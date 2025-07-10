@@ -77,8 +77,8 @@ To get started with BorgVR, ensure that you have access to an Apple Vision Pro d
    cd BorgVR
    ```
 
-2. **Install dependencies**:
-   Run the provided setup script or install required packages manually based on the dependencies outlined in `requirements.txt`.
+2. **Xcode Setup**:
+   Make sure to change the Team in the xcode settings.
 
 3. **Build and Run**:
    Use the Xcode project provided to build and deploy BorgVR on the Vision Pro platform.
