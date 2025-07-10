@@ -1,0 +1,855 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXCopyFilesBuildPhase section */
+		562FD5A02D7B2AA300265EF6 /* CopyFiles */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 12;
+			dstPath = "";
+			dstSubfolderSpec = 7;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		562FD5CD2D7C962900265EF6 /* CopyFiles */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = /usr/share/man/man1/;
+			dstSubfolderSpec = 0;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 1;
+		};
+		569EA3F42CD449C400D8FADD /* CopyFiles */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 12;
+			dstPath = "";
+			dstSubfolderSpec = 16;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		562FD5CF2D7C962900265EF6 /* ClientTest */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = ClientTest; sourceTree = BUILT_PRODUCTS_DIR; };
+		564183782D649679003A1EC4 /* VisionApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = VisionApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		5655824B2D4E5D6F008E7CE6 /* GUIApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = GUIApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		569EA3F62CD449C400D8FADD /* CmdApp */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = CmdApp; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		560D09592D98280400EAD023 /* Exceptions for "BORGVR-Render" folder in "CmdApp" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				BorgARProvider.swift,
+				Helpers/Tesselation.swift,
+				"Performance Tracking/CPUFrameTimer.swift",
+				"Performance Tracking/FrameTimerProtocol.swift",
+				"Performance Tracking/GPUFrameTimer.swift",
+				"Performance Tracking/PerformanceGraph.swift",
+				RendererLoop.swift,
+				RendererResourceInit.swift,
+				RendererSetup.swift,
+				RendererVariables.swift,
+				VolumeAtlas/AsyncEmptinessUpdater.swift,
+				VolumeAtlas/VolumeAtlas.swift,
+			);
+			target = 569EA3F52CD449C400D8FADD /* CmdApp */;
+		};
+		560D095E2D98282100EAD023 /* Exceptions for "BORGVR-Render" folder in "VisionApp" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				BorgARProvider.swift,
+				Helpers/AlignedBuffer.swift,
+				Helpers/RingBuffer.swift,
+				Helpers/Tesselation.swift,
+				"Performance Tracking/CPUFrameTimer.swift",
+				"Performance Tracking/FrameTimerProtocol.swift",
+				"Performance Tracking/GPUFrameTimer.swift",
+				"Performance Tracking/PerformanceGraph.swift",
+				RendererLoop.swift,
+				RendererResourceInit.swift,
+				RendererSetup.swift,
+				RendererVariables.swift,
+				"Transfer Function 1D/TransferFunction1D.swift",
+				"Transfer Function 1D/TransferFunction1DUI.swift",
+				VolumeAtlas/AsyncEmptinessUpdater.swift,
+				VolumeAtlas/VolumeAtlas.swift,
+			);
+			target = 564183772D649679003A1EC4 /* VisionApp */;
+		};
+		560D0A6A2D98B98100EAD023 /* Exceptions for "BORGVR-Render" folder in "GUIApp" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Helpers/AlignedBuffer.swift,
+				Helpers/RingBuffer.swift,
+				"Performance Tracking/CPUFrameTimer.swift",
+				"Performance Tracking/FrameTimerProtocol.swift",
+				"Performance Tracking/GPUFrameTimer.swift",
+				"Performance Tracking/PerformanceGraph.swift",
+				"Transfer Function 1D/TransferFunction1D.swift",
+				"Transfer Function 1D/TransferFunction1DUI.swift",
+			);
+			target = 5655824A2D4E5D6F008E7CE6 /* GUIApp */;
+		};
+		562FD5E32D7C9A3400265EF6 /* Exceptions for "BORGVR-IO" folder in "ClientTest" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				BORGVRDataBase.swift,
+				BORGVRFileData.swift,
+				BORGVRMetaData.swift,
+				BrickedVolumeReorganizer.swift,
+				DICOM.swift,
+				HighResolutionTimer.swift,
+				IOExtensions.swift,
+				Logger.swift,
+				MemoryMappedFile.swift,
+				NRRDParser.swift,
+				QVISParser.swift,
+				RawFileAccessor.swift,
+				Remote/BORGVRRemoteData.swift,
+				Remote/BORGVRRemoteDataManager.swift,
+				Remote/CacheMap.swift,
+				Remote/CachingRemoteDataSource.swift,
+				Remote/DataSource.swift,
+				Remote/LocalDataSource.swift,
+				Remote/RemoteDataSource.swift,
+				Vector.swift,
+				VolumeDataAccessing.swift,
+				VolumeDataAccessor.swift,
+				VolumeFileParser.swift,
+			);
+			target = 562FD5CE2D7C962900265EF6 /* ClientTest */;
+		};
+		564183882D649679003A1EC4 /* Exceptions for "VisionApp" folder in "VisionApp" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 564183772D649679003A1EC4 /* VisionApp */;
+		};
+		564183972D649734003A1EC4 /* Exceptions for "BORGVR-IO" folder in "VisionApp" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				BORGVRDataBase.swift,
+				BORGVRFileData.swift,
+				BORGVRMetaData.swift,
+				BrickedVolumeReorganizer.swift,
+				DICOM.swift,
+				HighResolutionTimer.swift,
+				IOExtensions.swift,
+				Logger.swift,
+				MemoryMappedFile.swift,
+				NRRDParser.swift,
+				QVISParser.swift,
+				RawFileAccessor.swift,
+				Remote/BORGVRRemoteData.swift,
+				Remote/BORGVRRemoteDataManager.swift,
+				Remote/CacheMap.swift,
+				Remote/CachingRemoteDataSource.swift,
+				Remote/DataSource.swift,
+				Remote/LocalDataSource.swift,
+				Remote/RemoteDataSource.swift,
+				Vector.swift,
+				VolumeDataAccessing.swift,
+				VolumeDataAccessor.swift,
+				VolumeFileParser.swift,
+			);
+			target = 564183772D649679003A1EC4 /* VisionApp */;
+		};
+		565582782D4E5ECB008E7CE6 /* Exceptions for "BORGVR-IO" folder in "CmdApp" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				BORGVRDataBase.swift,
+				BORGVRFileData.swift,
+				BORGVRMetaData.swift,
+				BrickedVolumeReorganizer.swift,
+				DICOM.swift,
+				HighResolutionTimer.swift,
+				IOExtensions.swift,
+				Logger.swift,
+				MemoryMappedFile.swift,
+				NRRDParser.swift,
+				QVISParser.swift,
+				RawFileAccessor.swift,
+				Vector.swift,
+				VolumeDataAccessing.swift,
+				VolumeDataAccessor.swift,
+				VolumeFileParser.swift,
+			);
+			target = 569EA3F52CD449C400D8FADD /* CmdApp */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
+/* Begin PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet section */
+		560D0A752D98BB3500EAD023 /* Exceptions for "VisionApp" folder in "Copy Bundle Resources" phase from "VisionApp" target */ = {
+			isa = PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet;
+			buildPhase = 564183762D649679003A1EC4 /* Resources */;
+			membershipExceptions = (
+				GPUHashtable.h,
+				Helper.h,
+				VolumeAtlas.h,
+			);
+		};
+		560D0A762D98BB4200EAD023 /* Exceptions for "VisionApp" folder in "Copy Files" phase from "VisionApp" target */ = {
+			isa = PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet;
+			buildPhase = 562FD5A02D7B2AA300265EF6 /* CopyFiles */;
+			membershipExceptions = (
+				Shaders.metal,
+				ShaderTypes.h,
+			);
+		};
+		562360D72CD6766A001A8514 /* Exceptions for "CmdApp" folder in "Copy Files" phase from "CmdApp" target */ = {
+			isa = PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet;
+			buildPhase = 569EA3F42CD449C400D8FADD /* CopyFiles */;
+			membershipExceptions = (
+				c60.dat,
+				c60.raw,
+			);
+		};
+/* End PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		560D09552D98280400EAD023 /* BORGVR-Render */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				560D09592D98280400EAD023 /* Exceptions for "BORGVR-Render" folder in "CmdApp" target */,
+				560D0A6A2D98B98100EAD023 /* Exceptions for "BORGVR-Render" folder in "GUIApp" target */,
+				560D095E2D98282100EAD023 /* Exceptions for "BORGVR-Render" folder in "VisionApp" target */,
+			);
+			path = "BORGVR-Render";
+			sourceTree = "<group>";
+		};
+		564183792D649679003A1EC4 /* VisionApp */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				564183882D649679003A1EC4 /* Exceptions for "VisionApp" folder in "VisionApp" target */,
+				560D0A752D98BB3500EAD023 /* Exceptions for "VisionApp" folder in "Copy Bundle Resources" phase from "VisionApp" target */,
+				560D0A762D98BB4200EAD023 /* Exceptions for "VisionApp" folder in "Copy Files" phase from "VisionApp" target */,
+			);
+			path = VisionApp;
+			sourceTree = "<group>";
+		};
+		5655824C2D4E5D6F008E7CE6 /* GUIApp */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = GUIApp;
+			sourceTree = "<group>";
+		};
+		565582772D4E5EAF008E7CE6 /* BORGVR-IO */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				565582782D4E5ECB008E7CE6 /* Exceptions for "BORGVR-IO" folder in "CmdApp" target */,
+				564183972D649734003A1EC4 /* Exceptions for "BORGVR-IO" folder in "VisionApp" target */,
+				562FD5E32D7C9A3400265EF6 /* Exceptions for "BORGVR-IO" folder in "ClientTest" target */,
+			);
+			path = "BORGVR-IO";
+			sourceTree = "<group>";
+		};
+		569EA3F82CD449C400D8FADD /* CmdApp */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				562360D72CD6766A001A8514 /* Exceptions for "CmdApp" folder in "Copy Files" phase from "CmdApp" target */,
+			);
+			path = CmdApp;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		562FD5CC2D7C962900265EF6 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		564183752D649679003A1EC4 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		565582482D4E5D6F008E7CE6 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		569EA3F32CD449C400D8FADD /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		569EA3ED2CD449C400D8FADD = {
+			isa = PBXGroup;
+			children = (
+				560D09552D98280400EAD023 /* BORGVR-Render */,
+				565582772D4E5EAF008E7CE6 /* BORGVR-IO */,
+				569EA3F82CD449C400D8FADD /* CmdApp */,
+				5655824C2D4E5D6F008E7CE6 /* GUIApp */,
+				564183792D649679003A1EC4 /* VisionApp */,
+				56CEE7592D71363A0002C232 /* Frameworks */,
+				569EA3F72CD449C400D8FADD /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		569EA3F72CD449C400D8FADD /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				569EA3F62CD449C400D8FADD /* CmdApp */,
+				5655824B2D4E5D6F008E7CE6 /* GUIApp.app */,
+				564183782D649679003A1EC4 /* VisionApp.app */,
+				562FD5CF2D7C962900265EF6 /* ClientTest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		56CEE7592D71363A0002C232 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		562FD5CE2D7C962900265EF6 /* ClientTest */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 562FD5D32D7C962900265EF6 /* Build configuration list for PBXNativeTarget "ClientTest" */;
+			buildPhases = (
+				562FD5CB2D7C962900265EF6 /* Sources */,
+				562FD5CC2D7C962900265EF6 /* Frameworks */,
+				562FD5CD2D7C962900265EF6 /* CopyFiles */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = ClientTest;
+			packageProductDependencies = (
+			);
+			productName = ClientTest;
+			productReference = 562FD5CF2D7C962900265EF6 /* ClientTest */;
+			productType = "com.apple.product-type.tool";
+		};
+		564183772D649679003A1EC4 /* VisionApp */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 564183892D649679003A1EC4 /* Build configuration list for PBXNativeTarget "VisionApp" */;
+			buildPhases = (
+				564183742D649679003A1EC4 /* Sources */,
+				564183752D649679003A1EC4 /* Frameworks */,
+				564183762D649679003A1EC4 /* Resources */,
+				562FD5A02D7B2AA300265EF6 /* CopyFiles */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				564183792D649679003A1EC4 /* VisionApp */,
+			);
+			name = VisionApp;
+			packageProductDependencies = (
+			);
+			productName = VisionApp;
+			productReference = 564183782D649679003A1EC4 /* VisionApp.app */;
+			productType = "com.apple.product-type.application";
+		};
+		5655824A2D4E5D6F008E7CE6 /* GUIApp */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 5655826D2D4E5D70008E7CE6 /* Build configuration list for PBXNativeTarget "GUIApp" */;
+			buildPhases = (
+				565582472D4E5D6F008E7CE6 /* Sources */,
+				565582482D4E5D6F008E7CE6 /* Frameworks */,
+				565582492D4E5D6F008E7CE6 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				5655824C2D4E5D6F008E7CE6 /* GUIApp */,
+				565582772D4E5EAF008E7CE6 /* BORGVR-IO */,
+			);
+			name = GUIApp;
+			packageProductDependencies = (
+			);
+			productName = GUIApp;
+			productReference = 5655824B2D4E5D6F008E7CE6 /* GUIApp.app */;
+			productType = "com.apple.product-type.application";
+		};
+		569EA3F52CD449C400D8FADD /* CmdApp */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 569EA3FD2CD449C400D8FADD /* Build configuration list for PBXNativeTarget "CmdApp" */;
+			buildPhases = (
+				569EA3F22CD449C400D8FADD /* Sources */,
+				569EA3F32CD449C400D8FADD /* Frameworks */,
+				569EA3F42CD449C400D8FADD /* CopyFiles */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				560D09552D98280400EAD023 /* BORGVR-Render */,
+				569EA3F82CD449C400D8FADD /* CmdApp */,
+			);
+			name = CmdApp;
+			packageProductDependencies = (
+			);
+			productName = OwlAngel;
+			productReference = 569EA3F62CD449C400D8FADD /* CmdApp */;
+			productType = "com.apple.product-type.tool";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		569EA3EE2CD449C400D8FADD /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1620;
+				LastUpgradeCheck = 1630;
+				TargetAttributes = {
+					562FD5CE2D7C962900265EF6 = {
+						CreatedOnToolsVersion = 16.2;
+					};
+					564183772D649679003A1EC4 = {
+						CreatedOnToolsVersion = 16.2;
+					};
+					5655824A2D4E5D6F008E7CE6 = {
+						CreatedOnToolsVersion = 16.2;
+					};
+					569EA3F52CD449C400D8FADD = {
+						CreatedOnToolsVersion = 16.1;
+					};
+				};
+			};
+			buildConfigurationList = 569EA3F12CD449C400D8FADD /* Build configuration list for PBXProject "BorgVR" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 569EA3ED2CD449C400D8FADD;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 569EA3F72CD449C400D8FADD /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				569EA3F52CD449C400D8FADD /* CmdApp */,
+				5655824A2D4E5D6F008E7CE6 /* GUIApp */,
+				564183772D649679003A1EC4 /* VisionApp */,
+				562FD5CE2D7C962900265EF6 /* ClientTest */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		564183762D649679003A1EC4 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		565582492D4E5D6F008E7CE6 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		562FD5CB2D7C962900265EF6 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		564183742D649679003A1EC4 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		565582472D4E5D6F008E7CE6 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		569EA3F22CD449C400D8FADD /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		562FD5D42D7C962900265EF6 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				ENABLE_HARDENED_RUNTIME = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.2;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		562FD5D52D7C962900265EF6 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				ENABLE_HARDENED_RUNTIME = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.2;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		5641838A2D649679003A1EC4 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 2;
+				DEVELOPMENT_ASSET_PATHS = "";
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "$(TARGET_NAME)/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = BorgVR;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "de.uni-due.VisionApp";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = xros;
+				SUPPORTED_PLATFORMS = "xros xrsimulator";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OBJC_BRIDGING_HEADER = VisionApp/ShaderTypes.h;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 7;
+				XROS_DEPLOYMENT_TARGET = 2;
+			};
+			name = Debug;
+		};
+		5641838B2D649679003A1EC4 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 2;
+				DEVELOPMENT_ASSET_PATHS = "";
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "$(TARGET_NAME)/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = BorgVR;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "de.uni-due.VisionApp";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = xros;
+				SUPPORTED_PLATFORMS = "xros xrsimulator";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OBJC_BRIDGING_HEADER = VisionApp/ShaderTypes.h;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 7;
+				VALIDATE_PRODUCT = YES;
+				XROS_DEPLOYMENT_TARGET = 2;
+			};
+			name = Release;
+		};
+		5655826E2D4E5D70008E7CE6 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = GUIApp/GUIApp.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_ASSET_PATHS = "\"GUIApp/Preview Content\"";
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.education";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 15.2;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "de.uni-due.GUIApp";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		5655826F2D4E5D70008E7CE6 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = GUIApp/GUIApp.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_ASSET_PATHS = "\"GUIApp/Preview Content\"";
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.education";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 15.2;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "de.uni-due.GUIApp";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		569EA3FB2CD449C400D8FADD /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEAD_CODE_STRIPPING = YES;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = L8Q6MVX7ZF;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.1;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		569EA3FC2CD449C400D8FADD /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEAD_CODE_STRIPPING = YES;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = L8Q6MVX7ZF;
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.1;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+			};
+			name = Release;
+		};
+		569EA3FE2CD449C400D8FADD /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				DEAD_CODE_STRIPPING = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		569EA3FF2CD449C400D8FADD /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				DEAD_CODE_STRIPPING = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		562FD5D32D7C962900265EF6 /* Build configuration list for PBXNativeTarget "ClientTest" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				562FD5D42D7C962900265EF6 /* Debug */,
+				562FD5D52D7C962900265EF6 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		564183892D649679003A1EC4 /* Build configuration list for PBXNativeTarget "VisionApp" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				5641838A2D649679003A1EC4 /* Debug */,
+				5641838B2D649679003A1EC4 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		5655826D2D4E5D70008E7CE6 /* Build configuration list for PBXNativeTarget "GUIApp" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				5655826E2D4E5D70008E7CE6 /* Debug */,
+				5655826F2D4E5D70008E7CE6 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		569EA3F12CD449C400D8FADD /* Build configuration list for PBXProject "BorgVR" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				569EA3FB2CD449C400D8FADD /* Debug */,
+				569EA3FC2CD449C400D8FADD /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		569EA3FD2CD449C400D8FADD /* Build configuration list for PBXNativeTarget "CmdApp" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				569EA3FE2CD449C400D8FADD /* Debug */,
+				569EA3FF2CD449C400D8FADD /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 569EA3EE2CD449C400D8FADD /* Project object */;
+}
