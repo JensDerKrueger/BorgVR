@@ -73,28 +73,30 @@ extension Renderer {
 
    - Parameters:
    - layerRenderer: The layer renderer instance used for rendering.
-   - appModel: The shared application model.
+   - runtimeAppModel: The shared application model.
    - appSetings: The application settings.
-   - renderingParamaters: The parameters used for rendering.
+   - sharedAppModel: The parameters used for rendering.
    - timer: A CPU frame timer.
    - dataset: The dataset to be rendered.
    */
   @MainActor
   static func startRenderLoop(_ layerRenderer: LayerRenderer,
-                              appModel: AppModel,
-                              appSetings: AppSettings,
-                              renderingParamaters: RenderingParamaters,
+                              runtimeAppModel: RuntimeAppModel,
+                              storedAppModel: StoredAppModel,
+                              sharedAppModel: SharedAppModel,
                               timer: CPUFrameTimer,
                               dataset: BORGVRDatasetProtocol,
+                              isHost:Bool,
                               logger: LoggerBase? = nil) {
     Task(executorPreference: RendererTaskExecutor.shared) {
       let renderer = try Renderer(
         layerRenderer,
-        appModel: appModel,
-        appSettings: appSetings,
-        renderingParamaters: renderingParamaters,
+        runtimeAppModel: runtimeAppModel,
+        storedAppModel: storedAppModel,
+        sharedAppModel: sharedAppModel,
         timer: timer,
         dataset: dataset,
+        isHost: isHost,
         logger: logger
       )
 

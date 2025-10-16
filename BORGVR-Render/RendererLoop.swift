@@ -17,20 +17,25 @@ extension Renderer {
    - drawable: The drawable from the current frame.
    - deviceAnchor: The device anchor containing the transform of the Vision Pro.
    */
-  private func updateRenderState(drawable: LayerRenderer.Drawable, anchorTransform: simd_float4x4) {
-
-    if renderingParamaters.purgeAtlas {
+  private func updateRenderState(drawable: LayerRenderer.Drawable) {
+    if sharedAppModel.purgeAtlas {
       volumeAtlas.purge()
-      renderingParamaters.purgeAtlas = false
+      sharedAppModel.purgeAtlas = false
     }
+
+    let anchors = borgARProvider.getAnchors(for: drawable)
+    let originFromDevice = anchors.originFromDevice ?? matrix_identity_float4x4
+    let originFromWorldAnchor = anchors.originFromWorldAnchor ?? matrix_identity_float4x4
+
+    sharedAppModel.originFromWorldAnchorMatrix = originFromWorldAnchor
 
     let modelMatrix : simd_float4x4
     if autoRotationAngle > 0 {
       let autoRotationMatrix = rotationYMatrix(degrees: autoRotationAngle)
 
-      let rot = renderingParamaters.transform.rotation
-      let trans = renderingParamaters.transform.translation
-      let scale = renderingParamaters.transform.scale
+      let rot = sharedAppModel.modelTransform.rotation
+      let trans = sharedAppModel.modelTransform.translation
+      let scale = sharedAppModel.modelTransform.scale
 
       let model = Transform(
         scale: scale,
@@ -38,23 +43,23 @@ extension Renderer {
         translation: trans
       ).matrix
 
-      modelMatrix = model * volumeScale
+      modelMatrix = originFromWorldAnchor * model * volumeScale
     } else {
-      modelMatrix = renderingParamaters.transform.matrix * volumeScale
+      modelMatrix = originFromWorldAnchor * sharedAppModel.modelTransform.matrix * volumeScale
     }
 
     func uniforms(forViewIndex viewIndex: Int) -> (VertexUniforms, FragmentUniforms) {
       let view = drawable.views[viewIndex]
-      let viewMatrix = (anchorTransform * view.transform).inverse
+      let viewMatrix = (originFromDevice * view.transform).inverse
       let projection = drawable.computeProjection(viewIndex: viewIndex)
 
       let viewToTexture = Transform(translation: SIMD3<Float>(0.5, 0.5, 0.5)).matrix * simd_inverse(viewMatrix * modelMatrix)
-      let viewToTextureVoxelScaled = Transform(translation: SIMD3<Float>(0.5, 0.5, 0.5)).matrix * simd_inverse(viewMatrix * renderingParamaters.transform.matrix)
+      let viewToTextureVoxelScaled = Transform(translation: SIMD3<Float>(0.5, 0.5, 0.5)).matrix * simd_inverse(viewMatrix * originFromWorldAnchor * sharedAppModel.modelTransform.matrix)
 
       let metadata = borgData.getMetadata()
       let borderSize = Float(metadata.overlap + 1) / SIMD3<Float>(Float(metadata.width), Float(metadata.height), Float(metadata.depth))
-      let clipMin = renderingParamaters.clipMin + borderSize
-      let clipMax = renderingParamaters.clipMax - borderSize
+      let clipMin = sharedAppModel.clipMin + borderSize
+      let clipMax = sharedAppModel.clipMax - borderSize
 
       let clipScale = (clipMax - clipMin)
       let clipMatrix = Transform(
@@ -66,9 +71,9 @@ extension Renderer {
         VertexUniforms(modelViewProjectionMatrix: projection * viewMatrix * modelMatrix * clipMatrix,
                        clipMatrix: clipMatrix),
         FragmentUniforms(
-          isoValue: renderingParamaters.isoValue,
+          isoValue: sharedAppModel.isoValue,
           oversampling: activeOversampling,
-          transferBias: renderingParamaters.transferFunction.textureBias,
+          transferBias: sharedAppModel.transferFunction.textureBias,
           cameraPosInTextureSpace: simd_make_float3(viewToTexture * simd_float4(0, 0, 0, 1)),
           cameraPosInTextureSpaceVoxelScaled: simd_make_float3(viewToTextureVoxelScaled * simd_float4(0, 0, 0, 1)),
           cubeBounds: (clipMin, clipMax),
@@ -83,11 +88,11 @@ extension Renderer {
       (uniformBufferVertex.current.uniforms.1, uniformBufferFragment.current.uniforms.1) = uniforms(forViewIndex: 1)
     }
 
-    switch renderingParamaters.renderMode {
+    switch sharedAppModel.renderMode {
       case .transferFunction1D, .transferFunction1DLighting:
-        volumeAtlas.updateEmptiness(transferFunction: renderingParamaters.transferFunction)
+        volumeAtlas.updateEmptiness(transferFunction: sharedAppModel.transferFunction)
       case .isoValue:
-        volumeAtlas.updateEmptiness(isoValue: renderingParamaters.isoValue)
+        volumeAtlas.updateEmptiness(isoValue: sharedAppModel.isoValue)
     }
   }
 
@@ -130,7 +135,7 @@ extension Renderer {
       }
     }
 
-    currentRenderTargetIndex = (currentRenderTargetIndex + 1) % appModel.maxBuffersInFlight
+    currentRenderTargetIndex = (currentRenderTargetIndex + 1) % runtimeAppModel.maxBuffersInFlight
 
     let cachedTargets = memorylessTargets[currentRenderTargetIndex]
     let newTargets = (renderTarget(resolveTexture: drawable.colorTextures[0], cachedTexture: cachedTargets?.color),
@@ -148,9 +153,9 @@ extension Renderer {
    */
   func readBackHashTable(commandBuffer: MTLCommandBuffer) {
     let missingBricks = hashTable.getValues(from: commandBuffer)
+
     if !missingBricks.isEmpty {
       let intArray = missingBricks.map { Int($0) }.sorted(by: >)
-
       let metadata = borgData.getMetadata()
 
       for entry in intArray {
@@ -190,19 +195,19 @@ extension Renderer {
     }
 
     DispatchQueue.main.async {
-      self.appModel.performanceModel.history.recoveryThreshold = Double(self.recoveryFPS)
-      self.appModel.performanceModel.history.dropThreshold = Double(self.dropFPS)
-      self.appModel.performanceModel.history.add(last: last,
+      self.runtimeAppModel.performanceModel.history.recoveryThreshold = Double(self.recoveryFPS)
+      self.runtimeAppModel.performanceModel.history.dropThreshold = Double(self.dropFPS)
+      self.runtimeAppModel.performanceModel.history.add(last: last,
                                                  avg: avg,
                                                  smoothed: smoothed)
 
-      if self.appModel.startRotationCapture {
+      if self.runtimeAppModel.startRotationCapture {
         self.logger?.info("Start Rotation")
         self.autoRotationAngle = 1
-        self.appModel.startRotationCapture = false
+        self.runtimeAppModel.startRotationCapture = false
       }
 
-      if self.appModel.logPerformance {
+      if self.runtimeAppModel.logPerformance {
         struct State {
           static var lastTime = CACurrentMediaTime()
         }
@@ -242,22 +247,14 @@ extension Renderer {
     guard let commandBuffer = commandQueue.makeCommandBuffer() else {
       fatalError("Failed to create command buffer")
     }
+    commandBuffer.label = "BorgVR Command Buffer"
 
-    guard let drawable = frame.queryDrawable() else { return }
+    guard let drawable = frame.queryDrawables().first else { return }
 
-    _ = inFlightSemaphore.wait(timeout: DispatchTime.distantFuture)
     frame.startSubmission()
-
-    let anchorTransform = borgARProvider.updateAnchor(drawable: drawable)
-
-    let semaphore = inFlightSemaphore
-    commandBuffer.addCompletedHandler { (_ commandBuffer) -> Swift.Void in
-      semaphore.signal()
-    }
-
     self.updateDynamicBufferState()
 
-    self.updateRenderState(drawable: drawable, anchorTransform: anchorTransform)
+    self.updateRenderState(drawable: drawable)
 
     let renderPassDescriptor = MTLRenderPassDescriptor()
 
@@ -294,10 +291,10 @@ extension Renderer {
     renderEncoder.setCullMode(.front)
     renderEncoder.setFrontFacing(.counterClockwise)
 
-    if renderingParamaters.brickVis {
+    if sharedAppModel.brickVis {
       renderEncoder.setRenderPipelineState(pipelineStateBrickVis)
     } else {
-      switch renderingParamaters.renderMode {
+      switch sharedAppModel.renderMode {
         case .isoValue:
           renderEncoder.setRenderPipelineState(pipelineStateIso)
         case .transferFunction1D:
@@ -324,7 +321,12 @@ extension Renderer {
     }
 
     renderEncoder.setVertexBuffer(cubeBuffer, offset: 0, index: VertexBufferIndex.meshPositions.rawValue)
-    renderingParamaters.transferFunction.bind(to: renderEncoder, index: TextureIndex.transferFunction.rawValue)
+
+    do {
+      try sharedAppModel.transferFunction.bind(to: renderEncoder, index: TextureIndex.transferFunction.rawValue)
+    } catch {
+      logger?.error("Failed to bind transfer function texture: \(error)")
+    }
 
     volumeAtlas.bind(to: renderEncoder,
                      atlasIndex: TextureIndex.volumeAtlas.rawValue,
@@ -354,19 +356,19 @@ extension Renderer {
     while true {
       if layerRenderer.state == .invalidated {
         Task { @MainActor in
-          appModel.immersiveSpaceState = .closed
+          runtimeAppModel.immersiveSpaceState = .closed
         }
         return
       } else if layerRenderer.state == .paused {
         Task { @MainActor in
-          appModel.immersiveSpaceState = .inTransition
+          runtimeAppModel.immersiveSpaceState = .inTransition
         }
         layerRenderer.waitUntilRunning()
         continue
       } else {
         Task { @MainActor in
-          if appModel.immersiveSpaceState != .open {
-            appModel.immersiveSpaceState = .open
+          if runtimeAppModel.immersiveSpaceState != .open {
+            runtimeAppModel.immersiveSpaceState = .open
           }
         }
         autoreleasepool {

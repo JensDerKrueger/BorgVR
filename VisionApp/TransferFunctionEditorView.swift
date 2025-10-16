@@ -17,11 +17,11 @@ import UniformTypeIdentifiers
  */
 struct TransferFunctionEditorView: View {
   /// The shared application model, which holds the current interaction mode.
-  @Environment(AppModel.self) private var appModel
+  @Environment(RuntimeAppModel.self) private var runtimeAppModel
   /// The shared rendering parameters, including the transfer function to edit.
-  @Environment(RenderingParamaters.self) private var renderingParamaters
+  @Environment(SharedAppModel.self) private var sharedAppModel
   /// Application settings for auto-load/save behavior.
-  @EnvironmentObject var appSettings: AppSettings
+  @EnvironmentObject var storedAppModel: StoredAppModel
 
   /// Tracks the size of the drawing canvas for gesture translations.
   @State private var canvasSize: CGSize = .zero
@@ -60,14 +60,16 @@ struct TransferFunctionEditorView: View {
 
     // Determine which channels are currently enabled for editing
     var channels: [Int] = []
-    if renderingParamaters.transferEditing.red     { channels.append(0) }
-    if renderingParamaters.transferEditing.green   { channels.append(1) }
-    if renderingParamaters.transferEditing.blue    { channels.append(2) }
-    if renderingParamaters.transferEditing.opacity { channels.append(3) }
+    if runtimeAppModel.transferEditState.red     { channels.append(0) }
+    if runtimeAppModel.transferEditState.green   { channels.append(1) }
+    if runtimeAppModel.transferEditState.blue    { channels.append(2) }
+    if runtimeAppModel.transferEditState.opacity { channels.append(3) }
 
     // Apply smooth-step to the transfer function data
-    renderingParamaters.transferFunction
+    sharedAppModel.transferFunction
       .smoothStep(start: translationTF.x, shift: translationTF.y, channels: channels)
+
+    sharedAppModel.synchronize(kind: .full)
   }
 
   // MARK: - View Body
@@ -88,18 +90,18 @@ struct TransferFunctionEditorView: View {
           // Draw ribbon and checkerboard background
           let ribbonHeight: CGFloat = 20
           let ribbonRect = CGRect(x: 0, y: 0, width: size.width, height: ribbonHeight)
-          renderingParamaters.transferFunction.drawCheckerboard(in: context, rect: ribbonRect)
-          renderingParamaters.transferFunction.drawRibbon(in: context, rect: ribbonRect)
+          sharedAppModel.transferFunction.drawCheckerboard(in: context, rect: ribbonRect)
+          sharedAppModel.transferFunction.drawRibbon(in: context, rect: ribbonRect)
 
           // Draw grid and curves below the ribbon
           let drawingRect = CGRect(x: 0, y: ribbonHeight, width: size.width, height: size.height - ribbonHeight - 5)
-          renderingParamaters.transferFunction.drawGrid(in: context, rect: drawingRect)
-          renderingParamaters.transferFunction.drawCurves(in: context, rect: drawingRect)
+          sharedAppModel.transferFunction.drawGrid(in: context, rect: drawingRect)
+          sharedAppModel.transferFunction.drawCurves(in: context, rect: drawingRect)
         }
         .frame(height: 400)
         .background(Color(.systemGray6))
         .border(Color.gray, width: 2)
-        .id(renderingParamaters.transferFunction.data.hashValue) // Force redraw on data change
+        .id(sharedAppModel.transferFunction.data.hashValue) // Force redraw on data change
 
         // Transparent layer to capture drag gestures
         Color.clear
@@ -114,23 +116,16 @@ struct TransferFunctionEditorView: View {
         GroupBox(label: Label("Global", systemImage: "globe")) {
           Toggle("All", isOn: Binding(
             get: {
-              appModel.interactionMode == .transferEditing &&
-              renderingParamaters.transferEditing.red &&
-              renderingParamaters.transferEditing.green &&
-              renderingParamaters.transferEditing.blue &&
-              renderingParamaters.transferEditing.opacity
+              runtimeAppModel.transferEditState.red &&
+              runtimeAppModel.transferEditState.green &&
+              runtimeAppModel.transferEditState.blue &&
+              runtimeAppModel.transferEditState.opacity
             },
             set: { newValue in
-              if newValue {
-                appModel.interactionMode = .transferEditing
-              } else if appModel.interactionMode == .transferEditing {
-                appModel.interactionMode = .model
-              }
-              renderingParamaters.transferEditing.red     = newValue
-              renderingParamaters.transferEditing.green   = newValue
-              renderingParamaters.transferEditing.blue    = newValue
-              renderingParamaters.transferEditing.opacity = newValue
-              updateTransferEditingEnabledState()
+              runtimeAppModel.transferEditState.red     = newValue
+              runtimeAppModel.transferEditState.green   = newValue
+              runtimeAppModel.transferEditState.blue    = newValue
+              runtimeAppModel.transferEditState.opacity = newValue
             }
           ))
           .frame(width: 150)
@@ -140,18 +135,16 @@ struct TransferFunctionEditorView: View {
         GroupBox(label: Label("Color", systemImage: "paintpalette")) {
           Toggle("Only Color", isOn: Binding(
             get: {
-              appModel.interactionMode == .transferEditing &&
-              renderingParamaters.transferEditing.red &&
-              renderingParamaters.transferEditing.green &&
-              renderingParamaters.transferEditing.blue &&
-              !renderingParamaters.transferEditing.opacity
+              runtimeAppModel.transferEditState.red &&
+              runtimeAppModel.transferEditState.green &&
+              runtimeAppModel.transferEditState.blue &&
+              !runtimeAppModel.transferEditState.opacity
             },
             set: { newValue in
-              renderingParamaters.transferEditing.red   = newValue
-              renderingParamaters.transferEditing.green = newValue
-              renderingParamaters.transferEditing.blue  = newValue
-              if newValue { renderingParamaters.transferEditing.opacity = false }
-              updateTransferEditingEnabledState()
+              runtimeAppModel.transferEditState.red   = newValue
+              runtimeAppModel.transferEditState.green = newValue
+              runtimeAppModel.transferEditState.blue  = newValue
+              if newValue { runtimeAppModel.transferEditState.opacity = false }
             }
           ))
           .frame(width: 150)
@@ -159,34 +152,28 @@ struct TransferFunctionEditorView: View {
           HStack {
             Toggle("Red", isOn: Binding(
               get: {
-                appModel.interactionMode == .transferEditing &&
-                renderingParamaters.transferEditing.red
+                runtimeAppModel.transferEditState.red
               },
               set: {
-                renderingParamaters.transferEditing.red = $0
-                updateTransferEditingEnabledState()
+                runtimeAppModel.transferEditState.red = $0
               }
             )).frame(width: 150)
 
             Toggle("Green", isOn: Binding(
               get: {
-                appModel.interactionMode == .transferEditing &&
-                renderingParamaters.transferEditing.green
+                runtimeAppModel.transferEditState.green
               },
               set: {
-                renderingParamaters.transferEditing.green = $0
-                updateTransferEditingEnabledState()
+                runtimeAppModel.transferEditState.green = $0
               }
             )).frame(width: 150)
 
             Toggle("Blue", isOn: Binding(
               get: {
-                appModel.interactionMode == .transferEditing &&
-                renderingParamaters.transferEditing.blue
+                runtimeAppModel.transferEditState.blue
               },
               set: {
-                renderingParamaters.transferEditing.blue = $0
-                updateTransferEditingEnabledState()
+                runtimeAppModel.transferEditState.blue = $0
               }
             )).frame(width: 150)
           }
@@ -196,12 +183,10 @@ struct TransferFunctionEditorView: View {
         GroupBox(label: Label("Opacity", systemImage: "circle.lefthalf.fill")) {
           Toggle("Opacity", isOn: Binding(
             get: {
-              appModel.interactionMode == .transferEditing &&
-              renderingParamaters.transferEditing.opacity
+              runtimeAppModel.transferEditState.opacity
             },
             set: {
-              renderingParamaters.transferEditing.opacity = $0
-              updateTransferEditingEnabledState()
+              runtimeAppModel.transferEditState.opacity = $0
             }
           ))
           .frame(width: 150)
@@ -218,7 +203,7 @@ struct TransferFunctionEditorView: View {
             }
             .sheet(isPresented: $showLoadFilePicker) {
               FilePickerDialog(
-                renderingParamaters: renderingParamaters,
+                sharedAppModel: sharedAppModel,
                 isPresented: $showLoadFilePicker
               )
             }
@@ -237,7 +222,7 @@ struct TransferFunctionEditorView: View {
                   .appendingPathComponent(name)
                   .appendingPathExtension("tf1d")
                 do {
-                  try renderingParamaters.transferFunction.save(to: url)
+                  try sharedAppModel.transferFunction.save(to: url)
                 } catch {
                   saveError       = error
                   showSaveError   = true
@@ -254,7 +239,7 @@ struct TransferFunctionEditorView: View {
 
             // Auto-load/save toggle
             Text("Load and Save Automatically")
-            Toggle("", isOn: $appSettings.autoloadTF)
+            Toggle("", isOn: $storedAppModel.autoloadTF)
               .labelsHidden()
           }
           HStack {
@@ -279,7 +264,8 @@ struct TransferFunctionEditorView: View {
                     if url.startAccessingSecurityScopedResource() {
                       defer { url.stopAccessingSecurityScopedResource() }
                       do {
-                        try renderingParamaters.transferFunction.load(from: url)
+                        try sharedAppModel.transferFunction.load(from: url)
+                        sharedAppModel.synchronize(kind: .full)
                       } catch {
                         importError = error
                         showImportError = true
@@ -299,7 +285,7 @@ struct TransferFunctionEditorView: View {
             }
             .fileExporter(
               isPresented: $showICloudExporter,
-              document: TransferFunctionDocument(transferFunction: renderingParamaters.transferFunction),
+              document: TransferFunctionDocument(transferFunction: sharedAppModel.transferFunction),
               contentType: .data,
               defaultFilename: "TransferFunction.tf1d"
             ) { result in
@@ -316,33 +302,11 @@ struct TransferFunctionEditorView: View {
         }
       }
     }
-    .onDisappear {
-      // Restore interaction mode when leaving editor
-      if appModel.interactionMode == .transferEditing {
-        appModel.interactionMode = .model
-      }
-    }
     .padding()
 
   }
 
-  // MARK: - Helper Methods
 
-  /**
-   Updates the appModel’s interaction mode based on which transfer editing channels are enabled.
-
-   If any channel is enabled, sets mode to `.transferEditing`; otherwise, `.model`.
-   */
-  func updateTransferEditingEnabledState() {
-    if renderingParamaters.transferEditing.red ||
-        renderingParamaters.transferEditing.green ||
-        renderingParamaters.transferEditing.blue ||
-        renderingParamaters.transferEditing.opacity {
-      appModel.interactionMode = .transferEditing
-    } else {
-      appModel.interactionMode = .model
-    }
-  }
 }
 
 // MARK: - FilePickerDialog
@@ -354,7 +318,7 @@ struct TransferFunctionEditorView: View {
  */
 struct FilePickerDialog: View {
   /// The rendering parameters containing the transfer function.
-  var renderingParamaters: RenderingParamaters
+  var sharedAppModel: SharedAppModel
   /// Binding controlling presentation.
   @Binding var isPresented: Bool
   /// URLs of available `.tf1d` files.
@@ -369,7 +333,8 @@ struct FilePickerDialog: View {
       List(availableFiles, id: \.self) { fileURL in
         Button(action: {
           do {
-            try renderingParamaters.transferFunction.load(from: fileURL)
+            try sharedAppModel.transferFunction.load(from: fileURL)
+            sharedAppModel.synchronize(kind: .full)
             isPresented = false
           } catch {
             loadError     = error

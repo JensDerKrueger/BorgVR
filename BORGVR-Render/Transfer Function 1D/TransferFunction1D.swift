@@ -5,8 +5,18 @@ import Metal
 
  Currently, it supports an error for mismatched data counts.
  */
-enum TransferFunction1DError: Error {
+enum TransferFunction1DError: Error, LocalizedError {
   case mismatchedDataCount(expected: Int, found: Int)
+  case noDeviceSet
+
+  var errorDescription: String? {
+    switch self {
+      case .mismatchedDataCount(let expected, let found):
+        return "Mismatched data count: expected \(expected), found \(found)"
+      case .noDeviceSet:
+        return "No Metal device set for transfer function."
+    }
+  }
 }
 
 /**
@@ -81,6 +91,17 @@ class TransferFunction1D: Equatable {
    */
   convenience init(from url: URL) throws {
     try self.init(from: try Data(contentsOf: url))
+  }
+
+  /**
+   Sets an existing TransferFunction1D to the data from a data object
+
+   - Parameter from: The data object to extract the data from
+   - Throws: `mismatchedDataCount` if data extraction fails
+   */
+  func update(from data: Data) throws {
+    self.data = try Self.parseTransferFunctionData(data)
+    updateDataDependencies()
   }
 
   /**
@@ -257,7 +278,7 @@ class TransferFunction1D: Equatable {
       throw TransferFunction1DError.mismatchedDataCount(expected: data.count, found: newData.count)
     }
     self.data = newData
-    transferDataToTexture()
+    try transferDataToTexture()
   }
 
   /// Updates internal dependencies after data changes, including min/max indices and invalidates texture
@@ -294,7 +315,7 @@ class TransferFunction1D: Equatable {
    This method creates a 1D texture with an RGBA8Unorm pixel format and uploads the current
    transfer function data to the texture.
    */
-  private func createTexture() {
+  private func createTexture() throws {
     if let device = self.device {
       let descriptor = MTLTextureDescriptor()
       descriptor.textureType = .type1D
@@ -303,7 +324,9 @@ class TransferFunction1D: Equatable {
       descriptor.usage = [.shaderRead]
       descriptor.storageMode = .shared
       self.texture = device.makeTexture(descriptor: descriptor)
-      transferDataToTexture()
+      try transferDataToTexture()
+    } else {
+      throw TransferFunction1DError.noDeviceSet
     }
   }
 
@@ -314,7 +337,7 @@ class TransferFunction1D: Equatable {
    */
   func initMetal(device: MTLDevice) {
     self.device = device
-    createTexture()
+    try? createTexture()
   }
 
   /**
@@ -324,11 +347,10 @@ class TransferFunction1D: Equatable {
    - encoder: The MTLRenderCommandEncoder to bind the texture to.
    - index: The texture index in the fragment shader.
    */
-  func bind(to encoder: MTLRenderCommandEncoder, index: Int) {
+  func bind(to encoder: MTLRenderCommandEncoder, index: Int) throws {
     if texture == nil {
-      createTexture()
+      try createTexture()
     }
-
     encoder.setFragmentTexture(texture, index: index)
   }
 
@@ -337,18 +359,17 @@ class TransferFunction1D: Equatable {
 
    If the texture is not already created, it attempts to create it.
    */
-  private func transferDataToTexture() {
-
+  private func transferDataToTexture() throws{
     if let texture = self.texture {
       if texture.width != data.count {
-        createTexture()
+        try createTexture()
       }
 
       let wholeTexture = MTLRegionMake1D(0, data.count)
       texture.replace(region: wholeTexture, mipmapLevel: 0, withBytes: data,
                       bytesPerRow: data.count * MemoryLayout<SIMD4<UInt8>>.stride)
     } else {
-      createTexture()
+      try createTexture()
     }
   }
 
@@ -400,6 +421,22 @@ class TransferFunction1D: Equatable {
   func save(to url: URL) throws {
     let data = serialize()
     try data.write(to: url, options: .atomic)
+  }
+
+
+  var debugDescription: String {
+    var result = "TransferFunction1D(\n"
+    result += "  data.count: \(data.count),\n"
+    for (i, value) in data.enumerated() {
+      result += "    [\(i)]: \(value),\n"
+    }
+
+    result += "  minIndex: \(minIndex),\n"
+    result += "  maxIndex: \(maxIndex),\n"
+    result += "  bias: \(bias),\n"
+    result += "  textureBias: \(textureBias)\n"
+    result += ")"
+    return result
   }
 }
 

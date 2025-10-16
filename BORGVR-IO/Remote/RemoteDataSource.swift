@@ -11,16 +11,15 @@ import Network
  */
 final class RemoteDataSource: DataSource {
   /// The underlying NWConnection used for communication with the remote server.
-  private let connection: NWConnection
+  private var connection: NWConnection
   /// The dataset ID for the remote dataset.
-  private let datasetID: Int
+  private let datasetID: String
   /// Indicates whether the remote dataset is open.
   private var isOpen: Bool
   /// The metadata for the remote dataset.
   private var metadata: BORGVRMetaData
   /// An optional logger for debug and error messages.
   private let logger: LoggerBase?
-
 
   /// A scratch buffer used during decompression (allocated only if compression is enabled).
   private var compressionScratchBuffer: UnsafeMutableRawPointer?
@@ -37,7 +36,7 @@ final class RemoteDataSource: DataSource {
    - datasetID: The identifier for the dataset to open.
    - Throws: An error if sending the "OPEN" command fails or if metadata cannot be parsed.
    */
-  init(connection: NWConnection, datasetID: Int, logger: LoggerBase?) throws {
+  init(connection: NWConnection, datasetID: String, logger: LoggerBase?) throws {
     self.connection = connection
     self.datasetID = datasetID
     self.isOpen = false
@@ -78,22 +77,25 @@ final class RemoteDataSource: DataSource {
   }
 
   /**
-   Loads a raw brick from the remote dataset and copies its data into the provided output buffer.
+   Loads a set of raw bricka from the remote dataset and copies its data into the provided output buffer.
 
    - Parameters:
-   - index: The index of the brick to load.
-   - outputBuffer: A pointer to the memory area to copy the brick data.
-   - Returns: The BrickMetadata for the loaded brick.
+   - iindicesndex: The indices of the bricks to load.
+   - outputBuffer: A pointer to the memory area to copy the data of all bricks
+   - Returns: The BrickMetadata for the loaded bricks.
    - Throws: An error if the brick cannot be loaded.
    */
-  func getRawBrick(index: Int, outputBuffer: UnsafeMutablePointer<UInt8>) throws -> BrickMetadata {
-    let brickMeta = metadata.brickMetadata[index]
-    try sendCommand("GETBRICK \(index)")
+  func getRawBricks(indices: [Int], outputBuffer: UnsafeMutablePointer<UInt8>,
+                    outputBufferSize: Int) throws -> [BrickMetadata] {
+    let command = "GETBRICKS " + indices.map { String($0) }.joined(separator: " ")
+    try sendCommand(command)
     let responseData = try receiveBinaryData()
+    if responseData.count > outputBufferSize {
+      throw BORGVRDataError.networkError(message: "Received data size does not match expected size.")
+    }
     responseData.copyBytes(to: outputBuffer, count: responseData.count)
-    return brickMeta
+    return indices.map { metadata.brickMetadata[$0] }
   }
-
   /**
    Loads the first brick from the remote dataset into the provided output buffer.
    In contrast to getBrick, this call is always synchronous.
@@ -120,7 +122,7 @@ final class RemoteDataSource: DataSource {
   func getBrick(index: Int, outputBuffer: UnsafeMutablePointer<UInt8>) throws {
     let brickMeta = metadata.brickMetadata[index]
 
-    try sendCommand("GETBRICK \(index)")
+    try sendCommand("GETBRICKS \(index)")
     let responseData = try receiveBinaryData()
 
     if metadata.compression && brickMeta.size < fullBrickSize {
@@ -187,7 +189,22 @@ final class RemoteDataSource: DataSource {
    - Throws: An error if sending fails.
    */
   private func sendCommand(_ command: String) throws {
-    try RemoteDataSource.sendCommand(command, connection: connection)
+    do {
+      try RemoteDataSource.sendCommand(command, connection: connection)
+    } catch {
+      if case let .hostPort(host, port) = connection.endpoint {
+        let newConnection = NWConnection(host: host,
+                                            port: port,
+                                            using: .tcp)
+        try BORGVRRemoteDataManager.connect(connection: newConnection,
+                                            timeout: 2, logger: logger)
+        connection = newConnection
+        try sendCommand("OPEN \(datasetID)")
+        _ = try receiveBinaryData()
+      } else {
+        throw error
+      }
+    }
   }
 
   /**
@@ -225,14 +242,17 @@ final class RemoteDataSource: DataSource {
       dataSize = sizeData.withUnsafeBytes { $0.load(as: UInt32.self) }
     }
 
-    if sizeSemaphore.wait(timeout: .now() + 5) == .timedOut {
+    if sizeSemaphore.wait(timeout: .now() + 15) == .timedOut {
       throw BORGVRDataError.networkError(message: "Timeout while waiting for data size")
     }
 
     // Receive the payload.
     let dataSemaphore = DispatchSemaphore(value: 0)
     connection.receive(minimumIncompleteLength: Int(dataSize), maximumLength: Int(dataSize)) { data, _, _, error in
-      defer { dataSemaphore.signal() }
+      defer {
+        dataSemaphore.signal()
+
+      }
       if let data = data {
         receivedData = data
       } else if let error = error {
@@ -240,12 +260,12 @@ final class RemoteDataSource: DataSource {
       }
     }
 
-    if let error = sendError {
-      throw error
+    if dataSemaphore.wait(timeout: .now() + 50) == .timedOut {
+      throw BORGVRDataError.networkError(message: "Timeout while waiting for data")
     }
 
-    if dataSemaphore.wait(timeout: .now() + 5) == .timedOut {
-      throw BORGVRDataError.networkError(message: "Timeout while waiting for data")
+    if let error = sendError {
+      throw error
     }
 
     guard let result = receivedData else {

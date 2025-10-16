@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct TrackedView<Content: View>: View {
-  @Environment(AppModel.self) private var appModel
+  @Environment(RuntimeAppModel.self) private var runtimeAppModel
 
   let name: String
   let content: () -> Content
@@ -9,10 +9,10 @@ struct TrackedView<Content: View>: View {
   var body: some View {
     content()
       .onAppear {
-        appModel.registerView(name: name)
+        runtimeAppModel.registerView(name: name)
       }
       .onDisappear {
-        appModel.unregisterView(name: name)
+        runtimeAppModel.unregisterView(name: name)
       }
   }
 }

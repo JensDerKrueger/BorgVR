@@ -2,6 +2,8 @@ import Network
 import Foundation
 
 class TCPServer {
+  static let protocolVersionName : String = "1"
+  
   let port: NWEndpoint.Port
   let queue = DispatchQueue(label: "TCPServerQueue")
   var listener: NWListener?
@@ -9,14 +11,34 @@ class TCPServer {
   var isRunning = false
   var logger: LoggerBase?
 
+  // Maximum number of bricks allowed in a single GETBRICKS request
+  let maxBricksPerGetRequest: Int
+
   /// Dataset list received from the GUI
   private var datasets: [DatasetInfo]
-  private var connectionDatasets: [ObjectIdentifier: (dataset: BORGVRFileData, buffer: UnsafeMutablePointer<UInt8>)] = [:]
 
-  init(port: UInt16, logger: LoggerBase? = nil, datasets: [DatasetInfo] = []) {
+  // Dataset and its reusable brick buffer for a single connection
+  final class ConnectionDataset {
+    let dataset: BORGVRFileData
+    let buffer: UnsafeMutablePointer<UInt8>
+
+    init(dataset: BORGVRFileData) {
+      self.dataset = dataset
+      self.buffer = dataset.allocateBrickBuffer()
+    }
+
+    deinit {
+      buffer.deallocate()
+    }
+  }
+
+  private var connectionDatasets: [ObjectIdentifier: ConnectionDataset] = [:]
+
+  init(port: UInt16, maxBricksPerGetRequest: Int, logger: LoggerBase? = nil, datasets: [DatasetInfo] = []) {
     self.port = NWEndpoint.Port(rawValue: port)!
     self.logger = logger
     self.datasets = datasets
+    self.maxBricksPerGetRequest = maxBricksPerGetRequest
   }
 
   func start() {
@@ -33,7 +55,10 @@ class TCPServer {
 
     listener?.start(queue: queue)
     isRunning = true
-    logger?.info("Server started on port \(port)")
+    logger?
+      .info(
+        "Server with protocol version \(TCPServer.protocolVersionName) started on port \(port)"
+      )
   }
 
   func stop() {
@@ -48,6 +73,8 @@ class TCPServer {
   }
 
   private func handleNewConnection(_ connection: NWConnection) {
+    activeConnections.append(connection)
+
     connection.stateUpdateHandler = { [weak self] state in
       switch state {
         case .cancelled, .waiting, .failed(_):
@@ -57,10 +84,17 @@ class TCPServer {
           break
       }
     }
-
     connection.start(queue: queue)
-    activeConnections.append(connection)
     receiveLine(on: connection, buffer: "")
+  }
+  
+  // MARK: - Parameter validation helpers
+  private func expectParameterCount(_ parameters: ArraySlice<Substring>, equals expected: Int) -> Bool {
+    return parameters.count == expected
+  }
+
+  private func expectParameterCount(_ parameters: ArraySlice<Substring>, in range: ClosedRange<Int>) -> Bool {
+    return parameters.count >= range.lowerBound && parameters.count <= range.upperBound
   }
 
   private func receiveLine(on connection: NWConnection, buffer: String) {
@@ -87,15 +121,6 @@ class TCPServer {
         let request = newBuffer[..<newlineRange.lowerBound].trimmingCharacters(in: .whitespacesAndNewlines)
         newBuffer = String(newBuffer[newlineRange.upperBound...])
 
-#if DEBUG
-        if case let .hostPort(host, _) = connection.endpoint {
-          let clientAddress = host.debugDescription
-          logger?.dev("Received from \(clientAddress): \(request)")
-        } else {
-          logger?.dev("Received: \(request)")
-        }
-#endif
-
         if !self.processCommand(request, connection: connection) {
           connection.cancel()
           return
@@ -118,35 +143,41 @@ class TCPServer {
       return false
     }
 
+    let parameters = components.dropFirst()
+
     switch cmd.uppercased() {
       case "LIST":
-        let datasetList = datasets.map { "\($0.id) \($0.datasetDescription)" }.joined(separator: "\n") + "\n\n"
-        connection.send(content: datasetList.data(using: .utf8), completion: .contentProcessed({ _ in }))
-        return true
+        return sendList(parameters: parameters, connection: connection)
+
       case "OPEN":
-        return openDataset(components.dropFirst().first, connection: connection)
-      case "GETBRICK":
-        return getBrick(components.dropFirst().first, connection: connection)
+        return openDataset(parameters:parameters, connection: connection)
+
+      case "GETBRICKS":
+        return getBricks(parameters: parameters, connection: connection)
+      
+      case "INFO":
+        return sendInfo(parameters: parameters, connection: connection)
+
       default:
         return false
     }
   }
 
-  private func openDataset(_ idString: Substring?, connection: NWConnection) -> Bool {
-    guard let idString = idString, let id = Int(idString), let dataset = datasets.first(where: { $0.id == id }) else {
+  private func openDataset(parameters: ArraySlice<Substring>, connection: NWConnection) -> Bool {
+    guard expectParameterCount(parameters, equals: 1) else { return false }
+
+    guard let idString = parameters.first, let dataset = datasets.first(where: { $0.id == idString }) else {
       return false
     }
 
     let connectionID = ObjectIdentifier(connection)
-    if let existingDataset = connectionDatasets[connectionID] {
+    if connectionDatasets[connectionID] != nil {
       logger?.info("Closing previous dataset for connection")
-      existingDataset.buffer.deallocate()
       connectionDatasets[connectionID] = nil
     }
 
     if let data = try? BORGVRFileData(filename: dataset.filename) {
-      let buffer = data.allocateBrickBuffer()
-      connectionDatasets[connectionID] = (dataset: data, buffer: buffer)
+      connectionDatasets[connectionID] = ConnectionDataset(dataset: data)
 
       let filename = URL(fileURLWithPath: dataset.filename).lastPathComponent
       if case let .hostPort(host, _) = connection.endpoint {
@@ -156,16 +187,23 @@ class TCPServer {
         logger?.info("Opened dataset \(filename) ID=\(connectionID.hashValue)")
       }
 
-      sendBinaryResponse(data.getMetadata().toData(), connection: connection)
+      sendBinaryResponse(data: data.getMetadata().toData(), connection: connection)
       return true
     } else {
-      logger?.error("Failed to open dataset \(id)")
+      logger?.error("Failed to open dataset \(idString)")
       return false
     }
   }
 
-  private func getBrick(_ indexString: Substring?, connection: NWConnection) -> Bool {
-    guard let indexString = indexString, let index = Int(indexString) else {
+  private func convertToInts(_ indexStrings: ArraySlice<Substring>) -> [Int]? {
+    let ints = indexStrings.compactMap { Int($0) }
+    return ints.count == indexStrings.count ? ints : nil
+  }
+
+  private func getBricks(parameters indexStrings: ArraySlice<Substring>, connection: NWConnection) -> Bool {
+    guard expectParameterCount(indexStrings, in: 1...Int(maxBricksPerGetRequest)) else { return false }
+
+    guard let indices = convertToInts(indexStrings), indices.count <= maxBricksPerGetRequest else {
       return false
     }
 
@@ -174,23 +212,28 @@ class TCPServer {
       return false
     }
 
-    do {
+    var totalSize = 0
+    for index in indices {
       let brickMeta = datasetEntry.dataset.getMetadata().brickMetadata[index]
-      try datasetEntry.dataset.getRawBrick(brickMeta: brickMeta, outputBuffer: datasetEntry.buffer)
+      totalSize += brickMeta.size
+    }
 
-#if DEBUG
-      logger?.dev("Sending Brick of length \(brickMeta.size) at index \(index)")
-#endif
-
-      sendBinaryResponse(Data(bytes: datasetEntry.buffer, count: brickMeta.size), connection: connection)
+    do {
+      var brickData = Data(capacity: totalSize)
+      for index in indices {
+        let brickMeta = datasetEntry.dataset.getMetadata().brickMetadata[index]
+        try datasetEntry.dataset.getRawBrick(brickMeta: brickMeta, outputBuffer: datasetEntry.buffer)
+        brickData.append(Data(bytes: datasetEntry.buffer, count: brickMeta.size))
+      }
+      sendBinaryResponse(data: brickData, connection: connection)
       return true
     } catch {
-      logger?.error("Failed to get brick at index \(index)")
+      logger?.error("Failed to get bricks: \(error)")
       return false
     }
   }
 
-  private func sendBinaryResponse(_ data: Data, connection: NWConnection) {
+  private func sendBinaryResponse(data: Data, connection: NWConnection) {
     var message = Data()
     let dataSize = Int32(data.count)
     message.append(Data(from: dataSize))
@@ -203,11 +246,28 @@ class TCPServer {
     }))
   }
 
+  private func sendList(parameters: ArraySlice<Substring>, connection: NWConnection) -> Bool {
+    guard expectParameterCount(parameters, equals: 0) else { return false }
+    let datasetList = datasets.map { "\($0.id) \($0.datasetDescription)" }.joined(separator: "\n") + "\n\n"
+    connection.send(content: datasetList.data(using: .utf8), completion: .contentProcessed({ _ in }))
+    return true
+  }
+  
+  private func sendInfo(parameters: ArraySlice<Substring>, connection: NWConnection) -> Bool {
+    guard expectParameterCount(parameters, equals: 0) else { return false }
+
+    let kv = KeyValuePairHandler()
+    kv.set("VERSION",TCPServer.protocolVersionName)
+    kv.set("MAX_BRICKS_PER_GET_REQUEST",maxBricksPerGetRequest)
+    let serverInfo = kv.synthesize() + "\n"
+
+    connection.send(content: serverInfo.data(using: .utf8), completion: .contentProcessed({ _ in }))
+    return true
+  }
+
   private func closeConnection(for connection: NWConnection) {
     let connectionID = ObjectIdentifier(connection)
-    if let datasetEntry = connectionDatasets[connectionID] {
-      datasetEntry.buffer.deallocate()
-    }
     connectionDatasets[connectionID] = nil
   }
 }
+

@@ -41,11 +41,11 @@ extension Renderer {
     }
     let shaderSource = try String(contentsOfFile: shaderPath, encoding: .utf8)
 
-    let screenSpaceError = AppSettings.float("screenSpaceError")
-    let atlasSizeMB = AppSettings.int("atlasSizeMB")
-    let maxProbingAttempts = AppSettings.int("maxProbingAttempts")
-    let requestLowResLOD = AppSettings.bool("requestLowResLOD") ? 1 : 0
-    let stopOnMiss = AppSettings.bool("stopOnMiss") ? 1 : 0
+    let screenSpaceError = StoredAppModel.float("screenSpaceError")
+    let atlasSizeMB = StoredAppModel.int("atlasSizeMB")
+    let maxProbingAttempts = StoredAppModel.int("maxProbingAttempts")
+    let requestLowResLOD = StoredAppModel.bool("requestLowResLOD") ? 1 : 0
+    let stopOnMiss = StoredAppModel.bool("stopOnMiss") ? 1 : 0
 
     let width : Float = 1888.0
 

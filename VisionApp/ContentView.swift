@@ -10,14 +10,15 @@ import SwiftUI
  - `.importData`: presents the `ConverterView`.
  - `.selectData`: presents the `OpenDatasetView`.
  - `.renderData`: presents the `RenderView`.
+ - `.waitingForHost`: presents the `WaitingView`.
  */
 struct ContentView: View {
   /// The shared application model injected into the environment, holding app state.
-  @Environment(AppModel.self) private var appModel
+  @Environment(RuntimeAppModel.self) private var runtimeAppModel
 
   /// The body of the view, switching between subviews according to the current state.
   var body: some View {
-    switch appModel.currentState {
+    switch runtimeAppModel.currentState {
       case .start:
         /// Show the initial mode selection screen.
         ModeSelectionView()
@@ -33,12 +34,24 @@ struct ContentView: View {
       case .renderData:
         /// Show the main rendering view for volumetric data.
         RenderView()
+      case .waitingForHost:
+        /// Show a window that tells the users that they are waiting for the host to open a dataset.
+        WaitingView()
       @unknown default:
         /// Handle any future unknown states.
         Text("Unknown state")
           .foregroundColor(.red)
     }
   }
+}
+
+// MARK: - Preview
+
+#Preview {
+  ContentView()
+    .environment(RuntimeAppModel())
+    .environment(SharedAppModel())
+    .environmentObject(StoredAppModel())
 }
 
 /*

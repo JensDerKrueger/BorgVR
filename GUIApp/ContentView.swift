@@ -6,18 +6,18 @@ import AppKit
 
 // MARK: - ContentView
 struct ContentView: View {
-  @Environment(AppModel.self) private var appModel
+  @Environment(RuntimeAppModel.self) private var runtimeAppModel
 
   var body: some View {
-    switch appModel.currentState {
-    case .start:
-      ModeSelectionView()
-    case .importData:
-      ConverterView()
-    case .serveData:
-      ServerView()
-    case .settings:
-      SettingsView()
+    switch runtimeAppModel.currentState {
+      case .start:
+        ModeSelectionView()
+      case .importData:
+        ConverterView()
+      case .serveData:
+        ServerView()
+      case .settings:
+        SettingsView()
     }
   }
 }

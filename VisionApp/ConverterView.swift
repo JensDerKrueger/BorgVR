@@ -28,9 +28,9 @@ enum FileError: Error {
  */
 struct ConverterView: View {
   /// The shared application model used to manage application state.
-  @Environment(AppModel.self) private var appModel
+  @Environment(RuntimeAppModel.self) private var runtimeAppModel
   /// The application settings injected from the environment.
-  @EnvironmentObject var appSettings: AppSettings
+  @EnvironmentObject var storedAppModel: StoredAppModel
 
   // MARK: - UI State Properties
 
@@ -198,7 +198,7 @@ struct ConverterView: View {
 
         // Back button
         Button("Back to Main Menu") {
-          appModel.currentState = .start
+          runtimeAppModel.currentState = .start
         }
         .font(.headline)
         .padding()
@@ -243,25 +243,7 @@ struct ConverterView: View {
      - destinationDirURL: The destination directory URL.
      - Returns: `true` if the file was copied successfully; otherwise, `false`.
      */
-    func copyFile(from sourceURL: URL, toDir destinationDirURL: URL) -> Bool {
-      let destinationURL = destinationDirURL.appendingPathComponent(sourceURL.lastPathComponent)
-      let fileManager = FileManager.default
-      do {
-        let destinationDirectory = destinationURL.deletingLastPathComponent()
-        if !fileManager.fileExists(atPath: destinationDirectory.path) {
-          try fileManager.createDirectory(at: destinationDirectory, withIntermediateDirectories: true)
-        }
-        if fileManager.fileExists(atPath: destinationURL.path) {
-          try fileManager.removeItem(at: destinationURL)
-        }
-        try fileManager.copyItem(at: sourceURL, to: destinationURL)
-        logger.info("File copied successfully")
-        return true
-      } catch {
-        logger.error("Error copying file: \(error.localizedDescription)")
-        return false
-      }
-    }
+    
 
     isWorking = true
 
@@ -284,7 +266,7 @@ struct ConverterView: View {
       let documentsDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
 
       logger.info("Copying Native BorgVR File")
-      _ = copyFile(from: fileURL, toDir: documentsDirectory)
+      _ = copyFile(from: fileURL, toDir: documentsDirectory, logger: logger)
     }
   }
 
@@ -364,7 +346,7 @@ struct ConverterView: View {
         : description
 
         let borderMode: ExtensionStrategy
-        switch appSettings.borderMode {
+        switch storedAppModel.borderMode {
           case "zeroes":
             borderMode = .fillZeroes
           case "border":
@@ -373,19 +355,19 @@ struct ConverterView: View {
             borderMode = .repeatValue
           default:
             borderMode = .fillZeroes
-            logger.error("Unsupported border mode \(appSettings.borderMode), falling back to zeroes")
+            logger.error("Unsupported border mode \(storedAppModel.borderMode), falling back to zeroes")
         }
 
         let reorganizer = BrickedVolumeReorganizer(
           inputVolume: volume,
-          brickSize: appSettings.brickSize,
-          overlap: appSettings.brickOverlap,
+          brickSize: storedAppModel.brickSize,
+          overlap: storedAppModel.brickOverlap,
           extensionStrategy: borderMode
         )
         try reorganizer.reorganize(
           to: outputFile,
           datasetDescription: actualDesc,
-          useCompressor: appSettings.enableCompression,
+          useCompressor: storedAppModel.enableCompression,
           logger: logger
         )
       }
@@ -417,6 +399,14 @@ extension UTType {
   static var volumeData: UTType {
     UTType(exportedAs: "de.cgvis.volumedata")
   }
+}
+
+// MARK: - Preview
+
+#Preview {
+  ConverterView()
+    .environment(RuntimeAppModel())
+    .environmentObject(StoredAppModel())
 }
 
 /*

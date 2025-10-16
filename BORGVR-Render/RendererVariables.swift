@@ -63,10 +63,6 @@ final actor Renderer {
   var volumeScale: float4x4
   /// A GPU hashtable for indexing volume bricks.
   var hashTable: GPUHashtable
-
-  /// A semaphore used to limit the number of frames in flight.
-  let inFlightSemaphore: DispatchSemaphore
-
   /// The number of samples per pixel used during rasterization.
   let rasterSampleCount: Int
   /// Current index into the memoryless target textures.
@@ -88,11 +84,11 @@ final actor Renderer {
   /// The layer renderer used for rendering.
   let layerRenderer: LayerRenderer
   /// The application model containing global settings.
-  let appModel: AppModel
+  let runtimeAppModel: RuntimeAppModel
   /// Application settings.
-  let appSettings: AppSettings
+  let storedAppModel: StoredAppModel
   /// Rendering parameters such as transfer functions and isosurface values.
-  let renderingParamaters: RenderingParamaters
+  let sharedAppModel: SharedAppModel
   /// A CPU frame timer.
   let timer: CPUFrameTimer
   /// The initial oversampling factor.
@@ -124,86 +120,94 @@ final actor Renderer {
 
    - Parameters:
    - layerRenderer: The layer renderer to be used.
-   - appModel: The global application model.
-   - appSettings: Application settings.
-   - renderingParamaters: Rendering parameters including transfer function and
+   - runtimeAppModel: The global application model.
+   - storedAppModel: Application settings.
+   - sharedAppModel: Rendering parameters including transfer function and
    isosurface value.
    - timer: A CPU frame timer.
    - dataset: The BorgVR dataset.
    - logger: An optional logger.
    */
   init(_ layerRenderer: LayerRenderer,
-       appModel: AppModel,
-       appSettings: AppSettings,
-       renderingParamaters: RenderingParamaters,
+       runtimeAppModel: RuntimeAppModel,
+       storedAppModel: StoredAppModel,
+       sharedAppModel: SharedAppModel,
        timer: CPUFrameTimer,
        dataset: BORGVRDatasetProtocol,
+       isHost: Bool,
        logger: LoggerBase? = nil) throws {
 
     logger?.info("Loading dataset \(dataset.getMetadata().datasetDescription)")
+    logger?
+      .info(
+        "  dimensions: \(dataset.getMetadata().width) x \(dataset.getMetadata().height) x \(dataset.getMetadata().depth)"
+      )
+    logger?.info("  aspect: \(dataset.getMetadata().aspectX) x \(dataset.getMetadata().aspectY) x \(dataset.getMetadata().aspectZ)")
+    logger?.info("  brickSize: \(dataset.getMetadata().brickSize)")
+
 
     self.timer = timer
-    self.initialOversampling = Float(appSettings.oversampling)
+    self.initialOversampling = Float(storedAppModel.oversampling)
     self.activeOversampling = self.initialOversampling
-    self.dropFPS = appSettings.dropFPS
-    self.recoveryFPS = appSettings.recoveryFPS
-    self.dynamicOverSampling = appSettings.oversamplingMode ==
+    self.dropFPS = storedAppModel.dropFPS
+    self.recoveryFPS = storedAppModel.recoveryFPS
+    self.dynamicOverSampling = storedAppModel.oversamplingMode ==
     OversamplingMode.dynamicMode.rawValue
     self.logger = logger
 
     self.layerRenderer = layerRenderer
     self.device = layerRenderer.device
     self.commandQueue = self.device.makeCommandQueue()!
-    self.appModel = appModel
-    self.renderingParamaters = renderingParamaters
+    self.runtimeAppModel = runtimeAppModel
+    self.sharedAppModel = sharedAppModel
 
     self.autoRotationAngle = 0
     self.autoRotationStartTime = 0
 
     self.borgData = dataset
 
-    let atlasSizeMB = AppSettings.int("atlasSizeMB")
+    let atlasSizeMB = StoredAppModel.int("atlasSizeMB")
 
     do {
       volumeAtlas = try VolumeAtlas(
         device: device,
         maxMemory: atlasSizeMB * 1024 * 1024,
         borgData: borgData,
-        transferFunction: renderingParamaters.transferFunction,
-        isoValue: renderingParamaters.isoValue,
+        transferFunction: sharedAppModel.transferFunction,
+        isoValue: sharedAppModel.isoValue,
         logger: logger
       )
       logger?.dev("VolumeAtlas created successfully.")
     } catch {
       logger?.error("Failed to create volume atlas: \(error)")
-      fatalError()
+      throw error
     }
 
     let metadata = borgData.getMetadata()
 
     // Page in initial bricks for smoother rendering.
-    let maxInitialBricks = AppSettings.int("initialBricks")
+    let maxInitialBricks = StoredAppModel.int("initialBricks")
 
-    let start = metadata.brickMetadata.count-3
-    let count = min(maxInitialBricks,metadata.brickMetadata.count-2)
+    let start = metadata.brickMetadata.count-2
+    let count = min(maxInitialBricks,metadata.brickMetadata.count-1)
     let initialIDs = (0..<count).map { start - $0 }
 
     do {
+      // note that this does not guarantee that all initialIDs
+      // are paged in, as some may be empty
       try volumeAtlas.pageIn(IDs: initialIDs)
       logger?.dev("\(initialIDs.count) initial bricks paged in successfully.")
     } catch {
       logger?.warning("Failed to page in all of the initial bricks: \(error)")
     }
 
-    let minHashTableSize = AppSettings.int("minHashTableSize")
-
+    let minHashTableSize = StoredAppModel.int("minHashTableSize")
 
     let minTableElementCount : Int = Int(ceil(Double(minHashTableSize * 1024 * 1024) / Double(metadata.componentCount * metadata.bytesPerComponent * metadata.brickSize * metadata.brickSize * metadata.brickSize)))
 
-    logger?.dev("HashTableSize of \(minHashTableSize) MB is converted to \(minTableElementCount) table elements.")
+    logger?.dev("Size of Bricks represented by the Hash Table is \(minHashTableSize) MB. That means a minimum of \(minTableElementCount) table elements.")
 
     self.hashTable = GPUHashtable(minTableElementCount: minTableElementCount, device: device, logger: logger)
-    self.inFlightSemaphore = DispatchSemaphore(value: appModel.maxBuffersInFlight)
 
     let maxExtend = Float(max(metadata.width, metadata.height, metadata.depth))
     let scale = SIMD3<Float>(metadata.aspectX * Float(metadata.width) / maxExtend,
@@ -211,24 +215,25 @@ final actor Renderer {
                              metadata.aspectZ * Float(metadata.depth) / maxExtend)
     self.volumeScale = Transform(scale: scale).matrix
 
+
     let device = self.device
-    if appModel.useMultisamplingIfAvailable && device.supports32BitMSAA &&
+    if runtimeAppModel.useMultisamplingIfAvailable && device.supports32BitMSAA &&
         device.supportsTextureSampleCount(4) {
       self.rasterSampleCount = 4
     } else {
       self.rasterSampleCount = 1
     }
 
-    self.memorylessTargets = .init(repeating: nil, count: appModel.maxBuffersInFlight)
+    self.memorylessTargets = .init(repeating: nil, count: runtimeAppModel.maxBuffersInFlight)
 
     self.uniformBufferVertex = try AlignedBuffer<VertexUniformsArray>(
       device: device,
-      capacity: appModel.maxBuffersInFlight
+      capacity: runtimeAppModel.maxBuffersInFlight
     )
 
     self.uniformBufferFragment = try AlignedBuffer<FragmentUniformsArray>(
       device: device,
-      capacity: appModel.maxBuffersInFlight
+      capacity: runtimeAppModel.maxBuffersInFlight
     )
 
     do {
@@ -272,10 +277,13 @@ final actor Renderer {
 
     vertexCount = cube.vertices.count
 
-    self.borgARProvider = BorgARProvider(logger: logger)
-    self.appSettings = appSettings
+    self.borgARProvider = BorgARProvider(
+      logger: logger,
+      groupSessionHost: isHost
+    )
+    self.storedAppModel = storedAppModel
 
-    renderingParamaters.transferFunction.initMetal(device: device)
+    sharedAppModel.transferFunction.initMetal(device: device)
 
     logger?.dev("Renderer initialized")
   }
@@ -285,9 +293,13 @@ final actor Renderer {
     // TODO: figure out a better way to detect that the immersive space
     //       has been closed due to external circumstances, such as pressing
     //       home
-    let model = appModel
+
+    borgARProvider.stopARSession()
+    let model = runtimeAppModel
     Task { @MainActor in
       model.currentState = .selectData
+      model.activeDataset = nil
+      model.groupSessionHost = false
     }
   }
 

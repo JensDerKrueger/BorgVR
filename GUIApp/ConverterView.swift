@@ -22,13 +22,14 @@ struct ConverterView: View {
   @State private var tempBrickSize: String = ""
   @State private var brickSizeErrorMsg: String?
 
+  @State private var step: Int = 1
 
-  @EnvironmentObject var appSettings: AppSettings
+  @EnvironmentObject var storedAppModel: StoredAppModel
 
   /**
    The shared application model environment object that manages global state.
    */
-  @Environment(AppModel.self) private var appModel
+  @Environment(RuntimeAppModel.self) private var runtimeAppModel
 
   // Create an instance of our GUI logger.
   // (It starts with no bindings until we set them in onAppear.)
@@ -36,181 +37,204 @@ struct ConverterView: View {
 
   var body: some View {
     VStack(spacing: 16) {
-      // Step 1: Select input file or directory
-      VStack{
-        Text("Step 1: Select Input")
-          .font(.headline)
-          .multilineTextAlignment(.center)
-          .frame(maxWidth: .infinity, alignment: .leading)
-        HStack {
-          VStack(alignment: .leading, spacing: 4) {
-            Text("Choose the QVIS or NRRD file you want to import.")
-              .font(.subheadline)
-              .foregroundColor(.gray)
-              .multilineTextAlignment(.center)
+      // Title
+      Text("Import Dataset")
+        .font(.title)
+        .bold()
+        .frame(maxWidth: .infinity, alignment: .leading)
 
-            HStack {
-              Button("Select Input File") {
-                selectInputFile()
+      // Step indicator
+      Text("Step \(step) of 6")
+        .font(.subheadline)
+        .foregroundColor(.secondary)
+        .frame(maxWidth: .infinity, alignment: .leading)
+
+      // Wizard content by step
+      Group {
+        switch step {
+          case 1:
+            // Step 1: Input source
+            VStack(alignment: .leading, spacing: 12) {
+              Text("Select Input Source")
+                .font(.headline)
+              Text("Choose a file (QVIS/NRRD) or a directory with DICOM files.")
+                .font(.subheadline)
+                .foregroundColor(.gray)
+
+              HStack {
+                Button {
+                  selectInputFile()
+                } label: {
+                  Label("Select Input File", systemImage: "doc")
+                }
+                Text(inputFile.isEmpty ? "No file selected" : inputFile)
+                  .lineLimit(1)
+                  .truncationMode(.middle)
+                  .foregroundColor(inputFile.isEmpty ? .gray : .primary)
               }
-              Text(inputFile.isEmpty ? "No file selected" : inputFile)
-                .lineLimit(1)
-                .truncationMode(.middle)
-                .foregroundColor(inputFile.isEmpty ? .gray : .primary)
-            }
-          }
 
-          Spacer()
-          Text("or")
-            .font(.headline)
-            .multilineTextAlignment(.center)
-          Spacer()
-
-
-          VStack(alignment: .leading, spacing: 4) {
-            Text("Choose the Directory containing DICOM files you want to import.")
-              .font(.subheadline)
-              .foregroundColor(.gray)
-              .multilineTextAlignment(.center)
-
-            HStack {
-              Button("Select Input Directory") {
-                selectInputDirectory()
+              HStack {
+                Button {
+                  selectInputDirectory()
+                } label: {
+                  Label("Select Input Directory", systemImage: "folder")
+                }
+                Text(inputDirectory.isEmpty ? "No directory selected" : inputDirectory)
+                  .lineLimit(1)
+                  .truncationMode(.middle)
+                  .foregroundColor(inputDirectory.isEmpty ? .gray : .primary)
               }
-              Text(inputDirectory.isEmpty ? "No file selected" : inputDirectory)
-                .lineLimit(1)
-                .truncationMode(.middle)
-                .foregroundColor(inputDirectory.isEmpty ? .gray : .primary)
             }
-          }
+          case 2:
+            // Step 2: Output directory
+            VStack(alignment: .leading, spacing: 12) {
+              Text("Select Output Directory")
+                .font(.headline)
+              Text("Choose a folder where the converted dataset will be stored.")
+                .font(.subheadline)
+                .foregroundColor(.gray)
+
+              HStack {
+                Text("Data Directory:")
+                TextField("Select output folder", text: $storedAppModel.dataDirectory)
+                  .textFieldStyle(RoundedBorderTextFieldStyle())
+                  .accentColor(.blue)
+                Button {
+                  showDirectoryPicker = true
+                } label: {
+                  Label("Browse", systemImage: "ellipsis.circle")
+                }
+              }
+            }
+          case 3:
+            // Step 3: Output filename
+            VStack(alignment: .leading, spacing: 12) {
+              Text("Enter Output Filename")
+                .font(.headline)
+              Text("Provide a name for the new dataset file.")
+                .font(.subheadline)
+                .foregroundColor(.gray)
+
+              HStack {
+                Text("Output File:")
+                TextField("Enter output file name", text: $outputFile)
+                  .textFieldStyle(RoundedBorderTextFieldStyle())
+                  .accentColor(.blue)
+              }
+            }
+          case 4:
+            // Step 4: Description
+            VStack(alignment: .leading, spacing: 12) {
+              Text("Enter Description (Optional)")
+                .font(.headline)
+              Text("Provide a description of the dataset.")
+                .font(.subheadline)
+                .foregroundColor(.gray)
+
+              HStack {
+                Text("Description:")
+                TextField("Enter Description", text: $datasetDescription)
+                  .textFieldStyle(RoundedBorderTextFieldStyle())
+                  .accentColor(.blue)
+              }
+            }
+          case 5:
+            // Step 5: Confirm and start
+            VStack(alignment: .leading, spacing: 12) {
+              Text("Ready to Convert")
+                .font(.headline)
+
+              if storedAppModel.lastMinute {
+                Text("Review settings and start the conversion process.")
+                  .font(.subheadline)
+                  .foregroundColor(.gray)
+                HStack(spacing: 8) {
+                  Text("Bricksize:")
+                  TextField("Bricksize", text: $tempBrickSize, onCommit: validateBrickSize)
+                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                    .accentColor(.blue)
+                    .frame(maxWidth: 120)
+                    .onAppear { tempBrickSize = String(storedAppModel.brickSize) }
+                  if let error = brickSizeErrorMsg {
+                    Text(error).foregroundColor(.red).font(.caption)
+                  }
+                }
+              }
+            }
+          default:
+            // Conversion running: show progress and log only
+            VStack(alignment: .leading, spacing: 8) {
+              Text("Converting…")
+                .font(.headline)
+              HStack {
+                Text(progressText)
+                ProgressView(value: progressValue)
+                  .padding(.leading)
+              }
+              TextEditor(text: $logText)
+                .border(Color.gray, width: 1)
+                .font(.system(.body, design: .monospaced))
+                .frame(minHeight: 220)
+            }
+
         }
       }
-
-      // Step 2: Select output directory
-      VStack(alignment: .leading, spacing: 4) {
-        Text("Step 2: Select Output Directory")
-          .font(.headline)
-          .frame(maxWidth: .infinity, alignment: .leading)
-        Text("Choose a folder where the converted dataset will be stored.")
-          .font(.subheadline)
-          .foregroundColor(.gray)
-          .frame(maxWidth: .infinity, alignment: .leading)
-
-        HStack {
-          Text("Data Directory:")
-          TextField("Select output folder", text: $appSettings.dataDirectory)
-            .textFieldStyle(RoundedBorderTextFieldStyle())
-            .accentColor(.blue)
-            .disabled(isConverting)
-          Button("...") {
-            showDirectoryPicker = true
-          }
-          .disabled(isConverting)
-        }
-      }
-
-      // Step 3: Specify output filename
-      VStack(alignment: .leading, spacing: 4) {
-        Text("Step 3: Enter Output Filename")
-          .font(.headline)
-          .frame(maxWidth: .infinity, alignment: .leading)
-        Text("Provide a name for the new dataset file.")
-          .font(.subheadline)
-          .foregroundColor(.gray)
-          .frame(maxWidth: .infinity, alignment: .leading)
-          .accentColor(.blue)
-
-        HStack {
-          Text("Output File:")
-          TextField("Enter output file name", text: $outputFile)
-            .textFieldStyle(RoundedBorderTextFieldStyle())
-            .accentColor(.blue)
-        }
-      }
-
-      // Step 4: Specify output filename
-      VStack(alignment: .leading, spacing: 4) {
-        Text("Step 4: Enter Description (Optional)")
-          .font(.headline)
-          .frame(maxWidth: .infinity, alignment: .leading)
-        Text("Provide a decription of the dataset.")
-          .font(.subheadline)
-          .foregroundColor(.gray)
-          .frame(maxWidth: .infinity, alignment: .leading)
-          .accentColor(.blue)
-
-        HStack {
-          Text("Description:")
-          TextField("Enter Description", text: $datasetDescription)
-            .textFieldStyle(RoundedBorderTextFieldStyle())
-            .accentColor(.blue)
-        }
-      }
-
-      // Step 5: Start conversion
-      VStack(spacing: 4) {
-
-        Text("Step 5: Start Conversion")
-          .font(.headline)
-          .frame(maxWidth: .infinity, alignment: .leading)
-
-        Text("Click the button below to start the conversion process.")
-          .font(.subheadline)
-          .foregroundColor(.gray)
-          .frame(maxWidth: .infinity, alignment: .leading)
-
-        HStack {
-          Button("Start Conversion") {
-            startConversion()
-          }
-          Spacer()
-        }
-        .disabled(isConverting)
-      }
-
-      // Progress view
-      HStack {
-        Text(progressText)
-        ProgressView(value: progressValue)
-          .padding()
-      }
-
-      // Multi-line log display
-      TextEditor(text: $logText)
-        .border(Color.gray, width: 1)
-        .font(.system(.body, design: .monospaced))
 
       Spacer()
 
-      HStack {
-        Button("Back to main menu") {
-          appModel.currentState = .start
-        }
-
-        if appSettings.lastMinute {
-          Spacer()
-          HStack {
-            Text("Bricksize:")
-
-            TextField(
-              "Bricksize",
-              text: $tempBrickSize,
-              onCommit: validateBrickSize
-            )
-              .textFieldStyle(RoundedBorderTextFieldStyle())
-              .accentColor(.blue)
-              .onAppear { tempBrickSize = String(appSettings.brickSize) }
+      // Navigation controls
+      if !isConverting {
+        HStack {
+          Button {
+            if step > 1 { step -= 1 }
+          } label: {
+            Label("Back", systemImage: "chevron.backward")
           }
-          if let error = brickSizeErrorMsg {
-            Text(error).foregroundColor(.red).font(.caption)
-          }
+          .disabled(step == 1)
+
           Spacer()
+
+          Button {
+            // Validate minimal inputs for each step before advancing
+            switch step {
+              case 1:
+                if !inputFile.isEmpty || !inputDirectory.isEmpty { step += 1 }
+              case 2:
+                if !storedAppModel.dataDirectory.isEmpty { step += 1 }
+              case 3:
+                if !outputFile.isEmpty { step += 1 }
+              case 4:
+                step += 1
+              case 5:
+                step += 1
+                startConversion()
+              default:
+                runtimeAppModel.currentState = .start
+            }
+          } label: {
+            Label(step < 5 ? "Next" : (step == 5 ? "Start Conversion" : "Close"), systemImage: step < 5 ? "chevron.forward" : "checkmark.circle")
+          }
+          .disabled(
+            (step == 1 && (inputFile.isEmpty && inputDirectory.isEmpty)) ||
+            (step == 2 && storedAppModel.dataDirectory.isEmpty) ||
+            (step == 3 && outputFile.isEmpty) ||
+            (step == 5 && brickSizeErrorMsg != nil) ||
+            (step == 6 && isConverting)
+          )
         }
       }
 
+      // Footer
+      HStack {
+        Button {
+          runtimeAppModel.currentState = .start
+        } label: {
+          Label("Back to main menu", systemImage: "chevron.backward.circle")
+        }
+        .disabled(isConverting)
 
-      .disabled(isConverting)
-
+        Spacer()
+      }
     }
     .padding()
     .onAppear {
@@ -223,7 +247,7 @@ struct ConverterView: View {
       switch result {
         case .success(let urls):
           if let selectedURL = urls.first {
-            appSettings.dataDirectory = selectedURL.path
+            storedAppModel.dataDirectory = selectedURL.path
           }
         case .failure(let error):
           logger.error("Error selecting directory: \(error.localizedDescription)")
@@ -258,8 +282,8 @@ struct ConverterView: View {
   }
 
   private func validateBrickSize() {
-    if let size = Int(tempBrickSize), size >= 1 + appSettings.brickOverlap * 2 {
-      appSettings.brickSize = size
+    if let size = Int(tempBrickSize), size >= 1 + storedAppModel.brickOverlap * 2 {
+      storedAppModel.brickSize = size
       brickSizeErrorMsg = nil
     } else {
       brickSizeErrorMsg = "Must be ≥ 1 + overlap × 2."
@@ -368,13 +392,13 @@ struct ConverterView: View {
 
       do {
 
-        let bricksize = appSettings.brickSize
+        let bricksize = storedAppModel.brickSize
 
-        let directoryURL = URL(fileURLWithPath: appSettings.dataDirectory)
+        let directoryURL = URL(fileURLWithPath: storedAppModel.dataDirectory)
         let outputFilePath = directoryURL.appendingPathComponent(outputFile).path
 
         let borderMode: ExtensionStrategy
-        switch appSettings.borderModeString {
+        switch storedAppModel.borderModeString {
           case "zeroes":
             borderMode = .fillZeroes
           case "border":
@@ -401,10 +425,10 @@ struct ConverterView: View {
                                  maxBrickSize: bricksize,
                                  bytesPerVoxel: parser.bytesPerComponent,
                                  aspect: parser.sliceThickness,
-                                 overlap: appSettings.brickOverlap,
+                                 overlap: storedAppModel.brickOverlap,
                                  outputFilename: appendExtensionIfNeeded(to:outputFilePath,ext:"data"),
                                  datasetDescription: datasetDescription == "" ? "Converted from QVIS Volume \(fileNameWithoutExtension)" : datasetDescription,
-                                 useCompressor: appSettings.enableCompression,
+                                 useCompressor: storedAppModel.enableCompression,
                                  extensionStrategy: borderMode)
           } else {
             logger.info("Opening NRRD volume ...")
@@ -421,10 +445,10 @@ struct ConverterView: View {
                                  maxBrickSize: bricksize,
                                  bytesPerVoxel: parser.bytesPerComponent,
                                  aspect: parser.sliceThickness,
-                                 overlap: appSettings.brickOverlap,
+                                 overlap: storedAppModel.brickOverlap,
                                  outputFilename:appendExtensionIfNeeded(to:outputFilePath,ext:"data"),
                                  datasetDescription: datasetDescription == "" ? "Converted from NRRD Volume \(fileNameWithoutExtension)" : datasetDescription,
-                                 useCompressor: appSettings.enableCompression,
+                                 useCompressor: storedAppModel.enableCompression,
                                  extensionStrategy: borderMode)
 
             if parser.dataIsTempCopy {
@@ -472,10 +496,10 @@ struct ConverterView: View {
                                aspect: Vec3<Float>(x: dicomVolume.scale.x,
                                                    y: dicomVolume.scale.y,
                                                    z: dicomVolume.scale.z),
-                               overlap: appSettings.brickOverlap,
+                               overlap: storedAppModel.brickOverlap,
                                outputFilename: appendExtensionIfNeeded(to:outputFilePath,ext:"data"),
                                datasetDescription: datasetDescription == "" ? "Converted from DICOM Stack \(dirName)" : datasetDescription,
-                               useCompressor: appSettings.enableCompression,
+                               useCompressor: storedAppModel.enableCompression,
                                extensionStrategy: borderMode)
 
           try FileManager.default.removeItem(at: tempURL)
@@ -499,3 +523,4 @@ struct ConverterView: View {
     }
   }
 }
+

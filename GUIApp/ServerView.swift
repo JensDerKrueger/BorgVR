@@ -5,8 +5,8 @@ import SystemConfiguration
 
 
 struct ServerView: View {
-  @Environment(AppModel.self) private var appModel
-  @EnvironmentObject var appSettings: AppSettings
+  @Environment(RuntimeAppModel.self) private var runtimeAppModel
+  @EnvironmentObject var storedAppModel: StoredAppModel
 
   @State private var isRunningServer: Bool = false
   @State private var logText: String = ""
@@ -30,6 +30,10 @@ struct ServerView: View {
   @State private var datasetInfoText: String = "Scanning for datasets..."
   @State private var showDirectoryPicker = false
 
+  struct IPSelection: Identifiable { let id = UUID(); let ips: [String] }
+  @State private var ipSelection: IPSelection? = nil
+
+
   var body: some View {
     ZStack {
       VStack(spacing: 20) {
@@ -45,7 +49,7 @@ struct ServerView: View {
           .clipShape(RoundedRectangle(cornerRadius: 20))
           .shadow(radius: 10)
 
-        HStack {
+        HStack(spacing: 10) {
           Text("IP Addresses of this System:")
 
           Text(IPText)
@@ -53,15 +57,32 @@ struct ServerView: View {
             .bold()
             .foregroundColor(.blue)
             .textSelection(.enabled)
+
+          Button {
+            let ips = getMyIPAddresses().filter { $0 != "127.0.0.1" }
+            guard !ips.isEmpty else { return }
+            
+            if ips.count == 1 {
+              let toCopy = ips.first ?? IPText
+              NSPasteboard.general.clearContents()
+              NSPasteboard.general.setString(toCopy, forType: .string)
+            } else {
+              ipSelection = IPSelection(ips: ips)
+            }
+          } label: {
+            Label("Copy", systemImage: "doc.on.doc")
+          }
+          .buttonStyle(.borderless)
+          .help("Copy IP addresses")
         }
 
         HStack {
-          Text("Port: \(String(appSettings.port))")
+          Text("Port: \(String(storedAppModel.port))")
         }
 
         HStack {
           Text("Data directory:")
-          TextField("Path", text: $appSettings.dataDirectory, onCommit: scanDatasets)
+          TextField("Path", text: $storedAppModel.dataDirectory, onCommit: scanDatasets)
             .textFieldStyle(RoundedBorderTextFieldStyle())
             .disabled(isRunningServer)
             .accentColor(.blue)
@@ -89,7 +110,7 @@ struct ServerView: View {
         Spacer()
 
         HStack {
-          Button(isRunningServer ? "Stop Server" : "Start Dataset Server") {
+          Button {
             isRunningServer.toggle()
 
             if isRunningServer {
@@ -97,13 +118,23 @@ struct ServerView: View {
             } else {
               stopServer()
             }
+          } label: {
+            if isRunningServer {
+              Label("Stop Server", systemImage: "stop.circle")
+            } else {
+              Label("Start Dataset Server", systemImage: "play.circle")
+            }
           }
-          Button("Clear Log") {
+          Button {
             logText = ""
+          } label: {
+            Label("Clear Log", systemImage: "trash")
           }
 
-          Button("Back to main menu") {
-            appModel.currentState = .start
+          Button {
+            runtimeAppModel.currentState = .start
+          } label: {
+            Label("Back to main menu", systemImage: "chevron.backward.circle")
           }
           .disabled(isRunningServer)
         }
@@ -159,25 +190,62 @@ struct ServerView: View {
       switch result {
         case .success(let urls):
           if let selectedURL = urls.first {
-            appSettings.dataDirectory = selectedURL.path
+            storedAppModel.dataDirectory = selectedURL.path
             scanDatasets()
           }
         case .failure(let error):
           logger.error("Error selecting directory: \(error.localizedDescription)")
       }
     }
+    .sheet(item: $ipSelection) { selection in
+
+
+      VStack(alignment: .leading, spacing: 12) {
+        Text("Select IP to Copy")
+          .font(.headline)
+        Text("Multiple IP addresses were found on this system. Choose one to copy.")
+          .font(.subheadline)
+          .foregroundColor(.secondary)
+
+        ForEach(Array(selection.ips.enumerated()), id: \.offset) { _, ip in
+          Button {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(ip, forType: .string)
+            ipSelection = nil
+          } label: {
+            HStack {
+              Image(systemName: "doc.on.doc")
+              Text(ip)
+                .font(.system(.body, design: .monospaced))
+              Spacer()
+            }
+          }
+        }
+
+        HStack {
+          Spacer()
+          Button(role: .cancel) {
+            ipSelection = nil
+          } label: {
+            Label("Cancel", systemImage: "xmark.circle")
+          }
+        }
+      }
+      .padding(20)
+      .frame(minWidth: 420)
+    }
   }
 
   private func scanDatasets() {
     isScanningDatasets = true
     Task {
-      datasetScanner = DatasetScanner(directory: appSettings.dataDirectory, logger: logger)
+      datasetScanner = DatasetScanner(directory: storedAppModel.dataDirectory, logger: logger)
       datasetScanner?.loadDatasets()
       datasets = datasetScanner?.getDatasets() ?? []
       datasetInfoText = "Found datasets: \(datasets.count)"
       isScanningDatasets = false
 
-      if appSettings.autoStartServer {
+      if storedAppModel.autoStartServer {
         isRunningServer = true
         startServer()
       }
@@ -227,7 +295,8 @@ struct ServerView: View {
   private func startServer() {
     logText = ""
     server = TCPServer(
-      port: UInt16(appSettings.port),
+      port: UInt16(storedAppModel.port),
+      maxBricksPerGetRequest: storedAppModel.maxBricksPerGetRequest,
       logger: logger,
       datasets: datasets
     )
@@ -237,3 +306,4 @@ struct ServerView: View {
   }
 
 }
+

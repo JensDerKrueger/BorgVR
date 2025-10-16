@@ -77,8 +77,6 @@ class BORGVRRemoteData: BORGVRDatasetProtocol {
     }
   }
 
-
-
   /**
    Initializes a new BORGVRRemoteData instance.
 
@@ -89,13 +87,14 @@ class BORGVRRemoteData: BORGVRDatasetProtocol {
    - Parameters:
    - connection: The NWConnection to the remote server.
    - datasetID: The identifier of the dataset.
-   - asyncGet: A flag indicating whether to fetch data asynchronously.
    - targetFilename: An optional file path for a local data source.
    - Throws: An error if initializing the underlying data source fails.
    */
-  init(connection: NWConnection, datasetID: Int,
-       asyncGet: Bool, targetFilename: String?,
-       logger:LoggerBase?) throws {
+  init(connection: NWConnection, datasetID: String,
+       maxBricksPerGetRequest: Int,
+       targetFilename: String?,
+       logger:LoggerBase?,
+       notifier:NotificationBase?) throws {
 
     self.logger = logger
 
@@ -112,18 +111,21 @@ class BORGVRRemoteData: BORGVRDatasetProtocol {
           self.brickDataSource = try CachingRemoteDataSource(
             connection: connection,
             datasetID: datasetID,
-            asyncGet: asyncGet,
+            maxBricksPerGetRequest: maxBricksPerGetRequest,
             filename: targetFilename,
-            logger:logger)
+            logger:logger,
+            notifier: notifier
+          )
         }
       } else {
         logger?.dev("Loading remote and caching locally")
         self.brickDataSource = try CachingRemoteDataSource(
           connection: connection,
           datasetID: datasetID,
-          asyncGet: asyncGet,
+          maxBricksPerGetRequest: maxBricksPerGetRequest,
           filename: targetFilename,
-          logger:logger)
+          logger:logger,
+          notifier: notifier)
       }
     } else {
       logger?.dev("Loading remote dataset directly")

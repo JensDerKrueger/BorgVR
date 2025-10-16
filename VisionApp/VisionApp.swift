@@ -1,12 +1,6 @@
-//
-//  VisionAppApp.swift
-//  VisionApp
-//
-//  Created by Jens Krüger on 18.02.25.
-//
-
 import SwiftUI
 import CompositorServices
+import GroupActivities
 
 struct ContentStageConfiguration: CompositorLayerConfiguration {
 
@@ -23,39 +17,63 @@ struct ContentStageConfiguration: CompositorLayerConfiguration {
     let supportedLayouts = capabilities.supportedLayouts(options: options)
 
     configuration.layout = supportedLayouts.contains(.layered) ? .layered : .dedicated
-
-
   }
 }
 
 @main
 struct VisionApp: App {
 
-  @State private var appModel = AppModel()
-  @State private var renderingParamaters = RenderingParamaters()
-  @StateObject private var appSettings = AppSettings()
+  @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+
+  @State private var runtimeAppModel = RuntimeAppModel()
+  @State private var sharedAppModel = SharedAppModel()
+  @StateObject private var storedAppModel = StoredAppModel()
 
   @Environment(\.scenePhase) private var scenePhase
+  @Environment(\.openImmersiveSpace) private var openImmersiveSpace
   @Environment(\.dismissImmersiveSpace) private var dismissImmersiveSpace
 
   var body: some Scene {
     WindowGroup(id: "main") {
       ContentView()
         .frame(
-          minWidth: appModel.windowSize.width, maxWidth: appModel.windowSize.width,
-          minHeight: appModel.windowSize.height, maxHeight: appModel.windowSize.height
+          minWidth: runtimeAppModel.windowSize.width, maxWidth: runtimeAppModel.windowSize.width,
+          minHeight: runtimeAppModel.windowSize.height, maxHeight: runtimeAppModel.windowSize.height
         )
         .trackView(name: "MainView")
-        .environment(appModel)
+        .environment(runtimeAppModel)
+        .onOpenURL { url in
+          Task {
+            await handleOpenRequest(url:url)
+          }
+        }
+        .task {
+          GroupActivityHelper.registerGroupActivity()
+        }
+        .task {
+          await NotificationHelper.requestAuthorization(storedAppModel:storedAppModel)
+        }
+        .task {
+          await sharedAppModel.configureGroupActivities(runtimeAppModel:runtimeAppModel)
+        }
     }
-    .environment(appModel)
-    .environment(renderingParamaters)
-    .environmentObject(appSettings)
+    .environment(runtimeAppModel)
+    .environment(sharedAppModel)
+    .environmentObject(storedAppModel)
     .windowResizability(.contentSize)
-    .defaultSize(width:appModel.windowSize.width,height:appModel.windowSize.height)
+    .defaultSize(width:runtimeAppModel.windowSize.width,height:runtimeAppModel.windowSize.height)
     .onChange(of: scenePhase) {
       if scenePhase == .background {
         quitApp()
+      }
+    }
+    .onChange(of: runtimeAppModel.immersiveSpaceIntent) { _, newValue in
+      Task { @MainActor in
+        switch newValue {
+          case .open:  await openSpace()
+          case .close: await closeSpace()
+          default: break
+        }
       }
     }
 
@@ -63,24 +81,24 @@ struct VisionApp: App {
     WindowGroup(id: "TransferFunctionEditorView") {
       TransferFunctionEditorView()
         .trackView(name: "TransferFunctionEditorView")
-        .environment(appModel)
-        .environment(renderingParamaters)
-        .environmentObject(appSettings)
+        .environment(runtimeAppModel)
+        .environment(sharedAppModel)
+        .environmentObject(storedAppModel)
         .frame(
           minWidth: 400, maxWidth: 600,
           minHeight: 1050, maxHeight: 1050
         )
-
     }
     .windowResizability(.contentSize)
     .windowStyle(.plain)
+
 
     // Iso-Value Editor Window
     WindowGroup(id: "IsovalueEditorView") {
       IsovalueEditorView()
         .trackView(name: "IsovalueEditorView")
-        .environment(appModel)
-        .environment(renderingParamaters)
+        .environment(runtimeAppModel)
+        .environment(sharedAppModel)
         .frame(
           minWidth: 300,
           minHeight: 200
@@ -93,7 +111,7 @@ struct VisionApp: App {
     WindowGroup(id: "PerformanceGraphView") {
       PerformanceGraphView()
         .trackView(name: "PerformanceGraphView")
-        .environment(appModel)
+        .environment(runtimeAppModel)
         .frame(
           minWidth: 300,
           minHeight: 200
@@ -105,18 +123,18 @@ struct VisionApp: App {
     WindowGroup(id: "ProfileView") {
       ProfileView()
         .trackView(name: "ProfileView")
-        .environment(appModel)
-        .environment(renderingParamaters)
-        .environmentObject(appSettings)
+        .environment(runtimeAppModel)
+        .environment(sharedAppModel)
+        .environmentObject(storedAppModel)
     }
     .windowResizability(.contentSize)
     .defaultSize(width:800,height:1200)
 
     // Logger Window
     WindowGroup(id: "LoggerView") {
-      LoggerView(logger:appModel.logger)
+      LoggerView(logger:runtimeAppModel.logger)
         .trackView(name: "LoggerView")
-        .environment(appModel)
+        .environment(runtimeAppModel)
         .frame(
           minWidth: 300,
           minHeight: 200
@@ -124,96 +142,136 @@ struct VisionApp: App {
     }
     .windowResizability(.contentSize)
 
-    ImmersiveSpace(id: appModel.immersiveSpaceID) {
-      CompositorLayer(configuration: ContentStageConfiguration(disableFoveation: appSettings.disableFoveation)) { @MainActor layerRenderer in
-
-        let dataset : BORGVRDatasetProtocol
-        do {
-          switch appModel.datasetSource {
-            case .Local:
-              dataset = try BORGVRFileData(filename: appModel.activeDataset)
-            case .Remote:
-              let manager = BORGVRRemoteDataManager(
-                host: appSettings.serverAddress,
-                port: UInt16(appSettings.serverPort),
-                logger:appModel.logger
-              )
-              try manager.connect(timeout: appSettings.timeout)
-
-              if let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
-
-                let fileURL = documentsURL.appendingPathComponent(
-                  "\(appSettings.serverAddress)-\(appModel.activeDataset).data"
-                )
-
-                dataset = try manager.openDataset(
-                  datasetID: Int(appModel.activeDataset)!,
-                  timeout: appSettings.timeout,
-                  localCacheFilename: appSettings.makeLocalCopy ? fileURL.path : nil
-                )
-
-              } else {
-                dataset = try manager.openDataset(
-                  datasetID: Int(appModel.activeDataset)!,
-                  timeout: appSettings.timeout
-                )
-              }
-          }
-        } catch {
-          return
-        }
-
-        let timer = CPUFrameTimer()
-        appModel.timer = timer
-
-        renderingParamaters.reset()
-
-        if appModel.datasetSource == .Local {
-          if appSettings.autoloadTF {
-            let tfFilename = URL(fileURLWithPath: appModel.activeDataset).deletingPathExtension().path()+".tf1d"
-            let fileURL = URL(fileURLWithPath: tfFilename)
-            try? renderingParamaters.transferFunction.load(from: fileURL)
-          }
-          if appSettings.autoloadTransform {
-            let tfFilename = URL(fileURLWithPath: appModel.activeDataset).deletingPathExtension().path()+".trafo"
-            let fileURL = URL(fileURLWithPath: tfFilename)
-            try? renderingParamaters.loadTransform(from: fileURL)
-          }
-        }
-
-        renderingParamaters.updateRanges(minValue: dataset.getMetadata().minValue,
-                                         maxValue: dataset.getMetadata().maxValue,
-                                         rangeMax: dataset.getMetadata().rangeMax)
-        Renderer
-          .startRenderLoop(
-            layerRenderer,
-            appModel: appModel,
-            appSetings: appSettings,
-            renderingParamaters: renderingParamaters,
-            timer: timer,
-            dataset: dataset,
-            logger: appModel.logger
-          )
-
-        let fullControlls = ImmersiveInteraction(
-          renderingParamaters:  renderingParamaters
-        )
-        layerRenderer.onSpatialEvent = { events in
-          fullControlls
-            .handleSpatialEvents(events, appModel.interactionMode)
-        }
+    ImmersiveSpace(id: runtimeAppModel.immersiveSpaceID) {
+      CompositorLayer(configuration: ContentStageConfiguration(disableFoveation: storedAppModel.disableFoveation)) {
+        @MainActor layerRenderer in
+        ImmersiveBootstrap.run(layerRenderer: layerRenderer,
+                               runtimeAppModel: runtimeAppModel,
+                               storedAppModel: storedAppModel,
+                               sharedAppModel: sharedAppModel)
       }
     }
-    .immersionStyle(selection: .constant(appModel.mixedImmersionStyle ? .mixed : .full), in: appModel.mixedImmersionStyle ? .mixed : .full)
+    .immersionStyle(selection: .constant(runtimeAppModel.mixedImmersionStyle ? .mixed : .full), in: runtimeAppModel.mixedImmersionStyle ? .mixed : .full)
+    .handlesExternalEvents(matching: [groupActivityIdentifier])
   }
 
   func quitApp() {
-    if appModel.immersiveSpaceState == .open {
+    if runtimeAppModel.immersiveSpaceState == .open {
       Task { @MainActor in
         await dismissImmersiveSpace()
       }
     }
-    appModel.quitApp()
+    runtimeAppModel.quitApp()
   }
+
+  @MainActor
+  private func openSpace() async {
+    if runtimeAppModel.immersiveSpaceState == .open {
+      runtimeAppModel.immersiveSpaceState = .inTransition
+      await dismissImmersiveSpace()
+    }
+
+    runtimeAppModel.immersiveSpaceState = .inTransition
+    switch await openImmersiveSpace(id: runtimeAppModel.immersiveSpaceID) {
+      case .opened:
+        runtimeAppModel.currentState = .renderData
+      case .userCancelled, .error:
+        fallthrough
+      @unknown default:
+        runtimeAppModel.immersiveSpaceState = .closed
+    }
+
+    if runtimeAppModel.groupSessionHost {
+      sharedAppModel.openSharedView()
+    }
+    runtimeAppModel.immersiveSpaceIntent = .keepCurrent
+  }
+
+  @MainActor
+  private func closeSpace() async {
+    runtimeAppModel.immersiveSpaceState = .inTransition
+    await dismissImmersiveSpace()
+    runtimeAppModel.immersiveSpaceIntent = .keepCurrent
+    runtimeAppModel.currentState = .selectData
+
+    if runtimeAppModel.groupSessionHost {
+      sharedAppModel.shutdownGroupsession()
+    }
+
+    let documentsDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+    if let activeDataset = runtimeAppModel.activeDataset {
+      let autoURL = documentsDirectory.appendingPathComponent(activeDataset.uniqueId)
+      if storedAppModel.autoloadTF {
+        let fileURL = URL(
+          fileURLWithPath: autoURL.deletingPathExtension().path() + ".tf1d"
+        )
+        try? sharedAppModel.transferFunction.save(to: fileURL)
+      }
+      if storedAppModel.autoloadTransform {
+        let fileURL = URL(
+          fileURLWithPath: autoURL.deletingPathExtension().path() + ".trafo"
+        )
+        try? sharedAppModel.modelTransform.save(to: fileURL)
+      }
+    }
+  }
+
+  @MainActor
+  private func handleOpenRequest(url:URL) async {
+    do {
+      guard url.startAccessingSecurityScopedResource() else {
+        throw FileError.noPermission("No Permission to access file \(url)")
+      }
+      defer { url.stopAccessingSecurityScopedResource() }
+
+      let documentsDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+      guard let externalMeta = try? BORGVRMetaData(url: url) else {
+        throw FileError.noPermission("Invalid file \(url)")
+      }
+
+      let localURL : URL
+      if let existingURL = findlocalFile(id: externalMeta.uniqueID) {
+        localURL = existingURL
+      } else {
+        guard let copyURL = copyFile(from: url, toDir: documentsDirectory, logger: nil) else {
+          throw FileError
+            .noPermission(
+              "Unable to copy file \(url) to document directory"
+            )
+        }
+        localURL = copyURL
+      }
+
+      runtimeAppModel.startImmersiveSpace(identifier: localURL.path(),
+                                   description: externalMeta.description,
+                                   source: .local,
+                                   uniqueId: externalMeta.uniqueID,
+                                   asGroupSessionHost: true)
+    } catch {
+      runtimeAppModel.logger.error(error.localizedDescription)
+    }
+  }
+
 }
 
+/*
+ Copyright (c) 2025 Computer Graphics and Visualization Group, University of Duisburg-
+ Essen
+
+ Permission is hereby granted, free of charge, to any person obtaining a copy of this
+ software and associated documentation files (the "Software"), to deal in the Software
+ without restriction, including without limitation the rights to use, copy, modify,
+ merge, publish, distribute, sublicense, and/or sell copies of the Software, and to
+ permit persons to whom the Software is furnished to do so, subject to the following
+ conditions:
+
+ The above copyright notice and this permission notice shall be included in all copies
+ or substantial portions of the Software.
+
+ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+ INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+ PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+ HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF
+ CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR
+ THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ */

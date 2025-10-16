@@ -14,7 +14,7 @@ enum BORGVRRemoteDataManagerError: Error {
   /// Receiving data failed with a reason.
   case receiveFailed(reason: String)
   /// The response is invalid.
-  case invalidResponse
+  case invalidResponse(reason: String)
   /// Some unknown error occurred.
   case unknown(Error)
 
@@ -29,8 +29,8 @@ enum BORGVRRemoteDataManagerError: Error {
         return "Failed to send command: \(error.localizedDescription)"
       case .receiveFailed(let reason):
         return "Failed to receive response: \(reason)"
-      case .invalidResponse:
-        return "Received invalid or unexpected response from server."
+      case .invalidResponse(let reason):
+        return "Received invalid or unexpected response from server: \(reason)"
       case .unknown(let error):
         return "An unknown error occurred: \(error.localizedDescription)"
     }
@@ -48,14 +48,18 @@ class BORGVRRemoteDataManager {
   /// The underlying NWConnection for this manager.
   private let connection: NWConnection
   /// The local list of datasets.
-  private var datasets: [(id: Int, description: String)] = []
+  private var datasets: [(id: String, description: String)] = []
   /// An optional logger for logging messages.
   private let logger: LoggerBase?
+  /// An optional notifier
+  private let notifier: NotificationBase?
   /// The host of the remote server.
   private let host: String
   /// The port number used to connect to the remote server.
   private let port: UInt16
 
+  private static let protocolVersionName : String = "1"
+  private(set) var maxBricksPerGetRequest : Int = 1
   /**
    Initializes a new instance of the remote data manager.
 
@@ -64,8 +68,14 @@ class BORGVRRemoteDataManager {
    - port: The port number to connect on.
    - logger: An optional logger for debug/info logging.
    */
-  init(host: String, port: UInt16, logger: LoggerBase?) {
+  init(
+    host: String,
+    port: UInt16,
+    logger: LoggerBase?,
+    notifier: NotificationBase?
+  ) {
     self.logger = logger
+    self.notifier = notifier
     self.host = host
     self.port = port
     self.connection = NWConnection(host: NWEndpoint.Host(host),
@@ -89,6 +99,7 @@ class BORGVRRemoteDataManager {
   func connect(timeout: Double) throws {
     try BORGVRRemoteDataManager.connect(connection: connection,
                                         timeout: timeout, logger: logger)
+    try getInfo()
   }
 
   /**
@@ -100,8 +111,8 @@ class BORGVRRemoteDataManager {
    - logger: An optional logger to log connection status.
    - Throws: A BORGVRRemoteDataManagerError in case of timeout or failure.
    */
-  static private func connect(connection: NWConnection, timeout: Double,
-                              logger: LoggerBase? = nil) throws {
+  static func connect(connection: NWConnection, timeout: Double,
+                      logger: LoggerBase? = nil) throws {
     let semaphore = DispatchSemaphore(value: 0)
     var success = false
 
@@ -137,22 +148,52 @@ class BORGVRRemoteDataManager {
       )
     }
   }
+  
+  private func getInfo() throws {
+    try sendCommand("INFO")
+    let response = try receiveTextResponse()
 
-  /**
+    let data = KeyValuePairHandler(text:response)
+
+    guard let versionString = data["VERSION"] else {
+      throw BORGVRRemoteDataManagerError.invalidResponse(reason:"Version not found in info response.")
+    }
+    
+    guard BORGVRRemoteDataManager.protocolVersionName <= versionString else {
+      throw BORGVRRemoteDataManagerError.invalidResponse(reason: "Unsupported server protocol version. Server: \(versionString) (Local: \(BORGVRRemoteDataManager.protocolVersionName)).")
+    }
+
+    if let maxBricksPerGetRequest = data.int(for: "MAX_BRICKS_PER_GET_REQUEST") {
+      self.maxBricksPerGetRequest = maxBricksPerGetRequest
+    } else {
+      throw BORGVRRemoteDataManagerError.invalidResponse(reason: "Could not parse brick request limit from server response.")
+    }
+  }
+    /**
    Requests the dataset list from the remote server.
 
    - Returns: An array of tuples containing dataset id and description.
    - Throws: An error if sending or receiving the command fails.
    */
-  func requestDatasetList() throws -> [(id: Int, description: String)] {
+  func requestDatasetList() throws -> [(id: String, description: String)] {
     try sendCommand("LIST")
     let response = try receiveTextResponse()
 
     let lines = response.split(separator: "\n")
-    self.datasets = lines.compactMap { line in
+    self.datasets = try lines.compactMap { line in
       let parts = line.split(separator: " ", maxSplits: 1)
-      guard let id = Int(parts[0]), parts.count > 1 else { return nil }
-      return (id: id, description: String(parts[1]))
+      guard parts.count > 1 else {
+        throw BORGVRRemoteDataManagerError.invalidResponse(reason: "List response too short.")
+      }
+
+      // make sure the id is properly formated
+      let idString = String(parts[0])
+      if UUID(uuidString: idString) != nil {
+        return (id: idString, description: String(parts[1]))
+      } else {
+        throw BORGVRRemoteDataManagerError.invalidResponse(reason: "Invalid ID in List response.")
+      }
+
     }
     return self.datasets
   }
@@ -169,9 +210,8 @@ class BORGVRRemoteDataManager {
    - Returns: A BORGVRRemoteData instance representing the open dataset.
    - Throws: An error if the connection fails.
    */
-  func openDataset(datasetID: Int, timeout: Double,
-                   localCacheFilename: String? = nil,
-                   asyncGet : Bool = true) throws -> BORGVRRemoteData  {
+  func openDataset(datasetID: String, timeout: Double,
+                   localCacheFilename: String? = nil) throws -> BORGVRRemoteData  {
     let datasetConnection = NWConnection(
       host: NWEndpoint.Host(host),
       port: NWEndpoint.Port(rawValue: port)!,
@@ -182,9 +222,10 @@ class BORGVRRemoteDataManager {
                                         timeout: timeout, logger: logger)
     return try BORGVRRemoteData(connection: datasetConnection,
                                 datasetID: datasetID,
-                                asyncGet: true,
+                                maxBricksPerGetRequest: maxBricksPerGetRequest,
                                 targetFilename: localCacheFilename,
-                                logger:logger)
+                                logger:logger,
+                                notifier: notifier)
   }
 
   /**

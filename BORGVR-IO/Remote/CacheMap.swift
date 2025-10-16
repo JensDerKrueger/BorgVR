@@ -138,54 +138,6 @@ class CacheMap {
   }
 
   /**
-   Finds the first index where the bit is not set.
-
-   - Returns: The first unset index, or nil if all bits are set.
-   */
-  func firstUnsetIndex() -> Int? {
-    for byteIndex in 0..<map.count {
-      let byte = map[byteIndex]
-      if byte != 0xFF {
-        for bit in 0..<8 {
-          let mask: UInt8 = 1 << (7 - bit)
-          let index = byteIndex * 8 + bit
-          if index >= count {
-            return nil
-          }
-          if (byte & mask) == 0 {
-            return index
-          }
-        }
-      }
-    }
-    return nil  // All bits are set.
-  }
-
-  /**
-   Finds the last index where the bit is not set.
-
-   - Returns: The last unset index, or nil if all bits are set.
-   */
-  func lastUnsetIndex() -> Int? {
-    for byteIndex in (0..<map.count).reversed() {
-      let byte = map[byteIndex]
-      if byte != 0xFF {
-        for bit in 0..<8 {
-          let mask: UInt8 = 1 << (7 - bit)
-          let index = byteIndex * 8 + bit
-          if index >= count {
-            continue
-          }
-          if (byte & mask) == 0 {
-            return index
-          }
-        }
-      }
-    }
-    return nil  // All bits are set.
-  }
-
-  /**
    Determines if all bits in the cache map are set.
 
    - Returns: True if the number of set bits equals the total count; otherwise, false.

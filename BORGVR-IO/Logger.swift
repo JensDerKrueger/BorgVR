@@ -57,6 +57,7 @@ public protocol LoggerBase {
   func warning(_ message: String)
   /// Logs an error message.
   func error(_ message: String)
+
   /**
    Logs a progress message with a progress value.
 

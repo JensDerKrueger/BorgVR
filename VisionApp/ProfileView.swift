@@ -21,7 +21,7 @@ extension NumberFormatter {
  */
 struct TrafoFilePickerDialog: View {
   /// The rendering parameters containing the transfomration
-  var renderingParamaters: RenderingParamaters
+  var sharedAppModel: SharedAppModel
   /// Binding controlling presentation.
   @Binding var isPresented: Bool
   /// URLs of available `.trafo` files.
@@ -36,7 +36,7 @@ struct TrafoFilePickerDialog: View {
       List(availableFiles, id: \.self) { fileURL in
         Button(action: {
           do {
-            try renderingParamaters.loadTransform(from: fileURL)
+            try sharedAppModel.loadTransform(from: fileURL)
             isPresented = false
           } catch {
             loadError     = error
@@ -77,9 +77,9 @@ struct TrafoFilePickerDialog: View {
 
 struct ProfileView: View {
   /// The shared application model containing performance data.
-  @Environment(AppModel.self) private var appModel
-  @Environment(RenderingParamaters.self) private var renderingParamaters
-  @EnvironmentObject var appSettings: AppSettings
+  @Environment(RuntimeAppModel.self) private var runtimeAppModel
+  @Environment(SharedAppModel.self) private var sharedAppModel
+  @EnvironmentObject var storedAppModel: StoredAppModel
   @Environment(\.openWindow) private var openWindow
   @Environment(\.dismissWindow) private var dismissWindow
 
@@ -132,8 +132,8 @@ struct ProfileView: View {
       GroupBox(label: Label("Rendermodes", systemImage: "eye")) {
         HStack {
           Toggle("Show Bricks", isOn: Binding(
-            get: { renderingParamaters.brickVis },
-            set: { renderingParamaters.brickVis = $0 }
+            get: { sharedAppModel.brickVis },
+            set: { sharedAppModel.brickVis = $0 }
           ))
           .padding()
           .fixedSize()
@@ -142,7 +142,7 @@ struct ProfileView: View {
         }
       }.padding()
 
-      GroupBox(label: Label("Coutdown", systemImage: "clock")) {
+      GroupBox(label: Label("Countdown", systemImage: "clock")) {
         HStack {
           HStack {
             Text("Startup:")
@@ -164,8 +164,8 @@ struct ProfileView: View {
       GroupBox(label: Label("Performance Profiling", systemImage: "gauge")) {
         HStack {
           Toggle("Log Performance", isOn: Binding(
-            get: { appModel.logPerformance },
-            set: { appModel.logPerformance = $0 }
+            get: { runtimeAppModel.logPerformance },
+            set: { runtimeAppModel.logPerformance = $0 }
           ))
           .padding()
           .fixedSize()
@@ -190,7 +190,7 @@ struct ProfileView: View {
 
         HStack {
           Button("Clear Atlas") {
-            renderingParamaters.purgeAtlas = true
+            sharedAppModel.purgeAtlas = true
           }
           .buttonStyle(.borderedProminent)
           .padding()
@@ -231,7 +231,7 @@ struct ProfileView: View {
                 .appendingPathComponent(name)
                 .appendingPathExtension("trafo")
               do {
-                try renderingParamaters.transform.save(to: url)
+                try sharedAppModel.modelTransform.save(to: url)
               } catch {
                 saveError       = error
                 showSaveError   = true
@@ -252,27 +252,27 @@ struct ProfileView: View {
           .padding(.vertical, 10)
           .sheet(isPresented: $showLoadFilePicker) {
             TrafoFilePickerDialog(
-              renderingParamaters: renderingParamaters,
+              sharedAppModel: sharedAppModel,
               isPresented: $showLoadFilePicker
             )
           }
           Spacer()
           // Auto-load/save toggle
           Text("Load and Save Automatically")
-          Toggle("", isOn: $appSettings.autoloadTransform)
+          Toggle("", isOn: $storedAppModel.autoloadTransform)
             .labelsHidden()
         }
       }.padding()
   }
 
   private func openLoggerView() {
-    if !self.appModel.isViewOpen("LoggerView") {
+    if !self.runtimeAppModel.isViewOpen("LoggerView") {
       openWindow(id: "LoggerView")
     }
   }
 
   private func openPerformanceGraphView() {
-    if !self.appModel.isViewOpen("PerformanceGraphView") {
+    if !self.runtimeAppModel.isViewOpen("PerformanceGraphView") {
       openWindow(id: "PerformanceGraphView")
     }
   }
@@ -289,7 +289,7 @@ struct ProfileView: View {
         AudioServicesPlaySystemSound(1322)
         workingSetCountdown = nil
         workingSetTimer?.invalidate()
-        renderingParamaters.purgeAtlas = true
+        sharedAppModel.purgeAtlas = true
         measureWorkingSetSize()
       }
     }
@@ -307,7 +307,7 @@ struct ProfileView: View {
         AudioServicesPlaySystemSound(1322)
         workingSetCountdown = nil
         workingSetTimer?.invalidate()
-        renderingParamaters.purgeAtlas = true
+        sharedAppModel.purgeAtlas = true
       }
     }
   }
@@ -325,10 +325,31 @@ struct ProfileView: View {
         preRotationCountdown = nil
         preRotationTimer?.invalidate()
         DispatchQueue.main.async {
-          appModel.startRotationCapture = true
+          runtimeAppModel.startRotationCapture = true
         }
       }
     }
   }
 }
 
+/*
+ Copyright (c) 2025 Computer Graphics and Visualization Group, University of Duisburg-
+ Essen
+
+ Permission is hereby granted, free of charge, to any person obtaining a copy of this
+ software and associated documentation files (the "Software"), to deal in the Software
+ without restriction, including without limitation the rights to use, copy, modify,
+ merge, publish, distribute, sublicense, and/or sell copies of the Software, and to
+ permit persons to whom the Software is furnished to do so, subject to the following
+ conditions:
+
+ The above copyright notice and this permission notice shall be included in all copies
+ or substantial portions of the Software.
+
+ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+ INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+ PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+ HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF
+ CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR
+ THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ */

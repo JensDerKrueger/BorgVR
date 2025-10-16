@@ -1,5 +1,49 @@
 import Foundation
 
+// MARK: - BORGVRError
+
+/**
+ Typed errors for BORGVRMetaData and BrickMetadata parsing/serialization.
+ */
+enum BORGVRError: Swift.Error, LocalizedError {
+  // Generic I/O / bounds
+  case unexpectedEndOfData(context: String)
+  case fileReadFailed(String)
+  case fileWriteFailed(String)
+
+  // Header validation
+  case invalidMagicBytes
+  case unsupportedVersion(found: Int64, expected: Int)
+
+  // String / UUID issues
+  case invalidStringEncoding
+  case invalidUUID(String)
+
+  // Other
+  case other(String)
+
+  var errorDescription: String? {
+    switch self {
+      case .unexpectedEndOfData(let ctx):
+        return "Unexpected end of data while reading \(ctx)."
+      case .fileReadFailed(let msg):
+        return "Failed to read file: \(msg)"
+      case .fileWriteFailed(let msg):
+        return "Failed to write file: \(msg)"
+      case .invalidMagicBytes:
+        return "Invalid magic bytes in BORGVR metadata."
+      case .unsupportedVersion(let found, let expected):
+        return "Unsupported metadata version \(found). Expected \(expected)."
+      case .invalidStringEncoding:
+        return "Invalid UTF-8 string encoding in metadata."
+      case .invalidUUID(let s):
+        return "Invalid UUID string: \(s)"
+      case .other(let msg):
+        return msg
+    }
+  }
+}
+
 // MARK: - BrickMetadata
 
 /**
@@ -46,21 +90,19 @@ final class BrickMetadata: Codable, CustomStringConvertible {
    - Throws: An error if the data is invalid or out of bounds.
    */
   init(fromData data: Data, offset: inout Int, componentCount: Int) throws {
-    func read<T: FixedWidthInteger>() throws -> T {
+    func read<T: FixedWidthInteger>(_ context: String) throws -> T {
       guard offset + MemoryLayout<T>.size <= data.count else {
-        throw NSError(domain: "BrickMetadata", code: 3,
-                      userInfo: [NSLocalizedDescriptionKey: "Unexpected end of data"])
+        throw BORGVRError.unexpectedEndOfData(context: context)
       }
-
-      let value = data.loadLE(at: offset) as T
+      let value: T = data.loadLE(at: offset)
       offset += MemoryLayout<T>.size
       return value
     }
 
-    self.offset   = Int(try read() as Int64)
-    self.size     = Int(try read() as Int64)
-    self.minValue = Int(try read() as Int64)
-    self.maxValue = Int(try read() as Int64)
+    self.offset   = Int(try read("brick offset") as Int64)
+    self.size     = Int(try read("brick size") as Int64)
+    self.minValue = Int(try read("brick minValue") as Int64)
+    self.maxValue = Int(try read("brick maxValue") as Int64)
   }
 
   /**
@@ -136,7 +178,7 @@ final class BORGVRMetaData: CustomStringConvertible, Codable {
   /// Magic bytes used for file identification.
   private static let magicBytes = "BORGVR".data(using: .utf8)!
   /// The version of the metadata format.
-  private static let version: Int = 1
+  private static let version: Int = 2
 
   /// The original volume width.
   private(set) var width: Int = 0
@@ -172,6 +214,8 @@ final class BORGVRMetaData: CustomStringConvertible, Codable {
   private(set) var maxValue: Int = 0
   /// A flag indicating whether compression is enabled.
   private(set) var compression: Bool = false
+  /// A unique ID generated at time of creation
+  var uniqueID: String = ""
   /// A short description of the dataset.
   var datasetDescription: String = ""
 
@@ -190,7 +234,8 @@ final class BORGVRMetaData: CustomStringConvertible, Codable {
     min/max: \(minValue)/\(maxValue), \
     levels: \(levelMetadata.count), \
     bricks: \(brickMetadata.count), \
-    label: “\(datasetDescription)”
+    label: “\(datasetDescription)”, \
+    uniqueID: “\(uniqueID)”
     """
   }
 
@@ -301,6 +346,7 @@ final class BORGVRMetaData: CustomStringConvertible, Codable {
     self.maxValue = maxValue
     self.compression = compression
     self.datasetDescription = datasetDescription
+    self.uniqueID = UUID().uuidString
 
     computeLevelMetadata()
   }
@@ -311,8 +357,18 @@ final class BORGVRMetaData: CustomStringConvertible, Codable {
    - Parameter filename: The file path from which to load the metadata.
    - Throws: An error if reading or parsing fails.
    */
-  init(filename: String) throws {
-    try self.load(filename: filename)
+  convenience init(filename: String) throws {
+    try self.init(url: URL(fileURLWithPath: filename))
+  }
+
+  /**
+   Initializes `BORGVRMetaData` by loading from a file.
+
+   - Parameter url: The url from which to load the metadata.
+   - Throws: An error if reading or parsing fails.
+   */
+  init(url: URL) throws {
+    try self.load(url: url)
   }
 
   /**
@@ -398,6 +454,7 @@ final class BORGVRMetaData: CustomStringConvertible, Codable {
     data.append(Data(from: minValue))
     data.append(Data(from: maxValue))
     data.append(Data(from: compression))
+    data.appendString(uniqueID)
     data.appendString(datasetDescription)
     data.append(Data(from: Int64(brickMetadata.count)))
     let dataOffset: Int64 = 0
@@ -420,11 +477,15 @@ final class BORGVRMetaData: CustomStringConvertible, Codable {
    */
   func save(filename: String) throws {
     let fileURL = URL(fileURLWithPath: filename)
-    let fileHandle = try FileHandle(forWritingTo: fileURL)
-    defer { try? fileHandle.close() }
-    fileHandle.seekToEndOfFile()
-    let binaryData = toData()
-    fileHandle.write(binaryData)
+    do {
+      let fileHandle = try FileHandle(forWritingTo: fileURL)
+      defer { try? fileHandle.close() }
+      fileHandle.seekToEndOfFile()
+      let binaryData = toData()
+      fileHandle.write(binaryData)
+    } catch {
+      throw BORGVRError.fileWriteFailed(error.localizedDescription)
+    }
   }
 
   /**
@@ -433,22 +494,27 @@ final class BORGVRMetaData: CustomStringConvertible, Codable {
    Expects the file to begin with a header (magic bytes, version, volume parameters),
    followed by the raw data file name and a sequence of `BrickMetadata` records.
 
-   - Parameter filename: The file path from which to load the metadata.
+   - Parameter url: The url from which to load the metadata.
    - Throws: An error if the file cannot be read or if the data is invalid.
    */
-  func load(filename: String) throws {
-    let fileURL = URL(fileURLWithPath: filename)
-    let fileHandle = try FileHandle(forReadingFrom: fileURL)
-    defer { fileHandle.closeFile() }
+  private func load(url: URL) throws {
+    do {
+      let fileHandle = try FileHandle(forReadingFrom: url)
+      defer { fileHandle.closeFile() }
 
-    let offset = try fileHandle.read(upToCount: 8)
-    guard let offset = offset, offset.count == 8 else {
-      throw NSError(domain: "Load error", code: 1, userInfo: [NSLocalizedDescriptionKey: "Unable to read offset"])
+      let offset = try fileHandle.read(upToCount: 8)
+      guard let offset = offset, offset.count == 8 else {
+        throw BORGVRError.fileReadFailed("Unable to read metadata offset (expected 8 bytes).")
+      }
+      let offsetMetaData = offset.withUnsafeBytes { $0.load(as: UInt64.self) }
+      try fileHandle.seek(toOffset: offsetMetaData)
+      let fileData = fileHandle.readDataToEndOfFile()
+      try fromData(fileData)
+    } catch let e as BORGVRError {
+      throw e
+    } catch {
+      throw BORGVRError.fileReadFailed(error.localizedDescription)
     }
-    let offsetMetaData = offset.withUnsafeBytes { $0.load(as: UInt64.self) }
-    try fileHandle.seek(toOffset: offsetMetaData)
-    let fileData = fileHandle.readDataToEndOfFile()
-    try fromData(fileData)
   }
 
   /**
@@ -460,11 +526,14 @@ final class BORGVRMetaData: CustomStringConvertible, Codable {
   func fromData(_ data: Data) throws {
     var offset = 0
 
-    func read<T>(_ type: T.Type) throws -> T {
-      guard offset + MemoryLayout<T>.size <= data.count else {
-        throw NSError(domain: "BORGVRMetaData", code: 3,
-                      userInfo: [NSLocalizedDescriptionKey: "Unexpected end of data"])
+    func ensure(_ count: Int, context: String) throws {
+      guard offset + count <= data.count else {
+        throw BORGVRError.unexpectedEndOfData(context: context)
       }
+    }
+
+    func read<T>(_ type: T.Type, context: String) throws -> T {
+      try ensure(MemoryLayout<T>.size, context: context)
       var value: T!
       let valueData = data.subdata(in: offset..<offset + MemoryLayout<T>.size)
       valueData.withUnsafeBytes { rawBuffer in
@@ -474,54 +543,56 @@ final class BORGVRMetaData: CustomStringConvertible, Codable {
       return value
     }
 
-    func readData(length: Int) throws -> Data {
-      guard offset + length <= data.count else {
-        throw NSError(domain: "BORGVRMetaData", code: 4,
-                      userInfo: [NSLocalizedDescriptionKey: "Unexpected end of data"])
-      }
+    func readData(length: Int, context: String) throws -> Data {
+      try ensure(length, context: context)
       let value = data.subdata(in: offset..<offset + length)
       offset += length
       return value
     }
 
-    func readString() throws -> String {
-      let length: Int64 = try read(Int64.self)
-      let stringData = try readData(length: Int(length))
+    func readString(context: String) throws -> String {
+      let length: Int64 = try read(Int64.self, context: "\(context).length")
+      let stringData = try readData(length: Int(length), context: context)
       guard let string = String(data: stringData, encoding: .utf8) else {
-        throw NSError(domain: "BORGVRMetaData", code: 5,
-                      userInfo: [NSLocalizedDescriptionKey: "Invalid string encoding"])
+        throw BORGVRError.invalidStringEncoding
       }
       return string
     }
 
-    let magic = try readData(length: BORGVRMetaData.magicBytes.count)
+    let magic = try readData(length: BORGVRMetaData.magicBytes.count, context: "magicBytes")
     guard magic == BORGVRMetaData.magicBytes else {
-      throw NSError(domain: "BORGVRMetaData", code: 1,
-                    userInfo: [NSLocalizedDescriptionKey: "Invalid magic bytes"])
+      throw BORGVRError.invalidMagicBytes
     }
 
-    let fileVersion: Int64 = try read(Int64.self)
+    let fileVersion: Int64 = try read(Int64.self, context: "version")
     guard fileVersion == BORGVRMetaData.version else {
-      throw NSError(domain: "BORGVRMetaData", code: 2,
-                    userInfo: [NSLocalizedDescriptionKey: "Unsupported version"])
+      throw BORGVRError.unsupportedVersion(found: fileVersion, expected: BORGVRMetaData.version)
     }
 
-    self.width            = Int(try read(Int64.self))
-    self.height           = Int(try read(Int64.self))
-    self.depth            = Int(try read(Int64.self))
-    self.componentCount   = Int(try read(Int64.self))
-    self.bytesPerComponent = Int(try read(Int64.self))
-    self.aspectX          = try read(Float.self)
-    self.aspectY          = try read(Float.self)
-    self.aspectZ          = try read(Float.self)
-    self.brickSize        = Int(try read(Int64.self))
-    self.overlap          = Int(try read(Int64.self))
-    self.minValue         = Int(try read(Int64.self))
-    self.maxValue         = Int(try read(Int64.self))
-    self.compression      = try read(Bool.self)
-    self.datasetDescription = try readString()
-    let metadataCount     = Int(try read(Int64.self))
-    let dataOffset        = Int(try read(Int64.self))
+    self.width            = Int(try read(Int64.self, context: "width"))
+    self.height           = Int(try read(Int64.self, context: "height"))
+    self.depth            = Int(try read(Int64.self, context: "depth"))
+    self.componentCount   = Int(try read(Int64.self, context: "componentCount"))
+    self.bytesPerComponent = Int(try read(Int64.self, context: "bytesPerComponent"))
+    self.aspectX          = try read(Float.self, context: "aspectX")
+    self.aspectY          = try read(Float.self, context: "aspectY")
+    self.aspectZ          = try read(Float.self, context: "aspectZ")
+    self.brickSize        = Int(try read(Int64.self, context: "brickSize"))
+    self.overlap          = Int(try read(Int64.self, context: "overlap"))
+    self.minValue         = Int(try read(Int64.self, context: "minValue"))
+    self.maxValue         = Int(try read(Int64.self, context: "maxValue"))
+    self.compression      = try read(Bool.self, context: "compression")
+
+    let uniqueIDStr = try readString(context: "uniqueID")
+    if UUID(uuidString: uniqueIDStr) != nil {
+      self.uniqueID = uniqueIDStr
+    } else {
+      throw BORGVRError.invalidUUID(uniqueIDStr)
+    }
+
+    self.datasetDescription = try readString(context: "datasetDescription")
+    let metadataCount     = Int(try read(Int64.self, context: "brickMetadataCount"))
+    let dataOffset        = Int(try read(Int64.self, context: "brickDataOffset"))
 
     computeLevelMetadata()
 

@@ -14,7 +14,7 @@ import SwiftUI
  */
 struct PerformanceGraphView: View {
   /// The shared application model containing performance data.
-  @Environment(AppModel.self) private var appModel
+  @Environment(RuntimeAppModel.self) private var runtimeAppModel
 
   /// The content and layout of the view.
   var body: some View {
@@ -25,7 +25,7 @@ struct PerformanceGraphView: View {
         .bold()
 
       // Embed the performance graph, passing in the model
-      PerformanceGraph(model: appModel.performanceModel)
+      PerformanceGraph(model: runtimeAppModel.performanceModel)
     }
     .padding()
   }

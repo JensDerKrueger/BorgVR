@@ -6,6 +6,11 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		560B8BE82E5C575A0042E45B /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 560B8BE72E5C57580042E45B /* PrivacyInfo.xcprivacy */; };
+		56730FE52E6B79000091976B /* head_32.data in Resources */ = {isa = PBXBuildFile; fileRef = 56730FE42E6B79000091976B /* head_32.data */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXCopyFilesBuildPhase section */
 		562FD5A02D7B2AA300265EF6 /* CopyFiles */ = {
 			isa = PBXCopyFilesBuildPhase;
@@ -15,15 +20,6 @@
 			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
-		};
-		562FD5CD2D7C962900265EF6 /* CopyFiles */ = {
-			isa = PBXCopyFilesBuildPhase;
-			buildActionMask = 2147483647;
-			dstPath = /usr/share/man/man1/;
-			dstSubfolderSpec = 0;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 1;
 		};
 		569EA3F42CD449C400D8FADD /* CopyFiles */ = {
 			isa = PBXCopyFilesBuildPhase;
@@ -37,9 +33,10 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		562FD5CF2D7C962900265EF6 /* ClientTest */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = ClientTest; sourceTree = BUILT_PRODUCTS_DIR; };
+		560B8BE72E5C57580042E45B /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		564183782D649679003A1EC4 /* VisionApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = VisionApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		5655824B2D4E5D6F008E7CE6 /* GUIApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = GUIApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		56730FE42E6B79000091976B /* head_32.data */ = {isa = PBXFileReference; lastKnownFileType = file; path = head_32.data; sourceTree = "<group>"; };
 		569EA3F62CD449C400D8FADD /* CmdApp */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = CmdApp; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -98,35 +95,6 @@
 			);
 			target = 5655824A2D4E5D6F008E7CE6 /* GUIApp */;
 		};
-		562FD5E32D7C9A3400265EF6 /* Exceptions for "BORGVR-IO" folder in "ClientTest" target */ = {
-			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-			membershipExceptions = (
-				BORGVRDataBase.swift,
-				BORGVRFileData.swift,
-				BORGVRMetaData.swift,
-				BrickedVolumeReorganizer.swift,
-				DICOM.swift,
-				HighResolutionTimer.swift,
-				IOExtensions.swift,
-				Logger.swift,
-				MemoryMappedFile.swift,
-				NRRDParser.swift,
-				QVISParser.swift,
-				RawFileAccessor.swift,
-				Remote/BORGVRRemoteData.swift,
-				Remote/BORGVRRemoteDataManager.swift,
-				Remote/CacheMap.swift,
-				Remote/CachingRemoteDataSource.swift,
-				Remote/DataSource.swift,
-				Remote/LocalDataSource.swift,
-				Remote/RemoteDataSource.swift,
-				Vector.swift,
-				VolumeDataAccessing.swift,
-				VolumeDataAccessor.swift,
-				VolumeFileParser.swift,
-			);
-			target = 562FD5CE2D7C962900265EF6 /* ClientTest */;
-		};
 		564183882D649679003A1EC4 /* Exceptions for "VisionApp" folder in "VisionApp" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
@@ -146,6 +114,7 @@
 				IOExtensions.swift,
 				Logger.swift,
 				MemoryMappedFile.swift,
+				Notifier.swift,
 				NRRDParser.swift,
 				QVISParser.swift,
 				RawFileAccessor.swift,
@@ -154,6 +123,7 @@
 				Remote/CacheMap.swift,
 				Remote/CachingRemoteDataSource.swift,
 				Remote/DataSource.swift,
+				Remote/KeyValuePairHandler.swift,
 				Remote/LocalDataSource.swift,
 				Remote/RemoteDataSource.swift,
 				Vector.swift,
@@ -175,6 +145,7 @@
 				IOExtensions.swift,
 				Logger.swift,
 				MemoryMappedFile.swift,
+				Notifier.swift,
 				NRRDParser.swift,
 				QVISParser.swift,
 				RawFileAccessor.swift,
@@ -246,7 +217,6 @@
 			exceptions = (
 				565582782D4E5ECB008E7CE6 /* Exceptions for "BORGVR-IO" folder in "CmdApp" target */,
 				564183972D649734003A1EC4 /* Exceptions for "BORGVR-IO" folder in "VisionApp" target */,
-				562FD5E32D7C9A3400265EF6 /* Exceptions for "BORGVR-IO" folder in "ClientTest" target */,
 			);
 			path = "BORGVR-IO";
 			sourceTree = "<group>";
@@ -262,13 +232,6 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
-		562FD5CC2D7C962900265EF6 /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 		564183752D649679003A1EC4 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -296,6 +259,8 @@
 		569EA3ED2CD449C400D8FADD = {
 			isa = PBXGroup;
 			children = (
+				56730FE42E6B79000091976B /* head_32.data */,
+				560B8BE72E5C57580042E45B /* PrivacyInfo.xcprivacy */,
 				560D09552D98280400EAD023 /* BORGVR-Render */,
 				565582772D4E5EAF008E7CE6 /* BORGVR-IO */,
 				569EA3F82CD449C400D8FADD /* CmdApp */,
@@ -312,7 +277,6 @@
 				569EA3F62CD449C400D8FADD /* CmdApp */,
 				5655824B2D4E5D6F008E7CE6 /* GUIApp.app */,
 				564183782D649679003A1EC4 /* VisionApp.app */,
-				562FD5CF2D7C962900265EF6 /* ClientTest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -327,25 +291,6 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		562FD5CE2D7C962900265EF6 /* ClientTest */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = 562FD5D32D7C962900265EF6 /* Build configuration list for PBXNativeTarget "ClientTest" */;
-			buildPhases = (
-				562FD5CB2D7C962900265EF6 /* Sources */,
-				562FD5CC2D7C962900265EF6 /* Frameworks */,
-				562FD5CD2D7C962900265EF6 /* CopyFiles */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-			);
-			name = ClientTest;
-			packageProductDependencies = (
-			);
-			productName = ClientTest;
-			productReference = 562FD5CF2D7C962900265EF6 /* ClientTest */;
-			productType = "com.apple.product-type.tool";
-		};
 		564183772D649679003A1EC4 /* VisionApp */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 564183892D649679003A1EC4 /* Build configuration list for PBXNativeTarget "VisionApp" */;
@@ -423,11 +368,8 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
 				LastSwiftUpdateCheck = 1620;
-				LastUpgradeCheck = 1630;
+				LastUpgradeCheck = 2600;
 				TargetAttributes = {
-					562FD5CE2D7C962900265EF6 = {
-						CreatedOnToolsVersion = 16.2;
-					};
 					564183772D649679003A1EC4 = {
 						CreatedOnToolsVersion = 16.2;
 					};
@@ -456,7 +398,6 @@
 				569EA3F52CD449C400D8FADD /* CmdApp */,
 				5655824A2D4E5D6F008E7CE6 /* GUIApp */,
 				564183772D649679003A1EC4 /* VisionApp */,
-				562FD5CE2D7C962900265EF6 /* ClientTest */,
 			);
 		};
 /* End PBXProject section */
@@ -466,6 +407,8 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				560B8BE82E5C575A0042E45B /* PrivacyInfo.xcprivacy in Resources */,
+				56730FE52E6B79000091976B /* head_32.data in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -479,13 +422,6 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
-		562FD5CB2D7C962900265EF6 /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 		564183742D649679003A1EC4 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -510,47 +446,30 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin XCBuildConfiguration section */
-		562FD5D42D7C962900265EF6 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CODE_SIGN_STYLE = Automatic;
-				ENABLE_HARDENED_RUNTIME = YES;
-				MACOSX_DEPLOYMENT_TARGET = 15.2;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SWIFT_VERSION = 5.0;
-			};
-			name = Debug;
-		};
-		562FD5D52D7C962900265EF6 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CODE_SIGN_STYLE = Automatic;
-				ENABLE_HARDENED_RUNTIME = YES;
-				MACOSX_DEPLOYMENT_TARGET = 15.2;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SWIFT_VERSION = 5.0;
-			};
-			name = Release;
-		};
 		5641838A2D649679003A1EC4 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
+				CODE_SIGN_ENTITLEMENTS = VisionApp/VisionApp.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 3;
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "$(TARGET_NAME)/Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = BorgVR;
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "The microphone is used to let you interact with the app using voice commands instead of traditional UI controls.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Speech recognition is used to let you interact with the app using voice commands instead of traditional UI controls.";
+				INFOPLIST_KEY_NSWorldSensingUsageDescription = "To collaborate with others, this app needs access to your environment.";
+				INFOPLIST_KEY_UISupportsDocumentBrowser = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "de.uni-due.VisionApp";
+				PRODUCT_BUNDLE_IDENTIFIER = "de.uni-due.BorgVRVisionApp";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = xros;
 				SUPPORTED_PLATFORMS = "xros xrsimulator";
@@ -558,7 +477,7 @@
 				SWIFT_OBJC_BRIDGING_HEADER = VisionApp/ShaderTypes.h;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 7;
-				XROS_DEPLOYMENT_TARGET = 2;
+				XROS_DEPLOYMENT_TARGET = 26.0;
 			};
 			name = Debug;
 		};
@@ -568,19 +487,24 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
+				CODE_SIGN_ENTITLEMENTS = VisionApp/VisionApp.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 3;
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "$(TARGET_NAME)/Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = BorgVR;
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "The microphone is used to let you interact with the app using voice commands instead of traditional UI controls.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Speech recognition is used to let you interact with the app using voice commands instead of traditional UI controls.";
+				INFOPLIST_KEY_NSWorldSensingUsageDescription = "To collaborate with others, this app needs access to your environment.";
+				INFOPLIST_KEY_UISupportsDocumentBrowser = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "de.uni-due.VisionApp";
+				PRODUCT_BUNDLE_IDENTIFIER = "de.uni-due.BorgVRVisionApp";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = xros;
 				SUPPORTED_PLATFORMS = "xros xrsimulator";
@@ -589,7 +513,7 @@
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 7;
 				VALIDATE_PRODUCT = YES;
-				XROS_DEPLOYMENT_TARGET = 2;
+				XROS_DEPLOYMENT_TARGET = 26.0;
 			};
 			name = Release;
 		};
@@ -603,7 +527,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "\"GUIApp/Preview Content\"";
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -635,7 +559,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "\"GUIApp/Preview Content\"";
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -717,6 +641,7 @@
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = macosx;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 			};
@@ -775,6 +700,7 @@
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				SDKROOT = macosx;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
 			};
 			name = Release;
@@ -804,15 +730,6 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		562FD5D32D7C962900265EF6 /* Build configuration list for PBXNativeTarget "ClientTest" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				562FD5D42D7C962900265EF6 /* Debug */,
-				562FD5D52D7C962900265EF6 /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
 		564183892D649679003A1EC4 /* Build configuration list for PBXNativeTarget "VisionApp" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

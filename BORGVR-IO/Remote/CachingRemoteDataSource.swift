@@ -21,11 +21,14 @@ final class CachingRemoteDataSource: DataSource {
   /// The target filename for the cached local data.
   let targetFilename: String
 
-  /// Flag to indicate if bricks should be fetched asynchronously.
-  private let asyncGet: Bool
-
   /// An optional logger for debug and error messages.
   private let logger: LoggerBase?
+
+  /// An optional notifier
+  private let notifier: NotificationBase?
+
+  /// How many bricks do we ant to request in a single call?
+  private let maxBricksPerGetRequest: Int
 
   /// Flag indicating if caching has been fully completed.
   private(set) var cachingComplete: Bool = false
@@ -63,9 +66,6 @@ final class CachingRemoteDataSource: DataSource {
   /// A semaphore used to signal the worker that new requests are available.
   private let requestSemaphore = DispatchSemaphore(value: 0)
 
-  /// A dictionary mapping brick indices to semaphores waiting for their fetch.
-  private var waiters: [Int: DispatchSemaphore] = [:]
-
   /// Flag indicating if the background worker has been terminated.
   private var terminated = false
 
@@ -87,18 +87,18 @@ final class CachingRemoteDataSource: DataSource {
    - Parameters:
    - connection: The NWConnection used for remote communication.
    - datasetID: The identifier of the remote dataset.
-   - asyncGet: A Boolean indicating if asynchronous brick fetching is enabled.
    - filename: The target filename for the local cache.
    - Throws: An error if the backing file cannot be created or mapped.
    */
-  init(connection: NWConnection, datasetID: Int, asyncGet: Bool,
-       filename: String, logger: LoggerBase?) throws {
+  init(connection: NWConnection, datasetID: String, maxBricksPerGetRequest: Int,
+       filename: String, logger: LoggerBase?, notifier: NotificationBase?) throws {
     self.remoteDataSource = try RemoteDataSource(connection: connection,
                                                  datasetID: datasetID,
                                                  logger:logger)
     self.targetFilename = filename
-    self.asyncGet = asyncGet
     self.logger = logger
+    self.notifier = notifier
+    self.maxBricksPerGetRequest = maxBricksPerGetRequest
 
     let metadata = remoteDataSource.getMetadata()
     let fileManager = FileManager.default
@@ -112,6 +112,7 @@ final class CachingRemoteDataSource: DataSource {
         self.cacheMap = CacheMap(count: metadata.brickMetadata.count)
       }
       logger?.dev("Using existing cache map, continuing caching...")
+      logger?.dev("\(self.cacheMap.fillRatio * 100) % of bricks are aleady cached")
     } else {
       self.cacheMap = CacheMap(count: metadata.brickMetadata.count)
       logger?.dev("Creating new cache map...")
@@ -143,7 +144,8 @@ final class CachingRemoteDataSource: DataSource {
       )
     }
     self.tempDataBuffer = UnsafeMutablePointer<UInt8>.allocate(capacity: fullBrickSize)
-    self.tempDataBufferBackground = UnsafeMutablePointer<UInt8>.allocate(capacity: fullBrickSize)
+    self.tempDataBufferBackground = UnsafeMutablePointer<UInt8>
+      .allocate(capacity: fullBrickSize*maxBricksPerGetRequest)
 
     // Initialize the request queue (initially empty).
     self.requestQueue = []
@@ -187,7 +189,6 @@ final class CachingRemoteDataSource: DataSource {
           try FileManager.default.removeItem(at: completeURL)
         }
         try fileManager.moveItem(at: incompleteURL, to: completeURL)
-        remoteDataSource.getMetadata().datasetDescription = "Local copy of \(remoteDataSource.getMetadata().datasetDescription)"
         try remoteDataSource.getMetadata().save(filename: targetFilename)
         try? FileManager.default.removeItem(at: cacheMapURL)
         logger?.dev("Dataset caching complete, finalized local copy")
@@ -217,60 +218,43 @@ final class CachingRemoteDataSource: DataSource {
    */
   func getFirstBrick(outputBuffer: UnsafeMutablePointer<UInt8>) throws {
     let minResBrick = remoteDataSource.getMetadata().brickMetadata.count - 1
-    try getBrick(index: minResBrick, outputBuffer: outputBuffer, asyncGet: false)
-  }
+    do {
+      try getBrick(index: minResBrick, outputBuffer: outputBuffer)
+      return
+    } catch {}
 
-  /**
-   Retrieves a brick at the specified index and writes its data into the output buffer.
-
-   This method uses the asyncGet flag to determine if the brick should be fetched
-   asynchronously.
-
-   - Parameters:
-   - index: The index of the brick to retrieve.
-   - outputBuffer: A pointer to a memory area with capacity at least the brick size.
-   - Throws: An error if the brick is not yet available or cannot be retrieved.
-   */
-  func getBrick(index: Int, outputBuffer: UnsafeMutablePointer<UInt8>) throws {
-    try getBrick(index: index, outputBuffer: outputBuffer, asyncGet: self.asyncGet)
+    var sleepCount = 0
+    while !cacheMap.isSet(index: minResBrick) {
+      Thread.sleep(forTimeInterval: 0.2)
+      if sleepCount > 500 {
+        break
+      }
+      sleepCount += 1
+    }
+    try getBrick(index: minResBrick, outputBuffer: outputBuffer)
   }
 
   /**
    Retrieves a brick at the specified index, with control over asynchronous fetching.
 
-   If the brick is already cached, it is retrieved from local storage. If asyncGet is true and
-   the brick is not available, an error is thrown. Otherwise, the method waits until the brick
-   becomes available.
-
+   If the brick is already cached, it is retrieved from local storage.
+   
    - Parameters:
    - index: The index of the brick.
    - outputBuffer: A pointer to a memory area with capacity at least the brick size.
-   - asyncGet: A Boolean flag indicating if the fetch should be asynchronous.
    - Throws: A BORGVRDataError if the brick is not yet available or retrieval fails.
    */
-  func getBrick(index: Int, outputBuffer: UnsafeMutablePointer<UInt8>,
-                asyncGet: Bool) throws {
+  func getBrick(index: Int, outputBuffer: UnsafeMutablePointer<UInt8>) throws {
     if cachingComplete || cacheMap.isSet(index: index) {
       try getLocalBrick(index: index, outputBuffer: outputBuffer)
       return
     }
 
-    if asyncGet {
-      requestQueueLock.sync {
-        requestQueue.append(index)
-      }
-      requestSemaphore.signal()
-      throw BORGVRDataError.brickNotYetAvailable(index: index)
-    } else {
-      let semaphore = DispatchSemaphore(value: 0)
-      requestQueueLock.sync {
-        waiters[index] = semaphore
-        requestQueue.append(index)
-      }
-      requestSemaphore.signal()
-      semaphore.wait()
-      try getLocalBrick(index: index, outputBuffer: outputBuffer)
+    requestQueueLock.sync {
+      requestQueue.append(index)
     }
+    requestSemaphore.signal()
+    throw BORGVRDataError.brickNotYetAvailable(index: index)
   }
 
   func newRequest() {
@@ -290,51 +274,62 @@ final class CachingRemoteDataSource: DataSource {
    signals any waiting threads.
    */
   private func backgroundWorkerLoop() {
+    var lastIndex = cacheMap.count - 1
     while !terminated {
-      var indexToProcess: Int?
+      var indicesToProcess =  Set<Int>()
 
       // First: priority requests from getBrick unless we have already
       //        cached that brick
       requestQueueLock.sync {
-        while !requestQueue.isEmpty {
-          indexToProcess = requestQueue.removeFirst()
-          guard let nextIndex = indexToProcess else { break }
-          if !cacheMap.isSet(index: nextIndex) {
-            break
+        requestQueue.removeAll { cacheMap.isSet(index: $0) }
+        let take = min(maxBricksPerGetRequest, requestQueue.count)
+        indicesToProcess = Set(requestQueue.prefix(take))
+        requestQueue.removeFirst(take)
+      }
+
+      // Second: background prefetch from cacheMap to compete the dataset
+      //         load lower resolutions first
+      if indicesToProcess.count < maxBricksPerGetRequest && !cacheMap.isComplete() {
+        while lastIndex >= 0 && indicesToProcess.count < maxBricksPerGetRequest {
+          if !cacheMap.isSet(index: lastIndex) {
+            indicesToProcess.insert(lastIndex)
           }
+          lastIndex-=1
         }
       }
 
-      // Second: background prefetch from cacheMap.
-      //         load lower resolutions first
-      if indexToProcess == nil && !cacheMap.isComplete() {
-        indexToProcess = cacheMap.lastUnsetIndex()
-      }
 
       // Wait if no work is available.
-      if indexToProcess == nil {
+      if indicesToProcess.isEmpty {
         requestSemaphore.wait()
         continue
       }
 
-      guard let index = indexToProcess, !cacheMap.isSet(index: index) else { continue }
       do {
-        let brickMeta = try remoteDataSource.getRawBrick(
-          index: index,
-          outputBuffer: tempDataBufferBackground
+        let indexArray = Array(indicesToProcess.sorted())
+
+        let brickMeta = try remoteDataSource.getRawBricks(
+          indices: indexArray,
+          outputBuffer: tempDataBufferBackground,
+          outputBufferSize: fullBrickSize*maxBricksPerGetRequest
         )
 
-        try setLocalBrick(index: index, brickMeta: brickMeta)
-
-        requestQueueLock.sync {
-          if let waiter = waiters.removeValue(forKey: index) {
-            waiter.signal()
-          }
+        var offset = 0
+        for (meta,index) in zip(brickMeta,indexArray) {
+          let brickPtr = tempDataBufferBackground.advanced(by: offset)
+          try setLocalBrick(index: index,
+                            brickMeta: meta,
+                            buffer: brickPtr)
+          offset += meta.size
         }
+        logger?.dev("Cached \(cacheMap.fillRatio*100) % of the dataset.")
+
 
         if cacheMap.isComplete() {
           cachingComplete = true
           logger?.dev("All bricks are locally cached")
+          notifier?.silent(title:"Remote Dataset Complete",
+                           message:"The dataset has been downloaded in its entirety and is now available locally.")
           break
         }
       } catch {
@@ -351,10 +346,11 @@ final class CachingRemoteDataSource: DataSource {
    - brickMeta: The metadata of the brick.
    - Throws: An error if the memory mapping is unavailable.
    */
-  private func setLocalBrick(index: Int, brickMeta: BrickMetadata) throws {
+  private func setLocalBrick(index: Int, brickMeta: BrickMetadata,
+                             buffer: UnsafeMutablePointer<UInt8>) throws {
     memcpy(
       dataFile.mappedMemory.advanced(by: brickMeta.offset),
-      tempDataBufferBackground,
+      buffer,
       brickMeta.size
     )
     cacheMap.set(index: index)

@@ -1,39 +1,5 @@
 import SwiftUI
 
-struct PrefetchDialog: View {
-  @Binding var isPresented: Bool
-  @Binding var progress: Double
-  @Binding var statusText: String
-  @Binding var continueExecution: Bool
-  @Binding var wasCancelled: Bool
-
-  var body: some View {
-    VStack(spacing: 20) {
-      Text("Prefetching Dataset")
-        .font(.headline)
-
-      Text(statusText)
-        .font(.subheadline)
-        .multilineTextAlignment(.center)
-
-      ProgressView(value: progress)
-        .progressViewStyle(LinearProgressViewStyle())
-        .padding()
-
-      ProgressView() // Busy spinner
-
-      Button("Cancel and Resume Later") {
-        continueExecution = false
-        wasCancelled = true
-        isPresented = false
-      }
-      .padding(.top, 10)
-    }
-    .padding()
-    .frame(width: 300)
-  }
-}
-
 /**
  A view that displays available datasets and provides options to open, delete, and refresh them.
 
@@ -75,24 +41,25 @@ struct OpenDatasetView: View {
     }
   }
 
-  @State private var datasets: [(String, String, AppModel.DatasetSource)] = []
+  @State private var datasets: [RuntimeAppModel.DatasetEntry] = []
   @State private var selectedIndex: Int?
   @State private var showDeleteConfirmation = false
   @State private var datasetToDelete: IndexSet?
   @State private var datasetToDeleteName: String?
+  @State private var datasetToDeleteDescription: String?
+
   @State private var isLoading = false
   @State private var loadingStage: LoadingStage = .idle
 
-  @State private var showDialog = false
-  @State private var progress: Double = 0.0
-  @State private var statusText: String = "Starting..."
-  @State private var continueExecution = true
-  @State private var wasCancelled = false
+  @State private var showPrefetchDialog = false
+  @State private var prefetchProgress: Double = 0.0
+  @State private var prefetchStatusText: String = "Starting..."
+  @State private var prefetchContinue = true
+  @State private var prefetchWasCancelled = false
 
-  @Environment(AppModel.self) private var appModel
-  @EnvironmentObject var appSettings: AppSettings
+  @Environment(RuntimeAppModel.self) private var runtimeAppModel
+  @EnvironmentObject var storedAppModel: StoredAppModel
   @Environment(\.dismissImmersiveSpace) private var dismissImmersiveSpace
-  @Environment(\.openImmersiveSpace) private var openImmersiveSpace
   @Environment(\.openWindow) private var openWindow
   @Environment(\.dismissWindow) var dismissWindow
 
@@ -106,51 +73,71 @@ struct OpenDatasetView: View {
 
         if datasets.isEmpty && !isLoading {
           Text("""
-  **No Valid Datasets Found**
+**No Valid Datasets Found**
 
-  To add datasets, you have two options:
+To add datasets, you have two options:
 
-  - **Import Dataset:** Use the “Import a Dataset” option in the main menu.
-  - **Connect to a Dataset Server:**  
-    Enter the server address in the settings dialog and then return to this window.
+- **Import Dataset:** Use the “Import a Dataset” option in the main menu.
+- **Connect to a Dataset Server:**  
+  Enter the server address in the settings dialog and then return to this window.
 """)
           .padding()
         } else {
           List {
             ForEach(datasets.indices, id: \.self) { index in
-              HStack {
-                Image(systemName: selectedIndex == index ? "checkmark.circle.fill" : "doc.fill")
-                  .foregroundColor(selectedIndex == index ? .blue : .primary)
-
-                switch datasets[index].2 {
-                  case .Local:
-                    Text(datasets[index].1 + " - Local")
-                  case .Remote:
-                    Text(datasets[index].1 + " - Remote")
-                }
-
-                Spacer()
-
-                if datasets[index].2 == .Local {
-                  Button(action: {
-                    datasetToDelete = IndexSet(integer: index)
-                    datasetToDeleteName = datasets[index].1
-                    showDeleteConfirmation = true
-                  }) {
-                    Image(systemName: "trash")
-                      .foregroundColor(.red)
-                  }
-                  .buttonStyle(.borderless)
-                }
-              }
-              .contentShape(Rectangle())
-              .onTapGesture {
+              Button {
                 selectedIndex = index
+              } label: {
+                HStack {
+                  Image(systemName: selectedIndex == index ? "checkmark.circle.fill" : iconForDatasetType(type:datasets[index].source))
+                    .foregroundColor(selectedIndex == index ? .blue : .primary)
+
+                  switch datasets[index].source {
+                    case .local:
+                      Text(datasets[index].description + " - Local")
+                    case .remote:
+                      Text(datasets[index].description + " - Remote")
+                    case .builtIn:
+                      Text(datasets[index].description + " - builtIn")
+                  }
+
+                  Spacer()
+
+                  if datasets[index].source == .local {
+                    Button(action: {
+                      datasetToDelete = IndexSet(integer: index)
+                      datasetToDeleteName = datasets[index].identifier
+                      datasetToDeleteDescription = datasets[index].description
+                      showDeleteConfirmation = true
+                    }) {
+                      Image(systemName: "trash")
+                        .foregroundColor(.red)
+                    }
+                    .buttonStyle(.borderless)
+                  }
+                }
+                .padding(.vertical, 6)
+                .contentShape(Rectangle())
+                .background(
+                  RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(
+                      Color.clear // selectedIndex == index ? Color.blue.opacity(0.12) : Color.clear
+                    )
+                )
+                .overlay(
+                  RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .stroke(
+                      Color.clear, //selectedIndex == index ? Color.blue.opacity(0.6) : Color.clear,
+                      lineWidth: 1
+                    )
+                )
               }
+              .buttonStyle(.plain)
+              .animation(.easeInOut(duration: 0.15), value: selectedIndex)
             }
           }
           .confirmationDialog(
-            "Are you sure you want to delete \(datasetToDeleteName ?? "this dataset") ?",
+            "Are you sure you want to delete \(datasetToDeleteDescription ?? "this dataset") ?",
             isPresented: $showDeleteConfirmation,
             titleVisibility: .visible
           ) {
@@ -173,8 +160,8 @@ struct OpenDatasetView: View {
             .padding()
 
           Picker("Immersion Style", selection: Binding(
-            get: { appModel.mixedImmersionStyle },
-            set: { newValue in appModel.mixedImmersionStyle = newValue }
+            get: { runtimeAppModel.mixedImmersionStyle },
+            set: { newValue in runtimeAppModel.mixedImmersionStyle = newValue }
           )) {
             Text("Mixed (AR Mode)").tag(true)
             Text("Full (VR Mode)").tag(false)
@@ -191,36 +178,50 @@ struct OpenDatasetView: View {
               .padding(.vertical, 10)
           }
           .padding()
-
         }
 
         HStack {
+          ShareLink(
+            item: BorgVRActivity(),
+            preview: SharePreview("BorgVR Live Collaboration")
+          ).hidden()
+
           Button {
             Task { @MainActor in
-              switch appModel.immersiveSpaceState {
+              switch runtimeAppModel.immersiveSpaceState {
                 case .open:
-                  appModel.immersiveSpaceState = .inTransition
+                  runtimeAppModel.immersiveSpaceState = .inTransition
                   await dismissImmersiveSpace()
                 case .closed:
                   if let index = selectedIndex, datasets.indices.contains(index) {
-                    switch datasets[index].2 {
-                      case .Local:
+                    switch datasets[index].source {
+                      case .builtIn:
+                        runtimeAppModel.startImmersiveSpace(dataset: datasets[index],
+                                                     asGroupSessionHost:true)
+                      case .local:
                         let documentsDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
-                        appModel.activeDataset = documentsDirectory.appendingPathComponent((datasets[index].0)).relativePath
-                        appModel.datasetSource = datasets[index].2
-                        await openSpace()
-                      case .Remote:
-                        if !appSettings.progressiveLoading {
-                          progress = 0.0
-                          statusText = "Initializing..."
-                          continueExecution = true
-                          wasCancelled = false
-                          showDialog = true
-                          startWork(activeDataset: datasets[index].0)
+
+                        let localFilename =  documentsDirectory
+                          .appendingPathComponent(
+                            (datasets[index].identifier)
+                          ).relativePath
+
+                        runtimeAppModel.startImmersiveSpace(identifier: localFilename,
+                                                     description: datasets[index].description,
+                                                     source: datasets[index].source,
+                                                     uniqueId: datasets[index].uniqueId,
+                                                     asGroupSessionHost:true)
+
+
+                      case .remote:
+                        if storedAppModel.progressiveLoading {
+                          runtimeAppModel.startImmersiveSpace(dataset: datasets[index],
+                                                       asGroupSessionHost:true)
                         } else {
-                          appModel.activeDataset = datasets[index].0
-                          appModel.datasetSource = datasets[index].2
-                          await openSpace()
+                          downloadAndOpenSpace(datasetID: datasets[index].identifier,
+                                               serverAddress:storedAppModel.serverAddress,
+                                               serverPort:storedAppModel.serverPort,
+                                               asGroupSessionHost:true)
                         }
                     }
                   }
@@ -230,16 +231,16 @@ struct OpenDatasetView: View {
               }
             }
           } label: {
-            Text(appModel.immersiveSpaceState == .open ? "Close Dataset" : "Open Dataset")
+            Text(runtimeAppModel.immersiveSpaceState == .open ? "Close Dataset" : "Open Dataset")
           }
-          .disabled(selectedIndex == nil || appModel.immersiveSpaceState == .inTransition || isLoading)
+          .disabled(selectedIndex == nil || runtimeAppModel.immersiveSpaceState == .inTransition || isLoading)
           .animation(.none, value: 0)
           .fontWeight(.semibold)
           .buttonStyle(.borderedProminent)
           .padding()
 
           Button(action: {
-            appModel.currentState = .importData
+            runtimeAppModel.currentState = .importData
           }) {
             Text("Import Data")
           }
@@ -249,7 +250,7 @@ struct OpenDatasetView: View {
           }.padding()
 
           Button(action: {
-            appModel.currentState = .start
+            runtimeAppModel.currentState = .start
           }) {
             Text("Back to Main Menu")
           }
@@ -258,13 +259,13 @@ struct OpenDatasetView: View {
         .onAppear {
           Task { await loadDatasetFilesAsync() }
         }
-      }.sheet(isPresented: $showDialog) {
+      }.sheet(isPresented: $showPrefetchDialog) {
         PrefetchDialog(
-          isPresented: $showDialog,
-          progress: $progress,
-          statusText: $statusText,
-          continueExecution: $continueExecution,
-          wasCancelled: $wasCancelled
+          isPresented: $showPrefetchDialog,
+          progress: $prefetchProgress,
+          statusText: $prefetchStatusText,
+          continueExecution: $prefetchContinue,
+          wasCancelled: $prefetchWasCancelled
         )
       }
 
@@ -308,19 +309,7 @@ struct OpenDatasetView: View {
         .animation(.easeInOut, value: isLoading)
       }
     }.onAppear() {
-      appModel.immersiveSpaceState = .closed
-    }
-  }
-
-  private func openSpace() async {
-    appModel.immersiveSpaceState = .inTransition
-    switch await openImmersiveSpace(id: appModel.immersiveSpaceID) {
-      case .opened:
-        appModel.currentState = .renderData
-      case .userCancelled, .error:
-        fallthrough
-      @unknown default:
-        appModel.immersiveSpaceState = .closed
+      runtimeAppModel.immersiveSpaceState = .closed
     }
   }
 
@@ -341,14 +330,14 @@ struct OpenDatasetView: View {
   private func deleteDataset(at index: Int) {
     let documentsDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
     let inputFile = documentsDirectory
-      .appendingPathComponent((datasets[index].0)).relativePath
+      .appendingPathComponent((datasets[index].identifier)).relativePath
     let fileURL = URL(fileURLWithPath: inputFile)
 
     do {
       try FileManager.default.removeItem(at: fileURL)
       datasets.remove(at: index)
     } catch {
-      appModel.logger.error("Error deleting file: \(error)")
+      runtimeAppModel.logger.error("Error deleting file: \(error)")
     }
 
     if let selected = selectedIndex, datasets.indices.contains(selected) == false {
@@ -361,73 +350,91 @@ struct OpenDatasetView: View {
     openWindow(id: "LoggerView")
   }
 
-  private func loadRemoteDatasets() async -> [AppModel.DatasetEntry] {
-    var datasets: [AppModel.DatasetEntry] = []
+  private func loadRemoteDatasets() async -> [RuntimeAppModel.DatasetEntry] {
+    var datasets: [RuntimeAppModel.DatasetEntry] = []
 
-    if !appSettings.serverAddress.isEmpty {
+    if !storedAppModel.serverAddress.isEmpty {
       await MainActor.run { loadingStage = .connectingServer }
       do {
         let manager = BORGVRRemoteDataManager(
-          host: appSettings.serverAddress,
-          port: UInt16(appSettings.serverPort),
-          logger: appModel.logger
+          host: storedAppModel.serverAddress,
+          port: UInt16(storedAppModel.serverPort),
+          logger: runtimeAppModel.logger,
+          notifier: runtimeAppModel.notifier
         )
-        try manager.connect(timeout: appSettings.timeout)
+        try manager.connect(timeout: storedAppModel.timeout)
         let remoteDatasets = try manager.requestDatasetList()
         for dataset in remoteDatasets {
-          datasets.append((
-            String(dataset.id),
-            dataset.description,
-            .Remote
+          datasets.append(RuntimeAppModel.DatasetEntry(
+            identifier: dataset.id,
+            description: dataset.description,
+            source:.remote(address:storedAppModel.serverAddress,
+                           port:storedAppModel.serverPort),
+            uniqueId:dataset.id
           ))
         }
       } catch {
-        appModel.logger.error("Error loading connecting to remote server: \(error.localizedDescription)")
+        runtimeAppModel.logger.error("Error loading connecting to remote server: \(error.localizedDescription)")
       }
     }
     return datasets
   }
 
+  private func iconForDatasetType(type: RuntimeAppModel.DatasetSource) -> String {
+    switch type {
+      case .local:
+        return "doc.fill"
+      case .builtIn:
+        return "internaldrive"
+      case .remote:
+        return "network"
+    }
+  }
 
-  func startWork(activeDataset:String) {
+  private func downloadAndOpenSpace(datasetID:String, serverAddress:String,
+                                    serverPort:Int, asGroupSessionHost:Bool) {
+    prefetchProgress = 0.0
+    prefetchStatusText = "Initializing..."
+    prefetchContinue = true
+    prefetchWasCancelled = false
+    showPrefetchDialog = true
+
     DispatchQueue.global(qos: .userInitiated).async {
 
       let logger : GUILogger = GUILogger()
-      logger.setProgressBinding($statusText, $progress)
+      logger.setProgressBinding($prefetchStatusText, $prefetchProgress)
       logger.setMinimumLogLevel(.dev)
+      var entryForLocalCopy : RuntimeAppModel.DatasetEntry? = nil
 
       do{
-
         let manager = BORGVRRemoteDataManager(
-          host: appSettings.serverAddress,
-          port: UInt16(appSettings.serverPort),
-          logger:logger
+          host: serverAddress,
+          port: UInt16(serverPort),
+          logger:logger,
+          notifier: nil
         )
-        try manager.connect(timeout: appSettings.timeout)
+        try manager.connect(timeout: storedAppModel.timeout)
 
         if let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
 
           let fileURL = documentsURL.appendingPathComponent(
-            "\(appSettings.serverAddress)-\(activeDataset).data"
+            "\(datasetID).data"
           )
 
           let dataset = try manager.openDataset(
-            datasetID: Int(activeDataset)!,
-            timeout: appSettings.timeout,
-            localCacheFilename: appSettings.makeLocalCopy ? fileURL.path : nil,
-            asyncGet: true
+            datasetID: datasetID,
+            timeout: storedAppModel.timeout,
+            localCacheFilename: fileURL.path
           )
 
-
-          DispatchQueue.main.async {
-            if let localFile = dataset.localFile {
-              appModel.datasetSource = .Local
-              appModel.activeDataset = localFile
-            }
-          }
+          entryForLocalCopy = RuntimeAppModel.DatasetEntry(
+            identifier: fileURL.path,
+            description: dataset.getMetadata().description,
+            source:.local,
+            uniqueId: dataset.getMetadata().uniqueID
+          )
 
           let count = dataset.getMetadata().brickMetadata.count
-
           let b = dataset.allocateBrickBuffer()
           defer { b.deallocate() }
           for i in 0..<count {
@@ -438,62 +445,82 @@ struct OpenDatasetView: View {
           }
 
           DispatchQueue.main.async {
-            statusText = "Loading \(count) bricks ..."
+            prefetchStatusText = "Loading \(count) bricks ..."
           }
+
           while dataset.localRatio < 1.0 {
-            if !continueExecution { break }
+            if !prefetchContinue { break }
             DispatchQueue.main.async {
-              progress = dataset.localRatio
-              statusText = "Loading bricks \(Int(dataset.localRatio * Double(count))) of \(count) \n\(String(format: "%.2f", dataset.localRatio * 100)) % complete..."
+              prefetchProgress = dataset.localRatio
+              prefetchStatusText = "Loading bricks \(Int(dataset.localRatio * Double(count))) of \(count) \n\(String(format: "%.2f", dataset.localRatio * 100)) % complete..."
             }
             Thread.sleep(forTimeInterval: 1)
           }
-
-
         }
       } catch {
       }
 
       DispatchQueue.main.async {
-        showDialog = false
-
+        showPrefetchDialog = false
       }
 
-      if continueExecution {
+      if prefetchContinue {
         Task { @MainActor in
-          await openSpace()
+          if let entryForLocalCopy {
+            runtimeAppModel.startImmersiveSpace(dataset: entryForLocalCopy,
+                                         asGroupSessionHost:asGroupSessionHost)
+          }
         }
       }
     }
   }
 
-  private func loadLocalDataset() async -> [AppModel.DatasetEntry] {
-    var datasets: [AppModel.DatasetEntry] = []
+  private func listLocalDataset() async -> [RuntimeAppModel.DatasetEntry] {
+    var datasets: [RuntimeAppModel.DatasetEntry] = []
 
     let fileManager = FileManager.default
     if let documentsURL = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first {
       do {
         let files = try fileManager.contentsOfDirectory(at: documentsURL, includingPropertiesForKeys: nil)
-        let datasetURLs = files.filter { $0.pathExtension == "data" }
+        let datasetURLs = files.filter {
+          $0.pathExtension.lowercased() == "data"
+        }
         for (index, url) in datasetURLs.enumerated() {
           await MainActor.run {
             loadingStage = .loadingLocalDataset(url.lastPathComponent, index, datasetURLs.count)
           }
           try? await Task.sleep(nanoseconds: 10_000_000)
-          let data = try? BORGVRFileData(filename: url.path())
-          if let data = data {
-            datasets.append((
-              url.lastPathComponent,
-              data.getMetadata().datasetDescription,
-              .Local
+          if let data = try? BORGVRMetaData(url: url) {
+            datasets.append(RuntimeAppModel.DatasetEntry(
+              identifier: url.lastPathComponent,
+              description: data.datasetDescription,
+              source:.local,
+              uniqueId:data.uniqueID
             ))
           }
         }
       } catch {
-        appModel.logger.error("Error loading dataset files: \(error.localizedDescription)")
+        runtimeAppModel.logger.error("Error loading dataset files: \(error.localizedDescription)")
       }
     }
 
+    if let datasetURLs = Bundle.main.urls(forResourcesWithExtension: "data", subdirectory: nil) {
+      for (index, url) in datasetURLs.enumerated() {
+        await MainActor.run {
+          loadingStage = .loadingLocalDataset(url.lastPathComponent, index, datasetURLs.count)
+        }
+        try? await Task.sleep(nanoseconds: 10_000_000)
+
+        if let data = try? BORGVRMetaData(url: url) {
+          datasets.append(RuntimeAppModel.DatasetEntry(
+            identifier:url.path(),
+            description:data.datasetDescription,
+            source:.builtIn,
+            uniqueId:data.uniqueID
+          ))
+        }
+      }
+    }
     return datasets
   }
 
@@ -505,11 +532,11 @@ struct OpenDatasetView: View {
     }
     try? await Task.sleep(nanoseconds: 20_000_000)
 
-    var loadedDatasets: [AppModel.DatasetEntry] = await loadLocalDataset()
+    var loadedDatasets: [RuntimeAppModel.DatasetEntry] = await listLocalDataset()
     loadedDatasets.append(contentsOf: await loadRemoteDatasets())
 
     await MainActor.run {
-      datasets = loadedDatasets.sorted { $0.1 < $1.1 }
+      datasets = loadedDatasets.sorted { $0.description < $1.description }
       isLoading = false
       loadingStage = .idle
     }
