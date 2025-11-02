@@ -106,8 +106,11 @@ struct ConverterView: View {
 
       // File selection row
       HStack {
-        Button("Select Input Volume") {
+
+        Button {
           showFilePicker = true
+        } label: {
+          Label("Select Input Volume", systemImage: "cube")
         }
         .disabled(isWorking)
 
@@ -183,22 +186,27 @@ struct ConverterView: View {
 
       HStack {
 
-        Button("Clear Output") {
+        Button {
           logText = ""
+        } label: {
+          Label("Clear Output", systemImage: "eraser")
         }
         .padding()
 
-
-        Button("Export Output") {
+        Button {
           isExporting = true
+        } label: {
+          Label("Export Output", systemImage: "square.and.arrow.up")
         }
         .padding()
 
         Spacer()
 
         // Back button
-        Button("Back to Main Menu") {
+        Button {
           runtimeAppModel.currentState = .start
+        } label: {
+          Label("Back to Main Menu", systemImage: "chevron.backward")
         }
         .font(.headline)
         .padding()

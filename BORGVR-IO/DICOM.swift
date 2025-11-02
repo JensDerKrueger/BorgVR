@@ -146,30 +146,7 @@ final class DicomParser {
 
   // MARK: - DICOM Tag Definitions
 
-  /**
-   Represents a DICOM tag with group and element numbers.
 
-   Conforms to `Equatable` and `Hashable` for use in dictionaries and sets.
-   */
-  struct DicomTag: Equatable, Hashable {
-    let group: UInt16
-    let element: UInt16
-
-    static let transferSyntaxUID = DicomTag(group: 0x0002, element: 0x0010)
-    static let rows = DicomTag(group: 0x0028, element: 0x0010)
-    static let columns = DicomTag(group: 0x0028, element: 0x0011)
-    static let samplesPerPixel = DicomTag(group: 0x0028, element: 0x0002)
-    static let bitsAllocated = DicomTag(group: 0x0028, element: 0x0100)
-    static let bitsStored = DicomTag(group: 0x0028, element: 0x0101)
-    static let highBit = DicomTag(group: 0x0028, element: 0x0102)
-    static let pixelRepresentation = DicomTag(group: 0x0028, element: 0x0103)
-    static let sliceThickness = DicomTag(group: 0x0018, element: 0x0050)
-    static let pixelSpacing = DicomTag(group: 0x0028, element: 0x0030)
-    static let imagePositionPatient = DicomTag(group: 0x0020, element: 0x0032)
-    static let imageOrientationPatient = DicomTag(group: 0x0020, element: 0x0037)
-    static let instanceNumber = DicomTag(group: 0x0020, element: 0x0013)
-    static let pixelData = DicomTag(group: 0x7FE0, element: 0x0010)
-  }
 
   // MARK: - DICOM File and Element Representations
 
@@ -517,6 +494,16 @@ final class DicomParser {
     }
   }
 
+  // Common VR inference for frequently used DICOM tags.
+  // Returns a VR string like "US", "UL", "CS", "SQ", etc., or UN if unknown.
+  static func inferredVR(for tag: DicomTag) -> String {
+    // Lookup in centralized map defined in DicomVRMap.swift
+    let tag = DicomTag(tag.group, tag.element)
+    let vr = DicomVRMap.vr(for: tag)
+    return vr
+  }
+
+
   /**
    Read a single DICOM data element at the given byte offset.
 
@@ -527,13 +514,14 @@ final class DicomParser {
    - Throws: `DicomParsingError.incompleteElementHeader` if not enough data.
    - Returns: A tuple containing the parsed `DicomElement` and the offset to the next element.
    */
-  static func readElement(at offset: Int, in data: Data, using encoding: DataElementEncoding) throws -> (element: DicomElement, nextOffset: Int) {
-    guard offset + 8 <= data.count else {
+  static func readElement(at startOffset: Int, in data: Data, using encoding: DataElementEncoding) throws -> (element: DicomElement, nextOffset: Int) {
+    guard startOffset + 8 <= data.count else {
       throw DicomParsingError.incompleteElementHeader
     }
 
-    let groupRange = offset..<offset+2
-    let elementRange = offset+2..<offset+4
+    let groupRange = startOffset..<startOffset+2
+    let elementRange = startOffset+2..<startOffset+4
+    var offset = startOffset+4
 
     let group = encoding == .explicitVRBigEndian
     ? UInt16(bigEndian: data.subdata(in: groupRange).withUnsafeBytes { $0.load(as: UInt16.self) })
@@ -543,33 +531,47 @@ final class DicomParser {
     ? UInt16(bigEndian: data.subdata(in: elementRange).withUnsafeBytes { $0.load(as: UInt16.self) })
     : UInt16(littleEndian: data.subdata(in: elementRange).withUnsafeBytes { $0.load(as: UInt16.self) })
 
-    let tag = DicomTag(group: group, element: element)
+    let tag = DicomTag(group, element)
+
+    let actualEncoding: DataElementEncoding = (group == 0x0002) ? .explicitVRLittleEndian : encoding
 
     let vr: String
     let length: Int
-    let valueOffset: Int
 
-    if encoding == .implicitVRLittleEndian {
-      vr = "UN"
-      length = Int(UInt32(littleEndian: data.subdata(in: offset+4..<offset+8).withUnsafeBytes { $0.load(as: UInt32.self) }))
-      valueOffset = offset + 8
+    if actualEncoding == .implicitVRLittleEndian {
+      vr = inferredVR(for: tag)
+      length = Int(UInt32(littleEndian: data.subdata(in: offset..<offset+4).withUnsafeBytes { $0.load(as: UInt32.self) }))
+      offset += 4
     } else {
-      vr = String(data: data.subdata(in: offset+4..<offset+6), encoding: .ascii) ?? "UN"
+      vr = String(data: data.subdata(in: offset..<offset+2), encoding: .ascii) ?? "UN"
+      offset += 2
+
       let isLongVR = ["OB", "OW", "OF", "SQ", "UT", "UN"].contains(vr)
 
       if isLongVR {
-        length = Int(UInt32(littleEndian: data.subdata(in: offset+8..<offset+12).withUnsafeBytes { $0.load(as: UInt32.self) }))
-        valueOffset = offset + 12
+        offset += 2 // skip the 2 reserved bytes
+        length = Int(UInt32(littleEndian: data.subdata(in: offset..<offset+4).withUnsafeBytes { $0.load(as: UInt32.self) }))
+        offset += 4
       } else {
-        length = Int(UInt16(littleEndian: data.subdata(in: offset+6..<offset+8).withUnsafeBytes { $0.load(as: UInt16.self) }))
-        valueOffset = offset + 8
+        length = Int(UInt16(littleEndian: data.subdata(in: offset..<offset+2).withUnsafeBytes { $0.load(as: UInt16.self) }))
+        offset += 2
       }
     }
 
-    return (
-      element: DicomElement(tag: tag, vr: vr, length: length, valueOffset: valueOffset, isSequence: vr == "SQ"),
-      nextOffset: valueOffset + length
-    )
+    // if length is 0xFFFFFFFF we hit an undef length SQ
+    // since we don't know all the private tags we may
+    // have missclassified them as UN so switch to SQ now
+    if length == 0xFFFFFFFF {
+      return (
+        element: DicomElement(tag: tag, vr: "SQ", length: length, valueOffset: offset, isSequence: true),
+        nextOffset: offset + length
+      )
+    } else {
+      return (
+        element: DicomElement(tag: tag, vr: vr, length: length, valueOffset: offset, isSequence: vr == "SQ"),
+        nextOffset: offset + length
+      )
+    }
   }
 
   /**
@@ -596,7 +598,7 @@ final class DicomParser {
     while offset + 8 <= data.count {
       let group = UInt16(littleEndian: data.subdata(in: offset..<offset+2).withUnsafeBytes { $0.load(as: UInt16.self) })
       let element = UInt16(littleEndian: data.subdata(in: offset+2..<offset+4).withUnsafeBytes { $0.load(as: UInt16.self) })
-      let tag = DicomTag(group: group, element: element)
+      let tag = DicomTag(group, element)
 
       let vr = String(data: data.subdata(in: offset+4..<offset+6), encoding: .ascii) ?? ""
       let length: Int
@@ -664,8 +666,8 @@ final class DicomParser {
           var totalLength = 0
           while pixelOffset + 8 <= data.count {
             let itemTag = DicomTag(
-              group: UInt16(littleEndian: data.subdata(in: pixelOffset..<pixelOffset+2).withUnsafeBytes { $0.load(as: UInt16.self) }),
-              element: UInt16(littleEndian: data.subdata(in: pixelOffset+2..<pixelOffset+4).withUnsafeBytes { $0.load(as: UInt16.self) })
+              UInt16(littleEndian: data.subdata(in: pixelOffset..<pixelOffset+2).withUnsafeBytes { $0.load(as: UInt16.self) }),
+              UInt16(littleEndian: data.subdata(in: pixelOffset+2..<pixelOffset+4).withUnsafeBytes { $0.load(as: UInt16.self) })
             )
             if itemTag.group == 0xFFFE && itemTag.element == 0xE000 {
               let itemLength = UInt32(littleEndian:
@@ -687,6 +689,7 @@ final class DicomParser {
             valueOffset: element.valueOffset,
             isSequence: element.isSequence
           )
+
         }
 
         // Record element if it matches one of the targets
@@ -707,8 +710,8 @@ final class DicomParser {
 
           while itemOffset + 8 <= subrangeEnd {
             let itemTag = DicomTag(
-              group: UInt16(littleEndian: data.subdata(in: itemOffset..<itemOffset+2).withUnsafeBytes { $0.load(as: UInt16.self) }),
-              element: UInt16(littleEndian: data.subdata(in: itemOffset+2..<itemOffset+4).withUnsafeBytes { $0.load(as: UInt16.self) })
+              UInt16(littleEndian: data.subdata(in: itemOffset..<itemOffset+2).withUnsafeBytes { $0.load(as: UInt16.self) }),
+              UInt16(littleEndian: data.subdata(in: itemOffset+2..<itemOffset+4).withUnsafeBytes { $0.load(as: UInt16.self) })
             )
             if itemTag.group == 0xFFFE && itemTag.element == 0xE000 {
               let itemLength = UInt32(littleEndian:
@@ -730,7 +733,7 @@ final class DicomParser {
               break
             }
           }
-          currentOffset = element.length == 0xFFFE_ffff
+          currentOffset = element.length == 0xFFFFFFFF //0xFFFE_ffff
           ? maxOffset
           : nextOffset
         } else {
@@ -863,3 +866,4 @@ final class DicomParser {
  CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR
  THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
+

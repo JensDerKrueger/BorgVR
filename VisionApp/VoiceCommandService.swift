@@ -90,7 +90,7 @@ public final class VoiceCommandService: ObservableObject {
   }
 
   // MARK: Public API
-  public func requestAuthorization() {
+  public func requestAuthorization(autostart:Bool=false) {
     transition(to: .requestingAuth)
     SFSpeechRecognizer.requestAuthorization { [weak self] auth in
       Task { @MainActor in
@@ -100,6 +100,12 @@ public final class VoiceCommandService: ObservableObject {
             do {
               try self.configureAudioSession()
               self.transition(to: .ready)
+
+              if autostart {
+                self.startListening()
+                self.enterPassiveMode()
+              }
+
             } catch {
               self.fail("Audio session error: \(error.localizedDescription)")
             }

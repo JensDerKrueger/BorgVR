@@ -35,7 +35,7 @@
 /* Begin PBXFileReference section */
 		560B8BE72E5C57580042E45B /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		564183782D649679003A1EC4 /* VisionApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = VisionApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		5655824B2D4E5D6F008E7CE6 /* GUIApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = GUIApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		5655824B2D4E5D6F008E7CE6 /* BorgVR Companion Application.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "BorgVR Companion Application.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		56730FE42E6B79000091976B /* head_32.data */ = {isa = PBXFileReference; lastKnownFileType = file; path = head_32.data; sourceTree = "<group>"; };
 		569EA3F62CD449C400D8FADD /* CmdApp */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = CmdApp; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -95,6 +95,13 @@
 			);
 			target = 5655824A2D4E5D6F008E7CE6 /* GUIApp */;
 		};
+		5634F94F2EB7FC67006B02FF /* Exceptions for "BORGVR-IO" folder in "GUIApp" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				make_json_from_part6.py,
+			);
+			target = 5655824A2D4E5D6F008E7CE6 /* GUIApp */;
+		};
 		564183882D649679003A1EC4 /* Exceptions for "VisionApp" folder in "VisionApp" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
@@ -110,6 +117,7 @@
 				BORGVRMetaData.swift,
 				BrickedVolumeReorganizer.swift,
 				DICOM.swift,
+				DICOMVRMap.swift,
 				HighResolutionTimer.swift,
 				IOExtensions.swift,
 				Logger.swift,
@@ -141,6 +149,7 @@
 				BORGVRMetaData.swift,
 				BrickedVolumeReorganizer.swift,
 				DICOM.swift,
+				DICOMVRMap.swift,
 				HighResolutionTimer.swift,
 				IOExtensions.swift,
 				Logger.swift,
@@ -216,6 +225,7 @@
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
 				565582782D4E5ECB008E7CE6 /* Exceptions for "BORGVR-IO" folder in "CmdApp" target */,
+				5634F94F2EB7FC67006B02FF /* Exceptions for "BORGVR-IO" folder in "GUIApp" target */,
 				564183972D649734003A1EC4 /* Exceptions for "BORGVR-IO" folder in "VisionApp" target */,
 			);
 			path = "BORGVR-IO";
@@ -275,7 +285,7 @@
 			isa = PBXGroup;
 			children = (
 				569EA3F62CD449C400D8FADD /* CmdApp */,
-				5655824B2D4E5D6F008E7CE6 /* GUIApp.app */,
+				5655824B2D4E5D6F008E7CE6 /* BorgVR Companion Application.app */,
 				564183782D649679003A1EC4 /* VisionApp.app */,
 			);
 			name = Products;
@@ -334,7 +344,7 @@
 			packageProductDependencies = (
 			);
 			productName = GUIApp;
-			productReference = 5655824B2D4E5D6F008E7CE6 /* GUIApp.app */;
+			productReference = 5655824B2D4E5D6F008E7CE6 /* BorgVR Companion Application.app */;
 			productType = "com.apple.product-type.application";
 		};
 		569EA3F52CD449C400D8FADD /* CmdApp */ = {
@@ -542,7 +552,7 @@
 				MACOSX_DEPLOYMENT_TARGET = 15.2;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "de.uni-due.GUIApp";
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = "BorgVR Companion Application";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
@@ -574,7 +584,7 @@
 				MACOSX_DEPLOYMENT_TARGET = 15.2;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "de.uni-due.GUIApp";
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = "BorgVR Companion Application";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;

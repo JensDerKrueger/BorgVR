@@ -37,8 +37,8 @@ struct VisionApp: App {
     WindowGroup(id: "main") {
       ContentView()
         .frame(
-          minWidth: runtimeAppModel.windowSize.width, maxWidth: runtimeAppModel.windowSize.width,
-          minHeight: runtimeAppModel.windowSize.height, maxHeight: runtimeAppModel.windowSize.height
+          minWidth: runtimeAppModel.windowSize.width,
+          minHeight: runtimeAppModel.windowSize.height
         )
         .trackView(name: "MainView")
         .environment(runtimeAppModel)
@@ -90,8 +90,6 @@ struct VisionApp: App {
         )
     }
     .windowResizability(.contentSize)
-    .windowStyle(.plain)
-
 
     // Iso-Value Editor Window
     WindowGroup(id: "IsovalueEditorView") {
@@ -105,7 +103,17 @@ struct VisionApp: App {
         )
     }
     .windowResizability(.contentSize)
-    .windowStyle(.plain)
+
+    // PrivateRenderingParameters Window
+    WindowGroup(id: "PrivateApplicationView") {
+      PrivateApplicationView()
+        .trackView(name: "PrivateApplicationView")
+        .environment(runtimeAppModel)
+        .environment(sharedAppModel)
+    }
+    .windowResizability(.contentSize)
+    .defaultSize(width:200,height:40)
+
 
     // Performance Window
     WindowGroup(id: "PerformanceGraphView") {

@@ -6,13 +6,38 @@ struct GUIAppApp: App {
   @StateObject private var storedAppModel = StoredAppModel()
   @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
+  @State private var showingAbout = false
+
   var body: some Scene {
     WindowGroup("BorgVR Dataset Companion Application") {
       ContentView()
+      .onAppear {
+        NSWindow.allowsAutomaticWindowTabbing = false
+      }
+      .sheet(isPresented: $showingAbout) {
+        InfoView()
+      }
+
     }
     .environment(runtimeAppModel)
     .environmentObject(storedAppModel)
-    .defaultSize(width:600,height:600)
+    .defaultSize(width:600,height:300)
+
+    .commandsRemoved()
+    .commands {
+
+      CommandGroup(replacing: .appTermination) {
+        Button("Quit Companion Application") {
+          NSApp.sendAction(#selector(NSWindow.performClose(_:)), to: nil, from: nil)
+        }
+      }
+
+      CommandGroup(replacing: .appInfo) {
+        Button("About Companion Application") {
+          showingAbout = true
+        }
+      }
+    }
   }
 }
 

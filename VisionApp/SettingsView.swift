@@ -349,12 +349,11 @@ struct SettingsView: View {
       }
       
       Spacer()
-      
-      Button(action: { runtimeAppModel.currentState = .start }) {
-        Text("Back to Main Menu")
-          .font(.headline)
-          .padding()
-          .frame(maxWidth: .infinity)
+
+      Button {
+        runtimeAppModel.currentState = .start
+      } label: {
+        Label("Back to Main Menu", systemImage: "chevron.backward")
       }
       .background(RoundedRectangle(cornerRadius: 30).fill(Color.blue))
       .padding(.horizontal)

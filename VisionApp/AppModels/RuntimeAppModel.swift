@@ -237,8 +237,7 @@ class RuntimeAppModel {
   /// The current content view state of the application.
   var currentState: ContentViewState = .start
   /// The current window size of the application.
-  var windowSize: CGSize = CGSize(width: 1300, height: 1000)
-
+  var windowSize: CGSize = CGSize(width: 1000, height: 520)
 
   func startImmersiveSpace(dataset: DatasetEntry,
                            asGroupSessionHost:Bool) {    

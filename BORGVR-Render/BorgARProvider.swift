@@ -224,7 +224,6 @@ final class BorgARProvider {
               try? await provider.removeAnchor(wa)
             }
           }
-
         }
       }
     }

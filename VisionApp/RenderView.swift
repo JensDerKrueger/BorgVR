@@ -34,9 +34,8 @@ struct RenderView: View {
       .padding(.horizontal)
 
       HStack {
-        // Button to open the selected editor
         Button(action: openSelectedEditor) {
-          Text("Open " + String(describing: sharedAppModel.renderMode) + " Editor")
+          Text(String(describing: sharedAppModel.renderMode) + " Editor")
         }
         .padding()
 
@@ -83,32 +82,25 @@ struct RenderView: View {
                 )
                             : Color.white.opacity(0.12),
                             lineWidth: 2
-)
+              )
           )
           .shadow(radius: voice.isEnabled ? 14 : 6)
           .animation(.spring(response: 0.28, dampingFraction: 0.85), value: voice.isEnabled)
           .accessibilityLabel(voice.isEnabled ? "Stop Listening" : "Start Voice Input")
-          .onAppear { startupVoice() }
+          .onAppear {
+            startupVoice()
+            if !self.runtimeAppModel.isViewOpen("PrivateApplicationView") {
+              openWindow(id: "PrivateApplicationView")
+            }
+          }
         }
       }
 
-      Picker("Interaction", selection: Binding(
-        get: { runtimeAppModel.interactionMode.rawValue},
-        set: { (value:String) in
-          switch value {
-            case "model":
-              runtimeAppModel.interactionMode = .model
-            case "clipping":
-              runtimeAppModel.interactionMode = .clipping
-            default:
-              break
-          }
+      Button("Open Interaction Window") {
+        if !self.runtimeAppModel.isViewOpen("PrivateApplicationView") {
+          openWindow(id: "PrivateApplicationView")
         }
-      )) {
-        Text("Model").tag("model")
-        Text("Clipping").tag("clipping")
       }
-      .pickerStyle(.segmented)
 
       Spacer()
 
@@ -156,6 +148,7 @@ struct RenderView: View {
       dismissWindow(id: "PerformanceGraphView")
       dismissWindow(id: "LoggerView")
       dismissWindow(id: "ProfileView")
+      dismissWindow(id: "PrivateApplicationView")
       voice.stopListening()
     }
     .padding()
@@ -193,6 +186,7 @@ struct RenderView: View {
   // MARK: - Voice Control
 
   private func startupVoice() {
+
     voice.onMessage = { msg in
       switch msg {
         case .transcript(let text, let isFinal):
@@ -201,9 +195,10 @@ struct RenderView: View {
           handleVoiceStateChange(state:state)
       }
     }
+    
     switch voice.state {
       case .idle :
-        voice.requestAuthorization()
+        voice.requestAuthorization(autostart: storedAppModel.enableVoiceInput && storedAppModel.autostartVoiceInput)
       case .failed(let error) :
         runtimeAppModel.logger.warning("Voice usage failed: \(error)")
         return
@@ -213,11 +208,6 @@ struct RenderView: View {
         return
       default:
         break
-    }
-
-    if storedAppModel.enableVoiceInput && storedAppModel.autostartVoiceInput {
-      voice.startListening()
-      voice.enterPassiveMode()
     }
   }
 
@@ -278,6 +268,7 @@ struct RenderView: View {
     }
     if text.hasSuffix("disable voice") ||
         text.hasSuffix("stop voice") ||
+        text.hasSuffix("stop listening") ||
         text.hasSuffix("end voice") ||
         text.hasSuffix("cancel voice") ||
         text.hasSuffix("halt voice") ||
