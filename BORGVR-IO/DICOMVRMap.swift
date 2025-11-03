@@ -31,6 +31,9 @@ public struct DicomTag: Equatable, Hashable {
   static let imagePositionPatient = DicomTag(0x0020, 0x0032)
   static let imageOrientationPatient = DicomTag(0x0020, 0x0037)
   static let instanceNumber = DicomTag(0x0020, 0x0013)
+  static let modality = DicomTag(0x0008, 0x0060)
+  static let patientName = DicomTag(0x0010, 0x0010)
+  static let seriesDate = DicomTag(0x0008, 0x0020)
   static let pixelData = DicomTag(0x7FE0, 0x0010)
 }
 
@@ -45,7 +48,7 @@ public struct DicomTag: Equatable, Hashable {
 public enum DicomVRMap {
 
   /// Immutable in-memory map after load: packed tag -> VR String.
-  public static var runtime: [UInt32: String] = {
+  public static var runtime: [UInt32: (vr: String, name:String)] = {
     // Try default bundle load on first access
     if let url = Bundle.main.url(forResource: "DICOMVRMap", withExtension: "json"),
        let data = try? Data(contentsOf: url),
@@ -63,17 +66,15 @@ public enum DicomVRMap {
   /// - "UN" when unknown
   @inlinable
   public static func vr(for tag: DicomTag) -> String {
-    if tag.element == 0x0000 { return "UL" }         // group length
-    if let vr = runtime[tag.packed] { return vr }
+    if tag.element == 0x0000 { return "UL" } // group length
+    if let value = runtime[tag.packed] { return value.vr }
     return "UN"
   }
 
-  /// Lookup using packed key (ggggeeee).
-  @inlinable
-  public static func vr(forPacked packed: UInt32) -> String {
-    let element = UInt16(packed & 0xFFFF)
-    if element == 0x0000 { return "UL" }
-    return runtime[packed] ?? "UN"
+  public static func name(for tag: DicomTag) -> String {
+    if tag.element == 0x0000 { return "group length" }
+    if let value = runtime[tag.packed] { return value.name }
+    return ""
   }
 
   /// Reload from a specific JSON file URL (overrides current map).
@@ -95,19 +96,13 @@ public enum DicomVRMap {
     return true
   }
 
-  /// Manually register/override entries at runtime (keys are DicomTag).
-  public static func register(_ entries: [DicomTag: String]) {
-    var copy = runtime
-    for (t, vr) in entries { copy[t.packed] = vr }
-    runtime = copy
-  }
 
   // MARK: JSON parsing
 
   /// Accepts either:
   ///  - [String: String] (VR-only), or
   ///  - [String: { "vr": String, "name": String }]
-  private static func parseJSON(data: Data) -> [UInt32: String]? {
+  private static func parseJSON(data: Data) -> [UInt32: (vr: String, name:String)]? {
     // Try the simplest shape first: [String:String]
     if let dict = try? JSONSerialization.jsonObject(with: data) as? [String: String] {
       return parseVROnly(dict)
@@ -119,27 +114,30 @@ public enum DicomVRMap {
     return nil
   }
 
-  private static func parseVROnly(_ dict: [String: String]) -> [UInt32: String] {
-    var out: [UInt32: String] = [:]
+  private static func parseVROnly(_ dict: [String: String]) -> [UInt32: (vr: String, name:String)] {
+    var out: [UInt32: (vr: String, name:String)] = [:]
     out.reserveCapacity(dict.count)
     for (rawKey, vr) in dict {
       if let packed = parseKeyToPacked(rawKey) {
-        out[packed] = vr.uppercased()
+        out[packed] = (vr:vr.uppercased(), name:"")
       }
     }
     return out
   }
 
-  private static func parseVRWithObjects(_ dict: [String: Any]) -> [UInt32: String] {
-    var out: [UInt32: String] = [:]
+  private static func parseVRWithObjects(_ dict: [String: Any]) -> [UInt32: (vr: String, name:String)] {
+    var out: [UInt32: (vr: String, name:String)] = [:]
     out.reserveCapacity(dict.count)
     for (rawKey, value) in dict {
       guard let obj = value as? [String: Any] else { continue }
-      // Accept keys "vr" or "VR"
+
       let vr = (obj["vr"] as? String) ?? (obj["VR"] as? String)
       guard let vrStr = vr?.uppercased() else { continue }
+
+      let name = (obj["name"] as? String) ?? (obj["NAME"] as? String)
+
       if let packed = parseKeyToPacked(rawKey) {
-        out[packed] = vrStr
+        out[packed] = (vr:vrStr, name:(name ?? ""))
       }
     }
     return out
@@ -154,3 +152,25 @@ public enum DicomVRMap {
     return u
   }
 }
+
+/*
+ Copyright (c) 2025 Computer Graphics and Visualization Group, University of Duisburg-
+ Essen
+
+ Permission is hereby granted, free of charge, to any person obtaining a copy of this
+ software and associated documentation files (the "Software"), to deal in the Software
+ without restriction, including without limitation the rights to use, copy, modify,
+ merge, publish, distribute, sublicense, and/or sell copies of the Software, and to
+ permit persons to whom the Software is furnished to do so, subject to the following
+ conditions:
+
+ The above copyright notice and this permission notice shall be included in all copies
+ or substantial portions of the Software.
+
+ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+ INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+ PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+ HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF
+ CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR
+ THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ */

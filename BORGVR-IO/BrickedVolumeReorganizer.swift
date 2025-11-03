@@ -210,6 +210,7 @@ public class BrickedVolumeReorganizer {
    */
   public func reorganize(to filename: String,
                          datasetDescription: String,
+                         metaDescription:String,
                          useCompressor: Bool = false,
                          logger: LoggerBase? = nil) throws {
 
@@ -230,9 +231,8 @@ public class BrickedVolumeReorganizer {
                                   minValue: minValue,
                                   maxValue: maxValue,
                                   compression: useCompressor,
-                                  datasetDescription: datasetDescription)
-
-
+                                  datasetDescription: datasetDescription,
+                                  metaDescription: metaDescription)
 
     let levelCount = BORGVRMetaData.calculateLevelCount(size: inputVolume.size,
                                                         brickSize: brickSize,

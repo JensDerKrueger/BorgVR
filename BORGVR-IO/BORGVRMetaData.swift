@@ -178,7 +178,7 @@ final class BORGVRMetaData: CustomStringConvertible, Codable {
   /// Magic bytes used for file identification.
   private static let magicBytes = "BORGVR".data(using: .utf8)!
   /// The version of the metadata format.
-  private static let version: Int = 2
+  private static let version: Int = 3
 
   /// The original volume width.
   private(set) var width: Int = 0
@@ -218,6 +218,8 @@ final class BORGVRMetaData: CustomStringConvertible, Codable {
   var uniqueID: String = ""
   /// A short description of the dataset.
   var datasetDescription: String = ""
+  /// A long description of the dataset.
+  var metaDescription: String = ""
 
   /// An array containing metadata for each level in the bricked hierarchy.
   private(set) var levelMetadata: [LevelMetadata] = []
@@ -235,6 +237,7 @@ final class BORGVRMetaData: CustomStringConvertible, Codable {
     levels: \(levelMetadata.count), \
     bricks: \(brickMetadata.count), \
     label: “\(datasetDescription)”, \
+    desc: “\(metaDescription)”, \
     uniqueID: “\(uniqueID)”
     """
   }
@@ -317,6 +320,7 @@ final class BORGVRMetaData: CustomStringConvertible, Codable {
    - Parameter maxValue: The maximum intensity value in the volume.
    - Parameter compression: A Boolean flag indicating compression status.
    - Parameter description: A short description of the dataset.
+   - Parameter metaDescription: A long description of the dataset.
    */
   init(width: Int,
        height: Int,
@@ -331,7 +335,8 @@ final class BORGVRMetaData: CustomStringConvertible, Codable {
        minValue: Int,
        maxValue: Int,
        compression: Bool,
-       datasetDescription: String) {
+       datasetDescription: String,
+       metaDescription:String) {
     self.width = width
     self.height = height
     self.depth = depth
@@ -346,6 +351,7 @@ final class BORGVRMetaData: CustomStringConvertible, Codable {
     self.maxValue = maxValue
     self.compression = compression
     self.datasetDescription = datasetDescription
+    self.metaDescription = metaDescription
     self.uniqueID = UUID().uuidString
 
     computeLevelMetadata()
@@ -456,6 +462,7 @@ final class BORGVRMetaData: CustomStringConvertible, Codable {
     data.append(Data(from: compression))
     data.appendString(uniqueID)
     data.appendString(datasetDescription)
+    data.appendString(metaDescription)
     data.append(Data(from: Int64(brickMetadata.count)))
     let dataOffset: Int64 = 0
     data.append(Data(from: dataOffset))
@@ -591,6 +598,7 @@ final class BORGVRMetaData: CustomStringConvertible, Codable {
     }
 
     self.datasetDescription = try readString(context: "datasetDescription")
+    self.metaDescription = try readString(context: "metaDescription")
     let metadataCount     = Int(try read(Int64.self, context: "brickMetadataCount"))
     let dataOffset        = Int(try read(Int64.self, context: "brickDataOffset"))
 

@@ -50,8 +50,6 @@ struct ConverterView: View {
             .foregroundColor(.secondary)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding()
-
-
         }
         Image("step\(step)")
           .resizable()
@@ -311,8 +309,7 @@ struct ConverterView: View {
         defer { url.stopAccessingSecurityScopedResource() }
         inputDirectory = url.path
         inputFile = ""
-        outputFile = URL(fileURLWithPath: inputDirectory).lastPathComponent
-        datasetDescription = "Converted from DICOM Directory \(outputFile)"
+        (outputFile, datasetDescription) = generateDescriptionSuggestion(from: inputDirectory)
       } else {
         logger.error("Unable to access the selected directory due to sandbox restrictions.")
       }
@@ -354,6 +351,7 @@ struct ConverterView: View {
                         overlap: Int,
                         outputFilename: String,
                         datasetDescription: String,
+                        metaDescription: String,
                         useCompressor:Bool,
                         extensionStrategy:ExtensionStrategy) throws {
     let volume = try RawFileAccessor(
@@ -377,6 +375,7 @@ struct ConverterView: View {
       .reorganize(
         to: outputFilename,
         datasetDescription: datasetDescription,
+        metaDescription: metaDescription,
         useCompressor: useCompressor,
         logger: logger
       )
@@ -425,7 +424,6 @@ struct ConverterView: View {
 
           let ext = URL(fileURLWithPath: inputFile).pathExtension
 
-
           if ext == "dat" {
             let parser = try QVISParser(filename: inputFile)
             let fileNameWithoutExtension = URL(fileURLWithPath: inputFile).deletingPathExtension().lastPathComponent
@@ -439,6 +437,7 @@ struct ConverterView: View {
                                  overlap: storedAppModel.brickOverlap,
                                  outputFilename: appendExtensionIfNeeded(to:outputFilePath,ext:"data"),
                                  datasetDescription: datasetDescription == "" ? "Converted from QVIS Volume \(fileNameWithoutExtension)" : datasetDescription,
+                                 metaDescription: "Converted from QVIS Volume \(fileNameWithoutExtension)",
                                  useCompressor: storedAppModel.enableCompression,
                                  extensionStrategy: borderMode)
           } else {
@@ -459,32 +458,17 @@ struct ConverterView: View {
                                  overlap: storedAppModel.brickOverlap,
                                  outputFilename:appendExtensionIfNeeded(to:outputFilePath,ext:"data"),
                                  datasetDescription: datasetDescription == "" ? "Converted from NRRD Volume \(fileNameWithoutExtension)" : datasetDescription,
+                                 metaDescription: "Converted from NRRD Volume \(fileNameWithoutExtension)",
                                  useCompressor: storedAppModel.enableCompression,
                                  extensionStrategy: borderMode)
 
             if parser.dataIsTempCopy {
               try FileManager.default.removeItem(at: URL(fileURLWithPath: parser.absoluteFilename))
             }
-
           }
-
         } else {
           let directory = URL(fileURLWithPath: inputDirectory, isDirectory: true)
-
-          let fileManager = FileManager.default
-          let files = try fileManager.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
-          let dicomFiles = files.filter { $0.isFileURL }
-
-          logger.info("Scanning directory for DICOM files...")
-
-          guard !dicomFiles.isEmpty else {
-            logger.error("No files found in directory.")
-            exit(1)
-          }
-
-          logger.info(String(format: "Found %d DICOM files.", dicomFiles.count))
-
-          let dicomVolume = try DicomParser.decodeVolume(from: dicomFiles)
+          let dicomVolume = try getDicomVolume(directory: directory)
 
           let tempDir = FileManager.default.temporaryDirectory
           let uuid = UUID().uuidString
@@ -510,6 +494,7 @@ struct ConverterView: View {
                                overlap: storedAppModel.brickOverlap,
                                outputFilename: appendExtensionIfNeeded(to:outputFilePath,ext:"data"),
                                datasetDescription: datasetDescription == "" ? "Converted from DICOM Stack \(dirName)" : datasetDescription,
+                               metaDescription: "Converted from DICOM Stack \(dirName)",
                                useCompressor: storedAppModel.enableCompression,
                                extensionStrategy: borderMode)
 
@@ -533,6 +518,70 @@ struct ConverterView: View {
       logger.info("Time elapsed: \(total) seconds")
     }
   }
+
+  func getDicomVolume(directory:URL) throws -> DicomParser.DicomVolume {
+    let fileManager = FileManager.default
+    let files = try fileManager.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
+    let dicomFiles = files.filter { $0.isFileURL }
+
+    logger.info("Scanning directory for DICOM files...")
+
+    guard !dicomFiles.isEmpty else {
+      logger.error("No files found in directory.")
+      throw DicomParser.DicomParsingError.noValidFilesFound
+    }
+
+    logger.info(String(format: "Found %d DICOM files.", dicomFiles.count))
+
+    return try DicomParser.decodeVolume(from: dicomFiles)
+  }
+
+  enum DummyError: Error {}
+
+  func generateDescriptionSuggestion(from directoryString:String) -> (String,String) {
+
+    let directory = URL(fileURLWithPath: directoryString, isDirectory: true)
+
+    do {
+      let fileManager = FileManager.default
+      let files = try fileManager.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
+      let dicomFiles = files.filter { $0.isFileURL }
+
+      guard dicomFiles.isEmpty == false else {
+        throw NSError(domain: "", code: 0)
+      }
+
+      func genTitle(slice : DicomParser.DicomSlice ) -> String {
+        var parts: [String] = []
+        parts.append(slice.modality.map { "\($0) scan" } ?? "Scan")
+        if let name = slice.patientName {
+          parts.append("of \(name)")
+        }
+        if let date = slice.seriesDate {
+          parts.append("at \(date)")
+        }
+        return parts.joined(separator: " ").replacingOccurrences(of: "^", with: ", ")
+      }
+
+      let file = try DicomParser.parseDicomHeader(from: dicomFiles.first!)
+      let combined = genTitle(slice: try DicomParser.decodeSlice(from: file))
+
+      if combined.isEmpty {
+        return (URL(fileURLWithPath: inputDirectory).lastPathComponent, "Converted from DICOM Directory \(directory)")
+      }
+
+      return (
+        URL(fileURLWithPath: inputDirectory).lastPathComponent,
+        combined
+      )
+
+    } catch {
+      return (URL(fileURLWithPath: inputDirectory).lastPathComponent, "Converted from DICOM Directory \(directory)")
+    }
+  }
+
+
+
 }
 
 /*

@@ -30,6 +30,10 @@ final class DicomParser {
     let scale: (x: Float, y: Float, z: Float)
     /// Flat voxel data array in Z-Y-X order.
     let voxelData: [UInt8]
+
+    let modality: String?
+    let patientName: String?
+    let seriesDate: String?
   }
 
   /**
@@ -109,13 +113,18 @@ final class DicomParser {
       scale = (1, 1, 1)
     }
 
+    let metaSource = parsed.first!.1
+
     return DicomVolume(
       width: width,
       height: height,
       depth: depth,
       bytesPerVoxel: bytesPerVoxel,
       scale: scale,
-      voxelData: buffer
+      voxelData: buffer,
+      modality: metaSource.modality,
+      patientName: metaSource.patientName,
+      seriesDate: metaSource.seriesDate
     )
   }
 
@@ -226,6 +235,10 @@ final class DicomParser {
     let orientation: [Float]?
     /// Instance number for ordering slices.
     let instanceNumber: Int?
+
+    let modality: String?
+    let patientName: String?
+    let seriesDate: String?
 
     /**
      Decode the raw pixel data into an array of bytes according to the specified encoding.
@@ -639,7 +652,7 @@ final class DicomParser {
    - Throws: `DicomParsingError` on read errors.
    - Returns: A dictionary mapping each found tag to its `DicomElement`.
    */
-  static func extractElements(from dicom: DicomFile, targetTags: Set<DicomTag>) throws -> [DicomTag: DicomElement] {
+  static func extractElements(from dicom: DicomFile) throws -> [DicomTag: DicomElement] {
     let offset = 132
     var result: [DicomTag: DicomElement] = [:]
 
@@ -692,13 +705,8 @@ final class DicomParser {
 
         }
 
-        // Record element if it matches one of the targets
-        if targetTags.contains(element.tag) {
-          result[element.tag] = element
-          if result.count == targetTags.count {
-            return currentOffset - startOffset
-          }
-        }
+        // Record element
+        result[element.tag] = element
 
         // Recurse into sequences
         if element.isSequence {
@@ -758,7 +766,9 @@ final class DicomParser {
    - Returns: A `DicomSlice` with image and metadata.
    */
   static func decodeSlice(from dicom: DicomFile) throws -> DicomSlice {
-    // Define required and optional tags
+    let elements = try extractElements(from: dicom)
+
+    // Ensure all non-optional tags are present
     let tagRequirements: [(DicomTag, Bool)] = [
       (.rows, false),
       (.columns, false),
@@ -770,13 +780,11 @@ final class DicomParser {
       (.pixelSpacing, true),
       (.imagePositionPatient, true),
       (.imageOrientationPatient, true),
-      (.instanceNumber, true)
+      (.instanceNumber, true),
+      (.modality, true),
+      (.patientName, true),
+      (.seriesDate, true)
     ]
-
-    let tagSet = Set(tagRequirements.map { $0.0 })
-    let elements = try extractElements(from: dicom, targetTags: tagSet)
-
-    // Ensure all non-optional tags are present
     for (tag, isOptional) in tagRequirements where !isOptional {
       guard elements[tag] != nil else {
         throw DicomParsingError.tagNotFound(tag)
@@ -798,6 +806,16 @@ final class DicomParser {
         encoding: .ascii
       )?.trimmingCharacters(in: .whitespaces)
       return str.flatMap(Float.init)
+    }
+
+    // Helper to read ASCII value
+    func readString(tag: DicomTag) -> String? {
+      guard let elem = elements[tag] else { return nil }
+      let str = String(
+        data: dicom.rawData.subdata(in: elem.valueOffset..<elem.valueOffset+elem.length),
+        encoding: .ascii
+      )?.trimmingCharacters(in: .whitespaces)
+      return str
     }
 
     // Helper to read tuple of floats separated by backslashes
@@ -840,7 +858,10 @@ final class DicomParser {
       pixelSpacing: readFloatTuple(tag: .pixelSpacing, count: 2).flatMap { ($0[0], $0[1]) },
       position: readFloatTuple(tag: .imagePositionPatient, count: 3).flatMap { ($0[0], $0[1], $0[2]) },
       orientation: readFloatTuple(tag: .imageOrientationPatient, count: 6),
-      instanceNumber: readInstanceNumber(tag: .instanceNumber)
+      instanceNumber: readInstanceNumber(tag: .instanceNumber),
+      modality: readString(tag:.modality),
+      patientName: readString(tag:.patientName),
+      seriesDate: readString(tag:.seriesDate)
     )
   }
 }
@@ -866,4 +887,5 @@ final class DicomParser {
  CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR
  THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
+
 

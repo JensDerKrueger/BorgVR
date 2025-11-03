@@ -353,6 +353,8 @@ struct ConverterView: View {
         ? "Converted from external volume file \(URL(fileURLWithPath: inputFile).deletingPathExtension().lastPathComponent)"
         : description
 
+        let metaDesc = "Converted from external volume file \(URL(fileURLWithPath: inputFile).deletingPathExtension().lastPathComponent)"
+
         let borderMode: ExtensionStrategy
         switch storedAppModel.borderMode {
           case "zeroes":
@@ -375,6 +377,7 @@ struct ConverterView: View {
         try reorganizer.reorganize(
           to: outputFile,
           datasetDescription: actualDesc,
+          metaDescription: metaDesc,
           useCompressor: storedAppModel.enableCompression,
           logger: logger
         )

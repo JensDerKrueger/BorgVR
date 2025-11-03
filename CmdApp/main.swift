@@ -245,7 +245,8 @@ func convertRawVolume(inputFilename: String,
                       aspect: Vec3<Float>,
                       overlap: Int,
                       outputFilename: String,
-                      datasetDescription: String) throws {
+                      datasetDescription: String,
+                      metaDescription:String) throws {
   let volume = try RawFileAccessor(
     filename: inputFilename,
     size: size,
@@ -267,6 +268,7 @@ func convertRawVolume(inputFilename: String,
     .reorganize(
       to: outputFilename,
       datasetDescription: datasetDescription,
+      metaDescription:metaDescription,
       useCompressor: true,
       logger: logger
     )
@@ -321,7 +323,8 @@ func convertDICOMStack(_ params: DicomModeParameters) {
                                              z: dicomVolume.scale.z),
                          overlap: params.common.overlap,
                          outputFilename: params.common.outputFilename,
-                         datasetDescription: params.common.datasetDescription)
+                         datasetDescription: params.common.datasetDescription,
+                         metaDescription:"")
 
     try FileManager.default.removeItem(at: tempURL)
   } catch {
@@ -354,7 +357,8 @@ func convertNRRDVolume(_ params: HeaderFileModeParameters) {
                          aspect: parser.sliceThickness,
                          overlap: params.common.overlap,
                          outputFilename: params.common.outputFilename,
-                         datasetDescription: params.common.datasetDescription)
+                         datasetDescription: params.common.datasetDescription,
+                         metaDescription: "")
 
     if parser.dataIsTempCopy {
       try FileManager.default.removeItem(at: URL(fileURLWithPath: parser.absoluteFilename))
@@ -390,7 +394,8 @@ func convertQVISVolume(_ params: HeaderFileModeParameters) {
                          aspect: parser.sliceThickness,
                          overlap: params.common.overlap,
                          outputFilename: params.common.outputFilename,
-                         datasetDescription: params.common.datasetDescription)
+                         datasetDescription: params.common.datasetDescription,
+                         metaDescription:"")
   } catch {
     logger.error("Error: \(error.localizedDescription)")
     exit(1)
@@ -441,7 +446,8 @@ func generateVolume(_ params: CreateModeParameters) {
                          aspect: Vec3<Float>(x: 1, y: 1, z: 1),
                          overlap: params.common.overlap,
                          outputFilename: params.common.outputFilename,
-                         datasetDescription: params.common.datasetDescription)
+                         datasetDescription: params.common.datasetDescription,
+                         metaDescription:"")
 
     try FileManager.default.removeItem(at: tempURL)
   } catch {
