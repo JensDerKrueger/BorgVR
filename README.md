@@ -2,20 +2,31 @@
 
 # BorgVR
 
-BorgVR stands for Bricked Out Of Core Ray Guided Volume Rendering in Virtual Reallity and is is a high-performance, large-scale, mixed-reality, out-of-core, [ray-guided](https://en.wikipedia.org/wiki/Ray_tracing_(graphics)), [volume rendering](https://en.wikipedia.org/wiki/Volume_rendering) project. This project is developed by the [Computergraphics and Visualization Group](https://www.cgvis.de/) at the University of Duisburg-Essen and targets the **Apple Vision Pro Spatial Computing platform**. BorgVR aims to push the boundaries of [mixed reality](https://en.wikipedia.org/wiki/Mixed_reality) and [virtual reality (VR)](https://en.wikipedia.org/wiki/Virtual_reality) by leveraging advanced GPU-based volume visualization techniques for spatial computing.
+BorgVR stands for Bricked Out-of-Core Ray-Guided Volume Rendering and is a high-performance, large-scale, out-of-core, [ray-guided](https://en.wikipedia.org/wiki/Ray_tracing_(graphics)), [volume rendering](https://en.wikipedia.org/wiki/Volume_rendering) project. This project is developed by the [Computergraphics and Visualization Group](https://www.cgvis.de/) at the University of Duisburg-Essen and supports **visionOS, iOS/iPadOS, and macOS**. BorgVR started as an Apple Vision Pro spatial computing application and now also provides native iPhone, iPad, and Mac applications built around the same bricked volume rendering system.
 
 ---
 
 ## Overview
 
-BorgVR extends the capabilities of volume rendering to mixed reality, specifically designed to harness the power of Apple Vision Pro. The system employs cutting-edge techniques in out-of-core raycasting to render complex, large-scale volumetric datasets seamlessly. BorgVR is built to meet the computational demands of spatial computing environments, offering a unique experience for high-fidelity visualization in VR and MR settings.
+BorgVR extends the capabilities of volume rendering across Apple platforms. The system employs cutting-edge techniques in out-of-core raycasting to render complex, large-scale volumetric datasets seamlessly. On Apple Vision Pro, BorgVR provides immersive spatial visualization; on iPhone, iPad, and Mac, it offers native touch, pointer, and desktop workflows for interactive volume exploration.
 
 ### Key Features
 
-- **High-Performance Volume Rendering**: Optimized for Apple Vision Pro, designed to provide smooth and immersive volume visualization.
+- **High-Performance Volume Rendering**: Optimized Metal-based rendering for Apple Vision Pro, iPhone, iPad, and Mac.
 - **Out-of-Core Data Handling**: Efficient management and rendering of massive datasets, suitable for high-resolution visualization and simulation.
-- **Ray-Guided Volume Rendering**: Advanced ray-guided techniques for interactive visualization, supporting intuitive exploration of volumetric data in 3D space.
-- **GPU Acceleration**: Full utilization of Apple Vision Pro’s GPU capabilities to support real-time, spatially immersive rendering.
+- **Ray-Guided Volume Rendering**: Advanced ray-guided techniques for interactive visualization, supporting intuitive exploration of volumetric data.
+- **GPU Acceleration**: Full utilization of Apple GPU capabilities to support real-time rendering.
+- **Cross-Platform Collaboration**: SharePlay-based collaborative sessions can synchronize datasets and render state across supported Apple platforms.
+- **Dataset Tools and Server Support**: Includes import/conversion workflows and server components for local and remote dataset access.
+
+### Applications and Targets
+
+- **VisionApp**: Native visionOS renderer for Apple Vision Pro.
+- **iOSApp**: Native iPhone and iPad renderer.
+- **macOSApp**: Native Mac renderer with import features and optional background dataset server support.
+- **macOSServer**: Mac dataset server and import utility.
+- **TerminalServerApp**: Command-line dataset server.
+- **TerminalConverterApp**: Command-line dataset conversion tool.
 
 ---
 
@@ -69,7 +80,7 @@ These works provide the foundation for BorgVR’s architecture, data handling, a
 
 ## Installation
 
-To get started with BorgVR, ensure that you have access to an Apple Vision Pro development environment with Xcode and all necessary Apple developer tools.
+To get started with BorgVR, ensure that you have Xcode and the required Apple platform SDKs installed for the targets you want to build.
 
 1. **Clone the repository**:
    ```bash
@@ -78,16 +89,22 @@ To get started with BorgVR, ensure that you have access to an Apple Vision Pro d
    ```
 
 2. **Xcode Setup**:
-   Make sure to change the Team in the xcode settings.
+   Open `BorgVR.xcodeproj` and configure the signing team for the app targets you want to build.
 
 3. **Build and Run**:
-   Use the Xcode project provided to build and deploy BorgVR on the Vision Pro platform.
+   Use the Xcode schemes for the desired platform:
+   - `VisionApp` or `VisionApp Release`
+   - `iOSApp` or `iOSApp Release`
+   - `macOSApp` or `macOSApp Release`
+   - `macOSServer` or `macOSServer Release`
+   - `TerminalServerApp`
+   - `TerminalConverterApp`
 
 ---
 
 ## Usage
 
-BorgVR is designed for research and educational use in high-performance visualization projects. Once deployed, it provides an interactive UI for volume exploration and manipulation, with support for loading custom volumetric datasets. Additional tools and settings are accessible through the application’s main interface, optimized for Apple Vision Pro’s spatial computing environment.
+BorgVR is designed for research and educational use in high-performance visualization projects. Once deployed, it provides an interactive UI for volume exploration and manipulation, with support for loading custom volumetric datasets. The user experience is adapted to each platform: spatial interaction on Apple Vision Pro, touch interaction on iPhone and iPad, and desktop interaction on macOS.
 
 ---
 
@@ -111,7 +128,7 @@ For questions or further information, please reach out to the Computergraphics a
 
 ## Acknowledgments
 
-This project builds on years of research and development in volume rendering and spatial computing. We are grateful to all researchers and contributors whose work has made BorgVR possible, especially those whose publications have provided a foundation for this project’s algorithms and optimizations. A special thanks to the Apple Vision Pro team for creating a hardware platform that enables next-generation visualization experiences in spatial computing.
+This project builds on years of research and development in volume rendering and spatial computing. We are grateful to all researchers and contributors whose work has made BorgVR possible, especially those whose publications have provided a foundation for this project’s algorithms and optimizations. A special thanks to the Apple Vision Pro team for creating a hardware platform that enables next-generation visualization experiences in spatial computing, and to the broader Apple platform ecosystem that makes it possible to share rendering technology across visionOS, iOS/iPadOS, and macOS.
 
 We would also like to acknowledge the funding and support from the University of Duisburg-Essen and the collaborators and contributors to the IEEE VIS and WSCG conferences, as well as the Supercomputing and EuroVis workshops.
 
@@ -140,7 +157,7 @@ If you're interested in similar work, check out the following related projects b
 BorgVR is an active research project, and we aim to continually improve its performance and feature set. Future plans include:
 
 - **Enhanced Data Streaming**: Improving out-of-core data handling for larger datasets in real-time.
-- **Cross-Platform Support**: Exploring compatibility with other spatial computing devices.
+- **Cross-Platform Support**: Further improving shared workflows across visionOS, iOS/iPadOS, and macOS.
 - **User Interaction Enhancements**: Adding more immersive controls and interaction capabilities in the mixed-reality environment.
 - **Optimized Memory Management**: Further optimizing memory allocation and management on GPU resources to improve rendering efficiency.
 
