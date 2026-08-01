@@ -1,0 +1,41 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Xcode user state
+xcuserdata/
+*.xcuserstate
+*.xccheckout
+*.moved-aside
+*.xcscmblueprint
+
+# Xcode build output
+build/
+Build/
+DerivedData/
+*.xcarchive
+*.xcresult
+*.dSYM
+
+# Swift Package Manager local state
+.build/
+.swiftpm/
+
+# CMake / native build output
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+compile_commands.json
+
+# Visual Studio user/cache state
+.vs/
+*.suo
+*.VC.db
+*.vsidx
+*.vcxproj.user
+
+# Temporary files
+*.tmp
+*.swp
+*~

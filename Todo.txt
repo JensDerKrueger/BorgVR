@@ -1,0 +1,6 @@
+Current Work:
+integrate virtual samples
+
+Todo:
+consider lowering lod in areas where foveation reduces resolution
+DICOM Importer UI on Vision OS

@@ -1,0 +1,346 @@
+/* Localizable.strings (de) — additions for macOS ConverterView */
+
+"converter_import_title" = "Datensatz importieren";
+"converter_step_of_total_format" = "Schritt %d von %d";
+
+/* Step 1 */
+"converter_step1_title" = "Eingabequelle auswählen";
+"converter_step1_subtitle" = "Wählen Sie eine Datei (QVIS/NRRD) oder ein Verzeichnis mit DICOM-Dateien.";
+"converter_button_select_input_file" = "Eingabedatei auswählen";
+"converter_status_no_file" = "Keine Datei ausgewählt";
+"converter_button_select_input_dir" = "Eingabeverzeichnis auswählen";
+"converter_status_no_directory" = "Kein Verzeichnis ausgewählt";
+"converter_bpp_format" = "%hu Bit pro Pixel";
+
+/* Step 2 */
+"converter_step2_title" = "Ausgabeverzeichnis auswählen";
+"converter_step2_subtitle" = "Wählen Sie einen Ordner, in dem der konvertierte Datensatz gespeichert wird.";
+"converter_label_data_directory" = "Datenverzeichnis:";
+"converter_textfield_output_folder_placeholder" = "Ausgabeordner wählen";
+"converter_button_browse" = "Durchsuchen …";
+
+/* Step 3 */
+"converter_step3_title" = "Ausgabedateinamen eingeben";
+"converter_step3_subtitle" = "Geben Sie einen Namen für die neue Datensatzdatei an.";
+"converter_label_output_file" = "Ausgabedatei:";
+"converter_textfield_output_filename_placeholder" = "Ausgabedateinamen eingeben";
+
+/* Step 4 */
+"converter_step4_title" = "Beschreibung eingeben (optional)";
+"converter_step4_subtitle" = "Geben Sie eine Beschreibung für den Datensatz an.";
+"converter_label_description" = "Beschreibung:";
+"converter_textfield_description_placeholder" = "Beschreibung eingeben";
+
+/* Step 5 */
+"converter_step5_title" = "Bereit für die Konvertierung";
+"converter_step5_subtitle" = "Überprüfen Sie die Einstellungen und starten Sie die Konvertierung.";
+"converter_label_bricksize" = "Brickgröße:";
+"converter_textfield_bricksize_placeholder" = "Brickgröße";
+"converter_error_bricksize" = "Muss ≥ 1 + Überlappung × 2 sein.";
+
+/* Running conversion */
+"converter_converting_title" = "Konvertierung läuft …";
+
+/* Navigation buttons */
+"converter_button_back" = "Zurück";
+"converter_nav_next" = "Weiter";
+"converter_nav_start" = "Konvertierung starten";
+"converter_nav_close" = "Schließen";
+
+/* Footer */
+"converter_back_to_main_menu" = "Zurück zum Hauptmenü";
+
+/* Dataset descriptions */
+"converter_desc_from_file" = "Konvertiert aus %@";
+"converter_desc_from_qvis" = "Konvertiert aus QVIS-Volumen %@";
+"converter_desc_from_nrrd" = "Konvertiert aus NRRD-Volumen %@";
+"converter_desc_from_dicom_stack" = "Konvertiert aus DICOM-Stack %@";
+"converter_desc_from_dicom_directory" = "Konvertiert aus DICOM-Verzeichnis %@";
+
+/* DICOM title generation */
+"converter_dicom_scan_with_modality" = "%@-Scan";
+"converter_dicom_scan_generic" = "Scan";
+"converter_dicom_of_name" = "von %@";
+"converter_dicom_at_date" = "am %@";
+
+/* Localizable.strings (de) — additions for macOSServerApp */
+
+"macosserver_window_title" = "BorgVR Server";
+"macosserver_menu_quit" = "BorgVR Server beenden";
+"macosserver_menu_about" = "Über BorgVR Server";
+
+"modeselection_title" = "BorgVR macOS – Version %@.%@";
+"modeselection_version_format" = "Version %@.%@";
+"modeselection_subtitle" = "Bitte wählen Sie eine Option aus";
+"modeselection_tagline" = "Volume Rendering, Datenimport und Datensatzserver für macOS.";
+
+"modeselection_open_dataset" = "Datensatz öffnen";
+"modeselection_import" = "Datensatz importieren";
+"modeselection_server" = "Server";
+"modeselection_settings" = "Einstellungen";
+"modeselection_about" = "Info";
+"modeselection_start_background_server" = "Hintergrundserver starten";
+"modeselection_stop_background_server" = "Hintergrundserver stoppen";
+"modeselection_server_running" = "Server läuft";
+"modeselection_server_stopped" = "Server gestoppt";
+
+"modeselection_footer_years" = "© 2024–2026";
+"modeselection_footer_cgvis" = "CGVIS Duisburg";
+
+"server_title_app" = "BorgVR Server";
+"server_label_ip_addresses" = "IP-Adressen dieses Systems:";
+"server_button_copy" = "Kopieren";
+"server_help_copy_ip" = "IP-Adressen kopieren";
+
+"server_label_port_format" = "Port: %d";
+
+"server_label_data_directory" = "Datenverzeichnis:";
+"server_placeholder_path" = "Pfad";
+"server_button_select" = "Auswählen";
+
+"server_dataset_scanning_message" = "Suche nach Datensätzen...";
+"server_dataset_scanning_title" = "Suche nach Datensätzen";
+"server_dataset_found_count" = "Gefundene Datensätze: %d";
+
+"server_status_stopped" = "Serverstatus: Gestoppt";
+"server_status_running" = "Serverstatus: Läuft";
+
+"server_button_stop_server" = "Server stoppen";
+"server_button_start_server" = "Server starten";
+"server_button_clear_log" = "Log löschen";
+"server_button_back_to_main_menu" = "Zurück zum Hauptmenü";
+
+"server_footer_cgvis_link" = "CGVIS Duisburg";
+
+"server_error_selecting_directory" = "Fehler beim Auswählen des Verzeichnisses: %@";
+
+"server_ip_sheet_title" = "IP zum Kopieren auswählen";
+"server_ip_sheet_description" = "Auf diesem System wurden mehrere IP-Adressen gefunden. Wähle eine zum Kopieren aus.";
+"server_button_cancel" = "Abbrechen";
+
+/* SettingsView titles and tabs */
+"settings_title" = "BorgVR macOS-Einstellungen";
+"settings_tab_server" = "Server";
+"settings_tab_import" = "Import";
+
+/* Server group */
+"settings_server_group_title" = "Datensatz-Server";
+"settings_port_label" = "Port:";
+"settings_port_placeholder" = "Portnummer";
+"settings_brickcount_label" = "Max. Anzahl Bricks pro Anfrage:";
+"settings_brickcount_placeholder" = "Anzahl Bricks";
+"settings_autostart_label" = "Server automatisch starten:";
+
+/* Import group */
+"settings_import_group_title" = "Importeinstellungen";
+"settings_bricksize_label" = "Brick-Größe:";
+"settings_bricksize_placeholder" = "Brick-Größe";
+"settings_overlap_label" = "Überlappung:";
+"settings_overlap_placeholder" = "Überlappung";
+"settings_lastminute_label" = "Last-Minute-Änderungen erlauben:";
+"settings_compression_label" = "Kompression:";
+"settings_border_label" = "Randmodus:";
+"settings_border_zeroes" = "Nullen";
+"settings_border_border" = "Rand";
+"settings_border_repeat" = "Wiederholen";
+
+/* Buttons and help */
+"settings_button_revert" = "Auf Standardeinstellungen zurücksetzen";
+"settings_help_revert" = "Alle Einstellungen auf ihre Standardwerte zurücksetzen";
+"settings_button_back" = "Zurück zum Hauptmenü";
+
+/* Validation error messages */
+"settings_error_brickcount_invalid" = "Ungültige Brick-Anzahl. Wert muss zwischen 1 und 1000 liegen.";
+"settings_error_port_invalid" = "Ungültiger Port. Wert muss zwischen 0 und 65535 liegen.";
+"settings_error_bricksize_invalid" = "Muss ≥ 1 + Überlappung × 2 sein.";
+"settings_error_overlap_invalid" = "Muss ≥ 1 sein und brickSize − 2×Überlappung ≥ 1 erfüllen.";
+
+"info_title" = "BorgVR macOS – Version %@.%@";
+
+"info_heading" = "Über BorgVR macOS.";
+
+"BorgVR macOS Live Collaboration" = "BorgVR macOS Live-Zusammenarbeit";
+
+"Render Mode" = "Rendermodus";
+"Interaction" = "Interaktion";
+
+"info_paragraph_intro" = "BorgVR ist eine **Bricked Out-of-Core, Ray-Guided Volume Rendering Anwendung**, entwickelt für **Virtual und Augmented Reality** auf der **Apple Vision Pro** Plattform. Inzwischen wurde das System auf **iOS** und **macOS** portiert; mehrere Nutzerinnen und Nutzer können über **SharePlay** gemeinsam auf iPhone, iPad, Mac und Apple Vision Pro mit denselben Datensätzen arbeiten. BorgVR nutzt **Swift** und **Metal** für hochperformantes Rendering und ist ein **Open-Source**-Projekt.";
+
+"info_paragraph_papers" = "Diese Anwendung ist Teil eines **laufenden Forschungsprojekts**, das fortgeschrittene Verfahren im Volume Rendering untersucht. Unsere Arbeiten wurden in den folgenden Veröffentlichungen präsentiert:";
+
+"info_paper1_title" = "**Investigating the Apple Vision Pro Spatial Computing Platform for GPU-Based Volume Visualization**";
+"info_paper1_venue" = "Präsentiert auf der **IEEE Visualization 2024**.";
+
+"info_paper2_title" = "**An Investigation of the Apple Vision Pro for Out-of-Core Ray-Guided Volume Rendering with BorgVR**";
+"info_paper2_venue" = "Präsentiert auf der **VMV 2025**.";
+
+"info_paragraph_future" = "Während die ursprüngliche Studie die grundlegende Technologie eingeführt hat, stellt BorgVR inzwischen einen **deutlich weiterentwickelten Volume Renderer** dar, der **Ray-Guided Volume Rendering** mit modernen Funktionen von **iOS**, **visionOS** und **macOS** verbindet.";
+
+"info_button_close" = "Schließen";
+
+"info_footer_years" = "© 2024–2026";
+"info_footer_cgvis" = "CGVIS Duisburg";
+
+/* Log: failed to create TCP listener */
+"tcpserver_error_create_listener" = "Listener konnte nicht erstellt werden:";
+
+/* Log: server started with protocol version and port – arguments: version, port */
+"tcpserver_info_server_started" = "Server mit Protokollversion %@ auf Port %@ gestartet.";
+
+/* Log: server stopped */
+"tcpserver_info_server_stopped" = "Server wurde beendet.";
+
+/* Log: client disconnected with error – argument: error description */
+"tcpserver_warning_client_error_disconnect" = "Client mit Fehler getrennt: %@.";
+
+/* Log: client disconnected normally */
+"tcpserver_info_client_disconnected_normal" = "Client normal getrennt.";
+
+/* Log: closing connection after processing */
+"tcpserver_info_closing_connection_after_processing" = "Verbindung nach der Verarbeitung wird geschlossen.";
+
+/* Log: unknown dataset id in OPEN – argument: dataset id */
+"tcpserver_warning_open_unknown_dataset" = "OPEN: Unbekannte Datensatz-ID %@.";
+
+/* Log: closing previous dataset for connection */
+"tcpserver_info_closing_previous_dataset" = "Vorheriger Datensatz für diese Verbindung wird geschlossen.";
+
+/* Log: opened dataset for client with id – arguments: filename, client address, connection id */
+"tcpserver_info_opened_dataset_with_client" = "Datensatz %@ für %@ geöffnet (ID=%@).";
+
+/* Log: opened dataset with id – arguments: filename, connection id */
+"tcpserver_info_opened_dataset" = "Datensatz %@ geöffnet (ID=%@).";
+
+/* Log: failed to open dataset – argument: dataset id */
+"tcpserver_error_open_dataset_failed" = "Datensatz %@ konnte nicht geöffnet werden.";
+
+"tcpserver_error_invalid_port" = "Ungültiger Port %@, verwende Standard-Port 12345.";
+"tcpserver_error_invalid_port_default" = "Standard-Port kann nicht gesetzt werden.";
+"tcpserver_error_invalid_maxBricks" = "Ungültiger Wert für maxBricksPerGetRequest %@, verwende 1.";
+
+
+/* Log: GETBRICKS index out of range – arguments: valid range, indices list */
+"tcpserver_warning_getbricks_index_out_of_range" = "GETBRICKS: Index außerhalb des gültigen Bereichs (%@) in %@.";
+
+/* Log: failed to get bricks */
+"tcpserver_error_getbricks_failed" = "Fehler beim Laden der Bricks:";
+
+/* Log: failed to send binary response */
+"tcpserver_error_send_binary_failed" = "Fehler beim Senden der Binärantwort:";
+
+/* Log: dataset file successfully loaded – arguments: description/name, filename, dataset id */
+"datasetscanner_info_loaded_dataset" = "Datensatz geladen: %@ (%@, ID %@)";
+
+/* Log: failed to load dataset file – argument: filename */
+"datasetscanner_warning_failed_load_dataset" = "Datensatz konnte nicht geladen werden: %@";
+
+/* Log: failed to read dataset directory (error is appended) */
+"datasetscanner_error_failed_read_directory" = "Verzeichnis konnte nicht gelesen werden:";
+
+/* Log: error while selecting directory – argument: error.localizedDescription */
+"converter_log_error_select_directory" = "Fehler beim Auswählen des Verzeichnisses: %@";
+
+/* Log: cannot access selected file due to sandbox */
+"converter_log_error_access_file_sandbox" = "Auf die ausgewählte Datei kann aufgrund von Sandbox-Beschränkungen nicht zugegriffen werden.";
+
+/* Log: cannot access selected directory due to sandbox */
+"converter_log_error_access_directory_sandbox" = "Auf das ausgewählte Verzeichnis kann aufgrund von Sandbox-Beschränkungen nicht zugegriffen werden.";
+
+/* Log: missing input or output */
+"converter_log_error_missing_input_or_output" = "Eingabe- oder Ausgabedatei ist nicht angegeben.";
+
+/* Log: starting conversion */
+"converter_log_info_starting_conversion" = "Konvertierung wird gestartet...";
+
+/* Log: debug mode warning */
+"converter_log_warning_debug_mode" = "Debug-Modus aktiv. Die Konvertierung kann länger dauern.";
+
+/* Log: unsupported border mode, falling back to zeroes – argument: original mode string */
+"converter_log_error_unsupported_border_mode_fallback_zeroes" = "Nicht unterstützter Randmodus \"%@\". Es wird auf Nullen zurückgegriffen.";
+
+/* Log: opening NRRD volume */
+"converter_log_info_opening_nrrd" = "NRRD-Volumen wird geöffnet...";
+
+/* Log: converting NRRD to BorgVR format */
+"converter_log_info_converting_nrrd" = "NRRD-Volumen wird in das BorgVR-Dateiformat konvertiert...";
+
+/* Log: converting DICOM stack to temporary raw file */
+"converter_log_info_converting_dicom_to_temp_raw" = "DICOM-Stack wird in eine temporäre Rohdatei konvertiert...";
+
+/* Log: converting raw file to BorgVR format */
+"converter_log_info_converting_raw_to_borgvr" = "Rohdatei wird in das BorgVR-Dateiformat konvertiert...";
+
+/* Log: QVISParser error – argument: localizedDescription */
+"converter_log_error_qvisparser" = "QVISParser-Fehler: %@";
+
+/* Log: NRRDParser error – argument: localizedDescription */
+"converter_log_error_nrrdparser" = "NRRDParser-Fehler: %@";
+
+/* Log: RawFileAccessor error – argument: localizedDescription */
+"converter_log_error_rawfileaccessor" = "RawFileAccessor-Fehler: %@";
+
+/* Log: MemoryMappedFile error – argument: localizedDescription */
+"converter_log_error_memorymappedfile" = "MemoryMappedFile-Fehler: %@";
+
+/* Log: unexpected error – argument: localizedDescription */
+"converter_log_error_unexpected" = "Unerwarteter Fehler: %@";
+
+/* Log: time elapsed – argument: seconds as floating point */
+"converter_log_info_time_elapsed" = "Vergangene Zeit: %.3f Sekunden";
+
+/* Log: scanning directory for DICOM files */
+"converter_log_info_scanning_dicom_dir" = "Verzeichnis wird nach DICOM-Dateien durchsucht...";
+
+/* Log: no files in directory */
+"converter_log_error_no_files_in_directory" = "Im Verzeichnis wurden keine Dateien gefunden.";
+
+/* Log: found number of DICOM files – argument: file count */
+"converter_log_info_found_dicom_files" = "%d DICOM-Dateien gefunden.";
+
+/* Log: min and max values – args: min, max */
+"bricked_log_minmax" = "Minimalwert: %d, Maximalwert: %d";
+
+/* Log: writing metadata */
+"bricked_log_writing_metadata" = "Metadaten werden geschrieben";
+
+/* Log: reorganization complete */
+"bricked_log_reorganization_complete" = "Reorganisation abgeschlossen";
+
+/* Log: file size in bytes – arg: size */
+"bricked_log_file_size" = "Dateigröße: %d Byte";
+
+/* Log: file size unknown – arg: filename */
+"bricked_log_file_size_unknown" = "Dateigröße für Datei %@ konnte nicht ermittelt werden.";
+
+/* Log: failed to get file size – args: filename, error */
+"bricked_log_file_size_failed" = "Dateigröße für Datei %@ konnte nicht gelesen werden: %@";
+
+/* Log: start subsampling */
+"bricked_log_subsampling_start" = "Reduzierung";
+
+/* Log: subsampling progress title */
+"bricked_log_subsampling_progress_title" = "Reduzierung";
+
+/* Log: bricking level – args: bx, by, bz, total */
+"bricked_log_bricking_level" = "Level wird in %d × %d × %d Blöcke unterteilt. Gesamt: %d";
+
+/* Log: bricking progress title */
+"bricked_log_bricking_progress_title" = "Blockzerlegung";
+
+/* Log: compression summary – args: compressed, uncompressed */
+"bricked_log_compression_summary" = "Komprimiert: %d Blöcke, unkomprimiert: %d Blöcke";
+
+"log_level_dev" = "Entwicklung";
+"log_level_progress" = "Fortschritt";
+"log_level_info" = "Info";
+"log_level_warning" = "Warnungen";
+"log_level_error" = "Fehler";
+
+"tf_editor_save" = "Transferfunktion speichern";
+"tf_editor_load" = "Transferfunktion laden";
+"tf_editor_save_help" = "Transferfunktion neben dem aktuellen Datensatz speichern";
+"tf_editor_load_help" = "Transferfunktion neben dem aktuellen Datensatz laden";
+"tf_editor_save_success" = "Transferfunktion gespeichert:";
+"tf_editor_load_success" = "Transferfunktion geladen:";
+"tf_editor_save_failed" = "Transferfunktion konnte nicht gespeichert werden:";
+"tf_editor_load_failed" = "Transferfunktion konnte nicht geladen werden:";
