@@ -37,10 +37,7 @@ extension Renderer {
   (MTLRenderPipelineState, MTLRenderPipelineState, MTLRenderPipelineState,
    MTLRenderPipelineState, MTLRenderPipelineState) {
     // Build a render state pipeline object.
-    guard let shaderPath = Bundle.main.path(forResource: "Shaders", ofType: "metal") else {
-      fatalError("Failed to find Shaders.metal file")
-    }
-    let shaderSource = try String(contentsOfFile: shaderPath, encoding: .utf8)
+    let shaderSource = try RuntimeMetalShaderLoader.loadSource(named: "Shaders")
 
     let screenSpaceError = StoredAppModel.float("screenSpaceError")
     let atlasSizeMB = StoredAppModel.int("atlasSizeMB")

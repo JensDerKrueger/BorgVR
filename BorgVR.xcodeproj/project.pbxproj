@@ -10,9 +10,36 @@
 		560B8BE82E5C575A0042E45B /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 560B8BE72E5C57580042E45B /* PrivacyInfo.xcprivacy */; };
 		56730FE32E6B78990091976B /* c60_32.data in Resources */ = {isa = PBXBuildFile; fileRef = 56730FE22E6B78990091976B /* c60_32.data */; };
 		56730FE52E6B79000091976B /* head_32.data in Resources */ = {isa = PBXBuildFile; fileRef = 56730FE42E6B79000091976B /* head_32.data */; };
-		56F100012E6C000100000001 /* macOSApp/RuntimeVolumeShaders.metal in Resources */ = {isa = PBXBuildFile; fileRef = 56F100032E6C000100000001 /* macOSApp/RuntimeVolumeShaders.metal */; };
-		56F100022E6C000100000001 /* iOSApp/RuntimeVolumeShaders.metal in Resources */ = {isa = PBXBuildFile; fileRef = 56F100042E6C000100000001 /* iOSApp/RuntimeVolumeShaders.metal */; };
-		56F100072E6C000100000001 /* macOSApp/RuntimeVolumeShadersPrevious.metal in Resources */ = {isa = PBXBuildFile; fileRef = 56F100082E6C000100000001 /* macOSApp/RuntimeVolumeShadersPrevious.metal */; };
+		57A000302E70000200000001 /* FilePickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A000202E70000200000001 /* FilePickerView.swift */; };
+		57A000312E70000200000001 /* GPUHashtable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A000212E70000200000001 /* GPUHashtable.swift */; };
+		57A000322E70000200000001 /* RuntimeMetalShaderLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A000242E70000200000001 /* RuntimeMetalShaderLoader.swift */; };
+		57A000332E70000200000001 /* TextFileDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A000282E70000200000001 /* TextFileDocument.swift */; };
+		57A000342E70000200000001 /* GPUHashtable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A000212E70000200000001 /* GPUHashtable.swift */; };
+		57A000352E70000200000001 /* RuntimeMetalShaderLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A000242E70000200000001 /* RuntimeMetalShaderLoader.swift */; };
+		57A000362E70000200000001 /* TextFileDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A000282E70000200000001 /* TextFileDocument.swift */; };
+		57A000372E70000200000001 /* FilePickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A000202E70000200000001 /* FilePickerView.swift */; };
+		57A000382E70000200000001 /* GPUHashtable.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A000212E70000200000001 /* GPUHashtable.swift */; };
+		57A000392E70000200000001 /* RuntimeMetalShaderLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A000242E70000200000001 /* RuntimeMetalShaderLoader.swift */; };
+		57A0003A2E70000200000001 /* TextFileDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A000282E70000200000001 /* TextFileDocument.swift */; };
+		57A000412E70000200000001 /* RuntimeVolumeShaders.metal in Resources */ = {isa = PBXBuildFile; fileRef = 57A000252E70000200000001 /* RuntimeVolumeShaders.metal */; };
+		57A000422E70000200000001 /* ShaderTypes.h in Resources */ = {isa = PBXBuildFile; fileRef = 57A000272E70000200000001 /* ShaderTypes.h */; };
+		57A000432E70000200000001 /* VolumeAtlas.h in Resources */ = {isa = PBXBuildFile; fileRef = 57A000292E70000200000001 /* VolumeAtlas.h */; };
+		57A000442E70000200000001 /* Helper.h in Resources */ = {isa = PBXBuildFile; fileRef = 57A000232E70000200000001 /* Helper.h */; };
+		57A000452E70000200000001 /* GPUHashtable.h in Resources */ = {isa = PBXBuildFile; fileRef = 57A000222E70000200000001 /* GPUHashtable.h */; };
+		57A0004C2E70000200000001 /* VolumeRaycaster.metal in Resources */ = {isa = PBXBuildFile; fileRef = 57A0002A2E70000200000001 /* VolumeRaycaster.metal */; };
+		57A000462E70000200000001 /* RuntimeVolumeShaders.metal in Resources */ = {isa = PBXBuildFile; fileRef = 57A000252E70000200000001 /* RuntimeVolumeShaders.metal */; };
+		57A000472E70000200000001 /* RuntimeVolumeShadersPrevious.metal in Resources */ = {isa = PBXBuildFile; fileRef = 57A000262E70000200000001 /* RuntimeVolumeShadersPrevious.metal */; };
+		57A000482E70000200000001 /* ShaderTypes.h in Resources */ = {isa = PBXBuildFile; fileRef = 57A000272E70000200000001 /* ShaderTypes.h */; };
+		57A000492E70000200000001 /* VolumeAtlas.h in Resources */ = {isa = PBXBuildFile; fileRef = 57A000292E70000200000001 /* VolumeAtlas.h */; };
+		57A0004A2E70000200000001 /* Helper.h in Resources */ = {isa = PBXBuildFile; fileRef = 57A000232E70000200000001 /* Helper.h */; };
+		57A0004B2E70000200000001 /* GPUHashtable.h in Resources */ = {isa = PBXBuildFile; fileRef = 57A000222E70000200000001 /* GPUHashtable.h */; };
+		57A0004D2E70000200000001 /* VolumeRaycaster.metal in Resources */ = {isa = PBXBuildFile; fileRef = 57A0002A2E70000200000001 /* VolumeRaycaster.metal */; };
+		57A0004E2E70000200000001 /* VolumeRaycaster.metal in Resources */ = {isa = PBXBuildFile; fileRef = 57A0002A2E70000200000001 /* VolumeRaycaster.metal */; };
+		57A0004F2E70000200000001 /* VisionHUDShaders.metal in Resources */ = {isa = PBXBuildFile; fileRef = 57A0002B2E70000200000001 /* VisionHUDShaders.metal */; };
+		57A000522E70000200000001 /* ShaderTypes.h in Resources */ = {isa = PBXBuildFile; fileRef = 57A000272E70000200000001 /* ShaderTypes.h */; };
+		57A000532E70000200000001 /* VolumeAtlas.h in Resources */ = {isa = PBXBuildFile; fileRef = 57A000292E70000200000001 /* VolumeAtlas.h */; };
+		57A000542E70000200000001 /* Helper.h in Resources */ = {isa = PBXBuildFile; fileRef = 57A000232E70000200000001 /* Helper.h */; };
+		57A000552E70000200000001 /* GPUHashtable.h in Resources */ = {isa = PBXBuildFile; fileRef = 57A000222E70000200000001 /* GPUHashtable.h */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -48,9 +75,18 @@
 		569701382D9D8F1400BB74CC /* Todo.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = Todo.txt; sourceTree = "<group>"; };
 		569701392D9D8F3E00BB74CC /* readme.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = readme.txt; sourceTree = "<group>"; };
 		569EA3F62CD449C400D8FADD /* TerminalConverterApp */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = TerminalConverterApp; sourceTree = BUILT_PRODUCTS_DIR; };
-		56F100032E6C000100000001 /* macOSApp/RuntimeVolumeShaders.metal */ = {isa = PBXFileReference; explicitFileType = text; path = macOSApp/RuntimeVolumeShaders.metal; sourceTree = "<group>"; };
-		56F100042E6C000100000001 /* iOSApp/RuntimeVolumeShaders.metal */ = {isa = PBXFileReference; explicitFileType = text; path = iOSApp/RuntimeVolumeShaders.metal; sourceTree = "<group>"; };
-		56F100082E6C000100000001 /* macOSApp/RuntimeVolumeShadersPrevious.metal */ = {isa = PBXFileReference; explicitFileType = text; path = macOSApp/RuntimeVolumeShadersPrevious.metal; sourceTree = "<group>"; };
+		57A000202E70000200000001 /* FilePickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FilePickerView.swift; sourceTree = "<group>"; };
+		57A000212E70000200000001 /* GPUHashtable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GPUHashtable.swift; sourceTree = "<group>"; };
+		57A000222E70000200000001 /* GPUHashtable.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = GPUHashtable.h; sourceTree = "<group>"; };
+		57A000232E70000200000001 /* Helper.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Helper.h; sourceTree = "<group>"; };
+		57A000242E70000200000001 /* RuntimeMetalShaderLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuntimeMetalShaderLoader.swift; sourceTree = "<group>"; };
+		57A000252E70000200000001 /* RuntimeVolumeShaders.metal */ = {isa = PBXFileReference; explicitFileType = text; path = RuntimeVolumeShaders.metal; sourceTree = "<group>"; };
+		57A000262E70000200000001 /* RuntimeVolumeShadersPrevious.metal */ = {isa = PBXFileReference; explicitFileType = text; path = RuntimeVolumeShadersPrevious.metal; sourceTree = "<group>"; };
+		57A000272E70000200000001 /* ShaderTypes.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ShaderTypes.h; sourceTree = "<group>"; };
+		57A000282E70000200000001 /* TextFileDocument.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextFileDocument.swift; sourceTree = "<group>"; };
+		57A000292E70000200000001 /* VolumeAtlas.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = VolumeAtlas.h; sourceTree = "<group>"; };
+		57A0002A2E70000200000001 /* VolumeRaycaster.metal */ = {isa = PBXFileReference; explicitFileType = text; path = VolumeRaycaster.metal; sourceTree = "<group>"; };
+		57A0002B2E70000200000001 /* VisionHUDShaders.metal */ = {isa = PBXFileReference; explicitFileType = text; path = VisionHUDShaders.metal; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -152,21 +188,6 @@
 			);
 			target = 564183772D649679003A1EC4 /* VisionApp */;
 		};
-		56F100052E6C000100000001 /* Exceptions for "macOSApp" folder in "macOSApp" target */ = {
-			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-			membershipExceptions = (
-				RuntimeVolumeShaders.metal,
-				RuntimeVolumeShadersPrevious.metal,
-			);
-			target = 560C00012E00000000000010 /* macOSApp */;
-		};
-		56F100062E6C000100000001 /* Exceptions for "iOSApp" folder in "iOSApp" target */ = {
-			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-			membershipExceptions = (
-				RuntimeVolumeShaders.metal,
-			);
-			target = 111111111111111111111501 /* iOSApp */;
-		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet section */
@@ -174,9 +195,6 @@
 			isa = PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet;
 			buildPhase = 564183762D649679003A1EC4 /* Resources */;
 			membershipExceptions = (
-				GPUHashtable.h,
-				Helper.h,
-				VolumeAtlas.h,
 			);
 		};
 		560D0A762D98BB4200EAD023 /* Exceptions for "VisionApp" folder in "Copy Files" phase from "VisionApp" target */ = {
@@ -184,7 +202,6 @@
 			buildPhase = 562FD5A02D7B2AA300265EF6 /* CopyFiles */;
 			membershipExceptions = (
 				Shaders.metal,
-				ShaderTypes.h,
 			);
 		};
 		562360D72CD6766A001A8514 /* Exceptions for "TerminalConverterApp" folder in "Copy Files" phase from "TerminalConverterApp" target */ = {
@@ -200,9 +217,6 @@
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		111111111111111111111201 /* iOSApp */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-				56F100062E6C000100000001 /* Exceptions for "iOSApp" folder in "iOSApp" target */,
-			);
 			path = iOSApp;
 			sourceTree = "<group>";
 		};
@@ -218,9 +232,6 @@
 		};
 		560C00012E00000000000002 /* macOSApp */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-				56F100052E6C000100000001 /* Exceptions for "macOSApp" folder in "macOSApp" target */,
-			);
 			path = macOSApp;
 			sourceTree = "<group>";
 		};
@@ -316,14 +327,23 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		568747B5301E2BBC00E5E3AC /* Recovered References */ = {
+		57A000102E70000100000001 /* AppSupport */ = {
 			isa = PBXGroup;
 			children = (
-				56F100042E6C000100000001 /* iOSApp/RuntimeVolumeShaders.metal */,
-				56F100032E6C000100000001 /* macOSApp/RuntimeVolumeShaders.metal */,
-				56F100082E6C000100000001 /* macOSApp/RuntimeVolumeShadersPrevious.metal */,
+				57A000202E70000200000001 /* FilePickerView.swift */,
+				57A000212E70000200000001 /* GPUHashtable.swift */,
+				57A000222E70000200000001 /* GPUHashtable.h */,
+				57A000232E70000200000001 /* Helper.h */,
+				57A000242E70000200000001 /* RuntimeMetalShaderLoader.swift */,
+				57A000252E70000200000001 /* RuntimeVolumeShaders.metal */,
+				57A000262E70000200000001 /* RuntimeVolumeShadersPrevious.metal */,
+				57A000272E70000200000001 /* ShaderTypes.h */,
+				57A000282E70000200000001 /* TextFileDocument.swift */,
+				57A000292E70000200000001 /* VolumeAtlas.h */,
+				57A0002A2E70000200000001 /* VolumeRaycaster.metal */,
+				57A0002B2E70000200000001 /* VisionHUDShaders.metal */,
 			);
-			name = "Recovered References";
+			path = AppSupport;
 			sourceTree = "<group>";
 		};
 		569EA3ED2CD449C400D8FADD = {
@@ -334,6 +354,7 @@
 				569701392D9D8F3E00BB74CC /* readme.txt */,
 				569701382D9D8F1400BB74CC /* Todo.txt */,
 				560B8BE72E5C57580042E45B /* PrivacyInfo.xcprivacy */,
+				57A000102E70000100000001 /* AppSupport */,
 				560B00012E00000000000001 /* BORGVR-Services */,
 				560D09552D98280400EAD023 /* BORGVR-Render */,
 				565582772D4E5EAF008E7CE6 /* BORGVR-IO */,
@@ -345,7 +366,6 @@
 				111111111111111111111201 /* iOSApp */,
 				56CEE7592D71363A0002C232 /* Frameworks */,
 				569EA3F72CD449C400D8FADD /* Products */,
-				568747B5301E2BBC00E5E3AC /* Recovered References */,
 			);
 			sourceTree = "<group>";
 		};
@@ -578,7 +598,12 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				56F100022E6C000100000001 /* iOSApp/RuntimeVolumeShaders.metal in Resources */,
+				57A000412E70000200000001 /* RuntimeVolumeShaders.metal in Resources */,
+				57A0004C2E70000200000001 /* VolumeRaycaster.metal in Resources */,
+				57A000422E70000200000001 /* ShaderTypes.h in Resources */,
+				57A000432E70000200000001 /* VolumeAtlas.h in Resources */,
+				57A000442E70000200000001 /* Helper.h in Resources */,
+				57A000452E70000200000001 /* GPUHashtable.h in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -586,8 +611,13 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				56F100012E6C000100000001 /* macOSApp/RuntimeVolumeShaders.metal in Resources */,
-				56F100072E6C000100000001 /* macOSApp/RuntimeVolumeShadersPrevious.metal in Resources */,
+				57A000462E70000200000001 /* RuntimeVolumeShaders.metal in Resources */,
+				57A000472E70000200000001 /* RuntimeVolumeShadersPrevious.metal in Resources */,
+				57A0004D2E70000200000001 /* VolumeRaycaster.metal in Resources */,
+				57A000482E70000200000001 /* ShaderTypes.h in Resources */,
+				57A000492E70000200000001 /* VolumeAtlas.h in Resources */,
+				57A0004A2E70000200000001 /* Helper.h in Resources */,
+				57A0004B2E70000200000001 /* GPUHashtable.h in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -598,6 +628,12 @@
 				560B8BE82E5C575A0042E45B /* PrivacyInfo.xcprivacy in Resources */,
 				56730FE52E6B79000091976B /* head_32.data in Resources */,
 				56730FE32E6B78990091976B /* c60_32.data in Resources */,
+				57A0004E2E70000200000001 /* VolumeRaycaster.metal in Resources */,
+				57A0004F2E70000200000001 /* VisionHUDShaders.metal in Resources */,
+				57A000522E70000200000001 /* ShaderTypes.h in Resources */,
+				57A000532E70000200000001 /* VolumeAtlas.h in Resources */,
+				57A000542E70000200000001 /* Helper.h in Resources */,
+				57A000552E70000200000001 /* GPUHashtable.h in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -615,6 +651,10 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				57A000302E70000200000001 /* FilePickerView.swift in Sources */,
+				57A000312E70000200000001 /* GPUHashtable.swift in Sources */,
+				57A000322E70000200000001 /* RuntimeMetalShaderLoader.swift in Sources */,
+				57A000332E70000200000001 /* TextFileDocument.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -629,6 +669,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				57A000342E70000200000001 /* GPUHashtable.swift in Sources */,
+				57A000352E70000200000001 /* RuntimeMetalShaderLoader.swift in Sources */,
+				57A000362E70000200000001 /* TextFileDocument.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -636,6 +679,10 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				57A000372E70000200000001 /* FilePickerView.swift in Sources */,
+				57A000382E70000200000001 /* GPUHashtable.swift in Sources */,
+				57A000392E70000200000001 /* RuntimeMetalShaderLoader.swift in Sources */,
+				57A0003A2E70000200000001 /* TextFileDocument.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -684,7 +731,7 @@
 				SDKROOT = iphoneos;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_OBJC_BRIDGING_HEADER = iOSApp/ShaderTypes.h;
+				SWIFT_OBJC_BRIDGING_HEADER = AppSupport/ShaderTypes.h;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -718,7 +765,7 @@
 				SDKROOT = iphoneos;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_OBJC_BRIDGING_HEADER = iOSApp/ShaderTypes.h;
+				SWIFT_OBJC_BRIDGING_HEADER = AppSupport/ShaderTypes.h;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				VALIDATE_PRODUCT = YES;
@@ -782,7 +829,7 @@
 				PRODUCT_NAME = "BorgVR macOS";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_OBJC_BRIDGING_HEADER = macOSApp/ShaderTypes.h;
+				SWIFT_OBJC_BRIDGING_HEADER = AppSupport/ShaderTypes.h;
 				SWIFT_VERSION = 5.0;
 			};
 			name = Debug;
@@ -816,7 +863,7 @@
 				PRODUCT_NAME = "BorgVR macOS";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_OBJC_BRIDGING_HEADER = macOSApp/ShaderTypes.h;
+				SWIFT_OBJC_BRIDGING_HEADER = AppSupport/ShaderTypes.h;
 				SWIFT_VERSION = 5.0;
 				VALIDATE_PRODUCT = YES;
 			};
@@ -851,7 +898,7 @@
 				SDKROOT = xros;
 				SUPPORTED_PLATFORMS = "xros xrsimulator";
 				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_OBJC_BRIDGING_HEADER = VisionApp/ShaderTypes.h;
+				SWIFT_OBJC_BRIDGING_HEADER = AppSupport/ShaderTypes.h;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 7;
 				XROS_DEPLOYMENT_TARGET = 26.0;
@@ -887,7 +934,7 @@
 				SDKROOT = xros;
 				SUPPORTED_PLATFORMS = "xros xrsimulator";
 				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_OBJC_BRIDGING_HEADER = VisionApp/ShaderTypes.h;
+				SWIFT_OBJC_BRIDGING_HEADER = AppSupport/ShaderTypes.h;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 7;
 				VALIDATE_PRODUCT = YES;

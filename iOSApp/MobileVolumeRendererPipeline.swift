@@ -25,10 +25,7 @@ extension MobileVolumeRenderer {
     hashTable: GPUHashtable,
     appSettings: AppSettings
   ) throws -> (tf: MTLRenderPipelineState, tfl: MTLRenderPipelineState, iso: MTLRenderPipelineState, brick: MTLRenderPipelineState) {
-    guard let shaderPath = Bundle.main.path(forResource: "RuntimeVolumeShaders", ofType: "metal") else {
-      throw MobileVolumeRendererPipelineError.missingShaderSource
-    }
-    let shaderSource = try String(contentsOfFile: shaderPath, encoding: .utf8)
+    let shaderSource = try RuntimeMetalShaderLoader.loadSource(named: "RuntimeVolumeShaders")
 
     let screenSpaceError = Float(appSettings.screenSpaceError)
     let lodFactor = 2.0 * tan(0.75 / 2.0) * screenSpaceError / max(drawableWidth, 1)
