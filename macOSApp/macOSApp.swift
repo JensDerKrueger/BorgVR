@@ -42,6 +42,7 @@ struct macOSApp: App {
   @StateObject private var storedAppModel = StoredAppModel()
   @StateObject private var serverController = BackgroundServerController()
   @StateObject private var sharePlay = SharePlayCoordinator()
+  @StateObject private var docking = DockingController()
 
   var body: some Scene {
     WindowGroup("BorgVR macOS") {
@@ -52,6 +53,7 @@ struct macOSApp: App {
         .environmentObject(storedAppModel)
         .environmentObject(serverController)
         .environmentObject(sharePlay)
+        .environmentObject(docking)
         .frame(minWidth: 980, minHeight: 680)
         .task {
           sharePlay.registerGroupActivity()
@@ -78,5 +80,41 @@ struct macOSApp: App {
         }
     }
     .defaultSize(width: 1200, height: 820)
+
+    WindowGroup("Render UI", id: DockablePanelID.renderControls.windowID) {
+      DetachedPanelContent(panel: .renderControls)
+        .environmentObject(appModel)
+        .environmentObject(renderingParameters)
+        .environmentObject(appSettings)
+        .environmentObject(storedAppModel)
+        .environmentObject(serverController)
+        .environmentObject(sharePlay)
+        .environmentObject(docking)
+    }
+    .defaultSize(width: 720, height: 260)
+
+    WindowGroup("Transfer Function", id: DockablePanelID.transferFunctionEditor.windowID) {
+      DetachedPanelContent(panel: .transferFunctionEditor)
+        .environmentObject(appModel)
+        .environmentObject(renderingParameters)
+        .environmentObject(appSettings)
+        .environmentObject(storedAppModel)
+        .environmentObject(serverController)
+        .environmentObject(sharePlay)
+        .environmentObject(docking)
+    }
+    .defaultSize(width: 820, height: 320)
+
+    WindowGroup("Isowert", id: DockablePanelID.isoEditor.windowID) {
+      DetachedPanelContent(panel: .isoEditor)
+        .environmentObject(appModel)
+        .environmentObject(renderingParameters)
+        .environmentObject(appSettings)
+        .environmentObject(storedAppModel)
+        .environmentObject(serverController)
+        .environmentObject(sharePlay)
+        .environmentObject(docking)
+    }
+    .defaultSize(width: 560, height: 180)
   }
 }

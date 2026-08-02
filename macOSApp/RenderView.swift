@@ -6,12 +6,8 @@ struct RenderView: View {
   @EnvironmentObject private var renderingParameters: RenderingParameters
   @EnvironmentObject var appSettings: AppSettings
   @EnvironmentObject private var sharePlay: SharePlayCoordinator
+  @EnvironmentObject private var docking: DockingController
 
-  @State private var showTransferEditor = false
-  @State private var showIsoEditor = false
-  @State private var showLog = false
-  @State private var showRenderControls = true
-  @State private var selectedInteractionMode: AppModel.InteractionMode = .model
   @State private var transferSmoothCenter: Float = 0.25
   @State private var transferSmoothWidth: Float = 0.3
 
@@ -39,111 +35,10 @@ struct RenderView: View {
       )
         .ignoresSafeArea()
 
-      if showRenderControls {
-        VStack(spacing: 8) {
-          HStack {
-            Button {
-              closeDataset()
-            } label: {
-              Image(systemName: "xmark")
-            }
-            .accessibilityLabel("Schließen")
-            .buttonStyle(.borderedProminent)
-
-            Spacer()
-
-            Text(appModel.activeDataset?.description ?? "BorgVR macOS")
-              .font(.headline)
-              .lineLimit(1)
-
-            Spacer()
-
-            ShareLink(
-              item: BorgVRSharePlayActivity(),
-              preview: SharePreview(String(localized: "BorgVR macOS Live Collaboration"))
-            ) {
-              Image(systemName: "shareplay")
-            }
-            .simultaneousGesture(
-              TapGesture().onEnded {
-                sharePlay.markLocalActivityStarter()
-              }
-            )
-            .accessibilityLabel(sharePlay.isInSession ? "SharePlay aktiv" : "SharePlay starten")
-            .buttonStyle(.bordered)
-
-            Button {
-              showLog.toggle()
-            } label: {
-              Image(systemName: "text.alignleft")
-            }
-            .accessibilityLabel("Log")
-            .buttonStyle(.bordered)
-
-            visibilityButton
-          }
-
-          Picker("Render Mode", selection: $renderingParameters.renderMode) {
-            ForEach(RenderMode.allCases) { mode in
-              Text(mode.description).tag(mode)
-            }
-          }
-          .pickerStyle(.segmented)
-          .onChange(of: renderingParameters.renderMode) {
-            synchronizeState()
-          }
-
-          Picker("Interaction", selection: $selectedInteractionMode) {
-            Text("Modell").tag(AppModel.InteractionMode.model)
-            Text("Clipping").tag(AppModel.InteractionMode.clipping)
-            Text("Transfer").tag(AppModel.InteractionMode.transferEditing)
-          }
-          .pickerStyle(.segmented)
-          .onAppear {
-            selectedInteractionMode = appModel.interactionMode
-          }
-          .onChange(of: selectedInteractionMode) { _, newValue in
-            applyInteractionModeSelection(newValue)
-          }
-          .onChange(of: appModel.interactionMode) { _, newValue in
-            if selectedInteractionMode != newValue {
-              selectedInteractionMode = newValue
-            }
-          }
-
-          HStack {
-            Toggle("Bricks", isOn: $renderingParameters.brickVis)
-              .toggleStyle(.button)
-              .onChange(of: renderingParameters.brickVis) {
-                synchronizeState()
-              }
-
-            Button {
-              renderingParameters.reset()
-              synchronizeFullState()
-              synchronizeTransform()
-              sharePlay.flushSynchronization()
-            } label: {
-              Label("Reset", systemImage: "arrow.counterclockwise")
-            }
-
-            Button {
-              if renderingParameters.renderMode == .isoValue {
-                showTransferEditor = false
-                showIsoEditor.toggle()
-              } else {
-                showIsoEditor = false
-                showTransferEditor.toggle()
-              }
-            } label: {
-              Label("Editor", systemImage: "slider.horizontal.3")
-            }
-          }
-        }
-        .padding(12)
-        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 8))
-        .padding()
-      } else {
+      if docking.isDockedVisible(.renderControls) {
+        RenderControlsPanel(isDetachedWindow: false)
+          .padding()
+      } else if !docking.isDetached(.renderControls) {
         HStack {
           Spacer()
           visibilityButton
@@ -151,37 +46,38 @@ struct RenderView: View {
         .padding()
       }
 
-      if showIsoEditor && renderingParameters.renderMode == .isoValue {
+      if docking.isDockedVisible(.isoEditor) && renderingParameters.renderMode == .isoValue {
         VStack {
           Spacer()
 
-          IsovalueEditorView {
-            showIsoEditor = false
+          DockableEditorPanel(panel: .isoEditor) {
+            IsovalueEditorView {
+              docking.hide(.isoEditor)
+            }
+            .environmentObject(renderingParameters)
           }
-          .environmentObject(renderingParameters)
           .padding(.horizontal)
           .padding(.bottom)
         }
         .transition(.move(edge: .bottom).combined(with: .opacity))
       }
 
-      if showTransferEditor && renderingParameters.renderMode != .isoValue {
+      if docking.isDockedVisible(.transferFunctionEditor) && renderingParameters.renderMode != .isoValue {
         VStack {
           Spacer()
 
-          TransferFunctionEditorView {
-            showTransferEditor = false
+          DockableEditorPanel(panel: .transferFunctionEditor) {
+            TransferFunctionEditorView {
+              docking.hide(.transferFunctionEditor)
+            }
+            .environmentObject(renderingParameters)
+            .frame(maxWidth: 720)
           }
-          .environmentObject(renderingParameters)
-          .frame(maxWidth: 720)
           .padding(.horizontal)
           .padding(.bottom)
         }
         .transition(.move(edge: .bottom).combined(with: .opacity))
       }
-    }
-    .sheet(isPresented: $showLog) {
-      LoggerView(logger: appModel.logger)
     }
   }
 
@@ -206,17 +102,16 @@ struct RenderView: View {
 
   private var visibilityButton: some View {
     Button {
-      showRenderControls.toggle()
+      docking.show(.renderControls)
     } label: {
-      Image(systemName: showRenderControls ? "eye.slash" : "eye")
+      Image(systemName: "eye")
     }
-    .accessibilityLabel(showRenderControls ? "UI ausblenden" : "UI einblenden")
+    .accessibilityLabel("UI einblenden")
     .buttonStyle(.bordered)
   }
 
   private func toggleInteractionMode() {
     let newMode: AppModel.InteractionMode = appModel.interactionMode == .clipping ? .model : .clipping
-    selectedInteractionMode = newMode
     applyInteractionModeSelection(newMode)
   }
 
@@ -377,17 +272,6 @@ struct RenderView: View {
       renderingParameters.clipMin[axis] = 0
       renderingParameters.clipMax[axis] = 1 + translation
     }
-  }
-
-  private func closeDataset() {
-    if appModel.activeDataset?.source == .local,
-       let identifier = appModel.activeDataset?.identifier,
-       appSettings.autoloadTF {
-      let fileURL = URL(fileURLWithPath: identifier).deletingPathExtension().appendingPathExtension("tf1d")
-      try? renderingParameters.transferFunction.save(to: fileURL)
-    }
-    sharePlay.closeSharedDataset()
-    appModel.currentState = .selectData
   }
 
   private func synchronizeTransform() {
