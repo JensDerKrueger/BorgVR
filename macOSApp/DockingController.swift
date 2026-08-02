@@ -177,7 +177,18 @@ struct DetachedDockablePanel<Content: View>: View {
 
 struct DockableEditorPanel<Content: View>: View {
   let panel: DockablePanelID
+  let maxWidth: CGFloat?
   @ViewBuilder var content: () -> Content
+
+  init(
+    panel: DockablePanelID,
+    maxWidth: CGFloat? = nil,
+    @ViewBuilder content: @escaping () -> Content
+  ) {
+    self.panel = panel
+    self.maxWidth = maxWidth
+    self.content = content
+  }
 
   var body: some View {
     VStack(spacing: 8) {
@@ -189,6 +200,7 @@ struct DockableEditorPanel<Content: View>: View {
       }
       content()
     }
+    .frame(maxWidth: maxWidth)
   }
 }
 
@@ -210,7 +222,7 @@ struct DetachedPanelContent: View {
           if renderingParameters.renderMode == .isoValue {
             unavailableEditorMessage
           } else {
-            DockableEditorPanel(panel: panel) {
+            DockableEditorPanel(panel: panel, maxWidth: 720) {
               TransferFunctionEditorView {
                 docking.close(panel)
               }
@@ -221,7 +233,7 @@ struct DetachedPanelContent: View {
       case .isoEditor:
         DetachedDockablePanel(panel: panel, minWidth: 520, minHeight: 150) {
           if renderingParameters.renderMode == .isoValue {
-            DockableEditorPanel(panel: panel) {
+            DockableEditorPanel(panel: panel, maxWidth: 520) {
               IsovalueEditorView {
                 docking.close(panel)
               }

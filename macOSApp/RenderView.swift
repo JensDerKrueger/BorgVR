@@ -50,7 +50,7 @@ struct RenderView: View {
         VStack {
           Spacer()
 
-          DockableEditorPanel(panel: .isoEditor) {
+          DockableEditorPanel(panel: .isoEditor, maxWidth: 520) {
             IsovalueEditorView {
               docking.hide(.isoEditor)
             }
@@ -66,12 +66,11 @@ struct RenderView: View {
         VStack {
           Spacer()
 
-          DockableEditorPanel(panel: .transferFunctionEditor) {
+          DockableEditorPanel(panel: .transferFunctionEditor, maxWidth: 720) {
             TransferFunctionEditorView {
               docking.hide(.transferFunctionEditor)
             }
             .environmentObject(renderingParameters)
-            .frame(maxWidth: 720)
           }
           .padding(.horizontal)
           .padding(.bottom)
