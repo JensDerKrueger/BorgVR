@@ -393,3 +393,9 @@
 "tf_editor_green_channel_help" = "Editar el canal verde de la función de transferencia";
 "tf_editor_blue_channel_help" = "Editar el canal azul de la función de transferencia";
 "tf_editor_alpha_channel_help" = "Editar el canal alfa/opacidad de la función de transferencia";
+
+/* External dataset opening */
+"external_dataset_error_extension" = "Solo se pueden abrir directamente archivos .data de BorgVR.";
+"external_dataset_error_destination" = "El directorio de datos no está disponible.";
+"external_dataset_imported_format" = "Conjunto de datos importado: %@";
+"external_dataset_open_failed_format" = "No se pudo abrir el conjunto de datos %@: %@";

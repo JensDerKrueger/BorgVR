@@ -48,6 +48,7 @@
 		57A001362E70000300000001 /* IsovalueEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001262E70000300000001 /* IsovalueEditorView.swift */; };
 		57A001372E70000300000001 /* VolumeRendererPipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001272E70000300000001 /* VolumeRendererPipeline.swift */; };
 		57A001402E70000300000001 /* DatasetInfoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001282E70000300000001 /* DatasetInfoView.swift */; };
+		57A001422E70000300000001 /* ExternalDatasetImporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001292E70000300000001 /* ExternalDatasetImporter.swift */; };
 		57A001382E70000300000001 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001202E70000300000001 /* AppModel.swift */; };
 		57A001392E70000300000001 /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001212E70000300000001 /* AppSettings.swift */; };
 		57A0013A2E70000300000001 /* RenderingParameters.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001222E70000300000001 /* RenderingParameters.swift */; };
@@ -57,6 +58,7 @@
 		57A0013E2E70000300000001 /* IsovalueEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001262E70000300000001 /* IsovalueEditorView.swift */; };
 		57A0013F2E70000300000001 /* VolumeRendererPipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001272E70000300000001 /* VolumeRendererPipeline.swift */; };
 		57A001412E70000300000001 /* DatasetInfoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001282E70000300000001 /* DatasetInfoView.swift */; };
+		57A001432E70000300000001 /* ExternalDatasetImporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001292E70000300000001 /* ExternalDatasetImporter.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -112,9 +114,17 @@
 		57A001262E70000300000001 /* IsovalueEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IsovalueEditorView.swift; sourceTree = "<group>"; };
 		57A001272E70000300000001 /* VolumeRendererPipeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VolumeRendererPipeline.swift; sourceTree = "<group>"; };
 		57A001282E70000300000001 /* DatasetInfoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DatasetInfoView.swift; sourceTree = "<group>"; };
+		57A001292E70000300000001 /* ExternalDatasetImporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExternalDatasetImporter.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		111111111111111111111206 /* Exceptions for "iOSApp" folder in "iOSApp" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 111111111111111111111501 /* iOSApp */;
+		};
 		111111111111111111111204 /* Exceptions for "BORGVR-IO" folder in "iOSApp" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
@@ -148,6 +158,13 @@
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				make_json_from_part6.py,
+			);
+			target = 560C00012E00000000000010 /* macOSApp */;
+		};
+		560C00012E00000000000005 /* Exceptions for "macOSApp" folder in "macOSApp" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
 			);
 			target = 560C00012E00000000000010 /* macOSApp */;
 		};
@@ -236,6 +253,9 @@
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		111111111111111111111201 /* iOSApp */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				111111111111111111111206 /* Exceptions for "iOSApp" folder in "iOSApp" target */,
+			);
 			path = iOSApp;
 			sourceTree = "<group>";
 		};
@@ -251,6 +271,9 @@
 		};
 		560C00012E00000000000002 /* macOSApp */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				560C00012E00000000000005 /* Exceptions for "macOSApp" folder in "macOSApp" target */,
+			);
 			path = macOSApp;
 			sourceTree = "<group>";
 		};
@@ -394,6 +417,7 @@
 				57A001202E70000300000001 /* AppModel.swift */,
 				57A001212E70000300000001 /* AppSettings.swift */,
 				57A001282E70000300000001 /* DatasetInfoView.swift */,
+				57A001292E70000300000001 /* ExternalDatasetImporter.swift */,
 				57A000202E70000200000001 /* FilePickerView.swift */,
 				57A000212E70000200000001 /* GPUHashtable.swift */,
 				57A000222E70000200000001 /* GPUHashtable.h */,
@@ -685,6 +709,7 @@
 				57A001342E70000300000001 /* MatrixUtilities.swift in Sources */,
 				57A001322E70000300000001 /* RenderingParameters.swift in Sources */,
 				57A001402E70000300000001 /* DatasetInfoView.swift in Sources */,
+				57A001422E70000300000001 /* ExternalDatasetImporter.swift in Sources */,
 				57A000322E70000200000001 /* RuntimeMetalShaderLoader.swift in Sources */,
 				57A000332E70000200000001 /* TextFileDocument.swift in Sources */,
 				57A001352E70000300000001 /* TransferFunctionEditorView.swift in Sources */,
@@ -711,6 +736,7 @@
 				57A0013C2E70000300000001 /* MatrixUtilities.swift in Sources */,
 				57A0013A2E70000300000001 /* RenderingParameters.swift in Sources */,
 				57A001412E70000300000001 /* DatasetInfoView.swift in Sources */,
+				57A001432E70000300000001 /* ExternalDatasetImporter.swift in Sources */,
 				57A000352E70000200000001 /* RuntimeMetalShaderLoader.swift in Sources */,
 				57A000362E70000200000001 /* TextFileDocument.swift in Sources */,
 				57A0013D2E70000300000001 /* TransferFunctionEditorView.swift in Sources */,
@@ -758,6 +784,7 @@
 				DEVELOPMENT_TEAM = L8Q6MVX7ZF;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = iOSApp/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "BorgVR Mobile";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "BorgVR uses the local network to share the currently open dataset with participants in a live collaboration session.";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -792,6 +819,7 @@
 				DEVELOPMENT_TEAM = L8Q6MVX7ZF;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = iOSApp/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "BorgVR Mobile";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "BorgVR uses the local network to share the currently open dataset with participants in a live collaboration session.";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -859,6 +887,7 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = macOSApp/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "BorgVR macOS";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.education";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
@@ -893,6 +922,7 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = macOSApp/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "BorgVR macOS";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.education";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";

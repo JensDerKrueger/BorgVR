@@ -64,6 +64,9 @@ struct macOSApp: App {
         .onChange(of: appSettings.logLevel) { _, newValue in
           appModel.setLogLevel(newValue)
         }
+        .onOpenURL { url in
+          openExternalDataset(url)
+        }
         .task {
           await sharePlay.configure(
             appModel: appModel,
@@ -116,5 +119,35 @@ struct macOSApp: App {
         .environmentObject(docking)
     }
     .defaultSize(width: 560, height: 180)
+  }
+
+  private func openExternalDataset(_ url: URL) {
+    Task { @MainActor in
+      do {
+        let dataDirectoryAccessURL = storedAppModel.startAccessingDataDirectory()
+        defer {
+          storedAppModel.stopAccessingDataDirectory(dataDirectoryAccessURL)
+        }
+
+        let dataset = try ExternalDatasetImporter.importDataset(
+          from: url,
+          into: storedAppModel.resolvedDataDirectoryURL(),
+          logger: appModel.logger
+        )
+        appModel.activeDataset = dataset
+        appModel.groupSessionHost = true
+        appModel.currentState = .renderData
+        docking.resetForDatasetClose()
+        sharePlay.datasetOpened()
+      } catch {
+        appModel.logger.error(
+          String(
+            format: String(localized: "external_dataset_open_failed_format"),
+            url.lastPathComponent,
+            error.localizedDescription
+          )
+        )
+      }
+    }
   }
 }
