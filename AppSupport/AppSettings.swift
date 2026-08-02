@@ -1,5 +1,9 @@
-import AppKit
 import SwiftUI
+#if canImport(UIKit)
+import UIKit
+#elseif canImport(AppKit)
+import AppKit
+#endif
 
 enum OversamplingMode: String {
   case staticMode = "static"
@@ -15,9 +19,9 @@ enum RenderBackgroundMode: String, CaseIterable, Identifiable {
 
   var label: String {
     switch self {
-      case .system: return "Systemfarbe"
-      case .solid: return "Eigene Farbe"
-      case .gradient: return "Vertikaler Verlauf"
+      case .system: return String(localized: "Systemfarbe")
+      case .solid: return String(localized: "Eigene Farbe")
+      case .gradient: return String(localized: "Vertikaler Verlauf")
     }
   }
 }
@@ -71,11 +75,13 @@ final class AppSettings: ObservableObject {
     "initialBricks": 4000,
     "minHashTableSize": 16,
     "maxProbingAttempts": 32,
+    "maxBricksPerGetRequest": 20,
     "atlasSizeMB": 1500,
     "oversampling": 1.0,
     "oversamplingMode": OversamplingMode.dynamicMode.rawValue,
     "dropFPS": 20,
     "recoveryFPS": 50,
+    "sharePlayServerPort": 12346,
     "autoloadTF": false,
     "autoloadTransform": false,
     "requestLowResLOD": true,
@@ -109,11 +115,13 @@ final class AppSettings: ObservableObject {
   @AppStorage("initialBricks") var initialBricks: Int = AppSettings.int("initialBricks")
   @AppStorage("minHashTableSize") var minHashTableSize: Int = AppSettings.int("minHashTableSize")
   @AppStorage("maxProbingAttempts") var maxProbingAttempts: Int = AppSettings.int("maxProbingAttempts")
+  @AppStorage("maxBricksPerGetRequest") var maxBricksPerGetRequest: Int = AppSettings.int("maxBricksPerGetRequest")
   @AppStorage("atlasSizeMB") var atlasSizeMB: Int = AppSettings.int("atlasSizeMB")
   @AppStorage("oversampling") var oversampling: Double = AppSettings.double("oversampling")
   @AppStorage("oversamplingMode") var oversamplingMode: String = AppSettings.string("oversamplingMode")
   @AppStorage("dropFPS") var dropFPS: Int = AppSettings.int("dropFPS")
   @AppStorage("recoveryFPS") var recoveryFPS: Int = AppSettings.int("recoveryFPS")
+  @AppStorage("sharePlayServerPort") var sharePlayServerPort: Int = AppSettings.int("sharePlayServerPort")
   @AppStorage("autoloadTF") var autoloadTF: Bool = AppSettings.bool("autoloadTF")
   @AppStorage("autoloadTransform") var autoloadTransform: Bool = AppSettings.bool("autoloadTransform")
   @AppStorage("requestLowResLOD") var requestLowResLOD: Bool = AppSettings.bool("requestLowResLOD")
@@ -229,6 +237,19 @@ final class AppSettings: ObservableObject {
   }
 
   private static func components(for color: Color) -> (red: Double, green: Double, blue: Double, alpha: Double) {
+    #if canImport(UIKit)
+    var red: CGFloat = 0
+    var green: CGFloat = 0
+    var blue: CGFloat = 0
+    var alpha: CGFloat = 0
+    UIColor(color).getRed(&red, green: &green, blue: &blue, alpha: &alpha)
+    return (
+      red: Double(red),
+      green: Double(green),
+      blue: Double(blue),
+      alpha: Double(alpha)
+    )
+    #elseif canImport(AppKit)
     let nsColor = NSColor(color)
     let rgbColor = nsColor.usingColorSpace(.deviceRGB) ?? .black
     return (
@@ -237,5 +258,8 @@ final class AppSettings: ObservableObject {
       blue: Double(rgbColor.blueComponent),
       alpha: Double(rgbColor.alphaComponent)
     )
+    #else
+    return (0, 0, 0, 1)
+    #endif
   }
 }

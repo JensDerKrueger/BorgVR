@@ -91,6 +91,7 @@ struct TransferFunctionEditorView: View {
         } label: {
           Image(systemName: "square.split.2x1")
         }
+        .help("Slicing Preset")
         .accessibilityLabel("Slicing Preset")
 
         Button {
@@ -100,6 +101,7 @@ struct TransferFunctionEditorView: View {
         } label: {
           Image(systemName: "arrow.counterclockwise")
         }
+        .help("Reset")
         .accessibilityLabel("Reset")
 
         Button {
@@ -107,6 +109,7 @@ struct TransferFunctionEditorView: View {
         } label: {
           Image(systemName: "checkmark")
         }
+        .help("Fertig")
         .accessibilityLabel("Fertig")
       }
     }
@@ -121,6 +124,7 @@ struct TransferFunctionEditorView: View {
     }
     .buttonStyle(.borderedProminent)
     .tint(isSelected ? color : .gray)
+    .help(title)
   }
 
   private func paint(at point: CGPoint, in size: CGSize) {

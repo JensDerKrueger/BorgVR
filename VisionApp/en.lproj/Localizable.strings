@@ -710,6 +710,9 @@
 "voice_patterns_dataset_info" = "what am i looking at|what am i seeing|describe this dataset";
 "voice_patterns_aliases_dataset_info" = "";
 
+"notfication_dataset_downloaded_title" = "Remote Dataset Complete";
+"notfication_dataset_downloaded_text" = "The dataset has been downloaded in its entirety and is now available locally.";
+
 /* Log: min and max values – args: min, max */
 "bricked_log_minmax" = "Min value: %d, Max value: %d";
 

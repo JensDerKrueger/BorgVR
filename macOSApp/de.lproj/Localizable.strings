@@ -155,6 +155,9 @@
 "settings_error_bricksize_invalid" = "Muss ≥ 1 + Überlappung × 2 sein.";
 "settings_error_overlap_invalid" = "Muss ≥ 1 sein und brickSize − 2×Überlappung ≥ 1 erfüllen.";
 
+"notfication_dataset_downloaded_title" = "Remote Dataset vollständig";
+"notfication_dataset_downloaded_text" = "Der Datensatz wurde vollständig heruntergeladen und ist nun lokal verfügbar.";
+
 "info_title" = "BorgVR macOS – Version %@.%@";
 
 "info_heading" = "Über BorgVR macOS.";
@@ -344,3 +347,26 @@
 "tf_editor_load_success" = "Transferfunktion geladen:";
 "tf_editor_save_failed" = "Transferfunktion konnte nicht gespeichert werden:";
 "tf_editor_load_failed" = "Transferfunktion konnte nicht geladen werden:";
+
+"Systemfarbe" = "Systemfarbe";
+"Eigene Farbe" = "Eigene Farbe";
+"Vertikaler Verlauf" = "Vertikaler Verlauf";
+"Transfer Function + Licht" = "Transferfunktion + Licht";
+"Transfer Function" = "Transferfunktion";
+"Isowert" = "Isowert";
+"Isowert-Editor schließen" = "Isowert-Editor schließen";
+"Slicing Preset" = "Slicing-Preset";
+"Reset" = "Zurücksetzen";
+"Fertig" = "Fertig";
+"Schließen" = "Schließen";
+"SharePlay aktiv" = "SharePlay aktiv";
+"SharePlay starten" = "SharePlay starten";
+"Log" = "Log";
+"UI ausblenden" = "UI ausblenden";
+"UI einblenden" = "UI einblenden";
+"Datensatz löschen" = "Datensatz löschen";
+"Server entfernen" = "Server entfernen";
+"Server hinzufügen" = "Server hinzufügen";
+"Datenverzeichnis auswählen" = "Datenverzeichnis auswählen";
+"Panel andocken" = "Panel andocken";
+"Panel abdocken" = "Panel abdocken";

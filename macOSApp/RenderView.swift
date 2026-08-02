@@ -106,6 +106,7 @@ struct RenderView: View {
       Image(systemName: "eye")
     }
     .accessibilityLabel("UI einblenden")
+    .help("UI einblenden")
     .buttonStyle(.bordered)
   }
 

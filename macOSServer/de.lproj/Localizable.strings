@@ -317,3 +317,6 @@
 
 /* Log: compression summary – args: compressed, uncompressed */
 "bricked_log_compression_summary" = "Komprimiert: %d Blöcke, unkomprimiert: %d Blöcke";
+
+"notfication_dataset_downloaded_title" = "Remote Dataset vollständig";
+"notfication_dataset_downloaded_text" = "Der Datensatz wurde vollständig heruntergeladen und ist nun lokal verfügbar.";

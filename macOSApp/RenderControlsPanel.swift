@@ -21,6 +21,7 @@ struct RenderControlsPanel: View {
           Image(systemName: "xmark")
         }
         .accessibilityLabel("Schließen")
+        .help("Schließen")
         .buttonStyle(.borderedProminent)
 
         Spacer()
@@ -43,6 +44,7 @@ struct RenderControlsPanel: View {
           }
         )
         .accessibilityLabel(sharePlay.isInSession ? "SharePlay aktiv" : "SharePlay starten")
+        .help(sharePlay.isInSession ? "SharePlay aktiv" : "SharePlay starten")
         .buttonStyle(.bordered)
 
         Button {
@@ -51,6 +53,7 @@ struct RenderControlsPanel: View {
           Image(systemName: "text.alignleft")
         }
         .accessibilityLabel("Log")
+        .help("Log")
         .buttonStyle(.bordered)
 
         DockToggleButton(panel: .renderControls)
@@ -62,6 +65,7 @@ struct RenderControlsPanel: View {
             Image(systemName: "eye.slash")
           }
           .accessibilityLabel("UI ausblenden")
+          .help("UI ausblenden")
           .buttonStyle(.bordered)
         }
       }

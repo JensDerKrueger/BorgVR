@@ -26,13 +26,12 @@
 		57A000432E70000200000001 /* VolumeAtlas.h in Resources */ = {isa = PBXBuildFile; fileRef = 57A000292E70000200000001 /* VolumeAtlas.h */; };
 		57A000442E70000200000001 /* Helper.h in Resources */ = {isa = PBXBuildFile; fileRef = 57A000232E70000200000001 /* Helper.h */; };
 		57A000452E70000200000001 /* GPUHashtable.h in Resources */ = {isa = PBXBuildFile; fileRef = 57A000222E70000200000001 /* GPUHashtable.h */; };
-		57A0004C2E70000200000001 /* VolumeRaycaster.metal in Resources */ = {isa = PBXBuildFile; fileRef = 57A0002A2E70000200000001 /* VolumeRaycaster.metal */; };
 		57A000462E70000200000001 /* RuntimeVolumeShaders.metal in Resources */ = {isa = PBXBuildFile; fileRef = 57A000252E70000200000001 /* RuntimeVolumeShaders.metal */; };
-		57A000472E70000200000001 /* RuntimeVolumeShadersPrevious.metal in Resources */ = {isa = PBXBuildFile; fileRef = 57A000262E70000200000001 /* RuntimeVolumeShadersPrevious.metal */; };
 		57A000482E70000200000001 /* ShaderTypes.h in Resources */ = {isa = PBXBuildFile; fileRef = 57A000272E70000200000001 /* ShaderTypes.h */; };
 		57A000492E70000200000001 /* VolumeAtlas.h in Resources */ = {isa = PBXBuildFile; fileRef = 57A000292E70000200000001 /* VolumeAtlas.h */; };
 		57A0004A2E70000200000001 /* Helper.h in Resources */ = {isa = PBXBuildFile; fileRef = 57A000232E70000200000001 /* Helper.h */; };
 		57A0004B2E70000200000001 /* GPUHashtable.h in Resources */ = {isa = PBXBuildFile; fileRef = 57A000222E70000200000001 /* GPUHashtable.h */; };
+		57A0004C2E70000200000001 /* VolumeRaycaster.metal in Resources */ = {isa = PBXBuildFile; fileRef = 57A0002A2E70000200000001 /* VolumeRaycaster.metal */; };
 		57A0004D2E70000200000001 /* VolumeRaycaster.metal in Resources */ = {isa = PBXBuildFile; fileRef = 57A0002A2E70000200000001 /* VolumeRaycaster.metal */; };
 		57A0004E2E70000200000001 /* VolumeRaycaster.metal in Resources */ = {isa = PBXBuildFile; fileRef = 57A0002A2E70000200000001 /* VolumeRaycaster.metal */; };
 		57A0004F2E70000200000001 /* VisionHUDShaders.metal in Resources */ = {isa = PBXBuildFile; fileRef = 57A0002B2E70000200000001 /* VisionHUDShaders.metal */; };
@@ -40,6 +39,22 @@
 		57A000532E70000200000001 /* VolumeAtlas.h in Resources */ = {isa = PBXBuildFile; fileRef = 57A000292E70000200000001 /* VolumeAtlas.h */; };
 		57A000542E70000200000001 /* Helper.h in Resources */ = {isa = PBXBuildFile; fileRef = 57A000232E70000200000001 /* Helper.h */; };
 		57A000552E70000200000001 /* GPUHashtable.h in Resources */ = {isa = PBXBuildFile; fileRef = 57A000222E70000200000001 /* GPUHashtable.h */; };
+		57A001302E70000300000001 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001202E70000300000001 /* AppModel.swift */; };
+		57A001312E70000300000001 /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001212E70000300000001 /* AppSettings.swift */; };
+		57A001322E70000300000001 /* RenderingParameters.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001222E70000300000001 /* RenderingParameters.swift */; };
+		57A001332E70000300000001 /* LoggerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001232E70000300000001 /* LoggerView.swift */; };
+		57A001342E70000300000001 /* MatrixUtilities.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001242E70000300000001 /* MatrixUtilities.swift */; };
+		57A001352E70000300000001 /* TransferFunctionEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001252E70000300000001 /* TransferFunctionEditorView.swift */; };
+		57A001362E70000300000001 /* IsovalueEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001262E70000300000001 /* IsovalueEditorView.swift */; };
+		57A001372E70000300000001 /* VolumeRendererPipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001272E70000300000001 /* VolumeRendererPipeline.swift */; };
+		57A001382E70000300000001 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001202E70000300000001 /* AppModel.swift */; };
+		57A001392E70000300000001 /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001212E70000300000001 /* AppSettings.swift */; };
+		57A0013A2E70000300000001 /* RenderingParameters.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001222E70000300000001 /* RenderingParameters.swift */; };
+		57A0013B2E70000300000001 /* LoggerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001232E70000300000001 /* LoggerView.swift */; };
+		57A0013C2E70000300000001 /* MatrixUtilities.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001242E70000300000001 /* MatrixUtilities.swift */; };
+		57A0013D2E70000300000001 /* TransferFunctionEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001252E70000300000001 /* TransferFunctionEditorView.swift */; };
+		57A0013E2E70000300000001 /* IsovalueEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001262E70000300000001 /* IsovalueEditorView.swift */; };
+		57A0013F2E70000300000001 /* VolumeRendererPipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001272E70000300000001 /* VolumeRendererPipeline.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -81,12 +96,19 @@
 		57A000232E70000200000001 /* Helper.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Helper.h; sourceTree = "<group>"; };
 		57A000242E70000200000001 /* RuntimeMetalShaderLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuntimeMetalShaderLoader.swift; sourceTree = "<group>"; };
 		57A000252E70000200000001 /* RuntimeVolumeShaders.metal */ = {isa = PBXFileReference; explicitFileType = text; path = RuntimeVolumeShaders.metal; sourceTree = "<group>"; };
-		57A000262E70000200000001 /* RuntimeVolumeShadersPrevious.metal */ = {isa = PBXFileReference; explicitFileType = text; path = RuntimeVolumeShadersPrevious.metal; sourceTree = "<group>"; };
 		57A000272E70000200000001 /* ShaderTypes.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ShaderTypes.h; sourceTree = "<group>"; };
 		57A000282E70000200000001 /* TextFileDocument.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextFileDocument.swift; sourceTree = "<group>"; };
 		57A000292E70000200000001 /* VolumeAtlas.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = VolumeAtlas.h; sourceTree = "<group>"; };
 		57A0002A2E70000200000001 /* VolumeRaycaster.metal */ = {isa = PBXFileReference; explicitFileType = text; path = VolumeRaycaster.metal; sourceTree = "<group>"; };
 		57A0002B2E70000200000001 /* VisionHUDShaders.metal */ = {isa = PBXFileReference; explicitFileType = text; path = VisionHUDShaders.metal; sourceTree = "<group>"; };
+		57A001202E70000300000001 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
+		57A001212E70000300000001 /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
+		57A001222E70000300000001 /* RenderingParameters.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RenderingParameters.swift; sourceTree = "<group>"; };
+		57A001232E70000300000001 /* LoggerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoggerView.swift; sourceTree = "<group>"; };
+		57A001242E70000300000001 /* MatrixUtilities.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MatrixUtilities.swift; sourceTree = "<group>"; };
+		57A001252E70000300000001 /* TransferFunctionEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransferFunctionEditorView.swift; sourceTree = "<group>"; };
+		57A001262E70000300000001 /* IsovalueEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IsovalueEditorView.swift; sourceTree = "<group>"; };
+		57A001272E70000300000001 /* VolumeRendererPipeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VolumeRendererPipeline.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -191,12 +213,6 @@
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet section */
-		560D0A752D98BB3500EAD023 /* Exceptions for "VisionApp" folder in "Copy Bundle Resources" phase from "VisionApp" target */ = {
-			isa = PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet;
-			buildPhase = 564183762D649679003A1EC4 /* Resources */;
-			membershipExceptions = (
-			);
-		};
 		560D0A762D98BB4200EAD023 /* Exceptions for "VisionApp" folder in "Copy Files" phase from "VisionApp" target */ = {
 			isa = PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet;
 			buildPhase = 562FD5A02D7B2AA300265EF6 /* CopyFiles */;
@@ -249,7 +265,6 @@
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
 				564183882D649679003A1EC4 /* Exceptions for "VisionApp" folder in "VisionApp" target */,
-				560D0A752D98BB3500EAD023 /* Exceptions for "VisionApp" folder in "Copy Bundle Resources" phase from "VisionApp" target */,
 				560D0A762D98BB4200EAD023 /* Exceptions for "VisionApp" folder in "Copy Files" phase from "VisionApp" target */,
 			);
 			path = VisionApp;
@@ -327,25 +342,6 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		57A000102E70000100000001 /* AppSupport */ = {
-			isa = PBXGroup;
-			children = (
-				57A000202E70000200000001 /* FilePickerView.swift */,
-				57A000212E70000200000001 /* GPUHashtable.swift */,
-				57A000222E70000200000001 /* GPUHashtable.h */,
-				57A000232E70000200000001 /* Helper.h */,
-				57A000242E70000200000001 /* RuntimeMetalShaderLoader.swift */,
-				57A000252E70000200000001 /* RuntimeVolumeShaders.metal */,
-				57A000262E70000200000001 /* RuntimeVolumeShadersPrevious.metal */,
-				57A000272E70000200000001 /* ShaderTypes.h */,
-				57A000282E70000200000001 /* TextFileDocument.swift */,
-				57A000292E70000200000001 /* VolumeAtlas.h */,
-				57A0002A2E70000200000001 /* VolumeRaycaster.metal */,
-				57A0002B2E70000200000001 /* VisionHUDShaders.metal */,
-			);
-			path = AppSupport;
-			sourceTree = "<group>";
-		};
 		569EA3ED2CD449C400D8FADD = {
 			isa = PBXGroup;
 			children = (
@@ -387,6 +383,32 @@
 			children = (
 			);
 			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		57A000102E70000100000001 /* AppSupport */ = {
+			isa = PBXGroup;
+			children = (
+				57A001202E70000300000001 /* AppModel.swift */,
+				57A001212E70000300000001 /* AppSettings.swift */,
+				57A000202E70000200000001 /* FilePickerView.swift */,
+				57A000212E70000200000001 /* GPUHashtable.swift */,
+				57A000222E70000200000001 /* GPUHashtable.h */,
+				57A000232E70000200000001 /* Helper.h */,
+				57A001262E70000300000001 /* IsovalueEditorView.swift */,
+				57A001232E70000300000001 /* LoggerView.swift */,
+				57A001242E70000300000001 /* MatrixUtilities.swift */,
+				57A001222E70000300000001 /* RenderingParameters.swift */,
+				57A000242E70000200000001 /* RuntimeMetalShaderLoader.swift */,
+				57A000252E70000200000001 /* RuntimeVolumeShaders.metal */,
+				57A000272E70000200000001 /* ShaderTypes.h */,
+				57A000282E70000200000001 /* TextFileDocument.swift */,
+				57A001252E70000300000001 /* TransferFunctionEditorView.swift */,
+				57A000292E70000200000001 /* VolumeAtlas.h */,
+				57A001272E70000300000001 /* VolumeRendererPipeline.swift */,
+				57A0002A2E70000200000001 /* VolumeRaycaster.metal */,
+				57A0002B2E70000200000001 /* VisionHUDShaders.metal */,
+			);
+			path = AppSupport;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -612,7 +634,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				57A000462E70000200000001 /* RuntimeVolumeShaders.metal in Resources */,
-				57A000472E70000200000001 /* RuntimeVolumeShadersPrevious.metal in Resources */,
 				57A0004D2E70000200000001 /* VolumeRaycaster.metal in Resources */,
 				57A000482E70000200000001 /* ShaderTypes.h in Resources */,
 				57A000492E70000200000001 /* VolumeAtlas.h in Resources */,
@@ -653,8 +674,16 @@
 			files = (
 				57A000302E70000200000001 /* FilePickerView.swift in Sources */,
 				57A000312E70000200000001 /* GPUHashtable.swift in Sources */,
+				57A001302E70000300000001 /* AppModel.swift in Sources */,
+				57A001312E70000300000001 /* AppSettings.swift in Sources */,
+				57A001362E70000300000001 /* IsovalueEditorView.swift in Sources */,
+				57A001332E70000300000001 /* LoggerView.swift in Sources */,
+				57A001342E70000300000001 /* MatrixUtilities.swift in Sources */,
+				57A001322E70000300000001 /* RenderingParameters.swift in Sources */,
 				57A000322E70000200000001 /* RuntimeMetalShaderLoader.swift in Sources */,
 				57A000332E70000200000001 /* TextFileDocument.swift in Sources */,
+				57A001352E70000300000001 /* TransferFunctionEditorView.swift in Sources */,
+				57A001372E70000300000001 /* VolumeRendererPipeline.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -670,8 +699,16 @@
 			buildActionMask = 2147483647;
 			files = (
 				57A000342E70000200000001 /* GPUHashtable.swift in Sources */,
+				57A001382E70000300000001 /* AppModel.swift in Sources */,
+				57A001392E70000300000001 /* AppSettings.swift in Sources */,
+				57A0013E2E70000300000001 /* IsovalueEditorView.swift in Sources */,
+				57A0013B2E70000300000001 /* LoggerView.swift in Sources */,
+				57A0013C2E70000300000001 /* MatrixUtilities.swift in Sources */,
+				57A0013A2E70000300000001 /* RenderingParameters.swift in Sources */,
 				57A000352E70000200000001 /* RuntimeMetalShaderLoader.swift in Sources */,
 				57A000362E70000200000001 /* TextFileDocument.swift in Sources */,
+				57A0013D2E70000300000001 /* TransferFunctionEditorView.swift in Sources */,
+				57A0013F2E70000300000001 /* VolumeRendererPipeline.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

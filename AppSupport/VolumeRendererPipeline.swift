@@ -1,21 +1,18 @@
 import Metal
 import MetalKit
 
-enum MobileVolumeRendererPipelineError: LocalizedError {
-  case missingShaderSource
+enum VolumeRendererPipelineError: LocalizedError {
   case missingShaderFunction(String)
 
   var errorDescription: String? {
     switch self {
-      case .missingShaderSource:
-        return "RuntimeVolumeShaders.metal wurde nicht im App-Bundle gefunden."
       case let .missingShaderFunction(name):
         return "Metal-Funktion \(name) wurde in RuntimeVolumeShaders.metal nicht gefunden."
     }
   }
 }
 
-extension MobileVolumeRenderer {
+enum VolumeRendererPipeline {
   static func buildRenderPipelines(
     device: MTLDevice,
     colorFormat: MTLPixelFormat,
@@ -23,7 +20,8 @@ extension MobileVolumeRenderer {
     drawableWidth: Float,
     metadata: BORGVRMetaData,
     hashTable: GPUHashtable,
-    appSettings: AppSettings
+    appSettings: AppSettings,
+    labelPrefix: String
   ) throws -> (tf: MTLRenderPipelineState, tfl: MTLRenderPipelineState, iso: MTLRenderPipelineState, brick: MTLRenderPipelineState) {
     let shaderSource = try RuntimeMetalShaderLoader.loadSource(named: "RuntimeVolumeShaders")
 
@@ -65,18 +63,19 @@ extension MobileVolumeRenderer {
       "REQUEST_LOWRES_LOD": NSNumber(value: appSettings.requestLowResLOD ? 1 : 0),
       "STOP_ON_MISS": NSNumber(value: appSettings.stopOnMiss ? 1 : 0)
     ]
-    if #available(iOS 18.0, *) {
+
+    if #available(iOS 18.0, macOS 15.0, *) {
       compileOptions.mathMode = .fast
     }
 
     let library = try device.makeLibrary(source: shaderSource, options: compileOptions)
     guard let vertexFunction = library.makeFunction(name: "volumeVertexShader") else {
-      throw MobileVolumeRendererPipelineError.missingShaderFunction("volumeVertexShader")
+      throw VolumeRendererPipelineError.missingShaderFunction("volumeVertexShader")
     }
 
     func descriptor(label: String, fragmentName: String) throws -> MTLRenderPipelineDescriptor {
       guard let fragmentFunction = library.makeFunction(name: fragmentName) else {
-        throw MobileVolumeRendererPipelineError.missingShaderFunction(fragmentName)
+        throw VolumeRendererPipelineError.missingShaderFunction(fragmentName)
       }
       let descriptor = MTLRenderPipelineDescriptor()
       descriptor.label = label
@@ -96,10 +95,10 @@ extension MobileVolumeRenderer {
     }
 
     return (
-      try device.makeRenderPipelineState(descriptor: descriptor(label: "Mobile TF", fragmentName: "volumeFragmentShaderTF")),
-      try device.makeRenderPipelineState(descriptor: descriptor(label: "Mobile TF Lighting", fragmentName: "volumeFragmentShaderTFLighting")),
-      try device.makeRenderPipelineState(descriptor: descriptor(label: "Mobile Iso", fragmentName: "volumeFragmentShaderIso")),
-      try device.makeRenderPipelineState(descriptor: descriptor(label: "Mobile Brick", fragmentName: "volumeFragmentShaderBrickVis"))
+      try device.makeRenderPipelineState(descriptor: descriptor(label: "\(labelPrefix) TF", fragmentName: "volumeFragmentShaderTF")),
+      try device.makeRenderPipelineState(descriptor: descriptor(label: "\(labelPrefix) TF Lighting", fragmentName: "volumeFragmentShaderTFLighting")),
+      try device.makeRenderPipelineState(descriptor: descriptor(label: "\(labelPrefix) Iso", fragmentName: "volumeFragmentShaderIso")),
+      try device.makeRenderPipelineState(descriptor: descriptor(label: "\(labelPrefix) Brick", fragmentName: "volumeFragmentShaderBrickVis"))
     )
   }
 }

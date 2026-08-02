@@ -207,6 +207,7 @@ struct OpenDatasetView: View {
           Image(systemName: "trash")
         }
         .accessibilityLabel("Datensatz löschen")
+        .help("Datensatz löschen")
         .buttonStyle(.borderless)
       }
     }

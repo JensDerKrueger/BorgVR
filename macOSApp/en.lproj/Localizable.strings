@@ -343,3 +343,26 @@
 "tf_editor_load_success" = "Transfer function loaded:";
 "tf_editor_save_failed" = "Could not save transfer function:";
 "tf_editor_load_failed" = "Could not load transfer function:";
+
+"Systemfarbe" = "System color";
+"Eigene Farbe" = "Custom color";
+"Vertikaler Verlauf" = "Vertical gradient";
+"Transfer Function + Licht" = "Transfer Function + Lighting";
+"Transfer Function" = "Transfer Function";
+"Isowert" = "Isovalue";
+"Isowert-Editor schließen" = "Close isovalue editor";
+"Slicing Preset" = "Slicing preset";
+"Reset" = "Reset";
+"Fertig" = "Done";
+"Schließen" = "Close";
+"SharePlay aktiv" = "SharePlay active";
+"SharePlay starten" = "Start SharePlay";
+"Log" = "Log";
+"UI ausblenden" = "Hide UI";
+"UI einblenden" = "Show UI";
+"Datensatz löschen" = "Delete dataset";
+"Server entfernen" = "Remove server";
+"Server hinzufügen" = "Add server";
+"Datenverzeichnis auswählen" = "Choose data directory";
+"Panel andocken" = "Dock panel";
+"Panel abdocken" = "Detach panel";

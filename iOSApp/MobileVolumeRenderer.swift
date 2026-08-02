@@ -381,14 +381,15 @@ final class MobileVolumeRenderer: NSObject, MTKViewDelegate, UIGestureRecognizer
 
   private func buildPipelines(for view: MTKView, metadata: BORGVRMetaData, drawableWidth: Float) throws {
     guard let device = view.device, let hashTable else { return }
-    let states = try MobileVolumeRenderer.buildRenderPipelines(
+    let states = try VolumeRendererPipeline.buildRenderPipelines(
       device: device,
       colorFormat: view.colorPixelFormat,
       depthFormat: view.depthStencilPixelFormat,
       drawableWidth: drawableWidth,
       metadata: metadata,
       hashTable: hashTable,
-      appSettings: appSettings
+      appSettings: appSettings,
+      labelPrefix: "iOS"
     )
     pipelineStateTF = states.tf
     pipelineStateTFL = states.tfl

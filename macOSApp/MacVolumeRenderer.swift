@@ -38,7 +38,6 @@ final class MacVolumeRenderer: NSObject, MTKViewDelegate {
   private let minimumPipelineDrawableWidth: Float = 64
   private let pipelineWidthChangeThreshold: Float = 32
   private var frameInFlight = false
-  private var shaderVariant: RuntimeShaderVariant = .current
 
   init(
     appModel: AppModel,
@@ -109,13 +108,6 @@ final class MacVolumeRenderer: NSObject, MTKViewDelegate {
        abs(width - pipelineDrawableWidth) > pipelineWidthChangeThreshold {
       clearPipelineStates()
     }
-  }
-
-  func toggleShaderVariant() {
-    shaderVariant = shaderVariant.toggled
-    clearPipelineStates()
-    appModel.logger.dev("Runtime shader variant: \(shaderVariant.displayName)")
-    view?.setNeedsDisplay(view?.bounds ?? .zero)
   }
 
   func draw(in view: MTKView) {
@@ -356,7 +348,7 @@ final class MacVolumeRenderer: NSObject, MTKViewDelegate {
 
   private func buildPipelines(for view: MTKView, metadata: BORGVRMetaData, drawableWidth: Float) throws {
     guard let device = view.device, let hashTable else { return }
-    let states = try MacVolumeRenderer.buildRenderPipelines(
+    let states = try VolumeRendererPipeline.buildRenderPipelines(
       device: device,
       colorFormat: view.colorPixelFormat,
       depthFormat: view.depthStencilPixelFormat,
@@ -364,7 +356,7 @@ final class MacVolumeRenderer: NSObject, MTKViewDelegate {
       metadata: metadata,
       hashTable: hashTable,
       appSettings: appSettings,
-      shaderVariant: shaderVariant
+      labelPrefix: "macOS"
     )
     pipelineStateTF = states.tf
     pipelineStateTFL = states.tfl

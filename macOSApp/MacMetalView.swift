@@ -61,9 +61,6 @@ struct MacMetalView: NSViewRepresentable {
     view.onMagnificationDelta = onMagnificationDelta
     view.onMagnificationEnded = onMagnificationEnded
     view.onDoubleTap = onDoubleTap
-    view.onShaderToggle = {
-      renderer.toggleShaderVariant()
-    }
   }
 }
 
@@ -74,7 +71,6 @@ final class InteractiveMTKView: MTKView {
   var onMagnificationDelta: (CGFloat) -> Void = { _ in }
   var onMagnificationEnded: () -> Void = {}
   var onDoubleTap: () -> Void = {}
-  var onShaderToggle: () -> Void = {}
 
   private var lastDragLocation: CGPoint?
 
@@ -139,15 +135,6 @@ final class InteractiveMTKView: MTKView {
     if event.phase == .ended || event.phase == .cancelled {
       onMagnificationEnded()
     }
-  }
-
-  override func keyDown(with event: NSEvent) {
-    if event.charactersIgnoringModifiers?.lowercased() == "s" {
-      onShaderToggle()
-      return
-    }
-
-    super.keyDown(with: event)
   }
 
   private func handleMouseDrag(_ event: NSEvent) {

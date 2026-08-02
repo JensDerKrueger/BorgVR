@@ -691,6 +691,7 @@
 "voice_patterns_interaction_reset_clipping" = "clipping zurücksetzen|schnittbox zurücksetzen|schnittflächen zurücksetzen";
 "voice_patterns_aliases_interaction_reset_clipping" = "";
 "voice_patterns_interaction_open_editor" = "editor öffnen|editor anzeigen";
+"voice_patterns_aliases_interaction_open_editor" = "";
 "voice_patterns_interaction_activate_model" = "clipping ausschalten|clipping deaktivieren|modellmodus|modell aktivieren|zu modell wechseln";
 "voice_patterns_aliases_interaction_activate_model" = "";
 

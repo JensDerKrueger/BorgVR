@@ -102,6 +102,7 @@ struct SettingsView: View {
             } label: {
               Image(systemName: "trash")
             }
+            .help("Server entfernen")
           }
         }
 
@@ -114,6 +115,7 @@ struct SettingsView: View {
           } label: {
             Image(systemName: "plus")
           }
+          .help("Server hinzufügen")
         }
       }
     }

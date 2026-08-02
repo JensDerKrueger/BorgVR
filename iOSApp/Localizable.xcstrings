@@ -4568,6 +4568,14 @@
         "fr": { "stringUnit": { "state": "translated", "value": "Charger la fonction de transfert" } }
       }
     },
+    "tf_editor_load_help": {
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Transferfunktion neben dem aktuellen Datensatz laden" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Load the transfer function next to the current dataset" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Cargar la función de transferencia junto al conjunto de datos actual" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Charger la fonction de transfert à côté du jeu de données actuel" } }
+      }
+    },
     "tf_editor_load_failed": {
       "localizations": {
         "de": { "stringUnit": { "state": "translated", "value": "Transferfunktion konnte nicht geladen werden:" } },
@@ -4590,6 +4598,14 @@
         "en": { "stringUnit": { "state": "translated", "value": "Save transfer function" } },
         "es": { "stringUnit": { "state": "translated", "value": "Guardar función de transferencia" } },
         "fr": { "stringUnit": { "state": "translated", "value": "Enregistrer la fonction de transfert" } }
+      }
+    },
+    "tf_editor_save_help": {
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Transferfunktion neben dem aktuellen Datensatz speichern" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Save the transfer function next to the current dataset" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Guardar la función de transferencia junto al conjunto de datos actual" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Enregistrer la fonction de transfert à côté du jeu de données actuel" } }
       }
     },
     "tf_editor_save_failed": {

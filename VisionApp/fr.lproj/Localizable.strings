@@ -1,0 +1,747 @@
+/* Localizable.strings (en) */
+
+/* Title of dataset import view */
+"converter_title" = "Importation de jeux de données BorgVR";
+
+/* Subtitle of dataset import view */
+"converter_subtitle" = "Importation de données volumiques";
+
+/* Instructions shown on the converter view */
+"converter_instructions" = "Pour lancer l’importation des données, touchez **Sélectionner le volume d’entrée** et choisissez le volume à importer :\n\n- **Volume QVIS** : sélectionnez un fichier `.DAT` (métadonnées) et son fichier `.RAW` correspondant (données volumiques). Ce format **nécessite une conversion**.\n- **Volume NRRD** : sélectionnez un fichier `.NRRD` ou `.NHDR` (métadonnées) et le fichier de données volumiques correspondant. Ce format **nécessite une conversion**.\n- **Volume BorgVR natif** : sélectionnez le fichier de volume `.DATA`. Ce format est **copié sans conversion**.\n\nEn raison des restrictions du système de sécurité du **sandbox des apps iOS**, vous devez **sélectionner manuellement tous les fichiers concernés**. Si vous importez un volume QVIS ou NHDR, vous devez sélectionner à la fois le **fichier de métadonnées** et le **fichier de données volumiques**. Pour copier un volume BorgVR natif, sélectionnez simplement le fichier `.DATA`.\n\nSi vous importez un volume, saisissez une **description** du jeu de données avant de continuer. Touchez ensuite **Démarrer la conversion** pour convertir les données dans un **format hiérarchique en bricks**, optimisé pour le rendu BorgVR. Si vous importez un volume BorgVR natif, touchez simplement **Copier les données** pour stocker les fichiers dans l’espace privé de l’app en vue d’une visualisation haute performance.";
+
+/* Button: select input volume */
+"converter_select_input_volume" = "Sélectionner le volume d’entrée";
+
+/* Label for dataset description */
+"converter_description_label" = "Description :";
+
+/* Placeholder for dataset description text field */
+"converter_dataset_description_placeholder" = "Saisir une description pour ce jeu de données";
+
+/* Button: copy data */
+"converter_copy_data" = "Copier les données";
+
+/* Button: start conversion */
+"converter_start_conversion" = "Démarrer la conversion";
+
+/* Button: clear output */
+"converter_clear_output" = "Effacer la sortie";
+
+/* Button: export output */
+"converter_export_output" = "Exporter la sortie";
+
+/* Button: back to main menu */
+"converter_back_to_main_menu" = "Retour au menu principal";
+
+/* Default filename for exported log */
+"converter_default_export_filename" = "ImportOutput";
+
+/* Log: log saved to URL (parameter: file path) */
+"converter_log_saved_to_url" = "Journal enregistré dans %@";
+
+/* Log: failed to save log (parameter: error description) */
+"converter_failed_to_save_log" = "Impossible d’enregistrer le journal : %@";
+
+/* Error: no permission to access file (parameter: file path) */
+"converter_no_permission_access_file" = "Pas d’autorisation pour accéder au fichier %@";
+
+/* Log: copying native BorgVR file */
+"converter_copying_native_borgvr_file" = "Copie du fichier BorgVR natif";
+
+/* Error: input file not specified */
+"converter_input_file_not_specified" = "Fichier d’entrée non spécifié.";
+
+/* Log: starting conversion */
+"converter_starting_conversion" = "Démarrage de la conversion...";
+
+/* Warning: debug mode may be slow */
+"converter_debug_mode_warning" = "Exécution en mode debug. La conversion peut prendre longtemps.";
+
+/* Error: unsupported border mode, fallback */
+"converter_unsupported_border_mode_fallback_zeroes" = "Mode de bord non pris en charge %@ ; utilisation de zéros";
+
+/* Auto-generated dataset/meta description (parameter: base filename) */
+"converter_dataset_description_auto" = "Converti depuis le fichier de volume externe %@";
+
+/* QVISParser error (parameter: error description) */
+"converter_qvisparser_error" = "Erreur QVISParser : %@";
+
+/* NRRDParser error (parameter: error description) */
+"converter_nrrdparser_error" = "Erreur NRRDParser : %@";
+
+/* RawFileAccessor error (parameter: error description) */
+"converter_rawfileaccessor_error" = "Erreur RawFileAccessor : %@";
+
+/* MemoryMappedFile error (parameter: error description) */
+"converter_memorymappedfile_error" = "Erreur MemoryMappedFile : %@";
+
+/* FileError (parameter: error description) */
+"converter_fileerror" = "Erreur de fichier : %@";
+
+/* Unexpected error (parameter: error description) */
+"converter_unexpected_error" = "Une erreur inattendue s’est produite : %@";
+
+/* Log: time elapsed in seconds (parameter: seconds as float) */
+"converter_time_elapsed_seconds" = "Temps écoulé : %f secondes";
+
+/* Info screen: intro title */
+"info_intro_title" = "Bienvenue dans l’application BorgVR.";
+
+/* Info screen: intro body text */
+"info_intro_body" = "BorgVR est une **application de rendu volumique bricked out-of-core et ray-guided** conçue pour la **réalité virtuelle et augmentée** sur la plateforme **Apple Vision Pro**. Le système a depuis été porté sur **iOS** et **macOS** ; plusieurs utilisateurs peuvent collaborer via **SharePlay** sur les mêmes jeux de données avec iPhone, iPad, Mac et Apple Vision Pro. BorgVR utilise **Swift** et **Metal** pour un rendu haute performance et c’est un projet **open source**.";
+
+/* Info screen: publications intro */
+"info_publications_intro" = "Cette application fait partie d’un **projet de recherche en cours**, qui explore des techniques avancées de rendu volumique. Nos travaux ont été publiés dans les articles suivants :";
+
+/* Info screen: first paper title (link text) */
+"info_pub1_title" = "**Investigating the Apple Vision Pro Spatial Computing Platform for GPU-Based Volume Visualization**";
+
+/* Info screen: first paper venue */
+"info_pub1_venue" = "Présenté à **IEEE Visualization 2024**.";
+
+/* Info screen: second paper title (link text) */
+"info_pub2_title" = "**An Investigation of the Apple Vision Pro for Out-of-Core Ray-Guided Volume Rendering with BorgVR**";
+
+/* Info screen: second paper venue */
+"info_pub2_venue" = "Présenté à **VMV 2025**.";
+
+/* Info screen: concluding body text */
+"info_conclusion_body" = "Même si l’étude initiale a introduit la technologie de base, BorgVR est désormais un **renderer volumique plus sophistiqué**, combinant **Ray-Guided Volume Rendering** avec des fonctionnalités modernes de **iOS**, **visionOS** et **macOS**.";
+
+/* Info screen: close button label */
+"info_close_button" = "Fermer";
+
+/* Info screen: footer copyright text */
+"info_footer_copyright" = "© 2024–2026";
+
+/* Info screen: footer link label */
+"info_footer_link" = "CGVIS Duisburg, Allemagne";
+
+/* Title of the isovalue editor view */
+"isovalue_editor_title" = "Éditeur d’isovaleur";
+
+/* Label showing the normalized isovalue (parameter: normalized value) */
+"isovalue_normalized_value" = "Valeur normalisée : %.2f";
+
+/* Logger view: title */
+"logger_title" = "Journal de l’application";
+
+/* Logger view: clear log button */
+"logger_clear_log_button" = "Effacer le journal";
+
+/* Logger view: export log button */
+"logger_export_log_button" = "Exporter le journal";
+
+/* Logger view: log level picker label */
+"logger_log_level_label" = "Niveau de journal";
+
+/* Logger view: log level - all messages */
+"logger_log_level_all" = "Tous les messages";
+
+/* Logger view: log level - progress and up */
+"logger_log_level_progress" = "Progression et plus";
+
+/* Logger view: log level - info and up */
+"logger_log_level_info" = "Info et plus";
+
+/* Logger view: log level - warnings and up */
+"logger_log_level_warning" = "Avertissements et plus";
+
+/* Logger view: log level - only errors */
+"logger_log_level_error" = "Erreurs uniquement";
+
+/* Logger view: default filename for exported log */
+"logger_default_export_filename" = "LogOutput";
+
+/* Logger view: log saved to URL (parameter: file path) */
+"logger_log_saved_to_url" = "Journal enregistré dans %@";
+
+/* Logger view: failed to save log (parameter: error description) */
+"logger_failed_to_save_log" = "Impossible d’enregistrer le journal : %@";
+
+/* Mode selection: app title */
+"mode_title_app_name" = "BorgVR";
+
+/* Mode selection: version label (parameters: app version, app build) */
+"mode_version_format" = "Version %@.%@";
+
+/* Mode selection: prompt text */
+"mode_prompt_choose_option" = "Veuillez choisir une option ci-dessous";
+
+/* Mode selection: button - open dataset */
+"mode_button_open_dataset" = "Ouvrir un jeu de données";
+
+/* Mode selection: button - import dataset */
+"mode_button_import_dataset" = "Importer un jeu de données";
+
+/* Mode selection: button - settings */
+"mode_button_settings" = "Réglages";
+
+/* Mode selection: share preview title */
+"mode_share_preview_title" = "Collaboration BorgVR en direct";
+
+/* Mode selection: button - about */
+"mode_button_about" = "À propos";
+
+/* Mode selection: footer copyright text */
+"mode_footer_copyright" = "© 2024–2026";
+
+/* Mode selection: footer link label */
+"mode_footer_link" = "CGVIS Duisburg, Germany";
+
+/* Open dataset: loading stages */
+"open_loading_scanning_files" = "Analyse des fichiers locaux…";
+"open_loading_local_dataset_format" = "Chargement de %@ (%d sur %d)…";
+"open_loading_connecting_server" = "Connexion au serveur %@:%d …";
+
+/* Open dataset: main title */
+"open_title_available_datasets" = "Jeux de données disponibles";
+
+/* Open dataset: empty state message */
+"open_no_datasets_message" = "**Aucun jeu de données valide trouvé**\n\nPour ajouter des jeux de données, vous avez deux possibilités :\n\n- **Importer un jeu de données :** utilisez l’option \"Importer un jeu de données\" dans le menu principal.\n- **Se connecter à un serveur de jeux de données :**  \n  saisissez l’adresse du serveur dans les réglages, puis revenez à cette fenêtre.";
+
+/* Open dataset: dataset description suffixes */
+"open_dataset_description_local_suffix" = "%@ - local";
+"open_dataset_description_remote_suffix" = "%@ - distant (%@:%d)";
+"open_dataset_description_built_in_suffix" = "%@ - intégré";
+
+/* Open dataset: delete confirmation */
+"open_delete_confirmation_title" = "Voulez-vous vraiment supprimer \"%@\" ?";
+"open_delete_default_dataset_name" = "ce jeu de données";
+"open_delete_button" = "Supprimer";
+"open_cancel_button" = "Annuler";
+
+/* Open dataset: immersion style section */
+"open_immersion_style_label" = "Style d’immersion";
+"open_immersion_style_mixed" = "Mixte (mode AR)";
+"open_immersion_style_full" = "Complet (mode VR)";
+
+/* Open dataset: log button */
+"open_button_show_log" = "Afficher le journal";
+
+/* Open dataset: main action buttons */
+"open_button_close_dataset" = "Fermer le jeu de données";
+"open_button_open_dataset" = "Ouvrir un jeu de données";
+"open_button_import_data" = "Importer des données";
+"open_button_refresh_list" = "Actualiser la liste";
+"open_button_back_to_main_menu" = "Retour au menu principal";
+
+/* Open dataset: error messages */
+"open_error_deleting_file" = "Erreur lors de la suppression du fichier : %@";
+"open_error_connecting_remote_server" = "Erreur lors de la connexion au serveur distant : %@";
+"open_error_loading_dataset_files" = "Erreur lors du chargement des fichiers du jeu de données : %@";
+
+/* Open dataset: prefetch status */
+"open_prefetch_starting" = "Démarrage...";
+"open_prefetch_initializing" = "Initialisation...";
+"open_prefetch_loading_bricks_count" = "Chargement de %d bricks ...";
+"open_prefetch_loading_bricks_progress" = "Chargement des bricks %d sur %d \n%@ %% terminé...";
+
+/* Performance graph view: title */
+"performance_title" = "Performances";
+
+/* Prefetch dialog: title */
+"prefetch_title" = "Préchargement du jeu de données";
+
+/* Prefetch dialog: cancel button */
+"prefetch_cancel_button" = "Annuler et reprendre plus tard";
+
+/* Private application: interaction title and picker */
+"private_interaction_title" = "Interaction";
+"private_interaction_picker_label" = "Interaction";
+
+/* Private application: interaction modes */
+"private_interaction_option_model" = "Modèle";
+"private_interaction_option_clipping" = "Découpe";
+
+/* Private application: editor button title format */
+"private_editor_title_format" = "Éditeur %@";
+
+/* Private application: slicing presets button */
+"private_slicing_presets_button" = "Préréglages de coupe";
+
+/* Private application: reset section */
+"private_reset_section_title" = "Réinitialiser";
+"private_reset_model_button" = "Modèle";
+"private_reset_clipping_button" = "Découpe";
+"private_reset_all_parameters_button" = "Tous les paramètres";
+
+/* Private application: voice button texts */
+"private_voice_stop_button" = "Arrêter l’écoute";
+"private_voice_start_button" = "Démarrer l’entrée vocale";
+
+/* Private application: accessibility labels for voice button */
+"private_voice_stop_label" = "Arrêter l’écoute";
+"private_voice_start_label" = "Démarrer l’entrée vocale";
+
+/* Private application: spoken feedback when toggling voice */
+"private_voice_off" = "Voix désactivée";
+"private_voice_on" = "Voix activée";
+
+/* Private application: logging for voice usage errors */
+"private_voice_usage_failed" = "Échec de l’utilisation de la voix : %@";
+"private_voice_usage_denied" = "Utilisation de la voix refusée : %@";
+
+/* Private application: voice access / failure messages */
+"private_voice_access_denied" = "Accès vocal refusé à cause de %@";
+"private_voice_failed" = "La voix a échoué à cause de %@";
+
+/* Trafo file picker */
+"trafo_picker_title" = "Choisir la transformation";
+"trafo_picker_cancel_button" = "Annuler";
+"trafo_picker_load_failed_title" = "Échec du chargement";
+"trafo_picker_ok_button" = "OK";
+
+/* Profile view: main title */
+"profile_advanced_settings_title" = "Réglages avancés";
+
+/* Profile view: group titles */
+"profile_group_additional_windows" = "Fenêtres supplémentaires";
+"profile_group_rendermodes" = "Modes de rendu";
+"profile_group_countdown" = "Compte à rebours";
+"profile_group_performance_profiling" = "Profilage des performances";
+"profile_group_memory_profiling" = "Profilage mémoire";
+"profile_group_transform" = "Transformation";
+
+/* Profile view: buttons and toggles */
+"profile_button_performance_graph" = "Graphique des performances";
+"profile_button_show_log" = "Afficher le journal";
+"profile_toggle_show_bricks" = "Afficher les bricks";
+"profile_label_startup" = "Démarrage :";
+"profile_label_measurement" = "Mesure :";
+"profile_toggle_log_performance" = "Journaliser les performances";
+"profile_button_capture_rotation" = "Capturer la rotation";
+"profile_button_clear_atlas" = "Effacer l’atlas";
+"profile_button_measure_working_set" = "Mesurer la taille du working set";
+"profile_button_save" = "Enregistrer";
+"profile_button_load" = "Charger";
+"profile_toggle_load_save_automatically" = "Charger et enregistrer automatiquement";
+
+/* Profile view: save error */
+"profile_save_failed_title" = "Échec de l’enregistrement";
+"profile_alert_ok_button" = "OK";
+
+/* Settings: main title */
+"settings_title_borgvr" = "Réglages de BorgVR";
+
+/* Settings: tab titles */
+"settings_tab_rendering" = "Rendu";
+"settings_tab_remote" = "Distant";
+"settings_tab_import" = "Importer";
+"settings_tab_advanced" = "Avancé";
+
+/* Settings: section headers */
+"settings_section_rendering_interface" = "Interface de rendu";
+"settings_section_remote_datasets" = "Serveur pour jeux de données distants";
+"settings_section_import" = "Importer";
+"settings_section_advanced_options" = "Options avancées";
+
+/* Settings: Rendering tab toggles */
+"settings_toggle_autoload_tf" = "Charger et enregistrer automatiquement les fonctions de transfert";
+"settings_toggle_autoload_transform" = "Charger et enregistrer automatiquement la transformation";
+"settings_toggle_disable_foveation" = "Désactiver la fovéation";
+"settings_toggle_show_notifications" = "Afficher les notifications (autorisation requise)";
+"settings_toggle_enable_voice_input" = "Activer l’entrée vocale (autorisation requise)";
+"settings_toggle_autostart_voice" = "Démarrer automatiquement l’entrée vocale";
+"settings_toggle_enable_voice_feedback" = "Activer le retour vocal";
+
+/* Settings: Remote tab labels and placeholders */
+"settings_label_hostname" = "Nom d’hôte";
+"settings_placeholder_hostname" = "Saisir le nom d’hôte";
+
+"settings_label_port_number" = "Numéro de port";
+"settings_placeholder_port" = "Saisir le port";
+
+"settings_label_timeout" = "Délai (secondes)";
+"settings_placeholder_timeout" = "Saisir le délai";
+"settings_label_shareplay_server_port" = "Port du serveur ad hoc de jeux de données";
+"settings_placeholder_shareplay_server_port" = "Saisir le port";
+
+"settings_toggle_progressive_loading" = "Chargement progressif";
+"settings_toggle_store_local_copy" = "Stocker une version locale en mode progressif";
+
+/* Settings: Import tab */
+"settings_label_brick_size" = "Taille de brick";
+"settings_placeholder_brick_size" = "Taille de brick";
+
+"settings_label_overlap" = "Chevauchement";
+"settings_placeholder_overlap" = "Chevauchement";
+
+"settings_toggle_compression" = "Compression";
+"settings_picker_borders" = "Bords";
+"settings_border_zeroes" = "zéros";
+"settings_border_border" = "bord";
+"settings_border_repeat" = "répéter";
+
+/* Settings: Advanced tab basic parameters */
+"settings_label_screen_space_pixel_error" = "Erreur de pixel en espace écran";
+"settings_placeholder_pixel_error" = "Erreur de pixel";
+
+"settings_label_initial_bricks" = "Bricks initiales";
+"settings_placeholder_initial_bricks" = "Nombre de bricks";
+
+"settings_label_hash_size" = "Taille des bricks représentées par la table de hachage (Mo)";
+"settings_placeholder_hash_size" = "Taille min.";
+
+"settings_label_max_probing_attempts" = "Tentatives maximales de sondage linéaire";
+"settings_placeholder_max_probing_attempts" = "Tentatives";
+
+"settings_label_atlas_size" = "Taille de l’atlas (Mo)";
+"settings_placeholder_atlas_size" = "Taille de l’atlas";
+
+"settings_toggle_request_low_res_lod" = "Demander un LOD basse résolution";
+"settings_toggle_stop_on_miss" = "Arrêter le raycasting lorsqu’une brick manquante est rencontrée";
+"settings_toggle_show_profiling" = "Afficher les options de profilage";
+
+/* Settings: Oversampling section */
+"settings_label_oversampling_mode_section_title" = "Mode de suréchantillonnage";
+"settings_picker_oversampling_mode" = "Mode de suréchantillonnage";
+"settings_oversampling_mode_static" = "Statique";
+"settings_oversampling_mode_dynamic" = "Dynamique";
+
+"settings_label_base_oversampling" = "Suréchantillonnage de base";
+"settings_label_oversampling" = "Suréchantillonnage";
+"settings_placeholder_oversampling" = "Suréchantillonnage";
+
+"settings_label_drop_fps" = "FPS de baisse";
+"settings_label_recovery_fps" = "FPS de récupération";
+
+"settings_error_drop_recovery_fps" = "Drop FPS doit être inférieur à Recovery FPS, et les deux valeurs doivent être des entiers positifs.";
+
+/* Settings: validation error messages */
+"settings_error_timeout" = "Délai invalide. Doit être un nombre positif en secondes.";
+"settings_error_port" = "Port invalide. Doit être un nombre entre 1 et 65535.";
+"settings_error_pixel_error" = "Erreur de pixel invalide. Doit être un nombre supérieur à 0.";
+"settings_error_initial_bricks" = "Valeur invalide. Doit être un entier non négatif.";
+"settings_error_hash_size" = "Valeur invalide. Doit être un entier d’au moins 1.";
+"settings_error_max_probing_attempts" = "Valeur invalide. Doit être un entier d’au moins 1.";
+"settings_error_atlas_size" = "Valeur invalide. Doit être un entier d’au moins 1.";
+"settings_error_oversampling" = "Suréchantillonnage invalide. Doit être un nombre supérieur à 0.";
+"settings_error_brick_size" = "Taille de brick invalide. Doit être >= 1 + chevauchement * 2.";
+"settings_error_brick_overlap" = "Chevauchement invalide. Doit être >= 1 et permettre brickSize - 2*chevauchement >= 1.";
+
+"settings_error_connection_failed" = "Échec de la connexion";
+"settings_error_address_must_not_be_empty" = "L’adresse ne doit pas être vide";
+"settings_servers" = "Serveurs";
+"settings_validate_servers" = "Valider les serveurs";
+"settings_label_add_servers" = "Ajouter";
+
+
+/* Settings: bottom navigation button */
+"settings_button_back_to_main_menu" = "Retour au menu principal";
+
+/* Transfer function editor: main title */
+"tf_editor_title" = "Éditeur de fonction de transfert";
+
+/* Transfer function editor: groups */
+"tf_editor_group_global" = "Global";
+"tf_editor_group_color" = "Couleur";
+"tf_editor_group_opacity" = "Opacité";
+"tf_editor_group_storage" = "Stockage";
+
+"tfMode_windowOnly" = "Désactivé";
+"tfMode_HUD" = "HUD";
+"tfMode_Object" = "Objet";
+
+/* Transfer function editor: toggles */
+"tf_editor_toggle_all" = "Tout";
+"tf_editor_toggle_only_color" = "Couleur uniquement";
+"tf_editor_toggle_red" = "Rouge";
+"tf_editor_toggle_green" = "Vert";
+"tf_editor_toggle_blue" = "Bleu";
+"tf_editor_toggle_opacity" = "Opacité";
+
+/* Transfer function editor: storage buttons and labels */
+"tf_editor_button_load" = "Charger";
+"tf_editor_button_save" = "Enregistrer";
+"tf_editor_autoload_label" = "Charger et enregistrer automatiquement";
+"tf_editor_save_failed_title" = "Échec de l’enregistrement";
+"tf_editor_ok_button" = "OK";
+"tf_editor_button_import" = "Importer";
+"tf_editor_import_failed_title" = "Échec de l’importation";
+"tf_editor_button_export" = "Exporter";
+
+/* Transfer function file picker dialog */
+"tf_picker_title" = "Choisir une fonction de transfert";
+"tf_picker_cancel_button" = "Annuler";
+"tf_picker_load_failed_title" = "Échec du chargement";
+"tf_picker_ok_button" = "OK";
+
+/* Transfer function save-as dialog */
+"tf_save_dialog_filename_placeholder" = "Nom de fichier";
+"tf_save_dialog_title" = "Enregistrer la fonction de transfert";
+"tf_save_dialog_cancel_button" = "Annuler";
+"tf_save_dialog_save_button" = "Enregistrer";
+
+/* Voice / speech recognition errors */
+"voice_error_audio_session" = "Erreur de session audio : %@";
+"voice_error_denied" = "L’utilisateur a refusé la reconnaissance vocale.";
+"voice_error_restricted" = "La reconnaissance vocale est restreinte sur cet appareil.";
+"voice_error_not_determined" = "L’autorisation vocale n’a pas encore été déterminée.";
+"voice_error_unknown_auth_state" = "État d’autorisation vocale inconnu.";
+"voice_error_unavailable" = "Reconnaissance vocale indisponible.";
+"voice_error_start_failed" = "Échec du démarrage : %@";
+
+/* Tab titles */
+"voice_help_tab_overview" = "Vue d’ensemble";
+"voice_help_tab_passive" = "Passif";
+"voice_help_tab_main" = "Principal";
+
+/* Overview / section headings */
+"voice_help_sections_title" = "Sections";
+"voice_help_categories_title" = "Catégories";
+
+/* Localizable.strings (en) — additions for VoiceCommandHandler */
+
+/* Group titles */
+"voice_group_passive_title" = "Réveil";
+"voice_group_voiceState_title" = "État vocal";
+"voice_group_isoMode_title" = "Rendu iso";
+"voice_group_transferGlobal_title" = "Fonction de transfert – global";
+"voice_group_transferOpacity_title" = "Fonction de transfert – opacité";
+"voice_group_transferChannels_title" = "Fonction de transfert – canaux";
+"voice_group_transferReset_title" = "Fonction de transfert – réinitialisation";
+"voice_group_interaction_title" = "Interaction et clipping";
+"voice_group_global_title" = "Global";
+"voice_group_datasetInfo_title" = "Infos du jeu de données";
+
+/* Group descriptions */
+"voice_group_passive_description" = "Commandes pour réveiller l’assistant depuis la veille.";
+"voice_group_voiceState_description" = "Passer en veille ou désactiver complètement le contrôle vocal.";
+"voice_group_isoMode_description" = "Commandes pour l’isovaleur en mode de rendu iso.";
+"voice_group_transferGlobal_description" = "Activer ou désactiver tous les canaux de couleur ensemble.";
+"voice_group_transferOpacity_description" = "Activer, désactiver ou basculer l’édition de l’opacité.";
+"voice_group_transferChannels_description" = "Contrôler les canaux de couleur individuels (rouge, vert, bleu).";
+"voice_group_transferReset_description" = "Réinitialiser la fonction de transfert à son état par défaut.";
+"voice_group_interaction_description" = "Mode d’interaction, clipping et contrôle de l’éditeur.";
+"voice_group_global_description" = "Réinitialiser l’état global de l’application.";
+"voice_group_datasetInfo_description" = "Demander des informations sur le jeu de données actuellement chargé.";
+
+/* Command descriptions */
+"voice_cmd_passive_wakeup_description" = "Réveiller l’assistant depuis le mode veille/passif.";
+"voice_cmd_voice_standby_description" = "Mettre l’assistant en mode veille/passif.";
+"voice_cmd_iso_reset_iso_description" = "Réinitialiser l’isovaleur en mode de rendu iso.";
+"voice_cmd_tf_color_off_description" = "Désactiver tous les canaux de couleur dans la fonction de transfert.";
+"voice_cmd_tf_color_on_description" = "Activer tous les canaux de couleur dans la fonction de transfert.";
+"voice_cmd_tf_color_toggle_description" = "Basculer tous les canaux de couleur dans la fonction de transfert.";
+"voice_cmd_tf_opacity_off_description" = "Désactiver l’édition de l’opacité dans la fonction de transfert.";
+"voice_cmd_tf_opacity_on_description" = "Activer l’édition de l’opacité dans la fonction de transfert.";
+"voice_cmd_tf_opacity_toggle_description" = "Basculer l’édition de l’opacité dans la fonction de transfert.";
+"voice_cmd_tf_red_off_description" = "Désactiver le canal rouge dans la fonction de transfert.";
+"voice_cmd_tf_green_off_description" = "Désactiver le canal vert dans la fonction de transfert.";
+"voice_cmd_tf_blue_off_description" = "Désactiver le canal bleu dans la fonction de transfert.";
+"voice_cmd_tf_red_on_description" = "Activer le canal rouge dans la fonction de transfert.";
+"voice_cmd_tf_green_on_description" = "Activer le canal vert dans la fonction de transfert.";
+"voice_cmd_tf_blue_on_description" = "Activer le canal bleu dans la fonction de transfert.";
+"voice_cmd_tf_toggle_red_description" = "Basculer le canal rouge dans la fonction de transfert.";
+"voice_cmd_tf_toggle_green_description" = "Basculer le canal vert dans la fonction de transfert.";
+"voice_cmd_tf_toggle_blue_description" = "Basculer le canal bleu dans la fonction de transfert.";
+"voice_cmd_tf_reset_description" = "Réinitialiser la fonction de transfert à sa configuration par défaut.";
+"voice_cmd_interaction_activate_clipping_description" = "Passer le mode d’interaction au clipping.";
+"voice_cmd_interaction_reset_clipping_description" = "Réinitialiser les limites de clipping au volume complet.";
+"voice_cmd_interaction_open_editor_description" = "Ouvrir la fenêtre de l’éditeur actuellement sélectionné.";
+"voice_cmd_interaction_activate_model_description" = "Passer le mode d’interaction à la manipulation du modèle.";
+"voice_cmd_voice_disable_description" = "Arrêter la reconnaissance vocale et désactiver le contrôle vocal.";
+"voice_cmd_global_reset_all_description" = "Réinitialiser toute l’application à son état initial.";
+"voice_cmd_dataset_info_description" = "Décrire le jeu de données actuellement chargé.";
+
+/* Overview text */
+"voice_overview_title" = "Commandes vocales";
+"voice_overview_subtitle" = "Terminez vos phrases par l’une des expressions indiquées.";
+"voice_overview_generalDescription" = "Toutes les commandes sont reconnues par leur phrase finale. Vous pouvez parler naturellement ; tant que votre phrase se termine par l’une des expressions ci-dessous, l’action correspondante sera déclenchée.";
+"voice_overview_passive_title" = "Mode passif";
+"voice_overview_passive_description" = "Ces commandes ne fonctionnent que lorsque l’assistant est en veille.";
+"voice_overview_main_title" = "Commandes principales";
+"voice_overview_main_description" = "Commandes disponibles lorsque l’assistant écoute activement.";
+
+/* Voice feedback: generic state words */
+"voice_state_on" = "activé";
+"voice_state_off" = "désactivé";
+
+/* Voice feedback: simple phrases */
+"voice_speak_wakeup" = "J’écoute";
+"voice_speak_standby" = "En veille";
+"voice_speak_clipping" = "Découpe";
+"voice_speak_model" = "Modèle";
+"voice_speak_voice_off" = "Voix désactivée";
+"voice_speak_reset_all" = "réinitialiser";
+
+/* Voice feedback: formatted phrases */
+"voice_speak_colour_state" = "couleur %@";
+"voice_speak_colour_toggled" = "couleur basculée";
+"voice_speak_red_state" = "rouge %@";
+"voice_speak_green_state" = "vert %@";
+"voice_speak_blue_state" = "bleu %@";
+"voice_speak_opacity_state" = "opacité %@";
+
+/* Dataset description pieces */
+"voice_dataset_component_singular" = "composant";
+"voice_dataset_component_plural" = "composants";
+"voice_dataset_byte_singular" = "octet";
+"voice_dataset_byte_plural" = "octets";
+"voice_dataset_size_cube" = "%d au cube";
+"voice_dataset_size_square_depth" = "%d au carré par %d";
+"voice_dataset_size_generic" = "%d par %d par %d";
+"voice_dataset_full_sentence" = "Vous regardez le jeu de données %@. Sa taille est %@, avec %d %@ de %d %@ par voxel.";
+
+"render_title" = "Options de rendu";
+"render_picker_title" = "Éditeur";
+"renderMode_transferFunction1DLighting" = "Fonction de transfert avec éclairage";
+"renderMode_transferFunction1D" = "Fonction de transfert";
+"renderMode_isoValue" = "Isovaleur";
+"render_button_open_interaction" = "Ouvrir la fenêtre d’interaction";
+"render_button_profiling" = "Options de profilage";
+"render_share_preview_title" = "Collaboration BorgVR en direct";
+"render_button_close_dataset" = "Fermer le jeu de données";
+
+
+/* Legend labels */
+"perf_legend_last" = "Dernière";
+"perf_legend_avg" = "Moyenne";
+"perf_legend_smoothed" = "Lissée";
+"perf_legend_below_drop" = "Sous le seuil de chute";
+"perf_legend_between" = "Entre les deux";
+"perf_legend_above_recovery" = "Au-dessus de la récupération";
+
+/* Toggle labels */
+"perf_toggle_last" = "Dernière";
+"perf_toggle_avg" = "Moyenne";
+"perf_toggle_smoothed" = "Lissée";
+"perf_toggle_grid" = "Grille";
+"perf_toggle_thresholds" = "Seuils";
+"perf_toggle_legend" = "Légende";
+"perf_toggle_zones" = "Zones de performance";
+"perf_toggle_ms" = "Millisecondes";
+
+/* Toggle accessibility labels */
+"perf_toggle_last_accessibility" = "Afficher la courbe de performance de la dernière image";
+"perf_toggle_avg_accessibility" = "Afficher la courbe de performance moyenne";
+"perf_toggle_smoothed_accessibility" = "Afficher la courbe de performance lissée";
+"perf_toggle_grid_accessibility" = "Afficher la grille du graphique de performance";
+"perf_toggle_thresholds_accessibility" = "Afficher les lignes de seuil de performance";
+"perf_toggle_legend_accessibility" = "Afficher la légende du graphique de performance";
+"perf_toggle_zones_accessibility" = "Afficher les zones de performance";
+"perf_toggle_ms_accessibility" = "Afficher les temps d’image en millisecondes";
+
+/* Units */
+"perf_unit_fps" = "fps";
+"perf_unit_ms" = "ms";
+
+/* Tooltip formats (value, unit) */
+"perf_tooltip_last_format" = "Dernière : %.1f %@";
+"perf_tooltip_avg_format" = "Moyenne : %.1f %@";
+"perf_tooltip_smoothed_format" = "Lissée : %.1f %@";
+
+/* Passive wake-up */
+"voice_patterns_passive_wakeup" = "réveille-toi|reprendre";
+"voice_patterns_aliases_passive_wakeup" = "";
+
+/* Voice state: standby / passive mode */
+"voice_patterns_voice_standby" = "veille|pause";
+"voice_patterns_aliases_voice_standby" = "";
+
+/* Iso mode */
+"voice_patterns_iso_reset_iso" = "réinitialiser iso";
+"voice_patterns_aliases_iso_reset_iso" = "";
+
+/* Transfer function – global color */
+"voice_patterns_tf_color_off" = "couleur désactivée|désactiver la couleur";
+"voice_patterns_aliases_tf_color_off" = "couleur désactivée|désactiver la couleur";
+
+"voice_patterns_tf_color_on" = "couleur activée|activer la couleur";
+"voice_patterns_aliases_tf_color_on" = "couleur activée|activer la couleur";
+
+"voice_patterns_tf_color_toggle" = "basculer la couleur";
+"voice_patterns_aliases_tf_color_toggle" = "basculer la couleur";
+
+/* Transfer function – opacity */
+"voice_patterns_tf_opacity_off" = "opacité désactivée|alpha désactivé|désactiver l’opacité";
+"voice_patterns_aliases_tf_opacity_off" = "";
+"voice_patterns_tf_opacity_on" = "opacité activée|alpha activé|activer l’opacité";
+"voice_patterns_aliases_tf_opacity_on" = "";
+"voice_patterns_tf_opacity_toggle" = "basculer l’opacité|basculer alpha";
+"voice_patterns_aliases_tf_opacity_toggle" = "";
+
+/* Transfer function – per-channel */
+"voice_patterns_tf_red_off" = "rouge désactivé|désactiver rouge";
+"voice_patterns_aliases_tf_red_off" = "";
+"voice_patterns_tf_green_off" = "vert désactivé|désactiver vert";
+"voice_patterns_aliases_tf_green_off" = "";
+"voice_patterns_tf_blue_off" = "bleu désactivé|désactiver bleu";
+"voice_patterns_aliases_tf_blue_off" = "";
+
+"voice_patterns_tf_red_on" = "rouge activé|activer rouge";
+"voice_patterns_aliases_tf_red_on" = "";
+"voice_patterns_tf_green_on" = "vert activé|activer vert";
+"voice_patterns_aliases_tf_green_on" = "";
+"voice_patterns_tf_blue_on" = "bleu activé|activer bleu";
+"voice_patterns_aliases_tf_blue_on" = "";
+
+"voice_patterns_tf_toggle_red" = "basculer rouge";
+"voice_patterns_aliases_tf_toggle_red" = "";
+"voice_patterns_tf_toggle_green" = "basculer vert";
+"voice_patterns_aliases_tf_toggle_green" = "";
+"voice_patterns_tf_toggle_blue" = "basculer bleu";
+"voice_patterns_aliases_tf_toggle_blue" = "";
+
+/* Transfer function – reset */
+"voice_patterns_tf_reset" = "réinitialiser la fonction de transfert|réinitialiser tf";
+"voice_patterns_aliases_tf_reset" = "";
+
+/* Interaction / clipping / model / editor */
+"voice_patterns_interaction_activate_clipping" = "activer le clipping|passer au clipping|mode clipping";
+"voice_patterns_aliases_interaction_activate_clipping" = "";
+"voice_patterns_interaction_reset_clipping" = "réinitialiser le clipping|réinitialiser les plans de coupe";
+"voice_patterns_aliases_interaction_reset_clipping" = "";
+"voice_patterns_interaction_open_editor" = "ouvrir l’éditeur|afficher l’éditeur";
+"voice_patterns_aliases_interaction_open_editor" = "";
+"voice_patterns_interaction_activate_model" = "activer le modèle|passer au modèle|mode modèle";
+"voice_patterns_aliases_interaction_activate_model" = "";
+
+/* Voice disable */
+"voice_patterns_voice_disable" = "désactiver la voix|arrêter la voix|arrête d’écouter|fin de la voix|annuler la voix";
+"voice_patterns_aliases_voice_disable" = "";
+
+/* Global reset */
+"voice_patterns_global_reset_all" = "tout réinitialiser|réinitialiser tout";
+"voice_patterns_aliases_global_reset_all" = "";
+
+/* Dataset info */
+"voice_patterns_dataset_info" = "que suis-je en train de voir|quel jeu de données est affiché|décris ce jeu de données";
+"voice_patterns_aliases_dataset_info" = "";
+
+"notfication_dataset_downloaded_title" = "Jeu de données distant complet";
+"notfication_dataset_downloaded_text" = "Le jeu de données a été entièrement téléchargé et est maintenant disponible localement.";
+
+/* Log: min and max values – args: min, max */
+"bricked_log_minmax" = "Valeur min : %d, valeur max : %d";
+
+/* Log: writing metadata */
+"bricked_log_writing_metadata" = "Écriture des métadonnées";
+
+/* Log: reorganization complete */
+"bricked_log_reorganization_complete" = "Réorganisation terminée";
+
+/* Log: file size in bytes – arg: size */
+"bricked_log_file_size" = "Taille du fichier : %d octets";
+
+/* Log: file size unknown – arg: filename */
+"bricked_log_file_size_unknown" = "Impossible de déterminer la taille du fichier : %@";
+
+/* Log: failed to get file size – args: filename, error */
+"bricked_log_file_size_failed" = "Impossible d’obtenir la taille du fichier %@ : %@";
+
+/* Log: start subsampling */
+"bricked_log_subsampling_start" = "Sous-échantillonnage";
+
+/* Log: subsampling progress title */
+"bricked_log_subsampling_progress_title" = "Sous-échantillonnage";
+
+/* Log: bricking level – args: bx, by, bz, total */
+"bricked_log_bricking_level" = "Niveau découpé en %d x %d x %d bricks. Total : %d";
+
+/* Log: bricking progress title */
+"bricked_log_bricking_progress_title" = "Découpage en bricks";
+
+/* Log: compression summary – args: compressed, uncompressed */
+"bricked_log_compression_summary" = "%d brick(s) compressés, %d brick(s) non compressés";
