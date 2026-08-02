@@ -4,10 +4,22 @@ struct TransferFunctionEditorView: View {
   @EnvironmentObject private var appModel: AppModel
   @EnvironmentObject private var renderingParameters: RenderingParameters
   @EnvironmentObject private var sharePlay: SharePlayCoordinator
+  var usesPanelBackground = true
   var onClose: (() -> Void)?
   @State private var lastPaintPoint: CGPoint?
 
+  @ViewBuilder
   var body: some View {
+    if usesPanelBackground {
+      editorContent
+        .padding()
+        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 8))
+    } else {
+      editorContent
+    }
+  }
+
+  private var editorContent: some View {
     VStack(spacing: 10) {
       GeometryReader { geometry in
         Canvas { context, size in
@@ -98,8 +110,6 @@ struct TransferFunctionEditorView: View {
         .accessibilityLabel("Fertig")
       }
     }
-    .padding()
-    .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 8))
   }
 
   private func channelButton(_ title: String, color: Color, isSelected: Bool, action: @escaping () -> Void) -> some View {

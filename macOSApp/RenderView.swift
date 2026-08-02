@@ -51,7 +51,7 @@ struct RenderView: View {
           Spacer()
 
           DockableEditorPanel(panel: .isoEditor, maxWidth: 520) {
-            IsovalueEditorView {
+            IsovalueEditorView(usesPanelBackground: false) {
               docking.hide(.isoEditor)
             }
             .environmentObject(renderingParameters)
@@ -67,7 +67,7 @@ struct RenderView: View {
           Spacer()
 
           DockableEditorPanel(panel: .transferFunctionEditor, maxWidth: 720) {
-            TransferFunctionEditorView {
+            TransferFunctionEditorView(usesPanelBackground: false) {
               docking.hide(.transferFunctionEditor)
             }
             .environmentObject(renderingParameters)

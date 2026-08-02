@@ -200,6 +200,8 @@ struct DockableEditorPanel<Content: View>: View {
       }
       content()
     }
+    .padding(12)
+    .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 8))
     .frame(maxWidth: maxWidth)
   }
 }
@@ -223,7 +225,7 @@ struct DetachedPanelContent: View {
             unavailableEditorMessage
           } else {
             DockableEditorPanel(panel: panel, maxWidth: 720) {
-              TransferFunctionEditorView {
+              TransferFunctionEditorView(usesPanelBackground: false) {
                 docking.close(panel)
               }
             }
@@ -234,7 +236,7 @@ struct DetachedPanelContent: View {
         DetachedDockablePanel(panel: panel, minWidth: 520, minHeight: 150) {
           if renderingParameters.renderMode == .isoValue {
             DockableEditorPanel(panel: panel, maxWidth: 520) {
-              IsovalueEditorView {
+              IsovalueEditorView(usesPanelBackground: false) {
                 docking.close(panel)
               }
             }

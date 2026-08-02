@@ -3,9 +3,21 @@ import SwiftUI
 struct IsovalueEditorView: View {
   @EnvironmentObject private var renderingParameters: RenderingParameters
   @EnvironmentObject private var sharePlay: SharePlayCoordinator
+  var usesPanelBackground = true
   var onClose: (() -> Void)?
 
+  @ViewBuilder
   var body: some View {
+    if usesPanelBackground {
+      editorContent
+        .padding(12)
+        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 8))
+    } else {
+      editorContent
+    }
+  }
+
+  private var editorContent: some View {
     HStack(spacing: 12) {
       Text("Isowert")
         .font(.headline)
@@ -35,7 +47,5 @@ struct IsovalueEditorView: View {
         .buttonStyle(.bordered)
       }
     }
-    .padding(12)
-    .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 8))
   }
 }
