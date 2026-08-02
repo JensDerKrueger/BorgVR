@@ -49,6 +49,7 @@ struct TransferFunctionEditorView: View {
         channelButton(
           "R",
           color: .red,
+          activeForeground: .white,
           help: "tf_editor_red_channel_help",
           isSelected: renderingParameters.transferEditing.red
         ) {
@@ -58,6 +59,7 @@ struct TransferFunctionEditorView: View {
         channelButton(
           "G",
           color: .green,
+          activeForeground: .white,
           help: "tf_editor_green_channel_help",
           isSelected: renderingParameters.transferEditing.green
         ) {
@@ -67,6 +69,7 @@ struct TransferFunctionEditorView: View {
         channelButton(
           "B",
           color: .blue,
+          activeForeground: .white,
           help: "tf_editor_blue_channel_help",
           isSelected: renderingParameters.transferEditing.blue
         ) {
@@ -76,6 +79,7 @@ struct TransferFunctionEditorView: View {
         channelButton(
           "A",
           color: .white,
+          activeForeground: .black,
           help: "tf_editor_alpha_channel_help",
           isSelected: renderingParameters.transferEditing.opacity
         ) {
@@ -138,18 +142,55 @@ struct TransferFunctionEditorView: View {
   private func channelButton(
     _ title: String,
     color: Color,
+    activeForeground: Color,
     help: LocalizedStringKey,
     isSelected: Bool,
     action: @escaping () -> Void
   ) -> some View {
     Button(action: action) {
-      Text(title)
-        .font(.headline)
-        .monospaced()
-        .frame(width: 28, height: 28)
+      ZStack(alignment: .topTrailing) {
+        RoundedRectangle(cornerRadius: 7)
+          .fill(isSelected ? color : Color.secondary.opacity(0.16))
+          .overlay {
+            RoundedRectangle(cornerRadius: 7)
+              .strokeBorder(
+                isSelected ? Color.primary : Color.secondary.opacity(0.5),
+                lineWidth: isSelected ? 2.5 : 1
+              )
+          }
+          .shadow(
+            color: isSelected ? color.opacity(0.45) : .clear,
+            radius: 4,
+            x: 0,
+            y: 0
+          )
+
+        VStack {
+          Spacer()
+          HStack {
+            Text(title)
+              .font(.headline.weight(isSelected ? .black : .semibold))
+              .monospaced()
+              .foregroundStyle(isSelected ? activeForeground : Color.secondary)
+            Spacer()
+          }
+        }
+        .padding(.leading, 7)
+        .padding(.bottom, 3)
+
+        if isSelected {
+          Image(systemName: "checkmark.circle.fill")
+            .font(.system(size: 12, weight: .bold))
+            .symbolRenderingMode(.palette)
+            .foregroundStyle(activeForeground, color)
+            .background(Circle().fill(color))
+            .offset(x: 4, y: -4)
+        }
+      }
+      .frame(width: 34, height: 30)
     }
-    .buttonStyle(.borderedProminent)
-    .tint(isSelected ? color : .gray)
+    .buttonStyle(.plain)
+    .accessibilityAddTraits(isSelected ? .isSelected : [])
     .help(help)
     .accessibilityLabel(help)
   }

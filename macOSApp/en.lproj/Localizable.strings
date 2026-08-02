@@ -399,3 +399,25 @@
 "external_dataset_error_destination" = "The data directory is unavailable.";
 "external_dataset_imported_format" = "Dataset imported: %@";
 "external_dataset_open_failed_format" = "Could not open dataset %@: %@";
+
+/* Screenshots */
+"screenshot_no_dataset" = "No dataset is open; screenshot was not saved.";
+"screenshot_data_directory_unavailable" = "The data folder is unavailable: %@";
+"screenshot_failed_empty" = "Screenshot failed: render target is empty.";
+"screenshot_failed_readback" = "Screenshot failed: render target could not be read.";
+"screenshot_saved_format" = "Screenshot saved: %@";
+"screenshot_failed_format" = "Could not save screenshot: %@";
+"screenshot_error_image_creation" = "Could not create the image.";
+"screenshot_error_destination_creation" = "Could not create the PNG destination.";
+"screenshot_error_write" = "Could not write the PNG file.";
+
+/* Scripting */
+"Script" = "Script";
+"Script ausführen..." = "Run Script...";
+"Script stoppen" = "Stop Script";
+"Kein Script aktiv" = "No script active";
+"Script ausführen" = "Run Script";
+"Wähle ein BorgVR gsc Script." = "Choose a BorgVR gsc script.";
+"Script läuft: %@" = "Script running: %@";
+"Scriptfehler" = "Script error";
+"Renderer ist nicht verfügbar." = "Renderer is not available.";

@@ -47,8 +47,6 @@
 		57A001352E70000300000001 /* TransferFunctionEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001252E70000300000001 /* TransferFunctionEditorView.swift */; };
 		57A001362E70000300000001 /* IsovalueEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001262E70000300000001 /* IsovalueEditorView.swift */; };
 		57A001372E70000300000001 /* VolumeRendererPipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001272E70000300000001 /* VolumeRendererPipeline.swift */; };
-		57A001402E70000300000001 /* DatasetInfoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001282E70000300000001 /* DatasetInfoView.swift */; };
-		57A001422E70000300000001 /* ExternalDatasetImporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001292E70000300000001 /* ExternalDatasetImporter.swift */; };
 		57A001382E70000300000001 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001202E70000300000001 /* AppModel.swift */; };
 		57A001392E70000300000001 /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001212E70000300000001 /* AppSettings.swift */; };
 		57A0013A2E70000300000001 /* RenderingParameters.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001222E70000300000001 /* RenderingParameters.swift */; };
@@ -57,7 +55,9 @@
 		57A0013D2E70000300000001 /* TransferFunctionEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001252E70000300000001 /* TransferFunctionEditorView.swift */; };
 		57A0013E2E70000300000001 /* IsovalueEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001262E70000300000001 /* IsovalueEditorView.swift */; };
 		57A0013F2E70000300000001 /* VolumeRendererPipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001272E70000300000001 /* VolumeRendererPipeline.swift */; };
+		57A001402E70000300000001 /* DatasetInfoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001282E70000300000001 /* DatasetInfoView.swift */; };
 		57A001412E70000300000001 /* DatasetInfoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001282E70000300000001 /* DatasetInfoView.swift */; };
+		57A001422E70000300000001 /* ExternalDatasetImporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001292E70000300000001 /* ExternalDatasetImporter.swift */; };
 		57A001432E70000300000001 /* ExternalDatasetImporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001292E70000300000001 /* ExternalDatasetImporter.swift */; };
 /* End PBXBuildFile section */
 
@@ -118,13 +118,6 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		111111111111111111111206 /* Exceptions for "iOSApp" folder in "iOSApp" target */ = {
-			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-			membershipExceptions = (
-				Info.plist,
-			);
-			target = 111111111111111111111501 /* iOSApp */;
-		};
 		111111111111111111111204 /* Exceptions for "BORGVR-IO" folder in "iOSApp" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
@@ -140,6 +133,13 @@
 				RendererResourceInit.swift,
 				RendererSetup.swift,
 				RendererVariables.swift,
+			);
+			target = 111111111111111111111501 /* iOSApp */;
+		};
+		111111111111111111111206 /* Exceptions for "iOSApp" folder in "iOSApp" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
 			);
 			target = 111111111111111111111501 /* iOSApp */;
 		};

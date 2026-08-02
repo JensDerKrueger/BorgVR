@@ -20,13 +20,31 @@ public class CPUFrameTimer: FrameTimerProtocol {
   public private(set) var minFPS: Double = Double.greatestFiniteMagnitude
   /// The maximum recorded FPS.
   public private(set) var maxFPS: Double = 0
+  /// The number of completed frames seen by the timer.
+  public private(set) var renderedFrameCount: UInt64 = 0
 
   /// The timestamp of the last rendered frame.
   private var lastTimestamp: CFTimeInterval = 0
+  /// The timestamp where the current FPS measurement window started.
+  private var measurementStartTimestamp: CFTimeInterval = 0
   /// A ring buffer storing recent frame timestamps.
   private var frameTimestamps = RingBuffer<CFTimeInterval>()
   /// The maximum duration (in seconds) to keep frame history.
-  private let maxHistoryDuration: CFTimeInterval = 5
+  public var historyDuration: CFTimeInterval = 5 {
+    didSet {
+      historyDuration = max(0.1, historyDuration)
+      purgeOldFrames(currentTime: CACurrentMediaTime())
+    }
+  }
+  /// The elapsed time since the current FPS measurement started.
+  public var measurementDuration: CFTimeInterval {
+    guard measurementStartTimestamp > 0 else { return 0 }
+    return max(0, CACurrentMediaTime() - measurementStartTimestamp)
+  }
+  /// True when enough samples have been collected to cover the configured FPS window.
+  public var hasCompleteMeasurementWindow: Bool {
+    renderedFrameCount > 0 && measurementDuration >= historyDuration
+  }
   /// The smoothing factor used for the exponential moving average.
   private let smoothingFactor: Double = 0.1
   /// Flag indicating whether the exponential moving average has been initialized.
@@ -70,6 +88,7 @@ public class CPUFrameTimer: FrameTimerProtocol {
 
     guard lastTimestamp > 0 else {
       lastTimestamp = now
+      measurementStartTimestamp = now
       return
     }
 
@@ -79,6 +98,7 @@ public class CPUFrameTimer: FrameTimerProtocol {
 
     guard delta > 0 else { return }
 
+    renderedFrameCount += 1
     let fps = 1.0 / delta
     updateStats(now: now, fps: fps)
   }
@@ -173,7 +193,7 @@ public class CPUFrameTimer: FrameTimerProtocol {
    - Parameter currentTime: The current timestamp.
    */
   private func purgeOldFrames(currentTime: CFTimeInterval) {
-    let cutoff = currentTime - maxHistoryDuration
+    let cutoff = currentTime - historyDuration
     frameTimestamps.removeOld(olderThan: cutoff, isOlder: <)
   }
 
@@ -184,12 +204,14 @@ public class CPUFrameTimer: FrameTimerProtocol {
    */
   public func reset() {
     lastTimestamp = 0
+    measurementStartTimestamp = 0
     frameTimestamps.removeAll()
     lastFPS = 0
     smoothedFPS = 0
     averageFPS = 0
     minFPS = Double.greatestFiniteMagnitude
     maxFPS = 0
+    renderedFrameCount = 0
     emaInitialized = false
     state = .normal
 

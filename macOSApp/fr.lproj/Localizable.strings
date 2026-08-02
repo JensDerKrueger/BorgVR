@@ -399,3 +399,25 @@
 "external_dataset_error_destination" = "Le répertoire de données n’est pas disponible.";
 "external_dataset_imported_format" = "Jeu de données importé : %@";
 "external_dataset_open_failed_format" = "Impossible d’ouvrir le jeu de données %@ : %@";
+
+/* Screenshots */
+"screenshot_no_dataset" = "Aucun jeu de données n’est ouvert ; la capture n’a pas été enregistrée.";
+"screenshot_data_directory_unavailable" = "Le dossier de données n’est pas disponible : %@";
+"screenshot_failed_empty" = "Échec de la capture : la cible de rendu est vide.";
+"screenshot_failed_readback" = "Échec de la capture : la cible de rendu n’a pas pu être lue.";
+"screenshot_saved_format" = "Capture enregistrée : %@";
+"screenshot_failed_format" = "Impossible d’enregistrer la capture : %@";
+"screenshot_error_image_creation" = "Impossible de créer l’image.";
+"screenshot_error_destination_creation" = "Impossible de créer la destination PNG.";
+"screenshot_error_write" = "Impossible d’écrire le fichier PNG.";
+
+/* Scripting */
+"Script" = "Script";
+"Script ausführen..." = "Exécuter le script...";
+"Script stoppen" = "Arrêter le script";
+"Kein Script aktiv" = "Aucun script actif";
+"Script ausführen" = "Exécuter le script";
+"Wähle ein BorgVR gsc Script." = "Choisissez un script gsc BorgVR.";
+"Script läuft: %@" = "Script en cours : %@";
+"Scriptfehler" = "Erreur de script";
+"Renderer ist nicht verfügbar." = "Le rendu n’est pas disponible.";

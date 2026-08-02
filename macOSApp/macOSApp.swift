@@ -43,6 +43,7 @@ struct macOSApp: App {
   @StateObject private var serverController = BackgroundServerController()
   @StateObject private var sharePlay = SharePlayCoordinator()
   @StateObject private var docking = DockingController()
+  @StateObject private var scriptRunner = BorgVRScriptRunner()
 
   var body: some Scene {
     WindowGroup("BorgVR macOS") {
@@ -54,12 +55,21 @@ struct macOSApp: App {
         .environmentObject(serverController)
         .environmentObject(sharePlay)
         .environmentObject(docking)
+        .environmentObject(scriptRunner)
         .frame(minWidth: 980, minHeight: 680)
         .task {
           sharePlay.registerGroupActivity()
         }
         .onAppear {
           appModel.setLogLevel(appSettings.logLevel)
+          scriptRunner.configure(
+            appModel: appModel,
+            renderingParameters: renderingParameters,
+            appSettings: appSettings,
+            storedAppModel: storedAppModel,
+            sharePlay: sharePlay,
+            docking: docking
+          )
         }
         .onChange(of: appSettings.logLevel) { _, newValue in
           appModel.setLogLevel(newValue)
@@ -93,6 +103,7 @@ struct macOSApp: App {
         .environmentObject(serverController)
         .environmentObject(sharePlay)
         .environmentObject(docking)
+        .environmentObject(scriptRunner)
     }
     .defaultSize(width: 720, height: 260)
 
@@ -105,6 +116,7 @@ struct macOSApp: App {
         .environmentObject(serverController)
         .environmentObject(sharePlay)
         .environmentObject(docking)
+        .environmentObject(scriptRunner)
     }
     .defaultSize(width: 820, height: 320)
 
@@ -117,8 +129,22 @@ struct macOSApp: App {
         .environmentObject(serverController)
         .environmentObject(sharePlay)
         .environmentObject(docking)
+        .environmentObject(scriptRunner)
     }
     .defaultSize(width: 560, height: 180)
+    .commands {
+      CommandMenu("Script") {
+        Button("Script ausführen...") {
+          scriptRunner.showOpenPanelAndRun()
+        }
+        .keyboardShortcut("r", modifiers: [.command, .shift])
+
+        Button("Script stoppen") {
+          scriptRunner.stopScript()
+        }
+        .disabled(!scriptRunner.isRunning)
+      }
+    }
   }
 
   private func openExternalDataset(_ url: URL) {

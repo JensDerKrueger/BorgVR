@@ -30,19 +30,27 @@ BrickCorners getBrickCorners(uint4 brickCoords, device const LevelData *levelArr
   return c;
 }
 
+float brickAxisExit(float point, float dir, float brickMin, float brickMax,
+                    float cubeMin, float cubeMax) {
+  const float eps = 1e-8;
+  if (abs(dir) < eps) {
+    return INFINITY;
+  }
+
+  float boundary = dir > 0.0 ? min(brickMax, cubeMax) : max(brickMin, cubeMin);
+  return max((boundary - point) / dir, 0.0);
+}
+
 float3 brickExit(float3 pointInBrick, float3 dir, float3 cubeBounds[2],
                  BrickCorners corners) {
-  float3 div = 1.0 / dir;
-  uint3 side = uint3(step(0.0,div));
-  float3 tIntersect;
-
-  tIntersect.x = (corners.values[side.x].x - pointInBrick.x) * div.x;
-  tIntersect.y = (corners.values[side.y].y - pointInBrick.y) * div.y;
-  tIntersect.z = (corners.values[side.z].z - pointInBrick.z) * div.z;
-
-  tIntersect.x = min(tIntersect.x, (cubeBounds[side.x].x - pointInBrick.x) * div.x);
-  tIntersect.y = min(tIntersect.y, (cubeBounds[side.y].y - pointInBrick.y) * div.y);
-  tIntersect.z = min(tIntersect.z, (cubeBounds[side.z].z - pointInBrick.z) * div.z);
+  float3 tIntersect = float3(
+    brickAxisExit(pointInBrick.x, dir.x, corners.values[0].x, corners.values[1].x,
+                  cubeBounds[0].x, cubeBounds[1].x),
+    brickAxisExit(pointInBrick.y, dir.y, corners.values[0].y, corners.values[1].y,
+                  cubeBounds[0].y, cubeBounds[1].y),
+    brickAxisExit(pointInBrick.z, dir.z, corners.values[0].z, corners.values[1].z,
+                  cubeBounds[0].z, cubeBounds[1].z)
+  );
 
   return pointInBrick + min(min(tIntersect.x, tIntersect.y), tIntersect.z) * dir;
 }

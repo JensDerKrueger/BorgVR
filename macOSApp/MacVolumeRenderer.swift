@@ -1,8 +1,10 @@
 import Foundation
+import ImageIO
 import Metal
 import MetalKit
 import simd
 import AppKit
+import UniformTypeIdentifiers
 
 @MainActor
 final class MacVolumeRenderer: NSObject, MTKViewDelegate {
@@ -38,6 +40,9 @@ final class MacVolumeRenderer: NSObject, MTKViewDelegate {
   private let minimumPipelineDrawableWidth: Float = 64
   private let pipelineWidthChangeThreshold: Float = 32
   private var frameInFlight = false
+  private var pendingScreenshotURL: URL?
+  private var pendingScreenshotAccessURL: URL?
+  private var pendingScreenshotCompletion: ((Result<URL, Error>) -> Void)?
 
   init(
     appModel: AppModel,
@@ -80,10 +85,24 @@ final class MacVolumeRenderer: NSObject, MTKViewDelegate {
 
     uniformBufferVertex = try? AlignedBuffer<VertexUniformsArray>(device: view.device!, capacity: 2)
     uniformBufferFragment = try? AlignedBuffer<FragmentUniformsArray>(device: view.device!, capacity: 2)
+
+    appModel.renderScreenshotHandler = { [weak self] url, accessURL, completion in
+      Task { @MainActor in
+        guard let self else {
+          completion(.failure(AppModelError.rendererUnavailable))
+          return
+        }
+        self.saveScreenshot(to: url, accessURL: accessURL, completion: completion)
+      }
+    }
+    appModel.renderDisplaySyncHandler = { [weak self] enabled in
+      self?.setDisplaySyncEnabled(enabled)
+    }
+    setDisplaySyncEnabled(appModel.renderDisplaySyncEnabled)
   }
 
   func updateIfNeeded(for view: MTKView) {
-    let key = appModel.activeDataset.map { "\($0.source)-\($0.identifier)" } ?? ""
+    let key = appModel.activeDatasetRenderKey
     guard key != loadedDatasetKey else { return }
 
     guard !key.isEmpty else {
@@ -95,9 +114,11 @@ final class MacVolumeRenderer: NSObject, MTKViewDelegate {
     do {
       try loadDataset(for: view)
       loadedDatasetKey = key
+      appModel.markRenderedDataset(key: key)
     } catch {
       clearPipelineStates()
       loadedDatasetKey = ""
+      appModel.markRenderedDatasetFailed(key: key)
       appModel.logger.error("Renderer setup failed: \(error.localizedDescription)")
     }
   }
@@ -108,6 +129,62 @@ final class MacVolumeRenderer: NSObject, MTKViewDelegate {
        abs(width - pipelineDrawableWidth) > pipelineWidthChangeThreshold {
       clearPipelineStates()
     }
+  }
+
+  func saveScreenshotToDataDirectory() {
+    saveScreenshot(to: nil, accessURL: nil) { [weak appModel] result in
+      if case let .failure(error) = result {
+        appModel?.logger.error(error.localizedDescription)
+      }
+    }
+  }
+
+  func saveScreenshot(
+    to requestedURL: URL?,
+    accessURL requestedAccessURL: URL?,
+    completion: @escaping (Result<URL, Error>) -> Void
+  ) {
+    guard appModel.activeDataset != nil else {
+      appModel.logger.warning(String(localized: "screenshot_no_dataset"))
+      completion(.failure(ScreenshotError.noDataset))
+      return
+    }
+
+    let accessURL = requestedAccessURL ?? storedAppModel.startAccessingDataDirectory()
+    let screenshotURL: URL
+    if let requestedURL {
+      screenshotURL = requestedURL
+    } else {
+      screenshotURL = uniqueScreenshotURL(in: storedAppModel.resolvedDataDirectoryURL())
+    }
+
+    let directoryURL = screenshotURL.deletingLastPathComponent()
+    do {
+      try FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
+    } catch {
+      storedAppModel.stopAccessingDataDirectory(accessURL)
+      appModel.logger.error(
+        String(
+          format: String(localized: "screenshot_data_directory_unavailable"),
+          error.localizedDescription
+        )
+      )
+      completion(.failure(error))
+      return
+    }
+
+    pendingScreenshotURL = screenshotURL
+    pendingScreenshotAccessURL = accessURL
+    pendingScreenshotCompletion = completion
+    guard let view else {
+      pendingScreenshotURL = nil
+      pendingScreenshotAccessURL = nil
+      pendingScreenshotCompletion = nil
+      storedAppModel.stopAccessingDataDirectory(accessURL)
+      completion(.failure(AppModelError.rendererUnavailable))
+      return
+    }
+    view.draw()
   }
 
   func draw(in view: MTKView) {
@@ -143,7 +220,9 @@ final class MacVolumeRenderer: NSObject, MTKViewDelegate {
       renderEncoder.endEncoding()
       commandBuffer.addCompletedHandler { [weak self] _ in
         Task { @MainActor in
-          self?.frameInFlight = false
+          guard let self else { return }
+          self.frameInFlight = false
+          self.drawNextFrameIfDisplaySyncIsDisabled()
         }
       }
       commandBuffer.present(drawable)
@@ -171,16 +250,38 @@ final class MacVolumeRenderer: NSObject, MTKViewDelegate {
     renderEncoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: vertexCount)
     renderEncoder.endEncoding()
 
+    let screenshotCapture = makeScreenshotCapture(
+      from: drawable.texture,
+      on: commandBuffer
+    )
+
     commandBuffer.addCompletedHandler { [weak self] completedBuffer in
       Task { @MainActor in
         guard let self else { return }
-        self.readBackHashTable(commandBuffer: completedBuffer)
+        let missingBrickCount = self.readBackHashTable(commandBuffer: completedBuffer)
+        self.appModel.recordCompletedRenderFrame(
+          datasetKey: self.loadedDatasetKey,
+          missingBrickCount: missingBrickCount
+        )
+        self.finishScreenshotCapture(screenshotCapture)
         self.timer.frameRendered()
         self.frameInFlight = false
+        self.drawNextFrameIfDisplaySyncIsDisabled()
       }
     }
     commandBuffer.present(drawable)
     commandBuffer.commit()
+  }
+
+  private func setDisplaySyncEnabled(_ enabled: Bool) {
+    guard let view else { return }
+    view.preferredFramesPerSecond = enabled ? 60 : 0
+    (view.layer as? CAMetalLayer)?.displaySyncEnabled = enabled
+  }
+
+  private func drawNextFrameIfDisplaySyncIsDisabled() {
+    guard !appModel.renderDisplaySyncEnabled, let view else { return }
+    view.draw()
   }
 
   private func activePipelineState() -> MTLRenderPipelineState? {
@@ -213,6 +314,8 @@ final class MacVolumeRenderer: NSObject, MTKViewDelegate {
     volumeAtlas = nil
     hashTable = nil
     loadedDatasetKey = ""
+    appModel.markRenderedDataset(key: "")
+    appModel.resetBrickReadbackState()
     clearPipelineStates()
   }
 
@@ -253,6 +356,7 @@ final class MacVolumeRenderer: NSObject, MTKViewDelegate {
     }
 
     dataset = newDataset
+    appModel.resetBrickReadbackState()
     renderingParameters.reset()
     let metadata = newDataset.getMetadata()
     renderingParameters.updateRanges(
@@ -428,10 +532,190 @@ final class MacVolumeRenderer: NSObject, MTKViewDelegate {
     }
   }
 
-  private func readBackHashTable(commandBuffer: MTLCommandBuffer) {
-    guard let hashTable, let volumeAtlas else { return }
+  private func readBackHashTable(commandBuffer: MTLCommandBuffer) -> Int {
+    guard let hashTable, let volumeAtlas else { return 0 }
     let missingBricks = hashTable.getValues(from: commandBuffer)
-    guard !missingBricks.isEmpty else { return }
+    guard !missingBricks.isEmpty else { return 0 }
     try? volumeAtlas.pageIn(IDs: missingBricks.map(Int.init).sorted(by: >))
+    return missingBricks.count
+  }
+
+  private struct ScreenshotCapture {
+    let url: URL
+    let accessURL: URL?
+    let completion: ((Result<URL, Error>) -> Void)?
+    let buffer: MTLBuffer
+    let width: Int
+    let height: Int
+    let bytesPerRow: Int
+  }
+
+  private func makeScreenshotCapture(
+    from texture: MTLTexture,
+    on commandBuffer: MTLCommandBuffer
+  ) -> ScreenshotCapture? {
+    guard let url = pendingScreenshotURL else { return nil }
+    let accessURL = pendingScreenshotAccessURL
+    let completion = pendingScreenshotCompletion
+    pendingScreenshotURL = nil
+    pendingScreenshotAccessURL = nil
+    pendingScreenshotCompletion = nil
+
+    let width = texture.width
+    let height = texture.height
+    guard width > 0, height > 0 else {
+      storedAppModel.stopAccessingDataDirectory(accessURL)
+      appModel.logger.warning(String(localized: "screenshot_failed_empty"))
+      completion?(.failure(ScreenshotError.emptyTexture))
+      return nil
+    }
+
+    let bytesPerPixel = 4
+    let unalignedBytesPerRow = width * bytesPerPixel
+    let bytesPerRow = ((unalignedBytesPerRow + 255) / 256) * 256
+    let byteCount = bytesPerRow * height
+    guard let buffer = device?.makeBuffer(length: byteCount, options: .storageModeShared),
+          let blitEncoder = commandBuffer.makeBlitCommandEncoder() else {
+      storedAppModel.stopAccessingDataDirectory(accessURL)
+      appModel.logger.error(String(localized: "screenshot_failed_readback"))
+      completion?(.failure(ScreenshotError.readbackFailed))
+      return nil
+    }
+
+    blitEncoder.copy(
+      from: texture,
+      sourceSlice: 0,
+      sourceLevel: 0,
+      sourceOrigin: MTLOrigin(x: 0, y: 0, z: 0),
+      sourceSize: MTLSize(width: width, height: height, depth: 1),
+      to: buffer,
+      destinationOffset: 0,
+      destinationBytesPerRow: bytesPerRow,
+      destinationBytesPerImage: byteCount
+    )
+    blitEncoder.endEncoding()
+
+    return ScreenshotCapture(
+      url: url,
+      accessURL: accessURL,
+      completion: completion,
+      buffer: buffer,
+      width: width,
+      height: height,
+      bytesPerRow: bytesPerRow
+    )
+  }
+
+  private func finishScreenshotCapture(_ capture: ScreenshotCapture?) {
+    guard let capture else { return }
+    defer {
+      storedAppModel.stopAccessingDataDirectory(capture.accessURL)
+    }
+
+    do {
+      try writeScreenshot(capture)
+      appModel.logger.info(
+        String(
+          format: String(localized: "screenshot_saved_format"),
+          capture.url.lastPathComponent
+        )
+      )
+      capture.completion?(.success(capture.url))
+    } catch {
+      appModel.logger.error(
+        String(
+          format: String(localized: "screenshot_failed_format"),
+          error.localizedDescription
+        )
+      )
+      capture.completion?(.failure(error))
+    }
+  }
+
+  private func writeScreenshot(_ capture: ScreenshotCapture) throws {
+    let byteCount = capture.bytesPerRow * capture.height
+    let data = Data(bytes: capture.buffer.contents(), count: byteCount)
+    guard let dataProvider = CGDataProvider(data: data as CFData) else {
+      throw ScreenshotError.imageCreationFailed
+    }
+
+    let colorSpace = CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB()
+    let bitmapInfo = CGBitmapInfo.byteOrder32Little.union(
+      CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedFirst.rawValue)
+    )
+
+    guard let image = CGImage(
+      width: capture.width,
+      height: capture.height,
+      bitsPerComponent: 8,
+      bitsPerPixel: 32,
+      bytesPerRow: capture.bytesPerRow,
+      space: colorSpace,
+      bitmapInfo: bitmapInfo,
+      provider: dataProvider,
+      decode: nil,
+      shouldInterpolate: false,
+      intent: .defaultIntent
+    ) else {
+      throw ScreenshotError.imageCreationFailed
+    }
+
+    guard let destination = CGImageDestinationCreateWithURL(
+      capture.url as CFURL,
+      UTType.png.identifier as CFString,
+      1,
+      nil
+    ) else {
+      throw ScreenshotError.destinationCreationFailed
+    }
+
+    CGImageDestinationAddImage(destination, image, nil)
+    guard CGImageDestinationFinalize(destination) else {
+      throw ScreenshotError.writeFailed
+    }
+  }
+
+  private func uniqueScreenshotURL(in directory: URL) -> URL {
+    let formatter = DateFormatter()
+    formatter.locale = Locale(identifier: "en_US_POSIX")
+    formatter.dateFormat = "yyyy-MM-dd_HH-mm-ss"
+    let baseName = "BorgVR-\(formatter.string(from: Date()))"
+    let fileManager = FileManager.default
+
+    var url = directory.appendingPathComponent(baseName).appendingPathExtension("png")
+    var index = 2
+    while fileManager.fileExists(atPath: url.path) {
+      url = directory
+        .appendingPathComponent("\(baseName)-\(index)")
+        .appendingPathExtension("png")
+      index += 1
+    }
+    return url
+  }
+
+  private enum ScreenshotError: LocalizedError {
+    case noDataset
+    case emptyTexture
+    case readbackFailed
+    case imageCreationFailed
+    case destinationCreationFailed
+    case writeFailed
+
+    var errorDescription: String? {
+      switch self {
+        case .noDataset:
+          return String(localized: "screenshot_no_dataset")
+        case .emptyTexture:
+          return String(localized: "screenshot_failed_empty")
+        case .readbackFailed:
+          return String(localized: "screenshot_failed_readback")
+        case .imageCreationFailed:
+          return String(localized: "screenshot_error_image_creation")
+        case .destinationCreationFailed:
+          return String(localized: "screenshot_error_destination_creation")
+        case .writeFailed:
+          return String(localized: "screenshot_error_write")
+      }
+    }
   }
 }

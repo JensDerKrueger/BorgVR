@@ -39,6 +39,7 @@ struct MacMetalView: NSViewRepresentable {
     view.layer?.isOpaque = false
     view.layer?.backgroundColor = NSColor.clear.cgColor
     view.clearColor = MTLClearColor(red: 0, green: 0, blue: 0, alpha: 0)
+    view.framebufferOnly = false
     view.preferredFramesPerSecond = 60
     view.delegate = context.coordinator
     configureInteractionCallbacks(for: view, renderer: context.coordinator)
@@ -61,6 +62,9 @@ struct MacMetalView: NSViewRepresentable {
     view.onMagnificationDelta = onMagnificationDelta
     view.onMagnificationEnded = onMagnificationEnded
     view.onDoubleTap = onDoubleTap
+    view.onScreenshotRequested = {
+      renderer.saveScreenshotToDataDirectory()
+    }
   }
 }
 
@@ -71,6 +75,7 @@ final class InteractiveMTKView: MTKView {
   var onMagnificationDelta: (CGFloat) -> Void = { _ in }
   var onMagnificationEnded: () -> Void = {}
   var onDoubleTap: () -> Void = {}
+  var onScreenshotRequested: () -> Void = {}
 
   private var lastDragLocation: CGPoint?
 
@@ -80,6 +85,14 @@ final class InteractiveMTKView: MTKView {
 
   override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
     true
+  }
+
+  override func viewDidMoveToWindow() {
+    super.viewDidMoveToWindow()
+    DispatchQueue.main.async { [weak self] in
+      guard let self else { return }
+      self.window?.makeFirstResponder(self)
+    }
   }
 
   override func mouseDown(with event: NSEvent) {
@@ -135,6 +148,18 @@ final class InteractiveMTKView: MTKView {
     if event.phase == .ended || event.phase == .cancelled {
       onMagnificationEnded()
     }
+  }
+
+  override func keyDown(with event: NSEvent) {
+    let modifierFlags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+    let commandModifiers: NSEvent.ModifierFlags = [.command, .control, .option]
+    guard modifierFlags.intersection(commandModifiers).isEmpty,
+          event.charactersIgnoringModifiers?.lowercased() == "s" else {
+      super.keyDown(with: event)
+      return
+    }
+
+    onScreenshotRequested()
   }
 
   private func handleMouseDrag(_ event: NSEvent) {

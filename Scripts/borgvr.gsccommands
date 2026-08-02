@@ -1,0 +1,56 @@
+# BorgVR commands for Graphics Script Editor.
+# Types: bool, int, int64, float, double, string, restString.
+# bool accepts: 1/0, true/false, on/off, yes/no.
+
+
+# Logging and output
+logMetalInfo()
+logMetalInfo(bool)
+
+# App and dataset control
+opendataset(string)
+resize(int,int)
+quit()
+
+# Capture and synchronization
+waitframes(int)
+waitloaded()
+waitloaded(int)
+waitidle()
+waitidle(int)
+
+# Rendering state
+reset()
+rendermode(string)
+setmethod(int)
+setbackground(double,double,double,double)
+background(string)
+background(string,double,double,double)
+background(string,double,double,double,double,double,double)
+
+# Transform
+resetrotation()
+addrotationx(float)
+addrotationy(float)
+addrotationz(float)
+settranslation(float,float)
+zoom(float)
+setscale(float)
+
+# Clipping and isovalue
+clip(float,float,float,float,float,float)
+resetclip()
+isovalue(float)
+isovalueNormalized(float)
+
+# Transfer function
+settffile(string)
+loadtf(string)
+savetffile(string)
+savetf(string)
+
+# Performance
+resetfps()
+setfpswindow(double)
+setDisplaySync(bool)
+logfps()

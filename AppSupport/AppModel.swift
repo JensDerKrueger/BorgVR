@@ -22,6 +22,13 @@ enum RenderMode: String, CaseIterable, Identifiable, CustomStringConvertible {
 
 @MainActor
 final class AppModel: ObservableObject {
+  typealias RenderScreenshotHandler = (
+    _ url: URL?,
+    _ accessURL: URL?,
+    _ completion: @escaping (Result<URL, Error>) -> Void
+  ) -> Void
+  typealias RenderDisplaySyncHandler = (_ enabled: Bool) -> Void
+
   enum ContentViewState {
     case start
     case settings
@@ -76,6 +83,16 @@ final class AppModel: ObservableObject {
   @Published var timer: CPUFrameTimer?
   @Published var performanceModel = PerformanceGraphModel()
   let logger = GUILogger()
+  var renderScreenshotHandler: RenderScreenshotHandler?
+  var renderDisplaySyncHandler: RenderDisplaySyncHandler?
+  private(set) var renderDisplaySyncEnabled = true
+  private(set) var brickReadbackCount: UInt64 = 0
+  private(set) var lastMissingBrickCount: Int = 0
+  private(set) var consecutiveEmptyBrickReadbacks: UInt64 = 0
+  private(set) var renderedDatasetKey = ""
+  private(set) var failedRenderedDatasetKey = ""
+  private(set) var completedRenderFrameCount: UInt64 = 0
+  private(set) var lastCompletedFrameDatasetKey = ""
 
   init() {
     logger.setMinimumLogLevel(.warning)
@@ -84,5 +101,79 @@ final class AppModel: ObservableObject {
   func setLogLevel(_ setting: String) {
     let logLevel = AppLogLevel(rawValue: setting) ?? .warning
     logger.setMinimumLogLevel(logLevel.level)
+  }
+
+  func requestRenderScreenshot(
+    to url: URL?,
+    accessURL: URL?,
+    completion: @escaping (Result<URL, Error>) -> Void
+  ) {
+    guard let renderScreenshotHandler else {
+      completion(.failure(AppModelError.rendererUnavailable))
+      return
+    }
+    renderScreenshotHandler(url, accessURL, completion)
+  }
+
+  func setRenderDisplaySyncEnabled(_ enabled: Bool) {
+    renderDisplaySyncEnabled = enabled
+    renderDisplaySyncHandler?(enabled)
+  }
+
+  func datasetRenderKey(for dataset: DatasetEntry?) -> String {
+    dataset.map { "\($0.source)-\($0.identifier)" } ?? ""
+  }
+
+  var activeDatasetRenderKey: String {
+    datasetRenderKey(for: activeDataset)
+  }
+
+  var rendererHasActiveDataset: Bool {
+    !activeDatasetRenderKey.isEmpty && renderedDatasetKey == activeDatasetRenderKey
+  }
+
+  var rendererFailedActiveDataset: Bool {
+    !activeDatasetRenderKey.isEmpty && failedRenderedDatasetKey == activeDatasetRenderKey
+  }
+
+  func markRenderedDataset(key: String) {
+    renderedDatasetKey = key
+    failedRenderedDatasetKey = ""
+  }
+
+  func markRenderedDatasetFailed(key: String) {
+    renderedDatasetKey = ""
+    failedRenderedDatasetKey = key
+  }
+
+  func resetBrickReadbackState() {
+    brickReadbackCount = 0
+    lastMissingBrickCount = 0
+    consecutiveEmptyBrickReadbacks = 0
+    completedRenderFrameCount = 0
+    lastCompletedFrameDatasetKey = ""
+  }
+
+  func recordCompletedRenderFrame(datasetKey: String, missingBrickCount: Int) {
+    completedRenderFrameCount += 1
+    lastCompletedFrameDatasetKey = datasetKey
+    brickReadbackCount += 1
+    lastMissingBrickCount = missingBrickCount
+    if missingBrickCount == 0 {
+      consecutiveEmptyBrickReadbacks += 1
+    } else {
+      consecutiveEmptyBrickReadbacks = 0
+    }
+  }
+}
+
+enum AppModelError: LocalizedError {
+  case rendererUnavailable
+
+  var errorDescription: String? {
+    switch self {
+      case .rendererUnavailable:
+        return String(localized: "Renderer ist nicht verfügbar.")
+    }
   }
 }
