@@ -242,11 +242,7 @@ struct TransferFunctionEditorView: View {
   }
 
   private var transferFunctionFileURL: URL? {
-    guard appModel.activeDataset?.source == .local,
-          let identifier = appModel.activeDataset?.identifier else {
-      return nil
-    }
-    return URL(fileURLWithPath: identifier).deletingPathExtension().appendingPathExtension("tf1d")
+    appModel.transferFunctionFileURL()
   }
 
   private func saveTransferFunction() {

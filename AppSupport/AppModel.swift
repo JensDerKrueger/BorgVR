@@ -120,6 +120,31 @@ final class AppModel: ObservableObject {
     renderDisplaySyncHandler?(enabled)
   }
 
+  func transferFunctionFileURL(for dataset: DatasetEntry? = nil) -> URL? {
+    guard let dataset = dataset ?? activeDataset else { return nil }
+
+    switch dataset.source {
+      case .local:
+        let datasetURL: URL
+        if dataset.identifier.hasPrefix("/") {
+          datasetURL = URL(fileURLWithPath: dataset.identifier)
+        } else if let documentsURL = documentsDirectoryURL() {
+          datasetURL = documentsURL.appendingPathComponent(dataset.identifier)
+        } else {
+          return nil
+        }
+        let localURL = datasetURL.deletingPathExtension().appendingPathExtension("tf1d")
+        movePersistentTransferFunctionIfNeeded(for: dataset, to: localURL)
+        return localURL
+
+      case .builtIn:
+        return persistentTransferFunctionFileURL(for: dataset)
+
+      case .remote:
+        return persistentTransferFunctionFileURL(for: dataset)
+    }
+  }
+
   func datasetRenderKey(for dataset: DatasetEntry?) -> String {
     dataset.map { "\($0.source)-\($0.identifier)" } ?? ""
   }
@@ -164,6 +189,58 @@ final class AppModel: ObservableObject {
     } else {
       consecutiveEmptyBrickReadbacks = 0
     }
+  }
+
+  private func transferFunctionDirectoryURL() -> URL? {
+    guard let documentsURL = documentsDirectoryURL() else { return nil }
+    let directoryURL = documentsURL.appendingPathComponent("TransferFunctions", isDirectory: true)
+    do {
+      try FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
+      return directoryURL
+    } catch {
+      logger.warning("Transfer function directory unavailable: \(error.localizedDescription)")
+      return nil
+    }
+  }
+
+  private func persistentTransferFunctionFileURL(for dataset: DatasetEntry) -> URL? {
+    guard let directoryURL = transferFunctionDirectoryURL() else { return nil }
+    let fallbackName = URL(fileURLWithPath: dataset.identifier).deletingPathExtension().lastPathComponent
+    let stem = sanitizedTransferFunctionFilename(dataset.uniqueId.isEmpty ? fallbackName : dataset.uniqueId)
+    return directoryURL.appendingPathComponent(stem).appendingPathExtension("tf1d")
+  }
+
+  private func movePersistentTransferFunctionIfNeeded(for dataset: DatasetEntry, to localURL: URL) {
+    guard let persistentURL = persistentTransferFunctionFileURL(for: dataset),
+          persistentURL != localURL else {
+      return
+    }
+
+    let fileManager = FileManager.default
+    guard fileManager.fileExists(atPath: persistentURL.path),
+          !fileManager.fileExists(atPath: localURL.path) else {
+      return
+    }
+
+    do {
+      try fileManager.moveItem(at: persistentURL, to: localURL)
+      logger.info("Transfer function migrated to \(localURL.lastPathComponent)")
+    } catch {
+      logger.warning("Transfer function migration failed: \(error.localizedDescription)")
+    }
+  }
+
+  private func documentsDirectoryURL() -> URL? {
+    FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
+  }
+
+  private func sanitizedTransferFunctionFilename(_ filename: String) -> String {
+    let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "._-"))
+    let sanitizedScalars = filename.unicodeScalars.map { scalar in
+      allowed.contains(scalar) ? Character(scalar) : "_"
+    }
+    let sanitized = String(sanitizedScalars).trimmingCharacters(in: CharacterSet(charactersIn: "._-"))
+    return sanitized.isEmpty ? "transfer-function" : sanitized
   }
 }
 

@@ -364,8 +364,7 @@ final class MacVolumeRenderer: NSObject, MTKViewDelegate {
       maxValue: metadata.maxValue,
       rangeMax: metadata.rangeMax
     )
-    if activeDataset.source == .local && appSettings.autoloadTF {
-      let tfURL = URL(fileURLWithPath: activeDataset.identifier).deletingPathExtension().appendingPathExtension("tf1d")
+    if appSettings.autoloadTF, let tfURL = appModel.transferFunctionFileURL(for: activeDataset) {
       try? renderingParameters.transferFunction.load(from: tfURL)
     }
 

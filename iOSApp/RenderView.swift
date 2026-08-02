@@ -382,10 +382,8 @@ struct RenderView: View {
   }
 
   private func closeDataset() {
-    if appModel.activeDataset?.source == .local,
-       let identifier = appModel.activeDataset?.identifier,
-       appSettings.autoloadTF {
-      let fileURL = URL(fileURLWithPath: identifier).deletingPathExtension().appendingPathExtension("tf1d")
+    if appSettings.autoloadTF,
+       let fileURL = appModel.transferFunctionFileURL() {
       try? renderingParameters.transferFunction.save(to: fileURL)
     }
     sharePlay.closeSharedDataset()
