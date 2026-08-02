@@ -370,3 +370,30 @@
 "Datenverzeichnis auswählen" = "Datenverzeichnis auswählen";
 "Panel andocken" = "Panel andocken";
 "Panel abdocken" = "Panel abdocken";
+
+/* Dataset info and tooltips */
+"dataset_info_title" = "Datensatzinfo";
+"dataset_info_button" = "Datensatzinfo";
+"dataset_info_button_help" = "Informationen zum aktuell geöffneten Datensatz anzeigen";
+"dataset_info_name" = "Name";
+"dataset_info_source" = "Quelle";
+"dataset_info_unique_id" = "Eindeutige ID";
+"dataset_info_identifier" = "Datei oder Server-ID";
+"dataset_info_metadata" = "Metadaten";
+"dataset_info_no_metadata" = "Keine Metadaten-Zusammenfassung verfügbar.";
+"dataset_info_unavailable_title" = "Kein Datensatz geöffnet";
+"dataset_info_unavailable_message" = "Öffne zuerst einen Datensatz, um dessen Informationen zu sehen.";
+"dataset_info_empty_value" = "Nicht angegeben";
+"dataset_source_local" = "Lokal";
+"dataset_source_built_in" = "Eingebaut";
+"dataset_source_remote_format" = "Remote (%@:%d)";
+"dataset_open_back_help" = "Zurück zum Startbildschirm";
+"dataset_open_refresh_help" = "Lokale Datensätze erneut lesen und Remote-Server neu abfragen";
+"dataset_open_import_help" = "Einen neuen Datensatz importieren";
+"dataset_open_open_help" = "Den ausgewählten Datensatz öffnen";
+"dataset_open_stop_download_help" = "Den aktuellen Download anhalten und später fortsetzen";
+"dataset_open_select_help" = "Datensatz auswählen; Doppelklick öffnet ihn direkt";
+"tf_editor_red_channel_help" = "Roten Kanal der Transferfunktion bearbeiten";
+"tf_editor_green_channel_help" = "Grünen Kanal der Transferfunktion bearbeiten";
+"tf_editor_blue_channel_help" = "Blauen Kanal der Transferfunktion bearbeiten";
+"tf_editor_alpha_channel_help" = "Alpha-/Opazitätskanal der Transferfunktion bearbeiten";

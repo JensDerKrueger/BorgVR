@@ -366,3 +366,30 @@
 "Datenverzeichnis auswählen" = "Choose data directory";
 "Panel andocken" = "Dock panel";
 "Panel abdocken" = "Detach panel";
+
+/* Dataset info and tooltips */
+"dataset_info_title" = "Dataset Info";
+"dataset_info_button" = "Dataset info";
+"dataset_info_button_help" = "Show information about the currently open dataset";
+"dataset_info_name" = "Name";
+"dataset_info_source" = "Source";
+"dataset_info_unique_id" = "Unique ID";
+"dataset_info_identifier" = "File or server ID";
+"dataset_info_metadata" = "Metadata";
+"dataset_info_no_metadata" = "No metadata summary available.";
+"dataset_info_unavailable_title" = "No Dataset Open";
+"dataset_info_unavailable_message" = "Open a dataset first to see its information.";
+"dataset_info_empty_value" = "Not specified";
+"dataset_source_local" = "Local";
+"dataset_source_built_in" = "Built-in";
+"dataset_source_remote_format" = "Remote (%@:%d)";
+"dataset_open_back_help" = "Return to the start screen";
+"dataset_open_refresh_help" = "Rescan local datasets and query remote servers again";
+"dataset_open_import_help" = "Import a new dataset";
+"dataset_open_open_help" = "Open the selected dataset";
+"dataset_open_stop_download_help" = "Pause the current download and resume it later";
+"dataset_open_select_help" = "Select the dataset; double-click opens it directly";
+"tf_editor_red_channel_help" = "Edit the red transfer-function channel";
+"tf_editor_green_channel_help" = "Edit the green transfer-function channel";
+"tf_editor_blue_channel_help" = "Edit the blue transfer-function channel";
+"tf_editor_alpha_channel_help" = "Edit the alpha/opacity transfer-function channel";

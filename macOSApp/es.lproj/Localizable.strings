@@ -366,3 +366,30 @@
 "Datenverzeichnis auswählen" = "Elegir directorio de datos";
 "Panel andocken" = "Acoplar panel";
 "Panel abdocken" = "Desacoplar panel";
+
+/* Dataset info and tooltips */
+"dataset_info_title" = "Información del conjunto de datos";
+"dataset_info_button" = "Información del conjunto de datos";
+"dataset_info_button_help" = "Mostrar información sobre el conjunto de datos abierto actualmente";
+"dataset_info_name" = "Nombre";
+"dataset_info_source" = "Fuente";
+"dataset_info_unique_id" = "ID única";
+"dataset_info_identifier" = "Archivo o ID del servidor";
+"dataset_info_metadata" = "Metadatos";
+"dataset_info_no_metadata" = "No hay resumen de metadatos disponible.";
+"dataset_info_unavailable_title" = "No hay conjunto de datos abierto";
+"dataset_info_unavailable_message" = "Abre primero un conjunto de datos para ver su información.";
+"dataset_info_empty_value" = "No especificado";
+"dataset_source_local" = "Local";
+"dataset_source_built_in" = "Integrado";
+"dataset_source_remote_format" = "Remoto (%@:%d)";
+"dataset_open_back_help" = "Volver a la pantalla inicial";
+"dataset_open_refresh_help" = "Volver a leer los conjuntos de datos locales y consultar de nuevo los servidores remotos";
+"dataset_open_import_help" = "Importar un nuevo conjunto de datos";
+"dataset_open_open_help" = "Abrir el conjunto de datos seleccionado";
+"dataset_open_stop_download_help" = "Pausar la descarga actual y continuarla más tarde";
+"dataset_open_select_help" = "Seleccionar el conjunto de datos; doble clic para abrirlo directamente";
+"tf_editor_red_channel_help" = "Editar el canal rojo de la función de transferencia";
+"tf_editor_green_channel_help" = "Editar el canal verde de la función de transferencia";
+"tf_editor_blue_channel_help" = "Editar el canal azul de la función de transferencia";
+"tf_editor_alpha_channel_help" = "Editar el canal alfa/opacidad de la función de transferencia";

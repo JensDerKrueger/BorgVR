@@ -366,3 +366,30 @@
 "Datenverzeichnis auswählen" = "Choisir le répertoire de données";
 "Panel andocken" = "Ancrer le panneau";
 "Panel abdocken" = "Détacher le panneau";
+
+/* Dataset info and tooltips */
+"dataset_info_title" = "Informations sur le jeu de données";
+"dataset_info_button" = "Infos du jeu de données";
+"dataset_info_button_help" = "Afficher les informations sur le jeu de données actuellement ouvert";
+"dataset_info_name" = "Nom";
+"dataset_info_source" = "Source";
+"dataset_info_unique_id" = "ID unique";
+"dataset_info_identifier" = "Fichier ou ID serveur";
+"dataset_info_metadata" = "Métadonnées";
+"dataset_info_no_metadata" = "Aucun résumé des métadonnées disponible.";
+"dataset_info_unavailable_title" = "Aucun jeu de données ouvert";
+"dataset_info_unavailable_message" = "Ouvrez d’abord un jeu de données pour afficher ses informations.";
+"dataset_info_empty_value" = "Non indiqué";
+"dataset_source_local" = "Local";
+"dataset_source_built_in" = "Intégré";
+"dataset_source_remote_format" = "Distant (%@:%d)";
+"dataset_open_back_help" = "Revenir à l’écran de démarrage";
+"dataset_open_refresh_help" = "Relire les jeux de données locaux et interroger à nouveau les serveurs distants";
+"dataset_open_import_help" = "Importer un nouveau jeu de données";
+"dataset_open_open_help" = "Ouvrir le jeu de données sélectionné";
+"dataset_open_stop_download_help" = "Mettre en pause le téléchargement actuel et le reprendre plus tard";
+"dataset_open_select_help" = "Sélectionner le jeu de données ; un double-clic l’ouvre directement";
+"tf_editor_red_channel_help" = "Modifier le canal rouge de la fonction de transfert";
+"tf_editor_green_channel_help" = "Modifier le canal vert de la fonction de transfert";
+"tf_editor_blue_channel_help" = "Modifier le canal bleu de la fonction de transfert";
+"tf_editor_alpha_channel_help" = "Modifier le canal alpha/opacité de la fonction de transfert";

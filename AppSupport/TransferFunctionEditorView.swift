@@ -46,19 +46,39 @@ struct TransferFunctionEditorView: View {
       .frame(height: 150)
 
       HStack {
-        channelButton("R", color: .red, isSelected: renderingParameters.transferEditing.red) {
+        channelButton(
+          "R",
+          color: .red,
+          help: "tf_editor_red_channel_help",
+          isSelected: renderingParameters.transferEditing.red
+        ) {
           renderingParameters.transferEditing.red.toggle()
           sharePlay.synchronize(kind: .stateOnly)
         }
-        channelButton("G", color: .green, isSelected: renderingParameters.transferEditing.green) {
+        channelButton(
+          "G",
+          color: .green,
+          help: "tf_editor_green_channel_help",
+          isSelected: renderingParameters.transferEditing.green
+        ) {
           renderingParameters.transferEditing.green.toggle()
           sharePlay.synchronize(kind: .stateOnly)
         }
-        channelButton("B", color: .blue, isSelected: renderingParameters.transferEditing.blue) {
+        channelButton(
+          "B",
+          color: .blue,
+          help: "tf_editor_blue_channel_help",
+          isSelected: renderingParameters.transferEditing.blue
+        ) {
           renderingParameters.transferEditing.blue.toggle()
           sharePlay.synchronize(kind: .stateOnly)
         }
-        channelButton("A", color: .white, isSelected: renderingParameters.transferEditing.opacity) {
+        channelButton(
+          "A",
+          color: .white,
+          help: "tf_editor_alpha_channel_help",
+          isSelected: renderingParameters.transferEditing.opacity
+        ) {
           renderingParameters.transferEditing.opacity.toggle()
           sharePlay.synchronize(kind: .stateOnly)
         }
@@ -115,7 +135,13 @@ struct TransferFunctionEditorView: View {
     }
   }
 
-  private func channelButton(_ title: String, color: Color, isSelected: Bool, action: @escaping () -> Void) -> some View {
+  private func channelButton(
+    _ title: String,
+    color: Color,
+    help: LocalizedStringKey,
+    isSelected: Bool,
+    action: @escaping () -> Void
+  ) -> some View {
     Button(action: action) {
       Text(title)
         .font(.headline)
@@ -124,7 +150,8 @@ struct TransferFunctionEditorView: View {
     }
     .buttonStyle(.borderedProminent)
     .tint(isSelected ? color : .gray)
-    .help(title)
+    .help(help)
+    .accessibilityLabel(help)
   }
 
   private func paint(at point: CGPoint, in size: CGSize) {

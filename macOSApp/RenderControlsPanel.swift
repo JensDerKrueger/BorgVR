@@ -10,6 +10,7 @@ struct RenderControlsPanel: View {
   let isDetachedWindow: Bool
 
   @State private var showLog = false
+  @State private var showDatasetInfo = false
   @State private var selectedInteractionMode: AppModel.InteractionMode = .model
 
   var body: some View {
@@ -45,6 +46,15 @@ struct RenderControlsPanel: View {
         )
         .accessibilityLabel(sharePlay.isInSession ? "SharePlay aktiv" : "SharePlay starten")
         .help(sharePlay.isInSession ? "SharePlay aktiv" : "SharePlay starten")
+        .buttonStyle(.bordered)
+
+        Button {
+          showDatasetInfo.toggle()
+        } label: {
+          Image(systemName: "info.circle")
+        }
+        .accessibilityLabel("dataset_info_button")
+        .help("dataset_info_button_help")
         .buttonStyle(.bordered)
 
         Button {
@@ -126,6 +136,12 @@ struct RenderControlsPanel: View {
     .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 8))
     .sheet(isPresented: $showLog) {
       LoggerView(logger: appModel.logger)
+    }
+    .sheet(isPresented: $showDatasetInfo) {
+      DatasetInfoView(dataset: appModel.activeDataset) {
+        showDatasetInfo = false
+      }
+      .frame(minWidth: 420, minHeight: 360)
     }
   }
 

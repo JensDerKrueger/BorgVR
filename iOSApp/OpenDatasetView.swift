@@ -93,6 +93,7 @@ struct OpenDatasetView: View {
       .toolbar {
         ToolbarItem(placement: .topBarLeading) {
           Button("Zurück") { appModel.currentState = .start }
+            .help("dataset_open_back_help")
         }
         ToolbarItemGroup(placement: .topBarTrailing) {
           Button {
@@ -100,11 +101,13 @@ struct OpenDatasetView: View {
           } label: {
             Label("Aktualisieren", systemImage: "arrow.clockwise")
           }
+          .help("dataset_open_refresh_help")
           Button {
             appModel.currentState = .importData
           } label: {
             Label("Import", systemImage: "square.and.arrow.down")
           }
+          .help("dataset_open_import_help")
         }
         ToolbarItem(placement: .bottomBar) {
           Button {
@@ -115,6 +118,7 @@ struct OpenDatasetView: View {
           }
           .buttonStyle(.borderedProminent)
           .disabled(selectedDataset == nil || isLoading || isOpening)
+          .help("dataset_open_open_help")
         }
       }
       .alert(
@@ -156,6 +160,7 @@ struct OpenDatasetView: View {
           openingTask?.cancel()
         }
         .buttonStyle(.bordered)
+        .help("dataset_open_stop_download_help")
       }
     }
   }
@@ -196,6 +201,7 @@ struct OpenDatasetView: View {
           startOpening(dataset)
         }
       )
+      .help("dataset_open_select_help")
 
       if dataset.source == .local {
         Button(role: .destructive) {
@@ -205,6 +211,7 @@ struct OpenDatasetView: View {
           Image(systemName: "trash")
         }
         .accessibilityLabel("Datensatz löschen")
+        .help("Datensatz löschen")
         .buttonStyle(.borderless)
       }
     }

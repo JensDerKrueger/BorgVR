@@ -10,6 +10,7 @@ struct RenderView: View {
   @State private var showTransferEditor = false
   @State private var showIsoEditor = false
   @State private var showLog = false
+  @State private var showDatasetInfo = false
   @State private var showRenderControls = true
   @State private var previousDragTranslation = CGSize.zero
   @State private var previousMagnification: CGFloat = 1
@@ -72,6 +73,15 @@ struct RenderView: View {
                 ? String(localized: "SharePlay aktiv")
                 : String(localized: "SharePlay starten")
             )
+            .buttonStyle(.bordered)
+
+            Button {
+              showDatasetInfo.toggle()
+            } label: {
+              Image(systemName: "info.circle")
+            }
+            .accessibilityLabel("dataset_info_button")
+            .help("dataset_info_button_help")
             .buttonStyle(.bordered)
 
             Button {
@@ -173,6 +183,11 @@ struct RenderView: View {
     }
     .sheet(isPresented: $showLog) {
       LoggerView(logger: appModel.logger)
+    }
+    .sheet(isPresented: $showDatasetInfo) {
+      DatasetInfoView(dataset: appModel.activeDataset) {
+        showDatasetInfo = false
+      }
     }
   }
 

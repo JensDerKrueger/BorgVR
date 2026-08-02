@@ -47,6 +47,7 @@
 		57A001352E70000300000001 /* TransferFunctionEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001252E70000300000001 /* TransferFunctionEditorView.swift */; };
 		57A001362E70000300000001 /* IsovalueEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001262E70000300000001 /* IsovalueEditorView.swift */; };
 		57A001372E70000300000001 /* VolumeRendererPipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001272E70000300000001 /* VolumeRendererPipeline.swift */; };
+		57A001402E70000300000001 /* DatasetInfoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001282E70000300000001 /* DatasetInfoView.swift */; };
 		57A001382E70000300000001 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001202E70000300000001 /* AppModel.swift */; };
 		57A001392E70000300000001 /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001212E70000300000001 /* AppSettings.swift */; };
 		57A0013A2E70000300000001 /* RenderingParameters.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001222E70000300000001 /* RenderingParameters.swift */; };
@@ -55,6 +56,7 @@
 		57A0013D2E70000300000001 /* TransferFunctionEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001252E70000300000001 /* TransferFunctionEditorView.swift */; };
 		57A0013E2E70000300000001 /* IsovalueEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001262E70000300000001 /* IsovalueEditorView.swift */; };
 		57A0013F2E70000300000001 /* VolumeRendererPipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001272E70000300000001 /* VolumeRendererPipeline.swift */; };
+		57A001412E70000300000001 /* DatasetInfoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001282E70000300000001 /* DatasetInfoView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -109,6 +111,7 @@
 		57A001252E70000300000001 /* TransferFunctionEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransferFunctionEditorView.swift; sourceTree = "<group>"; };
 		57A001262E70000300000001 /* IsovalueEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IsovalueEditorView.swift; sourceTree = "<group>"; };
 		57A001272E70000300000001 /* VolumeRendererPipeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VolumeRendererPipeline.swift; sourceTree = "<group>"; };
+		57A001282E70000300000001 /* DatasetInfoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DatasetInfoView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -390,6 +393,7 @@
 			children = (
 				57A001202E70000300000001 /* AppModel.swift */,
 				57A001212E70000300000001 /* AppSettings.swift */,
+				57A001282E70000300000001 /* DatasetInfoView.swift */,
 				57A000202E70000200000001 /* FilePickerView.swift */,
 				57A000212E70000200000001 /* GPUHashtable.swift */,
 				57A000222E70000200000001 /* GPUHashtable.h */,
@@ -680,6 +684,7 @@
 				57A001332E70000300000001 /* LoggerView.swift in Sources */,
 				57A001342E70000300000001 /* MatrixUtilities.swift in Sources */,
 				57A001322E70000300000001 /* RenderingParameters.swift in Sources */,
+				57A001402E70000300000001 /* DatasetInfoView.swift in Sources */,
 				57A000322E70000200000001 /* RuntimeMetalShaderLoader.swift in Sources */,
 				57A000332E70000200000001 /* TextFileDocument.swift in Sources */,
 				57A001352E70000300000001 /* TransferFunctionEditorView.swift in Sources */,
@@ -705,6 +710,7 @@
 				57A0013B2E70000300000001 /* LoggerView.swift in Sources */,
 				57A0013C2E70000300000001 /* MatrixUtilities.swift in Sources */,
 				57A0013A2E70000300000001 /* RenderingParameters.swift in Sources */,
+				57A001412E70000300000001 /* DatasetInfoView.swift in Sources */,
 				57A000352E70000200000001 /* RuntimeMetalShaderLoader.swift in Sources */,
 				57A000362E70000200000001 /* TextFileDocument.swift in Sources */,
 				57A0013D2E70000300000001 /* TransferFunctionEditorView.swift in Sources */,

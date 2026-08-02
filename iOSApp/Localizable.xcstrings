@@ -4514,114 +4514,394 @@
     },
     "Log-Level": {
       "localizations": {
-        "de": { "stringUnit": { "state": "translated", "value": "Log-Level" } },
-        "en": { "stringUnit": { "state": "translated", "value": "Log level" } },
-        "es": { "stringUnit": { "state": "translated", "value": "Nivel de registro" } },
-        "fr": { "stringUnit": { "state": "translated", "value": "Niveau de journalisation" } }
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Log-Level"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Log level"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nivel de registro"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Niveau de journalisation"
+          }
+        }
       }
     },
     "log_level_dev": {
       "localizations": {
-        "de": { "stringUnit": { "state": "translated", "value": "Entwicklung" } },
-        "en": { "stringUnit": { "state": "translated", "value": "Development" } },
-        "es": { "stringUnit": { "state": "translated", "value": "Desarrollo" } },
-        "fr": { "stringUnit": { "state": "translated", "value": "Développement" } }
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Entwicklung"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Development"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Desarrollo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Développement"
+          }
+        }
       }
     },
     "log_level_error": {
       "localizations": {
-        "de": { "stringUnit": { "state": "translated", "value": "Fehler" } },
-        "en": { "stringUnit": { "state": "translated", "value": "Errors" } },
-        "es": { "stringUnit": { "state": "translated", "value": "Errores" } },
-        "fr": { "stringUnit": { "state": "translated", "value": "Erreurs" } }
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fehler"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Errors"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Errores"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erreurs"
+          }
+        }
       }
     },
     "log_level_info": {
       "localizations": {
-        "de": { "stringUnit": { "state": "translated", "value": "Info" } },
-        "en": { "stringUnit": { "state": "translated", "value": "Info" } },
-        "es": { "stringUnit": { "state": "translated", "value": "Info" } },
-        "fr": { "stringUnit": { "state": "translated", "value": "Info" } }
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Info"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Info"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Info"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Info"
+          }
+        }
       }
     },
     "log_level_progress": {
       "localizations": {
-        "de": { "stringUnit": { "state": "translated", "value": "Fortschritt" } },
-        "en": { "stringUnit": { "state": "translated", "value": "Progress" } },
-        "es": { "stringUnit": { "state": "translated", "value": "Progreso" } },
-        "fr": { "stringUnit": { "state": "translated", "value": "Progression" } }
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fortschritt"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Progress"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Progreso"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Progression"
+          }
+        }
       }
     },
     "log_level_warning": {
       "localizations": {
-        "de": { "stringUnit": { "state": "translated", "value": "Warnungen" } },
-        "en": { "stringUnit": { "state": "translated", "value": "Warnings" } },
-        "es": { "stringUnit": { "state": "translated", "value": "Advertencias" } },
-        "fr": { "stringUnit": { "state": "translated", "value": "Avertissements" } }
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Warnungen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Warnings"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Advertencias"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Avertissements"
+          }
+        }
       }
     },
     "tf_editor_load": {
       "localizations": {
-        "de": { "stringUnit": { "state": "translated", "value": "Transferfunktion laden" } },
-        "en": { "stringUnit": { "state": "translated", "value": "Load transfer function" } },
-        "es": { "stringUnit": { "state": "translated", "value": "Cargar función de transferencia" } },
-        "fr": { "stringUnit": { "state": "translated", "value": "Charger la fonction de transfert" } }
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Transferfunktion laden"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Load transfer function"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cargar función de transferencia"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Charger la fonction de transfert"
+          }
+        }
       }
     },
     "tf_editor_load_help": {
       "localizations": {
-        "de": { "stringUnit": { "state": "translated", "value": "Transferfunktion neben dem aktuellen Datensatz laden" } },
-        "en": { "stringUnit": { "state": "translated", "value": "Load the transfer function next to the current dataset" } },
-        "es": { "stringUnit": { "state": "translated", "value": "Cargar la función de transferencia junto al conjunto de datos actual" } },
-        "fr": { "stringUnit": { "state": "translated", "value": "Charger la fonction de transfert à côté du jeu de données actuel" } }
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Transferfunktion neben dem aktuellen Datensatz laden"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Load the transfer function next to the current dataset"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cargar la función de transferencia junto al conjunto de datos actual"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Charger la fonction de transfert à côté du jeu de données actuel"
+          }
+        }
       }
     },
     "tf_editor_load_failed": {
       "localizations": {
-        "de": { "stringUnit": { "state": "translated", "value": "Transferfunktion konnte nicht geladen werden:" } },
-        "en": { "stringUnit": { "state": "translated", "value": "Could not load transfer function:" } },
-        "es": { "stringUnit": { "state": "translated", "value": "No se pudo cargar la función de transferencia:" } },
-        "fr": { "stringUnit": { "state": "translated", "value": "Impossible de charger la fonction de transfert :" } }
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Transferfunktion konnte nicht geladen werden:"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not load transfer function:"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudo cargar la función de transferencia:"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impossible de charger la fonction de transfert :"
+          }
+        }
       }
     },
     "tf_editor_load_success": {
       "localizations": {
-        "de": { "stringUnit": { "state": "translated", "value": "Transferfunktion geladen:" } },
-        "en": { "stringUnit": { "state": "translated", "value": "Transfer function loaded:" } },
-        "es": { "stringUnit": { "state": "translated", "value": "Función de transferencia cargada:" } },
-        "fr": { "stringUnit": { "state": "translated", "value": "Fonction de transfert chargée :" } }
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Transferfunktion geladen:"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Transfer function loaded:"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Función de transferencia cargada:"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fonction de transfert chargée :"
+          }
+        }
       }
     },
     "tf_editor_save": {
       "localizations": {
-        "de": { "stringUnit": { "state": "translated", "value": "Transferfunktion speichern" } },
-        "en": { "stringUnit": { "state": "translated", "value": "Save transfer function" } },
-        "es": { "stringUnit": { "state": "translated", "value": "Guardar función de transferencia" } },
-        "fr": { "stringUnit": { "state": "translated", "value": "Enregistrer la fonction de transfert" } }
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Transferfunktion speichern"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Save transfer function"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Guardar función de transferencia"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enregistrer la fonction de transfert"
+          }
+        }
       }
     },
     "tf_editor_save_help": {
       "localizations": {
-        "de": { "stringUnit": { "state": "translated", "value": "Transferfunktion neben dem aktuellen Datensatz speichern" } },
-        "en": { "stringUnit": { "state": "translated", "value": "Save the transfer function next to the current dataset" } },
-        "es": { "stringUnit": { "state": "translated", "value": "Guardar la función de transferencia junto al conjunto de datos actual" } },
-        "fr": { "stringUnit": { "state": "translated", "value": "Enregistrer la fonction de transfert à côté du jeu de données actuel" } }
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Transferfunktion neben dem aktuellen Datensatz speichern"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Save the transfer function next to the current dataset"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Guardar la función de transferencia junto al conjunto de datos actual"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enregistrer la fonction de transfert à côté du jeu de données actuel"
+          }
+        }
       }
     },
     "tf_editor_save_failed": {
       "localizations": {
-        "de": { "stringUnit": { "state": "translated", "value": "Transferfunktion konnte nicht gespeichert werden:" } },
-        "en": { "stringUnit": { "state": "translated", "value": "Could not save transfer function:" } },
-        "es": { "stringUnit": { "state": "translated", "value": "No se pudo guardar la función de transferencia:" } },
-        "fr": { "stringUnit": { "state": "translated", "value": "Impossible d’enregistrer la fonction de transfert :" } }
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Transferfunktion konnte nicht gespeichert werden:"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not save transfer function:"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudo guardar la función de transferencia:"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impossible d’enregistrer la fonction de transfert :"
+          }
+        }
       }
     },
     "tf_editor_save_success": {
       "localizations": {
-        "de": { "stringUnit": { "state": "translated", "value": "Transferfunktion gespeichert:" } },
-        "en": { "stringUnit": { "state": "translated", "value": "Transfer function saved:" } },
-        "es": { "stringUnit": { "state": "translated", "value": "Función de transferencia guardada:" } },
-        "fr": { "stringUnit": { "state": "translated", "value": "Fonction de transfert enregistrée :" } }
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Transferfunktion gespeichert:"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Transfer function saved:"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Función de transferencia guardada:"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fonction de transfert enregistrée :"
+          }
+        }
       }
     },
     "Imported with BorgVR Mobile": {
@@ -4648,6 +4928,731 @@
           "stringUnit": {
             "state": "translated",
             "value": "Importé avec BorgVR Mobile"
+          }
+        }
+      }
+    },
+    "dataset_info_title": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Datensatzinfo"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dataset Info"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Información del conjunto de datos"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Informations sur le jeu de données"
+          }
+        }
+      }
+    },
+    "dataset_info_button": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Datensatzinfo"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dataset info"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Información del conjunto de datos"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Infos du jeu de données"
+          }
+        }
+      }
+    },
+    "dataset_info_button_help": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Informationen zum aktuell geöffneten Datensatz anzeigen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show information about the currently open dataset"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mostrar información sobre el conjunto de datos abierto actualmente"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Afficher les informations sur le jeu de données actuellement ouvert"
+          }
+        }
+      }
+    },
+    "dataset_info_name": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Name"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Name"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nombre"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nom"
+          }
+        }
+      }
+    },
+    "dataset_info_source": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quelle"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Source"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fuente"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Source"
+          }
+        }
+      }
+    },
+    "dataset_info_unique_id": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eindeutige ID"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unique ID"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ID única"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ID unique"
+          }
+        }
+      }
+    },
+    "dataset_info_identifier": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Datei oder Server-ID"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "File or server ID"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Archivo o ID del servidor"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fichier ou ID serveur"
+          }
+        }
+      }
+    },
+    "dataset_info_metadata": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Metadaten"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Metadata"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Metadatos"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Métadonnées"
+          }
+        }
+      }
+    },
+    "dataset_info_no_metadata": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keine Metadaten-Zusammenfassung verfügbar."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No metadata summary available."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No hay resumen de metadatos disponible."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aucun résumé des métadonnées disponible."
+          }
+        }
+      }
+    },
+    "dataset_info_unavailable_title": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kein Datensatz geöffnet"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No Dataset Open"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No hay conjunto de datos abierto"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aucun jeu de données ouvert"
+          }
+        }
+      }
+    },
+    "dataset_info_unavailable_message": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Öffne zuerst einen Datensatz, um dessen Informationen zu sehen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open a dataset first to see its information."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abre primero un conjunto de datos para ver su información."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ouvrez d’abord un jeu de données pour afficher ses informations."
+          }
+        }
+      }
+    },
+    "dataset_info_empty_value": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nicht angegeben"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not specified"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No especificado"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Non indiqué"
+          }
+        }
+      }
+    },
+    "dataset_source_local": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lokal"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Local"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Local"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Local"
+          }
+        }
+      }
+    },
+    "dataset_source_built_in": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eingebaut"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Built-in"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Integrado"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Intégré"
+          }
+        }
+      }
+    },
+    "dataset_source_remote_format": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remote (%@:%d)"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remote (%@:%d)"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remoto (%@:%d)"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Distant (%@:%d)"
+          }
+        }
+      }
+    },
+    "dataset_open_back_help": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zurück zum Startbildschirm"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Return to the start screen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Volver a la pantalla inicial"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Revenir à l’écran de démarrage"
+          }
+        }
+      }
+    },
+    "dataset_open_refresh_help": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lokale Datensätze erneut lesen und Remote-Server neu abfragen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rescan local datasets and query remote servers again"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Volver a leer los conjuntos de datos locales y consultar de nuevo los servidores remotos"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Relire les jeux de données locaux et interroger à nouveau les serveurs distants"
+          }
+        }
+      }
+    },
+    "dataset_open_import_help": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Einen neuen Datensatz importieren"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Import a new dataset"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Importar un nuevo conjunto de datos"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Importer un nouveau jeu de données"
+          }
+        }
+      }
+    },
+    "dataset_open_open_help": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Den ausgewählten Datensatz öffnen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open the selected dataset"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abrir el conjunto de datos seleccionado"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ouvrir le jeu de données sélectionné"
+          }
+        }
+      }
+    },
+    "dataset_open_stop_download_help": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Den aktuellen Download anhalten und später fortsetzen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pause the current download and resume it later"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pausar la descarga actual y continuarla más tarde"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mettre en pause le téléchargement actuel et le reprendre plus tard"
+          }
+        }
+      }
+    },
+    "dataset_open_select_help": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Datensatz auswählen; Doppelklick öffnet ihn direkt"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Select the dataset; double-click opens it directly"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seleccionar el conjunto de datos; doble clic para abrirlo directamente"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sélectionner le jeu de données ; un double-clic l’ouvre directement"
+          }
+        }
+      }
+    },
+    "tf_editor_red_channel_help": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Roten Kanal der Transferfunktion bearbeiten"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Edit the red transfer-function channel"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Editar el canal rojo de la función de transferencia"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modifier le canal rouge de la fonction de transfert"
+          }
+        }
+      }
+    },
+    "tf_editor_green_channel_help": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Grünen Kanal der Transferfunktion bearbeiten"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Edit the green transfer-function channel"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Editar el canal verde de la función de transferencia"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modifier le canal vert de la fonction de transfert"
+          }
+        }
+      }
+    },
+    "tf_editor_blue_channel_help": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Blauen Kanal der Transferfunktion bearbeiten"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Edit the blue transfer-function channel"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Editar el canal azul de la función de transferencia"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modifier le canal bleu de la fonction de transfert"
+          }
+        }
+      }
+    },
+    "tf_editor_alpha_channel_help": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alpha-/Opazitätskanal der Transferfunktion bearbeiten"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Edit the alpha/opacity transfer-function channel"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Editar el canal alfa/opacidad de la función de transferencia"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modifier le canal alpha/opacité de la fonction de transfert"
           }
         }
       }
