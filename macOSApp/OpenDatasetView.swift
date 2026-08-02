@@ -42,9 +42,9 @@ struct OpenDatasetView: View {
 
   @State private var datasets: [AppModel.DatasetEntry] = []
   @State private var selectedDatasetKey: String?
-  @State private var isLoading = false
+  @State private var isLoading = true
   @State private var isOpening = false
-  @State private var statusText = ""
+  @State private var statusText = String(localized: "Lokale Datensätze werden gelesen ...")
   @State private var openProgress: Double?
   @State private var openingTask: Task<Void, Never>?
   @State private var downloadCancellation: RemoteDatasetDownloadCancellation?
@@ -56,7 +56,10 @@ struct OpenDatasetView: View {
   var body: some View {
     NavigationStack {
       Group {
-        if datasets.isEmpty && !isLoading {
+        if isLoading && datasets.isEmpty {
+          loadingPanel
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if datasets.isEmpty {
           ContentUnavailableView(
             "Keine Datensätze gefunden",
             systemImage: "externaldrive.badge.questionmark",
@@ -82,25 +85,10 @@ struct OpenDatasetView: View {
         }
       }
       .overlay {
-        if isLoading || isOpening {
-          VStack(spacing: 14) {
-            if let openProgress {
-              ProgressView(value: openProgress)
-            } else {
-              ProgressView()
-            }
-            Text(statusText)
-              .foregroundStyle(.secondary)
-            if openProgress != nil {
-              Button("Jetzt stoppen und später fortsetzen") {
-                downloadCancellation?.cancel()
-                openingTask?.cancel()
-              }
-              .buttonStyle(.bordered)
-            }
-          }
-          .padding(22)
-          .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+        if isOpening || (isLoading && !datasets.isEmpty) {
+          loadingPanel
+            .padding(22)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
         }
       }
       .navigationTitle("Datensatz öffnen")
@@ -122,7 +110,7 @@ struct OpenDatasetView: View {
         }
         ToolbarItem(placement: .confirmationAction) {
           Button {
-            openingTask = Task { await openSelectedDataset() }
+            startOpeningSelectedDataset()
           } label: {
             Label("Öffnen", systemImage: "play.fill")
               .frame(maxWidth: .infinity)
@@ -151,6 +139,25 @@ struct OpenDatasetView: View {
       }
       .task {
         await loadDatasetFiles()
+      }
+    }
+  }
+
+  private var loadingPanel: some View {
+    VStack(spacing: 14) {
+      if let openProgress {
+        ProgressView(value: openProgress)
+      } else {
+        ProgressView()
+      }
+      Text(statusText)
+        .foregroundStyle(.secondary)
+      if openProgress != nil {
+        Button("Jetzt stoppen und später fortsetzen") {
+          downloadCancellation?.cancel()
+          openingTask?.cancel()
+        }
+        .buttonStyle(.bordered)
       }
     }
   }
@@ -186,6 +193,11 @@ struct OpenDatasetView: View {
         .contentShape(Rectangle())
       }
       .buttonStyle(.plain)
+      .simultaneousGesture(
+        TapGesture(count: 2).onEnded {
+          startOpening(dataset)
+        }
+      )
 
       if dataset.source == .local {
         Button(role: .destructive) {
@@ -250,8 +262,19 @@ struct OpenDatasetView: View {
       "\(compressionText) - \(String(localized: "Werte")) \(metadata.minValue)...\(metadata.maxValue)"
   }
 
-  private func openSelectedDataset() async {
-    guard let dataset = selectedDataset else { return }
+  private func startOpeningSelectedDataset() {
+    guard let selectedDataset else { return }
+    startOpening(selectedDataset)
+  }
+
+  private func startOpening(_ dataset: AppModel.DatasetEntry) {
+    guard !isLoading && !isOpening else { return }
+    selectedDatasetKey = dataset.selectionKey
+    openingTask?.cancel()
+    openingTask = Task { await openDatasetEntry(dataset) }
+  }
+
+  private func openDatasetEntry(_ dataset: AppModel.DatasetEntry) async {
     isOpening = true
     statusText = String(localized: "Datensatz wird geöffnet ...")
     defer {
@@ -466,10 +489,12 @@ struct OpenDatasetView: View {
 
   private func loadDatasetFiles() async {
     isLoading = true
-    statusText = "Lokale Datensätze werden gelesen ..."
+    statusText = String(localized: "Lokale Datensätze werden gelesen ...")
+    await Task.yield()
     var loadedDatasets = await loadLocalDatasets()
 
-    statusText = "Remote-Server wird geprüft ..."
+    statusText = String(localized: "Remote-Server wird geprüft ...")
+    await Task.yield()
     loadedDatasets.append(contentsOf: await loadRemoteDatasets())
 
     datasets = loadedDatasets.sorted { $0.description < $1.description }
@@ -539,32 +564,38 @@ struct OpenDatasetView: View {
   }
 
   private func loadRemoteDatasets() async -> [AppModel.DatasetEntry] {
-    var loaded: [AppModel.DatasetEntry] = []
-    for server in appSettings.servers where !server.address.isEmpty {
-      do {
-        let manager = BORGVRRemoteDataManager(
-          host: server.address,
-          port: UInt16(server.port),
-          logger: appModel.logger,
-          notifier: nil
-        )
-        try manager.connect(timeout: appSettings.timeout)
-        for dataset in try manager.requestDatasetList() {
-          loaded.append(
-            AppModel.DatasetEntry(
-              identifier: dataset.id,
-              description: dataset.description,
-              source: .remote(address: server.address, port: server.port),
-              uniqueId: dataset.id,
-              metadataSummary: nil
-            )
+    let servers = appSettings.servers.filter { !$0.address.isEmpty }
+    let timeout = appSettings.timeout
+    let logger = appModel.logger
+
+    return await Task.detached(priority: .userInitiated) {
+      var loaded: [AppModel.DatasetEntry] = []
+      for server in servers {
+        do {
+          let manager = BORGVRRemoteDataManager(
+            host: server.address,
+            port: UInt16(server.port),
+            logger: logger,
+            notifier: nil
           )
+          try manager.connect(timeout: timeout)
+          for dataset in try manager.requestDatasetList() {
+            loaded.append(
+              AppModel.DatasetEntry(
+                identifier: dataset.id,
+                description: dataset.description,
+                source: .remote(address: server.address, port: server.port),
+                uniqueId: dataset.id,
+                metadataSummary: nil
+              )
+            )
+          }
+        } catch {
+          logger.error("Error connecting to remote server \(server.address):\(server.port): \(error.localizedDescription)")
         }
-      } catch {
-        appModel.logger.error("Error connecting to remote server: \(error.localizedDescription)")
       }
-    }
-    return loaded
+      return loaded
+    }.value
   }
 }
 
