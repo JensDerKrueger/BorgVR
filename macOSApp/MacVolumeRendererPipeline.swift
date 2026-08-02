@@ -102,8 +102,8 @@ extension MacVolumeRenderer {
     }
 
     let library = try device.makeLibrary(source: shaderSource, options: compileOptions)
-    guard let vertexFunction = library.makeFunction(name: "macOSVertexShader") else {
-      throw MacVolumeRendererPipelineError.missingShaderFunction("macOSVertexShader", shaderName)
+    guard let vertexFunction = library.makeFunction(name: "volumeVertexShader") else {
+      throw MacVolumeRendererPipelineError.missingShaderFunction("volumeVertexShader", shaderName)
     }
 
     func descriptor(label: String, fragmentName: String) throws -> MTLRenderPipelineDescriptor {
@@ -128,10 +128,10 @@ extension MacVolumeRenderer {
     }
 
     return (
-      try device.makeRenderPipelineState(descriptor: descriptor(label: "macOS TF", fragmentName: "macOSFragmentShaderTF")),
-      try device.makeRenderPipelineState(descriptor: descriptor(label: "macOS TF Lighting", fragmentName: "macOSFragmentShaderTFLighting")),
-      try device.makeRenderPipelineState(descriptor: descriptor(label: "macOS Iso", fragmentName: "macOSFragmentShaderIso")),
-      try device.makeRenderPipelineState(descriptor: descriptor(label: "macOS Brick", fragmentName: "macOSFragmentShaderBrickVis"))
+      try device.makeRenderPipelineState(descriptor: descriptor(label: "macOS TF", fragmentName: "volumeFragmentShaderTF")),
+      try device.makeRenderPipelineState(descriptor: descriptor(label: "macOS TF Lighting", fragmentName: "volumeFragmentShaderTFLighting")),
+      try device.makeRenderPipelineState(descriptor: descriptor(label: "macOS Iso", fragmentName: "volumeFragmentShaderIso")),
+      try device.makeRenderPipelineState(descriptor: descriptor(label: "macOS Brick", fragmentName: "volumeFragmentShaderBrickVis"))
     )
   }
 }

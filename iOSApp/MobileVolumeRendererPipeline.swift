@@ -73,8 +73,8 @@ extension MobileVolumeRenderer {
     }
 
     let library = try device.makeLibrary(source: shaderSource, options: compileOptions)
-    guard let vertexFunction = library.makeFunction(name: "mobileVertexShader") else {
-      throw MobileVolumeRendererPipelineError.missingShaderFunction("mobileVertexShader")
+    guard let vertexFunction = library.makeFunction(name: "volumeVertexShader") else {
+      throw MobileVolumeRendererPipelineError.missingShaderFunction("volumeVertexShader")
     }
 
     func descriptor(label: String, fragmentName: String) throws -> MTLRenderPipelineDescriptor {
@@ -99,10 +99,10 @@ extension MobileVolumeRenderer {
     }
 
     return (
-      try device.makeRenderPipelineState(descriptor: descriptor(label: "Mobile TF", fragmentName: "mobileFragmentShaderTF")),
-      try device.makeRenderPipelineState(descriptor: descriptor(label: "Mobile TF Lighting", fragmentName: "mobileFragmentShaderTFLighting")),
-      try device.makeRenderPipelineState(descriptor: descriptor(label: "Mobile Iso", fragmentName: "mobileFragmentShaderIso")),
-      try device.makeRenderPipelineState(descriptor: descriptor(label: "Mobile Brick", fragmentName: "mobileFragmentShaderBrickVis"))
+      try device.makeRenderPipelineState(descriptor: descriptor(label: "Mobile TF", fragmentName: "volumeFragmentShaderTF")),
+      try device.makeRenderPipelineState(descriptor: descriptor(label: "Mobile TF Lighting", fragmentName: "volumeFragmentShaderTFLighting")),
+      try device.makeRenderPipelineState(descriptor: descriptor(label: "Mobile Iso", fragmentName: "volumeFragmentShaderIso")),
+      try device.makeRenderPipelineState(descriptor: descriptor(label: "Mobile Brick", fragmentName: "volumeFragmentShaderBrickVis"))
     )
   }
 }
