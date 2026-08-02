@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		560B8BE82E5C575A0042E45B /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 560B8BE72E5C57580042E45B /* PrivacyInfo.xcprivacy */; };
+		560C60DA2E91000000000001 /* c60_32.data in Resources */ = {isa = PBXBuildFile; fileRef = 56730FE22E6B78990091976B /* c60_32.data */; };
 		56730FE32E6B78990091976B /* c60_32.data in Resources */ = {isa = PBXBuildFile; fileRef = 56730FE22E6B78990091976B /* c60_32.data */; };
 		56730FE52E6B79000091976B /* head_32.data in Resources */ = {isa = PBXBuildFile; fileRef = 56730FE42E6B79000091976B /* head_32.data */; };
 		57A000302E70000200000001 /* FilePickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A000202E70000200000001 /* FilePickerView.swift */; };
@@ -661,6 +662,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				560C60DA2E91000000000001 /* c60_32.data in Resources */,
 				57A000462E70000200000001 /* RuntimeVolumeShaders.metal in Resources */,
 				57A0004D2E70000200000001 /* VolumeRaycaster.metal in Resources */,
 				57A000482E70000200000001 /* ShaderTypes.h in Resources */,
