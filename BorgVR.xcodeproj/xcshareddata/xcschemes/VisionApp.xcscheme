@@ -16,7 +16,7 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "564183772D649679003A1EC4"
-               BuildableName = "VisionApp.app"
+               BuildableName = "BorgVR.app"
                BlueprintName = "VisionApp"
                ReferencedContainer = "container:BorgVR.xcodeproj">
             </BuildableReference>
@@ -45,7 +45,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "564183772D649679003A1EC4"
-            BuildableName = "VisionApp.app"
+            BuildableName = "BorgVR.app"
             BlueprintName = "VisionApp"
             ReferencedContainer = "container:BorgVR.xcodeproj">
          </BuildableReference>
@@ -62,7 +62,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "564183772D649679003A1EC4"
-            BuildableName = "VisionApp.app"
+            BuildableName = "BorgVR.app"
             BlueprintName = "VisionApp"
             ReferencedContainer = "container:BorgVR.xcodeproj">
          </BuildableReference>
