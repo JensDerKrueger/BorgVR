@@ -35,22 +35,28 @@ final class StoredAppModel : ObservableObject {
   static let defaultDataDirectory: String = FileManager.default.homeDirectoryForCurrentUser.path
   @AppStorage("dataDirectory") var dataDirectory: String = defaultDataDirectory
 
-  func resetToDefaults() {
-    deactivateDataDirectoryAccess()
-
+  func resetImportDefaults() {
     brickSize = StoredAppModel.defaultBrickSize
     brickOverlap = StoredAppModel.defaultBrickOverlap
     enableCompression = StoredAppModel.defaultEnableCompression
+    borderModeString = StoredAppModel.defaultBorderModeString
+  }
+
+  func resetBackgroundServerDefaults() {
+    deactivateDataDirectoryAccess()
     lastMinute = StoredAppModel.defaultLastMinute
     autoStartServer = StoredAppModel.defaultAutoStartServer
-    borderModeString = StoredAppModel.defaultBorderModeString
-
     port = StoredAppModel.defaultPort
     sharePlayServerPort = StoredAppModel.defaultSharePlayServerPort
     maxBricksPerGetRequest = StoredAppModel.defaultMaxBricksPerGetRequest
     dataDirectory = StoredAppModel.defaultDataDirectory
     clearDataDirectoryBookmark()
     lastDataDirectoryAccessError = nil
+  }
+
+  func resetToDefaults() {
+    resetImportDefaults()
+    resetBackgroundServerDefaults()
   }
 
   func setDataDirectoryURL(_ url: URL) {

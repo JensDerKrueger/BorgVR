@@ -1,4 +1,5 @@
 import SwiftUI
+import Foundation
 #if canImport(UIKit)
 import UIKit
 #elseif canImport(AppKit)
@@ -63,6 +64,35 @@ struct StoredServer: Identifiable, Codable, Equatable {
 }
 
 final class AppSettings: ObservableObject {
+  private static let maximum3DTextureDimension = 2048
+#if os(iOS)
+  // iOS can fail to map very large shared 3D texture allocations even on
+  // 64-bit devices. Keep the default/settings cap below that practical limit.
+  private static let maximumSingleAtlasAllocationMB = 2048
+#endif
+
+  static var physicalMemoryMB: Int {
+    Int(ProcessInfo.processInfo.physicalMemory / 1024 / 1024)
+  }
+
+  static var maximumAtlasTextureSizeMB: Int {
+    let dimension = Int64(maximum3DTextureDimension)
+    let bytes = dimension * dimension * dimension
+    return Int(bytes / 1024 / 1024)
+  }
+
+  static var maximumAtlasSizeMB: Int {
+#if os(iOS)
+    max(128, min(physicalMemoryMB, maximumAtlasTextureSizeMB, maximumSingleAtlasAllocationMB))
+#else
+    max(128, min(physicalMemoryMB, maximumAtlasTextureSizeMB))
+#endif
+  }
+
+  static var defaultAtlasSizeMB: Int {
+    max(128, min(physicalMemoryMB / 2, maximumAtlasSizeMB))
+  }
+
   static let values: [String: Any] = [
     "timeout": 2.0,
     "makeLocalCopy": true,
@@ -71,12 +101,12 @@ final class AppSettings: ObservableObject {
     "brickOverlap": 2,
     "enableCompression": true,
     "borderMode": "zeroes",
-    "screenSpaceError": 1.0,
+    "screenSpaceError": 0.25,
     "initialBricks": 4000,
     "minHashTableSize": 16,
     "maxProbingAttempts": 32,
     "maxBricksPerGetRequest": 20,
-    "atlasSizeMB": 1500,
+    "atlasSizeMB": defaultAtlasSizeMB,
     "oversampling": 1.0,
     "oversamplingMode": OversamplingMode.dynamicMode.rawValue,
     "dropFPS": 20,
@@ -170,6 +200,7 @@ final class AppSettings: ObservableObject {
   }
 
   init() {
+    clampAtlasSizeToSupportedRange()
     loadServers()
   }
 
@@ -218,6 +249,78 @@ final class AppSettings: ObservableObject {
     if let data = try? JSONEncoder().encode(servers) {
       serversData = data
     }
+  }
+
+  private func clampAtlasSizeToSupportedRange() {
+    atlasSizeMB = min(max(128, atlasSizeMB), Self.maximumAtlasSizeMB)
+  }
+
+  func resetRenderingDefaults() {
+    autoloadTF = Self.boolDefault("autoloadTF")
+    autoloadTransform = Self.boolDefault("autoloadTransform")
+    oversampling = Self.doubleDefault("oversampling")
+    oversamplingMode = Self.stringDefault("oversamplingMode")
+    atlasSizeMB = Self.intDefault("atlasSizeMB")
+    minHashTableSize = Self.intDefault("minHashTableSize")
+    renderBackgroundMode = Self.stringDefault("renderBackgroundMode")
+    renderBackgroundPrimaryRed = Self.doubleDefault("renderBackgroundPrimaryRed")
+    renderBackgroundPrimaryGreen = Self.doubleDefault("renderBackgroundPrimaryGreen")
+    renderBackgroundPrimaryBlue = Self.doubleDefault("renderBackgroundPrimaryBlue")
+    renderBackgroundPrimaryAlpha = Self.doubleDefault("renderBackgroundPrimaryAlpha")
+    renderBackgroundSecondaryRed = Self.doubleDefault("renderBackgroundSecondaryRed")
+    renderBackgroundSecondaryGreen = Self.doubleDefault("renderBackgroundSecondaryGreen")
+    renderBackgroundSecondaryBlue = Self.doubleDefault("renderBackgroundSecondaryBlue")
+    renderBackgroundSecondaryAlpha = Self.doubleDefault("renderBackgroundSecondaryAlpha")
+    logLevel = Self.stringDefault("logLevel")
+  }
+
+  func resetImportDefaults() {
+    brickSize = Self.intDefault("brickSize")
+    brickOverlap = Self.intDefault("brickOverlap")
+    enableCompression = Self.boolDefault("enableCompression")
+    borderMode = Self.stringDefault("borderMode")
+  }
+
+  func resetRemoteDefaults() {
+    timeout = Self.doubleDefault("timeout")
+    makeLocalCopy = Self.boolDefault("makeLocalCopy")
+    progressiveLoading = Self.boolDefault("progressiveLoading")
+    maxBricksPerGetRequest = Self.intDefault("maxBricksPerGetRequest")
+    sharePlayServerPort = Self.intDefault("sharePlayServerPort")
+    servers = []
+  }
+
+  func resetLODDefaults() {
+    screenSpaceError = Self.doubleDefault("screenSpaceError")
+    initialBricks = Self.intDefault("initialBricks")
+    maxProbingAttempts = Self.intDefault("maxProbingAttempts")
+    dropFPS = Self.intDefault("dropFPS")
+    recoveryFPS = Self.intDefault("recoveryFPS")
+    requestLowResLOD = Self.boolDefault("requestLowResLOD")
+    stopOnMiss = Self.boolDefault("stopOnMiss")
+  }
+
+  func resetToDefaults() {
+    resetRenderingDefaults()
+    resetImportDefaults()
+    resetRemoteDefaults()
+    resetLODDefaults()
+  }
+
+  private static func intDefault(_ key: String) -> Int {
+    values[key] as? Int ?? 0
+  }
+
+  private static func doubleDefault(_ key: String) -> Double {
+    values[key] as? Double ?? 0
+  }
+
+  private static func stringDefault(_ key: String) -> String {
+    values[key] as? String ?? ""
+  }
+
+  private static func boolDefault(_ key: String) -> Bool {
+    values[key] as? Bool ?? false
   }
 
   private func setPrimaryBackgroundColor(_ color: Color) {

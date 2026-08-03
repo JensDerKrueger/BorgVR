@@ -1,5 +1,25 @@
 import SwiftUI
 
+private enum SettingsResetSection: String, Identifiable {
+  case rendering
+  case importSettings
+  case lod
+  case backgroundServer
+  case externalDataSources
+
+  var id: String { rawValue }
+
+  var title: String {
+    switch self {
+      case .rendering: return "Rendering"
+      case .importSettings: return "Import"
+      case .lod: return "LOD"
+      case .backgroundServer: return "Hintergrundserver"
+      case .externalDataSources: return "Externe Datenquellen"
+    }
+  }
+}
+
 struct SettingsView: View {
   @EnvironmentObject private var appModel: AppModel
   @EnvironmentObject private var appSettings: AppSettings
@@ -8,6 +28,7 @@ struct SettingsView: View {
   @State private var serverAddress = ""
   @State private var serverPort = "12345"
   @State private var showDataDirectoryPicker = false
+  @State private var pendingResetSection: SettingsResetSection?
 
   var body: some View {
     Form {
@@ -38,7 +59,7 @@ struct SettingsView: View {
             set: { appSettings.renderBackgroundSecondaryColor = $0 }
           ), supportsOpacity: true)
         }
-        Stepper(value: $appSettings.atlasSizeMB, in: 128...16384, step: 128) {
+        Stepper(value: $appSettings.atlasSizeMB, in: 128...AppSettings.maximumAtlasSizeMB, step: 128) {
           Text("Atlasgröße: \(appSettings.atlasSizeMB) MB")
         }
         Stepper(value: $appSettings.minHashTableSize, in: 1...1024) {
@@ -49,6 +70,7 @@ struct SettingsView: View {
             Text(level.label).tag(level.rawValue)
           }
         }
+        resetButton(for: .rendering)
       }
 
       Section("Import") {
@@ -64,6 +86,30 @@ struct SettingsView: View {
           Text("Rand").tag("border")
           Text("Wiederholen").tag("repeat")
         }
+        resetButton(for: .importSettings)
+      }
+
+      Section("LOD") {
+        Stepper(value: $appSettings.screenSpaceError, in: 0.05...10, step: 0.05) {
+          Text(String(format: "Screen-Space-Pixelfehler: %.2f", appSettings.screenSpaceError))
+        }
+        Stepper(value: $appSettings.initialBricks, in: 0...20000, step: 100) {
+          Text("Initiale Bricks: \(appSettings.initialBricks)")
+        }
+        Stepper(value: $appSettings.maxProbingAttempts, in: 1...512) {
+          Text("Max. Suchversuche: \(appSettings.maxProbingAttempts)")
+        }
+        Toggle("Low-res LOD mit anfordern", isOn: $appSettings.requestLowResLOD)
+        Toggle("Bei fehlendem Brick stoppen", isOn: $appSettings.stopOnMiss)
+        if appSettings.oversamplingMode == OversamplingMode.dynamicMode.rawValue {
+          Stepper(value: $appSettings.dropFPS, in: 1...120) {
+            Text("Drop FPS: \(appSettings.dropFPS)")
+          }
+          Stepper(value: $appSettings.recoveryFPS, in: 1...120) {
+            Text("Recovery FPS: \(appSettings.recoveryFPS)")
+          }
+        }
+        resetButton(for: .lod)
       }
 
       Section("Hintergrundserver") {
@@ -90,6 +136,7 @@ struct SettingsView: View {
         Stepper(value: $storedAppModel.maxBricksPerGetRequest, in: 1...1000) {
           Text("Max. Bricks pro Anfrage: \(storedAppModel.maxBricksPerGetRequest)")
         }
+        resetButton(for: .backgroundServer)
       }
 
       Section("Externe Datenquellen") {
@@ -117,6 +164,7 @@ struct SettingsView: View {
           }
           .help("Server hinzufügen")
         }
+        resetButton(for: .externalDataSources)
       }
     }
     .formStyle(.grouped)
@@ -138,6 +186,33 @@ struct SettingsView: View {
         }
       }
     }
+    .confirmationDialog(
+      resetConfirmationTitle,
+      item: $pendingResetSection,
+      titleVisibility: .visible
+    ) { section in
+      Button("Zurücksetzen", role: .destructive) {
+        resetToDefaults(section)
+      }
+      Button("Abbrechen", role: .cancel) {}
+    } message: { section in
+      Text("Der Abschnitt \(section.title) wird auf seine Standardwerte zurückgesetzt.")
+    }
+  }
+
+  private var resetConfirmationTitle: String {
+    guard let pendingResetSection else {
+      return "Einstellungen zurücksetzen?"
+    }
+    return "\(pendingResetSection.title) zurücksetzen?"
+  }
+
+  private func resetButton(for section: SettingsResetSection) -> some View {
+    Button(role: .destructive) {
+      pendingResetSection = section
+    } label: {
+      Label("\(section.title) zurücksetzen", systemImage: "arrow.counterclockwise")
+    }
   }
 
   private func addRemoteServer() {
@@ -155,5 +230,25 @@ struct SettingsView: View {
       )
     )
     serverAddress = ""
+  }
+
+  private func resetToDefaults(_ section: SettingsResetSection) {
+    switch section {
+      case .rendering:
+        appSettings.resetRenderingDefaults()
+      case .importSettings:
+        appSettings.resetImportDefaults()
+        storedAppModel.resetImportDefaults()
+      case .lod:
+        appSettings.resetLODDefaults()
+      case .backgroundServer:
+        appSettings.sharePlayServerPort = AppSettings.values["sharePlayServerPort"] as? Int ?? 12346
+        appSettings.maxBricksPerGetRequest = AppSettings.values["maxBricksPerGetRequest"] as? Int ?? 20
+        storedAppModel.resetBackgroundServerDefaults()
+      case .externalDataSources:
+        appSettings.servers = []
+        serverAddress = ""
+        serverPort = "12345"
+    }
   }
 }

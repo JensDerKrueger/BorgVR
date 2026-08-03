@@ -185,35 +185,65 @@ class VolumeAtlas {
     )
 
     let metadata = self.borgData.getMetadata()
-    let (width, height, depth, inCoreBrickCount) = VolumeAtlas.computeAtlasSize(
-      maxMemory: maxMemory,
-      maxBrickCount: metadata.brickMetadata.count,
-      brickSize: metadata.brickSize,
-      bytesPerComponent: metadata.bytesPerComponent,
-      componentCount: metadata.componentCount
-    )
-
     let brickSize = metadata.brickSize
-    self.brickStorage = (width / brickSize, height / brickSize, depth / brickSize)
     let pixelFormat = VolumeAtlas.getPixelFormat(
       bytesPerComponent: metadata.bytesPerComponent,
       componentCount: metadata.componentCount
     )
 
-    // Create the 3D texture atlas.
-    let atlasDescriptor = MTLTextureDescriptor()
-    atlasDescriptor.textureType = .type3D
-    atlasDescriptor.pixelFormat = pixelFormat
-    atlasDescriptor.width = width
-    atlasDescriptor.height = height
-    atlasDescriptor.depth = depth
-    atlasDescriptor.usage = [.shaderRead]
-    atlasDescriptor.storageMode = .shared
+    let bytesPerVoxel = metadata.bytesPerComponent * metadata.componentCount
+    let minimumAtlasMemory = max(1, brickSize * brickSize * brickSize * bytesPerVoxel)
+    var atlasBudget = max(maxMemory, minimumAtlasMemory)
+    var atlasLayout: (width: Int, height: Int, depth: Int, inCoreBrickCount: Int)?
+    var createdAtlasTexture: MTLTexture?
 
-    guard let atlasTexture = device.makeTexture(descriptor: atlasDescriptor) else {
+    while atlasBudget >= minimumAtlasMemory {
+      let layout = VolumeAtlas.computeAtlasSize(
+        maxMemory: atlasBudget,
+        maxBrickCount: metadata.brickMetadata.count,
+        brickSize: metadata.brickSize,
+        bytesPerComponent: metadata.bytesPerComponent,
+        componentCount: metadata.componentCount
+      )
+
+      let atlasDescriptor = MTLTextureDescriptor()
+      atlasDescriptor.textureType = .type3D
+      atlasDescriptor.pixelFormat = pixelFormat
+      atlasDescriptor.width = layout.width
+      atlasDescriptor.height = layout.height
+      atlasDescriptor.depth = layout.depth
+      atlasDescriptor.usage = [.shaderRead]
+      atlasDescriptor.storageMode = .shared
+
+      if let atlasTexture = device.makeTexture(descriptor: atlasDescriptor) {
+        atlasLayout = layout
+        createdAtlasTexture = atlasTexture
+        if atlasBudget < maxMemory {
+          logger?.warning(
+            "Atlas allocation fell back from \(maxMemory / 1024 / 1024) MB " +
+            "to \(atlasBudget / 1024 / 1024) MB."
+          )
+        }
+        break
+      }
+
+      let nextBudget = atlasBudget / 2
+      logger?.warning(
+        "Atlas allocation failed for \(atlasBudget / 1024 / 1024) MB; " +
+        "retrying with \(nextBudget / 1024 / 1024) MB."
+      )
+      atlasBudget = nextBudget
+    }
+
+    guard let atlasLayout, let createdAtlasTexture else {
       throw VolumeAtlasError.failedToCreateTexture
     }
-    self.atlasTexture = atlasTexture
+    let width = atlasLayout.width
+    let height = atlasLayout.height
+    let depth = atlasLayout.depth
+    let inCoreBrickCount = atlasLayout.inCoreBrickCount
+    self.brickStorage = (width / brickSize, height / brickSize, depth / brickSize)
+    self.atlasTexture = createdAtlasTexture
 
     // Create metadata buffer.
     let brickCount = metadata.brickMetadata.count

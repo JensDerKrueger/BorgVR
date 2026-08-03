@@ -1,5 +1,23 @@
 import SwiftUI
 
+private enum SettingsResetSection: String, Identifiable {
+  case rendering
+  case importSettings
+  case remoteDatasets
+  case lod
+
+  var id: String { rawValue }
+
+  var title: String {
+    switch self {
+      case .rendering: return String(localized: "Rendering")
+      case .importSettings: return String(localized: "Import")
+      case .remoteDatasets: return String(localized: "Remote-Datensätze")
+      case .lod: return String(localized: "LOD")
+    }
+  }
+}
+
 struct SettingsView: View {
   @EnvironmentObject private var appModel: AppModel
   @EnvironmentObject var appSettings: AppSettings
@@ -9,11 +27,11 @@ struct SettingsView: View {
   @State private var tempTimeout = ""
   @State private var tempBrickSize = ""
   @State private var tempBrickOverlap = ""
-  @State private var tempAtlasSize = ""
   @State private var tempHashSize = ""
   @State private var tempPixelError = ""
   @State private var tempOversampling = ""
   @State private var validationMessage: String?
+  @State private var pendingResetSection: SettingsResetSection?
 
   var body: some View {
     NavigationStack {
@@ -47,8 +65,9 @@ struct SettingsView: View {
           }
           TextField("Oversampling", text: $tempOversampling)
             .keyboardType(.decimalPad)
-          TextField("Atlasgröße (MB)", text: $tempAtlasSize)
-            .keyboardType(.numberPad)
+          Stepper(value: $appSettings.atlasSizeMB, in: 128...AppSettings.maximumAtlasSizeMB, step: 128) {
+            Text(String(format: String(localized: "Atlasgröße: %d MB"), appSettings.atlasSizeMB))
+          }
           TextField("Min. Hash-Table-Größe (MB)", text: $tempHashSize)
             .keyboardType(.numberPad)
           Picker("Log-Level", selection: $appSettings.logLevel) {
@@ -56,6 +75,7 @@ struct SettingsView: View {
               Text(level.label).tag(level.rawValue)
             }
           }
+          resetButton(for: .rendering)
         }
 
         Section("Import") {
@@ -69,6 +89,7 @@ struct SettingsView: View {
             Text("Rand").tag("border")
             Text("Wiederholen").tag("repeat")
           }
+          resetButton(for: .importSettings)
         }
 
         Section("Remote-Datensätze") {
@@ -101,6 +122,7 @@ struct SettingsView: View {
           Stepper(value: $appSettings.sharePlayServerPort, in: 1...65535) {
             Text(String(format: String(localized: "Ad-hoc Dataset-Server-Port: %d"), appSettings.sharePlayServerPort))
           }
+          resetButton(for: .remoteDatasets)
         }
 
         Section("LOD") {
@@ -122,6 +144,7 @@ struct SettingsView: View {
               Text(String(format: String(localized: "Recovery FPS: %d"), appSettings.recoveryFPS))
             }
           }
+          resetButton(for: .lod)
         }
 
         if let validationMessage {
@@ -130,6 +153,7 @@ struct SettingsView: View {
               .foregroundStyle(.red)
           }
         }
+
       }
       .navigationTitle("Einstellungen")
       .toolbar {
@@ -142,6 +166,33 @@ struct SettingsView: View {
       }
       .onAppear(perform: loadTemporaryValues)
       .onDisappear(perform: saveSettings)
+      .confirmationDialog(
+        resetConfirmationTitle,
+        item: $pendingResetSection,
+        titleVisibility: .visible
+      ) { section in
+        Button("Zurücksetzen", role: .destructive) {
+          resetToDefaults(section)
+        }
+        Button("Abbrechen", role: .cancel) {}
+      } message: { section in
+        Text("Der Abschnitt \(section.title) wird auf seine Standardwerte zurückgesetzt.")
+      }
+    }
+  }
+
+  private var resetConfirmationTitle: String {
+    guard let pendingResetSection else {
+      return "Einstellungen zurücksetzen?"
+    }
+    return "\(pendingResetSection.title) zurücksetzen?"
+  }
+
+  private func resetButton(for section: SettingsResetSection) -> some View {
+    Button(role: .destructive) {
+      pendingResetSection = section
+    } label: {
+      Label("\(section.title) zurücksetzen", systemImage: "arrow.counterclockwise")
     }
   }
 
@@ -151,7 +202,6 @@ struct SettingsView: View {
     tempTimeout = String(appSettings.timeout)
     tempBrickSize = String(appSettings.brickSize)
     tempBrickOverlap = String(appSettings.brickOverlap)
-    tempAtlasSize = String(appSettings.atlasSizeMB)
     tempHashSize = String(appSettings.minHashTableSize)
     tempPixelError = String(appSettings.screenSpaceError)
     tempOversampling = String(appSettings.oversampling)
@@ -167,9 +217,6 @@ struct SettingsView: View {
     }
     if let overlap = Int(tempBrickOverlap), overlap >= 1, appSettings.brickSize - overlap * 2 >= 1 {
       appSettings.brickOverlap = overlap
-    }
-    if let atlasSize = Int(tempAtlasSize), atlasSize >= 1 {
-      appSettings.atlasSizeMB = atlasSize
     }
     if let hashSize = Int(tempHashSize), hashSize >= 1 {
       appSettings.minHashTableSize = hashSize
@@ -196,5 +243,22 @@ struct SettingsView: View {
     )
     tempServerAddress = ""
     validationMessage = nil
+  }
+
+  private func resetToDefaults(_ section: SettingsResetSection) {
+    switch section {
+      case .rendering:
+        appSettings.resetRenderingDefaults()
+      case .importSettings:
+        appSettings.resetImportDefaults()
+      case .remoteDatasets:
+        appSettings.resetRemoteDefaults()
+        tempPort = "12345"
+        tempServerAddress = ""
+      case .lod:
+        appSettings.resetLODDefaults()
+    }
+    validationMessage = nil
+    loadTemporaryValues()
   }
 }
