@@ -141,16 +141,7 @@ struct SettingsView: View {
 
       Section("Externe Datenquellen") {
         ForEach(appSettings.servers) { server in
-          HStack {
-            Text("\(server.address):\(server.port)")
-            Spacer()
-            Button(role: .destructive) {
-              appSettings.servers.removeAll { $0.id == server.id }
-            } label: {
-              Image(systemName: "trash")
-            }
-            .help("Server entfernen")
-          }
+          serverRow(for: server)
         }
 
         HStack {
@@ -188,16 +179,30 @@ struct SettingsView: View {
     }
     .confirmationDialog(
       resetConfirmationTitle,
-      item: $pendingResetSection,
+      isPresented: isResetConfirmationPresented,
       titleVisibility: .visible
-    ) { section in
+    ) {
       Button("Zurücksetzen", role: .destructive) {
-        resetToDefaults(section)
+        if let pendingResetSection {
+          resetToDefaults(pendingResetSection)
+        }
+        pendingResetSection = nil
       }
       Button("Abbrechen", role: .cancel) {}
-    } message: { section in
-      Text("Der Abschnitt \(section.title) wird auf seine Standardwerte zurückgesetzt.")
+    } message: {
+      Text(resetConfirmationMessage)
     }
+  }
+
+  private var isResetConfirmationPresented: Binding<Bool> {
+    Binding(
+      get: { pendingResetSection != nil },
+      set: { isPresented in
+        if !isPresented {
+          pendingResetSection = nil
+        }
+      }
+    )
   }
 
   private var resetConfirmationTitle: String {
@@ -205,6 +210,13 @@ struct SettingsView: View {
       return "Einstellungen zurücksetzen?"
     }
     return "\(pendingResetSection.title) zurücksetzen?"
+  }
+
+  private var resetConfirmationMessage: String {
+    guard let pendingResetSection else {
+      return "Der Abschnitt wird auf seine Standardwerte zurückgesetzt."
+    }
+    return "Der Abschnitt \(pendingResetSection.title) wird auf seine Standardwerte zurückgesetzt."
   }
 
   private func resetButton(for section: SettingsResetSection) -> some View {
@@ -230,6 +242,27 @@ struct SettingsView: View {
       )
     )
     serverAddress = ""
+  }
+
+  private func serverRow(for server: StoredServer) -> some View {
+    HStack {
+      Text(serverLabel(for: server))
+      Spacer()
+      Button(role: .destructive) {
+        removeRemoteServer(server)
+      } label: {
+        Image(systemName: "trash")
+      }
+      .help("Server entfernen")
+    }
+  }
+
+  private func serverLabel(for server: StoredServer) -> String {
+    "\(server.address):\(server.port)"
+  }
+
+  private func removeRemoteServer(_ server: StoredServer) {
+    appSettings.servers.removeAll { $0.id == server.id }
   }
 
   private func resetToDefaults(_ section: SettingsResetSection) {

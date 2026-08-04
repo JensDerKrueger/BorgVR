@@ -89,19 +89,23 @@ extension Renderer {
                               isHost:Bool,
                               logger: LoggerBase? = nil) {
     Task(executorPreference: RendererTaskExecutor.shared) {
-      let renderer = try Renderer(
-        layerRenderer,
-        runtimeAppModel: runtimeAppModel,
-        storedAppModel: storedAppModel,
-        sharedAppModel: sharedAppModel,
-        timer: timer,
-        dataset: dataset,
-        isHost: isHost,
-        logger: logger
-      )
+      do {
+        let renderer = try Renderer(
+          layerRenderer,
+          runtimeAppModel: runtimeAppModel,
+          storedAppModel: storedAppModel,
+          sharedAppModel: sharedAppModel,
+          timer: timer,
+          dataset: dataset,
+          isHost: isHost,
+          logger: logger
+        )
 
-      await renderer.initRenderLoop()
-      await renderer.renderLoop()
+        await renderer.initRenderLoop()
+        await renderer.renderLoop()
+      } catch {
+        logger?.error("Failed to start render loop: \(error)")
+      }
     }
   }
 }
