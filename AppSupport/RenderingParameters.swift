@@ -52,7 +52,7 @@ final class RenderingParameters: ObservableObject {
     clippingTranslation = SIMD3<Float>(0, 0, 0)
     clipMin = SIMD3<Float>(0, 0, 0)
     clipMax = SIMD3<Float>(1, 1, 1)
-    transferFunction.slicingPreset()
+    transferFunction.reset()
     transferEditing = TransferEditing()
     normIsoValue = 0.1
     renderMode = .transferFunction1D
