@@ -154,12 +154,17 @@ final class InteractiveMTKView: MTKView {
     let modifierFlags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
     let commandModifiers: NSEvent.ModifierFlags = [.command, .control, .option]
     guard modifierFlags.intersection(commandModifiers).isEmpty,
-          event.charactersIgnoringModifiers?.lowercased() == "s" else {
+          let key = event.charactersIgnoringModifiers?.lowercased() else {
       super.keyDown(with: event)
       return
     }
 
-    onScreenshotRequested()
+    switch key {
+      case "s":
+        onScreenshotRequested()
+      default:
+        super.keyDown(with: event)
+    }
   }
 
   private func handleMouseDrag(_ event: NSEvent) {

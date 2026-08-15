@@ -105,20 +105,16 @@ fragment half4 VOLUME_FRAGMENT_SHADER_TF_NAME(
                                 ) {
   FragmentUniforms uniforms = uniformsArray.uniforms[VOLUME_SHADER_UNIFORM_INDEX];
   constexpr sampler s(address::clamp_to_border, filter::linear);
-  float3 stepEpsilon = 0.125 / POOL_SIZE;
 
   // Compute ray entry and exit in texture space
   float3 exitPoint  = in.exitPoint;
   float3 entryPoint = computeEntryPoint(uniforms.cameraPosInTextureSpace, exitPoint, uniforms);
 
-  // Adjust entry point to avoid self-intersection
-  float3 direction = normalize(exitPoint - entryPoint);
-  entryPoint += direction * stepEpsilon;
-  direction = exitPoint - entryPoint;
+  float3 direction = exitPoint - entryPoint;
   float rayLength = length(direction);
 
   // If ray is too short, return transparent
-  if (rayLength < length(stepEpsilon)) return half4(0);
+  if (rayLength < 1e-6) return half4(0);
 
   // Compute distances for LOD selection
   float entryDepth = length(uniforms.cameraPosInTextureSpaceVoxelScaled - entryPoint);
@@ -178,7 +174,7 @@ fragment half4 VOLUME_FRAGMENT_SHADER_TF_NAME(
     }
 
     // Advance to the next brick
-    currentPos = brickResult.normExitCoords + (stepEpsilon * direction / rayLength);
+    currentPos = brickResult.normExitCoords;
     t = length(entryPoint - currentPos) / rayLength;
 
     // Safety cap to prevent infinite loops
@@ -214,20 +210,16 @@ fragment half4 VOLUME_FRAGMENT_SHADER_TF_LIGHTING_NAME(
                                 ) {
   FragmentUniforms uniforms = uniformsArray.uniforms[VOLUME_SHADER_UNIFORM_INDEX];
   constexpr sampler s(address::clamp_to_border, filter::linear);
-  float3 stepEpsilon = 0.125 / POOL_SIZE;
 
   // Compute ray entry and exit in texture space
   float3 exitPoint  = in.exitPoint;
   float3 entryPoint = computeEntryPoint(uniforms.cameraPosInTextureSpace, exitPoint, uniforms);
 
-  // Adjust entry point to avoid self-intersection
-  float3 direction = normalize(exitPoint - entryPoint);
-  entryPoint += direction * stepEpsilon;
-  direction = exitPoint - entryPoint;
+  float3 direction = exitPoint - entryPoint;
   float rayLength = length(direction);
 
   // If ray is too short, return transparent
-  if (rayLength < length(stepEpsilon)) return half4(0);
+  if (rayLength < 1e-6) return half4(0);
 
   // Compute distances for LOD selection
   float entryDepth = length(uniforms.cameraPosInTextureSpaceVoxelScaled - entryPoint);
@@ -270,6 +262,11 @@ fragment half4 VOLUME_FRAGMENT_SHADER_TF_LIGHTING_NAME(
       // Sample along the ray segment in this brick
       for (int i = 0; i < iSteps; ++i) {
         float sampleT = (float(i) + 0.5) / float(iSteps);
+        float3 sampleNormCoords = mix(
+                                      currentPos,
+                                      brickResult.normExitCoords,
+                                      sampleT
+                                      );
         float3 poolCoords = mix(
                                 brickResult.poolBrickInfo.poolEntryCoords,
                                 brickResult.poolBrickInfo.poolExitCoords,
@@ -288,7 +285,7 @@ fragment half4 VOLUME_FRAGMENT_SHADER_TF_LIGHTING_NAME(
                                         s
                                         );
 
-          half3 posInView    = half3((uniforms.modelView * float4((currentPos - 0.5),1)).xyz);
+          half3 posInView    = half3((uniforms.modelView * float4((sampleNormCoords - 0.5),1)).xyz);
           half3 normalInView = half3(normalize((uniforms.modelViewIT * float4(normal,0)).xyz));
           current.rgb += float3(lighting(posInView, normalInView, half3(current.rgb)));
         }
@@ -297,13 +294,12 @@ fragment half4 VOLUME_FRAGMENT_SHADER_TF_LIGHTING_NAME(
 
         // Early ray termination on high opacity
         if (accColor.a > 0.99) return half4(accColor);
-        poolCoords += voxelSpaceDirection;
       }
     }
 
     // Advance to the next brick
-    currentPos = brickResult.normExitCoords + (stepEpsilon * direction / rayLength);
-    t = length(entryPoint - brickResult.normExitCoords) / rayLength;
+    currentPos = brickResult.normExitCoords;
+    t = length(entryPoint - currentPos) / rayLength;
 
     // Safety cap to prevent infinite loops
     brickCount++;
@@ -331,17 +327,14 @@ fragment half4 VOLUME_FRAGMENT_SHADER_ISO_NAME(
                                  ) {
   FragmentUniforms uniforms = uniformsArray.uniforms[VOLUME_SHADER_UNIFORM_INDEX];
   constexpr sampler s(address::clamp_to_border, filter::linear);
-  float3 stepEpsilon = 0.125 / POOL_SIZE;
 
   float3 exitPoint  = in.exitPoint;
   float3 entryPoint = computeEntryPoint(uniforms.cameraPosInTextureSpace, exitPoint, uniforms);
 
-  float3 direction = normalize(exitPoint - entryPoint);
-  entryPoint += direction * stepEpsilon;
-  direction = exitPoint - entryPoint;
+  float3 direction = exitPoint - entryPoint;
   float rayLength = length(direction);
 
-  if (rayLength < length(stepEpsilon)) return half4(0);
+  if (rayLength < 1e-6) return half4(0);
 
   float entryDepth = length(uniforms.cameraPosInTextureSpaceVoxelScaled - entryPoint);
   float exitDepth  = length(uniforms.cameraPosInTextureSpaceVoxelScaled - exitPoint);
@@ -374,10 +367,16 @@ fragment half4 VOLUME_FRAGMENT_SHADER_ISO_NAME(
                             ));
       iSteps = min(int(2*BRICK_SIZE*uniforms.oversampling),iSteps);
       for (int i = 0; i < iSteps; ++i) {
+        float sampleT = i / float(iSteps);
+        float3 sampleNormCoords = mix(
+                                      currentPos,
+                                      brickResult.normExitCoords,
+                                      sampleT
+                                      );
         float3 poolCoords = mix(
                                 brickResult.poolBrickInfo.poolEntryCoords,
                                 brickResult.poolBrickInfo.poolExitCoords,
-                                i / float(iSteps)
+                                sampleT
                                 );
         float value = volumeAtlas.sample(s, poolCoords).r;
         if (value >= uniforms.isoValue) {
@@ -394,7 +393,7 @@ fragment half4 VOLUME_FRAGMENT_SHADER_ISO_NAME(
                                         volumeAtlas,
                                         s
                                         );
-          half3 posInView    = half3((uniforms.modelView * float4((currentPos - 0.5),1)).xyz);
+          half3 posInView    = half3((uniforms.modelView * float4((sampleNormCoords - 0.5),1)).xyz);
           half3 normalInView = half3(normalize((uniforms.modelViewIT * float4(normal,0)).xyz));
           half3 color = lighting(posInView, normalInView, half3(0.5,0.5,0.5));
           return half4(color, 1);
@@ -402,7 +401,7 @@ fragment half4 VOLUME_FRAGMENT_SHADER_ISO_NAME(
       }
     }
 
-    currentPos = brickResult.normExitCoords + (stepEpsilon * direction / rayLength);
+    currentPos = brickResult.normExitCoords;
     t = length(entryPoint - brickResult.normExitCoords) / rayLength;
 
     // Safety cap to prevent infinite loops
@@ -429,17 +428,14 @@ fragment half4 VOLUME_FRAGMENT_SHADER_BRICK_VIS_NAME(
                                       device atomic_uint* hashBuffer                    [[buffer(FragmentBufferIndexHashTable)]]
                                       ) {
   FragmentUniforms uniforms = uniformsArray.uniforms[VOLUME_SHADER_UNIFORM_INDEX];
-  float3 stepEpsilon = 0.125 / POOL_SIZE;
 
   float3 exitPoint  = in.exitPoint;
   float3 entryPoint = computeEntryPoint(uniforms.cameraPosInTextureSpace, exitPoint, uniforms);
 
-  float3 direction = normalize(exitPoint - entryPoint);
-  entryPoint += direction * stepEpsilon;
-  direction = exitPoint - entryPoint;
+  float3 direction = exitPoint - entryPoint;
   float rayLength = length(direction);
 
-  if (rayLength < length(stepEpsilon)) return half4(0);
+  if (rayLength < 1e-6) return half4(0);
 
   float entryDepth = length(uniforms.cameraPosInTextureSpaceVoxelScaled - entryPoint);
   float exitDepth  = length(uniforms.cameraPosInTextureSpaceVoxelScaled - exitPoint);
@@ -467,7 +463,7 @@ fragment half4 VOLUME_FRAGMENT_SHADER_BRICK_VIS_NAME(
       accColor += half4(0.1, 0, 0, 0.1);
     }
 
-    currentPos = brickResult.normExitCoords + (stepEpsilon * direction / rayLength);
+    currentPos = brickResult.normExitCoords;
     t = length(entryPoint - brickResult.normExitCoords) / rayLength;
 
     // Safety cap to prevent infinite loops

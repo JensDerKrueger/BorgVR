@@ -14,9 +14,35 @@ uint getBrickIndex(uint4 brickCoords, device const LevelData *levelArray) {
 }
 
 uint4 computeBrickCoords(float3 normEntryCoords,
-                         device const LevelData *levelArray, uint LOD) {
+                         device const LevelData *levelArray,
+                         uint LOD,
+                         float3 direction) {
   LevelData level = levelArray[LOD];
-  return uint4(uint3(normEntryCoords*level.fractionalBrickLayout), LOD);
+  float3 scaledCoords = clamp(normEntryCoords, float3(0), float3(1)) *
+                        level.fractionalBrickLayout;
+  uint3 maxCoords = max(uint3(ceil(level.fractionalBrickLayout)), uint3(1)) -
+                    uint3(1);
+  float3 nearestBoundary = round(scaledCoords);
+  float3 boundaryDistance = abs(scaledCoords - nearestBoundary);
+
+  // Snap lookup coordinates that are numerically on a brick boundary. Positive
+  // rays naturally belong to the brick after the boundary; negative rays need
+  // a tiny lookup-only bias to select the brick before it. Sampling still uses
+  // the original, unbiased normEntryCoords.
+  if (boundaryDistance.x <= 1e-5) {
+    scaledCoords.x = direction.x < 0.0 ? nearestBoundary.x - 1e-5 :
+                                        nearestBoundary.x;
+  }
+  if (boundaryDistance.y <= 1e-5) {
+    scaledCoords.y = direction.y < 0.0 ? nearestBoundary.y - 1e-5 :
+                                        nearestBoundary.y;
+  }
+  if (boundaryDistance.z <= 1e-5) {
+    scaledCoords.z = direction.z < 0.0 ? nearestBoundary.z - 1e-5 :
+                                        nearestBoundary.z;
+  }
+
+  return uint4(min(uint3(max(scaledCoords, float3(0))), maxCoords), LOD);
 }
 
 struct BrickCorners {
@@ -114,7 +140,8 @@ BrickInformation getBrick(float3 normEntryCoords, uint iLOD,
 
   normEntryCoords = clamp(normEntryCoords,float3(0),float3(1));
 
-  uint4 brickCoords = computeBrickCoords(normEntryCoords, levelArray, info.LOD);
+  uint4 brickCoords = computeBrickCoords(normEntryCoords, levelArray,
+                                         info.LOD, direction);
   uint  brickIndex  = getBrickIndex(brickCoords, levelArray);
   uint  brickInfo   = brickMeta[brickIndex];
 
@@ -131,7 +158,8 @@ BrickInformation getBrick(float3 normEntryCoords, uint iLOD,
     do {
       lastBrickIndex = brickIndex;
       info.LOD++;
-      brickCoords = computeBrickCoords(normEntryCoords, levelArray, info.LOD);
+      brickCoords = computeBrickCoords(normEntryCoords, levelArray,
+                                       info.LOD, direction);
       brickIndex  = getBrickIndex(brickCoords, levelArray);
       brickInfo   = brickMeta[brickIndex];
     } while (brickInfo == BI_MISSING);
@@ -150,7 +178,8 @@ BrickInformation getBrick(float3 normEntryCoords, uint iLOD,
     // when we find an empty brick check if the lower resolutions are also empty
     // this allows us to potentially skip a larger region
     for (uint lowResLOD = info.LOD+1; lowResLOD<LEVEL_COUNT;++lowResLOD) {
-      uint4 lowResBrickCoords = computeBrickCoords(normEntryCoords, levelArray, lowResLOD);
+      uint4 lowResBrickCoords = computeBrickCoords(normEntryCoords, levelArray,
+                                                   lowResLOD, direction);
       uint lowResBrickIndex  = getBrickIndex(lowResBrickCoords, levelArray);
       uint lowResBrickInfo = brickMeta[lowResBrickIndex];
       if (lowResBrickInfo == BI_CHILD_EMPTY) {
