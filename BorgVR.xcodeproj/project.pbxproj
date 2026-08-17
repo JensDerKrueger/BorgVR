@@ -89,7 +89,7 @@
 		111111111111111111111101 /* BorgVR Mobile.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "BorgVR Mobile.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		560A00012E00000000000001 /* TerminalServerApp */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = TerminalServerApp; sourceTree = BUILT_PRODUCTS_DIR; };
 		560B8BE72E5C57580042E45B /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
-		560C00012E00000000000001 /* BorgVR macOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "BorgVR macOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		560C00012E00000000000001 /* BorgVR.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BorgVR.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		564183782D649679003A1EC4 /* BorgVR.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BorgVR.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		5655824B2D4E5D6F008E7CE6 /* BorgVR Server.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "BorgVR Server.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		56730FE22E6B78990091976B /* c60_32.data */ = {isa = PBXFileReference; lastKnownFileType = file; path = c60_32.data; sourceTree = "<group>"; };
@@ -398,7 +398,7 @@
 			isa = PBXGroup;
 			children = (
 				111111111111111111111101 /* BorgVR Mobile.app */,
-				560C00012E00000000000001 /* BorgVR macOS.app */,
+				560C00012E00000000000001 /* BorgVR.app */,
 				569EA3F62CD449C400D8FADD /* TerminalConverterApp */,
 				560A00012E00000000000001 /* TerminalServerApp */,
 				5655824B2D4E5D6F008E7CE6 /* BorgVR Server.app */,
@@ -516,7 +516,7 @@
 			packageProductDependencies = (
 			);
 			productName = macOSApp;
-			productReference = 560C00012E00000000000001 /* BorgVR macOS.app */;
+			productReference = 560C00012E00000000000001 /* BorgVR.app */;
 			productType = "com.apple.product-type.application";
 		};
 		564183772D649679003A1EC4 /* VisionApp */ = {
@@ -959,7 +959,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = macOSApp/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "BorgVR macOS";
+				INFOPLIST_KEY_CFBundleDisplayName = BorgVR;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.education";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "BorgVR uses the local network to share the currently open dataset with participants in a live collaboration session.";
@@ -970,7 +970,7 @@
 				MACOSX_DEPLOYMENT_TARGET = 15.2;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "de.uni-due.BorgVRVisionApp";
-				PRODUCT_NAME = "BorgVR macOS";
+				PRODUCT_NAME = BorgVR;
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_OBJC_BRIDGING_HEADER = AppSupport/ShaderTypes.h;
@@ -995,7 +995,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = macOSApp/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "BorgVR macOS";
+				INFOPLIST_KEY_CFBundleDisplayName = BorgVR;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.education";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "BorgVR uses the local network to share the currently open dataset with participants in a live collaboration session.";
@@ -1006,7 +1006,7 @@
 				MACOSX_DEPLOYMENT_TARGET = 15.2;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "de.uni-due.BorgVRVisionApp";
-				PRODUCT_NAME = "BorgVR macOS";
+				PRODUCT_NAME = BorgVR;
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_OBJC_BRIDGING_HEADER = AppSupport/ShaderTypes.h;

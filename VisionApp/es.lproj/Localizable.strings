@@ -88,7 +88,7 @@
 "info_intro_title" = "Bienvenido a la aplicación BorgVR.";
 
 /* Info screen: intro body text */
-"info_intro_body" = "BorgVR es una **aplicación de renderizado volumétrico bricked out-of-core y ray-guided** diseñada para **realidad virtual y aumentada** en la plataforma **Apple Vision Pro**. Desde entonces, el sistema se ha portado a **iOS** y **macOS**; varios usuarios pueden colaborar mediante **SharePlay** sobre los mismos conjuntos de datos en iPhone, iPad, Mac y Apple Vision Pro. BorgVR usa **Swift** y **Metal** para un renderizado de alto rendimiento y es un proyecto de **código abierto**.";
+"info_intro_body" = "BorgVR es una **aplicación de renderizado volumétrico bricked out-of-core y ray-guided** diseñada para **realidad virtual y aumentada** en la plataforma **Apple Vision Pro**. El sistema ahora admite flujos de trabajo móviles, de escritorio y espaciales; varios usuarios pueden colaborar mediante **SharePlay** sobre los mismos conjuntos de datos en dispositivos compatibles. BorgVR usa **Swift** y **Metal** para un renderizado de alto rendimiento y es un proyecto de **código abierto**.";
 
 /* Info screen: publications intro */
 "info_publications_intro" = "Esta aplicación forma parte de un **proyecto de investigación en curso** que explora técnicas avanzadas de renderizado volumétrico. Nuestro trabajo se ha publicado en los siguientes artículos:";
@@ -106,7 +106,7 @@
 "info_pub2_venue" = "Presentado en **VMV 2025**.";
 
 /* Info screen: concluding body text */
-"info_conclusion_body" = "Aunque el estudio original introdujo la tecnología central, BorgVR representa ahora un **renderizador volumétrico más sofisticado**, que combina **Ray-Guided Volume Rendering** con funciones modernas de **iOS**, **visionOS** y **macOS**.";
+"info_conclusion_body" = "Aunque el estudio original introdujo la tecnología central, BorgVR representa ahora un **renderizador volumétrico más sofisticado**, que combina **Ray-Guided Volume Rendering** con funciones modernas multiplataforma.";
 
 /* Info screen: close button label */
 "info_close_button" = "Cerrar";

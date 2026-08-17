@@ -66,10 +66,10 @@
 "macosserver_menu_quit" = "Salir de BorgVR Server";
 "macosserver_menu_about" = "Acerca de BorgVR Server";
 
-"modeselection_title" = "BorgVR macOS – Versión %@.%@";
+"modeselection_title" = "BorgVR – Versión %@.%@";
 "modeselection_version_format" = "Versión %@.%@";
 "modeselection_subtitle" = "Elige una opción abajo";
-"modeselection_tagline" = "Renderizado volumétrico, importación de datos y servidor de conjuntos de datos para macOS.";
+"modeselection_tagline" = "Renderizado volumétrico, importación de datos y servidor de conjuntos de datos para flujos de trabajo de escritorio.";
 
 "modeselection_open_dataset" = "Abrir conjunto de datos";
 "modeselection_import" = "Importar un conjunto de datos";
@@ -116,7 +116,7 @@
 "server_button_cancel" = "Cancelar";
 
 /* SettingsView titles and tabs */
-"settings_title" = "Ajustes de BorgVR macOS";
+"settings_title" = "Ajustes de BorgVR";
 "settings_tab_server" = "Servidor";
 "settings_tab_import" = "Importar";
 
@@ -157,14 +157,14 @@
 
 "info_title" = "Acerca de";
 
-"info_heading" = "Acerca de BorgVR macOS.";
+"info_heading" = "Acerca de BorgVR.";
 
-"BorgVR macOS Live Collaboration" = "Colaboración en vivo de BorgVR macOS";
+"BorgVR Live Collaboration" = "Colaboración en vivo de BorgVR";
 
 "Render Mode" = "Modo de renderizado";
 "Interaction" = "Interacción";
 
-"info_paragraph_intro" = "BorgVR es una **aplicación de renderizado volumétrico bricked out-of-core y ray-guided** diseñada para **realidad virtual y aumentada** en la plataforma **Apple Vision Pro**. Desde entonces, el sistema se ha portado a **iOS** y **macOS**; varios usuarios pueden colaborar mediante **SharePlay** sobre los mismos conjuntos de datos en iPhone, iPad, Mac y Apple Vision Pro. BorgVR usa **Swift** y **Metal** para un renderizado de alto rendimiento y es un proyecto de **código abierto**.";
+"info_paragraph_intro" = "BorgVR es una **aplicación de renderizado volumétrico bricked out-of-core y ray-guided** diseñada para **realidad virtual y aumentada** en la plataforma **Apple Vision Pro**. El sistema ahora admite flujos de trabajo móviles, de escritorio y espaciales; varios usuarios pueden colaborar mediante **SharePlay** sobre los mismos conjuntos de datos en dispositivos compatibles. BorgVR usa **Swift** y **Metal** para un renderizado de alto rendimiento y es un proyecto de **código abierto**.";
 
 "info_paragraph_papers" = "Esta aplicación forma parte de un **proyecto de investigación en curso** que explora técnicas avanzadas de renderizado volumétrico. Nuestro trabajo se ha publicado en los siguientes artículos:";
 
@@ -174,7 +174,7 @@
 "info_paper2_title" = "**An Investigation of the Apple Vision Pro for Out-of-Core Ray-Guided Volume Rendering with BorgVR**";
 "info_paper2_venue" = "Presentado en **VMV 2025**.";
 
-"info_paragraph_future" = "Aunque el estudio original introdujo la tecnología central, BorgVR representa ahora un **renderizador volumétrico más sofisticado**, que combina **Ray-Guided Volume Rendering** con funciones modernas de **iOS**, **visionOS** y **macOS**.";
+"info_paragraph_future" = "Aunque el estudio original introdujo la tecnología central, BorgVR representa ahora un **renderizador volumétrico más sofisticado**, que combina **Ray-Guided Volume Rendering** con funciones modernas multiplataforma.";
 
 "info_button_close" = "Cerrar";
 

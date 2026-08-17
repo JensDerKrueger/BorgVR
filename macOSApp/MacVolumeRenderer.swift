@@ -459,7 +459,7 @@ final class MacVolumeRenderer: NSObject, MTKViewDelegate {
       metadata: metadata,
       hashTable: hashTable,
       appSettings: appSettings,
-      labelPrefix: "macOS"
+      labelPrefix: "BorgVR"
     )
     pipelineStateTF = states.tf
     pipelineStateTFL = states.tfl

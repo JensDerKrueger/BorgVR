@@ -88,7 +88,7 @@
 "info_intro_title" = "Bienvenue dans l’application BorgVR.";
 
 /* Info screen: intro body text */
-"info_intro_body" = "BorgVR est une **application de rendu volumique bricked out-of-core et ray-guided** conçue pour la **réalité virtuelle et augmentée** sur la plateforme **Apple Vision Pro**. Le système a depuis été porté sur **iOS** et **macOS** ; plusieurs utilisateurs peuvent collaborer via **SharePlay** sur les mêmes jeux de données avec iPhone, iPad, Mac et Apple Vision Pro. BorgVR utilise **Swift** et **Metal** pour un rendu haute performance et c’est un projet **open source**.";
+"info_intro_body" = "BorgVR est une **application de rendu volumique bricked out-of-core et ray-guided** conçue pour la **réalité virtuelle et augmentée** sur la plateforme **Apple Vision Pro**. Le système prend désormais en charge des workflows mobiles, de bureau et spatiaux ; plusieurs utilisateurs peuvent collaborer via **SharePlay** sur les mêmes jeux de données avec des appareils compatibles. BorgVR utilise **Swift** et **Metal** pour un rendu haute performance et c’est un projet **open source**.";
 
 /* Info screen: publications intro */
 "info_publications_intro" = "Cette application fait partie d’un **projet de recherche en cours**, qui explore des techniques avancées de rendu volumique. Nos travaux ont été publiés dans les articles suivants :";
@@ -106,7 +106,7 @@
 "info_pub2_venue" = "Présenté à **VMV 2025**.";
 
 /* Info screen: concluding body text */
-"info_conclusion_body" = "Même si l’étude initiale a introduit la technologie de base, BorgVR est désormais un **renderer volumique plus sophistiqué**, combinant **Ray-Guided Volume Rendering** avec des fonctionnalités modernes de **iOS**, **visionOS** et **macOS**.";
+"info_conclusion_body" = "Même si l’étude initiale a introduit la technologie de base, BorgVR est désormais un **renderer volumique plus sophistiqué**, combinant **Ray-Guided Volume Rendering** avec des fonctionnalités multiplateformes modernes.";
 
 /* Info screen: close button label */
 "info_close_button" = "Fermer";

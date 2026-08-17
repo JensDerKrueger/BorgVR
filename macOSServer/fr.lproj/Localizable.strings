@@ -66,7 +66,7 @@
 "macosserver_menu_quit" = "Quitter BorgVR Server";
 "macosserver_menu_about" = "À propos de BorgVR Server";
 
-"modeselection_title" = "BorgVR macOS – Version %@.%@";
+"modeselection_title" = "BorgVR – Version %@.%@";
 "modeselection_subtitle" = "Veuillez choisir une option ci-dessous";
 
 "modeselection_import" = "Importer un jeu de données";
@@ -150,9 +150,9 @@
 
 "info_title" = "À propos";
 
-"info_heading" = "À propos de BorgVR macOS.";
+"info_heading" = "À propos de BorgVR.";
 
-"info_paragraph_intro" = "BorgVR est une **application de rendu volumique bricked out-of-core et ray-guided** conçue pour la **réalité virtuelle et augmentée** sur la plateforme **Apple Vision Pro**. Le système a depuis été porté sur **iOS** et **macOS** ; plusieurs utilisateurs peuvent collaborer via **SharePlay** sur les mêmes jeux de données avec iPhone, iPad, Mac et Apple Vision Pro. BorgVR utilise **Swift** et **Metal** pour un rendu haute performance et c’est un projet **open source**.";
+"info_paragraph_intro" = "BorgVR est une **application de rendu volumique bricked out-of-core et ray-guided** conçue pour la **réalité virtuelle et augmentée** sur la plateforme **Apple Vision Pro**. Le système prend désormais en charge des workflows mobiles, de bureau et spatiaux ; plusieurs utilisateurs peuvent collaborer via **SharePlay** sur les mêmes jeux de données avec des appareils compatibles. BorgVR utilise **Swift** et **Metal** pour un rendu haute performance et c’est un projet **open source**.";
 
 "info_paragraph_papers" = "Cette application fait partie d’un **projet de recherche en cours**, qui explore des techniques avancées de rendu volumique. Nos travaux ont été publiés dans les articles suivants :";
 
@@ -162,7 +162,7 @@
 "info_paper2_title" = "**An Investigation of the Apple Vision Pro for Out-of-Core Ray-Guided Volume Rendering with BorgVR**";
 "info_paper2_venue" = "Présenté à **VMV 2025**.";
 
-"info_paragraph_future" = "Même si l’étude initiale a introduit la technologie de base, BorgVR est désormais un **renderer volumique plus sophistiqué**, combinant **Ray-Guided Volume Rendering** avec des fonctionnalités modernes de **iOS**, **visionOS** et **macOS**.";
+"info_paragraph_future" = "Même si l’étude initiale a introduit la technologie de base, BorgVR est désormais un **renderer volumique plus sophistiqué**, combinant **Ray-Guided Volume Rendering** avec des fonctionnalités multiplateformes modernes.";
 
 "info_button_close" = "Fermer";
 

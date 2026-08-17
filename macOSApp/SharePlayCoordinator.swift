@@ -11,7 +11,7 @@ struct BorgVRSharePlayActivity: GroupActivity, Transferable {
 
   var metadata: GroupActivityMetadata = {
     var metadata = GroupActivityMetadata()
-    metadata.title = String(localized: "BorgVR macOS Live Collaboration")
+    metadata.title = String(localized: "BorgVR Live Collaboration")
     metadata.subtitle = String(localized: "Collaborate on the same volumetric dataset.")
     metadata.type = .generic
     metadata.sceneAssociationBehavior = .content(borgVRSharePlayActivityIdentifier)

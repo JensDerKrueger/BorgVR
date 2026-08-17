@@ -150,9 +150,9 @@
 
 "info_title" = "Acerca de";
 
-"info_heading" = "Acerca de BorgVR macOS.";
+"info_heading" = "Acerca de BorgVR.";
 
-"info_paragraph_intro" = "BorgVR es una **aplicación de renderizado volumétrico bricked out-of-core y ray-guided** diseñada para **realidad virtual y aumentada** en la plataforma **Apple Vision Pro**. Desde entonces, el sistema se ha portado a **iOS** y **macOS**; varios usuarios pueden colaborar mediante **SharePlay** sobre los mismos conjuntos de datos en iPhone, iPad, Mac y Apple Vision Pro. BorgVR usa **Swift** y **Metal** para un renderizado de alto rendimiento y es un proyecto de **código abierto**.";
+"info_paragraph_intro" = "BorgVR es una **aplicación de renderizado volumétrico bricked out-of-core y ray-guided** diseñada para **realidad virtual y aumentada** en la plataforma **Apple Vision Pro**. El sistema ahora admite flujos de trabajo móviles, de escritorio y espaciales; varios usuarios pueden colaborar mediante **SharePlay** sobre los mismos conjuntos de datos en dispositivos compatibles. BorgVR usa **Swift** y **Metal** para un renderizado de alto rendimiento y es un proyecto de **código abierto**.";
 
 "info_paragraph_papers" = "Esta aplicación forma parte de un **proyecto de investigación en curso** que explora técnicas avanzadas de renderizado volumétrico. Nuestro trabajo se ha publicado en los siguientes artículos:";
 
@@ -162,7 +162,7 @@
 "info_paper2_title" = "**An Investigation of the Apple Vision Pro for Out-of-Core Ray-Guided Volume Rendering with BorgVR**";
 "info_paper2_venue" = "Presentado en **VMV 2025**.";
 
-"info_paragraph_future" = "Aunque el estudio original introdujo la tecnología central, BorgVR representa ahora un **renderizador volumétrico más sofisticado**, que combina **Ray-Guided Volume Rendering** con funciones modernas de **iOS**, **visionOS** y **macOS**.";
+"info_paragraph_future" = "Aunque el estudio original introdujo la tecnología central, BorgVR representa ahora un **renderizador volumétrico más sofisticado**, que combina **Ray-Guided Volume Rendering** con funciones modernas multiplataforma.";
 
 "info_button_close" = "Cerrar";
 

@@ -88,7 +88,7 @@
 "info_intro_title" = "Willkommen bei der BorgVR-Anwendung.";
 
 /* Info screen: intro body text */
-"info_intro_body" = "BorgVR ist eine **Bricked Out-of-Core, Ray-Guided Volume Rendering Anwendung**, die für **Virtual und Augmented Reality** auf der **Apple Vision Pro** Plattform entwickelt wurde. Inzwischen wurde das System auf **iOS** und **macOS** portiert; mehrere Nutzerinnen und Nutzer können über **SharePlay** gemeinsam auf iPhone, iPad, Mac und Apple Vision Pro mit denselben Datensätzen arbeiten. BorgVR nutzt **Swift** und **Metal** für hochperformantes Rendering und ist ein **Open-Source**-Projekt.";
+"info_intro_body" = "BorgVR ist eine **Bricked Out-of-Core, Ray-Guided Volume Rendering Anwendung**, die für **Virtual und Augmented Reality** auf der **Apple Vision Pro** Plattform entwickelt wurde. Inzwischen unterstützt das System mobile, Desktop- und Spatial-Workflows; mehrere Nutzerinnen und Nutzer können über **SharePlay** gemeinsam auf unterstützten Geräten mit denselben Datensätzen arbeiten. BorgVR nutzt **Swift** und **Metal** für hochperformantes Rendering und ist ein **Open-Source**-Projekt.";
 
 /* Info screen: publications intro */
 "info_publications_intro" = "Diese Anwendung ist Teil eines **laufenden Forschungsprojekts**, das fortgeschrittene Techniken im Volumen-Rendering untersucht. Unsere Arbeiten wurden in den folgenden Publikationen veröffentlicht:";
@@ -106,7 +106,7 @@
 "info_pub2_venue" = "Vorgestellt auf der **VMV 2025**.";
 
 /* Info screen: concluding body text */
-"info_conclusion_body" = "Während die ursprüngliche Studie die grundlegende Technologie eingeführt hat, stellt BorgVR inzwischen einen **deutlich weiterentwickelten Volumenrenderer** dar, der **Ray-Guided Volume Rendering** mit modernen Funktionen von **iOS**, **visionOS** und **macOS** kombiniert.";
+"info_conclusion_body" = "Während die ursprüngliche Studie die grundlegende Technologie eingeführt hat, stellt BorgVR inzwischen einen **deutlich weiterentwickelten Volumenrenderer** dar, der **Ray-Guided Volume Rendering** mit modernen plattformübergreifenden Funktionen kombiniert.";
 
 /* Info screen: close button label */
 "info_close_button" = "Schließen";

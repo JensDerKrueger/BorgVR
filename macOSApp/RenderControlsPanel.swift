@@ -27,7 +27,7 @@ struct RenderControlsPanel: View {
 
         Spacer()
 
-        Text(appModel.activeDataset?.description ?? "BorgVR macOS")
+        Text(appModel.activeDataset?.description ?? "BorgVR")
           .font(.headline)
           .lineLimit(1)
 
@@ -35,7 +35,7 @@ struct RenderControlsPanel: View {
 
         ShareLink(
           item: BorgVRSharePlayActivity(),
-          preview: SharePreview(String(localized: "BorgVR macOS Live Collaboration"))
+          preview: SharePreview(String(localized: "BorgVR Live Collaboration"))
         ) {
           Image(systemName: "shareplay")
         }

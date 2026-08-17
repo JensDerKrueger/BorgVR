@@ -19,7 +19,7 @@ struct ModeSelectionView: View {
           .shadow(color: .black.opacity(0.18), radius: 18, x: 0, y: 10)
 
         VStack(alignment: .leading, spacing: 8) {
-          Text("BorgVR macOS")
+          Text("BorgVR")
             .font(.system(size: 46, weight: .bold))
 
           Text("modeselection_tagline")

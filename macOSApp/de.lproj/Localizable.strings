@@ -1,4 +1,4 @@
-/* Localizable.strings (de) — additions for macOS ConverterView */
+/* Localizable.strings (de) — additions for ConverterView */
 
 "converter_import_title" = "Datensatz importieren";
 "converter_step_of_total_format" = "Schritt %d von %d";
@@ -63,16 +63,16 @@
 "converter_dicom_of_name" = "von %@";
 "converter_dicom_at_date" = "am %@";
 
-/* Localizable.strings (de) — additions for macOSServerApp */
+/* Localizable.strings (de) — additions for ServerApp */
 
 "macosserver_window_title" = "BorgVR Server";
 "macosserver_menu_quit" = "BorgVR Server beenden";
 "macosserver_menu_about" = "Über BorgVR Server";
 
-"modeselection_title" = "BorgVR macOS – Version %@.%@";
+"modeselection_title" = "BorgVR – Version %@.%@";
 "modeselection_version_format" = "Version %@.%@";
 "modeselection_subtitle" = "Bitte wählen Sie eine Option aus";
-"modeselection_tagline" = "Volume Rendering, Datenimport und Datensatzserver für macOS.";
+"modeselection_tagline" = "Volume Rendering, Datenimport und Datensatzserver für Desktop-Workflows.";
 
 "modeselection_open_dataset" = "Datensatz öffnen";
 "modeselection_import" = "Datensatz importieren";
@@ -119,7 +119,7 @@
 "server_button_cancel" = "Abbrechen";
 
 /* SettingsView titles and tabs */
-"settings_title" = "BorgVR macOS-Einstellungen";
+"settings_title" = "BorgVR-Einstellungen";
 "settings_tab_server" = "Server";
 "settings_tab_import" = "Import";
 
@@ -158,16 +158,16 @@
 "notfication_dataset_downloaded_title" = "Remote Dataset vollständig";
 "notfication_dataset_downloaded_text" = "Der Datensatz wurde vollständig heruntergeladen und ist nun lokal verfügbar.";
 
-"info_title" = "BorgVR macOS – Version %@.%@";
+"info_title" = "BorgVR – Version %@.%@";
 
-"info_heading" = "Über BorgVR macOS.";
+"info_heading" = "Über BorgVR.";
 
-"BorgVR macOS Live Collaboration" = "BorgVR macOS Live-Zusammenarbeit";
+"BorgVR Live Collaboration" = "BorgVR Live-Zusammenarbeit";
 
 "Render Mode" = "Rendermodus";
 "Interaction" = "Interaktion";
 
-"info_paragraph_intro" = "BorgVR ist eine **Bricked Out-of-Core, Ray-Guided Volume Rendering Anwendung**, entwickelt für **Virtual und Augmented Reality** auf der **Apple Vision Pro** Plattform. Inzwischen wurde das System auf **iOS** und **macOS** portiert; mehrere Nutzerinnen und Nutzer können über **SharePlay** gemeinsam auf iPhone, iPad, Mac und Apple Vision Pro mit denselben Datensätzen arbeiten. BorgVR nutzt **Swift** und **Metal** für hochperformantes Rendering und ist ein **Open-Source**-Projekt.";
+"info_paragraph_intro" = "BorgVR ist eine **Bricked Out-of-Core, Ray-Guided Volume Rendering Anwendung**, entwickelt für **Virtual und Augmented Reality** auf der **Apple Vision Pro** Plattform. Inzwischen unterstützt das System mobile, Desktop- und Spatial-Workflows; mehrere Nutzerinnen und Nutzer können über **SharePlay** gemeinsam auf unterstützten Geräten mit denselben Datensätzen arbeiten. BorgVR nutzt **Swift** und **Metal** für hochperformantes Rendering und ist ein **Open-Source**-Projekt.";
 
 "info_paragraph_papers" = "Diese Anwendung ist Teil eines **laufenden Forschungsprojekts**, das fortgeschrittene Verfahren im Volume Rendering untersucht. Unsere Arbeiten wurden in den folgenden Veröffentlichungen präsentiert:";
 
@@ -177,7 +177,7 @@
 "info_paper2_title" = "**An Investigation of the Apple Vision Pro for Out-of-Core Ray-Guided Volume Rendering with BorgVR**";
 "info_paper2_venue" = "Präsentiert auf der **VMV 2025**.";
 
-"info_paragraph_future" = "Während die ursprüngliche Studie die grundlegende Technologie eingeführt hat, stellt BorgVR inzwischen einen **deutlich weiterentwickelten Volume Renderer** dar, der **Ray-Guided Volume Rendering** mit modernen Funktionen von **iOS**, **visionOS** und **macOS** verbindet.";
+"info_paragraph_future" = "Während die ursprüngliche Studie die grundlegende Technologie eingeführt hat, stellt BorgVR inzwischen einen **deutlich weiterentwickelten Volume Renderer** dar, der **Ray-Guided Volume Rendering** mit modernen plattformübergreifenden Funktionen verbindet.";
 
 "info_button_close" = "Schließen";
 

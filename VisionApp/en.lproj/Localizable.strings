@@ -88,7 +88,7 @@
 "info_intro_title" = "Welcome to the BorgVR application.";
 
 /* Info screen: intro body text */
-"info_intro_body" = "BorgVR is a **Bricked Out-of-Core, Ray-Guided Volume Rendering Application** designed for **Virtual and Augmented Reality** on the **Apple Vision Pro** platform. The system has since been ported to **iOS** and **macOS**; multiple users can collaborate through **SharePlay** on the same datasets across iPhone, iPad, Mac, and Apple Vision Pro. BorgVR uses **Swift** and **Metal** for high-performance rendering and is an **open-source** project.";
+"info_intro_body" = "BorgVR is a **Bricked Out-of-Core, Ray-Guided Volume Rendering Application** designed for **Virtual and Augmented Reality** on the **Apple Vision Pro** platform. The system now supports mobile, desktop, and spatial workflows; multiple users can collaborate through **SharePlay** on the same datasets across supported devices. BorgVR uses **Swift** and **Metal** for high-performance rendering and is an **open-source** project.";
 
 /* Info screen: publications intro */
 "info_publications_intro" = "This application is part of an **ongoing research project**, exploring advanced techniques in volume rendering. Our work has been published in the following papers:";
@@ -106,7 +106,7 @@
 "info_pub2_venue" = "Presented at **VMV 2025**.";
 
 /* Info screen: concluding body text */
-"info_conclusion_body" = "While the original study introduced the core technology, BorgVR now represents a **more sophisticated volume renderer**, combining **Ray-Guided Volume Rendering** with modern **iOS**, **visionOS**, and **macOS** features.";
+"info_conclusion_body" = "While the original study introduced the core technology, BorgVR now represents a **more sophisticated volume renderer**, combining **Ray-Guided Volume Rendering** with modern cross-platform features.";
 
 /* Info screen: close button label */
 "info_close_button" = "Close";

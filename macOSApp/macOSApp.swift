@@ -46,7 +46,7 @@ struct macOSApp: App {
   @StateObject private var scriptRunner = BorgVRScriptRunner()
 
   var body: some Scene {
-    WindowGroup("BorgVR macOS") {
+    WindowGroup("BorgVR") {
       ContentView()
         .environmentObject(appModel)
         .environmentObject(renderingParameters)

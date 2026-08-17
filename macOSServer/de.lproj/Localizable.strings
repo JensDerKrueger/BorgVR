@@ -1,4 +1,4 @@
-/* Localizable.strings (de) — additions for macOS ConverterView */
+/* Localizable.strings (de) — additions for ConverterView */
 
 "converter_import_title" = "Datensatz importieren";
 "converter_step_of_total_format" = "Schritt %d von %d";
@@ -63,7 +63,7 @@
 "converter_dicom_of_name" = "von %@";
 "converter_dicom_at_date" = "am %@";
 
-/* Localizable.strings (de) — additions for macOSServerApp */
+/* Localizable.strings (de) — additions for ServerApp */
 
 "macosserver_window_title" = "BorgVR Server";
 "macosserver_menu_quit" = "BorgVR Server beenden";
