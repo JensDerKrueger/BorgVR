@@ -93,6 +93,7 @@ class BORGVRRemoteData: BORGVRDatasetProtocol {
   init(connection: NWConnection, datasetID: String,
        maxBricksPerGetRequest: Int,
        targetFilename: String?,
+       authSecret: String? = nil,
        logger:LoggerBase?,
        notifier:NotificationBase?) throws {
 
@@ -113,6 +114,7 @@ class BORGVRRemoteData: BORGVRDatasetProtocol {
             datasetID: datasetID,
             maxBricksPerGetRequest: maxBricksPerGetRequest,
             filename: targetFilename,
+            authSecret: authSecret,
             logger:logger,
             notifier: notifier
           )
@@ -124,6 +126,7 @@ class BORGVRRemoteData: BORGVRDatasetProtocol {
           datasetID: datasetID,
           maxBricksPerGetRequest: maxBricksPerGetRequest,
           filename: targetFilename,
+          authSecret: authSecret,
           logger:logger,
           notifier: notifier)
       }
@@ -132,6 +135,7 @@ class BORGVRRemoteData: BORGVRDatasetProtocol {
       self.brickDataSource = try RemoteDataSource(
         connection: connection,
         datasetID: datasetID,
+        authSecret: authSecret,
         logger:logger)
     }
     logger?.dev("BORGVRRemoteData initialized")

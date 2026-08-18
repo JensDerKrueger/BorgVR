@@ -20,10 +20,11 @@ enum ImmersiveBootstrap {
         case .local, .builtIn:
           dataset = try BORGVRFileData(filename: activeDataset.identifier)
 
-        case .remote(let address, let port):
+        case .remote(let address, let port, let password):
           let manager = BORGVRRemoteDataManager(
             host: address,
             port: UInt16(port),
+            authSecret: password,
             logger: runtimeAppModel.logger,
             notifier: runtimeAppModel.notifier
           )

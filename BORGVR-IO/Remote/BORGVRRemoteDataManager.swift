@@ -57,8 +57,9 @@ class BORGVRRemoteDataManager {
   private let host: String
   /// The port number used to connect to the remote server.
   private let port: UInt16
+  private let authSecret: String
 
-  private static let protocolVersionName : String = "1"
+  private static let protocolVersionName : String = BorgVRServerAuthentication.protocolVersionName
   private(set) var maxBricksPerGetRequest : Int = 1
   /**
    Initializes a new instance of the remote data manager.
@@ -71,6 +72,7 @@ class BORGVRRemoteDataManager {
   init(
     host: String,
     port: UInt16,
+    authSecret: String? = nil,
     logger: LoggerBase?,
     notifier: NotificationBase?
   ) {
@@ -78,6 +80,7 @@ class BORGVRRemoteDataManager {
     self.notifier = notifier
     self.host = host
     self.port = port
+    self.authSecret = BorgVRServerAuthentication.normalizedSecret(authSecret)
     self.connection = NWConnection(host: NWEndpoint.Host(host),
                                    port: NWEndpoint.Port(rawValue: port)!,
                                    using: .tcp)
@@ -99,6 +102,12 @@ class BORGVRRemoteDataManager {
   func connect(timeout: Double) throws {
     try BORGVRRemoteDataManager.connect(connection: connection,
                                         timeout: timeout, logger: logger)
+    try BorgVRServerAuthentication.authenticate(
+      connection: connection,
+      secret: authSecret,
+      timeout: timeout,
+      logger: logger
+    )
     try getInfo()
   }
 
@@ -220,10 +229,17 @@ class BORGVRRemoteDataManager {
 
     try BORGVRRemoteDataManager.connect(connection: datasetConnection,
                                         timeout: timeout, logger: logger)
+    try BorgVRServerAuthentication.authenticate(
+      connection: datasetConnection,
+      secret: authSecret,
+      timeout: timeout,
+      logger: logger
+    )
     return try BORGVRRemoteData(connection: datasetConnection,
                                 datasetID: datasetID,
                                 maxBricksPerGetRequest: maxBricksPerGetRequest,
                                 targetFilename: localCacheFilename,
+                                authSecret: authSecret,
                                 logger:logger,
                                 notifier: notifier)
   }
@@ -235,30 +251,7 @@ class BORGVRRemoteDataManager {
    - Throws: A BORGVRRemoteDataManagerError if sending fails or times out.
    */
   private func sendCommand(_ command: String) throws {
-    let semaphore = DispatchSemaphore(value: 0)
-    var sendError: Error?
-
-    let terminatedCommand = command.hasSuffix("\n") ? command : command + "\n"
-    guard let commandData = terminatedCommand.data(using: .utf8) else {
-      throw BORGVRRemoteDataManagerError.sendFailed(
-        NSError(domain: "Encoding", code: 1,
-                userInfo: [NSLocalizedDescriptionKey: "Failed to encode command"])
-      )
-    }
-
-    connection.send(content: commandData,
-                    completion: .contentProcessed({ error in
-      sendError = error
-      semaphore.signal()
-    }))
-
-    let result = semaphore.wait(timeout: .now() + 5)
-    if result == .timedOut {
-      throw BORGVRRemoteDataManagerError.timeout(seconds: 5)
-    }
-    if let error = sendError {
-      throw BORGVRRemoteDataManagerError.sendFailed(error)
-    }
+    try BorgVRServerAuthentication.sendCommand(command, connection: connection)
   }
 
   /**
@@ -271,42 +264,7 @@ class BORGVRRemoteDataManager {
    - Throws: A BORGVRRemoteDataManagerError if reception times out or fails.
    */
   private func receiveTextResponse(timeout: TimeInterval = 5.0) throws -> String {
-    let deadline = Date().addingTimeInterval(timeout)
-    var buffer = Data()
-
-    while Date() < deadline {
-      let semaphore = DispatchSemaphore(value: 0)
-      var chunk: Data?
-      var receiveError: Error?
-
-      connection.receive(minimumIncompleteLength: 1, maximumLength: 4096) { data, _, _, error in
-        chunk = data
-        receiveError = error
-        semaphore.signal()
-      }
-
-      let result = semaphore.wait(timeout: .now() + timeout)
-      if result == .timedOut {
-        throw BORGVRRemoteDataManagerError.timeout(seconds: timeout)
-      }
-
-      if let error = receiveError {
-        throw BORGVRRemoteDataManagerError.receiveFailed(
-          reason: error.localizedDescription
-        )
-      }
-
-      if let data = chunk {
-        buffer.append(data)
-        if let str = String(data: buffer, encoding: .utf8),
-           let range = str.range(of: "\n\n") {
-          let endIndex = str.index(before: range.upperBound)
-          return String(str[..<endIndex])
-        }
-      }
-    }
-
-    throw BORGVRRemoteDataManagerError.timeout(seconds: timeout)
+    try BorgVRServerAuthentication.receiveTextResponse(connection: connection, timeout: timeout)
   }
 }
 

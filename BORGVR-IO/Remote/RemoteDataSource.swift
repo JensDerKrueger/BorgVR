@@ -14,6 +14,7 @@ final class RemoteDataSource: DataSource {
   private var connection: NWConnection
   /// The dataset ID for the remote dataset.
   private let datasetID: String
+  private let authSecret: String
   /// Indicates whether the remote dataset is open.
   private var isOpen: Bool
   /// The metadata for the remote dataset.
@@ -36,9 +37,10 @@ final class RemoteDataSource: DataSource {
    - datasetID: The identifier for the dataset to open.
    - Throws: An error if sending the "OPEN" command fails or if metadata cannot be parsed.
    */
-  init(connection: NWConnection, datasetID: String, logger: LoggerBase?) throws {
+  init(connection: NWConnection, datasetID: String, authSecret: String? = nil, logger: LoggerBase?) throws {
     self.connection = connection
     self.datasetID = datasetID
+    self.authSecret = BorgVRServerAuthentication.normalizedSecret(authSecret)
     self.isOpen = false
     self.logger = logger
 
@@ -198,6 +200,12 @@ final class RemoteDataSource: DataSource {
                                             using: .tcp)
         try BORGVRRemoteDataManager.connect(connection: newConnection,
                                             timeout: 2, logger: logger)
+        try BorgVRServerAuthentication.authenticate(
+          connection: newConnection,
+          secret: authSecret,
+          timeout: 2,
+          logger: logger
+        )
         connection = newConnection
         try sendCommand("OPEN \(datasetID)")
         _ = try receiveBinaryData()

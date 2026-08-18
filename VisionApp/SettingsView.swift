@@ -13,6 +13,7 @@ private struct ServerConfig: Identifiable, Equatable {
   let id: UUID = UUID()
   var address: String
   var port: String
+  var password: String = ""
   var status: ServerValidationStatus = .unknown
 }
 
@@ -157,7 +158,7 @@ struct SettingsView: View {
                 servers = [ServerConfig(address: "", port: "")]
               } else {
                 servers = storedAppModel.servers.map {
-                  ServerConfig(address: $0.address, port: String($0.port))
+                  ServerConfig(address: $0.address, port: String($0.port), password: $0.password)
                 }
               }
             }
@@ -523,7 +524,7 @@ struct SettingsView: View {
   private func syncServersToStoredModel() {
     let converted: [StoredServer] = servers.compactMap { cfg in
       guard let portInt = Int(cfg.port) else { return nil }
-      return StoredServer(address: cfg.address, port: portInt)
+      return StoredServer(address: cfg.address, port: portInt, password: cfg.password)
     }
     storedAppModel.servers = converted
   }
@@ -584,7 +585,7 @@ struct SettingsView: View {
 
     let ok: Bool
     do {
-      ok = try await validateConnection(address: trimmedAddress, port: portValue)
+      ok = try await validateConnection(address: trimmedAddress, port: portValue, password: server.password)
     } catch {
       await MainActor.run {
         servers[index].status = .invalid(error.localizedDescription)
@@ -602,7 +603,7 @@ struct SettingsView: View {
     }
   }
 
-  private func validateConnection(address: String, port: UInt16) async throws -> Bool {
+  private func validateConnection(address: String, port: UInt16, password: String) async throws -> Bool {
     if port == 0 || address.isEmpty {
       return false
     }
@@ -610,6 +611,7 @@ struct SettingsView: View {
       let manager = BORGVRRemoteDataManager(
         host: address,
         port: port,
+        authSecret: password,
         logger: nil,
         notifier: nil
       )
@@ -764,6 +766,10 @@ private struct ServerRowView: View {
         .textFieldStyle(RoundedBorderTextFieldStyle())
         .keyboardType(.numberPad)
         .frame(width: 80)
+
+        SecureField("Passwort (optional)", text: $server.password)
+          .textFieldStyle(RoundedBorderTextFieldStyle())
+          .frame(width: 180)
 
         statusIndicator
 

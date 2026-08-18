@@ -189,7 +189,7 @@ class RuntimeAppModel {
    */
   enum DatasetSource : Equatable {
     case local
-    case remote(address: String, port: Int)
+    case remote(address: String, port: Int, password: String)
     case builtIn
 
     static func == (lhs: DatasetSource, rhs: DatasetSource) -> Bool {
@@ -197,8 +197,8 @@ class RuntimeAppModel {
         case (.local, .local),
           (.builtIn, .builtIn):
           return true
-        case let (.remote(addr1, port1), .remote(addr2, port2)):
-          return addr1 == addr2 && port1 == port2
+        case let (.remote(addr1, port1, password1), .remote(addr2, port2, password2)):
+          return addr1 == addr2 && port1 == port2 && password1 == password2
         default:
           return false
       }

@@ -27,6 +27,7 @@ struct SettingsView: View {
 
   @State private var serverAddress = ""
   @State private var serverPort = "12345"
+  @State private var serverPassword = ""
   @State private var showDataDirectoryPicker = false
   @State private var pendingResetSection: SettingsResetSection?
 
@@ -130,6 +131,7 @@ struct SettingsView: View {
         Stepper(value: $storedAppModel.port, in: 1...65535) {
           Text("Port: \(storedAppModel.port)")
         }
+        SecureField("Server-Passwort (optional)", text: $storedAppModel.serverPassword)
         Stepper(value: $storedAppModel.sharePlayServerPort, in: 1...65535) {
           Text("Ad-hoc Dataset-Server-Port: \(storedAppModel.sharePlayServerPort)")
         }
@@ -148,6 +150,8 @@ struct SettingsView: View {
           TextField("Serveradresse", text: $serverAddress)
           TextField("Port", text: $serverPort)
             .frame(width: 90)
+          SecureField("Passwort", text: $serverPassword)
+            .frame(width: 160)
           Button {
             addRemoteServer()
           } label: {
@@ -238,10 +242,12 @@ struct SettingsView: View {
     appSettings.servers.append(
       StoredServer(
         address: trimmedAddress,
-        port: port
+        port: port,
+        password: serverPassword
       )
     )
     serverAddress = ""
+    serverPassword = ""
   }
 
   private func serverRow(for server: StoredServer) -> some View {
@@ -258,7 +264,10 @@ struct SettingsView: View {
   }
 
   private func serverLabel(for server: StoredServer) -> String {
-    "\(server.address):\(server.port)"
+    if server.password.isEmpty {
+      return "\(server.address):\(server.port)"
+    }
+    return "\(server.address):\(server.port) \(String(localized: "(Passwort)"))"
   }
 
   private func removeRemoteServer(_ server: StoredServer) {
@@ -282,6 +291,7 @@ struct SettingsView: View {
         appSettings.servers = []
         serverAddress = ""
         serverPort = "12345"
+        serverPassword = ""
     }
   }
 }

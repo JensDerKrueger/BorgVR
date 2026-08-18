@@ -93,9 +93,10 @@ final class CachingRemoteDataSource: DataSource {
    - Throws: An error if the backing file cannot be created or mapped.
    */
   init(connection: NWConnection, datasetID: String, maxBricksPerGetRequest: Int,
-       filename: String, logger: LoggerBase?, notifier: NotificationBase?) throws {
+       filename: String, authSecret: String? = nil, logger: LoggerBase?, notifier: NotificationBase?) throws {
     self.remoteDataSource = try RemoteDataSource(connection: connection,
                                                  datasetID: datasetID,
+                                                 authSecret: authSecret,
                                                  logger:logger)
     self.targetFilename = filename
     self.logger = logger

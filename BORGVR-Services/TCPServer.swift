@@ -2,7 +2,7 @@ import Network
 import Foundation
 
 class TCPServer {
-  static let protocolVersionName: String = "1"
+  static let protocolVersionName: String = BorgVRServerAuthentication.protocolVersionName
 
   let port: NWEndpoint.Port
   let queue = DispatchQueue(label: "TCPServerQueue")
@@ -16,6 +16,14 @@ class TCPServer {
 
   /// Dataset list received from the GUI
   private var datasets: [DatasetInfo]
+  private let authSecret: String
+  private var authChallenges: [ObjectIdentifier: AuthChallenge] = [:]
+  private var authenticatedConnections: Set<ObjectIdentifier> = []
+
+  private struct AuthChallenge {
+    let salt: Data
+    let serverNonce: Data
+  }
 
   // Dataset and its reusable brick buffer for a single connection
   final class ConnectionDataset {
@@ -39,10 +47,12 @@ class TCPServer {
     port: UInt16,
     maxBricksPerGetRequest: Int,
     logger: LoggerBase? = nil,
-    datasets: [DatasetInfo] = []
+    datasets: [DatasetInfo] = [],
+    authSecret: String? = nil
   ) {
     self.logger = logger
     self.datasets = datasets
+    self.authSecret = BorgVRServerAuthentication.normalizedSecret(authSecret)
 
     if maxBricksPerGetRequest > 0 {
       self.maxBricksPerGetRequest = maxBricksPerGetRequest
@@ -241,21 +251,140 @@ class TCPServer {
     let parameters = components.dropFirst()
 
     switch cmd.uppercased() {
+      case "HELLO":
+        return sendHello(parameters: parameters, connection: connection)
+
+      case "AUTH":
+        return authenticate(parameters: parameters, connection: connection)
+
       case "LIST":
+        guard isCommandAllowed(for: connection) else { return false }
         return sendList(parameters: parameters, connection: connection)
 
       case "OPEN":
+        guard isCommandAllowed(for: connection) else { return false }
         return openDataset(parameters: parameters, connection: connection)
 
       case "GETBRICKS":
+        guard isCommandAllowed(for: connection) else { return false }
         return getBricks(parameters: parameters, connection: connection)
 
       case "INFO":
+        guard isCommandAllowed(for: connection) else { return false }
         return sendInfo(parameters: parameters, connection: connection)
 
       default:
         return false
     }
+  }
+
+  private var requiresAuthentication: Bool {
+    !authSecret.isEmpty
+  }
+
+  private func isCommandAllowed(for connection: NWConnection) -> Bool {
+    guard requiresAuthentication else { return true }
+    let connectionID = ObjectIdentifier(connection)
+    stateLock.lock()
+    let authenticated = authenticatedConnections.contains(connectionID)
+    stateLock.unlock()
+    if !authenticated {
+      logger?.warning("Rejecting unauthenticated server command.")
+    }
+    return authenticated
+  }
+
+  private func sendHello(
+    parameters: ArraySlice<Substring>,
+    connection: NWConnection
+  ) -> Bool {
+    guard expectParameterCount(parameters, equals: 0) else { return false }
+
+    let kv = KeyValuePairHandler()
+    kv.set("VERSION", TCPServer.protocolVersionName)
+
+    if requiresAuthentication {
+      let challenge = AuthChallenge(
+        salt: BorgVRServerAuthentication.randomSalt(),
+        serverNonce: BorgVRServerAuthentication.randomNonce()
+      )
+      let connectionID = ObjectIdentifier(connection)
+      stateLock.lock()
+      authChallenges[connectionID] = challenge
+      stateLock.unlock()
+
+      kv.set("AUTH", "REQUIRED")
+      kv.set("SALT", challenge.salt.base64EncodedString())
+      kv.set("SERVER_NONCE", challenge.serverNonce.base64EncodedString())
+    } else {
+      kv.set("AUTH", "NONE")
+    }
+
+    let response = kv.synthesize() + "\n"
+    connection.send(content: response.data(using: .utf8), completion: .contentProcessed({ _ in }))
+    return true
+  }
+
+  private func authenticate(
+    parameters: ArraySlice<Substring>,
+    connection: NWConnection
+  ) -> Bool {
+    guard requiresAuthentication else {
+      return sendAuthResult("OK", connection: connection)
+    }
+    guard expectParameterCount(parameters, equals: 2) else {
+      return sendAuthResult("FAILED", connection: connection)
+    }
+
+    let connectionID = ObjectIdentifier(connection)
+    stateLock.lock()
+    let challenge = authChallenges[connectionID]
+    stateLock.unlock()
+
+    guard
+      let challenge,
+      let clientNonce = Data(base64Encoded: String(parameters[parameters.startIndex]))
+    else {
+      return sendAuthResult("FAILED", connection: connection)
+    }
+
+    let providedResponse = String(parameters[parameters.index(after: parameters.startIndex)])
+    let expectedResponse = BorgVRServerAuthentication.response(
+      secret: authSecret,
+      salt: challenge.salt,
+      serverNonce: challenge.serverNonce,
+      clientNonce: clientNonce
+    )
+
+    guard constantTimeEquals(providedResponse, expectedResponse) else {
+      logger?.warning("Client authentication failed.")
+      return sendAuthResult("FAILED", connection: connection)
+    }
+
+    stateLock.lock()
+    authenticatedConnections.insert(connectionID)
+    authChallenges.removeValue(forKey: connectionID)
+    stateLock.unlock()
+    return sendAuthResult("OK", connection: connection)
+  }
+
+  private func sendAuthResult(_ result: String, connection: NWConnection) -> Bool {
+    let kv = KeyValuePairHandler()
+    kv.set("AUTH", result)
+    let response = kv.synthesize() + "\n"
+    connection.send(content: response.data(using: .utf8), completion: .contentProcessed({ _ in }))
+    return true
+  }
+
+  private func constantTimeEquals(_ lhs: String, _ rhs: String) -> Bool {
+    let lhsBytes = [UInt8](lhs.utf8)
+    let rhsBytes = [UInt8](rhs.utf8)
+    var difference = lhsBytes.count ^ rhsBytes.count
+    let count = min(lhsBytes.count, rhsBytes.count)
+    for index in 0..<count {
+      difference |= Int(lhsBytes[index] ^ rhsBytes[index])
+    }
+    return difference == 0
   }
 
   private func openDataset(
@@ -480,6 +609,8 @@ class TCPServer {
     let connectionID = ObjectIdentifier(connection)
     stateLock.lock()
     connectionDatasets.removeValue(forKey: connectionID)
+    authChallenges.removeValue(forKey: connectionID)
+    authenticatedConnections.remove(connectionID)
     stateLock.unlock()
   }
 

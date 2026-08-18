@@ -4,6 +4,7 @@ struct BorgVRServerConfiguration {
   var dataDirectory: String
   var port: Int
   var maxBricksPerGetRequest: Int
+  var authSecret: String = ""
 }
 
 struct BorgVRServerState {
@@ -49,7 +50,8 @@ final class BorgVRServerHost {
       port: serverPort,
       maxBricksPerGetRequest: configuration.maxBricksPerGetRequest,
       logger: logger,
-      datasets: datasets
+      datasets: datasets,
+      authSecret: configuration.authSecret
     )
     newServer.start()
 

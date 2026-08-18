@@ -5,16 +5,18 @@ struct ServerConfiguration {
   var dataDirectory: String = FileManager.default.homeDirectoryForCurrentUser.path
   var port: UInt16 = 12345
   var maxBricksPerGetRequest: Int = 20
+  var password: String = ""
 }
 
 let usage = """
 Usage:
-  TerminalServerApp [--directory <path>] [--port <port>] [--max-bricks <count>]
+  TerminalServerApp [--directory <path>] [--port <port>] [--max-bricks <count>] [--password <secret>]
 
 Options:
   --directory, -d   Directory containing .data datasets. Defaults to the home directory.
   --port, -p        TCP port to listen on. Defaults to 12345.
   --max-bricks, -m  Maximum bricks per GETBRICKS request. Defaults to 20.
+  --password        Optional server password. If omitted, the server accepts unauthenticated clients.
   --help, -h        Show this help.
 """
 
@@ -53,6 +55,9 @@ func parseArguments(_ args: [String]) -> ServerConfiguration {
         }
         config.maxBricksPerGetRequest = maxBricks
 
+      case "--password":
+        config.password = requireValue(after: argument)
+
       case "--help", "-h":
         print(usage)
         exit(0)
@@ -81,7 +86,8 @@ let server = TCPServer(
   port: config.port,
   maxBricksPerGetRequest: config.maxBricksPerGetRequest,
   logger: logger,
-  datasets: datasets
+  datasets: datasets,
+  authSecret: config.password
 )
 server.start()
 

@@ -23,6 +23,9 @@ final class StoredAppModel : ObservableObject {
   static let defaultPort: Int = 12345
   @AppStorage("serverPort") var port: Int = defaultPort
 
+  static let defaultServerPassword: String = ""
+  @AppStorage("serverPassword") var serverPassword: String = defaultServerPassword
+
   static let defaultMaxBricksPerGetRequest: Int = 20
   @AppStorage("maxBricksPerGetRequest") var maxBricksPerGetRequest: Int = defaultMaxBricksPerGetRequest
 
@@ -38,6 +41,7 @@ final class StoredAppModel : ObservableObject {
     borderModeString = StoredAppModel.defaultBorderModeString
 
     port = StoredAppModel.defaultPort
+    serverPassword = StoredAppModel.defaultServerPassword
     maxBricksPerGetRequest = StoredAppModel.defaultMaxBricksPerGetRequest
     dataDirectory = StoredAppModel.defaultDataDirectory
   }

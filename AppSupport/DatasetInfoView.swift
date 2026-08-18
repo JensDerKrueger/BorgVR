@@ -59,7 +59,7 @@ struct DatasetInfoView: View {
         return String(localized: "dataset_source_local")
       case .builtIn:
         return String(localized: "dataset_source_built_in")
-      case let .remote(address, port):
+      case let .remote(address, port, _):
         return String(format: String(localized: "dataset_source_remote_format"), address, port)
     }
   }

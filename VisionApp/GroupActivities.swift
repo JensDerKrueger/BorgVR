@@ -35,6 +35,7 @@ class GroupActivityHelper {
   private let localActivityStartGraceInterval: TimeInterval = 120
   private let sharePlayServerHost = BorgVRServerHost(logger: GUILogger())
   private var sharePlayDatasetID: String?
+  private var sharePlayAuthToken = ""
   private var sharePlayServerRunning = false
   private var sharePlayServerPort = StoredAppModel.int("sharePlayServerPort")
 
@@ -199,9 +200,11 @@ class GroupActivityHelper {
     runtimeAppModel.logger.dev("sendInitialData")
 
     if let dataset = runtimeAppModel.activeDataset {
+      let sharedDataset = shareOrigins(for: dataset)
       let initMessage = InitMessage(
         uniqueID: dataset.uniqueId,
-        origins: shareOrigins(for: dataset),
+        origins: sharedDataset.origins,
+        authToken: sharedDataset.authToken,
         description:dataset.description
       )
 
@@ -222,7 +225,7 @@ class GroupActivityHelper {
         runtimeAppModel.logger.error("Failed to send init data to all participants: \(error)")
       }
     } else {
-      let data = InitMessage(uniqueID: "", origins: [], description:"").toData()
+      let data = InitMessage(uniqueID: "", origins: [], authToken: "", description:"").toData()
       do {
         try await sendData(data:data, of: .initMessage, to: to)
       } catch {
@@ -328,11 +331,13 @@ class GroupActivityHelper {
   struct InitMessage: DataCodable {
     let uniqueID: String
     let origins: [String]
+    let authToken: String
     let description: String
 
-    init(uniqueID: String, origins: [String], description:String) {
+    init(uniqueID: String, origins: [String], authToken: String, description:String) {
       self.uniqueID = uniqueID
       self.origins = origins
+      self.authToken = authToken
       self.description = description
     }
 
@@ -370,10 +375,12 @@ class GroupActivityHelper {
 
       guard let id = readString(),
             let origins = readStringArray(),
+            let authToken = readString(),
             let desc = readString() else { return nil }
 
       self.uniqueID = id
       self.origins = origins
+      self.authToken = authToken
       self.description = desc
     }
 
@@ -395,6 +402,7 @@ class GroupActivityHelper {
 
       writeString(uniqueID)
       writeStringArray(origins)
+      writeString(authToken)
       writeString(description)
 
       return data
@@ -458,6 +466,7 @@ class GroupActivityHelper {
             uniqueID: initMessage.uniqueID,
             description: initMessage.description,
             origins: remoteOrigins,
+            authToken: initMessage.authToken,
             sessionGeneration: generation
           )
         }
@@ -470,12 +479,13 @@ class GroupActivityHelper {
     uniqueID: String,
     description: String,
     origins: [(address: String, port: Int)],
+    authToken: String,
     sessionGeneration generation: Int
   ) async {
     guard generation == sessionGeneration, groupSession != nil else { return }
     guard let runtimeAppModel else { return }
 
-    guard let remoteSource = await firstReachableOrigin(origins, datasetID: uniqueID) else {
+    guard let remoteSource = await firstReachableOrigin(origins, datasetID: uniqueID, authToken: authToken) else {
       guard generation == sessionGeneration, groupSession != nil else { return }
       runtimeAppModel.currentState = .waitingForHost
       runtimeAppModel.logger.error("SharePlay dataset \(uniqueID) is not available locally and none of the host origins are reachable.")
@@ -486,7 +496,7 @@ class GroupActivityHelper {
     let dataset = RuntimeAppModel.DatasetEntry(
       identifier: uniqueID,
       description: description,
-      source:.remote(address: remoteSource.address, port: remoteSource.port),
+      source:.remote(address: remoteSource.address, port: remoteSource.port, password: authToken),
       uniqueId: uniqueID
     )
     runtimeAppModel.startImmersiveSpace(dataset: dataset, asGroupSessionHost:false)
@@ -494,7 +504,8 @@ class GroupActivityHelper {
 
   private func firstReachableOrigin(
     _ origins: [(address: String, port: Int)],
-    datasetID: String
+    datasetID: String,
+    authToken: String
   ) async -> (address: String, port: Int)? {
     for origin in origins {
       let isReachable = await Task.detached(priority: .userInitiated) {
@@ -502,6 +513,7 @@ class GroupActivityHelper {
           let manager = BORGVRRemoteDataManager(
             host: origin.address,
             port: UInt16(clamping: origin.port),
+            authSecret: authToken,
             logger: nil,
             notifier: nil
           )
@@ -521,33 +533,35 @@ class GroupActivityHelper {
   }
 
   @MainActor
-  private func shareOrigins(for dataset: RuntimeAppModel.DatasetEntry) -> [String] {
+  private func shareOrigins(for dataset: RuntimeAppModel.DatasetEntry) -> (origins: [String], authToken: String) {
     switch dataset.source {
-      case .remote(let address, let port):
-        return ["\(address):\(port)"]
+      case .remote(let address, let port, let password):
+        return (["\(address):\(port)"], password)
       case .local, .builtIn:
         return ensureServing(dataset: dataset)
     }
   }
 
   @MainActor
-  private func ensureServing(dataset: RuntimeAppModel.DatasetEntry) -> [String] {
+  private func ensureServing(dataset: RuntimeAppModel.DatasetEntry) -> (origins: [String], authToken: String) {
     guard let datasetInfo = serverDatasetInfo(for: dataset) else {
-      return []
+      return ([], "")
     }
 
     if sharePlayServerRunning,
        sharePlayDatasetID == datasetInfo.id {
-      return originAddresses(port: sharePlayServerPort)
+      return (originAddresses(port: sharePlayServerPort), sharePlayAuthToken)
     }
 
     stopSharePlayServer()
+    let authToken = BorgVRServerAuthentication.randomToken()
     for port in sharePlayCandidatePorts(preferredPort: storedAppModel?.sharePlayServerPort ?? sharePlayServerPort) {
       let state = sharePlayServerHost.start(
         configuration: BorgVRServerConfiguration(
           dataDirectory: "",
           port: port,
-          maxBricksPerGetRequest: 20
+          maxBricksPerGetRequest: 20,
+          authSecret: authToken
         ),
         additionalDatasets: [datasetInfo],
         includeScannedDatasets: false
@@ -558,19 +572,21 @@ class GroupActivityHelper {
       }
 
       sharePlayDatasetID = datasetInfo.id
+      sharePlayAuthToken = authToken
       sharePlayServerRunning = true
       sharePlayServerPort = state.port
-      return originAddresses(port: state.port)
+      return (originAddresses(port: state.port), authToken)
     }
 
     runtimeAppModel?.logger.error("SharePlay dataset server did not start for dataset \(datasetInfo.id).")
-    return []
+    return ([], "")
   }
 
   @MainActor
   private func stopSharePlayServer() {
     sharePlayServerHost.stop()
     sharePlayDatasetID = nil
+    sharePlayAuthToken = ""
     sharePlayServerRunning = false
   }
 

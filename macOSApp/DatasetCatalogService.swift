@@ -112,6 +112,7 @@ final class DatasetCatalogService {
           let manager = BORGVRRemoteDataManager(
             host: server.address,
             port: UInt16(server.port),
+            authSecret: server.password,
             logger: logger,
             notifier: nil
           )
@@ -121,7 +122,7 @@ final class DatasetCatalogService {
               AppModel.DatasetEntry(
                 identifier: dataset.id,
                 description: dataset.description,
-                source: .remote(address: server.address, port: server.port),
+                source: .remote(address: server.address, port: server.port, password: server.password),
                 uniqueId: dataset.id,
                 metadataSummary: nil
               )

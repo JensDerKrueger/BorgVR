@@ -24,6 +24,7 @@ struct SettingsView: View {
 
   @State private var tempPort = ""
   @State private var tempServerAddress = ""
+  @State private var tempServerPassword = ""
   @State private var tempTimeout = ""
   @State private var tempBrickSize = ""
   @State private var tempBrickOverlap = ""
@@ -146,6 +147,7 @@ struct SettingsView: View {
         .autocorrectionDisabled()
       TextField("Port", text: $tempPort)
         .keyboardType(.numberPad)
+      SecureField("Passwort (optional)", text: $tempServerPassword)
       Button {
         addServer()
       } label: {
@@ -242,7 +244,10 @@ struct SettingsView: View {
   }
 
   private func serverLabel(for server: StoredServer) -> String {
-    "\(server.address):\(server.port)"
+    if server.password.isEmpty {
+      return "\(server.address):\(server.port)"
+    }
+    return "\(server.address):\(server.port) \(String(localized: "(Passwort)"))"
   }
 
   private func removeServer(_ server: StoredServer) {
@@ -252,6 +257,7 @@ struct SettingsView: View {
   private func loadTemporaryValues() {
     tempPort = "12345"
     tempServerAddress = ""
+    tempServerPassword = ""
     tempTimeout = String(appSettings.timeout)
     tempBrickSize = String(appSettings.brickSize)
     tempBrickOverlap = String(appSettings.brickOverlap)
@@ -291,10 +297,12 @@ struct SettingsView: View {
     appSettings.servers.append(
       StoredServer(
         address: tempServerAddress.trimmingCharacters(in: .whitespacesAndNewlines),
-        port: Int(port)
+        port: Int(port),
+        password: tempServerPassword
       )
     )
     tempServerAddress = ""
+    tempServerPassword = ""
     validationMessage = nil
   }
 
@@ -308,6 +316,7 @@ struct SettingsView: View {
         appSettings.resetRemoteDefaults()
         tempPort = "12345"
         tempServerAddress = ""
+        tempServerPassword = ""
       case .lod:
         appSettings.resetLODDefaults()
     }

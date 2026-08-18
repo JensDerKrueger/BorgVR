@@ -246,7 +246,7 @@ struct OpenDatasetView: View {
 
     switch dataset.source {
       case .local: return String(localized: "Lokal")
-      case let .remote(address, port): return "Remote - \(address):\(port)"
+      case let .remote(address, port, _): return "Remote - \(address):\(port)"
       case .builtIn: return String(localized: "eingebaut")
     }
   }
@@ -338,7 +338,7 @@ struct OpenDatasetView: View {
   }
 
   private func validateDatasetCanOpen(_ dataset: AppModel.DatasetEntry) async throws {
-    guard case let .remote(address, port) = dataset.source else { return }
+    guard case let .remote(address, port, password) = dataset.source else { return }
 
     let datasetID = dataset.identifier
     let timeout = appSettings.timeout
@@ -346,6 +346,7 @@ struct OpenDatasetView: View {
       let manager = BORGVRRemoteDataManager(
         host: address,
         port: UInt16(port),
+        authSecret: password,
         logger: nil,
         notifier: nil
       )
@@ -358,7 +359,7 @@ struct OpenDatasetView: View {
     _ dataset: AppModel.DatasetEntry,
     cancellation: RemoteDatasetDownloadCancellation
   ) async throws -> AppModel.DatasetEntry {
-    guard case let .remote(address, port) = dataset.source else { return dataset }
+    guard case let .remote(address, port, password) = dataset.source else { return dataset }
 
     let datasetID = dataset.identifier
     let timeout = appSettings.timeout
@@ -382,6 +383,7 @@ struct OpenDatasetView: View {
       let manager = BORGVRRemoteDataManager(
         host: address,
         port: UInt16(port),
+        authSecret: password,
         logger: nil,
         notifier: nil
       )
@@ -463,9 +465,9 @@ struct OpenDatasetView: View {
   }
 
   private func removeUnavailableRemoteEntries(matching dataset: AppModel.DatasetEntry) {
-    guard case let .remote(address, port) = dataset.source else { return }
+    guard case let .remote(address, port, _) = dataset.source else { return }
     datasets.removeAll {
-      if case let .remote(candidateAddress, candidatePort) = $0.source {
+      if case let .remote(candidateAddress, candidatePort, _) = $0.source {
         return candidateAddress == address && candidatePort == port
       }
       return false
@@ -582,6 +584,7 @@ struct OpenDatasetView: View {
           let manager = BORGVRRemoteDataManager(
             host: server.address,
             port: UInt16(server.port),
+            authSecret: server.password,
             logger: logger,
             notifier: nil
           )
@@ -591,7 +594,7 @@ struct OpenDatasetView: View {
               AppModel.DatasetEntry(
                 identifier: dataset.id,
                 description: dataset.description,
-                source: .remote(address: server.address, port: server.port),
+                source: .remote(address: server.address, port: server.port, password: server.password),
                 uniqueId: dataset.id,
                 metadataSummary: nil
               )
@@ -619,7 +622,7 @@ private extension AppModel.DatasetSource {
         return "local"
       case .builtIn:
         return "builtIn"
-      case let .remote(address, port):
+      case let .remote(address, port, _):
         return "remote:\(address):\(port)"
     }
   }

@@ -335,10 +335,11 @@ final class MacVolumeRenderer: NSObject, MTKViewDelegate {
           storedAppModel.stopAccessingDataDirectory(accessURL)
           throw error
         }
-      case let .remote(address, port):
+      case let .remote(address, port, password):
         let manager = BORGVRRemoteDataManager(
           host: address,
           port: UInt16(port),
+          authSecret: password,
           logger: appModel.logger,
           notifier: nil
         )

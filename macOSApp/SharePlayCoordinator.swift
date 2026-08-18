@@ -251,13 +251,15 @@ final class SharePlayCoordinator: ObservableObject {
     guard appModel?.groupSessionHost == true else { return }
 
     guard let dataset = appModel?.activeDataset else {
-      try? await sendData(InitMessage(uniqueID: "", origins: [], description: "").toData(), of: .initMessage, to: participants)
+      try? await sendData(InitMessage(uniqueID: "", origins: [], authToken: "", description: "").toData(), of: .initMessage, to: participants)
       return
     }
 
+    let sharedDataset = shareOrigins(for: dataset)
     let message = InitMessage(
       uniqueID: dataset.uniqueId,
-      origins: shareOrigins(for: dataset),
+      origins: sharedDataset.origins,
+      authToken: sharedDataset.authToken,
       description: dataset.description
     )
     try? await sendData(message.toData(), of: .initMessage, to: participants)
@@ -382,6 +384,7 @@ final class SharePlayCoordinator: ObservableObject {
         uniqueID: message.uniqueID,
         description: message.description,
         origins: remoteOrigins,
+        authToken: message.authToken,
         sessionGeneration: generation
       )
     }
@@ -391,12 +394,13 @@ final class SharePlayCoordinator: ObservableObject {
     uniqueID: String,
     description: String,
     origins: [(address: String, port: Int)],
+    authToken: String,
     sessionGeneration generation: Int
   ) async {
     guard generation == sessionGeneration, isInSession else { return }
     guard let appModel else { return }
 
-    guard let remoteSource = await firstReachableOrigin(origins, datasetID: uniqueID) else {
+    guard let remoteSource = await firstReachableOrigin(origins, datasetID: uniqueID, authToken: authToken) else {
       guard generation == sessionGeneration, isInSession else { return }
       appModel.currentState = .waitingForHost
       appModel.logger.error("SharePlay dataset \(uniqueID) is not available locally and none of the host origins are reachable.")
@@ -407,7 +411,7 @@ final class SharePlayCoordinator: ObservableObject {
     appModel.activeDataset = AppModel.DatasetEntry(
       identifier: uniqueID,
       description: description,
-      source: .remote(address: remoteSource.address, port: remoteSource.port),
+      source: .remote(address: remoteSource.address, port: remoteSource.port, password: authToken),
       uniqueId: uniqueID
     )
     appModel.currentState = .renderData
@@ -415,7 +419,8 @@ final class SharePlayCoordinator: ObservableObject {
 
   private func firstReachableOrigin(
     _ origins: [(address: String, port: Int)],
-    datasetID: String
+    datasetID: String,
+    authToken: String
   ) async -> (address: String, port: Int)? {
     for origin in origins {
       let isReachable = await Task.detached(priority: .userInitiated) {
@@ -423,6 +428,7 @@ final class SharePlayCoordinator: ObservableObject {
           let manager = BORGVRRemoteDataManager(
             host: origin.address,
             port: UInt16(clamping: origin.port),
+            authSecret: authToken,
             logger: nil,
             notifier: nil
           )
@@ -492,14 +498,14 @@ final class SharePlayCoordinator: ObservableObject {
     return (address, port)
   }
 
-  private func shareOrigins(for dataset: AppModel.DatasetEntry) -> [String] {
+  private func shareOrigins(for dataset: AppModel.DatasetEntry) -> (origins: [String], authToken: String) {
     switch dataset.source {
-      case .remote(let address, let port):
-        return ["\(address):\(port)"]
+      case .remote(let address, let port, let password):
+        return (["\(address):\(port)"], password)
       case .local, .builtIn:
         guard let storedAppModel, let serverController else {
           appModel?.logger.error("SharePlay dataset \(dataset.uniqueId) cannot be shared because no dataset server is configured.")
-          return []
+          return ([], "")
         }
         return serverController.ensureServing(dataset: dataset, using: storedAppModel)
     }
@@ -509,11 +515,13 @@ final class SharePlayCoordinator: ObservableObject {
 private struct InitMessage {
   let uniqueID: String
   let origins: [String]
+  let authToken: String
   let description: String
 
-  init(uniqueID: String, origins: [String], description: String) {
+  init(uniqueID: String, origins: [String], authToken: String, description: String) {
     self.uniqueID = uniqueID
     self.origins = origins
+    self.authToken = authToken
     self.description = description
   }
 
@@ -547,6 +555,7 @@ private struct InitMessage {
 
     guard let uniqueID = readString(),
           let origins = readStringArray(),
+          let authToken = readString(),
           let description = readString()
     else {
       return nil
@@ -554,6 +563,7 @@ private struct InitMessage {
 
     self.uniqueID = uniqueID
     self.origins = origins
+    self.authToken = authToken
     self.description = description
   }
 
@@ -575,6 +585,7 @@ private struct InitMessage {
 
     writeString(uniqueID)
     writeStringArray(origins)
+    writeString(authToken)
     writeString(description)
 
     return data

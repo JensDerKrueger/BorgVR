@@ -61,6 +61,29 @@ struct StoredServer: Identifiable, Codable, Equatable {
   var id: UUID = UUID()
   var address: String
   var port: Int
+  var password: String = ""
+
+  init(id: UUID = UUID(), address: String, port: Int, password: String = "") {
+    self.id = id
+    self.address = address
+    self.port = port
+    self.password = password
+  }
+
+  private enum CodingKeys: String, CodingKey {
+    case id
+    case address
+    case port
+    case password
+  }
+
+  init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+    address = try container.decode(String.self, forKey: .address)
+    port = try container.decode(Int.self, forKey: .port)
+    password = try container.decodeIfPresent(String.self, forKey: .password) ?? ""
+  }
 }
 
 final class AppSettings: ObservableObject {

@@ -11,6 +11,7 @@ final class BackgroundServerController: ObservableObject {
   private let sharePlayServerHost: BorgVRServerHost
   private let logger = GUILogger()
   private var sharePlayDatasetID: String?
+  private var sharePlayAuthToken = ""
   private var sharePlayServerRunning = false
   private var sharePlayServerPort = StoredAppModel.defaultPort + 1
   private var runningPort = StoredAppModel.defaultPort
@@ -25,23 +26,25 @@ final class BackgroundServerController: ObservableObject {
     startServer(using: settings, additionalDatasets: [])
   }
 
-  func ensureServing(dataset: AppModel.DatasetEntry, using settings: StoredAppModel) -> [String] {
+  func ensureServing(dataset: AppModel.DatasetEntry, using settings: StoredAppModel) -> (origins: [String], authToken: String) {
     guard let datasetInfo = serverDatasetInfo(for: dataset) else {
-      return []
+      return ([], "")
     }
 
     if sharePlayServerRunning,
        sharePlayDatasetID == datasetInfo.id {
-      return originAddresses(port: sharePlayServerPort)
+      return (originAddresses(port: sharePlayServerPort), sharePlayAuthToken)
     }
 
     stopSharePlayServer()
+    let authToken = BorgVRServerAuthentication.randomToken()
     for port in sharePlayCandidatePorts(preferredPort: settings.sharePlayServerPort) {
       let state = sharePlayServerHost.start(
         configuration: BorgVRServerConfiguration(
           dataDirectory: "",
           port: port,
-          maxBricksPerGetRequest: settings.maxBricksPerGetRequest
+          maxBricksPerGetRequest: settings.maxBricksPerGetRequest,
+          authSecret: authToken
         ),
         additionalDatasets: [datasetInfo],
         includeScannedDatasets: false
@@ -52,13 +55,14 @@ final class BackgroundServerController: ObservableObject {
       }
 
       sharePlayDatasetID = datasetInfo.id
+      sharePlayAuthToken = authToken
       sharePlayServerRunning = true
       sharePlayServerPort = state.port
-      return originAddresses(port: state.port)
+      return (originAddresses(port: state.port), authToken)
     }
 
     logger.error("SharePlay dataset server did not start for dataset \(datasetInfo.id).")
-    return []
+    return ([], "")
   }
 
   private func startServer(using settings: StoredAppModel, additionalDatasets: [DatasetInfo]) {
@@ -66,7 +70,8 @@ final class BackgroundServerController: ObservableObject {
       configuration: BorgVRServerConfiguration(
         dataDirectory: settings.dataDirectory,
         port: settings.port,
-        maxBricksPerGetRequest: settings.maxBricksPerGetRequest
+        maxBricksPerGetRequest: settings.maxBricksPerGetRequest,
+        authSecret: settings.serverPassword
       ),
       additionalDatasets: additionalDatasets
     )
@@ -88,6 +93,7 @@ final class BackgroundServerController: ObservableObject {
   func stopSharePlayServer() {
     sharePlayServerHost.stop()
     sharePlayDatasetID = nil
+    sharePlayAuthToken = ""
     sharePlayServerRunning = false
   }
 

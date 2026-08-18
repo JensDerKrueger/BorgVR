@@ -26,6 +26,9 @@ final class StoredAppModel : ObservableObject {
   static let defaultPort: Int = 12345
   @AppStorage("serverPort") var port: Int = defaultPort
 
+  static let defaultServerPassword: String = ""
+  @AppStorage("serverPassword") var serverPassword: String = defaultServerPassword
+
   static let defaultSharePlayServerPort: Int = 12346
   @AppStorage("sharePlayServerPort") var sharePlayServerPort: Int = defaultSharePlayServerPort
 
@@ -47,6 +50,7 @@ final class StoredAppModel : ObservableObject {
     lastMinute = StoredAppModel.defaultLastMinute
     autoStartServer = StoredAppModel.defaultAutoStartServer
     port = StoredAppModel.defaultPort
+    serverPassword = StoredAppModel.defaultServerPassword
     sharePlayServerPort = StoredAppModel.defaultSharePlayServerPort
     maxBricksPerGetRequest = StoredAppModel.defaultMaxBricksPerGetRequest
     dataDirectory = StoredAppModel.defaultDataDirectory

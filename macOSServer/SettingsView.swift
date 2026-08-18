@@ -48,6 +48,15 @@ struct SettingsView: View {
                 }
               }
               GridRow {
+                Text("Server-Passwort")
+                  .gridColumnAlignment(.trailing)
+                  .frame(minWidth: 120, alignment: .trailing)
+                SecureField("Passwort (optional)", text: $storedAppModel.serverPassword)
+                  .textFieldStyle(RoundedBorderTextFieldStyle())
+                  .frame(width: 220)
+                  .accentColor(.blue)
+              }
+              GridRow {
                 Text("settings_brickcount_label")
                   .gridColumnAlignment(.trailing)
                   .frame(minWidth: 120, alignment: .trailing)

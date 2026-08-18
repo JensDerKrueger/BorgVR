@@ -120,7 +120,7 @@ struct OpenDatasetView: View {
                           datasets[index].description
                         )
                       )
-                    case let .remote(adress, port):
+                    case let .remote(adress, port, _):
                       Text(
                         String(
                           format: NSLocalizedString(
@@ -291,7 +291,7 @@ struct OpenDatasetView: View {
                           asGroupSessionHost: true
                         )
 
-                      case let .remote(addr, port):
+                      case let .remote(addr, port, password):
                         if storedAppModel.progressiveLoading {
                           runtimeAppModel.startImmersiveSpace(
                             dataset: datasets[index],
@@ -302,6 +302,7 @@ struct OpenDatasetView: View {
                             datasetID: datasets[index].identifier,
                             serverAddress: addr,
                             serverPort: port,
+                            authSecret: password,
                             asGroupSessionHost: true
                           )
                         }
@@ -474,6 +475,7 @@ struct OpenDatasetView: View {
           let manager = BORGVRRemoteDataManager(
             host: server.address,
             port: UInt16(server.port),
+            authSecret: server.password,
             logger: runtimeAppModel.logger,
             notifier: runtimeAppModel.notifier
           )
@@ -486,7 +488,8 @@ struct OpenDatasetView: View {
                 description: dataset.description,
                 source: .remote(
                   address: server.address,
-                  port: server.port
+                  port: server.port,
+                  password: server.password
                 ),
                 uniqueId: dataset.id
               )
@@ -525,6 +528,7 @@ struct OpenDatasetView: View {
     datasetID: String,
     serverAddress: String,
     serverPort: Int,
+    authSecret: String,
     asGroupSessionHost: Bool
   ) {
     prefetchProgress = 0.0
@@ -547,6 +551,7 @@ struct OpenDatasetView: View {
         let manager = BORGVRRemoteDataManager(
           host: serverAddress,
           port: UInt16(serverPort),
+          authSecret: authSecret,
           logger: logger,
           notifier: nil
         )

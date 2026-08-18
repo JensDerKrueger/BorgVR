@@ -43,7 +43,7 @@ static bool parseInt(const std::string& s, int& out) {
 
 static void printUsage(const char* filename) {
   std::cout << "Usage:\n  " << basenameOf(filename)
-            << " port maxBricksPerGetRequest datasetDirectory [scanIntervalSeconds]\n";
+            << " port maxBricksPerGetRequest datasetDirectory [scanIntervalSeconds] [--password secret]\n";
 }
 
 static std::vector<DatasetInfo> scanDatasetDirectory(const std::string& directory,
@@ -118,12 +118,29 @@ int main(int argc, char** argv) {
     int tmp = 0;
     if (parseInt(argv[argi], tmp) && tmp > 0) {
       scanIntervalSeconds = tmp;
+      ++argi;
+    }
+  }
+
+  std::string password;
+  while (argc > argi) {
+    const std::string option = argv[argi++];
+    if (option == "--password") {
+      if (argc <= argi) {
+        logger->error("Missing value for --password");
+        return 1;
+      }
+      password = argv[argi++];
+    } else {
+      logger->error("Unknown argument: " + option);
+      printUsage(argv[0]);
+      return 1;
     }
   }
 
   auto datasets = scanDatasetDirectory(datasetDir, logger);
 
-  TCPServer server(port, maxBricks, logger);
+  TCPServer server(port, maxBricks, logger, password);
   server.setDatasets(datasets);
   if (!server.start()) {
     return 2;

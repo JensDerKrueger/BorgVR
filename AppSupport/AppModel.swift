@@ -48,7 +48,7 @@ final class AppModel: ObservableObject {
 
   enum DatasetSource: Equatable {
     case local
-    case remote(address: String, port: Int)
+    case remote(address: String, port: Int, password: String)
     case builtIn
   }
 
@@ -146,7 +146,17 @@ final class AppModel: ObservableObject {
   }
 
   func datasetRenderKey(for dataset: DatasetEntry?) -> String {
-    dataset.map { "\($0.source)-\($0.identifier)" } ?? ""
+    guard let dataset else { return "" }
+    let sourceKey: String
+    switch dataset.source {
+      case .local:
+        sourceKey = "local"
+      case .builtIn:
+        sourceKey = "builtIn"
+      case let .remote(address, port, _):
+        sourceKey = "remote:\(address):\(port)"
+    }
+    return "\(sourceKey)-\(dataset.identifier)"
   }
 
   var activeDatasetRenderKey: String {

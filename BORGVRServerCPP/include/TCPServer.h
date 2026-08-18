@@ -20,11 +20,12 @@ struct DatasetInfo {
 
 class TCPServer {
 public:
-  static constexpr const char* kProtocolVersionName = "1";
+  static constexpr const char* kProtocolVersionName = "2";
 
   TCPServer(uint16_t port,
             int maxBricksPerGetRequest,
-            std::shared_ptr<Logger> logger);
+            std::shared_ptr<Logger> logger,
+            std::string authSecret = "");
 
   ~TCPServer();
 
@@ -53,6 +54,10 @@ private:
   private:
     void run();
     bool processCommand(const std::string& line);
+    bool sendHello(const std::vector<std::string>& params);
+    bool authenticate(const std::vector<std::string>& params);
+    bool sendAuthResult(const std::string& result);
+    bool commandAllowed() const;
     bool sendList(const std::vector<std::string>& params);
     bool sendInfo(const std::vector<std::string>& params);
     bool openDataset(const std::vector<std::string>& params);
@@ -69,6 +74,9 @@ private:
     // Per-connection dataset state
     std::unique_ptr<BORGVRFileData> dataset_;
     std::vector<uint8_t> brickBuffer_;
+    bool authenticated_{false};
+    std::vector<uint8_t> salt_;
+    std::vector<uint8_t> serverNonce_;
   };
 
   void acceptLoop();
@@ -76,6 +84,7 @@ private:
 
   uint16_t port_;
   int maxBricksPerGetRequest_;
+  std::string authSecret_;
   std::shared_ptr<Logger> logger_;
   std::vector<DatasetInfo> datasets_;
   mutable std::mutex datasetsMutex_;
@@ -108,4 +117,3 @@ private:
  OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
  IN THE SOFTWARE.
  */
-

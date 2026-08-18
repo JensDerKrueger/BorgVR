@@ -1,6 +1,7 @@
 import SwiftUI
 import UniformTypeIdentifiers
 import Foundation
+import Combine
 import SystemConfiguration
 
 
@@ -350,7 +351,8 @@ struct ServerView: View {
       port: UInt16(storedAppModel.port),
       maxBricksPerGetRequest: storedAppModel.maxBricksPerGetRequest,
       logger: logger,
-      datasets: datasets
+      datasets: datasets,
+      authSecret: storedAppModel.serverPassword
     )
     server?.start()
     statusText = L(

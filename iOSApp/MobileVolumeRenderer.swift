@@ -265,10 +265,11 @@ final class MobileVolumeRenderer: NSObject, MTKViewDelegate, UIGestureRecognizer
         newDataset = try BORGVRFileData(filename: activeDataset.identifier)
       case .local:
         newDataset = try BORGVRFileData(filename: activeDataset.identifier)
-      case let .remote(address, port):
+      case let .remote(address, port, password):
         let manager = BORGVRRemoteDataManager(
           host: address,
           port: UInt16(port),
+          authSecret: password,
           logger: appModel.logger,
           notifier: nil
         )
