@@ -14,6 +14,8 @@
 		561B8D402EF92E61008BADBC /* LZ4.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 561B8D362EF92E61008BADBC /* LZ4.cpp */; };
 		561B8D412EF92E61008BADBC /* BORGVRFileData.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 561B8D342EF92E61008BADBC /* BORGVRFileData.cpp */; };
 		561B8D422EF92E61008BADBC /* MemoryMappedFile.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 561B8D382EF92E61008BADBC /* MemoryMappedFile.cpp */; };
+		561B8D452EF92F01008BADBC /* HTTPWebServer.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 561B8D442EF92F01008BADBC /* HTTPWebServer.cpp */; };
+		561B8D462EF93010008BADBC /* GeneratedWebAssets.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 561B8D472EF93010008BADBC /* GeneratedWebAssets.cpp */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -40,8 +42,12 @@
 		561B8D302EF92E61008BADBC /* MemoryMappedFile.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = MemoryMappedFile.h; sourceTree = "<group>"; };
 		561B8D312EF92E61008BADBC /* Socket.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Socket.h; sourceTree = "<group>"; };
 		561B8D322EF92E61008BADBC /* TCPServer.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = TCPServer.h; sourceTree = "<group>"; };
+		561B8D432EF92F01008BADBC /* HTTPWebServer.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = HTTPWebServer.h; sourceTree = "<group>"; };
 		561B8D342EF92E61008BADBC /* BORGVRFileData.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = BORGVRFileData.cpp; sourceTree = "<group>"; };
 		561B8D352EF92E61008BADBC /* BORGVRMetaData.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = BORGVRMetaData.cpp; sourceTree = "<group>"; };
+		561B8D472EF93010008BADBC /* GeneratedWebAssets.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = GeneratedWebAssets.cpp; sourceTree = "<group>"; };
+		561B8D482EF93010008BADBC /* GeneratedWebAssets.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = GeneratedWebAssets.h; sourceTree = "<group>"; };
+		561B8D442EF92F01008BADBC /* HTTPWebServer.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = HTTPWebServer.cpp; sourceTree = "<group>"; };
 		561B8D362EF92E61008BADBC /* LZ4.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = LZ4.cpp; sourceTree = "<group>"; };
 		561B8D372EF92E61008BADBC /* main.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = main.cpp; sourceTree = "<group>"; };
 		561B8D382EF92E61008BADBC /* MemoryMappedFile.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = MemoryMappedFile.cpp; sourceTree = "<group>"; };
@@ -84,6 +90,7 @@
 				561B8D2A2EF92E61008BADBC /* BORGVRDataBase.h */,
 				561B8D2B2EF92E61008BADBC /* BORGVRFileData.h */,
 				561B8D2C2EF92E61008BADBC /* BORGVRMetaData.h */,
+				561B8D432EF92F01008BADBC /* HTTPWebServer.h */,
 				561B8D2D2EF92E61008BADBC /* KeyValue.h */,
 				561B8D2E2EF92E61008BADBC /* Logger.h */,
 				561B8D2F2EF92E61008BADBC /* LZ4.h */,
@@ -99,6 +106,9 @@
 			children = (
 				561B8D342EF92E61008BADBC /* BORGVRFileData.cpp */,
 				561B8D352EF92E61008BADBC /* BORGVRMetaData.cpp */,
+				561B8D472EF93010008BADBC /* GeneratedWebAssets.cpp */,
+				561B8D482EF93010008BADBC /* GeneratedWebAssets.h */,
+				561B8D442EF92F01008BADBC /* HTTPWebServer.cpp */,
 				561B8D362EF92E61008BADBC /* LZ4.cpp */,
 				561B8D372EF92E61008BADBC /* main.cpp */,
 				561B8D382EF92E61008BADBC /* MemoryMappedFile.cpp */,
@@ -115,6 +125,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 561B8D262EF92E27008BADBC /* Build configuration list for PBXNativeTarget "BorgVRServer" */;
 			buildPhases = (
+				561B8D492EF93010008BADBC /* Embed Web Assets */,
 				561B8D1B2EF92E27008BADBC /* Sources */,
 				561B8D1C2EF92E27008BADBC /* Frameworks */,
 				561B8D1D2EF92E27008BADBC /* CopyFiles */,
@@ -163,6 +174,32 @@
 		};
 /* End PBXProject section */
 
+/* Begin PBXShellScriptBuildPhase section */
+		561B8D492EF93010008BADBC /* Embed Web Assets */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"$(SRCROOT)/scripts/embed_web_assets.py",
+				"$(SRCROOT)/../web",
+			);
+			name = "Embed Web Assets";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(SRCROOT)/src/GeneratedWebAssets.cpp",
+				"$(SRCROOT)/src/GeneratedWebAssets.h",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "python3 scripts/embed_web_assets.py --web-dir ../web --out-dir src\n";
+		};
+/* End PBXShellScriptBuildPhase section */
+
 /* Begin PBXSourcesBuildPhase section */
 		561B8D1B2EF92E27008BADBC /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
@@ -175,6 +212,8 @@
 				561B8D402EF92E61008BADBC /* LZ4.cpp in Sources */,
 				561B8D412EF92E61008BADBC /* BORGVRFileData.cpp in Sources */,
 				561B8D422EF92E61008BADBC /* MemoryMappedFile.cpp in Sources */,
+				561B8D452EF92F01008BADBC /* HTTPWebServer.cpp in Sources */,
+				561B8D462EF93010008BADBC /* GeneratedWebAssets.cpp in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -219,7 +258,7 @@
 				DEVELOPMENT_TEAM = L8Q6MVX7ZF;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
-				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GCC_DYNAMIC_NO_PIC = NO;
 				GCC_NO_COMMON_BLOCKS = YES;
@@ -281,7 +320,7 @@
 				DEVELOPMENT_TEAM = L8Q6MVX7ZF;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
-				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GCC_NO_COMMON_BLOCKS = YES;
 				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;

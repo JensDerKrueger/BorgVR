@@ -421,3 +421,33 @@
 "Script läuft: %@" = "Script running: %@";
 "Scriptfehler" = "Script error";
 "Renderer ist nicht verfügbar." = "Renderer is not available.";
+
+/* Performance graph */
+"performance_title" = "Performance";
+"perf_legend_last" = "Last";
+"perf_legend_avg" = "Avg";
+"perf_legend_smoothed" = "Smoothed";
+"perf_legend_below_drop" = "Below Drop";
+"perf_legend_between" = "Between";
+"perf_legend_above_recovery" = "Above Recovery";
+"perf_toggle_last" = "Last";
+"perf_toggle_avg" = "Avg";
+"perf_toggle_smoothed" = "Smoothed";
+"perf_toggle_grid" = "Grid";
+"perf_toggle_thresholds" = "Thresholds";
+"perf_toggle_legend" = "Legend";
+"perf_toggle_zones" = "Zones";
+"perf_toggle_ms" = "ms";
+"perf_toggle_last_accessibility" = "Show last frame rate curve";
+"perf_toggle_avg_accessibility" = "Show average frame rate curve";
+"perf_toggle_smoothed_accessibility" = "Show smoothed frame rate curve";
+"perf_toggle_grid_accessibility" = "Show grid lines on graph";
+"perf_toggle_thresholds_accessibility" = "Show threshold lines";
+"perf_toggle_legend_accessibility" = "Show graph legend";
+"perf_toggle_zones_accessibility" = "Show performance zones";
+"perf_toggle_ms_accessibility" = "Switch to frame time in milliseconds";
+"perf_unit_fps" = "fps";
+"perf_unit_ms" = "ms";
+"perf_tooltip_last_format" = "Last: %.1f %@";
+"perf_tooltip_avg_format" = "Avg: %.1f %@";
+"perf_tooltip_smoothed_format" = "Smoothed: %.1f %@";

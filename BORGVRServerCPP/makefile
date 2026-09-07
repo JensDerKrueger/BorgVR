@@ -20,8 +20,15 @@ TARGET    := borgvr_server
 SRC_DIR   := src
 INC_DIR   := include
 BUILD_DIR := build
+WEB_DIR   := ../web
+SCRIPT_DIR := scripts
 
-SRCS := $(wildcard $(SRC_DIR)/*.cpp)
+GENERATED_WEB_SRC := $(SRC_DIR)/GeneratedWebAssets.cpp
+GENERATED_WEB_HDR := $(SRC_DIR)/GeneratedWebAssets.h
+WEB_EMBED_SCRIPT := $(SCRIPT_DIR)/embed_web_assets.py
+WEB_ASSETS := $(shell find $(WEB_DIR) -type f ! -name '.*' 2>/dev/null)
+
+SRCS := $(filter-out $(GENERATED_WEB_SRC),$(wildcard $(SRC_DIR)/*.cpp)) $(GENERATED_WEB_SRC)
 OBJS := $(patsubst $(SRC_DIR)/%.cpp,$(BUILD_DIR)/obj/%.o,$(SRCS))
 DEPS := $(OBJS:.o=.d)
 
@@ -61,6 +68,9 @@ endif
 
 all: $(BUILD_DIR)/$(TARGET)
 
+$(GENERATED_WEB_SRC) $(GENERATED_WEB_HDR): $(WEB_ASSETS) $(WEB_EMBED_SCRIPT)
+	python3 $(WEB_EMBED_SCRIPT) --web-dir $(WEB_DIR) --out-dir $(SRC_DIR)
+
 $(BUILD_DIR)/$(TARGET): $(OBJS)
 	@mkdir -p $(dir $@)
 	$(CXX) $(OBJS) -o $@ $(LDFLAGS)
@@ -86,3 +96,22 @@ print-vars:
 	@echo "SRCS=$(SRCS)"
 
 -include $(DEPS)
+
+# Copyright (c) 2026 Computer Graphics and Visualization Group, University of Duisburg-Essen
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy of this
+# software and associated documentation files (the "Software"), to deal in the Software
+# without restriction, including without limitation the rights to use, copy, modify,
+# merge, publish, distribute, sublicense, and/or sell copies of the Software, and to
+# permit persons to whom the Software is furnished to do so, subject to the following
+# conditions:
+#
+# The above copyright notice and this permission notice shall be included in all copies or
+# substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+# INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+# PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
+# BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+# OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
+# IN THE SOFTWARE.

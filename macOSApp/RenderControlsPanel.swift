@@ -6,6 +6,7 @@ struct RenderControlsPanel: View {
   @EnvironmentObject private var appSettings: AppSettings
   @EnvironmentObject private var sharePlay: SharePlayCoordinator
   @EnvironmentObject private var docking: DockingController
+  @Environment(\.openWindow) private var openWindow
 
   let isDetachedWindow: Bool
 
@@ -64,6 +65,15 @@ struct RenderControlsPanel: View {
         }
         .accessibilityLabel("Log")
         .help("Log")
+        .buttonStyle(.bordered)
+
+        Button {
+          openWindow(id: "PerformanceGraphView")
+        } label: {
+          Image(systemName: "chart.xyaxis.line")
+        }
+        .accessibilityLabel("performance_title")
+        .help("performance_title")
         .buttonStyle(.bordered)
 
         DockToggleButton(panel: .renderControls)

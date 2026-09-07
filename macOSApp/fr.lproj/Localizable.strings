@@ -421,3 +421,33 @@
 "Script läuft: %@" = "Script en cours : %@";
 "Scriptfehler" = "Erreur de script";
 "Renderer ist nicht verfügbar." = "Le rendu n’est pas disponible.";
+
+/* Performance graph */
+"performance_title" = "Performances";
+"perf_legend_last" = "Dernière";
+"perf_legend_avg" = "Moyenne";
+"perf_legend_smoothed" = "Lissée";
+"perf_legend_below_drop" = "Sous le seuil de chute";
+"perf_legend_between" = "Entre les deux";
+"perf_legend_above_recovery" = "Au-dessus de la récupération";
+"perf_toggle_last" = "Dernière";
+"perf_toggle_avg" = "Moyenne";
+"perf_toggle_smoothed" = "Lissée";
+"perf_toggle_grid" = "Grille";
+"perf_toggle_thresholds" = "Seuils";
+"perf_toggle_legend" = "Légende";
+"perf_toggle_zones" = "Zones de performance";
+"perf_toggle_ms" = "Millisecondes";
+"perf_toggle_last_accessibility" = "Afficher la courbe de performance de la dernière image";
+"perf_toggle_avg_accessibility" = "Afficher la courbe de performance moyenne";
+"perf_toggle_smoothed_accessibility" = "Afficher la courbe de performance lissée";
+"perf_toggle_grid_accessibility" = "Afficher la grille du graphique de performance";
+"perf_toggle_thresholds_accessibility" = "Afficher les lignes de seuil de performance";
+"perf_toggle_legend_accessibility" = "Afficher la légende du graphique de performance";
+"perf_toggle_zones_accessibility" = "Afficher les zones de performance";
+"perf_toggle_ms_accessibility" = "Afficher les temps d’image en millisecondes";
+"perf_unit_fps" = "fps";
+"perf_unit_ms" = "ms";
+"perf_tooltip_last_format" = "Dernière : %.1f %@";
+"perf_tooltip_avg_format" = "Moyenne : %.1f %@";
+"perf_tooltip_smoothed_format" = "Lissée : %.1f %@";

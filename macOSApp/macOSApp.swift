@@ -132,6 +132,12 @@ struct macOSApp: App {
         .environmentObject(scriptRunner)
     }
     .defaultSize(width: 560, height: 180)
+
+    WindowGroup("Performance", id: "PerformanceGraphView") {
+      PerformanceGraphView()
+        .environmentObject(appModel)
+    }
+    .defaultSize(width: 820, height: 360)
     .commands {
       CommandMenu("Script") {
         Button("Script ausführen...") {

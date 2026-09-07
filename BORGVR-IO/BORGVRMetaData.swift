@@ -418,9 +418,9 @@ final class BORGVRMetaData: CustomStringConvertible, Codable {
     for _ in 0..<levelCount {
       let nextLevel = LevelMetadata(levelWidth, levelHeight, levelDepth, brickSize, overlap, prevBricks)
       self.levelMetadata.append(nextLevel)
-      levelWidth /= 2
-      levelHeight /= 2
-      levelDepth /= 2
+      levelWidth = max(1, (levelWidth + 1) / 2)
+      levelHeight = max(1, (levelHeight + 1) / 2)
+      levelDepth = max(1, (levelDepth + 1) / 2)
       prevBricks += nextLevel.totalBricks.x * nextLevel.totalBricks.y * nextLevel.totalBricks.z
     }
   }

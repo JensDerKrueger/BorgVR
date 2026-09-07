@@ -421,3 +421,33 @@
 "Script läuft: %@" = "Script en ejecución: %@";
 "Scriptfehler" = "Error de script";
 "Renderer ist nicht verfügbar." = "El renderizador no está disponible.";
+
+/* Performance graph */
+"performance_title" = "Rendimiento";
+"perf_legend_last" = "Último";
+"perf_legend_avg" = "Promedio";
+"perf_legend_smoothed" = "Suavizado";
+"perf_legend_below_drop" = "Por debajo de caída";
+"perf_legend_between" = "Intermedio";
+"perf_legend_above_recovery" = "Por encima de recuperación";
+"perf_toggle_last" = "Último";
+"perf_toggle_avg" = "Promedio";
+"perf_toggle_smoothed" = "Suavizado";
+"perf_toggle_grid" = "Cuadrícula";
+"perf_toggle_thresholds" = "Umbrales";
+"perf_toggle_legend" = "Leyenda";
+"perf_toggle_zones" = "Zonas de rendimiento";
+"perf_toggle_ms" = "Milisegundos";
+"perf_toggle_last_accessibility" = "Mostrar curva de rendimiento del último fotograma";
+"perf_toggle_avg_accessibility" = "Mostrar curva de rendimiento promedio";
+"perf_toggle_smoothed_accessibility" = "Mostrar curva de rendimiento suavizada";
+"perf_toggle_grid_accessibility" = "Mostrar cuadrícula del gráfico de rendimiento";
+"perf_toggle_thresholds_accessibility" = "Mostrar líneas de umbral de rendimiento";
+"perf_toggle_legend_accessibility" = "Mostrar leyenda del gráfico de rendimiento";
+"perf_toggle_zones_accessibility" = "Mostrar zonas de rendimiento";
+"perf_toggle_ms_accessibility" = "Mostrar tiempos de fotograma en milisegundos";
+"perf_unit_fps" = "fps";
+"perf_unit_ms" = "ms";
+"perf_tooltip_last_format" = "Último: %.1f %@";
+"perf_tooltip_avg_format" = "Promedio: %.1f %@";
+"perf_tooltip_smoothed_format" = "Suavizado: %.1f %@";

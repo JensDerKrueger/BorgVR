@@ -10,7 +10,7 @@ log Melanix y-axis rotation capture
 logtime
 setfpswindow 1.0
 setDisplaySync false
-logMetalInfo true
+logGPUInfo true
 
 rendermode tflighting
 resetrotation

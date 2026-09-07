@@ -203,9 +203,9 @@ void BORGVRMetaData::computeLevelMetadata() {
 
     levelMetadata_.push_back(lm);
 
-    levelWidth /= 2;
-    levelHeight /= 2;
-    levelDepth /= 2;
+    levelWidth = std::max(1, (levelWidth + 1) / 2);
+    levelHeight = std::max(1, (levelHeight + 1) / 2);
+    levelDepth = std::max(1, (levelDepth + 1) / 2);
 
     prevBricks += lm.totalBricks.x * lm.totalBricks.y * lm.totalBricks.z;
   }

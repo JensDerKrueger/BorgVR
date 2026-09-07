@@ -196,6 +196,8 @@
   <ItemGroup>
     <ClCompile Include="src\BORGVRFileData.cpp" />
     <ClCompile Include="src\BORGVRMetaData.cpp" />
+    <ClCompile Include="src\GeneratedWebAssets.cpp" />
+    <ClCompile Include="src\HTTPWebServer.cpp" />
     <ClCompile Include="src\LZ4.cpp" />
     <ClCompile Include="src\main.cpp" />
     <ClCompile Include="src\MemoryMappedFile.cpp" />
@@ -207,6 +209,8 @@
     <ClInclude Include="include\BORGVRDataBase.h" />
     <ClInclude Include="include\BORGVRFileData.h" />
     <ClInclude Include="include\BORGVRMetaData.h" />
+    <ClInclude Include="include\HTTPWebServer.h" />
+    <ClInclude Include="src\GeneratedWebAssets.h" />
     <ClInclude Include="include\KeyValue.h" />
     <ClInclude Include="include\Logger.h" />
     <ClInclude Include="include\LZ4.h" />
@@ -214,6 +218,9 @@
     <ClInclude Include="include\Socket.h" />
     <ClInclude Include="include\TCPServer.h" />
   </ItemGroup>
+  <Target Name="EmbedWebAssets" BeforeTargets="ClCompile">
+    <Exec Command="python scripts\embed_web_assets.py --web-dir ..\web --out-dir src" />
+  </Target>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

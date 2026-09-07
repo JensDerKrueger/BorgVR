@@ -1,13 +1,16 @@
+#include "HTTPWebServer.h"
 #include "TCPServer.h"
 #include "BORGVRMetaData.h"
 #include "Logger.h"
 #include "Socket.h"
 
+#include <atomic>
 #include <filesystem>
 #include <iostream>
 #include <memory>
 #include <string>
 #include <sstream>
+#include <thread>
 #include <vector>
 
 static std::string basenameOf(const std::string& path) {
@@ -43,7 +46,12 @@ static bool parseInt(const std::string& s, int& out) {
 
 static void printUsage(const char* filename) {
   std::cout << "Usage:\n  " << basenameOf(filename)
-            << " port maxBricksPerGetRequest datasetDirectory [scanIntervalSeconds] [--password secret]\n";
+            << " port maxBricksPerGetRequest datasetDirectory [scanIntervalSeconds]\n"
+            << "    [--password secret]\n"
+            << "    [--web-port port]\n\n"
+            << "Examples:\n"
+            << "  " << basenameOf(filename) << " 12345 64 /data/BorgVR\n"
+            << "  " << basenameOf(filename) << " 12345 64 /data/BorgVR --web-port 8080\n";
 }
 
 static std::vector<DatasetInfo> scanDatasetDirectory(const std::string& directory,
@@ -89,9 +97,10 @@ int main(int argc, char** argv) {
   SocketSystem sockSys;
   auto logger = std::make_shared<Logger>(LogLevel::Info);
 
-  if (argc < 2) {
+  const bool wantsHelp = argc >= 2 && (std::string(argv[1]) == "--help" || std::string(argv[1]) == "-h");
+  if (wantsHelp || argc < 4) {
     printUsage(argv[0]);
-    return 1;
+    return wantsHelp ? 0 : 1;
   }
 
   uint16_t port = 0;
@@ -123,6 +132,7 @@ int main(int argc, char** argv) {
   }
 
   std::string password;
+  uint16_t webPort = 0;
   while (argc > argi) {
     const std::string option = argv[argi++];
     if (option == "--password") {
@@ -131,6 +141,16 @@ int main(int argc, char** argv) {
         return 1;
       }
       password = argv[argi++];
+    } else if (option == "--web-port") {
+      if (argc <= argi) {
+        logger->error("Missing value for --web-port");
+        return 1;
+      }
+      if (!parseUint16(argv[argi], webPort)) {
+        logger->error(std::string("Invalid web port: ") + argv[argi]);
+        return 1;
+      }
+      ++argi;
     } else {
       logger->error("Unknown argument: " + option);
       printUsage(argv[0]);
@@ -144,6 +164,15 @@ int main(int argc, char** argv) {
   server.setDatasets(datasets);
   if (!server.start()) {
     return 2;
+  }
+
+  std::unique_ptr<HTTPWebServer> webServer;
+  if (webPort > 0) {
+    webServer = std::make_unique<HTTPWebServer>(webPort, server, logger, password);
+    if (!webServer->start()) {
+      server.stop();
+      return 3;
+    }
   }
 
   std::atomic<bool> monitorRunning{true};
@@ -168,6 +197,9 @@ int main(int argc, char** argv) {
     }
   }
 
+  if (webServer) {
+    webServer->stop();
+  }
   server.stop();
   monitorRunning = false;
   if (monitorThread.joinable()) {

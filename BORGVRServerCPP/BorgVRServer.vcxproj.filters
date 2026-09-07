@@ -21,6 +21,12 @@
     <ClCompile Include="src\BORGVRMetaData.cpp">
       <Filter>Quelldateien</Filter>
     </ClCompile>
+    <ClCompile Include="src\GeneratedWebAssets.cpp">
+      <Filter>Quelldateien</Filter>
+    </ClCompile>
+    <ClCompile Include="src\HTTPWebServer.cpp">
+      <Filter>Quelldateien</Filter>
+    </ClCompile>
     <ClCompile Include="src\LZ4.cpp">
       <Filter>Quelldateien</Filter>
     </ClCompile>
@@ -48,6 +54,12 @@
       <Filter>Headerdateien</Filter>
     </ClInclude>
     <ClInclude Include="include\BORGVRMetaData.h">
+      <Filter>Headerdateien</Filter>
+    </ClInclude>
+    <ClInclude Include="include\HTTPWebServer.h">
+      <Filter>Headerdateien</Filter>
+    </ClInclude>
+    <ClInclude Include="src\GeneratedWebAssets.h">
       <Filter>Headerdateien</Filter>
     </ClInclude>
     <ClInclude Include="include\KeyValue.h">

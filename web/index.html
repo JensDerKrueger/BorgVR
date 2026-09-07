@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>BorgVR WebGPU</title>
+    <link rel="icon" href="./assets/borgvr.jpg">
+    <link rel="stylesheet" href="./styles/main.css?v=20260907-range-fix">
+  </head>
+  <body>
+    <main class="app-shell">
+      <aside class="dataset-panel">
+        <header>
+          <div class="brand-row">
+            <img src="./assets/borgvr.jpg" alt="" aria-hidden="true">
+            <div>
+              <h1>BorgVR WebGPU</h1>
+              <p id="catalog-status">Loading datasets...</p>
+            </div>
+            <a class="app-store-link" href="https://apps.apple.com/de/app/borgvr/id6751489740" target="_blank" rel="noopener noreferrer" aria-label="Open BorgVR in the App Store">
+              <span>Get BorgVR</span>
+              <strong>App Store</strong>
+            </a>
+          </div>
+        </header>
+        <div id="dataset-list" class="dataset-list"></div>
+      </aside>
+
+      <section class="viewer-panel">
+        <canvas id="render-canvas"></canvas>
+        <div class="viewer-toolbar">
+          <button id="info-button" class="icon-button" type="button" aria-label="Show dataset information" title="Dataset information" disabled>i</button>
+          <button id="status-button" class="icon-button" type="button" aria-label="Show renderer status" title="Renderer status">S</button>
+        </div>
+        <div id="viewer-empty" class="viewer-empty">
+          <img src="./assets/borgvr.jpg" alt="" aria-hidden="true">
+          <div>
+            <strong>WebGPU renderer workbench</strong>
+            <span>Select a dataset to draw its aspect-ratio cube.</span>
+          </div>
+        </div>
+        <div id="dataset-info" class="dataset-info" hidden></div>
+        <div id="render-controls" class="render-controls" hidden>
+          <div class="render-controls-top">
+            <div class="segmented-control" role="group" aria-label="Render mode">
+              <button type="button" data-render-mode="tf" class="active" aria-pressed="true">Transfer Function</button>
+              <button type="button" data-render-mode="tf-lighting" aria-pressed="false">Transfer Function Lighting</button>
+              <button type="button" data-render-mode="iso" aria-pressed="false">Isovalue</button>
+            </div>
+            <button id="controls-collapse-button" class="icon-button controls-collapse-button" type="button" aria-label="Hide render controls" title="Hide render controls">x</button>
+          </div>
+
+          <section id="tf-editor" class="control-panel editor-panel" data-editor-mode="transfer">
+            <div class="panel-title">Transfer Function</div>
+            <canvas id="tf-editor-canvas" class="tf-editor-canvas" width="512" height="180" aria-label="Transfer function editor"></canvas>
+            <div class="editor-toolbar">
+              <div class="channel-row" aria-label="Transfer function channels">
+                <button class="channel-button channel-red active" type="button" data-tf-channel="0" aria-label="Red channel" aria-pressed="true">R</button>
+                <button class="channel-button channel-green active" type="button" data-tf-channel="1" aria-label="Green channel" aria-pressed="true">G</button>
+                <button class="channel-button channel-blue active" type="button" data-tf-channel="2" aria-label="Blue channel" aria-pressed="true">B</button>
+                <button class="channel-button channel-alpha active" type="button" data-tf-channel="3" aria-label="Alpha channel" aria-pressed="true">A</button>
+              </div>
+              <div class="tf-action-row">
+                <button id="tf-save" class="tf-command-button" type="button" aria-label="Save transfer function" title="Save transfer function">↓</button>
+                <button id="tf-load" class="tf-command-button" type="button" aria-label="Load transfer function" title="Load transfer function">↑</button>
+                <button id="tf-slicing-preset" class="tf-command-button" type="button" aria-label="Slicing preset" title="Slicing preset">▥</button>
+                <button id="tf-reset" class="tf-command-button" type="button" aria-label="Reset transfer function" title="Reset transfer function">↺</button>
+              </div>
+              <input id="tf-load-input" type="file" accept=".tf1d,application/octet-stream" hidden>
+            </div>
+          </section>
+
+          <section id="iso-editor" class="control-panel editor-panel" data-editor-mode="iso" hidden>
+            <div class="panel-title">Isovalue</div>
+            <label>
+              <span>Value</span>
+              <input id="iso-value" type="range" min="0" max="1" step="0.001" value="0.1">
+            </label>
+          </section>
+
+          <details class="control-panel">
+            <summary>Clipping</summary>
+            <div class="clip-grid">
+              <label><span>X min</span><input data-clip-axis="0" data-clip-bound="min" type="range" min="0" max="0.99" step="0.001" value="0"></label>
+              <label><span>X max</span><input data-clip-axis="0" data-clip-bound="max" type="range" min="0.01" max="1" step="0.001" value="1"></label>
+              <label><span>Y min</span><input data-clip-axis="1" data-clip-bound="min" type="range" min="0" max="0.99" step="0.001" value="0"></label>
+              <label><span>Y max</span><input data-clip-axis="1" data-clip-bound="max" type="range" min="0.01" max="1" step="0.001" value="1"></label>
+              <label><span>Z min</span><input data-clip-axis="2" data-clip-bound="min" type="range" min="0" max="0.99" step="0.001" value="0"></label>
+              <label><span>Z max</span><input data-clip-axis="2" data-clip-bound="max" type="range" min="0.01" max="1" step="0.001" value="1"></label>
+            </div>
+            <button id="clip-reset" class="small-command-button" type="button">Reset</button>
+          </details>
+        </div>
+        <div id="status-line" class="status-line" hidden></div>
+      </section>
+    </main>
+
+    <!-- Server integration TODOs:
+      - Show a login screen before loading datasets when the BorgVR dataset server advertises password protection.
+      - Support direct dataset links, e.g. selecting a dataset from a URL parameter such as ?dataset=<id>.
+    -->
+    <script type="module" src="./src/app.js?v=20260907-extensionless-bricks"></script>
+  </body>
+</html>
+
+<!--
+ Copyright (c) 2026 Computer Graphics and Visualization Group, University of Duisburg-Essen
+
+ Permission is hereby granted, free of charge, to any person obtaining a copy of this
+ software and associated documentation files (the "Software"), to deal in the Software
+ without restriction, including without limitation the rights to use, copy, modify,
+ merge, publish, distribute, sublicense, and/or sell copies of the Software, and to
+ permit persons to whom the Software is furnished to do so, subject to the following
+ conditions:
+
+ The above copyright notice and this permission notice shall be included in all copies or
+ substantial portions of the Software.
+
+ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+ INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+ PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
+ BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+ OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
+ IN THE SOFTWARE.
+-->

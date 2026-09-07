@@ -159,12 +159,12 @@ final class BorgVRScriptRunner: ObservableObject {
       return self?.logInfo(formatter.string(from: Date())) ?? .callbackError
     }
 
-    register("logMetalInfo", []) { [weak self] _ in
-      self?.logMetalInfo(includeFamilies: true) ?? .callbackError
+    register("logGPUInfo", []) { [weak self] _ in
+      self?.logGPUInfo(includeFamilies: true) ?? .callbackError
     }
 
-    register("logMetalInfo", [.bool]) { [weak self] args in
-      self?.logMetalInfo(includeFamilies: args.bool(0)) ?? .callbackError
+    register("logGPUInfo", [.bool]) { [weak self] args in
+      self?.logGPUInfo(includeFamilies: args.bool(0)) ?? .callbackError
     }
 
     register("setdir", [.string]) { [weak self] args in
@@ -647,7 +647,7 @@ final class BorgVRScriptRunner: ObservableObject {
     return logInfo(enabled ? "Display Sync eingeschaltet" : "Display Sync ausgeschaltet")
   }
 
-  private func logMetalInfo(includeFamilies: Bool) -> CommandResultCode {
+  private func logGPUInfo(includeFamilies: Bool) -> CommandResultCode {
     guard let device = MTLCreateSystemDefaultDevice() else {
       logError("Kein Metal-Gerät verfügbar.")
       return .callbackError

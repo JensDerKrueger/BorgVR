@@ -265,6 +265,7 @@ final class MacVolumeRenderer: NSObject, MTKViewDelegate {
         )
         self.finishScreenshotCapture(screenshotCapture)
         self.timer.frameRendered()
+        self.updatePerformanceGraph()
         self.frameInFlight = false
         self.drawNextFrameIfDisplaySyncIsDisabled()
       }
@@ -282,6 +283,16 @@ final class MacVolumeRenderer: NSObject, MTKViewDelegate {
   private func drawNextFrameIfDisplaySyncIsDisabled() {
     guard !appModel.renderDisplaySyncEnabled, let view else { return }
     view.draw()
+  }
+
+  private func updatePerformanceGraph() {
+    appModel.performanceModel.history.recoveryThreshold = Double(appSettings.recoveryFPS)
+    appModel.performanceModel.history.dropThreshold = Double(appSettings.dropFPS)
+    appModel.performanceModel.history.add(
+      last: timer.lastFPS,
+      avg: timer.averageFPS,
+      smoothed: timer.smoothedFPS
+    )
   }
 
   private func activePipelineState() -> MTLRenderPipelineState? {
@@ -316,6 +327,8 @@ final class MacVolumeRenderer: NSObject, MTKViewDelegate {
     loadedDatasetKey = ""
     appModel.markRenderedDataset(key: "")
     appModel.resetBrickReadbackState()
+    timer.reset()
+    appModel.performanceModel.history = PerformanceHistory()
     clearPipelineStates()
   }
 
@@ -358,6 +371,8 @@ final class MacVolumeRenderer: NSObject, MTKViewDelegate {
 
     dataset = newDataset
     appModel.resetBrickReadbackState()
+    timer.reset()
+    appModel.performanceModel.history = PerformanceHistory()
     renderingParameters.reset()
     let metadata = newDataset.getMetadata()
     renderingParameters.updateRanges(
