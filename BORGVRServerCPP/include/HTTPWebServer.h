@@ -68,6 +68,7 @@ private:
   std::string authSecret_;
 
   std::atomic<bool> running_{false};
+  std::atomic<int> activeHandlers_{0};
   TcpListener listener_;
   std::thread acceptThread_;
 };

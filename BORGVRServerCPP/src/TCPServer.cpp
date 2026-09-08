@@ -641,53 +641,59 @@ bool TCPServer::ClientSession::processCommand(const std::string& line) {
 }
 
 void TCPServer::ClientSession::run() {
+  try {
 
-  std::string buffer;
-  buffer.reserve(4096);
-  constexpr size_t kMaxLineBytes = 8 * 1024;
+    std::string buffer;
+    buffer.reserve(4096);
+    constexpr size_t kMaxLineBytes = 8 * 1024;
 
-  uint8_t temp[1024];
+    uint8_t temp[1024];
 
-  while (running_.load() && server_.running_.load() && socket_.valid()) {
-    const int rc = socket_.recvSome(temp, sizeof(temp));
-    if (rc < 0) {
-      if (server_.logger_) server_.logger_->warning("Client recv error; disconnecting");
-      break;
-    }
-    if (rc == 0) {
-      // orderly shutdown
-      break;
-    }
-
-    buffer.append(reinterpret_cast<const char*>(temp), static_cast<size_t>(rc));
-    if (buffer.size() > kMaxLineBytes * 4) {
-      if (server_.logger_) server_.logger_->warning("Input buffer too large; disconnecting");
-      break;
-    }
-
-    for (;;) {
-      const auto pos = buffer.find('\n');
-      if (pos == std::string::npos) break;
-
-      std::string line = buffer.substr(0, pos);
-      buffer.erase(0, pos + 1);
-
-      line = trim(line);
-      if (line.empty()) {
-        running_.store(false);
+    while (running_.load() && server_.running_.load() && socket_.valid()) {
+      const int rc = socket_.recvSome(temp, sizeof(temp));
+      if (rc < 0) {
+        if (server_.logger_) server_.logger_->warning("Client recv error; disconnecting");
         break;
       }
-      if (line.size() > kMaxLineBytes) {
-        if (server_.logger_) server_.logger_->warning("Command line too long; disconnecting");
-        running_.store(false);
+      if (rc == 0) {
+        // orderly shutdown
         break;
       }
 
-      if (!processCommand(line)) {
-        running_.store(false);
+      buffer.append(reinterpret_cast<const char*>(temp), static_cast<size_t>(rc));
+      if (buffer.size() > kMaxLineBytes * 4) {
+        if (server_.logger_) server_.logger_->warning("Input buffer too large; disconnecting");
         break;
       }
+
+      for (;;) {
+        const auto pos = buffer.find('\n');
+        if (pos == std::string::npos) break;
+
+        std::string line = buffer.substr(0, pos);
+        buffer.erase(0, pos + 1);
+
+        line = trim(line);
+        if (line.empty()) {
+          running_.store(false);
+          break;
+        }
+        if (line.size() > kMaxLineBytes) {
+          if (server_.logger_) server_.logger_->warning("Command line too long; disconnecting");
+          running_.store(false);
+          break;
+        }
+
+        if (!processCommand(line)) {
+          running_.store(false);
+          break;
+        }
+      }
     }
+  } catch (const std::exception& e) {
+    if (server_.logger_) server_.logger_->warning(std::string("Client session aborted: ") + e.what());
+  } catch (...) {
+    if (server_.logger_) server_.logger_->warning("Client session aborted with an unknown exception.");
   }
 
   stop();

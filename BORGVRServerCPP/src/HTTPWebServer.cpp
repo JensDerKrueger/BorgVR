@@ -12,6 +12,23 @@
 
 namespace {
 
+class HandlerCounter {
+public:
+  explicit HandlerCounter(std::atomic<int>& counter) : counter_(counter) {
+    counter_.fetch_add(1);
+  }
+
+  ~HandlerCounter() {
+    counter_.fetch_sub(1);
+  }
+
+  HandlerCounter(const HandlerCounter&) = delete;
+  HandlerCounter& operator=(const HandlerCounter&) = delete;
+
+private:
+  std::atomic<int>& counter_;
+};
+
 std::string trimCopy(const std::string& s) {
   size_t start = 0;
   while (start < s.size() && std::isspace(static_cast<unsigned char>(s[start]))) ++start;
@@ -212,6 +229,9 @@ void HTTPWebServer::stop() {
   if (acceptThread_.joinable()) {
     acceptThread_.join();
   }
+  while (activeHandlers_.load() > 0) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+  }
   if (logger_) logger_->info("HTTP/WebGPU server stopped");
 }
 
@@ -224,9 +244,20 @@ void HTTPWebServer::acceptLoop() {
       continue;
     }
 
-    std::thread([this](TcpSocket socket) {
-      handleClient(std::move(socket));
-    }, std::move(client)).detach();
+    try {
+      std::thread([this](TcpSocket socket) {
+        HandlerCounter counter(activeHandlers_);
+        try {
+          handleClient(std::move(socket));
+        } catch (const std::exception& e) {
+          if (logger_) logger_->warning(std::string("HTTP client handler aborted: ") + e.what());
+        } catch (...) {
+          if (logger_) logger_->warning("HTTP client handler aborted with an unknown exception.");
+        }
+      }, std::move(client)).detach();
+    } catch (const std::exception& e) {
+      if (logger_) logger_->error(std::string("Failed to start HTTP client thread: ") + e.what());
+    }
   }
 }
 

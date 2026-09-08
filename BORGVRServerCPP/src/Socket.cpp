@@ -8,7 +8,9 @@
   #pragma comment(lib, "Ws2_32.lib")
 #else
   #include <arpa/inet.h>
+  #include <cerrno>
   #include <netinet/in.h>
+  #include <signal.h>
   #include <sys/socket.h>
   #include <unistd.h>
 #endif
@@ -18,6 +20,8 @@ SocketSystem::SocketSystem() {
   WSADATA wsa{};
   const int rc = WSAStartup(MAKEWORD(2, 2), &wsa);
   (void)rc;
+#else
+  ::signal(SIGPIPE, SIG_IGN);
 #endif
 }
 
@@ -83,8 +87,16 @@ bool TcpSocket::sendAll(const uint8_t* data, size_t size) {
                     static_cast<int>(size - sent), 0);
     if (rc == SOCKET_ERROR) return false;
 #else
-    ssize_t rc = ::send(sock_, data + sent, size - sent, 0);
-    if (rc < 0) return false;
+  #if defined(MSG_NOSIGNAL)
+    constexpr int sendFlags = MSG_NOSIGNAL;
+  #else
+    constexpr int sendFlags = 0;
+  #endif
+    ssize_t rc = ::send(sock_, data + sent, size - sent, sendFlags);
+    if (rc < 0) {
+      if (errno == EINTR) continue;
+      return false;
+    }
 #endif
     if (rc == 0) return false;
     sent += static_cast<size_t>(rc);
@@ -99,7 +111,10 @@ int TcpSocket::recvSome(uint8_t* buffer, size_t capacity) {
   if (rc == SOCKET_ERROR) return -1;
   return rc;
 #else
-  ssize_t rc = ::recv(sock_, buffer, capacity, 0);
+  ssize_t rc = 0;
+  do {
+    rc = ::recv(sock_, buffer, capacity, 0);
+  } while (rc < 0 && errno == EINTR);
   if (rc < 0) return -1;
   return static_cast<int>(rc);
 #endif
@@ -182,7 +197,9 @@ TcpSocket TcpListener::accept() {
 #else
   socklen_t len = sizeof(clientAddr);
   SocketHandle s = ::accept(sock_, reinterpret_cast<sockaddr*>(&clientAddr), &len);
-  if (s < 0) return TcpSocket{};
+  if (s < 0) {
+    return TcpSocket{};
+  }
 #endif
   return TcpSocket{s};
 }
