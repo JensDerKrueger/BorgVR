@@ -5,6 +5,7 @@ struct BorgVRServerConfiguration {
   var port: Int
   var maxBricksPerGetRequest: Int
   var authSecret: String = ""
+  var startDatasetServer: Bool = true
   var enableWebServer: Bool = false
   var webPort: Int = 8080
   var useWebServerTLS: Bool = true
@@ -65,7 +66,9 @@ final class BorgVRServerHost {
       datasets: datasets,
       authSecret: configuration.authSecret
     )
-    newServer.start()
+    if configuration.startDatasetServer {
+      newServer.start()
+    }
 
     let webPort = UInt16(clamping: configuration.webPort)
     let newWebServer: HTTPWebServer?
@@ -88,7 +91,7 @@ final class BorgVRServerHost {
     server = newServer
     webServer = newWebServer
     state = BorgVRServerState(
-      isRunning: newServer.isRunning,
+      isRunning: newServer.isRunning || (newWebServer?.isRunning ?? false),
       datasets: datasets,
       port: Int(serverPort),
       isWebServerRunning: newWebServer?.isRunning ?? false,

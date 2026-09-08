@@ -4,6 +4,8 @@ private enum SettingsResetSection: String, Identifiable {
   case rendering
   case importSettings
   case remoteDatasets
+  case backgroundServer
+  case webServer
   case lod
 
   var id: String { rawValue }
@@ -13,6 +15,8 @@ private enum SettingsResetSection: String, Identifiable {
       case .rendering: return String(localized: "Rendering")
       case .importSettings: return String(localized: "Import")
       case .remoteDatasets: return String(localized: "Remote-Datensätze")
+      case .backgroundServer: return String(localized: "Hintergrundserver")
+      case .webServer: return String(localized: "WebGPU-Webserver")
       case .lod: return String(localized: "LOD")
     }
   }
@@ -71,6 +75,8 @@ struct SettingsView: View {
       renderingSection
       importSection
       remoteDatasetsSection
+      backgroundServerSection
+      webServerSection
       lodSection
       validationSection
     }
@@ -157,10 +163,30 @@ struct SettingsView: View {
         .keyboardType(.decimalPad)
       Toggle("Progressives Laden", isOn: $appSettings.progressiveLoading)
       Toggle("Lokale Kopie behalten", isOn: $appSettings.makeLocalCopy)
+      resetButton(for: .remoteDatasets)
+    }
+  }
+
+  private var backgroundServerSection: some View {
+    Section("Hintergrundserver") {
+      Toggle("Server automatisch starten", isOn: $appSettings.autoStartServer)
+      Stepper(value: $appSettings.serverPort, in: 1...65535) {
+        Text(verbatim: "Port: \(appSettings.serverPort)")
+      }
+      SecureField("Server-Passwort (optional)", text: $appSettings.serverPassword)
+      Stepper(value: $appSettings.maxBricksPerGetRequest, in: 1...1000) {
+        Text(String(format: String(localized: "Max. Bricks pro Anfrage: %d"), appSettings.maxBricksPerGetRequest))
+      }
       Stepper(value: $appSettings.sharePlayServerPort, in: 1...65535) {
         Text(verbatim: "Ad-hoc Dataset-Server-Port: \(appSettings.sharePlayServerPort)")
       }
-      Toggle("WebGPU-Webserver starten", isOn: $appSettings.enableWebServer)
+      resetButton(for: .backgroundServer)
+    }
+  }
+
+  private var webServerSection: some View {
+    Section("WebGPU-Webserver") {
+      Toggle("WebGPU-Webserver aktivieren", isOn: $appSettings.enableWebServer)
       Toggle("HTTPS verwenden", isOn: $appSettings.webServerUsesTLS)
       if !appSettings.webServerUsesTLS {
         Text("Ohne HTTPS sind nur localhost-Verbindungen möglich.")
@@ -178,7 +204,7 @@ struct SettingsView: View {
       Stepper(value: $appSettings.sharePlayWebServerPort, in: 1...65535) {
         Text(verbatim: "Ad-hoc WebGPU-Webserver-Port: \(appSettings.sharePlayWebServerPort)")
       }
-      resetButton(for: .remoteDatasets)
+      resetButton(for: .webServer)
     }
   }
 
@@ -335,6 +361,10 @@ struct SettingsView: View {
         tempPort = "12345"
         tempServerAddress = ""
         tempServerPassword = ""
+      case .backgroundServer:
+        appSettings.resetBackgroundServerDefaults()
+      case .webServer:
+        appSettings.resetWebServerDefaults()
       case .lod:
         appSettings.resetLODDefaults()
     }

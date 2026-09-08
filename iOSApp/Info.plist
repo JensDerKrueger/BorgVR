@@ -19,6 +19,8 @@
 	</array>
 	<key>LSSupportsOpeningDocumentsInPlace</key>
 	<true/>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>BorgVR uses the local network to provide datasets to other BorgVR clients and the WebGPU renderer.</string>
 	<key>UTExportedTypeDeclarations</key>
 	<array>
 		<dict>

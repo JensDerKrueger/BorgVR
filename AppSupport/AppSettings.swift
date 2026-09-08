@@ -134,6 +134,9 @@ final class AppSettings: ObservableObject {
     "oversamplingMode": OversamplingMode.dynamicMode.rawValue,
     "dropFPS": 20,
     "recoveryFPS": 50,
+    "autoStartServer": false,
+    "serverPort": 12345,
+    "serverPassword": "",
     "sharePlayServerPort": 12346,
     "enableWebServer": false,
     "webServerPort": 8080,
@@ -179,6 +182,9 @@ final class AppSettings: ObservableObject {
   @AppStorage("oversamplingMode") var oversamplingMode: String = AppSettings.string("oversamplingMode")
   @AppStorage("dropFPS") var dropFPS: Int = AppSettings.int("dropFPS")
   @AppStorage("recoveryFPS") var recoveryFPS: Int = AppSettings.int("recoveryFPS")
+  @AppStorage("autoStartServer") var autoStartServer: Bool = AppSettings.bool("autoStartServer")
+  @AppStorage("serverPort") var serverPort: Int = AppSettings.int("serverPort")
+  @AppStorage("serverPassword") var serverPassword: String = AppSettings.string("serverPassword")
   @AppStorage("sharePlayServerPort") var sharePlayServerPort: Int = AppSettings.int("sharePlayServerPort")
   @AppStorage("enableWebServer") var enableWebServer: Bool = AppSettings.bool("enableWebServer")
   @AppStorage("webServerPort") var webServerPort: Int = AppSettings.int("webServerPort")
@@ -325,15 +331,24 @@ final class AppSettings: ObservableObject {
     timeout = Self.doubleDefault("timeout")
     makeLocalCopy = Self.boolDefault("makeLocalCopy")
     progressiveLoading = Self.boolDefault("progressiveLoading")
+    servers = []
+  }
+
+  func resetBackgroundServerDefaults() {
+    autoStartServer = Self.boolDefault("autoStartServer")
+    serverPort = Self.intDefault("serverPort")
+    serverPassword = Self.stringDefault("serverPassword")
     maxBricksPerGetRequest = Self.intDefault("maxBricksPerGetRequest")
     sharePlayServerPort = Self.intDefault("sharePlayServerPort")
+  }
+
+  func resetWebServerDefaults() {
     enableWebServer = Self.boolDefault("enableWebServer")
     webServerPort = Self.intDefault("webServerPort")
     webServerUsesTLS = Self.boolDefault("webServerUsesTLS")
     webServerCertificateData = Self.dataDefault("webServerCertificateData")
     WebServerCertificatePasswordStore.delete()
     sharePlayWebServerPort = Self.intDefault("sharePlayWebServerPort")
-    servers = []
   }
 
   var webServerCertificatePassword: String {
@@ -355,6 +370,8 @@ final class AppSettings: ObservableObject {
     resetRenderingDefaults()
     resetImportDefaults()
     resetRemoteDefaults()
+    resetBackgroundServerDefaults()
+    resetWebServerDefaults()
     resetLODDefaults()
   }
 

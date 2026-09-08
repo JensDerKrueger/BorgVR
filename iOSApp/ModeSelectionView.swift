@@ -3,6 +3,8 @@ import UIKit
 
 struct ModeSelectionView: View {
   @EnvironmentObject private var appModel: AppModel
+  @EnvironmentObject private var appSettings: AppSettings
+  @EnvironmentObject private var serverController: BackgroundServerController
   @State private var showingAbout = false
 
   var body: some View {
@@ -28,6 +30,8 @@ struct ModeSelectionView: View {
               .foregroundStyle(.secondary)
               .multilineTextAlignment(.center)
           }
+
+          serverStatus
 
           VStack(spacing: 14) {
             Button {
@@ -61,6 +65,21 @@ struct ModeSelectionView: View {
                 .frame(maxWidth: .infinity)
             }
             .buttonStyle(.bordered)
+
+            Button {
+              if serverController.isRunning {
+                serverController.stop()
+              } else {
+                serverController.start(using: appSettings)
+              }
+            } label: {
+              Label(
+                serverController.isRunning ? "Hintergrundserver stoppen" : "Hintergrundserver starten",
+                systemImage: serverController.isRunning ? "stop.circle" : "play.circle"
+              )
+              .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.bordered)
           }
           .controlSize(.large)
           .frame(maxWidth: 420)
@@ -77,6 +96,23 @@ struct ModeSelectionView: View {
     .sheet(isPresented: $showingAbout) {
       iOSAboutView()
     }
+  }
+
+  private var serverStatus: some View {
+    VStack(spacing: 6) {
+      Label(
+        serverController.isRunning ? "Hintergrundserver läuft" : "Hintergrundserver gestoppt",
+        systemImage: serverController.isRunning ? "checkmark.circle.fill" : "circle"
+      )
+      .foregroundStyle(serverController.isRunning ? .green : .secondary)
+
+      Text(serverController.statusText)
+        .font(.callout)
+        .foregroundStyle(.secondary)
+        .multilineTextAlignment(.center)
+        .lineLimit(3)
+    }
+    .frame(maxWidth: 420)
   }
 
   @ViewBuilder
