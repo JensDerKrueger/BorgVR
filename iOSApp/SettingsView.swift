@@ -1,11 +1,21 @@
 import SwiftUI
 
+private let portNumberFormatter: NumberFormatter = {
+  let formatter = NumberFormatter()
+  formatter.numberStyle = .none
+  formatter.usesGroupingSeparator = false
+  formatter.minimum = 1
+  formatter.maximum = 65535
+  return formatter
+}()
+
 private enum SettingsResetSection: String, Identifiable {
   case rendering
   case importSettings
   case remoteDatasets
   case backgroundServer
   case webServer
+  case adHocServer
   case lod
 
   var id: String { rawValue }
@@ -17,6 +27,7 @@ private enum SettingsResetSection: String, Identifiable {
       case .remoteDatasets: return String(localized: "Remote-Datensätze")
       case .backgroundServer: return String(localized: "Hintergrundserver")
       case .webServer: return String(localized: "WebGPU-Webserver")
+      case .adHocServer: return String(localized: "Ad-hoc-Server")
       case .lod: return String(localized: "LOD")
     }
   }
@@ -76,7 +87,10 @@ struct SettingsView: View {
       importSection
       remoteDatasetsSection
       backgroundServerSection
-      webServerSection
+      if appSettings.enableDatasetServer {
+        webServerSection
+      }
+      adHocServerSection
       lodSection
       validationSection
     }
@@ -169,16 +183,14 @@ struct SettingsView: View {
 
   private var backgroundServerSection: some View {
     Section("Hintergrundserver") {
-      Toggle("Server automatisch starten", isOn: $appSettings.autoStartServer)
-      Stepper(value: $appSettings.serverPort, in: 1...65535) {
-        Text(verbatim: "Port: \(appSettings.serverPort)")
-      }
-      SecureField("Server-Passwort (optional)", text: $appSettings.serverPassword)
-      Stepper(value: $appSettings.maxBricksPerGetRequest, in: 1...1000) {
-        Text(String(format: String(localized: "Max. Bricks pro Anfrage: %d"), appSettings.maxBricksPerGetRequest))
-      }
-      Stepper(value: $appSettings.sharePlayServerPort, in: 1...65535) {
-        Text(verbatim: "Ad-hoc Dataset-Server-Port: \(appSettings.sharePlayServerPort)")
+      Toggle("Dataset-Server aktivieren", isOn: $appSettings.enableDatasetServer)
+      if appSettings.enableDatasetServer {
+        Toggle("Server automatisch starten", isOn: $appSettings.autoStartServer)
+        portField("Port", value: $appSettings.serverPort)
+        SecureField("Server-Passwort (optional)", text: $appSettings.serverPassword)
+        Stepper(value: $appSettings.maxBricksPerGetRequest, in: 1...1000) {
+          Text(String(format: String(localized: "Max. Bricks pro Anfrage: %d"), appSettings.maxBricksPerGetRequest))
+        }
       }
       resetButton(for: .backgroundServer)
     }
@@ -198,13 +210,16 @@ struct SettingsView: View {
           certificateData: $appSettings.webServerCertificateData
         )
       }
-      Stepper(value: $appSettings.webServerPort, in: 1...65535) {
-        Text(verbatim: "WebGPU-Webserver-Port: \(appSettings.webServerPort)")
-      }
-      Stepper(value: $appSettings.sharePlayWebServerPort, in: 1...65535) {
-        Text(verbatim: "Ad-hoc WebGPU-Webserver-Port: \(appSettings.sharePlayWebServerPort)")
-      }
+      portField("WebGPU-Webserver-Port", value: $appSettings.webServerPort)
       resetButton(for: .webServer)
+    }
+  }
+
+  private var adHocServerSection: some View {
+    Section("Ad-hoc-Server") {
+      portField("Ad-hoc Dataset-Server-Port", value: $appSettings.sharePlayServerPort)
+      portField("Ad-hoc WebGPU-Webserver-Port", value: $appSettings.sharePlayWebServerPort)
+      resetButton(for: .adHocServer)
     }
   }
 
@@ -294,6 +309,26 @@ struct SettingsView: View {
     return "\(server.address):\(server.port) \(String(localized: "(Passwort)"))"
   }
 
+  private func portField(_ title: LocalizedStringKey, value: Binding<Int>) -> some View {
+    HStack {
+      Text(title)
+      Spacer()
+      TextField(title, value: clampedPortBinding(value), formatter: portNumberFormatter)
+        .keyboardType(.numberPad)
+        .multilineTextAlignment(.trailing)
+        .frame(width: 110)
+    }
+  }
+
+  private func clampedPortBinding(_ value: Binding<Int>) -> Binding<Int> {
+    Binding(
+      get: { value.wrappedValue },
+      set: { newValue in
+        value.wrappedValue = min(65535, max(1, newValue))
+      }
+    )
+  }
+
   private func removeServer(_ server: StoredServer) {
     appSettings.servers.removeAll { $0.id == server.id }
   }
@@ -365,6 +400,8 @@ struct SettingsView: View {
         appSettings.resetBackgroundServerDefaults()
       case .webServer:
         appSettings.resetWebServerDefaults()
+      case .adHocServer:
+        appSettings.resetAdHocServerDefaults()
       case .lod:
         appSettings.resetLODDefaults()
     }

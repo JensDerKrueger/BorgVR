@@ -17,6 +17,7 @@ struct BorgVRServerState {
   var isRunning: Bool
   var datasets: [DatasetInfo]
   var port: Int
+  var serverError: String?
   var isWebServerRunning: Bool
   var webPort: Int
   var webServerUsesTLS: Bool
@@ -32,6 +33,7 @@ final class BorgVRServerHost {
     isRunning: false,
     datasets: [],
     port: StoredServerDefaults.port,
+    serverError: nil,
     isWebServerRunning: false,
     webPort: StoredServerDefaults.webPort,
     webServerUsesTLS: StoredServerDefaults.useWebServerTLS,
@@ -72,7 +74,7 @@ final class BorgVRServerHost {
       newServer.start()
     }
 
-    let webPort = UInt16(clamping: configuration.webPort)
+    let webPort = effectiveWebPort(configuration: configuration, serverPort: serverPort)
     let newWebServer: HTTPWebServer?
     if configuration.enableWebServer {
       let server = HTTPWebServer(
@@ -96,6 +98,7 @@ final class BorgVRServerHost {
       isRunning: newServer.isRunning || (newWebServer?.isRunning ?? false),
       datasets: datasets,
       port: Int(serverPort),
+      serverError: newServer.lastError,
       isWebServerRunning: newWebServer?.isRunning ?? false,
       webPort: Int(webPort),
       webServerUsesTLS: configuration.useWebServerTLS,
@@ -113,6 +116,7 @@ final class BorgVRServerHost {
       isRunning: false,
       datasets: [],
       port: state.port,
+      serverError: nil,
       isWebServerRunning: false,
       webPort: state.webPort,
       webServerUsesTLS: state.webServerUsesTLS,
@@ -130,6 +134,15 @@ final class BorgVRServerHost {
     }
 
     return datasets
+  }
+
+  private func effectiveWebPort(configuration: BorgVRServerConfiguration, serverPort: UInt16) -> UInt16 {
+    var webPort = UInt16(clamping: configuration.webPort)
+    if configuration.startDatasetServer, webPort == serverPort {
+      webPort = serverPort == UInt16.max ? 1 : serverPort + 1
+      logger?.warning("WebGPU-Webserver-Port matches the dataset server port. Using \(webPort) instead.")
+    }
+    return webPort
   }
 }
 

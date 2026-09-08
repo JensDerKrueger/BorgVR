@@ -1,10 +1,20 @@
 import SwiftUI
 
+private let portNumberFormatter: NumberFormatter = {
+  let formatter = NumberFormatter()
+  formatter.numberStyle = .none
+  formatter.usesGroupingSeparator = false
+  formatter.minimum = 1
+  formatter.maximum = 65535
+  return formatter
+}()
+
 private enum SettingsResetSection: String, Identifiable {
   case rendering
   case importSettings
   case lod
   case backgroundServer
+  case adHocServer
   case externalDataSources
 
   var id: String { rawValue }
@@ -15,6 +25,7 @@ private enum SettingsResetSection: String, Identifiable {
       case .importSettings: return "Import"
       case .lod: return "LOD"
       case .backgroundServer: return "Hintergrundserver"
+      case .adHocServer: return "Ad-hoc-Server"
       case .externalDataSources: return "Externe Datenquellen"
     }
   }
@@ -114,49 +125,48 @@ struct SettingsView: View {
       }
 
       Section("Hintergrundserver") {
-        Toggle("Server automatisch starten", isOn: $storedAppModel.autoStartServer)
-        HStack {
-          Text(storedAppModel.dataDirectory)
-            .lineLimit(1)
-            .truncationMode(.middle)
-            .textSelection(.enabled)
-            .frame(maxWidth: .infinity, alignment: .leading)
-          Button {
-            showDataDirectoryPicker = true
-          } label: {
-            Image(systemName: "folder")
+        Toggle("Dataset-Server aktivieren", isOn: $storedAppModel.enableDatasetServer)
+        if storedAppModel.enableDatasetServer {
+          Toggle("Server automatisch starten", isOn: $storedAppModel.autoStartServer)
+          HStack {
+            Text(storedAppModel.dataDirectory)
+              .lineLimit(1)
+              .truncationMode(.middle)
+              .textSelection(.enabled)
+              .frame(maxWidth: .infinity, alignment: .leading)
+            Button {
+              showDataDirectoryPicker = true
+            } label: {
+              Image(systemName: "folder")
+            }
+            .help("Datenverzeichnis auswählen")
           }
-          .help("Datenverzeichnis auswählen")
-        }
-        Stepper(value: $storedAppModel.port, in: 1...65535) {
-          Text(verbatim: "Port: \(storedAppModel.port)")
-        }
-        SecureField("Server-Passwort (optional)", text: $storedAppModel.serverPassword)
-        Toggle("WebGPU-Webserver starten", isOn: $storedAppModel.enableWebServer)
-        Toggle("HTTPS verwenden", isOn: $storedAppModel.webServerUsesTLS)
-        if !storedAppModel.webServerUsesTLS {
-          Text("Ohne HTTPS sind nur localhost-Verbindungen möglich.")
-            .font(.caption)
-            .foregroundStyle(.secondary)
-        }
-        if storedAppModel.webServerUsesTLS {
-          WebServerCertificateControls(
-            certificateData: $storedAppModel.webServerCertificateData
-          )
-        }
-        Stepper(value: $storedAppModel.webServerPort, in: 1...65535) {
-          Text(verbatim: "WebGPU-Webserver-Port: \(storedAppModel.webServerPort)")
-        }
-        Stepper(value: $storedAppModel.sharePlayServerPort, in: 1...65535) {
-          Text(verbatim: "Ad-hoc Dataset-Server-Port: \(storedAppModel.sharePlayServerPort)")
-        }
-        Stepper(value: $storedAppModel.sharePlayWebServerPort, in: 1...65535) {
-          Text(verbatim: "Ad-hoc WebGPU-Webserver-Port: \(storedAppModel.sharePlayWebServerPort)")
-        }
-        Stepper(value: $storedAppModel.maxBricksPerGetRequest, in: 1...1000) {
-          Text("Max. Bricks pro Anfrage: \(storedAppModel.maxBricksPerGetRequest)")
+          portField("Port", value: $storedAppModel.port)
+          SecureField("Server-Passwort (optional)", text: $storedAppModel.serverPassword)
+          Toggle("WebGPU-Webserver starten", isOn: $storedAppModel.enableWebServer)
+          Toggle("HTTPS verwenden", isOn: $storedAppModel.webServerUsesTLS)
+          if !storedAppModel.webServerUsesTLS {
+            Text("Ohne HTTPS sind nur localhost-Verbindungen möglich.")
+              .font(.caption)
+              .foregroundStyle(.secondary)
+          }
+          if storedAppModel.webServerUsesTLS {
+            WebServerCertificateControls(
+              certificateData: $storedAppModel.webServerCertificateData
+            )
+          }
+          portField("WebGPU-Webserver-Port", value: $storedAppModel.webServerPort)
+          Stepper(value: $storedAppModel.maxBricksPerGetRequest, in: 1...1000) {
+            Text("Max. Bricks pro Anfrage: \(storedAppModel.maxBricksPerGetRequest)")
+          }
         }
         resetButton(for: .backgroundServer)
+      }
+
+      Section("Ad-hoc-Server") {
+        portField("Ad-hoc Dataset-Server-Port", value: $storedAppModel.sharePlayServerPort)
+        portField("Ad-hoc WebGPU-Webserver-Port", value: $storedAppModel.sharePlayWebServerPort)
+        resetButton(for: .adHocServer)
       }
 
       Section("Externe Datenquellen") {
@@ -288,6 +298,26 @@ struct SettingsView: View {
     return "\(server.address):\(server.port) \(String(localized: "(Passwort)"))"
   }
 
+  private func portField(_ title: String, value: Binding<Int>) -> some View {
+    HStack {
+      Text(title)
+      Spacer()
+      TextField(title, value: clampedPortBinding(value), formatter: portNumberFormatter)
+        .multilineTextAlignment(.trailing)
+        .textFieldStyle(.roundedBorder)
+        .frame(width: 110)
+    }
+  }
+
+  private func clampedPortBinding(_ value: Binding<Int>) -> Binding<Int> {
+    Binding(
+      get: { value.wrappedValue },
+      set: { newValue in
+        value.wrappedValue = min(65535, max(1, newValue))
+      }
+    )
+  }
+
   private func removeRemoteServer(_ server: StoredServer) {
     appSettings.servers.removeAll { $0.id == server.id }
   }
@@ -302,9 +332,10 @@ struct SettingsView: View {
       case .lod:
         appSettings.resetLODDefaults()
       case .backgroundServer:
-        appSettings.sharePlayServerPort = AppSettings.values["sharePlayServerPort"] as? Int ?? 12346
         appSettings.maxBricksPerGetRequest = AppSettings.values["maxBricksPerGetRequest"] as? Int ?? 20
         storedAppModel.resetBackgroundServerDefaults()
+      case .adHocServer:
+        storedAppModel.resetAdHocServerDefaults()
       case .externalDataSources:
         appSettings.servers = []
         serverAddress = ""

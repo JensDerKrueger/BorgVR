@@ -29,7 +29,7 @@ final class StoredAppModel : ObservableObject {
   static let defaultEnableWebServer: Bool = false
   @AppStorage("enableWebServer") var enableWebServer: Bool = defaultEnableWebServer
 
-  static let defaultWebServerPort: Int = 8080
+  static let defaultWebServerPort: Int = 443
   @AppStorage("webServerPort") var webServerPort: Int = defaultWebServerPort
 
   static let defaultWebServerUsesTLS: Bool = true

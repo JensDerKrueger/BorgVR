@@ -99,7 +99,7 @@ struct ServerView: View {
         if storedAppModel.enableWebServer {
           HStack {
             Text("WebGPU-Webserver:")
-            Text(verbatim: "\(storedAppModel.webServerUsesTLS ? "https" : "http")://localhost:\(storedAppModel.webServerPort)")
+            Text(verbatim: "\(storedAppModel.webServerUsesTLS ? "https" : "http")://localhost:\(resolvedWebServerPort)")
               .font(.system(.body, design: .monospaced))
               .bold()
               .textSelection(.enabled)
@@ -369,8 +369,9 @@ struct ServerView: View {
     )
     server?.start()
     if storedAppModel.enableWebServer, let server {
+      let webPort = resolvedWebServerPort
       webServer = HTTPWebServer(
-        port: UInt16(clamping: storedAppModel.webServerPort),
+        port: UInt16(clamping: webPort),
         datasetServer: server,
         logger: logger,
         authSecret: storedAppModel.serverPassword,
@@ -385,6 +386,14 @@ struct ServerView: View {
       comment: "Server status when the server is running"
     )
     statusColor = .green
+  }
+
+  private var resolvedWebServerPort: Int {
+    guard storedAppModel.enableWebServer,
+          storedAppModel.webServerPort == storedAppModel.port else {
+      return storedAppModel.webServerPort
+    }
+    return storedAppModel.port == 65535 ? 1 : storedAppModel.port + 1
   }
 
 }

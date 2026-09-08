@@ -28,6 +28,7 @@ struct VisionApp: App {
   @State private var runtimeAppModel = RuntimeAppModel()
   @State private var sharedAppModel = SharedAppModel()
   @StateObject private var storedAppModel = StoredAppModel()
+  @StateObject private var serverController = BackgroundServerController()
 
   @StateObject private var voice = VoiceCommandService()
   @StateObject private var speech = SpeechHelper()
@@ -45,6 +46,7 @@ struct VisionApp: App {
         )
         .trackView(name: "MainView")
         .environment(runtimeAppModel)
+        .environmentObject(serverController)
         .onOpenURL { url in
           Task {
             await handleOpenRequest(url:url)
@@ -62,10 +64,51 @@ struct VisionApp: App {
             storedAppModel: storedAppModel
           )
         }
+        .task {
+          if storedAppModel.enableDatasetServer && storedAppModel.autoStartServer {
+            serverController.start(using: storedAppModel)
+          }
+        }
+        .onChange(of: storedAppModel.enableDatasetServer) { _, enabled in
+          if enabled {
+            if storedAppModel.autoStartServer, !serverController.isRunning {
+              serverController.start(using: storedAppModel)
+            }
+          } else {
+            serverController.stop()
+          }
+        }
+        .onChange(of: storedAppModel.autoStartServer) { _, enabled in
+          if enabled, storedAppModel.enableDatasetServer, !serverController.isRunning {
+            serverController.start(using: storedAppModel)
+          }
+        }
+        .onChange(of: storedAppModel.serverPort) { _, _ in
+          serverController.restartIfRunning(using: storedAppModel)
+        }
+        .onChange(of: storedAppModel.serverPassword) { _, _ in
+          serverController.restartIfRunning(using: storedAppModel)
+        }
+        .onChange(of: storedAppModel.maxBricksPerGetRequest) { _, _ in
+          serverController.restartIfRunning(using: storedAppModel)
+        }
+        .onChange(of: storedAppModel.enableWebServer) { _, _ in
+          serverController.restartIfRunning(using: storedAppModel)
+        }
+        .onChange(of: storedAppModel.webServerPort) { _, _ in
+          serverController.restartIfRunning(using: storedAppModel)
+        }
+        .onChange(of: storedAppModel.webServerUsesTLS) { _, _ in
+          serverController.restartIfRunning(using: storedAppModel)
+        }
+        .onChange(of: storedAppModel.webServerCertificateData) { _, _ in
+          serverController.restartIfRunning(using: storedAppModel)
+        }
     }
     .environment(runtimeAppModel)
     .environment(sharedAppModel)
     .environmentObject(storedAppModel)
+    .environmentObject(serverController)
     .environmentObject(voice)
     .environmentObject(speech)
     .windowResizability(.contentSize)
@@ -119,6 +162,7 @@ struct VisionApp: App {
         .environment(runtimeAppModel)
         .environment(sharedAppModel)
         .environmentObject(storedAppModel)
+        .environmentObject(serverController)
         .environmentObject(voice)
         .environmentObject(speech)
     }
@@ -155,6 +199,7 @@ struct VisionApp: App {
         .environment(runtimeAppModel)
         .environment(sharedAppModel)
         .environmentObject(storedAppModel)
+        .environmentObject(serverController)
     }
     .windowResizability(.contentSize)
     .defaultSize(width:800,height:1200)

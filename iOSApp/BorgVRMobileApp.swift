@@ -26,8 +26,17 @@ struct BorgVRMobileApp: App {
           appModel.setLogLevel(newValue)
         }
         .onChange(of: appSettings.autoStartServer) { _, enabled in
-          if enabled, !serverController.isRunning {
+          if enabled, appSettings.enableDatasetServer, !serverController.isRunning {
             serverController.start(using: appSettings)
+          }
+        }
+        .onChange(of: appSettings.enableDatasetServer) { _, enabled in
+          if enabled {
+            if appSettings.autoStartServer, !serverController.isRunning {
+              serverController.start(using: appSettings)
+            }
+          } else {
+            serverController.stop()
           }
         }
         .onChange(of: appSettings.serverPort) { _, _ in
@@ -52,7 +61,7 @@ struct BorgVRMobileApp: App {
           serverController.restartIfRunning(using: appSettings)
         }
         .task {
-          if appSettings.autoStartServer {
+          if appSettings.enableDatasetServer && appSettings.autoStartServer {
             serverController.start(using: appSettings)
           }
         }

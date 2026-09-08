@@ -74,6 +74,20 @@ struct macOSApp: App {
         .onChange(of: appSettings.logLevel) { _, newValue in
           appModel.setLogLevel(newValue)
         }
+        .onChange(of: storedAppModel.enableDatasetServer) { _, enabled in
+          if enabled {
+            if storedAppModel.autoStartServer, !serverController.isRunning {
+              serverController.start(using: storedAppModel)
+            }
+          } else {
+            serverController.stop()
+          }
+        }
+        .onChange(of: storedAppModel.autoStartServer) { _, enabled in
+          if enabled, storedAppModel.enableDatasetServer, !serverController.isRunning {
+            serverController.start(using: storedAppModel)
+          }
+        }
         .onOpenURL { url in
           openExternalDataset(url)
         }
@@ -87,7 +101,7 @@ struct macOSApp: App {
         }
         .task {
           _ = storedAppModel.activateDataDirectoryAccess()
-          if storedAppModel.autoStartServer {
+          if storedAppModel.enableDatasetServer && storedAppModel.autoStartServer {
             serverController.start(using: storedAppModel)
           }
         }

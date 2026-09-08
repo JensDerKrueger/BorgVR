@@ -8,7 +8,7 @@ final class BackgroundServerController: ObservableObject {
 
   private let serverHost = BorgVRServerHost(logger: GUILogger())
 
-  func start(using settings: AppSettings) {
+  func start(using settings: StoredAppModel) {
     guard settings.enableDatasetServer else {
       stop()
       return
@@ -35,6 +35,7 @@ final class BackgroundServerController: ObservableObject {
 
     datasets = state.datasets
     isRunning = state.isRunning
+
     let webStatus: String
     if state.isWebServerRunning {
       webStatus = ", WebGPU \(state.webServerUsesTLS ? "HTTPS" : "HTTP") \(state.webPort)"
@@ -44,6 +45,7 @@ final class BackgroundServerController: ObservableObject {
     } else {
       webStatus = ""
     }
+
     if state.isRunning {
       statusText = "Port \(state.port)\(webStatus), \(state.datasets.count) Datensätze"
     } else {
@@ -52,7 +54,7 @@ final class BackgroundServerController: ObservableObject {
     }
   }
 
-  func restartIfRunning(using settings: AppSettings) {
+  func restartIfRunning(using settings: StoredAppModel) {
     guard isRunning else { return }
     start(using: settings)
   }

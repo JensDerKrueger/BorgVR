@@ -176,6 +176,10 @@
 
 /* Mode selection: button - settings */
 "mode_button_settings" = "Settings";
+"mode_button_start_background_server" = "Start Background Server";
+"mode_button_stop_background_server" = "Stop Background Server";
+"mode_server_running" = "Background server is running";
+"mode_server_stopped" = "Background server is stopped";
 
 /* Mode selection: share preview title */
 "mode_share_preview_title" = "BorgVR Live Collaboration";
@@ -354,8 +358,22 @@
 
 "settings_label_timeout" = "Timeout (seconds)";
 "settings_placeholder_timeout" = "Enter timeout";
+"settings_section_background_server" = "Background Server";
+"settings_toggle_enable_dataset_server" = "Enable Dataset Server";
+"settings_toggle_autostart_dataset_server" = "Start server automatically";
+"settings_label_dataset_server_port" = "Dataset server port";
+"settings_label_dataset_server_password" = "Server password (optional)";
+"settings_label_max_bricks_per_request_format" = "Max. bricks per request: %d";
+"settings_toggle_enable_webgpu_server" = "Start WebGPU web server";
+"settings_toggle_use_https" = "Use HTTPS";
+"settings_note_http_localhost_only" = "Without HTTPS, only localhost connections are possible.";
+"settings_label_webgpu_server_port" = "WebGPU web server port";
+"settings_button_reset_background_server" = "Reset background server";
+"settings_section_ad_hoc_server" = "Ad-hoc Server";
 "settings_label_shareplay_server_port" = "Ad-hoc dataset server port";
 "settings_placeholder_shareplay_server_port" = "Enter port";
+"settings_label_ad_hoc_webgpu_server_port" = "Ad-hoc WebGPU web server port";
+"settings_button_reset_ad_hoc_server" = "Reset ad-hoc server";
 
 "settings_toggle_progressive_loading" = "Progressive loading";
 "settings_toggle_store_local_copy" = "Store local version in progressive mode";

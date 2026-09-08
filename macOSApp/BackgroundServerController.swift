@@ -22,6 +22,11 @@ final class BackgroundServerController: ObservableObject {
   }
 
   func start(using settings: StoredAppModel) {
+    guard settings.enableDatasetServer else {
+      stop()
+      return
+    }
+
     _ = settings.activateDataDirectoryAccess()
     startServer(using: settings, additionalDatasets: [])
   }
@@ -89,12 +94,21 @@ final class BackgroundServerController: ObservableObject {
     datasets = state.datasets
     isRunning = state.isRunning
     runningPort = state.port
-    let webStatus = state.isWebServerRunning
-      ? ", \(state.webServerUsesTLS ? "HTTPS" : "HTTP") \(state.webPort)"
-      : ""
-    statusText = isRunning
-      ? "Port \(state.port)\(webStatus), \(datasets.count) Datensätze"
-      : "Server konnte nicht gestartet werden."
+    let webStatus: String
+    if state.isWebServerRunning {
+      webStatus = ", WebGPU \(state.webServerUsesTLS ? "HTTPS" : "HTTP") \(state.webPort)"
+    } else if settings.enableWebServer {
+      let reason = state.webServerError.map { ": \($0)" } ?? ""
+      webStatus = ", WebGPU \(state.webServerUsesTLS ? "HTTPS" : "HTTP") \(state.webPort) fehlgeschlagen\(reason)"
+    } else {
+      webStatus = ""
+    }
+    if isRunning {
+      statusText = "Port \(state.port)\(webStatus), \(datasets.count) Datensätze"
+    } else {
+      let reason = state.serverError.map { ": \($0)" } ?? ""
+      statusText = "Server konnte nicht gestartet werden\(reason)"
+    }
   }
 
   func stop() {

@@ -12,6 +12,8 @@ struct ModeSelectionView: View {
   /// The shared application model, providing access to the application state.
   @Environment(RuntimeAppModel.self) private var runtimeAppModel
   @Environment(SharedAppModel.self) private var sharedAppModel
+  @EnvironmentObject private var storedAppModel: StoredAppModel
+  @EnvironmentObject private var serverController: BackgroundServerController
 
   /// An environment value that provides a closure to open new windows.
   @Environment(\.openWindow) private var openWindow
@@ -49,6 +51,11 @@ struct ModeSelectionView: View {
             .font(.title2)
             .padding()
             .frame(maxWidth: .infinity, alignment: .leading)
+
+          if storedAppModel.enableDatasetServer {
+            serverStatus
+              .padding(.horizontal)
+          }
         }
 
         Spacer()
@@ -107,6 +114,7 @@ struct ModeSelectionView: View {
             sharedAppModel.markLocalActivityStarter()
           }
         )
+        .frame(width: 0, height: 0)
         .hidden()
 
         Button {
@@ -138,6 +146,45 @@ struct ModeSelectionView: View {
           minHeight: 300
         )
     }
+  }
+
+  private var serverStatus: some View {
+    HStack(alignment: .center, spacing: 18) {
+      VStack(alignment: .leading, spacing: 6) {
+        Label(
+          serverController.isRunning ? "mode_server_running" : "mode_server_stopped",
+          systemImage: serverController.isRunning ? "checkmark.circle.fill" : "circle"
+        )
+        .foregroundStyle(serverController.isRunning ? .green : .secondary)
+
+        Text(serverController.statusText)
+          .font(.callout)
+          .foregroundStyle(.secondary)
+          .lineLimit(3)
+      }
+
+      Spacer(minLength: 16)
+
+      serverButton
+    }
+    .frame(maxWidth: .infinity, alignment: .leading)
+  }
+
+  private var serverButton: some View {
+    Button {
+      if serverController.isRunning {
+        serverController.stop()
+      } else {
+        serverController.start(using: storedAppModel)
+      }
+    } label: {
+      Label(
+        serverController.isRunning ? "mode_button_stop_background_server" : "mode_button_start_background_server",
+        systemImage: serverController.isRunning ? "stop.circle" : "play.circle"
+      )
+    }
+    .buttonStyle(.borderedProminent)
+    .fixedSize()
   }
 }
 

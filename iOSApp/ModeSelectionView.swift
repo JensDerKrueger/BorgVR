@@ -9,86 +9,17 @@ struct ModeSelectionView: View {
 
   var body: some View {
     NavigationStack {
-      ZStack {
-        Color(.systemBackground)
-          .ignoresSafeArea()
+      GeometryReader { proxy in
+        ZStack {
+          Color(.systemBackground)
+            .ignoresSafeArea()
 
-        VStack(spacing: 28) {
-          Spacer(minLength: 20)
-
-          borgVRLogo
-            .frame(maxWidth: 280)
-            .clipShape(RoundedRectangle(cornerRadius: 8))
-
-          VStack(spacing: 8) {
-            Text("BorgVR Mobile")
-              .font(.largeTitle.weight(.bold))
-              .multilineTextAlignment(.center)
-
-            Text("Interaktive Visualisierung volumetrischer Datensätze auf iPhone und iPad")
-              .font(.headline)
-              .foregroundStyle(.secondary)
-              .multilineTextAlignment(.center)
+          if proxy.size.width > proxy.size.height {
+            landscapeContent(size: proxy.size)
+          } else {
+            portraitContent
           }
-
-          serverStatus
-
-          VStack(spacing: 14) {
-            Button {
-              appModel.currentState = .selectData
-            } label: {
-              Label("Datensatz öffnen", systemImage: "folder")
-                .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.borderedProminent)
-
-            Button {
-              appModel.currentState = .importData
-            } label: {
-              Label("Datensatz importieren", systemImage: "square.and.arrow.down")
-                .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.bordered)
-
-            Button {
-              appModel.currentState = .settings
-            } label: {
-              Label("Einstellungen", systemImage: "gearshape")
-                .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.bordered)
-
-            Button {
-              showingAbout = true
-            } label: {
-              Label("Info", systemImage: "info.circle")
-                .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.bordered)
-
-            Button {
-              if serverController.isRunning {
-                serverController.stop()
-              } else {
-                serverController.start(using: appSettings)
-              }
-            } label: {
-              Label(
-                serverController.isRunning ? "Hintergrundserver stoppen" : "Hintergrundserver starten",
-                systemImage: serverController.isRunning ? "stop.circle" : "play.circle"
-              )
-              .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.bordered)
-          }
-          .controlSize(.large)
-          .frame(maxWidth: 420)
-
-          Spacer()
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(.horizontal, 24)
-        .padding(.vertical, 20)
       }
       .toolbar(.hidden, for: .navigationBar)
     }
@@ -96,6 +27,157 @@ struct ModeSelectionView: View {
     .sheet(isPresented: $showingAbout) {
       iOSAboutView()
     }
+  }
+
+  private var portraitContent: some View {
+    ScrollView {
+      VStack(spacing: 24) {
+        borgVRLogo
+          .frame(maxWidth: 260)
+          .clipShape(RoundedRectangle(cornerRadius: 8))
+
+        titleBlock(multilineAlignment: .center)
+
+        if appSettings.enableDatasetServer {
+          serverStatus
+        }
+
+        buttonStack
+      }
+      .frame(maxWidth: .infinity)
+      .padding(.horizontal, 24)
+      .padding(.vertical, 24)
+    }
+  }
+
+  private func landscapeContent(size: CGSize) -> some View {
+    Group {
+      if size.width >= 1000 {
+        regularLandscapeContent
+      } else {
+        compactLandscapeContent
+      }
+    }
+  }
+
+  private var compactLandscapeContent: some View {
+    HStack(spacing: 28) {
+      ScrollView {
+        VStack(spacing: 14) {
+          borgVRLogo
+            .frame(maxWidth: 130)
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+
+          titleBlock(multilineAlignment: .center)
+
+          if appSettings.enableDatasetServer {
+            serverStatus
+          }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 18)
+      }
+
+      buttonStack
+        .frame(maxWidth: 360)
+    }
+    .padding(.horizontal, 24)
+    .padding(.vertical, 14)
+  }
+
+  private var regularLandscapeContent: some View {
+    HStack(alignment: .center, spacing: 84) {
+      VStack(spacing: 18) {
+        borgVRLogo
+          .frame(width: 190, height: 190)
+          .clipShape(RoundedRectangle(cornerRadius: 8))
+
+        titleBlock(multilineAlignment: .center)
+
+        if appSettings.enableDatasetServer {
+          serverStatus
+        }
+      }
+      .frame(maxWidth: 470)
+
+      buttonStack
+        .frame(width: 360)
+    }
+    .frame(maxWidth: 980, maxHeight: .infinity, alignment: .center)
+    .padding(.horizontal, 40)
+    .padding(.vertical, 32)
+  }
+
+  private func titleBlock(multilineAlignment: TextAlignment) -> some View {
+    VStack(spacing: 8) {
+      Text("BorgVR Mobile")
+        .font(.largeTitle.weight(.bold))
+        .multilineTextAlignment(multilineAlignment)
+
+      Text("Interaktive Visualisierung volumetrischer Datensätze auf iPhone und iPad")
+        .font(.headline)
+        .foregroundStyle(.secondary)
+        .multilineTextAlignment(multilineAlignment)
+    }
+  }
+
+  private var buttonStack: some View {
+    VStack(spacing: 12) {
+      Button {
+        appModel.currentState = .selectData
+      } label: {
+        Label("Datensatz öffnen", systemImage: "folder")
+          .frame(maxWidth: .infinity)
+      }
+      .buttonStyle(.borderedProminent)
+
+      Button {
+        appModel.currentState = .importData
+      } label: {
+        Label("Datensatz importieren", systemImage: "square.and.arrow.down")
+          .frame(maxWidth: .infinity)
+      }
+      .buttonStyle(.bordered)
+
+      Button {
+        appModel.currentState = .settings
+      } label: {
+        Label("Einstellungen", systemImage: "gearshape")
+          .frame(maxWidth: .infinity)
+      }
+      .buttonStyle(.bordered)
+
+      Button {
+        showingAbout = true
+      } label: {
+        Label("Info", systemImage: "info.circle")
+          .frame(maxWidth: .infinity)
+      }
+      .buttonStyle(.bordered)
+
+      if appSettings.enableDatasetServer {
+        serverButton
+      }
+    }
+    .controlSize(.large)
+    .frame(maxWidth: 420)
+  }
+
+  private var serverButton: some View {
+    Button {
+      if serverController.isRunning {
+        serverController.stop()
+      } else {
+        serverController.start(using: appSettings)
+      }
+    } label: {
+      Label(
+        serverController.isRunning ? "Hintergrundserver stoppen" : "Hintergrundserver starten",
+        systemImage: serverController.isRunning ? "stop.circle" : "play.circle"
+      )
+      .frame(maxWidth: .infinity)
+    }
+    .buttonStyle(.bordered)
   }
 
   private var serverStatus: some View {

@@ -9,6 +9,7 @@ class TCPServer {
   var listener: NWListener?
   var activeConnections: [NWConnection] = []
   var isRunning = false
+  var lastError: String?
   var logger: LoggerBase?
 
   // Maximum number of bricks allowed in a single GETBRICKS request
@@ -92,14 +93,15 @@ class TCPServer {
   }
 
   func start() {
+    lastError = nil
     do {
       listener = try NWListener(using: .tcp, on: port)
     } catch {
-      logger?.error(
-        L("tcpserver_error_create_listener",
-          value: "Could not create listener:",
-          comment: "failed to create TCP listener") + " \(error)"
-      )
+      let message = L("tcpserver_error_create_listener",
+                      value: "Could not create listener:",
+                      comment: "failed to create TCP listener") + " \(error)"
+      lastError = message
+      logger?.error(message)
       return
     }
 
@@ -145,6 +147,7 @@ class TCPServer {
     }
     removeAllActiveConnections()
     isRunning = false
+    lastError = nil
     logger?.info(
       L(
         "tcpserver_info_server_stopped",

@@ -1,5 +1,14 @@
 import SwiftUI
 
+private let portNumberFormatter: NumberFormatter = {
+  let formatter = NumberFormatter()
+  formatter.numberStyle = .none
+  formatter.usesGroupingSeparator = false
+  formatter.minimum = 1
+  formatter.maximum = 65535
+  return formatter
+}()
+
 struct SettingsView: View {
   @Environment(RuntimeAppModel.self) private var runtimeAppModel
   @EnvironmentObject var storedAppModel: StoredAppModel
@@ -94,10 +103,14 @@ struct SettingsView: View {
                 Text("WebGPU-Port")
                   .gridColumnAlignment(.trailing)
                   .frame(minWidth: 120, alignment: .trailing)
-                Stepper(value: $storedAppModel.webServerPort, in: 1...65535) {
-                  Text(verbatim: String(storedAppModel.webServerPort))
-                }
-                .frame(width: 160)
+                TextField(
+                  "443",
+                  value: clampedPortBinding($storedAppModel.webServerPort),
+                  formatter: portNumberFormatter
+                )
+                .textFieldStyle(RoundedBorderTextFieldStyle())
+                .frame(width: 120)
+                .accentColor(.blue)
               }
               GridRow {
                 Text("settings_brickcount_label")
@@ -266,6 +279,15 @@ struct SettingsView: View {
         comment: "Invalid port error"
       )
     }
+  }
+
+  private func clampedPortBinding(_ value: Binding<Int>) -> Binding<Int> {
+    Binding(
+      get: { value.wrappedValue },
+      set: { newValue in
+        value.wrappedValue = min(65535, max(1, newValue))
+      }
+    )
   }
 
   private func validateBrickSize() {

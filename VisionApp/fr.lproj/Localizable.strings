@@ -176,6 +176,10 @@
 
 /* Mode selection: button - settings */
 "mode_button_settings" = "Réglages";
+"mode_button_start_background_server" = "Démarrer le serveur en arrière-plan";
+"mode_button_stop_background_server" = "Arrêter le serveur en arrière-plan";
+"mode_server_running" = "Le serveur en arrière-plan fonctionne";
+"mode_server_stopped" = "Le serveur en arrière-plan est arrêté";
 
 /* Mode selection: share preview title */
 "mode_share_preview_title" = "Collaboration BorgVR en direct";
@@ -354,8 +358,22 @@
 
 "settings_label_timeout" = "Délai (secondes)";
 "settings_placeholder_timeout" = "Saisir le délai";
+"settings_section_background_server" = "Serveur en arrière-plan";
+"settings_toggle_enable_dataset_server" = "Activer le serveur de jeux de données";
+"settings_toggle_autostart_dataset_server" = "Démarrer automatiquement le serveur";
+"settings_label_dataset_server_port" = "Port du serveur de jeux de données";
+"settings_label_dataset_server_password" = "Mot de passe du serveur (facultatif)";
+"settings_label_max_bricks_per_request_format" = "Bricks max. par requête : %d";
+"settings_toggle_enable_webgpu_server" = "Démarrer le serveur web WebGPU";
+"settings_toggle_use_https" = "Utiliser HTTPS";
+"settings_note_http_localhost_only" = "Sans HTTPS, seules les connexions localhost sont possibles.";
+"settings_label_webgpu_server_port" = "Port du serveur web WebGPU";
+"settings_button_reset_background_server" = "Réinitialiser le serveur en arrière-plan";
+"settings_section_ad_hoc_server" = "Serveur ad hoc";
 "settings_label_shareplay_server_port" = "Port du serveur ad hoc de jeux de données";
 "settings_placeholder_shareplay_server_port" = "Saisir le port";
+"settings_label_ad_hoc_webgpu_server_port" = "Port du serveur web WebGPU ad hoc";
+"settings_button_reset_ad_hoc_server" = "Réinitialiser le serveur ad hoc";
 
 "settings_toggle_progressive_loading" = "Chargement progressif";
 "settings_toggle_store_local_copy" = "Stocker une version locale en mode progressif";

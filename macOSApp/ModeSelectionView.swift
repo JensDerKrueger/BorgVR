@@ -41,7 +41,9 @@ struct ModeSelectionView: View {
           .foregroundStyle(.tertiary)
         }
 
-        serverStatus
+        if storedAppModel.enableDatasetServer {
+          serverStatus
+        }
 
         Spacer()
 
@@ -66,18 +68,20 @@ struct ModeSelectionView: View {
           appModel.currentState = .settings
         }
 
-        Divider()
-          .frame(maxWidth: 420)
-          .padding(.vertical, 8)
+        if storedAppModel.enableDatasetServer {
+          Divider()
+            .frame(maxWidth: 420)
+            .padding(.vertical, 8)
 
-        commandButton(
-          serverController.isRunning ? "modeselection_stop_background_server" : "modeselection_start_background_server",
-          systemImage: serverController.isRunning ? "stop.circle" : "play.circle"
-        ) {
-          if serverController.isRunning {
-            serverController.stop()
-          } else {
-            serverController.start(using: storedAppModel)
+          commandButton(
+            serverController.isRunning ? "modeselection_stop_background_server" : "modeselection_start_background_server",
+            systemImage: serverController.isRunning ? "stop.circle" : "play.circle"
+          ) {
+            if serverController.isRunning {
+              serverController.stop()
+            } else {
+              serverController.start(using: storedAppModel)
+            }
           }
         }
 

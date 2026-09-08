@@ -93,12 +93,17 @@ final class StoredAppModel: ObservableObject {
     "oversamplingMode": OversamplingMode.dynamicMode.rawValue,
     "dropFPS": 20,
     "recoveryFPS": 50,
+    "enableDatasetServer": false,
+    "autoStartServer": false,
+    "serverPort": 12345,
+    "serverPassword": "",
+    "maxBricksPerGetRequest": 20,
     "sharePlayServerPort": 12346,
     "enableWebServer": false,
-    "webServerPort": 8080,
+    "webServerPort": 443,
     "webServerUsesTLS": true,
     "webServerCertificateData": Data(),
-    "sharePlayWebServerPort": 8081,
+    "sharePlayWebServerPort": 444,
     "autoloadTF": false,
     "autoloadTransform": false,
     "disableFoveation": false,
@@ -165,6 +170,16 @@ final class StoredAppModel: ObservableObject {
   @AppStorage("dropFPS") var dropFPS: Int = StoredAppModel.int("dropFPS")
   /// FPS at which recovery occurs after step size increment.
   @AppStorage("recoveryFPS") var recoveryFPS: Int = StoredAppModel.int("recoveryFPS")
+  /// Whether the persistent dataset server can be started from the main menu.
+  @AppStorage("enableDatasetServer") var enableDatasetServer: Bool = StoredAppModel.bool("enableDatasetServer")
+  /// Whether the persistent dataset server should start automatically.
+  @AppStorage("autoStartServer") var autoStartServer: Bool = StoredAppModel.bool("autoStartServer")
+  /// Preferred port for the persistent dataset server.
+  @AppStorage("serverPort") var serverPort: Int = StoredAppModel.int("serverPort")
+  /// Optional password for the persistent dataset server.
+  @AppStorage("serverPassword") var serverPassword: String = StoredAppModel.string("serverPassword")
+  /// Maximum number of bricks returned by a single get request.
+  @AppStorage("maxBricksPerGetRequest") var maxBricksPerGetRequest: Int = StoredAppModel.int("maxBricksPerGetRequest")
   /// Preferred port for the temporary dataset server used by SharePlay hosts.
   @AppStorage("sharePlayServerPort") var sharePlayServerPort: Int = StoredAppModel.int("sharePlayServerPort")
   /// Whether to also expose the WebGPU browser frontend from dataset servers.
@@ -285,6 +300,24 @@ final class StoredAppModel: ObservableObject {
   var webServerCertificatePassword: String {
     get { WebServerCertificatePasswordStore.load() }
     set { try? WebServerCertificatePasswordStore.save(newValue) }
+  }
+
+  func resetBackgroundServerDefaults() {
+    enableDatasetServer = Self.values["enableDatasetServer"] as? Bool ?? false
+    autoStartServer = Self.values["autoStartServer"] as? Bool ?? false
+    serverPort = Self.values["serverPort"] as? Int ?? 12345
+    serverPassword = Self.values["serverPassword"] as? String ?? ""
+    maxBricksPerGetRequest = Self.values["maxBricksPerGetRequest"] as? Int ?? 20
+    enableWebServer = Self.values["enableWebServer"] as? Bool ?? false
+    webServerPort = Self.values["webServerPort"] as? Int ?? 443
+    webServerUsesTLS = Self.values["webServerUsesTLS"] as? Bool ?? true
+    webServerCertificateData = Self.values["webServerCertificateData"] as? Data ?? Data()
+    WebServerCertificatePasswordStore.delete()
+  }
+
+  func resetAdHocServerDefaults() {
+    sharePlayServerPort = Self.values["sharePlayServerPort"] as? Int ?? 12346
+    sharePlayWebServerPort = Self.values["sharePlayWebServerPort"] as? Int ?? 444
   }
 
   private func loadServers() {

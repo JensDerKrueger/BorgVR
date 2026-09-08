@@ -20,6 +20,9 @@ final class StoredAppModel : ObservableObject {
   static let defaultAutoStartServer: Bool = false
   @AppStorage("autoStartServer") var autoStartServer: Bool = defaultAutoStartServer
 
+  static let defaultEnableDatasetServer: Bool = false
+  @AppStorage("enableDatasetServer") var enableDatasetServer: Bool = defaultEnableDatasetServer
+
   static let defaultBorderModeString: String = "zeroes"
   @AppStorage("borderMode") var borderModeString: String = defaultBorderModeString
 
@@ -35,7 +38,7 @@ final class StoredAppModel : ObservableObject {
   static let defaultEnableWebServer: Bool = false
   @AppStorage("enableWebServer") var enableWebServer: Bool = defaultEnableWebServer
 
-  static let defaultWebServerPort: Int = 8080
+  static let defaultWebServerPort: Int = 443
   @AppStorage("webServerPort") var webServerPort: Int = defaultWebServerPort
 
   static let defaultWebServerUsesTLS: Bool = true
@@ -44,7 +47,7 @@ final class StoredAppModel : ObservableObject {
   static let defaultWebServerCertificateData = Data()
   @AppStorage("webServerCertificateData") var webServerCertificateData: Data = defaultWebServerCertificateData
 
-  static let defaultSharePlayWebServerPort: Int = 8081
+  static let defaultSharePlayWebServerPort: Int = 444
   @AppStorage("sharePlayWebServerPort") var sharePlayWebServerPort: Int = defaultSharePlayWebServerPort
 
   static let defaultMaxBricksPerGetRequest: Int = 20
@@ -63,25 +66,30 @@ final class StoredAppModel : ObservableObject {
   func resetBackgroundServerDefaults() {
     deactivateDataDirectoryAccess()
     lastMinute = StoredAppModel.defaultLastMinute
+    enableDatasetServer = StoredAppModel.defaultEnableDatasetServer
     autoStartServer = StoredAppModel.defaultAutoStartServer
     port = StoredAppModel.defaultPort
     serverPassword = StoredAppModel.defaultServerPassword
-    sharePlayServerPort = StoredAppModel.defaultSharePlayServerPort
     enableWebServer = StoredAppModel.defaultEnableWebServer
     webServerPort = StoredAppModel.defaultWebServerPort
     webServerUsesTLS = StoredAppModel.defaultWebServerUsesTLS
     webServerCertificateData = StoredAppModel.defaultWebServerCertificateData
     WebServerCertificatePasswordStore.delete()
-    sharePlayWebServerPort = StoredAppModel.defaultSharePlayWebServerPort
     maxBricksPerGetRequest = StoredAppModel.defaultMaxBricksPerGetRequest
     dataDirectory = StoredAppModel.defaultDataDirectory
     clearDataDirectoryBookmark()
     lastDataDirectoryAccessError = nil
   }
 
+  func resetAdHocServerDefaults() {
+    sharePlayServerPort = StoredAppModel.defaultSharePlayServerPort
+    sharePlayWebServerPort = StoredAppModel.defaultSharePlayWebServerPort
+  }
+
   func resetToDefaults() {
     resetImportDefaults()
     resetBackgroundServerDefaults()
+    resetAdHocServerDefaults()
   }
 
   var webServerCertificatePassword: String {

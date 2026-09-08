@@ -54,7 +54,7 @@ final class HTTPWebServer {
     }
     listener?.start(queue: queue)
     isRunning = true
-    logger?.info("\(schemeName)/WebGPU server started on localhost port \(port).")
+    logger?.info("\(schemeName)/WebGPU server started on \(listenScopeDescription) port \(port).")
   }
 
   func stop() {
@@ -71,6 +71,10 @@ final class HTTPWebServer {
 
   private var schemeName: String {
     useTLS ? "HTTPS" : "HTTP"
+  }
+
+  private var listenScopeDescription: String {
+    useTLS ? "local network" : "localhost"
   }
 
   private func listenerParameters() throws -> NWParameters {
@@ -94,7 +98,6 @@ final class HTTPWebServer {
 
     let tcpOptions = NWProtocolTCP.Options()
     let parameters = NWParameters(tls: tlsOptions, tcp: tcpOptions)
-    try restrictToLocalhost(parameters)
     return parameters
   }
 

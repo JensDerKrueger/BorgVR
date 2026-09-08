@@ -90,8 +90,9 @@ The WebGPU server is disabled by default. When enabled, HTTPS is enabled by defa
 browser WebGPU access generally requires a secure context. If no certificate is configured, BorgVR
 creates a temporary self-signed certificate at server startup. A custom `.p12` or `.pfx`
 certificate can be imported in the app settings; its password is stored in the system Keychain.
-For safety, the WebGPU HTTP/HTTPS endpoint binds to `localhost` only. Use a reverse proxy such as
-nginx if you intentionally want to expose it outside the local machine.
+For safety, plain HTTP binds to `localhost` only. HTTPS listens on the local network so browsers
+on other devices can use WebGPU through a secure context. Use a reverse proxy such as nginx if you
+intentionally want to expose it outside the local network.
 
 The WebGPU frontend is primarily intended as a convenient preview and dataset browser. The native
 apps remain the main high-performance rendering applications.
