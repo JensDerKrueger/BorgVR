@@ -50,7 +50,7 @@ final class HTTPWebServer {
     }
     listener?.start(queue: queue)
     isRunning = true
-    logger?.info("\(schemeName)/WebGPU server started on port \(port).")
+    logger?.info("\(schemeName)/WebGPU server started on localhost port \(port).")
   }
 
   func stop() {
@@ -71,7 +71,9 @@ final class HTTPWebServer {
 
   private func listenerParameters() throws -> NWParameters {
     guard useTLS else {
-      return .tcp
+      let parameters = NWParameters.tcp
+      try restrictToLocalhost(parameters)
+      return parameters
     }
 
     let identity = try HTTPWebServerTLSIdentity.create(
@@ -87,7 +89,16 @@ final class HTTPWebServer {
     sec_protocol_options_set_local_identity(tlsOptions.securityProtocolOptions, protocolIdentity)
 
     let tcpOptions = NWProtocolTCP.Options()
-    return NWParameters(tls: tlsOptions, tcp: tcpOptions)
+    let parameters = NWParameters(tls: tlsOptions, tcp: tcpOptions)
+    try restrictToLocalhost(parameters)
+    return parameters
+  }
+
+  private func restrictToLocalhost(_ parameters: NWParameters) throws {
+    guard let address = IPv4Address("127.0.0.1") else {
+      throw HTTPWebServerError.localhostBindingFailed
+    }
+    parameters.requiredLocalEndpoint = .hostPort(host: .ipv4(address), port: port)
   }
 
   private func handleNewConnection(_ connection: NWConnection) {
@@ -554,6 +565,7 @@ private struct HTTPResponse {
 
 private enum HTTPWebServerError: Error {
   case notFound
+  case localhostBindingFailed
   case tlsIdentityCreationFailed
 }
 

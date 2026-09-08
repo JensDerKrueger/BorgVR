@@ -70,6 +70,15 @@ struct SettingsView: View {
                 Toggle("", isOn: $storedAppModel.webServerUsesTLS)
                   .labelsHidden()
               }
+              if !storedAppModel.webServerUsesTLS {
+                GridRow {
+                  Text("")
+                  Text("Ohne HTTPS sind nur localhost-Verbindungen möglich.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .frame(width: 360, alignment: .leading)
+                }
+              }
               if storedAppModel.webServerUsesTLS {
                 GridRow {
                   Text("Zertifikat")

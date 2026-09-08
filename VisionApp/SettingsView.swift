@@ -217,6 +217,11 @@ struct SettingsView: View {
           }
           Toggle("WebGPU-Webserver starten", isOn: $storedAppModel.enableWebServer)
           Toggle("HTTPS verwenden", isOn: $storedAppModel.webServerUsesTLS)
+          if !storedAppModel.webServerUsesTLS {
+            Text("Ohne HTTPS sind nur localhost-Verbindungen möglich.")
+              .font(.caption)
+              .foregroundStyle(.secondary)
+          }
           if storedAppModel.webServerUsesTLS {
             WebServerCertificateControls(
               certificateData: $storedAppModel.webServerCertificateData

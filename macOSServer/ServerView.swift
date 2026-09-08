@@ -99,7 +99,7 @@ struct ServerView: View {
         if storedAppModel.enableWebServer {
           HStack {
             Text("WebGPU-Webserver:")
-            Text(verbatim: "\(storedAppModel.webServerUsesTLS ? "https" : "http")://<IP>:\(storedAppModel.webServerPort)")
+            Text(verbatim: "\(storedAppModel.webServerUsesTLS ? "https" : "http")://localhost:\(storedAppModel.webServerPort)")
               .font(.system(.body, design: .monospaced))
               .bold()
               .textSelection(.enabled)

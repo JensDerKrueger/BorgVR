@@ -190,15 +190,15 @@ HTTPWebServer::~HTTPWebServer() {
 bool HTTPWebServer::start() {
   if (running_.load()) return true;
 
-  if (!listener_.listen(port_)) {
-    if (logger_) logger_->error("Failed to listen for HTTP/WebGPU on port " + std::to_string(port_));
+  if (!listener_.listenLocalhost(port_)) {
+    if (logger_) logger_->error("Failed to listen for HTTP/WebGPU on localhost port " + std::to_string(port_));
     return false;
   }
 
   running_.store(true);
   acceptThread_ = std::thread([this]() { acceptLoop(); });
   if (logger_) {
-    logger_->info("HTTP/WebGPU server started on port " + std::to_string(port_));
+    logger_->info("HTTP/WebGPU server started on http://localhost:" + std::to_string(port_));
   }
   return true;
 }

@@ -66,6 +66,7 @@ public:
   TcpListener& operator=(const TcpListener&) = delete;
 
   bool listen(uint16_t port, int backlog = 16);
+  bool listenLocalhost(uint16_t port, int backlog = 16);
   void close();
 
   TcpSocket accept();
@@ -73,6 +74,8 @@ public:
   bool valid() const;
 
 private:
+  bool listenIPv4(uint16_t port, int backlog, uint32_t hostOrderAddress);
+
   SocketHandle sock_ = kInvalidSocket;
 };
 

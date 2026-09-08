@@ -118,6 +118,14 @@ bool TcpListener::valid() const {
 }
 
 bool TcpListener::listen(uint16_t port, int backlog) {
+  return listenIPv4(port, backlog, INADDR_ANY);
+}
+
+bool TcpListener::listenLocalhost(uint16_t port, int backlog) {
+  return listenIPv4(port, backlog, INADDR_LOOPBACK);
+}
+
+bool TcpListener::listenIPv4(uint16_t port, int backlog, uint32_t hostOrderAddress) {
   close();
 #if defined(__linux__)
   sock_ = ::socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, IPPROTO_TCP);
@@ -138,7 +146,7 @@ bool TcpListener::listen(uint16_t port, int backlog) {
   sockaddr_in addr{};
   addr.sin_family = AF_INET;
   addr.sin_port = htons(port);
-  addr.sin_addr.s_addr = htonl(INADDR_ANY);
+  addr.sin_addr.s_addr = htonl(hostOrderAddress);
 
   if (::bind(sock_, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) != 0) {
     close();
