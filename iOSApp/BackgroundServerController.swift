@@ -30,9 +30,15 @@ final class BackgroundServerController: ObservableObject {
 
     datasets = state.datasets
     isRunning = state.isRunning
-    let webStatus = state.isWebServerRunning
-      ? ", WebGPU \(state.webServerUsesTLS ? "HTTPS" : "HTTP") \(state.webPort)"
-      : ""
+    let webStatus: String
+    if state.isWebServerRunning {
+      webStatus = ", WebGPU \(state.webServerUsesTLS ? "HTTPS" : "HTTP") \(state.webPort)"
+    } else if settings.enableWebServer {
+      let reason = state.webServerError.map { ": \($0)" } ?? ""
+      webStatus = ", WebGPU \(state.webServerUsesTLS ? "HTTPS" : "HTTP") \(state.webPort) fehlgeschlagen\(reason)"
+    } else {
+      webStatus = ""
+    }
     statusText = state.isRunning
       ? "Port \(state.port)\(webStatus), \(state.datasets.count) Datensätze"
       : "Server konnte nicht gestartet werden."

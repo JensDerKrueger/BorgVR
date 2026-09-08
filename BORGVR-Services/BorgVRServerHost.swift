@@ -20,6 +20,7 @@ struct BorgVRServerState {
   var isWebServerRunning: Bool
   var webPort: Int
   var webServerUsesTLS: Bool
+  var webServerError: String?
 }
 
 final class BorgVRServerHost {
@@ -33,7 +34,8 @@ final class BorgVRServerHost {
     port: StoredServerDefaults.port,
     isWebServerRunning: false,
     webPort: StoredServerDefaults.webPort,
-    webServerUsesTLS: StoredServerDefaults.useWebServerTLS
+    webServerUsesTLS: StoredServerDefaults.useWebServerTLS,
+    webServerError: nil
   )
 
   init(logger: LoggerBase? = nil) {
@@ -96,7 +98,8 @@ final class BorgVRServerHost {
       port: Int(serverPort),
       isWebServerRunning: newWebServer?.isRunning ?? false,
       webPort: Int(webPort),
-      webServerUsesTLS: configuration.useWebServerTLS
+      webServerUsesTLS: configuration.useWebServerTLS,
+      webServerError: newWebServer?.lastError
     )
     return state
   }
@@ -112,7 +115,8 @@ final class BorgVRServerHost {
       port: state.port,
       isWebServerRunning: false,
       webPort: state.webPort,
-      webServerUsesTLS: state.webServerUsesTLS
+      webServerUsesTLS: state.webServerUsesTLS,
+      webServerError: nil
     )
   }
 

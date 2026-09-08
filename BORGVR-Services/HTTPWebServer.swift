@@ -18,6 +18,7 @@ final class HTTPWebServer {
   private let stateLock = NSLock()
 
   private(set) var isRunning = false
+  private(set) var lastError: String?
 
   init(
     port: UInt16,
@@ -38,10 +39,13 @@ final class HTTPWebServer {
   }
 
   func start() {
+    lastError = nil
     do {
       listener = try NWListener(using: listenerParameters(), on: port)
     } catch {
-      logger?.error("Could not create \(schemeName)/WebGPU listener: \(error.localizedDescription)")
+      let message = "Could not create \(schemeName)/WebGPU listener: \(error.localizedDescription)"
+      lastError = message
+      logger?.error(message)
       return
     }
 
