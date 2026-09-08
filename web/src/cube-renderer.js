@@ -625,7 +625,7 @@ export class CoordinateCubeRenderer {
     this.resize();
     this.requestRender();
     this.ready = true;
-    this.reportStatus("WebGPU ready. Select a dataset to draw its aspect-ratio cube.");
+    this.reportStatus("WebGPU ready. Select a dataset to start rendering.");
     if (this.pendingManifest) {
       const manifest = this.pendingManifest;
       this.pendingManifest = null;
