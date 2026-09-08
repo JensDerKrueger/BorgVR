@@ -1,4 +1,4 @@
-import { CoordinateCubeRenderer } from "./cube-renderer.js?v=20260907-extensionless-bricks";
+import { CoordinateCubeRenderer } from "./cube-renderer.js?v=20260908-remote-errors";
 
 const catalogStatus = document.querySelector("#catalog-status");
 const datasetList = document.querySelector("#dataset-list");
@@ -33,6 +33,7 @@ let controlsCollapsed = false;
 let currentRenderMode = "tf";
 let lastTransferPaintPoint = null;
 let transferPointerMode = null;
+let rendererReadyPromise = null;
 
 main().catch((error) => {
   setStatus(error.message ?? String(error));
@@ -41,11 +42,12 @@ main().catch((error) => {
 async function main() {
   renderer = new CoordinateCubeRenderer(canvas);
   renderer.setStatusReporting(statusVisible);
-  renderer.initialize((message) => {
+  rendererReadyPromise = renderer.initialize((message) => {
     setStatus(message);
   }).then(() => {
     drawTransferFunctionEditor();
-  }).catch((error) => {
+  });
+  rendererReadyPromise.catch((error) => {
     setStatus(error.message ?? String(error));
   });
 
@@ -93,13 +95,20 @@ function datasetButton(dataset) {
       element.classList.remove("active");
     });
     button.classList.add("active");
-    await showDataset(dataset);
+    try {
+      await showDataset(dataset);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setStatus(`Could not open ${dataset.name}: ${message}`);
+      console.error("BorgVR dataset loading failed", error);
+    }
   });
   return button;
 }
 
 async function showDataset(dataset) {
   setStatus(`Loading ${dataset.name}...`);
+  await rendererReadyPromise;
   const manifestURL = new URL(`./web-data/${dataset.metadata}`, window.location.href);
   currentManifest = await fetchJSON(manifestURL);
   currentManifest.baseURL = new URL(".", manifestURL).href;
@@ -444,7 +453,10 @@ function renderDatasetInfo(manifest) {
 async function fetchJSON(url) {
   const requestURL = new URL(url, window.location.href);
   requestURL.searchParams.set("cacheBust", String(Date.now()));
-  const response = await fetch(requestURL, { cache: "no-store" });
+  const response = await fetch(requestURL, {
+    cache: "no-store",
+    credentials: "same-origin"
+  });
   if (!response.ok) {
     throw new Error(`HTTP ${response.status} while loading ${requestURL}`);
   }

@@ -1,5 +1,14 @@
 import SwiftUI
 
+private let portNumberFormatter: NumberFormatter = {
+  let formatter = NumberFormatter()
+  formatter.numberStyle = .none
+  formatter.usesGroupingSeparator = false
+  formatter.minimum = 1
+  formatter.maximum = 65535
+  return formatter
+}()
+
 // MARK: - Server model for list
 
 private enum ServerValidationStatus: Equatable {
@@ -200,7 +209,38 @@ struct SettingsView: View {
             TextField(
               "settings_placeholder_shareplay_server_port",
               value: $storedAppModel.sharePlayServerPort,
-              formatter: NumberFormatter()
+              formatter: portNumberFormatter
+            )
+            .textFieldStyle(RoundedBorderTextFieldStyle())
+            .keyboardType(.numberPad)
+            .frame(width: 100)
+          }
+          Toggle("WebGPU-Webserver starten", isOn: $storedAppModel.enableWebServer)
+          Toggle("HTTPS verwenden", isOn: $storedAppModel.webServerUsesTLS)
+          if storedAppModel.webServerUsesTLS {
+            WebServerCertificateControls(
+              certificateData: $storedAppModel.webServerCertificateData
+            )
+          }
+          HStack {
+            Text("WebGPU-Webserver-Port")
+            Spacer()
+            TextField(
+              "8080",
+              value: $storedAppModel.webServerPort,
+              formatter: portNumberFormatter
+            )
+            .textFieldStyle(RoundedBorderTextFieldStyle())
+            .keyboardType(.numberPad)
+            .frame(width: 100)
+          }
+          HStack {
+            Text("Ad-hoc WebGPU-Webserver-Port")
+            Spacer()
+            TextField(
+              "8081",
+              value: $storedAppModel.sharePlayWebServerPort,
+              formatter: portNumberFormatter
             )
             .textFieldStyle(RoundedBorderTextFieldStyle())
             .keyboardType(.numberPad)

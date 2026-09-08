@@ -122,6 +122,20 @@ class TCPServer {
     )
   }
 
+  func datasetsSnapshot() -> [DatasetInfo] {
+    stateLock.lock()
+    let snapshot = datasets
+    stateLock.unlock()
+    return snapshot
+  }
+
+  func findDatasetById(_ id: String) -> DatasetInfo? {
+    stateLock.lock()
+    let dataset = datasets.first(where: { $0.id == id })
+    stateLock.unlock()
+    return dataset
+  }
+
   func stop() {
     listener?.cancel()
     let connections = activeConnectionsSnapshot()

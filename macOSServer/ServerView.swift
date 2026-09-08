@@ -27,6 +27,7 @@ struct ServerView: View {
 
   /// Server instance
   @State private var server: TCPServer?
+  @State private var webServer: HTTPWebServer?
 
   /// Dataset scanner for the directory
   @State private var datasetScanner: DatasetScanner?
@@ -93,6 +94,16 @@ struct ServerView: View {
               storedAppModel.port
             )
           )
+        }
+
+        if storedAppModel.enableWebServer {
+          HStack {
+            Text("WebGPU-Webserver:")
+            Text(verbatim: "\(storedAppModel.webServerUsesTLS ? "https" : "http")://<IP>:\(storedAppModel.webServerPort)")
+              .font(.system(.body, design: .monospaced))
+              .bold()
+              .textSelection(.enabled)
+          }
         }
 
         HStack {
@@ -336,6 +347,8 @@ struct ServerView: View {
   }
 
   private func stopServer() {
+    webServer?.stop()
+    webServer = nil
     server?.stop()
     server = nil
     statusText = L(
@@ -355,6 +368,18 @@ struct ServerView: View {
       authSecret: storedAppModel.serverPassword
     )
     server?.start()
+    if storedAppModel.enableWebServer, let server {
+      webServer = HTTPWebServer(
+        port: UInt16(clamping: storedAppModel.webServerPort),
+        datasetServer: server,
+        logger: logger,
+        authSecret: storedAppModel.serverPassword,
+        useTLS: storedAppModel.webServerUsesTLS,
+        tlsCertificateData: storedAppModel.webServerCertificateData,
+        tlsCertificatePassword: storedAppModel.webServerCertificatePassword
+      )
+      webServer?.start()
+    }
     statusText = L(
       "server_status_running",
       comment: "Server status when the server is running"

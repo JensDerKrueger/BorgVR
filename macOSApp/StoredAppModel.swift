@@ -32,6 +32,21 @@ final class StoredAppModel : ObservableObject {
   static let defaultSharePlayServerPort: Int = 12346
   @AppStorage("sharePlayServerPort") var sharePlayServerPort: Int = defaultSharePlayServerPort
 
+  static let defaultEnableWebServer: Bool = false
+  @AppStorage("enableWebServer") var enableWebServer: Bool = defaultEnableWebServer
+
+  static let defaultWebServerPort: Int = 8080
+  @AppStorage("webServerPort") var webServerPort: Int = defaultWebServerPort
+
+  static let defaultWebServerUsesTLS: Bool = true
+  @AppStorage("webServerUsesTLS") var webServerUsesTLS: Bool = defaultWebServerUsesTLS
+
+  static let defaultWebServerCertificateData = Data()
+  @AppStorage("webServerCertificateData") var webServerCertificateData: Data = defaultWebServerCertificateData
+
+  static let defaultSharePlayWebServerPort: Int = 8081
+  @AppStorage("sharePlayWebServerPort") var sharePlayWebServerPort: Int = defaultSharePlayWebServerPort
+
   static let defaultMaxBricksPerGetRequest: Int = 20
   @AppStorage("maxBricksPerGetRequest") var maxBricksPerGetRequest: Int = defaultMaxBricksPerGetRequest
 
@@ -52,6 +67,12 @@ final class StoredAppModel : ObservableObject {
     port = StoredAppModel.defaultPort
     serverPassword = StoredAppModel.defaultServerPassword
     sharePlayServerPort = StoredAppModel.defaultSharePlayServerPort
+    enableWebServer = StoredAppModel.defaultEnableWebServer
+    webServerPort = StoredAppModel.defaultWebServerPort
+    webServerUsesTLS = StoredAppModel.defaultWebServerUsesTLS
+    webServerCertificateData = StoredAppModel.defaultWebServerCertificateData
+    WebServerCertificatePasswordStore.delete()
+    sharePlayWebServerPort = StoredAppModel.defaultSharePlayWebServerPort
     maxBricksPerGetRequest = StoredAppModel.defaultMaxBricksPerGetRequest
     dataDirectory = StoredAppModel.defaultDataDirectory
     clearDataDirectoryBookmark()
@@ -61,6 +82,11 @@ final class StoredAppModel : ObservableObject {
   func resetToDefaults() {
     resetImportDefaults()
     resetBackgroundServerDefaults()
+  }
+
+  var webServerCertificatePassword: String {
+    get { WebServerCertificatePasswordStore.load() }
+    set { try? WebServerCertificatePasswordStore.save(newValue) }
   }
 
   func setDataDirectoryURL(_ url: URL) {

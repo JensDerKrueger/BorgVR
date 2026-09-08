@@ -57,6 +57,40 @@ struct SettingsView: View {
                   .accentColor(.blue)
               }
               GridRow {
+                Text("WebGPU-Webserver")
+                  .gridColumnAlignment(.trailing)
+                  .frame(minWidth: 120, alignment: .trailing)
+                Toggle("", isOn: $storedAppModel.enableWebServer)
+                  .labelsHidden()
+              }
+              GridRow {
+                Text("HTTPS")
+                  .gridColumnAlignment(.trailing)
+                  .frame(minWidth: 120, alignment: .trailing)
+                Toggle("", isOn: $storedAppModel.webServerUsesTLS)
+                  .labelsHidden()
+              }
+              if storedAppModel.webServerUsesTLS {
+                GridRow {
+                  Text("Zertifikat")
+                    .gridColumnAlignment(.trailing)
+                    .frame(minWidth: 120, alignment: .trailing)
+                  WebServerCertificateControls(
+                    certificateData: $storedAppModel.webServerCertificateData
+                  )
+                  .frame(width: 360, alignment: .leading)
+                }
+              }
+              GridRow {
+                Text("WebGPU-Port")
+                  .gridColumnAlignment(.trailing)
+                  .frame(minWidth: 120, alignment: .trailing)
+                Stepper(value: $storedAppModel.webServerPort, in: 1...65535) {
+                  Text(verbatim: String(storedAppModel.webServerPort))
+                }
+                .frame(width: 160)
+              }
+              GridRow {
                 Text("settings_brickcount_label")
                   .gridColumnAlignment(.trailing)
                   .frame(minWidth: 120, alignment: .trailing)

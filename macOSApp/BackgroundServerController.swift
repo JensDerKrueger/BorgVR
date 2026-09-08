@@ -44,7 +44,12 @@ final class BackgroundServerController: ObservableObject {
           dataDirectory: "",
           port: port,
           maxBricksPerGetRequest: settings.maxBricksPerGetRequest,
-          authSecret: authToken
+          authSecret: authToken,
+          enableWebServer: settings.enableWebServer,
+          webPort: sharePlayWebPort(for: port, settings: settings),
+          useWebServerTLS: settings.webServerUsesTLS,
+          webServerCertificateData: settings.webServerCertificateData,
+          webServerCertificatePassword: settings.webServerCertificatePassword
         ),
         additionalDatasets: [datasetInfo],
         includeScannedDatasets: false
@@ -71,7 +76,12 @@ final class BackgroundServerController: ObservableObject {
         dataDirectory: settings.dataDirectory,
         port: settings.port,
         maxBricksPerGetRequest: settings.maxBricksPerGetRequest,
-        authSecret: settings.serverPassword
+        authSecret: settings.serverPassword,
+        enableWebServer: settings.enableWebServer,
+        webPort: settings.webServerPort,
+        useWebServerTLS: settings.webServerUsesTLS,
+        webServerCertificateData: settings.webServerCertificateData,
+        webServerCertificatePassword: settings.webServerCertificatePassword
       ),
       additionalDatasets: additionalDatasets
     )
@@ -79,8 +89,11 @@ final class BackgroundServerController: ObservableObject {
     datasets = state.datasets
     isRunning = state.isRunning
     runningPort = state.port
+    let webStatus = state.isWebServerRunning
+      ? ", \(state.webServerUsesTLS ? "HTTPS" : "HTTP") \(state.webPort)"
+      : ""
     statusText = isRunning
-      ? "Port \(state.port), \(datasets.count) Datensätze"
+      ? "Port \(state.port)\(webStatus), \(datasets.count) Datensätze"
       : "Server konnte nicht gestartet werden."
   }
 
@@ -153,6 +166,13 @@ final class BackgroundServerController: ObservableObject {
     return ports.filter { port in
       port != runningPort && seen.insert(port).inserted
     }
+  }
+
+  private func sharePlayWebPort(for serverPort: Int, settings: StoredAppModel) -> Int {
+    if settings.sharePlayWebServerPort == settings.sharePlayServerPort {
+      return min(65535, max(1, serverPort + 1))
+    }
+    return settings.sharePlayWebServerPort
   }
 
   private static func localIPv4Addresses() -> [String] {

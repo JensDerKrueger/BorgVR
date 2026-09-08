@@ -373,12 +373,12 @@ export class BrickAtlas {
   async fetchBrickData(brick) {
     const brickName = String(brick.index).padStart(6, "0");
     const url = new URL(brick.url ?? `bricks/${brickName}`, this.baseURL);
-    let response = await fetch(url);
+    let response = await fetch(url, { credentials: "same-origin" });
     let requestedURL = url;
     if (!response.ok && response.status === 404 && !brick.url) {
       const extension = this.effectiveBrickCompression(brick) === "lz4" ? "lz4" : "bin";
       requestedURL = new URL(`bricks/${brickName}.${extension}`, this.baseURL);
-      response = await fetch(requestedURL);
+      response = await fetch(requestedURL, { credentials: "same-origin" });
     }
     if (!response.ok) {
       throw new Error(`HTTP ${response.status} while loading ${requestedURL.pathname}`);

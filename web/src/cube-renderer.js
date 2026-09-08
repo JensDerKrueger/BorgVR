@@ -1,4 +1,4 @@
-import { BrickAtlas } from "./brick-atlas.js?v=20260907-extensionless-bricks";
+import { BrickAtlas } from "./brick-atlas.js?v=20260908-remote-errors";
 import { createDefaultTransferFunction } from "./transfer-function.js?v=20260907-range-fix";
 
 const shaderSource = `
@@ -586,6 +586,9 @@ export class CoordinateCubeRenderer {
   async initialize(statusCallback) {
     this.statusCallback = statusCallback;
     if (!navigator.gpu) {
+      if (!window.isSecureContext) {
+        throw new Error("WebGPU requires HTTPS or localhost. The page can load over LAN HTTP, but the browser may block rendering.");
+      }
       throw new Error("WebGPU is not available in this browser.");
     }
 

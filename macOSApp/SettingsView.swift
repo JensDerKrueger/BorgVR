@@ -129,11 +129,24 @@ struct SettingsView: View {
           .help("Datenverzeichnis auswählen")
         }
         Stepper(value: $storedAppModel.port, in: 1...65535) {
-          Text("Port: \(storedAppModel.port)")
+          Text(verbatim: "Port: \(storedAppModel.port)")
         }
         SecureField("Server-Passwort (optional)", text: $storedAppModel.serverPassword)
+        Toggle("WebGPU-Webserver starten", isOn: $storedAppModel.enableWebServer)
+        Toggle("HTTPS verwenden", isOn: $storedAppModel.webServerUsesTLS)
+        if storedAppModel.webServerUsesTLS {
+          WebServerCertificateControls(
+            certificateData: $storedAppModel.webServerCertificateData
+          )
+        }
+        Stepper(value: $storedAppModel.webServerPort, in: 1...65535) {
+          Text(verbatim: "WebGPU-Webserver-Port: \(storedAppModel.webServerPort)")
+        }
         Stepper(value: $storedAppModel.sharePlayServerPort, in: 1...65535) {
-          Text("Ad-hoc Dataset-Server-Port: \(storedAppModel.sharePlayServerPort)")
+          Text(verbatim: "Ad-hoc Dataset-Server-Port: \(storedAppModel.sharePlayServerPort)")
+        }
+        Stepper(value: $storedAppModel.sharePlayWebServerPort, in: 1...65535) {
+          Text(verbatim: "Ad-hoc WebGPU-Webserver-Port: \(storedAppModel.sharePlayWebServerPort)")
         }
         Stepper(value: $storedAppModel.maxBricksPerGetRequest, in: 1...1000) {
           Text("Max. Bricks pro Anfrage: \(storedAppModel.maxBricksPerGetRequest)")

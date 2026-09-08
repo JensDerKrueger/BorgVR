@@ -542,7 +542,12 @@ final class SharePlayCoordinator: ObservableObject {
           dataDirectory: "",
           port: port,
           maxBricksPerGetRequest: appSettings?.maxBricksPerGetRequest ?? 20,
-          authSecret: authToken
+          authSecret: authToken,
+          enableWebServer: appSettings?.enableWebServer ?? false,
+          webPort: sharePlayWebPort(for: port),
+          useWebServerTLS: appSettings?.webServerUsesTLS ?? true,
+          webServerCertificateData: appSettings?.webServerCertificateData ?? Data(),
+          webServerCertificatePassword: appSettings?.webServerCertificatePassword ?? ""
         ),
         additionalDatasets: [datasetInfo],
         includeScannedDatasets: false
@@ -568,6 +573,16 @@ final class SharePlayCoordinator: ObservableObject {
     sharePlayDatasetID = nil
     sharePlayAuthToken = ""
     sharePlayServerRunning = false
+  }
+
+  private func sharePlayWebPort(for serverPort: Int) -> Int {
+    guard let appSettings else {
+      return min(65535, max(1, serverPort + 1))
+    }
+    if appSettings.sharePlayWebServerPort == appSettings.sharePlayServerPort {
+      return min(65535, max(1, serverPort + 1))
+    }
+    return appSettings.sharePlayWebServerPort
   }
 
   private func serverDatasetInfo(for dataset: AppModel.DatasetEntry) -> DatasetInfo? {

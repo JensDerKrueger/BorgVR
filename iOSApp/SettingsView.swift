@@ -158,7 +158,20 @@ struct SettingsView: View {
       Toggle("Progressives Laden", isOn: $appSettings.progressiveLoading)
       Toggle("Lokale Kopie behalten", isOn: $appSettings.makeLocalCopy)
       Stepper(value: $appSettings.sharePlayServerPort, in: 1...65535) {
-        Text(String(format: String(localized: "Ad-hoc Dataset-Server-Port: %d"), appSettings.sharePlayServerPort))
+        Text(verbatim: "Ad-hoc Dataset-Server-Port: \(appSettings.sharePlayServerPort)")
+      }
+      Toggle("WebGPU-Webserver starten", isOn: $appSettings.enableWebServer)
+      Toggle("HTTPS verwenden", isOn: $appSettings.webServerUsesTLS)
+      if appSettings.webServerUsesTLS {
+        WebServerCertificateControls(
+          certificateData: $appSettings.webServerCertificateData
+        )
+      }
+      Stepper(value: $appSettings.webServerPort, in: 1...65535) {
+        Text(verbatim: "WebGPU-Webserver-Port: \(appSettings.webServerPort)")
+      }
+      Stepper(value: $appSettings.sharePlayWebServerPort, in: 1...65535) {
+        Text(verbatim: "Ad-hoc WebGPU-Webserver-Port: \(appSettings.sharePlayWebServerPort)")
       }
       resetButton(for: .remoteDatasets)
     }

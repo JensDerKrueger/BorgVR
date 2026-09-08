@@ -10,6 +10,10 @@
 		560B8BE82E5C575A0042E45B /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 560B8BE72E5C57580042E45B /* PrivacyInfo.xcprivacy */; };
 		560B8BE92E5C575A0042E45B /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 560B8BE72E5C57580042E45B /* PrivacyInfo.xcprivacy */; };
 		560B8BEA2E5C575A0042E45B /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 560B8BE72E5C57580042E45B /* PrivacyInfo.xcprivacy */; };
+		560B90012E9150000042E45B /* web in Resources */ = {isa = PBXBuildFile; fileRef = 560B90002E9150000042E45B /* web */; };
+		560B90022E9150000042E45B /* web in Resources */ = {isa = PBXBuildFile; fileRef = 560B90002E9150000042E45B /* web */; };
+		560B90032E9150000042E45B /* web in Resources */ = {isa = PBXBuildFile; fileRef = 560B90002E9150000042E45B /* web */; };
+		560B90042E9150000042E45B /* web in Resources */ = {isa = PBXBuildFile; fileRef = 560B90002E9150000042E45B /* web */; };
 		560C60DA2E91000000000001 /* c60_32.data in Resources */ = {isa = PBXBuildFile; fileRef = 56730FE22E6B78990091976B /* c60_32.data */; };
 		56730FE32E6B78990091976B /* c60_32.data in Resources */ = {isa = PBXBuildFile; fileRef = 56730FE22E6B78990091976B /* c60_32.data */; };
 		56730FE52E6B79000091976B /* head_32.data in Resources */ = {isa = PBXBuildFile; fileRef = 56730FE42E6B79000091976B /* head_32.data */; };
@@ -62,6 +66,18 @@
 		57A001412E70000300000001 /* DatasetInfoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001282E70000300000001 /* DatasetInfoView.swift */; };
 		57A001422E70000300000001 /* ExternalDatasetImporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001292E70000300000001 /* ExternalDatasetImporter.swift */; };
 		57A001432E70000300000001 /* ExternalDatasetImporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001292E70000300000001 /* ExternalDatasetImporter.swift */; };
+		57A001442E70000300000001 /* WebAssetProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A0012A2E70000300000001 /* WebAssetProvider.swift */; };
+		57A001452E70000300000001 /* WebAssetProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A0012A2E70000300000001 /* WebAssetProvider.swift */; };
+		57A001462E70000300000001 /* WebAssetProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A0012A2E70000300000001 /* WebAssetProvider.swift */; };
+		57A001472E70000300000001 /* WebAssetProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A0012A2E70000300000001 /* WebAssetProvider.swift */; };
+		57A001482E70000300000001 /* WebServerCertificateControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A0012B2E70000300000001 /* WebServerCertificateControls.swift */; };
+		57A001492E70000300000001 /* WebServerCertificateControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A0012B2E70000300000001 /* WebServerCertificateControls.swift */; };
+		57A0014A2E70000300000001 /* WebServerCertificateControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A0012B2E70000300000001 /* WebServerCertificateControls.swift */; };
+		57A0014B2E70000300000001 /* WebServerCertificateControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A0012B2E70000300000001 /* WebServerCertificateControls.swift */; };
+		57A0014C2E70000300000001 /* KeychainSecretStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A0012C2E70000300000001 /* KeychainSecretStore.swift */; };
+		57A0014D2E70000300000001 /* KeychainSecretStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A0012C2E70000300000001 /* KeychainSecretStore.swift */; };
+		57A0014E2E70000300000001 /* KeychainSecretStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A0012C2E70000300000001 /* KeychainSecretStore.swift */; };
+		57A0014F2E70000300000001 /* KeychainSecretStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A0012C2E70000300000001 /* KeychainSecretStore.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -89,6 +105,7 @@
 		111111111111111111111101 /* BorgVR Mobile.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "BorgVR Mobile.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		560A00012E00000000000001 /* TerminalServerApp */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = TerminalServerApp; sourceTree = BUILT_PRODUCTS_DIR; };
 		560B8BE72E5C57580042E45B /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		560B90002E9150000042E45B /* web */ = {isa = PBXFileReference; lastKnownFileType = folder; path = web; sourceTree = "<group>"; };
 		560C00012E00000000000001 /* BorgVR.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BorgVR.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		564183782D649679003A1EC4 /* BorgVR.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BorgVR.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		5655824B2D4E5D6F008E7CE6 /* BorgVR Server.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "BorgVR Server.app"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -118,6 +135,9 @@
 		57A001272E70000300000001 /* VolumeRendererPipeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VolumeRendererPipeline.swift; sourceTree = "<group>"; };
 		57A001282E70000300000001 /* DatasetInfoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DatasetInfoView.swift; sourceTree = "<group>"; };
 		57A001292E70000300000001 /* ExternalDatasetImporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExternalDatasetImporter.swift; sourceTree = "<group>"; };
+		57A0012A2E70000300000001 /* WebAssetProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebAssetProvider.swift; sourceTree = "<group>"; };
+		57A0012B2E70000300000001 /* WebServerCertificateControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebServerCertificateControls.swift; sourceTree = "<group>"; };
+		57A0012C2E70000300000001 /* KeychainSecretStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainSecretStore.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -380,6 +400,7 @@
 				569701392D9D8F3E00BB74CC /* readme.txt */,
 				569701382D9D8F1400BB74CC /* Todo.txt */,
 				560B8BE72E5C57580042E45B /* PrivacyInfo.xcprivacy */,
+				560B90002E9150000042E45B /* web */,
 				57A000102E70000100000001 /* AppSupport */,
 				560B00012E00000000000001 /* BORGVR-Services */,
 				560D09552D98280400EAD023 /* BORGVR-Render */,
@@ -427,6 +448,7 @@
 				57A000222E70000200000001 /* GPUHashtable.h */,
 				57A000232E70000200000001 /* Helper.h */,
 				57A001262E70000300000001 /* IsovalueEditorView.swift */,
+				57A0012C2E70000300000001 /* KeychainSecretStore.swift */,
 				57A001232E70000300000001 /* LoggerView.swift */,
 				57A001242E70000300000001 /* MatrixUtilities.swift */,
 				57A001222E70000300000001 /* RenderingParameters.swift */,
@@ -435,6 +457,8 @@
 				57A000272E70000200000001 /* ShaderTypes.h */,
 				57A000282E70000200000001 /* TextFileDocument.swift */,
 				57A001252E70000300000001 /* TransferFunctionEditorView.swift */,
+				57A0012A2E70000300000001 /* WebAssetProvider.swift */,
+				57A0012B2E70000300000001 /* WebServerCertificateControls.swift */,
 				57A000292E70000200000001 /* VolumeAtlas.h */,
 				57A001272E70000300000001 /* VolumeRendererPipeline.swift */,
 				57A0002A2E70000200000001 /* VolumeRaycaster.metal */,
@@ -656,6 +680,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				560B8BE92E5C575A0042E45B /* PrivacyInfo.xcprivacy in Resources */,
+				560B90012E9150000042E45B /* web in Resources */,
 				57A000412E70000200000001 /* RuntimeVolumeShaders.metal in Resources */,
 				57A0004C2E70000200000001 /* VolumeRaycaster.metal in Resources */,
 				57A000422E70000200000001 /* ShaderTypes.h in Resources */,
@@ -670,6 +695,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				560B8BEA2E5C575A0042E45B /* PrivacyInfo.xcprivacy in Resources */,
+				560B90022E9150000042E45B /* web in Resources */,
 				560C60DA2E91000000000001 /* c60_32.data in Resources */,
 				57A000462E70000200000001 /* RuntimeVolumeShaders.metal in Resources */,
 				57A0004D2E70000200000001 /* VolumeRaycaster.metal in Resources */,
@@ -685,6 +711,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				560B8BE82E5C575A0042E45B /* PrivacyInfo.xcprivacy in Resources */,
+				560B90032E9150000042E45B /* web in Resources */,
 				56730FE52E6B79000091976B /* head_32.data in Resources */,
 				56730FE32E6B78990091976B /* c60_32.data in Resources */,
 				57A0004E2E70000200000001 /* VolumeRaycaster.metal in Resources */,
@@ -700,6 +727,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				560B90042E9150000042E45B /* web in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -775,6 +803,7 @@
 				57A001302E70000300000001 /* AppModel.swift in Sources */,
 				57A001312E70000300000001 /* AppSettings.swift in Sources */,
 				57A001362E70000300000001 /* IsovalueEditorView.swift in Sources */,
+				57A0014C2E70000300000001 /* KeychainSecretStore.swift in Sources */,
 				57A001332E70000300000001 /* LoggerView.swift in Sources */,
 				57A001342E70000300000001 /* MatrixUtilities.swift in Sources */,
 				57A001322E70000300000001 /* RenderingParameters.swift in Sources */,
@@ -783,6 +812,8 @@
 				57A000322E70000200000001 /* RuntimeMetalShaderLoader.swift in Sources */,
 				57A000332E70000200000001 /* TextFileDocument.swift in Sources */,
 				57A001352E70000300000001 /* TransferFunctionEditorView.swift in Sources */,
+				57A001442E70000300000001 /* WebAssetProvider.swift in Sources */,
+				57A001482E70000300000001 /* WebServerCertificateControls.swift in Sources */,
 				57A001372E70000300000001 /* VolumeRendererPipeline.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -802,6 +833,7 @@
 				57A001382E70000300000001 /* AppModel.swift in Sources */,
 				57A001392E70000300000001 /* AppSettings.swift in Sources */,
 				57A0013E2E70000300000001 /* IsovalueEditorView.swift in Sources */,
+				57A0014D2E70000300000001 /* KeychainSecretStore.swift in Sources */,
 				57A0013B2E70000300000001 /* LoggerView.swift in Sources */,
 				57A0013C2E70000300000001 /* MatrixUtilities.swift in Sources */,
 				57A0013A2E70000300000001 /* RenderingParameters.swift in Sources */,
@@ -810,6 +842,8 @@
 				57A000352E70000200000001 /* RuntimeMetalShaderLoader.swift in Sources */,
 				57A000362E70000200000001 /* TextFileDocument.swift in Sources */,
 				57A0013D2E70000300000001 /* TransferFunctionEditorView.swift in Sources */,
+				57A001452E70000300000001 /* WebAssetProvider.swift in Sources */,
+				57A001492E70000300000001 /* WebServerCertificateControls.swift in Sources */,
 				57A0013F2E70000300000001 /* VolumeRendererPipeline.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -820,8 +854,11 @@
 			files = (
 				57A000372E70000200000001 /* FilePickerView.swift in Sources */,
 				57A000382E70000200000001 /* GPUHashtable.swift in Sources */,
+				57A0014E2E70000300000001 /* KeychainSecretStore.swift in Sources */,
 				57A000392E70000200000001 /* RuntimeMetalShaderLoader.swift in Sources */,
 				57A0003A2E70000200000001 /* TextFileDocument.swift in Sources */,
+				57A001462E70000300000001 /* WebAssetProvider.swift in Sources */,
+				57A0014A2E70000300000001 /* WebServerCertificateControls.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -829,6 +866,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				57A0014F2E70000300000001 /* KeychainSecretStore.swift in Sources */,
+				57A001472E70000300000001 /* WebAssetProvider.swift in Sources */,
+				57A0014B2E70000300000001 /* WebServerCertificateControls.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -849,7 +889,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = iOSApp/BorgVRMobile.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_ASSET_PATHS = "";
 				DEVELOPMENT_TEAM = L8Q6MVX7ZF;
 				ENABLE_PREVIEWS = YES;
@@ -866,7 +906,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.1;
+				MARKETING_VERSION = 1.2;
 				PRODUCT_BUNDLE_IDENTIFIER = "de.uni-due.BorgVRVisionApp";
 				PRODUCT_NAME = "BorgVR Mobile";
 				SDKROOT = iphoneos;
@@ -885,7 +925,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = iOSApp/BorgVRMobile.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_ASSET_PATHS = "";
 				DEVELOPMENT_TEAM = L8Q6MVX7ZF;
 				ENABLE_PREVIEWS = YES;
@@ -902,7 +942,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.1;
+				MARKETING_VERSION = 1.2;
 				PRODUCT_BUNDLE_IDENTIFIER = "de.uni-due.BorgVRVisionApp";
 				PRODUCT_NAME = "BorgVR Mobile";
 				SDKROOT = iphoneos;
@@ -953,7 +993,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 4;
+				CURRENT_PROJECT_VERSION = 5;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -969,7 +1009,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.2;
-				MARKETING_VERSION = 1.1;
+				MARKETING_VERSION = 1.2;
 				PRODUCT_BUNDLE_IDENTIFIER = "de.uni-due.BorgVRVisionApp";
 				PRODUCT_NAME = BorgVR;
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -989,7 +1029,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 4;
+				CURRENT_PROJECT_VERSION = 5;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -1005,7 +1045,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.2;
-				MARKETING_VERSION = 1.1;
+				MARKETING_VERSION = 1.2;
 				PRODUCT_BUNDLE_IDENTIFIER = "de.uni-due.BorgVRVisionApp";
 				PRODUCT_NAME = BorgVR;
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -1024,7 +1064,7 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = VisionApp/VisionApp.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 6;
+				CURRENT_PROJECT_VERSION = 7;
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -1039,7 +1079,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.1;
+				MARKETING_VERSION = 1.2;
 				PRODUCT_BUNDLE_IDENTIFIER = "de.uni-due.BorgVRVisionApp";
 				PRODUCT_NAME = BorgVR;
 				SDKROOT = xros;
@@ -1060,7 +1100,7 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = VisionApp/VisionApp.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 6;
+				CURRENT_PROJECT_VERSION = 7;
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -1075,7 +1115,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.1;
+				MARKETING_VERSION = 1.2;
 				PRODUCT_BUNDLE_IDENTIFIER = "de.uni-due.BorgVRVisionApp";
 				PRODUCT_NAME = BorgVR;
 				SDKROOT = xros;
@@ -1099,7 +1139,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 4;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "\"macOSServer/Preview Content\"";
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -1112,7 +1152,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.2;
-				MARKETING_VERSION = 1.1;
+				MARKETING_VERSION = 1.2;
 				PRODUCT_BUNDLE_IDENTIFIER = "de.uni-due.macOSServer";
 				PRODUCT_NAME = "BorgVR Server";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -1131,7 +1171,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 4;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "\"macOSServer/Preview Content\"";
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -1144,7 +1184,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.2;
-				MARKETING_VERSION = 1.1;
+				MARKETING_VERSION = 1.2;
 				PRODUCT_BUNDLE_IDENTIFIER = "de.uni-due.macOSServer";
 				PRODUCT_NAME = "BorgVR Server";
 				PROVISIONING_PROFILE_SPECIFIER = "";

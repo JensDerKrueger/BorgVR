@@ -94,6 +94,11 @@ final class StoredAppModel: ObservableObject {
     "dropFPS": 20,
     "recoveryFPS": 50,
     "sharePlayServerPort": 12346,
+    "enableWebServer": false,
+    "webServerPort": 8080,
+    "webServerUsesTLS": true,
+    "webServerCertificateData": Data(),
+    "sharePlayWebServerPort": 8081,
     "autoloadTF": false,
     "autoloadTransform": false,
     "disableFoveation": false,
@@ -162,6 +167,16 @@ final class StoredAppModel: ObservableObject {
   @AppStorage("recoveryFPS") var recoveryFPS: Int = StoredAppModel.int("recoveryFPS")
   /// Preferred port for the temporary dataset server used by SharePlay hosts.
   @AppStorage("sharePlayServerPort") var sharePlayServerPort: Int = StoredAppModel.int("sharePlayServerPort")
+  /// Whether to also expose the WebGPU browser frontend from dataset servers.
+  @AppStorage("enableWebServer") var enableWebServer: Bool = StoredAppModel.bool("enableWebServer")
+  /// Preferred port for the WebGPU browser frontend.
+  @AppStorage("webServerPort") var webServerPort: Int = StoredAppModel.int("webServerPort")
+  /// Whether the WebGPU browser frontend should be served over HTTPS.
+  @AppStorage("webServerUsesTLS") var webServerUsesTLS: Bool = StoredAppModel.bool("webServerUsesTLS")
+  /// Optional PKCS#12 identity used by the WebGPU browser frontend.
+  @AppStorage("webServerCertificateData") var webServerCertificateData: Data = StoredAppModel.data("webServerCertificateData")
+  /// Preferred port for the temporary WebGPU frontend used by SharePlay hosts.
+  @AppStorage("sharePlayWebServerPort") var sharePlayWebServerPort: Int = StoredAppModel.int("sharePlayWebServerPort")
   /// Whether to automatically load the transfer function.
   @AppStorage("autoloadTF") var autoloadTF: Bool = StoredAppModel.bool("autoloadTF")
   /// Whether to automatically load the object transfomration.
@@ -241,6 +256,19 @@ final class StoredAppModel: ObservableObject {
   }
 
   /**
+   Retrieves `Data` for the given key from `UserDefaults`, or falls back to the default value.
+
+   - Parameter key: The settings key.
+   - Returns: The stored or default data value.
+   */
+  static func data(_ key: String) -> Data {
+    if let value = UserDefaults.standard.object(forKey: key) as? Data {
+      return value
+    }
+    return StoredAppModel.values[key] as? Data ?? Data()
+  }
+
+  /**
    Retrieves a `Bool` for the given key from `UserDefaults`, or falls back to the default value.
 
    - Parameter key: The settings key.
@@ -251,6 +279,12 @@ final class StoredAppModel: ObservableObject {
       return value
     }
     return StoredAppModel.values[key] as? Bool ?? false
+  }
+
+  /// Password for the optional PKCS#12 identity.
+  var webServerCertificatePassword: String {
+    get { WebServerCertificatePasswordStore.load() }
+    set { try? WebServerCertificatePasswordStore.save(newValue) }
   }
 
   private func loadServers() {

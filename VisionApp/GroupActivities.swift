@@ -561,7 +561,12 @@ class GroupActivityHelper {
           dataDirectory: "",
           port: port,
           maxBricksPerGetRequest: 20,
-          authSecret: authToken
+          authSecret: authToken,
+          enableWebServer: storedAppModel?.enableWebServer ?? false,
+          webPort: sharePlayWebPort(for: port),
+          useWebServerTLS: storedAppModel?.webServerUsesTLS ?? true,
+          webServerCertificateData: storedAppModel?.webServerCertificateData ?? Data(),
+          webServerCertificatePassword: storedAppModel?.webServerCertificatePassword ?? ""
         ),
         additionalDatasets: [datasetInfo],
         includeScannedDatasets: false
@@ -588,6 +593,17 @@ class GroupActivityHelper {
     sharePlayDatasetID = nil
     sharePlayAuthToken = ""
     sharePlayServerRunning = false
+  }
+
+  @MainActor
+  private func sharePlayWebPort(for serverPort: Int) -> Int {
+    guard let storedAppModel else {
+      return min(65535, max(1, serverPort + 1))
+    }
+    if storedAppModel.sharePlayWebServerPort == storedAppModel.sharePlayServerPort {
+      return min(65535, max(1, serverPort + 1))
+    }
+    return storedAppModel.sharePlayWebServerPort
   }
 
   @MainActor

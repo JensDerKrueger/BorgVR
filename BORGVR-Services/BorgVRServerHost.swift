@@ -5,22 +5,34 @@ struct BorgVRServerConfiguration {
   var port: Int
   var maxBricksPerGetRequest: Int
   var authSecret: String = ""
+  var enableWebServer: Bool = false
+  var webPort: Int = 8080
+  var useWebServerTLS: Bool = true
+  var webServerCertificateData: Data = Data()
+  var webServerCertificatePassword: String = ""
 }
 
 struct BorgVRServerState {
   var isRunning: Bool
   var datasets: [DatasetInfo]
   var port: Int
+  var isWebServerRunning: Bool
+  var webPort: Int
+  var webServerUsesTLS: Bool
 }
 
 final class BorgVRServerHost {
   private var server: TCPServer?
+  private var webServer: HTTPWebServer?
   private let logger: LoggerBase?
 
   private(set) var state = BorgVRServerState(
     isRunning: false,
     datasets: [],
-    port: StoredServerDefaults.port
+    port: StoredServerDefaults.port,
+    isWebServerRunning: false,
+    webPort: StoredServerDefaults.webPort,
+    webServerUsesTLS: StoredServerDefaults.useWebServerTLS
   )
 
   init(logger: LoggerBase? = nil) {
@@ -55,22 +67,49 @@ final class BorgVRServerHost {
     )
     newServer.start()
 
+    let webPort = UInt16(clamping: configuration.webPort)
+    let newWebServer: HTTPWebServer?
+    if configuration.enableWebServer {
+      let server = HTTPWebServer(
+        port: webPort,
+        datasetServer: newServer,
+        logger: logger,
+        authSecret: configuration.authSecret,
+        useTLS: configuration.useWebServerTLS,
+        tlsCertificateData: configuration.webServerCertificateData,
+        tlsCertificatePassword: configuration.webServerCertificatePassword
+      )
+      server.start()
+      newWebServer = server
+    } else {
+      newWebServer = nil
+    }
+
     server = newServer
+    webServer = newWebServer
     state = BorgVRServerState(
       isRunning: newServer.isRunning,
       datasets: datasets,
-      port: Int(serverPort)
+      port: Int(serverPort),
+      isWebServerRunning: newWebServer?.isRunning ?? false,
+      webPort: Int(webPort),
+      webServerUsesTLS: configuration.useWebServerTLS
     )
     return state
   }
 
   func stop() {
+    webServer?.stop()
+    webServer = nil
     server?.stop()
     server = nil
     state = BorgVRServerState(
       isRunning: false,
       datasets: [],
-      port: state.port
+      port: state.port,
+      isWebServerRunning: false,
+      webPort: state.webPort,
+      webServerUsesTLS: state.webServerUsesTLS
     )
   }
 
@@ -89,4 +128,6 @@ final class BorgVRServerHost {
 
 private enum StoredServerDefaults {
   static let port = 12345
+  static let webPort = 8080
+  static let useWebServerTLS = true
 }

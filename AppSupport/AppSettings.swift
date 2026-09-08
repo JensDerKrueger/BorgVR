@@ -135,6 +135,11 @@ final class AppSettings: ObservableObject {
     "dropFPS": 20,
     "recoveryFPS": 50,
     "sharePlayServerPort": 12346,
+    "enableWebServer": false,
+    "webServerPort": 8080,
+    "webServerUsesTLS": true,
+    "webServerCertificateData": Data(),
+    "sharePlayWebServerPort": 8081,
     "autoloadTF": false,
     "autoloadTransform": false,
     "requestLowResLOD": true,
@@ -175,6 +180,11 @@ final class AppSettings: ObservableObject {
   @AppStorage("dropFPS") var dropFPS: Int = AppSettings.int("dropFPS")
   @AppStorage("recoveryFPS") var recoveryFPS: Int = AppSettings.int("recoveryFPS")
   @AppStorage("sharePlayServerPort") var sharePlayServerPort: Int = AppSettings.int("sharePlayServerPort")
+  @AppStorage("enableWebServer") var enableWebServer: Bool = AppSettings.bool("enableWebServer")
+  @AppStorage("webServerPort") var webServerPort: Int = AppSettings.int("webServerPort")
+  @AppStorage("webServerUsesTLS") var webServerUsesTLS: Bool = AppSettings.bool("webServerUsesTLS")
+  @AppStorage("webServerCertificateData") var webServerCertificateData: Data = AppSettings.data("webServerCertificateData")
+  @AppStorage("sharePlayWebServerPort") var sharePlayWebServerPort: Int = AppSettings.int("sharePlayWebServerPort")
   @AppStorage("autoloadTF") var autoloadTF: Bool = AppSettings.bool("autoloadTF")
   @AppStorage("autoloadTransform") var autoloadTransform: Bool = AppSettings.bool("autoloadTransform")
   @AppStorage("requestLowResLOD") var requestLowResLOD: Bool = AppSettings.bool("requestLowResLOD")
@@ -255,6 +265,13 @@ final class AppSettings: ObservableObject {
     return values[key] as? String ?? ""
   }
 
+  static func data(_ key: String) -> Data {
+    if let value = UserDefaults.standard.object(forKey: key) as? Data {
+      return value
+    }
+    return values[key] as? Data ?? Data()
+  }
+
   static func bool(_ key: String) -> Bool {
     if let value = UserDefaults.standard.object(forKey: key) as? Bool {
       return value
@@ -310,7 +327,18 @@ final class AppSettings: ObservableObject {
     progressiveLoading = Self.boolDefault("progressiveLoading")
     maxBricksPerGetRequest = Self.intDefault("maxBricksPerGetRequest")
     sharePlayServerPort = Self.intDefault("sharePlayServerPort")
+    enableWebServer = Self.boolDefault("enableWebServer")
+    webServerPort = Self.intDefault("webServerPort")
+    webServerUsesTLS = Self.boolDefault("webServerUsesTLS")
+    webServerCertificateData = Self.dataDefault("webServerCertificateData")
+    WebServerCertificatePasswordStore.delete()
+    sharePlayWebServerPort = Self.intDefault("sharePlayWebServerPort")
     servers = []
+  }
+
+  var webServerCertificatePassword: String {
+    get { WebServerCertificatePasswordStore.load() }
+    set { try? WebServerCertificatePasswordStore.save(newValue) }
   }
 
   func resetLODDefaults() {
@@ -340,6 +368,10 @@ final class AppSettings: ObservableObject {
 
   private static func stringDefault(_ key: String) -> String {
     values[key] as? String ?? ""
+  }
+
+  private static func dataDefault(_ key: String) -> Data {
+    values[key] as? Data ?? Data()
   }
 
   private static func boolDefault(_ key: String) -> Bool {
