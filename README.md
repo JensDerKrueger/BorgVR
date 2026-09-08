@@ -1,172 +1,133 @@
-<img src="borgvr.png" alt="BorgVR Logo" width="300"/>
+<p align="center">
+  <img src="borgvr.png" alt="BorgVR Logo" width="220"/>
+</p>
 
 # BorgVR
 
-BorgVR stands for Bricked Out-of-Core Ray-Guided Volume Rendering and is a high-performance, large-scale, out-of-core, [ray-guided](https://en.wikipedia.org/wiki/Ray_tracing_(graphics)), [volume rendering](https://en.wikipedia.org/wiki/Volume_rendering) project. This project is developed by the [Computergraphics and Visualization Group](https://www.cgvis.de/) at the University of Duisburg-Essen and supports **visionOS, iOS/iPadOS, and macOS**. BorgVR started as an Apple Vision Pro spatial computing application and now also provides native iPhone, iPad, and Mac applications built around the same bricked volume rendering system.
+BorgVR is a bricked out-of-core, ray-guided volume rendering system developed by the
+[Computer Graphics and Visualization Group](https://www.cgvis.de/) at the University of
+Duisburg-Essen. It started as a native Apple Vision Pro renderer and has since grown into
+a shared codebase for **visionOS**, **iOS/iPadOS**, and **macOS**.
 
----
+The project is intended for interactive exploration of large volumetric datasets. It combines
+native Metal renderers, dataset conversion tools, local and remote dataset servers, SharePlay
+collaboration, and an experimental WebGPU browser frontend served directly by the dataset server.
 
-## Overview
+## What Is Included
 
-BorgVR extends the capabilities of volume rendering across Apple platforms. The system employs cutting-edge techniques in out-of-core raycasting to render complex, large-scale volumetric datasets seamlessly. On Apple Vision Pro, BorgVR provides immersive spatial visualization; on iPhone, iPad, and Mac, it offers native touch, pointer, and desktop workflows for interactive volume exploration.
+- **VisionApp**: native visionOS volume renderer for Apple Vision Pro.
+- **iOSApp**: native iPhone and iPad volume renderer.
+- **macOSApp**: native Mac renderer with import tools, scripting support, and optional background server.
+- **macOSServer**: Mac GUI for dataset conversion and serving.
+- **TerminalServerApp**: command-line dataset server.
+- **TerminalConverterApp**: command-line dataset conversion tool.
+- **BORGVRServerCPP**: C++ implementation of the dataset server protocol, including the embedded WebGPU frontend.
+- **web**: WebGPU browser frontend used by the server.
+- **html**: static support, privacy, and landing pages for app distribution.
 
-### Key Features
+## Features
 
-- **High-Performance Volume Rendering**: Optimized Metal-based rendering for Apple Vision Pro, iPhone, iPad, and Mac.
-- **Out-of-Core Data Handling**: Efficient management and rendering of massive datasets, suitable for high-resolution visualization and simulation.
-- **Ray-Guided Volume Rendering**: Advanced ray-guided techniques for interactive visualization, supporting intuitive exploration of volumetric data.
-- **GPU Acceleration**: Full utilization of Apple GPU capabilities to support real-time rendering.
-- **Cross-Platform Collaboration**: SharePlay-based collaborative sessions can synchronize datasets and render state across supported Apple platforms.
-- **Dataset Tools and Server Support**: Includes import/conversion workflows and server components for local and remote dataset access.
+- Bricked out-of-core volume rendering for datasets larger than GPU memory.
+- Metal renderers shared across Apple platforms where possible.
+- Transfer-function, isosurface, lighting, clipping, and LOD controls.
+- GPU-guided brick requests with progressive paging into a brick atlas.
+- SharePlay collaboration with synchronized dataset and render state.
+- Optional ad-hoc dataset servers for collaboration sessions.
+- Password-protected dataset servers.
+- Optional HTTPS WebGPU server with generated self-signed certificates or imported PKCS#12 identities.
+- WebGPU preview frontend for browsing and rendering datasets from a browser.
+- Dataset import and conversion from supported volume formats.
+- macOS scripting support for repeatable rendering and screenshots.
 
-### Applications and Targets
+## Repository Layout
 
-- **VisionApp**: Native visionOS renderer for Apple Vision Pro.
-- **iOSApp**: Native iPhone and iPad renderer.
-- **macOSApp**: Native Mac renderer with import features and optional background dataset server support.
-- **macOSServer**: Mac dataset server and import utility.
-- **TerminalServerApp**: Command-line dataset server.
-- **TerminalConverterApp**: Command-line dataset conversion tool.
+```text
+AppSupport/             Shared Swift UI, renderer support, shaders, settings, and WebGPU assets
+BORGVR-IO/              Dataset readers, metadata, raw access, and conversion helpers
+BORGVR-Render/          Metal rendering infrastructure
+BORGVR-Services/        Swift TCP dataset server and HTTP/WebGPU server
+BORGVRServerCPP/        C++ dataset server implementation
+VisionApp/              visionOS app target
+iOSApp/                 iPhone and iPad app target
+macOSApp/               macOS renderer app target
+macOSServer/            macOS server/converter app target
+TerminalServerApp/      Swift command-line dataset server
+TerminalConverterApp/   Swift command-line converter
+web/                    WebGPU browser frontend
+html/                   App support/privacy website pages
+```
 
----
+## Building
 
-## Research Basis
+Open `BorgVR.xcodeproj` in Xcode and select the scheme for the platform you want to build.
 
-BorgVR is grounded in the following research publications. The full list of publications can be found on our [publications page](https://www.cgvis.de/publications.shtml).
+Common schemes:
 
-1. **Investigating the Apple Vision Pro Spatial Computing Platform for GPU-Based Volume Visualization**  
-   *Camilla Hrycak, David Lewakis, Jens Krüger*  
-   *Proceedings of the IEEE VIS 2024 Conference*
+- `VisionApp`
+- `VisionApp Release`
+- `iOSApp`
+- `iOSApp Release`
+- `macOSApp`
+- `macOSApp Release`
+- `macOSServer`
+- `macOSServer Release`
+- `TerminalServerApp`
+- `TerminalConverterApp`
 
-2. **Embracing Raycasting for Virtual Reality**  
-   *Andre Waschk, Jens Krüger*  
-   *30th International Conference on Computer Graphics, Visualization and Computer Vision, WSCG 2022*
+For App Store or device builds, configure your Apple development team and signing settings in Xcode.
+The project uses the shared bundle identifier configured in the Xcode project.
 
-3. **FAVR - Accelerating Direct Volume Rendering for Virtual Reality Systems**  
-   *Andre Waschk, Jens Krüger*  
-   *2020 IEEE Visualization Conference (VIS)*
+### Apple Vision Pro Development
 
-4. **Mobile Computational Steering for Interactive Prediction and Visualization of Deep Brain Stimulation Therapy**  
-   *Johannes Vorwerk, Andrew Janson, Alexander Schiewe, Jens Krüger, Christopher R. Butson*  
-   *Medical Image Analysis and Visualization Workshop, Supercomputing 2016*
+Short setup notes for pairing and enabling development on Apple Vision Pro are kept in `readme.txt`.
 
-5. **Mobile Decision Support System for Nurse Management of Deep Brain Stimulation**  
-   *Gordon Duffley, D. Martinez, Jens Krüger, B. Lutz, M.S. Okun, Christopher R. Butson*  
-   *20th International Congress on Parkinson’s and Movement Disorders*
+## Dataset Server And WebGPU Frontend
 
-6. **Trinity: A Novel Visualization and Data Distribution System**  
-   *Andrey Krekhov, Jens Krüger*  
-   *GPU Technology Conference 2016*
+BorgVR can expose datasets through its native server protocol. The Swift server can also start a
+small HTTP/HTTPS server that serves the WebGPU frontend and dataset resources to a browser.
 
-7. **State of the Art in Mobile Volume Rendering on iOS Devices**  
-   *Alexander Schiewe, Mario Anstoots, Jens Krüger*  
-   *EuroVis 2015 Short Paper Proceedings*
+The WebGPU server is disabled by default. When enabled, HTTPS is enabled by default because remote
+browser WebGPU access generally requires a secure context. If no certificate is configured, BorgVR
+creates a temporary self-signed certificate at server startup. A custom `.p12` or `.pfx`
+certificate can be imported in the app settings; its password is stored in the system Keychain.
 
-8. **An Analysis of Scalable GPU-Based Ray-Guided Volume Rendering**  
-   *Thomas Fogal, Alexander Schiewe, Jens Krüger*  
-   *IEEE Large Scale Data Analysis and Visualization Symposium 2013*
+The WebGPU frontend is primarily intended as a convenient preview and dataset browser. The native
+apps remain the main high-performance rendering applications.
 
-9. **Evaluation of Interactive Visualization on Mobile Computing Platforms for Selection of Deep Brain Stimulation Parameters**  
-   *Christopher Butson, Georg Tamm, Sanket Jain, Thomas Fogal, Jens Krüger*  
-   *IEEE Transactions on Visualization and Computer Graphics, 19(1):108 - 117, January 2013*
+## Data Files
 
-10. **Tuvok - An Architecture for Large Scale Volume Rendering**  
-    *Jens Krüger, Thomas Fogal*  
-    *Proceedings of the 15th Vision, Modeling and Visualization Workshop 2010*
+BorgVR uses `.data` files containing metadata and bricked volume data. The repository includes small
+sample datasets for testing. Larger datasets should be kept outside the repository and served or
+opened from a local data directory.
 
-These works provide the foundation for BorgVR’s architecture, data handling, and rendering approach, advancing the field of volume visualization and raycasting for immersive spatial computing applications.
+## Research Background
 
----
+BorgVR builds on several years of work on GPU volume rendering, ray-guided rendering, mobile
+visualization, and virtual-reality visualization systems. Related publications include:
 
-## Installation
+1. **Investigating the Apple Vision Pro Spatial Computing Platform for GPU-Based Volume Visualization**:
+   Camilla Hrycak, David Lewakis, Jens Krueger, IEEE VIS 2024
 
-To get started with BorgVR, ensure that you have Xcode and the required Apple platform SDKs installed for the targets you want to build.
+2. **Embracing Raycasting for Virtual Reality**:
+   Andre Waschk, Jens Krueger, WSCG 2022
 
-1. **Clone the repository**:
-   ```bash
-   git clone https://github.com/JensDerKrueger/BorgVR.git
-   cd BorgVR
-   ```
+3. **FAVR - Accelerating Direct Volume Rendering for Virtual Reality Systems**:
+   Andre Waschk, Jens Krueger, IEEE VIS 2020
 
-2. **Xcode Setup**:
-   Open `BorgVR.xcodeproj` and configure the signing team for the app targets you want to build.
+4. **State of the Art in Mobile Volume Rendering on iOS Devices**:
+   Alexander Schiewe, Mario Anstoots, Jens Krueger, EuroVis 2015
 
-3. **Build and Run**:
-   Use the Xcode schemes for the desired platform:
-   - `VisionApp` or `VisionApp Release`
-   - `iOSApp` or `iOSApp Release`
-   - `macOSApp` or `macOSApp Release`
-   - `macOSServer` or `macOSServer Release`
-   - `TerminalServerApp`
-   - `TerminalConverterApp`
+5. **An Analysis of Scalable GPU-Based Ray-Guided Volume Rendering**:
+   Thomas Fogal, Alexander Schiewe, Jens Krueger, IEEE LDAV 2013
 
----
-
-## Usage
-
-BorgVR is designed for research and educational use in high-performance visualization projects. Once deployed, it provides an interactive UI for volume exploration and manipulation, with support for loading custom volumetric datasets. The user experience is adapted to each platform: spatial interaction on Apple Vision Pro, touch interaction on iPhone and iPad, and desktop interaction on macOS.
-
----
-
-## Contributing
-
-We welcome contributions from researchers and developers interested in high-performance volume rendering. Please see `CONTRIBUTING.md` for guidelines on how to contribute to BorgVR.
-
----
+More publications are listed on the [CGVIS publications page](https://www.cgvis.de/publications.shtml).
 
 ## License
 
 BorgVR is released under the [MIT License](LICENSE).
 
----
-
 ## Contact
 
-For questions or further information, please reach out to the Computergraphics and Visualization Group at the University of Duisburg-Essen. Detailed contact information is available on our [official website](https://www.cgvis.de/).
-
----
-
-## Acknowledgments
-
-This project builds on years of research and development in volume rendering and spatial computing. We are grateful to all researchers and contributors whose work has made BorgVR possible, especially those whose publications have provided a foundation for this project’s algorithms and optimizations. A special thanks to the Apple Vision Pro team for creating a hardware platform that enables next-generation visualization experiences in spatial computing, and to the broader Apple platform ecosystem that makes it possible to share rendering technology across visionOS, iOS/iPadOS, and macOS.
-
-We would also like to acknowledge the funding and support from the University of Duisburg-Essen and the collaborators and contributors to the IEEE VIS and WSCG conferences, as well as the Supercomputing and EuroVis workshops.
-
-## Additional Resources
-
-### Documentation
-
-Comprehensive documentation, including API references, usage examples, and a developer's guide, can be found in the `docs` folder. Start with `docs/Getting_Started.md` for an introduction to the system architecture and basic usage.
-
-### Tutorials
-
-Example datasets and hands-on tutorials are provided to help users get up and running quickly. Visit the `examples` folder in the repository for sample projects, including real-world volume data and visualization cases.
-
-### Related Projects
-
-If you're interested in similar work, check out the following related projects by the Computergraphics and Visualization Group:
-
-- **Tuvok**: Large-scale volume rendering architecture
-- **Trinity**: Data distribution and visualization system for GPUs
-- **FAVR**: Accelerated volume rendering for VR environments
-
----
-
-## Future Work
-
-BorgVR is an active research project, and we aim to continually improve its performance and feature set. Future plans include:
-
-- **Enhanced Data Streaming**: Improving out-of-core data handling for larger datasets in real-time.
-- **Cross-Platform Support**: Further improving shared workflows across visionOS, iOS/iPadOS, and macOS.
-- **User Interaction Enhancements**: Adding more immersive controls and interaction capabilities in the mixed-reality environment.
-- **Optimized Memory Management**: Further optimizing memory allocation and management on GPU resources to improve rendering efficiency.
-
-Your feedback and contributions are invaluable in shaping the future of BorgVR. Join us on this journey to advance high-fidelity, large-scale, interactive volume visualization in mixed reality.
-
----
-
-Thank you for using and supporting BorgVR!
-
-**The BorgVR Team**  
-Computergraphics and Visualization Group  
+Computer Graphics and Visualization Group
 University of Duisburg-Essen
+[https://www.cgvis.de/](https://www.cgvis.de/)
