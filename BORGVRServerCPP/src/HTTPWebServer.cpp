@@ -12,6 +12,9 @@
 
 namespace {
 
+constexpr size_t kChunkedResponseThreshold = 1024 * 1024;
+constexpr size_t kHTTPChunkBytes = 16 * 1024;
+
 class HandlerCounter {
 public:
   explicit HandlerCounter(std::atomic<int>& counter) : counter_(counter) {
@@ -274,7 +277,7 @@ void HTTPWebServer::handleClient(TcpSocket socket) {
     return;
   }
 
-  if (request.method != "GET" && request.method != "HEAD") {
+  if (request.method != "GET") {
     sendError(socket, 405, "Method Not Allowed", "Only GET is supported.");
     return;
   }
@@ -567,6 +570,10 @@ bool HTTPWebServer::sendResponse(TcpSocket& socket,
                                  const std::string& contentType,
                                  const std::vector<uint8_t>& body,
                                  const std::vector<std::pair<std::string, std::string>>& extraHeaders) const {
+  if (body.size() >= kChunkedResponseThreshold) {
+    return sendChunkedResponse(socket, status, reason, contentType, body, extraHeaders);
+  }
+
   std::ostringstream header;
   header << "HTTP/1.1 " << status << " " << reason << "\r\n"
          << "Content-Length: " << body.size() << "\r\n"
@@ -590,6 +597,57 @@ bool HTTPWebServer::sendResponse(TcpSocket& socket,
     }
     return false;
   }
+  return true;
+}
+
+bool HTTPWebServer::sendChunkedResponse(TcpSocket& socket,
+                                        int status,
+                                        const std::string& reason,
+                                        const std::string& contentType,
+                                        const std::vector<uint8_t>& body,
+                                        const std::vector<std::pair<std::string, std::string>>& extraHeaders) const {
+  std::ostringstream header;
+  header << "HTTP/1.1 " << status << " " << reason << "\r\n"
+         << "Transfer-Encoding: chunked\r\n"
+         << "Content-Type: " << contentType << "\r\n"
+         << "Connection: close\r\n"
+         << "Access-Control-Allow-Origin: *\r\n"
+         << "Cache-Control: no-store\r\n";
+  for (const auto& item : extraHeaders) {
+    header << item.first << ": " << item.second << "\r\n";
+  }
+  header << "\r\n";
+
+  if (!socket.sendAll(header.str())) {
+    if (logger_) logger_->warning("HTTP chunked response header send failed for status " + std::to_string(status));
+    return false;
+  }
+
+  size_t offset = 0;
+  while (offset < body.size()) {
+    const size_t chunkSize = std::min(kHTTPChunkBytes, body.size() - offset);
+
+    std::ostringstream chunkHeader;
+    chunkHeader << std::hex << chunkSize << "\r\n";
+    if (!socket.sendAll(chunkHeader.str()) ||
+        !socket.sendAll(body.data() + offset, chunkSize) ||
+        !socket.sendAll("\r\n")) {
+      if (logger_) {
+        logger_->warning("HTTP chunked response body send failed for status " + std::to_string(status) +
+                         " at offset " + std::to_string(offset) +
+                         " of " + std::to_string(body.size()) + " bytes");
+      }
+      return false;
+    }
+
+    offset += chunkSize;
+  }
+
+  if (!socket.sendAll("0\r\n\r\n")) {
+    if (logger_) logger_->warning("HTTP chunked response terminator send failed for status " + std::to_string(status));
+    return false;
+  }
+
   return true;
 }
 

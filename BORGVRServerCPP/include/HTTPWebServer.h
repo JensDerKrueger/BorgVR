@@ -53,6 +53,12 @@ private:
                     const std::string& contentType,
                     const std::vector<uint8_t>& body,
                     const std::vector<std::pair<std::string, std::string>>& extraHeaders = {}) const;
+  bool sendChunkedResponse(TcpSocket& socket,
+                           int status,
+                           const std::string& reason,
+                           const std::string& contentType,
+                           const std::vector<uint8_t>& body,
+                           const std::vector<std::pair<std::string, std::string>>& extraHeaders = {}) const;
   bool sendTextResponse(TcpSocket& socket,
                         int status,
                         const std::string& reason,
