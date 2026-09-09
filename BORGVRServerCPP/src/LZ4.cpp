@@ -21,7 +21,8 @@ uint32_t read32(const uint8_t* ptr) {
 }
 
 size_t hashSequence(uint32_t sequence) {
-  return (static_cast<uint64_t>(sequence) * 2654435761u) >> (32 - kHashBits);
+  const uint32_t mixed = sequence * 2654435761u;
+  return static_cast<size_t>(mixed >> (32 - kHashBits));
 }
 
 bool writeLength(uint8_t*& op, uint8_t* oend, size_t length) {
@@ -83,14 +84,6 @@ size_t compressBlock(const uint8_t* src, size_t srcSize, uint8_t* dst, size_t ds
 
   if (dstCapacity < compressBlockBound(srcSize)) {
     return 0;
-  }
-
-  uint8_t* literalOp = dst;
-  uint8_t* const literalEnd = dst + dstCapacity;
-  if (srcSize < 1024 * 1024) {
-    return emitSequence(literalOp, literalEnd, src, srcSize, 0, 0)
-      ? static_cast<size_t>(literalOp - dst)
-      : 0;
   }
 
   const uint8_t* ip = src;
