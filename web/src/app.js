@@ -1,5 +1,5 @@
-import { CoordinateCubeRenderer } from "./cube-renderer.js?v=20260909-lz4-manifest";
-import { decodeAppleLZ4 } from "./brick-atlas.js?v=20260909-lz4-manifest";
+import { CoordinateCubeRenderer } from "./cube-renderer.js?v=20260909-dataset-url";
+import { decodeAppleLZ4 } from "./brick-atlas.js?v=20260909-dataset-url";
 
 const catalogStatus = document.querySelector("#catalog-status");
 const datasetList = document.querySelector("#dataset-list");
@@ -77,6 +77,7 @@ async function main() {
     setStatus(`${catalog.datasets.length} datasets available`);
   }
   datasetList.replaceChildren(...catalog.datasets.map((dataset) => datasetButton(dataset)));
+  await openDatasetFromURL(catalog.datasets);
 }
 
 function datasetButton(dataset) {
@@ -91,20 +92,58 @@ function datasetButton(dataset) {
   button.querySelector(".dataset-title").textContent = displayDatasetName(dataset);
   button.querySelector(".dataset-meta").textContent = dataset.description || "BorgVR dataset";
   button.querySelector(".dataset-id").textContent = dataset.id;
+  button.dataset.datasetId = dataset.id;
   button.addEventListener("click", async () => {
-    document.querySelectorAll(".dataset-button.active").forEach((element) => {
-      element.classList.remove("active");
-    });
-    button.classList.add("active");
-    try {
-      await showDataset(dataset);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      setStatus(`Could not open ${dataset.name}: ${message}`);
-      console.error("BorgVR dataset loading failed", error);
-    }
+    await selectDataset(dataset, button, true);
   });
   return button;
+}
+
+async function openDatasetFromURL(datasets) {
+  const datasetID = requestedDatasetID();
+  if (!datasetID) {
+    return;
+  }
+
+  const normalizedID = datasetID.toLowerCase();
+  const dataset = datasets.find((candidate) => candidate.id?.toLowerCase() === normalizedID);
+  if (!dataset) {
+    setStatus(`Dataset ${datasetID} is not available on this server.`);
+    return;
+  }
+
+  const button = datasetList.querySelector(`[data-dataset-id="${CSS.escape(dataset.id)}"]`);
+  await selectDataset(dataset, button, false);
+}
+
+function requestedDatasetID() {
+  const params = new URLSearchParams(window.location.search);
+  return params.get("ID") || params.get("id") || params.get("dataset") || "";
+}
+
+async function selectDataset(dataset, button, updateURL) {
+  document.querySelectorAll(".dataset-button.active").forEach((element) => {
+    element.classList.remove("active");
+  });
+  button?.classList.add("active");
+  if (updateURL) {
+    updateDatasetURL(dataset.id);
+  }
+  try {
+    await showDataset(dataset);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    setStatus(`Could not open ${dataset.name}: ${message}`);
+    console.error("BorgVR dataset loading failed", error);
+  }
+}
+
+function updateDatasetURL(datasetID) {
+  const url = new URL(window.location.href);
+  url.searchParams.delete("id");
+  url.searchParams.delete("dataset");
+  url.searchParams.set("ID", datasetID);
+  window.history.replaceState(null, "", url);
 }
 
 async function showDataset(dataset) {
