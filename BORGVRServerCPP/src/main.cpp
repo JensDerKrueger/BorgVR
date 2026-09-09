@@ -5,12 +5,15 @@
 #include "Socket.h"
 
 #include <atomic>
+#include <exception>
 #include <filesystem>
 #include <iostream>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <sstream>
 #include <thread>
+#include <unordered_set>
 #include <vector>
 
 static std::string basenameOf(const std::string& path) {
@@ -54,6 +57,20 @@ static void printUsage(const char* filename) {
             << "  " << basenameOf(filename) << " 12345 64 /data/BorgVR --web-port 8080\n";
 }
 
+static void logDatasetScanFailureOnce(const std::string& filename,
+                                      const std::string& reason,
+                                      std::shared_ptr<Logger> logger) {
+  if (!logger) return;
+
+  static std::mutex mutex;
+  static std::unordered_set<std::string> reportedFiles;
+
+  std::lock_guard<std::mutex> lock(mutex);
+  if (reportedFiles.insert(filename).second) {
+    logger->warning("Unable to load dataset file " + filename + ": " + reason);
+  }
+}
+
 static std::vector<DatasetInfo> scanDatasetDirectory(const std::string& directory,
                                                      std::shared_ptr<Logger> logger) {
   namespace fs = std::filesystem;
@@ -80,13 +97,10 @@ static std::vector<DatasetInfo> scanDatasetDirectory(const std::string& director
       info.filename = filename;
       info.datasetDescription = md.datasetDescription();
       datasets.push_back(std::move(info));
+    } catch (const std::exception& e) {
+      logDatasetScanFailureOnce(filename, e.what(), logger);
     } catch (...) {
-      // Do not report invalid files; this would trigger many warnings
-      // when a large file is being copied into the dataset directory.
-      // For debugging, this warning may still be useful.
-#ifndef NDEBUG
-      if (logger) logger->warning("Unable to load file " + filename);
-#endif
+      logDatasetScanFailureOnce(filename, "unknown error", logger);
     }
   }
 
