@@ -132,7 +132,7 @@ final class StoredAppModel : ObservableObject {
       }
       return url
     } catch {
-      lastDataDirectoryAccessError = "Bookmark konnte nicht aufgelöst werden: \(error.localizedDescription)"
+      lastDataDirectoryAccessError = "Bookmark could not be resolved: \(error.localizedDescription)"
       return URL(fileURLWithPath: dataDirectory, isDirectory: true)
     }
   }
@@ -153,7 +153,7 @@ final class StoredAppModel : ObservableObject {
 
     activeDataDirectoryAccessURL = nil
     if dataDirectoryBookmarkData != nil {
-      lastDataDirectoryAccessError = "Zugriff auf den gespeicherten Datenordner wurde verweigert."
+      lastDataDirectoryAccessError = "Access to the saved data folder was denied."
     }
     return false
   }
@@ -195,7 +195,7 @@ final class StoredAppModel : ObservableObject {
       )
       UserDefaults.standard.set(bookmark, forKey: StoredAppModel.dataDirectoryBookmarkKey)
     } catch {
-      lastDataDirectoryAccessError = "Bookmark konnte nicht erzeugt werden: \(error.localizedDescription)"
+      lastDataDirectoryAccessError = "Bookmark could not be created: \(error.localizedDescription)"
       clearDataDirectoryBookmark()
     }
   }

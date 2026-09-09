@@ -34,7 +34,7 @@ struct DatasetInfoView: View {
       #endif
       .toolbar {
         ToolbarItem(placement: .confirmationAction) {
-          Button("Schließen") {
+          Button("Close") {
             onClose?()
           }
         }

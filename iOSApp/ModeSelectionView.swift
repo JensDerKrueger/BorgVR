@@ -114,7 +114,7 @@ struct ModeSelectionView: View {
         .font(.largeTitle.weight(.bold))
         .multilineTextAlignment(multilineAlignment)
 
-      Text("Interaktive Visualisierung volumetrischer Datensätze auf iPhone und iPad")
+      Text("Interactive visualization of volumetric datasets on iPhone and iPad")
         .font(.headline)
         .foregroundStyle(.secondary)
         .multilineTextAlignment(multilineAlignment)
@@ -126,7 +126,7 @@ struct ModeSelectionView: View {
       Button {
         appModel.currentState = .selectData
       } label: {
-        Label("Datensatz öffnen", systemImage: "folder")
+        Label("Open dataset", systemImage: "folder")
           .frame(maxWidth: .infinity)
       }
       .buttonStyle(.borderedProminent)
@@ -134,7 +134,7 @@ struct ModeSelectionView: View {
       Button {
         appModel.currentState = .importData
       } label: {
-        Label("Datensatz importieren", systemImage: "square.and.arrow.down")
+        Label("Import dataset", systemImage: "square.and.arrow.down")
           .frame(maxWidth: .infinity)
       }
       .buttonStyle(.bordered)
@@ -142,7 +142,7 @@ struct ModeSelectionView: View {
       Button {
         appModel.currentState = .settings
       } label: {
-        Label("Einstellungen", systemImage: "gearshape")
+        Label("Settings", systemImage: "gearshape")
           .frame(maxWidth: .infinity)
       }
       .buttonStyle(.bordered)
@@ -172,7 +172,7 @@ struct ModeSelectionView: View {
       }
     } label: {
       Label(
-        serverController.isRunning ? "Hintergrundserver stoppen" : "Hintergrundserver starten",
+        serverController.isRunning ? "Stop background server" : "Start background server",
         systemImage: serverController.isRunning ? "stop.circle" : "play.circle"
       )
       .frame(maxWidth: .infinity)
@@ -183,7 +183,7 @@ struct ModeSelectionView: View {
   private var serverStatus: some View {
     VStack(spacing: 6) {
       Label(
-        serverController.isRunning ? "Hintergrundserver läuft" : "Hintergrundserver gestoppt",
+        serverController.isRunning ? "Background server running" : "Background server stopped",
         systemImage: serverController.isRunning ? "checkmark.circle.fill" : "circle"
       )
       .foregroundStyle(serverController.isRunning ? .green : .secondary)

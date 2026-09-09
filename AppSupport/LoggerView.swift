@@ -12,7 +12,7 @@ struct LoggerView: View {
         .padding()
         .navigationTitle("Log")
         .toolbar {
-          Button("Fertig") { dismiss() }
+          Button("Done") { dismiss() }
         }
         .onAppear {
           logger.setLogBinding($text)

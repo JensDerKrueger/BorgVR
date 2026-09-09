@@ -133,8 +133,8 @@ struct TransferFunctionEditorView: View {
         } label: {
           Image(systemName: "checkmark")
         }
-        .help("Fertig")
-        .accessibilityLabel("Fertig")
+        .help("Done")
+        .accessibilityLabel("Done")
       }
     }
   }

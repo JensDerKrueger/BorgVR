@@ -768,11 +768,11 @@ private extension BORGVRMetaData {
   var summaryText: String {
     let bitsPerComponent = bytesPerComponent * 8
     let channelText = componentCount == 1
-      ? String(localized: "1 Kanal")
+      ? String(localized: "1 channel")
       : String(format: String(localized: "metadata_channel_count_format"), componentCount)
     let compressionText = compression
-      ? String(localized: "komprimiert")
-      : String(localized: "unkomprimiert")
+      ? String(localized: "compressed")
+      : String(localized: "uncompressed")
     let lodText = levelMetadata.count == 1
       ? String(localized: "1 LOD")
       : String(format: String(localized: "metadata_lod_count_format"), levelMetadata.count)
@@ -780,6 +780,6 @@ private extension BORGVRMetaData {
     return "\(width) x \(height) x \(depth) - " +
       "\(bitsPerComponent)-bit, \(channelText) - " +
       "\(String(localized: "Brick")) \(brickSize) - \(lodText) - " +
-      "\(compressionText) - \(String(localized: "Werte")) \(minValue)...\(maxValue)"
+      "\(compressionText) - \(String(localized: "Values")) \(minValue)...\(maxValue)"
   }
 }

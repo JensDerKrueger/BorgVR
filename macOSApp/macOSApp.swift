@@ -134,7 +134,7 @@ struct macOSApp: App {
     }
     .defaultSize(width: 820, height: 320)
 
-    WindowGroup("Isowert", id: DockablePanelID.isoEditor.windowID) {
+    WindowGroup("Isovalue", id: DockablePanelID.isoEditor.windowID) {
       DetachedPanelContent(panel: .isoEditor)
         .environmentObject(appModel)
         .environmentObject(renderingParameters)
@@ -154,12 +154,12 @@ struct macOSApp: App {
     .defaultSize(width: 820, height: 360)
     .commands {
       CommandMenu("Script") {
-        Button("Script ausführen...") {
+        Button("Run Script...") {
           scriptRunner.showOpenPanelAndRun()
         }
         .keyboardShortcut("r", modifiers: [.command, .shift])
 
-        Button("Script stoppen") {
+        Button("Stop Script") {
           scriptRunner.stopScript()
         }
         .disabled(!scriptRunner.isRunning)

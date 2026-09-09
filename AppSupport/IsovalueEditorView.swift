@@ -19,7 +19,7 @@ struct IsovalueEditorView: View {
 
   private var editorContent: some View {
     HStack(spacing: 12) {
-      Text("Isowert")
+      Text("Isovalue")
         .font(.headline)
 
       Slider(value: $renderingParameters.normIsoValue, in: 0...1)
@@ -43,8 +43,8 @@ struct IsovalueEditorView: View {
         } label: {
           Image(systemName: "xmark")
         }
-        .help("Isowert-Editor schließen")
-        .accessibilityLabel("Isowert-Editor schließen")
+        .help("Close isovalue editor")
+        .accessibilityLabel("Close isovalue editor")
         .buttonStyle(.bordered)
       }
     }

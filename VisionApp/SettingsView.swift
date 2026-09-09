@@ -844,7 +844,7 @@ private struct ServerRowView: View {
         .keyboardType(.numberPad)
         .frame(width: 80)
 
-        SecureField("Passwort (optional)", text: $server.password)
+        SecureField("Password (optional)", text: $server.password)
           .textFieldStyle(RoundedBorderTextFieldStyle())
           .frame(width: 180)
 

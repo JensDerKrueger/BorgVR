@@ -8,9 +8,9 @@ enum RuntimeMetalShaderLoaderError: LocalizedError {
   var errorDescription: String? {
     switch self {
       case let .missingShader(name):
-        return "\(name) wurde nicht im App-Bundle gefunden."
+        return "\(name) was not found in the app bundle."
       case let .missingInclude(name, sourceURL):
-        return "Metal-Include \(name) wurde für \(sourceURL.lastPathComponent) nicht gefunden."
+        return "Metal include \(name) was not found for \(sourceURL.lastPathComponent)."
       case let .recursiveInclude(name):
         return "Rekursives Metal-Include \(name) erkannt."
     }

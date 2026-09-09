@@ -57,16 +57,16 @@ struct SettingsView: View {
                 }
               }
               GridRow {
-                Text("Server-Passwort")
+                Text("Server password")
                   .gridColumnAlignment(.trailing)
                   .frame(minWidth: 120, alignment: .trailing)
-                SecureField("Passwort (optional)", text: $storedAppModel.serverPassword)
+                SecureField("Password (optional)", text: $storedAppModel.serverPassword)
                   .textFieldStyle(RoundedBorderTextFieldStyle())
                   .frame(width: 220)
                   .accentColor(.blue)
               }
               GridRow {
-                Text("WebGPU-Webserver")
+                Text("WebGPU web server")
                   .gridColumnAlignment(.trailing)
                   .frame(minWidth: 120, alignment: .trailing)
                 Toggle("", isOn: $storedAppModel.enableWebServer)
@@ -82,7 +82,7 @@ struct SettingsView: View {
               if !storedAppModel.webServerUsesTLS {
                 GridRow {
                   Text("")
-                  Text("Ohne HTTPS sind nur localhost-Verbindungen möglich.")
+                  Text("Without HTTPS, only localhost connections are possible.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .frame(width: 360, alignment: .leading)
@@ -90,7 +90,7 @@ struct SettingsView: View {
               }
               if storedAppModel.webServerUsesTLS {
                 GridRow {
-                  Text("Zertifikat")
+                  Text("Certificate")
                     .gridColumnAlignment(.trailing)
                     .frame(minWidth: 120, alignment: .trailing)
                   WebServerCertificateControls(
@@ -100,7 +100,7 @@ struct SettingsView: View {
                 }
               }
               GridRow {
-                Text("WebGPU-Port")
+                Text("WebGPU port")
                   .gridColumnAlignment(.trailing)
                   .frame(minWidth: 120, alignment: .trailing)
                 TextField(

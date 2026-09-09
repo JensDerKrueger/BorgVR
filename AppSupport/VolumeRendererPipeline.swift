@@ -7,7 +7,7 @@ enum VolumeRendererPipelineError: LocalizedError {
   var errorDescription: String? {
     switch self {
       case let .missingShaderFunction(name):
-        return "Metal-Funktion \(name) wurde in RuntimeVolumeShaders.metal nicht gefunden."
+        return "Metal function \(name) was not found in RuntimeVolumeShaders.metal."
     }
   }
 }

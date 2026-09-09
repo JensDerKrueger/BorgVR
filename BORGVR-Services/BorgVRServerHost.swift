@@ -140,7 +140,7 @@ final class BorgVRServerHost {
     var webPort = UInt16(clamping: configuration.webPort)
     if configuration.startDatasetServer, webPort == serverPort {
       webPort = serverPort == UInt16.max ? 1 : serverPort + 1
-      logger?.warning("WebGPU-Webserver-Port matches the dataset server port. Using \(webPort) instead.")
+      logger?.warning("WebGPU web server port matches the dataset server port. Using \(webPort) instead.")
     }
     return webPort
   }

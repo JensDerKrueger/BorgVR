@@ -22,8 +22,8 @@ struct RenderControlsPanel: View {
         } label: {
           Image(systemName: "xmark")
         }
-        .accessibilityLabel("Schließen")
-        .help("Schließen")
+        .accessibilityLabel("Close")
+        .help("Close")
         .buttonStyle(.borderedProminent)
 
         Spacer()
@@ -45,8 +45,8 @@ struct RenderControlsPanel: View {
             sharePlay.markLocalActivityStarter()
           }
         )
-        .accessibilityLabel(sharePlay.isInSession ? "SharePlay aktiv" : "SharePlay starten")
-        .help(sharePlay.isInSession ? "SharePlay aktiv" : "SharePlay starten")
+        .accessibilityLabel(sharePlay.isInSession ? "SharePlay active" : "Start SharePlay")
+        .help(sharePlay.isInSession ? "SharePlay active" : "Start SharePlay")
         .buttonStyle(.bordered)
 
         Button {
@@ -84,8 +84,8 @@ struct RenderControlsPanel: View {
           } label: {
             Image(systemName: "eye.slash")
           }
-          .accessibilityLabel("UI ausblenden")
-          .help("UI ausblenden")
+          .accessibilityLabel("Hide UI")
+          .help("Hide UI")
           .buttonStyle(.bordered)
         }
       }
@@ -102,7 +102,7 @@ struct RenderControlsPanel: View {
       }
 
       Picker("Interaktion", selection: $selectedInteractionMode) {
-        Text("Modell").tag(AppModel.InteractionMode.model)
+        Text("Model").tag(AppModel.InteractionMode.model)
         Text("Clipping").tag(AppModel.InteractionMode.clipping)
         Text("Transfer").tag(AppModel.InteractionMode.transferEditing)
       }

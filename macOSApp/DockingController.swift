@@ -15,7 +15,7 @@ enum DockablePanelID: String, CaseIterable, Identifiable {
       case .transferFunctionEditor:
         return "Transfer Function"
       case .isoEditor:
-        return "Isowert"
+        return "Isovalue"
     }
   }
 
@@ -254,7 +254,7 @@ struct DetachedPanelContent: View {
 
   private var unavailableEditorMessage: some View {
     VStack(spacing: 12) {
-      Text("Dieser Editor ist im aktuellen Rendermodus nicht verfügbar.")
+      Text("This editor is not available in the current render mode.")
         .foregroundStyle(.secondary)
       DockToggleButton(panel: panel)
     }

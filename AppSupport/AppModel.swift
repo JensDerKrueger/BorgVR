@@ -11,11 +11,11 @@ enum RenderMode: String, CaseIterable, Identifiable, CustomStringConvertible {
   var description: String {
     switch self {
       case .transferFunction1DLighting:
-        return String(localized: "Transfer Function + Licht")
+        return String(localized: "Transfer function + lighting")
       case .transferFunction1D:
         return String(localized: "Transfer Function")
       case .isoValue:
-        return String(localized: "Isowert")
+        return String(localized: "Isovalue")
     }
   }
 }
@@ -260,7 +260,7 @@ enum AppModelError: LocalizedError {
   var errorDescription: String? {
     switch self {
       case .rendererUnavailable:
-        return String(localized: "Renderer ist nicht verfügbar.")
+        return String(localized: "Renderer is not available.")
     }
   }
 }

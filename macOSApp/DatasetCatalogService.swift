@@ -139,11 +139,11 @@ final class DatasetCatalogService {
   static func metadataSummary(for metadata: BORGVRMetaData) -> String {
     let bitsPerComponent = metadata.bytesPerComponent * 8
     let channelText = metadata.componentCount == 1
-      ? String(localized: "1 Kanal")
+      ? String(localized: "1 channel")
       : String(format: String(localized: "metadata_channel_count_format"), metadata.componentCount)
     let compressionText = metadata.compression
-      ? String(localized: "komprimiert")
-      : String(localized: "unkomprimiert")
+      ? String(localized: "compressed")
+      : String(localized: "uncompressed")
     let lodText = metadata.levelMetadata.count == 1
       ? String(localized: "1 LOD")
       : String(format: String(localized: "metadata_lod_count_format"), metadata.levelMetadata.count)
@@ -151,6 +151,6 @@ final class DatasetCatalogService {
     return "\(metadata.width) x \(metadata.height) x \(metadata.depth) - " +
       "\(bitsPerComponent)-bit, \(channelText) - " +
       "\(String(localized: "Brick")) \(metadata.brickSize) - \(lodText) - " +
-      "\(compressionText) - \(String(localized: "Werte")) \(metadata.minValue)...\(metadata.maxValue)"
+      "\(compressionText) - \(String(localized: "Values")) \(metadata.minValue)...\(metadata.maxValue)"
   }
 }

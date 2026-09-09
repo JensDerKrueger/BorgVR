@@ -24,10 +24,10 @@ private enum SettingsResetSection: String, Identifiable {
     switch self {
       case .rendering: return String(localized: "Rendering")
       case .importSettings: return String(localized: "Import")
-      case .remoteDatasets: return String(localized: "Remote-Datensätze")
-      case .backgroundServer: return String(localized: "Hintergrundserver")
-      case .webServer: return String(localized: "WebGPU-Webserver")
-      case .adHocServer: return String(localized: "Ad-hoc-Server")
+      case .remoteDatasets: return String(localized: "Remote datasets")
+      case .backgroundServer: return String(localized: "Background server")
+      case .webServer: return String(localized: "WebGPU web server")
+      case .adHocServer: return String(localized: "Ad-hoc server")
       case .lod: return String(localized: "LOD")
     }
   }
@@ -52,10 +52,10 @@ struct SettingsView: View {
   var body: some View {
     NavigationStack {
       settingsForm
-        .navigationTitle("Einstellungen")
+        .navigationTitle("Settings")
         .toolbar {
           ToolbarItem(placement: .topBarLeading) {
-            Button("Zurück") {
+            Button("Back") {
               saveSettings()
               appModel.currentState = .start
             }
@@ -68,13 +68,13 @@ struct SettingsView: View {
           isPresented: isResetConfirmationPresented,
           titleVisibility: .visible
         ) {
-          Button("Zurücksetzen", role: .destructive) {
+          Button("Reset", role: .destructive) {
             if let pendingResetSection {
               resetToDefaults(pendingResetSection)
             }
             pendingResetSection = nil
           }
-          Button("Abbrechen", role: .cancel) {}
+          Button("Cancel", role: .cancel) {}
         } message: {
           Text(resetConfirmationMessage)
         }
@@ -98,28 +98,28 @@ struct SettingsView: View {
 
   private var renderingSection: some View {
     Section("Rendering") {
-      Toggle("Transfer Functions automatisch laden/speichern", isOn: $appSettings.autoloadTF)
+      Toggle("Automatically load/save transfer functions", isOn: $appSettings.autoloadTF)
       Picker("Oversampling", selection: $appSettings.oversamplingMode) {
-        Text("Statisch").tag(OversamplingMode.staticMode.rawValue)
-        Text("Dynamisch").tag(OversamplingMode.dynamicMode.rawValue)
+        Text("Static").tag(OversamplingMode.staticMode.rawValue)
+        Text("Dynamic").tag(OversamplingMode.dynamicMode.rawValue)
       }
-      Picker("Hintergrund", selection: $appSettings.renderBackgroundMode) {
+      Picker("Background", selection: $appSettings.renderBackgroundMode) {
         ForEach(RenderBackgroundMode.allCases) { mode in
           Text(mode.label).tag(mode.rawValue)
         }
       }
       if appSettings.renderBackgroundMode == RenderBackgroundMode.solid.rawValue {
-        ColorPicker("Farbe", selection: Binding(
+        ColorPicker("Color", selection: Binding(
           get: { appSettings.renderBackgroundPrimaryColor },
           set: { appSettings.renderBackgroundPrimaryColor = $0 }
         ), supportsOpacity: true)
       }
       if appSettings.renderBackgroundMode == RenderBackgroundMode.gradient.rawValue {
-        ColorPicker("Farbe oben", selection: Binding(
+        ColorPicker("Top color", selection: Binding(
           get: { appSettings.renderBackgroundPrimaryColor },
           set: { appSettings.renderBackgroundPrimaryColor = $0 }
         ), supportsOpacity: true)
-        ColorPicker("Farbe unten", selection: Binding(
+        ColorPicker("Bottom color", selection: Binding(
           get: { appSettings.renderBackgroundSecondaryColor },
           set: { appSettings.renderBackgroundSecondaryColor = $0 }
         ), supportsOpacity: true)
@@ -127,9 +127,9 @@ struct SettingsView: View {
       TextField("Oversampling", text: $tempOversampling)
         .keyboardType(.decimalPad)
       Stepper(value: $appSettings.atlasSizeMB, in: 128...AppSettings.maximumAtlasSizeMB, step: 128) {
-        Text(String(format: String(localized: "Atlasgröße: %d MB"), appSettings.atlasSizeMB))
+        Text(String(format: String(localized: "Atlas size: %d MB"), appSettings.atlasSizeMB))
       }
-      TextField("Min. Hash-Table-Größe (MB)", text: $tempHashSize)
+      TextField("Min. hash table size (MB)", text: $tempHashSize)
         .keyboardType(.numberPad)
       Picker("Log-Level", selection: $appSettings.logLevel) {
         ForEach(AppLogLevel.allCases) { level in
@@ -142,22 +142,22 @@ struct SettingsView: View {
 
   private var importSection: some View {
     Section("Import") {
-      TextField("Brick-Größe", text: $tempBrickSize)
+      TextField("Brick size", text: $tempBrickSize)
         .keyboardType(.numberPad)
-      TextField("Überlappung", text: $tempBrickOverlap)
+      TextField("Overlap", text: $tempBrickOverlap)
         .keyboardType(.numberPad)
-      Toggle("Kompression", isOn: $appSettings.enableCompression)
-      Picker("Ränder", selection: $appSettings.borderMode) {
-        Text("Nullen").tag("zeroes")
-        Text("Rand").tag("border")
-        Text("Wiederholen").tag("repeat")
+      Toggle("Compression", isOn: $appSettings.enableCompression)
+      Picker("Borders", selection: $appSettings.borderMode) {
+        Text("Zeroes").tag("zeroes")
+        Text("Border").tag("border")
+        Text("Repeat").tag("repeat")
       }
       resetButton(for: .importSettings)
     }
   }
 
   private var remoteDatasetsSection: some View {
-    Section("Remote-Datensätze") {
+    Section("Remote datasets") {
       ForEach(appSettings.servers) { server in
         serverRow(for: server)
       }
@@ -167,29 +167,29 @@ struct SettingsView: View {
         .autocorrectionDisabled()
       TextField("Port", text: $tempPort)
         .keyboardType(.numberPad)
-      SecureField("Passwort (optional)", text: $tempServerPassword)
+      SecureField("Password (optional)", text: $tempServerPassword)
       Button {
         addServer()
       } label: {
-        Label("Server hinzufügen", systemImage: "plus")
+        Label("Add server", systemImage: "plus")
       }
       TextField("Timeout", text: $tempTimeout)
         .keyboardType(.decimalPad)
-      Toggle("Progressives Laden", isOn: $appSettings.progressiveLoading)
-      Toggle("Lokale Kopie behalten", isOn: $appSettings.makeLocalCopy)
+      Toggle("Progressive loading", isOn: $appSettings.progressiveLoading)
+      Toggle("Keep local copy", isOn: $appSettings.makeLocalCopy)
       resetButton(for: .remoteDatasets)
     }
   }
 
   private var backgroundServerSection: some View {
-    Section("Hintergrundserver") {
-      Toggle("Dataset-Server aktivieren", isOn: $appSettings.enableDatasetServer)
+    Section("Background server") {
+      Toggle("Enable dataset server", isOn: $appSettings.enableDatasetServer)
       if appSettings.enableDatasetServer {
-        Toggle("Server automatisch starten", isOn: $appSettings.autoStartServer)
+        Toggle("Start server automatically", isOn: $appSettings.autoStartServer)
         portField("Port", value: $appSettings.serverPort)
-        SecureField("Server-Passwort (optional)", text: $appSettings.serverPassword)
+        SecureField("Server password (optional)", text: $appSettings.serverPassword)
         Stepper(value: $appSettings.maxBricksPerGetRequest, in: 1...1000) {
-          Text(String(format: String(localized: "Max. Bricks pro Anfrage: %d"), appSettings.maxBricksPerGetRequest))
+          Text(String(format: String(localized: "Max. bricks per request: %d"), appSettings.maxBricksPerGetRequest))
         }
       }
       resetButton(for: .backgroundServer)
@@ -197,11 +197,11 @@ struct SettingsView: View {
   }
 
   private var webServerSection: some View {
-    Section("WebGPU-Webserver") {
-      Toggle("WebGPU-Webserver aktivieren", isOn: $appSettings.enableWebServer)
-      Toggle("HTTPS verwenden", isOn: $appSettings.webServerUsesTLS)
+    Section("WebGPU web server") {
+      Toggle("Enable WebGPU web server", isOn: $appSettings.enableWebServer)
+      Toggle("Use HTTPS", isOn: $appSettings.webServerUsesTLS)
       if !appSettings.webServerUsesTLS {
-        Text("Ohne HTTPS sind nur localhost-Verbindungen möglich.")
+        Text("Without HTTPS, only localhost connections are possible.")
           .font(.caption)
           .foregroundStyle(.secondary)
       }
@@ -210,31 +210,31 @@ struct SettingsView: View {
           certificateData: $appSettings.webServerCertificateData
         )
       }
-      portField("WebGPU-Webserver-Port", value: $appSettings.webServerPort)
+      portField("WebGPU web server port", value: $appSettings.webServerPort)
       resetButton(for: .webServer)
     }
   }
 
   private var adHocServerSection: some View {
-    Section("Ad-hoc-Server") {
-      portField("Ad-hoc Dataset-Server-Port", value: $appSettings.sharePlayServerPort)
-      portField("Ad-hoc WebGPU-Webserver-Port", value: $appSettings.sharePlayWebServerPort)
+    Section("Ad-hoc server") {
+      portField("Ad-hoc dataset server port", value: $appSettings.sharePlayServerPort)
+      portField("Ad-hoc WebGPU web server port", value: $appSettings.sharePlayWebServerPort)
       resetButton(for: .adHocServer)
     }
   }
 
   private var lodSection: some View {
     Section("LOD") {
-      TextField("Screen-Space-Pixelfehler", text: $tempPixelError)
+      TextField("Screen-space pixel error", text: $tempPixelError)
         .keyboardType(.decimalPad)
       Stepper(value: $appSettings.initialBricks, in: 0...20000, step: 100) {
-        Text(String(format: String(localized: "Initiale Bricks: %d"), appSettings.initialBricks))
+        Text(String(format: String(localized: "Initial bricks: %d"), appSettings.initialBricks))
       }
       Stepper(value: $appSettings.maxProbingAttempts, in: 1...512) {
-        Text(String(format: String(localized: "Max. Suchversuche: %d"), appSettings.maxProbingAttempts))
+        Text(String(format: String(localized: "Max. probing attempts: %d"), appSettings.maxProbingAttempts))
       }
-      Toggle("Low-res LOD mit anfordern", isOn: $appSettings.requestLowResLOD)
-      Toggle("Bei fehlendem Brick stoppen", isOn: $appSettings.stopOnMiss)
+      Toggle("Request low-res LOD", isOn: $appSettings.requestLowResLOD)
+      Toggle("Stop on missing brick", isOn: $appSettings.stopOnMiss)
       if appSettings.oversamplingMode == OversamplingMode.dynamicMode.rawValue {
         Stepper(value: $appSettings.dropFPS, in: 1...120) {
           Text(String(format: String(localized: "Drop FPS: %d"), appSettings.dropFPS))
@@ -270,23 +270,23 @@ struct SettingsView: View {
 
   private var resetConfirmationTitle: String {
     guard let pendingResetSection else {
-      return "Einstellungen zurücksetzen?"
+      return "Reset settings?"
     }
-    return "\(pendingResetSection.title) zurücksetzen?"
+    return "Reset \(pendingResetSection.title)?"
   }
 
   private var resetConfirmationMessage: String {
     guard let pendingResetSection else {
-      return "Der Abschnitt wird auf seine Standardwerte zurückgesetzt."
+      return "The section will be reset to its default values."
     }
-    return "Der Abschnitt \(pendingResetSection.title) wird auf seine Standardwerte zurückgesetzt."
+    return "The \(pendingResetSection.title) section will be reset to its default values."
   }
 
   private func resetButton(for section: SettingsResetSection) -> some View {
     Button(role: .destructive) {
       pendingResetSection = section
     } label: {
-      Label("\(section.title) zurücksetzen", systemImage: "arrow.counterclockwise")
+      Label("Reset \(section.title)", systemImage: "arrow.counterclockwise")
     }
   }
 
@@ -306,7 +306,7 @@ struct SettingsView: View {
     if server.password.isEmpty {
       return "\(server.address):\(server.port)"
     }
-    return "\(server.address):\(server.port) \(String(localized: "(Passwort)"))"
+    return "\(server.address):\(server.port) \(String(localized: "(Password)"))"
   }
 
   private func portField(_ title: LocalizedStringKey, value: Binding<Int>) -> some View {
@@ -370,7 +370,7 @@ struct SettingsView: View {
   private func addServer() {
     guard !tempServerAddress.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
           let port = UInt16(tempPort) else {
-      validationMessage = String(localized: "Server braucht Hostname und Port zwischen 0 und 65535.")
+      validationMessage = String(localized: "Server requires a hostname and a port between 0 and 65535.")
       return
     }
     appSettings.servers.append(

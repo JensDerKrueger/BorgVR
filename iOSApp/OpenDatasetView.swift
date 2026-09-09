@@ -8,11 +8,11 @@ private enum RemoteDatasetOpenError: LocalizedError {
   var errorDescription: String? {
     switch self {
       case .documentsDirectoryUnavailable:
-        return String(localized: "Das Dokumentenverzeichnis ist nicht verfügbar.")
+        return String(localized: "The documents directory is not available.")
       case .downloadStalled:
-        return String(localized: "Der Remote-Download macht keinen Fortschritt mehr.")
+        return String(localized: "The remote download is no longer making progress.")
       case .downloadCancelled:
-        return String(localized: "Der Remote-Download wurde angehalten.")
+        return String(localized: "The remote download was paused.")
     }
   }
 }
@@ -43,7 +43,7 @@ struct OpenDatasetView: View {
   @State private var selectedDatasetKey: String?
   @State private var isLoading = true
   @State private var isOpening = false
-  @State private var statusText = String(localized: "Lokale Datensätze werden gelesen ...")
+  @State private var statusText = String(localized: "Reading local datasets ...")
   @State private var openProgress: Double?
   @State private var openingTask: Task<Void, Never>?
   @State private var downloadCancellation: RemoteDatasetDownloadCancellation?
@@ -59,9 +59,9 @@ struct OpenDatasetView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if datasets.isEmpty {
           ContentUnavailableView(
-            "Keine Datensätze gefunden",
+            "No datasets found",
             systemImage: "externaldrive.badge.questionmark",
-            description: Text("Importiere einen Datensatz oder konfiguriere einen Remote-Server in den Einstellungen.")
+            description: Text("Import a dataset or configure a remote server in Settings.")
           )
           .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
@@ -89,17 +89,17 @@ struct OpenDatasetView: View {
             .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
         }
       }
-      .navigationTitle("Datensatz öffnen")
+      .navigationTitle("Open dataset")
       .toolbar {
         ToolbarItem(placement: .topBarLeading) {
-          Button("Zurück") { appModel.currentState = .start }
+          Button("Back") { appModel.currentState = .start }
             .help("dataset_open_back_help")
         }
         ToolbarItemGroup(placement: .topBarTrailing) {
           Button {
             Task { await loadDatasetFiles() }
           } label: {
-            Label("Aktualisieren", systemImage: "arrow.clockwise")
+            Label("Refresh", systemImage: "arrow.clockwise")
           }
           .help("dataset_open_refresh_help")
           Button {
@@ -113,7 +113,7 @@ struct OpenDatasetView: View {
           Button {
             startOpeningSelectedDataset()
           } label: {
-            Label("Öffnen", systemImage: "play.fill")
+            Label("Open", systemImage: "play.fill")
               .frame(maxWidth: .infinity)
           }
           .buttonStyle(.borderedProminent)
@@ -122,7 +122,7 @@ struct OpenDatasetView: View {
         }
       }
       .alert(
-        "Datensatz konnte nicht geöffnet werden",
+        "Dataset could not be opened",
         isPresented: Binding(
           get: { openErrorMessage != nil },
           set: { if !$0 { openErrorMessage = nil } }
@@ -132,8 +132,8 @@ struct OpenDatasetView: View {
       } message: {
         Text(openErrorMessage ?? "")
       }
-      .confirmationDialog("Datensatz löschen?", isPresented: $showDeleteConfirmation) {
-        Button("Löschen", role: .destructive) {
+      .confirmationDialog("Delete dataset?", isPresented: $showDeleteConfirmation) {
+        Button("Delete", role: .destructive) {
           if let pendingDeleteKey {
             deleteDataset(withKey: pendingDeleteKey)
           }
@@ -155,7 +155,7 @@ struct OpenDatasetView: View {
       Text(statusText)
         .foregroundStyle(.secondary)
       if openProgress != nil {
-        Button("Jetzt stoppen und später fortsetzen") {
+        Button("Stop now and continue later") {
           downloadCancellation?.cancel()
           openingTask?.cancel()
         }
@@ -210,8 +210,8 @@ struct OpenDatasetView: View {
         } label: {
           Image(systemName: "trash")
         }
-        .accessibilityLabel("Datensatz löschen")
-        .help("Datensatz löschen")
+        .accessibilityLabel("Delete dataset")
+        .help("Delete dataset")
         .buttonStyle(.borderless)
       }
     }
@@ -243,20 +243,20 @@ struct OpenDatasetView: View {
     }
 
     switch dataset.source {
-      case .local: return String(localized: "Lokal")
+      case .local: return String(localized: "Local")
       case let .remote(address, port, _): return "Remote - \(address):\(port)"
-      case .builtIn: return String(localized: "eingebaut")
+      case .builtIn: return String(localized: "built in")
     }
   }
 
   private func metadataSummary(for metadata: BORGVRMetaData) -> String {
     let bitsPerComponent = metadata.bytesPerComponent * 8
     let channelText = metadata.componentCount == 1
-      ? String(localized: "1 Kanal")
+      ? String(localized: "1 channel")
       : String(format: String(localized: "metadata_channel_count_format"), metadata.componentCount)
     let compressionText = metadata.compression
-      ? String(localized: "komprimiert")
-      : String(localized: "unkomprimiert")
+      ? String(localized: "compressed")
+      : String(localized: "uncompressed")
     let lodText = metadata.levelMetadata.count == 1
       ? String(localized: "1 LOD")
       : String(format: String(localized: "metadata_lod_count_format"), metadata.levelMetadata.count)
@@ -264,7 +264,7 @@ struct OpenDatasetView: View {
     return "\(metadata.width) x \(metadata.height) x \(metadata.depth) - " +
       "\(bitsPerComponent)-bit, \(channelText) - " +
       "\(String(localized: "Brick")) \(metadata.brickSize) - \(lodText) - " +
-      "\(compressionText) - \(String(localized: "Werte")) \(metadata.minValue)...\(metadata.maxValue)"
+      "\(compressionText) - \(String(localized: "Values")) \(metadata.minValue)...\(metadata.maxValue)"
   }
 
   private func startOpeningSelectedDataset() {
@@ -281,7 +281,7 @@ struct OpenDatasetView: View {
 
   private func openDatasetEntry(_ dataset: AppModel.DatasetEntry) async {
     isOpening = true
-    statusText = String(localized: "Datensatz wird geöffnet ...")
+    statusText = String(localized: "Opening dataset ...")
     defer {
       isOpening = false
       statusText = ""
@@ -370,7 +370,7 @@ struct OpenDatasetView: View {
     let incompletePath = cachePath + ".incomplete"
     let stallTimeout = max(30.0, timeout * 10.0)
 
-    statusText = String(localized: "Remote-Datensatz wird lokal geladen ...")
+    statusText = String(localized: "Downloading remote dataset locally ...")
     openProgress = 0
 
     let localPath = try await Task.detached(priority: .userInitiated) {
@@ -491,11 +491,11 @@ struct OpenDatasetView: View {
 
   private func loadDatasetFiles() async {
     isLoading = true
-    statusText = String(localized: "Lokale Datensätze werden gelesen ...")
+    statusText = String(localized: "Reading local datasets ...")
     await Task.yield()
     var loadedDatasets = await loadLocalDatasets()
 
-    statusText = String(localized: "Remote-Server wird geprüft ...")
+    statusText = String(localized: "Checking remote server ...")
     await Task.yield()
     loadedDatasets.append(contentsOf: await loadRemoteDatasets())
 

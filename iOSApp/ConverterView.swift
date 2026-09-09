@@ -31,9 +31,9 @@ struct ConverterView: View {
     NavigationStack {
       VStack(spacing: 14) {
         VStack(alignment: .leading, spacing: 8) {
-          Text("Unterstützt werden QVIS `.dat` + `.raw`, NRRD/NHDR und native BorgVR `.data`-Dateien.")
+          Text("Supported formats are QVIS `.dat` + `.raw`, NRRD/NHDR, and native BorgVR `.data` files.")
             .foregroundStyle(.secondary)
-          Text("Bei `.dat` und `.nhdr` muss iOS auch Zugriff auf die referenzierte Rohdatei bekommen.")
+          Text("For `.dat` and `.nhdr`, iOS also needs access to the referenced raw data file.")
             .font(.caption)
             .foregroundStyle(.secondary)
         }
@@ -43,23 +43,23 @@ struct ConverterView: View {
           Button {
             showFilePicker = true
           } label: {
-            Label("Input-Volume auswählen", systemImage: "doc.badge.plus")
+            Label("Select input volume", systemImage: "doc.badge.plus")
           }
           .disabled(isWorking)
 
-          Text(inputFile.isEmpty ? String(localized: "Keine Datei ausgewählt") : inputFile)
+          Text(inputFile.isEmpty ? String(localized: "No file selected") : inputFile)
             .lineLimit(1)
             .truncationMode(.middle)
             .foregroundStyle(.secondary)
         }
 
         if mode == .convert {
-          TextField("Beschreibung für den Datensatz", text: $datasetDescription)
+          TextField("Dataset description", text: $datasetDescription)
             .textFieldStyle(.roundedBorder)
         }
 
         HStack {
-          Button(mode == .copy ? String(localized: "Data kopieren") : String(localized: "Konvertierung starten")) {
+          Button(mode == .copy ? String(localized: "Copy data") : String(localized: "Start conversion")) {
             logText = ""
             mode == .copy ? copyData() : startConversion(description: datasetDescription)
           }
@@ -84,14 +84,14 @@ struct ConverterView: View {
       .navigationTitle("Import")
       .toolbar {
         ToolbarItem(placement: .topBarLeading) {
-          Button("Zurück") { appModel.currentState = .start }
+          Button("Back") { appModel.currentState = .start }
             .disabled(isWorking)
         }
         ToolbarItemGroup(placement: .topBarTrailing) {
           Button {
             logText = ""
           } label: {
-            Label("Leeren", systemImage: "trash")
+            Label("Clear", systemImage: "trash")
           }
           Button {
             isExporting = true

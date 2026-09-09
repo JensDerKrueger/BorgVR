@@ -46,7 +46,7 @@ struct RenderView: View {
             } label: {
               Image(systemName: "xmark")
             }
-            .accessibilityLabel(String(localized: "Schließen"))
+            .accessibilityLabel(String(localized: "Close"))
             .buttonStyle(.borderedProminent)
 
             Spacer()
@@ -70,8 +70,8 @@ struct RenderView: View {
             )
             .accessibilityLabel(
               sharePlay.isInSession
-                ? String(localized: "SharePlay aktiv")
-                : String(localized: "SharePlay starten")
+                ? String(localized: "SharePlay active")
+                : String(localized: "Start SharePlay")
             )
             .buttonStyle(.bordered)
 
@@ -106,7 +106,7 @@ struct RenderView: View {
           }
 
           Picker("Interaction", selection: $appModel.interactionMode) {
-            Text("Modell").tag(AppModel.InteractionMode.model)
+            Text("Model").tag(AppModel.InteractionMode.model)
             Text("Clipping").tag(AppModel.InteractionMode.clipping)
             Text("Transfer").tag(AppModel.InteractionMode.transferEditing)
           }
@@ -218,8 +218,8 @@ struct RenderView: View {
     }
     .accessibilityLabel(
       showRenderControls
-        ? String(localized: "UI ausblenden")
-        : String(localized: "UI einblenden")
+        ? String(localized: "Hide UI")
+        : String(localized: "Show UI")
     )
     .buttonStyle(.bordered)
   }

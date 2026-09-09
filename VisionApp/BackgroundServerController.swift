@@ -3,7 +3,7 @@ import Foundation
 @MainActor
 final class BackgroundServerController: ObservableObject {
   @Published private(set) var isRunning = false
-  @Published private(set) var statusText = "Server ist nicht gestartet."
+  @Published private(set) var statusText = String(localized: "Server is not started.")
   @Published private(set) var datasets: [DatasetInfo] = []
 
   private let serverHost = BorgVRServerHost(logger: GUILogger())
@@ -41,16 +41,27 @@ final class BackgroundServerController: ObservableObject {
       webStatus = ", WebGPU \(state.webServerUsesTLS ? "HTTPS" : "HTTP") \(state.webPort)"
     } else if settings.enableWebServer {
       let reason = state.webServerError.map { ": \($0)" } ?? ""
-      webStatus = ", WebGPU \(state.webServerUsesTLS ? "HTTPS" : "HTTP") \(state.webPort) fehlgeschlagen\(reason)"
+      let failedStatus = String(
+        format: String(localized: "WebGPU %@ %@ failed%@"),
+        state.webServerUsesTLS ? "HTTPS" : "HTTP",
+        "\(state.webPort)",
+        reason
+      )
+      webStatus = ", \(failedStatus)"
     } else {
       webStatus = ""
     }
 
     if state.isRunning {
-      statusText = "Port \(state.port)\(webStatus), \(state.datasets.count) Datensätze"
+      statusText = String(
+        format: String(localized: "Port %@%@, %@ datasets"),
+        "\(state.port)",
+        webStatus,
+        "\(state.datasets.count)"
+      )
     } else {
       let reason = state.serverError.map { ": \($0)" } ?? ""
-      statusText = "Server konnte nicht gestartet werden\(reason)"
+      statusText = "Server could not be started\(reason)"
     }
   }
 
@@ -63,7 +74,7 @@ final class BackgroundServerController: ObservableObject {
     serverHost.stop()
     datasets = []
     isRunning = false
-    statusText = "Server ist nicht gestartet."
+    statusText = String(localized: "Server is not started.")
   }
 
   private static func builtInDatasets() -> [DatasetInfo] {

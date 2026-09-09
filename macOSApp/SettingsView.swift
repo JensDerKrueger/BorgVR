@@ -24,9 +24,9 @@ private enum SettingsResetSection: String, Identifiable {
       case .rendering: return "Rendering"
       case .importSettings: return "Import"
       case .lod: return "LOD"
-      case .backgroundServer: return "Hintergrundserver"
-      case .adHocServer: return "Ad-hoc-Server"
-      case .externalDataSources: return "Externe Datenquellen"
+      case .backgroundServer: return "Background server"
+      case .adHocServer: return "Ad-hoc server"
+      case .externalDataSources: return "External data sources"
     }
   }
 }
@@ -45,37 +45,37 @@ struct SettingsView: View {
   var body: some View {
     Form {
       Section("Rendering") {
-        Toggle("Transfer Functions automatisch laden/speichern", isOn: $appSettings.autoloadTF)
+        Toggle("Automatically load/save transfer functions", isOn: $appSettings.autoloadTF)
         Picker("Oversampling", selection: $appSettings.oversamplingMode) {
-          Text("Statisch").tag(OversamplingMode.staticMode.rawValue)
-          Text("Dynamisch").tag(OversamplingMode.dynamicMode.rawValue)
+          Text("Static").tag(OversamplingMode.staticMode.rawValue)
+          Text("Dynamic").tag(OversamplingMode.dynamicMode.rawValue)
         }
-        Picker("Hintergrund", selection: $appSettings.renderBackgroundMode) {
+        Picker("Background", selection: $appSettings.renderBackgroundMode) {
           ForEach(RenderBackgroundMode.allCases) { mode in
             Text(mode.label).tag(mode.rawValue)
           }
         }
         if appSettings.renderBackgroundMode == RenderBackgroundMode.solid.rawValue {
-          ColorPicker("Farbe", selection: Binding(
+          ColorPicker("Color", selection: Binding(
             get: { appSettings.renderBackgroundPrimaryColor },
             set: { appSettings.renderBackgroundPrimaryColor = $0 }
           ), supportsOpacity: true)
         }
         if appSettings.renderBackgroundMode == RenderBackgroundMode.gradient.rawValue {
-          ColorPicker("Farbe oben", selection: Binding(
+          ColorPicker("Top color", selection: Binding(
             get: { appSettings.renderBackgroundPrimaryColor },
             set: { appSettings.renderBackgroundPrimaryColor = $0 }
           ), supportsOpacity: true)
-          ColorPicker("Farbe unten", selection: Binding(
+          ColorPicker("Bottom color", selection: Binding(
             get: { appSettings.renderBackgroundSecondaryColor },
             set: { appSettings.renderBackgroundSecondaryColor = $0 }
           ), supportsOpacity: true)
         }
         Stepper(value: $appSettings.atlasSizeMB, in: 128...AppSettings.maximumAtlasSizeMB, step: 128) {
-          Text("Atlasgröße: \(appSettings.atlasSizeMB) MB")
+          Text("Atlas size: \(appSettings.atlasSizeMB) MB")
         }
         Stepper(value: $appSettings.minHashTableSize, in: 1...1024) {
-          Text("Min. Hash-Table-Größe: \(appSettings.minHashTableSize) MB")
+          Text("Min. hash table size: \(appSettings.minHashTableSize) MB")
         }
         Picker("Log-Level", selection: $appSettings.logLevel) {
           ForEach(AppLogLevel.allCases) { level in
@@ -87,32 +87,32 @@ struct SettingsView: View {
 
       Section("Import") {
         Stepper(value: $storedAppModel.brickSize, in: 8...512, step: 8) {
-          Text("Brick-Größe: \(storedAppModel.brickSize)")
+          Text("Brick size: \(storedAppModel.brickSize)")
         }
         Stepper(value: $storedAppModel.brickOverlap, in: 1...16) {
-          Text("Überlappung: \(storedAppModel.brickOverlap)")
+          Text("Overlap: \(storedAppModel.brickOverlap)")
         }
-        Toggle("Kompression", isOn: $storedAppModel.enableCompression)
-        Picker("Ränder", selection: $storedAppModel.borderModeString) {
-          Text("Nullen").tag("zeroes")
-          Text("Rand").tag("border")
-          Text("Wiederholen").tag("repeat")
+        Toggle("Compression", isOn: $storedAppModel.enableCompression)
+        Picker("Borders", selection: $storedAppModel.borderModeString) {
+          Text("Zeroes").tag("zeroes")
+          Text("Border").tag("border")
+          Text("Repeat").tag("repeat")
         }
         resetButton(for: .importSettings)
       }
 
       Section("LOD") {
         Stepper(value: $appSettings.screenSpaceError, in: 0.05...10, step: 0.05) {
-          Text(String(format: "Screen-Space-Pixelfehler: %.2f", appSettings.screenSpaceError))
+          Text(String(format: "Screen-space pixel error: %.2f", appSettings.screenSpaceError))
         }
         Stepper(value: $appSettings.initialBricks, in: 0...20000, step: 100) {
-          Text("Initiale Bricks: \(appSettings.initialBricks)")
+          Text("Initial bricks: \(appSettings.initialBricks)")
         }
         Stepper(value: $appSettings.maxProbingAttempts, in: 1...512) {
-          Text("Max. Suchversuche: \(appSettings.maxProbingAttempts)")
+          Text("Max. probing attempts: \(appSettings.maxProbingAttempts)")
         }
-        Toggle("Low-res LOD mit anfordern", isOn: $appSettings.requestLowResLOD)
-        Toggle("Bei fehlendem Brick stoppen", isOn: $appSettings.stopOnMiss)
+        Toggle("Request low-res LOD", isOn: $appSettings.requestLowResLOD)
+        Toggle("Stop on missing brick", isOn: $appSettings.stopOnMiss)
         if appSettings.oversamplingMode == OversamplingMode.dynamicMode.rawValue {
           Stepper(value: $appSettings.dropFPS, in: 1...120) {
             Text("Drop FPS: \(appSettings.dropFPS)")
@@ -124,10 +124,10 @@ struct SettingsView: View {
         resetButton(for: .lod)
       }
 
-      Section("Hintergrundserver") {
-        Toggle("Dataset-Server aktivieren", isOn: $storedAppModel.enableDatasetServer)
+      Section("Background server") {
+        Toggle("Enable dataset server", isOn: $storedAppModel.enableDatasetServer)
         if storedAppModel.enableDatasetServer {
-          Toggle("Server automatisch starten", isOn: $storedAppModel.autoStartServer)
+          Toggle("Start server automatically", isOn: $storedAppModel.autoStartServer)
           HStack {
             Text(storedAppModel.dataDirectory)
               .lineLimit(1)
@@ -139,14 +139,14 @@ struct SettingsView: View {
             } label: {
               Image(systemName: "folder")
             }
-            .help("Datenverzeichnis auswählen")
+            .help("Choose data directory")
           }
           portField("Port", value: $storedAppModel.port)
-          SecureField("Server-Passwort (optional)", text: $storedAppModel.serverPassword)
-          Toggle("WebGPU-Webserver starten", isOn: $storedAppModel.enableWebServer)
-          Toggle("HTTPS verwenden", isOn: $storedAppModel.webServerUsesTLS)
+          SecureField("Server password (optional)", text: $storedAppModel.serverPassword)
+          Toggle("Start WebGPU web server", isOn: $storedAppModel.enableWebServer)
+          Toggle("Use HTTPS", isOn: $storedAppModel.webServerUsesTLS)
           if !storedAppModel.webServerUsesTLS {
-            Text("Ohne HTTPS sind nur localhost-Verbindungen möglich.")
+            Text("Without HTTPS, only localhost connections are possible.")
               .font(.caption)
               .foregroundStyle(.secondary)
           }
@@ -155,43 +155,43 @@ struct SettingsView: View {
               certificateData: $storedAppModel.webServerCertificateData
             )
           }
-          portField("WebGPU-Webserver-Port", value: $storedAppModel.webServerPort)
+          portField("WebGPU web server port", value: $storedAppModel.webServerPort)
           Stepper(value: $storedAppModel.maxBricksPerGetRequest, in: 1...1000) {
-            Text("Max. Bricks pro Anfrage: \(storedAppModel.maxBricksPerGetRequest)")
+            Text("Max. bricks per request: \(storedAppModel.maxBricksPerGetRequest)")
           }
         }
         resetButton(for: .backgroundServer)
       }
 
-      Section("Ad-hoc-Server") {
-        portField("Ad-hoc Dataset-Server-Port", value: $storedAppModel.sharePlayServerPort)
-        portField("Ad-hoc WebGPU-Webserver-Port", value: $storedAppModel.sharePlayWebServerPort)
+      Section("Ad-hoc server") {
+        portField("Ad-hoc dataset server port", value: $storedAppModel.sharePlayServerPort)
+        portField("Ad-hoc WebGPU web server port", value: $storedAppModel.sharePlayWebServerPort)
         resetButton(for: .adHocServer)
       }
 
-      Section("Externe Datenquellen") {
+      Section("External data sources") {
         ForEach(appSettings.servers) { server in
           serverRow(for: server)
         }
 
         HStack {
-          TextField("Serveradresse", text: $serverAddress)
+          TextField("Server address", text: $serverAddress)
           TextField("Port", text: $serverPort)
             .frame(width: 90)
-          SecureField("Passwort", text: $serverPassword)
+          SecureField("Password", text: $serverPassword)
             .frame(width: 160)
           Button {
             addRemoteServer()
           } label: {
             Image(systemName: "plus")
           }
-          .help("Server hinzufügen")
+          .help("Add server")
         }
         resetButton(for: .externalDataSources)
       }
     }
     .formStyle(.grouped)
-    .navigationTitle("Einstellungen")
+    .navigationTitle("Settings")
     .fileImporter(
       isPresented: $showDataDirectoryPicker,
       allowedContentTypes: [.folder],
@@ -204,7 +204,7 @@ struct SettingsView: View {
     }
     .toolbar {
       ToolbarItem(placement: .cancellationAction) {
-        Button("Zurück") {
+        Button("Back") {
           appModel.currentState = .start
         }
       }
@@ -214,13 +214,13 @@ struct SettingsView: View {
       isPresented: isResetConfirmationPresented,
       titleVisibility: .visible
     ) {
-      Button("Zurücksetzen", role: .destructive) {
+      Button("Reset", role: .destructive) {
         if let pendingResetSection {
           resetToDefaults(pendingResetSection)
         }
         pendingResetSection = nil
       }
-      Button("Abbrechen", role: .cancel) {}
+      Button("Cancel", role: .cancel) {}
     } message: {
       Text(resetConfirmationMessage)
     }
@@ -239,23 +239,23 @@ struct SettingsView: View {
 
   private var resetConfirmationTitle: String {
     guard let pendingResetSection else {
-      return "Einstellungen zurücksetzen?"
+      return "Reset settings?"
     }
-    return "\(pendingResetSection.title) zurücksetzen?"
+    return "Reset \(pendingResetSection.title)?"
   }
 
   private var resetConfirmationMessage: String {
     guard let pendingResetSection else {
-      return "Der Abschnitt wird auf seine Standardwerte zurückgesetzt."
+      return "The section will be reset to its default values."
     }
-    return "Der Abschnitt \(pendingResetSection.title) wird auf seine Standardwerte zurückgesetzt."
+    return "The \(pendingResetSection.title) section will be reset to its default values."
   }
 
   private func resetButton(for section: SettingsResetSection) -> some View {
     Button(role: .destructive) {
       pendingResetSection = section
     } label: {
-      Label("\(section.title) zurücksetzen", systemImage: "arrow.counterclockwise")
+      Label("Reset \(section.title)", systemImage: "arrow.counterclockwise")
     }
   }
 
@@ -295,7 +295,7 @@ struct SettingsView: View {
     if server.password.isEmpty {
       return "\(server.address):\(server.port)"
     }
-    return "\(server.address):\(server.port) \(String(localized: "(Passwort)"))"
+    return "\(server.address):\(server.port) \(String(localized: "(Password)"))"
   }
 
   private func portField(_ title: String, value: Binding<Int>) -> some View {

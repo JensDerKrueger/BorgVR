@@ -7,7 +7,7 @@ import simd
 @MainActor
 final class BorgVRScriptRunner: ObservableObject {
   @Published private(set) var isRunning = false
-  @Published private(set) var statusText = String(localized: "Kein Script aktiv")
+  @Published private(set) var statusText = String(localized: "No script active")
   @Published private(set) var scriptURL: URL?
 
   private let interpreter = CommandInterpreter()
@@ -68,8 +68,8 @@ final class BorgVRScriptRunner: ObservableObject {
     panel.allowsMultipleSelection = false
     panel.canChooseDirectories = false
     panel.canChooseFiles = true
-    panel.title = String(localized: "Script ausführen")
-    panel.message = String(localized: "Wähle ein BorgVR gsc Script.")
+    panel.title = String(localized: "Run Script")
+    panel.message = String(localized: "Choose a BorgVR gsc script.")
 
     if panel.runModal() == .OK, let url = panel.url {
       runScript(at: url)
@@ -85,14 +85,14 @@ final class BorgVRScriptRunner: ObservableObject {
 
     let result = interpreter.loadFromFile(url.path)
     guard result == .success else {
-      logError("Script konnte nicht geladen werden: \(result)")
+      logError("Script could not be loaded: \(result)")
       return
     }
 
     scriptURL = url
     isRunning = true
-    statusText = String(format: String(localized: "Script läuft: %@"), url.lastPathComponent)
-    logInfo("Script gestartet: \(url.lastPathComponent)")
+    statusText = String(format: String(localized: "Script running: %@"), url.lastPathComponent)
+    logInfo("Script started: \(url.lastPathComponent)")
 
     executionTask = Task { [weak self] in
       await self?.runLoop()
@@ -112,10 +112,10 @@ final class BorgVRScriptRunner: ObservableObject {
     pendingWaitLoadedFrameTarget = nil
     pendingWaitLoadedDatasetKey = nil
     if isRunning {
-      logInfo("Script gestoppt")
+      logInfo("Script stopped")
     }
     isRunning = false
-    statusText = String(localized: "Kein Script aktiv")
+    statusText = String(localized: "No script active")
   }
 
   private func runLoop() async {
@@ -127,15 +127,15 @@ final class BorgVRScriptRunner: ObservableObject {
         case .waitingNoop:
           try? await Task.sleep(nanoseconds: 16_000_000)
         case .finished:
-          logInfo("Script beendet")
+          logInfo("Script finished")
           isRunning = false
-          statusText = String(localized: "Kein Script aktiv")
+          statusText = String(localized: "No script active")
           return
         default:
           let lineText = interpreter.lastErrorLine.map { " in Zeile \($0)" } ?? ""
-          logError("Scriptfehler\(lineText): \(result)")
+          logError("Script error\(lineText): \(result)")
           isRunning = false
-          statusText = String(localized: "Scriptfehler")
+          statusText = String(localized: "Script error")
           return
       }
     }
@@ -347,9 +347,9 @@ final class BorgVRScriptRunner: ObservableObject {
       let accessURL = storedAppModel?.startAccessingDataDirectory()
       defer { storedAppModel?.stopAccessingDataDirectory(accessURL) }
       try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-      return logInfo("Script-Ausgabeverzeichnis: \(directory.path)")
+      return logInfo("Script output directory: \(directory.path)")
     } catch {
-      logError("Ausgabeverzeichnis konnte nicht angelegt werden: \(error.localizedDescription)")
+      logError("Output directory could not be created: \(error.localizedDescription)")
       return .callbackError
     }
   }
@@ -376,7 +376,7 @@ final class BorgVRScriptRunner: ObservableObject {
             self?.logInfo("Screenshot gespeichert: \(url.path)")
             self?.pendingScreenshotResult = .success
           case let .failure(error):
-            self?.logError("Screenshot fehlgeschlagen: \(error.localizedDescription)")
+            self?.logError("Screenshot failed: \(error.localizedDescription)")
             self?.pendingScreenshotResult = .callbackError
         }
       }
@@ -404,12 +404,12 @@ final class BorgVRScriptRunner: ObservableObject {
         let description = pendingDatasetDescription ?? id
         pendingDatasetID = nil
         pendingDatasetDescription = nil
-        return logInfo("Datensatz im Renderer bereit: \(description)")
+        return logInfo("Dataset ready in renderer: \(description)")
       }
       if appModel?.rendererFailedActiveDataset == true {
         pendingDatasetID = nil
         pendingDatasetDescription = nil
-        logError("Renderer konnte den Datensatz nicht öffnen: \(id)")
+        logError("Renderer could not open dataset: \(id)")
         return .callbackError
       }
       return .waitingNoop
@@ -427,7 +427,7 @@ final class BorgVRScriptRunner: ObservableObject {
         logger: appModel.logger
       )
       guard let dataset = await catalog.dataset(matchingID: id) else {
-        await self?.completeDatasetOpen(result: .callbackError, message: "Datensatz nicht gefunden: \(id)")
+        await self?.completeDatasetOpen(result: .callbackError, message: "Dataset not found: \(id)")
         return
       }
 
@@ -440,7 +440,7 @@ final class BorgVRScriptRunner: ObservableObject {
       appModel.currentState = .renderData
       self?.sharePlay?.datasetOpened()
       self?.pendingDatasetDescription = openable.description
-      self?.logInfo("Datensatz ausgewählt: \(openable.description)")
+      self?.logInfo("Dataset selected: \(openable.description)")
     }
 
     return .waitingNoop
@@ -550,9 +550,9 @@ final class BorgVRScriptRunner: ObservableObject {
       parameters.objectWillChange.send()
       try parameters.transferFunction.load(from: url)
       sharePlay?.synchronize(kind: .full)
-      return logInfo("Transferfunktion geladen: \(url.path)")
+      return logInfo("Transfer function loaded: \(url.path)")
     } catch {
-      logError("Transferfunktion konnte nicht geladen werden: \(error.localizedDescription)")
+      logError("Transfer function could not be loaded: \(error.localizedDescription)")
       return .callbackError
     }
   }
@@ -565,9 +565,9 @@ final class BorgVRScriptRunner: ObservableObject {
       defer { storedAppModel?.stopAccessingDataDirectory(accessURL) }
       try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
       try parameters.transferFunction.save(to: url)
-      return logInfo("Transferfunktion gespeichert: \(url.path)")
+      return logInfo("Transfer function saved: \(url.path)")
     } catch {
-      logError("Transferfunktion konnte nicht gespeichert werden: \(error.localizedDescription)")
+      logError("Transfer function could not be saved: \(error.localizedDescription)")
       return .callbackError
     }
   }
@@ -611,7 +611,7 @@ final class BorgVRScriptRunner: ObservableObject {
 
   private func logFPS() -> CommandResultCode {
     guard let timer = appModel?.timer else {
-      logError("FPS-Timer ist nicht verfügbar.")
+      logError("FPS timer is not available.")
       return .callbackError
     }
 
@@ -649,7 +649,7 @@ final class BorgVRScriptRunner: ObservableObject {
 
   private func logGPUInfo(includeFamilies: Bool) -> CommandResultCode {
     guard let device = MTLCreateSystemDefaultDevice() else {
-      logError("Kein Metal-Gerät verfügbar.")
+      logError("No Metal device available.")
       return .callbackError
     }
 
@@ -712,7 +712,7 @@ final class BorgVRScriptRunner: ObservableObject {
 
     if appModel.rendererFailedActiveDataset {
       clearPendingWaitLoaded()
-      logError("Renderer konnte den aktiven Datensatz nicht laden.")
+      logError("Renderer could not load the active dataset.")
       return .callbackError
     }
 
@@ -739,7 +739,7 @@ final class BorgVRScriptRunner: ObservableObject {
            appModel.lastCompletedFrameDatasetKey == datasetKey {
           clearPendingWaitLoaded()
           logInfo(
-            "Dataset geladen: \(appModel.consecutiveEmptyBrickReadbacks) leere HashTable-Readbacks, letzter Request \(appModel.lastMissingBrickCount) Bricks"
+            "Dataset loaded: \(appModel.consecutiveEmptyBrickReadbacks) empty hash table readbacks, last request \(appModel.lastMissingBrickCount) bricks"
           )
           return .success
         }
@@ -816,7 +816,7 @@ final class BorgVRScriptRunner: ObservableObject {
       logFileURL = url
       return logInfo("Logdatei: \(url.path)")
     } catch {
-      logError("Logdatei konnte nicht geöffnet werden: \(error.localizedDescription)")
+      logError("Log file could not be opened: \(error.localizedDescription)")
       return .callbackError
     }
   }
@@ -827,7 +827,7 @@ final class BorgVRScriptRunner: ObservableObject {
       try Data().write(to: logFileURL, options: .atomic)
       return .success
     } catch {
-      logError("Logdatei konnte nicht geleert werden: \(error.localizedDescription)")
+      logError("Log file could not be cleared: \(error.localizedDescription)")
       return .callbackError
     }
   }

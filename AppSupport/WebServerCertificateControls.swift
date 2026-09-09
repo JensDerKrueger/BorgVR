@@ -15,14 +15,14 @@ struct WebServerCertificateControls: View {
         .font(.caption)
         .foregroundStyle(.secondary)
 
-      SecureField("PKCS#12-Passwort", text: passwordBinding)
+      SecureField("PKCS#12 password", text: passwordBinding)
         .textFieldStyle(.roundedBorder)
 
       HStack {
         Button {
           isImporterPresented = true
         } label: {
-          Label("PKCS#12 importieren", systemImage: "doc.badge.plus")
+          Label("Import PKCS#12", systemImage: "doc.badge.plus")
         }
 
         Button(role: .destructive) {
@@ -30,9 +30,9 @@ struct WebServerCertificateControls: View {
           passwordText = ""
           WebServerCertificatePasswordStore.delete()
           passwordStatus = nil
-          importStatus = "Benutzerdefiniertes Zertifikat entfernt."
+          importStatus = "Custom certificate removed."
         } label: {
-          Label("Zertifikat entfernen", systemImage: "trash")
+          Label("Remove certificate", systemImage: "trash")
         }
         .disabled(certificateData.isEmpty)
       }
@@ -62,9 +62,9 @@ struct WebServerCertificateControls: View {
 
   private var certificateStatusText: String {
     if certificateData.isEmpty {
-      return "Kein benutzerdefiniertes Zertifikat: BorgVR erzeugt ein temporäres Self-Signed-Zertifikat."
+      return "No custom certificate: BorgVR creates a temporary self-signed certificate."
     }
-    return "Benutzerdefiniertes PKCS#12-Zertifikat geladen (\(certificateData.count) Bytes)."
+    return "Custom PKCS#12 certificate loaded (\(certificateData.count) bytes)."
   }
 
   private var passwordBinding: Binding<String> {
@@ -74,9 +74,9 @@ struct WebServerCertificateControls: View {
         passwordText = newValue
         do {
           try WebServerCertificatePasswordStore.save(newValue)
-          passwordStatus = newValue.isEmpty ? nil : "Passwort in der Keychain gespeichert."
+          passwordStatus = newValue.isEmpty ? nil : "Password saved in the Keychain."
         } catch {
-          passwordStatus = "Passwort konnte nicht gespeichert werden: \(error.localizedDescription)"
+          passwordStatus = "Password could not be saved: \(error.localizedDescription)"
         }
       }
     )
@@ -99,7 +99,7 @@ struct WebServerCertificateControls: View {
       importStatus = "\(url.lastPathComponent) importiert."
       passwordText = WebServerCertificatePasswordStore.load()
     } catch {
-      importStatus = "Zertifikat konnte nicht importiert werden: \(error.localizedDescription)"
+      importStatus = "Certificate could not be imported: \(error.localizedDescription)"
     }
   }
 
