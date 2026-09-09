@@ -488,29 +488,8 @@ final class HTTPWebServer {
   }
 
   private func appleLZ4Stream(for data: Data) -> Data? {
-    let blockSize = 64 * 1024
-    var stream = Data()
-    var offset = 0
-
-    while offset < data.count {
-      let count = min(blockSize, data.count - offset)
-      guard let compressedBlock = lz4Block(data.subdata(in: offset..<(offset + count))) else {
-        return nil
-      }
-
-      stream.append(contentsOf: [0x62, 0x76, 0x34, 0x31])
-      stream.appendLittleEndianUInt32(UInt32(count))
-      stream.appendLittleEndianUInt32(UInt32(compressedBlock.count))
-      stream.append(compressedBlock)
-      offset += count
-    }
-
-    stream.append(contentsOf: [0x62, 0x76, 0x34, 0x24])
-    return stream
-  }
-
-  private func lz4Block(_ data: Data) -> Data? {
-    let bound = data.count + data.count / 255 + 16
+    let blockCount = max(1, (data.count + 65_535) / 65_536)
+    let bound = data.count + data.count / 255 + 64 + blockCount * 32
     var compressed = Data(count: bound)
     let compressedSize = data.withUnsafeBytes { source in
       compressed.withUnsafeMutableBytes { destination in
@@ -526,28 +505,10 @@ final class HTTPWebServer {
     }
 
     guard compressedSize > 0 else {
-      return literalLZ4Block(for: data)
+      return nil
     }
     compressed.removeSubrange(compressedSize..<compressed.count)
     return compressed
-  }
-
-  private func literalLZ4Block(for data: Data) -> Data {
-    var block = Data()
-    let literalLength = data.count
-    if literalLength < 15 {
-      block.append(UInt8(literalLength << 4))
-    } else {
-      block.append(0xf0)
-      var remaining = literalLength - 15
-      while remaining >= 255 {
-        block.append(255)
-        remaining -= 255
-      }
-      block.append(UInt8(remaining))
-    }
-    block.append(data)
-    return block
   }
 
   private func sendError(

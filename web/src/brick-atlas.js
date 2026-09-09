@@ -810,25 +810,12 @@ function buildChildTable(levels, totalBrickCount) {
 }
 
 export function decodeAppleLZ4(data, expectedLength) {
-  if (data.byteLength >= 12 &&
+  if (data.byteLength >= 8 &&
       data[0] === 0x62 &&
       data[1] === 0x76 &&
       data[2] === 0x34 &&
-      data[3] === 0x31) {
+      (data[3] === 0x31 || data[3] === 0x2d)) {
     return decodeAppleLZ4Stream(data, expectedLength);
-  } else if (data.byteLength >= 12 &&
-             data[0] === 0x62 &&
-             data[1] === 0x76 &&
-             data[2] === 0x34 &&
-             data[3] === 0x2d) {
-    const uncompressedLength = readUInt32LE(data, 4);
-    if (uncompressedLength !== expectedLength) {
-      throw new Error(`LZ4 raw header has ${uncompressedLength} bytes, expected ${expectedLength}`);
-    }
-    if (data.byteLength - 12 !== expectedLength) {
-      throw new Error(`LZ4 raw block has ${data.byteLength - 12} bytes, expected ${expectedLength}`);
-    }
-    return data.subarray(12);
   }
 
   return decodeLZ4Block(data, expectedLength);
@@ -849,33 +836,51 @@ function decodeAppleLZ4Stream(data, expectedLength) {
       break;
     }
 
-    if (sourceOffset + 12 > data.byteLength ||
+    if (sourceOffset + 8 > data.byteLength ||
         data[sourceOffset] !== 0x62 ||
         data[sourceOffset + 1] !== 0x76 ||
-        data[sourceOffset + 2] !== 0x34 ||
-        data[sourceOffset + 3] !== 0x31) {
+        data[sourceOffset + 2] !== 0x34) {
       throw new Error("Invalid Apple LZ4 block header");
     }
 
+    const blockType = data[sourceOffset + 3];
     const uncompressedLength = readUInt32LE(data, sourceOffset + 4);
-    const compressedLength = readUInt32LE(data, sourceOffset + 8);
-    sourceOffset += 12;
-
-    if (sourceOffset + compressedLength > data.byteLength) {
-      throw new Error("Apple LZ4 block exceeds source size");
-    }
     if (outputOffset + uncompressedLength > expectedLength) {
       throw new Error(`Apple LZ4 stream exceeds expected output size ${expectedLength}`);
     }
 
-    const decodedLength = decodeLZ4BlockInto(
-      data.subarray(sourceOffset, sourceOffset + compressedLength),
-      output,
-      outputOffset,
-      uncompressedLength
-    );
-    outputOffset += decodedLength;
-    sourceOffset += compressedLength;
+    if (blockType === 0x31) {
+      if (sourceOffset + 12 > data.byteLength) {
+        throw new Error("Apple LZ4 compressed block header is incomplete");
+      }
+      const compressedLength = readUInt32LE(data, sourceOffset + 8);
+      sourceOffset += 12;
+
+      if (sourceOffset + compressedLength > data.byteLength) {
+        throw new Error("Apple LZ4 compressed block exceeds source size");
+      }
+
+      const decodedLength = decodeLZ4BlockInto(
+        data.subarray(sourceOffset, sourceOffset + compressedLength),
+        output,
+        outputOffset,
+        uncompressedLength
+      );
+      outputOffset += decodedLength;
+      sourceOffset += compressedLength;
+    } else if (blockType === 0x2d) {
+      sourceOffset += 8;
+
+      if (sourceOffset + uncompressedLength > data.byteLength) {
+        throw new Error("Apple LZ4 raw block exceeds source size");
+      }
+
+      output.set(data.subarray(sourceOffset, sourceOffset + uncompressedLength), outputOffset);
+      outputOffset += uncompressedLength;
+      sourceOffset += uncompressedLength;
+    } else {
+      throw new Error("Invalid Apple LZ4 block type");
+    }
   }
 
   if (outputOffset !== expectedLength) {
