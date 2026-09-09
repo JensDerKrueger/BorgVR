@@ -17,6 +17,7 @@ namespace {
 constexpr size_t kChunkedResponseThreshold = 1024 * 1024;
 constexpr size_t kHTTPChunkBytes = 16 * 1024;
 constexpr size_t kAppleLZ4BlockBytes = 64 * 1024;
+constexpr size_t kMaxHTTPBrickBatchCount = 128;
 
 class HandlerCounter {
 public:
@@ -166,6 +167,52 @@ std::string stripQueryAndFragment(const std::string& target) {
   return pos == std::string::npos ? target : target.substr(0, pos);
 }
 
+std::string queryValue(const std::string& target, const std::string& key) {
+  const auto question = target.find('?');
+  if (question == std::string::npos) return "";
+  const auto fragment = target.find('#', question + 1);
+  const std::string query = target.substr(
+    question + 1,
+    fragment == std::string::npos ? std::string::npos : fragment - question - 1
+  );
+
+  size_t start = 0;
+  while (start <= query.size()) {
+    const size_t end = query.find('&', start);
+    const std::string item = query.substr(
+      start,
+      end == std::string::npos ? std::string::npos : end - start
+    );
+    const size_t equals = item.find('=');
+    const std::string itemKey = urlDecode(equals == std::string::npos ? item : item.substr(0, equals));
+    if (itemKey == key) {
+      return urlDecode(equals == std::string::npos ? "" : item.substr(equals + 1));
+    }
+    if (end == std::string::npos) break;
+    start = end + 1;
+  }
+  return "";
+}
+
+std::vector<size_t> parseBrickIDs(const std::string& idsText) {
+  std::vector<size_t> ids;
+  size_t start = 0;
+  while (start <= idsText.size() && ids.size() < kMaxHTTPBrickBatchCount) {
+    const size_t end = idsText.find(',', start);
+    const std::string item = trimCopy(idsText.substr(
+      start,
+      end == std::string::npos ? std::string::npos : end - start
+    ));
+    size_t value = 0;
+    if (parseUnsigned(item, value)) {
+      ids.push_back(value);
+    }
+    if (end == std::string::npos) break;
+    start = end + 1;
+  }
+  return ids;
+}
+
 std::string displayNameFor(const DatasetInfo& dataset) {
   if (!dataset.datasetDescription.empty()) {
     return dataset.datasetDescription;
@@ -200,6 +247,13 @@ void appendLE32(std::vector<uint8_t>& out, uint32_t value) {
   out.push_back(static_cast<uint8_t>((value >> 8) & 0xff));
   out.push_back(static_cast<uint8_t>((value >> 16) & 0xff));
   out.push_back(static_cast<uint8_t>((value >> 24) & 0xff));
+}
+
+void writeLE32(std::vector<uint8_t>& out, size_t offset, uint32_t value) {
+  out[offset + 0] = static_cast<uint8_t>(value & 0xff);
+  out[offset + 1] = static_cast<uint8_t>((value >> 8) & 0xff);
+  out[offset + 2] = static_cast<uint8_t>((value >> 16) & 0xff);
+  out[offset + 3] = static_cast<uint8_t>((value >> 24) & 0xff);
 }
 
 std::vector<uint8_t> encodeAppleLZ4Stream(const std::string& text) {
@@ -303,30 +357,42 @@ void HTTPWebServer::acceptLoop() {
 }
 
 void HTTPWebServer::handleClient(TcpSocket socket) {
-  Request request;
-  if (!parseRequest(socket, request)) {
-    return;
-  }
+  int handledRequestCount = 0;
+  while (running_.load()) {
+    Request request;
+    if (!parseRequest(socket, request)) {
+      return;
+    }
+    ++handledRequestCount;
+    const bool closeAfterSend = shouldCloseConnection(request, handledRequestCount);
 
-  if (request.method == "OPTIONS") {
-    sendTextResponse(socket, 204, "No Content", "text/plain; charset=utf-8", "",
-                     {{"Access-Control-Allow-Methods", "GET, OPTIONS"},
-                      {"Access-Control-Allow-Headers", "Authorization, Content-Type"}});
-    return;
-  }
+    if (request.method == "OPTIONS") {
+      sendTextResponse(socket, 204, "No Content", "text/plain; charset=utf-8", "",
+                       {{"Access-Control-Allow-Methods", "GET, OPTIONS"},
+                        {"Access-Control-Allow-Headers", "Authorization, Content-Type"}},
+                       closeAfterSend);
+      if (closeAfterSend) return;
+      continue;
+    }
 
-  if (request.method != "GET") {
-    sendError(socket, 405, "Method Not Allowed", "Only GET is supported.");
-    return;
-  }
+    if (request.method != "GET") {
+      sendError(socket, 405, "Method Not Allowed", "Only GET is supported.", closeAfterSend);
+      if (closeAfterSend) return;
+      continue;
+    }
 
-  if (!isAuthorized(request)) {
-    sendUnauthorized(socket);
-    return;
-  }
+    if (!isAuthorized(request)) {
+      sendUnauthorized(socket, closeAfterSend);
+      if (closeAfterSend) return;
+      continue;
+    }
 
-  if (!routeRequest(socket, request)) {
-    sendError(socket, 404, "Not Found", "No resource exists at this path.");
+    if (!routeRequest(socket, request, closeAfterSend)) {
+      sendError(socket, 404, "Not Found", "No resource exists at this path.", closeAfterSend);
+    }
+    if (closeAfterSend) {
+      return;
+    }
   }
 }
 
@@ -365,9 +431,9 @@ bool HTTPWebServer::parseRequest(TcpSocket& socket, Request& request) const {
 
   {
     std::istringstream firstLine(trimCopy(line));
-    std::string version;
-    firstLine >> request.method >> request.target >> version;
+    firstLine >> request.method >> request.target >> request.version;
     if (request.method.empty() || request.target.empty()) return false;
+    if (request.version.empty()) request.version = "HTTP/1.0";
   }
 
   request.path = urlDecode(stripQueryAndFragment(request.target));
@@ -407,9 +473,30 @@ bool HTTPWebServer::isAuthorized(const Request& request) const {
   return constantTimeEquals(password, authSecret_);
 }
 
-bool HTTPWebServer::routeRequest(TcpSocket& socket, const Request& request) {
+bool HTTPWebServer::shouldCloseConnection(const Request& request, int handledRequestCount) const {
+  if (handledRequestCount >= 1000) {
+    return true;
+  }
+
+  const std::string connection = lowerCopy(headerValue(request, "Connection"));
+  std::istringstream tokens(connection);
+  std::string token;
+  while (std::getline(tokens, token, ',')) {
+    token = trimCopy(token);
+    if (token == "close") {
+      return true;
+    }
+    if (token == "keep-alive") {
+      return false;
+    }
+  }
+
+  return request.version != "HTTP/1.1";
+}
+
+bool HTTPWebServer::routeRequest(TcpSocket& socket, const Request& request, bool closeAfterSend) {
   if (request.path == "/web-data/datasets.json") {
-    return sendCatalog(socket);
+    return sendCatalog(socket, closeAfterSend);
   }
 
   constexpr const char* datasetPrefix = "/web-data/datasets/";
@@ -424,20 +511,23 @@ bool HTTPWebServer::routeRequest(TcpSocket& socket, const Request& request) {
     const std::string datasetID = rest.substr(0, slash);
     const std::string tail = rest.substr(slash + 1);
     if (tail == "dataset.json.lz4") {
-      return sendDatasetManifest(socket, datasetID);
+      return sendDatasetManifest(socket, datasetID, closeAfterSend);
+    }
+    if (tail == "bricks.batch") {
+      return sendBrickBatch(socket, datasetID, queryValue(request.target, "ids"), closeAfterSend);
     }
 
     constexpr const char* bricksPrefix = "bricks/";
     const std::string bricks(bricksPrefix);
     if (tail.compare(0, bricks.size(), bricks) == 0) {
-      return sendBrick(socket, datasetID, tail.substr(bricks.size()));
+      return sendBrick(socket, datasetID, tail.substr(bricks.size()), closeAfterSend);
     }
   }
 
-  return sendStaticFile(socket, request.path);
+  return sendStaticFile(socket, request.path, closeAfterSend);
 }
 
-bool HTTPWebServer::sendCatalog(TcpSocket& socket) {
+bool HTTPWebServer::sendCatalog(TcpSocket& socket, bool closeAfterSend) {
   const auto datasets = datasetServer_.datasetsSnapshot();
 
   std::ostringstream oss;
@@ -462,10 +552,10 @@ bool HTTPWebServer::sendCatalog(TcpSocket& socket) {
 
   oss << "  ]\n"
       << "}\n";
-  return sendTextResponse(socket, 200, "OK", "application/json; charset=utf-8", oss.str());
+  return sendTextResponse(socket, 200, "OK", "application/json; charset=utf-8", oss.str(), {}, closeAfterSend);
 }
 
-bool HTTPWebServer::sendDatasetManifest(TcpSocket& socket, const std::string& datasetID) {
+bool HTTPWebServer::sendDatasetManifest(TcpSocket& socket, const std::string& datasetID, bool closeAfterSend) {
   DatasetInfo info;
   if (!datasetServer_.findDatasetById(datasetID, info)) {
     return false;
@@ -538,7 +628,7 @@ bool HTTPWebServer::sendDatasetManifest(TcpSocket& socket, const std::string& da
     const std::string json = oss.str();
     auto body = encodeAppleLZ4Stream(json);
     if (body.empty() && !json.empty()) {
-      return sendError(socket, 500, "Internal Server Error", "Unable to compress dataset metadata.");
+      return sendError(socket, 500, "Internal Server Error", "Unable to compress dataset metadata.", closeAfterSend);
     }
     return sendResponse(socket,
                         200,
@@ -546,14 +636,15 @@ bool HTTPWebServer::sendDatasetManifest(TcpSocket& socket, const std::string& da
                         "application/octet-stream",
                         body,
                         {{"X-BorgVR-Uncompressed-Length", std::to_string(json.size())},
-                         {"X-BorgVR-Content", "dataset-manifest-lz4"}});
+                         {"X-BorgVR-Content", "dataset-manifest-lz4"}},
+                        closeAfterSend);
   } catch (const std::exception& e) {
     if (logger_) logger_->error(std::string("HTTP manifest failed: ") + e.what());
-    return sendError(socket, 500, "Internal Server Error", "Unable to open dataset metadata.");
+    return sendError(socket, 500, "Internal Server Error", "Unable to open dataset metadata.", closeAfterSend);
   }
 }
 
-bool HTTPWebServer::sendBrick(TcpSocket& socket, const std::string& datasetID, const std::string& filename) {
+bool HTTPWebServer::sendBrick(TcpSocket& socket, const std::string& datasetID, const std::string& filename, bool closeAfterSend) {
   DatasetInfo info;
   if (!datasetServer_.findDatasetById(datasetID, info)) {
     return false;
@@ -575,21 +666,108 @@ bool HTTPWebServer::sendBrick(TcpSocket& socket, const std::string& datasetID, c
     const size_t byteCount = static_cast<size_t>(bm.size);
     std::vector<uint8_t> body(byteCount);
     dataset.getRawBrick(bm, body.data(), body.size());
-    return sendResponse(socket, 200, "OK", "application/octet-stream", body);
+    return sendResponse(socket, 200, "OK", "application/octet-stream", body, {}, closeAfterSend);
   } catch (const std::exception& e) {
     if (logger_) logger_->error(std::string("HTTP brick failed: ") + e.what());
-    return sendError(socket, 500, "Internal Server Error", "Unable to read brick.");
+    return sendError(socket, 500, "Internal Server Error", "Unable to read brick.", closeAfterSend);
   }
 }
 
-bool HTTPWebServer::sendStaticFile(TcpSocket& socket, const std::string& requestPath) {
+bool HTTPWebServer::sendBrickBatch(TcpSocket& socket, const std::string& datasetID, const std::string& idsText, bool closeAfterSend) {
+  DatasetInfo info;
+  if (!datasetServer_.findDatasetById(datasetID, info)) {
+    return false;
+  }
+
+  const auto requestedIDs = parseBrickIDs(idsText);
+  if (requestedIDs.empty()) {
+    return false;
+  }
+
+  try {
+    BORGVRFileData dataset(info.filename);
+    const BORGVRMetaData& md = dataset.metadata();
+    const auto& bricks = md.brickMetadata();
+
+    struct BatchEntry {
+      uint32_t id = 0;
+      uint32_t offset = 0;
+      uint32_t size = 0;
+      const BrickMetadata* metadata = nullptr;
+    };
+
+    std::vector<BatchEntry> entries;
+    entries.reserve(requestedIDs.size());
+    size_t payloadSize = 0;
+    for (const size_t brickID : requestedIDs) {
+      if (brickID >= bricks.size()) {
+        continue;
+      }
+      const auto& bm = bricks[brickID];
+      if (bm.size < 0) {
+        continue;
+      }
+      const size_t byteCount = static_cast<size_t>(bm.size);
+      if (byteCount > std::numeric_limits<uint32_t>::max() ||
+          payloadSize > std::numeric_limits<uint32_t>::max() - byteCount) {
+        continue;
+      }
+      entries.push_back(BatchEntry{
+        static_cast<uint32_t>(brickID),
+        0,
+        static_cast<uint32_t>(byteCount),
+        &bm
+      });
+      payloadSize += byteCount;
+    }
+
+    if (entries.empty()) {
+      return false;
+    }
+
+    const size_t tableBytes = 8 + entries.size() * 12;
+    if (tableBytes > std::numeric_limits<uint32_t>::max() ||
+        payloadSize > std::numeric_limits<uint32_t>::max() - tableBytes) {
+      return sendError(socket, 413, "Payload Too Large", "Brick batch is too large.", closeAfterSend);
+    }
+
+    std::vector<uint8_t> body(tableBytes + payloadSize);
+    writeLE32(body, 0, 0x31425642);
+    writeLE32(body, 4, static_cast<uint32_t>(entries.size()));
+
+    size_t payloadOffset = tableBytes;
+    for (size_t index = 0; index < entries.size(); ++index) {
+      auto& entry = entries[index];
+      entry.offset = static_cast<uint32_t>(payloadOffset);
+      const size_t tableOffset = 8 + index * 12;
+      writeLE32(body, tableOffset + 0, entry.id);
+      writeLE32(body, tableOffset + 4, entry.offset);
+      writeLE32(body, tableOffset + 8, entry.size);
+      dataset.getRawBrick(*entry.metadata, body.data() + payloadOffset, entry.size);
+      payloadOffset += entry.size;
+    }
+
+    return sendResponse(socket,
+                        200,
+                        "OK",
+                        "application/octet-stream",
+                        body,
+                        {{"X-BorgVR-Content", "brick-batch-v1"}},
+                        closeAfterSend);
+  } catch (const std::exception& e) {
+    if (logger_) logger_->error(std::string("HTTP brick batch failed: ") + e.what());
+    return sendError(socket, 500, "Internal Server Error", "Unable to read brick batch.", closeAfterSend);
+  }
+}
+
+bool HTTPWebServer::sendStaticFile(TcpSocket& socket, const std::string& requestPath, bool closeAfterSend) {
   const EmbeddedWebAsset* asset = findEmbeddedWebAsset(requestPath.c_str());
   if (!asset) {
     return false;
   }
 
   std::vector<uint8_t> body(asset->data, asset->data + asset->size);
-  return sendResponse(socket, 200, "OK", asset->contentType, body);
+  return sendResponse(socket, 200, "OK", asset->contentType, body, {}, closeAfterSend);
 }
 
 bool HTTPWebServer::sendResponse(TcpSocket& socket,
@@ -597,19 +775,23 @@ bool HTTPWebServer::sendResponse(TcpSocket& socket,
                                  const std::string& reason,
                                  const std::string& contentType,
                                  const std::vector<uint8_t>& body,
-                                 const std::vector<std::pair<std::string, std::string>>& extraHeaders) const {
+                                 const std::vector<std::pair<std::string, std::string>>& extraHeaders,
+                                 bool closeAfterSend) const {
   if (body.size() >= kChunkedResponseThreshold) {
-    return sendChunkedResponse(socket, status, reason, contentType, body, extraHeaders);
+    return sendChunkedResponse(socket, status, reason, contentType, body, extraHeaders, closeAfterSend);
   }
 
   std::ostringstream header;
   header << "HTTP/1.1 " << status << " " << reason << "\r\n"
          << "Content-Length: " << body.size() << "\r\n"
          << "Content-Type: " << contentType << "\r\n"
-         << "Connection: close\r\n"
+         << "Connection: " << (closeAfterSend ? "close" : "keep-alive") << "\r\n"
          << "Access-Control-Allow-Origin: *\r\n"
          << "Access-Control-Expose-Headers: X-BorgVR-Uncompressed-Length\r\n"
          << "Cache-Control: no-store\r\n";
+  if (!closeAfterSend) {
+    header << "Keep-Alive: timeout=15, max=1000\r\n";
+  }
   for (const auto& item : extraHeaders) {
     header << item.first << ": " << item.second << "\r\n";
   }
@@ -634,15 +816,19 @@ bool HTTPWebServer::sendChunkedResponse(TcpSocket& socket,
                                         const std::string& reason,
                                         const std::string& contentType,
                                         const std::vector<uint8_t>& body,
-                                        const std::vector<std::pair<std::string, std::string>>& extraHeaders) const {
+                                        const std::vector<std::pair<std::string, std::string>>& extraHeaders,
+                                        bool closeAfterSend) const {
   std::ostringstream header;
   header << "HTTP/1.1 " << status << " " << reason << "\r\n"
          << "Transfer-Encoding: chunked\r\n"
          << "Content-Type: " << contentType << "\r\n"
-         << "Connection: close\r\n"
+         << "Connection: " << (closeAfterSend ? "close" : "keep-alive") << "\r\n"
          << "Access-Control-Allow-Origin: *\r\n"
          << "Access-Control-Expose-Headers: X-BorgVR-Uncompressed-Length\r\n"
          << "Cache-Control: no-store\r\n";
+  if (!closeAfterSend) {
+    header << "Keep-Alive: timeout=15, max=1000\r\n";
+  }
   for (const auto& item : extraHeaders) {
     header << item.first << ": " << item.second << "\r\n";
   }
@@ -686,31 +872,44 @@ bool HTTPWebServer::sendTextResponse(TcpSocket& socket,
                                      const std::string& reason,
                                      const std::string& contentType,
                                      const std::string& body,
-                                     const std::vector<std::pair<std::string, std::string>>& extraHeaders) const {
+                                     const std::vector<std::pair<std::string, std::string>>& extraHeaders,
+                                     bool closeAfterSend) const {
   return sendResponse(socket,
                       status,
                       reason,
                       contentType,
                       std::vector<uint8_t>(body.begin(), body.end()),
-                      extraHeaders);
+                      extraHeaders,
+                      closeAfterSend);
 }
 
-bool HTTPWebServer::sendError(TcpSocket& socket, int status, const std::string& reason, const std::string& message) const {
+bool HTTPWebServer::sendError(TcpSocket& socket,
+                              int status,
+                              const std::string& reason,
+                              const std::string& message,
+                              bool closeAfterSend) const {
   std::ostringstream body;
   body << "{\n"
        << "  \"error\": \"" << jsonEscape(reason) << "\",\n"
        << "  \"message\": \"" << jsonEscape(message) << "\"\n"
        << "}\n";
-  return sendTextResponse(socket, status, reason, "application/json; charset=utf-8", body.str());
+  return sendTextResponse(socket,
+                          status,
+                          reason,
+                          "application/json; charset=utf-8",
+                          body.str(),
+                          {},
+                          closeAfterSend);
 }
 
-bool HTTPWebServer::sendUnauthorized(TcpSocket& socket) const {
+bool HTTPWebServer::sendUnauthorized(TcpSocket& socket, bool closeAfterSend) const {
   return sendTextResponse(socket,
                           401,
                           "Unauthorized",
                           "application/json; charset=utf-8",
                           "{\n  \"error\": \"Unauthorized\",\n  \"message\": \"A BorgVR server password is required.\"\n}\n",
-                          {{"WWW-Authenticate", "Basic realm=\"BorgVR Dataset Server\""}});
+                          {{"WWW-Authenticate", "Basic realm=\"BorgVR Dataset Server\""}},
+                          closeAfterSend);
 }
 
 /*

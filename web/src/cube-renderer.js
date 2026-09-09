@@ -1,4 +1,4 @@
-import { BrickAtlas } from "./brick-atlas.js?v=20260909-dataset-url";
+import { BrickAtlas } from "./brick-atlas.js?v=20260909-brick-batch";
 import { createDefaultTransferFunction } from "./transfer-function.js?v=20260907-range-fix";
 
 const shaderSource = `
@@ -566,6 +566,8 @@ export class CoordinateCubeRenderer {
     this.hasScene = false;
     this.statusCallback = null;
     this.statusReporting = true;
+    this.profilingEnabled = false;
+    this.profile = createRendererProfile();
     this.animationFrame = 0;
     this.needsRender = false;
     this.readbackSkippedWhileInFlight = false;
@@ -577,6 +579,51 @@ export class CoordinateCubeRenderer {
 
   setStatusReporting(enabled) {
     this.statusReporting = enabled;
+  }
+
+  setProfiling(enabled) {
+    this.profilingEnabled = enabled;
+    this.profile = createRendererProfile();
+    this.brickAtlas?.setProfiling(enabled);
+  }
+
+  profileSnapshot() {
+    const frameCount = Math.max(1, this.profile.frames);
+    const readbacks = Math.max(1, this.profile.readbacks);
+    const atlas = this.brickAtlas?.profileSnapshot() ?? null;
+    return {
+      renderer: {
+        frames: this.profile.frames,
+        drawCpuMs: this.profile.drawCpuMs,
+        avgDrawCpuMs: this.profile.drawCpuMs / frameCount,
+        readbacks: this.profile.readbacks,
+        readbackMapMs: this.profile.readbackMapMs,
+        readbackProcessMs: this.profile.readbackProcessMs,
+        avgReadbackMapMs: this.profile.readbackMapMs / readbacks,
+        avgReadbackProcessMs: this.profile.readbackProcessMs / readbacks,
+        requestedBricks: this.profile.requestedBricks,
+        avgRequestedBricks: this.profile.requestedBricks / readbacks,
+        readbackOverflows: this.profile.readbackOverflows,
+        skippedReadbacks: this.profile.skippedReadbacks
+      },
+      atlas
+    };
+  }
+
+  profileSummaryText() {
+    const snapshot = this.profileSnapshot();
+    const atlas = snapshot.atlas;
+    if (!atlas) {
+      return "Profile: no atlas";
+    }
+    return [
+      `Profile: ${atlas.loads} bricks`,
+      `fetch ${(atlas.fetchHeaderMs + atlas.fetchBodyMs).toFixed(0)} ms`,
+      `lz4 ${atlas.lz4DecodeMs.toFixed(0)} ms`,
+      `prep ${atlas.uploadPrepareMs.toFixed(0)} ms`,
+      `upload ${atlas.uploadSubmitMs.toFixed(0)} ms`,
+      `draw avg ${snapshot.renderer.avgDrawCpuMs.toFixed(2)} ms`
+    ].join(" · ");
   }
 
   reportStatus(message) {
@@ -615,6 +662,7 @@ export class CoordinateCubeRenderer {
     }, () => {
       this.requestRender();
     });
+    this.brickAtlas.setProfiling(this.profilingEnabled);
     this.context = this.canvas.getContext("webgpu");
     this.format = navigator.gpu.getPreferredCanvasFormat();
     this.configureContext();
@@ -1223,6 +1271,7 @@ export class CoordinateCubeRenderer {
   }
 
   draw() {
+    const drawStart = performance.now();
     if (!this.device ||
         !this.depthTexture ||
         !this.bindGroup ||
@@ -1266,6 +1315,7 @@ export class CoordinateCubeRenderer {
       this.frameIndex % BRICK_REQUEST_READBACK_INTERVAL === 0;
     if (this.hasScene && this.brickRequestReadbackInFlight) {
       this.readbackSkippedWhileInFlight = true;
+      this.profile.skippedReadbacks += 1;
     }
     if (shouldReadBack) {
       encoder.copyBufferToBuffer(
@@ -1278,6 +1328,8 @@ export class CoordinateCubeRenderer {
       this.brickRequestReadbackInFlight = true;
     }
     this.device.queue.submit([encoder.finish()]);
+    this.recordProfile("drawCpuMs", performance.now() - drawStart);
+    this.profile.frames += 1;
     this.frameIndex += 1;
 
     if (shouldReadBack) {
@@ -1331,13 +1383,16 @@ export class CoordinateCubeRenderer {
     const atlas = this.brickAtlas;
     const atlasGeneration = atlas?.generation ?? 0;
     try {
+      const mapStart = performance.now();
       await readbackBuffer.mapAsync(GPUMapMode.READ);
+      this.recordProfile("readbackMapMs", performance.now() - mapStart);
       if (readbackBuffer !== this.brickRequestReadbackBuffer ||
           atlasGeneration !== (this.brickAtlas?.generation ?? 0)) {
         readbackBuffer.unmap();
         return;
       }
       const values = new Uint32Array(readbackBuffer.getMappedRange());
+      const processStart = performance.now();
       const rawCount = values[0];
       const readableCount = Math.min(rawCount, listCapacity);
       const requests = Array.from(values.slice(1, readableCount + 1))
@@ -1345,7 +1400,13 @@ export class CoordinateCubeRenderer {
       const overflowText = rawCount > listCapacity
         ? `, overflow ${rawCount - listCapacity}`
         : "";
+      this.profile.readbacks += 1;
+      this.profile.requestedBricks += requests.length;
+      if (rawCount > listCapacity) {
+        this.profile.readbackOverflows += 1;
+      }
       atlas?.requestBricks(requests);
+      this.recordProfile("readbackProcessMs", performance.now() - processStart);
       if (this.statusReporting) {
         const atlasSummary = atlas ? `; ${atlas.summary()}` : "";
         this.reportStatus(
@@ -1409,6 +1470,25 @@ export class CoordinateCubeRenderer {
     const length = Math.sqrt(lengthSquared);
     return [x / length, y / length, 0];
   }
+
+  recordProfile(key, value) {
+    if (this.profilingEnabled) {
+      this.profile[key] += value;
+    }
+  }
+}
+
+function createRendererProfile() {
+  return {
+    frames: 0,
+    drawCpuMs: 0,
+    readbacks: 0,
+    readbackMapMs: 0,
+    readbackProcessMs: 0,
+    requestedBricks: 0,
+    readbackOverflows: 0,
+    skippedReadbacks: 0
+  };
 }
 
 function perspectiveWebGPU(fovy, aspect, near, far) {

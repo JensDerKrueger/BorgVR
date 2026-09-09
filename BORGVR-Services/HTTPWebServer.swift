@@ -4,6 +4,9 @@ import Security
 import Compression
 
 final class HTTPWebServer {
+  private static let maxHTTPBrickBatchCount = 128
+  private static let brickBatchMagic: UInt32 = 0x31425642
+
   private let port: NWEndpoint.Port
   private let queue = DispatchQueue(label: "HTTPWebServerQueue")
   private let datasetServer: TCPServer
@@ -243,6 +246,12 @@ final class HTTPWebServer {
       if tail == "dataset.json.lz4" {
         return try datasetManifestResponse(datasetID: datasetID)
       }
+      if tail == "bricks.batch" {
+        return try brickBatchResponse(
+          datasetID: datasetID,
+          idsText: request.queryValue(named: "ids") ?? ""
+        )
+      }
 
       let bricksPrefix = "bricks/"
       if tail.hasPrefix(bricksPrefix) {
@@ -353,6 +362,79 @@ final class HTTPWebServer {
     try dataset.getRawBrick(brickMeta: brick, outputBuffer: buffer)
     let body = Data(bytes: buffer, count: brick.size)
     return HTTPResponse(status: 200, reason: "OK", contentType: "application/octet-stream", body: body)
+  }
+
+  private func brickBatchResponse(datasetID: String, idsText: String) throws -> HTTPResponse {
+    guard let info = datasetServer.findDatasetById(datasetID) else {
+      throw HTTPWebServerError.notFound
+    }
+
+    let requestedIDs = parseBrickIDs(idsText)
+    guard !requestedIDs.isEmpty else {
+      throw HTTPWebServerError.notFound
+    }
+
+    let dataset = try BORGVRFileData(filename: info.filename)
+    let metadata = dataset.getMetadata()
+
+    struct BatchEntry {
+      let id: Int
+      let size: Int
+      let brick: BrickMetadata
+    }
+
+    var entries: [BatchEntry] = []
+    entries.reserveCapacity(requestedIDs.count)
+    var payloadSize = 0
+    for brickID in requestedIDs where brickID >= 0 && brickID < metadata.brickMetadata.count {
+      let brick = metadata.brickMetadata[brickID]
+      guard brick.size >= 0 else { continue }
+      guard payloadSize <= Int(UInt32.max) - brick.size else { continue }
+      entries.append(BatchEntry(id: brickID, size: brick.size, brick: brick))
+      payloadSize += brick.size
+    }
+
+    guard !entries.isEmpty else {
+      throw HTTPWebServerError.notFound
+    }
+
+    let tableBytes = 8 + entries.count * 12
+    guard tableBytes <= Int(UInt32.max),
+          payloadSize <= Int(UInt32.max) - tableBytes
+    else {
+      return HTTPResponse(
+        status: 413,
+        reason: "Payload Too Large",
+        contentType: "text/plain; charset=utf-8",
+        body: Data("Brick batch is too large.\n".utf8)
+      )
+    }
+
+    var body = Data(count: tableBytes + payloadSize)
+    body.writeLittleEndianUInt32(Self.brickBatchMagic, at: 0)
+    body.writeLittleEndianUInt32(UInt32(entries.count), at: 4)
+
+    var payloadOffset = tableBytes
+    for (index, entry) in entries.enumerated() {
+      let tableOffset = 8 + index * 12
+      body.writeLittleEndianUInt32(UInt32(entry.id), at: tableOffset)
+      body.writeLittleEndianUInt32(UInt32(payloadOffset), at: tableOffset + 4)
+      body.writeLittleEndianUInt32(UInt32(entry.size), at: tableOffset + 8)
+
+      try body.withUnsafeMutableBytes { destination in
+        let pointer = destination.baseAddress!.advanced(by: payloadOffset).assumingMemoryBound(to: UInt8.self)
+        try dataset.getRawBrick(brickMeta: entry.brick, outputBuffer: pointer)
+      }
+      payloadOffset += entry.size
+    }
+
+    return HTTPResponse(
+      status: 200,
+      reason: "OK",
+      contentType: "application/octet-stream",
+      body: body,
+      headers: [("X-BorgVR-Content", "brick-batch-v1")]
+    )
   }
 
   private func staticAssetResponse(path: String) throws -> HTTPResponse {
@@ -546,6 +628,20 @@ final class HTTPWebServer {
     return URL(fileURLWithPath: dataset.filename).deletingPathExtension().lastPathComponent
   }
 
+  private func parseBrickIDs(_ idsText: String) -> [Int] {
+    var ids: [Int] = []
+    ids.reserveCapacity(min(Self.maxHTTPBrickBatchCount, 32))
+    for item in idsText.split(separator: ",", omittingEmptySubsequences: true) {
+      if ids.count >= Self.maxHTTPBrickBatchCount {
+        break
+      }
+      let text = item.trimmingCharacters(in: .whitespacesAndNewlines)
+      guard let value = Int(text), value >= 0 else { continue }
+      ids.append(value)
+    }
+    return ids
+  }
+
   private func constantTimeEquals(_ lhs: String, _ rhs: String) -> Bool {
     let lhsBytes = [UInt8](lhs.utf8)
     let rhsBytes = [UInt8](rhs.utf8)
@@ -605,6 +701,22 @@ private struct HTTPRequest {
   func header(named name: String) -> String? {
     let normalizedName = name.lowercased()
     return headers.first(where: { $0.0 == normalizedName })?.1
+  }
+
+  func queryValue(named name: String) -> String? {
+    guard let queryStart = target.firstIndex(of: "?") else {
+      return nil
+    }
+    let queryEnd = target[queryStart...].firstIndex(of: "#") ?? target.endIndex
+    let query = target[target.index(after: queryStart)..<queryEnd]
+    for item in query.split(separator: "&", omittingEmptySubsequences: false) {
+      let parts = item.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false)
+      let key = String(parts.first ?? "").removingPercentEncoding ?? String(parts.first ?? "")
+      guard key == name else { continue }
+      let rawValue = parts.count > 1 ? String(parts[1]) : ""
+      return rawValue.replacingOccurrences(of: "+", with: " ").removingPercentEncoding ?? rawValue
+    }
+    return nil
   }
 
   var shouldCloseConnection: Bool {
@@ -715,6 +827,13 @@ private extension Data {
     append(UInt8((value >> 8) & 0xff))
     append(UInt8((value >> 16) & 0xff))
     append(UInt8((value >> 24) & 0xff))
+  }
+
+  mutating func writeLittleEndianUInt32(_ value: UInt32, at offset: Int) {
+    self[offset + 0] = UInt8(value & 0xff)
+    self[offset + 1] = UInt8((value >> 8) & 0xff)
+    self[offset + 2] = UInt8((value >> 16) & 0xff)
+    self[offset + 3] = UInt8((value >> 24) & 0xff)
   }
 }
 

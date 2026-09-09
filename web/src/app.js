@@ -1,5 +1,5 @@
-import { CoordinateCubeRenderer } from "./cube-renderer.js?v=20260909-dataset-url";
-import { decodeAppleLZ4 } from "./brick-atlas.js?v=20260909-dataset-url";
+import { CoordinateCubeRenderer } from "./cube-renderer.js?v=20260909-brick-batch";
+import { decodeAppleLZ4 } from "./brick-atlas.js?v=20260909-brick-batch";
 
 const catalogStatus = document.querySelector("#catalog-status");
 const datasetList = document.querySelector("#dataset-list");
@@ -35,13 +35,18 @@ let currentRenderMode = "tf";
 let lastTransferPaintPoint = null;
 let transferPointerMode = null;
 let rendererReadyPromise = null;
+let profilingEnabled = false;
 
 main().catch((error) => {
   setStatus(error.message ?? String(error));
 });
 
 async function main() {
+  profilingEnabled = profilingRequested();
   renderer = new CoordinateCubeRenderer(canvas);
+  window.borgvrProfileSnapshot = () => renderer?.profileSnapshot();
+  window.borgvrProfileSummary = () => renderer?.profileSummaryText();
+  renderer.setProfiling(profilingEnabled);
   renderer.setStatusReporting(statusVisible);
   rendererReadyPromise = renderer.initialize((message) => {
     setStatus(message);
@@ -70,8 +75,12 @@ async function main() {
 
   installRenderControls();
   window.addEventListener("resize", drawTransferFunctionEditor);
+  if (profilingEnabled) {
+    showStatusLine();
+    setInterval(reportProfile, 2000);
+  }
 
-  const catalog = await fetchJSON("./web-data/datasets.json");
+  const catalog = await fetchJSON("./web-data/datasets.json", "catalog");
   catalogStatus.textContent = `${catalog.datasets.length} datasets available`;
   if (rendererStatus === "Initializing WebGPU...") {
     setStatus(`${catalog.datasets.length} datasets available`);
@@ -150,7 +159,7 @@ async function showDataset(dataset) {
   setStatus(`Loading ${dataset.name}...`);
   await rendererReadyPromise;
   const manifestURL = new URL(`./web-data/${dataset.metadata}`, window.location.href);
-  currentManifest = await fetchLZ4JSON(manifestURL);
+  currentManifest = await fetchLZ4JSON(manifestURL, "manifest");
   currentManifest.baseURL = new URL(".", manifestURL).href;
   if (!renderer?.ready) {
     setStatus(rendererStatus);
@@ -173,6 +182,27 @@ function setStatus(message) {
   if (statusVisible) {
     statusLine.textContent = message;
   }
+}
+
+function showStatusLine() {
+  statusVisible = true;
+  renderer?.setStatusReporting(true);
+  statusLine.hidden = false;
+  statusButton.classList.add("active");
+  statusButton.setAttribute("aria-label", "Hide renderer status");
+  statusLine.textContent = rendererStatus;
+}
+
+function reportProfile() {
+  if (!renderer) {
+    return;
+  }
+  const snapshot = renderer.profileSnapshot();
+  const rows = flattenProfileSnapshot(snapshot);
+  document.documentElement.dataset.borgvrProfile = JSON.stringify(snapshot);
+  console.info("BorgVR profile", JSON.stringify(rows));
+  console.table(rows);
+  setStatus(renderer.profileSummaryText());
 }
 
 function installRenderControls() {
@@ -500,26 +530,42 @@ function brickCountForManifest(manifest) {
   return (manifest.levels ?? []).reduce((sum, level) => sum + (level.brickTotal ?? 0), 0);
 }
 
-async function fetchJSON(url) {
+async function fetchJSON(url, label = "json") {
   const requestURL = new URL(url, window.location.href);
   requestURL.searchParams.set("cacheBust", String(Date.now()));
+  const fetchStart = performance.now();
   const response = await fetch(requestURL, {
     cache: "no-store",
     credentials: "same-origin"
   });
+  const fetchMs = performance.now() - fetchStart;
   if (!response.ok) {
     throw new Error(`HTTP ${response.status} while loading ${requestURL}`);
   }
-  return response.json();
+  const bodyStart = performance.now();
+  const text = await response.text();
+  const bodyMs = performance.now() - bodyStart;
+  const parseStart = performance.now();
+  const json = JSON.parse(text);
+  const parseMs = performance.now() - parseStart;
+  logProfileRow(`${label} JSON`, {
+    fetchMs,
+    bodyMs,
+    parseMs,
+    bytes: text.length
+  });
+  return json;
 }
 
-async function fetchLZ4JSON(url) {
+async function fetchLZ4JSON(url, label = "lz4-json") {
   const requestURL = new URL(url, window.location.href);
   requestURL.searchParams.set("cacheBust", String(Date.now()));
+  const fetchStart = performance.now();
   const response = await fetch(requestURL, {
     cache: "no-store",
     credentials: "same-origin"
   });
+  const fetchMs = performance.now() - fetchStart;
   if (!response.ok) {
     throw new Error(`HTTP ${response.status} while loading ${requestURL}`);
   }
@@ -529,9 +575,90 @@ async function fetchLZ4JSON(url) {
     throw new Error("Compressed manifest is missing its uncompressed length.");
   }
 
+  const bodyStart = performance.now();
   const compressed = new Uint8Array(await response.arrayBuffer());
+  const bodyMs = performance.now() - bodyStart;
+  const decodeStart = performance.now();
   const jsonBytes = decodeAppleLZ4(compressed, expectedLength);
-  return JSON.parse(new TextDecoder().decode(jsonBytes));
+  const decodeMs = performance.now() - decodeStart;
+  const parseStart = performance.now();
+  const json = JSON.parse(new TextDecoder().decode(jsonBytes));
+  const parseMs = performance.now() - parseStart;
+  logProfileRow(`${label} LZ4 JSON`, {
+    fetchMs,
+    bodyMs,
+    decodeMs,
+    parseMs,
+    compressedBytes: compressed.byteLength,
+    decodedBytes: jsonBytes.byteLength
+  });
+  return json;
+}
+
+function profilingRequested() {
+  const params = new URLSearchParams(window.location.search);
+  return params.get("profile") === "1" || params.get("profile") === "true";
+}
+
+function logProfileRow(label, values) {
+  if (!profilingEnabled) {
+    return;
+  }
+  console.table([{ label, ...values }]);
+}
+
+function flattenProfileSnapshot(snapshot) {
+  const renderer = snapshot.renderer ?? {};
+  const atlas = snapshot.atlas ?? {};
+  return [
+    {
+      section: "network",
+      totalMs: atlas.fetchHeaderMs + atlas.fetchBodyMs,
+      avgMs: atlas.avgFetchHeaderMsPerBatch + atlas.avgFetchBodyMsPerBatch,
+      detail: `${atlas.batchRequests ?? 0} batches, ${atlas.compressedMiB?.toFixed?.(1) ?? "0.0"} MiB compressed`
+    },
+    {
+      section: "lz4 decode",
+      totalMs: atlas.lz4DecodeMs,
+      avgMs: atlas.avgLZ4DecodeMs,
+      detail: `${atlas.lz4Bricks ?? 0} bricks`
+    },
+    {
+      section: "upload prepare",
+      totalMs: atlas.uploadPrepareMs,
+      avgMs: atlas.avgUploadPrepareMs,
+      detail: `${atlas.uploadedMiB?.toFixed?.(1) ?? "0.0"} MiB upload data`
+    },
+    {
+      section: "writeTexture",
+      totalMs: atlas.uploadSubmitMs,
+      avgMs: atlas.avgUploadSubmitMs,
+      detail: `${atlas.loads ?? 0} bricks`
+    },
+    {
+      section: "draw CPU",
+      totalMs: renderer.drawCpuMs,
+      avgMs: renderer.avgDrawCpuMs,
+      detail: `${renderer.frames ?? 0} frames`
+    },
+    {
+      section: "readback wait",
+      totalMs: renderer.readbackMapMs,
+      avgMs: renderer.avgReadbackMapMs,
+      detail: `${renderer.requestedBricks ?? 0} requests, ${renderer.readbackOverflows ?? 0} overflows`
+    },
+    {
+      section: "readback process",
+      totalMs: renderer.readbackProcessMs,
+      avgMs: renderer.avgReadbackProcessMs,
+      detail: `${renderer.requestedBricks ?? 0} request ids filtered/enqueued`
+    }
+  ].map((row) => ({
+    section: row.section,
+    totalMs: Number(row.totalMs ?? 0).toFixed(2),
+    avgMs: Number(row.avgMs ?? 0).toFixed(3),
+    detail: row.detail
+  }));
 }
 
 function variantLabel(variant) {

@@ -30,6 +30,7 @@ public:
   struct Request {
     std::string method;
     std::string target;
+    std::string version;
     std::string path;
     std::vector<std::pair<std::string, std::string>> headers;
   };
@@ -40,33 +41,38 @@ private:
 
   bool parseRequest(TcpSocket& socket, Request& request) const;
   bool isAuthorized(const Request& request) const;
-  bool routeRequest(TcpSocket& socket, const Request& request);
+  bool shouldCloseConnection(const Request& request, int handledRequestCount) const;
+  bool routeRequest(TcpSocket& socket, const Request& request, bool closeAfterSend);
 
-  bool sendCatalog(TcpSocket& socket);
-  bool sendDatasetManifest(TcpSocket& socket, const std::string& datasetID);
-  bool sendBrick(TcpSocket& socket, const std::string& datasetID, const std::string& filename);
-  bool sendStaticFile(TcpSocket& socket, const std::string& requestPath);
+  bool sendCatalog(TcpSocket& socket, bool closeAfterSend);
+  bool sendDatasetManifest(TcpSocket& socket, const std::string& datasetID, bool closeAfterSend);
+  bool sendBrick(TcpSocket& socket, const std::string& datasetID, const std::string& filename, bool closeAfterSend);
+  bool sendBrickBatch(TcpSocket& socket, const std::string& datasetID, const std::string& idsText, bool closeAfterSend);
+  bool sendStaticFile(TcpSocket& socket, const std::string& requestPath, bool closeAfterSend);
 
   bool sendResponse(TcpSocket& socket,
                     int status,
                     const std::string& reason,
                     const std::string& contentType,
                     const std::vector<uint8_t>& body,
-                    const std::vector<std::pair<std::string, std::string>>& extraHeaders = {}) const;
+                    const std::vector<std::pair<std::string, std::string>>& extraHeaders = {},
+                    bool closeAfterSend = true) const;
   bool sendChunkedResponse(TcpSocket& socket,
                            int status,
                            const std::string& reason,
                            const std::string& contentType,
                            const std::vector<uint8_t>& body,
-                           const std::vector<std::pair<std::string, std::string>>& extraHeaders = {}) const;
+                           const std::vector<std::pair<std::string, std::string>>& extraHeaders = {},
+                           bool closeAfterSend = true) const;
   bool sendTextResponse(TcpSocket& socket,
                         int status,
                         const std::string& reason,
                         const std::string& contentType,
                         const std::string& body,
-                        const std::vector<std::pair<std::string, std::string>>& extraHeaders = {}) const;
-  bool sendError(TcpSocket& socket, int status, const std::string& reason, const std::string& message) const;
-  bool sendUnauthorized(TcpSocket& socket) const;
+                        const std::vector<std::pair<std::string, std::string>>& extraHeaders = {},
+                        bool closeAfterSend = true) const;
+  bool sendError(TcpSocket& socket, int status, const std::string& reason, const std::string& message, bool closeAfterSend = true) const;
+  bool sendUnauthorized(TcpSocket& socket, bool closeAfterSend = true) const;
 
   uint16_t port_;
   TCPServer& datasetServer_;

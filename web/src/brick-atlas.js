@@ -3,9 +3,11 @@ const BI_CHILD_EMPTY = 1;
 const BI_EMPTY = 2;
 const BI_FLAG_COUNT = 3;
 
-const MAX_CONCURRENT_BRICK_LOADS = 32;
+const MAX_CONCURRENT_BRICK_LOADS = 128;
+const MAX_BRICKS_PER_BATCH_REQUEST = 32;
 const MAX_PENDING_REQUEST_AGE_FRAMES = 10;
 const DEFAULT_ATLAS_MEMORY_BYTES = 2 * 1024 * 1024 * 1024;
+const BATCH_MAGIC = 0x31425642;
 
 export class BrickAtlas {
   constructor(device, statusCallback = null, activityCallback = null) {
@@ -13,7 +15,43 @@ export class BrickAtlas {
     this.statusCallback = statusCallback;
     this.activityCallback = activityCallback;
     this.generation = 0;
+    this.profilingEnabled = false;
+    this.profile = createAtlasProfile();
     this.resetState();
+  }
+
+  setProfiling(enabled) {
+    this.profilingEnabled = enabled;
+    this.profile = createAtlasProfile();
+  }
+
+  profileSnapshot() {
+    const profile = this.profile;
+    const loadedCount = Math.max(1, profile.loadedBricks);
+    return {
+      loads: profile.loadedBricks,
+      failed: profile.failedBricks,
+      batchRequests: profile.batchRequests,
+      compressedMiB: bytesToMiB(profile.compressedBytes),
+      decodedMiB: bytesToMiB(profile.decodedBytes),
+      uploadedMiB: bytesToMiB(profile.uploadedBytes),
+      fetchHeaderMs: profile.fetchHeaderMs,
+      fetchBodyMs: profile.fetchBodyMs,
+      lz4DecodeMs: profile.lz4DecodeMs,
+      uploadPrepareMs: profile.uploadPrepareMs,
+      uploadSubmitMs: profile.uploadSubmitMs,
+      totalLoadMs: profile.totalLoadMs,
+      avgFetchHeaderMs: profile.fetchHeaderMs / loadedCount,
+      avgFetchBodyMs: profile.fetchBodyMs / loadedCount,
+      avgFetchHeaderMsPerBatch: profile.fetchHeaderMs / Math.max(1, profile.batchRequests),
+      avgFetchBodyMsPerBatch: profile.fetchBodyMs / Math.max(1, profile.batchRequests),
+      avgLZ4DecodeMs: profile.lz4DecodeMs / Math.max(1, profile.lz4Bricks),
+      avgUploadPrepareMs: profile.uploadPrepareMs / loadedCount,
+      avgUploadSubmitMs: profile.uploadSubmitMs / loadedCount,
+      avgTotalLoadMs: profile.totalLoadMs / loadedCount,
+      lz4Bricks: profile.lz4Bricks,
+      rawBricks: profile.rawBricks
+    };
   }
 
   reset(manifest, transferFunction = null, options = {}) {
@@ -239,23 +277,37 @@ export class BrickAtlas {
     while (this.activeLoads < MAX_CONCURRENT_BRICK_LOADS &&
            this.pendingBrickIDs.length > 0 &&
            (this.freeSlots.length > 0 || this.hasEvictableSlot())) {
-      const brickID = this.pendingBrickIDs.shift();
-      this.pendingRequestFrames.delete(brickID);
-      this.activeLoads += 1;
-      this.loadBrick(brickID, generation)
+      const batchIDs = [];
+      const batchLimit = Math.min(
+        MAX_BRICKS_PER_BATCH_REQUEST,
+        MAX_CONCURRENT_BRICK_LOADS - this.activeLoads
+      );
+      while (batchIDs.length < batchLimit && this.pendingBrickIDs.length > 0) {
+        const brickID = this.pendingBrickIDs.shift();
+        this.pendingRequestFrames.delete(brickID);
+        batchIDs.push(brickID);
+      }
+
+      if (batchIDs.length === 0) {
+        break;
+      }
+
+      this.activeLoads += batchIDs.length;
+      this.loadBrickBatch(batchIDs, generation)
         .catch((error) => {
           if (generation !== this.generation) {
             return;
           }
-          this.failedLoads += 1;
-          this.statusCallback?.(`Atlas brick ${brickID} failed: ${error.message ?? String(error)}`);
+          this.profile.failedBricks += batchIDs.length;
+          this.failedLoads += batchIDs.length;
+          this.statusCallback?.(`Atlas brick batch failed: ${error.message ?? String(error)}`);
         })
         .finally(() => {
           if (generation !== this.generation) {
             return;
           }
-          this.activeLoads -= 1;
-          this.loadingBricks.delete(brickID);
+          this.activeLoads -= batchIDs.length;
+          batchIDs.forEach((brickID) => this.loadingBricks.delete(brickID));
           this.pumpLoads();
         });
     }
@@ -282,7 +334,74 @@ export class BrickAtlas {
     this.pendingBrickIDs = retainedBrickIDs;
   }
 
+  async loadBrickBatch(brickIDs, generation = this.generation) {
+    if (brickIDs.length === 1) {
+      await this.loadBrick(brickIDs[0], generation);
+      return;
+    }
+
+    const batchStart = now();
+    let brickDataByID;
+    try {
+      brickDataByID = await this.fetchBrickBatchData(brickIDs);
+    } catch (error) {
+      if (error?.httpStatus !== 404) {
+        throw error;
+      }
+      await Promise.all(brickIDs.map((brickID) => this.loadBrick(brickID, generation)));
+      return;
+    }
+
+    if (generation !== this.generation) {
+      return;
+    }
+
+    for (const brickID of brickIDs) {
+      const brickData = brickDataByID.get(brickID);
+      if (!brickData) {
+        continue;
+      }
+      if (this.brickMeta[brickID] === BI_EMPTY || this.brickMeta[brickID] === BI_CHILD_EMPTY) {
+        continue;
+      }
+
+      const slot = this.acquireSlot();
+      if (slot === undefined) {
+        continue;
+      }
+
+      try {
+        this.uploadBrick(slot, brickData);
+      } catch (error) {
+        this.freeSlots.unshift(slot);
+        throw error;
+      }
+      if (generation !== this.generation) {
+        this.freeSlots.unshift(slot);
+        return;
+      }
+
+      this.loadedBricks.set(brickID, slot);
+      this.residentOrder.push(brickID);
+      this.brickMeta[brickID] = slot + BI_FLAG_COUNT;
+      this.device.queue.writeBuffer(
+        this.brickMetaBuffer,
+        brickID * Uint32Array.BYTES_PER_ELEMENT,
+        new Uint32Array([this.brickMeta[brickID]])
+      );
+      this.profile.loadedBricks += 1;
+    }
+
+    this.recordProfile("totalLoadMs", now() - batchStart);
+    this.activityCallback?.();
+
+    if (this.loadedBricks.size === 1 || this.loadedBricks.size % 16 === 0) {
+      this.statusCallback?.(`Atlas loaded ${this.loadedBricks.size}/${this.slotCapacity} slots`);
+    }
+  }
+
   async loadBrick(brickID, generation = this.generation) {
+    const loadStart = now();
     const brick = this.manifest.bricks[brickID];
     if (!brick) {
       return;
@@ -313,6 +432,8 @@ export class BrickAtlas {
     if (generation !== this.generation) {
       return;
     }
+    this.recordProfile("totalLoadMs", now() - loadStart);
+    this.profile.loadedBricks += 1;
     this.loadedBricks.set(brickID, slot);
     this.residentOrder.push(brickID);
     this.brickMeta[brickID] = slot + BI_FLAG_COUNT;
@@ -373,6 +494,7 @@ export class BrickAtlas {
   async fetchBrickData(brick) {
     const brickName = String(brick.index).padStart(6, "0");
     const url = new URL(brick.url ?? `bricks/${brickName}`, this.baseURL);
+    const fetchStart = now();
     let response = await fetch(url, { credentials: "same-origin" });
     let requestedURL = url;
     if (!response.ok && response.status === 404 && !brick.url) {
@@ -380,19 +502,94 @@ export class BrickAtlas {
       requestedURL = new URL(`bricks/${brickName}.${extension}`, this.baseURL);
       response = await fetch(requestedURL, { credentials: "same-origin" });
     }
+    this.recordProfile("fetchHeaderMs", now() - fetchStart);
     if (!response.ok) {
       throw new Error(`HTTP ${response.status} while loading ${requestedURL.pathname}`);
     }
+    const bodyStart = now();
     const data = new Uint8Array(await response.arrayBuffer());
+    this.recordProfile("fetchBodyMs", now() - bodyStart);
+    this.profile.compressedBytes += data.byteLength;
     const uncompressedByteLength = this.uncompressedByteLengthFor(brick);
 
     if (this.shouldDecompressBrick(brick, data)) {
-      return decodeAppleLZ4(data, uncompressedByteLength);
+      const decodeStart = now();
+      const decoded = decodeAppleLZ4(data, uncompressedByteLength);
+      this.recordProfile("lz4DecodeMs", now() - decodeStart);
+      this.profile.decodedBytes += decoded.byteLength;
+      this.profile.lz4Bricks += 1;
+      return decoded;
     }
     if (data.byteLength !== uncompressedByteLength) {
       throw new Error(`raw brick has ${data.byteLength} bytes, expected ${uncompressedByteLength}`);
     }
+    this.profile.decodedBytes += data.byteLength;
+    this.profile.rawBricks += 1;
     return data;
+  }
+
+  async fetchBrickBatchData(brickIDs) {
+    const url = new URL("bricks.batch", this.baseURL);
+    url.searchParams.set("ids", brickIDs.join(","));
+    const fetchStart = now();
+    const response = await fetch(url, { credentials: "same-origin" });
+    this.recordProfile("fetchHeaderMs", now() - fetchStart);
+    if (!response.ok) {
+      const error = new Error(`HTTP ${response.status} while loading brick batch`);
+      error.httpStatus = response.status;
+      throw error;
+    }
+
+    const bodyStart = now();
+    const batchData = new Uint8Array(await response.arrayBuffer());
+    this.recordProfile("fetchBodyMs", now() - bodyStart);
+    this.profile.batchRequests += 1;
+
+    const view = new DataView(batchData.buffer, batchData.byteOffset, batchData.byteLength);
+    if (batchData.byteLength < 8 || view.getUint32(0, true) !== BATCH_MAGIC) {
+      throw new Error("Invalid BorgVR brick batch header.");
+    }
+
+    const count = view.getUint32(4, true);
+    const tableByteLength = 8 + count * 12;
+    if (batchData.byteLength < tableByteLength) {
+      throw new Error("Truncated BorgVR brick batch table.");
+    }
+
+    const bricksByID = new Map();
+    for (let index = 0; index < count; index += 1) {
+      const entryOffset = 8 + index * 12;
+      const brickID = view.getUint32(entryOffset, true);
+      const dataOffset = view.getUint32(entryOffset + 4, true);
+      const byteLength = view.getUint32(entryOffset + 8, true);
+      if (dataOffset < tableByteLength || dataOffset + byteLength > batchData.byteLength) {
+        throw new Error("Invalid BorgVR brick batch entry.");
+      }
+
+      const brick = this.manifest.bricks[brickID];
+      if (!brick) {
+        continue;
+      }
+      const storedData = batchData.subarray(dataOffset, dataOffset + byteLength);
+      this.profile.compressedBytes += storedData.byteLength;
+      const uncompressedByteLength = this.uncompressedByteLengthFor(brick);
+      if (this.shouldDecompressBrick(brick, storedData)) {
+        const decodeStart = now();
+        const decoded = decodeAppleLZ4(storedData, uncompressedByteLength);
+        this.recordProfile("lz4DecodeMs", now() - decodeStart);
+        this.profile.decodedBytes += decoded.byteLength;
+        this.profile.lz4Bricks += 1;
+        bricksByID.set(brickID, decoded);
+      } else {
+        if (storedData.byteLength !== uncompressedByteLength) {
+          throw new Error(`raw brick ${brickID} has ${storedData.byteLength} bytes, expected ${uncompressedByteLength}`);
+        }
+        this.profile.decodedBytes += storedData.byteLength;
+        this.profile.rawBricks += 1;
+        bricksByID.set(brickID, storedData);
+      }
+    }
+    return bricksByID;
   }
 
   shouldDecompressBrick(brick, data) {
@@ -413,6 +610,7 @@ export class BrickAtlas {
   }
 
   uploadBrick(slot, brickData) {
+    const prepareStart = now();
     const origin = this.slotOrigin(slot);
     const bytesPerRow = align(this.brickSize * this.textureBytesPerVoxel, 256);
     const rowsPerImage = this.brickSize;
@@ -435,13 +633,17 @@ export class BrickAtlas {
         }
       }
     }
+    this.recordProfile("uploadPrepareMs", now() - prepareStart);
+    this.profile.uploadedBytes += paddedData.byteLength;
 
+    const uploadStart = now();
     this.device.queue.writeTexture(
       { texture: this.texture, origin },
       paddedData,
       { bytesPerRow, rowsPerImage },
       [this.brickSize, this.brickSize, this.brickSize]
     );
+    this.recordProfile("uploadSubmitMs", now() - uploadStart);
   }
 
   slotOrigin(slot) {
@@ -454,6 +656,31 @@ export class BrickAtlas {
       z: z * this.brickSize
     };
   }
+
+  recordProfile(key, value) {
+    if (this.profilingEnabled) {
+      this.profile[key] += value;
+    }
+  }
+}
+
+function createAtlasProfile() {
+  return {
+    loadedBricks: 0,
+    failedBricks: 0,
+    batchRequests: 0,
+    lz4Bricks: 0,
+    rawBricks: 0,
+    compressedBytes: 0,
+    decodedBytes: 0,
+    uploadedBytes: 0,
+    fetchHeaderMs: 0,
+    fetchBodyMs: 0,
+    lz4DecodeMs: 0,
+    uploadPrepareMs: 0,
+    uploadSubmitMs: 0,
+    totalLoadMs: 0
+  };
 }
 
 function classifyBricks(manifest, transferFunction, options = {}) {
@@ -532,6 +759,14 @@ function normalizeCompressionName(value) {
 
 function formatMiB(byteCount) {
   return `${(byteCount / (1024 * 1024)).toFixed(1)} MiB`;
+}
+
+function bytesToMiB(byteCount) {
+  return byteCount / (1024 * 1024);
+}
+
+function now() {
+  return performance.now();
 }
 
 function buildChildTable(levels, totalBrickCount) {

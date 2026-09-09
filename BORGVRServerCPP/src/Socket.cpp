@@ -15,6 +15,7 @@
   #include <signal.h>
   #include <sys/socket.h>
   #include <sys/select.h>
+  #include <sys/time.h>
   #include <unistd.h>
 #endif
 
@@ -106,6 +107,19 @@ void TcpSocket::shutdownBoth() {
   ::shutdown(sock_, SD_BOTH);
 #else
   ::shutdown(sock_, SHUT_RDWR);
+#endif
+}
+
+void TcpSocket::setReceiveTimeoutMilliseconds(int milliseconds) {
+  if (!valid() || milliseconds <= 0) return;
+#if defined(_WIN32)
+  const DWORD timeout = static_cast<DWORD>(milliseconds);
+  ::setsockopt(sock_, SOL_SOCKET, SO_RCVTIMEO, reinterpret_cast<const char*>(&timeout), sizeof(timeout));
+#else
+  timeval timeout{};
+  timeout.tv_sec = milliseconds / 1000;
+  timeout.tv_usec = (milliseconds % 1000) * 1000;
+  ::setsockopt(sock_, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
 #endif
 }
 
@@ -239,7 +253,9 @@ TcpSocket TcpListener::accept() {
   }
   makeBlocking(s);
 #endif
-  return TcpSocket{s};
+  TcpSocket socket{s};
+  socket.setReceiveTimeoutMilliseconds(15000);
+  return socket;
 }
 
 /*

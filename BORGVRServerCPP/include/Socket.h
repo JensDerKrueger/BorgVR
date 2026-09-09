@@ -41,6 +41,7 @@ public:
 
   void close();
   void shutdownBoth();
+  void setReceiveTimeoutMilliseconds(int milliseconds);
 
   // Blocking send of all bytes.
   bool sendAll(const uint8_t* data, size_t size);
