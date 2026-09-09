@@ -14,10 +14,13 @@
   #include <netinet/in.h>
   #include <signal.h>
   #include <sys/socket.h>
+  #include <sys/select.h>
   #include <unistd.h>
 #endif
 
 namespace {
+
+constexpr size_t kSendChunkBytes = 16 * 1024;
 
 #if !defined(_WIN32)
 bool waitUntilWritable(SocketHandle socket) {
@@ -110,9 +113,10 @@ bool TcpSocket::sendAll(const uint8_t* data, size_t size) {
   if (!valid()) return false;
   size_t sent = 0;
   while (sent < size) {
-#if defined(_WIN32)
     const size_t remaining = size - sent;
-    const int chunk = remaining > static_cast<size_t>(INT_MAX) ? INT_MAX : static_cast<int>(remaining);
+    const size_t chunkSize = remaining > kSendChunkBytes ? kSendChunkBytes : remaining;
+#if defined(_WIN32)
+    const int chunk = chunkSize > static_cast<size_t>(INT_MAX) ? INT_MAX : static_cast<int>(chunkSize);
     int rc = ::send(sock_, reinterpret_cast<const char*>(data + sent),
                     chunk, 0);
     if (rc == SOCKET_ERROR) return false;
@@ -122,7 +126,7 @@ bool TcpSocket::sendAll(const uint8_t* data, size_t size) {
   #else
     constexpr int sendFlags = 0;
   #endif
-    ssize_t rc = ::send(sock_, data + sent, size - sent, sendFlags);
+    ssize_t rc = ::send(sock_, data + sent, chunkSize, sendFlags);
     if (rc < 0) {
       if (errno == EINTR) continue;
       if (errno == EAGAIN || errno == EWOULDBLOCK) {

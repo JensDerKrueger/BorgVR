@@ -580,9 +580,14 @@ bool HTTPWebServer::sendResponse(TcpSocket& socket,
   header << "\r\n";
 
   if (!socket.sendAll(header.str())) {
+    if (logger_) logger_->warning("HTTP response header send failed for status " + std::to_string(status));
     return false;
   }
   if (!body.empty() && !socket.sendAll(body)) {
+    if (logger_) {
+      logger_->warning("HTTP response body send failed for status " + std::to_string(status) +
+                       " with " + std::to_string(body.size()) + " bytes");
+    }
     return false;
   }
   return true;
