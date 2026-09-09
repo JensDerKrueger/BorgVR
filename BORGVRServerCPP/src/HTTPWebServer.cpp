@@ -423,12 +423,8 @@ bool HTTPWebServer::routeRequest(TcpSocket& socket, const Request& request) {
 
     const std::string datasetID = rest.substr(0, slash);
     const std::string tail = rest.substr(slash + 1);
-    if (tail == "dataset.json") {
-      return sendDatasetManifest(socket, datasetID, false);
-    }
-
     if (tail == "dataset.json.lz4") {
-      return sendDatasetManifest(socket, datasetID, true);
+      return sendDatasetManifest(socket, datasetID);
     }
 
     constexpr const char* bricksPrefix = "bricks/";
@@ -459,8 +455,7 @@ bool HTTPWebServer::sendCatalog(TcpSocket& socket) {
         << "      \"id\": \"" << jsonEscape(dataset.id) << "\",\n"
         << "      \"name\": \"" << jsonEscape(name) << "\",\n"
         << "      \"description\": \"" << jsonEscape(dataset.datasetDescription.empty() ? name : dataset.datasetDescription) << "\",\n"
-        << "      \"metadata\": \"datasets/" << jsonEscape(dataset.id) << "/dataset.json\",\n"
-        << "      \"metadataLZ4\": \"datasets/" << jsonEscape(dataset.id) << "/dataset.json.lz4\",\n"
+        << "      \"metadata\": \"datasets/" << jsonEscape(dataset.id) << "/dataset.json.lz4\",\n"
         << "      \"variant\": \"server\"\n"
         << "    }" << (i + 1 < datasets.size() ? "," : "") << "\n";
   }
@@ -470,7 +465,7 @@ bool HTTPWebServer::sendCatalog(TcpSocket& socket) {
   return sendTextResponse(socket, 200, "OK", "application/json; charset=utf-8", oss.str());
 }
 
-bool HTTPWebServer::sendDatasetManifest(TcpSocket& socket, const std::string& datasetID, bool compressed) {
+bool HTTPWebServer::sendDatasetManifest(TcpSocket& socket, const std::string& datasetID) {
   DatasetInfo info;
   if (!datasetServer_.findDatasetById(datasetID, info)) {
     return false;
@@ -541,10 +536,6 @@ bool HTTPWebServer::sendDatasetManifest(TcpSocket& socket, const std::string& da
         << "}\n";
 
     const std::string json = oss.str();
-    if (!compressed) {
-      return sendTextResponse(socket, 200, "OK", "application/json; charset=utf-8", json);
-    }
-
     auto body = encodeAppleLZ4Stream(json);
     if (body.empty() && !json.empty()) {
       return sendError(socket, 500, "Internal Server Error", "Unable to compress dataset metadata.");

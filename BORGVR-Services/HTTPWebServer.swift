@@ -240,12 +240,8 @@ final class HTTPWebServer {
 
       let datasetID = String(parts[0])
       let tail = String(parts[1])
-      if tail == "dataset.json" {
-        return try datasetManifestResponse(datasetID: datasetID, compressed: false)
-      }
-
       if tail == "dataset.json.lz4" {
-        return try datasetManifestResponse(datasetID: datasetID, compressed: true)
+        return try datasetManifestResponse(datasetID: datasetID)
       }
 
       let bricksPrefix = "bricks/"
@@ -267,8 +263,7 @@ final class HTTPWebServer {
         id: dataset.id,
         name: name,
         description: dataset.datasetDescription.isEmpty ? name : dataset.datasetDescription,
-        metadata: "datasets/\(dataset.id)/dataset.json",
-        metadataLZ4: "datasets/\(dataset.id)/dataset.json.lz4",
+        metadata: "datasets/\(dataset.id)/dataset.json.lz4",
         variant: "server"
       )
     }
@@ -282,7 +277,7 @@ final class HTTPWebServer {
     return jsonResponse(catalog)
   }
 
-  private func datasetManifestResponse(datasetID: String, compressed: Bool) throws -> HTTPResponse {
+  private func datasetManifestResponse(datasetID: String) throws -> HTTPResponse {
     guard let info = datasetServer.findDatasetById(datasetID) else {
       throw HTTPWebServerError.notFound
     }
@@ -336,7 +331,7 @@ final class HTTPWebServer {
         values: brickValues
       )
     )
-    return compressed ? compressedJSONResponse(manifest) : jsonResponse(manifest)
+    return compressedJSONResponse(manifest)
   }
 
   private func brickResponse(datasetID: String, brickName: String) throws -> HTTPResponse {
@@ -663,7 +658,6 @@ private struct WebCatalogDataset: Encodable {
   let name: String
   let description: String
   let metadata: String
-  let metadataLZ4: String
   let variant: String
 }
 

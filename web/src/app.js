@@ -1,5 +1,5 @@
-import { CoordinateCubeRenderer } from "./cube-renderer.js?v=20260909-compact-manifest";
-import { decodeAppleLZ4 } from "./brick-atlas.js?v=20260909-compact-manifest";
+import { CoordinateCubeRenderer } from "./cube-renderer.js?v=20260909-lz4-manifest";
+import { decodeAppleLZ4 } from "./brick-atlas.js?v=20260909-lz4-manifest";
 
 const catalogStatus = document.querySelector("#catalog-status");
 const datasetList = document.querySelector("#dataset-list");
@@ -111,7 +111,7 @@ async function showDataset(dataset) {
   setStatus(`Loading ${dataset.name}...`);
   await rendererReadyPromise;
   const manifestURL = new URL(`./web-data/${dataset.metadata}`, window.location.href);
-  currentManifest = await fetchManifestJSON(dataset, manifestURL);
+  currentManifest = await fetchLZ4JSON(manifestURL);
   currentManifest.baseURL = new URL(".", manifestURL).href;
   if (!renderer?.ready) {
     setStatus(rendererStatus);
@@ -472,17 +472,6 @@ async function fetchJSON(url) {
     throw new Error(`HTTP ${response.status} while loading ${requestURL}`);
   }
   return response.json();
-}
-
-async function fetchManifestJSON(dataset, manifestURL) {
-  if (dataset.metadataLZ4) {
-    try {
-      return await fetchLZ4JSON(new URL(`./web-data/${dataset.metadataLZ4}`, window.location.href));
-    } catch (error) {
-      console.warn("Falling back to uncompressed BorgVR manifest", error);
-    }
-  }
-  return fetchJSON(manifestURL);
 }
 
 async function fetchLZ4JSON(url) {

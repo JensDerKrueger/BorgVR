@@ -1,4 +1,4 @@
-import { BrickAtlas } from "./brick-atlas.js?v=20260909-compact-manifest";
+import { BrickAtlas } from "./brick-atlas.js?v=20260909-lz4-manifest";
 import { createDefaultTransferFunction } from "./transfer-function.js?v=20260907-range-fix";
 
 const shaderSource = `

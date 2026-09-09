@@ -43,7 +43,7 @@ private:
   bool routeRequest(TcpSocket& socket, const Request& request);
 
   bool sendCatalog(TcpSocket& socket);
-  bool sendDatasetManifest(TcpSocket& socket, const std::string& datasetID, bool compressed);
+  bool sendDatasetManifest(TcpSocket& socket, const std::string& datasetID);
   bool sendBrick(TcpSocket& socket, const std::string& datasetID, const std::string& filename);
   bool sendStaticFile(TcpSocket& socket, const std::string& requestPath);
 
