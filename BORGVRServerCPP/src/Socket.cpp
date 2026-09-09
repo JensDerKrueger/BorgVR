@@ -1,5 +1,6 @@
 #include "Socket.h"
 
+#include <climits>
 #include <cstring>
 
 #if defined(_WIN32)
@@ -9,11 +10,38 @@
 #else
   #include <arpa/inet.h>
   #include <cerrno>
+  #include <fcntl.h>
   #include <netinet/in.h>
   #include <signal.h>
   #include <sys/socket.h>
   #include <unistd.h>
 #endif
+
+namespace {
+
+#if !defined(_WIN32)
+bool waitUntilWritable(SocketHandle socket) {
+  fd_set writeSet;
+  FD_ZERO(&writeSet);
+  FD_SET(socket, &writeSet);
+
+  int rc = 0;
+  do {
+    rc = ::select(socket + 1, nullptr, &writeSet, nullptr, nullptr);
+  } while (rc < 0 && errno == EINTR);
+
+  return rc > 0;
+}
+
+void makeBlocking(SocketHandle socket) {
+  const int flags = ::fcntl(socket, F_GETFL, 0);
+  if (flags >= 0) {
+    ::fcntl(socket, F_SETFL, flags & ~O_NONBLOCK);
+  }
+}
+#endif
+
+} // namespace
 
 SocketSystem::SocketSystem() {
 #if defined(_WIN32)
@@ -83,8 +111,10 @@ bool TcpSocket::sendAll(const uint8_t* data, size_t size) {
   size_t sent = 0;
   while (sent < size) {
 #if defined(_WIN32)
+    const size_t remaining = size - sent;
+    const int chunk = remaining > static_cast<size_t>(INT_MAX) ? INT_MAX : static_cast<int>(remaining);
     int rc = ::send(sock_, reinterpret_cast<const char*>(data + sent),
-                    static_cast<int>(size - sent), 0);
+                    chunk, 0);
     if (rc == SOCKET_ERROR) return false;
 #else
   #if defined(MSG_NOSIGNAL)
@@ -95,6 +125,9 @@ bool TcpSocket::sendAll(const uint8_t* data, size_t size) {
     ssize_t rc = ::send(sock_, data + sent, size - sent, sendFlags);
     if (rc < 0) {
       if (errno == EINTR) continue;
+      if (errno == EAGAIN || errno == EWOULDBLOCK) {
+        if (waitUntilWritable(sock_)) continue;
+      }
       return false;
     }
 #endif
@@ -200,6 +233,7 @@ TcpSocket TcpListener::accept() {
   if (s < 0) {
     return TcpSocket{};
   }
+  makeBlocking(s);
 #endif
   return TcpSocket{s};
 }
