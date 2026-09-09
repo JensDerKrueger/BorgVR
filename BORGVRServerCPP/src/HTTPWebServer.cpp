@@ -2,10 +2,12 @@
 
 #include "BORGVRFileData.h"
 #include "GeneratedWebAssets.h"
+#include "LZ4.h"
 
 #include <algorithm>
 #include <cctype>
 #include <chrono>
+#include <cstring>
 #include <iomanip>
 #include <limits>
 #include <sstream>
@@ -14,6 +16,7 @@ namespace {
 
 constexpr size_t kChunkedResponseThreshold = 1024 * 1024;
 constexpr size_t kHTTPChunkBytes = 16 * 1024;
+constexpr size_t kAppleLZ4BlockBytes = 64 * 1024;
 
 class HandlerCounter {
 public:
@@ -190,6 +193,41 @@ uint64_t dataTypeMaxValue(const BORGVRMetaData& md) {
     return std::numeric_limits<uint64_t>::max();
   }
   return (uint64_t{1} << bits) - 1;
+}
+
+void appendLE32(std::vector<uint8_t>& out, uint32_t value) {
+  out.push_back(static_cast<uint8_t>(value & 0xff));
+  out.push_back(static_cast<uint8_t>((value >> 8) & 0xff));
+  out.push_back(static_cast<uint8_t>((value >> 16) & 0xff));
+  out.push_back(static_cast<uint8_t>((value >> 24) & 0xff));
+}
+
+std::vector<uint8_t> encodeAppleLZ4Stream(const std::string& text) {
+  const auto* input = reinterpret_cast<const uint8_t*>(text.data());
+  size_t offset = 0;
+  std::vector<uint8_t> out;
+  out.reserve(text.size() / 2);
+
+  while (offset < text.size()) {
+    const size_t blockLength = std::min(kAppleLZ4BlockBytes, text.size() - offset);
+    std::vector<uint8_t> compressed(lz4::compressBlockBound(blockLength));
+    const size_t compressedLength = lz4::compressBlock(input + offset,
+                                                       blockLength,
+                                                       compressed.data(),
+                                                       compressed.size());
+    if (compressedLength == 0) {
+      return {};
+    }
+
+    out.insert(out.end(), {'b', 'v', '4', '1'});
+    appendLE32(out, static_cast<uint32_t>(blockLength));
+    appendLE32(out, static_cast<uint32_t>(compressedLength));
+    out.insert(out.end(), compressed.begin(), compressed.begin() + static_cast<ptrdiff_t>(compressedLength));
+    offset += blockLength;
+  }
+
+  out.insert(out.end(), {'b', 'v', '4', '$'});
+  return out;
 }
 
 } // namespace
@@ -386,7 +424,11 @@ bool HTTPWebServer::routeRequest(TcpSocket& socket, const Request& request) {
     const std::string datasetID = rest.substr(0, slash);
     const std::string tail = rest.substr(slash + 1);
     if (tail == "dataset.json") {
-      return sendDatasetManifest(socket, datasetID);
+      return sendDatasetManifest(socket, datasetID, false);
+    }
+
+    if (tail == "dataset.json.lz4") {
+      return sendDatasetManifest(socket, datasetID, true);
     }
 
     constexpr const char* bricksPrefix = "bricks/";
@@ -418,6 +460,7 @@ bool HTTPWebServer::sendCatalog(TcpSocket& socket) {
         << "      \"name\": \"" << jsonEscape(name) << "\",\n"
         << "      \"description\": \"" << jsonEscape(dataset.datasetDescription.empty() ? name : dataset.datasetDescription) << "\",\n"
         << "      \"metadata\": \"datasets/" << jsonEscape(dataset.id) << "/dataset.json\",\n"
+        << "      \"metadataLZ4\": \"datasets/" << jsonEscape(dataset.id) << "/dataset.json.lz4\",\n"
         << "      \"variant\": \"server\"\n"
         << "    }" << (i + 1 < datasets.size() ? "," : "") << "\n";
   }
@@ -427,7 +470,7 @@ bool HTTPWebServer::sendCatalog(TcpSocket& socket) {
   return sendTextResponse(socket, 200, "OK", "application/json; charset=utf-8", oss.str());
 }
 
-bool HTTPWebServer::sendDatasetManifest(TcpSocket& socket, const std::string& datasetID) {
+bool HTTPWebServer::sendDatasetManifest(TcpSocket& socket, const std::string& datasetID, bool compressed) {
   DatasetInfo info;
   if (!datasetServer_.findDatasetById(datasetID, info)) {
     return false;
@@ -481,44 +524,38 @@ bool HTTPWebServer::sendDatasetManifest(TcpSocket& socket, const std::string& da
     }
 
     oss << "  ],\n"
-        << "  \"bricks\": [\n";
+        << "  \"brickMetadata\": {\n"
+        << "    \"format\": \"min-max-byteLength-v1\",\n"
+        << "    \"fields\": [\"min\", \"max\", \"byteLength\"],\n"
+        << "    \"values\": [\n";
 
     const auto& bricks = md.brickMetadata();
     for (size_t i = 0; i < bricks.size(); ++i) {
       const auto& bm = bricks[i];
-      size_t levelIndex = 0;
-      for (size_t l = 0; l < levels.size(); ++l) {
-        const auto& level = levels[l];
-        const int levelTotal = level.totalBricks.x * level.totalBricks.y * level.totalBricks.z;
-        if (i >= static_cast<size_t>(level.prevBricks) &&
-            i < static_cast<size_t>(level.prevBricks + levelTotal)) {
-          levelIndex = l;
-          break;
-        }
-      }
-
-      const auto& level = levels[levelIndex];
-      const size_t localIndex = i - static_cast<size_t>(level.prevBricks);
-      const int bricksX = level.totalBricks.x;
-      const int bricksY = level.totalBricks.y;
-      const int x = static_cast<int>(localIndex % static_cast<size_t>(bricksX));
-      const int y = static_cast<int>((localIndex / static_cast<size_t>(bricksX)) % static_cast<size_t>(bricksY));
-      const int z = static_cast<int>(localIndex / static_cast<size_t>(bricksX * bricksY));
-
-      oss << "    {\n"
-          << "      \"index\": " << i << ",\n"
-          << "      \"level\": " << levelIndex << ",\n"
-          << "      \"coord\": [" << x << ", " << y << ", " << z << "],\n"
-          << "      \"min\": " << bm.minValue << ",\n"
-          << "      \"max\": " << bm.maxValue << ",\n"
-          << "      \"byteLength\": " << bm.size << "\n"
-          << "    }" << (i + 1 < bricks.size() ? "," : "") << "\n";
+      oss << "      " << bm.minValue << ", " << bm.maxValue << ", " << bm.size
+          << (i + 1 < bricks.size() ? "," : "") << "\n";
     }
 
-    oss << "  ]\n"
+    oss << "    ]\n"
+        << "  }\n"
         << "}\n";
 
-    return sendTextResponse(socket, 200, "OK", "application/json; charset=utf-8", oss.str());
+    const std::string json = oss.str();
+    if (!compressed) {
+      return sendTextResponse(socket, 200, "OK", "application/json; charset=utf-8", json);
+    }
+
+    auto body = encodeAppleLZ4Stream(json);
+    if (body.empty() && !json.empty()) {
+      return sendError(socket, 500, "Internal Server Error", "Unable to compress dataset metadata.");
+    }
+    return sendResponse(socket,
+                        200,
+                        "OK",
+                        "application/octet-stream",
+                        body,
+                        {{"X-BorgVR-Uncompressed-Length", std::to_string(json.size())},
+                         {"X-BorgVR-Content", "dataset-manifest-lz4"}});
   } catch (const std::exception& e) {
     if (logger_) logger_->error(std::string("HTTP manifest failed: ") + e.what());
     return sendError(socket, 500, "Internal Server Error", "Unable to open dataset metadata.");
@@ -580,6 +617,7 @@ bool HTTPWebServer::sendResponse(TcpSocket& socket,
          << "Content-Type: " << contentType << "\r\n"
          << "Connection: close\r\n"
          << "Access-Control-Allow-Origin: *\r\n"
+         << "Access-Control-Expose-Headers: X-BorgVR-Uncompressed-Length\r\n"
          << "Cache-Control: no-store\r\n";
   for (const auto& item : extraHeaders) {
     header << item.first << ": " << item.second << "\r\n";
@@ -612,6 +650,7 @@ bool HTTPWebServer::sendChunkedResponse(TcpSocket& socket,
          << "Content-Type: " << contentType << "\r\n"
          << "Connection: close\r\n"
          << "Access-Control-Allow-Origin: *\r\n"
+         << "Access-Control-Expose-Headers: X-BorgVR-Uncompressed-Length\r\n"
          << "Cache-Control: no-store\r\n";
   for (const auto& item : extraHeaders) {
     header << item.first << ": " << item.second << "\r\n";

@@ -1,4 +1,4 @@
-import { BrickAtlas } from "./brick-atlas.js?v=20260908-remote-errors";
+import { BrickAtlas } from "./brick-atlas.js?v=20260909-compact-manifest";
 import { createDefaultTransferFunction } from "./transfer-function.js?v=20260907-range-fix";
 
 const shaderSource = `
@@ -1568,7 +1568,35 @@ function normalizeManifestRanges(manifest) {
 }
 
 function normalizeManifestForRenderer(manifest) {
-  return normalizeManifestLevels(normalizeManifestRanges(manifest));
+  return normalizeManifestBricks(normalizeManifestLevels(normalizeManifestRanges(manifest)));
+}
+
+function normalizeManifestBricks(manifest) {
+  if (Array.isArray(manifest.bricks)) {
+    return manifest;
+  }
+
+  const values = manifest.brickMetadata?.values;
+  if (!Array.isArray(values)) {
+    return manifest;
+  }
+
+  const brickCount = Math.floor(values.length / 3);
+  const bricks = new Array(brickCount);
+  for (let index = 0; index < brickCount; index += 1) {
+    const offset = index * 3;
+    bricks[index] = {
+      index,
+      min: values[offset] ?? 0,
+      max: values[offset + 1] ?? values[offset] ?? 0,
+      byteLength: values[offset + 2] ?? 0
+    };
+  }
+
+  return {
+    ...manifest,
+    bricks
+  };
 }
 
 function normalizeManifestLevels(manifest) {

@@ -1,4 +1,5 @@
-import { CoordinateCubeRenderer } from "./cube-renderer.js?v=20260908-remote-errors";
+import { CoordinateCubeRenderer } from "./cube-renderer.js?v=20260909-compact-manifest";
+import { decodeAppleLZ4 } from "./brick-atlas.js?v=20260909-compact-manifest";
 
 const catalogStatus = document.querySelector("#catalog-status");
 const datasetList = document.querySelector("#dataset-list");
@@ -110,7 +111,7 @@ async function showDataset(dataset) {
   setStatus(`Loading ${dataset.name}...`);
   await rendererReadyPromise;
   const manifestURL = new URL(`./web-data/${dataset.metadata}`, window.location.href);
-  currentManifest = await fetchJSON(manifestURL);
+  currentManifest = await fetchManifestJSON(dataset, manifestURL);
   currentManifest.baseURL = new URL(".", manifestURL).href;
   if (!renderer?.ready) {
     setStatus(rendererStatus);
@@ -447,7 +448,17 @@ function renderDatasetInfo(manifest) {
   datasetInfo.querySelector(".components").textContent = `${manifest.volume.componentCount} x ${manifest.volume.bytesPerComponent * 8}-bit`;
   datasetInfo.querySelector(".brick-layout").textContent = `${manifest.bricking.brickSize}³, overlap ${manifest.bricking.overlap}`;
   datasetInfo.querySelector(".lod-levels").textContent = String(manifest.levels.length);
-  datasetInfo.querySelector(".brick-count").textContent = String(manifest.bricks.length);
+  datasetInfo.querySelector(".brick-count").textContent = String(brickCountForManifest(manifest));
+}
+
+function brickCountForManifest(manifest) {
+  if (Array.isArray(manifest.bricks)) {
+    return manifest.bricks.length;
+  }
+  if (Array.isArray(manifest.brickMetadata?.values)) {
+    return Math.floor(manifest.brickMetadata.values.length / 3);
+  }
+  return (manifest.levels ?? []).reduce((sum, level) => sum + (level.brickTotal ?? 0), 0);
 }
 
 async function fetchJSON(url) {
@@ -461,6 +472,38 @@ async function fetchJSON(url) {
     throw new Error(`HTTP ${response.status} while loading ${requestURL}`);
   }
   return response.json();
+}
+
+async function fetchManifestJSON(dataset, manifestURL) {
+  if (dataset.metadataLZ4) {
+    try {
+      return await fetchLZ4JSON(new URL(`./web-data/${dataset.metadataLZ4}`, window.location.href));
+    } catch (error) {
+      console.warn("Falling back to uncompressed BorgVR manifest", error);
+    }
+  }
+  return fetchJSON(manifestURL);
+}
+
+async function fetchLZ4JSON(url) {
+  const requestURL = new URL(url, window.location.href);
+  requestURL.searchParams.set("cacheBust", String(Date.now()));
+  const response = await fetch(requestURL, {
+    cache: "no-store",
+    credentials: "same-origin"
+  });
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status} while loading ${requestURL}`);
+  }
+
+  const expectedLength = Number(response.headers.get("X-BorgVR-Uncompressed-Length"));
+  if (!Number.isFinite(expectedLength) || expectedLength <= 0) {
+    throw new Error("Compressed manifest is missing its uncompressed length.");
+  }
+
+  const compressed = new Uint8Array(await response.arrayBuffer());
+  const jsonBytes = decodeAppleLZ4(compressed, expectedLength);
+  return JSON.parse(new TextDecoder().decode(jsonBytes));
 }
 
 function variantLabel(variant) {

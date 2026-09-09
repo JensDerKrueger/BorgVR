@@ -4,6 +4,13 @@
 #include <cstdint>
 
 namespace lz4 {
+// Maximum destination size needed by compressBlock.
+size_t compressBlockBound(size_t srcSize);
+
+// Compress a raw LZ4 *block* (not the framed format).
+// Returns the number of bytes written to dst, or 0 on error.
+size_t compressBlock(const uint8_t* src, size_t srcSize, uint8_t* dst, size_t dstCapacity);
+
 // Decompress a raw LZ4 *block* (not the framed format).
 // Returns the number of bytes written to dst, or 0 on error.
 size_t decompressBlock(const uint8_t* src, size_t srcSize, uint8_t* dst, size_t dstCapacity);

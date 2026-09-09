@@ -1,6 +1,7 @@
 import Foundation
 import Network
 import Security
+import Compression
 
 final class HTTPWebServer {
   private let port: NWEndpoint.Port
@@ -240,7 +241,11 @@ final class HTTPWebServer {
       let datasetID = String(parts[0])
       let tail = String(parts[1])
       if tail == "dataset.json" {
-        return try datasetManifestResponse(datasetID: datasetID)
+        return try datasetManifestResponse(datasetID: datasetID, compressed: false)
+      }
+
+      if tail == "dataset.json.lz4" {
+        return try datasetManifestResponse(datasetID: datasetID, compressed: true)
       }
 
       let bricksPrefix = "bricks/"
@@ -263,6 +268,7 @@ final class HTTPWebServer {
         name: name,
         description: dataset.datasetDescription.isEmpty ? name : dataset.datasetDescription,
         metadata: "datasets/\(dataset.id)/dataset.json",
+        metadataLZ4: "datasets/\(dataset.id)/dataset.json.lz4",
         variant: "server"
       )
     }
@@ -276,7 +282,7 @@ final class HTTPWebServer {
     return jsonResponse(catalog)
   }
 
-  private func datasetManifestResponse(datasetID: String) throws -> HTTPResponse {
+  private func datasetManifestResponse(datasetID: String, compressed: Bool) throws -> HTTPResponse {
     guard let info = datasetServer.findDatasetById(datasetID) else {
       throw HTTPWebServerError.notFound
     }
@@ -293,16 +299,8 @@ final class HTTPWebServer {
       )
     }
 
-    let bricks = metadata.brickMetadata.enumerated().map { index, brick in
-      let (levelIndex, coord) = brickCoordinate(index: index, levels: metadata.levelMetadata)
-      return WebDatasetBrick(
-        index: index,
-        level: levelIndex,
-        coord: coord,
-        min: brick.minValue,
-        max: brick.maxValue,
-        byteLength: brick.size
-      )
+    let brickValues = metadata.brickMetadata.flatMap { brick in
+      [brick.minValue, brick.maxValue, brick.size]
     }
 
     let manifest = WebDatasetManifest(
@@ -332,9 +330,13 @@ final class HTTPWebServer {
         supportedCompressions: ["none", "lz4"]
       ),
       levels: levels,
-      bricks: bricks
+      brickMetadata: WebDatasetBrickMetadata(
+        format: "min-max-byteLength-v1",
+        fields: ["min", "max", "byteLength"],
+        values: brickValues
+      )
     )
-    return jsonResponse(manifest)
+    return compressed ? compressedJSONResponse(manifest) : jsonResponse(manifest)
   }
 
   private func brickResponse(datasetID: String, brickName: String) throws -> HTTPResponse {
@@ -383,6 +385,94 @@ final class HTTPWebServer {
     return HTTPResponse(status: 200, reason: "OK", contentType: "application/json; charset=utf-8", body: body)
   }
 
+  private func compressedJSONResponse<T: Encodable>(_ value: T) -> HTTPResponse {
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+    let json = (try? encoder.encode(value)) ?? Data("{}".utf8)
+    guard let compressed = appleLZ4Stream(for: json) else {
+      return HTTPResponse(
+        status: 500,
+        reason: "Internal Server Error",
+        contentType: "text/plain; charset=utf-8",
+        body: Data("Unable to compress dataset metadata.\n".utf8)
+      )
+    }
+
+    return HTTPResponse(
+      status: 200,
+      reason: "OK",
+      contentType: "application/octet-stream",
+      body: compressed,
+      headers: [
+        ("X-BorgVR-Uncompressed-Length", "\(json.count)"),
+        ("X-BorgVR-Content", "dataset-manifest-lz4")
+      ]
+    )
+  }
+
+  private func appleLZ4Stream(for data: Data) -> Data? {
+    let blockSize = 64 * 1024
+    var stream = Data()
+    var offset = 0
+
+    while offset < data.count {
+      let count = min(blockSize, data.count - offset)
+      guard let compressedBlock = lz4Block(data.subdata(in: offset..<(offset + count))) else {
+        return nil
+      }
+
+      stream.append(contentsOf: [0x62, 0x76, 0x34, 0x31])
+      stream.appendLittleEndianUInt32(UInt32(count))
+      stream.appendLittleEndianUInt32(UInt32(compressedBlock.count))
+      stream.append(compressedBlock)
+      offset += count
+    }
+
+    stream.append(contentsOf: [0x62, 0x76, 0x34, 0x24])
+    return stream
+  }
+
+  private func lz4Block(_ data: Data) -> Data? {
+    let bound = data.count + data.count / 255 + 16
+    var compressed = Data(count: bound)
+    let compressedSize = data.withUnsafeBytes { source in
+      compressed.withUnsafeMutableBytes { destination in
+        compression_encode_buffer(
+          destination.baseAddress!.assumingMemoryBound(to: UInt8.self),
+          bound,
+          source.baseAddress!.assumingMemoryBound(to: UInt8.self),
+          data.count,
+          nil,
+          COMPRESSION_LZ4
+        )
+      }
+    }
+
+    guard compressedSize > 0 else {
+      return literalLZ4Block(for: data)
+    }
+    compressed.removeSubrange(compressedSize..<compressed.count)
+    return compressed
+  }
+
+  private func literalLZ4Block(for data: Data) -> Data {
+    var block = Data()
+    let literalLength = data.count
+    if literalLength < 15 {
+      block.append(UInt8(literalLength << 4))
+    } else {
+      block.append(0xf0)
+      var remaining = literalLength - 15
+      while remaining >= 255 {
+        block.append(255)
+        remaining -= 255
+      }
+      block.append(UInt8(remaining))
+    }
+    block.append(data)
+    return block
+  }
+
   private func sendError(
     _ status: Int,
     reason: String,
@@ -424,6 +514,7 @@ final class HTTPWebServer {
       header += "Keep-Alive: timeout=15, max=1000\r\n"
     }
     header += "Access-Control-Allow-Origin: *\r\n"
+    header += "Access-Control-Expose-Headers: X-BorgVR-Uncompressed-Length\r\n"
     for (name, value) in response.headers {
       header += "\(name): \(value)\r\n"
     }
@@ -451,23 +542,6 @@ final class HTTPWebServer {
           self.receiveRequest(on: connection, data: Data())
         }
       })
-  }
-
-  private func brickCoordinate(index: Int, levels: [LevelMetadata]) -> (level: Int, coord: [Int]) {
-    for (levelIndex, level) in levels.enumerated() {
-      let total = level.totalBricks.x * level.totalBricks.y * level.totalBricks.z
-      guard index >= level.prevBricks, index < level.prevBricks + total else {
-        continue
-      }
-
-      let localIndex = index - level.prevBricks
-      let x = localIndex % level.totalBricks.x
-      let y = (localIndex / level.totalBricks.x) % level.totalBricks.y
-      let z = localIndex / (level.totalBricks.x * level.totalBricks.y)
-      return (levelIndex, [x, y, z])
-    }
-
-    return (0, [0, 0, 0])
   }
 
   private func displayName(for dataset: DatasetInfo) -> String {
@@ -589,6 +663,7 @@ private struct WebCatalogDataset: Encodable {
   let name: String
   let description: String
   let metadata: String
+  let metadataLZ4: String
   let variant: String
 }
 
@@ -603,7 +678,7 @@ private struct WebDatasetManifest: Encodable {
   let volume: WebDatasetVolume
   let bricking: WebDatasetBricking
   let levels: [WebDatasetLevel]
-  let bricks: [WebDatasetBrick]
+  let brickMetadata: WebDatasetBrickMetadata
 }
 
 private struct WebDatasetVolume: Encodable {
@@ -634,13 +709,19 @@ private struct WebDatasetLevel: Encodable {
   let firstBrick: Int
 }
 
-private struct WebDatasetBrick: Encodable {
-  let index: Int
-  let level: Int
-  let coord: [Int]
-  let min: Int
-  let max: Int
-  let byteLength: Int
+private struct WebDatasetBrickMetadata: Encodable {
+  let format: String
+  let fields: [String]
+  let values: [Int]
+}
+
+private extension Data {
+  mutating func appendLittleEndianUInt32(_ value: UInt32) {
+    append(UInt8(value & 0xff))
+    append(UInt8((value >> 8) & 0xff))
+    append(UInt8((value >> 16) & 0xff))
+    append(UInt8((value >> 24) & 0xff))
+  }
 }
 
 /*
