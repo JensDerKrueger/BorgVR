@@ -1,4 +1,4 @@
-import { BrickAtlas } from "./brick-atlas.js?v=20260909-brick-batch";
+import { BrickAtlas } from "./brick-atlas.js?v=20260911-worker";
 import { createDefaultTransferFunction } from "./transfer-function.js?v=20260907-range-fix";
 
 const shaderSource = `

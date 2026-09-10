@@ -1,5 +1,5 @@
-import { CoordinateCubeRenderer } from "./cube-renderer.js?v=20260909-brick-batch";
-import { decodeAppleLZ4 } from "./brick-atlas.js?v=20260909-brick-batch";
+import { CoordinateCubeRenderer } from "./cube-renderer.js?v=20260911-worker";
+import { decodeAppleLZ4 } from "./lz4.js?v=20260911-worker";
 
 const catalogStatus = document.querySelector("#catalog-status");
 const datasetList = document.querySelector("#dataset-list");

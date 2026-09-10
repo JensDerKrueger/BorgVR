@@ -1,3 +1,5 @@
+import { decodeAppleLZ4 } from "./lz4.js?v=20260911-worker";
+
 export const BI_MISSING = 0;
 const BI_CHILD_EMPTY = 1;
 const BI_EMPTY = 2;
@@ -17,6 +19,9 @@ export class BrickAtlas {
     this.generation = 0;
     this.profilingEnabled = false;
     this.profile = createAtlasProfile();
+    this.worker = null;
+    this.workerRequests = new Map();
+    this.nextWorkerRequestID = 1;
     this.resetState();
   }
 
@@ -106,6 +111,8 @@ export class BrickAtlas {
     this.device.queue.writeBuffer(this.brickMetaBuffer, 0, this.brickMeta);
 
     this.freeSlots = Array.from({ length: this.slotCapacity }, (_, index) => index);
+    this.createWorker();
+    this.configureWorker();
     this.statusCallback?.(
       `Atlas ready: ${this.textureSize}³ ${this.textureFormat} voxels, ${this.slotCapacity} slots for ${this.totalBrickCount} bricks`
     );
@@ -154,8 +161,102 @@ export class BrickAtlas {
   }
 
   destroy() {
+    this.destroyWorker();
     this.texture?.destroy();
     this.brickMetaBuffer?.destroy();
+  }
+
+  createWorker() {
+    this.destroyWorker();
+    if (typeof Worker === "undefined") {
+      return;
+    }
+    try {
+      this.worker = new Worker(new URL("./brick-worker.js?v=20260911-worker", import.meta.url), { type: "module" });
+      this.worker.onmessage = (event) => this.handleWorkerMessage(event.data);
+      this.worker.onerror = (event) => {
+        for (const request of this.workerRequests.values()) {
+          request.reject(new Error(event.message || "Brick worker failed."));
+        }
+        this.workerRequests.clear();
+        this.worker?.terminate();
+        this.worker = null;
+      };
+    } catch {
+      this.worker = null;
+    }
+  }
+
+  configureWorker() {
+    if (!this.worker) {
+      return;
+    }
+    this.worker.postMessage({
+      type: "configure",
+      config: {
+        baseURL: this.baseURL,
+        bricks: this.manifest.bricks.map((brick) => ({
+          index: brick.index,
+          url: brick.url ?? null,
+          compression: brick.compression ?? null,
+          uncompressedByteLength: brick.uncompressedByteLength ?? null
+        })),
+        brickSize: this.brickSize,
+        bytesPerComponent: this.bytesPerComponent,
+        bytesPerVoxel: this.bytesPerVoxel,
+        textureBytesPerVoxel: this.textureBytesPerVoxel,
+        dataRangeMax: this.dataRangeMax,
+        uncompressedBrickByteLength: this.uncompressedBrickByteLength,
+        datasetCompression: this.datasetCompression
+      }
+    });
+  }
+
+  destroyWorker() {
+    if (this.worker) {
+      this.worker.terminate();
+      this.worker = null;
+    }
+    if (this.workerRequests) {
+      for (const request of this.workerRequests.values()) {
+        request.reject(new Error("Brick worker was reset."));
+      }
+      this.workerRequests.clear();
+    }
+  }
+
+  handleWorkerMessage(message) {
+    if (!message || !this.workerRequests.has(message.requestID)) {
+      return;
+    }
+    const request = this.workerRequests.get(message.requestID);
+    this.workerRequests.delete(message.requestID);
+    if (message.type === "batchLoaded") {
+      this.applyWorkerProfile(message.profile);
+      request.resolve(message.bricks ?? []);
+    } else if (message.type === "batchFailed") {
+      const error = new Error(message.error ?? "Brick worker batch failed.");
+      if (message.httpStatus) {
+        error.httpStatus = message.httpStatus;
+      }
+      request.reject(error);
+    }
+  }
+
+  requestWorkerBatch(brickIDs, generation) {
+    if (!this.worker) {
+      return null;
+    }
+    const requestID = this.nextWorkerRequestID++;
+    return new Promise((resolve, reject) => {
+      this.workerRequests.set(requestID, { resolve, reject });
+      this.worker.postMessage({
+        type: "loadBatch",
+        requestID,
+        generation,
+        brickIDs
+      });
+    });
   }
 
   beginFrame(frameIndex) {
@@ -335,15 +436,10 @@ export class BrickAtlas {
   }
 
   async loadBrickBatch(brickIDs, generation = this.generation) {
-    if (brickIDs.length === 1) {
-      await this.loadBrick(brickIDs[0], generation);
-      return;
-    }
-
     const batchStart = now();
-    let brickDataByID;
+    let preparedBricks;
     try {
-      brickDataByID = await this.fetchBrickBatchData(brickIDs);
+      preparedBricks = await this.fetchPreparedBrickBatch(brickIDs, generation);
     } catch (error) {
       if (error?.httpStatus !== 404) {
         throw error;
@@ -356,9 +452,9 @@ export class BrickAtlas {
       return;
     }
 
-    for (const brickID of brickIDs) {
-      const brickData = brickDataByID.get(brickID);
-      if (!brickData) {
+    for (const preparedBrick of preparedBricks) {
+      const brickID = preparedBrick.brickID;
+      if (brickID < 0 || brickID >= this.totalBrickCount) {
         continue;
       }
       if (this.brickMeta[brickID] === BI_EMPTY || this.brickMeta[brickID] === BI_CHILD_EMPTY) {
@@ -371,7 +467,7 @@ export class BrickAtlas {
       }
 
       try {
-        this.uploadBrick(slot, brickData);
+        this.uploadPreparedBrick(slot, preparedBrick);
       } catch (error) {
         this.freeSlots.unshift(slot);
         throw error;
@@ -398,6 +494,29 @@ export class BrickAtlas {
     if (this.loadedBricks.size === 1 || this.loadedBricks.size % 16 === 0) {
       this.statusCallback?.(`Atlas loaded ${this.loadedBricks.size}/${this.slotCapacity} slots`);
     }
+  }
+
+  async fetchPreparedBrickBatch(brickIDs, generation) {
+    const workerResult = this.requestWorkerBatch(brickIDs, generation);
+    if (workerResult) {
+      return workerResult;
+    }
+
+    const brickDataByID = brickIDs.length === 1
+      ? new Map([[brickIDs[0], await this.fetchBrickData(this.manifest.bricks[brickIDs[0]])]])
+      : await this.fetchBrickBatchData(brickIDs);
+    const preparedBricks = [];
+    for (const brickID of brickIDs) {
+      const brickData = brickDataByID.get(brickID);
+      if (!brickData) {
+        continue;
+      }
+      preparedBricks.push({
+        brickID,
+        ...this.prepareBrickUploadData(brickData)
+      });
+    }
+    return preparedBricks;
   }
 
   async loadBrick(brickID, generation = this.generation) {
@@ -610,8 +729,11 @@ export class BrickAtlas {
   }
 
   uploadBrick(slot, brickData) {
+    this.uploadPreparedBrick(slot, this.prepareBrickUploadData(brickData));
+  }
+
+  prepareBrickUploadData(brickData) {
     const prepareStart = now();
-    const origin = this.slotOrigin(slot);
     const bytesPerRow = align(this.brickSize * this.textureBytesPerVoxel, 256);
     const rowsPerImage = this.brickSize;
     const paddedData = new Uint8Array(bytesPerRow * rowsPerImage * this.brickSize);
@@ -635,12 +757,16 @@ export class BrickAtlas {
     }
     this.recordProfile("uploadPrepareMs", now() - prepareStart);
     this.profile.uploadedBytes += paddedData.byteLength;
+    return { data: paddedData, bytesPerRow, rowsPerImage };
+  }
 
+  uploadPreparedBrick(slot, preparedBrick) {
+    const origin = this.slotOrigin(slot);
     const uploadStart = now();
     this.device.queue.writeTexture(
       { texture: this.texture, origin },
-      paddedData,
-      { bytesPerRow, rowsPerImage },
+      preparedBrick.data,
+      { bytesPerRow: preparedBrick.bytesPerRow, rowsPerImage: preparedBrick.rowsPerImage },
       [this.brickSize, this.brickSize, this.brickSize]
     );
     this.recordProfile("uploadSubmitMs", now() - uploadStart);
@@ -660,6 +786,15 @@ export class BrickAtlas {
   recordProfile(key, value) {
     if (this.profilingEnabled) {
       this.profile[key] += value;
+    }
+  }
+
+  applyWorkerProfile(profile) {
+    if (!profile || !this.profilingEnabled) {
+      return;
+    }
+    for (const key of Object.keys(this.profile)) {
+      this.profile[key] += profile[key] ?? 0;
     }
   }
 }
@@ -807,166 +942,6 @@ function buildChildTable(levels, totalBrickCount) {
   }
 
   return childTable;
-}
-
-export function decodeAppleLZ4(data, expectedLength) {
-  if (data.byteLength >= 8 &&
-      data[0] === 0x62 &&
-      data[1] === 0x76 &&
-      data[2] === 0x34 &&
-      (data[3] === 0x31 || data[3] === 0x2d)) {
-    return decodeAppleLZ4Stream(data, expectedLength);
-  }
-
-  return decodeLZ4Block(data, expectedLength);
-}
-
-function decodeAppleLZ4Stream(data, expectedLength) {
-  const output = new Uint8Array(expectedLength);
-  let sourceOffset = 0;
-  let outputOffset = 0;
-
-  while (sourceOffset < data.byteLength) {
-    if (sourceOffset + 4 <= data.byteLength &&
-        data[sourceOffset] === 0x62 &&
-        data[sourceOffset + 1] === 0x76 &&
-        data[sourceOffset + 2] === 0x34 &&
-        data[sourceOffset + 3] === 0x24) {
-      sourceOffset += 4;
-      break;
-    }
-
-    if (sourceOffset + 8 > data.byteLength ||
-        data[sourceOffset] !== 0x62 ||
-        data[sourceOffset + 1] !== 0x76 ||
-        data[sourceOffset + 2] !== 0x34) {
-      throw new Error("Invalid Apple LZ4 block header");
-    }
-
-    const blockType = data[sourceOffset + 3];
-    const uncompressedLength = readUInt32LE(data, sourceOffset + 4);
-    if (outputOffset + uncompressedLength > expectedLength) {
-      throw new Error(`Apple LZ4 stream exceeds expected output size ${expectedLength}`);
-    }
-
-    if (blockType === 0x31) {
-      if (sourceOffset + 12 > data.byteLength) {
-        throw new Error("Apple LZ4 compressed block header is incomplete");
-      }
-      const compressedLength = readUInt32LE(data, sourceOffset + 8);
-      sourceOffset += 12;
-
-      if (sourceOffset + compressedLength > data.byteLength) {
-        throw new Error("Apple LZ4 compressed block exceeds source size");
-      }
-
-      const decodedLength = decodeLZ4BlockInto(
-        data.subarray(sourceOffset, sourceOffset + compressedLength),
-        output,
-        outputOffset,
-        uncompressedLength
-      );
-      outputOffset += decodedLength;
-      sourceOffset += compressedLength;
-    } else if (blockType === 0x2d) {
-      sourceOffset += 8;
-
-      if (sourceOffset + uncompressedLength > data.byteLength) {
-        throw new Error("Apple LZ4 raw block exceeds source size");
-      }
-
-      output.set(data.subarray(sourceOffset, sourceOffset + uncompressedLength), outputOffset);
-      outputOffset += uncompressedLength;
-      sourceOffset += uncompressedLength;
-    } else {
-      throw new Error("Invalid Apple LZ4 block type");
-    }
-  }
-
-  if (outputOffset !== expectedLength) {
-    throw new Error(`Apple LZ4 stream decoded ${outputOffset} bytes, expected ${expectedLength}`);
-  }
-  return output;
-}
-
-function decodeLZ4Block(source, expectedLength) {
-  const output = new Uint8Array(expectedLength);
-  decodeLZ4BlockInto(source, output, 0, expectedLength);
-  return output;
-}
-
-function decodeLZ4BlockInto(source, output, startOffset, expectedLength) {
-  let inputOffset = 0;
-  let outputOffset = startOffset;
-  const outputEnd = startOffset + expectedLength;
-
-  const readLength = (initialLength) => {
-    let length = initialLength;
-    if (initialLength === 15) {
-      while (inputOffset < source.byteLength) {
-        const value = source[inputOffset];
-        inputOffset += 1;
-        length += value;
-        if (value !== 255) {
-          break;
-        }
-      }
-    }
-    return length;
-  };
-
-  while (inputOffset < source.byteLength && outputOffset < outputEnd) {
-    const token = source[inputOffset];
-    inputOffset += 1;
-
-    const literalLength = readLength(token >> 4);
-    if (inputOffset + literalLength > source.byteLength) {
-      throw new Error("LZ4 literal run exceeds source size");
-    }
-    if (outputOffset + literalLength > outputEnd) {
-      throw new Error("LZ4 literal run exceeds output size");
-    }
-    output.set(source.subarray(inputOffset, inputOffset + literalLength), outputOffset);
-    inputOffset += literalLength;
-    outputOffset += literalLength;
-
-    if (inputOffset >= source.byteLength || outputOffset >= outputEnd) {
-      break;
-    }
-    if (inputOffset + 2 > source.byteLength) {
-      throw new Error("LZ4 block ends before match offset");
-    }
-
-    const offset = source[inputOffset] | (source[inputOffset + 1] << 8);
-    inputOffset += 2;
-    if (offset === 0 || offset > outputOffset) {
-      throw new Error("LZ4 match offset is invalid");
-    }
-
-    const matchLength = readLength(token & 0x0f) + 4;
-    if (outputOffset + matchLength > outputEnd) {
-      throw new Error("LZ4 match exceeds output size");
-    }
-
-    let matchOffset = outputOffset - offset;
-    for (let index = 0; index < matchLength; index += 1) {
-      output[outputOffset] = output[matchOffset];
-      outputOffset += 1;
-      matchOffset += 1;
-    }
-  }
-
-  if (outputOffset !== outputEnd) {
-    throw new Error(`LZ4 decoded ${outputOffset - startOffset} bytes, expected ${expectedLength}`);
-  }
-  return expectedLength;
-}
-
-function readUInt32LE(data, offset) {
-  return (data[offset] |
-    (data[offset + 1] << 8) |
-    (data[offset + 2] << 16) |
-    (data[offset + 3] << 24)) >>> 0;
 }
 
 function writeUInt16LE(data, offset, value) {

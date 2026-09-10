@@ -109,7 +109,7 @@ final class HTTPWebServer {
     guard let address = IPv4Address("127.0.0.1") else {
       throw HTTPWebServerError.localhostBindingFailed
     }
-    parameters.requiredLocalEndpoint = .hostPort(host: .ipv4(address), port: port)
+    parameters.requiredLocalEndpoint = .hostPort(host: .ipv4(address), port: .any)
   }
 
   private func handleNewConnection(_ connection: NWConnection) {
