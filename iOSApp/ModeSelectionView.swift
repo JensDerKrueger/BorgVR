@@ -2,6 +2,8 @@ import SwiftUI
 import UIKit
 
 struct ModeSelectionView: View {
+  @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+  @Environment(\.verticalSizeClass) private var verticalSizeClass
   @EnvironmentObject private var appModel: AppModel
   @EnvironmentObject private var appSettings: AppSettings
   @EnvironmentObject private var serverController: BackgroundServerController
@@ -10,15 +12,18 @@ struct ModeSelectionView: View {
   var body: some View {
     NavigationStack {
       GeometryReader { proxy in
+        let layout = AdaptiveLayout(
+          size: proxy.size,
+          safeAreaInsets: proxy.safeAreaInsets,
+          horizontalSizeClass: horizontalSizeClass,
+          verticalSizeClass: verticalSizeClass
+        )
+
         ZStack {
           Color(.systemBackground)
             .ignoresSafeArea()
 
-          if proxy.size.width > proxy.size.height {
-            landscapeContent(size: proxy.size)
-          } else {
-            portraitContent
-          }
+          content(for: layout)
         }
       }
       .toolbar(.hidden, for: .navigationBar)
@@ -26,6 +31,18 @@ struct ModeSelectionView: View {
     .frame(maxWidth: .infinity, maxHeight: .infinity)
     .sheet(isPresented: $showingAbout) {
       iOSAboutView()
+    }
+  }
+
+  @ViewBuilder
+  private func content(for layout: AdaptiveLayout) -> some View {
+    switch layout.modeSelectionStyle {
+      case .portrait:
+        portraitContent
+      case .compactLandscape:
+        compactLandscapeContent
+      case .regularLandscape:
+        regularLandscapeContent
     }
   }
 
@@ -47,16 +64,6 @@ struct ModeSelectionView: View {
       .frame(maxWidth: .infinity)
       .padding(.horizontal, 24)
       .padding(.vertical, 24)
-    }
-  }
-
-  private func landscapeContent(size: CGSize) -> some View {
-    Group {
-      if size.width >= 1000 {
-        regularLandscapeContent
-      } else {
-        compactLandscapeContent
-      }
     }
   }
 

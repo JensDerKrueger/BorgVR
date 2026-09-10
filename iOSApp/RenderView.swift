@@ -2,6 +2,8 @@ import SwiftUI
 import simd
 
 struct RenderView: View {
+  @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+  @Environment(\.verticalSizeClass) private var verticalSizeClass
   @EnvironmentObject private var appModel: AppModel
   @EnvironmentObject private var renderingParameters: RenderingParameters
   @EnvironmentObject var appSettings: AppSettings
@@ -28,6 +30,28 @@ struct RenderView: View {
   private let maximumModelScale: Float = 20
 
   var body: some View {
+    GeometryReader { proxy in
+      let layout = AdaptiveLayout(
+        size: proxy.size,
+        safeAreaInsets: proxy.safeAreaInsets,
+        horizontalSizeClass: horizontalSizeClass,
+        verticalSizeClass: verticalSizeClass
+      )
+
+      renderContent(for: layout)
+    }
+    .sheet(isPresented: $showLog) {
+      LoggerView(logger: appModel.logger)
+    }
+    .sheet(isPresented: $showDatasetInfo) {
+      DatasetInfoView(dataset: appModel.activeDataset) {
+        showDatasetInfo = false
+      }
+    }
+  }
+
+  @ViewBuilder
+  private func renderContent(for layout: AdaptiveLayout) -> some View {
     ZStack(alignment: .top) {
       renderBackground
         .ignoresSafeArea()
@@ -38,118 +62,9 @@ struct RenderView: View {
         .simultaneousGesture(zoomGesture)
         .simultaneousGesture(doubleTapInteractionGesture)
 
-      if showRenderControls {
-        VStack(spacing: 8) {
-          HStack {
-            Button {
-              closeDataset()
-            } label: {
-              Image(systemName: "xmark")
-            }
-            .accessibilityLabel(String(localized: "Close"))
-            .buttonStyle(.borderedProminent)
-
-            Spacer()
-
-            Text(appModel.activeDataset?.description ?? "BorgVR Mobile")
-              .font(.headline)
-              .lineLimit(1)
-
-            Spacer()
-
-            ShareLink(
-              item: BorgVRSharePlayActivity(),
-              preview: SharePreview(String(localized: "BorgVR Mobile Live Collaboration"))
-            ) {
-              Image(systemName: "shareplay")
-            }
-            .simultaneousGesture(
-              TapGesture().onEnded {
-                sharePlay.markLocalActivityStarter()
-              }
-            )
-            .accessibilityLabel(
-              sharePlay.isInSession
-                ? String(localized: "SharePlay active")
-                : String(localized: "Start SharePlay")
-            )
-            .buttonStyle(.bordered)
-
-            Button {
-              showDatasetInfo.toggle()
-            } label: {
-              Image(systemName: "info.circle")
-            }
-            .accessibilityLabel("dataset_info_button")
-            .help("dataset_info_button_help")
-            .buttonStyle(.bordered)
-
-            Button {
-              showLog.toggle()
-            } label: {
-              Image(systemName: "text.alignleft")
-            }
-            .accessibilityLabel("Log")
-            .buttonStyle(.bordered)
-
-            visibilityButton
-          }
-
-          Picker("Render Mode", selection: $renderingParameters.renderMode) {
-            ForEach(RenderMode.allCases) { mode in
-              Text(mode.description).tag(mode)
-            }
-          }
-          .pickerStyle(.segmented)
-          .onChange(of: renderingParameters.renderMode) {
-            synchronizeState()
-          }
-
-          Picker("Interaction", selection: $appModel.interactionMode) {
-            Text("Model").tag(AppModel.InteractionMode.model)
-            Text("Clipping").tag(AppModel.InteractionMode.clipping)
-            Text("Transfer").tag(AppModel.InteractionMode.transferEditing)
-          }
-          .pickerStyle(.segmented)
-
-          HStack {
-            Toggle("Bricks", isOn: $renderingParameters.brickVis)
-              .toggleStyle(.button)
-              .onChange(of: renderingParameters.brickVis) {
-                synchronizeState()
-              }
-
-            Button {
-              renderingParameters.reset()
-              synchronizeFullState()
-              synchronizeTransform()
-              sharePlay.flushSynchronization()
-            } label: {
-              Label("Reset", systemImage: "arrow.counterclockwise")
-            }
-
-            Button {
-              if renderingParameters.renderMode == .isoValue {
-                showTransferEditor = false
-                showIsoEditor.toggle()
-              } else {
-                showIsoEditor = false
-                showTransferEditor.toggle()
-              }
-            } label: {
-              Label("Editor", systemImage: "slider.horizontal.3")
-            }
-          }
-        }
-        .padding(12)
-        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 8))
-        .padding()
-      } else {
-        HStack {
-          Spacer()
-          visibilityButton
-        }
-        .padding()
+      switch layout.renderControlPlacement {
+        case .overlayTop:
+          topOverlayControls
       }
 
       if showIsoEditor && renderingParameters.renderMode == .isoValue {
@@ -181,13 +96,122 @@ struct RenderView: View {
         .transition(.move(edge: .bottom).combined(with: .opacity))
       }
     }
-    .sheet(isPresented: $showLog) {
-      LoggerView(logger: appModel.logger)
-    }
-    .sheet(isPresented: $showDatasetInfo) {
-      DatasetInfoView(dataset: appModel.activeDataset) {
-        showDatasetInfo = false
+  }
+
+  @ViewBuilder
+  private var topOverlayControls: some View {
+    if showRenderControls {
+      VStack(spacing: 8) {
+        HStack {
+          Button {
+            closeDataset()
+          } label: {
+            Image(systemName: "xmark")
+          }
+          .accessibilityLabel(String(localized: "Close"))
+          .buttonStyle(.borderedProminent)
+
+          Spacer()
+
+          Text(appModel.activeDataset?.description ?? "BorgVR Mobile")
+            .font(.headline)
+            .lineLimit(1)
+
+          Spacer()
+
+          ShareLink(
+            item: BorgVRSharePlayActivity(),
+            preview: SharePreview(String(localized: "BorgVR Mobile Live Collaboration"))
+          ) {
+            Image(systemName: "shareplay")
+          }
+          .simultaneousGesture(
+            TapGesture().onEnded {
+              sharePlay.markLocalActivityStarter()
+            }
+          )
+          .accessibilityLabel(
+            sharePlay.isInSession
+              ? String(localized: "SharePlay active")
+              : String(localized: "Start SharePlay")
+          )
+          .buttonStyle(.bordered)
+
+          Button {
+            showDatasetInfo.toggle()
+          } label: {
+            Image(systemName: "info.circle")
+          }
+          .accessibilityLabel("dataset_info_button")
+          .help("dataset_info_button_help")
+          .buttonStyle(.bordered)
+
+          Button {
+            showLog.toggle()
+          } label: {
+            Image(systemName: "text.alignleft")
+          }
+          .accessibilityLabel("Log")
+          .buttonStyle(.bordered)
+
+          visibilityButton
+        }
+
+        Picker("Render Mode", selection: $renderingParameters.renderMode) {
+          ForEach(RenderMode.allCases) { mode in
+            Text(mode.description).tag(mode)
+          }
+        }
+        .pickerStyle(.segmented)
+        .onChange(of: renderingParameters.renderMode) {
+          synchronizeState()
+        }
+
+        Picker("Interaction", selection: $appModel.interactionMode) {
+          Text("Model").tag(AppModel.InteractionMode.model)
+          Text("Clipping").tag(AppModel.InteractionMode.clipping)
+          Text("Transfer").tag(AppModel.InteractionMode.transferEditing)
+        }
+        .pickerStyle(.segmented)
+
+        HStack {
+          Toggle("Bricks", isOn: $renderingParameters.brickVis)
+            .toggleStyle(.button)
+            .onChange(of: renderingParameters.brickVis) {
+              synchronizeState()
+            }
+
+          Button {
+            renderingParameters.reset()
+            synchronizeFullState()
+            synchronizeTransform()
+            sharePlay.flushSynchronization()
+          } label: {
+            Label("Reset", systemImage: "arrow.counterclockwise")
+          }
+
+          Button {
+            if renderingParameters.renderMode == .isoValue {
+              showTransferEditor = false
+              showIsoEditor.toggle()
+            } else {
+              showIsoEditor = false
+              showTransferEditor.toggle()
+            }
+          } label: {
+            Label("Editor", systemImage: "slider.horizontal.3")
+          }
+        }
       }
+      .padding(12)
+      .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 8))
+      .padding()
+    } else {
+      HStack {
+        Spacer()
+        visibilityButton
+      }
+      .padding()
     }
   }
 
