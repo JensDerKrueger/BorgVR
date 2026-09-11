@@ -97,7 +97,9 @@ async function main() {
 async function loadTransferFunctionCatalog() {
   try {
     const catalog = await fetchJSON("./web-data/transfer-functions.json", "transfer functions");
-    transferFunctionCatalog = Array.isArray(catalog.transferFunctions) ? catalog.transferFunctions : [];
+    transferFunctionCatalog = groupTransferFunctionCatalog(
+      Array.isArray(catalog.transferFunctions) ? catalog.transferFunctions : []
+    );
   } catch {
     transferFunctionCatalog = [];
   }
@@ -136,7 +138,37 @@ async function loadCatalogTransferFunction(id) {
 }
 
 function displayTransferFunctionName(entry) {
+  if (entry.displayName) {
+    return entry.displayName;
+  }
   return entry.description?.trim() || entry.id;
+}
+
+function groupTransferFunctionCatalog(entries) {
+  const groups = new Map();
+  for (const entry of entries) {
+    if (!entry?.id) {
+      continue;
+    }
+
+    const name = displayTransferFunctionName(entry);
+    let group = groups.get(entry.id);
+    if (!group) {
+      group = {
+        ...entry,
+        displayNames: [],
+      };
+      groups.set(entry.id, group);
+    }
+    if (!group.displayNames.includes(name)) {
+      group.displayNames.push(name);
+    }
+  }
+
+  return Array.from(groups.values()).map((group) => ({
+    ...group,
+    displayName: group.displayNames.join(" / "),
+  }));
 }
 
 function datasetButton(dataset) {
