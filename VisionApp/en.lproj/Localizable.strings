@@ -261,8 +261,6 @@
 /* Private application: editor button title format */
 "private_editor_title_format" = "%@ Editor";
 
-/* Private application: slicing presets button */
-
 /* Private application: reset section */
 "private_reset_section_title" = "Reset";
 "private_reset_model_button" = "Model";

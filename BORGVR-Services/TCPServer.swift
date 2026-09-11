@@ -151,6 +151,19 @@ class TCPServer {
     return snapshot
   }
 
+  func updateCatalog(
+    datasets: [DatasetInfo],
+    transferFunctions: [TransferFunctionInfo]
+  ) {
+    stateLock.lock()
+    self.datasets = datasets
+    self.transferFunctions = transferFunctions
+    stateLock.unlock()
+    logger?.info(
+      "Updated server catalog: \(datasets.count) datasets, \(transferFunctions.count) transfer functions."
+    )
+  }
+
   func transferFunctionData(id: String) -> Data? {
     stateLock.lock()
     let transferFunction = transferFunctions.first(where: { $0.id == id })

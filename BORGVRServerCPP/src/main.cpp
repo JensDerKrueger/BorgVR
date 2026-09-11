@@ -2,6 +2,7 @@
 #include "TCPServer.h"
 #include "BORGVRMetaData.h"
 #include "Logger.h"
+#include "ServerSync.h"
 #include "Socket.h"
 
 #include <array>
@@ -62,10 +63,12 @@ static void printUsage(const char* filename) {
   std::cout << "Usage:\n  " << basenameOf(filename)
             << " port maxBricksPerGetRequest datasetDirectory [scanIntervalSeconds]\n"
             << "    [--password secret]\n"
-            << "    [--web-port port]\n\n"
+            << "    [--web-port port]\n"
+            << "    [--sync-server address port intervalSeconds [password]]\n\n"
             << "Examples:\n"
             << "  " << basenameOf(filename) << " 12345 64 /data/BorgVR\n"
-            << "  " << basenameOf(filename) << " 12345 64 /data/BorgVR --web-port 8080\n";
+            << "  " << basenameOf(filename) << " 12345 64 /data/BorgVR --web-port 8080\n"
+            << "  " << basenameOf(filename) << " 12345 64 /data/BorgVR --sync-server 192.168.1.10 12345 300 secret\n";
 }
 
 static void printStartupBanner(uint16_t port,
@@ -73,7 +76,8 @@ static void printStartupBanner(uint16_t port,
                                const std::string& datasetDir,
                                uint16_t webPort,
                                int scanIntervalSeconds,
-                               bool passwordProtected) {
+                               bool passwordProtected,
+                               const std::vector<ServerSyncEndpoint>& syncEndpoints) {
   std::cout
     << "\n"
     << "  ____                   __     ______\n"
@@ -96,6 +100,17 @@ static void printStartupBanner(uint16_t port,
     std::cout << " WebGPU preview    : http://localhost:" << webPort << "\n";
   } else {
     std::cout << " WebGPU preview    : disabled\n";
+  }
+
+  if (syncEndpoints.empty()) {
+    std::cout << " Sync servers      : disabled\n";
+  } else {
+    std::cout << " Sync servers      : " << syncEndpoints.size() << "\n";
+    for (const auto& endpoint : syncEndpoints) {
+      std::cout << "   - " << endpoint.address << ":" << endpoint.port
+                << " every " << endpoint.intervalSeconds << " s"
+                << (endpoint.password.empty() ? "" : " (password)") << "\n";
+    }
   }
 
   std::cout
@@ -420,6 +435,7 @@ int main(int argc, char** argv) {
 
   std::string password;
   uint16_t webPort = 0;
+  std::vector<ServerSyncEndpoint> syncEndpoints;
   while (argc > argi) {
     const std::string option = argv[argi++];
     if (option == "--password") {
@@ -438,6 +454,35 @@ int main(int argc, char** argv) {
         return 1;
       }
       ++argi;
+    } else if (option == "--sync-server") {
+      if (argc <= argi + 2) {
+        logger->error("Missing values for --sync-server");
+        return 1;
+      }
+
+      ServerSyncEndpoint endpoint;
+      endpoint.address = argv[argi++];
+      if (!parseUint16(argv[argi], endpoint.port)) {
+        logger->error(std::string("Invalid sync server port: ") + argv[argi]);
+        return 1;
+      }
+      ++argi;
+
+      if (!parseInt(argv[argi], endpoint.intervalSeconds) || endpoint.intervalSeconds <= 0) {
+        logger->error(std::string("Invalid sync server interval: ") + argv[argi]);
+        return 1;
+      }
+      ++argi;
+
+      if (argc > argi && std::string(argv[argi]).rfind("--", 0) != 0) {
+        endpoint.password = argv[argi++];
+      }
+
+      if (!endpoint.usable()) {
+        logger->error("Invalid sync server configuration");
+        return 1;
+      }
+      syncEndpoints.push_back(std::move(endpoint));
     } else {
       logger->error("Unknown argument: " + option);
       printUsage(argv[0]);
@@ -445,7 +490,7 @@ int main(int argc, char** argv) {
     }
   }
 
-  printStartupBanner(port, maxBricks, datasetDir, webPort, scanIntervalSeconds, !password.empty());
+  printStartupBanner(port, maxBricks, datasetDir, webPort, scanIntervalSeconds, !password.empty(), syncEndpoints);
 
   auto datasets = scanDatasetDirectory(datasetDir, logger);
   auto transferFunctions = scanTransferFunctionDirectory(datasetDir, logger);
@@ -466,13 +511,45 @@ int main(int argc, char** argv) {
     }
   }
 
+  auto refreshCatalog = [&]() {
+    const auto refreshed = scanDatasetDirectory(datasetDir, logger);
+    server.setDatasets(refreshed);
+    const auto refreshedTransferFunctions = scanTransferFunctionDirectory(datasetDir, logger);
+    server.setTransferFunctions(refreshedTransferFunctions);
+  };
+
+  std::unique_ptr<ServerSyncManager> syncManager;
+  if (!syncEndpoints.empty()) {
+    auto localDatasetIds = [&]() {
+      std::unordered_set<std::string> ids;
+      for (const auto& dataset : scanDatasetDirectory(datasetDir, nullptr)) {
+        ids.insert(dataset.id);
+      }
+      return ids;
+    };
+    auto localTransferFunctionIds = [&]() {
+      std::unordered_set<std::string> ids;
+      for (const auto& tf : scanTransferFunctionDirectory(datasetDir, nullptr)) {
+        ids.insert(tf.id);
+      }
+      return ids;
+    };
+
+    syncManager = std::make_unique<ServerSyncManager>(
+      datasetDir,
+      syncEndpoints,
+      localDatasetIds,
+      localTransferFunctionIds,
+      refreshCatalog,
+      logger
+    );
+    syncManager->start();
+  }
+
   std::atomic<bool> monitorRunning{true};
   std::thread monitorThread([&]() {
     while (monitorRunning.load()) {
-      const auto refreshed = scanDatasetDirectory(datasetDir, logger);
-      server.setDatasets(refreshed);
-      const auto refreshedTransferFunctions = scanTransferFunctionDirectory(datasetDir, logger);
-      server.setTransferFunctions(refreshedTransferFunctions);
+      refreshCatalog();
 
       for (int i = 0; i < scanIntervalSeconds * 10 && monitorRunning.load(); ++i) {
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -492,6 +569,9 @@ int main(int argc, char** argv) {
 
   if (webServer) {
     webServer->stop();
+  }
+  if (syncManager) {
+    syncManager->stop();
   }
   server.stop();
   monitorRunning = false;

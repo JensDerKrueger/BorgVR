@@ -17,6 +17,7 @@ struct ServerView: View {
     comment: "Initial server status text when the server is stopped"
   )
   @State private var statusColor: Color = .red
+  @State private var syncStatus: ServerSyncStatus = .idle
   @State private var isScanningDatasets = false
 
   /// Logger instance for GUI
@@ -28,6 +29,7 @@ struct ServerView: View {
   /// Server instance
   @State private var server: TCPServer?
   @State private var webServer: HTTPWebServer?
+  @State private var syncManager: ServerSyncManager?
 
   /// Dataset scanner for the directory
   @State private var datasetScanner: DatasetScanner?
@@ -126,6 +128,15 @@ struct ServerView: View {
         Text(datasetInfoText)
           .font(.footnote)
           .foregroundColor(.gray)
+
+        if isRunningServer {
+          HStack(spacing: 8) {
+            Image(systemName: syncStatus.activeDatasetCount > 0 ? "arrow.triangle.2.circlepath" : "checkmark.circle")
+            Text(syncStatusText)
+          }
+          .font(.footnote)
+          .foregroundColor(syncStatus.activeDatasetCount > 0 ? .blue : .gray)
+        }
 
         TextEditor(text: $logText)
           .border(Color.gray, width: 1)
@@ -299,6 +310,10 @@ struct ServerView: View {
         datasets.count
       )
       isScanningDatasets = false
+      server?.updateCatalog(
+        datasets: datasets,
+        transferFunctions: transferFunctions
+      )
 
       if storedAppModel.autoStartServer {
         isRunningServer = true
@@ -349,6 +364,9 @@ struct ServerView: View {
   }
 
   private func stopServer() {
+    syncManager?.stop()
+    syncManager = nil
+    syncStatus = .idle
     webServer?.stop()
     webServer = nil
     server?.stop()
@@ -384,6 +402,7 @@ struct ServerView: View {
       )
       webServer?.start()
     }
+    startSyncManager()
     statusText = L(
       "server_status_running",
       comment: "Server status when the server is running"
@@ -397,6 +416,81 @@ struct ServerView: View {
       return storedAppModel.webServerPort
     }
     return storedAppModel.port == 65535 ? 1 : storedAppModel.port + 1
+  }
+
+  private func startSyncManager() {
+    syncManager?.stop()
+    let manager = ServerSyncManager(
+      logger: logger,
+      dataDirectory: storedAppModel.dataDirectory,
+      endpoints: storedAppModel.syncServers,
+      onLocalCatalogChanged: {
+        rescanCatalogAfterSync()
+      },
+      onStatusChanged: { status in
+        syncStatus = status
+      }
+    )
+    syncManager = manager
+    manager.start()
+  }
+
+  private func rescanCatalogAfterSync() {
+    datasetScanner = DatasetScanner(
+      directory: storedAppModel.dataDirectory,
+      logger: logger
+    )
+    datasetScanner?.loadDatasets()
+    datasets = datasetScanner?.getDatasets() ?? []
+    transferFunctions = datasetScanner?.getTransferFunctions() ?? []
+    datasetInfoText = String(
+      format: L(
+        "server_dataset_found_count",
+        comment: "Label showing the number of found datasets"
+      ),
+      datasets.count
+    )
+    server?.updateCatalog(
+      datasets: datasets,
+      transferFunctions: transferFunctions
+    )
+  }
+
+  private var syncStatusText: String {
+    let usableSyncServerCount = storedAppModel.syncServers.filter(\.isUsable).count
+    if usableSyncServerCount == 0 {
+      return L(
+        "server_sync_status_no_servers",
+        comment: "Server sync status when no sync servers are configured"
+      )
+    }
+
+    if syncStatus.activeDatasetCount == 0 {
+      return L(
+        "server_sync_status_idle",
+        comment: "Server sync status when no dataset sync is active"
+      )
+    }
+
+    if syncStatus.activeDatasetCount == 1 {
+      return String(
+        format: L(
+          "server_sync_status_one_dataset_format",
+          comment: "Server sync status for one active dataset. Arguments: dataset name, percent"
+        ),
+        syncStatus.primaryDatasetDescription,
+        Int((syncStatus.primaryProgress * 100).rounded())
+      )
+    }
+
+    return String(
+      format: L(
+        "server_sync_status_multiple_datasets_format",
+        comment: "Server sync status for multiple active datasets. Arguments: count, percent"
+      ),
+      syncStatus.activeDatasetCount,
+      Int((syncStatus.averageProgress * 100).rounded())
+    )
   }
 
 }

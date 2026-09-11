@@ -92,6 +92,11 @@
 "server_dataset_scanning_title" = "Scanning for datasets";
 "server_dataset_found_count" = "Found datasets: %d";
 
+"server_sync_status_no_servers" = "Sync: no sync servers configured.";
+"server_sync_status_idle" = "Sync: idle.";
+"server_sync_status_one_dataset_format" = "Syncing %@: %d%% complete.";
+"server_sync_status_multiple_datasets_format" = "Syncing %d datasets: %d%% average progress.";
+
 "server_status_stopped" = "Server status: Stopped";
 "server_status_running" = "Server status: Running";
 
@@ -120,6 +125,18 @@
 "settings_brickcount_label" = "Max. Brick Count Per Request:";
 "settings_brickcount_placeholder" = "Brick Count";
 "settings_autostart_label" = "Autostart Server:";
+
+/* Sync server group */
+"settings_sync_servers_group_title" = "Sync Servers";
+"settings_sync_servers_empty" = "No sync servers configured.";
+"settings_sync_address_label" = "Address";
+"settings_sync_port_label" = "Port";
+"settings_sync_password_label" = "Password";
+"settings_sync_interval_label" = "Interval (s)";
+"settings_sync_address_placeholder" = "server.example.org";
+"settings_sync_password_placeholder" = "Optional";
+"settings_sync_add_button" = "Add Sync Server";
+"settings_sync_remove_help" = "Remove sync server";
 
 /* Import group */
 "settings_import_group_title" = "Import Settings";

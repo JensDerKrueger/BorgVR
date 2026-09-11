@@ -39,6 +39,7 @@ public:
   bool valid() const;
   SocketHandle handle() const { return sock_; }
 
+  bool connectTo(const std::string& host, uint16_t port);
   void close();
   void shutdownBoth();
   void setReceiveTimeoutMilliseconds(int milliseconds);

@@ -92,6 +92,11 @@
 "server_dataset_scanning_title" = "Buscando conjuntos de datos";
 "server_dataset_found_count" = "Conjuntos de datos encontrados: %d";
 
+"server_sync_status_no_servers" = "Sincronización: no hay servidores configurados.";
+"server_sync_status_idle" = "Sincronización: inactiva.";
+"server_sync_status_one_dataset_format" = "Sincronizando %@: %d%% completado.";
+"server_sync_status_multiple_datasets_format" = "Sincronizando %d conjuntos de datos: %d%% de progreso medio.";
+
 "server_status_stopped" = "Estado del servidor: detenido";
 "server_status_running" = "Estado del servidor: en ejecución";
 
@@ -120,6 +125,18 @@
 "settings_brickcount_label" = "Máx. de bricks por solicitud:";
 "settings_brickcount_placeholder" = "Número de bricks";
 "settings_autostart_label" = "Inicio automático del servidor:";
+
+/* Sync server group */
+"settings_sync_servers_group_title" = "Servidores de sincronización";
+"settings_sync_servers_empty" = "No hay servidores de sincronización configurados.";
+"settings_sync_address_label" = "Dirección";
+"settings_sync_port_label" = "Puerto";
+"settings_sync_password_label" = "Contraseña";
+"settings_sync_interval_label" = "Intervalo (s)";
+"settings_sync_address_placeholder" = "server.example.org";
+"settings_sync_password_placeholder" = "Opcional";
+"settings_sync_add_button" = "Añadir servidor de sincronización";
+"settings_sync_remove_help" = "Eliminar servidor de sincronización";
 
 /* Import group */
 "settings_import_group_title" = "Ajustes de importación";

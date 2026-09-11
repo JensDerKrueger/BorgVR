@@ -1,5 +1,29 @@
 import SwiftUI
 
+struct ServerSyncEndpoint: Identifiable, Codable, Equatable {
+  var id: UUID = UUID()
+  var address: String
+  var port: Int
+  var password: String
+  var intervalSeconds: Int
+
+  var isUsable: Bool {
+    !address.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+    port >= 1 &&
+    port <= 65535 &&
+    intervalSeconds >= 10
+  }
+
+  static var empty: ServerSyncEndpoint {
+    ServerSyncEndpoint(
+      address: "",
+      port: StoredAppModel.defaultPort,
+      password: "",
+      intervalSeconds: 300
+    )
+  }
+}
+
 final class StoredAppModel : ObservableObject {
 
   static let defaultBrickSize: Int = 64
@@ -44,6 +68,25 @@ final class StoredAppModel : ObservableObject {
   static let defaultDataDirectory: String = FileManager.default.homeDirectoryForCurrentUser.path
   @AppStorage("dataDirectory") var dataDirectory: String = defaultDataDirectory
 
+  @AppStorage("syncServers") private var syncServersData: Data = Data()
+
+  var syncServers: [ServerSyncEndpoint] {
+    get {
+      guard !syncServersData.isEmpty,
+            let servers = try? JSONDecoder().decode(
+              [ServerSyncEndpoint].self,
+              from: syncServersData
+            ) else {
+        return []
+      }
+      return servers
+    }
+    set {
+      objectWillChange.send()
+      syncServersData = (try? JSONEncoder().encode(newValue)) ?? Data()
+    }
+  }
+
   func resetToDefaults() {
     brickSize = StoredAppModel.defaultBrickSize
     brickOverlap = StoredAppModel.defaultBrickOverlap
@@ -61,6 +104,7 @@ final class StoredAppModel : ObservableObject {
     WebServerCertificatePasswordStore.delete()
     maxBricksPerGetRequest = StoredAppModel.defaultMaxBricksPerGetRequest
     dataDirectory = StoredAppModel.defaultDataDirectory
+    syncServers = []
   }
 
   var webServerCertificatePassword: String {

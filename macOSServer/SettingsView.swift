@@ -24,6 +24,7 @@ struct SettingsView: View {
 
   @State private var tempBrickOverlap: String = ""
   @State private var brickOverlapErrorMsg: String?
+  @State private var syncServers: [ServerSyncEndpoint] = []
 
   var body: some View {
     VStack(alignment: .leading, spacing: 16) {
@@ -141,6 +142,82 @@ struct SettingsView: View {
             .onAppear {
               tempPort = String(storedAppModel.port)
               tempBrickCount = String(storedAppModel.maxBricksPerGetRequest)
+            }
+            .padding(.vertical, 4)
+          }
+
+          GroupBox(label: Text("settings_sync_servers_group_title").bold()) {
+            VStack(alignment: .leading, spacing: 10) {
+              if syncServers.isEmpty {
+                Text("settings_sync_servers_empty")
+                  .font(.caption)
+                  .foregroundStyle(.secondary)
+              } else {
+                Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 8) {
+                  GridRow {
+                    Text("settings_sync_address_label")
+                    Text("settings_sync_port_label")
+                    Text("settings_sync_password_label")
+                    Text("settings_sync_interval_label")
+                    EmptyView()
+                  }
+                  .font(.caption)
+                  .foregroundStyle(.secondary)
+
+                  ForEach($syncServers) { $syncServer in
+                    GridRow {
+                      TextField("settings_sync_address_placeholder", text: $syncServer.address)
+                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                        .frame(width: 180)
+                        .accentColor(.blue)
+
+                      TextField(
+                        "12345",
+                        value: clampedPortBinding($syncServer.port),
+                        formatter: portNumberFormatter
+                      )
+                      .textFieldStyle(RoundedBorderTextFieldStyle())
+                      .frame(width: 80)
+                      .accentColor(.blue)
+
+                      SecureField("settings_sync_password_placeholder", text: $syncServer.password)
+                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                        .frame(width: 140)
+                        .accentColor(.blue)
+
+                      TextField(
+                        "300",
+                        value: minimumIntBinding($syncServer.intervalSeconds, minimum: 10),
+                        formatter: portNumberFormatter
+                      )
+                      .textFieldStyle(RoundedBorderTextFieldStyle())
+                      .frame(width: 80)
+                      .accentColor(.blue)
+
+                      Button {
+                        syncServers.removeAll { $0.id == syncServer.id }
+                      } label: {
+                        Image(systemName: "minus.circle")
+                      }
+                      .buttonStyle(.borderless)
+                      .help("settings_sync_remove_help")
+                    }
+                  }
+                }
+              }
+
+              Button {
+                syncServers.append(.empty)
+              } label: {
+                Label("settings_sync_add_button", systemImage: "plus.circle")
+              }
+              .buttonStyle(.bordered)
+            }
+            .onAppear {
+              syncServers = storedAppModel.syncServers
+            }
+            .onChange(of: syncServers) { _ in
+              storedAppModel.syncServers = syncServers
             }
             .padding(.vertical, 4)
           }
@@ -286,6 +363,15 @@ struct SettingsView: View {
       get: { value.wrappedValue },
       set: { newValue in
         value.wrappedValue = min(65535, max(1, newValue))
+      }
+    )
+  }
+
+  private func minimumIntBinding(_ value: Binding<Int>, minimum: Int) -> Binding<Int> {
+    Binding(
+      get: { value.wrappedValue },
+      set: { newValue in
+        value.wrappedValue = max(minimum, newValue)
       }
     )
   }

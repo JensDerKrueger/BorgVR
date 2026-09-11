@@ -2,6 +2,7 @@
 
 #include <climits>
 #include <cstring>
+#include <string>
 
 #if defined(_WIN32)
   #include <winsock2.h>
@@ -11,6 +12,7 @@
   #include <arpa/inet.h>
   #include <cerrno>
   #include <fcntl.h>
+  #include <netdb.h>
   #include <netinet/in.h>
   #include <signal.h>
   #include <sys/socket.h>
@@ -88,6 +90,50 @@ bool TcpSocket::valid() const {
 #else
   return sock_ >= 0;
 #endif
+}
+
+bool TcpSocket::connectTo(const std::string& host, uint16_t port) {
+  close();
+
+  addrinfo hints{};
+  hints.ai_family = AF_UNSPEC;
+  hints.ai_socktype = SOCK_STREAM;
+  hints.ai_protocol = IPPROTO_TCP;
+
+  addrinfo* addresses = nullptr;
+  const std::string service = std::to_string(port);
+  if (::getaddrinfo(host.c_str(), service.c_str(), &hints, &addresses) != 0) {
+    return false;
+  }
+
+  for (addrinfo* addr = addresses; addr != nullptr; addr = addr->ai_next) {
+    SocketHandle candidate = ::socket(addr->ai_family, addr->ai_socktype, addr->ai_protocol);
+#if defined(_WIN32)
+    if (candidate == INVALID_SOCKET) {
+      continue;
+    }
+#else
+    if (candidate < 0) {
+      continue;
+    }
+#endif
+
+    if (::connect(candidate, addr->ai_addr, static_cast<int>(addr->ai_addrlen)) == 0) {
+      sock_ = candidate;
+      setReceiveTimeoutMilliseconds(15000);
+      ::freeaddrinfo(addresses);
+      return true;
+    }
+
+#if defined(_WIN32)
+    ::closesocket(candidate);
+#else
+    ::close(candidate);
+#endif
+  }
+
+  ::freeaddrinfo(addresses);
+  return false;
 }
 
 void TcpSocket::close() {

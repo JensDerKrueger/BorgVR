@@ -261,8 +261,6 @@
 /* Private application: editor button title format */
 "private_editor_title_format" = "%@-Editor";
 
-/* Private application: slicing presets button */
-
 /* Private application: reset section */
 "private_reset_section_title" = "Zurücksetzen";
 "private_reset_model_button" = "Modell";
@@ -763,7 +761,7 @@
 "bricked_log_compression_summary" = "Komprimiert: %d Blöcke, unkomprimiert: %d Blöcke";
 
 /* English source-code keys */
-"Transfer function + lighting" = "Transfer Function + Licht";
+"Transfer function + lighting" = "Transferfunktion + Licht";
 "Isovalue" = "Isowert";
 "Renderer is not available." = "Renderer ist nicht verfügbar.";
 "Custom color" = "Eigene Farbe";
