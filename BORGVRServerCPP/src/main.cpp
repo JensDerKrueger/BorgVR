@@ -57,6 +57,41 @@ static void printUsage(const char* filename) {
             << "  " << basenameOf(filename) << " 12345 64 /data/BorgVR --web-port 8080\n";
 }
 
+static void printStartupBanner(uint16_t port,
+                               int maxBricks,
+                               const std::string& datasetDir,
+                               uint16_t webPort,
+                               int scanIntervalSeconds,
+                               bool passwordProtected) {
+  std::cout
+    << "\n"
+    << "  ____                   __     ______\n"
+    << " | __ )  ___  _ __ __ _ \\ \\   / /  _ \\\n"
+    << " |  _ \\ / _ \\| '__/ _` | \\ \\ / /| |_) |\n"
+    << " | |_) | (_) | | | (_| |  \\ V / |  _ <\n"
+    << " |____/ \\___/|_|  \\__, |   \\_/  |_| \\_\\\n"
+    << "                  |___/\n"
+    << "\n"
+    << " BorgVR Dataset Server\n"
+    << " ------------------------------------------------------------\n"
+    << " Dataset directory : " << datasetDir << "\n"
+    << " Dataset port      : " << port << "\n"
+    << " Max brick batch   : " << maxBricks << "\n"
+    << " Scan interval     : " << scanIntervalSeconds << " s\n"
+    << " Password          : " << (passwordProtected ? "enabled" : "disabled") << "\n";
+
+  if (webPort > 0) {
+    std::cout << " WebGPU preview    : http://localhost:" << webPort << "\n";
+  } else {
+    std::cout << " WebGPU preview    : disabled\n";
+  }
+
+  std::cout
+    << " ------------------------------------------------------------\n"
+    << "\n"
+    << std::flush;
+}
+
 static void logDatasetScanFailureOnce(const std::string& filename,
                                       const std::string& reason,
                                       std::shared_ptr<Logger> logger) {
@@ -171,6 +206,8 @@ int main(int argc, char** argv) {
       return 1;
     }
   }
+
+  printStartupBanner(port, maxBricks, datasetDir, webPort, scanIntervalSeconds, !password.empty());
 
   auto datasets = scanDatasetDirectory(datasetDir, logger);
 

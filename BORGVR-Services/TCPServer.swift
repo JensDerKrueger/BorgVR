@@ -3,6 +3,9 @@ import Foundation
 
 class TCPServer {
   static let protocolVersionName: String = BorgVRServerAuthentication.protocolVersionName
+  private static let maxCommandLineBytes = 8 * 1024
+  private static let maxCommandBufferBytes = maxCommandLineBytes * 4
+  private static let maxActiveConnections = 128
 
   let port: NWEndpoint.Port
   let queue = DispatchQueue(label: "TCPServerQueue")
@@ -158,6 +161,12 @@ class TCPServer {
   }
 
   private func handleNewConnection(_ connection: NWConnection) {
+    guard activeConnectionCount() < Self.maxActiveConnections else {
+      logger?.warning("Dataset server connection limit reached; rejecting client.")
+      connection.cancel()
+      return
+    }
+
     appendActiveConnection(connection)
 
     connection.stateUpdateHandler = { [weak self, weak connection] state in
@@ -228,11 +237,24 @@ class TCPServer {
       }
 
       var newBuffer = buffer + String(decoding: data, as: UTF8.self)
+      if newBuffer.utf8.count > Self.maxCommandBufferBytes {
+        self.logger?.warning("Input buffer too large; disconnecting client.")
+        self.closeConnection(for: connection)
+        connection.cancel()
+        return
+      }
 
       while let newlineRange = newBuffer.range(of: "\n") {
         let request = newBuffer[..<newlineRange.lowerBound]
           .trimmingCharacters(in: .whitespacesAndNewlines)
         newBuffer = String(newBuffer[newlineRange.upperBound...])
+
+        if request.utf8.count > Self.maxCommandLineBytes {
+          self.logger?.warning("Input line too large; disconnecting client.")
+          self.closeConnection(for: connection)
+          connection.cancel()
+          return
+        }
 
         if !self.processCommand(request, connection: connection) {
           connection.cancel()
@@ -654,6 +676,13 @@ class TCPServer {
     let connections = activeConnections
     stateLock.unlock()
     return connections
+  }
+
+  private func activeConnectionCount() -> Int {
+    stateLock.lock()
+    let count = activeConnections.count
+    stateLock.unlock()
+    return count
   }
 
   private func setConnectionDataset(_ dataset: ConnectionDataset, for connection: NWConnection) {

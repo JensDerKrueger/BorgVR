@@ -5,6 +5,9 @@ import Compression
 
 final class HTTPWebServer {
   private static let maxHTTPBrickBatchCount = 128
+  private static let maxHTTPHeaderBytes = 32 * 1024
+  private static let maxActiveConnections = 128
+  private static let maxKeepAliveRequests = 1000
   private static let brickBatchMagic: UInt32 = 0x31425642
 
   private let port: NWEndpoint.Port
@@ -113,6 +116,12 @@ final class HTTPWebServer {
   }
 
   private func handleNewConnection(_ connection: NWConnection) {
+    guard activeConnectionCount() < Self.maxActiveConnections else {
+      logger?.warning("\(schemeName)/WebGPU connection limit reached; rejecting client.")
+      connection.cancel()
+      return
+    }
+
     appendActiveConnection(connection)
     connection.stateUpdateHandler = { [weak self, weak connection] state in
       guard let self, let connection else { return }
@@ -124,10 +133,14 @@ final class HTTPWebServer {
       }
     }
     connection.start(queue: queue)
-    receiveRequest(on: connection, data: Data())
+    receiveRequest(on: connection, data: Data(), handledRequestCount: 0)
   }
 
-  private func receiveRequest(on connection: NWConnection, data: Data) {
+  private func receiveRequest(
+    on connection: NWConnection,
+    data: Data,
+    handledRequestCount: Int
+  ) {
     connection.receive(
       minimumIncompleteLength: 1,
       maximumLength: 16 * 1024
@@ -146,6 +159,18 @@ final class HTTPWebServer {
         requestData.append(chunk)
       }
 
+      if requestData.count > Self.maxHTTPHeaderBytes {
+        self.sendError(
+          431,
+          reason: "Request Header Fields Too Large",
+          message: "HTTP request header is too large.",
+          closeAfterSend: true,
+          connection: connection,
+          handledRequestCount: handledRequestCount
+        )
+        return
+      }
+
       if requestData.isEmpty && isComplete {
         connection.cancel()
         self.removeActiveConnection(connection)
@@ -155,22 +180,42 @@ final class HTTPWebServer {
       if requestData.range(of: Data("\r\n\r\n".utf8)) != nil ||
          requestData.range(of: Data("\n\n".utf8)) != nil ||
          isComplete {
-        self.handleRequestData(requestData, connection: connection)
+        self.handleRequestData(
+          requestData,
+          connection: connection,
+          handledRequestCount: handledRequestCount + 1
+        )
       } else {
-        self.receiveRequest(on: connection, data: requestData)
+        self.receiveRequest(
+          on: connection,
+          data: requestData,
+          handledRequestCount: handledRequestCount
+        )
       }
     }
   }
 
-  private func handleRequestData(_ data: Data, connection: NWConnection) {
+  private func handleRequestData(
+    _ data: Data,
+    connection: NWConnection,
+    handledRequestCount: Int
+  ) {
     guard let requestText = String(data: data, encoding: .utf8),
           let request = HTTPRequest(text: requestText)
     else {
-      sendError(400, reason: "Bad Request", message: "Invalid HTTP request.", closeAfterSend: true, connection: connection)
+      sendError(
+        400,
+        reason: "Bad Request",
+        message: "Invalid HTTP request.",
+        closeAfterSend: true,
+        connection: connection,
+        handledRequestCount: handledRequestCount
+      )
       return
     }
 
-    let closeAfterSend = request.shouldCloseConnection
+    let closeAfterSend = request.shouldCloseConnection ||
+      handledRequestCount >= Self.maxKeepAliveRequests
 
     guard request.method == "GET" || request.method == "HEAD" else {
       sendError(
@@ -178,13 +223,18 @@ final class HTTPWebServer {
         reason: "Method Not Allowed",
         message: "Only GET and HEAD are supported.",
         closeAfterSend: closeAfterSend,
-        connection: connection
+        connection: connection,
+        handledRequestCount: handledRequestCount
       )
       return
     }
 
     guard isAuthorized(request) else {
-      sendUnauthorized(closeAfterSend: closeAfterSend, connection: connection)
+      sendUnauthorized(
+        closeAfterSend: closeAfterSend,
+        connection: connection,
+        handledRequestCount: handledRequestCount
+      )
       return
     }
 
@@ -208,7 +258,13 @@ final class HTTPWebServer {
       )
     }
 
-    send(response, includeBody: request.method != "HEAD", closeAfterSend: closeAfterSend, connection: connection)
+    send(
+      response,
+      includeBody: request.method != "HEAD",
+      closeAfterSend: closeAfterSend,
+      connection: connection,
+      handledRequestCount: handledRequestCount
+    )
   }
 
   private func isAuthorized(_ request: HTTPRequest) -> Bool {
@@ -516,7 +572,8 @@ final class HTTPWebServer {
     reason: String,
     message: String,
     closeAfterSend: Bool = false,
-    connection: NWConnection
+    connection: NWConnection,
+    handledRequestCount: Int = 0
   ) {
     let response = HTTPResponse(
       status: status,
@@ -524,10 +581,19 @@ final class HTTPWebServer {
       contentType: "text/plain; charset=utf-8",
       body: Data("\(message)\n".utf8)
     )
-    send(response, closeAfterSend: closeAfterSend, connection: connection)
+    send(
+      response,
+      closeAfterSend: closeAfterSend,
+      connection: connection,
+      handledRequestCount: handledRequestCount
+    )
   }
 
-  private func sendUnauthorized(closeAfterSend: Bool = false, connection: NWConnection) {
+  private func sendUnauthorized(
+    closeAfterSend: Bool = false,
+    connection: NWConnection,
+    handledRequestCount: Int
+  ) {
     let response = HTTPResponse(
       status: 401,
       reason: "Unauthorized",
@@ -535,14 +601,20 @@ final class HTTPWebServer {
       body: Data("A BorgVR server password is required.\n".utf8),
       headers: [("WWW-Authenticate", "Basic realm=\"BorgVR Dataset Server\"")]
     )
-    send(response, closeAfterSend: closeAfterSend, connection: connection)
+    send(
+      response,
+      closeAfterSend: closeAfterSend,
+      connection: connection,
+      handledRequestCount: handledRequestCount
+    )
   }
 
   private func send(
     _ response: HTTPResponse,
     includeBody: Bool = true,
     closeAfterSend: Bool = false,
-    connection: NWConnection
+    connection: NWConnection,
+    handledRequestCount: Int = 0
   ) {
     var header = "HTTP/1.1 \(response.status) \(response.reason)\r\n"
     header += "Content-Type: \(response.contentType)\r\n"
@@ -577,7 +649,11 @@ final class HTTPWebServer {
         if closeAfterSend {
           self.removeActiveConnection(connection)
         } else {
-          self.receiveRequest(on: connection, data: Data())
+          self.receiveRequest(
+            on: connection,
+            data: Data(),
+            handledRequestCount: handledRequestCount
+          )
         }
       })
   }
@@ -631,6 +707,13 @@ final class HTTPWebServer {
     let connections = activeConnections
     stateLock.unlock()
     return connections
+  }
+
+  private func activeConnectionCount() -> Int {
+    stateLock.lock()
+    let count = activeConnections.count
+    stateLock.unlock()
+    return count
   }
 }
 

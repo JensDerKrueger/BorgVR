@@ -10,6 +10,12 @@
 #include <random>
 #include <sstream>
 
+namespace {
+
+constexpr size_t kMaxActiveSessions = 128;
+
+}
+
 static std::string trim(const std::string& s) {
   size_t start = 0;
   while (start < s.size() && std::isspace(static_cast<unsigned char>(s[start]))) start++;
@@ -354,27 +360,38 @@ void TCPServer::acceptLoop() {
       continue;
     }
 
+    {
+      std::lock_guard<std::mutex> lock(sessionsMutex_);
+      pruneSessionsLocked();
+      if (sessions_.size() >= kMaxActiveSessions) {
+        if (logger_) logger_->warning("Connection limit reached; rejecting client");
+        continue;
+      }
+    }
+
     auto session = std::make_shared<ClientSession>(*this, std::move(client));
+    session->start();
     {
       std::lock_guard<std::mutex> lock(sessionsMutex_);
       sessions_.push_back(session);
-      pruneSessionsLocked();
     }
-    session->start();
   }
 }
 
 void TCPServer::pruneSessionsLocked() {
-  // Join and remove sessions whose thread has ended (running_ == false but joinable).
   for (auto it = sessions_.begin(); it != sessions_.end();) {
     auto& s = *it;
     if (!s) {
       it = sessions_.erase(it);
       continue;
     }
-    // If session finished naturally, running_ will be false and joinable true.
-    // join() is safe and quick once the thread has ended.
-    // We can't access session internals here; just keep simple and avoid pruning.
+
+    if (!s->isRunning()) {
+      s->join();
+      it = sessions_.erase(it);
+      continue;
+    }
+
     ++it;
   }
 }
@@ -404,6 +421,10 @@ void TCPServer::ClientSession::join() {
   if (thread_.joinable()) {
     thread_.join();
   }
+}
+
+bool TCPServer::ClientSession::isRunning() const {
+  return running_.load();
 }
 
 bool TCPServer::ClientSession::sendText(const std::string& text) {

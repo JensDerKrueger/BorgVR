@@ -50,6 +50,7 @@ private:
     void start();
     void stop();
     void join();
+    bool isRunning() const;
 
   private:
     void run();

@@ -18,11 +18,12 @@ constexpr size_t kChunkedResponseThreshold = 1024 * 1024;
 constexpr size_t kHTTPChunkBytes = 16 * 1024;
 constexpr size_t kAppleLZ4BlockBytes = 64 * 1024;
 constexpr size_t kMaxHTTPBrickBatchCount = 128;
+constexpr int kMaxActiveHTTPHandlers = 128;
 
 class HandlerCounter {
 public:
-  explicit HandlerCounter(std::atomic<int>& counter) : counter_(counter) {
-    counter_.fetch_add(1);
+  explicit HandlerCounter(std::atomic<int>& counter, bool increment = true) : counter_(counter) {
+    if (increment) counter_.fetch_add(1);
   }
 
   ~HandlerCounter() {
@@ -339,9 +340,15 @@ void HTTPWebServer::acceptLoop() {
       continue;
     }
 
+    if (activeHandlers_.load() >= kMaxActiveHTTPHandlers) {
+      if (logger_) logger_->warning("HTTP/WebGPU connection limit reached; rejecting client");
+      continue;
+    }
+
+    activeHandlers_.fetch_add(1);
     try {
       std::thread([this](TcpSocket socket) {
-        HandlerCounter counter(activeHandlers_);
+        HandlerCounter counter(activeHandlers_, false);
         try {
           handleClient(std::move(socket));
         } catch (const std::exception& e) {
@@ -351,6 +358,7 @@ void HTTPWebServer::acceptLoop() {
         }
       }, std::move(client)).detach();
     } catch (const std::exception& e) {
+      activeHandlers_.fetch_sub(1);
       if (logger_) logger_->error(std::string("Failed to start HTTP client thread: ") + e.what());
     }
   }
