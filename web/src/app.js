@@ -31,6 +31,7 @@ const MAX_TRANSFER_FUNCTION_URL_BYTES = 1024 * 1024;
 let renderer = null;
 let currentManifest = null;
 let transferFunctionCatalog = [];
+let transferFunctionCatalogBuffers = new Map();
 let rendererStatus = "Initializing WebGPU...";
 let statusVisible = false;
 let controlsCollapsed = false;
@@ -100,6 +101,7 @@ async function loadTransferFunctionCatalog() {
   } catch {
     transferFunctionCatalog = [];
   }
+  transferFunctionCatalogBuffers = new Map();
 
   const options = [
     new Option("Server Presets", ""),
@@ -123,12 +125,7 @@ async function loadCatalogTransferFunction(id) {
   }
 
   try {
-    const url = new URL(`./web-data/${entry.url}`, window.location.href);
-    const response = await fetch(url);
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
-    }
-    renderer?.loadTransferFunction(await response.arrayBuffer());
+    renderer?.loadTransferFunction(await fetchCatalogTransferFunction(entry));
     drawTransferFunctionEditor();
     updateTransferFunctionURL();
     tfCatalogSelect.value = id;
@@ -219,7 +216,7 @@ async function showDataset(dataset) {
     return;
   }
   renderer?.setDataset(currentManifest);
-  const transferFunctionStatus = applyTransferFunctionFromURL();
+  const transferFunctionStatus = await applyTransferFunctionFromURL();
   viewerEmpty.hidden = true;
   infoButton.disabled = false;
   renderControls.hidden = false;
@@ -431,22 +428,26 @@ async function loadTransferFunction(file) {
     renderer?.loadTransferFunction(await file.arrayBuffer());
     drawTransferFunctionEditor();
     updateTransferFunctionURL();
-    clearTransferFunctionSelection();
+    await selectMatchingCatalogTransferFunction(renderer?.serializeTransferFunction());
     setStatus(`Transfer function loaded: ${file.name}`);
   } catch (error) {
     setStatus(`Transfer function load failed: ${error.message ?? String(error)}`);
   }
 }
 
-function applyTransferFunctionFromURL() {
+async function applyTransferFunctionFromURL() {
   const encoded = requestedTransferFunction();
   if (!encoded) {
     return "";
   }
 
   try {
-    renderer?.loadTransferFunction(decodeTransferFunctionURLValue(encoded));
-    clearTransferFunctionSelection();
+    const transferFunction = decodeTransferFunctionURLValue(encoded);
+    renderer?.loadTransferFunction(transferFunction);
+    const matchingEntry = await selectMatchingCatalogTransferFunction(transferFunction);
+    if (matchingEntry) {
+      return `Transfer function loaded from URL: ${displayTransferFunctionName(matchingEntry)}.`;
+    }
     return "Transfer function loaded from URL.";
   } catch (error) {
     return `Transfer function URL parameter ignored: ${error.message ?? String(error)}`;
@@ -481,6 +482,66 @@ function clearTransferFunctionSelection() {
   if (tfCatalogSelect) {
     tfCatalogSelect.value = "";
   }
+}
+
+async function selectMatchingCatalogTransferFunction(buffer) {
+  if (!buffer?.byteLength || transferFunctionCatalog.length === 0) {
+    clearTransferFunctionSelection();
+    return null;
+  }
+
+  const bytes = transferFunctionBytes(buffer);
+  for (const entry of transferFunctionCatalog) {
+    try {
+      if (bytesEqual(bytes, transferFunctionBytes(await fetchCatalogTransferFunction(entry)))) {
+        tfCatalogSelect.value = entry.id;
+        return entry;
+      }
+    } catch {
+      // Ignore broken catalog entries; loading the transfer function itself already succeeded.
+    }
+  }
+
+  clearTransferFunctionSelection();
+  return null;
+}
+
+async function fetchCatalogTransferFunction(entry) {
+  if (!entry?.id || !entry?.url) {
+    throw new Error("Transfer function catalog entry is incomplete.");
+  }
+
+  if (transferFunctionCatalogBuffers.has(entry.id)) {
+    return transferFunctionCatalogBuffers.get(entry.id);
+  }
+
+  const url = new URL(`./web-data/${entry.url}`, window.location.href);
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}`);
+  }
+  const buffer = await response.arrayBuffer();
+  transferFunctionCatalogBuffers.set(entry.id, buffer);
+  return buffer;
+}
+
+function transferFunctionBytes(buffer) {
+  if (buffer instanceof ArrayBuffer) {
+    return new Uint8Array(buffer);
+  }
+  return new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+}
+
+function bytesEqual(left, right) {
+  if (left.byteLength !== right.byteLength) {
+    return false;
+  }
+  for (let index = 0; index < left.byteLength; index += 1) {
+    if (left[index] !== right[index]) {
+      return false;
+    }
+  }
+  return true;
 }
 
 function encodeTransferFunctionURLValue(buffer) {
