@@ -28,6 +28,10 @@
 #define BORGVR_BUILD_TIMESTAMP "unknown"
 #endif
 
+#ifndef BORGVR_SERVER_VERSION
+#define BORGVR_SERVER_VERSION "2.0"
+#endif
+
 static std::string basenameOf(const std::string& path) {
   const auto slash = path.find_last_of("/\\");
   if (slash == std::string::npos) return path;
@@ -89,6 +93,7 @@ static void printStartupBanner(uint16_t port,
     << "\n"
     << " BorgVR Dataset Server\n"
     << " ------------------------------------------------------------\n"
+    << " Version           : " << BORGVR_SERVER_VERSION << "\n"
     << " Build             : " << BORGVR_BUILD_TIMESTAMP << "\n"
     << " Dataset directory : " << datasetDir << "\n"
     << " Dataset port      : " << port << "\n"
