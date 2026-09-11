@@ -35,10 +35,12 @@ DEPS := $(OBJS:.o=.d)
 CONFIG    ?= release
 ASAN      ?= 0
 UNIVERSAL ?= 0
+BUILD_TIMESTAMP ?= $(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
 
 CXXFLAGS_BASE := -std=c++17 -Wall -Wextra -Wpedantic -I$(INC_DIR) -MMD -MP
 CXXFLAGS_BASE += -pthread
 LDFLAGS_BASE  := -pthread
+BUILD_ID_FLAGS := -DBORGVR_BUILD_TIMESTAMP=\"$(BUILD_TIMESTAMP)\"
 
 # macOS: universal binary (arm64 + x86_64)
 ifeq ($(UNAME_S),Darwin)
@@ -64,7 +66,7 @@ else
   LDFLAGS  := $(LDFLAGS_BASE)
 endif
 
-.PHONY: all clean run print-vars
+.PHONY: all clean run print-vars FORCE
 
 all: $(BUILD_DIR)/$(TARGET)
 
@@ -74,6 +76,10 @@ $(GENERATED_WEB_SRC) $(GENERATED_WEB_HDR): $(WEB_ASSETS) $(WEB_EMBED_SCRIPT)
 $(BUILD_DIR)/$(TARGET): $(OBJS)
 	@mkdir -p $(dir $@)
 	$(CXX) $(OBJS) -o $@ $(LDFLAGS)
+
+$(BUILD_DIR)/obj/main.o: $(SRC_DIR)/main.cpp FORCE
+	@mkdir -p $(dir $@)
+	$(CXX) $(CXXFLAGS) $(BUILD_ID_FLAGS) -c $< -o $@
 
 $(BUILD_DIR)/obj/%.o: $(SRC_DIR)/%.cpp
 	@mkdir -p $(dir $@)
@@ -90,6 +96,7 @@ print-vars:
 	@echo "CONFIG=$(CONFIG)"
 	@echo "ASAN=$(ASAN)"
 	@echo "UNIVERSAL=$(UNIVERSAL)"
+	@echo "BUILD_TIMESTAMP=$(BUILD_TIMESTAMP)"
 	@echo "CXX=$(CXX)"
 	@echo "CXXFLAGS=$(CXXFLAGS)"
 	@echo "LDFLAGS=$(LDFLAGS)"

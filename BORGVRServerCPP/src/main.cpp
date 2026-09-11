@@ -16,6 +16,10 @@
 #include <unordered_set>
 #include <vector>
 
+#ifndef BORGVR_BUILD_TIMESTAMP
+#define BORGVR_BUILD_TIMESTAMP "unknown"
+#endif
+
 static std::string basenameOf(const std::string& path) {
   const auto slash = path.find_last_of("/\\");
   if (slash == std::string::npos) return path;
@@ -74,6 +78,7 @@ static void printStartupBanner(uint16_t port,
     << "\n"
     << " BorgVR Dataset Server\n"
     << " ------------------------------------------------------------\n"
+    << " Build             : " << BORGVR_BUILD_TIMESTAMP << "\n"
     << " Dataset directory : " << datasetDir << "\n"
     << " Dataset port      : " << port << "\n"
     << " Max brick batch   : " << maxBricks << "\n"
