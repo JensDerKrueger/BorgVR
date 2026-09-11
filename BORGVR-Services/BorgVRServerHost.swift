@@ -64,6 +64,10 @@ final class BorgVRServerHost {
       scannedTransferFunctions = []
     }
     let datasets = mergedDatasets(scannedDatasets, additionalDatasets: additionalDatasets)
+    let transferFunctions = mergedTransferFunctions(
+      scannedTransferFunctions,
+      additionalTransferFunctions: DatasetScanner.bundledTransferFunctions(logger: logger)
+    )
 
     let serverPort = UInt16(clamping: configuration.port)
     let newServer = TCPServer(
@@ -71,7 +75,7 @@ final class BorgVRServerHost {
       maxBricksPerGetRequest: configuration.maxBricksPerGetRequest,
       logger: logger,
       datasets: datasets,
-      transferFunctions: scannedTransferFunctions,
+      transferFunctions: transferFunctions,
       authSecret: configuration.authSecret
     )
     if configuration.startDatasetServer {
@@ -138,6 +142,21 @@ final class BorgVRServerHost {
     }
 
     return datasets
+  }
+
+  private func mergedTransferFunctions(
+    _ scannedTransferFunctions: [TransferFunctionInfo],
+    additionalTransferFunctions: [TransferFunctionInfo]
+  ) -> [TransferFunctionInfo] {
+    var transferFunctions = scannedTransferFunctions
+    var knownIDs = Set(scannedTransferFunctions.map(\.id))
+
+    for transferFunction in additionalTransferFunctions where !knownIDs.contains(transferFunction.id) {
+      transferFunctions.append(transferFunction)
+      knownIDs.insert(transferFunction.id)
+    }
+
+    return transferFunctions
   }
 
   private func effectiveWebPort(configuration: BorgVRServerConfiguration, serverPort: UInt16) -> UInt16 {

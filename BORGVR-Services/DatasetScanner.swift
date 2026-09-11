@@ -73,6 +73,14 @@ class DatasetScanner {
     return transferFunctions
   }
 
+  static func bundledTransferFunctions(logger: LoggerBase? = nil) -> [TransferFunctionInfo] {
+    let urls = Bundle.main.urls(
+      forResourcesWithExtension: "tf1d",
+      subdirectory: "TransferFunctions"
+    ) ?? []
+    return transferFunctions(for: urls, logger: logger)
+  }
+
   private func loadDataset(at url: URL) {
     if let data = try? BORGVRFileData(filename: url.path()) {
       let dataset = DatasetInfo(
@@ -110,21 +118,9 @@ class DatasetScanner {
   }
 
   private func loadTransferFunction(at url: URL) {
-    do {
-      let fileData = try Data(contentsOf: url)
-      let parsed = try DatasetScanner.parseTransferFunctionData(fileData)
-      let fallbackDescription = url.deletingPathExtension().lastPathComponent
-      let description = parsed.description.trimmingCharacters(in: .whitespacesAndNewlines)
-      let transferFunction = TransferFunctionInfo(
-        id: parsed.id,
-        filename: url.path(),
-        transferFunctionDescription: description.isEmpty ? fallbackDescription : description,
-        byteCount: fileData.count
-      )
+    if let transferFunction = DatasetScanner.transferFunctionInfo(at: url, logger: logger) {
       transferFunctions.append(transferFunction)
       logger?.info("Loaded transfer function: \(transferFunction.transferFunctionDescription) (\(url.lastPathComponent), id \(transferFunction.id))")
-    } catch {
-      logger?.warning("Failed to load transfer function file: \(url.path())")
     }
   }
 
@@ -171,6 +167,28 @@ class DatasetScanner {
       .map { String(format: "%02x", $0) }
       .joined()
     return (id, description)
+  }
+
+  private static func transferFunctions(for urls: [URL], logger: LoggerBase?) -> [TransferFunctionInfo] {
+    urls.compactMap { transferFunctionInfo(at: $0, logger: logger) }
+  }
+
+  private static func transferFunctionInfo(at url: URL, logger: LoggerBase?) -> TransferFunctionInfo? {
+    do {
+      let fileData = try Data(contentsOf: url)
+      let parsed = try parseTransferFunctionData(fileData)
+      let fallbackDescription = url.deletingPathExtension().lastPathComponent
+      let description = parsed.description.trimmingCharacters(in: .whitespacesAndNewlines)
+      return TransferFunctionInfo(
+        id: parsed.id,
+        filename: url.path,
+        transferFunctionDescription: description.isEmpty ? fallbackDescription : description,
+        byteCount: fileData.count
+      )
+    } catch {
+      logger?.warning("Failed to load transfer function file: \(url.path)")
+      return nil
+    }
   }
 
   private static func readLittleEndianUInt32(from data: Data, cursor: inout Int) throws -> UInt32 {

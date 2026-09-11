@@ -54,18 +54,20 @@
             <div class="panel-title">Transfer Function</div>
             <canvas id="tf-editor-canvas" class="tf-editor-canvas" width="512" height="180" aria-label="Transfer function editor"></canvas>
             <div class="editor-toolbar">
-              <div class="channel-row" aria-label="Transfer function channels">
-                <button class="channel-button channel-red active" type="button" data-tf-channel="0" aria-label="Red channel" aria-pressed="true">R</button>
-                <button class="channel-button channel-green active" type="button" data-tf-channel="1" aria-label="Green channel" aria-pressed="true">G</button>
-                <button class="channel-button channel-blue active" type="button" data-tf-channel="2" aria-label="Blue channel" aria-pressed="true">B</button>
-                <button class="channel-button channel-alpha active" type="button" data-tf-channel="3" aria-label="Alpha channel" aria-pressed="true">A</button>
+              <div class="tf-channel-row" aria-label="Transfer function channels">
+                <div class="channel-row">
+                  <button class="channel-button channel-red active" type="button" data-tf-channel="0" aria-label="Red channel" aria-pressed="true">R</button>
+                  <button class="channel-button channel-green active" type="button" data-tf-channel="1" aria-label="Green channel" aria-pressed="true">G</button>
+                  <button class="channel-button channel-blue active" type="button" data-tf-channel="2" aria-label="Blue channel" aria-pressed="true">B</button>
+                  <button class="channel-button channel-alpha active" type="button" data-tf-channel="3" aria-label="Alpha channel" aria-pressed="true">A</button>
+                </div>
               </div>
-              <div class="tf-action-row">
+              <div class="tf-action-row" aria-label="Transfer function file actions">
                 <select id="tf-catalog-select" class="tf-catalog-select" aria-label="Transfer functions" hidden>
-                  <option value="">Transfer Functions</option>
+                  <option value="" disabled selected>Select Transfer Function</option>
                 </select>
-                <button id="tf-save" class="tf-command-button" type="button" aria-label="Save transfer function" title="Save transfer function">↓</button>
-                <button id="tf-load" class="tf-command-button" type="button" aria-label="Load transfer function" title="Load transfer function">↑</button>
+                <button id="tf-save" class="tf-command-button" type="button" aria-label="Save transfer function locally" title="Save transfer function locally">↓</button>
+                <button id="tf-load" class="tf-command-button" type="button" aria-label="Load transfer function locally" title="Load transfer function locally">↑</button>
                 <button id="tf-reset" class="tf-command-button" type="button" aria-label="Reset transfer function" title="Reset transfer function">↺</button>
               </div>
               <input id="tf-load-input" type="file" accept=".tf1d,application/octet-stream" hidden>

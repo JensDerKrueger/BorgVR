@@ -102,9 +102,11 @@ async function loadTransferFunctionCatalog() {
   }
 
   const options = [
-    new Option("Transfer Functions", ""),
+    new Option("Select Transfer Function", ""),
     ...transferFunctionCatalog.map((entry) => new Option(displayTransferFunctionName(entry), entry.id)),
   ];
+  options[0].disabled = true;
+  options[0].selected = true;
   tfCatalogSelect.replaceChildren(...options);
   tfCatalogSelect.hidden = transferFunctionCatalog.length === 0;
 }
@@ -129,6 +131,7 @@ async function loadCatalogTransferFunction(id) {
     renderer?.loadTransferFunction(await response.arrayBuffer());
     drawTransferFunctionEditor();
     updateTransferFunctionURL();
+    tfCatalogSelect.value = "";
     setStatus(`Transfer function loaded: ${displayTransferFunctionName(entry)}`);
   } catch (error) {
     setStatus(`Transfer function load failed: ${error.message ?? String(error)}`);

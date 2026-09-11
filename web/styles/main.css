@@ -451,10 +451,12 @@ p {
 
 .editor-toolbar {
   display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 8px;
-  align-items: center;
+  gap: 7px;
   padding: 0 9px 9px;
+}
+
+.tf-channel-row {
+  display: grid;
 }
 
 .channel-row {
@@ -523,7 +525,7 @@ p {
 .tf-action-row {
   display: flex;
   gap: 6px;
-  justify-content: flex-end;
+  align-items: center;
 }
 
 .tf-catalog-select {
