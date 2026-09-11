@@ -3,6 +3,7 @@ import Foundation
 struct TransferFunctionCatalogEntry: Identifiable, Equatable {
   enum Source: Equatable {
     case builtIn
+    case cached
     case local
   }
 
@@ -78,16 +79,7 @@ enum TransferFunctionCatalog {
       logger: logger
     ))
 
-    var entriesByID: [String: TransferFunctionCatalogEntry] = [:]
-    for entry in entries {
-      if let current = entriesByID[entry.id],
-         current.displayNameOverride != nil || entry.displayNameOverride == nil {
-        continue
-      }
-      entriesByID[entry.id] = entry
-    }
-    return entries
-      .compactMap { entriesByID.removeValue(forKey: $0.id) }
+    return groupedEntriesByID(entries)
       .sorted { lhs, rhs in
         lhs.displayName.localizedCaseInsensitiveCompare(rhs.displayName) == .orderedAscending
       }
@@ -177,7 +169,7 @@ enum TransferFunctionCatalog {
     }
     return entries(
       for: urls.filter { $0.pathExtension.lowercased() == "tf1d" },
-      source: .local,
+      source: .cached,
       logger: logger
     ).compactMap {
       catalogEntry($0, datasetTransferFunctionURL: datasetTransferFunctionURL)
@@ -248,11 +240,72 @@ enum TransferFunctionCatalog {
       )
     }
 
+    if entry.source == .cached {
+      return nil
+    }
+
     if isDatasetAutosave(entry) {
       return nil
     }
 
     return entry
+  }
+
+  private static func groupedEntriesByID(_ entries: [TransferFunctionCatalogEntry]) -> [TransferFunctionCatalogEntry] {
+    var groups: [String: [TransferFunctionCatalogEntry]] = [:]
+    var idOrder: [String] = []
+
+    for entry in entries {
+      if groups[entry.id] == nil {
+        idOrder.append(entry.id)
+        groups[entry.id] = []
+      }
+      groups[entry.id]?.append(entry)
+    }
+
+    return idOrder.compactMap { id in
+      guard let group = groups[id], let representative = representativeEntry(in: group) else {
+        return nil
+      }
+      guard group.count > 1 else {
+        return representative
+      }
+
+      return TransferFunctionCatalogEntry(
+        id: representative.id,
+        description: representative.description,
+        url: representative.url,
+        source: representative.source,
+        displayNameOverride: groupedDisplayName(for: group)
+      )
+    }
+  }
+
+  private static func representativeEntry(
+    in entries: [TransferFunctionCatalogEntry]
+  ) -> TransferFunctionCatalogEntry? {
+    entries.first { $0.displayNameOverride != nil } ??
+      entries.first { !isAnonymousCachedEntry($0) } ??
+      entries.first
+  }
+
+  private static func groupedDisplayName(for entries: [TransferFunctionCatalogEntry]) -> String {
+    let namedEntries = entries.filter { !isAnonymousCachedEntry($0) }
+    let displayEntries = namedEntries.isEmpty ? entries : namedEntries
+    var names: [String] = []
+    for entry in displayEntries {
+      let name = entry.displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+      if !name.isEmpty && !names.contains(name) {
+        names.append(name)
+      }
+    }
+    return names.joined(separator: " / ")
+  }
+
+  private static func isAnonymousCachedEntry(_ entry: TransferFunctionCatalogEntry) -> Bool {
+    entry.source == .cached &&
+      entry.description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+      entry.url.deletingPathExtension().lastPathComponent == entry.id
   }
 
   private static func isDatasetAutosave(_ entry: TransferFunctionCatalogEntry) -> Bool {
