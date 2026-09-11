@@ -293,7 +293,10 @@ struct TransferFunctionEditorView: View {
                 }
               }
             } label: {
-              Label("tf_catalog_menu", systemImage: "waveform")
+              Label(currentTransferFunctionMenuTitle, systemImage: currentTransferFunctionMenuIcon)
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .frame(maxWidth: 300, alignment: .leading)
             }
 
             Button {
@@ -364,8 +367,20 @@ struct TransferFunctionEditorView: View {
   }
 
   private var currentTransferFunctionDescription: String {
+    return currentTransferFunctionCatalogEntry?.displayName ?? ""
+  }
+
+  private var currentTransferFunctionCatalogEntry: TransferFunctionCatalogEntry? {
     let currentID = sharedAppModel.transferFunction.identifier
-    return transferFunctionCatalog.first { $0.id == currentID }?.displayName ?? ""
+    return transferFunctionCatalog.first { $0.id == currentID }
+  }
+
+  private var currentTransferFunctionMenuTitle: String {
+    currentTransferFunctionCatalogEntry?.displayName ?? String(localized: "tf_catalog_custom")
+  }
+
+  private var currentTransferFunctionMenuIcon: String {
+    currentTransferFunctionCatalogEntry == nil ? "waveform" : "checkmark.circle"
   }
 
   private func refreshTransferFunctionCatalog() {

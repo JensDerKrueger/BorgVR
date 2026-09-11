@@ -10,6 +10,47 @@ export function decodeAppleLZ4(data, expectedLength) {
   return decodeLZ4Block(data, expectedLength);
 }
 
+export function encodeLZ4Block(data) {
+  const source = data instanceof Uint8Array ? data : new Uint8Array(data);
+  const output = [];
+  const table = new Map();
+  let anchor = 0;
+  let position = 0;
+
+  while (position + 4 <= source.byteLength) {
+    const sequence = readUInt32LE(source, position);
+    const reference = table.get(sequence);
+    table.set(sequence, position);
+
+    if (reference !== undefined &&
+        position - reference <= 65535 &&
+        source[reference] === source[position] &&
+        source[reference + 1] === source[position + 1] &&
+        source[reference + 2] === source[position + 2] &&
+        source[reference + 3] === source[position + 3]) {
+      let matchLength = 4;
+      while (position + matchLength < source.byteLength &&
+             source[reference + matchLength] === source[position + matchLength]) {
+        matchLength += 1;
+      }
+
+      emitLZ4Sequence(output, source, anchor, position, position - reference, matchLength);
+      const matchEnd = position + matchLength;
+      for (let fill = position + 1; fill + 4 <= matchEnd; fill += 1) {
+        table.set(readUInt32LE(source, fill), fill);
+      }
+      position = matchEnd;
+      anchor = position;
+      continue;
+    }
+
+    position += 1;
+  }
+
+  emitLZ4Sequence(output, source, anchor, source.byteLength, 0, 0);
+  return new Uint8Array(output);
+}
+
 function decodeAppleLZ4Stream(data, expectedLength) {
   const output = new Uint8Array(expectedLength);
   let sourceOffset = 0;
@@ -156,6 +197,38 @@ function readUInt32LE(data, offset) {
     (data[offset + 1] << 8) |
     (data[offset + 2] << 16) |
     (data[offset + 3] << 24)) >>> 0;
+}
+
+function emitLZ4Sequence(output, source, literalStart, literalEnd, matchOffset, matchLength) {
+  const literalLength = literalEnd - literalStart;
+  const matchTokenLength = matchLength > 0 ? matchLength - 4 : 0;
+  output.push((Math.min(literalLength, 15) << 4) | Math.min(matchTokenLength, 15));
+
+  if (literalLength >= 15) {
+    emitLZ4Length(output, literalLength - 15);
+  }
+
+  for (let index = literalStart; index < literalEnd; index += 1) {
+    output.push(source[index]);
+  }
+
+  if (matchLength <= 0) {
+    return;
+  }
+
+  output.push(matchOffset & 0xff, (matchOffset >> 8) & 0xff);
+  if (matchTokenLength >= 15) {
+    emitLZ4Length(output, matchTokenLength - 15);
+  }
+}
+
+function emitLZ4Length(output, length) {
+  let remaining = length;
+  while (remaining >= 255) {
+    output.push(255);
+    remaining -= 255;
+  }
+  output.push(remaining);
 }
 
 /*

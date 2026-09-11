@@ -345,6 +345,7 @@
 "tf_editor_load_failed" = "No se pudo cargar la función de transferencia:";
 "tf_catalog_empty" = "No se encontraron funciones de transferencia";
 "tf_catalog_menu" = "Funciones de transferencia";
+"tf_catalog_custom" = "Función de transferencia personalizada";
 "tf_catalog_dataset_saved" = "Guardada para este conjunto de datos";
 "tf_save_dialog_title" = "Guardar función de transferencia";
 "tf_save_dialog_description_placeholder" = "Descripción";

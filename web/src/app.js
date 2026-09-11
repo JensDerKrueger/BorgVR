@@ -1,5 +1,5 @@
 import { CoordinateCubeRenderer } from "./cube-renderer.js?v=20260911-worker";
-import { decodeAppleLZ4 } from "./lz4.js?v=20260911-worker";
+import { decodeAppleLZ4, encodeLZ4Block } from "./lz4.js?v=20260911-urltf";
 
 const catalogStatus = document.querySelector("#catalog-status");
 const datasetList = document.querySelector("#dataset-list");
@@ -25,6 +25,8 @@ const clipInputs = Array.from(document.querySelectorAll("[data-clip-axis]"));
 const clipReset = document.querySelector("#clip-reset");
 const MINIMUM_TRANSFER_SMOOTH_WIDTH = 0.02;
 const MAXIMUM_TRANSFER_SMOOTH_WIDTH = 1.0;
+const TRANSFER_FUNCTION_URL_PARAMETER = "TF";
+const MAX_TRANSFER_FUNCTION_URL_BYTES = 1024 * 1024;
 
 let renderer = null;
 let currentManifest = null;
@@ -126,6 +128,7 @@ async function loadCatalogTransferFunction(id) {
     }
     renderer?.loadTransferFunction(await response.arrayBuffer());
     drawTransferFunctionEditor();
+    updateTransferFunctionURL();
     setStatus(`Transfer function loaded: ${displayTransferFunctionName(entry)}`);
   } catch (error) {
     setStatus(`Transfer function load failed: ${error.message ?? String(error)}`);
@@ -213,6 +216,7 @@ async function showDataset(dataset) {
     return;
   }
   renderer?.setDataset(currentManifest);
+  const transferFunctionStatus = applyTransferFunctionFromURL();
   viewerEmpty.hidden = true;
   infoButton.disabled = false;
   renderControls.hidden = false;
@@ -221,7 +225,7 @@ async function showDataset(dataset) {
   isoValue.value = String(renderer.getNormalizedIsoValue());
   updateVisibleEditor();
   drawTransferFunctionEditor();
-  setStatus(`Rendering ${currentManifest.name}`);
+  setStatus(transferFunctionStatus || `Rendering ${currentManifest.name}`);
 }
 
 function setStatus(message) {
@@ -297,6 +301,7 @@ function installRenderControls() {
   tfReset.addEventListener("click", () => {
     renderer?.resetTransferFunction();
     drawTransferFunctionEditor();
+    clearTransferFunctionURL();
   });
 
   transferEditorCanvas.addEventListener("pointerdown", (event) => {
@@ -336,11 +341,13 @@ function installRenderControls() {
   transferEditorCanvas.addEventListener("pointerup", () => {
     lastTransferPaintPoint = null;
     transferPointerMode = null;
+    updateTransferFunctionURL();
   });
 
   transferEditorCanvas.addEventListener("pointercancel", () => {
     lastTransferPaintPoint = null;
     transferPointerMode = null;
+    updateTransferFunctionURL();
   });
 
   transferEditorCanvas.addEventListener("contextmenu", (event) => {
@@ -417,10 +424,151 @@ async function loadTransferFunction(file) {
   try {
     renderer?.loadTransferFunction(await file.arrayBuffer());
     drawTransferFunctionEditor();
+    updateTransferFunctionURL();
     setStatus(`Transfer function loaded: ${file.name}`);
   } catch (error) {
     setStatus(`Transfer function load failed: ${error.message ?? String(error)}`);
   }
+}
+
+function applyTransferFunctionFromURL() {
+  const encoded = requestedTransferFunction();
+  if (!encoded) {
+    return "";
+  }
+
+  try {
+    renderer?.loadTransferFunction(decodeTransferFunctionURLValue(encoded));
+    return "Transfer function loaded from URL.";
+  } catch (error) {
+    return `Transfer function URL parameter ignored: ${error.message ?? String(error)}`;
+  }
+}
+
+function requestedTransferFunction() {
+  const params = new URLSearchParams(window.location.search);
+  return params.get(TRANSFER_FUNCTION_URL_PARAMETER) || params.get("tf") || "";
+}
+
+function updateTransferFunctionURL() {
+  const buffer = renderer?.serializeTransferFunction();
+  if (!buffer?.byteLength) {
+    return;
+  }
+
+  const url = new URL(window.location.href);
+  url.searchParams.delete("tf");
+  url.searchParams.set(TRANSFER_FUNCTION_URL_PARAMETER, encodeTransferFunctionURLValue(buffer));
+  window.history.replaceState(null, "", url);
+}
+
+function clearTransferFunctionURL() {
+  const url = new URL(window.location.href);
+  url.searchParams.delete(TRANSFER_FUNCTION_URL_PARAMETER);
+  url.searchParams.delete("tf");
+  window.history.replaceState(null, "", url);
+}
+
+function encodeTransferFunctionURLValue(buffer) {
+  const bytes = buffer instanceof ArrayBuffer
+    ? new Uint8Array(buffer)
+    : new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  const nativeCompressed = encodeLZ4Block(bytes);
+  const nativeToken = `l.${bytes.byteLength}.${bytesToBase64URL(nativeCompressed)}`;
+
+  const rgba = transferFunctionRGBAData(bytes);
+  const deltaCompressed = encodeLZ4Block(deltaEncodeRGBA(rgba));
+  const deltaToken = `d.${rgba.byteLength / 4}.${bytesToBase64URL(deltaCompressed)}`;
+  return deltaToken.length < nativeToken.length ? deltaToken : nativeToken;
+}
+
+function decodeTransferFunctionURLValue(value) {
+  const parts = value.split(".");
+  if (parts.length !== 3) {
+    throw new Error("Unsupported transfer function encoding.");
+  }
+
+  if (parts[0] === "lz4" || parts[0] === "l") {
+    const byteLength = Number(parts[1]);
+    if (!Number.isInteger(byteLength) || byteLength <= 0 || byteLength > MAX_TRANSFER_FUNCTION_URL_BYTES) {
+      throw new Error("Invalid transfer function byte length.");
+    }
+
+    const compressed = base64URLToBytes(parts[2]);
+    return decodeAppleLZ4(compressed, byteLength).buffer;
+  }
+
+  if (parts[0] === "d") {
+    const count = Number(parts[1]);
+    if (!Number.isInteger(count) || count <= 0 || count * 4 > MAX_TRANSFER_FUNCTION_URL_BYTES) {
+      throw new Error("Invalid transfer function entry count.");
+    }
+
+    const compressed = base64URLToBytes(parts[2]);
+    const deltaRGBA = decodeAppleLZ4(compressed, count * 4);
+    return nativeTransferFunctionBuffer(deltaDecodeRGBA(deltaRGBA));
+  }
+
+  throw new Error("Unsupported transfer function encoding.");
+}
+
+function transferFunctionRGBAData(bytes) {
+  if (bytes.byteLength < 4) {
+    throw new Error("Transfer function data is too small.");
+  }
+
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const count = view.getUint32(0, true);
+  const expectedLength = 4 + count * 4;
+  if (count <= 0 || expectedLength > bytes.byteLength) {
+    throw new Error("Transfer function data is invalid.");
+  }
+  return bytes.subarray(4, expectedLength);
+}
+
+function nativeTransferFunctionBuffer(rgba) {
+  const bytes = new Uint8Array(4 + rgba.byteLength);
+  new DataView(bytes.buffer).setUint32(0, rgba.byteLength / 4, true);
+  bytes.set(rgba, 4);
+  return bytes.buffer;
+}
+
+function deltaEncodeRGBA(rgba) {
+  const result = new Uint8Array(rgba.byteLength);
+  for (let index = 0; index < rgba.byteLength; index += 1) {
+    result[index] = index < 4 ? rgba[index] : (rgba[index] - rgba[index - 4]) & 0xff;
+  }
+  return result;
+}
+
+function deltaDecodeRGBA(deltaRGBA) {
+  const result = new Uint8Array(deltaRGBA.byteLength);
+  for (let index = 0; index < deltaRGBA.byteLength; index += 1) {
+    result[index] = index < 4 ? deltaRGBA[index] : (deltaRGBA[index] + result[index - 4]) & 0xff;
+  }
+  return result;
+}
+
+function bytesToBase64URL(bytes) {
+  let binary = "";
+  const chunkSize = 0x8000;
+  for (let offset = 0; offset < bytes.byteLength; offset += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize));
+  }
+  return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/u, "");
+}
+
+function base64URLToBytes(value) {
+  const padded = value
+    .replaceAll("-", "+")
+    .replaceAll("_", "/")
+    .padEnd(Math.ceil(value.length / 4) * 4, "=");
+  const binary = atob(padded);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return bytes;
 }
 
 function selectedTransferChannels() {

@@ -345,6 +345,7 @@
 "tf_editor_load_failed" = "Could not load transfer function:";
 "tf_catalog_empty" = "No transfer functions found";
 "tf_catalog_menu" = "Transfer Functions";
+"tf_catalog_custom" = "Custom Transfer Function";
 "tf_catalog_dataset_saved" = "Saved for this dataset";
 "tf_save_dialog_title" = "Save Transfer Function";
 "tf_save_dialog_description_placeholder" = "Description";

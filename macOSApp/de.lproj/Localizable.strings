@@ -349,6 +349,7 @@
 "tf_editor_load_failed" = "Transferfunktion konnte nicht geladen werden:";
 "tf_catalog_empty" = "Keine Transferfunktionen gefunden";
 "tf_catalog_menu" = "Transferfunktionen";
+"tf_catalog_custom" = "Benutzerdefinierte Transferfunktion";
 "tf_catalog_dataset_saved" = "Gespeichert für diesen Datensatz";
 "tf_save_dialog_title" = "Transferfunktion speichern";
 "tf_save_dialog_description_placeholder" = "Beschreibung";

@@ -487,6 +487,7 @@
 /* Transfer function save-as dialog */
 "tf_catalog_empty" = "Aucune fonction de transfert trouvée";
 "tf_catalog_menu" = "Fonctions de transfert";
+"tf_catalog_custom" = "Fonction de transfert personnalisée";
 "tf_catalog_dataset_saved" = "Enregistrée pour ce jeu de données";
 "tf_save_dialog_filename_placeholder" = "Nom de fichier";
 "tf_save_dialog_description_placeholder" = "Description";

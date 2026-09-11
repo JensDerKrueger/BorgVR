@@ -125,7 +125,10 @@ struct TransferFunctionEditorView: View {
             }
           }
         } label: {
-          Image(systemName: "waveform")
+          Label(currentTransferFunctionMenuTitle, systemImage: currentTransferFunctionMenuIcon)
+            .lineLimit(1)
+            .truncationMode(.middle)
+            .frame(maxWidth: 220, alignment: .leading)
         }
         .help("tf_catalog_menu")
         .accessibilityLabel("tf_catalog_menu")
@@ -274,8 +277,20 @@ struct TransferFunctionEditorView: View {
     renderingParameters.transferFunction.identifier
   }
 
+  private var currentTransferFunctionCatalogEntry: TransferFunctionCatalogEntry? {
+    transferFunctionCatalog.first { $0.id == currentTransferFunctionID }
+  }
+
   private var currentTransferFunctionDescription: String {
-    transferFunctionCatalog.first { $0.id == currentTransferFunctionID }?.displayName ?? ""
+    currentTransferFunctionCatalogEntry?.displayName ?? ""
+  }
+
+  private var currentTransferFunctionMenuTitle: String {
+    currentTransferFunctionCatalogEntry?.displayName ?? String(localized: "tf_catalog_custom")
+  }
+
+  private var currentTransferFunctionMenuIcon: String {
+    currentTransferFunctionCatalogEntry == nil ? "waveform" : "checkmark.circle"
   }
 
   private func refreshTransferFunctionCatalog() {
