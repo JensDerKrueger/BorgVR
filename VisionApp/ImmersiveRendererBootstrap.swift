@@ -70,11 +70,17 @@ enum ImmersiveBootstrap {
     let documentsDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
     let autoURL = documentsDirectory.appendingPathComponent(activeDataset.uniqueId)
 
+    // Update value ranges before loading transfer functions so TFs with non-default
+    // sample counts keep the active dataset normalization.
+    sharedAppModel.updateRanges(minValue: dataset.getMetadata().minValue,
+                                maxValue: dataset.getMetadata().maxValue,
+                                rangeMax: dataset.getMetadata().rangeMax)
+
     if storedAppModel.autoloadTF {
       let fileURL = URL(
         fileURLWithPath: autoURL.deletingPathExtension().path() + ".tf1d"
       )
-      try? sharedAppModel.transferFunction.load(from: fileURL)
+      try? sharedAppModel.loadTransferFunction(from: fileURL)
       sharedAppModel.synchronize(kind: .full)
     }
     if storedAppModel.autoloadTransform {
@@ -83,11 +89,6 @@ enum ImmersiveBootstrap {
       )
       try? sharedAppModel.loadTransform(from: fileURL)
     }
-
-    // Update value ranges from dataset metadata
-    sharedAppModel.updateRanges(minValue: dataset.getMetadata().minValue,
-                                maxValue: dataset.getMetadata().maxValue,
-                                rangeMax: dataset.getMetadata().rangeMax)
 
     // Start renderer
     Renderer.startRenderLoop(

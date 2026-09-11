@@ -5,8 +5,12 @@ struct TransferFunctionEditorView: View {
   @EnvironmentObject private var renderingParameters: RenderingParameters
   @EnvironmentObject private var sharePlay: SharePlayCoordinator
   var usesPanelBackground = true
+  var catalogDirectoryURLs: [URL] = []
   var onClose: (() -> Void)?
   @State private var lastPaintPoint: CGPoint?
+  @State private var transferFunctionCatalog: [TransferFunctionCatalogEntry] = []
+  @State private var saveDescription = ""
+  @State private var showingSaveDescriptionPrompt = false
 
   @ViewBuilder
   var body: some View {
@@ -90,7 +94,8 @@ struct TransferFunctionEditorView: View {
         Spacer()
 
         Button {
-          saveTransferFunction()
+          saveDescription = currentTransferFunctionDescription
+          showingSaveDescriptionPrompt = true
         } label: {
           Image(systemName: "square.and.arrow.down")
         }
@@ -107,16 +112,23 @@ struct TransferFunctionEditorView: View {
         .help("tf_editor_load_help")
         .accessibilityLabel("tf_editor_load")
 
-        Button {
-          renderingParameters.objectWillChange.send()
-          renderingParameters.transferFunction.slicingPreset()
-          renderingParameters.renderMode = .transferFunction1D
-          sharePlay.synchronize(kind: .full)
+        Menu {
+          if transferFunctionCatalog.isEmpty {
+            Text("tf_catalog_empty")
+          } else {
+            ForEach(transferFunctionCatalog) { entry in
+              Button {
+                loadTransferFunction(from: entry)
+              } label: {
+                Label(entry.displayName, systemImage: currentTransferFunctionID == entry.id ? "checkmark" : "waveform")
+              }
+            }
+          }
         } label: {
-          Image(systemName: "square.split.2x1")
+          Image(systemName: "waveform")
         }
-        .help("Slicing Preset")
-        .accessibilityLabel("Slicing Preset")
+        .help("tf_catalog_menu")
+        .accessibilityLabel("tf_catalog_menu")
 
         Button {
           renderingParameters.objectWillChange.send()
@@ -136,6 +148,19 @@ struct TransferFunctionEditorView: View {
         .help("Done")
         .accessibilityLabel("Done")
       }
+    }
+    .onAppear(perform: refreshTransferFunctionCatalog)
+    .onChange(of: catalogDirectoryURLs) {
+      refreshTransferFunctionCatalog()
+    }
+    .alert("tf_save_dialog_title", isPresented: $showingSaveDescriptionPrompt) {
+      TextField("tf_save_dialog_description_placeholder", text: $saveDescription)
+      Button("tf_save_dialog_save_button") {
+        saveTransferFunction(description: saveDescription)
+      }
+      Button("tf_save_dialog_cancel_button", role: .cancel) {}
+    } message: {
+      Text("tf_save_dialog_message")
     }
   }
 
@@ -245,12 +270,34 @@ struct TransferFunctionEditorView: View {
     appModel.transferFunctionFileURL()
   }
 
-  private func saveTransferFunction() {
+  private var currentTransferFunctionID: String {
+    renderingParameters.transferFunction.identifier
+  }
+
+  private var currentTransferFunctionDescription: String {
+    transferFunctionCatalog.first { $0.id == currentTransferFunctionID }?.displayName ?? ""
+  }
+
+  private func refreshTransferFunctionCatalog() {
+    transferFunctionCatalog = TransferFunctionCatalog.entries(
+      additionalDirectoryURLs: catalogDirectoryURLs,
+      datasetTransferFunctionURL: appModel.transferFunctionFileURL(),
+      logger: appModel.logger
+    )
+  }
+
+  private func saveTransferFunction(description: String) {
     guard let fileURL = transferFunctionFileURL else { return }
     do {
-      try renderingParameters.transferFunction.save(to: fileURL)
+      try renderingParameters.transferFunction.save(to: fileURL, description: description)
+      let catalogURL = try TransferFunctionCatalog.store(
+        transferFunction: renderingParameters.transferFunction,
+        description: description,
+        logger: appModel.logger
+      )
+      refreshTransferFunctionCatalog()
       appModel.logger.info(
-        String(localized: "tf_editor_save_success") + " \(fileURL.lastPathComponent)"
+        String(localized: "tf_editor_save_success") + " \(catalogURL.lastPathComponent)"
       )
     } catch {
       appModel.logger.warning(
@@ -263,10 +310,26 @@ struct TransferFunctionEditorView: View {
     guard let fileURL = transferFunctionFileURL else { return }
     do {
       renderingParameters.objectWillChange.send()
-      try renderingParameters.transferFunction.load(from: fileURL)
+      try renderingParameters.loadTransferFunction(from: fileURL)
       sharePlay.synchronize(kind: .full)
       appModel.logger.info(
         String(localized: "tf_editor_load_success") + " \(fileURL.lastPathComponent)"
+      )
+    } catch {
+      appModel.logger.warning(
+        String(localized: "tf_editor_load_failed") + " \(error.localizedDescription)"
+      )
+    }
+  }
+
+  private func loadTransferFunction(from entry: TransferFunctionCatalogEntry) {
+    do {
+      renderingParameters.objectWillChange.send()
+      try renderingParameters.loadTransferFunction(from: entry.url)
+      renderingParameters.renderMode = .transferFunction1D
+      sharePlay.synchronize(kind: .full)
+      appModel.logger.info(
+        String(localized: "tf_editor_load_success") + " \(entry.url.lastPathComponent)"
       )
     } catch {
       appModel.logger.warning(

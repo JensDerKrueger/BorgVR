@@ -213,6 +213,7 @@ struct DockableEditorPanel<Content: View>: View {
 
 struct DetachedPanelContent: View {
   @EnvironmentObject private var renderingParameters: RenderingParameters
+  @EnvironmentObject private var storedAppModel: StoredAppModel
   @EnvironmentObject private var docking: DockingController
 
   let panel: DockablePanelID
@@ -230,7 +231,10 @@ struct DetachedPanelContent: View {
             unavailableEditorMessage
           } else {
             DockableEditorPanel(panel: panel, maxWidth: 720, showsTitle: false) {
-              TransferFunctionEditorView(usesPanelBackground: false) {
+              TransferFunctionEditorView(
+                usesPanelBackground: false,
+                catalogDirectoryURLs: transferFunctionCatalogDirectoryURLs
+              ) {
                 docking.close(panel)
               }
             }
@@ -259,5 +263,9 @@ struct DetachedPanelContent: View {
       DockToggleButton(panel: panel)
     }
     .padding()
+  }
+
+  private var transferFunctionCatalogDirectoryURLs: [URL] {
+    [storedAppModel.resolvedDataDirectoryURL()]
   }
 }

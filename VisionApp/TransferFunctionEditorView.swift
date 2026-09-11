@@ -23,6 +23,8 @@ struct TransferFunctionEditorView: View {
   @State private var showSaveDialog = false
   /// The filename entered in the Save As dialog (without extension).
   @State private var saveFilename = ""
+  /// The description entered in the Save As dialog.
+  @State private var saveDescription = ""
   /// An error encountered during save operations.
   @State private var saveError: Error? = nil
   /// Whether to show an alert for a save error.
@@ -34,6 +36,7 @@ struct TransferFunctionEditorView: View {
 
   @State private var showICloudImporter = false
   @State private var showICloudExporter = false
+  @State private var transferFunctionCatalog: [TransferFunctionCatalogEntry] = []
 
   // MARK: - Gesture Handler
 
@@ -227,6 +230,7 @@ struct TransferFunctionEditorView: View {
             // Save button
             Button {
               saveFilename = ""
+              saveDescription = currentTransferFunctionDescription
               showSaveDialog = true
             } label: {
               Label("tf_editor_button_save", systemImage: "square.and.arrow.down")
@@ -234,14 +238,21 @@ struct TransferFunctionEditorView: View {
             .sheet(isPresented: $showSaveDialog) {
               SaveAsDialog(
                 isPresented: $showSaveDialog,
-                filename: $saveFilename
+                filename: $saveFilename,
+                transferFunctionDescription: $saveDescription,
+                showsDescriptionField: true
               ) { name in
                 let url = FileManager.default
                   .urls(for: .documentDirectory, in: .userDomainMask).first!
                   .appendingPathComponent(name)
                   .appendingPathExtension("tf1d")
                 do {
-                  try sharedAppModel.transferFunction.save(to: url)
+                  try sharedAppModel.transferFunction.save(to: url, description: saveDescription)
+                  try TransferFunctionCatalog.store(
+                    transferFunction: sharedAppModel.transferFunction,
+                    description: saveDescription
+                  )
+                  refreshTransferFunctionCatalog()
                 } catch {
                   saveError       = error
                   showSaveError   = true
@@ -266,6 +277,25 @@ struct TransferFunctionEditorView: View {
               .labelsHidden()
           }
           HStack {
+            Menu {
+              if transferFunctionCatalog.isEmpty {
+                Text("tf_catalog_empty")
+              } else {
+                ForEach(transferFunctionCatalog) { entry in
+                  Button {
+                    loadCatalogTransferFunction(entry)
+                  } label: {
+                    Label(
+                      entry.displayName,
+                      systemImage: sharedAppModel.transferFunction.identifier == entry.id ? "checkmark" : "waveform"
+                    )
+                  }
+                }
+              }
+            } label: {
+              Label("tf_catalog_menu", systemImage: "waveform")
+            }
+
             Button {
               showICloudImporter = true
             } label: {
@@ -291,7 +321,7 @@ struct TransferFunctionEditorView: View {
                     if url.startAccessingSecurityScopedResource() {
                       defer { url.stopAccessingSecurityScopedResource() }
                       do {
-                        try sharedAppModel.transferFunction.load(from: url)
+                        try sharedAppModel.loadTransferFunction(from: url)
                         sharedAppModel.synchronize(kind: .full)
                       } catch {
                         importError = error
@@ -330,6 +360,45 @@ struct TransferFunctionEditorView: View {
       }
     }
     .padding()
+    .onAppear(perform: refreshTransferFunctionCatalog)
+  }
+
+  private var currentTransferFunctionDescription: String {
+    let currentID = sharedAppModel.transferFunction.identifier
+    return transferFunctionCatalog.first { $0.id == currentID }?.displayName ?? ""
+  }
+
+  private func refreshTransferFunctionCatalog() {
+    transferFunctionCatalog = TransferFunctionCatalog.entries(
+      additionalDirectoryURLs: transferFunctionCatalogDirectoryURLs,
+      datasetTransferFunctionURL: datasetTransferFunctionURL,
+      logger: runtimeAppModel.logger
+    )
+  }
+
+  private var datasetTransferFunctionURL: URL? {
+    guard let activeDataset = runtimeAppModel.activeDataset,
+          let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
+      return nil
+    }
+    return documentsURL
+      .appendingPathComponent(activeDataset.uniqueId)
+      .appendingPathExtension("tf1d")
+  }
+
+  private func loadCatalogTransferFunction(_ entry: TransferFunctionCatalogEntry) {
+    do {
+      try sharedAppModel.loadTransferFunction(from: entry.url)
+      sharedAppModel.renderMode = .transferFunction1D
+      sharedAppModel.synchronize(kind: .full)
+    } catch {
+      importError = error
+      showImportError = true
+    }
+  }
+
+  private var transferFunctionCatalogDirectoryURLs: [URL] {
+    FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
   }
 }
 
@@ -356,7 +425,7 @@ struct FilePickerDialog: View {
       List(availableFiles, id: \.self) { fileURL in
         Button(action: {
           do {
-            try sharedAppModel.transferFunction.load(from: fileURL)
+            try sharedAppModel.loadTransferFunction(from: fileURL)
             sharedAppModel.synchronize(kind: .full)
             isPresented = false
           } catch {
@@ -417,8 +486,25 @@ struct SaveAsDialog: View {
   @Binding var isPresented: Bool
   /// Binding for the filename input (without extension).
   @Binding var filename: String
+  /// Binding for the transfer function description.
+  @Binding var transferFunctionDescription: String
+  private let showsDescriptionField: Bool
   /// Closure invoked when user confirms Save.
   let onSave: (String) -> Void
+
+  init(
+    isPresented: Binding<Bool>,
+    filename: Binding<String>,
+    transferFunctionDescription: Binding<String> = .constant(""),
+    showsDescriptionField: Bool = false,
+    onSave: @escaping (String) -> Void
+  ) {
+    self._isPresented = isPresented
+    self._filename = filename
+    self._transferFunctionDescription = transferFunctionDescription
+    self.showsDescriptionField = showsDescriptionField
+    self.onSave = onSave
+  }
 
   var body: some View {
     NavigationView {
@@ -426,6 +512,9 @@ struct SaveAsDialog: View {
         TextField("tf_save_dialog_filename_placeholder", text: $filename)
           .textInputAutocapitalization(.never)
           .disableAutocorrection(true)
+        if showsDescriptionField {
+          TextField("tf_save_dialog_description_placeholder", text: $transferFunctionDescription)
+        }
       }
       .navigationTitle("tf_save_dialog_title")
       .toolbar {

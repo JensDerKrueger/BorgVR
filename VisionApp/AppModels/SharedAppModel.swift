@@ -120,6 +120,16 @@ class SharedAppModel {
     )
   }
 
+  func loadTransferFunction(from url: URL) throws {
+    try transferFunction.load(from: url)
+    transferFunction.updateRanges(minValue: minValue, maxValue: maxValue, rangeMax: rangeMax)
+  }
+
+  func loadTransferFunction(from data: Data) throws {
+    try transferFunction.load(from: data)
+    transferFunction.updateRanges(minValue: minValue, maxValue: maxValue, rangeMax: rangeMax)
+  }
+
   func loadTransform(from url: URL) throws {
     let transform = try Transform.load(from:url)
     self.modelTransform = transform

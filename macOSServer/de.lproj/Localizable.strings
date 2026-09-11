@@ -373,7 +373,7 @@
 "WebGPU web server" = "WebGPU-Webserver";
 "Ad-hoc server" = "Ad-hoc-Server";
 "External data sources" = "Externe Datenquellen";
-"Automatically load/save transfer functions" = "Transfer Functions automatisch laden/speichern";
+"Automatically load/save transfer functions" = "Transferfunktionen automatisch laden/speichern";
 "Static" = "Statisch";
 "Dynamic" = "Dynamisch";
 "Background" = "Hintergrund";
@@ -489,3 +489,13 @@
 "Screenshot failed: \\(error.localizedDescription)" = "Screenshot fehlgeschlagen: \\(error.localizedDescription)";
 "Transfer function saved: \\(url.path)" = "Transferfunktion gespeichert: \\(url.path)";
 "Transfer function could not be saved: \\(error.localizedDescription)" = "Transferfunktion konnte nicht gespeichert werden: \\(error.localizedDescription)";
+
+/* Transfer function catalog and save dialog */
+"tf_catalog_empty" = "Keine Transferfunktionen gefunden";
+"tf_catalog_menu" = "Transferfunktionen";
+"tf_catalog_dataset_saved" = "Gespeichert für diesen Datensatz";
+"tf_save_dialog_title" = "Transferfunktion speichern";
+"tf_save_dialog_description_placeholder" = "Beschreibung";
+"tf_save_dialog_cancel_button" = "Abbrechen";
+"tf_save_dialog_save_button" = "Speichern";
+"tf_save_dialog_message" = "Geben Sie eine Beschreibung für diese Transferfunktion ein.";

@@ -32,6 +32,7 @@ struct ServerView: View {
   /// Dataset scanner for the directory
   @State private var datasetScanner: DatasetScanner?
   @State private var datasets: [DatasetInfo] = []
+  @State private var transferFunctions: [TransferFunctionInfo] = []
   @State private var datasetInfoText: String = L(
     "server_dataset_scanning_message",
     comment: "Status text while scanning for datasets"
@@ -289,6 +290,7 @@ struct ServerView: View {
       )
       datasetScanner?.loadDatasets()
       datasets = datasetScanner?.getDatasets() ?? []
+      transferFunctions = datasetScanner?.getTransferFunctions() ?? []
       datasetInfoText = String(
         format: L(
           "server_dataset_found_count",
@@ -365,6 +367,7 @@ struct ServerView: View {
       maxBricksPerGetRequest: storedAppModel.maxBricksPerGetRequest,
       logger: logger,
       datasets: datasets,
+      transferFunctions: transferFunctions,
       authSecret: storedAppModel.serverPassword
     )
     server?.start()

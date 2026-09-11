@@ -1,3 +1,4 @@
+import CryptoKit
 import Metal
 
 /**
@@ -29,6 +30,9 @@ enum TransferFunction1DError: Error, LocalizedError {
 @Observable
 #endif
 class TransferFunction1D: Equatable {
+  private static let fileMagic = [UInt8]("BTF1".utf8)
+  private static let fileVersion: UInt32 = 2
+
   /// The transfer function data represented as an array of RGBA values.
   private(set) var data: [SIMD4<UInt8>]
 
@@ -81,7 +85,7 @@ class TransferFunction1D: Equatable {
    - Throws: `mismatchedDataCount` if data extraction fails
    */
   init(from data: Data) throws {
-    self.data = try Self.parseTransferFunctionData(data)
+    self.data = try Self.parseTransferFunctionData(data).samples
     updateDataDependencies()
   }
 
@@ -102,7 +106,7 @@ class TransferFunction1D: Equatable {
    - Throws: `mismatchedDataCount` if data extraction fails
    */
   func update(from data: Data) throws {
-    self.data = try Self.parseTransferFunctionData(data)
+    self.data = try Self.parseTransferFunctionData(data).samples
     updateDataDependencies()
   }
 
@@ -123,23 +127,51 @@ class TransferFunction1D: Equatable {
    - Throws: `mismatchedDataCount` if data extraction fails
    */
   func load(from data: Data) throws {
-    self.data = try Self.parseTransferFunctionData(data)
+    self.data = try Self.parseTransferFunctionData(data).samples
     updateDataDependencies()
   }
 
   /// extract the transfer function table from a data object
-  private static func parseTransferFunctionData(_ data: Data) throws -> [SIMD4<UInt8>] {
+  private static func parseTransferFunctionData(_ data: Data) throws -> (description: String, samples: [SIMD4<UInt8>]) {
     var cursor = 0
+    let hasExtendedHeader = data.count >= fileMagic.count &&
+      Array(data.prefix(fileMagic.count)) == fileMagic
 
-    // Read the count
+    let description: String
+    if hasExtendedHeader {
+      cursor += fileMagic.count
+      let version = try readLittleEndianUInt32(from: data, cursor: &cursor)
+      guard version == fileVersion else {
+        throw TransferFunction1DError.mismatchedDataCount(expected: Int(fileVersion), found: Int(version))
+      }
+
+      let descriptionByteCount = Int(try readLittleEndianUInt32(from: data, cursor: &cursor))
+      let count = try readLittleEndianUInt32(from: data, cursor: &cursor)
+      guard data.count >= cursor + descriptionByteCount else {
+        throw TransferFunction1DError.mismatchedDataCount(expected: descriptionByteCount, found: data.count - cursor)
+      }
+
+      let descriptionData = data.subdata(in: cursor..<(cursor + descriptionByteCount))
+      description = String(data: descriptionData, encoding: .utf8) ?? ""
+      cursor += descriptionByteCount
+
+      return try parseSamples(data, cursor: cursor, count: count, description: description)
+    }
+
     guard data.count >= MemoryLayout<UInt32>.size else {
       throw TransferFunction1DError.mismatchedDataCount(expected: 0, found: -1)
     }
 
-    let count = data.withUnsafeBytes { $0.load(fromByteOffset: cursor, as: UInt32.self) }
-    cursor += MemoryLayout<UInt32>.size
+    let count = try readLittleEndianUInt32(from: data, cursor: &cursor)
+    return try parseSamples(data, cursor: cursor, count: count, description: "")
+  }
 
-    // Compute expected size
+  private static func parseSamples(
+    _ data: Data,
+    cursor: Int,
+    count: UInt32,
+    description: String
+  ) throws -> (description: String, samples: [SIMD4<UInt8>]) {
     let expectedSize = Int(count) * MemoryLayout<SIMD4<UInt8>>.size
     guard data.count >= cursor + expectedSize else {
       throw TransferFunction1DError.mismatchedDataCount(expected: Int(count), found: (data.count - cursor) / 4)
@@ -151,7 +183,33 @@ class TransferFunction1D: Equatable {
       data.copyBytes(to: dst, from: cursor..<(cursor + dst.count))
     }
 
-    return result
+    return (description, result)
+  }
+
+  private static func readLittleEndianUInt32(from data: Data, cursor: inout Int) throws -> UInt32 {
+    guard data.count >= cursor + MemoryLayout<UInt32>.size else {
+      throw TransferFunction1DError.mismatchedDataCount(expected: 1, found: 0)
+    }
+
+    let value = UInt32(data[cursor]) |
+      (UInt32(data[cursor + 1]) << 8) |
+      (UInt32(data[cursor + 2]) << 16) |
+      (UInt32(data[cursor + 3]) << 24)
+    cursor += MemoryLayout<UInt32>.size
+    return value
+  }
+
+  static func fileDescription(from data: Data) throws -> String {
+    try parseTransferFunctionData(data).description
+  }
+
+  static func identifier(for data: Data) throws -> String {
+    let samples = try parseTransferFunctionData(data).samples
+    return identifier(forRGBAData: rgbaData(for: samples))
+  }
+
+  var identifier: String {
+    Self.identifier(forRGBAData: rgbaData())
   }
 
   /**
@@ -170,13 +228,6 @@ class TransferFunction1D: Equatable {
   /// Resets the transfer function by applying a default smooth step function.
   func reset() {
     smoothStep(start: 0.1, shift: 0.3, channels: [0, 1, 2, 3])
-  }
-
-  /// Sets the transfer fucntion to opaque with a color ramp that spawns the entire range
-  /// this is usefull when slicing througth the dataset
-  func slicingPreset() {
-    smoothStep(start: 0, shift: 1, channels: [0, 1, 2])
-    smoothStep(start: -1, shift: 0.3, channels: [3])
   }
 
   /**
@@ -446,24 +497,48 @@ class TransferFunction1D: Equatable {
   }
 
   /// Serializes the transfer function into a Data object.
-  func serialize() -> Data {
+  func serialize(description: String = "") -> Data {
     var buffer = Data()
+    buffer.append(contentsOf: Self.fileMagic)
+    Self.appendLittleEndianUInt32(Self.fileVersion, to: &buffer)
 
-    // Write data count
-    var count = UInt32(data.count)
-    buffer.append(Data(bytes: &count, count: MemoryLayout<UInt32>.size))
-
-    // Safely write the RGBA values
-    data.withUnsafeBytes { rawBuffer in
-      buffer.append(rawBuffer.bindMemory(to: UInt8.self))
-    }
+    let descriptionData = Data(description.utf8)
+    Self.appendLittleEndianUInt32(UInt32(clamping: descriptionData.count), to: &buffer)
+    Self.appendLittleEndianUInt32(UInt32(data.count), to: &buffer)
+    buffer.append(descriptionData)
+    buffer.append(rgbaData())
 
     return buffer
   }
 
+  private static func appendLittleEndianUInt32(_ value: UInt32, to data: inout Data) {
+    data.append(UInt8(value & 0xff))
+    data.append(UInt8((value >> 8) & 0xff))
+    data.append(UInt8((value >> 16) & 0xff))
+    data.append(UInt8((value >> 24) & 0xff))
+  }
+
+  private func rgbaData() -> Data {
+    Self.rgbaData(for: data)
+  }
+
+  private static func rgbaData(for samples: [SIMD4<UInt8>]) -> Data {
+    var buffer = Data(capacity: samples.count * MemoryLayout<SIMD4<UInt8>>.size)
+    samples.withUnsafeBytes { rawBuffer in
+      buffer.append(rawBuffer.bindMemory(to: UInt8.self))
+    }
+    return buffer
+  }
+
+  private static func identifier(forRGBAData rgbaData: Data) -> String {
+    Insecure.MD5.hash(data: rgbaData)
+      .map { String(format: "%02x", $0) }
+      .joined()
+  }
+
   /// Saves the transfer function to a file at the given URL.
-  func save(to url: URL) throws {
-    let data = serialize()
+  func save(to url: URL, description: String = "") throws {
+    let data = serialize(description: description)
     try data.write(to: url, options: .atomic)
   }
 

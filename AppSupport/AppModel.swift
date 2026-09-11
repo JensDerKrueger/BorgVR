@@ -202,15 +202,7 @@ final class AppModel: ObservableObject {
   }
 
   private func transferFunctionDirectoryURL() -> URL? {
-    guard let documentsURL = documentsDirectoryURL() else { return nil }
-    let directoryURL = documentsURL.appendingPathComponent("TransferFunctions", isDirectory: true)
-    do {
-      try FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
-      return directoryURL
-    } catch {
-      logger.warning("Transfer function directory unavailable: \(error.localizedDescription)")
-      return nil
-    }
+    TransferFunctionCatalog.storageDirectoryURL(logger: logger)
   }
 
   private func persistentTransferFunctionFileURL(for dataset: DatasetEntry) -> URL? {

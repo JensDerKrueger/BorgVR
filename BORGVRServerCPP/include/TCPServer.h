@@ -18,9 +18,16 @@ struct DatasetInfo {
   std::string datasetDescription; // displayed in LIST
 };
 
+struct TransferFunctionInfo {
+  std::string id;                          // MD5 over RGBA transfer function samples
+  std::string filename;                    // path to .tf1d file
+  std::string transferFunctionDescription; // displayed in LISTTF
+  size_t byteCount = 0;                    // full .tf1d file size
+};
+
 class TCPServer {
 public:
-  static constexpr const char* kProtocolVersionName = "2";
+  static constexpr const char* kProtocolVersionName = "3";
 
   TCPServer(uint16_t port,
             int maxBricksPerGetRequest,
@@ -40,6 +47,9 @@ public:
   void setDatasets(std::vector<DatasetInfo> datasets);
   std::vector<DatasetInfo> datasetsSnapshot() const;
   bool findDatasetById(const std::string& id, DatasetInfo& out) const;
+  void setTransferFunctions(std::vector<TransferFunctionInfo> transferFunctions);
+  std::vector<TransferFunctionInfo> transferFunctionsSnapshot() const;
+  bool findTransferFunctionById(const std::string& id, TransferFunctionInfo& out) const;
 
 private:
   class ClientSession {
@@ -60,8 +70,10 @@ private:
     bool sendAuthResult(const std::string& result);
     bool commandAllowed() const;
     bool sendList(const std::vector<std::string>& params);
+    bool sendTransferFunctionList(const std::vector<std::string>& params);
     bool sendInfo(const std::vector<std::string>& params);
     bool openDataset(const std::vector<std::string>& params);
+    bool getTransferFunction(const std::vector<std::string>& params);
     bool getBricks(const std::vector<std::string>& params);
 
     void sendBinaryResponse(const std::vector<uint8_t>& payload);
@@ -88,6 +100,7 @@ private:
   std::string authSecret_;
   std::shared_ptr<Logger> logger_;
   std::vector<DatasetInfo> datasets_;
+  std::vector<TransferFunctionInfo> transferFunctions_;
   mutable std::mutex datasetsMutex_;
 
   std::atomic<bool> running_{false};

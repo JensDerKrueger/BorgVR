@@ -485,3 +485,13 @@
 "Screenshot failed: \\(error.localizedDescription)" = "Screenshot failed: \\(error.localizedDescription)";
 "Transfer function saved: \\(url.path)" = "Transfer function saved: \\(url.path)";
 "Transfer function could not be saved: \\(error.localizedDescription)" = "Transfer function could not be saved: \\(error.localizedDescription)";
+
+/* Transfer function catalog and save dialog */
+"tf_catalog_empty" = "No transfer functions found";
+"tf_catalog_menu" = "Transfer Functions";
+"tf_catalog_dataset_saved" = "Saved for this dataset";
+"tf_save_dialog_title" = "Save Transfer Function";
+"tf_save_dialog_description_placeholder" = "Description";
+"tf_save_dialog_cancel_button" = "Cancel";
+"tf_save_dialog_save_button" = "Save";
+"tf_save_dialog_message" = "Enter a description for this transfer function.";

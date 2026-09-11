@@ -80,13 +80,16 @@ logger.info("Scanning datasets in \(config.dataDirectory)")
 let scanner = DatasetScanner(directory: config.dataDirectory, logger: logger)
 scanner.loadDatasets()
 let datasets = scanner.getDatasets()
+let transferFunctions = scanner.getTransferFunctions()
 logger.info("Found \(datasets.count) datasets.")
+logger.info("Found \(transferFunctions.count) transfer functions.")
 
 let server = TCPServer(
   port: config.port,
   maxBricksPerGetRequest: config.maxBricksPerGetRequest,
   logger: logger,
   datasets: datasets,
+  transferFunctions: transferFunctions,
   authSecret: config.password
 )
 server.start()

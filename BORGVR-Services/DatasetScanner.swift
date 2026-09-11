@@ -7,8 +7,23 @@ struct DatasetInfo {
   let datasetDescription: String
 }
 
+struct TransferFunctionInfo {
+  let id: String
+  let filename: String
+  let transferFunctionDescription: String
+  let byteCount: Int
+}
+
+private enum DatasetScannerError: Error {
+  case invalidTransferFunctionFile
+}
+
 class DatasetScanner {
+  private static let transferFunctionMagic = [UInt8]("BTF1".utf8)
+  private static let transferFunctionFileVersion: UInt32 = 2
+
   private var datasets: [DatasetInfo] = []
+  private var transferFunctions: [TransferFunctionInfo] = []
   private let directory: String
   private let logger: LoggerBase?
 
@@ -19,6 +34,7 @@ class DatasetScanner {
 
   func loadDatasets() {
     datasets.removeAll()
+    transferFunctions.removeAll()
     let fileManager = FileManager.default
     let directoryURL = URL(fileURLWithPath: directory)
 
@@ -28,39 +44,14 @@ class DatasetScanner {
         includingPropertiesForKeys: nil,
         options: .skipsHiddenFiles
       )
-      for url in fileURLs where url.pathExtension == "data" {
-        if let data = try? BORGVRFileData(filename: url.path()) {
-          let dataset = DatasetInfo(
-            id: data.getMetadata().uniqueID,
-            filename: url.path(),
-            datasetDescription: data.getMetadata().datasetDescription
-          )
-          datasets.append(dataset)
-          let datasetName = DatasetScanner.displayName(for: dataset)
-          let filename = url.lastPathComponent
-          logger?.info(
-            String(
-              format: L(
-                "datasetscanner_info_loaded_dataset",
-                value: "Loaded dataset: %@ (%@, id %@)",
-                comment: "Log: dataset file successfully loaded"
-              ),
-              datasetName,
-              filename,
-              dataset.id
-            )
-          )
-        } else {
-          logger?.warning(
-            String(
-              format: L(
-                "datasetscanner_warning_failed_load_dataset",
-                value: "Failed to load dataset file: %@",
-                comment: "Log: failed to load dataset file"
-              ),
-              url.path()
-            )
-          )
+      for url in fileURLs {
+        switch url.pathExtension.lowercased() {
+          case "data":
+            loadDataset(at: url)
+          case "tf1d":
+            loadTransferFunction(at: url)
+          default:
+            break
         }
       }
     } catch {
@@ -78,12 +69,121 @@ class DatasetScanner {
     return datasets
   }
 
+  func getTransferFunctions() -> [TransferFunctionInfo] {
+    return transferFunctions
+  }
+
+  private func loadDataset(at url: URL) {
+    if let data = try? BORGVRFileData(filename: url.path()) {
+      let dataset = DatasetInfo(
+        id: data.getMetadata().uniqueID,
+        filename: url.path(),
+        datasetDescription: data.getMetadata().datasetDescription
+      )
+      datasets.append(dataset)
+      let datasetName = DatasetScanner.displayName(for: dataset)
+      let filename = url.lastPathComponent
+      logger?.info(
+        String(
+          format: L(
+            "datasetscanner_info_loaded_dataset",
+            value: "Loaded dataset: %@ (%@, id %@)",
+            comment: "Log: dataset file successfully loaded"
+          ),
+          datasetName,
+          filename,
+          dataset.id
+        )
+      )
+    } else {
+      logger?.warning(
+        String(
+          format: L(
+            "datasetscanner_warning_failed_load_dataset",
+            value: "Failed to load dataset file: %@",
+            comment: "Log: failed to load dataset file"
+          ),
+          url.path()
+        )
+      )
+    }
+  }
+
+  private func loadTransferFunction(at url: URL) {
+    do {
+      let fileData = try Data(contentsOf: url)
+      let parsed = try DatasetScanner.parseTransferFunctionData(fileData)
+      let fallbackDescription = url.deletingPathExtension().lastPathComponent
+      let description = parsed.description.trimmingCharacters(in: .whitespacesAndNewlines)
+      let transferFunction = TransferFunctionInfo(
+        id: parsed.id,
+        filename: url.path(),
+        transferFunctionDescription: description.isEmpty ? fallbackDescription : description,
+        byteCount: fileData.count
+      )
+      transferFunctions.append(transferFunction)
+      logger?.info("Loaded transfer function: \(transferFunction.transferFunctionDescription) (\(url.lastPathComponent), id \(transferFunction.id))")
+    } catch {
+      logger?.warning("Failed to load transfer function file: \(url.path())")
+    }
+  }
+
   private static func displayName(for dataset: DatasetInfo) -> String {
     let description = dataset.datasetDescription.trimmingCharacters(in: .whitespacesAndNewlines)
     if !description.isEmpty {
       return description
     }
     return URL(fileURLWithPath: dataset.filename).deletingPathExtension().lastPathComponent
+  }
+
+  private static func parseTransferFunctionData(_ data: Data) throws -> (id: String, description: String) {
+    var cursor = 0
+    let hasExtendedHeader = data.count >= transferFunctionMagic.count &&
+      Array(data.prefix(transferFunctionMagic.count)) == transferFunctionMagic
+
+    let description: String
+    let count: UInt32
+    if hasExtendedHeader {
+      cursor += transferFunctionMagic.count
+      let version = try readLittleEndianUInt32(from: data, cursor: &cursor)
+      guard version == transferFunctionFileVersion else {
+        throw DatasetScannerError.invalidTransferFunctionFile
+      }
+      let descriptionByteCount = Int(try readLittleEndianUInt32(from: data, cursor: &cursor))
+      count = try readLittleEndianUInt32(from: data, cursor: &cursor)
+      guard data.count >= cursor + descriptionByteCount else {
+        throw DatasetScannerError.invalidTransferFunctionFile
+      }
+      let descriptionData = data.subdata(in: cursor..<(cursor + descriptionByteCount))
+      description = String(data: descriptionData, encoding: .utf8) ?? ""
+      cursor += descriptionByteCount
+    } else {
+      count = try readLittleEndianUInt32(from: data, cursor: &cursor)
+      description = ""
+    }
+
+    let rgbaByteCount = Int(count) * MemoryLayout<SIMD4<UInt8>>.size
+    guard data.count >= cursor + rgbaByteCount else {
+      throw DatasetScannerError.invalidTransferFunctionFile
+    }
+    let rgbaData = data.subdata(in: cursor..<(cursor + rgbaByteCount))
+    let id = Insecure.MD5.hash(data: rgbaData)
+      .map { String(format: "%02x", $0) }
+      .joined()
+    return (id, description)
+  }
+
+  private static func readLittleEndianUInt32(from data: Data, cursor: inout Int) throws -> UInt32 {
+    guard data.count >= cursor + MemoryLayout<UInt32>.size else {
+      throw DatasetScannerError.invalidTransferFunctionFile
+    }
+
+    let value = UInt32(data[cursor]) |
+      (UInt32(data[cursor + 1]) << 8) |
+      (UInt32(data[cursor + 2]) << 16) |
+      (UInt32(data[cursor + 3]) << 24)
+    cursor += MemoryLayout<UInt32>.size
+    return value
   }
 }
 

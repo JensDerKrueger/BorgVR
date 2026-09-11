@@ -548,7 +548,7 @@ final class BorgVRScriptRunner: ObservableObject {
     let url = scriptFileURL(filename: filename, defaultExtension: "tf1d")
     do {
       parameters.objectWillChange.send()
-      try parameters.transferFunction.load(from: url)
+      try parameters.loadTransferFunction(from: url)
       sharePlay?.synchronize(kind: .full)
       return logInfo("Transfer function loaded: \(url.path)")
     } catch {

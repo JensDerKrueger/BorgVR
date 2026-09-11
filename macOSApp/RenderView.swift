@@ -5,6 +5,7 @@ struct RenderView: View {
   @EnvironmentObject private var appModel: AppModel
   @EnvironmentObject private var renderingParameters: RenderingParameters
   @EnvironmentObject var appSettings: AppSettings
+  @EnvironmentObject private var storedAppModel: StoredAppModel
   @EnvironmentObject private var sharePlay: SharePlayCoordinator
   @EnvironmentObject private var docking: DockingController
 
@@ -67,7 +68,10 @@ struct RenderView: View {
           Spacer()
 
           DockableEditorPanel(panel: .transferFunctionEditor, maxWidth: 720) {
-            TransferFunctionEditorView(usesPanelBackground: false) {
+            TransferFunctionEditorView(
+              usesPanelBackground: false,
+              catalogDirectoryURLs: transferFunctionCatalogDirectoryURLs
+            ) {
               docking.hide(.transferFunctionEditor)
             }
             .environmentObject(renderingParameters)
@@ -108,6 +112,10 @@ struct RenderView: View {
     .accessibilityLabel("Show UI")
     .help("Show UI")
     .buttonStyle(.bordered)
+  }
+
+  private var transferFunctionCatalogDirectoryURLs: [URL] {
+    [storedAppModel.resolvedDataDirectoryURL()]
   }
 
   private func toggleInteractionMode() {

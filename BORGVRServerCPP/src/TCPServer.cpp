@@ -7,6 +7,7 @@
 #include <cctype>
 #include <chrono>
 #include <cstring>
+#include <fstream>
 #include <random>
 #include <sstream>
 
@@ -235,9 +236,10 @@ TCPServer::TCPServer(uint16_t port,
                      std::string authSecret)
   : port_(port),
     maxBricksPerGetRequest_(maxBricksPerGetRequest),
-    authSecret_(trimSecret(authSecret)),
-    logger_(std::move(logger)),
-    datasets_() {}
+	    authSecret_(trimSecret(authSecret)),
+	    logger_(std::move(logger)),
+	    datasets_(),
+	    transferFunctions_() {}
 
 TCPServer::~TCPServer() {
   stop();
@@ -293,6 +295,31 @@ bool TCPServer::findDatasetById(const std::string& id, DatasetInfo& out) const {
   auto it = std::find_if(datasets_.begin(), datasets_.end(),
                                                      [&](const DatasetInfo& d) { return d.id == id; });
   if (it == datasets_.end()) return false;
+  out = *it;
+  return true;
+}
+
+void TCPServer::setTransferFunctions(std::vector<TransferFunctionInfo> transferFunctions) {
+  std::lock_guard<std::mutex> lock(datasetsMutex_);
+
+  std::sort(transferFunctions.begin(), transferFunctions.end(),
+            [](const TransferFunctionInfo& a, const TransferFunctionInfo& b) {
+    return a.id < b.id;
+  });
+
+  transferFunctions_ = std::move(transferFunctions);
+}
+
+std::vector<TransferFunctionInfo> TCPServer::transferFunctionsSnapshot() const {
+  std::lock_guard<std::mutex> lock(datasetsMutex_);
+  return transferFunctions_;
+}
+
+bool TCPServer::findTransferFunctionById(const std::string& id, TransferFunctionInfo& out) const {
+  std::lock_guard<std::mutex> lock(datasetsMutex_);
+  auto it = std::find_if(transferFunctions_.begin(), transferFunctions_.end(),
+                         [&](const TransferFunctionInfo& tf) { return tf.id == id; });
+  if (it == transferFunctions_.end()) return false;
   out = *it;
   return true;
 }
@@ -468,6 +495,31 @@ bool TCPServer::ClientSession::sendList(const std::vector<std::string>& params) 
   return sendText(oss.str());
 }
 
+static std::string protocolLineText(std::string text) {
+  for (char& c : text) {
+    if (c == '\r' || c == '\n' || c == '\t') {
+      c = ' ';
+    }
+  }
+  return text;
+}
+
+bool TCPServer::ClientSession::sendTransferFunctionList(const std::vector<std::string>& params) {
+  if (!params.empty()) return false;
+
+  const auto transferFunctions = server_.transferFunctionsSnapshot();
+
+  std::ostringstream oss;
+  for (size_t i = 0; i < transferFunctions.size(); ++i) {
+    const auto& tf = transferFunctions[i];
+    oss << tf.id << " " << tf.byteCount << " " << protocolLineText(tf.transferFunctionDescription);
+    if (i + 1 < transferFunctions.size()) oss << "\n";
+  }
+  oss << "\n\n";
+
+  return sendText(oss.str());
+}
+
 bool TCPServer::ClientSession::sendInfo(const std::vector<std::string>& params) {
   if (!params.empty()) return false;
 
@@ -565,6 +617,30 @@ bool TCPServer::ClientSession::openDataset(const std::vector<std::string>& param
   }
 }
 
+bool TCPServer::ClientSession::getTransferFunction(const std::vector<std::string>& params) {
+  if (params.size() != 1) return false;
+
+  TransferFunctionInfo chosen;
+  if (!server_.findTransferFunctionById(params[0], chosen)) {
+    if (server_.logger_) server_.logger_->warning("GETTF unknown transfer function id: " + params[0]);
+    return false;
+  }
+
+  std::ifstream file(chosen.filename, std::ios::binary);
+  if (!file) {
+    if (server_.logger_) server_.logger_->error("Failed to open transfer function: " + chosen.filename);
+    return false;
+  }
+
+  std::vector<uint8_t> payload(
+    (std::istreambuf_iterator<char>(file)),
+    std::istreambuf_iterator<char>()
+  );
+
+  sendBinaryResponse(payload);
+  return true;
+}
+
 static bool parseIntStrict(const std::string& s, int& out) {
   if (s.empty()) return false;
   size_t idx = 0;
@@ -654,8 +730,10 @@ bool TCPServer::ClientSession::processCommand(const std::string& line) {
   }
 
   if (cmd == "LIST") return sendList(params);
+  if (cmd == "LISTTF") return sendTransferFunctionList(params);
   if (cmd == "INFO") return sendInfo(params);
   if (cmd == "OPEN") return openDataset(params);
+  if (cmd == "GETTF") return getTransferFunction(params);
   if (cmd == "GETBRICKS") return getBricks(params);
 
   return false;

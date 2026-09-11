@@ -54,14 +54,6 @@ struct PrivateApplicationView: View {
           )
         }
         .padding()
-
-        Button("private_slicing_presets_button") {
-          sharedAppModel.transferFunction.slicingPreset()
-          runtimeAppModel.interactionMode = .clipping
-          sharedAppModel.renderMode = .transferFunction1D
-          sharedAppModel.synchronize(kind: .full)
-        }
-        .padding()
       }
 
       Spacer()

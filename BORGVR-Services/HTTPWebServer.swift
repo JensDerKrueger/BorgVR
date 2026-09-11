@@ -291,6 +291,17 @@ final class HTTPWebServer {
       return catalogResponse()
     }
 
+    if request.path == "/web-data/transfer-functions.json" {
+      return transferFunctionCatalogResponse()
+    }
+
+    let transferFunctionPrefix = "/web-data/transfer-functions/"
+    if request.path.hasPrefix(transferFunctionPrefix) {
+      let id = String(request.path.dropFirst(transferFunctionPrefix.count))
+        .replacingOccurrences(of: ".tf1d", with: "")
+      return try transferFunctionResponse(id: id)
+    }
+
     let datasetPrefix = "/web-data/datasets/"
     if request.path.hasPrefix(datasetPrefix) {
       let rest = String(request.path.dropFirst(datasetPrefix.count))
@@ -340,6 +351,40 @@ final class HTTPWebServer {
       datasets: entries
     )
     return jsonResponse(catalog)
+  }
+
+  private func transferFunctionCatalogResponse() -> HTTPResponse {
+    let entries = datasetServer.transferFunctionsSnapshot().map { transferFunction in
+      WebTransferFunctionCatalogEntry(
+        id: transferFunction.id,
+        description: transferFunction.transferFunctionDescription,
+        byteCount: transferFunction.byteCount,
+        url: "transfer-functions/\(transferFunction.id).tf1d"
+      )
+    }
+
+    let catalog = WebTransferFunctionCatalog(
+      format: "borgvr-transfer-functions",
+      version: 1,
+      generatedAt: "dynamic",
+      transferFunctions: entries
+    )
+    return jsonResponse(catalog)
+  }
+
+  private func transferFunctionResponse(id: String) throws -> HTTPResponse {
+    guard id.count == 32,
+          id.allSatisfy({ $0.isHexDigit }),
+          let data = datasetServer.transferFunctionData(id: id) else {
+      throw HTTPWebServerError.notFound
+    }
+
+    return HTTPResponse(
+      status: 200,
+      reason: "OK",
+      contentType: "application/octet-stream",
+      body: data
+    )
   }
 
   private func datasetManifestResponse(datasetID: String) throws -> HTTPResponse {
@@ -815,6 +860,20 @@ private struct WebCatalogDataset: Encodable {
   let description: String
   let metadata: String
   let variant: String
+}
+
+private struct WebTransferFunctionCatalog: Encodable {
+  let format: String
+  let version: Int
+  let generatedAt: String
+  let transferFunctions: [WebTransferFunctionCatalogEntry]
+}
+
+private struct WebTransferFunctionCatalogEntry: Encodable {
+  let id: String
+  let description: String
+  let byteCount: Int
+  let url: String
 }
 
 private struct WebDatasetManifest: Encodable {

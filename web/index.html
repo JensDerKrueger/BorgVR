@@ -61,9 +61,11 @@
                 <button class="channel-button channel-alpha active" type="button" data-tf-channel="3" aria-label="Alpha channel" aria-pressed="true">A</button>
               </div>
               <div class="tf-action-row">
+                <select id="tf-catalog-select" class="tf-catalog-select" aria-label="Transfer functions" hidden>
+                  <option value="">Transfer Functions</option>
+                </select>
                 <button id="tf-save" class="tf-command-button" type="button" aria-label="Save transfer function" title="Save transfer function">↓</button>
                 <button id="tf-load" class="tf-command-button" type="button" aria-label="Load transfer function" title="Load transfer function">↑</button>
-                <button id="tf-slicing-preset" class="tf-command-button" type="button" aria-label="Slicing preset" title="Slicing preset">▥</button>
                 <button id="tf-reset" class="tf-command-button" type="button" aria-label="Reset transfer function" title="Reset transfer function">↺</button>
               </div>
               <input id="tf-load-input" type="file" accept=".tf1d,application/octet-stream" hidden>

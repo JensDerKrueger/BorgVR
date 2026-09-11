@@ -295,7 +295,7 @@ final class MobileVolumeRenderer: NSObject, MTKViewDelegate, UIGestureRecognizer
       rangeMax: metadata.rangeMax
     )
     if appSettings.autoloadTF, let tfURL = appModel.transferFunctionFileURL(for: activeDataset) {
-      try? renderingParameters.transferFunction.load(from: tfURL)
+      try? renderingParameters.loadTransferFunction(from: tfURL)
     }
 
     activeOversampling = Float(appSettings.oversampling)

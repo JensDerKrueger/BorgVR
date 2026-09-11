@@ -20,6 +20,7 @@ class TCPServer {
 
   /// Dataset list received from the GUI
   private var datasets: [DatasetInfo]
+  private var transferFunctions: [TransferFunctionInfo]
   private let authSecret: String
   private var authChallenges: [ObjectIdentifier: AuthChallenge] = [:]
   private var authenticatedConnections: Set<ObjectIdentifier> = []
@@ -52,10 +53,12 @@ class TCPServer {
     maxBricksPerGetRequest: Int,
     logger: LoggerBase? = nil,
     datasets: [DatasetInfo] = [],
+    transferFunctions: [TransferFunctionInfo] = [],
     authSecret: String? = nil
   ) {
     self.logger = logger
     self.datasets = datasets
+    self.transferFunctions = transferFunctions
     self.authSecret = BorgVRServerAuthentication.normalizedSecret(authSecret)
 
     if maxBricksPerGetRequest > 0 {
@@ -139,6 +142,21 @@ class TCPServer {
     let dataset = datasets.first(where: { $0.id == id })
     stateLock.unlock()
     return dataset
+  }
+
+  func transferFunctionsSnapshot() -> [TransferFunctionInfo] {
+    stateLock.lock()
+    let snapshot = transferFunctions
+    stateLock.unlock()
+    return snapshot
+  }
+
+  func transferFunctionData(id: String) -> Data? {
+    stateLock.lock()
+    let transferFunction = transferFunctions.first(where: { $0.id == id })
+    stateLock.unlock()
+    guard let transferFunction else { return nil }
+    return try? Data(contentsOf: URL(fileURLWithPath: transferFunction.filename))
   }
 
   func stop() {
@@ -300,9 +318,17 @@ class TCPServer {
         guard isCommandAllowed(for: connection) else { return false }
         return sendList(parameters: parameters, connection: connection)
 
+      case "LISTTF":
+        guard isCommandAllowed(for: connection) else { return false }
+        return sendTransferFunctionList(parameters: parameters, connection: connection)
+
       case "OPEN":
         guard isCommandAllowed(for: connection) else { return false }
         return openDataset(parameters: parameters, connection: connection)
+
+      case "GETTF":
+        guard isCommandAllowed(for: connection) else { return false }
+        return getTransferFunction(parameters: parameters, connection: connection)
 
       case "GETBRICKS":
         guard isCommandAllowed(for: connection) else { return false }
@@ -624,6 +650,49 @@ class TCPServer {
       completion: .contentProcessed({ _ in })
     )
     return true
+  }
+
+  private func sendTransferFunctionList(
+    parameters: ArraySlice<Substring>,
+    connection: NWConnection
+  ) -> Bool {
+    guard expectParameterCount(parameters, equals: 0) else { return false }
+    let transferFunctionList = transferFunctions
+      .map { "\($0.id) \($0.byteCount) \(protocolLineText($0.transferFunctionDescription))" }
+      .joined(separator: "\n") + "\n\n"
+    connection.send(
+      content: transferFunctionList.data(using: .utf8),
+      completion: .contentProcessed({ _ in })
+    )
+    return true
+  }
+
+  private func protocolLineText(_ text: String) -> String {
+    text
+      .replacingOccurrences(of: "\r", with: " ")
+      .replacingOccurrences(of: "\n", with: " ")
+      .replacingOccurrences(of: "\t", with: " ")
+  }
+
+  private func getTransferFunction(
+    parameters: ArraySlice<Substring>,
+    connection: NWConnection
+  ) -> Bool {
+    guard expectParameterCount(parameters, equals: 1),
+          let id = parameters.first,
+          let transferFunction = transferFunctions.first(where: { $0.id == id })
+    else {
+      return false
+    }
+
+    do {
+      let data = try Data(contentsOf: URL(fileURLWithPath: transferFunction.filename))
+      sendBinaryResponse(data: data, connection: connection)
+      return true
+    } catch {
+      logger?.error("Failed to read transfer function \(transferFunction.filename): \(error)")
+      return false
+    }
   }
 
   private func sendInfo(

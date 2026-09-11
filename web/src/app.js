@@ -18,7 +18,7 @@ const tfChannelButtons = Array.from(document.querySelectorAll("[data-tf-channel]
 const tfSave = document.querySelector("#tf-save");
 const tfLoad = document.querySelector("#tf-load");
 const tfLoadInput = document.querySelector("#tf-load-input");
-const tfSlicingPreset = document.querySelector("#tf-slicing-preset");
+const tfCatalogSelect = document.querySelector("#tf-catalog-select");
 const tfReset = document.querySelector("#tf-reset");
 const isoValue = document.querySelector("#iso-value");
 const clipInputs = Array.from(document.querySelectorAll("[data-clip-axis]"));
@@ -28,6 +28,7 @@ const MAXIMUM_TRANSFER_SMOOTH_WIDTH = 1.0;
 
 let renderer = null;
 let currentManifest = null;
+let transferFunctionCatalog = [];
 let rendererStatus = "Initializing WebGPU...";
 let statusVisible = false;
 let controlsCollapsed = false;
@@ -81,12 +82,58 @@ async function main() {
   }
 
   const catalog = await fetchJSON("./web-data/datasets.json", "catalog");
+  await loadTransferFunctionCatalog();
   catalogStatus.textContent = `${catalog.datasets.length} datasets available`;
   if (rendererStatus === "Initializing WebGPU...") {
     setStatus(`${catalog.datasets.length} datasets available`);
   }
   datasetList.replaceChildren(...catalog.datasets.map((dataset) => datasetButton(dataset)));
   await openDatasetFromURL(catalog.datasets);
+}
+
+async function loadTransferFunctionCatalog() {
+  try {
+    const catalog = await fetchJSON("./web-data/transfer-functions.json", "transfer functions");
+    transferFunctionCatalog = Array.isArray(catalog.transferFunctions) ? catalog.transferFunctions : [];
+  } catch {
+    transferFunctionCatalog = [];
+  }
+
+  const options = [
+    new Option("Transfer Functions", ""),
+    ...transferFunctionCatalog.map((entry) => new Option(displayTransferFunctionName(entry), entry.id)),
+  ];
+  tfCatalogSelect.replaceChildren(...options);
+  tfCatalogSelect.hidden = transferFunctionCatalog.length === 0;
+}
+
+async function loadCatalogTransferFunction(id) {
+  if (!id) {
+    return;
+  }
+
+  const entry = transferFunctionCatalog.find((candidate) => candidate.id === id);
+  if (!entry) {
+    setStatus("Transfer function not found.");
+    return;
+  }
+
+  try {
+    const url = new URL(`./web-data/${entry.url}`, window.location.href);
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+    renderer?.loadTransferFunction(await response.arrayBuffer());
+    drawTransferFunctionEditor();
+    setStatus(`Transfer function loaded: ${displayTransferFunctionName(entry)}`);
+  } catch (error) {
+    setStatus(`Transfer function load failed: ${error.message ?? String(error)}`);
+  }
+}
+
+function displayTransferFunctionName(entry) {
+  return entry.description?.trim() || entry.id;
 }
 
 function datasetButton(dataset) {
@@ -243,9 +290,8 @@ function installRenderControls() {
     await loadTransferFunction(tfLoadInput.files?.[0]);
   });
 
-  tfSlicingPreset.addEventListener("click", () => {
-    renderer?.setTransferFunctionSlicingPreset();
-    drawTransferFunctionEditor();
+  tfCatalogSelect.addEventListener("change", async () => {
+    await loadCatalogTransferFunction(tfCatalogSelect.value);
   });
 
   tfReset.addEventListener("click", () => {

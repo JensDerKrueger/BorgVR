@@ -347,12 +347,19 @@
 "tf_editor_load_success" = "Transferfunktion geladen:";
 "tf_editor_save_failed" = "Transferfunktion konnte nicht gespeichert werden:";
 "tf_editor_load_failed" = "Transferfunktion konnte nicht geladen werden:";
+"tf_catalog_empty" = "Keine Transferfunktionen gefunden";
+"tf_catalog_menu" = "Transferfunktionen";
+"tf_catalog_dataset_saved" = "Gespeichert für diesen Datensatz";
+"tf_save_dialog_title" = "Transferfunktion speichern";
+"tf_save_dialog_description_placeholder" = "Beschreibung";
+"tf_save_dialog_cancel_button" = "Abbrechen";
+"tf_save_dialog_save_button" = "Speichern";
+"tf_save_dialog_message" = "Geben Sie eine Beschreibung für diese Transferfunktion ein.";
 
 "Systemfarbe" = "Systemfarbe";
 "Vertikaler Verlauf" = "Vertikaler Verlauf";
 "Transfer Function + Licht" = "Transferfunktion + Licht";
 "Transfer Function" = "Transferfunktion";
-"Slicing Preset" = "Slicing-Preset";
 "Reset" = "Zurücksetzen";
 "SharePlay aktiv" = "SharePlay aktiv";
 "Log" = "Log";
@@ -406,7 +413,6 @@
 
 /* Scripting */
 "Script" = "Script";
-"Kein Script aktiv" = "Kein Script aktiv";
 
 /* Performance graph */
 "performance_title" = "Leistung";
@@ -489,7 +495,7 @@
 "WebGPU web server" = "WebGPU-Webserver";
 "Ad-hoc server" = "Ad-hoc-Server";
 "External data sources" = "Externe Datenquellen";
-"Automatically load/save transfer functions" = "Transfer Functions automatisch laden/speichern";
+"Automatically load/save transfer functions" = "Transferfunktionen automatisch laden/speichern";
 "Static" = "Statisch";
 "Dynamic" = "Dynamisch";
 "Background" = "Hintergrund";

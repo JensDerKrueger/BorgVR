@@ -526,6 +526,18 @@ p {
   justify-content: flex-end;
 }
 
+.tf-catalog-select {
+  min-width: 0;
+  flex: 1;
+  min-height: 30px;
+  border: 1px solid rgba(190, 249, 255, 0.18);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--soft);
+  padding: 0 8px;
+  font-size: 12px;
+}
+
 .icon-command-button {
   width: 32px;
   min-height: 30px;

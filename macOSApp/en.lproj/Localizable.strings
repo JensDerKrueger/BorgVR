@@ -343,12 +343,19 @@
 "tf_editor_load_success" = "Transfer function loaded:";
 "tf_editor_save_failed" = "Could not save transfer function:";
 "tf_editor_load_failed" = "Could not load transfer function:";
+"tf_catalog_empty" = "No transfer functions found";
+"tf_catalog_menu" = "Transfer Functions";
+"tf_catalog_dataset_saved" = "Saved for this dataset";
+"tf_save_dialog_title" = "Save Transfer Function";
+"tf_save_dialog_description_placeholder" = "Description";
+"tf_save_dialog_cancel_button" = "Cancel";
+"tf_save_dialog_save_button" = "Save";
+"tf_save_dialog_message" = "Enter a description for this transfer function.";
 
 "Systemfarbe" = "System color";
 "Vertikaler Verlauf" = "Vertical gradient";
 "Transfer Function + Licht" = "Transfer Function + Lighting";
 "Transfer Function" = "Transfer Function";
-"Slicing Preset" = "Slicing preset";
 "Reset" = "Reset";
 "SharePlay aktiv" = "SharePlay active";
 "Log" = "Log";
@@ -402,7 +409,6 @@
 
 /* Scripting */
 "Script" = "Script";
-"Kein Script aktiv" = "No script active";
 
 /* Performance graph */
 "performance_title" = "Performance";

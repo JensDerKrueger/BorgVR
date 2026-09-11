@@ -117,6 +117,17 @@ final class DatasetCatalogService {
             notifier: nil
           )
           try manager.connect(timeout: timeout)
+          do {
+            let syncedCount = try TransferFunctionCatalog.storeRemoteTransferFunctions(
+              from: manager,
+              logger: logger
+            )
+            if syncedCount > 0 {
+              logger?.info("Synced \(syncedCount) transfer functions from \(server.address):\(server.port).")
+            }
+          } catch {
+            logger?.warning("Transfer function sync failed for \(server.address):\(server.port): \(error.localizedDescription)")
+          }
           for dataset in try manager.requestDatasetList() {
             loaded.append(
               AppModel.DatasetEntry(

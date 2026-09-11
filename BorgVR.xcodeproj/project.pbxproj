@@ -78,6 +78,12 @@
 		57A0014D2E70000300000001 /* KeychainSecretStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A0012C2E70000300000001 /* KeychainSecretStore.swift */; };
 		57A0014E2E70000300000001 /* KeychainSecretStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A0012C2E70000300000001 /* KeychainSecretStore.swift */; };
 		57A0014F2E70000300000001 /* KeychainSecretStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A0012C2E70000300000001 /* KeychainSecretStore.swift */; };
+		57A001502E70000300000001 /* TransferFunctionCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001542E70000300000001 /* TransferFunctionCatalog.swift */; };
+		57A001512E70000300000001 /* TransferFunctionCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001542E70000300000001 /* TransferFunctionCatalog.swift */; };
+		57A001522E70000300000001 /* TransferFunctionCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001542E70000300000001 /* TransferFunctionCatalog.swift */; };
+		57A001552E70000300000001 /* TransferFunctions in Resources */ = {isa = PBXBuildFile; fileRef = 57A001532E70000300000001 /* TransferFunctions */; };
+		57A001562E70000300000001 /* TransferFunctions in Resources */ = {isa = PBXBuildFile; fileRef = 57A001532E70000300000001 /* TransferFunctions */; };
+		57A001572E70000300000001 /* TransferFunctions in Resources */ = {isa = PBXBuildFile; fileRef = 57A001532E70000300000001 /* TransferFunctions */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -138,6 +144,8 @@
 		57A0012A2E70000300000001 /* WebAssetProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebAssetProvider.swift; sourceTree = "<group>"; };
 		57A0012B2E70000300000001 /* WebServerCertificateControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebServerCertificateControls.swift; sourceTree = "<group>"; };
 		57A0012C2E70000300000001 /* KeychainSecretStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainSecretStore.swift; sourceTree = "<group>"; };
+		57A001532E70000300000001 /* TransferFunctions */ = {isa = PBXFileReference; lastKnownFileType = folder; path = TransferFunctions; sourceTree = "<group>"; };
+		57A001542E70000300000001 /* TransferFunctionCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransferFunctionCatalog.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -401,6 +409,7 @@
 				569701382D9D8F1400BB74CC /* Todo.txt */,
 				560B8BE72E5C57580042E45B /* PrivacyInfo.xcprivacy */,
 				560B90002E9150000042E45B /* web */,
+				57A001532E70000300000001 /* TransferFunctions */,
 				57A000102E70000100000001 /* AppSupport */,
 				560B00012E00000000000001 /* BORGVR-Services */,
 				560D09552D98280400EAD023 /* BORGVR-Render */,
@@ -456,6 +465,7 @@
 				57A000252E70000200000001 /* RuntimeVolumeShaders.metal */,
 				57A000272E70000200000001 /* ShaderTypes.h */,
 				57A000282E70000200000001 /* TextFileDocument.swift */,
+				57A001542E70000300000001 /* TransferFunctionCatalog.swift */,
 				57A001252E70000300000001 /* TransferFunctionEditorView.swift */,
 				57A0012A2E70000300000001 /* WebAssetProvider.swift */,
 				57A0012B2E70000300000001 /* WebServerCertificateControls.swift */,
@@ -681,6 +691,7 @@
 			files = (
 				560B8BE92E5C575A0042E45B /* PrivacyInfo.xcprivacy in Resources */,
 				560B90012E9150000042E45B /* web in Resources */,
+				57A001552E70000300000001 /* TransferFunctions in Resources */,
 				57A000412E70000200000001 /* RuntimeVolumeShaders.metal in Resources */,
 				57A0004C2E70000200000001 /* VolumeRaycaster.metal in Resources */,
 				57A000422E70000200000001 /* ShaderTypes.h in Resources */,
@@ -696,6 +707,7 @@
 			files = (
 				560B8BEA2E5C575A0042E45B /* PrivacyInfo.xcprivacy in Resources */,
 				560B90022E9150000042E45B /* web in Resources */,
+				57A001562E70000300000001 /* TransferFunctions in Resources */,
 				560C60DA2E91000000000001 /* c60_32.data in Resources */,
 				57A000462E70000200000001 /* RuntimeVolumeShaders.metal in Resources */,
 				57A0004D2E70000200000001 /* VolumeRaycaster.metal in Resources */,
@@ -712,6 +724,7 @@
 			files = (
 				560B8BE82E5C575A0042E45B /* PrivacyInfo.xcprivacy in Resources */,
 				560B90032E9150000042E45B /* web in Resources */,
+				57A001572E70000300000001 /* TransferFunctions in Resources */,
 				56730FE52E6B79000091976B /* head_32.data in Resources */,
 				56730FE32E6B78990091976B /* c60_32.data in Resources */,
 				57A0004E2E70000200000001 /* VolumeRaycaster.metal in Resources */,
@@ -814,6 +827,7 @@
 				57A001352E70000300000001 /* TransferFunctionEditorView.swift in Sources */,
 				57A001442E70000300000001 /* WebAssetProvider.swift in Sources */,
 				57A001482E70000300000001 /* WebServerCertificateControls.swift in Sources */,
+				57A001502E70000300000001 /* TransferFunctionCatalog.swift in Sources */,
 				57A001372E70000300000001 /* VolumeRendererPipeline.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -844,6 +858,7 @@
 				57A0013D2E70000300000001 /* TransferFunctionEditorView.swift in Sources */,
 				57A001452E70000300000001 /* WebAssetProvider.swift in Sources */,
 				57A001492E70000300000001 /* WebServerCertificateControls.swift in Sources */,
+				57A001512E70000300000001 /* TransferFunctionCatalog.swift in Sources */,
 				57A0013F2E70000300000001 /* VolumeRendererPipeline.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -859,6 +874,7 @@
 				57A0003A2E70000200000001 /* TextFileDocument.swift in Sources */,
 				57A001462E70000300000001 /* WebAssetProvider.swift in Sources */,
 				57A0014A2E70000300000001 /* WebServerCertificateControls.swift in Sources */,
+				57A001522E70000300000001 /* TransferFunctionCatalog.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

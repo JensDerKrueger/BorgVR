@@ -21,12 +21,6 @@ export class TransferFunction1D {
     this.setSmoothStep(0.1, 0.3, [0, 1, 2, 3]);
   }
 
-  slicingPreset() {
-    this.data.fill(0);
-    this.smoothStep(0, 1, [0, 1, 2]);
-    this.smoothStep(-1, 0.3, [3]);
-  }
-
   smoothStep(start, shift, channels, reverse = false) {
     const invFactor1 = reverse ? -1 : 1;
     const invFactor2 = reverse ? 1 : 0;

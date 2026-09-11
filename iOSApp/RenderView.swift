@@ -85,7 +85,7 @@ struct RenderView: View {
         VStack {
           Spacer()
 
-          TransferFunctionEditorView {
+          TransferFunctionEditorView(catalogDirectoryURLs: transferFunctionCatalogDirectoryURLs) {
             showTransferEditor = false
           }
           .environmentObject(renderingParameters)
@@ -232,6 +232,10 @@ struct RenderView: View {
           endPoint: .bottom
         )
     }
+  }
+
+  private var transferFunctionCatalogDirectoryURLs: [URL] {
+    FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
   }
 
   private var visibilityButton: some View {

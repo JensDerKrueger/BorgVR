@@ -45,6 +45,16 @@ final class RenderingParameters: ObservableObject {
     transferFunction.updateRanges(minValue: minValue, maxValue: maxValue, rangeMax: rangeMax)
   }
 
+  func loadTransferFunction(from url: URL) throws {
+    try transferFunction.load(from: url)
+    transferFunction.updateRanges(minValue: minValue, maxValue: maxValue, rangeMax: rangeMax)
+  }
+
+  func loadTransferFunction(from data: Data) throws {
+    try transferFunction.load(from: data)
+    transferFunction.updateRanges(minValue: minValue, maxValue: maxValue, rangeMax: rangeMax)
+  }
+
   func reset() {
     orientation = RenderingParameters.defaultOrientation
     scale = 1.0

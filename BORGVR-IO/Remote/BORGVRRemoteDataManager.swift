@@ -45,10 +45,18 @@ enum BORGVRRemoteDataManagerError: Error, LocalizedError {
  commands and binary responses.
  */
 class BORGVRRemoteDataManager {
+  struct RemoteTransferFunctionInfo: Equatable {
+    let id: String
+    let byteCount: Int
+    let description: String
+  }
+
   /// The underlying NWConnection for this manager.
   private let connection: NWConnection
   /// The local list of datasets.
   private var datasets: [(id: String, description: String)] = []
+  /// The remote list of transfer functions.
+  private var transferFunctions: [RemoteTransferFunctionInfo] = []
   /// An optional logger for logging messages.
   private let logger: LoggerBase?
   /// An optional notifier
@@ -168,7 +176,8 @@ class BORGVRRemoteDataManager {
       throw BORGVRRemoteDataManagerError.invalidResponse(reason:"Version not found in info response.")
     }
     
-    guard BORGVRRemoteDataManager.protocolVersionName <= versionString else {
+    guard BORGVRRemoteDataManager.serverProtocolVersion(versionString) >=
+            BORGVRRemoteDataManager.serverProtocolVersion(BORGVRRemoteDataManager.protocolVersionName) else {
       throw BORGVRRemoteDataManagerError.invalidResponse(reason: "Unsupported server protocol version. Server: \(versionString) (Local: \(BORGVRRemoteDataManager.protocolVersionName)).")
     }
 
@@ -205,6 +214,40 @@ class BORGVRRemoteDataManager {
 
     }
     return self.datasets
+  }
+
+  func requestTransferFunctionList() throws -> [RemoteTransferFunctionInfo] {
+    try sendCommand("LISTTF")
+    let response = try receiveTextResponse()
+    let lines = response.split(separator: "\n", omittingEmptySubsequences: true)
+
+    self.transferFunctions = try lines.compactMap { line in
+      let parts = line.split(separator: " ", maxSplits: 2, omittingEmptySubsequences: false)
+      guard parts.count >= 2 else {
+        throw BORGVRRemoteDataManagerError.invalidResponse(reason: "Transfer function list response too short.")
+      }
+
+      let id = String(parts[0])
+      guard Self.isTransferFunctionIdentifier(id) else {
+        throw BORGVRRemoteDataManagerError.invalidResponse(reason: "Invalid transfer function ID in LISTTF response.")
+      }
+
+      guard let byteCount = Int(parts[1]), byteCount > 0 else {
+        throw BORGVRRemoteDataManagerError.invalidResponse(reason: "Invalid transfer function byte count in LISTTF response.")
+      }
+
+      let description = parts.count > 2 ? String(parts[2]) : ""
+      return RemoteTransferFunctionInfo(id: id, byteCount: byteCount, description: description)
+    }
+    return self.transferFunctions
+  }
+
+  func requestTransferFunction(id: String) throws -> Data {
+    guard Self.isTransferFunctionIdentifier(id) else {
+      throw BORGVRRemoteDataManagerError.invalidResponse(reason: "Invalid transfer function ID.")
+    }
+    try sendCommand("GETTF \(id)")
+    return try receiveBinaryData()
   }
 
   /**
@@ -265,6 +308,81 @@ class BORGVRRemoteDataManager {
    */
   private func receiveTextResponse(timeout: TimeInterval = 5.0) throws -> String {
     try BorgVRServerAuthentication.receiveTextResponse(connection: connection, timeout: timeout)
+  }
+
+  private func receiveBinaryData(timeout: TimeInterval = 15.0) throws -> Data {
+    var sizeData = Data()
+    while sizeData.count < MemoryLayout<UInt32>.size {
+      let chunk = try receiveData(
+        minimumLength: 1,
+        maximumLength: MemoryLayout<UInt32>.size - sizeData.count,
+        timeout: timeout
+      )
+      sizeData.append(chunk)
+    }
+
+    let payloadSize = Int(
+      UInt32(sizeData[0]) |
+      (UInt32(sizeData[1]) << 8) |
+      (UInt32(sizeData[2]) << 16) |
+      (UInt32(sizeData[3]) << 24)
+    )
+    guard payloadSize >= 0 else {
+      throw BORGVRRemoteDataManagerError.invalidResponse(reason: "Invalid binary response size.")
+    }
+
+    var payload = Data()
+    while payload.count < payloadSize {
+      let remaining = payloadSize - payload.count
+      let chunk = try receiveData(
+        minimumLength: 1,
+        maximumLength: min(remaining, 64 * 1024),
+        timeout: timeout
+      )
+      payload.append(chunk)
+    }
+    return payload
+  }
+
+  private func receiveData(
+    minimumLength: Int,
+    maximumLength: Int,
+    timeout: TimeInterval
+  ) throws -> Data {
+    let semaphore = DispatchSemaphore(value: 0)
+    var chunk: Data?
+    var receiveError: Error?
+
+    connection.receive(
+      minimumIncompleteLength: minimumLength,
+      maximumLength: maximumLength
+    ) { data, _, _, error in
+      chunk = data
+      receiveError = error
+      semaphore.signal()
+    }
+
+    let result = semaphore.wait(timeout: .now() + timeout)
+    if result == .timedOut {
+      throw BORGVRRemoteDataManagerError.timeout(seconds: timeout)
+    }
+    if let receiveError {
+      throw BORGVRRemoteDataManagerError.receiveFailed(reason: receiveError.localizedDescription)
+    }
+    guard let chunk, !chunk.isEmpty else {
+      throw BORGVRRemoteDataManagerError.receiveFailed(reason: "Missing binary response data.")
+    }
+    return chunk
+  }
+
+  private static func isTransferFunctionIdentifier(_ id: String) -> Bool {
+    id.count == 32 && id.allSatisfy { character in
+      character.isHexDigit
+    }
+  }
+
+  private static func serverProtocolVersion(_ version: String) -> Int {
+    Int(version) ?? 0
   }
 }
 

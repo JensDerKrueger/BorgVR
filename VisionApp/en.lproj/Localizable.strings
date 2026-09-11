@@ -262,7 +262,6 @@
 "private_editor_title_format" = "%@ Editor";
 
 /* Private application: slicing presets button */
-"private_slicing_presets_button" = "Slicing Presets";
 
 /* Private application: reset section */
 "private_reset_section_title" = "Reset";
@@ -486,7 +485,11 @@
 "tf_picker_ok_button" = "OK";
 
 /* Transfer function save-as dialog */
+"tf_catalog_empty" = "No transfer functions found";
+"tf_catalog_menu" = "Transfer Functions";
+"tf_catalog_dataset_saved" = "Saved for this dataset";
 "tf_save_dialog_filename_placeholder" = "File name";
+"tf_save_dialog_description_placeholder" = "Description";
 "tf_save_dialog_title" = "Save Transfer Function";
 "tf_save_dialog_cancel_button" = "Cancel";
 "tf_save_dialog_save_button" = "Save";

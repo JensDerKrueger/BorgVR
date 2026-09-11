@@ -796,14 +796,6 @@ export class CoordinateCubeRenderer {
     this.finishTransferFunctionEdit();
   }
 
-  setTransferFunctionSlicingPreset() {
-    if (!this.transferFunction || !this.transferFunctionTexture) {
-      return;
-    }
-    this.transferFunction.slicingPreset();
-    this.finishTransferFunctionEdit();
-  }
-
   getTransferFunctionData() {
     return this.transferFunction?.data ?? new Uint8Array(0);
   }

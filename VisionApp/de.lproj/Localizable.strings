@@ -262,7 +262,6 @@
 "private_editor_title_format" = "%@-Editor";
 
 /* Private application: slicing presets button */
-"private_slicing_presets_button" = "Slicing-Voreinstellungen";
 
 /* Private application: reset section */
 "private_reset_section_title" = "Zurücksetzen";
@@ -488,7 +487,11 @@
 "tf_picker_ok_button" = "OK";
 
 /* Transfer function save-as dialog */
+"tf_catalog_empty" = "Keine Transferfunktionen gefunden";
+"tf_catalog_menu" = "Transferfunktionen";
+"tf_catalog_dataset_saved" = "Gespeichert für diesen Datensatz";
 "tf_save_dialog_filename_placeholder" = "Dateiname";
+"tf_save_dialog_description_placeholder" = "Beschreibung";
 "tf_save_dialog_title" = "Transferfunktion speichern";
 "tf_save_dialog_cancel_button" = "Abbrechen";
 "tf_save_dialog_save_button" = "Speichern";
@@ -810,7 +813,7 @@
 "WebGPU web server" = "WebGPU-Webserver";
 "Ad-hoc server" = "Ad-hoc-Server";
 "External data sources" = "Externe Datenquellen";
-"Automatically load/save transfer functions" = "Transfer Functions automatisch laden/speichern";
+"Automatically load/save transfer functions" = "Transferfunktionen automatisch laden/speichern";
 "Static" = "Statisch";
 "Dynamic" = "Dynamisch";
 "Background" = "Hintergrund";
