@@ -102,7 +102,7 @@ async function loadTransferFunctionCatalog() {
   }
 
   const options = [
-    new Option("Select Transfer Function", ""),
+    new Option("Server Presets", ""),
     ...transferFunctionCatalog.map((entry) => new Option(displayTransferFunctionName(entry), entry.id)),
   ];
   options[0].disabled = true;
@@ -131,7 +131,7 @@ async function loadCatalogTransferFunction(id) {
     renderer?.loadTransferFunction(await response.arrayBuffer());
     drawTransferFunctionEditor();
     updateTransferFunctionURL();
-    tfCatalogSelect.value = "";
+    tfCatalogSelect.value = id;
     setStatus(`Transfer function loaded: ${displayTransferFunctionName(entry)}`);
   } catch (error) {
     setStatus(`Transfer function load failed: ${error.message ?? String(error)}`);
@@ -305,6 +305,7 @@ function installRenderControls() {
     renderer?.resetTransferFunction();
     drawTransferFunctionEditor();
     clearTransferFunctionURL();
+    clearTransferFunctionSelection();
   });
 
   transferEditorCanvas.addEventListener("pointerdown", (event) => {
@@ -345,12 +346,14 @@ function installRenderControls() {
     lastTransferPaintPoint = null;
     transferPointerMode = null;
     updateTransferFunctionURL();
+    clearTransferFunctionSelection();
   });
 
   transferEditorCanvas.addEventListener("pointercancel", () => {
     lastTransferPaintPoint = null;
     transferPointerMode = null;
     updateTransferFunctionURL();
+    clearTransferFunctionSelection();
   });
 
   transferEditorCanvas.addEventListener("contextmenu", (event) => {
@@ -428,6 +431,7 @@ async function loadTransferFunction(file) {
     renderer?.loadTransferFunction(await file.arrayBuffer());
     drawTransferFunctionEditor();
     updateTransferFunctionURL();
+    clearTransferFunctionSelection();
     setStatus(`Transfer function loaded: ${file.name}`);
   } catch (error) {
     setStatus(`Transfer function load failed: ${error.message ?? String(error)}`);
@@ -442,6 +446,7 @@ function applyTransferFunctionFromURL() {
 
   try {
     renderer?.loadTransferFunction(decodeTransferFunctionURLValue(encoded));
+    clearTransferFunctionSelection();
     return "Transfer function loaded from URL.";
   } catch (error) {
     return `Transfer function URL parameter ignored: ${error.message ?? String(error)}`;
@@ -470,6 +475,12 @@ function clearTransferFunctionURL() {
   url.searchParams.delete(TRANSFER_FUNCTION_URL_PARAMETER);
   url.searchParams.delete("tf");
   window.history.replaceState(null, "", url);
+}
+
+function clearTransferFunctionSelection() {
+  if (tfCatalogSelect) {
+    tfCatalogSelect.value = "";
+  }
 }
 
 function encodeTransferFunctionURLValue(buffer) {
