@@ -1356,34 +1356,6 @@
         }
       }
     },
-    "Copy WebGPU link" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "WebGPU-Link kopieren"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Copy WebGPU link"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Copiar enlace WebGPU"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Copier le lien WebGPU"
-          }
-        }
-      }
-    },
     "Collaborate on the same volumetric dataset." : {
       "localizations" : {
         "de" : {
@@ -1520,6 +1492,34 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Copier les données"
+          }
+        }
+      }
+    },
+    "Copy WebGPU link" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "WebGPU-Link kopieren"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copy WebGPU link"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copiar enlace WebGPU"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copier le lien WebGPU"
           }
         }
       }
@@ -2617,6 +2617,64 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Le téléchargement distant a été suspendu."
+          }
+        }
+      }
+    },
+    "Detach panel" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Panel abdocken"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Detach panel"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Desacoplar panel"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Détacher le panneau"
+          }
+        }
+      }
+    },
+    "Dock panel" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Panel andocken"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dock panel"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Acoplar panel"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ancrer le panneau"
           }
         }
       }
@@ -6416,6 +6474,35 @@
         }
       }
     },
+    "Remove server" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Server entfernen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remove server"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eliminar servidor"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Supprimer le serveur"
+          }
+        }
+      }
+    },
     "Render Mode" : {
       "localizations" : {
         "de" : {
@@ -7781,7 +7868,7 @@
         }
       }
     },
-    "Systemfarbe" : {
+    "System color" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -7805,6 +7892,147 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Couleur système"
+          }
+        }
+      }
+    },
+    "Systemfarbe" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Systemfarbe"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "System color"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Color del sistema"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couleur système"
+          }
+        }
+      }
+    },
+    "tf_catalog_custom" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Benutzerdefinierte Transferfunktion"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Custom Transfer Function"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Función de transferencia personalizada"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fonction de transfert personnalisée"
+          }
+        }
+      }
+    },
+    "tf_catalog_dataset_saved" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gespeichert für diesen Datensatz"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Saved for this dataset"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Guardada para este conjunto de datos"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enregistrée pour ce jeu de données"
+          }
+        }
+      }
+    },
+    "tf_catalog_empty" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keine Transferfunktionen gefunden"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No transfer functions found"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se encontraron funciones de transferencia"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aucune fonction de transfert trouvée"
+          }
+        }
+      }
+    },
+    "tf_catalog_menu" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Transferfunktionen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Transfer Functions"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Funciones de transferencia"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fonctions de transfert"
           }
         }
       }
@@ -8145,6 +8373,146 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Fonction de transfert enregistrée :"
+          }
+        }
+      }
+    },
+    "tf_save_dialog_cancel_button" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abbrechen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cancel"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cancelar"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Annuler"
+          }
+        }
+      }
+    },
+    "tf_save_dialog_description_placeholder" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Beschreibung"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Description"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Descripción"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Description"
+          }
+        }
+      }
+    },
+    "tf_save_dialog_message" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Geben Sie eine Beschreibung für diese Transferfunktion ein."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enter a description for this transfer function."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Introduce una descripción para esta función de transferencia."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Saisissez une description pour cette fonction de transfert."
+          }
+        }
+      }
+    },
+    "tf_save_dialog_save_button" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Speichern"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Save"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Guardar"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enregistrer"
+          }
+        }
+      }
+    },
+    "tf_save_dialog_title" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Transferfunktion speichern"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Save Transfer Function"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Guardar función de transferencia"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enregistrer la fonction de transfert"
           }
         }
       }
@@ -8644,7 +9012,36 @@
         }
       }
     },
+    "Vertical gradient" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vertikaler Verlauf"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vertical gradient"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Degradado vertical"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dégradé vertical"
+          }
+        }
+      }
+    },
     "Vertikaler Verlauf" : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -9023,298 +9420,6 @@
             "value" : "Zéros"
           }
         }
-      }
-    },
-    "tf_catalog_empty" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Keine Transferfunktionen gefunden"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No transfer functions found"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No se encontraron funciones de transferencia"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Aucune fonction de transfert trouvée"
-          }
-        }
-      }
-    },
-    "tf_catalog_menu" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Transferfunktionen"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Transfer Functions"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Funciones de transferencia"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Fonctions de transfert"
-          }
-        }
-      }
-    },
-    "tf_save_dialog_title" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Transferfunktion speichern"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Save Transfer Function"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Guardar función de transferencia"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Enregistrer la fonction de transfert"
-          }
-        }
-      }
-    },
-    "tf_save_dialog_description_placeholder" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Beschreibung"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Description"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Descripción"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Description"
-          }
-        }
-      }
-    },
-    "tf_save_dialog_cancel_button" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Abbrechen"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Cancel"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Cancelar"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Annuler"
-          }
-        }
-      }
-    },
-    "tf_save_dialog_save_button" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Speichern"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Save"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Guardar"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Enregistrer"
-          }
-        }
-      }
-    },
-    "tf_save_dialog_message" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Geben Sie eine Beschreibung für diese Transferfunktion ein."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Enter a description for this transfer function."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Introduce una descripción para esta función de transferencia."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Saisissez une description pour cette fonction de transfert."
-          }
-        }
-      }
-    },
-    "tf_catalog_dataset_saved" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Gespeichert für diesen Datensatz"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Saved for this dataset"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Guardada para este conjunto de datos"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Enregistrée pour ce jeu de données"
-          }
-        }
-      }
-    },
-    "tf_catalog_custom" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Benutzerdefinierte Transferfunktion"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Custom Transfer Function"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Función de transferencia personalizada"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Fonction de transfert personnalisée"
-          }
-        }
-      }
-    },
-    "System color" : {
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Systemfarbe" } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "System color" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Color del sistema" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Couleur système" } }
-      }
-    },
-    "Vertical gradient" : {
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Vertikaler Verlauf" } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Vertical gradient" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Degradado vertical" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Dégradé vertical" } }
-      }
-    },
-    "Remove server" : {
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Server entfernen" } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Remove server" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Eliminar servidor" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Supprimer le serveur" } }
-      }
-    },
-    "Dock panel" : {
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Panel andocken" } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Dock panel" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Acoplar panel" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Ancrer le panneau" } }
-      }
-    },
-    "Detach panel" : {
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Panel abdocken" } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Detach panel" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Desacoplar panel" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Détacher le panneau" } }
       }
     }
   },

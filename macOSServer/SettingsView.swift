@@ -216,8 +216,8 @@ struct SettingsView: View {
             .onAppear {
               syncServers = storedAppModel.syncServers
             }
-            .onChange(of: syncServers) { _ in
-              storedAppModel.syncServers = syncServers
+            .onChange(of: syncServers) { _, newValue in
+              storedAppModel.syncServers = newValue
             }
             .padding(.vertical, 4)
           }
