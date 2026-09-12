@@ -119,25 +119,74 @@ export class TransferFunction1D {
     const source = buffer instanceof ArrayBuffer
       ? buffer
       : buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength);
-    if (source.byteLength < 4) {
-      throw new Error("Transfer function file is too small.");
-    }
+    const parsed = parseNativeTransferFunction(source);
 
-    const view = new DataView(source);
-    const count = view.getUint32(0, true);
-    if (count === 0) {
-      throw new Error("Transfer function file contains no entries.");
-    }
-    const expectedSize = 4 + count * 4;
-    if (source.byteLength < expectedSize) {
-      throw new Error(`Transfer function file is incomplete: expected ${expectedSize} bytes, found ${source.byteLength}.`);
-    }
-
-    this.width = count;
-    this.data = new Uint8Array(count * 4);
-    this.data.set(new Uint8Array(source, 4, count * 4));
+    this.width = parsed.count;
+    this.data = new Uint8Array(parsed.rgba.byteLength);
+    this.data.set(parsed.rgba);
     this.updateVisibilityRange();
   }
+}
+
+export function transferFunctionRGBAData(buffer) {
+  const source = buffer instanceof Uint8Array
+    ? buffer
+    : buffer instanceof ArrayBuffer
+      ? new Uint8Array(buffer)
+      : new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  return parseNativeTransferFunction(source).rgba;
+}
+
+const TRANSFER_FUNCTION_MAGIC = 0x31465442; // "BTF1" as little-endian UInt32
+const TRANSFER_FUNCTION_FILE_VERSION = 2;
+
+function parseNativeTransferFunction(source) {
+  const bytes = source instanceof Uint8Array ? source : new Uint8Array(source);
+  if (bytes.byteLength < 4) {
+    throw new Error("Transfer function file is too small.");
+  }
+
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  let cursor = 0;
+  let count = 0;
+
+  if (view.getUint32(cursor, true) === TRANSFER_FUNCTION_MAGIC) {
+    cursor += 4;
+    if (bytes.byteLength < cursor + 12) {
+      throw new Error("Transfer function extended header is incomplete.");
+    }
+
+    const version = view.getUint32(cursor, true);
+    cursor += 4;
+    if (version !== TRANSFER_FUNCTION_FILE_VERSION) {
+      throw new Error(`Unsupported transfer function file version: ${version}.`);
+    }
+
+    const descriptionByteCount = view.getUint32(cursor, true);
+    cursor += 4;
+    count = view.getUint32(cursor, true);
+    cursor += 4;
+    if (descriptionByteCount > bytes.byteLength - cursor) {
+      throw new Error("Transfer function description exceeds file size.");
+    }
+    cursor += descriptionByteCount;
+  } else {
+    count = view.getUint32(cursor, true);
+    cursor += 4;
+  }
+
+  if (count === 0) {
+    throw new Error("Transfer function file contains no entries.");
+  }
+  const rgbaByteLength = count * 4;
+  if (!Number.isSafeInteger(rgbaByteLength) || rgbaByteLength > bytes.byteLength - cursor) {
+    throw new Error(`Transfer function file is incomplete: expected ${cursor + rgbaByteLength} bytes, found ${bytes.byteLength}.`);
+  }
+
+  return {
+    count,
+    rgba: bytes.subarray(cursor, cursor + rgbaByteLength),
+  };
 }
 
 function clamp(value, min, max) {

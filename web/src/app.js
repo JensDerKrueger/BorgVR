@@ -1,5 +1,6 @@
 import { CoordinateCubeRenderer } from "./cube-renderer.js?v=20260911-worker";
 import { decodeAppleLZ4, encodeLZ4Block } from "./lz4.js?v=20260911-urltf";
+import { transferFunctionRGBAData } from "./transfer-function.js?v=20260912-btf1";
 
 const catalogStatus = document.querySelector("#catalog-status");
 const datasetList = document.querySelector("#dataset-list");
@@ -522,10 +523,10 @@ async function selectMatchingCatalogTransferFunction(buffer) {
     return null;
   }
 
-  const bytes = transferFunctionBytes(buffer);
+  const bytes = transferFunctionRGBAData(buffer);
   for (const entry of transferFunctionCatalog) {
     try {
-      if (bytesEqual(bytes, transferFunctionBytes(await fetchCatalogTransferFunction(entry)))) {
+      if (bytesEqual(bytes, transferFunctionRGBAData(await fetchCatalogTransferFunction(entry)))) {
         tfCatalogSelect.value = entry.id;
         return entry;
       }
@@ -555,13 +556,6 @@ async function fetchCatalogTransferFunction(entry) {
   const buffer = await response.arrayBuffer();
   transferFunctionCatalogBuffers.set(entry.id, buffer);
   return buffer;
-}
-
-function transferFunctionBytes(buffer) {
-  if (buffer instanceof ArrayBuffer) {
-    return new Uint8Array(buffer);
-  }
-  return new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength);
 }
 
 function bytesEqual(left, right) {
@@ -617,20 +611,6 @@ function decodeTransferFunctionURLValue(value) {
   }
 
   throw new Error("Unsupported transfer function encoding.");
-}
-
-function transferFunctionRGBAData(bytes) {
-  if (bytes.byteLength < 4) {
-    throw new Error("Transfer function data is too small.");
-  }
-
-  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  const count = view.getUint32(0, true);
-  const expectedLength = 4 + count * 4;
-  if (count <= 0 || expectedLength > bytes.byteLength) {
-    throw new Error("Transfer function data is invalid.");
-  }
-  return bytes.subarray(4, expectedLength);
 }
 
 function nativeTransferFunctionBuffer(rgba) {
