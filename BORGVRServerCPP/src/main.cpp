@@ -268,6 +268,9 @@ static std::string trimCopy(const std::string& text) {
 static bool parseTransferFunctionFile(const std::string& filename,
                                       TransferFunctionInfo& out,
                                       std::string& reason) {
+  constexpr size_t maximumTransferFunctionEntryCount = 1u << 16;
+  constexpr size_t maximumTransferFunctionDescriptionByteCount = 64u * 1024u;
+
   std::vector<uint8_t> bytes;
   if (!readFileBytes(filename, bytes)) {
     reason = "unable to read file";
@@ -301,6 +304,10 @@ static bool parseTransferFunctionFile(const std::string& filename,
     cursor += 4;
     count = readU32LE(bytes, cursor);
     cursor += 4;
+    if (descriptionByteCount > maximumTransferFunctionDescriptionByteCount) {
+      reason = "description exceeds supported size";
+      return false;
+    }
     if (descriptionByteCount > bytes.size() - cursor) {
       reason = "description exceeds file size";
       return false;
@@ -312,7 +319,7 @@ static bool parseTransferFunctionFile(const std::string& filename,
     cursor += 4;
   }
 
-  if (static_cast<size_t>(count) > std::numeric_limits<size_t>::max() / 4) {
+  if (static_cast<size_t>(count) > maximumTransferFunctionEntryCount) {
     reason = "transfer function sample count is too large";
     return false;
   }

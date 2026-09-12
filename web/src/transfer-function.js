@@ -139,6 +139,7 @@ export function transferFunctionRGBAData(buffer) {
 
 const TRANSFER_FUNCTION_MAGIC = 0x31465442; // "BTF1" as little-endian UInt32
 const TRANSFER_FUNCTION_FILE_VERSION = 2;
+const MAX_TRANSFER_FUNCTION_ENTRIES = 1 << 16;
 
 function parseNativeTransferFunction(source) {
   const bytes = source instanceof Uint8Array ? source : new Uint8Array(source);
@@ -177,6 +178,9 @@ function parseNativeTransferFunction(source) {
 
   if (count === 0) {
     throw new Error("Transfer function file contains no entries.");
+  }
+  if (count > MAX_TRANSFER_FUNCTION_ENTRIES) {
+    throw new Error("Transfer function file exceeds the supported entry limit.");
   }
   const rgbaByteLength = count * 4;
   if (!Number.isSafeInteger(rgbaByteLength) || rgbaByteLength > bytes.byteLength - cursor) {

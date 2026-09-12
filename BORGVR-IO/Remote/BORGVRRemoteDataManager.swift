@@ -68,6 +68,10 @@ class BORGVRRemoteDataManager {
   private let authSecret: String
 
   private static let protocolVersionName : String = BorgVRServerAuthentication.protocolVersionName
+  private static let maximumTransferFunctionEntryCount = 1 << 16
+  private static let maximumTransferFunctionDescriptionByteCount = 64 * 1024
+  private static let maximumTransferFunctionByteCount =
+    maximumTransferFunctionEntryCount * 4 + maximumTransferFunctionDescriptionByteCount
   private(set) var maxBricksPerGetRequest : Int = 1
   /**
    Initializes a new instance of the remote data manager.
@@ -232,7 +236,8 @@ class BORGVRRemoteDataManager {
         throw BORGVRRemoteDataManagerError.invalidResponse(reason: "Invalid transfer function ID in LISTTF response.")
       }
 
-      guard let byteCount = Int(parts[1]), byteCount > 0 else {
+      guard let byteCount = Int(parts[1]), byteCount > 0,
+            byteCount <= Self.maximumTransferFunctionByteCount else {
         throw BORGVRRemoteDataManagerError.invalidResponse(reason: "Invalid transfer function byte count in LISTTF response.")
       }
 
@@ -246,8 +251,15 @@ class BORGVRRemoteDataManager {
     guard Self.isTransferFunctionIdentifier(id) else {
       throw BORGVRRemoteDataManagerError.invalidResponse(reason: "Invalid transfer function ID.")
     }
+    let expectedByteCount = transferFunctions.first { $0.id == id }?.byteCount
     try sendCommand("GETTF \(id)")
-    return try receiveBinaryData()
+    let data = try receiveBinaryData(maximumPayloadSize: Self.maximumTransferFunctionByteCount)
+    if let expectedByteCount, data.count != expectedByteCount {
+      throw BORGVRRemoteDataManagerError.invalidResponse(
+        reason: "Transfer function byte count mismatch."
+      )
+    }
+    return data
   }
 
   /**
@@ -310,7 +322,10 @@ class BORGVRRemoteDataManager {
     try BorgVRServerAuthentication.receiveTextResponse(connection: connection, timeout: timeout)
   }
 
-  private func receiveBinaryData(timeout: TimeInterval = 15.0) throws -> Data {
+  private func receiveBinaryData(
+    timeout: TimeInterval = 15.0,
+    maximumPayloadSize: Int? = nil
+  ) throws -> Data {
     var sizeData = Data()
     while sizeData.count < MemoryLayout<UInt32>.size {
       let chunk = try receiveData(
@@ -329,6 +344,11 @@ class BORGVRRemoteDataManager {
     )
     guard payloadSize >= 0 else {
       throw BORGVRRemoteDataManagerError.invalidResponse(reason: "Invalid binary response size.")
+    }
+    if let maximumPayloadSize, payloadSize > maximumPayloadSize {
+      throw BORGVRRemoteDataManagerError.invalidResponse(
+        reason: "Binary response exceeds the supported size limit."
+      )
     }
 
     var payload = Data()

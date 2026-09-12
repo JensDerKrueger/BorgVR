@@ -22,7 +22,11 @@ namespace {
 
 constexpr size_t kMaxTextResponseBytes = 8 * 1024 * 1024;
 constexpr size_t kMaxBinaryResponseBytes = 512 * 1024 * 1024;
-constexpr size_t kMaxTransferFunctionBytesPerPass = 32 * 1024 * 1024;
+constexpr size_t kMaxTransferFunctionEntries = 1u << 16;
+constexpr size_t kMaxTransferFunctionDescriptionBytes = 64u * 1024u;
+constexpr size_t kMaxTransferFunctionBytes =
+  kMaxTransferFunctionEntries * 4u + kMaxTransferFunctionDescriptionBytes;
+constexpr size_t kMaxTransferFunctionBytesPerPass = 32u * 1024u * 1024u;
 
 struct RemoteDataset {
   std::string id;
@@ -771,7 +775,8 @@ void ServerSyncManager::run() {
         for (const auto& tf : snapshot.transferFunctions) {
           if (!running_.load()) break;
           if (localTfIds.find(tf.id) != localTfIds.end()) continue;
-          if (transferredTfBytes + tf.byteCount > kMaxTransferFunctionBytesPerPass) continue;
+          if (tf.byteCount > kMaxTransferFunctionBytes ||
+              transferredTfBytes + tf.byteCount > kMaxTransferFunctionBytesPerPass) continue;
 
           try {
             if (syncTransferFunction(snapshot.endpoint, tf, dataDirectory_, logger_)) {

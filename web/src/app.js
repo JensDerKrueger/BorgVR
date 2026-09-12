@@ -27,7 +27,11 @@ const clipReset = document.querySelector("#clip-reset");
 const MINIMUM_TRANSFER_SMOOTH_WIDTH = 0.02;
 const MAXIMUM_TRANSFER_SMOOTH_WIDTH = 1.0;
 const TRANSFER_FUNCTION_URL_PARAMETER = "TF";
-const MAX_TRANSFER_FUNCTION_URL_BYTES = 1024 * 1024;
+const MAX_TRANSFER_FUNCTION_ENTRIES = 1 << 16;
+const MAX_TRANSFER_FUNCTION_RGBA_BYTES = MAX_TRANSFER_FUNCTION_ENTRIES * 4;
+const MAX_TRANSFER_FUNCTION_METADATA_BYTES = 64 * 1024;
+const MAX_TRANSFER_FUNCTION_URL_BYTES = MAX_TRANSFER_FUNCTION_RGBA_BYTES + MAX_TRANSFER_FUNCTION_METADATA_BYTES;
+const MAX_TRANSFER_FUNCTION_FILE_BYTES = MAX_TRANSFER_FUNCTION_RGBA_BYTES + MAX_TRANSFER_FUNCTION_METADATA_BYTES;
 
 let renderer = null;
 let currentManifest = null;
@@ -543,6 +547,7 @@ async function fetchCatalogTransferFunction(entry) {
   if (!entry?.id || !entry?.url) {
     throw new Error("Transfer function catalog entry is incomplete.");
   }
+  const declaredByteCount = transferFunctionByteCount(entry);
 
   if (transferFunctionCatalogBuffers.has(entry.id)) {
     return transferFunctionCatalogBuffers.get(entry.id);
@@ -553,9 +558,87 @@ async function fetchCatalogTransferFunction(entry) {
   if (!response.ok) {
     throw new Error(`HTTP ${response.status}`);
   }
-  const buffer = await response.arrayBuffer();
+  validateResponseContentLength(response, MAX_TRANSFER_FUNCTION_FILE_BYTES, "transfer function");
+  const buffer = await responseArrayBufferWithLimit(
+    response,
+    MAX_TRANSFER_FUNCTION_FILE_BYTES,
+    "transfer function"
+  );
+  if (declaredByteCount !== null && buffer.byteLength !== declaredByteCount) {
+    throw new Error(
+      `Transfer function byte count mismatch: expected ${declaredByteCount}, received ${buffer.byteLength}.`
+    );
+  }
   transferFunctionCatalogBuffers.set(entry.id, buffer);
   return buffer;
+}
+
+function transferFunctionByteCount(entry) {
+  if (entry.byteCount === undefined || entry.byteCount === null) {
+    return null;
+  }
+  const byteCount = Number(entry.byteCount);
+  if (!Number.isInteger(byteCount) || byteCount <= 0 || byteCount > MAX_TRANSFER_FUNCTION_FILE_BYTES) {
+    throw new Error("Transfer function catalog entry exceeds the supported size limit.");
+  }
+  return byteCount;
+}
+
+function validateResponseContentLength(response, maxBytes, label) {
+  const contentLength = response.headers.get("content-length");
+  if (!contentLength) {
+    return;
+  }
+  const byteCount = Number(contentLength);
+  if (!Number.isInteger(byteCount) || byteCount < 0) {
+    throw new Error(`Invalid ${label} Content-Length.`);
+  }
+  if (byteCount > maxBytes) {
+    throw new Error(`${capitalize(label)} exceeds the supported size limit.`);
+  }
+}
+
+async function responseArrayBufferWithLimit(response, maxBytes, label) {
+  if (!response.body?.getReader) {
+    throw new Error(`Cannot safely load ${label}: streaming response bodies are not available.`);
+  }
+
+  const reader = response.body.getReader();
+  const chunks = [];
+  let totalBytes = 0;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) {
+        break;
+      }
+      totalBytes += value.byteLength;
+      if (totalBytes > maxBytes) {
+        throw new Error(`${capitalize(label)} exceeds the supported size limit.`);
+      }
+      chunks.push(value);
+    }
+  } catch (error) {
+    try {
+      await reader.cancel();
+    } catch {
+      // Ignore cancellation failures; the original read error is more useful.
+    }
+    throw error;
+  }
+
+  const bytes = new Uint8Array(totalBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return bytes.buffer;
+}
+
+function capitalize(text) {
+  return text.length === 0 ? text : text[0].toUpperCase() + text.slice(1);
 }
 
 function bytesEqual(left, right) {

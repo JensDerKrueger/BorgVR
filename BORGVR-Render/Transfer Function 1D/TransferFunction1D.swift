@@ -32,6 +32,10 @@ enum TransferFunction1DError: Error, LocalizedError {
 class TransferFunction1D: Equatable {
   private static let fileMagic = [UInt8]("BTF1".utf8)
   private static let fileVersion: UInt32 = 2
+  static let maximumEntryCount = 1 << 16
+  static let maximumDescriptionByteCount = 64 * 1024
+  static let maximumFileByteCount =
+    maximumEntryCount * MemoryLayout<SIMD4<UInt8>>.size + maximumDescriptionByteCount
 
   /// The transfer function data represented as an array of RGBA values.
   private(set) var data: [SIMD4<UInt8>]
@@ -147,6 +151,12 @@ class TransferFunction1D: Equatable {
 
       let descriptionByteCount = Int(try readLittleEndianUInt32(from: data, cursor: &cursor))
       let count = try readLittleEndianUInt32(from: data, cursor: &cursor)
+      guard descriptionByteCount <= maximumDescriptionByteCount else {
+        throw TransferFunction1DError.mismatchedDataCount(
+          expected: maximumDescriptionByteCount,
+          found: descriptionByteCount
+        )
+      }
       guard data.count >= cursor + descriptionByteCount else {
         throw TransferFunction1DError.mismatchedDataCount(expected: descriptionByteCount, found: data.count - cursor)
       }
@@ -172,6 +182,12 @@ class TransferFunction1D: Equatable {
     count: UInt32,
     description: String
   ) throws -> (description: String, samples: [SIMD4<UInt8>]) {
+    guard count <= UInt32(maximumEntryCount) else {
+      throw TransferFunction1DError.mismatchedDataCount(
+        expected: maximumEntryCount,
+        found: Int(count)
+      )
+    }
     let expectedSize = Int(count) * MemoryLayout<SIMD4<UInt8>>.size
     guard data.count >= cursor + expectedSize else {
       throw TransferFunction1DError.mismatchedDataCount(expected: Int(count), found: (data.count - cursor) / 4)

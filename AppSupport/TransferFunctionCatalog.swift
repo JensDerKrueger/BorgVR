@@ -115,7 +115,8 @@ enum TransferFunctionCatalog {
         continue
       }
 
-      guard transferredBytes + remoteTransferFunction.byteCount <= byteLimit else {
+      guard remoteTransferFunction.byteCount <= Self.remoteTransferFunctionByteLimit,
+            transferredBytes + remoteTransferFunction.byteCount <= byteLimit else {
         logger?.warning("Transfer function sync limit reached before \(remoteTransferFunction.id).")
         break
       }

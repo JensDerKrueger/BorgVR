@@ -21,6 +21,8 @@ private enum DatasetScannerError: Error {
 class DatasetScanner {
   private static let transferFunctionMagic = [UInt8]("BTF1".utf8)
   private static let transferFunctionFileVersion: UInt32 = 2
+  private static let maximumTransferFunctionEntryCount = 1 << 16
+  private static let maximumTransferFunctionDescriptionByteCount = 64 * 1024
 
   private var datasets: [DatasetInfo] = []
   private var transferFunctions: [TransferFunctionInfo] = []
@@ -147,6 +149,9 @@ class DatasetScanner {
       }
       let descriptionByteCount = Int(try readLittleEndianUInt32(from: data, cursor: &cursor))
       count = try readLittleEndianUInt32(from: data, cursor: &cursor)
+      guard descriptionByteCount <= maximumTransferFunctionDescriptionByteCount else {
+        throw DatasetScannerError.invalidTransferFunctionFile
+      }
       guard data.count >= cursor + descriptionByteCount else {
         throw DatasetScannerError.invalidTransferFunctionFile
       }
@@ -158,6 +163,9 @@ class DatasetScanner {
       description = ""
     }
 
+    guard count <= UInt32(maximumTransferFunctionEntryCount) else {
+      throw DatasetScannerError.invalidTransferFunctionFile
+    }
     let rgbaByteCount = Int(count) * MemoryLayout<SIMD4<UInt8>>.size
     guard data.count >= cursor + rgbaByteCount else {
       throw DatasetScannerError.invalidTransferFunctionFile
