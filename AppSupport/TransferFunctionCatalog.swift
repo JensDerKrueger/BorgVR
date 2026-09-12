@@ -39,6 +39,7 @@ struct TransferFunctionCatalogEntry: Identifiable, Equatable {
 }
 
 enum TransferFunctionCatalog {
+  static let didChangeNotification = Notification.Name("TransferFunctionCatalogDidChange")
   static let storageDirectoryName = "TransferFunctions"
   static let bundledSubdirectory = "TransferFunctions"
   static let remoteTransferFunctionByteLimit = 32 * 1024 * 1024
@@ -105,6 +106,12 @@ enum TransferFunctionCatalog {
         .appendingPathExtension("tf1d")
 
       if FileManager.default.fileExists(atPath: targetURL.path) {
+        if try updateCachedTransferFunctionDescriptionIfNeeded(
+          at: targetURL,
+          remoteDescription: remoteTransferFunction.description
+        ) {
+          storedCount += 1
+        }
         continue
       }
 
@@ -121,9 +128,17 @@ enum TransferFunctionCatalog {
         )
       }
 
-      try data.write(to: targetURL, options: .atomic)
+      let storedData = try dataWithDescriptionIfNeeded(
+        data,
+        remoteDescription: remoteTransferFunction.description
+      )
+      try storedData.write(to: targetURL, options: .atomic)
       transferredBytes += data.count
       storedCount += 1
+    }
+
+    if storedCount > 0 {
+      NotificationCenter.default.post(name: didChangeNotification, object: nil)
     }
 
     return storedCount
@@ -226,6 +241,40 @@ enum TransferFunctionCatalog {
     }
   }
 
+  private static func dataWithDescriptionIfNeeded(
+    _ data: Data,
+    remoteDescription: String
+  ) throws -> Data {
+    let description = remoteDescription.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !description.isEmpty,
+          try TransferFunction1D.fileDescription(from: data)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .isEmpty else {
+      return data
+    }
+
+    return try TransferFunction1D(from: data).serialize(description: description)
+  }
+
+  private static func updateCachedTransferFunctionDescriptionIfNeeded(
+    at url: URL,
+    remoteDescription: String
+  ) throws -> Bool {
+    let description = remoteDescription.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !description.isEmpty else { return false }
+
+    let data = try Data(contentsOf: url)
+    guard try TransferFunction1D.fileDescription(from: data)
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+      .isEmpty else {
+      return false
+    }
+
+    let updatedData = try TransferFunction1D(from: data).serialize(description: description)
+    try updatedData.write(to: url, options: .atomic)
+    return true
+  }
+
   private static func catalogEntry(
     _ entry: TransferFunctionCatalogEntry,
     datasetTransferFunctionURL: URL?
@@ -240,11 +289,11 @@ enum TransferFunctionCatalog {
       )
     }
 
-    if entry.source == .cached {
+    if isDatasetAutosave(entry) {
       return nil
     }
 
-    if isDatasetAutosave(entry) {
+    if isAnonymousCachedEntry(entry) {
       return nil
     }
 

@@ -156,6 +156,11 @@ struct TransferFunctionEditorView: View {
     .onChange(of: catalogDirectoryURLs) {
       refreshTransferFunctionCatalog()
     }
+    .onReceive(NotificationCenter.default.publisher(
+      for: TransferFunctionCatalog.didChangeNotification
+    )) { _ in
+      refreshTransferFunctionCatalog()
+    }
     .alert("tf_save_dialog_title", isPresented: $showingSaveDescriptionPrompt) {
       TextField("tf_save_dialog_description_placeholder", text: $saveDescription)
       Button("tf_save_dialog_save_button") {

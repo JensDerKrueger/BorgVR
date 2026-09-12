@@ -364,6 +364,11 @@ struct TransferFunctionEditorView: View {
     }
     .padding()
     .onAppear(perform: refreshTransferFunctionCatalog)
+    .onReceive(NotificationCenter.default.publisher(
+      for: TransferFunctionCatalog.didChangeNotification
+    )) { _ in
+      refreshTransferFunctionCatalog()
+    }
   }
 
   private var currentTransferFunctionDescription: String {
