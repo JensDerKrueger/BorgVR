@@ -128,8 +128,8 @@ struct DockToggleButton: View {
     } label: {
       Image(systemName: docking.isDetached(panel) ? panel.detachedIcon : panel.dockedIcon)
     }
-    .help(docking.isDetached(panel) ? "Panel andocken" : "Panel abdocken")
-    .accessibilityLabel(docking.isDetached(panel) ? "Panel andocken" : "Panel abdocken")
+    .help(docking.isDetached(panel) ? "Dock panel" : "Detach panel")
+    .accessibilityLabel(docking.isDetached(panel) ? "Dock panel" : "Detach panel")
     .buttonStyle(.bordered)
   }
 }

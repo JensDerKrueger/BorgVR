@@ -359,6 +359,8 @@
 
 "Systemfarbe" = "Systemfarbe";
 "Vertikaler Verlauf" = "Vertikaler Verlauf";
+"System color" = "Systemfarbe";
+"Vertical gradient" = "Vertikaler Verlauf";
 "Transfer Function" = "Transferfunktion";
 "Reset" = "Zurücksetzen";
 "SharePlay aktiv" = "SharePlay aktiv";
@@ -366,6 +368,9 @@
 "Server entfernen" = "Server entfernen";
 "Panel andocken" = "Panel andocken";
 "Panel abdocken" = "Panel abdocken";
+"Remove server" = "Server entfernen";
+"Dock panel" = "Panel andocken";
+"Detach panel" = "Panel abdocken";
 
 /* Dataset info and tooltips */
 "dataset_info_title" = "Datensatzinfo";
@@ -611,3 +616,4 @@
 "Screenshot failed: \\(error.localizedDescription)" = "Screenshot fehlgeschlagen: \\(error.localizedDescription)";
 "Transfer function saved: \\(url.path)" = "Transferfunktion gespeichert: \\(url.path)";
 "Transfer function could not be saved: \\(error.localizedDescription)" = "Transferfunktion konnte nicht gespeichert werden: \\(error.localizedDescription)";
+"Copy WebGPU link" = "WebGPU-Link kopieren";

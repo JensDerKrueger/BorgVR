@@ -5,6 +5,7 @@ final class BackgroundServerController: ObservableObject {
   @Published private(set) var isRunning = false
   @Published private(set) var statusText = String(localized: "Server is not started.")
   @Published private(set) var datasets: [DatasetInfo] = []
+  @Published private(set) var shareableWebServerURL: URL?
 
   private let serverHost = BorgVRServerHost(logger: GUILogger())
 
@@ -35,6 +36,9 @@ final class BackgroundServerController: ObservableObject {
 
     datasets = state.datasets
     isRunning = state.isRunning
+    shareableWebServerURL = state.isWebServerRunning && state.webServerUsesTLS
+      ? WebGPUShareLink.serverBaseURL(port: state.webPort)
+      : nil
     let webStatus: String
     if state.isWebServerRunning {
       webStatus = ", WebGPU \(state.webServerUsesTLS ? "HTTPS" : "HTTP") \(state.webPort)"
@@ -71,6 +75,7 @@ final class BackgroundServerController: ObservableObject {
   func stop() {
     serverHost.stop()
     datasets = []
+    shareableWebServerURL = nil
     isRunning = false
     statusText = String(localized: "Server is not started.")
   }

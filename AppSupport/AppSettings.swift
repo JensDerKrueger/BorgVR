@@ -20,9 +20,9 @@ enum RenderBackgroundMode: String, CaseIterable, Identifiable {
 
   var label: String {
     switch self {
-      case .system: return String(localized: "Systemfarbe")
+      case .system: return String(localized: "System color")
       case .solid: return String(localized: "Custom color")
-      case .gradient: return String(localized: "Vertikaler Verlauf")
+      case .gradient: return String(localized: "Vertical gradient")
     }
   }
 }

@@ -1356,6 +1356,34 @@
         }
       }
     },
+    "Copy WebGPU link" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "WebGPU-Link kopieren"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copy WebGPU link"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copiar enlace WebGPU"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copier le lien WebGPU"
+          }
+        }
+      }
+    },
     "Collaborate on the same volumetric dataset." : {
       "localizations" : {
         "de" : {
@@ -9247,6 +9275,46 @@
             "value" : "Fonction de transfert personnalisée"
           }
         }
+      }
+    },
+    "System color" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Systemfarbe" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "System color" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Color del sistema" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Couleur système" } }
+      }
+    },
+    "Vertical gradient" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Vertikaler Verlauf" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Vertical gradient" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Degradado vertical" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Dégradé vertical" } }
+      }
+    },
+    "Remove server" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Server entfernen" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Remove server" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Eliminar servidor" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Supprimer le serveur" } }
+      }
+    },
+    "Dock panel" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Panel andocken" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Dock panel" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Acoplar panel" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Ancrer le panneau" } }
+      }
+    },
+    "Detach panel" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Panel abdocken" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Detach panel" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Desacoplar panel" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Détacher le panneau" } }
       }
     }
   },

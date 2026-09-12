@@ -287,7 +287,7 @@ struct SettingsView: View {
       } label: {
         Image(systemName: "trash")
       }
-      .help("Server entfernen")
+      .help("Remove server")
     }
   }
 

@@ -1,56 +1,5 @@
 import SwiftUI
 
-// MARK: - RenderMode
-
-/**
- Enumeration of rendering modes for volume visualization.
-
- - transferFunction1D: Use a 1D transfer function for color mapping.
- - isoValue: Render using an isovalue threshold.
- */
-enum RenderMode: UInt8, CustomStringConvertible {
-  /// Use a 1D transfer function.
-  case transferFunction1D         = 0
-  /// Use a 1D transfer function with illumination.
-  case transferFunction1DLighting = 1
-  /// Use an isovalue threshold.
-  case isoValue                   = 2
-
-  /// A human-readable description of the render mode.
-  var description: String {
-    switch self {
-      case .transferFunction1D:
-        return NSLocalizedString(
-          "renderMode_transferFunction1D",
-          comment: "Transfer Function"
-        )
-      case .transferFunction1DLighting:
-        return NSLocalizedString(
-          "renderMode_transferFunction1DLighting",
-          comment: "Transfer Function with illumination"
-        )
-      case .isoValue:
-        return NSLocalizedString(
-          "renderMode_isoValue",
-          comment: "Isovalue"
-        )
-    }
-  }
-
-  // MARK: - Serialization helpers
-
-  /// Serialize this enum case to a single byte.
-  func serialize() -> UInt8 {
-    return self.rawValue
-  }
-
-  /// Deserialize from a byte. Falls back to `.transferFunction1D` if unknown.
-  static func deserialize(_ byte: UInt8) -> RenderMode {
-    return RenderMode(rawValue: byte) ?? .transferFunction1D
-  }
-}
-
-
 // MARK: - RuntimeAppModel
 
 /**

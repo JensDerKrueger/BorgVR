@@ -355,6 +355,8 @@
 
 "Systemfarbe" = "Color del sistema";
 "Vertikaler Verlauf" = "Degradado vertical";
+"System color" = "Color del sistema";
+"Vertical gradient" = "Degradado vertical";
 "Transfer Function" = "Función de transferencia";
 "Reset" = "Restablecer";
 "SharePlay aktiv" = "SharePlay activo";
@@ -362,6 +364,9 @@
 "Server entfernen" = "Eliminar servidor";
 "Panel andocken" = "Acoplar panel";
 "Panel abdocken" = "Desacoplar panel";
+"Remove server" = "Eliminar servidor";
+"Dock panel" = "Acoplar panel";
+"Detach panel" = "Desacoplar panel";
 
 /* Dataset info and tooltips */
 "dataset_info_title" = "Información del conjunto de datos";
@@ -607,3 +612,4 @@
 "Screenshot failed: \\(error.localizedDescription)" = "Error al crear la captura de pantalla: \\(error.localizedDescription)";
 "Transfer function saved: \\(url.path)" = "Función de transferencia guardada: \\(url.path)";
 "Transfer function could not be saved: \\(error.localizedDescription)" = "No se pudo guardar la función de transferencia: \\(error.localizedDescription)";
+"Copy WebGPU link" = "Copiar enlace WebGPU";

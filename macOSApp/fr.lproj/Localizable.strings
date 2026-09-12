@@ -355,6 +355,8 @@
 
 "Systemfarbe" = "Couleur système";
 "Vertikaler Verlauf" = "Dégradé vertical";
+"System color" = "Couleur système";
+"Vertical gradient" = "Dégradé vertical";
 "Transfer Function" = "Fonction de transfert";
 "Reset" = "Réinitialiser";
 "SharePlay aktiv" = "SharePlay actif";
@@ -362,6 +364,9 @@
 "Server entfernen" = "Supprimer le serveur";
 "Panel andocken" = "Ancrer le panneau";
 "Panel abdocken" = "Détacher le panneau";
+"Remove server" = "Supprimer le serveur";
+"Dock panel" = "Ancrer le panneau";
+"Detach panel" = "Détacher le panneau";
 
 /* Dataset info and tooltips */
 "dataset_info_title" = "Informations sur le jeu de données";
@@ -607,3 +612,4 @@
 "Screenshot failed: \\(error.localizedDescription)" = "Échec de la capture d’écran : \\(error.localizedDescription)";
 "Transfer function saved: \\(url.path)" = "Fonction de transfert enregistrée : \\(url.path)";
 "Transfer function could not be saved: \\(error.localizedDescription)" = "La fonction de transfert n’a pas pu être enregistrée : \\(error.localizedDescription)";
+"Copy WebGPU link" = "Copier le lien WebGPU";

@@ -24,6 +24,7 @@ struct RenderView: View {
 
   /// Persistent user settings and profiling options.
   @EnvironmentObject var storedAppModel: StoredAppModel
+  @EnvironmentObject private var serverController: BackgroundServerController
 
   /// Scene phase, used to close the dataset when the app goes to background.
   @Environment(\.scenePhase) private var scenePhase
@@ -42,6 +43,8 @@ struct RenderView: View {
 
   /// Text-to-speech helper used for voice feedback.
   @EnvironmentObject var speech: SpeechHelper
+
+  @State private var copiedWebGPUShareLink = false
 
   var body: some View {
     VStack(spacing: 20) {
@@ -109,6 +112,18 @@ struct RenderView: View {
         )
         .padding()
 
+        if canCopyWebGPUShareLink {
+          Button(action: copyWebGPUShareLink) {
+            Image(systemName: copiedWebGPUShareLink ? "checkmark" : "link")
+              .font(.headline)
+              .padding(.horizontal, 20)
+              .padding(.vertical, 10)
+          }
+          .accessibilityLabel("Copy WebGPU link")
+          .help("Copy WebGPU link")
+          .padding()
+        }
+
         Button(action: closeDataset) {
           Text("render_button_close_dataset")
             .font(.headline)
@@ -158,6 +173,41 @@ struct RenderView: View {
    */
   private func closeDataset() {
     runtimeAppModel.immersiveSpaceIntent = .close
+  }
+
+  private var canCopyWebGPUShareLink: Bool {
+    guard let baseURL = serverController.shareableWebServerURL,
+          let dataset = runtimeAppModel.activeDataset,
+          serverController.datasets.contains(where: {
+            $0.id.caseInsensitiveCompare(dataset.uniqueId) == .orderedSame
+          }) else {
+      return false
+    }
+
+    return baseURL.scheme == "https"
+  }
+
+  private func shareableWebGPUURL() -> URL? {
+    guard let baseURL = serverController.shareableWebServerURL,
+          let dataset = runtimeAppModel.activeDataset else {
+      return nil
+    }
+    return WebGPUShareLink.datasetURL(
+      baseURL: baseURL,
+      datasetID: dataset.uniqueId,
+      transferFunction: sharedAppModel.transferFunction,
+      renderMode: sharedAppModel.renderMode,
+      normalizedIsoValue: sharedAppModel.normIsoValue
+    )
+  }
+
+  private func copyWebGPUShareLink() {
+    guard let url = shareableWebGPUURL() else { return }
+    WebGPUShareLink.copyToPasteboard(url.absoluteString)
+    copiedWebGPUShareLink = true
+    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+      copiedWebGPUShareLink = false
+    }
   }
 }
 

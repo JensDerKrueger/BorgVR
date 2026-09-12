@@ -7,6 +7,7 @@ struct RenderView: View {
   @EnvironmentObject private var appModel: AppModel
   @EnvironmentObject private var renderingParameters: RenderingParameters
   @EnvironmentObject var appSettings: AppSettings
+  @EnvironmentObject private var serverController: BackgroundServerController
   @EnvironmentObject private var sharePlay: SharePlayCoordinator
 
   @State private var showTransferEditor = false
@@ -18,6 +19,7 @@ struct RenderView: View {
   @State private var previousMagnification: CGFloat = 1
   @State private var transferSmoothCenter: Float = 0.25
   @State private var transferSmoothWidth: Float = 0.3
+  @State private var copiedWebGPUShareLink = false
 
   private let modelRotationSensitivity: Float = 0.006
   private let clippingSensitivity: Float = 0.0012
@@ -137,6 +139,17 @@ struct RenderView: View {
           )
           .buttonStyle(.bordered)
 
+          if canCopyWebGPUShareLink {
+            Button {
+              copyWebGPUShareLink()
+            } label: {
+              Image(systemName: copiedWebGPUShareLink ? "checkmark" : "link")
+            }
+            .accessibilityLabel("Copy WebGPU link")
+            .help("Copy WebGPU link")
+            .buttonStyle(.bordered)
+          }
+
           Button {
             showDatasetInfo.toggle()
           } label: {
@@ -236,6 +249,41 @@ struct RenderView: View {
 
   private var transferFunctionCatalogDirectoryURLs: [URL] {
     FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
+  }
+
+  private var canCopyWebGPUShareLink: Bool {
+    guard let baseURL = serverController.shareableWebServerURL,
+          let dataset = appModel.activeDataset,
+          serverController.datasets.contains(where: {
+            $0.id.caseInsensitiveCompare(dataset.uniqueId) == .orderedSame
+          }) else {
+      return false
+    }
+
+    return baseURL.scheme == "https"
+  }
+
+  private func shareableWebGPUURL() -> URL? {
+    guard let baseURL = serverController.shareableWebServerURL,
+          let dataset = appModel.activeDataset else {
+      return nil
+    }
+    return WebGPUShareLink.datasetURL(
+      baseURL: baseURL,
+      datasetID: dataset.uniqueId,
+      transferFunction: renderingParameters.transferFunction,
+      renderMode: renderingParameters.renderMode,
+      normalizedIsoValue: renderingParameters.normIsoValue
+    )
+  }
+
+  private func copyWebGPUShareLink() {
+    guard let url = shareableWebGPUURL() else { return }
+    WebGPUShareLink.copyToPasteboard(url.absoluteString)
+    copiedWebGPUShareLink = true
+    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+      copiedWebGPUShareLink = false
+    }
   }
 
   private var visibilityButton: some View {

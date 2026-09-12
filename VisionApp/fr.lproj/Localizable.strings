@@ -934,3 +934,6 @@
 "Screenshot failed: \\(error.localizedDescription)" = "Échec de la capture d’écran : \\(error.localizedDescription)";
 "Transfer function saved: \\(url.path)" = "Fonction de transfert enregistrée : \\(url.path)";
 "Transfer function could not be saved: \\(error.localizedDescription)" = "La fonction de transfert n’a pas pu être enregistrée : \\(error.localizedDescription)";
+"System color" = "Couleur système";
+"Vertical gradient" = "Dégradé vertical";
+"Copy WebGPU link" = "Copier le lien WebGPU";

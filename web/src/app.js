@@ -27,6 +27,9 @@ const clipReset = document.querySelector("#clip-reset");
 const MINIMUM_TRANSFER_SMOOTH_WIDTH = 0.02;
 const MAXIMUM_TRANSFER_SMOOTH_WIDTH = 1.0;
 const TRANSFER_FUNCTION_URL_PARAMETER = "TF";
+const RENDER_MODE_URL_PARAMETER = "mode";
+const ISO_VALUE_URL_PARAMETER = "iso";
+const VALID_RENDER_MODES = new Set(["tf", "tf-lighting", "iso"]);
 const MAX_TRANSFER_FUNCTION_ENTRIES = 1 << 16;
 const MAX_TRANSFER_FUNCTION_RGBA_BYTES = MAX_TRANSFER_FUNCTION_ENTRIES * 4;
 const MAX_TRANSFER_FUNCTION_METADATA_BYTES = 64 * 1024;
@@ -253,15 +256,17 @@ async function showDataset(dataset) {
     return;
   }
   renderer?.setDataset(currentManifest);
+  isoValue.value = String(renderer.getNormalizedIsoValue());
+  applyRenderStateFromURL();
   const transferFunctionStatus = await applyTransferFunctionFromURL();
   viewerEmpty.hidden = true;
   infoButton.disabled = false;
   renderControls.hidden = false;
   datasetInfo.hidden = true;
   renderDatasetInfo(currentManifest);
-  isoValue.value = String(renderer.getNormalizedIsoValue());
   updateVisibleEditor();
   drawTransferFunctionEditor();
+  updateURLState();
   setStatus(transferFunctionStatus || `Rendering ${currentManifest.name}`);
 }
 
@@ -300,13 +305,12 @@ function installRenderControls() {
 
   renderModeButtons.forEach((button) => {
     button.addEventListener("click", () => {
-      renderModeButtons.forEach((element) => element.classList.remove("active"));
-      renderModeButtons.forEach((element) => element.setAttribute("aria-pressed", "false"));
-      button.classList.add("active");
-      button.setAttribute("aria-pressed", "true");
-      currentRenderMode = button.dataset.renderMode;
-      updateVisibleEditor();
-      renderer?.setRenderMode(currentRenderMode);
+      const mode = button.dataset.renderMode;
+      if (!VALID_RENDER_MODES.has(mode)) {
+        return;
+      }
+      selectRenderMode(mode);
+      updateURLState();
     });
   });
 
@@ -396,6 +400,7 @@ function installRenderControls() {
 
   isoValue.addEventListener("input", () => {
     renderer?.setIsoValue(Number(isoValue.value));
+    updateURLState();
   });
 
   clipInputs.forEach((input) => {
@@ -424,6 +429,20 @@ function updateVisibleEditor() {
   editorPanels.forEach((panel) => {
     panel.hidden = panel.dataset.editorMode !== activeEditor;
   });
+}
+
+function selectRenderMode(mode) {
+  if (!VALID_RENDER_MODES.has(mode)) {
+    return;
+  }
+  currentRenderMode = mode;
+  renderModeButtons.forEach((button) => {
+    const active = button.dataset.renderMode === mode;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", active ? "true" : "false");
+  });
+  updateVisibleEditor();
+  renderer?.setRenderMode(mode);
 }
 
 function setControlsCollapsed(collapsed) {
@@ -473,6 +492,10 @@ async function loadTransferFunction(file) {
 }
 
 async function applyTransferFunctionFromURL() {
+  if (currentRenderMode === "iso") {
+    return "";
+  }
+
   const encoded = requestedTransferFunction();
   if (!encoded) {
     return "";
@@ -496,16 +519,66 @@ function requestedTransferFunction() {
   return params.get(TRANSFER_FUNCTION_URL_PARAMETER) || params.get("tf") || "";
 }
 
-function updateTransferFunctionURL() {
-  const buffer = renderer?.serializeTransferFunction();
-  if (!buffer?.byteLength) {
-    return;
+function applyRenderStateFromURL() {
+  const normalizedIsoValue = requestedIsoValue();
+  if (normalizedIsoValue !== null) {
+    isoValue.value = String(normalizedIsoValue);
+    renderer?.setIsoValue(normalizedIsoValue);
   }
 
+  const renderMode = requestedRenderMode();
+  if (renderMode) {
+    selectRenderMode(renderMode);
+  }
+}
+
+function requestedRenderMode() {
+  const params = new URLSearchParams(window.location.search);
+  const mode = (params.get(RENDER_MODE_URL_PARAMETER) || params.get("renderMode") || "").toLowerCase();
+  return VALID_RENDER_MODES.has(mode) ? mode : "";
+}
+
+function requestedIsoValue() {
+  const params = new URLSearchParams(window.location.search);
+  const value = params.get(ISO_VALUE_URL_PARAMETER) || params.get("isoValue") || params.get("isovalue");
+  if (value === null) {
+    return null;
+  }
+  const numberValue = Number(value);
+  return Number.isFinite(numberValue) ? clamp(numberValue, 0, 1) : null;
+}
+
+function updateURLState() {
   const url = new URL(window.location.href);
   url.searchParams.delete("tf");
-  url.searchParams.set(TRANSFER_FUNCTION_URL_PARAMETER, encodeTransferFunctionURLValue(buffer));
+  url.searchParams.delete("renderMode");
+  url.searchParams.delete("isoValue");
+  url.searchParams.delete("isovalue");
+  url.searchParams.set(RENDER_MODE_URL_PARAMETER, currentRenderMode);
+
+  if (currentRenderMode === "iso") {
+    url.searchParams.delete(TRANSFER_FUNCTION_URL_PARAMETER);
+    url.searchParams.set(ISO_VALUE_URL_PARAMETER, normalizedIsoValueForURL());
+  } else {
+    url.searchParams.delete(ISO_VALUE_URL_PARAMETER);
+    const buffer = renderer?.serializeTransferFunction();
+    if (buffer?.byteLength) {
+      url.searchParams.set(TRANSFER_FUNCTION_URL_PARAMETER, encodeTransferFunctionURLValue(buffer));
+    } else {
+      url.searchParams.delete(TRANSFER_FUNCTION_URL_PARAMETER);
+    }
+  }
+
   window.history.replaceState(null, "", url);
+}
+
+function normalizedIsoValueForURL() {
+  const value = clamp(Number(isoValue.value), 0, 1);
+  return Number.isFinite(value) ? value.toPrecision(6).replace(/(?:\.0+|(\.\d+?)0+)$/, "$1") : "0";
+}
+
+function updateTransferFunctionURL() {
+  updateURLState();
 }
 
 function clearTransferFunctionURL() {

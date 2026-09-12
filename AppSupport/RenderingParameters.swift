@@ -311,32 +311,6 @@ enum RenderingParametersUpdateError: Error, LocalizedError {
   }
 }
 
-private extension RenderMode {
-  func serialize() -> UInt8 {
-    switch self {
-      case .transferFunction1D:
-        return 0
-      case .transferFunction1DLighting:
-        return 1
-      case .isoValue:
-        return 2
-    }
-  }
-
-  static func deserialize(_ rawValue: UInt8) -> RenderMode {
-    switch rawValue {
-      case 0:
-        return .transferFunction1D
-      case 1:
-        return .transferFunction1DLighting
-      case 2:
-        return .isoValue
-      default:
-        return .transferFunction1D
-    }
-  }
-}
-
 private struct DataWriter {
   private(set) var data = Data()
 

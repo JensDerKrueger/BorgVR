@@ -1,25 +1,6 @@
 import Foundation
 import SwiftUI
 
-enum RenderMode: String, CaseIterable, Identifiable, CustomStringConvertible {
-  case transferFunction1DLighting
-  case transferFunction1D
-  case isoValue
-
-  var id: String { rawValue }
-
-  var description: String {
-    switch self {
-      case .transferFunction1DLighting:
-        return String(localized: "Transfer function + lighting")
-      case .transferFunction1D:
-        return String(localized: "Transfer Function")
-      case .isoValue:
-        return String(localized: "Isovalue")
-    }
-  }
-}
-
 @MainActor
 final class AppModel: ObservableObject {
   typealias RenderScreenshotHandler = (

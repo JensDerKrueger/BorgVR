@@ -81,6 +81,12 @@
 		57A001502E70000300000001 /* TransferFunctionCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001542E70000300000001 /* TransferFunctionCatalog.swift */; };
 		57A001512E70000300000001 /* TransferFunctionCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001542E70000300000001 /* TransferFunctionCatalog.swift */; };
 		57A001522E70000300000001 /* TransferFunctionCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001542E70000300000001 /* TransferFunctionCatalog.swift */; };
+		57A001612E99000100000001 /* WebGPUShareLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001602E99000100000001 /* WebGPUShareLink.swift */; };
+		57A001622E99000100000001 /* WebGPUShareLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001602E99000100000001 /* WebGPUShareLink.swift */; };
+		57A001632E99000100000001 /* WebGPUShareLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001602E99000100000001 /* WebGPUShareLink.swift */; };
+		57A001652E99000200000001 /* RenderMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001642E99000200000001 /* RenderMode.swift */; };
+		57A001662E99000200000001 /* RenderMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001642E99000200000001 /* RenderMode.swift */; };
+		57A001672E99000200000001 /* RenderMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001642E99000200000001 /* RenderMode.swift */; };
 		57A001552E70000300000001 /* TransferFunctions in Resources */ = {isa = PBXBuildFile; fileRef = 57A001532E70000300000001 /* TransferFunctions */; };
 		57A001562E70000300000001 /* TransferFunctions in Resources */ = {isa = PBXBuildFile; fileRef = 57A001532E70000300000001 /* TransferFunctions */; };
 		57A001572E70000300000001 /* TransferFunctions in Resources */ = {isa = PBXBuildFile; fileRef = 57A001532E70000300000001 /* TransferFunctions */; };
@@ -146,6 +152,8 @@
 		57A0012C2E70000300000001 /* KeychainSecretStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainSecretStore.swift; sourceTree = "<group>"; };
 		57A001532E70000300000001 /* TransferFunctions */ = {isa = PBXFileReference; lastKnownFileType = folder; path = TransferFunctions; sourceTree = "<group>"; };
 		57A001542E70000300000001 /* TransferFunctionCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransferFunctionCatalog.swift; sourceTree = "<group>"; };
+		57A001602E99000100000001 /* WebGPUShareLink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebGPUShareLink.swift; sourceTree = "<group>"; };
+		57A001642E99000200000001 /* RenderMode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RenderMode.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -460,6 +468,7 @@
 				57A0012C2E70000300000001 /* KeychainSecretStore.swift */,
 				57A001232E70000300000001 /* LoggerView.swift */,
 				57A001242E70000300000001 /* MatrixUtilities.swift */,
+				57A001642E99000200000001 /* RenderMode.swift */,
 				57A001222E70000300000001 /* RenderingParameters.swift */,
 				57A000242E70000200000001 /* RuntimeMetalShaderLoader.swift */,
 				57A000252E70000200000001 /* RuntimeVolumeShaders.metal */,
@@ -468,6 +477,7 @@
 				57A001542E70000300000001 /* TransferFunctionCatalog.swift */,
 				57A001252E70000300000001 /* TransferFunctionEditorView.swift */,
 				57A0012A2E70000300000001 /* WebAssetProvider.swift */,
+				57A001602E99000100000001 /* WebGPUShareLink.swift */,
 				57A0012B2E70000300000001 /* WebServerCertificateControls.swift */,
 				57A000292E70000200000001 /* VolumeAtlas.h */,
 				57A001272E70000300000001 /* VolumeRendererPipeline.swift */,
@@ -819,6 +829,7 @@
 				57A0014C2E70000300000001 /* KeychainSecretStore.swift in Sources */,
 				57A001332E70000300000001 /* LoggerView.swift in Sources */,
 				57A001342E70000300000001 /* MatrixUtilities.swift in Sources */,
+				57A001652E99000200000001 /* RenderMode.swift in Sources */,
 				57A001322E70000300000001 /* RenderingParameters.swift in Sources */,
 				57A001402E70000300000001 /* DatasetInfoView.swift in Sources */,
 				57A001422E70000300000001 /* ExternalDatasetImporter.swift in Sources */,
@@ -826,6 +837,7 @@
 				57A000332E70000200000001 /* TextFileDocument.swift in Sources */,
 				57A001352E70000300000001 /* TransferFunctionEditorView.swift in Sources */,
 				57A001442E70000300000001 /* WebAssetProvider.swift in Sources */,
+				57A001612E99000100000001 /* WebGPUShareLink.swift in Sources */,
 				57A001482E70000300000001 /* WebServerCertificateControls.swift in Sources */,
 				57A001502E70000300000001 /* TransferFunctionCatalog.swift in Sources */,
 				57A001372E70000300000001 /* VolumeRendererPipeline.swift in Sources */,
@@ -850,6 +862,7 @@
 				57A0014D2E70000300000001 /* KeychainSecretStore.swift in Sources */,
 				57A0013B2E70000300000001 /* LoggerView.swift in Sources */,
 				57A0013C2E70000300000001 /* MatrixUtilities.swift in Sources */,
+				57A001662E99000200000001 /* RenderMode.swift in Sources */,
 				57A0013A2E70000300000001 /* RenderingParameters.swift in Sources */,
 				57A001412E70000300000001 /* DatasetInfoView.swift in Sources */,
 				57A001432E70000300000001 /* ExternalDatasetImporter.swift in Sources */,
@@ -857,6 +870,7 @@
 				57A000362E70000200000001 /* TextFileDocument.swift in Sources */,
 				57A0013D2E70000300000001 /* TransferFunctionEditorView.swift in Sources */,
 				57A001452E70000300000001 /* WebAssetProvider.swift in Sources */,
+				57A001622E99000100000001 /* WebGPUShareLink.swift in Sources */,
 				57A001492E70000300000001 /* WebServerCertificateControls.swift in Sources */,
 				57A001512E70000300000001 /* TransferFunctionCatalog.swift in Sources */,
 				57A0013F2E70000300000001 /* VolumeRendererPipeline.swift in Sources */,
@@ -871,8 +885,10 @@
 				57A000382E70000200000001 /* GPUHashtable.swift in Sources */,
 				57A0014E2E70000300000001 /* KeychainSecretStore.swift in Sources */,
 				57A000392E70000200000001 /* RuntimeMetalShaderLoader.swift in Sources */,
+				57A001672E99000200000001 /* RenderMode.swift in Sources */,
 				57A0003A2E70000200000001 /* TextFileDocument.swift in Sources */,
 				57A001462E70000300000001 /* WebAssetProvider.swift in Sources */,
+				57A001632E99000100000001 /* WebGPUShareLink.swift in Sources */,
 				57A0014A2E70000300000001 /* WebServerCertificateControls.swift in Sources */,
 				57A001522E70000300000001 /* TransferFunctionCatalog.swift in Sources */,
 			);

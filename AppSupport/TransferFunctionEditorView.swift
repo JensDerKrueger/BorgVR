@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct TransferFunctionEditorView: View {
+  @Environment(\.horizontalSizeClass) private var horizontalSizeClass
   @EnvironmentObject private var appModel: AppModel
   @EnvironmentObject private var renderingParameters: RenderingParameters
   @EnvironmentObject private var sharePlay: SharePlayCoordinator
@@ -49,108 +50,7 @@ struct TransferFunctionEditorView: View {
       }
       .frame(height: 150)
 
-      HStack {
-        channelButton(
-          "R",
-          color: .red,
-          activeForeground: .white,
-          help: "tf_editor_red_channel_help",
-          isSelected: renderingParameters.transferEditing.red
-        ) {
-          renderingParameters.transferEditing.red.toggle()
-          sharePlay.synchronize(kind: .stateOnly)
-        }
-        channelButton(
-          "G",
-          color: .green,
-          activeForeground: .white,
-          help: "tf_editor_green_channel_help",
-          isSelected: renderingParameters.transferEditing.green
-        ) {
-          renderingParameters.transferEditing.green.toggle()
-          sharePlay.synchronize(kind: .stateOnly)
-        }
-        channelButton(
-          "B",
-          color: .blue,
-          activeForeground: .white,
-          help: "tf_editor_blue_channel_help",
-          isSelected: renderingParameters.transferEditing.blue
-        ) {
-          renderingParameters.transferEditing.blue.toggle()
-          sharePlay.synchronize(kind: .stateOnly)
-        }
-        channelButton(
-          "A",
-          color: .white,
-          activeForeground: .black,
-          help: "tf_editor_alpha_channel_help",
-          isSelected: renderingParameters.transferEditing.opacity
-        ) {
-          renderingParameters.transferEditing.opacity.toggle()
-          sharePlay.synchronize(kind: .stateOnly)
-        }
-
-        Spacer()
-
-        Button {
-          saveDescription = currentTransferFunctionDescription
-          showingSaveDescriptionPrompt = true
-        } label: {
-          Image(systemName: "square.and.arrow.down")
-        }
-        .disabled(transferFunctionFileURL == nil)
-        .help("tf_editor_save_help")
-        .accessibilityLabel("tf_editor_save")
-
-        Button {
-          loadTransferFunction()
-        } label: {
-          Image(systemName: "square.and.arrow.up")
-        }
-        .disabled(transferFunctionFileURL == nil)
-        .help("tf_editor_load_help")
-        .accessibilityLabel("tf_editor_load")
-
-        Menu {
-          if transferFunctionCatalog.isEmpty {
-            Text("tf_catalog_empty")
-          } else {
-            ForEach(transferFunctionCatalog) { entry in
-              Button {
-                loadTransferFunction(from: entry)
-              } label: {
-                Label(entry.displayName, systemImage: currentTransferFunctionID == entry.id ? "checkmark" : "waveform")
-              }
-            }
-          }
-        } label: {
-          Label(currentTransferFunctionMenuTitle, systemImage: currentTransferFunctionMenuIcon)
-            .lineLimit(1)
-            .truncationMode(.middle)
-            .frame(maxWidth: 220, alignment: .leading)
-        }
-        .help("tf_catalog_menu")
-        .accessibilityLabel("tf_catalog_menu")
-
-        Button {
-          renderingParameters.objectWillChange.send()
-          renderingParameters.transferFunction.reset()
-          sharePlay.synchronize(kind: .full)
-        } label: {
-          Image(systemName: "arrow.counterclockwise")
-        }
-        .help("Reset")
-        .accessibilityLabel("Reset")
-
-        Button {
-          onClose?()
-        } label: {
-          Image(systemName: "checkmark")
-        }
-        .help("Done")
-        .accessibilityLabel("Done")
-      }
+      transferFunctionToolbar
     }
     .onAppear(perform: refreshTransferFunctionCatalog)
     .onChange(of: catalogDirectoryURLs) {
@@ -170,6 +70,155 @@ struct TransferFunctionEditorView: View {
     } message: {
       Text("tf_save_dialog_message")
     }
+  }
+
+  @ViewBuilder
+  private var transferFunctionToolbar: some View {
+    if horizontalSizeClass == .compact {
+      twoLineTransferFunctionToolbar
+    } else {
+      adaptiveTransferFunctionToolbar
+    }
+  }
+
+  private var adaptiveTransferFunctionToolbar: some View {
+    ViewThatFits(in: .horizontal) {
+      oneLineTransferFunctionToolbar
+      twoLineTransferFunctionToolbar
+    }
+  }
+
+  private var oneLineTransferFunctionToolbar: some View {
+    HStack(spacing: 12) {
+      channelControls
+      Spacer(minLength: 8)
+      commandControls(menuMaxWidth: 220)
+    }
+  }
+
+  private var twoLineTransferFunctionToolbar: some View {
+    VStack(spacing: 8) {
+      HStack(spacing: 12) {
+        channelControls
+        Spacer(minLength: 0)
+      }
+
+      HStack(spacing: 12) {
+        commandControls(menuMaxWidth: nil)
+      }
+    }
+  }
+
+  private var channelControls: some View {
+    HStack(spacing: 10) {
+      channelButton(
+        "R",
+        color: .red,
+        activeForeground: .white,
+        help: "tf_editor_red_channel_help",
+        isSelected: renderingParameters.transferEditing.red
+      ) {
+        renderingParameters.transferEditing.red.toggle()
+        sharePlay.synchronize(kind: .stateOnly)
+      }
+      channelButton(
+        "G",
+        color: .green,
+        activeForeground: .white,
+        help: "tf_editor_green_channel_help",
+        isSelected: renderingParameters.transferEditing.green
+      ) {
+        renderingParameters.transferEditing.green.toggle()
+        sharePlay.synchronize(kind: .stateOnly)
+      }
+      channelButton(
+        "B",
+        color: .blue,
+        activeForeground: .white,
+        help: "tf_editor_blue_channel_help",
+        isSelected: renderingParameters.transferEditing.blue
+      ) {
+        renderingParameters.transferEditing.blue.toggle()
+        sharePlay.synchronize(kind: .stateOnly)
+      }
+      channelButton(
+        "A",
+        color: .white,
+        activeForeground: .black,
+        help: "tf_editor_alpha_channel_help",
+        isSelected: renderingParameters.transferEditing.opacity
+      ) {
+        renderingParameters.transferEditing.opacity.toggle()
+        sharePlay.synchronize(kind: .stateOnly)
+      }
+    }
+  }
+
+  private func commandControls(menuMaxWidth: CGFloat?) -> some View {
+    HStack(spacing: 12) {
+      Button {
+        saveDescription = currentTransferFunctionDescription
+        showingSaveDescriptionPrompt = true
+      } label: {
+        Image(systemName: "square.and.arrow.down")
+      }
+      .disabled(transferFunctionFileURL == nil)
+      .help("tf_editor_save_help")
+      .accessibilityLabel("tf_editor_save")
+
+      Button {
+        loadTransferFunction()
+      } label: {
+        Image(systemName: "square.and.arrow.up")
+      }
+      .disabled(transferFunctionFileURL == nil)
+      .help("tf_editor_load_help")
+      .accessibilityLabel("tf_editor_load")
+
+      transferFunctionMenu(menuMaxWidth: menuMaxWidth)
+        .frame(maxWidth: menuMaxWidth == nil ? .infinity : menuMaxWidth, alignment: .leading)
+
+      Button {
+        renderingParameters.objectWillChange.send()
+        renderingParameters.transferFunction.reset()
+        sharePlay.synchronize(kind: .full)
+      } label: {
+        Image(systemName: "arrow.counterclockwise")
+      }
+      .help("Reset")
+      .accessibilityLabel("Reset")
+
+      Button {
+        onClose?()
+      } label: {
+        Image(systemName: "checkmark")
+      }
+      .help("Done")
+      .accessibilityLabel("Done")
+    }
+  }
+
+  private func transferFunctionMenu(menuMaxWidth: CGFloat?) -> some View {
+    Menu {
+      if transferFunctionCatalog.isEmpty {
+        Text("tf_catalog_empty")
+      } else {
+        ForEach(transferFunctionCatalog) { entry in
+          Button {
+            loadTransferFunction(from: entry)
+          } label: {
+            Label(entry.displayName, systemImage: currentTransferFunctionID == entry.id ? "checkmark" : "waveform")
+          }
+        }
+      }
+    } label: {
+      Label(currentTransferFunctionMenuTitle, systemImage: currentTransferFunctionMenuIcon)
+        .lineLimit(1)
+        .truncationMode(.middle)
+        .frame(maxWidth: menuMaxWidth ?? .infinity, alignment: .leading)
+    }
+    .help("tf_catalog_menu")
+    .accessibilityLabel("tf_catalog_menu")
   }
 
   private func channelButton(
