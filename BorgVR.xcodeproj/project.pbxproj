@@ -81,15 +81,15 @@
 		57A001502E70000300000001 /* TransferFunctionCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001542E70000300000001 /* TransferFunctionCatalog.swift */; };
 		57A001512E70000300000001 /* TransferFunctionCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001542E70000300000001 /* TransferFunctionCatalog.swift */; };
 		57A001522E70000300000001 /* TransferFunctionCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001542E70000300000001 /* TransferFunctionCatalog.swift */; };
+		57A001552E70000300000001 /* TransferFunctions in Resources */ = {isa = PBXBuildFile; fileRef = 57A001532E70000300000001 /* TransferFunctions */; };
+		57A001562E70000300000001 /* TransferFunctions in Resources */ = {isa = PBXBuildFile; fileRef = 57A001532E70000300000001 /* TransferFunctions */; };
+		57A001572E70000300000001 /* TransferFunctions in Resources */ = {isa = PBXBuildFile; fileRef = 57A001532E70000300000001 /* TransferFunctions */; };
 		57A001612E99000100000001 /* WebGPUShareLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001602E99000100000001 /* WebGPUShareLink.swift */; };
 		57A001622E99000100000001 /* WebGPUShareLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001602E99000100000001 /* WebGPUShareLink.swift */; };
 		57A001632E99000100000001 /* WebGPUShareLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001602E99000100000001 /* WebGPUShareLink.swift */; };
 		57A001652E99000200000001 /* RenderMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001642E99000200000001 /* RenderMode.swift */; };
 		57A001662E99000200000001 /* RenderMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001642E99000200000001 /* RenderMode.swift */; };
 		57A001672E99000200000001 /* RenderMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001642E99000200000001 /* RenderMode.swift */; };
-		57A001552E70000300000001 /* TransferFunctions in Resources */ = {isa = PBXBuildFile; fileRef = 57A001532E70000300000001 /* TransferFunctions */; };
-		57A001562E70000300000001 /* TransferFunctions in Resources */ = {isa = PBXBuildFile; fileRef = 57A001532E70000300000001 /* TransferFunctions */; };
-		57A001572E70000300000001 /* TransferFunctions in Resources */ = {isa = PBXBuildFile; fileRef = 57A001532E70000300000001 /* TransferFunctions */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -929,7 +929,8 @@
 				INFOPLIST_FILE = iOSApp/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "BorgVR Mobile";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.education";
-				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "BorgVR uses the local network to share the currently open dataset with participants in a live collaboration session.";
+				INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace = YES;
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "BorgVR uses the local network to provide datasets to other BorgVR clients and the WebGPU renderer.";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
@@ -965,7 +966,8 @@
 				INFOPLIST_FILE = iOSApp/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "BorgVR Mobile";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.education";
-				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "BorgVR uses the local network to share the currently open dataset with participants in a live collaboration session.";
+				INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace = YES;
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "BorgVR uses the local network to provide datasets to other BorgVR clients and the WebGPU renderer.";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
@@ -993,8 +995,8 @@
 				CODE_SIGN_STYLE = Automatic;
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
-				MARKETING_VERSION = 2.0;
 				MACOSX_DEPLOYMENT_TARGET = 15.2;
+				MARKETING_VERSION = 2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "de.uni-due.TerminalServerApp";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
@@ -1008,8 +1010,8 @@
 				CODE_SIGN_STYLE = Automatic;
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
-				MARKETING_VERSION = 2.0;
 				MACOSX_DEPLOYMENT_TARGET = 15.2;
+				MARKETING_VERSION = 2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "de.uni-due.TerminalServerApp";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
@@ -1027,7 +1029,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 5;
+				CURRENT_PROJECT_VERSION = 8;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -1063,7 +1065,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 5;
+				CURRENT_PROJECT_VERSION = 8;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_HARDENED_RUNTIME = YES;
