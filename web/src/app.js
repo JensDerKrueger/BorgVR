@@ -33,7 +33,6 @@ const TRANSFER_FUNCTION_URL_PARAMETER = "TF";
 const RENDER_MODE_URL_PARAMETER = "mode";
 const ISO_VALUE_URL_PARAMETER = "iso";
 const PERSISTENT_BRICK_CACHE_SETTING = "borgvr.persistentBrickCache";
-const PERSISTENT_BRICK_CACHE_DATABASE = "borgvr-brick-cache-v1";
 const VALID_RENDER_MODES = new Set(["tf", "tf-lighting", "iso"]);
 const MAX_TRANSFER_FUNCTION_ENTRIES = 1 << 16;
 const MAX_TRANSFER_FUNCTION_RGBA_BYTES = MAX_TRANSFER_FUNCTION_ENTRIES * 4;
@@ -488,21 +487,8 @@ function loadPersistentBrickCacheSetting() {
 
 async function clearPersistentBrickCache() {
   await renderer?.clearPersistentBrickCache();
-  await deleteIndexedDB(PERSISTENT_BRICK_CACHE_DATABASE);
   setStatus("Persistent brick cache cleared.");
   updateBrickCacheStats();
-}
-
-function deleteIndexedDB(databaseName) {
-  if (!("indexedDB" in window)) {
-    return Promise.resolve();
-  }
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.deleteDatabase(databaseName);
-    request.onsuccess = () => resolve();
-    request.onblocked = () => resolve();
-    request.onerror = () => reject(request.error ?? new Error("Could not clear persistent brick cache."));
-  });
 }
 
 function updateVisibleEditor() {
