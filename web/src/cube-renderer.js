@@ -1,4 +1,4 @@
-import { BrickAtlas } from "./brick-atlas.js?v=20260914-cache-stats";
+import { BrickAtlas } from "./brick-atlas.js?v=20260914-cache-toggle-fix";
 import { createDefaultTransferFunction } from "./transfer-function.js?v=20260907-range-fix";
 
 const shaderSource = `

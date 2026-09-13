@@ -24,6 +24,7 @@ export class BrickAtlas {
     this.workerRequests = new Map();
     this.nextWorkerRequestID = 1;
     this.persistentCacheEnabled = true;
+    this.cacheEpoch = 1;
     this.resetState();
   }
 
@@ -34,6 +35,7 @@ export class BrickAtlas {
 
   setPersistentCacheEnabled(enabled) {
     this.persistentCacheEnabled = enabled;
+    this.cacheEpoch += 1;
     this.configureWorker();
   }
 
@@ -41,11 +43,31 @@ export class BrickAtlas {
     if (!this.worker) {
       return Promise.resolve();
     }
+    this.cacheEpoch += 1;
+    this.configureWorker();
     const requestID = this.nextWorkerRequestID++;
     return new Promise((resolve, reject) => {
-      this.workerRequests.set(requestID, { resolve, reject });
-      this.worker.postMessage({ type: "clearCache", requestID });
+      this.workerRequests.set(requestID, {
+        resolve: () => {
+          this.resetCacheProfileCounters();
+          resolve();
+        },
+        reject
+      });
+      this.worker.postMessage({
+        type: "clearCache",
+        requestID,
+        database: PERSISTENT_BRICK_CACHE_DATABASE
+      });
     });
+  }
+
+  resetCacheProfileCounters() {
+    this.profile.cacheHits = 0;
+    this.profile.cacheMisses = 0;
+    this.profile.cacheHitBytes = 0;
+    this.profile.cacheReadMs = 0;
+    this.profile.cacheWriteMs = 0;
   }
 
   profileSnapshot() {
@@ -197,7 +219,7 @@ export class BrickAtlas {
       return;
     }
     try {
-      this.worker = new Worker(new URL("./brick-worker.js?v=20260914-cache-stats", import.meta.url), { type: "module" });
+      this.worker = new Worker(new URL("./brick-worker.js?v=20260914-cache-toggle-fix", import.meta.url), { type: "module" });
       this.worker.onmessage = (event) => this.handleWorkerMessage(event.data);
       this.worker.onerror = (event) => {
         for (const request of this.workerRequests.values()) {
@@ -235,7 +257,8 @@ export class BrickAtlas {
         datasetCompression: this.datasetCompression,
         persistentCacheEnabled: this.persistentCacheEnabled,
         persistentCacheDatabase: PERSISTENT_BRICK_CACHE_DATABASE,
-        cacheNamespace: cacheNamespaceForManifest(this.manifest)
+        cacheNamespace: cacheNamespaceForManifest(this.manifest),
+        cacheEpoch: this.cacheEpoch
       }
     });
   }
@@ -260,7 +283,9 @@ export class BrickAtlas {
     const request = this.workerRequests.get(message.requestID);
     this.workerRequests.delete(message.requestID);
     if (message.type === "batchLoaded") {
-      this.applyWorkerProfile(message.profile);
+      if (message.cacheEpoch === this.cacheEpoch) {
+        this.applyWorkerProfile(message.profile);
+      }
       request.resolve(message.bricks ?? []);
     } else if (message.type === "batchFailed") {
       const error = new Error(message.error ?? "Brick worker batch failed.");

@@ -13,7 +13,7 @@ self.addEventListener("message", (event) => {
     return;
   }
   if (message?.type === "clearCache") {
-    clearPersistentBrickCache()
+    clearPersistentBrickCache(message.database)
       .then(() => {
         self.postMessage({
           type: "cacheCleared",
@@ -46,11 +46,12 @@ async function loadBatch(message) {
   if (!config) {
     throw new Error("Brick worker is not configured.");
   }
+  const requestConfig = config;
 
   const profile = createProfile();
   const decodedBricks = message.brickIDs.length === 1
-    ? await fetchSingleBrick(message.brickIDs[0], profile)
-    : await fetchBatchBricks(message.brickIDs, profile);
+    ? await fetchSingleBrick(requestConfig, message.brickIDs[0], profile)
+    : await fetchBatchBricks(requestConfig, message.brickIDs, profile);
   const preparedBricks = [];
   const transferList = [];
 
@@ -60,7 +61,7 @@ async function loadBatch(message) {
       continue;
     }
     const prepareStart = now();
-    const prepared = prepareBrickUploadData(brickData);
+    const prepared = prepareBrickUploadData(requestConfig, brickData);
     profile.uploadPrepareMs += now() - prepareStart;
     profile.uploadedBytes += prepared.data.byteLength;
     preparedBricks.push({
@@ -76,19 +77,20 @@ async function loadBatch(message) {
     type: "batchLoaded",
     requestID: message.requestID,
     generation: message.generation,
+    cacheEpoch: requestConfig.cacheEpoch,
     bricks: preparedBricks,
     profile
   }, transferList);
 }
 
-async function fetchBatchBricks(brickIDs, profile) {
-  const cachedBricks = await readCachedBricks(brickIDs, profile);
+async function fetchBatchBricks(cfg, brickIDs, profile) {
+  const cachedBricks = await readCachedBricks(cfg, brickIDs, profile);
   const missingBrickIDs = brickIDs.filter((brickID) => !cachedBricks.has(brickID));
   if (missingBrickIDs.length === 0) {
     return cachedBricks;
   }
 
-  const url = new URL("bricks.batch", config.baseURL);
+  const url = new URL("bricks.batch", cfg.baseURL);
   url.searchParams.set("ids", missingBrickIDs.join(","));
   const fetchStart = now();
   const response = await fetch(url, { credentials: "same-origin" });
@@ -96,7 +98,7 @@ async function fetchBatchBricks(brickIDs, profile) {
 
   if (!response.ok) {
     if (response.status === 404) {
-      const entries = await Promise.all(missingBrickIDs.map((brickID) => fetchSingleBrick(brickID, profile)));
+      const entries = await Promise.all(missingBrickIDs.map((brickID) => fetchSingleBrick(cfg, brickID, profile)));
       const bricksByID = new Map(cachedBricks);
       for (const entry of entries) {
         for (const [brickID, brickData] of entry) {
@@ -137,7 +139,7 @@ async function fetchBatchBricks(brickIDs, profile) {
       throw new Error("Invalid BorgVR brick batch entry.");
     }
 
-    const brick = config.bricks[brickID];
+    const brick = cfg.bricks[brickID];
     if (!brick) {
       continue;
     }
@@ -145,30 +147,30 @@ async function fetchBatchBricks(brickIDs, profile) {
     cacheWrites.push({ brickID, data: storedData });
     profile.serverBricks += 1;
     profile.serverBytes += storedData.byteLength;
-    bricksByID.set(brickID, decodeStoredBrick(brick, storedData, profile));
+    bricksByID.set(brickID, decodeStoredBrick(cfg, brick, storedData, profile));
   }
-  await writeCachedStoredBricks(cacheWrites, profile);
+  await writeCachedStoredBricks(cfg, cacheWrites, profile);
   return bricksByID;
 }
 
-async function fetchSingleBrick(brickID, profile) {
-  const brick = config.bricks[brickID];
+async function fetchSingleBrick(cfg, brickID, profile) {
+  const brick = cfg.bricks[brickID];
   if (!brick) {
     return new Map();
   }
-  const cachedData = await readCachedStoredBrick(brickID, profile);
+  const cachedData = await readCachedStoredBrick(cfg, brickID, profile);
   if (cachedData) {
-    return new Map([[brickID, decodeStoredBrick(brick, cachedData, profile)]]);
+    return new Map([[brickID, decodeStoredBrick(cfg, brick, cachedData, profile)]]);
   }
 
   const brickName = String(brick.index).padStart(6, "0");
-  const url = new URL(brick.url ?? `bricks/${brickName}`, config.baseURL);
+  const url = new URL(brick.url ?? `bricks/${brickName}`, cfg.baseURL);
   const fetchStart = now();
   let response = await fetch(url, { credentials: "same-origin" });
   let requestedURL = url;
   if (!response.ok && response.status === 404 && !brick.url) {
-    const extension = effectiveBrickCompression(brick) === "lz4" ? "lz4" : "bin";
-    requestedURL = new URL(`bricks/${brickName}.${extension}`, config.baseURL);
+    const extension = effectiveBrickCompression(cfg, brick) === "lz4" ? "lz4" : "bin";
+    requestedURL = new URL(`bricks/${brickName}.${extension}`, cfg.baseURL);
     response = await fetch(requestedURL, { credentials: "same-origin" });
   }
   profile.fetchHeaderMs += now() - fetchStart;
@@ -181,15 +183,15 @@ async function fetchSingleBrick(brickID, profile) {
   profile.fetchBodyMs += now() - bodyStart;
   profile.serverBricks += 1;
   profile.serverBytes += data.byteLength;
-  await writeCachedStoredBrick(brickID, data, profile);
+  await writeCachedStoredBrick(cfg, brickID, data, profile);
 
-  return new Map([[brickID, decodeStoredBrick(brick, data, profile)]]);
+  return new Map([[brickID, decodeStoredBrick(cfg, brick, data, profile)]]);
 }
 
-function decodeStoredBrick(brick, data, profile) {
+function decodeStoredBrick(cfg, brick, data, profile) {
   profile.compressedBytes += data.byteLength;
-  const uncompressedByteLength = uncompressedByteLengthFor(brick);
-  if (shouldDecompressBrick(brick, data)) {
+  const uncompressedByteLength = uncompressedByteLengthFor(cfg, brick);
+  if (shouldDecompressBrick(cfg, brick, data)) {
     const decodeStart = now();
     const decoded = decodeAppleLZ4(data, uncompressedByteLength);
     profile.lz4DecodeMs += now() - decodeStart;
@@ -206,41 +208,41 @@ function decodeStoredBrick(brick, data, profile) {
   return data;
 }
 
-function shouldDecompressBrick(brick, data) {
-  return effectiveBrickCompression(brick) === "lz4" &&
-    data.byteLength < uncompressedByteLengthFor(brick);
+function shouldDecompressBrick(cfg, brick, data) {
+  return effectiveBrickCompression(cfg, brick) === "lz4" &&
+    data.byteLength < uncompressedByteLengthFor(cfg, brick);
 }
 
-function uncompressedByteLengthFor(brick) {
-  return brick.uncompressedByteLength ?? config.uncompressedBrickByteLength;
+function uncompressedByteLengthFor(cfg, brick) {
+  return brick.uncompressedByteLength ?? cfg.uncompressedBrickByteLength;
 }
 
-function effectiveBrickCompression(brick) {
+function effectiveBrickCompression(cfg, brick) {
   const brickCompression = normalizeCompressionName(brick.compression);
   if (brickCompression && brickCompression !== "per-brick") {
     return brickCompression;
   }
-  return config.datasetCompression === "per-brick" ? "lz4" : config.datasetCompression;
+  return cfg.datasetCompression === "per-brick" ? "lz4" : cfg.datasetCompression;
 }
 
-function prepareBrickUploadData(brickData) {
-  const bytesPerRow = align(config.brickSize * config.textureBytesPerVoxel, 256);
-  const rowsPerImage = config.brickSize;
-  const paddedData = new Uint8Array(bytesPerRow * rowsPerImage * config.brickSize);
-  const sourceBytesPerRow = config.brickSize * config.bytesPerVoxel;
+function prepareBrickUploadData(cfg, brickData) {
+  const bytesPerRow = align(cfg.brickSize * cfg.textureBytesPerVoxel, 256);
+  const rowsPerImage = cfg.brickSize;
+  const paddedData = new Uint8Array(bytesPerRow * rowsPerImage * cfg.brickSize);
+  const sourceBytesPerRow = cfg.brickSize * cfg.bytesPerVoxel;
 
-  for (let z = 0; z < config.brickSize; z += 1) {
-    for (let y = 0; y < config.brickSize; y += 1) {
-      const sourceOffset = (z * config.brickSize + y) * sourceBytesPerRow;
+  for (let z = 0; z < cfg.brickSize; z += 1) {
+    for (let y = 0; y < cfg.brickSize; y += 1) {
+      const sourceOffset = (z * cfg.brickSize + y) * sourceBytesPerRow;
       const destinationOffset = (z * rowsPerImage + y) * bytesPerRow;
-      if (config.bytesPerComponent === 1) {
+      if (cfg.bytesPerComponent === 1) {
         paddedData.set(brickData.subarray(sourceOffset, sourceOffset + sourceBytesPerRow), destinationOffset);
       } else {
-        for (let x = 0; x < config.brickSize; x += 1) {
-          const sourceVoxelOffset = sourceOffset + x * config.bytesPerVoxel;
+        for (let x = 0; x < cfg.brickSize; x += 1) {
+          const sourceVoxelOffset = sourceOffset + x * cfg.bytesPerVoxel;
           const value = brickData[sourceVoxelOffset] | (brickData[sourceVoxelOffset + 1] << 8);
-          const normalizedValue = Math.min(1, Math.max(0, value / Math.max(1, config.dataRangeMax)));
-          writeUInt16LE(paddedData, destinationOffset + x * config.textureBytesPerVoxel, float32ToFloat16Bits(normalizedValue));
+          const normalizedValue = Math.min(1, Math.max(0, value / Math.max(1, cfg.dataRangeMax)));
+          writeUInt16LE(paddedData, destinationOffset + x * cfg.textureBytesPerVoxel, float32ToFloat16Bits(normalizedValue));
         }
       }
     }
@@ -275,16 +277,16 @@ function createProfile() {
   };
 }
 
-async function readCachedBricks(brickIDs, profile) {
+async function readCachedBricks(cfg, brickIDs, profile) {
   const result = new Map();
-  if (!persistentCacheEnabled()) {
+  if (!persistentCacheEnabled(cfg)) {
     return result;
   }
   const readStart = now();
   try {
     const db = await openPersistentCacheDB();
     try {
-      const records = await idbGetMany(db, brickIDs.map((brickID) => cacheKey(brickID)));
+      const records = await idbGetMany(db, brickIDs.map((brickID) => cacheKey(cfg, brickID)));
       profile.cacheReadMs += now() - readStart;
       for (let index = 0; index < brickIDs.length; index += 1) {
         const brickID = brickIDs[index];
@@ -293,13 +295,13 @@ async function readCachedBricks(brickIDs, profile) {
           profile.cacheMisses += 1;
           continue;
         }
-        const brick = config.bricks[brickID];
+        const brick = cfg.bricks[brickID];
         if (!brick) {
           continue;
         }
         profile.cacheHits += 1;
         profile.cacheHitBytes += record.data.byteLength;
-        result.set(brickID, decodeStoredBrick(brick, new Uint8Array(record.data), profile));
+        result.set(brickID, decodeStoredBrick(cfg, brick, new Uint8Array(record.data), profile));
       }
     } finally {
       db.close();
@@ -310,15 +312,15 @@ async function readCachedBricks(brickIDs, profile) {
   return result;
 }
 
-async function readCachedStoredBrick(brickID, profile) {
-  if (!persistentCacheEnabled()) {
+async function readCachedStoredBrick(cfg, brickID, profile) {
+  if (!persistentCacheEnabled(cfg)) {
     return null;
   }
   const readStart = now();
   try {
     const db = await openPersistentCacheDB();
     try {
-      const record = await idbGet(db, cacheKey(brickID));
+      const record = await idbGet(db, cacheKey(cfg, brickID));
       profile.cacheReadMs += now() - readStart;
       if (!record?.data) {
         profile.cacheMisses += 1;
@@ -336,12 +338,12 @@ async function readCachedStoredBrick(brickID, profile) {
   }
 }
 
-async function writeCachedStoredBrick(brickID, data, profile) {
-  await writeCachedStoredBricks([{ brickID, data }], profile);
+async function writeCachedStoredBrick(cfg, brickID, data, profile) {
+  await writeCachedStoredBricks(cfg, [{ brickID, data }], profile);
 }
 
-async function writeCachedStoredBricks(entries, profile) {
-  if (!persistentCacheEnabled()) {
+async function writeCachedStoredBricks(cfg, entries, profile) {
+  if (!persistentCacheEnabled(cfg) || cfg.cacheEpoch !== config?.cacheEpoch) {
     return;
   }
   const validEntries = entries.filter((entry) => entry?.data?.byteLength > 0);
@@ -353,8 +355,8 @@ async function writeCachedStoredBricks(entries, profile) {
     const db = await openPersistentCacheDB();
     try {
       await idbPutMany(db, validEntries.map(({ brickID, data }) => ({
-        key: cacheKey(brickID),
-        namespace: config.cacheNamespace,
+        key: cacheKey(cfg, brickID),
+        namespace: cfg.cacheNamespace,
         brickID,
         byteLength: data.byteLength,
         updatedAt: Date.now(),
@@ -369,11 +371,11 @@ async function writeCachedStoredBricks(entries, profile) {
   }
 }
 
-async function clearPersistentBrickCache() {
+async function clearPersistentBrickCache(databaseName = DEFAULT_CACHE_DATABASE) {
   if (!("indexedDB" in self)) {
     return;
   }
-  const db = await openPersistentCacheDB();
+  const db = await openPersistentCacheDB(databaseName);
   try {
     await idbClear(db);
   } finally {
@@ -381,20 +383,20 @@ async function clearPersistentBrickCache() {
   }
 }
 
-function persistentCacheEnabled() {
-  return config?.persistentCacheEnabled === true &&
-    typeof config.cacheNamespace === "string" &&
-    config.cacheNamespace.length > 0 &&
+function persistentCacheEnabled(cfg) {
+  return cfg?.persistentCacheEnabled === true &&
+    typeof cfg.cacheNamespace === "string" &&
+    cfg.cacheNamespace.length > 0 &&
     "indexedDB" in self;
 }
 
-function cacheKey(brickID) {
-  return `${config.cacheNamespace}|${brickID}`;
+function cacheKey(cfg, brickID) {
+  return `${cfg.cacheNamespace}|${brickID}`;
 }
 
-function openPersistentCacheDB() {
+function openPersistentCacheDB(databaseName = config?.persistentCacheDatabase || DEFAULT_CACHE_DATABASE) {
   return new Promise((resolve, reject) => {
-    const request = indexedDB.open(config?.persistentCacheDatabase || DEFAULT_CACHE_DATABASE, 1);
+    const request = indexedDB.open(databaseName, 1);
     request.onupgradeneeded = () => {
       const db = request.result;
       if (!db.objectStoreNames.contains(CACHE_STORE)) {

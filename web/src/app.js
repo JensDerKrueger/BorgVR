@@ -1,4 +1,4 @@
-import { CoordinateCubeRenderer } from "./cube-renderer.js?v=20260914-cache-stats";
+import { CoordinateCubeRenderer } from "./cube-renderer.js?v=20260914-cache-toggle-fix";
 import { decodeAppleLZ4, encodeLZ4Block } from "./lz4.js?v=20260911-urltf";
 import { transferFunctionRGBAData } from "./transfer-function.js?v=20260912-btf1";
 
@@ -468,9 +468,13 @@ function installRenderControls() {
 
   clearBrickCache.addEventListener("click", async () => {
     try {
+      clearBrickCache.disabled = true;
+      setStatus("Clearing persistent brick cache...");
       await clearPersistentBrickCache();
     } catch (error) {
       setStatus(error.message ?? String(error));
+    } finally {
+      clearBrickCache.disabled = false;
     }
   });
 
