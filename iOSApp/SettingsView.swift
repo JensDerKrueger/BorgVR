@@ -33,6 +33,11 @@ private enum SettingsResetSection: String, Identifiable {
   }
 }
 
+private enum ServerConnectionTestResult {
+  case success(datasetCount: Int, transferFunctionCount: Int)
+  case failure(String)
+}
+
 struct SettingsView: View {
   @EnvironmentObject private var appModel: AppModel
   @EnvironmentObject var appSettings: AppSettings
@@ -47,6 +52,11 @@ struct SettingsView: View {
   @State private var tempPixelError = ""
   @State private var tempOversampling = ""
   @State private var validationMessage: String?
+  @State private var showingAddServerSheet = false
+  @State private var addServerValidationMessage: String?
+  @State private var isTestingServerConnection = false
+  @State private var serverConnectionTestResult: ServerConnectionTestResult?
+  @State private var pendingServerDeletion: StoredServer?
   @State private var pendingResetSection: SettingsResetSection?
 
   var body: some View {
@@ -63,41 +73,135 @@ struct SettingsView: View {
         }
         .onAppear(perform: loadTemporaryValues)
         .onDisappear(perform: saveSettings)
-        .confirmationDialog(
-          resetConfirmationTitle,
-          isPresented: isResetConfirmationPresented,
-          titleVisibility: .visible
-        ) {
-          Button("Reset", role: .destructive) {
-            if let pendingResetSection {
-              resetToDefaults(pendingResetSection)
-            }
-            pendingResetSection = nil
-          }
-          Button("Cancel", role: .cancel) {}
-        } message: {
-          Text(resetConfirmationMessage)
+        .sheet(isPresented: $showingAddServerSheet) {
+          addServerSheet
         }
     }
   }
 
   private var settingsForm: some View {
     Form {
-      renderingSection
-      importSection
-      remoteDatasetsSection
-      backgroundServerSection
-      if appSettings.enableDatasetServer {
-        webServerSection
+      Section {
+        NavigationLink {
+          settingsPage(
+            title: "Rendering",
+            description: "This page contains settings for the BorgVR rendering system. Some options, such as the background color, are mostly cosmetic, while others, such as the atlas size, can have a major impact on performance. If renderer problems occur, you can return this section to the default settings, which are suitable for most cases."
+          ) {
+            renderingSection
+          }
+        } label: {
+          settingsCategoryLabel("Rendering", systemImage: "paintpalette")
+        }
+
+        NavigationLink {
+          settingsPage(
+            title: "Import",
+            description: "This page controls the parameters used when importing and converting datasets. Datasets that have already been converted are not affected by these settings."
+          ) {
+            importSection
+          }
+        } label: {
+          settingsCategoryLabel("Import", systemImage: "square.and.arrow.down")
+        }
+
+        NavigationLink {
+          settingsPage(
+            title: "Remote datasets",
+            description: "If you have access to one or more central dataset servers, you can configure them here. The server details are provided by the server operator. More information about dataset servers in general, and about running a dedicated server yourself, is available on the support website."
+          ) {
+            remoteDatasetsSection
+          }
+        } label: {
+          settingsCategoryLabel("Remote datasets", systemImage: "network")
+        }
+
+        NavigationLink {
+          settingsPage(
+            title: "Local server",
+            description: "You can share your local datasets with other users directly from this device, without running a dedicated server. You can start a general dataset server from this app and share the device address with other users. During SharePlay collaboration, BorgVR can also create a session-specific server that shares data only with the SharePlay participants."
+          ) {
+            backgroundServerSection
+            if appSettings.enableDatasetServer {
+              webServerSection
+            }
+            adHocServerSection
+          }
+        } label: {
+          settingsCategoryLabel("Local server", systemImage: "server.rack")
+        }
+
+        NavigationLink {
+          settingsPage(
+            title: "LOD",
+            description: "This page controls BorgVR's level-of-detail system. These settings allow fine tuning between visual quality and rendering performance."
+          ) {
+            lodSection
+          }
+        } label: {
+          settingsCategoryLabel("LOD", systemImage: "square.stack.3d.up")
+        }
       }
-      adHocServerSection
-      lodSection
       validationSection
     }
   }
 
+  private func settingsPage<Content: View>(
+    title: LocalizedStringKey,
+    description: LocalizedStringKey,
+    @ViewBuilder content: @escaping () -> Content
+  ) -> some View {
+    Form {
+      settingsDescriptionSection(description)
+      content()
+      validationSection
+    }
+    .navigationTitle(title)
+    .onDisappear(perform: saveSettings)
+    .confirmationDialog(
+      resetConfirmationTitle,
+      isPresented: isResetConfirmationPresented,
+      titleVisibility: .visible
+    ) {
+      Button("Reset", role: .destructive) {
+        if let pendingResetSection {
+          resetToDefaults(pendingResetSection)
+        }
+        pendingResetSection = nil
+      }
+      Button("Cancel", role: .cancel) {}
+    } message: {
+      Text(resetConfirmationMessage)
+    }
+    .alert(
+      "Delete server?",
+      isPresented: isServerDeleteConfirmationPresented,
+    ) {
+      Button("Delete", role: .destructive) {
+        if let pendingServerDeletion {
+          removeServer(pendingServerDeletion)
+        }
+        pendingServerDeletion = nil
+      }
+      Button("Cancel", role: .cancel) {}
+    } message: {
+      Text("This remote server will be removed from the list.")
+    }
+  }
+
+  private func settingsCategoryLabel(_ title: LocalizedStringKey, systemImage: String) -> some View {
+    Label(title, systemImage: systemImage)
+  }
+
+  private func settingsDescriptionSection(_ description: LocalizedStringKey) -> some View {
+    Section {
+      Text(description)
+        .font(.footnote)
+        .foregroundStyle(.secondary)
+    }
+  }
+
   private var renderingSection: some View {
-    Section("Rendering") {
+    Section {
       Toggle("Automatically load/save transfer functions", isOn: $appSettings.autoloadTF)
       Picker("Oversampling", selection: $appSettings.oversamplingMode) {
         Text("Static").tag(OversamplingMode.staticMode.rawValue)
@@ -124,13 +228,11 @@ struct SettingsView: View {
           set: { appSettings.renderBackgroundSecondaryColor = $0 }
         ), supportsOpacity: true)
       }
-      TextField("Oversampling", text: $tempOversampling)
-        .keyboardType(.decimalPad)
+      textFieldRow("Oversampling", text: $tempOversampling, keyboardType: .decimalPad)
       Stepper(value: $appSettings.atlasSizeMB, in: 128...AppSettings.maximumAtlasSizeMB, step: 128) {
         Text(String(format: String(localized: "Atlas size: %d MB"), appSettings.atlasSizeMB))
       }
-      TextField("Min. hash table size (MB)", text: $tempHashSize)
-        .keyboardType(.numberPad)
+      textFieldRow("Min. hash table size (MB)", text: $tempHashSize, keyboardType: .numberPad)
       Picker("Log-Level", selection: $appSettings.logLevel) {
         ForEach(AppLogLevel.allCases) { level in
           Text(level.label).tag(level.rawValue)
@@ -141,11 +243,9 @@ struct SettingsView: View {
   }
 
   private var importSection: some View {
-    Section("Import") {
-      TextField("Brick size", text: $tempBrickSize)
-        .keyboardType(.numberPad)
-      TextField("Overlap", text: $tempBrickOverlap)
-        .keyboardType(.numberPad)
+    Section {
+      textFieldRow("Brick size (voxels)", text: $tempBrickSize, keyboardType: .numberPad)
+      textFieldRow("Overlap (voxels)", text: $tempBrickOverlap, keyboardType: .numberPad)
       Toggle("Compression", isOn: $appSettings.enableCompression)
       Picker("Borders", selection: $appSettings.borderMode) {
         Text("Zeroes").tag("zeroes")
@@ -156,28 +256,94 @@ struct SettingsView: View {
     }
   }
 
+  @ViewBuilder
   private var remoteDatasetsSection: some View {
-    Section("Remote datasets") {
-      ForEach(appSettings.servers) { server in
-        serverRow(for: server)
+    Section("Configured servers") {
+      if appSettings.servers.isEmpty {
+        Text("No remote servers configured.")
+          .foregroundStyle(.secondary)
+      } else {
+        ForEach(appSettings.servers) { server in
+          serverRow(for: server)
+        }
       }
 
-      TextField("Hostname", text: $tempServerAddress)
-        .textInputAutocapitalization(.never)
-        .autocorrectionDisabled()
-      TextField("Port", text: $tempPort)
-        .keyboardType(.numberPad)
-      SecureField("Password (optional)", text: $tempServerPassword)
       Button {
-        addServer()
+        beginAddingServer()
       } label: {
         Label("Add server", systemImage: "plus")
       }
-      TextField("Timeout", text: $tempTimeout)
-        .keyboardType(.decimalPad)
+    }
+
+    Section("Loading") {
+      textFieldRow("Timeout (seconds)", text: $tempTimeout, keyboardType: .decimalPad)
       Toggle("Progressive loading", isOn: $appSettings.progressiveLoading)
       Toggle("Keep local copy", isOn: $appSettings.makeLocalCopy)
+    }
+
+    Section {
       resetButton(for: .remoteDatasets)
+    }
+  }
+
+  private var addServerSheet: some View {
+    NavigationStack {
+      Form {
+        Section("Server") {
+          textFieldRow(
+            "Hostname",
+            text: $tempServerAddress,
+            keyboardType: .URL,
+            textInputAutocapitalization: .never,
+            autocorrectionDisabled: true
+          )
+          textFieldRow("Port", text: $tempPort, keyboardType: .numberPad)
+          secureFieldRow("Password (optional)", text: $tempServerPassword)
+        }
+
+        if let addServerValidationMessage {
+          Section {
+            Text(addServerValidationMessage)
+              .foregroundStyle(.red)
+          }
+        }
+
+        Section {
+          Button {
+            testServerConnection()
+          } label: {
+            if isTestingServerConnection {
+              HStack {
+                ProgressView()
+                Text("Testing connection ...")
+              }
+            } else {
+              Label("Test connection", systemImage: "network")
+            }
+          }
+          .disabled(isTestingServerConnection)
+
+          if let serverConnectionTestResult {
+            serverConnectionTestResultView(serverConnectionTestResult)
+          }
+        }
+      }
+      .navigationTitle("Add server")
+      .toolbar {
+        ToolbarItem(placement: .cancellationAction) {
+          Button("Cancel") {
+            showingAddServerSheet = false
+          }
+        }
+
+        ToolbarItem(placement: .confirmationAction) {
+          Button("Add") {
+            if addServer() {
+              showingAddServerSheet = false
+            }
+          }
+        }
+      }
     }
   }
 
@@ -187,7 +353,7 @@ struct SettingsView: View {
       if appSettings.enableDatasetServer {
         Toggle("Start server automatically", isOn: $appSettings.autoStartServer)
         portField("Port", value: $appSettings.serverPort)
-        SecureField("Server password (optional)", text: $appSettings.serverPassword)
+        secureFieldRow("Server password (optional)", text: $appSettings.serverPassword)
         Stepper(value: $appSettings.maxBricksPerGetRequest, in: 1...1000) {
           Text(String(format: String(localized: "Max. bricks per request: %d"), appSettings.maxBricksPerGetRequest))
         }
@@ -224,9 +390,8 @@ struct SettingsView: View {
   }
 
   private var lodSection: some View {
-    Section("LOD") {
-      TextField("Screen-space pixel error", text: $tempPixelError)
-        .keyboardType(.decimalPad)
+    Section {
+      textFieldRow("Screen-space pixel error (pixels)", text: $tempPixelError, keyboardType: .decimalPad)
       Stepper(value: $appSettings.initialBricks, in: 0...20000, step: 100) {
         Text(String(format: String(localized: "Initial bricks: %d"), appSettings.initialBricks))
       }
@@ -237,10 +402,10 @@ struct SettingsView: View {
       Toggle("Stop on missing brick", isOn: $appSettings.stopOnMiss)
       if appSettings.oversamplingMode == OversamplingMode.dynamicMode.rawValue {
         Stepper(value: $appSettings.dropFPS, in: 1...120) {
-          Text(String(format: String(localized: "Drop FPS: %d"), appSettings.dropFPS))
+          Text(String(format: String(localized: "Drop FPS: %d fps"), appSettings.dropFPS))
         }
         Stepper(value: $appSettings.recoveryFPS, in: 1...120) {
-          Text(String(format: String(localized: "Recovery FPS: %d"), appSettings.recoveryFPS))
+          Text(String(format: String(localized: "Recovery FPS: %d fps"), appSettings.recoveryFPS))
         }
       }
       resetButton(for: .lod)
@@ -263,6 +428,17 @@ struct SettingsView: View {
       set: { isPresented in
         if !isPresented {
           pendingResetSection = nil
+        }
+      }
+    )
+  }
+
+  private var isServerDeleteConfirmationPresented: Binding<Bool> {
+    Binding(
+      get: { pendingServerDeletion != nil },
+      set: { isPresented in
+        if !isPresented {
+          pendingServerDeletion = nil
         }
       }
     )
@@ -295,10 +471,33 @@ struct SettingsView: View {
       Text(serverLabel(for: server))
       Spacer()
       Button(role: .destructive) {
-        removeServer(server)
+        pendingServerDeletion = server
       } label: {
         Image(systemName: "trash")
       }
+      .buttonStyle(.borderless)
+    }
+  }
+
+  @ViewBuilder
+  private func serverConnectionTestResultView(_ result: ServerConnectionTestResult) -> some View {
+    switch result {
+      case let .success(datasetCount, transferFunctionCount):
+        Label {
+          Text(
+            String(
+              format: String(localized: "Connection successful: %d datasets, %d transfer functions available."),
+              datasetCount,
+              transferFunctionCount
+            )
+          )
+        } icon: {
+          Image(systemName: "checkmark.circle.fill")
+        }
+        .foregroundStyle(.green)
+      case let .failure(message):
+        Label(message, systemImage: "xmark.octagon.fill")
+          .foregroundStyle(.red)
     }
   }
 
@@ -309,11 +508,40 @@ struct SettingsView: View {
     return "\(server.address):\(server.port) \(String(localized: "(Password)"))"
   }
 
+  private func textFieldRow(
+    _ title: LocalizedStringKey,
+    text: Binding<String>,
+    keyboardType: UIKeyboardType,
+    textInputAutocapitalization: TextInputAutocapitalization? = nil,
+    autocorrectionDisabled: Bool = false
+  ) -> some View {
+    HStack {
+      Text(title)
+      Spacer()
+      TextField("", text: text)
+        .keyboardType(keyboardType)
+        .textInputAutocapitalization(textInputAutocapitalization)
+        .autocorrectionDisabled(autocorrectionDisabled)
+        .multilineTextAlignment(.trailing)
+        .frame(maxWidth: 180)
+    }
+  }
+
+  private func secureFieldRow(_ title: LocalizedStringKey, text: Binding<String>) -> some View {
+    HStack {
+      Text(title)
+      Spacer()
+      SecureField("", text: text)
+        .multilineTextAlignment(.trailing)
+        .frame(maxWidth: 180)
+    }
+  }
+
   private func portField(_ title: LocalizedStringKey, value: Binding<Int>) -> some View {
     HStack {
       Text(title)
       Spacer()
-      TextField(title, value: clampedPortBinding(value), formatter: portNumberFormatter)
+      TextField("", value: clampedPortBinding(value), formatter: portNumberFormatter)
         .keyboardType(.numberPad)
         .multilineTextAlignment(.trailing)
         .frame(width: 110)
@@ -331,6 +559,16 @@ struct SettingsView: View {
 
   private func removeServer(_ server: StoredServer) {
     appSettings.servers.removeAll { $0.id == server.id }
+  }
+
+  private func beginAddingServer() {
+    tempServerAddress = ""
+    tempPort = "12345"
+    tempServerPassword = ""
+    addServerValidationMessage = nil
+    serverConnectionTestResult = nil
+    isTestingServerConnection = false
+    showingAddServerSheet = true
   }
 
   private func loadTemporaryValues() {
@@ -367,22 +605,69 @@ struct SettingsView: View {
     }
   }
 
-  private func addServer() {
-    guard !tempServerAddress.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-          let port = UInt16(tempPort) else {
-      validationMessage = String(localized: "Server requires a hostname and a port between 0 and 65535.")
-      return
+  private func addServer() -> Bool {
+    let trimmedAddress = tempServerAddress.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmedAddress.isEmpty,
+          let port = UInt16(tempPort),
+          port > 0 else {
+      addServerValidationMessage = String(localized: "Server requires a hostname and a port between 1 and 65535.")
+      return false
     }
     appSettings.servers.append(
       StoredServer(
-        address: tempServerAddress.trimmingCharacters(in: .whitespacesAndNewlines),
+        address: trimmedAddress,
         port: Int(port),
         password: tempServerPassword
       )
     )
     tempServerAddress = ""
     tempServerPassword = ""
+    addServerValidationMessage = nil
     validationMessage = nil
+    return true
+  }
+
+  private func testServerConnection() {
+    let trimmedAddress = tempServerAddress.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmedAddress.isEmpty,
+          let port = UInt16(tempPort),
+          port > 0 else {
+      addServerValidationMessage = String(localized: "Server requires a hostname and a port between 1 and 65535.")
+      serverConnectionTestResult = nil
+      return
+    }
+
+    addServerValidationMessage = nil
+    serverConnectionTestResult = nil
+    isTestingServerConnection = true
+    let password = tempServerPassword
+    let timeout = appSettings.timeout
+
+    Task {
+      let result: ServerConnectionTestResult = await Task.detached(priority: .userInitiated) {
+        do {
+          let manager = BORGVRRemoteDataManager(
+            host: trimmedAddress,
+            port: port,
+            authSecret: password,
+            logger: nil,
+            notifier: nil
+          )
+          try manager.connect(timeout: timeout)
+          let datasets = try manager.requestDatasetList()
+          let transferFunctions = try manager.requestTransferFunctionList()
+          return .success(
+            datasetCount: datasets.count,
+            transferFunctionCount: transferFunctions.count
+          )
+        } catch {
+          return .failure(error.localizedDescription)
+        }
+      }.value
+
+      serverConnectionTestResult = result
+      isTestingServerConnection = false
+    }
   }
 
   private func resetToDefaults(_ section: SettingsResetSection) {
