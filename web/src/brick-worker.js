@@ -268,10 +268,7 @@ function createProfile() {
     uploadSubmitMs: 0,
     totalLoadMs: 0,
     cacheHits: 0,
-    cacheMisses: 0,
     cacheHitBytes: 0,
-    cacheReadMs: 0,
-    cacheWriteMs: 0,
     serverBricks: 0,
     serverBytes: 0
   };
@@ -282,17 +279,14 @@ async function readCachedBricks(cfg, brickIDs, profile) {
   if (!persistentCacheEnabled(cfg)) {
     return result;
   }
-  const readStart = now();
   try {
     const db = await openPersistentCacheDB();
     try {
       const records = await idbGetMany(db, brickIDs.map((brickID) => cacheKey(cfg, brickID)));
-      profile.cacheReadMs += now() - readStart;
       for (let index = 0; index < brickIDs.length; index += 1) {
         const brickID = brickIDs[index];
         const record = records[index];
         if (!record?.data) {
-          profile.cacheMisses += 1;
           continue;
         }
         const brick = cfg.bricks[brickID];
@@ -307,7 +301,6 @@ async function readCachedBricks(cfg, brickIDs, profile) {
       db.close();
     }
   } catch {
-    profile.cacheReadMs += now() - readStart;
   }
   return result;
 }
@@ -316,14 +309,11 @@ async function readCachedStoredBrick(cfg, brickID, profile) {
   if (!persistentCacheEnabled(cfg)) {
     return null;
   }
-  const readStart = now();
   try {
     const db = await openPersistentCacheDB();
     try {
       const record = await idbGet(db, cacheKey(cfg, brickID));
-      profile.cacheReadMs += now() - readStart;
       if (!record?.data) {
-        profile.cacheMisses += 1;
         return null;
       }
       profile.cacheHits += 1;
@@ -333,7 +323,6 @@ async function readCachedStoredBrick(cfg, brickID, profile) {
       db.close();
     }
   } catch {
-    profile.cacheReadMs += now() - readStart;
     return null;
   }
 }
@@ -350,7 +339,6 @@ async function writeCachedStoredBricks(cfg, entries, profile) {
   if (validEntries.length === 0) {
     return;
   }
-  const writeStart = now();
   try {
     const db = await openPersistentCacheDB();
     try {
@@ -362,12 +350,10 @@ async function writeCachedStoredBricks(cfg, entries, profile) {
         updatedAt: Date.now(),
         data: data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength)
       })));
-      profile.cacheWriteMs += now() - writeStart;
     } finally {
       db.close();
     }
   } catch {
-    profile.cacheWriteMs += now() - writeStart;
   }
 }
 

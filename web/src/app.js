@@ -1,4 +1,4 @@
-import { CoordinateCubeRenderer } from "./cube-renderer.js?v=20260914-cache-toggle-fix";
+import { CoordinateCubeRenderer } from "./cube-renderer.js?v=20260914-cache-summary";
 import { decodeAppleLZ4, encodeLZ4Block } from "./lz4.js?v=20260911-urltf";
 import { transferFunctionRGBAData } from "./transfer-function.js?v=20260912-btf1";
 
@@ -319,13 +319,9 @@ function updateBrickCacheStats() {
   }
   const cacheBytes = atlas.cacheHitMiB?.toFixed?.(1) ?? "0.0";
   const serverBytes = atlas.serverMiB?.toFixed?.(1) ?? "0.0";
-  const readMs = atlas.cacheReadMs?.toFixed?.(0) ?? "0";
-  const writeMs = atlas.cacheWriteMs?.toFixed?.(0) ?? "0";
   brickCacheStats.textContent = [
     `Cache: ${atlas.cacheHits ?? 0} bricks (${cacheBytes} MiB)`,
-    `Server: ${atlas.serverBricks ?? 0} bricks (${serverBytes} MiB)`,
-    `Misses: ${atlas.cacheMisses ?? 0}`,
-    `IndexedDB: read ${readMs} ms, write ${writeMs} ms`
+    `Server: ${atlas.serverBricks ?? 0} bricks (${serverBytes} MiB)`
   ].join(" · ");
 }
 
@@ -1123,9 +1119,9 @@ function flattenProfileSnapshot(snapshot) {
     },
     {
       section: "persistent cache",
-      totalMs: (atlas.cacheReadMs ?? 0) + (atlas.cacheWriteMs ?? 0),
+      totalMs: 0,
       avgMs: 0,
-      detail: `${atlas.cacheHits ?? 0} hits (${atlas.cacheHitMiB?.toFixed?.(1) ?? "0.0"} MiB), ${atlas.cacheMisses ?? 0} misses`
+      detail: `${atlas.cacheHits ?? 0} hits (${atlas.cacheHitMiB?.toFixed?.(1) ?? "0.0"} MiB)`
     },
     {
       section: "lz4 decode",

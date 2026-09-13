@@ -64,10 +64,7 @@ export class BrickAtlas {
 
   resetCacheProfileCounters() {
     this.profile.cacheHits = 0;
-    this.profile.cacheMisses = 0;
     this.profile.cacheHitBytes = 0;
-    this.profile.cacheReadMs = 0;
-    this.profile.cacheWriteMs = 0;
   }
 
   profileSnapshot() {
@@ -97,10 +94,7 @@ export class BrickAtlas {
       lz4Bricks: profile.lz4Bricks,
       rawBricks: profile.rawBricks,
       cacheHits: profile.cacheHits,
-      cacheMisses: profile.cacheMisses,
       cacheHitMiB: bytesToMiB(profile.cacheHitBytes),
-      cacheReadMs: profile.cacheReadMs,
-      cacheWriteMs: profile.cacheWriteMs,
       serverBricks: profile.serverBricks,
       serverMiB: bytesToMiB(profile.serverBytes)
     };
@@ -219,7 +213,7 @@ export class BrickAtlas {
       return;
     }
     try {
-      this.worker = new Worker(new URL("./brick-worker.js?v=20260914-cache-toggle-fix", import.meta.url), { type: "module" });
+      this.worker = new Worker(new URL("./brick-worker.js?v=20260914-cache-summary", import.meta.url), { type: "module" });
       this.worker.onmessage = (event) => this.handleWorkerMessage(event.data);
       this.worker.onerror = (event) => {
         for (const request of this.workerRequests.values()) {
@@ -864,10 +858,7 @@ export class BrickAtlas {
 
 const alwaysCollectedProfileKeys = new Set([
   "cacheHits",
-  "cacheMisses",
   "cacheHitBytes",
-  "cacheReadMs",
-  "cacheWriteMs",
   "serverBricks",
   "serverBytes",
   "batchRequests",
@@ -892,10 +883,7 @@ function createAtlasProfile() {
     uploadSubmitMs: 0,
     totalLoadMs: 0,
     cacheHits: 0,
-    cacheMisses: 0,
     cacheHitBytes: 0,
-    cacheReadMs: 0,
-    cacheWriteMs: 0,
     serverBricks: 0,
     serverBytes: 0
   };
