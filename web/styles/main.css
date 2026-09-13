@@ -437,6 +437,20 @@ p {
   width: 100%;
 }
 
+.cache-toggle-row {
+  grid-template-columns: 1fr auto;
+}
+
+.cache-toggle-row input {
+  justify-self: end;
+}
+
+.cache-action-row {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0 9px 9px;
+}
+
 .tf-editor-canvas {
   display: block;
   width: calc(100% - 18px);

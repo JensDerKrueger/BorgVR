@@ -567,6 +567,7 @@ export class CoordinateCubeRenderer {
     this.statusCallback = null;
     this.statusReporting = true;
     this.profilingEnabled = false;
+    this.persistentBrickCacheEnabled = true;
     this.profile = createRendererProfile();
     this.animationFrame = 0;
     this.needsRender = false;
@@ -585,6 +586,15 @@ export class CoordinateCubeRenderer {
     this.profilingEnabled = enabled;
     this.profile = createRendererProfile();
     this.brickAtlas?.setProfiling(enabled);
+  }
+
+  setPersistentBrickCacheEnabled(enabled) {
+    this.persistentBrickCacheEnabled = enabled;
+    this.brickAtlas?.setPersistentCacheEnabled(enabled);
+  }
+
+  clearPersistentBrickCache() {
+    return this.brickAtlas?.clearPersistentCache() ?? Promise.resolve();
   }
 
   profileSnapshot() {
@@ -619,6 +629,7 @@ export class CoordinateCubeRenderer {
     return [
       `Profile: ${atlas.loads} bricks`,
       `fetch ${(atlas.fetchHeaderMs + atlas.fetchBodyMs).toFixed(0)} ms`,
+      `cache ${atlas.cacheHits ?? 0}/${(atlas.cacheHits ?? 0) + (atlas.cacheMisses ?? 0)}`,
       `lz4 ${atlas.lz4DecodeMs.toFixed(0)} ms`,
       `prep ${atlas.uploadPrepareMs.toFixed(0)} ms`,
       `upload ${atlas.uploadSubmitMs.toFixed(0)} ms`,
@@ -663,6 +674,7 @@ export class CoordinateCubeRenderer {
       this.requestRender();
     });
     this.brickAtlas.setProfiling(this.profilingEnabled);
+    this.brickAtlas.setPersistentCacheEnabled(this.persistentBrickCacheEnabled);
     this.context = this.canvas.getContext("webgpu");
     this.format = navigator.gpu.getPreferredCanvasFormat();
     this.configureContext();

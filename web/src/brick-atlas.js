@@ -10,6 +10,7 @@ const MAX_BRICKS_PER_BATCH_REQUEST = 32;
 const MAX_PENDING_REQUEST_AGE_FRAMES = 10;
 const DEFAULT_ATLAS_MEMORY_BYTES = 2 * 1024 * 1024 * 1024;
 const BATCH_MAGIC = 0x31425642;
+const PERSISTENT_BRICK_CACHE_DATABASE = "borgvr-brick-cache-v1";
 
 export class BrickAtlas {
   constructor(device, statusCallback = null, activityCallback = null) {
@@ -22,12 +23,29 @@ export class BrickAtlas {
     this.worker = null;
     this.workerRequests = new Map();
     this.nextWorkerRequestID = 1;
+    this.persistentCacheEnabled = true;
     this.resetState();
   }
 
   setProfiling(enabled) {
     this.profilingEnabled = enabled;
     this.profile = createAtlasProfile();
+  }
+
+  setPersistentCacheEnabled(enabled) {
+    this.persistentCacheEnabled = enabled;
+    this.configureWorker();
+  }
+
+  clearPersistentCache() {
+    if (!this.worker) {
+      return Promise.resolve();
+    }
+    const requestID = this.nextWorkerRequestID++;
+    return new Promise((resolve, reject) => {
+      this.workerRequests.set(requestID, { resolve, reject });
+      this.worker.postMessage({ type: "clearCache", requestID });
+    });
   }
 
   profileSnapshot() {
@@ -55,7 +73,11 @@ export class BrickAtlas {
       avgUploadSubmitMs: profile.uploadSubmitMs / loadedCount,
       avgTotalLoadMs: profile.totalLoadMs / loadedCount,
       lz4Bricks: profile.lz4Bricks,
-      rawBricks: profile.rawBricks
+      rawBricks: profile.rawBricks,
+      cacheHits: profile.cacheHits,
+      cacheMisses: profile.cacheMisses,
+      cacheReadMs: profile.cacheReadMs,
+      cacheWriteMs: profile.cacheWriteMs
     };
   }
 
@@ -207,7 +229,10 @@ export class BrickAtlas {
         textureBytesPerVoxel: this.textureBytesPerVoxel,
         dataRangeMax: this.dataRangeMax,
         uncompressedBrickByteLength: this.uncompressedBrickByteLength,
-        datasetCompression: this.datasetCompression
+        datasetCompression: this.datasetCompression,
+        persistentCacheEnabled: this.persistentCacheEnabled,
+        persistentCacheDatabase: PERSISTENT_BRICK_CACHE_DATABASE,
+        cacheNamespace: cacheNamespaceForManifest(this.manifest)
       }
     });
   }
@@ -240,6 +265,10 @@ export class BrickAtlas {
         error.httpStatus = message.httpStatus;
       }
       request.reject(error);
+    } else if (message.type === "cacheCleared") {
+      request.resolve();
+    } else if (message.type === "cacheClearFailed") {
+      request.reject(new Error(message.error ?? "Persistent brick cache could not be cleared."));
     }
   }
 
@@ -814,7 +843,11 @@ function createAtlasProfile() {
     lz4DecodeMs: 0,
     uploadPrepareMs: 0,
     uploadSubmitMs: 0,
-    totalLoadMs: 0
+    totalLoadMs: 0,
+    cacheHits: 0,
+    cacheMisses: 0,
+    cacheReadMs: 0,
+    cacheWriteMs: 0
   };
 }
 
@@ -890,6 +923,21 @@ function normalizeCompressionName(value) {
     return value;
   }
   return null;
+}
+
+function cacheNamespaceForManifest(manifest) {
+  const volume = manifest.volume ?? {};
+  const bricking = manifest.bricking ?? {};
+  const datasetID = manifest.id ?? manifest.ID ?? manifest.uniqueID ?? manifest.uniqueId ?? manifest.uuid ?? manifest.datasetID ?? manifest.name ?? "dataset";
+  return [
+    String(datasetID),
+    String(bricking.brickSize ?? ""),
+    String(bricking.overlap ?? ""),
+    String(bricking.compression ?? ""),
+    String(volume.componentCount ?? ""),
+    String(volume.bytesPerComponent ?? ""),
+    String((manifest.bricks ?? []).length)
+  ].join("|");
 }
 
 function formatMiB(byteCount) {

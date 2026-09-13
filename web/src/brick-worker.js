@@ -1,6 +1,8 @@
 import { decodeAppleLZ4 } from "./lz4.js?v=20260911-worker";
 
 const BATCH_MAGIC = 0x31425642;
+const DEFAULT_CACHE_DATABASE = "borgvr-brick-cache-v1";
+const CACHE_STORE = "bricks";
 
 let config = null;
 
@@ -8,6 +10,23 @@ self.addEventListener("message", (event) => {
   const message = event.data;
   if (message?.type === "configure") {
     config = message.config;
+    return;
+  }
+  if (message?.type === "clearCache") {
+    clearPersistentBrickCache()
+      .then(() => {
+        self.postMessage({
+          type: "cacheCleared",
+          requestID: message.requestID ?? 0
+        });
+      })
+      .catch((error) => {
+        self.postMessage({
+          type: "cacheClearFailed",
+          requestID: message.requestID ?? 0,
+          error: error.message ?? String(error)
+        });
+      });
     return;
   }
   if (message?.type === "loadBatch") {
@@ -63,16 +82,22 @@ async function loadBatch(message) {
 }
 
 async function fetchBatchBricks(brickIDs, profile) {
+  const cachedBricks = await readCachedBricks(brickIDs, profile);
+  const missingBrickIDs = brickIDs.filter((brickID) => !cachedBricks.has(brickID));
+  if (missingBrickIDs.length === 0) {
+    return cachedBricks;
+  }
+
   const url = new URL("bricks.batch", config.baseURL);
-  url.searchParams.set("ids", brickIDs.join(","));
+  url.searchParams.set("ids", missingBrickIDs.join(","));
   const fetchStart = now();
   const response = await fetch(url, { credentials: "same-origin" });
   profile.fetchHeaderMs += now() - fetchStart;
 
   if (!response.ok) {
     if (response.status === 404) {
-      const entries = await Promise.all(brickIDs.map((brickID) => fetchSingleBrick(brickID, profile)));
-      const bricksByID = new Map();
+      const entries = await Promise.all(missingBrickIDs.map((brickID) => fetchSingleBrick(brickID, profile)));
+      const bricksByID = new Map(cachedBricks);
       for (const entry of entries) {
         for (const [brickID, brickData] of entry) {
           bricksByID.set(brickID, brickData);
@@ -101,7 +126,8 @@ async function fetchBatchBricks(brickIDs, profile) {
     throw new Error("Truncated BorgVR brick batch table.");
   }
 
-  const bricksByID = new Map();
+  const bricksByID = new Map(cachedBricks);
+  const cacheWrites = [];
   for (let index = 0; index < count; index += 1) {
     const entryOffset = 8 + index * 12;
     const brickID = view.getUint32(entryOffset, true);
@@ -116,8 +142,10 @@ async function fetchBatchBricks(brickIDs, profile) {
       continue;
     }
     const storedData = batchData.subarray(dataOffset, dataOffset + byteLength);
+    cacheWrites.push({ brickID, data: storedData });
     bricksByID.set(brickID, decodeStoredBrick(brick, storedData, profile));
   }
+  await writeCachedStoredBricks(cacheWrites, profile);
   return bricksByID;
 }
 
@@ -125,6 +153,10 @@ async function fetchSingleBrick(brickID, profile) {
   const brick = config.bricks[brickID];
   if (!brick) {
     return new Map();
+  }
+  const cachedData = await readCachedStoredBrick(brickID, profile);
+  if (cachedData) {
+    return new Map([[brickID, decodeStoredBrick(brick, cachedData, profile)]]);
   }
 
   const brickName = String(brick.index).padStart(6, "0");
@@ -145,6 +177,7 @@ async function fetchSingleBrick(brickID, profile) {
   const bodyStart = now();
   const data = new Uint8Array(await response.arrayBuffer());
   profile.fetchBodyMs += now() - bodyStart;
+  await writeCachedStoredBrick(brickID, data, profile);
 
   return new Map([[brickID, decodeStoredBrick(brick, data, profile)]]);
 }
@@ -227,8 +260,187 @@ function createProfile() {
     lz4DecodeMs: 0,
     uploadPrepareMs: 0,
     uploadSubmitMs: 0,
-    totalLoadMs: 0
+    totalLoadMs: 0,
+    cacheHits: 0,
+    cacheMisses: 0,
+    cacheReadMs: 0,
+    cacheWriteMs: 0
   };
+}
+
+async function readCachedBricks(brickIDs, profile) {
+  const result = new Map();
+  if (!persistentCacheEnabled()) {
+    return result;
+  }
+  const readStart = now();
+  try {
+    const db = await openPersistentCacheDB();
+    try {
+      const records = await idbGetMany(db, brickIDs.map((brickID) => cacheKey(brickID)));
+      profile.cacheReadMs += now() - readStart;
+      for (let index = 0; index < brickIDs.length; index += 1) {
+        const brickID = brickIDs[index];
+        const record = records[index];
+        if (!record?.data) {
+          profile.cacheMisses += 1;
+          continue;
+        }
+        const brick = config.bricks[brickID];
+        if (!brick) {
+          continue;
+        }
+        profile.cacheHits += 1;
+        result.set(brickID, decodeStoredBrick(brick, new Uint8Array(record.data), profile));
+      }
+    } finally {
+      db.close();
+    }
+  } catch {
+    profile.cacheReadMs += now() - readStart;
+  }
+  return result;
+}
+
+async function readCachedStoredBrick(brickID, profile) {
+  if (!persistentCacheEnabled()) {
+    return null;
+  }
+  const readStart = now();
+  try {
+    const db = await openPersistentCacheDB();
+    try {
+      const record = await idbGet(db, cacheKey(brickID));
+      profile.cacheReadMs += now() - readStart;
+      if (!record?.data) {
+        profile.cacheMisses += 1;
+        return null;
+      }
+      profile.cacheHits += 1;
+      return new Uint8Array(record.data);
+    } finally {
+      db.close();
+    }
+  } catch {
+    profile.cacheReadMs += now() - readStart;
+    return null;
+  }
+}
+
+async function writeCachedStoredBrick(brickID, data, profile) {
+  await writeCachedStoredBricks([{ brickID, data }], profile);
+}
+
+async function writeCachedStoredBricks(entries, profile) {
+  if (!persistentCacheEnabled()) {
+    return;
+  }
+  const validEntries = entries.filter((entry) => entry?.data?.byteLength > 0);
+  if (validEntries.length === 0) {
+    return;
+  }
+  const writeStart = now();
+  try {
+    const db = await openPersistentCacheDB();
+    try {
+      await idbPutMany(db, validEntries.map(({ brickID, data }) => ({
+        key: cacheKey(brickID),
+        namespace: config.cacheNamespace,
+        brickID,
+        byteLength: data.byteLength,
+        updatedAt: Date.now(),
+        data: data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength)
+      })));
+      profile.cacheWriteMs += now() - writeStart;
+    } finally {
+      db.close();
+    }
+  } catch {
+    profile.cacheWriteMs += now() - writeStart;
+  }
+}
+
+async function clearPersistentBrickCache() {
+  if (!("indexedDB" in self)) {
+    return;
+  }
+  const db = await openPersistentCacheDB();
+  try {
+    await idbClear(db);
+  } finally {
+    db.close();
+  }
+}
+
+function persistentCacheEnabled() {
+  return config?.persistentCacheEnabled === true &&
+    typeof config.cacheNamespace === "string" &&
+    config.cacheNamespace.length > 0 &&
+    "indexedDB" in self;
+}
+
+function cacheKey(brickID) {
+  return `${config.cacheNamespace}|${brickID}`;
+}
+
+function openPersistentCacheDB() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(config?.persistentCacheDatabase || DEFAULT_CACHE_DATABASE, 1);
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(CACHE_STORE)) {
+        db.createObjectStore(CACHE_STORE, { keyPath: "key" });
+      }
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error ?? new Error("Could not open persistent brick cache."));
+  });
+}
+
+function idbGet(db, key) {
+  return new Promise((resolve, reject) => {
+    const request = db.transaction(CACHE_STORE, "readonly").objectStore(CACHE_STORE).get(key);
+    request.onsuccess = () => resolve(request.result ?? null);
+    request.onerror = () => reject(request.error ?? new Error("Could not read persistent brick cache."));
+  });
+}
+
+function idbGetMany(db, keys) {
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(CACHE_STORE, "readonly");
+    const store = transaction.objectStore(CACHE_STORE);
+    const records = new Array(keys.length).fill(null);
+    keys.forEach((key, index) => {
+      const request = store.get(key);
+      request.onsuccess = () => {
+        records[index] = request.result ?? null;
+      };
+      request.onerror = () => reject(request.error ?? new Error("Could not read persistent brick cache."));
+    });
+    transaction.oncomplete = () => resolve(records);
+    transaction.onerror = () => reject(transaction.error ?? new Error("Could not read persistent brick cache."));
+  });
+}
+
+function idbPutMany(db, records) {
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(CACHE_STORE, "readwrite");
+    const store = transaction.objectStore(CACHE_STORE);
+    for (const record of records) {
+      store.put(record);
+    }
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = () => reject(transaction.error ?? new Error("Could not write persistent brick cache."));
+  });
+}
+
+function idbClear(db) {
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(CACHE_STORE, "readwrite");
+    transaction.objectStore(CACHE_STORE).clear();
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = () => reject(transaction.error ?? new Error("Could not clear persistent brick cache."));
+  });
 }
 
 function normalizeCompressionName(value) {
