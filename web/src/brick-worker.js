@@ -143,6 +143,8 @@ async function fetchBatchBricks(brickIDs, profile) {
     }
     const storedData = batchData.subarray(dataOffset, dataOffset + byteLength);
     cacheWrites.push({ brickID, data: storedData });
+    profile.serverBricks += 1;
+    profile.serverBytes += storedData.byteLength;
     bricksByID.set(brickID, decodeStoredBrick(brick, storedData, profile));
   }
   await writeCachedStoredBricks(cacheWrites, profile);
@@ -177,6 +179,8 @@ async function fetchSingleBrick(brickID, profile) {
   const bodyStart = now();
   const data = new Uint8Array(await response.arrayBuffer());
   profile.fetchBodyMs += now() - bodyStart;
+  profile.serverBricks += 1;
+  profile.serverBytes += data.byteLength;
   await writeCachedStoredBrick(brickID, data, profile);
 
   return new Map([[brickID, decodeStoredBrick(brick, data, profile)]]);
@@ -263,8 +267,11 @@ function createProfile() {
     totalLoadMs: 0,
     cacheHits: 0,
     cacheMisses: 0,
+    cacheHitBytes: 0,
     cacheReadMs: 0,
-    cacheWriteMs: 0
+    cacheWriteMs: 0,
+    serverBricks: 0,
+    serverBytes: 0
   };
 }
 
@@ -291,6 +298,7 @@ async function readCachedBricks(brickIDs, profile) {
           continue;
         }
         profile.cacheHits += 1;
+        profile.cacheHitBytes += record.data.byteLength;
         result.set(brickID, decodeStoredBrick(brick, new Uint8Array(record.data), profile));
       }
     } finally {
@@ -317,6 +325,7 @@ async function readCachedStoredBrick(brickID, profile) {
         return null;
       }
       profile.cacheHits += 1;
+      profile.cacheHitBytes += record.data.byteLength;
       return new Uint8Array(record.data);
     } finally {
       db.close();

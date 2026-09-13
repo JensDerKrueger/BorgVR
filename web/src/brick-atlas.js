@@ -76,8 +76,11 @@ export class BrickAtlas {
       rawBricks: profile.rawBricks,
       cacheHits: profile.cacheHits,
       cacheMisses: profile.cacheMisses,
+      cacheHitMiB: bytesToMiB(profile.cacheHitBytes),
       cacheReadMs: profile.cacheReadMs,
-      cacheWriteMs: profile.cacheWriteMs
+      cacheWriteMs: profile.cacheWriteMs,
+      serverBricks: profile.serverBricks,
+      serverMiB: bytesToMiB(profile.serverBytes)
     };
   }
 
@@ -194,7 +197,7 @@ export class BrickAtlas {
       return;
     }
     try {
-      this.worker = new Worker(new URL("./brick-worker.js?v=20260911-worker", import.meta.url), { type: "module" });
+      this.worker = new Worker(new URL("./brick-worker.js?v=20260914-cache-stats", import.meta.url), { type: "module" });
       this.worker.onmessage = (event) => this.handleWorkerMessage(event.data);
       this.worker.onerror = (event) => {
         for (const request of this.workerRequests.values()) {
@@ -658,6 +661,8 @@ export class BrickAtlas {
     const data = new Uint8Array(await response.arrayBuffer());
     this.recordProfile("fetchBodyMs", now() - bodyStart);
     this.profile.compressedBytes += data.byteLength;
+    this.profile.serverBricks += 1;
+    this.profile.serverBytes += data.byteLength;
     const uncompressedByteLength = this.uncompressedByteLengthFor(brick);
 
     if (this.shouldDecompressBrick(brick, data)) {
@@ -720,6 +725,8 @@ export class BrickAtlas {
       }
       const storedData = batchData.subarray(dataOffset, dataOffset + byteLength);
       this.profile.compressedBytes += storedData.byteLength;
+      this.profile.serverBricks += 1;
+      this.profile.serverBytes += storedData.byteLength;
       const uncompressedByteLength = this.uncompressedByteLengthFor(brick);
       if (this.shouldDecompressBrick(brick, storedData)) {
         const decodeStart = now();
@@ -819,14 +826,29 @@ export class BrickAtlas {
   }
 
   applyWorkerProfile(profile) {
-    if (!profile || !this.profilingEnabled) {
+    if (!profile) {
       return;
     }
     for (const key of Object.keys(this.profile)) {
-      this.profile[key] += profile[key] ?? 0;
+      if (this.profilingEnabled || alwaysCollectedProfileKeys.has(key)) {
+        this.profile[key] += profile[key] ?? 0;
+      }
     }
   }
 }
+
+const alwaysCollectedProfileKeys = new Set([
+  "cacheHits",
+  "cacheMisses",
+  "cacheHitBytes",
+  "cacheReadMs",
+  "cacheWriteMs",
+  "serverBricks",
+  "serverBytes",
+  "batchRequests",
+  "fetchHeaderMs",
+  "fetchBodyMs"
+]);
 
 function createAtlasProfile() {
   return {
@@ -846,8 +868,11 @@ function createAtlasProfile() {
     totalLoadMs: 0,
     cacheHits: 0,
     cacheMisses: 0,
+    cacheHitBytes: 0,
     cacheReadMs: 0,
-    cacheWriteMs: 0
+    cacheWriteMs: 0,
+    serverBricks: 0,
+    serverBytes: 0
   };
 }
 

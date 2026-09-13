@@ -1,4 +1,4 @@
-import { BrickAtlas } from "./brick-atlas.js?v=20260911-worker";
+import { BrickAtlas } from "./brick-atlas.js?v=20260914-cache-stats";
 import { createDefaultTransferFunction } from "./transfer-function.js?v=20260907-range-fix";
 
 const shaderSource = `
@@ -628,8 +628,8 @@ export class CoordinateCubeRenderer {
     }
     return [
       `Profile: ${atlas.loads} bricks`,
-      `fetch ${(atlas.fetchHeaderMs + atlas.fetchBodyMs).toFixed(0)} ms`,
-      `cache ${atlas.cacheHits ?? 0}/${(atlas.cacheHits ?? 0) + (atlas.cacheMisses ?? 0)}`,
+      `server ${atlas.serverBricks ?? 0} bricks / ${(atlas.fetchHeaderMs + atlas.fetchBodyMs).toFixed(0)} ms`,
+      `cache ${atlas.cacheHits ?? 0} hits / ${atlas.cacheMisses ?? 0} misses`,
       `lz4 ${atlas.lz4DecodeMs.toFixed(0)} ms`,
       `prep ${atlas.uploadPrepareMs.toFixed(0)} ms`,
       `upload ${atlas.uploadSubmitMs.toFixed(0)} ms`,

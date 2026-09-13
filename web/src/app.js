@@ -1,4 +1,4 @@
-import { CoordinateCubeRenderer } from "./cube-renderer.js?v=20260911-worker";
+import { CoordinateCubeRenderer } from "./cube-renderer.js?v=20260914-cache-stats";
 import { decodeAppleLZ4, encodeLZ4Block } from "./lz4.js?v=20260911-urltf";
 import { transferFunctionRGBAData } from "./transfer-function.js?v=20260912-btf1";
 
@@ -26,6 +26,7 @@ const clipInputs = Array.from(document.querySelectorAll("[data-clip-axis]"));
 const clipReset = document.querySelector("#clip-reset");
 const persistentBrickCache = document.querySelector("#persistent-brick-cache");
 const clearBrickCache = document.querySelector("#clear-brick-cache");
+const brickCacheStats = document.querySelector("#brick-cache-stats");
 const MINIMUM_TRANSFER_SMOOTH_WIDTH = 0.02;
 const MAXIMUM_TRANSFER_SMOOTH_WIDTH = 1.0;
 const TRANSFER_FUNCTION_URL_PARAMETER = "TF";
@@ -99,6 +100,7 @@ async function main() {
     showStatusLine();
     setInterval(reportProfile, 2000);
   }
+  setInterval(updateBrickCacheStats, 1000);
 
   const catalog = await fetchJSON("./web-data/datasets.json", "catalog");
   await loadTransferFunctionCatalog();
@@ -273,6 +275,7 @@ async function showDataset(dataset) {
   datasetInfo.hidden = true;
   renderDatasetInfo(currentManifest);
   updateVisibleEditor();
+  updateBrickCacheStats();
   drawTransferFunctionEditor();
   updateURLState();
   setStatus(transferFunctionStatus || `Rendering ${currentManifest.name}`);
@@ -304,6 +307,27 @@ function reportProfile() {
   console.info("BorgVR profile", JSON.stringify(rows));
   console.table(rows);
   setStatus(renderer.profileSummaryText());
+}
+
+function updateBrickCacheStats() {
+  if (!brickCacheStats || !renderer || renderControls.hidden) {
+    return;
+  }
+  const atlas = renderer.profileSnapshot().atlas;
+  if (!atlas) {
+    brickCacheStats.textContent = "Cache: 0 bricks · Server: 0 bricks";
+    return;
+  }
+  const cacheBytes = atlas.cacheHitMiB?.toFixed?.(1) ?? "0.0";
+  const serverBytes = atlas.serverMiB?.toFixed?.(1) ?? "0.0";
+  const readMs = atlas.cacheReadMs?.toFixed?.(0) ?? "0";
+  const writeMs = atlas.cacheWriteMs?.toFixed?.(0) ?? "0";
+  brickCacheStats.textContent = [
+    `Cache: ${atlas.cacheHits ?? 0} bricks (${cacheBytes} MiB)`,
+    `Server: ${atlas.serverBricks ?? 0} bricks (${serverBytes} MiB)`,
+    `Misses: ${atlas.cacheMisses ?? 0}`,
+    `IndexedDB: read ${readMs} ms, write ${writeMs} ms`
+  ].join(" · ");
 }
 
 function installRenderControls() {
@@ -432,6 +456,7 @@ function installRenderControls() {
     persistentBrickCacheEnabled = persistentBrickCache.checked;
     localStorage.setItem(PERSISTENT_BRICK_CACHE_SETTING, persistentBrickCacheEnabled ? "1" : "0");
     renderer?.setPersistentBrickCacheEnabled(persistentBrickCacheEnabled);
+    updateBrickCacheStats();
     if (!persistentBrickCacheEnabled) {
       try {
         await clearPersistentBrickCache();
@@ -461,6 +486,7 @@ async function clearPersistentBrickCache() {
   await renderer?.clearPersistentBrickCache();
   await deleteIndexedDB(PERSISTENT_BRICK_CACHE_DATABASE);
   setStatus("Persistent brick cache cleared.");
+  updateBrickCacheStats();
 }
 
 function deleteIndexedDB(databaseName) {
@@ -1103,13 +1129,13 @@ function flattenProfileSnapshot(snapshot) {
       section: "network",
       totalMs: atlas.fetchHeaderMs + atlas.fetchBodyMs,
       avgMs: atlas.avgFetchHeaderMsPerBatch + atlas.avgFetchBodyMsPerBatch,
-      detail: `${atlas.batchRequests ?? 0} batches, ${atlas.compressedMiB?.toFixed?.(1) ?? "0.0"} MiB compressed`
+      detail: `${atlas.batchRequests ?? 0} batches, ${atlas.serverBricks ?? 0} bricks, ${atlas.serverMiB?.toFixed?.(1) ?? "0.0"} MiB from server`
     },
     {
       section: "persistent cache",
       totalMs: (atlas.cacheReadMs ?? 0) + (atlas.cacheWriteMs ?? 0),
       avgMs: 0,
-      detail: `${atlas.cacheHits ?? 0} hits, ${atlas.cacheMisses ?? 0} misses`
+      detail: `${atlas.cacheHits ?? 0} hits (${atlas.cacheHitMiB?.toFixed?.(1) ?? "0.0"} MiB), ${atlas.cacheMisses ?? 0} misses`
     },
     {
       section: "lz4 decode",

@@ -445,6 +445,14 @@ p {
   justify-self: end;
 }
 
+.cache-stats {
+  padding: 0 9px 8px;
+  color: var(--muted);
+  font-family: "SFMono-Regular", "Roboto Mono", monospace;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
 .cache-action-row {
   display: flex;
   justify-content: flex-end;
