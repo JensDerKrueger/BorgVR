@@ -107,6 +107,23 @@ class RuntimeAppModel {
     var green: Bool = false
     var blue: Bool = false
     var opacity: Bool = false
+
+    var channelMask: UInt32 {
+      var mask: UInt32 = 0
+      if red {
+        mask |= 1 << 0
+      }
+      if green {
+        mask |= 1 << 1
+      }
+      if blue {
+        mask |= 1 << 2
+      }
+      if opacity {
+        mask |= 1 << 3
+      }
+      return mask
+    }
   }
   /// Toggles for editing transfer function channels.
   var transferEditState: TransferEditState = .init()

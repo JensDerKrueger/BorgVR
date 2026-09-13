@@ -328,14 +328,23 @@
 /* Settings: tab titles */
 "settings_tab_rendering" = "Rendering";
 "settings_tab_remote" = "Remote";
+"settings_tab_local_server" = "Local Server";
 "settings_tab_import" = "Import";
 "settings_tab_advanced" = "Advanced";
 
 /* Settings: section headers */
 "settings_section_rendering_interface" = "Rendering Interface";
 "settings_section_remote_datasets" = "Server for Remote Datasets";
+"settings_section_remote_loading" = "Remote Loading";
 "settings_section_import" = "Import";
 "settings_section_advanced_options" = "Advanced Options";
+
+/* Settings: page descriptions */
+"settings_description_rendering" = "These settings control BorgVR's rendering interface on visionOS. Some options affect presentation and comfort, while others change how the renderer behaves during interactive work.";
+"settings_description_remote_datasets" = "If you have access to central dataset servers, configure them here. The address, port, and password must be provided by the server operator. These settings are only for connecting to external servers.";
+"settings_description_local_server" = "These settings control servers started by this visionOS device. The background dataset server can share local datasets with other users, and the ad-hoc server is used for SharePlay sessions.";
+"settings_description_import" = "These options are used when importing and converting datasets on this device. Already converted datasets are not changed by these settings.";
+"settings_description_advanced" = "These options tune BorgVR's level-of-detail and paging behavior. They can affect visual quality, responsiveness, and memory use.";
 
 /* Settings: Rendering tab toggles */
 "settings_toggle_autoload_tf" = "Automatically Load and Save Transfer Functions";

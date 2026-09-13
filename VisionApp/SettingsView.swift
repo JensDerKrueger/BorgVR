@@ -72,6 +72,7 @@ struct SettingsView: View {
       TabView {
         // Rendering UI Tab
         Form {
+          settingsIntroSection("settings_description_rendering")
           Section(header: Text("settings_section_rendering_interface").bold()) {
             Toggle(
               "settings_toggle_autoload_tf",
@@ -124,6 +125,7 @@ struct SettingsView: View {
 
         // Remote Datasets Tab
         Form {
+          settingsIntroSection("settings_description_remote_datasets")
           Section(header: Text("settings_section_remote_datasets").bold()) {
 
             // Header + Add / Validate buttons
@@ -176,118 +178,126 @@ struct SettingsView: View {
             }
           }
 
-          HStack {
-            Text("settings_label_timeout")
-            Spacer()
-            TextField(
-              "settings_placeholder_timeout",
-              text: $tempTimeout,
-              onCommit: validateTimeout
-            )
-            .onChange(of: tempTimeout) { validateTimeout() }
-            .textFieldStyle(RoundedBorderTextFieldStyle())
-            .keyboardType(.numberPad)
-            .frame(width: 100)
-            .onAppear { tempTimeout = String(storedAppModel.timeout) }
-          }
-          if let error = timeoutError {
-            Text(error)
-              .foregroundColor(.red)
-              .font(.caption)
-          }
-          Toggle(
-            "settings_toggle_progressive_loading",
-            isOn: $storedAppModel.progressiveLoading
-          )
-          Toggle(
-            "settings_toggle_store_local_copy",
-            isOn: $storedAppModel.makeLocalCopy
-          )
-
-          Section(header: Text("settings_section_background_server").bold()) {
-          Toggle("settings_toggle_enable_dataset_server", isOn: $storedAppModel.enableDatasetServer)
-          if storedAppModel.enableDatasetServer {
-            Toggle("settings_toggle_autostart_dataset_server", isOn: $storedAppModel.autoStartServer)
+          Section(header: Text("settings_section_remote_loading").bold()) {
             HStack {
-              Text("settings_label_dataset_server_port")
+              Text("settings_label_timeout")
               Spacer()
               TextField(
-                "12345",
-                value: $storedAppModel.serverPort,
-                formatter: portNumberFormatter
+                "settings_placeholder_timeout",
+                text: $tempTimeout,
+                onCommit: validateTimeout
               )
+              .onChange(of: tempTimeout) { validateTimeout() }
               .textFieldStyle(RoundedBorderTextFieldStyle())
               .keyboardType(.numberPad)
               .frame(width: 100)
+              .onAppear { tempTimeout = String(storedAppModel.timeout) }
             }
-            SecureField("settings_label_dataset_server_password", text: $storedAppModel.serverPassword)
-            Stepper(value: $storedAppModel.maxBricksPerGetRequest, in: 1...1000) {
-              Text(String(format: NSLocalizedString("settings_label_max_bricks_per_request_format", comment: "Maximum bricks per request"), storedAppModel.maxBricksPerGetRequest))
-            }
-            Toggle("settings_toggle_enable_webgpu_server", isOn: $storedAppModel.enableWebServer)
-            Toggle("settings_toggle_use_https", isOn: $storedAppModel.webServerUsesTLS)
-            if !storedAppModel.webServerUsesTLS {
-              Text("settings_note_http_localhost_only")
+            if let error = timeoutError {
+              Text(error)
+                .foregroundColor(.red)
                 .font(.caption)
-                .foregroundStyle(.secondary)
             }
-            if storedAppModel.webServerUsesTLS {
-              WebServerCertificateControls(
-                certificateData: $storedAppModel.webServerCertificateData
-              )
-            }
-            HStack {
-              Text("settings_label_webgpu_server_port")
-              Spacer()
-              TextField(
-                "443",
-                value: $storedAppModel.webServerPort,
-                formatter: portNumberFormatter
-              )
-              .textFieldStyle(RoundedBorderTextFieldStyle())
-              .keyboardType(.numberPad)
-              .frame(width: 100)
-            }
-          }
-          Button("settings_button_reset_background_server") {
-            storedAppModel.resetBackgroundServerDefaults()
-          }
-        }
-
-          Section(header: Text("settings_section_ad_hoc_server").bold()) {
-          HStack {
-            Text("settings_label_shareplay_server_port")
-            Spacer()
-            TextField(
-              "settings_placeholder_shareplay_server_port",
-              value: $storedAppModel.sharePlayServerPort,
-              formatter: portNumberFormatter
+            Toggle(
+              "settings_toggle_progressive_loading",
+              isOn: $storedAppModel.progressiveLoading
             )
-            .textFieldStyle(RoundedBorderTextFieldStyle())
-            .keyboardType(.numberPad)
-            .frame(width: 100)
-          }
-          HStack {
-            Text("settings_label_ad_hoc_webgpu_server_port")
-            Spacer()
-            TextField(
-              "444",
-              value: $storedAppModel.sharePlayWebServerPort,
-              formatter: portNumberFormatter
+            Toggle(
+              "settings_toggle_store_local_copy",
+              isOn: $storedAppModel.makeLocalCopy
             )
-            .textFieldStyle(RoundedBorderTextFieldStyle())
-            .keyboardType(.numberPad)
-            .frame(width: 100)
-          }
-          Button("settings_button_reset_ad_hoc_server") {
-            storedAppModel.resetAdHocServerDefaults()
-          }
           }
         }
         .tabItem { Label("settings_tab_remote", systemImage: "network") }
 
+        // Local Server Tab
+        Form {
+          settingsIntroSection("settings_description_local_server")
+          Section(header: Text("settings_section_background_server").bold()) {
+            Toggle("settings_toggle_enable_dataset_server", isOn: $storedAppModel.enableDatasetServer)
+            if storedAppModel.enableDatasetServer {
+              Toggle("settings_toggle_autostart_dataset_server", isOn: $storedAppModel.autoStartServer)
+              HStack {
+                Text("settings_label_dataset_server_port")
+                Spacer()
+                TextField(
+                  "12345",
+                  value: $storedAppModel.serverPort,
+                  formatter: portNumberFormatter
+                )
+                .textFieldStyle(RoundedBorderTextFieldStyle())
+                .keyboardType(.numberPad)
+                .frame(width: 100)
+              }
+              SecureField("settings_label_dataset_server_password", text: $storedAppModel.serverPassword)
+              Stepper(value: $storedAppModel.maxBricksPerGetRequest, in: 1...1000) {
+                Text(String(format: NSLocalizedString("settings_label_max_bricks_per_request_format", comment: "Maximum bricks per request"), storedAppModel.maxBricksPerGetRequest))
+              }
+              Toggle("settings_toggle_enable_webgpu_server", isOn: $storedAppModel.enableWebServer)
+              Toggle("settings_toggle_use_https", isOn: $storedAppModel.webServerUsesTLS)
+              if !storedAppModel.webServerUsesTLS {
+                Text("settings_note_http_localhost_only")
+                  .font(.caption)
+                  .foregroundStyle(.secondary)
+              }
+              if storedAppModel.webServerUsesTLS {
+                WebServerCertificateControls(
+                  certificateData: $storedAppModel.webServerCertificateData
+                )
+              }
+              HStack {
+                Text("settings_label_webgpu_server_port")
+                Spacer()
+                TextField(
+                  "443",
+                  value: $storedAppModel.webServerPort,
+                  formatter: portNumberFormatter
+                )
+                .textFieldStyle(RoundedBorderTextFieldStyle())
+                .keyboardType(.numberPad)
+                .frame(width: 100)
+              }
+            }
+            Button("settings_button_reset_background_server") {
+              storedAppModel.resetBackgroundServerDefaults()
+            }
+          }
+
+          Section(header: Text("settings_section_ad_hoc_server").bold()) {
+            HStack {
+              Text("settings_label_shareplay_server_port")
+              Spacer()
+              TextField(
+                "settings_placeholder_shareplay_server_port",
+                value: $storedAppModel.sharePlayServerPort,
+                formatter: portNumberFormatter
+              )
+              .textFieldStyle(RoundedBorderTextFieldStyle())
+              .keyboardType(.numberPad)
+              .frame(width: 100)
+            }
+            HStack {
+              Text("settings_label_ad_hoc_webgpu_server_port")
+              Spacer()
+              TextField(
+                "444",
+                value: $storedAppModel.sharePlayWebServerPort,
+                formatter: portNumberFormatter
+              )
+              .textFieldStyle(RoundedBorderTextFieldStyle())
+              .keyboardType(.numberPad)
+              .frame(width: 100)
+            }
+            Button("settings_button_reset_ad_hoc_server") {
+              storedAppModel.resetAdHocServerDefaults()
+            }
+          }
+        }
+        .tabItem { Label("settings_tab_local_server", systemImage: "server.rack") }
+
         // Import Tab
         Form {
+          settingsIntroSection("settings_description_import")
           Section(header: Text("settings_section_import").bold()) {
             HStack {
               Text("settings_label_brick_size")
@@ -348,6 +358,7 @@ struct SettingsView: View {
 
         // Advanced Options Tab
         Form {
+          settingsIntroSection("settings_description_advanced")
           Section(header: Text("settings_section_advanced_options").bold()) {
             HStack {
               Text("settings_label_screen_space_pixel_error")
@@ -582,6 +593,14 @@ struct SettingsView: View {
       validateOversampling()
       validateBrickSize()
       validateBrickOverlap()
+    }
+  }
+
+  private func settingsIntroSection(_ key: LocalizedStringKey) -> some View {
+    Section {
+      Text(key)
+        .font(.footnote)
+        .foregroundStyle(.secondary)
     }
   }
 
@@ -844,7 +863,7 @@ private struct ServerRowView: View {
         .keyboardType(.numberPad)
         .frame(width: 80)
 
-        SecureField("Password (optional)", text: $server.password)
+        SecureField("settings_label_dataset_server_password", text: $server.password)
           .textFieldStyle(RoundedBorderTextFieldStyle())
           .frame(width: 180)
 

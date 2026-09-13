@@ -87,6 +87,7 @@ extension Renderer {
                               timer: CPUFrameTimer,
                               dataset: BORGVRDatasetProtocol,
                               isHost:Bool,
+                              transferFunctionPanelInteractionState: TransferFunctionPanelInteractionState,
                               logger: LoggerBase? = nil) {
     Task(executorPreference: RendererTaskExecutor.shared) {
       do {
@@ -98,6 +99,7 @@ extension Renderer {
           timer: timer,
           dataset: dataset,
           isHost: isHost,
+          transferFunctionPanelInteractionState: transferFunctionPanelInteractionState,
           logger: logger
         )
 

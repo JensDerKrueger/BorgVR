@@ -335,6 +335,7 @@ extension Renderer {
     var mvp = [simd_float4x4](repeating: matrix_identity_float4x4, count: viewCount)
 
     var panelSize : SIMD2<Float>
+    var panelWorldForPicking = tfPanelWorldMatrix
     if storedAppModel.tfMode == TransferFunctionDisplayMode.HUD.rawValue {
       for i in 0..<viewCount {
         let view = drawable.views[i]
@@ -343,6 +344,7 @@ extension Renderer {
         mvp[i] = projection * viewMatrix * tfPanelWorldMatrix
       }
       panelSize = tfPanelSizeMeters
+      panelWorldForPicking = tfPanelWorldMatrix
     } else {
       // --- Compute panel transform for Object mode ---
       let worldUp = SIMD3<Float>(0, 1, 0)
@@ -361,15 +363,16 @@ extension Renderer {
       panelSize = SIMD2<Float>(panelWidth, panelHeight)
 
       // Position: under the volume bottom, with margin
-      let margin: Float = 0.02
+      let margin: Float = 0.08
       let bottomCenter = volCenter - worldUp * (0.5 * volHeight)
       let panelPos = bottomCenter - worldUp * (margin + 0.5 * panelHeight)
 
-      // Billboard: face viewer; use cylindrical=true for yaw-only (stays upright)
+      // Billboard toward the viewer. Full billboarding keeps the local panel tilt
+      // visually stable when the object is moved up, down, or deeper into the scene.
       let (billboard, forward) = makeBillboardMatrix(position: panelPos,
                                                      camera: lastHeadPosition,
                                                      up: worldUp,
-                                                     cylindrical: true)
+                                                     cylindrical: false)
 
       // Optional: push slightly toward the camera to avoid depth fighting with the volume
       let pushTowardCamera: Float = 0.005
@@ -377,6 +380,7 @@ extension Renderer {
       panelWorld.columns.3.x += forward.x * pushTowardCamera
       panelWorld.columns.3.y += forward.y * pushTowardCamera
       panelWorld.columns.3.z += forward.z * pushTowardCamera
+      panelWorldForPicking = panelWorld
 
       for i in 0..<viewCount {
         let view = drawable.views[i]
@@ -385,6 +389,12 @@ extension Renderer {
         mvp[i] = projection * viewMatrix * panelWorld
       }
     }
+
+    transferFunctionPanelInteractionState.updatePanel(
+      matrix: panelWorldForPicking,
+      size: panelSize,
+      isVisible: true
+    )
 
     // buffer(20): mvp array
     mvp.withUnsafeBytes { bytes in
@@ -396,6 +406,27 @@ extension Renderer {
     renderEncoder.setVertexBytes(&panelSize,
                                  length: MemoryLayout<SIMD2<Float>>.stride,
                                  index: 21)
+    let panelInteractionShaderState = transferFunctionPanelInteractionState.shaderState()
+    var isFocused: UInt32 = panelInteractionShaderState.isFocused ? 1 : 0
+    var hitUV = SIMD4<Float>(
+      panelInteractionShaderState.hitUV?.x ?? 0,
+      panelInteractionShaderState.hitUV?.y ?? 0,
+      panelInteractionShaderState.hitUV == nil ? 0 : panelInteractionShaderState.hitOpacity,
+      0
+    )
+    var channelMask = panelInteractionShaderState.channelMask
+    renderEncoder.setFragmentBytes(&panelSize,
+                                   length: MemoryLayout<SIMD2<Float>>.stride,
+                                   index: 21)
+    renderEncoder.setFragmentBytes(&isFocused,
+                                   length: MemoryLayout<UInt32>.stride,
+                                   index: 22)
+    renderEncoder.setFragmentBytes(&hitUV,
+                                   length: MemoryLayout<SIMD4<Float>>.stride,
+                                   index: 23)
+    renderEncoder.setFragmentBytes(&channelMask,
+                                   length: MemoryLayout<UInt32>.stride,
+                                   index: 24)
     renderEncoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 6)
     renderEncoder.popDebugGroup()
   }
@@ -511,6 +542,13 @@ extension Renderer {
 
     if storedAppModel.tfMode != TransferFunctionDisplayMode.windowOnly.rawValue {
       renderTransferfunction(renderEncoder, drawable: drawable)
+    } else {
+      transferFunctionPanelInteractionState.updatePanel(
+        matrix: matrix_identity_float4x4,
+        size: .zero,
+        isVisible: false
+      )
+      transferFunctionPanelInteractionState.setFocused(false)
     }
 
     renderEncoder.endEncoding()
@@ -589,5 +627,3 @@ extension Renderer {
  CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR
  THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
-
-

@@ -90,6 +90,8 @@ enum ImmersiveBootstrap {
       try? sharedAppModel.loadTransform(from: fileURL)
     }
 
+    let transferFunctionPanelInteractionState = TransferFunctionPanelInteractionState()
+
     // Start renderer
     Renderer.startRenderLoop(
       layerRenderer,
@@ -99,19 +101,37 @@ enum ImmersiveBootstrap {
       timer: timer,
       dataset: dataset,
       isHost: runtimeAppModel.groupSessionHost,
+      transferFunctionPanelInteractionState: transferFunctionPanelInteractionState,
       logger: runtimeAppModel.logger
     )
 
     // Hook up spatial interactions
     let immersiveInteraction = ImmersiveInteraction(
-      sharedAppModel: sharedAppModel
+      sharedAppModel: sharedAppModel,
+      transferFunctionPanelInteractionState: transferFunctionPanelInteractionState
     )
     layerRenderer.onSpatialEvent = { events in
+      transferFunctionPanelInteractionState.updateChannelMask(
+        runtimeAppModel.transferEditState.channelMask
+      )
       immersiveInteraction.handleSpatialEvents(
         events,
         runtimeAppModel.interactionMode,
         runtimeAppModel.transferEditState
-      )
+      ) { channelIndex in
+        switch channelIndex {
+          case 0:
+            runtimeAppModel.transferEditState.red.toggle()
+          case 1:
+            runtimeAppModel.transferEditState.green.toggle()
+          case 2:
+            runtimeAppModel.transferEditState.blue.toggle()
+          case 3:
+            runtimeAppModel.transferEditState.opacity.toggle()
+          default:
+            break
+        }
+      }
     }
   }
 }

@@ -32,6 +32,7 @@ enum TransferFunction1DError: Error, LocalizedError {
 class TransferFunction1D: Equatable {
   private static let fileMagic = [UInt8]("BTF1".utf8)
   private static let fileVersion: UInt32 = 2
+  static let defaultEntryCount = 4096
   static let maximumEntryCount = 1 << 16
   static let maximumDescriptionByteCount = 64 * 1024
   static let maximumFileByteCount =
@@ -58,11 +59,11 @@ class TransferFunction1D: Equatable {
   /**
    Initializes a new TransferFunction1D with the specified bin count
 
-   The number of entries in the transfer function is count (default is 256).
+   The number of entries in the transfer function is count (default is defaultEntryCount).
 
    - Parameter count: The number of elemtns per entry .
    */
-  init(count: Int = 256) {
+  init(count: Int = TransferFunction1D.defaultEntryCount) {
     self.data = Array(repeating: .init(0, 0, 0, 0), count: count)
     reset()
   }

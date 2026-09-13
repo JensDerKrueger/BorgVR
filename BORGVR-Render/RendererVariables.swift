@@ -107,6 +107,8 @@ final actor Renderer {
   let storedAppModel: StoredAppModel
   /// Rendering parameters such as transfer functions and isosurface values.
   let sharedAppModel: SharedAppModel
+  /// Shared picking state for the transfer function HUD/object panel.
+  let transferFunctionPanelInteractionState: TransferFunctionPanelInteractionState
   /// A CPU frame timer.
   let timer: CPUFrameTimer
   /// The initial oversampling factor.
@@ -153,6 +155,7 @@ final actor Renderer {
        timer: CPUFrameTimer,
        dataset: BORGVRDatasetProtocol,
        isHost: Bool,
+       transferFunctionPanelInteractionState: TransferFunctionPanelInteractionState,
        logger: LoggerBase? = nil) throws {
 
     logger?.info("Loading dataset \(dataset.getMetadata().datasetDescription)")
@@ -178,6 +181,7 @@ final actor Renderer {
     self.commandQueue = self.device.makeCommandQueue()!
     self.runtimeAppModel = runtimeAppModel
     self.sharedAppModel = sharedAppModel
+    self.transferFunctionPanelInteractionState = transferFunctionPanelInteractionState
 
     self.autoRotationAngle = 0
     self.autoRotationStartTime = 0

@@ -38,12 +38,36 @@ vertex TFHUDVaryings vertexShaderTFPanel(uint vid [[vertex_id]],
 
 static inline float gridLine(float x, float cells, float thickness) {
   float gx = fabs(fract(x * cells) - 0.5);
-  float w  = fwidth(x * cells) * thickness;
+  float w  = max(fwidth(x * cells) * thickness, 0.025);
   return 1.0 - smoothstep(0.0, w, gx);
 }
 
+static inline float markerMask(float2 uv, float4 hitUVState, float2 panelSizeMeters) {
+  if (hitUVState.z <= 0.001) {
+    return 0.0;
+  }
+
+  float minPanelSize = min(panelSizeMeters.x, panelSizeMeters.y);
+  float2 markerDelta = abs(uv - hitUVState.xy) * panelSizeMeters;
+  float lineWidth = max(minPanelSize * 0.006, min(fwidth(uv.x) * panelSizeMeters.x,
+                                                  fwidth(uv.y) * panelSizeMeters.y) * 2.0);
+  float markerRadius = minPanelSize * 0.018;
+  float marker = 1.0 - smoothstep(markerRadius, markerRadius + lineWidth, length(markerDelta));
+  float cross = max(
+    1.0 - smoothstep(0.0, lineWidth, markerDelta.x),
+    1.0 - smoothstep(0.0, lineWidth, markerDelta.y)
+  );
+  float crossExtent = 1.0 - smoothstep(minPanelSize * 0.04, minPanelSize * 0.055,
+                                       max(markerDelta.x, markerDelta.y));
+  return max(marker, cross * crossExtent) * saturate(hitUVState.z);
+}
+
 fragment float4 fragmentShaderTFHUD(TFHUDVaryings in [[stage_in]],
-                                    texture1d<float> tfTex [[texture(TextureIndexTransferFunction)]]) {
+                                    texture1d<float> tfTex [[texture(TextureIndexTransferFunction)]],
+                                    constant float2 &panelSizeMeters [[buffer(21)]],
+                                    constant uint &isFocused [[buffer(22)]],
+                                    constant float4 &hitUVState [[buffer(23)]],
+                                    constant uint &channelMask [[buffer(24)]]) {
   constexpr sampler s(filter::linear, address::clamp_to_edge);
 
   float2 uv = clamp(in.uv, float2(0.0), float2(1.0));
@@ -52,7 +76,8 @@ fragment float4 fragmentShaderTFHUD(TFHUDVaryings in [[stage_in]],
   // Panel style (tune as needed)
   constexpr float panelAlpha = 0.85;
   constexpr float ribbonFrac = 0.14; // top ribbon height fraction
-  constexpr float minBorder  = 0.01;
+  constexpr float minBorder = 0.018;
+  float curveHeight = 1.0 - ribbonFrac;
 
   // Border mask (anti-aliased)
   float2 edge = min(uv, 1.0 - uv);
@@ -60,33 +85,13 @@ fragment float4 fragmentShaderTFHUD(TFHUDVaryings in [[stage_in]],
   float edgeWidth = max(fwidth(edgeDist) * 2.0, minBorder);
   float borderMask = 1.0 - smoothstep(0.0, edgeWidth, edgeDist);
 
-  // Ribbon region (top): show TF colors over checkerboard using TF alpha
-  if (uv.y > 1.0 - (ribbonFrac-0.01)) {
-    float2 ruv = float2(uv.x, (uv.y - (1.0 - ribbonFrac)) / ribbonFrac);
-
-    float cx = floor(ruv.x * 24.0);
-    float cy = floor(ruv.y * 2.0);
-    float check = fmod(cx + cy, 2.0);
-
-    float3 bgA = float3(0.20);
-    float3 bgB = float3(0.12);
-    float3 bg  = mix(bgA, bgB, check);
-
-    float3 col = mix(bg, tf.rgb, tf.a);
-
-    // Dark border
-    col = mix(col, float3(0.0), borderMask);
-
-    return float4(col, panelAlpha);
-  }
-
   // Curve area (below ribbon)
-  float curveY = uv.y / (1.0 - ribbonFrac); // normalize to [0..1] within curve area
+  float curveY = clamp(uv.y / curveHeight, 0.0, 1.0); // normalize to [0..1] within curve area
 
   float3 bg = float3(0.06);
-  float  gx = gridLine(uv.x,    10.0, 1.0);
-  float  gy = gridLine(curveY,  10.0, 1.0);
-  bg += (gx + gy) * 0.06;
+  float  gx = gridLine(uv.x,    10.0, 1.6);
+  float  gy = gridLine(curveY,  10.0, 1.6);
+  bg += (gx + gy) * 0.035;
 
   float lw = fwidth(curveY) * 5.0;
 
@@ -103,9 +108,41 @@ fragment float4 fragmentShaderTFHUD(TFHUDVaryings in [[stage_in]],
   col = mix(col, float3(0.2, 0.2, 1.0), ab); // B
   col = mix(col, float3(1.0),          aa);  // A (white)
 
+  float2 ruv = float2(uv.x, clamp((uv.y - curveHeight) / ribbonFrac, 0.0, 1.0));
+  float cx = floor(ruv.x * 24.0);
+  float cy = floor(ruv.y * 2.0);
+  float check = fmod(cx + cy, 2.0);
+  float3 ribbonBgA = float3(0.20);
+  float3 ribbonBgB = float3(0.12);
+  float3 ribbonBg = mix(ribbonBgA, ribbonBgB, check);
+  float3 ribbonCol = mix(ribbonBg, tf.rgb, tf.a);
 
-  // Dark border
+  int channelIndex = min(3, int(floor(uv.x * 4.0)));
+  uint channelBit = 1u << uint(channelIndex);
+  bool channelActive = (channelMask & channelBit) != 0u;
+  float3 channelColor = channelIndex == 0 ? float3(1.0, 0.12, 0.10)
+                       : channelIndex == 1 ? float3(0.10, 0.95, 0.18)
+                       : channelIndex == 2 ? float3(0.20, 0.32, 1.0)
+                                           : float3(1.0);
+  float segmentX = fract(uv.x * 4.0);
+  float segmentFill = smoothstep(0.08, 0.20, segmentX)
+                    * (1.0 - smoothstep(0.80, 0.92, segmentX));
+  float stripeY = clamp((uv.y - curveHeight) / ribbonFrac, 0.0, 1.0);
+  float stripeMask = segmentFill
+                   * smoothstep(0.08, 0.24, stripeY)
+                   * (1.0 - smoothstep(0.46, 0.68, stripeY));
+  float3 inactiveColor = mix(ribbonCol, float3(0.04), 0.55);
+  float3 activeColor = mix(ribbonCol, channelColor, 0.72);
+  ribbonCol = mix(ribbonCol, channelActive ? activeColor : inactiveColor, stripeMask);
+
+  float ribbonBlendWidth = max(fwidth(uv.y) * 4.0, 0.025);
+  float ribbonMask = smoothstep(curveHeight - ribbonBlendWidth,
+                                curveHeight + ribbonBlendWidth,
+                                uv.y);
+  col = mix(col, ribbonCol, ribbonMask);
+
   col = mix(col, float3(0.0), borderMask);
+  col = mix(col, float3(1.0, 0.9, 0.05), markerMask(uv, hitUVState, panelSizeMeters));
 
   return float4(col, panelAlpha);
 }

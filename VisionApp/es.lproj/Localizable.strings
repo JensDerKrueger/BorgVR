@@ -328,14 +328,23 @@
 /* Settings: tab titles */
 "settings_tab_rendering" = "Renderizado";
 "settings_tab_remote" = "Remoto";
+"settings_tab_local_server" = "Servidor local";
 "settings_tab_import" = "Importar";
 "settings_tab_advanced" = "Avanzado";
 
 /* Settings: section headers */
 "settings_section_rendering_interface" = "Interfaz de renderizado";
 "settings_section_remote_datasets" = "Servidor para conjuntos de datos remotos";
+"settings_section_remote_loading" = "Carga remota";
 "settings_section_import" = "Importar";
 "settings_section_advanced_options" = "Opciones avanzadas";
+
+/* Settings: page descriptions */
+"settings_description_rendering" = "Estos ajustes controlan la interfaz de renderizado de BorgVR en visionOS. Algunas opciones afectan a la presentación y la comodidad, mientras que otras cambian el comportamiento del renderizador durante el trabajo interactivo.";
+"settings_description_remote_datasets" = "Si tienes acceso a servidores centrales de conjuntos de datos, configúralos aquí. La dirección, el puerto y la contraseña debe proporcionarlos el operador del servidor. Estos ajustes solo sirven para conectarse a servidores externos.";
+"settings_description_local_server" = "Estos ajustes controlan los servidores iniciados por este dispositivo visionOS. El servidor de conjuntos de datos en segundo plano puede compartir conjuntos de datos locales con otros usuarios, y el servidor ad hoc se usa para sesiones de SharePlay.";
+"settings_description_import" = "Estas opciones se usan al importar y convertir conjuntos de datos en este dispositivo. Los conjuntos de datos ya convertidos no se modifican con estos ajustes.";
+"settings_description_advanced" = "Estas opciones ajustan el nivel de detalle y el comportamiento de paginación de BorgVR. Pueden afectar a la calidad visual, la capacidad de respuesta y el uso de memoria.";
 
 /* Settings: Rendering tab toggles */
 "settings_toggle_autoload_tf" = "Cargar y guardar automáticamente las funciones de transferencia";

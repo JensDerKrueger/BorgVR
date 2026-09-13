@@ -328,14 +328,23 @@
 /* Settings: tab titles */
 "settings_tab_rendering" = "Rendu";
 "settings_tab_remote" = "Distant";
+"settings_tab_local_server" = "Serveur local";
 "settings_tab_import" = "Importer";
 "settings_tab_advanced" = "Avancé";
 
 /* Settings: section headers */
 "settings_section_rendering_interface" = "Interface de rendu";
 "settings_section_remote_datasets" = "Serveur pour jeux de données distants";
+"settings_section_remote_loading" = "Chargement distant";
 "settings_section_import" = "Importer";
 "settings_section_advanced_options" = "Options avancées";
+
+/* Settings: page descriptions */
+"settings_description_rendering" = "Ces réglages contrôlent l’interface de rendu BorgVR sous visionOS. Certaines options influencent la présentation et le confort, tandis que d’autres modifient le comportement du rendu pendant le travail interactif.";
+"settings_description_remote_datasets" = "Si vous avez accès à des serveurs centraux de jeux de données, configurez-les ici. L’adresse, le port et le mot de passe doivent être fournis par l’opérateur du serveur. Ces réglages concernent uniquement la connexion à des serveurs externes.";
+"settings_description_local_server" = "Ces réglages contrôlent les serveurs démarrés par cet appareil visionOS. Le serveur de jeux de données en arrière-plan peut partager les jeux de données locaux avec d’autres utilisateurs, et le serveur ad hoc est utilisé pour les sessions SharePlay.";
+"settings_description_import" = "Ces options sont utilisées lors de l’importation et de la conversion des jeux de données sur cet appareil. Les jeux de données déjà convertis ne sont pas modifiés par ces réglages.";
+"settings_description_advanced" = "Ces options ajustent le niveau de détail et le comportement de pagination de BorgVR. Elles peuvent influencer la qualité visuelle, la réactivité et l’utilisation de la mémoire.";
 
 /* Settings: Rendering tab toggles */
 "settings_toggle_autoload_tf" = "Charger et enregistrer automatiquement les fonctions de transfert";
