@@ -9,6 +9,9 @@ private let portNumberFormatter: NumberFormatter = {
   return formatter
 }()
 
+private let settingsGroupWidth: CGFloat = 640
+private let settingsGroupContentWidth: CGFloat = 600
+
 struct SettingsView: View {
   @Environment(RuntimeAppModel.self) private var runtimeAppModel
   @EnvironmentObject var storedAppModel: StoredAppModel
@@ -25,6 +28,7 @@ struct SettingsView: View {
   @State private var tempBrickOverlap: String = ""
   @State private var brickOverlapErrorMsg: String?
   @State private var syncServers: [ServerSyncEndpoint] = []
+  @State private var showResetConfirmation = false
 
   var body: some View {
     VStack(alignment: .leading, spacing: 16) {
@@ -36,7 +40,7 @@ struct SettingsView: View {
 
       TabView {
         // Server Tab
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .center, spacing: 12) {
           GroupBox(label: Text("settings_server_group_title").bold()) {
             Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 8) {
               GridRow {
@@ -143,11 +147,18 @@ struct SettingsView: View {
               tempPort = String(storedAppModel.port)
               tempBrickCount = String(storedAppModel.maxBricksPerGetRequest)
             }
+            .frame(width: settingsGroupContentWidth, alignment: .leading)
             .padding(.vertical, 4)
           }
+          .frame(width: settingsGroupWidth, alignment: .leading)
 
           GroupBox(label: Text("settings_sync_servers_group_title").bold()) {
             VStack(alignment: .leading, spacing: 10) {
+              Text("settings_sync_servers_description")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
               if syncServers.isEmpty {
                 Text("settings_sync_servers_empty")
                   .font(.caption)
@@ -219,10 +230,13 @@ struct SettingsView: View {
             .onChange(of: syncServers) { _, newValue in
               storedAppModel.syncServers = newValue
             }
+            .frame(width: settingsGroupContentWidth, alignment: .leading)
             .padding(.vertical, 4)
           }
+          .frame(width: settingsGroupWidth, alignment: .leading)
           Spacer(minLength: 0)
         }
+        .frame(maxWidth: .infinity, alignment: .center)
         .tabItem {
           Label("settings_tab_server", systemImage: "server.rack")
         }
@@ -306,11 +320,11 @@ struct SettingsView: View {
           Label("settings_tab_import", systemImage: "square.and.arrow.down")
         }
       }
-      .frame(minWidth: 500, minHeight: 380)
+      .frame(minWidth: 720, minHeight: 380)
 
       HStack {
         Button {
-          revertToDefaults()
+          showResetConfirmation = true
         } label: {
           Label("settings_button_revert", systemImage: "arrow.counterclockwise")
         }
@@ -327,6 +341,14 @@ struct SettingsView: View {
     }
     .keyboardShortcut(.cancelAction)
     .padding(24)
+    .alert("Reset settings?", isPresented: $showResetConfirmation) {
+      Button("Cancel", role: .cancel) {}
+      Button("Reset", role: .destructive) {
+        revertToDefaults()
+      }
+    } message: {
+      Text("All settings will be reset to their default values.")
+    }
     .onDisappear {
       validatePort()
       validateBrickSize()
@@ -405,7 +427,13 @@ struct SettingsView: View {
   private func revertToDefaults() {
     storedAppModel.resetToDefaults()
 
+    tempPort = String(storedAppModel.port)
+    tempBrickCount = String(storedAppModel.maxBricksPerGetRequest)
+    tempBrickSize = String(storedAppModel.brickSize)
+    tempBrickOverlap = String(storedAppModel.brickOverlap)
+    syncServers = storedAppModel.syncServers
     portError = nil
+    brickCountError = nil
     brickSizeErrorMsg = nil
     brickOverlapErrorMsg = nil
   }

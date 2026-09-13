@@ -6,6 +6,7 @@ struct TransferFunctionEditorView: View {
   @EnvironmentObject private var renderingParameters: RenderingParameters
   @EnvironmentObject private var sharePlay: SharePlayCoordinator
   var usesPanelBackground = true
+  var usesFlexibleCanvasHeight = false
   var catalogDirectoryURLs: [URL] = []
   var onClose: (() -> Void)?
   @State private var lastPaintPoint: CGPoint?
@@ -26,29 +27,13 @@ struct TransferFunctionEditorView: View {
 
   private var editorContent: some View {
     VStack(spacing: 10) {
-      GeometryReader { geometry in
-        Canvas { context, size in
-          let rect = CGRect(origin: .zero, size: size)
-          renderingParameters.transferFunction.drawCheckerboard(in: context, rect: rect)
-          renderingParameters.transferFunction.drawRibbon(in: context, rect: rect.insetBy(dx: 0, dy: size.height * 0.38))
-          renderingParameters.transferFunction.drawGrid(in: context, rect: rect)
-          renderingParameters.transferFunction.drawCurves(in: context, rect: rect)
-        }
-        .background(.black)
-        .clipShape(RoundedRectangle(cornerRadius: 8))
-        .contentShape(Rectangle())
-        .gesture(
-          DragGesture(minimumDistance: 0)
-            .onChanged { value in
-              paint(at: value.location, in: geometry.size)
-            }
-            .onEnded { _ in
-              lastPaintPoint = nil
-              sharePlay.flushSynchronization()
-            }
-        )
+      if usesFlexibleCanvasHeight {
+        transferFunctionCanvas
+          .frame(minHeight: 150, maxHeight: .infinity)
+      } else {
+        transferFunctionCanvas
+          .frame(height: 150)
       }
-      .frame(height: 150)
 
       transferFunctionToolbar
     }
@@ -69,6 +54,31 @@ struct TransferFunctionEditorView: View {
       Button("tf_save_dialog_cancel_button", role: .cancel) {}
     } message: {
       Text("tf_save_dialog_message")
+    }
+  }
+
+  private var transferFunctionCanvas: some View {
+    GeometryReader { geometry in
+      Canvas { context, size in
+        let rect = CGRect(origin: .zero, size: size)
+        renderingParameters.transferFunction.drawCheckerboard(in: context, rect: rect)
+        renderingParameters.transferFunction.drawRibbon(in: context, rect: rect.insetBy(dx: 0, dy: size.height * 0.38))
+        renderingParameters.transferFunction.drawGrid(in: context, rect: rect)
+        renderingParameters.transferFunction.drawCurves(in: context, rect: rect)
+      }
+      .background(.black)
+      .clipShape(RoundedRectangle(cornerRadius: 8))
+      .contentShape(Rectangle())
+      .gesture(
+        DragGesture(minimumDistance: 0)
+          .onChanged { value in
+            paint(at: value.location, in: geometry.size)
+          }
+          .onEnded { _ in
+            lastPaintPoint = nil
+            sharePlay.flushSynchronization()
+          }
+      )
     }
   }
 

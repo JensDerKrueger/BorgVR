@@ -128,6 +128,7 @@
 
 /* Sync server group */
 "settings_sync_servers_group_title" = "Sync Servers";
+"settings_sync_servers_description" = "Sync servers are checked periodically. New datasets and transfer functions found there are copied into the local data directory.";
 "settings_sync_servers_empty" = "No sync servers configured.";
 "settings_sync_address_label" = "Address";
 "settings_sync_port_label" = "Port";
@@ -513,3 +514,11 @@
 "tf_save_dialog_cancel_button" = "Cancel";
 "tf_save_dialog_save_button" = "Save";
 "tf_save_dialog_message" = "Enter a description for this transfer function.";
+
+/* Server log polish */
+"log_level_warning" = "WARNING";
+"log_level_error" = "ERROR";
+"datasetscanner_info_loaded_transfer_function" = "Loaded transfer function: %@ (%@, id %@)";
+"datasetscanner_warning_failed_load_transfer_function" = "Failed to load transfer function file: %@";
+"All settings will be reset to their default values." = "All settings will be reset to their default values.";
+"WebGPU web server:" = "WebGPU web server:";

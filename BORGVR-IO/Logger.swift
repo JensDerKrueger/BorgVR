@@ -1029,6 +1029,14 @@ public class GUILogger: LoggerBase {
     }
   }
 
+  /// Clears the retained UI log and the attached text binding.
+  public func clear() {
+    DispatchQueue.main.async {
+      self.logText = ""
+      self.logBinding?.wrappedValue = ""
+    }
+  }
+
   /**
    Sets or updates bindings for progress text and value.
 
@@ -1074,12 +1082,12 @@ public class GUILogger: LoggerBase {
   /// Appends a warning message to the UI log.
   public func warning(_ message: String) {
     if minimumLogLevel <= .warning {
-      appendLog("[WARNING] \(message)")
+      appendLog("[\(localizedLogLevel("log_level_warning", fallback: "WARNING"))] \(message)")
     }
   }
   /// Appends an error message to the UI log.
   public func error(_ message: String) {
-    appendLog("[ERROR] \(message)")
+    appendLog("[\(localizedLogLevel("log_level_error", fallback: "ERROR"))] \(message)")
   }
   /**
    Updates the progress bindings on the main thread.
@@ -1103,6 +1111,10 @@ public class GUILogger: LoggerBase {
    */
   public func setMinimumLogLevel(_ level: LogLevel) {
     self.minimumLogLevel = level
+  }
+
+  private func localizedLogLevel(_ key: String, fallback: String) -> String {
+    NSLocalizedString(key, tableName: nil, bundle: .main, value: fallback, comment: "Log level label")
   }
 }
 

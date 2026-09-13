@@ -8,9 +8,12 @@ struct RenderView: View {
   @EnvironmentObject private var storedAppModel: StoredAppModel
   @EnvironmentObject private var sharePlay: SharePlayCoordinator
   @EnvironmentObject private var docking: DockingController
+  @Environment(\.openWindow) private var openWindow
+  @Environment(\.dismissWindow) private var dismissWindow
 
   @State private var transferSmoothCenter: Float = 0.25
   @State private var transferSmoothWidth: Float = 0.3
+  @State private var restoredDetachedPanelWindows: Set<DockablePanelID> = []
 
   private let modelRotationSensitivity: Float = 0.006
   private let clippingSensitivity: Float = 0.0012
@@ -82,6 +85,13 @@ struct RenderView: View {
         .transition(.move(edge: .bottom).combined(with: .opacity))
       }
     }
+    .onAppear {
+      docking.restoreForDatasetOpen()
+      updateDetachedPanelWindows()
+    }
+    .onChange(of: renderingParameters.renderMode) {
+      updateDetachedPanelWindows()
+    }
   }
 
   @ViewBuilder
@@ -116,6 +126,27 @@ struct RenderView: View {
 
   private var transferFunctionCatalogDirectoryURLs: [URL] {
     [storedAppModel.resolvedDataDirectoryURL()]
+  }
+
+  private func updateDetachedPanelWindows() {
+    temporarilyCloseIncompatibleDetachedPanelWindows()
+    restoreDetachedPanelWindows()
+  }
+
+  private func temporarilyCloseIncompatibleDetachedPanelWindows() {
+    for panel in docking.detachedPanelsToTemporarilyClose(incompatibleWith: renderingParameters.renderMode) {
+      docking.markDetachedWindowTemporarilyClosed(panel)
+      dismissWindow(id: panel.windowID)
+      restoredDetachedPanelWindows.remove(panel)
+    }
+  }
+
+  private func restoreDetachedPanelWindows() {
+    for panel in docking.detachedPanelsToRestore(compatibleWith: renderingParameters.renderMode) {
+      guard !restoredDetachedPanelWindows.contains(panel) else { continue }
+      openWindow(id: panel.windowID)
+      restoredDetachedPanelWindows.insert(panel)
+    }
   }
 
   private func toggleInteractionMode() {

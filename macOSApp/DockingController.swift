@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 enum DockablePanelID: String, CaseIterable, Identifiable {
@@ -7,6 +8,7 @@ enum DockablePanelID: String, CaseIterable, Identifiable {
 
   var id: String { rawValue }
   var windowID: String { "dockable.\(rawValue)" }
+  var windowFrameAutosaveName: String { "BorgVR.\(windowID).frame" }
 
   var title: LocalizedStringKey {
     switch self {
@@ -30,8 +32,25 @@ enum DockablePanelID: String, CaseIterable, Identifiable {
 
 @MainActor
 final class DockingController: ObservableObject {
-  @Published private var visiblePanels: Set<DockablePanelID> = [.renderControls]
-  @Published private var detachedPanels: Set<DockablePanelID> = []
+  private static let visiblePanelsKey = "dockable.visiblePanels"
+  private static let detachedPanelsKey = "dockable.detachedPanels"
+
+  @Published private var visiblePanels: Set<DockablePanelID>
+  @Published private var detachedPanels: Set<DockablePanelID>
+  private var datasetLifecycleClosingPanels: Set<DockablePanelID> = []
+  private var transientClosingPanels: Set<DockablePanelID> = []
+
+  init() {
+    visiblePanels = Self.loadPanels(
+      forKey: Self.visiblePanelsKey,
+      defaultValue: [.renderControls]
+    )
+    detachedPanels = Self.loadPanels(
+      forKey: Self.detachedPanelsKey,
+      defaultValue: []
+    )
+    visiblePanels.formUnion(detachedPanels)
+  }
 
   func isVisible(_ panel: DockablePanelID) -> Bool {
     visiblePanels.contains(panel)
@@ -47,10 +66,12 @@ final class DockingController: ObservableObject {
 
   func show(_ panel: DockablePanelID) {
     visiblePanels.insert(panel)
+    persistLayout()
   }
 
   func hide(_ panel: DockablePanelID) {
     visiblePanels.remove(panel)
+    persistLayout()
   }
 
   func toggleVisibility(_ panel: DockablePanelID) {
@@ -64,48 +85,148 @@ final class DockingController: ObservableObject {
   func detach(_ panel: DockablePanelID) {
     visiblePanels.insert(panel)
     detachedPanels.insert(panel)
+    persistLayout()
   }
 
   func dock(_ panel: DockablePanelID) {
     detachedPanels.remove(panel)
+    visiblePanels.insert(panel)
+    persistLayout()
   }
 
   func close(_ panel: DockablePanelID) {
+    transientClosingPanels.insert(panel)
     hide(panel)
-    dock(panel)
+    detachedPanels.remove(panel)
+    persistLayout()
   }
 
   func resetForDatasetClose() {
+    datasetLifecycleClosingPanels.formUnion(detachedPanels)
     detachedPanels.removeAll()
-    visiblePanels = [.renderControls]
+    visiblePanels.removeAll()
+  }
+
+  func restoreForDatasetOpen() {
+    visiblePanels = Self.loadPanels(
+      forKey: Self.visiblePanelsKey,
+      defaultValue: [.renderControls]
+    )
+    detachedPanels = Self.loadPanels(
+      forKey: Self.detachedPanelsKey,
+      defaultValue: []
+    )
+    visiblePanels.formUnion(detachedPanels)
+  }
+
+  func detachedWindowDidDisappear(_ panel: DockablePanelID) {
+    if datasetLifecycleClosingPanels.remove(panel) != nil {
+      return
+    }
+    if transientClosingPanels.remove(panel) != nil {
+      return
+    }
+    dock(panel)
+  }
+
+  func detachedPanelsToRestore(compatibleWith renderMode: RenderMode) -> [DockablePanelID] {
+    DockablePanelID.allCases.filter { panel in
+      isVisible(panel) && isDetached(panel) && isCompatible(panel, with: renderMode)
+    }
+  }
+
+  func detachedPanelsToTemporarilyClose(incompatibleWith renderMode: RenderMode) -> [DockablePanelID] {
+    DockablePanelID.allCases.filter { panel in
+      isVisible(panel) && isDetached(panel) && !isCompatible(panel, with: renderMode)
+    }
+  }
+
+  func markDetachedWindowTemporarilyClosed(_ panel: DockablePanelID) {
+    transientClosingPanels.insert(panel)
   }
 
   func showEditor(for renderMode: RenderMode) {
     if renderMode == .isoValue {
-      hide(.transferFunctionEditor)
       show(.isoEditor)
     } else {
-      hide(.isoEditor)
       show(.transferFunctionEditor)
     }
   }
 
   func toggleEditor(for renderMode: RenderMode) {
     if renderMode == .isoValue {
-      hide(.transferFunctionEditor)
       toggleVisibility(.isoEditor)
     } else {
-      hide(.isoEditor)
       toggleVisibility(.transferFunctionEditor)
     }
   }
 
-  func hideIncompatibleEditor(for renderMode: RenderMode) {
-    if renderMode == .isoValue {
-      hide(.transferFunctionEditor)
-    } else {
-      hide(.isoEditor)
+  func hideIncompatibleEditor(for _: RenderMode) {
+    // Incompatible editors are only hidden by the current render mode. The user's
+    // saved docking layout must survive switching between TF and ISO rendering.
+  }
+
+  private func isCompatible(_ panel: DockablePanelID, with renderMode: RenderMode) -> Bool {
+    switch panel {
+      case .renderControls:
+        return true
+      case .transferFunctionEditor:
+        return renderMode != .isoValue
+      case .isoEditor:
+        return renderMode == .isoValue
     }
+  }
+
+  private func persistLayout() {
+    UserDefaults.standard.set(
+      visiblePanels.map(\.rawValue).sorted(),
+      forKey: Self.visiblePanelsKey
+    )
+    UserDefaults.standard.set(
+      detachedPanels.map(\.rawValue).sorted(),
+      forKey: Self.detachedPanelsKey
+    )
+  }
+
+  private static func loadPanels(
+    forKey key: String,
+    defaultValue: Set<DockablePanelID>
+  ) -> Set<DockablePanelID> {
+    guard let rawValues = UserDefaults.standard.stringArray(forKey: key) else {
+      return defaultValue
+    }
+    return Set(rawValues.compactMap(DockablePanelID.init(rawValue:)))
+  }
+}
+
+private struct WindowFrameAutosaveAccessor: NSViewRepresentable {
+  let name: String
+
+  func makeNSView(context: Context) -> NSView {
+    let view = NSView(frame: .zero)
+    DispatchQueue.main.async {
+      configure(window: view.window)
+    }
+    return view
+  }
+
+  func updateNSView(_ nsView: NSView, context: Context) {
+    DispatchQueue.main.async {
+      configure(window: nsView.window)
+    }
+  }
+
+  private func configure(window: NSWindow?) {
+    guard let window else { return }
+    window.tabbingMode = .disallowed
+    _ = window.setFrameUsingName(name)
+    _ = window.setFrameAutosaveName(name)
+  }
+}
+
+private extension View {
+  func windowFrameAutosaveName(_ name: String) -> some View {
+    background(WindowFrameAutosaveAccessor(name: name).frame(width: 0, height: 0))
   }
 }
 
@@ -170,8 +291,9 @@ struct DetachedDockablePanel<Content: View>: View {
       }
     }
     .onDisappear {
-      docking.dock(panel)
+      docking.detachedWindowDidDisappear(panel)
     }
+    .windowFrameAutosaveName(panel.windowFrameAutosaveName)
   }
 }
 
@@ -230,14 +352,16 @@ struct DetachedPanelContent: View {
           if renderingParameters.renderMode == .isoValue {
             unavailableEditorMessage
           } else {
-            DockableEditorPanel(panel: panel, maxWidth: 720, showsTitle: false) {
+            DockableEditorPanel(panel: panel, showsTitle: false) {
               TransferFunctionEditorView(
                 usesPanelBackground: false,
+                usesFlexibleCanvasHeight: true,
                 catalogDirectoryURLs: transferFunctionCatalogDirectoryURLs
               ) {
                 docking.close(panel)
               }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
           }
         }
 

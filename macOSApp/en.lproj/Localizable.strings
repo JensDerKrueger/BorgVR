@@ -493,6 +493,7 @@
 "Reset \\(section.title)" = "Reset \\(section.title)";
 "Remote datasets" = "Remote datasets";
 "Background server" = "Background server";
+"Data source" = "Data source";
 "WebGPU web server" = "WebGPU web server";
 "Ad-hoc server" = "Ad-hoc server";
 "External data sources" = "External data sources";
@@ -613,3 +614,13 @@
 "Transfer function saved: \\(url.path)" = "Transfer function saved: \\(url.path)";
 "Transfer function could not be saved: \\(error.localizedDescription)" = "Transfer function could not be saved: \\(error.localizedDescription)";
 "Copy WebGPU link" = "Copy WebGPU link";
+
+/* macOS settings page descriptions */
+"Configure how datasets are rendered, including transfer-function handling, background appearance, GPU memory limits, hash table size, and the amount of runtime logging." = "Configure how datasets are rendered, including transfer-function handling, background appearance, GPU memory limits, hash table size, and the amount of runtime logging.";
+"Choose the local folder BorgVR uses for datasets and transfer functions. The app reads local datasets from this directory, imports new datasets into it, and the background server publishes the same content when enabled." = "Choose the local folder BorgVR uses for datasets and transfer functions. The app reads local datasets from this directory, imports new datasets into it, and the background server publishes the same content when enabled.";
+"Choose how newly imported volumes are converted into BorgVR datasets. Brick size, overlap, compression, and border handling influence dataset size, loading performance, and sampling quality." = "Choose how newly imported volumes are converted into BorgVR datasets. Brick size, overlap, compression, and border handling influence dataset size, loading performance, and sampling quality.";
+"Control level-of-detail selection and brick request behavior. These settings balance visual quality, paging speed, memory pressure, and responsiveness while navigating large datasets." = "Control level-of-detail selection and brick request behavior. These settings balance visual quality, paging speed, memory pressure, and responsiveness while navigating large datasets.";
+"Enable the local dataset server used by other BorgVR clients and the WebGPU preview. Here you choose the data directory, ports, password, HTTPS certificate, and transfer batch size." = "Enable the local dataset server used by other BorgVR clients and the WebGPU preview. Here you choose the data directory, ports, password, HTTPS certificate, and transfer batch size.";
+"Enable the local dataset server used by other BorgVR clients and the WebGPU preview. Here you configure ports, password, HTTPS certificate, and transfer batch size for the shared local data source." = "Enable the local dataset server used by other BorgVR clients and the WebGPU preview. Here you configure ports, password, HTTPS certificate, and transfer batch size for the shared local data source.";
+"Configure the temporary server ports used for ad-hoc sharing sessions such as SharePlay. These settings are separate from the persistent background dataset server." = "Configure the temporary server ports used for ad-hoc sharing sessions such as SharePlay. These settings are separate from the persistent background dataset server.";
+"Manage remote BorgVR dataset servers that this app can query. Added servers appear in the dataset browser; enter the address, port, and password provided by the server operator." = "Manage remote BorgVR dataset servers that this app can query. Added servers appear in the dataset browser; enter the address, port, and password provided by the server operator.";

@@ -56,6 +56,13 @@ final class StoredAppModel : ObservableObject {
   static let defaultDataDirectory: String = FileManager.default.homeDirectoryForCurrentUser.path
   @AppStorage("dataDirectory") var dataDirectory: String = defaultDataDirectory
 
+  func resetDataSourceDefaults() {
+    deactivateDataDirectoryAccess()
+    dataDirectory = StoredAppModel.defaultDataDirectory
+    clearDataDirectoryBookmark()
+    lastDataDirectoryAccessError = nil
+  }
+
   func resetImportDefaults() {
     brickSize = StoredAppModel.defaultBrickSize
     brickOverlap = StoredAppModel.defaultBrickOverlap
@@ -64,7 +71,6 @@ final class StoredAppModel : ObservableObject {
   }
 
   func resetBackgroundServerDefaults() {
-    deactivateDataDirectoryAccess()
     lastMinute = StoredAppModel.defaultLastMinute
     enableDatasetServer = StoredAppModel.defaultEnableDatasetServer
     autoStartServer = StoredAppModel.defaultAutoStartServer
@@ -76,9 +82,6 @@ final class StoredAppModel : ObservableObject {
     webServerCertificateData = StoredAppModel.defaultWebServerCertificateData
     WebServerCertificatePasswordStore.delete()
     maxBricksPerGetRequest = StoredAppModel.defaultMaxBricksPerGetRequest
-    dataDirectory = StoredAppModel.defaultDataDirectory
-    clearDataDirectoryBookmark()
-    lastDataDirectoryAccessError = nil
   }
 
   func resetAdHocServerDefaults() {
@@ -87,6 +90,7 @@ final class StoredAppModel : ObservableObject {
   }
 
   func resetToDefaults() {
+    resetDataSourceDefaults()
     resetImportDefaults()
     resetBackgroundServerDefaults()
     resetAdHocServerDefaults()

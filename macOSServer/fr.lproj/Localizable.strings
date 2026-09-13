@@ -128,6 +128,7 @@
 
 /* Sync server group */
 "settings_sync_servers_group_title" = "Serveurs de synchronisation";
+"settings_sync_servers_description" = "Les serveurs de synchronisation sont vérifiés régulièrement. Les nouveaux jeux de données et fonctions de transfert qui y sont trouvés sont copiés dans le dossier de données local.";
 "settings_sync_servers_empty" = "Aucun serveur de synchronisation configuré.";
 "settings_sync_address_label" = "Adresse";
 "settings_sync_port_label" = "Port";
@@ -513,3 +514,11 @@
 "tf_save_dialog_cancel_button" = "Annuler";
 "tf_save_dialog_save_button" = "Enregistrer";
 "tf_save_dialog_message" = "Saisissez une description pour cette fonction de transfert.";
+
+/* Server log polish */
+"log_level_warning" = "AVERTISSEMENT";
+"log_level_error" = "ERREUR";
+"datasetscanner_info_loaded_transfer_function" = "Fonction de transfert chargée : %@ (%@, id %@)";
+"datasetscanner_warning_failed_load_transfer_function" = "Impossible de charger le fichier de fonction de transfert : %@";
+"All settings will be reset to their default values." = "Tous les réglages seront réinitialisés à leurs valeurs par défaut.";
+"WebGPU web server:" = "Serveur web WebGPU :";

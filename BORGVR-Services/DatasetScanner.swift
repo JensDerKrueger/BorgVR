@@ -84,10 +84,11 @@ class DatasetScanner {
   }
 
   private func loadDataset(at url: URL) {
-    if let data = try? BORGVRFileData(filename: url.path()) {
+    let path = url.path
+    if let data = try? BORGVRFileData(filename: path) {
       let dataset = DatasetInfo(
         id: data.getMetadata().uniqueID,
-        filename: url.path(),
+        filename: path,
         datasetDescription: data.getMetadata().datasetDescription
       )
       datasets.append(dataset)
@@ -113,7 +114,7 @@ class DatasetScanner {
             value: "Failed to load dataset file: %@",
             comment: "Log: failed to load dataset file"
           ),
-          url.path()
+          path
         )
       )
     }
@@ -122,7 +123,18 @@ class DatasetScanner {
   private func loadTransferFunction(at url: URL) {
     if let transferFunction = DatasetScanner.transferFunctionInfo(at: url, logger: logger) {
       transferFunctions.append(transferFunction)
-      logger?.info("Loaded transfer function: \(transferFunction.transferFunctionDescription) (\(url.lastPathComponent), id \(transferFunction.id))")
+      logger?.info(
+        String(
+          format: L(
+            "datasetscanner_info_loaded_transfer_function",
+            value: "Loaded transfer function: %@ (%@, id %@)",
+            comment: "Log: transfer function file successfully loaded"
+          ),
+          transferFunction.transferFunctionDescription,
+          url.lastPathComponent,
+          transferFunction.id
+        )
+      )
     }
   }
 
@@ -194,7 +206,16 @@ class DatasetScanner {
         byteCount: fileData.count
       )
     } catch {
-      logger?.warning("Failed to load transfer function file: \(url.path)")
+      logger?.warning(
+        String(
+          format: L(
+            "datasetscanner_warning_failed_load_transfer_function",
+            value: "Failed to load transfer function file: %@",
+            comment: "Log: failed to load transfer function file"
+          ),
+          url.path
+        )
+      )
       return nil
     }
   }

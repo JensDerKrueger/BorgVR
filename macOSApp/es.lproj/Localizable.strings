@@ -493,6 +493,7 @@
 "Reset \\(section.title)" = "Restablecer \\(section.title)";
 "Remote datasets" = "Conjuntos de datos remotos";
 "Background server" = "Servidor en segundo plano";
+"Data source" = "Fuente de datos";
 "WebGPU web server" = "Servidor web WebGPU";
 "Ad-hoc server" = "Servidor ad hoc";
 "External data sources" = "Fuentes de datos externas";
@@ -613,3 +614,13 @@
 "Transfer function saved: \\(url.path)" = "Función de transferencia guardada: \\(url.path)";
 "Transfer function could not be saved: \\(error.localizedDescription)" = "No se pudo guardar la función de transferencia: \\(error.localizedDescription)";
 "Copy WebGPU link" = "Copiar enlace WebGPU";
+
+/* macOS settings page descriptions */
+"Configure how datasets are rendered, including transfer-function handling, background appearance, GPU memory limits, hash table size, and the amount of runtime logging." = "Configura cómo se renderizan los conjuntos de datos, incluyendo el manejo de funciones de transferencia, la apariencia del fondo, los límites de memoria GPU, el tamaño de la tabla hash y la cantidad de registro en tiempo de ejecución.";
+"Choose the local folder BorgVR uses for datasets and transfer functions. The app reads local datasets from this directory, imports new datasets into it, and the background server publishes the same content when enabled." = "Elige la carpeta local que BorgVR usa para conjuntos de datos y funciones de transferencia. La app lee los conjuntos de datos locales desde este directorio, importa allí nuevos conjuntos de datos y el servidor en segundo plano publica el mismo contenido cuando está activado.";
+"Choose how newly imported volumes are converted into BorgVR datasets. Brick size, overlap, compression, and border handling influence dataset size, loading performance, and sampling quality." = "Elige cómo se convierten los volúmenes recién importados en conjuntos de datos BorgVR. El tamaño de brick, el solapamiento, la compresión y el manejo de bordes influyen en el tamaño del conjunto de datos, el rendimiento de carga y la calidad de muestreo.";
+"Control level-of-detail selection and brick request behavior. These settings balance visual quality, paging speed, memory pressure, and responsiveness while navigating large datasets." = "Controla la selección de niveles de detalle y el comportamiento de las solicitudes de bricks. Estos ajustes equilibran la calidad visual, la velocidad de carga progresiva, la presión de memoria y la capacidad de respuesta al navegar por conjuntos de datos grandes.";
+"Enable the local dataset server used by other BorgVR clients and the WebGPU preview. Here you choose the data directory, ports, password, HTTPS certificate, and transfer batch size." = "Activa el servidor local de conjuntos de datos usado por otros clientes BorgVR y por la vista previa WebGPU. Aquí se eligen el directorio de datos, los puertos, la contraseña, el certificado HTTPS y el tamaño de lote de transferencia.";
+"Enable the local dataset server used by other BorgVR clients and the WebGPU preview. Here you configure ports, password, HTTPS certificate, and transfer batch size for the shared local data source." = "Activa el servidor local de conjuntos de datos usado por otros clientes BorgVR y por la vista previa WebGPU. Aquí se configuran los puertos, la contraseña, el certificado HTTPS y el tamaño de lote de transferencia para la fuente de datos local compartida.";
+"Configure the temporary server ports used for ad-hoc sharing sessions such as SharePlay. These settings are separate from the persistent background dataset server." = "Configura los puertos temporales usados para sesiones de uso compartido ad hoc como SharePlay. Estos ajustes están separados del servidor de conjuntos de datos en segundo plano.";
+"Manage remote BorgVR dataset servers that this app can query. Added servers appear in the dataset browser; enter the address, port, and password provided by the server operator." = "Gestiona servidores remotos de conjuntos de datos BorgVR que esta app puede consultar. Los servidores añadidos aparecen en el navegador de conjuntos de datos; introduce la dirección, el puerto y la contraseña proporcionados por el operador del servidor.";

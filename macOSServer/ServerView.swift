@@ -101,7 +101,7 @@ struct ServerView: View {
 
         if storedAppModel.enableWebServer {
           HStack {
-            Text("WebGPU-Webserver:")
+            Text("WebGPU web server:")
             Text(verbatim: "\(storedAppModel.webServerUsesTLS ? "https" : "http")://localhost:\(resolvedWebServerPort)")
               .font(.system(.body, design: .monospaced))
               .bold()
@@ -129,7 +129,7 @@ struct ServerView: View {
           .font(.footnote)
           .foregroundColor(.gray)
 
-        if isRunningServer {
+        if isRunningServer, hasUsableSyncServers {
           HStack(spacing: 8) {
             Image(systemName: syncStatus.activeDatasetCount > 0 ? "arrow.triangle.2.circlepath" : "checkmark.circle")
             Text(syncStatusText)
@@ -169,7 +169,7 @@ struct ServerView: View {
           }
 
           Button {
-            logText = ""
+            logger.clear()
           } label: {
             Label("server_button_clear_log", systemImage: "trash")
           }
@@ -379,7 +379,7 @@ struct ServerView: View {
   }
 
   private func startServer() {
-    logText = ""
+    logger.clear()
     server = TCPServer(
       port: UInt16(storedAppModel.port),
       maxBricksPerGetRequest: storedAppModel.maxBricksPerGetRequest,
@@ -491,6 +491,10 @@ struct ServerView: View {
       syncStatus.activeDatasetCount,
       Int((syncStatus.averageProgress * 100).rounded())
     )
+  }
+
+  private var hasUsableSyncServers: Bool {
+    storedAppModel.syncServers.contains { $0.isUsable }
   }
 
 }
