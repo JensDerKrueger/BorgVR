@@ -12,6 +12,7 @@ const datasetInfo = document.querySelector("#dataset-info");
 const statusLine = document.querySelector("#status-line");
 const renderControls = document.querySelector("#render-controls");
 const controlsCollapseButton = document.querySelector("#controls-collapse-button");
+const persistentUIPanels = Array.from(document.querySelectorAll("[data-ui-panel]"));
 const renderModeButtons = Array.from(document.querySelectorAll("[data-render-mode]"));
 const editorPanels = Array.from(document.querySelectorAll("[data-editor-mode]"));
 const transferEditorCanvas = document.querySelector("#tf-editor-canvas");
@@ -33,6 +34,8 @@ const TRANSFER_FUNCTION_URL_PARAMETER = "TF";
 const RENDER_MODE_URL_PARAMETER = "mode";
 const ISO_VALUE_URL_PARAMETER = "iso";
 const PERSISTENT_BRICK_CACHE_SETTING = "borgvr.persistentBrickCache";
+const RENDER_CONTROLS_COLLAPSED_SETTING = "borgvr.renderControlsCollapsed";
+const OPEN_UI_PANELS_SETTING = "borgvr.openUIPanels";
 const VALID_RENDER_MODES = new Set(["tf", "tf-lighting", "iso"]);
 const MAX_TRANSFER_FUNCTION_ENTRIES = 1 << 16;
 const MAX_TRANSFER_FUNCTION_RGBA_BYTES = MAX_TRANSFER_FUNCTION_ENTRIES * 4;
@@ -62,6 +65,8 @@ async function main() {
   profilingEnabled = profilingRequested();
   persistentBrickCacheEnabled = loadPersistentBrickCacheSetting();
   persistentBrickCache.checked = persistentBrickCacheEnabled;
+  controlsCollapsed = loadRenderControlsCollapsedSetting();
+  restoreOpenUIPanels();
   renderer = new CoordinateCubeRenderer(canvas);
   window.borgvrProfileSnapshot = () => renderer?.profileSnapshot();
   window.borgvrProfileSummary = () => renderer?.profileSummaryText();
@@ -94,6 +99,7 @@ async function main() {
   });
 
   installRenderControls();
+  setControlsCollapsed(controlsCollapsed, { persist: false });
   window.addEventListener("resize", drawTransferFunctionEditor);
   if (profilingEnabled) {
     showStatusLine();
@@ -330,6 +336,12 @@ function installRenderControls() {
     setControlsCollapsed(!controlsCollapsed);
   });
 
+  persistentUIPanels.forEach((panel) => {
+    panel.addEventListener("toggle", () => {
+      saveOpenUIPanels();
+    });
+  });
+
   renderModeButtons.forEach((button) => {
     button.addEventListener("click", () => {
       const mode = button.dataset.renderMode;
@@ -481,6 +493,33 @@ function loadPersistentBrickCacheSetting() {
   return localStorage.getItem(PERSISTENT_BRICK_CACHE_SETTING) !== "0";
 }
 
+function loadRenderControlsCollapsedSetting() {
+  return localStorage.getItem(RENDER_CONTROLS_COLLAPSED_SETTING) === "1";
+}
+
+function restoreOpenUIPanels() {
+  const openPanels = new Set(readJSONLocalStorage(OPEN_UI_PANELS_SETTING, []));
+  persistentUIPanels.forEach((panel) => {
+    panel.open = openPanels.has(panel.dataset.uiPanel);
+  });
+}
+
+function saveOpenUIPanels() {
+  const openPanels = persistentUIPanels
+    .filter((panel) => panel.open)
+    .map((panel) => panel.dataset.uiPanel);
+  localStorage.setItem(OPEN_UI_PANELS_SETTING, JSON.stringify(openPanels));
+}
+
+function readJSONLocalStorage(key, fallback) {
+  try {
+    const value = localStorage.getItem(key);
+    return value === null ? fallback : JSON.parse(value);
+  } catch {
+    return fallback;
+  }
+}
+
 async function clearPersistentBrickCache() {
   await renderer?.clearPersistentBrickCache();
   setStatus("Persistent brick cache cleared.");
@@ -508,8 +547,11 @@ function selectRenderMode(mode) {
   renderer?.setRenderMode(mode);
 }
 
-function setControlsCollapsed(collapsed) {
+function setControlsCollapsed(collapsed, options = {}) {
   controlsCollapsed = collapsed;
+  if (options.persist !== false) {
+    localStorage.setItem(RENDER_CONTROLS_COLLAPSED_SETTING, controlsCollapsed ? "1" : "0");
+  }
   renderControls.classList.toggle("collapsed", controlsCollapsed);
   controlsCollapseButton.textContent = controlsCollapsed ? "UI" : "x";
   controlsCollapseButton.setAttribute("aria-label", controlsCollapsed ? "Show render controls" : "Hide render controls");

@@ -82,7 +82,7 @@
             </label>
           </section>
 
-          <details class="control-panel">
+          <details class="control-panel" data-ui-panel="clipping">
             <summary>Clipping</summary>
             <div class="clip-grid">
               <label><span>X min</span><input data-clip-axis="0" data-clip-bound="min" type="range" min="0" max="0.99" step="0.001" value="0"></label>
@@ -95,7 +95,7 @@
             <button id="clip-reset" class="small-command-button" type="button">Reset</button>
           </details>
 
-          <details class="control-panel">
+          <details class="control-panel" data-ui-panel="browser-cache">
             <summary>Browser Cache</summary>
             <label class="cache-toggle-row">
               <span>Persistent bricks</span>
@@ -111,7 +111,7 @@
       </section>
     </main>
 
-    <script type="module" src="./src/app.js?v=20260914-cache-summary"></script>
+    <script type="module" src="./src/app.js?v=20260914-ui-state"></script>
   </body>
 </html>
 
