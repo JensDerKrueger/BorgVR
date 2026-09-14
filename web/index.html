@@ -49,8 +49,8 @@
                 <input id="start-persistent-brick-cache" data-persistent-brick-cache type="checkbox">
               </label>
               <p id="persistent-brick-cache-info" class="start-settings-info" hidden>
-                When enabled, bricks received from the dataset server are stored in this browser's IndexedDB. Bricks are small pieces of the volume data. Keeping them locally can reduce network traffic when the same bricks are needed again and may improve performance on slower connections.
-                The stored data is only available to this exact web server origin and cannot be read by other websites. It is still stored on this computer's local storage, so other users of this operating-system account could in principle inspect it. Turn this option off on public or shared computers when visualizing sensitive volumes.
+                When enabled, BorgVR stores partitions of the volume dataset, called bricks, in this browser's <a href="https://developer.mozilla.org/en-US/docs/Web/API/IndexedDB_API" target="_blank" rel="noopener noreferrer">IndexedDB</a>. Reusing cached bricks can reduce network traffic and may improve performance when the same parts of a volume are needed again.
+                Browser storage is isolated by web origin, so other websites cannot read these cached bricks. They are still written to this computer's local storage, though, and another user of the same operating-system account could in principle inspect them. Turn this option off on public or shared computers when visualizing sensitive data.
               </p>
             </section>
           </div>

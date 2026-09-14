@@ -318,6 +318,15 @@ p {
   text-align: left;
 }
 
+.start-settings-info a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.start-settings-info a:hover {
+  text-decoration: underline;
+}
+
 @media (max-height: 820px) {
   .viewer-empty-copy {
     margin-top: 52px;
