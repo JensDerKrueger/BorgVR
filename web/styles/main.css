@@ -208,15 +208,18 @@ p {
 
 .viewer-empty-content {
   display: grid;
-  gap: 14px;
+  gap: 0;
   justify-items: center;
-  width: min(360px, calc(100% - 40px));
+  width: min(560px, calc(100% - 48px));
 }
 
-.viewer-empty-content > div {
+.viewer-empty-copy {
   display: grid;
-  gap: 7px;
+  gap: 10px;
   justify-items: center;
+  width: 100%;
+  margin-top: 34px;
+  text-align: center;
 }
 
 .viewer-empty img {
@@ -229,21 +232,25 @@ p {
 }
 
 .viewer-empty strong {
-  margin-top: 18px;
-  font-size: 18px;
+  font-size: 20px;
+  line-height: 1.15;
 }
 
 .viewer-empty span {
+  max-width: 520px;
   color: rgba(237, 248, 251, 0.72);
+  font-size: 15px;
+  line-height: 1.35;
+  text-align: center;
 }
 
 .start-settings-box {
   pointer-events: auto;
   display: grid;
-  width: min(320px, 100%);
-  gap: 8px;
-  margin-top: 4px;
-  padding: 10px;
+  width: min(340px, 100%);
+  gap: 12px;
+  margin-top: 38px;
+  padding: 16px 18px;
   border: 1px solid rgba(190, 249, 255, 0.18);
   border-radius: 8px;
   background: rgba(5, 16, 22, 0.62);
@@ -252,10 +259,24 @@ p {
 }
 
 .start-settings-title {
-  padding: 0 9px;
   color: var(--soft);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 750;
+  line-height: 1.2;
+}
+
+.start-settings-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 18px;
+  align-items: center;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.2;
+}
+
+.start-settings-row input {
+  justify-self: end;
 }
 
 .dataset-info {

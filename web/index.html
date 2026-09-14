@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>BorgVR WebGPU</title>
     <link rel="icon" href="./assets/borgvr.jpg">
-    <link rel="stylesheet" href="./styles/main.css?v=20260914-start-settings">
+    <link rel="stylesheet" href="./styles/main.css?v=20260914-start-settings-polish">
   </head>
   <body>
     <main class="app-shell">
@@ -35,13 +35,13 @@
         <div id="viewer-empty" class="viewer-empty">
           <div class="viewer-empty-content">
             <img src="./assets/borgvr.jpg" alt="" aria-hidden="true">
-            <div>
+            <div class="viewer-empty-copy">
               <strong>WebGPU renderer workbench</strong>
               <span>Select a dataset to start interactive volume rendering.</span>
             </div>
             <section class="start-settings-box" aria-label="Settings">
               <div class="start-settings-title">Settings</div>
-              <label class="cache-toggle-row">
+              <label class="start-settings-row">
                 <span>Persistent bricks</span>
                 <input id="start-persistent-brick-cache" data-persistent-brick-cache type="checkbox">
               </label>
@@ -120,7 +120,7 @@
       </section>
     </main>
 
-    <script type="module" src="./src/app.js?v=20260914-start-settings"></script>
+    <script type="module" src="./src/app.js?v=20260914-start-settings-polish"></script>
   </body>
 </html>
 
