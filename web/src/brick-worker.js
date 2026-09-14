@@ -3,6 +3,7 @@ import { decodeAppleLZ4 } from "./lz4.js?v=20260911-worker";
 const BATCH_MAGIC = 0x31425642;
 const DEFAULT_CACHE_DATABASE = "borgvr-brick-cache-v1";
 const CACHE_STORE = "bricks";
+const CACHE_EVICTION_EXTRA_BYTES = 8 * 1024 * 1024;
 
 let config = null;
 
@@ -339,17 +340,35 @@ async function writeCachedStoredBricks(cfg, entries, profile) {
   if (validEntries.length === 0) {
     return;
   }
+  const records = validEntries.map(({ brickID, data }) => ({
+    key: cacheKey(cfg, brickID),
+    namespace: cfg.cacheNamespace,
+    brickID,
+    byteLength: data.byteLength,
+    updatedAt: Date.now(),
+    data: data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength)
+  }));
+  const targetBytes = records.reduce((sum, record) => sum + record.byteLength, 0) + CACHE_EVICTION_EXTRA_BYTES;
   try {
     const db = await openPersistentCacheDB();
     try {
-      await idbPutMany(db, validEntries.map(({ brickID, data }) => ({
-        key: cacheKey(cfg, brickID),
-        namespace: cfg.cacheNamespace,
-        brickID,
-        byteLength: data.byteLength,
-        updatedAt: Date.now(),
-        data: data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength)
-      })));
+      try {
+        await idbPutMany(db, records);
+      } catch (error) {
+        if (!cacheWriteMayBenefitFromEviction(error)) {
+          return;
+        }
+        await evictCachedBricks(db, cfg.cacheNamespace, targetBytes, false);
+        try {
+          await idbPutMany(db, records);
+        } catch (retryError) {
+          if (!cacheWriteMayBenefitFromEviction(retryError)) {
+            return;
+          }
+          await evictCachedBricks(db, cfg.cacheNamespace, targetBytes, true);
+          await idbPutMany(db, records);
+        }
+      }
     } finally {
       db.close();
     }
@@ -429,6 +448,56 @@ function idbPutMany(db, records) {
     transaction.oncomplete = () => resolve();
     transaction.onerror = () => reject(transaction.error ?? new Error("Could not write persistent brick cache."));
   });
+}
+
+function evictCachedBricks(db, currentNamespace, targetBytes, includeCurrentNamespace) {
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(CACHE_STORE, "readwrite");
+    const store = transaction.objectStore(CACHE_STORE);
+    const candidates = [];
+    const cursorRequest = store.openCursor();
+    cursorRequest.onsuccess = () => {
+      const cursor = cursorRequest.result;
+      if (!cursor) {
+        candidates.sort((a, b) => a.updatedAt - b.updatedAt);
+        let releasedBytes = 0;
+        for (const candidate of candidates) {
+          store.delete(candidate.key);
+          releasedBytes += candidate.byteLength;
+          if (releasedBytes >= targetBytes) {
+            break;
+          }
+        }
+        return;
+      }
+
+      const record = cursor.value;
+      const isCurrentNamespace = record?.namespace === currentNamespace;
+      if (record?.key &&
+          record?.byteLength > 0 &&
+          (!isCurrentNamespace || includeCurrentNamespace)) {
+        candidates.push({
+          key: record.key,
+          byteLength: record.byteLength,
+          updatedAt: Number.isFinite(Number(record.updatedAt)) ? Number(record.updatedAt) : 0
+        });
+      }
+      cursor.continue();
+    };
+    cursorRequest.onerror = () => reject(cursorRequest.error ?? new Error("Could not scan persistent brick cache."));
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = () => reject(transaction.error ?? new Error("Could not evict persistent brick cache records."));
+  });
+}
+
+function cacheWriteMayBenefitFromEviction(error) {
+  const name = error?.name ?? "";
+  const message = String(error?.message ?? "").toLowerCase();
+  return name === "QuotaExceededError" ||
+    name === "AbortError" ||
+    name === "UnknownError" ||
+    message.includes("quota") ||
+    message.includes("storage");
 }
 
 function idbClear(db) {
