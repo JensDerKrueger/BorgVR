@@ -1,4 +1,4 @@
-import { BrickAtlas } from "./brick-atlas.js?v=20260914-cache-summary";
+import { BrickAtlas } from "./brick-atlas.js?v=20260915-mobile-budget";
 import { createDefaultTransferFunction } from "./transfer-function.js?v=20260907-range-fix";
 
 const shaderSource = `
@@ -504,6 +504,7 @@ const BRICK_REQUEST_READBACK_INTERVAL = 1;
 const UNIFORM_BUFFER_BYTE_LENGTH = 256;
 const LEVEL_DATA_STRIDE = 32;
 const DEFAULT_SCREEN_SPACE_ERROR = 1.0;
+const APPLE_MOBILE_RENDER_PIXEL_RATIO = 1.0;
 const RENDER_MODES = new Map([
   ["tf", 0],
   ["tf-lighting", 1],
@@ -879,8 +880,8 @@ export class CoordinateCubeRenderer {
   }
 
   resize() {
-    const scale = window.devicePixelRatio || 1;
     const rect = this.canvas.getBoundingClientRect();
+    const scale = renderPixelRatio();
     const width = Math.max(1, Math.round(rect.width * scale));
     const height = Math.max(1, Math.round(rect.height * scale));
     if (
@@ -1619,6 +1620,11 @@ function isAppleMobileDevice() {
   const platform = navigator.platform || "";
   return /iPhone|iPad|iPod/.test(userAgent) ||
     (platform === "MacIntel" && navigator.maxTouchPoints > 1);
+}
+
+function renderPixelRatio() {
+  const ratio = window.devicePixelRatio || 1;
+  return isAppleMobileDevice() ? Math.min(ratio, APPLE_MOBILE_RENDER_PIXEL_RATIO) : ratio;
 }
 
 function limitSnapshot(limits) {

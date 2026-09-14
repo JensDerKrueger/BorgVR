@@ -5,10 +5,13 @@ const BI_CHILD_EMPTY = 1;
 const BI_EMPTY = 2;
 const BI_FLAG_COUNT = 3;
 
-const MAX_CONCURRENT_BRICK_LOADS = 128;
-const MAX_BRICKS_PER_BATCH_REQUEST = 32;
+const DESKTOP_MAX_CONCURRENT_BRICK_LOADS = 128;
+const APPLE_MOBILE_MAX_CONCURRENT_BRICK_LOADS = 32;
+const DESKTOP_MAX_BRICKS_PER_BATCH_REQUEST = 32;
+const APPLE_MOBILE_MAX_BRICKS_PER_BATCH_REQUEST = 16;
 const MAX_PENDING_REQUEST_AGE_FRAMES = 10;
-const DEFAULT_ATLAS_MEMORY_BYTES = 2 * 1024 * 1024 * 1024;
+const DESKTOP_ATLAS_MEMORY_BYTES = 2 * 1024 * 1024 * 1024;
+const APPLE_MOBILE_ATLAS_MEMORY_BYTES = 256 * 1024 * 1024;
 const BATCH_MAGIC = 0x31425642;
 const PERSISTENT_BRICK_CACHE_DATABASE = "borgvr-brick-cache-v1";
 
@@ -123,7 +126,7 @@ export class BrickAtlas {
 
     const maxTextureBricks = Math.max(1, Math.floor(this.device.limits.maxTextureDimension3D / this.brickSize));
     const brickTextureBytes = this.brickSize * this.brickSize * this.brickSize * this.textureBytesPerVoxel;
-    const maxMemoryBricks = Math.max(1, Math.floor(Math.cbrt(DEFAULT_ATLAS_MEMORY_BYTES / Math.max(1, brickTextureBytes))));
+    const maxMemoryBricks = Math.max(1, Math.floor(Math.cbrt(atlasMemoryBudgetBytes() / Math.max(1, brickTextureBytes))));
     const maxAtlasBricksPerAxis = Math.min(maxTextureBricks, maxMemoryBricks);
     const targetSlots = Math.min(Math.max(1, this.totalBrickCount), maxAtlasBricksPerAxis ** 3);
     this.atlasBricksPerAxis = Math.max(1, Math.min(maxAtlasBricksPerAxis, Math.ceil(Math.cbrt(targetSlots))));
@@ -425,14 +428,16 @@ export class BrickAtlas {
 
   pumpLoads() {
     const generation = this.generation;
+    const maxConcurrentLoads = maxConcurrentBrickLoads();
+    const batchRequestLimit = maxBricksPerBatchRequest();
     this.pruneStalePendingRequests();
-    while (this.activeLoads < MAX_CONCURRENT_BRICK_LOADS &&
+    while (this.activeLoads < maxConcurrentLoads &&
            this.pendingBrickIDs.length > 0 &&
            (this.freeSlots.length > 0 || this.hasEvictableSlot())) {
       const batchIDs = [];
       const batchLimit = Math.min(
-        MAX_BRICKS_PER_BATCH_REQUEST,
-        MAX_CONCURRENT_BRICK_LOADS - this.activeLoads
+        batchRequestLimit,
+        maxConcurrentLoads - this.activeLoads
       );
       while (batchIDs.length < batchLimit && this.pendingBrickIDs.length > 0) {
         const brickID = this.pendingBrickIDs.shift();
@@ -976,6 +981,26 @@ function cacheNamespaceForManifest(manifest) {
     String(volume.bytesPerComponent ?? ""),
     String((manifest.bricks ?? []).length)
   ].join("|");
+}
+
+function atlasMemoryBudgetBytes() {
+  return isAppleMobileDevice() ? APPLE_MOBILE_ATLAS_MEMORY_BYTES : DESKTOP_ATLAS_MEMORY_BYTES;
+}
+
+function maxConcurrentBrickLoads() {
+  return isAppleMobileDevice() ? APPLE_MOBILE_MAX_CONCURRENT_BRICK_LOADS : DESKTOP_MAX_CONCURRENT_BRICK_LOADS;
+}
+
+function maxBricksPerBatchRequest() {
+  return isAppleMobileDevice() ? APPLE_MOBILE_MAX_BRICKS_PER_BATCH_REQUEST : DESKTOP_MAX_BRICKS_PER_BATCH_REQUEST;
+}
+
+function isAppleMobileDevice() {
+  const nav = globalThis.navigator ?? {};
+  const userAgent = nav.userAgent || "";
+  const platform = nav.platform || "";
+  return /iPhone|iPad|iPod/.test(userAgent) ||
+    (platform === "MacIntel" && nav.maxTouchPoints > 1);
 }
 
 function formatMiB(byteCount) {
