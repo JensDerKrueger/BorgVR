@@ -218,7 +218,7 @@ p {
   gap: 10px;
   justify-items: center;
   width: 100%;
-  margin-top: 34px;
+  margin-top: clamp(66px, 10vh, 102px);
   text-align: center;
 }
 
@@ -247,10 +247,10 @@ p {
 .start-settings-box {
   pointer-events: auto;
   display: grid;
-  width: min(340px, 100%);
-  gap: 12px;
-  margin-top: 38px;
-  padding: 16px 18px;
+  width: min(430px, 100%);
+  gap: 14px;
+  margin-top: clamp(74px, 11vh, 114px);
+  padding: 20px 22px;
   border: 1px solid rgba(190, 249, 255, 0.18);
   border-radius: 8px;
   background: rgba(5, 16, 22, 0.62);
@@ -260,9 +260,10 @@ p {
 
 .start-settings-title {
   color: var(--soft);
-  font-size: 14px;
+  font-size: 18px;
   font-weight: 750;
   line-height: 1.2;
+  text-align: left;
 }
 
 .start-settings-row {
@@ -273,10 +274,58 @@ p {
   color: var(--muted);
   font-size: 14px;
   line-height: 1.2;
+  text-align: left;
+}
+
+.start-settings-label {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 7px;
 }
 
 .start-settings-row input {
   justify-self: end;
+}
+
+.inline-info-button {
+  display: inline-grid;
+  width: 17px;
+  height: 17px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid rgba(190, 249, 255, 0.34);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--soft);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.inline-info-button:hover,
+.inline-info-button[aria-expanded="true"] {
+  border-color: rgba(55, 211, 240, 0.68);
+  background: rgba(55, 211, 240, 0.14);
+}
+
+.start-settings-info {
+  margin: 0;
+  color: rgba(237, 248, 251, 0.68);
+  font-size: 12px;
+  line-height: 1.45;
+  text-align: left;
+}
+
+@media (max-height: 820px) {
+  .viewer-empty-copy {
+    margin-top: 52px;
+  }
+
+  .start-settings-box {
+    margin-top: 58px;
+  }
 }
 
 .dataset-info {

@@ -26,6 +26,8 @@ const isoValue = document.querySelector("#iso-value");
 const clipInputs = Array.from(document.querySelectorAll("[data-clip-axis]"));
 const clipReset = document.querySelector("#clip-reset");
 const persistentBrickCacheControls = Array.from(document.querySelectorAll("[data-persistent-brick-cache]"));
+const persistentBrickCacheInfoButton = document.querySelector("#persistent-brick-cache-info-button");
+const persistentBrickCacheInfo = document.querySelector("#persistent-brick-cache-info");
 const clearBrickCache = document.querySelector("#clear-brick-cache");
 const brickCacheStats = document.querySelector("#brick-cache-stats");
 const MINIMUM_TRANSFER_SMOOTH_WIDTH = 0.02;
@@ -463,6 +465,14 @@ function installRenderControls() {
     control.addEventListener("change", async () => {
       await setPersistentBrickCacheEnabled(control.checked);
     });
+  });
+
+  persistentBrickCacheInfoButton?.addEventListener("click", () => {
+    const expanded = persistentBrickCacheInfoButton.getAttribute("aria-expanded") === "true";
+    persistentBrickCacheInfoButton.setAttribute("aria-expanded", expanded ? "false" : "true");
+    if (persistentBrickCacheInfo) {
+      persistentBrickCacheInfo.hidden = expanded;
+    }
   });
 
   clearBrickCache.addEventListener("click", async () => {

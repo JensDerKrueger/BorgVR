@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>BorgVR WebGPU</title>
     <link rel="icon" href="./assets/borgvr.jpg">
-    <link rel="stylesheet" href="./styles/main.css?v=20260914-start-settings-polish">
+    <link rel="stylesheet" href="./styles/main.css?v=20260914-start-settings-info">
   </head>
   <body>
     <main class="app-shell">
@@ -42,9 +42,16 @@
             <section class="start-settings-box" aria-label="Settings">
               <div class="start-settings-title">Settings</div>
               <label class="start-settings-row">
-                <span>Persistent bricks</span>
+                <span class="start-settings-label">
+                  Persistent bricks
+                  <button id="persistent-brick-cache-info-button" class="inline-info-button" type="button" aria-expanded="false" aria-controls="persistent-brick-cache-info" aria-label="Explain persistent bricks">i</button>
+                </span>
                 <input id="start-persistent-brick-cache" data-persistent-brick-cache type="checkbox">
               </label>
+              <p id="persistent-brick-cache-info" class="start-settings-info" hidden>
+                When enabled, bricks received from the dataset server are stored in this browser's IndexedDB. Bricks are small pieces of the volume data. Keeping them locally can reduce network traffic when the same bricks are needed again and may improve performance on slower connections.
+                The stored data is only available to this exact web server origin and cannot be read by other websites. It is still stored on this computer's local storage, so other users of this operating-system account could in principle inspect it. Turn this option off on public or shared computers when visualizing sensitive volumes.
+              </p>
             </section>
           </div>
         </div>
@@ -120,7 +127,7 @@
       </section>
     </main>
 
-    <script type="module" src="./src/app.js?v=20260914-start-settings-polish"></script>
+    <script type="module" src="./src/app.js?v=20260914-start-settings-info"></script>
   </body>
 </html>
 
