@@ -25,7 +25,7 @@ const tfReset = document.querySelector("#tf-reset");
 const isoValue = document.querySelector("#iso-value");
 const clipInputs = Array.from(document.querySelectorAll("[data-clip-axis]"));
 const clipReset = document.querySelector("#clip-reset");
-const persistentBrickCache = document.querySelector("#persistent-brick-cache");
+const persistentBrickCacheControls = Array.from(document.querySelectorAll("[data-persistent-brick-cache]"));
 const clearBrickCache = document.querySelector("#clear-brick-cache");
 const brickCacheStats = document.querySelector("#brick-cache-stats");
 const MINIMUM_TRANSFER_SMOOTH_WIDTH = 0.02;
@@ -64,7 +64,7 @@ main().catch((error) => {
 async function main() {
   profilingEnabled = profilingRequested();
   persistentBrickCacheEnabled = loadPersistentBrickCacheSetting();
-  persistentBrickCache.checked = persistentBrickCacheEnabled;
+  setPersistentBrickCacheControls(persistentBrickCacheEnabled);
   controlsCollapsed = loadRenderControlsCollapsedSetting();
   restoreOpenUIPanels();
   renderer = new CoordinateCubeRenderer(canvas);
@@ -459,18 +459,10 @@ function installRenderControls() {
     renderer?.resetClipping();
   });
 
-  persistentBrickCache.addEventListener("change", async () => {
-    persistentBrickCacheEnabled = persistentBrickCache.checked;
-    localStorage.setItem(PERSISTENT_BRICK_CACHE_SETTING, persistentBrickCacheEnabled ? "1" : "0");
-    renderer?.setPersistentBrickCacheEnabled(persistentBrickCacheEnabled);
-    updateBrickCacheStats();
-    if (!persistentBrickCacheEnabled) {
-      try {
-        await clearPersistentBrickCache();
-      } catch (error) {
-        setStatus(error.message ?? String(error));
-      }
-    }
+  persistentBrickCacheControls.forEach((control) => {
+    control.addEventListener("change", async () => {
+      await setPersistentBrickCacheEnabled(control.checked);
+    });
   });
 
   clearBrickCache.addEventListener("click", async () => {
@@ -491,6 +483,27 @@ function installRenderControls() {
 
 function loadPersistentBrickCacheSetting() {
   return localStorage.getItem(PERSISTENT_BRICK_CACHE_SETTING) !== "0";
+}
+
+async function setPersistentBrickCacheEnabled(enabled) {
+  persistentBrickCacheEnabled = enabled;
+  localStorage.setItem(PERSISTENT_BRICK_CACHE_SETTING, persistentBrickCacheEnabled ? "1" : "0");
+  setPersistentBrickCacheControls(persistentBrickCacheEnabled);
+  renderer?.setPersistentBrickCacheEnabled(persistentBrickCacheEnabled);
+  updateBrickCacheStats();
+  if (!persistentBrickCacheEnabled) {
+    try {
+      await clearPersistentBrickCache();
+    } catch (error) {
+      setStatus(error.message ?? String(error));
+    }
+  }
+}
+
+function setPersistentBrickCacheControls(enabled) {
+  persistentBrickCacheControls.forEach((control) => {
+    control.checked = enabled;
+  });
 }
 
 function loadRenderControlsCollapsedSetting() {

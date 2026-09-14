@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>BorgVR WebGPU</title>
     <link rel="icon" href="./assets/borgvr.jpg">
-    <link rel="stylesheet" href="./styles/main.css?v=20260908-remote-errors">
+    <link rel="stylesheet" href="./styles/main.css?v=20260914-start-settings">
   </head>
   <body>
     <main class="app-shell">
@@ -33,10 +33,19 @@
           <button id="status-button" class="icon-button" type="button" aria-label="Show renderer status" title="Renderer status">S</button>
         </div>
         <div id="viewer-empty" class="viewer-empty">
-          <img src="./assets/borgvr.jpg" alt="" aria-hidden="true">
-          <div>
-            <strong>WebGPU renderer workbench</strong>
-            <span>Select a dataset to start interactive volume rendering.</span>
+          <div class="viewer-empty-content">
+            <img src="./assets/borgvr.jpg" alt="" aria-hidden="true">
+            <div>
+              <strong>WebGPU renderer workbench</strong>
+              <span>Select a dataset to start interactive volume rendering.</span>
+            </div>
+            <section class="start-settings-box" aria-label="Settings">
+              <div class="start-settings-title">Settings</div>
+              <label class="cache-toggle-row">
+                <span>Persistent bricks</span>
+                <input id="start-persistent-brick-cache" data-persistent-brick-cache type="checkbox">
+              </label>
+            </section>
           </div>
         </div>
         <div id="dataset-info" class="dataset-info" hidden></div>
@@ -99,7 +108,7 @@
             <summary>Browser Cache</summary>
             <label class="cache-toggle-row">
               <span>Persistent bricks</span>
-              <input id="persistent-brick-cache" type="checkbox">
+              <input id="persistent-brick-cache" data-persistent-brick-cache type="checkbox">
             </label>
             <div id="brick-cache-stats" class="cache-stats">Cache: 0 bricks · Server: 0 bricks</div>
             <div class="cache-action-row">
@@ -111,7 +120,7 @@
       </section>
     </main>
 
-    <script type="module" src="./src/app.js?v=20260914-ui-state"></script>
+    <script type="module" src="./src/app.js?v=20260914-start-settings"></script>
   </body>
 </html>
 
