@@ -1,8 +1,10 @@
-import { CoordinateCubeRenderer } from "./cube-renderer.js?v=20260914-cache-summary";
+import { CoordinateCubeRenderer } from "./cube-renderer.js?v=20260915-mobile-layout";
 import { decodeAppleLZ4, encodeLZ4Block } from "./lz4.js?v=20260911-urltf";
 import { transferFunctionRGBAData } from "./transfer-function.js?v=20260912-btf1";
 
 const catalogStatus = document.querySelector("#catalog-status");
+const datasetPanel = document.querySelector(".dataset-panel");
+const datasetPanelToggle = document.querySelector("#dataset-panel-toggle");
 const datasetList = document.querySelector("#dataset-list");
 const canvas = document.querySelector("#render-canvas");
 const viewerEmpty = document.querySelector("#viewer-empty");
@@ -37,6 +39,7 @@ const RENDER_MODE_URL_PARAMETER = "mode";
 const ISO_VALUE_URL_PARAMETER = "iso";
 const PERSISTENT_BRICK_CACHE_SETTING = "borgvr.persistentBrickCache";
 const RENDER_CONTROLS_COLLAPSED_SETTING = "borgvr.renderControlsCollapsed";
+const DATASET_PANEL_COLLAPSED_SETTING = "borgvr.datasetPanelCollapsed";
 const OPEN_UI_PANELS_SETTING = "borgvr.openUIPanels";
 const VALID_RENDER_MODES = new Set(["tf", "tf-lighting", "iso"]);
 const MAX_TRANSFER_FUNCTION_ENTRIES = 1 << 16;
@@ -52,6 +55,7 @@ let transferFunctionCatalogBuffers = new Map();
 let rendererStatus = "Initializing WebGPU...";
 let statusVisible = false;
 let controlsCollapsed = false;
+let datasetPanelCollapsed = false;
 let currentRenderMode = "tf";
 let lastTransferPaintPoint = null;
 let transferPointerMode = null;
@@ -68,6 +72,7 @@ async function main() {
   persistentBrickCacheEnabled = loadPersistentBrickCacheSetting();
   setPersistentBrickCacheControls(persistentBrickCacheEnabled);
   controlsCollapsed = loadRenderControlsCollapsedSetting();
+  datasetPanelCollapsed = loadDatasetPanelCollapsedSetting();
   restoreOpenUIPanels();
   renderer = new CoordinateCubeRenderer(canvas);
   window.borgvrProfileSnapshot = () => renderer?.profileSnapshot();
@@ -101,7 +106,9 @@ async function main() {
   });
 
   installRenderControls();
+  installDatasetPanelControls();
   setControlsCollapsed(controlsCollapsed, { persist: false });
+  setDatasetPanelCollapsed(datasetPanelCollapsed, { persist: false });
   window.addEventListener("resize", drawTransferFunctionEditor);
   if (profilingEnabled) {
     showStatusLine();
@@ -247,10 +254,40 @@ async function selectDataset(dataset, button, updateURL) {
   }
   try {
     await showDataset(dataset);
+    collapseDatasetPanelOnNarrowViewport();
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     setStatus(`Could not open ${dataset.name}: ${message}`);
     console.error("BorgVR dataset loading failed", error);
+  }
+}
+
+function installDatasetPanelControls() {
+  datasetPanelToggle?.addEventListener("click", () => {
+    setDatasetPanelCollapsed(!datasetPanelCollapsed);
+  });
+}
+
+function loadDatasetPanelCollapsedSetting() {
+  return localStorage.getItem(DATASET_PANEL_COLLAPSED_SETTING) === "1";
+}
+
+function setDatasetPanelCollapsed(collapsed, options = {}) {
+  datasetPanelCollapsed = collapsed;
+  if (options.persist !== false) {
+    localStorage.setItem(DATASET_PANEL_COLLAPSED_SETTING, datasetPanelCollapsed ? "1" : "0");
+  }
+  datasetPanel?.classList.toggle("collapsed", datasetPanelCollapsed);
+  if (datasetPanelToggle) {
+    datasetPanelToggle.textContent = datasetPanelCollapsed ? "☰" : "×";
+    datasetPanelToggle.setAttribute("aria-label", datasetPanelCollapsed ? "Show dataset list" : "Hide dataset list");
+    datasetPanelToggle.title = datasetPanelCollapsed ? "Show dataset list" : "Hide dataset list";
+  }
+}
+
+function collapseDatasetPanelOnNarrowViewport() {
+  if (window.matchMedia("(max-width: 860px)").matches) {
+    setDatasetPanelCollapsed(true);
   }
 }
 

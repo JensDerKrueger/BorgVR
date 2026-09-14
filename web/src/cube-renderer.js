@@ -644,14 +644,17 @@ export class CoordinateCubeRenderer {
   async initialize(statusCallback) {
     this.statusCallback = statusCallback;
     if (!navigator.gpu) {
-      if (!window.isSecureContext) {
-        throw new Error("WebGPU requires HTTPS or localhost. The page can load over LAN HTTP, but the browser may block rendering.");
+      if (isAppleMobileDevice()) {
+        throw new Error("WebGPU requires iOS/iPadOS 26 or newer on Apple mobile devices.");
       }
       throw new Error("WebGPU is not available in this browser.");
     }
 
     const adapter = await navigator.gpu.requestAdapter();
     if (!adapter) {
+      if (isAppleMobileDevice()) {
+        throw new Error("WebGPU requires iOS/iPadOS 26 or newer on Apple mobile devices.");
+      }
       throw new Error("No WebGPU adapter is available.");
     }
 
@@ -1609,6 +1612,13 @@ function preferredDeviceLimits(adapterLimits) {
     requiredLimits.maxStorageBufferBindingSize = maxStorageBufferBindingSize;
   }
   return requiredLimits;
+}
+
+function isAppleMobileDevice() {
+  const userAgent = navigator.userAgent || "";
+  const platform = navigator.platform || "";
+  return /iPhone|iPad|iPod/.test(userAgent) ||
+    (platform === "MacIntel" && navigator.maxTouchPoints > 1);
 }
 
 function limitSnapshot(limits) {
