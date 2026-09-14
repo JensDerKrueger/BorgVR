@@ -56,9 +56,17 @@ struct TransferFunctionEditorView: View {
     if runtimeAppModel.transferEditState.blue    { channels.append(2) }
     if runtimeAppModel.transferEditState.opacity { channels.append(3) }
 
-    // Apply smooth-step to the transfer function data
-    sharedAppModel.transferFunction
-      .smoothStep(start: translationTF.x, shift: translationTF.y, channels: channels)
+    // Apply smooth-step to the transfer function data. RGB channels may invert;
+    // opacity stays monotonic to avoid large brick-visibility churn while dragging.
+    let colorChannels = channels.filter { $0 != 3 }
+    if !colorChannels.isEmpty {
+      sharedAppModel.transferFunction
+        .smoothStep(start: translationTF.x, shift: translationTF.y, channels: colorChannels)
+    }
+    if channels.contains(3) {
+      sharedAppModel.transferFunction
+        .smoothStep(start: translationTF.x, shift: abs(translationTF.y), channels: [3])
+    }
 
     sharedAppModel.synchronize(kind: .full)
   }

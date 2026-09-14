@@ -341,11 +341,22 @@ class ImmersiveInteraction {
           ? clamp(-0.08 + delta.y * 2, -1, -0.01)
           : clamp(0.08 + delta.y * 2, 0.01, 1)
         let channels = editableChannels(transferEditState)
-        sharedAppModel.transferFunction.smoothStep(
-          start: center - signedShift * 0.5,
-          shift: signedShift,
-          channels: channels
-        )
+        let colorChannels = channels.filter { $0 != 3 }
+        if !colorChannels.isEmpty {
+          sharedAppModel.transferFunction.smoothStep(
+            start: center - signedShift * 0.5,
+            shift: signedShift,
+            channels: colorChannels
+          )
+        }
+        if channels.contains(3) {
+          let alphaShift = abs(signedShift)
+          sharedAppModel.transferFunction.smoothStep(
+            start: center - alphaShift * 0.5,
+            shift: alphaShift,
+            channels: [3]
+          )
+        }
         sharedAppModel.synchronize(kind: .full)
         return true
 
