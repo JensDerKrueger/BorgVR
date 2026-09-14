@@ -562,6 +562,8 @@ export class CoordinateCubeRenderer {
     this.clipMax = [1, 1, 1];
     this.totalBrickCount = 1;
     this.lastPointer = null;
+    this.activePointers = new Map();
+    this.pinchGesture = null;
     this.dragStartVector = null;
     this.dragStartOrientation = null;
     this.hasScene = false;
@@ -1197,7 +1199,16 @@ export class CoordinateCubeRenderer {
 
   installInteraction() {
     this.canvas.addEventListener("pointerdown", (event) => {
+      event.preventDefault();
       this.canvas.setPointerCapture(event.pointerId);
+      this.activePointers.set(event.pointerId, {
+        x: event.clientX,
+        y: event.clientY
+      });
+      if (this.activePointers.size >= 2) {
+        this.beginPinchGesture();
+        return;
+      }
       this.lastPointer = {
         x: event.clientX,
         y: event.clientY,
@@ -1210,9 +1221,22 @@ export class CoordinateCubeRenderer {
     });
 
     this.canvas.addEventListener("pointermove", (event) => {
+      if (this.activePointers.has(event.pointerId)) {
+        this.activePointers.set(event.pointerId, {
+          x: event.clientX,
+          y: event.clientY
+        });
+      }
+      if (this.pinchGesture && this.activePointers.size >= 2) {
+        event.preventDefault();
+        this.updatePinchGesture();
+        this.requestRender();
+        return;
+      }
       if (!this.lastPointer) {
         return;
       }
+      event.preventDefault();
       const dx = event.clientX - this.lastPointer.x;
       const dy = event.clientY - this.lastPointer.y;
       this.lastPointer.x = event.clientX;
@@ -1227,15 +1251,14 @@ export class CoordinateCubeRenderer {
       this.requestRender();
     });
 
-    this.canvas.addEventListener("pointerup", () => {
-      this.lastPointer = null;
-      this.dragStartVector = null;
-      this.dragStartOrientation = null;
+    this.canvas.addEventListener("pointerup", (event) => {
+      this.endPointerInteraction(event.pointerId);
     });
-    this.canvas.addEventListener("pointercancel", () => {
-      this.lastPointer = null;
-      this.dragStartVector = null;
-      this.dragStartOrientation = null;
+    this.canvas.addEventListener("pointercancel", (event) => {
+      this.endPointerInteraction(event.pointerId);
+    });
+    this.canvas.addEventListener("lostpointercapture", (event) => {
+      this.endPointerInteraction(event.pointerId);
     });
     this.canvas.addEventListener("contextmenu", (event) => event.preventDefault());
     this.canvas.addEventListener("wheel", (event) => {
@@ -1244,6 +1267,54 @@ export class CoordinateCubeRenderer {
       this.distance = Math.max(0.2, Math.min(500.0, this.distance));
       this.requestRender();
     }, { passive: false });
+  }
+
+  beginPinchGesture() {
+    const points = Array.from(this.activePointers.values()).slice(0, 2);
+    if (points.length < 2) {
+      return;
+    }
+    const center = midpoint(points[0], points[1]);
+    this.pinchGesture = {
+      distance: Math.max(1, pointDistance(points[0], points[1])),
+      centerX: center.x,
+      centerY: center.y,
+      viewDistance: this.distance
+    };
+    this.lastPointer = null;
+    this.dragStartVector = null;
+    this.dragStartOrientation = null;
+  }
+
+  updatePinchGesture() {
+    const points = Array.from(this.activePointers.values()).slice(0, 2);
+    if (points.length < 2 || !this.pinchGesture) {
+      return;
+    }
+    const center = midpoint(points[0], points[1]);
+    const nextDistance = Math.max(1, pointDistance(points[0], points[1]));
+    const scale = this.pinchGesture.distance / nextDistance;
+    const dx = center.x - this.pinchGesture.centerX;
+    const dy = center.y - this.pinchGesture.centerY;
+    this.distance = clamp(this.pinchGesture.viewDistance * scale, 0.2, 500.0);
+    this.panX += dx * 0.003;
+    this.panY -= dy * 0.003;
+    this.pinchGesture.distance = nextDistance;
+    this.pinchGesture.centerX = center.x;
+    this.pinchGesture.centerY = center.y;
+    this.pinchGesture.viewDistance = this.distance;
+  }
+
+  endPointerInteraction(pointerId) {
+    this.activePointers.delete(pointerId);
+    if (this.activePointers.size >= 2) {
+      this.beginPinchGesture();
+      return;
+    }
+    this.pinchGesture = null;
+    this.lastPointer = null;
+    this.dragStartVector = null;
+    this.dragStartOrientation = null;
   }
 
   installResizeObserver() {
@@ -1596,6 +1667,17 @@ function cross(a, b) {
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
+}
+
+function midpoint(a, b) {
+  return {
+    x: (a.x + b.x) * 0.5,
+    y: (a.y + b.y) * 0.5
+  };
+}
+
+function pointDistance(a, b) {
+  return Math.hypot(a.x - b.x, a.y - b.y);
 }
 
 function preferredDeviceLimits(adapterLimits) {
