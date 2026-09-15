@@ -492,17 +492,29 @@
 "Clear" = "Leeren";
 "Settings" = "Einstellungen";
 "Reset settings?" = "Einstellungen zurücksetzen?";
+"Reset %@?" = "%@ zurücksetzen?";
 "Reset \\(pendingResetSection.title)?" = "\\(pendingResetSection.title) zurücksetzen?";
 "The section will be reset to its default values." = "Der Abschnitt wird auf seine Standardwerte zurückgesetzt.";
+"The %@ section will be reset to its default values." = "Der Abschnitt %@ wird auf seine Standardwerte zurückgesetzt.";
 "The \\(pendingResetSection.title) section will be reset to its default values." = "Der Abschnitt \\(pendingResetSection.title) wird auf seine Standardwerte zurückgesetzt.";
+"Reset %@" = "%@ zurücksetzen";
 "Reset \\(section.title)" = "\\(section.title) zurücksetzen";
 "Remote datasets" = "Remote-Datensätze";
 "Background server" = "Hintergrundserver";
 "Data source" = "Datenquelle";
+"Rendering" = "Rendering";
+"Import" = "Import";
+"Servers" = "Server";
 "WebGPU web server" = "WebGPU-Webserver";
 "Ad-hoc server" = "Ad-hoc-Server";
 "External data sources" = "Externe Datenquellen";
+"Miscellaneous" = "Sonstiges";
 "Automatically load/save transfer functions" = "Transferfunktionen automatisch laden/speichern";
+"Oversampling mode" = "Oversampling-Modus";
+"Oversampling factor" = "Oversampling-Faktor";
+"Drop FPS" = "FPS zum Reduzieren";
+"Recovery FPS" = "FPS zur Erholung";
+"Log level" = "Log-Level";
 "Static" = "Statisch";
 "Dynamic" = "Dynamisch";
 "Background" = "Hintergrund";
@@ -622,6 +634,7 @@
 
 /* macOS settings page descriptions */
 "Configure how datasets are rendered, including transfer-function handling, background appearance, GPU memory limits, hash table size, and the amount of runtime logging." = "Legt fest, wie Datensätze gerendert werden: Transferfunktionsverhalten, Hintergrunddarstellung, GPU-Speichergrenzen, Hash-Table-Größe und Umfang der Laufzeit-Logs.";
+"Configure how datasets are rendered, including transfer-function handling, oversampling, background appearance, GPU memory limits, and hash table size. These settings can affect visual quality, memory use, and rendering speed." = "Legt fest, wie Datensätze gerendert werden: Transferfunktionsverhalten, Oversampling, Hintergrunddarstellung, GPU-Speichergrenzen und Hash-Table-Größe. Diese Einstellungen können Bildqualität, Speicherbedarf und Rendering-Geschwindigkeit beeinflussen.";
 "Choose the local folder BorgVR uses for datasets and transfer functions. The app reads local datasets from this directory, imports new datasets into it, and the background server publishes the same content when enabled." = "Wählt den lokalen Ordner, den BorgVR für Datensätze und Transferfunktionen verwendet. Die App liest lokale Datensätze aus diesem Verzeichnis, importiert neue Datensätze dorthin und der Hintergrundserver veröffentlicht bei Bedarf denselben Inhalt.";
 "Choose how newly imported volumes are converted into BorgVR datasets. Brick size, overlap, compression, and border handling influence dataset size, loading performance, and sampling quality." = "Legt fest, wie neu importierte Volumen in BorgVR-Datensätze umgewandelt werden. Brick-Größe, Überlappung, Kompression und Randbehandlung beeinflussen Dateigröße, Ladeleistung und Sampling-Qualität.";
 "Control level-of-detail selection and brick request behavior. These settings balance visual quality, paging speed, memory pressure, and responsiveness while navigating large datasets." = "Steuert die Level-of-Detail-Auswahl und das Anfordern von Bricks. Diese Einstellungen balancieren Bildqualität, Paging-Geschwindigkeit, Speicherbedarf und Reaktionsfähigkeit bei großen Datensätzen.";
@@ -629,3 +642,4 @@
 "Enable the local dataset server used by other BorgVR clients and the WebGPU preview. Here you configure ports, password, HTTPS certificate, and transfer batch size for the shared local data source." = "Aktiviert den lokalen Datensatz-Server für andere BorgVR-Clients und die WebGPU-Vorschau. Hier werden Ports, Passwort, HTTPS-Zertifikat und Transfer-Batch-Größe für die gemeinsame lokale Datenquelle eingestellt.";
 "Configure the temporary server ports used for ad-hoc sharing sessions such as SharePlay. These settings are separate from the persistent background dataset server." = "Konfiguriert die temporären Server-Ports für Ad-hoc-Freigaben wie SharePlay. Diese Einstellungen sind unabhängig vom permanenten Hintergrund-Datensatz-Server.";
 "Manage remote BorgVR dataset servers that this app can query. Added servers appear in the dataset browser; enter the address, port, and password provided by the server operator." = "Verwaltet entfernte BorgVR-Datensatz-Server, die diese App abfragen kann. Hinzugefügte Server erscheinen im Datensatzbrowser; Adresse, Port und Passwort werden vom Server-Betreiber bereitgestellt.";
+"Adjust general application behavior that is not tied to a specific renderer, importer, or server workflow." = "Stellt allgemeines App-Verhalten ein, das nicht direkt zu Renderer, Import oder Server gehört.";

@@ -310,11 +310,13 @@ final class AppSettings: ObservableObject {
     atlasSizeMB = min(max(128, atlasSizeMB), Self.maximumAtlasSizeMB)
   }
 
-  func resetRenderingDefaults() {
+  func resetRenderingDefaults(resetLogLevel: Bool = true) {
     autoloadTF = Self.boolDefault("autoloadTF")
     autoloadTransform = Self.boolDefault("autoloadTransform")
     oversampling = Self.doubleDefault("oversampling")
     oversamplingMode = Self.stringDefault("oversamplingMode")
+    dropFPS = Self.intDefault("dropFPS")
+    recoveryFPS = Self.intDefault("recoveryFPS")
     atlasSizeMB = Self.intDefault("atlasSizeMB")
     minHashTableSize = Self.intDefault("minHashTableSize")
     renderBackgroundMode = Self.stringDefault("renderBackgroundMode")
@@ -326,6 +328,11 @@ final class AppSettings: ObservableObject {
     renderBackgroundSecondaryGreen = Self.doubleDefault("renderBackgroundSecondaryGreen")
     renderBackgroundSecondaryBlue = Self.doubleDefault("renderBackgroundSecondaryBlue")
     renderBackgroundSecondaryAlpha = Self.doubleDefault("renderBackgroundSecondaryAlpha")
+    guard resetLogLevel else { return }
+    resetMiscDefaults()
+  }
+
+  func resetMiscDefaults() {
     logLevel = Self.stringDefault("logLevel")
   }
 
@@ -369,12 +376,14 @@ final class AppSettings: ObservableObject {
     set { try? WebServerCertificatePasswordStore.save(newValue) }
   }
 
-  func resetLODDefaults() {
+  func resetLODDefaults(resetOversamplingThresholds: Bool = true) {
     screenSpaceError = Self.doubleDefault("screenSpaceError")
     initialBricks = Self.intDefault("initialBricks")
     maxProbingAttempts = Self.intDefault("maxProbingAttempts")
-    dropFPS = Self.intDefault("dropFPS")
-    recoveryFPS = Self.intDefault("recoveryFPS")
+    if resetOversamplingThresholds {
+      dropFPS = Self.intDefault("dropFPS")
+      recoveryFPS = Self.intDefault("recoveryFPS")
+    }
     requestLowResLOD = Self.boolDefault("requestLowResLOD")
     stopOnMiss = Self.boolDefault("stopOnMiss")
   }

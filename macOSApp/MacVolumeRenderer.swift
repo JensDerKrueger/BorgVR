@@ -34,6 +34,7 @@ final class MacVolumeRenderer: NSObject, MTKViewDelegate {
   private var loadedDatasetKey = ""
   private var pipelineDrawableWidth: Float = 0
   private var activeOversampling: Float = 1
+  private var configuredOversamplingMode = ""
   private let timer = CPUFrameTimer()
   private let cameraDistance: Float = 2.4
   private let fieldOfViewY: Float = .pi / 4
@@ -286,6 +287,7 @@ final class MacVolumeRenderer: NSObject, MTKViewDelegate {
   }
 
   private func updatePerformanceGraph() {
+    updatePerformanceTrackingSettings()
     appModel.performanceModel.history.recoveryThreshold = Double(appSettings.recoveryFPS)
     appModel.performanceModel.history.dropThreshold = Double(appSettings.dropFPS)
     appModel.performanceModel.history.add(
@@ -387,6 +389,7 @@ final class MacVolumeRenderer: NSObject, MTKViewDelegate {
     }
 
     activeOversampling = Float(appSettings.oversampling)
+    configurePerformanceTracking()
     let atlasSizeMB = appSettings.atlasSizeMB
     volumeAtlas = try VolumeAtlas(
       device: device,
@@ -489,6 +492,7 @@ final class MacVolumeRenderer: NSObject, MTKViewDelegate {
     guard let dataset,
           let uniformBufferVertex,
           let uniformBufferFragment else { return }
+    updateActiveOversamplingForCurrentMode()
     uniformBufferVertex.advance()
     uniformBufferFragment.advance()
 
@@ -537,6 +541,60 @@ final class MacVolumeRenderer: NSObject, MTKViewDelegate {
 
     uniformBufferVertex.current = vertexUniforms
     uniformBufferFragment.current = fragmentUniforms
+  }
+
+  private func updateActiveOversamplingForCurrentMode() {
+    let baseOversampling = Float(appSettings.oversampling)
+    if appSettings.oversamplingMode == OversamplingMode.dynamicMode.rawValue {
+      activeOversampling = min(activeOversampling, baseOversampling)
+    } else {
+      activeOversampling = baseOversampling
+    }
+  }
+
+  private func updatePerformanceTrackingSettings() {
+    timer.dropThreshold = Double(appSettings.dropFPS)
+    timer.recoveryThreshold = Double(appSettings.recoveryFPS)
+    timer.minimumDropDuration = 0.5
+    if configuredOversamplingMode != appSettings.oversamplingMode {
+      configurePerformanceTracking()
+    }
+  }
+
+  private func configurePerformanceTracking() {
+    configuredOversamplingMode = appSettings.oversamplingMode
+    timer.dropThreshold = Double(appSettings.dropFPS)
+    timer.recoveryThreshold = Double(appSettings.recoveryFPS)
+    timer.minimumDropDuration = 0.5
+
+    guard appSettings.oversamplingMode == OversamplingMode.dynamicMode.rawValue else {
+      timer.onPerformanceTooSlow = nil
+      timer.onPerformanceRecovered = nil
+      return
+    }
+
+    timer.onPerformanceTooSlow = { [weak self] _, _ in
+      MainActor.assumeIsolated {
+        guard let self else { return }
+        if self.activeOversampling < 0.5 {
+          return
+        }
+        self.activeOversampling -= 0.1
+      }
+    }
+
+    timer.onPerformanceRecovered = { [weak self] _, _ in
+      MainActor.assumeIsolated {
+        guard let self else { return false }
+        let baseOversampling = Float(self.appSettings.oversampling)
+        if self.activeOversampling >= baseOversampling {
+          self.activeOversampling = baseOversampling
+          return false
+        }
+        self.activeOversampling += 0.1
+        return true
+      }
+    }
   }
 
   private func updateEmptiness() {
