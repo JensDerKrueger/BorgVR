@@ -175,32 +175,6 @@ fn level0VoxelSize() -> vec3<f32> {
   ), vec3<f32>(1.0));
 }
 
-fn rayStepTForLOD(ray: vec3<f32>, lod: u32) -> f32 {
-  let rayVoxelLength = length(ray * levelVoxelSize(lod));
-  return 1.0 / max(rayVoxelLength * 2.0, 0.000001);
-}
-
-fn firstGlobalSampleT(segmentStartT: f32, rayStepT: f32) -> f32 {
-  var sampleT = (ceil(segmentStartT / rayStepT - 0.5) + 0.5) * rayStepT;
-  if (sampleT < segmentStartT) {
-    sampleT = sampleT + rayStepT;
-  }
-  return sampleT;
-}
-
-fn firstSegmentSampleT(segmentStartT: f32, segmentEndT: f32, rayStepT: f32) -> f32 {
-  var sampleT = firstGlobalSampleT(segmentStartT, rayStepT);
-  if (sampleT >= segmentEndT) {
-    sampleT = 0.5 * (segmentStartT + segmentEndT);
-  }
-  return sampleT;
-}
-
-fn opacityCorrectionFactor(ray: vec3<f32>, rayStepT: f32, lod: u32) -> f32 {
-  let sampleStepVoxelLength = length(ray * rayStepT * levelVoxelSize(lod));
-  return max(f32(1u << lod) * 2.0 * sampleStepVoxelLength, 0.000001);
-}
-
 fn computeLOD(distance: f32) -> u32 {
   let levelCount = availableLevelCount();
   let lodFactor = max(uniforms.lodInfo.y, 0.0);
@@ -475,20 +449,19 @@ fn fragmentMain(input: VertexOut) -> @location(0) vec4<f32> {
     let nextRayT = min(max(currentRayT + segmentT, currentRayT + 0.000001), 1.0);
 
     if (!brick.empty && brick.info >= BI_FLAG_COUNT) {
-      let rayStepT = rayStepTForLOD(ray, brick.lod);
-      let firstSampleT = firstSegmentSampleT(currentRayT, nextRayT, rayStepT);
-      let segmentSampleCount = min(u32(ceil(max(nextRayT - firstSampleT, 0.0) / rayStepT)), MAX_RAY_SAMPLE_COUNT);
-      let sampleStep = ray * rayStepT;
-      let ocFactor = opacityCorrectionFactor(ray, rayStepT, brick.lod);
-      var sampleRayT = firstSampleT;
+      let segmentVoxelLength = length((ray * (nextRayT - currentRayT)) * levelVoxelSize(brick.lod));
+      let segmentSampleCount = min(max(u32(ceil(segmentVoxelLength * 2.0)), 1u), MAX_RAY_SAMPLE_COUNT);
+      let sampleStep = ray * ((nextRayT - currentRayT) / f32(segmentSampleCount));
+      let sampleStepVoxelLength = segmentVoxelLength / f32(segmentSampleCount);
+      let lodScale = f32(1u << brick.lod);
+      let ocFactor = max(lodScale * 2.0 * sampleStepVoxelLength, 0.000001);
 
       for (var sampleIndex = 0u; sampleIndex < MAX_RAY_SAMPLE_COUNT; sampleIndex = sampleIndex + 1u) {
         if (sampleIndex >= segmentSampleCount) {
           break;
         }
-        if (sampleRayT >= nextRayT) {
-          break;
-        }
+        let localT = (f32(sampleIndex) + 0.5) / f32(segmentSampleCount);
+        let sampleRayT = mix(currentRayT, nextRayT, localT);
         let samplePoint = entryPoint + ray * sampleRayT;
         let scalar = sampleAtlasBrick(brick.index, brick.coords, brick.lod, samplePoint);
 
@@ -498,7 +471,6 @@ fn fragmentMain(input: VertexOut) -> @location(0) vec4<f32> {
             let normal = computeNormalForBrick(brick.index, brick.coords, brick.lod, refinedPoint);
             return vec4<f32>(lighting(refinedPoint, normal, vec3<f32>(0.5, 0.5, 0.5)), 1.0);
           }
-          sampleRayT = sampleRayT + rayStepT;
           continue;
         }
 
@@ -514,7 +486,6 @@ fn fragmentMain(input: VertexOut) -> @location(0) vec4<f32> {
         if (accumulatedAlpha > 0.99) {
           break;
         }
-        sampleRayT = sampleRayT + rayStepT;
       }
     }
 
