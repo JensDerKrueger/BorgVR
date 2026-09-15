@@ -84,15 +84,6 @@ inline float effectiveOversampling(float baseOversampling,
 #endif
 }
 
-inline float rayStepTForLOD(float3 ray,
-                            uint lod,
-                            device const LevelData* levelData,
-                            float oversampling) {
-  float3 lodVoxelSize = levelData[lod].fractionalBrickLayout * float(BRICK_INNER_SIZE);
-  float rayVoxelLength = length(ray * lodVoxelSize);
-  return 1.0 / max(rayVoxelLength * 2.0 * oversampling, 1e-6);
-}
-
 inline float firstGlobalSampleT(float segmentStartT, float rayStepT) {
   float sampleT = (ceil(segmentStartT / rayStepT - 0.5) + 0.5) * rayStepT;
   if (sampleT < segmentStartT) {
@@ -101,13 +92,21 @@ inline float firstGlobalSampleT(float segmentStartT, float rayStepT) {
   return sampleT;
 }
 
-inline float opacityCorrectionFactor(float3 ray,
-                                     float rayStepT,
-                                     uint lod,
-                                     device const LevelData* levelData) {
-  float3 lodVoxelSize = levelData[lod].fractionalBrickLayout * float(BRICK_INNER_SIZE);
-  float sampleStepVoxelLength = length(ray * rayStepT * lodVoxelSize);
-  return max(float(1u << lod) * 2.0 * sampleStepVoxelLength, 1e-6);
+inline float rayStepTForPoolStep(float3 ray,
+                                 float3 normToPoolScale,
+                                 float poolStepSize) {
+  float poolRayLength = length(ray * normToPoolScale);
+  return poolStepSize / max(poolRayLength, 1e-6);
+}
+
+inline float opacityCorrectionFactorForPoolStep(float3 ray,
+                                                float rayStepT,
+                                                float3 normToPoolScale,
+                                                float poolStepSize,
+                                                uint lod,
+                                                float oversampling) {
+  float actualStepScale = length(ray * rayStepT * normToPoolScale) / max(poolStepSize, 1e-6);
+  return max(float(1u << lod) * actualStepScale / oversampling, 1e-6);
 }
 
 // MARK: - Vertex Shader
@@ -190,6 +189,8 @@ fragment half4 VOLUME_FRAGMENT_SHADER_TF_NAME(
   float4 accColor   = float4(0);
   float t           = 0;
   uint  brickCount  = 0;
+  float3 voxelSpaceDirection = transformToPoolSpace(direction, oversampling);
+  float stepSize = length(voxelSpaceDirection);
 
   // March until exit or full opacity
   while (t < 0.9999) {
@@ -209,11 +210,18 @@ fragment half4 VOLUME_FRAGMENT_SHADER_TF_NAME(
 
     if (!brickResult.empty) {
       float nextT = length(entryPoint - brickResult.normExitCoords) / rayLength;
-      float rayStepT = rayStepTForLOD(direction, brickResult.LOD, levelData, oversampling);
+      float rayStepT = rayStepTForPoolStep(direction,
+                                           brickResult.poolBrickInfo.normToPoolScale,
+                                           stepSize);
       float sampleRayT = firstGlobalSampleT(t, rayStepT);
       int iSteps = int(ceil(max(nextT - sampleRayT, 0.0) / rayStepT));
       iSteps = min(int(2*BRICK_SIZE*oversampling)+2, iSteps);
-      float ocFactor = opacityCorrectionFactor(direction, rayStepT, brickResult.LOD, levelData);
+      float ocFactor = opacityCorrectionFactorForPoolStep(direction,
+                                                          rayStepT,
+                                                          brickResult.poolBrickInfo.normToPoolScale,
+                                                          stepSize,
+                                                          brickResult.LOD,
+                                                          oversampling);
 
       // Sample along the ray segment in this brick
       for (int i = 0; i < iSteps; ++i) {
@@ -295,6 +303,8 @@ fragment half4 VOLUME_FRAGMENT_SHADER_TF_LIGHTING_NAME(
   float4 accColor   = float4(0);
   float t           = 0;
   uint  brickCount  = 0;
+  float3 voxelSpaceDirection = transformToPoolSpace(direction, oversampling);
+  float stepSize = length(voxelSpaceDirection);
 
   // March until exit or full opacity
   while (t < 0.9999) {
@@ -314,11 +324,18 @@ fragment half4 VOLUME_FRAGMENT_SHADER_TF_LIGHTING_NAME(
 
     if (!brickResult.empty) {
       float nextT = length(entryPoint - brickResult.normExitCoords) / rayLength;
-      float rayStepT = rayStepTForLOD(direction, brickResult.LOD, levelData, oversampling);
+      float rayStepT = rayStepTForPoolStep(direction,
+                                           brickResult.poolBrickInfo.normToPoolScale,
+                                           stepSize);
       float sampleRayT = firstGlobalSampleT(t, rayStepT);
       int iSteps = int(ceil(max(nextT - sampleRayT, 0.0) / rayStepT));
       iSteps = min(int(2*BRICK_SIZE*oversampling)+2, iSteps);
-      float ocFactor = opacityCorrectionFactor(direction, rayStepT, brickResult.LOD, levelData);
+      float ocFactor = opacityCorrectionFactorForPoolStep(direction,
+                                                          rayStepT,
+                                                          brickResult.poolBrickInfo.normToPoolScale,
+                                                          stepSize,
+                                                          brickResult.LOD,
+                                                          oversampling);
 
       // Sample along the ray segment in this brick
       for (int i = 0; i < iSteps; ++i) {
@@ -402,6 +419,8 @@ fragment half4 VOLUME_FRAGMENT_SHADER_ISO_NAME(
   float3 currentPos = entryPoint;
   float t           = 0;
   uint  brickCount  = 0;
+  float3 voxelSpaceDirection = transformToPoolSpace(direction, oversampling);
+  float stepSize = length(voxelSpaceDirection);
 
   while (t < 0.9999) {
     float currentDepth = mix(entryDepth, exitDepth, t);
@@ -419,7 +438,9 @@ fragment half4 VOLUME_FRAGMENT_SHADER_ISO_NAME(
     
     if (!brickResult.empty) {
       float nextT = length(entryPoint - brickResult.normExitCoords) / rayLength;
-      float rayStepT = rayStepTForLOD(direction, brickResult.LOD, levelData, oversampling);
+      float rayStepT = rayStepTForPoolStep(direction,
+                                           brickResult.poolBrickInfo.normToPoolScale,
+                                           stepSize);
       float sampleRayT = firstGlobalSampleT(t, rayStepT);
       int iSteps = int(ceil(max(nextT - sampleRayT, 0.0) / rayStepT));
       iSteps = min(int(2*BRICK_SIZE*oversampling)+2, iSteps);
