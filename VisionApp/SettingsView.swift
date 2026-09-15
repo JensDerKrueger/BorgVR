@@ -61,6 +61,7 @@ struct SettingsView: View {
 
   // List of servers for UI editing; persisted via StoredAppModel.servers
   @State private var servers: [ServerConfig] = []
+  @State private var didLoadServersForEditing = false
   @State private var isValidatingServers = false
 
   var body: some View {
@@ -163,16 +164,7 @@ struct SettingsView: View {
             }
           }
           .onAppear {
-            // Initialize UI list from StoredAppModel.servers only once
-            if servers.isEmpty {
-              if storedAppModel.servers.isEmpty {
-                servers = [ServerConfig(address: "", port: "")]
-              } else {
-                servers = storedAppModel.servers.map {
-                  ServerConfig(address: $0.address, port: String($0.port), password: $0.password)
-                }
-              }
-            }
+            loadServersForEditingIfNeeded()
             Task {
               await validateAllServers()
             }
@@ -582,7 +574,6 @@ struct SettingsView: View {
     }
     .padding()
     .onDisappear {
-      // Persist the edited server list back into StoredAppModel.servers
       syncServersToStoredModel()
 
       validateTimeout()
@@ -606,11 +597,26 @@ struct SettingsView: View {
 
   // MARK: - Remote server helpers
 
+  private func loadServersForEditingIfNeeded() {
+    guard !didLoadServersForEditing else { return }
+    didLoadServersForEditing = true
+
+    if storedAppModel.servers.isEmpty {
+      servers = [ServerConfig(address: "", port: "")]
+    } else {
+      servers = storedAppModel.servers.map {
+        ServerConfig(address: $0.address, port: String($0.port), password: $0.password)
+      }
+    }
+  }
+
   private func addServer() {
+    loadServersForEditingIfNeeded()
     servers.append(ServerConfig(address: "", port: ""))
   }
 
   private func deleteServer(id: UUID) {
+    loadServersForEditingIfNeeded()
     if let index = servers.firstIndex(where: { $0.id == id }) {
       servers.remove(at: index)
     }
@@ -618,9 +624,12 @@ struct SettingsView: View {
 
   /// Convert UI `ServerConfig` list into `[StoredServer]` and store it.
   private func syncServersToStoredModel() {
+    guard didLoadServersForEditing else { return }
     let converted: [StoredServer] = servers.compactMap { cfg in
+      let trimmedAddress = cfg.address.trimmingCharacters(in: .whitespacesAndNewlines)
+      guard !trimmedAddress.isEmpty else { return nil }
       guard let portInt = Int(cfg.port) else { return nil }
-      return StoredServer(address: cfg.address, port: portInt, password: cfg.password)
+      return StoredServer(address: trimmedAddress, port: portInt, password: cfg.password)
     }
     storedAppModel.servers = converted
   }

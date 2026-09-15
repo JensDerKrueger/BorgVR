@@ -427,6 +427,7 @@
 "perf_legend_below_drop" = "Unterhalb Drop-Grenze";
 "perf_legend_between" = "Dazwischen";
 "perf_legend_above_recovery" = "Über Erholungsschwelle";
+"perf_legend_reduced_sampling" = "Reduziertes Sampling";
 "perf_toggle_last" = "Aktuell";
 "perf_toggle_avg" = "Mittel";
 "perf_toggle_smoothed" = "Geglättet";

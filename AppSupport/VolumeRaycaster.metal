@@ -19,12 +19,24 @@ using namespace metal;
 #define VOLUME_SHADER_USES_AMPLIFICATION 0
 #endif
 
+#ifndef VOLUME_SHADER_USES_RATE_MAP
+#define VOLUME_SHADER_USES_RATE_MAP 0
+#endif
+
 #if VOLUME_SHADER_USES_AMPLIFICATION
 #define VOLUME_SHADER_AMP_PARAMETER , ushort amp_id [[amplification_id]]
 #define VOLUME_SHADER_UNIFORM_INDEX amp_id
 #else
 #define VOLUME_SHADER_AMP_PARAMETER
 #define VOLUME_SHADER_UNIFORM_INDEX 0
+#endif
+
+#if VOLUME_SHADER_USES_RATE_MAP
+#define VOLUME_SHADER_RATE_MAP_PARAMETER , constant rasterization_rate_map_data& rateMapData [[buffer(FragmentBufferIndexRateMap)]]
+#define VOLUME_SHADER_RATE_MAP_ARGUMENT , rateMapData
+#else
+#define VOLUME_SHADER_RATE_MAP_PARAMETER
+#define VOLUME_SHADER_RATE_MAP_ARGUMENT
 #endif
 
 #ifndef VOLUME_VERTEX_SHADER_NAME
@@ -49,6 +61,28 @@ typedef struct {
   /// Exit point of the ray in texture coordinate space (0–1 range).
   simd_float3 exitPoint;
 } VertexToFragment;
+
+inline float effectiveOversampling(float baseOversampling,
+                                   float4 fragmentPosition,
+                                   uint layerIndex
+#if VOLUME_SHADER_USES_RATE_MAP
+                                   , constant rasterization_rate_map_data& rateMapData
+#endif
+                                   ) {
+#if VOLUME_SHADER_USES_RATE_MAP
+  rasterization_rate_map_decoder rateMap(rateMapData);
+  float2 physicalPosition = fragmentPosition.xy;
+  float2 screenPosition = rateMap.map_physical_to_screen_coordinates(physicalPosition, layerIndex);
+  float2 screenPositionX = rateMap.map_physical_to_screen_coordinates(physicalPosition + float2(1.0, 0.0), layerIndex);
+  float2 screenPositionY = rateMap.map_physical_to_screen_coordinates(physicalPosition + float2(0.0, 1.0), layerIndex);
+  float screenPixelsPerPhysicalPixel = max(length(screenPositionX - screenPosition),
+                                           length(screenPositionY - screenPosition));
+  float rateScale = sqrt(1.0 / max(screenPixelsPerPhysicalPixel, 1.0));
+  return max(baseOversampling * clamp(rateScale, 0.5, 1.0), 0.25);
+#else
+  return baseOversampling;
+#endif
+}
 
 // MARK: - Vertex Shader
 
@@ -102,8 +136,13 @@ fragment half4 VOLUME_FRAGMENT_SHADER_TF_NAME(
                                 device const LevelData* levelData                [[buffer(FragmentBufferIndexLevelTable)]],
                                 device const uint* brickMeta                     [[buffer(FragmentBufferIndexBrickMeta)]],
                                 device atomic_uint* hashBuffer                   [[buffer(FragmentBufferIndexHashTable)]]
+                                VOLUME_SHADER_RATE_MAP_PARAMETER
                                 ) {
   FragmentUniforms uniforms = uniformsArray.uniforms[VOLUME_SHADER_UNIFORM_INDEX];
+  float oversampling = effectiveOversampling(uniforms.oversampling,
+                                             in.position,
+                                             uint(VOLUME_SHADER_UNIFORM_INDEX)
+                                             VOLUME_SHADER_RATE_MAP_ARGUMENT);
   constexpr sampler s(address::clamp_to_border, filter::linear);
 
   // Compute ray entry and exit in texture space
@@ -120,7 +159,7 @@ fragment half4 VOLUME_FRAGMENT_SHADER_TF_NAME(
   float entryDepth = length(uniforms.cameraPosInTextureSpaceVoxelScaled - entryPoint);
   float exitDepth  = length(uniforms.cameraPosInTextureSpaceVoxelScaled - exitPoint);
 
-  float3 voxelSpaceDirection = transformToPoolSpace(direction, uniforms.oversampling);
+  float3 voxelSpaceDirection = transformToPoolSpace(direction, oversampling);
   float  stepSize            = length(voxelSpaceDirection);
 
   // Initialize ray marching
@@ -150,9 +189,9 @@ fragment half4 VOLUME_FRAGMENT_SHADER_TF_NAME(
       float segmentLength = length(brickResult.poolBrickInfo.poolExitCoords
                                    - brickResult.poolBrickInfo.poolEntryCoords);
       int iSteps = int(ceil(segmentLength / stepSize));
-      iSteps = min(int(2*BRICK_SIZE*uniforms.oversampling),iSteps);
+      iSteps = min(int(2*BRICK_SIZE*oversampling),iSteps);
       float actualStepScale = segmentLength / max(float(iSteps) * stepSize, 1e-6);
-      float ocFactor = float(1 << iLOD) * actualStepScale / uniforms.oversampling;
+      float ocFactor = float(1 << iLOD) * actualStepScale / oversampling;
 
       // Sample along the ray segment in this brick
       for (int i = 0; i < iSteps; ++i) {
@@ -207,8 +246,13 @@ fragment half4 VOLUME_FRAGMENT_SHADER_TF_LIGHTING_NAME(
                                 device const LevelData* levelData                [[buffer(FragmentBufferIndexLevelTable)]],
                                 device const uint* brickMeta                   [[buffer(FragmentBufferIndexBrickMeta)]],
                                 device atomic_uint* hashBuffer                   [[buffer(FragmentBufferIndexHashTable)]]
+                                VOLUME_SHADER_RATE_MAP_PARAMETER
                                 ) {
   FragmentUniforms uniforms = uniformsArray.uniforms[VOLUME_SHADER_UNIFORM_INDEX];
+  float oversampling = effectiveOversampling(uniforms.oversampling,
+                                             in.position,
+                                             uint(VOLUME_SHADER_UNIFORM_INDEX)
+                                             VOLUME_SHADER_RATE_MAP_ARGUMENT);
   constexpr sampler s(address::clamp_to_border, filter::linear);
 
   // Compute ray entry and exit in texture space
@@ -225,7 +269,7 @@ fragment half4 VOLUME_FRAGMENT_SHADER_TF_LIGHTING_NAME(
   float entryDepth = length(uniforms.cameraPosInTextureSpaceVoxelScaled - entryPoint);
   float exitDepth  = length(uniforms.cameraPosInTextureSpaceVoxelScaled - exitPoint);
 
-  float3 voxelSpaceDirection = transformToPoolSpace(direction, uniforms.oversampling);
+  float3 voxelSpaceDirection = transformToPoolSpace(direction, oversampling);
   float  stepSize            = length(voxelSpaceDirection);
 
   // Initialize ray marching
@@ -255,9 +299,9 @@ fragment half4 VOLUME_FRAGMENT_SHADER_TF_LIGHTING_NAME(
       float segmentLength = length(brickResult.poolBrickInfo.poolExitCoords
                                    - brickResult.poolBrickInfo.poolEntryCoords);
       int iSteps = int(ceil(segmentLength / stepSize));
-      iSteps = min(int(2*BRICK_SIZE*uniforms.oversampling),iSteps);
+      iSteps = min(int(2*BRICK_SIZE*oversampling),iSteps);
       float actualStepScale = segmentLength / max(float(iSteps) * stepSize, 1e-6);
-      float ocFactor = float(1 << iLOD) * actualStepScale / uniforms.oversampling;
+      float ocFactor = float(1 << iLOD) * actualStepScale / oversampling;
 
       // Sample along the ray segment in this brick
       for (int i = 0; i < iSteps; ++i) {
@@ -324,8 +368,13 @@ fragment half4 VOLUME_FRAGMENT_SHADER_ISO_NAME(
                                  device const LevelData* levelData                 [[buffer(FragmentBufferIndexLevelTable)]],
                                  device const uint* brickMeta                    [[buffer(FragmentBufferIndexBrickMeta)]],
                                  device atomic_uint* hashBuffer                    [[buffer(FragmentBufferIndexHashTable)]]
+                                 VOLUME_SHADER_RATE_MAP_PARAMETER
                                  ) {
   FragmentUniforms uniforms = uniformsArray.uniforms[VOLUME_SHADER_UNIFORM_INDEX];
+  float oversampling = effectiveOversampling(uniforms.oversampling,
+                                             in.position,
+                                             uint(VOLUME_SHADER_UNIFORM_INDEX)
+                                             VOLUME_SHADER_RATE_MAP_ARGUMENT);
   constexpr sampler s(address::clamp_to_border, filter::linear);
 
   float3 exitPoint  = in.exitPoint;
@@ -339,7 +388,7 @@ fragment half4 VOLUME_FRAGMENT_SHADER_ISO_NAME(
   float entryDepth = length(uniforms.cameraPosInTextureSpaceVoxelScaled - entryPoint);
   float exitDepth  = length(uniforms.cameraPosInTextureSpaceVoxelScaled - exitPoint);
 
-  float3 voxelSpaceDirection = transformToPoolSpace(direction, uniforms.oversampling);
+  float3 voxelSpaceDirection = transformToPoolSpace(direction, oversampling);
   float  stepSize            = length(voxelSpaceDirection);
 
   float3 currentPos = entryPoint;
@@ -365,7 +414,7 @@ fragment half4 VOLUME_FRAGMENT_SHADER_ISO_NAME(
                             length(brickResult.poolBrickInfo.poolExitCoords
                                    - brickResult.poolBrickInfo.poolEntryCoords) / stepSize
                             ));
-      iSteps = min(int(2*BRICK_SIZE*uniforms.oversampling),iSteps);
+      iSteps = min(int(2*BRICK_SIZE*oversampling),iSteps);
       for (int i = 0; i < iSteps; ++i) {
         float sampleT = i / float(iSteps);
         float3 sampleNormCoords = mix(

@@ -92,7 +92,7 @@ final class StoredAppModel: ObservableObject {
     "oversampling": 1.0,
     "oversamplingMode": OversamplingMode.dynamicMode.rawValue,
     "dropFPS": 20,
-    "recoveryFPS": 50,
+    "recoveryFPS": 100,
     "enableDatasetServer": false,
     "autoStartServer": false,
     "serverPort": 12345,
@@ -126,9 +126,13 @@ final class StoredAppModel: ObservableObject {
   /// The address and port of the remote servers
   ///
   @AppStorage("serversData") private var serversData: Data = Data()
+  private var isLoadingServers = false
 
   @Published var servers: [StoredServer] = [] {
-    didSet { saveServers() }
+    didSet {
+      guard !isLoadingServers else { return }
+      saveServers()
+    }
   }
 
   /// Network timeout duration in seconds.
@@ -321,6 +325,9 @@ final class StoredAppModel: ObservableObject {
   }
 
   private func loadServers() {
+    isLoadingServers = true
+    defer { isLoadingServers = false }
+
     if let decoded = try? JSONDecoder().decode([StoredServer].self, from: serversData),
        !decoded.isEmpty {
       servers = decoded

@@ -18,12 +18,16 @@ struct PerformanceHistory {
   var averageFPS: RingBuffer<Double>
   /// A ring buffer to store the smoothed FPS values.
   var smoothedFPS: RingBuffer<Double>
+  /// A ring buffer to store the active oversampling value used for each frame.
+  var activeSamplingRates: RingBuffer<Double>
   /// Dictionary storing keyframes (frame index mapped to a color).
   var keyframes: [Int: Color] = [:]
   /// The threshold below which FPS is considered to be dropped.
   var dropThreshold: Double? = nil
   /// The threshold above which FPS is considered recovered.
   var recoveryThreshold: Double? = nil
+  /// The configured sampling rate before dynamic performance reductions are applied.
+  var baseSamplingRate: Double = 1
 
   /**
    Initializes an empty PerformanceHistory with buffers of capacity maxFrames.
@@ -32,6 +36,7 @@ struct PerformanceHistory {
     lastFPS = .init(capacity: maxFrames+1)
     averageFPS = .init(capacity: maxFrames+1)
     smoothedFPS = .init(capacity: maxFrames+1)
+    activeSamplingRates = .init(capacity: maxFrames+1)
   }
 
   /**
@@ -45,14 +50,26 @@ struct PerformanceHistory {
    - avg: The average FPS value.
    - smoothed: The smoothed FPS value.
    */
-  mutating func add(last: Double, avg: Double, smoothed: Double) {
+  mutating func add(
+    last: Double,
+    avg: Double,
+    smoothed: Double,
+    samplingRate: Double? = nil,
+    baseSamplingRate: Double? = nil
+  ) {
+    if let baseSamplingRate {
+      self.baseSamplingRate = baseSamplingRate
+    }
+
     lastFPS.append(last)
     averageFPS.append(avg)
     smoothedFPS.append(smoothed)
+    activeSamplingRates.append(samplingRate ?? self.baseSamplingRate)
 
     if lastFPS.count > maxFrames { lastFPS.removeFirst() }
     if averageFPS.count > maxFrames { averageFPS.removeFirst() }
     if smoothedFPS.count > maxFrames { smoothedFPS.removeFirst() }
+    if activeSamplingRates.count > maxFrames { activeSamplingRates.removeFirst() }
 
     // Shift keyframes by decreasing frame indices.
     keyframes = keyframes.compactMapValues { $0 }
@@ -139,6 +156,7 @@ struct PerformanceGraph: View {
         let visibleMaxY = computeVisibleMaxY()
         Canvas { context, size in
           drawPerformanceZones(in: size, context: &context, maxY: visibleMaxY)
+          drawReducedSamplingShading(in: size, context: &context)
           drawGrid(in: size, context: &context)
           drawYAxisLabels(in: size, context: &context, maxY: visibleMaxY)
           drawThresholdLines(in: size, context: &context, maxY: visibleMaxY)
@@ -177,6 +195,8 @@ struct PerformanceGraph: View {
               .foregroundColor(.yellow.opacity(0.4))
             Label("perf_legend_above_recovery", systemImage: "rectangle.fill")
               .foregroundColor(.green.opacity(0.4))
+            Label("perf_legend_reduced_sampling", systemImage: "rectangle.fill")
+              .foregroundColor(.cyan.opacity(0.45))
           }
         }
         .font(.caption)
@@ -303,6 +323,46 @@ struct PerformanceGraph: View {
       let yRecovery = adjustedY(for: recovery, size: size, maxY:maxY)
       let zone = Path(CGRect(x: 0, y: 0, width: size.width, height: yRecovery))
       context.fill(zone, with: .color(.green.opacity(0.05)))
+    }
+  }
+
+  /**
+   Draws a background shade for frames rendered below the configured sampling rate.
+
+   Dynamic oversampling reduces the active sampling rate when performance drops.
+   This overlay marks those reduced-quality intervals without adding another curve.
+   */
+  private func drawReducedSamplingShading(in size: CGSize, context: inout GraphicsContext) {
+    let values = model.history.activeSamplingRates
+    guard values.count > 0 else { return }
+
+    let baseSamplingRate = model.history.baseSamplingRate
+    guard baseSamplingRate > 0 else { return }
+
+    let stepX = size.width / CGFloat(model.history.maxFrames)
+    let tolerance = max(0.0001, baseSamplingRate * 0.001)
+    var runStart: Int?
+
+    for index in 0..<values.count {
+      let isReduced = values[index] < baseSamplingRate - tolerance
+      if isReduced {
+        if runStart == nil {
+          runStart = index
+        }
+      } else if let start = runStart {
+        let x = CGFloat(start) * stepX
+        let width = max(stepX, CGFloat(index - start) * stepX)
+        let rect = CGRect(x: x, y: 0, width: width, height: size.height)
+        context.fill(Path(rect), with: .color(.cyan.opacity(0.13)))
+        runStart = nil
+      }
+    }
+
+    if let start = runStart {
+      let x = CGFloat(start) * stepX
+      let width = max(stepX, CGFloat(values.count - start) * stepX)
+      let rect = CGRect(x: x, y: 0, width: width, height: size.height)
+      context.fill(Path(rect), with: .color(.cyan.opacity(0.13)))
     }
   }
 

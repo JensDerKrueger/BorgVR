@@ -73,7 +73,8 @@ typedef NS_ENUM(EnumBackingType, FragmentBufferIndex)
   FragmentBufferIndexUniforms   = 0,  ///< Buffer containing fragment uniforms.
   FragmentBufferIndexLevelTable = 1,  ///< Buffer containing LOD level information.
   FragmentBufferIndexBrickMeta  = 2,  ///< Buffer containing per-brick metadata.
-  FragmentBufferIndexHashTable  = 3   ///< Buffer used as the GPU-side hash table.
+  FragmentBufferIndexHashTable  = 3,  ///< Buffer used as the GPU-side hash table.
+  FragmentBufferIndexRateMap    = 4   ///< Rasterization-rate-map parameters for foveated rendering.
 };
 
 /**

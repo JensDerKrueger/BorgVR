@@ -631,6 +631,7 @@
 "perf_legend_below_drop" = "Sous le seuil de chute";
 "perf_legend_between" = "Entre les deux";
 "perf_legend_above_recovery" = "Au-dessus de la récupération";
+"perf_legend_reduced_sampling" = "Échantillonnage réduit";
 
 /* Toggle labels */
 "perf_toggle_last" = "Dernière";

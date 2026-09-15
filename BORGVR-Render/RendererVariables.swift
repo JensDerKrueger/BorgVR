@@ -96,6 +96,8 @@ final actor Renderer {
 
   /// A buffer containing vertex data for a cube.
   let cubeBuffer: MTLBuffer
+  /// Parameter data copied from the drawable rasterization-rate map for shader-side foveation decisions.
+  var rasterizationRateMapBuffer: MTLBuffer?
   /// The number of vertices in the cube buffer.
   let vertexCount: Int
 

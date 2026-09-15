@@ -291,7 +291,9 @@ final class MacVolumeRenderer: NSObject, MTKViewDelegate {
     appModel.performanceModel.history.add(
       last: timer.lastFPS,
       avg: timer.averageFPS,
-      smoothed: timer.smoothedFPS
+      smoothed: timer.smoothedFPS,
+      samplingRate: Double(activeOversampling),
+      baseSamplingRate: Double(appSettings.oversampling)
     )
   }
 

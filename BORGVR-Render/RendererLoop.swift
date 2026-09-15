@@ -231,6 +231,24 @@ extension Renderer {
     return newTargets
   }
 
+  private func bindRasterizationRateMap(_ rateMap: MTLRasterizationRateMap?,
+                                        to renderEncoder: MTLRenderCommandEncoder) {
+    guard let rateMap else { return }
+
+    let sizeAndAlign = rateMap.parameterDataSizeAndAlign
+    let bufferLength = rasterizationRateMapBuffer?.length ?? 0
+    if bufferLength < sizeAndAlign.size {
+      rasterizationRateMapBuffer = device.makeBuffer(length: sizeAndAlign.size, options: .storageModeShared)
+      rasterizationRateMapBuffer?.label = "Rasterization Rate Map Parameters"
+    }
+
+    guard let rasterizationRateMapBuffer else { return }
+    rateMap.copyParameterData(buffer: rasterizationRateMapBuffer, offset: 0)
+    renderEncoder.setFragmentBuffer(rasterizationRateMapBuffer,
+                                    offset: 0,
+                                    index: FragmentBufferIndex.rateMap.rawValue)
+  }
+
   /**
    Reads back the GPU hash table and pages in missing bricks.
 
@@ -284,7 +302,9 @@ extension Renderer {
       self.runtimeAppModel.performanceModel.history.dropThreshold = Double(self.dropFPS)
       self.runtimeAppModel.performanceModel.history.add(last: last,
                                                  avg: avg,
-                                                 smoothed: smoothed)
+                                                 smoothed: smoothed,
+                                                 samplingRate: Double(self.activeOversampling),
+                                                 baseSamplingRate: Double(self.initialOversampling))
 
       if self.runtimeAppModel.startRotationCapture {
         self.logger?.info("Start Rotation")
@@ -479,7 +499,8 @@ extension Renderer {
     renderPassDescriptor.colorAttachments[0].clearColor = MTLClearColor(red: 0.0, green: 0.0, blue: 0.0, alpha: 0.0)
     renderPassDescriptor.depthAttachment.loadAction = .clear
     renderPassDescriptor.depthAttachment.clearDepth = 0.0
-    renderPassDescriptor.rasterizationRateMap = drawable.rasterizationRateMaps.first
+    let rasterizationRateMap = drawable.rasterizationRateMaps.first
+    renderPassDescriptor.rasterizationRateMap = rasterizationRateMap
     if layerRenderer.configuration.layout == .layered {
       renderPassDescriptor.renderTargetArrayLength = drawable.views.count
     }
@@ -509,6 +530,7 @@ extension Renderer {
 
     uniformBufferVertex.bindVertex(to: renderEncoder, index: VertexBufferIndex.uniforms.rawValue)
     uniformBufferFragment.bindFragment(to: renderEncoder, index: FragmentBufferIndex.uniforms.rawValue)
+    bindRasterizationRateMap(rasterizationRateMap, to: renderEncoder)
 
     let viewports = drawable.views.map { $0.textureMap.viewport }
     renderEncoder.setViewports(viewports)

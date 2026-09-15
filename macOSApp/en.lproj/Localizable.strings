@@ -423,6 +423,7 @@
 "perf_legend_below_drop" = "Below Drop";
 "perf_legend_between" = "Between";
 "perf_legend_above_recovery" = "Above Recovery";
+"perf_legend_reduced_sampling" = "Reduced sampling";
 "perf_toggle_last" = "Last";
 "perf_toggle_avg" = "Avg";
 "perf_toggle_smoothed" = "Smoothed";

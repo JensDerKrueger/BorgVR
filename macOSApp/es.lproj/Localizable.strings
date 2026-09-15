@@ -423,6 +423,7 @@
 "perf_legend_below_drop" = "Por debajo de caída";
 "perf_legend_between" = "Intermedio";
 "perf_legend_above_recovery" = "Por encima de recuperación";
+"perf_legend_reduced_sampling" = "Muestreo reducido";
 "perf_toggle_last" = "Último";
 "perf_toggle_avg" = "Promedio";
 "perf_toggle_smoothed" = "Suavizado";
