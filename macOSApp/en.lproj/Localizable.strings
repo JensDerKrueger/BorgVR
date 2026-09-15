@@ -508,6 +508,7 @@
 "Automatically load/save transfer functions" = "Automatically load/save transfer functions";
 "Oversampling mode" = "Oversampling mode";
 "Oversampling factor" = "Oversampling factor";
+"Randomized sample phase" = "Randomized sample phase";
 "Drop FPS" = "Drop FPS";
 "Recovery FPS" = "Recovery FPS";
 "Log level" = "Log level";

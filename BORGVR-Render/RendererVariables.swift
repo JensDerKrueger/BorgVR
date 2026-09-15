@@ -58,6 +58,8 @@ final actor Renderer {
 
   /// Render pipeline state for the transfer function HUD overlay.
   var pipelineStateTFHUD: MTLRenderPipelineState
+  /// Render pipeline state for transfer function HUD channel controls.
+  var pipelineStateTFHUDControls: MTLRenderPipelineState
   /// Depth stencil state for the HUD overlay (no depth writes, always passes).
   var depthStateHUD: MTLDepthStencilState
   // TF panel (3D HUD) configuration
@@ -265,7 +267,8 @@ final actor Renderer {
        pipelineStateTFL,
        pipelineStateIso,
        pipelineStateBrickVis,
-       pipelineStateTFHUD) =
+       pipelineStateTFHUD,
+       pipelineStateTFHUDControls) =
       try Renderer.buildRenderPipelinesWithDevice(
         device: device,
         layerRenderer: layerRenderer,

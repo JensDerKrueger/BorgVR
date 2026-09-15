@@ -3,6 +3,16 @@ struct TFHUDVaryings {
   float2 uv;
 };
 
+struct TFChannelControlVaryings {
+  float4 position [[position]];
+  float2 uv;
+  float channelIndex;
+};
+
+static inline float panelDepthForY(float y, float panelHeight, float bottomDepthOffset) {
+  return bottomDepthOffset * (0.5 - y / max(panelHeight, 0.0001));
+}
+
 vertex TFHUDVaryings vertexShaderTFPanel(uint vid [[vertex_id]],
                                            ushort ampId [[amplification_id]],
                                            constant float4x4 *mvpPerView [[buffer(20)]],
@@ -19,12 +29,12 @@ vertex TFHUDVaryings vertexShaderTFPanel(uint vid [[vertex_id]],
 
   // Two triangles (6 verts)
   switch (vid) {
-    case 0: p = float3(-0.5*w, -0.5*h, 0.1); uv = float2(0.0, 0.0); break;
-    case 1: p = float3( 0.5*w, -0.5*h, 0.1); uv = float2(1.0, 0.0); break;
-    case 2: p = float3(-0.5*w,  0.5*h, 0.0); uv = float2(0.0, 1.0); break;
-    case 3: p = float3( 0.5*w, -0.5*h, 0.1); uv = float2(1.0, 0.0); break;
-    case 4: p = float3( 0.5*w,  0.5*h, 0.0); uv = float2(1.0, 1.0); break;
-    default: p = float3(-0.5*w, 0.5*h, 0.0); uv = float2(0.0, 1.0); break;
+    case 0: p = float3(-0.5*w, -0.5*h, panelDepthForY(-0.5*h, h, 0.1)); uv = float2(0.0, 0.0); break;
+    case 1: p = float3( 0.5*w, -0.5*h, panelDepthForY(-0.5*h, h, 0.1)); uv = float2(1.0, 0.0); break;
+    case 2: p = float3(-0.5*w,  0.5*h, panelDepthForY( 0.5*h, h, 0.1)); uv = float2(0.0, 1.0); break;
+    case 3: p = float3( 0.5*w, -0.5*h, panelDepthForY(-0.5*h, h, 0.1)); uv = float2(1.0, 0.0); break;
+    case 4: p = float3( 0.5*w,  0.5*h, panelDepthForY( 0.5*h, h, 0.1)); uv = float2(1.0, 1.0); break;
+    default: p = float3(-0.5*w, 0.5*h, panelDepthForY(0.5*h, h, 0.1)); uv = float2(0.0, 1.0); break;
   }
 
   float4 localPos = float4(p.x, p.y, p.z, 1.0);
@@ -33,6 +43,53 @@ vertex TFHUDVaryings vertexShaderTFPanel(uint vid [[vertex_id]],
   out.position = mvpPerView[ampId] * localPos;
   out.uv = uv;
 
+  return out;
+}
+
+vertex TFChannelControlVaryings vertexShaderTFChannelControls(
+  uint vid [[vertex_id]],
+  uint instanceId [[instance_id]],
+  ushort ampId [[amplification_id]],
+  constant float4x4 *mvpPerView [[buffer(20)]],
+  constant float2 &panelSizeMeters [[buffer(21)]])
+{
+  TFChannelControlVaryings out;
+
+  float w = panelSizeMeters.x;
+  float h = panelSizeMeters.y;
+  float buttonHeight = h * 0.22;
+  float spacing = h * 0.055;
+  float sideMargin = h * 0.10;
+  float buttonWidth = (w - 2.0 * sideMargin - 3.0 * spacing) * 0.25;
+  float left = -0.5 * w + sideMargin + float(instanceId) * (buttonWidth + spacing);
+  float right = left + buttonWidth;
+  float top = -0.5 * h - h * 0.07;
+  float bottom = top - buttonHeight;
+
+  float2 corners[6] = {
+    float2(left, bottom),
+    float2(right, bottom),
+    float2(left, top),
+    float2(right, bottom),
+    float2(right, top),
+    float2(left, top)
+  };
+
+  float2 uvs[6] = {
+    float2(0.0, 0.0),
+    float2(1.0, 0.0),
+    float2(0.0, 1.0),
+    float2(1.0, 0.0),
+    float2(1.0, 1.0),
+    float2(0.0, 1.0)
+  };
+
+  float2 local = corners[vid];
+  float z = panelDepthForY(local.y, h, 0.1) + 0.003;
+
+  out.position = mvpPerView[ampId] * float4(local.x, local.y, z, 1.0);
+  out.uv = uvs[vid];
+  out.channelIndex = float(instanceId);
   return out;
 }
 
@@ -66,8 +123,7 @@ fragment float4 fragmentShaderTFHUD(TFHUDVaryings in [[stage_in]],
                                     texture1d<float> tfTex [[texture(TextureIndexTransferFunction)]],
                                     constant float2 &panelSizeMeters [[buffer(21)]],
                                     constant uint &isFocused [[buffer(22)]],
-                                    constant float4 &hitUVState [[buffer(23)]],
-                                    constant uint &channelMask [[buffer(24)]]) {
+                                    constant float4 &hitUVState [[buffer(23)]]) {
   constexpr sampler s(filter::linear, address::clamp_to_edge);
 
   float2 uv = clamp(in.uv, float2(0.0), float2(1.0));
@@ -117,24 +173,6 @@ fragment float4 fragmentShaderTFHUD(TFHUDVaryings in [[stage_in]],
   float3 ribbonBg = mix(ribbonBgA, ribbonBgB, check);
   float3 ribbonCol = mix(ribbonBg, tf.rgb, tf.a);
 
-  int channelIndex = min(3, int(floor(uv.x * 4.0)));
-  uint channelBit = 1u << uint(channelIndex);
-  bool channelActive = (channelMask & channelBit) != 0u;
-  float3 channelColor = channelIndex == 0 ? float3(1.0, 0.12, 0.10)
-                       : channelIndex == 1 ? float3(0.10, 0.95, 0.18)
-                       : channelIndex == 2 ? float3(0.20, 0.32, 1.0)
-                                           : float3(1.0);
-  float segmentX = fract(uv.x * 4.0);
-  float segmentFill = smoothstep(0.08, 0.20, segmentX)
-                    * (1.0 - smoothstep(0.80, 0.92, segmentX));
-  float stripeY = clamp((uv.y - curveHeight) / ribbonFrac, 0.0, 1.0);
-  float stripeMask = segmentFill
-                   * smoothstep(0.08, 0.24, stripeY)
-                   * (1.0 - smoothstep(0.46, 0.68, stripeY));
-  float3 inactiveColor = mix(ribbonCol, float3(0.04), 0.55);
-  float3 activeColor = mix(ribbonCol, channelColor, 0.72);
-  ribbonCol = mix(ribbonCol, channelActive ? activeColor : inactiveColor, stripeMask);
-
   float ribbonBlendWidth = max(fwidth(uv.y) * 4.0, 0.025);
   float ribbonMask = smoothstep(curveHeight - ribbonBlendWidth,
                                 curveHeight + ribbonBlendWidth,
@@ -145,6 +183,36 @@ fragment float4 fragmentShaderTFHUD(TFHUDVaryings in [[stage_in]],
   col = mix(col, float3(1.0, 0.9, 0.05), markerMask(uv, hitUVState, panelSizeMeters));
 
   return float4(col, panelAlpha);
+}
+
+fragment float4 fragmentShaderTFChannelControls(
+  TFChannelControlVaryings in [[stage_in]],
+  constant uint &channelMask [[buffer(24)]])
+{
+  float2 uv = clamp(in.uv, float2(0.0), float2(1.0));
+  uint channelIndex = uint(round(in.channelIndex));
+  uint channelBit = 1u << channelIndex;
+  bool channelActive = (channelMask & channelBit) != 0u;
+
+  float3 channelColor = channelIndex == 0 ? float3(1.0, 0.12, 0.10)
+                       : channelIndex == 1 ? float3(0.10, 0.95, 0.18)
+                       : channelIndex == 2 ? float3(0.20, 0.32, 1.0)
+                                           : float3(1.0);
+  float3 inactiveFill = mix(float3(0.045), channelColor, 0.18);
+  float3 activeFill = mix(float3(0.08), channelColor, 0.86);
+  float3 color = channelActive ? activeFill : inactiveFill;
+
+  float cornerRadius = 0.16;
+  float2 p = abs(uv - 0.5);
+  float2 q = p - (float2(0.5) - cornerRadius);
+  float signedDistance = length(max(q, float2(0.0)))
+                       + min(max(q.x, q.y), 0.0)
+                       - cornerRadius;
+  float shape = 1.0 - smoothstep(0.0, 0.035, signedDistance);
+  float border = shape * smoothstep(-0.12, -0.04, signedDistance);
+  color = mix(color, channelColor, border * (channelActive ? 0.70 : 0.95));
+
+  return float4(color, shape * 0.92);
 }
 
 /*

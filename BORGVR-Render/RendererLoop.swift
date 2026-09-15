@@ -158,6 +158,7 @@ extension Renderer {
         FragmentUniforms(
           isoValue: sharedAppModel.isoValue,
           oversampling: activeOversampling,
+          sampleJitter: storedAppModel.sampleJitter ? 1 : 0,
           transferBias: sharedAppModel.transferFunction.textureBias,
           cameraPosInTextureSpace: simd_make_float3(viewToTexture * simd_float4(0, 0, 0, 1)),
           cameraPosInTextureSpaceVoxelScaled: simd_make_float3(viewToTextureVoxelScaled * simd_float4(0, 0, 0, 1)),
@@ -444,10 +445,19 @@ extension Renderer {
     renderEncoder.setFragmentBytes(&hitUV,
                                    length: MemoryLayout<SIMD4<Float>>.stride,
                                    index: 23)
+    renderEncoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 6)
+
+    renderEncoder.setRenderPipelineState(pipelineStateTFHUDControls)
+    renderEncoder.setVertexBytes(&panelSize,
+                                 length: MemoryLayout<SIMD2<Float>>.stride,
+                                 index: 21)
     renderEncoder.setFragmentBytes(&channelMask,
                                    length: MemoryLayout<UInt32>.stride,
                                    index: 24)
-    renderEncoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 6)
+    renderEncoder.drawPrimitives(type: .triangle,
+                                 vertexStart: 0,
+                                 vertexCount: 6,
+                                 instanceCount: 4)
     renderEncoder.popDebugGroup()
   }
 

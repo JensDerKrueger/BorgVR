@@ -228,10 +228,7 @@ class ImmersiveInteraction {
   }
 
   private func transferFunctionChannelIndex(for hit: SIMD2<Float>) -> Int? {
-    guard hit.y >= 0.86 else {
-      return nil
-    }
-    return min(max(Int(hit.x * 4), 0), 3)
+    transferFunctionPanelInteractionState.channelIndex(for: hit)
   }
 
   private func toggleTransferFunctionChannel(
@@ -297,6 +294,12 @@ class ImmersiveInteraction {
             transferFunctionPanelInteractionState.setFocused(true)
             transferFunctionPanelInteractionState.updateHitUV(nil)
             return true
+          }
+          guard hit.x >= 0,
+                hit.x <= 1,
+                hit.y >= 0,
+                hit.y <= 1 else {
+            return false
           }
           transferFunctionPanelDragStart = hit
           transferFunctionPanelMarkerOpacity = 1

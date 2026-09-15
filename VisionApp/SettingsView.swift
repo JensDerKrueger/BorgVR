@@ -517,6 +517,11 @@ struct SettingsView: View {
                   .font(.caption)
               }
 
+              Toggle(
+                "settings_toggle_sample_jitter",
+                isOn: $storedAppModel.sampleJitter
+              )
+
               if storedAppModel.oversamplingMode
                   == OversamplingMode.dynamicMode.rawValue
               {

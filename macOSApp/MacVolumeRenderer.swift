@@ -530,6 +530,7 @@ final class MacVolumeRenderer: NSObject, MTKViewDelegate {
     fragmentUniforms.uniforms.0 = FragmentUniforms(
       isoValue: renderingParameters.isoValue,
       oversampling: activeOversampling,
+      sampleJitter: appSettings.sampleJitter ? 1 : 0,
       transferBias: renderingParameters.transferFunction.textureBias,
       cameraPosInTextureSpace: simd_make_float3(viewToTexture * SIMD4<Float>(0, 0, 0, 1)),
       cameraPosInTextureSpaceVoxelScaled: simd_make_float3(viewToTexture * SIMD4<Float>(0, 0, 0, 1)),

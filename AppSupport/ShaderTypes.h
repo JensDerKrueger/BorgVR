@@ -93,6 +93,7 @@ typedef NS_ENUM(EnumBackingType, TextureIndex)
 
  - isoValue:                        Threshold for isosurface rendering.
  - oversampling:                   Raymarching oversampling factor.
+ - sampleJitter:                   Enables randomized per-ray sampling phase.
  - transferBias:                   Bias for transfer function lookup.
  - cameraPosInTextureSpace:        Camera position in normalized texture coords.
  - cameraPosInTextureSpaceVoxelScaled:
@@ -104,6 +105,7 @@ typedef NS_ENUM(EnumBackingType, TextureIndex)
 typedef struct {
   float isoValue;
   float oversampling;
+  float sampleJitter;
   float transferBias;
   vector_float3 cameraPosInTextureSpace;
   vector_float3 cameraPosInTextureSpaceVoxelScaled;

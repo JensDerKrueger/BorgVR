@@ -35,7 +35,7 @@ extension Renderer {
                                              borgVRMetaData: BORGVRMetaData,
                                              hasTable: GPUHashtable) throws ->
   (MTLRenderPipelineState, MTLRenderPipelineState, MTLRenderPipelineState,
-   MTLRenderPipelineState, MTLRenderPipelineState) {
+   MTLRenderPipelineState, MTLRenderPipelineState, MTLRenderPipelineState) {
     // Build a render state pipeline object.
     let shaderSource = try RuntimeMetalShaderLoader.loadSource(named: "Shaders")
 
@@ -135,6 +135,8 @@ extension Renderer {
     // TF HUD overlay pipeline (2D screen-space panel)
     let hudVertexFunction = library.makeFunction(name: "vertexShaderTFPanel")
     let hudFragmentFunction = library.makeFunction(name: "fragmentShaderTFHUD")
+    let hudControlsVertexFunction = library.makeFunction(name: "vertexShaderTFChannelControls")
+    let hudControlsFragmentFunction = library.makeFunction(name: "fragmentShaderTFChannelControls")
 
     let pipelineDescriptorTFHUD = MTLRenderPipelineDescriptor()
     pipelineDescriptorTFHUD.label = "Render Pipeline for TF HUD"
@@ -155,12 +157,32 @@ extension Renderer {
       ca.destinationAlphaBlendFactor = .oneMinusSourceAlpha
     }
 
+    let pipelineDescriptorTFHUDControls = MTLRenderPipelineDescriptor()
+    pipelineDescriptorTFHUDControls.label = "Render Pipeline for TF HUD Channel Controls"
+    pipelineDescriptorTFHUDControls.vertexFunction = hudControlsVertexFunction
+    pipelineDescriptorTFHUDControls.fragmentFunction = hudControlsFragmentFunction
+    pipelineDescriptorTFHUDControls.rasterSampleCount = rasterSampleCount
+    pipelineDescriptorTFHUDControls.colorAttachments[0].pixelFormat = layerRenderer.configuration.colorFormat
+    pipelineDescriptorTFHUDControls.depthAttachmentPixelFormat = layerRenderer.configuration.depthFormat
+    pipelineDescriptorTFHUDControls.maxVertexAmplificationCount = layerRenderer.properties.viewCount
+
+    if let ca = pipelineDescriptorTFHUDControls.colorAttachments[0] {
+      ca.isBlendingEnabled = true
+      ca.rgbBlendOperation = .add
+      ca.alphaBlendOperation = .add
+      ca.sourceRGBBlendFactor = .sourceAlpha
+      ca.destinationRGBBlendFactor = .oneMinusSourceAlpha
+      ca.sourceAlphaBlendFactor = .one
+      ca.destinationAlphaBlendFactor = .oneMinusSourceAlpha
+    }
+
     return (
       try device.makeRenderPipelineState(descriptor: pipelineDescriptorTF),
       try device.makeRenderPipelineState(descriptor: pipelineDescriptorTFL),
       try device.makeRenderPipelineState(descriptor: pipelineDescriptorIso),
       try device.makeRenderPipelineState(descriptor: pipelineDescriptorBrickVis),
-      try device.makeRenderPipelineState(descriptor: pipelineDescriptorTFHUD)
+      try device.makeRenderPipelineState(descriptor: pipelineDescriptorTFHUD),
+      try device.makeRenderPipelineState(descriptor: pipelineDescriptorTFHUDControls)
     )
   }
 

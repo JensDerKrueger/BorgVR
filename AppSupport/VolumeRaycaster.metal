@@ -84,6 +84,26 @@ inline float effectiveOversampling(float baseOversampling,
 #endif
 }
 
+inline float hash13(float3 seed) {
+  float3 p = fract(seed * 0.1031);
+  p += dot(p, p.yzx + 33.33);
+  return fract((p.x + p.y) * p.z);
+}
+
+inline float raySamplePhase(float3 entryPoint, float3 direction, uint layerIndex) {
+  float3 voxelEntry = entryPoint * VOLUME_SIZE;
+  float3 voxelDirection = normalize(direction * VOLUME_SIZE);
+  return hash13(voxelEntry + voxelDirection * 97.0 + float3(float(layerIndex) * 31.0));
+}
+
+inline float samplingPhase(FragmentUniforms uniforms,
+                           float3 entryPoint,
+                           float3 direction,
+                           uint layerIndex,
+                           float defaultPhase) {
+  return uniforms.sampleJitter > 0.5 ? raySamplePhase(entryPoint, direction, layerIndex) : defaultPhase;
+}
+
 // MARK: - Vertex Shader
 
 /**
@@ -161,6 +181,7 @@ fragment half4 VOLUME_FRAGMENT_SHADER_TF_NAME(
 
   float3 voxelSpaceDirection = transformToPoolSpace(direction, oversampling);
   float  stepSize            = length(voxelSpaceDirection);
+  float  samplePhase         = samplingPhase(uniforms, entryPoint, direction, uint(VOLUME_SHADER_UNIFORM_INDEX), 0.5);
 
   // Initialize ray marching
   float3 currentPos = entryPoint;
@@ -195,7 +216,7 @@ fragment half4 VOLUME_FRAGMENT_SHADER_TF_NAME(
 
       // Sample along the ray segment in this brick
       for (int i = 0; i < iSteps; ++i) {
-        float sampleT = (float(i) + 0.5) / float(iSteps);
+        float sampleT = (float(i) + samplePhase) / float(iSteps);
         float3 poolCoords = mix(
                                 brickResult.poolBrickInfo.poolEntryCoords,
                                 brickResult.poolBrickInfo.poolExitCoords,
@@ -271,6 +292,7 @@ fragment half4 VOLUME_FRAGMENT_SHADER_TF_LIGHTING_NAME(
 
   float3 voxelSpaceDirection = transformToPoolSpace(direction, oversampling);
   float  stepSize            = length(voxelSpaceDirection);
+  float  samplePhase         = samplingPhase(uniforms, entryPoint, direction, uint(VOLUME_SHADER_UNIFORM_INDEX), 0.5);
 
   // Initialize ray marching
   float3 currentPos = entryPoint;
@@ -305,7 +327,7 @@ fragment half4 VOLUME_FRAGMENT_SHADER_TF_LIGHTING_NAME(
 
       // Sample along the ray segment in this brick
       for (int i = 0; i < iSteps; ++i) {
-        float sampleT = (float(i) + 0.5) / float(iSteps);
+        float sampleT = (float(i) + samplePhase) / float(iSteps);
         float3 sampleNormCoords = mix(
                                       currentPos,
                                       brickResult.normExitCoords,
@@ -390,6 +412,7 @@ fragment half4 VOLUME_FRAGMENT_SHADER_ISO_NAME(
 
   float3 voxelSpaceDirection = transformToPoolSpace(direction, oversampling);
   float  stepSize            = length(voxelSpaceDirection);
+  float  samplePhase         = samplingPhase(uniforms, entryPoint, direction, uint(VOLUME_SHADER_UNIFORM_INDEX), 0.5);
 
   float3 currentPos = entryPoint;
   float t           = 0;
@@ -416,7 +439,7 @@ fragment half4 VOLUME_FRAGMENT_SHADER_ISO_NAME(
                             ));
       iSteps = min(int(2*BRICK_SIZE*oversampling),iSteps);
       for (int i = 0; i < iSteps; ++i) {
-        float sampleT = i / float(iSteps);
+        float sampleT = (float(i) + samplePhase) / float(iSteps);
         float3 sampleNormCoords = mix(
                                       currentPos,
                                       brickResult.normExitCoords,

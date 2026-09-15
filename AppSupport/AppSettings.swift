@@ -131,6 +131,7 @@ final class AppSettings: ObservableObject {
     "maxBricksPerGetRequest": 20,
     "atlasSizeMB": defaultAtlasSizeMB,
     "oversampling": 1.0,
+    "sampleJitter": false,
     "oversamplingMode": OversamplingMode.dynamicMode.rawValue,
     "dropFPS": 20,
     "recoveryFPS": 100,
@@ -184,6 +185,7 @@ final class AppSettings: ObservableObject {
   @AppStorage("maxBricksPerGetRequest") var maxBricksPerGetRequest: Int = AppSettings.int("maxBricksPerGetRequest")
   @AppStorage("atlasSizeMB") var atlasSizeMB: Int = AppSettings.int("atlasSizeMB")
   @AppStorage("oversampling") var oversampling: Double = AppSettings.double("oversampling")
+  @AppStorage("sampleJitter") var sampleJitter: Bool = AppSettings.bool("sampleJitter")
   @AppStorage("oversamplingMode") var oversamplingMode: String = AppSettings.string("oversamplingMode")
   @AppStorage("dropFPS") var dropFPS: Int = AppSettings.int("dropFPS")
   @AppStorage("recoveryFPS") var recoveryFPS: Int = AppSettings.int("recoveryFPS")
@@ -314,6 +316,7 @@ final class AppSettings: ObservableObject {
     autoloadTF = Self.boolDefault("autoloadTF")
     autoloadTransform = Self.boolDefault("autoloadTransform")
     oversampling = Self.doubleDefault("oversampling")
+    sampleJitter = Self.boolDefault("sampleJitter")
     oversamplingMode = Self.stringDefault("oversamplingMode")
     dropFPS = Self.intDefault("dropFPS")
     recoveryFPS = Self.intDefault("recoveryFPS")

@@ -229,6 +229,7 @@ struct SettingsView: View {
         ), supportsOpacity: true)
       }
       textFieldRow("Oversampling", text: $tempOversampling, keyboardType: .decimalPad)
+      Toggle("Randomized sample phase", isOn: $appSettings.sampleJitter)
       Stepper(value: $appSettings.atlasSizeMB, in: 128...AppSettings.maximumAtlasSizeMB, step: 128) {
         Text(String(format: String(localized: "Atlas size: %d MB"), appSettings.atlasSizeMB))
       }

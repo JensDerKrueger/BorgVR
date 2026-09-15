@@ -350,6 +350,7 @@
 "settings_toggle_autoload_tf" = "Automatically Load and Save Transfer Functions";
 "settings_toggle_autoload_transform" = "Automatically Load and Save Transformation";
 "settings_toggle_disable_foveation" = "Disable Foveation";
+"settings_toggle_sample_jitter" = "Randomized Sample Phase";
 "settings_toggle_show_notifications" = "Show Notifications (requires permission)";
 "settings_toggle_enable_voice_input" = "Enable Voice Input (requires permission)";
 "settings_toggle_autostart_voice" = "Automatically Start Voice Input";

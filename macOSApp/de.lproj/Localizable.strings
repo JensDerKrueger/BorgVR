@@ -512,6 +512,7 @@
 "Automatically load/save transfer functions" = "Transferfunktionen automatisch laden/speichern";
 "Oversampling mode" = "Oversampling-Modus";
 "Oversampling factor" = "Oversampling-Faktor";
+"Randomized sample phase" = "Zufällige Sampling-Phase";
 "Drop FPS" = "FPS zum Reduzieren";
 "Recovery FPS" = "FPS zur Erholung";
 "Log level" = "Log-Level";

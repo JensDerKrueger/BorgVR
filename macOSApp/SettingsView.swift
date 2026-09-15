@@ -222,6 +222,7 @@ struct SettingsView: View {
                        range: 0.1...8.0,
                        step: 0.1,
                        format: "%.1f")
+      toggleRow("Randomized sample phase", isOn: $appSettings.sampleJitter)
       if appSettings.oversamplingMode == OversamplingMode.dynamicMode.rawValue {
         intStepperRow("Drop FPS",
                       value: $appSettings.dropFPS,

@@ -2,6 +2,11 @@ import Foundation
 import simd
 
 final class TransferFunctionPanelInteractionState {
+  static let channelControlTop: Float = -0.07
+  static let channelControlBottom: Float = -0.29
+  static let channelControlSideMarginFraction: Float = 0.10
+  static let channelControlSpacingFraction: Float = 0.055
+
   private struct State {
     var panelWorldMatrix = matrix_identity_float4x4
     var panelSize = SIMD2<Float>(repeating: 0)
@@ -56,6 +61,34 @@ final class TransferFunctionPanelInteractionState {
     return value
   }
 
+  func channelIndex(for hit: SIMD2<Float>) -> Int? {
+    lock.lock()
+    let panelSize = state.panelSize
+    lock.unlock()
+
+    guard panelSize.x > 0,
+          panelSize.y > 0,
+          hit.y <= Self.channelControlTop,
+          hit.y >= Self.channelControlBottom else {
+      return nil
+    }
+
+    let aspect = panelSize.y / panelSize.x
+    let sideMargin = Self.channelControlSideMarginFraction * aspect
+    let spacing = Self.channelControlSpacingFraction * aspect
+    let buttonWidth = (1 - 2 * sideMargin - 3 * spacing) * 0.25
+
+    for index in 0..<4 {
+      let left = sideMargin + Float(index) * (buttonWidth + spacing)
+      let right = left + buttonWidth
+      if hit.x >= left && hit.x <= right {
+        return index
+      }
+    }
+
+    return nil
+  }
+
   func localPoint(forWorldPosition worldPosition: SIMD3<Float>) -> (point: SIMD3<Float>, size: SIMD2<Float>)? {
     lock.lock()
     let snapshot = state
@@ -108,9 +141,10 @@ final class TransferFunctionPanelInteractionState {
 
     let hit = localOrigin + localDirection * t
     let halfSize = snapshot.panelSize * 0.5
+    let lowerControlExtension = snapshot.panelSize.y * abs(Self.channelControlBottom)
     guard hit.x >= -halfSize.x,
           hit.x <= halfSize.x,
-          hit.y >= -halfSize.y,
+          hit.y >= -halfSize.y - lowerControlExtension,
           hit.y <= halfSize.y else {
       return nil
     }

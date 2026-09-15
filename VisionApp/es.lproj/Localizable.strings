@@ -350,6 +350,7 @@
 "settings_toggle_autoload_tf" = "Cargar y guardar automáticamente las funciones de transferencia";
 "settings_toggle_autoload_transform" = "Cargar y guardar automáticamente la transformación";
 "settings_toggle_disable_foveation" = "Desactivar foveación";
+"settings_toggle_sample_jitter" = "Fase de muestreo aleatoria";
 "settings_toggle_show_notifications" = "Mostrar notificaciones (requiere permiso)";
 "settings_toggle_enable_voice_input" = "Activar entrada de voz (requiere permiso)";
 "settings_toggle_autostart_voice" = "Iniciar automáticamente la entrada de voz";

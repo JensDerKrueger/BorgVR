@@ -126,7 +126,14 @@ class RuntimeAppModel {
     }
   }
   /// Toggles for editing transfer function channels.
-  var transferEditState: TransferEditState = .init()
+  var transferEditState: TransferEditState = .init() {
+    didSet {
+      transferFunctionPanelInteractionState?.updateChannelMask(transferEditState.channelMask)
+    }
+  }
+
+  /// Shared renderer-side interaction state for the immersive transfer function panel.
+  var transferFunctionPanelInteractionState: TransferFunctionPanelInteractionState?
 
   var openViews: [String: Int] = [:]
 

@@ -5758,6 +5758,34 @@
         }
       }
     },
+    "Randomized sample phase" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zufällige Sampling-Phase"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Randomized sample phase"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fase de muestreo aleatoria"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Phase d’échantillonnage aléatoire"
+          }
+        }
+      }
+    },
     "Password" : {
       "extractionState" : "stale",
       "localizations" : {

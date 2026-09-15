@@ -91,6 +91,10 @@ enum ImmersiveBootstrap {
     }
 
     let transferFunctionPanelInteractionState = TransferFunctionPanelInteractionState()
+    runtimeAppModel.transferFunctionPanelInteractionState = transferFunctionPanelInteractionState
+    transferFunctionPanelInteractionState.updateChannelMask(
+      runtimeAppModel.transferEditState.channelMask
+    )
 
     // Start renderer
     Renderer.startRenderLoop(
