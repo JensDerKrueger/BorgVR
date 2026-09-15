@@ -1,6 +1,7 @@
-Current Work:
-integrate virtual samples
+Next Todo:
 
-Todo:
-consider lowering lod in areas where foveation reduces resolution
-DICOM Importer UI on Vision OS
+- Opaque geometry rendering with proper compositing
+
+Possible Futute Additions:
+- DICOM importer UI on vision OS
+- virtual sampling
