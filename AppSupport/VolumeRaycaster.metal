@@ -84,6 +84,32 @@ inline float effectiveOversampling(float baseOversampling,
 #endif
 }
 
+inline float rayStepTForLOD(float3 ray,
+                            uint lod,
+                            device const LevelData* levelData,
+                            float oversampling) {
+  float3 lodVoxelSize = levelData[lod].fractionalBrickLayout * float(BRICK_INNER_SIZE);
+  float rayVoxelLength = length(ray * lodVoxelSize);
+  return 1.0 / max(rayVoxelLength * 2.0 * oversampling, 1e-6);
+}
+
+inline float firstGlobalSampleT(float segmentStartT, float rayStepT) {
+  float sampleT = (ceil(segmentStartT / rayStepT - 0.5) + 0.5) * rayStepT;
+  if (sampleT < segmentStartT) {
+    sampleT += rayStepT;
+  }
+  return sampleT;
+}
+
+inline float opacityCorrectionFactor(float3 ray,
+                                     float rayStepT,
+                                     uint lod,
+                                     device const LevelData* levelData) {
+  float3 lodVoxelSize = levelData[lod].fractionalBrickLayout * float(BRICK_INNER_SIZE);
+  float sampleStepVoxelLength = length(ray * rayStepT * lodVoxelSize);
+  return max(float(1u << lod) * 2.0 * sampleStepVoxelLength, 1e-6);
+}
+
 // MARK: - Vertex Shader
 
 /**
@@ -159,9 +185,6 @@ fragment half4 VOLUME_FRAGMENT_SHADER_TF_NAME(
   float entryDepth = length(uniforms.cameraPosInTextureSpaceVoxelScaled - entryPoint);
   float exitDepth  = length(uniforms.cameraPosInTextureSpaceVoxelScaled - exitPoint);
 
-  float3 voxelSpaceDirection = transformToPoolSpace(direction, oversampling);
-  float  stepSize            = length(voxelSpaceDirection);
-
   // Initialize ray marching
   float3 currentPos = entryPoint;
   float4 accColor   = float4(0);
@@ -185,22 +208,19 @@ fragment half4 VOLUME_FRAGMENT_SHADER_TF_NAME(
 #endif
 
     if (!brickResult.empty) {
-      // Number of samples within this brick
-      float segmentLength = length(brickResult.poolBrickInfo.poolExitCoords
-                                   - brickResult.poolBrickInfo.poolEntryCoords);
-      int iSteps = int(ceil(segmentLength / stepSize));
-      iSteps = min(int(2*BRICK_SIZE*oversampling),iSteps);
-      float actualStepScale = segmentLength / max(float(iSteps) * stepSize, 1e-6);
-      float ocFactor = float(1 << iLOD) * actualStepScale / oversampling;
+      float nextT = length(entryPoint - brickResult.normExitCoords) / rayLength;
+      float rayStepT = rayStepTForLOD(direction, brickResult.LOD, levelData, oversampling);
+      float sampleRayT = firstGlobalSampleT(t, rayStepT);
+      int iSteps = int(ceil(max(nextT - sampleRayT, 0.0) / rayStepT));
+      iSteps = min(int(2*BRICK_SIZE*oversampling)+2, iSteps);
+      float ocFactor = opacityCorrectionFactor(direction, rayStepT, brickResult.LOD, levelData);
 
       // Sample along the ray segment in this brick
       for (int i = 0; i < iSteps; ++i) {
-        float sampleT = (float(i) + 0.5) / float(iSteps);
-        float3 poolCoords = mix(
-                                brickResult.poolBrickInfo.poolEntryCoords,
-                                brickResult.poolBrickInfo.poolExitCoords,
-                                sampleT
-                                );
+        if (sampleRayT >= nextT) break;
+        float3 sampleNormCoords = entryPoint + direction * sampleRayT;
+        float3 poolCoords = sampleNormCoords * brickResult.poolBrickInfo.normToPoolScale +
+                            brickResult.poolBrickInfo.normToPoolTrans;
 
         float volumeValue = volumeAtlas.sample(s, poolCoords).r;
         float4 current = float4(transferFunc.sample(s, volumeValue * uniforms.transferBias));
@@ -209,6 +229,7 @@ fragment half4 VOLUME_FRAGMENT_SHADER_TF_NAME(
 
         // Early ray termination on high opacity
         if (accColor.a > 0.99) return half4(accColor);
+        sampleRayT += rayStepT;
       }
     }
 
@@ -269,9 +290,6 @@ fragment half4 VOLUME_FRAGMENT_SHADER_TF_LIGHTING_NAME(
   float entryDepth = length(uniforms.cameraPosInTextureSpaceVoxelScaled - entryPoint);
   float exitDepth  = length(uniforms.cameraPosInTextureSpaceVoxelScaled - exitPoint);
 
-  float3 voxelSpaceDirection = transformToPoolSpace(direction, oversampling);
-  float  stepSize            = length(voxelSpaceDirection);
-
   // Initialize ray marching
   float3 currentPos = entryPoint;
   float4 accColor   = float4(0);
@@ -295,27 +313,19 @@ fragment half4 VOLUME_FRAGMENT_SHADER_TF_LIGHTING_NAME(
 #endif
 
     if (!brickResult.empty) {
-      // Number of samples within this brick
-      float segmentLength = length(brickResult.poolBrickInfo.poolExitCoords
-                                   - brickResult.poolBrickInfo.poolEntryCoords);
-      int iSteps = int(ceil(segmentLength / stepSize));
-      iSteps = min(int(2*BRICK_SIZE*oversampling),iSteps);
-      float actualStepScale = segmentLength / max(float(iSteps) * stepSize, 1e-6);
-      float ocFactor = float(1 << iLOD) * actualStepScale / oversampling;
+      float nextT = length(entryPoint - brickResult.normExitCoords) / rayLength;
+      float rayStepT = rayStepTForLOD(direction, brickResult.LOD, levelData, oversampling);
+      float sampleRayT = firstGlobalSampleT(t, rayStepT);
+      int iSteps = int(ceil(max(nextT - sampleRayT, 0.0) / rayStepT));
+      iSteps = min(int(2*BRICK_SIZE*oversampling)+2, iSteps);
+      float ocFactor = opacityCorrectionFactor(direction, rayStepT, brickResult.LOD, levelData);
 
       // Sample along the ray segment in this brick
       for (int i = 0; i < iSteps; ++i) {
-        float sampleT = (float(i) + 0.5) / float(iSteps);
-        float3 sampleNormCoords = mix(
-                                      currentPos,
-                                      brickResult.normExitCoords,
-                                      sampleT
-                                      );
-        float3 poolCoords = mix(
-                                brickResult.poolBrickInfo.poolEntryCoords,
-                                brickResult.poolBrickInfo.poolExitCoords,
-                                sampleT
-                                );
+        if (sampleRayT >= nextT) break;
+        float3 sampleNormCoords = entryPoint + direction * sampleRayT;
+        float3 poolCoords = sampleNormCoords * brickResult.poolBrickInfo.normToPoolScale +
+                            brickResult.poolBrickInfo.normToPoolTrans;
         float volumeValue = volumeAtlas.sample(s, poolCoords).r;
         float4 current = float4(transferFunc.sample(s, volumeValue * uniforms.transferBias));
         // Opacity correction
@@ -338,6 +348,7 @@ fragment half4 VOLUME_FRAGMENT_SHADER_TF_LIGHTING_NAME(
 
         // Early ray termination on high opacity
         if (accColor.a > 0.99) return half4(accColor);
+        sampleRayT += rayStepT;
       }
     }
 
@@ -388,9 +399,6 @@ fragment half4 VOLUME_FRAGMENT_SHADER_ISO_NAME(
   float entryDepth = length(uniforms.cameraPosInTextureSpaceVoxelScaled - entryPoint);
   float exitDepth  = length(uniforms.cameraPosInTextureSpaceVoxelScaled - exitPoint);
 
-  float3 voxelSpaceDirection = transformToPoolSpace(direction, oversampling);
-  float  stepSize            = length(voxelSpaceDirection);
-
   float3 currentPos = entryPoint;
   float t           = 0;
   uint  brickCount  = 0;
@@ -410,27 +418,21 @@ fragment half4 VOLUME_FRAGMENT_SHADER_ISO_NAME(
 #endif
     
     if (!brickResult.empty) {
-      int iSteps = int(ceil(
-                            length(brickResult.poolBrickInfo.poolExitCoords
-                                   - brickResult.poolBrickInfo.poolEntryCoords) / stepSize
-                            ));
-      iSteps = min(int(2*BRICK_SIZE*oversampling),iSteps);
+      float nextT = length(entryPoint - brickResult.normExitCoords) / rayLength;
+      float rayStepT = rayStepTForLOD(direction, brickResult.LOD, levelData, oversampling);
+      float sampleRayT = firstGlobalSampleT(t, rayStepT);
+      int iSteps = int(ceil(max(nextT - sampleRayT, 0.0) / rayStepT));
+      iSteps = min(int(2*BRICK_SIZE*oversampling)+2, iSteps);
       for (int i = 0; i < iSteps; ++i) {
-        float sampleT = i / float(iSteps);
-        float3 sampleNormCoords = mix(
-                                      currentPos,
-                                      brickResult.normExitCoords,
-                                      sampleT
-                                      );
-        float3 poolCoords = mix(
-                                brickResult.poolBrickInfo.poolEntryCoords,
-                                brickResult.poolBrickInfo.poolExitCoords,
-                                sampleT
-                                );
+        if (sampleRayT >= nextT) break;
+        float3 sampleNormCoords = entryPoint + direction * sampleRayT;
+        float3 poolCoords = sampleNormCoords * brickResult.poolBrickInfo.normToPoolScale +
+                            brickResult.poolBrickInfo.normToPoolTrans;
         float value = volumeAtlas.sample(s, poolCoords).r;
         if (value >= uniforms.isoValue) {
+          float3 poolRayStep = direction * rayStepT * brickResult.poolBrickInfo.normToPoolScale;
           poolCoords = refineIsosurface(
-                                        voxelSpaceDirection,
+                                        poolRayStep,
                                         poolCoords,
                                         uniforms.isoValue,
                                         volumeAtlas,
@@ -447,6 +449,7 @@ fragment half4 VOLUME_FRAGMENT_SHADER_ISO_NAME(
           half3 color = lighting(posInView, normalInView, half3(0.5,0.5,0.5));
           return half4(color, 1);
         }
+        sampleRayT += rayStepT;
       }
     }
 
