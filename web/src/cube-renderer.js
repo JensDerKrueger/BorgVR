@@ -188,6 +188,14 @@ fn firstGlobalSampleT(segmentStartT: f32, rayStepT: f32) -> f32 {
   return sampleT;
 }
 
+fn firstSegmentSampleT(segmentStartT: f32, segmentEndT: f32, rayStepT: f32) -> f32 {
+  var sampleT = firstGlobalSampleT(segmentStartT, rayStepT);
+  if (sampleT >= segmentEndT) {
+    sampleT = 0.5 * (segmentStartT + segmentEndT);
+  }
+  return sampleT;
+}
+
 fn opacityCorrectionFactor(ray: vec3<f32>, rayStepT: f32, lod: u32) -> f32 {
   let sampleStepVoxelLength = length(ray * rayStepT * levelVoxelSize(lod));
   return max(f32(1u << lod) * 2.0 * sampleStepVoxelLength, 0.000001);
@@ -468,7 +476,7 @@ fn fragmentMain(input: VertexOut) -> @location(0) vec4<f32> {
 
     if (!brick.empty && brick.info >= BI_FLAG_COUNT) {
       let rayStepT = rayStepTForLOD(ray, brick.lod);
-      let firstSampleT = firstGlobalSampleT(currentRayT, rayStepT);
+      let firstSampleT = firstSegmentSampleT(currentRayT, nextRayT, rayStepT);
       let segmentSampleCount = min(u32(ceil(max(nextRayT - firstSampleT, 0.0) / rayStepT)), MAX_RAY_SAMPLE_COUNT);
       let sampleStep = ray * rayStepT;
       let ocFactor = opacityCorrectionFactor(ray, rayStepT, brick.lod);

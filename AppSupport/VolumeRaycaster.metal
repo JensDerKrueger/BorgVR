@@ -92,6 +92,14 @@ inline float firstGlobalSampleT(float segmentStartT, float rayStepT) {
   return sampleT;
 }
 
+inline float firstSegmentSampleT(float segmentStartT, float segmentEndT, float rayStepT) {
+  float sampleT = firstGlobalSampleT(segmentStartT, rayStepT);
+  if (sampleT >= segmentEndT) {
+    sampleT = 0.5 * (segmentStartT + segmentEndT);
+  }
+  return sampleT;
+}
+
 inline float rayStepTForPoolStep(float3 ray,
                                  float3 normToPoolScale,
                                  float poolStepSize) {
@@ -213,7 +221,7 @@ fragment half4 VOLUME_FRAGMENT_SHADER_TF_NAME(
       float rayStepT = rayStepTForPoolStep(direction,
                                            brickResult.poolBrickInfo.normToPoolScale,
                                            stepSize);
-      float sampleRayT = firstGlobalSampleT(t, rayStepT);
+      float sampleRayT = firstSegmentSampleT(t, nextT, rayStepT);
       int iSteps = int(ceil(max(nextT - sampleRayT, 0.0) / rayStepT));
       iSteps = min(int(2*BRICK_SIZE*oversampling)+2, iSteps);
       float ocFactor = opacityCorrectionFactorForPoolStep(direction,
@@ -327,7 +335,7 @@ fragment half4 VOLUME_FRAGMENT_SHADER_TF_LIGHTING_NAME(
       float rayStepT = rayStepTForPoolStep(direction,
                                            brickResult.poolBrickInfo.normToPoolScale,
                                            stepSize);
-      float sampleRayT = firstGlobalSampleT(t, rayStepT);
+      float sampleRayT = firstSegmentSampleT(t, nextT, rayStepT);
       int iSteps = int(ceil(max(nextT - sampleRayT, 0.0) / rayStepT));
       iSteps = min(int(2*BRICK_SIZE*oversampling)+2, iSteps);
       float ocFactor = opacityCorrectionFactorForPoolStep(direction,
@@ -441,7 +449,7 @@ fragment half4 VOLUME_FRAGMENT_SHADER_ISO_NAME(
       float rayStepT = rayStepTForPoolStep(direction,
                                            brickResult.poolBrickInfo.normToPoolScale,
                                            stepSize);
-      float sampleRayT = firstGlobalSampleT(t, rayStepT);
+      float sampleRayT = firstSegmentSampleT(t, nextT, rayStepT);
       int iSteps = int(ceil(max(nextT - sampleRayT, 0.0) / rayStepT));
       iSteps = min(int(2*BRICK_SIZE*oversampling)+2, iSteps);
       for (int i = 0; i < iSteps; ++i) {
