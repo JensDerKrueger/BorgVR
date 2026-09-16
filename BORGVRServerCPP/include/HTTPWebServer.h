@@ -47,6 +47,8 @@ private:
   bool sendCatalog(TcpSocket& socket, bool closeAfterSend);
   bool sendTransferFunctionCatalog(TcpSocket& socket, bool closeAfterSend);
   bool sendTransferFunction(TcpSocket& socket, const std::string& id, bool closeAfterSend);
+  bool sendMarkerFileCatalog(TcpSocket& socket, bool closeAfterSend);
+  bool sendMarkerFile(TcpSocket& socket, const std::string& id, bool closeAfterSend);
   bool sendDatasetManifest(TcpSocket& socket, const std::string& datasetID, bool closeAfterSend);
   bool sendBrick(TcpSocket& socket, const std::string& datasetID, const std::string& filename, bool closeAfterSend);
   bool sendBrickBatch(TcpSocket& socket, const std::string& datasetID, const std::string& idsText, bool closeAfterSend);

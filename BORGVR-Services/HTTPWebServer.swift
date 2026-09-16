@@ -295,11 +295,22 @@ final class HTTPWebServer {
       return transferFunctionCatalogResponse()
     }
 
+    if request.path == "/web-data/marker-files.json" {
+      return markerFileCatalogResponse()
+    }
+
     let transferFunctionPrefix = "/web-data/transfer-functions/"
     if request.path.hasPrefix(transferFunctionPrefix) {
       let id = String(request.path.dropFirst(transferFunctionPrefix.count))
         .replacingOccurrences(of: ".tf1d", with: "")
       return try transferFunctionResponse(id: id)
+    }
+
+    let markerFilePrefix = "/web-data/marker-files/"
+    if request.path.hasPrefix(markerFilePrefix) {
+      let id = String(request.path.dropFirst(markerFilePrefix.count))
+        .replacingOccurrences(of: ".marker", with: "")
+      return try markerFileResponse(id: id)
     }
 
     let datasetPrefix = "/web-data/datasets/"
@@ -383,6 +394,44 @@ final class HTTPWebServer {
       status: 200,
       reason: "OK",
       contentType: "application/octet-stream",
+      body: data
+    )
+  }
+
+  private func markerFileCatalogResponse() -> HTTPResponse {
+    let entries = datasetServer.markerFilesSnapshot().map { markerFile in
+      WebMarkerFileCatalogEntry(
+        id: markerFile.id,
+        datasetID: markerFile.datasetID,
+        description: markerFile.markerDescription,
+        byteCount: markerFile.byteCount,
+        url: "marker-files/\(markerFile.id).marker"
+      )
+    }
+    return jsonResponse(
+      WebMarkerFileCatalog(
+        format: "borgvr-marker-files",
+        version: 1,
+        generatedAt: "dynamic",
+        markerFiles: entries
+      )
+    )
+  }
+
+  private func markerFileResponse(id: String) throws -> HTTPResponse {
+    guard id.count == 32,
+          id.allSatisfy({ $0.isHexDigit }),
+          let markerFile = datasetServer.findMarkerFileById(id) else {
+      throw HTTPWebServerError.notFound
+    }
+    let data = try Data(contentsOf: URL(fileURLWithPath: markerFile.filename), options: .mappedIfSafe)
+    guard data.count == markerFile.byteCount else {
+      throw HTTPWebServerError.notFound
+    }
+    return HTTPResponse(
+      status: 200,
+      reason: "OK",
+      contentType: "application/json; charset=utf-8",
       body: data
     )
   }
@@ -871,6 +920,21 @@ private struct WebTransferFunctionCatalog: Encodable {
 
 private struct WebTransferFunctionCatalogEntry: Encodable {
   let id: String
+  let description: String
+  let byteCount: Int
+  let url: String
+}
+
+private struct WebMarkerFileCatalog: Encodable {
+  let format: String
+  let version: Int
+  let generatedAt: String
+  let markerFiles: [WebMarkerFileCatalogEntry]
+}
+
+private struct WebMarkerFileCatalogEntry: Encodable {
+  let id: String
+  let datasetID: String
   let description: String
   let byteCount: Int
   let url: String

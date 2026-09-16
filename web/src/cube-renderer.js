@@ -13,6 +13,7 @@ struct Uniforms {
   cubeMax: vec4<f32>,
   lodInfo: vec4<f32>,
   dataInfo: vec4<f32>,
+  volumeInfo: vec4<f32>,
 };
 
 @group(0) @binding(0) var<uniform> uniforms: Uniforms;
@@ -52,6 +53,7 @@ struct LevelTable {
 };
 
 @group(0) @binding(8) var<storage, read> levelTable: LevelTable;
+@group(0) @binding(9) var markerDepthTexture: texture_depth_2d;
 
 const BI_MISSING: u32 = 0u;
 const BI_CHILD_EMPTY: u32 = 1u;
@@ -416,6 +418,18 @@ fn lighting(samplePoint: vec3<f32>, normal: vec3<f32>, color: vec3<f32>) -> vec3
   );
 }
 
+fn markerOccludesPoint(point: vec3<f32>, markerDepth: f32) -> bool {
+  if (markerDepth >= 0.999999) {
+    return false;
+  }
+  let localPoint = (point * 2.0 - vec3<f32>(1.0)) * uniforms.volumeInfo.xyz;
+  let clipPoint = uniforms.mvp * vec4<f32>(localPoint, 1.0);
+  if (clipPoint.w <= 0.0) {
+    return false;
+  }
+  return clipPoint.z / clipPoint.w >= markerDepth - 0.00001;
+}
+
 @fragment
 fn fragmentMain(input: VertexOut) -> @location(0) vec4<f32> {
   let exitPoint = input.coord;
@@ -432,6 +446,7 @@ fn fragmentMain(input: VertexOut) -> @location(0) vec4<f32> {
   var accumulatedAlpha = 0.0;
   let renderMode = u32(uniforms.dataInfo.y + 0.5);
   let isoValue = uniforms.dataInfo.z;
+  let markerDepth = textureLoad(markerDepthTexture, vec2<i32>(input.position.xy), 0);
 
   var currentRayT = 0.0;
   for (var brickIteration = 0u; brickIteration < MAX_BRICK_ITERATIONS; brickIteration = brickIteration + 1u) {
@@ -440,6 +455,9 @@ fn fragmentMain(input: VertexOut) -> @location(0) vec4<f32> {
     }
 
     let currentPos = entryPoint + ray * currentRayT;
+    if (markerOccludesPoint(currentPos, markerDepth)) {
+      break;
+    }
     let currentDepth = mix(entryDepth, exitDepth, currentRayT);
     let brick = lookupBrick(currentPos, ray, computeLOD(currentDepth));
     let segmentT = min(
@@ -463,6 +481,9 @@ fn fragmentMain(input: VertexOut) -> @location(0) vec4<f32> {
         let localT = (f32(sampleIndex) + 0.5) / f32(segmentSampleCount);
         let sampleRayT = mix(currentRayT, nextRayT, localT);
         let samplePoint = entryPoint + ray * sampleRayT;
+        if (markerOccludesPoint(samplePoint, markerDepth)) {
+          break;
+        }
         let scalar = sampleAtlasBrick(brick.index, brick.coords, brick.lod, samplePoint);
 
         if (renderMode == RENDER_MODE_ISO) {
@@ -499,9 +520,53 @@ fn fragmentMain(input: VertexOut) -> @location(0) vec4<f32> {
 }
 `;
 
+const markerShaderSource = `
+struct MarkerUniforms {
+  mvp: mat4x4<f32>,
+  modelView: mat4x4<f32>,
+};
+
+@group(0) @binding(0) var<uniform> uniforms: MarkerUniforms;
+
+struct MarkerVertexIn {
+  @location(0) position: vec3<f32>,
+  @location(1) normal: vec3<f32>,
+  @location(2) centerRadius: vec4<f32>,
+  @location(3) color: vec4<f32>,
+};
+
+struct MarkerVertexOut {
+  @builtin(position) position: vec4<f32>,
+  @location(0) normalView: vec3<f32>,
+  @location(1) color: vec3<f32>,
+};
+
+@vertex
+fn markerVertexMain(input: MarkerVertexIn) -> MarkerVertexOut {
+  var output: MarkerVertexOut;
+  let localPosition = input.centerRadius.xyz + input.position * input.centerRadius.w;
+  output.position = uniforms.mvp * vec4<f32>(localPosition, 1.0);
+  output.normalView = normalize((uniforms.modelView * vec4<f32>(input.normal, 0.0)).xyz);
+  output.color = input.color.rgb;
+  return output;
+}
+
+@fragment
+fn markerFragmentMain(input: MarkerVertexOut) -> @location(0) vec4<f32> {
+  let normal = normalize(input.normalView);
+  let lightDirection = vec3<f32>(0.0, 0.0, 1.0);
+  let diffuse = max(dot(normal, lightDirection), 0.0);
+  let specular = pow(max(normal.z, 0.0), 24.0);
+  let color = input.color * (0.28 + 0.72 * diffuse) + vec3<f32>(0.32) * specular;
+  return vec4<f32>(clamp(color, vec3<f32>(0.0), vec3<f32>(1.0)), 1.0);
+}
+`;
+
 const MAX_BRICK_REQUEST_LIST_IDS = 65536;
 const BRICK_REQUEST_READBACK_INTERVAL = 1;
-const UNIFORM_BUFFER_BYTE_LENGTH = 256;
+const UNIFORM_BUFFER_BYTE_LENGTH = 272;
+const MARKER_UNIFORM_BUFFER_BYTE_LENGTH = 128;
+const MARKER_INSTANCE_STRIDE = 32;
 const LEVEL_DATA_STRIDE = 32;
 const DEFAULT_SCREEN_SPACE_ERROR = 1.0;
 const APPLE_MOBILE_RENDER_PIXEL_RATIO = 1.0;
@@ -518,7 +583,10 @@ export class CoordinateCubeRenderer {
     this.context = null;
     this.format = null;
     this.pipeline = null;
+    this.markerPipeline = null;
     this.uniformBuffer = null;
+    this.markerUniformBuffer = null;
+    this.markerBindGroup = null;
     this.bindGroup = null;
     this.brickAtlas = null;
     this.transferFunction = null;
@@ -542,9 +610,16 @@ export class CoordinateCubeRenderer {
     this.vertexBuffer = null;
     this.indexBuffer = null;
     this.depthTexture = null;
+    this.markerDepthTexture = null;
     this.depthWidth = 0;
     this.depthHeight = 0;
     this.indexCount = 0;
+    this.markerVertexBuffer = null;
+    this.markerIndexBuffer = null;
+    this.markerInstanceBuffer = null;
+    this.markerIndexCount = 0;
+    this.markerInstanceCount = 0;
+    this.markers = [];
     this.volumeHalfExtent = [0.68, 0.68, 0.68];
     this.level0BrickCount = [1, 1, 1];
     this.level0Size = [1, 1, 1];
@@ -598,6 +673,12 @@ export class CoordinateCubeRenderer {
 
   clearPersistentBrickCache() {
     return this.brickAtlas?.clearPersistentCache() ?? Promise.resolve();
+  }
+
+  setMarkers(markers) {
+    this.markers = Array.isArray(markers) ? markers : [];
+    this.uploadMarkerInstances();
+    this.drawNow();
   }
 
   profileSnapshot() {
@@ -891,19 +972,27 @@ export class CoordinateCubeRenderer {
       this.canvas.height !== height ||
       this.depthWidth !== width ||
       this.depthHeight !== height ||
-      !this.depthTexture
+      !this.depthTexture ||
+      !this.markerDepthTexture
     ) {
       this.canvas.width = width;
       this.canvas.height = height;
       this.configureContext();
       this.depthTexture?.destroy();
+      this.markerDepthTexture?.destroy();
       this.depthTexture = this.device?.createTexture({
         size: [width, height],
         format: "depth24plus",
         usage: GPUTextureUsage.RENDER_ATTACHMENT
       }) ?? null;
+      this.markerDepthTexture = this.device?.createTexture({
+        size: [width, height],
+        format: "depth32float",
+        usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING
+      }) ?? null;
       this.depthWidth = this.depthTexture ? width : 0;
       this.depthHeight = this.depthTexture ? height : 0;
+      this.rebuildBindGroup();
       this.reportStatus(this.hasScene
         ? `Rendering resized canvas · ${width} x ${height}`
         : `WebGPU canvas ready · ${width} x ${height}`);
@@ -1001,7 +1090,70 @@ export class CoordinateCubeRenderer {
       }
     });
 
+    await this.createMarkerPipeline();
+
     this.createBrickRequestBuffers(this.totalBrickCount);
+  }
+
+  async createMarkerPipeline() {
+    const shaderModule = this.device.createShaderModule({
+      label: "BorgVR WebGPU marker shader",
+      code: markerShaderSource
+    });
+    const compilationInfo = await shaderModule.getCompilationInfo();
+    const shaderErrors = compilationInfo.messages.filter((message) => message.type === "error");
+    if (shaderErrors.length > 0) {
+      throw new Error(`Marker shader compilation failed:\n${shaderErrors.map((message) => message.message).join("\n")}`);
+    }
+
+    this.markerUniformBuffer = this.device.createBuffer({
+      size: MARKER_UNIFORM_BUFFER_BYTE_LENGTH,
+      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
+    });
+    this.markerPipeline = await this.device.createRenderPipelineAsync({
+      layout: "auto",
+      vertex: {
+        module: shaderModule,
+        entryPoint: "markerVertexMain",
+        buffers: [
+          {
+            arrayStride: 24,
+            attributes: [
+              { shaderLocation: 0, offset: 0, format: "float32x3" },
+              { shaderLocation: 1, offset: 12, format: "float32x3" }
+            ]
+          },
+          {
+            arrayStride: MARKER_INSTANCE_STRIDE,
+            stepMode: "instance",
+            attributes: [
+              { shaderLocation: 2, offset: 0, format: "float32x4" },
+              { shaderLocation: 3, offset: 16, format: "float32x4" }
+            ]
+          }
+        ]
+      },
+      fragment: {
+        module: shaderModule,
+        entryPoint: "markerFragmentMain",
+        targets: [{ format: this.format }]
+      },
+      primitive: {
+        topology: "triangle-list",
+        cullMode: "back"
+      },
+      depthStencil: {
+        depthWriteEnabled: true,
+        depthCompare: "less",
+        format: "depth32float"
+      }
+    });
+    this.markerBindGroup = this.device.createBindGroup({
+      layout: this.markerPipeline.getBindGroupLayout(0),
+      entries: [{ binding: 0, resource: { buffer: this.markerUniformBuffer } }]
+    });
+    this.createMarkerGeometry();
+    this.uploadMarkerInstances();
   }
 
   createTextureResources() {
@@ -1130,7 +1282,8 @@ export class CoordinateCubeRenderer {
         !this.volumeSampler ||
         !this.fallbackVolumeTexture ||
         !this.fallbackBrickMetaBuffer ||
-        !this.fallbackLevelDataBuffer) {
+        !this.fallbackLevelDataBuffer ||
+        !this.markerDepthTexture) {
       return;
     }
 
@@ -1148,7 +1301,8 @@ export class CoordinateCubeRenderer {
         { binding: 5, resource: this.transferFunctionTexture.createView() },
         { binding: 6, resource: this.transferFunctionSampler },
         { binding: 7, resource: { buffer: brickMetaBuffer } },
-        { binding: 8, resource: { buffer: levelDataBuffer } }
+        { binding: 8, resource: { buffer: levelDataBuffer } },
+        { binding: 9, resource: this.markerDepthTexture.createView() }
       ]
     });
   }
@@ -1195,6 +1349,79 @@ export class CoordinateCubeRenderer {
     this.device.queue.writeBuffer(this.vertexBuffer, 0, vertexData);
     this.device.queue.writeBuffer(this.indexBuffer, 0, indexData);
     this.indexCount = indexData.length;
+    this.uploadMarkerInstances();
+  }
+
+  createMarkerGeometry() {
+    if (!this.device) {
+      return;
+    }
+    const latitudeSegments = 20;
+    const longitudeSegments = 32;
+    const vertices = [];
+    const indices = [];
+    for (let latitude = 0; latitude <= latitudeSegments; latitude += 1) {
+      const theta = latitude * Math.PI / latitudeSegments;
+      const radial = Math.sin(theta);
+      const y = Math.cos(theta);
+      for (let longitude = 0; longitude <= longitudeSegments; longitude += 1) {
+        const phi = longitude * 2 * Math.PI / longitudeSegments;
+        const x = radial * Math.cos(phi);
+        const z = radial * Math.sin(phi);
+        vertices.push(x, y, z, x, y, z);
+      }
+    }
+    const rowLength = longitudeSegments + 1;
+    for (let latitude = 0; latitude < latitudeSegments; latitude += 1) {
+      for (let longitude = 0; longitude < longitudeSegments; longitude += 1) {
+        const topLeft = latitude * rowLength + longitude;
+        const bottomLeft = topLeft + rowLength;
+        indices.push(topLeft, topLeft + 1, bottomLeft);
+        indices.push(bottomLeft, topLeft + 1, bottomLeft + 1);
+      }
+    }
+
+    const vertexData = new Float32Array(vertices);
+    const indexData = new Uint16Array(indices);
+    this.markerVertexBuffer?.destroy();
+    this.markerIndexBuffer?.destroy();
+    this.markerVertexBuffer = this.device.createBuffer({
+      size: vertexData.byteLength,
+      usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST
+    });
+    this.markerIndexBuffer = this.device.createBuffer({
+      size: indexData.byteLength,
+      usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST
+    });
+    this.device.queue.writeBuffer(this.markerVertexBuffer, 0, vertexData);
+    this.device.queue.writeBuffer(this.markerIndexBuffer, 0, indexData);
+    this.markerIndexCount = indexData.length;
+  }
+
+  uploadMarkerInstances() {
+    if (!this.device) {
+      return;
+    }
+    const markerScale = 1.36;
+    const instanceData = new Float32Array(this.markers.length * 8);
+    this.markers.forEach((marker, index) => {
+      const offset = index * 8;
+      instanceData[offset] = (marker.position[0] - 0.5) * 2 * this.volumeHalfExtent[0];
+      instanceData[offset + 1] = (marker.position[1] - 0.5) * 2 * this.volumeHalfExtent[1];
+      instanceData[offset + 2] = (marker.position[2] - 0.5) * 2 * this.volumeHalfExtent[2];
+      instanceData[offset + 3] = marker.radius * markerScale;
+      instanceData.set(marker.color, offset + 4);
+    });
+
+    this.markerInstanceBuffer?.destroy();
+    this.markerInstanceBuffer = this.device.createBuffer({
+      size: Math.max(MARKER_INSTANCE_STRIDE, instanceData.byteLength),
+      usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST
+    });
+    if (instanceData.byteLength > 0) {
+      this.device.queue.writeBuffer(this.markerInstanceBuffer, 0, instanceData);
+    }
+    this.markerInstanceCount = this.markers.length;
   }
 
   installInteraction() {
@@ -1353,6 +1580,9 @@ export class CoordinateCubeRenderer {
     const drawStart = performance.now();
     if (!this.device ||
         !this.depthTexture ||
+        !this.markerDepthTexture ||
+        !this.markerPipeline ||
+        !this.markerBindGroup ||
         !this.bindGroup ||
         !this.brickRequestBitsetBuffer ||
         !this.brickRequestListBuffer ||
@@ -1364,11 +1594,43 @@ export class CoordinateCubeRenderer {
     this.device.queue.writeBuffer(this.brickRequestBitsetBuffer, 0, this.brickRequestBitsetClearData);
     this.device.queue.writeBuffer(this.brickRequestListBuffer, 0, this.brickRequestListClearData);
     const encoder = this.device.createCommandEncoder();
-    const pass = encoder.beginRenderPass({
+    const colorView = this.context.getCurrentTexture().createView();
+    if (this.hasScene) {
+      this.updateUniforms();
+    }
+
+    const markerPass = encoder.beginRenderPass({
       colorAttachments: [{
-        view: this.context.getCurrentTexture().createView(),
+        view: colorView,
         clearValue: { r: 0.05, g: 0.13, b: 0.21, a: 1 },
         loadOp: "clear",
+        storeOp: "store"
+      }],
+      depthStencilAttachment: {
+        view: this.markerDepthTexture.createView(),
+        depthClearValue: 1,
+        depthLoadOp: "clear",
+        depthStoreOp: "store"
+      }
+    });
+    if (this.hasScene &&
+        this.markerInstanceCount > 0 &&
+        this.markerVertexBuffer &&
+        this.markerIndexBuffer &&
+        this.markerInstanceBuffer) {
+      markerPass.setPipeline(this.markerPipeline);
+      markerPass.setBindGroup(0, this.markerBindGroup);
+      markerPass.setVertexBuffer(0, this.markerVertexBuffer);
+      markerPass.setVertexBuffer(1, this.markerInstanceBuffer);
+      markerPass.setIndexBuffer(this.markerIndexBuffer, "uint16");
+      markerPass.drawIndexed(this.markerIndexCount, this.markerInstanceCount);
+    }
+    markerPass.end();
+
+    const volumePass = encoder.beginRenderPass({
+      colorAttachments: [{
+        view: colorView,
+        loadOp: "load",
         storeOp: "store"
       }],
       depthStencilAttachment: {
@@ -1380,15 +1642,14 @@ export class CoordinateCubeRenderer {
     });
 
     if (this.hasScene) {
-      this.updateUniforms();
-      pass.setPipeline(this.pipeline);
-      pass.setBindGroup(0, this.bindGroup);
-      pass.setVertexBuffer(0, this.vertexBuffer);
-      pass.setIndexBuffer(this.indexBuffer, "uint16");
-      pass.drawIndexed(this.indexCount);
+      volumePass.setPipeline(this.pipeline);
+      volumePass.setBindGroup(0, this.bindGroup);
+      volumePass.setVertexBuffer(0, this.vertexBuffer);
+      volumePass.setIndexBuffer(this.indexBuffer, "uint16");
+      volumePass.drawIndexed(this.indexCount);
     }
 
-    pass.end();
+    volumePass.end();
     const shouldReadBack = this.hasScene &&
       !this.brickRequestReadbackInFlight &&
       this.frameIndex % BRICK_REQUEST_READBACK_INTERVAL === 0;
@@ -1421,7 +1682,8 @@ export class CoordinateCubeRenderer {
     const projection = perspectiveWebGPU(45 * Math.PI / 180, aspect, 0.05, 1000);
     const view = translation(this.panX, this.panY, -this.distance);
     const model = matrixFromQuaternion(this.orientation);
-    const mvp = multiply(projection, multiply(view, model));
+    const modelView = multiply(view, model);
+    const mvp = multiply(projection, modelView);
     const cameraTexture = this.cameraPositionInTextureSpace();
     const atlasAxis = this.brickAtlas?.atlasBricksPerAxis || 1;
     const brickSize = this.brickAtlas?.brickSize || 1;
@@ -1451,8 +1713,16 @@ export class CoordinateCubeRenderer {
       cubeMin[0], cubeMin[1], cubeMin[2], 0,
       cubeMax[0], cubeMax[1], cubeMax[2], 0,
       this.levelCount, lodFactor, this.levelZeroWorldSpaceError, 1,
-      this.transferBias, this.renderMode, this.isoValue, 1
+      this.transferBias, this.renderMode, this.isoValue, 1,
+      this.volumeHalfExtent[0], this.volumeHalfExtent[1], this.volumeHalfExtent[2], 0
     ]));
+    if (this.markerUniformBuffer) {
+      this.device.queue.writeBuffer(
+        this.markerUniformBuffer,
+        0,
+        new Float32Array([...mvp, ...modelView])
+      );
+    }
   }
 
   async readBackBrickRequests() {

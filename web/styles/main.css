@@ -570,6 +570,47 @@ p {
   padding: 0 9px 9px;
 }
 
+.marker-controls {
+  display: grid;
+  gap: 7px;
+  padding: 2px 0 9px;
+}
+
+.marker-controls label {
+  grid-template-columns: 70px minmax(0, 1fr);
+  padding-bottom: 2px;
+}
+
+.marker-controls select {
+  min-width: 0;
+  width: 100%;
+  min-height: 30px;
+  border: 1px solid rgba(190, 249, 255, 0.18);
+  border-radius: 8px;
+  background: rgba(4, 14, 20, 0.78);
+  color: var(--text);
+  padding: 0 8px;
+}
+
+.marker-action-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 9px;
+}
+
+.marker-action-row .small-command-button {
+  margin: 0;
+  flex: 0 0 auto;
+}
+
+.marker-count {
+  min-width: 0;
+  flex: 1;
+  color: var(--muted);
+  font-size: 11px;
+}
+
 .tf-editor-canvas {
   display: block;
   width: calc(100% - 18px);

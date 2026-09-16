@@ -512,6 +512,10 @@ bool HTTPWebServer::routeRequest(TcpSocket& socket, const Request& request, bool
     return sendTransferFunctionCatalog(socket, closeAfterSend);
   }
 
+  if (request.path == "/web-data/marker-files.json") {
+    return sendMarkerFileCatalog(socket, closeAfterSend);
+  }
+
   constexpr const char* transferFunctionPrefix = "/web-data/transfer-functions/";
   const std::string tfPrefix(transferFunctionPrefix);
   if (request.path.compare(0, tfPrefix.size(), tfPrefix) == 0) {
@@ -522,6 +526,18 @@ bool HTTPWebServer::routeRequest(TcpSocket& socket, const Request& request, bool
       id.resize(id.size() - suffix.size());
     }
     return sendTransferFunction(socket, id, closeAfterSend);
+  }
+
+  constexpr const char* markerFilePrefix = "/web-data/marker-files/";
+  const std::string markerPrefix(markerFilePrefix);
+  if (request.path.compare(0, markerPrefix.size(), markerPrefix) == 0) {
+    std::string id = request.path.substr(markerPrefix.size());
+    const std::string suffix = ".marker";
+    if (id.size() > suffix.size() &&
+        id.compare(id.size() - suffix.size(), suffix.size(), suffix) == 0) {
+      id.resize(id.size() - suffix.size());
+    }
+    return sendMarkerFile(socket, id, closeAfterSend);
   }
 
   constexpr const char* datasetPrefix = "/web-data/datasets/";
@@ -626,6 +642,58 @@ bool HTTPWebServer::sendTransferFunction(TcpSocket& socket, const std::string& i
   );
 
   return sendResponse(socket, 200, "OK", "application/octet-stream", body, {}, closeAfterSend);
+}
+
+bool HTTPWebServer::sendMarkerFileCatalog(TcpSocket& socket, bool closeAfterSend) {
+  const auto markerFiles = datasetServer_.markerFilesSnapshot();
+
+  std::ostringstream oss;
+  oss << "{\n"
+      << "  \"format\": \"borgvr-marker-files\",\n"
+      << "  \"version\": 1,\n"
+      << "  \"generatedAt\": \"dynamic\",\n"
+      << "  \"markerFiles\": [\n";
+
+  for (size_t i = 0; i < markerFiles.size(); ++i) {
+    const auto& marker = markerFiles[i];
+    oss << "    {\n"
+        << "      \"id\": \"" << jsonEscape(marker.id) << "\",\n"
+        << "      \"datasetID\": \"" << jsonEscape(marker.datasetId) << "\",\n"
+        << "      \"description\": \"" << jsonEscape(marker.markerDescription) << "\",\n"
+        << "      \"byteCount\": " << marker.byteCount << ",\n"
+        << "      \"url\": \"marker-files/" << jsonEscape(marker.id) << ".marker\"\n"
+        << "    }" << (i + 1 < markerFiles.size() ? "," : "") << "\n";
+  }
+
+  oss << "  ]\n"
+      << "}\n";
+  return sendTextResponse(socket, 200, "OK", "application/json; charset=utf-8", oss.str(), {}, closeAfterSend);
+}
+
+bool HTTPWebServer::sendMarkerFile(TcpSocket& socket, const std::string& id, bool closeAfterSend) {
+  if (id.size() != 32 ||
+      !std::all_of(id.begin(), id.end(), [](unsigned char c) { return std::isxdigit(c) != 0; })) {
+    return false;
+  }
+
+  MarkerFileInfo info;
+  if (!datasetServer_.findMarkerFileById(id, info)) {
+    return false;
+  }
+
+  std::ifstream input(info.filename, std::ios::binary);
+  if (!input) {
+    return false;
+  }
+  std::vector<uint8_t> body(
+    (std::istreambuf_iterator<char>(input)),
+    std::istreambuf_iterator<char>()
+  );
+  if (body.size() != info.byteCount) {
+    return false;
+  }
+
+  return sendResponse(socket, 200, "OK", "application/json; charset=utf-8", body, {}, closeAfterSend);
 }
 
 bool HTTPWebServer::sendDatasetManifest(TcpSocket& socket, const std::string& datasetID, bool closeAfterSend) {

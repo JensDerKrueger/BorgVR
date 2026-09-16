@@ -1,4 +1,4 @@
-import { CoordinateCubeRenderer } from "./cube-renderer.js?v=20260915-touch-zoom";
+import { CoordinateCubeRenderer } from "./cube-renderer.js?v=20260917-markers";
 import { decodeAppleLZ4, encodeLZ4Block } from "./lz4.js?v=20260911-urltf";
 import { transferFunctionRGBAData } from "./transfer-function.js?v=20260912-btf1";
 
@@ -27,6 +27,11 @@ const tfReset = document.querySelector("#tf-reset");
 const isoValue = document.querySelector("#iso-value");
 const clipInputs = Array.from(document.querySelectorAll("[data-clip-axis]"));
 const clipReset = document.querySelector("#clip-reset");
+const markerCatalogSelect = document.querySelector("#marker-catalog-select");
+const markerLoad = document.querySelector("#marker-load");
+const markerLoadInput = document.querySelector("#marker-load-input");
+const markerClear = document.querySelector("#marker-clear");
+const markerCount = document.querySelector("#marker-count");
 const persistentBrickCacheControls = Array.from(document.querySelectorAll("[data-persistent-brick-cache]"));
 const persistentBrickCacheInfoButton = document.querySelector("#persistent-brick-cache-info-button");
 const persistentBrickCacheInfo = document.querySelector("#persistent-brick-cache-info");
@@ -47,11 +52,15 @@ const MAX_TRANSFER_FUNCTION_RGBA_BYTES = MAX_TRANSFER_FUNCTION_ENTRIES * 4;
 const MAX_TRANSFER_FUNCTION_METADATA_BYTES = 64 * 1024;
 const MAX_TRANSFER_FUNCTION_URL_BYTES = MAX_TRANSFER_FUNCTION_RGBA_BYTES + MAX_TRANSFER_FUNCTION_METADATA_BYTES;
 const MAX_TRANSFER_FUNCTION_FILE_BYTES = MAX_TRANSFER_FUNCTION_RGBA_BYTES + MAX_TRANSFER_FUNCTION_METADATA_BYTES;
+const MAX_MARKER_FILE_BYTES = 64 * 1024 * 1024;
+const MAX_MARKER_COUNT = 100_000;
 
 let renderer = null;
 let currentManifest = null;
 let transferFunctionCatalog = [];
 let transferFunctionCatalogBuffers = new Map();
+let markerFileCatalog = [];
+let markerFileCatalogBuffers = new Map();
 let rendererStatus = "Initializing WebGPU...";
 let statusVisible = false;
 let controlsCollapsed = false;
@@ -118,12 +127,60 @@ async function main() {
 
   const catalog = await fetchJSON("./web-data/datasets.json", "catalog");
   await loadTransferFunctionCatalog();
+  await loadMarkerFileCatalog();
   catalogStatus.textContent = `${catalog.datasets.length} datasets available`;
   if (rendererStatus === "Initializing WebGPU...") {
     setStatus(`${catalog.datasets.length} datasets available`);
   }
   datasetList.replaceChildren(...catalog.datasets.map((dataset) => datasetButton(dataset)));
   await openDatasetFromURL(catalog.datasets);
+}
+
+async function loadMarkerFileCatalog() {
+  try {
+    const catalog = await fetchJSON("./web-data/marker-files.json", "marker files");
+    markerFileCatalog = Array.isArray(catalog.markerFiles)
+      ? catalog.markerFiles.filter(validMarkerCatalogEntry)
+      : [];
+  } catch {
+    markerFileCatalog = [];
+  }
+  markerFileCatalogBuffers = new Map();
+  updateMarkerCatalogOptions();
+}
+
+function validMarkerCatalogEntry(entry) {
+  return Boolean(entry?.id && entry?.url && isUUID(entry?.datasetID));
+}
+
+function updateMarkerCatalogOptions() {
+  if (!markerCatalogSelect) {
+    return;
+  }
+  const currentDatasetID = currentManifest?.id?.toLowerCase() ?? "";
+  const sortedEntries = [...markerFileCatalog].sort((left, right) => {
+    const leftMatches = left.datasetID.toLowerCase() === currentDatasetID;
+    const rightMatches = right.datasetID.toLowerCase() === currentDatasetID;
+    if (leftMatches !== rightMatches) {
+      return leftMatches ? -1 : 1;
+    }
+    return displayMarkerFileName(left).localeCompare(displayMarkerFileName(right), undefined, { sensitivity: "base" });
+  });
+  const options = [new Option(sortedEntries.length ? "Server Marker Files" : "No marker files", "")];
+  options[0].selected = true;
+  for (const entry of sortedEntries) {
+    const matches = entry.datasetID.toLowerCase() === currentDatasetID;
+    const label = matches
+      ? `${displayMarkerFileName(entry)} (this dataset)`
+      : displayMarkerFileName(entry);
+    options.push(new Option(label, entry.id));
+  }
+  markerCatalogSelect.replaceChildren(...options);
+  markerCatalogSelect.disabled = sortedEntries.length === 0;
+}
+
+function displayMarkerFileName(entry) {
+  return entry.description?.trim() || entry.id;
 }
 
 async function loadTransferFunctionCatalog() {
@@ -310,6 +367,9 @@ async function showDataset(dataset) {
     return;
   }
   renderer?.setDataset(currentManifest);
+  renderer?.setMarkers([]);
+  updateMarkerState([]);
+  updateMarkerCatalogOptions();
   isoValue.value = String(renderer.getNormalizedIsoValue());
   applyRenderStateFromURL();
   const transferFunctionStatus = await applyTransferFunctionFromURL();
@@ -498,6 +558,55 @@ function installRenderControls() {
     renderer?.resetClipping();
   });
 
+  markerCatalogSelect?.addEventListener("change", async () => {
+    const entry = markerFileCatalog.find((candidate) => candidate.id === markerCatalogSelect.value);
+    if (!entry) {
+      return;
+    }
+    try {
+      const contents = parseMarkerFile(await fetchCatalogMarkerFile(entry));
+      if (!confirmMarkerDataset(contents.datasetID)) {
+        markerCatalogSelect.value = "";
+        return;
+      }
+      applyMarkers(contents.markers, entry.id);
+      setStatus(`Marker file loaded: ${displayMarkerFileName(entry)}`);
+    } catch (error) {
+      markerCatalogSelect.value = "";
+      setStatus(`Marker file load failed: ${error.message ?? String(error)}`);
+    }
+  });
+
+  markerLoad?.addEventListener("click", () => {
+    markerLoadInput.value = "";
+    markerLoadInput.click();
+  });
+
+  markerLoadInput?.addEventListener("change", async () => {
+    const file = markerLoadInput.files?.[0];
+    if (!file) {
+      return;
+    }
+    try {
+      if (file.size <= 0 || file.size > MAX_MARKER_FILE_BYTES) {
+        throw new Error("Marker file exceeds the supported size limit.");
+      }
+      const contents = parseMarkerFile(await file.arrayBuffer());
+      if (!confirmMarkerDataset(contents.datasetID)) {
+        return;
+      }
+      applyMarkers(contents.markers);
+      setStatus(`Marker file loaded: ${file.name}`);
+    } catch (error) {
+      setStatus(`Marker file load failed: ${error.message ?? String(error)}`);
+    }
+  });
+
+  markerClear?.addEventListener("click", () => {
+    applyMarkers([]);
+    setStatus("Markers cleared.");
+  });
+
   persistentBrickCacheControls.forEach((control) => {
     control.addEventListener("change", async () => {
       await setPersistentBrickCacheEnabled(control.checked);
@@ -526,6 +635,33 @@ function installRenderControls() {
 
   updateVisibleEditor();
   drawTransferFunctionEditor();
+}
+
+function applyMarkers(markers, catalogID = "") {
+  renderer?.setMarkers(markers);
+  updateMarkerState(markers);
+  if (markerCatalogSelect) {
+    markerCatalogSelect.value = catalogID;
+  }
+}
+
+function updateMarkerState(markers) {
+  const count = markers.length;
+  if (markerCount) {
+    markerCount.textContent = count === 0
+      ? "No markers loaded"
+      : `${count} marker${count === 1 ? "" : "s"} loaded`;
+  }
+  if (markerClear) {
+    markerClear.disabled = count === 0;
+  }
+}
+
+function confirmMarkerDataset(datasetID) {
+  if (!currentManifest?.id || datasetID.toLowerCase() === currentManifest.id.toLowerCase()) {
+    return true;
+  }
+  return window.confirm("This marker file was created for a different dataset. Load it anyway?");
 }
 
 function loadPersistentBrickCacheSetting() {
@@ -809,6 +945,96 @@ async function fetchCatalogTransferFunction(entry) {
   }
   transferFunctionCatalogBuffers.set(entry.id, buffer);
   return buffer;
+}
+
+async function fetchCatalogMarkerFile(entry) {
+  if (!entry?.id || !entry?.url) {
+    throw new Error("Marker file catalog entry is incomplete.");
+  }
+  const declaredByteCount = markerFileByteCount(entry);
+  if (markerFileCatalogBuffers.has(entry.id)) {
+    return markerFileCatalogBuffers.get(entry.id);
+  }
+
+  const url = new URL(`./web-data/${entry.url}`, window.location.href);
+  const response = await fetch(url, { credentials: "same-origin" });
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}`);
+  }
+  validateResponseContentLength(response, MAX_MARKER_FILE_BYTES, "marker file");
+  const buffer = await responseArrayBufferWithLimit(response, MAX_MARKER_FILE_BYTES, "marker file");
+  if (declaredByteCount !== null && buffer.byteLength !== declaredByteCount) {
+    throw new Error(
+      `Marker file byte count mismatch: expected ${declaredByteCount}, received ${buffer.byteLength}.`
+    );
+  }
+  markerFileCatalogBuffers.set(entry.id, buffer);
+  return buffer;
+}
+
+function markerFileByteCount(entry) {
+  if (entry.byteCount === undefined || entry.byteCount === null) {
+    return null;
+  }
+  const byteCount = Number(entry.byteCount);
+  if (!Number.isInteger(byteCount) || byteCount <= 0 || byteCount > MAX_MARKER_FILE_BYTES) {
+    throw new Error("Marker file catalog entry exceeds the supported size limit.");
+  }
+  return byteCount;
+}
+
+function parseMarkerFile(buffer) {
+  if (!(buffer instanceof ArrayBuffer) || buffer.byteLength <= 0 || buffer.byteLength > MAX_MARKER_FILE_BYTES) {
+    throw new Error("Marker file exceeds the supported size limit.");
+  }
+  let payload;
+  try {
+    payload = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(buffer));
+  } catch {
+    throw new Error("The selected file is not a valid BorgVR marker file.");
+  }
+  if (payload?.format !== "BorgVRVolumeMarkers" || payload?.version !== 1 || !isUUID(payload?.datasetID)) {
+    throw new Error("The selected file is not a supported BorgVR marker file.");
+  }
+  if (!Array.isArray(payload.markers) || payload.markers.length > MAX_MARKER_COUNT) {
+    throw new Error("The marker file contains too many markers or has an invalid marker list.");
+  }
+  return {
+    datasetID: payload.datasetID,
+    markers: payload.markers.map((marker, index) => normalizeMarker(marker, index))
+  };
+}
+
+function normalizeMarker(marker, index) {
+  if (!marker || !Array.isArray(marker.position) || !Array.isArray(marker.color)) {
+    throw new Error(`Marker ${index + 1} is incomplete.`);
+  }
+  return {
+    id: typeof marker.id === "string" ? marker.id : "",
+    name: String(marker.name || `Marker ${index + 1}`).trim().slice(0, 80) || `Marker ${index + 1}`,
+    position: [
+      finiteClamped(marker.position[0], 0.5, -8, 8),
+      finiteClamped(marker.position[1], 0.5, -8, 8),
+      finiteClamped(marker.position[2], 0.5, -8, 8)
+    ],
+    radius: finiteClamped(marker.radius, 0.08, 0.005, 1),
+    color: [
+      finiteClamped(marker.color[0], 1, 0, 1),
+      finiteClamped(marker.color[1], 0, 0, 1),
+      finiteClamped(marker.color[2], 0, 0, 1),
+      finiteClamped(marker.color[3], 1, 0, 1)
+    ]
+  };
+}
+
+function finiteClamped(value, fallback, minimum, maximum) {
+  const number = Number(value);
+  return Number.isFinite(number) ? clamp(number, minimum, maximum) : fallback;
+}
+
+function isUUID(value) {
+  return typeof value === "string" &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu.test(value);
 }
 
 function transferFunctionByteCount(entry) {
