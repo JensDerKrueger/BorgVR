@@ -1,4 +1,13 @@
+import Foundation
 import RealityKit
+
+struct VolumeMarker: Identifiable, Equatable {
+  var id: UUID
+  var name: String
+  var position: SIMD3<Float>
+  var radius: Float
+  var color: SIMD4<Float>
+}
 
 // MARK: - SharedAppModel
 
@@ -46,6 +55,10 @@ class SharedAppModel {
   var rangeMax: Int = 1
   /// A flag indicating that the atas should be emptied
   var purgeAtlas: Bool
+  /// Opaque markers placed in normalized dataset coordinates.
+  var volumeMarkers: [VolumeMarker]
+  /// Locally selected marker. This is intentionally not synchronized.
+  var selectedVolumeMarkerID: UUID?
 
   // Initialize after self is fully initialized to avoid using self too early.
   private var groupActivityHelper: GroupActivityHelper?
@@ -66,6 +79,8 @@ class SharedAppModel {
     renderMode = .transferFunction1D
     brickVis = false
     purgeAtlas = false
+    volumeMarkers = []
+    selectedVolumeMarkerID = nil
     groupActivityHelper = GroupActivityHelper(self)
 
     reset()
@@ -81,6 +96,19 @@ class SharedAppModel {
 
   func synchronize(kind: UpdateKind) {
     groupActivityHelper?.synchronize(kind: kind)
+  }
+
+  func synchronizeMarkers() {
+    groupActivityHelper?.synchronizeMarkers()
+  }
+
+  func nextVolumeMarkerName() -> String {
+    let usedNames = Set(volumeMarkers.map(\.name))
+    var markerIndex = volumeMarkers.count + 1
+    while usedNames.contains("Marker \(markerIndex)") {
+      markerIndex += 1
+    }
+    return "Marker \(markerIndex)"
   }
 
   @MainActor func leaveGroupActivity() {
@@ -154,6 +182,8 @@ class SharedAppModel {
     renderMode = .transferFunction1D
     brickVis = false
     purgeAtlas = false
+    volumeMarkers = []
+    selectedVolumeMarkerID = nil
   }
 
   func resetModel() {
@@ -308,6 +338,27 @@ class SharedAppModel {
     return w.data
   }
 
+  func serializeVolumeMarkersSharePlayState() -> Data {
+    var w = DataWriter()
+
+    w.write(Self.sharePlayMagic)
+    w.write(Self.sharePlayVersion)
+    w.write(SharePlayPacketKind.volumeMarkers.rawValue)
+    w.write(UInt8(0))
+
+    let markerCount = min(volumeMarkers.count, Int(UInt16.max))
+    w.write(UInt16(markerCount))
+    for marker in volumeMarkers.prefix(markerCount) {
+      w.writeUUID(marker.id)
+      w.writeString(marker.name, maxCharacterCount: 80)
+      w.writeSIMD3(marker.position)
+      w.write(marker.radius)
+      w.writeSIMD4(marker.color)
+    }
+
+    return w.data
+  }
+
   /// Deserialize from a Data blob created by `serialize`.
   /// Initializes a fresh instance and populates all fields.
   convenience init(from data: Data) throws {
@@ -406,6 +457,38 @@ class SharedAppModel {
         let lScale = try r.readSIMD3()
         modelTransform = Transform(scale: tScale, rotation: tRotation, translation: tTranslation)
         lastModelTransform = Transform(scale: lScale, rotation: lRotation, translation: lTranslation)
+      case .volumeMarkers:
+        let markerCount: UInt16 = try r.read()
+        var newMarkers: [VolumeMarker] = []
+        newMarkers.reserveCapacity(Int(markerCount))
+        for _ in 0..<markerCount {
+          let id = try r.readUUID()
+          let name = try r.readString(maxByteCount: 512)
+          let position = try r.readSIMD3()
+          let radius: Float = try r.read()
+          let color = try r.readSIMD4()
+          let displayName = name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+          ? "Marker \(newMarkers.count + 1)"
+          : name
+          newMarkers.append(
+            VolumeMarker(
+              id: id,
+              name: String(displayName.prefix(80)),
+              position: SIMD3<Float>(
+                min(max(position.x, -8), 8),
+                min(max(position.y, -8), 8),
+                min(max(position.z, -8), 8)
+              ),
+              radius: min(max(radius, 0.005), 1.0),
+              color: color
+            )
+          )
+        }
+        volumeMarkers = newMarkers
+        if let selectedVolumeMarkerID,
+           !volumeMarkers.contains(where: { $0.id == selectedVolumeMarkerID }) {
+          self.selectedVolumeMarkerID = nil
+        }
     }
 
     if !r.isAtEnd { throw SharedAppModelError.trailingBytes(r.remainingCount) }
@@ -452,6 +535,7 @@ private enum SharePlayPacketKind: UInt8 {
   case commonRenderState = 1
   case screenTransform = 2
   case visionTransform = 3
+  case volumeMarkers = 4
 }
 
 // MARK: - Errors
@@ -461,6 +545,7 @@ enum SharedAppModelError: Error, CustomStringConvertible {
   case unsupportedVersion(UInt16)
   case unsupportedPacket(UInt8)
   case outOfBounds
+  case invalidString
   case trailingBytes(Int)
 
   var description: String {
@@ -469,6 +554,7 @@ enum SharedAppModelError: Error, CustomStringConvertible {
       case .unsupportedVersion(let v): return "Unsupported version \(v)."
       case .unsupportedPacket(let p): return "Unsupported packet \(p)."
       case .outOfBounds: return "Unexpected end of data."
+      case .invalidString: return "Invalid string data."
       case .trailingBytes(let n): return "Trailing \(n) byte(s) after record."
     }
   }
@@ -506,6 +592,24 @@ private struct DataWriter {
 
   mutating func writeSIMD3(_ v: SIMD3<Float>) {
     write(v.x); write(v.y); write(v.z)
+  }
+
+  mutating func writeSIMD4(_ v: SIMD4<Float>) {
+    write(v.x); write(v.y); write(v.z); write(v.w)
+  }
+
+  mutating func writeUUID(_ uuid: UUID) {
+    var value = uuid.uuid
+    withUnsafeBytes(of: &value) { raw in
+      data.append(contentsOf: raw)
+    }
+  }
+
+  mutating func writeString(_ string: String, maxCharacterCount: Int) {
+    let limitedString = String(string.prefix(maxCharacterCount))
+    let bytes = Data(limitedString.utf8)
+    write(UInt16(bytes.count))
+    writeRaw(bytes)
   }
 
   mutating func writeQuat(_ q: simd_quatf) {
@@ -560,6 +664,49 @@ private struct DataReader {
     let y: Float = try read()
     let z: Float = try read()
     return SIMD3<Float>(x, y, z)
+  }
+
+  mutating func readSIMD4() throws -> SIMD4<Float> {
+    let x: Float = try read()
+    let y: Float = try read()
+    let z: Float = try read()
+    let w: Float = try read()
+    return SIMD4<Float>(x, y, z, w)
+  }
+
+  mutating func readUUID() throws -> UUID {
+    guard offset + 16 <= data.count else { throw SharedAppModelError.outOfBounds }
+    let bytes = data[offset ..< offset + 16]
+    offset += 16
+    let tuple = (
+      bytes[bytes.startIndex],
+      bytes[bytes.index(bytes.startIndex, offsetBy: 1)],
+      bytes[bytes.index(bytes.startIndex, offsetBy: 2)],
+      bytes[bytes.index(bytes.startIndex, offsetBy: 3)],
+      bytes[bytes.index(bytes.startIndex, offsetBy: 4)],
+      bytes[bytes.index(bytes.startIndex, offsetBy: 5)],
+      bytes[bytes.index(bytes.startIndex, offsetBy: 6)],
+      bytes[bytes.index(bytes.startIndex, offsetBy: 7)],
+      bytes[bytes.index(bytes.startIndex, offsetBy: 8)],
+      bytes[bytes.index(bytes.startIndex, offsetBy: 9)],
+      bytes[bytes.index(bytes.startIndex, offsetBy: 10)],
+      bytes[bytes.index(bytes.startIndex, offsetBy: 11)],
+      bytes[bytes.index(bytes.startIndex, offsetBy: 12)],
+      bytes[bytes.index(bytes.startIndex, offsetBy: 13)],
+      bytes[bytes.index(bytes.startIndex, offsetBy: 14)],
+      bytes[bytes.index(bytes.startIndex, offsetBy: 15)]
+    )
+    return UUID(uuid: tuple)
+  }
+
+  mutating func readString(maxByteCount: Int) throws -> String {
+    let byteCount: UInt16 = try read()
+    guard Int(byteCount) <= maxByteCount else { throw SharedAppModelError.invalidString }
+    let stringData = try readRaw(Int(byteCount))
+    guard let string = String(data: stringData, encoding: .utf8) else {
+      throw SharedAppModelError.invalidString
+    }
+    return string
   }
 
   mutating func readQuat() throws -> simd_quatf {

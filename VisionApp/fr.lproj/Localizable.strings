@@ -257,6 +257,23 @@
 /* Private application: interaction modes */
 "private_interaction_option_model" = "Modèle";
 "private_interaction_option_clipping" = "Découpe";
+"private_interaction_option_marker" = "Marqueurs";
+"private_marker_color_picker" = "Couleur du marqueur";
+"private_marker_no_selection" = "Sélectionnez un marqueur pour changer sa couleur.";
+"private_marker_delete_selected_button" = "Supprimer le marqueur sélectionné";
+"private_marker_clear_all_button" = "Effacer les marqueurs";
+"private_marker_open_button" = "Marqueurs…";
+"marker_window_title" = "Marqueurs";
+"private_marker_spawn_label" = "Créer un nouveau marqueur";
+"private_marker_spawn_hand" = "Position de la main";
+"private_marker_spawn_gaze" = "Position du regard";
+"marker_window_empty" = "Aucun marqueur n’a encore été placé. Passez en mode Marqueurs et pincez pour en créer un.";
+"marker_window_marker_row_format" = "Marqueur %d";
+"marker_window_name_field" = "Nom";
+"marker_clear_all_confirmation_title" = "Effacer tous les marqueurs ?";
+"marker_clear_all_confirmation_message" = "Cela supprime tous les marqueurs de la session actuelle.";
+"marker_clear_all_confirmation_delete" = "Effacer les marqueurs";
+"marker_clear_all_confirmation_cancel" = "Annuler";
 
 /* Private application: editor button title format */
 "private_editor_title_format" = "Éditeur %@";
@@ -334,6 +351,7 @@
 
 /* Settings: section headers */
 "settings_section_rendering_interface" = "Interface de rendu";
+"settings_section_markers" = "Marqueurs";
 "settings_section_remote_datasets" = "Serveur pour jeux de données distants";
 "settings_section_remote_loading" = "Chargement distant";
 "settings_section_import" = "Importer";
@@ -351,6 +369,13 @@
 "settings_toggle_autoload_transform" = "Charger et enregistrer automatiquement la transformation";
 "settings_toggle_disable_foveation" = "Désactiver la fovéation";
 "settings_toggle_sample_jitter" = "Phase d’échantillonnage aléatoire";
+"settings_toggle_quick_marker" = "Marqueur rapide";
+"settings_quick_marker_info_button" = "Infos sur le marqueur rapide";
+"settings_quick_marker_info_title" = "Marqueur rapide";
+"settings_quick_marker_info_message" = "Lorsque le marqueur rapide est activé, vous pouvez placer un marqueur sans passer durablement en mode Marqueurs. Faites un double pincement sur le volume ; le second pincement crée le marqueur à cet endroit, et tant que vous maintenez le pincement vous pouvez le déplacer. Au relâchement, BorgVR reprend le mode d’interaction précédent.";
+"settings_quick_marker_double_pinch_window" = "Délai du double pincement";
+"settings_quick_marker_seconds_format" = "%.2f s";
+"settings_marker_default_color" = "Couleur par défaut des marqueurs";
 "settings_toggle_show_notifications" = "Afficher les notifications (autorisation requise)";
 "settings_toggle_enable_voice_input" = "Activer l’entrée vocale (autorisation requise)";
 "settings_toggle_autostart_voice" = "Démarrer automatiquement l’entrée vocale";
@@ -531,7 +556,7 @@
 "voice_group_transferOpacity_title" = "Fonction de transfert – opacité";
 "voice_group_transferChannels_title" = "Fonction de transfert – canaux";
 "voice_group_transferReset_title" = "Fonction de transfert – réinitialisation";
-"voice_group_interaction_title" = "Interaction et clipping";
+"voice_group_interaction_title" = "Interaction, clipping et marqueurs";
 "voice_group_global_title" = "Global";
 "voice_group_datasetInfo_title" = "Infos du jeu de données";
 
@@ -543,7 +568,7 @@
 "voice_group_transferOpacity_description" = "Activer, désactiver ou basculer l’édition de l’opacité.";
 "voice_group_transferChannels_description" = "Contrôler les canaux de couleur individuels (rouge, vert, bleu).";
 "voice_group_transferReset_description" = "Réinitialiser la fonction de transfert à son état par défaut.";
-"voice_group_interaction_description" = "Mode d’interaction, clipping et contrôle de l’éditeur.";
+"voice_group_interaction_description" = "Mode d’interaction, clipping, placement de marqueurs, marqueur rapide et contrôle de l’éditeur.";
 "voice_group_global_description" = "Réinitialiser l’état global de l’application.";
 "voice_group_datasetInfo_description" = "Demander des informations sur le jeu de données actuellement chargé.";
 
@@ -571,6 +596,10 @@
 "voice_cmd_interaction_reset_clipping_description" = "Réinitialiser les limites de clipping au volume complet.";
 "voice_cmd_interaction_open_editor_description" = "Ouvrir la fenêtre de l’éditeur actuellement sélectionné.";
 "voice_cmd_interaction_activate_model_description" = "Passer le mode d’interaction à la manipulation du modèle.";
+"voice_cmd_interaction_activate_marker_description" = "Passer le mode d’interaction au placement et à l’édition des marqueurs.";
+"voice_cmd_interaction_quick_marker_on_description" = "Activer le placement de marqueurs par double pincement rapide.";
+"voice_cmd_interaction_quick_marker_off_description" = "Désactiver le placement de marqueurs par double pincement rapide.";
+"voice_cmd_interaction_quick_marker_toggle_description" = "Basculer le placement de marqueurs par double pincement rapide.";
 "voice_cmd_voice_disable_description" = "Arrêter la reconnaissance vocale et désactiver le contrôle vocal.";
 "voice_cmd_global_reset_all_description" = "Réinitialiser toute l’application à son état initial.";
 "voice_cmd_dataset_info_description" = "Décrire le jeu de données actuellement chargé.";
@@ -593,11 +622,13 @@
 "voice_speak_standby" = "En veille";
 "voice_speak_clipping" = "Découpe";
 "voice_speak_model" = "Modèle";
+"voice_speak_marker" = "Marqueurs";
 "voice_speak_voice_off" = "Voix désactivée";
 "voice_speak_reset_all" = "réinitialiser";
 
 /* Voice feedback: formatted phrases */
 "voice_speak_colour_state" = "couleur %@";
+"voice_speak_quick_marker_state" = "marqueur rapide %@";
 "voice_speak_colour_toggled" = "couleur basculée";
 "voice_speak_red_state" = "rouge %@";
 "voice_speak_green_state" = "vert %@";
@@ -728,6 +759,14 @@
 "voice_patterns_aliases_interaction_open_editor" = "";
 "voice_patterns_interaction_activate_model" = "activer le modèle|passer au modèle|mode modèle";
 "voice_patterns_aliases_interaction_activate_model" = "";
+"voice_patterns_interaction_activate_marker" = "activer les marqueurs|passer aux marqueurs|mode marqueurs";
+"voice_patterns_aliases_interaction_activate_marker" = "activer marqueur|passer au marqueur|mode marqueur";
+"voice_patterns_interaction_quick_marker_on" = "marqueur rapide activé|activer marqueur rapide";
+"voice_patterns_aliases_interaction_quick_marker_on" = "activer les marqueurs rapides";
+"voice_patterns_interaction_quick_marker_off" = "marqueur rapide désactivé|désactiver marqueur rapide";
+"voice_patterns_aliases_interaction_quick_marker_off" = "désactiver les marqueurs rapides";
+"voice_patterns_interaction_quick_marker_toggle" = "basculer marqueur rapide|marqueur rapide";
+"voice_patterns_aliases_interaction_quick_marker_toggle" = "basculer les marqueurs rapides";
 
 /* Voice disable */
 "voice_patterns_voice_disable" = "désactiver la voix|arrêter la voix|arrête d’écouter|fin de la voix|annuler la voix";

@@ -86,10 +86,12 @@ class RuntimeAppModel {
 
    - model: Manipulate the 3D model.
    - clipping: Adjust clipping planes.
+   - marker: Place and edit opaque volume markers.
    */
   enum InteractionMode: String {
     case model = "model"
     case clipping = "clipping"
+    case marker = "marker"
   }
   /// The current interaction mode.
   var interactionMode: InteractionMode = .model
@@ -201,16 +203,29 @@ class RuntimeAppModel {
     let width: Int
     let height: Int
     let depth: Int
+    let aspectX: Float
+    let aspectY: Float
+    let aspectZ: Float
     let componentCount: Int
     let bytesPerComponent: Int
+    let volumeScale: SIMD3<Float>
 
     init(meta: BORGVRMetaData) {
       self.description = meta.datasetDescription
       self.width = meta.width
       self.height = meta.height
       self.depth = meta.depth
+      self.aspectX = meta.aspectX
+      self.aspectY = meta.aspectY
+      self.aspectZ = meta.aspectZ
       self.componentCount = meta.componentCount
       self.bytesPerComponent = meta.bytesPerComponent
+      let maxExtend = Float(max(meta.width, meta.height, meta.depth))
+      self.volumeScale = SIMD3<Float>(
+        meta.aspectX * Float(meta.width) / maxExtend,
+        meta.aspectY * Float(meta.height) / maxExtend,
+        meta.aspectZ * Float(meta.depth) / maxExtend
+      )
     }
   }
 

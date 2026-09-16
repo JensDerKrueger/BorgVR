@@ -23,6 +23,10 @@ using namespace metal;
 #define VOLUME_SHADER_USES_RATE_MAP 0
 #endif
 
+#ifndef VOLUME_SHADER_USES_MARKER_TEXTURES
+#define VOLUME_SHADER_USES_MARKER_TEXTURES 0
+#endif
+
 #if VOLUME_SHADER_USES_AMPLIFICATION
 #define VOLUME_SHADER_AMP_PARAMETER , ushort amp_id [[amplification_id]]
 #define VOLUME_SHADER_UNIFORM_INDEX amp_id
@@ -37,6 +41,14 @@ using namespace metal;
 #else
 #define VOLUME_SHADER_RATE_MAP_PARAMETER
 #define VOLUME_SHADER_RATE_MAP_ARGUMENT
+#endif
+
+#if VOLUME_SHADER_USES_MARKER_TEXTURES
+#define VOLUME_SHADER_MARKER_PARAMETER , depth2d_array<float> markerDepthTexture [[texture(TextureIndexMarkerDepth)]]
+#define VOLUME_SHADER_MARKER_ARGUMENT , markerDepthTexture
+#else
+#define VOLUME_SHADER_MARKER_PARAMETER
+#define VOLUME_SHADER_MARKER_ARGUMENT
 #endif
 
 #ifndef VOLUME_VERTEX_SHADER_NAME
@@ -104,6 +116,41 @@ inline float samplingPhase(FragmentUniforms uniforms,
   return uniforms.sampleJitter > 0.5 ? raySamplePhase(entryPoint, direction, layerIndex) : defaultPhase;
 }
 
+#if VOLUME_SHADER_USES_MARKER_TEXTURES
+inline float markerDepthAtFragment(float4 fragmentPosition,
+                                   uint layerIndex,
+                                   depth2d_array<float> markerDepthTexture) {
+  uint2 pixel = uint2(fragmentPosition.xy);
+  if (pixel.x >= markerDepthTexture.get_width() ||
+      pixel.y >= markerDepthTexture.get_height() ||
+      layerIndex >= markerDepthTexture.get_array_size()) {
+    return 0.0;
+  }
+  return markerDepthTexture.read(pixel, layerIndex);
+}
+
+inline bool sampleReachedMarker(FragmentUniforms uniforms,
+                                float3 sampleNormCoords,
+                                float markerDepth) {
+  if (markerDepth <= 0.0) {
+    return false;
+  }
+  float4 clip = uniforms.textureToClip * float4(sampleNormCoords, 1.0);
+  float sampleDepth = clip.z / clip.w;
+  return sampleDepth <= markerDepth + 0.00001;
+}
+#else
+inline float markerDepthAtFragment(float4 fragmentPosition, uint layerIndex) {
+  return 0.0;
+}
+
+inline bool sampleReachedMarker(FragmentUniforms uniforms,
+                                float3 sampleNormCoords,
+                                float markerDepth) {
+  return false;
+}
+#endif
+
 // MARK: - Vertex Shader
 
 /**
@@ -157,119 +204,12 @@ fragment half4 VOLUME_FRAGMENT_SHADER_TF_NAME(
                                 device const uint* brickMeta                     [[buffer(FragmentBufferIndexBrickMeta)]],
                                 device atomic_uint* hashBuffer                   [[buffer(FragmentBufferIndexHashTable)]]
                                 VOLUME_SHADER_RATE_MAP_PARAMETER
+                                VOLUME_SHADER_MARKER_PARAMETER
                                 ) {
   FragmentUniforms uniforms = uniformsArray.uniforms[VOLUME_SHADER_UNIFORM_INDEX];
-  float oversampling = effectiveOversampling(uniforms.oversampling,
-                                             in.position,
-                                             uint(VOLUME_SHADER_UNIFORM_INDEX)
-                                             VOLUME_SHADER_RATE_MAP_ARGUMENT);
-  constexpr sampler s(address::clamp_to_border, filter::linear);
-
-  // Compute ray entry and exit in texture space
-  float3 exitPoint  = in.exitPoint;
-  float3 entryPoint = computeEntryPoint(uniforms.cameraPosInTextureSpace, exitPoint, uniforms);
-
-  float3 direction = exitPoint - entryPoint;
-  float rayLength = length(direction);
-
-  // If ray is too short, return transparent
-  if (rayLength < 1e-6) return half4(0);
-
-  // Compute distances for LOD selection
-  float entryDepth = length(uniforms.cameraPosInTextureSpaceVoxelScaled - entryPoint);
-  float exitDepth  = length(uniforms.cameraPosInTextureSpaceVoxelScaled - exitPoint);
-
-  float3 voxelSpaceDirection = transformToPoolSpace(direction, oversampling);
-  float  stepSize            = length(voxelSpaceDirection);
-  float  samplePhase         = samplingPhase(uniforms, entryPoint, direction, uint(VOLUME_SHADER_UNIFORM_INDEX), 0.5);
-
-  // Initialize ray marching
-  float3 currentPos = entryPoint;
-  float4 accColor   = float4(0);
-  float t           = 0;
-  uint  brickCount  = 0;
-
-  // March until exit or full opacity
-  while (t < 0.9999) {
-    float currentDepth = mix(entryDepth, exitDepth, t);
-    uint  iLOD         = computeLOD(currentDepth);
-
-    BrickInformation brickResult = getBrick(
-                                            currentPos, iLOD, direction,
-                                            uniforms.cubeBounds,
-                                            brickMeta, levelData,
-                                            hashBuffer, false
-                                            );
-
-#if STOP_ON_MISS == 1
-    if (brickResult.substitute) return half4(accColor);
-#endif
-
-    if (!brickResult.empty) {
-      // Number of samples within this brick
-      float segmentLength = length(brickResult.poolBrickInfo.poolExitCoords
-                                   - brickResult.poolBrickInfo.poolEntryCoords);
-      int iSteps = int(ceil(segmentLength / stepSize));
-      iSteps = min(int(2*BRICK_SIZE*oversampling),iSteps);
-      float actualStepScale = segmentLength / max(float(iSteps) * stepSize, 1e-6);
-      float ocFactor = float(1 << iLOD) * actualStepScale / oversampling;
-
-      // Sample along the ray segment in this brick
-      for (int i = 0; i < iSteps; ++i) {
-        float sampleT = (float(i) + samplePhase) / float(iSteps);
-        float3 poolCoords = mix(
-                                brickResult.poolBrickInfo.poolEntryCoords,
-                                brickResult.poolBrickInfo.poolExitCoords,
-                                sampleT
-                                );
-
-        float volumeValue = volumeAtlas.sample(s, poolCoords).r;
-        float4 current = float4(transferFunc.sample(s, volumeValue * uniforms.transferBias));
-        current.a = 1.0 - pow(1.0 - current.a, ocFactor);
-        accColor = underFloat(current, accColor);
-
-        // Early ray termination on high opacity
-        if (accColor.a > 0.99) return half4(accColor);
-      }
-    }
-
-    // Advance to the next brick
-    currentPos = brickResult.normExitCoords;
-    t = length(entryPoint - currentPos) / rayLength;
-
-    // Safety cap to prevent infinite loops
-    brickCount++;
-    if (brickCount == MAX_ITERATIONS) return half4(accColor);
-  }
-
-  return half4(accColor);
-}
-
-/**
- Performs volume raymarching with a 1D transfer function an Lighting
-
- - Parameters:
- - in: Interpolated vertex-to-fragment data (position + exit).
- - amp_id: Amplification ID for multithreaded draws.
- - volumeAtlas: 3D texture atlas containing volume bricks.
- - transferFunc: 1D transfer function texture.
- - uniformsArray: Double-buffered fragment uniforms for camera and rendering parameters.
- - levelData: Buffer containing LOD level metadata.
- - brickMeta: Buffer containing per-brick metadata.
- - hashBuffer: Atomic hash table buffer for missing-brick tracking.
- - Returns: The accumulated RGBA color after compositing along the ray.
- */
-fragment half4 VOLUME_FRAGMENT_SHADER_TF_LIGHTING_NAME(
-                                VertexToFragment in [[stage_in]] VOLUME_SHADER_AMP_PARAMETER,
-                                texture3d<half> volumeAtlas   [[texture(TextureIndexVolumeAtlas)]],
-                                texture1d<half> transferFunc  [[texture(TextureIndexTransferFunction)]],
-                                device const FragmentUniformsArray& uniformsArray [[buffer(FragmentBufferIndexUniforms)]],
-                                device const LevelData* levelData                [[buffer(FragmentBufferIndexLevelTable)]],
-                                device const uint* brickMeta                   [[buffer(FragmentBufferIndexBrickMeta)]],
-                                device atomic_uint* hashBuffer                   [[buffer(FragmentBufferIndexHashTable)]]
-                                VOLUME_SHADER_RATE_MAP_PARAMETER
-                                ) {
-  FragmentUniforms uniforms = uniformsArray.uniforms[VOLUME_SHADER_UNIFORM_INDEX];
+  float markerDepth = markerDepthAtFragment(in.position,
+                                            uint(VOLUME_SHADER_UNIFORM_INDEX)
+                                            VOLUME_SHADER_MARKER_ARGUMENT);
   float oversampling = effectiveOversampling(uniforms.oversampling,
                                              in.position,
                                              uint(VOLUME_SHADER_UNIFORM_INDEX)
@@ -333,6 +273,132 @@ fragment half4 VOLUME_FRAGMENT_SHADER_TF_LIGHTING_NAME(
                                       brickResult.normExitCoords,
                                       sampleT
                                       );
+        if (sampleReachedMarker(uniforms, sampleNormCoords, markerDepth)) {
+          return half4(accColor);
+        }
+        float3 poolCoords = mix(
+                                brickResult.poolBrickInfo.poolEntryCoords,
+                                brickResult.poolBrickInfo.poolExitCoords,
+                                sampleT
+                                );
+
+        float volumeValue = volumeAtlas.sample(s, poolCoords).r;
+        float4 current = float4(transferFunc.sample(s, volumeValue * uniforms.transferBias));
+        current.a = 1.0 - pow(1.0 - current.a, ocFactor);
+        accColor = underFloat(current, accColor);
+
+        // Early ray termination on high opacity
+        if (accColor.a > 0.99) return half4(accColor);
+      }
+    }
+
+    // Advance to the next brick
+    currentPos = brickResult.normExitCoords;
+    t = length(entryPoint - currentPos) / rayLength;
+
+    // Safety cap to prevent infinite loops
+    brickCount++;
+    if (brickCount == MAX_ITERATIONS) return half4(accColor);
+  }
+
+  return half4(accColor);
+}
+
+/**
+ Performs volume raymarching with a 1D transfer function an Lighting
+
+ - Parameters:
+ - in: Interpolated vertex-to-fragment data (position + exit).
+ - amp_id: Amplification ID for multithreaded draws.
+ - volumeAtlas: 3D texture atlas containing volume bricks.
+ - transferFunc: 1D transfer function texture.
+ - uniformsArray: Double-buffered fragment uniforms for camera and rendering parameters.
+ - levelData: Buffer containing LOD level metadata.
+ - brickMeta: Buffer containing per-brick metadata.
+ - hashBuffer: Atomic hash table buffer for missing-brick tracking.
+ - Returns: The accumulated RGBA color after compositing along the ray.
+ */
+fragment half4 VOLUME_FRAGMENT_SHADER_TF_LIGHTING_NAME(
+                                VertexToFragment in [[stage_in]] VOLUME_SHADER_AMP_PARAMETER,
+                                texture3d<half> volumeAtlas   [[texture(TextureIndexVolumeAtlas)]],
+                                texture1d<half> transferFunc  [[texture(TextureIndexTransferFunction)]],
+                                device const FragmentUniformsArray& uniformsArray [[buffer(FragmentBufferIndexUniforms)]],
+                                device const LevelData* levelData                [[buffer(FragmentBufferIndexLevelTable)]],
+                                device const uint* brickMeta                   [[buffer(FragmentBufferIndexBrickMeta)]],
+                                device atomic_uint* hashBuffer                   [[buffer(FragmentBufferIndexHashTable)]]
+                                VOLUME_SHADER_RATE_MAP_PARAMETER
+                                VOLUME_SHADER_MARKER_PARAMETER
+                                ) {
+  FragmentUniforms uniforms = uniformsArray.uniforms[VOLUME_SHADER_UNIFORM_INDEX];
+  float markerDepth = markerDepthAtFragment(in.position,
+                                            uint(VOLUME_SHADER_UNIFORM_INDEX)
+                                            VOLUME_SHADER_MARKER_ARGUMENT);
+  float oversampling = effectiveOversampling(uniforms.oversampling,
+                                             in.position,
+                                             uint(VOLUME_SHADER_UNIFORM_INDEX)
+                                             VOLUME_SHADER_RATE_MAP_ARGUMENT);
+  constexpr sampler s(address::clamp_to_border, filter::linear);
+
+  // Compute ray entry and exit in texture space
+  float3 exitPoint  = in.exitPoint;
+  float3 entryPoint = computeEntryPoint(uniforms.cameraPosInTextureSpace, exitPoint, uniforms);
+
+  float3 direction = exitPoint - entryPoint;
+  float rayLength = length(direction);
+
+  // If ray is too short, return transparent
+  if (rayLength < 1e-6) return half4(0);
+
+  // Compute distances for LOD selection
+  float entryDepth = length(uniforms.cameraPosInTextureSpaceVoxelScaled - entryPoint);
+  float exitDepth  = length(uniforms.cameraPosInTextureSpaceVoxelScaled - exitPoint);
+
+  float3 voxelSpaceDirection = transformToPoolSpace(direction, oversampling);
+  float  stepSize            = length(voxelSpaceDirection);
+  float  samplePhase         = samplingPhase(uniforms, entryPoint, direction, uint(VOLUME_SHADER_UNIFORM_INDEX), 0.5);
+
+  // Initialize ray marching
+  float3 currentPos = entryPoint;
+  float4 accColor   = float4(0);
+  float t           = 0;
+  uint  brickCount  = 0;
+
+  // March until exit or full opacity
+  while (t < 0.9999) {
+    float currentDepth = mix(entryDepth, exitDepth, t);
+    uint  iLOD         = computeLOD(currentDepth);
+
+    BrickInformation brickResult = getBrick(
+                                            currentPos, iLOD, direction,
+                                            uniforms.cubeBounds,
+                                            brickMeta, levelData,
+                                            hashBuffer, false
+                                            );
+
+#if STOP_ON_MISS == 1
+    if (brickResult.substitute) return half4(accColor);
+#endif
+
+    if (!brickResult.empty) {
+      // Number of samples within this brick
+      float segmentLength = length(brickResult.poolBrickInfo.poolExitCoords
+                                   - brickResult.poolBrickInfo.poolEntryCoords);
+      int iSteps = int(ceil(segmentLength / stepSize));
+      iSteps = min(int(2*BRICK_SIZE*oversampling),iSteps);
+      float actualStepScale = segmentLength / max(float(iSteps) * stepSize, 1e-6);
+      float ocFactor = float(1 << iLOD) * actualStepScale / oversampling;
+
+      // Sample along the ray segment in this brick
+      for (int i = 0; i < iSteps; ++i) {
+        float sampleT = (float(i) + samplePhase) / float(iSteps);
+        float3 sampleNormCoords = mix(
+                                      currentPos,
+                                      brickResult.normExitCoords,
+                                      sampleT
+                                      );
+        if (sampleReachedMarker(uniforms, sampleNormCoords, markerDepth)) {
+          return half4(accColor);
+        }
         float3 poolCoords = mix(
                                 brickResult.poolBrickInfo.poolEntryCoords,
                                 brickResult.poolBrickInfo.poolExitCoords,
@@ -391,8 +457,12 @@ fragment half4 VOLUME_FRAGMENT_SHADER_ISO_NAME(
                                  device const uint* brickMeta                    [[buffer(FragmentBufferIndexBrickMeta)]],
                                  device atomic_uint* hashBuffer                    [[buffer(FragmentBufferIndexHashTable)]]
                                  VOLUME_SHADER_RATE_MAP_PARAMETER
+                                 VOLUME_SHADER_MARKER_PARAMETER
                                  ) {
   FragmentUniforms uniforms = uniformsArray.uniforms[VOLUME_SHADER_UNIFORM_INDEX];
+  float markerDepth = markerDepthAtFragment(in.position,
+                                            uint(VOLUME_SHADER_UNIFORM_INDEX)
+                                            VOLUME_SHADER_MARKER_ARGUMENT);
   float oversampling = effectiveOversampling(uniforms.oversampling,
                                              in.position,
                                              uint(VOLUME_SHADER_UNIFORM_INDEX)
@@ -445,6 +515,9 @@ fragment half4 VOLUME_FRAGMENT_SHADER_ISO_NAME(
                                       brickResult.normExitCoords,
                                       sampleT
                                       );
+        if (sampleReachedMarker(uniforms, sampleNormCoords, markerDepth)) {
+          return half4(0);
+        }
         float3 poolCoords = mix(
                                 brickResult.poolBrickInfo.poolEntryCoords,
                                 brickResult.poolBrickInfo.poolExitCoords,

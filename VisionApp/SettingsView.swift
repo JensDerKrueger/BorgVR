@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 private let portNumberFormatter: NumberFormatter = {
   let formatter = NumberFormatter()
@@ -63,6 +64,7 @@ struct SettingsView: View {
   @State private var servers: [ServerConfig] = []
   @State private var didLoadServersForEditing = false
   @State private var isValidatingServers = false
+  @State private var showQuickMarkerInfo = false
 
   var body: some View {
     VStack(spacing: 20) {
@@ -119,6 +121,58 @@ struct SettingsView: View {
             Toggle(
               "settings_toggle_enable_voice_feedback",
               isOn: $storedAppModel.enableVoiceOutput
+            )
+          }
+
+          Section(header: Text("settings_section_markers").bold()) {
+            Toggle(isOn: $storedAppModel.quickMarker) {
+              HStack(spacing: 8) {
+                Text("settings_toggle_quick_marker")
+                Button {
+                  showQuickMarkerInfo = true
+                } label: {
+                  Image(systemName: "info.circle")
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text("settings_quick_marker_info_button"))
+              }
+            }
+            .alert(
+              "settings_quick_marker_info_title",
+              isPresented: $showQuickMarkerInfo
+            ) {
+              Button("OK", role: .cancel) {}
+            } message: {
+              Text("settings_quick_marker_info_message")
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+              HStack {
+                Text("settings_quick_marker_double_pinch_window")
+                Spacer()
+                Text(
+                  String(
+                    format: NSLocalizedString(
+                      "settings_quick_marker_seconds_format",
+                      comment: "Quick Marker double pinch time window in seconds"
+                    ),
+                    storedAppModel.quickMarkerDoublePinchInterval
+                  )
+                )
+                .foregroundStyle(.secondary)
+              }
+              Slider(
+                value: $storedAppModel.quickMarkerDoublePinchInterval,
+                in: 0.15...0.6,
+                step: 0.05
+              )
+            }
+            .disabled(!storedAppModel.quickMarker)
+
+            ColorPicker(
+              "settings_marker_default_color",
+              selection: markerDefaultColorBinding,
+              supportsOpacity: false
             )
           }
         }
@@ -598,6 +652,28 @@ struct SettingsView: View {
         .font(.footnote)
         .foregroundStyle(.secondary)
     }
+  }
+
+  private var markerDefaultColorBinding: Binding<Color> {
+    Binding(
+      get: {
+        Color(
+          red: storedAppModel.markerDefaultRed,
+          green: storedAppModel.markerDefaultGreen,
+          blue: storedAppModel.markerDefaultBlue
+        )
+      },
+      set: { newColor in
+        var red: CGFloat = 1
+        var green: CGFloat = 0
+        var blue: CGFloat = 0
+        var alpha: CGFloat = 1
+        UIColor(newColor).getRed(&red, green: &green, blue: &blue, alpha: &alpha)
+        storedAppModel.markerDefaultRed = Double(red)
+        storedAppModel.markerDefaultGreen = Double(green)
+        storedAppModel.markerDefaultBlue = Double(blue)
+      }
+    )
   }
 
   // MARK: - Remote server helpers

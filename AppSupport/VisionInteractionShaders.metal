@@ -9,6 +9,95 @@ struct TFChannelControlVaryings {
   float channelIndex;
 };
 
+struct VolumeMarkerVaryings {
+  float4 position [[position]];
+  float3 worldPosition;
+  float3 worldNormal;
+  float3 eyePosition;
+};
+
+struct MarkerCompositeVaryings {
+  float4 position [[position]];
+};
+
+struct MarkerCompositeOut {
+  float4 color [[color(0)]];
+  float depth [[depth(any)]];
+};
+
+vertex VolumeMarkerVaryings vertexShaderVolumeMarker(
+  uint vertexId [[vertex_id]],
+  ushort ampId [[amplification_id]],
+  device const Vertex* in [[buffer(VertexBufferIndexMeshPositions)]],
+  constant float4x4 *mvpPerView [[buffer(20)]],
+  constant float4x4 &modelMatrix [[buffer(21)]],
+  constant float3 *eyePositionPerView [[buffer(22)]])
+{
+  float3 local = in[vertexId].position;
+  float4 world = modelMatrix * float4(local, 1.0);
+
+  VolumeMarkerVaryings out;
+  out.position = mvpPerView[ampId] * world;
+  out.worldPosition = world.xyz;
+  out.worldNormal = normalize((modelMatrix * float4(local, 0.0)).xyz);
+  out.eyePosition = eyePositionPerView[ampId];
+  return out;
+}
+
+fragment float4 fragmentShaderVolumeMarker(
+  VolumeMarkerVaryings in [[stage_in]],
+  constant float4 &markerColor [[buffer(23)]])
+{
+  float3 normal = normalize(in.worldNormal);
+  float3 lightDirection = normalize(in.eyePosition - in.worldPosition);
+  float diffuse = max(dot(normal, lightDirection), 0.0);
+  float3 baseColor = markerColor.rgb;
+  return float4(baseColor * (0.28 + 0.72 * diffuse), markerColor.a);
+}
+
+vertex MarkerCompositeVaryings vertexShaderMarkerComposite(
+  uint vertexId [[vertex_id]],
+  ushort ampId [[amplification_id]])
+{
+  float2 positions[6] = {
+    float2(-1.0, -1.0),
+    float2( 1.0, -1.0),
+    float2(-1.0,  1.0),
+    float2( 1.0, -1.0),
+    float2( 1.0,  1.0),
+    float2(-1.0,  1.0)
+  };
+
+  MarkerCompositeVaryings out;
+  out.position = float4(positions[vertexId], 0.5, 1.0);
+  return out;
+}
+
+fragment MarkerCompositeOut fragmentShaderMarkerComposite(
+  MarkerCompositeVaryings in [[stage_in]],
+  ushort ampId [[amplification_id]],
+  texture2d_array<float> markerColorTexture [[texture(TextureIndexMarkerColor)]],
+  depth2d_array<float> markerDepthTexture [[texture(TextureIndexMarkerDepth)]])
+{
+  uint2 pixel = uint2(in.position.xy);
+  if (pixel.x >= markerColorTexture.get_width() ||
+      pixel.y >= markerColorTexture.get_height() ||
+      ampId >= markerColorTexture.get_array_size()) {
+    discard_fragment();
+  }
+
+  float markerDepth = markerDepthTexture.read(pixel, ampId);
+  float4 markerColor = markerColorTexture.read(pixel, ampId);
+  if (markerDepth <= 0.0 || markerColor.a <= 0.0) {
+    discard_fragment();
+  }
+
+  MarkerCompositeOut out;
+  out.color = markerColor;
+  out.depth = markerDepth;
+  return out;
+}
+
 static inline float panelDepthForY(float y, float panelHeight, float bottomDepthOffset) {
   return bottomDepthOffset * (0.5 - y / max(panelHeight, 0.0001));
 }

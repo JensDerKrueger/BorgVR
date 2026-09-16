@@ -53,8 +53,16 @@ final actor Renderer {
   var pipelineStateIso: MTLRenderPipelineState
   /// Render pipeline state for visualizing bricks.
   var pipelineStateBrickVis: MTLRenderPipelineState
+  /// Render pipeline state for opaque volume markers.
+  var pipelineStateVolumeMarker: MTLRenderPipelineState
+  /// Render pipeline state for compositing marker color under the volume.
+  var pipelineStateMarkerComposite: MTLRenderPipelineState
   /// Depth stencil state for rendering.
   var depthState: MTLDepthStencilState
+  /// Depth stencil state for marker geometry.
+  var depthStateMarker: MTLDepthStencilState
+  /// Depth stencil state for marker compositing.
+  var depthStateMarkerComposite: MTLDepthStencilState
 
   /// Render pipeline state for the transfer function HUD overlay.
   var pipelineStateTFHUD: MTLRenderPipelineState
@@ -72,6 +80,7 @@ final actor Renderer {
   var lastOriginFromDevice: simd_float4x4 = matrix_identity_float4x4
   var tfPanelWorldMatrix: simd_float4x4 = matrix_identity_float4x4
   var lastModelMatrix: simd_float4x4 = matrix_identity_float4x4
+  var lastUnscaledModelMatrix: simd_float4x4 = matrix_identity_float4x4
   var lastClipMatrix: simd_float4x4 = matrix_identity_float4x4
   var lastHeadPosition: SIMD3<Float> = .zero
 
@@ -98,6 +107,14 @@ final actor Renderer {
 
   /// A buffer containing vertex data for a cube.
   let cubeBuffer: MTLBuffer
+  /// A buffer containing marker sphere vertex positions.
+  let markerSphereBuffer: MTLBuffer
+  /// The number of vertices in the marker sphere buffer.
+  let markerSphereVertexCount: Int
+  /// Color texture produced by the marker prepass.
+  var markerColorTexture: MTLTexture?
+  /// Depth texture produced by the marker prepass.
+  var markerDepthTexture: MTLTexture?
   /// Parameter data copied from the drawable rasterization-rate map for shader-side foveation decisions.
   var rasterizationRateMapBuffer: MTLBuffer?
   /// The number of vertices in the cube buffer.
@@ -267,6 +284,8 @@ final actor Renderer {
        pipelineStateTFL,
        pipelineStateIso,
        pipelineStateBrickVis,
+       pipelineStateVolumeMarker,
+       pipelineStateMarkerComposite,
        pipelineStateTFHUD,
        pipelineStateTFHUDControls) =
       try Renderer.buildRenderPipelinesWithDevice(
@@ -284,6 +303,16 @@ final actor Renderer {
     depthStateDescriptor.depthCompareFunction = .greater
     depthStateDescriptor.isDepthWriteEnabled = true
     self.depthState = device.makeDepthStencilState(descriptor: depthStateDescriptor)!
+
+    let markerDepthStateDescriptor = MTLDepthStencilDescriptor()
+    markerDepthStateDescriptor.depthCompareFunction = .greater
+    markerDepthStateDescriptor.isDepthWriteEnabled = true
+    self.depthStateMarker = device.makeDepthStencilState(descriptor: markerDepthStateDescriptor)!
+
+    let markerCompositeDepthStateDescriptor = MTLDepthStencilDescriptor()
+    markerCompositeDepthStateDescriptor.depthCompareFunction = .always
+    markerCompositeDepthStateDescriptor.isDepthWriteEnabled = true
+    self.depthStateMarkerComposite = device.makeDepthStencilState(descriptor: markerCompositeDepthStateDescriptor)!
 
     let hudDepthStateDescriptor = MTLDepthStencilDescriptor()
     hudDepthStateDescriptor.depthCompareFunction = .always
@@ -312,6 +341,29 @@ final actor Renderer {
     cubeBuffer.contents().copyMemory(from: alignedVertices, byteCount: vertexDataSize)
 
     vertexCount = cube.vertices.count
+
+    let sphere = Tesselation.genSphere(
+      center: SIMD3<Float>(repeating: 0),
+      radius: 1,
+      sectorCount: 32,
+      stackCount: 16
+    ).unpack()
+    let alignedSphereVertexDataCount = (sphere.vertices.count + 15) & -16
+    let sphereVertexDataSize = MemoryLayout<SIMD3<Float>>.stride *
+    alignedSphereVertexDataCount
+    var alignedSphereVertices = sphere.vertices
+    let spherePaddingCount = alignedSphereVertexDataCount - sphere.vertices.count
+    alignedSphereVertices.append(contentsOf: Array(
+      repeating: paddingElement, count: spherePaddingCount))
+    markerSphereBuffer = self.device.makeBuffer(
+      length: sphereVertexDataSize,
+      options: [MTLResourceOptions.storageModeShared]
+    )!
+    markerSphereBuffer.contents().copyMemory(
+      from: alignedSphereVertices,
+      byteCount: sphereVertexDataSize
+    )
+    markerSphereVertexCount = sphere.vertices.count
 
     self.borgARProvider = BorgARProvider(
       logger: logger,

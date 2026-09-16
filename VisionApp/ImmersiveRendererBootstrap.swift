@@ -112,6 +112,7 @@ enum ImmersiveBootstrap {
     // Hook up spatial interactions
     let immersiveInteraction = ImmersiveInteraction(
       sharedAppModel: sharedAppModel,
+      storedAppModel: storedAppModel,
       transferFunctionPanelInteractionState: transferFunctionPanelInteractionState
     )
     layerRenderer.onSpatialEvent = { events in
@@ -121,7 +122,8 @@ enum ImmersiveBootstrap {
       immersiveInteraction.handleSpatialEvents(
         events,
         runtimeAppModel.interactionMode,
-        runtimeAppModel.transferEditState
+        runtimeAppModel.transferEditState,
+        datasetInfo: runtimeAppModel.activeDatasetInfo
       ) { channelIndex in
         switch channelIndex {
           case 0:

@@ -169,6 +169,16 @@ struct VisionApp: App {
     .windowResizability(.contentSize)
     .defaultSize(width:500,height:400)
 
+    WindowGroup(id: "MarkerView") {
+      MarkerView()
+        .trackView(name: "MarkerView")
+        .environment(runtimeAppModel)
+        .environment(sharedAppModel)
+        .environmentObject(storedAppModel)
+    }
+    .windowResizability(.contentSize)
+    .defaultSize(width: 620, height: 560)
+
     Window("Voice Commands", id: "VoiceCommandsView") {
       VoiceHelpView()
         .environment(runtimeAppModel)

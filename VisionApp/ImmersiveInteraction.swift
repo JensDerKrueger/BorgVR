@@ -4,6 +4,7 @@ import SwiftUI
 
 class ImmersiveInteraction {
   var sharedAppModel: SharedAppModel
+  var storedAppModel: StoredAppModel
   var transferFunctionPanelInteractionState: TransferFunctionPanelInteractionState
 
   private var startTranslation: SIMD3<Float> = .zero
@@ -19,10 +20,26 @@ class ImmersiveInteraction {
   private var transferFunctionPanelMarkerOpacity: Float = 1
   private var transferFunctionPanelMarkerSuppressed = false
   private var transferFunctionPanelChannelToggleActive = false
+  private var markerDragID: UUID?
+  private var markerDragStartPosition: SIMD3<Float> = .zero
+  private var markerDragHandStart: SIMD3<Float>?
+  private var markerScaleID: UUID?
+  private var markerScaleStartDistance: Float = 0
+  private var markerScaleStartRadius: Float = 0.08
+  private var sessionDefaultMarkerRadius: Float = 0.08
+  private var quickMarkerDragActive = false
+  private var quickMarkerCandidateTime: Date?
+  private var quickMarkerCandidatePosition: SIMD3<Float>?
+  private let quickMarkerMaxDistance: Float = 0.15
+  private let minMarkerRadius: Float = 0.005
+  private let maxMarkerRadius: Float = 1.0
+  private let maxMarkerCoordinate: Float = 8.0
 
   init(sharedAppModel: SharedAppModel,
+       storedAppModel: StoredAppModel,
        transferFunctionPanelInteractionState: TransferFunctionPanelInteractionState) {
     self.sharedAppModel = sharedAppModel
+    self.storedAppModel = storedAppModel
     self.transferFunctionPanelInteractionState = transferFunctionPanelInteractionState
   }
 
@@ -222,6 +239,375 @@ class ImmersiveInteraction {
     min(max(value, lower), upper)
   }
 
+  private func clamp(_ value: SIMD3<Float>, _ lower: Float = 0, _ upper: Float = 1) -> SIMD3<Float> {
+    SIMD3<Float>(
+      clamp(value.x, lower, upper),
+      clamp(value.y, lower, upper),
+      clamp(value.z, lower, upper)
+    )
+  }
+
+  private func transformPoint(_ matrix: simd_float4x4, _ point: SIMD3<Float>) -> SIMD3<Float> {
+    let transformed = matrix * SIMD4<Float>(point, 1)
+    return SIMD3<Float>(transformed.x, transformed.y, transformed.z) / transformed.w
+  }
+
+  private func scaleMatrix(_ scale: SIMD3<Float>) -> simd_float4x4 {
+    simd_float4x4(
+      SIMD4<Float>(scale.x, 0, 0, 0),
+      SIMD4<Float>(0, scale.y, 0, 0),
+      SIMD4<Float>(0, 0, scale.z, 0),
+      SIMD4<Float>(0, 0, 0, 1)
+    )
+  }
+
+  private func markerVolumeMatrix(for datasetInfo: RuntimeAppModel.DatasetInfo) -> simd_float4x4 {
+    sharedAppModel.originFromWorldAnchorMatrix *
+      sharedAppModel.modelTransform.matrix *
+      scaleMatrix(datasetInfo.volumeScale)
+  }
+
+  private func markerWorldCenter(_ marker: VolumeMarker,
+                                 datasetInfo: RuntimeAppModel.DatasetInfo) -> SIMD3<Float> {
+    let matrix = markerVolumeMatrix(for: datasetInfo)
+    return transformPoint(matrix, marker.position - SIMD3<Float>(repeating: 0.5))
+  }
+
+  private func markerWorldRadius(_ marker: VolumeMarker) -> Float {
+    let scale = sharedAppModel.modelTransform.scale
+    return marker.radius * max(scale.x, max(scale.y, scale.z))
+  }
+
+  private func markerPosition(fromWorldPosition worldPosition: SIMD3<Float>,
+                              datasetInfo: RuntimeAppModel.DatasetInfo) -> SIMD3<Float> {
+    let inverseVolume = markerVolumeMatrix(for: datasetInfo).inverse
+    return clamp(
+      transformPoint(inverseVolume, worldPosition) + SIMD3<Float>(repeating: 0.5),
+      -maxMarkerCoordinate,
+       maxMarkerCoordinate
+    )
+  }
+
+  private func markerSpawnPosition(
+    from event: SpatialEventCollection.Event,
+    datasetInfo: RuntimeAppModel.DatasetInfo
+  ) -> SIMD3<Float>? {
+    if storedAppModel.markerSpawnAtGaze {
+      guard let ray = ray(from: event),
+            let hit = rayVolumeHit(
+              origin: ray.origin,
+              direction: ray.direction,
+              datasetInfo: datasetInfo
+            ) else {
+        return nil
+      }
+      return hit
+    }
+
+    guard let handPosition = inputWorldPosition(from: event) else {
+      return nil
+    }
+    return markerPosition(fromWorldPosition: handPosition, datasetInfo: datasetInfo)
+  }
+
+  private func nearestMarker(to worldPosition: SIMD3<Float>,
+                             datasetInfo: RuntimeAppModel.DatasetInfo) -> VolumeMarker? {
+    var best: (marker: VolumeMarker, distance: Float)?
+    for marker in sharedAppModel.volumeMarkers {
+      let center = markerWorldCenter(marker, datasetInfo: datasetInfo)
+      let distance = simd_distance(center, worldPosition)
+      let pickDistance = max(markerWorldRadius(marker) * 2, 0.08)
+      guard distance <= pickDistance else { continue }
+      if best == nil || distance < best!.distance {
+        best = (marker, distance)
+      }
+    }
+    return best?.marker
+  }
+
+  private func rayVolumeHit(
+    origin: SIMD3<Float>,
+    direction: SIMD3<Float>,
+    datasetInfo: RuntimeAppModel.DatasetInfo
+  ) -> SIMD3<Float>? {
+    let inverseVolume = markerVolumeMatrix(for: datasetInfo).inverse
+    let localOrigin = transformPoint(inverseVolume, origin)
+    let localDirection = simd_normalize(inverseVolume.transformDirection(direction))
+    var nearT: Float = -.greatestFiniteMagnitude
+    var farT: Float = .greatestFiniteMagnitude
+
+    for axis in 0..<3 {
+      let originComponent = localOrigin[axis]
+      let directionComponent = localDirection[axis]
+      if abs(directionComponent) < 0.00001 {
+        if originComponent < -0.5 || originComponent > 0.5 {
+          return nil
+        }
+        continue
+      }
+
+      let t0 = (-0.5 - originComponent) / directionComponent
+      let t1 = (0.5 - originComponent) / directionComponent
+      nearT = max(nearT, min(t0, t1))
+      farT = min(farT, max(t0, t1))
+    }
+
+    guard farT >= max(nearT, 0) else {
+      return nil
+    }
+
+    let hitT = max(nearT, 0)
+    return clamp(localOrigin + localDirection * hitT + SIMD3<Float>(repeating: 0.5))
+  }
+
+  private func markerHit(
+    origin: SIMD3<Float>,
+    direction: SIMD3<Float>,
+    datasetInfo: RuntimeAppModel.DatasetInfo
+  ) -> VolumeMarker? {
+    var best: (marker: VolumeMarker, distance: Float)?
+    for marker in sharedAppModel.volumeMarkers {
+      let center = markerWorldCenter(marker, datasetInfo: datasetInfo)
+      let oc = origin - center
+      let radius = markerWorldRadius(marker)
+      let b = simd_dot(oc, direction)
+      let c = simd_dot(oc, oc) - radius * radius
+      let discriminant = b * b - c
+      guard discriminant >= 0 else { continue }
+      let t = -b - sqrt(discriminant)
+      guard t >= 0 else { continue }
+      if best == nil || t < best!.distance {
+        best = (marker, t)
+      }
+    }
+    return best?.marker
+  }
+
+  private func beginMarkerDrag(
+    marker: VolumeMarker,
+    event: SpatialEventCollection.Event
+  ) {
+    sharedAppModel.volumeMarkers.append(marker)
+    markerDragID = marker.id
+    markerDragStartPosition = marker.position
+    markerDragHandStart = inputWorldPosition(from: event)
+    sharedAppModel.selectedVolumeMarkerID = marker.id
+    sharedAppModel.synchronizeMarkers()
+  }
+
+  private func makeMarker(at position: SIMD3<Float>) -> VolumeMarker {
+    VolumeMarker(
+      id: UUID(),
+      name: sharedAppModel.nextVolumeMarkerName(),
+      position: position,
+      radius: sessionDefaultMarkerRadius,
+      color: storedAppModel.markerDefaultColorSIMD
+    )
+  }
+
+  private func handleMarkerInteraction(
+    _ event: SpatialEventCollection.Event,
+    datasetInfo: RuntimeAppModel.DatasetInfo,
+    preferExistingMarker: Bool = true
+  ) {
+    switch event.phase {
+      case .active:
+        if markerDragID == nil {
+          let selectionRay = ray(from: event)
+
+          if preferExistingMarker,
+             let ray = selectionRay,
+             let existingMarker = markerHit(
+            origin: ray.origin,
+            direction: ray.direction,
+            datasetInfo: datasetInfo
+          ) {
+            markerDragID = existingMarker.id
+            markerDragStartPosition = existingMarker.position
+            markerDragHandStart = inputWorldPosition(from: event)
+            sharedAppModel.selectedVolumeMarkerID = existingMarker.id
+          } else if let markerPosition = markerSpawnPosition(from: event, datasetInfo: datasetInfo) {
+            beginMarkerDrag(
+              marker: makeMarker(at: markerPosition),
+              event: event
+            )
+          }
+        }
+
+        guard let markerDragID,
+              let markerIndex = sharedAppModel.volumeMarkers.firstIndex(where: { $0.id == markerDragID }) else {
+          return
+        }
+
+        if let handStart = markerDragHandStart,
+           let handPosition = inputWorldPosition(from: event) {
+          let inverseVolume = markerVolumeMatrix(for: datasetInfo).inverse
+          let localDelta = inverseVolume.transformDirection(handPosition - handStart)
+          sharedAppModel.volumeMarkers[markerIndex].position = clamp(
+            markerDragStartPosition + localDelta,
+            -maxMarkerCoordinate,
+             maxMarkerCoordinate
+          )
+          sharedAppModel.synchronizeMarkers()
+        }
+
+      case .ended, .cancelled:
+        if markerDragID != nil {
+          markerDragID = nil
+          markerDragHandStart = nil
+          quickMarkerDragActive = false
+          sharedAppModel.synchronizeMarkers()
+        }
+      @unknown default:
+        markerDragID = nil
+        markerDragHandStart = nil
+        quickMarkerDragActive = false
+    }
+  }
+
+  private func handleMarkerScaling(
+    _ events: SpatialEventCollection,
+    datasetInfo: RuntimeAppModel.DatasetInfo
+  ) {
+    let activePositions = events.compactMap { event -> SIMD3<Float>? in
+      guard case .active = event.phase else {
+        return nil
+      }
+      return inputWorldPosition(from: event)
+    }
+
+    if activePositions.count < 2 {
+      markerScaleID = nil
+      markerScaleStartDistance = 0
+      return
+    }
+
+    let first = activePositions[0]
+    let second = activePositions[1]
+    let distance = simd_distance(first, second)
+    guard distance > 0.0001 else {
+      return
+    }
+
+    if markerScaleID == nil {
+      let midpoint = (first + second) * 0.5
+      let targetMarker = selectedMarker()
+        ?? nearestMarker(to: midpoint, datasetInfo: datasetInfo)
+      guard let targetMarker else {
+        return
+      }
+      markerScaleID = targetMarker.id
+      markerScaleStartDistance = distance
+      markerScaleStartRadius = targetMarker.radius
+      sharedAppModel.selectedVolumeMarkerID = targetMarker.id
+    }
+
+    guard let markerScaleID,
+          markerScaleStartDistance > 0.0001,
+          let markerIndex = sharedAppModel.volumeMarkers.firstIndex(where: { $0.id == markerScaleID }) else {
+      return
+    }
+
+    let radius = clamp(
+      markerScaleStartRadius * distance / markerScaleStartDistance,
+      minMarkerRadius,
+      maxMarkerRadius
+    )
+    sharedAppModel.volumeMarkers[markerIndex].radius = radius
+    sessionDefaultMarkerRadius = radius
+    sharedAppModel.synchronizeMarkers()
+
+    if events.contains(where: { $0.phase == .ended || $0.phase == .cancelled }) {
+      self.markerScaleID = nil
+      markerScaleStartDistance = 0
+    }
+  }
+
+  private func selectedMarker() -> VolumeMarker? {
+    guard let selectedVolumeMarkerID = sharedAppModel.selectedVolumeMarkerID else {
+      return nil
+    }
+    return sharedAppModel.volumeMarkers.first { $0.id == selectedVolumeMarkerID }
+  }
+
+  private func recordQuickMarkerCandidate(
+    from event: SpatialEventCollection.Event,
+    datasetInfo: RuntimeAppModel.DatasetInfo
+  ) {
+    guard let handPosition = inputWorldPosition(from: event) else {
+      quickMarkerCandidateTime = nil
+      quickMarkerCandidatePosition = nil
+      return
+    }
+
+    quickMarkerCandidateTime = Date()
+    quickMarkerCandidatePosition = markerPosition(fromWorldPosition: handPosition, datasetInfo: datasetInfo)
+  }
+
+  private func shouldStartQuickMarker(
+    at hitPosition: SIMD3<Float>
+  ) -> Bool {
+    guard let candidateTime = quickMarkerCandidateTime,
+          let candidatePosition = quickMarkerCandidatePosition,
+          Date().timeIntervalSince(candidateTime) <= storedAppModel.quickMarkerDoublePinchInterval else {
+      return false
+    }
+
+    return simd_length(hitPosition - candidatePosition) <= quickMarkerMaxDistance
+  }
+
+  private func handleQuickMarker(
+    _ event: SpatialEventCollection.Event,
+    datasetInfo: RuntimeAppModel.DatasetInfo
+  ) -> Bool {
+    guard storedAppModel.quickMarker else {
+      return false
+    }
+
+    if quickMarkerDragActive {
+      handleMarkerInteraction(
+        event,
+        datasetInfo: datasetInfo,
+        preferExistingMarker: false
+      )
+      return true
+    }
+
+    switch event.phase {
+      case .active:
+        guard markerDragID == nil,
+              let handPosition = inputWorldPosition(from: event) else {
+          return false
+        }
+        let hitPosition = markerPosition(fromWorldPosition: handPosition, datasetInfo: datasetInfo)
+        guard
+              shouldStartQuickMarker(at: hitPosition) else {
+          return false
+        }
+
+        quickMarkerDragActive = true
+        quickMarkerCandidateTime = nil
+        quickMarkerCandidatePosition = nil
+        beginMarkerDrag(marker: makeMarker(at: hitPosition), event: event)
+        return true
+
+      case .ended, .cancelled:
+        recordQuickMarkerCandidate(from: event, datasetInfo: datasetInfo)
+        return false
+
+      @unknown default:
+        quickMarkerCandidateTime = nil
+        quickMarkerCandidatePosition = nil
+        return false
+    }
+  }
+
+  private func resetQuickMarkerState() {
+    quickMarkerDragActive = false
+    quickMarkerCandidateTime = nil
+    quickMarkerCandidatePosition = nil
+  }
+
   private func markerOpacity(forDragDelta delta: SIMD2<Float>) -> Float {
     let dragDistance = simd_length(delta)
     return clamp(1 - max(0, dragDistance - 0.01) * 20)
@@ -392,6 +778,7 @@ class ImmersiveInteraction {
   func handleSpatialEvents(_ events: SpatialEventCollection,
                            _ interactionMode: RuntimeAppModel.InteractionMode,
                            _ transferEditState: RuntimeAppModel.TransferEditState,
+                           datasetInfo: RuntimeAppModel.DatasetInfo?,
                            toggleChannel: @escaping @MainActor (Int) -> Void) {
     if events.count == 1,
        let event = events.first,
@@ -400,6 +787,20 @@ class ImmersiveInteraction {
         transferEditState,
         toggleChannel: toggleChannel
        ) {
+      return
+    }
+
+    if interactionMode == .marker {
+      resetQuickMarkerState()
+    } else {
+      sharedAppModel.selectedVolumeMarkerID = nil
+    }
+
+    if interactionMode != .marker,
+       events.count == 1,
+       let event = events.first,
+       let datasetInfo,
+       handleQuickMarker(event, datasetInfo: datasetInfo) {
       return
     }
 
@@ -419,6 +820,18 @@ class ImmersiveInteraction {
             handleClippingTranslationAndRotation(events.first!)
           case 2:
             return
+          default:
+            return
+        }
+      case .marker:
+        guard let datasetInfo else {
+          return
+        }
+        switch events.count {
+          case 1:
+            handleMarkerInteraction(events.first!, datasetInfo: datasetInfo)
+          case 2:
+            handleMarkerScaling(events, datasetInfo: datasetInfo)
           default:
             return
         }

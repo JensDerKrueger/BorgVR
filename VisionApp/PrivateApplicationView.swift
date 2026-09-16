@@ -27,9 +27,13 @@ struct PrivateApplicationView: View {
           set: { (value: String) in
             switch value {
               case "model":
+                sharedAppModel.selectedVolumeMarkerID = nil
                 runtimeAppModel.interactionMode = .model
               case "clipping":
+                sharedAppModel.selectedVolumeMarkerID = nil
                 runtimeAppModel.interactionMode = .clipping
+              case "marker":
+                runtimeAppModel.interactionMode = .marker
               default:
                 break
             }
@@ -38,6 +42,7 @@ struct PrivateApplicationView: View {
       ) {
         Text("private_interaction_option_model").tag("model")
         Text("private_interaction_option_clipping").tag("clipping")
+        Text("private_interaction_option_marker").tag("marker")
       }
       .pickerStyle(.segmented)
 
@@ -52,6 +57,13 @@ struct PrivateApplicationView: View {
               String(describing: sharedAppModel.renderMode)
             )
           )
+        }
+        .padding()
+
+        Button("private_marker_open_button") {
+          if !runtimeAppModel.isViewOpen("MarkerView") {
+            openWindow(id: "MarkerView")
+          }
         }
         .padding()
       }
@@ -286,6 +298,7 @@ struct PrivateApplicationView: View {
     let handler = VoiceCommandHandler(
       runtimeAppModel: runtimeAppModel,
       sharedAppModel: sharedAppModel,
+      storedAppModel: storedAppModel,
       voice: voice,
       speak: { message in
         speech.speak(message)

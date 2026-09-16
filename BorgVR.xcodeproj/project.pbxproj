@@ -41,7 +41,7 @@
 		57A0004C2E70000200000001 /* VolumeRaycaster.metal in Resources */ = {isa = PBXBuildFile; fileRef = 57A0002A2E70000200000001 /* VolumeRaycaster.metal */; };
 		57A0004D2E70000200000001 /* VolumeRaycaster.metal in Resources */ = {isa = PBXBuildFile; fileRef = 57A0002A2E70000200000001 /* VolumeRaycaster.metal */; };
 		57A0004E2E70000200000001 /* VolumeRaycaster.metal in Resources */ = {isa = PBXBuildFile; fileRef = 57A0002A2E70000200000001 /* VolumeRaycaster.metal */; };
-		57A0004F2E70000200000001 /* VisionHUDShaders.metal in Resources */ = {isa = PBXBuildFile; fileRef = 57A0002B2E70000200000001 /* VisionHUDShaders.metal */; };
+		57A0004F2E70000200000001 /* VisionInteractionShaders.metal in Resources */ = {isa = PBXBuildFile; fileRef = 57A0002B2E70000200000001 /* VisionInteractionShaders.metal */; };
 		57A000522E70000200000001 /* ShaderTypes.h in Resources */ = {isa = PBXBuildFile; fileRef = 57A000272E70000200000001 /* ShaderTypes.h */; };
 		57A000532E70000200000001 /* VolumeAtlas.h in Resources */ = {isa = PBXBuildFile; fileRef = 57A000292E70000200000001 /* VolumeAtlas.h */; };
 		57A000542E70000200000001 /* Helper.h in Resources */ = {isa = PBXBuildFile; fileRef = 57A000232E70000200000001 /* Helper.h */; };
@@ -136,7 +136,7 @@
 		57A000282E70000200000001 /* TextFileDocument.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextFileDocument.swift; sourceTree = "<group>"; };
 		57A000292E70000200000001 /* VolumeAtlas.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = VolumeAtlas.h; sourceTree = "<group>"; };
 		57A0002A2E70000200000001 /* VolumeRaycaster.metal */ = {isa = PBXFileReference; explicitFileType = text; path = VolumeRaycaster.metal; sourceTree = "<group>"; };
-		57A0002B2E70000200000001 /* VisionHUDShaders.metal */ = {isa = PBXFileReference; explicitFileType = text; path = VisionHUDShaders.metal; sourceTree = "<group>"; };
+		57A0002B2E70000200000001 /* VisionInteractionShaders.metal */ = {isa = PBXFileReference; explicitFileType = text; path = VisionInteractionShaders.metal; sourceTree = "<group>"; };
 		57A001202E70000300000001 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
 		57A001212E70000300000001 /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
 		57A001222E70000300000001 /* RenderingParameters.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RenderingParameters.swift; sourceTree = "<group>"; };
@@ -482,7 +482,7 @@
 				57A000292E70000200000001 /* VolumeAtlas.h */,
 				57A001272E70000300000001 /* VolumeRendererPipeline.swift */,
 				57A0002A2E70000200000001 /* VolumeRaycaster.metal */,
-				57A0002B2E70000200000001 /* VisionHUDShaders.metal */,
+				57A0002B2E70000200000001 /* VisionInteractionShaders.metal */,
 			);
 			path = AppSupport;
 			sourceTree = "<group>";
@@ -738,7 +738,7 @@
 				56730FE52E6B79000091976B /* head_32.data in Resources */,
 				56730FE32E6B78990091976B /* c60_32.data in Resources */,
 				57A0004E2E70000200000001 /* VolumeRaycaster.metal in Resources */,
-				57A0004F2E70000200000001 /* VisionHUDShaders.metal in Resources */,
+				57A0004F2E70000200000001 /* VisionInteractionShaders.metal in Resources */,
 				57A000522E70000200000001 /* ShaderTypes.h in Resources */,
 				57A000532E70000200000001 /* VolumeAtlas.h in Resources */,
 				57A000542E70000200000001 /* Helper.h in Resources */,
@@ -1029,7 +1029,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 8;
+				CURRENT_PROJECT_VERSION = 9;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -1115,7 +1115,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.1;
+				MARKETING_VERSION = 2.2;
 				PRODUCT_BUNDLE_IDENTIFIER = "de.uni-due.BorgVRVisionApp";
 				PRODUCT_NAME = BorgVR;
 				SDKROOT = xros;
@@ -1136,7 +1136,7 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = VisionApp/VisionApp.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 8;
+				CURRENT_PROJECT_VERSION = 9;
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -1151,7 +1151,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.1;
+				MARKETING_VERSION = 2.2;
 				PRODUCT_BUNDLE_IDENTIFIER = "de.uni-due.BorgVRVisionApp";
 				PRODUCT_NAME = BorgVR;
 				SDKROOT = xros;

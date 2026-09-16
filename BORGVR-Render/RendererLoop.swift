@@ -68,6 +68,7 @@ extension Renderer {
 
     sharedAppModel.originFromWorldAnchorMatrix = originFromWorldAnchor
 
+    let unscaledModelMatrix : simd_float4x4
     let modelMatrix : simd_float4x4
     if autoRotationAngle > 0 {
       let autoRotationMatrix = rotationYMatrix(degrees: autoRotationAngle)
@@ -82,9 +83,11 @@ extension Renderer {
         translation: trans
       ).matrix
 
-      modelMatrix = originFromWorldAnchor * model * volumeScale
+      unscaledModelMatrix = originFromWorldAnchor * model
+      modelMatrix = unscaledModelMatrix * volumeScale
     } else {
-      modelMatrix = originFromWorldAnchor * sharedAppModel.modelTransform.matrix * volumeScale
+      unscaledModelMatrix = originFromWorldAnchor * sharedAppModel.modelTransform.matrix
+      modelMatrix = unscaledModelMatrix * volumeScale
     }
 
     // Compute a head-centered transform by averaging eye translations.
@@ -150,6 +153,7 @@ extension Renderer {
 
       self.lastOriginFromDevice = originFromDevice
       self.lastModelMatrix = modelMatrix
+      self.lastUnscaledModelMatrix = unscaledModelMatrix
       self.lastClipMatrix = clipMatrix
 
       return (
@@ -164,7 +168,10 @@ extension Renderer {
           cameraPosInTextureSpaceVoxelScaled: simd_make_float3(viewToTextureVoxelScaled * simd_float4(0, 0, 0, 1)),
           cubeBounds: (clipMin, clipMax),
           modelView: viewMatrix * modelMatrix,
-          modelViewIT: simd_transpose(simd_inverse(viewMatrix * modelMatrix))
+          modelViewIT: simd_transpose(simd_inverse(viewMatrix * modelMatrix)),
+          textureToClip: projection * viewMatrix * modelMatrix * Transform(
+            translation: SIMD3<Float>(repeating: -0.5)
+          ).matrix
         )
       )
     }
@@ -230,6 +237,51 @@ extension Renderer {
     memorylessTargets[currentRenderTargetIndex] = newTargets
 
     return newTargets
+  }
+
+  private func markerRenderTargets(drawable: LayerRenderer.Drawable) -> (color: MTLTexture, depth: MTLTexture) {
+    let source = drawable.colorTextures[0]
+    let viewCount = max(drawable.views.count, 1)
+
+    let needsNewColor = markerColorTexture == nil ||
+      markerColorTexture!.width != source.width ||
+      markerColorTexture!.height != source.height ||
+      markerColorTexture!.arrayLength != viewCount
+    if needsNewColor {
+      let descriptor = MTLTextureDescriptor.texture2DDescriptor(
+        pixelFormat: layerRenderer.configuration.colorFormat,
+        width: source.width,
+        height: source.height,
+        mipmapped: false
+      )
+      descriptor.textureType = .type2DArray
+      descriptor.arrayLength = viewCount
+      descriptor.usage = [.renderTarget, .shaderRead]
+      descriptor.storageMode = .private
+      markerColorTexture = device.makeTexture(descriptor: descriptor)
+      markerColorTexture?.label = "Volume Marker Color"
+    }
+
+    let needsNewDepth = markerDepthTexture == nil ||
+      markerDepthTexture!.width != source.width ||
+      markerDepthTexture!.height != source.height ||
+      markerDepthTexture!.arrayLength != viewCount
+    if needsNewDepth {
+      let descriptor = MTLTextureDescriptor.texture2DDescriptor(
+        pixelFormat: layerRenderer.configuration.depthFormat,
+        width: source.width,
+        height: source.height,
+        mipmapped: false
+      )
+      descriptor.textureType = .type2DArray
+      descriptor.arrayLength = viewCount
+      descriptor.usage = [.renderTarget, .shaderRead]
+      descriptor.storageMode = .private
+      markerDepthTexture = device.makeTexture(descriptor: descriptor)
+      markerDepthTexture?.label = "Volume Marker Depth"
+    }
+
+    return (markerColorTexture!, markerDepthTexture!)
   }
 
   private func bindRasterizationRateMap(_ rateMap: MTLRasterizationRateMap?,
@@ -461,6 +513,150 @@ extension Renderer {
     renderEncoder.popDebugGroup()
   }
 
+  private func drawVolumeMarkers(_ renderEncoder: MTLRenderCommandEncoder,
+                                 drawable: LayerRenderer.Drawable) {
+    let markers = sharedAppModel.volumeMarkers
+    guard !markers.isEmpty else {
+      return
+    }
+
+    renderEncoder.setRenderPipelineState(pipelineStateVolumeMarker)
+    renderEncoder.setDepthStencilState(depthStateMarker)
+    renderEncoder.setCullMode(.back)
+    renderEncoder.setFrontFacing(.counterClockwise)
+
+    let viewCount = drawable.views.count
+    var mvp = [simd_float4x4](repeating: matrix_identity_float4x4, count: viewCount)
+    var eyePositions = [SIMD3<Float>](repeating: .zero, count: viewCount)
+    for i in 0..<viewCount {
+      let view = drawable.views[i]
+      let eyeMatrix = lastOriginFromDevice * view.transform
+      let viewMatrix = eyeMatrix.inverse
+      let projection = drawable.computeProjection(viewIndex: i)
+      mvp[i] = projection * viewMatrix
+      eyePositions[i] = SIMD3<Float>(
+        eyeMatrix.columns.3.x,
+        eyeMatrix.columns.3.y,
+        eyeMatrix.columns.3.z
+      )
+    }
+
+    mvp.withUnsafeBytes { bytes in
+      renderEncoder.setVertexBytes(
+        bytes.baseAddress!,
+        length: bytes.count,
+        index: 20
+      )
+    }
+    eyePositions.withUnsafeBytes { bytes in
+      renderEncoder.setVertexBytes(
+        bytes.baseAddress!,
+        length: bytes.count,
+        index: 22
+      )
+    }
+
+    renderEncoder.setVertexBuffer(
+      markerSphereBuffer,
+      offset: 0,
+      index: VertexBufferIndex.meshPositions.rawValue
+    )
+
+    for marker in markers {
+      let markerVolumePosition = simd_make_float3(
+        volumeScale * SIMD4<Float>(marker.position - SIMD3<Float>(repeating: 0.5), 1.0)
+      )
+      var modelMatrix = lastUnscaledModelMatrix *
+        Transform(translation: markerVolumePosition).matrix *
+        Transform(scale: SIMD3<Float>(repeating: marker.radius)).matrix
+      var markerColor = marker.color
+      if marker.id == sharedAppModel.selectedVolumeMarkerID {
+        markerColor = SIMD4<Float>(
+          min(markerColor.x + 0.25, 1),
+          min(markerColor.y + 0.25, 1),
+          min(markerColor.z + 0.25, 1),
+          markerColor.w
+        )
+      }
+      renderEncoder.setVertexBytes(
+        &modelMatrix,
+        length: MemoryLayout<simd_float4x4>.stride,
+        index: 21
+      )
+      renderEncoder.setFragmentBytes(
+        &markerColor,
+        length: MemoryLayout<SIMD4<Float>>.stride,
+        index: 23
+      )
+      renderEncoder.drawPrimitives(
+        type: .triangle,
+        vertexStart: 0,
+        vertexCount: markerSphereVertexCount
+      )
+    }
+  }
+
+  private func renderVolumeMarkers(commandBuffer: MTLCommandBuffer,
+                                   drawable: LayerRenderer.Drawable,
+                                   rasterizationRateMap: MTLRasterizationRateMap?) -> (color: MTLTexture, depth: MTLTexture) {
+    let targets = markerRenderTargets(drawable: drawable)
+    let renderPassDescriptor = MTLRenderPassDescriptor()
+    renderPassDescriptor.colorAttachments[0].texture = targets.color
+    renderPassDescriptor.colorAttachments[0].loadAction = .clear
+    renderPassDescriptor.colorAttachments[0].storeAction = .store
+    renderPassDescriptor.colorAttachments[0].clearColor = MTLClearColor(red: 0, green: 0, blue: 0, alpha: 0)
+    renderPassDescriptor.depthAttachment.texture = targets.depth
+    renderPassDescriptor.depthAttachment.loadAction = .clear
+    renderPassDescriptor.depthAttachment.storeAction = .store
+    renderPassDescriptor.depthAttachment.clearDepth = 0.0
+    renderPassDescriptor.rasterizationRateMap = rasterizationRateMap
+    if layerRenderer.configuration.layout == .layered {
+      renderPassDescriptor.renderTargetArrayLength = drawable.views.count
+    }
+
+    guard let renderEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: renderPassDescriptor) else {
+      fatalError("Failed to create marker prepass encoder")
+    }
+    renderEncoder.label = "BorgVR Volume Marker Prepass"
+    renderEncoder.pushDebugGroup("Volume Marker Prepass")
+
+    let viewports = drawable.views.map { $0.textureMap.viewport }
+    renderEncoder.setViewports(viewports)
+
+    if drawable.views.count > 1 {
+      var viewMappings = (0..<drawable.views.count).map {
+        MTLVertexAmplificationViewMapping(viewportArrayIndexOffset: UInt32($0),
+                                          renderTargetArrayIndexOffset: UInt32($0))
+      }
+      renderEncoder.setVertexAmplificationCount(viewports.count, viewMappings: &viewMappings)
+    }
+
+    drawVolumeMarkers(renderEncoder, drawable: drawable)
+
+    renderEncoder.popDebugGroup()
+    renderEncoder.endEncoding()
+    return targets
+  }
+
+  private func compositeVolumeMarkers(_ renderEncoder: MTLRenderCommandEncoder,
+                                      markerColorTexture: MTLTexture,
+                                      markerDepthTexture: MTLTexture) {
+    renderEncoder.pushDebugGroup("Composite Volume Markers")
+    renderEncoder.setRenderPipelineState(pipelineStateMarkerComposite)
+    renderEncoder.setDepthStencilState(depthStateMarkerComposite)
+    renderEncoder.setCullMode(.none)
+    renderEncoder.setFragmentTexture(
+      markerColorTexture,
+      index: TextureIndex.markerColor.rawValue
+    )
+    renderEncoder.setFragmentTexture(
+      markerDepthTexture,
+      index: TextureIndex.markerDepth.rawValue
+    )
+    renderEncoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 6)
+    renderEncoder.popDebugGroup()
+  }
+
   /**
    Renders a single frame. This function manages frame lifecycle, timing, command buffer setup,
    resource binding, and final drawing and presentation.
@@ -488,6 +684,13 @@ extension Renderer {
 
     self.updateRenderState(drawable: drawable)
 
+    let rasterizationRateMap = drawable.rasterizationRateMaps.first
+    let markerTargets = renderVolumeMarkers(
+      commandBuffer: commandBuffer,
+      drawable: drawable,
+      rasterizationRateMap: rasterizationRateMap
+    )
+
     let renderPassDescriptor = MTLRenderPassDescriptor()
 
     if rasterSampleCount > 1 {
@@ -509,7 +712,6 @@ extension Renderer {
     renderPassDescriptor.colorAttachments[0].clearColor = MTLClearColor(red: 0.0, green: 0.0, blue: 0.0, alpha: 0.0)
     renderPassDescriptor.depthAttachment.loadAction = .clear
     renderPassDescriptor.depthAttachment.clearDepth = 0.0
-    let rasterizationRateMap = drawable.rasterizationRateMaps.first
     renderPassDescriptor.rasterizationRateMap = rasterizationRateMap
     if layerRenderer.configuration.layout == .layered {
       renderPassDescriptor.renderTargetArrayLength = drawable.views.count
@@ -567,10 +769,20 @@ extension Renderer {
                      levelIndex: FragmentBufferIndex.levelTable.rawValue)
 
     hashTable.bind(to: renderEncoder, index: FragmentBufferIndex.hashTable.rawValue)
+    renderEncoder.setFragmentTexture(
+      markerTargets.depth,
+      index: TextureIndex.markerDepth.rawValue
+    )
 
     renderEncoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: self.vertexCount)
 
     renderEncoder.popDebugGroup()
+
+    compositeVolumeMarkers(
+      renderEncoder,
+      markerColorTexture: markerTargets.color,
+      markerDepthTexture: markerTargets.depth
+    )
 
     if storedAppModel.tfMode != TransferFunctionDisplayMode.windowOnly.rawValue {
       renderTransferfunction(renderEncoder, drawable: drawable)

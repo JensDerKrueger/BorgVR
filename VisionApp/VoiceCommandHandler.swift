@@ -7,17 +7,20 @@ final class VoiceCommandHandler {
 
   let runtimeAppModel: RuntimeAppModel
   let sharedAppModel: SharedAppModel
+  let storedAppModel: StoredAppModel
   let voice: VoiceCommandService
   let speak: (String) -> Void
   let openSelectedEditor: () -> Void
 
   init(runtimeAppModel: RuntimeAppModel,
        sharedAppModel: SharedAppModel,
+       storedAppModel: StoredAppModel,
        voice: VoiceCommandService,
        speak: @escaping (String) -> Void,
        openSelectedEditor: @escaping () -> Void) {
     self.runtimeAppModel = runtimeAppModel
     self.sharedAppModel = sharedAppModel
+    self.storedAppModel = storedAppModel
     self.voice = voice
     self.speak = speak
     self.openSelectedEditor = openSelectedEditor
@@ -579,6 +582,7 @@ final class VoiceCommandHandler {
       patternAliases: LP("voice_patterns_aliases_interaction_activate_clipping"),
       condition: VoiceCommandHandler.always,
       handler: { h in
+        h.sharedAppModel.selectedVolumeMarkerID = nil
         h.runtimeAppModel.interactionMode = .clipping
         h.speak(L("voice_speak_clipping", comment: "Voice: clipping mode"))
       },
@@ -626,12 +630,97 @@ final class VoiceCommandHandler {
       patternAliases: LP("voice_patterns_aliases_interaction_activate_model"),
       condition: VoiceCommandHandler.always,
       handler: { h in
+        h.sharedAppModel.selectedVolumeMarkerID = nil
         h.runtimeAppModel.interactionMode = .model
         h.speak(L("voice_speak_model", comment: "Voice: model mode"))
       },
       description: L(
         "voice_cmd_interaction_activate_model_description",
         comment: "Description: switch interaction mode to model"
+      )
+    ),
+
+    Command(
+      phase: .main,
+      group: .interaction,
+      patterns: LP("voice_patterns_interaction_activate_marker"),
+      patternAliases: LP("voice_patterns_aliases_interaction_activate_marker"),
+      condition: VoiceCommandHandler.always,
+      handler: { h in
+        h.runtimeAppModel.interactionMode = .marker
+        h.speak(L("voice_speak_marker", comment: "Voice: marker mode"))
+      },
+      description: L(
+        "voice_cmd_interaction_activate_marker_description",
+        comment: "Description: switch interaction mode to marker"
+      )
+    ),
+
+    Command(
+      phase: .main,
+      group: .interaction,
+      patterns: LP("voice_patterns_interaction_quick_marker_on"),
+      patternAliases: LP("voice_patterns_aliases_interaction_quick_marker_on"),
+      condition: VoiceCommandHandler.always,
+      handler: { h in
+        h.storedAppModel.quickMarker = true
+        let state = L("voice_state_on", comment: "State: on")
+        h.speak(
+          String(
+            format: L("voice_speak_quick_marker_state", comment: "Voice: Quick Marker on/off"),
+            state
+          )
+        )
+      },
+      description: L(
+        "voice_cmd_interaction_quick_marker_on_description",
+        comment: "Description: enable Quick Marker"
+      )
+    ),
+
+    Command(
+      phase: .main,
+      group: .interaction,
+      patterns: LP("voice_patterns_interaction_quick_marker_off"),
+      patternAliases: LP("voice_patterns_aliases_interaction_quick_marker_off"),
+      condition: VoiceCommandHandler.always,
+      handler: { h in
+        h.storedAppModel.quickMarker = false
+        let state = L("voice_state_off", comment: "State: off")
+        h.speak(
+          String(
+            format: L("voice_speak_quick_marker_state", comment: "Voice: Quick Marker on/off"),
+            state
+          )
+        )
+      },
+      description: L(
+        "voice_cmd_interaction_quick_marker_off_description",
+        comment: "Description: disable Quick Marker"
+      )
+    ),
+
+    Command(
+      phase: .main,
+      group: .interaction,
+      patterns: LP("voice_patterns_interaction_quick_marker_toggle"),
+      patternAliases: LP("voice_patterns_aliases_interaction_quick_marker_toggle"),
+      condition: VoiceCommandHandler.always,
+      handler: { h in
+        h.storedAppModel.quickMarker.toggle()
+        let state = h.storedAppModel.quickMarker
+        ? L("voice_state_on", comment: "State: on")
+        : L("voice_state_off", comment: "State: off")
+        h.speak(
+          String(
+            format: L("voice_speak_quick_marker_state", comment: "Voice: Quick Marker on/off"),
+            state
+          )
+        )
+      },
+      description: L(
+        "voice_cmd_interaction_quick_marker_toggle_description",
+        comment: "Description: toggle Quick Marker"
       )
     ),
 

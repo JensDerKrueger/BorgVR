@@ -64,11 +64,14 @@ struct Tesselation {
         let ny = xy * sinf(nextSectorAngle)
 
         let n = SIMD3<Float>(x: x * lengthInv, y: y * lengthInv, z: z * lengthInv)
-        let t = normalize(SIMD3<Float>(x: nx, y: ny, z: z) - SIMD3<Float>(x: x, y: y, z: z))
+        let tangentDelta = SIMD3<Float>(x: nx, y: ny, z: z) - SIMD3<Float>(x: x, y: y, z: z)
+        let t = length(tangentDelta) > 0.000001
+          ? normalize(tangentDelta)
+          : SIMD3<Float>(x: 1, y: 0, z: 0)
         let b = cross(n, t)
         let tCorr = cross(b, n)
 
-        tess.normals.append(tCorr)
+        tess.tangents.append(tCorr)
         tess.texCoords.append(SIMD2<Float>(x: Float(j) / Float(sectorCount),
                                            y: 1.0 - Float(i) / Float(stackCount)))
       }

@@ -35,7 +35,8 @@ extension Renderer {
                                              borgVRMetaData: BORGVRMetaData,
                                              hasTable: GPUHashtable) throws ->
   (MTLRenderPipelineState, MTLRenderPipelineState, MTLRenderPipelineState,
-   MTLRenderPipelineState, MTLRenderPipelineState, MTLRenderPipelineState) {
+   MTLRenderPipelineState, MTLRenderPipelineState, MTLRenderPipelineState,
+   MTLRenderPipelineState, MTLRenderPipelineState) {
     // Build a render state pipeline object.
     let shaderSource = try RuntimeMetalShaderLoader.loadSource(named: "Shaders")
 
@@ -137,6 +138,38 @@ extension Renderer {
     let hudFragmentFunction = library.makeFunction(name: "fragmentShaderTFHUD")
     let hudControlsVertexFunction = library.makeFunction(name: "vertexShaderTFChannelControls")
     let hudControlsFragmentFunction = library.makeFunction(name: "fragmentShaderTFChannelControls")
+    let markerVertexFunction = library.makeFunction(name: "vertexShaderVolumeMarker")
+    let markerFragmentFunction = library.makeFunction(name: "fragmentShaderVolumeMarker")
+    let markerCompositeVertexFunction = library.makeFunction(name: "vertexShaderMarkerComposite")
+    let markerCompositeFragmentFunction = library.makeFunction(name: "fragmentShaderMarkerComposite")
+
+    let pipelineDescriptorVolumeMarker = MTLRenderPipelineDescriptor()
+    pipelineDescriptorVolumeMarker.label = "Render Pipeline for Volume Markers"
+    pipelineDescriptorVolumeMarker.vertexFunction = markerVertexFunction
+    pipelineDescriptorVolumeMarker.fragmentFunction = markerFragmentFunction
+    pipelineDescriptorVolumeMarker.rasterSampleCount = rasterSampleCount
+    pipelineDescriptorVolumeMarker.colorAttachments[0].pixelFormat = layerRenderer.configuration.colorFormat
+    pipelineDescriptorVolumeMarker.depthAttachmentPixelFormat = layerRenderer.configuration.depthFormat
+    pipelineDescriptorVolumeMarker.maxVertexAmplificationCount = layerRenderer.properties.viewCount
+
+    let pipelineDescriptorMarkerComposite = MTLRenderPipelineDescriptor()
+    pipelineDescriptorMarkerComposite.label = "Render Pipeline for Marker Composite"
+    pipelineDescriptorMarkerComposite.vertexFunction = markerCompositeVertexFunction
+    pipelineDescriptorMarkerComposite.fragmentFunction = markerCompositeFragmentFunction
+    pipelineDescriptorMarkerComposite.rasterSampleCount = rasterSampleCount
+    pipelineDescriptorMarkerComposite.colorAttachments[0].pixelFormat = layerRenderer.configuration.colorFormat
+    pipelineDescriptorMarkerComposite.depthAttachmentPixelFormat = layerRenderer.configuration.depthFormat
+    pipelineDescriptorMarkerComposite.maxVertexAmplificationCount = layerRenderer.properties.viewCount
+
+    if let ca = pipelineDescriptorMarkerComposite.colorAttachments[0] {
+      ca.isBlendingEnabled = true
+      ca.rgbBlendOperation = .add
+      ca.alphaBlendOperation = .add
+      ca.sourceRGBBlendFactor = .oneMinusDestinationAlpha
+      ca.destinationRGBBlendFactor = .one
+      ca.sourceAlphaBlendFactor = .oneMinusDestinationAlpha
+      ca.destinationAlphaBlendFactor = .one
+    }
 
     let pipelineDescriptorTFHUD = MTLRenderPipelineDescriptor()
     pipelineDescriptorTFHUD.label = "Render Pipeline for TF HUD"
@@ -181,6 +214,8 @@ extension Renderer {
       try device.makeRenderPipelineState(descriptor: pipelineDescriptorTFL),
       try device.makeRenderPipelineState(descriptor: pipelineDescriptorIso),
       try device.makeRenderPipelineState(descriptor: pipelineDescriptorBrickVis),
+      try device.makeRenderPipelineState(descriptor: pipelineDescriptorVolumeMarker),
+      try device.makeRenderPipelineState(descriptor: pipelineDescriptorMarkerComposite),
       try device.makeRenderPipelineState(descriptor: pipelineDescriptorTFHUD),
       try device.makeRenderPipelineState(descriptor: pipelineDescriptorTFHUDControls)
     )

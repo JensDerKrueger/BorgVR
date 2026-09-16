@@ -84,7 +84,9 @@ typedef NS_ENUM(EnumBackingType, FragmentBufferIndex)
 typedef NS_ENUM(EnumBackingType, TextureIndex)
 {
   TextureIndexVolumeAtlas      = 0,   ///< 3D texture atlas containing brick data.
-  TextureIndexTransferFunction = 1    ///< 1D transfer function texture.
+  TextureIndexTransferFunction = 1,   ///< 1D transfer function texture.
+  TextureIndexMarkerColor      = 2,   ///< Opaque marker color prepass texture.
+  TextureIndexMarkerDepth      = 3    ///< Opaque marker depth prepass texture.
 };
 
 /**
@@ -112,6 +114,7 @@ typedef struct {
   vector_float3 cubeBounds[2];
   matrix_float4x4 modelView;
   matrix_float4x4 modelViewIT;
+  matrix_float4x4 textureToClip;
 } FragmentUniforms;
 
 /**

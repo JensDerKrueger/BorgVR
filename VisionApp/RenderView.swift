@@ -152,6 +152,7 @@ struct RenderView: View {
       dismissWindow(id: "LoggerView")
       dismissWindow(id: "ProfileView")
       dismissWindow(id: "PrivateApplicationView")
+      dismissWindow(id: "MarkerView")
       dismissWindow(id: "VoiceCommandsView")
       voice.stopListening()
     }

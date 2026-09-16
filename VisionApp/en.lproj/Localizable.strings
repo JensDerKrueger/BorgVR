@@ -257,6 +257,23 @@
 /* Private application: interaction modes */
 "private_interaction_option_model" = "Model";
 "private_interaction_option_clipping" = "Clipping";
+"private_interaction_option_marker" = "Marker";
+"private_marker_color_picker" = "Marker color";
+"private_marker_no_selection" = "Select a marker to change its color.";
+"private_marker_delete_selected_button" = "Delete selected marker";
+"private_marker_clear_all_button" = "Clear markers";
+"private_marker_open_button" = "Markers…";
+"marker_window_title" = "Markers";
+"private_marker_spawn_label" = "Create new marker";
+"private_marker_spawn_hand" = "Hand Position";
+"private_marker_spawn_gaze" = "Gaze Position";
+"marker_window_empty" = "No markers have been placed yet. Switch to Marker mode and pinch to create one.";
+"marker_window_marker_row_format" = "Marker %d";
+"marker_window_name_field" = "Name";
+"marker_clear_all_confirmation_title" = "Clear all markers?";
+"marker_clear_all_confirmation_message" = "This removes all markers from the current session.";
+"marker_clear_all_confirmation_delete" = "Clear Markers";
+"marker_clear_all_confirmation_cancel" = "Cancel";
 
 /* Private application: editor button title format */
 "private_editor_title_format" = "%@ Editor";
@@ -334,6 +351,7 @@
 
 /* Settings: section headers */
 "settings_section_rendering_interface" = "Rendering Interface";
+"settings_section_markers" = "Markers";
 "settings_section_remote_datasets" = "Server for Remote Datasets";
 "settings_section_remote_loading" = "Remote Loading";
 "settings_section_import" = "Import";
@@ -351,6 +369,13 @@
 "settings_toggle_autoload_transform" = "Automatically Load and Save Transformation";
 "settings_toggle_disable_foveation" = "Disable Foveation";
 "settings_toggle_sample_jitter" = "Randomized Sample Phase";
+"settings_toggle_quick_marker" = "Quick Marker";
+"settings_quick_marker_info_button" = "Quick Marker info";
+"settings_quick_marker_info_title" = "Quick Marker";
+"settings_quick_marker_info_message" = "When Quick Marker is enabled, you can place a marker without switching to Marker mode. Double pinch on the volume; the second pinch creates the marker at that position, and while you keep pinching you can drag it. When you release, BorgVR continues in the previous interaction mode.";
+"settings_quick_marker_double_pinch_window" = "Double Pinch Time";
+"settings_quick_marker_seconds_format" = "%.2f s";
+"settings_marker_default_color" = "Default Marker Color";
 "settings_toggle_show_notifications" = "Show Notifications (requires permission)";
 "settings_toggle_enable_voice_input" = "Enable Voice Input (requires permission)";
 "settings_toggle_autostart_voice" = "Automatically Start Voice Input";
@@ -531,7 +556,7 @@
 "voice_group_transferOpacity_title" = "Transfer function – opacity";
 "voice_group_transferChannels_title" = "Transfer function – channels";
 "voice_group_transferReset_title" = "Transfer function – reset";
-"voice_group_interaction_title" = "Interaction & clipping";
+"voice_group_interaction_title" = "Interaction, clipping & markers";
 "voice_group_global_title" = "Global";
 "voice_group_datasetInfo_title" = "Dataset info";
 
@@ -543,7 +568,7 @@
 "voice_group_transferOpacity_description" = "Enable, disable, or toggle opacity editing.";
 "voice_group_transferChannels_description" = "Control individual color channels (red, green, blue).";
 "voice_group_transferReset_description" = "Reset the transfer function to its default state.";
-"voice_group_interaction_description" = "Interaction mode, clipping, and editor control.";
+"voice_group_interaction_description" = "Interaction mode, clipping, marker placement, Quick Marker, and editor control.";
 "voice_group_global_description" = "Reset the overall application state.";
 "voice_group_datasetInfo_description" = "Query information about the currently loaded dataset.";
 
@@ -571,6 +596,10 @@
 "voice_cmd_interaction_reset_clipping_description" = "Reset clipping bounds to the full volume.";
 "voice_cmd_interaction_open_editor_description" = "Open the currently selected editor window.";
 "voice_cmd_interaction_activate_model_description" = "Switch interaction mode to model manipulation.";
+"voice_cmd_interaction_activate_marker_description" = "Switch interaction mode to marker placement and editing.";
+"voice_cmd_interaction_quick_marker_on_description" = "Enable Quick Marker double-pinch placement.";
+"voice_cmd_interaction_quick_marker_off_description" = "Disable Quick Marker double-pinch placement.";
+"voice_cmd_interaction_quick_marker_toggle_description" = "Toggle Quick Marker double-pinch placement.";
 "voice_cmd_voice_disable_description" = "Stop speech recognition and disable voice control.";
 "voice_cmd_global_reset_all_description" = "Reset the entire application to its initial state.";
 "voice_cmd_dataset_info_description" = "Describe the currently loaded dataset.";
@@ -593,11 +622,13 @@
 "voice_speak_standby" = "Standing by";
 "voice_speak_clipping" = "Clipping";
 "voice_speak_model" = "Model";
+"voice_speak_marker" = "Marker";
 "voice_speak_voice_off" = "Voice off";
 "voice_speak_reset_all" = "reset";
 
 /* Voice feedback: formatted phrases */
 "voice_speak_colour_state" = "colour %@";
+"voice_speak_quick_marker_state" = "Quick Marker %@";
 "voice_speak_colour_toggled" = "colour toggled";
 "voice_speak_red_state" = "red %@";
 "voice_speak_green_state" = "green %@";
@@ -728,6 +759,14 @@
 "voice_patterns_aliases_interaction_open_editor" = "";
 "voice_patterns_interaction_activate_model" = "activate model|switch to model|model mode";
 "voice_patterns_aliases_interaction_activate_model" = "";
+"voice_patterns_interaction_activate_marker" = "activate marker|switch to marker|marker mode";
+"voice_patterns_aliases_interaction_activate_marker" = "activate markers|switch to markers|markers mode";
+"voice_patterns_interaction_quick_marker_on" = "quick marker on|enable quick marker|activate quick marker";
+"voice_patterns_aliases_interaction_quick_marker_on" = "quick markers on|enable quick markers";
+"voice_patterns_interaction_quick_marker_off" = "quick marker off|disable quick marker|deactivate quick marker";
+"voice_patterns_aliases_interaction_quick_marker_off" = "quick markers off|disable quick markers";
+"voice_patterns_interaction_quick_marker_toggle" = "toggle quick marker|quick marker";
+"voice_patterns_aliases_interaction_quick_marker_toggle" = "toggle quick markers|quick markers";
 
 /* Voice disable */
 "voice_patterns_voice_disable" = "disable voice|stop voice|stop listening|end voice|cancel voice|halt voice|abort voice|leave me alone";

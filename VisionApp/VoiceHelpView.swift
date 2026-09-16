@@ -3,6 +3,7 @@ import SwiftUI
 struct VoiceHelpView: View {
   @Environment(RuntimeAppModel.self) private var runtimeAppModel
   @Environment(SharedAppModel.self) private var sharedAppModel
+  @EnvironmentObject var storedAppModel: StoredAppModel
   @EnvironmentObject var voice: VoiceCommandService
   @EnvironmentObject var speech: SpeechHelper
 
@@ -18,6 +19,7 @@ struct VoiceHelpView: View {
     VoiceCommandHandler(
       runtimeAppModel: runtimeAppModel,
       sharedAppModel: sharedAppModel,
+      storedAppModel: storedAppModel,
       voice: voice,
       speak: { _ in },    // no speech output from the help window
       openSelectedEditor: { }

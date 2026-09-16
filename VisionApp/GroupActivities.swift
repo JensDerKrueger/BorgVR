@@ -25,7 +25,7 @@ class GroupActivityHelper {
   private var messenger : GroupSessionMessenger? = nil
   private var messageTask: Task<Void, Never>?
   private var sessionGeneration = 0
-  private unowned var sharedAppModel : SharedAppModel
+  private weak var sharedAppModel : SharedAppModel?
   private weak var runtimeAppModel : RuntimeAppModel? = nil
   private weak var storedAppModel : StoredAppModel? = nil
   private var subscriptions = Set<AnyCancellable>()
@@ -169,6 +169,7 @@ class GroupActivityHelper {
 
   func synchronize(kind: SharedAppModel.UpdateKind) {
     Task {
+      guard let sharedAppModel else { return }
       do {
         switch kind {
           case .full:
@@ -192,9 +193,25 @@ class GroupActivityHelper {
     }
   }
 
+  func synchronizeMarkers() {
+    Task {
+      guard let sharedAppModel else { return }
+      do {
+        try await sendData(
+          data: sharedAppModel.serializeVolumeMarkersSharePlayState(),
+          of: .renderingUpdate
+        )
+      } catch {
+        await runtimeAppModel?.logger
+          .error("Failed to send marker data to all participants: \(error)")
+      }
+    }
+  }
+
   @MainActor
   func sendInitialData(to:Participants = .all) async  {
     guard let runtimeAppModel else { return }
+    guard let sharedAppModel else { return }
     guard runtimeAppModel.groupSessionHost else { return }
 
     runtimeAppModel.logger.dev("sendInitialData")
@@ -218,6 +235,11 @@ class GroupActivityHelper {
         )
         try await sendData(
           data: sharedAppModel.serializeVisionSharePlayTransform(),
+          of: .renderingUpdate,
+          to: to
+        )
+        try await sendData(
+          data: sharedAppModel.serializeVolumeMarkersSharePlayState(),
           of: .renderingUpdate,
           to: to
         )
@@ -707,6 +729,7 @@ class GroupActivityHelper {
   }
 
   func handleUpdate(data: Data, from: Participant) {
+    guard let sharedAppModel else { return }
     do {
       if try sharedAppModel.applySharePlayUpdate(from: data) {
         return

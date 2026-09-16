@@ -444,7 +444,8 @@ final class MobileVolumeRenderer: NSObject, MTKViewDelegate, UIGestureRecognizer
       cameraPosInTextureSpaceVoxelScaled: simd_make_float3(viewToTexture * SIMD4<Float>(0, 0, 0, 1)),
       cubeBounds: (clipMin, clipMax),
       modelView: viewMatrix * modelMatrix,
-      modelViewIT: simd_transpose(simd_inverse(viewMatrix * modelMatrix))
+      modelViewIT: simd_transpose(simd_inverse(viewMatrix * modelMatrix)),
+      textureToClip: projection * viewMatrix * modelMatrix * matrixTranslation(SIMD3<Float>(repeating: -0.5))
     )
     fragmentUniforms.uniforms.1 = fragmentUniforms.uniforms.0
 

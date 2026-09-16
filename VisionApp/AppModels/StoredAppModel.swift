@@ -115,10 +115,18 @@ final class StoredAppModel: ObservableObject {
     "enableVoiceInput": false,
     "autostartVoiceInput": false,
     "enableVoiceOutput": false,
-    "tfMode": TransferFunctionDisplayMode.windowOnly.rawValue
+    "tfMode": TransferFunctionDisplayMode.windowOnly.rawValue,
+    "quickMarker": false,
+    "quickMarkerDoublePinchInterval": 0.25,
+    "markerSpawnAtGaze": false,
+    "markerDefaultRed": 1.0,
+    "markerDefaultGreen": 0.08,
+    "markerDefaultBlue": 0.02,
+    "markerDefaultColorInitialized": false
   ]
 
   init() {
+    initializeMarkerDefaultColorIfNeeded()
     loadServers()
   }
 
@@ -221,6 +229,26 @@ final class StoredAppModel: ObservableObject {
   @AppStorage("enableVoiceOutput") var enableVoiceOutput: Bool = StoredAppModel.bool("enableVoiceOutput")
   /// The oversampling mode ("static" or "dynamic").
   @AppStorage("tfMode") var tfMode: Int = StoredAppModel.int("tfMode")
+  /// Whether a double pinch can place a temporary marker without switching modes.
+  @AppStorage("quickMarker") var quickMarker: Bool = StoredAppModel.bool("quickMarker")
+  /// Maximum time between two pinches that should be interpreted as a Quick Marker gesture.
+  @AppStorage("quickMarkerDoublePinchInterval") var quickMarkerDoublePinchInterval: Double = StoredAppModel.double("quickMarkerDoublePinchInterval")
+  /// Whether Marker mode places new markers at the gaze hit instead of the pinch hand.
+  @AppStorage("markerSpawnAtGaze") var markerSpawnAtGaze: Bool = StoredAppModel.bool("markerSpawnAtGaze")
+  /// Default marker color components.
+  @AppStorage("markerDefaultRed") var markerDefaultRed: Double = StoredAppModel.double("markerDefaultRed")
+  @AppStorage("markerDefaultGreen") var markerDefaultGreen: Double = StoredAppModel.double("markerDefaultGreen")
+  @AppStorage("markerDefaultBlue") var markerDefaultBlue: Double = StoredAppModel.double("markerDefaultBlue")
+  @AppStorage("markerDefaultColorInitialized") private var markerDefaultColorInitialized: Bool = StoredAppModel.bool("markerDefaultColorInitialized")
+
+  var markerDefaultColorSIMD: SIMD4<Float> {
+    SIMD4<Float>(
+      Float(markerDefaultRed),
+      Float(markerDefaultGreen),
+      Float(markerDefaultBlue),
+      1
+    )
+  }
 
 
   // MARK: - Convenience Accessors
@@ -307,6 +335,16 @@ final class StoredAppModel: ObservableObject {
   var webServerCertificatePassword: String {
     get { WebServerCertificatePasswordStore.load() }
     set { try? WebServerCertificatePasswordStore.save(newValue) }
+  }
+
+  private func initializeMarkerDefaultColorIfNeeded() {
+    guard !markerDefaultColorInitialized else {
+      return
+    }
+    markerDefaultRed = Double.random(in: 0.2...1.0)
+    markerDefaultGreen = Double.random(in: 0.2...1.0)
+    markerDefaultBlue = Double.random(in: 0.2...1.0)
+    markerDefaultColorInitialized = true
   }
 
   func resetBackgroundServerDefaults() {
