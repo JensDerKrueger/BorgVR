@@ -260,6 +260,8 @@
 "private_interaction_option_marker" = "Marker";
 "private_marker_color_picker" = "Marker color";
 "private_marker_no_selection" = "Select a marker to change its color.";
+"marker_load_button" = "Load Markers…";
+"marker_save_button" = "Save Markers…";
 "private_marker_delete_selected_button" = "Delete selected marker";
 "private_marker_clear_all_button" = "Clear markers";
 "private_marker_open_button" = "Markers…";
@@ -274,6 +276,11 @@
 "marker_clear_all_confirmation_message" = "This removes all markers from the current session.";
 "marker_clear_all_confirmation_delete" = "Clear Markers";
 "marker_clear_all_confirmation_cancel" = "Cancel";
+"marker_load_merge_title" = "Load markers";
+"marker_load_merge_message" = "Markers already exist in the current session. Do you want to replace them or add the loaded markers?";
+"marker_load_replace_button" = "Replace Existing Markers";
+"marker_load_add_button" = "Add Loaded Markers";
+"marker_file_error_title" = "Marker file error";
 
 /* Private application: editor button title format */
 "private_editor_title_format" = "%@ Editor";

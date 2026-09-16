@@ -260,6 +260,8 @@
 "private_interaction_option_marker" = "Marcadores";
 "private_marker_color_picker" = "Color del marcador";
 "private_marker_no_selection" = "Seleccione un marcador para cambiar su color.";
+"marker_load_button" = "Cargar marcadores…";
+"marker_save_button" = "Guardar marcadores…";
 "private_marker_delete_selected_button" = "Eliminar marcador seleccionado";
 "private_marker_clear_all_button" = "Borrar marcadores";
 "private_marker_open_button" = "Marcadores…";
@@ -274,6 +276,11 @@
 "marker_clear_all_confirmation_message" = "Esto elimina todos los marcadores de la sesión actual.";
 "marker_clear_all_confirmation_delete" = "Borrar marcadores";
 "marker_clear_all_confirmation_cancel" = "Cancelar";
+"marker_load_merge_title" = "Cargar marcadores";
+"marker_load_merge_message" = "Ya hay marcadores en la sesión actual. ¿Quieres reemplazarlos o añadir los marcadores cargados?";
+"marker_load_replace_button" = "Reemplazar marcadores existentes";
+"marker_load_add_button" = "Añadir marcadores cargados";
+"marker_file_error_title" = "Error de archivo de marcadores";
 
 /* Private application: editor button title format */
 "private_editor_title_format" = "Editor de %@";
