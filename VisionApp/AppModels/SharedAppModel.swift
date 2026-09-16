@@ -1,14 +1,6 @@
 import Foundation
 import RealityKit
 
-struct VolumeMarker: Identifiable, Equatable {
-  var id: UUID
-  var name: String
-  var position: SIMD3<Float>
-  var radius: Float
-  var color: SIMD4<Float>
-}
-
 // MARK: - SharedAppModel
 
 /**

@@ -51,12 +51,20 @@ class BORGVRRemoteDataManager {
     let description: String
   }
 
+  struct RemoteMarkerFileInfo: Equatable {
+    let id: String
+    let byteCount: Int
+    let datasetID: String
+    let description: String
+  }
+
   /// The underlying NWConnection for this manager.
   private let connection: NWConnection
   /// The local list of datasets.
   private var datasets: [(id: String, description: String)] = []
   /// The remote list of transfer functions.
   private var transferFunctions: [RemoteTransferFunctionInfo] = []
+  private var markerFiles: [RemoteMarkerFileInfo] = []
   /// An optional logger for logging messages.
   private let logger: LoggerBase?
   /// An optional notifier
@@ -72,6 +80,9 @@ class BORGVRRemoteDataManager {
   private static let maximumTransferFunctionDescriptionByteCount = 64 * 1024
   private static let maximumTransferFunctionByteCount =
     maximumTransferFunctionEntryCount * 4 + maximumTransferFunctionDescriptionByteCount
+  private static let maximumMarkerFileByteCount = 64 * 1024 * 1024
+  private(set) var serverProtocolVersion = 0
+  var supportsMarkerFiles: Bool { serverProtocolVersion >= 4 }
   private(set) var maxBricksPerGetRequest : Int = 1
   /**
    Initializes a new instance of the remote data manager.
@@ -180,10 +191,12 @@ class BORGVRRemoteDataManager {
       throw BORGVRRemoteDataManagerError.invalidResponse(reason:"Version not found in info response.")
     }
     
-    guard BORGVRRemoteDataManager.serverProtocolVersion(versionString) >=
+    let parsedServerVersion = BORGVRRemoteDataManager.serverProtocolVersion(versionString)
+    guard parsedServerVersion >=
             BORGVRRemoteDataManager.serverProtocolVersion(BORGVRRemoteDataManager.protocolVersionName) else {
       throw BORGVRRemoteDataManagerError.invalidResponse(reason: "Unsupported server protocol version. Server: \(versionString) (Local: \(BORGVRRemoteDataManager.protocolVersionName)).")
     }
+    serverProtocolVersion = parsedServerVersion
 
     if let maxBricksPerGetRequest = data.int(for: "MAX_BRICKS_PER_GET_REQUEST") {
       self.maxBricksPerGetRequest = maxBricksPerGetRequest
@@ -232,7 +245,7 @@ class BORGVRRemoteDataManager {
       }
 
       let id = String(parts[0])
-      guard Self.isTransferFunctionIdentifier(id) else {
+      guard Self.isMD5Identifier(id) else {
         throw BORGVRRemoteDataManagerError.invalidResponse(reason: "Invalid transfer function ID in LISTTF response.")
       }
 
@@ -248,7 +261,7 @@ class BORGVRRemoteDataManager {
   }
 
   func requestTransferFunction(id: String) throws -> Data {
-    guard Self.isTransferFunctionIdentifier(id) else {
+    guard Self.isMD5Identifier(id) else {
       throw BORGVRRemoteDataManagerError.invalidResponse(reason: "Invalid transfer function ID.")
     }
     let expectedByteCount = transferFunctions.first { $0.id == id }?.byteCount
@@ -258,6 +271,50 @@ class BORGVRRemoteDataManager {
       throw BORGVRRemoteDataManagerError.invalidResponse(
         reason: "Transfer function byte count mismatch."
       )
+    }
+    return data
+  }
+
+  func requestMarkerFileList() throws -> [RemoteMarkerFileInfo] {
+    guard supportsMarkerFiles else { return [] }
+    try sendCommand("LISTMARKERS")
+    let response = try receiveTextResponse()
+    markerFiles = try response.split(separator: "\n", omittingEmptySubsequences: true).map { line in
+      let parts = line.split(separator: " ", maxSplits: 3, omittingEmptySubsequences: false)
+      guard parts.count >= 3 else {
+        throw BORGVRRemoteDataManagerError.invalidResponse(reason: "Marker list response too short.")
+      }
+      let id = String(parts[0])
+      guard Self.isMD5Identifier(id) else {
+        throw BORGVRRemoteDataManagerError.invalidResponse(reason: "Invalid marker ID in LISTMARKERS response.")
+      }
+      guard let byteCount = Int(parts[1]), byteCount > 0,
+            byteCount <= Self.maximumMarkerFileByteCount else {
+        throw BORGVRRemoteDataManagerError.invalidResponse(reason: "Invalid marker file byte count in LISTMARKERS response.")
+      }
+      let datasetID = String(parts[2])
+      guard UUID(uuidString: datasetID) != nil else {
+        throw BORGVRRemoteDataManagerError.invalidResponse(reason: "Invalid dataset ID in LISTMARKERS response.")
+      }
+      return RemoteMarkerFileInfo(
+        id: id,
+        byteCount: byteCount,
+        datasetID: datasetID,
+        description: parts.count > 3 ? String(parts[3]) : ""
+      )
+    }
+    return markerFiles
+  }
+
+  func requestMarkerFile(id: String) throws -> Data {
+    guard supportsMarkerFiles, Self.isMD5Identifier(id) else {
+      throw BORGVRRemoteDataManagerError.invalidResponse(reason: "Invalid or unsupported marker file request.")
+    }
+    let expectedByteCount = markerFiles.first { $0.id == id }?.byteCount
+    try sendCommand("GETMARKER \(id)")
+    let data = try receiveBinaryData(maximumPayloadSize: Self.maximumMarkerFileByteCount)
+    if let expectedByteCount, data.count != expectedByteCount {
+      throw BORGVRRemoteDataManagerError.invalidResponse(reason: "Marker file byte count mismatch.")
     }
     return data
   }
@@ -395,7 +452,7 @@ class BORGVRRemoteDataManager {
     return chunk
   }
 
-  private static func isTransferFunctionIdentifier(_ id: String) -> Bool {
+  private static func isMD5Identifier(_ id: String) -> Bool {
     id.count == 32 && id.allSatisfy { character in
       character.isHexDigit
     }

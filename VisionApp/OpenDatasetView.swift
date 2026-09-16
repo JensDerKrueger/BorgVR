@@ -493,6 +493,19 @@ struct OpenDatasetView: View {
               "Transfer function sync failed for \(server.address):\(server.port): \(error.localizedDescription)"
             )
           }
+          do {
+            let syncedCount = try VolumeMarkerCatalog.storeRemoteMarkerFiles(
+              from: manager,
+              logger: runtimeAppModel.logger
+            )
+            if syncedCount > 0 {
+              runtimeAppModel.logger.info("Synced \(syncedCount) marker files from \(server.address):\(server.port).")
+            }
+          } catch {
+            runtimeAppModel.logger.warning(
+              "Marker file sync failed for \(server.address):\(server.port): \(error.localizedDescription)"
+            )
+          }
           let remoteDatasets = try manager.requestDatasetList()
           for dataset in remoteDatasets {
             datasets.append(

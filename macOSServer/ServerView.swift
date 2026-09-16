@@ -35,6 +35,7 @@ struct ServerView: View {
   @State private var datasetScanner: DatasetScanner?
   @State private var datasets: [DatasetInfo] = []
   @State private var transferFunctions: [TransferFunctionInfo] = []
+  @State private var markerFiles: [MarkerFileInfo] = []
   @State private var datasetInfoText: String = L(
     "server_dataset_scanning_message",
     comment: "Status text while scanning for datasets"
@@ -302,6 +303,7 @@ struct ServerView: View {
       datasetScanner?.loadDatasets()
       datasets = datasetScanner?.getDatasets() ?? []
       transferFunctions = datasetScanner?.getTransferFunctions() ?? []
+      markerFiles = datasetScanner?.getMarkerFiles() ?? []
       datasetInfoText = String(
         format: L(
           "server_dataset_found_count",
@@ -312,7 +314,8 @@ struct ServerView: View {
       isScanningDatasets = false
       server?.updateCatalog(
         datasets: datasets,
-        transferFunctions: transferFunctions
+        transferFunctions: transferFunctions,
+        markerFiles: markerFiles
       )
 
       if storedAppModel.autoStartServer {
@@ -386,6 +389,7 @@ struct ServerView: View {
       logger: logger,
       datasets: datasets,
       transferFunctions: transferFunctions,
+      markerFiles: markerFiles,
       authSecret: storedAppModel.serverPassword
     )
     server?.start()
@@ -443,6 +447,7 @@ struct ServerView: View {
     datasetScanner?.loadDatasets()
     datasets = datasetScanner?.getDatasets() ?? []
     transferFunctions = datasetScanner?.getTransferFunctions() ?? []
+    markerFiles = datasetScanner?.getMarkerFiles() ?? []
     datasetInfoText = String(
       format: L(
         "server_dataset_found_count",
@@ -452,7 +457,8 @@ struct ServerView: View {
     )
     server?.updateCatalog(
       datasets: datasets,
-      transferFunctions: transferFunctions
+      transferFunctions: transferFunctions,
+      markerFiles: markerFiles
     )
   }
 

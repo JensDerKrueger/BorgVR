@@ -644,3 +644,35 @@
 "Configure the temporary server ports used for ad-hoc sharing sessions such as SharePlay. These settings are separate from the persistent background dataset server." = "Konfiguriert die temporären Server-Ports für Ad-hoc-Freigaben wie SharePlay. Diese Einstellungen sind unabhängig vom permanenten Hintergrund-Datensatz-Server.";
 "Manage remote BorgVR dataset servers that this app can query. Added servers appear in the dataset browser; enter the address, port, and password provided by the server operator." = "Verwaltet entfernte BorgVR-Datensatz-Server, die diese App abfragen kann. Hinzugefügte Server erscheinen im Datensatzbrowser; Adresse, Port und Passwort werden vom Server-Betreiber bereitgestellt.";
 "Adjust general application behavior that is not tied to a specific renderer, importer, or server workflow." = "Stellt allgemeines App-Verhalten ein, das nicht direkt zu Renderer, Import oder Server gehört.";
+
+/* Volumenmarker */
+"Marker" = "Marker";
+"Markers" = "Marker";
+"No Markers" = "Keine Marker";
+"Selected Marker" = "Ausgewählter Marker";
+"Name" = "Name";
+"Radius" = "Radius";
+"Delete Selected Marker" = "Ausgewählten Marker löschen";
+"Delete All Markers" = "Alle Marker löschen";
+"Delete All Markers?" = "Alle Marker löschen?";
+"This removes every marker from the current session." = "Dadurch werden alle Marker aus der aktuellen Sitzung entfernt.";
+"Choose the Marker interaction mode and click in the rendering view to add a marker." = "Wählen Sie den Interaktionsmodus „Marker“ und klicken Sie in die Rendering-Ansicht, um einen Marker hinzuzufügen.";
+"Marker Files" = "Markerdateien";
+"Load Markers…" = "Marker laden…";
+"Save Markers…" = "Marker speichern…";
+"Load Markers" = "Marker laden";
+"No Marker Files Available" = "Keine Markerdateien verfügbar";
+"Markers for a Different Dataset" = "Marker für einen anderen Datensatz";
+"Load Anyway" = "Trotzdem laden";
+"This marker file was created for a different dataset. Its positions may not match the current volume. Do you still want to load it?" = "Diese Markerdatei wurde für einen anderen Datensatz erstellt. Ihre Positionen passen möglicherweise nicht zum aktuellen Volumen. Möchten Sie sie trotzdem laden?";
+"Markers already exist in the current session. Do you want to replace them or add the loaded markers?" = "In der aktuellen Sitzung sind bereits Marker vorhanden. Möchten Sie diese ersetzen oder die geladenen Marker hinzufügen?";
+"Replace Existing Markers" = "Vorhandene Marker ersetzen";
+"Add Loaded Markers" = "Geladene Marker hinzufügen";
+"Marker File Error" = "Marker-Dateifehler";
+"OK" = "OK";
+"datasetscanner_info_loaded_marker_file" = "Markerdatei geladen: %@ (Datensatz %@, ID %@)";
+"datasetscanner_warning_failed_load_marker_file" = "Markerdatei konnte nicht geladen werden: %@";
+"The selected file is not a BorgVR marker file." = "Die ausgewählte Datei ist keine BorgVR-Markerdatei.";
+"Unsupported marker file version %d." = "Nicht unterstützte Markerdateiversion %d.";
+"The marker file exceeds the maximum supported size." = "Die Markerdatei überschreitet die maximal unterstützte Größe.";
+"The marker file contains too many markers." = "Die Markerdatei enthält zu viele Marker.";

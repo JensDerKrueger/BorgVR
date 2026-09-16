@@ -9,6 +9,15 @@ final class AppModel: ObservableObject {
     _ completion: @escaping (Result<URL, Error>) -> Void
   ) -> Void
   typealias RenderDisplaySyncHandler = (_ enabled: Bool) -> Void
+  typealias MarkerPositionHandler = (
+    _ normalizedScreenPosition: SIMD2<Float>,
+    _ positionToPreserveDepth: SIMD3<Float>?
+  ) -> SIMD3<Float>?
+  typealias MarkerHitTestHandler = (_ normalizedScreenPosition: SIMD2<Float>) -> UUID?
+  typealias MarkerDepthAdjustmentHandler = (
+    _ position: SIMD3<Float>,
+    _ worldDistance: Float
+  ) -> SIMD3<Float>?
 
   enum ContentViewState {
     case start
@@ -23,6 +32,7 @@ final class AppModel: ObservableObject {
     case model
     case clipping
     case transferEditing
+    case marker
 
     var id: String { rawValue }
   }
@@ -61,11 +71,22 @@ final class AppModel: ObservableObject {
   @Published var activeDataset: DatasetEntry?
   @Published var groupSessionHost = true
   @Published var interactionMode: InteractionMode = .model
+  @Published var volumeMarkers: [VolumeMarker] = []
+  @Published var selectedVolumeMarkerID: UUID?
   @Published var timer: CPUFrameTimer?
   @Published var performanceModel = PerformanceGraphModel()
   let logger = GUILogger()
   var renderScreenshotHandler: RenderScreenshotHandler?
   var renderDisplaySyncHandler: RenderDisplaySyncHandler?
+  var markerPositionHandler: MarkerPositionHandler?
+  var markerHitTestHandler: MarkerHitTestHandler?
+  var markerDepthAdjustmentHandler: MarkerDepthAdjustmentHandler?
+  let defaultVolumeMarkerColor = SIMD4<Float>(
+    Float.random(in: 0.2...1),
+    Float.random(in: 0.2...1),
+    Float.random(in: 0.2...1),
+    1
+  )
   private(set) var renderDisplaySyncEnabled = true
   private(set) var brickReadbackCount: UInt64 = 0
   private(set) var lastMissingBrickCount: Int = 0
@@ -82,6 +103,23 @@ final class AppModel: ObservableObject {
   func setLogLevel(_ setting: String) {
     let logLevel = AppLogLevel(rawValue: setting) ?? .warning
     logger.setMinimumLogLevel(logLevel.level)
+  }
+
+  func nextVolumeMarkerName() -> String {
+    let usedNames = Set(volumeMarkers.map(\.name))
+    var markerIndex = volumeMarkers.count + 1
+    while usedNames.contains("Marker \(markerIndex)") {
+      markerIndex += 1
+    }
+    return "Marker \(markerIndex)"
+  }
+
+  func replaceVolumeMarkers(_ markers: [VolumeMarker]) {
+    volumeMarkers = markers
+    if let selectedVolumeMarkerID,
+       !markers.contains(where: { $0.id == selectedVolumeMarkerID }) {
+      self.selectedVolumeMarkerID = nil
+    }
   }
 
   func requestRenderScreenshot(

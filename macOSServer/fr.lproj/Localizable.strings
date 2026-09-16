@@ -522,3 +522,5 @@
 "datasetscanner_warning_failed_load_transfer_function" = "Impossible de charger le fichier de fonction de transfert : %@";
 "All settings will be reset to their default values." = "Tous les réglages seront réinitialisés à leurs valeurs par défaut.";
 "WebGPU web server:" = "Serveur web WebGPU :";
+"datasetscanner_info_loaded_marker_file" = "Fichier de marqueurs chargé : %@ (jeu de données %@, ID %@)";
+"datasetscanner_warning_failed_load_marker_file" = "Impossible de charger le fichier de marqueurs : %@";

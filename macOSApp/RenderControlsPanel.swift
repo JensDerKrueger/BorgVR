@@ -118,6 +118,7 @@ struct RenderControlsPanel: View {
         Text("Model").tag(AppModel.InteractionMode.model)
         Text("Clipping").tag(AppModel.InteractionMode.clipping)
         Text("Transfer").tag(AppModel.InteractionMode.transferEditing)
+        Text("Marker").tag(AppModel.InteractionMode.marker)
       }
       .pickerStyle(.segmented)
       .onAppear {
@@ -153,6 +154,16 @@ struct RenderControlsPanel: View {
         } label: {
           Label("Editor", systemImage: "slider.horizontal.3")
         }
+
+        Button {
+          if docking.isDetached(.markerEditor) {
+            openWindow(id: DockablePanelID.markerEditor.windowID)
+          } else {
+            docking.toggleVisibility(.markerEditor)
+          }
+        } label: {
+          Label("Markers", systemImage: "mappin.and.ellipse")
+        }
       }
     }
     .padding(12)
@@ -181,6 +192,8 @@ struct RenderControlsPanel: View {
       try? renderingParameters.transferFunction.save(to: fileURL)
     }
     sharePlay.closeSharedDataset()
+    appModel.volumeMarkers.removeAll()
+    appModel.selectedVolumeMarkerID = nil
     docking.resetForDatasetClose()
     appModel.currentState = .selectData
   }

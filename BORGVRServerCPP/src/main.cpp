@@ -29,7 +29,7 @@
 #endif
 
 #ifndef BORGVR_SERVER_VERSION
-#define BORGVR_SERVER_VERSION "2.0"
+#define BORGVR_SERVER_VERSION "2.2"
 #endif
 
 static std::string basenameOf(const std::string& path) {
@@ -407,6 +407,99 @@ static std::vector<TransferFunctionInfo> scanTransferFunctionDirectory(const std
   return transferFunctions;
 }
 
+static bool extractJsonString(const std::string& json,
+                              const std::string& key,
+                              std::string& value) {
+  const auto keyPosition = json.find("\"" + key + "\"");
+  if (keyPosition == std::string::npos) return false;
+  const auto colon = json.find(':', keyPosition + key.size() + 2);
+  if (colon == std::string::npos) return false;
+  auto cursor = json.find_first_not_of(" \t\r\n", colon + 1);
+  if (cursor == std::string::npos || json[cursor] != '"') return false;
+  ++cursor;
+  std::string result;
+  while (cursor < json.size()) {
+    const char c = json[cursor++];
+    if (c == '"') {
+      value = std::move(result);
+      return true;
+    }
+    if (c == '\\') {
+      if (cursor >= json.size()) return false;
+      const char escaped = json[cursor++];
+      if (escaped == '"' || escaped == '\\' || escaped == '/') result.push_back(escaped);
+      else return false;
+    } else {
+      result.push_back(c);
+    }
+  }
+  return false;
+}
+
+static bool extractJsonInteger(const std::string& json,
+                               const std::string& key,
+                               int& value) {
+  const auto keyPosition = json.find("\"" + key + "\"");
+  if (keyPosition == std::string::npos) return false;
+  const auto colon = json.find(':', keyPosition + key.size() + 2);
+  if (colon == std::string::npos) return false;
+  const auto start = json.find_first_not_of(" \t\r\n", colon + 1);
+  if (start == std::string::npos) return false;
+  auto end = start;
+  while (end < json.size() && std::isdigit(static_cast<unsigned char>(json[end]))) ++end;
+  return end > start && parseInt(json.substr(start, end - start), value);
+}
+
+static bool looksLikeUuid(const std::string& value) {
+  if (value.size() != 36) return false;
+  for (size_t i = 0; i < value.size(); ++i) {
+    if (i == 8 || i == 13 || i == 18 || i == 23) {
+      if (value[i] != '-') return false;
+    } else if (!std::isxdigit(static_cast<unsigned char>(value[i]))) {
+      return false;
+    }
+  }
+  return true;
+}
+
+static std::vector<MarkerFileInfo> scanMarkerDirectory(const std::string& directory,
+                                                       std::shared_ptr<Logger> logger) {
+  namespace fs = std::filesystem;
+  constexpr uintmax_t maximumMarkerFileBytes = 64u * 1024u * 1024u;
+  std::vector<MarkerFileInfo> markerFiles;
+  std::error_code ec;
+  if (!fs::exists(directory, ec) || !fs::is_directory(directory, ec)) return markerFiles;
+
+  for (const auto& entry : fs::directory_iterator(directory, ec)) {
+    if (ec) break;
+    if (!entry.is_regular_file(ec) || entry.path().extension() != ".marker") continue;
+    const auto byteCount = entry.file_size(ec);
+    if (ec || byteCount == 0 || byteCount > maximumMarkerFileBytes) continue;
+    std::ifstream file(entry.path(), std::ios::binary);
+    std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(file)),
+                               std::istreambuf_iterator<char>());
+    if (bytes.size() != byteCount || bytes.size() > maximumMarkerFileBytes) continue;
+    const std::string json(bytes.begin(), bytes.end());
+    std::string format;
+    std::string datasetId;
+    int version = 0;
+    if (!extractJsonString(json, "format", format) || format != "BorgVRVolumeMarkers" ||
+        !extractJsonInteger(json, "version", version) || version != 1 ||
+        !extractJsonString(json, "datasetID", datasetId) || !looksLikeUuid(datasetId)) {
+      if (logger) logger->warning("Unable to load marker file " + entry.path().string() + ": invalid header");
+      continue;
+    }
+    MarkerFileInfo info;
+    info.id = md5Hex(bytes.data(), bytes.size());
+    info.filename = entry.path().string();
+    info.datasetId = datasetId;
+    info.markerDescription = entry.path().stem().string();
+    info.byteCount = bytes.size();
+    markerFiles.push_back(std::move(info));
+  }
+  return markerFiles;
+}
+
 int main(int argc, char** argv) {
   SocketSystem sockSys;
   auto logger = std::make_shared<Logger>(LogLevel::Info);
@@ -506,10 +599,12 @@ int main(int argc, char** argv) {
 
   auto datasets = scanDatasetDirectory(datasetDir, logger);
   auto transferFunctions = scanTransferFunctionDirectory(datasetDir, logger);
+  auto markerFiles = scanMarkerDirectory(datasetDir, logger);
 
   TCPServer server(port, maxBricks, logger, password);
   server.setDatasets(datasets);
   server.setTransferFunctions(transferFunctions);
+  server.setMarkerFiles(markerFiles);
   if (!server.start()) {
     return 2;
   }
@@ -528,6 +623,7 @@ int main(int argc, char** argv) {
     server.setDatasets(refreshed);
     const auto refreshedTransferFunctions = scanTransferFunctionDirectory(datasetDir, logger);
     server.setTransferFunctions(refreshedTransferFunctions);
+    server.setMarkerFiles(scanMarkerDirectory(datasetDir, logger));
   };
 
   std::unique_ptr<ServerSyncManager> syncManager;

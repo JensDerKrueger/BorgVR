@@ -25,9 +25,17 @@ struct TransferFunctionInfo {
   size_t byteCount = 0;                    // full .tf1d file size
 };
 
+struct MarkerFileInfo {
+  std::string id;                // MD5 over the complete .marker file
+  std::string filename;          // path to .marker file
+  std::string datasetId;         // dataset UUID stored in the file
+  std::string markerDescription; // displayed in LISTMARKERS
+  size_t byteCount = 0;
+};
+
 class TCPServer {
 public:
-  static constexpr const char* kProtocolVersionName = "3";
+  static constexpr const char* kProtocolVersionName = "4";
 
   TCPServer(uint16_t port,
             int maxBricksPerGetRequest,
@@ -50,6 +58,9 @@ public:
   void setTransferFunctions(std::vector<TransferFunctionInfo> transferFunctions);
   std::vector<TransferFunctionInfo> transferFunctionsSnapshot() const;
   bool findTransferFunctionById(const std::string& id, TransferFunctionInfo& out) const;
+  void setMarkerFiles(std::vector<MarkerFileInfo> markerFiles);
+  std::vector<MarkerFileInfo> markerFilesSnapshot() const;
+  bool findMarkerFileById(const std::string& id, MarkerFileInfo& out) const;
 
 private:
   class ClientSession {
@@ -71,9 +82,11 @@ private:
     bool commandAllowed() const;
     bool sendList(const std::vector<std::string>& params);
     bool sendTransferFunctionList(const std::vector<std::string>& params);
+    bool sendMarkerFileList(const std::vector<std::string>& params);
     bool sendInfo(const std::vector<std::string>& params);
     bool openDataset(const std::vector<std::string>& params);
     bool getTransferFunction(const std::vector<std::string>& params);
+    bool getMarkerFile(const std::vector<std::string>& params);
     bool getBricks(const std::vector<std::string>& params);
 
     void sendBinaryResponse(const std::vector<uint8_t>& payload);
@@ -101,6 +114,7 @@ private:
   std::shared_ptr<Logger> logger_;
   std::vector<DatasetInfo> datasets_;
   std::vector<TransferFunctionInfo> transferFunctions_;
+  std::vector<MarkerFileInfo> markerFiles_;
   mutable std::mutex datasetsMutex_;
 
   std::atomic<bool> running_{false};

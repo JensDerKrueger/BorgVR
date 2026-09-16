@@ -70,6 +70,25 @@
 		<dict>
 			<key>UTTypeConformsTo</key>
 			<array>
+				<string>public.json</string>
+			</array>
+			<key>UTTypeDescription</key>
+			<string>BorgVR Markers</string>
+			<key>UTTypeIdentifier</key>
+			<string>de.uni-due.borgvr.marker</string>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>marker</string>
+				</array>
+				<key>public.mime-type</key>
+				<string>application/x-borgvr-markers</string>
+			</dict>
+		</dict>
+		<dict>
+			<key>UTTypeConformsTo</key>
+			<array>
 				<string>public.data</string>
 			</array>
 			<key>UTTypeDescription</key>

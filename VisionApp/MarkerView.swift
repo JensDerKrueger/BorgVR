@@ -12,6 +12,8 @@ struct MarkerView: View {
   @State private var showSaveFilePicker = false
   @State private var pendingLoadedMarkers: [VolumeMarker] = []
   @State private var showLoadMergeChoice = false
+  @State private var showDatasetMismatchWarning = false
+  @State private var markerCatalog: [VolumeMarkerCatalogEntry] = []
   @State private var markerFileError: Error?
   @State private var showMarkerFileError = false
 
@@ -83,6 +85,26 @@ struct MarkerView: View {
         }
 
         HStack {
+          Menu {
+            if markerCatalog.isEmpty {
+              Text("marker_catalog_empty")
+            } else {
+              ForEach(markerCatalog) { entry in
+                Button {
+                  loadMarkers(at: entry.url)
+                } label: {
+                  Label(
+                    entry.displayName,
+                    systemImage: entry.matches(datasetID: currentDatasetID)
+                      ? "checkmark.circle.fill" : "doc"
+                  )
+                }
+              }
+            }
+          } label: {
+            Label("marker_catalog_button", systemImage: "mappin.and.ellipse")
+          }
+
           Button("marker_load_button") {
             showLoadFilePicker = true
           }
@@ -121,6 +143,16 @@ struct MarkerView: View {
       Text("marker_clear_all_confirmation_message")
     }
     .confirmationDialog(
+      "marker_dataset_mismatch_title",
+      isPresented: $showDatasetMismatchWarning,
+      titleVisibility: .visible
+    ) {
+      Button("marker_dataset_mismatch_load") { continueLoadingMarkers() }
+      Button("marker_clear_all_confirmation_cancel", role: .cancel) { clearPendingLoad() }
+    } message: {
+      Text("marker_dataset_mismatch_message")
+    }
+    .confirmationDialog(
       "marker_load_merge_title",
       isPresented: $showLoadMergeChoice,
       titleVisibility: .visible
@@ -132,23 +164,23 @@ struct MarkerView: View {
         applyLoadedMarkers(replacingExisting: false)
       }
       Button("marker_clear_all_confirmation_cancel", role: .cancel) {
-        pendingLoadedMarkers = []
+        clearPendingLoad()
       }
     } message: {
       Text("marker_load_merge_message")
     }
     .fileImporter(
       isPresented: $showLoadFilePicker,
-      allowedContentTypes: [.json],
+      allowedContentTypes: [.borgVRMarker],
       allowsMultipleSelection: false
     ) { result in
       loadMarkers(from: result)
     }
     .fileExporter(
       isPresented: $showSaveFilePicker,
-      document: VolumeMarkerDocument(markers: sharedAppModel.volumeMarkers),
-      contentType: .json,
-      defaultFilename: "BorgVR Markers.json"
+      document: VolumeMarkerDocument(datasetID: currentDatasetID, markers: sharedAppModel.volumeMarkers),
+      contentType: .borgVRMarker,
+      defaultFilename: "BorgVR Markers.marker"
     ) { result in
       if case let .failure(error) = result {
         markerFileError = error
@@ -166,7 +198,16 @@ struct MarkerView: View {
     } message: { error in
       Text(error.localizedDescription)
     }
+    .onAppear(perform: refreshMarkerCatalog)
+    .onReceive(NotificationCenter.default.publisher(for: VolumeMarkerCatalog.didChangeNotification)) { _ in
+      refreshMarkerCatalog()
+    }
+    .onChange(of: currentDatasetID) { _, _ in
+      refreshMarkerCatalog()
+    }
   }
+
+  private var currentDatasetID: String? { runtimeAppModel.activeDataset?.uniqueId }
 
   private var interactionModeBinding: Binding<String> {
     Binding(
@@ -194,6 +235,9 @@ struct MarkerView: View {
       get: { sharedAppModel.selectedVolumeMarkerID },
       set: { newValue in
         sharedAppModel.selectedVolumeMarkerID = newValue
+        if newValue != nil {
+          runtimeAppModel.interactionMode = .marker
+        }
       }
     )
   }
@@ -295,19 +339,42 @@ struct MarkerView: View {
         }
       }
 
-      let data = try Data(contentsOf: url)
-      let markers = try VolumeMarkerDocument.decodeMarkers(from: data)
-      pendingLoadedMarkers = markers
-
-      if sharedAppModel.volumeMarkers.isEmpty {
-        applyLoadedMarkers(replacingExisting: true)
-      } else {
-        showLoadMergeChoice = true
-      }
+      prepareLoadedMarkers(try VolumeMarkerDocument.decode(from: Data(contentsOf: url)))
     } catch {
       markerFileError = error
       showMarkerFileError = true
     }
+  }
+
+  private func loadMarkers(at url: URL) {
+    do {
+      prepareLoadedMarkers(try VolumeMarkerDocument.decode(from: Data(contentsOf: url, options: .mappedIfSafe)))
+    } catch {
+      markerFileError = error
+      showMarkerFileError = true
+    }
+  }
+
+  private func prepareLoadedMarkers(_ contents: VolumeMarkerDocumentContents) {
+    pendingLoadedMarkers = contents.markers
+    if let currentDatasetID,
+       contents.datasetID.caseInsensitiveCompare(currentDatasetID) != .orderedSame {
+      showDatasetMismatchWarning = true
+    } else {
+      continueLoadingMarkers()
+    }
+  }
+
+  private func continueLoadingMarkers() {
+    if sharedAppModel.volumeMarkers.isEmpty {
+      applyLoadedMarkers(replacingExisting: true)
+    } else {
+      showLoadMergeChoice = true
+    }
+  }
+
+  private func clearPendingLoad() {
+    pendingLoadedMarkers = []
   }
 
   private func applyLoadedMarkers(replacingExisting: Bool) {
@@ -316,7 +383,7 @@ struct MarkerView: View {
     } else {
       sharedAppModel.volumeMarkers.append(contentsOf: markersWithUniqueIDs(pendingLoadedMarkers))
     }
-    pendingLoadedMarkers = []
+    clearPendingLoad()
     sharedAppModel.selectedVolumeMarkerID = nil
     sharedAppModel.synchronizeMarkers()
   }
@@ -332,82 +399,13 @@ struct MarkerView: View {
       return marker
     }
   }
-}
 
-private struct VolumeMarkerDocument: FileDocument {
-  static var readableContentTypes: [UTType] { [.json] }
-  static var writableContentTypes: [UTType] { [.json] }
-
-  let markers: [VolumeMarker]
-
-  init(markers: [VolumeMarker]) {
-    self.markers = markers
-  }
-
-  init(configuration: ReadConfiguration) throws {
-    guard let data = configuration.file.regularFileContents else {
-      throw CocoaError(.fileReadCorruptFile)
-    }
-    markers = try Self.decodeMarkers(from: data)
-  }
-
-  func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
-    let payload = VolumeMarkerFile(markers: markers.map(StoredVolumeMarker.init(marker:)))
-    let encoder = JSONEncoder()
-    encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-    return .init(regularFileWithContents: try encoder.encode(payload))
-  }
-
-  static func decodeMarkers(from data: Data) throws -> [VolumeMarker] {
-    let decoder = JSONDecoder()
-    let payload = try decoder.decode(VolumeMarkerFile.self, from: data)
-    return payload.markers.map(\.marker)
-  }
-}
-
-private struct VolumeMarkerFile: Codable {
-  var format: String = "BorgVRVolumeMarkers"
-  var version: Int = 1
-  var markers: [StoredVolumeMarker]
-}
-
-private struct StoredVolumeMarker: Codable {
-  var id: UUID
-  var name: String
-  var position: [Float]
-  var radius: Float
-  var color: [Float]
-
-  init(marker: VolumeMarker) {
-    id = marker.id
-    name = marker.name
-    position = [marker.position.x, marker.position.y, marker.position.z]
-    radius = marker.radius
-    color = [marker.color.x, marker.color.y, marker.color.z, marker.color.w]
-  }
-
-  var marker: VolumeMarker {
-    VolumeMarker(
-      id: id,
-      name: name,
-      position: SIMD3<Float>(
-        position[safe: 0] ?? 0.5,
-        position[safe: 1] ?? 0.5,
-        position[safe: 2] ?? 0.5
-      ),
-      radius: radius,
-      color: SIMD4<Float>(
-        color[safe: 0] ?? 1,
-        color[safe: 1] ?? 0,
-        color[safe: 2] ?? 0,
-        color[safe: 3] ?? 1
-      )
+  private func refreshMarkerCatalog() {
+    let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
+    markerCatalog = VolumeMarkerCatalog.entries(
+      additionalDirectoryURLs: documentsURL.map { [$0] } ?? [],
+      currentDatasetID: currentDatasetID,
+      logger: runtimeAppModel.logger
     )
-  }
-}
-
-private extension Array {
-  subscript(safe index: Int) -> Element? {
-    indices.contains(index) ? self[index] : nil
   }
 }

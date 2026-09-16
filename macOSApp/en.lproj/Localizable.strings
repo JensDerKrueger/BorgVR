@@ -640,3 +640,35 @@
 "Configure the temporary server ports used for ad-hoc sharing sessions such as SharePlay. These settings are separate from the persistent background dataset server." = "Configure the temporary server ports used for ad-hoc sharing sessions such as SharePlay. These settings are separate from the persistent background dataset server.";
 "Manage remote BorgVR dataset servers that this app can query. Added servers appear in the dataset browser; enter the address, port, and password provided by the server operator." = "Manage remote BorgVR dataset servers that this app can query. Added servers appear in the dataset browser; enter the address, port, and password provided by the server operator.";
 "Adjust general application behavior that is not tied to a specific renderer, importer, or server workflow." = "Adjust general application behavior that is not tied to a specific renderer, importer, or server workflow.";
+
+/* Volume markers */
+"Marker" = "Marker";
+"Markers" = "Markers";
+"No Markers" = "No Markers";
+"Selected Marker" = "Selected Marker";
+"Name" = "Name";
+"Radius" = "Radius";
+"Delete Selected Marker" = "Delete Selected Marker";
+"Delete All Markers" = "Delete All Markers";
+"Delete All Markers?" = "Delete All Markers?";
+"This removes every marker from the current session." = "This removes every marker from the current session.";
+"Choose the Marker interaction mode and click in the rendering view to add a marker." = "Choose the Marker interaction mode and click in the rendering view to add a marker.";
+"Marker Files" = "Marker Files";
+"Load Markers…" = "Load Markers…";
+"Save Markers…" = "Save Markers…";
+"Load Markers" = "Load Markers";
+"No Marker Files Available" = "No Marker Files Available";
+"Markers for a Different Dataset" = "Markers for a Different Dataset";
+"Load Anyway" = "Load Anyway";
+"This marker file was created for a different dataset. Its positions may not match the current volume. Do you still want to load it?" = "This marker file was created for a different dataset. Its positions may not match the current volume. Do you still want to load it?";
+"Markers already exist in the current session. Do you want to replace them or add the loaded markers?" = "Markers already exist in the current session. Do you want to replace them or add the loaded markers?";
+"Replace Existing Markers" = "Replace Existing Markers";
+"Add Loaded Markers" = "Add Loaded Markers";
+"Marker File Error" = "Marker File Error";
+"OK" = "OK";
+"datasetscanner_info_loaded_marker_file" = "Loaded marker file: %@ (dataset %@, id %@)";
+"datasetscanner_warning_failed_load_marker_file" = "Failed to load marker file: %@";
+"The selected file is not a BorgVR marker file." = "The selected file is not a BorgVR marker file.";
+"Unsupported marker file version %d." = "Unsupported marker file version %d.";
+"The marker file exceeds the maximum supported size." = "The marker file exceeds the maximum supported size.";
+"The marker file contains too many markers." = "The marker file contains too many markers.";

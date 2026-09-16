@@ -14,8 +14,17 @@ struct TransferFunctionInfo {
   let byteCount: Int
 }
 
+struct MarkerFileInfo {
+  let id: String
+  let filename: String
+  let datasetID: String
+  let markerDescription: String
+  let byteCount: Int
+}
+
 private enum DatasetScannerError: Error {
   case invalidTransferFunctionFile
+  case invalidMarkerFile
 }
 
 class DatasetScanner {
@@ -23,9 +32,17 @@ class DatasetScanner {
   private static let transferFunctionFileVersion: UInt32 = 2
   private static let maximumTransferFunctionEntryCount = 1 << 16
   private static let maximumTransferFunctionDescriptionByteCount = 64 * 1024
+  private static let maximumMarkerFileByteCount = 64 * 1024 * 1024
+
+  private struct MarkerFileHeader: Decodable {
+    let format: String
+    let version: Int
+    let datasetID: String
+  }
 
   private var datasets: [DatasetInfo] = []
   private var transferFunctions: [TransferFunctionInfo] = []
+  private var markerFiles: [MarkerFileInfo] = []
   private let directory: String
   private let logger: LoggerBase?
 
@@ -37,6 +54,7 @@ class DatasetScanner {
   func loadDatasets() {
     datasets.removeAll()
     transferFunctions.removeAll()
+    markerFiles.removeAll()
     let fileManager = FileManager.default
     let directoryURL = URL(fileURLWithPath: directory)
 
@@ -52,6 +70,8 @@ class DatasetScanner {
             loadDataset(at: url)
           case "tf1d":
             loadTransferFunction(at: url)
+          case "marker":
+            loadMarkerFile(at: url)
           default:
             break
         }
@@ -73,6 +93,10 @@ class DatasetScanner {
 
   func getTransferFunctions() -> [TransferFunctionInfo] {
     return transferFunctions
+  }
+
+  func getMarkerFiles() -> [MarkerFileInfo] {
+    markerFiles
   }
 
   static func bundledTransferFunctions(logger: LoggerBase? = nil) -> [TransferFunctionInfo] {
@@ -133,6 +157,64 @@ class DatasetScanner {
           transferFunction.transferFunctionDescription,
           url.lastPathComponent,
           transferFunction.id
+        )
+      )
+    }
+  }
+
+  private func loadMarkerFile(at url: URL) {
+    do {
+      let resourceValues = try url.resourceValues(forKeys: [.fileSizeKey])
+      guard let byteCount = resourceValues.fileSize,
+            byteCount > 0,
+            byteCount <= Self.maximumMarkerFileByteCount else {
+        throw DatasetScannerError.invalidMarkerFile
+      }
+      let data = try Data(contentsOf: url, options: .mappedIfSafe)
+      guard data.count == byteCount,
+            data.count <= Self.maximumMarkerFileByteCount else {
+        throw DatasetScannerError.invalidMarkerFile
+      }
+      let header = try JSONDecoder().decode(MarkerFileHeader.self, from: data)
+      guard header.format == "BorgVRVolumeMarkers",
+            header.version == 1,
+            UUID(uuidString: header.datasetID) != nil else {
+        throw DatasetScannerError.invalidMarkerFile
+      }
+      let datasetID = header.datasetID
+      let id = Insecure.MD5.hash(data: data)
+        .map { String(format: "%02x", $0) }
+        .joined()
+      markerFiles.append(
+        MarkerFileInfo(
+          id: id,
+          filename: url.path,
+          datasetID: datasetID,
+          markerDescription: url.deletingPathExtension().lastPathComponent,
+          byteCount: data.count
+        )
+      )
+      logger?.info(
+        String(
+          format: L(
+            "datasetscanner_info_loaded_marker_file",
+            value: "Loaded marker file: %@ (dataset %@, id %@)",
+            comment: "Log: marker file successfully loaded"
+          ),
+          url.lastPathComponent,
+          datasetID,
+          id
+        )
+      )
+    } catch {
+      logger?.warning(
+        String(
+          format: L(
+            "datasetscanner_warning_failed_load_marker_file",
+            value: "Failed to load marker file: %@",
+            comment: "Log: marker file could not be loaded"
+          ),
+          url.path
         )
       )
     }

@@ -526,3 +526,5 @@
 "datasetscanner_warning_failed_load_transfer_function" = "Transferfunktionsdatei konnte nicht geladen werden: %@";
 "All settings will be reset to their default values." = "Alle Einstellungen werden auf ihre Standardwerte zurückgesetzt.";
 "WebGPU web server:" = "WebGPU-Webserver:";
+"datasetscanner_info_loaded_marker_file" = "Markerdatei geladen: %@ (Datensatz %@, ID %@)";
+"datasetscanner_warning_failed_load_marker_file" = "Markerdatei konnte nicht geladen werden: %@";

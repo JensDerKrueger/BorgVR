@@ -17,6 +17,7 @@ struct MacMetalView: NSViewRepresentable {
   var onDragDelta: (CGSize) -> Void = { _ in }
   var onDragUpdate: (RenderDragUpdate) -> Void = { _ in }
   var onDragEnded: () -> Void = {}
+  var onPointerDown: (RenderDragUpdate) -> Void = { _ in }
   var onMagnificationDelta: (CGFloat) -> Void = { _ in }
   var onMagnificationEnded: () -> Void = {}
   var onDoubleTap: () -> Void = {}
@@ -59,6 +60,7 @@ struct MacMetalView: NSViewRepresentable {
     view.onDragDelta = onDragDelta
     view.onDragUpdate = onDragUpdate
     view.onDragEnded = onDragEnded
+    view.onPointerDown = onPointerDown
     view.onMagnificationDelta = onMagnificationDelta
     view.onMagnificationEnded = onMagnificationEnded
     view.onDoubleTap = onDoubleTap
@@ -72,6 +74,7 @@ final class InteractiveMTKView: MTKView {
   var onDragDelta: (CGSize) -> Void = { _ in }
   var onDragUpdate: (RenderDragUpdate) -> Void = { _ in }
   var onDragEnded: () -> Void = {}
+  var onPointerDown: (RenderDragUpdate) -> Void = { _ in }
   var onMagnificationDelta: (CGFloat) -> Void = { _ in }
   var onMagnificationEnded: () -> Void = {}
   var onDoubleTap: () -> Void = {}
@@ -101,6 +104,17 @@ final class InteractiveMTKView: MTKView {
     if event.clickCount >= 2 {
       onDoubleTap()
       lastDragLocation = nil
+      return
+    }
+    if let lastDragLocation {
+      onPointerDown(
+        RenderDragUpdate(
+          delta: .zero,
+          location: lastDragLocation,
+          viewSize: bounds.size,
+          isDirectPointer: true
+        )
+      )
     }
   }
 

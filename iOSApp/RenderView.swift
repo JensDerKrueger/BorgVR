@@ -20,6 +20,8 @@ struct RenderView: View {
   @State private var transferSmoothCenter: Float = 0.25
   @State private var transferSmoothWidth: Float = 0.3
   @State private var copiedWebGPUShareLink = false
+  @State private var showMarkerEditor = false
+  @State private var markerDragID: UUID?
 
   private let modelRotationSensitivity: Float = 0.006
   private let clippingSensitivity: Float = 0.0012
@@ -50,6 +52,11 @@ struct RenderView: View {
         showDatasetInfo = false
       }
     }
+    .sheet(isPresented: $showMarkerEditor) {
+      MobileMarkerView()
+        .environmentObject(appModel)
+        .environmentObject(sharePlay)
+    }
   }
 
   @ViewBuilder
@@ -60,9 +67,10 @@ struct RenderView: View {
 
       MobileMetalView()
         .ignoresSafeArea()
-        .gesture(rotationGesture)
+        .gesture(interactionGesture(in: layout.size))
         .simultaneousGesture(zoomGesture)
         .simultaneousGesture(doubleTapInteractionGesture)
+        .simultaneousGesture(markerTapGesture(in: layout.size))
 
       switch layout.renderControlPlacement {
         case .overlayTop:
@@ -184,6 +192,7 @@ struct RenderView: View {
           Text("Model").tag(AppModel.InteractionMode.model)
           Text("Clipping").tag(AppModel.InteractionMode.clipping)
           Text("Transfer").tag(AppModel.InteractionMode.transferEditing)
+          Text("Marker").tag(AppModel.InteractionMode.marker)
         }
         .pickerStyle(.segmented)
 
@@ -213,6 +222,12 @@ struct RenderView: View {
             }
           } label: {
             Label("Editor", systemImage: "slider.horizontal.3")
+          }
+
+          Button {
+            showMarkerEditor = true
+          } label: {
+            Label("Markers", systemImage: "mappin.and.ellipse")
           }
         }
       }
@@ -307,7 +322,7 @@ struct RenderView: View {
       }
   }
 
-  private var rotationGesture: some Gesture {
+  private func interactionGesture(in viewSize: CGSize) -> some Gesture {
     DragGesture(minimumDistance: 1)
       .onChanged { value in
         let delta = CGSize(
@@ -325,10 +340,68 @@ struct RenderView: View {
             synchronizeState()
           case .transferEditing:
             applyTransferInteraction(delta: delta)
+          case .marker:
+            updateMarkerInteraction(at: value.location, in: viewSize)
         }
       }
       .onEnded { _ in
         previousDragTranslation = .zero
+        markerDragID = nil
+        sharePlay.flushSynchronization()
+      }
+  }
+
+  private func updateMarkerInteraction(at location: CGPoint, in viewSize: CGSize) {
+    guard viewSize.width > 0, viewSize.height > 0 else { return }
+    let screenPosition = SIMD2<Float>(
+      Float(location.x / viewSize.width),
+      Float(1 - location.y / viewSize.height)
+    )
+    if markerDragID == nil {
+      beginMarkerInteraction(at: screenPosition)
+    }
+
+    guard let markerDragID,
+          let index = appModel.volumeMarkers.firstIndex(where: { $0.id == markerDragID }),
+          let position = appModel.markerPositionHandler?(
+            screenPosition,
+            appModel.volumeMarkers[index].position
+          ) else { return }
+    appModel.volumeMarkers[index].position = position
+    sharePlay.synchronizeMarkers()
+  }
+
+  private func beginMarkerInteraction(at screenPosition: SIMD2<Float>) {
+    if let markerID = appModel.markerHitTestHandler?(screenPosition) {
+      appModel.selectedVolumeMarkerID = markerID
+      markerDragID = markerID
+    } else if let position = appModel.markerPositionHandler?(screenPosition, nil) {
+      let marker = VolumeMarker(
+        id: UUID(),
+        name: appModel.nextVolumeMarkerName(),
+        position: position,
+        radius: 0.08,
+        color: appModel.defaultVolumeMarkerColor
+      )
+      appModel.volumeMarkers.append(marker)
+      appModel.selectedVolumeMarkerID = marker.id
+      markerDragID = marker.id
+      sharePlay.synchronizeMarkers()
+    }
+  }
+
+  private func markerTapGesture(in viewSize: CGSize) -> some Gesture {
+    SpatialTapGesture(count: 1)
+      .onEnded { value in
+        guard appModel.interactionMode == .marker,
+              viewSize.width > 0,
+              viewSize.height > 0 else { return }
+        let screenPosition = SIMD2<Float>(
+          Float(value.location.x / viewSize.width),
+          Float(1 - value.location.y / viewSize.height)
+        )
+        beginMarkerInteraction(at: screenPosition)
+        markerDragID = nil
         sharePlay.flushSynchronization()
       }
   }
@@ -446,6 +519,8 @@ struct RenderView: View {
         if appModel.interactionMode == .clipping {
           applyDepthAlignedClipping(magnificationDelta: delta)
           synchronizeState()
+        } else if appModel.interactionMode == .marker {
+          scaleSelectedMarker(by: Float(delta))
         } else {
           renderingParameters.scale = min(maximumModelScale, max(minimumModelScale, renderingParameters.scale * Float(delta)))
           synchronizeTransform()
@@ -457,12 +532,21 @@ struct RenderView: View {
       }
   }
 
+  private func scaleSelectedMarker(by factor: Float) {
+    guard let markerID = appModel.selectedVolumeMarkerID,
+          let index = appModel.volumeMarkers.firstIndex(where: { $0.id == markerID }) else { return }
+    appModel.volumeMarkers[index].radius = min(1, max(0.005, appModel.volumeMarkers[index].radius * factor))
+    sharePlay.synchronizeMarkers()
+  }
+
   private func closeDataset() {
     if appSettings.autoloadTF,
        let fileURL = appModel.transferFunctionFileURL() {
       try? renderingParameters.transferFunction.save(to: fileURL)
     }
     sharePlay.closeSharedDataset()
+    appModel.volumeMarkers.removeAll()
+    appModel.selectedVolumeMarkerID = nil
     appModel.currentState = .selectData
   }
 

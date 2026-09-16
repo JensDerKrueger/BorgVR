@@ -324,6 +324,27 @@ bool TCPServer::findTransferFunctionById(const std::string& id, TransferFunction
   return true;
 }
 
+void TCPServer::setMarkerFiles(std::vector<MarkerFileInfo> markerFiles) {
+  std::lock_guard<std::mutex> lock(datasetsMutex_);
+  std::sort(markerFiles.begin(), markerFiles.end(),
+            [](const MarkerFileInfo& a, const MarkerFileInfo& b) { return a.id < b.id; });
+  markerFiles_ = std::move(markerFiles);
+}
+
+std::vector<MarkerFileInfo> TCPServer::markerFilesSnapshot() const {
+  std::lock_guard<std::mutex> lock(datasetsMutex_);
+  return markerFiles_;
+}
+
+bool TCPServer::findMarkerFileById(const std::string& id, MarkerFileInfo& out) const {
+  std::lock_guard<std::mutex> lock(datasetsMutex_);
+  auto it = std::find_if(markerFiles_.begin(), markerFiles_.end(),
+                         [&](const MarkerFileInfo& marker) { return marker.id == id; });
+  if (it == markerFiles_.end()) return false;
+  out = *it;
+  return true;
+}
+
 bool TCPServer::start() {
   if (running_.load()) return true;
   if (maxBricksPerGetRequest_ <= 0) {
@@ -520,6 +541,20 @@ bool TCPServer::ClientSession::sendTransferFunctionList(const std::vector<std::s
   return sendText(oss.str());
 }
 
+bool TCPServer::ClientSession::sendMarkerFileList(const std::vector<std::string>& params) {
+  if (!params.empty()) return false;
+  const auto markerFiles = server_.markerFilesSnapshot();
+  std::ostringstream oss;
+  for (size_t i = 0; i < markerFiles.size(); ++i) {
+    const auto& marker = markerFiles[i];
+    oss << marker.id << " " << marker.byteCount << " " << marker.datasetId << " "
+        << protocolLineText(marker.markerDescription);
+    if (i + 1 < markerFiles.size()) oss << "\n";
+  }
+  oss << "\n\n";
+  return sendText(oss.str());
+}
+
 bool TCPServer::ClientSession::sendInfo(const std::vector<std::string>& params) {
   if (!params.empty()) return false;
 
@@ -641,6 +676,22 @@ bool TCPServer::ClientSession::getTransferFunction(const std::vector<std::string
   return true;
 }
 
+bool TCPServer::ClientSession::getMarkerFile(const std::vector<std::string>& params) {
+  if (params.size() != 1) return false;
+  MarkerFileInfo chosen;
+  if (!server_.findMarkerFileById(params[0], chosen)) {
+    if (server_.logger_) server_.logger_->warning("GETMARKER unknown marker file id: " + params[0]);
+    return false;
+  }
+  std::ifstream file(chosen.filename, std::ios::binary);
+  if (!file) return false;
+  std::vector<uint8_t> payload((std::istreambuf_iterator<char>(file)),
+                               std::istreambuf_iterator<char>());
+  if (payload.size() != chosen.byteCount) return false;
+  sendBinaryResponse(payload);
+  return true;
+}
+
 static bool parseIntStrict(const std::string& s, int& out) {
   if (s.empty()) return false;
   size_t idx = 0;
@@ -731,9 +782,11 @@ bool TCPServer::ClientSession::processCommand(const std::string& line) {
 
   if (cmd == "LIST") return sendList(params);
   if (cmd == "LISTTF") return sendTransferFunctionList(params);
+  if (cmd == "LISTMARKERS") return sendMarkerFileList(params);
   if (cmd == "INFO") return sendInfo(params);
   if (cmd == "OPEN") return openDataset(params);
   if (cmd == "GETTF") return getTransferFunction(params);
+  if (cmd == "GETMARKER") return getMarkerFile(params);
   if (cmd == "GETBRICKS") return getBricks(params);
 
   return false;

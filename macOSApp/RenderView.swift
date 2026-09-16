@@ -14,6 +14,7 @@ struct RenderView: View {
   @State private var transferSmoothCenter: Float = 0.25
   @State private var transferSmoothWidth: Float = 0.3
   @State private var restoredDetachedPanelWindows: Set<DockablePanelID> = []
+  @State private var markerDragID: UUID?
 
   private let modelRotationSensitivity: Float = 0.006
   private let clippingSensitivity: Float = 0.0012
@@ -24,6 +25,8 @@ struct RenderView: View {
   private let maximumTransferSmoothWidth: Float = 1.0
   private let minimumModelScale: Float = 0.2
   private let maximumModelScale: Float = 20
+  private let dockedMarkerPanelWidth: CGFloat = 380
+  private let markerDepthScrollSensitivity: Float = 0.003
 
   var body: some View {
     ZStack(alignment: .top) {
@@ -33,6 +36,7 @@ struct RenderView: View {
       MacMetalView(
         onDragUpdate: applyInteractionDrag(update:),
         onDragEnded: finishInteractionGesture,
+        onPointerDown: beginMarkerInteraction(update:),
         onMagnificationDelta: applyMagnificationDelta(_:),
         onMagnificationEnded: finishInteractionGesture,
         onDoubleTap: toggleInteractionMode
@@ -60,7 +64,8 @@ struct RenderView: View {
             }
             .environmentObject(renderingParameters)
           }
-          .padding(.horizontal)
+          .padding(.leading)
+          .padding(.trailing, dockedEditorTrailingPadding)
           .padding(.bottom)
         }
         .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -79,10 +84,27 @@ struct RenderView: View {
             }
             .environmentObject(renderingParameters)
           }
-          .padding(.horizontal)
+          .padding(.leading)
+          .padding(.trailing, dockedEditorTrailingPadding)
           .padding(.bottom)
         }
         .transition(.move(edge: .bottom).combined(with: .opacity))
+      }
+
+      if docking.isDockedVisible(.markerEditor) {
+        HStack {
+          Spacer()
+
+          DockableEditorPanel(panel: .markerEditor) {
+            MacMarkerView()
+          }
+          .frame(width: dockedMarkerPanelWidth)
+          .frame(maxHeight: .infinity)
+        }
+        .padding(.top, docking.isDockedVisible(.renderControls) ? 190 : 16)
+        .padding(.trailing)
+        .padding(.bottom)
+        .transition(.move(edge: .trailing).combined(with: .opacity))
       }
     }
     .onAppear {
@@ -128,6 +150,10 @@ struct RenderView: View {
     [storedAppModel.resolvedDataDirectoryURL()]
   }
 
+  private var dockedEditorTrailingPadding: CGFloat {
+    docking.isDockedVisible(.markerEditor) ? dockedMarkerPanelWidth + 32 : 16
+  }
+
   private func updateDetachedPanelWindows() {
     temporarilyCloseIncompatibleDetachedPanelWindows()
     restoreDetachedPanelWindows()
@@ -171,6 +197,12 @@ struct RenderView: View {
         synchronizeState()
       case .transferEditing:
         applyTransferInteraction(update: update)
+      case .marker:
+        if update.isDirectPointer {
+          updateMarkerInteraction(update: update)
+        } else {
+          moveSelectedMarkerInDepth(by: update.delta.height)
+        }
     }
   }
 
@@ -179,6 +211,8 @@ struct RenderView: View {
     if appModel.interactionMode == .clipping {
       applyDepthAlignedClipping(magnificationDelta: delta)
       synchronizeState()
+    } else if appModel.interactionMode == .marker {
+      scaleSelectedMarker(by: Float(delta))
     } else {
       renderingParameters.scale = min(maximumModelScale, max(minimumModelScale, renderingParameters.scale * Float(delta)))
       synchronizeTransform()
@@ -186,7 +220,74 @@ struct RenderView: View {
   }
 
   private func finishInteractionGesture() {
+    markerDragID = nil
     sharePlay.flushSynchronization()
+  }
+
+  private func beginMarkerInteraction(update: RenderDragUpdate) {
+    guard appModel.interactionMode == .marker,
+          update.viewSize.width > 0,
+          update.viewSize.height > 0 else { return }
+    let screenPosition = SIMD2<Float>(
+      Float(update.location.x / update.viewSize.width),
+      Float(update.location.y / update.viewSize.height)
+    )
+    if let markerID = appModel.markerHitTestHandler?(screenPosition) {
+      appModel.selectedVolumeMarkerID = markerID
+      markerDragID = markerID
+      return
+    }
+    guard let position = appModel.markerPositionHandler?(screenPosition, nil) else { return }
+    let marker = VolumeMarker(
+      id: UUID(),
+      name: appModel.nextVolumeMarkerName(),
+      position: position,
+      radius: 0.08,
+      color: appModel.defaultVolumeMarkerColor
+    )
+    appModel.volumeMarkers.append(marker)
+    appModel.selectedVolumeMarkerID = marker.id
+    markerDragID = marker.id
+    sharePlay.synchronizeMarkers()
+  }
+
+  private func updateMarkerInteraction(update: RenderDragUpdate) {
+    if markerDragID == nil {
+      beginMarkerInteraction(update: update)
+    }
+    guard let markerDragID,
+          let index = appModel.volumeMarkers.firstIndex(where: { $0.id == markerDragID }),
+          update.viewSize.width > 0,
+          update.viewSize.height > 0 else { return }
+    let screenPosition = SIMD2<Float>(
+      Float(update.location.x / update.viewSize.width),
+      Float(update.location.y / update.viewSize.height)
+    )
+    guard let position = appModel.markerPositionHandler?(
+      screenPosition,
+      appModel.volumeMarkers[index].position
+    ) else { return }
+    appModel.volumeMarkers[index].position = position
+    sharePlay.synchronizeMarkers()
+  }
+
+  private func scaleSelectedMarker(by factor: Float) {
+    guard let markerID = appModel.selectedVolumeMarkerID,
+          let index = appModel.volumeMarkers.firstIndex(where: { $0.id == markerID }) else { return }
+    appModel.volumeMarkers[index].radius = min(1, max(0.005, appModel.volumeMarkers[index].radius * factor))
+    sharePlay.synchronizeMarkers()
+  }
+
+  private func moveSelectedMarkerInDepth(by scrollDelta: CGFloat) {
+    guard scrollDelta != 0,
+          let markerID = appModel.selectedVolumeMarkerID,
+          let index = appModel.volumeMarkers.firstIndex(where: { $0.id == markerID }),
+          let position = appModel.markerDepthAdjustmentHandler?(
+            appModel.volumeMarkers[index].position,
+            Float(scrollDelta) * markerDepthScrollSensitivity
+          ) else { return }
+    appModel.volumeMarkers[index].position = position
+    sharePlay.synchronizeMarkers()
   }
 
   private func applyTransferInteraction(update: RenderDragUpdate) {

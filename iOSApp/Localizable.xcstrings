@@ -10264,6 +10264,238 @@
         }
       }
     },
+    "Marker" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Marker" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Marker" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Marcador" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Marqueur" } }
+      }
+    },
+    "Markers" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Marker" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Markers" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Marcadores" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Marqueurs" } }
+      }
+    },
+    "No Markers" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Keine Marker" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "No Markers" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Sin marcadores" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Aucun marqueur" } }
+      }
+    },
+    "Selected Marker" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Ausgewählter Marker" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Selected Marker" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Marcador seleccionado" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Marqueur sélectionné" } }
+      }
+    },
+    "Name" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Name" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Name" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Nombre" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Nom" } }
+      }
+    },
+    "Radius" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Radius" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Radius" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Radio" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Rayon" } }
+      }
+    },
+    "Delete Selected Marker" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Ausgewählten Marker löschen" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Delete Selected Marker" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Eliminar marcador seleccionado" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Supprimer le marqueur sélectionné" } }
+      }
+    },
+    "Delete All Markers" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Alle Marker löschen" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Delete All Markers" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Eliminar todos los marcadores" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Supprimer tous les marqueurs" } }
+      }
+    },
+    "Delete All Markers?" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Alle Marker löschen?" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Delete All Markers?" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "¿Eliminar todos los marcadores?" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Supprimer tous les marqueurs ?" } }
+      }
+    },
+    "This removes every marker from the current session." : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Dadurch werden alle Marker aus der aktuellen Sitzung entfernt." } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "This removes every marker from the current session." } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Esto elimina todos los marcadores de la sesión actual." } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Cette action supprime tous les marqueurs de la session actuelle." } }
+      }
+    },
+    "Choose the Marker interaction mode and drag in the rendering view to add a marker." : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Wählen Sie den Interaktionsmodus „Marker“ und ziehen Sie in der Rendering-Ansicht, um einen Marker hinzuzufügen." } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Choose the Marker interaction mode and drag in the rendering view to add a marker." } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Elige el modo de interacción Marcador y arrastra en la vista de renderizado para añadir un marcador." } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Choisissez le mode d’interaction Marqueur et faites glisser dans la vue de rendu pour ajouter un marqueur." } }
+      }
+    },
+    "Marker Files" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Markerdateien" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Marker Files" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Archivos de marcadores" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Fichiers de marqueurs" } }
+      }
+    },
+    "Load Markers…" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Marker laden…" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Load Markers…" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Cargar marcadores…" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Charger les marqueurs…" } }
+      }
+    },
+    "Save Markers…" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Marker speichern…" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Save Markers…" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Guardar marcadores…" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Enregistrer les marqueurs…" } }
+      }
+    },
+    "Load Markers" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Marker laden" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Load Markers" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Cargar marcadores" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Charger les marqueurs" } }
+      }
+    },
+    "Markers already exist in the current session. Do you want to replace them or add the loaded markers?" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "In der aktuellen Sitzung sind bereits Marker vorhanden. Möchten Sie diese ersetzen oder die geladenen Marker hinzufügen?" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Markers already exist in the current session. Do you want to replace them or add the loaded markers?" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Ya hay marcadores en la sesión actual. ¿Quieres reemplazarlos o añadir los marcadores cargados?" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Des marqueurs existent déjà dans la session actuelle. Voulez-vous les remplacer ou ajouter les marqueurs chargés ?" } }
+      }
+    },
+    "Replace Existing Markers" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Vorhandene Marker ersetzen" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Replace Existing Markers" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Reemplazar marcadores existentes" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Remplacer les marqueurs existants" } }
+      }
+    },
+    "Add Loaded Markers" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Geladene Marker hinzufügen" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Add Loaded Markers" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Añadir marcadores cargados" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Ajouter les marqueurs chargés" } }
+      }
+    },
+    "Marker File Error" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Marker-Dateifehler" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Marker File Error" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Error de archivo de marcadores" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Erreur de fichier de marqueurs" } }
+      }
+    },
+    "No Marker Files Available" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Keine Markerdateien verfügbar" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "No Marker Files Available" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "No hay archivos de marcadores disponibles" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Aucun fichier de marqueurs disponible" } }
+      }
+    },
+    "datasetscanner_info_loaded_marker_file" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Markerdatei geladen: %@ (Datensatz %@, ID %@)" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Loaded marker file: %@ (dataset %@, id %@)" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Archivo de marcadores cargado: %@ (conjunto de datos %@, ID %@)" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Fichier de marqueurs chargé : %@ (jeu de données %@, ID %@)" } }
+      }
+    },
+    "datasetscanner_warning_failed_load_marker_file" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Markerdatei konnte nicht geladen werden: %@" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Failed to load marker file: %@" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "No se pudo cargar el archivo de marcadores: %@" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Impossible de charger le fichier de marqueurs : %@" } }
+      }
+    },
+    "Markers for a Different Dataset" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Marker für einen anderen Datensatz" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Markers for a Different Dataset" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Marcadores para otro conjunto de datos" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Marqueurs pour un autre jeu de données" } }
+      }
+    },
+    "Load Anyway" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Trotzdem laden" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Load Anyway" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Cargar de todos modos" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Charger quand même" } }
+      }
+    },
+    "This marker file was created for a different dataset. Its positions may not match the current volume. Do you still want to load it?" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Diese Markerdatei wurde für einen anderen Datensatz erstellt. Ihre Positionen passen möglicherweise nicht zum aktuellen Volumen. Möchten Sie sie trotzdem laden?" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "This marker file was created for a different dataset. Its positions may not match the current volume. Do you still want to load it?" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Este archivo de marcadores se creó para otro conjunto de datos. Es posible que sus posiciones no coincidan con el volumen actual. ¿Desea cargarlo de todos modos?" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Ce fichier de marqueurs a été créé pour un autre jeu de données. Ses positions peuvent ne pas correspondre au volume actuel. Voulez-vous tout de même le charger ?" } }
+      }
+    },
+    "The selected file is not a BorgVR marker file." : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Die ausgewählte Datei ist keine BorgVR-Markerdatei." } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "The selected file is not a BorgVR marker file." } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "El archivo seleccionado no es un archivo de marcadores de BorgVR." } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Le fichier sélectionné n’est pas un fichier de marqueurs BorgVR." } }
+      }
+    },
+    "Unsupported marker file version %d." : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Nicht unterstützte Markerdateiversion %d." } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Unsupported marker file version %d." } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Versión de archivo de marcadores %d no compatible." } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Version %d du fichier de marqueurs non prise en charge." } }
+      }
+    },
+    "The marker file exceeds the maximum supported size." : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Die Markerdatei überschreitet die maximal unterstützte Größe." } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "The marker file exceeds the maximum supported size." } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "El archivo de marcadores supera el tamaño máximo compatible." } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Le fichier de marqueurs dépasse la taille maximale prise en charge." } }
+      }
+    },
+    "The marker file contains too many markers." : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Die Markerdatei enthält zu viele Marker." } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "The marker file contains too many markers." } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "El archivo de marcadores contiene demasiados marcadores." } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Le fichier de marqueurs contient trop de marqueurs." } }
+      }
+    },
     "Zeroes" : {
       "localizations" : {
         "de" : {

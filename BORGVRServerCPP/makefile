@@ -36,7 +36,7 @@ CONFIG    ?= release
 ASAN      ?= 0
 UNIVERSAL ?= 0
 BUILD_TIMESTAMP ?= $(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
-BORGVR_SERVER_VERSION ?= 2.0
+BORGVR_SERVER_VERSION ?= 2.2
 
 CXXFLAGS_BASE := -std=c++17 -Wall -Wextra -Wpedantic -I$(INC_DIR) -MMD -MP
 CXXFLAGS_BASE += -pthread

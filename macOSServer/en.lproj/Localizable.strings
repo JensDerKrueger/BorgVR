@@ -522,3 +522,5 @@
 "datasetscanner_warning_failed_load_transfer_function" = "Failed to load transfer function file: %@";
 "All settings will be reset to their default values." = "All settings will be reset to their default values.";
 "WebGPU web server:" = "WebGPU web server:";
+"datasetscanner_info_loaded_marker_file" = "Loaded marker file: %@ (dataset %@, id %@)";
+"datasetscanner_warning_failed_load_marker_file" = "Failed to load marker file: %@";

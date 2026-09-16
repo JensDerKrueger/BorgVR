@@ -20,6 +20,8 @@ final class MacVolumeRenderer: NSObject, MTKViewDelegate {
   private var pipelineStateTFL: MTLRenderPipelineState?
   private var pipelineStateIso: MTLRenderPipelineState?
   private var pipelineStateBrickVis: MTLRenderPipelineState?
+  private var pipelineStateMarker: MTLRenderPipelineState?
+  private var pipelineStateMarkerComposite: MTLRenderPipelineState?
   private var depthState: MTLDepthStencilState?
   private var cubeBuffer: MTLBuffer?
   private var vertexCount = 0
@@ -44,6 +46,7 @@ final class MacVolumeRenderer: NSObject, MTKViewDelegate {
   private var pendingScreenshotURL: URL?
   private var pendingScreenshotAccessURL: URL?
   private var pendingScreenshotCompletion: ((Result<URL, Error>) -> Void)?
+  private let markerRenderer = ScreenVolumeMarkerRenderer()
 
   init(
     appModel: AppModel,
@@ -98,6 +101,18 @@ final class MacVolumeRenderer: NSObject, MTKViewDelegate {
     }
     appModel.renderDisplaySyncHandler = { [weak self] enabled in
       self?.setDisplaySyncEnabled(enabled)
+    }
+    appModel.markerPositionHandler = { [weak self] screenPosition, existingPosition in
+      self?.markerPosition(
+        at: screenPosition,
+        preservingDepthOf: existingPosition
+      )
+    }
+    appModel.markerHitTestHandler = { [weak self] screenPosition in
+      self?.markerHit(at: screenPosition)
+    }
+    appModel.markerDepthAdjustmentHandler = { [weak self] position, worldDistance in
+      self?.markerPosition(position, offsetAlongViewRayBy: worldDistance)
     }
     setDisplaySyncEnabled(appModel.renderDisplaySyncEnabled)
   }
@@ -205,13 +220,32 @@ final class MacVolumeRenderer: NSObject, MTKViewDelegate {
           let drawable = view.currentDrawable,
           let renderPassDescriptor = view.currentRenderPassDescriptor,
           let commandBuffer = commandQueue.makeCommandBuffer(),
-          let renderEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: renderPassDescriptor) else {
+          let device = view.device else {
       return
     }
     frameInFlight = true
 
     updateUniforms(for: view)
     updateEmptiness()
+
+    let markerMatrices = markerFrameMatrices(for: view)
+    guard let markerTargets = markerRenderer.renderPrepass(
+      commandBuffer: commandBuffer,
+      device: device,
+      drawableSize: view.drawableSize,
+      colorFormat: view.colorPixelFormat,
+      depthFormat: view.depthStencilPixelFormat,
+      markers: appModel.volumeMarkers,
+      selectedMarkerID: appModel.selectedVolumeMarkerID,
+      viewProjection: markerMatrices.projection * markerMatrices.view,
+      modelMatrix: markerMatrices.model,
+      volumeScale: volumeScale,
+      eyePosition: SIMD3<Float>(0, 0, cameraDistance)
+    ),
+    let renderEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: renderPassDescriptor) else {
+      frameInFlight = false
+      return
+    }
 
     renderEncoder.setCullMode(.front)
     renderEncoder.setFrontFacing(.counterClockwise)
@@ -247,8 +281,14 @@ final class MacVolumeRenderer: NSObject, MTKViewDelegate {
       appModel.logger.error("Failed to bind transfer function: \(error.localizedDescription)")
     }
     hashTable.bind(to: renderEncoder, index: FragmentBufferIndex.hashTable.rawValue)
+    markerRenderer.bindDepth(markerTargets.depth, to: renderEncoder)
 
     renderEncoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: vertexCount)
+    markerRenderer.composite(
+      colorTexture: markerTargets.color,
+      depthTexture: markerTargets.depth,
+      to: renderEncoder
+    )
     renderEncoder.endEncoding()
 
     let screenshotCapture = makeScreenshotCapture(
@@ -319,7 +359,10 @@ final class MacVolumeRenderer: NSObject, MTKViewDelegate {
     pipelineStateTFL = nil
     pipelineStateIso = nil
     pipelineStateBrickVis = nil
+    pipelineStateMarker = nil
+    pipelineStateMarkerComposite = nil
     pipelineDrawableWidth = 0
+    markerRenderer.resetTargets()
   }
 
   private func clearDatasetResources() {
@@ -432,7 +475,9 @@ final class MacVolumeRenderer: NSObject, MTKViewDelegate {
     pipelineStateTF != nil &&
       pipelineStateTFL != nil &&
       pipelineStateIso != nil &&
-      pipelineStateBrickVis != nil
+      pipelineStateBrickVis != nil &&
+      pipelineStateMarker != nil &&
+      pipelineStateMarkerComposite != nil
   }
 
   private func effectiveDrawableWidth(for view: MTKView) -> Float {
@@ -486,6 +531,109 @@ final class MacVolumeRenderer: NSObject, MTKViewDelegate {
     pipelineStateTFL = states.tfl
     pipelineStateIso = states.iso
     pipelineStateBrickVis = states.brick
+    pipelineStateMarker = states.marker
+    pipelineStateMarkerComposite = states.markerComposite
+    markerRenderer.configure(
+      device: device,
+      markerPipeline: states.marker,
+      compositePipeline: states.markerComposite
+    )
+  }
+
+  private func markerFrameMatrices(for view: MTKView) -> (
+    projection: simd_float4x4,
+    view: simd_float4x4,
+    model: simd_float4x4
+  ) {
+    let aspect = Float(max(view.drawableSize.width, 1) / max(view.drawableSize.height, 1))
+    let projection = matrixPerspective(fovyRadians: fieldOfViewY, aspect: aspect, nearZ: 0.05, farZ: 100)
+    let viewMatrix = matrixTranslation(SIMD3<Float>(0, 0, -cameraDistance))
+    let modelMatrix =
+      matrixTranslation(SIMD3<Float>(renderingParameters.pan.x, renderingParameters.pan.y, 0)) *
+      simd_float4x4(renderingParameters.orientation) *
+      matrixScale(SIMD3<Float>(repeating: renderingParameters.scale))
+    return (projection, viewMatrix, modelMatrix)
+  }
+
+  private func markerRay(at normalizedScreenPosition: SIMD2<Float>) -> (
+    origin: SIMD3<Float>,
+    direction: SIMD3<Float>,
+    model: simd_float4x4
+  )? {
+    guard let view else { return nil }
+    let matrices = markerFrameMatrices(for: view)
+    let inverseViewProjection = simd_inverse(matrices.projection * matrices.view)
+    let clipX = normalizedScreenPosition.x * 2 - 1
+    let clipY = normalizedScreenPosition.y * 2 - 1
+    var near = inverseViewProjection * SIMD4<Float>(clipX, clipY, 0, 1)
+    var far = inverseViewProjection * SIMD4<Float>(clipX, clipY, 1, 1)
+    guard abs(near.w) > 0.000001, abs(far.w) > 0.000001 else { return nil }
+    near /= near.w
+    far /= far.w
+    let origin = SIMD3<Float>(near.x, near.y, near.z)
+    let direction = simd_normalize(SIMD3<Float>(far.x - near.x, far.y - near.y, far.z - near.z))
+    return (origin, direction, matrices.model)
+  }
+
+  private func markerPosition(
+    at normalizedScreenPosition: SIMD2<Float>,
+    preservingDepthOf existingPosition: SIMD3<Float>?
+  ) -> SIMD3<Float>? {
+    guard let ray = markerRay(at: normalizedScreenPosition) else { return nil }
+    let fullModel = ray.model * volumeScale
+    let referencePosition = existingPosition ?? SIMD3<Float>(repeating: 0.5)
+    let referenceWorld = simd_make_float3(
+      fullModel * SIMD4<Float>(referencePosition - SIMD3<Float>(repeating: 0.5), 1)
+    )
+    let distance = simd_dot(referenceWorld - ray.origin, ray.direction)
+    let worldPosition = ray.origin + ray.direction * distance
+    let local = simd_make_float3(simd_inverse(fullModel) * SIMD4<Float>(worldPosition, 1))
+    return local + SIMD3<Float>(repeating: 0.5)
+  }
+
+  private func markerHit(at normalizedScreenPosition: SIMD2<Float>) -> UUID? {
+    guard let ray = markerRay(at: normalizedScreenPosition) else { return nil }
+    var closestHit: (id: UUID, distance: Float)?
+    let radiusScale = max(0.0001, renderingParameters.scale)
+    for marker in appModel.volumeMarkers {
+      let center = simd_make_float3(
+        ray.model * volumeScale * SIMD4<Float>(marker.position - SIMD3<Float>(repeating: 0.5), 1)
+      )
+      let toCenter = center - ray.origin
+      let projectedDistance = simd_dot(toCenter, ray.direction)
+      guard projectedDistance >= 0 else { continue }
+      let closestPoint = ray.origin + ray.direction * projectedDistance
+      guard simd_distance(closestPoint, center) <= marker.radius * radiusScale else { continue }
+      if closestHit == nil || projectedDistance < closestHit!.distance {
+        closestHit = (marker.id, projectedDistance)
+      }
+    }
+    return closestHit?.id
+  }
+
+  private func markerPosition(
+    _ position: SIMD3<Float>,
+    offsetAlongViewRayBy worldDistance: Float
+  ) -> SIMD3<Float>? {
+    guard let view else { return nil }
+    let matrices = markerFrameMatrices(for: view)
+    let fullModel = matrices.model * volumeScale
+    let worldPosition = simd_make_float3(
+      fullModel * SIMD4<Float>(position - SIMD3<Float>(repeating: 0.5), 1)
+    )
+    let cameraPosition = simd_make_float3(
+      simd_inverse(matrices.view) * SIMD4<Float>(0, 0, 0, 1)
+    )
+    let cameraToMarker = worldPosition - cameraPosition
+    let currentDistance = simd_length(cameraToMarker)
+    guard currentDistance > 0.0001 else { return position }
+
+    let newDistance = min(99, max(0.06, currentDistance + worldDistance))
+    let newWorldPosition = cameraPosition + cameraToMarker / currentDistance * newDistance
+    let localPosition = simd_make_float3(
+      simd_inverse(fullModel) * SIMD4<Float>(newWorldPosition, 1)
+    )
+    return localPosition + SIMD3<Float>(repeating: 0.5)
   }
 
   private func updateUniforms(for view: MTKView) {

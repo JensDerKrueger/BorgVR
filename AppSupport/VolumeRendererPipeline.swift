@@ -22,7 +22,14 @@ enum VolumeRendererPipeline {
     hashTable: GPUHashtable,
     appSettings: AppSettings,
     labelPrefix: String
-  ) throws -> (tf: MTLRenderPipelineState, tfl: MTLRenderPipelineState, iso: MTLRenderPipelineState, brick: MTLRenderPipelineState) {
+  ) throws -> (
+    tf: MTLRenderPipelineState,
+    tfl: MTLRenderPipelineState,
+    iso: MTLRenderPipelineState,
+    brick: MTLRenderPipelineState,
+    marker: MTLRenderPipelineState,
+    markerComposite: MTLRenderPipelineState
+  ) {
     let shaderSource = try RuntimeMetalShaderLoader.loadSource(named: "RuntimeVolumeShaders")
 
     let screenSpaceError = Float(appSettings.screenSpaceError)
@@ -94,11 +101,239 @@ enum VolumeRendererPipeline {
       return descriptor
     }
 
+    guard let markerVertexFunction = library.makeFunction(name: "screenVolumeMarkerVertex"),
+          let markerFragmentFunction = library.makeFunction(name: "screenVolumeMarkerFragment"),
+          let markerCompositeVertexFunction = library.makeFunction(name: "screenMarkerCompositeVertex"),
+          let markerCompositeFragmentFunction = library.makeFunction(name: "screenMarkerCompositeFragment") else {
+      throw VolumeRendererPipelineError.missingShaderFunction("screen marker shaders")
+    }
+
+    let markerDescriptor = MTLRenderPipelineDescriptor()
+    markerDescriptor.label = "\(labelPrefix) Volume Marker"
+    markerDescriptor.vertexFunction = markerVertexFunction
+    markerDescriptor.fragmentFunction = markerFragmentFunction
+    markerDescriptor.colorAttachments[0].pixelFormat = colorFormat
+    markerDescriptor.depthAttachmentPixelFormat = depthFormat
+
+    let compositeDescriptor = MTLRenderPipelineDescriptor()
+    compositeDescriptor.label = "\(labelPrefix) Marker Composite"
+    compositeDescriptor.vertexFunction = markerCompositeVertexFunction
+    compositeDescriptor.fragmentFunction = markerCompositeFragmentFunction
+    compositeDescriptor.colorAttachments[0].pixelFormat = colorFormat
+    compositeDescriptor.depthAttachmentPixelFormat = depthFormat
+    if let colorAttachment = compositeDescriptor.colorAttachments[0] {
+      colorAttachment.isBlendingEnabled = true
+      colorAttachment.rgbBlendOperation = .add
+      colorAttachment.alphaBlendOperation = .add
+      colorAttachment.sourceRGBBlendFactor = .oneMinusDestinationAlpha
+      colorAttachment.destinationRGBBlendFactor = .one
+      colorAttachment.sourceAlphaBlendFactor = .oneMinusDestinationAlpha
+      colorAttachment.destinationAlphaBlendFactor = .one
+    }
+
     return (
       try device.makeRenderPipelineState(descriptor: descriptor(label: "\(labelPrefix) TF", fragmentName: "volumeFragmentShaderTF")),
       try device.makeRenderPipelineState(descriptor: descriptor(label: "\(labelPrefix) TF Lighting", fragmentName: "volumeFragmentShaderTFLighting")),
       try device.makeRenderPipelineState(descriptor: descriptor(label: "\(labelPrefix) Iso", fragmentName: "volumeFragmentShaderIso")),
-      try device.makeRenderPipelineState(descriptor: descriptor(label: "\(labelPrefix) Brick", fragmentName: "volumeFragmentShaderBrickVis"))
+      try device.makeRenderPipelineState(descriptor: descriptor(label: "\(labelPrefix) Brick", fragmentName: "volumeFragmentShaderBrickVis")),
+      try device.makeRenderPipelineState(descriptor: markerDescriptor),
+      try device.makeRenderPipelineState(descriptor: compositeDescriptor)
     )
+  }
+}
+
+@MainActor
+final class ScreenVolumeMarkerRenderer {
+  private var markerPipeline: MTLRenderPipelineState?
+  private var compositePipeline: MTLRenderPipelineState?
+  private var markerDepthState: MTLDepthStencilState?
+  private var compositeDepthState: MTLDepthStencilState?
+  private var sphereBuffer: MTLBuffer?
+  private var sphereVertexCount = 0
+  private var colorTexture: MTLTexture?
+  private var depthTexture: MTLTexture?
+
+  func configure(
+    device: MTLDevice,
+    markerPipeline: MTLRenderPipelineState,
+    compositePipeline: MTLRenderPipelineState
+  ) {
+    self.markerPipeline = markerPipeline
+    self.compositePipeline = compositePipeline
+
+    if markerDepthState == nil {
+      let descriptor = MTLDepthStencilDescriptor()
+      descriptor.depthCompareFunction = .less
+      descriptor.isDepthWriteEnabled = true
+      markerDepthState = device.makeDepthStencilState(descriptor: descriptor)
+    }
+    if compositeDepthState == nil {
+      let descriptor = MTLDepthStencilDescriptor()
+      descriptor.depthCompareFunction = .always
+      descriptor.isDepthWriteEnabled = true
+      compositeDepthState = device.makeDepthStencilState(descriptor: descriptor)
+    }
+    if sphereBuffer == nil {
+      let sphere = Tesselation.genSphere(
+        center: .zero,
+        radius: 1,
+        sectorCount: 32,
+        stackCount: 20
+      ).unpack()
+      sphereVertexCount = sphere.vertices.count
+      sphereBuffer = device.makeBuffer(
+        bytes: sphere.vertices,
+        length: MemoryLayout<SIMD3<Float>>.stride * sphere.vertices.count,
+        options: .storageModeShared
+      )
+      sphereBuffer?.label = "Screen Volume Marker Sphere"
+    }
+  }
+
+  func renderPrepass(
+    commandBuffer: MTLCommandBuffer,
+    device: MTLDevice,
+    drawableSize: CGSize,
+    colorFormat: MTLPixelFormat,
+    depthFormat: MTLPixelFormat,
+    markers: [VolumeMarker],
+    selectedMarkerID: UUID?,
+    viewProjection: simd_float4x4,
+    modelMatrix: simd_float4x4,
+    volumeScale: simd_float4x4,
+    eyePosition: SIMD3<Float>
+  ) -> (color: MTLTexture, depth: MTLTexture)? {
+    guard drawableSize.width >= 1,
+          drawableSize.height >= 1,
+          let markerPipeline,
+          let markerDepthState,
+          let sphereBuffer else {
+      return nil
+    }
+    guard let targets = targets(
+      device: device,
+      drawableSize: drawableSize,
+      colorFormat: colorFormat,
+      depthFormat: depthFormat
+    ) else {
+      return nil
+    }
+
+    let descriptor = MTLRenderPassDescriptor()
+    descriptor.colorAttachments[0].texture = targets.color
+    descriptor.colorAttachments[0].loadAction = .clear
+    descriptor.colorAttachments[0].storeAction = .store
+    descriptor.colorAttachments[0].clearColor = MTLClearColor(red: 0, green: 0, blue: 0, alpha: 0)
+    descriptor.depthAttachment.texture = targets.depth
+    descriptor.depthAttachment.loadAction = .clear
+    descriptor.depthAttachment.storeAction = .store
+    descriptor.depthAttachment.clearDepth = 1
+
+    guard let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: descriptor) else {
+      return nil
+    }
+    encoder.label = "Screen Volume Marker Prepass"
+    encoder.setRenderPipelineState(markerPipeline)
+    encoder.setDepthStencilState(markerDepthState)
+    encoder.setCullMode(.back)
+    encoder.setFrontFacing(.counterClockwise)
+    encoder.setVertexBuffer(
+      sphereBuffer,
+      offset: 0,
+      index: VertexBufferIndex.meshPositions.rawValue
+    )
+
+    var viewProjection = viewProjection
+    var eyePosition = eyePosition
+    encoder.setVertexBytes(&viewProjection, length: MemoryLayout<simd_float4x4>.stride, index: 20)
+    encoder.setVertexBytes(&eyePosition, length: MemoryLayout<SIMD3<Float>>.stride, index: 22)
+
+    for marker in markers {
+      let volumePosition = simd_make_float3(
+        volumeScale * SIMD4<Float>(marker.position - SIMD3<Float>(repeating: 0.5), 1)
+      )
+      var markerModel = modelMatrix *
+        matrixTranslation(volumePosition) *
+        matrixScale(SIMD3<Float>(repeating: marker.radius))
+      var color = marker.color
+      if marker.id == selectedMarkerID {
+        color = SIMD4<Float>(
+          min(color.x + 0.25, 1),
+          min(color.y + 0.25, 1),
+          min(color.z + 0.25, 1),
+          color.w
+        )
+      }
+      encoder.setVertexBytes(&markerModel, length: MemoryLayout<simd_float4x4>.stride, index: 21)
+      encoder.setFragmentBytes(&color, length: MemoryLayout<SIMD4<Float>>.stride, index: 23)
+      encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: sphereVertexCount)
+    }
+    encoder.endEncoding()
+    return targets
+  }
+
+  func bindDepth(_ texture: MTLTexture, to encoder: MTLRenderCommandEncoder) {
+    encoder.setFragmentTexture(texture, index: TextureIndex.markerDepth.rawValue)
+  }
+
+  func composite(
+    colorTexture: MTLTexture,
+    depthTexture: MTLTexture,
+    to encoder: MTLRenderCommandEncoder
+  ) {
+    guard let compositePipeline, let compositeDepthState else { return }
+    encoder.pushDebugGroup("Composite Volume Markers")
+    encoder.setRenderPipelineState(compositePipeline)
+    encoder.setDepthStencilState(compositeDepthState)
+    encoder.setCullMode(.none)
+    encoder.setFragmentTexture(colorTexture, index: TextureIndex.markerColor.rawValue)
+    encoder.setFragmentTexture(depthTexture, index: TextureIndex.markerDepth.rawValue)
+    encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 6)
+    encoder.popDebugGroup()
+  }
+
+  func resetTargets() {
+    colorTexture = nil
+    depthTexture = nil
+  }
+
+  private func targets(
+    device: MTLDevice,
+    drawableSize: CGSize,
+    colorFormat: MTLPixelFormat,
+    depthFormat: MTLPixelFormat
+  ) -> (color: MTLTexture, depth: MTLTexture)? {
+    let width = max(1, Int(drawableSize.width))
+    let height = max(1, Int(drawableSize.height))
+    if colorTexture?.width != width ||
+       colorTexture?.height != height ||
+       colorTexture?.pixelFormat != colorFormat {
+      let descriptor = MTLTextureDescriptor.texture2DDescriptor(
+        pixelFormat: colorFormat,
+        width: width,
+        height: height,
+        mipmapped: false
+      )
+      descriptor.storageMode = .private
+      descriptor.usage = [.renderTarget, .shaderRead]
+      colorTexture = device.makeTexture(descriptor: descriptor)
+      colorTexture?.label = "Screen Volume Marker Color"
+    }
+    if depthTexture?.width != width ||
+       depthTexture?.height != height ||
+       depthTexture?.pixelFormat != depthFormat {
+      let descriptor = MTLTextureDescriptor.texture2DDescriptor(
+        pixelFormat: depthFormat,
+        width: width,
+        height: height,
+        mipmapped: false
+      )
+      descriptor.storageMode = .private
+      descriptor.usage = [.renderTarget, .shaderRead]
+      depthTexture = device.makeTexture(descriptor: descriptor)
+      depthTexture?.label = "Screen Volume Marker Depth"
+    }
+    guard let colorTexture, let depthTexture else { return nil }
+    return (colorTexture, depthTexture)
   }
 }

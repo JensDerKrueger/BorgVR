@@ -281,6 +281,11 @@
 "marker_load_replace_button" = "Replace Existing Markers";
 "marker_load_add_button" = "Add Loaded Markers";
 "marker_file_error_title" = "Marker file error";
+"marker_catalog_button" = "Marker Files";
+"marker_catalog_empty" = "No Marker Files Available";
+"marker_dataset_mismatch_title" = "Markers for a Different Dataset";
+"marker_dataset_mismatch_message" = "This marker file was created for a different dataset. Its positions may not match the current volume. Do you still want to load it?";
+"marker_dataset_mismatch_load" = "Load Anyway";
 
 /* Private application: editor button title format */
 "private_editor_title_format" = "%@ Editor";
@@ -994,3 +999,9 @@
 "System color" = "System color";
 "Vertical gradient" = "Vertical gradient";
 "Copy WebGPU link" = "Copy WebGPU link";
+"datasetscanner_info_loaded_marker_file" = "Loaded marker file: %@ (dataset %@, id %@)";
+"datasetscanner_warning_failed_load_marker_file" = "Failed to load marker file: %@";
+"The selected file is not a BorgVR marker file." = "The selected file is not a BorgVR marker file.";
+"Unsupported marker file version %d." = "Unsupported marker file version %d.";
+"The marker file exceeds the maximum supported size." = "The marker file exceeds the maximum supported size.";
+"The marker file contains too many markers." = "The marker file contains too many markers.";

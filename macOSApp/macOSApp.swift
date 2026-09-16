@@ -152,6 +152,19 @@ struct macOSApp: App {
         .environmentObject(appModel)
     }
     .defaultSize(width: 820, height: 360)
+
+    WindowGroup("Markers", id: DockablePanelID.markerEditor.windowID) {
+      DetachedPanelContent(panel: .markerEditor)
+        .environmentObject(appModel)
+        .environmentObject(renderingParameters)
+        .environmentObject(appSettings)
+        .environmentObject(storedAppModel)
+        .environmentObject(serverController)
+        .environmentObject(sharePlay)
+        .environmentObject(docking)
+        .environmentObject(scriptRunner)
+    }
+    .defaultSize(width: 520, height: 560)
     .commands {
       CommandMenu("Script") {
         Button("Run Script...") {

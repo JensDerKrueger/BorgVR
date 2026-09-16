@@ -5,6 +5,7 @@ enum DockablePanelID: String, CaseIterable, Identifiable {
   case renderControls
   case transferFunctionEditor
   case isoEditor
+  case markerEditor
 
   var id: String { rawValue }
   var windowID: String { "dockable.\(rawValue)" }
@@ -18,6 +19,8 @@ enum DockablePanelID: String, CaseIterable, Identifiable {
         return "Transfer Function"
       case .isoEditor:
         return "Isovalue"
+      case .markerEditor:
+        return "Markers"
     }
   }
 
@@ -168,7 +171,7 @@ final class DockingController: ObservableObject {
 
   private func isCompatible(_ panel: DockablePanelID, with renderMode: RenderMode) -> Bool {
     switch panel {
-      case .renderControls:
+      case .renderControls, .markerEditor:
         return true
       case .transferFunctionEditor:
         return renderMode != .isoValue
@@ -376,6 +379,14 @@ struct DetachedPanelContent: View {
           } else {
             unavailableEditorMessage
           }
+        }
+
+      case .markerEditor:
+        DetachedDockablePanel(panel: panel, minWidth: 480, minHeight: 520) {
+          DockableEditorPanel(panel: panel) {
+            MacMarkerView()
+          }
+          .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
   }

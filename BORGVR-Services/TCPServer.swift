@@ -2,7 +2,7 @@ import Network
 import Foundation
 
 class TCPServer {
-  static let protocolVersionName: String = BorgVRServerAuthentication.protocolVersionName
+  static let protocolVersionName = "4"
   private static let maxCommandLineBytes = 8 * 1024
   private static let maxCommandBufferBytes = maxCommandLineBytes * 4
   private static let maxActiveConnections = 128
@@ -21,6 +21,7 @@ class TCPServer {
   /// Dataset list received from the GUI
   private var datasets: [DatasetInfo]
   private var transferFunctions: [TransferFunctionInfo]
+  private var markerFiles: [MarkerFileInfo]
   private let authSecret: String
   private var authChallenges: [ObjectIdentifier: AuthChallenge] = [:]
   private var authenticatedConnections: Set<ObjectIdentifier> = []
@@ -54,11 +55,13 @@ class TCPServer {
     logger: LoggerBase? = nil,
     datasets: [DatasetInfo] = [],
     transferFunctions: [TransferFunctionInfo] = [],
+    markerFiles: [MarkerFileInfo] = [],
     authSecret: String? = nil
   ) {
     self.logger = logger
     self.datasets = datasets
     self.transferFunctions = transferFunctions
+    self.markerFiles = markerFiles
     self.authSecret = BorgVRServerAuthentication.normalizedSecret(authSecret)
 
     if maxBricksPerGetRequest > 0 {
@@ -151,16 +154,32 @@ class TCPServer {
     return snapshot
   }
 
+  func markerFilesSnapshot() -> [MarkerFileInfo] {
+    stateLock.lock()
+    let snapshot = markerFiles
+    stateLock.unlock()
+    return snapshot
+  }
+
+  func findMarkerFileById(_ id: String) -> MarkerFileInfo? {
+    stateLock.lock()
+    let markerFile = markerFiles.first(where: { $0.id == id })
+    stateLock.unlock()
+    return markerFile
+  }
+
   func updateCatalog(
     datasets: [DatasetInfo],
-    transferFunctions: [TransferFunctionInfo]
+    transferFunctions: [TransferFunctionInfo],
+    markerFiles: [MarkerFileInfo]
   ) {
     stateLock.lock()
     self.datasets = datasets
     self.transferFunctions = transferFunctions
+    self.markerFiles = markerFiles
     stateLock.unlock()
     logger?.info(
-      "Updated server catalog: \(datasets.count) datasets, \(transferFunctions.count) transfer functions."
+      "Updated server catalog: \(datasets.count) datasets, \(transferFunctions.count) transfer functions, \(markerFiles.count) marker files."
     )
   }
 
@@ -335,6 +354,10 @@ class TCPServer {
         guard isCommandAllowed(for: connection) else { return false }
         return sendTransferFunctionList(parameters: parameters, connection: connection)
 
+      case "LISTMARKERS":
+        guard isCommandAllowed(for: connection) else { return false }
+        return sendMarkerFileList(parameters: parameters, connection: connection)
+
       case "OPEN":
         guard isCommandAllowed(for: connection) else { return false }
         return openDataset(parameters: parameters, connection: connection)
@@ -342,6 +365,10 @@ class TCPServer {
       case "GETTF":
         guard isCommandAllowed(for: connection) else { return false }
         return getTransferFunction(parameters: parameters, connection: connection)
+
+      case "GETMARKER":
+        guard isCommandAllowed(for: connection) else { return false }
+        return getMarkerFile(parameters: parameters, connection: connection)
 
       case "GETBRICKS":
         guard isCommandAllowed(for: connection) else { return false }
@@ -680,6 +707,21 @@ class TCPServer {
     return true
   }
 
+  private func sendMarkerFileList(
+    parameters: ArraySlice<Substring>,
+    connection: NWConnection
+  ) -> Bool {
+    guard expectParameterCount(parameters, equals: 0) else { return false }
+    let markerList = markerFilesSnapshot()
+      .map { "\($0.id) \($0.byteCount) \($0.datasetID) \(protocolLineText($0.markerDescription))" }
+      .joined(separator: "\n") + "\n\n"
+    connection.send(
+      content: markerList.data(using: .utf8),
+      completion: .contentProcessed({ _ in })
+    )
+    return true
+  }
+
   private func protocolLineText(_ text: String) -> String {
     text
       .replacingOccurrences(of: "\r", with: " ")
@@ -704,6 +746,26 @@ class TCPServer {
       return true
     } catch {
       logger?.error("Failed to read transfer function \(transferFunction.filename): \(error)")
+      return false
+    }
+  }
+
+  private func getMarkerFile(
+    parameters: ArraySlice<Substring>,
+    connection: NWConnection
+  ) -> Bool {
+    guard expectParameterCount(parameters, equals: 1),
+          let id = parameters.first,
+          let markerFile = findMarkerFileById(String(id)) else {
+      return false
+    }
+    do {
+      let data = try Data(contentsOf: URL(fileURLWithPath: markerFile.filename), options: .mappedIfSafe)
+      guard data.count == markerFile.byteCount else { return false }
+      sendBinaryResponse(data: data, connection: connection)
+      return true
+    } catch {
+      logger?.error("Failed to read marker file \(markerFile.filename): \(error)")
       return false
     }
   }

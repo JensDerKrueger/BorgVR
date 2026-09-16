@@ -281,6 +281,11 @@
 "marker_load_replace_button" = "Vorhandene Marker ersetzen";
 "marker_load_add_button" = "Geladene Marker hinzufügen";
 "marker_file_error_title" = "Marker-Dateifehler";
+"marker_catalog_button" = "Markerdateien";
+"marker_catalog_empty" = "Keine Markerdateien verfügbar";
+"marker_dataset_mismatch_title" = "Marker für einen anderen Datensatz";
+"marker_dataset_mismatch_message" = "Diese Markerdatei wurde für einen anderen Datensatz erstellt. Ihre Positionen passen möglicherweise nicht zum aktuellen Volumen. Möchten Sie sie trotzdem laden?";
+"marker_dataset_mismatch_load" = "Trotzdem laden";
 
 /* Private application: editor button title format */
 "private_editor_title_format" = "%@-Editor";
@@ -988,3 +993,9 @@
 "System color" = "Systemfarbe";
 "Vertical gradient" = "Vertikaler Verlauf";
 "Copy WebGPU link" = "WebGPU-Link kopieren";
+"datasetscanner_info_loaded_marker_file" = "Markerdatei geladen: %@ (Datensatz %@, ID %@)";
+"datasetscanner_warning_failed_load_marker_file" = "Markerdatei konnte nicht geladen werden: %@";
+"The selected file is not a BorgVR marker file." = "Die ausgewählte Datei ist keine BorgVR-Markerdatei.";
+"Unsupported marker file version %d." = "Nicht unterstützte Markerdateiversion %d.";
+"The marker file exceeds the maximum supported size." = "Die Markerdatei überschreitet die maximal unterstützte Größe.";
+"The marker file contains too many markers." = "Die Markerdatei enthält zu viele Marker.";

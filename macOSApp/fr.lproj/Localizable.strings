@@ -640,3 +640,35 @@
 "Configure the temporary server ports used for ad-hoc sharing sessions such as SharePlay. These settings are separate from the persistent background dataset server." = "Configure les ports temporaires utilisés pour les sessions de partage ad hoc comme SharePlay. Ces réglages sont séparés du serveur persistant de jeux de données en arrière-plan.";
 "Manage remote BorgVR dataset servers that this app can query. Added servers appear in the dataset browser; enter the address, port, and password provided by the server operator." = "Gère les serveurs distants de jeux de données BorgVR que cette app peut interroger. Les serveurs ajoutés apparaissent dans le navigateur de jeux de données ; saisissez l’adresse, le port et le mot de passe fournis par l’opérateur du serveur.";
 "Adjust general application behavior that is not tied to a specific renderer, importer, or server workflow." = "Ajuste le comportement général de l’application qui n’est pas lié à un flux précis de rendu, d’importation ou de serveur.";
+
+/* Marqueurs de volume */
+"Marker" = "Marqueur";
+"Markers" = "Marqueurs";
+"No Markers" = "Aucun marqueur";
+"Selected Marker" = "Marqueur sélectionné";
+"Name" = "Nom";
+"Radius" = "Rayon";
+"Delete Selected Marker" = "Supprimer le marqueur sélectionné";
+"Delete All Markers" = "Supprimer tous les marqueurs";
+"Delete All Markers?" = "Supprimer tous les marqueurs ?";
+"This removes every marker from the current session." = "Cette action supprime tous les marqueurs de la session actuelle.";
+"Choose the Marker interaction mode and click in the rendering view to add a marker." = "Choisissez le mode d’interaction Marqueur et cliquez dans la vue de rendu pour ajouter un marqueur.";
+"Marker Files" = "Fichiers de marqueurs";
+"Load Markers…" = "Charger les marqueurs…";
+"Save Markers…" = "Enregistrer les marqueurs…";
+"Load Markers" = "Charger les marqueurs";
+"No Marker Files Available" = "Aucun fichier de marqueurs disponible";
+"Markers for a Different Dataset" = "Marqueurs pour un autre jeu de données";
+"Load Anyway" = "Charger quand même";
+"This marker file was created for a different dataset. Its positions may not match the current volume. Do you still want to load it?" = "Ce fichier de marqueurs a été créé pour un autre jeu de données. Ses positions peuvent ne pas correspondre au volume actuel. Voulez-vous tout de même le charger ?";
+"Markers already exist in the current session. Do you want to replace them or add the loaded markers?" = "Des marqueurs existent déjà dans la session actuelle. Voulez-vous les remplacer ou ajouter les marqueurs chargés ?";
+"Replace Existing Markers" = "Remplacer les marqueurs existants";
+"Add Loaded Markers" = "Ajouter les marqueurs chargés";
+"Marker File Error" = "Erreur de fichier de marqueurs";
+"OK" = "OK";
+"datasetscanner_info_loaded_marker_file" = "Fichier de marqueurs chargé : %@ (jeu de données %@, ID %@)";
+"datasetscanner_warning_failed_load_marker_file" = "Impossible de charger le fichier de marqueurs : %@";
+"The selected file is not a BorgVR marker file." = "Le fichier sélectionné n’est pas un fichier de marqueurs BorgVR.";
+"Unsupported marker file version %d." = "Version %d du fichier de marqueurs non prise en charge.";
+"The marker file exceeds the maximum supported size." = "Le fichier de marqueurs dépasse la taille maximale prise en charge.";
+"The marker file contains too many markers." = "Le fichier de marqueurs contient trop de marqueurs.";

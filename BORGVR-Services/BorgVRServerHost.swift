@@ -54,14 +54,17 @@ final class BorgVRServerHost {
 
     let scannedDatasets: [DatasetInfo]
     let scannedTransferFunctions: [TransferFunctionInfo]
+    let scannedMarkerFiles: [MarkerFileInfo]
     if includeScannedDatasets {
       let scanner = DatasetScanner(directory: configuration.dataDirectory, logger: logger)
       scanner.loadDatasets()
       scannedDatasets = scanner.getDatasets()
       scannedTransferFunctions = scanner.getTransferFunctions()
+      scannedMarkerFiles = scanner.getMarkerFiles()
     } else {
       scannedDatasets = []
       scannedTransferFunctions = []
+      scannedMarkerFiles = []
     }
     let datasets = mergedDatasets(scannedDatasets, additionalDatasets: additionalDatasets)
     let transferFunctions = mergedTransferFunctions(
@@ -76,6 +79,7 @@ final class BorgVRServerHost {
       logger: logger,
       datasets: datasets,
       transferFunctions: transferFunctions,
+      markerFiles: scannedMarkerFiles,
       authSecret: configuration.authSecret
     )
     if configuration.startDatasetServer {

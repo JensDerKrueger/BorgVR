@@ -36,6 +36,7 @@ final class SharePlayCoordinator: ObservableObject {
   private var pendingCommonState = false
   private var pendingTransferFunction = false
   private var pendingTransform = false
+  private var pendingMarkers = false
   private var synchronizationTask: Task<Void, Never>?
   private var knownParticipants = Set<Participant>()
   private var startedActivityLocally = false
@@ -189,6 +190,16 @@ final class SharePlayCoordinator: ObservableObject {
     Task { await flushPendingSynchronization() }
   }
 
+  func synchronizeMarkers() {
+    guard isInSession else { return }
+    pendingMarkers = true
+    guard synchronizationTask == nil else { return }
+    synchronizationTask = Task { [weak self] in
+      try? await Task.sleep(nanoseconds: 50_000_000)
+      await self?.flushPendingSynchronization()
+    }
+  }
+
   private func configure(_ session: GroupSession<BorgVRSharePlayActivity>) {
     resetSessionReceivers()
     sessionGeneration += 1
@@ -269,6 +280,7 @@ final class SharePlayCoordinator: ObservableObject {
     pendingCommonState = false
     pendingTransferFunction = false
     pendingTransform = false
+    pendingMarkers = false
     knownParticipants.removeAll()
   }
 
@@ -300,6 +312,13 @@ final class SharePlayCoordinator: ObservableObject {
         to: participants
       )
     }
+    if let appModel {
+      try? await sendData(
+        VolumeMarkerSharePlayCodec.encode(appModel.volumeMarkers),
+        of: .renderingUpdate,
+        to: participants
+      )
+    }
   }
 
   private func sendInitialDataReliably(to participants: Participants = .all) async {
@@ -321,9 +340,11 @@ final class SharePlayCoordinator: ObservableObject {
     let shouldSendCommonState = pendingCommonState
     let shouldSendTransferFunction = pendingTransferFunction
     let shouldSendTransform = pendingTransform
+    let shouldSendMarkers = pendingMarkers
     pendingCommonState = false
     pendingTransferFunction = false
     pendingTransform = false
+    pendingMarkers = false
 
     do {
       if shouldSendCommonState {
@@ -335,6 +356,13 @@ final class SharePlayCoordinator: ObservableObject {
 
       if shouldSendTransform {
         try await sendData(renderingParameters.serializeScreenSharePlayTransform(), of: .renderingUpdate)
+      }
+
+      if shouldSendMarkers, let appModel {
+        try await sendData(
+          VolumeMarkerSharePlayCodec.encode(appModel.volumeMarkers),
+          of: .renderingUpdate
+        )
       }
     } catch {
       appModel?.logger.error("Failed to send SharePlay update: \(error.localizedDescription)")
@@ -365,6 +393,10 @@ final class SharePlayCoordinator: ObservableObject {
 
   private func handleUpdate(data: Data) {
     do {
+      if let markers = try VolumeMarkerSharePlayCodec.decodeIfPresent(data) {
+        appModel?.replaceVolumeMarkers(markers)
+        return
+      }
       if try renderingParameters?.applySharePlayUpdate(from: data) == true {
         return
       }
