@@ -1005,3 +1005,7 @@
 "Unsupported marker file version %d." = "Unsupported marker file version %d.";
 "The marker file exceeds the maximum supported size." = "The marker file exceeds the maximum supported size.";
 "The marker file contains too many markers." = "The marker file contains too many markers.";
+"The marker file contains too many geometry points." = "The marker file contains too many geometry points.";
+"The marker file contains invalid marker geometry." = "The marker file contains invalid marker geometry.";
+"Sphere" = "Sphere";
+"Stroke" = "Stroke";

@@ -1403,8 +1403,15 @@ export class CoordinateCubeRenderer {
       return;
     }
     const markerScale = 1.36;
-    const instanceData = new Float32Array(this.markers.length * 8);
-    this.markers.forEach((marker, index) => {
+    const primitives = this.markers.flatMap((marker) =>
+      (Array.isArray(marker.points) ? marker.points : []).map((point) => ({
+        position: point.position,
+        radius: point.radius,
+        color: marker.color
+      }))
+    );
+    const instanceData = new Float32Array(primitives.length * 8);
+    primitives.forEach((marker, index) => {
       const offset = index * 8;
       instanceData[offset] = (marker.position[0] - 0.5) * 2 * this.volumeHalfExtent[0];
       instanceData[offset + 1] = (marker.position[1] - 0.5) * 2 * this.volumeHalfExtent[1];
@@ -1421,7 +1428,7 @@ export class CoordinateCubeRenderer {
     if (instanceData.byteLength > 0) {
       this.device.queue.writeBuffer(this.markerInstanceBuffer, 0, instanceData);
     }
-    this.markerInstanceCount = this.markers.length;
+    this.markerInstanceCount = primitives.length;
   }
 
   installInteraction() {

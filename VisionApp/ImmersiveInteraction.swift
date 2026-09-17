@@ -267,15 +267,10 @@ class ImmersiveInteraction {
       scaleMatrix(datasetInfo.volumeScale)
   }
 
-  private func markerWorldCenter(_ marker: VolumeMarker,
+  private func markerWorldCenter(_ point: VolumeMarkerPoint,
                                  datasetInfo: RuntimeAppModel.DatasetInfo) -> SIMD3<Float> {
     let matrix = markerVolumeMatrix(for: datasetInfo)
-    return transformPoint(matrix, marker.position - SIMD3<Float>(repeating: 0.5))
-  }
-
-  private func markerWorldRadius(_ marker: VolumeMarker) -> Float {
-    let scale = sharedAppModel.modelTransform.scale
-    return marker.radius * max(scale.x, max(scale.y, scale.z))
+    return transformPoint(matrix, point.position - SIMD3<Float>(repeating: 0.5))
   }
 
   private func markerPosition(fromWorldPosition worldPosition: SIMD3<Float>,
@@ -314,12 +309,16 @@ class ImmersiveInteraction {
                              datasetInfo: RuntimeAppModel.DatasetInfo) -> VolumeMarker? {
     var best: (marker: VolumeMarker, distance: Float)?
     for marker in sharedAppModel.volumeMarkers {
-      let center = markerWorldCenter(marker, datasetInfo: datasetInfo)
-      let distance = simd_distance(center, worldPosition)
-      let pickDistance = max(markerWorldRadius(marker) * 2, 0.08)
-      guard distance <= pickDistance else { continue }
-      if best == nil || distance < best!.distance {
-        best = (marker, distance)
+      for point in marker.points {
+        let center = markerWorldCenter(point, datasetInfo: datasetInfo)
+        let distance = simd_distance(center, worldPosition)
+        let scale = sharedAppModel.modelTransform.scale
+        let worldRadius = point.radius * max(scale.x, max(scale.y, scale.z))
+        let pickDistance = max(worldRadius * 2, 0.08)
+        guard distance <= pickDistance else { continue }
+        if best == nil || distance < best!.distance {
+          best = (marker, distance)
+        }
       }
     }
     return best?.marker
@@ -367,17 +366,20 @@ class ImmersiveInteraction {
   ) -> VolumeMarker? {
     var best: (marker: VolumeMarker, distance: Float)?
     for marker in sharedAppModel.volumeMarkers {
-      let center = markerWorldCenter(marker, datasetInfo: datasetInfo)
-      let oc = origin - center
-      let radius = markerWorldRadius(marker)
-      let b = simd_dot(oc, direction)
-      let c = simd_dot(oc, oc) - radius * radius
-      let discriminant = b * b - c
-      guard discriminant >= 0 else { continue }
-      let t = -b - sqrt(discriminant)
-      guard t >= 0 else { continue }
-      if best == nil || t < best!.distance {
-        best = (marker, t)
+      for point in marker.points {
+        let center = markerWorldCenter(point, datasetInfo: datasetInfo)
+        let oc = origin - center
+        let scale = sharedAppModel.modelTransform.scale
+        let radius = point.radius * max(scale.x, max(scale.y, scale.z))
+        let b = simd_dot(oc, direction)
+        let c = simd_dot(oc, oc) - radius * radius
+        let discriminant = b * b - c
+        guard discriminant >= 0 else { continue }
+        let t = -b - sqrt(discriminant)
+        guard t >= 0 else { continue }
+        if best == nil || t < best!.distance {
+          best = (marker, t)
+        }
       }
     }
     return best?.marker

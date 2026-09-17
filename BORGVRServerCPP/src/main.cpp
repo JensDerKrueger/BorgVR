@@ -5,6 +5,7 @@
 #include "ServerSync.h"
 #include "Socket.h"
 
+#include <algorithm>
 #include <array>
 #include <atomic>
 #include <cctype>
@@ -407,65 +408,24 @@ static std::vector<TransferFunctionInfo> scanTransferFunctionDirectory(const std
   return transferFunctions;
 }
 
-static bool extractJsonString(const std::string& json,
-                              const std::string& key,
-                              std::string& value) {
-  const auto keyPosition = json.find("\"" + key + "\"");
-  if (keyPosition == std::string::npos) return false;
-  const auto colon = json.find(':', keyPosition + key.size() + 2);
-  if (colon == std::string::npos) return false;
-  auto cursor = json.find_first_not_of(" \t\r\n", colon + 1);
-  if (cursor == std::string::npos || json[cursor] != '"') return false;
-  ++cursor;
-  std::string result;
-  while (cursor < json.size()) {
-    const char c = json[cursor++];
-    if (c == '"') {
-      value = std::move(result);
-      return true;
-    }
-    if (c == '\\') {
-      if (cursor >= json.size()) return false;
-      const char escaped = json[cursor++];
-      if (escaped == '"' || escaped == '\\' || escaped == '/') result.push_back(escaped);
-      else return false;
-    } else {
-      result.push_back(c);
-    }
+static std::string formatUuid(const uint8_t* bytes) {
+  std::ostringstream stream;
+  stream << std::hex << std::setfill('0');
+  for (size_t index = 0; index < 16; ++index) {
+    if (index == 4 || index == 6 || index == 8 || index == 10) stream << '-';
+    stream << std::setw(2) << static_cast<unsigned int>(bytes[index]);
   }
-  return false;
-}
-
-static bool extractJsonInteger(const std::string& json,
-                               const std::string& key,
-                               int& value) {
-  const auto keyPosition = json.find("\"" + key + "\"");
-  if (keyPosition == std::string::npos) return false;
-  const auto colon = json.find(':', keyPosition + key.size() + 2);
-  if (colon == std::string::npos) return false;
-  const auto start = json.find_first_not_of(" \t\r\n", colon + 1);
-  if (start == std::string::npos) return false;
-  auto end = start;
-  while (end < json.size() && std::isdigit(static_cast<unsigned char>(json[end]))) ++end;
-  return end > start && parseInt(json.substr(start, end - start), value);
-}
-
-static bool looksLikeUuid(const std::string& value) {
-  if (value.size() != 36) return false;
-  for (size_t i = 0; i < value.size(); ++i) {
-    if (i == 8 || i == 13 || i == 18 || i == 23) {
-      if (value[i] != '-') return false;
-    } else if (!std::isxdigit(static_cast<unsigned char>(value[i]))) {
-      return false;
-    }
-  }
-  return true;
+  return stream.str();
 }
 
 static std::vector<MarkerFileInfo> scanMarkerDirectory(const std::string& directory,
                                                        std::shared_ptr<Logger> logger) {
   namespace fs = std::filesystem;
   constexpr uintmax_t maximumMarkerFileBytes = 64u * 1024u * 1024u;
+  constexpr std::array<uint8_t, 8> markerFileMagic = {
+    'B', 'V', 'R', 'M', 'A', 'R', 'K', 'R'
+  };
+  constexpr size_t markerFileHeaderBytes = 32;
   std::vector<MarkerFileInfo> markerFiles;
   std::error_code ec;
   if (!fs::exists(directory, ec) || !fs::is_directory(directory, ec)) return markerFiles;
@@ -479,16 +439,22 @@ static std::vector<MarkerFileInfo> scanMarkerDirectory(const std::string& direct
     std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(file)),
                                std::istreambuf_iterator<char>());
     if (bytes.size() != byteCount || bytes.size() > maximumMarkerFileBytes) continue;
-    const std::string json(bytes.begin(), bytes.end());
-    std::string format;
-    std::string datasetId;
-    int version = 0;
-    if (!extractJsonString(json, "format", format) || format != "BorgVRVolumeMarkers" ||
-        !extractJsonInteger(json, "version", version) || version != 1 ||
-        !extractJsonString(json, "datasetID", datasetId) || !looksLikeUuid(datasetId)) {
+    const bool validMagic = bytes.size() >= markerFileHeaderBytes &&
+      std::equal(markerFileMagic.begin(), markerFileMagic.end(), bytes.begin());
+    const uint16_t version = validMagic
+      ? static_cast<uint16_t>(bytes[8] | (static_cast<uint16_t>(bytes[9]) << 8))
+      : 0;
+    const uint32_t markerCount = validMagic
+      ? static_cast<uint32_t>(bytes[28]) |
+        (static_cast<uint32_t>(bytes[29]) << 8) |
+        (static_cast<uint32_t>(bytes[30]) << 16) |
+        (static_cast<uint32_t>(bytes[31]) << 24)
+      : 0;
+    if (!validMagic || version != 1 || markerCount > 100000) {
       if (logger) logger->warning("Unable to load marker file " + entry.path().string() + ": invalid header");
       continue;
     }
+    const std::string datasetId = formatUuid(bytes.data() + 12);
     MarkerFileInfo info;
     info.id = md5Hex(bytes.data(), bytes.size());
     info.filename = entry.path().string();

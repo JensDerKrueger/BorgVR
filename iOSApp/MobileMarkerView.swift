@@ -36,8 +36,13 @@ struct MobileMarkerView: View {
                   Circle()
                     .fill(color(from: marker.color))
                     .frame(width: 16, height: 16)
-                  Text(marker.name)
-                    .foregroundStyle(.primary)
+                  VStack(alignment: .leading, spacing: 1) {
+                    Text(marker.name)
+                      .foregroundStyle(.primary)
+                    Text(marker.kind == .sphere ? "Sphere" : "Stroke")
+                      .font(.caption)
+                      .foregroundStyle(.secondary)
+                  }
                   Spacer()
                   if marker.id == appModel.selectedVolumeMarkerID {
                     Image(systemName: "checkmark")

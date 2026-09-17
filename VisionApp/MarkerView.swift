@@ -56,7 +56,12 @@ struct MarkerView: View {
               Circle()
                 .fill(color(from: marker.color))
                 .frame(width: 18, height: 18)
-              Text(marker.name)
+              VStack(alignment: .leading) {
+                Text(marker.name)
+                Text(marker.kind == .sphere ? "Sphere" : "Stroke")
+                  .font(.caption)
+                  .foregroundStyle(.secondary)
+              }
               Spacer()
             }
             .tag(marker.id)

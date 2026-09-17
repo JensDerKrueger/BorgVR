@@ -563,36 +563,38 @@ extension Renderer {
     )
 
     for marker in markers {
-      let markerVolumePosition = simd_make_float3(
-        volumeScale * SIMD4<Float>(marker.position - SIMD3<Float>(repeating: 0.5), 1.0)
-      )
-      var modelMatrix = lastUnscaledModelMatrix *
-        Transform(translation: markerVolumePosition).matrix *
-        Transform(scale: SIMD3<Float>(repeating: marker.radius)).matrix
-      var markerColor = marker.color
-      if marker.id == sharedAppModel.selectedVolumeMarkerID {
-        markerColor = SIMD4<Float>(
-          min(markerColor.x + 0.25, 1),
-          min(markerColor.y + 0.25, 1),
-          min(markerColor.z + 0.25, 1),
-          markerColor.w
+      for point in marker.points {
+        let markerVolumePosition = simd_make_float3(
+          volumeScale * SIMD4<Float>(point.position - SIMD3<Float>(repeating: 0.5), 1.0)
+        )
+        var modelMatrix = lastUnscaledModelMatrix *
+          Transform(translation: markerVolumePosition).matrix *
+          Transform(scale: SIMD3<Float>(repeating: point.radius)).matrix
+        var markerColor = marker.color
+        if marker.id == sharedAppModel.selectedVolumeMarkerID {
+          markerColor = SIMD4<Float>(
+            min(markerColor.x + 0.25, 1),
+            min(markerColor.y + 0.25, 1),
+            min(markerColor.z + 0.25, 1),
+            markerColor.w
+          )
+        }
+        renderEncoder.setVertexBytes(
+          &modelMatrix,
+          length: MemoryLayout<simd_float4x4>.stride,
+          index: 21
+        )
+        renderEncoder.setFragmentBytes(
+          &markerColor,
+          length: MemoryLayout<SIMD4<Float>>.stride,
+          index: 23
+        )
+        renderEncoder.drawPrimitives(
+          type: .triangle,
+          vertexStart: 0,
+          vertexCount: markerSphereVertexCount
         )
       }
-      renderEncoder.setVertexBytes(
-        &modelMatrix,
-        length: MemoryLayout<simd_float4x4>.stride,
-        index: 21
-      )
-      renderEncoder.setFragmentBytes(
-        &markerColor,
-        length: MemoryLayout<SIMD4<Float>>.stride,
-        index: 23
-      )
-      renderEncoder.drawPrimitives(
-        type: .triangle,
-        vertexStart: 0,
-        vertexCount: markerSphereVertexCount
-      )
     }
   }
 

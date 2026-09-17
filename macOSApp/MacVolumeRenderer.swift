@@ -596,16 +596,18 @@ final class MacVolumeRenderer: NSObject, MTKViewDelegate {
     var closestHit: (id: UUID, distance: Float)?
     let radiusScale = max(0.0001, renderingParameters.scale)
     for marker in appModel.volumeMarkers {
-      let center = simd_make_float3(
-        ray.model * volumeScale * SIMD4<Float>(marker.position - SIMD3<Float>(repeating: 0.5), 1)
-      )
-      let toCenter = center - ray.origin
-      let projectedDistance = simd_dot(toCenter, ray.direction)
-      guard projectedDistance >= 0 else { continue }
-      let closestPoint = ray.origin + ray.direction * projectedDistance
-      guard simd_distance(closestPoint, center) <= marker.radius * radiusScale else { continue }
-      if closestHit == nil || projectedDistance < closestHit!.distance {
-        closestHit = (marker.id, projectedDistance)
+      for point in marker.points {
+        let center = simd_make_float3(
+          ray.model * volumeScale * SIMD4<Float>(point.position - SIMD3<Float>(repeating: 0.5), 1)
+        )
+        let toCenter = center - ray.origin
+        let projectedDistance = simd_dot(toCenter, ray.direction)
+        guard projectedDistance >= 0 else { continue }
+        let closestPoint = ray.origin + ray.direction * projectedDistance
+        guard simd_distance(closestPoint, center) <= point.radius * radiusScale else { continue }
+        if closestHit == nil || projectedDistance < closestHit!.distance {
+          closestHit = (marker.id, projectedDistance)
+        }
       }
     }
     return closestHit?.id

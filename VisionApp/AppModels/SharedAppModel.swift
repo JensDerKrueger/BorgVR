@@ -331,24 +331,7 @@ class SharedAppModel {
   }
 
   func serializeVolumeMarkersSharePlayState() -> Data {
-    var w = DataWriter()
-
-    w.write(Self.sharePlayMagic)
-    w.write(Self.sharePlayVersion)
-    w.write(SharePlayPacketKind.volumeMarkers.rawValue)
-    w.write(UInt8(0))
-
-    let markerCount = min(volumeMarkers.count, Int(UInt16.max))
-    w.write(UInt16(markerCount))
-    for marker in volumeMarkers.prefix(markerCount) {
-      w.writeUUID(marker.id)
-      w.writeString(marker.name, maxCharacterCount: 80)
-      w.writeSIMD3(marker.position)
-      w.write(marker.radius)
-      w.writeSIMD4(marker.color)
-    }
-
-    return w.data
+    VolumeMarkerSharePlayCodec.encode(volumeMarkers)
   }
 
   /// Deserialize from a Data blob created by `serialize`.
@@ -423,6 +406,15 @@ class SharedAppModel {
 
   @discardableResult
   func applySharePlayUpdate(from data: Data) throws -> Bool {
+    if let markers = try VolumeMarkerSharePlayCodec.decodeIfPresent(data) {
+      volumeMarkers = markers
+      if let selectedVolumeMarkerID,
+         !volumeMarkers.contains(where: { $0.id == selectedVolumeMarkerID }) {
+        self.selectedVolumeMarkerID = nil
+      }
+      return true
+    }
+
     var r = DataReader(data)
     let magic: UInt32 = try r.read()
     guard magic == Self.sharePlayMagic else { return false }
@@ -450,37 +442,7 @@ class SharedAppModel {
         modelTransform = Transform(scale: tScale, rotation: tRotation, translation: tTranslation)
         lastModelTransform = Transform(scale: lScale, rotation: lRotation, translation: lTranslation)
       case .volumeMarkers:
-        let markerCount: UInt16 = try r.read()
-        var newMarkers: [VolumeMarker] = []
-        newMarkers.reserveCapacity(Int(markerCount))
-        for _ in 0..<markerCount {
-          let id = try r.readUUID()
-          let name = try r.readString(maxByteCount: 512)
-          let position = try r.readSIMD3()
-          let radius: Float = try r.read()
-          let color = try r.readSIMD4()
-          let displayName = name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-          ? "Marker \(newMarkers.count + 1)"
-          : name
-          newMarkers.append(
-            VolumeMarker(
-              id: id,
-              name: String(displayName.prefix(80)),
-              position: SIMD3<Float>(
-                min(max(position.x, -8), 8),
-                min(max(position.y, -8), 8),
-                min(max(position.z, -8), 8)
-              ),
-              radius: min(max(radius, 0.005), 1.0),
-              color: color
-            )
-          )
-        }
-        volumeMarkers = newMarkers
-        if let selectedVolumeMarkerID,
-           !volumeMarkers.contains(where: { $0.id == selectedVolumeMarkerID }) {
-          self.selectedVolumeMarkerID = nil
-        }
+        throw SharedAppModelError.unsupportedVersion(version)
     }
 
     if !r.isAtEnd { throw SharedAppModelError.trailingBytes(r.remainingCount) }

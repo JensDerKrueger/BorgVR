@@ -32,8 +32,13 @@ struct MacMarkerView: View {
               Circle()
                 .fill(color(from: marker.color))
                 .frame(width: 14, height: 14)
-              Text(marker.name)
-                .lineLimit(1)
+              VStack(alignment: .leading, spacing: 1) {
+                Text(marker.name)
+                  .lineLimit(1)
+                Text(marker.kind == .sphere ? "Sphere" : "Stroke")
+                  .font(.caption)
+                  .foregroundStyle(.secondary)
+              }
             }
             .tag(marker.id)
           }

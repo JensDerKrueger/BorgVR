@@ -431,7 +431,7 @@ final class HTTPWebServer {
     return HTTPResponse(
       status: 200,
       reason: "OK",
-      contentType: "application/json; charset=utf-8",
+      contentType: "application/octet-stream",
       body: data
     )
   }

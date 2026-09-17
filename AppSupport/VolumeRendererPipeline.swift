@@ -249,24 +249,26 @@ final class ScreenVolumeMarkerRenderer {
     encoder.setVertexBytes(&eyePosition, length: MemoryLayout<SIMD3<Float>>.stride, index: 22)
 
     for marker in markers {
-      let volumePosition = simd_make_float3(
-        volumeScale * SIMD4<Float>(marker.position - SIMD3<Float>(repeating: 0.5), 1)
-      )
-      var markerModel = modelMatrix *
-        matrixTranslation(volumePosition) *
-        matrixScale(SIMD3<Float>(repeating: marker.radius))
-      var color = marker.color
-      if marker.id == selectedMarkerID {
-        color = SIMD4<Float>(
-          min(color.x + 0.25, 1),
-          min(color.y + 0.25, 1),
-          min(color.z + 0.25, 1),
-          color.w
+      for point in marker.points {
+        let volumePosition = simd_make_float3(
+          volumeScale * SIMD4<Float>(point.position - SIMD3<Float>(repeating: 0.5), 1)
         )
+        var markerModel = modelMatrix *
+          matrixTranslation(volumePosition) *
+          matrixScale(SIMD3<Float>(repeating: point.radius))
+        var color = marker.color
+        if marker.id == selectedMarkerID {
+          color = SIMD4<Float>(
+            min(color.x + 0.25, 1),
+            min(color.y + 0.25, 1),
+            min(color.z + 0.25, 1),
+            color.w
+          )
+        }
+        encoder.setVertexBytes(&markerModel, length: MemoryLayout<simd_float4x4>.stride, index: 21)
+        encoder.setFragmentBytes(&color, length: MemoryLayout<SIMD4<Float>>.stride, index: 23)
+        encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: sphereVertexCount)
       }
-      encoder.setVertexBytes(&markerModel, length: MemoryLayout<simd_float4x4>.stride, index: 21)
-      encoder.setFragmentBytes(&color, length: MemoryLayout<SIMD4<Float>>.stride, index: 23)
-      encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: sphereVertexCount)
     }
     encoder.endEncoding()
     return targets

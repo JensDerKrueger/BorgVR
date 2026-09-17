@@ -693,7 +693,7 @@ bool HTTPWebServer::sendMarkerFile(TcpSocket& socket, const std::string& id, boo
     return false;
   }
 
-  return sendResponse(socket, 200, "OK", "application/json; charset=utf-8", body, {}, closeAfterSend);
+  return sendResponse(socket, 200, "OK", "application/octet-stream", body, {}, closeAfterSend);
 }
 
 bool HTTPWebServer::sendDatasetManifest(TcpSocket& socket, const std::string& datasetID, bool closeAfterSend) {

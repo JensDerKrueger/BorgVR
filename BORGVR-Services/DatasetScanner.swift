@@ -33,12 +33,9 @@ class DatasetScanner {
   private static let maximumTransferFunctionEntryCount = 1 << 16
   private static let maximumTransferFunctionDescriptionByteCount = 64 * 1024
   private static let maximumMarkerFileByteCount = 64 * 1024 * 1024
-
-  private struct MarkerFileHeader: Decodable {
-    let format: String
-    let version: Int
-    let datasetID: String
-  }
+  private static let markerFileMagic = Data("BVRMARKR".utf8)
+  private static let markerFileVersion: UInt16 = 1
+  private static let markerFileHeaderByteCount = 32
 
   private var datasets: [DatasetInfo] = []
   private var transferFunctions: [TransferFunctionInfo] = []
@@ -175,13 +172,20 @@ class DatasetScanner {
             data.count <= Self.maximumMarkerFileByteCount else {
         throw DatasetScannerError.invalidMarkerFile
       }
-      let header = try JSONDecoder().decode(MarkerFileHeader.self, from: data)
-      guard header.format == "BorgVRVolumeMarkers",
-            header.version == 1,
-            UUID(uuidString: header.datasetID) != nil else {
+      guard data.count >= Self.markerFileHeaderByteCount,
+            data.prefix(Self.markerFileMagic.count) == Self.markerFileMagic,
+            Self.readUInt16(from: data, at: 8) == Self.markerFileVersion,
+            let markerCount = Self.readUInt32(from: data, at: 28),
+            markerCount <= 100_000 else {
         throw DatasetScannerError.invalidMarkerFile
       }
-      let datasetID = header.datasetID
+      let uuidBytes = Array(data[12..<28])
+      let datasetID = UUID(uuid: (
+        uuidBytes[0], uuidBytes[1], uuidBytes[2], uuidBytes[3],
+        uuidBytes[4], uuidBytes[5], uuidBytes[6], uuidBytes[7],
+        uuidBytes[8], uuidBytes[9], uuidBytes[10], uuidBytes[11],
+        uuidBytes[12], uuidBytes[13], uuidBytes[14], uuidBytes[15]
+      )).uuidString
       let id = Insecure.MD5.hash(data: data)
         .map { String(format: "%02x", $0) }
         .joined()
@@ -218,6 +222,19 @@ class DatasetScanner {
         )
       )
     }
+  }
+
+  private static func readUInt16(from data: Data, at offset: Int) -> UInt16? {
+    guard offset >= 0, offset + 2 <= data.count else { return nil }
+    return UInt16(data[offset]) | (UInt16(data[offset + 1]) << 8)
+  }
+
+  private static func readUInt32(from data: Data, at offset: Int) -> UInt32? {
+    guard offset >= 0, offset + 4 <= data.count else { return nil }
+    return UInt32(data[offset]) |
+      (UInt32(data[offset + 1]) << 8) |
+      (UInt32(data[offset + 2]) << 16) |
+      (UInt32(data[offset + 3]) << 24)
   }
 
   private static func displayName(for dataset: DatasetInfo) -> String {

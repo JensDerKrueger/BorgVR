@@ -4,6 +4,38 @@
     "" : {
 
     },
+    "Sphere" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Kugel" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Sphere" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Esfera" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Sphère" } }
+      }
+    },
+    "Stroke" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Linienzug" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Stroke" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Trazo" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Tracé" } }
+      }
+    },
+    "The marker file contains invalid marker geometry." : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Die Markerdatei enthält ungültige Marker-Geometrie." } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "The marker file contains invalid marker geometry." } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "El archivo de marcadores contiene geometría de marcador no válida." } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Le fichier de marqueurs contient une géométrie de marqueur non valide." } }
+      }
+    },
+    "The marker file contains too many geometry points." : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Die Markerdatei enthält zu viele Geometriepunkte." } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "The marker file contains too many geometry points." } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "El archivo de marcadores contiene demasiados puntos geométricos." } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Le fichier de marqueurs contient trop de points géométriques." } }
+      }
+    },
     "(password)" : {
       "extractionState" : "stale",
       "localizations" : {

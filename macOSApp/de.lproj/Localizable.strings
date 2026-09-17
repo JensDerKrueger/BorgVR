@@ -676,3 +676,7 @@
 "Unsupported marker file version %d." = "Nicht unterstützte Markerdateiversion %d.";
 "The marker file exceeds the maximum supported size." = "Die Markerdatei überschreitet die maximal unterstützte Größe.";
 "The marker file contains too many markers." = "Die Markerdatei enthält zu viele Marker.";
+"The marker file contains too many geometry points." = "Die Markerdatei enthält zu viele Geometriepunkte.";
+"The marker file contains invalid marker geometry." = "Die Markerdatei enthält ungültige Marker-Geometrie.";
+"Sphere" = "Kugel";
+"Stroke" = "Linienzug";

@@ -7,20 +7,154 @@ import simd
 extension UTType {
   static let borgVRMarker = UTType(
     exportedAs: "de.uni-due.borgvr.marker",
-    conformingTo: .json
+    conformingTo: .data
   )
 }
 
-struct VolumeMarker: Identifiable, Equatable {
-  var id: UUID
-  var name: String
+struct VolumeMarkerPoint: Equatable {
   var position: SIMD3<Float>
   var radius: Float
+}
+
+enum VolumeMarkerGeometry: Equatable {
+  case sphere(VolumeMarkerPoint)
+  case stroke([VolumeMarkerPoint])
+}
+
+enum VolumeMarkerKind: UInt8 {
+  case sphere = 1
+  case stroke = 2
+}
+
+struct VolumeMarker: Identifiable, Equatable {
+  static let strokePointSpacingDiameterFactor: Float = 0.35
+  static let maximumInteractiveStrokePointCount = 100_000
+
+  var id: UUID
+  var name: String
   var color: SIMD4<Float>
+  var geometry: VolumeMarkerGeometry
+
+  init(
+    id: UUID,
+    name: String,
+    position: SIMD3<Float>,
+    radius: Float,
+    color: SIMD4<Float>
+  ) {
+    self.id = id
+    self.name = name
+    self.color = color
+    geometry = .sphere(VolumeMarkerPoint(position: position, radius: radius))
+  }
+
+  init(
+    id: UUID,
+    name: String,
+    color: SIMD4<Float>,
+    geometry: VolumeMarkerGeometry
+  ) {
+    self.id = id
+    self.name = name
+    self.color = color
+    self.geometry = geometry
+  }
+
+  static func stroke(
+    id: UUID = UUID(),
+    name: String,
+    firstPoint: VolumeMarkerPoint,
+    color: SIMD4<Float>
+  ) -> VolumeMarker {
+    VolumeMarker(id: id, name: name, color: color, geometry: .stroke([firstPoint]))
+  }
+
+  var kind: VolumeMarkerKind {
+    switch geometry {
+      case .sphere: .sphere
+      case .stroke: .stroke
+    }
+  }
+
+  var points: [VolumeMarkerPoint] {
+    switch geometry {
+      case .sphere(let point): [point]
+      case .stroke(let points): points
+    }
+  }
+
+  var position: SIMD3<Float> {
+    get {
+      let markerPoints = points
+      guard !markerPoints.isEmpty else { return SIMD3<Float>(repeating: 0.5) }
+      return markerPoints.reduce(SIMD3<Float>.zero) { $0 + $1.position } / Float(markerPoints.count)
+    }
+    set {
+      translate(by: newValue - position)
+    }
+  }
+
+  var radius: Float {
+    get {
+      let markerPoints = points
+      guard !markerPoints.isEmpty else { return 0.08 }
+      return markerPoints.reduce(0) { $0 + $1.radius } / Float(markerPoints.count)
+    }
+    set {
+      let oldRadius = max(radius, 0.000_001)
+      scaleRadii(by: newValue / oldRadius)
+    }
+  }
+
+  mutating func translate(by offset: SIMD3<Float>) {
+    geometry = geometry.mapPoints { point in
+      VolumeMarkerPoint(position: point.position + offset, radius: point.radius)
+    }
+  }
+
+  mutating func scaleRadii(by factor: Float) {
+    geometry = geometry.mapPoints { point in
+      VolumeMarkerPoint(position: point.position, radius: point.radius * factor)
+    }
+  }
+
+  @discardableResult
+  mutating func appendStrokePoint(
+    _ point: VolumeMarkerPoint,
+    spacingDiameterFactor: Float = VolumeMarker.strokePointSpacingDiameterFactor,
+    coordinateScale: SIMD3<Float> = .one
+  ) -> Bool {
+    guard case .stroke(var points) = geometry,
+          points.count < Self.maximumInteractiveStrokePointCount,
+          let previousPoint = points.last else {
+      return false
+    }
+    let diameter = max(previousPoint.radius, point.radius) * 2
+    let minimumDistance = max(0, spacingDiameterFactor) * diameter
+    let scaledOffset = (point.position - previousPoint.position) * coordinateScale
+    guard simd_length(scaledOffset) >= minimumDistance else {
+      return false
+    }
+    points.append(point)
+    geometry = .stroke(points)
+    return true
+  }
+}
+
+private extension VolumeMarkerGeometry {
+  func mapPoints(_ transform: (VolumeMarkerPoint) -> VolumeMarkerPoint) -> Self {
+    switch self {
+      case .sphere(let point): .sphere(transform(point))
+      case .stroke(let points): .stroke(points.map(transform))
+    }
+  }
 }
 
 struct VolumeMarkerDocument: FileDocument {
+  // Header: magic, UInt16 version, UInt16 flags, dataset UUID; marker payload follows.
   static let maximumFileByteCount = 64 * 1024 * 1024
+  static let fileMagic = Data("BVRMARKR".utf8)
+  static let fileVersion: UInt16 = 1
   static var readableContentTypes: [UTType] { [.borgVRMarker] }
   static var writableContentTypes: [UTType] { [.borgVRMarker] }
 
@@ -42,41 +176,42 @@ struct VolumeMarkerDocument: FileDocument {
   }
 
   func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
-    guard let datasetID, UUID(uuidString: datasetID) != nil else {
+    guard let datasetID, let datasetUUID = UUID(uuidString: datasetID) else {
       throw VolumeMarkerDocumentError.invalidFormat
     }
-    let payload = VolumeMarkerFile(
-      version: 1,
-      datasetID: datasetID,
-      markers: markers.map(StoredVolumeMarker.init(marker:))
-    )
-    let encoder = JSONEncoder()
-    encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-    return .init(regularFileWithContents: try encoder.encode(payload))
+    var writer = MarkerDataWriter()
+    writer.writeBytes(Self.fileMagic)
+    writer.write(Self.fileVersion)
+    writer.write(UInt16(0))
+    writer.writeUUID(datasetUUID)
+    try VolumeMarkerBinaryCodec.encode(markers, to: &writer)
+    guard writer.data.count <= Self.maximumFileByteCount else {
+      throw VolumeMarkerDocumentError.fileTooLarge
+    }
+    return .init(regularFileWithContents: writer.data)
   }
 
   static func decode(from data: Data) throws -> VolumeMarkerDocumentContents {
     guard data.count <= maximumFileByteCount else {
       throw VolumeMarkerDocumentError.fileTooLarge
     }
-    let payload = try JSONDecoder().decode(VolumeMarkerFile.self, from: data)
-    guard payload.format == "BorgVRVolumeMarkers" else {
+    var reader = MarkerDataReader(data)
+    guard try reader.readBytes(count: fileMagic.count) == fileMagic else {
       throw VolumeMarkerDocumentError.invalidFormat
     }
-    guard payload.version == 1 else {
-      throw VolumeMarkerDocumentError.unsupportedVersion(payload.version)
+    let version: UInt16 = try reader.read()
+    guard version == fileVersion else {
+      throw VolumeMarkerDocumentError.unsupportedVersion(Int(version))
     }
-    guard UUID(uuidString: payload.datasetID) != nil else {
+    _ = try reader.read() as UInt16
+    let datasetID = try reader.readUUID().uuidString
+    let markers = try VolumeMarkerBinaryCodec.decode(from: &reader)
+    guard reader.isAtEnd else {
       throw VolumeMarkerDocumentError.invalidFormat
-    }
-    guard payload.markers.count <= 100_000 else {
-      throw VolumeMarkerDocumentError.tooManyMarkers
     }
     return VolumeMarkerDocumentContents(
-      datasetID: payload.datasetID,
-      markers: payload.markers.enumerated().map { index, stored in
-        stored.marker(fallbackName: "Marker \(index + 1)")
-      }
+      datasetID: datasetID,
+      markers: markers
     )
   }
 
@@ -95,6 +230,8 @@ enum VolumeMarkerDocumentError: LocalizedError {
   case unsupportedVersion(Int)
   case fileTooLarge
   case tooManyMarkers
+  case tooManyPoints
+  case invalidGeometry
 
   var errorDescription: String? {
     switch self {
@@ -121,61 +258,17 @@ enum VolumeMarkerDocumentError: LocalizedError {
           "The marker file contains too many markers.",
           comment: "Marker file validation error"
         )
+      case .tooManyPoints:
+        return NSLocalizedString(
+          "The marker file contains too many geometry points.",
+          comment: "Marker file validation error"
+        )
+      case .invalidGeometry:
+        return NSLocalizedString(
+          "The marker file contains invalid marker geometry.",
+          comment: "Marker file validation error"
+        )
     }
-  }
-}
-
-private struct VolumeMarkerFile: Codable {
-  var format: String = "BorgVRVolumeMarkers"
-  var version: Int = 1
-  var datasetID: String
-  var markers: [StoredVolumeMarker]
-}
-
-private struct StoredVolumeMarker: Codable {
-  var id: UUID
-  var name: String
-  var position: [Float]
-  var radius: Float
-  var color: [Float]
-
-  init(marker: VolumeMarker) {
-    id = marker.id
-    name = marker.name
-    position = [marker.position.x, marker.position.y, marker.position.z]
-    radius = marker.radius
-    color = [marker.color.x, marker.color.y, marker.color.z, marker.color.w]
-  }
-
-  func marker(fallbackName: String) -> VolumeMarker {
-    let cleanName = name.trimmingCharacters(in: .whitespacesAndNewlines)
-    return VolumeMarker(
-      id: id,
-      name: String((cleanName.isEmpty ? fallbackName : cleanName).prefix(80)),
-      position: SIMD3<Float>(
-        finite(position[safe: 0], fallback: 0.5, range: -8...8),
-        finite(position[safe: 1], fallback: 0.5, range: -8...8),
-        finite(position[safe: 2], fallback: 0.5, range: -8...8)
-      ),
-      radius: finite(radius, fallback: 0.08, range: 0.005...1),
-      color: SIMD4<Float>(
-        finite(color[safe: 0], fallback: 1, range: 0...1),
-        finite(color[safe: 1], fallback: 0, range: 0...1),
-        finite(color[safe: 2], fallback: 0, range: 0...1),
-        finite(color[safe: 3], fallback: 1, range: 0...1)
-      )
-    )
-  }
-
-  private func finite(_ value: Float?, fallback: Float, range: ClosedRange<Float>) -> Float {
-    guard let value, value.isFinite else { return fallback }
-    return min(range.upperBound, max(range.lowerBound, value))
-  }
-}
-
-private extension Array {
-  subscript(safe index: Int) -> Element? {
-    indices.contains(index) ? self[index] : nil
   }
 }
 
@@ -328,9 +421,8 @@ enum VolumeMarkerCatalog {
 
 enum VolumeMarkerSharePlayCodec {
   private static let sharePlayMagic: UInt32 = 0x4256_5350 // "BVSP"
-  private static let sharePlayVersion: UInt16 = 1
+  private static let sharePlayVersion: UInt16 = 2
   private static let packetKind: UInt8 = 4
-  private static let maximumMarkerCount = Int(UInt16.max)
 
   static func encode(_ markers: [VolumeMarker]) -> Data {
     var writer = MarkerDataWriter()
@@ -338,15 +430,11 @@ enum VolumeMarkerSharePlayCodec {
     writer.write(sharePlayVersion)
     writer.write(packetKind)
     writer.write(UInt8(0))
-
-    let markerCount = min(markers.count, maximumMarkerCount)
-    writer.write(UInt16(markerCount))
-    for marker in markers.prefix(markerCount) {
-      writer.writeUUID(marker.id)
-      writer.writeString(marker.name, maxCharacterCount: 80)
-      writer.writeSIMD3(marker.position)
-      writer.write(marker.radius)
-      writer.writeSIMD4(marker.color)
+    do {
+      try VolumeMarkerBinaryCodec.encode(markers, to: &writer)
+    } catch {
+      assertionFailure("Unable to encode volume markers: \(error.localizedDescription)")
+      writer.write(UInt32(0))
     }
     return writer.data
   }
@@ -357,47 +445,137 @@ enum VolumeMarkerSharePlayCodec {
     let magic: UInt32 = try reader.read()
     guard magic == sharePlayMagic else { return nil }
     let version: UInt16 = try reader.read()
-    guard version == sharePlayVersion else {
-      throw VolumeMarkerCodecError.unsupportedVersion(version)
-    }
     let packet: UInt8 = try reader.read()
     _ = try reader.read() as UInt8
     guard packet == packetKind else { return nil }
-
-    let markerCount: UInt16 = try reader.read()
-    var markers: [VolumeMarker] = []
-    markers.reserveCapacity(Int(markerCount))
-    for index in 0..<Int(markerCount) {
-      let id = try reader.readUUID()
-      let rawName = try reader.readString(maxByteCount: 512)
-      let position = try reader.readSIMD3()
-      let radius: Float = try reader.read()
-      let color = try reader.readSIMD4()
-      let trimmedName = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
-      markers.append(
-        VolumeMarker(
-          id: id,
-          name: String((trimmedName.isEmpty ? "Marker \(index + 1)" : trimmedName).prefix(80)),
-          position: SIMD3<Float>(
-            min(max(position.x, -8), 8),
-            min(max(position.y, -8), 8),
-            min(max(position.z, -8), 8)
-          ),
-          radius: min(max(radius, 0.005), 1),
-          color: SIMD4<Float>(
-            min(max(color.x, 0), 1),
-            min(max(color.y, 0), 1),
-            min(max(color.z, 0), 1),
-            min(max(color.w, 0), 1)
-          )
-        )
-      )
+    guard version == sharePlayVersion else {
+      throw VolumeMarkerCodecError.unsupportedVersion(version)
     }
+
+    let markers = try VolumeMarkerBinaryCodec.decode(from: &reader)
 
     guard reader.isAtEnd else {
       throw VolumeMarkerCodecError.trailingBytes(reader.remainingCount())
     }
     return markers
+  }
+}
+
+enum VolumeMarkerBinaryCodec {
+  // Each marker stores kind, UUID, name, RGBA, point count, then xyz/radius points.
+  static let maximumMarkerCount = 100_000
+  static let maximumPointCount = 1_000_000
+  private static let maximumNameByteCount = 512
+
+  static func encode(_ markers: [VolumeMarker], to writer: inout MarkerDataWriter) throws {
+    guard markers.count <= maximumMarkerCount else {
+      throw VolumeMarkerDocumentError.tooManyMarkers
+    }
+    let pointCount = markers.reduce(0) { $0 + $1.points.count }
+    guard pointCount <= maximumPointCount else {
+      throw VolumeMarkerDocumentError.tooManyPoints
+    }
+    guard markers.allSatisfy({ marker in
+      let points = marker.points
+      return !points.isEmpty && (marker.kind != .sphere || points.count == 1)
+    }) else {
+      throw VolumeMarkerDocumentError.invalidGeometry
+    }
+
+    writer.write(UInt32(markers.count))
+    for marker in markers {
+      let points = marker.points
+      writer.write(marker.kind.rawValue)
+      writer.write(UInt8(0))
+      writer.write(UInt16(0))
+      writer.writeUUID(marker.id)
+      writer.writeString(marker.name, maxCharacterCount: 80)
+      writer.writeSIMD4(sanitizedColor(marker.color))
+      writer.write(UInt32(points.count))
+      for point in points {
+        writer.writeSIMD3(sanitizedPosition(point.position))
+        writer.write(sanitizedRadius(point.radius))
+      }
+    }
+  }
+
+  static func decode(from reader: inout MarkerDataReader) throws -> [VolumeMarker] {
+    let markerCount = Int(try reader.read() as UInt32)
+    guard markerCount <= maximumMarkerCount else {
+      throw VolumeMarkerDocumentError.tooManyMarkers
+    }
+
+    var markers: [VolumeMarker] = []
+    markers.reserveCapacity(markerCount)
+    var totalPointCount = 0
+    for index in 0..<markerCount {
+      let rawKind: UInt8 = try reader.read()
+      _ = try reader.read() as UInt8
+      _ = try reader.read() as UInt16
+      guard let kind = VolumeMarkerKind(rawValue: rawKind) else {
+        throw VolumeMarkerDocumentError.invalidGeometry
+      }
+      let id = try reader.readUUID()
+      let rawName = try reader.readString(maxByteCount: maximumNameByteCount)
+      let color = sanitizedColor(try reader.readSIMD4())
+      let pointCount = Int(try reader.read() as UInt32)
+      guard pointCount > 0,
+            kind != .sphere || pointCount == 1,
+            pointCount <= maximumPointCount - totalPointCount else {
+        throw VolumeMarkerDocumentError.invalidGeometry
+      }
+      totalPointCount += pointCount
+      var points: [VolumeMarkerPoint] = []
+      points.reserveCapacity(pointCount)
+      for _ in 0..<pointCount {
+        points.append(
+          VolumeMarkerPoint(
+            position: sanitizedPosition(try reader.readSIMD3()),
+            radius: sanitizedRadius(try reader.read())
+          )
+        )
+      }
+      let trimmedName = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
+      markers.append(
+        VolumeMarker(
+          id: id,
+          name: String((trimmedName.isEmpty ? "Marker \(index + 1)" : trimmedName).prefix(80)),
+          color: color,
+          geometry: kind == .sphere ? .sphere(points[0]) : .stroke(points)
+        )
+      )
+    }
+    return markers
+  }
+
+  private static func sanitizedPosition(_ value: SIMD3<Float>) -> SIMD3<Float> {
+    SIMD3<Float>(
+      finite(value.x, fallback: 0.5, range: -8...8),
+      finite(value.y, fallback: 0.5, range: -8...8),
+      finite(value.z, fallback: 0.5, range: -8...8)
+    )
+  }
+
+  private static func sanitizedRadius(_ value: Float) -> Float {
+    finite(value, fallback: 0.08, range: 0.005...1)
+  }
+
+  private static func sanitizedColor(_ value: SIMD4<Float>) -> SIMD4<Float> {
+    SIMD4<Float>(
+      finite(value.x, fallback: 1, range: 0...1),
+      finite(value.y, fallback: 0, range: 0...1),
+      finite(value.z, fallback: 0, range: 0...1),
+      finite(value.w, fallback: 1, range: 0...1)
+    )
+  }
+
+  private static func finite(
+    _ value: Float,
+    fallback: Float,
+    range: ClosedRange<Float>
+  ) -> Float {
+    guard value.isFinite else { return fallback }
+    return min(range.upperBound, max(range.lowerBound, value))
   }
 }
 
@@ -421,7 +599,7 @@ enum VolumeMarkerCodecError: LocalizedError {
   }
 }
 
-private struct MarkerDataWriter {
+struct MarkerDataWriter {
   private(set) var data = Data()
 
   mutating func write<T: FixedWidthInteger>(_ value: T) {
@@ -436,6 +614,10 @@ private struct MarkerDataWriter {
   mutating func writeUUID(_ value: UUID) {
     var uuid = value.uuid
     withUnsafeBytes(of: &uuid) { data.append(contentsOf: $0) }
+  }
+
+  mutating func writeBytes(_ value: Data) {
+    data.append(value)
   }
 
   mutating func writeString(_ value: String, maxCharacterCount: Int) {
@@ -459,7 +641,7 @@ private struct MarkerDataWriter {
   }
 }
 
-private struct MarkerDataReader {
+struct MarkerDataReader {
   private let data: Data
   private var offset = 0
 
@@ -492,6 +674,15 @@ private struct MarkerDataReader {
     }
     offset += byteCount
     return UUID(uuid: uuid)
+  }
+
+  mutating func readBytes(count: Int) throws -> Data {
+    guard count >= 0, offset + count <= data.count else {
+      throw VolumeMarkerCodecError.outOfBounds
+    }
+    let bytes = data[offset..<(offset + count)]
+    offset += count
+    return Data(bytes)
   }
 
   mutating func readString(maxByteCount: Int) throws -> String {

@@ -1,4 +1,4 @@
-import { CoordinateCubeRenderer } from "./cube-renderer.js?v=20260917-markers";
+import { CoordinateCubeRenderer } from "./cube-renderer.js?v=20260917-marker-types";
 import { decodeAppleLZ4, encodeLZ4Block } from "./lz4.js?v=20260911-urltf";
 import { transferFunctionRGBAData } from "./transfer-function.js?v=20260912-btf1";
 
@@ -54,6 +54,7 @@ const MAX_TRANSFER_FUNCTION_URL_BYTES = MAX_TRANSFER_FUNCTION_RGBA_BYTES + MAX_T
 const MAX_TRANSFER_FUNCTION_FILE_BYTES = MAX_TRANSFER_FUNCTION_RGBA_BYTES + MAX_TRANSFER_FUNCTION_METADATA_BYTES;
 const MAX_MARKER_FILE_BYTES = 64 * 1024 * 1024;
 const MAX_MARKER_COUNT = 100_000;
+const MAX_MARKER_POINT_COUNT = 1_000_000;
 
 let renderer = null;
 let currentManifest = null;
@@ -987,43 +988,113 @@ function parseMarkerFile(buffer) {
   if (!(buffer instanceof ArrayBuffer) || buffer.byteLength <= 0 || buffer.byteLength > MAX_MARKER_FILE_BYTES) {
     throw new Error("Marker file exceeds the supported size limit.");
   }
-  let payload;
-  try {
-    payload = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(buffer));
-  } catch {
+  const bytes = new Uint8Array(buffer);
+  const view = new DataView(buffer);
+  let offset = 0;
+  const requireBytes = (count) => {
+    if (!Number.isInteger(count) || count < 0 || offset + count > buffer.byteLength) {
+      throw new Error("The marker file is incomplete.");
+    }
+  };
+  const readUint8 = () => {
+    requireBytes(1);
+    return view.getUint8(offset++);
+  };
+  const readUint16 = () => {
+    requireBytes(2);
+    const value = view.getUint16(offset, true);
+    offset += 2;
+    return value;
+  };
+  const readUint32 = () => {
+    requireBytes(4);
+    const value = view.getUint32(offset, true);
+    offset += 4;
+    return value;
+  };
+  const readFloat32 = () => {
+    requireBytes(4);
+    const value = view.getFloat32(offset, true);
+    offset += 4;
+    return value;
+  };
+  const readUUID = () => {
+    requireBytes(16);
+    const hex = Array.from(bytes.subarray(offset, offset + 16), (value) => value.toString(16).padStart(2, "0"));
+    offset += 16;
+    return `${hex.slice(0, 4).join("")}-${hex.slice(4, 6).join("")}-${hex.slice(6, 8).join("")}-${hex.slice(8, 10).join("")}-${hex.slice(10).join("")}`;
+  };
+  const readString = () => {
+    const byteCount = readUint16();
+    if (byteCount > 512) {
+      throw new Error("A marker name exceeds the supported length.");
+    }
+    requireBytes(byteCount);
+    const value = new TextDecoder("utf-8", { fatal: true }).decode(bytes.subarray(offset, offset + byteCount));
+    offset += byteCount;
+    return value;
+  };
+
+  requireBytes(28);
+  const magic = new TextDecoder("ascii").decode(bytes.subarray(0, 8));
+  offset = 8;
+  const version = readUint16();
+  readUint16();
+  if (magic !== "BVRMARKR" || version !== 1) {
     throw new Error("The selected file is not a valid BorgVR marker file.");
   }
-  if (payload?.format !== "BorgVRVolumeMarkers" || payload?.version !== 1 || !isUUID(payload?.datasetID)) {
-    throw new Error("The selected file is not a supported BorgVR marker file.");
-  }
-  if (!Array.isArray(payload.markers) || payload.markers.length > MAX_MARKER_COUNT) {
+  const datasetID = readUUID();
+  const markerCount = readUint32();
+  if (markerCount > MAX_MARKER_COUNT) {
     throw new Error("The marker file contains too many markers or has an invalid marker list.");
   }
-  return {
-    datasetID: payload.datasetID,
-    markers: payload.markers.map((marker, index) => normalizeMarker(marker, index))
-  };
-}
-
-function normalizeMarker(marker, index) {
-  if (!marker || !Array.isArray(marker.position) || !Array.isArray(marker.color)) {
-    throw new Error(`Marker ${index + 1} is incomplete.`);
+  const markers = [];
+  let totalPointCount = 0;
+  for (let markerIndex = 0; markerIndex < markerCount; markerIndex += 1) {
+    const typeValue = readUint8();
+    readUint8();
+    readUint16();
+    if (typeValue !== 1 && typeValue !== 2) {
+      throw new Error(`Marker ${markerIndex + 1} has an unsupported geometry type.`);
+    }
+    const id = readUUID();
+    const rawName = readString().trim();
+    const color = [
+      finiteClamped(readFloat32(), 1, 0, 1),
+      finiteClamped(readFloat32(), 0, 0, 1),
+      finiteClamped(readFloat32(), 0, 0, 1),
+      finiteClamped(readFloat32(), 1, 0, 1)
+    ];
+    const pointCount = readUint32();
+    totalPointCount += pointCount;
+    if (pointCount === 0 || (typeValue === 1 && pointCount !== 1) || totalPointCount > MAX_MARKER_POINT_COUNT) {
+      throw new Error(`Marker ${markerIndex + 1} has invalid or excessive geometry.`);
+    }
+    const points = [];
+    for (let pointIndex = 0; pointIndex < pointCount; pointIndex += 1) {
+      points.push({
+        position: [
+          finiteClamped(readFloat32(), 0.5, -8, 8),
+          finiteClamped(readFloat32(), 0.5, -8, 8),
+          finiteClamped(readFloat32(), 0.5, -8, 8)
+        ],
+        radius: finiteClamped(readFloat32(), 0.08, 0.005, 1)
+      });
+    }
+    markers.push({
+      id,
+      name: (rawName || `Marker ${markerIndex + 1}`).slice(0, 80),
+      type: typeValue === 1 ? "sphere" : "stroke",
+      color,
+      points
+    });
+  }
+  if (offset !== buffer.byteLength) {
+    throw new Error("The marker file contains unexpected trailing data.");
   }
   return {
-    id: typeof marker.id === "string" ? marker.id : "",
-    name: String(marker.name || `Marker ${index + 1}`).trim().slice(0, 80) || `Marker ${index + 1}`,
-    position: [
-      finiteClamped(marker.position[0], 0.5, -8, 8),
-      finiteClamped(marker.position[1], 0.5, -8, 8),
-      finiteClamped(marker.position[2], 0.5, -8, 8)
-    ],
-    radius: finiteClamped(marker.radius, 0.08, 0.005, 1),
-    color: [
-      finiteClamped(marker.color[0], 1, 0, 1),
-      finiteClamped(marker.color[1], 0, 0, 1),
-      finiteClamped(marker.color[2], 0, 0, 1),
-      finiteClamped(marker.color[3], 1, 0, 1)
-    ]
+    datasetID,
+    markers
   };
 }
 
