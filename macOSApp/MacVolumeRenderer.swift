@@ -71,7 +71,7 @@ final class MacVolumeRenderer: NSObject, MTKViewDelegate {
     renderingParameters.transferFunction.initMetal(device: view.device!)
 
     let depthDescriptor = MTLDepthStencilDescriptor()
-    depthDescriptor.depthCompareFunction = .less
+    depthDescriptor.depthCompareFunction = .greater
     depthDescriptor.isDepthWriteEnabled = true
     depthState = view.device?.makeDepthStencilState(descriptor: depthDescriptor)
 
@@ -565,8 +565,8 @@ final class MacVolumeRenderer: NSObject, MTKViewDelegate {
     let inverseViewProjection = simd_inverse(matrices.projection * matrices.view)
     let clipX = normalizedScreenPosition.x * 2 - 1
     let clipY = normalizedScreenPosition.y * 2 - 1
-    var near = inverseViewProjection * SIMD4<Float>(clipX, clipY, 0, 1)
-    var far = inverseViewProjection * SIMD4<Float>(clipX, clipY, 1, 1)
+    var near = inverseViewProjection * SIMD4<Float>(clipX, clipY, 1, 1)
+    var far = inverseViewProjection * SIMD4<Float>(clipX, clipY, 0, 1)
     guard abs(near.w) > 0.000001, abs(far.w) > 0.000001 else { return nil }
     near /= near.w
     far /= far.w

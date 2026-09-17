@@ -27,10 +27,6 @@ using namespace metal;
 #define VOLUME_SHADER_USES_MARKER_TEXTURES 0
 #endif
 
-#ifndef VOLUME_SHADER_REVERSED_DEPTH
-#define VOLUME_SHADER_REVERSED_DEPTH 0
-#endif
-
 #if VOLUME_SHADER_USES_AMPLIFICATION
 #define VOLUME_SHADER_AMP_PARAMETER , ushort amp_id [[amplification_id]]
 #define VOLUME_SHADER_UNIFORM_INDEX amp_id
@@ -132,19 +128,11 @@ inline float markerDepthAtFragment(float4 fragmentPosition,
   uint2 pixel = uint2(fragmentPosition.xy);
   if (pixel.x >= markerDepthTexture.get_width() ||
       pixel.y >= markerDepthTexture.get_height()) {
-#if VOLUME_SHADER_REVERSED_DEPTH
     return 0.0;
-#else
-    return 1.0;
-#endif
   }
 #if VOLUME_SHADER_USES_AMPLIFICATION
   if (layerIndex >= markerDepthTexture.get_array_size()) {
-#if VOLUME_SHADER_REVERSED_DEPTH
     return 0.0;
-#else
-    return 1.0;
-#endif
   }
   return markerDepthTexture.read(pixel, layerIndex);
 #else
@@ -155,22 +143,12 @@ inline float markerDepthAtFragment(float4 fragmentPosition,
 inline bool sampleReachedMarker(FragmentUniforms uniforms,
                                 float3 sampleNormCoords,
                                 float markerDepth) {
-#if VOLUME_SHADER_REVERSED_DEPTH
   if (markerDepth <= 0.0) {
     return false;
   }
-#else
-  if (markerDepth >= 1.0) {
-    return false;
-  }
-#endif
   float4 clip = uniforms.textureToClip * float4(sampleNormCoords, 1.0);
   float sampleDepth = clip.z / clip.w;
-#if VOLUME_SHADER_REVERSED_DEPTH
   return sampleDepth <= markerDepth + 0.00001;
-#else
-  return sampleDepth >= markerDepth - 0.00001;
-#endif
 }
 #else
 inline float markerDepthAtFragment(float4 fragmentPosition, uint layerIndex) {

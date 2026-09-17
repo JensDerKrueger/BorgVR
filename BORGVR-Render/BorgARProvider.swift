@@ -1,6 +1,7 @@
 import ARKit
 import RealityKit
 import CompositorServices
+import GameController
 import simd
 
 public struct BorgAnchorSample {
@@ -10,6 +11,12 @@ public struct BorgAnchorSample {
   public let worldAnchor: WorldAnchor?
 }
 
+struct BorgSpatialStylusSample {
+  let tipPosition: SIMD3<Float>
+  let isDrawing: Bool
+  let isAdjustingRadius: Bool
+}
+
 final class BorgARProvider {
 
   private let logger: LoggerBase?
@@ -17,6 +24,8 @@ final class BorgARProvider {
   let provider: WorldTrackingProvider
   private var updatesTask: Task<Void, Never>?
   private var sharingAvailabilityTask: Task<Void, Never>?
+  private var stylusConnectionTask: Task<Void, Never>?
+  private var stylusDisconnectionTask: Task<Void, Never>?
   private var isHost: Bool = false
 
   private(set) var currentWorldAnchor: WorldAnchor?
@@ -24,6 +33,8 @@ final class BorgARProvider {
   private var latestWorldAnchorTransform: simd_float4x4?
   private var worldAnchorCreationInProgress: Bool = false
   private var sharingIsAvailable: Bool = false
+  private var activeStylus: GCStylus?
+  private var accessoryTrackingProvider: AccessoryTrackingProvider?
 
   init(logger: LoggerBase?, groupSessionHost: Bool) {
     self.logger = logger
@@ -35,8 +46,12 @@ final class BorgARProvider {
   deinit {
     updatesTask?.cancel()
     sharingAvailabilityTask?.cancel()
+    stylusConnectionTask?.cancel()
+    stylusDisconnectionTask?.cancel()
     updatesTask = nil
     sharingAvailabilityTask = nil
+    stylusConnectionTask = nil
+    stylusDisconnectionTask = nil
     session.stop()
   }
 
@@ -71,6 +86,47 @@ final class BorgARProvider {
     )
   }
 
+  func getSpatialStylusSample(atTimestamp timestamp: TimeInterval) -> BorgSpatialStylusSample? {
+    let stylusState = stateQueue.sync {
+      (activeStylus, accessoryTrackingProvider)
+    }
+    guard let stylus = stylusState.0,
+          let accessoryTrackingProvider = stylusState.1,
+          accessoryTrackingProvider.state == .running,
+          let latestAnchor = accessoryTrackingProvider.latestAnchors.first else {
+      return nil
+    }
+
+    let anchor = accessoryTrackingProvider.predictAnchor(
+      for: latestAnchor,
+      at: timestamp
+    ) ?? latestAnchor
+    switch anchor.trackingState {
+      case .positionOrientationTracked, .positionOrientationTrackedLowAccuracy:
+        break
+      case .untracked, .orientationTracked:
+        return nil
+      @unknown default:
+        return nil
+    }
+
+    let input = stylus.input
+    let tipPressed = input?.buttons[.stylusTip]?.pressedInput.isPressed ?? false
+    let primaryPressed = input?.buttons[.stylusPrimaryButton]?.pressedInput.isPressed ?? false
+    let secondaryPressed = input?.buttons[.stylusSecondaryButton]?.pressedInput.isPressed ?? false
+    let isDrawing = tipPressed || secondaryPressed
+
+    let tipTransform = anchor.coordinateSpace(
+      for: .aim,
+      correction: .rendered
+    ).ancestorFromSpaceTransformFloat()
+    return BorgSpatialStylusSample(
+      tipPosition: tipTransform.translation.vector,
+      isDrawing: isDrawing,
+      isAdjustingRadius: !isDrawing && primaryPressed
+    )
+  }
+
   // MARK: - Session
 
   @MainActor
@@ -79,9 +135,21 @@ final class BorgARProvider {
     latestWorldAnchorTransform = nil
     worldAnchorCreationInProgress = false
     do {
-      try await session.run([provider])
+      if let stylus = GCStylus.styli.first(where: {
+        $0.productCategory == GCProductCategorySpatialStylus
+      }) {
+        do {
+          try await activateSpatialStylus(stylus)
+        } catch {
+          logger?.warning("Spatial stylus is unavailable: \(error)")
+          try await session.run([provider])
+        }
+      } else {
+        try await session.run([provider])
+      }
       startWorldAnchorListener()
       startSharingAvailabilityListener()
+      startSpatialStylusListeners()
     } catch {
       logger?.error("ARSession failed to start: \(error)")
       fatalError("Failed to initialize ARSession")
@@ -91,11 +159,89 @@ final class BorgARProvider {
   public func stopARSession() {
     updatesTask?.cancel()
     sharingAvailabilityTask?.cancel()
+    stylusConnectionTask?.cancel()
+    stylusDisconnectionTask?.cancel()
 
     currentWorldAnchor = nil
     latestWorldAnchorTransform = nil
     worldAnchorCreationInProgress = false
     sharingIsAvailable = false
+    stateQueue.sync {
+      activeStylus = nil
+      accessoryTrackingProvider = nil
+    }
+    session.stop()
+  }
+
+  @MainActor
+  private func activateSpatialStylus(_ stylus: GCStylus) async throws {
+    guard stylus.productCategory == GCProductCategorySpatialStylus else {
+      return
+    }
+    if stateQueue.sync(execute: { activeStylus === stylus }) {
+      return
+    }
+
+    let accessory = try await Accessory(device: stylus)
+    let accessoryProvider = AccessoryTrackingProvider(accessories: [accessory])
+    try await session.run([provider, accessoryProvider])
+    stateQueue.sync {
+      activeStylus = stylus
+      accessoryTrackingProvider = accessoryProvider
+    }
+    logger?.info("Spatial stylus connected: \(stylus.vendorName ?? stylus.productCategory)")
+  }
+
+  @MainActor
+  private func deactivateSpatialStylus(_ stylus: GCStylus) async {
+    guard stateQueue.sync(execute: { activeStylus === stylus }) else {
+      return
+    }
+    do {
+      try await session.run([provider])
+      logger?.info("Spatial stylus disconnected")
+    } catch {
+      logger?.error("Failed to stop spatial stylus tracking: \(error)")
+    }
+    stateQueue.sync {
+      activeStylus = nil
+      accessoryTrackingProvider = nil
+    }
+  }
+
+  @MainActor
+  private func startSpatialStylusListeners() {
+    stylusConnectionTask?.cancel()
+    stylusDisconnectionTask?.cancel()
+
+    stylusConnectionTask = Task { @MainActor [weak self] in
+      for await notification in NotificationCenter.default.notifications(
+        named: .GCStylusDidConnect
+      ) {
+        guard let self,
+              let stylus = notification.object as? GCStylus,
+              stylus.productCategory == GCProductCategorySpatialStylus else {
+          continue
+        }
+        do {
+          try await self.activateSpatialStylus(stylus)
+        } catch {
+          self.logger?.error("Failed to start spatial stylus tracking: \(error)")
+        }
+      }
+    }
+
+    stylusDisconnectionTask = Task { @MainActor [weak self] in
+      for await notification in NotificationCenter.default.notifications(
+        named: .GCStylusDidDisconnect
+      ) {
+        guard let self,
+              let stylus = notification.object as? GCStylus else {
+          continue
+        }
+        await self.deactivateSpatialStylus(stylus)
+      }
+    }
   }
 
   // MARK: - World anchor management (async)

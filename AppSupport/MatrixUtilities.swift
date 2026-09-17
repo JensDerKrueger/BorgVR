@@ -25,11 +25,11 @@ func matrixRotation(radians: Float, axis: SIMD3<Float>) -> simd_float4x4 {
 func matrixPerspective(fovyRadians: Float, aspect: Float, nearZ: Float, farZ: Float) -> simd_float4x4 {
   let y = 1 / tan(fovyRadians * 0.5)
   let x = y / aspect
-  let z = farZ / (nearZ - farZ)
+  let z = nearZ / (farZ - nearZ)
   return simd_float4x4(
     SIMD4<Float>(x, 0, 0, 0),
     SIMD4<Float>(0, y, 0, 0),
     SIMD4<Float>(0, 0, z, -1),
-    SIMD4<Float>(0, 0, z * nearZ, 0)
+    SIMD4<Float>(0, 0, z * farZ, 0)
   )
 }

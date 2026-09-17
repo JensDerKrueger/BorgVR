@@ -149,7 +149,9 @@ final class ScreenVolumeMarkerRenderer {
   private var markerDepthState: MTLDepthStencilState?
   private var compositeDepthState: MTLDepthStencilState?
   private var sphereBuffer: MTLBuffer?
+  private var sphereNormalBuffer: MTLBuffer?
   private var sphereVertexCount = 0
+  private let tubeMeshCache = VolumeMarkerTubeMeshCache()
   private var colorTexture: MTLTexture?
   private var depthTexture: MTLTexture?
 
@@ -163,7 +165,7 @@ final class ScreenVolumeMarkerRenderer {
 
     if markerDepthState == nil {
       let descriptor = MTLDepthStencilDescriptor()
-      descriptor.depthCompareFunction = .less
+      descriptor.depthCompareFunction = .greater
       descriptor.isDepthWriteEnabled = true
       markerDepthState = device.makeDepthStencilState(descriptor: descriptor)
     }
@@ -173,7 +175,7 @@ final class ScreenVolumeMarkerRenderer {
       descriptor.isDepthWriteEnabled = true
       compositeDepthState = device.makeDepthStencilState(descriptor: descriptor)
     }
-    if sphereBuffer == nil {
+    if sphereBuffer == nil || sphereNormalBuffer == nil {
       let sphere = Tesselation.genSphere(
         center: .zero,
         radius: 1,
@@ -186,7 +188,13 @@ final class ScreenVolumeMarkerRenderer {
         length: MemoryLayout<SIMD3<Float>>.stride * sphere.vertices.count,
         options: .storageModeShared
       )
+      sphereNormalBuffer = device.makeBuffer(
+        bytes: sphere.normals,
+        length: MemoryLayout<SIMD3<Float>>.stride * sphere.normals.count,
+        options: .storageModeShared
+      )
       sphereBuffer?.label = "Screen Volume Marker Sphere"
+      sphereNormalBuffer?.label = "Screen Volume Marker Sphere Normals"
     }
   }
 
@@ -207,7 +215,8 @@ final class ScreenVolumeMarkerRenderer {
           drawableSize.height >= 1,
           let markerPipeline,
           let markerDepthState,
-          let sphereBuffer else {
+          let sphereBuffer,
+          let sphereNormalBuffer else {
       return nil
     }
     guard let targets = targets(
@@ -227,7 +236,7 @@ final class ScreenVolumeMarkerRenderer {
     descriptor.depthAttachment.texture = targets.depth
     descriptor.depthAttachment.loadAction = .clear
     descriptor.depthAttachment.storeAction = .store
-    descriptor.depthAttachment.clearDepth = 1
+    descriptor.depthAttachment.clearDepth = 0
 
     guard let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: descriptor) else {
       return nil
@@ -242,32 +251,88 @@ final class ScreenVolumeMarkerRenderer {
       offset: 0,
       index: VertexBufferIndex.meshPositions.rawValue
     )
+    encoder.setVertexBuffer(sphereNormalBuffer, offset: 0, index: 24)
 
     var viewProjection = viewProjection
     var eyePosition = eyePosition
     encoder.setVertexBytes(&viewProjection, length: MemoryLayout<simd_float4x4>.stride, index: 20)
     encoder.setVertexBytes(&eyePosition, length: MemoryLayout<SIMD3<Float>>.stride, index: 22)
 
-    for marker in markers {
-      for point in marker.points {
-        let volumePosition = simd_make_float3(
-          volumeScale * SIMD4<Float>(point.position - SIMD3<Float>(repeating: 0.5), 1)
+    let coordinateScale = SIMD3<Float>(
+      volumeScale.columns.0.x,
+      volumeScale.columns.1.y,
+      volumeScale.columns.2.z
+    )
+    tubeMeshCache.retainOnly(markerIDs: Set(markers.map(\.id)))
+
+    func markerColor(_ marker: VolumeMarker) -> SIMD4<Float> {
+      var color = marker.color
+      if marker.id == selectedMarkerID {
+        color = SIMD4<Float>(
+          min(color.x + 0.25, 1),
+          min(color.y + 0.25, 1),
+          min(color.z + 0.25, 1),
+          color.w
         )
-        var markerModel = modelMatrix *
-          matrixTranslation(volumePosition) *
-          matrixScale(SIMD3<Float>(repeating: point.radius))
-        var color = marker.color
-        if marker.id == selectedMarkerID {
-          color = SIMD4<Float>(
-            min(color.x + 0.25, 1),
-            min(color.y + 0.25, 1),
-            min(color.z + 0.25, 1),
-            color.w
-          )
-        }
-        encoder.setVertexBytes(&markerModel, length: MemoryLayout<simd_float4x4>.stride, index: 21)
-        encoder.setFragmentBytes(&color, length: MemoryLayout<SIMD4<Float>>.stride, index: 23)
-        encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: sphereVertexCount)
+      }
+      return color
+    }
+
+    func drawSphere(_ point: VolumeMarkerPoint, color: SIMD4<Float>) {
+      var color = color
+      let volumePosition = simd_make_float3(
+        volumeScale * SIMD4<Float>(point.position - SIMD3<Float>(repeating: 0.5), 1)
+      )
+      var markerModel = modelMatrix *
+        matrixTranslation(volumePosition) *
+        matrixScale(SIMD3<Float>(repeating: point.radius))
+      encoder.setVertexBuffer(sphereBuffer, offset: 0, index: VertexBufferIndex.meshPositions.rawValue)
+      encoder.setVertexBuffer(sphereNormalBuffer, offset: 0, index: 24)
+      encoder.setVertexBytes(&markerModel, length: MemoryLayout<simd_float4x4>.stride, index: 21)
+      encoder.setFragmentBytes(&color, length: MemoryLayout<SIMD4<Float>>.stride, index: 23)
+      encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: sphereVertexCount)
+    }
+
+    for marker in markers {
+      var color = markerColor(marker)
+      switch marker.geometry {
+        case .sphere(let point):
+          drawSphere(point, color: color)
+        case .stroke(let points):
+          if let mesh = tubeMeshCache.mesh(
+            for: marker,
+            coordinateScale: coordinateScale,
+            device: device
+          ) {
+            var markerModel = modelMatrix
+            encoder.setVertexBuffer(
+              mesh.positionBuffer,
+              offset: 0,
+              index: VertexBufferIndex.meshPositions.rawValue
+            )
+            encoder.setVertexBuffer(mesh.normalBuffer, offset: 0, index: 24)
+            encoder.setVertexBytes(
+              &markerModel,
+              length: MemoryLayout<simd_float4x4>.stride,
+              index: 21
+            )
+            encoder.setFragmentBytes(
+              &color,
+              length: MemoryLayout<SIMD4<Float>>.stride,
+              index: 23
+            )
+            encoder.drawPrimitives(
+              type: .triangle,
+              vertexStart: 0,
+              vertexCount: mesh.vertexCount
+            )
+          }
+          if let first = points.first {
+            drawSphere(first, color: color)
+          }
+          if points.count > 1, let last = points.last {
+            drawSphere(last, color: color)
+          }
       }
     }
     encoder.endEncoding()

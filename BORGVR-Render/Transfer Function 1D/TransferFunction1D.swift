@@ -1,4 +1,5 @@
 import CryptoKit
+import Foundation
 import Metal
 
 /**
@@ -30,6 +31,20 @@ enum TransferFunction1DError: Error, LocalizedError {
 @Observable
 #endif
 class TransferFunction1D: Equatable {
+  struct SmoothStepOperation: Sendable {
+    let start: Float
+    let shift: Float
+    let channels: [Int]
+    let reverse: Bool
+
+    init(start: Float, shift: Float, channels: [Int], reverse: Bool = false) {
+      self.start = start
+      self.shift = shift
+      self.channels = channels
+      self.reverse = reverse
+    }
+  }
+
   private static let fileMagic = [UInt8]("BTF1".utf8)
   private static let fileVersion: UInt32 = 2
   static let defaultEntryCount = 4096
@@ -40,6 +55,8 @@ class TransferFunction1D: Equatable {
 
   /// The transfer function data represented as an array of RGBA values.
   private(set) var data: [SIMD4<UInt8>]
+  /// Incremented whenever the sample data changes so views can redraw without hashing the array.
+  private(set) var revision: UInt64 = 0
 
   /// The minimum index with a non-zero alpha value.
   private(set) var minIndex: Int = -1
@@ -53,8 +70,17 @@ class TransferFunction1D: Equatable {
 
   /// The Metal texture used for rendering the transfer function.
   private var texture: MTLTexture?
+  /// Indicates that the existing Metal texture needs new sample data.
+  private var textureNeedsUpload = true
   /// The Metal device used to create the texture.
   private var device: MTLDevice?
+  /// Serial worker that coalesces expensive interactive TF updates.
+  private let smoothStepQueue = DispatchQueue(
+    label: "TransferFunction1D.smoothStep",
+    qos: .userInitiated
+  )
+  private let smoothStepGenerationLock = NSLock()
+  private var smoothStepGeneration: UInt64 = 0
 
   /**
    Initializes a new TransferFunction1D with the specified bin count
@@ -75,9 +101,11 @@ class TransferFunction1D: Equatable {
    */
   init(copyFrom other: TransferFunction1D) {
     self.data = other.data
+    self.revision = other.revision
     self.minIndex = other.minIndex
     self.maxIndex = other.maxIndex
     self.texture = nil
+    self.textureNeedsUpload = true
     self.device = nil
     self.bias = other.bias
     self.textureBias = other.textureBias
@@ -308,16 +336,100 @@ class TransferFunction1D: Equatable {
    - reverse: If true, the smooth step function is reversed. Defaults to false.
    */
   func smoothStep(start: Float, shift: Float, channels: [Int], reverse: Bool = false) {
-    let invFact1: Float = reverse ? -1.0 : 1.0
-    let invFact2: Float = reverse ? 1.0 : 0.0
-    for i in 0..<data.count {
-      let f = Float(i) / Float(data.count - 1)
-      let v = (shift == 0) ? 1.0 : clamp((f - start) / shift, 0.0, 1.0)
-      for channel in channels {
-        data[i][channel] = UInt8(clamp(invFact1 * (Float(v * v * (3 - 2 * v)) - invFact2)) * 255)
+    let operation = SmoothStepOperation(
+      start: start,
+      shift: shift,
+      channels: channels,
+      reverse: reverse
+    )
+    guard let result = Self.applyingSmoothSteps([operation], to: data) else { return }
+    applySmoothStepResult(result)
+  }
+
+  /// Calculates interactive smooth-step changes away from the UI thread. Only the newest
+  /// queued request is published, preventing stale drag events from building up.
+  func scheduleSmoothSteps(
+    _ operations: [SmoothStepOperation],
+    completion: (() -> Void)? = nil
+  ) {
+    guard !operations.isEmpty, data.count > 1 else { return }
+
+    let sourceData = data
+    let generation = smoothStepGenerationLock.withLock {
+      smoothStepGeneration &+= 1
+      return smoothStepGeneration
+    }
+
+    smoothStepQueue.async { [weak self] in
+      guard let self, self.isCurrentSmoothStepGeneration(generation),
+            let result = Self.applyingSmoothSteps(operations, to: sourceData) else {
+        return
+      }
+      guard self.isCurrentSmoothStepGeneration(generation) else { return }
+
+      DispatchQueue.main.async { [weak self] in
+        guard let self, self.isCurrentSmoothStepGeneration(generation) else { return }
+        self.applySmoothStepResult(result, invalidatePendingSmoothSteps: false)
+        completion?()
       }
     }
-    updateDataDependencies()
+  }
+
+  private static func applyingSmoothSteps(
+    _ operations: [SmoothStepOperation],
+    to sourceData: [SIMD4<UInt8>]
+  ) -> (data: [SIMD4<UInt8>], alphaChanged: Bool)? {
+    guard sourceData.count > 1 else { return nil }
+
+    var updatedData = sourceData
+    var alphaChanged = false
+    let denominator = Float(updatedData.count - 1)
+
+    for operation in operations {
+      var channelMask = 0
+      for channel in operation.channels where channel >= 0 && channel < 4 {
+        channelMask |= 1 << channel
+      }
+      guard channelMask != 0 else { continue }
+
+      alphaChanged = alphaChanged || channelMask & 8 != 0
+      let invFact1: Float = operation.reverse ? -1 : 1
+      let invFact2: Float = operation.reverse ? 1 : 0
+      for index in updatedData.indices {
+        let position = Float(index) / denominator
+        let normalized = operation.shift == 0
+          ? 1
+          : min(max((position - operation.start) / operation.shift, 0), 1)
+        let value = UInt8(
+          min(max(invFact1 * (
+            normalized * normalized * (3 - 2 * normalized) - invFact2
+          ), 0), 1) * 255
+        )
+        if channelMask & 1 != 0 { updatedData[index].x = value }
+        if channelMask & 2 != 0 { updatedData[index].y = value }
+        if channelMask & 4 != 0 { updatedData[index].z = value }
+        if channelMask & 8 != 0 { updatedData[index].w = value }
+      }
+    }
+
+    return (updatedData, alphaChanged)
+  }
+
+  private func applySmoothStepResult(
+    _ result: (data: [SIMD4<UInt8>], alphaChanged: Bool),
+    invalidatePendingSmoothSteps: Bool = true
+  ) {
+    data = result.data
+    updateDataDependencies(
+      recalculateAlphaRange: result.alphaChanged,
+      invalidatePendingSmoothSteps: invalidatePendingSmoothSteps
+    )
+  }
+
+  private func isCurrentSmoothStepGeneration(_ generation: UInt64) -> Bool {
+    smoothStepGenerationLock.withLock {
+      smoothStepGeneration == generation
+    }
   }
 
   func paintValue(at normalizedPosition: Float, value normalizedValue: Float, channels: [Int], radius: Int = 1) {
@@ -390,13 +502,25 @@ class TransferFunction1D: Equatable {
       throw TransferFunction1DError.mismatchedDataCount(expected: data.count, found: newData.count)
     }
     self.data = newData
+    updateDataDependencies()
     try transferDataToTexture()
   }
 
   /// Updates internal dependencies after data changes, including min/max indices and invalidates texture
-  func updateDataDependencies() {
-    updateMinMaxIndices()
-    self.texture = nil
+  func updateDataDependencies(
+    recalculateAlphaRange: Bool = true,
+    invalidatePendingSmoothSteps: Bool = true
+  ) {
+    if invalidatePendingSmoothSteps {
+      smoothStepGenerationLock.withLock {
+        smoothStepGeneration &+= 1
+      }
+    }
+    if recalculateAlphaRange {
+      updateMinMaxIndices()
+    }
+    textureNeedsUpload = true
+    revision &+= 1
   }
 
   /**
@@ -428,18 +552,18 @@ class TransferFunction1D: Equatable {
    transfer function data to the texture.
    */
   private func createTexture() throws {
-    if let device = self.device {
-      let descriptor = MTLTextureDescriptor()
-      descriptor.textureType = .type1D
-      descriptor.pixelFormat = .rgba8Unorm
-      descriptor.width = data.count
-      descriptor.usage = [.shaderRead]
-      descriptor.storageMode = .shared
-      self.texture = device.makeTexture(descriptor: descriptor)
-      try transferDataToTexture()
-    } else {
+    guard let device else {
       throw TransferFunction1DError.noDeviceSet
     }
+    let descriptor = MTLTextureDescriptor()
+    descriptor.textureType = .type1D
+    descriptor.pixelFormat = .rgba8Unorm
+    descriptor.width = data.count
+    descriptor.usage = [.shaderRead]
+    descriptor.storageMode = .shared
+    texture = device.makeTexture(descriptor: descriptor)
+    textureNeedsUpload = true
+    try transferDataToTexture()
   }
 
   /**
@@ -460,8 +584,10 @@ class TransferFunction1D: Equatable {
    - index: The texture index in the fragment shader.
    */
   func bind(to encoder: MTLRenderCommandEncoder, index: Int) throws {
-    if texture == nil {
+    if texture == nil || texture?.width != data.count {
       try createTexture()
+    } else if textureNeedsUpload {
+      try transferDataToTexture()
     }
     encoder.setFragmentTexture(texture, index: index)
   }
@@ -471,18 +597,26 @@ class TransferFunction1D: Equatable {
 
    If the texture is not already created, it attempts to create it.
    */
-  private func transferDataToTexture() throws{
-    if let texture = self.texture {
-      if texture.width != data.count {
-        try createTexture()
-      }
-
-      let wholeTexture = MTLRegionMake1D(0, data.count)
-      texture.replace(region: wholeTexture, mipmapLevel: 0, withBytes: data,
-                      bytesPerRow: data.count * MemoryLayout<SIMD4<UInt8>>.stride)
-    } else {
+  private func transferDataToTexture() throws {
+    if texture == nil || texture?.width != data.count {
       try createTexture()
+      return
     }
+
+    guard let texture else {
+      throw TransferFunction1DError.noDeviceSet
+    }
+    let wholeTexture = MTLRegionMake1D(0, data.count)
+    data.withUnsafeBytes { bytes in
+      guard let baseAddress = bytes.baseAddress else { return }
+      texture.replace(
+        region: wholeTexture,
+        mipmapLevel: 0,
+        withBytes: baseAddress,
+        bytesPerRow: data.count * MemoryLayout<SIMD4<UInt8>>.stride
+      )
+    }
+    textureNeedsUpload = false
   }
 
   /**

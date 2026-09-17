@@ -109,8 +109,12 @@ final actor Renderer {
   let cubeBuffer: MTLBuffer
   /// A buffer containing marker sphere vertex positions.
   let markerSphereBuffer: MTLBuffer
+  /// A buffer containing marker sphere normals.
+  let markerSphereNormalBuffer: MTLBuffer
   /// The number of vertices in the marker sphere buffer.
   let markerSphereVertexCount: Int
+  /// Cached tube meshes for stroke markers.
+  let markerTubeMeshCache: VolumeMarkerTubeMeshCache
   /// Color texture produced by the marker prepass.
   var markerColorTexture: MTLTexture?
   /// Depth texture produced by the marker prepass.
@@ -119,6 +123,16 @@ final actor Renderer {
   var rasterizationRateMapBuffer: MTLBuffer?
   /// The number of vertices in the cube buffer.
   let vertexCount: Int
+  /// Stroke currently created by a connected spatial stylus.
+  var activeSpatialStylusStrokeID: UUID?
+  /// Local-only preview sphere shown at the tracked stylus tip.
+  var spatialStylusPreviewPoint: VolumeMarkerPoint?
+  /// Initial state while the primary stylus button adjusts stroke radius.
+  var spatialStylusRadiusAdjustmentStart: (
+    position: SIMD3<Float>,
+    radius: Float,
+    hue: Float
+  )?
 
   /// The layer renderer used for rendering.
   let layerRenderer: LayerRenderer
@@ -206,6 +220,13 @@ final actor Renderer {
 
     self.autoRotationAngle = 0
     self.autoRotationStartTime = 0
+    self.activeSpatialStylusStrokeID = nil
+    self.spatialStylusPreviewPoint = nil
+    self.spatialStylusRadiusAdjustmentStart = nil
+    self.markerTubeMeshCache = VolumeMarkerTubeMeshCache()
+    self.sharedAppModel.defaultVolumeStrokeColor = SharedAppModel.saturatedStrokeColor(
+      preservingHueOf: storedAppModel.markerDefaultColorSIMD
+    )
 
     self.borgData = dataset
 
@@ -361,6 +382,17 @@ final actor Renderer {
     )!
     markerSphereBuffer.contents().copyMemory(
       from: alignedSphereVertices,
+      byteCount: sphereVertexDataSize
+    )
+    var alignedSphereNormals = sphere.normals
+    alignedSphereNormals.append(contentsOf: Array(
+      repeating: SIMD3<Float>(0, 1, 0), count: spherePaddingCount))
+    markerSphereNormalBuffer = self.device.makeBuffer(
+      length: sphereVertexDataSize,
+      options: [MTLResourceOptions.storageModeShared]
+    )!
+    markerSphereNormalBuffer.contents().copyMemory(
+      from: alignedSphereNormals,
       byteCount: sphereVertexDataSize
     )
     markerSphereVertexCount = sphere.vertices.count

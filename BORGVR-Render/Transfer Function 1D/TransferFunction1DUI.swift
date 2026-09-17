@@ -17,13 +17,13 @@ extension TransferFunction1D {
    - context: The GraphicsContext to draw in.
    - rect: The CGRect area where the curves will be drawn.
    */
-  func drawCurves(in context: GraphicsContext, rect: CGRect) {
+  func drawCurves(in context: GraphicsContext, rect: CGRect, maxSampleCount: Int? = nil) {
     let width = rect.width
     let height = rect.height
     let count = data.count
     guard count > 1 else { return }
 
-    let xSpacing = width / CGFloat(count - 1)
+    let renderedSampleCount = min(count, max(maxSampleCount ?? count, 2))
 
     var redPath = Path()
     var greenPath = Path()
@@ -31,9 +31,11 @@ extension TransferFunction1D {
     var whitePath = Path()
 
     let dashStyle: [CGFloat] = [3, 4]
-    for i in 0..<count {
-      let x = CGFloat(i) * xSpacing + rect.minX
-      let values = data[i]
+    for renderedIndex in 0..<renderedSampleCount {
+      let fraction = CGFloat(renderedIndex) / CGFloat(renderedSampleCount - 1)
+      let dataIndex = min(Int((fraction * CGFloat(count - 1)).rounded()), count - 1)
+      let x = fraction * width + rect.minX
+      let values = data[dataIndex]
 
       // Map each UInt8 (0...255) to a y coordinate in the rect.
       let redY   = rect.maxY - (CGFloat(values.x) / 255.0 * height)
@@ -46,7 +48,7 @@ extension TransferFunction1D {
       let bluePoint = CGPoint(x: x, y: blueY)
       let whitePoint = CGPoint(x: x, y: whiteY)
 
-      if i == 0 {
+      if renderedIndex == 0 {
         redPath.move(to: redPoint)
         greenPath.move(to: greenPoint)
         bluePath.move(to: bluePoint)

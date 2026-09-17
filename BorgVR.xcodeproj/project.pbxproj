@@ -93,6 +93,9 @@
 		57A001692E99000300000001 /* VolumeMarker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001682E99000300000001 /* VolumeMarker.swift */; };
 		57A0016A2E99000300000001 /* VolumeMarker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001682E99000300000001 /* VolumeMarker.swift */; };
 		57A0016B2E99000300000001 /* VolumeMarker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001682E99000300000001 /* VolumeMarker.swift */; };
+		57A0016D2E99000400000001 /* VolumeMarkerTubeMesh.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A0016C2E99000400000001 /* VolumeMarkerTubeMesh.swift */; };
+		57A0016E2E99000400000001 /* VolumeMarkerTubeMesh.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A0016C2E99000400000001 /* VolumeMarkerTubeMesh.swift */; };
+		57A0016F2E99000400000001 /* VolumeMarkerTubeMesh.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A0016C2E99000400000001 /* VolumeMarkerTubeMesh.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -158,6 +161,7 @@
 		57A001602E99000100000001 /* WebGPUShareLink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebGPUShareLink.swift; sourceTree = "<group>"; };
 		57A001642E99000200000001 /* RenderMode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RenderMode.swift; sourceTree = "<group>"; };
 		57A001682E99000300000001 /* VolumeMarker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VolumeMarker.swift; sourceTree = "<group>"; };
+		57A0016C2E99000400000001 /* VolumeMarkerTubeMesh.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VolumeMarkerTubeMesh.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -486,6 +490,7 @@
 				57A000292E70000200000001 /* VolumeAtlas.h */,
 				57A001272E70000300000001 /* VolumeRendererPipeline.swift */,
 				57A001682E99000300000001 /* VolumeMarker.swift */,
+				57A0016C2E99000400000001 /* VolumeMarkerTubeMesh.swift */,
 				57A0002A2E70000200000001 /* VolumeRaycaster.metal */,
 				57A0002B2E70000200000001 /* VisionInteractionShaders.metal */,
 			);
@@ -847,6 +852,7 @@
 				57A001502E70000300000001 /* TransferFunctionCatalog.swift in Sources */,
 				57A001372E70000300000001 /* VolumeRendererPipeline.swift in Sources */,
 				57A001692E99000300000001 /* VolumeMarker.swift in Sources */,
+				57A0016D2E99000400000001 /* VolumeMarkerTubeMesh.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -881,6 +887,7 @@
 				57A001512E70000300000001 /* TransferFunctionCatalog.swift in Sources */,
 				57A0013F2E70000300000001 /* VolumeRendererPipeline.swift in Sources */,
 				57A0016A2E99000300000001 /* VolumeMarker.swift in Sources */,
+				57A0016E2E99000400000001 /* VolumeMarkerTubeMesh.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -899,6 +906,7 @@
 				57A0014A2E70000300000001 /* WebServerCertificateControls.swift in Sources */,
 				57A001522E70000300000001 /* TransferFunctionCatalog.swift in Sources */,
 				57A0016B2E99000300000001 /* VolumeMarker.swift in Sources */,
+				57A0016F2E99000400000001 /* VolumeMarkerTubeMesh.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

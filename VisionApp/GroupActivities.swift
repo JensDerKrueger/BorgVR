@@ -29,6 +29,10 @@ class GroupActivityHelper {
   private weak var runtimeAppModel : RuntimeAppModel? = nil
   private weak var storedAppModel : StoredAppModel? = nil
   private var subscriptions = Set<AnyCancellable>()
+  private var pendingCommonState = false
+  private var pendingTransferFunction = false
+  private var pendingTransform = false
+  private var synchronizationTask: Task<Void, Never>?
   private var knownParticipants = Set<Participant>()
   private var startedActivityLocally = false
   private var localActivityStartDate: Date?
@@ -168,32 +172,79 @@ class GroupActivityHelper {
   }
 
   func synchronize(kind: SharedAppModel.UpdateKind) {
-    Task {
-      guard let sharedAppModel else { return }
-      do {
-        switch kind {
-          case .full:
-            try await sendData(
-              data: sharedAppModel.serializeCommonSharePlayState(includeTransferFunction: true),
-              of: .renderingUpdate
-            )
-            try await sendData(data: sharedAppModel.serializeVisionSharePlayTransform(), of: .renderingUpdate)
-          case .stateOnly:
-            try await sendData(
-              data: sharedAppModel.serializeCommonSharePlayState(includeTransferFunction: false),
-              of: .renderingUpdate
-            )
-          case .transformOnly:
-            try await sendData(data: sharedAppModel.serializeVisionSharePlayTransform(), of: .renderingUpdate)
-        }
-      } catch {
-        await runtimeAppModel?.logger
-          .error("Failed to send synchronize data to all participants: \(error)")
+    Task { @MainActor [weak self] in
+      self?.scheduleSynchronization(kind: kind)
+    }
+  }
+
+  func flushSynchronization() {
+    Task { @MainActor [weak self] in
+      guard let self, self.messenger != nil else { return }
+      self.synchronizationTask?.cancel()
+      self.synchronizationTask = nil
+      await self.flushPendingSynchronization()
+    }
+  }
+
+  @MainActor
+  private func scheduleSynchronization(kind: SharedAppModel.UpdateKind) {
+    guard messenger != nil else { return }
+
+    switch kind {
+      case .full:
+        pendingCommonState = true
+        pendingTransferFunction = true
+        pendingTransform = true
+      case .stateOnly:
+        pendingCommonState = true
+      case .transformOnly:
+        pendingTransform = true
+    }
+
+    guard synchronizationTask == nil else { return }
+    let delay: UInt64 = pendingTransferFunction ? 200_000_000 : 50_000_000
+    synchronizationTask = Task { @MainActor [weak self] in
+      try? await Task.sleep(nanoseconds: delay)
+      guard !Task.isCancelled else { return }
+      await self?.flushPendingSynchronization()
+    }
+  }
+
+  @MainActor
+  private func flushPendingSynchronization() async {
+    synchronizationTask = nil
+    guard let sharedAppModel, messenger != nil else { return }
+
+    let shouldSendCommonState = pendingCommonState
+    let shouldSendTransferFunction = pendingTransferFunction
+    let shouldSendTransform = pendingTransform
+    pendingCommonState = false
+    pendingTransferFunction = false
+    pendingTransform = false
+
+    do {
+      if shouldSendCommonState {
+        try await sendData(
+          data: sharedAppModel.serializeCommonSharePlayState(
+            includeTransferFunction: shouldSendTransferFunction
+          ),
+          of: .renderingUpdate
+        )
       }
+      if shouldSendTransform {
+        try await sendData(
+          data: sharedAppModel.serializeVisionSharePlayTransform(),
+          of: .renderingUpdate
+        )
+      }
+    } catch {
+      await runtimeAppModel?.logger
+        .error("Failed to send synchronize data to all participants: \(error)")
     }
   }
 
   func synchronizeMarkers() {
+    guard messenger != nil else { return }
     Task {
       guard let sharedAppModel else { return }
       do {
@@ -316,6 +367,11 @@ class GroupActivityHelper {
     groupSession = nil
     messenger = nil
     subscriptions.removeAll()
+    synchronizationTask?.cancel()
+    synchronizationTask = nil
+    pendingCommonState = false
+    pendingTransferFunction = false
+    pendingTransform = false
     knownParticipants.removeAll()
   }
 

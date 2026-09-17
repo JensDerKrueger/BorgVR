@@ -26,7 +26,6 @@ class ImmersiveInteraction {
   private var markerScaleID: UUID?
   private var markerScaleStartDistance: Float = 0
   private var markerScaleStartRadius: Float = 0.08
-  private var sessionDefaultMarkerRadius: Float = 0.08
   private var quickMarkerDragActive = false
   private var quickMarkerCandidateTime: Date?
   private var quickMarkerCandidatePosition: SIMD3<Float>?
@@ -402,7 +401,7 @@ class ImmersiveInteraction {
       id: UUID(),
       name: sharedAppModel.nextVolumeMarkerName(),
       position: position,
-      radius: sessionDefaultMarkerRadius,
+      radius: sharedAppModel.defaultVolumeMarkerRadius,
       color: storedAppModel.markerDefaultColorSIMD
     )
   }
@@ -516,7 +515,7 @@ class ImmersiveInteraction {
       maxMarkerRadius
     )
     sharedAppModel.volumeMarkers[markerIndex].radius = radius
-    sessionDefaultMarkerRadius = radius
+    sharedAppModel.defaultVolumeMarkerRadius = radius
     sharedAppModel.synchronizeMarkers()
 
     if events.contains(where: { $0.phase == .ended || $0.phase == .cancelled }) {
@@ -733,26 +732,30 @@ class ImmersiveInteraction {
           : clamp(0.08 + delta.y * 2, 0.01, 1)
         let channels = editableChannels(transferEditState)
         let colorChannels = channels.filter { $0 != 3 }
+        var operations: [TransferFunction1D.SmoothStepOperation] = []
         if !colorChannels.isEmpty {
-          sharedAppModel.transferFunction.smoothStep(
+          operations.append(.init(
             start: center - signedShift * 0.5,
             shift: signedShift,
             channels: colorChannels
-          )
+          ))
         }
         if channels.contains(3) {
           let alphaShift = abs(signedShift)
-          sharedAppModel.transferFunction.smoothStep(
+          operations.append(.init(
             start: center - alphaShift * 0.5,
             shift: alphaShift,
             channels: [3]
-          )
+          ))
         }
-        sharedAppModel.synchronize(kind: .full)
+        sharedAppModel.transferFunction.scheduleSmoothSteps(operations) {
+          self.sharedAppModel.synchronize(kind: .full)
+        }
         return true
 
       case .ended, .cancelled:
         if isEditingPanel {
+          sharedAppModel.flushSynchronization()
           transferFunctionPanelDragStart = nil
           transferFunctionPanelHandStart = nil
           transferFunctionPanelMarkerOpacity = 1

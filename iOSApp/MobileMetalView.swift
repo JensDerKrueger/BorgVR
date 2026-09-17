@@ -19,6 +19,7 @@ struct MobileMetalView: UIViewRepresentable {
     view.device = MTLCreateSystemDefaultDevice()
     view.colorPixelFormat = .bgra8Unorm_srgb
     view.depthStencilPixelFormat = .depth32Float
+    view.clearDepth = 0
     view.isOpaque = false
     view.backgroundColor = .clear
     view.layer.isOpaque = false

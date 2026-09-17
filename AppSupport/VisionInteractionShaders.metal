@@ -29,6 +29,7 @@ vertex VolumeMarkerVaryings vertexShaderVolumeMarker(
   uint vertexId [[vertex_id]],
   ushort ampId [[amplification_id]],
   device const Vertex* in [[buffer(VertexBufferIndexMeshPositions)]],
+  device const Vertex* normals [[buffer(24)]],
   constant float4x4 *mvpPerView [[buffer(20)]],
   constant float4x4 &modelMatrix [[buffer(21)]],
   constant float3 *eyePositionPerView [[buffer(22)]])
@@ -39,7 +40,7 @@ vertex VolumeMarkerVaryings vertexShaderVolumeMarker(
   VolumeMarkerVaryings out;
   out.position = mvpPerView[ampId] * world;
   out.worldPosition = world.xyz;
-  out.worldNormal = normalize((modelMatrix * float4(local, 0.0)).xyz);
+  out.worldNormal = normalize((modelMatrix * float4(normals[vertexId].position, 0.0)).xyz);
   out.eyePosition = eyePositionPerView[ampId];
   return out;
 }

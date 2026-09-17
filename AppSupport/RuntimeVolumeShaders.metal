@@ -11,7 +11,6 @@
 #define VOLUME_FRAGMENT_SHADER_BRICK_VIS_NAME volumeFragmentShaderBrickVis
 #define VOLUME_SHADER_USES_AMPLIFICATION 0
 #define VOLUME_SHADER_USES_MARKER_TEXTURES 1
-#define VOLUME_SHADER_REVERSED_DEPTH 0
 
 #include "VolumeRaycaster.metal"
 
@@ -25,6 +24,7 @@ struct ScreenVolumeMarkerVaryings {
 vertex ScreenVolumeMarkerVaryings screenVolumeMarkerVertex(
   uint vertexId [[vertex_id]],
   device const Vertex* vertices [[buffer(VertexBufferIndexMeshPositions)]],
+  device const Vertex* normals [[buffer(24)]],
   constant float4x4 &viewProjection [[buffer(20)]],
   constant float4x4 &modelMatrix [[buffer(21)]],
   constant float3 &eyePosition [[buffer(22)]])
@@ -35,7 +35,7 @@ vertex ScreenVolumeMarkerVaryings screenVolumeMarkerVertex(
   ScreenVolumeMarkerVaryings out;
   out.position = viewProjection * world;
   out.worldPosition = world.xyz;
-  out.worldNormal = normalize((modelMatrix * float4(local, 0.0)).xyz);
+  out.worldNormal = normalize((modelMatrix * float4(normals[vertexId].position, 0.0)).xyz);
   out.eyePosition = eyePosition;
   return out;
 }
@@ -81,7 +81,7 @@ fragment ScreenMarkerCompositeOut screenMarkerCompositeFragment(
 
   float depth = markerDepthTexture.read(pixel);
   float4 color = markerColorTexture.read(pixel);
-  if (depth >= 1.0 || color.a <= 0.0) {
+  if (depth <= 0.0 || color.a <= 0.0) {
     discard_fragment();
   }
 

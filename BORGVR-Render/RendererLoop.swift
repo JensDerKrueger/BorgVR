@@ -516,7 +516,7 @@ extension Renderer {
   private func drawVolumeMarkers(_ renderEncoder: MTLRenderCommandEncoder,
                                  drawable: LayerRenderer.Drawable) {
     let markers = sharedAppModel.volumeMarkers
-    guard !markers.isEmpty else {
+    guard !markers.isEmpty || spatialStylusPreviewPoint != nil else {
       return
     }
 
@@ -561,40 +561,107 @@ extension Renderer {
       offset: 0,
       index: VertexBufferIndex.meshPositions.rawValue
     )
+    renderEncoder.setVertexBuffer(markerSphereNormalBuffer, offset: 0, index: 24)
+
+    let coordinateScale = SIMD3<Float>(
+      volumeScale.columns.0.x,
+      volumeScale.columns.1.y,
+      volumeScale.columns.2.z
+    )
+    markerTubeMeshCache.retainOnly(markerIDs: Set(markers.map(\.id)))
+
+    func color(for marker: VolumeMarker) -> SIMD4<Float> {
+      guard marker.id == sharedAppModel.selectedVolumeMarkerID else {
+        return marker.color
+      }
+      return SIMD4<Float>(
+        min(marker.color.x + 0.25, 1),
+        min(marker.color.y + 0.25, 1),
+        min(marker.color.z + 0.25, 1),
+        marker.color.w
+      )
+    }
+
+    func drawSphere(_ point: VolumeMarkerPoint, color: SIMD4<Float>) {
+      let markerVolumePosition = simd_make_float3(
+        volumeScale * SIMD4<Float>(point.position - SIMD3<Float>(repeating: 0.5), 1.0)
+      )
+      var modelMatrix = lastUnscaledModelMatrix *
+        Transform(translation: markerVolumePosition).matrix *
+        Transform(scale: SIMD3<Float>(repeating: point.radius)).matrix
+      var color = color
+      renderEncoder.setVertexBuffer(
+        markerSphereBuffer,
+        offset: 0,
+        index: VertexBufferIndex.meshPositions.rawValue
+      )
+      renderEncoder.setVertexBuffer(markerSphereNormalBuffer, offset: 0, index: 24)
+      renderEncoder.setVertexBytes(
+        &modelMatrix,
+        length: MemoryLayout<simd_float4x4>.stride,
+        index: 21
+      )
+      renderEncoder.setFragmentBytes(
+        &color,
+        length: MemoryLayout<SIMD4<Float>>.stride,
+        index: 23
+      )
+      renderEncoder.drawPrimitives(
+        type: .triangle,
+        vertexStart: 0,
+        vertexCount: markerSphereVertexCount
+      )
+    }
 
     for marker in markers {
-      for point in marker.points {
-        let markerVolumePosition = simd_make_float3(
-          volumeScale * SIMD4<Float>(point.position - SIMD3<Float>(repeating: 0.5), 1.0)
-        )
-        var modelMatrix = lastUnscaledModelMatrix *
-          Transform(translation: markerVolumePosition).matrix *
-          Transform(scale: SIMD3<Float>(repeating: point.radius)).matrix
-        var markerColor = marker.color
-        if marker.id == sharedAppModel.selectedVolumeMarkerID {
-          markerColor = SIMD4<Float>(
-            min(markerColor.x + 0.25, 1),
-            min(markerColor.y + 0.25, 1),
-            min(markerColor.z + 0.25, 1),
-            markerColor.w
-          )
-        }
-        renderEncoder.setVertexBytes(
-          &modelMatrix,
-          length: MemoryLayout<simd_float4x4>.stride,
-          index: 21
-        )
-        renderEncoder.setFragmentBytes(
-          &markerColor,
-          length: MemoryLayout<SIMD4<Float>>.stride,
-          index: 23
-        )
-        renderEncoder.drawPrimitives(
-          type: .triangle,
-          vertexStart: 0,
-          vertexCount: markerSphereVertexCount
-        )
+      var markerColor = color(for: marker)
+      switch marker.geometry {
+        case .sphere(let point):
+          drawSphere(point, color: markerColor)
+
+        case .stroke(let points):
+          if let tubeMesh = markerTubeMeshCache.mesh(
+            for: marker,
+            coordinateScale: coordinateScale,
+            device: device
+          ) {
+            var modelMatrix = lastUnscaledModelMatrix
+            renderEncoder.setVertexBuffer(
+              tubeMesh.positionBuffer,
+              offset: 0,
+              index: VertexBufferIndex.meshPositions.rawValue
+            )
+            renderEncoder.setVertexBuffer(tubeMesh.normalBuffer, offset: 0, index: 24)
+            renderEncoder.setVertexBytes(
+              &modelMatrix,
+              length: MemoryLayout<simd_float4x4>.stride,
+              index: 21
+            )
+            renderEncoder.setFragmentBytes(
+              &markerColor,
+              length: MemoryLayout<SIMD4<Float>>.stride,
+              index: 23
+            )
+            renderEncoder.drawPrimitives(
+              type: .triangle,
+              vertexStart: 0,
+              vertexCount: tubeMesh.vertexCount
+            )
+          }
+          if let first = points.first {
+            drawSphere(first, color: markerColor)
+          }
+          if points.count > 1, let last = points.last {
+            drawSphere(last, color: markerColor)
+          }
       }
+    }
+
+    if let spatialStylusPreviewPoint {
+      drawSphere(
+        spatialStylusPreviewPoint,
+        color: sharedAppModel.defaultVolumeStrokeColor
+      )
     }
   }
 
@@ -659,6 +726,176 @@ extension Renderer {
     renderEncoder.popDebugGroup()
   }
 
+  private func finishSpatialStylusStroke() {
+    guard activeSpatialStylusStrokeID != nil else {
+      return
+    }
+    activeSpatialStylusStrokeID = nil
+    sharedAppModel.synchronizeMarkers()
+  }
+
+  private func updateSpatialStylusStroke(drawable: LayerRenderer.Drawable) {
+    let timestamp = LayerRenderer.Clock.Instant.epoch
+      .duration(to: drawable.frameTiming.trackableAnchorTime)
+      .timeInterval
+    guard let sample = borgARProvider.getSpatialStylusSample(atTimestamp: timestamp) else {
+      finishSpatialStylusStroke()
+      spatialStylusPreviewPoint = nil
+      spatialStylusRadiusAdjustmentStart = nil
+      return
+    }
+
+    let volumeFromOrigin = simd_inverse(lastUnscaledModelMatrix * volumeScale)
+    let local = volumeFromOrigin * SIMD4<Float>(sample.tipPosition, 1)
+    guard abs(local.w) > 0.000_001 else {
+      finishSpatialStylusStroke()
+      spatialStylusPreviewPoint = nil
+      spatialStylusRadiusAdjustmentStart = nil
+      return
+    }
+    let unclampedPosition = SIMD3<Float>(local.x, local.y, local.z) / local.w +
+      SIMD3<Float>(repeating: 0.5)
+    let position = simd_clamp(
+      unclampedPosition,
+      SIMD3<Float>(repeating: -8),
+      SIMD3<Float>(repeating: 8)
+    )
+
+    if sample.isAdjustingRadius {
+      finishSpatialStylusStroke()
+      if spatialStylusRadiusAdjustmentStart == nil {
+        let hsv = rgbToHSV(sharedAppModel.defaultVolumeStrokeColor)
+        spatialStylusRadiusAdjustmentStart = (
+          position: sample.tipPosition,
+          radius: sharedAppModel.defaultVolumeStrokeRadius,
+          hue: hsv.hue
+        )
+      }
+      if let start = spatialStylusRadiusAdjustmentStart {
+        let deviceUp = simd_normalize(SIMD3<Float>(
+          lastOriginFromDevice.columns.1.x,
+          lastOriginFromDevice.columns.1.y,
+          lastOriginFromDevice.columns.1.z
+        ))
+        let deviceRight = simd_normalize(SIMD3<Float>(
+          lastOriginFromDevice.columns.0.x,
+          lastOriginFromDevice.columns.0.y,
+          lastOriginFromDevice.columns.0.z
+        ))
+        let movement = sample.tipPosition - start.position
+        let verticalMovement = simd_dot(movement, deviceUp)
+        let horizontalMovement = simd_dot(movement, deviceRight)
+        sharedAppModel.defaultVolumeStrokeRadius = min(
+          0.25,
+          max(
+            SharedAppModel.minimumVolumeStrokeRadius,
+            start.radius * exp(verticalMovement * 8)
+          )
+        )
+        sharedAppModel.defaultVolumeStrokeColor = hsvToRGB(
+          hue: start.hue + horizontalMovement * 3,
+          saturation: 1,
+          value: 1
+        )
+      }
+      spatialStylusPreviewPoint = VolumeMarkerPoint(
+        position: position,
+        radius: sharedAppModel.defaultVolumeStrokeRadius
+      )
+      return
+    }
+
+    spatialStylusRadiusAdjustmentStart = nil
+    guard sample.isDrawing else {
+      finishSpatialStylusStroke()
+      spatialStylusPreviewPoint = VolumeMarkerPoint(
+        position: position,
+        radius: sharedAppModel.defaultVolumeStrokeRadius
+      )
+      return
+    }
+
+    spatialStylusPreviewPoint = nil
+    let point = VolumeMarkerPoint(
+      position: position,
+      radius: sharedAppModel.defaultVolumeStrokeRadius
+    )
+
+    if let activeSpatialStylusStrokeID,
+       let markerIndex = sharedAppModel.volumeMarkers.firstIndex(where: {
+         $0.id == activeSpatialStylusStrokeID
+       }) {
+      let modelScale = simd_abs(sharedAppModel.modelTransform.scale)
+      _ = sharedAppModel.volumeMarkers[markerIndex].appendStrokePoint(
+        point,
+        coordinateScale: SIMD3<Float>(
+          volumeScale.columns.0.x,
+          volumeScale.columns.1.y,
+          volumeScale.columns.2.z
+        ) * modelScale
+      )
+      return
+    }
+
+    let marker = VolumeMarker.stroke(
+      name: sharedAppModel.nextVolumeMarkerName(),
+      firstPoint: point,
+      color: sharedAppModel.defaultVolumeStrokeColor
+    )
+    sharedAppModel.volumeMarkers.append(marker)
+    sharedAppModel.selectedVolumeMarkerID = marker.id
+    activeSpatialStylusStrokeID = marker.id
+    sharedAppModel.synchronizeMarkers()
+  }
+
+  private func rgbToHSV(_ color: SIMD4<Float>) -> (
+    hue: Float,
+    saturation: Float,
+    value: Float
+  ) {
+    let maximum = max(color.x, color.y, color.z)
+    let minimum = min(color.x, color.y, color.z)
+    let delta = maximum - minimum
+    let saturation = maximum > 0 ? delta / maximum : 0
+    guard delta > 0.000_001 else {
+      return (0, saturation, maximum)
+    }
+
+    let hue: Float
+    if maximum == color.x {
+      hue = (color.y - color.z) / delta / 6
+    } else if maximum == color.y {
+      hue = ((color.z - color.x) / delta + 2) / 6
+    } else {
+      hue = ((color.x - color.y) / delta + 4) / 6
+    }
+    return (hue - floor(hue), saturation, maximum)
+  }
+
+  private func hsvToRGB(
+    hue: Float,
+    saturation: Float,
+    value: Float
+  ) -> SIMD4<Float> {
+    let wrappedHue = hue - floor(hue)
+    let sector = wrappedHue * 6
+    let index = Int(floor(sector)) % 6
+    let fraction = sector - floor(sector)
+    let p = value * (1 - saturation)
+    let q = value * (1 - saturation * fraction)
+    let t = value * (1 - saturation * (1 - fraction))
+    let rgb: SIMD3<Float>
+    switch index {
+      case 0: rgb = SIMD3<Float>(value, t, p)
+      case 1: rgb = SIMD3<Float>(q, value, p)
+      case 2: rgb = SIMD3<Float>(p, value, t)
+      case 3: rgb = SIMD3<Float>(p, q, value)
+      case 4: rgb = SIMD3<Float>(t, p, value)
+      default: rgb = SIMD3<Float>(value, p, q)
+    }
+    return SIMD4<Float>(rgb, 1)
+  }
+
   /**
    Renders a single frame. This function manages frame lifecycle, timing, command buffer setup,
    resource binding, and final drawing and presentation.
@@ -685,6 +922,7 @@ extension Renderer {
     self.updateDynamicBufferState()
 
     self.updateRenderState(drawable: drawable)
+    self.updateSpatialStylusStroke(drawable: drawable)
 
     let rasterizationRateMap = drawable.rasterizationRateMaps.first
     let markerTargets = renderVolumeMarkers(

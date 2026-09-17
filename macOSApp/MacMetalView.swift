@@ -36,6 +36,7 @@ struct MacMetalView: NSViewRepresentable {
     view.device = MTLCreateSystemDefaultDevice()
     view.colorPixelFormat = .bgra8Unorm_srgb
     view.depthStencilPixelFormat = .depth32Float
+    view.clearDepth = 0
     view.wantsLayer = true
     view.layer?.isOpaque = false
     view.layer?.backgroundColor = NSColor.clear.cgColor

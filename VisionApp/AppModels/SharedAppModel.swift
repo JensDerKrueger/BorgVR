@@ -11,6 +11,40 @@ import RealityKit
 */
 @Observable
 class SharedAppModel {
+  static let initialVolumeStrokeRadius: Float = 0.002
+  static let minimumVolumeStrokeRadius: Float = 0.0002
+
+  static func saturatedStrokeColor(preservingHueOf color: SIMD4<Float>) -> SIMD4<Float> {
+    let maximum = max(color.x, color.y, color.z)
+    let minimum = min(color.x, color.y, color.z)
+    let delta = maximum - minimum
+    let hue: Float
+    if delta <= 0.000_001 {
+      hue = 0
+    } else if maximum == color.x {
+      hue = (color.y - color.z) / delta / 6
+    } else if maximum == color.y {
+      hue = ((color.z - color.x) / delta + 2) / 6
+    } else {
+      hue = ((color.x - color.y) / delta + 4) / 6
+    }
+
+    let wrappedHue = hue - floor(hue)
+    let sector = wrappedHue * 6
+    let index = Int(floor(sector)) % 6
+    let fraction = sector - floor(sector)
+    let rgb: SIMD3<Float>
+    switch index {
+      case 0: rgb = SIMD3<Float>(1, fraction, 0)
+      case 1: rgb = SIMD3<Float>(1 - fraction, 1, 0)
+      case 2: rgb = SIMD3<Float>(0, 1, fraction)
+      case 3: rgb = SIMD3<Float>(0, 1 - fraction, 1)
+      case 4: rgb = SIMD3<Float>(fraction, 0, 1)
+      default: rgb = SIMD3<Float>(1, 0, 1 - fraction)
+    }
+    return SIMD4<Float>(rgb, 1)
+  }
+
   /// Current world transformation matrix.
   var originFromWorldAnchorMatrix: simd_float4x4
   /// Current model transform.
@@ -51,6 +85,12 @@ class SharedAppModel {
   var volumeMarkers: [VolumeMarker]
   /// Locally selected marker. This is intentionally not synchronized.
   var selectedVolumeMarkerID: UUID?
+  /// Radius used for markers created locally during the current dataset session.
+  var defaultVolumeMarkerRadius: Float
+  /// Radius used for stylus strokes; intentionally independent from sphere markers.
+  var defaultVolumeStrokeRadius: Float
+  /// Color used for stylus strokes; locally adjustable without changing sphere markers.
+  var defaultVolumeStrokeColor: SIMD4<Float>
 
   // Initialize after self is fully initialized to avoid using self too early.
   private var groupActivityHelper: GroupActivityHelper?
@@ -73,6 +113,9 @@ class SharedAppModel {
     purgeAtlas = false
     volumeMarkers = []
     selectedVolumeMarkerID = nil
+    defaultVolumeMarkerRadius = 0.08
+    defaultVolumeStrokeRadius = Self.initialVolumeStrokeRadius
+    defaultVolumeStrokeColor = SIMD4<Float>(1, 0, 0, 1)
     groupActivityHelper = GroupActivityHelper(self)
 
     reset()
@@ -88,6 +131,10 @@ class SharedAppModel {
 
   func synchronize(kind: UpdateKind) {
     groupActivityHelper?.synchronize(kind: kind)
+  }
+
+  func flushSynchronization() {
+    groupActivityHelper?.flushSynchronization()
   }
 
   func synchronizeMarkers() {
@@ -176,6 +223,9 @@ class SharedAppModel {
     purgeAtlas = false
     volumeMarkers = []
     selectedVolumeMarkerID = nil
+    defaultVolumeMarkerRadius = 0.08
+    defaultVolumeStrokeRadius = Self.initialVolumeStrokeRadius
+    defaultVolumeStrokeColor = SIMD4<Float>(1, 0, 0, 1)
   }
 
   func resetModel() {

@@ -14,8 +14,6 @@ struct TransferFunctionEditorView: View {
   /// Application settings for auto-load/save behavior.
   @EnvironmentObject var storedAppModel: StoredAppModel
 
-  /// Tracks the size of the drawing canvas for gesture translations.
-  @State private var canvasSize: CGSize = .zero
   /// Whether the file picker sheet for loading transfer functions is presented.
   @State private var showLoadFilePicker = false
 
@@ -43,7 +41,7 @@ struct TransferFunctionEditorView: View {
   /**
    Applies a drag gesture translation to the transfer function.
    */
-  private func applyDrag(_ value: DragGesture.Value) {
+  private func applyDrag(_ value: DragGesture.Value, canvasSize: CGSize) {
     // Normalize translation by canvas dimensions
     let dx = value.translation.width  / max(canvasSize.width,  1)
     let dy = value.translation.height / max(canvasSize.height, 1)
@@ -59,16 +57,24 @@ struct TransferFunctionEditorView: View {
     // Apply smooth-step to the transfer function data. RGB channels may invert;
     // opacity stays monotonic to avoid large brick-visibility churn while dragging.
     let colorChannels = channels.filter { $0 != 3 }
+    var operations: [TransferFunction1D.SmoothStepOperation] = []
     if !colorChannels.isEmpty {
-      sharedAppModel.transferFunction
-        .smoothStep(start: translationTF.x, shift: translationTF.y, channels: colorChannels)
+      operations.append(.init(
+        start: translationTF.x,
+        shift: translationTF.y,
+        channels: colorChannels
+      ))
     }
     if channels.contains(3) {
-      sharedAppModel.transferFunction
-        .smoothStep(start: translationTF.x, shift: abs(translationTF.y), channels: [3])
+      operations.append(.init(
+        start: translationTF.x,
+        shift: abs(translationTF.y),
+        channels: [3]
+      ))
     }
-
-    sharedAppModel.synchronize(kind: .full)
+    sharedAppModel.transferFunction.scheduleSmoothSteps(operations) {
+      self.sharedAppModel.synchronize(kind: .full)
+    }
   }
 
   // MARK: - View Body
@@ -81,37 +87,49 @@ struct TransferFunctionEditorView: View {
         .bold()
 
       // Drawing canvas with transfer function preview
-      ZStack {
-        Canvas { context, size in
-          // Update canvas size for gesture calculations
-          DispatchQueue.main.async { self.canvasSize = size }
+      GeometryReader { geometry in
+        ZStack {
+          Canvas { context, size in
+            // Draw ribbon and checkerboard background
+            let ribbonHeight: CGFloat = 20
+            let ribbonRect = CGRect(x: 0, y: 0, width: size.width, height: ribbonHeight)
+            sharedAppModel.transferFunction.drawCheckerboard(in: context, rect: ribbonRect)
+            sharedAppModel.transferFunction.drawRibbon(in: context, rect: ribbonRect)
 
-          // Draw ribbon and checkerboard background
-          let ribbonHeight: CGFloat = 20
-          let ribbonRect = CGRect(x: 0, y: 0, width: size.width, height: ribbonHeight)
-          sharedAppModel.transferFunction.drawCheckerboard(in: context, rect: ribbonRect)
-          sharedAppModel.transferFunction.drawRibbon(in: context, rect: ribbonRect)
+            // Draw grid and curves below the ribbon. Two samples per display point preserve
+            // the visible curve without constructing paths for all 65,536 possible entries.
+            let drawingRect = CGRect(
+              x: 0,
+              y: ribbonHeight,
+              width: size.width,
+              height: size.height - ribbonHeight - 5
+            )
+            sharedAppModel.transferFunction.drawGrid(in: context, rect: drawingRect)
+            sharedAppModel.transferFunction.drawCurves(
+              in: context,
+              rect: drawingRect,
+              maxSampleCount: max(Int(size.width.rounded(.up)) * 2, 2)
+            )
+          }
+          .background(Color(.systemGray6))
+          .border(Color.gray, width: 2)
+          .id(sharedAppModel.transferFunction.revision)
 
-          // Draw grid and curves below the ribbon
-          let drawingRect = CGRect(
-            x: 0,
-            y: ribbonHeight,
-            width: size.width,
-            height: size.height - ribbonHeight - 5
-          )
-          sharedAppModel.transferFunction.drawGrid(in: context, rect: drawingRect)
-          sharedAppModel.transferFunction.drawCurves(in: context, rect: drawingRect)
+          // Transparent layer to capture drag gestures
+          Color.clear
+            .contentShape(Rectangle())
+            .gesture(
+              DragGesture()
+                .onChanged { value in
+                  applyDrag(value, canvasSize: geometry.size)
+                }
+                .onEnded { _ in
+                  sharedAppModel.flushSynchronization()
+                }
+            )
         }
-        .frame(height: 400)
-        .background(Color(.systemGray6))
-        .border(Color.gray, width: 2)
-        .id(sharedAppModel.transferFunction.data.hashValue) // Force redraw on data change
-
-        // Transparent layer to capture drag gestures
-        Color.clear
-          .contentShape(Rectangle())
-          .gesture(DragGesture().onChanged(applyDrag))
       }
+      .frame(height: 400)
 
       Picker(
         "render_picker_title",

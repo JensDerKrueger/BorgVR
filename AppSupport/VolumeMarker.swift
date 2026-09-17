@@ -33,7 +33,8 @@ struct VolumeMarker: Identifiable, Equatable {
   var id: UUID
   var name: String
   var color: SIMD4<Float>
-  var geometry: VolumeMarkerGeometry
+  private(set) var geometry: VolumeMarkerGeometry
+  private var geometryCacheID = UUID()
 
   init(
     id: UUID,
@@ -110,12 +111,14 @@ struct VolumeMarker: Identifiable, Equatable {
     geometry = geometry.mapPoints { point in
       VolumeMarkerPoint(position: point.position + offset, radius: point.radius)
     }
+    geometryCacheID = UUID()
   }
 
   mutating func scaleRadii(by factor: Float) {
     geometry = geometry.mapPoints { point in
       VolumeMarkerPoint(position: point.position, radius: point.radius * factor)
     }
+    geometryCacheID = UUID()
   }
 
   @discardableResult
@@ -137,7 +140,17 @@ struct VolumeMarker: Identifiable, Equatable {
     }
     points.append(point)
     geometry = .stroke(points)
+    geometryCacheID = UUID()
     return true
+  }
+
+  var meshCacheID: UUID { geometryCacheID }
+
+  static func == (lhs: VolumeMarker, rhs: VolumeMarker) -> Bool {
+    lhs.id == rhs.id &&
+      lhs.name == rhs.name &&
+      lhs.color == rhs.color &&
+      lhs.geometry == rhs.geometry
   }
 }
 
