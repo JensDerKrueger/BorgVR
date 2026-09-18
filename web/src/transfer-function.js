@@ -1,3 +1,9 @@
+import {
+  MAX_TRANSFER_FUNCTION_ENTRIES,
+  TRANSFER_FUNCTION_FILE_VERSION,
+  TRANSFER_FUNCTION_MAGIC
+} from "./format-constants.js?v=20260918-format-constants";
+
 export function createDefaultTransferFunction(binCount = 256) {
   const tf = new TransferFunction1D(binCount);
   tf.smoothStep(0.1, 0.3, [0, 1, 2, 3]);
@@ -136,10 +142,6 @@ export function transferFunctionRGBAData(buffer) {
       : new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength);
   return parseNativeTransferFunction(source).rgba;
 }
-
-const TRANSFER_FUNCTION_MAGIC = 0x31465442; // "BTF1" as little-endian UInt32
-const TRANSFER_FUNCTION_FILE_VERSION = 2;
-const MAX_TRANSFER_FUNCTION_ENTRIES = 1 << 16;
 
 function parseNativeTransferFunction(source) {
   const bytes = source instanceof Uint8Array ? source : new Uint8Array(source);

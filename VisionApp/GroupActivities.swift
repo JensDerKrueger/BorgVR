@@ -638,7 +638,7 @@ class GroupActivityHelper {
         configuration: BorgVRServerConfiguration(
           dataDirectory: "",
           port: port,
-          maxBricksPerGetRequest: 20,
+          maxBricksPerGetRequest: BorgVRSharedDefaults.maximumBricksPerRequest,
           authSecret: authToken,
           enableWebServer: storedAppModel?.enableWebServer ?? false,
           webPort: sharePlayWebPort(for: port),

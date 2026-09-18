@@ -240,18 +240,22 @@ struct VisionApp: App {
   }
 
   func quitApp() {
-    if runtimeAppModel.immersiveSpaceState == .open {
-      Task { @MainActor in
+    let renderTask = runtimeAppModel.cancelRenderLoop()
+    Task { @MainActor in
+      if runtimeAppModel.immersiveSpaceState == .open {
         await dismissImmersiveSpace()
       }
+      await renderTask?.value
+      runtimeAppModel.quitApp()
     }
-    runtimeAppModel.quitApp()
   }
 
   @MainActor
   private func openSpace() async {
     if runtimeAppModel.immersiveSpaceState == .open {
       runtimeAppModel.immersiveSpaceState = .inTransition
+      let renderTask = runtimeAppModel.cancelRenderLoop()
+      await renderTask?.value
       await dismissImmersiveSpace()
     }
 
@@ -274,6 +278,8 @@ struct VisionApp: App {
   @MainActor
   private func closeSpace() async {
     runtimeAppModel.immersiveSpaceState = .inTransition
+    let renderTask = runtimeAppModel.cancelRenderLoop()
+    await renderTask?.value
     await dismissImmersiveSpace()
     runtimeAppModel.immersiveSpaceIntent = .keepCurrent
     runtimeAppModel.currentState = .selectData

@@ -1,6 +1,27 @@
 import { CoordinateCubeRenderer } from "./cube-renderer.js?v=20260917-marker-types";
 import { decodeAppleLZ4, encodeLZ4Block } from "./lz4.js?v=20260911-urltf";
-import { transferFunctionRGBAData } from "./transfer-function.js?v=20260912-btf1";
+import {
+  MARKER_FILE_HEADER_BYTES,
+  MARKER_FILE_MAGIC,
+  MARKER_FILE_VERSION,
+  MARKER_POSITION_FALLBACK,
+  MARKER_POSITION_MAXIMUM,
+  MARKER_POSITION_MINIMUM,
+  MAX_MARKER_COUNT,
+  MAX_MARKER_FILE_BYTES,
+  MAX_MARKER_NAME_BYTES,
+  MAX_MARKER_NAME_CHARACTERS,
+  MAX_MARKER_POINT_COUNT,
+  MAX_TRANSFER_FUNCTION_ENTRIES,
+  MAX_TRANSFER_FUNCTION_FILE_BYTES,
+  SPHERE_RADIUS_DEFAULT,
+  SPHERE_RADIUS_MAXIMUM,
+  SPHERE_RADIUS_MINIMUM,
+  STROKE_RADIUS_DEFAULT,
+  STROKE_RADIUS_MAXIMUM,
+  STROKE_RADIUS_MINIMUM
+} from "./format-constants.js?v=20260918-format-constants";
+import { transferFunctionRGBAData } from "./transfer-function.js?v=20260918-format-constants";
 
 const catalogStatus = document.querySelector("#catalog-status");
 const datasetPanel = document.querySelector(".dataset-panel");
@@ -47,14 +68,7 @@ const RENDER_CONTROLS_COLLAPSED_SETTING = "borgvr.renderControlsCollapsed";
 const DATASET_PANEL_COLLAPSED_SETTING = "borgvr.datasetPanelCollapsed";
 const OPEN_UI_PANELS_SETTING = "borgvr.openUIPanels";
 const VALID_RENDER_MODES = new Set(["tf", "tf-lighting", "iso"]);
-const MAX_TRANSFER_FUNCTION_ENTRIES = 1 << 16;
-const MAX_TRANSFER_FUNCTION_RGBA_BYTES = MAX_TRANSFER_FUNCTION_ENTRIES * 4;
-const MAX_TRANSFER_FUNCTION_METADATA_BYTES = 64 * 1024;
-const MAX_TRANSFER_FUNCTION_URL_BYTES = MAX_TRANSFER_FUNCTION_RGBA_BYTES + MAX_TRANSFER_FUNCTION_METADATA_BYTES;
-const MAX_TRANSFER_FUNCTION_FILE_BYTES = MAX_TRANSFER_FUNCTION_RGBA_BYTES + MAX_TRANSFER_FUNCTION_METADATA_BYTES;
-const MAX_MARKER_FILE_BYTES = 64 * 1024 * 1024;
-const MAX_MARKER_COUNT = 100_000;
-const MAX_MARKER_POINT_COUNT = 1_000_000;
+const MAX_TRANSFER_FUNCTION_URL_BYTES = MAX_TRANSFER_FUNCTION_FILE_BYTES;
 
 let renderer = null;
 let currentManifest = null;
@@ -1026,7 +1040,7 @@ function parseMarkerFile(buffer) {
   };
   const readString = () => {
     const byteCount = readUint16();
-    if (byteCount > 512) {
+    if (byteCount > MAX_MARKER_NAME_BYTES) {
       throw new Error("A marker name exceeds the supported length.");
     }
     requireBytes(byteCount);
@@ -1035,12 +1049,12 @@ function parseMarkerFile(buffer) {
     return value;
   };
 
-  requireBytes(28);
+  requireBytes(MARKER_FILE_HEADER_BYTES);
   const magic = new TextDecoder("ascii").decode(bytes.subarray(0, 8));
   offset = 8;
   const version = readUint16();
   readUint16();
-  if (magic !== "BVRMARKR" || version !== 1) {
+  if (magic !== MARKER_FILE_MAGIC || version !== MARKER_FILE_VERSION) {
     throw new Error("The selected file is not a valid BorgVR marker file.");
   }
   const datasetID = readUUID();
@@ -1071,19 +1085,37 @@ function parseMarkerFile(buffer) {
       throw new Error(`Marker ${markerIndex + 1} has invalid or excessive geometry.`);
     }
     const points = [];
+    const radiusFallback = typeValue === 1 ? SPHERE_RADIUS_DEFAULT : STROKE_RADIUS_DEFAULT;
+    const radiusMinimum = typeValue === 1 ? SPHERE_RADIUS_MINIMUM : STROKE_RADIUS_MINIMUM;
+    const radiusMaximum = typeValue === 1 ? SPHERE_RADIUS_MAXIMUM : STROKE_RADIUS_MAXIMUM;
     for (let pointIndex = 0; pointIndex < pointCount; pointIndex += 1) {
       points.push({
         position: [
-          finiteClamped(readFloat32(), 0.5, -8, 8),
-          finiteClamped(readFloat32(), 0.5, -8, 8),
-          finiteClamped(readFloat32(), 0.5, -8, 8)
+          finiteClamped(
+            readFloat32(),
+            MARKER_POSITION_FALLBACK,
+            MARKER_POSITION_MINIMUM,
+            MARKER_POSITION_MAXIMUM
+          ),
+          finiteClamped(
+            readFloat32(),
+            MARKER_POSITION_FALLBACK,
+            MARKER_POSITION_MINIMUM,
+            MARKER_POSITION_MAXIMUM
+          ),
+          finiteClamped(
+            readFloat32(),
+            MARKER_POSITION_FALLBACK,
+            MARKER_POSITION_MINIMUM,
+            MARKER_POSITION_MAXIMUM
+          )
         ],
-        radius: finiteClamped(readFloat32(), 0.08, 0.005, 1)
+        radius: finiteClamped(readFloat32(), radiusFallback, radiusMinimum, radiusMaximum)
       });
     }
     markers.push({
       id,
-      name: (rawName || `Marker ${markerIndex + 1}`).slice(0, 80),
+      name: (rawName || `Marker ${markerIndex + 1}`).slice(0, MAX_MARKER_NAME_CHARACTERS),
       type: typeValue === 1 ? "sphere" : "stroke",
       color,
       points
@@ -1219,7 +1251,7 @@ function decodeTransferFunctionURLValue(value) {
 
   if (parts[0] === "d") {
     const count = Number(parts[1]);
-    if (!Number.isInteger(count) || count <= 0 || count * 4 > MAX_TRANSFER_FUNCTION_URL_BYTES) {
+    if (!Number.isInteger(count) || count <= 0 || count > MAX_TRANSFER_FUNCTION_ENTRIES) {
       throw new Error("Invalid transfer function entry count.");
     }
 

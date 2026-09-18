@@ -28,15 +28,6 @@ private enum DatasetScannerError: Error {
 }
 
 class DatasetScanner {
-  private static let transferFunctionMagic = [UInt8]("BTF1".utf8)
-  private static let transferFunctionFileVersion: UInt32 = 2
-  private static let maximumTransferFunctionEntryCount = 1 << 16
-  private static let maximumTransferFunctionDescriptionByteCount = 64 * 1024
-  private static let maximumMarkerFileByteCount = 64 * 1024 * 1024
-  private static let markerFileMagic = Data("BVRMARKR".utf8)
-  private static let markerFileVersion: UInt16 = 1
-  private static let markerFileHeaderByteCount = 32
-
   private var datasets: [DatasetInfo] = []
   private var transferFunctions: [TransferFunctionInfo] = []
   private var markerFiles: [MarkerFileInfo] = []
@@ -164,19 +155,20 @@ class DatasetScanner {
       let resourceValues = try url.resourceValues(forKeys: [.fileSizeKey])
       guard let byteCount = resourceValues.fileSize,
             byteCount > 0,
-            byteCount <= Self.maximumMarkerFileByteCount else {
+            byteCount <= BorgVRMarkerFormat.maximumFileByteCount else {
         throw DatasetScannerError.invalidMarkerFile
       }
       let data = try Data(contentsOf: url, options: .mappedIfSafe)
       guard data.count == byteCount,
-            data.count <= Self.maximumMarkerFileByteCount else {
+            data.count <= BorgVRMarkerFormat.maximumFileByteCount else {
         throw DatasetScannerError.invalidMarkerFile
       }
-      guard data.count >= Self.markerFileHeaderByteCount,
-            data.prefix(Self.markerFileMagic.count) == Self.markerFileMagic,
-            Self.readUInt16(from: data, at: 8) == Self.markerFileVersion,
+      let markerMagic = Data(BorgVRMarkerFormat.magicBytes)
+      guard data.count >= BorgVRMarkerFormat.headerByteCount,
+            data.prefix(markerMagic.count) == markerMagic,
+            Self.readUInt16(from: data, at: 8) == BorgVRMarkerFormat.version,
             let markerCount = Self.readUInt32(from: data, at: 28),
-            markerCount <= 100_000 else {
+            markerCount <= BorgVRMarkerFormat.maximumMarkerCount else {
         throw DatasetScannerError.invalidMarkerFile
       }
       let uuidBytes = Array(data[12..<28])
@@ -246,21 +238,25 @@ class DatasetScanner {
   }
 
   private static func parseTransferFunctionData(_ data: Data) throws -> (id: String, description: String) {
+    guard data.count <= BorgVRTransferFunctionFormat.maximumFileByteCount else {
+      throw DatasetScannerError.invalidTransferFunctionFile
+    }
     var cursor = 0
-    let hasExtendedHeader = data.count >= transferFunctionMagic.count &&
-      Array(data.prefix(transferFunctionMagic.count)) == transferFunctionMagic
+    let magic = BorgVRTransferFunctionFormat.magicBytes
+    let hasExtendedHeader = data.count >= magic.count &&
+      Array(data.prefix(magic.count)) == magic
 
     let description: String
     let count: UInt32
     if hasExtendedHeader {
-      cursor += transferFunctionMagic.count
+      cursor += magic.count
       let version = try readLittleEndianUInt32(from: data, cursor: &cursor)
-      guard version == transferFunctionFileVersion else {
+      guard version == BorgVRTransferFunctionFormat.version else {
         throw DatasetScannerError.invalidTransferFunctionFile
       }
       let descriptionByteCount = Int(try readLittleEndianUInt32(from: data, cursor: &cursor))
       count = try readLittleEndianUInt32(from: data, cursor: &cursor)
-      guard descriptionByteCount <= maximumTransferFunctionDescriptionByteCount else {
+      guard descriptionByteCount <= BorgVRTransferFunctionFormat.maximumDescriptionByteCount else {
         throw DatasetScannerError.invalidTransferFunctionFile
       }
       guard data.count >= cursor + descriptionByteCount else {
@@ -274,7 +270,7 @@ class DatasetScanner {
       description = ""
     }
 
-    guard count <= UInt32(maximumTransferFunctionEntryCount) else {
+    guard count <= UInt32(BorgVRTransferFunctionFormat.maximumEntryCount) else {
       throw DatasetScannerError.invalidTransferFunctionFile
     }
     let rgbaByteCount = Int(count) * MemoryLayout<SIMD4<UInt8>>.size
@@ -294,7 +290,16 @@ class DatasetScanner {
 
   private static func transferFunctionInfo(at url: URL, logger: LoggerBase?) -> TransferFunctionInfo? {
     do {
-      let fileData = try Data(contentsOf: url)
+      let resourceValues = try url.resourceValues(forKeys: [.fileSizeKey])
+      guard let byteCount = resourceValues.fileSize,
+            byteCount > 0,
+            byteCount <= BorgVRTransferFunctionFormat.maximumFileByteCount else {
+        throw DatasetScannerError.invalidTransferFunctionFile
+      }
+      let fileData = try Data(contentsOf: url, options: .mappedIfSafe)
+      guard fileData.count == byteCount else {
+        throw DatasetScannerError.invalidTransferFunctionFile
+      }
       let parsed = try parseTransferFunctionData(fileData)
       let fallbackDescription = url.deletingPathExtension().lastPathComponent
       let description = parsed.description.trimmingCharacters(in: .whitespacesAndNewlines)

@@ -185,7 +185,7 @@ struct MarkerView: View {
       isPresented: $showSaveFilePicker,
       document: VolumeMarkerDocument(datasetID: currentDatasetID, markers: sharedAppModel.volumeMarkers),
       contentType: .borgVRMarker,
-      defaultFilename: "BorgVR Markers.marker"
+      defaultFilename: BorgVRMarkerFormat.defaultFilename
     ) { result in
       if case let .failure(error) = result {
         markerFileError = error
@@ -264,7 +264,9 @@ struct MarkerView: View {
         guard let currentIndex = sharedAppModel.volumeMarkers.firstIndex(where: { $0.id == markerID }) else {
           return
         }
-        sharedAppModel.volumeMarkers[currentIndex].name = String(newName.prefix(80))
+        sharedAppModel.volumeMarkers[currentIndex].name = String(
+          newName.prefix(BorgVRMarkerFormat.maximumNameCharacterCount)
+        )
         sharedAppModel.synchronizeMarkers()
       }
     )

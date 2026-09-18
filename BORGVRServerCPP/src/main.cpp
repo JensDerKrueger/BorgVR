@@ -1,6 +1,7 @@
 #include "HTTPWebServer.h"
 #include "TCPServer.h"
 #include "BORGVRMetaData.h"
+#include "BorgVRFormatConstants.h"
 #include "Logger.h"
 #include "ServerSync.h"
 #include "Socket.h"
@@ -269,12 +270,13 @@ static std::string trimCopy(const std::string& text) {
 static bool parseTransferFunctionFile(const std::string& filename,
                                       TransferFunctionInfo& out,
                                       std::string& reason) {
-  constexpr size_t maximumTransferFunctionEntryCount = 1u << 16;
-  constexpr size_t maximumTransferFunctionDescriptionByteCount = 64u * 1024u;
-
   std::vector<uint8_t> bytes;
   if (!readFileBytes(filename, bytes)) {
     reason = "unable to read file";
+    return false;
+  }
+  if (bytes.size() > BorgVRFormat::kMaximumTransferFunctionFileBytes) {
+    reason = "file exceeds supported size";
     return false;
   }
   if (bytes.size() < 4) {
@@ -287,7 +289,11 @@ static bool parseTransferFunctionFile(const std::string& filename,
   uint32_t count = 0;
   const bool hasExtendedHeader =
     bytes.size() >= 4 &&
-    bytes[0] == 'B' && bytes[1] == 'T' && bytes[2] == 'F' && bytes[3] == '1';
+    std::equal(
+      BorgVRFormat::kTransferFunctionMagic.begin(),
+      BorgVRFormat::kTransferFunctionMagic.end(),
+      bytes.begin()
+    );
 
   if (hasExtendedHeader) {
     cursor = 4;
@@ -297,7 +303,7 @@ static bool parseTransferFunctionFile(const std::string& filename,
     }
     const uint32_t version = readU32LE(bytes, cursor);
     cursor += 4;
-    if (version != 2) {
+    if (version != BorgVRFormat::kTransferFunctionVersion) {
       reason = "unsupported transfer function version";
       return false;
     }
@@ -305,7 +311,7 @@ static bool parseTransferFunctionFile(const std::string& filename,
     cursor += 4;
     count = readU32LE(bytes, cursor);
     cursor += 4;
-    if (descriptionByteCount > maximumTransferFunctionDescriptionByteCount) {
+    if (descriptionByteCount > BorgVRFormat::kMaximumTransferFunctionDescriptionBytes) {
       reason = "description exceeds supported size";
       return false;
     }
@@ -320,7 +326,7 @@ static bool parseTransferFunctionFile(const std::string& filename,
     cursor += 4;
   }
 
-  if (static_cast<size_t>(count) > maximumTransferFunctionEntryCount) {
+  if (static_cast<size_t>(count) > BorgVRFormat::kMaximumTransferFunctionEntryCount) {
     reason = "transfer function sample count is too large";
     return false;
   }
@@ -421,11 +427,6 @@ static std::string formatUuid(const uint8_t* bytes) {
 static std::vector<MarkerFileInfo> scanMarkerDirectory(const std::string& directory,
                                                        std::shared_ptr<Logger> logger) {
   namespace fs = std::filesystem;
-  constexpr uintmax_t maximumMarkerFileBytes = 64u * 1024u * 1024u;
-  constexpr std::array<uint8_t, 8> markerFileMagic = {
-    'B', 'V', 'R', 'M', 'A', 'R', 'K', 'R'
-  };
-  constexpr size_t markerFileHeaderBytes = 32;
   std::vector<MarkerFileInfo> markerFiles;
   std::error_code ec;
   if (!fs::exists(directory, ec) || !fs::is_directory(directory, ec)) return markerFiles;
@@ -434,13 +435,13 @@ static std::vector<MarkerFileInfo> scanMarkerDirectory(const std::string& direct
     if (ec) break;
     if (!entry.is_regular_file(ec) || entry.path().extension() != ".marker") continue;
     const auto byteCount = entry.file_size(ec);
-    if (ec || byteCount == 0 || byteCount > maximumMarkerFileBytes) continue;
+    if (ec || byteCount == 0 || byteCount > BorgVRFormat::kMaximumMarkerFileBytes) continue;
     std::ifstream file(entry.path(), std::ios::binary);
     std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(file)),
                                std::istreambuf_iterator<char>());
-    if (bytes.size() != byteCount || bytes.size() > maximumMarkerFileBytes) continue;
-    const bool validMagic = bytes.size() >= markerFileHeaderBytes &&
-      std::equal(markerFileMagic.begin(), markerFileMagic.end(), bytes.begin());
+    if (bytes.size() != byteCount || bytes.size() > BorgVRFormat::kMaximumMarkerFileBytes) continue;
+    const bool validMagic = bytes.size() >= BorgVRFormat::kMarkerHeaderBytes &&
+      std::equal(BorgVRFormat::kMarkerMagic.begin(), BorgVRFormat::kMarkerMagic.end(), bytes.begin());
     const uint16_t version = validMagic
       ? static_cast<uint16_t>(bytes[8] | (static_cast<uint16_t>(bytes[9]) << 8))
       : 0;
@@ -450,7 +451,9 @@ static std::vector<MarkerFileInfo> scanMarkerDirectory(const std::string& direct
         (static_cast<uint32_t>(bytes[30]) << 16) |
         (static_cast<uint32_t>(bytes[31]) << 24)
       : 0;
-    if (!validMagic || version != 1 || markerCount > 100000) {
+    if (!validMagic ||
+        version != BorgVRFormat::kMarkerVersion ||
+        markerCount > BorgVRFormat::kMaximumMarkerCount) {
       if (logger) logger->warning("Unable to load marker file " + entry.path().string() + ": invalid header");
       continue;
     }

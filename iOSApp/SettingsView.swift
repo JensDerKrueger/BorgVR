@@ -564,7 +564,7 @@ struct SettingsView: View {
 
   private func beginAddingServer() {
     tempServerAddress = ""
-    tempPort = "12345"
+    tempPort = String(BorgVRSharedDefaults.datasetServerPort)
     tempServerPassword = ""
     addServerValidationMessage = nil
     serverConnectionTestResult = nil
@@ -573,7 +573,7 @@ struct SettingsView: View {
   }
 
   private func loadTemporaryValues() {
-    tempPort = "12345"
+    tempPort = String(BorgVRSharedDefaults.datasetServerPort)
     tempServerAddress = ""
     tempServerPassword = ""
     tempTimeout = String(appSettings.timeout)
@@ -679,7 +679,7 @@ struct SettingsView: View {
         appSettings.resetImportDefaults()
       case .remoteDatasets:
         appSettings.resetRemoteDefaults()
-        tempPort = "12345"
+        tempPort = String(BorgVRSharedDefaults.datasetServerPort)
         tempServerAddress = ""
         tempServerPassword = ""
       case .backgroundServer:

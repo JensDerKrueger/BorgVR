@@ -25,14 +25,11 @@ class ImmersiveInteraction {
   private var markerDragHandStart: SIMD3<Float>?
   private var markerScaleID: UUID?
   private var markerScaleStartDistance: Float = 0
-  private var markerScaleStartRadius: Float = 0.08
+  private var markerScaleStartRadius = VolumeMarkerRadius.sphereDefault
   private var quickMarkerDragActive = false
   private var quickMarkerCandidateTime: Date?
   private var quickMarkerCandidatePosition: SIMD3<Float>?
   private let quickMarkerMaxDistance: Float = 0.15
-  private let minMarkerRadius: Float = 0.005
-  private let maxMarkerRadius: Float = 1.0
-  private let maxMarkerCoordinate: Float = 8.0
 
   init(sharedAppModel: SharedAppModel,
        storedAppModel: StoredAppModel,
@@ -277,8 +274,8 @@ class ImmersiveInteraction {
     let inverseVolume = markerVolumeMatrix(for: datasetInfo).inverse
     return clamp(
       transformPoint(inverseVolume, worldPosition) + SIMD3<Float>(repeating: 0.5),
-      -maxMarkerCoordinate,
-       maxMarkerCoordinate
+      BorgVRMarkerFormat.positionRange.lowerBound,
+      BorgVRMarkerFormat.positionRange.upperBound
     )
   }
 
@@ -446,8 +443,8 @@ class ImmersiveInteraction {
           let localDelta = inverseVolume.transformDirection(handPosition - handStart)
           sharedAppModel.volumeMarkers[markerIndex].position = clamp(
             markerDragStartPosition + localDelta,
-            -maxMarkerCoordinate,
-             maxMarkerCoordinate
+            BorgVRMarkerFormat.positionRange.lowerBound,
+            BorgVRMarkerFormat.positionRange.upperBound
           )
           sharedAppModel.synchronizeMarkers()
         }
@@ -509,13 +506,17 @@ class ImmersiveInteraction {
       return
     }
 
-    let radius = clamp(
+    let markerKind = sharedAppModel.volumeMarkers[markerIndex].kind
+    let radius = VolumeMarkerRadius.clamp(
       markerScaleStartRadius * distance / markerScaleStartDistance,
-      minMarkerRadius,
-      maxMarkerRadius
+      for: markerKind
     )
     sharedAppModel.volumeMarkers[markerIndex].radius = radius
-    sharedAppModel.defaultVolumeMarkerRadius = radius
+    if markerKind == .sphere {
+      sharedAppModel.defaultVolumeMarkerRadius = radius
+    } else {
+      sharedAppModel.defaultVolumeStrokeRadius = radius
+    }
     sharedAppModel.synchronizeMarkers()
 
     if events.contains(where: { $0.phase == .ended || $0.phase == .cancelled }) {

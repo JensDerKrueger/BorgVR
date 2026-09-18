@@ -85,7 +85,7 @@ struct SettingsView: View {
   @EnvironmentObject private var storedAppModel: StoredAppModel
 
   @State private var serverAddress = ""
-  @State private var serverPort = "12345"
+  @State private var serverPort = String(BorgVRSharedDefaults.datasetServerPort)
   @State private var serverPassword = ""
   @State private var showDataDirectoryPicker = false
   @State private var pendingResetSection: SettingsResetSection?
@@ -644,14 +644,15 @@ struct SettingsView: View {
       case .lod:
         appSettings.resetLODDefaults(resetOversamplingThresholds: false)
       case .backgroundServer:
-        appSettings.maxBricksPerGetRequest = AppSettings.values["maxBricksPerGetRequest"] as? Int ?? 20
+        appSettings.maxBricksPerGetRequest = AppSettings.values["maxBricksPerGetRequest"] as? Int
+          ?? BorgVRSharedDefaults.maximumBricksPerRequest
         storedAppModel.resetBackgroundServerDefaults()
       case .adHocServer:
         storedAppModel.resetAdHocServerDefaults()
       case .externalDataSources:
         appSettings.servers = []
         serverAddress = ""
-        serverPort = "12345"
+        serverPort = String(BorgVRSharedDefaults.datasetServerPort)
         serverPassword = ""
       case .miscellaneous:
         appSettings.resetMiscDefaults()

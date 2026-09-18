@@ -571,14 +571,9 @@ extension Renderer {
     markerTubeMeshCache.retainOnly(markerIDs: Set(markers.map(\.id)))
 
     func color(for marker: VolumeMarker) -> SIMD4<Float> {
-      guard marker.id == sharedAppModel.selectedVolumeMarkerID else {
-        return marker.color
-      }
-      return SIMD4<Float>(
-        min(marker.color.x + 0.25, 1),
-        min(marker.color.y + 0.25, 1),
-        min(marker.color.z + 0.25, 1),
-        marker.color.w
+      VolumeMarkerPresentation.color(
+        for: marker,
+        isSelected: marker.id == sharedAppModel.selectedVolumeMarkerID
       )
     }
 
@@ -785,12 +780,9 @@ extension Renderer {
         let movement = sample.tipPosition - start.position
         let verticalMovement = simd_dot(movement, deviceUp)
         let horizontalMovement = simd_dot(movement, deviceRight)
-        sharedAppModel.defaultVolumeStrokeRadius = min(
-          0.25,
-          max(
-            SharedAppModel.minimumVolumeStrokeRadius,
-            start.radius * exp(verticalMovement * 8)
-          )
+        sharedAppModel.defaultVolumeStrokeRadius = VolumeMarkerRadius.clamp(
+          start.radius * exp(verticalMovement * 8),
+          for: .stroke
         )
         sharedAppModel.defaultVolumeStrokeColor = hsvToRGB(
           hue: start.hue + horizontalMovement * 3,
@@ -901,6 +893,7 @@ extension Renderer {
    resource binding, and final drawing and presentation.
    */
   func renderFrame() {
+    guard !Task.isCancelled, layerRenderer.state == .running else { return }
     guard let frame = layerRenderer.queryNextFrame() else { return }
 
     frame.startUpdate()
@@ -908,6 +901,10 @@ extension Renderer {
 
     guard let timing = frame.predictTiming() else { return }
     LayerRenderer.Clock().wait(until: timing.optimalInputTime)
+
+    // Closing an immersive space can happen while waiting for the predicted
+    // input time. Do not submit that now-obsolete frame to the GPU.
+    guard !Task.isCancelled, layerRenderer.state == .running else { return }
 
     let desc = MTLCommandBufferDescriptor()
     desc.errorOptions = .encoderExecutionStatus
@@ -917,6 +914,7 @@ extension Renderer {
     commandBuffer.label = "BorgVR Command Buffer"
 
     guard let drawable = frame.queryDrawables().first else { return }
+    guard !Task.isCancelled, layerRenderer.state == .running else { return }
 
     frame.startSubmission()
     self.updateDynamicBufferState()
@@ -1064,13 +1062,14 @@ extension Renderer {
    The main render loop. Handles immersive space state transitions and repeatedly calls `renderFrame()`.
    */
   func renderLoop() {
-    while true {
+    while !Task.isCancelled {
       if layerRenderer.state == .invalidated {
         Task { @MainActor in
           runtimeAppModel.immersiveSpaceState = .closed
         }
         return
       } else if layerRenderer.state == .paused {
+        guard !Task.isCancelled else { return }
         Task { @MainActor in
           runtimeAppModel.immersiveSpaceState = .inTransition
         }

@@ -267,7 +267,7 @@ struct SettingsView: View {
                 Text("settings_label_dataset_server_port")
                 Spacer()
                 TextField(
-                  "12345",
+                  String(BorgVRSharedDefaults.datasetServerPort),
                   value: $storedAppModel.serverPort,
                   formatter: portNumberFormatter
                 )
@@ -295,7 +295,7 @@ struct SettingsView: View {
                 Text("settings_label_webgpu_server_port")
                 Spacer()
                 TextField(
-                  "443",
+                  String(BorgVRSharedDefaults.webServerPort),
                   value: $storedAppModel.webServerPort,
                   formatter: portNumberFormatter
                 )
@@ -326,7 +326,7 @@ struct SettingsView: View {
               Text("settings_label_ad_hoc_webgpu_server_port")
               Spacer()
               TextField(
-                "444",
+                String(BorgVRSharedDefaults.sharePlayWebServerPort),
                 value: $storedAppModel.sharePlayWebServerPort,
                 formatter: portNumberFormatter
               )

@@ -246,6 +246,7 @@
 		564183972D649734003A1EC4 /* Exceptions for "BORGVR-IO" folder in "VisionApp" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
+				BorgVRSharedConstants.swift,
 				BORGVRDataBase.swift,
 				BORGVRFileData.swift,
 				BORGVRMetaData.swift,

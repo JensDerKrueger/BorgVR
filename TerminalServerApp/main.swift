@@ -3,8 +3,8 @@ import Foundation
 
 struct ServerConfiguration {
   var dataDirectory: String = FileManager.default.homeDirectoryForCurrentUser.path
-  var port: UInt16 = 12345
-  var maxBricksPerGetRequest: Int = 20
+  var port = UInt16(BorgVRSharedDefaults.datasetServerPort)
+  var maxBricksPerGetRequest = BorgVRSharedDefaults.maximumBricksPerRequest
   var password: String = ""
 }
 
@@ -14,8 +14,8 @@ Usage:
 
 Options:
   --directory, -d   Directory containing .data datasets. Defaults to the home directory.
-  --port, -p        TCP port to listen on. Defaults to 12345.
-  --max-bricks, -m  Maximum bricks per GETBRICKS request. Defaults to 20.
+  --port, -p        TCP port to listen on. Defaults to \(BorgVRSharedDefaults.datasetServerPort).
+  --max-bricks, -m  Maximum bricks per GETBRICKS request. Defaults to \(BorgVRSharedDefaults.maximumBricksPerRequest).
   --password        Optional server password. If omitted, the server accepts unauthenticated clients.
   --help, -h        Show this help.
 """

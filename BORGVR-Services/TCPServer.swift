@@ -2,7 +2,7 @@ import Network
 import Foundation
 
 class TCPServer {
-  static let protocolVersionName = "4"
+  static let protocolVersionName = BorgVRServerProtocol.currentVersionName
   private static let maxCommandLineBytes = 8 * 1024
   private static let maxCommandBufferBytes = maxCommandLineBytes * 4
   private static let maxActiveConnections = 128
@@ -90,7 +90,7 @@ class TCPServer {
         ),
         String(port)
       ))
-      if let p = NWEndpoint.Port(rawValue: 12345) {
+      if let p = NWEndpoint.Port(rawValue: UInt16(BorgVRSharedDefaults.datasetServerPort)) {
         self.port = p
       } else {
         logger?.error(L("tcpserver_error_invalid_port_default",

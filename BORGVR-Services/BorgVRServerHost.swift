@@ -174,7 +174,7 @@ final class BorgVRServerHost {
 }
 
 private enum StoredServerDefaults {
-  static let port = 12345
+  static let port = BorgVRSharedDefaults.datasetServerPort
   static let webPort = 8080
   static let useWebServerTLS = true
 }

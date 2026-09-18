@@ -89,7 +89,8 @@ extension Renderer {
                               isHost:Bool,
                               transferFunctionPanelInteractionState: TransferFunctionPanelInteractionState,
                               logger: LoggerBase? = nil) {
-    Task(executorPreference: RendererTaskExecutor.shared) {
+    runtimeAppModel.renderTask?.cancel()
+    runtimeAppModel.renderTask = Task(executorPreference: RendererTaskExecutor.shared) {
       do {
         let renderer = try Renderer(
           layerRenderer,
@@ -104,6 +105,7 @@ extension Renderer {
         )
 
         await renderer.initRenderLoop()
+        guard !Task.isCancelled else { return }
         await renderer.renderLoop()
       } catch {
         logger?.error("Failed to start render loop: \(error)")

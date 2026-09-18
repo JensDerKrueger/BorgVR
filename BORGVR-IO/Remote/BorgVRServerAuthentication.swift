@@ -4,7 +4,7 @@ import Network
 import Security
 
 enum BorgVRServerAuthentication {
-  static let protocolVersionName = "3"
+  static let protocolVersionName = BorgVRServerProtocol.authenticationMinimumVersionName
   static let nonceByteCount = 32
   static let saltByteCount = 16
 

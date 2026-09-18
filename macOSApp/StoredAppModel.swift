@@ -5,13 +5,13 @@ final class StoredAppModel : ObservableObject {
   private var activeDataDirectoryAccessURL: URL?
   private(set) var lastDataDirectoryAccessError: String?
 
-  static let defaultBrickSize: Int = 64
+  static let defaultBrickSize = BorgVRSharedDefaults.brickSize
   @AppStorage("brickSize") var brickSize: Int = defaultBrickSize
 
-  static let defaultBrickOverlap: Int = 2
+  static let defaultBrickOverlap = BorgVRSharedDefaults.brickOverlap
   @AppStorage("brickOverlap") var brickOverlap: Int = defaultBrickOverlap
 
-  static let defaultEnableCompression: Bool = true
+  static let defaultEnableCompression = BorgVRSharedDefaults.compressionEnabled
   @AppStorage("enableCompression") var enableCompression: Bool = defaultEnableCompression
 
   static let defaultLastMinute: Bool = false
@@ -23,22 +23,22 @@ final class StoredAppModel : ObservableObject {
   static let defaultEnableDatasetServer: Bool = false
   @AppStorage("enableDatasetServer") var enableDatasetServer: Bool = defaultEnableDatasetServer
 
-  static let defaultBorderModeString: String = "zeroes"
+  static let defaultBorderModeString = BorgVRSharedDefaults.borderMode
   @AppStorage("borderMode") var borderModeString: String = defaultBorderModeString
 
-  static let defaultPort: Int = 12345
+  static let defaultPort = BorgVRSharedDefaults.datasetServerPort
   @AppStorage("serverPort") var port: Int = defaultPort
 
   static let defaultServerPassword: String = ""
   @AppStorage("serverPassword") var serverPassword: String = defaultServerPassword
 
-  static let defaultSharePlayServerPort: Int = 12346
+  static let defaultSharePlayServerPort = BorgVRSharedDefaults.sharePlayServerPort
   @AppStorage("sharePlayServerPort") var sharePlayServerPort: Int = defaultSharePlayServerPort
 
   static let defaultEnableWebServer: Bool = false
   @AppStorage("enableWebServer") var enableWebServer: Bool = defaultEnableWebServer
 
-  static let defaultWebServerPort: Int = 443
+  static let defaultWebServerPort = BorgVRSharedDefaults.webServerPort
   @AppStorage("webServerPort") var webServerPort: Int = defaultWebServerPort
 
   static let defaultWebServerUsesTLS: Bool = true
@@ -47,10 +47,10 @@ final class StoredAppModel : ObservableObject {
   static let defaultWebServerCertificateData = Data()
   @AppStorage("webServerCertificateData") var webServerCertificateData: Data = defaultWebServerCertificateData
 
-  static let defaultSharePlayWebServerPort: Int = 444
+  static let defaultSharePlayWebServerPort = BorgVRSharedDefaults.sharePlayWebServerPort
   @AppStorage("sharePlayWebServerPort") var sharePlayWebServerPort: Int = defaultSharePlayWebServerPort
 
-  static let defaultMaxBricksPerGetRequest: Int = 20
+  static let defaultMaxBricksPerGetRequest = BorgVRSharedDefaults.maximumBricksPerRequest
   @AppStorage("maxBricksPerGetRequest") var maxBricksPerGetRequest: Int = defaultMaxBricksPerGetRequest
 
   static let defaultDataDirectory: String = FileManager.default.homeDirectoryForCurrentUser.path

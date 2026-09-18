@@ -242,7 +242,7 @@ struct RenderView: View {
       id: UUID(),
       name: appModel.nextVolumeMarkerName(),
       position: position,
-      radius: 0.08,
+      radius: VolumeMarkerRadius.sphereDefault,
       color: appModel.defaultVolumeMarkerColor
     )
     appModel.volumeMarkers.append(marker)
@@ -274,7 +274,11 @@ struct RenderView: View {
   private func scaleSelectedMarker(by factor: Float) {
     guard let markerID = appModel.selectedVolumeMarkerID,
           let index = appModel.volumeMarkers.firstIndex(where: { $0.id == markerID }) else { return }
-    appModel.volumeMarkers[index].radius = min(1, max(0.005, appModel.volumeMarkers[index].radius * factor))
+    let markerKind = appModel.volumeMarkers[index].kind
+    appModel.volumeMarkers[index].radius = VolumeMarkerRadius.clamp(
+      appModel.volumeMarkers[index].radius * factor,
+      for: markerKind
+    )
     sharePlay.synchronizeMarkers()
   }
 

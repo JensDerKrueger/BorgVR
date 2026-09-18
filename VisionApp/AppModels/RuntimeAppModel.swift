@@ -37,6 +37,20 @@ class RuntimeAppModel {
 
   var immersiveSpaceIntent = ImmersiveSpaceIntent.keepCurrent
 
+  /// The dedicated task that owns the compositor render loop.
+  var renderTask: Task<Void, Never>?
+
+  /**
+   Requests an orderly render-loop shutdown and returns the task so callers can
+   wait until the final in-flight frame has completed.
+   */
+  func cancelRenderLoop() -> Task<Void, Never>? {
+    let task = renderTask
+    renderTask = nil
+    task?.cancel()
+    return task
+  }
+
   /// Optional timer for CPU frame tracking.
   var timer: CPUFrameTimer? = nil
 

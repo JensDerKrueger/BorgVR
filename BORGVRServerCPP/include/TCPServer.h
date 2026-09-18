@@ -1,6 +1,7 @@
 #pragma once
 
 #include "BORGVRFileData.h"
+#include "BorgVRFormatConstants.h"
 #include "Logger.h"
 #include "Socket.h"
 
@@ -35,7 +36,7 @@ struct MarkerFileInfo {
 
 class TCPServer {
 public:
-  static constexpr const char* kProtocolVersionName = "4";
+  static constexpr const char* kProtocolVersionName = BorgVRFormat::kServerProtocolVersionName;
 
   TCPServer(uint16_t port,
             int maxBricksPerGetRequest,

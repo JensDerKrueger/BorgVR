@@ -45,13 +45,10 @@ class TransferFunction1D: Equatable {
     }
   }
 
-  private static let fileMagic = [UInt8]("BTF1".utf8)
-  private static let fileVersion: UInt32 = 2
   static let defaultEntryCount = 4096
-  static let maximumEntryCount = 1 << 16
-  static let maximumDescriptionByteCount = 64 * 1024
-  static let maximumFileByteCount =
-    maximumEntryCount * MemoryLayout<SIMD4<UInt8>>.size + maximumDescriptionByteCount
+  static let maximumEntryCount = BorgVRTransferFunctionFormat.maximumEntryCount
+  static let maximumDescriptionByteCount = BorgVRTransferFunctionFormat.maximumDescriptionByteCount
+  static let maximumFileByteCount = BorgVRTransferFunctionFormat.maximumFileByteCount
 
   /// The transfer function data represented as an array of RGBA values.
   private(set) var data: [SIMD4<UInt8>]
@@ -167,6 +164,7 @@ class TransferFunction1D: Equatable {
   /// extract the transfer function table from a data object
   private static func parseTransferFunctionData(_ data: Data) throws -> (description: String, samples: [SIMD4<UInt8>]) {
     var cursor = 0
+    let fileMagic = BorgVRTransferFunctionFormat.magicBytes
     let hasExtendedHeader = data.count >= fileMagic.count &&
       Array(data.prefix(fileMagic.count)) == fileMagic
 
@@ -174,8 +172,11 @@ class TransferFunction1D: Equatable {
     if hasExtendedHeader {
       cursor += fileMagic.count
       let version = try readLittleEndianUInt32(from: data, cursor: &cursor)
-      guard version == fileVersion else {
-        throw TransferFunction1DError.mismatchedDataCount(expected: Int(fileVersion), found: Int(version))
+      guard version == BorgVRTransferFunctionFormat.version else {
+        throw TransferFunction1DError.mismatchedDataCount(
+          expected: Int(BorgVRTransferFunctionFormat.version),
+          found: Int(version)
+        )
       }
 
       let descriptionByteCount = Int(try readLittleEndianUInt32(from: data, cursor: &cursor))
@@ -650,8 +651,8 @@ class TransferFunction1D: Equatable {
   /// Serializes the transfer function into a Data object.
   func serialize(description: String = "") -> Data {
     var buffer = Data()
-    buffer.append(contentsOf: Self.fileMagic)
-    Self.appendLittleEndianUInt32(Self.fileVersion, to: &buffer)
+    buffer.append(contentsOf: BorgVRTransferFunctionFormat.magicBytes)
+    Self.appendLittleEndianUInt32(BorgVRTransferFunctionFormat.version, to: &buffer)
 
     let descriptionData = Data(description.utf8)
     Self.appendLittleEndianUInt32(UInt32(clamping: descriptionData.count), to: &buffer)

@@ -263,6 +263,8 @@ struct OpenDatasetView: View {
               switch runtimeAppModel.immersiveSpaceState {
                 case .open:
                   runtimeAppModel.immersiveSpaceState = .inTransition
+                  let renderTask = runtimeAppModel.cancelRenderLoop()
+                  await renderTask?.value
                   await dismissImmersiveSpace()
                 case .closed:
                   if let index = selectedIndex, datasets.indices.contains(index) {

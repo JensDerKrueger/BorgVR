@@ -109,7 +109,7 @@ struct SettingsView: View {
                   .gridColumnAlignment(.trailing)
                   .frame(minWidth: 120, alignment: .trailing)
                 TextField(
-                  "443",
+                  String(BorgVRSharedDefaults.webServerPort),
                   value: clampedPortBinding($storedAppModel.webServerPort),
                   formatter: portNumberFormatter
                 )
@@ -183,7 +183,7 @@ struct SettingsView: View {
                         .accentColor(.blue)
 
                       TextField(
-                        "12345",
+                        String(BorgVRSharedDefaults.datasetServerPort),
                         value: clampedPortBinding($syncServer.port),
                         formatter: portNumberFormatter
                       )

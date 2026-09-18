@@ -573,7 +573,8 @@ final class SharePlayCoordinator: ObservableObject {
         configuration: BorgVRServerConfiguration(
           dataDirectory: "",
           port: port,
-          maxBricksPerGetRequest: appSettings?.maxBricksPerGetRequest ?? 20,
+          maxBricksPerGetRequest: appSettings?.maxBricksPerGetRequest
+            ?? BorgVRSharedDefaults.maximumBricksPerRequest,
           authSecret: authToken,
           enableWebServer: appSettings?.enableWebServer ?? false,
           webPort: sharePlayWebPort(for: port),

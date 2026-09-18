@@ -266,16 +266,10 @@ final class ScreenVolumeMarkerRenderer {
     tubeMeshCache.retainOnly(markerIDs: Set(markers.map(\.id)))
 
     func markerColor(_ marker: VolumeMarker) -> SIMD4<Float> {
-      var color = marker.color
-      if marker.id == selectedMarkerID {
-        color = SIMD4<Float>(
-          min(color.x + 0.25, 1),
-          min(color.y + 0.25, 1),
-          min(color.z + 0.25, 1),
-          color.w
-        )
-      }
-      return color
+      VolumeMarkerPresentation.color(
+        for: marker,
+        isSelected: marker.id == selectedMarkerID
+      )
     }
 
     func drawSphere(_ point: VolumeMarkerPoint, color: SIMD4<Float>) {

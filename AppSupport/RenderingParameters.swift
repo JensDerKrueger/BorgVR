@@ -11,8 +11,6 @@ struct TransferEditing {
 final class RenderingParameters: ObservableObject {
   private static let streamMagic: UInt32 = 0x5250_494F // "RPIO"
   private static let streamVersion: UInt16 = 1
-  private static let sharePlayMagic: UInt32 = 0x4256_5350 // "BVSP"
-  private static let sharePlayVersion: UInt16 = 1
 
   private static let defaultOrientation =
     simd_quatf(angle: 0.25, axis: SIMD3<Float>(1, 0, 0)) *
@@ -133,9 +131,9 @@ final class RenderingParameters: ObservableObject {
   func serializeCommonSharePlayState(includeTransferFunction: Bool) -> Data {
     var writer = DataWriter()
 
-    writer.write(Self.sharePlayMagic)
-    writer.write(Self.sharePlayVersion)
-    writer.write(SharePlayPacketKind.commonRenderState.rawValue)
+    writer.write(BorgVRSharePlayProtocol.magic)
+    writer.write(BorgVRSharePlayProtocol.renderStateVersion)
+    writer.write(BorgVRSharePlayProtocol.PacketKind.commonRenderState.rawValue)
     writer.write(UInt8(includeTransferFunction ? 1 : 0))
 
     writer.writeSIMD3(clipMin)
@@ -159,9 +157,9 @@ final class RenderingParameters: ObservableObject {
   func serializeScreenSharePlayTransform() -> Data {
     var writer = DataWriter()
 
-    writer.write(Self.sharePlayMagic)
-    writer.write(Self.sharePlayVersion)
-    writer.write(SharePlayPacketKind.screenTransform.rawValue)
+    writer.write(BorgVRSharePlayProtocol.magic)
+    writer.write(BorgVRSharePlayProtocol.renderStateVersion)
+    writer.write(BorgVRSharePlayProtocol.PacketKind.screenTransform.rawValue)
     writer.write(UInt8(0))
 
     writer.writeQuat(orientation)
@@ -175,13 +173,15 @@ final class RenderingParameters: ObservableObject {
   func applySharePlayUpdate(from data: Data) throws -> Bool {
     var reader = DataReader(data)
     let magic: UInt32 = try reader.read()
-    guard magic == Self.sharePlayMagic else { return false }
+    guard magic == BorgVRSharePlayProtocol.magic else { return false }
     let version: UInt16 = try reader.read()
-    guard version == Self.sharePlayVersion else { throw RenderingParametersUpdateError.unsupportedVersion(version) }
+    guard version == BorgVRSharePlayProtocol.renderStateVersion else {
+      throw RenderingParametersUpdateError.unsupportedVersion(version)
+    }
     let packetKindRaw: UInt8 = try reader.read()
     let flags: UInt8 = try reader.read()
 
-    guard let packetKind = SharePlayPacketKind(rawValue: packetKindRaw) else {
+    guard let packetKind = BorgVRSharePlayProtocol.PacketKind(rawValue: packetKindRaw) else {
       throw RenderingParametersUpdateError.unsupportedPacket(packetKindRaw)
     }
 
@@ -194,6 +194,8 @@ final class RenderingParameters: ObservableObject {
         pan = try reader.readSIMD2()
       case .visionTransform:
         break
+      case .volumeMarkers:
+        return false
     }
 
     if !reader.isAtEnd {
@@ -280,12 +282,6 @@ final class RenderingParameters: ObservableObject {
     }
     return translation
   }
-}
-
-private enum SharePlayPacketKind: UInt8 {
-  case commonRenderState = 1
-  case screenTransform = 2
-  case visionTransform = 3
 }
 
 enum RenderingParametersUpdateError: Error, LocalizedError {

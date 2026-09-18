@@ -80,10 +80,10 @@ final class StoredAppModel: ObservableObject {
     "timeout": 2.0,
     "makeLocalCopy": true,
     "progressiveLoading": true,
-    "brickSize": 64,
-    "brickOverlap": 2,
-    "enableCompression": true,
-    "borderMode": "zeroes",
+    "brickSize": BorgVRSharedDefaults.brickSize,
+    "brickOverlap": BorgVRSharedDefaults.brickOverlap,
+    "enableCompression": BorgVRSharedDefaults.compressionEnabled,
+    "borderMode": BorgVRSharedDefaults.borderMode,
     "screenSpaceError": 1.0,
     "initialBricks": 4000,
     "minHashTableSize": 16,
@@ -96,15 +96,15 @@ final class StoredAppModel: ObservableObject {
     "recoveryFPS": 100,
     "enableDatasetServer": false,
     "autoStartServer": false,
-    "serverPort": 12345,
+    "serverPort": BorgVRSharedDefaults.datasetServerPort,
     "serverPassword": "",
-    "maxBricksPerGetRequest": 20,
-    "sharePlayServerPort": 12346,
+    "maxBricksPerGetRequest": BorgVRSharedDefaults.maximumBricksPerRequest,
+    "sharePlayServerPort": BorgVRSharedDefaults.sharePlayServerPort,
     "enableWebServer": false,
-    "webServerPort": 443,
+    "webServerPort": BorgVRSharedDefaults.webServerPort,
     "webServerUsesTLS": true,
     "webServerCertificateData": Data(),
-    "sharePlayWebServerPort": 444,
+    "sharePlayWebServerPort": BorgVRSharedDefaults.sharePlayWebServerPort,
     "autoloadTF": false,
     "autoloadTransform": false,
     "disableFoveation": false,
@@ -350,19 +350,22 @@ final class StoredAppModel: ObservableObject {
   func resetBackgroundServerDefaults() {
     enableDatasetServer = Self.values["enableDatasetServer"] as? Bool ?? false
     autoStartServer = Self.values["autoStartServer"] as? Bool ?? false
-    serverPort = Self.values["serverPort"] as? Int ?? 12345
+    serverPort = Self.values["serverPort"] as? Int ?? BorgVRSharedDefaults.datasetServerPort
     serverPassword = Self.values["serverPassword"] as? String ?? ""
-    maxBricksPerGetRequest = Self.values["maxBricksPerGetRequest"] as? Int ?? 20
+    maxBricksPerGetRequest = Self.values["maxBricksPerGetRequest"] as? Int
+      ?? BorgVRSharedDefaults.maximumBricksPerRequest
     enableWebServer = Self.values["enableWebServer"] as? Bool ?? false
-    webServerPort = Self.values["webServerPort"] as? Int ?? 443
+    webServerPort = Self.values["webServerPort"] as? Int ?? BorgVRSharedDefaults.webServerPort
     webServerUsesTLS = Self.values["webServerUsesTLS"] as? Bool ?? true
     webServerCertificateData = Self.values["webServerCertificateData"] as? Data ?? Data()
     WebServerCertificatePasswordStore.delete()
   }
 
   func resetAdHocServerDefaults() {
-    sharePlayServerPort = Self.values["sharePlayServerPort"] as? Int ?? 12346
-    sharePlayWebServerPort = Self.values["sharePlayWebServerPort"] as? Int ?? 444
+    sharePlayServerPort = Self.values["sharePlayServerPort"] as? Int
+      ?? BorgVRSharedDefaults.sharePlayServerPort
+    sharePlayWebServerPort = Self.values["sharePlayWebServerPort"] as? Int
+      ?? BorgVRSharedDefaults.sharePlayWebServerPort
   }
 
   private func loadServers() {

@@ -75,14 +75,11 @@ class BORGVRRemoteDataManager {
   private let port: UInt16
   private let authSecret: String
 
-  private static let protocolVersionName : String = BorgVRServerAuthentication.protocolVersionName
-  private static let maximumTransferFunctionEntryCount = 1 << 16
-  private static let maximumTransferFunctionDescriptionByteCount = 64 * 1024
-  private static let maximumTransferFunctionByteCount =
-    maximumTransferFunctionEntryCount * 4 + maximumTransferFunctionDescriptionByteCount
-  private static let maximumMarkerFileByteCount = 64 * 1024 * 1024
+  private static let protocolVersionName = BorgVRServerProtocol.authenticationMinimumVersionName
   private(set) var serverProtocolVersion = 0
-  var supportsMarkerFiles: Bool { serverProtocolVersion >= 4 }
+  var supportsMarkerFiles: Bool {
+    serverProtocolVersion >= BorgVRServerProtocol.markerFilesMinimumVersion
+  }
   private(set) var maxBricksPerGetRequest : Int = 1
   /**
    Initializes a new instance of the remote data manager.
@@ -250,7 +247,7 @@ class BORGVRRemoteDataManager {
       }
 
       guard let byteCount = Int(parts[1]), byteCount > 0,
-            byteCount <= Self.maximumTransferFunctionByteCount else {
+            byteCount <= BorgVRTransferFunctionFormat.maximumFileByteCount else {
         throw BORGVRRemoteDataManagerError.invalidResponse(reason: "Invalid transfer function byte count in LISTTF response.")
       }
 
@@ -266,7 +263,9 @@ class BORGVRRemoteDataManager {
     }
     let expectedByteCount = transferFunctions.first { $0.id == id }?.byteCount
     try sendCommand("GETTF \(id)")
-    let data = try receiveBinaryData(maximumPayloadSize: Self.maximumTransferFunctionByteCount)
+    let data = try receiveBinaryData(
+      maximumPayloadSize: BorgVRTransferFunctionFormat.maximumFileByteCount
+    )
     if let expectedByteCount, data.count != expectedByteCount {
       throw BORGVRRemoteDataManagerError.invalidResponse(
         reason: "Transfer function byte count mismatch."
@@ -289,7 +288,7 @@ class BORGVRRemoteDataManager {
         throw BORGVRRemoteDataManagerError.invalidResponse(reason: "Invalid marker ID in LISTMARKERS response.")
       }
       guard let byteCount = Int(parts[1]), byteCount > 0,
-            byteCount <= Self.maximumMarkerFileByteCount else {
+            byteCount <= BorgVRMarkerFormat.maximumFileByteCount else {
         throw BORGVRRemoteDataManagerError.invalidResponse(reason: "Invalid marker file byte count in LISTMARKERS response.")
       }
       let datasetID = String(parts[2])
@@ -312,7 +311,7 @@ class BORGVRRemoteDataManager {
     }
     let expectedByteCount = markerFiles.first { $0.id == id }?.byteCount
     try sendCommand("GETMARKER \(id)")
-    let data = try receiveBinaryData(maximumPayloadSize: Self.maximumMarkerFileByteCount)
+    let data = try receiveBinaryData(maximumPayloadSize: BorgVRMarkerFormat.maximumFileByteCount)
     if let expectedByteCount, data.count != expectedByteCount {
       throw BORGVRRemoteDataManagerError.invalidResponse(reason: "Marker file byte count mismatch.")
     }

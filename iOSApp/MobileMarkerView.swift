@@ -61,7 +61,7 @@ struct MobileMarkerView: View {
               Text(selectedRadiusBinding.wrappedValue, format: .number.precision(.fractionLength(3)))
                 .monospacedDigit()
             }
-            Slider(value: selectedRadiusBinding, in: 0.005...1)
+            Slider(value: selectedRadiusBinding, in: selectedRadiusRange)
 
             Button("Delete Selected Marker", role: .destructive) {
               deleteSelectedMarker()
@@ -172,7 +172,7 @@ struct MobileMarkerView: View {
         isPresented: $showSaveFilePicker,
         document: VolumeMarkerDocument(datasetID: currentDatasetID, markers: appModel.volumeMarkers),
         contentType: .borgVRMarker,
-        defaultFilename: "BorgVR Markers.marker"
+        defaultFilename: BorgVRMarkerFormat.defaultFilename
       ) { result in
         if case let .failure(error) = result {
           markerFileError = error
@@ -215,7 +215,9 @@ struct MobileMarkerView: View {
       },
       set: { name in
         guard let index = selectedMarkerIndex else { return }
-        appModel.volumeMarkers[index].name = String(name.prefix(80))
+        appModel.volumeMarkers[index].name = String(
+          name.prefix(BorgVRMarkerFormat.maximumNameCharacterCount)
+        )
         synchronizeMarkers()
       }
     )
@@ -238,15 +240,28 @@ struct MobileMarkerView: View {
   private var selectedRadiusBinding: Binding<Float> {
     Binding(
       get: {
-        guard let index = selectedMarkerIndex else { return 0.08 }
+        guard let index = selectedMarkerIndex else {
+          return VolumeMarkerRadius.sphereDefault
+        }
         return appModel.volumeMarkers[index].radius
       },
       set: { radius in
         guard let index = selectedMarkerIndex else { return }
-        appModel.volumeMarkers[index].radius = min(1, max(0.005, radius))
+        let markerKind = appModel.volumeMarkers[index].kind
+        appModel.volumeMarkers[index].radius = VolumeMarkerRadius.clamp(
+          radius,
+          for: markerKind
+        )
         synchronizeMarkers()
       }
     )
+  }
+
+  private var selectedRadiusRange: ClosedRange<Float> {
+    guard let index = selectedMarkerIndex else {
+      return VolumeMarkerRadius.sphereRange
+    }
+    return VolumeMarkerRadius.range(for: appModel.volumeMarkers[index].kind)
   }
 
   private func deleteSelectedMarker() {

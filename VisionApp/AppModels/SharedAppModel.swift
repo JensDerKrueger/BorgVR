@@ -11,9 +11,6 @@ import RealityKit
 */
 @Observable
 class SharedAppModel {
-  static let initialVolumeStrokeRadius: Float = 0.002
-  static let minimumVolumeStrokeRadius: Float = 0.0002
-
   static func saturatedStrokeColor(preservingHueOf color: SIMD4<Float>) -> SIMD4<Float> {
     let maximum = max(color.x, color.y, color.z)
     let minimum = min(color.x, color.y, color.z)
@@ -113,8 +110,8 @@ class SharedAppModel {
     purgeAtlas = false
     volumeMarkers = []
     selectedVolumeMarkerID = nil
-    defaultVolumeMarkerRadius = 0.08
-    defaultVolumeStrokeRadius = Self.initialVolumeStrokeRadius
+    defaultVolumeMarkerRadius = VolumeMarkerRadius.sphereDefault
+    defaultVolumeStrokeRadius = VolumeMarkerRadius.strokeDefault
     defaultVolumeStrokeColor = SIMD4<Float>(1, 0, 0, 1)
     groupActivityHelper = GroupActivityHelper(self)
 
@@ -223,8 +220,8 @@ class SharedAppModel {
     purgeAtlas = false
     volumeMarkers = []
     selectedVolumeMarkerID = nil
-    defaultVolumeMarkerRadius = 0.08
-    defaultVolumeStrokeRadius = Self.initialVolumeStrokeRadius
+    defaultVolumeMarkerRadius = VolumeMarkerRadius.sphereDefault
+    defaultVolumeStrokeRadius = VolumeMarkerRadius.strokeDefault
     defaultVolumeStrokeColor = SIMD4<Float>(1, 0, 0, 1)
   }
 
@@ -258,8 +255,6 @@ class SharedAppModel {
   private static let streamMagic: UInt32 = 0x5250_414D // "RPAM"
   /// Protocl format version.
   private static let streamVersion: UInt16 = 1
-  private static let sharePlayMagic: UInt32 = 0x4256_5350 // "BVSP"
-  private static let sharePlayVersion: UInt16 = 1
 
   enum UpdateKind {
     case full          // includes TF
@@ -339,9 +334,9 @@ class SharedAppModel {
   func serializeCommonSharePlayState(includeTransferFunction: Bool) -> Data {
     var w = DataWriter()
 
-    w.write(Self.sharePlayMagic)
-    w.write(Self.sharePlayVersion)
-    w.write(SharePlayPacketKind.commonRenderState.rawValue)
+    w.write(BorgVRSharePlayProtocol.magic)
+    w.write(BorgVRSharePlayProtocol.renderStateVersion)
+    w.write(BorgVRSharePlayProtocol.PacketKind.commonRenderState.rawValue)
     w.write(UInt8(includeTransferFunction ? 1 : 0))
 
     w.writeSIMD3(clipMin)
@@ -365,9 +360,9 @@ class SharedAppModel {
   func serializeVisionSharePlayTransform() -> Data {
     var w = DataWriter()
 
-    w.write(Self.sharePlayMagic)
-    w.write(Self.sharePlayVersion)
-    w.write(SharePlayPacketKind.visionTransform.rawValue)
+    w.write(BorgVRSharePlayProtocol.magic)
+    w.write(BorgVRSharePlayProtocol.renderStateVersion)
+    w.write(BorgVRSharePlayProtocol.PacketKind.visionTransform.rawValue)
     w.write(UInt8(0))
 
     w.writeSIMD3(modelTransform.translation)
@@ -467,13 +462,15 @@ class SharedAppModel {
 
     var r = DataReader(data)
     let magic: UInt32 = try r.read()
-    guard magic == Self.sharePlayMagic else { return false }
+    guard magic == BorgVRSharePlayProtocol.magic else { return false }
     let version: UInt16 = try r.read()
-    guard version == Self.sharePlayVersion else { throw SharedAppModelError.unsupportedVersion(version) }
+    guard version == BorgVRSharePlayProtocol.renderStateVersion else {
+      throw SharedAppModelError.unsupportedVersion(version)
+    }
     let packetKindRaw: UInt8 = try r.read()
     let flags: UInt8 = try r.read()
 
-    guard let packetKind = SharePlayPacketKind(rawValue: packetKindRaw) else {
+    guard let packetKind = BorgVRSharePlayProtocol.PacketKind(rawValue: packetKindRaw) else {
       throw SharedAppModelError.unsupportedPacket(packetKindRaw)
     }
 
@@ -533,13 +530,6 @@ class SharedAppModel {
     }
     return translation
   }
-}
-
-private enum SharePlayPacketKind: UInt8 {
-  case commonRenderState = 1
-  case screenTransform = 2
-  case visionTransform = 3
-  case volumeMarkers = 4
 }
 
 // MARK: - Errors

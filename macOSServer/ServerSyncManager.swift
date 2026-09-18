@@ -15,10 +15,6 @@ struct ServerSyncStatus: Equatable {
 }
 
 final class ServerSyncManager {
-  private static let maximumTransferFunctionEntryCount = 1 << 16
-  private static let maximumTransferFunctionDescriptionByteCount = 64 * 1024
-  private static let maximumTransferFunctionByteCount =
-    maximumTransferFunctionEntryCount * 4 + maximumTransferFunctionDescriptionByteCount
   private static let transferFunctionSyncByteLimit = 32 * 1024 * 1024
   private static let datasetProgressTimeout: TimeInterval = 120
 
@@ -306,7 +302,7 @@ final class ServerSyncManager {
         continue
       }
 
-      guard remoteTransferFunction.byteCount <= Self.maximumTransferFunctionByteCount,
+      guard remoteTransferFunction.byteCount <= BorgVRTransferFunctionFormat.maximumFileByteCount,
             transferredBytes + remoteTransferFunction.byteCount <=
               Self.transferFunctionSyncByteLimit else {
         logger?.warning(
