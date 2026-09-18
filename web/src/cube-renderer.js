@@ -1,4 +1,5 @@
 import { BrickAtlas } from "./brick-atlas.js?v=20260915-mobile-budget";
+import { buildMarkerRenderGeometry } from "./marker-tube-mesh.js?v=20260918-tube-mesh";
 import { createDefaultTransferFunction } from "./transfer-function.js?v=20260907-range-fix";
 
 const shaderSource = `
@@ -617,8 +618,12 @@ export class CoordinateCubeRenderer {
     this.markerVertexBuffer = null;
     this.markerIndexBuffer = null;
     this.markerInstanceBuffer = null;
+    this.markerTubeVertexBuffer = null;
+    this.markerTubeIndexBuffer = null;
     this.markerIndexCount = 0;
+    this.markerSphereInstanceCount = 0;
     this.markerInstanceCount = 0;
+    this.markerTubeDraws = [];
     this.markers = [];
     this.volumeHalfExtent = [0.68, 0.68, 0.68];
     this.level0BrickCount = [1, 1, 1];
@@ -1402,22 +1407,22 @@ export class CoordinateCubeRenderer {
     if (!this.device) {
       return;
     }
-    const markerScale = 1.36;
-    const primitives = this.markers.flatMap((marker) =>
-      (Array.isArray(marker.points) ? marker.points : []).map((point) => ({
-        position: point.position,
-        radius: point.radius,
-        color: marker.color
-      }))
+    const geometry = buildMarkerRenderGeometry(
+      this.markers,
+      this.volumeHalfExtent
     );
-    const instanceData = new Float32Array(primitives.length * 8);
-    primitives.forEach((marker, index) => {
+    const instances = [
+      ...geometry.sphereInstances,
+      ...geometry.tubeDraws.map((tube) => ({
+        centerRadius: [0, 0, 0, 1],
+        color: tube.color
+      }))
+    ];
+    const instanceData = new Float32Array(instances.length * 8);
+    instances.forEach((instance, index) => {
       const offset = index * 8;
-      instanceData[offset] = (marker.position[0] - 0.5) * 2 * this.volumeHalfExtent[0];
-      instanceData[offset + 1] = (marker.position[1] - 0.5) * 2 * this.volumeHalfExtent[1];
-      instanceData[offset + 2] = (marker.position[2] - 0.5) * 2 * this.volumeHalfExtent[2];
-      instanceData[offset + 3] = marker.radius * markerScale;
-      instanceData.set(marker.color, offset + 4);
+      instanceData.set(instance.centerRadius, offset);
+      instanceData.set(instance.color, offset + 4);
     });
 
     this.markerInstanceBuffer?.destroy();
@@ -1428,7 +1433,30 @@ export class CoordinateCubeRenderer {
     if (instanceData.byteLength > 0) {
       this.device.queue.writeBuffer(this.markerInstanceBuffer, 0, instanceData);
     }
-    this.markerInstanceCount = primitives.length;
+    this.markerSphereInstanceCount = geometry.sphereInstances.length;
+    this.markerInstanceCount = instances.length;
+    this.markerTubeDraws = geometry.tubeDraws.map((tube, index) => ({
+      firstIndex: tube.firstIndex,
+      indexCount: tube.indexCount,
+      instanceIndex: this.markerSphereInstanceCount + index
+    }));
+
+    this.markerTubeVertexBuffer?.destroy();
+    this.markerTubeIndexBuffer?.destroy();
+    this.markerTubeVertexBuffer = null;
+    this.markerTubeIndexBuffer = null;
+    if (geometry.tubeVertices.byteLength > 0 && geometry.tubeIndices.byteLength > 0) {
+      this.markerTubeVertexBuffer = this.device.createBuffer({
+        size: geometry.tubeVertices.byteLength,
+        usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST
+      });
+      this.markerTubeIndexBuffer = this.device.createBuffer({
+        size: geometry.tubeIndices.byteLength,
+        usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST
+      });
+      this.device.queue.writeBuffer(this.markerTubeVertexBuffer, 0, geometry.tubeVertices);
+      this.device.queue.writeBuffer(this.markerTubeIndexBuffer, 0, geometry.tubeIndices);
+    }
   }
 
   installInteraction() {
@@ -1622,15 +1650,30 @@ export class CoordinateCubeRenderer {
     });
     if (this.hasScene &&
         this.markerInstanceCount > 0 &&
-        this.markerVertexBuffer &&
-        this.markerIndexBuffer &&
         this.markerInstanceBuffer) {
       markerPass.setPipeline(this.markerPipeline);
       markerPass.setBindGroup(0, this.markerBindGroup);
-      markerPass.setVertexBuffer(0, this.markerVertexBuffer);
       markerPass.setVertexBuffer(1, this.markerInstanceBuffer);
-      markerPass.setIndexBuffer(this.markerIndexBuffer, "uint16");
-      markerPass.drawIndexed(this.markerIndexCount, this.markerInstanceCount);
+      if (this.markerSphereInstanceCount > 0 &&
+          this.markerVertexBuffer &&
+          this.markerIndexBuffer) {
+        markerPass.setVertexBuffer(0, this.markerVertexBuffer);
+        markerPass.setIndexBuffer(this.markerIndexBuffer, "uint16");
+        markerPass.drawIndexed(this.markerIndexCount, this.markerSphereInstanceCount);
+      }
+      if (this.markerTubeVertexBuffer && this.markerTubeIndexBuffer) {
+        markerPass.setVertexBuffer(0, this.markerTubeVertexBuffer);
+        markerPass.setIndexBuffer(this.markerTubeIndexBuffer, "uint32");
+        for (const tube of this.markerTubeDraws) {
+          markerPass.drawIndexed(
+            tube.indexCount,
+            1,
+            tube.firstIndex,
+            0,
+            tube.instanceIndex
+          );
+        }
+      }
     }
     markerPass.end();
 

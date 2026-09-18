@@ -1,4 +1,4 @@
-import { CoordinateCubeRenderer } from "./cube-renderer.js?v=20260917-marker-types";
+import { CoordinateCubeRenderer } from "./cube-renderer.js?v=20260918-tube-mesh";
 import { decodeAppleLZ4, encodeLZ4Block } from "./lz4.js?v=20260911-urltf";
 import {
   MARKER_FILE_HEADER_BYTES,
