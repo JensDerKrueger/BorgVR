@@ -4,38 +4,6 @@
     "" : {
 
     },
-    "Sphere" : {
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Kugel" } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Sphere" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Esfera" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Sphère" } }
-      }
-    },
-    "Stroke" : {
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Linienzug" } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Stroke" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Trazo" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Tracé" } }
-      }
-    },
-    "The marker file contains invalid marker geometry." : {
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Die Markerdatei enthält ungültige Marker-Geometrie." } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "The marker file contains invalid marker geometry." } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "El archivo de marcadores contiene geometría de marcador no válida." } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Le fichier de marqueurs contient une géométrie de marqueur non valide." } }
-      }
-    },
-    "The marker file contains too many geometry points." : {
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Die Markerdatei enthält zu viele Geometriepunkte." } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "The marker file contains too many geometry points." } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "El archivo de marcadores contiene demasiados puntos geométricos." } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Le fichier de marqueurs contient trop de points géométriques." } }
-      }
-    },
     "(password)" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -475,6 +443,34 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ajouter"
+          }
+        }
+      }
+    },
+    "Add Loaded Markers" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Geladene Marker hinzufügen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add Loaded Markers"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Añadir marcadores cargados"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajouter les marqueurs chargés"
           }
         }
       }
@@ -1334,6 +1330,34 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Datenverzeichnis auswählen"
+          }
+        }
+      }
+    },
+    "Choose the Marker interaction mode and drag in the rendering view to add a marker." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wählen Sie den Interaktionsmodus „Marker“ und ziehen Sie in der Rendering-Ansicht, um einen Marker hinzuzufügen."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose the Marker interaction mode and drag in the rendering view to add a marker."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Elige el modo de interacción Marcador y arrastra en la vista de renderizado para añadir un marcador."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choisissez le mode d’interaction Marqueur et faites glisser dans la vue de rendu pour ajouter un marqueur."
           }
         }
       }
@@ -2631,6 +2655,64 @@
         }
       }
     },
+    "datasetscanner_info_loaded_marker_file" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Markerdatei geladen: %@ (Datensatz %@, ID %@)"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Loaded marker file: %@ (dataset %@, id %@)"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Archivo de marcadores cargado: %@ (conjunto de datos %@, ID %@)"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fichier de marqueurs chargé : %@ (jeu de données %@, ID %@)"
+          }
+        }
+      }
+    },
+    "datasetscanner_warning_failed_load_marker_file" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Markerdatei konnte nicht geladen werden: %@"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Failed to load marker file: %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo cargar el archivo de marcadores: %@"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossible de charger le fichier de marqueurs : %@"
+          }
+        }
+      }
+    },
     "Delete" : {
       "localizations" : {
         "de" : {
@@ -2655,6 +2737,62 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Supprimer"
+          }
+        }
+      }
+    },
+    "Delete All Markers" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alle Marker löschen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete All Markers"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eliminar todos los marcadores"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Supprimer tous les marqueurs"
+          }
+        }
+      }
+    },
+    "Delete All Markers?" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alle Marker löschen?"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete All Markers?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Eliminar todos los marcadores?"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Supprimer tous les marqueurs ?"
           }
         }
       }
@@ -2711,6 +2849,34 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Supprimer le jeu de données ?"
+          }
+        }
+      }
+    },
+    "Delete Selected Marker" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ausgewählten Marker löschen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete Selected Marker"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eliminar marcador seleccionado"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Supprimer le marqueur sélectionné"
           }
         }
       }
@@ -3455,118 +3621,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Si vous avez accès à un ou plusieurs serveurs centraux de jeux de données, vous pouvez les configurer ici. Les informations du serveur vous sont fournies par l’opérateur du serveur. Vous trouverez plus d’informations sur les serveurs de jeux de données en général, ainsi que sur l’exécution de votre propre serveur dédié, sur la page d’assistance."
-          }
-        }
-      }
-    },
-    "This page contains settings for the BorgVR rendering system. Some options, such as the background color, are mostly cosmetic, while others, such as the atlas size, can have a major impact on performance. If renderer problems occur, you can return this section to the default settings, which are suitable for most cases." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Hier können verschiedene Einstellungen des BorgVR-Rendering-Systems verändert werden. Einige Einstellungen, wie die Farbe des Hintergrunds, sind eher kosmetisch. Andere Einstellungen, wie die Größe des Atlas, können die Performance massiv beeinflussen. Sollten Probleme mit dem Renderer auftreten, können Sie diesen Bereich auf die Standardeinstellungen zurücksetzen, die für die meisten Fälle geeignet sind."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "This page contains settings for the BorgVR rendering system. Some options, such as the background color, are mostly cosmetic, while others, such as the atlas size, can have a major impact on performance. If renderer problems occur, you can return this section to the default settings, which are suitable for most cases."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Esta página contiene ajustes del sistema de renderizado de BorgVR. Algunas opciones, como el color de fondo, son principalmente cosméticas, mientras que otras, como el tamaño del atlas, pueden tener un gran impacto en el rendimiento. Si se producen problemas con el renderizador, puede restablecer esta sección a los ajustes predeterminados, adecuados para la mayoría de los casos."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Cette page contient les réglages du système de rendu BorgVR. Certaines options, comme la couleur d’arrière-plan, sont principalement cosmétiques, tandis que d’autres, comme la taille de l’atlas, peuvent avoir un impact important sur les performances. En cas de problème avec le moteur de rendu, vous pouvez rétablir les réglages par défaut de cette section, adaptés à la plupart des cas."
-          }
-        }
-      }
-    },
-    "This page controls BorgVR's level-of-detail system. These settings allow fine tuning between visual quality and rendering performance." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Hier kontrollieren Sie die Einstellungen des Level-of-Detail-Systems von BorgVR. Diese Einstellungen erlauben ein Fine-Tuning zwischen Qualität und Performance."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "This page controls BorgVR's level-of-detail system. These settings allow fine tuning between visual quality and rendering performance."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Esta página controla el sistema de nivel de detalle de BorgVR. Estos ajustes permiten ajustar el equilibrio entre calidad visual y rendimiento de renderizado."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Cette page contrôle le système de niveau de détail de BorgVR. Ces réglages permettent d’affiner l’équilibre entre qualité visuelle et performances de rendu."
-          }
-        }
-      }
-    },
-    "This page controls the parameters used when importing and converting datasets. Datasets that have already been converted are not affected by these settings." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Hier legen Sie die Parameter für den Import und die damit einhergehende Konvertierung der Datensätze fest. Bereits konvertierte Datensätze sind von diesen Einstellungen nicht betroffen."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "This page controls the parameters used when importing and converting datasets. Datasets that have already been converted are not affected by these settings."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Esta página controla los parámetros utilizados al importar y convertir conjuntos de datos. Los conjuntos de datos que ya se han convertido no se ven afectados por estos ajustes."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Cette page contrôle les paramètres utilisés lors de l’importation et de la conversion des jeux de données. Les jeux de données déjà convertis ne sont pas affectés par ces réglages."
-          }
-        }
-      }
-    },
-    "You can share your local datasets with other users directly from this device, without running a dedicated server. You can start a general dataset server from this app and share the device address with other users. During SharePlay collaboration, BorgVR can also create a session-specific server that shares data only with the SharePlay participants." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sie können Ihre lokalen Datensätze auch ohne dedizierten Server direkt von diesem Gerät aus anderen Nutzern zur Verfügung stellen. Sie können einen allgemeinen Datensatzserver direkt mit dieser App starten und die Adresse des Geräts anderen Nutzern mitteilen. Während einer SharePlay-Sitzung kann BorgVR außerdem einen sitzungsspezifischen Server erstellen, der Daten nur mit den SharePlay-Teilnehmern teilt."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "You can share your local datasets with other users directly from this device, without running a dedicated server. You can start a general dataset server from this app and share the device address with other users. During SharePlay collaboration, BorgVR can also create a session-specific server that shares data only with the SharePlay participants."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Puede compartir sus conjuntos de datos locales con otros usuarios directamente desde este dispositivo, sin ejecutar un servidor dedicado. Puede iniciar un servidor general de conjuntos de datos desde esta app y compartir la dirección del dispositivo con otros usuarios. Durante una colaboración con SharePlay, BorgVR también puede crear un servidor específico de la sesión que comparte datos solo con los participantes de SharePlay."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Vous pouvez partager vos jeux de données locaux avec d’autres utilisateurs directement depuis cet appareil, sans serveur dédié. Vous pouvez démarrer un serveur général de jeux de données depuis cette app et communiquer l’adresse de l’appareil à d’autres utilisateurs. Lors d’une collaboration SharePlay, BorgVR peut également créer un serveur propre à la session qui partage les données uniquement avec les participants SharePlay."
           }
         }
       }
@@ -4361,6 +4415,90 @@
         }
       }
     },
+    "Load Anyway" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Trotzdem laden"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Load Anyway"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cargar de todos modos"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Charger quand même"
+          }
+        }
+      }
+    },
+    "Load Markers" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Marker laden"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Load Markers"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cargar marcadores"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Charger les marqueurs"
+          }
+        }
+      }
+    },
+    "Load Markers…" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Marker laden…"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Load Markers…"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cargar marcadores…"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Charger les marqueurs…"
+          }
+        }
+      }
+    },
     "Loading" : {
       "comment" : "A section in the settings view that deals with loading settings.",
       "isCommentAutoGenerated" : true,
@@ -4927,6 +5065,174 @@
         }
       }
     },
+    "Marker" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Marker"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Marker"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Marcador"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Marqueur"
+          }
+        }
+      }
+    },
+    "Marker File Error" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Marker-Dateifehler"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Marker File Error"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Error de archivo de marcadores"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Erreur de fichier de marqueurs"
+          }
+        }
+      }
+    },
+    "Marker Files" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Markerdateien"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Marker Files"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Archivos de marcadores"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fichiers de marqueurs"
+          }
+        }
+      }
+    },
+    "Markers" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Marker"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Markers"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Marcadores"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Marqueurs"
+          }
+        }
+      }
+    },
+    "Markers already exist in the current session. Do you want to replace them or add the loaded markers?" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "In der aktuellen Sitzung sind bereits Marker vorhanden. Möchten Sie diese ersetzen oder die geladenen Marker hinzufügen?"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Markers already exist in the current session. Do you want to replace them or add the loaded markers?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ya hay marcadores en la sesión actual. ¿Quieres reemplazarlos o añadir los marcadores cargados?"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Des marqueurs existent déjà dans la session actuelle. Voulez-vous les remplacer ou ajouter les marqueurs chargés ?"
+          }
+        }
+      }
+    },
+    "Markers for a Different Dataset" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Marker für einen anderen Datensatz"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Markers for a Different Dataset"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Marcadores para otro conjunto de datos"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Marqueurs pour un autre jeu de données"
+          }
+        }
+      }
+    },
     "Max. bricks per request: \\(storedAppModel.maxBricksPerGetRequest)" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -5302,6 +5608,34 @@
         }
       }
     },
+    "Name" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Name"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Name"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nombre"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nom"
+          }
+        }
+      }
+    },
     "No custom certificate: BorgVR creates a temporary self-signed certificate." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -5383,6 +5717,62 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Aucun fichier sélectionné"
+          }
+        }
+      }
+    },
+    "No Marker Files Available" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keine Markerdateien verfügbar"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No Marker Files Available"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No hay archivos de marcadores disponibles"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aucun fichier de marqueurs disponible"
+          }
+        }
+      }
+    },
+    "No Markers" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keine Marker"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No Markers"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sin marcadores"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aucun marqueur"
           }
         }
       }
@@ -5786,34 +6176,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Suréchantillonnage"
-          }
-        }
-      }
-    },
-    "Randomized sample phase" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Zufällige Sampling-Phase"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Randomized sample phase"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Fase de muestreo aleatoria"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Phase d’échantillonnage aléatoire"
           }
         }
       }
@@ -6853,6 +7215,62 @@
         }
       }
     },
+    "Radius" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Radius"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Radius"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Radio"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rayon"
+          }
+        }
+      }
+    },
+    "Randomized sample phase" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zufällige Sampling-Phase"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Randomized sample phase"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fase de muestreo aleatoria"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Phase d’échantillonnage aléatoire"
+          }
+        }
+      }
+    },
     "Reading local datasets ..." : {
       "localizations" : {
         "de" : {
@@ -7281,6 +7699,34 @@
         }
       }
     },
+    "Replace Existing Markers" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vorhandene Marker ersetzen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Replace Existing Markers"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reemplazar marcadores existentes"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remplacer les marqueurs existants"
+          }
+        }
+      }
+    },
     "Request low-res LOD" : {
       "localizations" : {
         "de" : {
@@ -7508,6 +7954,34 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Exécuter le script..."
+          }
+        }
+      }
+    },
+    "Save Markers…" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Marker speichern…"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Save Markers…"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Guardar marcadores…"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enregistrer les marqueurs…"
           }
         }
       }
@@ -7912,6 +8386,34 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Sélectionner le volume d’entrée"
+          }
+        }
+      }
+    },
+    "Selected Marker" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ausgewählter Marker"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Selected Marker"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Marcador seleccionado"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Marqueur sélectionné"
           }
         }
       }
@@ -8323,6 +8825,34 @@
         }
       }
     },
+    "Sphere" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kugel"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sphere"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esfera"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sphère"
+          }
+        }
+      }
+    },
     "Start background server" : {
       "comment" : "A button that starts the background server.",
       "isCommentAutoGenerated" : true,
@@ -8607,6 +9137,34 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Arrêter le script"
+          }
+        }
+      }
+    },
+    "Stroke" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Linienzug"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stroke"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Trazo"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tracé"
           }
         }
       }
@@ -9401,6 +9959,122 @@
         }
       }
     },
+    "The marker file contains invalid marker geometry." : {
+      "comment" : "Marker file validation error",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Markerdatei enthält ungültige Marker-Geometrie."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The marker file contains invalid marker geometry."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El archivo de marcadores contiene geometría de marcador no válida."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le fichier de marqueurs contient une géométrie de marqueur non valide."
+          }
+        }
+      }
+    },
+    "The marker file contains too many geometry points." : {
+      "comment" : "Marker file validation error",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Markerdatei enthält zu viele Geometriepunkte."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The marker file contains too many geometry points."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El archivo de marcadores contiene demasiados puntos geométricos."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le fichier de marqueurs contient trop de points géométriques."
+          }
+        }
+      }
+    },
+    "The marker file contains too many markers." : {
+      "comment" : "Marker file validation error",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Markerdatei enthält zu viele Marker."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The marker file contains too many markers."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El archivo de marcadores contiene demasiados marcadores."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le fichier de marqueurs contient trop de marqueurs."
+          }
+        }
+      }
+    },
+    "The marker file exceeds the maximum supported size." : {
+      "comment" : "Marker file validation error",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Markerdatei überschreitet die maximal unterstützte Größe."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The marker file exceeds the maximum supported size."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El archivo de marcadores supera el tamaño máximo compatible."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le fichier de marqueurs dépasse la taille maximale prise en charge."
+          }
+        }
+      }
+    },
     "The remote download is no longer making progress." : {
       "localizations" : {
         "de" : {
@@ -9486,6 +10160,35 @@
         }
       }
     },
+    "The selected file is not a BorgVR marker file." : {
+      "comment" : "Marker file validation error",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die ausgewählte Datei ist keine BorgVR-Markerdatei."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The selected file is not a BorgVR marker file."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El archivo seleccionado no es un archivo de marcadores de BorgVR."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le fichier sélectionné n’est pas un fichier de marqueurs BorgVR."
+          }
+        }
+      }
+    },
     "This editor is not available in the current render mode." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -9515,6 +10218,118 @@
         }
       }
     },
+    "This marker file was created for a different dataset. Its positions may not match the current volume. Do you still want to load it?" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diese Markerdatei wurde für einen anderen Datensatz erstellt. Ihre Positionen passen möglicherweise nicht zum aktuellen Volumen. Möchten Sie sie trotzdem laden?"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This marker file was created for a different dataset. Its positions may not match the current volume. Do you still want to load it?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Este archivo de marcadores se creó para otro conjunto de datos. Es posible que sus posiciones no coincidan con el volumen actual. ¿Desea cargarlo de todos modos?"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ce fichier de marqueurs a été créé pour un autre jeu de données. Ses positions peuvent ne pas correspondre au volume actuel. Voulez-vous tout de même le charger ?"
+          }
+        }
+      }
+    },
+    "This page contains settings for the BorgVR rendering system. Some options, such as the background color, are mostly cosmetic, while others, such as the atlas size, can have a major impact on performance. If renderer problems occur, you can return this section to the default settings, which are suitable for most cases." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hier können verschiedene Einstellungen des BorgVR-Rendering-Systems verändert werden. Einige Einstellungen, wie die Farbe des Hintergrunds, sind eher kosmetisch. Andere Einstellungen, wie die Größe des Atlas, können die Performance massiv beeinflussen. Sollten Probleme mit dem Renderer auftreten, können Sie diesen Bereich auf die Standardeinstellungen zurücksetzen, die für die meisten Fälle geeignet sind."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This page contains settings for the BorgVR rendering system. Some options, such as the background color, are mostly cosmetic, while others, such as the atlas size, can have a major impact on performance. If renderer problems occur, you can return this section to the default settings, which are suitable for most cases."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esta página contiene ajustes del sistema de renderizado de BorgVR. Algunas opciones, como el color de fondo, son principalmente cosméticas, mientras que otras, como el tamaño del atlas, pueden tener un gran impacto en el rendimiento. Si se producen problemas con el renderizador, puede restablecer esta sección a los ajustes predeterminados, adecuados para la mayoría de los casos."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cette page contient les réglages du système de rendu BorgVR. Certaines options, comme la couleur d’arrière-plan, sont principalement cosmétiques, tandis que d’autres, comme la taille de l’atlas, peuvent avoir un impact important sur les performances. En cas de problème avec le moteur de rendu, vous pouvez rétablir les réglages par défaut de cette section, adaptés à la plupart des cas."
+          }
+        }
+      }
+    },
+    "This page controls BorgVR's level-of-detail system. These settings allow fine tuning between visual quality and rendering performance." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hier kontrollieren Sie die Einstellungen des Level-of-Detail-Systems von BorgVR. Diese Einstellungen erlauben ein Fine-Tuning zwischen Qualität und Performance."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This page controls BorgVR's level-of-detail system. These settings allow fine tuning between visual quality and rendering performance."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esta página controla el sistema de nivel de detalle de BorgVR. Estos ajustes permiten ajustar el equilibrio entre calidad visual y rendimiento de renderizado."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cette page contrôle le système de niveau de détail de BorgVR. Ces réglages permettent d’affiner l’équilibre entre qualité visuelle et performances de rendu."
+          }
+        }
+      }
+    },
+    "This page controls the parameters used when importing and converting datasets. Datasets that have already been converted are not affected by these settings." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hier legen Sie die Parameter für den Import und die damit einhergehende Konvertierung der Datensätze fest. Bereits konvertierte Datensätze sind von diesen Einstellungen nicht betroffen."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This page controls the parameters used when importing and converting datasets. Datasets that have already been converted are not affected by these settings."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esta página controla los parámetros utilizados al importar y convertir conjuntos de datos. Los conjuntos de datos que ya se han convertido no se ven afectados por estos ajustes."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cette page contrôle les paramètres utilisés lors de l’importation et de la conversion des jeux de données. Les jeux de données déjà convertis ne sont pas affectés par ces réglages."
+          }
+        }
+      }
+    },
     "This remote server will be removed from the list." : {
       "localizations" : {
         "de" : {
@@ -9539,6 +10354,34 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ce serveur distant sera supprimé de la liste."
+          }
+        }
+      }
+    },
+    "This removes every marker from the current session." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dadurch werden alle Marker aus der aktuellen Sitzung entfernt."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This removes every marker from the current session."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esto elimina todos los marcadores de la sesión actual."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cette action supprime tous les marqueurs de la session actuelle."
           }
         }
       }
@@ -9852,6 +10695,35 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "non compressé"
+          }
+        }
+      }
+    },
+    "Unsupported marker file version %d." : {
+      "comment" : "Marker file validation error with the unsupported version number",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nicht unterstützte Markerdateiversion %d."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unsupported marker file version %d."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Versión de archivo de marcadores %d no compatible."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Version %d du fichier de marqueurs non prise en charge."
           }
         }
       }
@@ -10296,236 +11168,32 @@
         }
       }
     },
-    "Marker" : {
+    "You can share your local datasets with other users directly from this device, without running a dedicated server. You can start a general dataset server from this app and share the device address with other users. During SharePlay collaboration, BorgVR can also create a session-specific server that shares data only with the SharePlay participants." : {
       "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Marker" } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Marker" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Marcador" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Marqueur" } }
-      }
-    },
-    "Markers" : {
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Marker" } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Markers" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Marcadores" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Marqueurs" } }
-      }
-    },
-    "No Markers" : {
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Keine Marker" } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "No Markers" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Sin marcadores" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Aucun marqueur" } }
-      }
-    },
-    "Selected Marker" : {
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Ausgewählter Marker" } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Selected Marker" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Marcador seleccionado" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Marqueur sélectionné" } }
-      }
-    },
-    "Name" : {
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Name" } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Name" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Nombre" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Nom" } }
-      }
-    },
-    "Radius" : {
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Radius" } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Radius" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Radio" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Rayon" } }
-      }
-    },
-    "Delete Selected Marker" : {
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Ausgewählten Marker löschen" } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Delete Selected Marker" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Eliminar marcador seleccionado" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Supprimer le marqueur sélectionné" } }
-      }
-    },
-    "Delete All Markers" : {
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Alle Marker löschen" } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Delete All Markers" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Eliminar todos los marcadores" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Supprimer tous les marqueurs" } }
-      }
-    },
-    "Delete All Markers?" : {
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Alle Marker löschen?" } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Delete All Markers?" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "¿Eliminar todos los marcadores?" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Supprimer tous les marqueurs ?" } }
-      }
-    },
-    "This removes every marker from the current session." : {
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Dadurch werden alle Marker aus der aktuellen Sitzung entfernt." } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "This removes every marker from the current session." } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Esto elimina todos los marcadores de la sesión actual." } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Cette action supprime tous les marqueurs de la session actuelle." } }
-      }
-    },
-    "Choose the Marker interaction mode and drag in the rendering view to add a marker." : {
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Wählen Sie den Interaktionsmodus „Marker“ und ziehen Sie in der Rendering-Ansicht, um einen Marker hinzuzufügen." } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Choose the Marker interaction mode and drag in the rendering view to add a marker." } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Elige el modo de interacción Marcador y arrastra en la vista de renderizado para añadir un marcador." } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Choisissez le mode d’interaction Marqueur et faites glisser dans la vue de rendu pour ajouter un marqueur." } }
-      }
-    },
-    "Marker Files" : {
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Markerdateien" } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Marker Files" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Archivos de marcadores" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Fichiers de marqueurs" } }
-      }
-    },
-    "Load Markers…" : {
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Marker laden…" } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Load Markers…" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Cargar marcadores…" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Charger les marqueurs…" } }
-      }
-    },
-    "Save Markers…" : {
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Marker speichern…" } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Save Markers…" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Guardar marcadores…" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Enregistrer les marqueurs…" } }
-      }
-    },
-    "Load Markers" : {
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Marker laden" } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Load Markers" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Cargar marcadores" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Charger les marqueurs" } }
-      }
-    },
-    "Markers already exist in the current session. Do you want to replace them or add the loaded markers?" : {
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "In der aktuellen Sitzung sind bereits Marker vorhanden. Möchten Sie diese ersetzen oder die geladenen Marker hinzufügen?" } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Markers already exist in the current session. Do you want to replace them or add the loaded markers?" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Ya hay marcadores en la sesión actual. ¿Quieres reemplazarlos o añadir los marcadores cargados?" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Des marqueurs existent déjà dans la session actuelle. Voulez-vous les remplacer ou ajouter les marqueurs chargés ?" } }
-      }
-    },
-    "Replace Existing Markers" : {
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Vorhandene Marker ersetzen" } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Replace Existing Markers" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Reemplazar marcadores existentes" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Remplacer les marqueurs existants" } }
-      }
-    },
-    "Add Loaded Markers" : {
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Geladene Marker hinzufügen" } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Add Loaded Markers" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Añadir marcadores cargados" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Ajouter les marqueurs chargés" } }
-      }
-    },
-    "Marker File Error" : {
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Marker-Dateifehler" } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Marker File Error" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Error de archivo de marcadores" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Erreur de fichier de marqueurs" } }
-      }
-    },
-    "No Marker Files Available" : {
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Keine Markerdateien verfügbar" } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "No Marker Files Available" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "No hay archivos de marcadores disponibles" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Aucun fichier de marqueurs disponible" } }
-      }
-    },
-    "datasetscanner_info_loaded_marker_file" : {
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Markerdatei geladen: %@ (Datensatz %@, ID %@)" } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Loaded marker file: %@ (dataset %@, id %@)" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Archivo de marcadores cargado: %@ (conjunto de datos %@, ID %@)" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Fichier de marqueurs chargé : %@ (jeu de données %@, ID %@)" } }
-      }
-    },
-    "datasetscanner_warning_failed_load_marker_file" : {
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Markerdatei konnte nicht geladen werden: %@" } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Failed to load marker file: %@" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "No se pudo cargar el archivo de marcadores: %@" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Impossible de charger le fichier de marqueurs : %@" } }
-      }
-    },
-    "Markers for a Different Dataset" : {
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Marker für einen anderen Datensatz" } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Markers for a Different Dataset" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Marcadores para otro conjunto de datos" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Marqueurs pour un autre jeu de données" } }
-      }
-    },
-    "Load Anyway" : {
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Trotzdem laden" } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Load Anyway" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Cargar de todos modos" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Charger quand même" } }
-      }
-    },
-    "This marker file was created for a different dataset. Its positions may not match the current volume. Do you still want to load it?" : {
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Diese Markerdatei wurde für einen anderen Datensatz erstellt. Ihre Positionen passen möglicherweise nicht zum aktuellen Volumen. Möchten Sie sie trotzdem laden?" } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "This marker file was created for a different dataset. Its positions may not match the current volume. Do you still want to load it?" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Este archivo de marcadores se creó para otro conjunto de datos. Es posible que sus posiciones no coincidan con el volumen actual. ¿Desea cargarlo de todos modos?" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Ce fichier de marqueurs a été créé pour un autre jeu de données. Ses positions peuvent ne pas correspondre au volume actuel. Voulez-vous tout de même le charger ?" } }
-      }
-    },
-    "The selected file is not a BorgVR marker file." : {
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Die ausgewählte Datei ist keine BorgVR-Markerdatei." } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "The selected file is not a BorgVR marker file." } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "El archivo seleccionado no es un archivo de marcadores de BorgVR." } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Le fichier sélectionné n’est pas un fichier de marqueurs BorgVR." } }
-      }
-    },
-    "Unsupported marker file version %d." : {
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Nicht unterstützte Markerdateiversion %d." } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Unsupported marker file version %d." } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Versión de archivo de marcadores %d no compatible." } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Version %d du fichier de marqueurs non prise en charge." } }
-      }
-    },
-    "The marker file exceeds the maximum supported size." : {
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Die Markerdatei überschreitet die maximal unterstützte Größe." } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "The marker file exceeds the maximum supported size." } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "El archivo de marcadores supera el tamaño máximo compatible." } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Le fichier de marqueurs dépasse la taille maximale prise en charge." } }
-      }
-    },
-    "The marker file contains too many markers." : {
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Die Markerdatei enthält zu viele Marker." } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "The marker file contains too many markers." } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "El archivo de marcadores contiene demasiados marcadores." } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Le fichier de marqueurs contient trop de marqueurs." } }
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sie können Ihre lokalen Datensätze auch ohne dedizierten Server direkt von diesem Gerät aus anderen Nutzern zur Verfügung stellen. Sie können einen allgemeinen Datensatzserver direkt mit dieser App starten und die Adresse des Geräts anderen Nutzern mitteilen. Während einer SharePlay-Sitzung kann BorgVR außerdem einen sitzungsspezifischen Server erstellen, der Daten nur mit den SharePlay-Teilnehmern teilt."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You can share your local datasets with other users directly from this device, without running a dedicated server. You can start a general dataset server from this app and share the device address with other users. During SharePlay collaboration, BorgVR can also create a session-specific server that shares data only with the SharePlay participants."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Puede compartir sus conjuntos de datos locales con otros usuarios directamente desde este dispositivo, sin ejecutar un servidor dedicado. Puede iniciar un servidor general de conjuntos de datos desde esta app y compartir la dirección del dispositivo con otros usuarios. Durante una colaboración con SharePlay, BorgVR también puede crear un servidor específico de la sesión que comparte datos solo con los participantes de SharePlay."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vous pouvez partager vos jeux de données locaux avec d’autres utilisateurs directement depuis cet appareil, sans serveur dédié. Vous pouvez démarrer un serveur général de jeux de données depuis cette app et communiquer l’adresse de l’appareil à d’autres utilisateurs. Lors d’une collaboration SharePlay, BorgVR peut également créer un serveur propre à la session qui partage les données uniquement avec les participants SharePlay."
+          }
+        }
       }
     },
     "Zeroes" : {

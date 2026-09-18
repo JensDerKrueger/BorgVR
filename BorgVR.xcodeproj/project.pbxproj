@@ -246,10 +246,10 @@
 		564183972D649734003A1EC4 /* Exceptions for "BORGVR-IO" folder in "VisionApp" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
-				BorgVRSharedConstants.swift,
 				BORGVRDataBase.swift,
 				BORGVRFileData.swift,
 				BORGVRMetaData.swift,
+				BorgVRSharedConstants.swift,
 				BrickedVolumeReorganizer.swift,
 				DICOM.swift,
 				DICOMVRMap.swift,
@@ -938,7 +938,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = iOSApp/BorgVRMobile.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 3;
 				DEVELOPMENT_ASSET_PATHS = "";
 				DEVELOPMENT_TEAM = L8Q6MVX7ZF;
 				ENABLE_PREVIEWS = YES;
@@ -975,7 +975,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = iOSApp/BorgVRMobile.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 3;
 				DEVELOPMENT_ASSET_PATHS = "";
 				DEVELOPMENT_TEAM = L8Q6MVX7ZF;
 				ENABLE_PREVIEWS = YES;
@@ -1046,7 +1046,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 9;
+				CURRENT_PROJECT_VERSION = 10;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -1082,7 +1082,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 8;
+				CURRENT_PROJECT_VERSION = 10;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -1117,12 +1117,13 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = VisionApp/VisionApp.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 8;
+				CURRENT_PROJECT_VERSION = 10;
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = VisionApp/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = BorgVR;
+				INFOPLIST_KEY_NSAccessoryTrackingUsageDescription = "BorgVR tracks a connected spatial stylus so you can draw markers directly in a volume.";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "BorgVR uses the local network to share the currently open dataset with participants in a live collaboration session.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "The microphone is used to let you interact with the app using voice commands instead of traditional UI controls.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Speech recognition is used to let you interact with the app using voice commands instead of traditional UI controls.";
@@ -1153,12 +1154,13 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = VisionApp/VisionApp.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 9;
+				CURRENT_PROJECT_VERSION = 10;
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = VisionApp/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = BorgVR;
+				INFOPLIST_KEY_NSAccessoryTrackingUsageDescription = "BorgVR tracks a connected spatial stylus so you can draw markers directly in a volume.";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "BorgVR uses the local network to share the currently open dataset with participants in a live collaboration session.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "The microphone is used to let you interact with the app using voice commands instead of traditional UI controls.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Speech recognition is used to let you interact with the app using voice commands instead of traditional UI controls.";
@@ -1192,7 +1194,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 4;
+				CURRENT_PROJECT_VERSION = 5;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "\"macOSServer/Preview Content\"";
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -1224,7 +1226,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 4;
+				CURRENT_PROJECT_VERSION = 5;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "\"macOSServer/Preview Content\"";
 				ENABLE_HARDENED_RUNTIME = YES;
