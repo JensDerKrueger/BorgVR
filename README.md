@@ -4,40 +4,72 @@
 
 # BorgVR
 
-BorgVR is a bricked out-of-core, ray-guided volume rendering system developed by the
+BorgVR is a bricked, out-of-core, ray-guided volume rendering system developed by the
 [Computer Graphics and Visualization Group](https://www.cgvis.de/) at the University of
 Duisburg-Essen. It started as a native Apple Vision Pro renderer and has since grown into
-a shared codebase for **visionOS**, **iOS/iPadOS**, and **macOS**.
+a family of native applications for **visionOS**, **iOS/iPadOS**, and **macOS**, accompanied
+by Swift and C++ dataset servers and a WebGPU browser renderer.
 
 The project is intended for interactive exploration of large volumetric datasets. It combines
 native Metal renderers, dataset conversion tools, local and remote dataset servers, SharePlay
-collaboration, and an experimental WebGPU browser frontend served directly by the dataset server.
+collaboration, and a WebGPU browser frontend served directly by the dataset server.
 
 ## What Is Included
 
-- **VisionApp**: native visionOS volume renderer for Apple Vision Pro.
-- **iOSApp**: native iPhone and iPad volume renderer.
-- **macOSApp**: native Mac renderer with import tools, scripting support, and optional background server.
-- **macOSServer**: Mac GUI for dataset conversion and serving.
+- **VisionApp**: native visionOS volume renderer with spatial interaction, SharePlay, markers,
+  and Logitech Muse support.
+- **iOSApp**: adaptive native iPhone and iPad volume renderer with local and remote datasets.
+- **macOSApp**: native Mac renderer with import tools, scripting, dockable editors, markers,
+  and an optional background server.
+- **macOSServer**: Mac GUI for dataset conversion, serving, and server-to-server synchronization.
 - **TerminalServerApp**: command-line dataset server.
 - **TerminalConverterApp**: command-line dataset conversion tool.
-- **BORGVRServerCPP**: C++ implementation of the dataset server protocol, including the embedded WebGPU frontend.
-- **web**: WebGPU browser frontend used by the server.
+- **BORGVRServerCPP**: cross-platform C++17 implementation of the dataset server protocol,
+  including synchronization and the embedded WebGPU frontend.
+- **web**: responsive WebGPU renderer served directly by a BorgVR server.
 - **html**: static support, privacy, and landing pages for app distribution.
 
 ## Features
 
-- Bricked out-of-core volume rendering for datasets larger than GPU memory.
-- Metal renderers shared across Apple platforms where possible.
-- Transfer-function, isosurface, lighting, clipping, and LOD controls.
+### Rendering
+
+- Bricked out-of-core rendering of volumes larger than GPU memory.
+- Native Metal raycasters on visionOS, iOS/iPadOS, and macOS, plus a WebGPU browser renderer.
+- Transfer-function, illuminated transfer-function, isosurface, clipping, LOD, and adaptive
+  sampling controls.
 - GPU-guided brick requests with progressive paging into a brick atlas.
-- SharePlay collaboration with synchronized dataset and render state.
-- Optional ad-hoc dataset servers for collaboration sessions.
-- Password-protected dataset servers.
-- Optional HTTPS WebGPU server with generated self-signed certificates or imported PKCS#12 identities.
-- WebGPU preview frontend for browsing and rendering datasets from a browser.
-- Dataset import and conversion from supported volume formats.
-- macOS scripting support for repeatable rendering and screenshots.
+- Interactive transfer-function editors and persistent transfer-function catalogs.
+
+### Collaboration And Markers
+
+- SharePlay collaboration with synchronized datasets, transforms, rendering parameters,
+  transfer functions, and markers.
+- Optional ad-hoc dataset servers for SharePlay sessions.
+- Named and colored spherical markers on all native clients and in WebGPU.
+- Tube-rendered stroke markers with a shared binary `.marker` format and dataset identity checks.
+- Marker import, export, server catalogs, editing, and synchronized initial state for new
+  SharePlay participants.
+- Hand-based marker placement on Apple Vision Pro, including configurable quick markers.
+- Logitech Muse spatial-stylus drawing on visionOS 26 or newer, with live stroke radius and
+  color controls.
+
+### Data And Servers
+
+- Dataset import and conversion from BorgVR, QVIS, NRRD/NHDR, and DICOM workflows.
+- Password-protected Swift and C++ dataset servers serving datasets, transfer functions,
+  and marker files.
+- Periodic server-to-server synchronization in the macOS server and C++ server, including
+  resumable downloads of incomplete datasets.
+- Optional HTTPS WebGPU hosting from the Swift server with generated self-signed certificates
+  or imported PKCS#12 identities.
+- macOS scripting support for repeatable interaction, rendering, and screenshots.
+
+### WebGPU
+
+- Responsive desktop and mobile UI with touch interaction and shareable renderer URLs.
+- Optional persistent brick cache backed by IndexedDB, including cache statistics and clearing.
+- Dataset-specific transfer-function and marker catalogs loaded from the server.
+- Sphere and tube-mesh marker rendering.
 
 ## Repository Layout
 
@@ -55,9 +87,23 @@ TerminalServerApp/      Swift command-line dataset server
 TerminalConverterApp/   Swift command-line converter
 web/                    WebGPU browser frontend
 html/                   App support/privacy website pages
+Scripts/                Example macOS scripting files and command definitions
+TransferFunctions/      Bundled transfer-function presets
 ```
 
 ## Building
+
+### Requirements
+
+- Xcode with the SDK required by the selected target. The current project targets iOS/iPadOS
+  17.0 or newer, macOS 15.2 or newer, and visionOS 26.0 or newer.
+- Apple development signing for device and App Store builds.
+- A C++17 compiler and `make` for the standalone C++ server on macOS or Linux. A Visual Studio
+  solution is also included for Windows.
+- A browser with WebGPU support for the browser renderer. WebGPU on iPhone and iPad requires
+  iOS/iPadOS 26 or newer.
+
+### Apple Applications
 
 Open `BorgVR.xcodeproj` in Xcode and select the scheme for the platform you want to build.
 
@@ -77,14 +123,39 @@ Common schemes:
 For App Store or device builds, configure your Apple development team and signing settings in Xcode.
 The project uses the shared bundle identifier configured in the Xcode project.
 
+### C++ Dataset Server
+
+Build the standalone server on macOS or Linux with:
+
+```sh
+cd BORGVRServerCPP
+make
+```
+
+The build first compiles a small C++ bootstrap tool that packages the current `web` directory as
+LZ4-compressed embedded assets. `src/GeneratedWebAssets.cpp` and
+`src/GeneratedWebAssets.h` are generated build inputs and are intentionally not tracked. No Python
+runtime is required.
+
+Run `make CONFIG=debug` for a debug build or, for example:
+
+```sh
+make run ARGS="12345 64 /path/to/datasets --web-port 8080"
+```
+
+The first two arguments select the native dataset-server port and maximum brick batch size. See the
+server's command-line help for password, scan interval, WebGPU port, and sync-server options.
+
 ### Apple Vision Pro Development
 
-Short setup notes for pairing and enabling development on Apple Vision Pro are kept in `readme.txt`.
+Short setup notes for pairing and enabling development on Apple Vision Pro are kept in
+[`readme.txt`](readme.txt).
 
 ## Dataset Server And WebGPU Frontend
 
 BorgVR can expose datasets through its native server protocol. The Swift server can also start a
-small HTTP/HTTPS server that serves the WebGPU frontend and dataset resources to a browser.
+small HTTP/HTTPS server that serves the WebGPU frontend and dataset resources to a browser. Both
+server implementations publish compatible dataset, transfer-function, and marker catalogs.
 
 The WebGPU server is disabled by default. When enabled, HTTPS is enabled by default because remote
 browser WebGPU access generally requires a secure context. If no certificate is configured, BorgVR
@@ -94,14 +165,22 @@ For safety, plain HTTP binds to `localhost` only. HTTPS listens on the local net
 on other devices can use WebGPU through a secure context. Use a reverse proxy such as nginx if you
 intentionally want to expose it outside the local network.
 
-The WebGPU frontend is primarily intended as a convenient preview and dataset browser. The native
-apps remain the main high-performance rendering applications.
+The WebGPU frontend supports the main rendering modes, transfer-function editing, marker files,
+touch controls, and optional persistent caching of downloaded bricks in IndexedDB. Browser storage
+is scoped to the server origin and can be disabled or cleared from the renderer settings. The native
+apps remain the primary high-performance and spatial rendering applications.
 
 ## Data Files
 
-BorgVR uses `.data` files containing metadata and bricked volume data. The repository includes small
-sample datasets for testing. Larger datasets should be kept outside the repository and served or
-opened from a local data directory.
+BorgVR uses three application-specific file types:
+
+- `.data`: metadata followed by bricked, optionally compressed volume data.
+- `.tf1d`: one-dimensional transfer functions and their display metadata.
+- `.marker`: binary sphere and stroke annotations, including the unique ID of their source dataset.
+
+Loading markers created for another dataset requires explicit confirmation. The repository includes
+small sample datasets for testing. Larger datasets should be kept outside the repository and served
+or opened from a local data directory.
 
 ## Research Background
 
