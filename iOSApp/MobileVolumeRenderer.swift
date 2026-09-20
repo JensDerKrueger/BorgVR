@@ -10,6 +10,7 @@ final class MobileVolumeRenderer: NSObject, MTKViewDelegate, UIGestureRecognizer
   private let appModel: AppModel
   private let appSettings: AppSettings
   private let renderingParameters: RenderingParameters
+  private let sharePlay: SharePlayCoordinator
 
   private var device: MTLDevice?
   private var commandQueue: MTLCommandQueue?
@@ -32,19 +33,27 @@ final class MobileVolumeRenderer: NSObject, MTKViewDelegate, UIGestureRecognizer
   private var loadedDatasetKey = ""
   private var pipelineDrawableWidth: Float = 0
   private var activeOversampling: Float = 1
+  private var configuredOversamplingMode = ""
   private let timer = CPUFrameTimer()
   private var twoFingerPanRecognizer: UIPanGestureRecognizer?
   private let cameraDistance: Float = 2.4
   private let fieldOfViewY: Float = .pi / 4
   private let minimumPipelineDrawableWidth: Float = 64
   private let pipelineWidthChangeThreshold: Float = 32
+  private let markerDepthPanSensitivity: Float = 0.003
   private var frameInFlight = false
   private let markerRenderer = ScreenVolumeMarkerRenderer()
 
-  init(appModel: AppModel, appSettings: AppSettings, renderingParameters: RenderingParameters) {
+  init(
+    appModel: AppModel,
+    appSettings: AppSettings,
+    renderingParameters: RenderingParameters,
+    sharePlay: SharePlayCoordinator
+  ) {
     self.appModel = appModel
     self.appSettings = appSettings
     self.renderingParameters = renderingParameters
+    self.sharePlay = sharePlay
     super.init()
     DispatchQueue.main.async { [appModel, timer] in
       appModel.timer = timer
@@ -83,6 +92,9 @@ final class MobileVolumeRenderer: NSObject, MTKViewDelegate, UIGestureRecognizer
     appModel.markerHitTestHandler = { [weak self] screenPosition in
       self?.markerHit(at: screenPosition)
     }
+    appModel.markerDepthAdjustmentHandler = { [weak self] position, worldDistance in
+      self?.markerPosition(position, offsetAlongViewRayBy: worldDistance)
+    }
   }
 
   private func installInteractionGestures(on view: MTKView) {
@@ -112,6 +124,11 @@ final class MobileVolumeRenderer: NSObject, MTKViewDelegate, UIGestureRecognizer
         let delta = recognizer.translation(in: view)
         recognizer.setTranslation(.zero, in: view)
 
+        if appModel.interactionMode == .marker {
+          moveSelectedMarkerInDepth(by: delta.y)
+          return
+        }
+
         let viewWidth = max(1, Float(view.bounds.width))
         let viewHeight = max(1, Float(view.bounds.height))
         let visibleHeight = 2 * tan(fieldOfViewY * 0.5) * cameraDistance
@@ -121,6 +138,9 @@ final class MobileVolumeRenderer: NSObject, MTKViewDelegate, UIGestureRecognizer
         renderingParameters.pan.y -= Float(delta.y) * visibleHeight / viewHeight
       case .ended, .cancelled, .failed:
         recognizer.setTranslation(.zero, in: view)
+        if appModel.interactionMode == .marker {
+          sharePlay.flushSynchronization()
+        }
       default:
         break
     }
@@ -336,6 +356,7 @@ final class MobileVolumeRenderer: NSObject, MTKViewDelegate, UIGestureRecognizer
     }
 
     activeOversampling = Float(appSettings.oversampling)
+    configurePerformanceTracking()
     let atlasSizeMB = appSettings.atlasSizeMB
     volumeAtlas = try VolumeAtlas(
       device: device,
@@ -516,10 +537,49 @@ final class MobileVolumeRenderer: NSObject, MTKViewDelegate, UIGestureRecognizer
     return closestHit?.id
   }
 
+  private func moveSelectedMarkerInDepth(by panDelta: CGFloat) {
+    guard panDelta != 0,
+          let markerID = appModel.selectedVolumeMarkerID,
+          let index = appModel.volumeMarkers.firstIndex(where: { $0.id == markerID }),
+          let position = appModel.markerDepthAdjustmentHandler?(
+            appModel.volumeMarkers[index].position,
+            Float(panDelta) * markerDepthPanSensitivity
+          ) else { return }
+    appModel.volumeMarkers[index].position = position
+    sharePlay.synchronizeMarkers()
+  }
+
+  private func markerPosition(
+    _ position: SIMD3<Float>,
+    offsetAlongViewRayBy worldDistance: Float
+  ) -> SIMD3<Float>? {
+    guard let view else { return nil }
+    let matrices = markerFrameMatrices(for: view)
+    let fullModel = matrices.model * volumeScale
+    let worldPosition = simd_make_float3(
+      fullModel * SIMD4<Float>(position - SIMD3<Float>(repeating: 0.5), 1)
+    )
+    let cameraPosition = simd_make_float3(
+      simd_inverse(matrices.view) * SIMD4<Float>(0, 0, 0, 1)
+    )
+    let cameraToMarker = worldPosition - cameraPosition
+    let currentDistance = simd_length(cameraToMarker)
+    guard currentDistance > 0.0001 else { return position }
+
+    let newDistance = min(99, max(0.06, currentDistance + worldDistance))
+    let newWorldPosition = cameraPosition + cameraToMarker / currentDistance * newDistance
+    let localPosition = simd_make_float3(
+      simd_inverse(fullModel) * SIMD4<Float>(newWorldPosition, 1)
+    )
+    return localPosition + SIMD3<Float>(repeating: 0.5)
+  }
+
   private func updateUniforms(for view: MTKView) {
     guard let dataset,
           let uniformBufferVertex,
           let uniformBufferFragment else { return }
+    updateActiveOversamplingForCurrentMode()
+    updatePerformanceTrackingSettings()
     uniformBufferVertex.advance()
     uniformBufferFragment.advance()
 
@@ -570,6 +630,60 @@ final class MobileVolumeRenderer: NSObject, MTKViewDelegate, UIGestureRecognizer
 
     uniformBufferVertex.current = vertexUniforms
     uniformBufferFragment.current = fragmentUniforms
+  }
+
+  private func updateActiveOversamplingForCurrentMode() {
+    let baseOversampling = Float(appSettings.oversampling)
+    if appSettings.oversamplingMode == OversamplingMode.dynamicMode.rawValue {
+      activeOversampling = min(activeOversampling, baseOversampling)
+    } else {
+      activeOversampling = baseOversampling
+    }
+  }
+
+  private func updatePerformanceTrackingSettings() {
+    timer.dropThreshold = Double(appSettings.dropFPS)
+    timer.recoveryThreshold = Double(appSettings.recoveryFPS)
+    timer.minimumDropDuration = 0.5
+    if configuredOversamplingMode != appSettings.oversamplingMode {
+      configurePerformanceTracking()
+    }
+  }
+
+  private func configurePerformanceTracking() {
+    configuredOversamplingMode = appSettings.oversamplingMode
+    timer.dropThreshold = Double(appSettings.dropFPS)
+    timer.recoveryThreshold = Double(appSettings.recoveryFPS)
+    timer.minimumDropDuration = 0.5
+
+    guard appSettings.oversamplingMode == OversamplingMode.dynamicMode.rawValue else {
+      timer.onPerformanceTooSlow = nil
+      timer.onPerformanceRecovered = nil
+      return
+    }
+
+    timer.onPerformanceTooSlow = { [weak self] _, _ in
+      MainActor.assumeIsolated {
+        guard let self else { return }
+        if self.activeOversampling < 0.5 {
+          return
+        }
+        self.activeOversampling -= 0.1
+      }
+    }
+
+    timer.onPerformanceRecovered = { [weak self] _, _ in
+      MainActor.assumeIsolated {
+        guard let self else { return false }
+        let baseOversampling = Float(self.appSettings.oversampling)
+        if self.activeOversampling >= baseOversampling {
+          self.activeOversampling = baseOversampling
+          return false
+        }
+        self.activeOversampling += 0.1
+        return true
+      }
+    }
   }
 
   private func updateEmptiness() {

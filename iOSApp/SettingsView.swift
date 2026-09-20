@@ -50,7 +50,6 @@ struct SettingsView: View {
   @State private var tempBrickOverlap = ""
   @State private var tempHashSize = ""
   @State private var tempPixelError = ""
-  @State private var tempOversampling = ""
   @State private var validationMessage: String?
   @State private var showingAddServerSheet = false
   @State private var addServerValidationMessage: String?
@@ -200,13 +199,10 @@ struct SettingsView: View {
     }
   }
 
+  @ViewBuilder
   private var renderingSection: some View {
-    Section {
+    Section("General") {
       Toggle("Automatically load/save transfer functions", isOn: $appSettings.autoloadTF)
-      Picker("Oversampling", selection: $appSettings.oversamplingMode) {
-        Text("Static").tag(OversamplingMode.staticMode.rawValue)
-        Text("Dynamic").tag(OversamplingMode.dynamicMode.rawValue)
-      }
       Picker("Background", selection: $appSettings.renderBackgroundMode) {
         ForEach(RenderBackgroundMode.allCases) { mode in
           Text(mode.label).tag(mode.rawValue)
@@ -228,7 +224,24 @@ struct SettingsView: View {
           set: { appSettings.renderBackgroundSecondaryColor = $0 }
         ), supportsOpacity: true)
       }
-      textFieldRow("Oversampling", text: $tempOversampling, keyboardType: .decimalPad)
+    }
+
+    Section("Advanced") {
+      Picker("Oversampling mode", selection: $appSettings.oversamplingMode) {
+        Text("Static").tag(OversamplingMode.staticMode.rawValue)
+        Text("Dynamic").tag(OversamplingMode.dynamicMode.rawValue)
+      }
+      Stepper(value: $appSettings.oversampling, in: 0.1...8.0, step: 0.1) {
+        Text(String(format: String(localized: "Oversampling factor: %.1f"), appSettings.oversampling))
+      }
+      if appSettings.oversamplingMode == OversamplingMode.dynamicMode.rawValue {
+        Stepper(value: $appSettings.dropFPS, in: 1...240) {
+          Text(String(format: String(localized: "Drop FPS: %d fps"), appSettings.dropFPS))
+        }
+        Stepper(value: $appSettings.recoveryFPS, in: 1...240) {
+          Text(String(format: String(localized: "Recovery FPS: %d fps"), appSettings.recoveryFPS))
+        }
+      }
       Toggle("Randomized sample phase", isOn: $appSettings.sampleJitter)
       Stepper(value: $appSettings.atlasSizeMB, in: 128...AppSettings.maximumAtlasSizeMB, step: 128) {
         Text(String(format: String(localized: "Atlas size: %d MB"), appSettings.atlasSizeMB))
@@ -401,14 +414,6 @@ struct SettingsView: View {
       }
       Toggle("Request low-res LOD", isOn: $appSettings.requestLowResLOD)
       Toggle("Stop on missing brick", isOn: $appSettings.stopOnMiss)
-      if appSettings.oversamplingMode == OversamplingMode.dynamicMode.rawValue {
-        Stepper(value: $appSettings.dropFPS, in: 1...120) {
-          Text(String(format: String(localized: "Drop FPS: %d fps"), appSettings.dropFPS))
-        }
-        Stepper(value: $appSettings.recoveryFPS, in: 1...120) {
-          Text(String(format: String(localized: "Recovery FPS: %d fps"), appSettings.recoveryFPS))
-        }
-      }
       resetButton(for: .lod)
     }
   }
@@ -581,7 +586,6 @@ struct SettingsView: View {
     tempBrickOverlap = String(appSettings.brickOverlap)
     tempHashSize = String(appSettings.minHashTableSize)
     tempPixelError = String(appSettings.screenSpaceError)
-    tempOversampling = String(appSettings.oversampling)
   }
 
   private func saveSettings() {
@@ -600,9 +604,6 @@ struct SettingsView: View {
     }
     if let pixelError = Double(tempPixelError.replacingOccurrences(of: ",", with: ".")), pixelError > 0 {
       appSettings.screenSpaceError = pixelError
-    }
-    if let oversampling = Double(tempOversampling.replacingOccurrences(of: ",", with: ".")), oversampling > 0 {
-      appSettings.oversampling = oversampling
     }
   }
 
@@ -689,7 +690,7 @@ struct SettingsView: View {
       case .adHocServer:
         appSettings.resetAdHocServerDefaults()
       case .lod:
-        appSettings.resetLODDefaults()
+        appSettings.resetLODDefaults(resetOversamplingThresholds: false)
     }
     validationMessage = nil
     loadTemporaryValues()
