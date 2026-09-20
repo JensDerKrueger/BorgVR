@@ -92,7 +92,11 @@ struct OpenDatasetView: View {
       .navigationTitle("Open dataset")
       .toolbar {
         ToolbarItem(placement: .topBarLeading) {
-          Button("Back") { appModel.currentState = .start }
+          Button {
+            appModel.currentState = .start
+          } label: {
+            Label("Back", systemImage: "chevron.backward")
+          }
             .help("dataset_open_back_help")
         }
         ToolbarItemGroup(placement: .topBarTrailing) {

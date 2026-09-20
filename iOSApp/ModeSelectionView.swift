@@ -69,27 +69,37 @@ struct ModeSelectionView: View {
 
   private var compactLandscapeContent: some View {
     HStack(spacing: 28) {
-      ScrollView {
-        VStack(spacing: 14) {
-          borgVRLogo
-            .frame(maxWidth: 130)
-            .clipShape(RoundedRectangle(cornerRadius: 8))
+      ViewThatFits(in: .vertical) {
+        compactLandscapeBranding
 
-          titleBlock(multilineAlignment: .center)
-
-          if appSettings.enableDatasetServer {
-            serverStatus
-          }
+        ScrollView {
+          compactLandscapeBranding
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 18)
+        .scrollIndicators(.hidden)
       }
 
       buttonStack
         .frame(maxWidth: 360)
     }
+    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
     .padding(.horizontal, 24)
     .padding(.vertical, 14)
+  }
+
+  private var compactLandscapeBranding: some View {
+    VStack(spacing: 14) {
+      borgVRLogo
+        .frame(maxWidth: 130)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+
+      titleBlock(multilineAlignment: .center)
+
+      if appSettings.enableDatasetServer {
+        serverStatus
+      }
+    }
+    .frame(maxWidth: .infinity)
+    .padding(.vertical, 18)
   }
 
   private var regularLandscapeContent: some View {
@@ -293,8 +303,10 @@ private struct iOSAboutView: View {
       .navigationTitle("info_title")
       .toolbar {
         ToolbarItem(placement: .cancellationAction) {
-          Button("info_close_button") {
+          Button {
             dismiss()
+          } label: {
+            Label("info_close_button", systemImage: "xmark")
           }
         }
       }

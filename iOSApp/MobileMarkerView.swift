@@ -115,8 +115,10 @@ struct MobileMarkerView: View {
       .navigationBarTitleDisplayMode(.inline)
       .toolbar {
         ToolbarItem(placement: .confirmationAction) {
-          Button("Done") {
+          Button {
             dismiss()
+          } label: {
+            Label("Done", systemImage: "checkmark")
           }
         }
       }

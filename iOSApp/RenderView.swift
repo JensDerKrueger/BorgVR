@@ -22,8 +22,9 @@ struct RenderView: View {
   @State private var copiedWebGPUShareLink = false
   @State private var showMarkerEditor = false
   @State private var markerDragID: UUID?
+  @State private var arcballStartOrientation: simd_quatf?
+  @StateObject private var renderSurface = MobileRenderSurface()
 
-  private let modelRotationSensitivity: Float = 0.006
   private let clippingSensitivity: Float = 0.0012
   private let clippingPinchSensitivity: Float = 0.45
   private let transferSmoothCenterSensitivity: Float = 0.003
@@ -65,12 +66,12 @@ struct RenderView: View {
       renderBackground
         .ignoresSafeArea()
 
-      MobileMetalView()
+      MobileMetalView(renderSurface: renderSurface)
         .ignoresSafeArea()
-        .gesture(interactionGesture(in: layout.size))
+        .gesture(interactionGesture)
         .simultaneousGesture(zoomGesture)
         .simultaneousGesture(doubleTapInteractionGesture)
-        .simultaneousGesture(markerTapGesture(in: layout.size))
+        .simultaneousGesture(markerTapGesture)
 
       switch layout.renderControlPlacement {
         case .overlayTop:
@@ -322,8 +323,8 @@ struct RenderView: View {
       }
   }
 
-  private func interactionGesture(in viewSize: CGSize) -> some Gesture {
-    DragGesture(minimumDistance: 1)
+  private var interactionGesture: some Gesture {
+    DragGesture(minimumDistance: 1, coordinateSpace: .global)
       .onChanged { value in
         let delta = CGSize(
           width: value.translation.width - previousDragTranslation.width,
@@ -333,7 +334,15 @@ struct RenderView: View {
 
         switch appModel.interactionMode {
           case .model:
-            rotateModel(by: delta)
+            guard let start = renderSurface.localPointAndSize(forGlobalPoint: value.startLocation),
+                  let current = renderSurface.localPointAndSize(forGlobalPoint: value.location) else {
+              return
+            }
+            rotateModel(
+              from: start.point,
+              to: current.point,
+              in: current.size
+            )
             synchronizeTransform()
           case .clipping:
             applyViewAlignedClipping(delta: delta)
@@ -341,22 +350,21 @@ struct RenderView: View {
           case .transferEditing:
             applyTransferInteraction(delta: delta)
           case .marker:
-            updateMarkerInteraction(at: value.location, in: viewSize)
+            updateMarkerInteraction(atGlobalPoint: value.location)
         }
       }
       .onEnded { _ in
         previousDragTranslation = .zero
+        arcballStartOrientation = nil
         markerDragID = nil
         sharePlay.flushSynchronization()
       }
   }
 
-  private func updateMarkerInteraction(at location: CGPoint, in viewSize: CGSize) {
-    guard viewSize.width > 0, viewSize.height > 0 else { return }
-    let screenPosition = SIMD2<Float>(
-      Float(location.x / viewSize.width),
-      Float(1 - location.y / viewSize.height)
-    )
+  private func updateMarkerInteraction(atGlobalPoint point: CGPoint) {
+    guard let screenPosition = renderSurface.normalizedScreenPosition(forGlobalPoint: point) else {
+      return
+    }
     if markerDragID == nil {
       beginMarkerInteraction(at: screenPosition)
     }
@@ -390,30 +398,63 @@ struct RenderView: View {
     }
   }
 
-  private func markerTapGesture(in viewSize: CGSize) -> some Gesture {
-    SpatialTapGesture(count: 1)
+  private var markerTapGesture: some Gesture {
+    SpatialTapGesture(count: 1, coordinateSpace: .global)
       .onEnded { value in
         guard appModel.interactionMode == .marker,
-              viewSize.width > 0,
-              viewSize.height > 0 else { return }
-        let screenPosition = SIMD2<Float>(
-          Float(value.location.x / viewSize.width),
-          Float(1 - value.location.y / viewSize.height)
-        )
+              let screenPosition = renderSurface.normalizedScreenPosition(
+                forGlobalPoint: value.location
+              ) else { return }
         beginMarkerInteraction(at: screenPosition)
         markerDragID = nil
         sharePlay.flushSynchronization()
       }
   }
 
-  private func rotateModel(by delta: CGSize) {
-    let xAngle = Float(delta.height) * modelRotationSensitivity
-    let yAngle = Float(delta.width) * modelRotationSensitivity
-    guard xAngle != 0 || yAngle != 0 else { return }
+  private func rotateModel(from start: CGPoint, to current: CGPoint, in viewSize: CGSize) {
+    guard viewSize.width > 0, viewSize.height > 0 else { return }
+    let startOrientation = arcballStartOrientation ?? renderingParameters.orientation
+    if arcballStartOrientation == nil {
+      arcballStartOrientation = startOrientation
+    }
 
-    let xRotation = simd_quatf(angle: xAngle, axis: SIMD3<Float>(1, 0, 0))
-    let yRotation = simd_quatf(angle: yAngle, axis: SIMD3<Float>(0, 1, 0))
-    renderingParameters.orientation = simd_normalize(yRotation * xRotation * renderingParameters.orientation)
+    let startVector = arcballVector(at: start, in: viewSize)
+    let currentVector = arcballVector(at: current, in: viewSize)
+    let rotation = quaternionRotating(from: startVector, to: currentVector)
+    renderingParameters.orientation = simd_normalize(rotation * startOrientation)
+  }
+
+  private func arcballVector(at location: CGPoint, in viewSize: CGSize) -> SIMD3<Float> {
+    let radius = Float(max(1, min(viewSize.width, viewSize.height) * 0.5))
+    var vector = SIMD3<Float>(
+      (Float(location.x) - Float(viewSize.width) * 0.5) / radius,
+      (Float(viewSize.height) * 0.5 - Float(location.y)) / radius,
+      0
+    )
+    let distanceSquared = vector.x * vector.x + vector.y * vector.y
+    if distanceSquared <= 1 {
+      vector.z = sqrt(1 - distanceSquared)
+      return vector
+    }
+    return simd_normalize(vector)
+  }
+
+  private func quaternionRotating(
+    from start: SIMD3<Float>,
+    to end: SIMD3<Float>
+  ) -> simd_quatf {
+    let cosine = min(1, max(-1, simd_dot(start, end)))
+    if cosine < -0.9999 {
+      let reference = abs(start.x) < 0.9
+        ? SIMD3<Float>(1, 0, 0)
+        : SIMD3<Float>(0, 1, 0)
+      return simd_quatf(angle: .pi, axis: simd_normalize(simd_cross(start, reference)))
+    }
+
+    let axis = simd_cross(start, end)
+    return simd_normalize(
+      simd_quatf(ix: axis.x, iy: axis.y, iz: axis.z, r: 1 + cosine)
+    )
   }
 
   private func applyTransferInteraction(delta: CGSize) {

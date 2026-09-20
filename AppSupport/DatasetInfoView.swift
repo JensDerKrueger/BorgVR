@@ -34,8 +34,10 @@ struct DatasetInfoView: View {
       #endif
       .toolbar {
         ToolbarItem(placement: .confirmationAction) {
-          Button("Close") {
+          Button {
             onClose?()
+          } label: {
+            Label("Close", systemImage: "xmark")
           }
         }
       }

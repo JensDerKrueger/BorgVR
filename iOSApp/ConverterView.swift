@@ -84,7 +84,11 @@ struct ConverterView: View {
       .navigationTitle("Import")
       .toolbar {
         ToolbarItem(placement: .topBarLeading) {
-          Button("Back") { appModel.currentState = .start }
+          Button {
+            appModel.currentState = .start
+          } label: {
+            Label("Back", systemImage: "chevron.backward")
+          }
             .disabled(isWorking)
         }
         ToolbarItemGroup(placement: .topBarTrailing) {

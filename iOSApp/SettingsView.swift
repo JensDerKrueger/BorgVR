@@ -64,9 +64,11 @@ struct SettingsView: View {
         .navigationTitle("Settings")
         .toolbar {
           ToolbarItem(placement: .topBarLeading) {
-            Button("Back") {
+            Button {
               saveSettings()
               appModel.currentState = .start
+            } label: {
+              Label("Back", systemImage: "chevron.backward")
             }
           }
         }
@@ -345,16 +347,20 @@ struct SettingsView: View {
       .navigationTitle("Add server")
       .toolbar {
         ToolbarItem(placement: .cancellationAction) {
-          Button("Cancel") {
+          Button {
             showingAddServerSheet = false
+          } label: {
+            Label("Cancel", systemImage: "xmark")
           }
         }
 
         ToolbarItem(placement: .confirmationAction) {
-          Button("Add") {
+          Button {
             if addServer() {
               showingAddServerSheet = false
             }
+          } label: {
+            Label("Add", systemImage: "plus")
           }
         }
       }
