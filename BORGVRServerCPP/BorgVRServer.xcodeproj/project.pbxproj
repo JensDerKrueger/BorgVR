@@ -16,6 +16,7 @@
 		561B8D422EF92E61008BADBC /* MemoryMappedFile.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 561B8D382EF92E61008BADBC /* MemoryMappedFile.cpp */; };
 		561B8D452EF92F01008BADBC /* HTTPWebServer.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 561B8D442EF92F01008BADBC /* HTTPWebServer.cpp */; };
 		561B8D462EF93010008BADBC /* GeneratedWebAssets.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 561B8D472EF93010008BADBC /* GeneratedWebAssets.cpp */; };
+		561B8D4A2EF93110008BADBC /* ServerSync.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 561B8D4B2EF93110008BADBC /* ServerSync.cpp */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -48,6 +49,9 @@
 		561B8D472EF93010008BADBC /* GeneratedWebAssets.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = GeneratedWebAssets.cpp; sourceTree = "<group>"; };
 		561B8D482EF93010008BADBC /* GeneratedWebAssets.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = GeneratedWebAssets.h; sourceTree = "<group>"; };
 		561B8D442EF92F01008BADBC /* HTTPWebServer.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = HTTPWebServer.cpp; sourceTree = "<group>"; };
+		561B8D4B2EF93110008BADBC /* ServerSync.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = ServerSync.cpp; sourceTree = "<group>"; };
+		561B8D4C2EF93110008BADBC /* ServerSync.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ServerSync.h; sourceTree = "<group>"; };
+		561B8D4D2EF93110008BADBC /* BorgVRFormatConstants.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = BorgVRFormatConstants.h; sourceTree = "<group>"; };
 		561B8D362EF92E61008BADBC /* LZ4.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = LZ4.cpp; sourceTree = "<group>"; };
 		561B8D372EF92E61008BADBC /* main.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = main.cpp; sourceTree = "<group>"; };
 		561B8D382EF92E61008BADBC /* MemoryMappedFile.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = MemoryMappedFile.cpp; sourceTree = "<group>"; };
@@ -87,6 +91,7 @@
 			isa = PBXGroup;
 			children = (
 				561B8D292EF92E61008BADBC /* BinaryIO.h */,
+				561B8D4D2EF93110008BADBC /* BorgVRFormatConstants.h */,
 				561B8D2A2EF92E61008BADBC /* BORGVRDataBase.h */,
 				561B8D2B2EF92E61008BADBC /* BORGVRFileData.h */,
 				561B8D2C2EF92E61008BADBC /* BORGVRMetaData.h */,
@@ -95,6 +100,7 @@
 				561B8D2E2EF92E61008BADBC /* Logger.h */,
 				561B8D2F2EF92E61008BADBC /* LZ4.h */,
 				561B8D302EF92E61008BADBC /* MemoryMappedFile.h */,
+				561B8D4C2EF93110008BADBC /* ServerSync.h */,
 				561B8D312EF92E61008BADBC /* Socket.h */,
 				561B8D322EF92E61008BADBC /* TCPServer.h */,
 			);
@@ -112,6 +118,7 @@
 				561B8D362EF92E61008BADBC /* LZ4.cpp */,
 				561B8D372EF92E61008BADBC /* main.cpp */,
 				561B8D382EF92E61008BADBC /* MemoryMappedFile.cpp */,
+				561B8D4B2EF93110008BADBC /* ServerSync.cpp */,
 				561B8D392EF92E61008BADBC /* Socket.cpp */,
 				561B8D3A2EF92E61008BADBC /* TCPServer.cpp */,
 			);
@@ -184,7 +191,9 @@
 			inputFileListPaths = (
 			);
 			inputPaths = (
-				"$(SRCROOT)/scripts/embed_web_assets.py",
+				"$(SRCROOT)/tools/embed_web_assets.cpp",
+				"$(SRCROOT)/src/LZ4.cpp",
+				"$(SRCROOT)/include/LZ4.h",
 				"$(SRCROOT)/../web",
 			);
 			name = "Embed Web Assets";
@@ -196,7 +205,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "python3 scripts/embed_web_assets.py --web-dir ../web --out-dir src\n";
+			shellScript = "set -eu\nTOOL_DIR=\"${DERIVED_FILE_DIR}/WebAssetTool\"\nTOOL=\"${TOOL_DIR}/embed_web_assets\"\nmkdir -p \"${TOOL_DIR}\"\nif [ ! -x \"${TOOL}\" ] || [ \"${SRCROOT}/tools/embed_web_assets.cpp\" -nt \"${TOOL}\" ] || [ \"${SRCROOT}/src/LZ4.cpp\" -nt \"${TOOL}\" ] || [ \"${SRCROOT}/include/LZ4.h\" -nt \"${TOOL}\" ]; then\n  xcrun --sdk macosx clang++ -std=c++17 -Wall -Wextra -Wpedantic -I\"${SRCROOT}/include\" \"${SRCROOT}/tools/embed_web_assets.cpp\" \"${SRCROOT}/src/LZ4.cpp\" -o \"${TOOL}\"\nfi\n\"${TOOL}\" --web-dir \"${SRCROOT}/../web\" --out-dir \"${SRCROOT}/src\"\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
@@ -213,6 +222,7 @@
 				561B8D412EF92E61008BADBC /* BORGVRFileData.cpp in Sources */,
 				561B8D422EF92E61008BADBC /* MemoryMappedFile.cpp in Sources */,
 				561B8D452EF92F01008BADBC /* HTTPWebServer.cpp in Sources */,
+				561B8D4A2EF93110008BADBC /* ServerSync.cpp in Sources */,
 				561B8D462EF93010008BADBC /* GeneratedWebAssets.cpp in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -344,6 +354,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = L8Q6MVX7ZF;
 				ENABLE_HARDENED_RUNTIME = YES;
+				HEADER_SEARCH_PATHS = "$(SRCROOT)/include";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 			};
 			name = Debug;
@@ -355,6 +366,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = L8Q6MVX7ZF;
 				ENABLE_HARDENED_RUNTIME = YES;
+				HEADER_SEARCH_PATHS = "$(SRCROOT)/include";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 			};
 			name = Release;

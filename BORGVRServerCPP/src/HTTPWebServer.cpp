@@ -21,6 +21,54 @@ constexpr size_t kAppleLZ4BlockBytes = 64 * 1024;
 constexpr size_t kMaxHTTPBrickBatchCount = 128;
 constexpr int kMaxActiveHTTPHandlers = 128;
 
+struct EmbeddedWebAssetCache {
+  std::vector<std::vector<uint8_t>> bodies;
+  std::vector<bool> valid;
+
+  EmbeddedWebAssetCache() {
+    const EmbeddedWebAsset* assets = embeddedWebAssets();
+    const size_t count = embeddedWebAssetCount();
+    bodies.resize(count);
+    valid.assign(count, false);
+
+    for (size_t index = 0; index < count; ++index) {
+      const EmbeddedWebAsset& asset = assets[index];
+      std::vector<uint8_t>& body = bodies[index];
+      if (asset.encoding == EmbeddedWebAssetEncoding::raw) {
+        if (asset.storedSize != asset.uncompressedSize) continue;
+        body.assign(asset.data, asset.data + asset.storedSize);
+        valid[index] = true;
+        continue;
+      }
+
+      if (asset.encoding != EmbeddedWebAssetEncoding::lz4 ||
+          asset.storedSize == 0 || asset.uncompressedSize == 0) {
+        continue;
+      }
+      body.resize(asset.uncompressedSize);
+      const size_t decodedSize = lz4::decompressBlock(
+        asset.data, asset.storedSize, body.data(), body.size()
+      );
+      if (decodedSize == asset.uncompressedSize) {
+        valid[index] = true;
+      } else {
+        body.clear();
+      }
+    }
+  }
+};
+
+const std::vector<uint8_t>* decodedEmbeddedWebAsset(const EmbeddedWebAsset* asset) {
+  if (!asset) return nullptr;
+  const EmbeddedWebAsset* assets = embeddedWebAssets();
+  const size_t count = embeddedWebAssetCount();
+  if (asset < assets || asset >= assets + count) return nullptr;
+
+  static const EmbeddedWebAssetCache cache;
+  const size_t index = static_cast<size_t>(asset - assets);
+  return cache.valid[index] ? &cache.bodies[index] : nullptr;
+}
+
 class HandlerCounter {
 public:
   explicit HandlerCounter(std::atomic<int>& counter, bool increment = true) : counter_(counter) {
@@ -907,8 +955,16 @@ bool HTTPWebServer::sendStaticFile(TcpSocket& socket, const std::string& request
     return false;
   }
 
-  std::vector<uint8_t> body(asset->data, asset->data + asset->size);
-  return sendResponse(socket, 200, "OK", asset->contentType, body, {}, closeAfterSend);
+  const std::vector<uint8_t>* body = decodedEmbeddedWebAsset(asset);
+  if (!body) {
+    if (logger_) logger_->error("Embedded web asset decompression failed for " + requestPath);
+    return sendError(socket,
+                     500,
+                     "Internal Server Error",
+                     "Unable to decode embedded web asset.",
+                     closeAfterSend);
+  }
+  return sendResponse(socket, 200, "OK", asset->contentType, *body, {}, closeAfterSend);
 }
 
 bool HTTPWebServer::sendResponse(TcpSocket& socket,

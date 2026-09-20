@@ -27,6 +27,8 @@ CMakeCache.txt
 CMakeFiles/
 cmake_install.cmake
 compile_commands.json
+BORGVRServerCPP/src/GeneratedWebAssets.cpp
+BORGVRServerCPP/src/GeneratedWebAssets.h
 
 # Visual Studio user/cache state
 .vs/

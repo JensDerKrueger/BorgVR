@@ -33,6 +33,9 @@
     <ClCompile Include="src\MemoryMappedFile.cpp">
       <Filter>Quelldateien</Filter>
     </ClCompile>
+    <ClCompile Include="src\ServerSync.cpp">
+      <Filter>Quelldateien</Filter>
+    </ClCompile>
     <ClCompile Include="src\Socket.cpp">
       <Filter>Quelldateien</Filter>
     </ClCompile>
@@ -56,6 +59,9 @@
     <ClInclude Include="include\BORGVRMetaData.h">
       <Filter>Headerdateien</Filter>
     </ClInclude>
+    <ClInclude Include="include\BorgVRFormatConstants.h">
+      <Filter>Headerdateien</Filter>
+    </ClInclude>
     <ClInclude Include="include\HTTPWebServer.h">
       <Filter>Headerdateien</Filter>
     </ClInclude>
@@ -72,6 +78,9 @@
       <Filter>Headerdateien</Filter>
     </ClInclude>
     <ClInclude Include="include\MemoryMappedFile.h">
+      <Filter>Headerdateien</Filter>
+    </ClInclude>
+    <ClInclude Include="include\ServerSync.h">
       <Filter>Headerdateien</Filter>
     </ClInclude>
     <ClInclude Include="include\Socket.h">

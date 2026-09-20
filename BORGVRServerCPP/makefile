@@ -21,11 +21,12 @@ SRC_DIR   := src
 INC_DIR   := include
 BUILD_DIR := build
 WEB_DIR   := ../web
-SCRIPT_DIR := scripts
+TOOLS_DIR := tools
 
 GENERATED_WEB_SRC := $(SRC_DIR)/GeneratedWebAssets.cpp
 GENERATED_WEB_HDR := $(SRC_DIR)/GeneratedWebAssets.h
-WEB_EMBED_SCRIPT := $(SCRIPT_DIR)/embed_web_assets.py
+WEB_EMBED_TOOL_SRC := $(TOOLS_DIR)/embed_web_assets.cpp
+WEB_EMBED_TOOL := $(BUILD_DIR)/tools/embed_web_assets
 WEB_ASSETS := $(shell find $(WEB_DIR) -type f ! -name '.*' 2>/dev/null)
 
 SRCS := $(filter-out $(GENERATED_WEB_SRC),$(wildcard $(SRC_DIR)/*.cpp)) $(GENERATED_WEB_SRC)
@@ -71,8 +72,18 @@ endif
 
 all: $(BUILD_DIR)/$(TARGET)
 
-$(GENERATED_WEB_SRC) $(GENERATED_WEB_HDR): $(WEB_ASSETS) $(WEB_EMBED_SCRIPT)
-	python3 $(WEB_EMBED_SCRIPT) --web-dir $(WEB_DIR) --out-dir $(SRC_DIR)
+$(WEB_EMBED_TOOL): $(WEB_EMBED_TOOL_SRC) $(SRC_DIR)/LZ4.cpp $(INC_DIR)/LZ4.h
+	@mkdir -p $(dir $@)
+	$(CXX) -std=c++17 -Wall -Wextra -Wpedantic -I$(INC_DIR) \
+		$(WEB_EMBED_TOOL_SRC) $(SRC_DIR)/LZ4.cpp -o $@
+
+$(GENERATED_WEB_SRC): $(WEB_ASSETS) $(WEB_EMBED_TOOL)
+	$(WEB_EMBED_TOOL) --web-dir $(WEB_DIR) --out-dir $(SRC_DIR)
+
+$(GENERATED_WEB_HDR): $(GENERATED_WEB_SRC)
+	@test -f $@ || $(WEB_EMBED_TOOL) --web-dir $(WEB_DIR) --out-dir $(SRC_DIR)
+
+$(BUILD_DIR)/obj/HTTPWebServer.o: $(GENERATED_WEB_HDR)
 
 $(BUILD_DIR)/$(TARGET): $(OBJS)
 	@mkdir -p $(dir $@)
@@ -91,6 +102,7 @@ run: all
 
 clean:
 	rm -rf $(BUILD_DIR)
+	rm -f $(GENERATED_WEB_SRC) $(GENERATED_WEB_HDR)
 
 print-vars:
 	@echo "UNAME_S=$(UNAME_S)"

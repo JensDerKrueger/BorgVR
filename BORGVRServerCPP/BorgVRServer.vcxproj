@@ -201,6 +201,7 @@
     <ClCompile Include="src\LZ4.cpp" />
     <ClCompile Include="src\main.cpp" />
     <ClCompile Include="src\MemoryMappedFile.cpp" />
+    <ClCompile Include="src\ServerSync.cpp" />
     <ClCompile Include="src\Socket.cpp" />
     <ClCompile Include="src\TCPServer.cpp" />
   </ItemGroup>
@@ -209,17 +210,25 @@
     <ClInclude Include="include\BORGVRDataBase.h" />
     <ClInclude Include="include\BORGVRFileData.h" />
     <ClInclude Include="include\BORGVRMetaData.h" />
+    <ClInclude Include="include\BorgVRFormatConstants.h" />
     <ClInclude Include="include\HTTPWebServer.h" />
     <ClInclude Include="src\GeneratedWebAssets.h" />
     <ClInclude Include="include\KeyValue.h" />
     <ClInclude Include="include\Logger.h" />
     <ClInclude Include="include\LZ4.h" />
     <ClInclude Include="include\MemoryMappedFile.h" />
+    <ClInclude Include="include\ServerSync.h" />
     <ClInclude Include="include\Socket.h" />
     <ClInclude Include="include\TCPServer.h" />
   </ItemGroup>
   <Target Name="EmbedWebAssets" BeforeTargets="ClCompile">
-    <Exec Command="python scripts\embed_web_assets.py --web-dir ..\web --out-dir src" />
+    <MakeDir Directories="$(IntDir)EmbedWebAssets" />
+    <Exec
+      WorkingDirectory="$(IntDir)EmbedWebAssets"
+      Command="&quot;$(CLToolPath)$(CLToolExe)&quot; /nologo /std:c++17 /EHsc /I&quot;$(ProjectDir)include&quot; &quot;$(ProjectDir)tools\embed_web_assets.cpp&quot; &quot;$(ProjectDir)src\LZ4.cpp&quot; /Fe:embed_web_assets.exe" />
+    <Exec
+      WorkingDirectory="$(IntDir)EmbedWebAssets"
+      Command=".\embed_web_assets.exe --web-dir &quot;$(ProjectDir)..\web&quot; --out-dir &quot;$(ProjectDir)src&quot;" />
   </Target>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
