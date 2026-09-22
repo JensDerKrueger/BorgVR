@@ -14,6 +14,9 @@ final class AppModel: ObservableObject {
     _ positionToPreserveDepth: SIMD3<Float>?
   ) -> SIMD3<Float>?
   typealias MarkerHitTestHandler = (_ normalizedScreenPosition: SIMD2<Float>) -> UUID?
+  typealias MarkerDirectionOriginHandler = (
+    _ normalizedScreenPosition: SIMD2<Float>
+  ) -> SIMD3<Float>?
   typealias MarkerDepthAdjustmentHandler = (
     _ position: SIMD3<Float>,
     _ worldDistance: Float
@@ -80,6 +83,7 @@ final class AppModel: ObservableObject {
   var renderDisplaySyncHandler: RenderDisplaySyncHandler?
   var markerPositionHandler: MarkerPositionHandler?
   var markerHitTestHandler: MarkerHitTestHandler?
+  var markerDirectionOriginHandler: MarkerDirectionOriginHandler?
   var markerDepthAdjustmentHandler: MarkerDepthAdjustmentHandler?
   let defaultVolumeMarkerColor = SIMD4<Float>(
     Float.random(in: 0.2...1),

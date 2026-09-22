@@ -1008,6 +1008,7 @@
 "The marker file contains too many geometry points." = "Le fichier de marqueurs contient trop de points géométriques.";
 "The marker file contains invalid marker geometry." = "Le fichier de marqueurs contient une géométrie de marqueur non valide.";
 "Sphere" = "Sphère";
+"Show Direction" = "Afficher la direction";
 "Stroke" = "Tracé";
 "Leave SharePlay" = "Quitter SharePlay";
 "Leave SharePlay?" = "Quitter SharePlay ?";

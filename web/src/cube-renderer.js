@@ -1,5 +1,5 @@
 import { BrickAtlas } from "./brick-atlas.js?v=20260915-mobile-budget";
-import { buildMarkerRenderGeometry } from "./marker-tube-mesh.js?v=20260918-tube-mesh";
+import { buildMarkerRenderGeometry } from "./marker-tube-mesh.js?v=20260922-marker-direction";
 import { createDefaultTransferFunction } from "./transfer-function.js?v=20260907-range-fix";
 
 const shaderSource = `

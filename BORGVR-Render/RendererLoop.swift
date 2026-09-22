@@ -608,41 +608,46 @@ extension Renderer {
       )
     }
 
+    func drawTube(for marker: VolumeMarker, color: SIMD4<Float>) {
+      guard let tubeMesh = markerTubeMeshCache.mesh(
+        for: marker,
+        coordinateScale: coordinateScale,
+        device: device
+      ) else { return }
+      var modelMatrix = lastUnscaledModelMatrix
+      var color = color
+      renderEncoder.setVertexBuffer(
+        tubeMesh.positionBuffer,
+        offset: 0,
+        index: VertexBufferIndex.meshPositions.rawValue
+      )
+      renderEncoder.setVertexBuffer(tubeMesh.normalBuffer, offset: 0, index: 24)
+      renderEncoder.setVertexBytes(
+        &modelMatrix,
+        length: MemoryLayout<simd_float4x4>.stride,
+        index: 21
+      )
+      renderEncoder.setFragmentBytes(
+        &color,
+        length: MemoryLayout<SIMD4<Float>>.stride,
+        index: 23
+      )
+      renderEncoder.drawPrimitives(
+        type: .triangle,
+        vertexStart: 0,
+        vertexCount: tubeMesh.vertexCount
+      )
+    }
+
     for marker in markers {
-      var markerColor = color(for: marker)
+      let markerColor = color(for: marker)
       switch marker.geometry {
         case .sphere(let point):
+          drawTube(for: marker, color: markerColor)
           drawSphere(point, color: markerColor)
 
         case .stroke(let points):
-          if let tubeMesh = markerTubeMeshCache.mesh(
-            for: marker,
-            coordinateScale: coordinateScale,
-            device: device
-          ) {
-            var modelMatrix = lastUnscaledModelMatrix
-            renderEncoder.setVertexBuffer(
-              tubeMesh.positionBuffer,
-              offset: 0,
-              index: VertexBufferIndex.meshPositions.rawValue
-            )
-            renderEncoder.setVertexBuffer(tubeMesh.normalBuffer, offset: 0, index: 24)
-            renderEncoder.setVertexBytes(
-              &modelMatrix,
-              length: MemoryLayout<simd_float4x4>.stride,
-              index: 21
-            )
-            renderEncoder.setFragmentBytes(
-              &markerColor,
-              length: MemoryLayout<SIMD4<Float>>.stride,
-              index: 23
-            )
-            renderEncoder.drawPrimitives(
-              type: .triangle,
-              vertexStart: 0,
-              vertexCount: tubeMesh.vertexCount
-            )
-          }
+          drawTube(for: marker, color: markerColor)
           if let first = points.first {
             drawSphere(first, color: markerColor)
           }

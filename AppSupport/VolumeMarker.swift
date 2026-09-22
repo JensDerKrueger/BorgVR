@@ -68,11 +68,14 @@ enum VolumeMarkerPresentation {
 
 struct VolumeMarker: Identifiable, Equatable {
   static let strokePointSpacingDiameterFactor: Float = 0.35
+  static let directionRadiusFactor: Float = 0.1
   static let maximumInteractiveStrokePointCount = 100_000
 
   var id: UUID
   var name: String
   var color: SIMD4<Float>
+  private(set) var directionOrigin: SIMD3<Float>?
+  var showsDirection: Bool
   private(set) var geometry: VolumeMarkerGeometry
   private var geometryCacheID = UUID()
 
@@ -81,11 +84,15 @@ struct VolumeMarker: Identifiable, Equatable {
     name: String,
     position: SIMD3<Float>,
     radius: Float,
-    color: SIMD4<Float>
+    color: SIMD4<Float>,
+    directionOrigin: SIMD3<Float>,
+    showsDirection: Bool = true
   ) {
     self.id = id
     self.name = name
     self.color = color
+    self.directionOrigin = directionOrigin
+    self.showsDirection = showsDirection
     geometry = .sphere(
       VolumeMarkerPoint(
         position: position,
@@ -98,11 +105,15 @@ struct VolumeMarker: Identifiable, Equatable {
     id: UUID,
     name: String,
     color: SIMD4<Float>,
-    geometry: VolumeMarkerGeometry
+    geometry: VolumeMarkerGeometry,
+    directionOrigin: SIMD3<Float>? = nil,
+    showsDirection: Bool = false
   ) {
     self.id = id
     self.name = name
     self.color = color
+    self.directionOrigin = directionOrigin
+    self.showsDirection = showsDirection && directionOrigin != nil
     switch geometry {
       case .sphere(let point):
         self.geometry = .sphere(
@@ -112,6 +123,8 @@ struct VolumeMarker: Identifiable, Equatable {
           )
         )
       case .stroke(let points):
+        self.directionOrigin = nil
+        self.showsDirection = false
         self.geometry = .stroke(points.map { point in
           VolumeMarkerPoint(
             position: point.position,
@@ -217,6 +230,8 @@ struct VolumeMarker: Identifiable, Equatable {
     lhs.id == rhs.id &&
       lhs.name == rhs.name &&
       lhs.color == rhs.color &&
+      lhs.directionOrigin == rhs.directionOrigin &&
+      lhs.showsDirection == rhs.showsDirection &&
       lhs.geometry == rhs.geometry
   }
 }
@@ -538,7 +553,7 @@ enum VolumeMarkerSharePlayCodec {
 }
 
 enum VolumeMarkerBinaryCodec {
-  // Each marker stores kind, UUID, name, RGBA, point count, then xyz/radius points.
+  // Each marker stores kind, flags, UUID, name, RGBA, points, and a sphere viewpoint.
   static func encode(_ markers: [VolumeMarker], to writer: inout MarkerDataWriter) throws {
     guard markers.count <= BorgVRMarkerFormat.maximumMarkerCount else {
       throw VolumeMarkerDocumentError.tooManyMarkers
@@ -549,7 +564,8 @@ enum VolumeMarkerBinaryCodec {
     }
     guard markers.allSatisfy({ marker in
       let points = marker.points
-      return !points.isEmpty && (marker.kind != .sphere || points.count == 1)
+      return !points.isEmpty &&
+        (marker.kind != .sphere || (points.count == 1 && marker.directionOrigin != nil))
     }) else {
       throw VolumeMarkerDocumentError.invalidGeometry
     }
@@ -558,7 +574,8 @@ enum VolumeMarkerBinaryCodec {
     for marker in markers {
       let points = marker.points
       writer.write(marker.kind.rawValue)
-      writer.write(UInt8(0))
+      let flags: UInt8 = marker.kind == .sphere && marker.showsDirection ? 1 : 0
+      writer.write(flags)
       writer.write(UInt16(0))
       writer.writeUUID(marker.id)
       writer.writeString(
@@ -570,6 +587,9 @@ enum VolumeMarkerBinaryCodec {
       for point in points {
         writer.writeSIMD3(sanitizedPosition(point.position))
         writer.write(sanitizedRadius(point.radius, kind: marker.kind))
+      }
+      if marker.kind == .sphere, let directionOrigin = marker.directionOrigin {
+        writer.writeSIMD3(sanitizedPosition(directionOrigin))
       }
     }
   }
@@ -585,7 +605,7 @@ enum VolumeMarkerBinaryCodec {
     var totalPointCount = 0
     for index in 0..<markerCount {
       let rawKind: UInt8 = try reader.read()
-      _ = try reader.read() as UInt8
+      let flags: UInt8 = try reader.read()
       _ = try reader.read() as UInt16
       guard let kind = VolumeMarkerKind(rawValue: rawKind) else {
         throw VolumeMarkerDocumentError.invalidGeometry
@@ -610,6 +630,9 @@ enum VolumeMarkerBinaryCodec {
           )
         )
       }
+      let directionOrigin = kind == .sphere
+        ? sanitizedPosition(try reader.readSIMD3())
+        : nil
       let trimmedName = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
       markers.append(
         VolumeMarker(
@@ -619,7 +642,9 @@ enum VolumeMarkerBinaryCodec {
               .prefix(BorgVRMarkerFormat.maximumNameCharacterCount)
           ),
           color: color,
-          geometry: kind == .sphere ? .sphere(points[0]) : .stroke(points)
+          geometry: kind == .sphere ? .sphere(points[0]) : .stroke(points),
+          directionOrigin: directionOrigin,
+          showsDirection: kind == .sphere && flags & 1 != 0
         )
       )
     }

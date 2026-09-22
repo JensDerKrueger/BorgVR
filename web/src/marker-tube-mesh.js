@@ -1,5 +1,6 @@
 const RADIAL_SEGMENT_COUNT = 12;
 const MARKER_RADIUS_SCALE = 1.36;
+const DIRECTION_RADIUS_FACTOR = 0.1;
 const MAXIMUM_TUBE_VERTEX_COUNT = 500_000;
 
 export function buildMarkerRenderGeometry(markers, volumeHalfExtent) {
@@ -11,6 +12,26 @@ export function buildMarkerRenderGeometry(markers, volumeHalfExtent) {
     if (marker.type !== "stroke") {
       if (points[0]) {
         sphereInstances.push(sphereInstance(points[0], marker.color, volumeHalfExtent));
+        if (marker.showsDirection && Array.isArray(marker.directionOrigin)) {
+          const directionPoints = [
+            {
+              position: points[0].position,
+              radius: points[0].radius * DIRECTION_RADIUS_FACTOR
+            },
+            {
+              position: marker.directionOrigin,
+              radius: points[0].radius * DIRECTION_RADIUS_FACTOR
+            }
+          ];
+          const preparedCurve = prepareCurve(directionPoints, volumeHalfExtent);
+          if (distance(preparedCurve[0].position, preparedCurve[1].position) > 0.000001) {
+            tubeSources.push({
+              color: marker.color,
+              preparedCurve,
+              desiredRingCount: desiredRingCount(preparedCurve)
+            });
+          }
+        }
       }
       continue;
     }

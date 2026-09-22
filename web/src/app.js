@@ -1,4 +1,4 @@
-import { CoordinateCubeRenderer } from "./cube-renderer.js?v=20260918-tube-mesh";
+import { CoordinateCubeRenderer } from "./cube-renderer.js?v=20260922-marker-direction";
 import { decodeAppleLZ4, encodeLZ4Block } from "./lz4.js?v=20260911-urltf";
 import {
   MARKER_FILE_HEADER_BYTES,
@@ -20,7 +20,7 @@ import {
   STROKE_RADIUS_DEFAULT,
   STROKE_RADIUS_MAXIMUM,
   STROKE_RADIUS_MINIMUM
-} from "./format-constants.js?v=20260918-format-constants";
+} from "./format-constants.js?v=20260922-marker-direction";
 import { transferFunctionRGBAData } from "./transfer-function.js?v=20260918-format-constants";
 
 const catalogStatus = document.querySelector("#catalog-status");
@@ -1066,7 +1066,7 @@ function parseMarkerFile(buffer) {
   let totalPointCount = 0;
   for (let markerIndex = 0; markerIndex < markerCount; markerIndex += 1) {
     const typeValue = readUint8();
-    readUint8();
+    const flags = readUint8();
     readUint16();
     if (typeValue !== 1 && typeValue !== 2) {
       throw new Error(`Marker ${markerIndex + 1} has an unsupported geometry type.`);
@@ -1113,12 +1113,36 @@ function parseMarkerFile(buffer) {
         radius: finiteClamped(readFloat32(), radiusFallback, radiusMinimum, radiusMaximum)
       });
     }
+    const directionOrigin = typeValue === 1
+      ? [
+          finiteClamped(
+            readFloat32(),
+            MARKER_POSITION_FALLBACK,
+            MARKER_POSITION_MINIMUM,
+            MARKER_POSITION_MAXIMUM
+          ),
+          finiteClamped(
+            readFloat32(),
+            MARKER_POSITION_FALLBACK,
+            MARKER_POSITION_MINIMUM,
+            MARKER_POSITION_MAXIMUM
+          ),
+          finiteClamped(
+            readFloat32(),
+            MARKER_POSITION_FALLBACK,
+            MARKER_POSITION_MINIMUM,
+            MARKER_POSITION_MAXIMUM
+          )
+        ]
+      : null;
     markers.push({
       id,
       name: (rawName || `Marker ${markerIndex + 1}`).slice(0, MAX_MARKER_NAME_CHARACTERS),
       type: typeValue === 1 ? "sphere" : "stroke",
       color,
-      points
+      points,
+      directionOrigin,
+      showsDirection: typeValue === 1 && (flags & 1) !== 0
     });
   }
   if (offset !== buffer.byteLength) {

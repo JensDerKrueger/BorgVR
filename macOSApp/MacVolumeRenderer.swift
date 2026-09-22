@@ -111,6 +111,9 @@ final class MacVolumeRenderer: NSObject, MTKViewDelegate {
     appModel.markerHitTestHandler = { [weak self] screenPosition in
       self?.markerHit(at: screenPosition)
     }
+    appModel.markerDirectionOriginHandler = { [weak self] screenPosition in
+      self?.markerDirectionOrigin(at: screenPosition)
+    }
     appModel.markerDepthAdjustmentHandler = { [weak self] position, worldDistance in
       self?.markerPosition(position, offsetAlongViewRayBy: worldDistance)
     }
@@ -588,6 +591,21 @@ final class MacVolumeRenderer: NSObject, MTKViewDelegate {
     let distance = simd_dot(referenceWorld - ray.origin, ray.direction)
     let worldPosition = ray.origin + ray.direction * distance
     let local = simd_make_float3(simd_inverse(fullModel) * SIMD4<Float>(worldPosition, 1))
+    return local + SIMD3<Float>(repeating: 0.5)
+  }
+
+  private func markerDirectionOrigin(
+    at normalizedScreenPosition: SIMD2<Float>
+  ) -> SIMD3<Float>? {
+    guard let view else { return nil }
+    let matrices = markerFrameMatrices(for: view)
+    let cameraPosition = simd_make_float3(
+      simd_inverse(matrices.view) * SIMD4<Float>(0, 0, 0, 1)
+    )
+    let fullModel = matrices.model * volumeScale
+    let local = simd_make_float3(
+      simd_inverse(fullModel) * SIMD4<Float>(cameraPosition, 1)
+    )
     return local + SIMD3<Float>(repeating: 0.5)
   }
 

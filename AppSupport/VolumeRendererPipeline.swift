@@ -287,40 +287,45 @@ final class ScreenVolumeMarkerRenderer {
       encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: sphereVertexCount)
     }
 
+    func drawTube(for marker: VolumeMarker, color: SIMD4<Float>) {
+      guard let mesh = tubeMeshCache.mesh(
+        for: marker,
+        coordinateScale: coordinateScale,
+        device: device
+      ) else { return }
+      var markerModel = modelMatrix
+      var color = color
+      encoder.setVertexBuffer(
+        mesh.positionBuffer,
+        offset: 0,
+        index: VertexBufferIndex.meshPositions.rawValue
+      )
+      encoder.setVertexBuffer(mesh.normalBuffer, offset: 0, index: 24)
+      encoder.setVertexBytes(
+        &markerModel,
+        length: MemoryLayout<simd_float4x4>.stride,
+        index: 21
+      )
+      encoder.setFragmentBytes(
+        &color,
+        length: MemoryLayout<SIMD4<Float>>.stride,
+        index: 23
+      )
+      encoder.drawPrimitives(
+        type: .triangle,
+        vertexStart: 0,
+        vertexCount: mesh.vertexCount
+      )
+    }
+
     for marker in markers {
-      var color = markerColor(marker)
+      let color = markerColor(marker)
       switch marker.geometry {
         case .sphere(let point):
+          drawTube(for: marker, color: color)
           drawSphere(point, color: color)
         case .stroke(let points):
-          if let mesh = tubeMeshCache.mesh(
-            for: marker,
-            coordinateScale: coordinateScale,
-            device: device
-          ) {
-            var markerModel = modelMatrix
-            encoder.setVertexBuffer(
-              mesh.positionBuffer,
-              offset: 0,
-              index: VertexBufferIndex.meshPositions.rawValue
-            )
-            encoder.setVertexBuffer(mesh.normalBuffer, offset: 0, index: 24)
-            encoder.setVertexBytes(
-              &markerModel,
-              length: MemoryLayout<simd_float4x4>.stride,
-              index: 21
-            )
-            encoder.setFragmentBytes(
-              &color,
-              length: MemoryLayout<SIMD4<Float>>.stride,
-              index: 23
-            )
-            encoder.drawPrimitives(
-              type: .triangle,
-              vertexStart: 0,
-              vertexCount: mesh.vertexCount
-            )
-          }
+          drawTube(for: marker, color: color)
           if let first = points.first {
             drawSphere(first, color: color)
           }

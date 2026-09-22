@@ -393,13 +393,17 @@ class ImmersiveInteraction {
     sharedAppModel.synchronizeMarkers()
   }
 
-  private func makeMarker(at position: SIMD3<Float>) -> VolumeMarker {
+  private func makeMarker(
+    at position: SIMD3<Float>,
+    directionOrigin: SIMD3<Float>
+  ) -> VolumeMarker {
     VolumeMarker(
       id: UUID(),
       name: sharedAppModel.nextVolumeMarkerName(),
       position: position,
       radius: sharedAppModel.defaultVolumeMarkerRadius,
-      color: storedAppModel.markerDefaultColorSIMD
+      color: storedAppModel.markerDefaultColorSIMD,
+      directionOrigin: directionOrigin
     )
   }
 
@@ -424,9 +428,16 @@ class ImmersiveInteraction {
             markerDragStartPosition = existingMarker.position
             markerDragHandStart = inputWorldPosition(from: event)
             sharedAppModel.selectedVolumeMarkerID = existingMarker.id
-          } else if let markerPosition = markerSpawnPosition(from: event, datasetInfo: datasetInfo) {
+          } else if let spawnPosition = markerSpawnPosition(from: event, datasetInfo: datasetInfo),
+                    let directionRay = selectionRay {
             beginMarkerDrag(
-              marker: makeMarker(at: markerPosition),
+              marker: makeMarker(
+                at: spawnPosition,
+                directionOrigin: markerPosition(
+                  fromWorldPosition: directionRay.origin,
+                  datasetInfo: datasetInfo
+                )
+              ),
               event: event
             )
           }
@@ -590,7 +601,17 @@ class ImmersiveInteraction {
         quickMarkerDragActive = true
         quickMarkerCandidateTime = nil
         quickMarkerCandidatePosition = nil
-        beginMarkerDrag(marker: makeMarker(at: hitPosition), event: event)
+        guard let directionRay = ray(from: event) else { return false }
+        beginMarkerDrag(
+          marker: makeMarker(
+            at: hitPosition,
+            directionOrigin: markerPosition(
+              fromWorldPosition: directionRay.origin,
+              datasetInfo: datasetInfo
+            )
+          ),
+          event: event
+        )
         return true
 
       case .ended, .cancelled:

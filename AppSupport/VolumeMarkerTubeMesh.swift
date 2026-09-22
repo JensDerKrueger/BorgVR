@@ -26,8 +26,25 @@ final class VolumeMarkerTubeMeshCache {
     coordinateScale: SIMD3<Float>,
     device: MTLDevice
   ) -> VolumeMarkerTubeGPUMesh? {
-    guard case .stroke(let points) = marker.geometry, points.count >= 2 else {
-      return nil
+    let points: [VolumeMarkerPoint]
+    switch marker.geometry {
+      case .sphere(let point):
+        guard marker.showsDirection,
+              let directionOrigin = marker.directionOrigin else {
+          return nil
+        }
+        let scaledOffset = (directionOrigin - point.position) * coordinateScale
+        guard simd_length_squared(scaledOffset) > 0.000_000_01 else {
+          return nil
+        }
+        let directionRadius = point.radius * VolumeMarker.directionRadiusFactor
+        points = [
+          VolumeMarkerPoint(position: point.position, radius: directionRadius),
+          VolumeMarkerPoint(position: directionOrigin, radius: directionRadius)
+        ]
+      case .stroke(let strokePoints):
+        guard strokePoints.count >= 2 else { return nil }
+        points = strokePoints
     }
     if let entry = entries[marker.id],
        entry.geometryID == marker.meshCacheID,

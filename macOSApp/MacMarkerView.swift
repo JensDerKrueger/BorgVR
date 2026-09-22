@@ -56,6 +56,9 @@ struct MacMarkerView: View {
                 .monospacedDigit()
                 .frame(width: 54, alignment: .trailing)
             }
+            if selectedMarkerKind == .sphere {
+              Toggle("Show Direction", isOn: selectedDirectionBinding)
+            }
           }
           .formStyle(.grouped)
         }
@@ -274,6 +277,26 @@ struct MacMarkerView: View {
       return VolumeMarkerRadius.sphereRange
     }
     return VolumeMarkerRadius.range(for: appModel.volumeMarkers[index].kind)
+  }
+
+  private var selectedMarkerKind: VolumeMarkerKind? {
+    guard let index = selectedMarkerIndex else { return nil }
+    return appModel.volumeMarkers[index].kind
+  }
+
+  private var selectedDirectionBinding: Binding<Bool> {
+    Binding(
+      get: {
+        guard let index = selectedMarkerIndex else { return false }
+        return appModel.volumeMarkers[index].showsDirection
+      },
+      set: { showsDirection in
+        guard let index = selectedMarkerIndex,
+              appModel.volumeMarkers[index].kind == .sphere else { return }
+        appModel.volumeMarkers[index].showsDirection = showsDirection
+        synchronizeMarkers()
+      }
+    )
   }
 
   private func deleteSelectedMarker() {

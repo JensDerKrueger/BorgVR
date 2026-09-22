@@ -89,6 +89,10 @@ struct MarkerView: View {
             .foregroundStyle(.secondary)
         }
 
+        if let selectedMarkerDirectionBinding {
+          Toggle("Show Direction", isOn: selectedMarkerDirectionBinding)
+        }
+
         HStack {
           Menu {
             if markerCatalog.isEmpty {
@@ -290,6 +294,26 @@ struct MarkerView: View {
           return
         }
         sharedAppModel.volumeMarkers[currentIndex].color = simdColor(from: newColor)
+        sharedAppModel.synchronizeMarkers()
+      }
+    )
+  }
+
+  private var selectedMarkerDirectionBinding: Binding<Bool>? {
+    guard let markerID = sharedAppModel.selectedVolumeMarkerID,
+          let marker = sharedAppModel.volumeMarkers.first(where: { $0.id == markerID }),
+          marker.kind == .sphere else {
+      return nil
+    }
+
+    return Binding(
+      get: {
+        sharedAppModel.volumeMarkers.first(where: { $0.id == markerID })?.showsDirection ?? false
+      },
+      set: { showsDirection in
+        guard let index = sharedAppModel.volumeMarkers.firstIndex(where: { $0.id == markerID }),
+              sharedAppModel.volumeMarkers[index].kind == .sphere else { return }
+        sharedAppModel.volumeMarkers[index].showsDirection = showsDirection
         sharedAppModel.synchronizeMarkers()
       }
     )

@@ -15,7 +15,7 @@ enum BorgVRMarkerFormat {
   static let fileExtension = "marker"
   static let defaultFilename = "BorgVR Markers.marker"
   static let magicBytes = [UInt8]("BVRMARKR".utf8)
-  static let version: UInt16 = 1
+  static let version: UInt16 = 2
   static let headerByteCount = 32
   static let maximumFileByteCount = 64 * 1024 * 1024
   static let maximumMarkerCount = 100_000
@@ -29,7 +29,7 @@ enum BorgVRMarkerFormat {
 enum BorgVRSharePlayProtocol {
   static let magic: UInt32 = 0x4256_5350 // "BVSP"
   static let renderStateVersion: UInt16 = 1
-  static let markerVersion: UInt16 = 2
+  static let markerVersion: UInt16 = 3
 
   enum PacketKind: UInt8 {
     case commonRenderState = 1

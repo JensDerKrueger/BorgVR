@@ -46,7 +46,8 @@ collaboration, and a WebGPU browser frontend served directly by the dataset serv
   transfer functions, and markers.
 - Optional ad-hoc dataset servers for SharePlay sessions.
 - Named and colored spherical markers on all native clients and in WebGPU.
-- Tube-rendered stroke markers with a shared binary `.marker` format and dataset identity checks.
+- Directional sphere markers and tube-rendered stroke markers with a shared binary `.marker`
+  format and dataset identity checks.
 - Marker import, export, server catalogs, editing, and synchronized initial state for new
   SharePlay participants.
 - Hand-based marker placement on Apple Vision Pro, including configurable quick markers.
@@ -176,7 +177,8 @@ BorgVR uses three application-specific file types:
 
 - `.data`: metadata followed by bricked, optionally compressed volume data.
 - `.tf1d`: one-dimensional transfer functions and their display metadata.
-- `.marker`: binary sphere and stroke annotations, including the unique ID of their source dataset.
+- `.marker`: binary directional sphere and stroke annotations, including the unique ID of their
+  source dataset.
 
 Loading markers created for another dataset requires explicit confirmation. The repository includes
 small sample datasets for testing. Larger datasets should be kept outside the repository and served

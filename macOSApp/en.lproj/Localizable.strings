@@ -675,6 +675,7 @@
 "The marker file contains too many geometry points." = "The marker file contains too many geometry points.";
 "The marker file contains invalid marker geometry." = "The marker file contains invalid marker geometry.";
 "Sphere" = "Sphere";
+"Show Direction" = "Show Direction";
 "Stroke" = "Stroke";
 "Leave SharePlay" = "Leave SharePlay";
 "Leave SharePlay?" = "Leave SharePlay?";

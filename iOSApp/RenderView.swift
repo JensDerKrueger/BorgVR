@@ -392,13 +392,15 @@ struct RenderView: View {
     if let markerID = appModel.markerHitTestHandler?(screenPosition) {
       appModel.selectedVolumeMarkerID = markerID
       markerDragID = markerID
-    } else if let position = appModel.markerPositionHandler?(screenPosition, nil) {
+    } else if let position = appModel.markerPositionHandler?(screenPosition, nil),
+              let directionOrigin = appModel.markerDirectionOriginHandler?(screenPosition) {
       let marker = VolumeMarker(
         id: UUID(),
         name: appModel.nextVolumeMarkerName(),
         position: position,
         radius: VolumeMarkerRadius.sphereDefault,
-        color: appModel.defaultVolumeMarkerColor
+        color: appModel.defaultVolumeMarkerColor,
+        directionOrigin: directionOrigin
       )
       appModel.volumeMarkers.append(marker)
       appModel.selectedVolumeMarkerID = marker.id
