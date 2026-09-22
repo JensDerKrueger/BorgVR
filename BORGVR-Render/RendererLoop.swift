@@ -516,7 +516,8 @@ extension Renderer {
   private func drawVolumeMarkers(_ renderEncoder: MTLRenderCommandEncoder,
                                  drawable: LayerRenderer.Drawable) {
     let markers = sharedAppModel.volumeMarkers
-    guard !markers.isEmpty || spatialStylusPreviewPoint != nil else {
+    let remoteStylusPreviews = sharedAppModel.activeRemoteSpatialStylusPreviews()
+    guard !markers.isEmpty || spatialStylusPreviewPoint != nil || !remoteStylusPreviews.isEmpty else {
       return
     }
 
@@ -663,6 +664,9 @@ extension Renderer {
         color: sharedAppModel.defaultVolumeStrokeColor
       )
     }
+    for preview in remoteStylusPreviews {
+      drawSphere(preview.point, color: preview.color)
+    }
   }
 
   private func renderVolumeMarkers(commandBuffer: MTLCommandBuffer,
@@ -727,11 +731,36 @@ extension Renderer {
   }
 
   private func finishSpatialStylusStroke() {
-    guard activeSpatialStylusStrokeID != nil else {
-      return
-    }
+    let completedStroke = activeSpatialStylusStrokeID != nil
     activeSpatialStylusStrokeID = nil
-    sharedAppModel.synchronizeMarkers()
+    spatialStylusTipFilterState = nil
+    if completedStroke {
+      sharedAppModel.synchronizeMarkers()
+    }
+  }
+
+  private func filteredSpatialStylusTip(
+    position: SIMD3<Float>,
+    pressure: Float?
+  ) -> (position: SIMD3<Float>, pressure: Float?) {
+    guard let pressure else {
+      spatialStylusTipFilterState = nil
+      return (position, nil)
+    }
+    guard let previous = spatialStylusTipFilterState else {
+      spatialStylusTipFilterState = (position, pressure)
+      return (position, pressure)
+    }
+
+    let movement = simd_distance(position, previous.position)
+    let positionBlend = min(0.7, max(0.18, movement / 0.003))
+    let filteredPosition = previous.position +
+      (position - previous.position) * positionBlend
+    let pressureBlend: Float = 0.22
+    let filteredPressure = previous.pressure +
+      (pressure - previous.pressure) * pressureBlend
+    spatialStylusTipFilterState = (filteredPosition, filteredPressure)
+    return (filteredPosition, filteredPressure)
   }
 
   private func updateSpatialStylusStroke(drawable: LayerRenderer.Drawable) {
@@ -744,9 +773,14 @@ extension Renderer {
       spatialStylusRadiusAdjustmentStart = nil
       return
     }
+    defer { synchronizeSpatialStylusPreviewIfNeeded(at: timestamp) }
 
+    let filteredTip = filteredSpatialStylusTip(
+      position: sample.tipPosition,
+      pressure: sample.tipPressure
+    )
     let volumeFromOrigin = simd_inverse(lastUnscaledModelMatrix * volumeScale)
-    let local = volumeFromOrigin * SIMD4<Float>(sample.tipPosition, 1)
+    let local = volumeFromOrigin * SIMD4<Float>(filteredTip.position, 1)
     guard abs(local.w) > 0.000_001 else {
       finishSpatialStylusStroke()
       spatialStylusPreviewPoint = nil
@@ -813,9 +847,15 @@ extension Renderer {
     }
 
     spatialStylusPreviewPoint = nil
+    let pointRadius = filteredTip.pressure.map {
+      VolumeMarkerRadius.pressureAdjustedStrokeRadius(
+        maximumRadius: sharedAppModel.defaultVolumeStrokeRadius,
+        pressure: $0
+      )
+    } ?? sharedAppModel.defaultVolumeStrokeRadius
     let point = VolumeMarkerPoint(
       position: position,
-      radius: sharedAppModel.defaultVolumeStrokeRadius
+      radius: pointRadius
     )
 
     if let activeSpatialStylusStrokeID,
@@ -843,6 +883,19 @@ extension Renderer {
     sharedAppModel.selectedVolumeMarkerID = marker.id
     activeSpatialStylusStrokeID = marker.id
     sharedAppModel.synchronizeMarkers()
+  }
+
+  private func synchronizeSpatialStylusPreviewIfNeeded(at timestamp: TimeInterval) {
+    guard storedAppModel.shareSpatialStylusPosition,
+          let spatialStylusPreviewPoint,
+          timestamp - lastSpatialStylusPreviewShareTime >= 0.05 else {
+      return
+    }
+    lastSpatialStylusPreviewShareTime = timestamp
+    sharedAppModel.synchronizeSpatialStylusPreview(
+      point: spatialStylusPreviewPoint,
+      color: sharedAppModel.defaultVolumeStrokeColor
+    )
   }
 
   private func rgbToHSV(_ color: SIMD4<Float>) -> (

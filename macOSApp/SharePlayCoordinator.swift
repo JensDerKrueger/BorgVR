@@ -285,6 +285,7 @@ final class SharePlayCoordinator: ObservableObject {
     pendingTransform = false
     pendingMarkers = false
     knownParticipants.removeAll()
+    appModel?.clearRemoteSpatialStylusPreviews()
   }
 
   private func sendInitialData(to participants: Participants = .all) async {
@@ -382,7 +383,7 @@ final class SharePlayCoordinator: ObservableObject {
         guard appModel?.groupSessionHost != true else { return }
         handleInit(data: payload, sessionGeneration: generation)
       case MessageType.renderingUpdate.rawValue:
-        handleUpdate(data: payload)
+        handleUpdate(data: payload, from: participant)
       case MessageType.shutdownRequest.rawValue:
         guard appModel?.groupSessionHost != true else { return }
         appModel?.volumeMarkers.removeAll()
@@ -396,8 +397,15 @@ final class SharePlayCoordinator: ObservableObject {
     }
   }
 
-  private func handleUpdate(data: Data) {
+  private func handleUpdate(data: Data, from participant: Participant) {
     do {
+      if let preview = try SpatialStylusPreviewSharePlayCodec.decodeIfPresent(data) {
+        appModel?.updateRemoteSpatialStylusPreview(
+          preview,
+          participantID: participant.id
+        )
+        return
+      }
       if let markers = try VolumeMarkerSharePlayCodec.decodeIfPresent(data) {
         appModel?.replaceVolumeMarkers(markers)
         return

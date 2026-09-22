@@ -388,6 +388,8 @@
 "settings_quick_marker_double_pinch_window" = "Délai du double pincement";
 "settings_quick_marker_seconds_format" = "%.2f s";
 "settings_marker_default_color" = "Couleur par défaut des marqueurs";
+"settings_toggle_share_stylus_position" = "Partager la position du stylet";
+"settings_share_stylus_position_description" = "Affiche la pointe de votre stylet spatial aux autres participants SharePlay pendant son suivi.";
 "settings_toggle_show_notifications" = "Afficher les notifications (autorisation requise)";
 "settings_toggle_enable_voice_input" = "Activer l’entrée vocale (autorisation requise)";
 "settings_toggle_autostart_voice" = "Démarrer automatiquement l’entrée vocale";

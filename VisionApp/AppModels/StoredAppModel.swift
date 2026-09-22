@@ -118,6 +118,7 @@ final class StoredAppModel: ObservableObject {
     "tfMode": TransferFunctionDisplayMode.windowOnly.rawValue,
     "quickMarker": false,
     "quickMarkerDoublePinchInterval": 0.25,
+    "shareSpatialStylusPosition": false,
     "markerSpawnAtGaze": false,
     "markerDefaultRed": 1.0,
     "markerDefaultGreen": 0.08,
@@ -233,6 +234,8 @@ final class StoredAppModel: ObservableObject {
   @AppStorage("quickMarker") var quickMarker: Bool = StoredAppModel.bool("quickMarker")
   /// Maximum time between two pinches that should be interpreted as a Quick Marker gesture.
   @AppStorage("quickMarkerDoublePinchInterval") var quickMarkerDoublePinchInterval: Double = StoredAppModel.double("quickMarkerDoublePinchInterval")
+  /// Whether SharePlay participants can see the local spatial stylus tip.
+  @AppStorage("shareSpatialStylusPosition") var shareSpatialStylusPosition: Bool = StoredAppModel.bool("shareSpatialStylusPosition")
   /// Whether Marker mode places new markers at the gaze hit instead of the pinch hand.
   @AppStorage("markerSpawnAtGaze") var markerSpawnAtGaze: Bool = StoredAppModel.bool("markerSpawnAtGaze")
   /// Default marker color components.

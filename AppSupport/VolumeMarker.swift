@@ -16,6 +16,18 @@ struct VolumeMarkerPoint: Equatable {
   var radius: Float
 }
 
+struct SpatialStylusPreview: Equatable {
+  static let expirationInterval: TimeInterval = 0.35
+
+  var point: VolumeMarkerPoint
+  var color: SIMD4<Float>
+  var receivedAt: TimeInterval
+
+  var isActive: Bool {
+    Date.timeIntervalSinceReferenceDate - receivedAt <= Self.expirationInterval
+  }
+}
+
 enum VolumeMarkerGeometry: Equatable {
   case sphere(VolumeMarkerPoint)
   case stroke([VolumeMarkerPoint])
@@ -49,6 +61,16 @@ enum VolumeMarkerRadius {
   static func clamp(_ value: Float, for kind: VolumeMarkerKind) -> Float {
     let limits = range(for: kind)
     return min(limits.upperBound, max(limits.lowerBound, value))
+  }
+
+  static func pressureAdjustedStrokeRadius(
+    maximumRadius: Float,
+    pressure: Float
+  ) -> Float {
+    let maximumRadius = clamp(maximumRadius, for: .stroke)
+    let pressure = min(1, max(0, pressure))
+    let response = sqrt(pressure)
+    return strokeMinimum + (maximumRadius - strokeMinimum) * response
   }
 }
 
@@ -552,6 +574,59 @@ enum VolumeMarkerSharePlayCodec {
   }
 }
 
+enum SpatialStylusPreviewSharePlayCodec {
+  static func encode(point: VolumeMarkerPoint, color: SIMD4<Float>) -> Data {
+    var writer = MarkerDataWriter()
+    writer.write(BorgVRSharePlayProtocol.magic)
+    writer.write(BorgVRSharePlayProtocol.renderStateVersion)
+    writer.write(BorgVRSharePlayProtocol.PacketKind.spatialStylusPreview.rawValue)
+    writer.write(UInt8(0))
+    writer.writeSIMD3(point.position)
+    writer.write(point.radius)
+    writer.writeSIMD4(color)
+    return writer.data
+  }
+
+  /// Returns `nil` when the data is a different SharePlay packet kind.
+  static func decodeIfPresent(_ data: Data) throws -> SpatialStylusPreview? {
+    var reader = MarkerDataReader(data)
+    let magic: UInt32 = try reader.read()
+    guard magic == BorgVRSharePlayProtocol.magic else { return nil }
+    let version: UInt16 = try reader.read()
+    let packet: UInt8 = try reader.read()
+    _ = try reader.read() as UInt8
+    guard packet == BorgVRSharePlayProtocol.PacketKind.spatialStylusPreview.rawValue else {
+      return nil
+    }
+    guard version == BorgVRSharePlayProtocol.renderStateVersion else {
+      throw VolumeMarkerCodecError.unsupportedVersion(version)
+    }
+
+    let position = try reader.readSIMD3()
+    let radius: Float = try reader.read()
+    let color = try reader.readSIMD4()
+    guard reader.isAtEnd,
+          position.x.isFinite, position.y.isFinite, position.z.isFinite,
+          radius.isFinite,
+          color.x.isFinite, color.y.isFinite, color.z.isFinite, color.w.isFinite else {
+      throw VolumeMarkerCodecError.invalidPreview
+    }
+
+    return SpatialStylusPreview(
+      point: VolumeMarkerPoint(
+        position: simd_clamp(
+          position,
+          SIMD3<Float>(repeating: BorgVRMarkerFormat.positionRange.lowerBound),
+          SIMD3<Float>(repeating: BorgVRMarkerFormat.positionRange.upperBound)
+        ),
+        radius: VolumeMarkerRadius.clamp(radius, for: .stroke)
+      ),
+      color: simd_clamp(color, .zero, .one),
+      receivedAt: Date.timeIntervalSinceReferenceDate
+    )
+  }
+}
+
 enum VolumeMarkerBinaryCodec {
   // Each marker stores kind, flags, UUID, name, RGBA, points, and a sphere viewpoint.
   static func encode(_ markers: [VolumeMarker], to writer: inout MarkerDataWriter) throws {
@@ -705,6 +780,7 @@ enum VolumeMarkerCodecError: LocalizedError {
   case unsupportedVersion(UInt16)
   case outOfBounds
   case invalidString
+  case invalidPreview
   case trailingBytes(Int)
 
   var errorDescription: String? {
@@ -715,6 +791,8 @@ enum VolumeMarkerCodecError: LocalizedError {
         return "Unexpected end of marker update."
       case .invalidString:
         return "Marker update contains invalid text."
+      case .invalidPreview:
+        return "Spatial stylus preview contains invalid values."
       case .trailingBytes(let count):
         return "Marker update has \(count) trailing bytes."
     }

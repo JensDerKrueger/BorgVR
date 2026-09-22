@@ -76,6 +76,7 @@ final class AppModel: ObservableObject {
   @Published var interactionMode: InteractionMode = .model
   @Published var volumeMarkers: [VolumeMarker] = []
   @Published var selectedVolumeMarkerID: UUID?
+  @Published private(set) var remoteSpatialStylusPreviews: [UUID: SpatialStylusPreview] = [:]
   /// Radius used for sphere markers created locally during this app session.
   var defaultVolumeMarkerRadius = VolumeMarkerRadius.sphereDefault
   @Published var timer: CPUFrameTimer?
@@ -126,6 +127,21 @@ final class AppModel: ObservableObject {
        !markers.contains(where: { $0.id == selectedVolumeMarkerID }) {
       self.selectedVolumeMarkerID = nil
     }
+  }
+
+  func updateRemoteSpatialStylusPreview(
+    _ preview: SpatialStylusPreview,
+    participantID: UUID
+  ) {
+    remoteSpatialStylusPreviews[participantID] = preview
+  }
+
+  func activeRemoteSpatialStylusPreviews() -> [SpatialStylusPreview] {
+    remoteSpatialStylusPreviews.values.filter(\.isActive)
+  }
+
+  func clearRemoteSpatialStylusPreviews() {
+    remoteSpatialStylusPreviews.removeAll()
   }
 
   func requestRenderScreenshot(

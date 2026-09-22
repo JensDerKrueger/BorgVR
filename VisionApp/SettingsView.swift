@@ -169,6 +169,14 @@ struct SettingsView: View {
             }
             .disabled(!storedAppModel.quickMarker)
 
+            Toggle(
+              "settings_toggle_share_stylus_position",
+              isOn: $storedAppModel.shareSpatialStylusPosition
+            )
+            Text("settings_share_stylus_position_description")
+              .font(.footnote)
+              .foregroundStyle(.secondary)
+
             ColorPicker(
               "settings_marker_default_color",
               selection: markerDefaultColorBinding,

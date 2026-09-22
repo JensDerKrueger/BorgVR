@@ -205,6 +205,7 @@ final class ScreenVolumeMarkerRenderer {
     colorFormat: MTLPixelFormat,
     depthFormat: MTLPixelFormat,
     markers: [VolumeMarker],
+    spatialStylusPreviews: [SpatialStylusPreview],
     selectedMarkerID: UUID?,
     viewProjection: simd_float4x4,
     modelMatrix: simd_float4x4,
@@ -333,6 +334,9 @@ final class ScreenVolumeMarkerRenderer {
             drawSphere(last, color: color)
           }
       }
+    }
+    for preview in spatialStylusPreviews {
+      drawSphere(preview.point, color: preview.color)
     }
     encoder.endEncoding()
     return targets

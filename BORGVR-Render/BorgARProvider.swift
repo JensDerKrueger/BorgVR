@@ -14,6 +14,8 @@ public struct BorgAnchorSample {
 struct BorgSpatialStylusSample {
   let tipPosition: SIMD3<Float>
   let isDrawing: Bool
+  /// Normalized pressure when drawing with the tip; nil for in-air drawing.
+  let tipPressure: Float?
   let isAdjustingRadius: Bool
 }
 
@@ -111,7 +113,10 @@ final class BorgARProvider {
     }
 
     let input = stylus.input
-    let tipPressed = input?.buttons[.stylusTip]?.pressedInput.isPressed ?? false
+    let tipInput = input?.buttons[.stylusTip]?.pressedInput
+    let tipPressure = min(1, max(0, tipInput?.value ?? 0))
+    // The system's binary pressed threshold is too high for natural writing.
+    let tipPressed = tipPressure > 0.001
     let primaryPressed = input?.buttons[.stylusPrimaryButton]?.pressedInput.isPressed ?? false
     let secondaryPressed = input?.buttons[.stylusSecondaryButton]?.pressedInput.isPressed ?? false
     let isDrawing = tipPressed || secondaryPressed
@@ -123,6 +128,7 @@ final class BorgARProvider {
     return BorgSpatialStylusSample(
       tipPosition: tipTransform.translation.vector,
       isDrawing: isDrawing,
+      tipPressure: tipPressed ? tipPressure : nil,
       isAdjustingRadius: !isDrawing && primaryPressed
     )
   }

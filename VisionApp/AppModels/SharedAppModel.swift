@@ -82,6 +82,8 @@ class SharedAppModel {
   var volumeMarkers: [VolumeMarker]
   /// Locally selected marker. This is intentionally not synchronized.
   var selectedVolumeMarkerID: UUID?
+  /// Short-lived stylus-tip previews received from other SharePlay participants.
+  var remoteSpatialStylusPreviews: [UUID: SpatialStylusPreview]
   /// Radius used for markers created locally during the current dataset session.
   var defaultVolumeMarkerRadius: Float
   /// Radius used for stylus strokes; intentionally independent from sphere markers.
@@ -110,6 +112,7 @@ class SharedAppModel {
     purgeAtlas = false
     volumeMarkers = []
     selectedVolumeMarkerID = nil
+    remoteSpatialStylusPreviews = [:]
     defaultVolumeMarkerRadius = VolumeMarkerRadius.sphereDefault
     defaultVolumeStrokeRadius = VolumeMarkerRadius.strokeDefault
     defaultVolumeStrokeColor = SIMD4<Float>(1, 0, 0, 1)
@@ -136,6 +139,28 @@ class SharedAppModel {
 
   func synchronizeMarkers() {
     groupActivityHelper?.synchronizeMarkers()
+  }
+
+  func synchronizeSpatialStylusPreview(
+    point: VolumeMarkerPoint,
+    color: SIMD4<Float>
+  ) {
+    groupActivityHelper?.synchronizeSpatialStylusPreview(point: point, color: color)
+  }
+
+  func updateRemoteSpatialStylusPreview(
+    _ preview: SpatialStylusPreview,
+    participantID: UUID
+  ) {
+    remoteSpatialStylusPreviews[participantID] = preview
+  }
+
+  func activeRemoteSpatialStylusPreviews() -> [SpatialStylusPreview] {
+    remoteSpatialStylusPreviews.values.filter(\.isActive)
+  }
+
+  func clearRemoteSpatialStylusPreviews() {
+    remoteSpatialStylusPreviews.removeAll()
   }
 
   func nextVolumeMarkerName() -> String {
@@ -224,6 +249,7 @@ class SharedAppModel {
     purgeAtlas = false
     volumeMarkers = []
     selectedVolumeMarkerID = nil
+    remoteSpatialStylusPreviews = [:]
     defaultVolumeMarkerRadius = VolumeMarkerRadius.sphereDefault
     defaultVolumeStrokeRadius = VolumeMarkerRadius.strokeDefault
     defaultVolumeStrokeColor = SIMD4<Float>(1, 0, 0, 1)
@@ -492,7 +518,7 @@ class SharedAppModel {
         let lScale = try r.readSIMD3()
         modelTransform = Transform(scale: tScale, rotation: tRotation, translation: tTranslation)
         lastModelTransform = Transform(scale: lScale, rotation: lRotation, translation: lTranslation)
-      case .volumeMarkers:
+      case .volumeMarkers, .spatialStylusPreview:
         throw SharedAppModelError.unsupportedVersion(version)
     }
 

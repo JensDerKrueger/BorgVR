@@ -388,6 +388,8 @@
 "settings_quick_marker_double_pinch_window" = "Doppelpinch-Zeit";
 "settings_quick_marker_seconds_format" = "%.2f s";
 "settings_marker_default_color" = "Standard-Markerfarbe";
+"settings_toggle_share_stylus_position" = "Stiftposition teilen";
+"settings_share_stylus_position_description" = "Zeigt anderen SharePlay-Teilnehmern die Spitze Ihres räumlichen Stifts, solange sie erfasst wird.";
 "settings_toggle_show_notifications" = "Benachrichtigungen anzeigen (erfordert Berechtigung)";
 "settings_toggle_enable_voice_input" = "Spracheingabe aktivieren (erfordert Berechtigung)";
 "settings_toggle_autostart_voice" = "Spracheingabe automatisch starten";

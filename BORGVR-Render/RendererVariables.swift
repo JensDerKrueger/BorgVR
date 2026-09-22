@@ -125,8 +125,15 @@ final actor Renderer {
   let vertexCount: Int
   /// Stroke currently created by a connected spatial stylus.
   var activeSpatialStylusStrokeID: UUID?
+  /// Smoothed surface-writing input from the pressure-sensitive stylus tip.
+  var spatialStylusTipFilterState: (
+    position: SIMD3<Float>,
+    pressure: Float
+  )?
   /// Local-only preview sphere shown at the tracked stylus tip.
   var spatialStylusPreviewPoint: VolumeMarkerPoint?
+  /// Timestamp of the most recent SharePlay stylus-tip update.
+  var lastSpatialStylusPreviewShareTime: TimeInterval
   /// Initial state while the primary stylus button adjusts stroke radius.
   var spatialStylusRadiusAdjustmentStart: (
     position: SIMD3<Float>,
@@ -221,7 +228,9 @@ final actor Renderer {
     self.autoRotationAngle = 0
     self.autoRotationStartTime = 0
     self.activeSpatialStylusStrokeID = nil
+    self.spatialStylusTipFilterState = nil
     self.spatialStylusPreviewPoint = nil
+    self.lastSpatialStylusPreviewShareTime = 0
     self.spatialStylusRadiusAdjustmentStart = nil
     self.markerTubeMeshCache = VolumeMarkerTubeMeshCache()
     self.sharedAppModel.defaultVolumeStrokeColor = SharedAppModel.saturatedStrokeColor(

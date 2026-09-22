@@ -28,7 +28,7 @@ enum BorgVRMarkerFormat {
 
 enum BorgVRSharePlayProtocol {
   static let magic: UInt32 = 0x4256_5350 // "BVSP"
-  static let renderStateVersion: UInt16 = 1
+  static let renderStateVersion: UInt16 = 2
   static let markerVersion: UInt16 = 3
 
   enum PacketKind: UInt8 {
@@ -36,6 +36,7 @@ enum BorgVRSharePlayProtocol {
     case screenTransform = 2
     case visionTransform = 3
     case volumeMarkers = 4
+    case spatialStylusPreview = 5
   }
 }
 

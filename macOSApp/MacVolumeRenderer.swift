@@ -239,6 +239,7 @@ final class MacVolumeRenderer: NSObject, MTKViewDelegate {
       colorFormat: view.colorPixelFormat,
       depthFormat: view.depthStencilPixelFormat,
       markers: appModel.volumeMarkers,
+      spatialStylusPreviews: appModel.activeRemoteSpatialStylusPreviews(),
       selectedMarkerID: appModel.selectedVolumeMarkerID,
       viewProjection: markerMatrices.projection * markerMatrices.view,
       modelMatrix: markerMatrices.model,

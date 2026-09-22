@@ -388,6 +388,8 @@
 "settings_quick_marker_double_pinch_window" = "Tiempo de doble pinch";
 "settings_quick_marker_seconds_format" = "%.2f s";
 "settings_marker_default_color" = "Color predeterminado del marcador";
+"settings_toggle_share_stylus_position" = "Compartir la posición del lápiz";
+"settings_share_stylus_position_description" = "Muestra la punta del lápiz espacial a los demás participantes de SharePlay mientras se realiza su seguimiento.";
 "settings_toggle_show_notifications" = "Mostrar notificaciones (requiere permiso)";
 "settings_toggle_enable_voice_input" = "Activar entrada de voz (requiere permiso)";
 "settings_toggle_autostart_voice" = "Iniciar automáticamente la entrada de voz";

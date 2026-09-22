@@ -194,7 +194,7 @@ final class RenderingParameters: ObservableObject {
         pan = try reader.readSIMD2()
       case .visionTransform:
         break
-      case .volumeMarkers:
+      case .volumeMarkers, .spatialStylusPreview:
         return false
     }
 
