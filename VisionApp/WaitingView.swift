@@ -46,12 +46,14 @@ struct WaitingView: View {
 
       Spacer()
 
-      // Cancel button row.
+      // Leave button row.
       HStack {
-        Button("Cancel") {
+        Button {
           // Leave the SharePlay group activity and return to start screen.
           sharedAppModel.leaveGroupActivity()
           runtimeAppModel.currentState = .start
+        } label: {
+          Label("Leave SharePlay", systemImage: "rectangle.portrait.and.arrow.right")
         }
         .padding()
         .buttonStyle(.borderedProminent)

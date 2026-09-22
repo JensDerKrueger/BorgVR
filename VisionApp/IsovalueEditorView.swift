@@ -18,6 +18,15 @@ struct IsovalueEditorView: View {
         ),
         in: 0.0...1.0
       )
+      .onChange(of: sharedAppModel.normIsoValue) {
+        sharedAppModel.synchronize(kind: .stateOnly)
+      }
+      .simultaneousGesture(
+        DragGesture(minimumDistance: 0)
+          .onEnded { _ in
+            sharedAppModel.flushSynchronization()
+          }
+      )
       .padding()
 
       Text(

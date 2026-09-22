@@ -45,6 +45,7 @@ struct RenderView: View {
   @EnvironmentObject var speech: SpeechHelper
 
   @State private var copiedWebGPUShareLink = false
+  @State private var showLeaveSharePlayConfirmation = false
 
   var body: some View {
     VStack(spacing: 20) {
@@ -124,7 +125,7 @@ struct RenderView: View {
           .padding()
         }
 
-        Button(action: closeDataset) {
+        Button(action: requestDatasetClose) {
           Text("render_button_close_dataset")
             .font(.headline)
             .padding(.horizontal, 20)
@@ -141,7 +142,10 @@ struct RenderView: View {
     .onChange(of: scenePhase) { _, newPhase in
       Task { @MainActor in
         if newPhase == .background {
-          closeDataset()
+          closeDataset(
+            leavingSharePlay: sharedAppModel.isInGroupSession
+              && !runtimeAppModel.groupSessionHost
+          )
         }
       }
     }
@@ -155,6 +159,14 @@ struct RenderView: View {
       dismissWindow(id: "MarkerView")
       dismissWindow(id: "VoiceCommandsView")
       voice.stopListening()
+    }
+    .alert("Leave SharePlay?", isPresented: $showLeaveSharePlayConfirmation) {
+      Button("Cancel", role: .cancel) {}
+      Button("Leave SharePlay", role: .destructive) {
+        closeDataset(leavingSharePlay: true)
+      }
+    } message: {
+      Text("Closing this dataset will leave the current SharePlay session.")
     }
     .padding()
   }
@@ -172,7 +184,18 @@ struct RenderView: View {
    This sets the immersive space intent to `.close`. The actual closing
    and teardown logic is handled elsewhere in the runtime model.
    */
-  private func closeDataset() {
+  private func requestDatasetClose() {
+    if sharedAppModel.isInGroupSession, !runtimeAppModel.groupSessionHost {
+      showLeaveSharePlayConfirmation = true
+    } else {
+      closeDataset(leavingSharePlay: false)
+    }
+  }
+
+  private func closeDataset(leavingSharePlay: Bool) {
+    if leavingSharePlay {
+      sharedAppModel.leaveGroupActivity()
+    }
     runtimeAppModel.immersiveSpaceIntent = .close
   }
 

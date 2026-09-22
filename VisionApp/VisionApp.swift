@@ -277,12 +277,15 @@ struct VisionApp: App {
 
   @MainActor
   private func closeSpace() async {
+    let destinationState = runtimeAppModel.currentState == .waitingForHost
+      ? RuntimeAppModel.ContentViewState.waitingForHost
+      : .selectData
     runtimeAppModel.immersiveSpaceState = .inTransition
     let renderTask = runtimeAppModel.cancelRenderLoop()
     await renderTask?.value
     await dismissImmersiveSpace()
     runtimeAppModel.immersiveSpaceIntent = .keepCurrent
-    runtimeAppModel.currentState = .selectData
+    runtimeAppModel.currentState = destinationState
 
     if runtimeAppModel.groupSessionHost {
       sharedAppModel.shutdownGroupsession()

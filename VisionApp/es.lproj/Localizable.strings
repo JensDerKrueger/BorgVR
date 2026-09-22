@@ -1009,3 +1009,7 @@
 "The marker file contains invalid marker geometry." = "El archivo de marcadores contiene geometría de marcador no válida.";
 "Sphere" = "Esfera";
 "Stroke" = "Trazo";
+"Leave SharePlay" = "Salir de SharePlay";
+"Leave SharePlay?" = "¿Salir de SharePlay?";
+"Closing this dataset will leave the current SharePlay session." = "Al cerrar este conjunto de datos, saldrá de la sesión actual de SharePlay.";
+"Waiting for the host to select and open a dataset." = "Esperando a que el anfitrión seleccione y abra un conjunto de datos.";

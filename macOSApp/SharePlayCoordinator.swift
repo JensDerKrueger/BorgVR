@@ -1,3 +1,4 @@
+import AppKit
 import Combine
 import Foundation
 import GroupActivities
@@ -5,9 +6,15 @@ import LinkPresentation
 import SwiftUI
 
 private let borgVRSharePlayActivityIdentifier = "de.cgvis.borgvr.collaboration"
+private let localBorgVRSharePlayInitiatorID = UUID()
 
 struct BorgVRSharePlayActivity: GroupActivity, Transferable {
   static let activityIdentifier = borgVRSharePlayActivityIdentifier
+  let initiatorID: UUID
+
+  init(initiatorID: UUID = localBorgVRSharePlayInitiatorID) {
+    self.initiatorID = initiatorID
+  }
 
   var metadata: GroupActivityMetadata = {
     var metadata = GroupActivityMetadata()
@@ -38,9 +45,8 @@ final class SharePlayCoordinator: ObservableObject {
   private var pendingMarkers = false
   private var synchronizationTask: Task<Void, Never>?
   private var knownParticipants = Set<Participant>()
-  private var startedActivityLocally = false
-  private var localActivityStartDate: Date?
-  private let localActivityStartGraceInterval: TimeInterval = 120
+  private let groupStateObserver = GroupStateObserver()
+  private var activityActivationTask: Task<Void, Never>?
 
   func configure(
     appModel: AppModel,
@@ -64,46 +70,69 @@ final class SharePlayCoordinator: ObservableObject {
 
   func startSharePlay() {
     markLocalActivityStarter()
-    Task {
-      do {
-        let activity = BorgVRSharePlayActivity()
-        switch await activity.prepareForActivation() {
-          case .activationPreferred:
-            _ = try await activity.activate()
-          case .activationDisabled:
-            clearLocalActivityStarter()
-            appModel?.logger.info("SharePlay activation is disabled.")
-          case .cancelled:
-            clearLocalActivityStarter()
-            break
-          @unknown default:
-            break
+    do {
+      let controller = try GroupActivitySharingController(BorgVRSharePlayActivity())
+      guard let presentingController = NSApp.keyWindow?.contentViewController else {
+        clearLocalActivityStarter()
+        appModel?.logger.error("Failed to start SharePlay because no active window is available.")
+        return
+      }
+
+      presentingController.presentAsSheet(controller)
+      Task { [weak self] in
+        if await controller.result == .cancelled, self?.isInSession == false {
+          self?.clearLocalActivityStarter()
         }
-        await sendInitialData()
+      }
+    } catch {
+      clearLocalActivityStarter()
+      appModel?.logger.error("Failed to start SharePlay: \(error.localizedDescription)")
+    }
+  }
+
+  func markLocalActivityStarter() {
+    appModel?.groupSessionHost = true
+    scheduleLocalActivityActivation()
+  }
+
+  private func clearLocalActivityStarter() {
+    activityActivationTask?.cancel()
+    activityActivationTask = nil
+    appModel?.groupSessionHost = false
+  }
+
+  private func scheduleLocalActivityActivation() {
+    activityActivationTask?.cancel()
+    let activity = BorgVRSharePlayActivity()
+    activityActivationTask = Task { [weak self] in
+      guard let self else { return }
+
+      // The sharing controller can establish FaceTime before it activates the
+      // GroupActivity. Give it the first opportunity, then cover that gap.
+      for _ in 0..<1_500 {
+        guard !Task.isCancelled, !isInSession else { return }
+        if groupStateObserver.isEligibleForGroupSession {
+          break
+        }
+        try? await Task.sleep(nanoseconds: 200_000_000)
+      }
+
+      guard
+        !Task.isCancelled,
+        !isInSession,
+        groupStateObserver.isEligibleForGroupSession
+      else { return }
+
+      try? await Task.sleep(nanoseconds: 750_000_000)
+      guard !Task.isCancelled, !isInSession else { return }
+
+      do {
+        _ = try await activity.activate()
       } catch {
         clearLocalActivityStarter()
         appModel?.logger.error("Failed to start SharePlay: \(error.localizedDescription)")
       }
     }
-  }
-
-  func markLocalActivityStarter() {
-    startedActivityLocally = true
-    localActivityStartDate = Date()
-    appModel?.groupSessionHost = true
-  }
-
-  private func clearLocalActivityStarter() {
-    startedActivityLocally = false
-    localActivityStartDate = nil
-    appModel?.groupSessionHost = false
-  }
-
-  private var isLocalActivityStartPending: Bool {
-    guard startedActivityLocally, let localActivityStartDate else {
-      return false
-    }
-    return Date().timeIntervalSince(localActivityStartDate) <= localActivityStartGraceInterval
   }
 
   func datasetOpened() {
@@ -129,8 +158,6 @@ final class SharePlayCoordinator: ObservableObject {
     } else {
       groupSession?.leave()
     }
-    startedActivityLocally = false
-    localActivityStartDate = nil
     appModel?.groupSessionHost = false
     isInSession = false
     resetSessionReceivers()
@@ -178,14 +205,15 @@ final class SharePlayCoordinator: ObservableObject {
   }
 
   private func configure(_ session: GroupSession<BorgVRSharePlayActivity>) {
+    activityActivationTask?.cancel()
+    activityActivationTask = nil
     resetSessionReceivers()
     sessionGeneration += 1
     let generation = sessionGeneration
     subscriptions.removeAll()
     groupSession = session
     isInSession = true
-    let isHost = isLocalActivityStartPending
-    startedActivityLocally = isHost
+    let isHost = session.activity.initiatorID == localBorgVRSharePlayInitiatorID
     appModel?.groupSessionHost = isHost
     knownParticipants = session.activeParticipants
 
@@ -357,7 +385,9 @@ final class SharePlayCoordinator: ObservableObject {
         handleUpdate(data: payload)
       case MessageType.shutdownRequest.rawValue:
         guard appModel?.groupSessionHost != true else { return }
-        appModel?.currentState = .selectData
+        appModel?.volumeMarkers.removeAll()
+        appModel?.selectedVolumeMarkerID = nil
+        appModel?.currentState = .waitingForHost
       case MessageType.stateRequest.rawValue:
         guard appModel?.groupSessionHost == true else { return }
         Task { await sendInitialDataReliably(to: .only(Set([participant]))) }

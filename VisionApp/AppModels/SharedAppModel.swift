@@ -151,6 +151,10 @@ class SharedAppModel {
     groupActivityHelper?.leaveGroupActivity()
   }
 
+  @MainActor var isInGroupSession: Bool {
+    groupActivityHelper?.isInGroupSession ?? false
+  }
+
   @MainActor func markLocalActivityStarter() {
     groupActivityHelper?.markLocalActivityStarter()
   }

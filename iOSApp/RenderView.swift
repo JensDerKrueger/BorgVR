@@ -23,6 +23,7 @@ struct RenderView: View {
   @State private var showMarkerEditor = false
   @State private var markerDragID: UUID?
   @State private var arcballStartOrientation: simd_quatf?
+  @State private var showLeaveSharePlayConfirmation = false
   @StateObject private var renderSurface = MobileRenderSurface()
 
   private let clippingSensitivity: Float = 0.0012
@@ -57,6 +58,14 @@ struct RenderView: View {
       MobileMarkerView()
         .environmentObject(appModel)
         .environmentObject(sharePlay)
+    }
+    .alert("Leave SharePlay?", isPresented: $showLeaveSharePlayConfirmation) {
+      Button("Cancel", role: .cancel) {}
+      Button("Leave SharePlay", role: .destructive) {
+        closeDataset(leavingSharePlay: true)
+      }
+    } message: {
+      Text("Closing this dataset will leave the current SharePlay session.")
     }
   }
 
@@ -115,7 +124,7 @@ struct RenderView: View {
       VStack(spacing: 8) {
         HStack {
           Button {
-            closeDataset()
+            requestDatasetClose()
           } label: {
             Image(systemName: "xmark")
           }
@@ -584,12 +593,24 @@ struct RenderView: View {
     sharePlay.synchronizeMarkers()
   }
 
-  private func closeDataset() {
+  private func requestDatasetClose() {
+    if sharePlay.isInSession, !appModel.groupSessionHost {
+      showLeaveSharePlayConfirmation = true
+    } else {
+      closeDataset(leavingSharePlay: false)
+    }
+  }
+
+  private func closeDataset(leavingSharePlay: Bool) {
     if appSettings.autoloadTF,
        let fileURL = appModel.transferFunctionFileURL() {
       try? renderingParameters.transferFunction.save(to: fileURL)
     }
-    sharePlay.closeSharedDataset()
+    if leavingSharePlay {
+      sharePlay.leaveGroupActivity()
+    } else {
+      sharePlay.closeSharedDataset()
+    }
     appModel.volumeMarkers.removeAll()
     appModel.selectedVolumeMarkerID = nil
     appModel.currentState = .selectData

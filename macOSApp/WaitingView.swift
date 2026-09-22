@@ -26,7 +26,7 @@ struct WaitingView: View {
         sharePlay.leaveGroupActivity()
         appModel.currentState = .start
       } label: {
-        Label("Cancel", systemImage: "xmark")
+        Label("Leave SharePlay", systemImage: "rectangle.portrait.and.arrow.right")
       }
       .buttonStyle(.borderedProminent)
 

@@ -6,9 +6,15 @@ import LinkPresentation
 import Combine
 
 let groupActivityIdentifier = "de.cgvis.borgvr.collaboration"
+private let localBorgVRSharePlayInitiatorID = UUID()
 
 struct BorgVRActivity: GroupActivity, Transferable {
   static let activityIdentifier = groupActivityIdentifier
+  let initiatorID: UUID
+
+  init(initiatorID: UUID = localBorgVRSharePlayInitiatorID) {
+    self.initiatorID = initiatorID
+  }
 
   var metadata: GroupActivityMetadata = {
     var metadata = GroupActivityMetadata()
@@ -34,9 +40,6 @@ class GroupActivityHelper {
   private var pendingTransform = false
   private var synchronizationTask: Task<Void, Never>?
   private var knownParticipants = Set<Participant>()
-  private var startedActivityLocally = false
-  private var localActivityStartDate: Date?
-  private let localActivityStartGraceInterval: TimeInterval = 120
   private let sharePlayServerHost = BorgVRServerHost(logger: GUILogger())
   private var sharePlayDatasetID: String?
   private var sharePlayAuthToken = ""
@@ -48,9 +51,11 @@ class GroupActivityHelper {
   }
 
   @MainActor func markLocalActivityStarter() {
-    startedActivityLocally = true
-    localActivityStartDate = Date()
     runtimeAppModel?.groupSessionHost = true
+  }
+
+  @MainActor var isInGroupSession: Bool {
+    groupSession != nil
   }
 
   @MainActor func leaveGroupActivity() {
@@ -62,17 +67,8 @@ class GroupActivityHelper {
     } else {
       self.groupSession?.leave()
     }
-    startedActivityLocally = false
-    localActivityStartDate = nil
     runtimeAppModel.groupSessionHost = false
     resetSessionReceivers()
-  }
-
-  private var isLocalActivityStartPending: Bool {
-    guard startedActivityLocally, let localActivityStartDate else {
-      return false
-    }
-    return Date().timeIntervalSince(localActivityStartDate) <= localActivityStartGraceInterval
   }
 
   func configureSession(runtimeAppModel:RuntimeAppModel, storedAppModel: StoredAppModel) async {
@@ -92,8 +88,7 @@ class GroupActivityHelper {
       systemCoordinator.configuration = config
 
       self.groupSession = session
-      let localUserStartedActivity = isLocalActivityStartPending
-      startedActivityLocally = localUserStartedActivity
+      let localUserStartedActivity = session.activity.initiatorID == localBorgVRSharePlayInitiatorID
       await MainActor.run {
         runtimeAppModel.groupSessionHost = localUserStartedActivity
       }
@@ -238,7 +233,7 @@ class GroupActivityHelper {
         )
       }
     } catch {
-      await runtimeAppModel?.logger
+      runtimeAppModel?.logger
         .error("Failed to send synchronize data to all participants: \(error)")
     }
   }
@@ -798,6 +793,7 @@ class GroupActivityHelper {
 
   @MainActor
   func handleShutdown(from: Participant) {
+    runtimeAppModel?.currentState = .waitingForHost
     runtimeAppModel?.immersiveSpaceIntent = .close
   }
 }

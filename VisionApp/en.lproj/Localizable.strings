@@ -1009,3 +1009,7 @@
 "The marker file contains invalid marker geometry." = "The marker file contains invalid marker geometry.";
 "Sphere" = "Sphere";
 "Stroke" = "Stroke";
+"Leave SharePlay" = "Leave SharePlay";
+"Leave SharePlay?" = "Leave SharePlay?";
+"Closing this dataset will leave the current SharePlay session." = "Closing this dataset will leave the current SharePlay session.";
+"Waiting for the host to select and open a dataset." = "Waiting for the host to select and open a dataset.";

@@ -15,12 +15,13 @@ struct RenderControlsPanel: View {
   @State private var showDatasetInfo = false
   @State private var selectedInteractionMode: AppModel.InteractionMode = .model
   @State private var copiedWebGPUShareLink = false
+  @State private var showLeaveSharePlayConfirmation = false
 
   var body: some View {
     VStack(spacing: 8) {
       HStack {
         Button {
-          closeDataset()
+          requestDatasetClose()
         } label: {
           Image(systemName: "xmark")
         }
@@ -36,17 +37,11 @@ struct RenderControlsPanel: View {
 
         Spacer()
 
-        ShareLink(
-          item: BorgVRSharePlayActivity(),
-          preview: SharePreview(String(localized: "BorgVR Live Collaboration"))
-        ) {
+        Button {
+          sharePlay.startSharePlay()
+        } label: {
           Image(systemName: "shareplay")
         }
-        .simultaneousGesture(
-          TapGesture().onEnded {
-            sharePlay.markLocalActivityStarter()
-          }
-        )
         .accessibilityLabel(sharePlay.isInSession ? "SharePlay active" : "Start SharePlay")
         .help(sharePlay.isInSession ? "SharePlay active" : "Start SharePlay")
         .buttonStyle(.bordered)
@@ -177,6 +172,14 @@ struct RenderControlsPanel: View {
       }
       .frame(minWidth: 420, minHeight: 360)
     }
+    .alert("Leave SharePlay?", isPresented: $showLeaveSharePlayConfirmation) {
+      Button("Cancel", role: .cancel) {}
+      Button("Leave SharePlay", role: .destructive) {
+        closeDataset(leavingSharePlay: true)
+      }
+    } message: {
+      Text("Closing this dataset will leave the current SharePlay session.")
+    }
   }
 
   private func applyInteractionModeSelection(_ mode: AppModel.InteractionMode) {
@@ -186,12 +189,24 @@ struct RenderControlsPanel: View {
     }
   }
 
-  private func closeDataset() {
+  private func requestDatasetClose() {
+    if sharePlay.isInSession, !appModel.groupSessionHost {
+      showLeaveSharePlayConfirmation = true
+    } else {
+      closeDataset(leavingSharePlay: false)
+    }
+  }
+
+  private func closeDataset(leavingSharePlay: Bool) {
     if appSettings.autoloadTF,
        let fileURL = appModel.transferFunctionFileURL() {
       try? renderingParameters.transferFunction.save(to: fileURL)
     }
-    sharePlay.closeSharedDataset()
+    if leavingSharePlay {
+      sharePlay.leaveGroupActivity()
+    } else {
+      sharePlay.closeSharedDataset()
+    }
     appModel.volumeMarkers.removeAll()
     appModel.selectedVolumeMarkerID = nil
     docking.resetForDatasetClose()
