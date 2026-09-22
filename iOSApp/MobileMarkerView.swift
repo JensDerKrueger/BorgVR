@@ -254,10 +254,14 @@ struct MobileMarkerView: View {
       set: { radius in
         guard let index = selectedMarkerIndex else { return }
         let markerKind = appModel.volumeMarkers[index].kind
-        appModel.volumeMarkers[index].radius = VolumeMarkerRadius.clamp(
+        let radius = VolumeMarkerRadius.clamp(
           radius,
           for: markerKind
         )
+        appModel.volumeMarkers[index].radius = radius
+        if markerKind == .sphere {
+          appModel.defaultVolumeMarkerRadius = radius
+        }
         synchronizeMarkers()
       }
     )

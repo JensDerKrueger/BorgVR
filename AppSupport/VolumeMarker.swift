@@ -27,7 +27,7 @@ enum VolumeMarkerKind: UInt8 {
 }
 
 enum VolumeMarkerRadius {
-  static let sphereDefault: Float = 0.08
+  static let sphereDefault: Float = 0.01
   static let sphereMinimum: Float = 0.005
   static let sphereMaximum: Float = 1
 

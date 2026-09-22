@@ -243,7 +243,7 @@ struct RenderView: View {
       id: UUID(),
       name: appModel.nextVolumeMarkerName(),
       position: position,
-      radius: VolumeMarkerRadius.sphereDefault,
+      radius: appModel.defaultVolumeMarkerRadius,
       color: appModel.defaultVolumeMarkerColor,
       directionOrigin: directionOrigin
     )
@@ -277,10 +277,14 @@ struct RenderView: View {
     guard let markerID = appModel.selectedVolumeMarkerID,
           let index = appModel.volumeMarkers.firstIndex(where: { $0.id == markerID }) else { return }
     let markerKind = appModel.volumeMarkers[index].kind
-    appModel.volumeMarkers[index].radius = VolumeMarkerRadius.clamp(
+    let radius = VolumeMarkerRadius.clamp(
       appModel.volumeMarkers[index].radius * factor,
       for: markerKind
     )
+    appModel.volumeMarkers[index].radius = radius
+    if markerKind == .sphere {
+      appModel.defaultVolumeMarkerRadius = radius
+    }
     sharePlay.synchronizeMarkers()
   }
 

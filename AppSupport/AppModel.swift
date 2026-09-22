@@ -76,6 +76,8 @@ final class AppModel: ObservableObject {
   @Published var interactionMode: InteractionMode = .model
   @Published var volumeMarkers: [VolumeMarker] = []
   @Published var selectedVolumeMarkerID: UUID?
+  /// Radius used for sphere markers created locally during this app session.
+  var defaultVolumeMarkerRadius = VolumeMarkerRadius.sphereDefault
   @Published var timer: CPUFrameTimer?
   @Published var performanceModel = PerformanceGraphModel()
   let logger = GUILogger()
