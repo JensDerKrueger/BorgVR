@@ -173,34 +173,12 @@
 			);
 			target = 111111111111111111111501 /* iOSApp */;
 		};
-		111111111111111111111205 /* Exceptions for "BORGVR-Render" folder in "iOSApp" target */ = {
-			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-			membershipExceptions = (
-				BorgARProvider.swift,
-				RendererLoop.swift,
-				RendererResourceInit.swift,
-				RendererSetup.swift,
-				RendererVariables.swift,
-			);
-			target = 111111111111111111111501 /* iOSApp */;
-		};
 		111111111111111111111206 /* Exceptions for "iOSApp" folder in "iOSApp" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
 			);
 			target = 111111111111111111111501 /* iOSApp */;
-		};
-		560C00012E00000000000003 /* Exceptions for "BORGVR-Render" folder in "macOSApp" target */ = {
-			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-			membershipExceptions = (
-				BorgARProvider.swift,
-				RendererLoop.swift,
-				RendererResourceInit.swift,
-				RendererSetup.swift,
-				RendererVariables.swift,
-			);
-			target = 560C00012E00000000000010 /* macOSApp */;
 		};
 		560C00012E00000000000004 /* Exceptions for "BORGVR-IO" folder in "macOSApp" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
@@ -330,8 +308,6 @@
 		560D09552D98280400EAD023 /* BORGVR-Render */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				111111111111111111111205 /* Exceptions for "BORGVR-Render" folder in "iOSApp" target */,
-				560C00012E00000000000003 /* Exceptions for "BORGVR-Render" folder in "macOSApp" target */,
 				560D0A6A2D98B98100EAD023 /* Exceptions for "BORGVR-Render" folder in "macOSServer" target */,
 			);
 			path = "BORGVR-Render";

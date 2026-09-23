@@ -258,35 +258,29 @@ final actor Renderer {
 
     let metadata = borgData.getMetadata()
 
-    // Page in initial bricks for smoother rendering.
     let maxInitialBricks = StoredAppModel.int("initialBricks")
-
-    let start = metadata.brickMetadata.count-2
-    let count = min(maxInitialBricks,metadata.brickMetadata.count-1)
-    let initialIDs = (0..<count).map { start - $0 }
-
     do {
-      // note that this does not guarantee that all initialIDs
-      // are paged in, as some may be empty
-      try volumeAtlas.pageIn(IDs: initialIDs)
-      logger?.dev("\(initialIDs.count) initial bricks paged in successfully.")
+      try VolumeRenderResources.pageInInitialBricks(
+        atlas: volumeAtlas,
+        dataset: borgData,
+        maximumCount: maxInitialBricks
+      )
+      logger?.dev("Initial bricks paged in successfully.")
     } catch {
       logger?.warning("Failed to page in all of the initial bricks: \(error)")
     }
 
     let minHashTableSize = StoredAppModel.int("minHashTableSize")
-
-    let minTableElementCount : Int = Int(ceil(Double(minHashTableSize * 1024 * 1024) / Double(metadata.componentCount * metadata.bytesPerComponent * metadata.brickSize * metadata.brickSize * metadata.brickSize)))
+    let minTableElementCount = VolumeRenderResources.minimumHashTableElementCount(
+      metadata: metadata,
+      representedMemoryMB: minHashTableSize
+    )
 
     logger?.dev("Size of Bricks represented by the Hash Table is \(minHashTableSize) MB. That means a minimum of \(minTableElementCount) table elements.")
 
     self.hashTable = GPUHashtable(minTableElementCount: minTableElementCount, device: device, logger: logger)
 
-    let maxExtend = Float(max(metadata.width, metadata.height, metadata.depth))
-    let scale = SIMD3<Float>(metadata.aspectX * Float(metadata.width) / maxExtend,
-                             metadata.aspectY * Float(metadata.height) / maxExtend,
-                             metadata.aspectZ * Float(metadata.depth) / maxExtend)
-    self.volumeScale = Transform(scale: scale).matrix
+    self.volumeScale = VolumeRenderResources.volumeScale(for: metadata)
 
 
     let device = self.device

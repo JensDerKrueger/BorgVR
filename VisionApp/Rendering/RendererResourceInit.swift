@@ -40,59 +40,19 @@ extension Renderer {
     // Build a render state pipeline object.
     let shaderSource = try RuntimeMetalShaderLoader.loadSource(named: "Shaders")
 
-    let screenSpaceError = StoredAppModel.float("screenSpaceError")
-    let atlasSizeMB = StoredAppModel.int("atlasSizeMB")
-    let maxProbingAttempts = StoredAppModel.int("maxProbingAttempts")
-    let requestLowResLOD = StoredAppModel.bool("requestLowResLOD") ? 1 : 0
-    let stopOnMiss = StoredAppModel.bool("stopOnMiss") ? 1 : 0
-
-    let width : Float = 1888.0
-
-    let lodFactor = 2.0 * tan(1.663 / 2.0) * screenSpaceError / width
-    let levelZeroWorldSpaceError = max(
-      borgVRMetaData.aspectX / Float(borgVRMetaData.width),
-      borgVRMetaData.aspectY / Float(borgVRMetaData.height),
-      borgVRMetaData.aspectZ / Float(borgVRMetaData.depth)
+    let compileOptions = VolumeShaderCompiler.compileOptions(
+      metadata: borgVRMetaData,
+      hashTableSize: hasTable.size,
+      configuration: VolumeShaderConfiguration(
+        screenSpaceError: StoredAppModel.float("screenSpaceError"),
+        atlasSizeMB: StoredAppModel.int("atlasSizeMB"),
+        maximumProbingAttempts: StoredAppModel.int("maxProbingAttempts"),
+        requestsLowResolutionLOD: StoredAppModel.bool("requestLowResLOD"),
+        stopsOnMissingBrick: StoredAppModel.bool("stopOnMiss"),
+        fieldOfViewRadians: 1.663,
+        drawableWidth: 1888
+      )
     )
-
-    let (atlasWidth, atlasHeight, atlasDepth, _) = VolumeAtlas.computeAtlasSize(
-      maxMemory: atlasSizeMB * 1024 * 1024,
-      maxBrickCount: borgVRMetaData.brickMetadata.count,
-      brickSize: borgVRMetaData.brickSize,
-      bytesPerComponent: borgVRMetaData.bytesPerComponent,
-      componentCount: borgVRMetaData.componentCount
-    )
-
-    func maxCellsIntersected(in grid: Vec3<Int>) -> Int {
-      return grid.x-1 + grid.y-1 + grid.z-1 + 1
-    }
-
-    let overlapStepX = Float(borgVRMetaData.overlap) / Float(atlasWidth)
-    let overlapStepY = Float(borgVRMetaData.overlap) / Float(atlasHeight)
-    let overlapStepZ = Float(borgVRMetaData.overlap) / Float(atlasDepth)
-    let maxIterations = maxCellsIntersected(
-      in: borgVRMetaData.levelMetadata[0].totalBricks
-    )
-
-    let compileOptions = MTLCompileOptions()
-    compileOptions.preprocessorMacros = [
-      "OVERRIDE_DUMMY" : NSNumber(value: 1),
-      "LEVEL_COUNT": NSNumber(value: borgVRMetaData.levelMetadata.count),
-      "BRICK_SIZE": NSNumber(value: borgVRMetaData.brickSize),
-      "BRICK_INNER_SIZE": NSNumber(value: borgVRMetaData.brickSize - borgVRMetaData.overlap * 2),
-      "OVERLAP_STEP": NSString(string: "float3(\(overlapStepX),\(overlapStepY),\(overlapStepZ))"),
-      "LEVEL_ZERO_WORLD_SPACE_ERROR" : NSNumber(value: levelZeroWorldSpaceError),
-      "LOD_FACTOR" : NSNumber(value: lodFactor),
-      "POOL_SIZE" : NSString(string: "float3(\(atlasWidth),\(atlasHeight),\(atlasDepth))"),
-      "VOLUME_SIZE" : NSString(string: "float3(\(borgVRMetaData.width),\(borgVRMetaData.height),\(borgVRMetaData.depth))"),
-      "POOL_CAPACITY" : NSString(string: "uint3(\(atlasWidth / borgVRMetaData.brickSize),\(atlasHeight / borgVRMetaData.brickSize),\(atlasDepth / borgVRMetaData.brickSize))"),
-      "HASHTABLE_SIZE" : NSNumber(value: hasTable.size),
-      "MAX_PROBING_ATTEMPTS" : NSNumber(value: maxProbingAttempts),
-      "MAX_ITERATIONS" : NSNumber(value: maxIterations),
-      "REQUEST_LOWRES_LOD": NSNumber(value: requestLowResLOD),
-      "STOP_ON_MISS": NSNumber(value: stopOnMiss)
-    ]
-    compileOptions.mathMode = .fast
 
     let library = try device.makeLibrary(source: shaderSource, options: compileOptions)
     let vertexFunction = library.makeFunction(name: "vertexShader")
