@@ -36,115 +36,110 @@ struct ModeSelectionView: View {
 
   @ViewBuilder
   private func content(for layout: AdaptiveLayout) -> some View {
-    switch layout.modeSelectionStyle {
-      case .portrait:
-        portraitContent
-      case .compactLandscape:
-        compactLandscapeContent
-      case .regularLandscape:
-        regularLandscapeContent
+    VStack(spacing: 0) {
+      visualHeader(for: layout)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .layoutPriority(1)
+        .ignoresSafeArea(edges: [.top, .horizontal])
+
+      actionPanel(for: layout)
     }
+    .frame(maxWidth: .infinity, maxHeight: .infinity)
   }
 
-  private var portraitContent: some View {
-    ScrollView {
-      VStack(spacing: 24) {
-        borgVRLogo
-          .frame(maxWidth: 260)
-          .clipShape(RoundedRectangle(cornerRadius: 8))
+  private func visualHeader(for layout: AdaptiveLayout) -> some View {
+    let isCompactPortrait = !layout.isLandscape && !layout.isRegularWidth
 
-        titleBlock(multilineAlignment: .center)
+    return GeometryReader { proxy in
+      ZStack(alignment: isCompactPortrait ? .bottom : .bottomLeading) {
+        borgVRArtwork
+          .scaledToFill()
+          .frame(width: proxy.size.width, height: proxy.size.height)
+          .clipped()
 
-        if appSettings.enableDatasetServer {
-          serverStatus
-        }
+        Color.black.opacity(0.38)
 
-        buttonStack
+        titleBlock(
+          horizontalAlignment: isCompactPortrait ? .center : .leading,
+          multilineAlignment: isCompactPortrait ? .center : .leading
+        )
+          .frame(
+            maxWidth: isCompactPortrait ? .infinity : 760,
+            alignment: isCompactPortrait ? .center : .leading
+          )
+          .padding(.horizontal, isCompactPortrait ? 24 : 40)
+          .padding(.bottom, isCompactPortrait ? 24 : 30)
       }
-      .frame(maxWidth: .infinity)
-      .padding(.horizontal, 24)
-      .padding(.vertical, 24)
+      .frame(width: proxy.size.width, height: proxy.size.height)
     }
+    .accessibilityElement(children: .contain)
   }
 
-  private var compactLandscapeContent: some View {
-    HStack(spacing: 28) {
-      ViewThatFits(in: .vertical) {
-        compactLandscapeBranding
-
-        ScrollView {
-          compactLandscapeBranding
-        }
-        .scrollIndicators(.hidden)
-      }
-
-      buttonStack
-        .frame(maxWidth: 360)
-    }
-    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-    .padding(.horizontal, 24)
-    .padding(.vertical, 14)
-  }
-
-  private var compactLandscapeBranding: some View {
-    VStack(spacing: 14) {
-      borgVRLogo
-        .frame(maxWidth: 130)
-        .clipShape(RoundedRectangle(cornerRadius: 8))
-
-      titleBlock(multilineAlignment: .center)
-
-      if appSettings.enableDatasetServer {
-        serverStatus
-      }
-    }
-    .frame(maxWidth: .infinity)
-    .padding(.vertical, 18)
-  }
-
-  private var regularLandscapeContent: some View {
-    HStack(alignment: .center, spacing: 84) {
-      VStack(spacing: 18) {
-        borgVRLogo
-          .frame(width: 190, height: 190)
-          .clipShape(RoundedRectangle(cornerRadius: 8))
-
-        titleBlock(multilineAlignment: .center)
-
-        if appSettings.enableDatasetServer {
-          serverStatus
-        }
-      }
-      .frame(maxWidth: 470)
-
-      buttonStack
-        .frame(width: 360)
-    }
-    .frame(maxWidth: 980, maxHeight: .infinity, alignment: .center)
-    .padding(.horizontal, 40)
-    .padding(.vertical, 32)
-  }
-
-  private func titleBlock(multilineAlignment: TextAlignment) -> some View {
-    VStack(spacing: 8) {
+  private func titleBlock(
+    horizontalAlignment: HorizontalAlignment,
+    multilineAlignment: TextAlignment
+  ) -> some View {
+    VStack(alignment: horizontalAlignment, spacing: 8) {
       Text("BorgVR Mobile")
         .font(.largeTitle.weight(.bold))
+        .foregroundStyle(.white)
         .multilineTextAlignment(multilineAlignment)
 
       Text("Interactive visualization of volumetric datasets on iPhone and iPad")
         .font(.headline)
-        .foregroundStyle(.secondary)
+        .foregroundStyle(.white.opacity(0.86))
         .multilineTextAlignment(multilineAlignment)
     }
   }
 
-  private var buttonStack: some View {
-    VStack(spacing: 12) {
+  private func actionPanel(for layout: AdaptiveLayout) -> some View {
+    VStack(spacing: 14) {
+      actionGrid(columnCount: actionColumnCount(for: layout))
+
+      if appSettings.enableDatasetServer {
+        Divider()
+
+        ViewThatFits(in: .horizontal) {
+          HStack(spacing: 20) {
+            serverStatus
+            serverButton
+              .frame(maxWidth: 360)
+          }
+
+          VStack(spacing: 12) {
+            serverStatus
+            serverButton
+          }
+        }
+      }
+    }
+    .frame(maxWidth: 1120)
+    .padding(.horizontal, layout.isRegularWidth ? 40 : 20)
+    .padding(.top, 18)
+    .padding(.bottom, max(layout.safeAreaInsets.bottom, 18))
+    .frame(maxWidth: .infinity)
+    .background(Color(.systemBackground))
+    .overlay(alignment: .top) {
+      Rectangle()
+        .fill(Color.accentColor)
+        .frame(height: 3)
+        .accessibilityHidden(true)
+    }
+  }
+
+  private func actionGrid(columnCount: Int) -> some View {
+    LazyVGrid(
+      columns: Array(
+        repeating: GridItem(.flexible(minimum: 120), spacing: 12),
+        count: columnCount
+      ),
+      spacing: 12
+    ) {
       Button {
         appModel.currentState = .selectData
       } label: {
         Label("Open dataset", systemImage: "folder")
-          .frame(maxWidth: .infinity)
+          .frame(maxWidth: .infinity, minHeight: 32)
       }
       .buttonStyle(.borderedProminent)
 
@@ -152,7 +147,7 @@ struct ModeSelectionView: View {
         appModel.currentState = .importData
       } label: {
         Label("Import dataset", systemImage: "square.and.arrow.down")
-          .frame(maxWidth: .infinity)
+          .frame(maxWidth: .infinity, minHeight: 32)
       }
       .buttonStyle(.bordered)
 
@@ -160,7 +155,7 @@ struct ModeSelectionView: View {
         appModel.currentState = .settings
       } label: {
         Label("Settings", systemImage: "gearshape")
-          .frame(maxWidth: .infinity)
+          .frame(maxWidth: .infinity, minHeight: 32)
       }
       .buttonStyle(.bordered)
 
@@ -168,16 +163,22 @@ struct ModeSelectionView: View {
         showingAbout = true
       } label: {
         Label("Info", systemImage: "info.circle")
-          .frame(maxWidth: .infinity)
+          .frame(maxWidth: .infinity, minHeight: 32)
       }
       .buttonStyle(.bordered)
-
-      if appSettings.enableDatasetServer {
-        serverButton
-      }
     }
     .controlSize(.large)
-    .frame(maxWidth: 420)
+  }
+
+  private func actionColumnCount(for layout: AdaptiveLayout) -> Int {
+    switch layout.modeSelectionStyle {
+      case .regularLandscape:
+        4
+      case .compactLandscape:
+        2
+      case .portrait:
+        layout.isRegularWidth ? 2 : 1
+    }
   }
 
   private var serverButton: some View {
@@ -215,12 +216,11 @@ struct ModeSelectionView: View {
   }
 
   @ViewBuilder
-  private var borgVRLogo: some View {
+  private var borgVRArtwork: some View {
     if let url = Bundle.main.url(forResource: "borgvr", withExtension: "png"),
        let image = UIImage(contentsOfFile: url.path) {
       Image(uiImage: image)
         .resizable()
-        .scaledToFit()
     } else {
       Image(systemName: "cube.transparent")
         .resizable()
