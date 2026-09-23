@@ -405,7 +405,7 @@ struct RenderView: View {
       appModel.volumeMarkers.append(marker)
       appModel.selectedVolumeMarkerID = marker.id
       markerDragID = marker.id
-      sharePlay.synchronizeMarkers()
+      sharePlay.synchronizeMarkers(immediately: true)
     }
   }
 

@@ -215,16 +215,23 @@ final class SharePlayCoordinator: ObservableObject {
   func flushSynchronization() {
     guard isInSession else { return }
     synchronizationTask?.cancel()
-    synchronizationTask = nil
-    Task { await flushPendingSynchronization() }
+    synchronizationTask = Task { [weak self] in
+      guard !Task.isCancelled else { return }
+      await self?.flushPendingSynchronization()
+    }
   }
 
-  func synchronizeMarkers() {
+  func synchronizeMarkers(immediately: Bool = false) {
     guard isInSession else { return }
     pendingMarkers = true
+    if immediately {
+      flushSynchronization()
+      return
+    }
     guard synchronizationTask == nil else { return }
     synchronizationTask = Task { [weak self] in
       try? await Task.sleep(nanoseconds: 50_000_000)
+      guard !Task.isCancelled else { return }
       await self?.flushPendingSynchronization()
     }
   }

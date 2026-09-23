@@ -280,16 +280,16 @@ struct VisionApp: App {
     let destinationState = runtimeAppModel.currentState == .waitingForHost
       ? RuntimeAppModel.ContentViewState.waitingForHost
       : .selectData
+    if runtimeAppModel.groupSessionHost && sharedAppModel.isInGroupSession {
+      await sharedAppModel.shutdownGroupsession()
+    }
+
     runtimeAppModel.immersiveSpaceState = .inTransition
     let renderTask = runtimeAppModel.cancelRenderLoop()
     await renderTask?.value
     await dismissImmersiveSpace()
     runtimeAppModel.immersiveSpaceIntent = .keepCurrent
     runtimeAppModel.currentState = destinationState
-
-    if runtimeAppModel.groupSessionHost {
-      sharedAppModel.shutdownGroupsession()
-    }
 
     let documentsDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
     if let activeDataset = runtimeAppModel.activeDataset {

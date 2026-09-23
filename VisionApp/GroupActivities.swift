@@ -152,17 +152,18 @@ class GroupActivityHelper {
     }
   }
 
-  func shutdownGroupsession() {
-    Task { @MainActor in
-      stopSharePlayServer()
-    }
-    Task {
-      do {
-        try await sendData(data:Data(), of: .shutdownRequest)
-      } catch {
-        await runtimeAppModel?.logger
-          .error("Failed to send shutdown data to all participants: \(error)")
-      }
+  @MainActor
+  func shutdownGroupsession() async {
+    defer { stopSharePlayServer() }
+    guard groupSession != nil else { return }
+
+    do {
+      try await sendData(data: Data(), of: .shutdownRequest)
+      try? await Task.sleep(nanoseconds: 100_000_000)
+      try await sendData(data: Data(), of: .shutdownRequest)
+    } catch {
+      runtimeAppModel?.logger
+        .error("Failed to send shutdown data to all participants: \(error)")
     }
   }
 

@@ -184,8 +184,8 @@ class SharedAppModel {
     groupActivityHelper?.markLocalActivityStarter()
   }
 
-  @MainActor func shutdownGroupsession() {
-    groupActivityHelper?.shutdownGroupsession()
+  @MainActor func shutdownGroupsession() async {
+    await groupActivityHelper?.shutdownGroupsession()
   }
 
   func openSharedView() {
