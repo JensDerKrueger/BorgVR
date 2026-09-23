@@ -46,6 +46,19 @@ struct RenderControlsPanel: View {
         .help(sharePlay.isInSession ? "SharePlay active" : "Start SharePlay")
         .buttonStyle(.bordered)
 
+        if sharePlay.isInSession, !sharePlay.participants.isEmpty {
+          Menu {
+            ForEach(sharePlay.participants) { participant in
+              Label(participant.displayName, systemImage: participant.platform.systemImage)
+            }
+          } label: {
+            Image(systemName: "person.2")
+          }
+          .accessibilityLabel("Participants")
+          .help("Participants")
+          .buttonStyle(.bordered)
+        }
+
         if canCopyWebGPUShareLink {
           Button {
             copyWebGPUShareLink()

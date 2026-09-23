@@ -50,6 +50,7 @@ private enum SettingsPage: String, CaseIterable, Identifiable {
   case lod
   case servers
   case externalDataSources
+  case sharePlay
   case miscellaneous
 
   var id: String { rawValue }
@@ -62,6 +63,7 @@ private enum SettingsPage: String, CaseIterable, Identifiable {
       case .lod: return "LOD"
       case .servers: return "Servers"
       case .externalDataSources: return "External data sources"
+      case .sharePlay: return "SharePlay"
       case .miscellaneous: return "Miscellaneous"
     }
   }
@@ -74,6 +76,7 @@ private enum SettingsPage: String, CaseIterable, Identifiable {
       case .lod: return "square.stack.3d.up"
       case .servers: return "server.rack"
       case .externalDataSources: return "network"
+      case .sharePlay: return "shareplay"
       case .miscellaneous: return "ellipsis.circle"
     }
   }
@@ -180,6 +183,8 @@ struct SettingsView: View {
         serverSettings
       case .externalDataSources:
         externalDataSourceSettings
+      case .sharePlay:
+        sharePlaySettings
       case .miscellaneous:
         miscellaneousSettings
     }
@@ -400,6 +405,21 @@ struct SettingsView: View {
         }
       }
       resetButton(for: .miscellaneous)
+    }
+  }
+
+  private var sharePlaySettings: some View {
+    settingsGroup(
+      "SharePlay",
+      description: "Choose how you appear to other people during SharePlay collaboration. Your display name is shared only with participants in the current session."
+    ) {
+      HStack {
+        Text("SharePlay display name")
+        Spacer()
+        TextField("SharePlay display name", text: $storedAppModel.sharePlayDisplayName)
+          .textFieldStyle(.roundedBorder)
+          .frame(width: 260)
+      }
     }
   }
 

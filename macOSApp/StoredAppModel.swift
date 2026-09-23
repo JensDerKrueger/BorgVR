@@ -50,6 +50,9 @@ final class StoredAppModel : ObservableObject {
   static let defaultSharePlayWebServerPort = BorgVRSharedDefaults.sharePlayWebServerPort
   @AppStorage("sharePlayWebServerPort") var sharePlayWebServerPort: Int = defaultSharePlayWebServerPort
 
+  static let defaultSharePlayDisplayName = ""
+  @AppStorage("sharePlayDisplayName") var sharePlayDisplayName: String = defaultSharePlayDisplayName
+
   static let defaultMaxBricksPerGetRequest = BorgVRSharedDefaults.maximumBricksPerRequest
   @AppStorage("maxBricksPerGetRequest") var maxBricksPerGetRequest: Int = defaultMaxBricksPerGetRequest
 
@@ -89,11 +92,16 @@ final class StoredAppModel : ObservableObject {
     sharePlayWebServerPort = StoredAppModel.defaultSharePlayWebServerPort
   }
 
+  func resetSharePlayDefaults() {
+    sharePlayDisplayName = StoredAppModel.defaultSharePlayDisplayName
+  }
+
   func resetToDefaults() {
     resetDataSourceDefaults()
     resetImportDefaults()
     resetBackgroundServerDefaults()
     resetAdHocServerDefaults()
+    resetSharePlayDefaults()
   }
 
   var webServerCertificatePassword: String {

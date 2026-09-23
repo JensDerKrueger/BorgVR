@@ -8,6 +8,22 @@ import RealityKit
 
 extension Renderer {
 
+  private static let screenViewVisualizationMarkerIDs: [UUID] = [
+    UUID(uuidString: "EC000000-0000-0000-0000-000000000001")!,
+    UUID(uuidString: "EC000000-0000-0000-0000-000000000002")!,
+    UUID(uuidString: "EC000000-0000-0000-0000-000000000003")!,
+    UUID(uuidString: "EC000000-0000-0000-0000-000000000004")!,
+    UUID(uuidString: "EC000000-0000-0000-0000-000000000005")!,
+    UUID(uuidString: "EC000000-0000-0000-0000-000000000006")!,
+    UUID(uuidString: "EC000000-0000-0000-0000-000000000007")!,
+    UUID(uuidString: "EC000000-0000-0000-0000-000000000008")!,
+    UUID(uuidString: "EC000000-0000-0000-0000-000000000009")!,
+    UUID(uuidString: "EC000000-0000-0000-0000-00000000000A")!,
+    UUID(uuidString: "EC000000-0000-0000-0000-00000000000B")!,
+    UUID(uuidString: "EC000000-0000-0000-0000-00000000000C")!,
+    UUID(uuidString: "EC000000-0000-0000-0000-00000000000D")!
+  ]
+
   private func makeBillboardMatrix(position: SIMD3<Float>,
                                    camera: SIMD3<Float>,
                                    up: SIMD3<Float>,
@@ -515,7 +531,7 @@ extension Renderer {
 
   private func drawVolumeMarkers(_ renderEncoder: MTLRenderCommandEncoder,
                                  drawable: LayerRenderer.Drawable) {
-    let markers = sharedAppModel.volumeMarkers
+    let markers = sharedAppModel.volumeMarkers + screenViewVisualizationMarkers()
     let remoteStylusPreviews = sharedAppModel.activeRemoteSpatialStylusPreviews()
     guard !markers.isEmpty || spatialStylusPreviewPoint != nil || !remoteStylusPreviews.isEmpty else {
       return
@@ -667,6 +683,144 @@ extension Renderer {
     for preview in remoteStylusPreviews {
       drawSphere(preview.point, color: preview.color)
     }
+  }
+
+  private func screenViewVisualizationMarkers() -> [VolumeMarker] {
+    guard let state = sharedAppModel.screenSharePlayViewState,
+          sharedAppModel.sharePlayParticipants.contains(where: {
+            $0.platform == .iOS || $0.platform == .macOS
+          }) else {
+      return []
+    }
+
+    let aspect = min(max(state.viewportAspectRatio, 0.25), 4)
+    let fieldOfView = min(max(state.verticalFieldOfView, 0.2), 2.6)
+    let nearDistance: Float = 0.12
+    let farDistance: Float = 3.6
+    let cameraDistance = BorgVRScreenViewState.cameraDistance
+
+    let screenFromVolume =
+      Transform(translation: SIMD3<Float>(state.pan.x, state.pan.y, 0)).matrix *
+      simd_float4x4(state.orientation) *
+      Transform(scale: SIMD3<Float>(repeating: state.scale)).matrix *
+      volumeScale
+    let volumeFromScreen = simd_inverse(screenFromVolume)
+
+    func volumePoint(_ point: SIMD3<Float>) -> SIMD3<Float> {
+      let transformed = volumeFromScreen * SIMD4<Float>(point, 1)
+      return SIMD3<Float>(transformed.x, transformed.y, transformed.z) / transformed.w +
+        SIMD3<Float>(repeating: 0.5)
+    }
+
+    func planeCorners(distance: Float) -> [SIMD3<Float>] {
+      let halfHeight = distance * tan(fieldOfView * 0.5)
+      let halfWidth = halfHeight * aspect
+      let z = cameraDistance - distance
+      return [
+        volumePoint(SIMD3<Float>(-halfWidth, -halfHeight, z)),
+        volumePoint(SIMD3<Float>( halfWidth, -halfHeight, z)),
+        volumePoint(SIMD3<Float>( halfWidth,  halfHeight, z)),
+        volumePoint(SIMD3<Float>(-halfWidth,  halfHeight, z))
+      ]
+    }
+
+    let color = SIMD4<Float>(0.05, 0.85, 1, 1)
+    let lineRadius: Float = 0.002
+
+    if !sharedAppModel.screenViewInteractionActive {
+      let screenCorners = planeCorners(distance: nearDistance)
+      var result = (0..<4).map { index in
+        VolumeMarker(
+          id: Self.screenViewVisualizationMarkerIDs[index],
+          name: "Shared Screen View",
+          color: color,
+          geometry: .stroke([
+            VolumeMarkerPoint(position: screenCorners[index], radius: 0.004),
+            VolumeMarkerPoint(position: screenCorners[(index + 1) % 4], radius: 0.004)
+          ])
+        )
+      }
+
+      let eyeZ = cameraDistance + 0.035
+      let eyeWidth: Float = 0.085
+      let eyeHeight: Float = 0.038
+      let upperEye = (0...8).map { index -> VolumeMarkerPoint in
+        let t = Float(index) / 8
+        return VolumeMarkerPoint(
+          position: volumePoint(SIMD3<Float>(
+            (t - 0.5) * eyeWidth,
+            sin(t * .pi) * eyeHeight,
+            eyeZ
+          )),
+          radius: 0.003
+        )
+      }
+      let lowerEye = (0...8).map { index -> VolumeMarkerPoint in
+        let t = Float(index) / 8
+        return VolumeMarkerPoint(
+          position: volumePoint(SIMD3<Float>(
+            (t - 0.5) * eyeWidth,
+            -sin(t * .pi) * eyeHeight,
+            eyeZ
+          )),
+          radius: 0.003
+        )
+      }
+      result.append(VolumeMarker(
+        id: Self.screenViewVisualizationMarkerIDs[4],
+        name: "Shared Screen View",
+        color: SIMD4<Float>(0.8, 0.97, 1, 1),
+        geometry: .stroke(upperEye)
+      ))
+      result.append(VolumeMarker(
+        id: Self.screenViewVisualizationMarkerIDs[5],
+        name: "Shared Screen View",
+        color: SIMD4<Float>(0.8, 0.97, 1, 1),
+        geometry: .stroke(lowerEye)
+      ))
+      result.append(VolumeMarker(
+        id: Self.screenViewVisualizationMarkerIDs[6],
+        name: "Shared Screen View",
+        color: color,
+        geometry: .sphere(VolumeMarkerPoint(
+          position: volumePoint(SIMD3<Float>(0, 0, eyeZ - 0.006)),
+          radius: 0.012
+        ))
+      ))
+      return result
+    }
+
+    let near = planeCorners(distance: nearDistance)
+    let far = planeCorners(distance: farDistance)
+    let edges = [
+      (near[0], near[1]), (near[1], near[2]),
+      (near[2], near[3]), (near[3], near[0]),
+      (far[0], far[1]), (far[1], far[2]),
+      (far[2], far[3]), (far[3], far[0]),
+      (near[0], far[0]), (near[1], far[1]),
+      (near[2], far[2]), (near[3], far[3])
+    ]
+    var result = edges.enumerated().map { index, edge in
+      VolumeMarker(
+        id: Self.screenViewVisualizationMarkerIDs[index],
+        name: "Shared Screen View",
+        color: color,
+        geometry: .stroke([
+          VolumeMarkerPoint(position: edge.0, radius: lineRadius),
+          VolumeMarkerPoint(position: edge.1, radius: lineRadius)
+        ])
+      )
+    }
+    result.append(VolumeMarker(
+      id: Self.screenViewVisualizationMarkerIDs[12],
+      name: "Shared Screen View",
+      color: color,
+      geometry: .sphere(VolumeMarkerPoint(
+        position: volumePoint(SIMD3<Float>(0, 0, cameraDistance)),
+        radius: 0.018
+      ))
+    ))
+    return result
   }
 
   private func renderVolumeMarkers(commandBuffer: MTLCommandBuffer,

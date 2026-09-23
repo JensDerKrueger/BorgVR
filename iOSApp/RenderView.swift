@@ -157,6 +157,18 @@ struct RenderView: View {
           )
           .buttonStyle(.bordered)
 
+          if sharePlay.isInSession, !sharePlay.participants.isEmpty {
+            Menu {
+              ForEach(sharePlay.participants) { participant in
+                Label(participant.displayName, systemImage: participant.platform.systemImage)
+              }
+            } label: {
+              Image(systemName: "person.2")
+            }
+            .accessibilityLabel("Participants")
+            .buttonStyle(.bordered)
+          }
+
           if canCopyWebGPUShareLink {
             Button {
               copyWebGPUShareLink()
@@ -400,7 +412,8 @@ struct RenderView: View {
         position: position,
         radius: appModel.defaultVolumeMarkerRadius,
         color: appModel.defaultVolumeMarkerColor,
-        directionOrigin: directionOrigin
+        directionOrigin: directionOrigin,
+        showsDirection: appModel.defaultVolumeMarkerShowsDirection
       )
       appModel.volumeMarkers.append(marker)
       appModel.selectedVolumeMarkerID = marker.id

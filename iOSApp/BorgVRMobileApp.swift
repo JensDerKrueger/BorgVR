@@ -25,6 +25,9 @@ struct BorgVRMobileApp: App {
         .onChange(of: appSettings.logLevel) { _, newValue in
           appModel.setLogLevel(newValue)
         }
+        .onChange(of: appSettings.sharePlayDisplayName) { _, _ in
+          sharePlay.participantInfoChanged()
+        }
         .onChange(of: appSettings.autoStartServer) { _, enabled in
           if enabled, appSettings.enableDatasetServer, !serverController.isRunning {
             serverController.start(using: appSettings)

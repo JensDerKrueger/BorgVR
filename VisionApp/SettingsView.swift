@@ -410,6 +410,14 @@ struct SettingsView: View {
         }
         .tabItem { Label("settings_tab_import", systemImage: "folder.fill") }
 
+        Form {
+          settingsIntroSection("Choose how you appear to other people during SharePlay collaboration. Your display name is shared only with participants in the current session.")
+          Section(header: Text("Identity").bold()) {
+            TextField("SharePlay display name", text: $storedAppModel.sharePlayDisplayName)
+          }
+        }
+        .tabItem { Label("SharePlay", systemImage: "shareplay") }
+
         // Advanced Options Tab
         Form {
           settingsIntroSection("settings_description_advanced")

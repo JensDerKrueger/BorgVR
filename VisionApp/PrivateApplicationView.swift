@@ -34,6 +34,9 @@ struct PrivateApplicationView: View {
                 runtimeAppModel.interactionMode = .clipping
               case "marker":
                 runtimeAppModel.interactionMode = .marker
+              case "screenView":
+                sharedAppModel.selectedVolumeMarkerID = nil
+                runtimeAppModel.interactionMode = .screenView
               default:
                 break
             }
@@ -43,8 +46,21 @@ struct PrivateApplicationView: View {
         Text("private_interaction_option_model").tag("model")
         Text("private_interaction_option_clipping").tag("clipping")
         Text("private_interaction_option_marker").tag("marker")
+        if hasSharedScreenView {
+          Text("Screen View").tag("screenView")
+        }
       }
       .pickerStyle(.segmented)
+
+      if !sharedAppModel.sharePlayParticipants.isEmpty {
+        Menu {
+          ForEach(sharedAppModel.sharePlayParticipants) { participant in
+            Label(participant.displayName, systemImage: participant.platform.systemImage)
+          }
+        } label: {
+          Label("Participants", systemImage: "person.2")
+        }
+      }
 
       HStack {
         Button(action: openSelectedEditor) {
@@ -158,6 +174,13 @@ struct PrivateApplicationView: View {
       }
     }
     .padding()
+  }
+
+  private var hasSharedScreenView: Bool {
+    sharedAppModel.screenSharePlayViewState != nil &&
+      sharedAppModel.sharePlayParticipants.contains {
+        $0.platform == .iOS || $0.platform == .macOS
+      }
   }
 
   func openSelectedEditor() {

@@ -118,6 +118,72 @@ class ImmersiveInteraction {
     }
   }
 
+  private func poseMatrix(_ event: SpatialEventCollection.Event) -> simd_float4x4? {
+    guard let pose = event.inputDevicePose else { return nil }
+    var matrix = simd_float4x4(simd_quatf(pose.pose3D.rotation))
+    let position = SIMD3<Float>(pose.pose3D.position.vector)
+    matrix.columns.3 = SIMD4<Float>(position, 1)
+    return matrix
+  }
+
+  private func handleScreenViewInteraction(_ event: SpatialEventCollection.Event) {
+    guard let hand = poseMatrix(event),
+          var state = sharedAppModel.screenSharePlayViewState else {
+      sharedAppModel.screenViewInteractionActive = false
+      return
+    }
+
+    switch event.phase {
+      case .active:
+        sharedAppModel.screenViewInteractionActive = true
+        let worldFromDataset = sharedAppModel.originFromWorldAnchorMatrix *
+          sharedAppModel.modelTransform.matrix
+        let handFromCamera = simd_float4x4(
+          simd_quatf(
+            angle: -.pi / 2,
+            axis: SIMD3<Float>(1, 0, 0)
+          ) *
+          simd_quatf(
+            angle: -.pi / 6,
+            axis: SIMD3<Float>(0, 1, 0)
+          ) *
+          simd_quatf(
+            angle: .pi / 6,
+            axis: SIMD3<Float>(1, 0, 0)
+          )
+        )
+        let datasetFromCamera = simd_inverse(worldFromDataset) * hand * handFromCamera
+        let cameraPosition = SIMD3<Float>(
+          datasetFromCamera.columns.3.x,
+          datasetFromCamera.columns.3.y,
+          datasetFromCamera.columns.3.z
+        )
+        let cameraOrientation = datasetFromCamera.rotationQuaternion(orthonormalize: true)
+        let orientation = cameraOrientation.inverse
+        let rotatedCameraPosition = orientation.act(cameraPosition)
+        guard rotatedCameraPosition.z > 0.001 else { return }
+
+        let scale = BorgVRScreenViewState.cameraDistance / rotatedCameraPosition.z
+        guard scale.isFinite else { return }
+        state.orientation = orientation
+        state.scale = min(max(scale, 0.05), 40)
+        state.pan = SIMD2<Float>(
+          -state.scale * rotatedCameraPosition.x,
+          -state.scale * rotatedCameraPosition.y
+        )
+        sharedAppModel.screenSharePlayViewState = state
+        sharedAppModel.synchronizeScreenView()
+
+      case .ended, .cancelled:
+        sharedAppModel.screenViewInteractionActive = false
+        sharedAppModel.synchronizeScreenView()
+        sharedAppModel.flushSynchronization()
+
+      default:
+        break
+    }
+  }
+
   private func handleClippingTranslationAndRotation(_ event: SpatialEventCollection.Event) {
     let inverseWorld = sharedAppModel.originFromWorldAnchorMatrix.inverse
 
@@ -403,7 +469,8 @@ class ImmersiveInteraction {
       position: position,
       radius: sharedAppModel.defaultVolumeMarkerRadius,
       color: storedAppModel.markerDefaultColorSIMD,
-      directionOrigin: directionOrigin
+      directionOrigin: directionOrigin,
+      showsDirection: sharedAppModel.defaultVolumeMarkerShowsDirection
     )
   }
 
@@ -807,6 +874,9 @@ class ImmersiveInteraction {
                            _ transferEditState: RuntimeAppModel.TransferEditState,
                            datasetInfo: RuntimeAppModel.DatasetInfo?,
                            toggleChannel: @escaping @MainActor (Int) -> Void) {
+    if interactionMode != .screenView {
+      sharedAppModel.screenViewInteractionActive = false
+    }
     if events.count == 1,
        let event = events.first,
        handleTransferFunctionPanel(
@@ -824,6 +894,7 @@ class ImmersiveInteraction {
     }
 
     if interactionMode != .marker,
+       interactionMode != .screenView,
        events.count == 1,
        let event = events.first,
        let datasetInfo,
@@ -862,6 +933,13 @@ class ImmersiveInteraction {
           default:
             return
         }
+      case .screenView:
+        resetQuickMarkerState()
+        guard events.count == 1, let event = events.first else {
+          sharedAppModel.screenViewInteractionActive = false
+          return
+        }
+        handleScreenViewInteraction(event)
     }
   }
 }

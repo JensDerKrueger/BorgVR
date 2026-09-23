@@ -158,6 +158,7 @@ final class AppSettings: ObservableObject {
     "renderBackgroundSecondaryGreen": 0.1960784314,
     "renderBackgroundSecondaryBlue": 0.3294117647,
     "renderBackgroundSecondaryAlpha": 1.0,
+    "sharePlayDisplayName": "",
     "logLevel": AppLogLevel.warning.rawValue
   ]
 
@@ -212,6 +213,7 @@ final class AppSettings: ObservableObject {
   @AppStorage("renderBackgroundSecondaryGreen") private var renderBackgroundSecondaryGreen: Double = AppSettings.double("renderBackgroundSecondaryGreen")
   @AppStorage("renderBackgroundSecondaryBlue") private var renderBackgroundSecondaryBlue: Double = AppSettings.double("renderBackgroundSecondaryBlue")
   @AppStorage("renderBackgroundSecondaryAlpha") private var renderBackgroundSecondaryAlpha: Double = AppSettings.double("renderBackgroundSecondaryAlpha")
+  @AppStorage("sharePlayDisplayName") var sharePlayDisplayName: String = AppSettings.string("sharePlayDisplayName")
   @AppStorage("logLevel") var logLevel: String = AppSettings.string("logLevel")
 
   var selectedLogLevel: AppLogLevel {
@@ -339,6 +341,10 @@ final class AppSettings: ObservableObject {
     logLevel = Self.stringDefault("logLevel")
   }
 
+  func resetSharePlayDefaults() {
+    sharePlayDisplayName = Self.stringDefault("sharePlayDisplayName")
+  }
+
   func resetImportDefaults() {
     brickSize = Self.intDefault("brickSize")
     brickOverlap = Self.intDefault("brickOverlap")
@@ -399,6 +405,7 @@ final class AppSettings: ObservableObject {
     resetWebServerDefaults()
     resetAdHocServerDefaults()
     resetLODDefaults()
+    resetSharePlayDefaults()
   }
 
   private static func intDefault(_ key: String) -> Int {

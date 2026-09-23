@@ -74,6 +74,9 @@ struct macOSApp: App {
         .onChange(of: appSettings.logLevel) { _, newValue in
           appModel.setLogLevel(newValue)
         }
+        .onChange(of: storedAppModel.sharePlayDisplayName) { _, _ in
+          sharePlay.participantInfoChanged()
+        }
         .onChange(of: storedAppModel.enableDatasetServer) { _, enabled in
           if enabled {
             if storedAppModel.autoStartServer, !serverController.isRunning {

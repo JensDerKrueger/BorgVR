@@ -682,3 +682,9 @@
 "Closing this dataset will leave the current SharePlay session." = "Closing this dataset will leave the current SharePlay session.";
 "Waiting for SharePlay Host" = "Waiting for SharePlay Host";
 "Waiting for the host to select and open a dataset." = "Waiting for the host to select and open a dataset.";
+"SharePlay" = "SharePlay";
+"Identity" = "Identity";
+"SharePlay display name" = "SharePlay display name";
+"Choose how you appear to other people during SharePlay collaboration. Your display name is shared only with participants in the current session." = "Choose how you appear to other people during SharePlay collaboration. Your display name is shared only with participants in the current session.";
+"Participants" = "Participants";
+"Mac" = "Mac";

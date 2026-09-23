@@ -30,6 +30,7 @@ struct BorgVRSharePlayActivity: GroupActivity, Transferable {
 @MainActor
 final class SharePlayCoordinator: ObservableObject {
   @Published private(set) var isInSession = false
+  @Published private(set) var participants: [BorgVRSharePlayParticipant] = []
 
   private var groupSession: GroupSession<BorgVRSharePlayActivity>?
   private var messenger: GroupSessionMessenger?
@@ -45,6 +46,7 @@ final class SharePlayCoordinator: ObservableObject {
   private var pendingMarkers = false
   private var synchronizationTask: Task<Void, Never>?
   private var knownParticipants = Set<Participant>()
+  private var participantInfoByID: [UUID: BorgVRSharePlayParticipantInfo] = [:]
   private let sharePlayServerHost = BorgVRServerHost(logger: GUILogger())
   private var sharePlayDatasetID: String?
   private var sharePlayAuthToken = ""
@@ -236,6 +238,10 @@ final class SharePlayCoordinator: ObservableObject {
     }
   }
 
+  func participantInfoChanged() {
+    Task { await sendParticipantInfo() }
+  }
+
   private func configure(_ session: GroupSession<BorgVRSharePlayActivity>) {
     activityActivationTask?.cancel()
     activityActivationTask = nil
@@ -254,8 +260,16 @@ final class SharePlayCoordinator: ObservableObject {
         guard let self else { return }
         let newParticipants = activeParticipants.subtracting(self.knownParticipants)
         self.knownParticipants = activeParticipants
+        let activeIDs = Set(activeParticipants.map(\.id))
+        self.participantInfoByID = self.participantInfoByID.filter {
+          activeIDs.contains($0.key)
+        }
+        self.publishParticipants()
         guard !newParticipants.isEmpty else { return }
-        Task { await self.sendInitialDataReliably(to: .only(newParticipants)) }
+        Task {
+          await self.sendInitialDataReliably(to: .only(newParticipants))
+          await self.sendParticipantInfo(to: .only(newParticipants))
+        }
       }
       .store(in: &subscriptions)
 
@@ -275,6 +289,7 @@ final class SharePlayCoordinator: ObservableObject {
     let messenger = GroupSessionMessenger(session: session)
     self.messenger = messenger
     session.join()
+    Task { await sendParticipantInfo() }
 
     messageTask = Task.detached { [weak self] in
       for await (data, context) in messenger.messages(of: Data.self) {
@@ -295,6 +310,8 @@ final class SharePlayCoordinator: ObservableObject {
     case renderingUpdate = 0x01
     case shutdownRequest = 0x02
     case stateRequest = 0x03
+    case participantInfo = 0x04
+    case screenViewRequest = 0x05
   }
 
   private func sendData(
@@ -304,6 +321,40 @@ final class SharePlayCoordinator: ObservableObject {
   ) async throws {
     guard let messenger else { return }
     try await messenger.send(Data([messageType.rawValue]) + data, to: participants)
+  }
+
+  private func sendParticipantInfo(to participants: Participants = .all) async {
+    guard messenger != nil else { return }
+    let configuredName = appSettings?.sharePlayDisplayName ?? ""
+    let displayName = configuredName.trimmingCharacters(in: .whitespacesAndNewlines)
+    let info = BorgVRSharePlayParticipantInfo(
+      platform: .iOS,
+      displayName: displayName.isEmpty
+        ? String(localized: "iPhone or iPad")
+        : displayName
+    )
+    guard let data = try? BorgVRSharePlayParticipantInfoCodec.encode(info) else { return }
+    try? await sendData(data, of: .participantInfo, to: participants)
+  }
+
+  private func handleParticipantInfo(data: Data, from participant: Participant) {
+    do {
+      participantInfoByID[participant.id] = try BorgVRSharePlayParticipantInfoCodec.decode(data)
+      publishParticipants()
+    } catch {
+      appModel?.logger.error("Failed to read SharePlay participant information: \(error)")
+    }
+  }
+
+  private func publishParticipants() {
+    participants = participantInfoByID.map {
+      BorgVRSharePlayParticipant(id: $0.key, info: $0.value)
+    }.sorted {
+      if $0.displayName == $1.displayName {
+        return $0.id.uuidString < $1.id.uuidString
+      }
+      return $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending
+    }
   }
 
   private func resetSessionReceivers() {
@@ -319,6 +370,8 @@ final class SharePlayCoordinator: ObservableObject {
     pendingTransform = false
     pendingMarkers = false
     knownParticipants.removeAll()
+    participantInfoByID.removeAll()
+    participants = []
     appModel?.clearRemoteSpatialStylusPreviews()
   }
 
@@ -426,6 +479,16 @@ final class SharePlayCoordinator: ObservableObject {
       case MessageType.stateRequest.rawValue:
         guard appModel?.groupSessionHost == true else { return }
         Task { await sendInitialDataReliably(to: .only(Set([participant]))) }
+      case MessageType.participantInfo.rawValue:
+        handleParticipantInfo(data: payload, from: participant)
+      case MessageType.screenViewRequest.rawValue:
+        guard let renderingParameters else { return }
+        Task {
+          try? await sendData(
+            renderingParameters.serializeScreenSharePlayTransform(),
+            of: .renderingUpdate
+          )
+        }
       default:
         appModel?.logger.error("Invalid SharePlay message type: \(firstByte)")
     }

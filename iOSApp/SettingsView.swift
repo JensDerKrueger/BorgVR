@@ -38,7 +38,42 @@ private enum ServerConnectionTestResult {
   case failure(String)
 }
 
+private enum SettingsPage: String, CaseIterable, Identifiable {
+  case rendering
+  case importSettings
+  case remoteDatasets
+  case localServer
+  case sharePlay
+  case lod
+
+  var id: String { rawValue }
+
+  var title: LocalizedStringKey {
+    switch self {
+      case .rendering: "Rendering"
+      case .importSettings: "Import"
+      case .remoteDatasets: "Remote datasets"
+      case .localServer: "Local server"
+      case .sharePlay: "SharePlay"
+      case .lod: "LOD"
+    }
+  }
+
+  var systemImage: String {
+    switch self {
+      case .rendering: "paintpalette"
+      case .importSettings: "square.and.arrow.down"
+      case .remoteDatasets: "network"
+      case .localServer: "server.rack"
+      case .sharePlay: "shareplay"
+      case .lod: "square.stack.3d.up"
+    }
+  }
+}
+
 struct SettingsView: View {
+  @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+  @Environment(\.verticalSizeClass) private var verticalSizeClass
   @EnvironmentObject private var appModel: AppModel
   @EnvironmentObject var appSettings: AppSettings
 
@@ -57,107 +92,24 @@ struct SettingsView: View {
   @State private var serverConnectionTestResult: ServerConnectionTestResult?
   @State private var pendingServerDeletion: StoredServer?
   @State private var pendingResetSection: SettingsResetSection?
+  @State private var selectedSettingsPage: SettingsPage?
 
   var body: some View {
-    NavigationStack {
-      settingsForm
-        .navigationTitle("Settings")
-        .toolbar {
-          ToolbarItem(placement: .topBarLeading) {
-            Button {
-              saveSettings()
-              appModel.currentState = .start
-            } label: {
-              Label("Back", systemImage: "chevron.backward")
-            }
-          }
-        }
-        .onAppear(perform: loadTemporaryValues)
-        .onDisappear(perform: saveSettings)
-        .sheet(isPresented: $showingAddServerSheet) {
-          addServerSheet
-        }
+    GeometryReader { proxy in
+      let layout = AdaptiveLayout(
+        size: proxy.size,
+        safeAreaInsets: proxy.safeAreaInsets,
+        horizontalSizeClass: horizontalSizeClass,
+        verticalSizeClass: verticalSizeClass
+      )
+
+      settingsNavigation(isWideLayout: layout.isRegularWidth)
     }
-  }
-
-  private var settingsForm: some View {
-    Form {
-      Section {
-        NavigationLink {
-          settingsPage(
-            title: "Rendering",
-            description: "This page contains settings for the BorgVR rendering system. Some options, such as the background color, are mostly cosmetic, while others, such as the atlas size, can have a major impact on performance. If renderer problems occur, you can return this section to the default settings, which are suitable for most cases."
-          ) {
-            renderingSection
-          }
-        } label: {
-          settingsCategoryLabel("Rendering", systemImage: "paintpalette")
-        }
-
-        NavigationLink {
-          settingsPage(
-            title: "Import",
-            description: "This page controls the parameters used when importing and converting datasets. Datasets that have already been converted are not affected by these settings."
-          ) {
-            importSection
-          }
-        } label: {
-          settingsCategoryLabel("Import", systemImage: "square.and.arrow.down")
-        }
-
-        NavigationLink {
-          settingsPage(
-            title: "Remote datasets",
-            description: "If you have access to one or more central dataset servers, you can configure them here. The server details are provided by the server operator. More information about dataset servers in general, and about running a dedicated server yourself, is available on the support website."
-          ) {
-            remoteDatasetsSection
-          }
-        } label: {
-          settingsCategoryLabel("Remote datasets", systemImage: "network")
-        }
-
-        NavigationLink {
-          settingsPage(
-            title: "Local server",
-            description: "You can share your local datasets with other users directly from this device, without running a dedicated server. You can start a general dataset server from this app and share the device address with other users. During SharePlay collaboration, BorgVR can also create a session-specific server that shares data only with the SharePlay participants."
-          ) {
-            backgroundServerSection
-            if appSettings.enableDatasetServer {
-              webServerSection
-            }
-            adHocServerSection
-          }
-        } label: {
-          settingsCategoryLabel("Local server", systemImage: "server.rack")
-        }
-
-        NavigationLink {
-          settingsPage(
-            title: "LOD",
-            description: "This page controls BorgVR's level-of-detail system. These settings allow fine tuning between visual quality and rendering performance."
-          ) {
-            lodSection
-          }
-        } label: {
-          settingsCategoryLabel("LOD", systemImage: "square.stack.3d.up")
-        }
-      }
-      validationSection
-    }
-  }
-
-  private func settingsPage<Content: View>(
-    title: LocalizedStringKey,
-    description: LocalizedStringKey,
-    @ViewBuilder content: @escaping () -> Content
-  ) -> some View {
-    Form {
-      settingsDescriptionSection(description)
-      content()
-      validationSection
-    }
-    .navigationTitle(title)
+    .onAppear(perform: loadTemporaryValues)
     .onDisappear(perform: saveSettings)
+    .sheet(isPresented: $showingAddServerSheet) {
+      addServerSheet
+    }
     .confirmationDialog(
       resetConfirmationTitle,
       isPresented: isResetConfirmationPresented,
@@ -187,6 +139,118 @@ struct SettingsView: View {
     } message: {
       Text("This remote server will be removed from the list.")
     }
+  }
+
+  private func settingsNavigation(isWideLayout: Bool) -> some View {
+    NavigationSplitView {
+      settingsSidebar
+    } detail: {
+      settingsDetail(for: selectedSettingsPage ?? .rendering)
+    }
+    .navigationSplitViewStyle(.balanced)
+    .onAppear {
+      if isWideLayout, selectedSettingsPage == nil {
+        selectedSettingsPage = .rendering
+      }
+    }
+    .onChange(of: isWideLayout) { _, isWide in
+      if isWide, selectedSettingsPage == nil {
+        selectedSettingsPage = .rendering
+      }
+    }
+  }
+
+  private var settingsSidebar: some View {
+    List(selection: $selectedSettingsPage) {
+      Section {
+        ForEach(SettingsPage.allCases) { page in
+          NavigationLink(value: page) {
+            settingsCategoryLabel(page.title, systemImage: page.systemImage)
+          }
+        }
+      }
+      validationSection
+    }
+    .navigationTitle("Settings")
+    .toolbar {
+      ToolbarItem(placement: .topBarLeading) {
+        Button {
+          saveSettings()
+          appModel.currentState = .start
+        } label: {
+          Label("Back", systemImage: "chevron.backward")
+        }
+      }
+    }
+  }
+
+  @ViewBuilder
+  private func settingsDetail(for page: SettingsPage) -> some View {
+    switch page {
+      case .rendering:
+        settingsPage(
+          title: page.title,
+          description: "This page contains settings for the BorgVR rendering system. Some options, such as the background color, are mostly cosmetic, while others, such as the atlas size, can have a major impact on performance. If renderer problems occur, you can return this section to the default settings, which are suitable for most cases."
+        ) {
+          renderingSection
+        }
+      case .importSettings:
+        settingsPage(
+          title: page.title,
+          description: "This page controls the parameters used when importing and converting datasets. Datasets that have already been converted are not affected by these settings."
+        ) {
+          importSection
+        }
+      case .remoteDatasets:
+        settingsPage(
+          title: page.title,
+          description: "If you have access to one or more central dataset servers, you can configure them here. The server details are provided by the server operator. More information about dataset servers in general, and about running a dedicated server yourself, is available on the support website."
+        ) {
+          remoteDatasetsSection
+        }
+      case .localServer:
+        settingsPage(
+          title: page.title,
+          description: "You can share your local datasets with other users directly from this device, without running a dedicated server. You can start a general dataset server from this app and share the device address with other users. During SharePlay collaboration, BorgVR can also create a session-specific server that shares data only with the SharePlay participants."
+        ) {
+          backgroundServerSection
+          if appSettings.enableDatasetServer {
+            webServerSection
+          }
+          adHocServerSection
+        }
+      case .sharePlay:
+        settingsPage(
+          title: page.title,
+          description: "Choose how you appear to other people during SharePlay collaboration. Your display name is shared only with participants in the current session."
+        ) {
+          Section("Identity") {
+            TextField("SharePlay display name", text: $appSettings.sharePlayDisplayName)
+              .textInputAutocapitalization(.words)
+          }
+        }
+      case .lod:
+        settingsPage(
+          title: page.title,
+          description: "This page controls BorgVR's level-of-detail system. These settings allow fine tuning between visual quality and rendering performance."
+        ) {
+          lodSection
+        }
+    }
+  }
+
+  private func settingsPage<Content: View>(
+    title: LocalizedStringKey,
+    description: LocalizedStringKey,
+    @ViewBuilder content: @escaping () -> Content
+  ) -> some View {
+    Form {
+      settingsDescriptionSection(description)
+      content()
+      validationSection
+    }
+    .navigationTitle(title)
+    .onDisappear(perform: saveSettings)
   }
 
   private func settingsCategoryLabel(_ title: LocalizedStringKey, systemImage: String) -> some View {

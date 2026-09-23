@@ -31,6 +31,9 @@ struct MarkerView: View {
         Text("private_interaction_option_model").tag("model")
         Text("private_interaction_option_clipping").tag("clipping")
         Text("private_interaction_option_marker").tag("marker")
+        if hasSharedScreenView {
+          Text("Screen View").tag("screenView")
+        }
       }
       .pickerStyle(.segmented)
 
@@ -218,6 +221,13 @@ struct MarkerView: View {
 
   private var currentDatasetID: String? { runtimeAppModel.activeDataset?.uniqueId }
 
+  private var hasSharedScreenView: Bool {
+    sharedAppModel.screenSharePlayViewState != nil &&
+      sharedAppModel.sharePlayParticipants.contains {
+        $0.platform == .iOS || $0.platform == .macOS
+      }
+  }
+
   private var interactionModeBinding: Binding<String> {
     Binding(
       get: { runtimeAppModel.interactionMode.rawValue },
@@ -314,6 +324,7 @@ struct MarkerView: View {
         guard let index = sharedAppModel.volumeMarkers.firstIndex(where: { $0.id == markerID }),
               sharedAppModel.volumeMarkers[index].kind == .sphere else { return }
         sharedAppModel.volumeMarkers[index].showsDirection = showsDirection
+        sharedAppModel.defaultVolumeMarkerShowsDirection = showsDirection
         sharedAppModel.synchronizeMarkers()
       }
     )

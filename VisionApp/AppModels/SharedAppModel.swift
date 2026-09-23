@@ -84,8 +84,16 @@ class SharedAppModel {
   var selectedVolumeMarkerID: UUID?
   /// Short-lived stylus-tip previews received from other SharePlay participants.
   var remoteSpatialStylusPreviews: [UUID: SpatialStylusPreview]
+  /// Participants announced in the current SharePlay session.
+  var sharePlayParticipants: [BorgVRSharePlayParticipant]
+  /// Shared camera used by all iOS and macOS participants.
+  var screenSharePlayViewState: BorgVRScreenViewState?
+  /// Local-only pinch state for the shared screen camera visualization.
+  var screenViewInteractionActive: Bool
   /// Radius used for markers created locally during the current dataset session.
   var defaultVolumeMarkerRadius: Float
+  /// Direction visibility used for sphere markers created later in this session.
+  var defaultVolumeMarkerShowsDirection: Bool
   /// Radius used for stylus strokes; intentionally independent from sphere markers.
   var defaultVolumeStrokeRadius: Float
   /// Color used for stylus strokes; locally adjustable without changing sphere markers.
@@ -113,7 +121,11 @@ class SharedAppModel {
     volumeMarkers = []
     selectedVolumeMarkerID = nil
     remoteSpatialStylusPreviews = [:]
+    sharePlayParticipants = []
+    screenSharePlayViewState = nil
+    screenViewInteractionActive = false
     defaultVolumeMarkerRadius = VolumeMarkerRadius.sphereDefault
+    defaultVolumeMarkerShowsDirection = true
     defaultVolumeStrokeRadius = VolumeMarkerRadius.strokeDefault
     defaultVolumeStrokeColor = SIMD4<Float>(1, 0, 0, 1)
     groupActivityHelper = GroupActivityHelper(self)
@@ -139,6 +151,15 @@ class SharedAppModel {
 
   func synchronizeMarkers() {
     groupActivityHelper?.synchronizeMarkers()
+  }
+
+  func synchronizeScreenView() {
+    guard let screenSharePlayViewState else { return }
+    groupActivityHelper?.synchronizeScreenView(screenSharePlayViewState)
+  }
+
+  func sharePlayDisplayNameChanged() {
+    groupActivityHelper?.participantInfoChanged()
   }
 
   func synchronizeSpatialStylusPreview(
@@ -250,7 +271,9 @@ class SharedAppModel {
     volumeMarkers = []
     selectedVolumeMarkerID = nil
     remoteSpatialStylusPreviews = [:]
+    screenViewInteractionActive = false
     defaultVolumeMarkerRadius = VolumeMarkerRadius.sphereDefault
+    defaultVolumeMarkerShowsDirection = true
     defaultVolumeStrokeRadius = VolumeMarkerRadius.strokeDefault
     defaultVolumeStrokeColor = SIMD4<Float>(1, 0, 0, 1)
   }
@@ -490,6 +513,11 @@ class SharedAppModel {
       return true
     }
 
+    if let screenViewState = try BorgVRScreenViewStateCodec.decodeIfPresent(data) {
+      screenSharePlayViewState = screenViewState
+      return true
+    }
+
     var r = DataReader(data)
     let magic: UInt32 = try r.read()
     guard magic == BorgVRSharePlayProtocol.magic else { return false }
@@ -508,7 +536,7 @@ class SharedAppModel {
       case .commonRenderState:
         try applyCommonSharePlayState(from: &r, includesTransferFunction: (flags & 1) != 0)
       case .screenTransform:
-        break
+        throw SharedAppModelError.unsupportedPacket(packetKindRaw)
       case .visionTransform:
         let tTranslation = try r.readSIMD3()
         let tRotation = try r.readQuat()

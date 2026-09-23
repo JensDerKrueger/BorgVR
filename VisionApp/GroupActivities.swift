@@ -38,8 +38,10 @@ class GroupActivityHelper {
   private var pendingCommonState = false
   private var pendingTransferFunction = false
   private var pendingTransform = false
+  private var pendingScreenViewState: BorgVRScreenViewState?
   private var synchronizationTask: Task<Void, Never>?
   private var knownParticipants = Set<Participant>()
+  private var participantInfoByID: [UUID: BorgVRSharePlayParticipantInfo] = [:]
   private let sharePlayServerHost = BorgVRServerHost(logger: GUILogger())
   private var sharePlayDatasetID: String?
   private var sharePlayAuthToken = ""
@@ -99,6 +101,13 @@ class GroupActivityHelper {
           guard generation == self.sessionGeneration else { return }
           let newParticipants = activeParticipants.subtracting(self.knownParticipants)
           self.knownParticipants = activeParticipants
+          let activeIDs = Set(activeParticipants.map(\.id))
+          self.participantInfoByID = self.participantInfoByID.filter {
+            activeIDs.contains($0.key)
+          }
+          Task { @MainActor in
+            self.publishParticipants()
+          }
 
           if newParticipants.isEmpty { return }
 
@@ -108,6 +117,7 @@ class GroupActivityHelper {
 
           Task {
             await self.sendInitialDataReliably(to: .only(newParticipants))
+            await self.sendParticipantInfo(to: .only(newParticipants))
           }
 
         } .store(in: &subscriptions)
@@ -127,6 +137,7 @@ class GroupActivityHelper {
       let messenger = GroupSessionMessenger(session: session)
       self.messenger = messenger
       session.join()
+      Task { await self.sendParticipantInfo() }
 
       if let pose = systemCoordinator.localParticipantState.pose {
         await runtimeAppModel.logger.dev("Joined groupsession with pose \(pose)")
@@ -214,9 +225,11 @@ class GroupActivityHelper {
     let shouldSendCommonState = pendingCommonState
     let shouldSendTransferFunction = pendingTransferFunction
     let shouldSendTransform = pendingTransform
+    let screenViewState = pendingScreenViewState
     pendingCommonState = false
     pendingTransferFunction = false
     pendingTransform = false
+    pendingScreenViewState = nil
 
     do {
       if shouldSendCommonState {
@@ -230,6 +243,12 @@ class GroupActivityHelper {
       if shouldSendTransform {
         try await sendData(
           data: sharedAppModel.serializeVisionSharePlayTransform(),
+          of: .renderingUpdate
+        )
+      }
+      if let screenViewState {
+        try await sendData(
+          data: BorgVRScreenViewStateCodec.encode(screenViewState),
           of: .renderingUpdate
         )
       }
@@ -252,6 +271,26 @@ class GroupActivityHelper {
         await runtimeAppModel?.logger
           .error("Failed to send marker data to all participants: \(error)")
       }
+    }
+  }
+
+  func synchronizeScreenView(_ state: BorgVRScreenViewState) {
+    guard messenger != nil else { return }
+    Task { @MainActor [weak self] in
+      guard let self else { return }
+      self.pendingScreenViewState = state
+      guard self.synchronizationTask == nil else { return }
+      self.synchronizationTask = Task { @MainActor [weak self] in
+        try? await Task.sleep(nanoseconds: 50_000_000)
+        guard !Task.isCancelled else { return }
+        await self?.flushPendingSynchronization()
+      }
+    }
+  }
+
+  func participantInfoChanged() {
+    Task { @MainActor [weak self] in
+      await self?.sendParticipantInfo()
     }
   }
 
@@ -309,6 +348,13 @@ class GroupActivityHelper {
           of: .renderingUpdate,
           to: to
         )
+        if let screenViewState = sharedAppModel.screenSharePlayViewState {
+          try await sendData(
+            data: BorgVRScreenViewStateCodec.encode(screenViewState),
+            of: .renderingUpdate,
+            to: to
+          )
+        }
       } catch {
         runtimeAppModel.logger.error("Failed to send init data to all participants: \(error)")
       }
@@ -356,6 +402,8 @@ class GroupActivityHelper {
         case MessageType.stateRequest.rawValue:
           guard runtimeAppModel.groupSessionHost else { return }
           Task { await self.sendInitialDataReliably(to: .only(Set([from]))) }
+        case MessageType.participantInfo.rawValue:
+          handleParticipantInfo(data: stripped, from: from)
         default :
           runtimeAppModel.logger.error("Invalid first byte: \(firstByte) in group message")
       }
@@ -368,12 +416,72 @@ class GroupActivityHelper {
     case renderingUpdate = 0x01
     case shutdownRequest = 0x02
     case stateRequest    = 0x03
+    case participantInfo = 0x04
+    case screenViewRequest = 0x05
   }
 
   private func sendData(data:Data, of messageType:MessageType,
                         to participants:Participants = .all) async throws {
     guard let messenger else { return }
     try await messenger.send(Data([messageType.rawValue]) + data, to:participants)
+  }
+
+  @MainActor
+  private func sendParticipantInfo(to participants: Participants = .all) async {
+    guard messenger != nil else { return }
+    let configuredName = storedAppModel?.sharePlayDisplayName ?? ""
+    let displayName = configuredName.trimmingCharacters(in: .whitespacesAndNewlines)
+    let info = BorgVRSharePlayParticipantInfo(
+      platform: .visionOS,
+      displayName: displayName.isEmpty
+        ? String(localized: "Apple Vision Pro")
+        : displayName
+    )
+    guard let data = try? BorgVRSharePlayParticipantInfoCodec.encode(info) else { return }
+    try? await sendData(data: data, of: .participantInfo, to: participants)
+  }
+
+  @MainActor
+  private func handleParticipantInfo(data: Data, from participant: Participant) {
+    do {
+      let info = try BorgVRSharePlayParticipantInfoCodec.decode(data)
+      participantInfoByID[participant.id] = info
+      publishParticipants()
+      if runtimeAppModel?.groupSessionHost == true,
+         sharedAppModel?.screenSharePlayViewState == nil,
+         info.platform == .iOS || info.platform == .macOS {
+        Task {
+          try? await sendData(
+            data: Data(),
+            of: .screenViewRequest,
+            to: .only(Set([participant]))
+          )
+        }
+      }
+    } catch {
+      runtimeAppModel?.logger.error("Failed to read SharePlay participant information: \(error)")
+    }
+  }
+
+  @MainActor
+  private func publishParticipants() {
+    let participants = participantInfoByID.map {
+      BorgVRSharePlayParticipant(id: $0.key, info: $0.value)
+    }.sorted {
+      if $0.displayName == $1.displayName {
+        return $0.id.uuidString < $1.id.uuidString
+      }
+      return $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending
+    }
+    sharedAppModel?.sharePlayParticipants = participants
+    let hasScreenParticipant = participants.contains {
+      $0.platform == .iOS || $0.platform == .macOS
+    }
+    if !hasScreenParticipant,
+       runtimeAppModel?.interactionMode == .screenView {
+      runtimeAppModel?.interactionMode = .model
+      sharedAppModel?.screenViewInteractionActive = false
+    }
   }
 
   private func resetSessionReceivers() {
@@ -387,7 +495,12 @@ class GroupActivityHelper {
     pendingCommonState = false
     pendingTransferFunction = false
     pendingTransform = false
+    pendingScreenViewState = nil
     knownParticipants.removeAll()
+    participantInfoByID.removeAll()
+    sharedAppModel?.sharePlayParticipants = []
+    sharedAppModel?.screenSharePlayViewState = nil
+    sharedAppModel?.screenViewInteractionActive = false
     sharedAppModel?.clearRemoteSpatialStylusPreviews()
   }
 
@@ -800,6 +913,7 @@ class GroupActivityHelper {
     return preferredAddresses + fallbackAddresses
   }
 
+  @MainActor
   func handleUpdate(data: Data, from: Participant) {
     guard let sharedAppModel else { return }
     do {
@@ -808,6 +922,10 @@ class GroupActivityHelper {
           preview,
           participantID: from.id
         )
+        return
+      }
+      if let screenViewState = try BorgVRScreenViewStateCodec.decodeIfPresent(data) {
+        sharedAppModel.screenSharePlayViewState = screenViewState
         return
       }
       if try sharedAppModel.applySharePlayUpdate(from: data) {

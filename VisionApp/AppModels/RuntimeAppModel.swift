@@ -101,11 +101,13 @@ class RuntimeAppModel {
    - model: Manipulate the 3D model.
    - clipping: Adjust clipping planes.
    - marker: Place and edit opaque volume markers.
+   - screenView: Position the shared iOS and macOS camera.
    */
   enum InteractionMode: String {
     case model = "model"
     case clipping = "clipping"
     case marker = "marker"
+    case screenView = "screenView"
   }
   /// The current interaction mode.
   var interactionMode: InteractionMode = .model

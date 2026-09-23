@@ -78,6 +78,9 @@ struct VisionApp: App {
             serverController.stop()
           }
         }
+        .onChange(of: storedAppModel.sharePlayDisplayName) { _, _ in
+          sharedAppModel.sharePlayDisplayNameChanged()
+        }
         .onChange(of: storedAppModel.autoStartServer) { _, enabled in
           if enabled, storedAppModel.enableDatasetServer, !serverController.isRunning {
             serverController.start(using: storedAppModel)

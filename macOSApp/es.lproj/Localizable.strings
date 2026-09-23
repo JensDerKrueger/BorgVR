@@ -682,3 +682,9 @@
 "Closing this dataset will leave the current SharePlay session." = "Al cerrar este conjunto de datos, saldrá de la sesión actual de SharePlay.";
 "Waiting for SharePlay Host" = "Esperando al anfitrión de SharePlay";
 "Waiting for the host to select and open a dataset." = "Esperando a que el anfitrión seleccione y abra un conjunto de datos.";
+"SharePlay" = "SharePlay";
+"Identity" = "Identidad";
+"SharePlay display name" = "Nombre para mostrar en SharePlay";
+"Choose how you appear to other people during SharePlay collaboration. Your display name is shared only with participants in the current session." = "Elige cómo apareces ante otras personas durante una colaboración con SharePlay. Tu nombre para mostrar solo se comparte con los participantes de la sesión actual.";
+"Participants" = "Participantes";
+"Mac" = "Mac";

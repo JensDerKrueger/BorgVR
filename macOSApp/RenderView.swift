@@ -245,7 +245,8 @@ struct RenderView: View {
       position: position,
       radius: appModel.defaultVolumeMarkerRadius,
       color: appModel.defaultVolumeMarkerColor,
-      directionOrigin: directionOrigin
+      directionOrigin: directionOrigin,
+      showsDirection: appModel.defaultVolumeMarkerShowsDirection
     )
     appModel.volumeMarkers.append(marker)
     appModel.selectedVolumeMarkerID = marker.id

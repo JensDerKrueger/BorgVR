@@ -119,6 +119,7 @@ final class StoredAppModel: ObservableObject {
     "quickMarker": false,
     "quickMarkerDoublePinchInterval": 0.25,
     "shareSpatialStylusPosition": false,
+    "sharePlayDisplayName": "",
     "markerSpawnAtGaze": false,
     "markerDefaultRed": 1.0,
     "markerDefaultGreen": 0.08,
@@ -236,6 +237,8 @@ final class StoredAppModel: ObservableObject {
   @AppStorage("quickMarkerDoublePinchInterval") var quickMarkerDoublePinchInterval: Double = StoredAppModel.double("quickMarkerDoublePinchInterval")
   /// Whether SharePlay participants can see the local spatial stylus tip.
   @AppStorage("shareSpatialStylusPosition") var shareSpatialStylusPosition: Bool = StoredAppModel.bool("shareSpatialStylusPosition")
+  /// Name shown to the other participants in a SharePlay session.
+  @AppStorage("sharePlayDisplayName") var sharePlayDisplayName: String = StoredAppModel.string("sharePlayDisplayName")
   /// Whether Marker mode places new markers at the gaze hit instead of the pinch hand.
   @AppStorage("markerSpawnAtGaze") var markerSpawnAtGaze: Bool = StoredAppModel.bool("markerSpawnAtGaze")
   /// Default marker color components.

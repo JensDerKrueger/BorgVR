@@ -289,6 +289,7 @@ struct MobileMarkerView: View {
         guard let index = selectedMarkerIndex,
               appModel.volumeMarkers[index].kind == .sphere else { return }
         appModel.volumeMarkers[index].showsDirection = showsDirection
+        appModel.defaultVolumeMarkerShowsDirection = showsDirection
         synchronizeMarkers()
       }
     )

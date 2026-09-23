@@ -144,7 +144,7 @@ struct ModeSelectionView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.vertical, 6)
     }
-    .buttonStyle(.borderedProminent)
+    .buttonStyle(.bordered)
     .controlSize(.large)
     .frame(maxWidth: 420)
   }

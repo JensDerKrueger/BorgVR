@@ -52,8 +52,8 @@ final class ScreenVolumeRendererCore {
   private(set) var activeOversampling: Float = 1
   private var configuredOversamplingMode = ""
   let timer = CPUFrameTimer()
-  private let cameraDistance: Float = 2.4
-  private let fieldOfViewY: Float = .pi / 4
+  private let cameraDistance = BorgVRScreenViewState.cameraDistance
+  private let fieldOfViewY = BorgVRScreenViewState.defaultVerticalFieldOfView
   private let minimumPipelineDrawableWidth: Float = 64
   private let pipelineWidthChangeThreshold: Float = 32
   private let markerRenderer = ScreenVolumeMarkerRenderer()
@@ -140,6 +140,9 @@ final class ScreenVolumeRendererCore {
   }
 
   func drawableSizeWillChange(_ size: CGSize) {
+    if size.height > 0 {
+      renderingParameters.updateViewportAspectRatio(Float(size.width / size.height))
+    }
     let width = Float(size.width)
     if pipelineDrawableWidth > 0,
        abs(width - pipelineDrawableWidth) > pipelineWidthChangeThreshold {
@@ -166,6 +169,11 @@ final class ScreenVolumeRendererCore {
       return nil
     }
 
+    if view.drawableSize.height > 0 {
+      renderingParameters.updateViewportAspectRatio(
+        Float(view.drawableSize.width / view.drawableSize.height)
+      )
+    }
     updateUniforms(for: view)
     updateEmptiness()
 

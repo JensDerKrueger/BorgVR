@@ -11421,6 +11421,54 @@
         }
       }
     },
+    "Choose how you appear to other people during SharePlay collaboration. Your display name is shared only with participants in the current session." : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Legen Sie fest, wie Sie anderen Personen während einer SharePlay-Zusammenarbeit angezeigt werden. Ihr Anzeigename wird nur mit den Teilnehmern der aktuellen Sitzung geteilt." } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Choose how you appear to other people during SharePlay collaboration. Your display name is shared only with participants in the current session." } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Elige cómo apareces ante otras personas durante una colaboración con SharePlay. Tu nombre para mostrar solo se comparte con los participantes de la sesión actual." } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Choisissez comment vous apparaissez aux autres personnes pendant une collaboration SharePlay. Votre nom d’affichage est partagé uniquement avec les participants de la session en cours." } }
+      }
+    },
+    "Identity" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Identität" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Identity" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Identidad" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Identité" } }
+      }
+    },
+    "iPhone or iPad" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "iPhone oder iPad" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "iPhone or iPad" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "iPhone o iPad" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "iPhone ou iPad" } }
+      }
+    },
+    "Participants" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Teilnehmer" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Participants" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Participantes" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Participants" } }
+      }
+    },
+    "SharePlay" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "SharePlay" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "SharePlay" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "SharePlay" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "SharePlay" } }
+      }
+    },
+    "SharePlay display name" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "SharePlay-Anzeigename" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "SharePlay display name" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Nombre para mostrar en SharePlay" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Nom d’affichage SharePlay" } }
+      }
+    },
     "Zeroes" : {
       "localizations" : {
         "de" : {

@@ -27,6 +27,7 @@ final class RenderingParameters: ObservableObject {
   @Published var normIsoValue: Float = 0.1
   @Published var renderMode: RenderMode = .transferFunction1D
   @Published var brickVis = false
+  private(set) var viewportAspectRatio: Float = 1
 
   @Published var minValue: Int = 0
   @Published var maxValue: Int = 1
@@ -51,6 +52,20 @@ final class RenderingParameters: ObservableObject {
   func loadTransferFunction(from data: Data) throws {
     try transferFunction.load(from: data)
     transferFunction.updateRanges(minValue: minValue, maxValue: maxValue, rangeMax: rangeMax)
+  }
+
+  func updateViewportAspectRatio(_ aspectRatio: Float) {
+    guard aspectRatio.isFinite, aspectRatio > 0 else { return }
+    viewportAspectRatio = aspectRatio
+  }
+
+  var screenViewState: BorgVRScreenViewState {
+    BorgVRScreenViewState(
+      orientation: orientation,
+      scale: scale,
+      pan: pan,
+      viewportAspectRatio: viewportAspectRatio
+    )
   }
 
   func reset() {
@@ -155,22 +170,16 @@ final class RenderingParameters: ObservableObject {
   }
 
   func serializeScreenSharePlayTransform() -> Data {
-    var writer = DataWriter()
-
-    writer.write(BorgVRSharePlayProtocol.magic)
-    writer.write(BorgVRSharePlayProtocol.renderStateVersion)
-    writer.write(BorgVRSharePlayProtocol.PacketKind.screenTransform.rawValue)
-    writer.write(UInt8(0))
-
-    writer.writeQuat(orientation)
-    writer.write(scale)
-    writer.writeSIMD2(pan)
-
-    return writer.data
+    BorgVRScreenViewStateCodec.encode(screenViewState)
   }
 
   @discardableResult
   func applySharePlayUpdate(from data: Data) throws -> Bool {
+    if let screenViewState = try BorgVRScreenViewStateCodec.decodeIfPresent(data) {
+      apply(screenViewState)
+      return true
+    }
+
     var reader = DataReader(data)
     let magic: UInt32 = try reader.read()
     guard magic == BorgVRSharePlayProtocol.magic else { return false }
@@ -189,9 +198,7 @@ final class RenderingParameters: ObservableObject {
       case .commonRenderState:
         try applyCommonSharePlayState(from: &reader, includesTransferFunction: (flags & 1) != 0)
       case .screenTransform:
-        orientation = try reader.readQuat()
-        scale = try reader.read()
-        pan = try reader.readSIMD2()
+        throw RenderingParametersUpdateError.unsupportedPacket(packetKindRaw)
       case .visionTransform:
         break
       case .volumeMarkers, .spatialStylusPreview:
@@ -203,6 +210,13 @@ final class RenderingParameters: ObservableObject {
     }
 
     return true
+  }
+
+  func apply(_ screenViewState: BorgVRScreenViewState) {
+    orientation = screenViewState.orientation
+    scale = screenViewState.scale
+    pan = screenViewState.pan
+    viewportAspectRatio = screenViewState.viewportAspectRatio
   }
 
   @discardableResult

@@ -79,6 +79,8 @@ final class AppModel: ObservableObject {
   @Published private(set) var remoteSpatialStylusPreviews: [UUID: SpatialStylusPreview] = [:]
   /// Radius used for sphere markers created locally during this app session.
   var defaultVolumeMarkerRadius = VolumeMarkerRadius.sphereDefault
+  /// Direction visibility used for sphere markers created later in this app session.
+  var defaultVolumeMarkerShowsDirection = true
   @Published var timer: CPUFrameTimer?
   @Published var performanceModel = PerformanceGraphModel()
   let logger = GUILogger()

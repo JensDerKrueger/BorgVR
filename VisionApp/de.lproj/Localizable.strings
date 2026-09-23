@@ -1010,3 +1010,10 @@
 "Leave SharePlay?" = "SharePlay verlassen?";
 "Closing this dataset will leave the current SharePlay session." = "Wenn Sie diesen Datensatz schließen, verlassen Sie die aktuelle SharePlay-Sitzung.";
 "Waiting for the host to select and open a dataset." = "Warten auf die Auswahl und das Öffnen eines Datensatzes durch den Host.";
+"SharePlay" = "SharePlay";
+"Identity" = "Identität";
+"SharePlay display name" = "SharePlay-Anzeigename";
+"Choose how you appear to other people during SharePlay collaboration. Your display name is shared only with participants in the current session." = "Legen Sie fest, wie Sie anderen Personen während einer SharePlay-Zusammenarbeit angezeigt werden. Ihr Anzeigename wird nur mit den Teilnehmern der aktuellen Sitzung geteilt.";
+"Participants" = "Teilnehmer";
+"Screen View" = "Bildschirmansicht";
+"Apple Vision Pro" = "Apple Vision Pro";
