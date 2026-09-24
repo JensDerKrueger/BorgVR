@@ -44,10 +44,12 @@ struct macOSApp: App {
   @StateObject private var sharePlay = SharePlayCoordinator()
   @StateObject private var docking = DockingController()
   @StateObject private var scriptRunner = BorgVRScriptRunner()
+  @StateObject private var updateChecker = AppStoreUpdateChecker()
 
   var body: some Scene {
     WindowGroup("BorgVR") {
       ContentView()
+        .appStoreUpdateAlert(using: updateChecker)
         .environmentObject(appModel)
         .environmentObject(renderingParameters)
         .environmentObject(appSettings)
@@ -56,6 +58,7 @@ struct macOSApp: App {
         .environmentObject(sharePlay)
         .environmentObject(docking)
         .environmentObject(scriptRunner)
+        .environmentObject(updateChecker)
         .frame(minWidth: 980, minHeight: 680)
         .task {
           sharePlay.registerGroupActivity()

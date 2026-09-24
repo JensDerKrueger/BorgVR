@@ -688,3 +688,12 @@
 "Choose how you appear to other people during SharePlay collaboration. Your display name is shared only with participants in the current session." = "Elige cómo apareces ante otras personas durante una colaboración con SharePlay. Tu nombre para mostrar solo se comparte con los participantes de la sesión actual.";
 "Participants" = "Participantes";
 "Mac" = "Mac";
+"Update Available" = "Actualización disponible";
+"A newer version of BorgVR (%@) is available in the App Store. You are currently using version %@." = "Hay una versión más reciente de BorgVR (%@) disponible en el App Store. Actualmente utiliza la versión %@.";
+"View in App Store" = "Ver en el App Store";
+"Remind Me Later" = "Recordar más tarde";
+"Ignore This Update" = "Ignorar esta actualización";
+"Never Remind Me" = "No volver a recordar";
+"Updates" = "Actualizaciones";
+"Automatically check for updates" = "Buscar actualizaciones automáticamente";
+"BorgVR periodically checks the App Store for new versions and displays a notification when an update is available." = "BorgVR consulta periódicamente el App Store en busca de nuevas versiones y muestra un aviso cuando hay una actualización disponible.";

@@ -3625,6 +3625,86 @@
         }
       }
     },
+    "A newer version of BorgVR (%@) is available in the App Store. You are currently using version %@." : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Eine neuere Version von BorgVR (%@) ist im App Store verfügbar. Sie verwenden derzeit Version %@." } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "A newer version of BorgVR (%@) is available in the App Store. You are currently using version %@." } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Hay una versión más reciente de BorgVR (%@) disponible en el App Store. Actualmente utiliza la versión %@." } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Une version plus récente de BorgVR (%@) est disponible dans l’App Store. Vous utilisez actuellement la version %@." } }
+      }
+    },
+    "Automatically check for updates" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Automatisch nach Updates suchen" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Automatically check for updates" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Buscar actualizaciones automáticamente" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Rechercher automatiquement les mises à jour" } }
+      }
+    },
+    "BorgVR periodically checks the App Store for new versions and displays a notification when an update is available." : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "BorgVR sucht regelmäßig im App Store nach neuen Versionen und zeigt einen Hinweis an, wenn ein Update verfügbar ist." } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "BorgVR periodically checks the App Store for new versions and displays a notification when an update is available." } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "BorgVR consulta periódicamente el App Store en busca de nuevas versiones y muestra un aviso cuando hay una actualización disponible." } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "BorgVR recherche régulièrement de nouvelles versions dans l’App Store et affiche un avis lorsqu’une mise à jour est disponible." } }
+      }
+    },
+    "Configure general application behavior, including automatic checks for new BorgVR versions in the App Store." : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Konfigurieren Sie das allgemeine Verhalten der App, einschließlich der automatischen Suche nach neuen BorgVR-Versionen im App Store." } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Configure general application behavior, including automatic checks for new BorgVR versions in the App Store." } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Configure el comportamiento general de la aplicación, incluida la búsqueda automática de nuevas versiones de BorgVR en el App Store." } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Configurez le comportement général de l’application, notamment la recherche automatique de nouvelles versions de BorgVR dans l’App Store." } }
+      }
+    },
+    "Ignore This Update" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Dieses Update ignorieren" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Ignore This Update" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Ignorar esta actualización" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Ignorer cette mise à jour" } }
+      }
+    },
+    "Never Remind Me" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Nie wieder erinnern" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Never Remind Me" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "No volver a recordar" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Ne plus me le rappeler" } }
+      }
+    },
+    "Remind Me Later" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Später wieder erinnern" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Remind Me Later" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Recordar más tarde" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Me le rappeler plus tard" } }
+      }
+    },
+    "Update Available" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Update verfügbar" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Update Available" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Actualización disponible" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Mise à jour disponible" } }
+      }
+    },
+    "Updates" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Updates" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Updates" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Actualizaciones" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Mises à jour" } }
+      }
+    },
+    "View in App Store" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Im App Store anzeigen" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "View in App Store" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Ver en el App Store" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Afficher dans l’App Store" } }
+      }
+    },
     "Hide UI" : {
       "localizations" : {
         "de" : {

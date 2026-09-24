@@ -29,6 +29,7 @@ struct VisionApp: App {
   @State private var sharedAppModel = SharedAppModel()
   @StateObject private var storedAppModel = StoredAppModel()
   @StateObject private var serverController = BackgroundServerController()
+  @StateObject private var updateChecker = AppStoreUpdateChecker()
 
   @StateObject private var voice = VoiceCommandService()
   @StateObject private var speech = SpeechHelper()
@@ -40,6 +41,7 @@ struct VisionApp: App {
   var body: some Scene {
     WindowGroup(id: "main") {
       ContentView()
+        .appStoreUpdateAlert(using: updateChecker)
         .frame(
           minWidth: runtimeAppModel.windowSize.width,
           minHeight: runtimeAppModel.windowSize.height
@@ -47,6 +49,7 @@ struct VisionApp: App {
         .trackView(name: "MainView")
         .environment(runtimeAppModel)
         .environmentObject(serverController)
+        .environmentObject(updateChecker)
         .onOpenURL { url in
           Task {
             await handleOpenRequest(url:url)

@@ -39,6 +39,7 @@ private enum ServerConnectionTestResult {
 }
 
 private enum SettingsPage: String, CaseIterable, Identifiable {
+  case general
   case rendering
   case importSettings
   case remoteDatasets
@@ -50,6 +51,7 @@ private enum SettingsPage: String, CaseIterable, Identifiable {
 
   var title: LocalizedStringKey {
     switch self {
+      case .general: "General"
       case .rendering: "Rendering"
       case .importSettings: "Import"
       case .remoteDatasets: "Remote datasets"
@@ -61,6 +63,7 @@ private enum SettingsPage: String, CaseIterable, Identifiable {
 
   var systemImage: String {
     switch self {
+      case .general: "gearshape"
       case .rendering: "paintpalette"
       case .importSettings: "square.and.arrow.down"
       case .remoteDatasets: "network"
@@ -76,6 +79,7 @@ struct SettingsView: View {
   @Environment(\.verticalSizeClass) private var verticalSizeClass
   @EnvironmentObject private var appModel: AppModel
   @EnvironmentObject var appSettings: AppSettings
+  @EnvironmentObject private var updateChecker: AppStoreUpdateChecker
 
   @State private var tempPort = ""
   @State private var tempServerAddress = ""
@@ -187,6 +191,21 @@ struct SettingsView: View {
   @ViewBuilder
   private func settingsDetail(for page: SettingsPage) -> some View {
     switch page {
+      case .general:
+        settingsPage(
+          title: page.title,
+          description: "Configure general application behavior, including automatic checks for new BorgVR versions in the App Store."
+        ) {
+          Section("Updates") {
+            Toggle(
+              "Automatically check for updates",
+              isOn: $updateChecker.checksEnabled
+            )
+            Text("BorgVR periodically checks the App Store for new versions and displays a notification when an update is available.")
+              .font(.footnote)
+              .foregroundStyle(.secondary)
+          }
+        }
       case .rendering:
         settingsPage(
           title: page.title,

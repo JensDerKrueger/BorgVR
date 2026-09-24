@@ -31,6 +31,7 @@ struct SettingsView: View {
 
   @Environment(RuntimeAppModel.self) private var runtimeAppModel
   @EnvironmentObject var storedAppModel: StoredAppModel
+  @EnvironmentObject private var updateChecker: AppStoreUpdateChecker
 
   // Temporary state for input validation
   @State private var tempPixelError: String = ""
@@ -183,6 +184,7 @@ struct SettingsView: View {
               supportsOpacity: false
             )
           }
+
         }
         .tabItem { Label("settings_tab_rendering", systemImage: "display") }
 
@@ -421,6 +423,16 @@ struct SettingsView: View {
         // Advanced Options Tab
         Form {
           settingsIntroSection("settings_description_advanced")
+          Section(header: Text("Updates").bold()) {
+            Toggle(
+              "Automatically check for updates",
+              isOn: $updateChecker.checksEnabled
+            )
+            Text("BorgVR periodically checks the App Store for new versions and displays a notification when an update is available.")
+              .font(.footnote)
+              .foregroundStyle(.secondary)
+          }
+
           Section(header: Text("settings_section_advanced_options").bold()) {
             HStack {
               Text("settings_label_screen_space_pixel_error")

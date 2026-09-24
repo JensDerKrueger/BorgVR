@@ -86,6 +86,7 @@ struct SettingsView: View {
   @EnvironmentObject private var appModel: AppModel
   @EnvironmentObject private var appSettings: AppSettings
   @EnvironmentObject private var storedAppModel: StoredAppModel
+  @EnvironmentObject private var updateChecker: AppStoreUpdateChecker
 
   @State private var serverAddress = ""
   @State private var serverPort = String(BorgVRSharedDefaults.datasetServerPort)
@@ -404,6 +405,14 @@ struct SettingsView: View {
           Text(level.label).tag(level.rawValue)
         }
       }
+      toggleRow(
+        "Automatically check for updates",
+        isOn: $updateChecker.checksEnabled
+      )
+      Text("BorgVR periodically checks the App Store for new versions and displays a notification when an update is available.")
+        .font(.callout)
+        .foregroundStyle(.secondary)
+        .fixedSize(horizontal: false, vertical: true)
       resetButton(for: .miscellaneous)
     }
   }

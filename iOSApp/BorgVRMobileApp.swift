@@ -7,15 +7,18 @@ struct BorgVRMobileApp: App {
   @StateObject private var appSettings = AppSettings()
   @StateObject private var sharePlay = SharePlayCoordinator()
   @StateObject private var serverController = BackgroundServerController()
+  @StateObject private var updateChecker = AppStoreUpdateChecker()
 
   var body: some Scene {
     WindowGroup {
       ContentView()
+        .appStoreUpdateAlert(using: updateChecker)
         .environmentObject(appModel)
         .environmentObject(renderingParameters)
         .environmentObject(appSettings)
         .environmentObject(sharePlay)
         .environmentObject(serverController)
+        .environmentObject(updateChecker)
         .task {
           sharePlay.registerGroupActivity()
         }

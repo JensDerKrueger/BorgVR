@@ -97,6 +97,9 @@
 		57A0016D2E99000400000001 /* VolumeMarkerTubeMesh.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A0016C2E99000400000001 /* VolumeMarkerTubeMesh.swift */; };
 		57A0016E2E99000400000001 /* VolumeMarkerTubeMesh.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A0016C2E99000400000001 /* VolumeMarkerTubeMesh.swift */; };
 		57A0016F2E99000400000001 /* VolumeMarkerTubeMesh.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A0016C2E99000400000001 /* VolumeMarkerTubeMesh.swift */; };
+		57A001712E99000500000001 /* AppStoreUpdateChecker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001702E99000500000001 /* AppStoreUpdateChecker.swift */; };
+		57A001722E99000500000001 /* AppStoreUpdateChecker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001702E99000500000001 /* AppStoreUpdateChecker.swift */; };
+		57A001732E99000500000001 /* AppStoreUpdateChecker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001702E99000500000001 /* AppStoreUpdateChecker.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -163,6 +166,7 @@
 		57A001642E99000200000001 /* RenderMode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RenderMode.swift; sourceTree = "<group>"; };
 		57A001682E99000300000001 /* VolumeMarker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VolumeMarker.swift; sourceTree = "<group>"; };
 		57A0016C2E99000400000001 /* VolumeMarkerTubeMesh.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VolumeMarkerTubeMesh.swift; sourceTree = "<group>"; };
+		57A001702E99000500000001 /* AppStoreUpdateChecker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStoreUpdateChecker.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -444,6 +448,7 @@
 			children = (
 				57A001202E70000300000001 /* AppModel.swift */,
 				57A001212E70000300000001 /* AppSettings.swift */,
+				57A001702E99000500000001 /* AppStoreUpdateChecker.swift */,
 				57A001282E70000300000001 /* DatasetInfoView.swift */,
 				57A001292E70000300000001 /* ExternalDatasetImporter.swift */,
 				57A000202E70000200000001 /* FilePickerView.swift */,
@@ -810,6 +815,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				57A001712E99000500000001 /* AppStoreUpdateChecker.swift in Sources */,
 				57A000302E70000200000001 /* FilePickerView.swift in Sources */,
 				57A000312E70000200000001 /* GPUHashtable.swift in Sources */,
 				57A001302E70000300000001 /* AppModel.swift in Sources */,
@@ -846,6 +852,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				57A001722E99000500000001 /* AppStoreUpdateChecker.swift in Sources */,
 				57A000342E70000200000001 /* GPUHashtable.swift in Sources */,
 				57A001382E70000300000001 /* AppModel.swift in Sources */,
 				57A001392E70000300000001 /* AppSettings.swift in Sources */,
@@ -874,6 +881,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				57A001732E99000500000001 /* AppStoreUpdateChecker.swift in Sources */,
 				57A000372E70000200000001 /* FilePickerView.swift in Sources */,
 				57A000382E70000200000001 /* GPUHashtable.swift in Sources */,
 				57A0014E2E70000300000001 /* KeychainSecretStore.swift in Sources */,
