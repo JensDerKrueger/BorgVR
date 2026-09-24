@@ -37,6 +37,7 @@ final class MacVolumeRenderer: NSObject, MTKViewDelegate {
   private let appModel: AppModel
   private let appSettings: AppSettings
   private let storedAppModel: StoredAppModel
+  private let sharePlay: SharePlayCoordinator
   private let datasetAccess: MacRendererDatasetAccess
   private let core: ScreenVolumeRendererCore
   private var frameInFlight = false
@@ -48,12 +49,14 @@ final class MacVolumeRenderer: NSObject, MTKViewDelegate {
     appModel: AppModel,
     appSettings: AppSettings,
     renderingParameters: RenderingParameters,
-    storedAppModel: StoredAppModel
+    storedAppModel: StoredAppModel,
+    sharePlay: SharePlayCoordinator
   ) {
     let datasetAccess = MacRendererDatasetAccess(storedAppModel: storedAppModel)
     self.appModel = appModel
     self.appSettings = appSettings
     self.storedAppModel = storedAppModel
+    self.sharePlay = sharePlay
     self.datasetAccess = datasetAccess
     self.core = ScreenVolumeRendererCore(
       appModel: appModel,
@@ -103,7 +106,9 @@ final class MacVolumeRenderer: NSObject, MTKViewDelegate {
   }
 
   func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {
-    core.drawableSizeWillChange(size)
+    if core.drawableSizeWillChange(size) {
+      sharePlay.synchronize(kind: .transformOnly)
+    }
   }
 
   func draw(in view: MTKView) {

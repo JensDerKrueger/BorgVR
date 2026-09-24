@@ -139,15 +139,20 @@ final class ScreenVolumeRendererCore {
     }
   }
 
-  func drawableSizeWillChange(_ size: CGSize) {
+  @discardableResult
+  func drawableSizeWillChange(_ size: CGSize) -> Bool {
+    var aspectRatioChanged = false
     if size.height > 0 {
-      renderingParameters.updateViewportAspectRatio(Float(size.width / size.height))
+      aspectRatioChanged = renderingParameters.updateViewportAspectRatio(
+        Float(size.width / size.height)
+      )
     }
     let width = Float(size.width)
     if pipelineDrawableWidth > 0,
        abs(width - pipelineDrawableWidth) > pipelineWidthChangeThreshold {
       clearPipelineStates()
     }
+    return aspectRatioChanged
   }
 
   func encodeFrame(in view: MTKView) -> ScreenVolumeEncodedFrame? {

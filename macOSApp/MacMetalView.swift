@@ -14,6 +14,7 @@ struct MacMetalView: NSViewRepresentable {
   @EnvironmentObject private var renderingParameters: RenderingParameters
   @EnvironmentObject var appSettings: AppSettings
   @EnvironmentObject private var storedAppModel: StoredAppModel
+  @EnvironmentObject private var sharePlay: SharePlayCoordinator
   var onDragDelta: (CGSize) -> Void = { _ in }
   var onDragUpdate: (RenderDragUpdate) -> Void = { _ in }
   var onDragEnded: () -> Void = {}
@@ -27,7 +28,8 @@ struct MacMetalView: NSViewRepresentable {
       appModel: appModel,
       appSettings: appSettings,
       renderingParameters: renderingParameters,
-      storedAppModel: storedAppModel
+      storedAppModel: storedAppModel,
+      sharePlay: sharePlay
     )
   }
 

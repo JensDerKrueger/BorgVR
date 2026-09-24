@@ -42,6 +42,7 @@ class GroupActivityHelper {
   private var synchronizationTask: Task<Void, Never>?
   private var knownParticipants = Set<Participant>()
   private var participantInfoByID: [UUID: BorgVRSharePlayParticipantInfo] = [:]
+  private var screenViewStateByParticipantID: [UUID: BorgVRScreenViewState] = [:]
   private let sharePlayServerHost = BorgVRServerHost(logger: GUILogger())
   private var sharePlayDatasetID: String?
   private var sharePlayAuthToken = ""
@@ -105,8 +106,12 @@ class GroupActivityHelper {
           self.participantInfoByID = self.participantInfoByID.filter {
             activeIDs.contains($0.key)
           }
+          self.screenViewStateByParticipantID = self.screenViewStateByParticipantID.filter {
+            activeIDs.contains($0.key)
+          }
           Task { @MainActor in
             self.publishParticipants()
+            self.applyMinimumScreenViewportAspectRatio()
           }
 
           if newParticipants.isEmpty { return }
@@ -447,9 +452,9 @@ class GroupActivityHelper {
       let info = try BorgVRSharePlayParticipantInfoCodec.decode(data)
       participantInfoByID[participant.id] = info
       publishParticipants()
-      if runtimeAppModel?.groupSessionHost == true,
-         sharedAppModel?.screenSharePlayViewState == nil,
-         info.platform == .iOS || info.platform == .macOS {
+      applyMinimumScreenViewportAspectRatio()
+      if (info.platform == .iOS || info.platform == .macOS),
+         screenViewStateByParticipantID[participant.id] == nil {
         Task {
           try? await sendData(
             data: Data(),
@@ -461,6 +466,42 @@ class GroupActivityHelper {
     } catch {
       runtimeAppModel?.logger.error("Failed to read SharePlay participant information: \(error)")
     }
+  }
+
+  @MainActor
+  private func applyScreenViewState(
+    _ state: BorgVRScreenViewState,
+    from participant: Participant
+  ) {
+    screenViewStateByParticipantID[participant.id] = state
+    var sharedState = state
+    if let minimumAspectRatio = minimumScreenViewportAspectRatio() {
+      sharedState.viewportAspectRatio = minimumAspectRatio
+    }
+    sharedAppModel?.screenSharePlayViewState = sharedState
+  }
+
+  @MainActor
+  private func applyMinimumScreenViewportAspectRatio() {
+    guard var state = sharedAppModel?.screenSharePlayViewState,
+          let minimumAspectRatio = minimumScreenViewportAspectRatio() else {
+      return
+    }
+    guard abs(state.viewportAspectRatio - minimumAspectRatio) > 0.0001 else {
+      return
+    }
+    state.viewportAspectRatio = minimumAspectRatio
+    sharedAppModel?.screenSharePlayViewState = state
+  }
+
+  private func minimumScreenViewportAspectRatio() -> Float? {
+    screenViewStateByParticipantID.compactMap { participantID, state in
+      guard let platform = participantInfoByID[participantID]?.platform,
+            platform == .iOS || platform == .macOS else {
+        return nil
+      }
+      return state.viewportAspectRatio
+    }.min()
   }
 
   @MainActor
@@ -498,6 +539,7 @@ class GroupActivityHelper {
     pendingScreenViewState = nil
     knownParticipants.removeAll()
     participantInfoByID.removeAll()
+    screenViewStateByParticipantID.removeAll()
     sharedAppModel?.sharePlayParticipants = []
     sharedAppModel?.screenSharePlayViewState = nil
     sharedAppModel?.screenViewInteractionActive = false
@@ -925,7 +967,7 @@ class GroupActivityHelper {
         return
       }
       if let screenViewState = try BorgVRScreenViewStateCodec.decodeIfPresent(data) {
-        sharedAppModel.screenSharePlayViewState = screenViewState
+        applyScreenViewState(screenViewState, from: from)
         return
       }
       if try sharedAppModel.applySharePlayUpdate(from: data) {

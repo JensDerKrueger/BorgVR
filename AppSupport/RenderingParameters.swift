@@ -54,9 +54,12 @@ final class RenderingParameters: ObservableObject {
     transferFunction.updateRanges(minValue: minValue, maxValue: maxValue, rangeMax: rangeMax)
   }
 
-  func updateViewportAspectRatio(_ aspectRatio: Float) {
-    guard aspectRatio.isFinite, aspectRatio > 0 else { return }
+  @discardableResult
+  func updateViewportAspectRatio(_ aspectRatio: Float) -> Bool {
+    guard aspectRatio.isFinite, aspectRatio > 0 else { return false }
+    guard abs(viewportAspectRatio - aspectRatio) > 0.0001 else { return false }
     viewportAspectRatio = aspectRatio
+    return true
   }
 
   var screenViewState: BorgVRScreenViewState {
@@ -216,7 +219,6 @@ final class RenderingParameters: ObservableObject {
     orientation = screenViewState.orientation
     scale = screenViewState.scale
     pan = screenViewState.pan
-    viewportAspectRatio = screenViewState.viewportAspectRatio
   }
 
   @discardableResult

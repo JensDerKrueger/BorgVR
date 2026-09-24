@@ -38,7 +38,9 @@ final class MobileVolumeRenderer: NSObject, MTKViewDelegate, UIGestureRecognizer
   }
 
   func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {
-    core.drawableSizeWillChange(size)
+    if core.drawableSizeWillChange(size) {
+      sharePlay.synchronize(kind: .transformOnly)
+    }
   }
 
   func draw(in view: MTKView) {
