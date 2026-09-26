@@ -36,7 +36,7 @@ extension Renderer {
                                              hasTable: GPUHashtable) throws ->
   (MTLRenderPipelineState, MTLRenderPipelineState, MTLRenderPipelineState,
    MTLRenderPipelineState, MTLRenderPipelineState, MTLRenderPipelineState,
-   MTLRenderPipelineState, MTLRenderPipelineState) {
+   MTLRenderPipelineState, MTLRenderPipelineState, MTLRenderPipelineState) {
     // Build a render state pipeline object.
     let shaderSource = try RuntimeMetalShaderLoader.loadSource(named: "Shaders")
 
@@ -100,6 +100,8 @@ extension Renderer {
     let hudControlsFragmentFunction = library.makeFunction(name: "fragmentShaderTFChannelControls")
     let markerVertexFunction = library.makeFunction(name: "vertexShaderVolumeMarker")
     let markerFragmentFunction = library.makeFunction(name: "fragmentShaderVolumeMarker")
+    let screenViewLabelVertexFunction = library.makeFunction(name: "vertexShaderScreenViewLabel")
+    let screenViewLabelFragmentFunction = library.makeFunction(name: "fragmentShaderScreenViewLabel")
     let markerCompositeVertexFunction = library.makeFunction(name: "vertexShaderMarkerComposite")
     let markerCompositeFragmentFunction = library.makeFunction(name: "fragmentShaderMarkerComposite")
 
@@ -111,6 +113,24 @@ extension Renderer {
     pipelineDescriptorVolumeMarker.colorAttachments[0].pixelFormat = layerRenderer.configuration.colorFormat
     pipelineDescriptorVolumeMarker.depthAttachmentPixelFormat = layerRenderer.configuration.depthFormat
     pipelineDescriptorVolumeMarker.maxVertexAmplificationCount = layerRenderer.properties.viewCount
+
+    let pipelineDescriptorScreenViewLabel = MTLRenderPipelineDescriptor()
+    pipelineDescriptorScreenViewLabel.label = "Render Pipeline for Screen View Labels"
+    pipelineDescriptorScreenViewLabel.vertexFunction = screenViewLabelVertexFunction
+    pipelineDescriptorScreenViewLabel.fragmentFunction = screenViewLabelFragmentFunction
+    pipelineDescriptorScreenViewLabel.rasterSampleCount = rasterSampleCount
+    pipelineDescriptorScreenViewLabel.colorAttachments[0].pixelFormat = layerRenderer.configuration.colorFormat
+    pipelineDescriptorScreenViewLabel.depthAttachmentPixelFormat = layerRenderer.configuration.depthFormat
+    pipelineDescriptorScreenViewLabel.maxVertexAmplificationCount = layerRenderer.properties.viewCount
+    if let colorAttachment = pipelineDescriptorScreenViewLabel.colorAttachments[0] {
+      colorAttachment.isBlendingEnabled = true
+      colorAttachment.rgbBlendOperation = .add
+      colorAttachment.alphaBlendOperation = .add
+      colorAttachment.sourceRGBBlendFactor = .one
+      colorAttachment.destinationRGBBlendFactor = .oneMinusSourceAlpha
+      colorAttachment.sourceAlphaBlendFactor = .one
+      colorAttachment.destinationAlphaBlendFactor = .oneMinusSourceAlpha
+    }
 
     let pipelineDescriptorMarkerComposite = MTLRenderPipelineDescriptor()
     pipelineDescriptorMarkerComposite.label = "Render Pipeline for Marker Composite"
@@ -175,6 +195,7 @@ extension Renderer {
       try device.makeRenderPipelineState(descriptor: pipelineDescriptorIso),
       try device.makeRenderPipelineState(descriptor: pipelineDescriptorBrickVis),
       try device.makeRenderPipelineState(descriptor: pipelineDescriptorVolumeMarker),
+      try device.makeRenderPipelineState(descriptor: pipelineDescriptorScreenViewLabel),
       try device.makeRenderPipelineState(descriptor: pipelineDescriptorMarkerComposite),
       try device.makeRenderPipelineState(descriptor: pipelineDescriptorTFHUD),
       try device.makeRenderPipelineState(descriptor: pipelineDescriptorTFHUDControls)

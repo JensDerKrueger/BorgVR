@@ -1,6 +1,42 @@
 import Foundation
 import RealityKit
 
+enum ScreenViewPresentation {
+  static let sharedColor = SIMD4<Float>(0.05, 0.85, 1, 1)
+
+  static func color(for participant: BorgVRSharePlayParticipant) -> SIMD4<Float> {
+    participant.info.sharesScreenView ? sharedColor : detachedColor(for: participant.id)
+  }
+
+  static func detachedColor(for participantID: UUID) -> SIMD4<Float> {
+    var hash: UInt32 = 2_166_136_261
+    withUnsafeBytes(of: participantID.uuid) { bytes in
+      for byte in bytes {
+        hash = (hash ^ UInt32(byte)) &* 16_777_619
+      }
+    }
+
+    let hue = Float(hash % 360) / 360
+    let sector = hue * 6
+    let index = Int(floor(sector)) % 6
+    let fraction = sector - floor(sector)
+    let saturation: Float = 0.72
+    let minimum = 1 - saturation
+    let rising = minimum + saturation * fraction
+    let falling = 1 - saturation * fraction
+    let rgb: SIMD3<Float>
+    switch index {
+      case 0: rgb = SIMD3<Float>(1, rising, minimum)
+      case 1: rgb = SIMD3<Float>(falling, 1, minimum)
+      case 2: rgb = SIMD3<Float>(minimum, 1, rising)
+      case 3: rgb = SIMD3<Float>(minimum, falling, 1)
+      case 4: rgb = SIMD3<Float>(rising, minimum, 1)
+      default: rgb = SIMD3<Float>(1, minimum, falling)
+    }
+    return SIMD4<Float>(rgb, 1)
+  }
+}
+
 // MARK: - SharedAppModel
 
 /**
@@ -80,14 +116,30 @@ class SharedAppModel {
   var purgeAtlas: Bool
   /// Opaque markers placed in normalized dataset coordinates.
   var volumeMarkers: [VolumeMarker]
-  /// Locally selected marker. This is intentionally not synchronized.
-  var selectedVolumeMarkerID: UUID?
+  /// Locally selected markers. These are intentionally not synchronized.
+  var selectedVolumeMarkerIDs: Set<UUID>
+  /// Primary local marker used for direct manipulation.
+  var selectedVolumeMarkerID: UUID? {
+    didSet {
+      guard let selectedVolumeMarkerID else {
+        selectedVolumeMarkerIDs.removeAll()
+        return
+      }
+      if !selectedVolumeMarkerIDs.contains(selectedVolumeMarkerID) {
+        selectedVolumeMarkerIDs = [selectedVolumeMarkerID]
+      }
+    }
+  }
   /// Short-lived stylus-tip previews received from other SharePlay participants.
   var remoteSpatialStylusPreviews: [UUID: SpatialStylusPreview]
   /// Participants announced in the current SharePlay session.
   var sharePlayParticipants: [BorgVRSharePlayParticipant]
   /// Shared camera used by all iOS and macOS participants.
   var screenSharePlayViewState: BorgVRScreenViewState?
+  /// Private cameras of iOS and macOS participants that left shared-view synchronization.
+  var detachedScreenSharePlayViewStates: [UUID: BorgVRScreenViewState]
+  /// Whether spatial labels are shown above shared and detached screen views.
+  var screenViewNamesVisible: Bool
   /// Local-only pinch state for the shared screen camera visualization.
   var screenViewInteractionActive: Bool
   /// Radius used for markers created locally during the current dataset session.
@@ -119,10 +171,13 @@ class SharedAppModel {
     brickVis = false
     purgeAtlas = false
     volumeMarkers = []
+    selectedVolumeMarkerIDs = []
     selectedVolumeMarkerID = nil
     remoteSpatialStylusPreviews = [:]
     sharePlayParticipants = []
     screenSharePlayViewState = nil
+    detachedScreenSharePlayViewStates = [:]
+    screenViewNamesVisible = true
     screenViewInteractionActive = false
     defaultVolumeMarkerRadius = VolumeMarkerRadius.sphereDefault
     defaultVolumeMarkerShowsDirection = true
@@ -197,6 +252,14 @@ class SharedAppModel {
     groupActivityHelper?.leaveGroupActivity()
   }
 
+  @MainActor func takeOverSharePlayHostRole() {
+    groupActivityHelper?.takeOverHostRole()
+  }
+
+  @MainActor func ignoreSharePlayHostDeparture() {
+    groupActivityHelper?.ignoreHostDeparture()
+  }
+
   @MainActor var isInGroupSession: Bool {
     groupActivityHelper?.isInGroupSession ?? false
   }
@@ -212,6 +275,12 @@ class SharedAppModel {
   func openSharedView() {
     Task { @MainActor in
       await groupActivityHelper?.sendInitialData()
+    }
+  }
+
+  func datasetRendererDidLoad() {
+    Task { @MainActor in
+      groupActivityHelper?.datasetRendererDidLoad()
     }
   }
 
@@ -290,6 +359,19 @@ class SharedAppModel {
     originFromWorldAnchorMatrix = matrix_identity_float4x4
     modelTransform = defaultTransform
     lastModelTransform = defaultTransform
+  }
+
+  func setVolumeMarkerSelection(_ ids: Set<UUID>, primary: UUID? = nil) {
+    let availableIDs = Set(volumeMarkers.map(\.id))
+    let validIDs = ids.intersection(availableIDs)
+    selectedVolumeMarkerIDs = validIDs
+    selectedVolumeMarkerID = primary.flatMap { validIDs.contains($0) ? $0 : nil }
+      ?? selectedVolumeMarkerID.flatMap { validIDs.contains($0) ? $0 : nil }
+      ?? volumeMarkers.first(where: { validIDs.contains($0.id) })?.id
+  }
+
+  func clearVolumeMarkerSelection() {
+    selectedVolumeMarkerID = nil
   }
 
   func resetIsoValue() {
@@ -506,10 +588,7 @@ class SharedAppModel {
   func applySharePlayUpdate(from data: Data) throws -> Bool {
     if let markers = try VolumeMarkerSharePlayCodec.decodeIfPresent(data) {
       volumeMarkers = markers
-      if let selectedVolumeMarkerID,
-         !volumeMarkers.contains(where: { $0.id == selectedVolumeMarkerID }) {
-        self.selectedVolumeMarkerID = nil
-      }
+      setVolumeMarkerSelection(selectedVolumeMarkerIDs, primary: selectedVolumeMarkerID)
       return true
     }
 

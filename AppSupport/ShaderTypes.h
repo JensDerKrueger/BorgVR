@@ -86,7 +86,8 @@ typedef NS_ENUM(EnumBackingType, TextureIndex)
   TextureIndexVolumeAtlas      = 0,   ///< 3D texture atlas containing brick data.
   TextureIndexTransferFunction = 1,   ///< 1D transfer function texture.
   TextureIndexMarkerColor      = 2,   ///< Opaque marker color prepass texture.
-  TextureIndexMarkerDepth      = 3    ///< Opaque marker depth prepass texture.
+  TextureIndexMarkerDepth      = 3,   ///< Opaque marker depth prepass texture.
+  TextureIndexScreenViewLabel  = 4    ///< Rasterized screen-view participant label.
 };
 
 /**

@@ -25,6 +25,11 @@ struct MarkerCompositeOut {
   float depth [[depth(any)]];
 };
 
+struct ScreenViewLabelVaryings {
+  float4 position [[position]];
+  float2 uv;
+};
+
 vertex VolumeMarkerVaryings vertexShaderVolumeMarker(
   uint vertexId [[vertex_id]],
   ushort ampId [[amplification_id]],
@@ -54,6 +59,42 @@ fragment float4 fragmentShaderVolumeMarker(
   float diffuse = max(dot(normal, lightDirection), 0.0);
   float3 baseColor = markerColor.rgb;
   return float4(baseColor * (0.28 + 0.72 * diffuse), markerColor.a);
+}
+
+vertex ScreenViewLabelVaryings vertexShaderScreenViewLabel(
+  uint vertexId [[vertex_id]],
+  ushort ampId [[amplification_id]],
+  constant float4x4 *mvpPerView [[buffer(20)]],
+  constant float4x4 &modelMatrix [[buffer(21)]],
+  constant float2 &labelSize [[buffer(22)]])
+{
+  const float2 corners[6] = {
+    float2(-0.5, -0.5), float2( 0.5, -0.5), float2(-0.5,  0.5),
+    float2( 0.5, -0.5), float2( 0.5,  0.5), float2(-0.5,  0.5)
+  };
+  const float2 uvs[6] = {
+    float2(0.0, 1.0), float2(1.0, 1.0), float2(0.0, 0.0),
+    float2(1.0, 1.0), float2(1.0, 0.0), float2(0.0, 0.0)
+  };
+
+  ScreenViewLabelVaryings out;
+  float2 corner = corners[vertexId] * labelSize;
+  float4 world = modelMatrix * float4(corner.x, corner.y, 0.0, 1.0);
+  out.position = mvpPerView[ampId] * world;
+  out.uv = uvs[vertexId];
+  return out;
+}
+
+fragment float4 fragmentShaderScreenViewLabel(
+  ScreenViewLabelVaryings in [[stage_in]],
+  texture2d<float> labelTexture [[texture(TextureIndexScreenViewLabel)]])
+{
+  constexpr sampler labelSampler(filter::linear, address::clamp_to_edge);
+  float4 color = labelTexture.sample(labelSampler, in.uv);
+  if (color.a < 0.01) {
+    discard_fragment();
+  }
+  return color;
 }
 
 vertex MarkerCompositeVaryings vertexShaderMarkerComposite(

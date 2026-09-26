@@ -176,6 +176,34 @@
         }
       }
     },
+    "A newer version of BorgVR (%@) is available in the App Store. You are currently using version %@." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eine neuere Version von BorgVR (%@) ist im App Store verfügbar. Sie verwenden derzeit Version %@."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A newer version of BorgVR (%@) is available in the App Store. You are currently using version %@."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hay una versión más reciente de BorgVR (%@) disponible en el App Store. Actualmente utiliza la versión %@."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Une version plus récente de BorgVR (%@) est disponible dans l’App Store. Vous utilisez actuellement la version %@."
+          }
+        }
+      }
+    },
     "Access to the saved data folder was denied." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -201,34 +229,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "L’accès au dossier de données enregistré a été refusé."
-          }
-        }
-      }
-    },
-    "Advanced" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Erweitert"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Advanced"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Avanzado"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Avancé"
           }
         }
       }
@@ -531,6 +531,34 @@
         }
       }
     },
+    "Advanced" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Erweitert"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Advanced"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Avanzado"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Avancé"
+          }
+        }
+      }
+    },
     "Aktualisieren" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -613,6 +641,34 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Taille de l’atlas : %d Mo"
+          }
+        }
+      }
+    },
+    "Automatically check for updates" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Automatisch nach Updates suchen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Automatically check for updates"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Buscar actualizaciones automáticamente"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rechercher automatiquement les mises à jour"
           }
         }
       }
@@ -992,6 +1048,62 @@
         }
       }
     },
+    "BorgVR periodically checks the App Store for new versions and displays a notification when an update is available." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "BorgVR sucht regelmäßig im App Store nach neuen Versionen und zeigt einen Hinweis an, wenn ein Update verfügbar ist."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "BorgVR periodically checks the App Store for new versions and displays a notification when an update is available."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "BorgVR consulta periódicamente el App Store en busca de nuevas versiones y muestra un aviso cuando hay una actualización disponible."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "BorgVR recherche régulièrement de nouvelles versions dans l’App Store et affiche un avis lorsqu’une mise à jour est disponible."
+          }
+        }
+      }
+    },
+    "BorgVR will forget all previously discovered dataset sources." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "BorgVR vergisst alle bisher gefundenen Datensatzquellen."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "BorgVR will forget all previously discovered dataset sources."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "BorgVR olvidará todas las fuentes de conjuntos de datos descubiertas anteriormente."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "BorgVR oubliera toutes les sources de jeux de données découvertes précédemment."
+          }
+        }
+      }
+    },
     "Bottom color" : {
       "localizations" : {
         "de" : {
@@ -1362,6 +1474,34 @@
         }
       }
     },
+    "Choose how you appear to other people during SharePlay collaboration. Your display name is shared only with participants in the current session." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Legen Sie fest, wie Sie anderen Personen während einer SharePlay-Zusammenarbeit angezeigt werden. Ihr Anzeigename wird nur mit den Teilnehmern der aktuellen Sitzung geteilt."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose how you appear to other people during SharePlay collaboration. Your display name is shared only with participants in the current session."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Elija cómo aparece ante otras personas durante una colaboración con SharePlay. Su nombre para mostrar solo se comparte con los participantes de la sesión actual."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choisissez comment vous apparaissez aux autres personnes pendant une collaboration SharePlay. Votre nom d’affichage est partagé uniquement avec les participants de la session en cours."
+          }
+        }
+      }
+    },
     "Choose the Marker interaction mode and drag in the rendering view to add a marker." : {
       "localizations" : {
         "de" : {
@@ -1414,6 +1554,62 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Effacer"
+          }
+        }
+      }
+    },
+    "Clear Dataset Origin Cache" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Datensatzquellen-Cache leeren"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Clear Dataset Origin Cache"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vaciar caché de orígenes"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vider le cache des sources"
+          }
+        }
+      }
+    },
+    "Clear Dataset Origin Cache?" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Datensatzquellen-Cache leeren?"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Clear Dataset Origin Cache?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Vaciar la caché de orígenes?"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vider le cache des sources ?"
           }
         }
       }
@@ -1638,6 +1834,34 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Compression"
+          }
+        }
+      }
+    },
+    "Configure general application behavior, including automatic checks for new BorgVR versions in the App Store." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Konfigurieren Sie das allgemeine Verhalten der App, einschließlich der automatischen Suche nach neuen BorgVR-Versionen im App Store."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Configure general application behavior, including automatic checks for new BorgVR versions in the App Store."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Configure el comportamiento general de la aplicación, incluida la búsqueda automática de nuevas versiones de BorgVR en el App Store."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Configurez le comportement général de l’application, notamment la recherche automatique de nouvelles versions de BorgVR dans l’App Store."
           }
         }
       }
@@ -1981,6 +2205,34 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Jeu de données introuvable : \\(id)"
+          }
+        }
+      }
+    },
+    "Dataset origin cache" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Datensatzquellen-Cache"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dataset origin cache"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Caché de orígenes de conjuntos de datos"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cache des sources de jeux de données"
           }
         }
       }
@@ -2937,6 +3189,34 @@
         }
       }
     },
+    "Delete Selected Markers" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ausgewählte Marker löschen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete Selected Markers"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eliminar marcadores seleccionados"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Supprimer les marqueurs sélectionnés"
+          }
+        }
+      }
+    },
     "Delete server?" : {
       "localizations" : {
         "de" : {
@@ -3625,86 +3905,6 @@
         }
       }
     },
-    "A newer version of BorgVR (%@) is available in the App Store. You are currently using version %@." : {
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Eine neuere Version von BorgVR (%@) ist im App Store verfügbar. Sie verwenden derzeit Version %@." } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "A newer version of BorgVR (%@) is available in the App Store. You are currently using version %@." } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Hay una versión más reciente de BorgVR (%@) disponible en el App Store. Actualmente utiliza la versión %@." } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Une version plus récente de BorgVR (%@) est disponible dans l’App Store. Vous utilisez actuellement la version %@." } }
-      }
-    },
-    "Automatically check for updates" : {
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Automatisch nach Updates suchen" } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Automatically check for updates" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Buscar actualizaciones automáticamente" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Rechercher automatiquement les mises à jour" } }
-      }
-    },
-    "BorgVR periodically checks the App Store for new versions and displays a notification when an update is available." : {
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "BorgVR sucht regelmäßig im App Store nach neuen Versionen und zeigt einen Hinweis an, wenn ein Update verfügbar ist." } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "BorgVR periodically checks the App Store for new versions and displays a notification when an update is available." } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "BorgVR consulta periódicamente el App Store en busca de nuevas versiones y muestra un aviso cuando hay una actualización disponible." } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "BorgVR recherche régulièrement de nouvelles versions dans l’App Store et affiche un avis lorsqu’une mise à jour est disponible." } }
-      }
-    },
-    "Configure general application behavior, including automatic checks for new BorgVR versions in the App Store." : {
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Konfigurieren Sie das allgemeine Verhalten der App, einschließlich der automatischen Suche nach neuen BorgVR-Versionen im App Store." } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Configure general application behavior, including automatic checks for new BorgVR versions in the App Store." } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Configure el comportamiento general de la aplicación, incluida la búsqueda automática de nuevas versiones de BorgVR en el App Store." } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Configurez le comportement général de l’application, notamment la recherche automatique de nouvelles versions de BorgVR dans l’App Store." } }
-      }
-    },
-    "Ignore This Update" : {
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Dieses Update ignorieren" } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Ignore This Update" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Ignorar esta actualización" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Ignorer cette mise à jour" } }
-      }
-    },
-    "Never Remind Me" : {
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Nie wieder erinnern" } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Never Remind Me" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "No volver a recordar" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Ne plus me le rappeler" } }
-      }
-    },
-    "Remind Me Later" : {
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Später wieder erinnern" } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Remind Me Later" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Recordar más tarde" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Me le rappeler plus tard" } }
-      }
-    },
-    "Update Available" : {
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Update verfügbar" } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Update Available" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Actualización disponible" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Mise à jour disponible" } }
-      }
-    },
-    "Updates" : {
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Updates" } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Updates" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Actualizaciones" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Mises à jour" } }
-      }
-    },
-    "View in App Store" : {
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Im App Store anzeigen" } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "View in App Store" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Ver en el App Store" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Afficher dans l’App Store" } }
-      }
-    },
     "Hide UI" : {
       "localizations" : {
         "de" : {
@@ -3761,6 +3961,34 @@
         }
       }
     },
+    "Identity" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Identität"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Identity"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Identidad"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Identité"
+          }
+        }
+      }
+    },
     "If you have access to one or more central dataset servers, you can configure them here. The server details are provided by the server operator. More information about dataset servers in general, and about running a dedicated server yourself, is available on the support website." : {
       "localizations" : {
         "de" : {
@@ -3785,6 +4013,34 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Si vous avez accès à un ou plusieurs serveurs centraux de jeux de données, vous pouvez les configurer ici. Les informations du serveur vous sont fournies par l’opérateur du serveur. Vous trouverez plus d’informations sur les serveurs de jeux de données en général, ainsi que sur l’exécution de votre propre serveur dédié, sur la page d’assistance."
+          }
+        }
+      }
+    },
+    "Ignore This Update" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dieses Update ignorieren"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ignore This Update"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ignorar esta actualización"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ignorer cette mise à jour"
           }
         }
       }
@@ -4465,6 +4721,34 @@
         }
       }
     },
+    "iPhone or iPad" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "iPhone oder iPad"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "iPhone or iPad"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "iPhone o iPad"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "iPhone ou iPad"
+          }
+        }
+      }
+    },
     "Isovalue" : {
       "localizations" : {
         "de" : {
@@ -4521,6 +4805,34 @@
         }
       }
     },
+    "Keep this device's view synchronized with other iPhone, iPad, and Mac participants." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hält die Ansicht dieses Geräts mit anderen iPhone-, iPad- und Mac-Teilnehmern synchron."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keep this device's view synchronized with other iPhone, iPad, and Mac participants."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mantiene la vista de este dispositivo sincronizada con otros participantes de iPhone, iPad y Mac."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Maintient la vue de cet appareil synchronisée avec les autres participants sur iPhone, iPad et Mac."
+          }
+        }
+      }
+    },
     "Kompression" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -4546,35 +4858,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Compression"
-          }
-        }
-      }
-    },
-    "Leeren" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Leeren"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Clear"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Vaciar"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Effacer"
           }
         }
       }
@@ -4631,6 +4914,35 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Quitter SharePlay ?"
+          }
+        }
+      }
+    },
+    "Leeren" : {
+      "extractionState" : "stale",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Leeren"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Clear"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vaciar"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Effacer"
           }
         }
       }
@@ -5856,6 +6168,34 @@
         }
       }
     },
+    "Never Remind Me" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nie wieder erinnern"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Never Remind Me"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No volver a recordar"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ne plus me le rappeler"
+          }
+        }
+      }
+    },
     "No custom certificate: BorgVR creates a temporary self-signed certificate." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -5883,6 +6223,22 @@
             "value" : "Aucun certificat personnalisé : BorgVR crée un certificat auto-signé temporaire."
           }
         }
+      }
+    },
+    "No Data Source Available" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Keine Datenquelle verfügbar" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "No Data Source Available" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "No hay ninguna fuente de datos disponible" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Aucune source de données disponible" } }
+      }
+    },
+    "The current dataset is not available from any known source. BorgVR is waiting for a participant to provide one." : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Der aktuelle Datensatz ist momentan über keine bekannte Quelle erreichbar. BorgVR wartet darauf, dass ein Teilnehmer eine Datenquelle bereitstellt." } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "The current dataset is not available from any known source. BorgVR is waiting for a participant to provide one." } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "El conjunto de datos actual no está disponible en ninguna fuente conocida. BorgVR espera a que un participante proporcione una fuente de datos." } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Le jeu de données actuel n’est disponible auprès d’aucune source connue. BorgVR attend qu’un participant fournisse une source de données." } }
       }
     },
     "No datasets found" : {
@@ -6453,6 +6809,34 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Mode de suréchantillonnage"
+          }
+        }
+      }
+    },
+    "Participants" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Teilnehmer"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Participants"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Participantes"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Participants"
           }
         }
       }
@@ -7661,6 +8045,34 @@
         }
       }
     },
+    "Remind Me Later" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Später wieder erinnern"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remind Me Later"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recordar más tarde"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Me le rappeler plus tard"
+          }
+        }
+      }
+    },
     "Remote dataset download paused." : {
       "localizations" : {
         "de" : {
@@ -8695,6 +9107,34 @@
         }
       }
     },
+    "Selected Markers" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ausgewählte Marker"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Selected Markers"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Marcadores seleccionados"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Marqueurs sélectionnés"
+          }
+        }
+      }
+    },
     "Server" : {
       "comment" : "A section for entering server details.",
       "isCommentAutoGenerated" : true,
@@ -9017,6 +9457,62 @@
         }
       }
     },
+    "Share source via SharePlay" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quelle über SharePlay teilen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Share source via SharePlay"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Compartir fuente mediante SharePlay"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Partager la source via SharePlay"
+          }
+        }
+      }
+    },
+    "SharePlay" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "SharePlay"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "SharePlay"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "SharePlay"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "SharePlay"
+          }
+        }
+      }
+    },
     "SharePlay active" : {
       "localizations" : {
         "de" : {
@@ -9074,6 +9570,174 @@
         }
       }
     },
+    "Choose your SharePlay name" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wählen Sie Ihren SharePlay-Namen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose your SharePlay name"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Elija su nombre para mostrar en SharePlay"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choisissez votre nom d’affichage SharePlay"
+          }
+        }
+      }
+    },
+    "Continue" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Weiter"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Continue"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Continuar"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Continuer"
+          }
+        }
+      }
+    },
+    "Display name" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Anzeigename"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Display name"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nombre para mostrar"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nom d’affichage"
+          }
+        }
+      }
+    },
+    "SharePlay display name" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "SharePlay-Anzeigename"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "SharePlay display name"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nombre para mostrar en SharePlay"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nom d’affichage SharePlay"
+          }
+        }
+      }
+    },
+    "What name should other people see for you in shared SharePlay sessions? You can change it later in Settings." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unter welchem Namen möchten Sie für andere Personen in gemeinsamen SharePlay-Sitzungen erscheinen? Sie können ihn später in den Einstellungen ändern."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "What name should other people see for you in shared SharePlay sessions? You can change it later in Settings."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Con qué nombre desea aparecer ante otras personas en las sesiones compartidas de SharePlay? Puede cambiarlo más tarde en Ajustes."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sous quel nom souhaitez-vous apparaître auprès des autres personnes dans les sessions SharePlay partagées ? Vous pourrez le modifier ultérieurement dans Réglages."
+          }
+        }
+      }
+    },
+    "Show Brick Visualization" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Brick-Visualisierung anzeigen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show Brick Visualization"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mostrar visualización de bricks"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Afficher la visualisation des briques"
+          }
+        }
+      }
+    },
     "Show Direction" : {
       "localizations" : {
         "de" : {
@@ -9098,6 +9762,34 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Afficher la direction"
+          }
+        }
+      }
+    },
+    "Show Log Button" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Log-Schaltfläche anzeigen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show Log Button"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mostrar botón de registro"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Afficher le bouton du journal"
           }
         }
       }
@@ -9498,6 +10190,34 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Les formats pris en charge sont QVIS `.dat` + `.raw`, NRRD/NHDR et les fichiers BorgVR natifs `.data`."
+          }
+        }
+      }
+    },
+    "Synchronize View" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ansicht synchronisieren"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synchronize View"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sincronizar vista"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Synchroniser la vue"
           }
         }
       }
@@ -10232,6 +10952,34 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "La section \\(pendingResetSection.title) sera réinitialisée à ses valeurs par défaut."
+          }
+        }
+      }
+    },
+    "The dataset is not available from any known source." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der Datensatz ist über keine bekannte Quelle verfügbar."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The dataset is not available from any known source."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El conjunto de datos no está disponible en ninguna fuente conocida."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le jeu de données n’est disponible depuis aucune source connue."
           }
         }
       }
@@ -11033,6 +11781,62 @@
         }
       }
     },
+    "Update Available" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Update verfügbar"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Update Available"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Actualización disponible"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mise à jour disponible"
+          }
+        }
+      }
+    },
+    "Updates" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Updates"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Updates"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Actualizaciones"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mises à jour"
+          }
+        }
+      }
+    },
     "Use HTTPS" : {
       "comment" : "A toggle that enables HTTPS for the web server.",
       "isCommentAutoGenerated" : true,
@@ -11144,6 +11948,34 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Dégradé vertical"
+          }
+        }
+      }
+    },
+    "View in App Store" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Im App Store anzeigen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "View in App Store"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ver en el App Store"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Afficher dans l’App Store"
           }
         }
       }
@@ -11443,6 +12275,34 @@
         }
       }
     },
+    "When enabled, the server address, port, and password may be sent to SharePlay participants so they can load shared datasets directly." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wenn diese Option aktiviert ist, dürfen Serveradresse, Port und Passwort an SharePlay-Teilnehmer gesendet werden, damit sie geteilte Datensätze direkt laden können."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "When enabled, the server address, port, and password may be sent to SharePlay participants so they can load shared datasets directly."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Si se activa, la dirección, el puerto y la contraseña del servidor podrán enviarse a los participantes de SharePlay para que carguen directamente los conjuntos de datos compartidos."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lorsque cette option est activée, l’adresse, le port et le mot de passe du serveur peuvent être envoyés aux participants SharePlay afin qu’ils chargent directement les jeux de données partagés."
+          }
+        }
+      }
+    },
     "Without HTTPS, only localhost connections are possible." : {
       "comment" : "A description of the limitations of using HTTPS in the Web Server.",
       "isCommentAutoGenerated" : true,
@@ -11501,52 +12361,144 @@
         }
       }
     },
-    "Choose how you appear to other people during SharePlay collaboration. Your display name is shared only with participants in the current session." : {
+    "Ignore" : {
       "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Legen Sie fest, wie Sie anderen Personen während einer SharePlay-Zusammenarbeit angezeigt werden. Ihr Anzeigename wird nur mit den Teilnehmern der aktuellen Sitzung geteilt." } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Choose how you appear to other people during SharePlay collaboration. Your display name is shared only with participants in the current session." } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Elige cómo apareces ante otras personas durante una colaboración con SharePlay. Tu nombre para mostrar solo se comparte con los participantes de la sesión actual." } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Choisissez comment vous apparaissez aux autres personnes pendant une collaboration SharePlay. Votre nom d’affichage est partagé uniquement avec les participants de la session en cours." } }
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ignorieren"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ignore"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ignorar"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ignorer"
+          }
+        }
       }
     },
-    "Identity" : {
+    "Leave Session" : {
       "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Identität" } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Identity" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Identidad" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Identité" } }
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sitzung verlassen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Leave Session"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abandonar la sesión"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quitter la session"
+          }
+        }
       }
     },
-    "iPhone or iPad" : {
+    "SharePlay Host Left" : {
       "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "iPhone oder iPad" } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "iPhone or iPad" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "iPhone o iPad" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "iPhone ou iPad" } }
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "SharePlay-Host hat die Sitzung verlassen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "SharePlay Host Left"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El anfitrión de SharePlay abandonó la sesión"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L’hôte SharePlay a quitté la session"
+          }
+        }
       }
     },
-    "Participants" : {
+    "Take Over Host Role" : {
       "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Teilnehmer" } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Participants" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Participantes" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Participants" } }
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Host-Rolle übernehmen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Take Over Host Role"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Asumir el rol de anfitrión"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reprendre le rôle d’hôte"
+          }
+        }
       }
     },
-    "SharePlay" : {
+    "The SharePlay host left the session. You can take over the host role, leave the session, or continue without a host." : {
       "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "SharePlay" } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "SharePlay" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "SharePlay" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "SharePlay" } }
-      }
-    },
-    "SharePlay display name" : {
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "SharePlay-Anzeigename" } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "SharePlay display name" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Nombre para mostrar en SharePlay" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Nom d’affichage SharePlay" } }
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der SharePlay-Host hat die Sitzung verlassen. Sie können die Host-Rolle übernehmen, die Sitzung verlassen oder ohne Host fortfahren."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The SharePlay host left the session. You can take over the host role, leave the session, or continue without a host."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El anfitrión de SharePlay abandonó la sesión. Puede asumir el rol de anfitrión, abandonar la sesión o continuar sin anfitrión."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L’hôte SharePlay a quitté la session. Vous pouvez reprendre le rôle d’hôte, quitter la session ou continuer sans hôte."
+          }
+        }
       }
     },
     "Zeroes" : {

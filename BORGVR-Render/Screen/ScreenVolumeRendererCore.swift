@@ -26,6 +26,7 @@ final class ScreenVolumeRendererCore {
   private let renderingParameters: RenderingParameters
   private let pipelineLabelPrefix: String
   private let loadLocalDataset: (String) throws -> BORGVRDatasetProtocol
+  private let remoteCacheFilename: (String) -> String?
   private let releaseDatasetAccess: () -> Void
   private let fallbackDrawableScale: (MTKView) -> CGFloat
 
@@ -64,6 +65,7 @@ final class ScreenVolumeRendererCore {
     renderingParameters: RenderingParameters,
     pipelineLabelPrefix: String,
     loadLocalDataset: @escaping (String) throws -> BORGVRDatasetProtocol,
+    remoteCacheFilename: @escaping (String) -> String?,
     releaseDatasetAccess: @escaping () -> Void = {},
     fallbackDrawableScale: @escaping (MTKView) -> CGFloat
   ) {
@@ -72,6 +74,7 @@ final class ScreenVolumeRendererCore {
     self.renderingParameters = renderingParameters
     self.pipelineLabelPrefix = pipelineLabelPrefix
     self.loadLocalDataset = loadLocalDataset
+    self.remoteCacheFilename = remoteCacheFilename
     self.releaseDatasetAccess = releaseDatasetAccess
     self.fallbackDrawableScale = fallbackDrawableScale
     DispatchQueue.main.async { [appModel, timer] in
@@ -191,7 +194,7 @@ final class ScreenVolumeRendererCore {
       depthFormat: view.depthStencilPixelFormat,
       markers: appModel.volumeMarkers,
       spatialStylusPreviews: appModel.activeRemoteSpatialStylusPreviews(),
-      selectedMarkerID: appModel.selectedVolumeMarkerID,
+      selectedMarkerIDs: appModel.selectedVolumeMarkerIDs,
       viewProjection: markerMatrices.projection * markerMatrices.view,
       modelMatrix: markerMatrices.model,
       volumeScale: volumeScale,
@@ -299,15 +302,16 @@ final class ScreenVolumeRendererCore {
           notifier: nil
         )
         try manager.connect(timeout: appSettings.timeout)
-        let cacheURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first?
-          .appendingPathComponent("\(activeDataset.identifier).data")
-        if let cacheURL, appSettings.makeLocalCopy {
-          appModel.logger.dev("Remote dataset will be cached at \(cacheURL.path)")
+        let cacheFilename = appSettings.makeLocalCopy
+          ? remoteCacheFilename(activeDataset.identifier)
+          : nil
+        if let cacheFilename {
+          appModel.logger.dev("Remote dataset will be cached at \(cacheFilename)")
         }
         newDataset = try manager.openDataset(
           datasetID: activeDataset.identifier,
           timeout: appSettings.timeout,
-          localCacheFilename: appSettings.makeLocalCopy ? cacheURL?.path : nil
+          localCacheFilename: cacheFilename
         )
     }
 
@@ -521,7 +525,11 @@ final class ScreenVolumeRendererCore {
             appModel.volumeMarkers[index].position,
             Float(panDelta) * sensitivity
           ) else { return false }
-    appModel.volumeMarkers[index].position = position
+    let offset = position - appModel.volumeMarkers[index].position
+    for selectedIndex in appModel.volumeMarkers.indices
+      where appModel.selectedVolumeMarkerIDs.contains(appModel.volumeMarkers[selectedIndex].id) {
+      appModel.volumeMarkers[selectedIndex].translate(by: offset)
+    }
     return true
   }
 

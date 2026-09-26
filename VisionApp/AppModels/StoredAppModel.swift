@@ -40,12 +40,20 @@ struct StoredServer: Identifiable, Codable, Equatable {
   var address: String
   var port: Int
   var password: String = ""
+  var shareViaSharePlay: Bool = false
 
-  init(id: UUID = UUID(), address: String, port: Int, password: String = "") {
+  init(
+    id: UUID = UUID(),
+    address: String,
+    port: Int,
+    password: String = "",
+    shareViaSharePlay: Bool = false
+  ) {
     self.id = id
     self.address = address
     self.port = port
     self.password = password
+    self.shareViaSharePlay = shareViaSharePlay
   }
 
   private enum CodingKeys: String, CodingKey {
@@ -53,6 +61,7 @@ struct StoredServer: Identifiable, Codable, Equatable {
     case address
     case port
     case password
+    case shareViaSharePlay
   }
 
   init(from decoder: Decoder) throws {
@@ -61,6 +70,7 @@ struct StoredServer: Identifiable, Codable, Equatable {
     address = try container.decode(String.self, forKey: .address)
     port = try container.decode(Int.self, forKey: .port)
     password = try container.decodeIfPresent(String.self, forKey: .password) ?? ""
+    shareViaSharePlay = try container.decodeIfPresent(Bool.self, forKey: .shareViaSharePlay) ?? false
   }
 }
 

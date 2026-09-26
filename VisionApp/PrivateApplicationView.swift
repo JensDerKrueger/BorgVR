@@ -53,12 +53,28 @@ struct PrivateApplicationView: View {
       .pickerStyle(.segmented)
 
       if !sharedAppModel.sharePlayParticipants.isEmpty {
-        Menu {
-          ForEach(sharedAppModel.sharePlayParticipants) { participant in
-            Label(participant.displayName, systemImage: participant.platform.systemImage)
+        HStack {
+          Menu {
+            ForEach(sharedAppModel.sharePlayParticipants) { participant in
+              Label {
+                Text(participant.displayName)
+              } icon: {
+                Image(systemName: participant.platform.systemImage)
+                  .foregroundStyle(participantColor(participant))
+              }
+            }
+          } label: {
+            Label("Participants", systemImage: "person.2")
           }
-        } label: {
-          Label("Participants", systemImage: "person.2")
+
+          Toggle(
+            "Show Names",
+            isOn: Binding(
+              get: { sharedAppModel.screenViewNamesVisible },
+              set: { sharedAppModel.screenViewNamesVisible = $0 }
+            )
+          )
+          .toggleStyle(.switch)
         }
       }
 
@@ -174,6 +190,22 @@ struct PrivateApplicationView: View {
       }
     }
     .padding()
+  }
+
+  private func color(_ value: SIMD4<Float>) -> Color {
+    Color(
+      red: Double(value.x),
+      green: Double(value.y),
+      blue: Double(value.z),
+      opacity: Double(value.w)
+    )
+  }
+
+  private func participantColor(_ participant: BorgVRSharePlayParticipant) -> Color {
+    guard participant.platform == .iOS || participant.platform == .macOS else {
+      return .primary
+    }
+    return color(ScreenViewPresentation.color(for: participant))
   }
 
   private var hasSharedScreenView: Bool {

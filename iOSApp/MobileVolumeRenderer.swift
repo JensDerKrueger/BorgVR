@@ -23,6 +23,11 @@ final class MobileVolumeRenderer: NSObject, MTKViewDelegate, UIGestureRecognizer
       renderingParameters: renderingParameters,
       pipelineLabelPrefix: "iOS",
       loadLocalDataset: { try BORGVRFileData(filename: $0) },
+      remoteCacheFilename: { datasetID in
+        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first?
+          .appendingPathComponent("\(datasetID).data")
+          .path
+      },
       fallbackDrawableScale: { $0.contentScaleFactor }
     )
     super.init()
@@ -34,7 +39,9 @@ final class MobileVolumeRenderer: NSObject, MTKViewDelegate, UIGestureRecognizer
   }
 
   func updateIfNeeded(for view: MTKView) {
-    _ = core.updateIfNeeded(for: view)
+    if case .loaded = core.updateIfNeeded(for: view) {
+      sharePlay.datasetRendererDidLoad()
+    }
   }
 
   func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {

@@ -90,6 +90,8 @@ enum ImmersiveBootstrap {
       try? sharedAppModel.loadTransform(from: fileURL)
     }
 
+    sharedAppModel.datasetRendererDidLoad()
+
     let transferFunctionPanelInteractionState = TransferFunctionPanelInteractionState()
     runtimeAppModel.transferFunctionPanelInteractionState = transferFunctionPanelInteractionState
     transferFunctionPanelInteractionState.updateChannelMask(

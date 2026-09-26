@@ -91,7 +91,9 @@ struct SettingsView: View {
   @State private var serverAddress = ""
   @State private var serverPort = String(BorgVRSharedDefaults.datasetServerPort)
   @State private var serverPassword = ""
+  @State private var shareNewServerViaSharePlay = false
   @State private var showDataDirectoryPicker = false
+  @State private var showClearOriginCacheConfirmation = false
   @State private var pendingResetSection: SettingsResetSection?
   @State private var selectedSettingsPage: SettingsPage = .dataSource
 
@@ -138,6 +140,18 @@ struct SettingsView: View {
       Button("Cancel", role: .cancel) {}
     } message: {
       Text(resetConfirmationMessage)
+    }
+    .confirmationDialog(
+      "Clear Dataset Origin Cache?",
+      isPresented: $showClearOriginCacheConfirmation,
+      titleVisibility: .visible
+    ) {
+      Button("Clear", role: .destructive) {
+        DatasetOriginCatalog.shared.clear()
+      }
+      Button("Cancel", role: .cancel) {}
+    } message: {
+      Text("BorgVR will forget all previously discovered dataset sources.")
     }
   }
 
@@ -229,6 +243,8 @@ struct SettingsView: View {
                        step: 0.1,
                        format: "%.1f")
       toggleRow("Randomized sample phase", isOn: $appSettings.sampleJitter)
+      toggleRow("Show Brick Visualization", isOn: $appSettings.showBrickVisualization)
+      toggleRow("Show Log Button", isOn: $appSettings.showLogButton)
       if appSettings.oversamplingMode == OversamplingMode.dynamicMode.rawValue {
         intStepperRow("Drop FPS",
                       value: $appSettings.dropFPS,
@@ -391,6 +407,29 @@ struct SettingsView: View {
         }
         .help("Add server")
       }
+      Toggle("Share source via SharePlay", isOn: $shareNewServerViaSharePlay)
+      Text("When enabled, the server address, port, and password may be sent to SharePlay participants so they can load shared datasets directly.")
+        .font(.callout)
+        .foregroundStyle(.secondary)
+        .fixedSize(horizontal: false, vertical: true)
+      Divider()
+        .padding(.vertical, 4)
+      Text("Loading")
+        .font(.headline)
+      doubleStepperRow(
+        "Timeout (seconds)",
+        value: $appSettings.timeout,
+        range: 0.1...120,
+        step: 0.5,
+        format: "%.1f"
+      )
+      toggleRow("Progressive loading", isOn: $appSettings.progressiveLoading)
+      toggleRow("Keep local copy", isOn: $appSettings.makeLocalCopy)
+      Button(role: .destructive) {
+        showClearOriginCacheConfirmation = true
+      } label: {
+        Label("Clear Dataset Origin Cache", systemImage: "trash")
+      }
       resetButton(for: .externalDataSources)
     }
   }
@@ -518,24 +557,44 @@ struct SettingsView: View {
       StoredServer(
         address: trimmedAddress,
         port: port,
-        password: serverPassword
+        password: serverPassword,
+        shareViaSharePlay: shareNewServerViaSharePlay
       )
     )
     serverAddress = ""
     serverPassword = ""
+    shareNewServerViaSharePlay = false
   }
 
   private func serverRow(for server: StoredServer) -> some View {
-    HStack {
-      Text(serverLabel(for: server))
-      Spacer()
-      Button(role: .destructive) {
-        removeRemoteServer(server)
-      } label: {
-        Image(systemName: "trash")
+    VStack(alignment: .leading, spacing: 6) {
+      HStack {
+        Text(serverLabel(for: server))
+        Spacer()
+        Toggle("Share source via SharePlay", isOn: serverSharingBinding(server))
+          .toggleStyle(.switch)
+        Button(role: .destructive) {
+          removeRemoteServer(server)
+        } label: {
+          Image(systemName: "trash")
+        }
+        .help("Remove server")
       }
-      .help("Remove server")
     }
+  }
+
+  private func serverSharingBinding(_ server: StoredServer) -> Binding<Bool> {
+    Binding(
+      get: { appSettings.servers.first(where: { $0.id == server.id })?.shareViaSharePlay ?? false },
+      set: { allowed in
+        guard let index = appSettings.servers.firstIndex(where: { $0.id == server.id }) else { return }
+        appSettings.servers[index].shareViaSharePlay = allowed
+        DatasetOriginCatalog.shared.setSharingAllowed(
+          allowed,
+          for: DatasetOrigin(address: server.address, port: server.port, password: server.password)
+        )
+      }
+    )
   }
 
   private func serverLabel(for server: StoredServer) -> String {
@@ -658,6 +717,10 @@ struct SettingsView: View {
   }
 
   private func removeRemoteServer(_ server: StoredServer) {
+    DatasetOriginCatalog.shared.setSharingAllowed(
+      false,
+      for: DatasetOrigin(address: server.address, port: server.port, password: server.password)
+    )
     appSettings.servers.removeAll { $0.id == server.id }
   }
 
@@ -679,7 +742,7 @@ struct SettingsView: View {
       case .adHocServer:
         storedAppModel.resetAdHocServerDefaults()
       case .externalDataSources:
-        appSettings.servers = []
+        appSettings.resetRemoteDefaults()
         serverAddress = ""
         serverPort = String(BorgVRSharedDefaults.datasetServerPort)
         serverPassword = ""

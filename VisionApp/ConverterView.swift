@@ -144,7 +144,11 @@ struct ConverterView: View {
               startConversion(description: datasetDescription)
             }
           } label: {
-            Text(mode == .copy ? "converter_copy_data" : "converter_start_conversion")
+            Text(
+              mode == .copy
+                ? String(localized: "converter_copy_data")
+                : String(localized: "converter_start_conversion")
+            )
           }
         }
         .disabled(isWorking || inputFile.isEmpty)

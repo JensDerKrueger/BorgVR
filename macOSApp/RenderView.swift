@@ -15,6 +15,8 @@ struct RenderView: View {
   @State private var transferSmoothWidth: Float = 0.3
   @State private var restoredDetachedPanelWindows: Set<DockablePanelID> = []
   @State private var markerDragID: UUID?
+  @State private var arcballStartLocation: CGPoint?
+  @State private var arcballStartOrientation: simd_quatf?
 
   private let modelRotationSensitivity: Float = 0.006
   private let clippingSensitivity: Float = 0.0012
@@ -36,7 +38,7 @@ struct RenderView: View {
       MacMetalView(
         onDragUpdate: applyInteractionDrag(update:),
         onDragEnded: finishInteractionGesture,
-        onPointerDown: beginMarkerInteraction(update:),
+        onPointerDown: beginInteraction(update:),
         onMagnificationDelta: applyMagnificationDelta(_:),
         onMagnificationEnded: finishInteractionGesture,
         onDoubleTap: toggleInteractionMode
@@ -114,6 +116,11 @@ struct RenderView: View {
     .onChange(of: renderingParameters.renderMode) {
       updateDetachedPanelWindows()
     }
+    .onChange(of: appSettings.showBrickVisualization) { _, isVisible in
+      guard !isVisible, renderingParameters.brickVis else { return }
+      renderingParameters.brickVis = false
+      sharePlay.synchronize(kind: .stateOnly)
+    }
   }
 
   @ViewBuilder
@@ -190,7 +197,11 @@ struct RenderView: View {
   private func applyInteractionDrag(update: RenderDragUpdate) {
     switch appModel.interactionMode {
       case .model:
-        rotateModel(by: update.delta)
+        if update.isDirectPointer {
+          rotateModel(to: update.location, in: update.viewSize)
+        } else {
+          rotateModelIncrementally(by: update.delta)
+        }
         synchronizeTransform()
       case .clipping:
         applyViewAlignedClipping(delta: update.delta)
@@ -220,8 +231,22 @@ struct RenderView: View {
   }
 
   private func finishInteractionGesture() {
+    arcballStartLocation = nil
+    arcballStartOrientation = nil
     markerDragID = nil
     sharePlay.flushSynchronization()
+  }
+
+  private func beginInteraction(update: RenderDragUpdate) {
+    switch appModel.interactionMode {
+      case .model:
+        arcballStartLocation = update.location
+        arcballStartOrientation = renderingParameters.orientation
+      case .marker:
+        beginMarkerInteraction(update: update)
+      case .clipping, .transferEditing:
+        break
+    }
   }
 
   private func beginMarkerInteraction(update: RenderDragUpdate) {
@@ -270,21 +295,23 @@ struct RenderView: View {
       screenPosition,
       appModel.volumeMarkers[index].position
     ) else { return }
-    appModel.volumeMarkers[index].position = position
+    let offset = position - appModel.volumeMarkers[index].position
+    for selectedIndex in appModel.volumeMarkers.indices
+      where appModel.selectedVolumeMarkerIDs.contains(appModel.volumeMarkers[selectedIndex].id) {
+      appModel.volumeMarkers[selectedIndex].translate(by: offset)
+    }
     sharePlay.synchronizeMarkers()
   }
 
   private func scaleSelectedMarker(by factor: Float) {
     guard let markerID = appModel.selectedVolumeMarkerID,
           let index = appModel.volumeMarkers.firstIndex(where: { $0.id == markerID }) else { return }
-    let markerKind = appModel.volumeMarkers[index].kind
-    let radius = VolumeMarkerRadius.clamp(
-      appModel.volumeMarkers[index].radius * factor,
-      for: markerKind
-    )
-    appModel.volumeMarkers[index].radius = radius
-    if markerKind == .sphere {
-      appModel.defaultVolumeMarkerRadius = radius
+    for selectedIndex in appModel.volumeMarkers.indices
+      where appModel.selectedVolumeMarkerIDs.contains(appModel.volumeMarkers[selectedIndex].id) {
+      appModel.volumeMarkers[selectedIndex].scaleRadii(by: factor)
+    }
+    if appModel.volumeMarkers[index].kind == .sphere {
+      appModel.defaultVolumeMarkerRadius = appModel.volumeMarkers[index].radius
     }
     sharePlay.synchronizeMarkers()
   }
@@ -297,7 +324,11 @@ struct RenderView: View {
             appModel.volumeMarkers[index].position,
             Float(scrollDelta) * markerDepthScrollSensitivity
           ) else { return }
-    appModel.volumeMarkers[index].position = position
+    let offset = position - appModel.volumeMarkers[index].position
+    for selectedIndex in appModel.volumeMarkers.indices
+      where appModel.selectedVolumeMarkerIDs.contains(appModel.volumeMarkers[selectedIndex].id) {
+      appModel.volumeMarkers[selectedIndex].translate(by: offset)
+    }
     sharePlay.synchronizeMarkers()
   }
 
@@ -347,7 +378,52 @@ struct RenderView: View {
     min(upperBound, max(lowerBound, value))
   }
 
-  private func rotateModel(by delta: CGSize) {
+  private func rotateModel(to current: CGPoint, in viewSize: CGSize) {
+    guard viewSize.width > 0,
+          viewSize.height > 0,
+          let start = arcballStartLocation,
+          let startOrientation = arcballStartOrientation else { return }
+
+    let startVector = arcballVector(at: start, in: viewSize)
+    let currentVector = arcballVector(at: current, in: viewSize)
+    let rotation = quaternionRotating(from: startVector, to: currentVector)
+    renderingParameters.orientation = simd_normalize(rotation * startOrientation)
+  }
+
+  private func arcballVector(at location: CGPoint, in viewSize: CGSize) -> SIMD3<Float> {
+    let radius = Float(max(1, min(viewSize.width, viewSize.height) * 0.5))
+    var vector = SIMD3<Float>(
+      (Float(location.x) - Float(viewSize.width) * 0.5) / radius,
+      (Float(location.y) - Float(viewSize.height) * 0.5) / radius,
+      0
+    )
+    let distanceSquared = vector.x * vector.x + vector.y * vector.y
+    if distanceSquared <= 1 {
+      vector.z = sqrt(1 - distanceSquared)
+      return vector
+    }
+    return simd_normalize(vector)
+  }
+
+  private func quaternionRotating(
+    from start: SIMD3<Float>,
+    to end: SIMD3<Float>
+  ) -> simd_quatf {
+    let cosine = min(1, max(-1, simd_dot(start, end)))
+    if cosine < -0.9999 {
+      let reference = abs(start.x) < 0.9
+        ? SIMD3<Float>(1, 0, 0)
+        : SIMD3<Float>(0, 1, 0)
+      return simd_quatf(angle: .pi, axis: simd_normalize(simd_cross(start, reference)))
+    }
+
+    let axis = simd_cross(start, end)
+    return simd_normalize(
+      simd_quatf(ix: axis.x, iy: axis.y, iz: axis.z, r: 1 + cosine)
+    )
+  }
+
+  private func rotateModelIncrementally(by delta: CGSize) {
     let xAngle = Float(delta.height) * modelRotationSensitivity
     let yAngle = Float(delta.width) * modelRotationSensitivity
     guard xAngle != 0 || yAngle != 0 else { return }

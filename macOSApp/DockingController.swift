@@ -252,8 +252,16 @@ struct DockToggleButton: View {
     } label: {
       Image(systemName: docking.isDetached(panel) ? panel.detachedIcon : panel.dockedIcon)
     }
-    .help(docking.isDetached(panel) ? "Dock panel" : "Detach panel")
-    .accessibilityLabel(docking.isDetached(panel) ? "Dock panel" : "Detach panel")
+    .help(
+      docking.isDetached(panel)
+        ? String(localized: "Dock panel")
+        : String(localized: "Detach panel")
+    )
+    .accessibilityLabel(
+      docking.isDetached(panel)
+        ? String(localized: "Dock panel")
+        : String(localized: "Detach panel")
+    )
     .buttonStyle(.bordered)
   }
 }

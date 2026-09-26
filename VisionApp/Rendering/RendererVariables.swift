@@ -55,6 +55,8 @@ final actor Renderer {
   var pipelineStateBrickVis: MTLRenderPipelineState
   /// Render pipeline state for opaque volume markers.
   var pipelineStateVolumeMarker: MTLRenderPipelineState
+  /// Render pipeline state for screen-view participant labels.
+  var pipelineStateScreenViewLabel: MTLRenderPipelineState
   /// Render pipeline state for compositing marker color under the volume.
   var pipelineStateMarkerComposite: MTLRenderPipelineState
   /// Depth stencil state for rendering.
@@ -115,6 +117,8 @@ final actor Renderer {
   let markerSphereVertexCount: Int
   /// Cached tube meshes for stroke markers.
   let markerTubeMeshCache: VolumeMarkerTubeMeshCache
+  /// Cached label textures for shared and detached screen views.
+  let screenViewLabelTextureCache: ScreenViewLabelTextureCache
   /// Color texture produced by the marker prepass.
   var markerColorTexture: MTLTexture?
   /// Depth texture produced by the marker prepass.
@@ -233,6 +237,7 @@ final actor Renderer {
     self.lastSpatialStylusPreviewShareTime = 0
     self.spatialStylusRadiusAdjustmentStart = nil
     self.markerTubeMeshCache = VolumeMarkerTubeMeshCache()
+    self.screenViewLabelTextureCache = ScreenViewLabelTextureCache()
     self.sharedAppModel.defaultVolumeStrokeColor = SharedAppModel.saturatedStrokeColor(
       preservingHueOf: storedAppModel.markerDefaultColorSIMD
     )
@@ -309,6 +314,7 @@ final actor Renderer {
        pipelineStateIso,
        pipelineStateBrickVis,
        pipelineStateVolumeMarker,
+       pipelineStateScreenViewLabel,
        pipelineStateMarkerComposite,
        pipelineStateTFHUD,
        pipelineStateTFHUDControls) =
@@ -413,16 +419,16 @@ final actor Renderer {
 
   deinit {
     logger?.dev("Renderer deinitialized")
-    // TODO: figure out a better way to detect that the immersive space
-    //       has been closed due to external circumstances, such as pressing
-    //       home
-
     borgARProvider.stopARSession()
     let model = runtimeAppModel
     Task { @MainActor in
-      model.currentState = .selectData
-      model.activeDataset = nil
-      model.groupSessionHost = false
+      model.immersiveSpaceState = .closed
+      if model.immersiveSpaceIntent == .keepCurrent {
+        // The system can destroy the renderer directly when the user presses Home.
+        // Route that through the regular close path so SharePlay participants are
+        // notified before the dataset selection is shown.
+        model.immersiveSpaceIntent = .close
+      }
     }
   }
 

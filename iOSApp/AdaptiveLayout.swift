@@ -39,6 +39,10 @@ struct AdaptiveLayout {
     .overlayTop
   }
 
+  var usesCompactRenderModeLabels: Bool {
+    size.width < 600
+  }
+
   init(
     size: CGSize,
     safeAreaInsets: EdgeInsets,

@@ -294,17 +294,29 @@ struct OpenDatasetView: View {
                         )
 
                       case let .remote(addr, port, password):
+                        guard let resolvedDataset = await resolveRemoteDataset(
+                          datasets[index],
+                          fallback: DatasetOrigin(address: addr, port: port, password: password)
+                        ) else {
+                          runtimeAppModel.logger.error(
+                            "The dataset is not available from any known source."
+                          )
+                          return
+                        }
                         if storedAppModel.progressiveLoading {
                           runtimeAppModel.startImmersiveSpace(
-                            dataset: datasets[index],
+                            dataset: resolvedDataset,
                             asGroupSessionHost: true
                           )
                         } else {
+                          guard case let .remote(resolvedAddress, resolvedPort, resolvedPassword) = resolvedDataset.source else {
+                            return
+                          }
                           downloadAndOpenSpace(
-                            datasetID: datasets[index].identifier,
-                            serverAddress: addr,
-                            serverPort: port,
-                            authSecret: password,
+                            datasetID: resolvedDataset.identifier,
+                            serverAddress: resolvedAddress,
+                            serverPort: resolvedPort,
+                            authSecret: resolvedPassword,
                             asGroupSessionHost: true
                           )
                         }
@@ -509,6 +521,11 @@ struct OpenDatasetView: View {
             )
           }
           let remoteDatasets = try manager.requestDatasetList()
+          DatasetOriginCatalog.shared.recordServerSnapshot(
+            origin: DatasetOrigin(address: server.address, port: server.port, password: server.password),
+            datasetIDs: remoteDatasets.map(\.id),
+            allowsSharing: server.shareViaSharePlay
+          )
           for dataset in remoteDatasets {
             datasets.append(
               RuntimeAppModel.DatasetEntry(
@@ -539,6 +556,44 @@ struct OpenDatasetView: View {
 
 
     return datasets
+  }
+
+  private func resolveRemoteDataset(
+    _ dataset: RuntimeAppModel.DatasetEntry,
+    fallback: DatasetOrigin
+  ) async -> RuntimeAppModel.DatasetEntry? {
+    let origins = DatasetOriginCatalog.deduplicated(
+      [fallback] + DatasetOriginCatalog.shared.origins(for: dataset.uniqueId)
+    )
+    let timeout = storedAppModel.timeout
+
+    for origin in origins {
+      let remoteDatasets = try? await Task.detached(priority: .userInitiated) {
+        let manager = BORGVRRemoteDataManager(
+          host: origin.address,
+          port: UInt16(clamping: origin.port),
+          authSecret: origin.password,
+          logger: nil,
+          notifier: nil
+        )
+        try manager.connect(timeout: timeout)
+        return try manager.requestDatasetList()
+      }.value
+      guard let remoteDatasets else { continue }
+      DatasetOriginCatalog.shared.recordServerSnapshot(
+        origin: origin,
+        datasetIDs: remoteDatasets.map(\.id),
+        allowsSharing: DatasetOriginCatalog.shared.sharingAllowed(for: origin)
+      )
+      guard remoteDatasets.contains(where: { $0.id == dataset.uniqueId }) else { continue }
+      return RuntimeAppModel.DatasetEntry(
+        identifier: dataset.uniqueId,
+        description: dataset.description,
+        source: .remote(address: origin.address, port: origin.port, password: origin.password),
+        uniqueId: dataset.uniqueId
+      )
+    }
+    return nil
   }
 
   private func iconForDatasetType(type: RuntimeAppModel.DatasetSource) -> String {

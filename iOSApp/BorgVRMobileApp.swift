@@ -8,11 +8,45 @@ struct BorgVRMobileApp: App {
   @StateObject private var sharePlay = SharePlayCoordinator()
   @StateObject private var serverController = BackgroundServerController()
   @StateObject private var updateChecker = AppStoreUpdateChecker()
+  @AppStorage("sharePlayDisplayNameOnboardingCompleted")
+  private var sharePlayDisplayNameOnboardingCompleted = false
+  @State private var showsSharePlayDisplayNameOnboarding = false
+  @State private var sharePlayDisplayNameDraft = ""
 
   var body: some Scene {
     WindowGroup {
       ContentView()
         .appStoreUpdateAlert(using: updateChecker)
+        .alert(
+          "Choose your SharePlay name",
+          isPresented: $showsSharePlayDisplayNameOnboarding
+        ) {
+          TextField("Display name", text: $sharePlayDisplayNameDraft)
+          Button("Continue") {
+            appSettings.sharePlayDisplayName = sharePlayDisplayNameDraft
+              .trimmingCharacters(in: .whitespacesAndNewlines)
+            sharePlayDisplayNameOnboardingCompleted = true
+          }
+          .disabled(sharePlayDisplayNameDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        } message: {
+          Text("What name should other people see for you in shared SharePlay sessions? You can change it later in Settings.")
+        }
+        .alert(
+          "SharePlay Host Left",
+          isPresented: $sharePlay.showsHostDeparturePrompt
+        ) {
+          Button("Take Over Host Role") {
+            sharePlay.takeOverHostRole()
+          }
+          Button("Leave Session", role: .destructive) {
+            sharePlay.leaveGroupActivity()
+          }
+          Button("Ignore", role: .cancel) {
+            sharePlay.ignoreHostDeparture()
+          }
+        } message: {
+          Text("The SharePlay host left the session. You can take over the host role, leave the session, or continue without a host.")
+        }
         .environmentObject(appModel)
         .environmentObject(renderingParameters)
         .environmentObject(appSettings)
@@ -24,6 +58,7 @@ struct BorgVRMobileApp: App {
         }
         .onAppear {
           appModel.setLogLevel(appSettings.logLevel)
+          presentSharePlayDisplayNameOnboardingIfNeeded()
         }
         .onChange(of: appSettings.logLevel) { _, newValue in
           appModel.setLogLevel(newValue)
@@ -82,6 +117,17 @@ struct BorgVRMobileApp: App {
           )
         }
     }
+  }
+
+  private func presentSharePlayDisplayNameOnboardingIfNeeded() {
+    guard !sharePlayDisplayNameOnboardingCompleted else { return }
+    let configuredName = appSettings.sharePlayDisplayName.trimmingCharacters(in: .whitespacesAndNewlines)
+    if !configuredName.isEmpty {
+      sharePlayDisplayNameOnboardingCompleted = true
+      return
+    }
+    sharePlayDisplayNameDraft = UIDevice.current.name
+    showsSharePlayDisplayNameOnboarding = true
   }
 
   private func openExternalDataset(_ url: URL) {

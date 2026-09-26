@@ -100,6 +100,9 @@
 		57A001712E99000500000001 /* AppStoreUpdateChecker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001702E99000500000001 /* AppStoreUpdateChecker.swift */; };
 		57A001722E99000500000001 /* AppStoreUpdateChecker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001702E99000500000001 /* AppStoreUpdateChecker.swift */; };
 		57A001732E99000500000001 /* AppStoreUpdateChecker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001702E99000500000001 /* AppStoreUpdateChecker.swift */; };
+		57A001752E99000600000001 /* DatasetOriginCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001742E99000600000001 /* DatasetOriginCatalog.swift */; };
+		57A001762E99000600000001 /* DatasetOriginCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001742E99000600000001 /* DatasetOriginCatalog.swift */; };
+		57A001772E99000600000001 /* DatasetOriginCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001742E99000600000001 /* DatasetOriginCatalog.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -167,6 +170,7 @@
 		57A001682E99000300000001 /* VolumeMarker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VolumeMarker.swift; sourceTree = "<group>"; };
 		57A0016C2E99000400000001 /* VolumeMarkerTubeMesh.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VolumeMarkerTubeMesh.swift; sourceTree = "<group>"; };
 		57A001702E99000500000001 /* AppStoreUpdateChecker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStoreUpdateChecker.swift; sourceTree = "<group>"; };
+		57A001742E99000600000001 /* DatasetOriginCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DatasetOriginCatalog.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -449,6 +453,7 @@
 				57A001202E70000300000001 /* AppModel.swift */,
 				57A001212E70000300000001 /* AppSettings.swift */,
 				57A001702E99000500000001 /* AppStoreUpdateChecker.swift */,
+				57A001742E99000600000001 /* DatasetOriginCatalog.swift */,
 				57A001282E70000300000001 /* DatasetInfoView.swift */,
 				57A001292E70000300000001 /* ExternalDatasetImporter.swift */,
 				57A000202E70000200000001 /* FilePickerView.swift */,
@@ -816,6 +821,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				57A001712E99000500000001 /* AppStoreUpdateChecker.swift in Sources */,
+				57A001752E99000600000001 /* DatasetOriginCatalog.swift in Sources */,
 				57A000302E70000200000001 /* FilePickerView.swift in Sources */,
 				57A000312E70000200000001 /* GPUHashtable.swift in Sources */,
 				57A001302E70000300000001 /* AppModel.swift in Sources */,
@@ -853,6 +859,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				57A001722E99000500000001 /* AppStoreUpdateChecker.swift in Sources */,
+				57A001762E99000600000001 /* DatasetOriginCatalog.swift in Sources */,
 				57A000342E70000200000001 /* GPUHashtable.swift in Sources */,
 				57A001382E70000300000001 /* AppModel.swift in Sources */,
 				57A001392E70000300000001 /* AppSettings.swift in Sources */,
@@ -882,6 +889,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				57A001732E99000500000001 /* AppStoreUpdateChecker.swift in Sources */,
+				57A001772E99000600000001 /* DatasetOriginCatalog.swift in Sources */,
 				57A000372E70000200000001 /* FilePickerView.swift in Sources */,
 				57A000382E70000200000001 /* GPUHashtable.swift in Sources */,
 				57A0014E2E70000300000001 /* KeychainSecretStore.swift in Sources */,
@@ -924,7 +932,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = iOSApp/BorgVRMobile.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 6;
+				CURRENT_PROJECT_VERSION = 7;
 				DEVELOPMENT_ASSET_PATHS = "";
 				DEVELOPMENT_TEAM = L8Q6MVX7ZF;
 				ENABLE_PREVIEWS = YES;
@@ -942,7 +950,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.3;
+				MARKETING_VERSION = 2.4;
 				PRODUCT_BUNDLE_IDENTIFIER = "de.uni-due.BorgVRVisionApp";
 				PRODUCT_NAME = "BorgVR Mobile";
 				SDKROOT = iphoneos;
@@ -961,7 +969,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = iOSApp/BorgVRMobile.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 6;
+				CURRENT_PROJECT_VERSION = 7;
 				DEVELOPMENT_ASSET_PATHS = "";
 				DEVELOPMENT_TEAM = L8Q6MVX7ZF;
 				ENABLE_PREVIEWS = YES;
@@ -979,7 +987,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.3;
+				MARKETING_VERSION = 2.4;
 				PRODUCT_BUNDLE_IDENTIFIER = "de.uni-due.BorgVRVisionApp";
 				PRODUCT_NAME = "BorgVR Mobile";
 				SDKROOT = iphoneos;
@@ -1032,7 +1040,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 12;
+				CURRENT_PROJECT_VERSION = 13;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -1048,7 +1056,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.2;
-				MARKETING_VERSION = 2.3;
+				MARKETING_VERSION = 2.4;
 				PRODUCT_BUNDLE_IDENTIFIER = "de.uni-due.BorgVRVisionApp";
 				PRODUCT_NAME = BorgVR;
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -1068,7 +1076,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 12;
+				CURRENT_PROJECT_VERSION = 13;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -1084,7 +1092,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.2;
-				MARKETING_VERSION = 2.3;
+				MARKETING_VERSION = 2.4;
 				PRODUCT_BUNDLE_IDENTIFIER = "de.uni-due.BorgVRVisionApp";
 				PRODUCT_NAME = BorgVR;
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -1103,7 +1111,7 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = VisionApp/VisionApp.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 12;
+				CURRENT_PROJECT_VERSION = 13;
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -1119,7 +1127,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.3;
+				MARKETING_VERSION = 2.4;
 				PRODUCT_BUNDLE_IDENTIFIER = "de.uni-due.BorgVRVisionApp";
 				PRODUCT_NAME = BorgVR;
 				SDKROOT = xros;
@@ -1140,7 +1148,7 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = VisionApp/VisionApp.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 12;
+				CURRENT_PROJECT_VERSION = 13;
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -1156,7 +1164,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.3;
+				MARKETING_VERSION = 2.4;
 				PRODUCT_BUNDLE_IDENTIFIER = "de.uni-due.BorgVRVisionApp";
 				PRODUCT_NAME = BorgVR;
 				SDKROOT = xros;
@@ -1193,7 +1201,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.2;
-				MARKETING_VERSION = 2.3;
+				MARKETING_VERSION = 2.4;
 				PRODUCT_BUNDLE_IDENTIFIER = "de.uni-due.macOSServer";
 				PRODUCT_NAME = "BorgVR Server";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -1225,7 +1233,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.2;
-				MARKETING_VERSION = 2.3;
+				MARKETING_VERSION = 2.4;
 				PRODUCT_BUNDLE_IDENTIFIER = "de.uni-due.macOSServer";
 				PRODUCT_NAME = "BorgVR Server";
 				PROVISIONING_PROFILE_SPECIFIER = "";

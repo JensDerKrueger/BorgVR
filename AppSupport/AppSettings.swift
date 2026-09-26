@@ -62,12 +62,20 @@ struct StoredServer: Identifiable, Codable, Equatable {
   var address: String
   var port: Int
   var password: String = ""
+  var shareViaSharePlay: Bool = false
 
-  init(id: UUID = UUID(), address: String, port: Int, password: String = "") {
+  init(
+    id: UUID = UUID(),
+    address: String,
+    port: Int,
+    password: String = "",
+    shareViaSharePlay: Bool = false
+  ) {
     self.id = id
     self.address = address
     self.port = port
     self.password = password
+    self.shareViaSharePlay = shareViaSharePlay
   }
 
   private enum CodingKeys: String, CodingKey {
@@ -75,6 +83,7 @@ struct StoredServer: Identifiable, Codable, Equatable {
     case address
     case port
     case password
+    case shareViaSharePlay
   }
 
   init(from decoder: Decoder) throws {
@@ -83,6 +92,7 @@ struct StoredServer: Identifiable, Codable, Equatable {
     address = try container.decode(String.self, forKey: .address)
     port = try container.decode(Int.self, forKey: .port)
     password = try container.decodeIfPresent(String.self, forKey: .password) ?? ""
+    shareViaSharePlay = try container.decodeIfPresent(Bool.self, forKey: .shareViaSharePlay) ?? false
   }
 }
 
@@ -132,6 +142,8 @@ final class AppSettings: ObservableObject {
     "atlasSizeMB": defaultAtlasSizeMB,
     "oversampling": 1.0,
     "sampleJitter": false,
+    "showBrickVisualization": false,
+    "showLogButton": false,
     "oversamplingMode": OversamplingMode.dynamicMode.rawValue,
     "dropFPS": 20,
     "recoveryFPS": 100,
@@ -187,6 +199,9 @@ final class AppSettings: ObservableObject {
   @AppStorage("atlasSizeMB") var atlasSizeMB: Int = AppSettings.int("atlasSizeMB")
   @AppStorage("oversampling") var oversampling: Double = AppSettings.double("oversampling")
   @AppStorage("sampleJitter") var sampleJitter: Bool = AppSettings.bool("sampleJitter")
+  @AppStorage("showBrickVisualization")
+  var showBrickVisualization: Bool = AppSettings.bool("showBrickVisualization")
+  @AppStorage("showLogButton") var showLogButton: Bool = AppSettings.bool("showLogButton")
   @AppStorage("oversamplingMode") var oversamplingMode: String = AppSettings.string("oversamplingMode")
   @AppStorage("dropFPS") var dropFPS: Int = AppSettings.int("dropFPS")
   @AppStorage("recoveryFPS") var recoveryFPS: Int = AppSettings.int("recoveryFPS")
@@ -319,6 +334,8 @@ final class AppSettings: ObservableObject {
     autoloadTransform = Self.boolDefault("autoloadTransform")
     oversampling = Self.doubleDefault("oversampling")
     sampleJitter = Self.boolDefault("sampleJitter")
+    showBrickVisualization = Self.boolDefault("showBrickVisualization")
+    showLogButton = Self.boolDefault("showLogButton")
     oversamplingMode = Self.stringDefault("oversamplingMode")
     dropFPS = Self.intDefault("dropFPS")
     recoveryFPS = Self.intDefault("recoveryFPS")

@@ -14,10 +14,14 @@ struct WaitingView: View {
         .frame(width: 140, height: 140)
         .clipShape(RoundedRectangle(cornerRadius: 8))
 
-      Text("Waiting for SharePlay Host")
+      Text(appModel.sharePlayWaitingReason == .datasetSource
+        ? "No Data Source Available"
+        : "Waiting for SharePlay Host")
         .font(.title2.bold())
 
-      Text("Waiting for the host to select and open a dataset.")
+      Text(appModel.sharePlayWaitingReason == .datasetSource
+        ? "The current dataset is not available from any known source. BorgVR is waiting for a participant to provide one."
+        : "Waiting for the host to select and open a dataset.")
         .font(.body)
         .multilineTextAlignment(.center)
         .foregroundStyle(.secondary)

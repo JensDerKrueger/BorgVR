@@ -21,11 +21,11 @@ class ImmersiveInteraction {
   private var transferFunctionPanelMarkerSuppressed = false
   private var transferFunctionPanelChannelToggleActive = false
   private var markerDragID: UUID?
-  private var markerDragStartPosition: SIMD3<Float> = .zero
+  private var markerDragStartPositions: [UUID: SIMD3<Float>] = [:]
   private var markerDragHandStart: SIMD3<Float>?
   private var markerScaleID: UUID?
   private var markerScaleStartDistance: Float = 0
-  private var markerScaleStartRadius = VolumeMarkerRadius.sphereDefault
+  private var markerScaleStartRadii: [UUID: Float] = [:]
   private var quickMarkerDragActive = false
   private var quickMarkerCandidateTime: Date?
   private var quickMarkerCandidatePosition: SIMD3<Float>?
@@ -453,9 +453,9 @@ class ImmersiveInteraction {
   ) {
     sharedAppModel.volumeMarkers.append(marker)
     markerDragID = marker.id
-    markerDragStartPosition = marker.position
     markerDragHandStart = inputWorldPosition(from: event)
     sharedAppModel.selectedVolumeMarkerID = marker.id
+    captureMarkerDragStartPositions()
     sharedAppModel.synchronizeMarkers()
   }
 
@@ -492,9 +492,9 @@ class ImmersiveInteraction {
             datasetInfo: datasetInfo
           ) {
             markerDragID = existingMarker.id
-            markerDragStartPosition = existingMarker.position
             markerDragHandStart = inputWorldPosition(from: event)
             sharedAppModel.selectedVolumeMarkerID = existingMarker.id
+            captureMarkerDragStartPositions()
           } else if let spawnPosition = markerSpawnPosition(from: event, datasetInfo: datasetInfo),
                     let directionRay = selectionRay {
             beginMarkerDrag(
@@ -510,8 +510,7 @@ class ImmersiveInteraction {
           }
         }
 
-        guard let markerDragID,
-              let markerIndex = sharedAppModel.volumeMarkers.firstIndex(where: { $0.id == markerDragID }) else {
+        guard markerDragID != nil else {
           return
         }
 
@@ -519,23 +518,29 @@ class ImmersiveInteraction {
            let handPosition = inputWorldPosition(from: event) {
           let inverseVolume = markerVolumeMatrix(for: datasetInfo).inverse
           let localDelta = inverseVolume.transformDirection(handPosition - handStart)
-          sharedAppModel.volumeMarkers[markerIndex].position = clamp(
-            markerDragStartPosition + localDelta,
-            BorgVRMarkerFormat.positionRange.lowerBound,
-            BorgVRMarkerFormat.positionRange.upperBound
-          )
+          for index in sharedAppModel.volumeMarkers.indices {
+            let markerID = sharedAppModel.volumeMarkers[index].id
+            guard let startPosition = markerDragStartPositions[markerID] else { continue }
+            sharedAppModel.volumeMarkers[index].position = clamp(
+              startPosition + localDelta,
+              BorgVRMarkerFormat.positionRange.lowerBound,
+              BorgVRMarkerFormat.positionRange.upperBound
+            )
+          }
           sharedAppModel.synchronizeMarkers()
         }
 
       case .ended, .cancelled:
         if markerDragID != nil {
           markerDragID = nil
+          markerDragStartPositions.removeAll()
           markerDragHandStart = nil
           quickMarkerDragActive = false
           sharedAppModel.synchronizeMarkers()
         }
       @unknown default:
         markerDragID = nil
+        markerDragStartPositions.removeAll()
         markerDragHandStart = nil
         quickMarkerDragActive = false
     }
@@ -555,6 +560,7 @@ class ImmersiveInteraction {
     if activePositions.count < 2 {
       markerScaleID = nil
       markerScaleStartDistance = 0
+      markerScaleStartRadii.removeAll()
       return
     }
 
@@ -574,8 +580,10 @@ class ImmersiveInteraction {
       }
       markerScaleID = targetMarker.id
       markerScaleStartDistance = distance
-      markerScaleStartRadius = targetMarker.radius
       sharedAppModel.selectedVolumeMarkerID = targetMarker.id
+      markerScaleStartRadii = Dictionary(uniqueKeysWithValues: sharedAppModel.volumeMarkers.compactMap {
+        sharedAppModel.selectedVolumeMarkerIDs.contains($0.id) ? ($0.id, $0.radius) : nil
+      })
     }
 
     guard let markerScaleID,
@@ -584,23 +592,32 @@ class ImmersiveInteraction {
       return
     }
 
+    let factor = distance / markerScaleStartDistance
+    for index in sharedAppModel.volumeMarkers.indices {
+      let markerID = sharedAppModel.volumeMarkers[index].id
+      guard let startRadius = markerScaleStartRadii[markerID] else { continue }
+      sharedAppModel.volumeMarkers[index].radius = startRadius * factor
+    }
     let markerKind = sharedAppModel.volumeMarkers[markerIndex].kind
-    let radius = VolumeMarkerRadius.clamp(
-      markerScaleStartRadius * distance / markerScaleStartDistance,
-      for: markerKind
-    )
-    sharedAppModel.volumeMarkers[markerIndex].radius = radius
+    let primaryRadius = sharedAppModel.volumeMarkers[markerIndex].radius
     if markerKind == .sphere {
-      sharedAppModel.defaultVolumeMarkerRadius = radius
+      sharedAppModel.defaultVolumeMarkerRadius = primaryRadius
     } else {
-      sharedAppModel.defaultVolumeStrokeRadius = radius
+      sharedAppModel.defaultVolumeStrokeRadius = primaryRadius
     }
     sharedAppModel.synchronizeMarkers()
 
     if events.contains(where: { $0.phase == .ended || $0.phase == .cancelled }) {
       self.markerScaleID = nil
       markerScaleStartDistance = 0
+      markerScaleStartRadii.removeAll()
     }
+  }
+
+  private func captureMarkerDragStartPositions() {
+    markerDragStartPositions = Dictionary(uniqueKeysWithValues: sharedAppModel.volumeMarkers.compactMap {
+      sharedAppModel.selectedVolumeMarkerIDs.contains($0.id) ? ($0.id, $0.position) : nil
+    })
   }
 
   private func selectedMarker() -> VolumeMarker? {

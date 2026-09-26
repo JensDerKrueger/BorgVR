@@ -4,6 +4,7 @@ private enum RemoteDatasetOpenError: LocalizedError {
   case documentsDirectoryUnavailable
   case downloadStalled
   case downloadCancelled
+  case noReachableOrigin
 
   var errorDescription: String? {
     switch self {
@@ -13,6 +14,8 @@ private enum RemoteDatasetOpenError: LocalizedError {
         return String(localized: "The remote download is no longer making progress.")
       case .downloadCancelled:
         return String(localized: "The remote download was paused.")
+      case .noReachableOrigin:
+        return String(localized: "The dataset is not available from any known source.")
     }
   }
 }
@@ -63,7 +66,10 @@ struct OpenDatasetView: View {
           ContentUnavailableView(
             "No datasets found",
             systemImage: "externaldrive.badge.questionmark",
-            description: Text(dataDirectoryAccessMessage ?? "Import a dataset or configure a remote server in Settings.")
+            description: Text(
+              dataDirectoryAccessMessage
+                ?? String(localized: "Import a dataset or configure a remote server in Settings.")
+            )
           )
           .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
@@ -293,17 +299,18 @@ struct OpenDatasetView: View {
     }
 
     do {
-      if case .remote = dataset.source, !appSettings.progressiveLoading {
+      let resolvedDataset = try await resolveRemoteDataset(dataset)
+      if case .remote = resolvedDataset.source, !appSettings.progressiveLoading {
         let cancellation = RemoteDatasetDownloadCancellation()
         downloadCancellation = cancellation
         let localDataset = try await downloadRemoteDatasetBeforeOpening(
-          dataset,
+          resolvedDataset,
           cancellation: cancellation
         )
         openDataset(localDataset)
       } else {
-        try await validateDatasetCanOpen(dataset)
-        openDataset(dataset)
+        try await validateDatasetCanOpen(resolvedDataset)
+        openDataset(resolvedDataset)
       }
     } catch RemoteDatasetOpenError.downloadCancelled {
       appModel.logger.info(String(localized: "Remote dataset download paused."))
@@ -312,6 +319,44 @@ struct OpenDatasetView: View {
       openErrorMessage = "\(dataset.description)\n\n\(error.localizedDescription)"
       removeUnavailableRemoteEntries(matching: dataset)
     }
+  }
+
+  private func resolveRemoteDataset(_ dataset: AppModel.DatasetEntry) async throws -> AppModel.DatasetEntry {
+    guard case let .remote(address, port, password) = dataset.source else { return dataset }
+    let selectedOrigin = DatasetOrigin(address: address, port: port, password: password)
+    let origins = DatasetOriginCatalog.deduplicated(
+      [selectedOrigin] + DatasetOriginCatalog.shared.origins(for: dataset.uniqueId)
+    )
+    let timeout = appSettings.timeout
+
+    for origin in origins {
+      let datasets = try? await Task.detached(priority: .userInitiated) {
+        let manager = BORGVRRemoteDataManager(
+          host: origin.address,
+          port: UInt16(clamping: origin.port),
+          authSecret: origin.password,
+          logger: nil,
+          notifier: nil
+        )
+        try manager.connect(timeout: timeout)
+        return try manager.requestDatasetList()
+      }.value
+      guard let datasets else { continue }
+      DatasetOriginCatalog.shared.recordServerSnapshot(
+        origin: origin,
+        datasetIDs: datasets.map(\.id),
+        allowsSharing: DatasetOriginCatalog.shared.sharingAllowed(for: origin)
+      )
+      guard datasets.contains(where: { $0.id == dataset.uniqueId }) else { continue }
+      return AppModel.DatasetEntry(
+        identifier: dataset.uniqueId,
+        description: dataset.description,
+        source: .remote(address: origin.address, port: origin.port, password: origin.password),
+        uniqueId: dataset.uniqueId,
+        metadataSummary: dataset.metadataSummary
+      )
+    }
+    throw RemoteDatasetOpenError.noReachableOrigin
   }
 
   private func openDataset(_ dataset: AppModel.DatasetEntry) {
@@ -608,7 +653,13 @@ struct OpenDatasetView: View {
           } catch {
             logger.warning("Marker file sync failed for \(server.address):\(server.port): \(error.localizedDescription)")
           }
-          for dataset in try manager.requestDatasetList() {
+          let remoteDatasets = try manager.requestDatasetList()
+          DatasetOriginCatalog.shared.recordServerSnapshot(
+            origin: DatasetOrigin(address: server.address, port: server.port, password: server.password),
+            datasetIDs: remoteDatasets.map(\.id),
+            allowsSharing: server.shareViaSharePlay
+          )
+          for dataset in remoteDatasets {
             loaded.append(
               AppModel.DatasetEntry(
                 identifier: dataset.id,

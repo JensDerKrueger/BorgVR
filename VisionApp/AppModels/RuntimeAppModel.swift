@@ -58,6 +58,8 @@ class RuntimeAppModel {
   var performanceModel: PerformanceGraphModel = PerformanceGraphModel()
 
   var groupSessionHost : Bool = false
+  var sharePlayWaitingReason: SharePlayWaitingReason = .hostDataset
+  var showsHostDeparturePrompt = false
 
   /**
    Represents the possible content view states.

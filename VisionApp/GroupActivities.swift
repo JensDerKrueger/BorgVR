@@ -48,6 +48,20 @@ class GroupActivityHelper {
   private var sharePlayAuthToken = ""
   private var sharePlayServerRunning = false
   private var sharePlayServerPort = StoredAppModel.int("sharePlayServerPort")
+  private struct PendingDatasetLoad {
+    let uniqueID: String
+    let description: String
+    let generation: Int
+  }
+  private var pendingDatasetLoad: PendingDatasetLoad?
+  private var pendingDatasetLoadTask: Task<Void, Never>?
+  private var sessionOriginsByDatasetID: [String: [DatasetOrigin]] = [:]
+  private var adHocOriginsByParticipantID: [UUID: [String: [DatasetOrigin]]] = [:]
+  private var localParticipantID: UUID?
+  private var currentHostParticipantID: UUID?
+  private var hostElectionTerm: UInt64 = 0
+  private var hostClaims: [UInt64: Set<UUID>] = [:]
+  private var hostElectionTask: Task<Void, Never>?
 
   init(_ sharedAppModel: SharedAppModel) {
     self.sharedAppModel = sharedAppModel
@@ -61,15 +75,20 @@ class GroupActivityHelper {
     groupSession != nil
   }
 
+  @MainActor func datasetRendererDidLoad() {
+    guard groupSession != nil, let runtimeAppModel else { return }
+    if runtimeAppModel.groupSessionHost {
+      Task { await sendInitialDataReliably() }
+    } else {
+      Task { await requestInitialStateReliably() }
+    }
+  }
+
   @MainActor func leaveGroupActivity() {
     guard let runtimeAppModel else { return }
 
     stopSharePlayServer()
-    if runtimeAppModel.groupSessionHost {
-      self.groupSession?.end()
-    } else {
-      self.groupSession?.leave()
-    }
+    self.groupSession?.leave()
     runtimeAppModel.groupSessionHost = false
     resetSessionReceivers()
   }
@@ -80,7 +99,7 @@ class GroupActivityHelper {
     self.storedAppModel = storedAppModel
     for await session in BorgVRActivity.sessions() {
       await runtimeAppModel.logger.dev("Received groupsession")
-      resetSessionReceivers()
+      await resetSessionReceivers()
       sessionGeneration += 1
       let generation = sessionGeneration
 
@@ -95,12 +114,17 @@ class GroupActivityHelper {
       await MainActor.run {
         runtimeAppModel.groupSessionHost = localUserStartedActivity
       }
+      localParticipantID = session.localParticipant.id
+      currentHostParticipantID = localUserStartedActivity ? session.localParticipant.id : nil
+      hostElectionTerm = 0
       knownParticipants = session.activeParticipants
 
       session.$activeParticipants
         .sink { activeParticipants in
           guard generation == self.sessionGeneration else { return }
+          let previousParticipants = self.knownParticipants
           let newParticipants = activeParticipants.subtracting(self.knownParticipants)
+          let departedParticipants = previousParticipants.subtracting(activeParticipants)
           self.knownParticipants = activeParticipants
           let activeIDs = Set(activeParticipants.map(\.id))
           self.participantInfoByID = self.participantInfoByID.filter {
@@ -109,7 +133,19 @@ class GroupActivityHelper {
           self.screenViewStateByParticipantID = self.screenViewStateByParticipantID.filter {
             activeIDs.contains($0.key)
           }
+          self.adHocOriginsByParticipantID = self.adHocOriginsByParticipantID.filter {
+            activeIDs.contains($0.key)
+          }
           Task { @MainActor in
+            if !newParticipants.isEmpty || !departedParticipants.isEmpty {
+              let joinedIDs = newParticipants.map { $0.id.uuidString }.sorted().joined(separator: ", ")
+              let departedIDs = departedParticipants.map { $0.id.uuidString }.sorted().joined(separator: ", ")
+              let hostID = self.currentHostParticipantID?.uuidString ?? "unknown"
+              runtimeAppModel.logger.info(
+                "SharePlay participants changed; joined: [\(joinedIDs)], departed: [\(departedIDs)], host: \(hostID), active count: \(activeIDs.count)."
+              )
+            }
+            self.handleHostParticipantChanges(activeParticipantIDs: activeIDs)
             self.publishParticipants()
             self.applyMinimumScreenViewportAspectRatio()
           }
@@ -123,15 +159,21 @@ class GroupActivityHelper {
           Task {
             await self.sendInitialDataReliably(to: .only(newParticipants))
             await self.sendParticipantInfo(to: .only(newParticipants))
+            await self.sendOriginCatalogSnapshot(to: .only(newParticipants))
+            await self.advertiseCurrentLocalDataset(to: .only(newParticipants))
+            await self.sendCurrentHostState(to: .only(newParticipants))
           }
 
         } .store(in: &subscriptions)
 
       session.$state
         .sink { [weak self] state in
-          guard case .invalidated = state else { return }
+          guard case .invalidated(let reason) = state else { return }
           Task { @MainActor in
             guard self?.sessionGeneration == generation else { return }
+            self?.runtimeAppModel?.logger.warning(
+              "SharePlay session invalidated by the system: \(reason.localizedDescription)"
+            )
             self?.stopSharePlayServer()
             self?.resetSessionReceivers()
             self?.runtimeAppModel?.groupSessionHost = false
@@ -142,7 +184,12 @@ class GroupActivityHelper {
       let messenger = GroupSessionMessenger(session: session)
       self.messenger = messenger
       session.join()
-      Task { await self.sendParticipantInfo() }
+      Task {
+        await self.sendParticipantInfo()
+        await self.sendOriginCatalogSnapshot()
+        await self.advertiseCurrentLocalDataset()
+        await self.sendCurrentHostState()
+      }
 
       if let pose = systemCoordinator.localParticipantState.pose {
         await runtimeAppModel.logger.dev("Joined groupsession with pose \(pose)")
@@ -253,7 +300,7 @@ class GroupActivityHelper {
       }
       if let screenViewState {
         try await sendData(
-          data: BorgVRScreenViewStateCodec.encode(screenViewState),
+          data: BorgVRScreenViewStateCodec.encode(screenViewState, isShared: true),
           of: .renderingUpdate
         )
       }
@@ -330,8 +377,7 @@ class GroupActivityHelper {
       let sharedDataset = shareOrigins(for: dataset)
       let initMessage = InitMessage(
         uniqueID: dataset.uniqueId,
-        origins: sharedDataset.origins,
-        authToken: sharedDataset.authToken,
+        origins: sharedDataset,
         description:dataset.description
       )
 
@@ -355,7 +401,7 @@ class GroupActivityHelper {
         )
         if let screenViewState = sharedAppModel.screenSharePlayViewState {
           try await sendData(
-            data: BorgVRScreenViewStateCodec.encode(screenViewState),
+            data: BorgVRScreenViewStateCodec.encode(screenViewState, isShared: true),
             of: .renderingUpdate,
             to: to
           )
@@ -364,7 +410,7 @@ class GroupActivityHelper {
         runtimeAppModel.logger.error("Failed to send init data to all participants: \(error)")
       }
     } else {
-      let data = InitMessage(uniqueID: "", origins: [], authToken: "", description:"").toData()
+      let data = InitMessage(uniqueID: "", origins: [], description:"").toData()
       do {
         try await sendData(data:data, of: .initMessage, to: to)
       } catch {
@@ -409,6 +455,23 @@ class GroupActivityHelper {
           Task { await self.sendInitialDataReliably(to: .only(Set([from]))) }
         case MessageType.participantInfo.rawValue:
           handleParticipantInfo(data: stripped, from: from)
+        case MessageType.screenViewRequest.rawValue:
+          guard let screenViewState = sharedAppModel?.screenSharePlayViewState else { return }
+          Task {
+            try? await sendData(
+              data: BorgVRScreenViewStateCodec.encode(screenViewState, isShared: true),
+              of: .renderingUpdate,
+              to: .only(Set([from]))
+            )
+          }
+        case MessageType.originCatalogSnapshot.rawValue:
+          handleOriginCatalogSnapshot(data: stripped)
+        case MessageType.datasetOriginAdvertisement.rawValue:
+          handleDatasetOriginAdvertisement(data: stripped, from: from)
+        case MessageType.hostClaim.rawValue:
+          handleHostClaim(data: stripped)
+        case MessageType.hostState.rawValue:
+          handleHostState(data: stripped)
         default :
           runtimeAppModel.logger.error("Invalid first byte: \(firstByte) in group message")
       }
@@ -423,6 +486,10 @@ class GroupActivityHelper {
     case stateRequest    = 0x03
     case participantInfo = 0x04
     case screenViewRequest = 0x05
+    case originCatalogSnapshot = 0x06
+    case datasetOriginAdvertisement = 0x07
+    case hostClaim = 0x08
+    case hostState = 0x09
   }
 
   private func sendData(data:Data, of messageType:MessageType,
@@ -440,7 +507,8 @@ class GroupActivityHelper {
       platform: .visionOS,
       displayName: displayName.isEmpty
         ? String(localized: "Apple Vision Pro")
-        : displayName
+        : displayName,
+      sharesScreenView: false
     )
     guard let data = try? BorgVRSharePlayParticipantInfoCodec.encode(info) else { return }
     try? await sendData(data: data, of: .participantInfo, to: participants)
@@ -469,16 +537,21 @@ class GroupActivityHelper {
   }
 
   @MainActor
-  private func applyScreenViewState(
-    _ state: BorgVRScreenViewState,
+  private func applyScreenViewUpdate(
+    _ update: BorgVRScreenViewUpdate,
     from participant: Participant
   ) {
-    screenViewStateByParticipantID[participant.id] = state
-    var sharedState = state
-    if let minimumAspectRatio = minimumScreenViewportAspectRatio() {
-      sharedState.viewportAspectRatio = minimumAspectRatio
+    screenViewStateByParticipantID[participant.id] = update.state
+    let participantSharesView = participantInfoByID[participant.id]?.sharesScreenView
+      ?? update.isShared
+    if update.isShared, participantSharesView {
+      var sharedState = update.state
+      if let minimumAspectRatio = minimumScreenViewportAspectRatio() {
+        sharedState.viewportAspectRatio = minimumAspectRatio
+      }
+      sharedAppModel?.screenSharePlayViewState = sharedState
     }
-    sharedAppModel?.screenSharePlayViewState = sharedState
+    publishDetachedScreenViews()
   }
 
   @MainActor
@@ -497,7 +570,8 @@ class GroupActivityHelper {
   private func minimumScreenViewportAspectRatio() -> Float? {
     screenViewStateByParticipantID.compactMap { participantID, state in
       guard let platform = participantInfoByID[participantID]?.platform,
-            platform == .iOS || platform == .macOS else {
+            platform == .iOS || platform == .macOS,
+            participantInfoByID[participantID]?.sharesScreenView == true else {
         return nil
       }
       return state.viewportAspectRatio
@@ -515,6 +589,7 @@ class GroupActivityHelper {
       return $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending
     }
     sharedAppModel?.sharePlayParticipants = participants
+    publishDetachedScreenViews()
     let hasScreenParticipant = participants.contains {
       $0.platform == .iOS || $0.platform == .macOS
     }
@@ -525,6 +600,16 @@ class GroupActivityHelper {
     }
   }
 
+  @MainActor
+  private func publishDetachedScreenViews() {
+    sharedAppModel?.detachedScreenSharePlayViewStates = screenViewStateByParticipantID.filter {
+      participantID, _ in
+      guard let info = participantInfoByID[participantID] else { return false }
+      return (info.platform == .iOS || info.platform == .macOS) && !info.sharesScreenView
+    }
+  }
+
+  @MainActor
   private func resetSessionReceivers() {
     messageTask?.cancel()
     messageTask = nil
@@ -540,8 +625,20 @@ class GroupActivityHelper {
     knownParticipants.removeAll()
     participantInfoByID.removeAll()
     screenViewStateByParticipantID.removeAll()
+    sessionOriginsByDatasetID.removeAll()
+    adHocOriginsByParticipantID.removeAll()
+    pendingDatasetLoadTask?.cancel()
+    pendingDatasetLoadTask = nil
+    pendingDatasetLoad = nil
+    hostElectionTask?.cancel()
+    hostElectionTask = nil
+    localParticipantID = nil
+    currentHostParticipantID = nil
+    hostClaims.removeAll()
+    runtimeAppModel?.showsHostDeparturePrompt = false
     sharedAppModel?.sharePlayParticipants = []
     sharedAppModel?.screenSharePlayViewState = nil
+    sharedAppModel?.detachedScreenSharePlayViewStates = [:]
     sharedAppModel?.screenViewInteractionActive = false
     sharedAppModel?.clearRemoteSpatialStylusPreviews()
   }
@@ -579,14 +676,12 @@ class GroupActivityHelper {
 
   struct InitMessage: DataCodable {
     let uniqueID: String
-    let origins: [String]
-    let authToken: String
+    let origins: [DatasetOrigin]
     let description: String
 
-    init(uniqueID: String, origins: [String], authToken: String, description:String) {
+    init(uniqueID: String, origins: [DatasetOrigin], description:String) {
       self.uniqueID = uniqueID
       self.origins = origins
-      self.authToken = authToken
       self.description = description
     }
 
@@ -608,28 +703,30 @@ class GroupActivityHelper {
         return String(data: stringData, encoding: .utf8)
       }
 
-      func readStringArray() -> [String]? {
+      func readOrigins() -> [DatasetOrigin]? {
         guard cursor + 4 <= data.endIndex else { return nil }
         let countData = data[cursor..<cursor+4]
         cursor += 4
         let count = UInt32(bigEndian: countData.withUnsafeBytes { $0.loadUnaligned(as: UInt32.self) })
-        var strings: [String] = []
-        strings.reserveCapacity(Int(count))
+        var origins: [DatasetOrigin] = []
+        origins.reserveCapacity(Int(count))
         for _ in 0..<count {
-          guard let string = readString() else { return nil }
-          strings.append(string)
+          guard let address = readString(), cursor + 4 <= data.endIndex else { return nil }
+          let portData = data[cursor..<cursor + 4]
+          cursor += 4
+          let port = UInt32(bigEndian: portData.withUnsafeBytes { $0.loadUnaligned(as: UInt32.self) })
+          guard let password = readString() else { return nil }
+          origins.append(DatasetOrigin(address: address, port: Int(port), password: password))
         }
-        return strings
+        return origins
       }
 
       guard let id = readString(),
-            let origins = readStringArray(),
-            let authToken = readString(),
+            let origins = readOrigins(),
             let desc = readString() else { return nil }
 
       self.uniqueID = id
       self.origins = origins
-      self.authToken = authToken
       self.description = desc
     }
 
@@ -643,15 +740,19 @@ class GroupActivityHelper {
         data.append(utf8)
       }
 
-      func writeStringArray(_ strings: [String]) {
-        var count = UInt32(strings.count).bigEndian
+      func writeOrigins(_ origins: [DatasetOrigin]) {
+        var count = UInt32(origins.count).bigEndian
         data.append(Data(bytes: &count, count: 4))
-        strings.forEach(writeString)
+        for origin in origins {
+          writeString(origin.address)
+          var port = UInt32(origin.port).bigEndian
+          data.append(Data(bytes: &port, count: 4))
+          writeString(origin.password)
+        }
       }
 
       writeString(uniqueID)
-      writeStringArray(origins)
-      writeString(authToken)
+      writeOrigins(origins)
       writeString(description)
 
       return data
@@ -660,15 +761,6 @@ class GroupActivityHelper {
 
   @MainActor
   func handleInit(data: Data, from: Participant, sessionGeneration generation: Int) {
-
-    func splitAddressAndPort(_ input: String) -> (address: String, port: Int)? {
-      guard let idx = input.lastIndex(of: ":") else { return nil }
-      let address = String(input[..<idx])
-      let portPart = String(input[input.index(after: idx)...])
-      guard let port = Int(portPart) else { return nil }
-      return (address, port)
-    }
-
     guard generation == sessionGeneration, groupSession != nil else { return }
     guard let runtimeAppModel = runtimeAppModel else { return }
     guard !runtimeAppModel.groupSessionHost else { return }
@@ -677,17 +769,29 @@ class GroupActivityHelper {
 
     guard let initMessage = InitMessage(data:data) else {
       runtimeAppModel.logger.dev("Received incomplete init message, waiting for host")
+      runtimeAppModel.sharePlayWaitingReason = .hostDataset
       runtimeAppModel.currentState = .waitingForHost
       return
     }
 
     guard initMessage.uniqueID != "" else {
       runtimeAppModel.logger.dev("Received empty dataset in init message, waiting for host")
+      pendingDatasetLoadTask?.cancel()
+      pendingDatasetLoadTask = nil
+      pendingDatasetLoad = nil
+      runtimeAppModel.sharePlayWaitingReason = .hostDataset
       runtimeAppModel.currentState = .waitingForHost
       return
     }
 
+    DatasetOriginCatalog.shared.prioritize(initMessage.origins, for: initMessage.uniqueID)
+    mergeSessionOrigins(initMessage.origins, for: initMessage.uniqueID)
+
     if let localFile = findlocalFile(id : initMessage.uniqueID) {
+      runtimeAppModel.logger.info("Found SharePlay dataset \(initMessage.uniqueID) locally at \(localFile.path()).")
+      pendingDatasetLoadTask?.cancel()
+      pendingDatasetLoadTask = nil
+      pendingDatasetLoad = nil
 
       if runtimeAppModel.immersiveSpaceState == .open {
         if let dataset = runtimeAppModel.activeDataset {
@@ -703,23 +807,42 @@ class GroupActivityHelper {
                                    source: .local,
                                    uniqueId: initMessage.uniqueID,
                                    asGroupSessionHost: false)
+      Task { await advertiseCurrentLocalDataset() }
     } else {
+      runtimeAppModel.logger.info("SharePlay dataset \(initMessage.uniqueID) is not available locally; searching known network sources.")
+      pendingDatasetLoad = PendingDatasetLoad(
+        uniqueID: initMessage.uniqueID,
+        description: initMessage.description,
+        generation: generation
+      )
+      retryPendingDatasetLoad()
+    }
+  }
 
-      let remoteOrigins = initMessage.origins.compactMap(splitAddressAndPort)
-      if remoteOrigins.isEmpty {
-        // TODO: handle local data that is not found on client
-      } else {
-        runtimeAppModel.currentState = .waitingForHost
-        Task {
-          await self.openFirstReachableRemoteDataset(
-            uniqueID: initMessage.uniqueID,
-            description: initMessage.description,
-            origins: remoteOrigins,
-            authToken: initMessage.authToken,
-            sessionGeneration: generation
-          )
-        }
-      }
+  @MainActor
+  private func retryPendingDatasetLoad() {
+    guard let pending = pendingDatasetLoad,
+          pending.generation == sessionGeneration,
+          groupSession != nil,
+          runtimeAppModel?.groupSessionHost != true else { return }
+    pendingDatasetLoadTask?.cancel()
+    let origins = knownOrigins(for: pending.uniqueID)
+    runtimeAppModel?.sharePlayWaitingReason = .datasetSource
+    runtimeAppModel?.currentState = .waitingForHost
+    guard !origins.isEmpty else {
+      runtimeAppModel?.logger.warning("No known source currently provides SharePlay dataset \(pending.uniqueID); waiting for participant sources.")
+      pendingDatasetLoadTask = nil
+      return
+    }
+    runtimeAppModel?.logger.info("Trying \(origins.count) known source(s) for SharePlay dataset \(pending.uniqueID).")
+    pendingDatasetLoadTask = Task { [weak self] in
+      guard let self else { return }
+      await self.openFirstReachableRemoteDataset(
+        uniqueID: pending.uniqueID,
+        description: pending.description,
+        origins: origins,
+        sessionGeneration: pending.generation
+      )
     }
   }
 
@@ -727,17 +850,17 @@ class GroupActivityHelper {
   private func openFirstReachableRemoteDataset(
     uniqueID: String,
     description: String,
-    origins: [(address: String, port: Int)],
-    authToken: String,
+    origins: [DatasetOrigin],
     sessionGeneration generation: Int
   ) async {
     guard generation == sessionGeneration, groupSession != nil else { return }
     guard let runtimeAppModel else { return }
 
-    guard let remoteSource = await firstReachableOrigin(origins, datasetID: uniqueID, authToken: authToken) else {
+    guard let remoteSource = await firstReachableOrigin(origins, datasetID: uniqueID) else {
       guard generation == sessionGeneration, groupSession != nil else { return }
       runtimeAppModel.currentState = .waitingForHost
-      runtimeAppModel.logger.error("SharePlay dataset \(uniqueID) is not available locally and none of the host origins are reachable.")
+      runtimeAppModel.logger.warning("None of the currently known sources provides SharePlay dataset \(uniqueID); waiting for additional participant sources.")
+      pendingDatasetLoadTask = nil
       return
     }
 
@@ -745,36 +868,51 @@ class GroupActivityHelper {
     let dataset = RuntimeAppModel.DatasetEntry(
       identifier: uniqueID,
       description: description,
-      source:.remote(address: remoteSource.address, port: remoteSource.port, password: authToken),
+      source:.remote(address: remoteSource.address, port: remoteSource.port, password: remoteSource.password),
       uniqueId: uniqueID
     )
+    runtimeAppModel.logger.info("Loading SharePlay dataset \(uniqueID) from \(remoteSource.address):\(remoteSource.port).")
+    pendingDatasetLoad = nil
+    pendingDatasetLoadTask = nil
     runtimeAppModel.startImmersiveSpace(dataset: dataset, asGroupSessionHost:false)
   }
 
   private func firstReachableOrigin(
-    _ origins: [(address: String, port: Int)],
-    datasetID: String,
-    authToken: String
-  ) async -> (address: String, port: Int)? {
+    _ origins: [DatasetOrigin],
+    datasetID: String
+  ) async -> DatasetOrigin? {
     for origin in origins {
-      let isReachable = await Task.detached(priority: .userInitiated) {
+      await logInfo("Checking \(origin.address):\(origin.port) for SharePlay dataset \(datasetID).")
+      let result = await Task.detached(priority: .userInitiated) {
         do {
           let manager = BORGVRRemoteDataManager(
             host: origin.address,
             port: UInt16(clamping: origin.port),
-            authSecret: authToken,
+            authSecret: origin.password,
             logger: nil,
             notifier: nil
           )
           try manager.connect(timeout: 2)
-          return try manager.requestDatasetList().contains { $0.id == datasetID }
+          let datasets = try manager.requestDatasetList()
+          DatasetOriginCatalog.shared.recordServerSnapshot(
+            origin: origin,
+            datasetIDs: datasets.map(\.id),
+            allowsSharing: DatasetOriginCatalog.shared.sharingAllowed(for: origin)
+          )
+          return (datasets.contains { $0.id == datasetID }, "")
         } catch {
-          return false
+          return (false, error.localizedDescription)
         }
       }.value
 
-      if isReachable {
+      if result.0 {
+        await logInfo("Found SharePlay dataset \(datasetID) at \(origin.address):\(origin.port).")
         return origin
+      }
+      if result.1.isEmpty {
+        await logInfo("Source \(origin.address):\(origin.port) is reachable but does not provide dataset \(datasetID).")
+      } else {
+        await logWarning("Could not query \(origin.address):\(origin.port): \(result.1)")
       }
     }
 
@@ -782,13 +920,255 @@ class GroupActivityHelper {
   }
 
   @MainActor
-  private func shareOrigins(for dataset: RuntimeAppModel.DatasetEntry) -> (origins: [String], authToken: String) {
+  private func logInfo(_ message: String) {
+    runtimeAppModel?.logger.info(message)
+  }
+
+  @MainActor
+  private func logWarning(_ message: String) {
+    runtimeAppModel?.logger.warning(message)
+  }
+
+  @MainActor
+  private func shareOrigins(for dataset: RuntimeAppModel.DatasetEntry) -> [DatasetOrigin] {
+    var immediateOrigins: [DatasetOrigin] = []
     switch dataset.source {
       case .remote(let address, let port, let password):
-        return (["\(address):\(port)"], password)
+        let origin = DatasetOrigin(address: address, port: port, password: password)
+        let mayShare = storedAppModel?.servers.first {
+          $0.address.caseInsensitiveCompare(address) == .orderedSame && $0.port == port
+        }?.shareViaSharePlay ?? false
+        DatasetOriginCatalog.shared.record(origin: origin, for: dataset.uniqueId, allowsSharing: mayShare)
+        if mayShare {
+          immediateOrigins.append(origin)
+        }
       case .local, .builtIn:
-        return ensureServing(dataset: dataset)
+        let served = ensureServing(dataset: dataset)
+        immediateOrigins = served.origins.compactMap { value in
+          guard let endpoint = splitAddressAndPort(value) else { return nil }
+          return DatasetOrigin(address: endpoint.address, port: endpoint.port, password: served.authToken)
+        }
     }
+    return DatasetOriginCatalog.deduplicated(
+      immediateOrigins + DatasetOriginCatalog.shared.shareableOrigins(for: dataset.uniqueId)
+    )
+  }
+
+  @MainActor
+  private func knownOrigins(for datasetID: String) -> [DatasetOrigin] {
+    let advertised = adHocOriginsByParticipantID.values.flatMap { $0[datasetID] ?? [] }
+    return DatasetOriginCatalog.deduplicated(
+      advertised + (sessionOriginsByDatasetID[datasetID] ?? [])
+        + DatasetOriginCatalog.shared.origins(for: datasetID)
+    )
+  }
+
+  @MainActor
+  private func mergeSessionOrigins(_ origins: [DatasetOrigin], for datasetID: String) {
+    guard !datasetID.isEmpty else { return }
+    sessionOriginsByDatasetID[datasetID] = DatasetOriginCatalog.deduplicated(
+      origins + (sessionOriginsByDatasetID[datasetID] ?? [])
+    )
+  }
+
+  @MainActor
+  private func sendOriginCatalogSnapshot(to participants: Participants = .all) async {
+    let local = DatasetOriginCatalog.shared.shareableSnapshot()
+    var combined = local.originsByDatasetID()
+    for (datasetID, origins) in sessionOriginsByDatasetID {
+      combined[datasetID, default: []].append(contentsOf: origins)
+    }
+    var datasetIDsByOrigin: [DatasetOrigin: Set<String>] = [:]
+    for (datasetID, origins) in combined {
+      for origin in DatasetOriginCatalog.deduplicated(origins) {
+        datasetIDsByOrigin[origin, default: []].insert(datasetID)
+      }
+    }
+    let snapshot = DatasetOriginSnapshot(entries: datasetIDsByOrigin.map {
+      .init(origin: $0.key, datasetIDs: $0.value.sorted())
+    })
+    guard let data = try? DatasetOriginSharePlayCodec.encode(snapshot) else { return }
+    try? await sendData(data: data, of: .originCatalogSnapshot, to: participants)
+  }
+
+  @MainActor
+  private func handleOriginCatalogSnapshot(data: Data) {
+    do {
+      let snapshot = try DatasetOriginSharePlayCodec.decode(DatasetOriginSnapshot.self, from: data)
+      DatasetOriginCatalog.shared.mergeRemoteSnapshot(snapshot)
+      for (datasetID, origins) in snapshot.originsByDatasetID() {
+        mergeSessionOrigins(origins, for: datasetID)
+      }
+      runtimeAppModel?.logger.info("Received a SharePlay source catalog with \(snapshot.entries.count) server(s).")
+      retryPendingDatasetLoad()
+    } catch {
+      runtimeAppModel?.logger.warning("Could not decode SharePlay source catalog: \(error.localizedDescription)")
+    }
+  }
+
+  @MainActor
+  private func advertiseCurrentLocalDataset(to participants: Participants = .all) async {
+    guard groupSession != nil, let dataset = runtimeAppModel?.activeDataset else { return }
+    guard dataset.source == .local || dataset.source == .builtIn else { return }
+    let served = ensureServing(dataset: dataset)
+    let origins = served.origins.compactMap { value -> DatasetOrigin? in
+      guard let endpoint = splitAddressAndPort(value) else { return nil }
+      return DatasetOrigin(address: endpoint.address, port: endpoint.port, password: served.authToken)
+    }
+    guard !origins.isEmpty else { return }
+    let advertisement = DatasetOriginAdvertisement(datasetID: dataset.uniqueId, origins: origins)
+    guard let data = try? DatasetOriginSharePlayCodec.encode(advertisement) else { return }
+    runtimeAppModel?.logger.info("Advertising this Apple Vision Pro as a SharePlay source for dataset \(dataset.uniqueId).")
+    try? await sendData(data: data, of: .datasetOriginAdvertisement, to: participants)
+  }
+
+  @MainActor
+  private func handleDatasetOriginAdvertisement(data: Data, from participant: Participant) {
+    do {
+      let advertisement = try DatasetOriginSharePlayCodec.decode(
+        DatasetOriginAdvertisement.self,
+        from: data
+      )
+      adHocOriginsByParticipantID[participant.id, default: [:]][advertisement.datasetID] =
+        DatasetOriginCatalog.deduplicated(advertisement.origins)
+      runtimeAppModel?.logger.info("Received \(advertisement.origins.count) participant source(s) for dataset \(advertisement.datasetID).")
+      retryPendingDatasetLoad()
+    } catch {
+      runtimeAppModel?.logger.warning("Could not decode SharePlay participant source: \(error.localizedDescription)")
+    }
+  }
+
+  @MainActor
+  func takeOverHostRole() {
+    guard groupSession != nil,
+          currentHostParticipantID == nil,
+          let localParticipantID else { return }
+    runtimeAppModel?.showsHostDeparturePrompt = false
+    let claim = BorgVRSharePlayHostClaim(
+      term: hostElectionTerm,
+      candidateID: localParticipantID
+    )
+    registerHostClaim(claim)
+    Task {
+      guard let data = try? BorgVRSharePlayHostCodec.encode(claim) else { return }
+      try? await sendData(data: data, of: .hostClaim)
+    }
+  }
+
+  @MainActor
+  func ignoreHostDeparture() {
+    runtimeAppModel?.showsHostDeparturePrompt = false
+  }
+
+  @MainActor
+  private func handleHostParticipantChanges(activeParticipantIDs: Set<UUID>) {
+    guard let currentHostParticipantID,
+          currentHostParticipantID != localParticipantID,
+          !activeParticipantIDs.contains(currentHostParticipantID) else { return }
+    self.currentHostParticipantID = nil
+    hostElectionTerm &+= 1
+    hostClaims = [hostElectionTerm: []]
+    runtimeAppModel?.groupSessionHost = false
+    runtimeAppModel?.showsHostDeparturePrompt = true
+    runtimeAppModel?.logger.warning("The SharePlay host left the session; waiting for a new host.")
+  }
+
+  @MainActor
+  private func sendCurrentHostState(to participants: Participants = .all) async {
+    guard let currentHostParticipantID else { return }
+    let state = BorgVRSharePlayHostState(
+      term: hostElectionTerm,
+      hostID: currentHostParticipantID
+    )
+    guard let data = try? BorgVRSharePlayHostCodec.encode(state) else { return }
+    try? await sendData(data: data, of: .hostState, to: participants)
+  }
+
+  @MainActor
+  private func handleHostClaim(data: Data) {
+    guard let claim = try? BorgVRSharePlayHostCodec.decode(
+      BorgVRSharePlayHostClaim.self,
+      from: data
+    ) else { return }
+    registerHostClaim(claim)
+  }
+
+  @MainActor
+  private func registerHostClaim(_ claim: BorgVRSharePlayHostClaim) {
+    guard claim.term >= hostElectionTerm, isParticipantActive(claim.candidateID) else { return }
+    if claim.term > hostElectionTerm {
+      hostElectionTerm = claim.term
+      currentHostParticipantID = nil
+      runtimeAppModel?.groupSessionHost = false
+      hostClaims.removeAll()
+    }
+    hostClaims[claim.term, default: []].insert(claim.candidateID)
+    scheduleHostElectionResolution(term: claim.term)
+  }
+
+  @MainActor
+  private func scheduleHostElectionResolution(term: UInt64) {
+    hostElectionTask?.cancel()
+    hostElectionTask = Task { @MainActor [weak self] in
+      try? await Task.sleep(nanoseconds: 350_000_000)
+      guard !Task.isCancelled else { return }
+      self?.resolveHostElection(term: term)
+    }
+  }
+
+  @MainActor
+  private func resolveHostElection(term: UInt64) {
+    guard term == hostElectionTerm else { return }
+    let candidates = (hostClaims[term] ?? []).filter(isParticipantActive)
+    guard let winner = candidates.min(by: { $0.uuidString < $1.uuidString }) else { return }
+    applyHostState(BorgVRSharePlayHostState(term: term, hostID: winner))
+    if winner == localParticipantID {
+      Task {
+        await sendCurrentHostState()
+        await sendInitialDataReliably()
+      }
+    }
+  }
+
+  @MainActor
+  private func handleHostState(data: Data) {
+    guard let state = try? BorgVRSharePlayHostCodec.decode(
+      BorgVRSharePlayHostState.self,
+      from: data
+    ), isParticipantActive(state.hostID) else { return }
+    guard state.term >= hostElectionTerm else { return }
+    if state.term == hostElectionTerm,
+       let existing = currentHostParticipantID,
+       existing.uuidString < state.hostID.uuidString {
+      return
+    }
+    applyHostState(state)
+  }
+
+  @MainActor
+  private func applyHostState(_ state: BorgVRSharePlayHostState) {
+    hostElectionTerm = state.term
+    currentHostParticipantID = state.hostID
+    hostClaims = [state.term: [state.hostID]]
+    hostElectionTask?.cancel()
+    hostElectionTask = nil
+    runtimeAppModel?.showsHostDeparturePrompt = false
+    let isLocalHost = state.hostID == localParticipantID
+    runtimeAppModel?.groupSessionHost = isLocalHost
+    runtimeAppModel?.logger.info(isLocalHost
+      ? "This device took over the SharePlay host role."
+      : "A participant took over the SharePlay host role.")
+  }
+
+  @MainActor
+  private func isParticipantActive(_ participantID: UUID) -> Bool {
+    participantID == localParticipantID || knownParticipants.contains { $0.id == participantID }
+  }
+
+  private func splitAddressAndPort(_ input: String) -> (address: String, port: Int)? {
+    guard let idx = input.lastIndex(of: ":"),
+          let port = Int(input[input.index(after: idx)...]) else { return nil }
+    return (String(input[..<idx]), port)
   }
 
   @MainActor
@@ -966,8 +1346,8 @@ class GroupActivityHelper {
         )
         return
       }
-      if let screenViewState = try BorgVRScreenViewStateCodec.decodeIfPresent(data) {
-        applyScreenViewState(screenViewState, from: from)
+      if let screenViewUpdate = try BorgVRScreenViewStateCodec.decodeUpdateIfPresent(data) {
+        applyScreenViewUpdate(screenViewUpdate, from: from)
         return
       }
       if try sharedAppModel.applySharePlayUpdate(from: data) {
@@ -981,6 +1361,7 @@ class GroupActivityHelper {
 
   @MainActor
   func handleShutdown(from: Participant) {
+    runtimeAppModel?.sharePlayWaitingReason = .hostDataset
     runtimeAppModel?.currentState = .waitingForHost
     runtimeAppModel?.immersiveSpaceIntent = .close
   }

@@ -8,6 +8,17 @@ import RealityKit
 
 extension Renderer {
 
+  private struct ScreenViewVisualization {
+    var markers: [VolumeMarker] = []
+    var labels: [ScreenViewLabelDescriptor] = []
+  }
+
+  private struct ScreenViewLabelDescriptor {
+    let text: String
+    let color: SIMD4<Float>
+    let position: SIMD3<Float>
+  }
+
   private static let screenViewVisualizationMarkerIDs: [UUID] = [
     UUID(uuidString: "EC000000-0000-0000-0000-000000000001")!,
     UUID(uuidString: "EC000000-0000-0000-0000-000000000002")!,
@@ -531,9 +542,11 @@ extension Renderer {
 
   private func drawVolumeMarkers(_ renderEncoder: MTLRenderCommandEncoder,
                                  drawable: LayerRenderer.Drawable) {
-    let markers = sharedAppModel.volumeMarkers + screenViewVisualizationMarkers()
+    let screenViews = screenViewVisualization()
+    let markers = sharedAppModel.volumeMarkers + screenViews.markers
     let remoteStylusPreviews = sharedAppModel.activeRemoteSpatialStylusPreviews()
-    guard !markers.isEmpty || spatialStylusPreviewPoint != nil || !remoteStylusPreviews.isEmpty else {
+    guard !markers.isEmpty || !screenViews.labels.isEmpty || spatialStylusPreviewPoint != nil ||
+      !remoteStylusPreviews.isEmpty else {
       return
     }
 
@@ -590,7 +603,7 @@ extension Renderer {
     func color(for marker: VolumeMarker) -> SIMD4<Float> {
       VolumeMarkerPresentation.color(
         for: marker,
-        isSelected: marker.id == sharedAppModel.selectedVolumeMarkerID
+        isSelected: sharedAppModel.selectedVolumeMarkerIDs.contains(marker.id)
       )
     }
 
@@ -683,14 +696,123 @@ extension Renderer {
     for preview in remoteStylusPreviews {
       drawSphere(preview.point, color: preview.color)
     }
+
+    drawScreenViewLabels(screenViews.labels, renderEncoder: renderEncoder)
   }
 
-  private func screenViewVisualizationMarkers() -> [VolumeMarker] {
-    guard let state = sharedAppModel.screenSharePlayViewState,
-          sharedAppModel.sharePlayParticipants.contains(where: {
-            $0.platform == .iOS || $0.platform == .macOS
-          }) else {
-      return []
+  private func drawScreenViewLabels(
+    _ labels: [ScreenViewLabelDescriptor],
+    renderEncoder: MTLRenderCommandEncoder
+  ) {
+    guard !labels.isEmpty else { return }
+
+    renderEncoder.setRenderPipelineState(pipelineStateScreenViewLabel)
+    renderEncoder.setDepthStencilState(depthStateMarker)
+    renderEncoder.setCullMode(.none)
+
+    for label in labels {
+      guard let labelTexture = screenViewLabelTextureCache.texture(
+        for: label.text,
+        accentColor: label.color,
+        device: device
+      ) else { continue }
+
+      let volumePosition = simd_make_float3(
+        volumeScale * SIMD4<Float>(label.position - SIMD3<Float>(repeating: 0.5), 1)
+      )
+      let worldPosition = simd_make_float3(
+        lastUnscaledModelMatrix * SIMD4<Float>(volumePosition, 1)
+      )
+      var modelMatrix = makeBillboardMatrix(
+        position: worldPosition,
+        camera: lastHeadPosition,
+        up: SIMD3<Float>(0, 1, 0),
+        cylindrical: false
+      ).0
+      let labelHeight: Float = 0.052
+      var labelSize = SIMD2<Float>(
+        min(labelHeight * labelTexture.aspectRatio, 0.36),
+        labelHeight
+      )
+
+      renderEncoder.setVertexBytes(
+        &modelMatrix,
+        length: MemoryLayout<simd_float4x4>.stride,
+        index: 21
+      )
+      renderEncoder.setVertexBytes(
+        &labelSize,
+        length: MemoryLayout<SIMD2<Float>>.stride,
+        index: 22
+      )
+      renderEncoder.setFragmentTexture(
+        labelTexture.texture,
+        index: TextureIndex.screenViewLabel.rawValue
+      )
+      renderEncoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 6)
+    }
+  }
+
+  private func screenViewVisualization() -> ScreenViewVisualization {
+    let screenParticipants = sharedAppModel.sharePlayParticipants.filter {
+      $0.platform == .iOS || $0.platform == .macOS
+    }
+    guard !screenParticipants.isEmpty else { return ScreenViewVisualization() }
+
+    var result = ScreenViewVisualization()
+    if let state = sharedAppModel.screenSharePlayViewState {
+      let sharedView = screenViewVisualizationMarkers(
+        state: state,
+        markerID: nil,
+        name: String(localized: "Shared View"),
+        color: ScreenViewPresentation.sharedColor,
+        interactionActive: sharedAppModel.screenViewInteractionActive
+      )
+      result.markers += sharedView.markers
+      if sharedAppModel.screenViewNamesVisible {
+        result.labels.append(sharedView.label)
+      }
+    }
+
+    let detachedParticipants = screenParticipants.filter {
+      sharedAppModel.detachedScreenSharePlayViewStates[$0.id] != nil
+    }
+    for participant in detachedParticipants {
+      guard let state = sharedAppModel.detachedScreenSharePlayViewStates[participant.id] else {
+        continue
+      }
+      let detachedView = screenViewVisualizationMarkers(
+        state: state,
+        markerID: participant.id,
+        name: participant.displayName,
+        color: ScreenViewPresentation.detachedColor(for: participant.id),
+        interactionActive: false
+      )
+      result.markers += detachedView.markers
+      if sharedAppModel.screenViewNamesVisible {
+        result.labels.append(detachedView.label)
+      }
+    }
+    return result
+  }
+
+  private func screenViewVisualizationMarkers(
+    state: BorgVRScreenViewState,
+    markerID: UUID?,
+    name: String,
+    color: SIMD4<Float>,
+    interactionActive: Bool
+  ) -> (markers: [VolumeMarker], label: ScreenViewLabelDescriptor) {
+    func id(_ index: Int) -> UUID {
+      guard let markerID else {
+        return Self.screenViewVisualizationMarkerIDs[index]
+      }
+      var uuid = markerID.uuid
+      withUnsafeMutableBytes(of: &uuid) { bytes in
+        bytes[14] ^= UInt8(truncatingIfNeeded: index >> 8)
+        bytes[15] ^= UInt8(truncatingIfNeeded: index)
+      }
+      return UUID(uuid: uuid)
     }
 
     let aspect = min(max(state.viewportAspectRatio, 0.25), 4)
@@ -724,15 +846,22 @@ extension Renderer {
       ]
     }
 
-    let color = SIMD4<Float>(0.05, 0.85, 1, 1)
+    let nearHalfHeight = nearDistance * tan(fieldOfView * 0.5)
+    let labelPosition = volumePoint(SIMD3<Float>(
+      0,
+      nearHalfHeight + 0.052,
+      cameraDistance - nearDistance
+    ))
+    let label = ScreenViewLabelDescriptor(text: name, color: color, position: labelPosition)
+
     let lineRadius: Float = 0.002
 
-    if !sharedAppModel.screenViewInteractionActive {
+    if !interactionActive {
       let screenCorners = planeCorners(distance: nearDistance)
       var result = (0..<4).map { index in
         VolumeMarker(
-          id: Self.screenViewVisualizationMarkerIDs[index],
-          name: "Shared Screen View",
+          id: id(index),
+          name: name,
           color: color,
           geometry: .stroke([
             VolumeMarkerPoint(position: screenCorners[index], radius: 0.004),
@@ -767,27 +896,27 @@ extension Renderer {
         )
       }
       result.append(VolumeMarker(
-        id: Self.screenViewVisualizationMarkerIDs[4],
-        name: "Shared Screen View",
-        color: SIMD4<Float>(0.8, 0.97, 1, 1),
+        id: id(4),
+        name: name,
+        color: color,
         geometry: .stroke(upperEye)
       ))
       result.append(VolumeMarker(
-        id: Self.screenViewVisualizationMarkerIDs[5],
-        name: "Shared Screen View",
-        color: SIMD4<Float>(0.8, 0.97, 1, 1),
+        id: id(5),
+        name: name,
+        color: color,
         geometry: .stroke(lowerEye)
       ))
       result.append(VolumeMarker(
-        id: Self.screenViewVisualizationMarkerIDs[6],
-        name: "Shared Screen View",
+        id: id(6),
+        name: name,
         color: color,
         geometry: .sphere(VolumeMarkerPoint(
           position: volumePoint(SIMD3<Float>(0, 0, eyeZ - 0.006)),
           radius: 0.012
         ))
       ))
-      return result
+      return (result, label)
     }
 
     let near = planeCorners(distance: nearDistance)
@@ -802,8 +931,8 @@ extension Renderer {
     ]
     var result = edges.enumerated().map { index, edge in
       VolumeMarker(
-        id: Self.screenViewVisualizationMarkerIDs[index],
-        name: "Shared Screen View",
+        id: id(index),
+        name: name,
         color: color,
         geometry: .stroke([
           VolumeMarkerPoint(position: edge.0, radius: lineRadius),
@@ -812,15 +941,15 @@ extension Renderer {
       )
     }
     result.append(VolumeMarker(
-      id: Self.screenViewVisualizationMarkerIDs[12],
-      name: "Shared Screen View",
+      id: id(12),
+      name: name,
       color: color,
       geometry: .sphere(VolumeMarkerPoint(
         position: volumePoint(SIMD3<Float>(0, 0, cameraDistance)),
         radius: 0.018
       ))
     ))
-    return result
+    return (result, label)
   }
 
   private func renderVolumeMarkers(commandBuffer: MTLCommandBuffer,
@@ -1278,6 +1407,12 @@ extension Renderer {
       if layerRenderer.state == .invalidated {
         Task { @MainActor in
           runtimeAppModel.immersiveSpaceState = .closed
+          if runtimeAppModel.immersiveSpaceIntent == .keepCurrent {
+            // The system closed the immersive space, for example via the Home button.
+            // Route that event through the regular dataset-close path so SharePlay
+            // clients receive the same shutdown notification as for an in-app close.
+            runtimeAppModel.immersiveSpaceIntent = .close
+          }
         }
         return
       } else if layerRenderer.state == .paused {

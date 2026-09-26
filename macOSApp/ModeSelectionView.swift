@@ -7,55 +7,65 @@ struct ModeSelectionView: View {
   @State private var showingAbout = false
 
   var body: some View {
-    HStack(spacing: 0) {
-      VStack(alignment: .leading, spacing: 26) {
-        Spacer()
+    GeometryReader { proxy in
+      let panelWidth = controlPanelWidth(for: proxy.size.width)
 
+      HStack(spacing: 0) {
         Image("borgvr")
           .resizable()
-          .scaledToFit()
-          .frame(width: 188, height: 188)
-          .clipShape(RoundedRectangle(cornerRadius: 8))
-          .shadow(color: .black.opacity(0.18), radius: 18, x: 0, y: 10)
-
-        VStack(alignment: .leading, spacing: 8) {
-          Text("BorgVR")
-            .font(.system(size: 46, weight: .bold))
-
-          Text("modeselection_tagline")
-            .font(.title3)
-            .foregroundStyle(.secondary)
-            .fixedSize(horizontal: false, vertical: true)
-
-          Text(
-            String(
-              format: NSLocalizedString(
-                "modeselection_version_format",
-                comment: "Version label with app version and build number"
-              ),
-              Bundle.main.appVersion,
-              Bundle.main.appBuild
-            )
+          .scaledToFill()
+          .frame(
+            width: max(proxy.size.width - panelWidth, 0),
+            height: proxy.size.height
           )
-          .font(.callout.weight(.medium))
-          .foregroundStyle(.tertiary)
-        }
+          .clipped()
+          .accessibilityHidden(true)
 
-        if storedAppModel.enableDatasetServer {
-          serverStatus
-        }
-
-        Spacer()
-
-        footer
+        controlPanel
+          .frame(width: panelWidth)
+          .frame(maxHeight: .infinity)
+          .background(.regularMaterial)
+          .overlay(alignment: .leading) {
+            Rectangle()
+              .fill(Color(nsColor: .separatorColor))
+              .frame(width: 1)
+          }
       }
-      .padding(44)
-      .frame(width: 430, alignment: .leading)
-      .background(Color(nsColor: .underPageBackgroundColor))
+    }
+    .sheet(isPresented: $showingAbout) {
+      MacAboutView()
+        .frame(minWidth: 720, idealWidth: 820, minHeight: 460)
+    }
+  }
+
+  private var controlPanel: some View {
+    VStack(alignment: .leading, spacing: 0) {
+      VStack(alignment: .leading, spacing: 10) {
+        Text("BorgVR")
+          .font(.system(size: 44, weight: .bold))
+
+        Text("modeselection_tagline")
+          .font(.title3)
+          .foregroundStyle(.secondary)
+          .fixedSize(horizontal: false, vertical: true)
+
+        Text(
+          String(
+            format: NSLocalizedString(
+              "modeselection_version_format",
+              comment: "Version label with app version and build number"
+            ),
+            Bundle.main.appVersion,
+            Bundle.main.appBuild
+          )
+        )
+        .font(.callout.weight(.medium))
+        .foregroundStyle(.tertiary)
+      }
+
+      Spacer(minLength: 32)
 
       VStack(spacing: 14) {
-        Spacer()
-
         commandButton("modeselection_open_dataset", systemImage: "folder") {
           appModel.currentState = .selectData
         }
@@ -70,7 +80,6 @@ struct ModeSelectionView: View {
 
         if storedAppModel.enableDatasetServer {
           Divider()
-            .frame(maxWidth: 420)
             .padding(.vertical, 8)
 
           commandButton(
@@ -85,26 +94,27 @@ struct ModeSelectionView: View {
           }
         }
 
-        Button {
+        commandButton("modeselection_about", systemImage: "info.circle") {
           showingAbout = true
-        } label: {
-          Label("modeselection_about", systemImage: "info.circle")
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.vertical, 6)
         }
-        .buttonStyle(.bordered)
-        .controlSize(.large)
-        .frame(maxWidth: 420)
-
-        Spacer()
       }
-      .padding(44)
-      .frame(maxWidth: .infinity)
+
+      Spacer(minLength: 32)
+
+      VStack(alignment: .leading, spacing: 22) {
+        if storedAppModel.enableDatasetServer {
+          serverStatus
+        }
+
+        footer
+      }
     }
-    .sheet(isPresented: $showingAbout) {
-      MacAboutView()
-        .frame(minWidth: 720, idealWidth: 820, minHeight: 460)
-    }
+    .padding(.horizontal, 42)
+    .padding(.vertical, 38)
+  }
+
+  private func controlPanelWidth(for windowWidth: CGFloat) -> CGFloat {
+    min(max(windowWidth * 0.36, 380), 460)
   }
 
   private var serverStatus: some View {
@@ -146,7 +156,7 @@ struct ModeSelectionView: View {
     }
     .buttonStyle(.bordered)
     .controlSize(.large)
-    .frame(maxWidth: 420)
+    .frame(maxWidth: .infinity)
   }
 }
 

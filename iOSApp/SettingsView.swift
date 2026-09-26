@@ -84,6 +84,7 @@ struct SettingsView: View {
   @State private var tempPort = ""
   @State private var tempServerAddress = ""
   @State private var tempServerPassword = ""
+  @State private var tempServerShareViaSharePlay = false
   @State private var tempTimeout = ""
   @State private var tempBrickSize = ""
   @State private var tempBrickOverlap = ""
@@ -95,6 +96,7 @@ struct SettingsView: View {
   @State private var isTestingServerConnection = false
   @State private var serverConnectionTestResult: ServerConnectionTestResult?
   @State private var pendingServerDeletion: StoredServer?
+  @State private var showClearOriginCacheConfirmation = false
   @State private var pendingResetSection: SettingsResetSection?
   @State private var selectedSettingsPage: SettingsPage?
 
@@ -142,6 +144,18 @@ struct SettingsView: View {
       Button("Cancel", role: .cancel) {}
     } message: {
       Text("This remote server will be removed from the list.")
+    }
+    .confirmationDialog(
+      "Clear Dataset Origin Cache?",
+      isPresented: $showClearOriginCacheConfirmation,
+      titleVisibility: .visible
+    ) {
+      Button("Clear", role: .destructive) {
+        DatasetOriginCatalog.shared.clear()
+      }
+      Button("Cancel", role: .cancel) {}
+    } message: {
+      Text("BorgVR will forget all previously discovered dataset sources.")
     }
   }
 
@@ -328,6 +342,8 @@ struct SettingsView: View {
         }
       }
       Toggle("Randomized sample phase", isOn: $appSettings.sampleJitter)
+      Toggle("Show Brick Visualization", isOn: $appSettings.showBrickVisualization)
+      Toggle("Show Log Button", isOn: $appSettings.showLogButton)
       Stepper(value: $appSettings.atlasSizeMB, in: 128...AppSettings.maximumAtlasSizeMB, step: 128) {
         Text(String(format: String(localized: "Atlas size: %d MB"), appSettings.atlasSizeMB))
       }
@@ -374,6 +390,14 @@ struct SettingsView: View {
       }
     }
 
+    Section("Dataset origin cache") {
+      Button(role: .destructive) {
+        showClearOriginCacheConfirmation = true
+      } label: {
+        Label("Clear Dataset Origin Cache", systemImage: "trash")
+      }
+    }
+
     Section("Loading") {
       textFieldRow("Timeout (seconds)", text: $tempTimeout, keyboardType: .decimalPad)
       Toggle("Progressive loading", isOn: $appSettings.progressiveLoading)
@@ -398,6 +422,10 @@ struct SettingsView: View {
           )
           textFieldRow("Port", text: $tempPort, keyboardType: .numberPad)
           secureFieldRow("Password (optional)", text: $tempServerPassword)
+          Toggle("Share source via SharePlay", isOn: $tempServerShareViaSharePlay)
+          Text("When enabled, the server address, port, and password may be sent to SharePlay participants so they can load shared datasets directly.")
+            .font(.footnote)
+            .foregroundStyle(.secondary)
         }
 
         if let addServerValidationMessage {
@@ -562,16 +590,33 @@ struct SettingsView: View {
   }
 
   private func serverRow(for server: StoredServer) -> some View {
-    HStack {
-      Text(serverLabel(for: server))
-      Spacer()
-      Button(role: .destructive) {
-        pendingServerDeletion = server
-      } label: {
-        Image(systemName: "trash")
+    VStack(alignment: .leading, spacing: 6) {
+      HStack {
+        Text(serverLabel(for: server))
+        Spacer()
+        Button(role: .destructive) {
+          pendingServerDeletion = server
+        } label: {
+          Image(systemName: "trash")
+        }
+        .buttonStyle(.borderless)
       }
-      .buttonStyle(.borderless)
+      Toggle("Share source via SharePlay", isOn: serverSharingBinding(server))
     }
+  }
+
+  private func serverSharingBinding(_ server: StoredServer) -> Binding<Bool> {
+    Binding(
+      get: { appSettings.servers.first(where: { $0.id == server.id })?.shareViaSharePlay ?? false },
+      set: { allowed in
+        guard let index = appSettings.servers.firstIndex(where: { $0.id == server.id }) else { return }
+        appSettings.servers[index].shareViaSharePlay = allowed
+        DatasetOriginCatalog.shared.setSharingAllowed(
+          allowed,
+          for: DatasetOrigin(address: server.address, port: server.port, password: server.password)
+        )
+      }
+    )
   }
 
   @ViewBuilder
@@ -653,6 +698,10 @@ struct SettingsView: View {
   }
 
   private func removeServer(_ server: StoredServer) {
+    DatasetOriginCatalog.shared.setSharingAllowed(
+      false,
+      for: DatasetOrigin(address: server.address, port: server.port, password: server.password)
+    )
     appSettings.servers.removeAll { $0.id == server.id }
   }
 
@@ -660,6 +709,7 @@ struct SettingsView: View {
     tempServerAddress = ""
     tempPort = String(BorgVRSharedDefaults.datasetServerPort)
     tempServerPassword = ""
+    tempServerShareViaSharePlay = false
     addServerValidationMessage = nil
     serverConnectionTestResult = nil
     isTestingServerConnection = false
@@ -670,6 +720,7 @@ struct SettingsView: View {
     tempPort = String(BorgVRSharedDefaults.datasetServerPort)
     tempServerAddress = ""
     tempServerPassword = ""
+    tempServerShareViaSharePlay = false
     tempTimeout = String(appSettings.timeout)
     tempBrickSize = String(appSettings.brickSize)
     tempBrickOverlap = String(appSettings.brickOverlap)
@@ -708,11 +759,17 @@ struct SettingsView: View {
       StoredServer(
         address: trimmedAddress,
         port: Int(port),
-        password: tempServerPassword
+        password: tempServerPassword,
+        shareViaSharePlay: tempServerShareViaSharePlay
       )
+    )
+    DatasetOriginCatalog.shared.setSharingAllowed(
+      tempServerShareViaSharePlay,
+      for: DatasetOrigin(address: trimmedAddress, port: Int(port), password: tempServerPassword)
     )
     tempServerAddress = ""
     tempServerPassword = ""
+    tempServerShareViaSharePlay = false
     addServerValidationMessage = nil
     validationMessage = nil
     return true
@@ -746,6 +803,11 @@ struct SettingsView: View {
           )
           try manager.connect(timeout: timeout)
           let datasets = try manager.requestDatasetList()
+          DatasetOriginCatalog.shared.recordServerSnapshot(
+            origin: DatasetOrigin(address: trimmedAddress, port: Int(port), password: password),
+            datasetIDs: datasets.map(\.id),
+            allowsSharing: false
+          )
           let transferFunctions = try manager.requestTransferFunctionList()
           return .success(
             datasetCount: datasets.count,

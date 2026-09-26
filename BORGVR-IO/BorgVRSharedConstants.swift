@@ -29,7 +29,7 @@ enum BorgVRMarkerFormat {
 
 enum BorgVRSharePlayProtocol {
   static let magic: UInt32 = 0x4256_5350 // "BVSP"
-  static let renderStateVersion: UInt16 = 3
+  static let renderStateVersion: UInt16 = 4
   static let markerVersion: UInt16 = 3
 
   enum PacketKind: UInt8 {
@@ -60,14 +60,20 @@ struct BorgVRSharePlayParticipantInfo: Codable, Equatable, Sendable {
 
   let platform: BorgVRSharePlayPlatform
   let displayName: String
+  let sharesScreenView: Bool
 
-  init(platform: BorgVRSharePlayPlatform, displayName: String) {
+  init(
+    platform: BorgVRSharePlayPlatform,
+    displayName: String,
+    sharesScreenView: Bool = false
+  ) {
     self.platform = platform
     self.displayName = String(
       displayName
         .trimmingCharacters(in: .whitespacesAndNewlines)
         .prefix(Self.maximumDisplayNameLength)
     )
+    self.sharesScreenView = sharesScreenView
   }
 }
 
@@ -96,6 +102,29 @@ enum BorgVRSharePlayParticipantInfoCodec {
   }
 }
 
+struct BorgVRSharePlayHostClaim: Codable, Equatable, Sendable {
+  let term: UInt64
+  let candidateID: UUID
+}
+
+struct BorgVRSharePlayHostState: Codable, Equatable, Sendable {
+  let term: UInt64
+  let hostID: UUID
+}
+
+enum BorgVRSharePlayHostCodec {
+  static func encode<T: Encodable>(_ value: T) throws -> Data {
+    try JSONEncoder().encode(value)
+  }
+
+  static func decode<T: Decodable>(_ type: T.Type, from data: Data) throws -> T {
+    guard data.count <= 1_024 else {
+      throw BorgVRSharePlayProtocolError.invalidParticipantInfo
+    }
+    return try JSONDecoder().decode(type, from: data)
+  }
+}
+
 struct BorgVRScreenViewState: Equatable, Sendable {
   static let cameraDistance: Float = 2.4
   static let defaultVerticalFieldOfView: Float = .pi / 4
@@ -121,13 +150,20 @@ struct BorgVRScreenViewState: Equatable, Sendable {
   }
 }
 
+struct BorgVRScreenViewUpdate: Equatable, Sendable {
+  let state: BorgVRScreenViewState
+  let isShared: Bool
+}
+
 enum BorgVRScreenViewStateCodec {
-  static func encode(_ state: BorgVRScreenViewState) -> Data {
+  private static let sharedViewFlag: UInt8 = 1 << 0
+
+  static func encode(_ state: BorgVRScreenViewState, isShared: Bool = true) -> Data {
     var writer = BorgVRSharePlayDataWriter()
     writer.write(BorgVRSharePlayProtocol.magic)
     writer.write(BorgVRSharePlayProtocol.renderStateVersion)
     writer.write(BorgVRSharePlayProtocol.PacketKind.screenTransform.rawValue)
-    writer.write(UInt8(0))
+    writer.write(isShared ? sharedViewFlag : UInt8(0))
     writer.write(state.orientation.vector.x)
     writer.write(state.orientation.vector.y)
     writer.write(state.orientation.vector.z)
@@ -140,7 +176,7 @@ enum BorgVRScreenViewStateCodec {
     return writer.data
   }
 
-  static func decodeIfPresent(_ data: Data) throws -> BorgVRScreenViewState? {
+  static func decodeUpdateIfPresent(_ data: Data) throws -> BorgVRScreenViewUpdate? {
     var reader = BorgVRSharePlayDataReader(data)
     let magic: UInt32 = try reader.read()
     guard magic == BorgVRSharePlayProtocol.magic else { return nil }
@@ -152,7 +188,7 @@ enum BorgVRScreenViewStateCodec {
     guard packetKind == BorgVRSharePlayProtocol.PacketKind.screenTransform.rawValue else {
       return nil
     }
-    let _: UInt8 = try reader.read()
+    let flags: UInt8 = try reader.read()
     let orientation = simd_quatf(vector: SIMD4<Float>(
       try reader.read(),
       try reader.read(),
@@ -182,7 +218,14 @@ enum BorgVRScreenViewStateCodec {
           state.verticalFieldOfView < .pi else {
       throw BorgVRSharePlayProtocolError.invalidScreenViewState
     }
-    return state
+    return BorgVRScreenViewUpdate(
+      state: state,
+      isShared: (flags & sharedViewFlag) != 0
+    )
+  }
+
+  static func decodeIfPresent(_ data: Data) throws -> BorgVRScreenViewState? {
+    try decodeUpdateIfPresent(data)?.state
   }
 }
 

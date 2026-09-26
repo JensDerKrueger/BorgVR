@@ -42,8 +42,16 @@ struct RenderControlsPanel: View {
         } label: {
           Image(systemName: "shareplay")
         }
-        .accessibilityLabel(sharePlay.isInSession ? "SharePlay active" : "Start SharePlay")
-        .help(sharePlay.isInSession ? "SharePlay active" : "Start SharePlay")
+        .accessibilityLabel(
+          sharePlay.isInSession
+            ? String(localized: "SharePlay active")
+            : String(localized: "Start SharePlay")
+        )
+        .help(
+          sharePlay.isInSession
+            ? String(localized: "SharePlay active")
+            : String(localized: "Start SharePlay")
+        )
         .buttonStyle(.bordered)
 
         if sharePlay.isInSession, !sharePlay.participants.isEmpty {
@@ -79,14 +87,16 @@ struct RenderControlsPanel: View {
         .help("dataset_info_button_help")
         .buttonStyle(.bordered)
 
-        Button {
-          showLog.toggle()
-        } label: {
-          Image(systemName: "text.alignleft")
+        if appSettings.showLogButton {
+          Button {
+            showLog.toggle()
+          } label: {
+            Image(systemName: "text.alignleft")
+          }
+          .accessibilityLabel("Log")
+          .help("Log")
+          .buttonStyle(.bordered)
         }
-        .accessibilityLabel("Log")
-        .help("Log")
-        .buttonStyle(.bordered)
 
         Button {
           openWindow(id: "PerformanceGraphView")
@@ -142,11 +152,21 @@ struct RenderControlsPanel: View {
       }
 
       HStack {
-        Toggle("Bricks", isOn: $renderingParameters.brickVis)
-          .toggleStyle(.button)
-          .onChange(of: renderingParameters.brickVis) {
-            sharePlay.synchronize(kind: .stateOnly)
+        if sharePlay.isInSession {
+          Toggle(isOn: screenViewSynchronizationBinding) {
+            Label("Synchronize View", systemImage: "link")
           }
+          .toggleStyle(.button)
+          .help("Keep this Mac's view synchronized with other iPhone, iPad, and Mac participants.")
+        }
+
+        if appSettings.showBrickVisualization {
+          Toggle("Bricks", isOn: $renderingParameters.brickVis)
+            .toggleStyle(.button)
+            .onChange(of: renderingParameters.brickVis) {
+              sharePlay.synchronize(kind: .stateOnly)
+            }
+        }
 
         Button {
           renderingParameters.reset()
@@ -185,6 +205,11 @@ struct RenderControlsPanel: View {
       }
       .frame(minWidth: 420, minHeight: 360)
     }
+    .onChange(of: appSettings.showLogButton) { _, isVisible in
+      if !isVisible {
+        showLog = false
+      }
+    }
     .alert("Leave SharePlay?", isPresented: $showLeaveSharePlayConfirmation) {
       Button("Cancel", role: .cancel) {}
       Button("Leave SharePlay", role: .destructive) {
@@ -200,6 +225,13 @@ struct RenderControlsPanel: View {
       guard appModel.interactionMode != mode else { return }
       appModel.interactionMode = mode
     }
+  }
+
+  private var screenViewSynchronizationBinding: Binding<Bool> {
+    Binding(
+      get: { sharePlay.isScreenViewSynchronized },
+      set: { sharePlay.setScreenViewSynchronizationEnabled($0) }
+    )
   }
 
   private func requestDatasetClose() {

@@ -35,12 +35,16 @@ struct WaitingView: View {
         .shadow(radius: 10)
 
       // Waiting message header.
-      Text("Prepare to be assimilated.")
+      Text(runtimeAppModel.sharePlayWaitingReason == .datasetSource
+        ? "No Data Source Available"
+        : "Prepare to be assimilated.")
         .font(.extraLargeTitle2)
         .bold()
 
       // Waiting instruction text.
-      Text("Waiting for the host to select and open a dataset.")
+      Text(runtimeAppModel.sharePlayWaitingReason == .datasetSource
+        ? "The current dataset is not available from any known source. BorgVR is waiting for a participant to provide one."
+        : "Waiting for the host to select and open a dataset.")
         .font(.largeTitle)
         .bold()
 

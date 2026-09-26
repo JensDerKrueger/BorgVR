@@ -24,6 +24,7 @@ private struct ServerConfig: Identifiable, Equatable {
   var address: String
   var port: String
   var password: String = ""
+  var shareViaSharePlay = false
   var status: ServerValidationStatus = .unknown
 }
 
@@ -66,6 +67,7 @@ struct SettingsView: View {
   @State private var didLoadServersForEditing = false
   @State private var isValidatingServers = false
   @State private var showQuickMarkerInfo = false
+  @State private var showClearOriginCacheConfirmation = false
 
   var body: some View {
     VStack(spacing: 20) {
@@ -262,6 +264,14 @@ struct SettingsView: View {
               "settings_toggle_store_local_copy",
               isOn: $storedAppModel.makeLocalCopy
             )
+          }
+
+          Section(header: Text("Dataset origin cache").bold()) {
+            Button(role: .destructive) {
+              showClearOriginCacheConfirmation = true
+            } label: {
+              Label("Clear Dataset Origin Cache", systemImage: "trash")
+            }
           }
         }
         .tabItem { Label("settings_tab_remote", systemImage: "network") }
@@ -672,6 +682,18 @@ struct SettingsView: View {
       validateBrickSize()
       validateBrickOverlap()
     }
+    .confirmationDialog(
+      "Clear Dataset Origin Cache?",
+      isPresented: $showClearOriginCacheConfirmation,
+      titleVisibility: .visible
+    ) {
+      Button("Clear", role: .destructive) {
+        DatasetOriginCatalog.shared.clear()
+      }
+      Button("Cancel", role: .cancel) {}
+    } message: {
+      Text("BorgVR will forget all previously discovered dataset sources.")
+    }
   }
 
   private func settingsIntroSection(_ key: LocalizedStringKey) -> some View {
@@ -714,7 +736,12 @@ struct SettingsView: View {
       servers = [ServerConfig(address: "", port: "")]
     } else {
       servers = storedAppModel.servers.map {
-        ServerConfig(address: $0.address, port: String($0.port), password: $0.password)
+        ServerConfig(
+          address: $0.address,
+          port: String($0.port),
+          password: $0.password,
+          shareViaSharePlay: $0.shareViaSharePlay
+        )
       }
     }
   }
@@ -727,6 +754,13 @@ struct SettingsView: View {
   private func deleteServer(id: UUID) {
     loadServersForEditingIfNeeded()
     if let index = servers.firstIndex(where: { $0.id == id }) {
+      let server = servers[index]
+      if let port = Int(server.port) {
+        DatasetOriginCatalog.shared.setSharingAllowed(
+          false,
+          for: DatasetOrigin(address: server.address, port: port, password: server.password)
+        )
+      }
       servers.remove(at: index)
     }
   }
@@ -738,9 +772,20 @@ struct SettingsView: View {
       let trimmedAddress = cfg.address.trimmingCharacters(in: .whitespacesAndNewlines)
       guard !trimmedAddress.isEmpty else { return nil }
       guard let portInt = Int(cfg.port) else { return nil }
-      return StoredServer(address: trimmedAddress, port: portInt, password: cfg.password)
+      return StoredServer(
+        address: trimmedAddress,
+        port: portInt,
+        password: cfg.password,
+        shareViaSharePlay: cfg.shareViaSharePlay
+      )
     }
     storedAppModel.servers = converted
+    for server in converted {
+      DatasetOriginCatalog.shared.setSharingAllowed(
+        server.shareViaSharePlay,
+        for: DatasetOrigin(address: server.address, port: server.port, password: server.password)
+      )
+    }
   }
 
   private func validateAllServers() async {
@@ -799,7 +844,12 @@ struct SettingsView: View {
 
     let ok: Bool
     do {
-      ok = try await validateConnection(address: trimmedAddress, port: portValue, password: server.password)
+      ok = try await validateConnection(
+        address: trimmedAddress,
+        port: portValue,
+        password: server.password,
+        shareViaSharePlay: server.shareViaSharePlay
+      )
     } catch {
       await MainActor.run {
         servers[index].status = .invalid(error.localizedDescription)
@@ -817,7 +867,12 @@ struct SettingsView: View {
     }
   }
 
-  private func validateConnection(address: String, port: UInt16, password: String) async throws -> Bool {
+  private func validateConnection(
+    address: String,
+    port: UInt16,
+    password: String,
+    shareViaSharePlay: Bool
+  ) async throws -> Bool {
     if port == 0 || address.isEmpty {
       return false
     }
@@ -830,6 +885,12 @@ struct SettingsView: View {
         notifier: nil
       )
       try manager.connect(timeout: storedAppModel.timeout)
+      let datasets = try manager.requestDatasetList()
+      DatasetOriginCatalog.shared.recordServerSnapshot(
+        origin: DatasetOrigin(address: address, port: Int(port), password: password),
+        datasetIDs: datasets.map(\.id),
+        allowsSharing: shareViaSharePlay
+      )
       return true
     } catch {
       return false
@@ -997,6 +1058,11 @@ private struct ServerRowView: View {
           .foregroundColor(.red)
           .font(.caption)
       }
+
+      Toggle("Share source via SharePlay", isOn: $server.shareViaSharePlay)
+      Text("When enabled, the server address, port, and password may be sent to SharePlay participants so they can load shared datasets directly.")
+        .font(.caption)
+        .foregroundStyle(.secondary)
     }
   }
 

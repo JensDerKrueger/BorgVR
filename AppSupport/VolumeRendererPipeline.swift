@@ -177,7 +177,7 @@ final class ScreenVolumeMarkerRenderer {
     depthFormat: MTLPixelFormat,
     markers: [VolumeMarker],
     spatialStylusPreviews: [SpatialStylusPreview],
-    selectedMarkerID: UUID?,
+    selectedMarkerIDs: Set<UUID>,
     viewProjection: simd_float4x4,
     modelMatrix: simd_float4x4,
     volumeScale: simd_float4x4,
@@ -240,7 +240,7 @@ final class ScreenVolumeMarkerRenderer {
     func markerColor(_ marker: VolumeMarker) -> SIMD4<Float> {
       VolumeMarkerPresentation.color(
         for: marker,
-        isSelected: marker.id == selectedMarkerID
+        isSelected: selectedMarkerIDs.contains(marker.id)
       )
     }
 

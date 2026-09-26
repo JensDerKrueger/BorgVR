@@ -136,7 +136,13 @@ final class DatasetCatalogService {
           } catch {
             logger?.warning("Marker file sync failed for \(server.address):\(server.port): \(error.localizedDescription)")
           }
-          for dataset in try manager.requestDatasetList() {
+          let remoteDatasets = try manager.requestDatasetList()
+          DatasetOriginCatalog.shared.recordServerSnapshot(
+            origin: DatasetOrigin(address: server.address, port: server.port, password: server.password),
+            datasetIDs: remoteDatasets.map(\.id),
+            allowsSharing: server.shareViaSharePlay
+          )
+          for dataset in remoteDatasets {
             loaded.append(
               AppModel.DatasetEntry(
                 identifier: dataset.id,

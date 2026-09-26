@@ -25,6 +25,14 @@ private final class MacRendererDatasetAccess {
     }
   }
 
+  func remoteCacheFilename(datasetID: String) -> String {
+    let newAccessURL = storedAppModel.startAccessingDataDirectory()
+    accessURL = newAccessURL
+    return storedAppModel.resolvedDataDirectoryURL()
+      .appendingPathComponent("\(datasetID).data")
+      .path
+  }
+
   func release() {
     storedAppModel.stopAccessingDataDirectory(accessURL)
     accessURL = nil
@@ -64,6 +72,7 @@ final class MacVolumeRenderer: NSObject, MTKViewDelegate {
       renderingParameters: renderingParameters,
       pipelineLabelPrefix: "BorgVR",
       loadLocalDataset: { try datasetAccess.load(filename: $0) },
+      remoteCacheFilename: { datasetAccess.remoteCacheFilename(datasetID: $0) },
       releaseDatasetAccess: { datasetAccess.release() },
       fallbackDrawableScale: {
         $0.window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 1
@@ -100,6 +109,7 @@ final class MacVolumeRenderer: NSObject, MTKViewDelegate {
       case .loaded(let key):
         resetRenderTracking()
         appModel.markRenderedDataset(key: key)
+        sharePlay.datasetRendererDidLoad()
       case .failed(let key, _):
         appModel.markRenderedDatasetFailed(key: key)
     }

@@ -45,11 +45,45 @@ struct macOSApp: App {
   @StateObject private var docking = DockingController()
   @StateObject private var scriptRunner = BorgVRScriptRunner()
   @StateObject private var updateChecker = AppStoreUpdateChecker()
+  @AppStorage("sharePlayDisplayNameOnboardingCompleted")
+  private var sharePlayDisplayNameOnboardingCompleted = false
+  @State private var showsSharePlayDisplayNameOnboarding = false
+  @State private var sharePlayDisplayNameDraft = ""
 
   var body: some Scene {
     WindowGroup("BorgVR") {
       ContentView()
         .appStoreUpdateAlert(using: updateChecker)
+        .alert(
+          "Choose your SharePlay name",
+          isPresented: $showsSharePlayDisplayNameOnboarding
+        ) {
+          TextField("Display name", text: $sharePlayDisplayNameDraft)
+          Button("Continue") {
+            storedAppModel.sharePlayDisplayName = sharePlayDisplayNameDraft
+              .trimmingCharacters(in: .whitespacesAndNewlines)
+            sharePlayDisplayNameOnboardingCompleted = true
+          }
+          .disabled(sharePlayDisplayNameDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        } message: {
+          Text("What name should other people see for you in shared SharePlay sessions? You can change it later in Settings.")
+        }
+        .alert(
+          "SharePlay Host Left",
+          isPresented: $sharePlay.showsHostDeparturePrompt
+        ) {
+          Button("Take Over Host Role") {
+            sharePlay.takeOverHostRole()
+          }
+          Button("Leave Session", role: .destructive) {
+            sharePlay.leaveGroupActivity()
+          }
+          Button("Ignore", role: .cancel) {
+            sharePlay.ignoreHostDeparture()
+          }
+        } message: {
+          Text("The SharePlay host left the session. You can take over the host role, leave the session, or continue without a host.")
+        }
         .environmentObject(appModel)
         .environmentObject(renderingParameters)
         .environmentObject(appSettings)
@@ -65,6 +99,7 @@ struct macOSApp: App {
         }
         .onAppear {
           appModel.setLogLevel(appSettings.logLevel)
+          presentSharePlayDisplayNameOnboardingIfNeeded()
           scriptRunner.configure(
             appModel: appModel,
             renderingParameters: renderingParameters,
@@ -101,6 +136,7 @@ struct macOSApp: App {
           await sharePlay.configure(
             appModel: appModel,
             renderingParameters: renderingParameters,
+            appSettings: appSettings,
             storedAppModel: storedAppModel,
             serverController: serverController
           )
@@ -184,6 +220,18 @@ struct macOSApp: App {
         .disabled(!scriptRunner.isRunning)
       }
     }
+  }
+
+  private func presentSharePlayDisplayNameOnboardingIfNeeded() {
+    guard !sharePlayDisplayNameOnboardingCompleted else { return }
+    let configuredName = storedAppModel.sharePlayDisplayName
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+    if !configuredName.isEmpty {
+      sharePlayDisplayNameOnboardingCompleted = true
+      return
+    }
+    sharePlayDisplayNameDraft = Host.current().localizedName ?? ProcessInfo.processInfo.hostName
+    showsSharePlayDisplayNameOnboarding = true
   }
 
   private func openExternalDataset(_ url: URL) {

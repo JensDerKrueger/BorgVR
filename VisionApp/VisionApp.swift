@@ -30,6 +30,10 @@ struct VisionApp: App {
   @StateObject private var storedAppModel = StoredAppModel()
   @StateObject private var serverController = BackgroundServerController()
   @StateObject private var updateChecker = AppStoreUpdateChecker()
+  @AppStorage("sharePlayDisplayNameOnboardingCompleted")
+  private var sharePlayDisplayNameOnboardingCompleted = false
+  @State private var showsSharePlayDisplayNameOnboarding = false
+  @State private var sharePlayDisplayNameDraft = ""
 
   @StateObject private var voice = VoiceCommandService()
   @StateObject private var speech = SpeechHelper()
@@ -42,6 +46,36 @@ struct VisionApp: App {
     WindowGroup(id: "main") {
       ContentView()
         .appStoreUpdateAlert(using: updateChecker)
+        .alert(
+          "Choose your SharePlay name",
+          isPresented: $showsSharePlayDisplayNameOnboarding
+        ) {
+          TextField("Display name", text: $sharePlayDisplayNameDraft)
+          Button("Continue") {
+            storedAppModel.sharePlayDisplayName = sharePlayDisplayNameDraft
+              .trimmingCharacters(in: .whitespacesAndNewlines)
+            sharePlayDisplayNameOnboardingCompleted = true
+          }
+          .disabled(sharePlayDisplayNameDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        } message: {
+          Text("What name should other people see for you in shared SharePlay sessions? You can change it later in Settings.")
+        }
+        .alert(
+          "SharePlay Host Left",
+          isPresented: $runtimeAppModel.showsHostDeparturePrompt
+        ) {
+          Button("Take Over Host Role") {
+            sharedAppModel.takeOverSharePlayHostRole()
+          }
+          Button("Leave Session", role: .destructive) {
+            sharedAppModel.leaveGroupActivity()
+          }
+          Button("Ignore", role: .cancel) {
+            sharedAppModel.ignoreSharePlayHostDeparture()
+          }
+        } message: {
+          Text("The SharePlay host left the session. You can take over the host role, leave the session, or continue without a host.")
+        }
         .frame(
           minWidth: runtimeAppModel.windowSize.width,
           minHeight: runtimeAppModel.windowSize.height
@@ -57,6 +91,7 @@ struct VisionApp: App {
         }
         .task {
           GroupActivityHelper.registerGroupActivity()
+          presentSharePlayDisplayNameOnboardingIfNeeded()
         }
         .task {
           await NotificationHelper.requestAuthorization(storedAppModel:storedAppModel)
@@ -245,13 +280,29 @@ struct VisionApp: App {
     .handlesExternalEvents(matching: [groupActivityIdentifier])
   }
 
+  private func presentSharePlayDisplayNameOnboardingIfNeeded() {
+    guard !sharePlayDisplayNameOnboardingCompleted else { return }
+    let configuredName = storedAppModel.sharePlayDisplayName
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+    if !configuredName.isEmpty {
+      sharePlayDisplayNameOnboardingCompleted = true
+      return
+    }
+    sharePlayDisplayNameDraft = UIDevice.current.name
+    showsSharePlayDisplayNameOnboarding = true
+  }
+
   func quitApp() {
     let renderTask = runtimeAppModel.cancelRenderLoop()
     Task { @MainActor in
+      if runtimeAppModel.groupSessionHost && sharedAppModel.isInGroupSession {
+        await sharedAppModel.shutdownGroupsession()
+      }
       if runtimeAppModel.immersiveSpaceState == .open {
         await dismissImmersiveSpace()
       }
       await renderTask?.value
+      runtimeAppModel.immersiveSpaceState = .closed
       runtimeAppModel.quitApp()
     }
   }
@@ -290,10 +341,16 @@ struct VisionApp: App {
       await sharedAppModel.shutdownGroupsession()
     }
 
-    runtimeAppModel.immersiveSpaceState = .inTransition
+    let immersiveSpaceWasAlreadyClosed = runtimeAppModel.immersiveSpaceState == .closed
+    if !immersiveSpaceWasAlreadyClosed {
+      runtimeAppModel.immersiveSpaceState = .inTransition
+    }
     let renderTask = runtimeAppModel.cancelRenderLoop()
     await renderTask?.value
-    await dismissImmersiveSpace()
+    if !immersiveSpaceWasAlreadyClosed {
+      await dismissImmersiveSpace()
+    }
+    runtimeAppModel.immersiveSpaceState = .closed
     runtimeAppModel.immersiveSpaceIntent = .keepCurrent
     runtimeAppModel.currentState = destinationState
 
@@ -313,6 +370,7 @@ struct VisionApp: App {
         try? sharedAppModel.modelTransform.save(to: fileURL)
       }
     }
+    runtimeAppModel.activeDataset = nil
   }
 
   @MainActor

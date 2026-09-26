@@ -67,6 +67,16 @@ struct RenderView: View {
     } message: {
       Text("Closing this dataset will leave the current SharePlay session.")
     }
+    .onChange(of: appSettings.showBrickVisualization) { _, isVisible in
+      guard !isVisible, renderingParameters.brickVis else { return }
+      renderingParameters.brickVis = false
+      synchronizeState()
+    }
+    .onChange(of: appSettings.showLogButton) { _, isVisible in
+      if !isVisible {
+        showLog = false
+      }
+    }
   }
 
   @ViewBuilder
@@ -84,7 +94,7 @@ struct RenderView: View {
 
       switch layout.renderControlPlacement {
         case .overlayTop:
-          topOverlayControls
+          topOverlayControls(usesCompactRenderModeLabels: layout.usesCompactRenderModeLabels)
       }
 
       if showIsoEditor && renderingParameters.renderMode == .isoValue {
@@ -119,7 +129,7 @@ struct RenderView: View {
   }
 
   @ViewBuilder
-  private var topOverlayControls: some View {
+  private func topOverlayControls(usesCompactRenderModeLabels: Bool) -> some View {
     if showRenderControls {
       VStack(spacing: 8) {
         HStack {
@@ -189,20 +199,23 @@ struct RenderView: View {
           .help("dataset_info_button_help")
           .buttonStyle(.bordered)
 
-          Button {
-            showLog.toggle()
-          } label: {
-            Image(systemName: "text.alignleft")
+          if appSettings.showLogButton {
+            Button {
+              showLog.toggle()
+            } label: {
+              Image(systemName: "text.alignleft")
+            }
+            .accessibilityLabel("Log")
+            .buttonStyle(.bordered)
           }
-          .accessibilityLabel("Log")
-          .buttonStyle(.bordered)
 
           visibilityButton
         }
 
         Picker("Render Mode", selection: $renderingParameters.renderMode) {
           ForEach(RenderMode.allCases) { mode in
-            Text(mode.description).tag(mode)
+            renderModeLabel(for: mode, compact: usesCompactRenderModeLabels)
+              .tag(mode)
           }
         }
         .pickerStyle(.segmented)
@@ -219,11 +232,26 @@ struct RenderView: View {
         .pickerStyle(.segmented)
 
         HStack {
-          Toggle("Bricks", isOn: $renderingParameters.brickVis)
-            .toggleStyle(.button)
-            .onChange(of: renderingParameters.brickVis) {
-              synchronizeState()
+          if sharePlay.isInSession {
+            Toggle(isOn: screenViewSynchronizationBinding) {
+              Label(
+                "Synchronize View",
+                systemImage: sharePlay.isScreenViewSynchronized ? "link" : "link.badge.plus"
+              )
+              .labelStyle(.iconOnly)
             }
+            .toggleStyle(.button)
+            .accessibilityLabel("Synchronize View")
+            .accessibilityHint("Keep this device's view synchronized with other iPhone, iPad, and Mac participants.")
+          }
+
+          if appSettings.showBrickVisualization {
+            Toggle("Bricks", isOn: $renderingParameters.brickVis)
+              .toggleStyle(.button)
+              .onChange(of: renderingParameters.brickVis) {
+                synchronizeState()
+              }
+          }
 
           Button {
             renderingParameters.reset()
@@ -266,6 +294,25 @@ struct RenderView: View {
   }
 
   @ViewBuilder
+  private func renderModeLabel(for mode: RenderMode, compact: Bool) -> some View {
+    if compact {
+      switch mode {
+        case .transferFunction1DLighting:
+          Image(systemName: "lightbulb.max.fill")
+            .accessibilityLabel(mode.description)
+        case .transferFunction1D:
+          Image(systemName: "chart.xyaxis.line")
+            .accessibilityLabel(mode.description)
+        case .isoValue:
+          Image(systemName: "square.3.layers.3d.top.filled")
+            .accessibilityLabel(mode.description)
+      }
+    } else {
+      Text(mode.description)
+    }
+  }
+
+  @ViewBuilder
   private var renderBackground: some View {
     switch RenderBackgroundMode(rawValue: appSettings.renderBackgroundMode) ?? .system {
       case .system:
@@ -286,6 +333,13 @@ struct RenderView: View {
 
   private var transferFunctionCatalogDirectoryURLs: [URL] {
     FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
+  }
+
+  private var screenViewSynchronizationBinding: Binding<Bool> {
+    Binding(
+      get: { sharePlay.isScreenViewSynchronized },
+      set: { sharePlay.setScreenViewSynchronizationEnabled($0) }
+    )
   }
 
   private var canCopyWebGPUShareLink: Bool {
@@ -396,7 +450,11 @@ struct RenderView: View {
             screenPosition,
             appModel.volumeMarkers[index].position
           ) else { return }
-    appModel.volumeMarkers[index].position = position
+    let offset = position - appModel.volumeMarkers[index].position
+    for selectedIndex in appModel.volumeMarkers.indices
+      where appModel.selectedVolumeMarkerIDs.contains(appModel.volumeMarkers[selectedIndex].id) {
+      appModel.volumeMarkers[selectedIndex].translate(by: offset)
+    }
     sharePlay.synchronizeMarkers()
   }
 
@@ -600,14 +658,12 @@ struct RenderView: View {
   private func scaleSelectedMarker(by factor: Float) {
     guard let markerID = appModel.selectedVolumeMarkerID,
           let index = appModel.volumeMarkers.firstIndex(where: { $0.id == markerID }) else { return }
-    let markerKind = appModel.volumeMarkers[index].kind
-    let radius = VolumeMarkerRadius.clamp(
-      appModel.volumeMarkers[index].radius * factor,
-      for: markerKind
-    )
-    appModel.volumeMarkers[index].radius = radius
-    if markerKind == .sphere {
-      appModel.defaultVolumeMarkerRadius = radius
+    for selectedIndex in appModel.volumeMarkers.indices
+      where appModel.selectedVolumeMarkerIDs.contains(appModel.volumeMarkers[selectedIndex].id) {
+      appModel.volumeMarkers[selectedIndex].scaleRadii(by: factor)
+    }
+    if appModel.volumeMarkers[index].kind == .sphere {
+      appModel.defaultVolumeMarkerRadius = appModel.volumeMarkers[index].radius
     }
     sharePlay.synchronizeMarkers()
   }

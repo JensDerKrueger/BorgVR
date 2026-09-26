@@ -71,11 +71,23 @@ final class AppModel: ObservableObject {
   }
 
   @Published var currentState: ContentViewState = .start
+  @Published var sharePlayWaitingReason: SharePlayWaitingReason = .hostDataset
   @Published var activeDataset: DatasetEntry?
   @Published var groupSessionHost = true
   @Published var interactionMode: InteractionMode = .model
   @Published var volumeMarkers: [VolumeMarker] = []
-  @Published var selectedVolumeMarkerID: UUID?
+  @Published var selectedVolumeMarkerIDs: Set<UUID> = []
+  @Published var selectedVolumeMarkerID: UUID? {
+    didSet {
+      guard let selectedVolumeMarkerID else {
+        selectedVolumeMarkerIDs.removeAll()
+        return
+      }
+      if !selectedVolumeMarkerIDs.contains(selectedVolumeMarkerID) {
+        selectedVolumeMarkerIDs = [selectedVolumeMarkerID]
+      }
+    }
+  }
   @Published private(set) var remoteSpatialStylusPreviews: [UUID: SpatialStylusPreview] = [:]
   /// Radius used for sphere markers created locally during this app session.
   var defaultVolumeMarkerRadius = VolumeMarkerRadius.sphereDefault
@@ -125,10 +137,20 @@ final class AppModel: ObservableObject {
 
   func replaceVolumeMarkers(_ markers: [VolumeMarker]) {
     volumeMarkers = markers
-    if let selectedVolumeMarkerID,
-       !markers.contains(where: { $0.id == selectedVolumeMarkerID }) {
-      self.selectedVolumeMarkerID = nil
-    }
+    setVolumeMarkerSelection(selectedVolumeMarkerIDs, primary: selectedVolumeMarkerID)
+  }
+
+  func setVolumeMarkerSelection(_ ids: Set<UUID>, primary: UUID? = nil) {
+    let availableIDs = Set(volumeMarkers.map(\.id))
+    let validIDs = ids.intersection(availableIDs)
+    selectedVolumeMarkerIDs = validIDs
+    selectedVolumeMarkerID = primary.flatMap { validIDs.contains($0) ? $0 : nil }
+      ?? selectedVolumeMarkerID.flatMap { validIDs.contains($0) ? $0 : nil }
+      ?? volumeMarkers.first(where: { validIDs.contains($0.id) })?.id
+  }
+
+  func clearVolumeMarkerSelection() {
+    selectedVolumeMarkerID = nil
   }
 
   func updateRemoteSpatialStylusPreview(

@@ -53,21 +53,32 @@ struct MarkerView: View {
         Text("marker_window_empty")
           .foregroundStyle(.secondary)
       } else {
-        List(selection: selectedMarkerBinding) {
+        List {
           ForEach(sharedAppModel.volumeMarkers) { marker in
-            HStack {
-              Circle()
-                .fill(color(from: marker.color))
-                .frame(width: 18, height: 18)
-              VStack(alignment: .leading) {
-                Text(marker.name)
-                Text(marker.kind == .sphere ? "Sphere" : "Stroke")
-                  .font(.caption)
-                  .foregroundStyle(.secondary)
+            Button {
+              toggleSelection(of: marker.id)
+            } label: {
+              HStack {
+                Circle()
+                  .fill(color(from: marker.color))
+                  .frame(width: 18, height: 18)
+                VStack(alignment: .leading) {
+                  Text(marker.name)
+                  Text(
+                    marker.kind == .sphere
+                      ? String(localized: "Sphere")
+                      : String(localized: "Stroke")
+                  )
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                }
+                Spacer()
+                if sharedAppModel.selectedVolumeMarkerIDs.contains(marker.id) {
+                  Image(systemName: "checkmark")
+                }
               }
-              Spacer()
             }
-            .tag(marker.id)
+            .buttonStyle(.plain)
           }
         }
         .frame(minHeight: 240)
@@ -87,6 +98,14 @@ struct MarkerView: View {
             selection: selectedMarkerColorBinding,
             supportsOpacity: false
           )
+
+          HStack {
+            Text("Radius")
+            Slider(value: selectedMarkerRadiusBinding, in: selectedMarkerRadiusRange)
+            Text(selectedMarkerRadiusBinding.wrappedValue, format: .number.precision(.fractionLength(3)))
+              .monospacedDigit()
+              .frame(width: 62, alignment: .trailing)
+          }
         } else {
           Text("private_marker_no_selection")
             .foregroundStyle(.secondary)
@@ -128,10 +147,10 @@ struct MarkerView: View {
         }
 
         HStack {
-          Button("private_marker_delete_selected_button") {
-            deleteSelectedMarker()
+          Button(deleteSelectedMarkersTitle) {
+            deleteSelectedMarkers()
           }
-          .disabled(sharedAppModel.selectedVolumeMarkerID == nil)
+          .disabled(sharedAppModel.selectedVolumeMarkerIDs.isEmpty)
 
           Button("private_marker_clear_all_button") {
             showClearAllConfirmation = true
@@ -221,6 +240,12 @@ struct MarkerView: View {
 
   private var currentDatasetID: String? { runtimeAppModel.activeDataset?.uniqueId }
 
+  private var deleteSelectedMarkersTitle: LocalizedStringKey {
+    sharedAppModel.selectedVolumeMarkerIDs.count == 1
+      ? "private_marker_delete_selected_button"
+      : "Delete Selected Markers"
+  }
+
   private var hasSharedScreenView: Bool {
     sharedAppModel.screenSharePlayViewState != nil &&
       sharedAppModel.sharePlayParticipants.contains {
@@ -249,20 +274,28 @@ struct MarkerView: View {
     )
   }
 
-  private var selectedMarkerBinding: Binding<UUID?> {
-    Binding(
-      get: { sharedAppModel.selectedVolumeMarkerID },
-      set: { newValue in
-        sharedAppModel.selectedVolumeMarkerID = newValue
-        if newValue != nil {
-          runtimeAppModel.interactionMode = .marker
-        }
-      }
-    )
+  private var selectedMarkerIndices: [Int] {
+    sharedAppModel.volumeMarkers.indices.filter {
+      sharedAppModel.selectedVolumeMarkerIDs.contains(sharedAppModel.volumeMarkers[$0].id)
+    }
+  }
+
+  private func toggleSelection(of markerID: UUID) {
+    var selection = sharedAppModel.selectedVolumeMarkerIDs
+    if selection.contains(markerID) {
+      selection.remove(markerID)
+    } else {
+      selection.insert(markerID)
+    }
+    sharedAppModel.setVolumeMarkerSelection(selection, primary: markerID)
+    if !selection.isEmpty {
+      runtimeAppModel.interactionMode = .marker
+    }
   }
 
   private var selectedMarkerNameBinding: Binding<String>? {
-    guard let markerID = sharedAppModel.selectedVolumeMarkerID,
+    guard selectedMarkerIndices.count == 1,
+          let markerID = sharedAppModel.selectedVolumeMarkerID,
           sharedAppModel.volumeMarkers.contains(where: { $0.id == markerID }) else {
       return nil
     }
@@ -300,30 +333,79 @@ struct MarkerView: View {
         return color(from: sharedAppModel.volumeMarkers[currentIndex].color)
       },
       set: { newColor in
-        guard let currentIndex = sharedAppModel.volumeMarkers.firstIndex(where: { $0.id == markerID }) else {
-          return
+        let markerColor = simdColor(from: newColor)
+        for index in selectedMarkerIndices {
+          sharedAppModel.volumeMarkers[index].color = markerColor
         }
-        sharedAppModel.volumeMarkers[currentIndex].color = simdColor(from: newColor)
         sharedAppModel.synchronizeMarkers()
       }
     )
   }
 
-  private var selectedMarkerDirectionBinding: Binding<Bool>? {
+  private var selectedMarkerRadiusBinding: Binding<Float> {
+    Binding(
+      get: {
+        guard let markerID = sharedAppModel.selectedVolumeMarkerID,
+              let marker = sharedAppModel.volumeMarkers.first(where: { $0.id == markerID }) else {
+          return VolumeMarkerRadius.sphereDefault
+        }
+        return marker.radius
+      },
+      set: { radius in
+        guard let markerID = sharedAppModel.selectedVolumeMarkerID,
+              let primaryIndex = sharedAppModel.volumeMarkers.firstIndex(where: { $0.id == markerID }) else {
+          return
+        }
+        let previousRadius = max(sharedAppModel.volumeMarkers[primaryIndex].radius, 0.000_001)
+        let factor = radius / previousRadius
+        for index in selectedMarkerIndices {
+          sharedAppModel.volumeMarkers[index].scaleRadii(by: factor)
+        }
+        let primaryMarker = sharedAppModel.volumeMarkers[primaryIndex]
+        if primaryMarker.kind == .sphere {
+          sharedAppModel.defaultVolumeMarkerRadius = primaryMarker.radius
+        } else {
+          sharedAppModel.defaultVolumeStrokeRadius = primaryMarker.radius
+        }
+        sharedAppModel.synchronizeMarkers()
+      }
+    )
+  }
+
+  private var selectedMarkerRadiusRange: ClosedRange<Float> {
     guard let markerID = sharedAppModel.selectedVolumeMarkerID,
-          let marker = sharedAppModel.volumeMarkers.first(where: { $0.id == markerID }),
-          marker.kind == .sphere else {
+          let primary = sharedAppModel.volumeMarkers.first(where: { $0.id == markerID }) else {
+      return VolumeMarkerRadius.sphereRange
+    }
+    let primaryRadius = max(primary.radius, 0.000_001)
+    var lowerFactor: Float = 0
+    var upperFactor = Float.greatestFiniteMagnitude
+    for index in selectedMarkerIndices {
+      let marker = sharedAppModel.volumeMarkers[index]
+      let range = VolumeMarkerRadius.range(for: marker.kind)
+      let radius = max(marker.radius, 0.000_001)
+      lowerFactor = max(lowerFactor, range.lowerBound / radius)
+      upperFactor = min(upperFactor, range.upperBound / radius)
+    }
+    return (primaryRadius * lowerFactor)...(primaryRadius * upperFactor)
+  }
+
+  private var selectedMarkerDirectionBinding: Binding<Bool>? {
+    let sphereIndices = selectedMarkerIndices.filter {
+      sharedAppModel.volumeMarkers[$0].kind == .sphere
+    }
+    guard !sphereIndices.isEmpty else {
       return nil
     }
 
     return Binding(
       get: {
-        sharedAppModel.volumeMarkers.first(where: { $0.id == markerID })?.showsDirection ?? false
+        sphereIndices.allSatisfy { sharedAppModel.volumeMarkers[$0].showsDirection }
       },
       set: { showsDirection in
-        guard let index = sharedAppModel.volumeMarkers.firstIndex(where: { $0.id == markerID }),
-              sharedAppModel.volumeMarkers[index].kind == .sphere else { return }
-        sharedAppModel.volumeMarkers[index].showsDirection = showsDirection
+        for index in selectedMarkerIndices where sharedAppModel.volumeMarkers[index].kind == .sphere {
+          sharedAppModel.volumeMarkers[index].showsDirection = showsDirection
+        }
         sharedAppModel.defaultVolumeMarkerShowsDirection = showsDirection
         sharedAppModel.synchronizeMarkers()
       }
@@ -353,12 +435,11 @@ struct MarkerView: View {
     )
   }
 
-  private func deleteSelectedMarker() {
-    guard let markerID = sharedAppModel.selectedVolumeMarkerID else {
-      return
-    }
-    sharedAppModel.volumeMarkers.removeAll { $0.id == markerID }
-    sharedAppModel.selectedVolumeMarkerID = nil
+  private func deleteSelectedMarkers() {
+    let selectedIDs = sharedAppModel.selectedVolumeMarkerIDs
+    guard !selectedIDs.isEmpty else { return }
+    sharedAppModel.volumeMarkers.removeAll { selectedIDs.contains($0.id) }
+    sharedAppModel.clearVolumeMarkerSelection()
     sharedAppModel.synchronizeMarkers()
   }
 
