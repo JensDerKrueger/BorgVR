@@ -274,19 +274,72 @@ func computeMandelbulb(filename: String, sizeX: Int, sizeY: Int, sizeZ: Int,
   )
 }
 
-/**
- Generates the same Mandelbulb volume slice by slice with a Metal compute kernel.
+enum MandelbulbFloatBackend {
+  case metal
+  case cpu
 
- The CPU implementation above remains available as a reference implementation.
- */
-func computeMandelbulbGPU(filename: String, sizeX: Int, sizeY: Int, sizeZ: Int,
-                          bytesPerVoxel: Int, logger: LoggerBase? = nil) throws {
-  let generator = try GPUMandelbulbGenerator(
+  var metaDescription: String {
+    switch self {
+      case .metal:
+        return "Single-precision Metal fractal data"
+      case .cpu:
+        return "Single-precision CPU fractal data"
+    }
+  }
+}
+
+/** Generates a single-precision Mandelbulb, preferring Metal when available. */
+func computeMandelbulbFloat(filename: String,
+                            sizeX: Int,
+                            sizeY: Int,
+                            sizeZ: Int,
+                            bytesPerVoxel: Int,
+                            logger: LoggerBase? = nil) throws -> MandelbulbFloatBackend {
+  let generator: GPUMandelbulbGenerator
+  do {
+    generator = try GPUMandelbulbGenerator(
+      sizeX: sizeX,
+      sizeY: sizeY,
+      sizeZ: sizeZ,
+      bytesPerVoxel: bytesPerVoxel
+    )
+  } catch {
+    logger?.warning(
+      "Metal initialization failed (\(error.localizedDescription)). " +
+      "Falling back to single-precision CPU generation."
+    )
+    try computeMandelbulbFloatCPU(
+      filename: filename,
+      sizeX: sizeX,
+      sizeY: sizeY,
+      sizeZ: sizeZ,
+      bytesPerVoxel: bytesPerVoxel,
+      logger: logger
+    )
+    return .cpu
+  }
+
+  logger?.info("Using Metal for single-precision Mandelbulb generation")
+  try computeMandelbulbGPU(
+    filename: filename,
     sizeX: sizeX,
     sizeY: sizeY,
     sizeZ: sizeZ,
-    bytesPerVoxel: bytesPerVoxel
+    bytesPerVoxel: bytesPerVoxel,
+    generator: generator,
+    logger: logger
   )
+  return .metal
+}
+
+/** Generates a Mandelbulb volume slice by slice with an initialized Metal context. */
+private func computeMandelbulbGPU(filename: String,
+                                  sizeX: Int,
+                                  sizeY: Int,
+                                  sizeZ: Int,
+                                  bytesPerVoxel: Int,
+                                  generator: GPUMandelbulbGenerator,
+                                  logger: LoggerBase? = nil) throws {
   let sliceByteCount = sizeX * sizeY * bytesPerVoxel
   let fileURL = URL(fileURLWithPath: filename)
   let memoryMappedFile = try MemoryMappedFile(
@@ -322,9 +375,13 @@ func computeMandelbulbGPU(filename: String, sizeX: Int, sizeY: Int, sizeZ: Int,
   )
 }
 
-/** Generates a single-precision CPU reference for the Metal Mandelbulb path. */
-func computeMandelbulbFloat(filename: String, sizeX: Int, sizeY: Int, sizeZ: Int,
-                            bytesPerVoxel: Int, logger: LoggerBase? = nil) throws {
+/** Generates a single-precision Mandelbulb on the CPU. */
+private func computeMandelbulbFloatCPU(filename: String,
+                                       sizeX: Int,
+                                       sizeY: Int,
+                                       sizeZ: Int,
+                                       bytesPerVoxel: Int,
+                                       logger: LoggerBase? = nil) throws {
   let maximumIterations = (1 << (8 * bytesPerVoxel)) - 1
   let fileURL = URL(fileURLWithPath: filename)
   let memoryMappedFile = try MemoryMappedFile(

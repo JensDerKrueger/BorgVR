@@ -5,7 +5,7 @@ import os
 /**
  Strategies for handling voxels when extending volume boundaries.
  */
-public enum ExtensionStrategy {
+public enum ExtensionStrategy: Equatable {
   /// Extend by filling missing voxels with zeroes.
   case fillZeroes
   /// Extend by clamping to the nearest valid voxel.
@@ -21,6 +21,48 @@ public enum ExtensionStrategy {
  continues until the dataset fits into a single brick.
  */
 public class BrickedVolumeReorganizer {
+
+  private struct BrickCoordinate: Sendable {
+    let x: Int
+    let y: Int
+    let z: Int
+  }
+
+  private struct PreparedBrick: Sendable {
+    let data: [UInt8]
+    let minValue: Int
+    let maxValue: Int
+    let isCompressed: Bool
+  }
+
+  private final class PreparedBrickStore: @unchecked Sendable {
+    private var values: [PreparedBrick?]
+    private let lock = NSLock()
+
+    init(count: Int) {
+      values = [PreparedBrick?](repeating: nil, count: count)
+    }
+
+    func set(_ value: PreparedBrick, at index: Int) {
+      lock.lock()
+      values[index] = value
+      lock.unlock()
+    }
+
+    func value(at index: Int) -> PreparedBrick {
+      lock.lock()
+      defer { lock.unlock() }
+      return values[index]!
+    }
+  }
+
+  private final class RawSourceReference: @unchecked Sendable {
+    let source: RawFileAccessor
+
+    init(_ source: RawFileAccessor) {
+      self.source = source
+    }
+  }
 
   // MARK: - Properties
 
@@ -107,6 +149,18 @@ public class BrickedVolumeReorganizer {
                          x: Int, y: Int, z: Int,
                          isBoundaryBrick: Bool,
                          brickData: inout [UInt8]) throws  {
+    if let rawSource = source as? RawFileAccessor {
+      fillRawBrick(
+        source: rawSource,
+        x: x,
+        y: y,
+        z: z,
+        isBoundaryBrick: isBoundaryBrick,
+        brickData: &brickData
+      )
+      return
+    }
+
     var pos = 0
 
     if isBoundaryBrick {
@@ -135,6 +189,118 @@ public class BrickedVolumeReorganizer {
           //          memcpy(&brickData[pos], voxelValue, voxelValue.count)
           brickData.replaceSubrange(pos ..< pos + voxelValue.count, with: voxelValue)
           pos += voxelValue.count
+        }
+      }
+    }
+  }
+
+  /**
+   Fills a brick directly from memory-mapped storage. This avoids creating
+   temporary arrays for every row or boundary voxel.
+   */
+  private func fillRawBrick(source: RawFileAccessor,
+                            x: Int, y: Int, z: Int,
+                            isBoundaryBrick: Bool,
+                            brickData: inout [UInt8]) {
+    let voxelByteSize = source.voxelByteSize
+    let sourcePointer = UnsafeRawPointer(source.mappedMemory)
+
+    brickData.withUnsafeMutableBytes { destinationBuffer in
+      guard let destinationBase = destinationBuffer.baseAddress else { return }
+
+      if !isBoundaryBrick {
+        let rowByteCount = brickSize * voxelByteSize
+        for zOffset in 0..<brickSize {
+          for yOffset in 0..<brickSize {
+            let sourceIndex = source.calculateIndex(
+              x: x - overlap,
+              y: y + yOffset - overlap,
+              z: z + zOffset - overlap
+            )
+            let destinationIndex =
+              (zOffset * brickSize * brickSize + yOffset * brickSize) * voxelByteSize
+            memcpy(
+              destinationBase.advanced(by: destinationIndex),
+              sourcePointer.advanced(by: sourceIndex),
+              rowByteCount
+            )
+          }
+        }
+        return
+      }
+
+      if extensionStrategy == .fillZeroes {
+        memset(destinationBase, 0, destinationBuffer.count)
+      }
+
+      let sourceStartX = x - overlap
+      for zOffset in 0..<brickSize {
+        let requestedZ = z + zOffset - overlap
+        for yOffset in 0..<brickSize {
+          let requestedY = y + yOffset - overlap
+          let destinationRowIndex =
+            (zOffset * brickSize * brickSize + yOffset * brickSize) * voxelByteSize
+
+          if extensionStrategy == .fillZeroes {
+            guard requestedY >= 0, requestedY < source.size.y,
+                  requestedZ >= 0, requestedZ < source.size.z else {
+              continue
+            }
+
+            let destinationStartX = max(0, -sourceStartX)
+            let validSourceX = max(0, sourceStartX)
+            let validVoxelCount = min(
+              brickSize - destinationStartX,
+              source.size.x - validSourceX
+            )
+            guard validVoxelCount > 0 else { continue }
+
+            let sourceIndex = source.calculateIndex(
+              x: validSourceX,
+              y: requestedY,
+              z: requestedZ
+            )
+            memcpy(
+              destinationBase.advanced(
+                by: destinationRowIndex + destinationStartX * voxelByteSize
+              ),
+              sourcePointer.advanced(by: sourceIndex),
+              validVoxelCount * voxelByteSize
+            )
+            continue
+          }
+
+          for xOffset in 0..<brickSize {
+            let requestedX = sourceStartX + xOffset
+            let sourceX: Int
+            let sourceY: Int
+            let sourceZ: Int
+
+            switch extensionStrategy {
+              case .fillZeroes:
+                preconditionFailure("fillZeroes handled above")
+              case .clamp:
+                sourceX = max(0, min(requestedX, source.size.x - 1))
+                sourceY = max(0, min(requestedY, source.size.y - 1))
+                sourceZ = max(0, min(requestedZ, source.size.z - 1))
+              case .repeatValue:
+                sourceX = (requestedX + source.size.x) % source.size.x
+                sourceY = (requestedY + source.size.y) % source.size.y
+                sourceZ = (requestedZ + source.size.z) % source.size.z
+            }
+
+            let sourceIndex = source.calculateIndex(
+              x: sourceX,
+              y: sourceY,
+              z: sourceZ
+            )
+            let destinationIndex = destinationRowIndex + xOffset * voxelByteSize
+            memcpy(
+              destinationBase.advanced(by: destinationIndex),
+              sourcePointer.advanced(by: sourceIndex),
+              voxelByteSize
+            )
+          }
         }
       }
     }
@@ -188,27 +354,25 @@ public class BrickedVolumeReorganizer {
    - Returns: A compressed array of `UInt8` if compression is successful;
    otherwise, `nil`.
    */
-  private func compress(data: [UInt8], algorithm: compression_algorithm) -> [UInt8]? {
-    let destinationBuffer = UnsafeMutablePointer<UInt8>.allocate(capacity: data.count)
-    defer { destinationBuffer.deallocate() }
-
+  private func compress(data: [UInt8],
+                        into destination: inout [UInt8],
+                        algorithm: compression_algorithm) -> Int? {
+    let destinationCount = destination.count
     let compressedSize = data.withUnsafeBytes { sourceBuffer in
-      compression_encode_buffer(
-        destinationBuffer,
-        data.count,
-        sourceBuffer.baseAddress!.assumingMemoryBound(to: UInt8.self),
-        data.count,
-        nil,
-        algorithm
-      )
+      destination.withUnsafeMutableBytes { destinationBuffer in
+        compression_encode_buffer(
+          destinationBuffer.baseAddress!.assumingMemoryBound(to: UInt8.self),
+          destinationCount,
+          sourceBuffer.baseAddress!.assumingMemoryBound(to: UInt8.self),
+          data.count,
+          nil,
+          algorithm
+        )
+      }
     }
 
-    guard compressedSize != 0, compressedSize < data.count else {
-      return nil
-    }
-
-    return Array(UnsafeBufferPointer(start: destinationBuffer,
-                                     count: compressedSize))
+    guard compressedSize != 0, compressedSize < data.count else { return nil }
+    return compressedSize
   }
 
   // MARK: - Public Methods
@@ -552,6 +716,19 @@ public class BrickedVolumeReorganizer {
       readOnly: false
     )
 
+    if let rawVolume = volume as? RawFileAccessor {
+      subsampleRaw(
+        source: rawVolume,
+        target: target,
+        newSize: newSize,
+        minMaxComputation: minMaxComputation,
+        minValue: &minValue,
+        maxValue: &maxValue,
+        logger: logger
+      )
+      return target
+    }
+
     switch volume.bytesPerComponent {
       case 1:
         var data = [UInt8](repeating: 0, count: volume.componentCount)
@@ -740,79 +917,333 @@ public class BrickedVolumeReorganizer {
   }
 
   /**
-   A generic helper that computes the minimum and maximum values and
-   builds a histogram for an array of fixed-width integers.
-
-   - Parameter values: An array of values of type T.
-   - Returns: A tuple containing:
-   - minValue: The minimum value found.
-   - maxValue: The maximum value found.
-   - histogram: An array of counts for each value in the range
-   [minValue, maxValue].
+   Subsamples a memory-mapped volume without allocating arrays for individual
+   source or destination voxels.
    */
-  func computeHistogramForValues<T: FixedWidthInteger & Comparable>(
-    values: [T]
-  ) -> (minValue: Int, maxValue: Int, histogram: [Int]) {
-    if let minVal = values.min(), let maxVal = values.max() {
-      let histLength = Int(maxVal - minVal) + 1
-      var histogram = [Int](repeating: 0, count: histLength)
-      for value in values {
-        let index = Int(value) - Int(minVal)
-        histogram[index] += 1
-      }
-      return (
-        minValue: Int(minVal),
-        maxValue: Int(maxVal),
-        histogram: histogram
+  private func subsampleRaw<T: ComputeMinMaxToggle>(
+    source: RawFileAccessor,
+    target: RawFileAccessor,
+    newSize: Vec3<Int>,
+    minMaxComputation: T.Type,
+    minValue: inout Int,
+    maxValue: inout Int,
+    logger: LoggerBase?
+  ) {
+    switch source.bytesPerComponent {
+      case 1:
+        subsampleRawValues(
+          source: source.mappedMemory.assumingMemoryBound(to: UInt8.self),
+          target: target.mappedMemory.assumingMemoryBound(to: UInt8.self),
+          sourceSize: source.size,
+          targetSize: newSize,
+          componentCount: source.componentCount,
+          accumulator: UInt16.self,
+          minMaxComputation: minMaxComputation,
+          minValue: &minValue,
+          maxValue: &maxValue,
+          logger: logger
+        )
+      case 2:
+        subsampleRawValues(
+          source: source.mappedMemory.assumingMemoryBound(to: UInt16.self),
+          target: target.mappedMemory.assumingMemoryBound(to: UInt16.self),
+          sourceSize: source.size,
+          targetSize: newSize,
+          componentCount: source.componentCount,
+          accumulator: UInt32.self,
+          minMaxComputation: minMaxComputation,
+          minValue: &minValue,
+          maxValue: &maxValue,
+          logger: logger
+        )
+      case 4:
+        subsampleRawValues(
+          source: source.mappedMemory.assumingMemoryBound(to: UInt32.self),
+          target: target.mappedMemory.assumingMemoryBound(to: UInt32.self),
+          sourceSize: source.size,
+          targetSize: newSize,
+          componentCount: source.componentCount,
+          accumulator: UInt64.self,
+          minMaxComputation: minMaxComputation,
+          minValue: &minValue,
+          maxValue: &maxValue,
+          logger: logger
+        )
+      default:
+        fatalError("\(#function): Unsupported data byte \(source.bytesPerComponent)")
+    }
+
+    logger?.progress(
+      L(
+        "bricked_log_subsampling_progress_title",
+        value: "Subsampling",
+        comment: "Log: subsampling progress title"
+      ),
+      1.0
+    )
+  }
+
+  private func subsampleRawValues<
+    Value: FixedWidthInteger,
+    Accumulator: FixedWidthInteger,
+    Toggle: ComputeMinMaxToggle
+  >(
+    source: UnsafeMutablePointer<Value>,
+    target: UnsafeMutablePointer<Value>,
+    sourceSize: Vec3<Int>,
+    targetSize: Vec3<Int>,
+    componentCount: Int,
+    accumulator: Accumulator.Type,
+    minMaxComputation: Toggle.Type,
+    minValue: inout Int,
+    maxValue: inout Int,
+    logger: LoggerBase?
+  ) {
+    var sums = [Accumulator](repeating: 0, count: componentCount)
+
+    for z in 0..<targetSize.z {
+      logger?.progress(
+        L(
+          "bricked_log_subsampling_progress_title",
+          value: "Subsampling",
+          comment: "Log: subsampling progress title"
+        ),
+        Double(z) / Double(targetSize.z)
       )
-    } else {
-      return (minValue: 0, maxValue: 0, histogram: [])
+
+      for y in 0..<targetSize.y {
+        for x in 0..<targetSize.x {
+          for component in 0..<componentCount {
+            sums[component] = 0
+          }
+
+          var sampleCount = 0
+          for dz in 0...1 {
+            let sourceZ = z * 2 + dz
+            guard sourceZ < sourceSize.z else { continue }
+            for dy in 0...1 {
+              let sourceY = y * 2 + dy
+              guard sourceY < sourceSize.y else { continue }
+              for dx in 0...1 {
+                let sourceX = x * 2 + dx
+                guard sourceX < sourceSize.x else { continue }
+
+                let sourceIndex =
+                  ((sourceZ * sourceSize.y + sourceY) * sourceSize.x + sourceX) *
+                  componentCount
+                if Toggle.minMaxComputationEnabled {
+                  let value = Int(source[sourceIndex])
+                  minValue = min(minValue, value)
+                  maxValue = max(maxValue, value)
+                }
+
+                for component in 0..<componentCount {
+                  sums[component] += Accumulator(source[sourceIndex + component])
+                }
+                sampleCount += 1
+              }
+            }
+          }
+
+          let targetIndex =
+            ((z * targetSize.y + y) * targetSize.x + x) * componentCount
+          let divisor = Accumulator(sampleCount)
+          for component in 0..<componentCount {
+            target[targetIndex + component] = Value(sums[component] / divisor)
+          }
+        }
+      }
     }
   }
 
-  /**
-   Computes statistics about the raw byte array data, interpreting it
-   according to `inputVolume.componentCount` and
-   `inputVolume.bytesPerComponent`.
-
-   - Parameter data: A flat array of `UInt8` containing the raw data.
-   - Returns: A tuple containing:
-   - minValue: The smallest value that appears.
-   - maxValue: The largest value that appears.
-   - histogram: An array of counts for each value in the range
-   [minValue, maxValue].
-   */
-  func computeHistogram(
-    data: [UInt8]
-  ) -> (minValue: Int, maxValue: Int, histogram: [Int]) {
+  /** Computes the scalar minimum and maximum without building a histogram. */
+  func computeMinMax(data: [UInt8]) -> (minValue: Int, maxValue: Int) {
     if inputVolume.componentCount != 1 {
-      return (minValue: 0, maxValue: 0, histogram: [])
+      return (minValue: 0, maxValue: 0)
     }
 
     switch inputVolume.bytesPerComponent {
       case 1:
-        return computeHistogramForValues(values: data)
+        guard let minValue = data.min(), let maxValue = data.max() else {
+          return (minValue: 0, maxValue: 0)
+        }
+        return (minValue: Int(minValue), maxValue: Int(maxValue))
       case 2:
         guard data.count % 2 == 0 else {
-          return (minValue: 0, maxValue: 0, histogram: [])
+          return (minValue: 0, maxValue: 0)
         }
-        let values: [UInt16] = data.withUnsafeBytes { rawBuffer in
-          let buffer = rawBuffer.bindMemory(to: UInt16.self)
-          return Array(buffer)
+        return data.withUnsafeBytes { rawBuffer in
+          computeMinMax(values: rawBuffer.bindMemory(to: UInt16.self))
         }
-        return computeHistogramForValues(values: values)
       case 4:
         guard data.count % 4 == 0 else {
-          return (minValue: 0, maxValue: 0, histogram: [])
+          return (minValue: 0, maxValue: 0)
         }
-        let values: [UInt32] = data.withUnsafeBytes { rawBuffer in
-          let buffer = rawBuffer.bindMemory(to: UInt32.self)
-          return Array(buffer)
+        return data.withUnsafeBytes { rawBuffer in
+          computeMinMax(values: rawBuffer.bindMemory(to: UInt32.self))
         }
-        return computeHistogramForValues(values: values)
       default:
-        return (minValue: 0, maxValue: 0, histogram: [])
+        return (minValue: 0, maxValue: 0)
     }
+  }
+
+  private func computeMinMax<T: FixedWidthInteger>(
+    values: UnsafeBufferPointer<T>
+  ) -> (minValue: Int, maxValue: Int) {
+    guard let first = values.first else { return (minValue: 0, maxValue: 0) }
+    var minimum = first
+    var maximum = first
+    for value in values.dropFirst() {
+      minimum = min(minimum, value)
+      maximum = max(maximum, value)
+    }
+    return (minValue: Int(minimum), maxValue: Int(maximum))
+  }
+
+  /**
+   Prepares memory-mapped bricks concurrently in bounded batches and writes
+   each batch in the original deterministic brick order.
+   */
+  private func reorganizeRawLevel(from source: RawFileAccessor,
+                                  to target: MemoryMappedFile,
+                                  at startPos: Int,
+                                  metaData: BORGVRMetaData,
+                                  useCompressor: Bool,
+                                  totalBricks: Int,
+                                  logger: LoggerBase?) -> Int {
+    let bStride = brickSize - 2 * overlap
+    var coordinates: [BrickCoordinate] = []
+    coordinates.reserveCapacity(totalBricks)
+    for z in stride(from: 0, to: source.size.z, by: bStride) {
+      for y in stride(from: 0, to: source.size.y, by: bStride) {
+        for x in stride(from: 0, to: source.size.x, by: bStride) {
+          coordinates.append(BrickCoordinate(x: x, y: y, z: z))
+        }
+      }
+    }
+
+    let brickByteCount = brickSize * brickSize * brickSize * source.voxelByteSize
+    let workerCount = max(1, min(ProcessInfo.processInfo.activeProcessorCount, totalBricks))
+    let memoryLimitedBatchSize = max(workerCount, (128 * 1024 * 1024) / brickByteCount)
+    let batchSize = max(workerCount, min(workerCount * 8, memoryLimitedBatchSize))
+    let sourceReference = RawSourceReference(source)
+
+    var filePos = startPos
+    var completedBrickCount = 0
+    var compressedBrickCounter = 0
+    var uncompressedBrickCounter = 0
+
+    for batchStart in stride(from: 0, to: coordinates.count, by: batchSize) {
+      let currentBatchCount = min(batchSize, coordinates.count - batchStart)
+      let store = PreparedBrickStore(count: currentBatchCount)
+      let currentWorkerCount = min(workerCount, currentBatchCount)
+
+      DispatchQueue.concurrentPerform(iterations: currentWorkerCount) { workerIndex in
+        var brickData = [UInt8](repeating: 0, count: brickByteCount)
+        var compressionBuffer = [UInt8](repeating: 0, count: brickByteCount)
+
+        for localIndex in stride(
+          from: workerIndex,
+          to: currentBatchCount,
+          by: currentWorkerCount
+        ) {
+          let coordinate = coordinates[batchStart + localIndex]
+          let isBoundary = self.isBoundaryBrick(
+            volumeSize: sourceReference.source.size,
+            x: coordinate.x,
+            y: coordinate.y,
+            z: coordinate.z
+          )
+          self.fillRawBrick(
+            source: sourceReference.source,
+            x: coordinate.x,
+            y: coordinate.y,
+            z: coordinate.z,
+            isBoundaryBrick: isBoundary,
+            brickData: &brickData
+          )
+
+          let stats = self.computeMinMax(data: brickData)
+          if useCompressor,
+             let compressedSize = self.compress(
+               data: brickData,
+               into: &compressionBuffer,
+               algorithm: COMPRESSION_LZ4
+             ) {
+            store.set(
+              PreparedBrick(
+                data: Array(compressionBuffer[0..<compressedSize]),
+                minValue: stats.minValue,
+                maxValue: stats.maxValue,
+                isCompressed: true
+              ),
+              at: localIndex
+            )
+          } else {
+            store.set(
+              PreparedBrick(
+                data: brickData,
+                minValue: stats.minValue,
+                maxValue: stats.maxValue,
+                isCompressed: false
+              ),
+              at: localIndex
+            )
+          }
+        }
+      }
+
+      for localIndex in 0..<currentBatchCount {
+        let brick = store.value(at: localIndex)
+        _ = brick.data.withUnsafeBytes { sourceBuffer in
+          memcpy(
+            target.mappedMemory.advanced(by: filePos),
+            sourceBuffer.baseAddress,
+            sourceBuffer.count
+          )
+        }
+        metaData.append(
+          offset: filePos,
+          size: brick.data.count,
+          minValue: brick.minValue,
+          maxValue: brick.maxValue
+        )
+        filePos += brick.data.count
+        completedBrickCount += 1
+        if useCompressor {
+          if brick.isCompressed {
+            compressedBrickCounter += 1
+          } else {
+            uncompressedBrickCounter += 1
+          }
+        }
+      }
+
+      logger?.progress(
+        L(
+          "bricked_log_bricking_progress_title",
+          value: "Bricking",
+          comment: "Log: bricking progress title"
+        ),
+        Double(completedBrickCount) / Double(totalBricks)
+      )
+    }
+
+    if useCompressor {
+      logger?.dev(
+        String(
+          format: L(
+            "bricked_log_compression_summary",
+            value: "Compressed %d brick(s), uncompressed %d brick(s)",
+            comment: "Log: compression summary"
+          ),
+          compressedBrickCounter,
+          uncompressedBrickCounter
+        )
+      )
+    }
+
+    return filePos
   }
 
   /**
@@ -858,12 +1289,25 @@ public class BrickedVolumeReorganizer {
       )
     )
 
+    if let rawSource = source as? RawFileAccessor {
+      return reorganizeRawLevel(
+        from: rawSource,
+        to: target,
+        at: startPos,
+        metaData: metaData,
+        useCompressor: useCompressor,
+        totalBricks: totalBricks,
+        logger: logger
+      )
+    }
+
     var brickIndex = 0
     var brickData = [UInt8](
       repeating: 0,
       count: brickSize * brickSize * brickSize *
       source.componentCount * source.bytesPerComponent
     )
+    var compressionBuffer = [UInt8](repeating: 0, count: brickData.count)
     let bStride = brickSize - 2 * overlap
 
     var compressedBrickCounter = 0
@@ -892,15 +1336,18 @@ public class BrickedVolumeReorganizer {
             .assumingMemoryBound(to: UInt8.self)
 
           var brickSizeInBytes = 0
-          let stats = computeHistogram(data: brickData)
+          let stats = computeMinMax(data: brickData)
 
           if useCompressor {
-            if let compressedData = compress(
+            if let compressedSize = compress(
               data: brickData,
+              into: &compressionBuffer,
               algorithm: COMPRESSION_LZ4
             ) {
-              brickSizeInBytes = compressedData.count
-              memcpy(pointer, compressedData, brickSizeInBytes)
+              brickSizeInBytes = compressedSize
+              _ = compressionBuffer.withUnsafeBytes { compressedBuffer in
+                memcpy(pointer, compressedBuffer.baseAddress, brickSizeInBytes)
+              }
               compressedBrickCounter += 1
             } else {
               brickSizeInBytes = brickData.count

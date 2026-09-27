@@ -21,15 +21,13 @@ enum Mode: String {
  An enum representing the types of datasets for demo data creation.
 
  - LinearData: A dataset with linearly increasing values.
- - FractalData: A double-precision CPU Mandelbulb.
- - FloatFractalData: A single-precision CPU Mandelbulb reference.
- - GPUFractalData: A single-precision Metal Mandelbulb.
+ - DoubleFractalData: A double-precision CPU Mandelbulb.
+ - FloatFractalData: A single-precision Mandelbulb using Metal when available.
  */
 enum DatasetType: String {
   case LinearData = "L"
-  case FractalData = "F"
-  case FloatFractalData = "S"
-  case GPUFractalData = "G"
+  case FloatFractalData = "F"
+  case DoubleFractalData = "D"
 }
 
 /**
@@ -69,7 +67,7 @@ struct HeaderFileModeParameters {
 /**
  Parameters specific to demo data creation mode.
 
- - datasetType: The type of dataset to generate (LinearData or FractalData).
+ - datasetType: The linear or Mandelbulb dataset variant to generate.
  - byteDepth: The bit depth per voxel.
  - componentCount: The number of components per voxel.
  - sizeX: The volume size along the X axis.
@@ -117,8 +115,8 @@ Mode N — Read a NRRD or NHDR file
         overlap           : Positive integer specifying the overlap between bricks
 
 Mode C — Create a volume file using a specified algorithm
-    (args[0]) C <L|F|S|G> <byte_depth> <component_count> <size_x> <size_y> <size_z> <output_filename> <description> <max_brick_size> <overlap>
-        L, F, S, or G     : Algorithm ('L' = linear, 'F' = Double CPU Mandelbulb, 'S' = Float CPU Mandelbulb, 'G' = GPU Mandelbulb)
+    (args[0]) C <L|F|D> <byte_depth> <component_count> <size_x> <size_y> <size_z> <output_filename> <description> <max_brick_size> <overlap>
+        L, F, or D        : Algorithm ('L' = linear, 'F' = Float Mandelbulb with automatic Metal acceleration, 'D' = Double CPU Mandelbulb)
         byte_depth        : Bytes per component (1, 2, or 4)
         component_count   : Number of components per voxel (e.g., 1 for grayscale, 3 for RGB)
         size_x            : Volume size along X (positive integer)
@@ -440,8 +438,8 @@ func convertQVISVolume(_ params: HeaderFileModeParameters) {
 /**
  Generates a synthetic volume dataset and converts it into the BorgVR file format.
 
- Depending on the specified dataset type (LinearData or FractalData), this function generates volume data using the
- appropriate algorithm, writes the raw data to a temporary file, and then converts the raw volume to the BorgVR format.
+ Depending on the specified dataset type, this function generates linear or Mandelbulb volume data, writes the raw data
+ to a temporary file, and then converts the raw volume to the BorgVR format.
 
  - Parameter params: The parameters for demo data creation.
  */
@@ -464,8 +462,8 @@ func generateVolume(_ params: CreateModeParameters) {
                           bytesPerVoxel: params.byteDepth,
                           componentCount: params.componentCount,
                           logger: logger)
-      case .FractalData:
-        metaDesc = "Fractal data"
+      case .DoubleFractalData:
+        metaDesc = "Double-precision CPU fractal data"
         try computeMandelbulb(filename: tempURL.path,
                               sizeX: params.sizeX,
                               sizeY: params.sizeY,
@@ -473,21 +471,15 @@ func generateVolume(_ params: CreateModeParameters) {
                               bytesPerVoxel: params.byteDepth,
                               logger: logger)
       case .FloatFractalData:
-        metaDesc = "Single-precision CPU fractal data"
-        try computeMandelbulbFloat(filename: tempURL.path,
-                                   sizeX: params.sizeX,
-                                   sizeY: params.sizeY,
-                                   sizeZ: params.sizeZ,
-                                   bytesPerVoxel: params.byteDepth,
-                                   logger: logger)
-      case .GPUFractalData:
-        metaDesc = "GPU fractal data"
-        try computeMandelbulbGPU(filename: tempURL.path,
-                                 sizeX: params.sizeX,
-                                 sizeY: params.sizeY,
-                                 sizeZ: params.sizeZ,
-                                 bytesPerVoxel: params.byteDepth,
-                                 logger: logger)
+        let backend = try computeMandelbulbFloat(
+          filename: tempURL.path,
+          sizeX: params.sizeX,
+          sizeY: params.sizeY,
+          sizeZ: params.sizeZ,
+          bytesPerVoxel: params.byteDepth,
+          logger: logger
+        )
+        metaDesc = backend.metaDescription
     }
 
     logger.info("Converting generated volume to BorgVR file format ...")
