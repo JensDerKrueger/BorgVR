@@ -379,7 +379,11 @@
 "dataset_info_name" = "Name";
 "dataset_info_source" = "Quelle";
 "dataset_info_unique_id" = "Eindeutige ID";
-"dataset_info_identifier" = "Datei oder Server-ID";
+"dataset_info_alternative_sources" = "Alternative Quellen";
+"dataset_info_no_alternative_sources" = "Keine alternativen Quellen bekannt.";
+"dataset_info_more_sources_format" = "(%@ weitere Quellen bekannt)";
+"dataset_info_password_protected" = "Passwortgeschützte Quelle";
+"dataset_info_private_source" = "Private Quelle, wird nicht über SharePlay geteilt";
 "dataset_info_metadata" = "Metadaten";
 "dataset_info_no_metadata" = "Keine Metadaten-Zusammenfassung verfügbar.";
 "dataset_info_unavailable_title" = "Kein Datensatz geöffnet";

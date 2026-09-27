@@ -375,7 +375,11 @@
 "dataset_info_name" = "Nom";
 "dataset_info_source" = "Source";
 "dataset_info_unique_id" = "ID unique";
-"dataset_info_identifier" = "Fichier ou ID serveur";
+"dataset_info_alternative_sources" = "Sources alternatives";
+"dataset_info_no_alternative_sources" = "Aucune source alternative connue.";
+"dataset_info_more_sources_format" = "(%@ autres sources connues)";
+"dataset_info_password_protected" = "Source protégée par mot de passe";
+"dataset_info_private_source" = "Source privée, non partagée via SharePlay";
 "dataset_info_metadata" = "Métadonnées";
 "dataset_info_no_metadata" = "Aucun résumé des métadonnées disponible.";
 "dataset_info_unavailable_title" = "Aucun jeu de données ouvert";

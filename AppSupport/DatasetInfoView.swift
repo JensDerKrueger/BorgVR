@@ -12,7 +12,7 @@ struct DatasetInfoView: View {
             infoRow(title: "dataset_info_name", value: dataset.description)
             infoRow(title: "dataset_info_source", value: sourceDescription(for: dataset.source))
             infoRow(title: "dataset_info_unique_id", value: dataset.uniqueId)
-            infoRow(title: "dataset_info_identifier", value: dataset.identifier)
+            alternativeSourcesRow(for: dataset)
             infoRow(
               title: "dataset_info_metadata",
               value: dataset.metadataSummary ?? String(localized: "dataset_info_no_metadata")
@@ -64,5 +64,82 @@ struct DatasetInfoView: View {
       case let .remote(address, port, _):
         return String(format: String(localized: "dataset_source_remote_format"), address, port)
     }
+  }
+
+  private func alternativeSources(for dataset: AppModel.DatasetEntry) -> [DatasetOrigin] {
+    let activeOrigin: DatasetOrigin?
+    switch dataset.source {
+      case let .remote(address, port, password):
+        activeOrigin = DatasetOrigin(address: address, port: port, password: password)
+      case .local, .builtIn:
+        activeOrigin = nil
+    }
+
+    return DatasetOriginCatalog.shared.origins(for: dataset.uniqueId).filter {
+      $0.identityKey != activeOrigin?.identityKey
+    }
+  }
+
+  private func alternativeSourcesRow(for dataset: AppModel.DatasetEntry) -> some View {
+    let alternatives = alternativeSources(for: dataset)
+    let visibleAlternatives = Array(alternatives.prefix(alternatives.count > 3 ? 2 : 3))
+
+    return VStack(alignment: .leading, spacing: 6) {
+      Text("dataset_info_alternative_sources")
+        .font(.caption)
+        .foregroundStyle(.secondary)
+
+      if alternatives.isEmpty {
+        Text("dataset_info_no_alternative_sources")
+          .font(.body)
+          .foregroundStyle(.secondary)
+      } else {
+        ForEach(visibleAlternatives, id: \.identityKey) { origin in
+          HStack(spacing: 8) {
+            Text(originDescription(origin))
+              .textSelection(.enabled)
+
+            if !origin.password.isEmpty {
+              sourceStatusIcon(
+                systemName: "key.fill",
+                label: String(localized: "dataset_info_password_protected")
+              )
+            }
+
+            if !DatasetOriginCatalog.shared.sharingAllowed(for: origin) {
+              sourceStatusIcon(
+                systemName: "eye.slash.fill",
+                label: String(localized: "dataset_info_private_source")
+              )
+            }
+          }
+        }
+
+        if alternatives.count > 3 {
+          Text(
+            String(
+              format: String(localized: "dataset_info_more_sources_format"),
+              String(alternatives.count - 2)
+            )
+          )
+          .foregroundStyle(.secondary)
+        }
+      }
+    }
+  }
+
+  private func sourceStatusIcon(systemName: String, label: String) -> some View {
+    Image(systemName: systemName)
+      .font(.caption)
+      .foregroundStyle(.secondary)
+      .accessibilityLabel(label)
+      .help(label)
+  }
+
+  private func originDescription(_ origin: DatasetOrigin) -> String {
+    let address = origin.address.contains(":") && !origin.address.hasPrefix("[")
+      ? "[\(origin.address)]"
+      : origin.address
+    return "\(address):\(origin.port)"
   }
 }
