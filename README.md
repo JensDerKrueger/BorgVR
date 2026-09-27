@@ -249,20 +249,33 @@ or opened from a local data directory.
 BorgVR builds on several years of work on GPU volume rendering, ray-guided rendering, mobile
 visualization, and virtual-reality visualization systems. Related publications include:
 
-1. **Investigating the Apple Vision Pro Spatial Computing Platform for GPU-Based Volume Visualization**:
-   Camilla Hrycak, David Lewakis, Jens Krueger, IEEE VIS 2024
+1. **An Investigation of the Apple Vision Pro for Out-of-Core Ray-Guided Volume Rendering with BorgVR**:
+   [Camilla Hrycak](https://www.cgvis.de/hrycak.shtml),
+   [Jens Krüger](https://www.cgvis.de/krueger.shtml), Proceedings of the 30th Vision, Modeling and
+   Visualization Workshop 2025
 
-2. **Embracing Raycasting for Virtual Reality**:
-   Andre Waschk, Jens Krueger, WSCG 2022
+2. **Investigating the Apple Vision Pro Spatial Computing Platform for GPU-Based Volume Visualization**:
+   [Camilla Hrycak](https://www.cgvis.de/hrycak.shtml),
+   [David Lewakis](https://de.linkedin.com/in/david-lewakis),
+   [Jens Krüger](https://www.cgvis.de/krueger.shtml), IEEE VIS 2024
 
-3. **FAVR - Accelerating Direct Volume Rendering for Virtual Reality Systems**:
-   Andre Waschk, Jens Krueger, IEEE VIS 2020
+3. **Embracing Raycasting for Virtual Reality**:
+   [Andre Waschk](https://www.cgvis.de/waschk.shtml),
+   [Jens Krüger](https://www.cgvis.de/krueger.shtml), WSCG 2022
 
-4. **State of the Art in Mobile Volume Rendering on iOS Devices**:
-   Alexander Schiewe, Mario Anstoots, Jens Krueger, EuroVis 2015
+4. **FAVR - Accelerating Direct Volume Rendering for Virtual Reality Systems**:
+   [Andre Waschk](https://www.cgvis.de/waschk.shtml),
+   [Jens Krüger](https://www.cgvis.de/krueger.shtml), IEEE VIS 2020
 
-5. **An Analysis of Scalable GPU-Based Ray-Guided Volume Rendering**:
-   Thomas Fogal, Alexander Schiewe, Jens Krueger, IEEE LDAV 2013
+5. **State of the Art in Mobile Volume Rendering on iOS Devices**:
+   [Alexander Schiewe](https://www.cgvis.de/schiewe.shtml),
+   [Mario Anstoots](https://dblp.org/pid/224/2475.html),
+   [Jens Krüger](https://www.cgvis.de/krueger.shtml), EuroVis 2015
+
+6. **An Analysis of Scalable GPU-Based Ray-Guided Volume Rendering**:
+   [Thomas Fogal](https://www.cgvis.de/fogal.shtml),
+   [Alexander Schiewe](https://www.cgvis.de/schiewe.shtml),
+   [Jens Krüger](https://www.cgvis.de/krueger.shtml), IEEE LDAV 2013
 
 More publications are listed on the [CGVIS publications page](https://www.cgvis.de/publications.shtml).
 
