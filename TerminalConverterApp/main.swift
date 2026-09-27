@@ -1,5 +1,19 @@
 import Foundation
 
+enum ConverterInfo {
+  static let version = "2.4"
+
+  static let banner = #"""
+   ____                   __     ______
+  | __ )  ___  _ __ __ _ \ \   / /  _ \
+  |  _ \ / _ \| '__/ _` | \ \ / /| |_) |
+  | |_) | (_) | | | (_| |  \ V / |  _ <
+  |____/ \___/|_|  \__, |   \_/  |_| \_\
+                   |___/
+              Volume Converter \#(version)
+  """#
+}
+
 // Create a logger for console output.
 let logger = PrintfLogger(useColors: false, etaFormat: .mmss)
 
@@ -86,12 +100,17 @@ struct CreateModeParameters {
 }
 
 /// A usage error message displayed when invalid parameters are provided.
+let executableName = URL(fileURLWithPath: CommandLine.arguments[0]).lastPathComponent
 let usageErrorMessage = """
 Invalid parameters.
 Usage:
 
+General
+    \(executableName) --help | -h
+    \(executableName) --version | -v
+
 Mode D — Read DICOM files from a directory
-    (args[0]) D <input_directory> <output_filename> <description> <max_brick_size> <overlap>
+    \(executableName) D <input_directory> <output_filename> <description> <max_brick_size> <overlap>
         input_directory   : Path to the directory containing DICOM files
         output_filename   : Name of the output file to create
         description       : Short description of the dataset
@@ -99,7 +118,7 @@ Mode D — Read DICOM files from a directory
         overlap           : Positive integer specifying the overlap between bricks
 
 Mode Q — Read a QVIS file
-    (args[0]) Q <input_filename> <output_filename> <description> <max_brick_size> <overlap>
+    \(executableName) Q <input_filename> <output_filename> <description> <max_brick_size> <overlap>
         input_filename    : Path to the QVIS file
         output_filename   : Name of the output file to create
         description       : Short description of the dataset
@@ -107,7 +126,7 @@ Mode Q — Read a QVIS file
         overlap           : Positive integer specifying the overlap between bricks
 
 Mode N — Read a NRRD or NHDR file
-    (args[0]) N <input_filename> <output_filename> <description> <max_brick_size> <overlap>
+    \(executableName) N <input_filename> <output_filename> <description> <max_brick_size> <overlap>
         input_filename    : Path to the NRRD or NHDR file
         output_filename   : Name of the output file to create
         description       : Short description of the dataset
@@ -115,7 +134,7 @@ Mode N — Read a NRRD or NHDR file
         overlap           : Positive integer specifying the overlap between bricks
 
 Mode C — Create a volume file using a specified algorithm
-    (args[0]) C <L|F|D> <byte_depth> <component_count> <size_x> <size_y> <size_z> <output_filename> <description> <max_brick_size> <overlap>
+    \(executableName) C <L|F|D> <byte_depth> <component_count> <size_x> <size_y> <size_z> <output_filename> <description> <max_brick_size> <overlap>
         L, F, or D        : Algorithm ('L' = linear, 'F' = Float Mandelbulb with automatic Metal acceleration, 'D' = Double CPU Mandelbulb)
         byte_depth        : Bytes per component (1, 2, or 4)
         component_count   : Number of components per voxel (e.g., 1 for grayscale, 3 for RGB)
@@ -127,6 +146,20 @@ Mode C — Create a volume file using a specified algorithm
         max_brick_size    : Positive integer specifying the maximum brick size
         overlap           : Positive integer specifying the overlap between bricks
 """
+
+print(ConverterInfo.banner)
+
+if CommandLine.arguments.count == 2 {
+  switch CommandLine.arguments[1] {
+    case "--version", "-v":
+      exit(0)
+    case "--help", "-h":
+      print(usageErrorMessage.replacingOccurrences(of: "Invalid parameters.\n", with: ""))
+      exit(0)
+    default:
+      break
+  }
+}
 
 /**
  Parses command-line arguments and returns the selected mode along with associated parameters.

@@ -310,7 +310,7 @@
 "bricked_log_reorganization_complete" = "Reorganisation abgeschlossen";
 
 /* Log: file size in bytes – arg: size */
-"bricked_log_file_size" = "Dateigröße: %d Byte";
+"bricked_log_file_size" = "Dateigröße: %lld Byte";
 
 /* Log: file size unknown – arg: filename */
 "bricked_log_file_size_unknown" = "Dateigröße für Datei %@ konnte nicht ermittelt werden.";

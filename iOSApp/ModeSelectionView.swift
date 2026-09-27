@@ -52,12 +52,12 @@ struct ModeSelectionView: View {
 
     return GeometryReader { proxy in
       ZStack(alignment: isCompactPortrait ? .bottom : .bottomLeading) {
-        borgVRArtwork
+        mandelbulbArtwork
           .scaledToFill()
           .frame(width: proxy.size.width, height: proxy.size.height)
           .clipped()
 
-        Color.black.opacity(0.38)
+        Color.black.opacity(0.32)
 
         titleBlock(
           horizontalAlignment: isCompactPortrait ? .center : .leading,
@@ -80,6 +80,9 @@ struct ModeSelectionView: View {
     multilineAlignment: TextAlignment
   ) -> some View {
     VStack(alignment: horizontalAlignment, spacing: 8) {
+      borgVRLogo
+        .padding(.bottom, 4)
+
       Text("BorgVR Mobile")
         .font(.largeTitle.weight(.bold))
         .foregroundStyle(.white)
@@ -213,6 +216,30 @@ struct ModeSelectionView: View {
         .lineLimit(3)
     }
     .frame(maxWidth: 420)
+  }
+
+  @ViewBuilder
+  private var mandelbulbArtwork: some View {
+    if let url = Bundle.main.url(forResource: "mandelbulb-background", withExtension: "jpg"),
+       let image = UIImage(contentsOfFile: url.path) {
+      Image(uiImage: image)
+        .resizable()
+    } else {
+      borgVRArtwork
+    }
+  }
+
+  private var borgVRLogo: some View {
+    borgVRArtwork
+      .scaledToFill()
+      .frame(width: 72, height: 72)
+      .clipShape(RoundedRectangle(cornerRadius: 12))
+      .overlay {
+        RoundedRectangle(cornerRadius: 12)
+          .stroke(.white.opacity(0.7), lineWidth: 1)
+      }
+      .shadow(color: .black.opacity(0.3), radius: 8, y: 3)
+      .accessibilityHidden(true)
   }
 
   @ViewBuilder

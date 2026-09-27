@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 struct ModeSelectionView: View {
   @EnvironmentObject private var appModel: AppModel
@@ -11,8 +12,7 @@ struct ModeSelectionView: View {
       let panelWidth = controlPanelWidth(for: proxy.size.width)
 
       HStack(spacing: 0) {
-        Image("borgvr")
-          .resizable()
+        mandelbulbArtwork
           .scaledToFill()
           .frame(
             width: max(proxy.size.width - panelWidth, 0),
@@ -40,27 +40,41 @@ struct ModeSelectionView: View {
 
   private var controlPanel: some View {
     VStack(alignment: .leading, spacing: 0) {
-      VStack(alignment: .leading, spacing: 10) {
-        Text("BorgVR")
-          .font(.system(size: 44, weight: .bold))
+      HStack(alignment: .top, spacing: 16) {
+        Image("borgvr")
+          .resizable()
+          .scaledToFill()
+          .frame(width: 72, height: 72)
+          .clipShape(RoundedRectangle(cornerRadius: 12))
+          .overlay {
+            RoundedRectangle(cornerRadius: 12)
+              .stroke(Color.primary.opacity(0.14), lineWidth: 1)
+          }
+          .shadow(color: .black.opacity(0.18), radius: 7, y: 3)
+          .accessibilityHidden(true)
 
-        Text("modeselection_tagline")
-          .font(.title3)
-          .foregroundStyle(.secondary)
-          .fixedSize(horizontal: false, vertical: true)
+        VStack(alignment: .leading, spacing: 7) {
+          Text("BorgVR")
+            .font(.system(size: 44, weight: .bold))
 
-        Text(
-          String(
-            format: NSLocalizedString(
-              "modeselection_version_format",
-              comment: "Version label with app version and build number"
-            ),
-            Bundle.main.appVersion,
-            Bundle.main.appBuild
+          Text("modeselection_tagline")
+            .font(.title3)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+
+          Text(
+            String(
+              format: NSLocalizedString(
+                "modeselection_version_format",
+                comment: "Version label with app version and build number"
+              ),
+              Bundle.main.appVersion,
+              Bundle.main.appBuild
+            )
           )
-        )
-        .font(.callout.weight(.medium))
-        .foregroundStyle(.tertiary)
+          .font(.callout.weight(.medium))
+          .foregroundStyle(.tertiary)
+        }
       }
 
       Spacer(minLength: 32)
@@ -115,6 +129,18 @@ struct ModeSelectionView: View {
 
   private func controlPanelWidth(for windowWidth: CGFloat) -> CGFloat {
     min(max(windowWidth * 0.36, 380), 460)
+  }
+
+  @ViewBuilder
+  private var mandelbulbArtwork: some View {
+    if let url = Bundle.main.url(forResource: "mandelbulb-background", withExtension: "jpg"),
+       let image = NSImage(contentsOf: url) {
+      Image(nsImage: image)
+        .resizable()
+    } else {
+      Image("borgvr")
+        .resizable()
+    }
   }
 
   private var serverStatus: some View {

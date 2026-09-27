@@ -531,10 +531,10 @@ public class BrickedVolumeReorganizer {
           String(
             format: L(
               "bricked_log_file_size",
-              value: "File size: %d bytes",
+              value: "File size: %lld bytes",
               comment: "Log: file size in bytes"
             ),
-            size
+            Int64(size)
           )
         )
       } else {

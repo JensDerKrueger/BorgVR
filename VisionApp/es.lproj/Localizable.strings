@@ -809,7 +809,7 @@
 "bricked_log_reorganization_complete" = "Reorganización completada";
 
 /* Log: file size in bytes – arg: size */
-"bricked_log_file_size" = "Tamaño de archivo: %d bytes";
+"bricked_log_file_size" = "Tamaño de archivo: %lld bytes";
 
 /* Log: file size unknown – arg: filename */
 "bricked_log_file_size_unknown" = "No se pudo determinar el tamaño del archivo: %@";
