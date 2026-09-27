@@ -156,6 +156,52 @@ func computeMandelbulb(_ sx: UInt64, _ sy: UInt64, _ sz: UInt64,
   return computeMandelbulb(x, y, z, Int(n), iMaxIterations, fBailout)
 }
 
+/// Single-precision reference matching the arithmetic used by the Metal kernel.
+func computeMandelbulbFloat(_ sx: Float, _ sy: Float, _ sz: Float,
+                            _ n: Int, _ maximumIterations: Int,
+                            _ bailout: Float) -> Int {
+  var x: Float = 0
+  var y: Float = 0
+  var z: Float = 0
+  var currentRadius: Float = 0
+
+  for iteration in 0..<maximumIterations {
+    let power = pow(currentRadius, Float(n))
+    let azimuth = atan2(y, x)
+    let polar = atan2(sqrt(x * x + y * y), z)
+    let sinPolar = sin(polar * Float(n))
+    let cosPolar = cos(polar * Float(n))
+    let cosAzimuth = cos(azimuth * Float(n))
+    let sinAzimuth = sin(azimuth * Float(n))
+
+    x = sx + power * sinPolar * cosAzimuth
+    y = sy + power * sinPolar * sinAzimuth
+    z = sz + power * cosPolar
+    currentRadius = sqrt(x * x + y * y + z * z)
+    if currentRadius > bailout {
+      return iteration
+    }
+  }
+  return maximumIterations
+}
+
+func computeMandelbulbFloat(_ x: Int, _ y: Int, _ z: Int,
+                            sizeX: Int, sizeY: Int, sizeZ: Int,
+                            maximumIterations: Int, bailout: Float = 100.0) -> Int {
+  let bulbSize: Float = 2.25
+  let sampleX = bulbSize * Float(x) / Float(sizeX - 1) - bulbSize / 2
+  let sampleY = bulbSize * Float(y) / Float(sizeY - 1) - bulbSize / 2
+  let sampleZ = bulbSize * Float(z) / Float(sizeZ - 1) - bulbSize / 2
+  return computeMandelbulbFloat(
+    sampleX,
+    sampleY,
+    sampleZ,
+    8,
+    maximumIterations,
+    bailout
+  )
+}
+
 // MARK: - File Output Functions
 
 /**
@@ -217,6 +263,116 @@ func computeMandelbulb(filename: String, sizeX: Int, sizeY: Int, sizeZ: Int,
     }
   }
   logger?.info("Finished writing Mandelbulb data to \(filename)")
+  logger?.info("Writing metadata file...")
+  writeMetadataFile(
+    filename: filename,
+    sizeX: sizeX,
+    sizeY: sizeY,
+    sizeZ: sizeZ,
+    bytesPerVoxel: bytesPerVoxel,
+    componentCount: 1
+  )
+}
+
+/**
+ Generates the same Mandelbulb volume slice by slice with a Metal compute kernel.
+
+ The CPU implementation above remains available as a reference implementation.
+ */
+func computeMandelbulbGPU(filename: String, sizeX: Int, sizeY: Int, sizeZ: Int,
+                          bytesPerVoxel: Int, logger: LoggerBase? = nil) throws {
+  let generator = try GPUMandelbulbGenerator(
+    sizeX: sizeX,
+    sizeY: sizeY,
+    sizeZ: sizeZ,
+    bytesPerVoxel: bytesPerVoxel
+  )
+  let sliceByteCount = sizeX * sizeY * bytesPerVoxel
+  let fileURL = URL(fileURLWithPath: filename)
+  let memoryMappedFile = try MemoryMappedFile(
+    filename: fileURL.path(),
+    size: Int64(sliceByteCount * sizeZ)
+  )
+  defer { try? memoryMappedFile.close() }
+
+  for z in 0..<sizeZ {
+    if sizeZ > 1 {
+      logger?.progress("Generating Mandelbulb on GPU", Double(z) / Double(sizeZ - 1))
+    }
+    let slice = try generator.generateSlice(zCoordinate: z)
+    slice.withUnsafeBytes { source in
+      guard let sourceAddress = source.baseAddress else { return }
+      memcpy(
+        memoryMappedFile.mappedMemory.advanced(by: z * sliceByteCount),
+        sourceAddress,
+        sliceByteCount
+      )
+    }
+  }
+
+  logger?.info("Finished writing GPU Mandelbulb data to \(filename)")
+  logger?.info("Writing metadata file...")
+  writeMetadataFile(
+    filename: filename,
+    sizeX: sizeX,
+    sizeY: sizeY,
+    sizeZ: sizeZ,
+    bytesPerVoxel: bytesPerVoxel,
+    componentCount: 1
+  )
+}
+
+/** Generates a single-precision CPU reference for the Metal Mandelbulb path. */
+func computeMandelbulbFloat(filename: String, sizeX: Int, sizeY: Int, sizeZ: Int,
+                            bytesPerVoxel: Int, logger: LoggerBase? = nil) throws {
+  let maximumIterations = (1 << (8 * bytesPerVoxel)) - 1
+  let fileURL = URL(fileURLWithPath: filename)
+  let memoryMappedFile = try MemoryMappedFile(
+    filename: fileURL.path(),
+    size: Int64(sizeX * sizeY * sizeZ * bytesPerVoxel)
+  )
+  defer { try? memoryMappedFile.close() }
+
+  for z in 0..<sizeZ {
+    if sizeZ > 1 {
+      logger?.progress("Generating Float Mandelbulb", Double(z) / Double(sizeZ - 1))
+    }
+    DispatchQueue.concurrentPerform(iterations: sizeY) { y in
+      for x in 0..<sizeX {
+        let iterations = computeMandelbulbFloat(
+          x,
+          y,
+          z,
+          sizeX: sizeX,
+          sizeY: sizeY,
+          sizeZ: sizeZ,
+          maximumIterations: maximumIterations
+        )
+        let position = z * sizeY * sizeX + y * sizeX + x
+        switch bytesPerVoxel {
+          case 1:
+            memoryMappedFile.mappedMemory.advanced(by: position).storeBytes(
+              of: UInt8(iterations),
+              as: UInt8.self
+            )
+          case 2:
+            memoryMappedFile.mappedMemory.advanced(by: position * 2).storeBytes(
+              of: UInt16(iterations),
+              as: UInt16.self
+            )
+          case 4:
+            memoryMappedFile.mappedMemory.advanced(by: position * 4).storeBytes(
+              of: UInt32(iterations),
+              as: UInt32.self
+            )
+          default:
+            preconditionFailure("Unsupported Mandelbulb output size")
+        }
+      }
+    }
+  }
+
+  logger?.info("Finished writing Float Mandelbulb data to \(filename)")
   logger?.info("Writing metadata file...")
   writeMetadataFile(
     filename: filename,

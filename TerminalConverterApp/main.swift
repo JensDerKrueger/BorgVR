@@ -21,11 +21,15 @@ enum Mode: String {
  An enum representing the types of datasets for demo data creation.
 
  - LinearData: A dataset with linearly increasing values.
- - FractalData: A dataset based on fractal (e.g., Mandelbulb) computation.
+ - FractalData: A double-precision CPU Mandelbulb.
+ - FloatFractalData: A single-precision CPU Mandelbulb reference.
+ - GPUFractalData: A single-precision Metal Mandelbulb.
  */
 enum DatasetType: String {
   case LinearData = "L"
   case FractalData = "F"
+  case FloatFractalData = "S"
+  case GPUFractalData = "G"
 }
 
 /**
@@ -106,16 +110,16 @@ Mode Q — Read a QVIS file
 
 Mode N — Read a NRRD or NHDR file
     (args[0]) N <input_filename> <output_filename> <description> <max_brick_size> <overlap>
-        input_filename    : Path to the QVIS file
+        input_filename    : Path to the NRRD or NHDR file
         output_filename   : Name of the output file to create
         description       : Short description of the dataset
         max_brick_size    : Positive integer specifying the maximum brick size
         overlap           : Positive integer specifying the overlap between bricks
 
 Mode C — Create a volume file using a specified algorithm
-    (args[0]) C <L|F> <byte_depth> <component_count> <size_x> <size_y> <size_z> <output_filename> <description> <max_brick_size> <overlap>
-        L or F            : Choose generation algorithm ('L' = linearly increasing, 'F' = Mandelbulb)
-        byte_depth        : Bit depth per voxel (e.g., 1, 2)
+    (args[0]) C <L|F|S|G> <byte_depth> <component_count> <size_x> <size_y> <size_z> <output_filename> <description> <max_brick_size> <overlap>
+        L, F, S, or G     : Algorithm ('L' = linear, 'F' = Double CPU Mandelbulb, 'S' = Float CPU Mandelbulb, 'G' = GPU Mandelbulb)
+        byte_depth        : Bytes per component (1, 2, or 4)
         component_count   : Number of components per voxel (e.g., 1 for grayscale, 3 for RGB)
         size_x            : Volume size along X (positive integer)
         size_y            : Volume size along Y (positive integer)
@@ -150,8 +154,9 @@ func parseArguments(_ args: [String]) -> (Mode, Any) {
         exit(1)
       }
       guard let maxBrickSize = Int(args[5]), maxBrickSize > 0,
-            let overlap = Int(args[6]), overlap > 0 else {
-        logger.error("Error: maxBrickSize and overlap must be positive integers.")
+            let overlap = Int(args[6]), overlap > 0,
+            overlap * 2 < maxBrickSize else {
+        logger.error("Error: maxBrickSize and overlap must be positive, and twice the overlap must be smaller than the brick size.")
         exit(1)
       }
       let params = DicomModeParameters(
@@ -171,8 +176,9 @@ func parseArguments(_ args: [String]) -> (Mode, Any) {
         exit(1)
       }
       guard let maxBrickSize = Int(args[5]), maxBrickSize > 0,
-            let overlap = Int(args[6]), overlap > 0 else {
-        logger.error("Error: maxBrickSize and overlap must be positive integers.")
+            let overlap = Int(args[6]), overlap > 0,
+            overlap * 2 < maxBrickSize else {
+        logger.error("Error: maxBrickSize and overlap must be positive, and twice the overlap must be smaller than the brick size.")
         exit(1)
       }
       let params = HeaderFileModeParameters(
@@ -190,14 +196,24 @@ func parseArguments(_ args: [String]) -> (Mode, Any) {
       guard args.count == 12,
             let datasetType = DatasetType(rawValue: args[2]),
             let byteDepth = Int(args[3]),
-            let componentCount = Int(args[4]),
+            [1, 2, 4].contains(byteDepth),
+            let componentCount = Int(args[4]), componentCount > 0,
             let sizeX = Int(args[5]), sizeX > 0,
             let sizeY = Int(args[6]), sizeY > 0,
             let sizeZ = Int(args[7]), sizeZ > 0,
             let maxBrickSize = Int(args[10]), maxBrickSize > 0,
-            let overlap = Int(args[11]), overlap > 0
+            let overlap = Int(args[11]), overlap > 0,
+            overlap * 2 < maxBrickSize
       else {
         logger.error("Error: Invalid arguments for mode C.\n\(usageErrorMessage)")
+        exit(1)
+      }
+      guard datasetType == .LinearData || componentCount == 1 else {
+        logger.error("Error: Mandelbulb generation currently supports exactly one component per voxel.")
+        exit(1)
+      }
+      guard datasetType == .LinearData || (sizeX > 1 && sizeY > 1 && sizeZ > 1) else {
+        logger.error("Error: Mandelbulb generation requires at least two samples on every axis.")
         exit(1)
       }
       let params = CreateModeParameters(
@@ -230,7 +246,8 @@ func parseArguments(_ args: [String]) -> (Mode, Any) {
  - inputFilename: The path to the raw input volume file.
  - size: A vector representing the dimensions (width, height, depth) of the volume.
  - maxBrickSize: The maximum brick size to use for partitioning the volume.
- - bytesPerVoxel: The number of bytes per voxel in the volume.
+ - bytesPerComponent: The number of bytes per component in the volume.
+ - componentCount: The number of components stored for each voxel.
  - aspect: A vector representing the aspect ratio scaling for the volume.
  - overlap: The overlap between adjacent bricks.
  - outputFilename: The name of the output file to create.
@@ -241,7 +258,8 @@ func convertRawVolume(inputFilename: String,
                       offset: Int,
                       size: Vec3<Int>,
                       maxBrickSize: Int,
-                      bytesPerVoxel: Int,
+                      bytesPerComponent: Int,
+                      componentCount: Int,
                       aspect: Vec3<Float>,
                       overlap: Int,
                       outputFilename: String,
@@ -250,8 +268,8 @@ func convertRawVolume(inputFilename: String,
   let volume = try RawFileAccessor(
     filename: inputFilename,
     size: size,
-    bytesPerComponent: bytesPerVoxel,
-    componentCount: 1,
+    bytesPerComponent: bytesPerComponent,
+    componentCount: componentCount,
     aspect: aspect,
     offset: offset,
     readOnly: true
@@ -327,7 +345,8 @@ func convertDICOMStack(_ params: DicomModeParameters) {
                                          y: dicomVolume.height,
                                          z: dicomVolume.depth),
                          maxBrickSize: params.common.maxBrickSize,
-                         bytesPerVoxel: dicomVolume.bytesPerVoxel,
+                         bytesPerComponent: dicomVolume.bytesPerVoxel,
+                         componentCount: 1,
                          aspect: Vec3<Float>(x: dicomVolume.scale.x,
                                              y: dicomVolume.scale.y,
                                              z: dicomVolume.scale.z),
@@ -365,7 +384,8 @@ func convertNRRDVolume(_ params: HeaderFileModeParameters) {
                          offset: parser.offset,
                          size: parser.size,
                          maxBrickSize: params.common.maxBrickSize,
-                         bytesPerVoxel: parser.bytesPerComponent,
+                         bytesPerComponent: parser.bytesPerComponent,
+                         componentCount: parser.components,
                          aspect: parser.sliceThickness,
                          overlap: params.common.overlap,
                          outputFilename: params.common.outputFilename,
@@ -404,7 +424,8 @@ func convertQVISVolume(_ params: HeaderFileModeParameters) {
                          offset: 0,
                          size: parser.size,
                          maxBrickSize: params.common.maxBrickSize,
-                         bytesPerVoxel: parser.bytesPerComponent,
+                         bytesPerComponent: parser.bytesPerComponent,
+                         componentCount: parser.components,
                          aspect: parser.sliceThickness,
                          overlap: params.common.overlap,
                          outputFilename: params.common.outputFilename,
@@ -451,6 +472,22 @@ func generateVolume(_ params: CreateModeParameters) {
                               sizeZ: params.sizeZ,
                               bytesPerVoxel: params.byteDepth,
                               logger: logger)
+      case .FloatFractalData:
+        metaDesc = "Single-precision CPU fractal data"
+        try computeMandelbulbFloat(filename: tempURL.path,
+                                   sizeX: params.sizeX,
+                                   sizeY: params.sizeY,
+                                   sizeZ: params.sizeZ,
+                                   bytesPerVoxel: params.byteDepth,
+                                   logger: logger)
+      case .GPUFractalData:
+        metaDesc = "GPU fractal data"
+        try computeMandelbulbGPU(filename: tempURL.path,
+                                 sizeX: params.sizeX,
+                                 sizeY: params.sizeY,
+                                 sizeZ: params.sizeZ,
+                                 bytesPerVoxel: params.byteDepth,
+                                 logger: logger)
     }
 
     logger.info("Converting generated volume to BorgVR file format ...")
@@ -459,7 +496,8 @@ func generateVolume(_ params: CreateModeParameters) {
                          offset: 0,
                          size: Vec3<Int>(x: params.sizeX, y: params.sizeY, z: params.sizeZ),
                          maxBrickSize: params.common.maxBrickSize,
-                         bytesPerVoxel: params.byteDepth,
+                         bytesPerComponent: params.byteDepth,
+                         componentCount: params.componentCount,
                          aspect: Vec3<Float>(x: 1, y: 1, z: 1),
                          overlap: params.common.overlap,
                          outputFilename: params.common.outputFilename,

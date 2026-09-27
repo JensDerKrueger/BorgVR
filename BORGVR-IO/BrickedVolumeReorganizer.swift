@@ -232,8 +232,9 @@ public class BrickedVolumeReorganizer {
                          useCompressor: Bool = false,
                          logger: LoggerBase? = nil) throws {
 
-    var maxValue: Int = 0
-    var minValue: Int = (1 << (inputVolume.bytesPerComponent * 8)) - 1
+    let representableMaximum = (1 << (inputVolume.bytesPerComponent * 8)) - 1
+    var maxValue = inputVolume.componentCount == 1 ? 0 : representableMaximum
+    var minValue = inputVolume.componentCount == 1 ? representableMaximum : 0
 
     // Create metadata for the volume.
     let metaData = BORGVRMetaData(
