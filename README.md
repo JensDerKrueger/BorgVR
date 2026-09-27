@@ -195,8 +195,7 @@ make
 
 The build first compiles a small C++ bootstrap tool that packages the current `web` directory as
 LZ4-compressed embedded assets. `src/GeneratedWebAssets.cpp` and
-`src/GeneratedWebAssets.h` are generated build inputs and are intentionally not tracked. No Python
-runtime is required.
+`src/GeneratedWebAssets.h` are generated build inputs and are intentionally not tracked.
 
 Run `make CONFIG=debug` for a debug build or, for example:
 
