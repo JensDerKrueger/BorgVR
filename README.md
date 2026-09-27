@@ -256,7 +256,7 @@ visualization, and virtual-reality visualization systems. Related publications i
 
 2. **Investigating the Apple Vision Pro Spatial Computing Platform for GPU-Based Volume Visualization**:
    [Camilla Hrycak](https://www.cgvis.de/hrycak.shtml),
-   [David Lewakis](https://de.linkedin.com/in/david-lewakis),
+   [David Lewakis](https://ieeexplore.ieee.org/author/936221321374789),
    [Jens Krüger](https://www.cgvis.de/krueger.shtml), IEEE VIS 2024
 
 3. **Embracing Raycasting for Virtual Reality**:
