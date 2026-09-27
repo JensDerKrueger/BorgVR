@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 
 struct ServerSyncStatus: Equatable {
@@ -16,6 +17,7 @@ struct ServerSyncStatus: Equatable {
 
 final class ServerSyncManager {
   private static let transferFunctionSyncByteLimit = 32 * 1024 * 1024
+  private static let markerSyncByteLimit = BorgVRMarkerFormat.maximumFileByteCount
   private static let datasetProgressTimeout: TimeInterval = 120
 
   private struct ActiveDatasetSync {
@@ -122,6 +124,7 @@ final class ServerSyncManager {
       )
       try manager.connect(timeout: 10)
       let didStoreTransferFunctions = try syncTransferFunctions(from: manager)
+      let didStoreMarkerFiles = try syncMarkerFiles(from: manager)
       let remoteDatasets = try manager.requestDatasetList()
       rememberDatasetSources(remoteDatasets, endpoint: endpoint)
       let localDatasetIDs = scanLocalDatasetIDs()
@@ -139,7 +142,7 @@ final class ServerSyncManager {
         )
       }
 
-      if didStoreTransferFunctions {
+      if didStoreTransferFunctions || didStoreMarkerFiles {
         notifyCatalogChanged()
       }
     } catch {
@@ -328,6 +331,50 @@ final class ServerSyncManager {
     return didStoreTransferFunctions
   }
 
+  private func syncMarkerFiles(from manager: BORGVRRemoteDataManager) throws -> Bool {
+    guard manager.supportsMarkerFiles else { return false }
+
+    let dataDirectoryURL = try dataDirectoryURL()
+    var localMarkerIDs = scanLocalMarkerIDs()
+    let remoteMarkerFiles = try manager.requestMarkerFileList()
+    var transferredBytes = 0
+    var didStoreMarkerFiles = false
+
+    for remoteMarkerFile in remoteMarkerFiles {
+      guard !localMarkerIDs.contains(remoteMarkerFile.id) else { continue }
+
+      guard remoteMarkerFile.byteCount <= BorgVRMarkerFormat.maximumFileByteCount,
+            transferredBytes + remoteMarkerFile.byteCount <= Self.markerSyncByteLimit else {
+        logger?.warning("Marker sync limit reached before \(remoteMarkerFile.id).")
+        break
+      }
+
+      let data = try manager.requestMarkerFile(id: remoteMarkerFile.id)
+      guard markerIdentifier(for: data) == remoteMarkerFile.id else {
+        throw BORGVRRemoteDataManagerError.invalidResponse(
+          reason: "Marker file ID mismatch for \(remoteMarkerFile.id)."
+        )
+      }
+      guard markerDatasetID(from: data)?.caseInsensitiveCompare(remoteMarkerFile.datasetID) == .orderedSame else {
+        throw BORGVRRemoteDataManagerError.invalidResponse(
+          reason: "Marker dataset ID mismatch for \(remoteMarkerFile.id)."
+        )
+      }
+
+      let targetURL = uniqueMarkerURL(
+        in: dataDirectoryURL,
+        remoteMarkerFile: remoteMarkerFile
+      )
+      try data.write(to: targetURL, options: .atomic)
+      transferredBytes += data.count
+      localMarkerIDs.insert(remoteMarkerFile.id)
+      didStoreMarkerFiles = true
+      logger?.info("Stored synced marker file \(displayName(for: remoteMarkerFile)).")
+    }
+
+    return didStoreMarkerFiles
+  }
+
   private func scanLocalDatasetIDs() -> Set<String> {
     let scanner = DatasetScanner(directory: dataDirectory, logger: nil)
     scanner.loadDatasets()
@@ -338,6 +385,12 @@ final class ServerSyncManager {
     let scanner = DatasetScanner(directory: dataDirectory, logger: nil)
     scanner.loadDatasets()
     return Set(scanner.getTransferFunctions().map(\.id))
+  }
+
+  private func scanLocalMarkerIDs() -> Set<String> {
+    let scanner = DatasetScanner(directory: dataDirectory, logger: nil)
+    scanner.loadDatasets()
+    return Set(scanner.getMarkerFiles().map(\.id))
   }
 
   private func dataDirectoryURL() throws -> URL {
@@ -353,7 +406,8 @@ final class ServerSyncManager {
     let baseName = sanitizedFilename(
       remoteTransferFunction.description.isEmpty ?
       remoteTransferFunction.id :
-      remoteTransferFunction.description
+      remoteTransferFunction.description,
+      fallback: "Transfer Function"
     )
 
     var candidate = directoryURL
@@ -378,7 +432,75 @@ final class ServerSyncManager {
     return candidate
   }
 
-  private func sanitizedFilename(_ filename: String) -> String {
+  private func uniqueMarkerURL(
+    in directoryURL: URL,
+    remoteMarkerFile: BORGVRRemoteDataManager.RemoteMarkerFileInfo
+  ) -> URL {
+    let baseName = sanitizedFilename(
+      remoteMarkerFile.description.isEmpty ? remoteMarkerFile.id : remoteMarkerFile.description,
+      fallback: "Markers"
+    )
+    var candidate = directoryURL
+      .appendingPathComponent(baseName)
+      .appendingPathExtension(BorgVRMarkerFormat.fileExtension)
+
+    guard FileManager.default.fileExists(atPath: candidate.path) else {
+      return candidate
+    }
+
+    candidate = directoryURL
+      .appendingPathComponent("\(baseName)-\(remoteMarkerFile.id.prefix(8))")
+      .appendingPathExtension(BorgVRMarkerFormat.fileExtension)
+
+    var suffix = 2
+    while FileManager.default.fileExists(atPath: candidate.path) {
+      candidate = directoryURL
+        .appendingPathComponent("\(baseName)-\(remoteMarkerFile.id.prefix(8))-\(suffix)")
+        .appendingPathExtension(BorgVRMarkerFormat.fileExtension)
+      suffix += 1
+    }
+    return candidate
+  }
+
+  private func markerIdentifier(for data: Data) -> String {
+    Insecure.MD5.hash(data: data)
+      .map { String(format: "%02x", $0) }
+      .joined()
+  }
+
+  private func markerDatasetID(from data: Data) -> String? {
+    let magic = Data(BorgVRMarkerFormat.magicBytes)
+    guard data.count >= BorgVRMarkerFormat.headerByteCount,
+          data.prefix(magic.count) == magic,
+          readUInt16(from: data, at: 8) == BorgVRMarkerFormat.version,
+          let markerCount = readUInt32(from: data, at: 28),
+          markerCount <= BorgVRMarkerFormat.maximumMarkerCount else {
+      return nil
+    }
+
+    let bytes = Array(data[12..<28])
+    return UUID(uuid: (
+      bytes[0], bytes[1], bytes[2], bytes[3],
+      bytes[4], bytes[5], bytes[6], bytes[7],
+      bytes[8], bytes[9], bytes[10], bytes[11],
+      bytes[12], bytes[13], bytes[14], bytes[15]
+    )).uuidString
+  }
+
+  private func readUInt16(from data: Data, at offset: Int) -> UInt16? {
+    guard offset >= 0, offset + 2 <= data.count else { return nil }
+    return UInt16(data[offset]) | (UInt16(data[offset + 1]) << 8)
+  }
+
+  private func readUInt32(from data: Data, at offset: Int) -> UInt32? {
+    guard offset >= 0, offset + 4 <= data.count else { return nil }
+    return UInt32(data[offset]) |
+      (UInt32(data[offset + 1]) << 8) |
+      (UInt32(data[offset + 2]) << 16) |
+      (UInt32(data[offset + 3]) << 24)
+  }
+
+  private func sanitizedFilename(_ filename: String, fallback: String) -> String {
     let invalidCharacters = CharacterSet(charactersIn: "/\\?%*|\"<>:")
       .union(.newlines)
       .union(.controlCharacters)
@@ -389,7 +511,7 @@ final class ServerSyncManager {
       .filter { !$0.isEmpty }
 
     let sanitized = components.joined(separator: "-")
-    return sanitized.isEmpty ? "Transfer Function" : sanitized
+    return sanitized.isEmpty ? fallback : String(sanitized.prefix(120))
   }
 
   private func displayName(for dataset: (id: String, description: String)) -> String {
@@ -407,6 +529,13 @@ final class ServerSyncManager {
   ) -> String {
     let description = transferFunction.description.trimmingCharacters(in: .whitespacesAndNewlines)
     return description.isEmpty ? transferFunction.id : description
+  }
+
+  private func displayName(
+    for markerFile: BORGVRRemoteDataManager.RemoteMarkerFileInfo
+  ) -> String {
+    let description = markerFile.description.trimmingCharacters(in: .whitespacesAndNewlines)
+    return description.isEmpty ? markerFile.id : description
   }
 
   private func notifyCatalogChanged() {

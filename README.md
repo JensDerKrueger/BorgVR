@@ -124,6 +124,66 @@ Common schemes:
 For App Store or device builds, configure your Apple development team and signing settings in Xcode.
 The project uses the shared bundle identifier configured in the Xcode project.
 
+### Command-Line Volume Generator
+
+The `TerminalConverterApp` scheme converts DICOM, QVIS, and NRRD input and can also create
+reproducible synthetic volumes. Its creation mode has this general form:
+
+```sh
+TerminalConverterApp C <algorithm> <bytes-per-component> <components> \
+  <size-x> <size-y> <size-z> <output.data> <description> <brick-size> <overlap>
+```
+
+The following algorithm identifiers are available:
+
+- `L`: linear test data
+- `F`: single-precision Mandelbulb, accelerated with Metal when available
+- `D`: double-precision Mandelbulb on the CPU
+- `J`: detailed asymmetric quaternion Julia-set slice
+- `B`: Mandelbox
+- `G`: periodic gyroid field
+- `P`: 3D Shepp-Logan phantom
+- `T`: frequency chirp with a calibration region aligned to the generated brick boundaries
+
+The analytical generators run slice by slice on Metal and automatically fall back to a
+multithreaded CPU implementation. They support one-component 8-, 16-, and 32-bit output. The Julia
+preset suppresses its early, nearly spherical escape bands so that the later fractal structures
+occupy the useful value range. For example, this creates a 16-bit `512³` Julia volume:
+
+```sh
+TerminalConverterApp C J 2 1 512 512 512 QuaternionJulia.data \
+  "Quaternion Julia set" 64 2
+```
+
+Use `TerminalConverterApp --help` for the complete argument list.
+
+### Swift Dataset Server
+
+The `TerminalServerApp` scheme builds the standalone Swift server. It serves datasets, transfer
+functions, and marker files from one directory and refreshes that catalog every ten seconds by
+default. For example:
+
+```sh
+TerminalServerApp --directory /path/to/datasets --port 12345 --web-port 8080
+```
+
+`--web-port` also starts the bundled WebGPU frontend. It uses HTTPS with a temporary self-signed
+certificate by default; use `--web-http` for localhost-only HTTP or `--web-certificate` to supply a
+PKCS#12 certificate. Password protection applies to both protocols. Run
+`TerminalServerApp --help` for certificate, scan-interval, and brick-batch options.
+
+Remote BorgVR servers can be synchronized into the same directory. The option is repeatable, and
+the optional password is never printed by the server:
+
+```sh
+TerminalServerApp --directory /srv/borgvr \
+  --sync-server server-a.example 12345 300 secret \
+  --sync-server server-b.example 12345 300
+```
+
+Synchronization includes datasets, transfer functions, and marker files. When more than one
+configured server offers a dataset, another source is tried if the current transfer stalls.
+
 ### C++ Dataset Server
 
 Build the standalone server on macOS or Linux with:

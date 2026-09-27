@@ -1,0 +1,1 @@
+../macOSServer/ServerSyncManager.swift

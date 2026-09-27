@@ -1,29 +1,5 @@
 import SwiftUI
 
-struct ServerSyncEndpoint: Identifiable, Codable, Equatable {
-  var id: UUID = UUID()
-  var address: String
-  var port: Int
-  var password: String
-  var intervalSeconds: Int
-
-  var isUsable: Bool {
-    !address.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
-    port >= 1 &&
-    port <= 65535 &&
-    intervalSeconds >= 10
-  }
-
-  static var empty: ServerSyncEndpoint {
-    ServerSyncEndpoint(
-      address: "",
-      port: StoredAppModel.defaultPort,
-      password: "",
-      intervalSeconds: 300
-    )
-  }
-}
-
 final class StoredAppModel : ObservableObject {
 
   static let defaultBrickSize = BorgVRSharedDefaults.brickSize

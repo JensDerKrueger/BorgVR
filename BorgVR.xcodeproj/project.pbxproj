@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		560A00012E00000000000031 /* web in CopyFiles */ = {isa = PBXBuildFile; fileRef = 560B90002E9150000042E45B /* web */; };
+		560A00012E00000000000032 /* TransferFunctions in CopyFiles */ = {isa = PBXBuildFile; fileRef = 57A001532E70000300000001 /* TransferFunctions */; };
 		560B8BE82E5C575A0042E45B /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 560B8BE72E5C57580042E45B /* PrivacyInfo.xcprivacy */; };
 		560B8BE92E5C575A0042E45B /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 560B8BE72E5C57580042E45B /* PrivacyInfo.xcprivacy */; };
 		560B8BEA2E5C575A0042E45B /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 560B8BE72E5C57580042E45B /* PrivacyInfo.xcprivacy */; };
@@ -106,6 +108,17 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
+		560A00012E00000000000014 /* CopyFiles */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 16;
+			files = (
+				560A00012E00000000000031 /* web in CopyFiles */,
+				560A00012E00000000000032 /* TransferFunctions in CopyFiles */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		562FD5A02D7B2AA300265EF6 /* CopyFiles */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 12;
@@ -520,6 +533,7 @@
 			buildPhases = (
 				560A00012E00000000000012 /* Sources */,
 				560A00012E00000000000011 /* Frameworks */,
+				560A00012E00000000000014 /* CopyFiles */,
 			);
 			buildRules = (
 			);
@@ -1004,10 +1018,11 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				MACOSX_DEPLOYMENT_TARGET = 15.2;
-				MARKETING_VERSION = 2.0;
+				MARKETING_VERSION = 2.4;
 				PRODUCT_BUNDLE_IDENTIFIER = "de.uni-due.TerminalServerApp";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
@@ -1019,10 +1034,11 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				MACOSX_DEPLOYMENT_TARGET = 15.2;
-				MARKETING_VERSION = 2.0;
+				MARKETING_VERSION = 2.4;
 				PRODUCT_BUNDLE_IDENTIFIER = "de.uni-due.TerminalServerApp";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;

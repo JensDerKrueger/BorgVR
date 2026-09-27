@@ -37,11 +37,32 @@ enum Mode: String {
  - LinearData: A dataset with linearly increasing values.
  - DoubleFractalData: A double-precision CPU Mandelbulb.
  - FloatFractalData: A single-precision Mandelbulb using Metal when available.
+ - QuaternionJuliaData: A quaternion Julia set.
+ - MandelboxData: A Mandelbox fractal.
+ - GyroidData: A periodic gyroid field.
+ - SheppLoganData: A 3D Shepp-Logan phantom.
+ - FrequencyChirpData: A frequency chirp with brick-boundary calibration planes.
  */
 enum DatasetType: String {
   case LinearData = "L"
   case FloatFractalData = "F"
   case DoubleFractalData = "D"
+  case QuaternionJuliaData = "J"
+  case MandelboxData = "B"
+  case GyroidData = "G"
+  case SheppLoganData = "P"
+  case FrequencyChirpData = "T"
+
+  var analyticKind: AnalyticVolumeKind? {
+    switch self {
+      case .QuaternionJuliaData: .quaternionJulia
+      case .MandelboxData: .mandelbox
+      case .GyroidData: .gyroid
+      case .SheppLoganData: .sheppLogan
+      case .FrequencyChirpData: .frequencyChirp
+      case .LinearData, .FloatFractalData, .DoubleFractalData: nil
+    }
+  }
 }
 
 /**
@@ -134,8 +155,15 @@ Mode N — Read a NRRD or NHDR file
         overlap           : Positive integer specifying the overlap between bricks
 
 Mode C — Create a volume file using a specified algorithm
-    \(executableName) C <L|F|D> <byte_depth> <component_count> <size_x> <size_y> <size_z> <output_filename> <description> <max_brick_size> <overlap>
-        L, F, or D        : Algorithm ('L' = linear, 'F' = Float Mandelbulb with automatic Metal acceleration, 'D' = Double CPU Mandelbulb)
+    \(executableName) C <algorithm> <byte_depth> <component_count> <size_x> <size_y> <size_z> <output_filename> <description> <max_brick_size> <overlap>
+        algorithm         : L = linear
+                            F = Float Mandelbulb with automatic Metal acceleration
+                            D = Double CPU Mandelbulb
+                            J = Quaternion Julia set
+                            B = Mandelbox
+                            G = Gyroid
+                            P = 3D Shepp-Logan phantom
+                            T = Frequency chirp and brick-boundary test
         byte_depth        : Bytes per component (1, 2, or 4)
         component_count   : Number of components per voxel (e.g., 1 for grayscale, 3 for RGB)
         size_x            : Volume size along X (positive integer)
@@ -240,11 +268,11 @@ func parseArguments(_ args: [String]) -> (Mode, Any) {
         exit(1)
       }
       guard datasetType == .LinearData || componentCount == 1 else {
-        logger.error("Error: Mandelbulb generation currently supports exactly one component per voxel.")
+        logger.error("Error: Analytical volume generation supports exactly one component per voxel.")
         exit(1)
       }
       guard datasetType == .LinearData || (sizeX > 1 && sizeY > 1 && sizeZ > 1) else {
-        logger.error("Error: Mandelbulb generation requires at least two samples on every axis.")
+        logger.error("Error: Analytical volume generation requires at least two samples on every axis.")
         exit(1)
       }
       let params = CreateModeParameters(
@@ -513,6 +541,25 @@ func generateVolume(_ params: CreateModeParameters) {
           logger: logger
         )
         metaDesc = backend.metaDescription
+      case .QuaternionJuliaData,
+           .MandelboxData,
+           .GyroidData,
+           .SheppLoganData,
+           .FrequencyChirpData:
+        guard let kind = params.datasetType.analyticKind else {
+          preconditionFailure("Missing analytical volume kind")
+        }
+        let backend = try computeAnalyticVolume(
+          kind: kind,
+          filename: tempURL.path,
+          sizeX: params.sizeX,
+          sizeY: params.sizeY,
+          sizeZ: params.sizeZ,
+          bytesPerVoxel: params.byteDepth,
+          brickStride: params.common.maxBrickSize - 2 * params.common.overlap,
+          logger: logger
+        )
+        metaDesc = "\(kind.displayName), generated using \(backend.displayName)"
     }
 
     logger.info("Converting generated volume to BorgVR file format ...")
