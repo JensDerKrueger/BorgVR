@@ -113,6 +113,10 @@ typedef struct {
   vector_float3 cameraPosInTextureSpace;
   vector_float3 cameraPosInTextureSpaceVoxelScaled;
   vector_float3 cubeBounds[2];
+  vector_float4 lightDirection;
+  vector_float4 ambientLightColor;
+  vector_float4 diffuseLightColor;
+  vector_float4 specularLightColor;
   matrix_float4x4 modelView;
   matrix_float4x4 modelViewIT;
   matrix_float4x4 textureToClip;

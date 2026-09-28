@@ -1,4 +1,4 @@
-import { CoordinateCubeRenderer } from "./cube-renderer.js?v=20260922-marker-direction";
+import { CoordinateCubeRenderer } from "./cube-renderer.js?v=20260928-lighting";
 import { decodeAppleLZ4, encodeLZ4Block } from "./lz4.js?v=20260911-urltf";
 import {
   MARKER_FILE_HEADER_BYTES,
@@ -22,6 +22,7 @@ import {
   STROKE_RADIUS_MINIMUM
 } from "./format-constants.js?v=20260922-marker-direction";
 import { transferFunctionRGBAData } from "./transfer-function.js?v=20260918-format-constants";
+import { installLightingEditor } from "./lighting-editor.js?v=20260928-lighting";
 
 const catalogStatus = document.querySelector("#catalog-status");
 const datasetPanel = document.querySelector(".dataset-panel");
@@ -58,6 +59,11 @@ const persistentBrickCacheInfoButton = document.querySelector("#persistent-brick
 const persistentBrickCacheInfo = document.querySelector("#persistent-brick-cache-info");
 const clearBrickCache = document.querySelector("#clear-brick-cache");
 const brickCacheStats = document.querySelector("#brick-cache-stats");
+const lightingDirectionCanvas = document.querySelector("#lighting-direction");
+const ambientLightColor = document.querySelector("#ambient-light-color");
+const diffuseLightColor = document.querySelector("#diffuse-light-color");
+const specularLightColor = document.querySelector("#specular-light-color");
+const lightingReset = document.querySelector("#lighting-reset");
 const MINIMUM_TRANSFER_SMOOTH_WIDTH = 0.02;
 const MAXIMUM_TRANSFER_SMOOTH_WIDTH = 1.0;
 const TRANSFER_FUNCTION_URL_PARAMETER = "TF";
@@ -99,6 +105,14 @@ async function main() {
   datasetPanelCollapsed = loadDatasetPanelCollapsedSetting();
   restoreOpenUIPanels();
   renderer = new CoordinateCubeRenderer(canvas);
+  installLightingEditor({
+    canvas: lightingDirectionCanvas,
+    ambientInput: ambientLightColor,
+    diffuseInput: diffuseLightColor,
+    specularInput: specularLightColor,
+    resetButton: lightingReset,
+    onChange: (lighting) => renderer?.setLighting(lighting)
+  });
   window.borgvrProfileSnapshot = () => renderer?.profileSnapshot();
   window.borgvrProfileSummary = () => renderer?.profileSummaryText();
   renderer.setProfiling(profilingEnabled);

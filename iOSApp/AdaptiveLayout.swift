@@ -43,6 +43,10 @@ struct AdaptiveLayout {
     size.width < 600
   }
 
+  var usesCompactActionLabels: Bool {
+    size.width < 600
+  }
+
   init(
     size: CGSize,
     safeAreaInsets: EdgeInsets,

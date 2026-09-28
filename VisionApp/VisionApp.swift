@@ -208,7 +208,7 @@ struct VisionApp: App {
         .environmentObject(speech)
     }
     .windowResizability(.contentSize)
-    .defaultSize(width:500,height:400)
+    .defaultSize(width: 750, height: 400)
 
     WindowGroup(id: "MarkerView") {
       MarkerView()
@@ -219,6 +219,36 @@ struct VisionApp: App {
     }
     .windowResizability(.contentSize)
     .defaultSize(width: 620, height: 560)
+
+    WindowGroup(id: "LightingEditorView") {
+      LightingEditorView(
+        lightDirection: Binding(
+          get: { sharedAppModel.lightDirection },
+          set: { sharedAppModel.lightDirection = $0 }
+        ),
+        ambientLightColor: Binding(
+          get: { sharedAppModel.ambientLightColor },
+          set: { sharedAppModel.ambientLightColor = $0 }
+        ),
+        diffuseLightColor: Binding(
+          get: { sharedAppModel.diffuseLightColor },
+          set: { sharedAppModel.diffuseLightColor = $0 }
+        ),
+        specularLightColor: Binding(
+          get: { sharedAppModel.specularLightColor },
+          set: { sharedAppModel.specularLightColor = $0 }
+        ),
+        usesPanelBackground: false,
+        onChange: { sharedAppModel.synchronize(kind: .stateOnly) },
+        onCommit: sharedAppModel.flushSynchronization
+      )
+      .padding()
+      .trackView(name: "LightingEditorView")
+      .environment(runtimeAppModel)
+      .environment(sharedAppModel)
+    }
+    .windowResizability(.contentSize)
+    .defaultSize(width: 440, height: 500)
 
     Window("Voice Commands", id: "VoiceCommandsView") {
       VoiceHelpView()

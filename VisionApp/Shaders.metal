@@ -10,7 +10,9 @@
 #define VOLUME_FRAGMENT_SHADER_ISO_NAME fragmentShaderIso
 #define VOLUME_FRAGMENT_SHADER_BRICK_VIS_NAME fragmentShaderBrickVis
 #define VOLUME_SHADER_USES_AMPLIFICATION 1
+#ifndef VOLUME_SHADER_USES_RATE_MAP
 #define VOLUME_SHADER_USES_RATE_MAP 1
+#endif
 #define VOLUME_SHADER_USES_MARKER_TEXTURES 1
 
 #include "../AppSupport/VolumeRaycaster.metal"

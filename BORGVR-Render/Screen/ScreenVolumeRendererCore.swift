@@ -616,6 +616,10 @@ final class ScreenVolumeRendererCore {
       cameraPosInTextureSpace: simd_make_float3(viewToTexture * SIMD4<Float>(0, 0, 0, 1)),
       cameraPosInTextureSpaceVoxelScaled: simd_make_float3(viewToTexture * SIMD4<Float>(0, 0, 0, 1)),
       cubeBounds: (clipMin, clipMax),
+      lightDirection: SIMD4<Float>(renderingParameters.lightDirection, 0),
+      ambientLightColor: SIMD4<Float>(renderingParameters.ambientLightColor, 0),
+      diffuseLightColor: SIMD4<Float>(renderingParameters.diffuseLightColor, 0),
+      specularLightColor: SIMD4<Float>(renderingParameters.specularLightColor, 0),
       modelView: viewMatrix * modelMatrix,
       modelViewIT: simd_transpose(simd_inverse(viewMatrix * modelMatrix)),
       textureToClip: projection * viewMatrix * modelMatrix * matrixTranslation(SIMD3<Float>(repeating: -0.5))

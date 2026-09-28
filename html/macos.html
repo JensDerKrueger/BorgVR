@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="color-scheme" content="dark" />
+  <title>BorgVR for macOS</title>
+  <meta name="description" content="How to use BorgVR on macOS, including rendering, dockable tools, markers, SharePlay, scripting, imports, and local servers." />
+  <link rel="canonical" href="https://www.jens-krueger.com/BorgVR/macos.html" />
+  <link rel="stylesheet" href="./style.css" />
+  <script src="./i18n.js"></script>
+</head>
+<body>
+  <a class="skip" href="#main" data-de="Zum Inhalt springen">Skip to content</a>
+  <header class="topbar"><div class="container topbar__inner"><a class="brand" href="./"><img class="brand__logo" src="./borgvr.png" alt="" /><span class="brand__text" data-de="BorgVR-Handbuch">BorgVR Guide</span></a><nav class="nav"><a class="nav__link" href="./concepts.html" data-de="Grundlagen">Concepts</a><a class="nav__link" href="./support.html">Support</a><a class="nav__link" href="./privacy.html" data-de="Datenschutz">Privacy</a></nav></div></header>
+  <main id="main">
+    <header class="doc-header"><div class="container doc-header__grid"><div><p class="eyebrow">Mac</p><h1 class="doc-title">BorgVR for macOS</h1><p class="lead" data-de="Die vollständige Desktop-Anwendung für lokale und entfernte Volumendaten, dockbare Werkzeuge, Marker, Skripte und Zusammenarbeit.">The complete desktop workspace for local and remote volume data, dockable tools, markers, scripts, and collaboration.</p></div><img class="doc-header__image" src="./mandelbulb-background.jpg" alt="Mandelbulb volume" data-de-attr="alt:Mandelbulb-Volumen" /></div></header>
+    <div class="container docs-shell">
+      <aside class="docs-nav" aria-label="Manual sections"><p class="docs-nav__title" data-de="Handbuch">Manual</p><a class="docs-nav__link" href="./concepts.html" data-de="Grundlagen">Concepts</a><a class="docs-nav__link" href="./visionos.html">visionOS</a><a class="docs-nav__link" href="./ios.html">iPhone &amp; iPad</a><a class="docs-nav__link" aria-current="page" href="./macos.html">macOS</a><a class="docs-nav__link" href="./server.html" data-de="Server-App">Server app</a><a class="docs-nav__link" href="./webgpu.html">WebGPU</a><a class="docs-nav__link" href="./command-line.html" data-de="Kommandozeile">Command line</a></aside>
+      <article class="doc-content">
+        <section>
+          <h2 data-de="Arbeitsablauf">Workflow</h2>
+          <ol>
+            <li data-de="Öffnen Sie über das Hauptmenü eine lokale BorgVR-Datei, einen kürzlich verwendeten Datensatz oder den Katalog eines Remote-Servers.">Open a local BorgVR file, a recent dataset, or a remote-server catalog from the main menu.</li>
+            <li data-de="Wählen Sie im Renderfenster Render- und Interaktionsmodus. Ziehen rotiert das Modell per Arcball; Trackpad- oder Mausgesten verschieben und skalieren es.">Select rendering and interaction modes in the render window. Dragging rotates the model with an arcball; trackpad or mouse gestures translate and scale it.</li>
+            <li data-de="Öffnen Sie nur die benötigten Werkzeuge und docken Sie sie am Renderfenster an oder öffnen Sie sie in eigenen Fenstern.">Open only the tools you need and dock them to the render window or detach them into separate windows.</li>
+          </ol>
+          <p data-de="Ein nicht mehr erreichbarer Eintrag unter den zuletzt verwendeten Datensätzen wird erst beim Öffnen geprüft. BorgVR zeigt dann einen Fehler, ohne den Startbildschirm durch vorzeitige Netzwerkprüfungen zu verzögern.">A recent dataset that is no longer reachable is checked only when opened. BorgVR then reports the error without delaying the start screen with speculative network checks.</p>
+        </section>
+
+        <section>
+          <h2 data-de="Renderfenster und dockbare Werkzeuge">Render window and dockable tools</h2>
+          <p data-de="Die obere Bedienleiste enthält Schließen, SharePlay, Teilnehmer, WebGPU-Link, Datensatzinfo, optional die Log-Anzeige, das Leistungsdiagramm und die Docking-Funktion. Darunter stehen Render-Modus, Interaktionsmodus, Zurücksetzen, Editor und Marker.">The top control bar contains close, SharePlay, participants, WebGPU link, dataset info, optional log, performance graph, and docking. Rendering mode, interaction mode, reset, editor, and markers appear below.</p>
+          <dl class="definition-list">
+            <div><dt data-de="Rendersteuerung">Rendering controls</dt><dd data-de="Sie kann über dem Bild liegen, am Fenster angedockt oder in einem separaten Fenster geöffnet werden.">May overlay the image, dock to the window, or live in a separate window.</dd></div>
+            <div><dt data-de="TF-/Iso-Editor">TF/isovalue editor</dt><dd data-de="Wechselt automatisch passend zum Render-Modus und kann neben der Renderfläche gedockt werden.">Automatically follows the rendering mode and can dock beside the rendering area.</dd></div>
+            <div><dt data-de="Markerfenster">Marker window</dt><dd data-de="Liste, Mehrfachauswahl, Name, Farbe, Radius, Richtungsanzeige sowie Laden und Speichern.">List, multiple selection, name, color, radius, direction display, loading, and saving.</dd></div>
+            <div><dt data-de="Leistungsanzeige">Performance</dt><dd data-de="Zeigt Bildrate, Zeitverlauf und Phasen mit reduzierter Abtastrate zur Diagnose.">Shows frame rate, timing history, and periods using a reduced sampling rate for diagnostics.</dd></div>
+          </dl>
+        </section>
+
+        <section>
+          <h2 data-de="Interaktionsmodi">Interaction modes</h2>
+          <ul>
+            <li data-de="<strong>Modell:</strong> Arcball-Rotation, Translation und Skalierung des Volumens."><strong>Model:</strong> Arcball rotation, translation, and scaling of the volume.</li>
+            <li data-de="<strong>Clipping:</strong> Bedienung der Schnittebene."><strong>Clipping:</strong> Manipulation of the clipping plane.</li>
+            <li data-de="<strong>Transfer:</strong> Direkte Bearbeitung der Transferfunktionskurve im Renderbereich."><strong>Transfer:</strong> Direct manipulation of the transfer-function curve in the rendering area.</li>
+            <li data-de="<strong>Marker:</strong> Marker setzen, auswählen und ziehen. Scrollen oder eine vertikale Zwei-Finger-Geste verschieben die Auswahl in der Tiefe."><strong>Marker:</strong> Place, select, and drag markers. Scrolling or a vertical two-finger gesture moves the selection in depth.</li>
+          </ul>
+          <p data-de="Die Auswahl eines Markers schaltet die App automatisch in den Marker-Modus. Bei einer Mehrfachauswahl können Farbe, Größe und Richtungsanzeige für alle ausgewählten Marker gleichzeitig geändert werden.">Selecting a marker automatically switches to marker mode. Multiple selection allows common color, size, and direction changes.</p>
+        </section>
+
+        <section>
+          <h2 data-de="Import, lokale Dateien und Server">Import, local files, and servers</h2>
+          <p data-de="Die integrierte Konvertierung erzeugt BorgVR-Dateien aus DICOM, NRRD/NHDR und QVIS. Für wiederholte oder serverseitige Konvertierungen stehen zusätzlich die grafische Server-App und der Kommandozeilen-Konverter bereit.">The integrated converter creates BorgVR files from DICOM, NRRD/NHDR, and QVIS. The GUI server utility and command-line converter are also available for repeated or server-side conversion.</p>
+          <p data-de="Remote-Server werden mit Hostname, Port und optionalem Passwort angelegt. Der Verbindungstest meldet erreichbare Datensätze und Transferfunktionen. Zeitlimit, progressives Laden und das Speichern lokaler Kopien gelten für alle Remote-Quellen.">Remote servers are configured with hostname, port, and optional password. The connection test reports available datasets and transfer functions. Timeout, progressive loading, and retaining a local copy apply to all remote sources.</p>
+          <p data-de="Der Mac kann selbst einen nativen Datensatzserver und einen HTTPS-WebGPU-Server betreiben. Eine Schaltfläche im Renderfenster kopiert einen datensatzspezifischen Browserlink, sobald der aktive Datensatz über diesen Server verfügbar ist.">The Mac can run its own native dataset server and HTTPS WebGPU server. A button in the rendering window copies a dataset-specific browser link once the active dataset is available through that server.</p>
+        </section>
+
+        <section>
+          <h2>SharePlay</h2>
+          <p data-de="Mac, iPhone und iPad verwenden standardmäßig eine gemeinsame Ansicht. Mit <strong>Ansicht synchronisieren</strong> können Sie den Mac davon entkoppeln oder wieder daran anbinden; Renderparameter und Marker bleiben dennoch synchronisiert. Beim erneuten Einklinken wird die aktuelle gemeinsame Ansicht übernommen.">Mac, iPhone, and iPad use a common view state by default. <strong>Synchronize View</strong> detaches or reattaches the Mac without removing rendering parameters and markers from the session. Reattaching adopts the current shared view.</p>
+          <p data-de="Der Host kündigt die Datensatz-ID, die Adresse seines Ad-hoc-Servers und bekannte freigegebene Quellen an. Alle Teilnehmer ergänzen ihren Quellen-Cache und können ihrerseits lokale Kopien anbieten. So kann ein erreichbarer Client Daten liefern, wenn der Host hinter einer Firewall steht.">The host announces the dataset ID, its ad-hoc address, and known shareable origins. Every participant merges these into its origin cache and may advertise a local copy in turn. This allows a reachable client to provide data when the host is behind a firewall.</p>
+        </section>
+
+        <section>
+          <h2 data-de="Skripte">Scripting</h2>
+          <p data-de="Die macOS-App unterstützt GSC-Skripte für reproduzierbare Interaktionen, Renderparameter und Screenshots. Beispieldateien und die Befehlsdefinitionen liegen im Repository unter <code>Scripts/</code>.">The macOS app supports GSC scripts for reproducible interaction, rendering parameters, and screenshots. Example files and command definitions are available in the repository under <code>Scripts/</code>.</p>
+          <div class="callout"><strong data-de="Reproduzierbare Ergebnisse">Reproducible results</strong><span data-de="Verwenden Sie Skripte, gespeicherte Transferfunktionen und Markerdateien zusammen, wenn Ansichten für Publikationen oder Präsentationen exakt wiederhergestellt werden sollen.">Combine scripts, saved transfer functions, and marker files when views for publications or presentations must be recreated precisely.</span></div>
+        </section>
+
+        <section>
+          <h2 data-de="Einstellungen">Settings</h2>
+          <p data-de="Die Seitenleiste trennt Datenquellen, Rendering, Import, LOD, lokalen Server, SharePlay und Sonstiges. Häufig benötigte Optionen stehen oben; Atlasgrößen, Hash-Tabellen, Oversampling-Strategie und weitere Expertenparameter befinden sich im erweiterten Bereich.">The sidebar separates data sources, rendering, import, LOD, local server, SharePlay, and miscellaneous options. Common settings appear first; atlas sizes, hash tables, oversampling strategy, and other expert parameters are kept in the advanced area.</p>
+          <ul class="feature-list">
+            <li data-de="Automatisches Laden und Speichern von Transferfunktionen">Automatic transfer-function loading and saving</li>
+            <li data-de="Hintergrundfarbe oder Farbverlauf">Solid or gradient background</li>
+            <li data-de="Statisches und dynamisches Oversampling">Static and dynamic oversampling</li>
+            <li data-de="Zufällige Abtastphase">Randomized sample phase</li>
+            <li data-de="Brick-Visualisierung und Log-Schaltfläche">Brick visualization and log button</li>
+            <li data-de="Laden von Remote-Servern und lokale Kopien">Remote loading and local copies</li>
+            <li data-de="Lokaler und Ad-hoc-Server">Local and ad-hoc servers</li>
+            <li data-de="App-Store-Update-Prüfung">App Store update checks</li>
+          </ul>
+        </section>
+      </article>
+    </div>
+  </main>
+  <footer class="footer"><div class="container footer__inner"><span class="footer__brand">© 2026 Jens Krueger</span><div class="footer__right"><a class="footer__link" href="./" data-de="Zur Handbuch-Startseite">Guide home</a><a class="footer__link" href="./support.html">Support</a></div></div></footer>
+  <script>window.BorgVRI18n.applyTranslations({en:{title:"BorgVR for macOS",metaDescription:"How to use BorgVR on macOS, including rendering, dockable tools, markers, SharePlay, scripting, imports, and local servers."},de:{title:"BorgVR für macOS",metaDescription:"BorgVR auf macOS verwenden: Rendering, dockbare Werkzeuge, Marker, SharePlay, Skripte, Import und lokale Server."}});</script>
+</body>
+</html>

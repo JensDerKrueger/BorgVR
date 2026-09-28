@@ -207,6 +207,19 @@ struct macOSApp: App {
         .environmentObject(scriptRunner)
     }
     .defaultSize(width: 520, height: 560)
+
+    WindowGroup("Lighting", id: DockablePanelID.lightingEditor.windowID) {
+      DetachedPanelContent(panel: .lightingEditor)
+        .environmentObject(appModel)
+        .environmentObject(renderingParameters)
+        .environmentObject(appSettings)
+        .environmentObject(storedAppModel)
+        .environmentObject(serverController)
+        .environmentObject(sharePlay)
+        .environmentObject(docking)
+        .environmentObject(scriptRunner)
+    }
+    .defaultSize(width: 430, height: 500)
     .commands {
       CommandMenu("Script") {
         Button("Run Script...") {

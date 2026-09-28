@@ -105,14 +105,17 @@ inline float3 computeEntryPoint(float3 P, float3 Q, FragmentUniforms params) {
  - color: The base color of the material.
  - Returns: The shaded color after ambient, diffuse, and specular contributions.
  */
-inline half3 lighting(half3 position, half3 normal, half3 color) {
-  const half3 ambientLight  = half3(0.1, 0.1, 0.1);
-  const half3 diffuseLight  = half3(0.5, 0.5, 0.5);
-  const half3 specularLight = half3(0.8, 0.8, 0.8);
+inline half3 lighting(half3 position,
+                      half3 normal,
+                      half3 color,
+                      half3 lightDirection,
+                      half3 ambientLight,
+                      half3 diffuseLight,
+                      half3 specularLight) {
   const half  shininess     = 8.0;
 
   half3 viewDir    = normalize(-position);
-  half3 lightDir   = viewDir; // light at camera for simplicity
+  half3 lightDir   = normalize(lightDirection);
   half3 reflection = reflect(-lightDir, normal);
 
   // Two-sided diffuse

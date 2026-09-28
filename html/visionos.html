@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="color-scheme" content="dark" />
+  <title>BorgVR for Apple Vision Pro</title>
+  <meta name="description" content="How to open, explore, annotate, and share volume datasets with BorgVR on Apple Vision Pro." />
+  <link rel="canonical" href="https://www.jens-krueger.com/BorgVR/visionos.html" />
+  <link rel="stylesheet" href="./style.css" />
+  <script src="./i18n.js"></script>
+</head>
+<body>
+  <a class="skip" href="#main" data-de="Zum Inhalt springen">Skip to content</a>
+  <header class="topbar"><div class="container topbar__inner">
+    <a class="brand" href="./"><img class="brand__logo" src="./borgvr.png" alt="" /><span class="brand__text" data-de="BorgVR-Handbuch">BorgVR Guide</span></a>
+    <nav class="nav"><a class="nav__link" href="./concepts.html" data-de="Grundlagen">Concepts</a><a class="nav__link" href="./support.html">Support</a><a class="nav__link" href="./privacy.html" data-de="Datenschutz">Privacy</a></nav>
+  </div></header>
+  <main id="main">
+    <header class="doc-header"><div class="container doc-header__grid">
+      <div><p class="eyebrow">Apple Vision Pro</p><h1 class="doc-title">BorgVR for visionOS</h1><p class="lead" data-de="Volumendaten frei im Raum platzieren, mit Händen oder Logitech Muse markieren und gemeinsam über SharePlay untersuchen.">Place volume data freely in space, annotate it with your hands or Logitech Muse, and explore it together through SharePlay.</p></div>
+      <img class="doc-header__image" src="./mandelbulb-background.jpg" alt="Mandelbulb rendered by BorgVR" data-de-attr="alt:Mit BorgVR gerenderter Mandelbulb" />
+    </div></header>
+    <div class="container docs-shell">
+      <aside class="docs-nav" aria-label="Manual sections">
+        <p class="docs-nav__title" data-de="Handbuch">Manual</p><a class="docs-nav__link" href="./concepts.html" data-de="Grundlagen">Concepts</a><a class="docs-nav__link" aria-current="page" href="./visionos.html">visionOS</a><a class="docs-nav__link" href="./ios.html">iPhone &amp; iPad</a><a class="docs-nav__link" href="./macos.html">macOS</a><a class="docs-nav__link" href="./server.html" data-de="Server-App">Server app</a><a class="docs-nav__link" href="./webgpu.html">WebGPU</a><a class="docs-nav__link" href="./command-line.html" data-de="Kommandozeile">Command line</a>
+      </aside>
+      <article class="doc-content">
+        <section>
+          <h2 data-de="Erster Start">First launch</h2>
+          <ol>
+            <li data-de="Wählen Sie <strong>Datensatz öffnen</strong>, um eine lokale Datei oder einen Datensatz eines konfigurierten Servers zu laden.">Choose <strong>Open Dataset</strong> to load a local file or a dataset from a configured server.</li>
+            <li data-de="Mit <strong>Datensatz importieren</strong> konvertieren Sie unterstützte Ausgangsdaten in das BorgVR-Format.">Use <strong>Import Dataset</strong> to convert supported source data into the BorgVR format.</li>
+            <li data-de="Nach dem Öffnen startet der Immersive Space. Das Volumen erscheint vor Ihnen; Bedienfenster bleiben als visionOS-Fenster verfügbar.">After opening, the Immersive Space starts. The volume appears in front of you while controls remain available in visionOS windows.</li>
+          </ol>
+          <p data-de="Beim ersten Start fragt BorgVR nach einem SharePlay-Anzeigenamen. Dieser Name identifiziert Sie in gemeinsamen Sitzungen und kann später in den Einstellungen geändert werden.">On first launch, BorgVR asks for a SharePlay display name. This name identifies you in shared sessions and can be changed later in Settings.</p>
+        </section>
+
+        <section>
+          <h2 data-de="Volumen und Clipping bedienen">Manipulating the volume and clipping</h2>
+          <p data-de="Wählen Sie im Interaktionsfenster den Modus, bevor Sie im Immersive Space pinchen und ziehen.">Choose the interaction mode before pinching and dragging in the Immersive Space.</p>
+          <dl class="definition-list">
+            <div><dt data-de="Modell">Model</dt><dd data-de="Das Volumen verschieben, drehen und skalieren. Zurücksetzen stellt die Ausgangstransformation wieder her.">Move, rotate, and scale the volume. Reset restores the initial transform.</dd></div>
+            <div><dt>Clipping</dt><dd data-de="Die Schnittebene positionieren und drehen, um in den Datensatz hineinzusehen.">Position and rotate the clipping plane to inspect the interior of the dataset.</dd></div>
+            <div><dt data-de="Marker">Marker</dt><dd data-de="Marker auswählen, erzeugen, verschieben und mit einer Zwei-Hand-Geste skalieren.">Select, create, move, and scale markers with a two-hand gesture.</dd></div>
+            <div><dt>Screen View</dt><dd data-de="Die gemeinsame Bildschirmansicht von Mac-, iPhone- und iPad-Teilnehmern im Raum positionieren. Dieser Modus erscheint nur, wenn eine solche Ansicht vorhanden ist.">Position the shared screen view of Mac, iPhone, and iPad participants in space. This mode appears only while such a view exists.</dd></div>
+          </dl>
+        </section>
+
+        <section>
+          <h2 data-de="Render-Modus und Transferfunktion">Rendering mode and transfer function</h2>
+          <p data-de="Im Renderfenster wechseln Sie zwischen beleuchteter Transferfunktion, Transferfunktion und Isofläche. Die Editor-Schaltfläche öffnet je nach Modus den Transferfunktions- oder Isowert-Editor.">The render window switches between illuminated transfer function, transfer function, and isosurface rendering. The Editor button opens either the transfer-function editor or the isovalue editor for the active mode.</p>
+          <p data-de="Zusätzlich zum großen Editor kann die Transferfunktion als HUD oder als Widget unter dem Datensatz angezeigt werden. Blicken Sie auf die Kurve, pinchen Sie und ziehen Sie: horizontal wird die Kurve verschoben, vertikal ihre Breite verändert. Nach Beginn des Ziehens bleibt der Ausgangspunkt stabil.">In addition to the large editor, the transfer function can appear as a HUD or as a widget below the dataset. Look at the curve, pinch, and drag: horizontal movement shifts the curve and vertical movement changes its width. The initial point remains stable once dragging begins.</p>
+          <p data-de="Über die separaten Farbkanal-Schaltflächen unter dem Widget wählen Sie Rot, Grün, Blau oder Alpha. Änderungen aus einem anderen Editor oder über Sprachbefehle werden in allen Darstellungen übernommen.">The separate color controls below the widget select red, green, blue, or alpha. Changes made in another editor or through voice commands are reflected in every display.</p>
+        </section>
+
+        <section>
+          <h2 data-de="Marker mit den Händen">Hand-created markers</h2>
+          <p data-de="Im Markerfenster legen Sie fest, ob neue Kugeln an der Hand- oder Blickposition entstehen. Eine Pinch-Geste erzeugt oder greift einen Marker; Ziehen bewegt ihn. Mehrere Marker können in der Liste gleichzeitig ausgewählt werden, um Name, Farbe, Radius oder Richtungsanzeige gemeinsam zu ändern.">The marker window controls whether new spheres appear at the hand or gaze position. A pinch creates or grabs a marker, and dragging moves it. Select multiple markers in the list to change their name, color, radius, or direction display together.</p>
+          <h3>Quick Marker</h3>
+          <p data-de="Wenn Quick Marker in den Einstellungen aktiviert ist, erzeugt ein schneller Doppel-Pinch auch außerhalb des Marker-Modus eine Kugel. Halten Sie die zweite Pinch-Geste, um die Kugel sofort zu bewegen. Im normalen Marker-Modus ist Quick Marker vorübergehend deaktiviert.">When Quick Marker is enabled in Settings, a rapid double pinch creates a sphere even outside marker mode. Keep the second pinch closed to move it immediately. Quick Marker is temporarily disabled in normal marker mode.</p>
+          <h3 data-de="Laden und Speichern">Loading and saving</h3>
+          <p data-de="Das Markerfenster lädt und speichert <code>.marker</code>-Dateien. Dateien aus lokalen und entfernten Katalogen werden zusammen angeboten; passende Datensatz-IDs sind markiert. Beim Laden können vorhandene Marker ersetzt oder ergänzt werden.">The marker window loads and saves <code>.marker</code> files. Local and remote catalog entries are shown together, with matching dataset IDs highlighted. Existing markers can be replaced or extended when loading.</p>
+        </section>
+
+        <section>
+          <h2>Logitech Muse</h2>
+          <p data-de="Auf unterstützten visionOS-Versionen dient Logitech Muse als räumlicher Stift. Die Spitze wird als Vorschaukugel angezeigt. Zeichnen Sie mit der Haupttaste oder durch Druck der Spitze auf eine reale Unterlage; BorgVR erzeugt daraus ein geglättetes Tube-Mesh.">On supported visionOS versions, Logitech Muse acts as a spatial stylus. Its tip appears as a preview sphere. Draw with the primary button or by pressing the tip against a physical surface; BorgVR turns the samples into a smoothed tube mesh.</p>
+          <ul>
+            <li data-de="Mit der zweiten Taste und einer Bewegung nach oben oder unten ändern Sie den Strichradius.">Hold the second button and move up or down to change stroke radius.</li>
+            <li data-de="Mit der zweiten Taste und einer Bewegung nach links oder rechts ändern Sie den Farbton entlang des gesamten Farbkreises; Sättigung und Helligkeit bleiben dabei vollständig erhalten.">Hold the second button and move left or right to cycle hue at full saturation and brightness.</li>
+            <li data-de="Die Sichtbarkeit Ihrer Stiftspitze für andere SharePlay-Teilnehmer wird in den Einstellungen gesteuert. Ist sie ausgeschaltet, werden keine Vorschaupositionen gesendet.">Settings control whether other SharePlay participants can see your stylus tip. When disabled, no preview positions are transmitted.</li>
+          </ul>
+        </section>
+
+        <section>
+          <h2>SharePlay</h2>
+          <p data-de="Starten Sie über die Systemoberfläche und die SharePlay-Schaltfläche in BorgVR eine SharePlay-Sitzung oder treten Sie einer bestehenden Sitzung bei. Renderparameter und Marker werden geteilt; räumliche Vision-Pro-Ansichten bleiben von der gemeinsamen Bildschirmansicht der übrigen Geräte getrennt.">Start or join SharePlay through the system interface and BorgVR's SharePlay button. Rendering parameters and markers are shared, while spatial Vision Pro views remain separate from the common screen view used by other devices.</p>
+          <p data-de="BorgVR zeigt die gemeinsame Bildschirmansicht als Auge vor einer Bildfläche. Entkoppelt sich ein Mac-, iPhone- oder iPad-Nutzer, erscheint für diese Person eine eigene farbcodierte Darstellung mit Anzeigename. Während der Interaktion wird das zugehörige Frustum eingeblendet.">BorgVR visualizes the shared screen view as an eye in front of an image plane. If a Mac, iPhone, or iPad user detaches, that person receives a separate color-coded representation with a display name. Its frustum appears while it is being manipulated.</p>
+          <div class="callout"><strong data-de="Host verlässt die Sitzung">When the host leaves</strong><span data-de="Teilnehmer können die Host-Rolle übernehmen, die Sitzung verlassen oder ohne Host fortfahren. Bei gleichzeitigen Übernahmeversuchen entscheidet eine feste Regel, wer die Host-Rolle erhält.">Participants may take over the host role, leave the session, or continue without a host. Simultaneous takeover attempts are resolved deterministically.</span></div>
+        </section>
+
+        <section>
+          <h2 data-de="Wichtige Einstellungen">Important settings</h2>
+          <ul class="feature-list">
+            <li data-de="Transferfunktions-HUD und Widget">Transfer-function HUD and widget</li>
+            <li data-de="Quick Marker und Doppel-Pinch-Intervall">Quick Marker and double-pinch interval</li>
+            <li data-de="Standardfarbe, Kugelradius, Strichradius und Richtungsanzeige">Default color, sphere radius, stroke radius, and direction display</li>
+            <li data-de="Position der Muse-Stiftspitze über SharePlay teilen">Share Muse tip position through SharePlay</li>
+            <li data-de="Remote-Server, Lade-Timeout und lokale Kopien">Remote servers, loading timeout, and local copies</li>
+            <li data-de="Lokaler Datensatz- und WebGPU-Server">Local dataset and WebGPU server</li>
+            <li data-de="LOD-, Atlas-, Abtastungs- und Foveation-Optionen">LOD, atlas, sampling, and foveation options</li>
+            <li data-de="SharePlay-Anzeigename und Update-Prüfung">SharePlay display name and update checks</li>
+          </ul>
+        </section>
+      </article>
+    </div>
+  </main>
+  <footer class="footer"><div class="container footer__inner"><span class="footer__brand">© 2026 Jens Krueger</span><div class="footer__right"><a class="footer__link" href="./" data-de="Zur Handbuch-Startseite">Guide home</a><a class="footer__link" href="./support.html">Support</a></div></div></footer>
+  <script>window.BorgVRI18n.applyTranslations({en:{title:"BorgVR for Apple Vision Pro",metaDescription:"How to open, explore, annotate, and share volume datasets with BorgVR on Apple Vision Pro."},de:{title:"BorgVR für Apple Vision Pro",metaDescription:"Datensätze mit BorgVR auf Apple Vision Pro öffnen, untersuchen, markieren und teilen."}});</script>
+</body>
+</html>

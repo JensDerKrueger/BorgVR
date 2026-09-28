@@ -27,6 +27,7 @@ struct RenderView: View {
   private let maximumTransferSmoothWidth: Float = 1.0
   private let minimumModelScale: Float = 0.2
   private let maximumModelScale: Float = 20
+  private let dockedLightingPanelWidth: CGFloat = 340
   private let dockedMarkerPanelWidth: CGFloat = 380
   private let markerDepthScrollSensitivity: Float = 0.003
 
@@ -66,7 +67,7 @@ struct RenderView: View {
             }
             .environmentObject(renderingParameters)
           }
-          .padding(.leading)
+          .padding(.leading, dockedEditorLeadingPadding)
           .padding(.trailing, dockedEditorTrailingPadding)
           .padding(.bottom)
         }
@@ -86,27 +87,53 @@ struct RenderView: View {
             }
             .environmentObject(renderingParameters)
           }
-          .padding(.leading)
+          .padding(.leading, dockedEditorLeadingPadding)
           .padding(.trailing, dockedEditorTrailingPadding)
           .padding(.bottom)
         }
         .transition(.move(edge: .bottom).combined(with: .opacity))
       }
 
-      if docking.isDockedVisible(.markerEditor) {
-        HStack {
-          Spacer()
+      if docking.isDockedVisible(.markerEditor) || docking.isDockedVisible(.lightingEditor) {
+        HStack(alignment: .top, spacing: 16) {
+          if docking.isDockedVisible(.lightingEditor) {
+            VStack {
+              Spacer(minLength: 0)
 
-          DockableEditorPanel(panel: .markerEditor) {
-            MacMarkerView()
+              DockableEditorPanel(panel: .lightingEditor) {
+                LightingEditorView(
+                  lightDirection: $renderingParameters.lightDirection,
+                  ambientLightColor: $renderingParameters.ambientLightColor,
+                  diffuseLightColor: $renderingParameters.diffuseLightColor,
+                  specularLightColor: $renderingParameters.specularLightColor,
+                  usesPanelBackground: false,
+                  showsTitle: false,
+                  onChange: { sharePlay.synchronize(kind: .stateOnly) },
+                  onCommit: sharePlay.flushSynchronization,
+                  onClose: { docking.hide(.lightingEditor) }
+                )
+              }
+            }
+            .frame(width: dockedLightingPanelWidth)
+            .frame(maxHeight: .infinity)
+            .transition(.move(edge: .leading).combined(with: .opacity))
           }
-          .frame(width: dockedMarkerPanelWidth)
-          .frame(maxHeight: .infinity)
+
+          Spacer(minLength: 0)
+
+          if docking.isDockedVisible(.markerEditor) {
+            DockableEditorPanel(panel: .markerEditor) {
+              MacMarkerView()
+            }
+            .frame(width: dockedMarkerPanelWidth)
+            .frame(maxHeight: .infinity)
+            .transition(.move(edge: .trailing).combined(with: .opacity))
+          }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .padding(.top, docking.isDockedVisible(.renderControls) ? 190 : 16)
-        .padding(.trailing)
+        .padding(.horizontal)
         .padding(.bottom)
-        .transition(.move(edge: .trailing).combined(with: .opacity))
       }
     }
     .onAppear {
@@ -157,8 +184,16 @@ struct RenderView: View {
     [storedAppModel.resolvedDataDirectoryURL()]
   }
 
+  private var dockedEditorLeadingPadding: CGFloat {
+    docking.isDockedVisible(.lightingEditor)
+      ? dockedLightingPanelWidth + 32
+      : 16
+  }
+
   private var dockedEditorTrailingPadding: CGFloat {
-    docking.isDockedVisible(.markerEditor) ? dockedMarkerPanelWidth + 32 : 16
+    docking.isDockedVisible(.markerEditor)
+      ? dockedMarkerPanelWidth + 32
+      : 16
   }
 
   private func updateDetachedPanelWindows() {

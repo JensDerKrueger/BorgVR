@@ -106,6 +106,12 @@ class SharedAppModel {
   var renderMode: RenderMode
   /// Flag to show or hide bricks.
   var brickVis: Bool
+  /// Directional light in view space.
+  var lightDirection: SIMD3<Float>
+  /// Ambient, diffuse, and specular light colors.
+  var ambientLightColor: SIMD3<Float>
+  var diffuseLightColor: SIMD3<Float>
+  var specularLightColor: SIMD3<Float>
   /// Minimum data value for ISO and TF mapping (presently unused).
   var minValue: Int = 0
   /// Maximum data value for ISO and TFmapping.
@@ -169,6 +175,10 @@ class SharedAppModel {
     normIsoValue = 0
     renderMode = .transferFunction1D
     brickVis = false
+    lightDirection = BorgVRLightingState.default.direction
+    ambientLightColor = BorgVRLightingState.default.ambientColor
+    diffuseLightColor = BorgVRLightingState.default.diffuseColor
+    specularLightColor = BorgVRLightingState.default.specularColor
     purgeAtlas = false
     volumeMarkers = []
     selectedVolumeMarkerIDs = []
@@ -336,6 +346,7 @@ class SharedAppModel {
     resetIsoValue()
     renderMode = .transferFunction1D
     brickVis = false
+    applyLightingState(.default)
     purgeAtlas = false
     volumeMarkers = []
     selectedVolumeMarkerID = nil
@@ -389,7 +400,7 @@ class SharedAppModel {
   /// Magic identifier for serialized RenderingParamaters blobs.
   private static let streamMagic: UInt32 = 0x5250_414D // "RPAM"
   /// Protocl format version.
-  private static let streamVersion: UInt16 = 1
+  private static let streamVersion: UInt16 = 2
 
   enum UpdateKind {
     case full          // includes TF
@@ -455,6 +466,10 @@ class SharedAppModel {
     w.write(Int32(maxValue))
     w.write(Int32(rangeMax))
     w.write(UInt8(purgeAtlas ? 1 : 0))
+    w.writeSIMD3(lightDirection)
+    w.writeSIMD3(ambientLightColor)
+    w.writeSIMD3(diffuseLightColor)
+    w.writeSIMD3(specularLightColor)
 
     // Optional transfer function block
     if case .full = kind {
@@ -482,6 +497,10 @@ class SharedAppModel {
     w.write(Int32(minValue))
     w.write(Int32(maxValue))
     w.write(Int32(rangeMax))
+    w.writeSIMD3(lightDirection)
+    w.writeSIMD3(ambientLightColor)
+    w.writeSIMD3(diffuseLightColor)
+    w.writeSIMD3(specularLightColor)
 
     if includeTransferFunction {
       let tfData = transferFunction.serialize()
@@ -564,6 +583,12 @@ class SharedAppModel {
     self.maxValue = Int(try r.read() as Int32)
     self.rangeMax = Int(try r.read() as Int32)
     self.purgeAtlas = (try r.read() as UInt8) != 0
+    applyLightingState(BorgVRLightingState(
+      direction: try r.readSIMD3(),
+      ambientColor: try r.readSIMD3(),
+      diffuseColor: try r.readSIMD3(),
+      specularColor: try r.readSIMD3()
+    ))
 
     // Optional TF
     if case .full = kind {
@@ -644,6 +669,12 @@ class SharedAppModel {
     minValue = Int(try r.read() as Int32)
     maxValue = Int(try r.read() as Int32)
     rangeMax = Int(try r.read() as Int32)
+    applyLightingState(BorgVRLightingState(
+      direction: try r.readSIMD3(),
+      ambientColor: try r.readSIMD3(),
+      diffuseColor: try r.readSIMD3(),
+      specularColor: try r.readSIMD3()
+    ))
 
     if includesTransferFunction {
       let tfLen: UInt32 = try r.read()
@@ -654,6 +685,14 @@ class SharedAppModel {
     transferFunction.updateRanges(minValue: minValue,
                                   maxValue: maxValue,
                                   rangeMax: rangeMax)
+  }
+
+  private func applyLightingState(_ state: BorgVRLightingState) {
+    let state = state.sanitized
+    lightDirection = state.direction
+    ambientLightColor = state.ambientColor
+    diffuseLightColor = state.diffuseColor
+    specularLightColor = state.specularColor
   }
 
   private static func translation(fromClipMin clipMin: SIMD3<Float>, clipMax: SIMD3<Float>) -> SIMD3<Float> {

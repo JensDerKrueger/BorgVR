@@ -15,6 +15,10 @@ struct Uniforms {
   lodInfo: vec4<f32>,
   dataInfo: vec4<f32>,
   volumeInfo: vec4<f32>,
+  lightDirection: vec4<f32>,
+  ambientLightColor: vec4<f32>,
+  diffuseLightColor: vec4<f32>,
+  specularLightColor: vec4<f32>,
 };
 
 @group(0) @binding(0) var<uniform> uniforms: Uniforms;
@@ -404,16 +408,15 @@ fn refineIsosurfaceForBrick(
 }
 
 fn lighting(samplePoint: vec3<f32>, normal: vec3<f32>, color: vec3<f32>) -> vec3<f32> {
-  let ambientLight = vec3<f32>(0.1, 0.1, 0.1);
-  let diffuseLight = vec3<f32>(0.5, 0.5, 0.5);
-  let specularLight = vec3<f32>(0.8, 0.8, 0.8);
   let viewDir = safeNormalize(uniforms.cameraTexture.xyz - samplePoint);
-  let lightDir = viewDir;
+  let lightDir = safeNormalize(uniforms.lightDirection.xyz);
   let reflection = reflect(-lightDir, normal);
   let diffuse = max(abs(dot(normal, lightDir)), 0.0);
   let specular = pow(max(dot(viewDir, reflection), 0.0), 8.0);
   return clamp(
-    color * ambientLight + color * diffuseLight * diffuse + specularLight * specular,
+    color * uniforms.ambientLightColor.xyz +
+      color * uniforms.diffuseLightColor.xyz * diffuse +
+      uniforms.specularLightColor.xyz * specular,
     vec3<f32>(0.0),
     vec3<f32>(1.0)
   );
@@ -565,7 +568,7 @@ fn markerFragmentMain(input: MarkerVertexOut) -> @location(0) vec4<f32> {
 
 const MAX_BRICK_REQUEST_LIST_IDS = 65536;
 const BRICK_REQUEST_READBACK_INTERVAL = 1;
-const UNIFORM_BUFFER_BYTE_LENGTH = 272;
+const UNIFORM_BUFFER_BYTE_LENGTH = 336;
 const MARKER_UNIFORM_BUFFER_BYTE_LENGTH = 128;
 const MARKER_INSTANCE_STRIDE = 32;
 const LEVEL_DATA_STRIDE = 32;
@@ -640,6 +643,10 @@ export class CoordinateCubeRenderer {
     this.valueRange = [0, 1];
     this.clipMin = [0, 0, 0];
     this.clipMax = [1, 1, 1];
+    this.lightDirection = [0, 0, 1];
+    this.ambientLightColor = [0.1, 0.1, 0.1];
+    this.diffuseLightColor = [0.5, 0.5, 0.5];
+    this.specularLightColor = [0.8, 0.8, 0.8];
     this.totalBrickCount = 1;
     this.lastPointer = null;
     this.activePointers = new Map();
@@ -859,6 +866,23 @@ export class CoordinateCubeRenderer {
 
   getNormalizedIsoValue() {
     return this.normIsoValue;
+  }
+
+  setLighting({ direction, ambientColor, diffuseColor, specularColor }) {
+    this.lightDirection = normalizeVector(direction ?? this.lightDirection);
+    this.ambientLightColor = sanitizeColor(ambientColor, this.ambientLightColor);
+    this.diffuseLightColor = sanitizeColor(diffuseColor, this.diffuseLightColor);
+    this.specularLightColor = sanitizeColor(specularColor, this.specularLightColor);
+    this.drawNow();
+  }
+
+  getLighting() {
+    return {
+      direction: [...this.lightDirection],
+      ambientColor: [...this.ambientLightColor],
+      diffuseColor: [...this.diffuseLightColor],
+      specularColor: [...this.specularLightColor]
+    };
   }
 
   setTransferFunctionSmoothStep({ start, shift, channels }) {
@@ -1753,6 +1777,10 @@ export class CoordinateCubeRenderer {
     const clipTranslation = cubeMax.map((value, index) => 0.5 * (value + cubeMin[index] - 1));
     const clipMatrix = scaleTranslation(clipScale[0], clipScale[1], clipScale[2], clipTranslation[0], clipTranslation[1], clipTranslation[2]);
     const lodFactor = 2.0 * Math.tan(0.75 / 2.0) * this.screenSpaceError / Math.max(this.canvas.width, 1);
+    const textureLightDirection = normalizeVector(rotateVectorByQuaternion(
+      this.lightDirection,
+      conjugateQuaternion(this.orientation)
+    ));
     this.device.queue.writeBuffer(this.uniformBuffer, 0, new Float32Array([
       ...mvp,
       ...clipMatrix,
@@ -1764,7 +1792,11 @@ export class CoordinateCubeRenderer {
       cubeMax[0], cubeMax[1], cubeMax[2], 0,
       this.levelCount, lodFactor, this.levelZeroWorldSpaceError, 1,
       this.transferBias, this.renderMode, this.isoValue, 1,
-      this.volumeHalfExtent[0], this.volumeHalfExtent[1], this.volumeHalfExtent[2], 0
+      this.volumeHalfExtent[0], this.volumeHalfExtent[1], this.volumeHalfExtent[2], 0,
+      textureLightDirection[0], textureLightDirection[1], textureLightDirection[2], 0,
+      this.ambientLightColor[0], this.ambientLightColor[1], this.ambientLightColor[2], 0,
+      this.diffuseLightColor[0], this.diffuseLightColor[1], this.diffuseLightColor[2], 0,
+      this.specularLightColor[0], this.specularLightColor[1], this.specularLightColor[2], 0
     ]));
     if (this.markerUniformBuffer) {
       this.device.queue.writeBuffer(
@@ -1971,6 +2003,13 @@ function normalizeVector(vector) {
     return [0, 0, 1];
   }
   return vector.map((value) => value / length);
+}
+
+function sanitizeColor(color, fallback) {
+  if (!Array.isArray(color) || color.length < 3 || color.slice(0, 3).some((value) => !Number.isFinite(value))) {
+    return [...fallback];
+  }
+  return color.slice(0, 3).map((value) => clamp(value, 0, 1));
 }
 
 function dot(a, b) {

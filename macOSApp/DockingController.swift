@@ -6,6 +6,7 @@ enum DockablePanelID: String, CaseIterable, Identifiable {
   case transferFunctionEditor
   case isoEditor
   case markerEditor
+  case lightingEditor
 
   var id: String { rawValue }
   var windowID: String { "dockable.\(rawValue)" }
@@ -21,6 +22,8 @@ enum DockablePanelID: String, CaseIterable, Identifiable {
         return "Isovalue"
       case .markerEditor:
         return "Markers"
+      case .lightingEditor:
+        return "Lighting"
     }
   }
 
@@ -171,7 +174,7 @@ final class DockingController: ObservableObject {
 
   private func isCompatible(_ panel: DockablePanelID, with renderMode: RenderMode) -> Bool {
     switch panel {
-      case .renderControls, .markerEditor:
+      case .renderControls, .markerEditor, .lightingEditor:
         return true
       case .transferFunctionEditor:
         return renderMode != .isoValue
@@ -348,6 +351,7 @@ struct DetachedPanelContent: View {
   @EnvironmentObject private var renderingParameters: RenderingParameters
   @EnvironmentObject private var storedAppModel: StoredAppModel
   @EnvironmentObject private var docking: DockingController
+  @EnvironmentObject private var sharePlay: SharePlayCoordinator
 
   let panel: DockablePanelID
 
@@ -395,6 +399,22 @@ struct DetachedPanelContent: View {
             MacMarkerView()
           }
           .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+
+      case .lightingEditor:
+        DetachedDockablePanel(panel: panel, minWidth: 380, minHeight: 430) {
+          DockableEditorPanel(panel: panel, showsTitle: false) {
+            LightingEditorView(
+              lightDirection: $renderingParameters.lightDirection,
+              ambientLightColor: $renderingParameters.ambientLightColor,
+              diffuseLightColor: $renderingParameters.diffuseLightColor,
+              specularLightColor: $renderingParameters.specularLightColor,
+              usesPanelBackground: false,
+              onChange: { sharePlay.synchronize(kind: .stateOnly) },
+              onCommit: sharePlay.flushSynchronization,
+              onClose: { docking.close(panel) }
+            )
+          }
         }
     }
   }

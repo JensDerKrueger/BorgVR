@@ -290,6 +290,10 @@ struct VolumeMarkerDocument: FileDocument {
   }
 
   func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
+    .init(regularFileWithContents: try Self.encode(datasetID: datasetID, markers: markers))
+  }
+
+  static func encode(datasetID: String?, markers: [VolumeMarker]) throws -> Data {
     guard let datasetID, let datasetUUID = UUID(uuidString: datasetID) else {
       throw VolumeMarkerDocumentError.invalidFormat
     }
@@ -302,7 +306,7 @@ struct VolumeMarkerDocument: FileDocument {
     guard writer.data.count <= BorgVRMarkerFormat.maximumFileByteCount else {
       throw VolumeMarkerDocumentError.fileTooLarge
     }
-    return .init(regularFileWithContents: writer.data)
+    return writer.data
   }
 
   static func decode(from data: Data) throws -> VolumeMarkerDocumentContents {

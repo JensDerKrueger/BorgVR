@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="color-scheme" content="dark" />
+  <title>BorgVR Mobile for iPhone and iPad</title>
+  <meta name="description" content="How to use BorgVR Mobile on iPhone and iPad, including touch interaction, markers, imports, servers, and SharePlay." />
+  <link rel="canonical" href="https://www.jens-krueger.com/BorgVR/ios.html" />
+  <link rel="stylesheet" href="./style.css" />
+  <script src="./i18n.js"></script>
+</head>
+<body>
+  <a class="skip" href="#main" data-de="Zum Inhalt springen">Skip to content</a>
+  <header class="topbar"><div class="container topbar__inner"><a class="brand" href="./"><img class="brand__logo" src="./borgvr.png" alt="" /><span class="brand__text" data-de="BorgVR-Handbuch">BorgVR Guide</span></a><nav class="nav"><a class="nav__link" href="./concepts.html" data-de="Grundlagen">Concepts</a><a class="nav__link" href="./support.html">Support</a><a class="nav__link" href="./privacy.html" data-de="Datenschutz">Privacy</a></nav></div></header>
+  <main id="main">
+    <header class="doc-header"><div class="container doc-header__grid"><div><p class="eyebrow">iPhone &amp; iPad</p><h1 class="doc-title">BorgVR Mobile</h1><p class="lead" data-de="Volumendaten mobil öffnen, per Touch untersuchen, markieren und über SharePlay mit Mac und Apple Vision Pro verbinden.">Open volume data on the go, explore it with touch, annotate it, and connect to Mac and Apple Vision Pro through SharePlay.</p></div><img class="doc-header__image" src="./mandelbulb-background.jpg" alt="Mandelbulb volume" data-de-attr="alt:Mandelbulb-Volumen" /></div></header>
+    <div class="container docs-shell">
+      <aside class="docs-nav" aria-label="Manual sections"><p class="docs-nav__title" data-de="Handbuch">Manual</p><a class="docs-nav__link" href="./concepts.html" data-de="Grundlagen">Concepts</a><a class="docs-nav__link" href="./visionos.html">visionOS</a><a class="docs-nav__link" aria-current="page" href="./ios.html">iPhone &amp; iPad</a><a class="docs-nav__link" href="./macos.html">macOS</a><a class="docs-nav__link" href="./server.html" data-de="Server-App">Server app</a><a class="docs-nav__link" href="./webgpu.html">WebGPU</a><a class="docs-nav__link" href="./command-line.html" data-de="Kommandozeile">Command line</a></aside>
+      <article class="doc-content">
+        <section>
+          <h2 data-de="Datensatz öffnen">Opening a dataset</h2>
+          <p data-de="Das Hauptmenü bietet vier Möglichkeiten: einen Datensatz öffnen, Ausgangsdaten importieren, Einstellungen ändern oder Informationen zur App anzeigen. Die Anordnung passt sich an iPhone, iPad, Hoch- und Querformat sowie faltbare Displays an.">The main menu offers four routes: open a dataset, import source data, change settings, or view app information. Its layout adapts to iPhone, iPad, portrait and landscape orientation, and foldable displays.</p>
+          <ol>
+            <li data-de="Wählen Sie eine lokale BorgVR-Datei oder öffnen Sie den Katalog eines konfigurierten Servers.">Choose a local BorgVR file or open the catalog of a configured server.</li>
+            <li data-de="Remote-Datensätze können progressiv geladen und optional als lokale Kopie behalten werden.">Remote datasets can load progressively and may optionally be retained as a local copy.</li>
+            <li data-de="Ist eine gespeicherte Quelle nicht erreichbar, sucht BorgVR nach weiteren bekannten Quellen derselben Datensatz-ID.">If a stored source cannot be reached, BorgVR searches other known origins for the same dataset ID.</li>
+          </ol>
+          <div class="callout"><strong data-de="Kompakte Oberfläche">Compact interface</strong><span data-de="Auf kleinen Displays können Datensatzliste und Rendersteuerung eingeklappt werden. Die Render-Modi erscheinen als Symbole, wenn ihre vollständigen Titel nicht passen.">On small displays, the dataset list and rendering controls can be collapsed. Rendering modes use icons when their full labels do not fit.</span></div>
+        </section>
+
+        <section>
+          <h2 data-de="Touch-Bedienung">Touch interaction</h2>
+          <p data-de="Der Interaktionsschalter bestimmt, was die Gesten im Renderbereich verändern.">The interaction selector determines what gestures in the rendering area modify.</p>
+          <dl class="definition-list">
+            <div><dt data-de="Modell">Model</dt><dd data-de="Ziehen rotiert das Volumen mit einer Arcball-Interaktion. Mit einer Pinch-Geste zoomen Sie; Zwei-Finger-Gesten verschieben das Volumen.">Drag rotates the volume with an arcball interaction. Pinch zooms. Two-finger gestures translate the volume.</dd></div>
+            <div><dt>Clipping</dt><dd data-de="Gesten verschieben oder drehen die Schnittebene statt des Volumens.">Gestures move or rotate the clipping plane instead of the volume.</dd></div>
+            <div><dt data-de="Transfer">Transfer</dt><dd data-de="Direktes Ziehen formt die aktive Transferfunktionskurve; der vollständige Editor bleibt über <strong>Editor</strong> erreichbar.">Direct dragging shapes the active transfer-function curve; the complete editor remains available through <strong>Editor</strong>.</dd></div>
+            <div><dt data-de="Marker">Marker</dt><dd data-de="Tippen erzeugt oder wählt einen Marker, Ziehen bewegt ihn. Eine vertikale Zwei-Finger-Geste verschiebt ausgewählte Marker in der Tiefe; eine Pinch-Geste ändert ihren Radius.">Tap creates or selects a marker, and drag moves it. A vertical two-finger gesture moves selected markers in depth, while pinch changes their radius.</dd></div>
+          </dl>
+        </section>
+
+        <section>
+          <h2 data-de="Rendersteuerung">Rendering controls</h2>
+          <p data-de="Oben wählen Sie den Render-Modus und die Interaktion. <strong>Zurücksetzen</strong> setzt Render- und Modellparameter zurück. <strong>Editor</strong> öffnet den Transferfunktions- oder Isowert-Editor, <strong>Marker</strong> die Marker-Verwaltung.">The top controls select rendering and interaction modes. <strong>Reset</strong> restores rendering and model parameters. <strong>Editor</strong> opens the transfer-function or isovalue editor, and <strong>Markers</strong> opens marker management.</p>
+          <ul>
+            <li data-de="Die Schließen-Schaltfläche kehrt zur Datensatzauswahl zurück.">The close button returns to dataset selection.</li>
+            <li data-de="Die Info-Schaltfläche zeigt Metadaten, die Datensatz-ID und bis zu drei alternative Quellen einschließlich Kennzeichnung für Passwortschutz und private Freigabe.">Info shows metadata, dataset ID, and up to three alternate origins, including password and private-sharing indicators.</li>
+            <li data-de="Log und Brick-Visualisierung sind Diagnosefunktionen und werden erst sichtbar, wenn sie in den Einstellungen aktiviert wurden.">Log and brick visualization are diagnostic features and appear only after being enabled in Settings.</li>
+            <li data-de="Ist der lokale HTTPS-Webserver aktiv und enthält er den Datensatz, kopiert die Link-Schaltfläche eine direkt teilbare WebGPU-Adresse.">If the local HTTPS web server is active and contains the dataset, the link button copies a directly shareable WebGPU URL.</li>
+          </ul>
+        </section>
+
+        <section>
+          <h2 data-de="Marker verwalten">Managing markers</h2>
+          <p data-de="Die Marker-Liste unterstützt Mehrfachauswahl. Änderungen an Farbe, Radius und Richtungsanzeige gelten für alle ausgewählten Marker; den Namen können Sie bei einer Einzelauswahl bearbeiten. Über die Löschen-Schaltfläche entfernen Sie entweder die Auswahl oder, nach einer Bestätigung, alle Marker.">The marker list supports multiple selection. Changes to color, radius, and direction display apply to all selected markers; the name is editable for a single selection. Delete removes the selection or, after confirmation, all markers.</p>
+          <p data-de="Über <strong>Laden</strong> und <strong>Speichern</strong> lesen und schreiben Sie binäre <code>.marker</code>-Dateien. Markerdateien aus dem Serverkatalog stehen im selben Menü; ein Häkchen kennzeichnet Dateien für den aktuellen Datensatz.">Use <strong>Load</strong> and <strong>Save</strong> for binary <code>.marker</code> files. Marker files from server catalogs appear in the same menu, with a checkmark indicating files for the current dataset.</p>
+        </section>
+
+        <section>
+          <h2>SharePlay</h2>
+          <p data-de="Die SharePlay-Schaltfläche startet eine gemeinsame Sitzung oder zeigt eine bereits aktive Sitzung an. Beim Beitritt erhält das Gerät den aktuellen Datensatz und Zustand. Kann der Datensatz noch nicht gefunden werden, zeigt BorgVR einen Wartezustand und prüft neu bekannt gegebene Teilnehmerquellen automatisch.">The SharePlay button starts or detects a shared session. On joining, the device receives the current dataset and state. If the dataset cannot yet be found, BorgVR displays a waiting state and automatically tries new participant origins.</p>
+          <p data-de="Mit <strong>Ansicht synchronisieren</strong> bleibt die lokale Kamera an die gemeinsame Ansicht aller iPhone-, iPad- und Mac-Teilnehmer gekoppelt. Schalten Sie dies aus, um lokal unabhängig zu arbeiten; Render-Modus, Transferfunktion, Isowert, Clipping und Marker bleiben weiterhin gemeinsam. Beim erneuten Einschalten wird sofort die gemeinsame Ansicht übernommen.">With <strong>Synchronize View</strong> enabled, the local camera follows the common view shared by iPhone, iPad, and Mac participants. Disable it to work independently; rendering mode, transfer function, isovalue, clipping, and markers remain shared. Enabling it again immediately adopts the common view.</p>
+          <p data-de="Schließt ein Client den Datensatz, fragt BorgVR nach und verlässt auf Wunsch SharePlay. Schließt der Host den Datensatz, wechseln die Clients in einen gesperrten Wartezustand; dort können sie SharePlay verlassen.">When a client closes the dataset, BorgVR asks for confirmation and can leave SharePlay. When the host closes it, clients enter a locked waiting state with an option to leave SharePlay.</p>
+        </section>
+
+        <section>
+          <h2 data-de="Import und Einstellungen">Import and settings</h2>
+          <p data-de="Der Import konvertiert unterstützte DICOM-, NRRD/NHDR- und QVIS-Daten. Brick-Größe, Überlappung, Randbehandlung und Kompression beeinflussen nur neu erzeugte BorgVR-Dateien.">Import converts supported DICOM, NRRD/NHDR, and QVIS data. Brick size, overlap, border handling, and compression only affect newly created BorgVR files.</p>
+          <ul class="feature-list">
+            <li data-de="Hintergrund und automatische Transferfunktionen">Background and automatic transfer functions</li>
+            <li data-de="Statisches oder dynamisches Oversampling">Static or dynamic oversampling</li>
+            <li data-de="Remote-Server mit Verbindungstest und SharePlay-Freigabe">Remote servers with connection test and sharing rule</li>
+            <li data-de="Lade-Timeout, progressives Laden und lokale Kopie">Loading timeout, progressive loading, and local copy</li>
+            <li data-de="Lokaler Datensatz-, Ad-hoc- und WebGPU-Server">Local dataset, ad-hoc, and WebGPU servers</li>
+            <li data-de="LOD-, Atlas- und Hash-Tabellenparameter">LOD, atlas, and hash-table parameters</li>
+            <li data-de="SharePlay-Anzeigename und Update-Prüfung">SharePlay display name and update checks</li>
+            <li data-de="Datensatzquellen-Cache löschen">Clear dataset-origin cache</li>
+          </ul>
+        </section>
+      </article>
+    </div>
+  </main>
+  <footer class="footer"><div class="container footer__inner"><span class="footer__brand">© 2026 Jens Krueger</span><div class="footer__right"><a class="footer__link" href="./" data-de="Zur Handbuch-Startseite">Guide home</a><a class="footer__link" href="./support.html">Support</a></div></div></footer>
+  <script>window.BorgVRI18n.applyTranslations({en:{title:"BorgVR Mobile for iPhone and iPad",metaDescription:"How to use BorgVR Mobile on iPhone and iPad, including touch interaction, markers, imports, servers, and SharePlay."},de:{title:"BorgVR Mobile für iPhone und iPad",metaDescription:"BorgVR Mobile auf iPhone und iPad verwenden: Touch-Bedienung, Marker, Import, Server und SharePlay."}});</script>
+</body>
+</html>

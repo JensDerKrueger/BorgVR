@@ -726,3 +726,9 @@
 "Delete Selected Markers" = "Supprimer les marqueurs sélectionnés";
 "No Data Source Available" = "Aucune source de données disponible";
 "The current dataset is not available from any known source. BorgVR is waiting for a participant to provide one." = "Le jeu de données actuel n’est disponible auprès d’aucune source connue. BorgVR attend qu’un participant fournisse une source de données.";
+"Lighting" = "Éclairage";
+"Light direction" = "Direction de la lumière";
+"Ambient light" = "Lumière ambiante";
+"Diffuse light" = "Lumière diffuse";
+"Specular light" = "Lumière spéculaire";
+"Close lighting editor" = "Fermer l’éditeur d’éclairage";

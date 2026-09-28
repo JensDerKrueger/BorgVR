@@ -891,7 +891,41 @@ final class CommandInterpreter {
     }
 
     private func tokenize(_ line: String) -> [String] {
-        line.split { $0.isWhitespace }.map(String.init)
+        var tokens: [String] = []
+        var current = ""
+        var quote: Character?
+        var isEscaping = false
+
+        func finishToken() {
+            guard !current.isEmpty else { return }
+            tokens.append(current)
+            current.removeAll(keepingCapacity: true)
+        }
+
+        for character in line {
+            if isEscaping {
+                current.append(character)
+                isEscaping = false
+            } else if quote != nil, character == "\\" {
+                isEscaping = true
+            } else if let activeQuote = quote, character == activeQuote {
+                quote = nil
+            } else if quote != nil {
+                current.append(character)
+            } else if character == "\"" || character == "'" {
+                quote = character
+            } else if character.isWhitespace {
+                finishToken()
+            } else {
+                current.append(character)
+            }
+        }
+
+        if isEscaping {
+            current.append("\\")
+        }
+        finishToken()
+        return tokens
     }
 
     private func parseIntStrict(_ s: String) -> Int64? {

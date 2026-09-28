@@ -3,128 +3,136 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <meta name="color-scheme" content="dark light" />
-
-  <title>BorgVR - Interactive 3D volume exploration</title>
-  <meta
-    name="description"
-    content="BorgVR lets you explore large 3D datasets on iPhone, iPad, Mac, and Apple Vision Pro with live collaboration."
-  />
+  <meta name="color-scheme" content="dark" />
+  <title>BorgVR User Guide</title>
+  <meta name="description" content="User guide for BorgVR on Apple Vision Pro, iPhone, iPad, Mac, WebGPU, and the BorgVR dataset servers." />
   <link rel="canonical" href="https://www.jens-krueger.com/BorgVR/" />
-
   <link rel="stylesheet" href="./style.css" />
   <script src="./i18n.js"></script>
 </head>
-
 <body>
-  <a class="skip" href="#main" data-i18n="skipToContent">Skip to content</a>
-
+  <a class="skip" href="#main" data-de="Zum Inhalt springen">Skip to content</a>
   <header class="topbar">
     <div class="container topbar__inner">
-      <a class="brand" href="../" aria-label="Home" data-i18n-attr="aria-label:homeAriaLabel">
-        <span class="brand__mark" aria-hidden="true"></span>
-        <span class="brand__text">Jens Krueger</span>
+      <a class="brand" href="./" aria-label="BorgVR manual">
+        <img class="brand__logo" src="./borgvr.png" alt="" />
+        <span class="brand__text" data-de="BorgVR-Handbuch">BorgVR Guide</span>
       </a>
-
       <nav class="nav" aria-label="Navigation">
-        <a class="nav__link" href="./">BorgVR</a>
-        <a class="nav__link" href="./support.html" data-i18n="navSupport">Support</a>
-        <a class="nav__link" href="./privacy.html" data-i18n="navPrivacy">Privacy</a>
+        <a class="nav__link" href="./concepts.html" data-de="Grundlagen">Concepts</a>
+        <a class="nav__link" href="./support.html">Support</a>
+        <a class="nav__link" href="./privacy.html" data-de="Datenschutz">Privacy</a>
       </nav>
     </div>
   </header>
 
-  <main id="main" class="container">
-    <section class="section">
-      <div class="hero">
-        <div class="hero__grid">
-          <div>
-            <img class="appicon" src="./borgvr.png" alt="" aria-hidden="true" />
-            <div class="kicker" data-i18n="kicker">iPhone, iPad, Mac, and Apple Vision Pro</div>
-            <h1 class="h1" data-i18n="heroTitle">Explore large 3D datasets together.</h1>
-            <p class="section__desc" data-i18n="heroDescription">
-              BorgVR turns complex volume data into an interactive visual experience for research, teaching, engineering, medicine, and presentations.
-            </p>
-            <div class="card__actions">
-              <a class="btn btn--primary" href="./support.html" data-i18n="navSupport">Support</a>
-              <a class="btn btn--ghost" href="./privacy.html" data-i18n="navPrivacy">Privacy</a>
-            </div>
-          </div>
+  <main id="main">
+    <section class="manual-hero">
+      <div class="container manual-hero__content">
+        <img class="appicon" src="./borgvr.png" alt="BorgVR" />
+        <p class="eyebrow" data-de="Benutzerhandbuch">User guide</p>
+        <h1 class="h1" data-de="Große Volumendaten verstehen, nicht nur anzeigen.">Understand large volume data, not just display it.</h1>
+        <p class="lead" data-de="BorgVR verbindet native Metal-Renderer, räumliche Interaktion, SharePlay, Datensatzserver und einen WebGPU-Client. Dieses Handbuch führt vom ersten Datensatz bis zur gemeinsamen Analyse.">
+          BorgVR combines native Metal renderers, spatial interaction, SharePlay, dataset servers, and a WebGPU client. This guide takes you from the first dataset to collaborative analysis.
+        </p>
+        <div class="button-row">
+          <a class="btn btn--primary" href="./concepts.html" data-de="Mit den Grundlagen beginnen">Start with the concepts</a>
+          <a class="btn btn--ghost" href="#applications" data-de="Programm auswählen">Choose an application</a>
+        </div>
+      </div>
+    </section>
 
-          <div class="window" aria-label="Feature overview" data-i18n-attr="aria-label:featureOverviewAriaLabel">
-            <div class="window__bar">
-              <span class="dot" aria-hidden="true"></span>
-              <span class="dot" aria-hidden="true"></span>
-              <span class="dot" aria-hidden="true"></span>
-              <span class="window__title" data-i18n="windowTitle">Why BorgVR?</span>
-            </div>
-            <div class="window__body">
-              <div class="volume-preview" aria-hidden="true"></div>
-              <div style="height:14px;"></div>
-              <div class="badge" data-i18n="badge1">Open local or remote datasets</div>
-              <div class="badge" data-i18n="badge2">Use transfer functions, isosurfaces, lighting, and clipping</div>
-              <div class="badge" data-i18n="badge3">Collaborate live with SharePlay</div>
-            </div>
+    <section class="section section--soft">
+      <div class="container">
+        <div class="section__head">
+          <p class="eyebrow" data-de="Ein System, mehrere Zugänge">One system, several entry points</p>
+          <h2 class="section__title" data-de="Das passende Werkzeug für den jeweiligen Arbeitsplatz">The right tool for each workspace</h2>
+          <p class="section__desc" data-de="Alle Renderer verwenden dieselben BorgVR-Datensätze, Transferfunktionen und Markerdateien. Die Bedienung ist jedoch für jede Plattform angepasst.">
+            All renderers use the same BorgVR datasets, transfer functions, and marker files, while each interface is adapted to its platform.
+          </p>
+        </div>
+        <div class="workflow">
+          <div class="workflow__step">
+            <h3 data-de="Daten bereitstellen">Prepare the data</h3>
+            <p data-de="Öffnen Sie vorhandene BorgVR-Dateien, importieren Sie DICOM-, NRRD- oder QVIS-Daten oder beziehen Sie einen Datensatz von einem Server.">Open existing BorgVR files, import DICOM, NRRD, or QVIS data, or obtain a dataset from a server.</p>
+          </div>
+          <div class="workflow__step">
+            <h3 data-de="Visualisierung anpassen">Shape the visualization</h3>
+            <p data-de="Wählen Sie Transferfunktion, beleuchtete Transferfunktion oder Isofläche und passen Sie Clipping, Detailgrad und Abtastung an.">Choose transfer-function, illuminated transfer-function, or isosurface rendering and adjust clipping, detail, and sampling.</p>
+          </div>
+          <div class="workflow__step">
+            <h3 data-de="Ergebnisse teilen">Share the result</h3>
+            <p data-de="Speichern Sie Transferfunktionen und Marker oder arbeiten Sie über SharePlay und WebGPU mit anderen Personen zusammen.">Save transfer functions and markers or collaborate with other people through SharePlay and WebGPU.</p>
           </div>
         </div>
       </div>
+    </section>
 
-      <div style="height:18px;"></div>
-
-      <div class="section__head">
-        <h2 class="section__title" data-i18n="sectionTitle">Built for interactive volume visualization</h2>
-        <p class="section__desc" data-i18n="sectionDescription">Move from overview to detail without leaving the app.</p>
-      </div>
-
-      <div class="cards">
-        <article class="card">
-          <div class="card__icon" aria-hidden="true"><span class="orb"></span></div>
-          <h3 class="card__title" data-i18n="card1Title">Explore in 3D</h3>
-          <p class="card__text" data-i18n="card1Text">
-            Rotate, pan, zoom, clip, and inspect volume datasets directly on the device that fits your workflow.
+    <section id="applications" class="section">
+      <div class="container">
+        <div class="section__head">
+          <p class="eyebrow" data-de="Plattformhandbücher">Platform guides</p>
+          <h2 class="section__title" data-de="Native Anwendungen">Native applications</h2>
+          <p class="section__desc" data-de="Diese vier Anleitungen beschreiben nicht nur die Funktionen, sondern den typischen Arbeitsablauf und die plattformspezifische Interaktion.">
+            These four guides explain not only the features, but also the typical workflow and platform-specific interaction.
           </p>
-        </article>
-
-        <article class="card">
-          <div class="card__icon" aria-hidden="true"><span class="orb orb--alt"></span></div>
-          <h3 class="card__title" data-i18n="card2Title">Adjust the view</h3>
-          <p class="card__text" data-i18n="card2Text">
-            Switch render modes, change isovalues, edit transfer functions, and tune the visualization for the data in front of you.
-          </p>
-        </article>
-
-        <article class="card">
-          <div class="card__icon" aria-hidden="true"><span class="orb"></span></div>
-          <h3 class="card__title" data-i18n="card3Title">Work together</h3>
-          <p class="card__text" data-i18n="card3Text">
-            SharePlay sessions keep datasets, render settings, and collaboration state in sync across supported Apple devices.
-          </p>
-        </article>
-
-        <article class="card">
-          <div class="card__icon" aria-hidden="true"><span class="orb orb--alt"></span></div>
-          <h3 class="card__title" data-i18n="card4Title">Import and present</h3>
-          <p class="card__text" data-i18n="card4Text">
-            Bring in your own datasets, store them locally, and use BorgVR for analysis, demonstrations, and live presentations.
-          </p>
-        </article>
-      </div>
-
-      <div style="height:18px;"></div>
-
-      <div class="panel">
-        <div class="panel__row">
-          <div class="panel__label" data-i18n="platformsLabel">Platforms</div>
-          <div class="panel__value" data-i18n="platformsValue">
-            BorgVR is available for iPhone, iPad, Mac, and Apple Vision Pro.
-          </div>
         </div>
-        <div class="panel__row">
-          <div class="panel__label" data-i18n="linksLabel">App Store links</div>
-          <div class="panel__value" data-i18n-html="linksValue">
-            Support URL: <a class="inline" href="./support.html">support.html</a><br />
-            Privacy: <a class="inline" href="./privacy.html">privacy.html</a>
-          </div>
+        <div class="platform-grid">
+          <a class="platform-card" href="./visionos.html">
+            <span class="platform-card__meta">Apple Vision Pro</span>
+            <h3 class="platform-card__title">BorgVR for visionOS</h3>
+            <p class="platform-card__text" data-de="Volumendaten im Raum untersuchen, Marker mit Hand oder Logitech Muse erzeugen und räumlich über SharePlay zusammenarbeiten.">Inspect volumes in space, create markers with your hands or Logitech Muse, and collaborate spatially with SharePlay.</p>
+            <span class="platform-card__link" data-de="visionOS-Anleitung öffnen">Open the visionOS guide</span>
+          </a>
+          <a class="platform-card" href="./ios.html">
+            <span class="platform-card__meta">iPhone &amp; iPad</span>
+            <h3 class="platform-card__title">BorgVR Mobile</h3>
+            <p class="platform-card__text" data-de="Lokale und entfernte Daten per Touch erkunden, Marker bearbeiten und die Ansicht in einer SharePlay-Sitzung synchronisieren oder davon entkoppeln.">Explore local and remote data with touch, edit markers, and share or detach the view in a SharePlay session.</p>
+            <span class="platform-card__link" data-de="iOS-Anleitung öffnen">Open the iOS guide</span>
+          </a>
+          <a class="platform-card" href="./macos.html">
+            <span class="platform-card__meta">Mac</span>
+            <h3 class="platform-card__title">BorgVR for macOS</h3>
+            <p class="platform-card__text" data-de="Große Datensätze mit Maus oder Trackpad untersuchen, Bedienfelder docken, Skripte ausführen und bei Bedarf einen lokalen Server starten.">Explore large datasets with a mouse or trackpad, dock control panels, run scripts, and optionally start a local server.</p>
+            <span class="platform-card__link" data-de="macOS-Anleitung öffnen">Open the macOS guide</span>
+          </a>
+          <a class="platform-card" href="./server.html">
+            <span class="platform-card__meta" data-de="Server-App für macOS">Mac server utility</span>
+            <h3 class="platform-card__title">BorgVR Dataset Server</h3>
+            <p class="platform-card__text" data-de="Datensätze importieren und katalogisieren, den nativen BorgVR-Server und den WebGPU-Webserver betreiben und Inhalte zwischen Servern synchronisieren.">Import and catalog datasets, operate the native BorgVR and WebGPU servers, and synchronize content between servers.</p>
+            <span class="platform-card__link" data-de="Server-Anleitung öffnen">Open the server guide</span>
+          </a>
+        </div>
+      </div>
+    </section>
+
+    <section class="section section--soft">
+      <div class="container">
+        <div class="section__head">
+          <p class="eyebrow" data-de="Weitere Werkzeuge">Additional tools</p>
+          <h2 class="section__title" data-de="Browser und Automatisierung">Browser and automation</h2>
+        </div>
+        <div class="cards">
+          <article class="card">
+            <h3 class="card__title" data-de="Grundlagen und Dateiformate">Concepts and file formats</h3>
+            <p class="card__text" data-de="Wie Bricks, LOD, Transferfunktionen, Marker, Serverquellen und SharePlay in BorgVR zusammenspielen.">How bricks, LOD, transfer functions, markers, server origins, and SharePlay fit together in BorgVR.</p>
+            <div class="card__actions"><a class="inline" href="./concepts.html" data-de="Grundlagen lesen">Read the concepts</a></div>
+          </article>
+          <article class="card">
+            <h3 class="card__title">WebGPU</h3>
+            <p class="card__text" data-de="Datensätze ohne Installation im Browser öffnen, Touch-Bedienung verwenden und Bricks optional dauerhaft in IndexedDB speichern.">Open datasets in a browser without installation, use touch controls, and optionally persist bricks in IndexedDB.</p>
+            <div class="card__actions"><a class="inline" href="./webgpu.html" data-de="WebGPU-Anleitung lesen">Read the WebGPU guide</a></div>
+          </article>
+          <article class="card">
+            <h3 class="card__title" data-de="Kommandozeilenwerkzeuge">Command-line tools</h3>
+            <p class="card__text" data-de="Datensätze konvertieren oder synthetisch erzeugen und Swift- oder C++-Server ohne grafische Oberfläche betreiben.">Convert or synthesize datasets and operate Swift or C++ servers without a graphical interface.</p>
+            <div class="card__actions"><a class="inline" href="./command-line.html" data-de="CLI-Referenz öffnen">Open the CLI reference</a></div>
+          </article>
+          <article class="card">
+            <h3 class="card__title">Support</h3>
+            <p class="card__text" data-de="Kontakt, häufige Fragen, Datenschutz und Informationen für App-Store-Nutzer.">Contact, frequently asked questions, privacy information, and App Store support.</p>
+            <div class="card__actions"><a class="inline" href="./support.html" data-de="Support öffnen">Open support</a></div>
+          </article>
         </div>
       </div>
     </section>
@@ -132,78 +140,17 @@
 
   <footer class="footer">
     <div class="container footer__inner">
-      <div class="footer__left">
-        <span class="footer__brand">© 2026 Jens Krueger</span>
-      </div>
+      <span class="footer__brand">© 2026 Jens Krueger</span>
       <div class="footer__right">
-        <a class="footer__link" href="../" data-i18n="footerHome">Home</a>
+        <a class="footer__link" href="https://github.com/JensDerKrueger/BorgVR">GitHub</a>
+        <a class="footer__link" href="./privacy.html" data-de="Datenschutz">Privacy</a>
       </div>
     </div>
   </footer>
   <script>
     window.BorgVRI18n.applyTranslations({
-      en: {
-        title: "BorgVR - Interactive 3D volume exploration",
-        metaDescription: "BorgVR lets you explore large 3D datasets on iPhone, iPad, Mac, and Apple Vision Pro with live collaboration.",
-        skipToContent: "Skip to content",
-        homeAriaLabel: "Home",
-        navSupport: "Support",
-        navPrivacy: "Privacy",
-        kicker: "iPhone, iPad, Mac, and Apple Vision Pro",
-        heroTitle: "Explore large 3D datasets together.",
-        heroDescription: "BorgVR turns complex volume data into an interactive visual experience for research, teaching, engineering, medicine, and presentations.",
-        featureOverviewAriaLabel: "Feature overview",
-        windowTitle: "Why BorgVR?",
-        badge1: "Open local or remote datasets",
-        badge2: "Use transfer functions, isosurfaces, lighting, and clipping",
-        badge3: "Collaborate live with SharePlay",
-        sectionTitle: "Built for interactive volume visualization",
-        sectionDescription: "Move from overview to detail without leaving the app.",
-        card1Title: "Explore in 3D",
-        card1Text: "Rotate, pan, zoom, clip, and inspect volume datasets directly on the device that fits your workflow.",
-        card2Title: "Adjust the view",
-        card2Text: "Switch render modes, change isovalues, edit transfer functions, and tune the visualization for the data in front of you.",
-        card3Title: "Work together",
-        card3Text: "SharePlay sessions keep datasets, render settings, and collaboration state in sync across supported Apple devices.",
-        card4Title: "Import and present",
-        card4Text: "Bring in your own datasets, store them locally, and use BorgVR for analysis, demonstrations, and live presentations.",
-        platformsLabel: "Platforms",
-        platformsValue: "BorgVR is available for iPhone, iPad, Mac, and Apple Vision Pro.",
-        linksLabel: "App Store links",
-        linksValue: "Support URL: <a class=\"inline\" href=\"./support.html\">support.html</a><br />Privacy: <a class=\"inline\" href=\"./privacy.html\">privacy.html</a>",
-        footerHome: "Home"
-      },
-      de: {
-        title: "BorgVR - Interaktive 3D-Volumendaten erkunden",
-        metaDescription: "BorgVR macht große 3D-Datensätze auf iPhone, iPad, Mac und Apple Vision Pro interaktiv erlebbar, inklusive Live-Zusammenarbeit.",
-        skipToContent: "Zum Inhalt springen",
-        homeAriaLabel: "Startseite",
-        navSupport: "Support",
-        navPrivacy: "Datenschutz",
-        kicker: "iPhone, iPad, Mac und Apple Vision Pro",
-        heroTitle: "Große 3D-Datensätze gemeinsam erkunden.",
-        heroDescription: "BorgVR macht komplexe Volumendaten zu einem interaktiven visuellen Erlebnis für Forschung, Lehre, Ingenieurwesen, Medizin und Präsentationen.",
-        featureOverviewAriaLabel: "Funktionsübersicht",
-        windowTitle: "Warum BorgVR?",
-        badge1: "Lokale oder entfernte Datensätze öffnen",
-        badge2: "Transferfunktionen, Isoflächen, Beleuchtung und Clipping nutzen",
-        badge3: "Live mit SharePlay zusammenarbeiten",
-        sectionTitle: "Gebaut für interaktive Volumenvisualisierung",
-        sectionDescription: "Vom Überblick zum Detail, ohne die App zu verlassen.",
-        card1Title: "In 3D erkunden",
-        card1Text: "Rotieren, verschieben, zoomen, clippen und Volumendaten direkt auf dem Gerät untersuchen, das zu deinem Workflow passt.",
-        card2Title: "Darstellung anpassen",
-        card2Text: "Render-Modi wechseln, Isowerte ändern, Transferfunktionen bearbeiten und die Visualisierung auf den aktuellen Datensatz abstimmen.",
-        card3Title: "Zusammenarbeiten",
-        card3Text: "SharePlay-Sitzungen synchronisieren Datensätze, Render-Einstellungen und den gemeinsamen Zustand über unterstützte Apple-Geräte hinweg.",
-        card4Title: "Importieren und präsentieren",
-        card4Text: "Eigene Datensätze importieren, lokal speichern und BorgVR für Analyse, Demonstrationen und Live-Präsentationen nutzen.",
-        platformsLabel: "Plattformen",
-        platformsValue: "BorgVR ist für iPhone, iPad, Mac und Apple Vision Pro verfügbar.",
-        linksLabel: "App-Store-Links",
-        linksValue: "Support-URL: <a class=\"inline\" href=\"./support.html\">support.html</a><br />Datenschutz: <a class=\"inline\" href=\"./privacy.html\">privacy.html</a>",
-        footerHome: "Startseite"
-      }
+      en: { title: "BorgVR User Guide", metaDescription: "User guide for BorgVR on Apple Vision Pro, iPhone, iPad, Mac, WebGPU, and the BorgVR dataset servers." },
+      de: { title: "BorgVR Benutzerhandbuch", metaDescription: "Benutzerhandbuch für BorgVR auf Apple Vision Pro, iPhone, iPad, Mac, WebGPU und die BorgVR-Datensatzserver." }
     });
   </script>
 </body>

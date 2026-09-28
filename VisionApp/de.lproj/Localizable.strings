@@ -1048,3 +1048,9 @@
 "The dataset is not available from any known source." = "Der Datensatz ist über keine bekannte Quelle verfügbar.";
 "No Data Source Available" = "Keine Datenquelle verfügbar";
 "The current dataset is not available from any known source. BorgVR is waiting for a participant to provide one." = "Der aktuelle Datensatz ist momentan über keine bekannte Quelle erreichbar. BorgVR wartet darauf, dass ein Teilnehmer eine Datenquelle bereitstellt.";
+"Lighting" = "Beleuchtung";
+"Light direction" = "Lichtrichtung";
+"Ambient light" = "Umgebungslicht";
+"Diffuse light" = "Diffuses Licht";
+"Specular light" = "Glanzlicht";
+"Close lighting editor" = "Beleuchtungseditor schließen";

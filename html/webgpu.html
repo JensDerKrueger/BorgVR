@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="color-scheme" content="dark" />
+  <title>BorgVR WebGPU Renderer</title>
+  <meta name="description" content="How to use the BorgVR WebGPU renderer in desktop and mobile browsers." />
+  <link rel="canonical" href="https://www.jens-krueger.com/BorgVR/webgpu.html" />
+  <link rel="stylesheet" href="./style.css" />
+  <script src="./i18n.js"></script>
+</head>
+<body>
+  <a class="skip" href="#main" data-de="Zum Inhalt springen">Skip to content</a>
+  <header class="topbar"><div class="container topbar__inner"><a class="brand" href="./"><img class="brand__logo" src="./borgvr.png" alt="" /><span class="brand__text" data-de="BorgVR-Handbuch">BorgVR Guide</span></a><nav class="nav"><a class="nav__link" href="./concepts.html" data-de="Grundlagen">Concepts</a><a class="nav__link" href="./support.html">Support</a><a class="nav__link" href="./privacy.html" data-de="Datenschutz">Privacy</a></nav></div></header>
+  <main id="main">
+    <header class="doc-header"><div class="container doc-header__grid"><div><p class="eyebrow" data-de="Browser-Renderer">Browser renderer</p><h1 class="doc-title">BorgVR WebGPU</h1><p class="lead" data-de="Einen vom BorgVR-Server bereitgestellten Datensatz direkt im Browser untersuchen, ohne eine native App zu installieren.">Explore a dataset served by BorgVR directly in the browser without installing a native application.</p></div><img class="doc-header__image" src="./mandelbulb-background.jpg" alt="WebGPU-compatible volume dataset" data-de-attr="alt:WebGPU-kompatibler Volumendatensatz" /></div></header>
+    <div class="container docs-shell">
+      <aside class="docs-nav" aria-label="Manual sections"><p class="docs-nav__title" data-de="Handbuch">Manual</p><a class="docs-nav__link" href="./concepts.html" data-de="Grundlagen">Concepts</a><a class="docs-nav__link" href="./visionos.html">visionOS</a><a class="docs-nav__link" href="./ios.html">iPhone &amp; iPad</a><a class="docs-nav__link" href="./macos.html">macOS</a><a class="docs-nav__link" href="./server.html" data-de="Server-App">Server app</a><a class="docs-nav__link" aria-current="page" href="./webgpu.html">WebGPU</a><a class="docs-nav__link" href="./command-line.html" data-de="Kommandozeile">Command line</a></aside>
+      <article class="doc-content">
+        <section>
+          <h2 data-de="Voraussetzungen und Verbindung">Requirements and connection</h2>
+          <p data-de="Der Browser muss WebGPU unterstützen. Auf iPhone und iPad benötigt BorgVR iOS beziehungsweise iPadOS 26 oder neuer. Ein Server im Netzwerk sollte HTTPS verwenden; unverschlüsseltes HTTP ist nur auf <code>localhost</code> vorgesehen.">The browser must support WebGPU. On iPhone and iPad, BorgVR requires iOS or iPadOS 26 or newer. A network server should use HTTPS; unencrypted HTTP is intended for <code>localhost</code> only.</p>
+          <ol>
+            <li data-de="Starten Sie den WebGPU-Webserver in einer nativen BorgVR-App, der macOS-Server-App oder einem Kommandozeilenserver.">Start the WebGPU web server in a native BorgVR app, the macOS server app, or a command-line server.</li>
+            <li data-de="Öffnen Sie die angezeigte URL. Bei einem selbstsignierten Zertifikat müssen Sie die Browserwarnung einmal ausdrücklich bestätigen.">Open the displayed URL. With a self-signed certificate, explicitly accept the browser warning once.</li>
+            <li data-de="Wählen Sie auf der Startseite einen Datensatz. Ein direkter Freigabelink kann Datensatz-ID, Transferfunktion, Render-Modus und Isowert bereits enthalten.">Choose a dataset on the start page. A direct sharing URL can already contain the dataset ID, transfer function, rendering mode, and isovalue.</li>
+          </ol>
+          <div class="callout"><strong data-de="Fehlender WebGPU-Adapter">No WebGPU adapter</strong><span data-de="Diese Meldung bedeutet normalerweise, dass Browser, Betriebssystem oder Gerät keinen WebGPU-Zugriff bereitstellen. Auf mobilen Apple-Geräten zeigt BorgVR bei älteren Systemen gezielt den Hinweis auf iOS/iPadOS 26 an.">This message usually means the browser, operating system, or device does not expose WebGPU. On older mobile Apple systems, BorgVR specifically reports the iOS/iPadOS 26 requirement.</span></div>
+        </section>
+
+        <section>
+          <h2 data-de="Oberfläche und Interaktion">Interface and interaction</h2>
+          <p data-de="Datensatzliste, Rendersteuerung und Transferfunktionseditor können eingeklappt werden. Auf kleinen Displays schafft dies Platz für das Volumen. Der Zustand der Bereiche und die Sichtbarkeit der Oberfläche werden lokal im Browser gespeichert.">The dataset list, rendering controls, and transfer-function editor can be collapsed. On small displays this preserves room for the volume. Expanded sections and overall UI visibility are stored locally in the browser.</p>
+          <ul>
+            <li data-de="Ziehen rotiert das Modell; eine Zwei-Finger-Geste oder Ziehen mit der rechten Maustaste verschiebt es.">Drag rotates the model; two-finger or secondary dragging translates it.</li>
+            <li data-de="Mit dem Mausrad oder einer Pinch-Geste zoomen Sie. Auf dem iPhone verwendet BorgVR eine echte Zwei-Finger-Pinch-Geste.">The mouse wheel or pinch zooms. On iPhone, BorgVR uses a true two-finger pinch gesture.</li>
+            <li data-de="Transferfunktion, beleuchtete Transferfunktion und Isowert entsprechen den nativen Render-Modi.">Transfer function, illuminated transfer function, and isosurface correspond to the native rendering modes.</li>
+            <li data-de="Markerdateien aus dem Serverkatalog können geladen werden; Kugeln und Striche werden als Geometrie beziehungsweise Tube-Meshes dargestellt.">Marker files from the server catalog can be loaded; spheres and strokes render as geometry and tube meshes.</li>
+          </ul>
+        </section>
+
+        <section>
+          <h2 data-de="Persistenter Brick-Cache">Persistent brick cache</h2>
+          <p data-de="Wenn <strong>Persistent bricks</strong> aktiviert ist, speichert BorgVR empfangene Teile des Volumens, sogenannte Bricks, in einer IndexedDB-Datenbank des Browsers. Benötigte Bricks können bei einem späteren Besuch lokal gelesen werden. Das reduziert erneuten Netzwerkverkehr und kann den Bildaufbau beschleunigen.">When <strong>Persistent bricks</strong> is enabled, BorgVR stores received pieces of the volume, called bricks, in the browser's IndexedDB database. Required bricks can be read locally during a later visit. This reduces repeated network traffic and may accelerate image construction.</p>
+          <p data-de="Die Einstellung und die gespeicherten Daten bleiben auch nach dem Schließen des Tabs erhalten. Browserdaten sind an den Web-Origin gebunden: Nur Seiten mit exakt demselben Protokoll, Hostnamen und Port können den Cache über IndexedDB lesen. Die Daten liegen dennoch auf dem lokalen Speichermedium und können prinzipiell von anderen Personen mit Zugriff auf dasselbe Benutzerkonto untersucht werden.">The setting and data survive closing the tab. Browser data is origin-bound: only pages using the exact same scheme, host, and port can read the cache through IndexedDB. The bytes still reside on local storage and can in principle be inspected by other users of the same computer account.</p>
+          <p data-de="Auf öffentlichen oder gemeinsam genutzten Computern sollte die Funktion bei sensiblen Datensätzen ausgeschaltet bleiben. Das Ausschalten löscht die Datenbank. <strong>Clear cache</strong> leert sie ebenfalls, ohne den Render-Worker abrupt zu beenden.">On public or shared computers, keep this feature disabled for sensitive datasets. Disabling it deletes the database. <strong>Clear cache</strong> also empties it without abruptly terminating the rendering worker.</p>
+          <h3 data-de="Speichergrenze">Storage quota</h3>
+          <p data-de="Ist das Speicherkontingent des Browsers ausgeschöpft, entfernt BorgVR zunächst ältere Bricks anderer Datensätze und anschließend die ältesten Bricks des aktuellen Datensatzes. Kann auch danach nichts gespeichert werden, läuft das Rendering mit Netzwerkdaten weiter.">When the browser quota is reached, BorgVR first removes older bricks belonging to other datasets, then the oldest bricks of the current dataset. If storage still fails, rendering continues with network data.</p>
+        </section>
+
+        <section>
+          <h2 data-de="Cache- und Serveranzeige">Cache and server counters</h2>
+          <p data-de="Die Oberfläche zählt Bricks, die aus IndexedDB beziehungsweise vom Server stammen. Beim erneuten Laden können einige wenige Bricks weiterhin vom Server kommen: Ansichtsabhängige LOD-Anfragen, die zeitliche Abfolge des progressiven Bildaufbaus und nicht im Cache abgelegte Anfragen können sich zwischen zwei Läufen leicht unterscheiden.">The UI counts bricks read from IndexedDB and from the server. After reloading, a small number of bricks may still come from the server: view-dependent LOD requests, progressive-loading timing, and non-persisted requests can vary slightly between runs.</p>
+          <p data-de="Der Cache verkürzt nicht zwangsläufig jeden Ladevorgang deutlich. Auch IndexedDB verursacht Aufwand für Transaktionen, Kopien und Dekompression; der verlässlichste Vorteil ist die Entlastung der Netzwerkverbindung.">The cache does not necessarily make every load dramatically faster. IndexedDB itself incurs transaction, copy, and decompression work; its most reliable benefit is reducing network use.</p>
+        </section>
+
+        <section>
+          <h2 data-de="Grenzen gegenüber nativen Apps">Differences from native apps</h2>
+          <p data-de="WebGPU eignet sich besonders zum schnellen Teilen eines Datensatzes und für Systeme ohne installierte BorgVR-App. Die nativen Apps bieten weiterhin die umfassendste Integration: SharePlay, lokale Konvertierung, Hintergrundserver, systemweite Dateiverwaltung und auf Vision Pro räumliche Hand- und Stiftinteraktion.">WebGPU is especially useful for quickly sharing a dataset and for systems without an installed BorgVR app. Native apps still provide the deepest integration: SharePlay, local conversion, background servers, system file management, and on Vision Pro spatial hand and stylus interaction.</p>
+          <div class="button-row"><a class="btn btn--primary" href="./server.html" data-de="WebGPU-Server einrichten">Set up a WebGPU server</a><a class="btn btn--ghost" href="./concepts.html" data-de="Grundlagen lesen">Read the concepts</a></div>
+        </section>
+      </article>
+    </div>
+  </main>
+  <footer class="footer"><div class="container footer__inner"><span class="footer__brand">© 2026 Jens Krueger</span><div class="footer__right"><a class="footer__link" href="./" data-de="Zur Handbuch-Startseite">Guide home</a><a class="footer__link" href="./support.html">Support</a></div></div></footer>
+  <script>window.BorgVRI18n.applyTranslations({en:{title:"BorgVR WebGPU Renderer",metaDescription:"How to use the BorgVR WebGPU renderer in desktop and mobile browsers."},de:{title:"BorgVR WebGPU-Renderer",metaDescription:"Den BorgVR-WebGPU-Renderer in Desktop- und Mobilbrowsern verwenden."}});</script>
+</body>
+</html>

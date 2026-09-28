@@ -184,6 +184,16 @@ struct RenderControlsPanel: View {
         }
 
         Button {
+          if docking.isDetached(.lightingEditor) {
+            openWindow(id: DockablePanelID.lightingEditor.windowID)
+          } else {
+            docking.toggleVisibility(.lightingEditor)
+          }
+        } label: {
+          Label("Lighting", systemImage: "lightbulb.max")
+        }
+
+        Button {
           if docking.isDetached(.markerEditor) {
             openWindow(id: DockablePanelID.markerEditor.windowID)
           } else {

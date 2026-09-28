@@ -275,6 +275,61 @@ final class BorgVRScriptRunner: ObservableObject {
       self?.saveTransferFunction(filename: args.string(0)) ?? .callbackError
     }
 
+    register("setlightdirection", [.float, .float, .float]) { [weak self] args in
+      self?.setLightDirection(args) ?? .callbackError
+    }
+
+    register("setambientlight", [.float, .float, .float]) { [weak self] args in
+      self?.setLightColor(\.ambientLightColor, arguments: args) ?? .callbackError
+    }
+
+    register("setdiffuselight", [.float, .float, .float]) { [weak self] args in
+      self?.setLightColor(\.diffuseLightColor, arguments: args) ?? .callbackError
+    }
+
+    register("setspecularlight", [.float, .float, .float]) { [weak self] args in
+      self?.setLightColor(\.specularLightColor, arguments: args) ?? .callbackError
+    }
+
+    register("resetlighting", []) { [weak self] _ in
+      self?.resetLighting() ?? .callbackError
+    }
+
+    register("addspheremarker", [.string, .float, .float, .float, .float, .float, .float, .float]) { [weak self] args in
+      self?.addSphereMarker(args, directional: false) ?? .callbackError
+    }
+
+    register(
+      "adddirectionalmarker",
+      [.string, .float, .float, .float, .float, .float, .float, .float, .float, .float, .float]
+    ) { [weak self] args in
+      self?.addSphereMarker(args, directional: true) ?? .callbackError
+    }
+
+    register("addstrokemarker", [.string, .float, .float, .float, .float, .restString]) { [weak self] args in
+      self?.addStrokeMarker(args) ?? .callbackError
+    }
+
+    register("removemarker", [.string]) { [weak self] args in
+      self?.removeMarker(identifier: args.string(0)) ?? .callbackError
+    }
+
+    register("clearmarkers", []) { [weak self] _ in
+      self?.clearMarkers() ?? .callbackError
+    }
+
+    register("loadmarkers", [.string]) { [weak self] args in
+      self?.loadMarkers(filename: args.string(0), replacingExisting: true) ?? .callbackError
+    }
+
+    register("loadmarkers", [.string, .bool]) { [weak self] args in
+      self?.loadMarkers(filename: args.string(0), replacingExisting: args.bool(1)) ?? .callbackError
+    }
+
+    register("savemarkers", [.string]) { [weak self] args in
+      self?.saveMarkers(filename: args.string(0)) ?? .callbackError
+    }
+
     register("setbackground", [.double, .double, .double, .double]) { [weak self] args in
       self?.setSolidBackground(red: args.double(0), green: args.double(1), blue: args.double(2), alpha: args.double(3)) ?? .callbackError
     }
@@ -570,6 +625,254 @@ final class BorgVRScriptRunner: ObservableObject {
       logError("Transfer function could not be saved: \(error.localizedDescription)")
       return .callbackError
     }
+  }
+
+  private func setLightDirection(_ args: [CommandArg]) -> CommandResultCode {
+    guard let parameters = renderingParameters else { return .callbackError }
+    let direction = SIMD3<Float>(args.float(0), args.float(1), args.float(2))
+    guard isFinite(direction), simd_length_squared(direction) > 0.000_001 else {
+      return .invalidArguments
+    }
+    parameters.lightDirection = simd_normalize(direction)
+    synchronizeLighting()
+    return .success
+  }
+
+  private func setLightColor(
+    _ keyPath: ReferenceWritableKeyPath<RenderingParameters, SIMD3<Float>>,
+    arguments: [CommandArg]
+  ) -> CommandResultCode {
+    guard let parameters = renderingParameters else { return .callbackError }
+    let color = SIMD3<Float>(arguments.float(0), arguments.float(1), arguments.float(2))
+    guard isFinite(color),
+          color.x >= 0, color.x <= 1,
+          color.y >= 0, color.y <= 1,
+          color.z >= 0, color.z <= 1 else {
+      return .invalidArguments
+    }
+    parameters[keyPath: keyPath] = color
+    synchronizeLighting()
+    return .success
+  }
+
+  private func resetLighting() -> CommandResultCode {
+    guard let parameters = renderingParameters else { return .callbackError }
+    let defaults = BorgVRLightingState.default
+    parameters.lightDirection = defaults.direction
+    parameters.ambientLightColor = defaults.ambientColor
+    parameters.diffuseLightColor = defaults.diffuseColor
+    parameters.specularLightColor = defaults.specularColor
+    synchronizeLighting()
+    return .success
+  }
+
+  private func addSphereMarker(
+    _ args: [CommandArg],
+    directional: Bool
+  ) -> CommandResultCode {
+    guard let appModel else { return .callbackError }
+    let name = markerName(args.string(0))
+    let position = SIMD3<Float>(args.float(1), args.float(2), args.float(3))
+    let radius = args.float(4)
+    let color = SIMD4<Float>(args.float(5), args.float(6), args.float(7), 1)
+    guard !name.isEmpty,
+          isFinite(position),
+          radius.isFinite,
+          isFinite(color),
+          validColor(color),
+          VolumeMarkerRadius.sphereRange.contains(radius) else {
+      return .invalidArguments
+    }
+
+    let marker: VolumeMarker
+    if directional {
+      let origin = SIMD3<Float>(args.float(8), args.float(9), args.float(10))
+      guard isFinite(origin) else { return .invalidArguments }
+      marker = VolumeMarker(
+        id: UUID(),
+        name: name,
+        position: position,
+        radius: radius,
+        color: color,
+        directionOrigin: origin,
+        showsDirection: true
+      )
+    } else {
+      marker = VolumeMarker(
+        id: UUID(),
+        name: name,
+        color: color,
+        geometry: .sphere(VolumeMarkerPoint(position: position, radius: radius))
+      )
+    }
+
+    appModel.volumeMarkers.append(marker)
+    synchronizeMarkers()
+    return logInfo("Marker added: \(name) [\(marker.id.uuidString)]")
+  }
+
+  private func addStrokeMarker(_ args: [CommandArg]) -> CommandResultCode {
+    guard let appModel else { return .callbackError }
+    let name = markerName(args.string(0))
+    let radius = args.float(1)
+    let color = SIMD4<Float>(args.float(2), args.float(3), args.float(4), 1)
+    let coordinateTokens = args.strings(5)
+    guard !name.isEmpty,
+          radius.isFinite,
+          VolumeMarkerRadius.strokeRange.contains(radius),
+          isFinite(color),
+          validColor(color),
+          !coordinateTokens.isEmpty,
+          coordinateTokens.count.isMultiple(of: 3) else {
+      return .invalidArguments
+    }
+
+    var points: [VolumeMarkerPoint] = []
+    points.reserveCapacity(coordinateTokens.count / 3)
+    for index in stride(from: 0, to: coordinateTokens.count, by: 3) {
+      guard let x = Float(coordinateTokens[index]),
+            let y = Float(coordinateTokens[index + 1]),
+            let z = Float(coordinateTokens[index + 2]) else {
+        return .invalidArguments
+      }
+      let position = SIMD3<Float>(x, y, z)
+      guard isFinite(position) else { return .invalidArguments }
+      points.append(VolumeMarkerPoint(position: position, radius: radius))
+    }
+
+    guard points.count <= VolumeMarker.maximumInteractiveStrokePointCount else {
+      return .invalidArguments
+    }
+    let marker = VolumeMarker(
+      id: UUID(),
+      name: name,
+      color: color,
+      geometry: .stroke(points)
+    )
+    appModel.volumeMarkers.append(marker)
+    synchronizeMarkers()
+    return logInfo("Stroke marker added: \(name) [\(marker.id.uuidString)]")
+  }
+
+  private func removeMarker(identifier: String) -> CommandResultCode {
+    guard let appModel else { return .callbackError }
+    let index: Int?
+    if let id = UUID(uuidString: identifier) {
+      index = appModel.volumeMarkers.firstIndex { $0.id == id }
+    } else {
+      index = appModel.volumeMarkers.firstIndex {
+        $0.name.caseInsensitiveCompare(identifier) == .orderedSame
+      }
+    }
+    guard let index else { return .invalidArguments }
+    let marker = appModel.volumeMarkers.remove(at: index)
+    appModel.setVolumeMarkerSelection(
+      appModel.selectedVolumeMarkerIDs.subtracting([marker.id])
+    )
+    synchronizeMarkers()
+    return logInfo("Marker removed: \(marker.name) [\(marker.id.uuidString)]")
+  }
+
+  private func clearMarkers() -> CommandResultCode {
+    guard let appModel else { return .callbackError }
+    appModel.volumeMarkers.removeAll()
+    appModel.clearVolumeMarkerSelection()
+    synchronizeMarkers()
+    return .success
+  }
+
+  private func loadMarkers(
+    filename: String,
+    replacingExisting: Bool
+  ) -> CommandResultCode {
+    guard let appModel else { return .callbackError }
+    let url = scriptFileURL(filename: filename, defaultExtension: "marker")
+    do {
+      let contents = try VolumeMarkerDocument.decode(
+        from: Data(contentsOf: url, options: .mappedIfSafe)
+      )
+      if let datasetID = appModel.activeDataset?.uniqueId,
+         contents.datasetID.caseInsensitiveCompare(datasetID) != .orderedSame {
+        logInfo(
+          "Marker dataset mismatch: file=\(contents.datasetID), active=\(datasetID); loading as requested."
+        )
+      }
+      if replacingExisting {
+        appModel.volumeMarkers = contents.markers
+      } else {
+        appModel.volumeMarkers.append(contentsOf: markersWithUniqueIDs(contents.markers))
+      }
+      appModel.clearVolumeMarkerSelection()
+      synchronizeMarkers()
+      return logInfo("Markers loaded: \(url.path)")
+    } catch {
+      logError("Markers could not be loaded: \(error.localizedDescription)")
+      return .callbackError
+    }
+  }
+
+  private func saveMarkers(filename: String) -> CommandResultCode {
+    guard let appModel, let datasetID = appModel.activeDataset?.uniqueId else {
+      return .callbackError
+    }
+    let url = scriptFileURL(filename: filename, defaultExtension: "marker")
+    do {
+      let accessURL = storedAppModel?.startAccessingDataDirectory()
+      defer { storedAppModel?.stopAccessingDataDirectory(accessURL) }
+      try FileManager.default.createDirectory(
+        at: url.deletingLastPathComponent(),
+        withIntermediateDirectories: true
+      )
+      let data = try VolumeMarkerDocument.encode(
+        datasetID: datasetID,
+        markers: appModel.volumeMarkers
+      )
+      try data.write(to: url, options: .atomic)
+      return logInfo("Markers saved: \(url.path)")
+    } catch {
+      logError("Markers could not be saved: \(error.localizedDescription)")
+      return .callbackError
+    }
+  }
+
+  private func markersWithUniqueIDs(_ markers: [VolumeMarker]) -> [VolumeMarker] {
+    var usedIDs = Set(appModel?.volumeMarkers.map(\.id) ?? [])
+    return markers.map { marker in
+      var marker = marker
+      if usedIDs.contains(marker.id) {
+        marker.id = UUID()
+      }
+      usedIDs.insert(marker.id)
+      return marker
+    }
+  }
+
+  private func markerName(_ name: String) -> String {
+    String(name.prefix(BorgVRMarkerFormat.maximumNameCharacterCount))
+  }
+
+  private func validColor(_ color: SIMD4<Float>) -> Bool {
+    color.x >= 0 && color.x <= 1 &&
+      color.y >= 0 && color.y <= 1 &&
+      color.z >= 0 && color.z <= 1
+  }
+
+  private func isFinite(_ value: SIMD3<Float>) -> Bool {
+    value.x.isFinite && value.y.isFinite && value.z.isFinite
+  }
+
+  private func isFinite(_ value: SIMD4<Float>) -> Bool {
+    value.x.isFinite && value.y.isFinite && value.z.isFinite && value.w.isFinite
+  }
+
+  private func synchronizeLighting() {
+    synchronizeState()
+    sharePlay?.flushSynchronization()
+  }
+
+  private func synchronizeMarkers() {
+    sharePlay?.synchronizeMarkers()
+    sharePlay?.flushSynchronization()
   }
 
   private func setSolidBackground(red: Double, green: Double, blue: Double, alpha: Double) -> CommandResultCode {
@@ -893,5 +1196,10 @@ private extension Array where Element == CommandArg {
   func string(_ index: Int) -> String {
     guard case let .string(value) = self[index] else { return "" }
     return value
+  }
+
+  func strings(_ index: Int) -> [String] {
+    guard case let .strings(values) = self[index] else { return [] }
+    return values
   }
 }

@@ -21,6 +21,7 @@ struct RenderView: View {
   @State private var transferSmoothWidth: Float = 0.3
   @State private var copiedWebGPUShareLink = false
   @State private var showMarkerEditor = false
+  @State private var showLightingEditor = false
   @State private var markerDragID: UUID?
   @State private var arcballStartOrientation: simd_quatf?
   @State private var showLeaveSharePlayConfirmation = false
@@ -59,6 +60,21 @@ struct RenderView: View {
         .environmentObject(appModel)
         .environmentObject(sharePlay)
     }
+    .sheet(isPresented: $showLightingEditor) {
+      LightingEditorView(
+        lightDirection: $renderingParameters.lightDirection,
+        ambientLightColor: $renderingParameters.ambientLightColor,
+        diffuseLightColor: $renderingParameters.diffuseLightColor,
+        specularLightColor: $renderingParameters.specularLightColor,
+        usesPanelBackground: false,
+        usesHorizontalLayout: true,
+        onChange: synchronizeState,
+        onCommit: sharePlay.flushSynchronization,
+        onClose: { showLightingEditor = false }
+      )
+      .padding()
+      .presentationDetents([.height(240), .medium, .large])
+    }
     .alert("Leave SharePlay?", isPresented: $showLeaveSharePlayConfirmation) {
       Button("Cancel", role: .cancel) {}
       Button("Leave SharePlay", role: .destructive) {
@@ -94,7 +110,10 @@ struct RenderView: View {
 
       switch layout.renderControlPlacement {
         case .overlayTop:
-          topOverlayControls(usesCompactRenderModeLabels: layout.usesCompactRenderModeLabels)
+          topOverlayControls(
+            usesCompactRenderModeLabels: layout.usesCompactRenderModeLabels,
+            usesCompactActionLabels: layout.usesCompactActionLabels
+          )
       }
 
       if showIsoEditor && renderingParameters.renderMode == .isoValue {
@@ -129,7 +148,10 @@ struct RenderView: View {
   }
 
   @ViewBuilder
-  private func topOverlayControls(usesCompactRenderModeLabels: Bool) -> some View {
+  private func topOverlayControls(
+    usesCompactRenderModeLabels: Bool,
+    usesCompactActionLabels: Bool
+  ) -> some View {
     if showRenderControls {
       VStack(spacing: 8) {
         HStack {
@@ -259,8 +281,13 @@ struct RenderView: View {
             synchronizeTransform()
             sharePlay.flushSynchronization()
           } label: {
-            Label("Reset", systemImage: "arrow.counterclockwise")
+            actionLabel(
+              "Reset",
+              systemImage: "arrow.counterclockwise",
+              compact: usesCompactActionLabels
+            )
           }
+          .accessibilityLabel("Reset")
 
           Button {
             if renderingParameters.renderMode == .isoValue {
@@ -271,14 +298,35 @@ struct RenderView: View {
               showTransferEditor.toggle()
             }
           } label: {
-            Label("Editor", systemImage: "slider.horizontal.3")
+            actionLabel(
+              "Editor",
+              systemImage: "slider.horizontal.3",
+              compact: usesCompactActionLabels
+            )
           }
+          .accessibilityLabel("Editor")
 
           Button {
             showMarkerEditor = true
           } label: {
-            Label("Markers", systemImage: "mappin.and.ellipse")
+            actionLabel(
+              "Markers",
+              systemImage: "mappin.and.ellipse",
+              compact: usesCompactActionLabels
+            )
           }
+          .accessibilityLabel("Markers")
+
+          Button {
+            showLightingEditor = true
+          } label: {
+            actionLabel(
+              "Lighting",
+              systemImage: "lightbulb.max",
+              compact: usesCompactActionLabels
+            )
+          }
+          .accessibilityLabel("Lighting")
         }
       }
       .padding(12)
@@ -290,6 +338,21 @@ struct RenderView: View {
         visibilityButton
       }
       .padding()
+    }
+  }
+
+  @ViewBuilder
+  private func actionLabel(
+    _ title: LocalizedStringKey,
+    systemImage: String,
+    compact: Bool
+  ) -> some View {
+    if compact {
+      Label(title, systemImage: systemImage)
+        .labelStyle(.iconOnly)
+        .padding(.horizontal, 6)
+    } else {
+      Label(title, systemImage: systemImage)
     }
   }
 

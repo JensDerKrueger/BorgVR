@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="color-scheme" content="dark" />
+  <title>BorgVR Concepts and Workflow</title>
+  <meta name="description" content="Learn how BorgVR datasets, rendering modes, transfer functions, markers, servers, and SharePlay work together." />
+  <link rel="canonical" href="https://www.jens-krueger.com/BorgVR/concepts.html" />
+  <link rel="stylesheet" href="./style.css" />
+  <script src="./i18n.js"></script>
+</head>
+<body>
+  <a class="skip" href="#main" data-de="Zum Inhalt springen">Skip to content</a>
+  <header class="topbar"><div class="container topbar__inner">
+    <a class="brand" href="./"><img class="brand__logo" src="./borgvr.png" alt="" /><span class="brand__text" data-de="BorgVR-Handbuch">BorgVR Guide</span></a>
+    <nav class="nav" aria-label="Navigation"><a class="nav__link" aria-current="page" href="./concepts.html" data-de="Grundlagen">Concepts</a><a class="nav__link" href="./support.html">Support</a><a class="nav__link" href="./privacy.html" data-de="Datenschutz">Privacy</a></nav>
+  </div></header>
+
+  <main id="main">
+    <header class="doc-header"><div class="container doc-header__grid">
+      <div><p class="eyebrow" data-de="Grundlagen">Concepts</p><h1 class="doc-title" data-de="Wie BorgVR arbeitet">How BorgVR works</h1><p class="lead" data-de="Ein gemeinsames Modell für Datensätze, Renderer, Server und Zusammenarbeit. Wer diese Begriffe kennt, findet sich in allen BorgVR-Anwendungen schnell zurecht.">A shared model for datasets, renderers, servers, and collaboration. Once these concepts are familiar, every BorgVR application follows naturally.</p></div>
+      <img class="doc-header__image" src="./mandelbulb-background.jpg" alt="Rendered Mandelbulb volume" data-de-attr="alt:Gerendertes Mandelbulb-Volumen" />
+    </div></header>
+
+    <div class="container docs-shell">
+      <aside class="docs-nav" aria-label="Manual sections">
+        <p class="docs-nav__title" data-de="Handbuch">Manual</p>
+        <a class="docs-nav__link" aria-current="page" href="./concepts.html" data-de="Grundlagen">Concepts</a>
+        <a class="docs-nav__link" href="./visionos.html">visionOS</a>
+        <a class="docs-nav__link" href="./ios.html">iPhone &amp; iPad</a>
+        <a class="docs-nav__link" href="./macos.html">macOS</a>
+        <a class="docs-nav__link" href="./server.html" data-de="Server-App">Server app</a>
+        <a class="docs-nav__link" href="./webgpu.html">WebGPU</a>
+        <a class="docs-nav__link" href="./command-line.html" data-de="Kommandozeile">Command line</a>
+      </aside>
+
+      <article class="doc-content">
+        <section id="overview">
+          <h2 data-de="Die grundlegende Idee">The basic idea</h2>
+          <p data-de="Volumendaten bestehen aus einem dreidimensionalen Raster von Messwerten. BorgVR zerlegt dieses Raster in kleine Blöcke, sogenannte Bricks, und lädt nur die Bricks und Detailstufen, die für das aktuelle Bild benötigt werden. Dadurch können auch Datensätze untersucht werden, die größer als der verfügbare Grafikspeicher sind.">Volume data is a three-dimensional grid of measurements. BorgVR divides this grid into small blocks called bricks and loads only the bricks and detail levels required for the current image. This makes it possible to explore datasets larger than the available GPU memory.</p>
+          <p data-de="Alle nativen Anwendungen und der WebGPU-Renderer verwenden dasselbe Datensatzformat. Ein Datensatz kann lokal geöffnet, von einem BorgVR-Server gestreamt oder innerhalb einer SharePlay-Sitzung über bekannte Quellen gefunden werden.">All native applications and the WebGPU renderer understand the same dataset format. A dataset can be opened locally, streamed from a BorgVR server, or discovered through known sources in a SharePlay session.</p>
+          <div class="callout"><strong data-de="Wichtig">Important</strong><span data-de="BorgVR überträgt in SharePlay hauptsächlich den gemeinsamen Zustand. Die eigentlichen Volumendaten kommen aus einer lokalen Datei oder von einem erreichbaren Datensatzserver.">SharePlay primarily transfers the shared state. The volume data itself comes from a local file or from a reachable dataset server.</span></div>
+        </section>
+
+        <section id="rendering">
+          <h2 data-de="Render-Modi">Rendering modes</h2>
+          <dl class="definition-list">
+            <div><dt data-de="Transferfunktion + Licht">Transfer function + light</dt><dd data-de="Ordnet Messwerten Farbe und Transparenz zu und beleuchtet sichtbare Strukturen. Dies liefert einen räumlichen Eindruck, benötigt aber zusätzliche Berechnungen für Gradienten und Licht.">Maps values to color and opacity and lights visible structures. This provides stronger shape cues but requires additional gradient and lighting work.</dd></div>
+            <div><dt data-de="Transferfunktion">Transfer function</dt><dd data-de="Setzt Farbe und Transparenz entlang jedes Strahls ohne Beleuchtung zusammen. Dieser Modus eignet sich gut für farbcodierte oder halbtransparente Strukturen.">Composites color and opacity along each ray without lighting. This mode works well for color-coded or translucent structures.</dd></div>
+            <div><dt data-de="Isowert">Isosurface</dt><dd data-de="Zeigt eine Oberfläche an der Stelle, an der der Datensatz einen gewählten Wert erreicht. Der Isowert lässt sich im zugehörigen Editor verändern.">Shows a surface where the dataset reaches a selected value. The corresponding editor controls that isovalue.</dd></div>
+          </dl>
+          <h3 data-de="Transferfunktionen">Transfer functions</h3>
+          <p data-de="Eine Transferfunktion enthält getrennte Kurven für Rot, Grün, Blau und Alpha. Alpha bestimmt, welche Werte sichtbar werden. Transferfunktionen können mit dem Datensatz gespeichert, aus einer <code>.tf1d</code>-Datei geladen oder aus dem Serverkatalog gewählt werden.">A transfer function contains separate curves for red, green, blue, and alpha. Alpha determines which values become visible. Transfer functions can be stored with the dataset, loaded from a <code>.tf1d</code> file, or selected from the server catalog.</p>
+          <h3 data-de="Abtastung, LOD und Bricks">Sampling, LOD, and bricks</h3>
+          <p data-de="Die Abtastrate bestimmt den Abstand zwischen Abtastpunkten entlang eines Strahls. Höhere Werte verbessern meist die Qualität, kosten aber Leistung. Das Level-of-Detail-System wählt gröbere oder feinere Bricks. Die optionale Brick-Visualisierung ist ein Diagnosewerkzeug und standardmäßig ausgeblendet.">The sampling rate controls the spacing between samples along a ray. Higher values usually improve quality at a performance cost. The level-of-detail system selects coarser or finer bricks. The optional brick visualization is a diagnostic tool and is hidden by default.</p>
+        </section>
+
+        <section id="data">
+          <h2 data-de="Daten öffnen und importieren">Opening and importing data</h2>
+          <ul>
+            <li data-de="<strong>Lokal:</strong> Eine vorhandene <code>.data</code>-Datei wird direkt vom Gerät gelesen."><strong>Local:</strong> An existing <code>.data</code> file is read directly from the device.</li>
+            <li data-de="<strong>Entfernt:</strong> Die App liest zunächst den Katalog eines konfigurierten BorgVR-Servers und lädt anschließend benötigte Bricks bei Bedarf."><strong>Remote:</strong> The app first reads the catalog of a configured BorgVR server and then fetches required bricks on demand.</li>
+            <li data-de="<strong>Import:</strong> DICOM-, NRRD/NHDR- oder QVIS-Daten werden in das in Bricks unterteilte BorgVR-Format konvertiert. Importparameter gelten nur für neu konvertierte Datensätze."><strong>Import:</strong> DICOM, NRRD/NHDR, or QVIS data is converted into the bricked BorgVR format. Import settings only affect newly converted datasets.</li>
+          </ul>
+          <p data-de="Die eindeutige Datensatz-ID ordnet lokale Kopien, Serverquellen, Transferfunktionen und Marker einander zu. Quellen werden für jede ID gespeichert. Ist eine Quelle nicht erreichbar, versucht BorgVR die zuletzt gemeldeten Quellen zuerst.">The dataset's unique ID connects local copies, server origins, transfer functions, and markers. Origins are stored per ID. If one source cannot be reached, BorgVR tries other known sources in the order in which they were most recently announced.</p>
+        </section>
+
+        <section id="markers">
+          <h2 data-de="Marker">Markers</h2>
+          <p data-de="Marker dienen dazu, räumliche Positionen und Zeichnungen unabhängig vom aktuellen Blickwinkel zu kommunizieren. Sie liegen im Koordinatensystem des Datensatzes; die Tiefenverarbeitung sorgt dafür, dass das Volumen sie korrekt verdeckt.">Markers communicate spatial positions and drawings independently of the current viewpoint. They live in dataset coordinates and are depth-composited correctly with the volume.</p>
+          <dl class="definition-list">
+            <div><dt data-de="Kugel">Sphere</dt><dd data-de="Ein benannter, farbiger Punkt mit einstellbarem Radius. Optional zeigt ein Strahl vom Kugelmittelpunkt in Richtung der ursprünglichen Kamera.">A named, colored point with an adjustable radius. An optional ray points from the sphere center toward the original camera position.</dd></div>
+            <div><dt data-de="Strich">Stroke</dt><dd data-de="Eine Folge räumlicher Punkte, die als glattes Tube-Mesh dargestellt wird. Auf Apple Vision Pro können Striche mit Logitech Muse gezeichnet werden.">A sequence of spatial points rendered as a smooth tube mesh. On Apple Vision Pro, strokes can be drawn with Logitech Muse.</dd></div>
+          </dl>
+          <p data-de="Markerdateien verwenden die Endung <code>.marker</code> und enthalten die ID des zugehörigen Datensatzes. Beim Laden einer Datei für einen anderen Datensatz fragt BorgVR ausdrücklich nach. Bereits vorhandene Marker können ersetzt oder ergänzt werden.">Marker files use the <code>.marker</code> extension and contain the associated dataset ID. BorgVR asks for confirmation when a file belongs to another dataset. Existing markers can be replaced or extended.</p>
+        </section>
+
+        <section id="shareplay">
+          <h2>SharePlay</h2>
+          <p data-de="In einer Sitzung werden Datensatzwahl, Render-Modus, Transferfunktion, Isowert, Clipping und Marker geteilt. iPhone-, iPad- und Mac-Teilnehmer verwenden standardmäßig eine gemeinsame Bildschirmansicht; einzelne Teilnehmer können diese Ansicht vorübergehend entkoppeln. Vision-Pro-Teilnehmer besitzen eine räumliche Ansicht und können die gemeinsamen sowie entkoppelten Bildschirmansichten im Raum sehen und bearbeiten.">A session shares dataset selection, rendering mode, transfer function, isovalue, clipping, and markers. iPhone, iPad, and Mac participants use a common screen view by default and may temporarily detach their own view. Vision Pro participants have a spatial view and can see and manipulate the shared and detached screen views in space.</p>
+          <p data-de="Beim Beitritt tauschen Teilnehmer bekannte, freigegebene Serverquellen aus. Geräte mit einer lokalen Kopie können zusätzlich einen Ad-hoc-Server anbieten. Ist noch keine Quelle erreichbar, bleibt die App im Wartezustand und versucht den Ladevorgang erneut, sobald eine neue Quelle bekannt wird.">When joining, participants exchange known server origins that are allowed to be shared. A device with a local copy can also advertise an ad-hoc server. If no source is reachable yet, the app waits and retries loading whenever a new source becomes known.</p>
+          <div class="callout callout--warm"><strong data-de="Passwortgeschützte Quellen">Password-protected sources</strong><span data-de="In den Servereinstellungen legen Sie ausdrücklich fest, ob eine Quelle einschließlich Passwort über SharePlay weitergegeben werden darf. Ist dies ausgeschaltet, wird die Quelle nicht angekündigt.">Server settings explicitly control whether an origin, including its password, may be shared through SharePlay. If disabled, that origin is not announced.</span></div>
+        </section>
+
+        <section id="files">
+          <h2 data-de="BorgVR-Dateien">BorgVR files</h2>
+          <div class="table-wrap"><table>
+            <thead><tr><th data-de="Endung">Extension</th><th data-de="Inhalt">Contents</th><th data-de="Verwendung">Use</th></tr></thead>
+            <tbody>
+              <tr><td><code>.data</code></td><td data-de="Metadaten und in Bricks unterteilte, optional LZ4-komprimierte Volumendaten">Metadata and bricked, optionally LZ4-compressed volume data</td><td data-de="Renderer und Server">Renderers and servers</td></tr>
+              <tr><td><code>.tf1d</code></td><td data-de="Eindimensionale Transferfunktion und Anzeigeinformationen">One-dimensional transfer function and display metadata</td><td data-de="Transferfunktionskatalog">Transfer-function catalog</td></tr>
+              <tr><td><code>.marker</code></td><td data-de="Kugeln, Richtungen und räumliche Striche mit Datensatz-ID">Spheres, directions, and spatial strokes with dataset ID</td><td data-de="Marker laden, speichern und teilen">Load, save, and share markers</td></tr>
+            </tbody>
+          </table></div>
+        </section>
+      </article>
+    </div>
+  </main>
+  <footer class="footer"><div class="container footer__inner"><span class="footer__brand">© 2026 Jens Krueger</span><div class="footer__right"><a class="footer__link" href="./" data-de="Zur Handbuch-Startseite">Guide home</a><a class="footer__link" href="./support.html">Support</a></div></div></footer>
+  <script>window.BorgVRI18n.applyTranslations({en:{title:"BorgVR Concepts and Workflow",metaDescription:"Learn how BorgVR datasets, rendering modes, transfer functions, markers, servers, and SharePlay work together."},de:{title:"BorgVR Grundlagen und Arbeitsablauf",metaDescription:"Erfahren Sie, wie Datensätze, Render-Modi, Transferfunktionen, Marker, Server und SharePlay in BorgVR zusammenspielen."}});</script>
+</body>
+</html>

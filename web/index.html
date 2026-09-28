@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>BorgVR WebGPU</title>
     <link rel="icon" href="./assets/borgvr.jpg">
-    <link rel="stylesheet" href="./styles/main.css?v=20260917-markers">
+    <link rel="stylesheet" href="./styles/main.css?v=20260928-lighting">
   </head>
   <body>
     <main class="app-shell">
@@ -112,6 +112,19 @@
             <button id="clip-reset" class="small-command-button" type="button">Reset</button>
           </details>
 
+          <details class="control-panel" data-ui-panel="lighting">
+            <summary>Lighting</summary>
+            <div class="lighting-controls">
+              <canvas id="lighting-direction" class="lighting-direction" width="180" height="180" aria-label="Light direction"></canvas>
+              <div class="lighting-colors">
+                <label><span>Ambient</span><input id="ambient-light-color" type="color" value="#1a1a1a"></label>
+                <label><span>Diffuse</span><input id="diffuse-light-color" type="color" value="#808080"></label>
+                <label><span>Specular</span><input id="specular-light-color" type="color" value="#cccccc"></label>
+                <button id="lighting-reset" class="small-command-button" type="button">Reset</button>
+              </div>
+            </div>
+          </details>
+
           <details class="control-panel" data-ui-panel="markers">
             <summary>Markers</summary>
             <div class="marker-controls">
@@ -146,7 +159,7 @@
       </section>
     </main>
 
-    <script type="module" src="./src/app.js?v=20260922-marker-direction"></script>
+    <script type="module" src="./src/app.js?v=20260928-lighting"></script>
   </body>
 </html>
 

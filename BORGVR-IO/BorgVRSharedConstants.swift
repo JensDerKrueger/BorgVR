@@ -29,7 +29,7 @@ enum BorgVRMarkerFormat {
 
 enum BorgVRSharePlayProtocol {
   static let magic: UInt32 = 0x4256_5350 // "BVSP"
-  static let renderStateVersion: UInt16 = 4
+  static let renderStateVersion: UInt16 = 5
   static let markerVersion: UInt16 = 3
 
   enum PacketKind: UInt8 {
@@ -38,6 +38,54 @@ enum BorgVRSharePlayProtocol {
     case visionTransform = 3
     case volumeMarkers = 4
     case spatialStylusPreview = 5
+  }
+}
+
+struct BorgVRLightingState: Equatable, Sendable {
+  static let defaultDirection = SIMD3<Float>(0, 0, 1)
+  static let defaultAmbientColor = SIMD3<Float>(repeating: 0.1)
+  static let defaultDiffuseColor = SIMD3<Float>(repeating: 0.5)
+  static let defaultSpecularColor = SIMD3<Float>(repeating: 0.8)
+
+  var direction: SIMD3<Float>
+  var ambientColor: SIMD3<Float>
+  var diffuseColor: SIMD3<Float>
+  var specularColor: SIMD3<Float>
+
+  static let `default` = BorgVRLightingState(
+    direction: defaultDirection,
+    ambientColor: defaultAmbientColor,
+    diffuseColor: defaultDiffuseColor,
+    specularColor: defaultSpecularColor
+  )
+
+  var sanitized: BorgVRLightingState {
+    let safeDirection: SIMD3<Float>
+    if direction.x.isFinite,
+       direction.y.isFinite,
+       direction.z.isFinite,
+       simd_length_squared(direction) > 0.000_001 {
+      safeDirection = simd_normalize(direction)
+    } else {
+      safeDirection = Self.defaultDirection
+    }
+
+    return BorgVRLightingState(
+      direction: safeDirection,
+      ambientColor: Self.sanitizeColor(ambientColor, fallback: Self.defaultAmbientColor),
+      diffuseColor: Self.sanitizeColor(diffuseColor, fallback: Self.defaultDiffuseColor),
+      specularColor: Self.sanitizeColor(specularColor, fallback: Self.defaultSpecularColor)
+    )
+  }
+
+  private static func sanitizeColor(
+    _ color: SIMD3<Float>,
+    fallback: SIMD3<Float>
+  ) -> SIMD3<Float> {
+    guard color.x.isFinite, color.y.isFinite, color.z.isFinite else {
+      return fallback
+    }
+    return simd_clamp(color, SIMD3<Float>(repeating: 0), SIMD3<Float>(repeating: 1))
   }
 }
 

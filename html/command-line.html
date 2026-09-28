@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="color-scheme" content="dark" />
+  <title>BorgVR Command-Line Tools</title>
+  <meta name="description" content="Reference for the BorgVR converter, Swift dataset server, and C++ dataset server." />
+  <link rel="canonical" href="https://www.jens-krueger.com/BorgVR/command-line.html" />
+  <link rel="stylesheet" href="./style.css" />
+  <script src="./i18n.js"></script>
+</head>
+<body>
+  <a class="skip" href="#main" data-de="Zum Inhalt springen">Skip to content</a>
+  <header class="topbar"><div class="container topbar__inner"><a class="brand" href="./"><img class="brand__logo" src="./borgvr.png" alt="" /><span class="brand__text" data-de="BorgVR-Handbuch">BorgVR Guide</span></a><nav class="nav"><a class="nav__link" href="./concepts.html" data-de="Grundlagen">Concepts</a><a class="nav__link" href="./support.html">Support</a><a class="nav__link" href="./privacy.html" data-de="Datenschutz">Privacy</a></nav></div></header>
+  <main id="main">
+    <header class="doc-header"><div class="container doc-header__grid"><div><p class="eyebrow" data-de="Referenz">Reference</p><h1 class="doc-title" data-de="Kommandozeilenwerkzeuge">Command-line tools</h1><p class="lead" data-de="Datensätze automatisiert konvertieren oder erzeugen und Swift- beziehungsweise C++-Server ohne grafische Oberfläche betreiben.">Convert or generate datasets in automated workflows and operate Swift or C++ servers without a graphical interface.</p></div><img class="doc-header__image" src="./mandelbulb-background.jpg" alt="Synthetic Mandelbulb dataset" data-de-attr="alt:Synthetischer Mandelbulb-Datensatz" /></div></header>
+    <div class="container docs-shell">
+      <aside class="docs-nav" aria-label="Manual sections"><p class="docs-nav__title" data-de="Handbuch">Manual</p><a class="docs-nav__link" href="./concepts.html" data-de="Grundlagen">Concepts</a><a class="docs-nav__link" href="./visionos.html">visionOS</a><a class="docs-nav__link" href="./ios.html">iPhone &amp; iPad</a><a class="docs-nav__link" href="./macos.html">macOS</a><a class="docs-nav__link" href="./server.html" data-de="Server-App">Server app</a><a class="docs-nav__link" href="./webgpu.html">WebGPU</a><a class="docs-nav__link" aria-current="page" href="./command-line.html" data-de="Kommandozeile">Command line</a></aside>
+      <article class="doc-content">
+        <section>
+          <h2>TerminalConverterApp</h2>
+          <p data-de="Der Swift-Konverter liest DICOM-Verzeichnisse, QVIS-Dateien und NRRD/NHDR-Dateien oder erzeugt reproduzierbare synthetische Volumen. Alle Modi schreiben das in Bricks unterteilte BorgVR-Format.">The Swift converter reads DICOM directories, QVIS files, and NRRD/NHDR files or creates reproducible synthetic volumes. Every mode writes the bricked BorgVR format.</p>
+          <pre><code>TerminalConverterApp D &lt;input-directory&gt; &lt;output.data&gt; &lt;description&gt; &lt;brick-size&gt; &lt;overlap&gt;
+TerminalConverterApp Q &lt;input-file&gt;      &lt;output.data&gt; &lt;description&gt; &lt;brick-size&gt; &lt;overlap&gt;
+TerminalConverterApp N &lt;input-file&gt;      &lt;output.data&gt; &lt;description&gt; &lt;brick-size&gt; &lt;overlap&gt;</code></pre>
+          <p data-de="Beschreibungen mit Leerzeichen müssen in Anführungszeichen stehen. <code>brick-size</code> und <code>overlap</code> sind positive Ganzzahlen.">Descriptions containing spaces must be quoted. <code>brick-size</code> and <code>overlap</code> are positive integers.</p>
+          <h3 data-de="Synthetische Datensätze">Synthetic datasets</h3>
+          <pre><code>TerminalConverterApp C &lt;algorithm&gt; &lt;bytes-per-component&gt; &lt;components&gt; \
+  &lt;size-x&gt; &lt;size-y&gt; &lt;size-z&gt; &lt;output.data&gt; &lt;description&gt; \
+  &lt;brick-size&gt; &lt;overlap&gt;</code></pre>
+          <div class="table-wrap"><table><thead><tr><th>ID</th><th data-de="Generator">Generator</th><th data-de="Ausführung">Execution</th></tr></thead><tbody>
+            <tr><td><code>L</code></td><td data-de="Linearer Testdatensatz">Linear test data</td><td>CPU</td></tr>
+            <tr><td><code>F</code></td><td data-de="Mandelbulb in einfacher Genauigkeit">Single-precision Mandelbulb</td><td data-de="Metal, automatischer CPU-Fallback">Metal with automatic CPU fallback</td></tr>
+            <tr><td><code>D</code></td><td data-de="Mandelbulb in doppelter Genauigkeit">Double-precision Mandelbulb</td><td>CPU</td></tr>
+            <tr><td><code>J</code></td><td data-de="Quaternionisches Sinus-Julia-Set">Quaternion sine Julia set</td><td data-de="Metal, automatischer CPU-Fallback">Metal with automatic CPU fallback</td></tr>
+            <tr><td><code>B</code></td><td>Mandelbox</td><td data-de="Metal, automatischer CPU-Fallback">Metal with automatic CPU fallback</td></tr>
+            <tr><td><code>G</code></td><td>Gyroid</td><td data-de="Metal, automatischer CPU-Fallback">Metal with automatic CPU fallback</td></tr>
+            <tr><td><code>P</code></td><td data-de="3D-Shepp-Logan-Phantom">3D Shepp-Logan phantom</td><td data-de="Metal, automatischer CPU-Fallback">Metal with automatic CPU fallback</td></tr>
+            <tr><td><code>T</code></td><td data-de="Frequenz-Chirp mit Brick-Grenztest">Frequency chirp with brick-boundary test</td><td data-de="Metal, automatischer CPU-Fallback">Metal with automatic CPU fallback</td></tr>
+          </tbody></table></div>
+          <p data-de="Die GPU-Generatoren arbeiten Schicht für Schicht, sodass auch große Volumen erzeugt werden können, ohne das gesamte Ergebnis gleichzeitig im GPU-Speicher zu halten. Der Konverter unterstützt Komponenten mit 1, 2 oder 4 Byte und kann mehrkanalige BorgVR-Dateien schreiben.">GPU generators operate slice by slice, allowing large volumes to be created without keeping the complete result in GPU memory. The converter supports 1-, 2-, or 4-byte components and can write multi-component BorgVR files.</p>
+          <pre><code>TerminalConverterApp C J 2 1 512 512 512 QuaternionJulia.data \
+  "Quaternion Julia set" 64 2</code></pre>
+          <p><code>TerminalConverterApp --help</code> <span data-de="zeigt die vollständige Syntax;">shows complete syntax;</span> <code>--version</code> <span data-de="gibt die Programmversion aus.">prints the tool version.</span></p>
+        </section>
+
+        <section>
+          <h2>TerminalServerApp</h2>
+          <p data-de="Der Swift-Server veröffentlicht <code>.data</code>-, <code>.tf1d</code>- und <code>.marker</code>-Dateien aus einem Verzeichnis. Der Katalog wird standardmäßig alle zehn Sekunden aktualisiert.">The Swift server publishes <code>.data</code>, <code>.tf1d</code>, and <code>.marker</code> files from one directory. By default, it refreshes the catalog every ten seconds.</p>
+          <pre><code>TerminalServerApp --directory /path/to/datasets \
+  --port 12345 --web-port 8080</code></pre>
+          <dl class="definition-list">
+            <div><dt><code>--directory, -d</code></dt><dd data-de="Verzeichnis mit Datensätzen, Transferfunktionen und Markern; Standard ist das Benutzerverzeichnis.">Directory containing datasets, transfer functions, and markers; defaults to the home directory.</dd></div>
+            <div><dt><code>--port, -p</code></dt><dd data-de="Port des nativen BorgVR-Protokolls.">Native BorgVR protocol port.</dd></div>
+            <div><dt><code>--max-bricks, -m</code></dt><dd data-de="Maximale Anzahl von Bricks pro GETBRICKS-Anfrage.">Maximum number of bricks per GETBRICKS request.</dd></div>
+            <div><dt><code>--password</code></dt><dd data-de="Optionales Passwort für native und WebGPU-Clients.">Optional password for native and WebGPU clients.</dd></div>
+            <div><dt><code>--scan-interval</code></dt><dd data-de="Intervall für die Katalogaktualisierung in Sekunden; <code>0</code> deaktiviert weitere Scans.">Catalog refresh interval in seconds; <code>0</code> disables rescanning.</dd></div>
+            <div><dt><code>--web-port</code></dt><dd data-de="Aktiviert den eingebetteten WebGPU-Server auf diesem Port.">Enables the embedded WebGPU server on this port.</dd></div>
+            <div><dt><code>--web-http</code></dt><dd data-de="Verwendet statt HTTPS lokales HTTP und bindet nur an <code>localhost</code>.">Uses local HTTP instead of HTTPS and binds only to <code>localhost</code>.</dd></div>
+            <div><dt><code>--web-certificate</code></dt><dd data-de="PKCS#12-Zertifikat als <code>.p12</code> oder <code>.pfx</code>; das Passwort folgt mit <code>--web-certificate-password</code>.">PKCS#12 certificate as <code>.p12</code> or <code>.pfx</code>; supply its password with <code>--web-certificate-password</code>.</dd></div>
+          </dl>
+          <h3 data-de="Synchronisation">Synchronization</h3>
+          <pre><code>TerminalServerApp --directory /srv/borgvr \
+  --sync-server server-a.example 12345 300 secret \
+  --sync-server server-b.example 12345 300</code></pre>
+          <p data-de="<code>--sync-server</code> kann mehrfach angegeben werden. Das Intervall muss mindestens zehn Sekunden betragen; das optionale Passwort wird in der Konsolenausgabe nicht angezeigt. Datensätze, Transferfunktionen und Markerdateien werden synchronisiert, unvollständige Übertragungen fortgesetzt und bei stockender Übertragung alternative Quellen verwendet."><code>--sync-server</code> is repeatable. The interval must be at least ten seconds; the optional password is not echoed in runtime output. Datasets, transfer functions, and marker files are synchronized, incomplete transfers resume, and alternate sources are tried after a stall.</p>
+        </section>
+
+        <section>
+          <h2>BORGVRServerCPP</h2>
+          <p data-de="Der C++17-Server ist die plattformübergreifende Alternative für macOS, Linux und Windows. Unter macOS oder Linux baut <code>make</code> zuerst ein kleines Bootstrap-Programm, das den Inhalt des Verzeichnisses <code>web/</code> LZ4-komprimiert in den Server einbettet.">The C++17 server is the cross-platform alternative for macOS, Linux, and Windows. On macOS or Linux, <code>make</code> first builds a small bootstrap program that embeds the contents of <code>web/</code> into the server using LZ4 compression.</p>
+          <pre><code>cd BORGVRServerCPP
+make
+make CONFIG=debug
+make run ARGS="12345 64 /path/to/datasets --web-port 8080"</code></pre>
+          <p data-de="Die drei Positionsparameter sind Port, maximale Bricks pro Anfrage und Datensatzverzeichnis. Danach können Scan-Intervall, Passwort, WebGPU-Port und mehrere <code>--sync-server</code>-Optionen folgen.">The three positional arguments are port, maximum bricks per request, and dataset directory. They may be followed by scan interval, password, WebGPU port, and repeatable <code>--sync-server</code> entries.</p>
+          <pre><code>BORGVRServerCPP 12345 64 /data/BorgVR \
+  --sync-server 192.168.1.10 12345 300 secret</code></pre>
+          <p data-de="Unter Windows ist zusätzlich eine Visual-Studio-Solution-Datei enthalten. Die generierten Dateien <code>src/GeneratedWebAssets.cpp</code> und <code>src/GeneratedWebAssets.h</code> sind Build-Artefakte und werden nicht im Repository versioniert.">A Visual Studio solution is also included for Windows. The generated files <code>src/GeneratedWebAssets.cpp</code> and <code>src/GeneratedWebAssets.h</code> are build artifacts and are not tracked in the repository.</p>
+        </section>
+
+        <section>
+          <h2 data-de="Ausgabe und Automatisierung">Output and automation</h2>
+          <p data-de="Beide Swift-Werkzeuge geben mit <code>--version</code> ihre Version aus und verwenden bei ungültigen Argumenten einen von null verschiedenen Exit-Code. Der Konverter protokolliert Dimensionen, Brick-Anzahl, Kompressionsstatistik, Wertebereich, Metadaten, Dateigröße und Laufzeit; dadurch lässt er sich gut in reproduzierbare Abläufe integrieren.">Both Swift tools report their version with <code>--version</code> and return a non-zero exit status for invalid arguments. The converter logs dimensions, brick counts, compression statistics, value range, metadata, file size, and elapsed time, making it suitable for reproducible pipelines.</p>
+          <div class="button-row"><a class="btn btn--primary" href="https://github.com/JensDerKrueger/BorgVR" data-de="GitHub-Repository">GitHub repository</a><a class="btn btn--ghost" href="./server.html" data-de="Grafische Server-App">Graphical server app</a></div>
+        </section>
+      </article>
+    </div>
+  </main>
+  <footer class="footer"><div class="container footer__inner"><span class="footer__brand">© 2026 Jens Krueger</span><div class="footer__right"><a class="footer__link" href="./" data-de="Zur Handbuch-Startseite">Guide home</a><a class="footer__link" href="./support.html">Support</a></div></div></footer>
+  <script>window.BorgVRI18n.applyTranslations({en:{title:"BorgVR Command-Line Tools",metaDescription:"Reference for the BorgVR converter, Swift dataset server, and C++ dataset server."},de:{title:"BorgVR-Kommandozeilenwerkzeuge",metaDescription:"Referenz für den BorgVR-Konverter, den Swift-Datensatzserver und den C++-Datensatzserver."}});</script>
+</body>
+</html>

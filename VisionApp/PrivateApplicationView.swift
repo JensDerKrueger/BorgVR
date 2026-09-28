@@ -80,22 +80,34 @@ struct PrivateApplicationView: View {
 
       HStack {
         Button(action: openSelectedEditor) {
-          Text(
+          Label(
             String(
               format: NSLocalizedString(
                 "private_editor_title_format",
                 comment: "Button title: '<render mode> Editor'"
               ),
               String(describing: sharedAppModel.renderMode)
-            )
+            ),
+            systemImage: "slider.horizontal.3"
           )
         }
         .padding()
 
-        Button("private_marker_open_button") {
+        Button {
           if !runtimeAppModel.isViewOpen("MarkerView") {
             openWindow(id: "MarkerView")
           }
+        } label: {
+          Label("private_marker_open_button", systemImage: "mappin.and.ellipse")
+        }
+        .padding()
+
+        Button {
+          if !runtimeAppModel.isViewOpen("LightingEditorView") {
+            openWindow(id: "LightingEditorView")
+          }
+        } label: {
+          Label("Lighting", systemImage: "lightbulb.max")
         }
         .padding()
       }

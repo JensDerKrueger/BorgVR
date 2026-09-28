@@ -10,7 +10,7 @@ struct TransferEditing {
 
 final class RenderingParameters: ObservableObject {
   private static let streamMagic: UInt32 = 0x5250_494F // "RPIO"
-  private static let streamVersion: UInt16 = 1
+  private static let streamVersion: UInt16 = 2
 
   private static let defaultOrientation =
     simd_quatf(angle: 0.25, axis: SIMD3<Float>(1, 0, 0)) *
@@ -27,6 +27,10 @@ final class RenderingParameters: ObservableObject {
   @Published var normIsoValue: Float = 0.1
   @Published var renderMode: RenderMode = .transferFunction1D
   @Published var brickVis = false
+  @Published var lightDirection = BorgVRLightingState.default.direction
+  @Published var ambientLightColor = BorgVRLightingState.default.ambientColor
+  @Published var diffuseLightColor = BorgVRLightingState.default.diffuseColor
+  @Published var specularLightColor = BorgVRLightingState.default.specularColor
   private(set) var viewportAspectRatio: Float = 1
 
   @Published var minValue: Int = 0
@@ -83,6 +87,7 @@ final class RenderingParameters: ObservableObject {
     normIsoValue = 0.1
     renderMode = .transferFunction1D
     brickVis = false
+    applyLightingState(.default)
   }
 
   enum UpdateKind {
@@ -136,6 +141,10 @@ final class RenderingParameters: ObservableObject {
     writer.write(Int32(minValue))
     writer.write(Int32(maxValue))
     writer.write(Int32(rangeMax))
+    writer.writeSIMD3(lightDirection)
+    writer.writeSIMD3(ambientLightColor)
+    writer.writeSIMD3(diffuseLightColor)
+    writer.writeSIMD3(specularLightColor)
 
     if case .full = kind {
       let tfData = transferFunction.serialize()
@@ -162,6 +171,10 @@ final class RenderingParameters: ObservableObject {
     writer.write(Int32(minValue))
     writer.write(Int32(maxValue))
     writer.write(Int32(rangeMax))
+    writer.writeSIMD3(lightDirection)
+    writer.writeSIMD3(ambientLightColor)
+    writer.writeSIMD3(diffuseLightColor)
+    writer.writeSIMD3(specularLightColor)
 
     if includeTransferFunction {
       let tfData = transferFunction.serialize()
@@ -249,6 +262,12 @@ final class RenderingParameters: ObservableObject {
     minValue = Int(try reader.read() as Int32)
     maxValue = Int(try reader.read() as Int32)
     rangeMax = Int(try reader.read() as Int32)
+    applyLightingState(BorgVRLightingState(
+      direction: try reader.readSIMD3(),
+      ambientColor: try reader.readSIMD3(),
+      diffuseColor: try reader.readSIMD3(),
+      specularColor: try reader.readSIMD3()
+    ))
 
     if case .full = kind {
       let tfLength: UInt32 = try reader.read()
@@ -276,6 +295,12 @@ final class RenderingParameters: ObservableObject {
     minValue = Int(try reader.read() as Int32)
     maxValue = Int(try reader.read() as Int32)
     rangeMax = Int(try reader.read() as Int32)
+    applyLightingState(BorgVRLightingState(
+      direction: try reader.readSIMD3(),
+      ambientColor: try reader.readSIMD3(),
+      diffuseColor: try reader.readSIMD3(),
+      specularColor: try reader.readSIMD3()
+    ))
 
     if includesTransferFunction {
       let tfLength: UInt32 = try reader.read()
@@ -285,6 +310,14 @@ final class RenderingParameters: ObservableObject {
     }
 
     transferFunction.updateRanges(minValue: minValue, maxValue: maxValue, rangeMax: rangeMax)
+  }
+
+  private func applyLightingState(_ state: BorgVRLightingState) {
+    let state = state.sanitized
+    lightDirection = state.direction
+    ambientLightColor = state.ambientColor
+    diffuseLightColor = state.diffuseColor
+    specularLightColor = state.specularColor
   }
 
   private static func translation(fromClipMin clipMin: SIMD3<Float>, clipMax: SIMD3<Float>) -> SIMD3<Float> {

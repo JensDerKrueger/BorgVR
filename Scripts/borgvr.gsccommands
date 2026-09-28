@@ -43,6 +43,28 @@ loadtf(string)
 savetffile(string)
 savetf(string)
 
+# Lighting (RGB components use the 0...1 range)
+setlightdirection(float,float,float)
+setambientlight(float,float,float)
+setdiffuselight(float,float,float)
+setspecularlight(float,float,float)
+resetlighting()
+
+# Markers
+# Put names and paths containing spaces in single or double quotes.
+# Sphere: name, position xyz, radius, RGB
+addspheremarker(string,float,float,float,float,float,float,float)
+# Directional sphere: name, position xyz, radius, RGB, direction-origin xyz
+adddirectionalmarker(string,float,float,float,float,float,float,float,float,float,float)
+# Stroke: name, radius, RGB, followed by one or more xyz point triples
+addstrokemarker(string,float,float,float,float,restString)
+removemarker(string)
+clearmarkers()
+# The optional bool selects replace (true) or merge (false).
+loadmarkers(string)
+loadmarkers(string,bool)
+savemarkers(string)
+
 # Performance
 resetfps()
 setDisplaySync(bool)

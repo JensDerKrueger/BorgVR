@@ -49,6 +49,37 @@
         }
       });
     });
+
+    if (locale === "de") {
+      document.querySelectorAll("[data-de]").forEach((element) => {
+        const translation = element.getAttribute("data-de");
+        if (translation.includes("<")) {
+          element.innerHTML = translation;
+        } else {
+          element.textContent = translation;
+        }
+      });
+
+      document.querySelectorAll("[data-de-html]").forEach((element) => {
+        element.innerHTML = element.getAttribute("data-de-html");
+      });
+
+      document.querySelectorAll("[data-de-attr]").forEach((element) => {
+        const mappings = element.getAttribute("data-de-attr").split("|");
+        mappings.forEach((mapping) => {
+          const separatorIndex = mapping.indexOf(":");
+          if (separatorIndex === -1) {
+            return;
+          }
+
+          const attributeName = mapping.slice(0, separatorIndex).trim();
+          const value = mapping.slice(separatorIndex + 1).trim();
+          if (attributeName) {
+            element.setAttribute(attributeName, value);
+          }
+        });
+      });
+    }
   }
 
   window.BorgVRI18n = {

@@ -194,6 +194,10 @@ extension Renderer {
           cameraPosInTextureSpace: simd_make_float3(viewToTexture * simd_float4(0, 0, 0, 1)),
           cameraPosInTextureSpaceVoxelScaled: simd_make_float3(viewToTextureVoxelScaled * simd_float4(0, 0, 0, 1)),
           cubeBounds: (clipMin, clipMax),
+          lightDirection: SIMD4<Float>(sharedAppModel.lightDirection, 0),
+          ambientLightColor: SIMD4<Float>(sharedAppModel.ambientLightColor, 0),
+          diffuseLightColor: SIMD4<Float>(sharedAppModel.diffuseLightColor, 0),
+          specularLightColor: SIMD4<Float>(sharedAppModel.specularLightColor, 0),
           modelView: viewMatrix * modelMatrix,
           modelViewIT: simd_transpose(simd_inverse(viewMatrix * modelMatrix)),
           textureToClip: projection * viewMatrix * modelMatrix * Transform(

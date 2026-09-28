@@ -1054,3 +1054,9 @@
 "The dataset is not available from any known source." = "The dataset is not available from any known source.";
 "No Data Source Available" = "No Data Source Available";
 "The current dataset is not available from any known source. BorgVR is waiting for a participant to provide one." = "The current dataset is not available from any known source. BorgVR is waiting for a participant to provide one.";
+"Lighting" = "Lighting";
+"Light direction" = "Light direction";
+"Ambient light" = "Ambient light";
+"Diffuse light" = "Diffuse light";
+"Specular light" = "Specular light";
+"Close lighting editor" = "Close lighting editor";

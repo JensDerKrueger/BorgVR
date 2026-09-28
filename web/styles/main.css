@@ -611,6 +611,54 @@ p {
   font-size: 11px;
 }
 
+.lighting-controls {
+  display: grid;
+  grid-template-columns: minmax(120px, 180px) minmax(120px, 1fr);
+  gap: 14px;
+  align-items: center;
+  padding: 4px 9px 10px;
+}
+
+.lighting-direction {
+  display: block;
+  width: 100%;
+  max-width: 180px;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  cursor: grab;
+  touch-action: none;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.32);
+}
+
+.lighting-direction:active {
+  cursor: grabbing;
+}
+
+.lighting-colors {
+  display: grid;
+  gap: 7px;
+}
+
+.lighting-colors label {
+  grid-template-columns: minmax(64px, 1fr) 42px;
+  padding: 0;
+}
+
+.lighting-colors input[type="color"] {
+  width: 42px;
+  height: 30px;
+  padding: 2px;
+  border: 1px solid rgba(190, 249, 255, 0.18);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+@media (max-width: 520px) {
+  .lighting-controls {
+    grid-template-columns: 128px minmax(0, 1fr);
+  }
+}
+
 .tf-editor-canvas {
   display: block;
   width: calc(100% - 18px);

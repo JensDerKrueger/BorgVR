@@ -53,6 +53,11 @@ extension Renderer {
         drawableWidth: 1888
       )
     )
+    var preprocessorMacros = compileOptions.preprocessorMacros ?? [:]
+    preprocessorMacros["VOLUME_SHADER_USES_RATE_MAP"] = NSNumber(
+      value: layerRenderer.configuration.isFoveationEnabled ? 1 : 0
+    )
+    compileOptions.preprocessorMacros = preprocessorMacros
 
     let library = try device.makeLibrary(source: shaderSource, options: compileOptions)
     let vertexFunction = library.makeFunction(name: "vertexShader")

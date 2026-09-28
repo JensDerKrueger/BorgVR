@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="color-scheme" content="dark" />
+  <title>BorgVR Dataset Server for macOS</title>
+  <meta name="description" content="How to import, catalog, serve, and synchronize BorgVR datasets with the macOS server application." />
+  <link rel="canonical" href="https://www.jens-krueger.com/BorgVR/server.html" />
+  <link rel="stylesheet" href="./style.css" />
+  <script src="./i18n.js"></script>
+</head>
+<body>
+  <a class="skip" href="#main" data-de="Zum Inhalt springen">Skip to content</a>
+  <header class="topbar"><div class="container topbar__inner"><a class="brand" href="./"><img class="brand__logo" src="./borgvr.png" alt="" /><span class="brand__text" data-de="BorgVR-Handbuch">BorgVR Guide</span></a><nav class="nav"><a class="nav__link" href="./concepts.html" data-de="Grundlagen">Concepts</a><a class="nav__link" href="./support.html">Support</a><a class="nav__link" href="./privacy.html" data-de="Datenschutz">Privacy</a></nav></div></header>
+  <main id="main">
+    <header class="doc-header"><div class="container doc-header__grid"><div><p class="eyebrow" data-de="Server-App für macOS">macOS server utility</p><h1 class="doc-title">BorgVR Dataset Server</h1><p class="lead" data-de="Datensätze konvertieren, katalogisieren und für native Clients oder den WebGPU-Browser bereitstellen, ohne die Kommandozeile zu verwenden.">Convert, catalog, and serve datasets to native clients or the WebGPU browser without using the command line.</p></div><img class="doc-header__image" src="./mandelbulb-background.jpg" alt="BorgVR dataset visualization" data-de-attr="alt:BorgVR-Datensatzvisualisierung" /></div></header>
+    <div class="container docs-shell">
+      <aside class="docs-nav" aria-label="Manual sections"><p class="docs-nav__title" data-de="Handbuch">Manual</p><a class="docs-nav__link" href="./concepts.html" data-de="Grundlagen">Concepts</a><a class="docs-nav__link" href="./visionos.html">visionOS</a><a class="docs-nav__link" href="./ios.html">iPhone &amp; iPad</a><a class="docs-nav__link" href="./macos.html">macOS</a><a class="docs-nav__link" aria-current="page" href="./server.html" data-de="Server-App">Server app</a><a class="docs-nav__link" href="./webgpu.html">WebGPU</a><a class="docs-nav__link" href="./command-line.html" data-de="Kommandozeile">Command line</a></aside>
+      <article class="doc-content">
+        <section>
+          <h2 data-de="Was die Server-App bereitstellt">What the server app provides</h2>
+          <p data-de="Die Server-App hat zwei Hauptaufgaben: Ausgangsdaten in das BorgVR-Format konvertieren und ein Verzeichnis mit Datensätzen, Transferfunktionen und Markerdateien über das Netzwerk bereitstellen. Optional synchronisiert sie dieses Verzeichnis mit weiteren BorgVR-Servern.">The server app has two primary jobs: converting source data into the BorgVR format and publishing a directory of datasets, transfer functions, and marker files over the network. It can also synchronize that directory with other BorgVR servers.</p>
+          <div class="table-wrap"><table><thead><tr><th data-de="Dienst">Service</th><th data-de="Zweck">Purpose</th><th data-de="Typische Clients">Typical clients</th></tr></thead><tbody>
+            <tr><td data-de="Nativer Datensatzserver">Native dataset server</td><td data-de="Katalog, Metadaten und Brick-Pakete über das BorgVR-Protokoll">Catalog, metadata, and brick batches over the BorgVR protocol</td><td data-de="visionOS-, iOS- und macOS-App">visionOS, iOS, and macOS apps</td></tr>
+            <tr><td data-de="WebGPU-Webserver">WebGPU web server</td><td data-de="Browseroberfläche, Datensatzressourcen, Transferfunktionen und Marker über HTTP(S)">Browser UI, dataset resources, transfer functions, and markers over HTTP(S)</td><td data-de="WebGPU-fähige Browser">WebGPU-capable browsers</td></tr>
+            <tr><td data-de="Server-Synchronisation">Server synchronization</td><td data-de="Fehlende oder unvollständige Inhalte aus entfernten Katalogen übernehmen">Copy missing or incomplete content from remote catalogs</td><td data-de="Andere BorgVR-Server">Other BorgVR servers</td></tr>
+          </tbody></table></div>
+        </section>
+
+        <section>
+          <h2 data-de="Server starten">Starting a server</h2>
+          <ol>
+            <li data-de="Wählen Sie im Hauptmenü <strong>Server</strong> und anschließend das Datenverzeichnis. BorgVR scannt <code>.data</code>-, <code>.tf1d</code>- und <code>.marker</code>-Dateien.">Choose <strong>Server</strong> in the main menu and select the data directory. BorgVR scans <code>.data</code>, <code>.tf1d</code>, and <code>.marker</code> files.</li>
+            <li data-de="Prüfen Sie die angezeigten IP-Adressen und den nativen Port. Mit der Kopier-Schaltfläche übernehmen Sie eine Adresse in die Zwischenablage.">Check the displayed IP addresses and native port. The copy button places an address on the clipboard.</li>
+            <li data-de="Aktivieren Sie den WebGPU-Server in den Einstellungen, falls Browserzugriff benötigt wird. Protokoll und Port werden im Serverfenster angezeigt.">Enable the WebGPU server in Settings when browser access is needed. Its protocol and port appear in the server window.</li>
+            <li data-de="Klicken Sie <strong>Server starten</strong>. Während der Server läuft, ist ein Wechsel des Datenverzeichnisses gesperrt.">Click <strong>Start Server</strong>. The data directory cannot be changed while the server is running.</li>
+          </ol>
+          <p data-de="Der Logbereich dokumentiert Katalog-Scans, Verbindungen, Fehler und Synchronisationsfortschritt. <strong>Log löschen</strong> entfernt nur die sichtbare Ausgabe und keine Daten.">The log records catalog scans, connections, errors, and synchronization progress. <strong>Clear Log</strong> clears only the visible output and does not remove data.</p>
+        </section>
+
+        <section>
+          <h2 data-de="WebGPU und TLS">WebGPU and TLS</h2>
+          <p data-de="Für Netzwerkzugriff verwendet der WebGPU-Server standardmäßig HTTPS. Ohne eigenes Zertifikat erzeugt BorgVR beim Start ein temporäres selbstsigniertes Zertifikat. Browser zeigen dafür eine Warnung; nach ausdrücklicher Bestätigung kann die Seite verwendet werden.">For network access, the WebGPU server uses HTTPS by default. Without a custom certificate, BorgVR creates a temporary self-signed certificate at startup. Browsers display a warning; after explicit confirmation, the site can be used.</p>
+          <p data-de="Alternativ importieren Sie eine PKCS#12-Identität als <code>.p12</code> oder <code>.pfx</code>. Das Passwort liegt im macOS-Schlüsselbund. Unverschlüsseltes HTTP bindet aus Sicherheitsgründen nur an <code>localhost</code>.">Alternatively, import a PKCS#12 identity as a <code>.p12</code> or <code>.pfx</code> file. Its password is stored in the macOS Keychain. For safety, unencrypted HTTP binds to <code>localhost</code> only.</p>
+          <div class="callout callout--warm"><strong data-de="Öffentlicher Betrieb">Public deployment</strong><span data-de="Für den öffentlichen Betrieb im Internet empfiehlt sich ein gültiges Zertifikat und ein vorgeschalteter Reverse Proxy. Ein selbstsigniertes Zertifikat ist für kontrollierte Tests im lokalen Netzwerk gedacht.">For deliberate public deployment, use a valid certificate and a reverse proxy. A self-signed certificate is intended for controlled testing on a local network.</span></div>
+        </section>
+
+        <section>
+          <h2 data-de="Datensätze importieren">Importing datasets</h2>
+          <p data-de="Der Konverter führt schrittweise durch Eingabe, Ausgabe, Datensatzbeschreibung und Brick-Parameter. Unterstützt werden QVIS, NRRD/NHDR und DICOM. Das Ergebnis ist eine eigenständige <code>.data</code>-Datei, die direkt in das Serververzeichnis geschrieben werden kann.">The converter guides you through input, output, dataset description, and brick settings. Supported workflows include QVIS, NRRD/NHDR, and DICOM. The result is a standalone <code>.data</code> file that can be written directly to the server directory.</p>
+          <dl class="definition-list">
+            <div><dt data-de="Brick-Größe">Brick size</dt><dd data-de="Größe der räumlichen Blöcke. Sie beeinflusst den Verwaltungsaufwand, das Streaming-Verhalten und die Nutzung des GPU-Atlas.">Size of the spatial blocks. It affects management overhead, streaming, and the GPU atlas.</dd></div>
+            <div><dt data-de="Überlappung">Overlap</dt><dd data-de="Zusätzliche Randvoxel für kontinuierliche Filterung zwischen benachbarten Bricks.">Additional border voxels for continuous filtering between neighboring bricks.</dd></div>
+            <div><dt data-de="Kompression">Compression</dt><dd data-de="Speichert geeignete Bricks LZ4-komprimiert und lässt nicht sinnvoll komprimierbare Bricks unverändert.">Stores suitable bricks using LZ4 and leaves bricks that do not compress efficiently uncompressed.</dd></div>
+            <div><dt data-de="Randbehandlung">Border handling</dt><dd data-de="Bestimmt, wie unvollständige Bricks am Rand eines nicht durch die Brick-Größe teilbaren Datensatzes gefüllt werden.">Determines how incomplete boundary bricks are filled when dataset dimensions are not divisible by the brick size.</dd></div>
+          </dl>
+        </section>
+
+        <section>
+          <h2 data-de="Server miteinander synchronisieren">Server-to-server synchronization</h2>
+          <p data-de="In den Einstellungen können mehrere entfernte BorgVR-Server mit Hostname, Port, Intervall und optionalem Passwort eingetragen werden. Die Server-App vergleicht deren Kataloge regelmäßig mit dem lokalen Verzeichnis.">Settings can contain multiple remote BorgVR servers with hostname, port, interval, and optional password. The server app periodically compares their catalogs with the local directory.</p>
+          <ul>
+            <li data-de="Neue Datensätze, Transferfunktionen und Markerdateien werden übernommen.">New datasets, transfer functions, and marker files are copied.</li>
+            <li data-de="Unvollständige Übertragungen werden fortgesetzt, statt von vorn zu beginnen.">Incomplete datasets resume instead of downloading from the beginning.</li>
+            <li data-de="Wenn mehrere Quellen denselben Datensatz anbieten, kann bei einer stockenden Übertragung auf eine andere Quelle gewechselt werden.">If multiple origins provide the same dataset, synchronization can switch to another source after a stall.</li>
+            <li data-de="Der Status im Serverfenster zeigt aktive Übertragungen sowie, ob alle Inhalte aktuell sind und keine Übertragung läuft.">The server window shows active transfers and an idle, up-to-date state.</li>
+          </ul>
+        </section>
+
+        <section>
+          <h2 data-de="Zugriffsschutz und Betrieb">Access control and operation</h2>
+          <p data-de="Ein Serverpasswort schützt sowohl das native Protokoll als auch den Webzugriff. Clients speichern das Passwort zusammen mit Hostname und Port in ihrer Serverkonfiguration. Prüfen Sie vor dem produktiven Einsatz außerdem die Firewall, die Erreichbarkeit der Adresse und den gewählten Port.">A server password protects both the native protocol and web access. Clients store the password with the hostname and port in their server configuration. Before production use, also verify the firewall, reachable address, and selected port.</p>
+          <p data-de="Automatischer Start eignet sich für einen dauerhaft betriebenen Rechner. Für den Betrieb ohne grafische Oberfläche oder auf anderen Plattformen verwenden Sie den Swift- oder C++-Kommandozeilenserver.">Automatic startup is useful on a dedicated machine. For headless or cross-platform operation, use the Swift or C++ command-line server.</p>
+          <div class="button-row"><a class="btn btn--primary" href="./command-line.html" data-de="Kommandozeilenserver">Command-line servers</a><a class="btn btn--ghost" href="./webgpu.html" data-de="WebGPU-Anleitung">WebGPU guide</a></div>
+        </section>
+      </article>
+    </div>
+  </main>
+  <footer class="footer"><div class="container footer__inner"><span class="footer__brand">© 2026 Jens Krueger</span><div class="footer__right"><a class="footer__link" href="./" data-de="Zur Handbuch-Startseite">Guide home</a><a class="footer__link" href="./support.html">Support</a></div></div></footer>
+  <script>window.BorgVRI18n.applyTranslations({en:{title:"BorgVR Dataset Server for macOS",metaDescription:"How to import, catalog, serve, and synchronize BorgVR datasets with the macOS server application."},de:{title:"BorgVR-Datensatzserver für macOS",metaDescription:"BorgVR-Datensätze mit der macOS-Server-App importieren, katalogisieren, bereitstellen und synchronisieren."}});</script>
+</body>
+</html>
