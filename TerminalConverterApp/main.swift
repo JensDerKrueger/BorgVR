@@ -159,7 +159,7 @@ Mode C — Create a volume file using a specified algorithm
         algorithm         : L = linear
                             F = Float Mandelbulb with automatic Metal acceleration
                             D = Double CPU Mandelbulb
-                            J = Quaternion Julia set
+                            J = Quaternion sine Julia set
                             B = Mandelbox
                             G = Gyroid
                             P = 3D Shepp-Logan phantom

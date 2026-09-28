@@ -9,7 +9,7 @@ enum AnalyticVolumeKind: String, CaseIterable {
 
   var displayName: String {
     switch self {
-      case .quaternionJulia: "Quaternion Julia set"
+      case .quaternionJulia: "Quaternion sine Julia set"
       case .mandelbox: "Mandelbox"
       case .gyroid: "Gyroid"
       case .sheppLogan: "3D Shepp-Logan phantom"
@@ -31,11 +31,16 @@ enum AnalyticVolumeBackend {
 }
 
 private enum QuaternionJuliaParameters {
-  static let coordinateScale: Float = 1.42
-  static let sliceCoordinate: Float = -0.16
-  static let constant = SIMD4<Float>(-0.05, 0.52, 0.63, -0.05)
-  static let maximumIterations = 40
-  static let suppressedEscapeIterations = 4
+  // Shawn Halayka, "Some visually interesting non-standard quaternion
+  // fractal sets", Chaos, Solitons & Fractals 41 (2009), Fig. 3.
+  // https://doi.org/10.1016/j.chaos.2008.10.035
+  // Z' = sin(Z) + C * sin(Z).
+  static let coordinateScale: Float = 1.5
+  static let sliceCoordinate: Float = 0
+  // Published as C_xyzw = (0.3, 0.5, 0.4, 0.2). This implementation stores
+  // the scalar component last, hence the reordered (y, z, w, x) components.
+  static let constant = SIMD4<Float>(0.5, 0.4, 0.2, 0.3)
+  static let maximumIterations = 8
   static let escapeRadiusSquared: Float = 16
 }
 
@@ -112,10 +117,34 @@ final class GPUAnalyticVolumeGenerator {
         uint zCoordinate;
       };
 
+      inline float4 quaternionMultiply(float4 left, float4 right) {
+        return float4(
+          left.w * right.xyz +
+            right.w * left.xyz +
+            cross(left.xyz, right.xyz),
+          left.w * right.w - dot(left.xyz, right.xyz)
+        );
+      }
+
+      inline float4 quaternionSine(float4 value) {
+        const float vectorLength = length(value.xyz);
+        const float vectorScale = vectorLength > 1e-6f
+          ? cos(value.w) * sinh(vectorLength) / vectorLength
+          : cos(value.w);
+        return float4(
+          value.xyz * vectorScale,
+          sin(value.w) * cosh(vectorLength)
+        );
+      }
+
       inline float quaternionJulia(float3 normalizedPoint) {
+        const float3 point = normalizedPoint *
+          \(QuaternionJuliaParameters.coordinateScale)f;
         float4 value = float4(
-          normalizedPoint * \(QuaternionJuliaParameters.coordinateScale)f,
-          \(QuaternionJuliaParameters.sliceCoordinate)f
+          point.y,
+          point.z,
+          \(QuaternionJuliaParameters.sliceCoordinate)f,
+          point.x
         );
         constexpr float4 juliaConstant = float4(
           \(QuaternionJuliaParameters.constant.x)f,
@@ -126,19 +155,13 @@ final class GPUAnalyticVolumeGenerator {
         constexpr uint maximumIterations = \(QuaternionJuliaParameters.maximumIterations)u;
         uint iteration = 0u;
         for (; iteration < maximumIterations; ++iteration) {
-          const float3 vectorPart = 2.0f * value.w * value.xyz;
-          const float scalarPart = value.w * value.w - dot(value.xyz, value.xyz);
-          value = float4(vectorPart, scalarPart) + juliaConstant;
+          const float4 sineValue = quaternionSine(value);
+          value = sineValue + quaternionMultiply(juliaConstant, sineValue);
           if (dot(value, value) > \(QuaternionJuliaParameters.escapeRadiusSquared)f) {
             break;
           }
         }
-        constexpr uint suppressedIterations =
-          \(QuaternionJuliaParameters.suppressedEscapeIterations)u;
-        const uint detailIteration =
-          iteration > suppressedIterations ? iteration - suppressedIterations : 0u;
-        return float(detailIteration) /
-          float(maximumIterations - suppressedIterations);
+        return float(iteration) / float(maximumIterations);
       }
 
       inline float mandelbox(float3 normalizedPoint) {
@@ -479,22 +502,50 @@ private enum AnalyticVolumeCPU {
 
   private static func quaternionJulia(_ point: SIMD3<Float>) -> Float {
     let parameters = QuaternionJuliaParameters.self
+    let scaledPoint = point * parameters.coordinateScale
     var value = SIMD4<Float>(
-      point * parameters.coordinateScale,
-      parameters.sliceCoordinate
+      scaledPoint.y,
+      scaledPoint.z,
+      parameters.sliceCoordinate,
+      scaledPoint.x
     )
     var iteration = 0
     while iteration < parameters.maximumIterations {
-      let vector = SIMD3<Float>(value.x, value.y, value.z)
-      let vectorPart = 2 * value.w * vector
-      let scalarPart = value.w * value.w - dot(vector, vector)
-      value = SIMD4<Float>(vectorPart, scalarPart) + parameters.constant
+      let sineValue = quaternionSine(value)
+      value = sineValue + quaternionMultiply(parameters.constant, sineValue)
       if dot(value, value) > parameters.escapeRadiusSquared { break }
       iteration += 1
     }
-    let detailIteration = max(0, iteration - parameters.suppressedEscapeIterations)
-    return Float(detailIteration) /
-      Float(parameters.maximumIterations - parameters.suppressedEscapeIterations)
+    return Float(iteration) / Float(parameters.maximumIterations)
+  }
+
+  private static func quaternionMultiply(_ left: SIMD4<Float>,
+                                         _ right: SIMD4<Float>) -> SIMD4<Float> {
+    let leftVector = SIMD3<Float>(left.x, left.y, left.z)
+    let rightVector = SIMD3<Float>(right.x, right.y, right.z)
+    let vector = left.w * rightVector +
+      right.w * leftVector +
+      SIMD3<Float>(
+        leftVector.y * rightVector.z - leftVector.z * rightVector.y,
+        leftVector.z * rightVector.x - leftVector.x * rightVector.z,
+        leftVector.x * rightVector.y - leftVector.y * rightVector.x
+      )
+    return SIMD4<Float>(
+      vector,
+      left.w * right.w - dot(leftVector, rightVector)
+    )
+  }
+
+  private static func quaternionSine(_ value: SIMD4<Float>) -> SIMD4<Float> {
+    let vector = SIMD3<Float>(value.x, value.y, value.z)
+    let vectorLength = sqrt(dot(vector, vector))
+    let vectorScale = vectorLength > 1e-6
+      ? cos(value.w) * sinh(vectorLength) / vectorLength
+      : cos(value.w)
+    return SIMD4<Float>(
+      vector * vectorScale,
+      sin(value.w) * cosh(vectorLength)
+    )
   }
 
   private static func mandelbox(_ normalizedPoint: SIMD3<Float>) -> Float {
