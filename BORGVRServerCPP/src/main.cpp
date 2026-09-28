@@ -31,7 +31,7 @@
 #endif
 
 #ifndef BORGVR_SERVER_VERSION
-#define BORGVR_SERVER_VERSION "2.2"
+#define BORGVR_SERVER_VERSION "2.5"
 #endif
 
 static std::string basenameOf(const std::string& path) {
