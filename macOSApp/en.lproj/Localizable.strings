@@ -76,6 +76,7 @@
 "modeselection_server" = "Dataset Server";
 "modeselection_settings" = "Settings";
 "modeselection_about" = "About";
+"modeselection_drop_script" = "Drop GSC script to run";
 "modeselection_start_background_server" = "Start Background Server";
 "modeselection_stop_background_server" = "Stop Background Server";
 "modeselection_server_running" = "Server running";
@@ -732,3 +733,6 @@
 "Diffuse light" = "Diffuse light";
 "Specular light" = "Specular light";
 "Close lighting editor" = "Close lighting editor";
+"Script Log" = "Script Log";
+"Clear Script Log" = "Clear Script Log";
+"No script output yet." = "No script output yet.";

@@ -6,9 +6,44 @@ import simd
 
 @MainActor
 final class BorgVRScriptRunner: ObservableObject {
+  private enum ScriptInputKind: Equatable {
+    case text
+    case file
+    case directory
+  }
+
+  private struct ScriptInputRequest: Equatable {
+    let kind: ScriptInputKind
+    let prompt: String
+  }
+
+  private enum ScriptImportKind: Equatable {
+    case file
+    case dicomDirectory
+  }
+
+  private struct ScriptImportRequest: Equatable {
+    let id: UUID
+    let kind: ScriptImportKind
+    let source: String
+    let destination: String
+    let datasetDescription: String
+
+    static func == (lhs: ScriptImportRequest, rhs: ScriptImportRequest) -> Bool {
+      lhs.kind == rhs.kind &&
+      lhs.source == rhs.source &&
+      lhs.destination == rhs.destination &&
+      lhs.datasetDescription == rhs.datasetDescription
+    }
+  }
+
   @Published private(set) var isRunning = false
   @Published private(set) var statusText = String(localized: "No script active")
   @Published private(set) var scriptURL: URL?
+  @Published private(set) var scriptLogText = ""
+  @Published private(set) var scriptProgressText = ""
+  @Published private(set) var scriptProgressValue: Double?
+  @Published private(set) var scriptLogWindowRequest = 0
 
   private let interpreter = CommandInterpreter()
   private var executionTask: Task<Void, Never>?
@@ -35,6 +70,15 @@ final class BorgVRScriptRunner: ObservableObject {
   private var pendingWaitLoadedRequiredEmptyReadbacks: UInt64 = 3
   private var pendingWaitLoadedFrameTarget: UInt64?
   private var pendingWaitLoadedDatasetKey: String?
+  private var pendingScriptInput: ScriptInputRequest?
+  private var pendingScriptInputValue: String?
+  private var scriptInputURLs: [String: URL] = [:]
+  private var pendingScriptImport: ScriptImportRequest?
+  private var pendingScriptImportResult: CommandResultCode?
+  private var importBrickSizeOverride: Int?
+  private var importOverlapOverride: Int?
+  private var importBorderModeOverride: ExtensionStrategy?
+  private var initialRenderDisplaySyncEnabled: Bool?
 
   deinit {
     executionTask?.cancel()
@@ -78,18 +122,33 @@ final class BorgVRScriptRunner: ObservableObject {
 
   func runScript(at url: URL) {
     stopScript()
+    scriptURL = url
+    scriptLogText = ""
+    scriptProgressText = ""
+    scriptProgressValue = nil
+    scriptLogWindowRequest &+= 1
     outputSubdirectory = ""
+    scriptInputURLs.removeAll()
+    importBrickSizeOverride = nil
+    importOverlapOverride = nil
+    importBorderModeOverride = nil
     logFileURL = nil
     storedAppModel?.stopAccessingDataDirectory(logFileAccessURL)
     logFileAccessURL = nil
 
+    let hasSecurityScope = url.startAccessingSecurityScopedResource()
+    defer {
+      if hasSecurityScope {
+        url.stopAccessingSecurityScopedResource()
+      }
+    }
     let result = interpreter.loadFromFile(url.path)
     guard result == .success else {
       logError("Script could not be loaded: \(result)")
       return
     }
 
-    scriptURL = url
+    initialRenderDisplaySyncEnabled = appModel?.renderDisplaySyncEnabled
     isRunning = true
     statusText = String(format: String(localized: "Script running: %@"), url.lastPathComponent)
     logInfo("Script started: \(url.lastPathComponent)")
@@ -111,9 +170,17 @@ final class BorgVRScriptRunner: ObservableObject {
     pendingWaitLoadedStartReadback = nil
     pendingWaitLoadedFrameTarget = nil
     pendingWaitLoadedDatasetKey = nil
+    pendingScriptInput = nil
+    pendingScriptInputValue = nil
+    scriptInputURLs.removeAll()
+    pendingScriptImport = nil
+    pendingScriptImportResult = nil
+    scriptProgressText = ""
+    scriptProgressValue = nil
     if isRunning {
       logInfo("Script stopped")
     }
+    restoreRenderDisplaySync()
     isRunning = false
     statusText = String(localized: "No script active")
   }
@@ -128,12 +195,14 @@ final class BorgVRScriptRunner: ObservableObject {
           try? await Task.sleep(nanoseconds: 16_000_000)
         case .finished:
           logInfo("Script finished")
+          restoreRenderDisplaySync()
           isRunning = false
           statusText = String(localized: "No script active")
           return
         default:
           let lineText = interpreter.lastErrorLine.map { " in Zeile \($0)" } ?? ""
           logError("Script error\(lineText): \(result)")
+          restoreRenderDisplaySync()
           isRunning = false
           statusText = String(localized: "Script error")
           return
@@ -169,6 +238,54 @@ final class BorgVRScriptRunner: ObservableObject {
 
     register("setdir", [.string]) { [weak self] args in
       self?.setOutputDirectory(args.string(0)) ?? .callbackError
+    }
+
+    registerValue("input", [.restString]) { [weak self] args in
+      self?.requestScriptInput(.text, prompt: args.restString) ?? .status(.callbackError)
+    }
+
+    registerValue("fileinput", [.restString]) { [weak self] args in
+      self?.requestScriptInput(.file, prompt: args.restString) ?? .status(.callbackError)
+    }
+
+    registerValue("dirinput", [.restString]) { [weak self] args in
+      self?.requestScriptInput(.directory, prompt: args.restString) ?? .status(.callbackError)
+    }
+
+    register("importfile", [.string, .string, .string]) { [weak self] args in
+      self?.importDataset(
+        kind: .file,
+        source: args.string(0),
+        destination: args.string(1),
+        datasetDescription: args.string(2)
+      ) ?? .callbackError
+    }
+
+    register("importdirectory", [.string, .string, .string]) { [weak self] args in
+      self?.importDataset(
+        kind: .dicomDirectory,
+        source: args.string(0),
+        destination: args.string(1),
+        datasetDescription: args.string(2)
+      ) ?? .callbackError
+    }
+
+    register("setimportbricksize", [.int]) { [weak self] args in
+      self?.setImportBrickSize(args.int(0)) ?? .callbackError
+    }
+    register("setimportbrickssize", [.int]) { [weak self] args in
+      self?.setImportBrickSize(args.int(0)) ?? .callbackError
+    }
+
+    register("setimportoverlap", [.int]) { [weak self] args in
+      self?.setImportOverlap(args.int(0)) ?? .callbackError
+    }
+
+    register("setbordermode", [.int]) { [weak self] args in
+      self?.setImportBorderMode(args.int(0)) ?? .callbackError
+    }
+    register("setbaordermode", [.int]) { [weak self] args in
+      self?.setImportBorderMode(args.int(0)) ?? .callbackError
     }
 
     register("screenshot", []) { [weak self] _ in
@@ -393,6 +510,315 @@ final class BorgVRScriptRunner: ObservableObject {
     _ callback: @escaping CommandInterpreter.CommandCallback
   ) {
     interpreter.registerCommand(name, signature, callback)
+  }
+
+  private func registerValue(
+    _ name: String,
+    _ signature: [ArgType],
+    _ callback: @escaping CommandInterpreter.ValueCommandCallback
+  ) {
+    interpreter.registerValueCommand(name, signature, callback)
+  }
+
+  private func requestScriptInput(
+    _ kind: ScriptInputKind,
+    prompt: String
+  ) -> CommandValueResult {
+    let request = ScriptInputRequest(kind: kind, prompt: prompt)
+    if pendingScriptInput == request {
+      guard let value = pendingScriptInputValue else {
+        return .status(.waitingNoop)
+      }
+      pendingScriptInput = nil
+      pendingScriptInputValue = nil
+      return .value(value)
+    }
+
+    guard pendingScriptInput == nil else {
+      return .status(.callbackError)
+    }
+    pendingScriptInput = request
+    pendingScriptInputValue = nil
+
+    switch kind {
+      case .text:
+        presentTextInput(for: request)
+      case .file:
+        presentFileInput(for: request, choosesDirectories: false)
+      case .directory:
+        presentFileInput(for: request, choosesDirectories: true)
+    }
+    return .status(.waitingNoop)
+  }
+
+  private func presentTextInput(for request: ScriptInputRequest) {
+    let alert = NSAlert()
+    alert.messageText = request.prompt
+    alert.addButton(withTitle: String(localized: "OK"))
+    alert.addButton(withTitle: String(localized: "Cancel"))
+
+    let textField = NSTextField(frame: NSRect(x: 0, y: 0, width: 360, height: 24))
+    alert.accessoryView = textField
+    alert.window.initialFirstResponder = textField
+
+    let completion: (NSApplication.ModalResponse) -> Void = { [weak self] response in
+      Task { @MainActor in
+        if response == .alertFirstButtonReturn {
+          self?.completeScriptInput(request, value: textField.stringValue)
+        } else {
+          self?.cancelScriptInput(request)
+        }
+      }
+    }
+
+    if let window = scriptDialogWindow {
+      alert.beginSheetModal(for: window, completionHandler: completion)
+    } else {
+      completion(alert.runModal())
+    }
+  }
+
+  private func presentFileInput(
+    for request: ScriptInputRequest,
+    choosesDirectories: Bool
+  ) {
+    let panel = NSOpenPanel()
+    panel.title = request.prompt
+    panel.message = request.prompt
+    panel.allowsMultipleSelection = false
+    panel.canChooseDirectories = choosesDirectories
+    panel.canChooseFiles = !choosesDirectories
+    panel.canCreateDirectories = choosesDirectories
+
+    let completion: (NSApplication.ModalResponse) -> Void = { [weak self] response in
+      Task { @MainActor in
+        if response == .OK, let url = panel.url {
+          self?.rememberScriptInputURL(url)
+          self?.completeScriptInput(request, value: url.path)
+        } else {
+          self?.cancelScriptInput(request)
+        }
+      }
+    }
+
+    if let window = scriptDialogWindow {
+      panel.beginSheetModal(for: window, completionHandler: completion)
+    } else {
+      panel.begin(completionHandler: completion)
+    }
+  }
+
+  private var scriptDialogWindow: NSWindow? {
+    NSApp.keyWindow ?? NSApp.mainWindow ?? NSApp.windows.first { $0.isVisible }
+  }
+
+  private func completeScriptInput(
+    _ request: ScriptInputRequest,
+    value: String
+  ) {
+    guard isRunning, pendingScriptInput == request else { return }
+    pendingScriptInputValue = value
+  }
+
+  private func cancelScriptInput(_ request: ScriptInputRequest) {
+    guard pendingScriptInput == request else { return }
+    pendingScriptInput = nil
+    pendingScriptInputValue = nil
+    logInfo("Script input cancelled")
+    stopScript()
+  }
+
+  private func rememberScriptInputURL(_ url: URL) {
+    scriptInputURLs[url.standardizedFileURL.path] = url
+  }
+
+  private func setImportBrickSize(_ value: Int) -> CommandResultCode {
+    guard value >= 1 else { return .invalidArguments }
+    importBrickSizeOverride = value
+    return logInfo("Script import brick size: \(value)")
+  }
+
+  private func setImportOverlap(_ value: Int) -> CommandResultCode {
+    guard value >= 1 else { return .invalidArguments }
+    importOverlapOverride = value
+    return logInfo("Script import overlap: \(value)")
+  }
+
+  private func setImportBorderMode(_ value: Int) -> CommandResultCode {
+    switch value {
+      case 0:
+        importBorderModeOverride = .fillZeroes
+      case 1:
+        importBorderModeOverride = .clamp
+      case 2:
+        importBorderModeOverride = .repeatValue
+      default:
+        return .invalidArguments
+    }
+    return logInfo("Script import border mode: \(value)")
+  }
+
+  private func importDataset(
+    kind: ScriptImportKind,
+    source: String,
+    destination: String,
+    datasetDescription: String
+  ) -> CommandResultCode {
+    if let pendingScriptImport,
+       pendingScriptImport.kind == kind,
+       pendingScriptImport.source == source,
+       pendingScriptImport.destination == destination,
+       pendingScriptImport.datasetDescription == datasetDescription {
+      guard let result = pendingScriptImportResult else {
+        return .waitingNoop
+      }
+      self.pendingScriptImport = nil
+      pendingScriptImportResult = nil
+      return result
+    }
+
+    guard pendingScriptImport == nil,
+          let storedAppModel,
+          let logger = appModel?.logger,
+          !source.isEmpty,
+          !destination.isEmpty else {
+      return .callbackError
+    }
+
+    let settings = ScriptDatasetConverter.Settings(
+      brickSize: importBrickSizeOverride ?? storedAppModel.brickSize,
+      overlap: importOverlapOverride ?? storedAppModel.brickOverlap,
+      useCompression: storedAppModel.enableCompression,
+      extensionStrategy: importBorderModeOverride ?? Self.extensionStrategy(
+        for: storedAppModel.borderModeString
+      )
+    )
+    guard settings.isValid else {
+      logError(
+        "Invalid import settings: brick size \(settings.brickSize), overlap \(settings.overlap)"
+      )
+      return .invalidArguments
+    }
+
+    let sourceURL = scriptPathURL(source, isDirectory: kind == .dicomDirectory)
+    let destinationURL = scriptOutputURL(destination, defaultExtension: "data")
+    let request = ScriptImportRequest(
+      id: UUID(),
+      kind: kind,
+      source: source,
+      destination: destination,
+      datasetDescription: datasetDescription
+    )
+    pendingScriptImport = request
+    pendingScriptImportResult = nil
+
+    let dataDirectoryAccessURL = storedAppModel.startAccessingDataDirectory()
+    let sourceAccess = sourceURL.startAccessingSecurityScopedResource()
+    let destinationDirectory = destinationURL.deletingLastPathComponent()
+    let destinationAccess = destinationDirectory.startAccessingSecurityScopedResource()
+    let scriptLogger = ScriptExecutionLogger(
+      destination: logger,
+      onMessage: { [weak self] level, message in
+        Task { @MainActor in
+          self?.appendScriptLog(level: level, message: message)
+        }
+      },
+      onProgress: { [weak self] message, progress in
+        Task { @MainActor in
+          self?.scriptProgressText = message
+          self?.scriptProgressValue = progress
+        }
+      }
+    )
+    let importContext = ScriptDatasetConverter.Context(settings: settings, logger: scriptLogger)
+    logInfo("Import started: \(sourceURL.path) -> \(destinationURL.path)")
+
+    DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+      let result: Result<Void, Error>
+      do {
+        switch kind {
+          case .file:
+            try ScriptDatasetConverter.importFile(
+              from: sourceURL,
+              to: destinationURL,
+              datasetDescription: datasetDescription,
+              settings: importContext.settings,
+              logger: importContext.logger
+            )
+          case .dicomDirectory:
+            try ScriptDatasetConverter.importDICOMDirectory(
+              from: sourceURL,
+              to: destinationURL,
+              datasetDescription: datasetDescription,
+              settings: importContext.settings,
+              logger: importContext.logger
+            )
+        }
+        result = .success(())
+      } catch {
+        result = .failure(error)
+      }
+
+      if sourceAccess {
+        sourceURL.stopAccessingSecurityScopedResource()
+      }
+      if destinationAccess {
+        destinationDirectory.stopAccessingSecurityScopedResource()
+      }
+
+      Task { @MainActor in
+        self?.storedAppModel?.stopAccessingDataDirectory(dataDirectoryAccessURL)
+        self?.completeScriptImport(requestID: request.id, destinationURL: destinationURL, result: result)
+      }
+    }
+
+    return .waitingNoop
+  }
+
+  private func completeScriptImport(
+    requestID: UUID,
+    destinationURL: URL,
+    result: Result<Void, Error>
+  ) {
+    guard pendingScriptImport?.id == requestID else { return }
+    switch result {
+      case .success:
+        scriptProgressText = ""
+        scriptProgressValue = nil
+        logInfo("Import completed: \(destinationURL.path)")
+        pendingScriptImportResult = .success
+      case let .failure(error):
+        scriptProgressText = ""
+        scriptProgressValue = nil
+        logError("Import failed: \(error.localizedDescription)")
+        pendingScriptImportResult = .callbackError
+    }
+  }
+
+  private func scriptPathURL(_ path: String, isDirectory: Bool) -> URL {
+    if NSString(string: path).isAbsolutePath {
+      let standardizedPath = URL(fileURLWithPath: path, isDirectory: isDirectory)
+        .standardizedFileURL.path
+      return scriptInputURLs[standardizedPath]
+        ?? URL(fileURLWithPath: path, isDirectory: isDirectory)
+    }
+    return outputDirectoryURL().appendingPathComponent(path, isDirectory: isDirectory)
+  }
+
+  private func scriptOutputURL(_ path: String, defaultExtension: String) -> URL {
+    var url = scriptPathURL(path, isDirectory: false)
+    if url.pathExtension.isEmpty {
+      url.appendPathExtension(defaultExtension)
+    }
+    return url
+  }
+
+  private static func extensionStrategy(for value: String) -> ExtensionStrategy {
+    switch value {
+      case "border": return .clamp
+      case "repeat": return .repeatValue
+      default: return .fillZeroes
+    }
   }
 
   private func setOutputDirectory(_ path: String) -> CommandResultCode {
@@ -950,6 +1376,12 @@ final class BorgVRScriptRunner: ObservableObject {
     return logInfo(enabled ? "Display Sync eingeschaltet" : "Display Sync ausgeschaltet")
   }
 
+  private func restoreRenderDisplaySync() {
+    guard let initialRenderDisplaySyncEnabled else { return }
+    self.initialRenderDisplaySyncEnabled = nil
+    appModel?.setRenderDisplaySyncEnabled(initialRenderDisplaySyncEnabled)
+  }
+
   private func logGPUInfo(includeFamilies: Bool) -> CommandResultCode {
     guard let device = MTLCreateSystemDefaultDevice() else {
       logError("No Metal device available.")
@@ -1138,13 +1570,34 @@ final class BorgVRScriptRunner: ObservableObject {
   @discardableResult
   private func logInfo(_ message: String) -> CommandResultCode {
     appModel?.logger.info(message)
+    appendScriptLog(level: .info, message: message)
     appendToLogFile(message)
     return .success
   }
 
   private func logError(_ message: String) {
     appModel?.logger.error(message)
+    appendScriptLog(level: .error, message: message)
     appendToLogFile("[ERROR] \(message)")
+  }
+
+  private func appendScriptLog(level: LogLevel, message: String) {
+    let levelName: String
+    switch level {
+      case .dev: levelName = "DEV"
+      case .progress: levelName = "PROGRESS"
+      case .info: levelName = "INFO"
+      case .warning: levelName = "WARNING"
+      case .error: levelName = "ERROR"
+    }
+    if !scriptLogText.isEmpty {
+      scriptLogText.append("\n")
+    }
+    scriptLogText.append("[\(levelName)] \(message)")
+  }
+
+  func clearScriptExecutionLog() {
+    scriptLogText = ""
   }
 
   private func appendToLogFile(_ message: String) {
@@ -1164,6 +1617,246 @@ final class BorgVRScriptRunner: ObservableObject {
 
   private func clamp(_ value: Double, _ lowerBound: Double = 0, _ upperBound: Double = 1) -> Double {
     min(upperBound, max(lowerBound, value))
+  }
+}
+
+private final class ScriptExecutionLogger: LoggerBase, @unchecked Sendable {
+  private let destination: LoggerBase
+  private let onMessage: @Sendable (LogLevel, String) -> Void
+  private let onProgress: @Sendable (String, Double) -> Void
+  private let lock = NSLock()
+  private var minimumLogLevel: LogLevel = .dev
+
+  init(
+    destination: LoggerBase,
+    onMessage: @escaping @Sendable (LogLevel, String) -> Void,
+    onProgress: @escaping @Sendable (String, Double) -> Void
+  ) {
+    self.destination = destination
+    self.onMessage = onMessage
+    self.onProgress = onProgress
+  }
+
+  func dev(_ message: String) {
+    destination.dev(message)
+    emit(.dev, message)
+  }
+
+  func info(_ message: String) {
+    destination.info(message)
+    emit(.info, message)
+  }
+
+  func warning(_ message: String) {
+    destination.warning(message)
+    emit(.warning, message)
+  }
+
+  func error(_ message: String) {
+    destination.error(message)
+    emit(.error, message)
+  }
+
+  func progress(_ message: String, _ progress: Double) {
+    destination.progress(message, progress)
+    guard shouldEmit(.progress) else { return }
+    onProgress(message, progress)
+  }
+
+  func setMinimumLogLevel(_ level: LogLevel) {
+    lock.lock()
+    minimumLogLevel = level
+    lock.unlock()
+    destination.setMinimumLogLevel(level)
+  }
+
+  private func emit(_ level: LogLevel, _ message: String) {
+    guard shouldEmit(level) else { return }
+    onMessage(level, message)
+  }
+
+  private func shouldEmit(_ level: LogLevel) -> Bool {
+    lock.lock()
+    defer { lock.unlock() }
+    return minimumLogLevel <= level
+  }
+}
+
+private enum ScriptDatasetConverter {
+  struct Settings: @unchecked Sendable {
+    let brickSize: Int
+    let overlap: Int
+    let useCompression: Bool
+    let extensionStrategy: ExtensionStrategy
+
+    var isValid: Bool {
+      brickSize >= 1 && overlap >= 1 && brickSize - 2 * overlap >= 1
+    }
+  }
+
+  final class Context: @unchecked Sendable {
+    let settings: Settings
+    let logger: LoggerBase
+
+    init(settings: Settings, logger: LoggerBase) {
+      self.settings = settings
+      self.logger = logger
+    }
+  }
+
+  enum ImportError: LocalizedError {
+    case unsupportedFileType(String)
+    case noDICOMFiles
+
+    var errorDescription: String? {
+      switch self {
+        case let .unsupportedFileType(pathExtension):
+          return "Unsupported import file type: \(pathExtension)"
+        case .noDICOMFiles:
+          return "The directory does not contain any DICOM files."
+      }
+    }
+  }
+
+  static func importFile(
+    from sourceURL: URL,
+    to destinationURL: URL,
+    datasetDescription: String,
+    settings: Settings,
+    logger: LoggerBase
+  ) throws {
+    try FileManager.default.createDirectory(
+      at: destinationURL.deletingLastPathComponent(),
+      withIntermediateDirectories: true
+    )
+
+    let sourceName = sourceURL.deletingPathExtension().lastPathComponent
+    let description = datasetDescription.isEmpty ? "Imported from \(sourceName)" : datasetDescription
+    switch sourceURL.pathExtension.lowercased() {
+      case "dat":
+        let parser = try QVISParser(filename: sourceURL.path)
+        try convertRawVolume(
+          inputFilename: parser.absoluteFilename,
+          offset: 0,
+          size: parser.size,
+          bytesPerComponent: parser.bytesPerComponent,
+          componentCount: parser.components,
+          aspect: parser.sliceThickness,
+          destinationURL: destinationURL,
+          datasetDescription: description,
+          metaDescription: "Imported from QVIS volume \(sourceName)",
+          settings: settings,
+          logger: logger
+        )
+
+      case "nrrd", "nhdr":
+        let parser = try NRRDParser(filename: sourceURL.path)
+        defer {
+          if parser.dataIsTempCopy {
+            try? FileManager.default.removeItem(atPath: parser.absoluteFilename)
+          }
+        }
+        try convertRawVolume(
+          inputFilename: parser.absoluteFilename,
+          offset: parser.offset,
+          size: parser.size,
+          bytesPerComponent: parser.bytesPerComponent,
+          componentCount: parser.components,
+          aspect: parser.sliceThickness,
+          destinationURL: destinationURL,
+          datasetDescription: description,
+          metaDescription: "Imported from NRRD volume \(sourceName)",
+          settings: settings,
+          logger: logger
+        )
+
+      default:
+        throw ImportError.unsupportedFileType(sourceURL.pathExtension)
+    }
+  }
+
+  static func importDICOMDirectory(
+    from sourceURL: URL,
+    to destinationURL: URL,
+    datasetDescription: String,
+    settings: Settings,
+    logger: LoggerBase
+  ) throws {
+    let files = try FileManager.default.contentsOfDirectory(
+      at: sourceURL,
+      includingPropertiesForKeys: [.isRegularFileKey],
+      options: [.skipsHiddenFiles]
+    ).filter { url in
+      (try? url.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true
+    }
+    guard !files.isEmpty else { throw ImportError.noDICOMFiles }
+
+    logger.info("Scanning DICOM directory: \(sourceURL.path)")
+    let volume = try DicomParser.decodeVolume(from: files)
+    let temporaryURL = FileManager.default.temporaryDirectory
+      .appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: temporaryURL) }
+    try volume.voxelData.withUnsafeBytes { bytes in
+      try Data(bytes).write(to: temporaryURL)
+    }
+
+    try FileManager.default.createDirectory(
+      at: destinationURL.deletingLastPathComponent(),
+      withIntermediateDirectories: true
+    )
+    let directoryName = sourceURL.lastPathComponent
+    try convertRawVolume(
+      inputFilename: temporaryURL.path,
+      offset: 0,
+      size: Vec3<Int>(x: volume.width, y: volume.height, z: volume.depth),
+      bytesPerComponent: volume.bytesPerVoxel,
+      componentCount: 1,
+      aspect: Vec3<Float>(x: volume.scale.x, y: volume.scale.y, z: volume.scale.z),
+      destinationURL: destinationURL,
+      datasetDescription: datasetDescription.isEmpty
+        ? "Imported from DICOM directory \(directoryName)"
+        : datasetDescription,
+      metaDescription: "Imported from DICOM directory \(directoryName)",
+      settings: settings,
+      logger: logger
+    )
+  }
+
+  private static func convertRawVolume(
+    inputFilename: String,
+    offset: Int,
+    size: Vec3<Int>,
+    bytesPerComponent: Int,
+    componentCount: Int,
+    aspect: Vec3<Float>,
+    destinationURL: URL,
+    datasetDescription: String,
+    metaDescription: String,
+    settings: Settings,
+    logger: LoggerBase
+  ) throws {
+    let volume = try RawFileAccessor(
+      filename: inputFilename,
+      size: size,
+      bytesPerComponent: bytesPerComponent,
+      componentCount: componentCount,
+      aspect: aspect,
+      offset: offset,
+      readOnly: true
+    )
+    let reorganizer = BrickedVolumeReorganizer(
+      inputVolume: volume,
+      brickSize: settings.brickSize,
+      overlap: settings.overlap,
+      extensionStrategy: settings.extensionStrategy
+    )
+    try reorganizer.reorganize(
+      to: destinationURL.path,
+      datasetDescription: datasetDescription,
+      metaDescription: metaDescription,
+      useCompressor: settings.useCompression,
+      logger: logger
+    )
   }
 }
 

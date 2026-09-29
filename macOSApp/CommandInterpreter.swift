@@ -61,13 +61,24 @@ enum CommandArg {
     case strings([String])
 }
 
+enum CommandValueResult {
+    case value(String)
+    case status(CommandResultCode)
+}
+
 final class CommandInterpreter {
     typealias CommandCallback = ([CommandArg]) -> CommandResultCode
+    typealias ValueCommandCallback = ([CommandArg]) -> CommandValueResult
     typealias UnknownCommandCallback = (_ command: String, _ args: [String]) -> CommandResultCode
 
     private struct CommandOverload {
         let signature: [ArgType]
         let callback: CommandCallback?
+    }
+
+    private struct ValueCommandOverload {
+        let signature: [ArgType]
+        let callback: ValueCommandCallback
     }
 
     private enum InstructionKind {
@@ -99,6 +110,7 @@ final class CommandInterpreter {
     }
 
     private var commandMap: [String: [CommandOverload]] = [:]
+    private var valueCommandMap: [String: [ValueCommandOverload]] = [:]
     private var unknownCommandHandler: UnknownCommandCallback?
 
     private var instructions: [Instruction] = []
@@ -120,6 +132,15 @@ final class CommandInterpreter {
                          _ callback: CommandCallback? = nil) -> CommandResultCode {
         let overload = CommandOverload(signature: signature, callback: callback)
         commandMap[commandName, default: []].append(overload)
+        return .success
+    }
+
+    @discardableResult
+    func registerValueCommand(_ commandName: String,
+                              _ signature: [ArgType],
+                              _ callback: @escaping ValueCommandCallback) -> CommandResultCode {
+        let overload = ValueCommandOverload(signature: signature, callback: callback)
+        valueCommandMap[commandName, default: []].append(overload)
         return .success
     }
 
@@ -370,7 +391,22 @@ final class CommandInterpreter {
                 let name = args[0]
                 let rhs = Array(args.dropFirst())
 
-                if rhs.count == 1 {
+                if let valueCommand = rhs.first,
+                   valueCommandMap[valueCommand] != nil {
+                    switch executeValueCommand(valueCommand, Array(rhs.dropFirst())) {
+                    case let .value(value):
+                        setVariable(name, value)
+                    case let .status(result):
+                        guard result != .success else {
+                            lastErrorLine = instruction.lineNumber
+                            return .callbackError
+                        }
+                        if result != .waitingNoop {
+                            lastErrorLine = instruction.lineNumber
+                        }
+                        return result
+                    }
+                } else if rhs.count == 1 {
                     setVariable(name, rhs[0])
                 } else {
                     var value: Int64 = 0
@@ -458,6 +494,24 @@ final class CommandInterpreter {
         }
 
         return .invalidArguments
+    }
+
+    private func executeValueCommand(
+        _ command: String,
+        _ args: [String]
+    ) -> CommandValueResult {
+        guard let overloads = valueCommandMap[command] else {
+            return .status(.unknownCommand)
+        }
+
+        for overload in overloads {
+            guard let parsed = parseArgs(args, signature: overload.signature) else {
+                continue
+            }
+            return overload.callback(parsed)
+        }
+
+        return .status(.invalidArguments)
     }
 
     private func parseArgs(_ args: [String], signature: [ArgType]) -> [CommandArg]? {

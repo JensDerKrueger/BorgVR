@@ -113,6 +113,11 @@ final class MacVolumeRenderer: NSObject, MTKViewDelegate {
       case .failed(let key, _):
         appModel.markRenderedDatasetFailed(key: key)
     }
+    if !appModel.renderDisplaySyncEnabled {
+      DispatchQueue.main.async { [weak view] in
+        view?.draw()
+      }
+    }
   }
 
   func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {
@@ -214,6 +219,11 @@ final class MacVolumeRenderer: NSObject, MTKViewDelegate {
     guard let view else { return }
     view.preferredFramesPerSecond = enabled ? 60 : 0
     (view.layer as? CAMetalLayer)?.displaySyncEnabled = enabled
+    if !enabled {
+      DispatchQueue.main.async { [weak view] in
+        view?.draw()
+      }
+    }
   }
 
   private func drawNextFrameIfDisplaySyncIsDisabled() {

@@ -195,6 +195,13 @@ struct macOSApp: App {
     }
     .defaultSize(width: 820, height: 360)
 
+    Window("Script Log", id: "ScriptLogView") {
+      ScriptLogView()
+        .environmentObject(scriptRunner)
+    }
+    .defaultSize(width: 760, height: 480)
+    .restorationBehavior(.disabled)
+
     WindowGroup("Markers", id: DockablePanelID.markerEditor.windowID) {
       DetachedPanelContent(panel: .markerEditor)
         .environmentObject(appModel)

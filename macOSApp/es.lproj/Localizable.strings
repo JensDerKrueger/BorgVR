@@ -76,6 +76,7 @@
 "modeselection_server" = "Servidor de conjuntos de datos";
 "modeselection_settings" = "Ajustes";
 "modeselection_about" = "Acerca de";
+"modeselection_drop_script" = "Suelta un script GSC para ejecutarlo";
 "modeselection_start_background_server" = "Iniciar servidor en segundo plano";
 "modeselection_stop_background_server" = "Detener servidor en segundo plano";
 "modeselection_server_running" = "Servidor en ejecución";
@@ -732,3 +733,6 @@
 "Diffuse light" = "Luz difusa";
 "Specular light" = "Luz especular";
 "Close lighting editor" = "Cerrar el editor de iluminación";
+"Script Log" = "Registro del script";
+"Clear Script Log" = "Borrar el registro del script";
+"No script output yet." = "Todavía no hay salida del script.";

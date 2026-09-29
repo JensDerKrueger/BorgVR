@@ -76,6 +76,7 @@
 "modeselection_server" = "Serveur de jeux de données";
 "modeselection_settings" = "Réglages";
 "modeselection_about" = "À propos";
+"modeselection_drop_script" = "Déposez un script GSC pour l’exécuter";
 "modeselection_start_background_server" = "Démarrer le serveur en arrière-plan";
 "modeselection_stop_background_server" = "Arrêter le serveur en arrière-plan";
 "modeselection_server_running" = "Serveur en cours d’exécution";
@@ -732,3 +733,6 @@
 "Diffuse light" = "Lumière diffuse";
 "Specular light" = "Lumière spéculaire";
 "Close lighting editor" = "Fermer l’éditeur d’éclairage";
+"Script Log" = "Journal du script";
+"Clear Script Log" = "Effacer le journal du script";
+"No script output yet." = "Aucune sortie de script pour le moment.";

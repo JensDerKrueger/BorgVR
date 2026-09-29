@@ -5,6 +5,27 @@
 # Types: bool, int, int64, float, double, string, restString.
 # bool accepts: 1/0, true/false, on/off, yes/no.
 
+# Interactive value functions
+# Use them on the right side of set, for example:
+# set name input "Enter a name"
+# set file fileinput "Choose a file"
+# set folder dirinput "Choose a folder"
+input(string) -> string
+fileinput(string) -> string
+dirinput(string) -> string
+
+# Dataset import
+# Relative paths are resolved below the current script output directory.
+importfile(string,string,string)
+importdirectory(string,string,string)
+setimportbricksize(int)
+# Accepted alias matching the original command proposal.
+setimportbrickssize(int)
+setimportoverlap(int)
+# Border modes: 0 = zeroes, 1 = clamp to border, 2 = repeat.
+setbordermode(int)
+setbaordermode(int)
+
 # Dataset control
 opendataset(string)
 

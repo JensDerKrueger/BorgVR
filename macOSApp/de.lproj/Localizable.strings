@@ -79,6 +79,7 @@
 "modeselection_server" = "Server";
 "modeselection_settings" = "Einstellungen";
 "modeselection_about" = "Info";
+"modeselection_drop_script" = "GSC-Skript zum Ausführen ablegen";
 "modeselection_start_background_server" = "Hintergrundserver starten";
 "modeselection_stop_background_server" = "Hintergrundserver stoppen";
 "modeselection_server_running" = "Server läuft";
@@ -736,3 +737,6 @@
 "Diffuse light" = "Diffuses Licht";
 "Specular light" = "Glanzlicht";
 "Close lighting editor" = "Beleuchtungseditor schließen";
+"Script Log" = "Skriptprotokoll";
+"Clear Script Log" = "Skriptprotokoll leeren";
+"No script output yet." = "Noch keine Skriptausgabe.";
