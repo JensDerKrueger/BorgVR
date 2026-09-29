@@ -112,7 +112,12 @@ class RuntimeAppModel {
     case screenView = "screenView"
   }
   /// The current interaction mode.
-  var interactionMode: InteractionMode = .model
+  var interactionMode: InteractionMode = .model {
+    didSet { spatialInputContext.update(mode: interactionMode) }
+  }
+
+  /// Lock-protected bridge read by the compositor render thread.
+  let spatialInputContext = SpatialInputRuntimeContext()
 
   /**
    Represents toggles for editing individual channels of the transfer function.
@@ -247,7 +252,9 @@ class RuntimeAppModel {
     }
   }
 
-  var activeDatasetInfo: DatasetInfo? = nil
+  var activeDatasetInfo: DatasetInfo? = nil {
+    didSet { spatialInputContext.update(datasetInfo: activeDatasetInfo) }
+  }
 
   /// The current content view state of the application.
   var currentState: ContentViewState = .start
@@ -285,6 +292,35 @@ class RuntimeAppModel {
       exit(0)
     }
 #endif
+  }
+}
+
+final class SpatialInputRuntimeContext: @unchecked Sendable {
+  struct Snapshot {
+    let mode: RuntimeAppModel.InteractionMode
+    let datasetInfo: RuntimeAppModel.DatasetInfo?
+  }
+
+  private let lock = NSLock()
+  private var mode: RuntimeAppModel.InteractionMode = .model
+  private var datasetInfo: RuntimeAppModel.DatasetInfo?
+
+  func update(mode: RuntimeAppModel.InteractionMode) {
+    lock.lock()
+    self.mode = mode
+    lock.unlock()
+  }
+
+  func update(datasetInfo: RuntimeAppModel.DatasetInfo?) {
+    lock.lock()
+    self.datasetInfo = datasetInfo
+    lock.unlock()
+  }
+
+  func snapshot() -> Snapshot {
+    lock.lock()
+    defer { lock.unlock() }
+    return Snapshot(mode: mode, datasetInfo: datasetInfo)
   }
 }
 

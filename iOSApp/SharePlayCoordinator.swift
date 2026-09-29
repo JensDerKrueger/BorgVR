@@ -515,7 +515,7 @@ final class SharePlayCoordinator: ObservableObject {
     hostClaims.removeAll()
     showsHostDeparturePrompt = false
     participants = []
-    appModel?.clearRemoteSpatialStylusPreviews()
+    appModel?.clearRemoteSpatialToolPreviews()
   }
 
   private func resetPendingSynchronizationForDatasetChange() {
@@ -678,9 +678,9 @@ final class SharePlayCoordinator: ObservableObject {
 
   private func handleUpdate(data: Data, from participant: Participant) {
     do {
-      if let preview = try SpatialStylusPreviewSharePlayCodec.decodeIfPresent(data) {
-        appModel?.updateRemoteSpatialStylusPreview(
-          preview,
+      if let previews = try SpatialToolPreviewSharePlayCodec.decodeIfPresent(data) {
+        appModel?.updateRemoteSpatialToolPreviews(
+          previews,
           participantID: participant.id
         )
         return

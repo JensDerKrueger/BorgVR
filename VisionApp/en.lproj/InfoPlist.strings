@@ -1,1 +1,1 @@
-"NSAccessoryTrackingUsageDescription" = "BorgVR tracks a connected spatial stylus so you can draw markers directly in a volume.";
+"NSAccessoryTrackingUsageDescription" = "BorgVR tracks connected spatial controllers and styli so you can interact with volumes and create markers.";

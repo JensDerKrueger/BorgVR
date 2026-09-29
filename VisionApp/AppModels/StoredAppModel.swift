@@ -128,6 +128,7 @@ final class StoredAppModel: ObservableObject {
     "tfMode": TransferFunctionDisplayMode.windowOnly.rawValue,
     "quickMarker": false,
     "quickMarkerDoublePinchInterval": 0.25,
+    "showHandsAndAccessories": false,
     "shareSpatialStylusPosition": false,
     "sharePlayDisplayName": "",
     "markerSpawnAtGaze": false,
@@ -245,6 +246,8 @@ final class StoredAppModel: ObservableObject {
   @AppStorage("quickMarker") var quickMarker: Bool = StoredAppModel.bool("quickMarker")
   /// Maximum time between two pinches that should be interpreted as a Quick Marker gesture.
   @AppStorage("quickMarkerDoublePinchInterval") var quickMarkerDoublePinchInterval: Double = StoredAppModel.double("quickMarkerDoublePinchInterval")
+  /// Whether visionOS may show the user's hands and tracked accessories in immersive content.
+  @AppStorage("showHandsAndAccessories") var showHandsAndAccessories: Bool = StoredAppModel.bool("showHandsAndAccessories")
   /// Whether SharePlay participants can see the local spatial stylus tip.
   @AppStorage("shareSpatialStylusPosition") var shareSpatialStylusPosition: Bool = StoredAppModel.bool("shareSpatialStylusPosition")
   /// Name shown to the other participants in a SharePlay session.

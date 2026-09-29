@@ -390,8 +390,10 @@
 "settings_quick_marker_double_pinch_window" = "Double Pinch Time";
 "settings_quick_marker_seconds_format" = "%.2f s";
 "settings_marker_default_color" = "Default Marker Color";
-"settings_toggle_share_stylus_position" = "Share Stylus Position";
-"settings_share_stylus_position_description" = "Show the tip of your spatial stylus to other SharePlay participants while it is being tracked.";
+"settings_toggle_show_hands_accessories" = "Show Hands and Controllers";
+"settings_show_hands_accessories_description" = "Lets visionOS show your hands and tracked controllers through immersive content.";
+"settings_toggle_share_stylus_position" = "Share Tool Positions";
+"settings_share_stylus_position_description" = "Show the tips of your spatial stylus and tracked controllers to other SharePlay participants.";
 "settings_toggle_show_notifications" = "Show Notifications (requires permission)";
 "settings_toggle_enable_voice_input" = "Enable Voice Input (requires permission)";
 "settings_toggle_autostart_voice" = "Automatically Start Voice Input";

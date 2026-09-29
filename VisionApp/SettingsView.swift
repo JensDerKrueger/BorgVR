@@ -173,6 +173,14 @@ struct SettingsView: View {
             .disabled(!storedAppModel.quickMarker)
 
             Toggle(
+              "settings_toggle_show_hands_accessories",
+              isOn: $storedAppModel.showHandsAndAccessories
+            )
+            Text("settings_show_hands_accessories_description")
+              .font(.footnote)
+              .foregroundStyle(.secondary)
+
+            Toggle(
               "settings_toggle_share_stylus_position",
               isOn: $storedAppModel.shareSpatialStylusPosition
             )

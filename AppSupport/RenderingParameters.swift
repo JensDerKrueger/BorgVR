@@ -217,7 +217,7 @@ final class RenderingParameters: ObservableObject {
         throw RenderingParametersUpdateError.unsupportedPacket(packetKindRaw)
       case .visionTransform:
         break
-      case .volumeMarkers, .spatialStylusPreview:
+      case .volumeMarkers, .spatialToolPreview:
         return false
     }
 

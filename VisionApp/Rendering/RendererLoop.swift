@@ -548,9 +548,10 @@ extension Renderer {
                                  drawable: LayerRenderer.Drawable) {
     let screenViews = screenViewVisualization()
     let markers = sharedAppModel.volumeMarkers + screenViews.markers
-    let remoteStylusPreviews = sharedAppModel.activeRemoteSpatialStylusPreviews()
+    let remoteToolPreviews = sharedAppModel.activeRemoteSpatialToolPreviews()
     guard !markers.isEmpty || !screenViews.labels.isEmpty || spatialStylusPreviewPoint != nil ||
-      !remoteStylusPreviews.isEmpty else {
+      !remoteToolPreviews.isEmpty || !spatialControllerSamples.isEmpty ||
+      !spatialControllerPreviewPoints.isEmpty else {
       return
     }
 
@@ -642,6 +643,56 @@ extension Renderer {
       )
     }
 
+    func drawControllerPointer(_ sample: BorgSpatialInputSample) {
+      var color = sharedAppModel.defaultVolumeStrokeColor
+      var pointerMatrix = sample.aimTransform
+      renderEncoder.setVertexBuffer(
+        spatialControllerPointerBuffer,
+        offset: 0,
+        index: VertexBufferIndex.meshPositions.rawValue
+      )
+      renderEncoder.setVertexBuffer(
+        spatialControllerPointerNormalBuffer,
+        offset: 0,
+        index: 24
+      )
+      renderEncoder.setVertexBytes(
+        &pointerMatrix,
+        length: MemoryLayout<simd_float4x4>.stride,
+        index: 21
+      )
+      renderEncoder.setFragmentBytes(
+        &color,
+        length: MemoryLayout<SIMD4<Float>>.stride,
+        index: 23
+      )
+      renderEncoder.drawPrimitives(
+        type: .triangle,
+        vertexStart: 0,
+        vertexCount: spatialControllerPointerVertexCount
+      )
+
+      var bodyMatrix = sample.aimTransform *
+        Transform(translation: SIMD3<Float>(0, 0, 0.055)).matrix *
+        Transform(scale: SIMD3<Float>(repeating: 0.015)).matrix
+      renderEncoder.setVertexBuffer(
+        markerSphereBuffer,
+        offset: 0,
+        index: VertexBufferIndex.meshPositions.rawValue
+      )
+      renderEncoder.setVertexBuffer(markerSphereNormalBuffer, offset: 0, index: 24)
+      renderEncoder.setVertexBytes(
+        &bodyMatrix,
+        length: MemoryLayout<simd_float4x4>.stride,
+        index: 21
+      )
+      renderEncoder.drawPrimitives(
+        type: .triangle,
+        vertexStart: 0,
+        vertexCount: markerSphereVertexCount
+      )
+    }
+
     func drawTube(for marker: VolumeMarker, color: SIMD4<Float>) {
       guard let tubeMesh = markerTubeMeshCache.mesh(
         for: marker,
@@ -697,8 +748,14 @@ extension Renderer {
         color: sharedAppModel.defaultVolumeStrokeColor
       )
     }
-    for preview in remoteStylusPreviews {
+    for point in spatialControllerPreviewPoints {
+      drawSphere(point, color: sharedAppModel.defaultVolumeStrokeColor)
+    }
+    for preview in remoteToolPreviews {
       drawSphere(preview.point, color: preview.color)
+    }
+    for sample in spatialControllerSamples {
+      drawControllerPointer(sample)
     }
 
     drawScreenViewLabels(screenViews.labels, renderEncoder: renderEncoder)
@@ -1050,37 +1107,55 @@ extension Renderer {
     return (filteredPosition, filteredPressure)
   }
 
-  private func updateSpatialStylusStroke(drawable: LayerRenderer.Drawable) {
-    let timestamp = LayerRenderer.Clock.Instant.epoch
-      .duration(to: drawable.frameTiming.trackableAnchorTime)
-      .timeInterval
-    guard let sample = borgARProvider.getSpatialStylusSample(atTimestamp: timestamp) else {
+  private func spatialToolPreviewPoint(
+    worldPosition: SIMD3<Float>,
+    radius: Float
+  ) -> VolumeMarkerPoint? {
+    let volumeFromOrigin = simd_inverse(lastUnscaledModelMatrix * volumeScale)
+    let local = volumeFromOrigin * SIMD4<Float>(worldPosition, 1)
+    guard abs(local.w) > 0.000_001 else { return nil }
+    let position = SIMD3<Float>(local.x, local.y, local.z) / local.w +
+      SIMD3<Float>(repeating: 0.5)
+    let modelScale = simd_abs(sharedAppModel.modelTransform.scale)
+    let averageModelScale = max(
+      (modelScale.x + modelScale.y + modelScale.z) / 3,
+      0.000_001
+    )
+    return VolumeMarkerPoint(
+      position: simd_clamp(
+        position,
+        SIMD3<Float>(repeating: -8),
+        SIMD3<Float>(repeating: 8)
+      ),
+      // Preview points originate in world space. Compensate the model scale so
+      // scaling the volume does not also resize the controller or stylus tip.
+      radius: radius / averageModelScale
+    )
+  }
+
+  private func updateSpatialStylusStroke(
+    sample: BorgSpatialStylusSample?
+  ) {
+    guard let sample else {
       finishSpatialStylusStroke()
       spatialStylusPreviewPoint = nil
       spatialStylusRadiusAdjustmentStart = nil
       return
     }
-    defer { synchronizeSpatialStylusPreviewIfNeeded(at: timestamp) }
-
     let filteredTip = filteredSpatialStylusTip(
       position: sample.tipPosition,
       pressure: sample.tipPressure
     )
-    let volumeFromOrigin = simd_inverse(lastUnscaledModelMatrix * volumeScale)
-    let local = volumeFromOrigin * SIMD4<Float>(filteredTip.position, 1)
-    guard abs(local.w) > 0.000_001 else {
+    guard let previewPoint = spatialToolPreviewPoint(
+      worldPosition: filteredTip.position,
+      radius: sharedAppModel.defaultVolumeStrokeRadius
+    ) else {
       finishSpatialStylusStroke()
       spatialStylusPreviewPoint = nil
       spatialStylusRadiusAdjustmentStart = nil
       return
     }
-    let unclampedPosition = SIMD3<Float>(local.x, local.y, local.z) / local.w +
-      SIMD3<Float>(repeating: 0.5)
-    let position = simd_clamp(
-      unclampedPosition,
-      SIMD3<Float>(repeating: -8),
-      SIMD3<Float>(repeating: 8)
-    )
+    let position = previewPoint.position
 
     if sample.isAdjustingRadius {
       finishSpatialStylusStroke()
@@ -1172,15 +1247,51 @@ extension Renderer {
     sharedAppModel.synchronizeMarkers()
   }
 
-  private func synchronizeSpatialStylusPreviewIfNeeded(at timestamp: TimeInterval) {
-    guard storedAppModel.shareSpatialStylusPosition,
-          let spatialStylusPreviewPoint,
-          timestamp - lastSpatialStylusPreviewShareTime >= 0.05 else {
-      return
+  private func updateSpatialAccessoryInteractions(drawable: LayerRenderer.Drawable) {
+    let timestamp = LayerRenderer.Clock.Instant.epoch
+      .duration(to: drawable.frameTiming.trackableAnchorTime)
+      .timeInterval
+    let samples = borgARProvider.getSpatialInputSamples(atTimestamp: timestamp)
+    let stylusSample = immersiveInteraction.spatialStylusSample(from: samples)
+    let inputContext = spatialInputContext.snapshot()
+    immersiveInteraction.handleSpatialInputSamples(
+      samples,
+      interactionMode: inputContext.mode,
+      datasetInfo: inputContext.datasetInfo,
+      timestamp: timestamp
+    )
+    spatialControllerSamples = samples.filter { $0.source == .controller }
+    spatialControllerPreviewPoints = spatialControllerSamples.compactMap {
+      spatialToolPreviewPoint(
+        worldPosition: $0.aimOrigin,
+        radius: sharedAppModel.defaultVolumeStrokeRadius
+      )
     }
-    lastSpatialStylusPreviewShareTime = timestamp
-    sharedAppModel.synchronizeSpatialStylusPreview(
-      point: spatialStylusPreviewPoint,
+    updateSpatialStylusStroke(sample: stylusSample)
+    var previewPoints = spatialControllerPreviewPoints
+    if let spatialStylusPreviewPoint {
+      previewPoints.append(spatialStylusPreviewPoint)
+    }
+    synchronizeSpatialToolPreviewsIfNeeded(
+      previewPoints,
+      at: timestamp
+    )
+  }
+
+  private func synchronizeSpatialToolPreviewsIfNeeded(
+    _ points: [VolumeMarkerPoint],
+    at timestamp: TimeInterval
+  ) {
+    let sharedPoints = storedAppModel.shareSpatialStylusPosition ? points : []
+    if sharedPoints.isEmpty {
+      guard spatialToolPreviewsWereShared else { return }
+    } else {
+      guard timestamp - lastSpatialToolPreviewShareTime >= 0.05 else { return }
+    }
+    lastSpatialToolPreviewShareTime = timestamp
+    spatialToolPreviewsWereShared = !sharedPoints.isEmpty
+    sharedAppModel.synchronizeSpatialToolPreviews(
+      points: sharedPoints,
       color: sharedAppModel.defaultVolumeStrokeColor
     )
   }
@@ -1265,7 +1376,7 @@ extension Renderer {
     self.updateDynamicBufferState()
 
     self.updateRenderState(drawable: drawable)
-    self.updateSpatialStylusStroke(drawable: drawable)
+    self.updateSpatialAccessoryInteractions(drawable: drawable)
 
     let rasterizationRateMap = drawable.rasterizationRateMaps.first
     let markerTargets = renderVolumeMarkers(

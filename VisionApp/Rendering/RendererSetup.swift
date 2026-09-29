@@ -88,6 +88,7 @@ extension Renderer {
                               dataset: BORGVRDatasetProtocol,
                               isHost:Bool,
                               transferFunctionPanelInteractionState: TransferFunctionPanelInteractionState,
+                              immersiveInteraction: ImmersiveInteraction,
                               logger: LoggerBase? = nil) {
     runtimeAppModel.renderTask?.cancel()
     runtimeAppModel.renderTask = Task(executorPreference: RendererTaskExecutor.shared) {
@@ -101,6 +102,7 @@ extension Renderer {
           dataset: dataset,
           isHost: isHost,
           transferFunctionPanelInteractionState: transferFunctionPanelInteractionState,
+          immersiveInteraction: immersiveInteraction,
           logger: logger
         )
 

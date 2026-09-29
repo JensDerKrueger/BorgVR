@@ -136,8 +136,8 @@ class SharedAppModel {
       }
     }
   }
-  /// Short-lived stylus-tip previews received from other SharePlay participants.
-  var remoteSpatialStylusPreviews: [UUID: SpatialStylusPreview]
+  /// Short-lived tool-tip previews received from other SharePlay participants.
+  var remoteSpatialToolPreviews: [UUID: [SpatialToolPreview]]
   /// Participants announced in the current SharePlay session.
   var sharePlayParticipants: [BorgVRSharePlayParticipant]
   /// Shared camera used by all iOS and macOS participants.
@@ -183,7 +183,7 @@ class SharedAppModel {
     volumeMarkers = []
     selectedVolumeMarkerIDs = []
     selectedVolumeMarkerID = nil
-    remoteSpatialStylusPreviews = [:]
+    remoteSpatialToolPreviews = [:]
     sharePlayParticipants = []
     screenSharePlayViewState = nil
     detachedScreenSharePlayViewStates = [:]
@@ -227,26 +227,26 @@ class SharedAppModel {
     groupActivityHelper?.participantInfoChanged()
   }
 
-  func synchronizeSpatialStylusPreview(
-    point: VolumeMarkerPoint,
+  func synchronizeSpatialToolPreviews(
+    points: [VolumeMarkerPoint],
     color: SIMD4<Float>
   ) {
-    groupActivityHelper?.synchronizeSpatialStylusPreview(point: point, color: color)
+    groupActivityHelper?.synchronizeSpatialToolPreviews(points: points, color: color)
   }
 
-  func updateRemoteSpatialStylusPreview(
-    _ preview: SpatialStylusPreview,
+  func updateRemoteSpatialToolPreviews(
+    _ previews: [SpatialToolPreview],
     participantID: UUID
   ) {
-    remoteSpatialStylusPreviews[participantID] = preview
+    remoteSpatialToolPreviews[participantID] = previews
   }
 
-  func activeRemoteSpatialStylusPreviews() -> [SpatialStylusPreview] {
-    remoteSpatialStylusPreviews.values.filter(\.isActive)
+  func activeRemoteSpatialToolPreviews() -> [SpatialToolPreview] {
+    remoteSpatialToolPreviews.values.flatMap { $0.filter(\.isActive) }
   }
 
-  func clearRemoteSpatialStylusPreviews() {
-    remoteSpatialStylusPreviews.removeAll()
+  func clearRemoteSpatialToolPreviews() {
+    remoteSpatialToolPreviews.removeAll()
   }
 
   func nextVolumeMarkerName() -> String {
@@ -350,7 +350,7 @@ class SharedAppModel {
     purgeAtlas = false
     volumeMarkers = []
     selectedVolumeMarkerID = nil
-    remoteSpatialStylusPreviews = [:]
+    remoteSpatialToolPreviews = [:]
     screenViewInteractionActive = false
     defaultVolumeMarkerRadius = VolumeMarkerRadius.sphereDefault
     defaultVolumeMarkerShowsDirection = true
@@ -650,7 +650,7 @@ class SharedAppModel {
         let lScale = try r.readSIMD3()
         modelTransform = Transform(scale: tScale, rotation: tRotation, translation: tTranslation)
         lastModelTransform = Transform(scale: lScale, rotation: lRotation, translation: lTranslation)
-      case .volumeMarkers, .spatialStylusPreview:
+      case .volumeMarkers, .spatialToolPreview:
         throw SharedAppModelError.unsupportedVersion(version)
     }
 

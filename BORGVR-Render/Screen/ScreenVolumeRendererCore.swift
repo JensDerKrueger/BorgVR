@@ -193,7 +193,7 @@ final class ScreenVolumeRendererCore {
       colorFormat: view.colorPixelFormat,
       depthFormat: view.depthStencilPixelFormat,
       markers: appModel.volumeMarkers,
-      spatialStylusPreviews: appModel.activeRemoteSpatialStylusPreviews(),
+      spatialToolPreviews: appModel.activeRemoteSpatialToolPreviews(),
       selectedMarkerIDs: appModel.selectedVolumeMarkerIDs,
       viewProjection: markerMatrices.projection * markerMatrices.view,
       modelMatrix: markerMatrices.model,

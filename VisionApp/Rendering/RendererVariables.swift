@@ -115,6 +115,10 @@ final actor Renderer {
   let markerSphereNormalBuffer: MTLBuffer
   /// The number of vertices in the marker sphere buffer.
   let markerSphereVertexCount: Int
+  /// A tapered pointer rendered at each tracked spatial controller's aim pose.
+  let spatialControllerPointerBuffer: MTLBuffer
+  let spatialControllerPointerNormalBuffer: MTLBuffer
+  let spatialControllerPointerVertexCount: Int
   /// Cached tube meshes for stroke markers.
   let markerTubeMeshCache: VolumeMarkerTubeMeshCache
   /// Cached label textures for shared and detached screen views.
@@ -136,8 +140,13 @@ final actor Renderer {
   )?
   /// Local-only preview sphere shown at the tracked stylus tip.
   var spatialStylusPreviewPoint: VolumeMarkerPoint?
-  /// Timestamp of the most recent SharePlay stylus-tip update.
-  var lastSpatialStylusPreviewShareTime: TimeInterval
+  /// Controller poses sampled for the current frame and rendered as local-only pointers.
+  var spatialControllerSamples: [BorgSpatialInputSample] = []
+  /// Local-only spheres at the tracked controller tips.
+  var spatialControllerPreviewPoints: [VolumeMarkerPoint] = []
+  /// Timestamp and activity state for the most recent SharePlay tool-tip update.
+  var lastSpatialToolPreviewShareTime: TimeInterval
+  var spatialToolPreviewsWereShared: Bool
   /// Initial state while the primary stylus button adjusts stroke radius.
   var spatialStylusRadiusAdjustmentStart: (
     position: SIMD3<Float>,
@@ -155,6 +164,10 @@ final actor Renderer {
   let sharedAppModel: SharedAppModel
   /// Shared picking state for the transfer function HUD/object panel.
   let transferFunctionPanelInteractionState: TransferFunctionPanelInteractionState
+  /// Shared semantic interaction layer for hands, styli, and spatial controllers.
+  let immersiveInteraction: ImmersiveInteraction
+  /// Thread-safe snapshot of UI-owned interaction state.
+  let spatialInputContext: SpatialInputRuntimeContext
   /// A CPU frame timer.
   let timer: CPUFrameTimer
   /// The initial oversampling factor.
@@ -202,6 +215,7 @@ final actor Renderer {
        dataset: BORGVRDatasetProtocol,
        isHost: Bool,
        transferFunctionPanelInteractionState: TransferFunctionPanelInteractionState,
+       immersiveInteraction: ImmersiveInteraction,
        logger: LoggerBase? = nil) throws {
 
     logger?.info("Loading dataset \(dataset.getMetadata().datasetDescription)")
@@ -228,13 +242,16 @@ final actor Renderer {
     self.runtimeAppModel = runtimeAppModel
     self.sharedAppModel = sharedAppModel
     self.transferFunctionPanelInteractionState = transferFunctionPanelInteractionState
+    self.immersiveInteraction = immersiveInteraction
+    self.spatialInputContext = runtimeAppModel.spatialInputContext
 
     self.autoRotationAngle = 0
     self.autoRotationStartTime = 0
     self.activeSpatialStylusStrokeID = nil
     self.spatialStylusTipFilterState = nil
     self.spatialStylusPreviewPoint = nil
-    self.lastSpatialStylusPreviewShareTime = 0
+    self.lastSpatialToolPreviewShareTime = 0
+    self.spatialToolPreviewsWereShared = false
     self.spatialStylusRadiusAdjustmentStart = nil
     self.markerTubeMeshCache = VolumeMarkerTubeMeshCache()
     self.screenViewLabelTextureCache = ScreenViewLabelTextureCache()
@@ -405,6 +422,42 @@ final actor Renderer {
       byteCount: sphereVertexDataSize
     )
     markerSphereVertexCount = sphere.vertices.count
+
+    let controllerPointer = Tesselation.genPointerCone(
+      radius: 0.012,
+      height: 0.055,
+      sectorCount: 24
+    ).unpack()
+    let alignedPointerVertexCount = (controllerPointer.vertices.count + 15) & -16
+    let pointerBufferSize = MemoryLayout<SIMD3<Float>>.stride * alignedPointerVertexCount
+    let pointerPaddingCount = alignedPointerVertexCount - controllerPointer.vertices.count
+    var alignedPointerVertices = controllerPointer.vertices
+    alignedPointerVertices.append(contentsOf: Array(
+      repeating: paddingElement,
+      count: pointerPaddingCount
+    ))
+    spatialControllerPointerBuffer = self.device.makeBuffer(
+      length: pointerBufferSize,
+      options: [MTLResourceOptions.storageModeShared]
+    )!
+    spatialControllerPointerBuffer.contents().copyMemory(
+      from: alignedPointerVertices,
+      byteCount: pointerBufferSize
+    )
+    var alignedPointerNormals = controllerPointer.normals
+    alignedPointerNormals.append(contentsOf: Array(
+      repeating: SIMD3<Float>(0, 0, -1),
+      count: pointerPaddingCount
+    ))
+    spatialControllerPointerNormalBuffer = self.device.makeBuffer(
+      length: pointerBufferSize,
+      options: [MTLResourceOptions.storageModeShared]
+    )!
+    spatialControllerPointerNormalBuffer.contents().copyMemory(
+      from: alignedPointerNormals,
+      byteCount: pointerBufferSize
+    )
+    spatialControllerPointerVertexCount = controllerPointer.vertices.count
 
     self.borgARProvider = BorgARProvider(
       logger: logger,

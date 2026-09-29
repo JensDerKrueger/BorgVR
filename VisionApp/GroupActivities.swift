@@ -346,20 +346,20 @@ class GroupActivityHelper {
     }
   }
 
-  func synchronizeSpatialStylusPreview(
-    point: VolumeMarkerPoint,
+  func synchronizeSpatialToolPreviews(
+    points: [VolumeMarkerPoint],
     color: SIMD4<Float>
   ) {
     guard messenger != nil else { return }
     Task {
       do {
         try await sendData(
-          data: SpatialStylusPreviewSharePlayCodec.encode(point: point, color: color),
+          data: SpatialToolPreviewSharePlayCodec.encode(points: points, color: color),
           of: .renderingUpdate
         )
       } catch {
         await runtimeAppModel?.logger.error(
-          "Failed to send spatial stylus preview: \(error)"
+          "Failed to send spatial tool previews: \(error)"
         )
       }
     }
@@ -640,7 +640,7 @@ class GroupActivityHelper {
     sharedAppModel?.screenSharePlayViewState = nil
     sharedAppModel?.detachedScreenSharePlayViewStates = [:]
     sharedAppModel?.screenViewInteractionActive = false
-    sharedAppModel?.clearRemoteSpatialStylusPreviews()
+    sharedAppModel?.clearRemoteSpatialToolPreviews()
   }
 
   static func registerGroupActivity() {
@@ -1339,9 +1339,9 @@ class GroupActivityHelper {
   func handleUpdate(data: Data, from: Participant) {
     guard let sharedAppModel else { return }
     do {
-      if let preview = try SpatialStylusPreviewSharePlayCodec.decodeIfPresent(data) {
-        sharedAppModel.updateRemoteSpatialStylusPreview(
-          preview,
+      if let previews = try SpatialToolPreviewSharePlayCodec.decodeIfPresent(data) {
+        sharedAppModel.updateRemoteSpatialToolPreviews(
+          previews,
           participantID: from.id
         )
         return

@@ -390,8 +390,10 @@
 "settings_quick_marker_double_pinch_window" = "Doppelpinch-Zeit";
 "settings_quick_marker_seconds_format" = "%.2f s";
 "settings_marker_default_color" = "Standard-Markerfarbe";
-"settings_toggle_share_stylus_position" = "Stiftposition teilen";
-"settings_share_stylus_position_description" = "Zeigt anderen SharePlay-Teilnehmern die Spitze Ihres räumlichen Stifts, solange sie erfasst wird.";
+"settings_toggle_show_hands_accessories" = "Hände und Controller anzeigen";
+"settings_show_hands_accessories_description" = "Erlaubt visionOS, Ihre Hände und erfassten Controller durch immersive Inhalte hindurch anzuzeigen.";
+"settings_toggle_share_stylus_position" = "Werkzeugpositionen teilen";
+"settings_share_stylus_position_description" = "Zeigt anderen SharePlay-Teilnehmern die Spitzen Ihres räumlichen Stifts und der erfassten Controller.";
 "settings_toggle_show_notifications" = "Benachrichtigungen anzeigen (erfordert Berechtigung)";
 "settings_toggle_enable_voice_input" = "Spracheingabe aktivieren (erfordert Berechtigung)";
 "settings_toggle_autostart_voice" = "Spracheingabe automatisch starten";

@@ -1141,7 +1141,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = VisionApp/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = BorgVR;
-				INFOPLIST_KEY_NSAccessoryTrackingUsageDescription = "BorgVR tracks a connected spatial stylus so you can draw markers directly in a volume.";
+				INFOPLIST_KEY_NSAccessoryTrackingUsageDescription = "BorgVR tracks connected spatial controllers and styli so you can interact with volumes and create markers.";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "BorgVR uses the local network to share the currently open dataset with participants in a live collaboration session.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "The microphone is used to let you interact with the app using voice commands instead of traditional UI controls.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Speech recognition is used to let you interact with the app using voice commands instead of traditional UI controls.";
@@ -1178,7 +1178,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = VisionApp/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = BorgVR;
-				INFOPLIST_KEY_NSAccessoryTrackingUsageDescription = "BorgVR tracks a connected spatial stylus so you can draw markers directly in a volume.";
+				INFOPLIST_KEY_NSAccessoryTrackingUsageDescription = "BorgVR tracks connected spatial controllers and styli so you can interact with volumes and create markers.";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "BorgVR uses the local network to share the currently open dataset with participants in a live collaboration session.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "The microphone is used to let you interact with the app using voice commands instead of traditional UI controls.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Speech recognition is used to let you interact with the app using voice commands instead of traditional UI controls.";

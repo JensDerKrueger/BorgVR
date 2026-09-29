@@ -16,7 +16,7 @@ struct VolumeMarkerPoint: Equatable {
   var radius: Float
 }
 
-struct SpatialStylusPreview: Equatable {
+struct SpatialToolPreview: Equatable {
   static let expirationInterval: TimeInterval = 0.35
 
   var point: VolumeMarkerPoint
@@ -578,56 +578,78 @@ enum VolumeMarkerSharePlayCodec {
   }
 }
 
-enum SpatialStylusPreviewSharePlayCodec {
-  static func encode(point: VolumeMarkerPoint, color: SIMD4<Float>) -> Data {
+enum SpatialToolPreviewSharePlayCodec {
+  private static let maximumPreviewCount = 8
+
+  static func encode(points: [VolumeMarkerPoint], color: SIMD4<Float>) -> Data {
+    let points = Array(points.prefix(maximumPreviewCount))
     var writer = MarkerDataWriter()
     writer.write(BorgVRSharePlayProtocol.magic)
     writer.write(BorgVRSharePlayProtocol.renderStateVersion)
-    writer.write(BorgVRSharePlayProtocol.PacketKind.spatialStylusPreview.rawValue)
+    writer.write(BorgVRSharePlayProtocol.PacketKind.spatialToolPreview.rawValue)
     writer.write(UInt8(0))
-    writer.writeSIMD3(point.position)
-    writer.write(point.radius)
-    writer.writeSIMD4(color)
+    writer.write(UInt8(points.count))
+    writer.write(UInt8(0))
+    writer.write(UInt16(0))
+    for point in points {
+      writer.writeSIMD3(point.position)
+      writer.write(point.radius)
+      writer.writeSIMD4(color)
+    }
     return writer.data
   }
 
   /// Returns `nil` when the data is a different SharePlay packet kind.
-  static func decodeIfPresent(_ data: Data) throws -> SpatialStylusPreview? {
+  static func decodeIfPresent(_ data: Data) throws -> [SpatialToolPreview]? {
     var reader = MarkerDataReader(data)
     let magic: UInt32 = try reader.read()
     guard magic == BorgVRSharePlayProtocol.magic else { return nil }
     let version: UInt16 = try reader.read()
     let packet: UInt8 = try reader.read()
     _ = try reader.read() as UInt8
-    guard packet == BorgVRSharePlayProtocol.PacketKind.spatialStylusPreview.rawValue else {
+    guard packet == BorgVRSharePlayProtocol.PacketKind.spatialToolPreview.rawValue else {
       return nil
     }
     guard version == BorgVRSharePlayProtocol.renderStateVersion else {
       throw VolumeMarkerCodecError.unsupportedVersion(version)
     }
 
-    let position = try reader.readSIMD3()
-    let radius: Float = try reader.read()
-    let color = try reader.readSIMD4()
-    guard reader.isAtEnd,
-          position.x.isFinite, position.y.isFinite, position.z.isFinite,
-          radius.isFinite,
-          color.x.isFinite, color.y.isFinite, color.z.isFinite, color.w.isFinite else {
+    let count: UInt8 = try reader.read()
+    _ = try reader.read() as UInt8
+    _ = try reader.read() as UInt16
+    guard Int(count) <= maximumPreviewCount else {
       throw VolumeMarkerCodecError.invalidPreview
     }
 
-    return SpatialStylusPreview(
-      point: VolumeMarkerPoint(
-        position: simd_clamp(
-          position,
-          SIMD3<Float>(repeating: BorgVRMarkerFormat.positionRange.lowerBound),
-          SIMD3<Float>(repeating: BorgVRMarkerFormat.positionRange.upperBound)
+    let receivedAt = Date.timeIntervalSinceReferenceDate
+    var previews: [SpatialToolPreview] = []
+    previews.reserveCapacity(Int(count))
+    for _ in 0..<count {
+      let position = try reader.readSIMD3()
+      let radius: Float = try reader.read()
+      let color = try reader.readSIMD4()
+      guard position.x.isFinite, position.y.isFinite, position.z.isFinite,
+            radius.isFinite,
+            color.x.isFinite, color.y.isFinite, color.z.isFinite, color.w.isFinite else {
+        throw VolumeMarkerCodecError.invalidPreview
+      }
+      previews.append(SpatialToolPreview(
+        point: VolumeMarkerPoint(
+          position: simd_clamp(
+            position,
+            SIMD3<Float>(repeating: BorgVRMarkerFormat.positionRange.lowerBound),
+            SIMD3<Float>(repeating: BorgVRMarkerFormat.positionRange.upperBound)
+          ),
+          radius: VolumeMarkerRadius.clamp(radius, for: .stroke)
         ),
-        radius: VolumeMarkerRadius.clamp(radius, for: .stroke)
-      ),
-      color: simd_clamp(color, .zero, .one),
-      receivedAt: Date.timeIntervalSinceReferenceDate
-    )
+        color: simd_clamp(color, .zero, .one),
+        receivedAt: receivedAt
+      ))
+    }
+    guard reader.isAtEnd else {
+      throw VolumeMarkerCodecError.invalidPreview
+    }
+    return previews
   }
 }
 

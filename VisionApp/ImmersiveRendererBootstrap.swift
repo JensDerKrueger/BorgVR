@@ -1,6 +1,33 @@
 import Foundation
 import SwiftUI
 import CompositorServices
+import GameController
+
+@MainActor
+private enum SpatialControllerEventRouting {
+  private static let immersiveSceneRole = "UIWindowSceneSessionRoleImmersiveSpaceApplication"
+  private static let interaction: GCEventInteraction = {
+    let interaction = GCEventInteraction()
+    interaction.handledEventTypes = .gamepad
+    interaction.receivesEventsInView = false
+    return interaction
+  }()
+
+  static func install() {
+    guard let rootView = UIApplication.shared.connectedScenes
+      .compactMap({ $0 as? UIWindowScene })
+      .first(where: { $0.session.role.rawValue == immersiveSceneRole })?
+      .windows
+      .first?
+      .rootViewController?
+      .view,
+      interaction.view !== rootView else {
+      return
+    }
+    interaction.view?.removeInteraction(interaction)
+    rootView.addInteraction(interaction)
+  }
+}
 
 enum ImmersiveBootstrap {
   @MainActor
@@ -8,6 +35,8 @@ enum ImmersiveBootstrap {
                   runtimeAppModel: RuntimeAppModel,
                   storedAppModel: StoredAppModel,
                   sharedAppModel: SharedAppModel) {
+
+    SpatialControllerEventRouting.install()
 
     guard let activeDataset = runtimeAppModel.activeDataset else {
       return
@@ -98,6 +127,27 @@ enum ImmersiveBootstrap {
       runtimeAppModel.transferEditState.channelMask
     )
 
+    let toggleTransferFunctionChannel: @MainActor (Int) -> Void = { channelIndex in
+      switch channelIndex {
+        case 0:
+          runtimeAppModel.transferEditState.red.toggle()
+        case 1:
+          runtimeAppModel.transferEditState.green.toggle()
+        case 2:
+          runtimeAppModel.transferEditState.blue.toggle()
+        case 3:
+          runtimeAppModel.transferEditState.opacity.toggle()
+        default:
+          break
+      }
+    }
+    let immersiveInteraction = ImmersiveInteraction(
+      sharedAppModel: sharedAppModel,
+      storedAppModel: storedAppModel,
+      transferFunctionPanelInteractionState: transferFunctionPanelInteractionState,
+      toggleTransferFunctionChannel: toggleTransferFunctionChannel
+    )
+
     // Start renderer
     Renderer.startRenderLoop(
       layerRenderer,
@@ -108,15 +158,11 @@ enum ImmersiveBootstrap {
       dataset: dataset,
       isHost: runtimeAppModel.groupSessionHost,
       transferFunctionPanelInteractionState: transferFunctionPanelInteractionState,
+      immersiveInteraction: immersiveInteraction,
       logger: runtimeAppModel.logger
     )
 
     // Hook up spatial interactions
-    let immersiveInteraction = ImmersiveInteraction(
-      sharedAppModel: sharedAppModel,
-      storedAppModel: storedAppModel,
-      transferFunctionPanelInteractionState: transferFunctionPanelInteractionState
-    )
     layerRenderer.onSpatialEvent = { events in
       transferFunctionPanelInteractionState.updateChannelMask(
         runtimeAppModel.transferEditState.channelMask
@@ -127,18 +173,7 @@ enum ImmersiveBootstrap {
         runtimeAppModel.transferEditState,
         datasetInfo: runtimeAppModel.activeDatasetInfo
       ) { channelIndex in
-        switch channelIndex {
-          case 0:
-            runtimeAppModel.transferEditState.red.toggle()
-          case 1:
-            runtimeAppModel.transferEditState.green.toggle()
-          case 2:
-            runtimeAppModel.transferEditState.blue.toggle()
-          case 3:
-            runtimeAppModel.transferEditState.opacity.toggle()
-          default:
-            break
-        }
+        toggleTransferFunctionChannel(channelIndex)
       }
     }
   }

@@ -6,6 +6,7 @@ class ImmersiveInteraction {
   var sharedAppModel: SharedAppModel
   var storedAppModel: StoredAppModel
   var transferFunctionPanelInteractionState: TransferFunctionPanelInteractionState
+  private let toggleTransferFunctionChannelFromAccessory: @MainActor (Int) -> Void
 
   private var startTranslation: SIMD3<Float> = .zero
   private var startRotation: simd_quatf = .init(.identity)
@@ -30,13 +31,40 @@ class ImmersiveInteraction {
   private var quickMarkerCandidateTime: Date?
   private var quickMarkerCandidatePosition: SIMD3<Float>?
   private let quickMarkerMaxDistance: Float = 0.15
+  private struct SpatialAccessoryAction {
+    enum Kind {
+      case model
+      case clipping
+      case markerSphere
+      case markerStroke
+      case screenView
+      case transferFunction
+    }
+
+    let sourceID: UUID
+    let kind: Kind
+    let startTransform: simd_float4x4
+    let startModelTranslation: SIMD3<Float>
+    let startModelRotation: simd_quatf
+    let startClippingTranslation: SIMD3<Float>
+    let markerID: UUID?
+    let markerStartPositions: [UUID: SIMD3<Float>]
+    let transferFunctionStart: SIMD2<Float>?
+  }
+  private var spatialAccessoryAction: SpatialAccessoryAction?
+  private var activeSpatialStylusID: UUID?
+  private var spatialAccessoryPrimaryStates: [UUID: Bool] = [:]
+  private var spatialAccessoryModifierStates: [UUID: Bool] = [:]
+  private var lastSpatialAccessoryAdjustmentTime: TimeInterval?
 
   init(sharedAppModel: SharedAppModel,
        storedAppModel: StoredAppModel,
-       transferFunctionPanelInteractionState: TransferFunctionPanelInteractionState) {
+       transferFunctionPanelInteractionState: TransferFunctionPanelInteractionState,
+       toggleTransferFunctionChannel: @escaping @MainActor (Int) -> Void) {
     self.sharedAppModel = sharedAppModel
     self.storedAppModel = storedAppModel
     self.transferFunctionPanelInteractionState = transferFunctionPanelInteractionState
+    self.toggleTransferFunctionChannelFromAccessory = toggleTransferFunctionChannel
   }
 
   func distanceBetweenVectors(v1: SIMD3<Double>, v2: SIMD3<Double>) -> Double {
@@ -461,14 +489,15 @@ class ImmersiveInteraction {
 
   private func makeMarker(
     at position: SIMD3<Float>,
-    directionOrigin: SIMD3<Float>
+    directionOrigin: SIMD3<Float>,
+    color: SIMD4<Float>? = nil
   ) -> VolumeMarker {
     VolumeMarker(
       id: UUID(),
       name: sharedAppModel.nextVolumeMarkerName(),
       position: position,
       radius: sharedAppModel.defaultVolumeMarkerRadius,
-      color: storedAppModel.markerDefaultColorSIMD,
+      color: color ?? storedAppModel.markerDefaultColorSIMD,
       directionOrigin: directionOrigin,
       showsDirection: sharedAppModel.defaultVolumeMarkerShowsDirection
     )
@@ -715,6 +744,554 @@ class ImmersiveInteraction {
     quickMarkerCandidatePosition = nil
   }
 
+  private func beginSpatialAccessoryAction(
+    _ sample: BorgSpatialInputSample,
+    mode: RuntimeAppModel.InteractionMode,
+    datasetInfo: RuntimeAppModel.DatasetInfo?
+  ) {
+    guard spatialAccessoryAction == nil,
+          activeSpatialStylusID == nil,
+          !handInteractionIsActive else { return }
+    let transform = sample.gripTransform
+    var kind: SpatialAccessoryAction.Kind
+    var markerID: UUID?
+    var markerStartPositions: [UUID: SIMD3<Float>] = [:]
+    var transferFunctionStart: SIMD2<Float>?
+
+    if let hit = transferFunctionPanelInteractionState.hitTest(
+      origin: sample.aimOrigin,
+      direction: sample.aimDirection
+    ) {
+      if let channelIndex = transferFunctionChannelIndex(for: hit) {
+        var channelMask = transferFunctionPanelInteractionState.shaderState().channelMask
+        channelMask ^= 1 << UInt32(channelIndex)
+        transferFunctionPanelInteractionState.updateChannelMask(channelMask)
+        Task { @MainActor in
+          toggleTransferFunctionChannelFromAccessory(channelIndex)
+        }
+        return
+      }
+      guard hit.x >= 0, hit.x <= 1, hit.y >= 0, hit.y <= 1 else { return }
+      kind = .transferFunction
+      transferFunctionStart = hit
+      transferFunctionPanelDragStart = hit
+      transferFunctionPanelMarkerOpacity = 1
+      transferFunctionPanelMarkerSuppressed = false
+      transferFunctionPanelInteractionState.setFocused(true)
+      transferFunctionPanelInteractionState.updateHitUV(hit)
+    } else {
+
+      switch mode {
+        case .model:
+          kind = .model
+        case .clipping:
+          kind = .clipping
+        case .screenView:
+          kind = .screenView
+          sharedAppModel.screenViewInteractionActive = true
+        case .marker:
+          guard let datasetInfo else { return }
+          let existingMarker = markerHit(
+            origin: sample.aimOrigin,
+            direction: sample.aimDirection,
+            datasetInfo: datasetInfo
+          )
+          if let existingMarker {
+            sharedAppModel.selectedVolumeMarkerID = existingMarker.id
+            markerID = existingMarker.id
+          } else {
+            let position: SIMD3<Float>
+            if storedAppModel.markerSpawnAtGaze,
+               let hit = rayVolumeHit(
+                origin: sample.aimOrigin,
+                direction: sample.aimDirection,
+                datasetInfo: datasetInfo
+               ) {
+              position = hit
+            } else {
+              position = markerPosition(
+                fromWorldPosition: sample.aimOrigin,
+                datasetInfo: datasetInfo
+              )
+            }
+            let marker = makeMarker(
+              at: position,
+              directionOrigin: markerPosition(
+                fromWorldPosition: sample.aimOrigin,
+                datasetInfo: datasetInfo
+              ),
+              color: sharedAppModel.defaultVolumeStrokeColor
+            )
+            sharedAppModel.volumeMarkers.append(marker)
+            sharedAppModel.selectedVolumeMarkerID = marker.id
+            markerID = marker.id
+            sharedAppModel.synchronizeMarkers()
+          }
+          markerStartPositions = Dictionary(
+            uniqueKeysWithValues: sharedAppModel.volumeMarkers.compactMap {
+              sharedAppModel.selectedVolumeMarkerIDs.contains($0.id)
+                ? ($0.id, $0.position) : nil
+            }
+          )
+          kind = .markerSphere
+      }
+    }
+
+    spatialAccessoryAction = SpatialAccessoryAction(
+      sourceID: sample.id,
+      kind: kind,
+      startTransform: transform,
+      startModelTranslation: sharedAppModel.modelTransform.translation,
+      startModelRotation: sharedAppModel.modelTransform.rotation,
+      startClippingTranslation: sharedAppModel.lastTranslationClipping,
+      markerID: markerID,
+      markerStartPositions: markerStartPositions,
+      transferFunctionStart: transferFunctionStart
+    )
+  }
+
+  private func beginSpatialAccessoryStroke(
+    _ sample: BorgSpatialInputSample,
+    datasetInfo: RuntimeAppModel.DatasetInfo?
+  ) {
+    guard spatialAccessoryAction == nil,
+          activeSpatialStylusID == nil,
+          !handInteractionIsActive,
+          let datasetInfo else { return }
+    let point = VolumeMarkerPoint(
+      position: markerPosition(
+        fromWorldPosition: sample.aimOrigin,
+        datasetInfo: datasetInfo
+      ),
+      radius: sharedAppModel.defaultVolumeStrokeRadius
+    )
+    let marker = VolumeMarker.stroke(
+      name: sharedAppModel.nextVolumeMarkerName(),
+      firstPoint: point,
+      color: sharedAppModel.defaultVolumeStrokeColor
+    )
+    sharedAppModel.volumeMarkers.append(marker)
+    sharedAppModel.selectedVolumeMarkerID = marker.id
+    sharedAppModel.synchronizeMarkers()
+    spatialAccessoryAction = SpatialAccessoryAction(
+      sourceID: sample.id,
+      kind: .markerStroke,
+      startTransform: sample.gripTransform,
+      startModelTranslation: sharedAppModel.modelTransform.translation,
+      startModelRotation: sharedAppModel.modelTransform.rotation,
+      startClippingTranslation: sharedAppModel.lastTranslationClipping,
+      markerID: marker.id,
+      markerStartPositions: [:],
+      transferFunctionStart: nil
+    )
+  }
+
+  private func updateSpatialAccessoryAction(
+    _ sample: BorgSpatialInputSample,
+    datasetInfo: RuntimeAppModel.DatasetInfo?
+  ) {
+    guard let action = spatialAccessoryAction,
+          action.sourceID == sample.id else { return }
+    let currentTransform = sample.gripTransform
+    let inverseWorld = sharedAppModel.originFromWorldAnchorMatrix.inverse
+    let currentAnchorTransform = inverseWorld * currentTransform
+    let startAnchorTransform = inverseWorld * action.startTransform
+    let translationDelta = SIMD3<Float>(currentAnchorTransform.columns.3.x,
+                                        currentAnchorTransform.columns.3.y,
+                                        currentAnchorTransform.columns.3.z) -
+      SIMD3<Float>(startAnchorTransform.columns.3.x,
+                   startAnchorTransform.columns.3.y,
+                   startAnchorTransform.columns.3.z)
+
+    switch action.kind {
+      case .model:
+        let startRotation = startAnchorTransform.rotationQuaternion(orthonormalize: true)
+        let currentRotation = currentAnchorTransform.rotationQuaternion(orthonormalize: true)
+        sharedAppModel.modelTransform.rotation = currentRotation * startRotation.inverse *
+          action.startModelRotation
+        sharedAppModel.modelTransform.translation = action.startModelTranslation + translationDelta
+        sharedAppModel.synchronize(kind: .transformOnly)
+
+      case .clipping:
+        var localDelta = simd_float3x3(sharedAppModel.modelTransform.rotation).inverse *
+          translationDelta
+        localDelta = simd_clamp(
+          action.startClippingTranslation + localDelta,
+          SIMD3<Float>(repeating: -0.99),
+          SIMD3<Float>(repeating: 0.99)
+        )
+        translationClipping = localDelta
+        sharedAppModel.clipMin = SIMD3<Float>(
+          localDelta.x >= 0 ? localDelta.x : 0,
+          localDelta.y >= 0 ? localDelta.y : 0,
+          localDelta.z >= 0 ? localDelta.z : 0
+        )
+        sharedAppModel.clipMax = SIMD3<Float>(
+          localDelta.x >= 0 ? 1 : 1 + localDelta.x,
+          localDelta.y >= 0 ? 1 : 1 + localDelta.y,
+          localDelta.z >= 0 ? 1 : 1 + localDelta.z
+        )
+        sharedAppModel.synchronize(kind: .stateOnly)
+
+      case .markerSphere:
+        guard let datasetInfo else { return }
+        let inverseVolume = markerVolumeMatrix(for: datasetInfo).inverse
+        let localDelta = inverseVolume.transformDirection(
+          SIMD3<Float>(currentTransform.columns.3.x,
+                       currentTransform.columns.3.y,
+                       currentTransform.columns.3.z) -
+            SIMD3<Float>(action.startTransform.columns.3.x,
+                         action.startTransform.columns.3.y,
+                         action.startTransform.columns.3.z)
+        )
+        for index in sharedAppModel.volumeMarkers.indices {
+          let id = sharedAppModel.volumeMarkers[index].id
+          guard let startPosition = action.markerStartPositions[id] else { continue }
+          sharedAppModel.volumeMarkers[index].position = clamp(
+            startPosition + localDelta,
+            BorgVRMarkerFormat.positionRange.lowerBound,
+            BorgVRMarkerFormat.positionRange.upperBound
+          )
+        }
+        sharedAppModel.synchronizeMarkers()
+
+      case .markerStroke:
+        guard let datasetInfo,
+              let markerID = action.markerID,
+              let markerIndex = sharedAppModel.volumeMarkers.firstIndex(where: {
+                $0.id == markerID
+              }) else { return }
+        let point = VolumeMarkerPoint(
+          position: markerPosition(
+            fromWorldPosition: sample.aimOrigin,
+            datasetInfo: datasetInfo
+          ),
+          radius: sharedAppModel.defaultVolumeStrokeRadius
+        )
+        let scale = simd_abs(sharedAppModel.modelTransform.scale) * datasetInfo.volumeScale
+        if sharedAppModel.volumeMarkers[markerIndex].appendStrokePoint(
+          point,
+          coordinateScale: scale
+        ) {
+          sharedAppModel.synchronizeMarkers()
+        }
+
+      case .screenView:
+        updateScreenView(fromWorldTransform: sample.gripTransform)
+
+      case .transferFunction:
+        guard let start = action.transferFunctionStart,
+              let hit = transferFunctionPanelInteractionState.hitTest(
+                origin: sample.aimOrigin,
+                direction: sample.aimDirection
+              ) else { return }
+        let delta = hit - start
+        transferFunctionPanelMarkerOpacity = min(
+          transferFunctionPanelMarkerOpacity,
+          markerOpacity(forDragDelta: delta)
+        )
+        transferFunctionPanelInteractionState.updateHitUV(
+          start,
+          opacity: transferFunctionPanelMarkerOpacity
+        )
+        let center = clamp(start.x + delta.x)
+        let signedShift = delta.y < 0
+          ? clamp(-0.08 + delta.y * 2, -1, -0.01)
+          : clamp(0.08 + delta.y * 2, 0.01, 1)
+        let channelMask = transferFunctionPanelInteractionState.shaderState().channelMask
+        let colorChannels = (0..<3).filter { channelMask & (1 << UInt32($0)) != 0 }
+        var operations: [TransferFunction1D.SmoothStepOperation] = []
+        if !colorChannels.isEmpty {
+          operations.append(.init(
+            start: center - signedShift * 0.5,
+            shift: signedShift,
+            channels: colorChannels
+          ))
+        }
+        if channelMask & (1 << 3) != 0 {
+          let alphaShift = abs(signedShift)
+          operations.append(.init(
+            start: center - alphaShift * 0.5,
+            shift: alphaShift,
+            channels: [3]
+          ))
+        }
+        sharedAppModel.transferFunction.scheduleSmoothSteps(operations) {
+          self.sharedAppModel.synchronize(kind: .full)
+        }
+    }
+  }
+
+  private func finishSpatialAccessoryAction() {
+    guard let action = spatialAccessoryAction else { return }
+    switch action.kind {
+      case .model:
+        sharedAppModel.lastModelTransform.translation = sharedAppModel.modelTransform.translation
+        sharedAppModel.lastModelTransform.rotation = sharedAppModel.modelTransform.rotation
+        sharedAppModel.synchronize(kind: .transformOnly)
+      case .clipping:
+        sharedAppModel.lastTranslationClipping = translationClipping
+        sharedAppModel.synchronize(kind: .stateOnly)
+      case .markerSphere, .markerStroke:
+        sharedAppModel.synchronizeMarkers()
+      case .screenView:
+        sharedAppModel.screenViewInteractionActive = false
+        sharedAppModel.synchronizeScreenView()
+        sharedAppModel.flushSynchronization()
+      case .transferFunction:
+        sharedAppModel.flushSynchronization()
+        transferFunctionPanelDragStart = nil
+        transferFunctionPanelHandStart = nil
+        transferFunctionPanelMarkerOpacity = 1
+        transferFunctionPanelMarkerSuppressed = true
+        transferFunctionPanelInteractionState.updateHitUV(nil)
+    }
+    spatialAccessoryAction = nil
+  }
+
+  private func updateScreenView(fromWorldTransform transform: simd_float4x4) {
+    guard var state = sharedAppModel.screenSharePlayViewState else {
+      sharedAppModel.screenViewInteractionActive = false
+      return
+    }
+    sharedAppModel.screenViewInteractionActive = true
+    let worldFromDataset = sharedAppModel.originFromWorldAnchorMatrix *
+      sharedAppModel.modelTransform.matrix
+    let controllerFromCamera = simd_float4x4(
+      simd_quatf(angle: -.pi / 2, axis: SIMD3<Float>(1, 0, 0)) *
+      simd_quatf(angle: -.pi / 6, axis: SIMD3<Float>(0, 1, 0)) *
+      simd_quatf(angle: .pi / 6, axis: SIMD3<Float>(1, 0, 0))
+    )
+    let datasetFromCamera = simd_inverse(worldFromDataset) * transform * controllerFromCamera
+    let cameraPosition = SIMD3<Float>(datasetFromCamera.columns.3.x,
+                                      datasetFromCamera.columns.3.y,
+                                      datasetFromCamera.columns.3.z)
+    let orientation = datasetFromCamera.rotationQuaternion(orthonormalize: true).inverse
+    let rotatedCameraPosition = orientation.act(cameraPosition)
+    guard rotatedCameraPosition.z > 0.001 else { return }
+    let scale = BorgVRScreenViewState.cameraDistance / rotatedCameraPosition.z
+    guard scale.isFinite else { return }
+    state.orientation = orientation
+    state.scale = min(max(scale, 0.05), 40)
+    state.pan = SIMD2<Float>(
+      -state.scale * rotatedCameraPosition.x,
+      -state.scale * rotatedCameraPosition.y
+    )
+    sharedAppModel.screenSharePlayViewState = state
+    sharedAppModel.synchronizeScreenView()
+  }
+
+  private func adjustSpatialAccessoryValues(
+    _ sample: BorgSpatialInputSample,
+    mode: RuntimeAppModel.InteractionMode,
+    deltaTime: Float
+  ) {
+    guard activeSpatialStylusID == nil, !handInteractionIsActive else { return }
+    if let action = spatialAccessoryAction,
+       action.sourceID != sample.id {
+      return
+    }
+    let stick = sample.adjustment
+    guard simd_length(stick) > 0.08 else { return }
+    let rate = min(max(deltaTime, 0), 0.05)
+
+    if let action = spatialAccessoryAction,
+       action.sourceID == sample.id,
+       case .markerStroke = action.kind {
+      if abs(stick.y) > 0.08 {
+        sharedAppModel.defaultVolumeStrokeRadius = VolumeMarkerRadius.clamp(
+          sharedAppModel.defaultVolumeStrokeRadius * exp(stick.y * rate * 2.5),
+          for: .stroke
+        )
+      }
+      if abs(stick.x) > 0.08 {
+        let hueShift = stick.x * rate * 0.6
+        sharedAppModel.defaultVolumeStrokeColor = shiftedHue(
+          sharedAppModel.defaultVolumeStrokeColor,
+          by: hueShift
+        )
+        if let markerID = action.markerID,
+           let markerIndex = sharedAppModel.volumeMarkers.firstIndex(where: {
+             $0.id == markerID
+           }) {
+          sharedAppModel.volumeMarkers[markerIndex].color =
+            sharedAppModel.defaultVolumeStrokeColor
+        }
+      }
+      sharedAppModel.synchronizeMarkers()
+      return
+    }
+
+    if mode == .model {
+      if abs(stick.y) > 0.08 {
+        let factor = exp(-stick.y * rate * 1.8)
+        sharedAppModel.modelTransform.scale = simd_clamp(
+          sharedAppModel.modelTransform.scale * factor,
+          SIMD3<Float>(repeating: 0.02),
+          SIMD3<Float>(repeating: 50)
+        )
+      }
+      if abs(stick.x) > 0.08 {
+        let rotation = simd_quatf(
+          angle: stick.x * rate * 2.4,
+          axis: SIMD3<Float>(0, 1, 0)
+        )
+        sharedAppModel.modelTransform.rotation = rotation *
+          sharedAppModel.modelTransform.rotation
+      }
+      sharedAppModel.lastModelTransform.scale = sharedAppModel.modelTransform.scale
+      sharedAppModel.lastModelTransform.rotation = sharedAppModel.modelTransform.rotation
+      sharedAppModel.synchronize(kind: .transformOnly)
+      return
+    }
+
+  }
+
+  private func shiftedHue(_ color: SIMD4<Float>, by shift: Float) -> SIMD4<Float> {
+    let maximum = max(color.x, color.y, color.z)
+    let minimum = min(color.x, color.y, color.z)
+    let delta = maximum - minimum
+    var hue: Float = 0
+    if delta > 0.000_001 {
+      if maximum == color.x {
+        hue = (color.y - color.z) / delta / 6
+      } else if maximum == color.y {
+        hue = ((color.z - color.x) / delta + 2) / 6
+      } else {
+        hue = ((color.x - color.y) / delta + 4) / 6
+      }
+    }
+    hue = hue + shift - floor(hue + shift)
+    let sector = hue * 6
+    let index = Int(floor(sector)) % 6
+    let fraction = sector - floor(sector)
+    let rgb: SIMD3<Float>
+    switch index {
+      case 0: rgb = SIMD3<Float>(1, fraction, 0)
+      case 1: rgb = SIMD3<Float>(1 - fraction, 1, 0)
+      case 2: rgb = SIMD3<Float>(0, 1, fraction)
+      case 3: rgb = SIMD3<Float>(0, 1 - fraction, 1)
+      case 4: rgb = SIMD3<Float>(fraction, 0, 1)
+      default: rgb = SIMD3<Float>(1, 0, 1 - fraction)
+    }
+    return SIMD4<Float>(rgb, color.w)
+  }
+
+  private var handInteractionIsActive: Bool {
+    startTranslation != .zero ||
+      startTranslationClipping != .zero ||
+      doubleEventIsRunning ||
+      transferFunctionPanelDragStart != nil ||
+      markerDragID != nil ||
+      markerScaleID != nil ||
+      quickMarkerDragActive ||
+      sharedAppModel.screenViewInteractionActive
+  }
+
+  func spatialStylusSample(
+    from samples: [BorgSpatialInputSample]
+  ) -> BorgSpatialStylusSample? {
+    let styli = samples.filter { $0.source == .stylus }
+    let activeSample = activeSpatialStylusID.flatMap({ activeID in
+      styli.first(where: { $0.id == activeID })
+    })
+    if activeSpatialStylusID != nil, activeSample == nil {
+      activeSpatialStylusID = nil
+    }
+    guard let sample = activeSample ?? styli.first else {
+      activeSpatialStylusID = nil
+      return nil
+    }
+
+    let requestsAction = sample.primaryPressed || sample.modifierPressed
+    if activeSpatialStylusID == sample.id {
+      if !requestsAction {
+        activeSpatialStylusID = nil
+      }
+    } else if requestsAction,
+              spatialAccessoryAction == nil,
+              !handInteractionIsActive {
+      activeSpatialStylusID = sample.id
+    }
+
+    let ownsAction = activeSpatialStylusID == sample.id
+    return BorgSpatialStylusSample(
+      tipPosition: sample.aimOrigin,
+      isDrawing: ownsAction && sample.primaryPressed,
+      tipPressure: ownsAction ? sample.tipPressure : nil,
+      isAdjustingRadius: ownsAction && !sample.primaryPressed && sample.modifierPressed
+    )
+  }
+
+  func handleSpatialInputSamples(
+    _ samples: [BorgSpatialInputSample],
+    interactionMode: RuntimeAppModel.InteractionMode,
+    datasetInfo: RuntimeAppModel.DatasetInfo?,
+    timestamp: TimeInterval
+  ) {
+    let controllers = samples.filter { $0.source == .controller }
+    let controllerIDs = Set(controllers.map(\.id))
+    if let action = spatialAccessoryAction,
+       !controllerIDs.contains(action.sourceID) {
+      finishSpatialAccessoryAction()
+    }
+
+    let deltaTime = Float(timestamp - (lastSpatialAccessoryAdjustmentTime ?? timestamp))
+    lastSpatialAccessoryAdjustmentTime = timestamp
+    for sample in controllers {
+      if spatialAccessoryAction == nil {
+        let hit = transferFunctionPanelInteractionState.hitTest(
+          origin: sample.aimOrigin,
+          direction: sample.aimDirection
+        )
+        transferFunctionPanelInteractionState.setFocused(hit != nil)
+        transferFunctionPanelInteractionState.updateHitUV(hit)
+      }
+      let wasPressed = spatialAccessoryPrimaryStates[sample.id] ?? false
+      let wasModifierPressed = spatialAccessoryModifierStates[sample.id] ?? false
+      if sample.modifierPressed && !wasModifierPressed {
+        beginSpatialAccessoryStroke(sample, datasetInfo: datasetInfo)
+      }
+      if sample.primaryPressed && !wasPressed {
+        beginSpatialAccessoryAction(
+          sample,
+          mode: interactionMode,
+          datasetInfo: datasetInfo
+        )
+      }
+      if let action = spatialAccessoryAction,
+         action.sourceID == sample.id {
+        switch action.kind {
+          case .markerStroke:
+            if sample.modifierPressed {
+              updateSpatialAccessoryAction(sample, datasetInfo: datasetInfo)
+            } else if wasModifierPressed {
+              finishSpatialAccessoryAction()
+            }
+          default:
+            if sample.primaryPressed {
+              updateSpatialAccessoryAction(sample, datasetInfo: datasetInfo)
+            } else if wasPressed {
+              finishSpatialAccessoryAction()
+            }
+        }
+      }
+      adjustSpatialAccessoryValues(
+        sample,
+        mode: interactionMode,
+        deltaTime: deltaTime
+      )
+      spatialAccessoryPrimaryStates[sample.id] = sample.primaryPressed
+      spatialAccessoryModifierStates[sample.id] = sample.modifierPressed
+    }
+    spatialAccessoryPrimaryStates = spatialAccessoryPrimaryStates.filter {
+      controllerIDs.contains($0.key)
+    }
+    spatialAccessoryModifierStates = spatialAccessoryModifierStates.filter {
+      controllerIDs.contains($0.key)
+    }
+  }
+
   private func markerOpacity(forDragDelta delta: SIMD2<Float>) -> Float {
     let dragDistance = simd_length(delta)
     return clamp(1 - max(0, dragDistance - 0.01) * 20)
@@ -891,6 +1468,7 @@ class ImmersiveInteraction {
                            _ transferEditState: RuntimeAppModel.TransferEditState,
                            datasetInfo: RuntimeAppModel.DatasetInfo?,
                            toggleChannel: @escaping @MainActor (Int) -> Void) {
+    guard spatialAccessoryAction == nil, activeSpatialStylusID == nil else { return }
     if interactionMode != .screenView {
       sharedAppModel.screenViewInteractionActive = false
     }

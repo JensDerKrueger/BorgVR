@@ -305,8 +305,10 @@ struct VisionApp: App {
                                storedAppModel: storedAppModel,
                                sharedAppModel: sharedAppModel)
       }
+      .upperLimbVisibility(storedAppModel.showHandsAndAccessories ? .visible : .hidden)
     }
     .immersionStyle(selection: .constant(runtimeAppModel.mixedImmersionStyle ? .mixed : .full), in: runtimeAppModel.mixedImmersionStyle ? .mixed : .full)
+    .persistentSystemOverlays(.hidden)
     .handlesExternalEvents(matching: [groupActivityIdentifier])
   }
 

@@ -103,6 +103,61 @@ struct Tesselation {
   }
 
   /**
+   Generates a closed cone that points toward the local negative z axis.
+
+   The tip is placed at the origin and the circular base is centered at `z = height`.
+   This makes the cone convenient for tracked pointing devices whose forward direction is `-z`.
+   */
+  static func genPointerCone(radius: Float, height: Float,
+                             sectorCount: UInt32) -> Tesselation {
+    var tess = Tesselation()
+    guard radius > 0, height > 0, sectorCount >= 3 else { return tess }
+
+    let tip = SIMD3<Float>(0, 0, 0)
+    let baseCenter = SIMD3<Float>(0, 0, height)
+    let step = 2 * PI / Float(sectorCount)
+    let slope = radius / height
+
+    for sector in 0..<sectorCount {
+      let angle0 = Float(sector) * step
+      let angle1 = Float(sector + 1) * step
+      let base0 = SIMD3<Float>(radius * cosf(angle0), radius * sinf(angle0), height)
+      let base1 = SIMD3<Float>(radius * cosf(angle1), radius * sinf(angle1), height)
+      let normal0 = normalize(SIMD3<Float>(cosf(angle0), sinf(angle0), -slope))
+      let normal1 = normalize(SIMD3<Float>(cosf(angle1), sinf(angle1), -slope))
+      let tipNormal = normalize(normal0 + normal1)
+
+      let sideStart = UInt32(tess.vertices.count)
+      tess.vertices.append(contentsOf: [tip, base1, base0])
+      tess.normals.append(contentsOf: [tipNormal, normal1, normal0])
+      tess.tangents.append(contentsOf: [
+        SIMD3<Float>(1, 0, 0),
+        SIMD3<Float>(-sinf(angle1), cosf(angle1), 0),
+        SIMD3<Float>(-sinf(angle0), cosf(angle0), 0)
+      ])
+      tess.texCoords.append(contentsOf: [
+        SIMD2<Float>(0.5, 0),
+        SIMD2<Float>(1, 1),
+        SIMD2<Float>(0, 1)
+      ])
+      tess.indices.append(contentsOf: [sideStart, sideStart + 1, sideStart + 2])
+
+      let baseStart = UInt32(tess.vertices.count)
+      tess.vertices.append(contentsOf: [baseCenter, base0, base1])
+      tess.normals.append(contentsOf: Array(repeating: SIMD3<Float>(0, 0, 1), count: 3))
+      tess.tangents.append(contentsOf: Array(repeating: SIMD3<Float>(1, 0, 0), count: 3))
+      tess.texCoords.append(contentsOf: [
+        SIMD2<Float>(0.5, 0.5),
+        SIMD2<Float>((cosf(angle0) + 1) * 0.5, (sinf(angle0) + 1) * 0.5),
+        SIMD2<Float>((cosf(angle1) + 1) * 0.5, (sinf(angle1) + 1) * 0.5)
+      ])
+      tess.indices.append(contentsOf: [baseStart, baseStart + 1, baseStart + 2])
+    }
+
+    return tess
+  }
+
+  /**
    Generates a tessellated rectangle.
 
    The rectangle is centered at a specified point with a given width and height.

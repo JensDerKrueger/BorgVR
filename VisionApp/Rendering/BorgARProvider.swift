@@ -19,6 +19,49 @@ struct BorgSpatialStylusSample {
   let isAdjustingRadius: Bool
 }
 
+enum BorgSpatialInputSource: Sendable {
+  case stylus
+  case controller
+}
+
+enum BorgSpatialInputChirality: Sendable {
+  case left
+  case right
+  case unspecified
+}
+
+/// Device-independent input consumed by the immersive interaction layer.
+struct BorgSpatialInputSample: Sendable {
+  let id: UUID
+  let source: BorgSpatialInputSource
+  let chirality: BorgSpatialInputChirality
+  let aimTransform: simd_float4x4
+  let gripTransform: simd_float4x4
+  let primaryValue: Float
+  let modifierPressed: Bool
+  let adjustment: SIMD2<Float>
+  let tipPressure: Float?
+
+  var primaryPressed: Bool { primaryValue > 0.05 }
+  var position: SIMD3<Float> {
+    SIMD3<Float>(gripTransform.columns.3.x,
+                 gripTransform.columns.3.y,
+                 gripTransform.columns.3.z)
+  }
+  var aimOrigin: SIMD3<Float> {
+    SIMD3<Float>(aimTransform.columns.3.x,
+                 aimTransform.columns.3.y,
+                 aimTransform.columns.3.z)
+  }
+  var aimDirection: SIMD3<Float> {
+    simd_normalize(-SIMD3<Float>(
+      aimTransform.columns.2.x,
+      aimTransform.columns.2.y,
+      aimTransform.columns.2.z
+    ))
+  }
+}
+
 final class BorgARProvider {
 
   private let logger: LoggerBase?
@@ -26,8 +69,7 @@ final class BorgARProvider {
   let provider: WorldTrackingProvider
   private var updatesTask: Task<Void, Never>?
   private var sharingAvailabilityTask: Task<Void, Never>?
-  private var stylusConnectionTask: Task<Void, Never>?
-  private var stylusDisconnectionTask: Task<Void, Never>?
+  private var accessoryConnectionTasks: [Task<Void, Never>] = []
   private var isHost: Bool = false
 
   private(set) var currentWorldAnchor: WorldAnchor?
@@ -35,7 +77,17 @@ final class BorgARProvider {
   private var latestWorldAnchorTransform: simd_float4x4?
   private var worldAnchorCreationInProgress: Bool = false
   private var sharingIsAvailable: Bool = false
-  private var activeStylus: GCStylus?
+  private enum SpatialAccessoryDevice {
+    case stylus(GCStylus)
+    case controller(GCController)
+  }
+
+  private struct TrackedSpatialAccessory {
+    let accessory: Accessory
+    let device: SpatialAccessoryDevice
+  }
+
+  private var trackedSpatialAccessories: [TrackedSpatialAccessory] = []
   private var accessoryTrackingProvider: AccessoryTrackingProvider?
 
   init(logger: LoggerBase?, groupSessionHost: Bool) {
@@ -48,12 +100,10 @@ final class BorgARProvider {
   deinit {
     updatesTask?.cancel()
     sharingAvailabilityTask?.cancel()
-    stylusConnectionTask?.cancel()
-    stylusDisconnectionTask?.cancel()
+    accessoryConnectionTasks.forEach { $0.cancel() }
     updatesTask = nil
     sharingAvailabilityTask = nil
-    stylusConnectionTask = nil
-    stylusDisconnectionTask = nil
+    accessoryConnectionTasks.removeAll()
     session.stop()
   }
 
@@ -89,48 +139,107 @@ final class BorgARProvider {
   }
 
   func getSpatialStylusSample(atTimestamp timestamp: TimeInterval) -> BorgSpatialStylusSample? {
-    let stylusState = stateQueue.sync {
-      (activeStylus, accessoryTrackingProvider)
-    }
-    guard let stylus = stylusState.0,
-          let accessoryTrackingProvider = stylusState.1,
-          accessoryTrackingProvider.state == .running,
-          let latestAnchor = accessoryTrackingProvider.latestAnchors.first else {
-      return nil
-    }
-
-    let anchor = accessoryTrackingProvider.predictAnchor(
-      for: latestAnchor,
-      at: timestamp
-    ) ?? latestAnchor
-    switch anchor.trackingState {
-      case .positionOrientationTracked, .positionOrientationTrackedLowAccuracy:
-        break
-      case .untracked, .orientationTracked:
-        return nil
-      @unknown default:
-        return nil
-    }
-
-    let input = stylus.input
-    let tipInput = input?.buttons[.stylusTip]?.pressedInput
-    let tipPressure = min(1, max(0, tipInput?.value ?? 0))
-    // The system's binary pressed threshold is too high for natural writing.
-    let tipPressed = tipPressure > 0.001
-    let primaryPressed = input?.buttons[.stylusPrimaryButton]?.pressedInput.isPressed ?? false
-    let secondaryPressed = input?.buttons[.stylusSecondaryButton]?.pressedInput.isPressed ?? false
-    let isDrawing = tipPressed || secondaryPressed
-
-    let tipTransform = anchor.coordinateSpace(
-      for: .aim,
-      correction: .rendered
-    ).ancestorFromSpaceTransformFloat()
+    guard let sample = getSpatialInputSamples(atTimestamp: timestamp).first(where: {
+      $0.source == .stylus
+    }) else { return nil }
     return BorgSpatialStylusSample(
-      tipPosition: tipTransform.translation.vector,
-      isDrawing: isDrawing,
-      tipPressure: tipPressed ? tipPressure : nil,
-      isAdjustingRadius: !isDrawing && primaryPressed
+      tipPosition: sample.aimOrigin,
+      isDrawing: sample.primaryPressed,
+      tipPressure: sample.tipPressure,
+      isAdjustingRadius: !sample.primaryPressed && sample.modifierPressed
     )
+  }
+
+  func getSpatialInputSamples(atTimestamp timestamp: TimeInterval) -> [BorgSpatialInputSample] {
+    let state = stateQueue.sync {
+      (trackedSpatialAccessories, accessoryTrackingProvider)
+    }
+    guard let accessoryTrackingProvider = state.1,
+          accessoryTrackingProvider.state == .running else {
+      return []
+    }
+
+    return accessoryTrackingProvider.latestAnchors.compactMap { latestAnchor in
+      guard let tracked = state.0.first(where: {
+        $0.accessory.id == latestAnchor.accessory.id
+      }) else { return nil }
+
+      let anchor = accessoryTrackingProvider.predictAnchor(
+        for: latestAnchor,
+        at: timestamp
+      ) ?? latestAnchor
+      switch anchor.trackingState {
+        case .positionOrientationTracked, .positionOrientationTrackedLowAccuracy:
+          break
+        case .untracked, .orientationTracked:
+          return nil
+        @unknown default:
+          return nil
+      }
+
+      let aimTransform = anchor.coordinateSpace(
+        for: .aim,
+        correction: .rendered
+      ).ancestorFromSpaceTransformFloat().matrix
+      let gripTransform: simd_float4x4
+      if tracked.accessory.locations.contains(.grip) {
+        gripTransform = anchor.coordinateSpace(
+          for: .grip,
+          correction: .rendered
+        ).ancestorFromSpaceTransformFloat().matrix
+      } else {
+        gripTransform = aimTransform
+      }
+
+      let chirality: BorgSpatialInputChirality
+      switch anchor.heldChirality ?? tracked.accessory.inherentChirality {
+        case .left: chirality = .left
+        case .right: chirality = .right
+        case .unspecified: chirality = .unspecified
+        @unknown default: chirality = .unspecified
+      }
+
+      switch tracked.device {
+        case .stylus(let stylus):
+          let input = stylus.input
+          let tipInput = input?.buttons[.stylusTip]?.pressedInput
+          let tipPressure = min(1, max(0, tipInput?.value ?? 0))
+          let tipPressed = tipPressure > 0.001
+          let sideDraw = input?.buttons[.stylusSecondaryButton]?.pressedInput.isPressed ?? false
+          let modifier = input?.buttons[.stylusPrimaryButton]?.pressedInput.isPressed ?? false
+          return BorgSpatialInputSample(
+            id: tracked.accessory.id,
+            source: .stylus,
+            chirality: chirality,
+            aimTransform: aimTransform,
+            gripTransform: gripTransform,
+            primaryValue: tipPressed || sideDraw ? max(tipPressure, 1) : 0,
+            modifierPressed: modifier,
+            adjustment: .zero,
+            tipPressure: tipPressed ? tipPressure : nil
+          )
+
+        case .controller(let controller):
+          let input = controller.input
+          let trigger = input.buttons[.trigger]?.pressedInput.value ?? 0
+          let grip = input.buttons[.grip]?.pressedInput.value ?? 0
+          let thumbstick = input.dpads[.thumbstick]
+          return BorgSpatialInputSample(
+            id: tracked.accessory.id,
+            source: .controller,
+            chirality: chirality,
+            aimTransform: aimTransform,
+            gripTransform: gripTransform,
+            primaryValue: min(1, max(0, trigger)),
+            modifierPressed: grip > 0.05,
+            adjustment: SIMD2<Float>(
+              thumbstick?.xAxis.value ?? 0,
+              thumbstick?.yAxis.value ?? 0
+            ),
+            tipPressure: nil
+          )
+      }
+    }
   }
 
   // MARK: - Session
@@ -141,21 +250,10 @@ final class BorgARProvider {
     latestWorldAnchorTransform = nil
     worldAnchorCreationInProgress = false
     do {
-      if let stylus = GCStylus.styli.first(where: {
-        $0.productCategory == GCProductCategorySpatialStylus
-      }) {
-        do {
-          try await activateSpatialStylus(stylus)
-        } catch {
-          logger?.warning("Spatial stylus is unavailable: \(error)")
-          try await session.run([provider])
-        }
-      } else {
-        try await session.run([provider])
-      }
+      try await reconfigureSpatialAccessories()
       startWorldAnchorListener()
       startSharingAvailabilityListener()
-      startSpatialStylusListeners()
+      startSpatialAccessoryListeners()
     } catch {
       logger?.error("ARSession failed to start: \(error)")
       fatalError("Failed to initialize ARSession")
@@ -165,62 +263,84 @@ final class BorgARProvider {
   public func stopARSession() {
     updatesTask?.cancel()
     sharingAvailabilityTask?.cancel()
-    stylusConnectionTask?.cancel()
-    stylusDisconnectionTask?.cancel()
+    accessoryConnectionTasks.forEach { $0.cancel() }
+    accessoryConnectionTasks.removeAll()
 
     currentWorldAnchor = nil
     latestWorldAnchorTransform = nil
     worldAnchorCreationInProgress = false
     sharingIsAvailable = false
     stateQueue.sync {
-      activeStylus = nil
+      trackedSpatialAccessories.removeAll()
       accessoryTrackingProvider = nil
     }
     session.stop()
   }
 
   @MainActor
-  private func activateSpatialStylus(_ stylus: GCStylus) async throws {
-    guard stylus.productCategory == GCProductCategorySpatialStylus else {
-      return
+  private func reconfigureSpatialAccessories() async throws {
+    let styli = GCStylus.styli.filter {
+      $0.productCategory == GCProductCategorySpatialStylus
     }
-    if stateQueue.sync(execute: { activeStylus === stylus }) {
-      return
+    let controllers = GCController.controllers().filter {
+      $0.productCategory == GCProductCategorySpatialController
     }
 
-    let accessory = try await Accessory(device: stylus)
-    let accessoryProvider = AccessoryTrackingProvider(accessories: [accessory])
-    try await session.run([provider, accessoryProvider])
+    var tracked: [TrackedSpatialAccessory] = []
+    for stylus in styli {
+      do {
+        tracked.append(.init(
+          accessory: try await Accessory(device: stylus),
+          device: .stylus(stylus)
+        ))
+      } catch {
+        logger?.warning("Spatial stylus is unavailable: \(error)")
+      }
+    }
+    for controller in controllers {
+      do {
+        tracked.append(.init(
+          accessory: try await Accessory(device: controller),
+          device: .controller(controller)
+        ))
+      } catch {
+        logger?.warning("Spatial controller is unavailable: \(error)")
+      }
+    }
+
+    let accessoryProvider: AccessoryTrackingProvider?
+    if tracked.isEmpty {
+      accessoryProvider = nil
+      try await session.run([provider])
+    } else {
+      let newProvider = AccessoryTrackingProvider(accessories: tracked.map(\.accessory))
+      accessoryProvider = newProvider
+      try await session.run([provider, newProvider])
+    }
     stateQueue.sync {
-      activeStylus = stylus
+      trackedSpatialAccessories = tracked
       accessoryTrackingProvider = accessoryProvider
     }
-    logger?.info("Spatial stylus connected: \(stylus.vendorName ?? stylus.productCategory)")
+    logger?.info(
+      "Tracking \(styli.count) spatial stylus device(s) and \(controllers.count) spatial controller(s)"
+    )
   }
 
   @MainActor
-  private func deactivateSpatialStylus(_ stylus: GCStylus) async {
-    guard stateQueue.sync(execute: { activeStylus === stylus }) else {
-      return
-    }
+  private func reconfigureSpatialAccessoriesAfterConnectionChange() async {
     do {
-      try await session.run([provider])
-      logger?.info("Spatial stylus disconnected")
+      try await reconfigureSpatialAccessories()
     } catch {
-      logger?.error("Failed to stop spatial stylus tracking: \(error)")
-    }
-    stateQueue.sync {
-      activeStylus = nil
-      accessoryTrackingProvider = nil
+      logger?.error("Failed to reconfigure spatial accessory tracking: \(error)")
     }
   }
 
   @MainActor
-  private func startSpatialStylusListeners() {
-    stylusConnectionTask?.cancel()
-    stylusDisconnectionTask?.cancel()
+  private func startSpatialAccessoryListeners() {
+    accessoryConnectionTasks.forEach { $0.cancel() }
+    accessoryConnectionTasks.removeAll()
 
-    stylusConnectionTask = Task { @MainActor [weak self] in
+    accessoryConnectionTasks.append(Task { @MainActor [weak self] in
       for await notification in NotificationCenter.default.notifications(
         named: .GCStylusDidConnect
       ) {
@@ -229,25 +349,47 @@ final class BorgARProvider {
               stylus.productCategory == GCProductCategorySpatialStylus else {
           continue
         }
-        do {
-          try await self.activateSpatialStylus(stylus)
-        } catch {
-          self.logger?.error("Failed to start spatial stylus tracking: \(error)")
-        }
+        await self.reconfigureSpatialAccessoriesAfterConnectionChange()
       }
-    }
+    })
 
-    stylusDisconnectionTask = Task { @MainActor [weak self] in
+    accessoryConnectionTasks.append(Task { @MainActor [weak self] in
       for await notification in NotificationCenter.default.notifications(
         named: .GCStylusDidDisconnect
       ) {
         guard let self,
-              let stylus = notification.object as? GCStylus else {
+              notification.object is GCStylus else {
           continue
         }
-        await self.deactivateSpatialStylus(stylus)
+        await self.reconfigureSpatialAccessoriesAfterConnectionChange()
       }
-    }
+    })
+
+    accessoryConnectionTasks.append(Task { @MainActor [weak self] in
+      for await notification in NotificationCenter.default.notifications(
+        named: .GCControllerDidConnect
+      ) {
+        guard let self,
+              let controller = notification.object as? GCController,
+              controller.productCategory == GCProductCategorySpatialController else {
+          continue
+        }
+        await self.reconfigureSpatialAccessoriesAfterConnectionChange()
+      }
+    })
+
+    accessoryConnectionTasks.append(Task { @MainActor [weak self] in
+      for await notification in NotificationCenter.default.notifications(
+        named: .GCControllerDidDisconnect
+      ) {
+        guard let self,
+              let controller = notification.object as? GCController,
+              controller.productCategory == GCProductCategorySpatialController else {
+          continue
+        }
+        await self.reconfigureSpatialAccessoriesAfterConnectionChange()
+      }
+    })
   }
 
   // MARK: - World anchor management (async)
