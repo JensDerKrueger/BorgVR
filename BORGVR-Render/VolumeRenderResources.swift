@@ -2,12 +2,16 @@ import simd
 
 enum VolumeRenderResources {
   static func volumeScale(for metadata: BORGVRMetaData) -> simd_float4x4 {
-    let maximumExtent = Float(max(metadata.width, metadata.height, metadata.depth))
-    let scale = SIMD3<Float>(
-      metadata.aspectX * Float(metadata.width) / maximumExtent,
-      metadata.aspectY * Float(metadata.height) / maximumExtent,
-      metadata.aspectZ * Float(metadata.depth) / maximumExtent
+    let physicalExtent = SIMD3<Float>(
+      metadata.aspectX * Float(metadata.width),
+      metadata.aspectY * Float(metadata.height),
+      metadata.aspectZ * Float(metadata.depth)
     )
+    let maximumExtent = max(physicalExtent.x, physicalExtent.y, physicalExtent.z)
+    guard maximumExtent.isFinite, maximumExtent > 0 else {
+      return matrix_identity_float4x4
+    }
+    let scale = physicalExtent / maximumExtent
     return simd_float4x4(
       SIMD4<Float>(scale.x, 0, 0, 0),
       SIMD4<Float>(0, scale.y, 0, 0),
