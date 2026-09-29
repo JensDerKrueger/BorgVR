@@ -1,7 +1,7 @@
 const DEFAULT_LIGHTING = Object.freeze({
   direction: [0, 0, 1],
-  ambientColor: [0.1, 0.1, 0.1],
-  diffuseColor: [0.5, 0.5, 0.5],
+  ambientColor: [1, 1, 1],
+  diffuseColor: [0.6, 0.6, 0.6],
   specularColor: [0.8, 0.8, 0.8]
 });
 
@@ -16,6 +16,10 @@ export function installLightingEditor({
   let lighting = cloneLighting(DEFAULT_LIGHTING);
   let dragStartVector = null;
   let dragStartDirection = null;
+
+  ambientInput.value = colorToHex(lighting.ambientColor);
+  diffuseInput.value = colorToHex(lighting.diffuseColor);
+  specularInput.value = colorToHex(lighting.specularColor);
 
   function publish() {
     drawLightingSphere(canvas, lighting);

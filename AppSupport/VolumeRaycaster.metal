@@ -430,15 +430,15 @@ fragment half4 VOLUME_FRAGMENT_SHADER_TF_LIGHTING_NAME(
 
           half3 posInView    = half3((uniforms.modelView * float4((sampleNormCoords - 0.5),1)).xyz);
           half3 normalInView = half3(normalize((uniforms.modelViewIT * float4(normal,0)).xyz));
-          current.rgb += float3(lighting(
-                                           posInView,
-                                           normalInView,
-                                           half3(current.rgb),
-                                           half3(uniforms.lightDirection.xyz),
-                                           half3(uniforms.ambientLightColor.xyz),
-                                           half3(uniforms.diffuseLightColor.xyz),
-                                           half3(uniforms.specularLightColor.xyz)
-                                           ));
+          current.rgb = float3(lighting(
+                                          posInView,
+                                          normalInView,
+                                          half3(current.rgb),
+                                          half3(uniforms.lightDirection.xyz),
+                                          half3(uniforms.ambientLightColor.xyz),
+                                          half3(uniforms.diffuseLightColor.xyz),
+                                          half3(uniforms.specularLightColor.xyz)
+                                          ));
         }
 
         accColor = underFloat(current, accColor);

@@ -504,7 +504,7 @@ fn fragmentMain(input: VertexOut) -> @location(0) vec4<f32> {
         var sampleColor = tf.rgb;
         if (renderMode == RENDER_MODE_TF_LIGHTING && alpha > 0.01) {
           let normal = computeNormalForBrick(brick.index, brick.coords, brick.lod, samplePoint);
-          sampleColor = clamp(sampleColor + lighting(samplePoint, normal, sampleColor), vec3<f32>(0.0), vec3<f32>(1.0));
+          sampleColor = lighting(samplePoint, normal, sampleColor);
         }
         accumulatedColor = accumulatedColor + (1.0 - accumulatedAlpha) * sampleColor * alpha;
         accumulatedAlpha = accumulatedAlpha + (1.0 - accumulatedAlpha) * alpha;
@@ -644,8 +644,8 @@ export class CoordinateCubeRenderer {
     this.clipMin = [0, 0, 0];
     this.clipMax = [1, 1, 1];
     this.lightDirection = [0, 0, 1];
-    this.ambientLightColor = [0.1, 0.1, 0.1];
-    this.diffuseLightColor = [0.5, 0.5, 0.5];
+    this.ambientLightColor = [1, 1, 1];
+    this.diffuseLightColor = [0.6, 0.6, 0.6];
     this.specularLightColor = [0.8, 0.8, 0.8];
     this.totalBrickCount = 1;
     this.lastPointer = null;
