@@ -1,8 +1,8 @@
 const DEFAULT_LIGHTING = Object.freeze({
   direction: [0, 0, 1],
-  ambientColor: [1, 1, 1],
-  diffuseColor: [0.6, 0.6, 0.6],
-  specularColor: [0.8, 0.8, 0.8]
+  ambientColor: [0.15, 0.15, 0.15],
+  diffuseColor: [0.8, 0.8, 0.8],
+  specularColor: [1, 1, 1]
 });
 
 export function installLightingEditor({

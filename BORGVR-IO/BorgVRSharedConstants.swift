@@ -43,9 +43,9 @@ enum BorgVRSharePlayProtocol {
 
 struct BorgVRLightingState: Equatable, Sendable {
   static let defaultDirection = SIMD3<Float>(0, 0, 1)
-  static let defaultAmbientColor = SIMD3<Float>(repeating: 1.0)
-  static let defaultDiffuseColor = SIMD3<Float>(repeating: 0.6)
-  static let defaultSpecularColor = SIMD3<Float>(repeating: 0.8)
+  static let defaultAmbientColor = SIMD3<Float>(repeating: 0.15)
+  static let defaultDiffuseColor = SIMD3<Float>(repeating: 0.8)
+  static let defaultSpecularColor = SIMD3<Float>(repeating: 1.0)
 
   var direction: SIMD3<Float>
   var ambientColor: SIMD3<Float>

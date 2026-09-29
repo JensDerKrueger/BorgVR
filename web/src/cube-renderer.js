@@ -644,9 +644,9 @@ export class CoordinateCubeRenderer {
     this.clipMin = [0, 0, 0];
     this.clipMax = [1, 1, 1];
     this.lightDirection = [0, 0, 1];
-    this.ambientLightColor = [1, 1, 1];
-    this.diffuseLightColor = [0.6, 0.6, 0.6];
-    this.specularLightColor = [0.8, 0.8, 0.8];
+    this.ambientLightColor = [0.15, 0.15, 0.15];
+    this.diffuseLightColor = [0.8, 0.8, 0.8];
+    this.specularLightColor = [1, 1, 1];
     this.totalBrickCount = 1;
     this.lastPointer = null;
     this.activePointers = new Map();
