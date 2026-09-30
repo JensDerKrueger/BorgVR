@@ -6,6 +6,7 @@ final class AppStoreUpdateChecker: ObservableObject {
   struct AvailableUpdate: Equatable {
     let version: String
     let storeURL: URL
+    let releaseNotes: String?
   }
 
   private enum DefaultsKey {
@@ -15,6 +16,7 @@ final class AppStoreUpdateChecker: ObservableObject {
     static let lastCheck = "appStoreUpdateLastCheck"
     static let cachedVersion = "appStoreUpdateCachedVersion"
     static let cachedStoreURL = "appStoreUpdateCachedStoreURL"
+    static let cachedReleaseNotes = "appStoreUpdateCachedReleaseNotes"
   }
 
   private struct LookupResponse: Decodable {
@@ -24,6 +26,7 @@ final class AppStoreUpdateChecker: ObservableObject {
   private struct LookupResult: Decodable {
     let version: String
     let trackViewUrl: String?
+    let releaseNotes: String?
   }
 
   private static let appStoreID = "6751489740"
@@ -103,7 +106,17 @@ final class AppStoreUpdateChecker: ObservableObject {
       defaults.set(result.version, forKey: DefaultsKey.cachedVersion)
       let storeURL = result.trackViewUrl.flatMap(URL.init(string:)) ?? fallbackStoreURL
       defaults.set(storeURL.absoluteString, forKey: DefaultsKey.cachedStoreURL)
-      presentUpdateIfEligible(version: result.version, storeURL: storeURL)
+      let releaseNotes = result.releaseNotes?.trimmingCharacters(in: .whitespacesAndNewlines)
+      if let releaseNotes, !releaseNotes.isEmpty {
+        defaults.set(releaseNotes, forKey: DefaultsKey.cachedReleaseNotes)
+      } else {
+        defaults.removeObject(forKey: DefaultsKey.cachedReleaseNotes)
+      }
+      presentUpdateIfEligible(
+        version: result.version,
+        storeURL: storeURL,
+        releaseNotes: releaseNotes
+      )
     } catch {
       // Update checks are optional and must never interfere with app startup.
     }
@@ -163,10 +176,18 @@ final class AppStoreUpdateChecker: ObservableObject {
     guard let version = defaults.string(forKey: DefaultsKey.cachedVersion) else { return }
     let storeURL = defaults.string(forKey: DefaultsKey.cachedStoreURL)
       .flatMap(URL.init(string:)) ?? fallbackStoreURL
-    presentUpdateIfEligible(version: version, storeURL: storeURL)
+    presentUpdateIfEligible(
+      version: version,
+      storeURL: storeURL,
+      releaseNotes: defaults.string(forKey: DefaultsKey.cachedReleaseNotes)
+    )
   }
 
-  private func presentUpdateIfEligible(version: String, storeURL: URL) {
+  private func presentUpdateIfEligible(
+    version: String,
+    storeURL: URL,
+    releaseNotes: String?
+  ) {
     guard version.compare(currentVersion, options: .numeric) == .orderedDescending,
           defaults.string(forKey: DefaultsKey.ignoredVersion) != version else {
       if availableUpdate?.version == version {
@@ -178,7 +199,11 @@ final class AppStoreUpdateChecker: ObservableObject {
        remindAfter > Date() {
       return
     }
-    availableUpdate = AvailableUpdate(version: version, storeURL: storeURL)
+    availableUpdate = AvailableUpdate(
+      version: version,
+      storeURL: storeURL,
+      releaseNotes: releaseNotes
+    )
   }
 }
 
@@ -196,38 +221,25 @@ private struct AppStoreUpdateAlertModifier: ViewModifier {
         guard phase == .active else { return }
         Task { await updateChecker.checkForUpdates() }
       }
-      .alert(
-        "Update Available",
-        isPresented: updateAlertIsPresented
-      ) {
-        Button("View in App Store") {
-          if let url = updateChecker.appStoreURLForCurrentUpdate() {
-            openURL(url)
-          }
-        }
-        Button("Remind Me Later", role: .cancel) {
-          updateChecker.remindLater()
-        }
-        Button("Ignore This Update") {
-          updateChecker.ignoreCurrentUpdate()
-        }
-        Button("Never Remind Me") {
-          updateChecker.neverRemindAgain()
-        }
-      } message: {
+      .sheet(isPresented: updateSheetIsPresented) {
         if let update = updateChecker.availableUpdate {
-          Text(
-            String(
-              format: String(localized: "A newer version of BorgVR (%@) is available in the App Store. You are currently using version %@."),
-              update.version,
-              currentVersion
-            )
+          AppStoreUpdateView(
+            update: update,
+            currentVersion: currentVersion,
+            viewInAppStore: {
+              if let url = updateChecker.appStoreURLForCurrentUpdate() {
+                openURL(url)
+              }
+            },
+            remindLater: updateChecker.remindLater,
+            ignoreUpdate: updateChecker.ignoreCurrentUpdate,
+            neverRemindAgain: updateChecker.neverRemindAgain
           )
         }
       }
   }
 
-  private var updateAlertIsPresented: Binding<Bool> {
+  private var updateSheetIsPresented: Binding<Bool> {
     Binding(
       get: { updateChecker.availableUpdate != nil },
       set: { isPresented in
@@ -240,6 +252,87 @@ private struct AppStoreUpdateAlertModifier: ViewModifier {
 
   private var currentVersion: String {
     Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
+  }
+}
+
+private struct AppStoreUpdateView: View {
+  let update: AppStoreUpdateChecker.AvailableUpdate
+  let currentVersion: String
+  let viewInAppStore: () -> Void
+  let remindLater: () -> Void
+  let ignoreUpdate: () -> Void
+  let neverRemindAgain: () -> Void
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 20) {
+      HStack(alignment: .top, spacing: 14) {
+        Image(systemName: "arrow.down.app.fill")
+          .font(.system(size: 34))
+          .foregroundStyle(.tint)
+          .accessibilityHidden(true)
+
+        VStack(alignment: .leading, spacing: 6) {
+          Text("Update Available")
+            .font(.title2.bold())
+          Text(updateMessage)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+        }
+      }
+
+      if let releaseNotes = update.releaseNotes, !releaseNotes.isEmpty {
+        Divider()
+
+        VStack(alignment: .leading, spacing: 10) {
+          Text("What's New")
+            .font(.headline)
+
+          ScrollView {
+            Text(releaseNotes)
+              .frame(maxWidth: .infinity, alignment: .leading)
+              .textSelection(.enabled)
+          }
+          .frame(minHeight: 100, maxHeight: 260)
+        }
+      }
+
+      VStack(spacing: 10) {
+        Button(action: viewInAppStore) {
+          Label("View in App Store", systemImage: "arrow.up.forward.app")
+            .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.borderedProminent)
+
+        Button(action: remindLater) {
+          Label("Remind Me Later", systemImage: "clock.arrow.circlepath")
+            .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.bordered)
+
+        Button(action: ignoreUpdate) {
+          Label("Ignore This Update", systemImage: "eye.slash")
+            .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.bordered)
+
+        Button(action: neverRemindAgain) {
+          Label("Never Remind Me", systemImage: "bell.slash")
+            .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.bordered)
+      }
+      .controlSize(.large)
+    }
+    .padding(24)
+    .frame(minWidth: 320, idealWidth: 500, maxWidth: 560)
+  }
+
+  private var updateMessage: String {
+    String(
+      format: String(localized: "A newer version of BorgVR (%@) is available in the App Store. You are currently using version %@."),
+      update.version,
+      currentVersion
+    )
   }
 }
 
