@@ -47,6 +47,15 @@ struct BorgVRMobileApp: App {
         } message: {
           Text("The SharePlay host left the session. You can take over the host role, leave the session, or continue without a host.")
         }
+        .alert(item: $sharePlay.protocolCompatibilityIssue) { issue in
+          Alert(
+            title: Text("Incompatible SharePlay Version"),
+            message: Text(issue.localizedMessage),
+            dismissButton: .default(Text("OK")) {
+              sharePlay.protocolCompatibilityIssue = nil
+            }
+          )
+        }
         .environmentObject(appModel)
         .environmentObject(renderingParameters)
         .environmentObject(appSettings)

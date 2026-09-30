@@ -1062,3 +1062,6 @@
 "Diffuse light" = "Diffuse light";
 "Specular light" = "Specular light";
 "Close lighting editor" = "Close lighting editor";
+"Incompatible SharePlay Version" = "Incompatible SharePlay Version";
+"Your installed BorgVR version is too old for this SharePlay session. Please update to version %@ or later." = "Your installed BorgVR version is too old for this SharePlay session. Please update to version %@ or later.";
+"The SharePlay host is using an outdated BorgVR version. The host must update to version %@ or later." = "The SharePlay host is using an outdated BorgVR version. The host must update to version %@ or later.";

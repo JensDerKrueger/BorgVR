@@ -485,7 +485,6 @@ class SharedAppModel {
     var w = DataWriter()
 
     w.write(BorgVRSharePlayProtocol.magic)
-    w.write(BorgVRSharePlayProtocol.renderStateVersion)
     w.write(BorgVRSharePlayProtocol.PacketKind.commonRenderState.rawValue)
     w.write(UInt8(includeTransferFunction ? 1 : 0))
 
@@ -515,7 +514,6 @@ class SharedAppModel {
     var w = DataWriter()
 
     w.write(BorgVRSharePlayProtocol.magic)
-    w.write(BorgVRSharePlayProtocol.renderStateVersion)
     w.write(BorgVRSharePlayProtocol.PacketKind.visionTransform.rawValue)
     w.write(UInt8(0))
 
@@ -625,10 +623,6 @@ class SharedAppModel {
     var r = DataReader(data)
     let magic: UInt32 = try r.read()
     guard magic == BorgVRSharePlayProtocol.magic else { return false }
-    let version: UInt16 = try r.read()
-    guard version == BorgVRSharePlayProtocol.renderStateVersion else {
-      throw SharedAppModelError.unsupportedVersion(version)
-    }
     let packetKindRaw: UInt8 = try r.read()
     let flags: UInt8 = try r.read()
 
@@ -651,7 +645,7 @@ class SharedAppModel {
         modelTransform = Transform(scale: tScale, rotation: tRotation, translation: tTranslation)
         lastModelTransform = Transform(scale: lScale, rotation: lRotation, translation: lTranslation)
       case .volumeMarkers, .spatialToolPreview:
-        throw SharedAppModelError.unsupportedVersion(version)
+        throw SharedAppModelError.unsupportedPacket(packetKindRaw)
     }
 
     if !r.isAtEnd { throw SharedAppModelError.trailingBytes(r.remainingCount) }

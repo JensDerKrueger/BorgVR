@@ -41,6 +41,7 @@ class GroupActivityHelper {
   private var pendingScreenViewState: BorgVRScreenViewState?
   private var synchronizationTask: Task<Void, Never>?
   private var knownParticipants = Set<Participant>()
+  private var protocolHandshake = BorgVRSharePlayHandshakeState()
   private var participantInfoByID: [UUID: BorgVRSharePlayParticipantInfo] = [:]
   private var screenViewStateByParticipantID: [UUID: BorgVRScreenViewState] = [:]
   private let sharePlayServerHost = BorgVRServerHost(logger: GUILogger())
@@ -136,6 +137,7 @@ class GroupActivityHelper {
           self.adHocOriginsByParticipantID = self.adHocOriginsByParticipantID.filter {
             activeIDs.contains($0.key)
           }
+          self.protocolHandshake.retainParticipants(activeIDs)
           Task { @MainActor in
             if !newParticipants.isEmpty || !departedParticipants.isEmpty {
               let joinedIDs = newParticipants.map { $0.id.uuidString }.sorted().joined(separator: ", ")
@@ -157,11 +159,7 @@ class GroupActivityHelper {
           }
 
           Task {
-            await self.sendInitialDataReliably(to: .only(newParticipants))
-            await self.sendParticipantInfo(to: .only(newParticipants))
-            await self.sendOriginCatalogSnapshot(to: .only(newParticipants))
-            await self.advertiseCurrentLocalDataset(to: .only(newParticipants))
-            await self.sendCurrentHostState(to: .only(newParticipants))
+            await self.sendProtocolVersion(to: .only(newParticipants))
           }
 
         } .store(in: &subscriptions)
@@ -183,13 +181,6 @@ class GroupActivityHelper {
 
       let messenger = GroupSessionMessenger(session: session)
       self.messenger = messenger
-      session.join()
-      Task {
-        await self.sendParticipantInfo()
-        await self.sendOriginCatalogSnapshot()
-        await self.advertiseCurrentLocalDataset()
-        await self.sendCurrentHostState()
-      }
 
       if let pose = systemCoordinator.localParticipantState.pose {
         await runtimeAppModel.logger.dev("Joined groupsession with pose \(pose)")
@@ -203,15 +194,8 @@ class GroupActivityHelper {
           await self?.handleIncoming(data: data, from: context.source, sessionGeneration: generation)
         }
       }
-
-      let isHost = await MainActor.run {
-        runtimeAppModel.groupSessionHost
-      }
-      if isHost {
-        Task { await self.sendInitialDataReliably() }
-      } else {
-        Task { await self.requestInitialStateReliably() }
-      }
+      session.join()
+      Task { await self.sendProtocolVersion() }
     }
   }
 
@@ -427,10 +411,10 @@ class GroupActivityHelper {
     await sendInitialData(to: to)
   }
 
-  func requestInitialStateReliably() async {
-    try? await sendData(data: Data(), of: .stateRequest)
+  func requestInitialStateReliably(to participants: Participants = .all) async {
+    try? await sendData(data: Data(), of: .stateRequest, to: participants)
     try? await Task.sleep(nanoseconds: 250_000_000)
-    try? await sendData(data: Data(), of: .stateRequest)
+    try? await sendData(data: Data(), of: .stateRequest, to: participants)
   }
 
   @MainActor
@@ -440,6 +424,15 @@ class GroupActivityHelper {
 
     if let firstByte = data.first {
       let stripped = Data(data.dropFirst())
+
+      if firstByte == MessageType.protocolVersion.rawValue {
+        handleProtocolVersion(data: stripped, from: from)
+        return
+      }
+      guard protocolHandshake.acceptsMessages(from: from.id) else {
+        runtimeAppModel.logger.warning("Ignored SharePlay data received before the protocol handshake.")
+        return
+      }
 
       switch firstByte {
         case MessageType.initMessage.rawValue:
@@ -479,23 +472,57 @@ class GroupActivityHelper {
     }
   }
 
-  private enum MessageType: UInt8 {
-    case initMessage     = 0x00
-    case renderingUpdate = 0x01
-    case shutdownRequest = 0x02
-    case stateRequest    = 0x03
-    case participantInfo = 0x04
-    case screenViewRequest = 0x05
-    case originCatalogSnapshot = 0x06
-    case datasetOriginAdvertisement = 0x07
-    case hostClaim = 0x08
-    case hostState = 0x09
-  }
+  private typealias MessageType = BorgVRSharePlayProtocol.MessageType
 
   private func sendData(data:Data, of messageType:MessageType,
                         to participants:Participants = .all) async throws {
     guard let messenger else { return }
     try await messenger.send(Data([messageType.rawValue]) + data, to:participants)
+  }
+
+  private func sendProtocolVersion(to participants: Participants = .all) async {
+    try? await sendData(
+      data: BorgVRSharePlayVersionCodec.encode(),
+      of: .protocolVersion,
+      to: participants
+    )
+  }
+
+  @MainActor
+  private func handleProtocolVersion(data: Data, from participant: Participant) {
+    guard let runtimeAppModel else { return }
+    do {
+      switch try protocolHandshake.receive(data, from: participant.id) {
+        case .alreadyAccepted:
+          return
+        case .incompatible(let issue):
+          runtimeAppModel.logger.error(
+            "Incompatible SharePlay protocol; version \(issue.requiredVersion) or later is required."
+          )
+          groupSession?.leave()
+          stopSharePlayServer()
+          runtimeAppModel.groupSessionHost = false
+          resetSessionReceivers()
+          runtimeAppModel.protocolCompatibilityIssue = issue
+          return
+        case .accepted:
+          break
+      }
+      Task {
+        await sendProtocolVersion(to: .only(Set([participant])))
+        await sendParticipantInfo(to: .only(Set([participant])))
+        await sendOriginCatalogSnapshot(to: .only(Set([participant])))
+        await advertiseCurrentLocalDataset(to: .only(Set([participant])))
+        await sendCurrentHostState(to: .only(Set([participant])))
+        if runtimeAppModel.groupSessionHost {
+          await sendInitialDataReliably(to: .only(Set([participant])))
+        } else {
+          await requestInitialStateReliably(to: .only(Set([participant])))
+        }
+      }
+    } catch {
+      runtimeAppModel.logger.error("Invalid SharePlay protocol handshake: \(error)")
+    }
   }
 
   @MainActor
@@ -623,6 +650,7 @@ class GroupActivityHelper {
     pendingTransform = false
     pendingScreenViewState = nil
     knownParticipants.removeAll()
+    protocolHandshake.reset()
     participantInfoByID.removeAll()
     screenViewStateByParticipantID.removeAll()
     sessionOriginsByDatasetID.removeAll()

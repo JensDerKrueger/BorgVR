@@ -159,7 +159,6 @@ final class RenderingParameters: ObservableObject {
     var writer = DataWriter()
 
     writer.write(BorgVRSharePlayProtocol.magic)
-    writer.write(BorgVRSharePlayProtocol.renderStateVersion)
     writer.write(BorgVRSharePlayProtocol.PacketKind.commonRenderState.rawValue)
     writer.write(UInt8(includeTransferFunction ? 1 : 0))
 
@@ -199,10 +198,6 @@ final class RenderingParameters: ObservableObject {
     var reader = DataReader(data)
     let magic: UInt32 = try reader.read()
     guard magic == BorgVRSharePlayProtocol.magic else { return false }
-    let version: UInt16 = try reader.read()
-    guard version == BorgVRSharePlayProtocol.renderStateVersion else {
-      throw RenderingParametersUpdateError.unsupportedVersion(version)
-    }
     let packetKindRaw: UInt8 = try reader.read()
     let flags: UInt8 = try reader.read()
 
@@ -216,9 +211,9 @@ final class RenderingParameters: ObservableObject {
       case .screenTransform:
         throw RenderingParametersUpdateError.unsupportedPacket(packetKindRaw)
       case .visionTransform:
-        break
+        return true
       case .volumeMarkers, .spatialToolPreview:
-        return false
+        return true
     }
 
     if !reader.isAtEnd {

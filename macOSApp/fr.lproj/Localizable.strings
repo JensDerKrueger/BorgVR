@@ -736,3 +736,6 @@
 "Script Log" = "Journal du script";
 "Clear Script Log" = "Effacer le journal du script";
 "No script output yet." = "Aucune sortie de script pour le moment.";
+"Incompatible SharePlay Version" = "Version SharePlay incompatible";
+"Your installed BorgVR version is too old for this SharePlay session. Please update to version %@ or later." = "Votre version installée de BorgVR est trop ancienne pour cette session SharePlay. Veuillez installer la version %@ ou une version ultérieure.";
+"The SharePlay host is using an outdated BorgVR version. The host must update to version %@ or later." = "L’hôte SharePlay utilise une version obsolète de BorgVR. Il doit installer la version %@ ou une version ultérieure.";

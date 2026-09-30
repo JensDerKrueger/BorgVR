@@ -29,8 +29,21 @@ enum BorgVRMarkerFormat {
 
 enum BorgVRSharePlayProtocol {
   static let magic: UInt32 = 0x4256_5350 // "BVSP"
-  static let renderStateVersion: UInt16 = 6
-  static let markerVersion: UInt16 = 3
+  static let version = BorgVRSemanticVersion(major: 2, minor: 6)
+
+  enum MessageType: UInt8 {
+    case initMessage = 0x00
+    case renderingUpdate = 0x01
+    case shutdownRequest = 0x02
+    case stateRequest = 0x03
+    case participantInfo = 0x04
+    case screenViewRequest = 0x05
+    case originCatalogSnapshot = 0x06
+    case datasetOriginAdvertisement = 0x07
+    case hostClaim = 0x08
+    case hostState = 0x09
+    case protocolVersion = 0x0A
+  }
 
   enum PacketKind: UInt8 {
     case commonRenderState = 1
@@ -38,6 +51,107 @@ enum BorgVRSharePlayProtocol {
     case visionTransform = 3
     case volumeMarkers = 4
     case spatialToolPreview = 5
+  }
+}
+
+struct BorgVRSemanticVersion: Codable, Comparable, Hashable, Sendable, CustomStringConvertible {
+  let major: UInt16
+  let minor: UInt16
+  let patch: UInt16
+
+  init(major: UInt16, minor: UInt16, patch: UInt16 = 0) {
+    self.major = major
+    self.minor = minor
+    self.patch = patch
+  }
+
+  static func < (lhs: Self, rhs: Self) -> Bool {
+    (lhs.major, lhs.minor, lhs.patch) < (rhs.major, rhs.minor, rhs.patch)
+  }
+
+  var description: String {
+    patch == 0 ? "\(major).\(minor)" : "\(major).\(minor).\(patch)"
+  }
+}
+
+enum BorgVRSharePlayCompatibilityIssueKind: Sendable {
+  case localVersionTooOld
+  case remoteVersionTooOld
+}
+
+struct BorgVRSharePlayCompatibilityIssue: Identifiable, Sendable {
+  let id = UUID()
+  let kind: BorgVRSharePlayCompatibilityIssueKind
+  let requiredVersion: BorgVRSemanticVersion
+
+  var localizedMessage: String {
+    let format: String
+    switch kind {
+      case .localVersionTooOld:
+        format = String(localized: "Your installed BorgVR version is too old for this SharePlay session. Please update to version %@ or later.")
+      case .remoteVersionTooOld:
+        format = String(localized: "The SharePlay host is using an outdated BorgVR version. The host must update to version %@ or later.")
+    }
+    return String(format: format, requiredVersion.description)
+  }
+}
+
+enum BorgVRSharePlayVersionCodec {
+  static func encode(_ version: BorgVRSemanticVersion = BorgVRSharePlayProtocol.version) -> Data {
+    var writer = BorgVRSharePlayDataWriter()
+    writer.write(version.major)
+    writer.write(version.minor)
+    writer.write(version.patch)
+    return writer.data
+  }
+
+  static func decode(_ data: Data) throws -> BorgVRSemanticVersion {
+    var reader = BorgVRSharePlayDataReader(data)
+    let version = BorgVRSemanticVersion(
+      major: try reader.read(),
+      minor: try reader.read(),
+      patch: try reader.read()
+    )
+    guard reader.isAtEnd else {
+      throw BorgVRSharePlayProtocolError.invalidProtocolVersion
+    }
+    return version
+  }
+}
+
+struct BorgVRSharePlayHandshakeState {
+  enum Result {
+    case accepted
+    case alreadyAccepted
+    case incompatible(BorgVRSharePlayCompatibilityIssue)
+  }
+
+  private var compatibleParticipantIDs = Set<UUID>()
+
+  mutating func receive(_ data: Data, from participantID: UUID) throws -> Result {
+    let remoteVersion = try BorgVRSharePlayVersionCodec.decode(data)
+    let localVersion = BorgVRSharePlayProtocol.version
+    guard remoteVersion == localVersion else {
+      return .incompatible(BorgVRSharePlayCompatibilityIssue(
+        kind: remoteVersion > localVersion ? .localVersionTooOld : .remoteVersionTooOld,
+        requiredVersion: remoteVersion > localVersion ? remoteVersion : localVersion
+      ))
+    }
+    return compatibleParticipantIDs.insert(participantID).inserted
+      ? .accepted
+      : .alreadyAccepted
+  }
+
+  func acceptsMessages(from participantID: UUID) -> Bool {
+    compatibleParticipantIDs.contains(participantID)
+  }
+
+  mutating func retainParticipants(_ activeParticipantIDs: Set<UUID>) {
+    compatibleParticipantIDs.formIntersection(activeParticipantIDs)
+  }
+
+  mutating func reset() {
+    compatibleParticipantIDs.removeAll()
   }
 }
 
@@ -209,7 +323,6 @@ enum BorgVRScreenViewStateCodec {
   static func encode(_ state: BorgVRScreenViewState, isShared: Bool = true) -> Data {
     var writer = BorgVRSharePlayDataWriter()
     writer.write(BorgVRSharePlayProtocol.magic)
-    writer.write(BorgVRSharePlayProtocol.renderStateVersion)
     writer.write(BorgVRSharePlayProtocol.PacketKind.screenTransform.rawValue)
     writer.write(isShared ? sharedViewFlag : UInt8(0))
     writer.write(state.orientation.vector.x)
@@ -228,10 +341,6 @@ enum BorgVRScreenViewStateCodec {
     var reader = BorgVRSharePlayDataReader(data)
     let magic: UInt32 = try reader.read()
     guard magic == BorgVRSharePlayProtocol.magic else { return nil }
-    let version: UInt16 = try reader.read()
-    guard version == BorgVRSharePlayProtocol.renderStateVersion else {
-      throw BorgVRSharePlayProtocolError.unsupportedVersion(version)
-    }
     let packetKind: UInt8 = try reader.read()
     guard packetKind == BorgVRSharePlayProtocol.PacketKind.screenTransform.rawValue else {
       return nil
@@ -279,7 +388,7 @@ enum BorgVRScreenViewStateCodec {
 
 enum BorgVRSharePlayProtocolError: Error {
   case unexpectedEnd
-  case unsupportedVersion(UInt16)
+  case invalidProtocolVersion
   case invalidParticipantInfo
   case invalidScreenViewState
 }

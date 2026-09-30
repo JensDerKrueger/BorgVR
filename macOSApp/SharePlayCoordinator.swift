@@ -32,6 +32,7 @@ final class SharePlayCoordinator: ObservableObject {
   @Published private(set) var participants: [BorgVRSharePlayParticipant] = []
   @Published private(set) var isScreenViewSynchronized = true
   @Published var showsHostDeparturePrompt = false
+  @Published var protocolCompatibilityIssue: BorgVRSharePlayCompatibilityIssue?
 
   private var groupSession: GroupSession<BorgVRSharePlayActivity>?
   private var messenger: GroupSessionMessenger?
@@ -49,6 +50,7 @@ final class SharePlayCoordinator: ObservableObject {
   private var pendingMarkers = false
   private var synchronizationTask: Task<Void, Never>?
   private var knownParticipants = Set<Participant>()
+  private var protocolHandshake = BorgVRSharePlayHandshakeState()
   private var participantInfoByID: [UUID: BorgVRSharePlayParticipantInfo] = [:]
   private var sharedScreenViewState: BorgVRScreenViewState?
   private var screenViewSynchronizationGeneration = 0
@@ -317,15 +319,12 @@ final class SharePlayCoordinator: ObservableObject {
         self.adHocOriginsByParticipantID = self.adHocOriginsByParticipantID.filter {
           activeIDs.contains($0.key)
         }
+        self.protocolHandshake.retainParticipants(activeIDs)
         self.handleHostParticipantChanges(activeParticipantIDs: activeIDs)
         self.publishParticipants()
         guard !newParticipants.isEmpty else { return }
         Task {
-          await self.sendInitialDataReliably(to: .only(newParticipants))
-          await self.sendParticipantInfo(to: .only(newParticipants))
-          await self.sendOriginCatalogSnapshot(to: .only(newParticipants))
-          await self.advertiseCurrentLocalDataset(to: .only(newParticipants))
-          await self.sendCurrentHostState(to: .only(newParticipants))
+          await self.sendProtocolVersion(to: .only(newParticipants))
         }
       }
       .store(in: &subscriptions)
@@ -346,40 +345,17 @@ final class SharePlayCoordinator: ObservableObject {
 
     let messenger = GroupSessionMessenger(session: session)
     self.messenger = messenger
-    session.join()
-    Task { await establishInitialScreenView(sessionGeneration: generation) }
-    Task {
-      await sendOriginCatalogSnapshot()
-      await advertiseCurrentLocalDataset()
-      await sendCurrentHostState()
-    }
-
     messageTask = Task.detached { [weak self] in
       for await (data, context) in messenger.messages(of: Data.self) {
         if Task.isCancelled { return }
         await self?.handleIncoming(data: data, from: context.source, sessionGeneration: generation)
       }
     }
-
-    if appModel?.groupSessionHost == true {
-      Task { await sendInitialDataReliably() }
-    } else {
-      Task { await requestInitialStateReliably() }
-    }
+    session.join()
+    Task { await sendProtocolVersion() }
   }
 
-  private enum MessageType: UInt8 {
-    case initMessage = 0x00
-    case renderingUpdate = 0x01
-    case shutdownRequest = 0x02
-    case stateRequest = 0x03
-    case participantInfo = 0x04
-    case screenViewRequest = 0x05
-    case originCatalogSnapshot = 0x06
-    case datasetOriginAdvertisement = 0x07
-    case hostClaim = 0x08
-    case hostState = 0x09
-  }
+  private typealias MessageType = BorgVRSharePlayProtocol.MessageType
 
   private func sendData(
     _ data: Data,
@@ -401,6 +377,50 @@ final class SharePlayCoordinator: ObservableObject {
     )
     guard let data = try? BorgVRSharePlayParticipantInfoCodec.encode(info) else { return }
     try? await sendData(data, of: .participantInfo, to: participants)
+  }
+
+  private func sendProtocolVersion(to participants: Participants = .all) async {
+    try? await sendData(
+      BorgVRSharePlayVersionCodec.encode(),
+      of: .protocolVersion,
+      to: participants
+    )
+  }
+
+  private func handleProtocolVersion(data: Data, from participant: Participant) {
+    do {
+      switch try protocolHandshake.receive(data, from: participant.id) {
+        case .alreadyAccepted:
+          return
+        case .incompatible(let issue):
+          appModel?.logger.error(
+            "Incompatible SharePlay protocol; version \(issue.requiredVersion) or later is required."
+          )
+          groupSession?.leave()
+          serverController?.stopSharePlayServer()
+          appModel?.groupSessionHost = false
+          isInSession = false
+          resetSessionReceivers()
+          protocolCompatibilityIssue = issue
+          return
+        case .accepted:
+          break
+      }
+      Task {
+        await sendProtocolVersion(to: .only(Set([participant])))
+        await sendParticipantInfo(to: .only(Set([participant])))
+        await sendOriginCatalogSnapshot(to: .only(Set([participant])))
+        await advertiseCurrentLocalDataset(to: .only(Set([participant])))
+        await sendCurrentHostState(to: .only(Set([participant])))
+        if appModel?.groupSessionHost == true {
+          await sendInitialDataReliably(to: .only(Set([participant])))
+        } else {
+          await requestInitialStateReliably(to: .only(Set([participant])))
+        }
+      }
+    } catch {
+      appModel?.logger.error("Invalid SharePlay protocol handshake: \(error)")
+    }
   }
 
   private func establishInitialScreenView(sessionGeneration generation: Int) async {
@@ -469,6 +489,7 @@ final class SharePlayCoordinator: ObservableObject {
     sharedScreenViewState = nil
     screenViewSynchronizationGeneration += 1
     knownParticipants.removeAll()
+    protocolHandshake.reset()
     participantInfoByID.removeAll()
     sessionOriginsByDatasetID.removeAll()
     adHocOriginsByParticipantID.removeAll()
@@ -550,10 +571,10 @@ final class SharePlayCoordinator: ObservableObject {
     await sendInitialData(to: participants)
   }
 
-  private func requestInitialStateReliably() async {
-    try? await sendData(Data(), of: .stateRequest)
+  private func requestInitialStateReliably(to participants: Participants = .all) async {
+    try? await sendData(Data(), of: .stateRequest, to: participants)
     try? await Task.sleep(nanoseconds: 250_000_000)
-    try? await sendData(Data(), of: .stateRequest)
+    try? await sendData(Data(), of: .stateRequest, to: participants)
   }
 
   private func flushPendingSynchronization() async {
@@ -600,6 +621,15 @@ final class SharePlayCoordinator: ObservableObject {
     guard generation == sessionGeneration, isInSession else { return }
     guard let firstByte = data.first else { return }
     let payload = Data(data.dropFirst())
+
+    if firstByte == MessageType.protocolVersion.rawValue {
+      handleProtocolVersion(data: payload, from: participant)
+      return
+    }
+    guard protocolHandshake.acceptsMessages(from: participant.id) else {
+      appModel?.logger.warning("Ignored SharePlay data received before the protocol handshake.")
+      return
+    }
 
     switch firstByte {
       case MessageType.initMessage.rawValue:

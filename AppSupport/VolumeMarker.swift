@@ -544,7 +544,6 @@ enum VolumeMarkerSharePlayCodec {
   static func encode(_ markers: [VolumeMarker]) -> Data {
     var writer = MarkerDataWriter()
     writer.write(BorgVRSharePlayProtocol.magic)
-    writer.write(BorgVRSharePlayProtocol.markerVersion)
     writer.write(BorgVRSharePlayProtocol.PacketKind.volumeMarkers.rawValue)
     writer.write(UInt8(0))
     do {
@@ -561,14 +560,9 @@ enum VolumeMarkerSharePlayCodec {
     var reader = MarkerDataReader(data)
     let magic: UInt32 = try reader.read()
     guard magic == BorgVRSharePlayProtocol.magic else { return nil }
-    let version: UInt16 = try reader.read()
     let packet: UInt8 = try reader.read()
     _ = try reader.read() as UInt8
     guard packet == BorgVRSharePlayProtocol.PacketKind.volumeMarkers.rawValue else { return nil }
-    guard version == BorgVRSharePlayProtocol.markerVersion else {
-      throw VolumeMarkerCodecError.unsupportedVersion(version)
-    }
-
     let markers = try VolumeMarkerBinaryCodec.decode(from: &reader)
 
     guard reader.isAtEnd else {
@@ -585,7 +579,6 @@ enum SpatialToolPreviewSharePlayCodec {
     let points = Array(points.prefix(maximumPreviewCount))
     var writer = MarkerDataWriter()
     writer.write(BorgVRSharePlayProtocol.magic)
-    writer.write(BorgVRSharePlayProtocol.renderStateVersion)
     writer.write(BorgVRSharePlayProtocol.PacketKind.spatialToolPreview.rawValue)
     writer.write(UInt8(0))
     writer.write(UInt8(points.count))
@@ -604,16 +597,11 @@ enum SpatialToolPreviewSharePlayCodec {
     var reader = MarkerDataReader(data)
     let magic: UInt32 = try reader.read()
     guard magic == BorgVRSharePlayProtocol.magic else { return nil }
-    let version: UInt16 = try reader.read()
     let packet: UInt8 = try reader.read()
     _ = try reader.read() as UInt8
     guard packet == BorgVRSharePlayProtocol.PacketKind.spatialToolPreview.rawValue else {
       return nil
     }
-    guard version == BorgVRSharePlayProtocol.renderStateVersion else {
-      throw VolumeMarkerCodecError.unsupportedVersion(version)
-    }
-
     let count: UInt8 = try reader.read()
     _ = try reader.read() as UInt8
     _ = try reader.read() as UInt16

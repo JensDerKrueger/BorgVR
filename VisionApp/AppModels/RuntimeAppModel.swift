@@ -60,6 +60,7 @@ class RuntimeAppModel {
   var groupSessionHost : Bool = false
   var sharePlayWaitingReason: SharePlayWaitingReason = .hostDataset
   var showsHostDeparturePrompt = false
+  var protocolCompatibilityIssue: BorgVRSharePlayCompatibilityIssue?
 
   /**
    Represents the possible content view states.

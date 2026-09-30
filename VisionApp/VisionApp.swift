@@ -76,6 +76,15 @@ struct VisionApp: App {
         } message: {
           Text("The SharePlay host left the session. You can take over the host role, leave the session, or continue without a host.")
         }
+        .alert(item: $runtimeAppModel.protocolCompatibilityIssue) { issue in
+          Alert(
+            title: Text("Incompatible SharePlay Version"),
+            message: Text(issue.localizedMessage),
+            dismissButton: .default(Text("OK")) {
+              runtimeAppModel.protocolCompatibilityIssue = nil
+            }
+          )
+        }
         .frame(
           minWidth: runtimeAppModel.windowSize.width,
           minHeight: runtimeAppModel.windowSize.height
