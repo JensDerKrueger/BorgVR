@@ -149,6 +149,10 @@ struct RenderView: View {
         }
       }
     }
+    .onChange(of: runtimeAppModel.auxiliaryWindowToggleRequest) { _, request in
+      guard let request else { return }
+      toggleAuxiliaryWindow(request)
+    }
     .onDisappear {
       dismissWindow(id: "TransferFunctionEditorView")
       dismissWindow(id: "IsovalueEditorView")
@@ -177,6 +181,20 @@ struct RenderView: View {
     if !runtimeAppModel.isViewOpen("ProfileView") {
       openWindow(id: "ProfileView")
     }
+  }
+
+  private func toggleAuxiliaryWindow(
+    _ request: RuntimeAppModel.AuxiliaryWindowToggleRequest
+  ) {
+    if runtimeAppModel.isViewOpen(request.windowID) {
+      dismissWindow(id: request.windowID)
+      return
+    }
+    if let otherWindowID = request.mutuallyExclusiveWindowID,
+       runtimeAppModel.isViewOpen(otherWindowID) {
+      dismissWindow(id: otherWindowID)
+    }
+    openWindow(id: request.windowID)
   }
 
   /**

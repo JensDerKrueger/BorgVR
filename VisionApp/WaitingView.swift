@@ -36,17 +36,33 @@ struct WaitingView: View {
 
       // Waiting message header.
       Text(runtimeAppModel.sharePlayWaitingReason == .datasetSource
-        ? "No Data Source Available"
+        ? "Waiting for Data Source"
         : "Prepare to be assimilated.")
         .font(.extraLargeTitle2)
         .bold()
 
       // Waiting instruction text.
       Text(runtimeAppModel.sharePlayWaitingReason == .datasetSource
-        ? "The current dataset is not available from any known source. BorgVR is waiting for a participant to provide one."
+        ? "BorgVR is waiting for a participant to make the current dataset available."
         : "Waiting for the host to select and open a dataset.")
         .font(.largeTitle)
         .bold()
+
+      if runtimeAppModel.sharePlayWaitingReason == .datasetSource,
+         let source = runtimeAppModel.sharePlayDatasetSource {
+        Label {
+          Text(
+            String(
+              format: NSLocalizedString("Trying server: %@", comment: "Currently queried dataset server"),
+              source.endpointDescription
+            )
+          )
+        } icon: {
+          Image(systemName: "server.rack")
+        }
+        .font(.title2.monospaced())
+        .foregroundStyle(.secondary)
+      }
 
       Spacer()
 

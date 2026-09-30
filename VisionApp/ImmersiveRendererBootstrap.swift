@@ -141,11 +141,20 @@ enum ImmersiveBootstrap {
           break
       }
     }
+    let performControllerFaceButton: @MainActor (SpatialControllerFaceButton) -> Void = {
+      button in
+      SpatialControllerShortcutHandler.perform(
+        storedAppModel.controllerAction(for: button),
+        runtimeAppModel: runtimeAppModel,
+        sharedAppModel: sharedAppModel
+      )
+    }
     let immersiveInteraction = ImmersiveInteraction(
       sharedAppModel: sharedAppModel,
       storedAppModel: storedAppModel,
       transferFunctionPanelInteractionState: transferFunctionPanelInteractionState,
-      toggleTransferFunctionChannel: toggleTransferFunctionChannel
+      toggleTransferFunctionChannel: toggleTransferFunctionChannel,
+      performControllerFaceButton: performControllerFaceButton
     )
 
     // Start renderer
@@ -177,6 +186,7 @@ enum ImmersiveBootstrap {
       }
     }
   }
+
 }
 
 /*

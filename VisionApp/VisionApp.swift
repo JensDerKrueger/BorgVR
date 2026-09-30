@@ -100,7 +100,12 @@ struct VisionApp: App {
         }
         .task {
           GroupActivityHelper.registerGroupActivity()
-          presentSharePlayDisplayNameOnboardingIfNeeded()
+          await presentSharePlayDisplayNameOnboardingIfNeeded()
+        }
+        .onChange(of: sharedAppModel.hasObservedGroupSession) { _, hasObservedSession in
+          if hasObservedSession {
+            showsSharePlayDisplayNameOnboarding = false
+          }
         }
         .task {
           await NotificationHelper.requestAuthorization(storedAppModel:storedAppModel)
@@ -321,14 +326,22 @@ struct VisionApp: App {
     .handlesExternalEvents(matching: [groupActivityIdentifier])
   }
 
-  private func presentSharePlayDisplayNameOnboardingIfNeeded() {
-    guard !sharePlayDisplayNameOnboardingCompleted else { return }
+  @MainActor
+  private func presentSharePlayDisplayNameOnboardingIfNeeded() async {
+    guard !sharePlayDisplayNameOnboardingCompleted,
+          !showsSharePlayDisplayNameOnboarding else { return }
     let configuredName = storedAppModel.sharePlayDisplayName
       .trimmingCharacters(in: .whitespacesAndNewlines)
     if !configuredName.isEmpty {
       sharePlayDisplayNameOnboardingCompleted = true
       return
     }
+
+    try? await Task.sleep(nanoseconds: 1_000_000_000)
+    guard !Task.isCancelled,
+          !sharedAppModel.hasObservedGroupSession,
+          !sharedAppModel.isInGroupSession else { return }
+
     sharePlayDisplayNameDraft = UIDevice.current.name
     showsSharePlayDisplayNameOnboarding = true
   }

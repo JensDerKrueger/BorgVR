@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import GameController
 
 private let portNumberFormatter: NumberFormatter = {
   let formatter = NumberFormatter()
@@ -37,6 +38,7 @@ struct SettingsView: View {
   // Temporary state for input validation
   @State private var tempPixelError: String = ""
   @State private var pixelErrorMsg: String?
+  @State private var spatialControllerRevision = 0
 
   @State private var tempTimeout: String = ""
   @State private var timeoutError: String?
@@ -193,6 +195,36 @@ struct SettingsView: View {
               selection: markerDefaultColorBinding,
               supportsOpacity: false
             )
+          }
+
+          Section(header: Text("settings_section_controller_shortcuts").bold()) {
+            Text("settings_controller_shortcuts_description")
+              .font(.footnote)
+              .foregroundStyle(.secondary)
+
+            controllerShortcutPicker(
+              button: .a,
+              selection: $storedAppModel.controllerButtonAAction
+            )
+            controllerShortcutPicker(
+              button: .b,
+              selection: $storedAppModel.controllerButtonBAction
+            )
+            controllerShortcutPicker(
+              button: .x,
+              selection: $storedAppModel.controllerButtonXAction
+            )
+            controllerShortcutPicker(
+              button: .y,
+              selection: $storedAppModel.controllerButtonYAction
+            )
+          }
+          .id(spatialControllerRevision)
+          .onReceive(NotificationCenter.default.publisher(for: .GCControllerDidConnect)) { _ in
+            spatialControllerRevision += 1
+          }
+          .onReceive(NotificationCenter.default.publisher(for: .GCControllerDidDisconnect)) { _ in
+            spatialControllerRevision += 1
           }
 
         }
@@ -701,6 +733,25 @@ struct SettingsView: View {
       Button("Cancel", role: .cancel) {}
     } message: {
       Text("BorgVR will forget all previously discovered dataset sources.")
+    }
+  }
+
+  private func controllerShortcutPicker(
+    button: SpatialControllerFaceButton,
+    selection: Binding<String>
+  ) -> some View {
+    let presentation = button.presentation()
+    return Picker(selection: selection) {
+      ForEach(SpatialControllerButtonAction.Category.allCases, id: \.self) { category in
+        Section(category.title) {
+          ForEach(SpatialControllerButtonAction.actions(in: category)) { action in
+            Label(action.title, systemImage: action.systemImage)
+              .tag(action.rawValue)
+          }
+        }
+      }
+    } label: {
+      Label(presentation.name, systemImage: presentation.systemImage)
     }
   }
 

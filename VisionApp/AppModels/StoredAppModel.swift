@@ -135,7 +135,11 @@ final class StoredAppModel: ObservableObject {
     "markerDefaultRed": 1.0,
     "markerDefaultGreen": 0.08,
     "markerDefaultBlue": 0.02,
-    "markerDefaultColorInitialized": false
+    "markerDefaultColorInitialized": false,
+    "controllerButtonAAction": SpatialControllerButtonAction.nextRenderMode.rawValue,
+    "controllerButtonBAction": SpatialControllerButtonAction.nextInteractionMode.rawValue,
+    "controllerButtonXAction": SpatialControllerButtonAction.toggleCurrentEditor.rawValue,
+    "controllerButtonYAction": SpatialControllerButtonAction.toggleMarkerWindow.rawValue
   ]
 
   init() {
@@ -259,6 +263,11 @@ final class StoredAppModel: ObservableObject {
   @AppStorage("markerDefaultGreen") var markerDefaultGreen: Double = StoredAppModel.double("markerDefaultGreen")
   @AppStorage("markerDefaultBlue") var markerDefaultBlue: Double = StoredAppModel.double("markerDefaultBlue")
   @AppStorage("markerDefaultColorInitialized") private var markerDefaultColorInitialized: Bool = StoredAppModel.bool("markerDefaultColorInitialized")
+  /// User-configurable shortcuts for spatial-controller face buttons.
+  @AppStorage("controllerButtonAAction") var controllerButtonAAction: String = StoredAppModel.string("controllerButtonAAction")
+  @AppStorage("controllerButtonBAction") var controllerButtonBAction: String = StoredAppModel.string("controllerButtonBAction")
+  @AppStorage("controllerButtonXAction") var controllerButtonXAction: String = StoredAppModel.string("controllerButtonXAction")
+  @AppStorage("controllerButtonYAction") var controllerButtonYAction: String = StoredAppModel.string("controllerButtonYAction")
 
   var markerDefaultColorSIMD: SIMD4<Float> {
     SIMD4<Float>(
@@ -267,6 +276,17 @@ final class StoredAppModel: ObservableObject {
       Float(markerDefaultBlue),
       1
     )
+  }
+
+  func controllerAction(for button: SpatialControllerFaceButton) -> SpatialControllerButtonAction {
+    let rawValue: String
+    switch button {
+      case .a: rawValue = controllerButtonAAction
+      case .b: rawValue = controllerButtonBAction
+      case .x: rawValue = controllerButtonXAction
+      case .y: rawValue = controllerButtonYAction
+    }
+    return SpatialControllerButtonAction(rawValue: rawValue) ?? .none
   }
 
 

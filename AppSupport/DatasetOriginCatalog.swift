@@ -8,6 +8,13 @@ struct DatasetOrigin: Codable, Hashable, Sendable {
   var identityKey: String {
     "\(address.lowercased())\u{0}\(port)\u{0}\(password)"
   }
+
+  var endpointDescription: String {
+    let formattedAddress = address.contains(":") && !address.hasPrefix("[")
+      ? "[\(address)]"
+      : address
+    return "\(formattedAddress):\(port)"
+  }
 }
 
 enum SharePlayWaitingReason {

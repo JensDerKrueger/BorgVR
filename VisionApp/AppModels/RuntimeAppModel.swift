@@ -59,6 +59,7 @@ class RuntimeAppModel {
 
   var groupSessionHost : Bool = false
   var sharePlayWaitingReason: SharePlayWaitingReason = .hostDataset
+  var sharePlayDatasetSource: DatasetOrigin?
   var showsHostDeparturePrompt = false
   var protocolCompatibilityIssue: BorgVRSharePlayCompatibilityIssue?
 
@@ -162,6 +163,24 @@ class RuntimeAppModel {
   var transferFunctionPanelInteractionState: TransferFunctionPanelInteractionState?
 
   var openViews: [String: Int] = [:]
+
+  struct AuxiliaryWindowToggleRequest: Equatable {
+    let id = UUID()
+    let windowID: String
+    let mutuallyExclusiveWindowID: String?
+  }
+
+  var auxiliaryWindowToggleRequest: AuxiliaryWindowToggleRequest?
+
+  func requestAuxiliaryWindowToggle(
+    _ windowID: String,
+    mutuallyExclusiveWith mutuallyExclusiveWindowID: String? = nil
+  ) {
+    auxiliaryWindowToggleRequest = AuxiliaryWindowToggleRequest(
+      windowID: windowID,
+      mutuallyExclusiveWindowID: mutuallyExclusiveWindowID
+    )
+  }
 
   func registerView(name: String) {
     openViews[name, default: 0] += 1

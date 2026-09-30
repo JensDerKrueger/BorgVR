@@ -100,6 +100,9 @@ class GroupActivityHelper {
     self.storedAppModel = storedAppModel
     for await session in BorgVRActivity.sessions() {
       await runtimeAppModel.logger.dev("Received groupsession")
+      await MainActor.run {
+        self.sharedAppModel?.hasObservedGroupSession = true
+      }
       await resetSessionReceivers()
       sessionGeneration += 1
       let generation = sessionGeneration
@@ -838,6 +841,8 @@ class GroupActivityHelper {
       Task { await advertiseCurrentLocalDataset() }
     } else {
       runtimeAppModel.logger.info("SharePlay dataset \(initMessage.uniqueID) is not available locally; searching known network sources.")
+      pendingDatasetLoadTask?.cancel()
+      pendingDatasetLoadTask = nil
       pendingDatasetLoad = PendingDatasetLoad(
         uniqueID: initMessage.uniqueID,
         description: initMessage.description,
@@ -853,13 +858,17 @@ class GroupActivityHelper {
           pending.generation == sessionGeneration,
           groupSession != nil,
           runtimeAppModel?.groupSessionHost != true else { return }
-    pendingDatasetLoadTask?.cancel()
+    guard pendingDatasetLoadTask == nil else { return }
     let origins = knownOrigins(for: pending.uniqueID)
     runtimeAppModel?.sharePlayWaitingReason = .datasetSource
     runtimeAppModel?.currentState = .waitingForHost
     guard !origins.isEmpty else {
+      runtimeAppModel?.sharePlayDatasetSource = nil
       runtimeAppModel?.logger.warning("No known source currently provides SharePlay dataset \(pending.uniqueID); waiting for participant sources.")
-      pendingDatasetLoadTask = nil
+      schedulePendingDatasetLoadRetry(
+        uniqueID: pending.uniqueID,
+        generation: pending.generation
+      )
       return
     }
     runtimeAppModel?.logger.info("Trying \(origins.count) known source(s) for SharePlay dataset \(pending.uniqueID).")
@@ -885,14 +894,21 @@ class GroupActivityHelper {
     guard let runtimeAppModel else { return }
 
     guard let remoteSource = await firstReachableOrigin(origins, datasetID: uniqueID) else {
-      guard generation == sessionGeneration, groupSession != nil else { return }
+      guard generation == sessionGeneration,
+            groupSession != nil,
+            pendingDatasetLoad?.uniqueID == uniqueID else { return }
+      runtimeAppModel.sharePlayDatasetSource = nil
       runtimeAppModel.currentState = .waitingForHost
-      runtimeAppModel.logger.warning("None of the currently known sources provides SharePlay dataset \(uniqueID); waiting for additional participant sources.")
-      pendingDatasetLoadTask = nil
+      runtimeAppModel.logger.warning("None of the known sources currently provides SharePlay dataset \(uniqueID); retrying after all sources have timed out.")
+      schedulePendingDatasetLoadRetry(uniqueID: uniqueID, generation: generation)
       return
     }
 
-    guard generation == sessionGeneration, groupSession != nil, !runtimeAppModel.groupSessionHost else { return }
+    guard generation == sessionGeneration,
+          groupSession != nil,
+          !runtimeAppModel.groupSessionHost,
+          pendingDatasetLoad?.uniqueID == uniqueID else { return }
+    runtimeAppModel.sharePlayDatasetSource = nil
     let dataset = RuntimeAppModel.DatasetEntry(
       identifier: uniqueID,
       description: description,
@@ -905,11 +921,32 @@ class GroupActivityHelper {
     runtimeAppModel.startImmersiveSpace(dataset: dataset, asGroupSessionHost:false)
   }
 
+  @MainActor
+  private func schedulePendingDatasetLoadRetry(uniqueID: String, generation: Int) {
+    pendingDatasetLoadTask = Task { [weak self] in
+      try? await Task.sleep(nanoseconds: 1_000_000_000)
+      guard !Task.isCancelled, let self else { return }
+      guard generation == sessionGeneration,
+            pendingDatasetLoad?.generation == generation,
+            pendingDatasetLoad?.uniqueID == uniqueID,
+            groupSession != nil else { return }
+      pendingDatasetLoadTask = nil
+      retryPendingDatasetLoad()
+    }
+  }
+
   private func firstReachableOrigin(
     _ origins: [DatasetOrigin],
     datasetID: String
   ) async -> DatasetOrigin? {
+    let timeout = await MainActor.run {
+      max(0.1, storedAppModel?.timeout ?? StoredAppModel.double("timeout"))
+    }
     for origin in origins {
+      guard !Task.isCancelled else { return nil }
+      await MainActor.run {
+        runtimeAppModel?.sharePlayDatasetSource = origin
+      }
       await logInfo("Checking \(origin.address):\(origin.port) for SharePlay dataset \(datasetID).")
       let result = await Task.detached(priority: .userInitiated) {
         do {
@@ -920,7 +957,7 @@ class GroupActivityHelper {
             logger: nil,
             notifier: nil
           )
-          try manager.connect(timeout: 2)
+          try manager.connect(timeout: timeout)
           let datasets = try manager.requestDatasetList()
           DatasetOriginCatalog.shared.recordServerSnapshot(
             origin: origin,

@@ -2,9 +2,7 @@ import Combine
 import Darwin
 import Foundation
 import GroupActivities
-import LinkPresentation
 import SwiftUI
-import UIKit
 
 private let borgVRSharePlayActivityIdentifier = "de.cgvis.borgvr.collaboration"
 private let localBorgVRSharePlayInitiatorID = UUID()
@@ -30,6 +28,7 @@ struct BorgVRSharePlayActivity: GroupActivity, Transferable {
 @MainActor
 final class SharePlayCoordinator: ObservableObject {
   @Published private(set) var isInSession = false
+  @Published private(set) var hasObservedGroupSession = false
   @Published private(set) var participants: [BorgVRSharePlayParticipant] = []
   @Published private(set) var isScreenViewSynchronized = true
   @Published var showsHostDeparturePrompt = false
@@ -37,6 +36,7 @@ final class SharePlayCoordinator: ObservableObject {
 
   private var groupSession: GroupSession<BorgVRSharePlayActivity>?
   private var messenger: GroupSessionMessenger?
+  private var sessionObservationTask: Task<Void, Never>?
   private var messageTask: Task<Void, Never>?
   private var sessionGeneration = 0
   private var appModel: AppModel?
@@ -58,8 +58,6 @@ final class SharePlayCoordinator: ObservableObject {
   private var sharePlayAuthToken = ""
   private var sharePlayServerRunning = false
   private var sharePlayServerPort = AppSettings.int("sharePlayServerPort")
-  private let groupStateObserver = GroupStateObserver()
-  private var activityActivationTask: Task<Void, Never>?
   private struct PendingDatasetLoad {
     let uniqueID: String
     let description: String
@@ -75,41 +73,23 @@ final class SharePlayCoordinator: ObservableObject {
   private var hostClaims: [UInt64: Set<UUID>] = [:]
   private var hostElectionTask: Task<Void, Never>?
 
-  func configure(
+  func startObservingSessions(
     appModel: AppModel,
     renderingParameters: RenderingParameters,
     appSettings: AppSettings
-  ) async {
+  ) {
     self.appModel = appModel
     self.renderingParameters = renderingParameters
     self.appSettings = appSettings
 
-    for await session in BorgVRSharePlayActivity.sessions() {
-      configure(session)
+    guard sessionObservationTask == nil else { return }
+    let sessions = BorgVRSharePlayActivity.sessions()
+    sessionObservationTask = Task { [weak self] in
+      for await session in sessions {
+        guard let self else { return }
+        configure(session)
+      }
     }
-  }
-
-  func registerGroupActivity() {
-    let activity = BorgVRSharePlayActivity()
-    let itemProvider = NSItemProvider()
-    itemProvider.registerGroupActivity(activity)
-
-    let configuration = UIActivityItemsConfiguration(itemProviders: [itemProvider])
-    configuration.metadataProvider = { key in
-      guard key == .linkPresentationMetadata else { return nil }
-      let metadata = LPLinkMetadata()
-      metadata.title = activity.metadata.title
-      return metadata
-    }
-
-    UIApplication.shared
-      .connectedScenes
-      .compactMap { $0 as? UIWindowScene }
-      .first?
-      .windows
-      .first?
-      .rootViewController?
-      .activityItemsConfiguration = configuration
   }
 
   func startSharePlay() {
@@ -139,47 +119,10 @@ final class SharePlayCoordinator: ObservableObject {
 
   func markLocalActivityStarter() {
     appModel?.groupSessionHost = true
-    scheduleLocalActivityActivation()
   }
 
   private func clearLocalActivityStarter() {
-    activityActivationTask?.cancel()
-    activityActivationTask = nil
     appModel?.groupSessionHost = false
-  }
-
-  private func scheduleLocalActivityActivation() {
-    activityActivationTask?.cancel()
-    let activity = BorgVRSharePlayActivity()
-    activityActivationTask = Task { [weak self] in
-      guard let self else { return }
-
-      // ShareLink can establish FaceTime before it activates the GroupActivity.
-      // Let the system complete that handoff first, then cover the missing step.
-      for _ in 0..<1_500 {
-        guard !Task.isCancelled, !isInSession else { return }
-        if groupStateObserver.isEligibleForGroupSession {
-          break
-        }
-        try? await Task.sleep(nanoseconds: 200_000_000)
-      }
-
-      guard
-        !Task.isCancelled,
-        !isInSession,
-        groupStateObserver.isEligibleForGroupSession
-      else { return }
-
-      try? await Task.sleep(nanoseconds: 750_000_000)
-      guard !Task.isCancelled, !isInSession else { return }
-
-      do {
-        _ = try await activity.activate()
-      } catch {
-        clearLocalActivityStarter()
-        appModel?.logger.error("Failed to start SharePlay: \(error.localizedDescription)")
-      }
-    }
   }
 
   func datasetOpened() {
@@ -311,8 +254,7 @@ final class SharePlayCoordinator: ObservableObject {
   }
 
   private func configure(_ session: GroupSession<BorgVRSharePlayActivity>) {
-    activityActivationTask?.cancel()
-    activityActivationTask = nil
+    hasObservedGroupSession = true
     resetSessionReceivers()
     sessionGeneration += 1
     let generation = sessionGeneration
@@ -793,6 +735,8 @@ final class SharePlayCoordinator: ObservableObject {
       return
     }
     appModel.logger.info("SharePlay dataset \(message.uniqueID) is not available locally; searching known network sources.")
+    pendingDatasetLoadTask?.cancel()
+    pendingDatasetLoadTask = nil
     pendingDatasetLoad = PendingDatasetLoad(
       uniqueID: message.uniqueID,
       description: message.description,
@@ -806,13 +750,17 @@ final class SharePlayCoordinator: ObservableObject {
           pending.generation == sessionGeneration,
           isInSession,
           appModel?.groupSessionHost != true else { return }
-    pendingDatasetLoadTask?.cancel()
+    guard pendingDatasetLoadTask == nil else { return }
     let origins = knownOrigins(for: pending.uniqueID)
     appModel?.sharePlayWaitingReason = .datasetSource
     appModel?.currentState = .waitingForHost
     guard !origins.isEmpty else {
+      appModel?.sharePlayDatasetSource = nil
       appModel?.logger.warning("No known source currently provides SharePlay dataset \(pending.uniqueID); waiting for participant sources.")
-      pendingDatasetLoadTask = nil
+      schedulePendingDatasetLoadRetry(
+        uniqueID: pending.uniqueID,
+        generation: pending.generation
+      )
       return
     }
     appModel?.logger.info("Trying \(origins.count) known source(s) for SharePlay dataset \(pending.uniqueID).")
@@ -837,14 +785,21 @@ final class SharePlayCoordinator: ObservableObject {
     guard let appModel else { return }
 
     guard let remoteSource = await firstReachableOrigin(origins, datasetID: uniqueID) else {
-      guard generation == sessionGeneration, isInSession else { return }
+      guard generation == sessionGeneration,
+            isInSession,
+            pendingDatasetLoad?.uniqueID == uniqueID else { return }
+      appModel.sharePlayDatasetSource = nil
       appModel.currentState = .waitingForHost
-      appModel.logger.warning("None of the currently known sources provides SharePlay dataset \(uniqueID); waiting for additional participant sources.")
-      pendingDatasetLoadTask = nil
+      appModel.logger.warning("None of the known sources currently provides SharePlay dataset \(uniqueID); retrying after all sources have timed out.")
+      schedulePendingDatasetLoadRetry(uniqueID: uniqueID, generation: generation)
       return
     }
 
-    guard generation == sessionGeneration, isInSession, appModel.groupSessionHost != true else { return }
+    guard generation == sessionGeneration,
+          isInSession,
+          appModel.groupSessionHost != true,
+          pendingDatasetLoad?.uniqueID == uniqueID else { return }
+    appModel.sharePlayDatasetSource = nil
     appModel.activeDataset = AppModel.DatasetEntry(
       identifier: uniqueID,
       description: description,
@@ -857,11 +812,29 @@ final class SharePlayCoordinator: ObservableObject {
     appModel.currentState = .renderData
   }
 
+  private func schedulePendingDatasetLoadRetry(uniqueID: String, generation: Int) {
+    pendingDatasetLoadTask = Task { [weak self] in
+      try? await Task.sleep(nanoseconds: 1_000_000_000)
+      guard !Task.isCancelled, let self else { return }
+      guard
+        generation == sessionGeneration,
+        pendingDatasetLoad?.generation == generation,
+        pendingDatasetLoad?.uniqueID == uniqueID,
+        isInSession
+      else { return }
+      pendingDatasetLoadTask = nil
+      retryPendingDatasetLoad()
+    }
+  }
+
   private func firstReachableOrigin(
     _ origins: [DatasetOrigin],
     datasetID: String
   ) async -> DatasetOrigin? {
+    let timeout = max(0.1, appSettings?.timeout ?? AppSettings.double("timeout"))
     for origin in origins {
+      guard !Task.isCancelled else { return nil }
+      appModel?.sharePlayDatasetSource = origin
       appModel?.logger.info("Checking \(origin.address):\(origin.port) for SharePlay dataset \(datasetID).")
       let result = await Task.detached(priority: .userInitiated) {
         do {
@@ -872,7 +845,7 @@ final class SharePlayCoordinator: ObservableObject {
             logger: nil,
             notifier: nil
           )
-          try manager.connect(timeout: 2)
+          try manager.connect(timeout: timeout)
           let datasets = try manager.requestDatasetList()
           DatasetOriginCatalog.shared.recordServerSnapshot(
             origin: origin,

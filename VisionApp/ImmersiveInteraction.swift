@@ -7,6 +7,9 @@ class ImmersiveInteraction {
   var storedAppModel: StoredAppModel
   var transferFunctionPanelInteractionState: TransferFunctionPanelInteractionState
   private let toggleTransferFunctionChannelFromAccessory: @MainActor (Int) -> Void
+  private let performControllerFaceButtonFromAccessory: @MainActor (
+    SpatialControllerFaceButton
+  ) -> Void
 
   private var startTranslation: SIMD3<Float> = .zero
   private var startRotation: simd_quatf = .init(.identity)
@@ -55,16 +58,21 @@ class ImmersiveInteraction {
   private var activeSpatialStylusID: UUID?
   private var spatialAccessoryPrimaryStates: [UUID: Bool] = [:]
   private var spatialAccessoryModifierStates: [UUID: Bool] = [:]
+  private var spatialAccessoryFaceButtonStates: [UUID: Set<SpatialControllerFaceButton>] = [:]
   private var lastSpatialAccessoryAdjustmentTime: TimeInterval?
 
   init(sharedAppModel: SharedAppModel,
        storedAppModel: StoredAppModel,
        transferFunctionPanelInteractionState: TransferFunctionPanelInteractionState,
-       toggleTransferFunctionChannel: @escaping @MainActor (Int) -> Void) {
+       toggleTransferFunctionChannel: @escaping @MainActor (Int) -> Void,
+       performControllerFaceButton: @escaping @MainActor (
+         SpatialControllerFaceButton
+       ) -> Void) {
     self.sharedAppModel = sharedAppModel
     self.storedAppModel = storedAppModel
     self.transferFunctionPanelInteractionState = transferFunctionPanelInteractionState
     self.toggleTransferFunctionChannelFromAccessory = toggleTransferFunctionChannel
+    self.performControllerFaceButtonFromAccessory = performControllerFaceButton
   }
 
   func distanceBetweenVectors(v1: SIMD3<Double>, v2: SIMD3<Double>) -> Double {
@@ -1249,6 +1257,12 @@ class ImmersiveInteraction {
       }
       let wasPressed = spatialAccessoryPrimaryStates[sample.id] ?? false
       let wasModifierPressed = spatialAccessoryModifierStates[sample.id] ?? false
+      let previousFaceButtons = spatialAccessoryFaceButtonStates[sample.id] ?? []
+      for button in sample.pressedFaceButtons.subtracting(previousFaceButtons) {
+        Task { @MainActor in
+          performControllerFaceButtonFromAccessory(button)
+        }
+      }
       if sample.modifierPressed && !wasModifierPressed {
         beginSpatialAccessoryStroke(sample, datasetInfo: datasetInfo)
       }
@@ -1283,11 +1297,15 @@ class ImmersiveInteraction {
       )
       spatialAccessoryPrimaryStates[sample.id] = sample.primaryPressed
       spatialAccessoryModifierStates[sample.id] = sample.modifierPressed
+      spatialAccessoryFaceButtonStates[sample.id] = sample.pressedFaceButtons
     }
     spatialAccessoryPrimaryStates = spatialAccessoryPrimaryStates.filter {
       controllerIDs.contains($0.key)
     }
     spatialAccessoryModifierStates = spatialAccessoryModifierStates.filter {
+      controllerIDs.contains($0.key)
+    }
+    spatialAccessoryFaceButtonStates = spatialAccessoryFaceButtonStates.filter {
       controllerIDs.contains($0.key)
     }
   }

@@ -588,6 +588,34 @@
         }
       }
     },
+    "Ambient light" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Umgebungslicht"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ambient light"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Luz ambiental"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lumière ambiante"
+          }
+        }
+      }
+    },
     "Atlas size: \\(appSettings.atlasSizeMB) MB" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -986,6 +1014,34 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Bords"
+          }
+        }
+      }
+    },
+    "BorgVR is waiting for a participant to make the current dataset available." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "BorgVR wartet darauf, dass ein Teilnehmer eine Quelle für den aktuellen Datensatz bereitstellt."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "BorgVR is waiting for a participant to make the current dataset available."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "BorgVR está esperando a que un participante proporcione una fuente para el conjunto de datos actual."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "BorgVR attend qu’un participant fournisse une source pour le jeu de données actuel."
           }
         }
       }
@@ -1530,6 +1586,34 @@
         }
       }
     },
+    "Choose your SharePlay name" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wählen Sie Ihren SharePlay-Namen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose your SharePlay name"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Elija su nombre para mostrar en SharePlay"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choisissez votre nom d’affichage SharePlay"
+          }
+        }
+      }
+    },
     "Clear" : {
       "localizations" : {
         "de" : {
@@ -1694,6 +1778,34 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Fermer l’éditeur d’isovaleur"
+          }
+        }
+      }
+    },
+    "Close lighting editor" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Beleuchtungseditor schließen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Close lighting editor"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cerrar el editor de iluminación"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fermer l’éditeur d’éclairage"
           }
         }
       }
@@ -1920,6 +2032,34 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Connexion réussie : %d jeux de données, %d fonctions de transfert disponibles."
+          }
+        }
+      }
+    },
+    "Continue" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Weiter"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Continue"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Continuar"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Continuer"
           }
         }
       }
@@ -2323,6 +2463,35 @@
         }
       }
     },
+    "dataset_info_alternative_sources" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alternative Quellen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alternative sources"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fuentes alternativas"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sources alternatives"
+          }
+        }
+      }
+    },
     "dataset_info_button" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2410,31 +2579,31 @@
         }
       }
     },
-    "dataset_info_alternative_sources" : {
+    "dataset_info_metadata" : {
       "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Alternative Quellen"
+            "value" : "Metadaten"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Alternative sources"
+            "value" : "Metadata"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Fuentes alternativas"
+            "value" : "Metadatos"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Sources alternatives"
+            "value" : "Métadonnées"
           }
         }
       }
@@ -2468,6 +2637,35 @@
         }
       }
     },
+    "dataset_info_name" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Name"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Name"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nombre"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nom"
+          }
+        }
+      }
+    },
     "dataset_info_no_alternative_sources" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2493,6 +2691,35 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Aucune source alternative connue."
+          }
+        }
+      }
+    },
+    "dataset_info_no_metadata" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keine Metadaten-Zusammenfassung verfügbar."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No metadata summary available."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No hay resumen de metadatos disponible."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aucun résumé des métadonnées disponible."
           }
         }
       }
@@ -2551,93 +2778,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Source privée, non partagée via SharePlay"
-          }
-        }
-      }
-    },
-    "dataset_info_metadata" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Metadaten"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Metadata"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Metadatos"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Métadonnées"
-          }
-        }
-      }
-    },
-    "dataset_info_name" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Name"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Name"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Nombre"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Nom"
-          }
-        }
-      }
-    },
-    "dataset_info_no_metadata" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Keine Metadaten-Zusammenfassung verfügbar."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No metadata summary available."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No hay resumen de metadatos disponible."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Aucun résumé des métadonnées disponible."
           }
         }
       }
@@ -3448,6 +3588,62 @@
         }
       }
     },
+    "Diffuse light" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diffuses Licht"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diffuse light"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Luz difusa"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lumière diffuse"
+          }
+        }
+      }
+    },
+    "Display name" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Anzeigename"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Display name"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nombre para mostrar"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nom d’affichage"
+          }
+        }
+      }
+    },
     "Dock panel" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -4133,6 +4329,34 @@
         }
       }
     },
+    "Ignore" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ignorieren"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ignore"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ignorar"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ignorer"
+          }
+        }
+      }
+    },
     "Ignore This Update" : {
       "localizations" : {
         "de" : {
@@ -4302,6 +4526,10 @@
           }
         }
       }
+    },
+    "Incompatible SharePlay Version" : {
+      "comment" : "A title for an alert that appears when a user's SharePlay version is incompatible with the app.",
+      "isCommentAutoGenerated" : true
     },
     "Info" : {
       "localizations" : {
@@ -4978,170 +5206,30 @@
         }
       }
     },
-    "Ambient light" : {
+    "Leave Session" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Umgebungslicht"
+            "value" : "Sitzung verlassen"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ambient light"
+            "value" : "Leave Session"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Luz ambiental"
+            "value" : "Abandonar la sesión"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lumière ambiante"
-          }
-        }
-      }
-    },
-    "Close lighting editor" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Beleuchtungseditor schließen"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Close lighting editor"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Cerrar el editor de iluminación"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Fermer l’éditeur d’éclairage"
-          }
-        }
-      }
-    },
-    "Diffuse light" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Diffuses Licht"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Diffuse light"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Luz difusa"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Lumière diffuse"
-          }
-        }
-      }
-    },
-    "Light direction" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Lichtrichtung"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Light direction"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Dirección de la luz"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Direction de la lumière"
-          }
-        }
-      }
-    },
-    "Lighting" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Beleuchtung"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Lighting"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Iluminación"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Éclairage"
-          }
-        }
-      }
-    },
-    "Specular light" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Glanzlicht"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Specular light"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Luz especular"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Lumière spéculaire"
+            "value" : "Quitter la session"
           }
         }
       }
@@ -5227,6 +5315,62 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Effacer"
+          }
+        }
+      }
+    },
+    "Light direction" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lichtrichtung"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Light direction"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dirección de la luz"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Direction de la lumière"
+          }
+        }
+      }
+    },
+    "Lighting" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Beleuchtung"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lighting"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Iluminación"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Éclairage"
           }
         }
       }
@@ -6507,22 +6651,6 @@
             "value" : "Aucun certificat personnalisé : BorgVR crée un certificat auto-signé temporaire."
           }
         }
-      }
-    },
-    "No Data Source Available" : {
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Keine Datenquelle verfügbar" } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "No Data Source Available" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "No hay ninguna fuente de datos disponible" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Aucune source de données disponible" } }
-      }
-    },
-    "The current dataset is not available from any known source. BorgVR is waiting for a participant to provide one." : {
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Der aktuelle Datensatz ist momentan über keine bekannte Quelle erreichbar. BorgVR wartet darauf, dass ein Teilnehmer eine Datenquelle bereitstellt." } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "The current dataset is not available from any known source. BorgVR is waiting for a participant to provide one." } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "El conjunto de datos actual no está disponible en ninguna fuente conocida. BorgVR espera a que un participante proporcione una fuente de datos." } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Le jeu de données actuel n’est disponible auprès d’aucune source connue. BorgVR attend qu’un participant fournisse une source de données." } }
       }
     },
     "No datasets found" : {
@@ -9854,90 +9982,6 @@
         }
       }
     },
-    "Choose your SharePlay name" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Wählen Sie Ihren SharePlay-Namen"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Choose your SharePlay name"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Elija su nombre para mostrar en SharePlay"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Choisissez votre nom d’affichage SharePlay"
-          }
-        }
-      }
-    },
-    "Continue" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Weiter"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Continue"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Continuar"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Continuer"
-          }
-        }
-      }
-    },
-    "Display name" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Anzeigename"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Display name"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Nombre para mostrar"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Nom d’affichage"
-          }
-        }
-      }
-    },
     "SharePlay display name" : {
       "localizations" : {
         "de" : {
@@ -9966,30 +10010,30 @@
         }
       }
     },
-    "What name should other people see for you in shared SharePlay sessions? You can change it later in Settings." : {
+    "SharePlay Host Left" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Unter welchem Namen möchten Sie für andere Personen in gemeinsamen SharePlay-Sitzungen erscheinen? Sie können ihn später in den Einstellungen ändern."
+            "value" : "SharePlay-Host hat die Sitzung verlassen"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "What name should other people see for you in shared SharePlay sessions? You can change it later in Settings."
+            "value" : "SharePlay Host Left"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "¿Con qué nombre desea aparecer ante otras personas en las sesiones compartidas de SharePlay? Puede cambiarlo más tarde en Ajustes."
+            "value" : "El anfitrión de SharePlay abandonó la sesión"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Sous quel nom souhaitez-vous apparaître auprès des autres personnes dans les sessions SharePlay partagées ? Vous pourrez le modifier ultérieurement dans Réglages."
+            "value" : "L’hôte SharePlay a quitté la session"
           }
         }
       }
@@ -10102,6 +10146,34 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Afficher l’interface"
+          }
+        }
+      }
+    },
+    "Specular light" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Glanzlicht"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Specular light"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Luz especular"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lumière spéculaire"
           }
         }
       }
@@ -10559,6 +10631,34 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Couleur système"
+          }
+        }
+      }
+    },
+    "Take Over Host Role" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Host-Rolle übernehmen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Take Over Host Role"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Asumir el rol de anfitrión"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reprendre le rôle d’hôte"
           }
         }
       }
@@ -11526,6 +11626,38 @@
         }
       }
     },
+    "The SharePlay host is using an outdated BorgVR version. The host must update to version %@ or later." : {
+      "comment" : "A message displayed in a dialog that informs the user that the host of a SharePlay session is using a version of BorgVR that is too old for the current session. The argument is the required version of Borg",
+      "isCommentAutoGenerated" : true
+    },
+    "The SharePlay host left the session. You can take over the host role, leave the session, or continue without a host." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der SharePlay-Host hat die Sitzung verlassen. Sie können die Host-Rolle übernehmen, die Sitzung verlassen oder ohne Host fortfahren."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The SharePlay host left the session. You can take over the host role, leave the session, or continue without a host."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El anfitrión de SharePlay abandonó la sesión. Puede asumir el rol de anfitrión, abandonar la sesión o continuar sin anfitrión."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L’hôte SharePlay a quitté la session. Vous pouvez reprendre le rôle d’hôte, quitter la session ou continuer sans hôte."
+          }
+        }
+      }
+    },
     "This editor is not available in the current render mode." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -12008,6 +12140,35 @@
         }
       }
     },
+    "Trying server: %@" : {
+      "comment" : "Currently queried dataset server",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Server wird geprüft: %@"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Trying server: %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Probando servidor: %@"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tentative avec le serveur : %@"
+          }
+        }
+      }
+    },
     "uncompressed" : {
       "localizations" : {
         "de" : {
@@ -12260,6 +12421,34 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Afficher dans l’App Store"
+          }
+        }
+      }
+    },
+    "Waiting for Data Source" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Warten auf Datenquelle"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Waiting for Data Source"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esperando una fuente de datos"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En attente d’une source de données"
           }
         }
       }
@@ -12559,6 +12748,62 @@
         }
       }
     },
+    "What name should other people see for you in shared SharePlay sessions? You can change it later in Settings." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unter welchem Namen möchten Sie für andere Personen in gemeinsamen SharePlay-Sitzungen erscheinen? Sie können ihn später in den Einstellungen ändern."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "What name should other people see for you in shared SharePlay sessions? You can change it later in Settings."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Con qué nombre desea aparecer ante otras personas en las sesiones compartidas de SharePlay? Puede cambiarlo más tarde en Ajustes."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sous quel nom souhaitez-vous apparaître auprès des autres personnes dans les sessions SharePlay partagées ? Vous pourrez le modifier ultérieurement dans Réglages."
+          }
+        }
+      }
+    },
+    "What's New" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Das ist neu"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "What's New"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Novedades"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nouveautés"
+          }
+        }
+      }
+    },
     "When enabled, the server address, port, and password may be sent to SharePlay participants so they can load shared datasets directly." : {
       "localizations" : {
         "de" : {
@@ -12645,145 +12890,9 @@
         }
       }
     },
-    "Ignore" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ignorieren"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ignore"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ignorar"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ignorer"
-          }
-        }
-      }
-    },
-    "Leave Session" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sitzung verlassen"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Leave Session"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Abandonar la sesión"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Quitter la session"
-          }
-        }
-      }
-    },
-    "SharePlay Host Left" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "SharePlay-Host hat die Sitzung verlassen"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "SharePlay Host Left"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "El anfitrión de SharePlay abandonó la sesión"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "L’hôte SharePlay a quitté la session"
-          }
-        }
-      }
-    },
-    "Take Over Host Role" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Host-Rolle übernehmen"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Take Over Host Role"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Asumir el rol de anfitrión"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Reprendre le rôle d’hôte"
-          }
-        }
-      }
-    },
-    "The SharePlay host left the session. You can take over the host role, leave the session, or continue without a host." : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Der SharePlay-Host hat die Sitzung verlassen. Sie können die Host-Rolle übernehmen, die Sitzung verlassen oder ohne Host fortfahren."
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The SharePlay host left the session. You can take over the host role, leave the session, or continue without a host."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "El anfitrión de SharePlay abandonó la sesión. Puede asumir el rol de anfitrión, abandonar la sesión o continuar sin anfitrión."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "L’hôte SharePlay a quitté la session. Vous pouvez reprendre le rôle d’hôte, quitter la session ou continuer sans hôte."
-          }
-        }
-      }
+    "Your installed BorgVR version is too old for this SharePlay session. Please update to version %@ or later." : {
+      "comment" : "A localized message describing a compatibility issue where the local BorgVR version is too old for a SharePlay session. The argument is the required version of BorgVR.",
+      "isCommentAutoGenerated" : true
     },
     "Zeroes" : {
       "localizations" : {

@@ -143,37 +143,78 @@ class BORGVRRemoteDataManager {
   static func connect(connection: NWConnection, timeout: Double,
                       logger: LoggerBase? = nil) throws {
     let semaphore = DispatchSemaphore(value: 0)
+    let stateLock = NSLock()
     var success = false
+    var failureReason: String?
+    var waitingForLocalNetworkAccess = false
+
+    func updateLocalNetworkAccessState(from path: NWPath?) {
+      guard path?.unsatisfiedReason == .localNetworkDenied else { return }
+      stateLock.lock()
+      waitingForLocalNetworkAccess = true
+      stateLock.unlock()
+    }
 
     connection.stateUpdateHandler = { state in
       switch state {
         case .ready:
           logger?.dev("Connected to server.")
+          stateLock.lock()
           success = true
+          stateLock.unlock()
           semaphore.signal()
         case .failed(let error):
           logger?.error("Connection failed: \(error)")
+          stateLock.lock()
+          failureReason = error.localizedDescription
+          stateLock.unlock()
           semaphore.signal()
         case .waiting(let error):
           logger?.warning("Connection waiting: \(error)")
-          semaphore.signal()
+          updateLocalNetworkAccessState(from: connection.currentPath)
         case .preparing:
           logger?.dev("Preparing connection...")
         default:
           break
       }
     }
+    connection.pathUpdateHandler = { path in
+      updateLocalNetworkAccessState(from: path)
+    }
     connection.start(queue: .global())
 
-    let timeoutResult = semaphore.wait(timeout: .now() + timeout)
+    var totalTimeout = timeout
+    var timeoutResult = semaphore.wait(timeout: .now() + timeout)
     if timeoutResult == .timedOut {
-      connection.cancel()
-      throw BORGVRRemoteDataManagerError.timeout(seconds: timeout)
+      updateLocalNetworkAccessState(from: connection.currentPath)
+      stateLock.lock()
+      let awaitingPermission = waitingForLocalNetworkAccess
+      stateLock.unlock()
+
+      if awaitingPermission {
+        // The first local-network request can remain in `.waiting` while the
+        // system permission dialog is visible. Keep this connection alive so
+        // allowing access can transition it directly to `.ready`.
+        let permissionGracePeriod = max(60.0, timeout)
+        totalTimeout += permissionGracePeriod
+        logger?.info("Waiting for local network access permission.")
+        timeoutResult = semaphore.wait(timeout: .now() + permissionGracePeriod)
+      }
     }
 
-    if !success {
+    if timeoutResult == .timedOut {
+      connection.cancel()
+      throw BORGVRRemoteDataManagerError.timeout(seconds: totalTimeout)
+    }
+
+    stateLock.lock()
+    let didConnect = success
+    let connectionFailureReason = failureReason
+    stateLock.unlock()
+
+    if !didConnect {
       throw BORGVRRemoteDataManagerError.connectionFailed(
-        reason: "Failed to connect to server."
+        reason: connectionFailureReason ?? "Failed to connect to server."
       )
     }
   }

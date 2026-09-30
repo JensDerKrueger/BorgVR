@@ -15,16 +15,32 @@ struct WaitingView: View {
         .clipShape(RoundedRectangle(cornerRadius: 8))
 
       Text(appModel.sharePlayWaitingReason == .datasetSource
-        ? "No Data Source Available"
+        ? "Waiting for Data Source"
         : "Waiting for SharePlay Host")
         .font(.title2.bold())
 
       Text(appModel.sharePlayWaitingReason == .datasetSource
-        ? "The current dataset is not available from any known source. BorgVR is waiting for a participant to provide one."
+        ? "BorgVR is waiting for a participant to make the current dataset available."
         : "Waiting for the host to select and open a dataset.")
         .font(.body)
         .multilineTextAlignment(.center)
         .foregroundStyle(.secondary)
+
+      if appModel.sharePlayWaitingReason == .datasetSource,
+         let source = appModel.sharePlayDatasetSource {
+        Label {
+          Text(
+            String(
+              format: NSLocalizedString("Trying server: %@", comment: "Currently queried dataset server"),
+              source.endpointDescription
+            )
+          )
+        } icon: {
+          Image(systemName: "server.rack")
+        }
+        .font(.callout.monospaced())
+        .foregroundStyle(.secondary)
+      }
 
       Button {
         sharePlay.leaveGroupActivity()

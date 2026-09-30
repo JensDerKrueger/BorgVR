@@ -104,11 +104,17 @@ struct macOSApp: App {
         .environmentObject(updateChecker)
         .frame(minWidth: 980, minHeight: 680)
         .task {
-          sharePlay.registerGroupActivity()
+          await presentSharePlayDisplayNameOnboardingIfNeeded()
         }
         .onAppear {
+          sharePlay.startObservingSessions(
+            appModel: appModel,
+            renderingParameters: renderingParameters,
+            appSettings: appSettings,
+            storedAppModel: storedAppModel,
+            serverController: serverController
+          )
           appModel.setLogLevel(appSettings.logLevel)
-          presentSharePlayDisplayNameOnboardingIfNeeded()
           scriptRunner.configure(
             appModel: appModel,
             renderingParameters: renderingParameters,
@@ -117,6 +123,11 @@ struct macOSApp: App {
             sharePlay: sharePlay,
             docking: docking
           )
+        }
+        .onChange(of: sharePlay.hasObservedGroupSession) { _, hasObservedSession in
+          if hasObservedSession {
+            showsSharePlayDisplayNameOnboarding = false
+          }
         }
         .onChange(of: appSettings.logLevel) { _, newValue in
           appModel.setLogLevel(newValue)
@@ -142,21 +153,13 @@ struct macOSApp: App {
           openExternalDataset(url)
         }
         .task {
-          await sharePlay.configure(
-            appModel: appModel,
-            renderingParameters: renderingParameters,
-            appSettings: appSettings,
-            storedAppModel: storedAppModel,
-            serverController: serverController
-          )
-        }
-        .task {
           _ = storedAppModel.activateDataDirectoryAccess()
           if storedAppModel.enableDatasetServer && storedAppModel.autoStartServer {
             serverController.start(using: storedAppModel)
           }
         }
     }
+    .handlesExternalEvents(matching: [BorgVRSharePlayActivity.activityIdentifier])
     .defaultSize(width: 1200, height: 820)
 
     WindowGroup("Render UI", id: DockablePanelID.renderControls.windowID) {
@@ -251,14 +254,22 @@ struct macOSApp: App {
     }
   }
 
-  private func presentSharePlayDisplayNameOnboardingIfNeeded() {
-    guard !sharePlayDisplayNameOnboardingCompleted else { return }
+  @MainActor
+  private func presentSharePlayDisplayNameOnboardingIfNeeded() async {
+    guard !sharePlayDisplayNameOnboardingCompleted,
+          !showsSharePlayDisplayNameOnboarding else { return }
     let configuredName = storedAppModel.sharePlayDisplayName
       .trimmingCharacters(in: .whitespacesAndNewlines)
     if !configuredName.isEmpty {
       sharePlayDisplayNameOnboardingCompleted = true
       return
     }
+
+    try? await Task.sleep(nanoseconds: 1_000_000_000)
+    guard !Task.isCancelled,
+          !sharePlay.hasObservedGroupSession,
+          !sharePlay.isInSession else { return }
+
     sharePlayDisplayNameDraft = Host.current().localizedName ?? ProcessInfo.processInfo.hostName
     showsSharePlayDisplayNameOnboarding = true
   }

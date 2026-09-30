@@ -700,6 +700,7 @@
 "Participants" = "Participants";
 "Mac" = "Mac";
 "Update Available" = "Update Available";
+"What's New" = "What's New";
 "A newer version of BorgVR (%@) is available in the App Store. You are currently using version %@." = "A newer version of BorgVR (%@) is available in the App Store. You are currently using version %@.";
 "View in App Store" = "View in App Store";
 "Remind Me Later" = "Remind Me Later";
@@ -725,8 +726,8 @@
 "Show Brick Visualization" = "Show Brick Visualization";
 "Show Log Button" = "Show Log Button";
 "Delete Selected Markers" = "Delete Selected Markers";
-"No Data Source Available" = "No Data Source Available";
-"The current dataset is not available from any known source. BorgVR is waiting for a participant to provide one." = "The current dataset is not available from any known source. BorgVR is waiting for a participant to provide one.";
+"Waiting for Data Source" = "Waiting for Data Source";
+"BorgVR is waiting for a participant to make the current dataset available." = "BorgVR is waiting for a participant to make the current dataset available.";
 "Lighting" = "Lighting";
 "Light direction" = "Light direction";
 "Ambient light" = "Ambient light";
@@ -739,3 +740,4 @@
 "Incompatible SharePlay Version" = "Incompatible SharePlay Version";
 "Your installed BorgVR version is too old for this SharePlay session. Please update to version %@ or later." = "Your installed BorgVR version is too old for this SharePlay session. Please update to version %@ or later.";
 "The SharePlay host is using an outdated BorgVR version. The host must update to version %@ or later." = "The SharePlay host is using an outdated BorgVR version. The host must update to version %@ or later.";
+"Trying server: %@" = "Trying server: %@";

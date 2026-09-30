@@ -72,6 +72,7 @@ final class AppModel: ObservableObject {
 
   @Published var currentState: ContentViewState = .start
   @Published var sharePlayWaitingReason: SharePlayWaitingReason = .hostDataset
+  @Published var sharePlayDatasetSource: DatasetOrigin?
   @Published var activeDataset: DatasetEntry?
   @Published var groupSessionHost = true
   @Published var interactionMode: InteractionMode = .model

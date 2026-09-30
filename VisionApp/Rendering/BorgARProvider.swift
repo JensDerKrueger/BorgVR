@@ -41,6 +41,7 @@ struct BorgSpatialInputSample: Sendable {
   let modifierPressed: Bool
   let adjustment: SIMD2<Float>
   let tipPressure: Float?
+  let pressedFaceButtons: Set<SpatialControllerFaceButton>
 
   var primaryPressed: Bool { primaryValue > 0.05 }
   var position: SIMD3<Float> {
@@ -216,7 +217,8 @@ final class BorgARProvider {
             primaryValue: tipPressed || sideDraw ? max(tipPressure, 1) : 0,
             modifierPressed: modifier,
             adjustment: .zero,
-            tipPressure: tipPressed ? tipPressure : nil
+            tipPressure: tipPressed ? tipPressure : nil,
+            pressedFaceButtons: []
           )
 
         case .controller(let controller):
@@ -224,6 +226,9 @@ final class BorgARProvider {
           let trigger = input.buttons[.trigger]?.pressedInput.value ?? 0
           let grip = input.buttons[.grip]?.pressedInput.value ?? 0
           let thumbstick = input.dpads[.thumbstick]
+          let pressedFaceButtons = Set(SpatialControllerFaceButton.allCases.filter {
+            input.buttons[$0.inputName]?.pressedInput.isPressed == true
+          })
           return BorgSpatialInputSample(
             id: tracked.accessory.id,
             source: .controller,
@@ -236,7 +241,8 @@ final class BorgARProvider {
               thumbstick?.xAxis.value ?? 0,
               thumbstick?.yAxis.value ?? 0
             ),
-            tipPressure: nil
+            tipPressure: nil,
+            pressedFaceButtons: pressedFaceButtons
           )
       }
     }
