@@ -84,6 +84,24 @@ h1 {
   letter-spacing: 0;
 }
 
+.brand-copy {
+  min-width: 0;
+}
+
+.brand-title-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.web-version {
+  flex: none;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 650;
+}
+
 p {
   margin: 0;
   color: var(--muted);

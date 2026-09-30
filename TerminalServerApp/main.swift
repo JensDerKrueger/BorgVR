@@ -2,7 +2,7 @@ import Dispatch
 import Foundation
 
 enum TerminalServerInfo {
-  static let version = "2.5"
+  static let version = "2.6"
 
   static let banner = #"""
    ____                   __     ______
