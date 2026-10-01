@@ -2,6 +2,8 @@ import { BrickAtlas } from "./brick-atlas.js?v=20260915-mobile-budget";
 import { buildMarkerRenderGeometry } from "./marker-tube-mesh.js?v=20260922-marker-direction";
 import { createDefaultTransferFunction } from "./transfer-function.js?v=20260907-range-fix";
 
+const VOLUME_DISPLAY_HALF_EXTENT = 0.68;
+
 const shaderSource = `
 struct Uniforms {
   mvp: mat4x4<f32>,
@@ -422,11 +424,19 @@ fn lighting(samplePoint: vec3<f32>, normal: vec3<f32>, color: vec3<f32>) -> vec3
   );
 }
 
+fn volumeLocalPoint(texturePoint: vec3<f32>) -> vec3<f32> {
+  return (texturePoint * 2.0 - vec3<f32>(1.0)) * uniforms.volumeInfo.xyz;
+}
+
+fn distanceFromCameraInNormalizedVolumeSpace(texturePoint: vec3<f32>) -> f32 {
+  return length(volumeLocalPoint(uniforms.cameraTexture.xyz) - volumeLocalPoint(texturePoint));
+}
+
 fn markerOccludesPoint(point: vec3<f32>, markerDepth: f32) -> bool {
   if (markerDepth >= 0.999999) {
     return false;
   }
-  let localPoint = (point * 2.0 - vec3<f32>(1.0)) * uniforms.volumeInfo.xyz;
+  let localPoint = volumeLocalPoint(point);
   let clipPoint = uniforms.mvp * vec4<f32>(localPoint, 1.0);
   if (clipPoint.w <= 0.0) {
     return false;
@@ -443,8 +453,8 @@ fn fragmentMain(input: VertexOut) -> @location(0) vec4<f32> {
   if (rayLength < 0.000001) {
     return vec4<f32>(0.0);
   }
-  let entryDepth = length(uniforms.cameraTexture.xyz - entryPoint);
-  let exitDepth = length(uniforms.cameraTexture.xyz - exitPoint);
+  let entryDepth = distanceFromCameraInNormalizedVolumeSpace(entryPoint);
+  let exitDepth = distanceFromCameraInNormalizedVolumeSpace(exitPoint);
 
   var accumulatedColor = vec3<f32>(0.0);
   var accumulatedAlpha = 0.0;
@@ -628,7 +638,11 @@ export class CoordinateCubeRenderer {
     this.markerInstanceCount = 0;
     this.markerTubeDraws = [];
     this.markers = [];
-    this.volumeHalfExtent = [0.68, 0.68, 0.68];
+    this.volumeHalfExtent = [
+      VOLUME_DISPLAY_HALF_EXTENT,
+      VOLUME_DISPLAY_HALF_EXTENT,
+      VOLUME_DISPLAY_HALF_EXTENT
+    ];
     this.level0BrickCount = [1, 1, 1];
     this.level0Size = [1, 1, 1];
     this.levelCount = 1;
@@ -806,10 +820,13 @@ export class CoordinateCubeRenderer {
     this.level0BrickCount = manifest.levels?.[0]?.brickCount ?? [1, 1, 1];
     this.level0Size = manifest.levels?.[0]?.size ?? manifest.volume?.size ?? [1, 1, 1];
     this.levelCount = Math.max(1, manifest.levels?.length ?? 1);
-    this.levelZeroWorldSpaceError = Math.max(
-      (manifest.volume.aspect?.[0] ?? 1) / Math.max(1, manifest.volume.size?.[0] ?? 1),
-      (manifest.volume.aspect?.[1] ?? 1) / Math.max(1, manifest.volume.size?.[1] ?? 1),
-      (manifest.volume.aspect?.[2] ?? 1) / Math.max(1, manifest.volume.size?.[2] ?? 1)
+    this.levelZeroWorldSpaceError = 2 * VOLUME_DISPLAY_HALF_EXTENT * Math.max(
+      manifest.volume.aspect?.[0] ?? 1,
+      manifest.volume.aspect?.[1] ?? 1,
+      manifest.volume.aspect?.[2] ?? 1
+    ) / Math.max(
+      Number.MIN_VALUE,
+      maxSize
     );
     const byteRangeMax = (2 ** (8 * (manifest.volume?.bytesPerComponent ?? 1))) - 1;
     this.dataRange = manifest.volume?.dataRange ?? [0, byteRangeMax];
@@ -1337,7 +1354,7 @@ export class CoordinateCubeRenderer {
   }
 
   createCubeGeometry(extent) {
-    const [sx, sy, sz] = extent.map((value) => value * 0.68);
+    const [sx, sy, sz] = extent.map((value) => value * VOLUME_DISPLAY_HALF_EXTENT);
     this.volumeHalfExtent = [sx, sy, sz];
     const x0 = -sx;
     const x1 = sx;

@@ -14,7 +14,7 @@ final class DicomParser {
    - height: The height (number of rows) of each slice.
    - depth: The number of slices in the volume.
    - bytesPerVoxel: The number of bytes used to represent each voxel.
-   - scale: The physical scaling factors in x, y, and z dimensions.
+   - scale: The physical voxel spacing in meters along the x, y, and z dimensions.
    - voxelData: A flat array of voxel intensities in ZYX order.
    */
   struct DicomVolume {
@@ -26,7 +26,7 @@ final class DicomParser {
     let depth: Int
     /// Number of bytes per voxel (e.g., 1 or 2).
     let bytesPerVoxel: Int
-    /// Physical scale factors for each axis (x, y, z).
+    /// Physical voxel spacing in meters for each axis (x, y, z).
     let scale: (x: Float, y: Float, z: Float)
     /// Flat voxel data array in Z-Y-X order.
     let voxelData: [UInt8]
@@ -155,7 +155,12 @@ final class DicomParser {
     let fallbackThickness = filtered.compactMap({ $0.1.sliceThickness }).first
     let z = sliceSpacingZ ?? fallbackSpace ?? fallbackThickness ?? 1
 
-    let scale = (x: inPlane.x, y: inPlane.y, z: z)
+    let millimetersToMeters: Float = 0.001
+    let scale = (
+      x: inPlane.x * millimetersToMeters,
+      y: inPlane.y * millimetersToMeters,
+      z: z * millimetersToMeters
+    )
 
 
     let depth = sorted.count
@@ -972,7 +977,7 @@ final class DicomParser {
       bitsStored: readUInt16(tag: .bitsStored),
       pixelRepresentation: readUInt16(tag: .pixelRepresentation),
       sliceThickness: readFloat(tag: .sliceThickness),
-      spaceBetweenSlices: readFloat(tag: .sliceThickness),
+      spaceBetweenSlices: readFloat(tag: .spaceBetweenSlices),
       pixelSpacing: readFloatTuple(tag: .pixelSpacing, count: 2).flatMap { ($0[0], $0[1]) },
       position: readFloatTuple(tag: .imagePositionPatient, count: 3).flatMap { ($0[0], $0[1], $0[2]) },
       orientation: readFloatTuple(tag: .imageOrientationPatient, count: 6),
@@ -1023,5 +1028,3 @@ private extension Data {
  CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR
  THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
-
-

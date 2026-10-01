@@ -121,6 +121,13 @@ inline float samplingPhase(FragmentUniforms uniforms,
   return uniforms.sampleJitter > 0.5 ? raySamplePhase(entryPoint, direction, layerIndex) : defaultPhase;
 }
 
+inline float distanceFromCameraInNormalizedVolumeSpace(FragmentUniforms uniforms,
+                                                       float3 texturePoint) {
+  float3 cameraPoint = uniforms.cameraPosInTextureSpaceVoxelScaled - 0.5;
+  float3 volumePoint = (texturePoint - 0.5) * VOLUME_SCALE;
+  return length(cameraPoint - volumePoint);
+}
+
 #if VOLUME_SHADER_USES_MARKER_TEXTURES
 inline float markerDepthAtFragment(float4 fragmentPosition,
                                    uint layerIndex,
@@ -238,8 +245,8 @@ fragment half4 VOLUME_FRAGMENT_SHADER_TF_NAME(
   if (rayLength < 1e-6) return half4(0);
 
   // Compute distances for LOD selection
-  float entryDepth = length(uniforms.cameraPosInTextureSpaceVoxelScaled - entryPoint);
-  float exitDepth  = length(uniforms.cameraPosInTextureSpaceVoxelScaled - exitPoint);
+  float entryDepth = distanceFromCameraInNormalizedVolumeSpace(uniforms, entryPoint);
+  float exitDepth  = distanceFromCameraInNormalizedVolumeSpace(uniforms, exitPoint);
 
   float3 voxelSpaceDirection = transformToPoolSpace(direction, oversampling);
   float  stepSize            = length(voxelSpaceDirection);
@@ -361,8 +368,8 @@ fragment half4 VOLUME_FRAGMENT_SHADER_TF_LIGHTING_NAME(
   if (rayLength < 1e-6) return half4(0);
 
   // Compute distances for LOD selection
-  float entryDepth = length(uniforms.cameraPosInTextureSpaceVoxelScaled - entryPoint);
-  float exitDepth  = length(uniforms.cameraPosInTextureSpaceVoxelScaled - exitPoint);
+  float entryDepth = distanceFromCameraInNormalizedVolumeSpace(uniforms, entryPoint);
+  float exitDepth  = distanceFromCameraInNormalizedVolumeSpace(uniforms, exitPoint);
 
   float3 voxelSpaceDirection = transformToPoolSpace(direction, oversampling);
   float  stepSize            = length(voxelSpaceDirection);
@@ -496,8 +503,8 @@ fragment half4 VOLUME_FRAGMENT_SHADER_ISO_NAME(
 
   if (rayLength < 1e-6) return half4(0);
 
-  float entryDepth = length(uniforms.cameraPosInTextureSpaceVoxelScaled - entryPoint);
-  float exitDepth  = length(uniforms.cameraPosInTextureSpaceVoxelScaled - exitPoint);
+  float entryDepth = distanceFromCameraInNormalizedVolumeSpace(uniforms, entryPoint);
+  float exitDepth  = distanceFromCameraInNormalizedVolumeSpace(uniforms, exitPoint);
 
   float3 voxelSpaceDirection = transformToPoolSpace(direction, oversampling);
   float  stepSize            = length(voxelSpaceDirection);
@@ -609,8 +616,8 @@ fragment half4 VOLUME_FRAGMENT_SHADER_BRICK_VIS_NAME(
 
   if (rayLength < 1e-6) return half4(0);
 
-  float entryDepth = length(uniforms.cameraPosInTextureSpaceVoxelScaled - entryPoint);
-  float exitDepth  = length(uniforms.cameraPosInTextureSpaceVoxelScaled - exitPoint);
+  float entryDepth = distanceFromCameraInNormalizedVolumeSpace(uniforms, entryPoint);
+  float exitDepth  = distanceFromCameraInNormalizedVolumeSpace(uniforms, exitPoint);
 
   float3 currentPos = entryPoint;
   half4 accColor    = half4(0);

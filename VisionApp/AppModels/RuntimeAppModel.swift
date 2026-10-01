@@ -301,12 +301,7 @@ class RuntimeAppModel {
       self.aspectZ = meta.aspectZ
       self.componentCount = meta.componentCount
       self.bytesPerComponent = meta.bytesPerComponent
-      let maxExtend = Float(max(meta.width, meta.height, meta.depth))
-      self.volumeScale = SIMD3<Float>(
-        meta.aspectX * Float(meta.width) / maxExtend,
-        meta.aspectY * Float(meta.height) / maxExtend,
-        meta.aspectZ * Float(meta.depth) / maxExtend
-      )
+      self.volumeScale = VolumeRenderResources.normalizedVolumeExtent(for: meta)
     }
   }
 

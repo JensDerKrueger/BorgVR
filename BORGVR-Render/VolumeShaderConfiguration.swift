@@ -18,11 +18,8 @@ enum VolumeShaderCompiler {
   ) -> MTLCompileOptions {
     let lodFactor = 2 * tan(configuration.fieldOfViewRadians / 2) *
       configuration.screenSpaceError / max(configuration.drawableWidth, 1)
-    let levelZeroWorldSpaceError = max(
-      metadata.aspectX / Float(metadata.width),
-      metadata.aspectY / Float(metadata.height),
-      metadata.aspectZ / Float(metadata.depth)
-    )
+    let levelZeroWorldSpaceError = VolumeRenderResources.levelZeroWorldSpaceError(for: metadata)
+    let volumeExtent = VolumeRenderResources.normalizedVolumeExtent(for: metadata)
     let (atlasWidth, atlasHeight, atlasDepth, _) = VolumeAtlas.computeAtlasSize(
       maxMemory: configuration.atlasSizeMB * 1024 * 1024,
       maxBrickCount: metadata.brickMetadata.count,
@@ -44,6 +41,9 @@ enum VolumeShaderCompiler {
         string: "float3(\(Float(metadata.overlap) / Float(atlasWidth)),\(Float(metadata.overlap) / Float(atlasHeight)),\(Float(metadata.overlap) / Float(atlasDepth)))"
       ),
       "LEVEL_ZERO_WORLD_SPACE_ERROR": NSNumber(value: levelZeroWorldSpaceError),
+      "VOLUME_SCALE": NSString(
+        string: "float3(\(volumeExtent.x),\(volumeExtent.y),\(volumeExtent.z))"
+      ),
       "LOD_FACTOR": NSNumber(value: lodFactor),
       "POOL_SIZE": NSString(string: "float3(\(atlasWidth),\(atlasHeight),\(atlasDepth))"),
       "VOLUME_SIZE": NSString(

@@ -88,17 +88,7 @@ public class VolumeDataAccessor: VolumeDataAccessing, CustomStringConvertible {
     self.bytesPerComponent = bytesPerComponent
     self.componentCount = componentCount
 
-    // Normalize the aspect-ratio to prevent zero or extreme values.
-    let maxAspect = max(aspect.x, aspect.y, aspect.z)
-    if maxAspect == 0 {
-      self.aspect = Vec3<Float>(x: 1, y: 1, z: 1)
-    } else {
-      self.aspect = Vec3<Float>(
-        x: aspect.x / maxAspect,
-        y: aspect.y / maxAspect,
-        z: aspect.z / maxAspect
-      )
-    }
+    self.aspect = aspect
 
     self.readOnly = readOnly
   }

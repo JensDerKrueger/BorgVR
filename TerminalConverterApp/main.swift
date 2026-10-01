@@ -570,7 +570,11 @@ func generateVolume(_ params: CreateModeParameters) {
                          maxBrickSize: params.common.maxBrickSize,
                          bytesPerComponent: params.byteDepth,
                          componentCount: params.componentCount,
-                         aspect: Vec3<Float>(x: 1, y: 1, z: 1),
+                         aspect: Vec3<Float>(
+                           x: 1 / Float(params.sizeX),
+                           y: 1 / Float(params.sizeY),
+                           z: 1 / Float(params.sizeZ)
+                         ),
                          overlap: params.common.overlap,
                          outputFilename: params.common.outputFilename,
                          datasetDescription: params.common.datasetDescription,

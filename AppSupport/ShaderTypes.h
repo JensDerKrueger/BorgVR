@@ -26,6 +26,7 @@ typedef NSInteger EnumBackingType;
 #define BRICK_INNER_SIZE 60                 ///< Inner voxel count per brick (excluding overlap).
 #define OVERLAP_STEP float3(1,1,1)          ///< Step size for overlap regions between bricks.
 #define LEVEL_ZERO_WORLD_SPACE_ERROR 1.0    ///< Base world-space error at LOD 0.
+#define VOLUME_SCALE float3(1,1,1)          ///< Normalized displayed extent of the volume.
 #define LOD_FACTOR 1.0                      ///< Factor used to compute LOD.
 #define POOL_CAPACITY uint3(1,1,1)          ///< Initial capacity of the brick cache pool.
 #define POOL_SIZE float3(1,1,1)             ///< Physical size of the pool in bricks.
@@ -100,7 +101,7 @@ typedef NS_ENUM(EnumBackingType, TextureIndex)
  - transferBias:                   Bias for transfer function lookup.
  - cameraPosInTextureSpace:        Camera position in normalized texture coords.
  - cameraPosInTextureSpaceVoxelScaled:
- Camera position scaled by volume dimensions.
+ Camera position in the normalized, unscaled volume-model space, offset by 0.5.
  - cubeBounds:                     Axis-aligned bounding box of the volume (min, max).
  - modelView:                      Model-view matrix for transforming positions.
  - modelViewIT:                    Inverse-transpose of the model-view for normals.

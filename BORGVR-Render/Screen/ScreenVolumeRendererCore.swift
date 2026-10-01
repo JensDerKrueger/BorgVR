@@ -581,14 +581,15 @@ final class ScreenVolumeRendererCore {
     let aspect = Float(max(view.drawableSize.width, 1) / max(view.drawableSize.height, 1))
     let projection = matrixPerspective(fovyRadians: fieldOfViewY, aspect: aspect, nearZ: 0.05, farZ: 100)
     let viewMatrix = matrixTranslation(SIMD3<Float>(0, 0, -cameraDistance))
-    let modelMatrix =
+    let unscaledModelMatrix =
       matrixTranslation(SIMD3<Float>(renderingParameters.pan.x, renderingParameters.pan.y, 0)) *
       simd_float4x4(renderingParameters.orientation) *
-      matrixScale(SIMD3<Float>(repeating: renderingParameters.scale)) *
-      volumeScale
+      matrixScale(SIMD3<Float>(repeating: renderingParameters.scale))
+    let modelMatrix = unscaledModelMatrix * volumeScale
 
     let textureOffset = matrixTranslation(SIMD3<Float>(0.5, 0.5, 0.5))
     let viewToTexture = textureOffset * simd_inverse(viewMatrix * modelMatrix)
+    let viewToNormalizedVolume = textureOffset * simd_inverse(viewMatrix * unscaledModelMatrix)
     let borderSize = Float(metadata.overlap + 1) / SIMD3<Float>(
       Float(metadata.width),
       Float(metadata.height),
@@ -614,7 +615,9 @@ final class ScreenVolumeRendererCore {
       sampleJitter: appSettings.sampleJitter ? 1 : 0,
       transferBias: renderingParameters.transferFunction.textureBias,
       cameraPosInTextureSpace: simd_make_float3(viewToTexture * SIMD4<Float>(0, 0, 0, 1)),
-      cameraPosInTextureSpaceVoxelScaled: simd_make_float3(viewToTexture * SIMD4<Float>(0, 0, 0, 1)),
+      cameraPosInTextureSpaceVoxelScaled: simd_make_float3(
+        viewToNormalizedVolume * SIMD4<Float>(0, 0, 0, 1)
+      ),
       cubeBounds: (clipMin, clipMax),
       lightDirection: SIMD4<Float>(renderingParameters.lightDirection, 0),
       ambientLightColor: SIMD4<Float>(renderingParameters.ambientLightColor, 0),
