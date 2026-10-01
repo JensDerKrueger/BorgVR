@@ -121,6 +121,20 @@ struct RenderControlsPanel: View {
         }
       }
 
+      if sharePlay.showsSystemSharePlayJoinInstructions {
+        Label(
+          "To complete the connection, click Join in the green SharePlay menu in the menu bar.",
+          systemImage: "shareplay"
+        )
+        .font(.callout.weight(.medium))
+        .multilineTextAlignment(.center)
+        .frame(maxWidth: .infinity, alignment: .center)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(Color.green.opacity(0.18), in: RoundedRectangle(cornerRadius: 6))
+        .transition(.opacity)
+      }
+
       Picker("Render Mode", selection: $renderingParameters.renderMode) {
         ForEach(RenderMode.allCases) { mode in
           Text(mode.description).tag(mode)
@@ -262,10 +276,9 @@ struct RenderControlsPanel: View {
     } else {
       sharePlay.closeSharedDataset()
     }
-    appModel.volumeMarkers.removeAll()
-    appModel.selectedVolumeMarkerID = nil
+    appModel.removeAllVolumeMarkers()
     docking.resetForDatasetClose()
-    appModel.currentState = .selectData
+    appModel.closeDataset(destination: .datasetSelection)
   }
 
   private var canCopyWebGPUShareLink: Bool {

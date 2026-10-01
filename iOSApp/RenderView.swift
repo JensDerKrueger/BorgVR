@@ -749,9 +749,8 @@ struct RenderView: View {
     } else {
       sharePlay.closeSharedDataset()
     }
-    appModel.volumeMarkers.removeAll()
-    appModel.selectedVolumeMarkerID = nil
-    appModel.currentState = .selectData
+    appModel.removeAllVolumeMarkers()
+    appModel.closeDataset(destination: .datasetSelection)
   }
 
   private func synchronizeTransform() {

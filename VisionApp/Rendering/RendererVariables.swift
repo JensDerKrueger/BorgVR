@@ -475,13 +475,10 @@ final actor Renderer {
     borgARProvider.stopARSession()
     let model = runtimeAppModel
     Task { @MainActor in
-      model.immersiveSpaceState = .closed
-      if model.immersiveSpaceIntent == .keepCurrent {
-        // The system can destroy the renderer directly when the user presses Home.
-        // Route that through the regular close path so SharePlay participants are
-        // notified before the dataset selection is shown.
-        model.immersiveSpaceIntent = .close
-      }
+      // The system can destroy the renderer directly when the user presses Home.
+      // Route that through the dataset state machine so SharePlay participants are
+      // notified before the dataset selection is shown.
+      model.immersiveSpaceWasClosedBySystem()
     }
   }
 

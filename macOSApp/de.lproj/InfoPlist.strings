@@ -1,2 +1,1 @@
-"NSAccessoryTrackingUsageDescription" = "BorgVR erfasst verbundene räumliche Controller und Eingabestifte, damit Sie mit Volumen interagieren und Marker erzeugen können.";
 "NSLocalNetworkUsageDescription" = "BorgVR verwendet das lokale Netzwerk, um Datensätze von anderen BorgVR-Geräten und Servern zu laden und sie bei aktivierter Freigabe für andere Teilnehmer und den WebGPU-Renderer bereitzustellen.";

@@ -85,7 +85,7 @@ struct ConverterView: View {
       .toolbar {
         ToolbarItem(placement: .topBarLeading) {
           Button {
-            appModel.currentState = .start
+            appModel.navigationState = .start
           } label: {
             Label("Back", systemImage: "chevron.backward")
           }

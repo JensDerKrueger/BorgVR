@@ -1,46 +1,44 @@
 import SwiftUI
 
 /**
- A container view that dynamically displays one of several subviews based on the current state of the application.
-
- This view observes the shared `AppModel` to determine which view to display:
-
- - `.start`: presents the `ModeSelectionView`.
- - `.settings`: presents the `SettingsView`.
- - `.importData`: presents the `ConverterView`.
- - `.selectData`: presents the `OpenDatasetView`.
- - `.renderData`: presents the `RenderView`.
- - `.waitingForHost`: presents the `WaitingView`.
+ A container view that derives dataset presentation from `datasetSessionState`
+ and uses `navigationState` only while no dataset session is active.
  */
 struct ContentView: View {
   /// The shared application model injected into the environment, holding app state.
   @Environment(RuntimeAppModel.self) private var runtimeAppModel
 
   /// The body of the view, switching between subviews according to the current state.
+  @ViewBuilder
   var body: some View {
-    switch runtimeAppModel.currentState {
+    switch runtimeAppModel.datasetSessionState {
+      case .waitingForSharePlay, .resolving:
+        WaitingView()
+      case .opening, .rendering:
+        RenderView()
+      case .closing(_, _, let destination):
+        switch destination {
+          case .datasetSelection:
+            RenderView()
+          case .sharePlayWaiting:
+            WaitingView()
+        }
+      case .inactive:
+        navigationContent
+    }
+  }
+
+  @ViewBuilder
+  private var navigationContent: some View {
+    switch runtimeAppModel.navigationState {
       case .start:
-        /// Show the initial mode selection screen.
         ModeSelectionView()
       case .settings:
-        /// Show the application settings screen.
         SettingsView()
       case .importData:
-        /// Show the data conversion/import screen.
         ConverterView()
       case .selectData:
-        /// Show the dataset selection screen.
         OpenDatasetView()
-      case .renderData:
-        /// Show the main rendering view for volumetric data.
-        RenderView()
-      case .waitingForHost:
-        /// Show a window that tells the users that they are waiting for the host to open a dataset.
-        WaitingView()
-      @unknown default:
-        /// Handle any future unknown states.
-        Text("Unknown state")
-          .foregroundColor(.red)
     }
   }
 }

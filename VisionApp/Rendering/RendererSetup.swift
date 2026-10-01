@@ -86,6 +86,7 @@ extension Renderer {
                               sharedAppModel: SharedAppModel,
                               timer: CPUFrameTimer,
                               dataset: BORGVRDatasetProtocol,
+                              datasetID: String,
                               isHost:Bool,
                               transferFunctionPanelInteractionState: TransferFunctionPanelInteractionState,
                               immersiveInteraction: ImmersiveInteraction,
@@ -108,6 +109,7 @@ extension Renderer {
 
         await renderer.initRenderLoop()
         guard !Task.isCancelled else { return }
+        await runtimeAppModel.markDatasetRendererReady(uniqueID: datasetID)
         await renderer.renderLoop()
       } catch {
         logger?.error("Failed to start render loop: \(error)")

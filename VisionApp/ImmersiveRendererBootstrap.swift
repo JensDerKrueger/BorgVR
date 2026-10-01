@@ -39,6 +39,7 @@ enum ImmersiveBootstrap {
     SpatialControllerEventRouting.install()
 
     guard let activeDataset = runtimeAppModel.activeDataset else {
+      runtimeAppModel.requestDatasetClose(destination: .datasetSelection)
       return
     }
 
@@ -83,7 +84,12 @@ enum ImmersiveBootstrap {
           }
       }
     } catch {
-      // If dataset setup fails, just return and let the immersive space close/idle.
+      runtimeAppModel.logger.error("Failed to load dataset: \(error.localizedDescription)")
+      runtimeAppModel.requestDatasetClose(
+        destination: runtimeAppModel.groupSessionHost
+          ? .datasetSelection
+          : .sharePlayWaiting(.datasetSource)
+      )
       return
     }
 
@@ -165,6 +171,7 @@ enum ImmersiveBootstrap {
       sharedAppModel: sharedAppModel,
       timer: timer,
       dataset: dataset,
+      datasetID: activeDataset.uniqueId,
       isHost: runtimeAppModel.groupSessionHost,
       transferFunctionPanelInteractionState: transferFunctionPanelInteractionState,
       immersiveInteraction: immersiveInteraction,

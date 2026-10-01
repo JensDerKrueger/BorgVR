@@ -287,9 +287,7 @@ struct macOSApp: App {
           into: storedAppModel.resolvedDataDirectoryURL(),
           logger: appModel.logger
         )
-        appModel.activeDataset = dataset
-        appModel.groupSessionHost = true
-        appModel.currentState = .renderData
+        appModel.openDataset(dataset, asGroupSessionHost: true)
         docking.resetForDatasetClose()
         sharePlay.datasetOpened()
       } catch {

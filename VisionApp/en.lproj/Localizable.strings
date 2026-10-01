@@ -265,7 +265,7 @@
 "private_marker_delete_selected_button" = "Delete selected marker";
 "Delete Selected Markers" = "Delete selected markers";
 "Radius" = "Radius";
-"private_marker_clear_all_button" = "Clear markers";
+"private_marker_clear_all_button" = "Clear All Markers";
 "private_marker_open_button" = "Markers…";
 "marker_window_title" = "Markers";
 "private_marker_spawn_label" = "Create new marker";
@@ -276,7 +276,7 @@
 "marker_window_name_field" = "Name";
 "marker_clear_all_confirmation_title" = "Clear all markers?";
 "marker_clear_all_confirmation_message" = "This removes all markers from the current session.";
-"marker_clear_all_confirmation_delete" = "Clear Markers";
+"marker_clear_all_confirmation_delete" = "Clear All Markers";
 "marker_clear_all_confirmation_cancel" = "Cancel";
 "marker_load_merge_title" = "Load markers";
 "marker_load_merge_message" = "Markers already exist in the current session. Do you want to replace them or add the loaded markers?";
@@ -1058,6 +1058,7 @@
 "controller_action_toggle_interaction_window" = "Show or Hide Interaction Window";
 "controller_action_reset_model" = "Reset Model";
 "controller_action_reset_clipping" = "Reset Clipping";
+"controller_action_delete_last_marker" = "Delete Last Marker";
 "controller_action_delete_selected_markers" = "Delete Selected Markers";
 "controller_action_toggle_marker_directions" = "Toggle Selected Marker Directions";
 "A newer version of BorgVR (%@) is available in the App Store. You are currently using version %@." = "A newer version of BorgVR (%@) is available in the App Store. You are currently using version %@.";
@@ -1092,3 +1093,13 @@
 "Your installed BorgVR version is too old for this SharePlay session. Please update to version %@ or later." = "Your installed BorgVR version is too old for this SharePlay session. Please update to version %@ or later.";
 "The SharePlay host is using an outdated BorgVR version. The host must update to version %@ or later." = "The SharePlay host is using an outdated BorgVR version. The host must update to version %@ or later.";
 "Trying server: %@" = "Trying server: %@";
+"settings_tab_general" = "General";
+"settings_tab_performance" = "Performance";
+"settings_tab_interaction" = "Interaction";
+"settings_description_general" = "Configure general application behavior, automatic loading, notifications, and update checks.";
+"settings_description_interaction" = "Configure voice control, markers, tracked accessories, and controller shortcuts.";
+"settings_description_performance" = "Configure level-of-detail selection, paging behavior, and GPU memory structures. Most users can leave these advanced settings unchanged.";
+"settings_section_general_behavior" = "Behavior";
+"settings_section_voice" = "Voice Control";
+"settings_section_sampling" = "Sampling";
+"Datasets provided through SharePlay ad-hoc connections are always loaded progressively, regardless of this setting." = "Datasets provided through SharePlay ad-hoc connections are always loaded progressively, regardless of this setting.";

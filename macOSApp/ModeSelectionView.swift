@@ -114,15 +114,15 @@ struct ModeSelectionView: View {
 
       VStack(spacing: 14) {
         commandButton("modeselection_open_dataset", systemImage: "folder") {
-          appModel.currentState = .selectData
+          appModel.navigationState = .selectData
         }
 
         commandButton("modeselection_import", systemImage: "square.and.arrow.down") {
-          appModel.currentState = .importData
+          appModel.navigationState = .importData
         }
 
         commandButton("modeselection_settings", systemImage: "gearshape") {
-          appModel.currentState = .settings
+          appModel.navigationState = .settings
         }
 
         if storedAppModel.enableDatasetServer {

@@ -532,6 +532,7 @@
       }
     },
     "Advanced" : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -612,6 +613,34 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Lumière ambiante"
+          }
+        }
+      }
+    },
+    "Appearance" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Darstellung"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Appearance"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apariencia"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apparence"
           }
         }
       }
@@ -871,6 +900,34 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Serveur en arrière-plan arrêté"
+          }
+        }
+      }
+    },
+    "Behavior" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verhalten"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Behavior"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Comportamiento"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Comportement"
           }
         }
       }
@@ -1950,7 +2007,36 @@
         }
       }
     },
+    "Configure general application behavior, automatic loading, interface diagnostics, and update checks." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Konfigurieren Sie das allgemeine Verhalten, automatisches Laden, Diagnoseelemente und die Suche nach Updates."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Configure general application behavior, automatic loading, interface diagnostics, and update checks."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Configura el comportamiento general, la carga automática, los diagnósticos y la búsqueda de actualizaciones."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Configurez le comportement général, le chargement automatique, les diagnostics et la recherche de mises à jour."
+          }
+        }
+      }
+    },
     "Configure general application behavior, including automatic checks for new BorgVR versions in the App Store." : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -1974,6 +2060,62 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Configurez le comportement général de l’application, notamment la recherche automatique de nouvelles versions de BorgVR dans l’App Store."
+          }
+        }
+      }
+    },
+    "Configure level-of-detail selection, paging behavior, and GPU memory structures. Most users can leave these advanced performance settings unchanged." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Konfigurieren Sie Detailstufen, Nachladen und GPU-Speicherstrukturen. Die meisten Nutzer können diese erweiterten Leistungseinstellungen unverändert lassen."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Configure level-of-detail selection, paging behavior, and GPU memory structures. Most users can leave these advanced performance settings unchanged."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Configura el nivel de detalle, la carga de datos y las estructuras de memoria de la GPU. La mayoría de los usuarios puede mantener estos ajustes avanzados sin cambios."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Configurez le niveau de détail, le chargement et les structures mémoire du GPU. La plupart des utilisateurs peuvent conserver ces réglages avancés."
+          }
+        }
+      }
+    },
+    "Configure visual appearance and sampling quality. These controls affect how the rendered image looks and how sampling adapts to the current frame rate." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Konfigurieren Sie Darstellung und Sampling-Qualität. Diese Einstellungen beeinflussen das Bild und die Anpassung des Samplings an die aktuelle Bildrate."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Configure visual appearance and sampling quality. These controls affect how the rendered image looks and how sampling adapts to the current frame rate."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Configura la apariencia y la calidad del muestreo. Estos controles afectan a la imagen y a la adaptación del muestreo a la frecuencia de fotogramas."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Configurez l’apparence et la qualité d’échantillonnage. Ces réglages influencent l’image et l’adaptation de l’échantillonnage à la fréquence d’images."
           }
         }
       }
@@ -3584,6 +3726,34 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Détacher le panneau"
+          }
+        }
+      }
+    },
+    "Diagnostics" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diagnose"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diagnostics"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diagnóstico"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diagnostic"
           }
         }
       }
@@ -5546,6 +5716,7 @@
       }
     },
     "LOD" : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -8145,6 +8316,34 @@
         }
       }
     },
+    "Performance" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Leistung"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Performance"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rendimiento"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Performances"
+          }
+        }
+      }
+    },
     "PKCS#12 password" : {
       "comment" : "A label for the password field in the web server certificate controls.",
       "isCommentAutoGenerated" : true,
@@ -8255,6 +8454,34 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Chargement progressif"
+          }
+        }
+      }
+    },
+    "Datasets provided through SharePlay ad-hoc connections are always loaded progressively, regardless of this setting." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Über SharePlay-Ad-hoc-Verbindungen bereitgestellte Datensätze werden unabhängig von dieser Einstellung immer progressiv geladen."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Datasets provided through SharePlay ad-hoc connections are always loaded progressively, regardless of this setting."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los conjuntos de datos proporcionados mediante conexiones ad hoc de SharePlay siempre se cargan progresivamente, independientemente de este ajuste."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les jeux de données fournis via des connexions ad hoc SharePlay sont toujours chargés progressivement, quel que soit ce réglage."
           }
         }
       }
@@ -9055,6 +9282,34 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Exécuter le script..."
+          }
+        }
+      }
+    },
+    "Sampling" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sampling"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sampling"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Muestreo"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Échantillonnage"
           }
         }
       }
@@ -11716,6 +11971,7 @@
       }
     },
     "This page contains settings for the BorgVR rendering system. Some options, such as the background color, are mostly cosmetic, while others, such as the atlas size, can have a major impact on performance. If renderer problems occur, you can return this section to the default settings, which are suitable for most cases." : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -11744,6 +12000,7 @@
       }
     },
     "This page controls BorgVR's level-of-detail system. These settings allow fine tuning between visual quality and rendering performance." : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {

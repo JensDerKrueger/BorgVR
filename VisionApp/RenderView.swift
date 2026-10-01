@@ -215,7 +215,7 @@ struct RenderView: View {
     if leavingSharePlay {
       sharedAppModel.leaveGroupActivity()
     }
-    runtimeAppModel.immersiveSpaceIntent = .close
+    runtimeAppModel.requestDatasetClose(destination: .datasetSelection)
   }
 
   private var canCopyWebGPUShareLink: Bool {

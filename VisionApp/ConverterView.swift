@@ -198,7 +198,7 @@ struct ConverterView: View {
 
         // Back button
         Button {
-          runtimeAppModel.currentState = .start
+          runtimeAppModel.navigationState = .start
         } label: {
           Label("converter_back_to_main_menu", systemImage: "chevron.backward")
         }

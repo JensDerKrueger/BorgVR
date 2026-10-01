@@ -74,6 +74,7 @@ enum SpatialControllerButtonAction: String, CaseIterable, Identifiable {
   case toggleInteractionWindow
   case resetModel
   case resetClipping
+  case deleteLastMarker
   case deleteSelectedMarkers
   case toggleSelectedMarkerDirections
 
@@ -90,7 +91,7 @@ enum SpatialControllerButtonAction: String, CaseIterable, Identifiable {
       case .toggleCurrentEditor, .toggleMarkerWindow, .toggleLightingWindow,
            .toggleInteractionWindow:
         .windows
-      case .resetModel, .resetClipping, .deleteSelectedMarkers,
+      case .resetModel, .resetClipping, .deleteLastMarker, .deleteSelectedMarkers,
            .toggleSelectedMarkerDirections:
         .actions
     }
@@ -116,6 +117,8 @@ enum SpatialControllerButtonAction: String, CaseIterable, Identifiable {
         String(localized: "controller_action_toggle_interaction_window")
       case .resetModel: String(localized: "controller_action_reset_model")
       case .resetClipping: String(localized: "controller_action_reset_clipping")
+      case .deleteLastMarker:
+        String(localized: "controller_action_delete_last_marker")
       case .deleteSelectedMarkers:
         String(localized: "controller_action_delete_selected_markers")
       case .toggleSelectedMarkerDirections:
@@ -141,6 +144,7 @@ enum SpatialControllerButtonAction: String, CaseIterable, Identifiable {
       case .toggleInteractionWindow: "hand.draw"
       case .resetModel: "arrow.counterclockwise"
       case .resetClipping: "crop.rotate"
+      case .deleteLastMarker: "delete.backward"
       case .deleteSelectedMarkers: "trash"
       case .toggleSelectedMarkerDirections: "location.north.line"
     }
@@ -213,22 +217,29 @@ enum SpatialControllerShortcutHandler {
       case .resetClipping:
         sharedAppModel.resetClipBoundsToVolume()
         sharedAppModel.synchronize(kind: .full)
+      case .deleteLastMarker:
+        if sharedAppModel.removeLastVolumeMarker() {
+          sharedAppModel.synchronizeMarkers()
+        }
       case .deleteSelectedMarkers:
         let selectedIDs = sharedAppModel.selectedVolumeMarkerIDs
-        guard !selectedIDs.isEmpty else { return }
-        sharedAppModel.volumeMarkers.removeAll { selectedIDs.contains($0.id) }
-        sharedAppModel.clearVolumeMarkerSelection()
-        sharedAppModel.synchronizeMarkers()
+        if sharedAppModel.removeVolumeMarkers(withIDs: selectedIDs) {
+          sharedAppModel.synchronizeMarkers()
+        }
       case .toggleSelectedMarkerDirections:
-        let indices = sharedAppModel.volumeMarkers.indices.filter {
-          sharedAppModel.selectedVolumeMarkerIDs.contains(sharedAppModel.volumeMarkers[$0].id) &&
-            sharedAppModel.volumeMarkers[$0].kind == .sphere
-        }
-        guard !indices.isEmpty else { return }
-        let showDirections = !indices.allSatisfy {
-          sharedAppModel.volumeMarkers[$0].showsDirection
-        }
-        for index in indices {
+        let markerIDs = Set(sharedAppModel.volumeMarkers.compactMap { marker in
+          sharedAppModel.selectedVolumeMarkerIDs.contains(marker.id) && marker.kind == .sphere
+            ? marker.id
+            : nil
+        })
+        guard !markerIDs.isEmpty else { return }
+        let showDirections = !sharedAppModel.volumeMarkers
+          .filter { markerIDs.contains($0.id) }
+          .allSatisfy(\.showsDirection)
+        for markerID in markerIDs {
+          guard let index = sharedAppModel.volumeMarkers.firstIndex(where: {
+            $0.id == markerID
+          }) else { continue }
           sharedAppModel.volumeMarkers[index].showsDirection = showDirections
         }
         sharedAppModel.defaultVolumeMarkerShowsDirection = showDirections

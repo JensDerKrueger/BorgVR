@@ -29,6 +29,45 @@ private struct ServerConfig: Identifiable, Equatable {
   var status: ServerValidationStatus = .unknown
 }
 
+private enum VisionSettingsPage: String, CaseIterable, Identifiable {
+  case general
+  case rendering
+  case performance
+  case interaction
+  case remoteDatasets
+  case localServer
+  case importSettings
+  case sharePlay
+
+  var id: String { rawValue }
+
+  var title: LocalizedStringKey {
+    switch self {
+      case .general: "settings_tab_general"
+      case .rendering: "settings_tab_rendering"
+      case .performance: "settings_tab_performance"
+      case .interaction: "settings_tab_interaction"
+      case .remoteDatasets: "settings_tab_remote"
+      case .localServer: "settings_tab_local_server"
+      case .importSettings: "settings_tab_import"
+      case .sharePlay: "SharePlay"
+    }
+  }
+
+  var systemImage: String {
+    switch self {
+      case .general: "gearshape"
+      case .rendering: "paintpalette"
+      case .performance: "gauge.with.dots.needle.50percent"
+      case .interaction: "hand.draw"
+      case .remoteDatasets: "network"
+      case .localServer: "server.rack"
+      case .importSettings: "square.and.arrow.down"
+      case .sharePlay: "shareplay"
+    }
+  }
+}
+
 struct SettingsView: View {
 
   @Environment(RuntimeAppModel.self) private var runtimeAppModel
@@ -70,6 +109,7 @@ struct SettingsView: View {
   @State private var isValidatingServers = false
   @State private var showQuickMarkerInfo = false
   @State private var showClearOriginCacheConfirmation = false
+  @State private var selectedSettingsPage: VisionSettingsPage = .general
 
   var body: some View {
     VStack(spacing: 20) {
@@ -77,36 +117,42 @@ struct SettingsView: View {
         .font(.largeTitle)
         .bold()
 
-      TabView {
-        // Rendering UI Tab
-        Form {
-          settingsIntroSection("settings_description_rendering")
-          Section(header: Text("settings_section_rendering_interface").bold()) {
-            Toggle(
-              "settings_toggle_autoload_tf",
-              isOn: $storedAppModel.autoloadTF
-            )
-            Toggle(
-              "settings_toggle_autoload_transform",
-              isOn: $storedAppModel.autoloadTransform
-            )
-            Toggle(
-              "settings_toggle_disable_foveation",
-              isOn: $storedAppModel.disableFoveation
-            )
-            Toggle(
-              "settings_toggle_show_notifications",
-              isOn: $storedAppModel.showNotifications
-            )
-            .onChange(of: storedAppModel.showNotifications) { _, newValue in
-              if newValue {
-                Task {
-                  await NotificationHelper.requestAuthorization(
-                    storedAppModel: storedAppModel
-                  )
-                }
+      HStack(spacing: 0) {
+        settingsSidebar
+        Divider()
+
+        Group {
+          if selectedSettingsPage == .general {
+            Form {
+              settingsIntroSection("settings_description_general")
+              Section(header: Text("settings_section_general_behavior").bold()) {
+                Toggle("settings_toggle_autoload_tf", isOn: $storedAppModel.autoloadTF)
+                Toggle("settings_toggle_autoload_transform", isOn: $storedAppModel.autoloadTransform)
+                Toggle("settings_toggle_show_notifications", isOn: $storedAppModel.showNotifications)
+                  .onChange(of: storedAppModel.showNotifications) { _, newValue in
+                    if newValue {
+                      Task {
+                        await NotificationHelper.requestAuthorization(
+                          storedAppModel: storedAppModel
+                        )
+                      }
+                    }
+                  }
+              }
+
+              Section(header: Text("Updates").bold()) {
+                Toggle("Automatically check for updates", isOn: $updateChecker.checksEnabled)
+                Text("BorgVR periodically checks the App Store for new versions and displays a notification when an update is available.")
+                  .font(.footnote)
+                  .foregroundStyle(.secondary)
               }
             }
+          }
+
+          if selectedSettingsPage == .interaction {
+        Form {
+          settingsIntroSection("settings_description_interaction")
+          Section(header: Text("settings_section_voice").bold()) {
             Toggle(
               "settings_toggle_enable_voice_input",
               isOn: $storedAppModel.enableVoiceInput
@@ -182,14 +228,6 @@ struct SettingsView: View {
               .font(.footnote)
               .foregroundStyle(.secondary)
 
-            Toggle(
-              "settings_toggle_share_stylus_position",
-              isOn: $storedAppModel.shareSpatialStylusPosition
-            )
-            Text("settings_share_stylus_position_description")
-              .font(.footnote)
-              .foregroundStyle(.secondary)
-
             ColorPicker(
               "settings_marker_default_color",
               selection: markerDefaultColorBinding,
@@ -228,9 +266,97 @@ struct SettingsView: View {
           }
 
         }
-        .tabItem { Label("settings_tab_rendering", systemImage: "display") }
+          }
 
-        // Remote Datasets Tab
+          if selectedSettingsPage == .rendering {
+            Form {
+              settingsIntroSection("settings_description_rendering")
+              Section(header: Text("settings_section_rendering_interface").bold()) {
+                Toggle("settings_toggle_disable_foveation", isOn: $storedAppModel.disableFoveation)
+              }
+
+              Section(header: Text("settings_section_sampling").bold()) {
+                Picker(
+                  "settings_picker_oversampling_mode",
+                  selection: $storedAppModel.oversamplingMode
+                ) {
+                  Text("settings_oversampling_mode_static")
+                    .tag(OversamplingMode.staticMode.rawValue)
+                  Text("settings_oversampling_mode_dynamic")
+                    .tag(OversamplingMode.dynamicMode.rawValue)
+                }
+                .pickerStyle(.segmented)
+
+                HStack {
+                  Text(
+                    NSLocalizedString(
+                      storedAppModel.oversamplingMode == OversamplingMode.dynamicMode.rawValue
+                        ? "settings_label_base_oversampling"
+                        : "settings_label_oversampling",
+                      comment: "Label for oversampling value depending on mode"
+                    )
+                  )
+                  Spacer()
+                  TextField(
+                    "settings_placeholder_oversampling",
+                    text: $tempOversampling,
+                    onCommit: validateOversampling
+                  )
+                  .onChange(of: tempOversampling) { validateOversampling() }
+                  .textFieldStyle(RoundedBorderTextFieldStyle())
+                  .keyboardType(.decimalPad)
+                  .frame(width: 100)
+                  .onAppear { tempOversampling = String(storedAppModel.oversampling) }
+                }
+                if let error = oversamplingErrorMsg {
+                  Text(error)
+                    .foregroundColor(.red)
+                    .font(.caption)
+                }
+
+                Toggle("settings_toggle_sample_jitter", isOn: $storedAppModel.sampleJitter)
+
+                if storedAppModel.oversamplingMode == OversamplingMode.dynamicMode.rawValue {
+                  HStack {
+                    Text("settings_label_drop_fps")
+                    Spacer()
+                    TextField(
+                      "settings_label_drop_fps",
+                      value: $storedAppModel.dropFPS,
+                      formatter: NumberFormatter()
+                    )
+                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                    .keyboardType(.numberPad)
+                    .frame(width: 100)
+                  }
+
+                  HStack {
+                    Text("settings_label_recovery_fps")
+                    Spacer()
+                    TextField(
+                      "settings_label_recovery_fps",
+                      value: $storedAppModel.recoveryFPS,
+                      formatter: NumberFormatter()
+                    )
+                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                    .keyboardType(.numberPad)
+                    .frame(width: 100)
+                  }
+
+                  if storedAppModel.dropFPS >= storedAppModel.recoveryFPS
+                      || storedAppModel.dropFPS <= 0
+                      || storedAppModel.recoveryFPS <= 0
+                  {
+                    Text("settings_error_drop_recovery_fps")
+                      .foregroundColor(.red)
+                      .font(.caption)
+                  }
+                }
+              }
+            }
+          }
+
+          if selectedSettingsPage == .remoteDatasets {
         Form {
           settingsIntroSection("settings_description_remote_datasets")
           Section(header: Text("settings_section_remote_datasets").bold()) {
@@ -300,6 +426,10 @@ struct SettingsView: View {
               "settings_toggle_progressive_loading",
               isOn: $storedAppModel.progressiveLoading
             )
+            Text("Datasets provided through SharePlay ad-hoc connections are always loaded progressively, regardless of this setting.")
+              .font(.caption)
+              .foregroundStyle(.secondary)
+              .fixedSize(horizontal: false, vertical: true)
             Toggle(
               "settings_toggle_store_local_copy",
               isOn: $storedAppModel.makeLocalCopy
@@ -314,9 +444,9 @@ struct SettingsView: View {
             }
           }
         }
-        .tabItem { Label("settings_tab_remote", systemImage: "network") }
+          }
 
-        // Local Server Tab
+          if selectedSettingsPage == .localServer {
         Form {
           settingsIntroSection("settings_description_local_server")
           Section(header: Text("settings_section_background_server").bold()) {
@@ -399,9 +529,9 @@ struct SettingsView: View {
             }
           }
         }
-        .tabItem { Label("settings_tab_local_server", systemImage: "server.rack") }
+          }
 
-        // Import Tab
+          if selectedSettingsPage == .importSettings {
         Form {
           settingsIntroSection("settings_description_import")
           Section(header: Text("settings_section_import").bold()) {
@@ -460,28 +590,29 @@ struct SettingsView: View {
             .pickerStyle(.segmented)
           }
         }
-        .tabItem { Label("settings_tab_import", systemImage: "folder.fill") }
+          }
 
+          if selectedSettingsPage == .sharePlay {
         Form {
           settingsIntroSection("Choose how you appear to other people during SharePlay collaboration. Your display name is shared only with participants in the current session.")
           Section(header: Text("Identity").bold()) {
             TextField("SharePlay display name", text: $storedAppModel.sharePlayDisplayName)
           }
-        }
-        .tabItem { Label("SharePlay", systemImage: "shareplay") }
-
-        // Advanced Options Tab
-        Form {
-          settingsIntroSection("settings_description_advanced")
-          Section(header: Text("Updates").bold()) {
+          Section(header: Text("settings_section_markers").bold()) {
             Toggle(
-              "Automatically check for updates",
-              isOn: $updateChecker.checksEnabled
+              "settings_toggle_share_stylus_position",
+              isOn: $storedAppModel.shareSpatialStylusPosition
             )
-            Text("BorgVR periodically checks the App Store for new versions and displays a notification when an update is available.")
+            Text("settings_share_stylus_position_description")
               .font(.footnote)
               .foregroundStyle(.secondary)
           }
+        }
+          }
+
+          if selectedSettingsPage == .performance {
+        Form {
+          settingsIntroSection("settings_description_performance")
 
           Section(header: Text("settings_section_advanced_options").bold()) {
             HStack {
@@ -605,104 +736,16 @@ struct SettingsView: View {
               isOn: $storedAppModel.showProfiling
             )
 
-            VStack {
-              Text("settings_label_oversampling_mode_section_title")
-
-              Picker(
-                "settings_picker_oversampling_mode",
-                selection: $storedAppModel.oversamplingMode
-              ) {
-                Text("settings_oversampling_mode_static")
-                  .tag(OversamplingMode.staticMode.rawValue)
-                Text("settings_oversampling_mode_dynamic")
-                  .tag(OversamplingMode.dynamicMode.rawValue)
-              }
-              .pickerStyle(.segmented)
-
-              HStack {
-                Text(
-                  NSLocalizedString(
-                    storedAppModel.oversamplingMode
-                    == OversamplingMode.dynamicMode.rawValue
-                    ? "settings_label_base_oversampling"
-                    : "settings_label_oversampling",
-                    comment: "Label for oversampling value depending on mode"
-                  )
-                )
-                Spacer()
-                TextField(
-                  "settings_placeholder_oversampling",
-                  text: $tempOversampling,
-                  onCommit: validateOversampling
-                )
-                .onChange(of: tempOversampling) { validateOversampling() }
-                .textFieldStyle(RoundedBorderTextFieldStyle())
-                .keyboardType(.decimalPad)
-                .frame(width: 100)
-                .onAppear {
-                  tempOversampling = String(storedAppModel.oversampling)
-                }
-              }
-              if let error = oversamplingErrorMsg {
-                Text(error)
-                  .foregroundColor(.red)
-                  .font(.caption)
-              }
-
-              Toggle(
-                "settings_toggle_sample_jitter",
-                isOn: $storedAppModel.sampleJitter
-              )
-
-              if storedAppModel.oversamplingMode
-                  == OversamplingMode.dynamicMode.rawValue
-              {
-                HStack {
-                  Text("settings_label_drop_fps")
-                  Spacer()
-                  TextField(
-                    "settings_label_drop_fps",
-                    value: $storedAppModel.dropFPS,
-                    formatter: NumberFormatter()
-                  )
-                  .textFieldStyle(RoundedBorderTextFieldStyle())
-                  .keyboardType(.numberPad)
-                  .frame(width: 100)
-                }
-
-                HStack {
-                  Text("settings_label_recovery_fps")
-                  Spacer()
-                  TextField(
-                    "settings_label_recovery_fps",
-                    value: $storedAppModel.recoveryFPS,
-                    formatter: NumberFormatter()
-                  )
-                  .textFieldStyle(RoundedBorderTextFieldStyle())
-                  .keyboardType(.numberPad)
-                  .frame(width: 100)
-                }
-
-                if storedAppModel.dropFPS >= storedAppModel.recoveryFPS
-                    || storedAppModel.dropFPS <= 0
-                    || storedAppModel.recoveryFPS <= 0
-                {
-                  Text("settings_error_drop_recovery_fps")
-                    .foregroundColor(.red)
-                    .font(.caption)
-                }
-              }
-
-            }
           }
         }
-        .tabItem { Label("settings_tab_advanced", systemImage: "gearshape.fill") }
+          }
+        }
       }
 
       Spacer()
 
       Button {
-        runtimeAppModel.currentState = .start
+        runtimeAppModel.navigationState = .start
       } label: {
         Label("settings_button_back_to_main_menu", systemImage: "chevron.backward")
       }
@@ -734,6 +777,33 @@ struct SettingsView: View {
     } message: {
       Text("BorgVR will forget all previously discovered dataset sources.")
     }
+  }
+
+  private var settingsSidebar: some View {
+    VStack(alignment: .leading, spacing: 6) {
+      ForEach(VisionSettingsPage.allCases) { page in
+        Button {
+          selectedSettingsPage = page
+        } label: {
+          Label(page.title, systemImage: page.systemImage)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 9)
+            .background {
+              if selectedSettingsPage == page {
+                RoundedRectangle(cornerRadius: 8)
+                  .fill(Color.accentColor.opacity(0.2))
+              }
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(selectedSettingsPage == page ? .primary : .secondary)
+      }
+      Spacer()
+    }
+    .padding(12)
+    .frame(width: 250)
   }
 
   private func controllerShortcutPicker(

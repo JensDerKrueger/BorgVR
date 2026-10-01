@@ -144,9 +144,9 @@ struct MobileMarkerView: View {
         titleVisibility: .visible
       ) {
         Button("Delete All Markers", role: .destructive) {
-          appModel.volumeMarkers.removeAll()
-          appModel.selectedVolumeMarkerID = nil
-          synchronizeMarkers()
+          if appModel.removeAllVolumeMarkers() {
+            synchronizeMarkers()
+          }
         }
         Button("Cancel", role: .cancel) {}
       } message: {
@@ -312,21 +312,23 @@ struct MobileMarkerView: View {
   }
 
   private var selectionContainsSphere: Bool {
-    selectedMarkerIndices.contains { appModel.volumeMarkers[$0].kind == .sphere }
+    appModel.volumeMarkers.contains {
+      appModel.selectedVolumeMarkerIDs.contains($0.id) && $0.kind == .sphere
+    }
   }
 
   private var selectedDirectionBinding: Binding<Bool> {
     Binding(
       get: {
-        let sphereIndices = selectedMarkerIndices.filter {
-          appModel.volumeMarkers[$0].kind == .sphere
+        let selectedSpheres = appModel.volumeMarkers.filter {
+          appModel.selectedVolumeMarkerIDs.contains($0.id) && $0.kind == .sphere
         }
-        return !sphereIndices.isEmpty && sphereIndices.allSatisfy {
-          appModel.volumeMarkers[$0].showsDirection
-        }
+        return !selectedSpheres.isEmpty && selectedSpheres.allSatisfy(\.showsDirection)
       },
       set: { showsDirection in
-        for index in selectedMarkerIndices where appModel.volumeMarkers[index].kind == .sphere {
+        for index in appModel.volumeMarkers.indices
+          where appModel.selectedVolumeMarkerIDs.contains(appModel.volumeMarkers[index].id) &&
+          appModel.volumeMarkers[index].kind == .sphere {
           appModel.volumeMarkers[index].showsDirection = showsDirection
         }
         appModel.defaultVolumeMarkerShowsDirection = showsDirection
@@ -337,10 +339,9 @@ struct MobileMarkerView: View {
 
   private func deleteSelectedMarker() {
     let selectedIDs = appModel.selectedVolumeMarkerIDs
-    guard !selectedIDs.isEmpty else { return }
-    appModel.volumeMarkers.removeAll { selectedIDs.contains($0.id) }
-    appModel.clearVolumeMarkerSelection()
-    synchronizeMarkers()
+    if appModel.removeVolumeMarkers(withIDs: selectedIDs) {
+      synchronizeMarkers()
+    }
   }
 
   private func loadMarkers(from result: Result<[URL], Error>) {

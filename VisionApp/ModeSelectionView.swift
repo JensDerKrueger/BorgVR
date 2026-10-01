@@ -77,7 +77,7 @@ struct ModeSelectionView: View {
       // Main action buttons
       HStack {
         Button {
-          runtimeAppModel.currentState = .selectData
+          runtimeAppModel.navigationState = .selectData
         } label: {
           Label("mode_button_open_dataset", systemImage: "folder")
         }
@@ -85,7 +85,7 @@ struct ModeSelectionView: View {
         .buttonStyle(.borderedProminent)
 
         Button {
-          runtimeAppModel.currentState = .importData
+          runtimeAppModel.navigationState = .importData
         } label: {
           Label("mode_button_import_dataset", systemImage: "tray.and.arrow.down")
         }
@@ -93,7 +93,7 @@ struct ModeSelectionView: View {
         .buttonStyle(.borderedProminent)
 
         Button {
-          runtimeAppModel.currentState = .settings
+          runtimeAppModel.navigationState = .settings
         } label: {
           Label("mode_button_settings", systemImage: "gearshape")
         }
@@ -108,14 +108,16 @@ struct ModeSelectionView: View {
               comment: "Share preview title for BorgVR collaboration"
             )
           )
-        )
+        ) {
+          Label("SharePlay", systemImage: "shareplay")
+        }
         .simultaneousGesture(
           TapGesture().onEnded {
             sharedAppModel.markLocalActivityStarter()
           }
         )
-        .frame(width: 0, height: 0)
-        .hidden()
+        .padding()
+        .buttonStyle(.borderedProminent)
 
         Button {
           showingAbout = true

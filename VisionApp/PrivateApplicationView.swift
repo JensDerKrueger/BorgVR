@@ -53,7 +53,7 @@ struct PrivateApplicationView: View {
       .pickerStyle(.segmented)
 
       if !sharedAppModel.sharePlayParticipants.isEmpty {
-        HStack {
+        HStack(spacing: 36) {
           Menu {
             ForEach(sharedAppModel.sharePlayParticipants) { participant in
               Label {
@@ -67,15 +67,21 @@ struct PrivateApplicationView: View {
             Label("Participants", systemImage: "person.2")
           }
 
-          Toggle(
-            "Show Names",
-            isOn: Binding(
-              get: { sharedAppModel.screenViewNamesVisible },
-              set: { sharedAppModel.screenViewNamesVisible = $0 }
+          HStack(spacing: 8) {
+            Text("Show Names")
+            Toggle(
+              "Show Names",
+              isOn: Binding(
+                get: { sharedAppModel.screenViewNamesVisible },
+                set: { sharedAppModel.screenViewNamesVisible = $0 }
+              )
             )
-          )
-          .toggleStyle(.switch)
+            .labelsHidden()
+            .toggleStyle(.switch)
+          }
+          .fixedSize()
         }
+        .frame(maxWidth: .infinity, alignment: .center)
       }
 
       HStack {

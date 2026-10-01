@@ -34,6 +34,7 @@ struct VisionApp: App {
   private var sharePlayDisplayNameOnboardingCompleted = false
   @State private var showsSharePlayDisplayNameOnboarding = false
   @State private var sharePlayDisplayNameDraft = ""
+  @State private var immersiveSpaceTransitionTask: Task<Void, Never>?
 
   @StateObject private var voice = VoiceCommandService()
   @StateObject private var speech = SpeechHelper()
@@ -173,14 +174,8 @@ struct VisionApp: App {
         quitApp()
       }
     }
-    .onChange(of: runtimeAppModel.immersiveSpaceIntent) { _, newValue in
-      Task { @MainActor in
-        switch newValue {
-          case .open:  await openSpace()
-          case .close: await closeSpace()
-          default: break
-        }
-      }
+    .onChange(of: runtimeAppModel.datasetSessionState) { _, newValue in
+      queueDatasetSessionTransition(for: newValue)
     }
 
     // Transfer Function Editor Window
@@ -362,7 +357,31 @@ struct VisionApp: App {
   }
 
   @MainActor
-  private func openSpace() async {
+  private func queueDatasetSessionTransition(
+    for state: RuntimeAppModel.DatasetSessionState
+  ) {
+    let precedingTask = immersiveSpaceTransitionTask
+    immersiveSpaceTransitionTask = Task { @MainActor in
+      await precedingTask?.value
+      guard !Task.isCancelled,
+            runtimeAppModel.datasetSessionState == state else { return }
+      switch state {
+        case .opening(_, let requestID):
+          await openSpace(requestID: requestID)
+        case .closing(let dataset, let requestID, let destination):
+          await closeSpace(
+            dataset: dataset,
+            requestID: requestID,
+            destination: destination
+          )
+        default:
+          break
+      }
+    }
+  }
+
+  @MainActor
+  private func openSpace(requestID: UUID) async {
     if runtimeAppModel.immersiveSpaceState == .open {
       runtimeAppModel.immersiveSpaceState = .inTransition
       let renderTask = runtimeAppModel.cancelRenderLoop()
@@ -371,26 +390,32 @@ struct VisionApp: App {
     }
 
     runtimeAppModel.immersiveSpaceState = .inTransition
+    var acceptedOpen = false
     switch await openImmersiveSpace(id: runtimeAppModel.immersiveSpaceID) {
       case .opened:
-        runtimeAppModel.currentState = .renderData
+        acceptedOpen = runtimeAppModel.markImmersiveSpaceOpened(requestID: requestID)
       case .userCancelled, .error:
         fallthrough
       @unknown default:
         runtimeAppModel.immersiveSpaceState = .closed
+        runtimeAppModel.requestDatasetClose(
+          destination: runtimeAppModel.groupSessionHost
+            ? .datasetSelection
+            : .sharePlayWaiting(.datasetSource)
+        )
     }
 
-    if runtimeAppModel.groupSessionHost {
+    if acceptedOpen, runtimeAppModel.groupSessionHost {
       sharedAppModel.openSharedView()
     }
-    runtimeAppModel.immersiveSpaceIntent = .keepCurrent
   }
 
   @MainActor
-  private func closeSpace() async {
-    let destinationState = runtimeAppModel.currentState == .waitingForHost
-      ? RuntimeAppModel.ContentViewState.waitingForHost
-      : .selectData
+  private func closeSpace(
+    dataset: RuntimeAppModel.DatasetEntry?,
+    requestID: UUID,
+    destination: RuntimeAppModel.DatasetCloseDestination
+  ) async {
     if runtimeAppModel.groupSessionHost && sharedAppModel.isInGroupSession {
       await sharedAppModel.shutdownGroupsession()
     }
@@ -405,12 +430,10 @@ struct VisionApp: App {
       await dismissImmersiveSpace()
     }
     runtimeAppModel.immersiveSpaceState = .closed
-    runtimeAppModel.immersiveSpaceIntent = .keepCurrent
-    runtimeAppModel.currentState = destinationState
 
     let documentsDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
-    if let activeDataset = runtimeAppModel.activeDataset {
-      let autoURL = documentsDirectory.appendingPathComponent(activeDataset.uniqueId)
+    if let dataset {
+      let autoURL = documentsDirectory.appendingPathComponent(dataset.uniqueId)
       if storedAppModel.autoloadTF {
         let fileURL = URL(
           fileURLWithPath: autoURL.deletingPathExtension().path() + ".tf1d"
@@ -424,7 +447,10 @@ struct VisionApp: App {
         try? sharedAppModel.modelTransform.save(to: fileURL)
       }
     }
-    runtimeAppModel.activeDataset = nil
+    runtimeAppModel.completeDatasetClose(
+      requestID: requestID,
+      destination: destination
+    )
   }
 
   @MainActor

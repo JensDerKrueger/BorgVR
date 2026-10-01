@@ -39,8 +39,16 @@ final class MobileVolumeRenderer: NSObject, MTKViewDelegate, UIGestureRecognizer
   }
 
   func updateIfNeeded(for view: MTKView) {
-    if case .loaded = core.updateIfNeeded(for: view) {
-      sharePlay.datasetRendererDidLoad()
+    switch core.updateIfNeeded(for: view) {
+      case .unchanged:
+        break
+      case .cleared:
+        appModel.markRenderedDataset(key: "")
+      case .loaded(let key):
+        appModel.markRenderedDataset(key: key)
+        sharePlay.datasetRendererDidLoad()
+      case .failed(let key, _):
+        appModel.markRenderedDatasetFailed(key: key)
     }
   }
 

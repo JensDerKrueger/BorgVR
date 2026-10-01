@@ -14,27 +14,27 @@ private let macAppSettingsGroupContentWidth: CGFloat = 640
 private let macAppSettingsSidebarWidth: CGFloat = 220
 
 private enum SettingsResetSection: String, Identifiable {
+  case general
   case dataSource
   case rendering
+  case performance
   case importSettings
-  case lod
   case backgroundServer
   case adHocServer
   case externalDataSources
-  case miscellaneous
 
   var id: String { rawValue }
 
   var title: String {
     switch self {
+      case .general: return "General"
       case .dataSource: return "Data source"
       case .rendering: return "Rendering"
+      case .performance: return "Performance"
       case .importSettings: return "Import"
-      case .lod: return "LOD"
       case .backgroundServer: return "Background server"
       case .adHocServer: return "Ad-hoc server"
       case .externalDataSources: return "External data sources"
-      case .miscellaneous: return "Miscellaneous"
     }
   }
 
@@ -44,40 +44,40 @@ private enum SettingsResetSection: String, Identifiable {
 }
 
 private enum SettingsPage: String, CaseIterable, Identifiable {
-  case dataSource
+  case general
   case rendering
+  case performance
+  case dataSource
   case importSettings
-  case lod
-  case servers
   case externalDataSources
+  case servers
   case sharePlay
-  case miscellaneous
 
   var id: String { rawValue }
 
   var title: LocalizedStringKey {
     switch self {
+      case .general: return "General"
       case .dataSource: return "Data source"
       case .rendering: return "Rendering"
+      case .performance: return "Performance"
       case .importSettings: return "Import"
-      case .lod: return "LOD"
       case .servers: return "Servers"
       case .externalDataSources: return "External data sources"
       case .sharePlay: return "SharePlay"
-      case .miscellaneous: return "Miscellaneous"
     }
   }
 
   var systemImage: String {
     switch self {
+      case .general: return "gearshape"
       case .dataSource: return "externaldrive"
       case .rendering: return "paintpalette"
+      case .performance: return "gauge.with.dots.needle.50percent"
       case .importSettings: return "square.and.arrow.down"
-      case .lod: return "square.stack.3d.up"
       case .servers: return "server.rack"
       case .externalDataSources: return "network"
       case .sharePlay: return "shareplay"
-      case .miscellaneous: return "ellipsis.circle"
     }
   }
 }
@@ -95,7 +95,7 @@ struct SettingsView: View {
   @State private var showDataDirectoryPicker = false
   @State private var showClearOriginCacheConfirmation = false
   @State private var pendingResetSection: SettingsResetSection?
-  @State private var selectedSettingsPage: SettingsPage = .dataSource
+  @State private var selectedSettingsPage: SettingsPage = .general
 
   var body: some View {
     HStack(spacing: 0) {
@@ -122,7 +122,7 @@ struct SettingsView: View {
     .toolbar {
       ToolbarItem(placement: .cancellationAction) {
         Button("Back") {
-          appModel.currentState = .start
+          appModel.navigationState = .start
         }
       }
     }
@@ -186,22 +186,22 @@ struct SettingsView: View {
   @ViewBuilder
   private func settingsPageContent(_ page: SettingsPage) -> some View {
     switch page {
+      case .general:
+        generalSettings
       case .dataSource:
         dataSourceSettings
       case .rendering:
         renderingSettings
+      case .performance:
+        performanceSettings
       case .importSettings:
         importSettings
-      case .lod:
-        lodSettings
       case .servers:
         serverSettings
       case .externalDataSources:
         externalDataSourceSettings
       case .sharePlay:
         sharePlaySettings
-      case .miscellaneous:
-        miscellaneousSettings
     }
   }
 
@@ -230,9 +230,8 @@ struct SettingsView: View {
   private var renderingSettings: some View {
     settingsGroup(
       "Rendering",
-      description: "Configure how datasets are rendered, including transfer-function handling, oversampling, background appearance, GPU memory limits, and hash table size. These settings can affect visual quality, memory use, and rendering speed."
+      description: "Configure visual appearance and sampling quality. These controls affect how the rendered image looks and how sampling adapts to the current frame rate."
     ) {
-      toggleRow("Automatically load/save transfer functions", isOn: $appSettings.autoloadTF)
       pickerRow("Oversampling mode", selection: $appSettings.oversamplingMode) {
         Text("Static").tag(OversamplingMode.staticMode.rawValue)
         Text("Dynamic").tag(OversamplingMode.dynamicMode.rawValue)
@@ -243,8 +242,6 @@ struct SettingsView: View {
                        step: 0.1,
                        format: "%.1f")
       toggleRow("Randomized sample phase", isOn: $appSettings.sampleJitter)
-      toggleRow("Show Brick Visualization", isOn: $appSettings.showBrickVisualization)
-      toggleRow("Show Log Button", isOn: $appSettings.showLogButton)
       if appSettings.oversamplingMode == OversamplingMode.dynamicMode.rawValue {
         intStepperRow("Drop FPS",
                       value: $appSettings.dropFPS,
@@ -278,17 +275,32 @@ struct SettingsView: View {
           set: { appSettings.renderBackgroundSecondaryColor = $0 }
         ))
       }
-      intStepperRow("Atlas size",
-                    value: $appSettings.atlasSizeMB,
-                    range: 128...AppSettings.maximumAtlasSizeMB,
-                    step: 128,
-                    suffix: "MB")
-      intStepperRow("Min. hash table size",
-                    value: $appSettings.minHashTableSize,
-                    range: 1...1024,
-                    step: 1,
-                    suffix: "MB")
       resetButton(for: .rendering)
+    }
+  }
+
+  private var generalSettings: some View {
+    settingsGroup(
+      "General",
+      description: "Configure automatic loading, optional interface diagnostics, logging, and update checks."
+    ) {
+      toggleRow("Automatically load/save transfer functions", isOn: $appSettings.autoloadTF)
+      toggleRow("Show Brick Visualization", isOn: $appSettings.showBrickVisualization)
+      toggleRow("Show Log Button", isOn: $appSettings.showLogButton)
+      pickerRow("Log level", selection: $appSettings.logLevel) {
+        ForEach(AppLogLevel.allCases) { level in
+          Text(level.label).tag(level.rawValue)
+        }
+      }
+      toggleRow(
+        "Automatically check for updates",
+        isOn: $updateChecker.checksEnabled
+      )
+      Text("BorgVR periodically checks the App Store for new versions and displays a notification when an update is available.")
+        .font(.callout)
+        .foregroundStyle(.secondary)
+        .fixedSize(horizontal: false, vertical: true)
+      resetButton(for: .general)
     }
   }
 
@@ -315,10 +327,10 @@ struct SettingsView: View {
     }
   }
 
-  private var lodSettings: some View {
+  private var performanceSettings: some View {
     settingsGroup(
-      "LOD",
-      description: "Control level-of-detail selection and brick request behavior. These settings balance visual quality, paging speed, memory pressure, and responsiveness while navigating large datasets."
+      "Performance",
+      description: "Control level-of-detail selection, brick requests, GPU memory, and hash table sizing. Most users can leave these advanced settings unchanged."
     ) {
       doubleStepperRow("Screen-space pixel error",
                        value: $appSettings.screenSpaceError,
@@ -335,7 +347,17 @@ struct SettingsView: View {
                     step: 1)
       toggleRow("Request low-res LOD", isOn: $appSettings.requestLowResLOD)
       toggleRow("Stop on missing brick", isOn: $appSettings.stopOnMiss)
-      resetButton(for: .lod)
+      intStepperRow("Atlas size",
+                    value: $appSettings.atlasSizeMB,
+                    range: 128...AppSettings.maximumAtlasSizeMB,
+                    step: 128,
+                    suffix: "MB")
+      intStepperRow("Min. hash table size",
+                    value: $appSettings.minHashTableSize,
+                    range: 1...1024,
+                    step: 1,
+                    suffix: "MB")
+      resetButton(for: .performance)
     }
   }
 
@@ -424,6 +446,10 @@ struct SettingsView: View {
         format: "%.1f"
       )
       toggleRow("Progressive loading", isOn: $appSettings.progressiveLoading)
+      Text("Datasets provided through SharePlay ad-hoc connections are always loaded progressively, regardless of this setting.")
+        .font(.callout)
+        .foregroundStyle(.secondary)
+        .fixedSize(horizontal: false, vertical: true)
       toggleRow("Keep local copy", isOn: $appSettings.makeLocalCopy)
       Button(role: .destructive) {
         showClearOriginCacheConfirmation = true
@@ -431,28 +457,6 @@ struct SettingsView: View {
         Label("Clear Dataset Origin Cache", systemImage: "trash")
       }
       resetButton(for: .externalDataSources)
-    }
-  }
-
-  private var miscellaneousSettings: some View {
-    settingsGroup(
-      "Miscellaneous",
-      description: "Adjust general application behavior that is not tied to a specific renderer, importer, or server workflow."
-    ) {
-      pickerRow("Log level", selection: $appSettings.logLevel) {
-        ForEach(AppLogLevel.allCases) { level in
-          Text(level.label).tag(level.rawValue)
-        }
-      }
-      toggleRow(
-        "Automatically check for updates",
-        isOn: $updateChecker.checksEnabled
-      )
-      Text("BorgVR periodically checks the App Store for new versions and displays a notification when an update is available.")
-        .font(.callout)
-        .foregroundStyle(.secondary)
-        .fixedSize(horizontal: false, vertical: true)
-      resetButton(for: .miscellaneous)
     }
   }
 
@@ -726,15 +730,18 @@ struct SettingsView: View {
 
   private func resetToDefaults(_ section: SettingsResetSection) {
     switch section {
+      case .general:
+        appSettings.resetGeneralDefaults()
+        updateChecker.checksEnabled = true
       case .dataSource:
         storedAppModel.resetDataSourceDefaults()
       case .rendering:
-        appSettings.resetRenderingDefaults(resetLogLevel: false)
+        appSettings.resetRenderingDefaults()
+      case .performance:
+        appSettings.resetPerformanceDefaults()
       case .importSettings:
         appSettings.resetImportDefaults()
         storedAppModel.resetImportDefaults()
-      case .lod:
-        appSettings.resetLODDefaults(resetOversamplingThresholds: false)
       case .backgroundServer:
         appSettings.maxBricksPerGetRequest = AppSettings.values["maxBricksPerGetRequest"] as? Int
           ?? BorgVRSharedDefaults.maximumBricksPerRequest
@@ -746,8 +753,6 @@ struct SettingsView: View {
         serverAddress = ""
         serverPort = String(BorgVRSharedDefaults.datasetServerPort)
         serverPassword = ""
-      case .miscellaneous:
-        appSettings.resetMiscDefaults()
     }
   }
 }

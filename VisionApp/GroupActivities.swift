@@ -95,11 +95,13 @@ class GroupActivityHelper {
   }
 
   func configureSession(runtimeAppModel:RuntimeAppModel, storedAppModel: StoredAppModel) async {
-    await runtimeAppModel.logger.dev("configure new groupSession")
+    await runtimeAppModel.logger.info("Starting SharePlay group-session observation on this Vision Pro.")
     self.runtimeAppModel = runtimeAppModel
     self.storedAppModel = storedAppModel
     for await session in BorgVRActivity.sessions() {
-      await runtimeAppModel.logger.dev("Received groupsession")
+      await runtimeAppModel.logger.info(
+        "SharePlay delivered a group session to this Vision Pro; activity initiator: \(session.activity.initiatorID.uuidString), initial state: \(String(describing: session.state)), active participant count: \(session.activeParticipants.count)."
+      )
       await MainActor.run {
         self.sharedAppModel?.hasObservedGroupSession = true
       }
@@ -169,15 +171,18 @@ class GroupActivityHelper {
 
       session.$state
         .sink { [weak self] state in
-          guard case .invalidated(let reason) = state else { return }
           Task { @MainActor in
-            guard self?.sessionGeneration == generation else { return }
-            self?.runtimeAppModel?.logger.warning(
+            guard let self, self.sessionGeneration == generation else { return }
+            self.runtimeAppModel?.logger.info(
+              "SharePlay group-session state changed to: \(String(describing: state))."
+            )
+            guard case .invalidated(let reason) = state else { return }
+            self.runtimeAppModel?.logger.warning(
               "SharePlay session invalidated by the system: \(reason.localizedDescription)"
             )
-            self?.stopSharePlayServer()
-            self?.resetSessionReceivers()
-            self?.runtimeAppModel?.groupSessionHost = false
+            self.stopSharePlayServer()
+            self.resetSessionReceivers()
+            self.runtimeAppModel?.groupSessionHost = false
           }
         }
         .store(in: &subscriptions)
@@ -197,7 +202,13 @@ class GroupActivityHelper {
           await self?.handleIncoming(data: data, from: context.source, sessionGeneration: generation)
         }
       }
+      await runtimeAppModel.logger.info(
+        "Calling session.join() for the delivered SharePlay group session."
+      )
       session.join()
+      await runtimeAppModel.logger.info(
+        "session.join() returned; current state: \(String(describing: session.state))."
+      )
       Task { await self.sendProtocolVersion() }
     }
   }
@@ -800,38 +811,45 @@ class GroupActivityHelper {
 
     guard let initMessage = InitMessage(data:data) else {
       runtimeAppModel.logger.dev("Received incomplete init message, waiting for host")
-      runtimeAppModel.sharePlayWaitingReason = .hostDataset
-      runtimeAppModel.currentState = .waitingForHost
+      runtimeAppModel.waitForSharePlayDataset(reason: .hostDataset)
       return
     }
 
     guard initMessage.uniqueID != "" else {
+      if let activeDataset = runtimeAppModel.activeDataset,
+         runtimeAppModel.isOpeningOrDisplayingDataset(withUniqueID: activeDataset.uniqueId) {
+        runtimeAppModel.logger.dev("Ignored stale empty groupsession init data while a dataset is opening or open")
+        return
+      }
       runtimeAppModel.logger.dev("Received empty dataset in init message, waiting for host")
       pendingDatasetLoadTask?.cancel()
       pendingDatasetLoadTask = nil
       pendingDatasetLoad = nil
-      runtimeAppModel.sharePlayWaitingReason = .hostDataset
-      runtimeAppModel.currentState = .waitingForHost
+      runtimeAppModel.waitForSharePlayDataset(reason: .hostDataset)
       return
     }
 
     DatasetOriginCatalog.shared.prioritize(initMessage.origins, for: initMessage.uniqueID)
     mergeSessionOrigins(initMessage.origins, for: initMessage.uniqueID)
 
+    if runtimeAppModel.isOpeningOrDisplayingDataset(withUniqueID: initMessage.uniqueID) {
+      runtimeAppModel.logger.dev("Dataset is already opening or open, ignoring duplicate groupsession init data")
+      return
+    }
+
+    if let pendingDatasetLoad,
+       pendingDatasetLoad.uniqueID == initMessage.uniqueID,
+       pendingDatasetLoad.generation == generation {
+      runtimeAppModel.logger.dev("Dataset source search is already active, keeping the existing load attempt")
+      retryPendingDatasetLoad()
+      return
+    }
+
     if let localFile = findlocalFile(id : initMessage.uniqueID) {
       runtimeAppModel.logger.info("Found SharePlay dataset \(initMessage.uniqueID) locally at \(localFile.path()).")
       pendingDatasetLoadTask?.cancel()
       pendingDatasetLoadTask = nil
       pendingDatasetLoad = nil
-
-      if runtimeAppModel.immersiveSpaceState == .open {
-        if let dataset = runtimeAppModel.activeDataset {
-          if initMessage.uniqueID == dataset.uniqueId {
-            runtimeAppModel.logger.dev("Dataset is already open, ignoring new groupsession init data")
-            return
-          }
-        }
-      }
 
       runtimeAppModel.startImmersiveSpace(identifier: localFile.path(),
                                    description: initMessage.description,
@@ -860,8 +878,10 @@ class GroupActivityHelper {
           runtimeAppModel?.groupSessionHost != true else { return }
     guard pendingDatasetLoadTask == nil else { return }
     let origins = knownOrigins(for: pending.uniqueID)
-    runtimeAppModel?.sharePlayWaitingReason = .datasetSource
-    runtimeAppModel?.currentState = .waitingForHost
+    runtimeAppModel?.beginResolvingSharePlayDataset(
+      uniqueID: pending.uniqueID,
+      description: pending.description
+    )
     guard !origins.isEmpty else {
       runtimeAppModel?.sharePlayDatasetSource = nil
       runtimeAppModel?.logger.warning("No known source currently provides SharePlay dataset \(pending.uniqueID); waiting for participant sources.")
@@ -898,7 +918,6 @@ class GroupActivityHelper {
             groupSession != nil,
             pendingDatasetLoad?.uniqueID == uniqueID else { return }
       runtimeAppModel.sharePlayDatasetSource = nil
-      runtimeAppModel.currentState = .waitingForHost
       runtimeAppModel.logger.warning("None of the known sources currently provides SharePlay dataset \(uniqueID); retrying after all sources have timed out.")
       schedulePendingDatasetLoadRetry(uniqueID: uniqueID, generation: generation)
       return
@@ -1426,8 +1445,8 @@ class GroupActivityHelper {
 
   @MainActor
   func handleShutdown(from: Participant) {
-    runtimeAppModel?.sharePlayWaitingReason = .hostDataset
-    runtimeAppModel?.currentState = .waitingForHost
-    runtimeAppModel?.immersiveSpaceIntent = .close
+    runtimeAppModel?.requestDatasetClose(
+      destination: .sharePlayWaiting(.hostDataset)
+    )
   }
 }

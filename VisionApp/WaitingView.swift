@@ -20,74 +20,74 @@ struct WaitingView: View {
 
   /// The view’s body.
   var body: some View {
-    VStack(spacing: 10) {
-      // Display the application version (major.minor).
-      Text("BorgVR Version \(Bundle.main.appVersion).\(Bundle.main.appBuild)")
-        .font(.extraLargeTitle)
-        .bold()
+    GeometryReader { proxy in
+      ScrollView {
+        VStack(spacing: 12) {
+          Text("BorgVR Version \(Bundle.main.appVersion).\(Bundle.main.appBuild)")
+            .font(.headline)
+            .fontWeight(.semibold)
 
-      // Display the BorgVR logo.
-      Image("borgvr")
-        .resizable()
-        .scaledToFit()
-        .frame(width: 400, height: 400)
-        .clipShape(RoundedRectangle(cornerRadius: 20))
-        .shadow(radius: 10)
-
-      // Waiting message header.
-      Text(runtimeAppModel.sharePlayWaitingReason == .datasetSource
-        ? "Waiting for Data Source"
-        : "Prepare to be assimilated.")
-        .font(.extraLargeTitle2)
-        .bold()
-
-      // Waiting instruction text.
-      Text(runtimeAppModel.sharePlayWaitingReason == .datasetSource
-        ? "BorgVR is waiting for a participant to make the current dataset available."
-        : "Waiting for the host to select and open a dataset.")
-        .font(.largeTitle)
-        .bold()
-
-      if runtimeAppModel.sharePlayWaitingReason == .datasetSource,
-         let source = runtimeAppModel.sharePlayDatasetSource {
-        Label {
-          Text(
-            String(
-              format: NSLocalizedString("Trying server: %@", comment: "Currently queried dataset server"),
-              source.endpointDescription
+          Image("borgvr")
+            .resizable()
+            .scaledToFit()
+            .frame(
+              width: min(180, proxy.size.width * 0.28),
+              height: min(180, proxy.size.height * 0.34)
             )
-          )
-        } icon: {
-          Image(systemName: "server.rack")
+            .clipShape(RoundedRectangle(cornerRadius: 14))
+            .shadow(radius: 6)
+
+          Text(runtimeAppModel.sharePlayWaitingReason == .datasetSource
+            ? "Waiting for Data Source"
+            : "Prepare to be assimilated.")
+            .font(.title2)
+            .fontWeight(.semibold)
+
+          Text(runtimeAppModel.sharePlayWaitingReason == .datasetSource
+            ? "BorgVR is waiting for a participant to make the current dataset available."
+            : "Waiting for the host to select and open a dataset.")
+            .font(.body)
+            .multilineTextAlignment(.center)
+            .foregroundStyle(.secondary)
+
+          if runtimeAppModel.sharePlayWaitingReason == .datasetSource,
+             let source = runtimeAppModel.sharePlayDatasetSource {
+            Label {
+              Text(
+                String(
+                  format: NSLocalizedString("Trying server: %@", comment: "Currently queried dataset server"),
+                  source.endpointDescription
+                )
+              )
+            } icon: {
+              Image(systemName: "server.rack")
+            }
+            .font(.callout.monospaced())
+            .foregroundStyle(.secondary)
+          }
+
+          Spacer(minLength: 4)
+
+          Button {
+            sharedAppModel.leaveGroupActivity()
+            runtimeAppModel.completeDatasetClose(destination: .datasetSelection)
+            runtimeAppModel.navigationState = .start
+          } label: {
+            Label("Leave SharePlay", systemImage: "rectangle.portrait.and.arrow.right")
+          }
+          .buttonStyle(.borderedProminent)
+
+          HStack(spacing: 5) {
+            Text("© 2024–2026")
+            Link("CGVIS Duisburg, Germany", destination: URL(string: "https://www.cgvis.de")!)
+          }
+          .font(.footnote)
+          .foregroundColor(.gray)
         }
-        .font(.title2.monospaced())
-        .foregroundStyle(.secondary)
+        .frame(maxWidth: .infinity, minHeight: proxy.size.height - 32)
+        .padding(16)
       }
-
-      Spacer()
-
-      // Leave button row.
-      HStack {
-        Button {
-          // Leave the SharePlay group activity and return to start screen.
-          sharedAppModel.leaveGroupActivity()
-          runtimeAppModel.currentState = .start
-        } label: {
-          Label("Leave SharePlay", systemImage: "rectangle.portrait.and.arrow.right")
-        }
-        .padding()
-        .buttonStyle(.borderedProminent)
-      }
-
-      // Footer with copyright and link.
-      HStack(spacing: 5) {
-        Text("© 2024–2026")
-        Link("CGVIS Duisburg, Germany", destination: URL(string: "https://www.cgvis.de")!)
-      }
-      .font(.footnote)
-      .foregroundColor(.gray)
     }
-    .padding()
   }
 }
 

@@ -1,2 +1,1 @@
-"NSAccessoryTrackingUsageDescription" = "BorgVR suit les contrôleurs spatiaux et stylets connectés afin que vous puissiez interagir avec les volumes et créer des marqueurs.";
 "NSLocalNetworkUsageDescription" = "BorgVR utilise le réseau local pour charger des jeux de données depuis d’autres appareils et serveurs BorgVR et, lorsque le partage est activé, les mettre à la disposition des collaborateurs et du moteur de rendu WebGPU.";

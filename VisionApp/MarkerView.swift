@@ -161,10 +161,9 @@ struct MarkerView: View {
       }
     }
     .padding()
-    .confirmationDialog(
+    .alert(
       "marker_clear_all_confirmation_title",
-      isPresented: $showClearAllConfirmation,
-      titleVisibility: .visible
+      isPresented: $showClearAllConfirmation
     ) {
       Button("marker_clear_all_confirmation_delete", role: .destructive) {
         clearAllMarkers()
@@ -391,19 +390,25 @@ struct MarkerView: View {
   }
 
   private var selectedMarkerDirectionBinding: Binding<Bool>? {
-    let sphereIndices = selectedMarkerIndices.filter {
-      sharedAppModel.volumeMarkers[$0].kind == .sphere
+    let hasSelectedSphere = sharedAppModel.volumeMarkers.contains {
+      sharedAppModel.selectedVolumeMarkerIDs.contains($0.id) && $0.kind == .sphere
     }
-    guard !sphereIndices.isEmpty else {
+    guard hasSelectedSphere else {
       return nil
     }
 
     return Binding(
       get: {
-        sphereIndices.allSatisfy { sharedAppModel.volumeMarkers[$0].showsDirection }
+        let selectedSpheres = sharedAppModel.volumeMarkers.filter {
+          sharedAppModel.selectedVolumeMarkerIDs.contains($0.id) && $0.kind == .sphere
+        }
+        return !selectedSpheres.isEmpty && selectedSpheres.allSatisfy(\.showsDirection)
       },
       set: { showsDirection in
-        for index in selectedMarkerIndices where sharedAppModel.volumeMarkers[index].kind == .sphere {
+        for index in sharedAppModel.volumeMarkers.indices
+          where sharedAppModel.selectedVolumeMarkerIDs.contains(
+            sharedAppModel.volumeMarkers[index].id
+          ) && sharedAppModel.volumeMarkers[index].kind == .sphere {
           sharedAppModel.volumeMarkers[index].showsDirection = showsDirection
         }
         sharedAppModel.defaultVolumeMarkerShowsDirection = showsDirection
@@ -437,16 +442,15 @@ struct MarkerView: View {
 
   private func deleteSelectedMarkers() {
     let selectedIDs = sharedAppModel.selectedVolumeMarkerIDs
-    guard !selectedIDs.isEmpty else { return }
-    sharedAppModel.volumeMarkers.removeAll { selectedIDs.contains($0.id) }
-    sharedAppModel.clearVolumeMarkerSelection()
-    sharedAppModel.synchronizeMarkers()
+    if sharedAppModel.removeVolumeMarkers(withIDs: selectedIDs) {
+      sharedAppModel.synchronizeMarkers()
+    }
   }
 
   private func clearAllMarkers() {
-    sharedAppModel.volumeMarkers.removeAll()
-    sharedAppModel.selectedVolumeMarkerID = nil
-    sharedAppModel.synchronizeMarkers()
+    if sharedAppModel.removeAllVolumeMarkers() {
+      sharedAppModel.synchronizeMarkers()
+    }
   }
 
   private func loadMarkers(from result: Result<[URL], Error>) {

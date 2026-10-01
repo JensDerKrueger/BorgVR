@@ -388,6 +388,33 @@ class SharedAppModel {
     selectedVolumeMarkerID = nil
   }
 
+  @discardableResult
+  func removeVolumeMarkers(withIDs markerIDs: Set<UUID>) -> Bool {
+    guard !markerIDs.isEmpty else { return false }
+    let previousCount = volumeMarkers.count
+    volumeMarkers.removeAll { markerIDs.contains($0.id) }
+    guard volumeMarkers.count != previousCount else { return false }
+    setVolumeMarkerSelection(
+      selectedVolumeMarkerIDs.subtracting(markerIDs),
+      primary: selectedVolumeMarkerID
+    )
+    return true
+  }
+
+  @discardableResult
+  func removeLastVolumeMarker() -> Bool {
+    guard let markerID = volumeMarkers.last?.id else { return false }
+    return removeVolumeMarkers(withIDs: [markerID])
+  }
+
+  @discardableResult
+  func removeAllVolumeMarkers() -> Bool {
+    guard !volumeMarkers.isEmpty else { return false }
+    volumeMarkers.removeAll()
+    clearVolumeMarkerSelection()
+    return true
+  }
+
   func resetIsoValue() {
     normIsoValue = 0.1
   }

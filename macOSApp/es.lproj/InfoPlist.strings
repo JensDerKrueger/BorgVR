@@ -1,2 +1,1 @@
-"NSAccessoryTrackingUsageDescription" = "BorgVR rastrea los controladores espaciales y lápices conectados para que pueda interactuar con volúmenes y crear marcadores.";
 "NSLocalNetworkUsageDescription" = "BorgVR utiliza la red local para cargar conjuntos de datos desde otros dispositivos y servidores BorgVR y, si se activa el uso compartido, ponerlos a disposición de los colaboradores y del renderizador WebGPU.";

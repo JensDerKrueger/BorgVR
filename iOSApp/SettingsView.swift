@@ -10,25 +10,27 @@ private let portNumberFormatter: NumberFormatter = {
 }()
 
 private enum SettingsResetSection: String, Identifiable {
+  case general
   case rendering
+  case performance
   case importSettings
   case remoteDatasets
   case backgroundServer
   case webServer
   case adHocServer
-  case lod
 
   var id: String { rawValue }
 
   var title: String {
     switch self {
+      case .general: return String(localized: "General")
       case .rendering: return String(localized: "Rendering")
+      case .performance: return String(localized: "Performance")
       case .importSettings: return String(localized: "Import")
       case .remoteDatasets: return String(localized: "Remote datasets")
       case .backgroundServer: return String(localized: "Background server")
       case .webServer: return String(localized: "WebGPU web server")
       case .adHocServer: return String(localized: "Ad-hoc server")
-      case .lod: return String(localized: "LOD")
     }
   }
 }
@@ -41,11 +43,11 @@ private enum ServerConnectionTestResult {
 private enum SettingsPage: String, CaseIterable, Identifiable {
   case general
   case rendering
+  case performance
   case importSettings
   case remoteDatasets
   case localServer
   case sharePlay
-  case lod
 
   var id: String { rawValue }
 
@@ -53,11 +55,11 @@ private enum SettingsPage: String, CaseIterable, Identifiable {
     switch self {
       case .general: "General"
       case .rendering: "Rendering"
+      case .performance: "Performance"
       case .importSettings: "Import"
       case .remoteDatasets: "Remote datasets"
       case .localServer: "Local server"
       case .sharePlay: "SharePlay"
-      case .lod: "LOD"
     }
   }
 
@@ -65,11 +67,11 @@ private enum SettingsPage: String, CaseIterable, Identifiable {
     switch self {
       case .general: "gearshape"
       case .rendering: "paintpalette"
+      case .performance: "gauge.with.dots.needle.50percent"
       case .importSettings: "square.and.arrow.down"
       case .remoteDatasets: "network"
       case .localServer: "server.rack"
       case .sharePlay: "shareplay"
-      case .lod: "square.stack.3d.up"
     }
   }
 }
@@ -163,17 +165,17 @@ struct SettingsView: View {
     NavigationSplitView {
       settingsSidebar
     } detail: {
-      settingsDetail(for: selectedSettingsPage ?? .rendering)
+      settingsDetail(for: selectedSettingsPage ?? .general)
     }
     .navigationSplitViewStyle(.balanced)
     .onAppear {
       if isWideLayout, selectedSettingsPage == nil {
-        selectedSettingsPage = .rendering
+        selectedSettingsPage = .general
       }
     }
     .onChange(of: isWideLayout) { _, isWide in
       if isWide, selectedSettingsPage == nil {
-        selectedSettingsPage = .rendering
+        selectedSettingsPage = .general
       }
     }
   }
@@ -194,7 +196,7 @@ struct SettingsView: View {
       ToolbarItem(placement: .topBarLeading) {
         Button {
           saveSettings()
-          appModel.currentState = .start
+          appModel.navigationState = .start
         } label: {
           Label("Back", systemImage: "chevron.backward")
         }
@@ -208,8 +210,9 @@ struct SettingsView: View {
       case .general:
         settingsPage(
           title: page.title,
-          description: "Configure general application behavior, including automatic checks for new BorgVR versions in the App Store."
+          description: "Configure general application behavior, automatic loading, interface diagnostics, and update checks."
         ) {
+          generalSection
           Section("Updates") {
             Toggle(
               "Automatically check for updates",
@@ -219,13 +222,21 @@ struct SettingsView: View {
               .font(.footnote)
               .foregroundStyle(.secondary)
           }
+          resetButton(for: .general)
         }
       case .rendering:
         settingsPage(
           title: page.title,
-          description: "This page contains settings for the BorgVR rendering system. Some options, such as the background color, are mostly cosmetic, while others, such as the atlas size, can have a major impact on performance. If renderer problems occur, you can return this section to the default settings, which are suitable for most cases."
+          description: "Configure visual appearance and sampling quality. These controls affect how the rendered image looks and how sampling adapts to the current frame rate."
         ) {
           renderingSection
+        }
+      case .performance:
+        settingsPage(
+          title: page.title,
+          description: "Configure level-of-detail selection, paging behavior, and GPU memory structures. Most users can leave these advanced performance settings unchanged."
+        ) {
+          performanceSection
         }
       case .importSettings:
         settingsPage(
@@ -262,13 +273,6 @@ struct SettingsView: View {
               .textInputAutocapitalization(.words)
           }
         }
-      case .lod:
-        settingsPage(
-          title: page.title,
-          description: "This page controls BorgVR's level-of-detail system. These settings allow fine tuning between visual quality and rendering performance."
-        ) {
-          lodSection
-        }
     }
   }
 
@@ -299,9 +303,25 @@ struct SettingsView: View {
   }
 
   @ViewBuilder
-  private var renderingSection: some View {
-    Section("General") {
+  private var generalSection: some View {
+    Section("Behavior") {
       Toggle("Automatically load/save transfer functions", isOn: $appSettings.autoloadTF)
+      Toggle("Show Brick Visualization", isOn: $appSettings.showBrickVisualization)
+      Toggle("Show Log Button", isOn: $appSettings.showLogButton)
+    }
+
+    Section("Diagnostics") {
+      Picker("Log-Level", selection: $appSettings.logLevel) {
+        ForEach(AppLogLevel.allCases) { level in
+          Text(level.label).tag(level.rawValue)
+        }
+      }
+    }
+  }
+
+  @ViewBuilder
+  private var renderingSection: some View {
+    Section("Appearance") {
       Picker("Background", selection: $appSettings.renderBackgroundMode) {
         ForEach(RenderBackgroundMode.allCases) { mode in
           Text(mode.label).tag(mode.rawValue)
@@ -325,7 +345,7 @@ struct SettingsView: View {
       }
     }
 
-    Section("Advanced") {
+    Section("Sampling") {
       Picker("Oversampling mode", selection: $appSettings.oversamplingMode) {
         Text("Static").tag(OversamplingMode.staticMode.rawValue)
         Text("Dynamic").tag(OversamplingMode.dynamicMode.rawValue)
@@ -342,17 +362,6 @@ struct SettingsView: View {
         }
       }
       Toggle("Randomized sample phase", isOn: $appSettings.sampleJitter)
-      Toggle("Show Brick Visualization", isOn: $appSettings.showBrickVisualization)
-      Toggle("Show Log Button", isOn: $appSettings.showLogButton)
-      Stepper(value: $appSettings.atlasSizeMB, in: 128...AppSettings.maximumAtlasSizeMB, step: 128) {
-        Text(String(format: String(localized: "Atlas size: %d MB"), appSettings.atlasSizeMB))
-      }
-      textFieldRow("Min. hash table size (MB)", text: $tempHashSize, keyboardType: .numberPad)
-      Picker("Log-Level", selection: $appSettings.logLevel) {
-        ForEach(AppLogLevel.allCases) { level in
-          Text(level.label).tag(level.rawValue)
-        }
-      }
       resetButton(for: .rendering)
     }
   }
@@ -401,6 +410,9 @@ struct SettingsView: View {
     Section("Loading") {
       textFieldRow("Timeout (seconds)", text: $tempTimeout, keyboardType: .decimalPad)
       Toggle("Progressive loading", isOn: $appSettings.progressiveLoading)
+      Text("Datasets provided through SharePlay ad-hoc connections are always loaded progressively, regardless of this setting.")
+        .font(.footnote)
+        .foregroundStyle(.secondary)
       Toggle("Keep local copy", isOn: $appSettings.makeLocalCopy)
     }
 
@@ -520,7 +532,7 @@ struct SettingsView: View {
     }
   }
 
-  private var lodSection: some View {
+  private var performanceSection: some View {
     Section {
       textFieldRow("Screen-space pixel error (pixels)", text: $tempPixelError, keyboardType: .decimalPad)
       Stepper(value: $appSettings.initialBricks, in: 0...20000, step: 100) {
@@ -531,7 +543,11 @@ struct SettingsView: View {
       }
       Toggle("Request low-res LOD", isOn: $appSettings.requestLowResLOD)
       Toggle("Stop on missing brick", isOn: $appSettings.stopOnMiss)
-      resetButton(for: .lod)
+      Stepper(value: $appSettings.atlasSizeMB, in: 128...AppSettings.maximumAtlasSizeMB, step: 128) {
+        Text(String(format: String(localized: "Atlas size: %d MB"), appSettings.atlasSizeMB))
+      }
+      textFieldRow("Min. hash table size (MB)", text: $tempHashSize, keyboardType: .numberPad)
+      resetButton(for: .performance)
     }
   }
 
@@ -825,8 +841,13 @@ struct SettingsView: View {
 
   private func resetToDefaults(_ section: SettingsResetSection) {
     switch section {
+      case .general:
+        appSettings.resetGeneralDefaults()
+        updateChecker.checksEnabled = true
       case .rendering:
         appSettings.resetRenderingDefaults()
+      case .performance:
+        appSettings.resetPerformanceDefaults()
       case .importSettings:
         appSettings.resetImportDefaults()
       case .remoteDatasets:
@@ -840,8 +861,6 @@ struct SettingsView: View {
         appSettings.resetWebServerDefaults()
       case .adHocServer:
         appSettings.resetAdHocServerDefaults()
-      case .lod:
-        appSettings.resetLODDefaults(resetOversamplingThresholds: false)
     }
     validationMessage = nil
     loadTemporaryValues()

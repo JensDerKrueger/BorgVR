@@ -913,12 +913,11 @@ final class BorgVRScriptRunner: ObservableObject {
       }
 
       let openable = catalog.openableDataset(from: dataset)
-      appModel.activeDataset = openable
-      if self?.sharePlay?.isInSession != true {
-        appModel.groupSessionHost = true
-      }
+      appModel.openDataset(
+        openable,
+        asGroupSessionHost: self?.sharePlay?.isInSession == true ? nil : true
+      )
       self?.docking?.resetForDatasetClose()
-      appModel.currentState = .renderData
       self?.sharePlay?.datasetOpened()
       self?.pendingDatasetDescription = openable.description
       self?.logInfo("Dataset selected: \(openable.description)")
@@ -1191,19 +1190,19 @@ final class BorgVRScriptRunner: ObservableObject {
       }
     }
     guard let index else { return .invalidArguments }
-    let marker = appModel.volumeMarkers.remove(at: index)
-    appModel.setVolumeMarkerSelection(
-      appModel.selectedVolumeMarkerIDs.subtracting([marker.id])
-    )
+    let marker = appModel.volumeMarkers[index]
+    guard appModel.removeVolumeMarkers(withIDs: [marker.id]) else {
+      return .callbackError
+    }
     synchronizeMarkers()
     return logInfo("Marker removed: \(marker.name) [\(marker.id.uuidString)]")
   }
 
   private func clearMarkers() -> CommandResultCode {
     guard let appModel else { return .callbackError }
-    appModel.volumeMarkers.removeAll()
-    appModel.clearVolumeMarkerSelection()
-    synchronizeMarkers()
+    if appModel.removeAllVolumeMarkers() {
+      synchronizeMarkers()
+    }
     return .success
   }
 

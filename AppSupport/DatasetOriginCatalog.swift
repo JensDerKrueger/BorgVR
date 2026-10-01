@@ -17,7 +17,7 @@ struct DatasetOrigin: Codable, Hashable, Sendable {
   }
 }
 
-enum SharePlayWaitingReason {
+enum SharePlayWaitingReason: Equatable {
   case hostDataset
   case datasetSource
 }

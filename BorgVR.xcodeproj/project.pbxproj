@@ -963,7 +963,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = "BorgVR Mobile";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.education";
 				INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace = YES;
-				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "BorgVR uses the local network to provide datasets to other BorgVR clients and the WebGPU renderer.";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "BorgVR uses the local network to load datasets from other BorgVR devices and servers and, when sharing is enabled, to make datasets available to collaborators and the WebGPU renderer.";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
@@ -1000,7 +1000,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = "BorgVR Mobile";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.education";
 				INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace = YES;
-				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "BorgVR uses the local network to provide datasets to other BorgVR clients and the WebGPU renderer.";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "BorgVR uses the local network to load datasets from other BorgVR devices and servers and, when sharing is enabled, to make datasets available to collaborators and the WebGPU renderer.";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
@@ -1074,7 +1074,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = BorgVR;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.education";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "BorgVR uses the local network to share the currently open dataset with participants in a live collaboration session.";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "BorgVR uses the local network to load datasets from other BorgVR devices and servers and, when sharing is enabled, to make datasets available to collaborators and the WebGPU renderer.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -1110,7 +1110,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = BorgVR;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.education";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "BorgVR uses the local network to share the currently open dataset with participants in a live collaboration session.";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "BorgVR uses the local network to load datasets from other BorgVR devices and servers and, when sharing is enabled, to make datasets available to collaborators and the WebGPU renderer.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -1142,7 +1142,7 @@
 				INFOPLIST_FILE = VisionApp/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = BorgVR;
 				INFOPLIST_KEY_NSAccessoryTrackingUsageDescription = "BorgVR tracks connected spatial controllers and styli so you can interact with volumes and create markers.";
-				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "BorgVR uses the local network to share the currently open dataset with participants in a live collaboration session.";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "BorgVR uses the local network to load datasets from other BorgVR devices and servers and, when sharing is enabled, to make datasets available to collaborators and the WebGPU renderer.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "The microphone is used to let you interact with the app using voice commands instead of traditional UI controls.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Speech recognition is used to let you interact with the app using voice commands instead of traditional UI controls.";
 				INFOPLIST_KEY_NSWorldSensingUsageDescription = "To collaborate with others, this app needs access to your environment.";
@@ -1179,7 +1179,7 @@
 				INFOPLIST_FILE = VisionApp/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = BorgVR;
 				INFOPLIST_KEY_NSAccessoryTrackingUsageDescription = "BorgVR tracks connected spatial controllers and styli so you can interact with volumes and create markers.";
-				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "BorgVR uses the local network to share the currently open dataset with participants in a live collaboration session.";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "BorgVR uses the local network to load datasets from other BorgVR devices and servers and, when sharing is enabled, to make datasets available to collaborators and the WebGPU renderer.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "The microphone is used to let you interact with the app using voice commands instead of traditional UI controls.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Speech recognition is used to let you interact with the app using voice commands instead of traditional UI controls.";
 				INFOPLIST_KEY_NSWorldSensingUsageDescription = "To collaborate with others, this app needs access to your environment.";

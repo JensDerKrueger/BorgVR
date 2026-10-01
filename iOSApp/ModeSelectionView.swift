@@ -139,7 +139,7 @@ struct ModeSelectionView: View {
       spacing: 12
     ) {
       Button {
-        appModel.currentState = .selectData
+        appModel.navigationState = .selectData
       } label: {
         Label("Open dataset", systemImage: "folder")
           .frame(maxWidth: .infinity, minHeight: 32)
@@ -147,7 +147,7 @@ struct ModeSelectionView: View {
       .buttonStyle(.borderedProminent)
 
       Button {
-        appModel.currentState = .importData
+        appModel.navigationState = .importData
       } label: {
         Label("Import dataset", systemImage: "square.and.arrow.down")
           .frame(maxWidth: .infinity, minHeight: 32)
@@ -155,7 +155,7 @@ struct ModeSelectionView: View {
       .buttonStyle(.bordered)
 
       Button {
-        appModel.currentState = .settings
+        appModel.navigationState = .settings
       } label: {
         Label("Settings", systemImage: "gearshape")
           .frame(maxWidth: .infinity, minHeight: 32)

@@ -22,13 +22,11 @@ final class AppModel: ObservableObject {
     _ worldDistance: Float
   ) -> SIMD3<Float>?
 
-  enum ContentViewState {
+  enum NavigationState {
     case start
     case settings
     case importData
     case selectData
-    case renderData
-    case waitingForHost
   }
 
   enum InteractionMode: String, CaseIterable, Identifiable {
@@ -70,10 +68,48 @@ final class AppModel: ObservableObject {
     }
   }
 
-  @Published var currentState: ContentViewState = .start
-  @Published var sharePlayWaitingReason: SharePlayWaitingReason = .hostDataset
+  enum DatasetCloseDestination: Equatable {
+    case start
+    case datasetSelection
+    case sharePlayWaiting(SharePlayWaitingReason)
+  }
+
+  enum DatasetSessionState: Equatable {
+    case inactive
+    case waitingForSharePlay(SharePlayWaitingReason)
+    case resolving(uniqueID: String, description: String)
+    case opening(dataset: DatasetEntry, requestID: UUID)
+    case rendering(dataset: DatasetEntry, requestID: UUID)
+    case closing(dataset: DatasetEntry?, requestID: UUID, destination: DatasetCloseDestination)
+
+    var logDescription: String {
+      switch self {
+        case .inactive:
+          return "inactive"
+        case .waitingForSharePlay(let reason):
+          return "waiting(\(reason))"
+        case .resolving(let uniqueID, _):
+          return "resolving(\(uniqueID))"
+        case .opening(let dataset, _):
+          return "opening(\(dataset.uniqueId))"
+        case .rendering(let dataset, _):
+          return "rendering(\(dataset.uniqueId))"
+        case .closing(let dataset, _, let destination):
+          return "closing(\(dataset?.uniqueId ?? "none"), \(destination))"
+      }
+    }
+  }
+
+  @Published var navigationState: NavigationState = .start
+  @Published private(set) var datasetSessionState = DatasetSessionState.inactive {
+    didSet {
+      guard oldValue != datasetSessionState else { return }
+      logger.dev(
+        "Dataset session: \(oldValue.logDescription) -> \(datasetSessionState.logDescription)"
+      )
+    }
+  }
   @Published var sharePlayDatasetSource: DatasetOrigin?
-  @Published var activeDataset: DatasetEntry?
   @Published var groupSessionHost = true
   @Published var interactionMode: InteractionMode = .model
   @Published var volumeMarkers: [VolumeMarker] = []
@@ -122,6 +158,84 @@ final class AppModel: ObservableObject {
     logger.setMinimumLogLevel(.warning)
   }
 
+  var activeDataset: DatasetEntry? {
+    switch datasetSessionState {
+      case .opening(let dataset, _), .rendering(let dataset, _), .closing(let dataset?, _, _):
+        return dataset
+      case .inactive, .waitingForSharePlay, .resolving, .closing(nil, _, _):
+        return nil
+    }
+  }
+
+  var sharePlayWaitingReason: SharePlayWaitingReason? {
+    switch datasetSessionState {
+      case .waitingForSharePlay(let reason):
+        return reason
+      case .resolving:
+        return .datasetSource
+      case .closing(_, _, .sharePlayWaiting(let reason)):
+        return reason
+      default:
+        return nil
+    }
+  }
+
+  func isOpeningOrRenderingDataset(withUniqueID uniqueID: String) -> Bool {
+    switch datasetSessionState {
+      case .opening(let dataset, _), .rendering(let dataset, _):
+        return dataset.uniqueId == uniqueID
+      case .closing(let dataset?, _, _):
+        return dataset.uniqueId == uniqueID
+      default:
+        return false
+    }
+  }
+
+  func openDataset(_ dataset: DatasetEntry, asGroupSessionHost: Bool? = nil) {
+    if let asGroupSessionHost {
+      groupSessionHost = asGroupSessionHost
+    }
+    sharePlayDatasetSource = nil
+    resetRenderedDatasetState()
+    datasetSessionState = .opening(dataset: dataset, requestID: UUID())
+  }
+
+  func waitForSharePlayDataset(reason: SharePlayWaitingReason) {
+    sharePlayDatasetSource = nil
+    resetRenderedDatasetState()
+    datasetSessionState = .waitingForSharePlay(reason)
+  }
+
+  func beginResolvingSharePlayDataset(uniqueID: String, description: String) {
+    if case .resolving(let currentID, _) = datasetSessionState,
+       currentID == uniqueID {
+      return
+    }
+    resetRenderedDatasetState()
+    datasetSessionState = .resolving(uniqueID: uniqueID, description: description)
+  }
+
+  func closeDataset(destination: DatasetCloseDestination = .datasetSelection) {
+    let requestID = UUID()
+    datasetSessionState = .closing(
+      dataset: activeDataset,
+      requestID: requestID,
+      destination: destination
+    )
+    sharePlayDatasetSource = nil
+    resetRenderedDatasetState()
+    switch destination {
+      case .start:
+        datasetSessionState = .inactive
+        navigationState = .start
+      case .datasetSelection:
+        datasetSessionState = .inactive
+        navigationState = .selectData
+      case .sharePlayWaiting(let reason):
+        datasetSessionState = .waitingForSharePlay(reason)
+    }
+  }
+
   func setLogLevel(_ setting: String) {
     let logLevel = AppLogLevel(rawValue: setting) ?? .warning
     logger.setMinimumLogLevel(logLevel.level)
@@ -152,6 +266,33 @@ final class AppModel: ObservableObject {
 
   func clearVolumeMarkerSelection() {
     selectedVolumeMarkerID = nil
+  }
+
+  @discardableResult
+  func removeVolumeMarkers(withIDs markerIDs: Set<UUID>) -> Bool {
+    guard !markerIDs.isEmpty else { return false }
+    let previousCount = volumeMarkers.count
+    volumeMarkers.removeAll { markerIDs.contains($0.id) }
+    guard volumeMarkers.count != previousCount else { return false }
+    setVolumeMarkerSelection(
+      selectedVolumeMarkerIDs.subtracting(markerIDs),
+      primary: selectedVolumeMarkerID
+    )
+    return true
+  }
+
+  @discardableResult
+  func removeLastVolumeMarker() -> Bool {
+    guard let markerID = volumeMarkers.last?.id else { return false }
+    return removeVolumeMarkers(withIDs: [markerID])
+  }
+
+  @discardableResult
+  func removeAllVolumeMarkers() -> Bool {
+    guard !volumeMarkers.isEmpty else { return false }
+    volumeMarkers.removeAll()
+    clearVolumeMarkerSelection()
+    return true
   }
 
   func updateRemoteSpatialToolPreviews(
@@ -240,11 +381,21 @@ final class AppModel: ObservableObject {
   func markRenderedDataset(key: String) {
     renderedDatasetKey = key
     failedRenderedDatasetKey = ""
+    guard !key.isEmpty else { return }
+    guard case .opening(let dataset, let requestID) = datasetSessionState,
+          datasetRenderKey(for: dataset) == key else { return }
+    datasetSessionState = .rendering(dataset: dataset, requestID: requestID)
   }
 
   func markRenderedDatasetFailed(key: String) {
     renderedDatasetKey = ""
     failedRenderedDatasetKey = key
+  }
+
+  private func resetRenderedDatasetState() {
+    renderedDatasetKey = ""
+    failedRenderedDatasetKey = ""
+    resetBrickReadbackState()
   }
 
   func resetBrickReadbackState() {

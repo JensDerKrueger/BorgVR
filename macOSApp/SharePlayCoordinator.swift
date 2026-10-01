@@ -31,6 +31,7 @@ final class SharePlayCoordinator: ObservableObject {
   @Published private(set) var hasObservedGroupSession = false
   @Published private(set) var participants: [BorgVRSharePlayParticipant] = []
   @Published private(set) var isScreenViewSynchronized = true
+  @Published private(set) var showsSystemSharePlayJoinInstructions = false
   @Published var showsHostDeparturePrompt = false
   @Published var protocolCompatibilityIssue: BorgVRSharePlayCompatibilityIssue?
 
@@ -69,6 +70,10 @@ final class SharePlayCoordinator: ObservableObject {
   private var hostElectionTerm: UInt64 = 0
   private var hostClaims: [UInt64: Set<UUID>] = [:]
   private var hostElectionTask: Task<Void, Never>?
+  private let groupStateObserver = GroupStateObserver()
+  private var groupStateObservation: AnyCancellable?
+  private var lastGroupSessionEligibility: Bool?
+  private var awaitsSessionFromSharingController = false
 
   func startObservingSessions(
     appModel: AppModel,
@@ -83,11 +88,45 @@ final class SharePlayCoordinator: ObservableObject {
     self.storedAppModel = storedAppModel
     self.serverController = serverController
 
+    if groupStateObservation == nil {
+      groupStateObservation = groupStateObserver.$isEligibleForGroupSession
+        .removeDuplicates()
+        .sink { [weak self] isEligible in
+          guard let self else { return }
+          let previousEligibility = lastGroupSessionEligibility
+          if let previousEligibility {
+            appModel.logger.info(
+              "SharePlay group-session eligibility changed: \(previousEligibility) -> \(isEligible)."
+            )
+          } else {
+            appModel.logger.info(
+              "Initial SharePlay group-session eligibility: \(isEligible)."
+            )
+          }
+          lastGroupSessionEligibility = isEligible
+          if isEligible,
+             previousEligibility == false,
+             awaitsSessionFromSharingController,
+             !isInSession {
+            showsSystemSharePlayJoinInstructions = true
+            appModel.logger.info(
+              "SharePlay is ready in FaceTime; waiting for the local user to join from the system SharePlay menu."
+            )
+          } else if !isEligible, awaitsSessionFromSharingController {
+            clearPendingSharePlayStart(resetHost: true)
+          }
+        }
+    }
+
     guard sessionObservationTask == nil else { return }
+    appModel.logger.info("Starting SharePlay group-session observation on this Mac.")
     let sessions = BorgVRSharePlayActivity.sessions()
     sessionObservationTask = Task { [weak self] in
       for await session in sessions {
         guard let self else { return }
+        appModel.logger.info(
+          "SharePlay delivered a group session to this Mac; activity initiator: \(session.activity.initiatorID.uuidString), initial participant count: \(session.activeParticipants.count)."
+        )
         configure(session)
       }
     }
@@ -98,18 +137,58 @@ final class SharePlayCoordinator: ObservableObject {
   }
 
   func startSharePlay() {
+    clearPendingSharePlayStart()
     markLocalActivityStarter()
+    let activity = BorgVRSharePlayActivity()
+    let isEligible = groupStateObserver.isEligibleForGroupSession
+    appModel?.logger.info(
+      "Starting SharePlay; eligible for the current group session: \(isEligible)."
+    )
+
+    if isEligible {
+      Task { [weak self] in
+        guard let self else { return }
+        let activationPreparation = await activity.prepareForActivation()
+        appModel?.logger.info(
+          "SharePlay prepareForActivation completed with: \(String(describing: activationPreparation))."
+        )
+        switch activationPreparation {
+          case .activationPreferred:
+            do {
+              let sessionWillBeDelivered = try await activity.activate()
+              appModel?.logger.info(
+                "SharePlay activity.activate() returned; session will be delivered: \(sessionWillBeDelivered)."
+              )
+              if !sessionWillBeDelivered, !isInSession {
+                clearPendingSharePlayStart(resetHost: true)
+              }
+            } catch {
+              clearPendingSharePlayStart(resetHost: true)
+              appModel?.logger.error("Failed to start SharePlay: \(error.localizedDescription)")
+            }
+          case .activationDisabled:
+            clearPendingSharePlayStart(resetHost: true)
+            appModel?.logger.info("SharePlay activation is disabled.")
+          case .cancelled:
+            clearPendingSharePlayStart(resetHost: true)
+          @unknown default:
+            clearPendingSharePlayStart(resetHost: true)
+        }
+      }
+      return
+    }
+
     let controller: GroupActivitySharingController
     do {
-      controller = try GroupActivitySharingController(BorgVRSharePlayActivity())
+      controller = try GroupActivitySharingController(activity)
     } catch {
-      appModel?.groupSessionHost = false
+      clearPendingSharePlayStart(resetHost: true)
       appModel?.logger.error("Failed to prepare SharePlay: \(error.localizedDescription)")
       return
     }
 
     guard let presentingController = NSApp.keyWindow?.contentViewController else {
-      appModel?.groupSessionHost = false
+      clearPendingSharePlayStart(resetHost: true)
       appModel?.logger.error("Failed to start SharePlay because no active window is available.")
       return
     }
@@ -118,14 +197,27 @@ final class SharePlayCoordinator: ObservableObject {
       guard let self else { return }
       switch await controller.result {
         case .success:
-          appModel?.logger.info("SharePlay sharing controller completed successfully; waiting for its group session.")
-        case .cancelled:
-          if !isInSession {
-            appModel?.groupSessionHost = false
+          awaitsSessionFromSharingController = true
+          appModel?.logger.info(
+            "SharePlay sharing controller completed successfully; waiting for its group session."
+          )
+          if groupStateObserver.isEligibleForGroupSession, !isInSession {
+            showsSystemSharePlayJoinInstructions = true
           }
+        case .cancelled:
+          appModel?.logger.info("SharePlay sharing controller was cancelled.")
+          clearPendingSharePlayStart(resetHost: true)
         @unknown default:
-          break
+          clearPendingSharePlayStart(resetHost: true)
       }
+    }
+  }
+
+  private func clearPendingSharePlayStart(resetHost: Bool = false) {
+    awaitsSessionFromSharingController = false
+    showsSystemSharePlayJoinInstructions = false
+    if resetHost, !isInSession {
+      appModel?.groupSessionHost = false
     }
   }
 
@@ -167,6 +259,7 @@ final class SharePlayCoordinator: ObservableObject {
   }
 
   func leaveGroupActivity() {
+    clearPendingSharePlayStart()
     serverController?.stopSharePlayServer()
     groupSession?.leave()
     appModel?.groupSessionHost = false
@@ -251,8 +344,11 @@ final class SharePlayCoordinator: ObservableObject {
   }
 
   private func configure(_ session: GroupSession<BorgVRSharePlayActivity>) {
+    clearPendingSharePlayStart()
     hasObservedGroupSession = true
-    appModel?.logger.info("Observed SharePlay group session; joining it now.")
+    appModel?.logger.info(
+      "Configuring delivered SharePlay group session; local participant: \(session.localParticipant.id.uuidString), initial state: \(String(describing: session.state)), active participant count: \(session.activeParticipants.count)."
+    )
     resetSessionReceivers()
     sessionGeneration += 1
     let generation = sessionGeneration
@@ -300,15 +396,19 @@ final class SharePlayCoordinator: ObservableObject {
 
     session.$state
       .sink { [weak self] state in
+        guard let self, self.sessionGeneration == generation else { return }
+        self.appModel?.logger.info(
+          "SharePlay group-session state changed to: \(String(describing: state))."
+        )
         guard case .invalidated(let reason) = state else { return }
-        guard self?.sessionGeneration == generation else { return }
-        self?.appModel?.logger.warning(
+        self.appModel?.logger.warning(
           "SharePlay session invalidated by the system: \(reason.localizedDescription)"
         )
-        self?.serverController?.stopSharePlayServer()
-        self?.resetSessionReceivers()
-        self?.isInSession = false
-        self?.appModel?.groupSessionHost = false
+        self.serverController?.stopSharePlayServer()
+        self.clearPendingSharePlayStart()
+        self.resetSessionReceivers()
+        self.isInSession = false
+        self.appModel?.groupSessionHost = false
       }
       .store(in: &subscriptions)
 
@@ -320,7 +420,11 @@ final class SharePlayCoordinator: ObservableObject {
         await self?.handleIncoming(data: data, from: context.source, sessionGeneration: generation)
       }
     }
+    appModel?.logger.info("Calling session.join() for the delivered SharePlay group session.")
     session.join()
+    appModel?.logger.info(
+      "session.join() returned; current state: \(String(describing: session.state))."
+    )
     Task { await sendProtocolVersion() }
   }
 
@@ -608,10 +712,11 @@ final class SharePlayCoordinator: ObservableObject {
         handleUpdate(data: payload, from: participant)
       case MessageType.shutdownRequest.rawValue:
         guard appModel?.groupSessionHost != true else { return }
-        appModel?.volumeMarkers.removeAll()
-        appModel?.selectedVolumeMarkerID = nil
-        appModel?.sharePlayWaitingReason = .hostDataset
-        appModel?.currentState = .waitingForHost
+        pendingDatasetLoadTask?.cancel()
+        pendingDatasetLoadTask = nil
+        pendingDatasetLoad = nil
+        appModel?.removeAllVolumeMarkers()
+        appModel?.closeDataset(destination: .sharePlayWaiting(.hostDataset))
       case MessageType.stateRequest.rawValue:
         guard appModel?.groupSessionHost == true else { return }
         Task { await sendInitialDataReliably(to: .only(Set([participant]))) }
@@ -701,8 +806,7 @@ final class SharePlayCoordinator: ObservableObject {
       pendingDatasetLoadTask?.cancel()
       pendingDatasetLoadTask = nil
       pendingDatasetLoad = nil
-      appModel.sharePlayWaitingReason = .hostDataset
-      appModel.currentState = .waitingForHost
+      appModel.waitForSharePlayDataset(reason: .hostDataset)
       return
     }
 
@@ -713,8 +817,12 @@ final class SharePlayCoordinator: ObservableObject {
       sharedScreenViewState = nil
     }
 
-    if appModel.activeDataset?.uniqueId == message.uniqueID,
-       appModel.currentState == .renderData {
+    if appModel.isOpeningOrRenderingDataset(withUniqueID: message.uniqueID) {
+      return
+    }
+
+    if pendingDatasetLoad?.uniqueID == message.uniqueID {
+      retryPendingDatasetLoad()
       return
     }
 
@@ -723,8 +831,7 @@ final class SharePlayCoordinator: ObservableObject {
       pendingDatasetLoadTask?.cancel()
       pendingDatasetLoadTask = nil
       pendingDatasetLoad = nil
-      appModel.activeDataset = localDataset
-      appModel.currentState = .renderData
+      appModel.openDataset(localDataset, asGroupSessionHost: false)
       Task { await advertiseCurrentLocalDataset() }
       return
     }
@@ -736,6 +843,10 @@ final class SharePlayCoordinator: ObservableObject {
       description: message.description,
       generation: generation
     )
+    appModel.beginResolvingSharePlayDataset(
+      uniqueID: message.uniqueID,
+      description: message.description
+    )
     retryPendingDatasetLoad()
   }
 
@@ -746,8 +857,10 @@ final class SharePlayCoordinator: ObservableObject {
           appModel?.groupSessionHost != true else { return }
     guard pendingDatasetLoadTask == nil else { return }
     let origins = knownOrigins(for: pending.uniqueID)
-    appModel?.sharePlayWaitingReason = .datasetSource
-    appModel?.currentState = .waitingForHost
+    appModel?.beginResolvingSharePlayDataset(
+      uniqueID: pending.uniqueID,
+      description: pending.description
+    )
     guard !origins.isEmpty else {
       appModel?.sharePlayDatasetSource = nil
       appModel?.logger.warning("No known source currently provides SharePlay dataset \(pending.uniqueID); waiting for participant sources.")
@@ -783,7 +896,6 @@ final class SharePlayCoordinator: ObservableObject {
             isInSession,
             pendingDatasetLoad?.uniqueID == uniqueID else { return }
       appModel.sharePlayDatasetSource = nil
-      appModel.currentState = .waitingForHost
       appModel.logger.warning("None of the known sources currently provides SharePlay dataset \(uniqueID); retrying after all sources have timed out.")
       schedulePendingDatasetLoadRetry(uniqueID: uniqueID, generation: generation)
       return
@@ -794,7 +906,7 @@ final class SharePlayCoordinator: ObservableObject {
           appModel.groupSessionHost != true,
           pendingDatasetLoad?.uniqueID == uniqueID else { return }
     appModel.sharePlayDatasetSource = nil
-    appModel.activeDataset = AppModel.DatasetEntry(
+    let dataset = AppModel.DatasetEntry(
       identifier: uniqueID,
       description: description,
       source: .remote(address: remoteSource.address, port: remoteSource.port, password: remoteSource.password),
@@ -803,7 +915,7 @@ final class SharePlayCoordinator: ObservableObject {
     appModel.logger.info("Loading SharePlay dataset \(uniqueID) from \(remoteSource.address):\(remoteSource.port).")
     pendingDatasetLoad = nil
     pendingDatasetLoadTask = nil
-    appModel.currentState = .renderData
+    appModel.openDataset(dataset, asGroupSessionHost: false)
   }
 
   private func schedulePendingDatasetLoadRetry(uniqueID: String, generation: Int) {

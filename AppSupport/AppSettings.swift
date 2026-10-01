@@ -329,18 +329,20 @@ final class AppSettings: ObservableObject {
     atlasSizeMB = min(max(128, atlasSizeMB), Self.maximumAtlasSizeMB)
   }
 
-  func resetRenderingDefaults(resetLogLevel: Bool = true) {
+  func resetGeneralDefaults() {
     autoloadTF = Self.boolDefault("autoloadTF")
     autoloadTransform = Self.boolDefault("autoloadTransform")
-    oversampling = Self.doubleDefault("oversampling")
-    sampleJitter = Self.boolDefault("sampleJitter")
     showBrickVisualization = Self.boolDefault("showBrickVisualization")
     showLogButton = Self.boolDefault("showLogButton")
+    logLevel = Self.stringDefault("logLevel")
+  }
+
+  func resetRenderingDefaults() {
+    oversampling = Self.doubleDefault("oversampling")
+    sampleJitter = Self.boolDefault("sampleJitter")
     oversamplingMode = Self.stringDefault("oversamplingMode")
     dropFPS = Self.intDefault("dropFPS")
     recoveryFPS = Self.intDefault("recoveryFPS")
-    atlasSizeMB = Self.intDefault("atlasSizeMB")
-    minHashTableSize = Self.intDefault("minHashTableSize")
     renderBackgroundMode = Self.stringDefault("renderBackgroundMode")
     renderBackgroundPrimaryRed = Self.doubleDefault("renderBackgroundPrimaryRed")
     renderBackgroundPrimaryGreen = Self.doubleDefault("renderBackgroundPrimaryGreen")
@@ -350,8 +352,6 @@ final class AppSettings: ObservableObject {
     renderBackgroundSecondaryGreen = Self.doubleDefault("renderBackgroundSecondaryGreen")
     renderBackgroundSecondaryBlue = Self.doubleDefault("renderBackgroundSecondaryBlue")
     renderBackgroundSecondaryAlpha = Self.doubleDefault("renderBackgroundSecondaryAlpha")
-    guard resetLogLevel else { return }
-    resetMiscDefaults()
   }
 
   func resetMiscDefaults() {
@@ -414,14 +414,21 @@ final class AppSettings: ObservableObject {
     stopOnMiss = Self.boolDefault("stopOnMiss")
   }
 
+  func resetPerformanceDefaults() {
+    atlasSizeMB = Self.intDefault("atlasSizeMB")
+    minHashTableSize = Self.intDefault("minHashTableSize")
+    resetLODDefaults(resetOversamplingThresholds: false)
+  }
+
   func resetToDefaults() {
+    resetGeneralDefaults()
     resetRenderingDefaults()
+    resetPerformanceDefaults()
     resetImportDefaults()
     resetRemoteDefaults()
     resetBackgroundServerDefaults()
     resetWebServerDefaults()
     resetAdHocServerDefaults()
-    resetLODDefaults()
     resetSharePlayDefaults()
   }
 

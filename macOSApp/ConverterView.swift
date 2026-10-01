@@ -218,7 +218,7 @@ struct ConverterView: View {
         HStack {
 
           Button {
-            appModel.currentState = .start
+            appModel.navigationState = .start
           } label: {
             Label("converter_back_to_main_menu", systemImage: "chevron.backward.circle")
           }
@@ -248,7 +248,7 @@ struct ConverterView: View {
                 step += 1
                 startConversion()
               default:
-                appModel.currentState = .start
+                appModel.navigationState = .start
             }
           } label: {
             Label(

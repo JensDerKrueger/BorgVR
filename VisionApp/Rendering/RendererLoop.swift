@@ -1252,7 +1252,10 @@ extension Renderer {
       .duration(to: drawable.frameTiming.trackableAnchorTime)
       .timeInterval
     let samples = borgARProvider.getSpatialInputSamples(atTimestamp: timestamp)
-    let stylusSample = immersiveInteraction.spatialStylusSample(from: samples)
+    let stylusSample = immersiveInteraction.spatialStylusSample(
+      from: samples,
+      timestamp: timestamp
+    )
     let inputContext = spatialInputContext.snapshot()
     immersiveInteraction.handleSpatialInputSamples(
       samples,
@@ -1521,13 +1524,7 @@ extension Renderer {
     while !Task.isCancelled {
       if layerRenderer.state == .invalidated {
         Task { @MainActor in
-          runtimeAppModel.immersiveSpaceState = .closed
-          if runtimeAppModel.immersiveSpaceIntent == .keepCurrent {
-            // The system closed the immersive space, for example via the Home button.
-            // Route that event through the regular dataset-close path so SharePlay
-            // clients receive the same shutdown notification as for an in-app close.
-            runtimeAppModel.immersiveSpaceIntent = .close
-          }
+          runtimeAppModel.immersiveSpaceWasClosedBySystem()
         }
         return
       } else if layerRenderer.state == .paused {
@@ -1540,7 +1537,7 @@ extension Renderer {
       } else {
         Task { @MainActor in
           if runtimeAppModel.immersiveSpaceState != .open {
-            runtimeAppModel.immersiveSpaceState = .open
+            runtimeAppModel.markImmersiveSpaceOpened()
           }
         }
         autoreleasepool {

@@ -17,19 +17,14 @@ struct BorgVRMobileApp: App {
     WindowGroup {
       ContentView()
         .appStoreUpdateAlert(using: updateChecker)
-        .alert(
-          "Choose your SharePlay name",
-          isPresented: $showsSharePlayDisplayNameOnboarding
-        ) {
-          TextField("Display name", text: $sharePlayDisplayNameDraft)
-          Button("Continue") {
+        .sheet(isPresented: $showsSharePlayDisplayNameOnboarding) {
+          SharePlayDisplayNameOnboardingView(name: $sharePlayDisplayNameDraft) {
             appSettings.sharePlayDisplayName = sharePlayDisplayNameDraft
               .trimmingCharacters(in: .whitespacesAndNewlines)
             sharePlayDisplayNameOnboardingCompleted = true
+            showsSharePlayDisplayNameOnboarding = false
           }
-          .disabled(sharePlayDisplayNameDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-        } message: {
-          Text("What name should other people see for you in shared SharePlay sessions? You can change it later in Settings.")
+          .interactiveDismissDisabled()
         }
         .alert(
           "SharePlay Host Left",
@@ -165,9 +160,7 @@ struct BorgVRMobileApp: App {
           into: documentsDirectory,
           logger: appModel.logger
         )
-        appModel.activeDataset = dataset
-        appModel.groupSessionHost = true
-        appModel.currentState = .renderData
+        appModel.openDataset(dataset, asGroupSessionHost: true)
         sharePlay.datasetOpened()
       } catch {
         appModel.logger.error(
@@ -179,5 +172,43 @@ struct BorgVRMobileApp: App {
         )
       }
     }
+  }
+}
+
+private struct SharePlayDisplayNameOnboardingView: View {
+  @Binding var name: String
+  let onContinue: () -> Void
+
+  private var trimmedName: String {
+    name.trimmingCharacters(in: .whitespacesAndNewlines)
+  }
+
+  var body: some View {
+    NavigationStack {
+      Form {
+        Section {
+          TextField("Display name", text: $name)
+            .textContentType(.name)
+            .submitLabel(.continue)
+            .onSubmit(continueIfPossible)
+        } footer: {
+          Text("What name should other people see for you in shared SharePlay sessions? You can change it later in Settings.")
+        }
+      }
+      .navigationTitle("Choose your SharePlay name")
+      .navigationBarTitleDisplayMode(.inline)
+      .toolbar {
+        ToolbarItem(placement: .confirmationAction) {
+          Button("Continue", action: onContinue)
+            .disabled(trimmedName.isEmpty)
+        }
+      }
+    }
+    .presentationDetents([.medium])
+  }
+
+  private func continueIfPossible() {
+    guard !trimmedName.isEmpty else { return }
+    onContinue()
   }
 }

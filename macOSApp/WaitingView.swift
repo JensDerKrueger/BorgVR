@@ -44,7 +44,7 @@ struct WaitingView: View {
 
       Button {
         sharePlay.leaveGroupActivity()
-        appModel.currentState = .start
+        appModel.closeDataset(destination: .start)
       } label: {
         Label("Leave SharePlay", systemImage: "rectangle.portrait.and.arrow.right")
       }

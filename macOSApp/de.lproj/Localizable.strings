@@ -745,3 +745,10 @@
 "Your installed BorgVR version is too old for this SharePlay session. Please update to version %@ or later." = "Ihre installierte BorgVR-Version ist für diese SharePlay-Sitzung zu alt. Bitte aktualisieren Sie auf Version %@ oder neuer.";
 "The SharePlay host is using an outdated BorgVR version. The host must update to version %@ or later." = "Der SharePlay-Host verwendet eine veraltete BorgVR-Version. Der Host muss auf Version %@ oder neuer aktualisieren.";
 "Trying server: %@" = "Server wird geprüft: %@";
+"General" = "Allgemein";
+"Performance" = "Leistung";
+"Configure automatic loading, optional interface diagnostics, logging, and update checks." = "Konfigurieren Sie automatisches Laden, optionale Diagnoseelemente, Protokollierung und die Suche nach Updates.";
+"Configure visual appearance and sampling quality. These controls affect how the rendered image looks and how sampling adapts to the current frame rate." = "Konfigurieren Sie Darstellung und Sampling-Qualität. Diese Einstellungen beeinflussen das Bild und die Anpassung des Samplings an die aktuelle Bildrate.";
+"Control level-of-detail selection, brick requests, GPU memory, and hash table sizing. Most users can leave these advanced settings unchanged." = "Konfigurieren Sie Detailstufen, Brick-Anfragen, GPU-Speicher und die Größe der Hashtabelle. Die meisten Nutzer können diese erweiterten Einstellungen unverändert lassen.";
+"To complete the connection, click Join in the green SharePlay menu in the menu bar." = "Klicken Sie jetzt oben in der Menüleiste im grünen SharePlay-Menü auf „Beitreten“, um die Verbindung abzuschließen.";
+"Datasets provided through SharePlay ad-hoc connections are always loaded progressively, regardless of this setting." = "Über SharePlay-Ad-hoc-Verbindungen bereitgestellte Datensätze werden unabhängig von dieser Einstellung immer progressiv geladen.";

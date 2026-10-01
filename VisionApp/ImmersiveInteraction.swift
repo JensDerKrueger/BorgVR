@@ -56,6 +56,10 @@ class ImmersiveInteraction {
   }
   private var spatialAccessoryAction: SpatialAccessoryAction?
   private var activeSpatialStylusID: UUID?
+  private var spatialStylusModifierStates: [UUID: Bool] = [:]
+  private var lastSpatialStylusModifierPressTimes: [UUID: TimeInterval] = [:]
+  private var suppressedSpatialStylusModifierIDs: Set<UUID> = []
+  private let spatialStylusDoubleClickInterval: TimeInterval = 0.35
   private var spatialAccessoryPrimaryStates: [UUID: Bool] = [:]
   private var spatialAccessoryModifierStates: [UUID: Bool] = [:]
   private var spatialAccessoryFaceButtonStates: [UUID: Set<SpatialControllerFaceButton>] = [:]
@@ -1197,9 +1201,19 @@ class ImmersiveInteraction {
   }
 
   func spatialStylusSample(
-    from samples: [BorgSpatialInputSample]
+    from samples: [BorgSpatialInputSample],
+    timestamp: TimeInterval
   ) -> BorgSpatialStylusSample? {
     let styli = samples.filter { $0.source == .stylus }
+    let stylusIDs = Set(styli.map(\.id))
+    spatialStylusModifierStates = spatialStylusModifierStates.filter {
+      stylusIDs.contains($0.key)
+    }
+    lastSpatialStylusModifierPressTimes = lastSpatialStylusModifierPressTimes.filter {
+      stylusIDs.contains($0.key)
+    }
+    suppressedSpatialStylusModifierIDs.formIntersection(stylusIDs)
+
     let activeSample = activeSpatialStylusID.flatMap({ activeID in
       styli.first(where: { $0.id == activeID })
     })
@@ -1210,6 +1224,23 @@ class ImmersiveInteraction {
       activeSpatialStylusID = nil
       return nil
     }
+
+    let modifierWasPressed = spatialStylusModifierStates[sample.id] ?? false
+    if sample.modifierPressed, !sample.primaryPressed, !modifierWasPressed {
+      if let lastPress = lastSpatialStylusModifierPressTimes[sample.id],
+         timestamp - lastPress <= spatialStylusDoubleClickInterval {
+        lastSpatialStylusModifierPressTimes[sample.id] = nil
+        suppressedSpatialStylusModifierIDs.insert(sample.id)
+        if sharedAppModel.removeLastVolumeMarker() {
+          sharedAppModel.synchronizeMarkers()
+        }
+      } else {
+        lastSpatialStylusModifierPressTimes[sample.id] = timestamp
+      }
+    } else if !sample.modifierPressed {
+      suppressedSpatialStylusModifierIDs.remove(sample.id)
+    }
+    spatialStylusModifierStates[sample.id] = sample.modifierPressed
 
     let requestsAction = sample.primaryPressed || sample.modifierPressed
     if activeSpatialStylusID == sample.id {
@@ -1227,7 +1258,10 @@ class ImmersiveInteraction {
       tipPosition: sample.aimOrigin,
       isDrawing: ownsAction && sample.primaryPressed,
       tipPressure: ownsAction ? sample.tipPressure : nil,
-      isAdjustingRadius: ownsAction && !sample.primaryPressed && sample.modifierPressed
+      isAdjustingRadius: ownsAction &&
+        !sample.primaryPressed &&
+        sample.modifierPressed &&
+        !suppressedSpatialStylusModifierIDs.contains(sample.id)
     )
   }
 

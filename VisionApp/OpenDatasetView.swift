@@ -80,7 +80,6 @@ struct OpenDatasetView: View {
 
   @Environment(RuntimeAppModel.self) private var runtimeAppModel
   @EnvironmentObject var storedAppModel: StoredAppModel
-  @Environment(\.dismissImmersiveSpace) private var dismissImmersiveSpace
   @Environment(\.openWindow) private var openWindow
   @Environment(\.dismissWindow) var dismissWindow
 
@@ -260,85 +259,64 @@ struct OpenDatasetView: View {
 
           Button {
             Task { @MainActor in
-              switch runtimeAppModel.immersiveSpaceState {
-                case .open:
-                  runtimeAppModel.immersiveSpaceState = .inTransition
-                  let renderTask = runtimeAppModel.cancelRenderLoop()
-                  await renderTask?.value
-                  await dismissImmersiveSpace()
-                case .closed:
-                  if let index = selectedIndex, datasets.indices.contains(index) {
-                    switch datasets[index].source {
-                      case .builtIn:
-                        runtimeAppModel.startImmersiveSpace(
-                          dataset: datasets[index],
-                          asGroupSessionHost: true
-                        )
-                      case .local:
-                        let documentsDirectory = FileManager.default.urls(
-                          for: .documentDirectory,
-                          in: .userDomainMask
-                        ).first!
+              if let index = selectedIndex, datasets.indices.contains(index) {
+                switch datasets[index].source {
+                  case .builtIn:
+                    runtimeAppModel.startImmersiveSpace(
+                      dataset: datasets[index],
+                      asGroupSessionHost: true
+                    )
+                  case .local:
+                    let documentsDirectory = FileManager.default.urls(
+                      for: .documentDirectory,
+                      in: .userDomainMask
+                    ).first!
 
-                        let localFilename = documentsDirectory
-                          .appendingPathComponent(
-                            (datasets[index].identifier)
-                          ).relativePath
+                    let localFilename = documentsDirectory
+                      .appendingPathComponent(
+                        (datasets[index].identifier)
+                      ).relativePath
 
-                        runtimeAppModel.startImmersiveSpace(
-                          identifier: localFilename,
-                          description: datasets[index].description,
-                          source: datasets[index].source,
-                          uniqueId: datasets[index].uniqueId,
-                          asGroupSessionHost: true
-                        )
+                    runtimeAppModel.startImmersiveSpace(
+                      identifier: localFilename,
+                      description: datasets[index].description,
+                      source: datasets[index].source,
+                      uniqueId: datasets[index].uniqueId,
+                      asGroupSessionHost: true
+                    )
 
-                      case let .remote(addr, port, password):
-                        guard let resolvedDataset = await resolveRemoteDataset(
-                          datasets[index],
-                          fallback: DatasetOrigin(address: addr, port: port, password: password)
-                        ) else {
-                          runtimeAppModel.logger.error(
-                            "The dataset is not available from any known source."
-                          )
-                          return
-                        }
-                        if storedAppModel.progressiveLoading {
-                          runtimeAppModel.startImmersiveSpace(
-                            dataset: resolvedDataset,
-                            asGroupSessionHost: true
-                          )
-                        } else {
-                          guard case let .remote(resolvedAddress, resolvedPort, resolvedPassword) = resolvedDataset.source else {
-                            return
-                          }
-                          downloadAndOpenSpace(
-                            datasetID: resolvedDataset.identifier,
-                            serverAddress: resolvedAddress,
-                            serverPort: resolvedPort,
-                            authSecret: resolvedPassword,
-                            asGroupSessionHost: true
-                          )
-                        }
+                  case let .remote(addr, port, password):
+                    guard let resolvedDataset = await resolveRemoteDataset(
+                      datasets[index],
+                      fallback: DatasetOrigin(address: addr, port: port, password: password)
+                    ) else {
+                      runtimeAppModel.logger.error(
+                        "The dataset is not available from any known source."
+                      )
+                      return
                     }
-                  }
-
-                case .inTransition:
-                  break
+                    if storedAppModel.progressiveLoading {
+                      runtimeAppModel.startImmersiveSpace(
+                        dataset: resolvedDataset,
+                        asGroupSessionHost: true
+                      )
+                    } else {
+                      guard case let .remote(resolvedAddress, resolvedPort, resolvedPassword) = resolvedDataset.source else {
+                        return
+                      }
+                      downloadAndOpenSpace(
+                        datasetID: resolvedDataset.identifier,
+                        serverAddress: resolvedAddress,
+                        serverPort: resolvedPort,
+                        authSecret: resolvedPassword,
+                        asGroupSessionHost: true
+                      )
+                    }
+                }
               }
             }
           } label: {
-            Text(
-              runtimeAppModel.immersiveSpaceState == .open
-              ? NSLocalizedString(
-                "open_button_close_dataset",
-                comment: "Button title: close dataset"
-              )
-              : NSLocalizedString(
-                "open_button_open_dataset",
-                comment: "Button title: open dataset"
-              )
-            )
+            Text("open_button_open_dataset")
           }
           .disabled(
             selectedIndex == nil
@@ -349,7 +327,7 @@ struct OpenDatasetView: View {
           .padding()
 
           Button(action: {
-            runtimeAppModel.currentState = .importData
+            runtimeAppModel.navigationState = .importData
           }) {
             Text("open_button_import_data")
           }
@@ -365,7 +343,7 @@ struct OpenDatasetView: View {
           .padding()
 
           Button(action: {
-            runtimeAppModel.currentState = .start
+            runtimeAppModel.navigationState = .start
           }) {
             Text("open_button_back_to_main_menu")
           }
@@ -424,9 +402,6 @@ struct OpenDatasetView: View {
         }
         .animation(.easeInOut, value: isLoading)
       }
-    }
-    .onAppear {
-      runtimeAppModel.immersiveSpaceState = .closed
     }
   }
 

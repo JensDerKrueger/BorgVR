@@ -96,7 +96,7 @@ struct OpenDatasetView: View {
       .toolbar {
         ToolbarItem(placement: .topBarLeading) {
           Button {
-            appModel.currentState = .start
+            appModel.navigationState = .start
           } label: {
             Label("Back", systemImage: "chevron.backward")
           }
@@ -110,7 +110,7 @@ struct OpenDatasetView: View {
           }
           .help("dataset_open_refresh_help")
           Button {
-            appModel.currentState = .importData
+            appModel.navigationState = .importData
           } label: {
             Label("Import", systemImage: "square.and.arrow.down")
           }
@@ -359,13 +359,14 @@ struct OpenDatasetView: View {
   }
 
   private func openDataset(_ dataset: AppModel.DatasetEntry) {
+    let openableDataset: AppModel.DatasetEntry
     switch dataset.source {
       case .local:
         let documentsDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
         let identifierPath = dataset.identifier.hasPrefix("/")
           ? dataset.identifier
           : documentsDirectory.appendingPathComponent(dataset.identifier).path
-        appModel.activeDataset = AppModel.DatasetEntry(
+        openableDataset = AppModel.DatasetEntry(
           identifier: identifierPath,
           description: dataset.description,
           source: dataset.source,
@@ -373,12 +374,12 @@ struct OpenDatasetView: View {
           metadataSummary: dataset.metadataSummary
         )
       case .remote, .builtIn:
-        appModel.activeDataset = dataset
+        openableDataset = dataset
     }
-    if !sharePlay.isInSession {
-      appModel.groupSessionHost = true
-    }
-    appModel.currentState = .renderData
+    appModel.openDataset(
+      openableDataset,
+      asGroupSessionHost: sharePlay.isInSession ? nil : true
+    )
     sharePlay.datasetOpened()
   }
 

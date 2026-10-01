@@ -1,2 +1,1 @@
-"NSAccessoryTrackingUsageDescription" = "BorgVR tracks connected spatial controllers and styli so you can interact with volumes and create markers.";
 "NSLocalNetworkUsageDescription" = "BorgVR uses the local network to load datasets from other BorgVR devices and servers and, when sharing is enabled, to make datasets available to collaborators and the WebGPU renderer.";

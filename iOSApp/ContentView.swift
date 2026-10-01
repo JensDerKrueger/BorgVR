@@ -14,19 +14,22 @@ struct ContentView: View {
 
   @ViewBuilder
   private var routedView: some View {
-    switch appModel.currentState {
-      case .start:
-        ModeSelectionView()
-      case .settings:
-        SettingsView()
-      case .importData:
-        ConverterView()
-      case .selectData:
-        OpenDatasetView()
-      case .renderData:
+    switch appModel.datasetSessionState {
+      case .opening, .rendering, .closing:
         RenderView()
-      case .waitingForHost:
+      case .waitingForSharePlay, .resolving:
         WaitingView()
+      case .inactive:
+        switch appModel.navigationState {
+          case .start:
+            ModeSelectionView()
+          case .settings:
+            SettingsView()
+          case .importData:
+            ConverterView()
+          case .selectData:
+            OpenDatasetView()
+        }
     }
   }
 }

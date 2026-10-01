@@ -29,14 +29,6 @@ class RuntimeAppModel {
   /// The current state of the immersive space.
   var immersiveSpaceState = ImmersiveSpaceState.closed
 
-  enum ImmersiveSpaceIntent {
-    case open
-    case close
-    case keepCurrent
-  }
-
-  var immersiveSpaceIntent = ImmersiveSpaceIntent.keepCurrent
-
   /// The dedicated task that owns the compositor render loop.
   var renderTask: Task<Void, Never>?
 
@@ -58,28 +50,15 @@ class RuntimeAppModel {
   var performanceModel: PerformanceGraphModel = PerformanceGraphModel()
 
   var groupSessionHost : Bool = false
-  var sharePlayWaitingReason: SharePlayWaitingReason = .hostDataset
   var sharePlayDatasetSource: DatasetOrigin?
   var showsHostDeparturePrompt = false
   var protocolCompatibilityIssue: BorgVRSharePlayCompatibilityIssue?
 
-  /**
-   Represents the possible content view states.
-
-   - start: The initial state, showing the main menu.
-   - settings: The settings view state.
-   - waitingForHost: Displayed when the host is still selecting data
-   - importData: The state for importing a dataset.
-   - selectData: The state for selecting a dataset.
-   - renderData: The state for rendering the dataset.
-   */
-  enum ContentViewState {
+  enum NavigationState {
     case start
-    case waitingForHost
     case settings
     case importData
     case selectData
-    case renderData
   }
 
   /// A flag indicating if mixed immersion style is enabled.
@@ -238,8 +217,67 @@ class RuntimeAppModel {
     }
   }
 
-  /// The currently active dataset
-  var activeDataset : DatasetEntry? = nil
+  enum DatasetCloseDestination: Equatable {
+    case datasetSelection
+    case sharePlayWaiting(SharePlayWaitingReason)
+  }
+
+  enum DatasetSessionState: Equatable {
+    case inactive
+    case waitingForSharePlay(SharePlayWaitingReason)
+    case resolving(uniqueID: String, description: String)
+    case opening(dataset: DatasetEntry, requestID: UUID)
+    case rendering(dataset: DatasetEntry, requestID: UUID)
+    case closing(dataset: DatasetEntry?, requestID: UUID, destination: DatasetCloseDestination)
+
+    var logDescription: String {
+      switch self {
+        case .inactive:
+          return "inactive"
+        case .waitingForSharePlay(let reason):
+          return "waiting(\(reason))"
+        case .resolving(let uniqueID, _):
+          return "resolving(\(uniqueID))"
+        case .opening(let dataset, _):
+          return "opening(\(dataset.uniqueId))"
+        case .rendering(let dataset, _):
+          return "rendering(\(dataset.uniqueId))"
+        case .closing(let dataset, _, let destination):
+          return "closing(\(dataset?.uniqueId ?? "none"), \(destination))"
+      }
+    }
+  }
+
+  private(set) var datasetSessionState = DatasetSessionState.inactive {
+    didSet {
+      guard oldValue != datasetSessionState else { return }
+      logger.dev(
+        "Dataset session: \(oldValue.logDescription) -> \(datasetSessionState.logDescription)"
+      )
+    }
+  }
+
+  var activeDataset: DatasetEntry? {
+    switch datasetSessionState {
+      case .opening(let dataset, _), .rendering(let dataset, _), .closing(let dataset?, _, _):
+        return dataset
+      case .inactive, .waitingForSharePlay, .resolving, .closing(nil, _, _):
+        return nil
+    }
+  }
+
+  var sharePlayWaitingReason: SharePlayWaitingReason? {
+    switch datasetSessionState {
+      case .waitingForSharePlay(let reason):
+        return reason
+      case .resolving:
+        return .datasetSource
+      case .closing(_, _, .sharePlayWaiting(let reason)):
+        return reason
+      default:
+        return nil
+    }
+  }
 
   struct DatasetInfo {
     let description: String
@@ -276,16 +314,105 @@ class RuntimeAppModel {
     didSet { spatialInputContext.update(datasetInfo: activeDatasetInfo) }
   }
 
-  /// The current content view state of the application.
-  var currentState: ContentViewState = .start
+  /// Navigation outside the dataset lifecycle.
+  var navigationState: NavigationState = .start
   /// The current window size of the application.
   var windowSize: CGSize = CGSize(width: 1000, height: 520)
 
+  @discardableResult
+  func markImmersiveSpaceOpened(requestID: UUID? = nil) -> Bool {
+    immersiveSpaceState = .open
+    guard let requestID else { return true }
+    switch datasetSessionState {
+      case .opening(_, let currentRequestID), .rendering(_, let currentRequestID):
+        return currentRequestID == requestID
+      default:
+        return false
+    }
+  }
+
+  func isOpeningOrDisplayingDataset(withUniqueID uniqueID: String) -> Bool {
+    switch datasetSessionState {
+      case .opening(let dataset, _), .rendering(let dataset, _):
+        return dataset.uniqueId == uniqueID
+      case .closing(let dataset?, _, _):
+        return dataset.uniqueId == uniqueID
+      default:
+        return false
+    }
+  }
+
   func startImmersiveSpace(dataset: DatasetEntry,
                            asGroupSessionHost:Bool) {    
+    guard !isOpeningOrDisplayingDataset(withUniqueID: dataset.uniqueId) else {
+      return
+    }
     groupSessionHost = asGroupSessionHost
-    activeDataset = dataset
-    immersiveSpaceIntent = .open
+    sharePlayDatasetSource = nil
+    datasetSessionState = .opening(dataset: dataset, requestID: UUID())
+  }
+
+  func waitForSharePlayDataset(reason: SharePlayWaitingReason) {
+    guard activeDataset == nil else { return }
+    sharePlayDatasetSource = nil
+    datasetSessionState = .waitingForSharePlay(reason)
+  }
+
+  func beginResolvingSharePlayDataset(uniqueID: String, description: String) {
+    if case .resolving(let currentID, _) = datasetSessionState,
+       currentID == uniqueID {
+      return
+    }
+    datasetSessionState = .resolving(uniqueID: uniqueID, description: description)
+  }
+
+  func markDatasetRendererReady(uniqueID: String) {
+    guard case .opening(let dataset, let requestID) = datasetSessionState,
+          dataset.uniqueId == uniqueID else { return }
+    datasetSessionState = .rendering(dataset: dataset, requestID: requestID)
+  }
+
+  func requestDatasetClose(destination: DatasetCloseDestination = .datasetSelection) {
+    if case .closing = datasetSessionState { return }
+    guard activeDataset != nil || immersiveSpaceState != .closed || renderTask != nil else {
+      completeDatasetClose(destination: destination)
+      return
+    }
+    datasetSessionState = .closing(
+      dataset: activeDataset,
+      requestID: UUID(),
+      destination: destination
+    )
+  }
+
+  func completeDatasetClose(requestID: UUID? = nil,
+                            destination: DatasetCloseDestination) {
+    if let requestID,
+       case .closing(_, let currentRequestID, _) = datasetSessionState,
+       currentRequestID != requestID {
+      return
+    }
+    activeDatasetInfo = nil
+    sharePlayDatasetSource = nil
+    switch destination {
+      case .datasetSelection:
+        datasetSessionState = .inactive
+        navigationState = .selectData
+      case .sharePlayWaiting(let reason):
+        datasetSessionState = .waitingForSharePlay(reason)
+    }
+  }
+
+  func immersiveSpaceWasClosedBySystem() {
+    let wasManagedTransition = immersiveSpaceState == .inTransition
+    immersiveSpaceState = .closed
+    guard !wasManagedTransition else { return }
+    switch datasetSessionState {
+      case .opening, .rendering:
+        requestDatasetClose(destination: .datasetSelection)
+      default:
+        break
+    }
   }
 
   func startImmersiveSpace(identifier: String,

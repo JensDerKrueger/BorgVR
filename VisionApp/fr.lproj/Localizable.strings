@@ -265,7 +265,7 @@
 "private_marker_delete_selected_button" = "Supprimer le marqueur sélectionné";
 "Delete Selected Markers" = "Supprimer les marqueurs sélectionnés";
 "Radius" = "Rayon";
-"private_marker_clear_all_button" = "Effacer les marqueurs";
+"private_marker_clear_all_button" = "Effacer tous les marqueurs";
 "private_marker_open_button" = "Marqueurs…";
 "marker_window_title" = "Marqueurs";
 "private_marker_spawn_label" = "Créer un nouveau marqueur";
@@ -276,7 +276,7 @@
 "marker_window_name_field" = "Nom";
 "marker_clear_all_confirmation_title" = "Effacer tous les marqueurs ?";
 "marker_clear_all_confirmation_message" = "Cela supprime tous les marqueurs de la session actuelle.";
-"marker_clear_all_confirmation_delete" = "Effacer les marqueurs";
+"marker_clear_all_confirmation_delete" = "Effacer tous les marqueurs";
 "marker_clear_all_confirmation_cancel" = "Annuler";
 "marker_load_merge_title" = "Charger les marqueurs";
 "marker_load_merge_message" = "Des marqueurs existent déjà dans la session actuelle. Voulez-vous les remplacer ou ajouter les marqueurs chargés ?";
@@ -1058,6 +1058,7 @@
 "controller_action_toggle_interaction_window" = "Afficher ou masquer la fenêtre d’interaction";
 "controller_action_reset_model" = "Réinitialiser le modèle";
 "controller_action_reset_clipping" = "Réinitialiser la découpe";
+"controller_action_delete_last_marker" = "Supprimer le dernier marqueur";
 "controller_action_delete_selected_markers" = "Supprimer les marqueurs sélectionnés";
 "controller_action_toggle_marker_directions" = "Afficher ou masquer la direction des marqueurs sélectionnés";
 "A newer version of BorgVR (%@) is available in the App Store. You are currently using version %@." = "Une version plus récente de BorgVR (%@) est disponible dans l’App Store. Vous utilisez actuellement la version %@.";
@@ -1092,3 +1093,13 @@
 "Your installed BorgVR version is too old for this SharePlay session. Please update to version %@ or later." = "Votre version installée de BorgVR est trop ancienne pour cette session SharePlay. Veuillez installer la version %@ ou une version ultérieure.";
 "The SharePlay host is using an outdated BorgVR version. The host must update to version %@ or later." = "L’hôte SharePlay utilise une version obsolète de BorgVR. Il doit installer la version %@ ou une version ultérieure.";
 "Trying server: %@" = "Tentative avec le serveur : %@";
+"settings_tab_general" = "Général";
+"settings_tab_performance" = "Performances";
+"settings_tab_interaction" = "Interaction";
+"settings_description_general" = "Configurez le comportement général, le chargement automatique, les notifications et la recherche de mises à jour.";
+"settings_description_interaction" = "Configurez les commandes vocales, les marqueurs, les accessoires suivis et les raccourcis de la manette.";
+"settings_description_performance" = "Configurez le niveau de détail, le chargement et les structures mémoire du GPU. La plupart des utilisateurs peuvent conserver les valeurs par défaut.";
+"settings_section_general_behavior" = "Comportement";
+"settings_section_voice" = "Commande vocale";
+"settings_section_sampling" = "Échantillonnage";
+"Datasets provided through SharePlay ad-hoc connections are always loaded progressively, regardless of this setting." = "Les jeux de données fournis via des connexions ad hoc SharePlay sont toujours chargés progressivement, quel que soit ce réglage.";
