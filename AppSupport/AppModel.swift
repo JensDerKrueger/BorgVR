@@ -109,6 +109,7 @@ final class AppModel: ObservableObject {
       )
     }
   }
+  @Published private(set) var activeDatasetMetadata: BORGVRMetaData?
   @Published var sharePlayDatasetSource: DatasetOrigin?
   @Published var groupSessionHost = true
   @Published var interactionMode: InteractionMode = .model
@@ -378,23 +379,29 @@ final class AppModel: ObservableObject {
     !activeDatasetRenderKey.isEmpty && failedRenderedDatasetKey == activeDatasetRenderKey
   }
 
-  func markRenderedDataset(key: String) {
+  func markRenderedDataset(key: String, metadata: BORGVRMetaData? = nil) {
     renderedDatasetKey = key
     failedRenderedDatasetKey = ""
-    guard !key.isEmpty else { return }
+    guard !key.isEmpty else {
+      activeDatasetMetadata = nil
+      return
+    }
     guard case .opening(let dataset, let requestID) = datasetSessionState,
           datasetRenderKey(for: dataset) == key else { return }
+    activeDatasetMetadata = metadata
     datasetSessionState = .rendering(dataset: dataset, requestID: requestID)
   }
 
   func markRenderedDatasetFailed(key: String) {
     renderedDatasetKey = ""
     failedRenderedDatasetKey = key
+    activeDatasetMetadata = nil
   }
 
   private func resetRenderedDatasetState() {
     renderedDatasetKey = ""
     failedRenderedDatasetKey = ""
+    activeDatasetMetadata = nil
     resetBrickReadbackState()
   }
 

@@ -2,7 +2,18 @@ import SwiftUI
 
 struct DatasetInfoView: View {
   let dataset: AppModel.DatasetEntry?
+  let metadata: BORGVRMetaData?
   var onClose: (() -> Void)?
+
+  init(
+    dataset: AppModel.DatasetEntry?,
+    metadata: BORGVRMetaData? = nil,
+    onClose: (() -> Void)? = nil
+  ) {
+    self.dataset = dataset
+    self.metadata = metadata
+    self.onClose = onClose
+  }
 
   var body: some View {
     NavigationStack {
@@ -12,6 +23,11 @@ struct DatasetInfoView: View {
             infoRow(title: "dataset_info_name", value: dataset.description)
             infoRow(title: "dataset_info_source", value: sourceDescription(for: dataset.source))
             infoRow(title: "dataset_info_unique_id", value: dataset.uniqueId)
+            if let physicalSize = metadata.flatMap({
+              PhysicalSizeFormatter.dimensions(for: $0)
+            }) {
+              infoRow(title: "dataset_info_physical_size", value: physicalSize)
+            }
             alternativeSourcesRow(for: dataset)
             infoRow(
               title: "dataset_info_metadata",

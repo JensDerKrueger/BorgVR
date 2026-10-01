@@ -766,7 +766,7 @@ bool HTTPWebServer::sendDatasetManifest(TcpSocket& socket, const std::string& da
         << "  \"variant\": \"" << variantName(md) << "\",\n"
         << "  \"volume\": {\n"
         << "    \"size\": [" << md.width() << ", " << md.height() << ", " << md.depth() << "],\n"
-        << "    \"aspect\": [" << md.aspectX() << ", " << md.aspectY() << ", " << md.aspectZ() << "],\n"
+        << "    \"voxelSpacing\": [" << md.voxelSpacingX() << ", " << md.voxelSpacingY() << ", " << md.voxelSpacingZ() << "],\n"
         << "    \"componentCount\": " << md.componentCount() << ",\n"
         << "    \"bytesPerComponent\": " << md.bytesPerComponent() << ",\n"
         << "    \"valueType\": \"uint\",\n"

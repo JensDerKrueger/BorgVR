@@ -55,8 +55,8 @@ public final class QVISParser: VolumeFileParser {
   /// The resolution of the volume in voxels along x, y, and z axes.
   public let size: Vec3<Int>
 
-  /// The physical slice thickness along x, y, and z axes.
-  public let sliceThickness: Vec3<Float>
+  /// The physical voxel spacing along x, y, and z axes.
+  public let voxelSpacing: Vec3<Float>
 
   /// Number of bytes per component (e.g., 1 for UCHAR/BYTE, 2 for USHORT, 4 for UINT).
   public let bytesPerComponent: Int
@@ -150,7 +150,7 @@ public final class QVISParser: VolumeFileParser {
     guard thicknessValues.count == 3 else {
       throw Error.invalidValue("SliceThickness")
     }
-    let sliceThickness = Vec3<Float>(
+    let voxelSpacing = Vec3<Float>(
       x: thicknessValues[0],
       y: thicknessValues[1],
       z: thicknessValues[2]
@@ -187,7 +187,7 @@ public final class QVISParser: VolumeFileParser {
     // Assign parsed properties
     self.absoluteFilename   = absoluteURL.path
     self.size               = size
-    self.sliceThickness     = sliceThickness
+    self.voxelSpacing       = voxelSpacing
     self.bytesPerComponent  = bytesPerComponent
     self.isLittleEndian     = isLittleEndian
   }

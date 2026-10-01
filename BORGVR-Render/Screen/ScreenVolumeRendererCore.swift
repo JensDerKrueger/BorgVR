@@ -9,7 +9,7 @@ import simd
 enum ScreenDatasetUpdate {
   case unchanged
   case cleared
-  case loaded(String)
+  case loaded(String, BORGVRMetaData)
   case failed(String, Error)
 }
 
@@ -132,9 +132,9 @@ final class ScreenVolumeRendererCore {
 
     clearPipelineStates()
     do {
-      try loadDataset(for: view)
+      let metadata = try loadDataset(for: view)
       loadedDatasetKey = key
-      return .loaded(key)
+      return .loaded(key, metadata)
     } catch {
       clearDatasetResources()
       appModel.logger.error("Renderer setup failed: \(error.localizedDescription)")
@@ -283,10 +283,14 @@ final class ScreenVolumeRendererCore {
     clearPipelineStates()
   }
 
-  private func loadDataset(for view: MTKView) throws {
-    guard let device = view.device else { return }
+  private func loadDataset(for view: MTKView) throws -> BORGVRMetaData {
+    guard let device = view.device else {
+      throw BORGVRError.other("Metal device unavailable while loading the dataset.")
+    }
     let newDataset: BORGVRDatasetProtocol
-    guard let activeDataset = appModel.activeDataset else { return }
+    guard let activeDataset = appModel.activeDataset else {
+      throw BORGVRError.other("No active dataset is available to load.")
+    }
     releaseDatasetAccess()
     switch activeDataset.source {
       case .builtIn:
@@ -354,6 +358,7 @@ final class ScreenVolumeRendererCore {
     )
     hashTable = GPUHashtable(minTableElementCount: minTableElementCount, device: device, logger: appModel.logger)
     volumeScale = VolumeRenderResources.volumeScale(for: metadata)
+    return metadata
   }
 
   private var pipelinesAreBuilt: Bool {

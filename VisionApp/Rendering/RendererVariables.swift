@@ -223,7 +223,7 @@ final actor Renderer {
       .info(
         "  dimensions: \(dataset.getMetadata().width) x \(dataset.getMetadata().height) x \(dataset.getMetadata().depth)"
       )
-    logger?.info("  aspect: \(dataset.getMetadata().aspectX) x \(dataset.getMetadata().aspectY) x \(dataset.getMetadata().aspectZ)")
+    logger?.info("  voxel spacing: \(dataset.getMetadata().voxelSpacingX) x \(dataset.getMetadata().voxelSpacingY) x \(dataset.getMetadata().voxelSpacingZ)")
     logger?.info("  brickSize: \(dataset.getMetadata().brickSize)")
 
 

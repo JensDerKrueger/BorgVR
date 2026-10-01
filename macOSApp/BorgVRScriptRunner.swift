@@ -1740,7 +1740,7 @@ private enum ScriptDatasetConverter {
           size: parser.size,
           bytesPerComponent: parser.bytesPerComponent,
           componentCount: parser.components,
-          aspect: parser.sliceThickness,
+          voxelSpacing: parser.voxelSpacing,
           destinationURL: destinationURL,
           datasetDescription: description,
           metaDescription: "Imported from QVIS volume \(sourceName)",
@@ -1761,7 +1761,7 @@ private enum ScriptDatasetConverter {
           size: parser.size,
           bytesPerComponent: parser.bytesPerComponent,
           componentCount: parser.components,
-          aspect: parser.sliceThickness,
+          voxelSpacing: parser.voxelSpacing,
           destinationURL: destinationURL,
           datasetDescription: description,
           metaDescription: "Imported from NRRD volume \(sourceName)",
@@ -1810,7 +1810,11 @@ private enum ScriptDatasetConverter {
       size: Vec3<Int>(x: volume.width, y: volume.height, z: volume.depth),
       bytesPerComponent: volume.bytesPerVoxel,
       componentCount: 1,
-      aspect: Vec3<Float>(x: volume.scale.x, y: volume.scale.y, z: volume.scale.z),
+      voxelSpacing: Vec3<Float>(
+        x: volume.voxelSpacing.x,
+        y: volume.voxelSpacing.y,
+        z: volume.voxelSpacing.z
+      ),
       destinationURL: destinationURL,
       datasetDescription: datasetDescription.isEmpty
         ? "Imported from DICOM directory \(directoryName)"
@@ -1827,7 +1831,7 @@ private enum ScriptDatasetConverter {
     size: Vec3<Int>,
     bytesPerComponent: Int,
     componentCount: Int,
-    aspect: Vec3<Float>,
+    voxelSpacing: Vec3<Float>,
     destinationURL: URL,
     datasetDescription: String,
     metaDescription: String,
@@ -1839,7 +1843,7 @@ private enum ScriptDatasetConverter {
       size: size,
       bytesPerComponent: bytesPerComponent,
       componentCount: componentCount,
-      aspect: aspect,
+      voxelSpacing: voxelSpacing,
       offset: offset,
       readOnly: true
     )

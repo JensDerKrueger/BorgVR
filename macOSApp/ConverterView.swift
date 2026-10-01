@@ -390,7 +390,7 @@ struct ConverterView: View {
    - maxBrickSize: The maximum brick size to use for partitioning the volume.
    - bytesPerComponent: The number of bytes per component in the volume.
    - componentCount: The number of components stored for each voxel.
-   - aspect: A vector representing the aspect ratio scaling for the volume.
+   - voxelSpacing: A vector containing the physical spacing of one voxel along each axis.
    - overlap: The overlap between adjacent bricks.
    - outputFilename: The name of the output file to create.
    - description: A short description of the dataset.
@@ -403,7 +403,7 @@ struct ConverterView: View {
     maxBrickSize: Int,
     bytesPerComponent: Int,
     componentCount: Int,
-    aspect: Vec3<Float>,
+    voxelSpacing: Vec3<Float>,
     overlap: Int,
     outputFilename: String,
     datasetDescription: String,
@@ -416,7 +416,7 @@ struct ConverterView: View {
       size: size,
       bytesPerComponent: bytesPerComponent,
       componentCount: componentCount,
-      aspect: aspect,
+      voxelSpacing: voxelSpacing,
       offset: offset,
       readOnly: true
     )
@@ -517,7 +517,7 @@ struct ConverterView: View {
               maxBrickSize: bricksize,
               bytesPerComponent: parser.bytesPerComponent,
               componentCount: parser.components,
-              aspect: parser.sliceThickness,
+              voxelSpacing: parser.voxelSpacing,
               overlap: storedAppModel.brickOverlap,
               outputFilename: appendExtensionIfNeeded(to: outputFilePath, ext: "data"),
               datasetDescription: datasetDescription == ""
@@ -560,7 +560,7 @@ struct ConverterView: View {
               maxBrickSize: bricksize,
               bytesPerComponent: parser.bytesPerComponent,
               componentCount: parser.components,
-              aspect: parser.sliceThickness,
+              voxelSpacing: parser.voxelSpacing,
               overlap: storedAppModel.brickOverlap,
               outputFilename: appendExtensionIfNeeded(to: outputFilePath, ext: "data"),
               datasetDescription: datasetDescription == ""
@@ -618,10 +618,10 @@ struct ConverterView: View {
             maxBrickSize: bricksize,
             bytesPerComponent: dicomVolume.bytesPerVoxel,
             componentCount: 1,
-            aspect: Vec3<Float>(
-              x: dicomVolume.scale.x,
-              y: dicomVolume.scale.y,
-              z: dicomVolume.scale.z
+            voxelSpacing: Vec3<Float>(
+              x: dicomVolume.voxelSpacing.x,
+              y: dicomVolume.voxelSpacing.y,
+              z: dicomVolume.voxelSpacing.z
             ),
             overlap: storedAppModel.brickOverlap,
             outputFilename: appendExtensionIfNeeded(to: outputFilePath, ext: "data"),

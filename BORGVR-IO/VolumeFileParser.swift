@@ -13,8 +13,8 @@ public protocol VolumeFileParser {
   /// The dimensions of the volume in voxels, as (width, height, depth).
   var size: Vec3<Int> { get }
 
-  /// The physical spacing (slice thickness) along each axis (x, y, z).
-  var sliceThickness: Vec3<Float> { get }
+  /// The physical voxel spacing along each axis (x, y, z).
+  var voxelSpacing: Vec3<Float> { get }
 
   /// The number of bytes used to represent a single data component (e.g., 1 for 8-bit, 2 for 16-bit).
   var bytesPerComponent: Int { get }

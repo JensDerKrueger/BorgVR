@@ -662,6 +662,7 @@
 "voice_dataset_size_square_depth" = "%d² mal %d";
 "voice_dataset_size_generic" = "%d mal %d mal %d";
 "voice_dataset_full_sentence" = "Dies ist der Datensatz %@. Er hat die Größe %@ mit %d %@ zu je %d %@ pro Voxel.";
+"voice_dataset_physical_size_sentence" = "Seine physische Größe beträgt %@.";
 
 "render_title" = "Render-Optionen";
 "render_picker_title" = "Editor";

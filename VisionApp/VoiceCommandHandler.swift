@@ -1093,7 +1093,7 @@ final class VoiceCommandHandler {
       )
     }
 
-    let text = String(
+    var text = String(
       format: L(
         "voice_dataset_full_sentence",
         comment: "Full spoken description of dataset"
@@ -1105,6 +1105,23 @@ final class VoiceCommandHandler {
       info.bytesPerComponent,
       byteWord
     )
+
+    if let physicalSize = PhysicalSizeFormatter.dimensions(
+      width: info.width,
+      height: info.height,
+      depth: info.depth,
+      voxelSpacingX: info.voxelSpacingX,
+      voxelSpacingY: info.voxelSpacingY,
+      voxelSpacingZ: info.voxelSpacingZ
+    ) {
+      text += " " + String(
+        format: L(
+          "voice_dataset_physical_size_sentence",
+          comment: "Spoken physical size of the dataset"
+        ),
+        physicalSize
+      )
+    }
 
     speak(text)
   }

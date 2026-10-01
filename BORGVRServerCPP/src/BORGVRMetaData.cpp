@@ -74,9 +74,9 @@ void BORGVRMetaData::parseFromBytes(const uint8_t* data, size_t size) {
   componentCount_ = static_cast<int>(br.read_i64("componentCount"));
   bytesPerComponent_ = static_cast<int>(br.read_i64("bytesPerComponent"));
 
-  aspectX_ = br.read_f32("aspectX");
-  aspectY_ = br.read_f32("aspectY");
-  aspectZ_ = br.read_f32("aspectZ");
+  voxelSpacingX_ = br.read_f32("voxelSpacingX");
+  voxelSpacingY_ = br.read_f32("voxelSpacingY");
+  voxelSpacingZ_ = br.read_f32("voxelSpacingZ");
 
   brickSize_ = static_cast<int>(br.read_i64("brickSize"));
   overlap_ = static_cast<int>(br.read_i64("overlap"));
@@ -129,9 +129,9 @@ std::vector<uint8_t> BORGVRMetaData::toBytes() const {
   append_i64_le(out, static_cast<int64_t>(componentCount_));
   append_i64_le(out, static_cast<int64_t>(bytesPerComponent_));
 
-  append_f32_le(out, aspectX_);
-  append_f32_le(out, aspectY_);
-  append_f32_le(out, aspectZ_);
+  append_f32_le(out, voxelSpacingX_);
+  append_f32_le(out, voxelSpacingY_);
+  append_f32_le(out, voxelSpacingZ_);
 
   append_i64_le(out, static_cast<int64_t>(brickSize_));
   append_i64_le(out, static_cast<int64_t>(overlap_));

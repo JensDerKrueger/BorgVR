@@ -68,7 +68,7 @@ public class RawFileAccessor: VolumeDataAccessor {
    - size: The dimensions of the volume in voxels (Vec3<Int>).
    - bytesPerComponent: Number of bytes per data component.
    - componentCount: Number of components per voxel.
-   - aspect: Physical aspect ratios of the volume (Vec3<Float>).
+   - voxelSpacing: Physical voxel spacing of the volume (Vec3<Float>).
    - offset: Byte offset within the file where voxel data starts (default is `0`).
    - readOnly: If `true`, open file in read-only mode; otherwise, read-write.
    - Throws:
@@ -79,7 +79,7 @@ public class RawFileAccessor: VolumeDataAccessor {
               size: Vec3<Int>,
               bytesPerComponent: Int,
               componentCount: Int,
-              aspect: Vec3<Float>,
+              voxelSpacing: Vec3<Float>,
               offset: Int = 0,
               readOnly: Bool = true) throws {
     self.offset = offset
@@ -92,7 +92,7 @@ public class RawFileAccessor: VolumeDataAccessor {
     self.memoryMappedFile = try MemoryMappedFile(filename: filename, readOnly: readOnly)
     self.mappedMemory = self.memoryMappedFile.mappedMemory.advanced(by: offset)
     super.init(size: size, bytesPerComponent: bytesPerComponent,
-               componentCount: componentCount, aspect: aspect, readOnly: readOnly)
+               componentCount: componentCount, voxelSpacing: voxelSpacing, readOnly: readOnly)
 
     guard self.memoryMappedFile.fileSize >= expectedFileSize else {
       throw Error.fileSizeMismatch

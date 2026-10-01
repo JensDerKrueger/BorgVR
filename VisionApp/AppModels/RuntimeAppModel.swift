@@ -284,9 +284,9 @@ class RuntimeAppModel {
     let width: Int
     let height: Int
     let depth: Int
-    let aspectX: Float
-    let aspectY: Float
-    let aspectZ: Float
+    let voxelSpacingX: Float
+    let voxelSpacingY: Float
+    let voxelSpacingZ: Float
     let componentCount: Int
     let bytesPerComponent: Int
     let volumeScale: SIMD3<Float>
@@ -296,9 +296,9 @@ class RuntimeAppModel {
       self.width = meta.width
       self.height = meta.height
       self.depth = meta.depth
-      self.aspectX = meta.aspectX
-      self.aspectY = meta.aspectY
-      self.aspectZ = meta.aspectZ
+      self.voxelSpacingX = meta.voxelSpacingX
+      self.voxelSpacingY = meta.voxelSpacingY
+      self.voxelSpacingZ = meta.voxelSpacingZ
       self.componentCount = meta.componentCount
       self.bytesPerComponent = meta.bytesPerComponent
       self.volumeScale = VolumeRenderResources.normalizedVolumeExtent(for: meta)

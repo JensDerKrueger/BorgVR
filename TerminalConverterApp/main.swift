@@ -307,7 +307,7 @@ func parseArguments(_ args: [String]) -> (Mode, Any) {
  - maxBrickSize: The maximum brick size to use for partitioning the volume.
  - bytesPerComponent: The number of bytes per component in the volume.
  - componentCount: The number of components stored for each voxel.
- - aspect: A vector representing the aspect ratio scaling for the volume.
+ - voxelSpacing: A vector containing the physical spacing of one voxel along each axis.
  - overlap: The overlap between adjacent bricks.
  - outputFilename: The name of the output file to create.
  - description: A short description of the dataset.
@@ -319,7 +319,7 @@ func convertRawVolume(inputFilename: String,
                       maxBrickSize: Int,
                       bytesPerComponent: Int,
                       componentCount: Int,
-                      aspect: Vec3<Float>,
+                      voxelSpacing: Vec3<Float>,
                       overlap: Int,
                       outputFilename: String,
                       datasetDescription: String,
@@ -329,7 +329,7 @@ func convertRawVolume(inputFilename: String,
     size: size,
     bytesPerComponent: bytesPerComponent,
     componentCount: componentCount,
-    aspect: aspect,
+    voxelSpacing: voxelSpacing,
     offset: offset,
     readOnly: true
   )
@@ -406,9 +406,9 @@ func convertDICOMStack(_ params: DicomModeParameters) {
                          maxBrickSize: params.common.maxBrickSize,
                          bytesPerComponent: dicomVolume.bytesPerVoxel,
                          componentCount: 1,
-                         aspect: Vec3<Float>(x: dicomVolume.scale.x,
-                                             y: dicomVolume.scale.y,
-                                             z: dicomVolume.scale.z),
+                         voxelSpacing: Vec3<Float>(x: dicomVolume.voxelSpacing.x,
+                                                   y: dicomVolume.voxelSpacing.y,
+                                                   z: dicomVolume.voxelSpacing.z),
                          overlap: params.common.overlap,
                          outputFilename: params.common.outputFilename,
                          datasetDescription: params.common.datasetDescription,
@@ -445,7 +445,7 @@ func convertNRRDVolume(_ params: HeaderFileModeParameters) {
                          maxBrickSize: params.common.maxBrickSize,
                          bytesPerComponent: parser.bytesPerComponent,
                          componentCount: parser.components,
-                         aspect: parser.sliceThickness,
+                         voxelSpacing: parser.voxelSpacing,
                          overlap: params.common.overlap,
                          outputFilename: params.common.outputFilename,
                          datasetDescription: params.common.datasetDescription,
@@ -485,7 +485,7 @@ func convertQVISVolume(_ params: HeaderFileModeParameters) {
                          maxBrickSize: params.common.maxBrickSize,
                          bytesPerComponent: parser.bytesPerComponent,
                          componentCount: parser.components,
-                         aspect: parser.sliceThickness,
+                         voxelSpacing: parser.voxelSpacing,
                          overlap: params.common.overlap,
                          outputFilename: params.common.outputFilename,
                          datasetDescription: params.common.datasetDescription,
@@ -570,7 +570,7 @@ func generateVolume(_ params: CreateModeParameters) {
                          maxBrickSize: params.common.maxBrickSize,
                          bytesPerComponent: params.byteDepth,
                          componentCount: params.componentCount,
-                         aspect: Vec3<Float>(
+                         voxelSpacing: Vec3<Float>(
                            x: 1 / Float(params.sizeX),
                            y: 1 / Float(params.sizeY),
                            z: 1 / Float(params.sizeZ)

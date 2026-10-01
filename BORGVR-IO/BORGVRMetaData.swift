@@ -186,16 +186,25 @@ final class BORGVRMetaData: CustomStringConvertible, Codable {
   private(set) var height: Int = 0
   /// The original volume depth.
   private(set) var depth: Int = 0
-  /// The x-axis voxel aspect ratio.
-  private(set) var aspectX: Float = 0
-  /// The y-axis voxel aspect ratio.
-  private(set) var aspectY: Float = 0
-  /// The z-axis voxel aspect ratio.
-  private(set) var aspectZ: Float = 0
+  /// The physical spacing of one voxel along the x-axis.
+  private(set) var voxelSpacingX: Float = 0
+  /// The physical spacing of one voxel along the y-axis.
+  private(set) var voxelSpacingY: Float = 0
+  /// The physical spacing of one voxel along the z-axis.
+  private(set) var voxelSpacingZ: Float = 0
   /// The number of components per voxel.
   private(set) var componentCount: Int = 0
   /// The number of bytes per component.
   private(set) var bytesPerComponent: Int = 0
+
+  /// The physical extent of the complete volume in meters.
+  var physicalExtentMeters: SIMD3<Float> {
+    SIMD3<Float>(
+      Float(width) * voxelSpacingX,
+      Float(height) * voxelSpacingY,
+      Float(depth) * voxelSpacingZ
+    )
+  }
 
   /// The maximum component value based on the number of bytes per component.
   var rangeMax: Int {
@@ -311,9 +320,9 @@ final class BORGVRMetaData: CustomStringConvertible, Codable {
    - Parameter depth: The original volume depth.
    - Parameter componentCount: The number of components per voxel.
    - Parameter bytePerComponent: The number of bytes per component.
-   - Parameter aspectX: The x-axis voxel aspect ratio.
-   - Parameter aspectY: The y-axis voxel aspect ratio.
-   - Parameter aspectZ: The z-axis voxel aspect ratio.
+   - Parameter voxelSpacingX: The physical spacing of one voxel along the x-axis.
+   - Parameter voxelSpacingY: The physical spacing of one voxel along the y-axis.
+   - Parameter voxelSpacingZ: The physical spacing of one voxel along the z-axis.
    - Parameter brickSize: The brick size (in voxels).
    - Parameter overlap: The overlap between bricks (in voxels).
    - Parameter minValue: The minimum intensity value in the volume.
@@ -327,9 +336,9 @@ final class BORGVRMetaData: CustomStringConvertible, Codable {
        depth: Int,
        componentCount: Int,
        bytePerComponent: Int,
-       aspectX: Float,
-       aspectY: Float,
-       aspectZ: Float,
+       voxelSpacingX: Float,
+       voxelSpacingY: Float,
+       voxelSpacingZ: Float,
        brickSize: Int,
        overlap: Int,
        minValue: Int,
@@ -342,9 +351,9 @@ final class BORGVRMetaData: CustomStringConvertible, Codable {
     self.depth = depth
     self.componentCount = componentCount
     self.bytesPerComponent = bytePerComponent
-    self.aspectX = aspectX
-    self.aspectY = aspectY
-    self.aspectZ = aspectZ
+    self.voxelSpacingX = voxelSpacingX
+    self.voxelSpacingY = voxelSpacingY
+    self.voxelSpacingZ = voxelSpacingZ
     self.brickSize = brickSize
     self.overlap = overlap
     self.minValue = minValue
@@ -452,9 +461,9 @@ final class BORGVRMetaData: CustomStringConvertible, Codable {
     data.append(Data(from: depth))
     data.append(Data(from: componentCount))
     data.append(Data(from: bytesPerComponent))
-    data.append(Data(from: aspectX))
-    data.append(Data(from: aspectY))
-    data.append(Data(from: aspectZ))
+    data.append(Data(from: voxelSpacingX))
+    data.append(Data(from: voxelSpacingY))
+    data.append(Data(from: voxelSpacingZ))
     data.append(Data(from: brickSize))
     data.append(Data(from: overlap))
     data.append(Data(from: minValue))
@@ -581,9 +590,9 @@ final class BORGVRMetaData: CustomStringConvertible, Codable {
     self.depth            = Int(try read(Int64.self, context: "depth"))
     self.componentCount   = Int(try read(Int64.self, context: "componentCount"))
     self.bytesPerComponent = Int(try read(Int64.self, context: "bytesPerComponent"))
-    self.aspectX          = try read(Float.self, context: "aspectX")
-    self.aspectY          = try read(Float.self, context: "aspectY")
-    self.aspectZ          = try read(Float.self, context: "aspectZ")
+    self.voxelSpacingX    = try read(Float.self, context: "voxelSpacingX")
+    self.voxelSpacingY    = try read(Float.self, context: "voxelSpacingY")
+    self.voxelSpacingZ    = try read(Float.self, context: "voxelSpacingZ")
     self.brickSize        = Int(try read(Int64.self, context: "brickSize"))
     self.overlap          = Int(try read(Int64.self, context: "overlap"))
     self.minValue         = Int(try read(Int64.self, context: "minValue"))
@@ -641,6 +650,110 @@ final class BORGVRMetaData: CustomStringConvertible, Codable {
    */
   public func getBrickMetadata(index: Int) -> BrickMetadata {
     return brickMetadata[index]
+  }
+}
+
+// MARK: - Physical size formatting
+
+enum PhysicalSizeFormatter {
+  private struct Unit {
+    let meters: Double
+    let symbol: String
+  }
+
+  private static let kilometer = Unit(meters: 1_000, symbol: "km")
+  private static let meter = Unit(meters: 1, symbol: "m")
+  private static let centimeter = Unit(meters: 1e-2, symbol: "cm")
+  private static let millimeter = Unit(meters: 1e-3, symbol: "mm")
+  private static let micrometer = Unit(meters: 1e-6, symbol: "µm")
+  private static let nanometer = Unit(meters: 1e-9, symbol: "nm")
+  private static let picometer = Unit(meters: 1e-12, symbol: "pm")
+
+  static func length(meters: Double, locale: Locale = .current) -> String? {
+    guard meters.isFinite, meters >= 0 else { return nil }
+    let unit = meters == 0 ? meter : preferredUnit(for: meters)
+    guard let value = formattedNumber(meters / unit.meters, locale: locale) else {
+      return nil
+    }
+    return "\(value) \(unit.symbol)"
+  }
+
+  static func dimensions(
+    widthMeters: Double,
+    heightMeters: Double,
+    depthMeters: Double,
+    locale: Locale = .current
+  ) -> String? {
+    let dimensions = [widthMeters, heightMeters, depthMeters]
+    guard dimensions.allSatisfy({ $0.isFinite && $0 >= 0 }),
+          let maximum = dimensions.max(), maximum > 0 else {
+      return nil
+    }
+
+    let unit = preferredUnit(for: maximum)
+    let values = dimensions.compactMap {
+      formattedNumber($0 / unit.meters, locale: locale)
+    }
+    guard values.count == dimensions.count else { return nil }
+    return "\(values.joined(separator: " × ")) \(unit.symbol)"
+  }
+
+  static func dimensions(
+    width: Int,
+    height: Int,
+    depth: Int,
+    voxelSpacingX: Float,
+    voxelSpacingY: Float,
+    voxelSpacingZ: Float,
+    locale: Locale = .current
+  ) -> String? {
+    dimensions(
+      widthMeters: Double(width) * Double(voxelSpacingX),
+      heightMeters: Double(height) * Double(voxelSpacingY),
+      depthMeters: Double(depth) * Double(voxelSpacingZ),
+      locale: locale
+    )
+  }
+
+  static func dimensions(for metadata: BORGVRMetaData, locale: Locale = .current) -> String? {
+    dimensions(
+      width: metadata.width,
+      height: metadata.height,
+      depth: metadata.depth,
+      voxelSpacingX: metadata.voxelSpacingX,
+      voxelSpacingY: metadata.voxelSpacingY,
+      voxelSpacingZ: metadata.voxelSpacingZ,
+      locale: locale
+    )
+  }
+
+  private static func preferredUnit(for meters: Double) -> Unit {
+    switch meters {
+      case 1_000...:
+        return kilometer
+      case 1...:
+        return meter
+      case 1e-2...:
+        return centimeter
+      case 1e-3...:
+        return millimeter
+      case 1e-6...:
+        return micrometer
+      case 1e-9...:
+        return nanometer
+      default:
+        return picometer
+    }
+  }
+
+  private static func formattedNumber(_ value: Double, locale: Locale) -> String? {
+    let formatter = NumberFormatter()
+    formatter.locale = locale
+    formatter.numberStyle = .decimal
+    formatter.usesSignificantDigits = true
+    formatter.minimumSignificantDigits = 1
+    formatter.maximumSignificantDigits = 4
+    return formatter.string(from: NSNumber(value: value))
   }
 }
 

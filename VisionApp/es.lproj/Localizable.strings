@@ -662,6 +662,7 @@
 "voice_dataset_size_square_depth" = "%d al cuadrado por %d";
 "voice_dataset_size_generic" = "%d por %d por %d";
 "voice_dataset_full_sentence" = "Estás viendo el conjunto de datos %@. Su tamaño es %@, con %d %@ de %d %@ por vóxel.";
+"voice_dataset_physical_size_sentence" = "Su tamaño físico es %@.";
 
 "render_title" = "Opciones de renderizado";
 "render_picker_title" = "Editor";

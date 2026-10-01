@@ -2,11 +2,7 @@ import simd
 
 enum VolumeRenderResources {
   private static func physicalExtent(for metadata: BORGVRMetaData) -> SIMD3<Float> {
-    SIMD3<Float>(
-      metadata.aspectX * Float(metadata.width),
-      metadata.aspectY * Float(metadata.height),
-      metadata.aspectZ * Float(metadata.depth)
-    )
+    metadata.physicalExtentMeters
   }
 
   static func normalizedVolumeExtent(for metadata: BORGVRMetaData) -> SIMD3<Float> {
@@ -24,7 +20,7 @@ enum VolumeRenderResources {
     guard maximumExtent.isFinite, maximumExtent > 0 else {
       return 1
     }
-    let error = max(metadata.aspectX, metadata.aspectY, metadata.aspectZ) / maximumExtent
+    let error = max(metadata.voxelSpacingX, metadata.voxelSpacingY, metadata.voxelSpacingZ) / maximumExtent
     return error.isFinite && error > 0 ? error : 1
   }
 

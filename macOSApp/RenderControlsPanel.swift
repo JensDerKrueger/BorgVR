@@ -224,7 +224,10 @@ struct RenderControlsPanel: View {
       LoggerView(logger: appModel.logger)
     }
     .sheet(isPresented: $showDatasetInfo) {
-      DatasetInfoView(dataset: appModel.activeDataset) {
+      DatasetInfoView(
+        dataset: appModel.activeDataset,
+        metadata: appModel.activeDatasetMetadata
+      ) {
         showDatasetInfo = false
       }
       .frame(minWidth: 420, minHeight: 360)

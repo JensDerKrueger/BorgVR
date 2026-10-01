@@ -407,9 +407,9 @@ public class BrickedVolumeReorganizer {
       depth: inputVolume.size.z,
       componentCount: inputVolume.componentCount,
       bytePerComponent: inputVolume.bytesPerComponent,
-      aspectX: inputVolume.aspect.x,
-      aspectY: inputVolume.aspect.y,
-      aspectZ: inputVolume.aspect.z,
+      voxelSpacingX: inputVolume.voxelSpacing.x,
+      voxelSpacingY: inputVolume.voxelSpacing.y,
+      voxelSpacingZ: inputVolume.voxelSpacing.z,
       brickSize: brickSize,
       overlap: overlap,
       minValue: minValue,
@@ -711,7 +711,7 @@ public class BrickedVolumeReorganizer {
       size: newSize,
       bytesPerComponent: volume.bytesPerComponent,
       componentCount: volume.componentCount,
-      aspect: volume.aspect,
+      voxelSpacing: volume.voxelSpacing,
       offset: 0,
       readOnly: false
     )

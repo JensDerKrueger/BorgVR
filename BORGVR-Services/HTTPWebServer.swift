@@ -467,7 +467,11 @@ final class HTTPWebServer {
       variant: metadata.compression ? "lz4" : "uncompressed",
       volume: WebDatasetVolume(
         size: [metadata.width, metadata.height, metadata.depth],
-        aspect: [metadata.aspectX, metadata.aspectY, metadata.aspectZ],
+        voxelSpacing: [
+          metadata.voxelSpacingX,
+          metadata.voxelSpacingY,
+          metadata.voxelSpacingZ
+        ],
         componentCount: metadata.componentCount,
         bytesPerComponent: metadata.bytesPerComponent,
         valueType: "uint",
@@ -956,7 +960,7 @@ private struct WebDatasetManifest: Encodable {
 
 private struct WebDatasetVolume: Encodable {
   let size: [Int]
-  let aspect: [Float]
+  let voxelSpacing: [Float]
   let componentCount: Int
   let bytesPerComponent: Int
   let valueType: String

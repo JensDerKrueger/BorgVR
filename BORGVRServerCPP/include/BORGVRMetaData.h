@@ -44,9 +44,9 @@ public:
   int width() const { return width_; }
   int height() const { return height_; }
   int depth() const { return depth_; }
-  float aspectX() const { return aspectX_; }
-  float aspectY() const { return aspectY_; }
-  float aspectZ() const { return aspectZ_; }
+  float voxelSpacingX() const { return voxelSpacingX_; }
+  float voxelSpacingY() const { return voxelSpacingY_; }
+  float voxelSpacingZ() const { return voxelSpacingZ_; }
   int componentCount() const { return componentCount_; }
   int bytesPerComponent() const { return bytesPerComponent_; }
   int brickSize() const { return brickSize_; }
@@ -76,9 +76,9 @@ private:
   int height_ = 0;
   int depth_ = 0;
 
-  float aspectX_ = 0.0f;
-  float aspectY_ = 0.0f;
-  float aspectZ_ = 0.0f;
+  float voxelSpacingX_ = 0.0f;
+  float voxelSpacingY_ = 0.0f;
+  float voxelSpacingZ_ = 0.0f;
 
   int componentCount_ = 0;
   int bytesPerComponent_ = 0;

@@ -106,9 +106,9 @@ final class MacVolumeRenderer: NSObject, MTKViewDelegate {
       case .cleared:
         appModel.markRenderedDataset(key: "")
         resetRenderTracking()
-      case .loaded(let key):
+      case .loaded(let key, let metadata):
         resetRenderTracking()
-        appModel.markRenderedDataset(key: key)
+        appModel.markRenderedDataset(key: key, metadata: metadata)
         sharePlay.datasetRendererDidLoad()
       case .failed(let key, _):
         appModel.markRenderedDatasetFailed(key: key)

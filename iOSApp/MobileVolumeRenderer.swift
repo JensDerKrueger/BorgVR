@@ -44,8 +44,8 @@ final class MobileVolumeRenderer: NSObject, MTKViewDelegate, UIGestureRecognizer
         break
       case .cleared:
         appModel.markRenderedDataset(key: "")
-      case .loaded(let key):
-        appModel.markRenderedDataset(key: key)
+      case .loaded(let key, let metadata):
+        appModel.markRenderedDataset(key: key, metadata: metadata)
         sharePlay.datasetRendererDidLoad()
       case .failed(let key, _):
         appModel.markRenderedDatasetFailed(key: key)

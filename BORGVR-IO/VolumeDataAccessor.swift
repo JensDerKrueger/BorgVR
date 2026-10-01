@@ -44,8 +44,8 @@ public class VolumeDataAccessor: VolumeDataAccessing, CustomStringConvertible {
   /// The number of components in each voxel.
   public let componentCount: Int
 
-  /// The aspect-ratio (physical spacing) of the volume along each axis.
-  public let aspect: Vec3<Float>
+  /// The physical voxel spacing of the volume along each axis.
+  public let voxelSpacing: Vec3<Float>
 
   /// Indicates whether the volume is opened in read-only mode.
   public let readOnly: Bool
@@ -74,21 +74,21 @@ public class VolumeDataAccessor: VolumeDataAccessing, CustomStringConvertible {
    - size: The dimensions of the volume in voxels.
    - bytesPerComponent: The number of bytes for each data component.
    - componentCount: The number of components per voxel.
-   - aspect: The aspect-ratio (spacing) of the volume along each axis.
+   - voxelSpacing: The physical voxel spacing of the volume along each axis.
    - readOnly: A Boolean indicating whether the volume is read-only.
    */
   public init(
     size: Vec3<Int>,
     bytesPerComponent: Int,
     componentCount: Int,
-    aspect: Vec3<Float>,
+    voxelSpacing: Vec3<Float>,
     readOnly: Bool
   ) {
     self.size = size
     self.bytesPerComponent = bytesPerComponent
     self.componentCount = componentCount
 
-    self.aspect = aspect
+    self.voxelSpacing = voxelSpacing
 
     self.readOnly = readOnly
   }

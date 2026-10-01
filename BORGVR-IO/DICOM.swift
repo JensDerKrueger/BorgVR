@@ -14,7 +14,7 @@ final class DicomParser {
    - height: The height (number of rows) of each slice.
    - depth: The number of slices in the volume.
    - bytesPerVoxel: The number of bytes used to represent each voxel.
-   - scale: The physical voxel spacing in meters along the x, y, and z dimensions.
+   - voxelSpacing: The physical voxel spacing in meters along the x, y, and z dimensions.
    - voxelData: A flat array of voxel intensities in ZYX order.
    */
   struct DicomVolume {
@@ -27,7 +27,7 @@ final class DicomParser {
     /// Number of bytes per voxel (e.g., 1 or 2).
     let bytesPerVoxel: Int
     /// Physical voxel spacing in meters for each axis (x, y, z).
-    let scale: (x: Float, y: Float, z: Float)
+    let voxelSpacing: (x: Float, y: Float, z: Float)
     /// Flat voxel data array in Z-Y-X order.
     let voxelData: [UInt8]
 
@@ -156,7 +156,7 @@ final class DicomParser {
     let z = sliceSpacingZ ?? fallbackSpace ?? fallbackThickness ?? 1
 
     let millimetersToMeters: Float = 0.001
-    let scale = (
+    let voxelSpacing = (
       x: inPlane.x * millimetersToMeters,
       y: inPlane.y * millimetersToMeters,
       z: z * millimetersToMeters
@@ -184,7 +184,7 @@ final class DicomParser {
       height: height,
       depth: depth,
       bytesPerVoxel: bytesPerVoxel,
-      scale: scale,
+      voxelSpacing: voxelSpacing,
       voxelData: buffer,
       modality: metaSource.modality,
       patientName: metaSource.patientName,

@@ -813,7 +813,9 @@ export class CoordinateCubeRenderer {
     }
 
     manifest = normalizeManifestForRenderer(manifest);
-    const physicalSize = manifest.volume.size.map((value, index) => value * manifest.volume.aspect[index]);
+    const physicalSize = manifest.volume.size.map(
+      (value, index) => value * manifest.volume.voxelSpacing[index]
+    );
     const maxSize = Math.max(...physicalSize);
     const extent = physicalSize.map((value) => value / maxSize);
     this.resetView();
@@ -821,9 +823,9 @@ export class CoordinateCubeRenderer {
     this.level0Size = manifest.levels?.[0]?.size ?? manifest.volume?.size ?? [1, 1, 1];
     this.levelCount = Math.max(1, manifest.levels?.length ?? 1);
     this.levelZeroWorldSpaceError = 2 * VOLUME_DISPLAY_HALF_EXTENT * Math.max(
-      manifest.volume.aspect?.[0] ?? 1,
-      manifest.volume.aspect?.[1] ?? 1,
-      manifest.volume.aspect?.[2] ?? 1
+      manifest.volume.voxelSpacing?.[0] ?? 1,
+      manifest.volume.voxelSpacing?.[1] ?? 1,
+      manifest.volume.voxelSpacing?.[2] ?? 1
     ) / Math.max(
       Number.MIN_VALUE,
       maxSize
@@ -847,7 +849,9 @@ export class CoordinateCubeRenderer {
     this.createCubeGeometry(extent);
     this.hasScene = true;
     this.drawNow();
-    this.reportStatus(`Rendering ${manifest.name} · aspect ${extent.map((value) => value.toFixed(3)).join(" x ")}`);
+    this.reportStatus(
+      `Rendering ${manifest.name} · normalized extent ${extent.map((value) => value.toFixed(3)).join(" x ")}`
+    );
   }
 
   setRenderMode(modeName) {

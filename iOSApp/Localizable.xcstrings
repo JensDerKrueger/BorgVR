@@ -2750,6 +2750,35 @@
         }
       }
     },
+    "dataset_info_physical_size" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Physische Größe"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Physical size"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tamaño físico"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dimensions physiques"
+          }
+        }
+      }
+    },
     "dataset_info_more_sources_format" : {
       "extractionState" : "manual",
       "localizations" : {

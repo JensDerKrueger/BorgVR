@@ -61,8 +61,8 @@ public final class NRRDParser: VolumeFileParser {
   public let absoluteFilename: String
   /// The dimensions of the volume (in voxels) along x, y, z.
   public let size: Vec3<Int>
-  /// The physical spacing (slice thickness) along x, y, z.
-  public let sliceThickness: Vec3<Float>
+  /// The physical voxel spacing along x, y, z.
+  public let voxelSpacing: Vec3<Float>
   /// The number of bytes per data component (e.g., 1 for 8-bit, 2 for 16-bit).
   public let bytesPerComponent: Int
   /// The number of components per voxel.
@@ -169,7 +169,7 @@ public final class NRRDParser: VolumeFileParser {
     guard spacingValues.count == 3 else {
       throw Error.invalidValue("spacings/space directions")
     }
-    self.sliceThickness = Vec3(x: spacingValues[0], y: spacingValues[1], z: spacingValues[2])
+    self.voxelSpacing = Vec3(x: spacingValues[0], y: spacingValues[1], z: spacingValues[2])
 
     // Parse data type and components
     guard let typeStr = headerDict["type"] else {

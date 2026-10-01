@@ -381,6 +381,7 @@
 "dataset_info_more_sources_format" = "(%@ fuentes adicionales conocidas)";
 "dataset_info_password_protected" = "Fuente protegida con contraseña";
 "dataset_info_private_source" = "Fuente privada, no compartida mediante SharePlay";
+"dataset_info_physical_size" = "Tamaño físico";
 "dataset_info_metadata" = "Metadatos";
 "dataset_info_no_metadata" = "No hay resumen de metadatos disponible.";
 "dataset_info_unavailable_title" = "No hay conjunto de datos abierto";

@@ -398,7 +398,7 @@ struct ConverterView: View {
           size: parser.size,
           bytesPerComponent: parser.bytesPerComponent,
           componentCount: parser.components,
-          aspect: parser.sliceThickness,
+          voxelSpacing: parser.voxelSpacing,
           offset: parser.offset,
           readOnly: true
         )
