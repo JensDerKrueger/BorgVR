@@ -296,11 +296,12 @@ function datasetButton(dataset) {
   button.innerHTML = `
     <span class="dataset-title"></span>
     <span class="dataset-meta"></span>
-    <span class="dataset-id"></span>
+    <span class="dataset-size"></span>
   `;
   button.querySelector(".dataset-title").textContent = displayDatasetName(dataset);
   button.querySelector(".dataset-meta").textContent = dataset.description || "BorgVR dataset";
-  button.querySelector(".dataset-id").textContent = dataset.id;
+  button.querySelector(".dataset-size").textContent =
+    formatPhysicalDimensions(dataset.size, dataset.voxelSpacing) || "Physical size unavailable";
   button.dataset.datasetId = dataset.id;
   button.addEventListener("click", async () => {
     await selectDataset(dataset, button, true);
@@ -1470,7 +1471,13 @@ function renderDatasetInfo(manifest) {
     </div>
     <dl class="manifest-grid">
       <div><dt>Dataset ID</dt><dd class="dataset-uuid"></dd></div>
-      <div><dt>Volume</dt><dd class="volume-size"></dd></div>
+      <div>
+        <dt>Volume</dt>
+        <dd class="volume-size">
+          <span class="physical-size"></span>
+          <span class="voxel-size"></span>
+        </dd>
+      </div>
       <div><dt>Components</dt><dd class="components"></dd></div>
       <div><dt>Brick layout</dt><dd class="brick-layout"></dd></div>
       <div><dt>LOD levels</dt><dd class="lod-levels"></dd></div>
@@ -1482,7 +1489,9 @@ function renderDatasetInfo(manifest) {
   datasetInfo.querySelector("p").textContent = manifest.description;
   datasetInfo.querySelector(".variant-badge").textContent = variantLabel(manifest.variant);
   datasetInfo.querySelector(".dataset-uuid").textContent = manifest.id;
-  datasetInfo.querySelector(".volume-size").textContent = manifest.volume.size.join(" x ");
+  datasetInfo.querySelector(".physical-size").textContent =
+    formatPhysicalDimensions(manifest.volume.size, manifest.volume.voxelSpacing) || "Physical size unavailable";
+  datasetInfo.querySelector(".voxel-size").textContent = `(${formatVoxelDimensions(manifest.volume.size)})`;
   datasetInfo.querySelector(".components").textContent = `${manifest.volume.componentCount} x ${manifest.volume.bytesPerComponent * 8}-bit`;
   datasetInfo.querySelector(".brick-layout").textContent = `${manifest.bricking.brickSize}³, overlap ${manifest.bricking.overlap}`;
   datasetInfo.querySelector(".lod-levels").textContent = String(manifest.levels.length);
@@ -1651,6 +1660,52 @@ function variantLabel(variant) {
 
 function displayDatasetName(dataset) {
   return (dataset.name || dataset.id).replace(/\s+\((LZ4|Raw|Stored)\)$/i, "");
+}
+
+function formatPhysicalDimensions(size, voxelSpacing) {
+  if (!validDimensions(size) || !validVoxelSpacing(voxelSpacing)) {
+    return null;
+  }
+
+  const dimensionsMeters = size.map((value, index) => value * voxelSpacing[index]);
+  const maximumMeters = Math.max(...dimensionsMeters);
+  if (!Number.isFinite(maximumMeters) || maximumMeters <= 0) {
+    return null;
+  }
+
+  const unit = preferredPhysicalUnit(maximumMeters);
+  const formatter = new Intl.NumberFormat(undefined, {
+    maximumSignificantDigits: 4
+  });
+  const values = dimensionsMeters.map((value) => formatter.format(value / unit.meters));
+  return `${values.join(" × ")} ${unit.symbol}`;
+}
+
+function formatVoxelDimensions(size) {
+  if (!validDimensions(size)) {
+    return "voxel dimensions unavailable";
+  }
+  return `${size.join(" × ")} voxels`;
+}
+
+function validDimensions(values) {
+  return Array.isArray(values) && values.length === 3 &&
+    values.every((value) => Number.isInteger(value) && value > 0);
+}
+
+function validVoxelSpacing(values) {
+  return Array.isArray(values) && values.length === 3 &&
+    values.every((value) => Number.isFinite(value) && value > 0);
+}
+
+function preferredPhysicalUnit(meters) {
+  if (meters >= 1_000) return { meters: 1_000, symbol: "km" };
+  if (meters >= 1) return { meters: 1, symbol: "m" };
+  if (meters >= 1e-2) return { meters: 1e-2, symbol: "cm" };
+  if (meters >= 1e-3) return { meters: 1e-3, symbol: "mm" };
+  if (meters >= 1e-6) return { meters: 1e-6, symbol: "µm" };
+  if (meters >= 1e-9) return { meters: 1e-9, symbol: "nm" };
+  return { meters: 1e-12, symbol: "pm" };
 }
 
 function safeFilename(name) {

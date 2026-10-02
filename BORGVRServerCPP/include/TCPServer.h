@@ -17,6 +17,12 @@ struct DatasetInfo {
   std::string id;                 // string id used by protocol
   std::string filename;           // path to .data file
   std::string datasetDescription; // displayed in LIST
+  int width = 0;
+  int height = 0;
+  int depth = 0;
+  float voxelSpacingX = 0.0f;
+  float voxelSpacingY = 0.0f;
+  float voxelSpacingZ = 0.0f;
 };
 
 struct TransferFunctionInfo {

@@ -351,7 +351,9 @@ final class HTTPWebServer {
         name: name,
         description: dataset.datasetDescription.isEmpty ? name : dataset.datasetDescription,
         metadata: "datasets/\(dataset.id)/dataset.json.lz4",
-        variant: "server"
+        variant: "server",
+        size: dataset.size,
+        voxelSpacing: dataset.voxelSpacing
       )
     }
 
@@ -913,6 +915,8 @@ private struct WebCatalogDataset: Encodable {
   let description: String
   let metadata: String
   let variant: String
+  let size: [Int]
+  let voxelSpacing: [Float]
 }
 
 private struct WebTransferFunctionCatalog: Encodable {

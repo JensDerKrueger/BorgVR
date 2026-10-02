@@ -145,7 +145,7 @@ p {
 }
 
 .dataset-meta,
-.dataset-id {
+.dataset-size {
   display: block;
   color: var(--muted);
   font-size: 12px;
@@ -153,10 +153,10 @@ p {
   overflow-wrap: anywhere;
 }
 
-.dataset-id {
+.dataset-size {
   margin-top: 5px;
   color: rgba(196, 232, 236, 0.62);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-variant-numeric: tabular-nums;
 }
 
 .viewer-panel {
@@ -377,6 +377,17 @@ p {
 
 .dataset-info[hidden] {
   display: none;
+}
+
+.volume-size .physical-size,
+.volume-size .voxel-size {
+  display: block;
+}
+
+.volume-size .voxel-size {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 0.9em;
 }
 
 .status-line {

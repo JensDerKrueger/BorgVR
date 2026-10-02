@@ -373,6 +373,12 @@ static std::vector<DatasetInfo> scanDatasetDirectory(const std::string& director
       info.id = md.uniqueID();
       info.filename = filename;
       info.datasetDescription = md.datasetDescription();
+      info.width = md.width();
+      info.height = md.height();
+      info.depth = md.depth();
+      info.voxelSpacingX = md.voxelSpacingX();
+      info.voxelSpacingY = md.voxelSpacingY();
+      info.voxelSpacingZ = md.voxelSpacingZ();
       datasets.push_back(std::move(info));
     } catch (const std::exception& e) {
       logDatasetScanFailureOnce(filename, e.what(), logger);

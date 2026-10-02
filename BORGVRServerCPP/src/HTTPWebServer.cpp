@@ -635,7 +635,9 @@ bool HTTPWebServer::sendCatalog(TcpSocket& socket, bool closeAfterSend) {
         << "      \"name\": \"" << jsonEscape(name) << "\",\n"
         << "      \"description\": \"" << jsonEscape(dataset.datasetDescription.empty() ? name : dataset.datasetDescription) << "\",\n"
         << "      \"metadata\": \"datasets/" << jsonEscape(dataset.id) << "/dataset.json.lz4\",\n"
-        << "      \"variant\": \"server\"\n"
+        << "      \"variant\": \"server\",\n"
+        << "      \"size\": [" << dataset.width << ", " << dataset.height << ", " << dataset.depth << "],\n"
+        << "      \"voxelSpacing\": [" << dataset.voxelSpacingX << ", " << dataset.voxelSpacingY << ", " << dataset.voxelSpacingZ << "]\n"
         << "    }" << (i + 1 < datasets.size() ? "," : "") << "\n";
   }
 

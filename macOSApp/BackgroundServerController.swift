@@ -151,7 +151,13 @@ final class BackgroundServerController: ObservableObject {
         return DatasetInfo(
           id: metadata.uniqueID,
           filename: url.path,
-          datasetDescription: metadata.datasetDescription.isEmpty ? dataset.description : metadata.datasetDescription
+          datasetDescription: metadata.datasetDescription.isEmpty ? dataset.description : metadata.datasetDescription,
+          size: [metadata.width, metadata.height, metadata.depth],
+          voxelSpacing: [
+            metadata.voxelSpacingX,
+            metadata.voxelSpacingY,
+            metadata.voxelSpacingZ
+          ]
         )
       case .remote:
         return nil

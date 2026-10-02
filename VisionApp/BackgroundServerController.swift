@@ -92,7 +92,13 @@ final class BackgroundServerController: ObservableObject {
       return DatasetInfo(
         id: metadata.uniqueID,
         filename: url.path,
-        datasetDescription: metadata.datasetDescription
+        datasetDescription: metadata.datasetDescription,
+        size: [metadata.width, metadata.height, metadata.depth],
+        voxelSpacing: [
+          metadata.voxelSpacingX,
+          metadata.voxelSpacingY,
+          metadata.voxelSpacingZ
+        ]
       )
     }
   }

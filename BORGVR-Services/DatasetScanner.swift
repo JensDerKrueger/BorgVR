@@ -5,6 +5,22 @@ struct DatasetInfo {
   let id: String
   let filename: String
   let datasetDescription: String
+  let size: [Int]
+  let voxelSpacing: [Float]
+
+  init(
+    id: String,
+    filename: String,
+    datasetDescription: String,
+    size: [Int] = [],
+    voxelSpacing: [Float] = []
+  ) {
+    self.id = id
+    self.filename = filename
+    self.datasetDescription = datasetDescription
+    self.size = size
+    self.voxelSpacing = voxelSpacing
+  }
 }
 
 struct TransferFunctionInfo {
@@ -98,10 +114,17 @@ class DatasetScanner {
   private func loadDataset(at url: URL) {
     let path = url.path
     if let data = try? BORGVRFileData(filename: path) {
+      let metadata = data.getMetadata()
       let dataset = DatasetInfo(
-        id: data.getMetadata().uniqueID,
+        id: metadata.uniqueID,
         filename: path,
-        datasetDescription: data.getMetadata().datasetDescription
+        datasetDescription: metadata.datasetDescription,
+        size: [metadata.width, metadata.height, metadata.depth],
+        voxelSpacing: [
+          metadata.voxelSpacingX,
+          metadata.voxelSpacingY,
+          metadata.voxelSpacingZ
+        ]
       )
       datasets.append(dataset)
       let datasetName = DatasetScanner.displayName(for: dataset)
