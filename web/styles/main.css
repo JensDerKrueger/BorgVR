@@ -144,8 +144,8 @@ p {
   font-weight: 720;
 }
 
-.dataset-meta,
-.dataset-size {
+.dataset-physical-size,
+.dataset-voxel-size {
   display: block;
   color: var(--muted);
   font-size: 12px;
@@ -153,7 +153,7 @@ p {
   overflow-wrap: anywhere;
 }
 
-.dataset-size {
+.dataset-voxel-size {
   margin-top: 5px;
   color: rgba(196, 232, 236, 0.62);
   font-variant-numeric: tabular-nums;

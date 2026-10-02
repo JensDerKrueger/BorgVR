@@ -295,13 +295,13 @@ function datasetButton(dataset) {
   button.type = "button";
   button.innerHTML = `
     <span class="dataset-title"></span>
-    <span class="dataset-meta"></span>
-    <span class="dataset-size"></span>
+    <span class="dataset-physical-size"></span>
+    <span class="dataset-voxel-size"></span>
   `;
   button.querySelector(".dataset-title").textContent = displayDatasetName(dataset);
-  button.querySelector(".dataset-meta").textContent = dataset.description || "BorgVR dataset";
-  button.querySelector(".dataset-size").textContent =
+  button.querySelector(".dataset-physical-size").textContent =
     formatPhysicalDimensions(dataset.size, dataset.voxelSpacing) || "Physical size unavailable";
+  button.querySelector(".dataset-voxel-size").textContent = formatVoxelDimensions(dataset.size);
   button.dataset.datasetId = dataset.id;
   button.addEventListener("click", async () => {
     await selectDataset(dataset, button, true);
