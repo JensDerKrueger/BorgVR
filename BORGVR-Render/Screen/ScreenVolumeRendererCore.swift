@@ -305,6 +305,8 @@ final class ScreenVolumeRendererCore {
       case .local:
         newDataset = try loadLocalDataset(activeDataset.identifier)
       case let .remote(address, port, password):
+        let primaryOrigin = DatasetOrigin(address: address, port: port, password: password)
+        let datasetID = activeDataset.identifier
         let manager = BORGVRRemoteDataManager(
           host: address,
           port: UInt16(port),
@@ -320,9 +322,14 @@ final class ScreenVolumeRendererCore {
           appModel.logger.dev("Remote dataset will be cached at \(cacheFilename)")
         }
         newDataset = try manager.openDataset(
-          datasetID: activeDataset.identifier,
+          datasetID: datasetID,
           timeout: appSettings.timeout,
-          localCacheFilename: cacheFilename
+          localCacheFilename: cacheFilename,
+          originProvider: {
+            DatasetOriginCatalog.deduplicated(
+              [primaryOrigin] + DatasetOriginCatalog.shared.origins(for: datasetID)
+            )
+          }
         )
     }
 

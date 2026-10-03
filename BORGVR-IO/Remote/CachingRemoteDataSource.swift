@@ -70,6 +70,7 @@ final class CachingRemoteDataSource: DataSource {
 
   /// Flag indicating if the background worker has been terminated.
   private var terminated = false
+  private var lastFetchFailureLog = Date.distantPast
 
   /// The current caching progress as a value between 0 and 1.
   public var cachingProgress: Double {
@@ -93,9 +94,17 @@ final class CachingRemoteDataSource: DataSource {
    - Throws: An error if the backing file cannot be created or mapped.
    */
   init(connection: NWConnection, datasetID: String, maxBricksPerGetRequest: Int,
-       filename: String, authSecret: String? = nil, logger: LoggerBase?, notifier: NotificationBase?) throws {
+       filename: String,
+       primaryOrigin: DatasetOrigin,
+       connectionTimeout: TimeInterval,
+       originProvider: @escaping DatasetOriginProvider,
+       authSecret: String? = nil, logger: LoggerBase?, notifier: NotificationBase?) throws {
     self.remoteDataSource = try RemoteDataSource(connection: connection,
                                                  datasetID: datasetID,
+                                                 primaryOrigin: primaryOrigin,
+                                                 maxBricksPerGetRequest: maxBricksPerGetRequest,
+                                                 connectionTimeout: connectionTimeout,
+                                                 originProvider: originProvider,
                                                  authSecret: authSecret,
                                                  logger:logger)
     self.targetFilename = filename
@@ -321,7 +330,18 @@ final class CachingRemoteDataSource: DataSource {
           break
         }
       } catch {
-        // Handle fetch or write failure as needed.
+        // Keep failed prefetch ranges eligible. Otherwise a temporary outage
+        // advances lastIndex past bricks that will never be considered again.
+        if let highestFailedIndex = indicesToProcess.max() {
+          lastIndex = max(lastIndex, highestFailedIndex)
+        }
+        if Date().timeIntervalSince(lastFetchFailureLog) >= 5 {
+          logger?.warning(
+            "Remote dataset caching is waiting for a source: \(error.localizedDescription)"
+          )
+          lastFetchFailureLog = Date()
+        }
+        Thread.sleep(forTimeInterval: 0.25)
       }
     }
   }

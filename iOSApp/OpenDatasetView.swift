@@ -411,6 +411,7 @@ struct OpenDatasetView: View {
     }
 
     let datasetID = dataset.identifier
+    let primaryOrigin = DatasetOrigin(address: address, port: port, password: password)
     let timeout = appSettings.timeout
     let cacheURL = documentsDirectory.appendingPathComponent("\(datasetID).data")
     let cachePath = cacheURL.path
@@ -436,7 +437,12 @@ struct OpenDatasetView: View {
       let remoteData = try manager.openDataset(
         datasetID: datasetID,
         timeout: timeout,
-        localCacheFilename: cachePath
+        localCacheFilename: cachePath,
+        originProvider: {
+          DatasetOriginCatalog.deduplicated(
+            [primaryOrigin] + DatasetOriginCatalog.shared.origins(for: datasetID)
+          )
+        }
       )
 
       let brickCount = remoteData.getMetadata().brickMetadata.count

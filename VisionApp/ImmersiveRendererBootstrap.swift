@@ -51,6 +51,8 @@ enum ImmersiveBootstrap {
           dataset = try BORGVRFileData(filename: activeDataset.identifier)
 
         case .remote(let address, let port, let password):
+          let primaryOrigin = DatasetOrigin(address: address, port: port, password: password)
+          let datasetID = activeDataset.identifier
           let manager = BORGVRRemoteDataManager(
             host: address,
             port: UInt16(port),
@@ -71,15 +73,25 @@ enum ImmersiveBootstrap {
             }
 
             dataset = try manager.openDataset(
-              datasetID: activeDataset.identifier,
+              datasetID: datasetID,
               timeout: storedAppModel.timeout,
-              localCacheFilename: storedAppModel.makeLocalCopy ? fileURLString : nil
+              localCacheFilename: storedAppModel.makeLocalCopy ? fileURLString : nil,
+              originProvider: {
+                DatasetOriginCatalog.deduplicated(
+                  [primaryOrigin] + DatasetOriginCatalog.shared.origins(for: datasetID)
+                )
+              }
             )
 
           } else {
             dataset = try manager.openDataset(
-              datasetID: activeDataset.identifier,
-              timeout: storedAppModel.timeout
+              datasetID: datasetID,
+              timeout: storedAppModel.timeout,
+              originProvider: {
+                DatasetOriginCatalog.deduplicated(
+                  [primaryOrigin] + DatasetOriginCatalog.shared.origins(for: datasetID)
+                )
+              }
             )
           }
       }

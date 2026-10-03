@@ -1,22 +1,5 @@
 import Foundation
 
-struct DatasetOrigin: Codable, Hashable, Sendable {
-  let address: String
-  let port: Int
-  let password: String
-
-  var identityKey: String {
-    "\(address.lowercased())\u{0}\(port)\u{0}\(password)"
-  }
-
-  var endpointDescription: String {
-    let formattedAddress = address.contains(":") && !address.hasPrefix("[")
-      ? "[\(address)]"
-      : address
-    return "\(formattedAddress):\(port)"
-  }
-}
-
 enum SharePlayWaitingReason: Equatable {
   case hostDataset
   case datasetSource

@@ -606,6 +606,11 @@ struct OpenDatasetView: View {
       var entryForLocalCopy: RuntimeAppModel.DatasetEntry? = nil
 
       do {
+        let primaryOrigin = DatasetOrigin(
+          address: serverAddress,
+          port: serverPort,
+          password: authSecret
+        )
         let manager = BORGVRRemoteDataManager(
           host: serverAddress,
           port: UInt16(serverPort),
@@ -627,7 +632,12 @@ struct OpenDatasetView: View {
           let dataset = try manager.openDataset(
             datasetID: datasetID,
             timeout: storedAppModel.timeout,
-            localCacheFilename: fileURL.path
+            localCacheFilename: fileURL.path,
+            originProvider: {
+              DatasetOriginCatalog.deduplicated(
+                [primaryOrigin] + DatasetOriginCatalog.shared.origins(for: datasetID)
+              )
+            }
           )
 
           entryForLocalCopy = RuntimeAppModel.DatasetEntry(

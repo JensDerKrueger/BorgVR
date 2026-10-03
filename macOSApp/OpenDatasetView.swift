@@ -408,6 +408,7 @@ struct OpenDatasetView: View {
     guard case let .remote(address, port, password) = dataset.source else { return dataset }
 
     let datasetID = dataset.identifier
+    let primaryOrigin = DatasetOrigin(address: address, port: port, password: password)
     let timeout = appSettings.timeout
     let dataDirectoryAccessURL = storedAppModel.startAccessingDataDirectory()
     defer {
@@ -437,7 +438,12 @@ struct OpenDatasetView: View {
       let remoteData = try manager.openDataset(
         datasetID: datasetID,
         timeout: timeout,
-        localCacheFilename: cachePath
+        localCacheFilename: cachePath,
+        originProvider: {
+          DatasetOriginCatalog.deduplicated(
+            [primaryOrigin] + DatasetOriginCatalog.shared.origins(for: datasetID)
+          )
+        }
       )
 
       let brickCount = remoteData.getMetadata().brickMetadata.count

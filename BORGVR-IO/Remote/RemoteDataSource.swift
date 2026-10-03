@@ -10,11 +10,26 @@ import Network
  connection. It sends commands and receives binary responses, handling decompression when necessary.
  */
 final class RemoteDataSource: DataSource {
+  private struct OriginFailure {
+    var retryAfter: Date
+    var delay: TimeInterval
+  }
+
+  private enum RequestError: Error {
+    case requestLimitChanged
+  }
+
   /// The underlying NWConnection used for communication with the remote server.
   private var connection: NWConnection
   /// The dataset ID for the remote dataset.
   private let datasetID: String
-  private let authSecret: String
+  private var currentOrigin: DatasetOrigin
+  private var maxBricksPerGetRequest: Int
+  private let connectionTimeout: TimeInterval
+  private let originProvider: DatasetOriginProvider
+  private var connectionIsUsable = true
+  private var originFailures: [String: OriginFailure] = [:]
+  private let requestLock = NSLock()
   /// Indicates whether the remote dataset is open.
   private var isOpen: Bool
   /// The metadata for the remote dataset.
@@ -37,10 +52,26 @@ final class RemoteDataSource: DataSource {
    - datasetID: The identifier for the dataset to open.
    - Throws: An error if sending the "OPEN" command fails or if metadata cannot be parsed.
    */
-  init(connection: NWConnection, datasetID: String, authSecret: String? = nil, logger: LoggerBase?) throws {
+  init(
+    connection: NWConnection,
+    datasetID: String,
+    primaryOrigin: DatasetOrigin,
+    maxBricksPerGetRequest: Int,
+    connectionTimeout: TimeInterval,
+    originProvider: @escaping DatasetOriginProvider,
+    authSecret: String? = nil,
+    logger: LoggerBase?
+  ) throws {
     self.connection = connection
     self.datasetID = datasetID
-    self.authSecret = BorgVRServerAuthentication.normalizedSecret(authSecret)
+    self.currentOrigin = DatasetOrigin(
+      address: primaryOrigin.address,
+      port: primaryOrigin.port,
+      password: BorgVRServerAuthentication.normalizedSecret(authSecret ?? primaryOrigin.password)
+    )
+    self.maxBricksPerGetRequest = max(1, maxBricksPerGetRequest)
+    self.connectionTimeout = max(0.1, connectionTimeout)
+    self.originProvider = originProvider
     self.isOpen = false
     self.logger = logger
 
@@ -89,14 +120,46 @@ final class RemoteDataSource: DataSource {
    */
   func getRawBricks(indices: [Int], outputBuffer: UnsafeMutablePointer<UInt8>,
                     outputBufferSize: Int) throws -> [BrickMetadata] {
-    let command = "GETBRICKS " + indices.map { String($0) }.joined(separator: " ")
-    try sendCommand(command)
-    let responseData = try receiveBinaryData()
-    if responseData.count > outputBufferSize {
-      throw BORGVRDataError.networkError(message: "Received data size does not match expected size.")
+    requestLock.lock()
+    defer { requestLock.unlock() }
+
+    guard indices.allSatisfy(metadata.brickMetadata.indices.contains) else {
+      throw BORGVRDataError.networkError(message: "Brick request contains an invalid index.")
     }
-    responseData.copyBytes(to: outputBuffer, count: responseData.count)
-    return indices.map { metadata.brickMetadata[$0] }
+
+    var result: [BrickMetadata] = []
+    result.reserveCapacity(indices.count)
+    var outputOffset = 0
+    var indexOffset = 0
+
+    while indexOffset < indices.count {
+      let requestLimit = max(1, maxBricksPerGetRequest)
+      let end = min(indexOffset + requestLimit, indices.count)
+      let requestIndices = Array(indices[indexOffset..<end])
+
+      do {
+        let responseData = try requestBrickData(requestIndices)
+        let requestMetadata = requestIndices.map { metadata.brickMetadata[$0] }
+        let expectedSize = requestMetadata.reduce(0) { $0 + $1.size }
+        guard responseData.count == expectedSize,
+              responseData.count <= outputBufferSize,
+              outputOffset <= outputBufferSize - responseData.count else {
+          throw BORGVRDataError.networkError(
+            message: "Received brick data size does not match the metadata."
+          )
+        }
+        responseData.copyBytes(to: outputBuffer.advanced(by: outputOffset), count: responseData.count)
+        outputOffset += responseData.count
+        result.append(contentsOf: requestMetadata)
+        indexOffset = end
+      } catch RequestError.requestLimitChanged {
+        // A failover source may advertise a smaller request limit. Rebuild the
+        // same request with that source's limit without advancing indexOffset.
+        continue
+      }
+    }
+
+    return result
   }
   /**
    Loads the first brick from the remote dataset into the provided output buffer.
@@ -122,10 +185,19 @@ final class RemoteDataSource: DataSource {
    - Throws: An error if the brick cannot be loaded or decompressed.
    */
   func getBrick(index: Int, outputBuffer: UnsafeMutablePointer<UInt8>) throws {
-    let brickMeta = metadata.brickMetadata[index]
+    requestLock.lock()
+    defer { requestLock.unlock() }
 
-    try sendCommand("GETBRICKS \(index)")
-    let responseData = try receiveBinaryData()
+    guard metadata.brickMetadata.indices.contains(index) else {
+      throw BORGVRDataError.networkError(message: "Brick request contains an invalid index.")
+    }
+    let brickMeta = metadata.brickMetadata[index]
+    let responseData = try requestBrickData([index])
+    guard responseData.count == brickMeta.size else {
+      throw BORGVRDataError.networkError(
+        message: "Received brick data size does not match the metadata."
+      )
+    }
 
     if metadata.compression && brickMeta.size < fullBrickSize {
       guard let compBuffer = compressedDataBuffer, let scratchBuffer = compressionScratchBuffer else {
@@ -184,45 +256,154 @@ final class RemoteDataSource: DataSource {
     }
   }
 
-  /**
-   Sends a command string using the current connection.
+  private func requestBrickData(_ indices: [Int]) throws -> Data {
+    var reconnectedOrigins = Set<String>()
 
-   - Parameter command: The command string to send.
-   - Throws: An error if sending fails.
-   */
-  private func sendCommand(_ command: String) throws {
-    do {
-      try RemoteDataSource.sendCommand(command, connection: connection)
-    } catch {
-      if case let .hostPort(host, port) = connection.endpoint {
-        let newConnection = NWConnection(host: host,
-                                            port: port,
-                                            using: .tcp)
-        try BORGVRRemoteDataManager.connect(connection: newConnection,
-                                            timeout: 2, logger: logger)
-        try BorgVRServerAuthentication.authenticate(
-          connection: newConnection,
-          secret: authSecret,
-          timeout: 2,
-          logger: logger
+    while true {
+      if !connectionIsUsable {
+        try connectToAvailableOrigin(excluding: &reconnectedOrigins)
+      }
+      guard indices.count <= maxBricksPerGetRequest else {
+        throw RequestError.requestLimitChanged
+      }
+
+      let command = "GETBRICKS " + indices.map(String.init).joined(separator: " ")
+      do {
+        try RemoteDataSource.sendCommand(command, connection: connection)
+        let response = try RemoteDataSource.receiveBinaryData(connection: connection)
+        originFailures[currentOrigin.identityKey] = nil
+        return response
+      } catch {
+        let failedOrigin = currentOrigin
+        connection.cancel()
+        connectionIsUsable = false
+        logger?.warning(
+          "Dataset source \(failedOrigin.endpointDescription) failed during a brick request: \(error.localizedDescription)"
         )
-        connection = newConnection
-        try sendCommand("OPEN \(datasetID)")
-        _ = try receiveBinaryData()
-      } else {
-        throw error
+
+        if reconnectedOrigins.contains(failedOrigin.identityKey) {
+          recordFailure(for: failedOrigin)
+        }
+        try connectToAvailableOrigin(
+          preferring: failedOrigin,
+          excluding: &reconnectedOrigins
+        )
       }
     }
   }
 
-  /**
-   Receives binary data from the remote server using the current connection.
+  private func connectToAvailableOrigin(
+    preferring preferredOrigin: DatasetOrigin? = nil,
+    excluding attemptedOrigins: inout Set<String>
+  ) throws {
+    let candidates = Self.deduplicatedOrigins(
+      [preferredOrigin ?? currentOrigin] + originProvider()
+    )
+    var lastError: Error?
+    let now = Date()
 
-   - Returns: The received Data.
-   - Throws: A network error if data reception fails.
-   */
-  private func receiveBinaryData() throws -> Data {
-    return try RemoteDataSource.receiveBinaryData(connection: connection)
+    for origin in candidates where !attemptedOrigins.contains(origin.identityKey) {
+      if let failure = originFailures[origin.identityKey], failure.retryAfter > now {
+        continue
+      }
+      attemptedOrigins.insert(origin.identityKey)
+
+      do {
+        try connect(to: origin)
+        originFailures[origin.identityKey] = nil
+        return
+      } catch {
+        lastError = error
+        recordFailure(for: origin)
+        logger?.warning(
+          "Could not recover through dataset source \(origin.endpointDescription): \(error.localizedDescription)"
+        )
+      }
+    }
+
+    if let lastError { throw lastError }
+    throw BORGVRDataError.networkError(
+      message: "No dataset source is currently ready for another connection attempt."
+    )
+  }
+
+  private func connect(to origin: DatasetOrigin) throws {
+    guard let port = NWEndpoint.Port(rawValue: UInt16(clamping: origin.port)),
+          origin.port == Int(port.rawValue) else {
+      throw BORGVRDataError.networkError(message: "Dataset source uses an invalid port.")
+    }
+
+    let newConnection = NWConnection(
+      host: NWEndpoint.Host(origin.address),
+      port: port,
+      using: .tcp
+    )
+
+    do {
+      try BORGVRRemoteDataManager.connect(
+        connection: newConnection,
+        timeout: connectionTimeout,
+        logger: logger
+      )
+      try BorgVRServerAuthentication.authenticate(
+        connection: newConnection,
+        secret: origin.password,
+        timeout: connectionTimeout,
+        logger: logger
+      )
+
+      try BorgVRServerAuthentication.sendCommand(
+        "INFO",
+        connection: newConnection,
+        timeout: connectionTimeout
+      )
+      let infoText = try BorgVRServerAuthentication.receiveTextResponse(
+        connection: newConnection,
+        timeout: connectionTimeout
+      )
+      let info = KeyValuePairHandler(text: infoText)
+      guard let requestLimit = info.int(for: "MAX_BRICKS_PER_GET_REQUEST"), requestLimit > 0 else {
+        throw BORGVRRemoteDataManagerError.invalidResponse(
+          reason: "Could not parse brick request limit from recovery source."
+        )
+      }
+
+      try RemoteDataSource.sendCommand("OPEN \(datasetID)", connection: newConnection)
+      let metadataData = try RemoteDataSource.receiveBinaryData(connection: newConnection)
+      let candidateMetadata = try BORGVRMetaData(fromData: metadataData)
+      guard candidateMetadata.toData() == metadata.toData() else {
+        throw BORGVRRemoteDataManagerError.invalidResponse(
+          reason: "Recovery source returned different metadata for dataset \(datasetID)."
+        )
+      }
+
+      connection.cancel()
+      connection = newConnection
+      currentOrigin = origin
+      maxBricksPerGetRequest = requestLimit
+      connectionIsUsable = true
+      logger?.info("Using dataset source \(origin.endpointDescription).")
+    } catch {
+      newConnection.cancel()
+      throw error
+    }
+  }
+
+  private func recordFailure(for origin: DatasetOrigin) {
+    let previousDelay = originFailures[origin.identityKey]?.delay ?? 0.5
+    let delay = min(max(1, previousDelay * 2), 30)
+    originFailures[origin.identityKey] = OriginFailure(
+      retryAfter: Date().addingTimeInterval(delay),
+      delay: delay
+    )
+  }
+
+  private static func deduplicatedOrigins(_ origins: [DatasetOrigin]) -> [DatasetOrigin] {
+    var identities = Set<String>()
+    return origins.filter { origin in
+      guard !origin.address.isEmpty, (1...65535).contains(origin.port) else { return false }
+      return identities.insert(origin.identityKey).inserted
+    }
   }
 
   /**

@@ -372,7 +372,8 @@ class BORGVRRemoteDataManager {
    - Throws: An error if the connection fails.
    */
   func openDataset(datasetID: String, timeout: Double,
-                   localCacheFilename: String? = nil) throws -> BORGVRRemoteData  {
+                   localCacheFilename: String? = nil,
+                   originProvider: @escaping DatasetOriginProvider = { [] }) throws -> BORGVRRemoteData  {
     let datasetConnection = NWConnection(
       host: NWEndpoint.Host(host),
       port: NWEndpoint.Port(rawValue: port)!,
@@ -391,6 +392,13 @@ class BORGVRRemoteDataManager {
                                 datasetID: datasetID,
                                 maxBricksPerGetRequest: maxBricksPerGetRequest,
                                 targetFilename: localCacheFilename,
+                                primaryOrigin: DatasetOrigin(
+                                  address: host,
+                                  port: Int(port),
+                                  password: authSecret
+                                ),
+                                connectionTimeout: timeout,
+                                originProvider: originProvider,
                                 authSecret: authSecret,
                                 logger:logger,
                                 notifier: notifier)

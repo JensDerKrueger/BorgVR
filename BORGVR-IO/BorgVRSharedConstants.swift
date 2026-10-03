@@ -1,6 +1,25 @@
 import Foundation
 import simd
 
+struct DatasetOrigin: Codable, Hashable, Sendable {
+  let address: String
+  let port: Int
+  let password: String
+
+  var identityKey: String {
+    "\(address.lowercased())\u{0}\(port)\u{0}\(password)"
+  }
+
+  var endpointDescription: String {
+    let formattedAddress = address.contains(":") && !address.hasPrefix("[")
+      ? "[\(address)]"
+      : address
+    return "\(formattedAddress):\(port)"
+  }
+}
+
+typealias DatasetOriginProvider = @Sendable () -> [DatasetOrigin]
+
 enum BorgVRTransferFunctionFormat {
   static let magicBytes = [UInt8]("BTF1".utf8)
   static let version: UInt32 = 2
