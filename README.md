@@ -105,6 +105,9 @@ The current development version is **2.7**. The SharePlay wire protocol remains 
 
 - Drag-and-drop `.gsc` scripts with a live execution log and repeatable interaction, rendering,
   and screenshot commands.
+- The companion [Graphics Script Editor](https://github.com/JensDerKrueger/GraphicsScriptEditor)
+  provides a graphical environment for conveniently creating and editing `.gsc` scripts for the
+  macOS renderer.
 - Synchronous text, file, and directory input functions for interactive scripts.
 - Scriptable QVIS, NRRD, PVM, and DICOM import, BorgVR LoD export, and configurable import
   brick size, overlap, and border handling.
