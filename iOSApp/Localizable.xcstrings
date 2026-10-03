@@ -13269,25 +13269,25 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ALLE Messungen löschen"
+            "value" : "Alle löschen"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Delete ALL Measurements"
+            "value" : "Delete All"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Eliminar TODAS las mediciones"
+            "value" : "Eliminar todas"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Supprimer TOUTES les mesures"
+            "value" : "Tout supprimer"
           }
         }
       }
@@ -13857,25 +13857,25 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Messungen laden…"
+            "value" : "Laden"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Load Measurements…"
+            "value" : "Load"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Cargar mediciones…"
+            "value" : "Cargar"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Charger les mesures…"
+            "value" : "Charger"
           }
         }
       }
@@ -14081,25 +14081,25 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Messungen speichern…"
+            "value" : "Speichern"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Save Measurements…"
+            "value" : "Save"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Guardar mediciones…"
+            "value" : "Guardar"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Enregistrer les mesures…"
+            "value" : "Enregistrer"
           }
         }
       }

@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		111111111111111111111701 /* c60_32.data in Resources */ = {isa = PBXBuildFile; fileRef = 56730FE22E6B78990091976B /* c60_32.data */; };
+		111111111111111111111702 /* head_32.data in Resources */ = {isa = PBXBuildFile; fileRef = 56730FE42E6B79000091976B /* head_32.data */; };
 		560A00012E00000000000031 /* web in CopyFiles */ = {isa = PBXBuildFile; fileRef = 560B90002E9150000042E45B /* web */; };
 		560A00012E00000000000032 /* TransferFunctions in CopyFiles */ = {isa = PBXBuildFile; fileRef = 57A001532E70000300000001 /* TransferFunctions */; };
 		560B8BE82E5C575A0042E45B /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 560B8BE72E5C57580042E45B /* PrivacyInfo.xcprivacy */; };
@@ -732,6 +734,8 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				111111111111111111111701 /* c60_32.data in Resources */,
+				111111111111111111111702 /* head_32.data in Resources */,
 				560B8BE92E5C575A0042E45B /* PrivacyInfo.xcprivacy in Resources */,
 				560B90012E9150000042E45B /* web in Resources */,
 				57A001552E70000300000001 /* TransferFunctions in Resources */,
