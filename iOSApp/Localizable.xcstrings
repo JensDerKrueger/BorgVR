@@ -1648,25 +1648,25 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Wählen Sie Ihren SharePlay-Namen"
+            "value" : "SharePlay-Name"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Choose your SharePlay name"
+            "value" : "SharePlay Name"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Elija su nombre para mostrar en SharePlay"
+            "value" : "Nombre de SharePlay"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Choisissez votre nom d’affichage SharePlay"
+            "value" : "Nom SharePlay"
           }
         }
       }
