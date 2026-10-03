@@ -14,13 +14,17 @@ The project is intended for interactive exploration of large volumetric datasets
 native Metal renderers, dataset conversion tools, local and remote dataset servers, SharePlay
 collaboration, and a WebGPU browser frontend served directly by the dataset server.
 
+The current development version is **2.7**. The SharePlay wire protocol remains at version
+**2.6** because application and collaboration-protocol versions advance independently.
+
 ## What Is Included
 
-- **VisionApp**: native visionOS volume renderer with spatial interaction, SharePlay, markers,
-  and Logitech Muse support.
-- **iOSApp**: adaptive native iPhone and iPad volume renderer with local and remote datasets.
-- **macOSApp**: native Mac renderer with import tools, scripting, dockable editors, markers,
-  and an optional background server.
+- **VisionApp**: native visionOS volume renderer with spatial interaction, SharePlay, annotations,
+  measurements, Logitech Muse, and PlayStation VR2 Sense controller support.
+- **iOSApp**: adaptive native iPhone and iPad volume renderer with local and remote datasets,
+  SharePlay, annotations, and measurements.
+- **macOSApp**: native Mac renderer with import/export tools, scripting, dockable editors,
+  annotations, measurements, and an optional background server.
 - **macOSServer**: Mac GUI for dataset conversion, serving, and server-to-server synchronization.
 - **TerminalServerApp**: command-line dataset server.
 - **TerminalConverterApp**: command-line dataset conversion tool.
@@ -37,33 +41,73 @@ collaboration, and a WebGPU browser frontend served directly by the dataset serv
 - Native Metal raycasters on visionOS, iOS/iPadOS, and macOS, plus a WebGPU browser renderer.
 - Transfer-function, illuminated transfer-function, isosurface, clipping, LOD, and adaptive
   sampling controls.
+- Configurable ambient, diffuse, and specular lighting with an interactive light-direction
+  arcball, shared across native clients and WebGPU.
 - GPU-guided brick requests with progressive paging into a brick atlas.
 - Interactive transfer-function editors and persistent transfer-function catalogs.
+- Physical voxel spacing is preserved through import and LoD generation. Dataset information
+  reports real-world extents using suitable metric units while rendering remains normalized.
 
-### Collaboration And Markers
+### Collaboration
 
 - SharePlay collaboration with synchronized datasets, transforms, rendering parameters,
-  transfer functions, and markers.
-- Optional ad-hoc dataset servers for SharePlay sessions.
+  transfer functions, lighting, markers, and measurements.
+- Protocol-version negotiation rejects incompatible clients with an actionable minimum-version
+  message before rendering state is exchanged.
+- Named and color-coded participants, shared or private screen views for iOS and macOS clients,
+  and spatial screen-view visualization and manipulation on Apple Vision Pro.
+- Host handover, explicit leave/waiting states, and synchronized initial state for participants
+  joining an active session.
+- Optional ad-hoc dataset servers and a persistent origin catalog. Participants exchange known
+  sources, retry unavailable endpoints, and can recover an active remote renderer through another
+  server that provides the same dataset.
+
+### Markers And Spatial Input
+
 - Named and colored spherical markers on all native clients and in WebGPU.
 - Directional sphere markers and tube-rendered stroke markers with a shared binary `.marker`
   format and dataset identity checks.
-- Marker import, export, server catalogs, editing, and synchronized initial state for new
-  SharePlay participants.
+- Multi-selection, marker import/export, server catalogs, editing, and synchronized initial state
+  for new SharePlay participants.
 - Hand-based marker placement on Apple Vision Pro, including configurable quick markers.
 - Logitech Muse spatial-stylus drawing on visionOS 26 or newer, with live stroke radius and
-  color controls.
+  color controls, pressure-sensitive drawing, and selectable marker or measurement tools.
+- Independent left- and right-hand PlayStation VR2 Sense controller tools with configurable
+  button actions, volume manipulation, stroke drawing, measurement, and shared tip previews.
+
+### Measurements
+
+- Interactive polyline length, planar convex-area, and convex-volume measurements on visionOS,
+  iOS/iPadOS, and macOS using physical dataset dimensions.
+- Editable control points, real-time values with automatically selected metric units, and
+  rendering integrated with the volume depth/compositing pipeline.
+- Measurement synchronization through SharePlay and a dataset-aware binary `.measurement`
+  format for local save/load workflows.
+- Direct hand, Logitech Muse, and PlayStation VR2 Sense controller measurement interaction on
+  Apple Vision Pro.
 
 ### Data And Servers
 
-- Dataset import and conversion from BorgVR, QVIS, NRRD/NHDR, PVM, and DICOM workflows.
+- Dataset import and conversion from BorgVR, QVIS, NRRD/NHDR, PVM/PVM2/PVM3, and DICOM workflows,
+  including physical DICOM spacing.
+- BorgVR datasets can be exported at any stored LoD as a flat, uncompressed NRRD volume while
+  retaining the corresponding voxel spacing.
 - Password-protected Swift and C++ dataset servers serving datasets, transfer functions,
   and marker files.
 - Periodic server-to-server synchronization in the macOS server and C++ server, including
   resumable downloads of incomplete datasets.
 - Optional HTTPS WebGPU hosting from the Swift server with generated self-signed certificates
   or imported PKCS#12 identities.
-- macOS scripting support for repeatable interaction, rendering, and screenshots.
+- Resilient remote paging reconnects interrupted streams, repeats complete brick transactions,
+  validates replacement-source metadata, and resumes incomplete local caches.
+
+### macOS Automation
+
+- Drag-and-drop `.gsc` scripts with a live execution log and repeatable interaction, rendering,
+  and screenshot commands.
+- Synchronous text, file, and directory input functions for interactive scripts.
+- Scriptable QVIS, NRRD, PVM, and DICOM import, BorgVR LoD export, and configurable import
+  brick size, overlap, and border handling.
 
 ### WebGPU
 
@@ -248,16 +292,17 @@ apps remain the primary high-performance and spatial rendering applications.
 
 ## Data Files
 
-BorgVR uses three application-specific file types:
+BorgVR uses four application-specific file types:
 
 - `.data`: metadata followed by bricked, optionally compressed volume data.
 - `.tf1d`: one-dimensional transfer functions and their display metadata.
 - `.marker`: binary directional sphere and stroke annotations, including the unique ID of their
   source dataset.
+- `.measurement`: binary length, area, and volume measurements associated with a source dataset.
 
-Loading markers created for another dataset requires explicit confirmation. The repository includes
-small sample datasets for testing. Larger datasets should be kept outside the repository and served
-or opened from a local data directory.
+Loading markers or measurements created for another dataset requires explicit confirmation. The
+repository includes small sample datasets for testing. Larger datasets should be kept outside the
+repository and served or opened from a local data directory.
 
 ## Research Background
 

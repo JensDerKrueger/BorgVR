@@ -158,7 +158,7 @@ class SharedAppModel {
   var defaultVolumeStrokeRadius: Float
   /// Color used for stylus strokes; locally adjustable without changing sphere markers.
   var defaultVolumeStrokeColor: SIMD4<Float>
-  /// Measurements placed in normalized dataset coordinates. Measurements are local in 2.6.
+  /// Measurements placed in normalized dataset coordinates.
   @ObservationIgnored private let volumeMeasurementsLock = NSLock()
   @ObservationIgnored private var storedVolumeMeasurements: [VolumeMeasurement] = []
   var volumeMeasurements: [VolumeMeasurement] {
