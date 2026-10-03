@@ -7,7 +7,7 @@ import AppKit
 import UIKit
 #endif
 
-struct LightingEditorView: View {
+struct LightingEditorView: View, Equatable {
   @Binding var lightDirection: SIMD3<Float>
   @Binding var ambientLightColor: SIMD3<Float>
   @Binding var diffuseLightColor: SIMD3<Float>
@@ -19,6 +19,17 @@ struct LightingEditorView: View {
   var onChange: () -> Void
   var onCommit: () -> Void
   var onClose: (() -> Void)?
+
+  static func == (lhs: LightingEditorView, rhs: LightingEditorView) -> Bool {
+    lhs.lightDirection == rhs.lightDirection &&
+      lhs.ambientLightColor == rhs.ambientLightColor &&
+      lhs.diffuseLightColor == rhs.diffuseLightColor &&
+      lhs.specularLightColor == rhs.specularLightColor &&
+      lhs.usesPanelBackground == rhs.usesPanelBackground &&
+      lhs.showsTitle == rhs.showsTitle &&
+      lhs.usesHorizontalLayout == rhs.usesHorizontalLayout &&
+      (lhs.onClose == nil) == (rhs.onClose == nil)
+  }
 
   @ViewBuilder
   var body: some View {
@@ -153,16 +164,23 @@ private struct LightingDirectionArcball: View {
 
   @State private var dragStartDirection: SIMD3<Float>?
   @State private var dragStartVector: SIMD3<Float>?
+  @State private var previewImage: CGImage?
 
   var body: some View {
     GeometryReader { geometry in
-      Image(
-        decorative: sphereImage(),
-        scale: 1,
-        orientation: .up
-      )
-      .resizable()
-      .interpolation(.high)
+      Group {
+        if let previewImage {
+          Image(
+            decorative: previewImage,
+            scale: 1,
+            orientation: .up
+          )
+          .resizable()
+          .interpolation(.high)
+        } else {
+          Circle().fill(.black)
+        }
+      }
       .clipShape(Circle())
       .overlay(Circle().stroke(.white.opacity(0.24), lineWidth: 1))
       .shadow(color: .black.opacity(0.35), radius: 10, y: 5)
@@ -189,6 +207,11 @@ private struct LightingDirectionArcball: View {
           }
       )
     }
+    .onAppear(perform: updatePreviewImage)
+    .onChange(of: direction) { updatePreviewImage() }
+    .onChange(of: ambientColor) { updatePreviewImage() }
+    .onChange(of: diffuseColor) { updatePreviewImage() }
+    .onChange(of: specularColor) { updatePreviewImage() }
   }
 
   private var normalizedDirection: SIMD3<Float> {
@@ -215,7 +238,11 @@ private struct LightingDirectionArcball: View {
     return SIMD3<Float>(x, y, 0)
   }
 
-  private func sphereImage() -> CGImage {
+  private func updatePreviewImage() {
+    previewImage = makeSphereImage()
+  }
+
+  private func makeSphereImage() -> CGImage {
     let resolution = 144
     var pixels = [UInt8](repeating: 0, count: resolution * resolution * 4)
     let lighting = BorgVRLightingState(

@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ContentView: View {
   @EnvironmentObject private var appModel: AppModel
+  @EnvironmentObject private var docking: DockingController
   @EnvironmentObject private var scriptRunner: BorgVRScriptRunner
   @Environment(\.openWindow) private var openWindow
   @Environment(\.dismissWindow) private var dismissWindow
@@ -14,8 +15,17 @@ struct ContentView: View {
         openWindow(id: "ScriptLogView")
       }
       .onDisappear {
-        dismissWindow(id: "ScriptLogView")
+        closeAuxiliaryWindows()
       }
+  }
+
+  private func closeAuxiliaryWindows() {
+    docking.resetForDatasetClose()
+    for panel in DockablePanelID.allCases {
+      dismissWindow(id: panel.windowID)
+    }
+    dismissWindow(id: "PerformanceGraphView")
+    dismissWindow(id: "ScriptLogView")
   }
 
   @ViewBuilder

@@ -118,6 +118,7 @@ struct RenderView: View {
                   onCommit: sharePlay.flushSynchronization,
                   onClose: { docking.hide(.lightingEditor) }
                 )
+                .equatable()
               }
             }
             .frame(width: dockedLightingPanelWidth)

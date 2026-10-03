@@ -584,6 +584,10 @@ final class ScreenVolumeRendererCore {
   private func updateMeasurementScreenLabels(
     matrices: (projection: simd_float4x4, view: simd_float4x4, model: simd_float4x4)
   ) {
+    guard !appModel.volumeMeasurements.isEmpty else {
+      appModel.updateMeasurementScreenLabels([])
+      return
+    }
     let transform = matrices.projection * matrices.view * matrices.model * volumeScale
     let labels = appModel.volumeMeasurements.compactMap { measurement -> AppModel.MeasurementScreenLabel? in
       guard let point = measurement.points.first,
@@ -602,9 +606,7 @@ final class ScreenVolumeRendererCore {
         )
       )
     }
-    DispatchQueue.main.async { [weak appModel] in
-      appModel?.updateMeasurementScreenLabels(labels)
-    }
+    appModel.updateMeasurementScreenLabels(labels)
   }
 
   @discardableResult

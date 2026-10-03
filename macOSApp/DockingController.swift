@@ -425,6 +425,7 @@ struct DetachedPanelContent: View {
               onCommit: sharePlay.flushSynchronization,
               onClose: { docking.close(panel) }
             )
+            .equatable()
           }
         }
     }

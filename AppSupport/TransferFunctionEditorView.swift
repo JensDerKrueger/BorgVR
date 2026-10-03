@@ -59,14 +59,10 @@ struct TransferFunctionEditorView: View {
 
   private var transferFunctionCanvas: some View {
     GeometryReader { geometry in
-      Canvas { context, size in
-        let rect = CGRect(origin: .zero, size: size)
-        renderingParameters.transferFunction.drawCheckerboard(in: context, rect: rect)
-        renderingParameters.transferFunction.drawRibbon(in: context, rect: rect.insetBy(dx: 0, dy: size.height * 0.38))
-        renderingParameters.transferFunction.drawGrid(in: context, rect: rect)
-        renderingParameters.transferFunction.drawCurves(in: context, rect: rect)
-      }
-      .background(.black)
+      CachedTransferFunctionPreview(
+        transferFunction: renderingParameters.transferFunction,
+        revision: renderingParameters.transferFunction.revision
+      )
       .clipShape(RoundedRectangle(cornerRadius: 8))
       .contentShape(Rectangle())
       .gesture(
@@ -415,5 +411,73 @@ struct TransferFunctionEditorView: View {
         String(localized: "tf_editor_load_failed") + " \(error.localizedDescription)"
       )
     }
+  }
+}
+
+private struct CachedTransferFunctionPreview: View {
+  private struct CacheKey: Hashable {
+    let revision: UInt64
+    let pixelWidth: Int
+    let pixelHeight: Int
+  }
+
+  let transferFunction: TransferFunction1D
+  let revision: UInt64
+
+  @Environment(\.displayScale) private var displayScale
+  @State private var cachedImage: CGImage?
+
+  var body: some View {
+    GeometryReader { geometry in
+      let size = CGSize(
+        width: max(1, geometry.size.width),
+        height: max(1, geometry.size.height)
+      )
+      let key = CacheKey(
+        revision: revision,
+        pixelWidth: max(1, Int((size.width * displayScale).rounded())),
+        pixelHeight: max(1, Int((size.height * displayScale).rounded()))
+      )
+
+      Group {
+        if let cachedImage {
+          Image(decorative: cachedImage, scale: displayScale, orientation: .up)
+            .resizable()
+            .interpolation(.high)
+        } else {
+          Color.black
+        }
+      }
+      .task(id: key) {
+        cachedImage = renderImage(size: size, scale: displayScale)
+      }
+    }
+  }
+
+  @MainActor
+  private func renderImage(size: CGSize, scale: CGFloat) -> CGImage? {
+    let maxSampleCount = max(2, Int((size.width * scale).rounded(.up)))
+    let content = Canvas(opaque: true, colorMode: .nonLinear) { context, canvasSize in
+      let rect = CGRect(origin: .zero, size: canvasSize)
+      transferFunction.drawCheckerboard(in: context, rect: rect)
+      transferFunction.drawRibbon(
+        in: context,
+        rect: rect.insetBy(dx: 0, dy: canvasSize.height * 0.38)
+      )
+      transferFunction.drawGrid(in: context, rect: rect)
+      transferFunction.drawCurves(
+        in: context,
+        rect: rect,
+        maxSampleCount: maxSampleCount
+      )
+    }
+    .frame(width: size.width, height: size.height)
+    .background(.black)
+
+    let renderer = ImageRenderer(content: content)
+    renderer.proposedSize = ProposedViewSize(size)
+    renderer.scale = scale
+    renderer.isOpaque = true
+    return renderer.cgImage
   }
 }
