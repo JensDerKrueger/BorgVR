@@ -47,8 +47,8 @@
         </section>
 
         <section>
-          <h2 data-de="Datensätze importieren">Importing datasets</h2>
-          <p data-de="Der Konverter führt schrittweise durch Eingabe, Ausgabe, Datensatzbeschreibung und Brick-Parameter. Unterstützt werden QVIS, NRRD/NHDR und DICOM. Das Ergebnis ist eine eigenständige <code>.data</code>-Datei, die direkt in das Serververzeichnis geschrieben werden kann.">The converter guides you through input, output, dataset description, and brick settings. Supported workflows include QVIS, NRRD/NHDR, and DICOM. The result is a standalone <code>.data</code> file that can be written directly to the server directory.</p>
+          <h2 data-de="Datensätze importieren und exportieren">Importing and exporting datasets</h2>
+          <p data-de="Der Import führt schrittweise durch Eingabe, Ausgabe, Datensatzbeschreibung und Brick-Parameter. Unterstützt werden QVIS, NRRD/NHDR, PVM und DICOM. Das Ergebnis ist eine eigenständige <code>.data</code>-Datei, die direkt in das Serververzeichnis geschrieben werden kann. Der Export rekonstruiert eine wählbare Detailstufe einer BorgVR-Datei als flaches, unkomprimiertes NRRD-Volumen; LoD 0 entspricht der vollen Auflösung.">Import guides you through input, output, dataset description, and brick settings. Supported workflows include QVIS, NRRD/NHDR, PVM, and DICOM. The result is a standalone <code>.data</code> file that can be written directly to the server directory. Export reconstructs a selected BorgVR level of detail as a flat, uncompressed NRRD volume; LoD 0 is the full resolution.</p>
           <dl class="definition-list">
             <div><dt data-de="Brick-Größe">Brick size</dt><dd data-de="Größe der räumlichen Blöcke. Sie beeinflusst den Verwaltungsaufwand, das Streaming-Verhalten und die Nutzung des GPU-Atlas.">Size of the spatial blocks. It affects management overhead, streaming, and the GPU atlas.</dd></div>
             <div><dt data-de="Überlappung">Overlap</dt><dd data-de="Zusätzliche Randvoxel für kontinuierliche Filterung zwischen benachbarten Bricks.">Additional border voxels for continuous filtering between neighboring bricks.</dd></div>

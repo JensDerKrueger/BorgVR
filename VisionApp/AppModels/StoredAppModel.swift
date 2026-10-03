@@ -136,8 +136,12 @@ final class StoredAppModel: ObservableObject {
     "markerDefaultGreen": 0.08,
     "markerDefaultBlue": 0.02,
     "markerDefaultColorInitialized": false,
+    "stylusStartFunction": SpatialStylusStartFunction.lastMode.rawValue,
+    "stylusToolMode": SpatialToolMode.marker.rawValue,
+    "leftControllerToolMode": SpatialToolMode.model.rawValue,
+    "rightControllerToolMode": SpatialToolMode.model.rawValue,
     "controllerButtonAAction": SpatialControllerButtonAction.nextRenderMode.rawValue,
-    "controllerButtonBAction": SpatialControllerButtonAction.nextInteractionMode.rawValue,
+    "controllerButtonBAction": SpatialControllerButtonAction.nextControllerTool.rawValue,
     "controllerButtonXAction": SpatialControllerButtonAction.toggleCurrentEditor.rawValue,
     "controllerButtonYAction": SpatialControllerButtonAction.toggleMarkerWindow.rawValue
   ]
@@ -263,11 +267,47 @@ final class StoredAppModel: ObservableObject {
   @AppStorage("markerDefaultGreen") var markerDefaultGreen: Double = StoredAppModel.double("markerDefaultGreen")
   @AppStorage("markerDefaultBlue") var markerDefaultBlue: Double = StoredAppModel.double("markerDefaultBlue")
   @AppStorage("markerDefaultColorInitialized") private var markerDefaultColorInitialized: Bool = StoredAppModel.bool("markerDefaultColorInitialized")
+  /// Tool selected when a dataset is opened and the current tools for spatial accessories.
+  @AppStorage("stylusStartFunction") private var stylusStartFunctionValue: String = StoredAppModel.string("stylusStartFunction")
+  @AppStorage("stylusToolMode") private var stylusToolMode: String = StoredAppModel.string("stylusToolMode")
+  @AppStorage("leftControllerToolMode") private var leftControllerToolMode: String = StoredAppModel.string("leftControllerToolMode")
+  @AppStorage("rightControllerToolMode") private var rightControllerToolMode: String = StoredAppModel.string("rightControllerToolMode")
   /// User-configurable shortcuts for spatial-controller face buttons.
   @AppStorage("controllerButtonAAction") var controllerButtonAAction: String = StoredAppModel.string("controllerButtonAAction")
   @AppStorage("controllerButtonBAction") var controllerButtonBAction: String = StoredAppModel.string("controllerButtonBAction")
   @AppStorage("controllerButtonXAction") var controllerButtonXAction: String = StoredAppModel.string("controllerButtonXAction")
   @AppStorage("controllerButtonYAction") var controllerButtonYAction: String = StoredAppModel.string("controllerButtonYAction")
+
+  var stylusStartFunction: SpatialStylusStartFunction {
+    get { SpatialStylusStartFunction(rawValue: stylusStartFunctionValue) ?? .lastMode }
+    set { stylusStartFunctionValue = newValue.rawValue }
+  }
+
+  var stylusTool: SpatialToolMode {
+    get { SpatialToolMode(rawValue: stylusToolMode) ?? .marker }
+    set { stylusToolMode = newValue.rawValue }
+  }
+
+  func controllerTool(for chirality: BorgSpatialInputChirality) -> SpatialToolMode {
+    switch chirality {
+      case .left:
+        SpatialToolMode(rawValue: leftControllerToolMode) ?? .model
+      case .right, .unspecified:
+        SpatialToolMode(rawValue: rightControllerToolMode) ?? .model
+    }
+  }
+
+  func setControllerTool(
+    _ tool: SpatialToolMode,
+    for chirality: BorgSpatialInputChirality
+  ) {
+    switch chirality {
+      case .left:
+        leftControllerToolMode = tool.rawValue
+      case .right, .unspecified:
+        rightControllerToolMode = tool.rawValue
+    }
+  }
 
   var markerDefaultColorSIMD: SIMD4<Float> {
     SIMD4<Float>(

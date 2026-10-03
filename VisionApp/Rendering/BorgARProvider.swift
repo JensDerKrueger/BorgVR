@@ -14,8 +14,8 @@ public struct BorgAnchorSample {
 struct BorgSpatialStylusSample {
   let tipPosition: SIMD3<Float>
   let isDrawing: Bool
-  /// Normalized pressure when drawing with the tip; nil for in-air drawing.
-  let tipPressure: Float?
+  /// Normalized pressure from the tip or large drawing button.
+  let drawingPressure: Float?
   let isAdjustingRadius: Bool
 }
 
@@ -39,8 +39,11 @@ struct BorgSpatialInputSample: Sendable {
   let gripTransform: simd_float4x4
   let primaryValue: Float
   let modifierPressed: Bool
+  /// Both Muse side buttons are held; the rear power button is not exposed by GameController.
+  let toolTogglePressed: Bool
   let adjustment: SIMD2<Float>
-  let tipPressure: Float?
+  /// Normalized pressure from the active Muse drawing input.
+  let drawingPressure: Float?
   let pressedFaceButtons: Set<SpatialControllerFaceButton>
 
   var primaryPressed: Bool { primaryValue > 0.05 }
@@ -90,6 +93,8 @@ final class BorgARProvider {
 
   private var trackedSpatialAccessories: [TrackedSpatialAccessory] = []
   private var accessoryTrackingProvider: AccessoryTrackingProvider?
+  @MainActor private var accessoryReconfigurationInProgress = false
+  @MainActor private var accessoryReconfigurationRequested = false
 
   init(logger: LoggerBase?, groupSessionHost: Bool) {
     self.logger = logger
@@ -146,7 +151,7 @@ final class BorgARProvider {
     return BorgSpatialStylusSample(
       tipPosition: sample.aimOrigin,
       isDrawing: sample.primaryPressed,
-      tipPressure: sample.tipPressure,
+      drawingPressure: sample.drawingPressure,
       isAdjustingRadius: !sample.primaryPressed && sample.modifierPressed
     )
   }
@@ -206,7 +211,9 @@ final class BorgARProvider {
           let tipInput = input?.buttons[.stylusTip]?.pressedInput
           let tipPressure = min(1, max(0, tipInput?.value ?? 0))
           let tipPressed = tipPressure > 0.001
-          let sideDraw = input?.buttons[.stylusSecondaryButton]?.pressedInput.isPressed ?? false
+          let sideInput = input?.buttons[.stylusSecondaryButton]?.pressedInput
+          let sidePressure = min(1, max(0, sideInput?.value ?? 0))
+          let sideDraw = sideInput?.isPressed ?? false
           let modifier = input?.buttons[.stylusPrimaryButton]?.pressedInput.isPressed ?? false
           return BorgSpatialInputSample(
             id: tracked.accessory.id,
@@ -214,10 +221,11 @@ final class BorgARProvider {
             chirality: chirality,
             aimTransform: aimTransform,
             gripTransform: gripTransform,
-            primaryValue: tipPressed || sideDraw ? max(tipPressure, 1) : 0,
+            primaryValue: tipPressed || sideDraw ? 1 : 0,
             modifierPressed: modifier,
+            toolTogglePressed: sideDraw && modifier,
             adjustment: .zero,
-            tipPressure: tipPressed ? tipPressure : nil,
+            drawingPressure: tipPressed ? tipPressure : (sideDraw ? sidePressure : nil),
             pressedFaceButtons: []
           )
 
@@ -237,11 +245,12 @@ final class BorgARProvider {
             gripTransform: gripTransform,
             primaryValue: min(1, max(0, trigger)),
             modifierPressed: grip > 0.05,
+            toolTogglePressed: false,
             adjustment: SIMD2<Float>(
               thumbstick?.xAxis.value ?? 0,
               thumbstick?.yAxis.value ?? 0
             ),
-            tipPressure: nil,
+            drawingPressure: nil,
             pressedFaceButtons: pressedFaceButtons
           )
       }
@@ -314,6 +323,20 @@ final class BorgARProvider {
       }
     }
 
+    let accessories = tracked.map(\.accessory)
+    let existingProvider = stateQueue.sync { accessoryTrackingProvider }
+    if #available(visionOS 27.0, *), let existingProvider {
+      try await existingProvider.updateAccessories(accessories)
+      stateQueue.sync {
+        trackedSpatialAccessories = tracked
+      }
+      logger?.info(
+        "Updated accessory tracking: \(styli.count) stylus device(s), " +
+          "\(controllers.count) spatial controller(s), \(accessories.count) tracked accessory(ies)."
+      )
+      return
+    }
+
     let accessoryProvider: AccessoryTrackingProvider?
     if tracked.isEmpty {
       accessoryProvider = nil
@@ -328,16 +351,25 @@ final class BorgARProvider {
       accessoryTrackingProvider = accessoryProvider
     }
     logger?.info(
-      "Tracking \(styli.count) spatial stylus device(s) and \(controllers.count) spatial controller(s)"
+      "Started accessory tracking: \(styli.count) stylus device(s), " +
+        "\(controllers.count) spatial controller(s), \(accessories.count) tracked accessory(ies)."
     )
   }
 
   @MainActor
   private func reconfigureSpatialAccessoriesAfterConnectionChange() async {
-    do {
-      try await reconfigureSpatialAccessories()
-    } catch {
-      logger?.error("Failed to reconfigure spatial accessory tracking: \(error)")
+    accessoryReconfigurationRequested = true
+    guard !accessoryReconfigurationInProgress else { return }
+    accessoryReconfigurationInProgress = true
+    defer { accessoryReconfigurationInProgress = false }
+
+    while accessoryReconfigurationRequested {
+      accessoryReconfigurationRequested = false
+      do {
+        try await reconfigureSpatialAccessories()
+      } catch {
+        logger?.error("Failed to reconfigure spatial accessory tracking: \(error)")
+      }
     }
   }
 

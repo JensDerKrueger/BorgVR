@@ -117,7 +117,7 @@ struct ModeSelectionView: View {
           appModel.navigationState = .selectData
         }
 
-        commandButton("modeselection_import", systemImage: "square.and.arrow.down") {
+        commandButton("modeselection_import", systemImage: "arrow.up.arrow.down.square") {
           appModel.navigationState = .importData
         }
 

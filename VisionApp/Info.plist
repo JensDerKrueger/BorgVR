@@ -101,6 +101,25 @@
 				<string>public.data</string>
 			</array>
 			<key>UTTypeDescription</key>
+			<string>BorgVR Measurements</string>
+			<key>UTTypeIdentifier</key>
+			<string>de.uni-due.borgvr.measurement</string>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>measurement</string>
+				</array>
+				<key>public.mime-type</key>
+				<string>application/x-borgvr-measurements</string>
+			</dict>
+		</dict>
+		<dict>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.data</string>
+			</array>
+			<key>UTTypeDescription</key>
 			<string>Volume Dataset</string>
 			<key>UTTypeIdentifier</key>
 			<string>de.cgvis.volumedata</string>

@@ -663,6 +663,7 @@ enum PhysicalSizeFormatter {
 
   private static let kilometer = Unit(meters: 1_000, symbol: "km")
   private static let meter = Unit(meters: 1, symbol: "m")
+  private static let decimeter = Unit(meters: 1e-1, symbol: "dm")
   private static let centimeter = Unit(meters: 1e-2, symbol: "cm")
   private static let millimeter = Unit(meters: 1e-3, symbol: "mm")
   private static let micrometer = Unit(meters: 1e-6, symbol: "µm")
@@ -676,6 +677,34 @@ enum PhysicalSizeFormatter {
       return nil
     }
     return "\(value) \(unit.symbol)"
+  }
+
+  static func area(squareMeters: Double, locale: Locale = .current) -> String? {
+    guard squareMeters.isFinite, squareMeters >= 0 else { return nil }
+    let unit = squareMeters == 0
+      ? meter
+      : preferredPoweredUnit(for: squareMeters, dimension: 2)
+    guard let value = formattedNumber(
+      squareMeters / (unit.meters * unit.meters),
+      locale: locale
+    ) else {
+      return nil
+    }
+    return "\(value) \(unit.symbol)²"
+  }
+
+  static func volume(cubicMeters: Double, locale: Locale = .current) -> String? {
+    guard cubicMeters.isFinite, cubicMeters >= 0 else { return nil }
+    let unit = cubicMeters == 0
+      ? meter
+      : preferredPoweredUnit(for: cubicMeters, dimension: 3)
+    guard let value = formattedNumber(
+      cubicMeters / (unit.meters * unit.meters * unit.meters),
+      locale: locale
+    ) else {
+      return nil
+    }
+    return "\(value) \(unit.symbol)³"
   }
 
   static func dimensions(
@@ -744,6 +773,17 @@ enum PhysicalSizeFormatter {
       default:
         return picometer
     }
+  }
+
+  private static func preferredPoweredUnit(
+    for valueInMeters: Double,
+    dimension: Int
+  ) -> Unit {
+    let units = [kilometer, meter, decimeter, centimeter, millimeter,
+                 micrometer, nanometer, picometer]
+    return units.first { unit in
+      valueInMeters / pow(unit.meters, Double(dimension)) >= 0.1
+    } ?? picometer
   }
 
   private static func formattedNumber(_ value: Double, locale: Locale) -> String? {

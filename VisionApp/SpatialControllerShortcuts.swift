@@ -1,6 +1,100 @@
 import GameController
 import SwiftUI
 
+enum SpatialToolMode: String, CaseIterable, Identifiable {
+  case model
+  case clipping
+  case marker
+  case lengthMeasurement
+  case areaMeasurement
+  case volumeMeasurement
+  case screenView
+
+  static let museModes: [Self] = [
+    .marker,
+    .lengthMeasurement,
+    .areaMeasurement,
+    .volumeMeasurement
+  ]
+
+  var id: String { rawValue }
+
+  var interactionMode: RuntimeAppModel.InteractionMode {
+    switch self {
+      case .model: .model
+      case .clipping: .clipping
+      case .marker: .marker
+      case .lengthMeasurement, .areaMeasurement, .volumeMeasurement: .measurement
+      case .screenView: .screenView
+    }
+  }
+
+  var measurementKind: VolumeMeasurementKind? {
+    switch self {
+      case .lengthMeasurement: .length
+      case .areaMeasurement: .area
+      case .volumeMeasurement: .volume
+      default: nil
+    }
+  }
+
+  var isMeasurement: Bool { measurementKind != nil }
+
+  var title: String {
+    switch self {
+      case .model: String(localized: "accessory_tool_model")
+      case .clipping: String(localized: "accessory_tool_clipping")
+      case .marker: String(localized: "settings_stylus_start_marker")
+      case .lengthMeasurement: String(localized: "settings_stylus_start_length")
+      case .areaMeasurement: String(localized: "settings_stylus_start_area")
+      case .volumeMeasurement: String(localized: "settings_stylus_start_volume")
+      case .screenView: String(localized: "controller_action_screen_view_mode")
+    }
+  }
+
+  var systemImage: String {
+    switch self {
+      case .model: "move.3d"
+      case .clipping: "crop"
+      case .marker: "pencil.and.outline"
+      case .lengthMeasurement: "ruler"
+      case .areaMeasurement: "triangle"
+      case .volumeMeasurement: "cube"
+      case .screenView: "rectangle.on.rectangle"
+    }
+  }
+}
+
+enum SpatialStylusStartFunction: String, CaseIterable, Identifiable {
+  case marker
+  case lengthMeasurement
+  case areaMeasurement
+  case volumeMeasurement
+  case lastMode
+
+  var id: String { rawValue }
+
+  var title: String {
+    switch self {
+      case .marker: String(localized: "settings_stylus_start_marker")
+      case .lengthMeasurement: String(localized: "settings_stylus_start_length")
+      case .areaMeasurement: String(localized: "settings_stylus_start_area")
+      case .volumeMeasurement: String(localized: "settings_stylus_start_volume")
+      case .lastMode: String(localized: "settings_stylus_start_last_mode")
+    }
+  }
+
+  var systemImage: String {
+    switch self {
+      case .marker: "pencil.and.outline"
+      case .lengthMeasurement: "ruler"
+      case .areaMeasurement: "triangle"
+      case .volumeMeasurement: "cube"
+      case .lastMode: "clock.arrow.circlepath"
+    }
+  }
+}
+
 enum SpatialControllerFaceButton: String, CaseIterable, Hashable, Sendable {
   case a
   case b
@@ -63,13 +157,22 @@ enum SpatialControllerButtonAction: String, CaseIterable, Identifiable {
   case modelMode
   case clippingMode
   case markerMode
+  case measurementMode
   case screenViewMode
+  case nextControllerTool
+  case controllerModelTool
+  case controllerClippingTool
+  case controllerMarkerTool
+  case controllerMeasurementTool
+  case controllerAreaMeasurementTool
+  case controllerVolumeMeasurementTool
   case nextRenderMode
   case transferFunctionLightingMode
   case transferFunctionMode
   case isoValueMode
   case toggleCurrentEditor
   case toggleMarkerWindow
+  case toggleMeasurementWindow
   case toggleLightingWindow
   case toggleInteractionWindow
   case resetModel
@@ -77,6 +180,7 @@ enum SpatialControllerButtonAction: String, CaseIterable, Identifiable {
   case deleteLastMarker
   case deleteSelectedMarkers
   case toggleSelectedMarkerDirections
+  case deleteSelectedMeasurementPoint
 
   var id: String { rawValue }
 
@@ -84,15 +188,19 @@ enum SpatialControllerButtonAction: String, CaseIterable, Identifiable {
     switch self {
       case .none:
         .general
-      case .nextInteractionMode, .modelMode, .clippingMode, .markerMode, .screenViewMode:
+      case .nextInteractionMode, .modelMode, .clippingMode, .markerMode, .measurementMode,
+           .screenViewMode, .nextControllerTool, .controllerModelTool,
+           .controllerClippingTool, .controllerMarkerTool, .controllerMeasurementTool,
+           .controllerAreaMeasurementTool, .controllerVolumeMeasurementTool:
         .interaction
       case .nextRenderMode, .transferFunctionLightingMode, .transferFunctionMode, .isoValueMode:
         .rendering
-      case .toggleCurrentEditor, .toggleMarkerWindow, .toggleLightingWindow,
+      case .toggleCurrentEditor, .toggleMarkerWindow, .toggleMeasurementWindow,
+           .toggleLightingWindow,
            .toggleInteractionWindow:
         .windows
       case .resetModel, .resetClipping, .deleteLastMarker, .deleteSelectedMarkers,
-           .toggleSelectedMarkerDirections:
+           .toggleSelectedMarkerDirections, .deleteSelectedMeasurementPoint:
         .actions
     }
   }
@@ -104,7 +212,19 @@ enum SpatialControllerButtonAction: String, CaseIterable, Identifiable {
       case .modelMode: String(localized: "controller_action_model_mode")
       case .clippingMode: String(localized: "controller_action_clipping_mode")
       case .markerMode: String(localized: "controller_action_marker_mode")
+      case .measurementMode: String(localized: "controller_action_measurement_mode")
       case .screenViewMode: String(localized: "controller_action_screen_view_mode")
+      case .nextControllerTool: String(localized: "controller_action_next_controller_tool")
+      case .controllerModelTool: String(localized: "controller_action_controller_model_tool")
+      case .controllerClippingTool:
+        String(localized: "controller_action_controller_clipping_tool")
+      case .controllerMarkerTool: String(localized: "controller_action_controller_marker_tool")
+      case .controllerMeasurementTool:
+        String(localized: "controller_action_controller_measurement_tool")
+      case .controllerAreaMeasurementTool:
+        String(localized: "controller_action_controller_area_measurement_tool")
+      case .controllerVolumeMeasurementTool:
+        String(localized: "controller_action_controller_volume_measurement_tool")
       case .nextRenderMode: String(localized: "controller_action_next_render_mode")
       case .transferFunctionLightingMode:
         String(localized: "controller_action_tf_lighting_mode")
@@ -112,6 +232,8 @@ enum SpatialControllerButtonAction: String, CaseIterable, Identifiable {
       case .isoValueMode: String(localized: "controller_action_iso_mode")
       case .toggleCurrentEditor: String(localized: "controller_action_toggle_current_editor")
       case .toggleMarkerWindow: String(localized: "controller_action_toggle_marker_window")
+      case .toggleMeasurementWindow:
+        String(localized: "controller_action_toggle_measurement_window")
       case .toggleLightingWindow: String(localized: "controller_action_toggle_lighting_window")
       case .toggleInteractionWindow:
         String(localized: "controller_action_toggle_interaction_window")
@@ -123,6 +245,8 @@ enum SpatialControllerButtonAction: String, CaseIterable, Identifiable {
         String(localized: "controller_action_delete_selected_markers")
       case .toggleSelectedMarkerDirections:
         String(localized: "controller_action_toggle_marker_directions")
+      case .deleteSelectedMeasurementPoint:
+        String(localized: "controller_action_delete_measurement_point")
     }
   }
 
@@ -133,13 +257,22 @@ enum SpatialControllerButtonAction: String, CaseIterable, Identifiable {
       case .modelMode: "move.3d"
       case .clippingMode: "crop"
       case .markerMode: "mappin"
+      case .measurementMode: "ruler"
       case .screenViewMode: "rectangle.on.rectangle"
+      case .nextControllerTool: "arrow.trianglehead.2.clockwise.rotate.90"
+      case .controllerModelTool: "move.3d"
+      case .controllerClippingTool: "crop"
+      case .controllerMarkerTool: "pencil.and.outline"
+      case .controllerMeasurementTool: "ruler"
+      case .controllerAreaMeasurementTool: "triangle"
+      case .controllerVolumeMeasurementTool: "cube"
       case .nextRenderMode: "rectangle.3.group"
       case .transferFunctionLightingMode: "lightbulb"
       case .transferFunctionMode: "chart.xyaxis.line"
       case .isoValueMode: "square.3.layers.3d.top.filled"
       case .toggleCurrentEditor: "slider.horizontal.3"
       case .toggleMarkerWindow: "mappin.and.ellipse"
+      case .toggleMeasurementWindow: "ruler"
       case .toggleLightingWindow: "lightbulb.max"
       case .toggleInteractionWindow: "hand.draw"
       case .resetModel: "arrow.counterclockwise"
@@ -147,6 +280,7 @@ enum SpatialControllerButtonAction: String, CaseIterable, Identifiable {
       case .deleteLastMarker: "delete.backward"
       case .deleteSelectedMarkers: "trash"
       case .toggleSelectedMarkerDirections: "location.north.line"
+      case .deleteSelectedMeasurementPoint: "point.bottomleft.forward.to.point.topright.scurvepath"
     }
   }
 
@@ -159,32 +293,49 @@ enum SpatialControllerButtonAction: String, CaseIterable, Identifiable {
 enum SpatialControllerShortcutHandler {
   static func perform(
     _ action: SpatialControllerButtonAction,
+    for chirality: BorgSpatialInputChirality,
     runtimeAppModel: RuntimeAppModel,
-    sharedAppModel: SharedAppModel
+    sharedAppModel: SharedAppModel,
+    storedAppModel: StoredAppModel
   ) {
     switch action {
       case .none:
         break
       case .nextInteractionMode:
-        var modes: [RuntimeAppModel.InteractionMode] = [.model, .clipping, .marker]
-        if hasSharedScreenView(sharedAppModel) {
-          modes.append(.screenView)
-        }
-        let currentIndex = modes.firstIndex(of: runtimeAppModel.interactionMode) ?? -1
-        setInteractionMode(
-          modes[(currentIndex + 1) % modes.count],
-          runtimeAppModel: runtimeAppModel,
-          sharedAppModel: sharedAppModel
+        advanceControllerTool(
+          for: chirality,
+          sharedAppModel: sharedAppModel,
+          storedAppModel: storedAppModel
         )
       case .modelMode:
-        setInteractionMode(.model, runtimeAppModel: runtimeAppModel, sharedAppModel: sharedAppModel)
+        storedAppModel.setControllerTool(.model, for: chirality)
       case .clippingMode:
-        setInteractionMode(.clipping, runtimeAppModel: runtimeAppModel, sharedAppModel: sharedAppModel)
+        storedAppModel.setControllerTool(.clipping, for: chirality)
       case .markerMode:
-        setInteractionMode(.marker, runtimeAppModel: runtimeAppModel, sharedAppModel: sharedAppModel)
+        storedAppModel.setControllerTool(.marker, for: chirality)
+      case .measurementMode:
+        storedAppModel.setControllerTool(.lengthMeasurement, for: chirality)
       case .screenViewMode:
         guard hasSharedScreenView(sharedAppModel) else { return }
-        setInteractionMode(.screenView, runtimeAppModel: runtimeAppModel, sharedAppModel: sharedAppModel)
+        storedAppModel.setControllerTool(.screenView, for: chirality)
+      case .nextControllerTool:
+        advanceControllerTool(
+          for: chirality,
+          sharedAppModel: sharedAppModel,
+          storedAppModel: storedAppModel
+        )
+      case .controllerModelTool:
+        storedAppModel.setControllerTool(.model, for: chirality)
+      case .controllerClippingTool:
+        storedAppModel.setControllerTool(.clipping, for: chirality)
+      case .controllerMarkerTool:
+        storedAppModel.setControllerTool(.marker, for: chirality)
+      case .controllerMeasurementTool:
+        storedAppModel.setControllerTool(.lengthMeasurement, for: chirality)
+      case .controllerAreaMeasurementTool:
+        storedAppModel.setControllerTool(.areaMeasurement, for: chirality)
+      case .controllerVolumeMeasurementTool:
+        storedAppModel.setControllerTool(.volumeMeasurement, for: chirality)
       case .nextRenderMode:
         let modes: [RenderMode] = [
           .transferFunction1DLighting,
@@ -207,6 +358,8 @@ enum SpatialControllerShortcutHandler {
         )
       case .toggleMarkerWindow:
         runtimeAppModel.requestAuxiliaryWindowToggle("MarkerView")
+      case .toggleMeasurementWindow:
+        runtimeAppModel.requestAuxiliaryWindowToggle("MeasurementView")
       case .toggleLightingWindow:
         runtimeAppModel.requestAuxiliaryWindowToggle("LightingEditorView")
       case .toggleInteractionWindow:
@@ -244,6 +397,8 @@ enum SpatialControllerShortcutHandler {
         }
         sharedAppModel.defaultVolumeMarkerShowsDirection = showDirections
         sharedAppModel.synchronizeMarkers()
+      case .deleteSelectedMeasurementPoint:
+        _ = sharedAppModel.removeSelectedVolumeMeasurementPoint()
     }
   }
 
@@ -254,15 +409,18 @@ enum SpatialControllerShortcutHandler {
       }
   }
 
-  private static func setInteractionMode(
-    _ mode: RuntimeAppModel.InteractionMode,
-    runtimeAppModel: RuntimeAppModel,
-    sharedAppModel: SharedAppModel
+  private static func advanceControllerTool(
+    for chirality: BorgSpatialInputChirality,
+    sharedAppModel: SharedAppModel,
+    storedAppModel: StoredAppModel
   ) {
-    if mode != .marker {
-      sharedAppModel.clearVolumeMarkerSelection()
+    var tools = SpatialToolMode.allCases
+    if !hasSharedScreenView(sharedAppModel) {
+      tools.removeAll { $0 == .screenView }
     }
-    runtimeAppModel.interactionMode = mode
+    let current = storedAppModel.controllerTool(for: chirality)
+    let currentIndex = tools.firstIndex(of: current) ?? -1
+    storedAppModel.setControllerTool(tools[(currentIndex + 1) % tools.count], for: chirality)
   }
 
   private static func setRenderMode(_ mode: RenderMode, sharedAppModel: SharedAppModel) {

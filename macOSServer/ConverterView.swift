@@ -7,7 +7,15 @@ import AppKit
 
 // MARK: - ContentView
 struct ConverterView: View {
+  private enum Operation: String, CaseIterable, Identifiable {
+    case importDataset
+    case exportDataset
+
+    var id: Self { self }
+  }
+
   // UI state properties.
+  @State private var operation: Operation = .importDataset
   @State private var inputFile: String = ""
   @State private var inputDirectory: String = ""
   @State private var outputFile: String = ""
@@ -23,6 +31,17 @@ struct ConverterView: View {
   @State private var brickSizeErrorMsg: String?
 
   @State private var step: Int = 1
+
+  @State private var exportInputFile: String = ""
+  @State private var exportOutputFile: String = ""
+  @State private var exportInputURL: URL?
+  @State private var exportOutputURL: URL?
+  @State private var exportLevel = 0
+  @State private var exportLevelDescriptions: [String] = []
+  @State private var exportStep = 1
+  @State private var exportDidFinish = false
+  @State private var exportDidSucceed = false
+  @State private var exportInputError: String?
 
   @EnvironmentObject var storedAppModel: StoredAppModel
 
@@ -40,7 +59,16 @@ struct ConverterView: View {
 
   var body: some View {
     VStack(spacing: 16) {
+      Picker("converter_mode", selection: $operation) {
+        Text("converter_mode_import").tag(Operation.importDataset)
+        Text("converter_mode_export").tag(Operation.exportDataset)
+      }
+      .pickerStyle(.segmented)
+      .frame(maxWidth: 360)
+      .disabled(isConverting)
 
+      if operation == .importDataset {
+      VStack(spacing: 16) {
       VStack {
         HStack {
           Text("converter_import_title")
@@ -56,21 +84,16 @@ struct ConverterView: View {
             )
           )
           .font(.subheadline)
-          .foregroundColor(.secondary)
+          .foregroundStyle(.secondary)
           .frame(maxWidth: .infinity, alignment: .leading)
           .padding()
         }
       }
       Spacer()
 
-      HStack {
+      HStack(alignment: .top) {
         VStack {
-          Image("step\(step)")
-            .resizable()
-            .frame(width: 100, height: 100)
-            .scaledToFit()
-            .clipShape(RoundedRectangle(cornerRadius: 20))
-            .padding()
+          wizardStepIcon(importStepSystemImage)
           Spacer()
         }
 
@@ -83,7 +106,7 @@ struct ConverterView: View {
                   .font(.headline)
                 Text("converter_step1_subtitle")
                   .font(.subheadline)
-                  .foregroundColor(.gray)
+                  .foregroundStyle(.secondary)
 
                 if inputDirectory.isEmpty == false {
                   DicomSlicePreview(model: dicomPreviewModel)
@@ -100,7 +123,7 @@ struct ConverterView: View {
                   Text(inputFile.isEmpty ? NSLocalizedString("converter_status_no_file", comment: "") : inputFile)
                     .lineLimit(1)
                     .truncationMode(.middle)
-                    .foregroundColor(inputFile.isEmpty ? .gray : .primary)
+                    .foregroundStyle(inputFile.isEmpty ? .secondary : .primary)
                 }
 
                 HStack {
@@ -112,7 +135,7 @@ struct ConverterView: View {
                   Text(inputDirectory.isEmpty ? NSLocalizedString("converter_status_no_directory", comment: "") : inputDirectory)
                     .lineLimit(1)
                     .truncationMode(.middle)
-                    .foregroundColor(inputDirectory.isEmpty ? .gray : .primary)
+                    .foregroundStyle(inputDirectory.isEmpty ? .secondary : .primary)
                 }
               }
             case 2:
@@ -122,13 +145,12 @@ struct ConverterView: View {
                   .font(.headline)
                 Text("converter_step2_subtitle")
                   .font(.subheadline)
-                  .foregroundColor(.gray)
+                  .foregroundStyle(.secondary)
 
                 HStack {
                   Text("converter_label_data_directory")
                   TextField("converter_textfield_output_folder_placeholder", text: $storedAppModel.dataDirectory)
                     .textFieldStyle(RoundedBorderTextFieldStyle())
-                    .accentColor(.blue)
                   Button {
                     showDirectoryPicker = true
                   } label: {
@@ -143,13 +165,12 @@ struct ConverterView: View {
                   .font(.headline)
                 Text("converter_step3_subtitle")
                   .font(.subheadline)
-                  .foregroundColor(.gray)
+                  .foregroundStyle(.secondary)
 
                 HStack {
                   Text("converter_label_output_file")
                   TextField("converter_textfield_output_filename_placeholder", text: $outputFile)
                     .textFieldStyle(RoundedBorderTextFieldStyle())
-                    .accentColor(.blue)
                 }
               }
             case 4:
@@ -159,13 +180,12 @@ struct ConverterView: View {
                   .font(.headline)
                 Text("converter_step4_subtitle")
                   .font(.subheadline)
-                  .foregroundColor(.gray)
+                  .foregroundStyle(.secondary)
 
                 HStack {
                   Text("converter_label_description")
                   TextField("converter_textfield_description_placeholder", text: $datasetDescription)
                     .textFieldStyle(RoundedBorderTextFieldStyle())
-                    .accentColor(.blue)
                 }
               }
             case 5:
@@ -177,7 +197,7 @@ struct ConverterView: View {
                 if storedAppModel.lastMinute {
                   Text("converter_step5_subtitle")
                     .font(.subheadline)
-                    .foregroundColor(.gray)
+                    .foregroundStyle(.secondary)
                   HStack(spacing: 8) {
                     Text("converter_label_bricksize")
                     TextField(
@@ -186,7 +206,6 @@ struct ConverterView: View {
                       onCommit: validateBrickSize
                     )
                     .textFieldStyle(RoundedBorderTextFieldStyle())
-                    .accentColor(.blue)
                     .frame(maxWidth: 120)
                     .onAppear { tempBrickSize = String(storedAppModel.brickSize) }
                     if let error = brickSizeErrorMsg {
@@ -206,7 +225,7 @@ struct ConverterView: View {
                     .padding(.leading)
                 }
                 TextEditor(text: $logText)
-                  .border(Color.gray, width: 1)
+                  .border(Color.secondary.opacity(0.5), width: 1)
                   .font(.system(.body, design: .monospaced))
                   .frame(minHeight: 220)
               }
@@ -272,7 +291,10 @@ struct ConverterView: View {
           )
         }
       }
-
+      }
+      } else {
+        exportContent
+      }
     }
     .padding()
     .onAppear {
@@ -305,6 +327,325 @@ struct ConverterView: View {
     }
   }
 
+  private var exportContent: some View {
+    VStack(spacing: 16) {
+      HStack {
+        Text("converter_export_title")
+          .font(.title)
+          .bold()
+          .padding()
+
+        Text(
+          String(
+            format: NSLocalizedString("converter_step_of_total_format", comment: ""),
+            exportStep,
+            4
+          )
+        )
+        .font(.subheadline)
+        .foregroundStyle(.secondary)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding()
+      }
+
+      Spacer()
+
+      HStack(alignment: .top) {
+        VStack {
+          wizardStepIcon(exportStepSystemImage)
+          Spacer()
+        }
+
+        Group {
+          switch exportStep {
+            case 1:
+              VStack(alignment: .leading, spacing: 12) {
+                Text("converter_export_select_input")
+                  .font(.headline)
+                Text("converter_export_step1_subtitle")
+                  .font(.subheadline)
+                  .foregroundStyle(.secondary)
+
+                Button {
+                  selectExportInputFile()
+                } label: {
+                  Label("converter_export_select_input", systemImage: "shippingbox")
+                }
+                Text(
+                  exportInputFile.isEmpty
+                  ? NSLocalizedString("converter_status_no_file", comment: "")
+                  : exportInputFile
+                )
+                .lineLimit(2)
+                .truncationMode(.middle)
+                .foregroundStyle(exportInputFile.isEmpty ? .secondary : .primary)
+
+                if let exportInputError {
+                  Label(exportInputError, systemImage: "exclamationmark.triangle.fill")
+                    .font(.callout)
+                    .foregroundStyle(.red)
+                    .fixedSize(horizontal: false, vertical: true)
+                }
+              }
+
+            case 2:
+              VStack(alignment: .leading, spacing: 12) {
+                Text("converter_export_lod")
+                  .font(.headline)
+                Text("converter_export_step2_subtitle")
+                  .font(.subheadline)
+                  .foregroundStyle(.secondary)
+
+                Picker("converter_export_lod", selection: $exportLevel) {
+                  ForEach(exportLevelDescriptions.indices, id: \.self) { level in
+                    Text(String(format: NSLocalizedString("converter_export_lod_option", comment: ""), level))
+                      .tag(level)
+                  }
+                }
+                .frame(maxWidth: 240)
+
+                if exportLevelDescriptions.indices.contains(exportLevel) {
+                  Text(exportLevelDescriptions[exportLevel])
+                    .foregroundStyle(.secondary)
+                }
+              }
+
+            case 3:
+              VStack(alignment: .leading, spacing: 12) {
+                Text("converter_export_select_output")
+                  .font(.headline)
+                Text("converter_export_step3_subtitle")
+                  .font(.subheadline)
+                  .foregroundStyle(.secondary)
+
+                Button {
+                  selectExportOutputFile()
+                } label: {
+                  Label("converter_export_select_output", systemImage: "doc.badge.arrow.up")
+                }
+                Text(
+                  exportOutputFile.isEmpty
+                  ? NSLocalizedString("converter_export_no_output", comment: "")
+                  : exportOutputFile
+                )
+                .lineLimit(2)
+                .truncationMode(.middle)
+                .foregroundStyle(exportOutputFile.isEmpty ? .secondary : .primary)
+              }
+
+            default:
+              VStack(alignment: .leading, spacing: 12) {
+                Text(exportResultTitle)
+                  .font(.headline)
+                Text(exportResultSubtitle)
+                  .font(.subheadline)
+                  .foregroundStyle(.secondary)
+
+                if isConverting {
+                  HStack {
+                    Text(progressText)
+                    ProgressView(value: progressValue)
+                      .padding(.leading)
+                  }
+                }
+
+                TextEditor(text: $logText)
+                  .border(Color.secondary.opacity(0.5), width: 1)
+                  .font(.system(.body, design: .monospaced))
+                  .frame(minHeight: 220)
+              }
+          }
+          Spacer()
+        }
+      }
+
+      Spacer()
+
+      if !isConverting {
+        HStack {
+          Button {
+            runtimeAppModel.currentState = .start
+          } label: {
+            Label("converter_back_to_main_menu", systemImage: "chevron.backward.circle")
+          }
+
+          Spacer()
+
+          if exportStep > 1 && !exportDidSucceed {
+            Button {
+              exportStep -= 1
+              exportDidFinish = false
+            } label: {
+              Label("converter_button_back", systemImage: "chevron.backward")
+            }
+          }
+
+          if exportStep < 3 {
+            Button {
+              exportStep += 1
+            } label: {
+              Label("converter_nav_next", systemImage: "chevron.forward")
+            }
+            .disabled(
+              (exportStep == 1 && exportLevelDescriptions.isEmpty) ||
+              (exportStep == 2 && !exportLevelDescriptions.indices.contains(exportLevel))
+            )
+          } else if exportStep == 3 {
+            Button {
+              exportStep = 4
+              startExport()
+            } label: {
+              Label("converter_export_start", systemImage: "square.and.arrow.up")
+            }
+            .disabled(exportOutputFile.isEmpty)
+          } else if exportDidSucceed {
+            Button {
+              runtimeAppModel.currentState = .start
+            } label: {
+              Label("converter_nav_close", systemImage: "checkmark.circle")
+            }
+          }
+        }
+      }
+    }
+  }
+
+  private var exportStepSystemImage: String {
+    switch exportStep {
+      case 1: return "shippingbox"
+      case 2: return "square.3.layers.3d"
+      case 3: return "doc.badge.arrow.up"
+      default:
+        if !exportDidFinish { return "arrow.up.doc" }
+        return exportDidSucceed ? "checkmark.circle.fill" : "exclamationmark.triangle.fill"
+    }
+  }
+
+  private var exportResultTitle: LocalizedStringKey {
+    if !exportDidFinish { return "converter_export_progress_title" }
+    return exportDidSucceed ? "converter_export_completed_title" : "converter_export_failed_title"
+  }
+
+  private var exportResultSubtitle: LocalizedStringKey {
+    if !exportDidFinish { return "converter_export_progress_subtitle" }
+    return exportDidSucceed
+      ? "converter_export_completed_subtitle"
+      : "converter_export_failed_subtitle"
+  }
+
+  private var importStepSystemImage: String {
+    switch step {
+      case 1: return "tray.and.arrow.down"
+      case 2: return "folder"
+      case 3: return "doc.text"
+      case 4: return "text.quote"
+      case 5: return "checkmark.circle"
+      default: return "gearshape.2"
+    }
+  }
+
+  private func wizardStepIcon(_ systemName: String) -> some View {
+    Image(systemName: systemName)
+      .font(.system(size: 42, weight: .medium))
+      .foregroundStyle(.tint)
+      .frame(width: 100, height: 100)
+      .background(.quaternary, in: RoundedRectangle(cornerRadius: 20))
+      .padding()
+      .accessibilityHidden(true)
+  }
+
+  private func selectExportInputFile() {
+    let panel = NSOpenPanel()
+    panel.canChooseFiles = true
+    panel.canChooseDirectories = false
+    panel.allowsMultipleSelection = false
+    panel.allowedContentTypes = [UTType(filenameExtension: "data") ?? .data]
+    guard panel.runModal() == .OK, let url = panel.url else { return }
+
+    exportInputError = nil
+    let access = url.startAccessingSecurityScopedResource()
+    defer { if access { url.stopAccessingSecurityScopedResource() } }
+    do {
+      let metadata = try BORGVRMetaData(url: url)
+      exportInputURL = url
+      exportInputFile = url.path
+      exportLevel = 0
+      exportLevelDescriptions = metadata.levelMetadata.map { level in
+        String(
+          format: NSLocalizedString("converter_export_resolution_format", comment: ""),
+          level.size.x,
+          level.size.y,
+          level.size.z
+        )
+      }
+      exportOutputFile = url.deletingPathExtension()
+        .appendingPathExtension("nrrd").path
+      exportOutputURL = nil
+    } catch {
+      logger.error(error.localizedDescription)
+      exportInputURL = nil
+      exportInputFile = ""
+      exportLevelDescriptions = []
+      exportInputError = String(
+        format: NSLocalizedString("converter_export_invalid_input_format", comment: ""),
+        error.localizedDescription
+      )
+    }
+  }
+
+  private func selectExportOutputFile() {
+    let panel = NSSavePanel()
+    panel.allowedContentTypes = [UTType(filenameExtension: "nrrd") ?? .data]
+    panel.canCreateDirectories = true
+    panel.nameFieldStringValue = exportOutputFile.isEmpty
+      ? "volume.nrrd"
+      : URL(fileURLWithPath: exportOutputFile).lastPathComponent
+    if !exportOutputFile.isEmpty {
+      panel.directoryURL = URL(fileURLWithPath: exportOutputFile).deletingLastPathComponent()
+    }
+    guard panel.runModal() == .OK, let url = panel.url else { return }
+    let outputURL = url.pathExtension.isEmpty ? url.appendingPathExtension("nrrd") : url
+    exportOutputURL = outputURL
+    exportOutputFile = outputURL.path
+  }
+
+  private func startExport() {
+    guard !exportInputFile.isEmpty, !exportOutputFile.isEmpty else { return }
+    isConverting = true
+    exportDidFinish = false
+    exportDidSucceed = false
+    logText = ""
+    let inputURL = exportInputURL ?? URL(fileURLWithPath: exportInputFile)
+    let outputURL = exportOutputURL ?? URL(fileURLWithPath: exportOutputFile)
+    let level = exportLevel
+    let inputAccess = inputURL.startAccessingSecurityScopedResource()
+    let outputDirectory = outputURL.deletingLastPathComponent()
+    let outputAccess = outputDirectory.startAccessingSecurityScopedResource()
+    DispatchQueue.global(qos: .userInitiated).async {
+      var didSucceed = false
+      defer {
+        if inputAccess { inputURL.stopAccessingSecurityScopedResource() }
+        if outputAccess { outputDirectory.stopAccessingSecurityScopedResource() }
+      }
+      do {
+        _ = try BORGVRVolumeExporter.export(
+          inputURL: inputURL,
+          outputURL: outputURL,
+          level: level,
+          logger: logger
+        )
+        didSucceed = true
+      } catch {
+        logger.error(error.localizedDescription)
+      }
+      DispatchQueue.main.async {
+        isConverting = false
+        exportDidFinish = true
+        exportDidSucceed = didSucceed
+      }
+    }
+  }
+
   /// Presents an NSOpenPanel to allow file selection (macOS only).
   func selectInputFile() {
     let panel = NSOpenPanel()
@@ -314,8 +655,9 @@ struct ConverterView: View {
     panel.allowsOtherFileTypes = true
     if let qvisType = UTType(filenameExtension: "dat"),
        let nrrdType = UTType(filenameExtension: "nrrd"),
-       let nhdrType = UTType(filenameExtension: "nhdr") {
-      panel.allowedContentTypes = [qvisType, nrrdType, nhdrType]
+       let nhdrType = UTType(filenameExtension: "nhdr"),
+       let pvmType = UTType(filenameExtension: "pvm") {
+      panel.allowedContentTypes = [qvisType, nrrdType, nhdrType, pvmType]
     }
     if panel.runModal() == .OK, let url = panel.url {
       if url.startAccessingSecurityScopedResource() {
@@ -506,85 +848,41 @@ struct ConverterView: View {
         }
 
         if inputFile != "" {
-
-          let ext = URL(fileURLWithPath: inputFile).pathExtension
-
-          if ext == "dat" {
-            let parser = try QVISParser(filename: inputFile)
-            let fileNameWithoutExtension =
-            URL(fileURLWithPath: inputFile).deletingPathExtension().lastPathComponent
-
-            try convertRawVolume(
-              inputFilename: parser.absoluteFilename,
-              offset: 0,
-              size: parser.size,
-              maxBrickSize: bricksize,
-              bytesPerComponent: parser.bytesPerComponent,
-              componentCount: parser.components,
-              voxelSpacing: parser.voxelSpacing,
-              overlap: storedAppModel.brickOverlap,
-              outputFilename: appendExtensionIfNeeded(to: outputFilePath, ext: "data"),
-              datasetDescription: datasetDescription == ""
-              ? String(
-                format: NSLocalizedString("converter_desc_from_qvis", comment: ""),
-                fileNameWithoutExtension
-              )
-              : datasetDescription,
-              metaDescription: String(
-                format: NSLocalizedString("converter_desc_from_qvis", comment: ""),
-                fileNameWithoutExtension
-              ),
-              useCompressor: storedAppModel.enableCompression,
-              extensionStrategy: borderMode
-            )
-          } else {
-            logger.info(
-              L(
-                "converter_log_info_opening_nrrd",
-                comment: "Log: opening NRRD volume"
-              )
-            )
-
-            let parser = try NRRDParser(filename: inputFile)
-
-            let fileNameWithoutExtension =
-            URL(fileURLWithPath: inputFile).deletingPathExtension().lastPathComponent
-
-            logger.info(
-              L(
-                "converter_log_info_converting_nrrd",
-                comment: "Log: converting NRRD to BorgVR format"
-              )
-            )
-
-            try convertRawVolume(
-              inputFilename: parser.absoluteFilename,
-              offset: parser.offset,
-              size: parser.size,
-              maxBrickSize: bricksize,
-              bytesPerComponent: parser.bytesPerComponent,
-              componentCount: parser.components,
-              voxelSpacing: parser.voxelSpacing,
-              overlap: storedAppModel.brickOverlap,
-              outputFilename: appendExtensionIfNeeded(to: outputFilePath, ext: "data"),
-              datasetDescription: datasetDescription == ""
-              ? String(
-                format: NSLocalizedString("converter_desc_from_nrrd", comment: ""),
-                fileNameWithoutExtension
-              )
-              : datasetDescription,
-              metaDescription: String(
-                format: NSLocalizedString("converter_desc_from_nrrd", comment: ""),
-                fileNameWithoutExtension
-              ),
-              useCompressor: storedAppModel.enableCompression,
-              extensionStrategy: borderMode
-            )
-
+          let sourceURL = URL(fileURLWithPath: inputFile)
+          let parser = try VolumeFileParserFactory.parser(for: inputFile)
+          defer {
             if parser.dataIsTempCopy {
-              try FileManager.default.removeItem(at: URL(fileURLWithPath: parser.absoluteFilename))
+              try? FileManager.default.removeItem(atPath: parser.absoluteFilename)
             }
           }
+          let descriptionKey: String
+          switch sourceURL.pathExtension.lowercased() {
+            case "dat": descriptionKey = "converter_desc_from_qvis"
+            case "pvm": descriptionKey = "converter_desc_from_pvm"
+            default: descriptionKey = "converter_desc_from_nrrd"
+          }
+          let sourceDescription = String(
+            format: NSLocalizedString(descriptionKey, comment: ""),
+            sourceURL.deletingPathExtension().lastPathComponent
+          )
+
+          try convertRawVolume(
+            inputFilename: parser.absoluteFilename,
+            offset: parser.offset,
+            size: parser.size,
+            maxBrickSize: bricksize,
+            bytesPerComponent: parser.bytesPerComponent,
+            componentCount: parser.components,
+            voxelSpacing: parser.voxelSpacing,
+            overlap: storedAppModel.brickOverlap,
+            outputFilename: appendExtensionIfNeeded(to: outputFilePath, ext: "data"),
+            datasetDescription: datasetDescription.isEmpty
+              ? sourceDescription
+              : datasetDescription,
+            metaDescription: sourceDescription,
+            useCompressor: storedAppModel.enableCompression,
+            extensionStrategy: borderMode
+          )
         } else {
           let directory = URL(fileURLWithPath: inputDirectory, isDirectory: true)
           let dicomVolume = try getDicomVolume(directory: directory)
@@ -665,6 +963,8 @@ struct ConverterView: View {
             error.localizedDescription
           )
         )
+      } catch let error as PVMParser.Error {
+        logger.error("PVMParser Error: \(error.localizedDescription)")
       } catch let error as RawFileAccessor.Error {
         logger.error(
           String(

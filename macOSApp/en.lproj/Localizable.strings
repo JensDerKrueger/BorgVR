@@ -3,7 +3,7 @@
 
 /* Step 1 */
 "converter_step1_title" = "Select Input Source";
-"converter_step1_subtitle" = "Choose a file (QVIS/NRRD) or a directory with DICOM files.";
+"converter_step1_subtitle" = "Choose a file (QVIS/NRRD/PVM) or a directory with DICOM files.";
 "converter_button_select_input_file" = "Select Input File";
 "converter_status_no_file" = "No file selected";
 "converter_button_select_input_dir" = "Select Input Directory";
@@ -53,6 +53,7 @@
 "converter_desc_from_file" = "Converted from %@";
 "converter_desc_from_qvis" = "Converted from QVIS Volume %@";
 "converter_desc_from_nrrd" = "Converted from NRRD Volume %@";
+"converter_desc_from_pvm" = "Converted from PVM Volume %@";
 "converter_desc_from_dicom_stack" = "Converted from DICOM Stack %@";
 "converter_desc_from_dicom_directory" = "Converted from DICOM Directory %@";
 
@@ -72,7 +73,7 @@
 "modeselection_tagline" = "Volume rendering, data import, and dataset server for desktop workflows.";
 
 "modeselection_open_dataset" = "Open Dataset";
-"modeselection_import" = "Import a Dataset";
+"modeselection_import" = "Import / Export Dataset";
 "modeselection_server" = "Dataset Server";
 "modeselection_settings" = "Settings";
 "modeselection_about" = "About";
@@ -580,7 +581,7 @@
 "Dataset description" = "Dataset description";
 "Copy data" = "Copy data";
 "Start conversion" = "Start conversion";
-"Supported formats are QVIS `.dat` + `.raw`, NRRD/NHDR, and native BorgVR `.data` files." = "Supported formats are QVIS `.dat` + `.raw`, NRRD/NHDR, and native BorgVR `.data` files.";
+"Supported formats are QVIS `.dat` + `.raw`, NRRD/NHDR, PVM, and native BorgVR `.data` files." = "Supported formats are QVIS `.dat` + `.raw`, NRRD/NHDR, PVM, and native BorgVR `.data` files.";
 "For `.dat` and `.nhdr`, iOS also needs access to the referenced raw data file." = "For `.dat` and `.nhdr`, iOS also needs access to the referenced raw data file.";
 "Model" = "Model";
 "Hide UI" = "Hide UI";
@@ -749,3 +750,62 @@
 "Control level-of-detail selection, brick requests, GPU memory, and hash table sizing. Most users can leave these advanced settings unchanged." = "Control level-of-detail selection, brick requests, GPU memory, and hash table sizing. Most users can leave these advanced settings unchanged.";
 "To complete the connection, click Join in the green SharePlay menu in the menu bar." = "To complete the connection, click Join in the green SharePlay menu in the menu bar.";
 "Datasets provided through SharePlay ad-hoc connections are always loaded progressively, regardless of this setting." = "Datasets provided through SharePlay ad-hoc connections are always loaded progressively, regardless of this setting.";
+"converter_mode" = "Operation";
+"converter_mode_import" = "Import";
+"converter_mode_export" = "Export";
+"converter_export_title" = "Export Dataset";
+"converter_export_subtitle" = "Reconstruct one BorgVR level of detail as a flat, uncompressed NRRD volume.";
+"converter_export_select_input" = "Select BorgVR Dataset";
+"converter_export_lod" = "Level of Detail";
+"converter_export_lod_option" = "LoD %d";
+"converter_export_resolution_format" = "%d × %d × %d voxels";
+"converter_export_select_output" = "Select Output File";
+"converter_export_no_output" = "No output file selected";
+"converter_export_start" = "Start Export";
+"converter_export_step1_subtitle" = "Choose the BorgVR .data file to reconstruct.";
+"converter_export_step2_subtitle" = "Select the stored resolution level to export. LoD 0 is the full-resolution volume.";
+"converter_export_step3_subtitle" = "Choose where to save the flat, uncompressed NRRD volume.";
+"converter_export_progress_title" = "Exporting Dataset";
+"converter_export_progress_subtitle" = "BorgVR is reconstructing the selected level from its bricks.";
+"converter_export_completed_title" = "Export Complete";
+"converter_export_completed_subtitle" = "The selected level of detail was written successfully.";
+"converter_export_failed_title" = "Export Failed";
+"converter_export_failed_subtitle" = "Review the log, then go back to adjust the output and try again.";
+"converter_export_invalid_input_format" = "The selected file is not a valid BorgVR dataset: %@";
+
+"private_interaction_option_measurement" = "Measure";
+"measurement_window_title" = "Measurements";
+"measurement_kind_picker" = "Measurement Type";
+"measurement_kind_length" = "Length";
+"measurement_kind_area" = "Area";
+"measurement_kind_volume" = "Volume";
+"measurement_new_button" = "New Measurement";
+"measurement_empty_title" = "No Measurements";
+"measurement_empty_description" = "There are no measurements for this dataset yet.";
+"measurement_name_field" = "Name";
+"measurement_delete_point_button" = "Delete Point";
+"measurement_delete_button" = "Delete Measurement";
+"measurement_delete_all_button" = "Delete ALL Measurements";
+"measurement_delete_all_confirmation_title" = "Delete All Measurements?";
+"measurement_delete_all_confirmation_delete" = "Delete ALL";
+"measurement_delete_all_confirmation_message" = "This action removes every measurement from the current dataset.";
+"measurement_value_incomplete" = "Incomplete";
+"measurement_point_count_format" = "%d points";
+"measurement_point_format" = "Point %d";
+"measurement_load_button" = "Load Measurements…";
+"measurement_save_button" = "Save Measurements…";
+"measurement_load_merge_title" = "Load Measurements";
+"measurement_load_merge_message" = "Measurements already exist for the current dataset. Do you want to replace them or add the loaded measurements?";
+"measurement_load_replace_button" = "Replace";
+"measurement_load_add_button" = "Add";
+"measurement_dataset_mismatch_title" = "Measurements for a Different Dataset";
+"measurement_dataset_mismatch_message" = "This measurement file was created for a different dataset. Its positions and values may not match the current volume. Do you still want to load it?";
+"measurement_dataset_mismatch_load" = "Load Anyway";
+"measurement_file_error_title" = "Measurement File Error";
+"measurement_file_error_invalid" = "The selected file is not a valid BorgVR measurement file.";
+"measurement_file_error_version_format" = "Measurement file version %d is not supported.";
+"measurement_file_error_too_large" = "The measurement file exceeds the maximum supported size.";
+"measurement_file_error_too_many_measurements" = "The file contains too many measurements.";
+"measurement_file_error_too_many_points" = "The file contains too many measurement points.";
+"measurement_file_error_invalid_geometry" = "The file contains invalid measurement geometry.";
+"measurement_file_error_missing_dataset" = "The spatial dimensions of the current dataset are not available yet.";

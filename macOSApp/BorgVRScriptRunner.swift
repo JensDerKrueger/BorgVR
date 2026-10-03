@@ -37,6 +37,19 @@ final class BorgVRScriptRunner: ObservableObject {
     }
   }
 
+  private struct ScriptExportRequest: Equatable {
+    let id: UUID
+    let source: String
+    let destination: String
+    let level: Int
+
+    static func == (lhs: ScriptExportRequest, rhs: ScriptExportRequest) -> Bool {
+      lhs.source == rhs.source &&
+      lhs.destination == rhs.destination &&
+      lhs.level == rhs.level
+    }
+  }
+
   @Published private(set) var isRunning = false
   @Published private(set) var statusText = String(localized: "No script active")
   @Published private(set) var scriptURL: URL?
@@ -75,6 +88,8 @@ final class BorgVRScriptRunner: ObservableObject {
   private var scriptInputURLs: [String: URL] = [:]
   private var pendingScriptImport: ScriptImportRequest?
   private var pendingScriptImportResult: CommandResultCode?
+  private var pendingScriptExport: ScriptExportRequest?
+  private var pendingScriptExportResult: CommandResultCode?
   private var importBrickSizeOverride: Int?
   private var importOverlapOverride: Int?
   private var importBorderModeOverride: ExtensionStrategy?
@@ -175,6 +190,8 @@ final class BorgVRScriptRunner: ObservableObject {
     scriptInputURLs.removeAll()
     pendingScriptImport = nil
     pendingScriptImportResult = nil
+    pendingScriptExport = nil
+    pendingScriptExportResult = nil
     scriptProgressText = ""
     scriptProgressValue = nil
     if isRunning {
@@ -267,6 +284,14 @@ final class BorgVRScriptRunner: ObservableObject {
         source: args.string(0),
         destination: args.string(1),
         datasetDescription: args.string(2)
+      ) ?? .callbackError
+    }
+
+    register("exportdataset", [.string, .string, .int]) { [weak self] args in
+      self?.exportDataset(
+        source: args.string(0),
+        destination: args.string(1),
+        level: args.int(2)
       ) ?? .callbackError
     }
 
@@ -792,6 +817,116 @@ final class BorgVRScriptRunner: ObservableObject {
         scriptProgressValue = nil
         logError("Import failed: \(error.localizedDescription)")
         pendingScriptImportResult = .callbackError
+    }
+  }
+
+  private func exportDataset(
+    source: String,
+    destination: String,
+    level: Int
+  ) -> CommandResultCode {
+    if let pendingScriptExport,
+       pendingScriptExport.source == source,
+       pendingScriptExport.destination == destination,
+       pendingScriptExport.level == level {
+      guard let result = pendingScriptExportResult else {
+        return .waitingNoop
+      }
+      self.pendingScriptExport = nil
+      pendingScriptExportResult = nil
+      return result
+    }
+
+    guard pendingScriptExport == nil,
+          pendingScriptImport == nil,
+          let storedAppModel,
+          let logger = appModel?.logger,
+          !source.isEmpty,
+          !destination.isEmpty,
+          level >= 0 else {
+      return .invalidArguments
+    }
+
+    let sourceURL = scriptPathURL(source, isDirectory: false)
+    let destinationURL = scriptOutputURL(destination, defaultExtension: "nrrd")
+    let request = ScriptExportRequest(
+      id: UUID(),
+      source: source,
+      destination: destination,
+      level: level
+    )
+    pendingScriptExport = request
+    pendingScriptExportResult = nil
+
+    let dataDirectoryAccessURL = storedAppModel.startAccessingDataDirectory()
+    let sourceAccess = sourceURL.startAccessingSecurityScopedResource()
+    let destinationDirectory = destinationURL.deletingLastPathComponent()
+    let destinationAccess = destinationDirectory.startAccessingSecurityScopedResource()
+    let scriptLogger = ScriptExecutionLogger(
+      destination: logger,
+      onMessage: { [weak self] level, message in
+        Task { @MainActor in
+          self?.appendScriptLog(level: level, message: message)
+        }
+      },
+      onProgress: { [weak self] message, progress in
+        Task { @MainActor in
+          self?.scriptProgressText = message
+          self?.scriptProgressValue = progress
+        }
+      }
+    )
+    logInfo("Export started: \(sourceURL.path) -> \(destinationURL.path), LoD \(level)")
+
+    DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+      let result: Result<Void, Error>
+      do {
+        _ = try BORGVRVolumeExporter.export(
+          inputURL: sourceURL,
+          outputURL: destinationURL,
+          level: level,
+          logger: scriptLogger
+        )
+        result = .success(())
+      } catch {
+        result = .failure(error)
+      }
+
+      if sourceAccess {
+        sourceURL.stopAccessingSecurityScopedResource()
+      }
+      if destinationAccess {
+        destinationDirectory.stopAccessingSecurityScopedResource()
+      }
+
+      Task { @MainActor in
+        self?.storedAppModel?.stopAccessingDataDirectory(dataDirectoryAccessURL)
+        self?.completeScriptExport(
+          requestID: request.id,
+          destinationURL: destinationURL,
+          result: result
+        )
+      }
+    }
+
+    return .waitingNoop
+  }
+
+  private func completeScriptExport(
+    requestID: UUID,
+    destinationURL: URL,
+    result: Result<Void, Error>
+  ) {
+    guard pendingScriptExport?.id == requestID else { return }
+    scriptProgressText = ""
+    scriptProgressValue = nil
+    switch result {
+      case .success:
+        logInfo("Export completed: \(destinationURL.path)")
+        pendingScriptExportResult = .success
+      case .failure(let error):
+        logError("Export failed: \(error.localizedDescription)")
+        pendingScriptExportResult = .callbackError
     }
   }
 
@@ -1731,47 +1866,35 @@ private enum ScriptDatasetConverter {
 
     let sourceName = sourceURL.deletingPathExtension().lastPathComponent
     let description = datasetDescription.isEmpty ? "Imported from \(sourceName)" : datasetDescription
-    switch sourceURL.pathExtension.lowercased() {
-      case "dat":
-        let parser = try QVISParser(filename: sourceURL.path)
-        try convertRawVolume(
-          inputFilename: parser.absoluteFilename,
-          offset: 0,
-          size: parser.size,
-          bytesPerComponent: parser.bytesPerComponent,
-          componentCount: parser.components,
-          voxelSpacing: parser.voxelSpacing,
-          destinationURL: destinationURL,
-          datasetDescription: description,
-          metaDescription: "Imported from QVIS volume \(sourceName)",
-          settings: settings,
-          logger: logger
-        )
-
-      case "nrrd", "nhdr":
-        let parser = try NRRDParser(filename: sourceURL.path)
-        defer {
-          if parser.dataIsTempCopy {
-            try? FileManager.default.removeItem(atPath: parser.absoluteFilename)
-          }
-        }
-        try convertRawVolume(
-          inputFilename: parser.absoluteFilename,
-          offset: parser.offset,
-          size: parser.size,
-          bytesPerComponent: parser.bytesPerComponent,
-          componentCount: parser.components,
-          voxelSpacing: parser.voxelSpacing,
-          destinationURL: destinationURL,
-          datasetDescription: description,
-          metaDescription: "Imported from NRRD volume \(sourceName)",
-          settings: settings,
-          logger: logger
-        )
-
-      default:
-        throw ImportError.unsupportedFileType(sourceURL.pathExtension)
+    let fileExtension = sourceURL.pathExtension.lowercased()
+    guard VolumeFileParserFactory.supportedExtensions.contains(fileExtension) else {
+      throw ImportError.unsupportedFileType(sourceURL.pathExtension)
     }
+    let parser = try VolumeFileParserFactory.parser(for: sourceURL.path)
+    defer {
+      if parser.dataIsTempCopy {
+        try? FileManager.default.removeItem(atPath: parser.absoluteFilename)
+      }
+    }
+    let formatName: String
+    switch fileExtension {
+      case "dat": formatName = "QVIS"
+      case "pvm": formatName = "PVM"
+      default: formatName = "NRRD"
+    }
+    try convertRawVolume(
+      inputFilename: parser.absoluteFilename,
+      offset: parser.offset,
+      size: parser.size,
+      bytesPerComponent: parser.bytesPerComponent,
+      componentCount: parser.components,
+      voxelSpacing: parser.voxelSpacing,
+      destinationURL: destinationURL,
+      datasetDescription: description,
+      metaDescription: "Imported from \(formatName) volume \(sourceName)",
+      settings: settings,
+      logger: logger
+    )
   }
 
   static func importDICOMDirectory(

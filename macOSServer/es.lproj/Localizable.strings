@@ -3,7 +3,7 @@
 
 /* Step 1 */
 "converter_step1_title" = "Seleccionar fuente de entrada";
-"converter_step1_subtitle" = "Elige un archivo (QVIS/NRRD) o un directorio con archivos DICOM.";
+"converter_step1_subtitle" = "Elige un archivo (QVIS/NRRD/PVM) o un directorio con archivos DICOM.";
 "converter_button_select_input_file" = "Seleccionar archivo de entrada";
 "converter_status_no_file" = "Ningún archivo seleccionado";
 "converter_button_select_input_dir" = "Seleccionar directorio de entrada";
@@ -53,6 +53,7 @@
 "converter_desc_from_file" = "Convertido desde %@";
 "converter_desc_from_qvis" = "Convertido desde volumen QVIS %@";
 "converter_desc_from_nrrd" = "Convertido desde volumen NRRD %@";
+"converter_desc_from_pvm" = "Convertido desde volumen PVM %@";
 "converter_desc_from_dicom_stack" = "Convertido desde pila DICOM %@";
 "converter_desc_from_dicom_directory" = "Convertido desde directorio DICOM %@";
 
@@ -69,7 +70,7 @@
 "modeselection_title" = "BorgVR – Versión %@.%@";
 "modeselection_subtitle" = "Elige una opción abajo";
 
-"modeselection_import" = "Importar un conjunto de datos";
+"modeselection_import" = "Importar / exportar conjunto de datos";
 "modeselection_server" = "Servidor de conjuntos de datos";
 "modeselection_settings" = "Ajustes";
 "modeselection_about" = "Acerca de";
@@ -448,7 +449,7 @@
 "Dataset description" = "Descripción del conjunto de datos";
 "Copy data" = "Data kopieren";
 "Start conversion" = "Konvertierung starten";
-"Supported formats are QVIS `.dat` + `.raw`, NRRD/NHDR, and native BorgVR `.data` files." = "Unterstützt werden QVIS `.dat` + `.raw`, NRRD/NHDR und native BorgVR `.data`-Dateien.";
+"Supported formats are QVIS `.dat` + `.raw`, NRRD/NHDR, PVM, and native BorgVR `.data` files." = "Los formatos compatibles son QVIS `.dat` + `.raw`, NRRD/NHDR, PVM y archivos BorgVR `.data` nativos.";
 "For `.dat` and `.nhdr`, iOS also needs access to the referenced raw data file." = "Bei `.dat` und `.nhdr` muss iOS auch Zugriff auf die referenzierte Rohdatei bekommen.";
 "Model" = "Modell";
 "Hide UI" = "Ocultar interfaz";
@@ -524,3 +525,25 @@
 "WebGPU web server:" = "Servidor web WebGPU:";
 "datasetscanner_info_loaded_marker_file" = "Archivo de marcadores cargado: %@ (conjunto de datos %@, ID %@)";
 "datasetscanner_warning_failed_load_marker_file" = "No se pudo cargar el archivo de marcadores: %@";
+"converter_mode" = "Operación";
+"converter_mode_import" = "Importar";
+"converter_mode_export" = "Exportar";
+"converter_export_title" = "Exportar conjunto de datos";
+"converter_export_subtitle" = "Reconstruye un nivel de detalle de BorgVR como un volumen NRRD plano y sin comprimir.";
+"converter_export_select_input" = "Seleccionar conjunto BorgVR";
+"converter_export_lod" = "Nivel de detalle";
+"converter_export_lod_option" = "LoD %d";
+"converter_export_resolution_format" = "%d × %d × %d vóxeles";
+"converter_export_select_output" = "Seleccionar archivo de salida";
+"converter_export_no_output" = "No se ha seleccionado un archivo de salida";
+"converter_export_start" = "Iniciar exportación";
+"converter_export_step1_subtitle" = "Seleccione el archivo .data de BorgVR que desea reconstruir.";
+"converter_export_step2_subtitle" = "Seleccione el nivel de resolución que desea exportar. LoD 0 contiene la resolución completa.";
+"converter_export_step3_subtitle" = "Seleccione el destino del volumen NRRD plano y sin comprimir.";
+"converter_export_progress_title" = "Exportando conjunto de datos";
+"converter_export_progress_subtitle" = "BorgVR está reconstruyendo el nivel seleccionado a partir de sus bloques.";
+"converter_export_completed_title" = "Exportación completada";
+"converter_export_completed_subtitle" = "El nivel de detalle seleccionado se ha escrito correctamente.";
+"converter_export_failed_title" = "Error de exportación";
+"converter_export_failed_subtitle" = "Revise el registro y vuelva atrás para ajustar el destino e intentarlo de nuevo.";
+"converter_export_invalid_input_format" = "El archivo seleccionado no es un conjunto de datos BorgVR válido: %@";

@@ -3,7 +3,7 @@
 
 /* Step 1 */
 "converter_step1_title" = "Sélectionner la source d’entrée";
-"converter_step1_subtitle" = "Choisissez un fichier (QVIS/NRRD) ou un répertoire contenant des fichiers DICOM.";
+"converter_step1_subtitle" = "Choisissez un fichier (QVIS/NRRD/PVM) ou un répertoire contenant des fichiers DICOM.";
 "converter_button_select_input_file" = "Sélectionner le fichier d’entrée";
 "converter_status_no_file" = "Aucun fichier sélectionné";
 "converter_button_select_input_dir" = "Sélectionner le répertoire d’entrée";
@@ -53,6 +53,7 @@
 "converter_desc_from_file" = "Converti depuis %@";
 "converter_desc_from_qvis" = "Converti depuis le volume QVIS %@";
 "converter_desc_from_nrrd" = "Converti depuis le volume NRRD %@";
+"converter_desc_from_pvm" = "Converti depuis le volume PVM %@";
 "converter_desc_from_dicom_stack" = "Converti depuis la pile DICOM %@";
 "converter_desc_from_dicom_directory" = "Converti depuis le répertoire DICOM %@";
 
@@ -69,7 +70,7 @@
 "modeselection_title" = "BorgVR – Version %@.%@";
 "modeselection_subtitle" = "Veuillez choisir une option ci-dessous";
 
-"modeselection_import" = "Importer un jeu de données";
+"modeselection_import" = "Importer / exporter un jeu de données";
 "modeselection_server" = "Serveur de jeux de données";
 "modeselection_settings" = "Réglages";
 "modeselection_about" = "À propos";
@@ -448,7 +449,7 @@
 "Dataset description" = "Description du jeu de données";
 "Copy data" = "Data kopieren";
 "Start conversion" = "Konvertierung starten";
-"Supported formats are QVIS `.dat` + `.raw`, NRRD/NHDR, and native BorgVR `.data` files." = "Unterstützt werden QVIS `.dat` + `.raw`, NRRD/NHDR und native BorgVR `.data`-Dateien.";
+"Supported formats are QVIS `.dat` + `.raw`, NRRD/NHDR, PVM, and native BorgVR `.data` files." = "Les formats pris en charge sont QVIS `.dat` + `.raw`, NRRD/NHDR, PVM et les fichiers BorgVR `.data` natifs.";
 "For `.dat` and `.nhdr`, iOS also needs access to the referenced raw data file." = "Bei `.dat` und `.nhdr` muss iOS auch Zugriff auf die referenzierte Rohdatei bekommen.";
 "Model" = "Modell";
 "Hide UI" = "Masquer l’interface";
@@ -524,3 +525,25 @@
 "WebGPU web server:" = "Serveur web WebGPU :";
 "datasetscanner_info_loaded_marker_file" = "Fichier de marqueurs chargé : %@ (jeu de données %@, ID %@)";
 "datasetscanner_warning_failed_load_marker_file" = "Impossible de charger le fichier de marqueurs : %@";
+"converter_mode" = "Opération";
+"converter_mode_import" = "Importer";
+"converter_mode_export" = "Exporter";
+"converter_export_title" = "Exporter le jeu de données";
+"converter_export_subtitle" = "Reconstruit un niveau de détail BorgVR sous forme de volume NRRD plat et non compressé.";
+"converter_export_select_input" = "Sélectionner un jeu BorgVR";
+"converter_export_lod" = "Niveau de détail";
+"converter_export_lod_option" = "LoD %d";
+"converter_export_resolution_format" = "%d × %d × %d voxels";
+"converter_export_select_output" = "Sélectionner le fichier de sortie";
+"converter_export_no_output" = "Aucun fichier de sortie sélectionné";
+"converter_export_start" = "Démarrer l’exportation";
+"converter_export_step1_subtitle" = "Sélectionnez le fichier BorgVR .data à reconstruire.";
+"converter_export_step2_subtitle" = "Sélectionnez le niveau de résolution à exporter. Le LoD 0 contient la résolution complète.";
+"converter_export_step3_subtitle" = "Choisissez la destination du volume NRRD plat et non compressé.";
+"converter_export_progress_title" = "Exportation du jeu de données";
+"converter_export_progress_subtitle" = "BorgVR reconstruit le niveau sélectionné à partir de ses briques.";
+"converter_export_completed_title" = "Exportation terminée";
+"converter_export_completed_subtitle" = "Le niveau de détail sélectionné a été écrit avec succès.";
+"converter_export_failed_title" = "Échec de l’exportation";
+"converter_export_failed_subtitle" = "Consultez le journal, puis revenez en arrière pour ajuster la destination et réessayer.";
+"converter_export_invalid_input_format" = "Le fichier sélectionné n’est pas un jeu de données BorgVR valide : %@";

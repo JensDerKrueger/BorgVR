@@ -27,6 +27,19 @@ enum BorgVRMarkerFormat {
   static let positionRange: ClosedRange<Float> = -8...8
 }
 
+enum BorgVRMeasurementFormat {
+  static let fileExtension = "measurement"
+  static let defaultFilename = "BorgVR Measurements.measurement"
+  static let magicBytes = [UInt8]("BVRMEASR".utf8)
+  static let version: UInt16 = 1
+  static let maximumFileByteCount = 32 * 1024 * 1024
+  static let maximumMeasurementCount = 10_000
+  static let maximumPointCount = 1_000_000
+  static let maximumNameCharacterCount = 80
+  static let maximumNameByteCount = 512
+  static let positionRange: ClosedRange<Float> = -8...8
+}
+
 enum BorgVRSharePlayProtocol {
   static let magic: UInt32 = 0x4256_5350 // "BVSP"
   static let version = BorgVRSemanticVersion(major: 2, minor: 6)
@@ -51,6 +64,7 @@ enum BorgVRSharePlayProtocol {
     case visionTransform = 3
     case volumeMarkers = 4
     case spatialToolPreview = 5
+    case volumeMeasurements = 6
   }
 }
 

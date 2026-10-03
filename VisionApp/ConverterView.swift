@@ -111,7 +111,7 @@ struct ConverterView: View {
           if let url = url {
             let fileExtension = url.pathExtension.lowercased()
             switch fileExtension {
-              case "dat", "nrrd", "nhdr":
+              case "dat", "nrrd", "nhdr", "pvm":
                 self.mode = .convert
               case "data":
                 self.mode = .copy
@@ -371,16 +371,16 @@ struct ConverterView: View {
         }
         defer { datURL.stopAccessingSecurityScopedResource() }
 
-        let ext = datURL.pathExtension
-        let parser: VolumeFileParser
-        if ext == "dat" {
-          parser = try QVISParser(filename: inputFile)
-        } else {
-          parser = try NRRDParser(filename: inputFile)
+        let parser = try VolumeFileParserFactory.parser(for: inputFile)
+        defer {
+          if parser.dataIsTempCopy {
+            try? FileManager.default.removeItem(atPath: parser.absoluteFilename)
+          }
         }
 
         let rawURL = URL(fileURLWithPath: parser.absoluteFilename)
-        guard rawURL.startAccessingSecurityScopedResource() else {
+        let rawNeedsSecurityScope = !parser.dataIsTempCopy
+        guard !rawNeedsSecurityScope || rawURL.startAccessingSecurityScopedResource() else {
           throw FileError.noPermission(
             String(
               format: NSLocalizedString(
@@ -391,7 +391,11 @@ struct ConverterView: View {
             )
           )
         }
-        defer { rawURL.stopAccessingSecurityScopedResource() }
+        defer {
+          if rawNeedsSecurityScope {
+            rawURL.stopAccessingSecurityScopedResource()
+          }
+        }
 
         let volume = try RawFileAccessor(
           filename: parser.absoluteFilename,

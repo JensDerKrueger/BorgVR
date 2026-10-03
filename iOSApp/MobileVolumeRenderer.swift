@@ -104,13 +104,19 @@ final class MobileVolumeRenderer: NSObject, MTKViewDelegate, UIGestureRecognizer
         let delta = recognizer.translation(in: view)
         recognizer.setTranslation(.zero, in: view)
         if appModel.interactionMode == .marker {
-          _ = core.moveSelectedMarkerInDepth(by: delta.y)
+          if core.moveSelectedMarkerInDepth(by: delta.y) {
+            sharePlay.synchronizeMarkers()
+          }
+        } else if appModel.interactionMode == .measurement {
+          if core.moveSelectedMeasurementPointInDepth(by: delta.y) {
+            sharePlay.synchronizeMeasurements()
+          }
         } else {
           core.panModel(by: delta, in: view)
         }
       case .ended, .cancelled, .failed:
         recognizer.setTranslation(.zero, in: view)
-        if appModel.interactionMode == .marker {
+        if appModel.interactionMode == .marker || appModel.interactionMode == .measurement {
           sharePlay.flushSynchronization()
         }
       default:

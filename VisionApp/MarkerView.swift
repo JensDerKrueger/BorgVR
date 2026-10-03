@@ -31,6 +31,7 @@ struct MarkerView: View {
         Text("private_interaction_option_model").tag("model")
         Text("private_interaction_option_clipping").tag("clipping")
         Text("private_interaction_option_marker").tag("marker")
+        Text("private_interaction_option_measurement").tag("measurement")
         if hasSharedScreenView {
           Text("Screen View").tag("screenView")
         }
@@ -259,6 +260,9 @@ struct MarkerView: View {
         if let newMode = RuntimeAppModel.InteractionMode(rawValue: rawValue) {
           if newMode != .marker {
             sharedAppModel.selectedVolumeMarkerID = nil
+          }
+          if newMode != .measurement {
+            sharedAppModel.selectedVolumeMeasurementPointID = nil
           }
           runtimeAppModel.interactionMode = newMode
         }

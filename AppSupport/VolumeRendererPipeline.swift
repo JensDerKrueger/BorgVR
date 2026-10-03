@@ -84,6 +84,15 @@ enum VolumeRendererPipeline {
     markerDescriptor.vertexFunction = markerVertexFunction
     markerDescriptor.fragmentFunction = markerFragmentFunction
     markerDescriptor.colorAttachments[0].pixelFormat = colorFormat
+    if let colorAttachment = markerDescriptor.colorAttachments[0] {
+      colorAttachment.isBlendingEnabled = true
+      colorAttachment.rgbBlendOperation = .add
+      colorAttachment.alphaBlendOperation = .add
+      colorAttachment.sourceRGBBlendFactor = .sourceAlpha
+      colorAttachment.destinationRGBBlendFactor = .oneMinusSourceAlpha
+      colorAttachment.sourceAlphaBlendFactor = .one
+      colorAttachment.destinationAlphaBlendFactor = .oneMinusSourceAlpha
+    }
     markerDescriptor.depthAttachmentPixelFormat = depthFormat
 
     let compositeDescriptor = MTLRenderPipelineDescriptor()
@@ -118,11 +127,13 @@ final class ScreenVolumeMarkerRenderer {
   private var markerPipeline: MTLRenderPipelineState?
   private var compositePipeline: MTLRenderPipelineState?
   private var markerDepthState: MTLDepthStencilState?
+  private var measurementSurfaceDepthState: MTLDepthStencilState?
   private var compositeDepthState: MTLDepthStencilState?
   private var sphereBuffer: MTLBuffer?
   private var sphereNormalBuffer: MTLBuffer?
   private var sphereVertexCount = 0
   private let tubeMeshCache = VolumeMarkerTubeMeshCache()
+  private let measurementSurfaceMeshCache = MeasurementSurfaceMeshCache()
   private var colorTexture: MTLTexture?
   private var depthTexture: MTLTexture?
 
@@ -139,6 +150,12 @@ final class ScreenVolumeMarkerRenderer {
       descriptor.depthCompareFunction = .greater
       descriptor.isDepthWriteEnabled = true
       markerDepthState = device.makeDepthStencilState(descriptor: descriptor)
+    }
+    if measurementSurfaceDepthState == nil {
+      let descriptor = MTLDepthStencilDescriptor()
+      descriptor.depthCompareFunction = .greater
+      descriptor.isDepthWriteEnabled = false
+      measurementSurfaceDepthState = device.makeDepthStencilState(descriptor: descriptor)
     }
     if compositeDepthState == nil {
       let descriptor = MTLDepthStencilDescriptor()
@@ -178,6 +195,9 @@ final class ScreenVolumeMarkerRenderer {
     markers: [VolumeMarker],
     spatialToolPreviews: [SpatialToolPreview],
     selectedMarkerIDs: Set<UUID>,
+    measurements: [VolumeMeasurement],
+    selectedMeasurementID: UUID?,
+    selectedMeasurementPointID: UUID?,
     viewProjection: simd_float4x4,
     modelMatrix: simd_float4x4,
     volumeScale: simd_float4x4,
@@ -187,6 +207,7 @@ final class ScreenVolumeMarkerRenderer {
           drawableSize.height >= 1,
           let markerPipeline,
           let markerDepthState,
+          let measurementSurfaceDepthState,
           let sphereBuffer,
           let sphereNormalBuffer else {
       return nil
@@ -235,7 +256,27 @@ final class ScreenVolumeMarkerRenderer {
       volumeScale.columns.1.y,
       volumeScale.columns.2.z
     )
-    tubeMeshCache.retainOnly(markerIDs: Set(markers.map(\.id)))
+    var measurementLineMarkers: [VolumeMarker] = []
+    for measurement in measurements {
+      let selected = selectedMeasurementID == measurement.id
+      let color = VolumeMeasurementPresentation.color(for: measurement.kind, selected: selected)
+      for (edgeIndex, edge) in measurement.geometry.edges.enumerated() {
+        measurementLineMarkers.append(VolumeMarker(
+          id: VolumeMeasurementPresentation.visualizationID(
+            measurement.id,
+            index: 0x1000 + edgeIndex
+          ),
+          name: measurement.name,
+          color: color,
+          geometry: .stroke([
+            VolumeMarkerPoint(position: edge.start, radius: 0.0015),
+            VolumeMarkerPoint(position: edge.end, radius: 0.0015)
+          ])
+        ))
+      }
+    }
+    tubeMeshCache.retainOnly(markerIDs: Set((markers + measurementLineMarkers).map(\.id)))
+    measurementSurfaceMeshCache.retainOnly(measurementIDs: Set(measurements.map(\.id)))
 
     func markerColor(_ marker: VolumeMarker) -> SIMD4<Float> {
       VolumeMarkerPresentation.color(
@@ -290,6 +331,37 @@ final class ScreenVolumeMarkerRenderer {
       )
     }
 
+    func drawMeasurementSurface(
+      _ measurement: VolumeMeasurement,
+      color: SIMD4<Float>,
+      writesDepth: Bool
+    ) {
+      guard let mesh = measurementSurfaceMeshCache.mesh(
+        for: measurement,
+        coordinateScale: coordinateScale,
+        device: device
+      ) else { return }
+      var markerModel = modelMatrix
+      var color = color
+      encoder.setDepthStencilState(writesDepth ? markerDepthState : measurementSurfaceDepthState)
+      encoder.setCullMode(.none)
+      encoder.setVertexBuffer(mesh.positionBuffer, offset: 0, index: VertexBufferIndex.meshPositions.rawValue)
+      encoder.setVertexBuffer(mesh.normalBuffer, offset: 0, index: 24)
+      encoder.setVertexBytes(&markerModel, length: MemoryLayout<simd_float4x4>.stride, index: 21)
+      encoder.setFragmentBytes(&color, length: MemoryLayout<SIMD4<Float>>.stride, index: 23)
+      encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: mesh.vertexCount)
+    }
+
+    for measurement in measurements where !measurement.geometry.triangleVertices.isEmpty {
+      let selected = selectedMeasurementID == measurement.id
+      var color = VolumeMeasurementPresentation.color(for: measurement.kind, selected: selected)
+      color.w = measurement.kind == .area ? 0.34 : 0.24
+      drawMeasurementSurface(measurement, color: color, writesDepth: false)
+    }
+
+    encoder.setDepthStencilState(markerDepthState)
+    encoder.setCullMode(.back)
+
     for marker in markers {
       let color = markerColor(marker)
       switch marker.geometry {
@@ -308,6 +380,30 @@ final class ScreenVolumeMarkerRenderer {
     }
     for preview in spatialToolPreviews {
       drawSphere(preview.point, color: preview.color)
+    }
+    for marker in measurementLineMarkers {
+      drawTube(for: marker, color: marker.color)
+    }
+    for measurement in measurements {
+      let selected = selectedMeasurementID == measurement.id
+      let color = VolumeMeasurementPresentation.color(for: measurement.kind, selected: selected)
+      for (pointIndex, point) in measurement.geometry.points.enumerated() {
+        let isSelected = selected && selectedMeasurementPointID == point.id
+        let isPlaneAnchor = measurement.kind == .area && pointIndex < 3
+        let pointColor = isSelected
+          ? SIMD4<Float>(1, 0.22, 0.03, 1)
+          : (isPlaneAnchor ? SIMD4<Float>(1, 1, 1, 1) : color)
+        drawSphere(
+          VolumeMarkerPoint(
+            position: point.position,
+            radius: isSelected ? 0.014 : (isPlaneAnchor ? 0.012 : 0.010)
+          ),
+          color: pointColor
+        )
+      }
+    }
+    for measurement in measurements where !measurement.geometry.triangleVertices.isEmpty {
+      drawMeasurementSurface(measurement, color: .zero, writesDepth: true)
     }
     encoder.endEncoding()
     return targets

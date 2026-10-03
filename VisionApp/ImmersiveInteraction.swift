@@ -8,7 +8,8 @@ class ImmersiveInteraction {
   var transferFunctionPanelInteractionState: TransferFunctionPanelInteractionState
   private let toggleTransferFunctionChannelFromAccessory: @MainActor (Int) -> Void
   private let performControllerFaceButtonFromAccessory: @MainActor (
-    SpatialControllerFaceButton
+    SpatialControllerFaceButton,
+    BorgSpatialInputChirality
   ) -> Void
 
   private var startTranslation: SIMD3<Float> = .zero
@@ -34,12 +35,19 @@ class ImmersiveInteraction {
   private var quickMarkerCandidateTime: Date?
   private var quickMarkerCandidatePosition: SIMD3<Float>?
   private let quickMarkerMaxDistance: Float = 0.15
+  private var measurementDragMeasurementID: UUID?
+  private var measurementDragPointID: UUID?
+  private var measurementDragHandStart: SIMD3<Float>?
+  private var measurementDragPointStart: SIMD3<Float>?
+  private var lastMeasurementTap: (pointID: UUID, time: Date)?
+  private let measurementDoubleClickInterval: TimeInterval = 0.35
   private struct SpatialAccessoryAction {
     enum Kind {
       case model
       case clipping
       case markerSphere
       case markerStroke
+      case measurementPoint
       case screenView
       case transferFunction
     }
@@ -52,17 +60,27 @@ class ImmersiveInteraction {
     let startClippingTranslation: SIMD3<Float>
     let markerID: UUID?
     let markerStartPositions: [UUID: SIMD3<Float>]
+    let measurementID: UUID?
+    let measurementPointID: UUID?
     let transferFunctionStart: SIMD2<Float>?
+    let markerStrokeUsesModifierButton: Bool
   }
   private var spatialAccessoryAction: SpatialAccessoryAction?
   private var activeSpatialStylusID: UUID?
+  private var activeSpatialStylusMeasurementID: UUID?
+  private var activeSpatialStylusMeasurementPointID: UUID?
+  private var spatialStylusStartsNewMeasurement = false
   private var spatialStylusModifierStates: [UUID: Bool] = [:]
   private var lastSpatialStylusModifierPressTimes: [UUID: TimeInterval] = [:]
   private var suppressedSpatialStylusModifierIDs: Set<UUID> = []
+  private var spatialStylusToolToggleStates: [UUID: Bool] = [:]
+  private var suppressedSpatialStylusToolToggleIDs: Set<UUID> = []
+  private var pendingSpatialStylusMeasurementStarts: [UUID: TimeInterval] = [:]
   private let spatialStylusDoubleClickInterval: TimeInterval = 0.35
   private var spatialAccessoryPrimaryStates: [UUID: Bool] = [:]
   private var spatialAccessoryModifierStates: [UUID: Bool] = [:]
   private var spatialAccessoryFaceButtonStates: [UUID: Set<SpatialControllerFaceButton>] = [:]
+  private var spatialAccessoryMeasurementIDs: [UUID: UUID] = [:]
   private var lastSpatialAccessoryAdjustmentTime: TimeInterval?
 
   init(sharedAppModel: SharedAppModel,
@@ -70,7 +88,8 @@ class ImmersiveInteraction {
        transferFunctionPanelInteractionState: TransferFunctionPanelInteractionState,
        toggleTransferFunctionChannel: @escaping @MainActor (Int) -> Void,
        performControllerFaceButton: @escaping @MainActor (
-         SpatialControllerFaceButton
+         SpatialControllerFaceButton,
+         BorgSpatialInputChirality
        ) -> Void) {
     self.sharedAppModel = sharedAppModel
     self.storedAppModel = storedAppModel
@@ -655,6 +674,195 @@ class ImmersiveInteraction {
     }
   }
 
+  private func measurementPointHit(
+    origin: SIMD3<Float>,
+    direction: SIMD3<Float>,
+    datasetInfo: RuntimeAppModel.DatasetInfo
+  ) -> (measurementID: UUID, point: VolumeMeasurementPoint)? {
+    var best: (measurementID: UUID, point: VolumeMeasurementPoint, distance: Float)?
+    for measurement in sharedAppModel.volumeMeasurementsSnapshot() {
+      for point in measurement.geometry.points {
+        let center = markerWorldCenter(
+          VolumeMarkerPoint(position: point.position, radius: 0.012),
+          datasetInfo: datasetInfo
+        )
+        guard center.x.isFinite, center.y.isFinite, center.z.isFinite else { continue }
+        let oc = origin - center
+        let radius: Float = 0.025
+        let b = simd_dot(oc, direction)
+        let c = simd_dot(oc, oc) - radius * radius
+        let discriminant = b * b - c
+        guard discriminant.isFinite, discriminant >= 0 else { continue }
+        let distance = -b - sqrt(discriminant)
+        guard distance.isFinite, distance >= 0 else { continue }
+        if best == nil || distance < best!.distance {
+          best = (measurement.id, point, distance)
+        }
+      }
+    }
+    return best.map { ($0.measurementID, $0.point) }
+  }
+
+  private func nearestMeasurementPoint(
+    to worldPosition: SIMD3<Float>,
+    datasetInfo: RuntimeAppModel.DatasetInfo
+  ) -> (measurementID: UUID, point: VolumeMeasurementPoint)? {
+    var best: (measurementID: UUID, point: VolumeMeasurementPoint, distance: Float)?
+    for measurement in sharedAppModel.volumeMeasurementsSnapshot() {
+      for point in measurement.geometry.points {
+        let center = markerWorldCenter(
+          VolumeMarkerPoint(position: point.position, radius: 0.012),
+          datasetInfo: datasetInfo
+        )
+        let distance = simd_distance(center, worldPosition)
+        guard distance.isFinite, distance <= 0.04 else { continue }
+        if best == nil || distance < best!.distance {
+          best = (measurement.id, point, distance)
+        }
+      }
+    }
+    return best.map { ($0.measurementID, $0.point) }
+  }
+
+  private func appendMeasurementPoint(
+    at position: SIMD3<Float>,
+    datasetInfo: RuntimeAppModel.DatasetInfo,
+    forceNewMeasurement: Bool = false,
+    kind requestedKind: VolumeMeasurementKind? = nil,
+    preferredMeasurementID: UUID? = nil
+  ) -> (measurementID: UUID, pointID: UUID)? {
+    let selectedID = forceNewMeasurement
+      ? nil
+      : (preferredMeasurementID ?? sharedAppModel.selectedVolumeMeasurementID)
+    let kind = requestedKind ?? sharedAppModel.measurementKind
+    let name = sharedAppModel.nextVolumeMeasurementName()
+    let result = sharedAppModel.mutateVolumeMeasurements { measurements -> (
+      measurementID: UUID,
+      pointID: UUID
+    )? in
+      var index = selectedID.flatMap { selectedID in
+        measurements.firstIndex {
+          $0.id == selectedID && $0.kind == kind
+        }
+      }
+      if index == nil {
+        measurements.append(VolumeMeasurement(name: name, kind: kind))
+        index = measurements.indices.last
+      }
+      guard let index,
+            let pointID = measurements[index].addPoint(
+              at: position,
+              physicalExtent: datasetInfo.physicalExtentMeters
+            ) else { return nil }
+      return (measurements[index].id, pointID)
+    }
+    guard let result else { return nil }
+    let measurementID = result.measurementID
+    sharedAppModel.selectedVolumeMeasurementID = measurementID
+    sharedAppModel.selectedVolumeMeasurementPointID = result.pointID
+    return result
+  }
+
+  private func updateMeasurementPoint(
+    measurementID: UUID,
+    pointID: UUID,
+    position: SIMD3<Float>,
+    datasetInfo: RuntimeAppModel.DatasetInfo
+  ) {
+    sharedAppModel.mutateVolumeMeasurements { measurements in
+      guard let index = measurements.firstIndex(where: {
+        $0.id == measurementID
+      }) else { return }
+      measurements[index].setPoint(
+        id: pointID,
+        position: position,
+        physicalExtent: datasetInfo.physicalExtentMeters
+      )
+    }
+  }
+
+  private func removeMeasurementPoint(measurementID: UUID, pointID: UUID) {
+    _ = sharedAppModel.removeVolumeMeasurementPoint(
+      measurementID: measurementID,
+      pointID: pointID
+    )
+  }
+
+  private func handleMeasurementInteraction(
+    _ event: SpatialEventCollection.Event,
+    datasetInfo: RuntimeAppModel.DatasetInfo
+  ) {
+    switch event.phase {
+      case .active:
+        guard let handPosition = inputWorldPosition(from: event) else { return }
+        if measurementDragPointID == nil {
+          if let hit = nearestMeasurementPoint(
+            to: handPosition,
+            datasetInfo: datasetInfo
+          ) {
+            if let lastMeasurementTap,
+               lastMeasurementTap.pointID == hit.point.id,
+               Date().timeIntervalSince(lastMeasurementTap.time) <= measurementDoubleClickInterval {
+              removeMeasurementPoint(measurementID: hit.measurementID, pointID: hit.point.id)
+              self.lastMeasurementTap = nil
+              return
+            }
+            measurementDragMeasurementID = hit.measurementID
+            measurementDragPointID = hit.point.id
+            measurementDragPointStart = hit.point.position
+            measurementDragHandStart = handPosition
+            sharedAppModel.selectedVolumeMeasurementID = hit.measurementID
+            sharedAppModel.selectedVolumeMeasurementPointID = hit.point.id
+          } else {
+            let position = markerPosition(
+              fromWorldPosition: handPosition,
+              datasetInfo: datasetInfo
+            )
+            guard let added = appendMeasurementPoint(
+              at: position,
+              datasetInfo: datasetInfo
+            ) else { return }
+            measurementDragMeasurementID = added.measurementID
+            measurementDragPointID = added.pointID
+            measurementDragPointStart = position
+            measurementDragHandStart = handPosition
+          }
+        }
+
+        guard let measurementID = measurementDragMeasurementID,
+              let pointID = measurementDragPointID,
+              let pointStart = measurementDragPointStart,
+              let handStart = measurementDragHandStart else { return }
+        let inverseVolume = markerVolumeMatrix(for: datasetInfo).inverse
+        let localDelta = inverseVolume.transformDirection(handPosition - handStart)
+        updateMeasurementPoint(
+          measurementID: measurementID,
+          pointID: pointID,
+          position: clamp(
+            pointStart + localDelta,
+            BorgVRMarkerFormat.positionRange.lowerBound,
+            BorgVRMarkerFormat.positionRange.upperBound
+          ),
+          datasetInfo: datasetInfo
+        )
+
+      case .ended, .cancelled:
+        if let pointID = measurementDragPointID {
+          lastMeasurementTap = (pointID, Date())
+        }
+        measurementDragMeasurementID = nil
+        measurementDragPointID = nil
+        measurementDragHandStart = nil
+        measurementDragPointStart = nil
+
+      @unknown default:
+        measurementDragMeasurementID = nil
+        measurementDragPointID = nil
+        measurementDragHandStart = nil
+        measurementDragPointStart = nil
+    }
+  }
+
   private func captureMarkerDragStartPositions() {
     markerDragStartPositions = Dictionary(uniqueKeysWithValues: sharedAppModel.volumeMarkers.compactMap {
       sharedAppModel.selectedVolumeMarkerIDs.contains($0.id) ? ($0.id, $0.position) : nil
@@ -758,7 +966,7 @@ class ImmersiveInteraction {
 
   private func beginSpatialAccessoryAction(
     _ sample: BorgSpatialInputSample,
-    mode: RuntimeAppModel.InteractionMode,
+    tool: SpatialToolMode,
     datasetInfo: RuntimeAppModel.DatasetInfo?
   ) {
     guard spatialAccessoryAction == nil,
@@ -768,6 +976,8 @@ class ImmersiveInteraction {
     var kind: SpatialAccessoryAction.Kind
     var markerID: UUID?
     var markerStartPositions: [UUID: SIMD3<Float>] = [:]
+    var measurementID: UUID?
+    var measurementPointID: UUID?
     var transferFunctionStart: SIMD2<Float>?
 
     if let hit = transferFunctionPanelInteractionState.hitTest(
@@ -793,7 +1003,7 @@ class ImmersiveInteraction {
       transferFunctionPanelInteractionState.updateHitUV(hit)
     } else {
 
-      switch mode {
+      switch tool.interactionMode {
         case .model:
           kind = .model
         case .clipping:
@@ -846,6 +1056,44 @@ class ImmersiveInteraction {
             }
           )
           kind = .markerSphere
+        case .measurement:
+          guard let datasetInfo, let measurementKind = tool.measurementKind else { return }
+          if let hit = measurementPointHit(
+            origin: sample.aimOrigin,
+            direction: sample.aimDirection,
+            datasetInfo: datasetInfo
+          ) {
+            measurementID = hit.measurementID
+            measurementPointID = hit.point.id
+            spatialAccessoryMeasurementIDs[sample.id] = hit.measurementID
+            sharedAppModel.selectedVolumeMeasurementID = hit.measurementID
+            sharedAppModel.selectedVolumeMeasurementPointID = hit.point.id
+          } else {
+            let position: SIMD3<Float>
+            if storedAppModel.markerSpawnAtGaze,
+               let hit = rayVolumeHit(
+                origin: sample.aimOrigin,
+                direction: sample.aimDirection,
+                datasetInfo: datasetInfo
+               ) {
+              position = hit
+            } else {
+              position = markerPosition(
+                fromWorldPosition: sample.aimOrigin,
+                datasetInfo: datasetInfo
+              )
+            }
+            guard let added = appendMeasurementPoint(
+              at: position,
+              datasetInfo: datasetInfo,
+              kind: measurementKind,
+              preferredMeasurementID: spatialAccessoryMeasurementIDs[sample.id]
+            ) else { return }
+            measurementID = added.measurementID
+            measurementPointID = added.pointID
+            spatialAccessoryMeasurementIDs[sample.id] = added.measurementID
+          }
+          kind = .measurementPoint
       }
     }
 
@@ -858,13 +1106,17 @@ class ImmersiveInteraction {
       startClippingTranslation: sharedAppModel.lastTranslationClipping,
       markerID: markerID,
       markerStartPositions: markerStartPositions,
-      transferFunctionStart: transferFunctionStart
+      measurementID: measurementID,
+      measurementPointID: measurementPointID,
+      transferFunctionStart: transferFunctionStart,
+      markerStrokeUsesModifierButton: false
     )
   }
 
   private func beginSpatialAccessoryStroke(
     _ sample: BorgSpatialInputSample,
-    datasetInfo: RuntimeAppModel.DatasetInfo?
+    datasetInfo: RuntimeAppModel.DatasetInfo?,
+    usesModifierButton: Bool
   ) {
     guard spatialAccessoryAction == nil,
           activeSpatialStylusID == nil,
@@ -894,7 +1146,10 @@ class ImmersiveInteraction {
       startClippingTranslation: sharedAppModel.lastTranslationClipping,
       markerID: marker.id,
       markerStartPositions: [:],
-      transferFunctionStart: nil
+      measurementID: nil,
+      measurementPointID: nil,
+      transferFunctionStart: nil,
+      markerStrokeUsesModifierButton: usesModifierButton
     )
   }
 
@@ -988,6 +1243,31 @@ class ImmersiveInteraction {
           sharedAppModel.synchronizeMarkers()
         }
 
+      case .measurementPoint:
+        guard let datasetInfo,
+              let measurementID = action.measurementID,
+              let pointID = action.measurementPointID else { return }
+        let position: SIMD3<Float>
+        if storedAppModel.markerSpawnAtGaze,
+           let hit = rayVolumeHit(
+            origin: sample.aimOrigin,
+            direction: sample.aimDirection,
+            datasetInfo: datasetInfo
+           ) {
+          position = hit
+        } else {
+          position = markerPosition(
+            fromWorldPosition: sample.aimOrigin,
+            datasetInfo: datasetInfo
+          )
+        }
+        updateMeasurementPoint(
+          measurementID: measurementID,
+          pointID: pointID,
+          position: position,
+          datasetInfo: datasetInfo
+        )
+
       case .screenView:
         updateScreenView(fromWorldTransform: sample.gripTransform)
 
@@ -1046,6 +1326,8 @@ class ImmersiveInteraction {
         sharedAppModel.synchronize(kind: .stateOnly)
       case .markerSphere, .markerStroke:
         sharedAppModel.synchronizeMarkers()
+      case .measurementPoint:
+        break
       case .screenView:
         sharedAppModel.screenViewInteractionActive = false
         sharedAppModel.synchronizeScreenView()
@@ -1196,6 +1478,7 @@ class ImmersiveInteraction {
       transferFunctionPanelDragStart != nil ||
       markerDragID != nil ||
       markerScaleID != nil ||
+      measurementDragPointID != nil ||
       quickMarkerDragActive ||
       sharedAppModel.screenViewInteractionActive
   }
@@ -1213,6 +1496,22 @@ class ImmersiveInteraction {
       stylusIDs.contains($0.key)
     }
     suppressedSpatialStylusModifierIDs.formIntersection(stylusIDs)
+    spatialStylusToolToggleStates = spatialStylusToolToggleStates.filter {
+      stylusIDs.contains($0.key)
+    }
+    suppressedSpatialStylusToolToggleIDs.formIntersection(stylusIDs)
+    pendingSpatialStylusMeasurementStarts = pendingSpatialStylusMeasurementStarts.filter {
+      stylusIDs.contains($0.key)
+    }
+    if storedAppModel.stylusTool.isMeasurement {
+      for (stylusID, pressTime) in pendingSpatialStylusMeasurementStarts
+      where timestamp - pressTime > spatialStylusDoubleClickInterval {
+        toggleSpatialStylusNewMeasurement()
+        pendingSpatialStylusMeasurementStarts[stylusID] = nil
+      }
+    } else {
+      pendingSpatialStylusMeasurementStarts.removeAll()
+    }
 
     let activeSample = activeSpatialStylusID.flatMap({ activeID in
       styli.first(where: { $0.id == activeID })
@@ -1225,24 +1524,70 @@ class ImmersiveInteraction {
       return nil
     }
 
+    let toolToggleWasPressed = spatialStylusToolToggleStates[sample.id] ?? false
+    if sample.toolTogglePressed, !toolToggleWasPressed {
+      advanceSpatialStylusMode()
+      suppressedSpatialStylusToolToggleIDs.insert(sample.id)
+      pendingSpatialStylusMeasurementStarts.removeAll()
+      lastSpatialStylusModifierPressTimes[sample.id] = nil
+      suppressedSpatialStylusModifierIDs.remove(sample.id)
+      activeSpatialStylusID = nil
+      activeSpatialStylusMeasurementID = nil
+      activeSpatialStylusMeasurementPointID = nil
+    }
+    spatialStylusToolToggleStates[sample.id] = sample.toolTogglePressed
+
+    if !sample.primaryPressed, !sample.modifierPressed {
+      suppressedSpatialStylusToolToggleIDs.remove(sample.id)
+    }
+
     let modifierWasPressed = spatialStylusModifierStates[sample.id] ?? false
-    if sample.modifierPressed, !sample.primaryPressed, !modifierWasPressed {
-      if let lastPress = lastSpatialStylusModifierPressTimes[sample.id],
-         timestamp - lastPress <= spatialStylusDoubleClickInterval {
-        lastSpatialStylusModifierPressTimes[sample.id] = nil
-        suppressedSpatialStylusModifierIDs.insert(sample.id)
-        if sharedAppModel.removeLastVolumeMarker() {
-          sharedAppModel.synchronizeMarkers()
-        }
-      } else {
-        lastSpatialStylusModifierPressTimes[sample.id] = timestamp
+    if sample.modifierPressed, !sample.primaryPressed,
+       !sample.toolTogglePressed, !modifierWasPressed {
+      switch storedAppModel.stylusTool {
+        case .lengthMeasurement, .areaMeasurement, .volumeMeasurement:
+          if let firstPress = pendingSpatialStylusMeasurementStarts[sample.id],
+             timestamp - firstPress <= spatialStylusDoubleClickInterval {
+            pendingSpatialStylusMeasurementStarts[sample.id] = nil
+            suppressedSpatialStylusModifierIDs.insert(sample.id)
+            spatialStylusStartsNewMeasurement = false
+            if !sharedAppModel.removeLastVolumeMeasurementPoint() {
+              activeSpatialStylusMeasurementID = nil
+              activeSpatialStylusMeasurementPointID = nil
+            }
+          } else {
+            pendingSpatialStylusMeasurementStarts[sample.id] = timestamp
+          }
+        case .marker:
+          if let firstPress = lastSpatialStylusModifierPressTimes[sample.id],
+             timestamp - firstPress <= spatialStylusDoubleClickInterval {
+            lastSpatialStylusModifierPressTimes[sample.id] = nil
+            suppressedSpatialStylusModifierIDs.insert(sample.id)
+            if sharedAppModel.removeLastVolumeMarker() {
+              sharedAppModel.synchronizeMarkers()
+            }
+          } else {
+            lastSpatialStylusModifierPressTimes[sample.id] = timestamp
+          }
+        case .model, .clipping, .screenView:
+          break
       }
     } else if !sample.modifierPressed {
       suppressedSpatialStylusModifierIDs.remove(sample.id)
     }
     spatialStylusModifierStates[sample.id] = sample.modifierPressed
 
-    let requestsAction = sample.primaryPressed || sample.modifierPressed
+    if suppressedSpatialStylusToolToggleIDs.contains(sample.id) {
+      return BorgSpatialStylusSample(
+        tipPosition: sample.aimOrigin,
+        isDrawing: false,
+        drawingPressure: nil,
+        isAdjustingRadius: false
+      )
+    }
+
+    let requestsAction = sample.primaryPressed ||
+      (storedAppModel.stylusTool == .marker && sample.modifierPressed)
     if activeSpatialStylusID == sample.id {
       if !requestsAction {
         activeSpatialStylusID = nil
@@ -1257,17 +1602,104 @@ class ImmersiveInteraction {
     return BorgSpatialStylusSample(
       tipPosition: sample.aimOrigin,
       isDrawing: ownsAction && sample.primaryPressed,
-      tipPressure: ownsAction ? sample.tipPressure : nil,
+      drawingPressure: ownsAction ? sample.drawingPressure : nil,
       isAdjustingRadius: ownsAction &&
+        storedAppModel.stylusTool == .marker &&
         !sample.primaryPressed &&
         sample.modifierPressed &&
         !suppressedSpatialStylusModifierIDs.contains(sample.id)
     )
   }
 
+  private func advanceSpatialStylusMode() {
+    spatialStylusStartsNewMeasurement = false
+    let modes = SpatialToolMode.museModes
+    let currentIndex = modes.firstIndex(of: storedAppModel.stylusTool) ?? -1
+    let nextMode = modes[(currentIndex + 1) % modes.count]
+    storedAppModel.stylusTool = nextMode
+    guard let nextKind = nextMode.measurementKind else {
+      sharedAppModel.selectedVolumeMeasurementID = nil
+      sharedAppModel.selectedVolumeMeasurementPointID = nil
+      return
+    }
+
+    sharedAppModel.measurementKind = nextKind
+    sharedAppModel.selectedVolumeMeasurementID = sharedAppModel.volumeMeasurementsSnapshot()
+      .last(where: { $0.kind == nextKind })?.id
+    sharedAppModel.selectedVolumeMeasurementPointID = nil
+  }
+
+  private func toggleSpatialStylusNewMeasurement() {
+    spatialStylusStartsNewMeasurement.toggle()
+    sharedAppModel.selectedVolumeMeasurementPointID = nil
+    guard !spatialStylusStartsNewMeasurement else { return }
+    guard let kind = storedAppModel.stylusTool.measurementKind else { return }
+    sharedAppModel.selectedVolumeMeasurementID = sharedAppModel.volumeMeasurementsSnapshot()
+      .last(where: { $0.kind == kind })?.id
+  }
+
+  var spatialStylusWillStartNewMeasurement: Bool {
+    guard let kind = storedAppModel.stylusTool.measurementKind else { return false }
+    if spatialStylusStartsNewMeasurement { return true }
+    guard let selectedID = sharedAppModel.selectedVolumeMeasurementID else { return true }
+    return !sharedAppModel.volumeMeasurementsSnapshot().contains {
+      $0.id == selectedID && $0.kind == kind && !$0.points.isEmpty
+    }
+  }
+
+  func handleSpatialStylusMeasurement(
+    _ sample: BorgSpatialStylusSample?,
+    datasetInfo: RuntimeAppModel.DatasetInfo?,
+    kind: VolumeMeasurementKind
+  ) {
+    guard let sample, let datasetInfo else {
+      activeSpatialStylusMeasurementID = nil
+      activeSpatialStylusMeasurementPointID = nil
+      return
+    }
+    guard sample.isDrawing else {
+      activeSpatialStylusMeasurementID = nil
+      activeSpatialStylusMeasurementPointID = nil
+      return
+    }
+
+    let position = markerPosition(
+      fromWorldPosition: sample.tipPosition,
+      datasetInfo: datasetInfo
+    )
+    if activeSpatialStylusMeasurementPointID == nil {
+      let startsNewMeasurement = spatialStylusStartsNewMeasurement
+      if !startsNewMeasurement, let nearest = nearestMeasurementPoint(
+        to: sample.tipPosition,
+        datasetInfo: datasetInfo
+      ) {
+        activeSpatialStylusMeasurementID = nearest.measurementID
+        activeSpatialStylusMeasurementPointID = nearest.point.id
+        sharedAppModel.selectedVolumeMeasurementID = nearest.measurementID
+        sharedAppModel.selectedVolumeMeasurementPointID = nearest.point.id
+      } else if let added = appendMeasurementPoint(
+        at: position,
+        datasetInfo: datasetInfo,
+        forceNewMeasurement: startsNewMeasurement,
+        kind: kind
+      ) {
+        spatialStylusStartsNewMeasurement = false
+        activeSpatialStylusMeasurementID = added.measurementID
+        activeSpatialStylusMeasurementPointID = added.pointID
+      }
+    }
+    guard let measurementID = activeSpatialStylusMeasurementID,
+          let pointID = activeSpatialStylusMeasurementPointID else { return }
+    updateMeasurementPoint(
+      measurementID: measurementID,
+      pointID: pointID,
+      position: position,
+      datasetInfo: datasetInfo
+    )
+  }
+
   func handleSpatialInputSamples(
     _ samples: [BorgSpatialInputSample],
-    interactionMode: RuntimeAppModel.InteractionMode,
     datasetInfo: RuntimeAppModel.DatasetInfo?,
     timestamp: TimeInterval
   ) {
@@ -1294,26 +1726,51 @@ class ImmersiveInteraction {
       let previousFaceButtons = spatialAccessoryFaceButtonStates[sample.id] ?? []
       for button in sample.pressedFaceButtons.subtracting(previousFaceButtons) {
         Task { @MainActor in
-          performControllerFaceButtonFromAccessory(button)
+          performControllerFaceButtonFromAccessory(button, sample.chirality)
         }
       }
+      let controllerTool = storedAppModel.controllerTool(for: sample.chirality)
       if sample.modifierPressed && !wasModifierPressed {
-        beginSpatialAccessoryStroke(sample, datasetInfo: datasetInfo)
+        beginSpatialAccessoryStroke(
+          sample,
+          datasetInfo: datasetInfo,
+          usesModifierButton: true
+        )
       }
       if sample.primaryPressed && !wasPressed {
-        beginSpatialAccessoryAction(
-          sample,
-          mode: interactionMode,
-          datasetInfo: datasetInfo
-        )
+        if controllerTool == .marker {
+          beginSpatialAccessoryStroke(
+            sample,
+            datasetInfo: datasetInfo,
+            usesModifierButton: false
+          )
+        } else {
+          beginSpatialAccessoryAction(
+            sample,
+            tool: controllerTool,
+            datasetInfo: datasetInfo
+          )
+        }
       }
       if let action = spatialAccessoryAction,
          action.sourceID == sample.id {
         switch action.kind {
           case .markerStroke:
-            if sample.modifierPressed {
+            let strokePressed = action.markerStrokeUsesModifierButton
+              ? sample.modifierPressed
+              : sample.primaryPressed
+            let strokeWasPressed = action.markerStrokeUsesModifierButton
+              ? wasModifierPressed
+              : wasPressed
+            if strokePressed {
               updateSpatialAccessoryAction(sample, datasetInfo: datasetInfo)
-            } else if wasModifierPressed {
+            } else if strokeWasPressed {
+              finishSpatialAccessoryAction()
+            }
+          case .measurementPoint:
+            if sample.primaryPressed {
+              updateSpatialAccessoryAction(sample, datasetInfo: datasetInfo)
+            } else if wasPressed {
               finishSpatialAccessoryAction()
             }
           default:
@@ -1326,7 +1783,7 @@ class ImmersiveInteraction {
       }
       adjustSpatialAccessoryValues(
         sample,
-        mode: interactionMode,
+        mode: controllerTool.interactionMode,
         deltaTime: deltaTime
       )
       spatialAccessoryPrimaryStates[sample.id] = sample.primaryPressed
@@ -1340,6 +1797,9 @@ class ImmersiveInteraction {
       controllerIDs.contains($0.key)
     }
     spatialAccessoryFaceButtonStates = spatialAccessoryFaceButtonStates.filter {
+      controllerIDs.contains($0.key)
+    }
+    spatialAccessoryMeasurementIDs = spatialAccessoryMeasurementIDs.filter {
       controllerIDs.contains($0.key)
     }
   }
@@ -1540,6 +2000,10 @@ class ImmersiveInteraction {
       sharedAppModel.selectedVolumeMarkerID = nil
     }
 
+    if interactionMode != .measurement {
+      sharedAppModel.selectedVolumeMeasurementPointID = nil
+    }
+
     if interactionMode != .marker,
        interactionMode != .screenView,
        events.count == 1,
@@ -1580,6 +2044,10 @@ class ImmersiveInteraction {
           default:
             return
         }
+      case .measurement:
+        resetQuickMarkerState()
+        guard let datasetInfo, events.count == 1, let event = events.first else { return }
+        handleMeasurementInteraction(event, datasetInfo: datasetInfo)
       case .screenView:
         resetQuickMarkerState()
         guard events.count == 1, let event = events.first else {

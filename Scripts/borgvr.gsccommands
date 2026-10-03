@@ -18,6 +18,8 @@ dirinput(string) -> string
 # Relative paths are resolved below the current script output directory.
 importfile(string,string,string)
 importdirectory(string,string,string)
+# Export one BorgVR LoD as an uncompressed inline NRRD; LoD 0 is full resolution.
+exportdataset(string,string,int)
 setimportbricksize(int)
 # Accepted alias matching the original command proposal.
 setimportbrickssize(int)

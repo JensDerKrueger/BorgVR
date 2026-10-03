@@ -30,6 +30,17 @@ struct ScreenViewLabelVaryings {
   float2 uv;
 };
 
+struct MeasurementLineInstance {
+  float4 startAndWidth;
+  float4 end;
+  float4 color;
+};
+
+struct MeasurementLineVaryings {
+  float4 position [[position]];
+  float4 color;
+};
+
 vertex VolumeMarkerVaryings vertexShaderVolumeMarker(
   uint vertexId [[vertex_id]],
   ushort ampId [[amplification_id]],
@@ -95,6 +106,49 @@ fragment float4 fragmentShaderScreenViewLabel(
     discard_fragment();
   }
   return color;
+}
+
+vertex MeasurementLineVaryings vertexShaderMeasurementLine(
+  uint vertexId [[vertex_id]],
+  uint instanceId [[instance_id]],
+  ushort ampId [[amplification_id]],
+  device const MeasurementLineInstance *lines [[buffer(25)]],
+  constant float4x4 *mvpPerView [[buffer(20)]],
+  constant float4x4 &modelMatrix [[buffer(21)]],
+  constant float2 *viewportSizePerView [[buffer(26)]])
+{
+  const uint endpointIndices[6] = { 0, 1, 0, 1, 1, 0 };
+  const float sides[6] = { -1.0, -1.0, 1.0, -1.0, 1.0, 1.0 };
+  MeasurementLineInstance line = lines[instanceId];
+  float4 startClip = mvpPerView[ampId] * modelMatrix * float4(line.startAndWidth.xyz, 1.0);
+  float4 endClip = mvpPerView[ampId] * modelMatrix * float4(line.end.xyz, 1.0);
+  float2 viewportSize = max(viewportSizePerView[ampId], float2(1.0));
+  float startW = max(abs(startClip.w), 0.000001);
+  float endW = max(abs(endClip.w), 0.000001);
+  float2 startNDC = startClip.xy / startW;
+  float2 endNDC = endClip.xy / endW;
+  float2 pixelDirection = (endNDC - startNDC) * viewportSize * 0.5;
+  float pixelLength = length(pixelDirection);
+  float2 direction = pixelLength > 0.0001
+    ? pixelDirection / pixelLength
+    : float2(1.0, 0.0);
+  float2 perpendicular = float2(-direction.y, direction.x);
+  float2 offsetNDC = perpendicular * line.startAndWidth.w / viewportSize;
+
+  uint endpoint = endpointIndices[vertexId];
+  float4 clipPosition = endpoint == 0 ? startClip : endClip;
+  clipPosition.xy += offsetNDC * sides[vertexId] * clipPosition.w;
+
+  MeasurementLineVaryings out;
+  out.position = clipPosition;
+  out.color = line.color;
+  return out;
+}
+
+fragment float4 fragmentShaderMeasurementLine(
+  MeasurementLineVaryings in [[stage_in]])
+{
+  return in.color;
 }
 
 vertex MarkerCompositeVaryings vertexShaderMarkerComposite(

@@ -99,8 +99,17 @@ public final class NRRDParser: VolumeFileParser {
       throw Error.fileReadFailed(underlying: error)
     }
 
-    // Verify the file starts with "NRRD"
-    guard let contentString = String(data: fileData, encoding: .ascii),
+    // Decode only the ASCII header. Inline raw NRRD payloads may contain arbitrary
+    // bytes and therefore cannot be decoded as one large ASCII string.
+    let lfTerminator = fileData.range(of: Data([0x0A, 0x0A]))
+    let crlfTerminator = fileData.range(of: Data([0x0D, 0x0A, 0x0D, 0x0A]))
+    let headerTerminator = [lfTerminator, crlfTerminator]
+      .compactMap { $0 }
+      .min { $0.lowerBound < $1.lowerBound }
+    let headerTextEnd = headerTerminator?.lowerBound ?? fileData.endIndex
+    let headerByteLength = headerTerminator?.upperBound ?? fileData.count
+    let headerData = fileData.subdata(in: fileData.startIndex..<headerTextEnd)
+    guard let contentString = String(data: headerData, encoding: .ascii),
           contentString.starts(with: "NRRD") else {
       throw Error.invalidHeader
     }
@@ -109,17 +118,12 @@ public final class NRRDParser: VolumeFileParser {
     let lines = contentString.split(omittingEmptySubsequences: false) { $0.isNewline }
 
     var headerDict = [String: String]()
-    var headerByteLength = 0
-    var encounteredEmptyLine = false
+    let encounteredEmptyLine = headerTerminator != nil
 
     // Parse header lines until blank line
     for line in lines {
       let lineStr = String(line)
-      headerByteLength += lineStr.utf8.count + 1
-      if lineStr.trimmingCharacters(in: .whitespaces).isEmpty {
-        encounteredEmptyLine = true
-        break
-      }
+      if lineStr.trimmingCharacters(in: .whitespaces).isEmpty { break }
       if lineStr.starts(with: "#") { continue } // Skip comments
       let parts = lineStr.split(separator: ":", maxSplits: 1)
         .map { $0.trimmingCharacters(in: .whitespaces) }
@@ -133,9 +137,10 @@ public final class NRRDParser: VolumeFileParser {
       throw Error.invalidHeader
     }
 
-    // Parse and validate dimension
+    // Parse and validate dimension. Four-dimensional files are accepted only in the
+    // component-first layout emitted by BORGVRVolumeExporter.
     guard let dimensionStr = headerDict["dimension"],
-          let dimension = Int(dimensionStr), dimension == 3 else {
+          let dimension = Int(dimensionStr), dimension == 3 || dimension == 4 else {
       throw Error.invalidValue("dimension")
     }
 
@@ -144,16 +149,29 @@ public final class NRRDParser: VolumeFileParser {
       throw Error.missingKey("sizes")
     }
     let sizes = sizesStr.split(separator: " ").compactMap { Int($0) }
-    guard sizes.count == 3 else {
+    guard sizes.count == dimension else {
       throw Error.invalidValue("sizes")
     }
-    self.size = Vec3(x: sizes[0], y: sizes[1], z: sizes[2])
+    if dimension == 4 {
+      let kinds = headerDict["kinds"]?.split(whereSeparator: { $0.isWhitespace })
+        .map { $0.lowercased() }
+      guard kinds?.count == 4,
+            ["vector", "list", "rgb-color", "rgba-color"].contains(kinds?[0] ?? ""),
+            sizes[0] > 0 else {
+        throw Error.invalidValue("component-first 4D layout")
+      }
+      self.components = sizes[0]
+      self.size = Vec3(x: sizes[1], y: sizes[2], z: sizes[3])
+    } else {
+      self.components = Int(headerDict["component"] ?? "1") ?? 1
+      self.size = Vec3(x: sizes[0], y: sizes[1], z: sizes[2])
+    }
 
     // Parse spacings or space directions
     guard let spacingsStr = headerDict["spacings"] ?? headerDict["space directions"] else {
       throw Error.missingKey("spacings or space directions")
     }
-    let spacingValues: [Float]
+    var spacingValues: [Float]
     if spacingsStr.contains("(") {
       spacingValues = spacingsStr
         .split(separator: ")")
@@ -166,17 +184,20 @@ public final class NRRDParser: VolumeFileParser {
     } else {
       spacingValues = spacingsStr.split(separator: " ").compactMap { Float($0) }
     }
+    if dimension == 4, spacingValues.count == 4 {
+      spacingValues.removeFirst()
+    }
     guard spacingValues.count == 3 else {
       throw Error.invalidValue("spacings/space directions")
     }
     self.voxelSpacing = Vec3(x: spacingValues[0], y: spacingValues[1], z: spacingValues[2])
 
-    // Parse data type and components
+    // Parse data type. Components were derived from the optional component field
+    // for 3D files or from the first axis for component-first 4D files above.
     guard let typeStr = headerDict["type"] else {
       throw Error.missingKey("type")
     }
     self.bytesPerComponent = try Self.bytesPerComponent(for: typeStr)
-    self.components = Int(headerDict["component"] ?? "1") ?? 1
 
     // Determine endianness
     let declaredEndian = headerDict["endian"]?.lowercased() ?? "little"

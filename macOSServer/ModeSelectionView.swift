@@ -40,7 +40,7 @@ struct ModeSelectionView: View {
         Button {
           runtimeAppModel.currentState = .importData
         } label: {
-          Label("modeselection_import", systemImage: "tray.and.arrow.down")
+          Label("modeselection_import", systemImage: "arrow.up.arrow.down.square")
         }
 
         Button {

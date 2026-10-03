@@ -217,7 +217,7 @@ struct VisionApp: App {
         .environmentObject(speech)
     }
     .windowResizability(.contentSize)
-    .defaultSize(width: 750, height: 400)
+    .defaultSize(width: 850, height: 400)
 
     WindowGroup(id: "MarkerView") {
       MarkerView()
@@ -228,6 +228,15 @@ struct VisionApp: App {
     }
     .windowResizability(.contentSize)
     .defaultSize(width: 620, height: 560)
+
+    WindowGroup(id: "MeasurementView") {
+      MeasurementView()
+        .trackView(name: "MeasurementView")
+        .environment(runtimeAppModel)
+        .environment(sharedAppModel)
+    }
+    .windowResizability(.contentSize)
+    .defaultSize(width: 680, height: 620)
 
     WindowGroup(id: "LightingEditorView") {
       LightingEditorView(
@@ -367,6 +376,7 @@ struct VisionApp: App {
             runtimeAppModel.datasetSessionState == state else { return }
       switch state {
         case .opening(_, let requestID):
+          applySpatialStylusStartFunction()
           await openSpace(requestID: requestID)
         case .closing(let dataset, let requestID, let destination):
           await closeSpace(
@@ -377,6 +387,27 @@ struct VisionApp: App {
         default:
           break
       }
+    }
+  }
+
+  @MainActor
+  private func applySpatialStylusStartFunction() {
+    switch storedAppModel.stylusStartFunction {
+      case .marker:
+        storedAppModel.stylusTool = .marker
+      case .lengthMeasurement:
+        storedAppModel.stylusTool = .lengthMeasurement
+        sharedAppModel.measurementKind = .length
+      case .areaMeasurement:
+        storedAppModel.stylusTool = .areaMeasurement
+        sharedAppModel.measurementKind = .area
+      case .volumeMeasurement:
+        storedAppModel.stylusTool = .volumeMeasurement
+        sharedAppModel.measurementKind = .volume
+      case .lastMode:
+        if let kind = storedAppModel.stylusTool.measurementKind {
+          sharedAppModel.measurementKind = kind
+        }
     }
   }
 

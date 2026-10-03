@@ -28,6 +28,8 @@ enum Mode: String {
   case DicomConversion = "D"
   case QVISConversion = "Q"
   case NRRDConversion = "N"
+  case PVMConversion = "P"
+  case FlatVolumeExport = "E"
   case DemoDataCreation = "C"
 }
 
@@ -99,6 +101,13 @@ struct HeaderFileModeParameters {
   let common: CommonParameters
 }
 
+/// Parameters for exporting one BorgVR LoD as a flat NRRD volume.
+struct ExportModeParameters {
+  let inputFilename: String
+  let outputFilename: String
+  let level: Int
+}
+
 /**
  Parameters specific to demo data creation mode.
 
@@ -153,6 +162,20 @@ Mode N — Read a NRRD or NHDR file
         description       : Short description of the dataset
         max_brick_size    : Positive integer specifying the maximum brick size
         overlap           : Positive integer specifying the overlap between bricks
+
+Mode P — Read a PVM, PVM2, or PVM3 file
+    \(executableName) P <input_filename> <output_filename> <description> <max_brick_size> <overlap>
+        input_filename    : Path to the PVM file (plain, DDS v3d, or DDS v3e)
+        output_filename   : Name of the output file to create
+        description       : Short description of the dataset
+        max_brick_size    : Positive integer specifying the maximum brick size
+        overlap           : Positive integer specifying the overlap between bricks
+
+Mode E — Export one BorgVR LoD as an uncompressed NRRD volume
+    \(executableName) E <input_filename> <output_filename> <lod>
+        input_filename    : Path to the BorgVR .data file
+        output_filename   : Name of the uncompressed inline .nrrd file to create
+        lod               : LoD to export; 0 is the full-resolution original
 
 Mode C — Create a volume file using a specified algorithm
     \(executableName) C <algorithm> <byte_depth> <component_count> <size_x> <size_y> <size_z> <output_filename> <description> <max_brick_size> <overlap>
@@ -229,9 +252,9 @@ func parseArguments(_ args: [String]) -> (Mode, Any) {
       )
       result.1 = params
 
-    case .QVISConversion, .NRRDConversion:
+    case .QVISConversion, .NRRDConversion, .PVMConversion:
       guard args.count == 7 else {
-        logger.error("Error: Invalid number of arguments for mode Q or N.\n\(usageErrorMessage)")
+        logger.error("Error: Invalid number of arguments for mode Q, N, or P.\n\(usageErrorMessage)")
         exit(1)
       }
       guard let maxBrickSize = Int(args[5]), maxBrickSize > 0,
@@ -250,6 +273,18 @@ func parseArguments(_ args: [String]) -> (Mode, Any) {
         )
       )
       result.1 = params
+
+    case .FlatVolumeExport:
+      guard args.count == 5,
+            let level = Int(args[4]), level >= 0 else {
+        logger.error("Error: Invalid arguments for mode E.\n\(usageErrorMessage)")
+        exit(1)
+      }
+      result.1 = ExportModeParameters(
+        inputFilename: args[2],
+        outputFilename: args[3],
+        level: level
+      )
 
     case .DemoDataCreation:
       guard args.count == 12,
@@ -460,6 +495,54 @@ func convertNRRDVolume(_ params: HeaderFileModeParameters) {
   }
 }
 
+/** Converts a PVM, PVM2, or PVM3 volume into the BorgVR file format. */
+func convertPVMVolume(_ params: HeaderFileModeParameters) {
+  do {
+    logger.info("Opening PVM volume ...")
+    let parser = try PVMParser(filename: params.inputFilename)
+    defer {
+      if parser.dataIsTempCopy {
+        try? FileManager.default.removeItem(atPath: parser.absoluteFilename)
+      }
+    }
+
+    logger.info("Converting PVM volume to BorgVR file format ...")
+    let sourceName = URL(fileURLWithPath: params.inputFilename)
+      .deletingPathExtension().lastPathComponent
+    try convertRawVolume(
+      inputFilename: parser.absoluteFilename,
+      offset: parser.offset,
+      size: parser.size,
+      maxBrickSize: params.common.maxBrickSize,
+      bytesPerComponent: parser.bytesPerComponent,
+      componentCount: parser.components,
+      voxelSpacing: parser.voxelSpacing,
+      overlap: params.common.overlap,
+      outputFilename: params.common.outputFilename,
+      datasetDescription: params.common.datasetDescription,
+      metaDescription: "Converted from PVM Volume \(sourceName)"
+    )
+  } catch {
+    logger.error("Error: \(error.localizedDescription)")
+    exit(1)
+  }
+}
+
+/// Exports one level of a BorgVR dataset as a flat, uncompressed inline NRRD file.
+func exportFlatVolume(_ params: ExportModeParameters) {
+  do {
+    _ = try BORGVRVolumeExporter.export(
+      inputURL: URL(fileURLWithPath: params.inputFilename),
+      outputURL: URL(fileURLWithPath: params.outputFilename),
+      level: params.level,
+      logger: logger
+    )
+  } catch {
+    logger.error("Error: \(error.localizedDescription)")
+    exit(1)
+  }
+}
+
 
 /**
  Converts a QVIS volume file into the BorgVR file format.
@@ -608,6 +691,12 @@ switch mode {
   case .NRRDConversion:
     guard let params = params as? HeaderFileModeParameters else { exit(1) }
     convertNRRDVolume(params)
+  case .PVMConversion:
+    guard let params = params as? HeaderFileModeParameters else { exit(1) }
+    convertPVMVolume(params)
+  case .FlatVolumeExport:
+    guard let params = params as? ExportModeParameters else { exit(1) }
+    exportFlatVolume(params)
 }
 
 let total = timer.stop()

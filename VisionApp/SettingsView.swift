@@ -236,6 +236,39 @@ struct SettingsView: View {
           }
 
           Section(header: Text("settings_section_controller_shortcuts").bold()) {
+            Picker("settings_stylus_start_function", selection: stylusStartFunctionBinding) {
+              ForEach(SpatialStylusStartFunction.allCases) { function in
+                Label(function.title, systemImage: function.systemImage)
+                  .tag(function)
+              }
+            }
+            Text("settings_stylus_start_function_description")
+              .font(.footnote)
+              .foregroundStyle(.secondary)
+
+            Picker(
+              "settings_left_controller_tool",
+              selection: controllerToolBinding(for: .left)
+            ) {
+              ForEach(SpatialToolMode.allCases) { tool in
+                Label(tool.title, systemImage: tool.systemImage)
+                  .tag(tool)
+              }
+            }
+
+            Picker(
+              "settings_right_controller_tool",
+              selection: controllerToolBinding(for: .right)
+            ) {
+              ForEach(SpatialToolMode.allCases) { tool in
+                Label(tool.title, systemImage: tool.systemImage)
+                  .tag(tool)
+              }
+            }
+            Text("settings_controller_tools_description")
+              .font(.footnote)
+              .foregroundStyle(.secondary)
+
             Text("settings_controller_shortcuts_description")
               .font(.footnote)
               .foregroundStyle(.secondary)
@@ -831,6 +864,22 @@ struct SettingsView: View {
         .font(.footnote)
         .foregroundStyle(.secondary)
     }
+  }
+
+  private var stylusStartFunctionBinding: Binding<SpatialStylusStartFunction> {
+    Binding(
+      get: { storedAppModel.stylusStartFunction },
+      set: { storedAppModel.stylusStartFunction = $0 }
+    )
+  }
+
+  private func controllerToolBinding(
+    for chirality: BorgSpatialInputChirality
+  ) -> Binding<SpatialToolMode> {
+    Binding(
+      get: { storedAppModel.controllerTool(for: chirality) },
+      set: { storedAppModel.setControllerTool($0, for: chirality) }
+    )
   }
 
   private var markerDefaultColorBinding: Binding<Color> {

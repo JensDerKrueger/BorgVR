@@ -22,7 +22,10 @@ struct RenderView: View {
   @State private var copiedWebGPUShareLink = false
   @State private var showMarkerEditor = false
   @State private var showLightingEditor = false
+  @State private var showMeasurementEditor = false
   @State private var markerDragID: UUID?
+  @State private var measurementDragMeasurementID: UUID?
+  @State private var measurementDragPointID: UUID?
   @State private var arcballStartOrientation: simd_quatf?
   @State private var showLeaveSharePlayConfirmation = false
   @StateObject private var renderSurface = MobileRenderSurface()
@@ -78,6 +81,11 @@ struct RenderView: View {
       .padding()
       .presentationDetents([.height(240), .medium, .large])
     }
+    .sheet(isPresented: $showMeasurementEditor) {
+      MobileMeasurementView()
+        .environmentObject(appModel)
+        .environmentObject(sharePlay)
+    }
     .alert("Leave SharePlay?", isPresented: $showLeaveSharePlayConfirmation) {
       Button("Cancel", role: .cancel) {}
       Button("Leave SharePlay", role: .destructive) {
@@ -110,6 +118,8 @@ struct RenderView: View {
         .simultaneousGesture(zoomGesture)
         .simultaneousGesture(doubleTapInteractionGesture)
         .simultaneousGesture(markerTapGesture)
+
+      measurementLabels
 
       switch layout.renderControlPlacement {
         case .overlayTop:
@@ -253,8 +263,14 @@ struct RenderView: View {
           Text("Clipping").tag(AppModel.InteractionMode.clipping)
           Text("Transfer").tag(AppModel.InteractionMode.transferEditing)
           Text("Marker").tag(AppModel.InteractionMode.marker)
+          Text("private_interaction_option_measurement").tag(AppModel.InteractionMode.measurement)
         }
         .pickerStyle(.segmented)
+        .onChange(of: appModel.interactionMode) { _, mode in
+          if mode != .measurement {
+            appModel.clearVolumeMeasurementSelection()
+          }
+        }
 
         HStack {
           if sharePlay.isInSession {
@@ -319,6 +335,17 @@ struct RenderView: View {
             )
           }
           .accessibilityLabel("Markers")
+
+          Button {
+            showMeasurementEditor = true
+          } label: {
+            actionLabel(
+              "measurement_window_title",
+              systemImage: "ruler",
+              compact: usesCompactActionLabels
+            )
+          }
+          .accessibilityLabel(Text("measurement_window_title"))
 
           Button {
             showLightingEditor = true
@@ -460,6 +487,12 @@ struct RenderView: View {
   private var doubleTapInteractionGesture: some Gesture {
     TapGesture(count: 2)
       .onEnded {
+        if appModel.interactionMode == .measurement {
+          if appModel.removeSelectedVolumeMeasurementPoint() {
+            sharePlay.synchronizeMeasurements(immediately: true)
+          }
+          return
+        }
         appModel.interactionMode = appModel.interactionMode == .clipping ? .model : .clipping
       }
   }
@@ -492,12 +525,16 @@ struct RenderView: View {
             applyTransferInteraction(delta: delta)
           case .marker:
             updateMarkerInteraction(atGlobalPoint: value.location)
+          case .measurement:
+            updateMeasurementInteraction(atGlobalPoint: value.location)
         }
       }
       .onEnded { _ in
         previousDragTranslation = .zero
         arcballStartOrientation = nil
         markerDragID = nil
+        measurementDragMeasurementID = nil
+        measurementDragPointID = nil
         sharePlay.flushSynchronization()
       }
   }
@@ -549,14 +586,109 @@ struct RenderView: View {
   private var markerTapGesture: some Gesture {
     SpatialTapGesture(count: 1, coordinateSpace: .global)
       .onEnded { value in
-        guard appModel.interactionMode == .marker,
-              let screenPosition = renderSurface.normalizedScreenPosition(
+        guard let screenPosition = renderSurface.normalizedScreenPosition(
                 forGlobalPoint: value.location
               ) else { return }
-        beginMarkerInteraction(at: screenPosition)
-        markerDragID = nil
+        switch appModel.interactionMode {
+          case .marker:
+            beginMarkerInteraction(at: screenPosition)
+            markerDragID = nil
+          case .measurement:
+            beginMeasurementInteraction(at: screenPosition)
+            measurementDragMeasurementID = nil
+            measurementDragPointID = nil
+          default:
+            return
+        }
         sharePlay.flushSynchronization()
       }
+  }
+
+  private func updateMeasurementInteraction(atGlobalPoint point: CGPoint) {
+    guard let screenPosition = renderSurface.normalizedScreenPosition(forGlobalPoint: point) else {
+      return
+    }
+    if measurementDragPointID == nil {
+      beginMeasurementInteraction(at: screenPosition)
+    }
+    guard let measurementID = measurementDragMeasurementID,
+          let pointID = measurementDragPointID,
+          let measurementIndex = appModel.volumeMeasurements.firstIndex(where: {
+            $0.id == measurementID
+          }),
+          let point = appModel.volumeMeasurements[measurementIndex].points.first(where: {
+            $0.id == pointID
+          }),
+          let position = appModel.markerPositionHandler?(screenPosition, point.position),
+          let extent = appModel.activeDatasetMetadata?.physicalExtentMeters else { return }
+    appModel.volumeMeasurements[measurementIndex].setPoint(
+      id: pointID,
+      position: position,
+      physicalExtent: extent
+    )
+    sharePlay.synchronizeMeasurements()
+  }
+
+  private func beginMeasurementInteraction(at screenPosition: SIMD2<Float>) {
+    if let hit = appModel.measurementHitTestHandler?(screenPosition) {
+      appModel.selectedVolumeMeasurementID = hit.measurementID
+      appModel.selectedVolumeMeasurementPointID = hit.pointID
+      measurementDragMeasurementID = hit.measurementID
+      measurementDragPointID = hit.pointID
+      if let measurement = appModel.volumeMeasurements.first(where: { $0.id == hit.measurementID }) {
+        appModel.measurementKind = measurement.kind
+      }
+      return
+    }
+    guard let position = appModel.markerPositionHandler?(screenPosition, nil),
+          let extent = appModel.activeDatasetMetadata?.physicalExtentMeters else { return }
+    var measurementID = appModel.selectedVolumeMeasurementID
+    if measurementID.flatMap({ id in
+      appModel.volumeMeasurements.first(where: { $0.id == id })?.kind
+    }) != appModel.measurementKind {
+      measurementID = appModel.volumeMeasurements.last(where: {
+        $0.kind == appModel.measurementKind
+      })?.id
+    }
+    if measurementID == nil {
+      measurementID = appModel.createVolumeMeasurement()
+    }
+    guard let measurementID,
+          let index = appModel.volumeMeasurements.firstIndex(where: { $0.id == measurementID }),
+          let pointID = appModel.volumeMeasurements[index].addPoint(
+            at: position,
+            physicalExtent: extent
+          ) else { return }
+    appModel.selectedVolumeMeasurementID = measurementID
+    appModel.selectedVolumeMeasurementPointID = pointID
+    measurementDragMeasurementID = measurementID
+    measurementDragPointID = pointID
+    sharePlay.synchronizeMeasurements(immediately: true)
+  }
+
+  private var measurementLabels: some View {
+    GeometryReader { proxy in
+      ForEach(appModel.measurementScreenLabels) { label in
+        Text(label.text)
+          .font(.caption2.monospacedDigit())
+          .padding(.horizontal, 5)
+          .padding(.vertical, 2)
+          .foregroundStyle(.white)
+          .background(
+            Color(
+              red: Double(label.color.x),
+              green: Double(label.color.y),
+              blue: Double(label.color.z)
+            ).opacity(0.82),
+            in: Capsule()
+          )
+          .position(
+            x: CGFloat(label.position.x) * proxy.size.width,
+            y: CGFloat(label.position.y) * proxy.size.height
+          )
+      }
+    }
+    .allowsHitTesting(false)
   }
 
   private func rotateModel(from start: CGPoint, to current: CGPoint, in viewSize: CGSize) {
@@ -753,6 +885,7 @@ struct RenderView: View {
       sharePlay.closeSharedDataset()
     }
     appModel.removeAllVolumeMarkers()
+    appModel.removeAllVolumeMeasurements()
     appModel.closeDataset(destination: .datasetSelection)
   }
 

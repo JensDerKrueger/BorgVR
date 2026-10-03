@@ -158,6 +158,29 @@ class SharedAppModel {
   var defaultVolumeStrokeRadius: Float
   /// Color used for stylus strokes; locally adjustable without changing sphere markers.
   var defaultVolumeStrokeColor: SIMD4<Float>
+  /// Measurements placed in normalized dataset coordinates. Measurements are local in 2.6.
+  @ObservationIgnored private let volumeMeasurementsLock = NSLock()
+  @ObservationIgnored private var storedVolumeMeasurements: [VolumeMeasurement] = []
+  var volumeMeasurements: [VolumeMeasurement] {
+    get {
+      access(keyPath: \.volumeMeasurements)
+      volumeMeasurementsLock.lock()
+      defer { volumeMeasurementsLock.unlock() }
+      return storedVolumeMeasurements
+    }
+    set {
+      withMutation(keyPath: \.volumeMeasurements) {
+        volumeMeasurementsLock.lock()
+        storedVolumeMeasurements = newValue
+        volumeMeasurementsLock.unlock()
+      }
+    }
+  }
+  /// Measurement type used when the next measurement is created.
+  var measurementKind: VolumeMeasurementKind
+  /// Locally selected measurement and control point.
+  var selectedVolumeMeasurementID: UUID?
+  var selectedVolumeMeasurementPointID: UUID?
 
   // Initialize after self is fully initialized to avoid using self too early.
   private var groupActivityHelper: GroupActivityHelper?
@@ -196,6 +219,10 @@ class SharedAppModel {
     defaultVolumeMarkerShowsDirection = true
     defaultVolumeStrokeRadius = VolumeMarkerRadius.strokeDefault
     defaultVolumeStrokeColor = SIMD4<Float>(1, 0, 0, 1)
+    storedVolumeMeasurements = []
+    measurementKind = .length
+    selectedVolumeMeasurementID = nil
+    selectedVolumeMeasurementPointID = nil
     groupActivityHelper = GroupActivityHelper(self)
 
     reset()
@@ -219,6 +246,10 @@ class SharedAppModel {
 
   func synchronizeMarkers() {
     groupActivityHelper?.synchronizeMarkers()
+  }
+
+  func synchronizeMeasurements() {
+    groupActivityHelper?.synchronizeMeasurements()
   }
 
   func synchronizeScreenView() {
@@ -359,6 +390,9 @@ class SharedAppModel {
     defaultVolumeMarkerShowsDirection = true
     defaultVolumeStrokeRadius = VolumeMarkerRadius.strokeDefault
     defaultVolumeStrokeColor = SIMD4<Float>(1, 0, 0, 1)
+    volumeMeasurements = []
+    selectedVolumeMeasurementID = nil
+    selectedVolumeMeasurementPointID = nil
   }
 
   func resetModel() {
@@ -413,6 +447,183 @@ class SharedAppModel {
     volumeMarkers.removeAll()
     clearVolumeMarkerSelection()
     return true
+  }
+
+  func nextVolumeMeasurementName() -> String {
+    let prefix: String
+    switch measurementKind {
+      case .length: prefix = String(localized: "measurement_kind_length")
+      case .area: prefix = String(localized: "measurement_kind_area")
+      case .volume: prefix = String(localized: "measurement_kind_volume")
+    }
+    let matchingCount = volumeMeasurements.filter { $0.kind == measurementKind }.count
+    return "\(prefix) \(matchingCount + 1)"
+  }
+
+  @discardableResult
+  func createVolumeMeasurement() -> UUID {
+    removeEmptyVolumeMeasurements()
+    let measurement = VolumeMeasurement(
+      name: nextVolumeMeasurementName(),
+      kind: measurementKind
+    )
+    mutateVolumeMeasurements { $0.append(measurement) }
+    selectedVolumeMeasurementID = measurement.id
+    selectedVolumeMeasurementPointID = nil
+    return measurement.id
+  }
+
+  func selectedVolumeMeasurementIndex() -> Int? {
+    guard let selectedVolumeMeasurementID else { return nil }
+    return volumeMeasurementsSnapshot().firstIndex { $0.id == selectedVolumeMeasurementID }
+  }
+
+  @discardableResult
+  func removeSelectedVolumeMeasurementPoint() -> Bool {
+    guard let selectedVolumeMeasurementID,
+          let selectedVolumeMeasurementPointID else { return false }
+    return removeVolumeMeasurementPoint(
+      measurementID: selectedVolumeMeasurementID,
+      pointID: selectedVolumeMeasurementPointID
+    )
+  }
+
+  @discardableResult
+  func removeLastVolumeMeasurementPoint() -> Bool {
+    let preferredID = selectedVolumeMeasurementID
+    let result: (
+      removed: Bool,
+      measurementID: UUID?,
+      pointID: UUID?,
+      removedMeasurement: Bool,
+      nextID: UUID?
+    ) = mutateVolumeMeasurements { measurements in
+      let index = preferredID.flatMap { id in
+        measurements.firstIndex { $0.id == id }
+      } ?? measurements.indices.last
+      guard let index,
+            let pointID = measurements[index].points.last?.id else {
+        return (false, nil, nil, false, nil)
+      }
+      let measurementID = measurements[index].id
+      guard measurements[index].removePoint(id: pointID) else {
+        return (false, nil, nil, false, nil)
+      }
+      if measurements[index].points.isEmpty {
+        measurements.remove(at: index)
+        return (true, measurementID, pointID, true, measurements.last?.id)
+      }
+      return (true, measurementID, pointID, false, measurementID)
+    }
+    guard result.removed else { return false }
+    if selectedVolumeMeasurementPointID == result.pointID {
+      selectedVolumeMeasurementPointID = nil
+    }
+    if result.removedMeasurement,
+       selectedVolumeMeasurementID == result.measurementID {
+      selectedVolumeMeasurementID = result.nextID
+    }
+    return true
+  }
+
+  @discardableResult
+  func removeVolumeMeasurementPoint(measurementID: UUID, pointID: UUID) -> Bool {
+    let result: (removed: Bool, removedMeasurement: Bool, nextID: UUID?) =
+      mutateVolumeMeasurements { measurements in
+        guard let index = measurements.firstIndex(where: {
+          $0.id == measurementID
+        }), measurements[index].removePoint(id: pointID) else {
+          return (false, false, nil)
+        }
+        if measurements[index].points.isEmpty {
+          measurements.remove(at: index)
+          return (true, true, measurements.last?.id)
+        }
+        return (true, false, measurementID)
+      }
+    guard result.removed else { return false }
+    if selectedVolumeMeasurementPointID == pointID {
+      selectedVolumeMeasurementPointID = nil
+    }
+    if result.removedMeasurement, selectedVolumeMeasurementID == measurementID {
+      selectedVolumeMeasurementID = result.nextID
+    }
+    return true
+  }
+
+  @discardableResult
+  func removeEmptyVolumeMeasurements() -> Bool {
+    let selectedID = selectedVolumeMeasurementID
+    let result: (removed: Bool, selectedStillExists: Bool, nextID: UUID?) =
+      mutateVolumeMeasurements { measurements in
+        let previousCount = measurements.count
+        measurements.removeAll { $0.points.isEmpty }
+        return (
+          measurements.count != previousCount,
+          selectedID.map { id in measurements.contains { $0.id == id } } ?? false,
+          measurements.last?.id
+        )
+      }
+    guard result.removed else { return false }
+    if !result.selectedStillExists {
+      selectedVolumeMeasurementID = result.nextID
+      selectedVolumeMeasurementPointID = nil
+    }
+    return true
+  }
+
+  @discardableResult
+  func removeSelectedVolumeMeasurement() -> Bool {
+    guard let selectedVolumeMeasurementID else { return false }
+    let result: (removed: Bool, nextID: UUID?) = mutateVolumeMeasurements { measurements in
+      let previousCount = measurements.count
+      measurements.removeAll { $0.id == selectedVolumeMeasurementID }
+      return (measurements.count != previousCount, measurements.last?.id)
+    }
+    guard result.removed else { return false }
+    self.selectedVolumeMeasurementID = result.nextID
+    selectedVolumeMeasurementPointID = nil
+    return true
+  }
+
+  func clearVolumeMeasurementSelection() {
+    selectedVolumeMeasurementID = nil
+    selectedVolumeMeasurementPointID = nil
+  }
+
+  func volumeMeasurementsSnapshot() -> [VolumeMeasurement] {
+    volumeMeasurements
+  }
+
+  @discardableResult
+  func removeAllVolumeMeasurements() -> Bool {
+    let removed = mutateVolumeMeasurements { measurements in
+      guard !measurements.isEmpty else { return false }
+      measurements.removeAll()
+      return true
+    }
+    clearVolumeMeasurementSelection()
+    return removed
+  }
+
+  func renameVolumeMeasurement(id: UUID, to name: String) {
+    mutateVolumeMeasurements { measurements in
+      guard let index = measurements.firstIndex(where: { $0.id == id }) else { return }
+      measurements[index].name = name
+    }
+  }
+
+  @discardableResult
+  func mutateVolumeMeasurements<Result>(
+    _ mutation: (inout [VolumeMeasurement]) -> Result
+  ) -> Result {
+    let result = withMutation(keyPath: \.volumeMeasurements) {
+      volumeMeasurementsLock.lock()
+      defer { volumeMeasurementsLock.unlock() }
+      return mutation(&storedVolumeMeasurements)
+    }
+    synchronizeMeasurements()
+    return result
   }
 
   func resetIsoValue() {
@@ -561,6 +772,10 @@ class SharedAppModel {
     VolumeMarkerSharePlayCodec.encode(volumeMarkers)
   }
 
+  func serializeVolumeMeasurementsSharePlayState() -> Data {
+    VolumeMeasurementSharePlayCodec.encode(volumeMeasurementsSnapshot())
+  }
+
   /// Deserialize from a Data blob created by `serialize`.
   /// Initializes a fresh instance and populates all fields.
   convenience init(from data: Data) throws {
@@ -674,7 +889,7 @@ class SharedAppModel {
         let lScale = try r.readSIMD3()
         modelTransform = Transform(scale: tScale, rotation: tRotation, translation: tTranslation)
         lastModelTransform = Transform(scale: lScale, rotation: lRotation, translation: lTranslation)
-      case .volumeMarkers, .spatialToolPreview:
+      case .volumeMarkers, .spatialToolPreview, .volumeMeasurements:
         throw SharedAppModelError.unsupportedPacket(packetKindRaw)
     }
 

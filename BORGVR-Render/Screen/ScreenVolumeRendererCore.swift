@@ -119,6 +119,9 @@ final class ScreenVolumeRendererCore {
     appModel.markerDepthAdjustmentHandler = { [weak self] position, worldDistance in
       self?.markerPosition(position, offsetAlongViewRayBy: worldDistance)
     }
+    appModel.measurementHitTestHandler = { [weak self] screenPosition in
+      self?.measurementHit(at: screenPosition)
+    }
   }
 
   func updateIfNeeded(for view: MTKView) -> ScreenDatasetUpdate {
@@ -195,6 +198,9 @@ final class ScreenVolumeRendererCore {
       markers: appModel.volumeMarkers,
       spatialToolPreviews: appModel.activeRemoteSpatialToolPreviews(),
       selectedMarkerIDs: appModel.selectedVolumeMarkerIDs,
+      measurements: appModel.volumeMeasurements,
+      selectedMeasurementID: appModel.selectedVolumeMeasurementID,
+      selectedMeasurementPointID: appModel.selectedVolumeMeasurementPointID,
       viewProjection: markerMatrices.projection * markerMatrices.view,
       modelMatrix: markerMatrices.model,
       volumeScale: volumeScale,
@@ -238,6 +244,7 @@ final class ScreenVolumeRendererCore {
       to: renderEncoder
     )
     renderEncoder.endEncoding()
+    updateMeasurementScreenLabels(matrices: markerMatrices)
     return ScreenVolumeEncodedFrame(commandBuffer: commandBuffer, drawable: drawable)
   }
 
@@ -516,6 +523,88 @@ final class ScreenVolumeRendererCore {
       }
     }
     return closestHit?.id
+  }
+
+  private func measurementHit(
+    at normalizedScreenPosition: SIMD2<Float>
+  ) -> AppModel.MeasurementPointHit? {
+    guard let ray = markerRay(at: normalizedScreenPosition) else { return nil }
+    var closestHit: (hit: AppModel.MeasurementPointHit, distance: Float)?
+    let radius = max(0.012, 0.016 * renderingParameters.scale)
+    for measurement in appModel.volumeMeasurements {
+      for point in measurement.points {
+        let center = simd_make_float3(
+          ray.model * volumeScale * SIMD4<Float>(point.position - SIMD3<Float>(repeating: 0.5), 1)
+        )
+        let projectedDistance = simd_dot(center - ray.origin, ray.direction)
+        guard projectedDistance >= 0 else { continue }
+        let closestPoint = ray.origin + ray.direction * projectedDistance
+        guard simd_distance(closestPoint, center) <= radius else { continue }
+        if closestHit == nil || projectedDistance < closestHit!.distance {
+          closestHit = (
+            AppModel.MeasurementPointHit(
+              measurementID: measurement.id,
+              pointID: point.id
+            ),
+            projectedDistance
+          )
+        }
+      }
+    }
+    return closestHit?.hit
+  }
+
+  @discardableResult
+  func moveSelectedMeasurementPointInDepth(
+    by panDelta: CGFloat,
+    sensitivity: Float = 0.003
+  ) -> Bool {
+    guard panDelta != 0,
+          let measurementID = appModel.selectedVolumeMeasurementID,
+          let pointID = appModel.selectedVolumeMeasurementPointID,
+          let measurementIndex = appModel.volumeMeasurements.firstIndex(where: {
+            $0.id == measurementID
+          }),
+          let point = appModel.volumeMeasurements[measurementIndex].points.first(where: {
+            $0.id == pointID
+          }),
+          let position = appModel.markerDepthAdjustmentHandler?(
+            point.position,
+            Float(panDelta) * sensitivity
+          ),
+          let extent = appModel.activeDatasetMetadata?.physicalExtentMeters else { return false }
+    appModel.volumeMeasurements[measurementIndex].setPoint(
+      id: pointID,
+      position: position,
+      physicalExtent: extent
+    )
+    return true
+  }
+
+  private func updateMeasurementScreenLabels(
+    matrices: (projection: simd_float4x4, view: simd_float4x4, model: simd_float4x4)
+  ) {
+    let transform = matrices.projection * matrices.view * matrices.model * volumeScale
+    let labels = appModel.volumeMeasurements.compactMap { measurement -> AppModel.MeasurementScreenLabel? in
+      guard let point = measurement.points.first,
+            let text = measurement.formattedValue() else { return nil }
+      let clip = transform * SIMD4<Float>(point.position - SIMD3<Float>(repeating: 0.5), 1)
+      guard clip.w > 0.000_001 else { return nil }
+      let ndc = SIMD2<Float>(clip.x / clip.w, clip.y / clip.w)
+      guard ndc.x.isFinite, ndc.y.isFinite else { return nil }
+      return AppModel.MeasurementScreenLabel(
+        id: measurement.id,
+        text: text,
+        position: SIMD2<Float>((ndc.x + 1) * 0.5, (1 - ndc.y) * 0.5),
+        color: VolumeMeasurementPresentation.color(
+          for: measurement.kind,
+          selected: appModel.selectedVolumeMeasurementID == measurement.id
+        )
+      )
+    }
+    DispatchQueue.main.async { [weak appModel] in
+      appModel?.updateMeasurementScreenLabels(labels)
+    }
   }
 
   @discardableResult

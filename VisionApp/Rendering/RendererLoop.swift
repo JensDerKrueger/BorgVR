@@ -1,4 +1,5 @@
 import CompositorServices
+import Foundation
 import Metal
 import MetalKit
 import simd
@@ -13,10 +14,32 @@ extension Renderer {
     var labels: [ScreenViewLabelDescriptor] = []
   }
 
+  private struct MeasurementVisualization {
+    struct Line {
+      let startAndWidth: SIMD4<Float>
+      let end: SIMD4<Float>
+      let color: SIMD4<Float>
+    }
+
+    struct Surface {
+      let measurement: VolumeMeasurement
+      let color: SIMD4<Float>
+    }
+
+    var markers: [VolumeMarker] = []
+    var lines: [Line] = []
+    var labels: [ScreenViewLabelDescriptor] = []
+    var surfaces: [Surface] = []
+  }
+
   private struct ScreenViewLabelDescriptor {
     let text: String
     let color: SIMD4<Float>
     let position: SIMD3<Float>
+    var depthOffsetTowardCamera: Float = 0
+    var opaqueBackground = false
+    var height: Float = 0.052
+    var billboardOffset = SIMD2<Float>.zero
   }
 
   private static let screenViewVisualizationMarkerIDs: [UUID] = [
@@ -34,6 +57,160 @@ extension Renderer {
     UUID(uuidString: "EC000000-0000-0000-0000-00000000000C")!,
     UUID(uuidString: "EC000000-0000-0000-0000-00000000000D")!
   ]
+  private static let stylusMeasurementPreviewMarkerIDs: [UUID] = (1...8).map {
+    UUID(uuidString: String(format: "ED000000-0000-0000-0000-%012X", $0))!
+  }
+
+  private func measurementVisualizationID(_ base: UUID, _ index: Int) -> UUID {
+    var uuid = base.uuid
+    withUnsafeMutableBytes(of: &uuid) { bytes in
+      bytes[12] ^= 0x4D
+      bytes[13] ^= UInt8(truncatingIfNeeded: index >> 16)
+      bytes[14] ^= UInt8(truncatingIfNeeded: index >> 8)
+      bytes[15] ^= UInt8(truncatingIfNeeded: index)
+    }
+    return UUID(uuid: uuid)
+  }
+
+  private func measurementColor(
+    for kind: VolumeMeasurementKind,
+    selected: Bool
+  ) -> SIMD4<Float> {
+    let base: SIMD3<Float>
+    switch kind {
+      case .length: base = SIMD3<Float>(1.0, 0.72, 0.12)
+      case .area: base = SIMD3<Float>(0.10, 0.78, 0.92)
+      case .volume: base = SIMD3<Float>(0.82, 0.30, 0.95)
+    }
+    let rgb = selected ? base + (SIMD3<Float>(repeating: 1) - base) * 0.22 : base
+    return SIMD4<Float>(rgb, 1)
+  }
+
+  private func measurementVisualization(
+    measurements: [VolumeMeasurement]
+  ) -> MeasurementVisualization {
+    var result = MeasurementVisualization()
+    let coordinateScale = SIMD3<Float>(
+      volumeScale.columns.0.x,
+      volumeScale.columns.1.y,
+      volumeScale.columns.2.z
+    )
+    let safeCoordinateScale = SIMD3<Float>(
+      coordinateScale.x.isFinite ? max(abs(coordinateScale.x), 1e-6) : 1,
+      coordinateScale.y.isFinite ? max(abs(coordinateScale.y), 1e-6) : 1,
+      coordinateScale.z.isFinite ? max(abs(coordinateScale.z), 1e-6) : 1
+    )
+
+    func line(
+      from start: SIMD3<Float>,
+      to end: SIMD3<Float>,
+      color: SIMD4<Float>,
+      width: Float
+    ) -> MeasurementVisualization.Line? {
+      let localStart = (start - SIMD3<Float>(repeating: 0.5)) * coordinateScale
+      let localEnd = (end - SIMD3<Float>(repeating: 0.5)) * coordinateScale
+      guard localStart.x.isFinite, localStart.y.isFinite, localStart.z.isFinite,
+            localEnd.x.isFinite, localEnd.y.isFinite, localEnd.z.isFinite else { return nil }
+      return MeasurementVisualization.Line(
+        startAndWidth: SIMD4<Float>(localStart, width),
+        end: SIMD4<Float>(localEnd, 0),
+        color: color
+      )
+    }
+
+    for measurement in measurements {
+      let selected = sharedAppModel.selectedVolumeMeasurementID == measurement.id
+      let color = measurementColor(for: measurement.kind, selected: selected)
+      let geometry = measurement.geometry
+      var visualIndex = 0
+
+      for (pointIndex, point) in geometry.points.enumerated() {
+        let pointSelected = selected &&
+          sharedAppModel.selectedVolumeMeasurementPointID == point.id
+        let definesAreaPlane = measurement.kind == .area && pointIndex < 3
+        let outerColor: SIMD4<Float>
+        if pointSelected {
+          outerColor = SIMD4<Float>(1, 0.22, 0.03, 1)
+        } else {
+          outerColor = color
+        }
+        result.markers.append(VolumeMarker(
+          id: measurementVisualizationID(measurement.id, visualIndex),
+          name: measurement.name,
+          color: outerColor,
+          geometry: .sphere(VolumeMarkerPoint(
+            position: point.position,
+            radius: pointSelected ? 0.014 : 0.010
+          ))
+        ))
+        visualIndex += 1
+        if definesAreaPlane {
+          let ringRadius: Float = 0.017
+          let segments = 16
+          let ringAxes = [(0, 1), (0, 2), (1, 2)]
+          for (firstAxis, secondAxis) in ringAxes {
+            let ring = (0...segments).map { segment -> SIMD3<Float> in
+              let angle = Float(segment) / Float(segments) * 2 * .pi
+              var offset = SIMD3<Float>.zero
+              offset[firstAxis] = cos(angle) * ringRadius / safeCoordinateScale[firstAxis]
+              offset[secondAxis] = sin(angle) * ringRadius / safeCoordinateScale[secondAxis]
+              return point.position + offset
+            }
+            for segment in 0..<segments {
+              if let ringLine = line(
+                from: ring[segment],
+                to: ring[segment + 1],
+                color: SIMD4<Float>(1, 1, 1, 1),
+                width: 2.5
+              ) {
+                result.lines.append(ringLine)
+              }
+            }
+          }
+        }
+      }
+
+      for edge in geometry.edges {
+        let displayLength = simd_length((edge.end - edge.start) * coordinateScale)
+        guard displayLength.isFinite else { continue }
+        let dashCount = max(1, Int(ceil(min(displayLength / 0.035, 4_096))))
+        for dash in 0..<dashCount {
+          let startT = Float(dash) / Float(dashCount)
+          let endT = min(1, startT + 0.62 / Float(dashCount))
+          let start = edge.start + (edge.end - edge.start) * startT
+          let end = edge.start + (edge.end - edge.start) * endT
+          if let dashLine = line(
+            from: start,
+            to: end,
+            color: color,
+            width: selected ? 4.5 : 3.5
+          ) {
+            result.lines.append(dashLine)
+          }
+        }
+      }
+
+      if let valueText = measurement.formattedValue(),
+         let firstPoint = geometry.points.first {
+        result.labels.append(ScreenViewLabelDescriptor(
+          text: valueText,
+          color: color,
+          position: firstPoint.position,
+          depthOffsetTowardCamera: 0.010,
+          opaqueBackground: true,
+          height: 0.021,
+          billboardOffset: SIMD2<Float>(0, 0.020)
+        ))
+      }
+      if !geometry.triangleVertices.isEmpty {
+        result.surfaces.append(.init(
+          measurement: measurement,
+          color: SIMD4<Float>(color.x, color.y, color.z, selected ? 0.34 : 0.22)
+        ))
+      }
+    }
+    return result
+  }
 
   private func makeBillboardMatrix(position: SIMD3<Float>,
                                    camera: SIMD3<Float>,
@@ -47,9 +224,19 @@ extension Renderer {
     }
 
     let fLen = simd_length(forward)
-    let f = (fLen > 1e-5) ? (forward / fLen) : SIMD3<Float>(0, 0, 1)
+    let f = (fLen.isFinite && fLen > 1e-5)
+      ? (forward / fLen)
+      : SIMD3<Float>(0, 0, 1)
 
-    let r = simd_normalize(simd_cross(up, f))
+    var right = simd_cross(up, f)
+    var rightLength = simd_length(right)
+    if !rightLength.isFinite || rightLength <= 1e-5 {
+      right = simd_cross(SIMD3<Float>(1, 0, 0), f)
+      rightLength = simd_length(right)
+    }
+    let r = (rightLength.isFinite && rightLength > 1e-5)
+      ? right / rightLength
+      : SIMD3<Float>(1, 0, 0)
     let u = simd_cross(f, r) // already normalized if r,f are
 
     var m = matrix_identity_float4x4
@@ -545,14 +732,18 @@ extension Renderer {
   }
 
   private func drawVolumeMarkers(_ renderEncoder: MTLRenderCommandEncoder,
-                                 drawable: LayerRenderer.Drawable) {
+                                 drawable: LayerRenderer.Drawable) -> [ScreenViewLabelDescriptor] {
     let screenViews = screenViewVisualization()
-    let markers = sharedAppModel.volumeMarkers + screenViews.markers
+    let measurementSnapshot = sharedAppModel.volumeMeasurementsSnapshot()
+    let measurements = measurementVisualization(measurements: measurementSnapshot)
+    let markers = sharedAppModel.volumeMarkers + screenViews.markers + measurements.markers +
+      spatialStylusMeasurementPreviewMarkers + spatialControllerModePreviewMarkers
     let remoteToolPreviews = sharedAppModel.activeRemoteSpatialToolPreviews()
-    guard !markers.isEmpty || !screenViews.labels.isEmpty || spatialStylusPreviewPoint != nil ||
+    guard !markers.isEmpty || !screenViews.labels.isEmpty || !measurements.surfaces.isEmpty ||
+      spatialStylusPreviewPoint != nil ||
       !remoteToolPreviews.isEmpty || !spatialControllerSamples.isEmpty ||
       !spatialControllerPreviewPoints.isEmpty else {
-      return
+      return measurements.labels
     }
 
     renderEncoder.setRenderPipelineState(pipelineStateVolumeMarker)
@@ -561,6 +752,7 @@ extension Renderer {
     renderEncoder.setFrontFacing(.counterClockwise)
 
     let viewCount = drawable.views.count
+    guard viewCount > 0 else { return measurements.labels }
     var mvp = [simd_float4x4](repeating: matrix_identity_float4x4, count: viewCount)
     var eyePositions = [SIMD3<Float>](repeating: .zero, count: viewCount)
     for i in 0..<viewCount {
@@ -576,20 +768,25 @@ extension Renderer {
       )
     }
 
-    mvp.withUnsafeBytes { bytes in
-      renderEncoder.setVertexBytes(
-        bytes.baseAddress!,
-        length: bytes.count,
-        index: 20
-      )
+    func bindMarkerViewData() {
+      mvp.withUnsafeBufferPointer { buffer in
+        guard let baseAddress = buffer.baseAddress else { return }
+        renderEncoder.setVertexBytes(
+          baseAddress,
+          length: MemoryLayout<simd_float4x4>.stride * buffer.count,
+          index: 20
+        )
+      }
+      eyePositions.withUnsafeBufferPointer { buffer in
+        guard let baseAddress = buffer.baseAddress else { return }
+        renderEncoder.setVertexBytes(
+          baseAddress,
+          length: MemoryLayout<SIMD3<Float>>.stride * buffer.count,
+          index: 22
+        )
+      }
     }
-    eyePositions.withUnsafeBytes { bytes in
-      renderEncoder.setVertexBytes(
-        bytes.baseAddress!,
-        length: bytes.count,
-        index: 22
-      )
-    }
+    bindMarkerViewData()
 
     renderEncoder.setVertexBuffer(
       markerSphereBuffer,
@@ -604,6 +801,9 @@ extension Renderer {
       volumeScale.columns.2.z
     )
     markerTubeMeshCache.retainOnly(markerIDs: Set(markers.map(\.id)))
+    measurementSurfaceMeshCache.retainOnly(
+      measurementIDs: Set(measurementSnapshot.map(\.id))
+    )
 
     func color(for marker: VolumeMarker) -> SIMD4<Float> {
       VolumeMarkerPresentation.color(
@@ -742,7 +942,8 @@ extension Renderer {
       }
     }
 
-    if let spatialStylusPreviewPoint {
+    if spatialStylusMeasurementPreviewMarkers.isEmpty,
+       let spatialStylusPreviewPoint {
       drawSphere(
         spatialStylusPreviewPoint,
         color: sharedAppModel.defaultVolumeStrokeColor
@@ -758,60 +959,247 @@ extension Renderer {
       drawControllerPointer(sample)
     }
 
-    drawScreenViewLabels(screenViews.labels, renderEncoder: renderEncoder)
-  }
+    if !measurements.lines.isEmpty {
+      let byteCount = MemoryLayout<MeasurementVisualization.Line>.stride *
+        measurements.lines.count
+      if measurementLineBuffer == nil || measurementLineBufferCapacity < byteCount {
+        var capacity = max(measurementLineBufferCapacity, 4_096)
+        while capacity < byteCount {
+          capacity *= 2
+        }
+        measurementLineBuffer = device.makeBuffer(
+          length: capacity,
+          options: .storageModeShared
+        )
+        measurementLineBuffer?.label = "Measurement Line Instances"
+        measurementLineBufferCapacity = capacity
+      }
+      if let measurementLineBuffer {
+        measurements.lines.withUnsafeBytes { bytes in
+          if let baseAddress = bytes.baseAddress {
+            measurementLineBuffer.contents().copyMemory(
+              from: baseAddress,
+              byteCount: bytes.count
+            )
+          }
+        }
+        var modelMatrix = lastUnscaledModelMatrix
+        let viewportSizes = drawable.views.map { view in
+          SIMD2<Float>(
+            Float(view.textureMap.viewport.width),
+            Float(view.textureMap.viewport.height)
+          )
+        }
+        renderEncoder.setRenderPipelineState(pipelineStateMeasurementLine)
+        renderEncoder.setDepthStencilState(depthStateMarker)
+        renderEncoder.setCullMode(.none)
+        bindMarkerViewData()
+        renderEncoder.setVertexBytes(
+          &modelMatrix,
+          length: MemoryLayout<simd_float4x4>.stride,
+          index: 21
+        )
+        renderEncoder.setVertexBuffer(measurementLineBuffer, offset: 0, index: 25)
+        viewportSizes.withUnsafeBufferPointer { buffer in
+          guard let baseAddress = buffer.baseAddress else { return }
+          renderEncoder.setVertexBytes(
+            baseAddress,
+            length: MemoryLayout<SIMD2<Float>>.stride * buffer.count,
+            index: 26
+          )
+        }
+        renderEncoder.drawPrimitives(
+          type: .triangle,
+          vertexStart: 0,
+          vertexCount: 6,
+          instanceCount: measurements.lines.count
+        )
+      }
+    }
 
-  private func drawScreenViewLabels(
-    _ labels: [ScreenViewLabelDescriptor],
-    renderEncoder: MTLRenderCommandEncoder
-  ) {
-    guard !labels.isEmpty else { return }
-
-    renderEncoder.setRenderPipelineState(pipelineStateScreenViewLabel)
-    renderEncoder.setDepthStencilState(depthStateMarker)
-    renderEncoder.setCullMode(.none)
-
-    for label in labels {
-      guard let labelTexture = screenViewLabelTextureCache.texture(
-        for: label.text,
-        accentColor: label.color,
+    let surfaceMeshes = measurements.surfaces.compactMap { surface -> (
+      surface: MeasurementVisualization.Surface,
+      mesh: MeasurementSurfaceGPUMesh
+    )? in
+      guard let mesh = measurementSurfaceMeshCache.mesh(
+        for: surface.measurement,
+        coordinateScale: coordinateScale,
         device: device
-      ) else { continue }
+      ) else { return nil }
+      return (surface, mesh)
+    }
 
-      let volumePosition = simd_make_float3(
-        volumeScale * SIMD4<Float>(label.position - SIMD3<Float>(repeating: 0.5), 1)
+    func drawSurface(
+      _ mesh: MeasurementSurfaceGPUMesh,
+      color: SIMD4<Float>,
+      cullMode: MTLCullMode,
+      depthStencilState: MTLDepthStencilState
+    ) {
+      guard mesh.vertexCount >= 3, mesh.vertexCount.isMultiple(of: 3) else { return }
+      var modelMatrix = lastUnscaledModelMatrix
+      var color = color
+      renderEncoder.setRenderPipelineState(pipelineStateVolumeMarker)
+      renderEncoder.setDepthStencilState(depthStencilState)
+      renderEncoder.setCullMode(cullMode)
+      // Labels use slot 22 for their float2 size. Restore the marker shader's
+      // per-view eye positions before every draw that follows a label.
+      bindMarkerViewData()
+      renderEncoder.setVertexBuffer(
+        mesh.positionBuffer,
+        offset: 0,
+        index: VertexBufferIndex.meshPositions.rawValue
       )
-      let worldPosition = simd_make_float3(
-        lastUnscaledModelMatrix * SIMD4<Float>(volumePosition, 1)
-      )
-      var modelMatrix = makeBillboardMatrix(
-        position: worldPosition,
-        camera: lastHeadPosition,
-        up: SIMD3<Float>(0, 1, 0),
-        cylindrical: false
-      ).0
-      let labelHeight: Float = 0.052
-      var labelSize = SIMD2<Float>(
-        min(labelHeight * labelTexture.aspectRatio, 0.36),
-        labelHeight
-      )
-
+      renderEncoder.setVertexBuffer(mesh.normalBuffer, offset: 0, index: 24)
       renderEncoder.setVertexBytes(
         &modelMatrix,
         length: MemoryLayout<simd_float4x4>.stride,
         index: 21
       )
-      renderEncoder.setVertexBytes(
-        &labelSize,
-        length: MemoryLayout<SIMD2<Float>>.stride,
-        index: 22
+      renderEncoder.setFragmentBytes(
+        &color,
+        length: MemoryLayout<SIMD4<Float>>.stride,
+        index: 23
       )
-      renderEncoder.setFragmentTexture(
-        labelTexture.texture,
-        index: TextureIndex.screenViewLabel.rawValue
+      renderEncoder.drawPrimitives(
+        type: .triangle,
+        vertexStart: 0,
+        vertexCount: mesh.vertexCount
       )
-      renderEncoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 6)
     }
+
+    // A ray through a convex hull sees at most one exit and one entry surface.
+    // Rendering back faces before front faces is therefore deterministic and
+    // does not rely on ambiguous triangle-centroid sorting.
+    for entry in surfaceMeshes {
+      if entry.surface.measurement.kind == .volume {
+        drawSurface(
+          entry.mesh,
+          color: entry.surface.color,
+          cullMode: .front,
+          depthStencilState: depthStateMarkerReadOnly
+        )
+        drawSurface(
+          entry.mesh,
+          color: entry.surface.color,
+          cullMode: .back,
+          depthStencilState: depthStateMarkerReadOnly
+        )
+      } else {
+        drawSurface(
+          entry.mesh,
+          color: entry.surface.color,
+          cullMode: .none,
+          depthStencilState: depthStateMarkerReadOnly
+        )
+      }
+    }
+
+    // Preserve the closest transparent surface depth for volume compositing without
+    // blending every surface a second time.
+    let transparentDepthColor = SIMD4<Float>(0, 0, 0, 0)
+    for entry in surfaceMeshes {
+      drawSurface(
+        entry.mesh,
+        color: transparentDepthColor,
+        cullMode: .none,
+        depthStencilState: depthStateMarker
+      )
+    }
+    renderEncoder.setCullMode(.back)
+
+    drawScreenViewLabels(
+      screenViews.labels,
+      renderEncoder: renderEncoder,
+      depthStencilState: depthStateMarker
+    )
+    return measurements.labels
+  }
+
+  private func drawScreenViewLabels(
+    _ labels: [ScreenViewLabelDescriptor],
+    renderEncoder: MTLRenderCommandEncoder,
+    depthStencilState: MTLDepthStencilState
+  ) {
+    guard !labels.isEmpty else { return }
+
+    for label in labels {
+      drawScreenViewLabel(
+        label,
+        renderEncoder: renderEncoder,
+        depthStencilState: depthStencilState
+      )
+    }
+  }
+
+  private func screenViewLabelWorldPosition(
+    _ label: ScreenViewLabelDescriptor
+  ) -> SIMD3<Float> {
+    let volumePosition = simd_make_float3(
+      volumeScale * SIMD4<Float>(label.position - SIMD3<Float>(repeating: 0.5), 1)
+    )
+    var worldPosition = simd_make_float3(
+      lastUnscaledModelMatrix * SIMD4<Float>(volumePosition, 1)
+    )
+    guard worldPosition.x.isFinite, worldPosition.y.isFinite, worldPosition.z.isFinite else {
+      return lastHeadPosition
+    }
+    if label.depthOffsetTowardCamera > 0 {
+      let cameraDirection = lastHeadPosition - worldPosition
+      let lengthSquared = simd_length_squared(cameraDirection)
+      if lengthSquared.isFinite, lengthSquared > 0.000_000_1 {
+        worldPosition += cameraDirection / sqrt(lengthSquared) * label.depthOffsetTowardCamera
+      }
+    }
+    return worldPosition
+  }
+
+  private func drawScreenViewLabel(
+    _ label: ScreenViewLabelDescriptor,
+    renderEncoder: MTLRenderCommandEncoder,
+    depthStencilState: MTLDepthStencilState
+  ) {
+
+    renderEncoder.setRenderPipelineState(pipelineStateScreenViewLabel)
+    renderEncoder.setDepthStencilState(depthStencilState)
+    renderEncoder.setCullMode(.none)
+
+    guard let labelTexture = screenViewLabelTextureCache.texture(
+      for: label.text,
+      accentColor: label.color,
+      opaqueBackground: label.opaqueBackground,
+      device: device
+    ) else { return }
+
+    let worldPosition = screenViewLabelWorldPosition(label)
+    var modelMatrix = makeBillboardMatrix(
+      position: worldPosition,
+      camera: lastHeadPosition,
+      up: SIMD3<Float>(0, 1, 0),
+      cylindrical: false
+    ).0
+    modelMatrix.columns.3 += modelMatrix.columns.0 * label.billboardOffset.x +
+      modelMatrix.columns.1 * label.billboardOffset.y
+    let labelHeight = label.height
+    var labelSize = SIMD2<Float>(
+      min(labelHeight * labelTexture.aspectRatio, 0.36),
+      labelHeight
+    )
+
+    renderEncoder.setVertexBytes(
+      &modelMatrix,
+      length: MemoryLayout<simd_float4x4>.stride,
+      index: 21
+    )
+    renderEncoder.setVertexBytes(
+      &labelSize,
+      length: MemoryLayout<SIMD2<Float>>.stride,
+      index: 22
+    )
+    renderEncoder.setFragmentTexture(
+      labelTexture.texture,
+      index: TextureIndex.screenViewLabel.rawValue
+    )
+    renderEncoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 6)
   }
 
   private func screenViewVisualization() -> ScreenViewVisualization {
@@ -1015,7 +1403,11 @@ extension Renderer {
 
   private func renderVolumeMarkers(commandBuffer: MTLCommandBuffer,
                                    drawable: LayerRenderer.Drawable,
-                                   rasterizationRateMap: MTLRasterizationRateMap?) -> (color: MTLTexture, depth: MTLTexture) {
+                                   rasterizationRateMap: MTLRasterizationRateMap?) -> (
+    color: MTLTexture,
+    depth: MTLTexture,
+    measurementLabels: [ScreenViewLabelDescriptor]
+  ) {
     let targets = markerRenderTargets(drawable: drawable)
     let renderPassDescriptor = MTLRenderPassDescriptor()
     renderPassDescriptor.colorAttachments[0].texture = targets.color
@@ -1048,11 +1440,41 @@ extension Renderer {
       renderEncoder.setVertexAmplificationCount(viewports.count, viewMappings: &viewMappings)
     }
 
-    drawVolumeMarkers(renderEncoder, drawable: drawable)
+    let measurementLabels = drawVolumeMarkers(renderEncoder, drawable: drawable)
 
     renderEncoder.popDebugGroup()
     renderEncoder.endEncoding()
-    return targets
+    return (targets.color, targets.depth, measurementLabels)
+  }
+
+  private func drawMeasurementLabelsOnScreen(
+    _ labels: [ScreenViewLabelDescriptor],
+    renderEncoder: MTLRenderCommandEncoder,
+    drawable: LayerRenderer.Drawable
+  ) {
+    guard !labels.isEmpty, !drawable.views.isEmpty else { return }
+    let mvp = drawable.views.indices.map { index in
+      let view = drawable.views[index]
+      let eyeMatrix = lastOriginFromDevice * view.transform
+      return drawable.computeProjection(viewIndex: index) * eyeMatrix.inverse
+    }
+    mvp.withUnsafeBufferPointer { buffer in
+      guard let baseAddress = buffer.baseAddress else { return }
+      renderEncoder.setVertexBytes(
+        baseAddress,
+        length: MemoryLayout<simd_float4x4>.stride * buffer.count,
+        index: 20
+      )
+    }
+    let sortedLabels = labels.sorted {
+      simd_distance_squared(screenViewLabelWorldPosition($0), lastHeadPosition) >
+        simd_distance_squared(screenViewLabelWorldPosition($1), lastHeadPosition)
+    }
+    drawScreenViewLabels(
+      sortedLabels,
+      renderEncoder: renderEncoder,
+      depthStencilState: depthStateMarkerComposite
+    )
   }
 
   private func compositeVolumeMarkers(_ renderEncoder: MTLRenderCommandEncoder,
@@ -1133,6 +1555,169 @@ extension Renderer {
     )
   }
 
+  private func stylusMeasurementPreviewMarkers(
+    worldPosition: SIMD3<Float>,
+    kind: VolumeMeasurementKind,
+    startsNewMeasurement: Bool,
+    markerIDs: [UUID]
+  ) -> [VolumeMarker] {
+    let right = simd_normalize(SIMD3<Float>(
+      lastOriginFromDevice.columns.0.x,
+      lastOriginFromDevice.columns.0.y,
+      lastOriginFromDevice.columns.0.z
+    ))
+    let up = simd_normalize(SIMD3<Float>(
+      lastOriginFromDevice.columns.1.x,
+      lastOriginFromDevice.columns.1.y,
+      lastOriginFromDevice.columns.1.z
+    ))
+    let forward = -simd_normalize(SIMD3<Float>(
+      lastOriginFromDevice.columns.2.x,
+      lastOriginFromDevice.columns.2.y,
+      lastOriginFromDevice.columns.2.z
+    ))
+    let size: Float = 0.011
+    var worldVertices: [SIMD3<Float>]
+    var paths: [[Int]]
+    switch kind {
+      case .length:
+        worldVertices = [worldPosition - right * size, worldPosition + right * size]
+        paths = [[0, 1]]
+      case .area:
+        worldVertices = [
+          worldPosition + up * size,
+          worldPosition - up * size * 0.7 - right * size,
+          worldPosition - up * size * 0.7 + right * size
+        ]
+        paths = [[0, 1, 2, 0]]
+      case .volume:
+        worldVertices = [
+          worldPosition + up * size,
+          worldPosition - up * size * 0.65 - right * size,
+          worldPosition - up * size * 0.65 + right * size,
+          worldPosition - forward * size * 1.25
+        ]
+        paths = [[0, 1], [0, 2], [0, 3], [1, 2], [1, 3], [2, 3]]
+    }
+    if startsNewMeasurement {
+      let center = worldPosition + right * size * 1.55 + up * size * 1.15
+      let arm = size * 0.34
+      let startIndex = worldVertices.count
+      worldVertices.append(contentsOf: [
+        center - right * arm,
+        center + right * arm,
+        center - up * arm,
+        center + up * arm
+      ])
+      paths.append([startIndex, startIndex + 1])
+      paths.append([startIndex + 2, startIndex + 3])
+    }
+    let points = worldVertices.compactMap {
+      spatialToolPreviewPoint(worldPosition: $0, radius: 0.0018)
+    }
+    guard points.count == worldVertices.count else { return [] }
+    let color = measurementColor(for: kind, selected: true)
+    return paths.enumerated().map { index, path in
+      VolumeMarker(
+        id: markerIDs[index],
+        name: "Stylus measurement preview",
+        color: color,
+        geometry: .stroke(path.map { points[$0] })
+      )
+    }
+  }
+
+  private func spatialControllerToolPreviewMarkers(
+    sample: BorgSpatialInputSample,
+    mode: SpatialToolMode
+  ) -> [VolumeMarker] {
+    let markerIDs = (0..<8).map {
+      measurementVisualizationID(sample.id, 0x100 + $0)
+    }
+    if let kind = mode.measurementKind {
+      return stylusMeasurementPreviewMarkers(
+        worldPosition: sample.aimOrigin,
+        kind: kind,
+        startsNewMeasurement: false,
+        markerIDs: markerIDs
+      )
+    }
+
+    let right = simd_normalize(SIMD3<Float>(
+      lastOriginFromDevice.columns.0.x,
+      lastOriginFromDevice.columns.0.y,
+      lastOriginFromDevice.columns.0.z
+    ))
+    let up = simd_normalize(SIMD3<Float>(
+      lastOriginFromDevice.columns.1.x,
+      lastOriginFromDevice.columns.1.y,
+      lastOriginFromDevice.columns.1.z
+    ))
+    let forward = -simd_normalize(SIMD3<Float>(
+      lastOriginFromDevice.columns.2.x,
+      lastOriginFromDevice.columns.2.y,
+      lastOriginFromDevice.columns.2.z
+    ))
+    let center = sample.aimOrigin
+    let size: Float = 0.011
+    let worldVertices: [SIMD3<Float>]
+    let paths: [[Int]]
+    let color: SIMD4<Float>
+    switch mode {
+      case .model:
+        worldVertices = [
+          center - right * size, center + right * size,
+          center - up * size, center + up * size,
+          center - forward * size, center + forward * size
+        ]
+        paths = [[0, 1], [2, 3], [4, 5]]
+        color = SIMD4<Float>(0.15, 0.8, 1, 1)
+      case .clipping:
+        worldVertices = [
+          center - right * size - up * size,
+          center + right * size - up * size,
+          center + right * size + up * size,
+          center - right * size + up * size,
+          center - right * size * 1.25,
+          center + right * size * 1.25
+        ]
+        paths = [[0, 1, 2, 3, 0], [4, 5]]
+        color = SIMD4<Float>(1, 0.55, 0.1, 1)
+      case .marker:
+        worldVertices = [
+          center - right * size - up * size * 0.55,
+          center - right * size * 0.25 + up * size * 0.4,
+          center + right * size * 0.35 - up * size * 0.25,
+          center + right * size + up * size * 0.65
+        ]
+        paths = [[0, 1, 2, 3]]
+        color = sharedAppModel.defaultVolumeStrokeColor
+      case .screenView:
+        worldVertices = [
+          center - right * size * 1.25 - up * size * 0.75,
+          center + right * size * 1.25 - up * size * 0.75,
+          center + right * size * 1.25 + up * size * 0.75,
+          center - right * size * 1.25 + up * size * 0.75
+        ]
+        paths = [[0, 1, 2, 3, 0]]
+        color = SIMD4<Float>(0.2, 1, 0.55, 1)
+      case .lengthMeasurement, .areaMeasurement, .volumeMeasurement:
+        return []
+    }
+    let points = worldVertices.compactMap {
+      spatialToolPreviewPoint(worldPosition: $0, radius: 0.0018)
+    }
+    guard points.count == worldVertices.count else { return [] }
+    return paths.enumerated().map { index, path in
+      VolumeMarker(
+        id: markerIDs[index],
+        name: "Controller tool preview",
+        color: color,
+        geometry: .stroke(path.map { points[$0] })
+      )
+    }
+  }
+
   private func updateSpatialStylusStroke(
     sample: BorgSpatialStylusSample?
   ) {
@@ -1144,7 +1729,7 @@ extension Renderer {
     }
     let filteredTip = filteredSpatialStylusTip(
       position: sample.tipPosition,
-      pressure: sample.tipPressure
+      pressure: sample.drawingPressure
     )
     guard let previewPoint = spatialToolPreviewPoint(
       worldPosition: filteredTip.position,
@@ -1252,14 +1837,13 @@ extension Renderer {
       .duration(to: drawable.frameTiming.trackableAnchorTime)
       .timeInterval
     let samples = borgARProvider.getSpatialInputSamples(atTimestamp: timestamp)
+    let inputContext = spatialInputContext.snapshot()
     let stylusSample = immersiveInteraction.spatialStylusSample(
       from: samples,
       timestamp: timestamp
     )
-    let inputContext = spatialInputContext.snapshot()
     immersiveInteraction.handleSpatialInputSamples(
       samples,
-      interactionMode: inputContext.mode,
       datasetInfo: inputContext.datasetInfo,
       timestamp: timestamp
     )
@@ -1270,7 +1854,40 @@ extension Renderer {
         radius: sharedAppModel.defaultVolumeStrokeRadius
       )
     }
-    updateSpatialStylusStroke(sample: stylusSample)
+    spatialControllerModePreviewMarkers = spatialControllerSamples.flatMap { sample in
+      spatialControllerToolPreviewMarkers(
+        sample: sample,
+        mode: storedAppModel.controllerTool(for: sample.chirality)
+      )
+    }
+    if let stylusMeasurementKind = storedAppModel.stylusTool.measurementKind {
+      finishSpatialStylusStroke()
+      spatialStylusRadiusAdjustmentStart = nil
+      immersiveInteraction.handleSpatialStylusMeasurement(
+        stylusSample,
+        datasetInfo: inputContext.datasetInfo,
+        kind: stylusMeasurementKind
+      )
+      spatialStylusPreviewPoint = stylusSample.flatMap {
+        spatialToolPreviewPoint(worldPosition: $0.tipPosition, radius: 0.008)
+      }
+      spatialStylusMeasurementPreviewMarkers = stylusSample.map {
+        stylusMeasurementPreviewMarkers(
+          worldPosition: $0.tipPosition,
+          kind: stylusMeasurementKind,
+          startsNewMeasurement: immersiveInteraction.spatialStylusWillStartNewMeasurement,
+          markerIDs: Self.stylusMeasurementPreviewMarkerIDs
+        )
+      } ?? []
+    } else {
+      spatialStylusMeasurementPreviewMarkers = []
+      immersiveInteraction.handleSpatialStylusMeasurement(
+        nil,
+        datasetInfo: nil,
+        kind: .length
+      )
+      updateSpatialStylusStroke(sample: stylusSample)
+    }
     var previewPoints = spatialControllerPreviewPoints
     if let spatialStylusPreviewPoint {
       previewPoints.append(spatialStylusPreviewPoint)
@@ -1479,6 +2096,11 @@ extension Renderer {
       renderEncoder,
       markerColorTexture: markerTargets.color,
       markerDepthTexture: markerTargets.depth
+    )
+    drawMeasurementLabelsOnScreen(
+      markerTargets.measurementLabels,
+      renderEncoder: renderEncoder,
+      drawable: drawable
     )
 
     if storedAppModel.tfMode != TransferFunctionDisplayMode.windowOnly.rawValue {

@@ -84,12 +84,14 @@ class RuntimeAppModel {
    - model: Manipulate the 3D model.
    - clipping: Adjust clipping planes.
    - marker: Place and edit opaque volume markers.
+   - measurement: Place and edit physical measurement points.
    - screenView: Position the shared iOS and macOS camera.
    */
   enum InteractionMode: String {
     case model = "model"
     case clipping = "clipping"
     case marker = "marker"
+    case measurement = "measurement"
     case screenView = "screenView"
   }
   /// The current interaction mode.
@@ -434,6 +436,16 @@ class RuntimeAppModel {
       exit(0)
     }
 #endif
+  }
+}
+
+extension RuntimeAppModel.DatasetInfo {
+  var physicalExtentMeters: SIMD3<Float> {
+    SIMD3<Float>(
+      Float(width) * voxelSpacingX,
+      Float(height) * voxelSpacingY,
+      Float(depth) * voxelSpacingZ
+    )
   }
 }
 

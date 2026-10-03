@@ -147,12 +147,16 @@ enum ImmersiveBootstrap {
           break
       }
     }
-    let performControllerFaceButton: @MainActor (SpatialControllerFaceButton) -> Void = {
-      button in
+    let performControllerFaceButton: @MainActor (
+      SpatialControllerFaceButton,
+      BorgSpatialInputChirality
+    ) -> Void = { button, chirality in
       SpatialControllerShortcutHandler.perform(
         storedAppModel.controllerAction(for: button),
+        for: chirality,
         runtimeAppModel: runtimeAppModel,
-        sharedAppModel: sharedAppModel
+        sharedAppModel: sharedAppModel,
+        storedAppModel: storedAppModel
       )
     }
     let immersiveInteraction = ImmersiveInteraction(

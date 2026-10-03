@@ -56,7 +56,7 @@ collaboration, and a WebGPU browser frontend served directly by the dataset serv
 
 ### Data And Servers
 
-- Dataset import and conversion from BorgVR, QVIS, NRRD/NHDR, and DICOM workflows.
+- Dataset import and conversion from BorgVR, QVIS, NRRD/NHDR, PVM, and DICOM workflows.
 - Password-protected Swift and C++ dataset servers serving datasets, transfer functions,
   and marker files.
 - Periodic server-to-server synchronization in the macOS server and C++ server, including
@@ -126,8 +126,19 @@ The project uses the shared bundle identifier configured in the Xcode project.
 
 ### Command-Line Volume Generator
 
-The `TerminalConverterApp` scheme converts DICOM, QVIS, and NRRD input and can also create
-reproducible synthetic volumes. Its creation mode has this general form:
+The `TerminalConverterApp` scheme converts DICOM, QVIS, NRRD, and PVM input, exports any LoD of a
+BorgVR dataset as a flat volume, and can create reproducible synthetic volumes. Export uses one
+deliberately simple interchange representation: an uncompressed inline NRRD file.
+
+```sh
+TerminalConverterApp E <input.data> <output.nrrd> <lod>
+```
+
+LoD `0` reconstructs the full-resolution source volume. Higher LoDs export the stored downsampled
+levels while preserving their corresponding physical voxel spacing. Importing and exporting works
+for one- and multi-component data with 1-, 2-, or 4-byte components.
+
+The creation mode has this general form:
 
 ```sh
 TerminalConverterApp C <algorithm> <bytes-per-component> <components> \
@@ -156,6 +167,11 @@ TerminalConverterApp C J 2 1 512 512 512 QuaternionJulia.data \
 ```
 
 Use `TerminalConverterApp --help` for the complete argument list.
+
+PVM import accepts PVM, PVM2, and PVM3 streams, including the `DDS v3d` and block-interleaved
+`DDS v3e` wrappers. The decoder is implemented directly in BorgVR. Because PVM spacing is
+relative rather than an absolute physical unit, BorgVR preserves its proportions and normalizes
+the longest dataset extent to one meter during import.
 
 ### Swift Dataset Server
 

@@ -47,6 +47,7 @@ final class SharePlayCoordinator: ObservableObject {
   private var pendingTransferFunction = false
   private var pendingTransform = false
   private var pendingMarkers = false
+  private var pendingMeasurements = false
   private var synchronizationTask: Task<Void, Never>?
   private var knownParticipants = Set<Participant>()
   private var protocolHandshake = BorgVRSharePlayHandshakeState()
@@ -222,6 +223,21 @@ final class SharePlayCoordinator: ObservableObject {
   func synchronizeMarkers(immediately: Bool = false) {
     guard isInSession else { return }
     pendingMarkers = true
+    if immediately {
+      flushSynchronization()
+      return
+    }
+    guard synchronizationTask == nil else { return }
+    synchronizationTask = Task { [weak self] in
+      try? await Task.sleep(nanoseconds: 50_000_000)
+      guard !Task.isCancelled else { return }
+      await self?.flushPendingSynchronization()
+    }
+  }
+
+  func synchronizeMeasurements(immediately: Bool = false) {
+    guard isInSession else { return }
+    pendingMeasurements = true
     if immediately {
       flushSynchronization()
       return
@@ -487,6 +503,7 @@ final class SharePlayCoordinator: ObservableObject {
     pendingTransferFunction = false
     pendingTransform = false
     pendingMarkers = false
+    pendingMeasurements = false
     isScreenViewSynchronized = true
     sharedScreenViewState = nil
     screenViewSynchronizationGeneration += 1
@@ -515,6 +532,7 @@ final class SharePlayCoordinator: ObservableObject {
     pendingTransferFunction = false
     pendingTransform = false
     pendingMarkers = false
+    pendingMeasurements = false
   }
 
   private func sendDatasetAnnouncement(to participants: Participants = .all) async {
@@ -564,6 +582,11 @@ final class SharePlayCoordinator: ObservableObject {
         of: .renderingUpdate,
         to: participants
       )
+      try? await sendData(
+        VolumeMeasurementSharePlayCodec.encode(appModel.volumeMeasurements),
+        of: .renderingUpdate,
+        to: participants
+      )
     }
   }
 
@@ -587,10 +610,12 @@ final class SharePlayCoordinator: ObservableObject {
     let shouldSendTransferFunction = pendingTransferFunction
     let shouldSendTransform = pendingTransform
     let shouldSendMarkers = pendingMarkers
+    let shouldSendMeasurements = pendingMeasurements
     pendingCommonState = false
     pendingTransferFunction = false
     pendingTransform = false
     pendingMarkers = false
+    pendingMeasurements = false
 
     do {
       if shouldSendCommonState {
@@ -611,6 +636,12 @@ final class SharePlayCoordinator: ObservableObject {
       if shouldSendMarkers, let appModel {
         try await sendData(
           VolumeMarkerSharePlayCodec.encode(appModel.volumeMarkers),
+          of: .renderingUpdate
+        )
+      }
+      if shouldSendMeasurements, let appModel {
+        try await sendData(
+          VolumeMeasurementSharePlayCodec.encode(appModel.volumeMeasurements),
           of: .renderingUpdate
         )
       }
@@ -645,6 +676,7 @@ final class SharePlayCoordinator: ObservableObject {
         pendingDatasetLoadTask = nil
         pendingDatasetLoad = nil
         appModel?.removeAllVolumeMarkers()
+        appModel?.removeAllVolumeMeasurements()
         appModel?.closeDataset(destination: .sharePlayWaiting(.hostDataset))
       case MessageType.stateRequest.rawValue:
         guard appModel?.groupSessionHost == true else { return }
@@ -687,6 +719,11 @@ final class SharePlayCoordinator: ObservableObject {
       }
       if let markers = try VolumeMarkerSharePlayCodec.decodeIfPresent(data) {
         appModel?.replaceVolumeMarkers(markers)
+        return
+      }
+      if let measurements = try VolumeMeasurementSharePlayCodec.decodeIfPresent(data) {
+        appModel?.replaceVolumeMeasurements(measurements)
+        appModel?.clearVolumeMeasurementSelection()
         return
       }
       if let update = try BorgVRScreenViewStateCodec.decodeUpdateIfPresent(data) {

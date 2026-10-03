@@ -8,7 +8,7 @@ import UIKit
  A SwiftUI wrapper for `UIDocumentPickerViewController` to allow file picking in SwiftUI.
 
  Presents a document picker that allows the user to select files of any type. When the user selects one or more files,
- the coordinator filters them for supported volume file extensions (`.nrrd`, `.nhdr`, `.dat`, `.data`) and invokes
+ the coordinator filters them for supported volume file extensions (`.nrrd`, `.nhdr`, `.dat`, `.pvm`, `.data`) and invokes
  the `onFilePicked` closure with the first matching URL or `nil` if none match.
  */
 struct FilePickerView: UIViewControllerRepresentable {
@@ -76,7 +76,7 @@ struct FilePickerView: UIViewControllerRepresentable {
                         didPickDocumentsAt urls: [URL]) {
       if let url = urls.first(where: {
         let ext = $0.pathExtension.lowercased()
-        return ext == "nrrd" || ext == "nhdr" || ext == "dat" || ext == "data"
+        return VolumeFileParserFactory.supportedExtensions.contains(ext) || ext == "data"
       }) {
         parent.onFilePicked(url)
       } else {

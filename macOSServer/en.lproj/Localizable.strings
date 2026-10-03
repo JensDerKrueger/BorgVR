@@ -3,7 +3,7 @@
 
 /* Step 1 */
 "converter_step1_title" = "Select Input Source";
-"converter_step1_subtitle" = "Choose a file (QVIS/NRRD) or a directory with DICOM files.";
+"converter_step1_subtitle" = "Choose a file (QVIS/NRRD/PVM) or a directory with DICOM files.";
 "converter_button_select_input_file" = "Select Input File";
 "converter_status_no_file" = "No file selected";
 "converter_button_select_input_dir" = "Select Input Directory";
@@ -53,6 +53,7 @@
 "converter_desc_from_file" = "Converted from %@";
 "converter_desc_from_qvis" = "Converted from QVIS Volume %@";
 "converter_desc_from_nrrd" = "Converted from NRRD Volume %@";
+"converter_desc_from_pvm" = "Converted from PVM Volume %@";
 "converter_desc_from_dicom_stack" = "Converted from DICOM Stack %@";
 "converter_desc_from_dicom_directory" = "Converted from DICOM Directory %@";
 
@@ -69,7 +70,7 @@
 "modeselection_title" = "BorgVR Server – Version %@.%@";
 "modeselection_subtitle" = "Please choose an option below";
 
-"modeselection_import" = "Import a Dataset";
+"modeselection_import" = "Import / Export Dataset";
 "modeselection_server" = "Dataset Server";
 "modeselection_settings" = "Settings";
 "modeselection_about" = "About";
@@ -448,7 +449,7 @@
 "Dataset description" = "Dataset description";
 "Copy data" = "Copy data";
 "Start conversion" = "Start conversion";
-"Supported formats are QVIS `.dat` + `.raw`, NRRD/NHDR, and native BorgVR `.data` files." = "Supported formats are QVIS `.dat` + `.raw`, NRRD/NHDR, and native BorgVR `.data` files.";
+"Supported formats are QVIS `.dat` + `.raw`, NRRD/NHDR, PVM, and native BorgVR `.data` files." = "Supported formats are QVIS `.dat` + `.raw`, NRRD/NHDR, PVM, and native BorgVR `.data` files.";
 "For `.dat` and `.nhdr`, iOS also needs access to the referenced raw data file." = "For `.dat` and `.nhdr`, iOS also needs access to the referenced raw data file.";
 "Model" = "Model";
 "Hide UI" = "Hide UI";
@@ -524,3 +525,25 @@
 "WebGPU web server:" = "WebGPU web server:";
 "datasetscanner_info_loaded_marker_file" = "Loaded marker file: %@ (dataset %@, id %@)";
 "datasetscanner_warning_failed_load_marker_file" = "Failed to load marker file: %@";
+"converter_mode" = "Operation";
+"converter_mode_import" = "Import";
+"converter_mode_export" = "Export";
+"converter_export_title" = "Export Dataset";
+"converter_export_subtitle" = "Reconstruct one BorgVR level of detail as a flat, uncompressed NRRD volume.";
+"converter_export_select_input" = "Select BorgVR Dataset";
+"converter_export_lod" = "Level of Detail";
+"converter_export_lod_option" = "LoD %d";
+"converter_export_resolution_format" = "%d × %d × %d voxels";
+"converter_export_select_output" = "Select Output File";
+"converter_export_no_output" = "No output file selected";
+"converter_export_start" = "Start Export";
+"converter_export_step1_subtitle" = "Choose the BorgVR .data file to reconstruct.";
+"converter_export_step2_subtitle" = "Select the stored resolution level to export. LoD 0 is the full-resolution volume.";
+"converter_export_step3_subtitle" = "Choose where to save the flat, uncompressed NRRD volume.";
+"converter_export_progress_title" = "Exporting Dataset";
+"converter_export_progress_subtitle" = "BorgVR is reconstructing the selected level from its bricks.";
+"converter_export_completed_title" = "Export Complete";
+"converter_export_completed_subtitle" = "The selected level of detail was written successfully.";
+"converter_export_failed_title" = "Export Failed";
+"converter_export_failed_subtitle" = "Review the log, then go back to adjust the output and try again.";
+"converter_export_invalid_input_format" = "The selected file is not a valid BorgVR dataset: %@";

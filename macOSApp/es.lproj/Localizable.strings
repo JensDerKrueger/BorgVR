@@ -3,7 +3,7 @@
 
 /* Step 1 */
 "converter_step1_title" = "Seleccionar fuente de entrada";
-"converter_step1_subtitle" = "Elige un archivo (QVIS/NRRD) o un directorio con archivos DICOM.";
+"converter_step1_subtitle" = "Elige un archivo (QVIS/NRRD/PVM) o un directorio con archivos DICOM.";
 "converter_button_select_input_file" = "Seleccionar archivo de entrada";
 "converter_status_no_file" = "Ningún archivo seleccionado";
 "converter_button_select_input_dir" = "Seleccionar directorio de entrada";
@@ -53,6 +53,7 @@
 "converter_desc_from_file" = "Convertido desde %@";
 "converter_desc_from_qvis" = "Convertido desde volumen QVIS %@";
 "converter_desc_from_nrrd" = "Convertido desde volumen NRRD %@";
+"converter_desc_from_pvm" = "Convertido desde volumen PVM %@";
 "converter_desc_from_dicom_stack" = "Convertido desde pila DICOM %@";
 "converter_desc_from_dicom_directory" = "Convertido desde directorio DICOM %@";
 
@@ -72,7 +73,7 @@
 "modeselection_tagline" = "Renderizado volumétrico, importación de datos y servidor de conjuntos de datos para flujos de trabajo de escritorio.";
 
 "modeselection_open_dataset" = "Abrir conjunto de datos";
-"modeselection_import" = "Importar un conjunto de datos";
+"modeselection_import" = "Importar / exportar conjunto de datos";
 "modeselection_server" = "Servidor de conjuntos de datos";
 "modeselection_settings" = "Ajustes";
 "modeselection_about" = "Acerca de";
@@ -580,7 +581,7 @@
 "Dataset description" = "Descripción del conjunto de datos";
 "Copy data" = "Copiar datos";
 "Start conversion" = "Iniciar conversión";
-"Supported formats are QVIS `.dat` + `.raw`, NRRD/NHDR, and native BorgVR `.data` files." = "Los formatos compatibles son QVIS `.dat` + `.raw`, NRRD/NHDR y archivos BorgVR `.data` nativos.";
+"Supported formats are QVIS `.dat` + `.raw`, NRRD/NHDR, PVM, and native BorgVR `.data` files." = "Los formatos compatibles son QVIS `.dat` + `.raw`, NRRD/NHDR, PVM y archivos BorgVR `.data` nativos.";
 "For `.dat` and `.nhdr`, iOS also needs access to the referenced raw data file." = "Para `.dat` y `.nhdr`, iOS también necesita acceso al archivo raw referenciado.";
 "Model" = "Modelo";
 "Hide UI" = "Ocultar interfaz";
@@ -749,3 +750,62 @@
 "Control level-of-detail selection, brick requests, GPU memory, and hash table sizing. Most users can leave these advanced settings unchanged." = "Configura el nivel de detalle, las solicitudes de bloques, la memoria de la GPU y la tabla hash. La mayoría de los usuarios puede mantener estos ajustes avanzados sin cambios.";
 "To complete the connection, click Join in the green SharePlay menu in the menu bar." = "Para completar la conexión, haz clic en Unirse en el menú verde de SharePlay de la barra de menús.";
 "Datasets provided through SharePlay ad-hoc connections are always loaded progressively, regardless of this setting." = "Los conjuntos de datos proporcionados mediante conexiones ad hoc de SharePlay siempre se cargan progresivamente, independientemente de este ajuste.";
+"converter_mode" = "Operación";
+"converter_mode_import" = "Importar";
+"converter_mode_export" = "Exportar";
+"converter_export_title" = "Exportar conjunto de datos";
+"converter_export_subtitle" = "Reconstruye un nivel de detalle de BorgVR como un volumen NRRD plano y sin comprimir.";
+"converter_export_select_input" = "Seleccionar conjunto BorgVR";
+"converter_export_lod" = "Nivel de detalle";
+"converter_export_lod_option" = "LoD %d";
+"converter_export_resolution_format" = "%d × %d × %d vóxeles";
+"converter_export_select_output" = "Seleccionar archivo de salida";
+"converter_export_no_output" = "No se ha seleccionado un archivo de salida";
+"converter_export_start" = "Iniciar exportación";
+"converter_export_step1_subtitle" = "Seleccione el archivo .data de BorgVR que desea reconstruir.";
+"converter_export_step2_subtitle" = "Seleccione el nivel de resolución que desea exportar. LoD 0 contiene la resolución completa.";
+"converter_export_step3_subtitle" = "Seleccione el destino del volumen NRRD plano y sin comprimir.";
+"converter_export_progress_title" = "Exportando conjunto de datos";
+"converter_export_progress_subtitle" = "BorgVR está reconstruyendo el nivel seleccionado a partir de sus bloques.";
+"converter_export_completed_title" = "Exportación completada";
+"converter_export_completed_subtitle" = "El nivel de detalle seleccionado se ha escrito correctamente.";
+"converter_export_failed_title" = "Error de exportación";
+"converter_export_failed_subtitle" = "Revise el registro y vuelva atrás para ajustar el destino e intentarlo de nuevo.";
+"converter_export_invalid_input_format" = "El archivo seleccionado no es un conjunto de datos BorgVR válido: %@";
+
+"private_interaction_option_measurement" = "Medir";
+"measurement_window_title" = "Mediciones";
+"measurement_kind_picker" = "Tipo de medición";
+"measurement_kind_length" = "Longitud";
+"measurement_kind_area" = "Área";
+"measurement_kind_volume" = "Volumen";
+"measurement_new_button" = "Nueva medición";
+"measurement_empty_title" = "Sin mediciones";
+"measurement_empty_description" = "Todavía no hay mediciones para este conjunto de datos.";
+"measurement_name_field" = "Nombre";
+"measurement_delete_point_button" = "Eliminar punto";
+"measurement_delete_button" = "Eliminar medición";
+"measurement_delete_all_button" = "Eliminar TODAS las mediciones";
+"measurement_delete_all_confirmation_title" = "¿Eliminar todas las mediciones?";
+"measurement_delete_all_confirmation_delete" = "Eliminar TODAS";
+"measurement_delete_all_confirmation_message" = "Esta acción elimina todas las mediciones del conjunto de datos actual.";
+"measurement_value_incomplete" = "Incompleta";
+"measurement_point_count_format" = "%d puntos";
+"measurement_point_format" = "Punto %d";
+"measurement_load_button" = "Cargar mediciones…";
+"measurement_save_button" = "Guardar mediciones…";
+"measurement_load_merge_title" = "Cargar mediciones";
+"measurement_load_merge_message" = "Ya existen mediciones para el conjunto de datos actual. ¿Desea reemplazarlas o añadir las mediciones cargadas?";
+"measurement_load_replace_button" = "Reemplazar";
+"measurement_load_add_button" = "Añadir";
+"measurement_dataset_mismatch_title" = "Mediciones para otro conjunto de datos";
+"measurement_dataset_mismatch_message" = "Este archivo de mediciones se creó para otro conjunto de datos. Es posible que sus posiciones y valores no coincidan con el volumen actual. ¿Desea cargarlo de todos modos?";
+"measurement_dataset_mismatch_load" = "Cargar de todos modos";
+"measurement_file_error_title" = "Error del archivo de mediciones";
+"measurement_file_error_invalid" = "El archivo seleccionado no es un archivo de mediciones de BorgVR válido.";
+"measurement_file_error_version_format" = "La versión %d del archivo de mediciones no es compatible.";
+"measurement_file_error_too_large" = "El archivo de mediciones supera el tamaño máximo permitido.";
+"measurement_file_error_too_many_measurements" = "El archivo contiene demasiadas mediciones.";
+"measurement_file_error_too_many_points" = "El archivo contiene demasiados puntos de medición.";
+"measurement_file_error_invalid_geometry" = "El archivo contiene geometría de medición no válida.";
+"measurement_file_error_missing_dataset" = "Las dimensiones espaciales del conjunto de datos actual aún no están disponibles.";

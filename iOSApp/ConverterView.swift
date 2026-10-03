@@ -31,7 +31,7 @@ struct ConverterView: View {
     NavigationStack {
       VStack(spacing: 14) {
         VStack(alignment: .leading, spacing: 8) {
-          Text("Supported formats are QVIS `.dat` + `.raw`, NRRD/NHDR, and native BorgVR `.data` files.")
+          Text("Supported formats are QVIS `.dat` + `.raw`, NRRD/NHDR, PVM, and native BorgVR `.data` files.")
             .foregroundStyle(.secondary)
           Text("For `.dat` and `.nhdr`, iOS also needs access to the referenced raw data file.")
             .font(.caption)
@@ -109,7 +109,7 @@ struct ConverterView: View {
           if let url {
             let fileExtension = url.pathExtension.lowercased()
             switch fileExtension {
-              case "dat", "nrrd", "nhdr":
+              case "dat", "nrrd", "nhdr", "pvm":
                 mode = .convert
               case "data":
                 mode = .copy
@@ -201,18 +201,25 @@ struct ConverterView: View {
         }
         defer { metadataURL.stopAccessingSecurityScopedResource() }
 
-        let parser: VolumeFileParser
-        if metadataURL.pathExtension.lowercased() == "dat" {
-          parser = try QVISParser(filename: inputFile)
-        } else {
-          parser = try NRRDParser(filename: inputFile)
+        let parser = try VolumeFileParserFactory.parser(for: inputFile)
+        defer {
+          if parser.dataIsTempCopy {
+            try? FileManager.default.removeItem(atPath: parser.absoluteFilename)
+          }
         }
 
         let rawURL = URL(fileURLWithPath: parser.absoluteFilename)
-        guard rawURL.startAccessingSecurityScopedResource() else {
-          throw FileError.noPermission(String(format: String(localized: "error_no_permission_file_format"), rawURL.path))
+        let rawNeedsSecurityScope = !parser.dataIsTempCopy
+        if rawNeedsSecurityScope && !rawURL.startAccessingSecurityScopedResource() {
+          throw FileError.noPermission(
+            String(format: String(localized: "error_no_permission_file_format"), rawURL.path)
+          )
         }
-        defer { rawURL.stopAccessingSecurityScopedResource() }
+        defer {
+          if rawNeedsSecurityScope {
+            rawURL.stopAccessingSecurityScopedResource()
+          }
+        }
 
         let volume = try RawFileAccessor(
           filename: parser.absoluteFilename,

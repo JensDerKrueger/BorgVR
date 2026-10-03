@@ -20,11 +20,16 @@
       <article class="doc-content">
         <section>
           <h2>TerminalConverterApp</h2>
-          <p data-de="Der Swift-Konverter liest DICOM-Verzeichnisse, QVIS-Dateien und NRRD/NHDR-Dateien oder erzeugt reproduzierbare synthetische Volumen. Alle Modi schreiben das in Bricks unterteilte BorgVR-Format.">The Swift converter reads DICOM directories, QVIS files, and NRRD/NHDR files or creates reproducible synthetic volumes. Every mode writes the bricked BorgVR format.</p>
+          <p data-de="Der Swift-Konverter liest DICOM-Verzeichnisse, QVIS-, NRRD/NHDR- und PVM-Dateien, exportiert BorgVR-Datensätze oder erzeugt reproduzierbare synthetische Volumen. Import und Erzeugung schreiben das in Bricks unterteilte BorgVR-Format.">The Swift converter reads DICOM directories, QVIS, NRRD/NHDR, and PVM files, exports BorgVR datasets, or creates reproducible synthetic volumes. Import and generation write the bricked BorgVR format.</p>
           <pre><code>TerminalConverterApp D &lt;input-directory&gt; &lt;output.data&gt; &lt;description&gt; &lt;brick-size&gt; &lt;overlap&gt;
 TerminalConverterApp Q &lt;input-file&gt;      &lt;output.data&gt; &lt;description&gt; &lt;brick-size&gt; &lt;overlap&gt;
-TerminalConverterApp N &lt;input-file&gt;      &lt;output.data&gt; &lt;description&gt; &lt;brick-size&gt; &lt;overlap&gt;</code></pre>
+TerminalConverterApp N &lt;input-file&gt;      &lt;output.data&gt; &lt;description&gt; &lt;brick-size&gt; &lt;overlap&gt;
+TerminalConverterApp P &lt;input-file&gt;      &lt;output.data&gt; &lt;description&gt; &lt;brick-size&gt; &lt;overlap&gt;</code></pre>
+          <p data-de="Der Modus <code>P</code> liest PVM, PVM2 und PVM3 einschließlich der Kompressions-Wrapper DDS v3d und DDS v3e. Relative PVM-Voxelabstände werden unter Beibehaltung ihrer Proportionen auf eine längste Gesamtausdehnung von einem Meter normalisiert.">Mode <code>P</code> reads PVM, PVM2, and PVM3, including the DDS v3d and DDS v3e compression wrappers. Relative PVM voxel spacing is preserved proportionally and normalized to a longest total extent of one meter.</p>
           <p data-de="Beschreibungen mit Leerzeichen müssen in Anführungszeichen stehen. <code>brick-size</code> und <code>overlap</code> sind positive Ganzzahlen.">Descriptions containing spaces must be quoted. <code>brick-size</code> and <code>overlap</code> are positive integers.</p>
+          <h3 data-de="Flaches Volumen exportieren">Exporting a flat volume</h3>
+          <pre><code>TerminalConverterApp E &lt;input.data&gt; &lt;output.nrrd&gt; &lt;lod&gt;</code></pre>
+          <p data-de="Der Export rekonstruiert die gewählte Detailstufe als unkomprimierte Inline-NRRD-Datei. LoD <code>0</code> enthält die volle Auflösung; höhere Werte wählen die gespeicherten, heruntergerechneten Stufen. Brick-Überlappung und Randauffüllung werden dabei entfernt und der physikalische Voxelabstand an die Detailstufe angepasst.">Export reconstructs the selected level of detail as an uncompressed inline NRRD file. LoD <code>0</code> contains the full resolution; higher values select the stored downsampled levels. Brick overlap and boundary padding are removed, and physical voxel spacing is adjusted for the selected level.</p>
           <h3 data-de="Synthetische Datensätze">Synthetic datasets</h3>
           <pre><code>TerminalConverterApp C &lt;algorithm&gt; &lt;bytes-per-component&gt; &lt;components&gt; \
   &lt;size-x&gt; &lt;size-y&gt; &lt;size-z&gt; &lt;output.data&gt; &lt;description&gt; \

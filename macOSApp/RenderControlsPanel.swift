@@ -151,6 +151,7 @@ struct RenderControlsPanel: View {
         Text("Clipping").tag(AppModel.InteractionMode.clipping)
         Text("Transfer").tag(AppModel.InteractionMode.transferEditing)
         Text("Marker").tag(AppModel.InteractionMode.marker)
+        Text("private_interaction_option_measurement").tag(AppModel.InteractionMode.measurement)
       }
       .pickerStyle(.segmented)
       .onAppear {
@@ -216,6 +217,16 @@ struct RenderControlsPanel: View {
         } label: {
           Label("Markers", systemImage: "mappin.and.ellipse")
         }
+
+        Button {
+          if docking.isDetached(.measurementEditor) {
+            openWindow(id: DockablePanelID.measurementEditor.windowID)
+          } else {
+            docking.toggleVisibility(.measurementEditor)
+          }
+        } label: {
+          Label("measurement_window_title", systemImage: "ruler")
+        }
       }
     }
     .padding(12)
@@ -250,6 +261,9 @@ struct RenderControlsPanel: View {
   private func applyInteractionModeSelection(_ mode: AppModel.InteractionMode) {
     DispatchQueue.main.async {
       guard appModel.interactionMode != mode else { return }
+      if mode != .measurement {
+        appModel.clearVolumeMeasurementSelection()
+      }
       appModel.interactionMode = mode
     }
   }
@@ -280,6 +294,7 @@ struct RenderControlsPanel: View {
       sharePlay.closeSharedDataset()
     }
     appModel.removeAllVolumeMarkers()
+    appModel.removeAllVolumeMeasurements()
     docking.resetForDatasetClose()
     appModel.closeDataset(destination: .datasetSelection)
   }

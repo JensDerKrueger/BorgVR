@@ -25,17 +25,22 @@ struct PrivateApplicationView: View {
         selection: Binding(
           get: { runtimeAppModel.interactionMode.rawValue },
           set: { (value: String) in
+            if value != "marker" {
+              sharedAppModel.clearVolumeMarkerSelection()
+            }
+            if value != "measurement" {
+              sharedAppModel.selectedVolumeMeasurementPointID = nil
+            }
             switch value {
               case "model":
-                sharedAppModel.selectedVolumeMarkerID = nil
                 runtimeAppModel.interactionMode = .model
               case "clipping":
-                sharedAppModel.selectedVolumeMarkerID = nil
                 runtimeAppModel.interactionMode = .clipping
               case "marker":
                 runtimeAppModel.interactionMode = .marker
+              case "measurement":
+                runtimeAppModel.interactionMode = .measurement
               case "screenView":
-                sharedAppModel.selectedVolumeMarkerID = nil
                 runtimeAppModel.interactionMode = .screenView
               default:
                 break
@@ -46,6 +51,7 @@ struct PrivateApplicationView: View {
         Text("private_interaction_option_model").tag("model")
         Text("private_interaction_option_clipping").tag("clipping")
         Text("private_interaction_option_marker").tag("marker")
+        Text("private_interaction_option_measurement").tag("measurement")
         if hasSharedScreenView {
           Text("Screen View").tag("screenView")
         }
@@ -84,39 +90,12 @@ struct PrivateApplicationView: View {
         .frame(maxWidth: .infinity, alignment: .center)
       }
 
-      HStack {
-        Button(action: openSelectedEditor) {
-          Label(
-            String(
-              format: NSLocalizedString(
-                "private_editor_title_format",
-                comment: "Button title: '<render mode> Editor'"
-              ),
-              String(describing: sharedAppModel.renderMode)
-            ),
-            systemImage: "slider.horizontal.3"
-          )
-        }
-        .padding()
-
-        Button {
-          if !runtimeAppModel.isViewOpen("MarkerView") {
-            openWindow(id: "MarkerView")
-          }
-        } label: {
-          Label("private_marker_open_button", systemImage: "mappin.and.ellipse")
-        }
-        .padding()
-
-        Button {
-          if !runtimeAppModel.isViewOpen("LightingEditorView") {
-            openWindow(id: "LightingEditorView")
-          }
-        } label: {
-          Label("Lighting", systemImage: "lightbulb.max")
-        }
-        .padding()
+      ViewThatFits(in: .horizontal) {
+        interactionToolButtons(showTitles: true)
+          .fixedSize(horizontal: true, vertical: false)
+        interactionToolButtons(showTitles: false)
       }
+      .frame(maxWidth: .infinity, alignment: .center)
 
       Spacer()
 
@@ -231,6 +210,82 @@ struct PrivateApplicationView: View {
       sharedAppModel.sharePlayParticipants.contains {
         $0.platform == .iOS || $0.platform == .macOS
       }
+  }
+
+  private var editorButtonTitle: String {
+    String(
+      format: NSLocalizedString(
+        "private_editor_title_format",
+        comment: "Button title: '<render mode> Editor'"
+      ),
+      String(describing: sharedAppModel.renderMode)
+    )
+  }
+
+  private func interactionToolButtons(showTitles: Bool) -> some View {
+    HStack(spacing: showTitles ? 18 : 28) {
+      Button(action: openSelectedEditor) {
+        toolLabel(editorButtonTitle, systemImage: "slider.horizontal.3", showTitle: showTitles)
+      }
+      .help(editorButtonTitle)
+
+      Button {
+        if !runtimeAppModel.isViewOpen("MarkerView") {
+          openWindow(id: "MarkerView")
+        }
+      } label: {
+        toolLabel(
+          String(localized: "private_marker_open_button"),
+          systemImage: "mappin.and.ellipse",
+          showTitle: showTitles
+        )
+      }
+      .help(String(localized: "private_marker_open_button"))
+
+      Button {
+        if !runtimeAppModel.isViewOpen("LightingEditorView") {
+          openWindow(id: "LightingEditorView")
+        }
+      } label: {
+        toolLabel(
+          String(localized: "Lighting"),
+          systemImage: "lightbulb.max",
+          showTitle: showTitles
+        )
+      }
+      .help(String(localized: "Lighting"))
+
+      Button {
+        if !runtimeAppModel.isViewOpen("MeasurementView") {
+          openWindow(id: "MeasurementView")
+        }
+      } label: {
+        toolLabel(
+          String(localized: "measurement_window_title"),
+          systemImage: "ruler",
+          showTitle: showTitles
+        )
+      }
+      .help(String(localized: "measurement_window_title"))
+    }
+    .buttonStyle(.bordered)
+  }
+
+  @ViewBuilder
+  private func toolLabel(
+    _ title: String,
+    systemImage: String,
+    showTitle: Bool
+  ) -> some View {
+    if showTitle {
+      Label(title, systemImage: systemImage)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+    } else {
+      Image(systemName: systemImage)
+        .frame(width: 44, height: 32)
+        .accessibilityLabel(title)
+    }
   }
 
   func openSelectedEditor() {

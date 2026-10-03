@@ -1,3 +1,5 @@
+import Foundation
+
 /**
  A protocol that defines the interface for a volume file parser.
 
@@ -30,6 +32,35 @@ public protocol VolumeFileParser {
 
   /// `true` if the parser created a temporary copy of the data; otherwise, `false`.
   var dataIsTempCopy: Bool { get }
+}
+
+/// Creates the appropriate parser for a supported volume-file extension.
+public enum VolumeFileParserFactory {
+  public enum Error: Swift.Error, LocalizedError {
+    case unsupportedFileType(String)
+
+    public var errorDescription: String? {
+      switch self {
+        case .unsupportedFileType(let pathExtension):
+          return "Unsupported volume file type: \(pathExtension.isEmpty ? "(none)" : pathExtension)."
+      }
+    }
+  }
+
+  public static let supportedExtensions = ["dat", "nrrd", "nhdr", "pvm"]
+
+  public static func parser(for filename: String) throws -> VolumeFileParser {
+    switch URL(fileURLWithPath: filename).pathExtension.lowercased() {
+      case "dat":
+        return try QVISParser(filename: filename)
+      case "nrrd", "nhdr":
+        return try NRRDParser(filename: filename)
+      case "pvm":
+        return try PVMParser(filename: filename)
+      default:
+        throw Error.unsupportedFileType(URL(fileURLWithPath: filename).pathExtension)
+    }
+  }
 }
 
 /*

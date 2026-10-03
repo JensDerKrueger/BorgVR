@@ -108,6 +108,15 @@
 		57A001812EA0000100000001 /* LightingEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001802EA0000100000001 /* LightingEditorView.swift */; };
 		57A001822EA0000100000001 /* LightingEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001802EA0000100000001 /* LightingEditorView.swift */; };
 		57A001832EA0000100000001 /* LightingEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001802EA0000100000001 /* LightingEditorView.swift */; };
+		57A001912EA1000100000001 /* VolumeMeasurement.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001902EA1000100000001 /* VolumeMeasurement.swift */; };
+		57A001922EA1000100000001 /* VolumeMeasurement.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001902EA1000100000001 /* VolumeMeasurement.swift */; };
+		57A001932EA1000100000001 /* VolumeMeasurement.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001902EA1000100000001 /* VolumeMeasurement.swift */; };
+		57A001952EA1000200000001 /* VolumeMeasurementDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001942EA1000200000001 /* VolumeMeasurementDocument.swift */; };
+		57A001962EA1000200000001 /* VolumeMeasurementDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001942EA1000200000001 /* VolumeMeasurementDocument.swift */; };
+		57A001972EA1000200000001 /* VolumeMeasurementDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001942EA1000200000001 /* VolumeMeasurementDocument.swift */; };
+		57A001992EA1000300000001 /* MeasurementSurfaceMeshCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001982EA1000300000001 /* MeasurementSurfaceMeshCache.swift */; };
+		57A0019A2EA1000300000001 /* MeasurementSurfaceMeshCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001982EA1000300000001 /* MeasurementSurfaceMeshCache.swift */; };
+		57A0019B2EA1000300000001 /* MeasurementSurfaceMeshCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001982EA1000300000001 /* MeasurementSurfaceMeshCache.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -188,6 +197,9 @@
 		57A001702E99000500000001 /* AppStoreUpdateChecker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStoreUpdateChecker.swift; sourceTree = "<group>"; };
 		57A001742E99000600000001 /* DatasetOriginCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DatasetOriginCatalog.swift; sourceTree = "<group>"; };
 		57A001802EA0000100000001 /* LightingEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LightingEditorView.swift; sourceTree = "<group>"; };
+		57A001902EA1000100000001 /* VolumeMeasurement.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VolumeMeasurement.swift; sourceTree = "<group>"; };
+		57A001942EA1000200000001 /* VolumeMeasurementDocument.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VolumeMeasurementDocument.swift; sourceTree = "<group>"; };
+		57A001982EA1000300000001 /* MeasurementSurfaceMeshCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeasurementSurfaceMeshCache.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -265,6 +277,7 @@
 				MemoryMappedFile.swift,
 				Notifier.swift,
 				NRRDParser.swift,
+				PVMParser.swift,
 				QVISParser.swift,
 				RawFileAccessor.swift,
 				Remote/BORGVRRemoteData.swift,
@@ -480,6 +493,7 @@
 				57A001262E70000300000001 /* IsovalueEditorView.swift */,
 				57A0012C2E70000300000001 /* KeychainSecretStore.swift */,
 				57A001802EA0000100000001 /* LightingEditorView.swift */,
+				57A001982EA1000300000001 /* MeasurementSurfaceMeshCache.swift */,
 				57A001232E70000300000001 /* LoggerView.swift */,
 				57A001242E70000300000001 /* MatrixUtilities.swift */,
 				57A001642E99000200000001 /* RenderMode.swift */,
@@ -497,6 +511,8 @@
 				57A001272E70000300000001 /* VolumeRendererPipeline.swift */,
 				57A001682E99000300000001 /* VolumeMarker.swift */,
 				57A0016C2E99000400000001 /* VolumeMarkerTubeMesh.swift */,
+				57A001902EA1000100000001 /* VolumeMeasurement.swift */,
+				57A001942EA1000200000001 /* VolumeMeasurementDocument.swift */,
 				57A0002A2E70000200000001 /* VolumeRaycaster.metal */,
 				57A0002B2E70000200000001 /* VisionInteractionShaders.metal */,
 			);
@@ -864,6 +880,9 @@
 				57A001372E70000300000001 /* VolumeRendererPipeline.swift in Sources */,
 				57A001692E99000300000001 /* VolumeMarker.swift in Sources */,
 				57A0016D2E99000400000001 /* VolumeMarkerTubeMesh.swift in Sources */,
+				57A001912EA1000100000001 /* VolumeMeasurement.swift in Sources */,
+				57A001952EA1000200000001 /* VolumeMeasurementDocument.swift in Sources */,
+				57A001992EA1000300000001 /* MeasurementSurfaceMeshCache.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -902,6 +921,9 @@
 				57A0013F2E70000300000001 /* VolumeRendererPipeline.swift in Sources */,
 				57A0016A2E99000300000001 /* VolumeMarker.swift in Sources */,
 				57A0016E2E99000400000001 /* VolumeMarkerTubeMesh.swift in Sources */,
+				57A001922EA1000100000001 /* VolumeMeasurement.swift in Sources */,
+				57A001962EA1000200000001 /* VolumeMeasurementDocument.swift in Sources */,
+				57A0019A2EA1000300000001 /* MeasurementSurfaceMeshCache.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -924,6 +946,9 @@
 				57A001522E70000300000001 /* TransferFunctionCatalog.swift in Sources */,
 				57A0016B2E99000300000001 /* VolumeMarker.swift in Sources */,
 				57A0016F2E99000400000001 /* VolumeMarkerTubeMesh.swift in Sources */,
+				57A001932EA1000100000001 /* VolumeMeasurement.swift in Sources */,
+				57A001972EA1000200000001 /* VolumeMeasurementDocument.swift in Sources */,
+				57A0019B2EA1000300000001 /* MeasurementSurfaceMeshCache.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

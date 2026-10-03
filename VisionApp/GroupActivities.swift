@@ -324,6 +324,23 @@ class GroupActivityHelper {
     }
   }
 
+  func synchronizeMeasurements() {
+    guard messenger != nil else { return }
+    Task {
+      guard let sharedAppModel else { return }
+      do {
+        try await sendData(
+          data: sharedAppModel.serializeVolumeMeasurementsSharePlayState(),
+          of: .renderingUpdate
+        )
+      } catch {
+        await runtimeAppModel?.logger.error(
+          "Failed to send measurement data to all participants: \(error)"
+        )
+      }
+    }
+  }
+
   func synchronizeScreenView(_ state: BorgVRScreenViewState) {
     guard messenger != nil else { return }
     Task { @MainActor [weak self] in
@@ -394,6 +411,11 @@ class GroupActivityHelper {
         )
         try await sendData(
           data: sharedAppModel.serializeVolumeMarkersSharePlayState(),
+          of: .renderingUpdate,
+          to: to
+        )
+        try await sendData(
+          data: sharedAppModel.serializeVolumeMeasurementsSharePlayState(),
           of: .renderingUpdate,
           to: to
         )
@@ -1434,6 +1456,21 @@ class GroupActivityHelper {
           previews,
           participantID: from.id
         )
+        return
+      }
+      if let measurements = try VolumeMeasurementSharePlayCodec.decodeIfPresent(data) {
+        let extent = runtimeAppModel?.activeDatasetInfo?.physicalExtentMeters
+        sharedAppModel.volumeMeasurements = measurements.map { measurement in
+          guard let extent else { return measurement }
+          return VolumeMeasurement(
+            id: measurement.id,
+            name: measurement.name,
+            kind: measurement.kind,
+            points: measurement.points,
+            physicalExtent: extent
+          )
+        }
+        sharedAppModel.clearVolumeMeasurementSelection()
         return
       }
       if let screenViewUpdate = try BorgVRScreenViewStateCodec.decodeUpdateIfPresent(data) {

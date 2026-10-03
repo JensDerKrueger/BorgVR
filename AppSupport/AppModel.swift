@@ -22,6 +22,22 @@ final class AppModel: ObservableObject {
     _ worldDistance: Float
   ) -> SIMD3<Float>?
 
+  struct MeasurementPointHit: Equatable {
+    let measurementID: UUID
+    let pointID: UUID
+  }
+
+  struct MeasurementScreenLabel: Identifiable, Equatable {
+    let id: UUID
+    let text: String
+    let position: SIMD2<Float>
+    let color: SIMD4<Float>
+  }
+
+  typealias MeasurementHitTestHandler = (
+    _ normalizedScreenPosition: SIMD2<Float>
+  ) -> MeasurementPointHit?
+
   enum NavigationState {
     case start
     case settings
@@ -34,6 +50,7 @@ final class AppModel: ObservableObject {
     case clipping
     case transferEditing
     case marker
+    case measurement
 
     var id: String { rawValue }
   }
@@ -126,6 +143,11 @@ final class AppModel: ObservableObject {
       }
     }
   }
+  @Published var volumeMeasurements: [VolumeMeasurement] = []
+  @Published var measurementKind: VolumeMeasurementKind = .length
+  @Published var selectedVolumeMeasurementID: UUID?
+  @Published var selectedVolumeMeasurementPointID: UUID?
+  @Published private(set) var measurementScreenLabels: [MeasurementScreenLabel] = []
   @Published private(set) var remoteSpatialToolPreviews: [UUID: [SpatialToolPreview]] = [:]
   /// Radius used for sphere markers created locally during this app session.
   var defaultVolumeMarkerRadius = VolumeMarkerRadius.sphereDefault
@@ -140,6 +162,7 @@ final class AppModel: ObservableObject {
   var markerHitTestHandler: MarkerHitTestHandler?
   var markerDirectionOriginHandler: MarkerDirectionOriginHandler?
   var markerDepthAdjustmentHandler: MarkerDepthAdjustmentHandler?
+  var measurementHitTestHandler: MeasurementHitTestHandler?
   let defaultVolumeMarkerColor = SIMD4<Float>(
     Float.random(in: 0.2...1),
     Float.random(in: 0.2...1),
@@ -294,6 +317,136 @@ final class AppModel: ObservableObject {
     volumeMarkers.removeAll()
     clearVolumeMarkerSelection()
     return true
+  }
+
+  func nextVolumeMeasurementName() -> String {
+    let prefix: String
+    switch measurementKind {
+      case .length: prefix = String(localized: "measurement_kind_length")
+      case .area: prefix = String(localized: "measurement_kind_area")
+      case .volume: prefix = String(localized: "measurement_kind_volume")
+    }
+    let count = volumeMeasurements.filter { $0.kind == measurementKind }.count
+    return "\(prefix) \(count + 1)"
+  }
+
+  @discardableResult
+  func createVolumeMeasurement() -> UUID {
+    removeEmptyVolumeMeasurements()
+    let measurement = VolumeMeasurement(
+      name: nextVolumeMeasurementName(),
+      kind: measurementKind,
+      physicalExtent: activeDatasetMetadata?.physicalExtentMeters
+    )
+    volumeMeasurements.append(measurement)
+    selectedVolumeMeasurementID = measurement.id
+    selectedVolumeMeasurementPointID = nil
+    return measurement.id
+  }
+
+  func replaceVolumeMeasurements(_ measurements: [VolumeMeasurement]) {
+    let extent = activeDatasetMetadata?.physicalExtentMeters
+    volumeMeasurements = measurements.map { measurement in
+      var measurement = measurement
+      if let extent { measurement.updatePhysicalExtent(extent) }
+      return measurement
+    }
+    let available = Set(volumeMeasurements.map(\.id))
+    if let selectedVolumeMeasurementID,
+       !available.contains(selectedVolumeMeasurementID) {
+      clearVolumeMeasurementSelection()
+    }
+  }
+
+  func mutateVolumeMeasurements<Result>(
+    _ mutation: (inout [VolumeMeasurement]) -> Result
+  ) -> Result {
+    mutation(&volumeMeasurements)
+  }
+
+  @discardableResult
+  func removeVolumeMeasurementPoint(measurementID: UUID, pointID: UUID) -> Bool {
+    guard let index = volumeMeasurements.firstIndex(where: { $0.id == measurementID }),
+          volumeMeasurements[index].removePoint(id: pointID) else { return false }
+    if volumeMeasurements[index].points.isEmpty {
+      volumeMeasurements.remove(at: index)
+      if selectedVolumeMeasurementID == measurementID {
+        selectedVolumeMeasurementID = volumeMeasurements.last?.id
+      }
+    }
+    if selectedVolumeMeasurementPointID == pointID {
+      selectedVolumeMeasurementPointID = nil
+    }
+    return true
+  }
+
+  @discardableResult
+  func removeSelectedVolumeMeasurementPoint() -> Bool {
+    guard let measurementID = selectedVolumeMeasurementID,
+          let pointID = selectedVolumeMeasurementPointID else { return false }
+    return removeVolumeMeasurementPoint(measurementID: measurementID, pointID: pointID)
+  }
+
+  @discardableResult
+  func removeLastVolumeMeasurementPoint() -> Bool {
+    let index = selectedVolumeMeasurementID.flatMap { selectedID in
+      volumeMeasurements.firstIndex { $0.id == selectedID }
+    } ?? volumeMeasurements.indices.last
+    guard let index, let pointID = volumeMeasurements[index].points.last?.id else {
+      return false
+    }
+    return removeVolumeMeasurementPoint(
+      measurementID: volumeMeasurements[index].id,
+      pointID: pointID
+    )
+  }
+
+  @discardableResult
+  func removeEmptyVolumeMeasurements() -> Bool {
+    let oldCount = volumeMeasurements.count
+    volumeMeasurements.removeAll { $0.points.isEmpty }
+    guard volumeMeasurements.count != oldCount else { return false }
+    if let selectedVolumeMeasurementID,
+       !volumeMeasurements.contains(where: { $0.id == selectedVolumeMeasurementID }) {
+      self.selectedVolumeMeasurementID = volumeMeasurements.last?.id
+      selectedVolumeMeasurementPointID = nil
+    }
+    return true
+  }
+
+  @discardableResult
+  func removeSelectedVolumeMeasurement() -> Bool {
+    guard let selectedVolumeMeasurementID else { return false }
+    let oldCount = volumeMeasurements.count
+    volumeMeasurements.removeAll { $0.id == selectedVolumeMeasurementID }
+    guard volumeMeasurements.count != oldCount else { return false }
+    self.selectedVolumeMeasurementID = volumeMeasurements.last?.id
+    selectedVolumeMeasurementPointID = nil
+    return true
+  }
+
+  @discardableResult
+  func removeAllVolumeMeasurements() -> Bool {
+    guard !volumeMeasurements.isEmpty else { return false }
+    volumeMeasurements.removeAll()
+    clearVolumeMeasurementSelection()
+    return true
+  }
+
+  func renameVolumeMeasurement(id: UUID, to name: String) {
+    guard let index = volumeMeasurements.firstIndex(where: { $0.id == id }) else { return }
+    volumeMeasurements[index].name = name
+  }
+
+  func clearVolumeMeasurementSelection() {
+    selectedVolumeMeasurementID = nil
+    selectedVolumeMeasurementPointID = nil
+  }
+
+  func updateMeasurementScreenLabels(_ labels: [MeasurementScreenLabel]) {
+    if measurementScreenLabels != labels {
+      measurementScreenLabels = labels
+    }
   }
 
   func updateRemoteSpatialToolPreviews(

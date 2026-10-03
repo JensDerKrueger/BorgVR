@@ -55,6 +55,8 @@ final actor Renderer {
   var pipelineStateBrickVis: MTLRenderPipelineState
   /// Render pipeline state for opaque volume markers.
   var pipelineStateVolumeMarker: MTLRenderPipelineState
+  /// Render pipeline state for lightweight screen-space measurement lines.
+  var pipelineStateMeasurementLine: MTLRenderPipelineState
   /// Render pipeline state for screen-view participant labels.
   var pipelineStateScreenViewLabel: MTLRenderPipelineState
   /// Render pipeline state for compositing marker color under the volume.
@@ -63,6 +65,8 @@ final actor Renderer {
   var depthState: MTLDepthStencilState
   /// Depth stencil state for marker geometry.
   var depthStateMarker: MTLDepthStencilState
+  /// Marker depth test without writes, used for back-to-front transparent geometry.
+  var depthStateMarkerReadOnly: MTLDepthStencilState
   /// Depth stencil state for marker compositing.
   var depthStateMarkerComposite: MTLDepthStencilState
 
@@ -121,6 +125,11 @@ final actor Renderer {
   let spatialControllerPointerVertexCount: Int
   /// Cached tube meshes for stroke markers.
   let markerTubeMeshCache: VolumeMarkerTubeMeshCache
+  /// Cached triangle meshes for area and volume measurements.
+  let measurementSurfaceMeshCache: MeasurementSurfaceMeshCache
+  /// Reusable instance buffer for lightweight measurement lines.
+  var measurementLineBuffer: MTLBuffer?
+  var measurementLineBufferCapacity = 0
   /// Cached label textures for shared and detached screen views.
   let screenViewLabelTextureCache: ScreenViewLabelTextureCache
   /// Color texture produced by the marker prepass.
@@ -140,10 +149,14 @@ final actor Renderer {
   )?
   /// Local-only preview sphere shown at the tracked stylus tip.
   var spatialStylusPreviewPoint: VolumeMarkerPoint?
+  /// Local-only tool glyph shown at the stylus tip while measuring.
+  var spatialStylusMeasurementPreviewMarkers: [VolumeMarker] = []
   /// Controller poses sampled for the current frame and rendered as local-only pointers.
   var spatialControllerSamples: [BorgSpatialInputSample] = []
   /// Local-only spheres at the tracked controller tips.
   var spatialControllerPreviewPoints: [VolumeMarkerPoint] = []
+  /// Local-only glyphs that show each controller's independently selected tool.
+  var spatialControllerModePreviewMarkers: [VolumeMarker] = []
   /// Timestamp and activity state for the most recent SharePlay tool-tip update.
   var lastSpatialToolPreviewShareTime: TimeInterval
   var spatialToolPreviewsWereShared: Bool
@@ -250,10 +263,14 @@ final actor Renderer {
     self.activeSpatialStylusStrokeID = nil
     self.spatialStylusTipFilterState = nil
     self.spatialStylusPreviewPoint = nil
+    self.spatialStylusMeasurementPreviewMarkers = []
+    self.spatialControllerModePreviewMarkers = []
     self.lastSpatialToolPreviewShareTime = 0
     self.spatialToolPreviewsWereShared = false
     self.spatialStylusRadiusAdjustmentStart = nil
     self.markerTubeMeshCache = VolumeMarkerTubeMeshCache()
+    self.measurementSurfaceMeshCache = MeasurementSurfaceMeshCache()
+    self.measurementLineBuffer = nil
     self.screenViewLabelTextureCache = ScreenViewLabelTextureCache()
     self.sharedAppModel.defaultVolumeStrokeColor = SharedAppModel.saturatedStrokeColor(
       preservingHueOf: storedAppModel.markerDefaultColorSIMD
@@ -331,6 +348,7 @@ final actor Renderer {
        pipelineStateIso,
        pipelineStateBrickVis,
        pipelineStateVolumeMarker,
+       pipelineStateMeasurementLine,
        pipelineStateScreenViewLabel,
        pipelineStateMarkerComposite,
        pipelineStateTFHUD,
@@ -355,6 +373,13 @@ final actor Renderer {
     markerDepthStateDescriptor.depthCompareFunction = .greater
     markerDepthStateDescriptor.isDepthWriteEnabled = true
     self.depthStateMarker = device.makeDepthStencilState(descriptor: markerDepthStateDescriptor)!
+
+    let markerReadOnlyDepthStateDescriptor = MTLDepthStencilDescriptor()
+    markerReadOnlyDepthStateDescriptor.depthCompareFunction = .greater
+    markerReadOnlyDepthStateDescriptor.isDepthWriteEnabled = false
+    self.depthStateMarkerReadOnly = device.makeDepthStencilState(
+      descriptor: markerReadOnlyDepthStateDescriptor
+    )!
 
     let markerCompositeDepthStateDescriptor = MTLDepthStencilDescriptor()
     markerCompositeDepthStateDescriptor.depthCompareFunction = .always

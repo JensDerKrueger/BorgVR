@@ -15,6 +15,8 @@ struct RenderView: View {
   @State private var transferSmoothWidth: Float = 0.3
   @State private var restoredDetachedPanelWindows: Set<DockablePanelID> = []
   @State private var markerDragID: UUID?
+  @State private var measurementDragMeasurementID: UUID?
+  @State private var measurementDragPointID: UUID?
   @State private var arcballStartLocation: CGPoint?
   @State private var arcballStartOrientation: simd_quatf?
 
@@ -94,7 +96,11 @@ struct RenderView: View {
         .transition(.move(edge: .bottom).combined(with: .opacity))
       }
 
-      if docking.isDockedVisible(.markerEditor) || docking.isDockedVisible(.lightingEditor) {
+      measurementLabels
+
+      if docking.isDockedVisible(.markerEditor) ||
+         docking.isDockedVisible(.measurementEditor) ||
+         docking.isDockedVisible(.lightingEditor) {
         HStack(alignment: .top, spacing: 16) {
           if docking.isDockedVisible(.lightingEditor) {
             VStack {
@@ -121,13 +127,24 @@ struct RenderView: View {
 
           Spacer(minLength: 0)
 
-          if docking.isDockedVisible(.markerEditor) {
-            DockableEditorPanel(panel: .markerEditor) {
-              MacMarkerView()
+          HStack(spacing: 16) {
+            if docking.isDockedVisible(.measurementEditor) {
+              DockableEditorPanel(panel: .measurementEditor) {
+                MacMeasurementView()
+              }
+              .frame(width: dockedMarkerPanelWidth)
+              .frame(maxHeight: .infinity)
+              .transition(.move(edge: .trailing).combined(with: .opacity))
             }
-            .frame(width: dockedMarkerPanelWidth)
-            .frame(maxHeight: .infinity)
-            .transition(.move(edge: .trailing).combined(with: .opacity))
+
+            if docking.isDockedVisible(.markerEditor) {
+              DockableEditorPanel(panel: .markerEditor) {
+                MacMarkerView()
+              }
+              .frame(width: dockedMarkerPanelWidth)
+              .frame(maxHeight: .infinity)
+              .transition(.move(edge: .trailing).combined(with: .opacity))
+            }
           }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -191,9 +208,10 @@ struct RenderView: View {
   }
 
   private var dockedEditorTrailingPadding: CGFloat {
-    docking.isDockedVisible(.markerEditor)
-      ? dockedMarkerPanelWidth + 32
-      : 16
+    CGFloat(
+      [DockablePanelID.markerEditor, .measurementEditor]
+        .filter { docking.isDockedVisible($0) }.count
+    ) * (dockedMarkerPanelWidth + 16) + 16
   }
 
   private func updateDetachedPanelWindows() {
@@ -218,6 +236,12 @@ struct RenderView: View {
   }
 
   private func toggleInteractionMode() {
+    if appModel.interactionMode == .measurement {
+      if appModel.removeSelectedVolumeMeasurementPoint() {
+        sharePlay.synchronizeMeasurements()
+      }
+      return
+    }
     let newMode: AppModel.InteractionMode = appModel.interactionMode == .clipping ? .model : .clipping
     applyInteractionModeSelection(newMode)
   }
@@ -225,6 +249,9 @@ struct RenderView: View {
   private func applyInteractionModeSelection(_ mode: AppModel.InteractionMode) {
     DispatchQueue.main.async {
       guard appModel.interactionMode != mode else { return }
+      if mode != .measurement {
+        appModel.clearVolumeMeasurementSelection()
+      }
       appModel.interactionMode = mode
     }
   }
@@ -249,6 +276,12 @@ struct RenderView: View {
         } else {
           moveSelectedMarkerInDepth(by: update.delta.height)
         }
+      case .measurement:
+        if update.isDirectPointer {
+          updateMeasurementInteraction(update: update)
+        } else {
+          moveSelectedMeasurementPointInDepth(by: update.delta.height)
+        }
     }
   }
 
@@ -269,6 +302,8 @@ struct RenderView: View {
     arcballStartLocation = nil
     arcballStartOrientation = nil
     markerDragID = nil
+    measurementDragMeasurementID = nil
+    measurementDragPointID = nil
     sharePlay.flushSynchronization()
   }
 
@@ -279,6 +314,8 @@ struct RenderView: View {
         arcballStartOrientation = renderingParameters.orientation
       case .marker:
         beginMarkerInteraction(update: update)
+      case .measurement:
+        beginMeasurementInteraction(update: update)
       case .clipping, .transferEditing:
         break
     }
@@ -365,6 +402,111 @@ struct RenderView: View {
       appModel.volumeMarkers[selectedIndex].translate(by: offset)
     }
     sharePlay.synchronizeMarkers()
+  }
+
+  private func normalizedPosition(for update: RenderDragUpdate) -> SIMD2<Float>? {
+    guard update.viewSize.width > 0, update.viewSize.height > 0 else { return nil }
+    return SIMD2<Float>(
+      Float(update.location.x / update.viewSize.width),
+      Float(update.location.y / update.viewSize.height)
+    )
+  }
+
+  private func beginMeasurementInteraction(update: RenderDragUpdate) {
+    guard let screenPosition = normalizedPosition(for: update) else { return }
+    if let hit = appModel.measurementHitTestHandler?(screenPosition) {
+      appModel.selectedVolumeMeasurementID = hit.measurementID
+      appModel.selectedVolumeMeasurementPointID = hit.pointID
+      measurementDragMeasurementID = hit.measurementID
+      measurementDragPointID = hit.pointID
+      if let measurement = appModel.volumeMeasurements.first(where: { $0.id == hit.measurementID }) {
+        appModel.measurementKind = measurement.kind
+      }
+      return
+    }
+    guard let position = appModel.markerPositionHandler?(screenPosition, nil),
+          let extent = appModel.activeDatasetMetadata?.physicalExtentMeters else { return }
+    var measurementID = appModel.selectedVolumeMeasurementID
+    if measurementID.flatMap({ id in
+      appModel.volumeMeasurements.first(where: { $0.id == id })?.kind
+    }) != appModel.measurementKind {
+      measurementID = appModel.volumeMeasurements.last(where: {
+        $0.kind == appModel.measurementKind
+      })?.id
+    }
+    if measurementID == nil { measurementID = appModel.createVolumeMeasurement() }
+    guard let measurementID,
+          let index = appModel.volumeMeasurements.firstIndex(where: { $0.id == measurementID }),
+          let pointID = appModel.volumeMeasurements[index].addPoint(
+            at: position,
+            physicalExtent: extent
+          ) else { return }
+    appModel.selectedVolumeMeasurementID = measurementID
+    appModel.selectedVolumeMeasurementPointID = pointID
+    measurementDragMeasurementID = measurementID
+    measurementDragPointID = pointID
+    sharePlay.synchronizeMeasurements()
+  }
+
+  private func updateMeasurementInteraction(update: RenderDragUpdate) {
+    if measurementDragPointID == nil { beginMeasurementInteraction(update: update) }
+    guard let screenPosition = normalizedPosition(for: update),
+          let measurementID = measurementDragMeasurementID,
+          let pointID = measurementDragPointID,
+          let index = appModel.volumeMeasurements.firstIndex(where: { $0.id == measurementID }),
+          let point = appModel.volumeMeasurements[index].points.first(where: { $0.id == pointID }),
+          let position = appModel.markerPositionHandler?(screenPosition, point.position),
+          let extent = appModel.activeDatasetMetadata?.physicalExtentMeters else { return }
+    appModel.volumeMeasurements[index].setPoint(
+      id: pointID,
+      position: position,
+      physicalExtent: extent
+    )
+    sharePlay.synchronizeMeasurements()
+  }
+
+  private func moveSelectedMeasurementPointInDepth(by delta: CGFloat) {
+    guard delta != 0,
+          let measurementID = appModel.selectedVolumeMeasurementID,
+          let pointID = appModel.selectedVolumeMeasurementPointID,
+          let index = appModel.volumeMeasurements.firstIndex(where: { $0.id == measurementID }),
+          let point = appModel.volumeMeasurements[index].points.first(where: { $0.id == pointID }),
+          let position = appModel.markerDepthAdjustmentHandler?(
+            point.position,
+            Float(delta) * markerDepthScrollSensitivity
+          ),
+          let extent = appModel.activeDatasetMetadata?.physicalExtentMeters else { return }
+    appModel.volumeMeasurements[index].setPoint(
+      id: pointID,
+      position: position,
+      physicalExtent: extent
+    )
+    sharePlay.synchronizeMeasurements()
+  }
+
+  private var measurementLabels: some View {
+    GeometryReader { proxy in
+      ForEach(appModel.measurementScreenLabels) { label in
+        Text(label.text)
+          .font(.caption2.monospacedDigit())
+          .padding(.horizontal, 5)
+          .padding(.vertical, 2)
+          .foregroundStyle(.white)
+          .background(
+            Color(
+              red: Double(label.color.x),
+              green: Double(label.color.y),
+              blue: Double(label.color.z)
+            ).opacity(0.82),
+            in: Capsule()
+          )
+          .position(
+            x: CGFloat(label.position.x) * proxy.size.width,
+            y: CGFloat(label.position.y) * proxy.size.height
+          )
+      }
+    }
+    .allowsHitTesting(false)
   }
 
   private func applyTransferInteraction(update: RenderDragUpdate) {

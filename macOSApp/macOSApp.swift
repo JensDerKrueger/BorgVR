@@ -227,6 +227,19 @@ struct macOSApp: App {
     }
     .defaultSize(width: 520, height: 560)
 
+    WindowGroup("measurement_window_title", id: DockablePanelID.measurementEditor.windowID) {
+      DetachedPanelContent(panel: .measurementEditor)
+        .environmentObject(appModel)
+        .environmentObject(renderingParameters)
+        .environmentObject(appSettings)
+        .environmentObject(storedAppModel)
+        .environmentObject(serverController)
+        .environmentObject(sharePlay)
+        .environmentObject(docking)
+        .environmentObject(scriptRunner)
+    }
+    .defaultSize(width: 520, height: 600)
+
     WindowGroup("Lighting", id: DockablePanelID.lightingEditor.windowID) {
       DetachedPanelContent(panel: .lightingEditor)
         .environmentObject(appModel)

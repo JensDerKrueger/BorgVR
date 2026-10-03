@@ -69,8 +69,7 @@ enum VolumeMarkerRadius {
   ) -> Float {
     let maximumRadius = clamp(maximumRadius, for: .stroke)
     let pressure = min(1, max(0, pressure))
-    let response = sqrt(pressure)
-    return strokeMinimum + (maximumRadius - strokeMinimum) * response
+    return clamp(maximumRadius * (0.5 + 0.5 * pressure), for: .stroke)
   }
 }
 

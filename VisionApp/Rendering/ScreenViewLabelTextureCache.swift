@@ -16,13 +16,18 @@ final class ScreenViewLabelTextureCache {
   func texture(
     for text: String,
     accentColor: SIMD4<Float>,
+    opaqueBackground: Bool = false,
     device: MTLDevice
   ) -> ScreenViewLabelTexture? {
-    let key = cacheKey(text: text, color: accentColor)
+    let key = cacheKey(text: text, color: accentColor, opaqueBackground: opaqueBackground)
     if let cached = entries[key] {
       return cached
     }
-    guard let image = makeImage(text: text, accentColor: accentColor) else {
+    guard let image = makeImage(
+      text: text,
+      accentColor: accentColor,
+      opaqueBackground: opaqueBackground
+    ) else {
       return nil
     }
 
@@ -47,14 +52,22 @@ final class ScreenViewLabelTextureCache {
     }
   }
 
-  private func cacheKey(text: String, color: SIMD4<Float>) -> String {
+  private func cacheKey(
+    text: String,
+    color: SIMD4<Float>,
+    opaqueBackground: Bool
+  ) -> String {
     let components = [color.x, color.y, color.z].map {
       String(Int((min(max($0, 0), 1) * 255).rounded()))
     }
-    return "\(components.joined(separator: ":"))|\(text)"
+    return "\(opaqueBackground ? "opaque" : "translucent")|\(components.joined(separator: ":"))|\(text)"
   }
 
-  private func makeImage(text: String, accentColor: SIMD4<Float>) -> CGImage? {
+  private func makeImage(
+    text: String,
+    accentColor: SIMD4<Float>,
+    opaqueBackground: Bool
+  ) -> CGImage? {
     let font = CTFontCreateUIFontForLanguage(.system, 34, nil) ??
       CTFontCreateWithName("Helvetica" as CFString, 34, nil)
     let attributes: [NSAttributedString.Key: Any] = [
@@ -98,7 +111,12 @@ final class ScreenViewLabelTextureCache {
       transform: nil
     )
     context.addPath(path)
-    context.setFillColor(CGColor(red: 0.035, green: 0.045, blue: 0.06, alpha: 0.88))
+    context.setFillColor(CGColor(
+      red: 0.035,
+      green: 0.045,
+      blue: 0.06,
+      alpha: opaqueBackground ? 1 : 0.88
+    ))
     context.fillPath()
     context.addPath(path)
     context.setStrokeColor(CGColor(
