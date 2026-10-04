@@ -40,6 +40,13 @@ struct MarkerFileInfo {
   size_t byteCount = 0;
 };
 
+struct MeshFileInfo {
+  std::string id;
+  std::string filename;
+  std::string name;
+  size_t byteCount = 0;
+};
+
 class TCPServer {
 public:
   static constexpr const char* kProtocolVersionName = BorgVRFormat::kServerProtocolVersionName;
@@ -68,6 +75,9 @@ public:
   void setMarkerFiles(std::vector<MarkerFileInfo> markerFiles);
   std::vector<MarkerFileInfo> markerFilesSnapshot() const;
   bool findMarkerFileById(const std::string& id, MarkerFileInfo& out) const;
+  void setMeshFiles(std::vector<MeshFileInfo> meshFiles);
+  std::vector<MeshFileInfo> meshFilesSnapshot() const;
+  bool findMeshFileById(const std::string& id, MeshFileInfo& out) const;
 
 private:
   class ClientSession {
@@ -90,10 +100,12 @@ private:
     bool sendList(const std::vector<std::string>& params);
     bool sendTransferFunctionList(const std::vector<std::string>& params);
     bool sendMarkerFileList(const std::vector<std::string>& params);
+    bool sendMeshFileList(const std::vector<std::string>& params);
     bool sendInfo(const std::vector<std::string>& params);
     bool openDataset(const std::vector<std::string>& params);
     bool getTransferFunction(const std::vector<std::string>& params);
     bool getMarkerFile(const std::vector<std::string>& params);
+    bool getMeshFile(const std::vector<std::string>& params);
     bool getBricks(const std::vector<std::string>& params);
 
     void sendBinaryResponse(const std::vector<uint8_t>& payload);
@@ -122,6 +134,7 @@ private:
   std::vector<DatasetInfo> datasets_;
   std::vector<TransferFunctionInfo> transferFunctions_;
   std::vector<MarkerFileInfo> markerFiles_;
+  std::vector<MeshFileInfo> meshFiles_;
   mutable std::mutex datasetsMutex_;
 
   std::atomic<bool> running_{false};

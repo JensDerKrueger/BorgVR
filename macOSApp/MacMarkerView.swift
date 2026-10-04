@@ -9,7 +9,9 @@ struct MacMarkerView: View {
   @State private var confirmDeleteAll = false
   @State private var showLoadFilePicker = false
   @State private var showSaveFilePicker = false
+  @State private var showMeshEditor = false
   @State private var pendingLoadedMarkers: [VolumeMarker] = []
+  @State private var pendingLoadedMeshInstances: [SceneMeshInstance] = []
   @State private var showLoadMergeChoice = false
   @State private var showDatasetMismatchWarning = false
   @State private var markerCatalog: [VolumeMarkerCatalogEntry] = []
@@ -71,6 +73,12 @@ struct MacMarkerView: View {
       }
 
       HStack {
+        Button {
+          showMeshEditor = true
+        } label: {
+          Label("Meshes…", systemImage: "cube.transparent")
+        }
+
         Menu {
           if markerCatalog.isEmpty {
             Text("No Marker Files Available")
@@ -102,7 +110,7 @@ struct MacMarkerView: View {
         } label: {
           Label("Save Markers…", systemImage: "square.and.arrow.down")
         }
-        .disabled(appModel.volumeMarkers.isEmpty)
+        .disabled(appModel.volumeMarkers.isEmpty && appModel.sceneMeshInstances.isEmpty)
 
         Spacer()
       }
@@ -181,9 +189,23 @@ struct MacMarkerView: View {
     ) { result in
       loadMarkers(from: result)
     }
+    .sheet(isPresented: $showMeshEditor) {
+      SceneMeshEditorView(
+        assets: $appModel.sceneMeshAssets,
+        instances: $appModel.sceneMeshInstances,
+        selectedInstanceID: $appModel.selectedSceneMeshInstanceID,
+        datasetExtentMeters: appModel.activeDatasetMetadata?.physicalExtentMeters,
+        logger: appModel.logger,
+        synchronize: synchronizeMarkers
+      )
+    }
     .fileExporter(
       isPresented: $showSaveFilePicker,
-      document: VolumeMarkerDocument(datasetID: currentDatasetID, markers: appModel.volumeMarkers),
+      document: VolumeMarkerDocument(
+        datasetID: currentDatasetID,
+        markers: appModel.volumeMarkers,
+        meshInstances: appModel.sceneMeshInstances
+      ),
       contentType: .borgVRMarker,
       defaultFilename: BorgVRMarkerFormat.defaultFilename
     ) { result in
@@ -374,6 +396,7 @@ struct MacMarkerView: View {
 
   private func prepareLoadedMarkers(_ contents: VolumeMarkerDocumentContents) {
     pendingLoadedMarkers = contents.markers
+    pendingLoadedMeshInstances = contents.meshInstances
     if let currentDatasetID,
        contents.datasetID.caseInsensitiveCompare(currentDatasetID) != .orderedSame {
       showDatasetMismatchWarning = true
@@ -383,7 +406,7 @@ struct MacMarkerView: View {
   }
 
   private func continueLoadingMarkers() {
-    if appModel.volumeMarkers.isEmpty {
+    if appModel.volumeMarkers.isEmpty && appModel.sceneMeshInstances.isEmpty {
       applyLoadedMarkers(replacingExisting: true)
     } else {
       showLoadMergeChoice = true
@@ -392,14 +415,20 @@ struct MacMarkerView: View {
 
   private func clearPendingLoad() {
     pendingLoadedMarkers = []
+    pendingLoadedMeshInstances = []
   }
 
   private func applyLoadedMarkers(replacingExisting: Bool) {
     if replacingExisting {
       appModel.volumeMarkers = pendingLoadedMarkers
+      appModel.replaceSceneMeshInstances(pendingLoadedMeshInstances)
     } else {
       appModel.volumeMarkers.append(contentsOf: markersWithUniqueIDs(pendingLoadedMarkers))
+      appModel.sceneMeshInstances.append(
+        contentsOf: meshInstancesWithUniqueIDs(pendingLoadedMeshInstances)
+      )
     }
+    appModel.resolveSceneMeshAssets()
     clearPendingLoad()
     appModel.selectedVolumeMarkerID = nil
     synchronizeMarkers()
@@ -414,6 +443,20 @@ struct MacMarkerView: View {
       }
       usedIDs.insert(marker.id)
       return marker
+    }
+  }
+
+  private func meshInstancesWithUniqueIDs(
+    _ instances: [SceneMeshInstance]
+  ) -> [SceneMeshInstance] {
+    var usedIDs = Set(appModel.sceneMeshInstances.map(\.id))
+    return instances.map { instance in
+      var instance = instance
+      if usedIDs.contains(instance.id) {
+        instance.id = UUID()
+      }
+      usedIDs.insert(instance.id)
+      return instance
     }
   }
 

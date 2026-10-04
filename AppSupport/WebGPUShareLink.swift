@@ -118,7 +118,7 @@ enum WebGPUShareLink {
       table[sequence] = position
 
       if let reference,
-         position - reference <= 65_535,
+         position - reference <= 65535,
          source[reference] == source[position],
          source[reference + 1] == source[position + 1],
          source[reference + 2] == source[position + 2],

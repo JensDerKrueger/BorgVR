@@ -131,6 +131,9 @@ final class AppModel: ObservableObject {
   @Published var groupSessionHost = true
   @Published var interactionMode: InteractionMode = .model
   @Published var volumeMarkers: [VolumeMarker] = []
+  @Published var sceneMeshAssets: [UUID: SceneMeshAsset] = [:]
+  @Published var sceneMeshInstances: [SceneMeshInstance] = []
+  @Published var selectedSceneMeshInstanceID: UUID?
   @Published var selectedVolumeMarkerIDs: Set<UUID> = []
   @Published var selectedVolumeMarkerID: UUID? {
     didSet {
@@ -277,6 +280,60 @@ final class AppModel: ObservableObject {
   func replaceVolumeMarkers(_ markers: [VolumeMarker]) {
     volumeMarkers = markers
     setVolumeMarkerSelection(selectedVolumeMarkerIDs, primary: selectedVolumeMarkerID)
+  }
+
+  func registerSceneMeshAsset(_ asset: SceneMeshAsset, persist: Bool = true) throws {
+    sceneMeshAssets[asset.id] = asset
+    if persist {
+      try SceneMeshAssetCatalog.store(asset, logger: logger)
+    }
+  }
+
+  @discardableResult
+  func addSceneMeshInstance(for asset: SceneMeshAsset) throws -> SceneMeshInstance {
+    try registerSceneMeshAsset(asset)
+    let instance = SceneMeshInstance(
+      name: nextSceneMeshInstanceName(assetName: asset.name),
+      asset: asset.reference
+    )
+    sceneMeshInstances.append(instance)
+    selectedSceneMeshInstanceID = instance.id
+    return instance
+  }
+
+  func replaceSceneMeshInstances(_ instances: [SceneMeshInstance]) {
+    sceneMeshInstances = instances
+    resolveSceneMeshAssets(for: instances)
+    if let selectedSceneMeshInstanceID,
+       !instances.contains(where: { $0.id == selectedSceneMeshInstanceID }) {
+      self.selectedSceneMeshInstanceID = nil
+    }
+  }
+
+  func resolveSceneMeshAssets(for instances: [SceneMeshInstance]? = nil) {
+    let instances = instances ?? sceneMeshInstances
+    for assetID in Set(instances.map(\.asset.assetID)) where sceneMeshAssets[assetID] == nil {
+      if let asset = SceneMeshAssetCatalog.load(assetID: assetID, logger: logger) {
+        sceneMeshAssets[assetID] = asset
+      }
+    }
+  }
+
+  @discardableResult
+  func removeSceneMeshInstance(id: UUID) -> Bool {
+    let previousCount = sceneMeshInstances.count
+    sceneMeshInstances.removeAll { $0.id == id }
+    guard sceneMeshInstances.count != previousCount else { return false }
+    if selectedSceneMeshInstanceID == id { selectedSceneMeshInstanceID = nil }
+    return true
+  }
+
+  func nextSceneMeshInstanceName(assetName: String) -> String {
+    let usedNames = Set(sceneMeshInstances.map(\.name))
+    if !usedNames.contains(assetName) { return assetName }
+    var index = 2
+    while usedNames.contains("\(assetName) \(index)") { index += 1 }
+    return "\(assetName) \(index)"
   }
 
   func setVolumeMarkerSelection(_ ids: Set<UUID>, primary: UUID? = nil) {

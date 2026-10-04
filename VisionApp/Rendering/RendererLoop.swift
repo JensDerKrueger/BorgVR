@@ -173,7 +173,7 @@ extension Renderer {
       for edge in geometry.edges {
         let displayLength = simd_length((edge.end - edge.start) * coordinateScale)
         guard displayLength.isFinite else { continue }
-        let dashCount = max(1, Int(ceil(min(displayLength / 0.035, 4_096))))
+        let dashCount = max(1, Int(ceil(min(displayLength / 0.035, 4096))))
         for dash in 0..<dashCount {
           let startT = Float(dash) / Float(dashCount)
           let endT = min(1, startT + 0.62 / Float(dashCount))
@@ -731,15 +731,70 @@ extension Renderer {
     renderEncoder.popDebugGroup()
   }
 
-  private func drawVolumeMarkers(_ renderEncoder: MTLRenderCommandEncoder,
-                                 drawable: LayerRenderer.Drawable) -> [ScreenViewLabelDescriptor] {
+  private func drawSceneMeshes(
+    _ instances: [SceneMeshInstance],
+    datasetMaximumExtentMeters: Float,
+    renderEncoder: MTLRenderCommandEncoder
+  ) {
+    sceneMeshGPUCache.retainOnly(assetIDs: Set(instances.map(\.asset.assetID)))
+    guard datasetMaximumExtentMeters.isFinite, datasetMaximumExtentMeters > 0 else { return }
+
+    renderEncoder.pushDebugGroup("Scene Meshes")
+    renderEncoder.setRenderPipelineState(pipelineStateSceneMesh)
+    renderEncoder.setDepthStencilState(depthStateMarker)
+    renderEncoder.setCullMode(.back)
+    for instance in instances where instance.isVisible {
+      guard let asset = sharedAppModel.sceneMeshAssets[instance.asset.assetID],
+            let gpuAsset = sceneMeshGPUCache.asset(for: asset, device: device) else {
+        continue
+      }
+      var modelMatrix = lastUnscaledModelMatrix *
+        matrixScale(SIMD3<Float>(repeating: 1 / datasetMaximumExtentMeters)) *
+        instance.transformMeters
+      var baseColor = asset.baseColor
+      renderEncoder.setVertexBuffer(
+        gpuAsset.vertexBuffer,
+        offset: 0,
+        index: VertexBufferIndex.meshPositions.rawValue
+      )
+      renderEncoder.setVertexBytes(
+        &modelMatrix,
+        length: MemoryLayout<simd_float4x4>.stride,
+        index: 21
+      )
+      renderEncoder.setFragmentBytes(
+        &baseColor,
+        length: MemoryLayout<SIMD3<Float>>.stride,
+        index: 23
+      )
+      renderEncoder.setFragmentTexture(
+        gpuAsset.texture ?? sceneMeshWhiteTexture,
+        index: TextureIndex.sceneMeshColor.rawValue
+      )
+      renderEncoder.drawIndexedPrimitives(
+        type: .triangle,
+        indexCount: gpuAsset.indexCount,
+        indexType: .uint32,
+        indexBuffer: gpuAsset.indexBuffer,
+        indexBufferOffset: 0
+      )
+    }
+    renderEncoder.popDebugGroup()
+  }
+
+  private func drawOpaqueGeometry(_ renderEncoder: MTLRenderCommandEncoder,
+                                  drawable: LayerRenderer.Drawable) -> [ScreenViewLabelDescriptor] {
     let screenViews = screenViewVisualization()
     let measurementSnapshot = sharedAppModel.volumeMeasurementsSnapshot()
     let measurements = measurementVisualization(measurements: measurementSnapshot)
-    let markers = sharedAppModel.volumeMarkers + screenViews.markers + measurements.markers +
-      spatialStylusMeasurementPreviewMarkers + spatialControllerModePreviewMarkers
+    let markers = sharedAppModel.volumeMarkers + screenViews.markers
+    let toolWidgetMarkers = spatialStylusMeasurementPreviewMarkers +
+      spatialControllerModePreviewMarkers
+    let sceneMeshInstances = sharedAppModel.sceneMeshInstances
     let remoteToolPreviews = sharedAppModel.activeRemoteSpatialToolPreviews()
-    guard !markers.isEmpty || !screenViews.labels.isEmpty || !measurements.surfaces.isEmpty ||
+    guard !markers.isEmpty || !measurements.markers.isEmpty ||
+      !screenViews.labels.isEmpty || !measurements.surfaces.isEmpty ||
+      !sceneMeshInstances.isEmpty ||
       spatialStylusPreviewPoint != nil ||
       !remoteToolPreviews.isEmpty || !spatialControllerSamples.isEmpty ||
       !spatialControllerPreviewPoints.isEmpty else {
@@ -788,6 +843,18 @@ extension Renderer {
     }
     bindMarkerViewData()
 
+    let physicalExtent = borgData.getMetadata().physicalExtentMeters
+    let datasetMaximumExtentMeters = max(
+      physicalExtent.x,
+      max(physicalExtent.y, physicalExtent.z)
+    )
+    drawSceneMeshes(
+      sceneMeshInstances,
+      datasetMaximumExtentMeters: datasetMaximumExtentMeters,
+      renderEncoder: renderEncoder
+    )
+    renderEncoder.setRenderPipelineState(pipelineStateVolumeMarker)
+
     renderEncoder.setVertexBuffer(
       markerSphereBuffer,
       offset: 0,
@@ -800,7 +867,9 @@ extension Renderer {
       volumeScale.columns.1.y,
       volumeScale.columns.2.z
     )
-    markerTubeMeshCache.retainOnly(markerIDs: Set(markers.map(\.id)))
+    markerTubeMeshCache.retainOnly(
+      markerIDs: Set((markers + measurements.markers + toolWidgetMarkers).map(\.id))
+    )
     measurementSurfaceMeshCache.retainOnly(
       measurementIDs: Set(measurementSnapshot.map(\.id))
     )
@@ -924,46 +993,61 @@ extension Renderer {
       )
     }
 
-    for marker in markers {
-      let markerColor = color(for: marker)
-      switch marker.geometry {
-        case .sphere(let point):
-          drawTube(for: marker, color: markerColor)
-          drawSphere(point, color: markerColor)
+    func drawMarkerGeometry(_ markerGeometry: [VolumeMarker], groupName: String) {
+      renderEncoder.pushDebugGroup(groupName)
+      for marker in markerGeometry {
+        let markerColor = color(for: marker)
+        switch marker.geometry {
+          case .sphere(let point):
+            drawTube(for: marker, color: markerColor)
+            drawSphere(point, color: markerColor)
 
-        case .stroke(let points):
-          drawTube(for: marker, color: markerColor)
-          if let first = points.first {
-            drawSphere(first, color: markerColor)
-          }
-          if points.count > 1, let last = points.last {
-            drawSphere(last, color: markerColor)
-          }
+          case .stroke(let points):
+            drawTube(for: marker, color: markerColor)
+            if let first = points.first {
+              drawSphere(first, color: markerColor)
+            }
+            if points.count > 1, let last = points.last {
+              drawSphere(last, color: markerColor)
+            }
+        }
       }
+      renderEncoder.popDebugGroup()
     }
 
-    if spatialStylusMeasurementPreviewMarkers.isEmpty,
-       let spatialStylusPreviewPoint {
-      drawSphere(
-        spatialStylusPreviewPoint,
-        color: sharedAppModel.defaultVolumeStrokeColor
-      )
-    }
-    for point in spatialControllerPreviewPoints {
-      drawSphere(point, color: sharedAppModel.defaultVolumeStrokeColor)
-    }
-    for preview in remoteToolPreviews {
-      drawSphere(preview.point, color: preview.color)
-    }
-    for sample in spatialControllerSamples {
-      drawControllerPointer(sample)
+    func drawToolWidgets() {
+      renderEncoder.pushDebugGroup("Spatial Tool Widgets")
+      drawMarkerGeometry(toolWidgetMarkers, groupName: "Tool Mode Glyphs")
+      if spatialStylusMeasurementPreviewMarkers.isEmpty,
+         let spatialStylusPreviewPoint {
+        drawSphere(
+          spatialStylusPreviewPoint,
+          color: sharedAppModel.defaultVolumeStrokeColor
+        )
+      }
+      for point in spatialControllerPreviewPoints {
+        drawSphere(point, color: sharedAppModel.defaultVolumeStrokeColor)
+      }
+      for preview in remoteToolPreviews {
+        drawSphere(preview.point, color: preview.color)
+      }
+      for sample in spatialControllerSamples {
+        drawControllerPointer(sample)
+      }
+      renderEncoder.popDebugGroup()
     }
 
-    if !measurements.lines.isEmpty {
+    drawMarkerGeometry(markers, groupName: "Markers")
+    drawToolWidgets()
+
+    func drawMeasurements() {
+      renderEncoder.pushDebugGroup("Measurements")
+      drawMarkerGeometry(measurements.markers, groupName: "Measurement Points")
+      if !measurements.lines.isEmpty {
       let byteCount = MemoryLayout<MeasurementVisualization.Line>.stride *
         measurements.lines.count
       if measurementLineBuffer == nil || measurementLineBufferCapacity < byteCount {
-        var capacity = max(measurementLineBufferCapacity, 4_096)
+        var capacity = max(measurementLineBufferCapacity, 4096)
         while capacity < byteCount {
           capacity *= 2
         }
@@ -1105,7 +1189,11 @@ extension Renderer {
         depthStencilState: depthStateMarker
       )
     }
-    renderEncoder.setCullMode(.back)
+      renderEncoder.setCullMode(.back)
+      renderEncoder.popDebugGroup()
+    }
+
+    drawMeasurements()
 
     drawScreenViewLabels(
       screenViews.labels,
@@ -1401,9 +1489,9 @@ extension Renderer {
     return (result, label)
   }
 
-  private func renderVolumeMarkers(commandBuffer: MTLCommandBuffer,
-                                   drawable: LayerRenderer.Drawable,
-                                   rasterizationRateMap: MTLRasterizationRateMap?) -> (
+  private func renderOpaqueGeometry(commandBuffer: MTLCommandBuffer,
+                                    drawable: LayerRenderer.Drawable,
+                                    rasterizationRateMap: MTLRasterizationRateMap?) -> (
     color: MTLTexture,
     depth: MTLTexture,
     measurementLabels: [ScreenViewLabelDescriptor]
@@ -1426,8 +1514,8 @@ extension Renderer {
     guard let renderEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: renderPassDescriptor) else {
       fatalError("Failed to create marker prepass encoder")
     }
-    renderEncoder.label = "BorgVR Volume Marker Prepass"
-    renderEncoder.pushDebugGroup("Volume Marker Prepass")
+    renderEncoder.label = "BorgVR Opaque Geometry Prepass"
+    renderEncoder.pushDebugGroup("Opaque Geometry Prepass")
 
     let viewports = drawable.views.map { $0.textureMap.viewport }
     renderEncoder.setViewports(viewports)
@@ -1440,7 +1528,7 @@ extension Renderer {
       renderEncoder.setVertexAmplificationCount(viewports.count, viewMappings: &viewMappings)
     }
 
-    let measurementLabels = drawVolumeMarkers(renderEncoder, drawable: drawable)
+    let measurementLabels = drawOpaqueGeometry(renderEncoder, drawable: drawable)
 
     renderEncoder.popDebugGroup()
     renderEncoder.endEncoding()
@@ -1477,19 +1565,19 @@ extension Renderer {
     )
   }
 
-  private func compositeVolumeMarkers(_ renderEncoder: MTLRenderCommandEncoder,
-                                      markerColorTexture: MTLTexture,
-                                      markerDepthTexture: MTLTexture) {
-    renderEncoder.pushDebugGroup("Composite Volume Markers")
+  private func compositeOpaqueGeometry(_ renderEncoder: MTLRenderCommandEncoder,
+                                       colorTexture: MTLTexture,
+                                       depthTexture: MTLTexture) {
+    renderEncoder.pushDebugGroup("Composite Opaque Geometry")
     renderEncoder.setRenderPipelineState(pipelineStateMarkerComposite)
     renderEncoder.setDepthStencilState(depthStateMarkerComposite)
     renderEncoder.setCullMode(.none)
     renderEncoder.setFragmentTexture(
-      markerColorTexture,
+      colorTexture,
       index: TextureIndex.markerColor.rawValue
     )
     renderEncoder.setFragmentTexture(
-      markerDepthTexture,
+      depthTexture,
       index: TextureIndex.markerDepth.rawValue
     )
     renderEncoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 6)
@@ -1838,15 +1926,21 @@ extension Renderer {
       .timeInterval
     let samples = borgARProvider.getSpatialInputSamples(atTimestamp: timestamp)
     let inputContext = spatialInputContext.snapshot()
-    let stylusSample = immersiveInteraction.spatialStylusSample(
+    let placementConsumesAccessories = immersiveInteraction.handleArmedSceneObjectPlacement(
+      samples: samples,
+      datasetInfo: inputContext.datasetInfo
+    )
+    let stylusSample = placementConsumesAccessories ? nil : immersiveInteraction.spatialStylusSample(
       from: samples,
       timestamp: timestamp
     )
-    immersiveInteraction.handleSpatialInputSamples(
-      samples,
-      datasetInfo: inputContext.datasetInfo,
-      timestamp: timestamp
-    )
+    if !placementConsumesAccessories {
+      immersiveInteraction.handleSpatialInputSamples(
+        samples,
+        datasetInfo: inputContext.datasetInfo,
+        timestamp: timestamp
+      )
+    }
     spatialControllerSamples = samples.filter { $0.source == .controller }
     spatialControllerPreviewPoints = spatialControllerSamples.compactMap {
       spatialToolPreviewPoint(
@@ -1999,7 +2093,7 @@ extension Renderer {
     self.updateSpatialAccessoryInteractions(drawable: drawable)
 
     let rasterizationRateMap = drawable.rasterizationRateMaps.first
-    let markerTargets = renderVolumeMarkers(
+    let opaqueGeometryTargets = renderOpaqueGeometry(
       commandBuffer: commandBuffer,
       drawable: drawable,
       rasterizationRateMap: rasterizationRateMap
@@ -2084,7 +2178,7 @@ extension Renderer {
 
     hashTable.bind(to: renderEncoder, index: FragmentBufferIndex.hashTable.rawValue)
     renderEncoder.setFragmentTexture(
-      markerTargets.depth,
+      opaqueGeometryTargets.depth,
       index: TextureIndex.markerDepth.rawValue
     )
 
@@ -2092,13 +2186,13 @@ extension Renderer {
 
     renderEncoder.popDebugGroup()
 
-    compositeVolumeMarkers(
+    compositeOpaqueGeometry(
       renderEncoder,
-      markerColorTexture: markerTargets.color,
-      markerDepthTexture: markerTargets.depth
+      colorTexture: opaqueGeometryTargets.color,
+      depthTexture: opaqueGeometryTargets.depth
     )
     drawMeasurementLabelsOnScreen(
-      markerTargets.measurementLabels,
+      opaqueGeometryTargets.measurementLabels,
       renderEncoder: renderEncoder,
       drawable: drawable
     )

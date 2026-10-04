@@ -31,6 +31,7 @@ public:
                     std::vector<ServerSyncEndpoint> endpoints,
                     IdProvider localDatasetIds,
                     IdProvider localTransferFunctionIds,
+                    IdProvider localMeshIds,
                     CatalogChangedCallback onCatalogChanged,
                     std::shared_ptr<Logger> logger);
   ~ServerSyncManager();
@@ -48,6 +49,7 @@ private:
   std::vector<ServerSyncEndpoint> endpoints_;
   IdProvider localDatasetIds_;
   IdProvider localTransferFunctionIds_;
+  IdProvider localMeshIds_;
   CatalogChangedCallback onCatalogChanged_;
   std::shared_ptr<Logger> logger_;
 

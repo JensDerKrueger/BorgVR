@@ -22,6 +22,7 @@ class TCPServer {
   private var datasets: [DatasetInfo]
   private var transferFunctions: [TransferFunctionInfo]
   private var markerFiles: [MarkerFileInfo]
+  private var meshFiles: [MeshFileInfo]
   private let authSecret: String
   private var authChallenges: [ObjectIdentifier: AuthChallenge] = [:]
   private var authenticatedConnections: Set<ObjectIdentifier> = []
@@ -56,12 +57,14 @@ class TCPServer {
     datasets: [DatasetInfo] = [],
     transferFunctions: [TransferFunctionInfo] = [],
     markerFiles: [MarkerFileInfo] = [],
+    meshFiles: [MeshFileInfo] = [],
     authSecret: String? = nil
   ) {
     self.logger = logger
     self.datasets = datasets
     self.transferFunctions = transferFunctions
     self.markerFiles = markerFiles
+    self.meshFiles = meshFiles
     self.authSecret = BorgVRServerAuthentication.normalizedSecret(authSecret)
 
     if maxBricksPerGetRequest > 0 {
@@ -168,18 +171,34 @@ class TCPServer {
     return markerFile
   }
 
+  func meshFilesSnapshot() -> [MeshFileInfo] {
+    stateLock.lock()
+    let snapshot = meshFiles
+    stateLock.unlock()
+    return snapshot
+  }
+
+  func findMeshFileById(_ id: UUID) -> MeshFileInfo? {
+    stateLock.lock()
+    let mesh = meshFiles.first(where: { $0.id == id })
+    stateLock.unlock()
+    return mesh
+  }
+
   func updateCatalog(
     datasets: [DatasetInfo],
     transferFunctions: [TransferFunctionInfo],
-    markerFiles: [MarkerFileInfo]
+    markerFiles: [MarkerFileInfo],
+    meshFiles: [MeshFileInfo]
   ) {
     stateLock.lock()
     self.datasets = datasets
     self.transferFunctions = transferFunctions
     self.markerFiles = markerFiles
+    self.meshFiles = meshFiles
     stateLock.unlock()
     logger?.info(
-      "Updated server catalog: \(datasets.count) datasets, \(transferFunctions.count) transfer functions, \(markerFiles.count) marker files."
+      "Updated server catalog: \(datasets.count) datasets, \(transferFunctions.count) transfer functions, \(markerFiles.count) marker files, \(meshFiles.count) meshes."
     )
   }
 
@@ -358,6 +377,10 @@ class TCPServer {
         guard isCommandAllowed(for: connection) else { return false }
         return sendMarkerFileList(parameters: parameters, connection: connection)
 
+      case "LISTMESHES":
+        guard isCommandAllowed(for: connection) else { return false }
+        return sendMeshFileList(parameters: parameters, connection: connection)
+
       case "OPEN":
         guard isCommandAllowed(for: connection) else { return false }
         return openDataset(parameters: parameters, connection: connection)
@@ -369,6 +392,10 @@ class TCPServer {
       case "GETMARKER":
         guard isCommandAllowed(for: connection) else { return false }
         return getMarkerFile(parameters: parameters, connection: connection)
+
+      case "GETMESH":
+        guard isCommandAllowed(for: connection) else { return false }
+        return getMeshFile(parameters: parameters, connection: connection)
 
       case "GETBRICKS":
         guard isCommandAllowed(for: connection) else { return false }
@@ -722,6 +749,21 @@ class TCPServer {
     return true
   }
 
+  private func sendMeshFileList(
+    parameters: ArraySlice<Substring>,
+    connection: NWConnection
+  ) -> Bool {
+    guard expectParameterCount(parameters, equals: 0) else { return false }
+    let meshList = meshFilesSnapshot()
+      .map { "\($0.id.uuidString) \($0.byteCount) \(protocolLineText($0.name))" }
+      .joined(separator: "\n") + "\n\n"
+    connection.send(
+      content: meshList.data(using: .utf8),
+      completion: .contentProcessed({ _ in })
+    )
+    return true
+  }
+
   private func protocolLineText(_ text: String) -> String {
     text
       .replacingOccurrences(of: "\r", with: " ")
@@ -766,6 +808,27 @@ class TCPServer {
       return true
     } catch {
       logger?.error("Failed to read marker file \(markerFile.filename): \(error)")
+      return false
+    }
+  }
+
+  private func getMeshFile(
+    parameters: ArraySlice<Substring>,
+    connection: NWConnection
+  ) -> Bool {
+    guard expectParameterCount(parameters, equals: 1),
+          let idText = parameters.first,
+          let id = UUID(uuidString: String(idText)),
+          let mesh = findMeshFileById(id) else {
+      return false
+    }
+    do {
+      let data = try Data(contentsOf: URL(fileURLWithPath: mesh.filename), options: .mappedIfSafe)
+      guard data.count == mesh.byteCount else { return false }
+      sendBinaryResponse(data: data, connection: connection)
+      return true
+    } catch {
+      logger?.error("Failed to read mesh file \(mesh.filename): \(error)")
       return false
     }
   }

@@ -196,6 +196,8 @@ final class ScreenVolumeRendererCore {
       colorFormat: view.colorPixelFormat,
       depthFormat: view.depthStencilPixelFormat,
       markers: appModel.volumeMarkers,
+      sceneMeshAssets: appModel.sceneMeshAssets,
+      sceneMeshInstances: appModel.sceneMeshInstances,
       spatialToolPreviews: appModel.activeRemoteSpatialToolPreviews(),
       selectedMarkerIDs: appModel.selectedVolumeMarkerIDs,
       measurements: appModel.volumeMeasurements,
@@ -204,6 +206,10 @@ final class ScreenVolumeRendererCore {
       viewProjection: markerMatrices.projection * markerMatrices.view,
       modelMatrix: markerMatrices.model,
       volumeScale: volumeScale,
+      datasetMaximumExtentMeters: appModel.activeDatasetMetadata.map { metadata in
+        let extent = metadata.physicalExtentMeters
+        return max(extent.x, max(extent.y, extent.z))
+      } ?? 1,
       eyePosition: SIMD3<Float>(0, 0, cameraDistance)
     ),
     let renderEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: renderPassDescriptor) else {
@@ -440,6 +446,7 @@ final class ScreenVolumeRendererCore {
     markerRenderer.configure(
       device: device,
       markerPipeline: states.marker,
+      sceneMeshPipeline: states.sceneMesh,
       compositePipeline: states.markerComposite
     )
   }

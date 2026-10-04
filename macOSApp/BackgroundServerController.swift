@@ -58,6 +58,7 @@ final class BackgroundServerController: ObservableObject {
           webServerCertificatePassword: settings.webServerCertificatePassword
         ),
         additionalDatasets: [datasetInfo],
+        additionalMeshFiles: SceneMeshAssetCatalog.serverFiles(logger: logger),
         includeScannedDatasets: false
       )
 
@@ -89,7 +90,8 @@ final class BackgroundServerController: ObservableObject {
         webServerCertificateData: settings.webServerCertificateData,
         webServerCertificatePassword: settings.webServerCertificatePassword
       ),
-      additionalDatasets: additionalDatasets
+      additionalDatasets: additionalDatasets,
+      additionalMeshFiles: SceneMeshAssetCatalog.serverFiles(logger: logger)
     )
 
     datasets = state.datasets

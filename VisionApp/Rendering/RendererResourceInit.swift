@@ -37,7 +37,7 @@ extension Renderer {
   (MTLRenderPipelineState, MTLRenderPipelineState, MTLRenderPipelineState,
    MTLRenderPipelineState, MTLRenderPipelineState, MTLRenderPipelineState,
    MTLRenderPipelineState, MTLRenderPipelineState, MTLRenderPipelineState,
-   MTLRenderPipelineState) {
+   MTLRenderPipelineState, MTLRenderPipelineState) {
     // Build a render state pipeline object.
     let shaderSource = try RuntimeMetalShaderLoader.loadSource(named: "Shaders")
 
@@ -106,6 +106,8 @@ extension Renderer {
     let hudControlsFragmentFunction = library.makeFunction(name: "fragmentShaderTFChannelControls")
     let markerVertexFunction = library.makeFunction(name: "vertexShaderVolumeMarker")
     let markerFragmentFunction = library.makeFunction(name: "fragmentShaderVolumeMarker")
+    let sceneMeshVertexFunction = library.makeFunction(name: "vertexShaderSceneMesh")
+    let sceneMeshFragmentFunction = library.makeFunction(name: "fragmentShaderSceneMesh")
     let measurementLineVertexFunction = library.makeFunction(name: "vertexShaderMeasurementLine")
     let measurementLineFragmentFunction = library.makeFunction(name: "fragmentShaderMeasurementLine")
     let screenViewLabelVertexFunction = library.makeFunction(name: "vertexShaderScreenViewLabel")
@@ -130,6 +132,15 @@ extension Renderer {
       colorAttachment.sourceAlphaBlendFactor = .one
       colorAttachment.destinationAlphaBlendFactor = .oneMinusSourceAlpha
     }
+
+    let pipelineDescriptorSceneMesh = MTLRenderPipelineDescriptor()
+    pipelineDescriptorSceneMesh.label = "Render Pipeline for Opaque Scene Meshes"
+    pipelineDescriptorSceneMesh.vertexFunction = sceneMeshVertexFunction
+    pipelineDescriptorSceneMesh.fragmentFunction = sceneMeshFragmentFunction
+    pipelineDescriptorSceneMesh.rasterSampleCount = rasterSampleCount
+    pipelineDescriptorSceneMesh.colorAttachments[0].pixelFormat = layerRenderer.configuration.colorFormat
+    pipelineDescriptorSceneMesh.depthAttachmentPixelFormat = layerRenderer.configuration.depthFormat
+    pipelineDescriptorSceneMesh.maxVertexAmplificationCount = layerRenderer.properties.viewCount
 
     let pipelineDescriptorMeasurementLine = MTLRenderPipelineDescriptor()
     pipelineDescriptorMeasurementLine.label = "Render Pipeline for Measurement Lines"
@@ -230,6 +241,7 @@ extension Renderer {
       try device.makeRenderPipelineState(descriptor: pipelineDescriptorIso),
       try device.makeRenderPipelineState(descriptor: pipelineDescriptorBrickVis),
       try device.makeRenderPipelineState(descriptor: pipelineDescriptorVolumeMarker),
+      try device.makeRenderPipelineState(descriptor: pipelineDescriptorSceneMesh),
       try device.makeRenderPipelineState(descriptor: pipelineDescriptorMeasurementLine),
       try device.makeRenderPipelineState(descriptor: pipelineDescriptorScreenViewLabel),
       try device.makeRenderPipelineState(descriptor: pipelineDescriptorMarkerComposite),

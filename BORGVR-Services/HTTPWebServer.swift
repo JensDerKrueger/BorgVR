@@ -299,6 +299,10 @@ final class HTTPWebServer {
       return markerFileCatalogResponse()
     }
 
+    if request.path == "/web-data/meshes.json" {
+      return meshCatalogResponse()
+    }
+
     let transferFunctionPrefix = "/web-data/transfer-functions/"
     if request.path.hasPrefix(transferFunctionPrefix) {
       let id = String(request.path.dropFirst(transferFunctionPrefix.count))
@@ -311,6 +315,13 @@ final class HTTPWebServer {
       let id = String(request.path.dropFirst(markerFilePrefix.count))
         .replacingOccurrences(of: ".marker", with: "")
       return try markerFileResponse(id: id)
+    }
+
+    let meshPrefix = "/web-data/meshes/"
+    if request.path.hasPrefix(meshPrefix) {
+      let id = String(request.path.dropFirst(meshPrefix.count))
+        .replacingOccurrences(of: ".mesh", with: "")
+      return try meshResponse(id: id)
     }
 
     let datasetPrefix = "/web-data/datasets/"
@@ -430,6 +441,40 @@ final class HTTPWebServer {
     guard data.count == markerFile.byteCount else {
       throw HTTPWebServerError.notFound
     }
+    return HTTPResponse(
+      status: 200,
+      reason: "OK",
+      contentType: "application/octet-stream",
+      body: data
+    )
+  }
+
+  private func meshCatalogResponse() -> HTTPResponse {
+    let entries = datasetServer.meshFilesSnapshot().map { mesh in
+      WebMeshCatalogEntry(
+        id: mesh.id.uuidString,
+        name: mesh.name,
+        byteCount: mesh.byteCount,
+        url: "meshes/\(mesh.id.uuidString).mesh"
+      )
+    }
+    return jsonResponse(
+      WebMeshCatalog(
+        format: "borgvr-meshes",
+        version: 1,
+        generatedAt: "dynamic",
+        meshes: entries
+      )
+    )
+  }
+
+  private func meshResponse(id: String) throws -> HTTPResponse {
+    guard let uuid = UUID(uuidString: id),
+          let mesh = datasetServer.findMeshFileById(uuid) else {
+      throw HTTPWebServerError.notFound
+    }
+    let data = try Data(contentsOf: URL(fileURLWithPath: mesh.filename), options: .mappedIfSafe)
+    guard data.count == mesh.byteCount else { throw HTTPWebServerError.notFound }
     return HTTPResponse(
       status: 200,
       reason: "OK",
@@ -644,7 +689,7 @@ final class HTTPWebServer {
   }
 
   private func appleLZ4Stream(for data: Data) -> Data? {
-    let blockCount = max(1, (data.count + 65_535) / 65_536)
+    let blockCount = max(1, (data.count + 65535) / 65536)
     let bound = data.count + data.count / 255 + 64 + blockCount * 32
     var compressed = Data(count: bound)
     let compressedSize = data.withUnsafeBytes { source in
@@ -944,6 +989,20 @@ private struct WebMarkerFileCatalogEntry: Encodable {
   let id: String
   let datasetID: String
   let description: String
+  let byteCount: Int
+  let url: String
+}
+
+private struct WebMeshCatalog: Encodable {
+  let format: String
+  let version: Int
+  let generatedAt: String
+  let meshes: [WebMeshCatalogEntry]
+}
+
+private struct WebMeshCatalogEntry: Encodable {
+  let id: String
+  let name: String
   let byteCount: Int
   let url: String
 }

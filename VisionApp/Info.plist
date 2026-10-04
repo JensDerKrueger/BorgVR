@@ -133,6 +133,25 @@
 				<string>application/x-volumedata</string>
 			</dict>
 		</dict>
+		<dict>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.data</string>
+			</array>
+			<key>UTTypeDescription</key>
+			<string>BorgVR Mesh</string>
+			<key>UTTypeIdentifier</key>
+			<string>de.uni-due.borgvr.mesh</string>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>mesh</string>
+				</array>
+				<key>public.mime-type</key>
+				<string>application/x-borgvr-mesh</string>
+			</dict>
+		</dict>
 	</array>
 </dict>
 </plist>

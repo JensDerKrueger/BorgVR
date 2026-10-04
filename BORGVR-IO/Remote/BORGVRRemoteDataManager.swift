@@ -58,6 +58,12 @@ class BORGVRRemoteDataManager {
     let description: String
   }
 
+  struct RemoteMeshInfo: Equatable {
+    let id: UUID
+    let byteCount: Int
+    let name: String
+  }
+
   /// The underlying NWConnection for this manager.
   private let connection: NWConnection
   /// The local list of datasets.
@@ -65,6 +71,7 @@ class BORGVRRemoteDataManager {
   /// The remote list of transfer functions.
   private var transferFunctions: [RemoteTransferFunctionInfo] = []
   private var markerFiles: [RemoteMarkerFileInfo] = []
+  private var meshes: [RemoteMeshInfo] = []
   /// An optional logger for logging messages.
   private let logger: LoggerBase?
   /// An optional notifier
@@ -79,6 +86,9 @@ class BORGVRRemoteDataManager {
   private(set) var serverProtocolVersion = 0
   var supportsMarkerFiles: Bool {
     serverProtocolVersion >= BorgVRServerProtocol.markerFilesMinimumVersion
+  }
+  var supportsMeshes: Bool {
+    serverProtocolVersion >= BorgVRServerProtocol.meshesMinimumVersion
   }
   private(set) var maxBricksPerGetRequest : Int = 1
   /**
@@ -355,6 +365,47 @@ class BORGVRRemoteDataManager {
     let data = try receiveBinaryData(maximumPayloadSize: BorgVRMarkerFormat.maximumFileByteCount)
     if let expectedByteCount, data.count != expectedByteCount {
       throw BORGVRRemoteDataManagerError.invalidResponse(reason: "Marker file byte count mismatch.")
+    }
+    return data
+  }
+
+  func requestMeshList() throws -> [RemoteMeshInfo] {
+    guard supportsMeshes else { return [] }
+    try sendCommand("LISTMESHES")
+    let response = try receiveTextResponse()
+    meshes = try response.split(separator: "\n", omittingEmptySubsequences: true).map { line in
+      let parts = line.split(separator: " ", maxSplits: 2, omittingEmptySubsequences: false)
+      guard parts.count >= 2, let id = UUID(uuidString: String(parts[0])) else {
+        throw BORGVRRemoteDataManagerError.invalidResponse(
+          reason: "Invalid mesh UUID in LISTMESHES response."
+        )
+      }
+      guard let byteCount = Int(parts[1]), byteCount > 0,
+            byteCount <= BorgVRMeshFormat.maximumFileByteCount else {
+        throw BORGVRRemoteDataManagerError.invalidResponse(
+          reason: "Invalid mesh byte count in LISTMESHES response."
+        )
+      }
+      return RemoteMeshInfo(
+        id: id,
+        byteCount: byteCount,
+        name: parts.count > 2 ? String(parts[2]) : id.uuidString
+      )
+    }
+    return meshes
+  }
+
+  func requestMesh(id: UUID) throws -> Data {
+    guard supportsMeshes else {
+      throw BORGVRRemoteDataManagerError.invalidResponse(
+        reason: "Mesh files are not supported by this server."
+      )
+    }
+    let expectedByteCount = meshes.first { $0.id == id }?.byteCount
+    try sendCommand("GETMESH \(id.uuidString)")
+    let data = try receiveBinaryData(maximumPayloadSize: BorgVRMeshFormat.maximumFileByteCount)
+    if let expectedByteCount, data.count != expectedByteCount {
+      throw BORGVRRemoteDataManagerError.invalidResponse(reason: "Mesh byte count mismatch.")
     }
     return data
   }

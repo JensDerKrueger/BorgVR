@@ -31,6 +31,7 @@ final class BackgroundServerController: ObservableObject {
         webServerCertificatePassword: settings.webServerCertificatePassword
       ),
       additionalDatasets: Self.builtInDatasets(),
+      additionalMeshFiles: SceneMeshAssetCatalog.serverFiles(),
       includeScannedDatasets: documentsDirectory != nil
     )
 

@@ -22,11 +22,18 @@ inline constexpr size_t kMaximumTransferFunctionFileBytes =
 inline constexpr std::array<uint8_t, 8> kMarkerMagic = {
   'B', 'V', 'R', 'M', 'A', 'R', 'K', 'R'
 };
-inline constexpr uint16_t kMarkerVersion = 1;
+inline constexpr uint16_t kMarkerVersion = 3;
 inline constexpr size_t kMarkerHeaderBytes = 32;
 inline constexpr uintmax_t kMaximumMarkerFileBytes = 64u * 1024u * 1024u;
 inline constexpr uint32_t kMaximumMarkerCount = 100000;
 
-inline constexpr const char* kServerProtocolVersionName = "4";
+inline constexpr std::array<uint8_t, 8> kMeshMagic = {
+  'B', 'V', 'R', 'M', 'E', 'S', 'H', '1'
+};
+inline constexpr uint16_t kMeshVersion = 1;
+inline constexpr uintmax_t kMaximumMeshFileBytes = 512u * 1024u * 1024u;
+inline constexpr size_t kMaximumMeshNameBytes = 1024;
+
+inline constexpr const char* kServerProtocolVersionName = "5";
 
 } // namespace BorgVRFormat

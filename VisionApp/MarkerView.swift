@@ -10,7 +10,9 @@ struct MarkerView: View {
   @State private var showClearAllConfirmation = false
   @State private var showLoadFilePicker = false
   @State private var showSaveFilePicker = false
+  @State private var showMeshEditor = false
   @State private var pendingLoadedMarkers: [VolumeMarker] = []
+  @State private var pendingLoadedMeshInstances: [SceneMeshInstance] = []
   @State private var showLoadMergeChoice = false
   @State private var showDatasetMismatchWarning = false
   @State private var markerCatalog: [VolumeMarkerCatalogEntry] = []
@@ -50,7 +52,66 @@ struct MarkerView: View {
         .pickerStyle(.segmented)
       }
 
-      if sharedAppModel.volumeMarkers.isEmpty {
+      VStack(alignment: .leading, spacing: 10) {
+        HStack {
+          Text("Marker Tool")
+            .font(.headline)
+          Picker("Marker Tool", selection: handMarkerToolBinding) {
+            Label("Draw", systemImage: "scribble").tag(HandMarkerTool.drawing)
+            Label("Place", systemImage: "cube").tag(HandMarkerTool.placement)
+          }
+          .pickerStyle(.segmented)
+        }
+
+        if sharedAppModel.handMarkerTool == .placement {
+          ScrollView(.horizontal) {
+            HStack(spacing: 10) {
+              objectCatalogButton(
+                title: String(localized: "Sphere"),
+                systemImage: "circle.fill",
+                prototype: .sphere
+              )
+              ForEach(sortedMeshAssets) { asset in
+                objectCatalogButton(
+                  title: asset.name,
+                  systemImage: "cube.fill",
+                  prototype: .mesh(asset.id)
+                )
+              }
+              Button {
+                showMeshEditor = true
+              } label: {
+                Label("Import Mesh…", systemImage: "plus")
+              }
+            }
+          }
+
+          HStack {
+            Button {
+              if sharedAppModel.armedSceneObjectPrototype == nil {
+                sharedAppModel.armSelectedSceneObjectForPlacement()
+                runtimeAppModel.interactionMode = .marker
+              } else {
+                sharedAppModel.cancelSceneObjectPlacement()
+              }
+            } label: {
+              Label(
+                sharedAppModel.armedSceneObjectPrototype == nil ? "Place" : "End Placement",
+                systemImage: sharedAppModel.armedSceneObjectPrototype == nil
+                  ? "hand.point.up.left" : "xmark"
+              )
+            }
+
+            if sharedAppModel.armedSceneObjectPrototype != nil {
+              Text("Hold a pinch, Muse tip, or controller trigger to position objects.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+          }
+        }
+      }
+
+      if sharedAppModel.volumeMarkers.isEmpty && sharedAppModel.sceneMeshInstances.isEmpty {
         Text("marker_window_empty")
           .foregroundStyle(.secondary)
       } else {
@@ -75,6 +136,29 @@ struct MarkerView: View {
                 }
                 Spacer()
                 if sharedAppModel.selectedVolumeMarkerIDs.contains(marker.id) {
+                  Image(systemName: "checkmark")
+                }
+              }
+            }
+            .buttonStyle(.plain)
+          }
+          ForEach(sharedAppModel.sceneMeshInstances) { instance in
+            Button {
+              sharedAppModel.selectedSceneMeshInstanceID = instance.id
+              sharedAppModel.clearVolumeMarkerSelection()
+              runtimeAppModel.interactionMode = .marker
+            } label: {
+              HStack {
+                Image(systemName: "cube.fill")
+                  .frame(width: 18, height: 18)
+                VStack(alignment: .leading) {
+                  Text(instance.name)
+                  Text("Mesh")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                }
+                Spacer()
+                if sharedAppModel.selectedSceneMeshInstanceID == instance.id {
                   Image(systemName: "checkmark")
                 }
               }
@@ -117,6 +201,12 @@ struct MarkerView: View {
         }
 
         HStack {
+          Button {
+            showMeshEditor = true
+          } label: {
+            Label("Meshes…", systemImage: "cube.transparent")
+          }
+
           Menu {
             if markerCatalog.isEmpty {
               Text("marker_catalog_empty")
@@ -144,19 +234,28 @@ struct MarkerView: View {
           Button("marker_save_button") {
             showSaveFilePicker = true
           }
-          .disabled(sharedAppModel.volumeMarkers.isEmpty)
+          .disabled(
+            sharedAppModel.volumeMarkers.isEmpty &&
+              sharedAppModel.sceneMeshInstances.isEmpty
+          )
         }
 
         HStack {
           Button(deleteSelectedMarkersTitle) {
             deleteSelectedMarkers()
           }
-          .disabled(sharedAppModel.selectedVolumeMarkerIDs.isEmpty)
+          .disabled(
+            sharedAppModel.selectedVolumeMarkerIDs.isEmpty &&
+              sharedAppModel.selectedSceneMeshInstanceID == nil
+          )
 
           Button("private_marker_clear_all_button") {
             showClearAllConfirmation = true
           }
-          .disabled(sharedAppModel.volumeMarkers.isEmpty)
+          .disabled(
+            sharedAppModel.volumeMarkers.isEmpty &&
+              sharedAppModel.sceneMeshInstances.isEmpty
+          )
         }
         .padding(.bottom, 24)
       }
@@ -207,9 +306,39 @@ struct MarkerView: View {
     ) { result in
       loadMarkers(from: result)
     }
+    .sheet(isPresented: $showMeshEditor) {
+      SceneMeshEditorView(
+        assets: Binding(
+          get: { sharedAppModel.sceneMeshAssets },
+          set: { sharedAppModel.sceneMeshAssets = $0 }
+        ),
+        instances: Binding(
+          get: { sharedAppModel.sceneMeshInstances },
+          set: { sharedAppModel.sceneMeshInstances = $0 }
+        ),
+        selectedInstanceID: Binding(
+          get: { sharedAppModel.selectedSceneMeshInstanceID },
+          set: { sharedAppModel.selectedSceneMeshInstanceID = $0 }
+        ),
+        datasetExtentMeters: runtimeAppModel.activeDatasetInfo?.physicalExtentMeters,
+        logger: runtimeAppModel.logger,
+        synchronize: sharedAppModel.synchronizeMarkers,
+        handleImportedAsset: { asset in
+          sharedAppModel.selectedSceneObjectPrototype = .mesh(asset.id)
+          sharedAppModel.armSelectedSceneObjectForPlacement()
+          runtimeAppModel.interactionMode = .marker
+          showMeshEditor = false
+          return true
+        }
+      )
+    }
     .fileExporter(
       isPresented: $showSaveFilePicker,
-      document: VolumeMarkerDocument(datasetID: currentDatasetID, markers: sharedAppModel.volumeMarkers),
+      document: VolumeMarkerDocument(
+        datasetID: currentDatasetID,
+        markers: sharedAppModel.volumeMarkers,
+        meshInstances: sharedAppModel.sceneMeshInstances
+      ),
       contentType: .borgVRMarker,
       defaultFilename: BorgVRMarkerFormat.defaultFilename
     ) { result in
@@ -229,9 +358,15 @@ struct MarkerView: View {
     } message: { error in
       Text(error.localizedDescription)
     }
-    .onAppear(perform: refreshMarkerCatalog)
+    .onAppear {
+      refreshMarkerCatalog()
+      refreshMeshCatalog()
+    }
     .onReceive(NotificationCenter.default.publisher(for: VolumeMarkerCatalog.didChangeNotification)) { _ in
       refreshMarkerCatalog()
+    }
+    .onReceive(NotificationCenter.default.publisher(for: SceneMeshAssetCatalog.didChangeNotification)) { _ in
+      refreshMeshCatalog()
     }
     .onChange(of: currentDatasetID) { _, _ in
       refreshMarkerCatalog()
@@ -240,8 +375,37 @@ struct MarkerView: View {
 
   private var currentDatasetID: String? { runtimeAppModel.activeDataset?.uniqueId }
 
+  private var sortedMeshAssets: [SceneMeshAsset] {
+    sharedAppModel.sceneMeshAssets.values.sorted {
+      $0.name.localizedStandardCompare($1.name) == .orderedAscending
+    }
+  }
+
+  @ViewBuilder
+  private func objectCatalogButton(
+    title: String,
+    systemImage: String,
+    prototype: SceneObjectPrototype
+  ) -> some View {
+    Button {
+      sharedAppModel.selectedSceneObjectPrototype = prototype
+      sharedAppModel.cancelSceneObjectPlacement()
+    } label: {
+      Label(title, systemImage: systemImage)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .background(
+          sharedAppModel.selectedSceneObjectPrototype == prototype
+            ? Color.accentColor.opacity(0.22) : Color.clear,
+          in: RoundedRectangle(cornerRadius: 6)
+        )
+    }
+    .buttonStyle(.plain)
+  }
+
   private var deleteSelectedMarkersTitle: LocalizedStringKey {
-    sharedAppModel.selectedVolumeMarkerIDs.count == 1
+    sharedAppModel.selectedSceneMeshInstanceID != nil ||
+      sharedAppModel.selectedVolumeMarkerIDs.count == 1
       ? "private_marker_delete_selected_button"
       : "Delete Selected Markers"
   }
@@ -277,6 +441,19 @@ struct MarkerView: View {
     )
   }
 
+  private var handMarkerToolBinding: Binding<HandMarkerTool> {
+    Binding(
+      get: { sharedAppModel.handMarkerTool },
+      set: { tool in
+        sharedAppModel.handMarkerTool = tool
+        if tool == .drawing {
+          sharedAppModel.cancelSceneObjectPlacement()
+        }
+        runtimeAppModel.interactionMode = .marker
+      }
+    )
+  }
+
   private var selectedMarkerIndices: [Int] {
     sharedAppModel.volumeMarkers.indices.filter {
       sharedAppModel.selectedVolumeMarkerIDs.contains(sharedAppModel.volumeMarkers[$0].id)
@@ -284,6 +461,7 @@ struct MarkerView: View {
   }
 
   private func toggleSelection(of markerID: UUID) {
+    sharedAppModel.selectedSceneMeshInstanceID = nil
     var selection = sharedAppModel.selectedVolumeMarkerIDs
     if selection.contains(markerID) {
       selection.remove(markerID)
@@ -445,6 +623,12 @@ struct MarkerView: View {
   }
 
   private func deleteSelectedMarkers() {
+    if let meshID = sharedAppModel.selectedSceneMeshInstanceID {
+      if sharedAppModel.removeSceneMeshInstance(id: meshID) {
+        sharedAppModel.synchronizeMarkers()
+      }
+      return
+    }
     let selectedIDs = sharedAppModel.selectedVolumeMarkerIDs
     if sharedAppModel.removeVolumeMarkers(withIDs: selectedIDs) {
       sharedAppModel.synchronizeMarkers()
@@ -452,7 +636,11 @@ struct MarkerView: View {
   }
 
   private func clearAllMarkers() {
-    if sharedAppModel.removeAllVolumeMarkers() {
+    let removedMarkers = sharedAppModel.removeAllVolumeMarkers()
+    let removedMeshes = !sharedAppModel.sceneMeshInstances.isEmpty
+    sharedAppModel.sceneMeshInstances.removeAll()
+    sharedAppModel.selectedSceneMeshInstanceID = nil
+    if removedMarkers || removedMeshes {
       sharedAppModel.synchronizeMarkers()
     }
   }
@@ -488,6 +676,7 @@ struct MarkerView: View {
 
   private func prepareLoadedMarkers(_ contents: VolumeMarkerDocumentContents) {
     pendingLoadedMarkers = contents.markers
+    pendingLoadedMeshInstances = contents.meshInstances
     if let currentDatasetID,
        contents.datasetID.caseInsensitiveCompare(currentDatasetID) != .orderedSame {
       showDatasetMismatchWarning = true
@@ -497,7 +686,7 @@ struct MarkerView: View {
   }
 
   private func continueLoadingMarkers() {
-    if sharedAppModel.volumeMarkers.isEmpty {
+    if sharedAppModel.volumeMarkers.isEmpty && sharedAppModel.sceneMeshInstances.isEmpty {
       applyLoadedMarkers(replacingExisting: true)
     } else {
       showLoadMergeChoice = true
@@ -506,14 +695,20 @@ struct MarkerView: View {
 
   private func clearPendingLoad() {
     pendingLoadedMarkers = []
+    pendingLoadedMeshInstances = []
   }
 
   private func applyLoadedMarkers(replacingExisting: Bool) {
     if replacingExisting {
       sharedAppModel.volumeMarkers = pendingLoadedMarkers
+      sharedAppModel.replaceSceneMeshInstances(pendingLoadedMeshInstances)
     } else {
       sharedAppModel.volumeMarkers.append(contentsOf: markersWithUniqueIDs(pendingLoadedMarkers))
+      sharedAppModel.sceneMeshInstances.append(
+        contentsOf: meshInstancesWithUniqueIDs(pendingLoadedMeshInstances)
+      )
     }
+    sharedAppModel.resolveSceneMeshAssets()
     clearPendingLoad()
     sharedAppModel.selectedVolumeMarkerID = nil
     sharedAppModel.synchronizeMarkers()
@@ -531,6 +726,20 @@ struct MarkerView: View {
     }
   }
 
+  private func meshInstancesWithUniqueIDs(
+    _ instances: [SceneMeshInstance]
+  ) -> [SceneMeshInstance] {
+    var usedIDs = Set(sharedAppModel.sceneMeshInstances.map(\.id))
+    return instances.map { instance in
+      var instance = instance
+      if usedIDs.contains(instance.id) {
+        instance.id = UUID()
+      }
+      usedIDs.insert(instance.id)
+      return instance
+    }
+  }
+
   private func refreshMarkerCatalog() {
     let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
     markerCatalog = VolumeMarkerCatalog.entries(
@@ -538,5 +747,11 @@ struct MarkerView: View {
       currentDatasetID: currentDatasetID,
       logger: runtimeAppModel.logger
     )
+  }
+
+  private func refreshMeshCatalog() {
+    for asset in SceneMeshAssetCatalog.allAssets(logger: runtimeAppModel.logger) {
+      sharedAppModel.sceneMeshAssets[asset.id] = asset
+    }
   }
 }

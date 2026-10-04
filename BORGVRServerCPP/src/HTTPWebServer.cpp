@@ -564,6 +564,10 @@ bool HTTPWebServer::routeRequest(TcpSocket& socket, const Request& request, bool
     return sendMarkerFileCatalog(socket, closeAfterSend);
   }
 
+  if (request.path == "/web-data/meshes.json") {
+    return sendMeshCatalog(socket, closeAfterSend);
+  }
+
   constexpr const char* transferFunctionPrefix = "/web-data/transfer-functions/";
   const std::string tfPrefix(transferFunctionPrefix);
   if (request.path.compare(0, tfPrefix.size(), tfPrefix) == 0) {
@@ -586,6 +590,18 @@ bool HTTPWebServer::routeRequest(TcpSocket& socket, const Request& request, bool
       id.resize(id.size() - suffix.size());
     }
     return sendMarkerFile(socket, id, closeAfterSend);
+  }
+
+  constexpr const char* meshFilePrefix = "/web-data/meshes/";
+  const std::string meshPrefix(meshFilePrefix);
+  if (request.path.compare(0, meshPrefix.size(), meshPrefix) == 0) {
+    std::string id = request.path.substr(meshPrefix.size());
+    const std::string suffix = ".mesh";
+    if (id.size() > suffix.size() &&
+        id.compare(id.size() - suffix.size(), suffix.size(), suffix) == 0) {
+      id.resize(id.size() - suffix.size());
+    }
+    return sendMeshFile(socket, id, closeAfterSend);
   }
 
   constexpr const char* datasetPrefix = "/web-data/datasets/";
@@ -743,6 +759,38 @@ bool HTTPWebServer::sendMarkerFile(TcpSocket& socket, const std::string& id, boo
     return false;
   }
 
+  return sendResponse(socket, 200, "OK", "application/octet-stream", body, {}, closeAfterSend);
+}
+
+bool HTTPWebServer::sendMeshCatalog(TcpSocket& socket, bool closeAfterSend) {
+  const auto meshes = datasetServer_.meshFilesSnapshot();
+  std::ostringstream oss;
+  oss << "{\n"
+      << "  \"format\": \"borgvr-meshes\",\n"
+      << "  \"version\": 1,\n"
+      << "  \"generatedAt\": \"dynamic\",\n"
+      << "  \"meshes\": [\n";
+  for (size_t i = 0; i < meshes.size(); ++i) {
+    const auto& mesh = meshes[i];
+    oss << "    {\n"
+        << "      \"id\": \"" << jsonEscape(mesh.id) << "\",\n"
+        << "      \"name\": \"" << jsonEscape(mesh.name) << "\",\n"
+        << "      \"byteCount\": " << mesh.byteCount << ",\n"
+        << "      \"url\": \"meshes/" << jsonEscape(mesh.id) << ".mesh\"\n"
+        << "    }" << (i + 1 < meshes.size() ? "," : "") << "\n";
+  }
+  oss << "  ]\n}\n";
+  return sendTextResponse(socket, 200, "OK", "application/json; charset=utf-8", oss.str(), {}, closeAfterSend);
+}
+
+bool HTTPWebServer::sendMeshFile(TcpSocket& socket, const std::string& id, bool closeAfterSend) {
+  MeshFileInfo info;
+  if (!datasetServer_.findMeshFileById(id, info)) return false;
+  std::ifstream input(info.filename, std::ios::binary);
+  if (!input) return false;
+  std::vector<uint8_t> body((std::istreambuf_iterator<char>(input)),
+                            std::istreambuf_iterator<char>());
+  if (body.size() != info.byteCount) return false;
   return sendResponse(socket, 200, "OK", "application/octet-stream", body, {}, closeAfterSend);
 }
 

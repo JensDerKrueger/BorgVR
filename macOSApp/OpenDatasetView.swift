@@ -660,6 +660,17 @@ struct OpenDatasetView: View {
           } catch {
             logger.warning("Marker file sync failed for \(server.address):\(server.port): \(error.localizedDescription)")
           }
+          do {
+            let syncedCount = try SceneMeshAssetCatalog.storeRemoteMeshes(
+              from: manager,
+              logger: logger
+            )
+            if syncedCount > 0 {
+              logger.info("Synced \(syncedCount) meshes from \(server.address):\(server.port).")
+            }
+          } catch {
+            logger.warning("Mesh sync failed for \(server.address):\(server.port): \(error.localizedDescription)")
+          }
           let remoteDatasets = try manager.requestDatasetList()
           DatasetOriginCatalog.shared.recordServerSnapshot(
             origin: DatasetOrigin(address: server.address, port: server.port, password: server.password),

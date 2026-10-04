@@ -49,6 +49,7 @@ final class BorgVRServerHost {
   func start(
     configuration: BorgVRServerConfiguration,
     additionalDatasets: [DatasetInfo] = [],
+    additionalMeshFiles: [MeshFileInfo] = [],
     includeScannedDatasets: Bool = true
   ) -> BorgVRServerState {
     stop()
@@ -56,13 +57,14 @@ final class BorgVRServerHost {
     let catalog = loadCatalog(
       configuration: configuration,
       additionalDatasets: additionalDatasets,
+      additionalMeshFiles: additionalMeshFiles,
       includeScannedDatasets: includeScannedDatasets,
       scanLogger: logger
     )
     logger?.info(
       "Server catalog contains \(catalog.datasets.count) datasets, " +
       "\(catalog.transferFunctions.count) transfer functions, and " +
-      "\(catalog.markerFiles.count) marker files."
+      "\(catalog.markerFiles.count) marker files and \(catalog.meshFiles.count) meshes."
     )
 
     let serverPort = UInt16(clamping: configuration.port)
@@ -73,6 +75,7 @@ final class BorgVRServerHost {
       datasets: catalog.datasets,
       transferFunctions: catalog.transferFunctions,
       markerFiles: catalog.markerFiles,
+      meshFiles: catalog.meshFiles,
       authSecret: configuration.authSecret
     )
     if configuration.startDatasetServer {
@@ -117,6 +120,7 @@ final class BorgVRServerHost {
   func refreshCatalog(
     configuration: BorgVRServerConfiguration,
     additionalDatasets: [DatasetInfo] = [],
+    additionalMeshFiles: [MeshFileInfo] = [],
     includeScannedDatasets: Bool = true
   ) -> Bool {
     guard let server else { return false }
@@ -124,6 +128,7 @@ final class BorgVRServerHost {
     let catalog = loadCatalog(
       configuration: configuration,
       additionalDatasets: additionalDatasets,
+      additionalMeshFiles: additionalMeshFiles,
       includeScannedDatasets: includeScannedDatasets,
       scanLogger: nil
     )
@@ -133,7 +138,8 @@ final class BorgVRServerHost {
     server.updateCatalog(
       datasets: catalog.datasets,
       transferFunctions: catalog.transferFunctions,
-      markerFiles: catalog.markerFiles
+      markerFiles: catalog.markerFiles,
+      meshFiles: catalog.meshFiles
     )
     catalogFingerprint = refreshedFingerprint
     state.datasets = catalog.datasets
@@ -185,25 +191,44 @@ final class BorgVRServerHost {
     return transferFunctions
   }
 
+  private func mergedMeshFiles(
+    _ scannedMeshFiles: [MeshFileInfo],
+    additionalMeshFiles: [MeshFileInfo]
+  ) -> [MeshFileInfo] {
+    var meshFiles = scannedMeshFiles
+    var knownIDs = Set(scannedMeshFiles.map(\.id))
+
+    for meshFile in additionalMeshFiles where !knownIDs.contains(meshFile.id) {
+      meshFiles.append(meshFile)
+      knownIDs.insert(meshFile.id)
+    }
+
+    return meshFiles
+  }
+
   private func loadCatalog(
     configuration: BorgVRServerConfiguration,
     additionalDatasets: [DatasetInfo],
+    additionalMeshFiles: [MeshFileInfo],
     includeScannedDatasets: Bool,
     scanLogger: LoggerBase?
   ) -> ServerCatalog {
     let scannedDatasets: [DatasetInfo]
     let scannedTransferFunctions: [TransferFunctionInfo]
     let scannedMarkerFiles: [MarkerFileInfo]
+    let scannedMeshFiles: [MeshFileInfo]
     if includeScannedDatasets {
       let scanner = DatasetScanner(directory: configuration.dataDirectory, logger: scanLogger)
       scanner.loadDatasets()
       scannedDatasets = scanner.getDatasets()
       scannedTransferFunctions = scanner.getTransferFunctions()
       scannedMarkerFiles = scanner.getMarkerFiles()
+      scannedMeshFiles = scanner.getMeshFiles()
     } else {
       scannedDatasets = []
       scannedTransferFunctions = []
       scannedMarkerFiles = []
+      scannedMeshFiles = []
     }
 
     return ServerCatalog(
@@ -212,7 +237,11 @@ final class BorgVRServerHost {
         scannedTransferFunctions,
         additionalTransferFunctions: DatasetScanner.bundledTransferFunctions(logger: scanLogger)
       ),
-      markerFiles: scannedMarkerFiles
+      markerFiles: scannedMarkerFiles,
+      meshFiles: mergedMeshFiles(
+        scannedMeshFiles,
+        additionalMeshFiles: additionalMeshFiles
+      )
     )
   }
 
@@ -225,6 +254,9 @@ final class BorgVRServerHost {
       })
       .union(catalog.markerFiles.map {
         "marker|\($0.id)|\($0.filename)|\($0.datasetID)|\($0.markerDescription)|\($0.byteCount)"
+      })
+      .union(catalog.meshFiles.map {
+        "mesh|\($0.id.uuidString)|\($0.filename)|\($0.name)|\($0.byteCount)"
       })
   }
 
@@ -251,6 +283,7 @@ private struct ServerCatalog {
   let datasets: [DatasetInfo]
   let transferFunctions: [TransferFunctionInfo]
   let markerFiles: [MarkerFileInfo]
+  let meshFiles: [MeshFileInfo]
 }
 
 private enum StoredServerDefaults {

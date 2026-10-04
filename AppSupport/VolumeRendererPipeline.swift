@@ -28,6 +28,7 @@ enum VolumeRendererPipeline {
     iso: MTLRenderPipelineState,
     brick: MTLRenderPipelineState,
     marker: MTLRenderPipelineState,
+    sceneMesh: MTLRenderPipelineState,
     markerComposite: MTLRenderPipelineState
   ) {
     let shaderSource = try RuntimeMetalShaderLoader.loadSource(named: "RuntimeVolumeShaders")
@@ -74,6 +75,8 @@ enum VolumeRendererPipeline {
 
     guard let markerVertexFunction = library.makeFunction(name: "screenVolumeMarkerVertex"),
           let markerFragmentFunction = library.makeFunction(name: "screenVolumeMarkerFragment"),
+          let sceneMeshVertexFunction = library.makeFunction(name: "screenSceneMeshVertex"),
+          let sceneMeshFragmentFunction = library.makeFunction(name: "screenSceneMeshFragment"),
           let markerCompositeVertexFunction = library.makeFunction(name: "screenMarkerCompositeVertex"),
           let markerCompositeFragmentFunction = library.makeFunction(name: "screenMarkerCompositeFragment") else {
       throw VolumeRendererPipelineError.missingShaderFunction("screen marker shaders")
@@ -94,6 +97,13 @@ enum VolumeRendererPipeline {
       colorAttachment.destinationAlphaBlendFactor = .oneMinusSourceAlpha
     }
     markerDescriptor.depthAttachmentPixelFormat = depthFormat
+
+    let sceneMeshDescriptor = MTLRenderPipelineDescriptor()
+    sceneMeshDescriptor.label = "\(labelPrefix) Scene Mesh"
+    sceneMeshDescriptor.vertexFunction = sceneMeshVertexFunction
+    sceneMeshDescriptor.fragmentFunction = sceneMeshFragmentFunction
+    sceneMeshDescriptor.colorAttachments[0].pixelFormat = colorFormat
+    sceneMeshDescriptor.depthAttachmentPixelFormat = depthFormat
 
     let compositeDescriptor = MTLRenderPipelineDescriptor()
     compositeDescriptor.label = "\(labelPrefix) Marker Composite"
@@ -117,6 +127,7 @@ enum VolumeRendererPipeline {
       try device.makeRenderPipelineState(descriptor: descriptor(label: "\(labelPrefix) Iso", fragmentName: "volumeFragmentShaderIso")),
       try device.makeRenderPipelineState(descriptor: descriptor(label: "\(labelPrefix) Brick", fragmentName: "volumeFragmentShaderBrickVis")),
       try device.makeRenderPipelineState(descriptor: markerDescriptor),
+      try device.makeRenderPipelineState(descriptor: sceneMeshDescriptor),
       try device.makeRenderPipelineState(descriptor: compositeDescriptor)
     )
   }
@@ -125,6 +136,7 @@ enum VolumeRendererPipeline {
 @MainActor
 final class ScreenVolumeMarkerRenderer {
   private var markerPipeline: MTLRenderPipelineState?
+  private var sceneMeshPipeline: MTLRenderPipelineState?
   private var compositePipeline: MTLRenderPipelineState?
   private var markerDepthState: MTLDepthStencilState?
   private var measurementSurfaceDepthState: MTLDepthStencilState?
@@ -134,15 +146,19 @@ final class ScreenVolumeMarkerRenderer {
   private var sphereVertexCount = 0
   private let tubeMeshCache = VolumeMarkerTubeMeshCache()
   private let measurementSurfaceMeshCache = MeasurementSurfaceMeshCache()
+  private let sceneMeshGPUCache = SceneMeshGPUCache()
+  private var whiteTexture: MTLTexture?
   private var colorTexture: MTLTexture?
   private var depthTexture: MTLTexture?
 
   func configure(
     device: MTLDevice,
     markerPipeline: MTLRenderPipelineState,
+    sceneMeshPipeline: MTLRenderPipelineState,
     compositePipeline: MTLRenderPipelineState
   ) {
     self.markerPipeline = markerPipeline
+    self.sceneMeshPipeline = sceneMeshPipeline
     self.compositePipeline = compositePipeline
 
     if markerDepthState == nil {
@@ -184,6 +200,23 @@ final class ScreenVolumeMarkerRenderer {
       sphereBuffer?.label = "Screen Volume Marker Sphere"
       sphereNormalBuffer?.label = "Screen Volume Marker Sphere Normals"
     }
+    if whiteTexture == nil {
+      let descriptor = MTLTextureDescriptor.texture2DDescriptor(
+        pixelFormat: .rgba8Unorm_srgb,
+        width: 1,
+        height: 1,
+        mipmapped: false
+      )
+      descriptor.usage = .shaderRead
+      whiteTexture = device.makeTexture(descriptor: descriptor)
+      var white: UInt32 = 0xFFFF_FFFF
+      whiteTexture?.replace(
+        region: MTLRegionMake2D(0, 0, 1, 1),
+        mipmapLevel: 0,
+        withBytes: &white,
+        bytesPerRow: MemoryLayout<UInt32>.size
+      )
+    }
   }
 
   func renderPrepass(
@@ -193,6 +226,8 @@ final class ScreenVolumeMarkerRenderer {
     colorFormat: MTLPixelFormat,
     depthFormat: MTLPixelFormat,
     markers: [VolumeMarker],
+    sceneMeshAssets: [UUID: SceneMeshAsset],
+    sceneMeshInstances: [SceneMeshInstance],
     spatialToolPreviews: [SpatialToolPreview],
     selectedMarkerIDs: Set<UUID>,
     measurements: [VolumeMeasurement],
@@ -201,11 +236,13 @@ final class ScreenVolumeMarkerRenderer {
     viewProjection: simd_float4x4,
     modelMatrix: simd_float4x4,
     volumeScale: simd_float4x4,
+    datasetMaximumExtentMeters: Float,
     eyePosition: SIMD3<Float>
   ) -> (color: MTLTexture, depth: MTLTexture)? {
     guard drawableSize.width >= 1,
           drawableSize.height >= 1,
           let markerPipeline,
+          let sceneMeshPipeline,
           let markerDepthState,
           let measurementSurfaceDepthState,
           let sphereBuffer,
@@ -250,6 +287,52 @@ final class ScreenVolumeMarkerRenderer {
     var eyePosition = eyePosition
     encoder.setVertexBytes(&viewProjection, length: MemoryLayout<simd_float4x4>.stride, index: 20)
     encoder.setVertexBytes(&eyePosition, length: MemoryLayout<SIMD3<Float>>.stride, index: 22)
+
+    sceneMeshGPUCache.retainOnly(assetIDs: Set(sceneMeshInstances.map(\.asset.assetID)))
+    if datasetMaximumExtentMeters.isFinite, datasetMaximumExtentMeters > 0 {
+      encoder.setRenderPipelineState(sceneMeshPipeline)
+      for instance in sceneMeshInstances where instance.isVisible {
+        guard let asset = sceneMeshAssets[instance.asset.assetID],
+              let gpuAsset = sceneMeshGPUCache.asset(for: asset, device: device) else { continue }
+        var meshModel = modelMatrix *
+          matrixScale(SIMD3<Float>(repeating: 1 / datasetMaximumExtentMeters)) *
+          instance.transformMeters
+        var normalMatrix = simd_transpose(simd_inverse(meshModel))
+        var baseColor = asset.baseColor
+        encoder.setVertexBuffer(
+          gpuAsset.vertexBuffer,
+          offset: 0,
+          index: VertexBufferIndex.meshPositions.rawValue
+        )
+        encoder.setVertexBytes(
+          &meshModel,
+          length: MemoryLayout<simd_float4x4>.stride,
+          index: 21
+        )
+        encoder.setVertexBytes(
+          &normalMatrix,
+          length: MemoryLayout<simd_float4x4>.stride,
+          index: 24
+        )
+        encoder.setFragmentBytes(
+          &baseColor,
+          length: MemoryLayout<SIMD3<Float>>.stride,
+          index: 23
+        )
+        encoder.setFragmentTexture(
+          gpuAsset.texture ?? whiteTexture,
+          index: TextureIndex.sceneMeshColor.rawValue
+        )
+        encoder.drawIndexedPrimitives(
+          type: .triangle,
+          indexCount: gpuAsset.indexCount,
+          indexType: .uint32,
+          indexBuffer: gpuAsset.indexBuffer,
+          indexBufferOffset: 0
+        )
+      }
+      encoder.setRenderPipelineState(markerPipeline)
+    }
 
     let coordinateScale = SIMD3<Float>(
       volumeScale.columns.0.x,

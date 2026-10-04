@@ -578,7 +578,10 @@ final class SharePlayCoordinator: ObservableObject {
     }
     if let appModel {
       try? await sendData(
-        VolumeMarkerSharePlayCodec.encode(appModel.volumeMarkers),
+        VolumeMarkerSharePlayCodec.encode(
+          appModel.volumeMarkers,
+          meshInstances: appModel.sceneMeshInstances
+        ),
         of: .renderingUpdate,
         to: participants
       )
@@ -635,7 +638,10 @@ final class SharePlayCoordinator: ObservableObject {
 
       if shouldSendMarkers, let appModel {
         try await sendData(
-          VolumeMarkerSharePlayCodec.encode(appModel.volumeMarkers),
+          VolumeMarkerSharePlayCodec.encode(
+            appModel.volumeMarkers,
+            meshInstances: appModel.sceneMeshInstances
+          ),
           of: .renderingUpdate
         )
       }
@@ -717,8 +723,9 @@ final class SharePlayCoordinator: ObservableObject {
         )
         return
       }
-      if let markers = try VolumeMarkerSharePlayCodec.decodeIfPresent(data) {
-        appModel?.replaceVolumeMarkers(markers)
+      if let annotations = try VolumeMarkerSharePlayCodec.decodeIfPresent(data) {
+        appModel?.replaceVolumeMarkers(annotations.markers)
+        appModel?.replaceSceneMeshInstances(annotations.meshInstances)
         return
       }
       if let measurements = try VolumeMeasurementSharePlayCodec.decodeIfPresent(data) {
@@ -1228,6 +1235,7 @@ final class SharePlayCoordinator: ObservableObject {
           webServerCertificatePassword: appSettings?.webServerCertificatePassword ?? ""
         ),
         additionalDatasets: [datasetInfo],
+        additionalMeshFiles: SceneMeshAssetCatalog.serverFiles(logger: appModel?.logger),
         includeScannedDatasets: false
       )
 

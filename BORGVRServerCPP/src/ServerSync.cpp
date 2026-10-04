@@ -39,6 +39,12 @@ struct RemoteTransferFunction {
   std::string description;
 };
 
+struct RemoteMesh {
+  std::string id;
+  size_t byteCount = 0;
+  std::string name;
+};
+
 std::string trim(const std::string& s) {
   size_t start = 0;
   while (start < s.size() && std::isspace(static_cast<unsigned char>(s[start]))) ++start;
@@ -283,6 +289,14 @@ public:
 
     sendCommand("HELLO");
     const auto hello = parseKeyValueResponse(receiveTextResponse());
+    auto versionIt = hello.find("VERSION");
+    if (versionIt != hello.end()) {
+      try {
+        serverVersion_ = std::stoi(versionIt->second);
+      } catch (...) {
+        serverVersion_ = 0;
+      }
+    }
     auto authIt = hello.find("AUTH");
     if (authIt == hello.end()) {
       throw std::runtime_error("Missing AUTH in HELLO response");
@@ -372,6 +386,36 @@ public:
     return receiveBinaryResponse();
   }
 
+  std::vector<RemoteMesh> listMeshes() {
+    if (serverVersion_ < 5) return {};
+    sendCommand("LISTMESHES");
+    const std::string text = receiveTextResponse();
+    std::vector<RemoteMesh> out;
+    std::istringstream lines(text);
+    std::string line;
+    while (std::getline(lines, line)) {
+      if (!line.empty() && line.back() == '\r') line.pop_back();
+      line = trim(line);
+      if (line.empty()) continue;
+      std::istringstream iss(line);
+      RemoteMesh mesh;
+      if (!(iss >> mesh.id >> mesh.byteCount)) continue;
+      std::string name;
+      std::getline(iss, name);
+      mesh.name = trim(name);
+      if (!mesh.id.empty() && mesh.byteCount > 0 &&
+          mesh.byteCount <= BorgVRFormat::kMaximumMeshFileBytes) {
+        out.push_back(std::move(mesh));
+      }
+    }
+    return out;
+  }
+
+  std::vector<uint8_t> getMesh(const std::string& id) {
+    sendCommand("GETMESH " + id);
+    return receiveBinaryResponse();
+  }
+
   std::vector<uint8_t> openDataset(const std::string& id) {
     sendCommand("OPEN " + id);
     return receiveBinaryResponse();
@@ -441,6 +485,7 @@ private:
   std::shared_ptr<Logger> logger_;
   TcpSocket socket_;
   int maxBricksPerRequest_ = 1;
+  int serverVersion_ = 0;
 };
 
 class CacheMap {
@@ -696,10 +741,54 @@ bool syncTransferFunction(const ServerSyncEndpoint& endpoint,
   return true;
 }
 
+bool syncMesh(const ServerSyncEndpoint& endpoint,
+              const RemoteMesh& mesh,
+              const std::string& dataDirectory,
+              std::shared_ptr<Logger> logger) {
+  RemoteClient client(endpoint, logger);
+  client.connectAndAuthenticate();
+  const auto payload = client.getMesh(mesh.id);
+  if (payload.size() != mesh.byteCount || payload.size() < 30 ||
+      !std::equal(BorgVRFormat::kMeshMagic.begin(), BorgVRFormat::kMeshMagic.end(), payload.begin()) ||
+      payload[8] != static_cast<uint8_t>(BorgVRFormat::kMeshVersion) || payload[9] != 0) {
+    throw std::runtime_error("Invalid mesh payload");
+  }
+  const std::string payloadId = [&]() {
+    std::ostringstream stream;
+    stream << std::hex << std::setfill('0');
+    for (size_t index = 0; index < 16; ++index) {
+      if (index == 4 || index == 6 || index == 8 || index == 10) stream << '-';
+      stream << std::setw(2) << static_cast<unsigned int>(payload[12 + index]);
+    }
+    return stream.str();
+  }();
+  std::string requestedId = mesh.id;
+  std::transform(requestedId.begin(), requestedId.end(), requestedId.begin(),
+                 [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+  if (payloadId != requestedId) throw std::runtime_error("Mesh UUID mismatch");
+
+  const std::string name = safeFilename(mesh.name, mesh.id);
+  std::filesystem::path path = std::filesystem::path(dataDirectory) / (name + ".mesh");
+  if (std::filesystem::exists(path)) {
+    path = std::filesystem::path(dataDirectory) / (mesh.id + ".mesh");
+  }
+  const auto tempPath = path.string() + ".tmp";
+  std::ofstream file(tempPath, std::ios::binary | std::ios::trunc);
+  if (!file) throw std::runtime_error("Unable to write mesh");
+  file.write(reinterpret_cast<const char*>(payload.data()), static_cast<std::streamsize>(payload.size()));
+  if (!file) throw std::runtime_error("Unable to finish mesh");
+  file.close();
+  std::filesystem::rename(tempPath, path);
+  if (logger) logger->info("Synced mesh " + (mesh.name.empty() ? mesh.id : mesh.name) +
+                           " from " + endpointName(endpoint));
+  return true;
+}
+
 struct CatalogSnapshot {
   ServerSyncEndpoint endpoint;
   std::vector<RemoteDataset> datasets;
   std::vector<RemoteTransferFunction> transferFunctions;
+  std::vector<RemoteMesh> meshes;
 };
 
 } // namespace
@@ -708,12 +797,14 @@ ServerSyncManager::ServerSyncManager(std::string dataDirectory,
                                      std::vector<ServerSyncEndpoint> endpoints,
                                      IdProvider localDatasetIds,
                                      IdProvider localTransferFunctionIds,
+                                     IdProvider localMeshIds,
                                      CatalogChangedCallback onCatalogChanged,
                                      std::shared_ptr<Logger> logger)
   : dataDirectory_(std::move(dataDirectory)),
     endpoints_(std::move(endpoints)),
     localDatasetIds_(std::move(localDatasetIds)),
     localTransferFunctionIds_(std::move(localTransferFunctionIds)),
+    localMeshIds_(std::move(localMeshIds)),
     onCatalogChanged_(std::move(onCatalogChanged)),
     logger_(std::move(logger)) {}
 
@@ -757,6 +848,7 @@ void ServerSyncManager::run() {
         snapshot.endpoint = endpoint;
         snapshot.datasets = client.listDatasets();
         snapshot.transferFunctions = client.listTransferFunctions();
+        snapshot.meshes = client.listMeshes();
         snapshots.push_back(std::move(snapshot));
       } catch (const std::exception& e) {
         if (logger_) {
@@ -789,6 +881,29 @@ void ServerSyncManager::run() {
               logger_->warning("Transfer function sync failed for " + tf.id + " from " +
                                endpointName(snapshot.endpoint) + ": " + e.what());
             }
+          }
+        }
+      }
+
+      std::unordered_set<std::string> localMeshIds =
+        localMeshIds_ ? localMeshIds_() : std::unordered_set<std::string>{};
+      size_t transferredMeshBytes = 0;
+      constexpr size_t kMaximumMeshBytesPerPass = 1024u * 1024u * 1024u;
+      for (const auto& snapshot : snapshots) {
+        for (const auto& mesh : snapshot.meshes) {
+          if (!running_.load()) break;
+          if (localMeshIds.find(mesh.id) != localMeshIds.end()) continue;
+          if (mesh.byteCount > BorgVRFormat::kMaximumMeshFileBytes ||
+              transferredMeshBytes + mesh.byteCount > kMaximumMeshBytesPerPass) continue;
+          try {
+            if (syncMesh(snapshot.endpoint, mesh, dataDirectory_, logger_)) {
+              localMeshIds.insert(mesh.id);
+              transferredMeshBytes += mesh.byteCount;
+              catalogChanged = true;
+            }
+          } catch (const std::exception& e) {
+            if (logger_) logger_->warning("Mesh sync failed for " + mesh.id + " from " +
+                                          endpointName(snapshot.endpoint) + ": " + e.what());
           }
         }
       }

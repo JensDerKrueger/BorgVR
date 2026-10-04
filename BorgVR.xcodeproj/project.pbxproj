@@ -119,6 +119,13 @@
 		57A001992EA1000300000001 /* MeasurementSurfaceMeshCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001982EA1000300000001 /* MeasurementSurfaceMeshCache.swift */; };
 		57A0019A2EA1000300000001 /* MeasurementSurfaceMeshCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001982EA1000300000001 /* MeasurementSurfaceMeshCache.swift */; };
 		57A0019B2EA1000300000001 /* MeasurementSurfaceMeshCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001982EA1000300000001 /* MeasurementSurfaceMeshCache.swift */; };
+		57A001A12EA2000100000001 /* SceneMesh.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001A02EA2000100000001 /* SceneMesh.swift */; };
+		57A001A22EA2000100000001 /* SceneMesh.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001A02EA2000100000001 /* SceneMesh.swift */; };
+		57A001A32EA2000100000001 /* SceneMesh.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001A02EA2000100000001 /* SceneMesh.swift */; };
+		57A001A42EA2000100000001 /* MatrixUtilities.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001242E70000300000001 /* MatrixUtilities.swift */; };
+		57A001A62EA2000200000001 /* SceneMeshEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001A52EA2000200000001 /* SceneMeshEditorView.swift */; };
+		57A001A72EA2000200000001 /* SceneMeshEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001A52EA2000200000001 /* SceneMeshEditorView.swift */; };
+		57A001A82EA2000200000001 /* SceneMeshEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001A52EA2000200000001 /* SceneMeshEditorView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -202,6 +209,8 @@
 		57A001902EA1000100000001 /* VolumeMeasurement.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VolumeMeasurement.swift; sourceTree = "<group>"; };
 		57A001942EA1000200000001 /* VolumeMeasurementDocument.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VolumeMeasurementDocument.swift; sourceTree = "<group>"; };
 		57A001982EA1000300000001 /* MeasurementSurfaceMeshCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeasurementSurfaceMeshCache.swift; sourceTree = "<group>"; };
+		57A001A02EA2000100000001 /* SceneMesh.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneMesh.swift; sourceTree = "<group>"; };
+		57A001A52EA2000200000001 /* SceneMeshEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneMeshEditorView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -496,6 +505,8 @@
 				57A0012C2E70000300000001 /* KeychainSecretStore.swift */,
 				57A001802EA0000100000001 /* LightingEditorView.swift */,
 				57A001982EA1000300000001 /* MeasurementSurfaceMeshCache.swift */,
+				57A001A02EA2000100000001 /* SceneMesh.swift */,
+				57A001A52EA2000200000001 /* SceneMeshEditorView.swift */,
 				57A001232E70000300000001 /* LoggerView.swift */,
 				57A001242E70000300000001 /* MatrixUtilities.swift */,
 				57A001642E99000200000001 /* RenderMode.swift */,
@@ -887,6 +898,8 @@
 				57A001912EA1000100000001 /* VolumeMeasurement.swift in Sources */,
 				57A001952EA1000200000001 /* VolumeMeasurementDocument.swift in Sources */,
 				57A001992EA1000300000001 /* MeasurementSurfaceMeshCache.swift in Sources */,
+				57A001A12EA2000100000001 /* SceneMesh.swift in Sources */,
+				57A001A62EA2000200000001 /* SceneMeshEditorView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -928,6 +941,8 @@
 				57A001922EA1000100000001 /* VolumeMeasurement.swift in Sources */,
 				57A001962EA1000200000001 /* VolumeMeasurementDocument.swift in Sources */,
 				57A0019A2EA1000300000001 /* MeasurementSurfaceMeshCache.swift in Sources */,
+				57A001A22EA2000100000001 /* SceneMesh.swift in Sources */,
+				57A001A72EA2000200000001 /* SceneMeshEditorView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -941,6 +956,7 @@
 				57A000382E70000200000001 /* GPUHashtable.swift in Sources */,
 				57A0014E2E70000300000001 /* KeychainSecretStore.swift in Sources */,
 				57A001832EA0000100000001 /* LightingEditorView.swift in Sources */,
+				57A001A42EA2000100000001 /* MatrixUtilities.swift in Sources */,
 				57A000392E70000200000001 /* RuntimeMetalShaderLoader.swift in Sources */,
 				57A001672E99000200000001 /* RenderMode.swift in Sources */,
 				57A0003A2E70000200000001 /* TextFileDocument.swift in Sources */,
@@ -953,6 +969,8 @@
 				57A001932EA1000100000001 /* VolumeMeasurement.swift in Sources */,
 				57A001972EA1000200000001 /* VolumeMeasurementDocument.swift in Sources */,
 				57A0019B2EA1000300000001 /* MeasurementSurfaceMeshCache.swift in Sources */,
+				57A001A32EA2000100000001 /* SceneMesh.swift in Sources */,
+				57A001A82EA2000200000001 /* SceneMeshEditorView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

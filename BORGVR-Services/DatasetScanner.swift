@@ -38,15 +38,24 @@ struct MarkerFileInfo {
   let byteCount: Int
 }
 
+struct MeshFileInfo {
+  let id: UUID
+  let filename: String
+  let name: String
+  let byteCount: Int
+}
+
 private enum DatasetScannerError: Error {
   case invalidTransferFunctionFile
   case invalidMarkerFile
+  case invalidMeshFile
 }
 
 class DatasetScanner {
   private var datasets: [DatasetInfo] = []
   private var transferFunctions: [TransferFunctionInfo] = []
   private var markerFiles: [MarkerFileInfo] = []
+  private var meshFiles: [MeshFileInfo] = []
   private let directory: String
   private let logger: LoggerBase?
 
@@ -59,6 +68,7 @@ class DatasetScanner {
     datasets.removeAll()
     transferFunctions.removeAll()
     markerFiles.removeAll()
+    meshFiles.removeAll()
     let fileManager = FileManager.default
     let directoryURL = URL(fileURLWithPath: directory)
 
@@ -76,6 +86,8 @@ class DatasetScanner {
             loadTransferFunction(at: url)
           case "marker":
             loadMarkerFile(at: url)
+          case "mesh":
+            loadMeshFile(at: url)
           default:
             break
         }
@@ -101,6 +113,10 @@ class DatasetScanner {
 
   func getMarkerFiles() -> [MarkerFileInfo] {
     markerFiles
+  }
+
+  func getMeshFiles() -> [MeshFileInfo] {
+    meshFiles
   }
 
   static func bundledTransferFunctions(logger: LoggerBase? = nil) -> [TransferFunctionInfo] {
@@ -236,6 +252,47 @@ class DatasetScanner {
           url.path
         )
       )
+    }
+  }
+
+  private func loadMeshFile(at url: URL) {
+    do {
+      let resourceValues = try url.resourceValues(forKeys: [.fileSizeKey])
+      guard let byteCount = resourceValues.fileSize,
+            byteCount >= 30,
+            byteCount <= BorgVRMeshFormat.maximumFileByteCount else {
+        throw DatasetScannerError.invalidMeshFile
+      }
+      let data = try Data(contentsOf: url, options: .mappedIfSafe)
+      let magic = Data(BorgVRMeshFormat.magicBytes)
+      guard data.count == byteCount,
+            data.prefix(magic.count) == magic,
+            Self.readUInt16(from: data, at: 8) == BorgVRMeshFormat.version,
+            let nameByteCount = Self.readUInt16(from: data, at: 28),
+            nameByteCount <= BorgVRMeshFormat.maximumNameByteCount,
+            30 + Int(nameByteCount) <= data.count else {
+        throw DatasetScannerError.invalidMeshFile
+      }
+      let uuidBytes = Array(data[12..<28])
+      let id = UUID(uuid: (
+        uuidBytes[0], uuidBytes[1], uuidBytes[2], uuidBytes[3],
+        uuidBytes[4], uuidBytes[5], uuidBytes[6], uuidBytes[7],
+        uuidBytes[8], uuidBytes[9], uuidBytes[10], uuidBytes[11],
+        uuidBytes[12], uuidBytes[13], uuidBytes[14], uuidBytes[15]
+      ))
+      let nameData = data[30..<(30 + Int(nameByteCount))]
+      guard let name = String(data: nameData, encoding: .utf8) else {
+        throw DatasetScannerError.invalidMeshFile
+      }
+      meshFiles.append(MeshFileInfo(
+        id: id,
+        filename: url.path,
+        name: name.isEmpty ? url.deletingPathExtension().lastPathComponent : name,
+        byteCount: data.count
+      ))
+      logger?.info("Loaded mesh file: \(url.lastPathComponent) (id \(id.uuidString))")
+    } catch {
+      logger?.warning("Failed to load mesh file \(url.path): \(error.localizedDescription)")
     }
   }
 

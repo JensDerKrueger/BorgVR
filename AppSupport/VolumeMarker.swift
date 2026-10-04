@@ -267,16 +267,22 @@ private extension VolumeMarkerGeometry {
 }
 
 struct VolumeMarkerDocument: FileDocument {
-  // Header: magic, UInt16 version, UInt16 flags, dataset UUID; marker payload follows.
+  // Header: magic, UInt16 version, UInt16 flags, dataset UUID; annotations follow.
   static var readableContentTypes: [UTType] { [.borgVRMarker] }
   static var writableContentTypes: [UTType] { [.borgVRMarker] }
 
   let datasetID: String?
   let markers: [VolumeMarker]
+  let meshInstances: [SceneMeshInstance]
 
-  init(datasetID: String?, markers: [VolumeMarker]) {
+  init(
+    datasetID: String?,
+    markers: [VolumeMarker],
+    meshInstances: [SceneMeshInstance] = []
+  ) {
     self.datasetID = datasetID
     self.markers = markers
+    self.meshInstances = meshInstances
   }
 
   init(configuration: ReadConfiguration) throws {
@@ -286,13 +292,22 @@ struct VolumeMarkerDocument: FileDocument {
     let contents = try Self.decode(from: data)
     datasetID = contents.datasetID
     markers = contents.markers
+    meshInstances = contents.meshInstances
   }
 
   func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
-    .init(regularFileWithContents: try Self.encode(datasetID: datasetID, markers: markers))
+    .init(regularFileWithContents: try Self.encode(
+      datasetID: datasetID,
+      markers: markers,
+      meshInstances: meshInstances
+    ))
   }
 
-  static func encode(datasetID: String?, markers: [VolumeMarker]) throws -> Data {
+  static func encode(
+    datasetID: String?,
+    markers: [VolumeMarker],
+    meshInstances: [SceneMeshInstance] = []
+  ) throws -> Data {
     guard let datasetID, let datasetUUID = UUID(uuidString: datasetID) else {
       throw VolumeMarkerDocumentError.invalidFormat
     }
@@ -302,6 +317,7 @@ struct VolumeMarkerDocument: FileDocument {
     writer.write(UInt16(0))
     writer.writeUUID(datasetUUID)
     try VolumeMarkerBinaryCodec.encode(markers, to: &writer)
+    try SceneMeshInstanceCodec.encode(meshInstances, to: &writer)
     guard writer.data.count <= BorgVRMarkerFormat.maximumFileByteCount else {
       throw VolumeMarkerDocumentError.fileTooLarge
     }
@@ -324,12 +340,14 @@ struct VolumeMarkerDocument: FileDocument {
     _ = try reader.read() as UInt16
     let datasetID = try reader.readUUID().uuidString
     let markers = try VolumeMarkerBinaryCodec.decode(from: &reader)
+    let meshInstances = try SceneMeshInstanceCodec.decode(from: &reader)
     guard reader.isAtEnd else {
       throw VolumeMarkerDocumentError.invalidFormat
     }
     return VolumeMarkerDocumentContents(
       datasetID: datasetID,
-      markers: markers
+      markers: markers,
+      meshInstances: meshInstances
     )
   }
 
@@ -341,6 +359,7 @@ struct VolumeMarkerDocument: FileDocument {
 struct VolumeMarkerDocumentContents {
   let datasetID: String
   let markers: [VolumeMarker]
+  let meshInstances: [SceneMeshInstance]
 }
 
 enum VolumeMarkerDocumentError: LocalizedError {
@@ -539,23 +558,33 @@ enum VolumeMarkerCatalog {
   }
 }
 
+struct VolumeMarkerSharePlayContents {
+  let markers: [VolumeMarker]
+  let meshInstances: [SceneMeshInstance]
+}
+
 enum VolumeMarkerSharePlayCodec {
-  static func encode(_ markers: [VolumeMarker]) -> Data {
+  static func encode(
+    _ markers: [VolumeMarker],
+    meshInstances: [SceneMeshInstance] = []
+  ) -> Data {
     var writer = MarkerDataWriter()
     writer.write(BorgVRSharePlayProtocol.magic)
     writer.write(BorgVRSharePlayProtocol.PacketKind.volumeMarkers.rawValue)
     writer.write(UInt8(0))
     do {
       try VolumeMarkerBinaryCodec.encode(markers, to: &writer)
+      try SceneMeshInstanceCodec.encode(meshInstances, to: &writer)
     } catch {
-      assertionFailure("Unable to encode volume markers: \(error.localizedDescription)")
+      assertionFailure("Unable to encode annotations: \(error.localizedDescription)")
+      writer.write(UInt32(0))
       writer.write(UInt32(0))
     }
     return writer.data
   }
 
   /// Returns `nil` when the data is a different SharePlay packet kind.
-  static func decodeIfPresent(_ data: Data) throws -> [VolumeMarker]? {
+  static func decodeIfPresent(_ data: Data) throws -> VolumeMarkerSharePlayContents? {
     var reader = MarkerDataReader(data)
     let magic: UInt32 = try reader.read()
     guard magic == BorgVRSharePlayProtocol.magic else { return nil }
@@ -563,11 +592,12 @@ enum VolumeMarkerSharePlayCodec {
     _ = try reader.read() as UInt8
     guard packet == BorgVRSharePlayProtocol.PacketKind.volumeMarkers.rawValue else { return nil }
     let markers = try VolumeMarkerBinaryCodec.decode(from: &reader)
+    let meshInstances = try SceneMeshInstanceCodec.decode(from: &reader)
 
     guard reader.isAtEnd else {
       throw VolumeMarkerCodecError.trailingBytes(reader.remainingCount())
     }
-    return markers
+    return VolumeMarkerSharePlayContents(markers: markers, meshInstances: meshInstances)
   }
 }
 

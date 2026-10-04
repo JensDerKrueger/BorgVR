@@ -35,7 +35,7 @@ enum BorgVRMarkerFormat {
   static let fileExtension = "marker"
   static let defaultFilename = "BorgVR Markers.marker"
   static let magicBytes = [UInt8]("BVRMARKR".utf8)
-  static let version: UInt16 = 2
+  static let version: UInt16 = 3
   static let headerByteCount = 32
   static let maximumFileByteCount = 64 * 1024 * 1024
   static let maximumMarkerCount = 100_000
@@ -52,16 +52,28 @@ enum BorgVRMeasurementFormat {
   static let magicBytes = [UInt8]("BVRMEASR".utf8)
   static let version: UInt16 = 1
   static let maximumFileByteCount = 32 * 1024 * 1024
-  static let maximumMeasurementCount = 10_000
+  static let maximumMeasurementCount = 10000
   static let maximumPointCount = 1_000_000
   static let maximumNameCharacterCount = 80
   static let maximumNameByteCount = 512
   static let positionRange: ClosedRange<Float> = -8...8
 }
 
+enum BorgVRMeshFormat {
+  static let fileExtension = "mesh"
+  static let magicBytes = [UInt8]("BVRMESH1".utf8)
+  static let version: UInt16 = 1
+  static let maximumFileByteCount = 512 * 1024 * 1024
+  static let maximumVertexCount = 10_000_000
+  static let maximumIndexCount = 30_000_000
+  static let maximumTextureByteCount = 256 * 1024 * 1024
+  static let maximumNameCharacterCount = 120
+  static let maximumNameByteCount = 1024
+}
+
 enum BorgVRSharePlayProtocol {
   static let magic: UInt32 = 0x4256_5350 // "BVSP"
-  static let version = BorgVRSemanticVersion(major: 2, minor: 6)
+  static let version = BorgVRSemanticVersion(major: 2, minor: 7)
 
   enum MessageType: UInt8 {
     case initMessage = 0x00
@@ -286,7 +298,7 @@ enum BorgVRSharePlayParticipantInfoCodec {
   }
 
   static func decode(_ data: Data) throws -> BorgVRSharePlayParticipantInfo {
-    guard data.count <= 1_024 else {
+    guard data.count <= 1024 else {
       throw BorgVRSharePlayProtocolError.invalidParticipantInfo
     }
     let info = try JSONDecoder().decode(BorgVRSharePlayParticipantInfo.self, from: data)
@@ -313,7 +325,7 @@ enum BorgVRSharePlayHostCodec {
   }
 
   static func decode<T: Decodable>(_ type: T.Type, from data: Data) throws -> T {
-    guard data.count <= 1_024 else {
+    guard data.count <= 1024 else {
       throw BorgVRSharePlayProtocolError.invalidParticipantInfo
     }
     return try JSONDecoder().decode(type, from: data)
@@ -469,8 +481,9 @@ private struct BorgVRSharePlayDataReader {
 
 enum BorgVRServerProtocol {
   static let authenticationMinimumVersionName = "3"
-  static let currentVersionName = "4"
+  static let currentVersionName = "5"
   static let markerFilesMinimumVersion = 4
+  static let meshesMinimumVersion = 5
 }
 
 enum BorgVRSharedDefaults {
@@ -478,8 +491,8 @@ enum BorgVRSharedDefaults {
   static let brickOverlap = 2
   static let compressionEnabled = true
   static let borderMode = "zeroes"
-  static let datasetServerPort = 12_345
-  static let sharePlayServerPort = 12_346
+  static let datasetServerPort = 12345
+  static let sharePlayServerPort = 12346
   static let webServerPort = 443
   static let sharePlayWebServerPort = 444
   static let maximumBricksPerRequest = 20

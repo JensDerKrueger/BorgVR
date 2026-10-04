@@ -345,6 +345,27 @@ bool TCPServer::findMarkerFileById(const std::string& id, MarkerFileInfo& out) c
   return true;
 }
 
+void TCPServer::setMeshFiles(std::vector<MeshFileInfo> meshFiles) {
+  std::lock_guard<std::mutex> lock(datasetsMutex_);
+  std::sort(meshFiles.begin(), meshFiles.end(),
+            [](const MeshFileInfo& a, const MeshFileInfo& b) { return a.id < b.id; });
+  meshFiles_ = std::move(meshFiles);
+}
+
+std::vector<MeshFileInfo> TCPServer::meshFilesSnapshot() const {
+  std::lock_guard<std::mutex> lock(datasetsMutex_);
+  return meshFiles_;
+}
+
+bool TCPServer::findMeshFileById(const std::string& id, MeshFileInfo& out) const {
+  std::lock_guard<std::mutex> lock(datasetsMutex_);
+  const auto it = std::find_if(meshFiles_.begin(), meshFiles_.end(),
+                               [&](const MeshFileInfo& mesh) { return mesh.id == id; });
+  if (it == meshFiles_.end()) return false;
+  out = *it;
+  return true;
+}
+
 bool TCPServer::start() {
   if (running_.load()) return true;
   if (maxBricksPerGetRequest_ <= 0) {
@@ -555,6 +576,19 @@ bool TCPServer::ClientSession::sendMarkerFileList(const std::vector<std::string>
   return sendText(oss.str());
 }
 
+bool TCPServer::ClientSession::sendMeshFileList(const std::vector<std::string>& params) {
+  if (!params.empty()) return false;
+  const auto meshes = server_.meshFilesSnapshot();
+  std::ostringstream oss;
+  for (size_t i = 0; i < meshes.size(); ++i) {
+    const auto& mesh = meshes[i];
+    oss << mesh.id << " " << mesh.byteCount << " " << protocolLineText(mesh.name);
+    if (i + 1 < meshes.size()) oss << "\n";
+  }
+  oss << "\n\n";
+  return sendText(oss.str());
+}
+
 bool TCPServer::ClientSession::sendInfo(const std::vector<std::string>& params) {
   if (!params.empty()) return false;
 
@@ -692,6 +726,22 @@ bool TCPServer::ClientSession::getMarkerFile(const std::vector<std::string>& par
   return true;
 }
 
+bool TCPServer::ClientSession::getMeshFile(const std::vector<std::string>& params) {
+  if (params.size() != 1) return false;
+  MeshFileInfo chosen;
+  if (!server_.findMeshFileById(params[0], chosen)) {
+    if (server_.logger_) server_.logger_->warning("GETMESH unknown mesh id: " + params[0]);
+    return false;
+  }
+  std::ifstream file(chosen.filename, std::ios::binary);
+  if (!file) return false;
+  std::vector<uint8_t> payload((std::istreambuf_iterator<char>(file)),
+                               std::istreambuf_iterator<char>());
+  if (payload.size() != chosen.byteCount) return false;
+  sendBinaryResponse(payload);
+  return true;
+}
+
 static bool parseIntStrict(const std::string& s, int& out) {
   if (s.empty()) return false;
   size_t idx = 0;
@@ -783,10 +833,12 @@ bool TCPServer::ClientSession::processCommand(const std::string& line) {
   if (cmd == "LIST") return sendList(params);
   if (cmd == "LISTTF") return sendTransferFunctionList(params);
   if (cmd == "LISTMARKERS") return sendMarkerFileList(params);
+  if (cmd == "LISTMESHES") return sendMeshFileList(params);
   if (cmd == "INFO") return sendInfo(params);
   if (cmd == "OPEN") return openDataset(params);
   if (cmd == "GETTF") return getTransferFunction(params);
   if (cmd == "GETMARKER") return getMarkerFile(params);
+  if (cmd == "GETMESH") return getMeshFile(params);
   if (cmd == "GETBRICKS") return getBricks(params);
 
   return false;

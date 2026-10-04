@@ -18,6 +18,7 @@ struct ServerSyncStatus: Equatable {
 final class ServerSyncManager {
   private static let transferFunctionSyncByteLimit = 32 * 1024 * 1024
   private static let markerSyncByteLimit = BorgVRMarkerFormat.maximumFileByteCount
+  private static let meshSyncByteLimit = 1024 * 1024 * 1024
   private static let datasetProgressTimeout: TimeInterval = 120
 
   private struct ActiveDatasetSync {
@@ -125,6 +126,7 @@ final class ServerSyncManager {
       try manager.connect(timeout: 10)
       let didStoreTransferFunctions = try syncTransferFunctions(from: manager)
       let didStoreMarkerFiles = try syncMarkerFiles(from: manager)
+      let didStoreMeshes = try syncMeshes(from: manager)
       let remoteDatasets = try manager.requestDatasetList()
       rememberDatasetSources(remoteDatasets, endpoint: endpoint)
       let localDatasetIDs = scanLocalDatasetIDs()
@@ -142,7 +144,7 @@ final class ServerSyncManager {
         )
       }
 
-      if didStoreTransferFunctions || didStoreMarkerFiles {
+      if didStoreTransferFunctions || didStoreMarkerFiles || didStoreMeshes {
         notifyCatalogChanged()
       }
     } catch {
@@ -375,6 +377,39 @@ final class ServerSyncManager {
     return didStoreMarkerFiles
   }
 
+  private func syncMeshes(from manager: BORGVRRemoteDataManager) throws -> Bool {
+    guard manager.supportsMeshes else { return false }
+
+    let dataDirectoryURL = try dataDirectoryURL()
+    var localMeshIDs = scanLocalMeshIDs()
+    let remoteMeshes = try manager.requestMeshList()
+    var transferredBytes = 0
+    var didStoreMeshes = false
+
+    for remoteMesh in remoteMeshes where !localMeshIDs.contains(remoteMesh.id) {
+      guard remoteMesh.byteCount <= BorgVRMeshFormat.maximumFileByteCount,
+            transferredBytes + remoteMesh.byteCount <= Self.meshSyncByteLimit else {
+        logger?.warning("Mesh sync limit reached before \(remoteMesh.id.uuidString).")
+        break
+      }
+
+      let data = try manager.requestMesh(id: remoteMesh.id)
+      guard meshIdentifier(from: data) == remoteMesh.id else {
+        throw BORGVRRemoteDataManagerError.invalidResponse(
+          reason: "Mesh UUID mismatch for \(remoteMesh.id.uuidString)."
+        )
+      }
+      let targetURL = uniqueMeshURL(in: dataDirectoryURL, remoteMesh: remoteMesh)
+      try data.write(to: targetURL, options: .atomic)
+      transferredBytes += data.count
+      localMeshIDs.insert(remoteMesh.id)
+      didStoreMeshes = true
+      logger?.info("Stored synced mesh \(displayName(for: remoteMesh)).")
+    }
+
+    return didStoreMeshes
+  }
+
   private func scanLocalDatasetIDs() -> Set<String> {
     let scanner = DatasetScanner(directory: dataDirectory, logger: nil)
     scanner.loadDatasets()
@@ -391,6 +426,12 @@ final class ServerSyncManager {
     let scanner = DatasetScanner(directory: dataDirectory, logger: nil)
     scanner.loadDatasets()
     return Set(scanner.getMarkerFiles().map(\.id))
+  }
+
+  private func scanLocalMeshIDs() -> Set<UUID> {
+    let scanner = DatasetScanner(directory: dataDirectory, logger: nil)
+    scanner.loadDatasets()
+    return Set(scanner.getMeshFiles().map(\.id))
   }
 
   private func dataDirectoryURL() throws -> URL {
@@ -462,6 +503,31 @@ final class ServerSyncManager {
     return candidate
   }
 
+  private func uniqueMeshURL(
+    in directoryURL: URL,
+    remoteMesh: BORGVRRemoteDataManager.RemoteMeshInfo
+  ) -> URL {
+    let baseName = sanitizedFilename(remoteMesh.name, fallback: "Mesh")
+    var candidate = directoryURL
+      .appendingPathComponent(baseName)
+      .appendingPathExtension(BorgVRMeshFormat.fileExtension)
+    guard FileManager.default.fileExists(atPath: candidate.path) else { return candidate }
+
+    candidate = directoryURL
+      .appendingPathComponent("\(baseName)-\(remoteMesh.id.uuidString.prefix(8))")
+      .appendingPathExtension(BorgVRMeshFormat.fileExtension)
+    var suffix = 2
+    while FileManager.default.fileExists(atPath: candidate.path) {
+      candidate = directoryURL
+        .appendingPathComponent(
+          "\(baseName)-\(remoteMesh.id.uuidString.prefix(8))-\(suffix)"
+        )
+        .appendingPathExtension(BorgVRMeshFormat.fileExtension)
+      suffix += 1
+    }
+    return candidate
+  }
+
   private func markerIdentifier(for data: Data) -> String {
     Insecure.MD5.hash(data: data)
       .map { String(format: "%02x", $0) }
@@ -485,6 +551,22 @@ final class ServerSyncManager {
       bytes[8], bytes[9], bytes[10], bytes[11],
       bytes[12], bytes[13], bytes[14], bytes[15]
     )).uuidString
+  }
+
+  private func meshIdentifier(from data: Data) -> UUID? {
+    let magic = Data(BorgVRMeshFormat.magicBytes)
+    guard data.count >= 28,
+          data.prefix(magic.count) == magic,
+          readUInt16(from: data, at: 8) == BorgVRMeshFormat.version else {
+      return nil
+    }
+    let bytes = Array(data[12..<28])
+    return UUID(uuid: (
+      bytes[0], bytes[1], bytes[2], bytes[3],
+      bytes[4], bytes[5], bytes[6], bytes[7],
+      bytes[8], bytes[9], bytes[10], bytes[11],
+      bytes[12], bytes[13], bytes[14], bytes[15]
+    ))
   }
 
   private func readUInt16(from data: Data, at offset: Int) -> UInt16? {
@@ -536,6 +618,11 @@ final class ServerSyncManager {
   ) -> String {
     let description = markerFile.description.trimmingCharacters(in: .whitespacesAndNewlines)
     return description.isEmpty ? markerFile.id : description
+  }
+
+  private func displayName(for mesh: BORGVRRemoteDataManager.RemoteMeshInfo) -> String {
+    let name = mesh.name.trimmingCharacters(in: .whitespacesAndNewlines)
+    return name.isEmpty ? mesh.id.uuidString : name
   }
 
   private func notifyCatalogChanged() {

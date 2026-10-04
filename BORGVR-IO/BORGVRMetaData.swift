@@ -661,7 +661,7 @@ enum PhysicalSizeFormatter {
     let symbol: String
   }
 
-  private static let kilometer = Unit(meters: 1_000, symbol: "km")
+  private static let kilometer = Unit(meters: 1000, symbol: "km")
   private static let meter = Unit(meters: 1, symbol: "m")
   private static let decimeter = Unit(meters: 1e-1, symbol: "dm")
   private static let centimeter = Unit(meters: 1e-2, symbol: "cm")
@@ -758,7 +758,7 @@ enum PhysicalSizeFormatter {
 
   private static func preferredUnit(for meters: Double) -> Unit {
     switch meters {
-      case 1_000...:
+      case 1000...:
         return kilometer
       case 1...:
         return meter

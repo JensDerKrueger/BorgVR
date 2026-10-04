@@ -55,6 +55,8 @@ final actor Renderer {
   var pipelineStateBrickVis: MTLRenderPipelineState
   /// Render pipeline state for opaque volume markers.
   var pipelineStateVolumeMarker: MTLRenderPipelineState
+  /// Render pipeline state for opaque scene meshes.
+  var pipelineStateSceneMesh: MTLRenderPipelineState
   /// Render pipeline state for lightweight screen-space measurement lines.
   var pipelineStateMeasurementLine: MTLRenderPipelineState
   /// Render pipeline state for screen-view participant labels.
@@ -125,6 +127,10 @@ final actor Renderer {
   let spatialControllerPointerVertexCount: Int
   /// Cached tube meshes for stroke markers.
   let markerTubeMeshCache: VolumeMarkerTubeMeshCache
+  /// Cached GPU resources for imported scene meshes.
+  let sceneMeshGPUCache: SceneMeshGPUCache
+  /// White fallback used when a scene mesh has no embedded texture.
+  let sceneMeshWhiteTexture: MTLTexture
   /// Cached triangle meshes for area and volume measurements.
   let measurementSurfaceMeshCache: MeasurementSurfaceMeshCache
   /// Reusable instance buffer for lightweight measurement lines.
@@ -269,6 +275,7 @@ final actor Renderer {
     self.spatialToolPreviewsWereShared = false
     self.spatialStylusRadiusAdjustmentStart = nil
     self.markerTubeMeshCache = VolumeMarkerTubeMeshCache()
+    self.sceneMeshGPUCache = SceneMeshGPUCache()
     self.measurementSurfaceMeshCache = MeasurementSurfaceMeshCache()
     self.measurementLineBuffer = nil
     self.screenViewLabelTextureCache = ScreenViewLabelTextureCache()
@@ -348,6 +355,7 @@ final actor Renderer {
        pipelineStateIso,
        pipelineStateBrickVis,
        pipelineStateVolumeMarker,
+       pipelineStateSceneMesh,
        pipelineStateMeasurementLine,
        pipelineStateScreenViewLabel,
        pipelineStateMarkerComposite,
@@ -363,6 +371,25 @@ final actor Renderer {
     } catch {
       fatalError("Unable to compile render pipeline state. Error info: \(error)")
     }
+
+    let whiteTextureDescriptor = MTLTextureDescriptor.texture2DDescriptor(
+      pixelFormat: .rgba8Unorm_srgb,
+      width: 1,
+      height: 1,
+      mipmapped: false
+    )
+    whiteTextureDescriptor.usage = .shaderRead
+    guard let sceneMeshWhiteTexture = device.makeTexture(descriptor: whiteTextureDescriptor) else {
+      fatalError("Unable to allocate the scene mesh fallback texture.")
+    }
+    var opaqueWhite: UInt32 = 0xFFFF_FFFF
+    sceneMeshWhiteTexture.replace(
+      region: MTLRegionMake2D(0, 0, 1, 1),
+      mipmapLevel: 0,
+      withBytes: &opaqueWhite,
+      bytesPerRow: MemoryLayout<UInt32>.size
+    )
+    self.sceneMeshWhiteTexture = sceneMeshWhiteTexture
 
     let depthStateDescriptor = MTLDepthStencilDescriptor()
     depthStateDescriptor.depthCompareFunction = .greater

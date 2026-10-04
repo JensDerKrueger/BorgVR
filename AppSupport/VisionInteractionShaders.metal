@@ -16,6 +16,26 @@ struct VolumeMarkerVaryings {
   float3 eyePosition;
 };
 
+struct VisionSceneMeshVertex {
+  packed_float3 position;
+  float positionPadding;
+  packed_float3 normal;
+  float normalPadding;
+  float2 texcoord;
+  float2 texcoordPadding;
+  packed_float3 color;
+  float colorPadding;
+};
+
+struct VisionSceneMeshVaryings {
+  float4 position [[position]];
+  float3 worldPosition;
+  float3 worldNormal;
+  float3 eyePosition;
+  float2 texcoord;
+  float3 color;
+};
+
 struct MarkerCompositeVaryings {
   float4 position [[position]];
 };
@@ -70,6 +90,46 @@ fragment float4 fragmentShaderVolumeMarker(
   float diffuse = max(dot(normal, lightDirection), 0.0);
   float3 baseColor = markerColor.rgb;
   return float4(baseColor * (0.28 + 0.72 * diffuse), markerColor.a);
+}
+
+vertex VisionSceneMeshVaryings vertexShaderSceneMesh(
+  uint vertexId [[vertex_id]],
+  ushort ampId [[amplification_id]],
+  device const VisionSceneMeshVertex *vertices [[buffer(VertexBufferIndexMeshPositions)]],
+  constant float4x4 *mvpPerView [[buffer(20)]],
+  constant float4x4 &modelMatrix [[buffer(21)]],
+  constant float3 *eyePositionPerView [[buffer(22)]])
+{
+  VisionSceneMeshVertex meshVertex = vertices[vertexId];
+  float4 world = modelMatrix * float4(float3(meshVertex.position), 1.0);
+  float3 modelX = modelMatrix[0].xyz;
+  float3 modelY = modelMatrix[1].xyz;
+  float3 modelZ = modelMatrix[2].xyz;
+  float3x3 normalMatrix = float3x3(cross(modelY, modelZ),
+                                    cross(modelZ, modelX),
+                                    cross(modelX, modelY));
+
+  VisionSceneMeshVaryings out;
+  out.position = mvpPerView[ampId] * world;
+  out.worldPosition = world.xyz;
+  out.worldNormal = normalize(normalMatrix * float3(meshVertex.normal));
+  out.eyePosition = eyePositionPerView[ampId];
+  out.texcoord = meshVertex.texcoord;
+  out.color = float3(meshVertex.color);
+  return out;
+}
+
+fragment float4 fragmentShaderSceneMesh(
+  VisionSceneMeshVaryings in [[stage_in]],
+  constant float3 &baseColor [[buffer(23)]],
+  texture2d<float> colorTexture [[texture(TextureIndexSceneMeshColor)]])
+{
+  constexpr sampler colorSampler(filter::linear, address::repeat);
+  float3 normal = normalize(in.worldNormal);
+  float3 lightDirection = normalize(in.eyePosition - in.worldPosition);
+  float diffuse = max(dot(normal, lightDirection), 0.0);
+  float3 color = baseColor * in.color * colorTexture.sample(colorSampler, in.texcoord).rgb;
+  return float4(color * (0.28 + 0.72 * diffuse), 1.0);
 }
 
 vertex ScreenViewLabelVaryings vertexShaderScreenViewLabel(

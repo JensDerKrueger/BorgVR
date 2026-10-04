@@ -37,6 +37,16 @@ enum ScreenViewPresentation {
   }
 }
 
+enum SceneObjectPrototype: Hashable {
+  case sphere
+  case mesh(UUID)
+}
+
+enum HandMarkerTool: String, CaseIterable {
+  case drawing
+  case placement
+}
+
 // MARK: - SharedAppModel
 
 /**
@@ -122,6 +132,13 @@ class SharedAppModel {
   var purgeAtlas: Bool
   /// Opaque markers placed in normalized dataset coordinates.
   var volumeMarkers: [VolumeMarker]
+  var sceneMeshAssets: [UUID: SceneMeshAsset]
+  var sceneMeshInstances: [SceneMeshInstance]
+  var selectedSceneMeshInstanceID: UUID?
+  /// Local catalog selection and one-shot placement request. Neither is synchronized.
+  var selectedSceneObjectPrototype: SceneObjectPrototype
+  var armedSceneObjectPrototype: SceneObjectPrototype?
+  var handMarkerTool: HandMarkerTool
   /// Locally selected markers. These are intentionally not synchronized.
   var selectedVolumeMarkerIDs: Set<UUID>
   /// Primary local marker used for direct manipulation.
@@ -206,6 +223,12 @@ class SharedAppModel {
     specularLightColor = BorgVRLightingState.default.specularColor
     purgeAtlas = false
     volumeMarkers = []
+    sceneMeshAssets = [:]
+    sceneMeshInstances = []
+    selectedSceneObjectPrototype = .sphere
+    armedSceneObjectPrototype = nil
+    handMarkerTool = .placement
+    selectedSceneMeshInstanceID = nil
     selectedVolumeMarkerIDs = []
     selectedVolumeMarkerID = nil
     remoteSpatialToolPreviews = [:]
@@ -383,6 +406,11 @@ class SharedAppModel {
     applyLightingState(.default)
     purgeAtlas = false
     volumeMarkers = []
+    sceneMeshInstances = []
+    selectedSceneObjectPrototype = .sphere
+    armedSceneObjectPrototype = nil
+    handMarkerTool = .placement
+    selectedSceneMeshInstanceID = nil
     selectedVolumeMarkerID = nil
     remoteSpatialToolPreviews = [:]
     screenViewInteractionActive = false
@@ -420,6 +448,67 @@ class SharedAppModel {
 
   func clearVolumeMarkerSelection() {
     selectedVolumeMarkerID = nil
+  }
+
+  func registerSceneMeshAsset(_ asset: SceneMeshAsset, persist: Bool = true) throws {
+    sceneMeshAssets[asset.id] = asset
+    if persist {
+      try SceneMeshAssetCatalog.store(asset)
+    }
+  }
+
+  func armSelectedSceneObjectForPlacement() {
+    armedSceneObjectPrototype = selectedSceneObjectPrototype
+  }
+
+  func cancelSceneObjectPlacement() {
+    armedSceneObjectPrototype = nil
+  }
+
+  @discardableResult
+  func addSceneMeshInstance(for asset: SceneMeshAsset) throws -> SceneMeshInstance {
+    try registerSceneMeshAsset(asset)
+    let instance = SceneMeshInstance(
+      name: nextSceneMeshInstanceName(assetName: asset.name),
+      asset: asset.reference
+    )
+    sceneMeshInstances.append(instance)
+    selectedSceneMeshInstanceID = instance.id
+    return instance
+  }
+
+  func replaceSceneMeshInstances(_ instances: [SceneMeshInstance]) {
+    sceneMeshInstances = instances
+    resolveSceneMeshAssets()
+    if let selectedSceneMeshInstanceID,
+       !instances.contains(where: { $0.id == selectedSceneMeshInstanceID }) {
+      self.selectedSceneMeshInstanceID = nil
+    }
+  }
+
+  func resolveSceneMeshAssets() {
+    for assetID in Set(sceneMeshInstances.map(\.asset.assetID)) where sceneMeshAssets[assetID] == nil {
+      if let asset = SceneMeshAssetCatalog.load(assetID: assetID) {
+        sceneMeshAssets[assetID] = asset
+      }
+    }
+  }
+
+  @discardableResult
+  func removeSceneMeshInstance(id: UUID) -> Bool {
+    let previousCount = sceneMeshInstances.count
+    sceneMeshInstances.removeAll { $0.id == id }
+    guard sceneMeshInstances.count != previousCount else { return false }
+    if selectedSceneMeshInstanceID == id { selectedSceneMeshInstanceID = nil }
+    return true
+  }
+
+  func nextSceneMeshInstanceName(assetName: String) -> String {
+    let usedNames = Set(sceneMeshInstances.map(\.name))
+    if !usedNames.contains(assetName) { return assetName }
+    var index = 2
+    while usedNames.contains("\(assetName) \(index)") { index += 1 }
+    return "\(assetName) \(index)"
   }
 
   @discardableResult
@@ -769,7 +858,7 @@ class SharedAppModel {
   }
 
   func serializeVolumeMarkersSharePlayState() -> Data {
-    VolumeMarkerSharePlayCodec.encode(volumeMarkers)
+    VolumeMarkerSharePlayCodec.encode(volumeMarkers, meshInstances: sceneMeshInstances)
   }
 
   func serializeVolumeMeasurementsSharePlayState() -> Data {
@@ -854,8 +943,10 @@ class SharedAppModel {
 
   @discardableResult
   func applySharePlayUpdate(from data: Data) throws -> Bool {
-    if let markers = try VolumeMarkerSharePlayCodec.decodeIfPresent(data) {
-      volumeMarkers = markers
+    if let annotations = try VolumeMarkerSharePlayCodec.decodeIfPresent(data) {
+      volumeMarkers = annotations.markers
+      sceneMeshInstances = annotations.meshInstances
+      resolveSceneMeshAssets()
       setVolumeMarkerSelection(selectedVolumeMarkerIDs, primary: selectedVolumeMarkerID)
       return true
     }

@@ -1304,6 +1304,7 @@ class GroupActivityHelper {
           webServerCertificatePassword: storedAppModel?.webServerCertificatePassword ?? ""
         ),
         additionalDatasets: [datasetInfo],
+        additionalMeshFiles: SceneMeshAssetCatalog.serverFiles(logger: runtimeAppModel?.logger),
         includeScannedDatasets: false
       )
 

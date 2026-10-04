@@ -475,6 +475,46 @@ static std::vector<MarkerFileInfo> scanMarkerDirectory(const std::string& direct
   return markerFiles;
 }
 
+static std::vector<MeshFileInfo> scanMeshDirectory(const std::string& directory,
+                                                   std::shared_ptr<Logger> logger) {
+  namespace fs = std::filesystem;
+  std::vector<MeshFileInfo> meshes;
+  std::error_code ec;
+  if (!fs::exists(directory, ec) || !fs::is_directory(directory, ec)) return meshes;
+
+  for (const auto& entry : fs::directory_iterator(directory, ec)) {
+    if (ec) break;
+    if (!entry.is_regular_file(ec) || entry.path().extension() != ".mesh") continue;
+    const auto byteCount = entry.file_size(ec);
+    if (ec || byteCount < 30 || byteCount > BorgVRFormat::kMaximumMeshFileBytes) continue;
+    std::ifstream file(entry.path(), std::ios::binary);
+    std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(file)),
+                               std::istreambuf_iterator<char>());
+    const bool validMagic = bytes.size() == byteCount && bytes.size() >= 30 &&
+      std::equal(BorgVRFormat::kMeshMagic.begin(), BorgVRFormat::kMeshMagic.end(), bytes.begin());
+    const uint16_t version = validMagic
+      ? static_cast<uint16_t>(bytes[8] | (static_cast<uint16_t>(bytes[9]) << 8))
+      : 0;
+    const uint16_t nameBytes = validMagic
+      ? static_cast<uint16_t>(bytes[28] | (static_cast<uint16_t>(bytes[29]) << 8))
+      : 0;
+    if (!validMagic || version != BorgVRFormat::kMeshVersion ||
+        nameBytes > BorgVRFormat::kMaximumMeshNameBytes ||
+        30u + static_cast<size_t>(nameBytes) > bytes.size()) {
+      if (logger) logger->warning("Unable to load mesh file " + entry.path().string() + ": invalid header");
+      continue;
+    }
+    MeshFileInfo info;
+    info.id = formatUuid(bytes.data() + 12);
+    info.filename = entry.path().string();
+    info.name.assign(reinterpret_cast<const char*>(bytes.data() + 30), nameBytes);
+    if (info.name.empty()) info.name = entry.path().stem().string();
+    info.byteCount = bytes.size();
+    meshes.push_back(std::move(info));
+  }
+  return meshes;
+}
+
 int main(int argc, char** argv) {
   SocketSystem sockSys;
   auto logger = std::make_shared<Logger>(LogLevel::Info);
@@ -575,11 +615,13 @@ int main(int argc, char** argv) {
   auto datasets = scanDatasetDirectory(datasetDir, logger);
   auto transferFunctions = scanTransferFunctionDirectory(datasetDir, logger);
   auto markerFiles = scanMarkerDirectory(datasetDir, logger);
+  auto meshFiles = scanMeshDirectory(datasetDir, logger);
 
   TCPServer server(port, maxBricks, logger, password);
   server.setDatasets(datasets);
   server.setTransferFunctions(transferFunctions);
   server.setMarkerFiles(markerFiles);
+  server.setMeshFiles(meshFiles);
   if (!server.start()) {
     return 2;
   }
@@ -599,6 +641,7 @@ int main(int argc, char** argv) {
     const auto refreshedTransferFunctions = scanTransferFunctionDirectory(datasetDir, logger);
     server.setTransferFunctions(refreshedTransferFunctions);
     server.setMarkerFiles(scanMarkerDirectory(datasetDir, logger));
+    server.setMeshFiles(scanMeshDirectory(datasetDir, logger));
   };
 
   std::unique_ptr<ServerSyncManager> syncManager;
@@ -617,12 +660,20 @@ int main(int argc, char** argv) {
       }
       return ids;
     };
+    auto localMeshIds = [&]() {
+      std::unordered_set<std::string> ids;
+      for (const auto& mesh : scanMeshDirectory(datasetDir, nullptr)) {
+        ids.insert(mesh.id);
+      }
+      return ids;
+    };
 
     syncManager = std::make_unique<ServerSyncManager>(
       datasetDir,
       syncEndpoints,
       localDatasetIds,
       localTransferFunctionIds,
+      localMeshIds,
       refreshCatalog,
       logger
     );

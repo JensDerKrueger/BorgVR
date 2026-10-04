@@ -10,6 +10,7 @@ struct ConverterView: View {
   private enum Operation: String, CaseIterable, Identifiable {
     case importDataset
     case exportDataset
+    case importMesh
 
     var id: Self { self }
   }
@@ -42,6 +43,12 @@ struct ConverterView: View {
   @State private var exportDidFinish = false
   @State private var exportDidSucceed = false
   @State private var exportInputError: String?
+  @State private var meshInputURL: URL?
+  @State private var meshOutputURL: URL?
+  @State private var meshName = ""
+  @State private var meshStep = 1
+  @State private var meshImportDidFinish = false
+  @State private var meshImportDidSucceed = false
 
   @EnvironmentObject var storedAppModel: StoredAppModel
   @EnvironmentObject private var appModel: AppModel
@@ -57,6 +64,7 @@ struct ConverterView: View {
       Picker("converter_mode", selection: $operation) {
         Text("converter_mode_import").tag(Operation.importDataset)
         Text("converter_mode_export").tag(Operation.exportDataset)
+        Text("converter_mode_mesh_import").tag(Operation.importMesh)
       }
       .pickerStyle(.segmented)
       .frame(maxWidth: 360)
@@ -287,8 +295,10 @@ struct ConverterView: View {
         }
       }
       }
-      } else {
+      } else if operation == .exportDataset {
         exportContent
+      } else {
+        meshImportContent
       }
     }
     .padding()
@@ -320,6 +330,249 @@ struct ConverterView: View {
           )
       }
     }
+  }
+
+  private var meshImportContent: some View {
+    VStack(spacing: 16) {
+      HStack {
+        Text("converter_mesh_import_title")
+          .font(.title)
+          .bold()
+          .padding()
+        Text(String(
+          format: NSLocalizedString("converter_step_of_total_format", comment: ""),
+          meshStep,
+          3
+        ))
+        .font(.subheadline)
+        .foregroundStyle(.secondary)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding()
+      }
+
+      Spacer()
+
+      HStack(alignment: .top) {
+        VStack {
+          wizardStepIcon(meshImportStepSystemImage)
+          Spacer()
+        }
+
+        Group {
+          switch meshStep {
+            case 1:
+              VStack(alignment: .leading, spacing: 12) {
+                Text("converter_mesh_select_input")
+                  .font(.headline)
+                Text("converter_mesh_select_input_help")
+                  .font(.subheadline)
+                  .foregroundStyle(.secondary)
+                Button {
+                  selectMeshInputFile()
+                } label: {
+                  Label("converter_mesh_select_input", systemImage: "cube.transparent")
+                }
+                Text(meshInputURL?.path ?? NSLocalizedString("converter_status_no_file", comment: ""))
+                  .lineLimit(2)
+                  .truncationMode(.middle)
+                  .foregroundStyle(meshInputURL == nil ? .secondary : .primary)
+              }
+
+            case 2:
+              VStack(alignment: .leading, spacing: 12) {
+                Text("converter_mesh_output_title")
+                  .font(.headline)
+                Text("converter_mesh_output_help")
+                  .font(.subheadline)
+                  .foregroundStyle(.secondary)
+                LabeledContent("converter_mesh_name") {
+                  TextField("converter_mesh_name", text: $meshName)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(minWidth: 280)
+                }
+                Button {
+                  selectMeshOutputFile()
+                } label: {
+                  Label("converter_mesh_select_output", systemImage: "square.and.arrow.down")
+                }
+                Text(meshOutputURL?.path ?? NSLocalizedString("converter_export_no_output", comment: ""))
+                  .lineLimit(2)
+                  .truncationMode(.middle)
+                  .foregroundStyle(meshOutputURL == nil ? .secondary : .primary)
+                Label("converter_mesh_meter_notice", systemImage: "ruler")
+                  .font(.callout)
+                  .foregroundStyle(.secondary)
+              }
+
+            default:
+              VStack(alignment: .leading, spacing: 12) {
+                Text(meshImportResultTitle)
+                  .font(.headline)
+                Text(meshImportResultSubtitle)
+                  .font(.subheadline)
+                  .foregroundStyle(.secondary)
+                if isConverting {
+                  ProgressView()
+                    .controlSize(.large)
+                }
+                TextEditor(text: $logText)
+                  .border(Color.secondary.opacity(0.5), width: 1)
+                  .font(.system(.body, design: .monospaced))
+                  .frame(minHeight: 220)
+              }
+          }
+          Spacer()
+        }
+      }
+
+      Spacer()
+
+      if !isConverting {
+        HStack {
+          Button {
+            closeConverter()
+          } label: {
+            Label("converter_back_to_main_menu", systemImage: "chevron.backward.circle")
+          }
+          Spacer()
+          if meshStep > 1 && !meshImportDidSucceed {
+            Button {
+              meshStep -= 1
+              meshImportDidFinish = false
+            } label: {
+              Label("converter_button_back", systemImage: "chevron.backward")
+            }
+          }
+          if meshStep == 1 {
+            Button {
+              meshStep = 2
+            } label: {
+              Label("converter_nav_next", systemImage: "chevron.forward")
+            }
+            .disabled(meshInputURL == nil)
+          } else if meshStep == 2 {
+            Button {
+              meshStep = 3
+              startMeshImport()
+            } label: {
+              Label("converter_mesh_start", systemImage: "cube.fill")
+            }
+            .disabled(
+              meshOutputURL == nil ||
+              meshName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            )
+          } else if meshImportDidSucceed {
+            Button {
+              closeConverter()
+            } label: {
+              Label("converter_nav_close", systemImage: "checkmark.circle")
+            }
+          }
+        }
+      }
+    }
+  }
+
+  private var meshImportStepSystemImage: String {
+    switch meshStep {
+      case 1: return "cube.transparent"
+      case 2: return "square.and.arrow.down"
+      default:
+        if !meshImportDidFinish { return "gearshape.2" }
+        return meshImportDidSucceed ? "checkmark.circle.fill" : "exclamationmark.triangle.fill"
+    }
+  }
+
+  private var meshImportResultTitle: LocalizedStringKey {
+    if !meshImportDidFinish { return "converter_mesh_importing_title" }
+    return meshImportDidSucceed
+      ? "converter_mesh_completed_title"
+      : "converter_mesh_failed_title"
+  }
+
+  private var meshImportResultSubtitle: LocalizedStringKey {
+    if !meshImportDidFinish { return "converter_mesh_importing_help" }
+    return meshImportDidSucceed
+      ? "converter_mesh_completed_help"
+      : "converter_mesh_failed_help"
+  }
+
+  private func selectMeshInputFile() {
+    let panel = NSOpenPanel()
+    panel.canChooseFiles = true
+    panel.canChooseDirectories = false
+    panel.allowsMultipleSelection = false
+    panel.allowedContentTypes = BorgVRMeshImporter.supportedFilenameExtensions.compactMap {
+      UTType(filenameExtension: $0)
+    }
+    guard panel.runModal() == .OK, let url = panel.url else { return }
+    meshInputURL = url
+    meshName = url.deletingPathExtension().lastPathComponent
+    let outputDirectory = URL(fileURLWithPath: storedAppModel.dataDirectory, isDirectory: true)
+    meshOutputURL = outputDirectory
+      .appendingPathComponent(meshName)
+      .appendingPathExtension(BorgVRMeshFormat.fileExtension)
+    meshImportDidFinish = false
+    meshImportDidSucceed = false
+  }
+
+  private func selectMeshOutputFile() {
+    let panel = NSSavePanel()
+    panel.allowedContentTypes = [
+      UTType(filenameExtension: BorgVRMeshFormat.fileExtension) ?? .data
+    ]
+    panel.canCreateDirectories = true
+    panel.nameFieldStringValue = meshOutputURL?.lastPathComponent
+      ?? "\(meshName.isEmpty ? "Mesh" : meshName).\(BorgVRMeshFormat.fileExtension)"
+    panel.directoryURL = meshOutputURL?.deletingLastPathComponent()
+      ?? URL(fileURLWithPath: storedAppModel.dataDirectory, isDirectory: true)
+    guard panel.runModal() == .OK, let selectedURL = panel.url else { return }
+    meshOutputURL = selectedURL.pathExtension.isEmpty
+      ? selectedURL.appendingPathExtension(BorgVRMeshFormat.fileExtension)
+      : selectedURL
+  }
+
+  private func startMeshImport() {
+    guard let inputURL = meshInputURL, let outputURL = meshOutputURL else { return }
+    isConverting = true
+    meshImportDidFinish = false
+    meshImportDidSucceed = false
+    logText = ""
+    let name = meshName
+    let inputAccess = inputURL.startAccessingSecurityScopedResource()
+    let outputDirectory = outputURL.deletingLastPathComponent()
+    let outputAccess = outputDirectory.startAccessingSecurityScopedResource()
+    DispatchQueue.global(qos: .userInitiated).async {
+      var succeeded = false
+      defer {
+        if inputAccess { inputURL.stopAccessingSecurityScopedResource() }
+        if outputAccess { outputDirectory.stopAccessingSecurityScopedResource() }
+      }
+      do {
+        try FileManager.default.createDirectory(
+          at: outputDirectory,
+          withIntermediateDirectories: true
+        )
+        try BorgVRMeshImporter.convert(
+          inputURL: inputURL,
+          outputURL: outputURL,
+          name: name,
+          logger: logger
+        )
+        succeeded = true
+      } catch {
+        logger.error(error.localizedDescription)
+      }
+      DispatchQueue.main.async {
+        isConverting = false
+        meshImportDidFinish = true
+        meshImportDidSucceed = succeeded
+      }
+    }
+  }
+
+  private func closeConverter() {
+    appModel.navigationState = .start
   }
 
   private var exportContent: some View {

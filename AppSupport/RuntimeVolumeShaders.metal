@@ -50,6 +50,57 @@ fragment float4 screenVolumeMarkerFragment(
   return float4(markerColor.rgb * (0.28 + 0.72 * diffuse), markerColor.a);
 }
 
+struct ScreenSceneMeshVertex {
+  float3 position;
+  float3 normal;
+  float2 texcoord;
+  float3 color;
+};
+
+struct ScreenSceneMeshVaryings {
+  float4 position [[position]];
+  float3 worldPosition;
+  float3 worldNormal;
+  float2 texcoord;
+  float3 color;
+  float3 eyePosition;
+};
+
+vertex ScreenSceneMeshVaryings screenSceneMeshVertex(
+  uint vertexId [[vertex_id]],
+  device const ScreenSceneMeshVertex* vertices [[buffer(VertexBufferIndexMeshPositions)]],
+  constant float4x4 &viewProjection [[buffer(20)]],
+  constant float4x4 &modelMatrix [[buffer(21)]],
+  constant float3 &eyePosition [[buffer(22)]],
+  constant float4x4 &normalMatrix [[buffer(24)]])
+{
+  ScreenSceneMeshVertex meshVertex = vertices[vertexId];
+  float4 world = modelMatrix * float4(meshVertex.position, 1.0);
+
+  ScreenSceneMeshVaryings out;
+  out.position = viewProjection * world;
+  out.worldPosition = world.xyz;
+  out.worldNormal = normalize((normalMatrix * float4(meshVertex.normal, 0.0)).xyz);
+  out.texcoord = meshVertex.texcoord;
+  out.color = meshVertex.color;
+  out.eyePosition = eyePosition;
+  return out;
+}
+
+fragment float4 screenSceneMeshFragment(
+  ScreenSceneMeshVaryings in [[stage_in]],
+  constant float3 &baseColor [[buffer(23)]],
+  texture2d<float> colorTexture [[texture(TextureIndexSceneMeshColor)]])
+{
+  constexpr sampler colorSampler(filter::linear, mip_filter::linear, address::repeat);
+  float3 textureColor = colorTexture.sample(colorSampler, in.texcoord).rgb;
+  float3 normal = normalize(in.worldNormal);
+  float3 lightDirection = normalize(in.eyePosition - in.worldPosition);
+  float diffuse = max(dot(normal, lightDirection), 0.0);
+  float3 color = baseColor * in.color * textureColor;
+  return float4(color * (0.22 + 0.78 * diffuse), 1.0);
+}
+
 struct ScreenMarkerCompositeVaryings {
   float4 position [[position]];
 };
