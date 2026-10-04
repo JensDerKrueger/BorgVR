@@ -269,6 +269,31 @@ struct SettingsView: View {
               .font(.footnote)
               .foregroundStyle(.secondary)
 
+            Divider()
+
+            Text("settings_controller_thumbsticks_description")
+              .font(.footnote)
+              .foregroundStyle(.secondary)
+
+            controllerThumbstickPicker(
+              "settings_left_controller_thumbstick_x",
+              selection: $storedAppModel.leftControllerThumbstickXAction
+            )
+            controllerThumbstickPicker(
+              "settings_left_controller_thumbstick_y",
+              selection: $storedAppModel.leftControllerThumbstickYAction
+            )
+            controllerThumbstickPicker(
+              "settings_right_controller_thumbstick_x",
+              selection: $storedAppModel.rightControllerThumbstickXAction
+            )
+            controllerThumbstickPicker(
+              "settings_right_controller_thumbstick_y",
+              selection: $storedAppModel.rightControllerThumbstickYAction
+            )
+
+            Divider()
+
             Text("settings_controller_shortcuts_description")
               .font(.footnote)
               .foregroundStyle(.secondary)
@@ -855,6 +880,18 @@ struct SettingsView: View {
       }
     } label: {
       Label(presentation.name, systemImage: presentation.systemImage)
+    }
+  }
+
+  private func controllerThumbstickPicker(
+    _ title: LocalizedStringKey,
+    selection: Binding<String>
+  ) -> some View {
+    Picker(title, selection: selection) {
+      ForEach(SpatialControllerThumbstickAction.allCases) { action in
+        Label(action.title, systemImage: action.systemImage)
+          .tag(action.rawValue)
+      }
     }
   }
 

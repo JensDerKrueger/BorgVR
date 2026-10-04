@@ -164,7 +164,7 @@ enum ImmersiveBootstrap {
       BorgSpatialInputChirality
     ) -> Void = { button, chirality in
       SpatialControllerShortcutHandler.perform(
-        storedAppModel.controllerAction(for: button),
+        storedAppModel.controllerAction(for: button, chirality: chirality),
         for: chirality,
         runtimeAppModel: runtimeAppModel,
         sharedAppModel: sharedAppModel,

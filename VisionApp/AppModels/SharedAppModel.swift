@@ -562,6 +562,21 @@ class SharedAppModel {
   }
 
   @discardableResult
+  func removeLastSceneObject() -> Bool {
+    if let selectedSceneMeshInstanceID,
+       removeSceneMeshInstance(id: selectedSceneMeshInstanceID) {
+      return true
+    }
+    if let selectedVolumeMarkerID,
+       removeVolumeMarkers(withIDs: [selectedVolumeMarkerID]) {
+      return true
+    }
+    if removeLastVolumeMarker() { return true }
+    guard let instanceID = sceneMeshInstances.last?.id else { return false }
+    return removeSceneMeshInstance(id: instanceID)
+  }
+
+  @discardableResult
   func removeAllVolumeMarkers() -> Bool {
     guard !volumeMarkers.isEmpty else { return false }
     volumeMarkers.removeAll()

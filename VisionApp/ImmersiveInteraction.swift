@@ -697,6 +697,89 @@ class ImmersiveInteraction {
     }
   }
 
+  private func handSceneMeshPlacementPose(
+    from event: SpatialEventCollection.Event,
+    datasetInfo: RuntimeAppModel.DatasetInfo
+  ) -> (position: SIMD3<Float>, rotation: simd_quatf)? {
+    guard let transform = poseMatrix(event),
+          let normalizedPosition = markerSpawnPosition(
+            from: event,
+            datasetInfo: datasetInfo
+          ) else {
+      return nil
+    }
+    let rotation = datasetPoseMeters(
+      fromWorldTransform: transform,
+      datasetInfo: datasetInfo
+    ).rotation
+    return (
+      (normalizedPosition - SIMD3<Float>(repeating: 0.5)) *
+        datasetInfo.physicalExtentMeters,
+      rotation
+    )
+  }
+
+  private func updateHandSceneMeshPlacement(
+    event: SpatialEventCollection.Event,
+    datasetInfo: RuntimeAppModel.DatasetInfo
+  ) -> Bool {
+    guard case .mesh(let instanceID) = activeSceneObjectPlacement,
+          let pose = handSceneMeshPlacementPose(from: event, datasetInfo: datasetInfo),
+          let index = sharedAppModel.sceneMeshInstances.firstIndex(where: {
+            $0.id == instanceID
+          }) else {
+      return false
+    }
+    sharedAppModel.sceneMeshInstances[index].translationMeters = pose.position
+    sharedAppModel.sceneMeshInstances[index].rotation = pose.rotation
+    return true
+  }
+
+  private func handleHandSceneMeshPlacement(
+    _ event: SpatialEventCollection.Event,
+    datasetInfo: RuntimeAppModel.DatasetInfo,
+    assetID: UUID
+  ) -> Bool {
+    switch event.phase {
+      case .active:
+        guard activeSceneObjectPlacementSourceID == nil else { return true }
+        if activeSceneObjectPlacement == nil {
+          guard let asset = sharedAppModel.sceneMeshAssets[assetID],
+                let pose = handSceneMeshPlacementPose(
+                  from: event,
+                  datasetInfo: datasetInfo
+                ) else {
+            return true
+          }
+          let instance = SceneMeshInstance(
+            name: sharedAppModel.nextSceneMeshInstanceName(assetName: asset.name),
+            asset: asset.reference,
+            translationMeters: pose.position,
+            rotation: pose.rotation
+          )
+          sharedAppModel.sceneMeshInstances.append(instance)
+          sharedAppModel.selectedSceneMeshInstanceID = instance.id
+          sharedAppModel.clearVolumeMarkerSelection()
+          activeSceneObjectPlacement = .mesh(instance.id)
+          activeSceneObjectPlacementUsesHand = true
+        }
+        if updateHandSceneMeshPlacement(event: event, datasetInfo: datasetInfo) {
+          sharedAppModel.synchronizeMarkers()
+        }
+
+      case .ended:
+        _ = updateHandSceneMeshPlacement(event: event, datasetInfo: datasetInfo)
+        finishSceneObjectPlacement(cancelled: false)
+
+      case .cancelled:
+        finishSceneObjectPlacement(cancelled: true)
+
+      @unknown default:
+        break
+    }
+    return true
+  }
+
   private func finishSceneObjectPlacement(cancelled: Bool) {
     if cancelled {
       switch activeSceneObjectPlacement {
@@ -747,6 +830,13 @@ class ImmersiveInteraction {
         preferExistingMarker: false
       )
       return true
+    }
+    if case .mesh(let assetID) = prototype {
+      return handleHandSceneMeshPlacement(
+        event,
+        datasetInfo: datasetInfo,
+        assetID: assetID
+      )
     }
     switch event.phase {
       case .active:
@@ -2255,7 +2345,6 @@ class ImmersiveInteraction {
 
   private func adjustSpatialAccessoryValues(
     _ sample: BorgSpatialInputSample,
-    mode: RuntimeAppModel.InteractionMode,
     deltaTime: Float
   ) {
     guard activeSpatialStylusID == nil, !handInteractionIsActive else { return }
@@ -2263,55 +2352,31 @@ class ImmersiveInteraction {
     guard simd_length(stick) > 0.08 else { return }
     let rate = min(max(deltaTime, 0), 0.05)
 
-    if let action = spatialAccessoryActions[sample.id],
-       case .markerStroke = action.kind {
-      if abs(stick.y) > 0.08 {
-        sharedAppModel.defaultVolumeStrokeRadius = VolumeMarkerRadius.clamp(
-          sharedAppModel.defaultVolumeStrokeRadius * exp(stick.y * rate * 2.5),
-          for: .stroke
-        )
-      }
-      if abs(stick.x) > 0.08 {
-        let hueShift = stick.x * rate * 0.6
-        sharedAppModel.defaultVolumeStrokeColor = shiftedHue(
-          sharedAppModel.defaultVolumeStrokeColor,
-          by: hueShift
-        )
-        if let markerID = action.markerID,
-           let markerIndex = sharedAppModel.volumeMarkers.firstIndex(where: {
-             $0.id == markerID
-           }) {
-          sharedAppModel.volumeMarkers[markerIndex].color =
-            sharedAppModel.defaultVolumeStrokeColor
-        }
-      }
-      sharedAppModel.synchronizeMarkers()
-      return
-    }
-
-    if mode == .model {
-      if abs(stick.y) > 0.08 {
-        let factor = exp(-stick.y * rate * 1.8)
-        sharedAppModel.modelTransform.scale = simd_clamp(
-          sharedAppModel.modelTransform.scale * factor,
-          SIMD3<Float>(repeating: 0.02),
-          SIMD3<Float>(repeating: 50)
-        )
-      }
-      if abs(stick.x) > 0.08 {
+    var changed = false
+    for (value, axis) in [
+      (stick.x, SpatialControllerThumbstickAxis.horizontal),
+      (stick.y, SpatialControllerThumbstickAxis.vertical)
+    ] where abs(value) > 0.08 {
+      let action = storedAppModel.controllerThumbstickAction(
+        for: sample.chirality,
+        axis: axis
+      )
+      if action.isRotation {
         let rotation = simd_quatf(
-          angle: stick.x * rate * 2.4,
-          axis: SIMD3<Float>(0, 1, 0)
+          angle: value * rate * 2.4,
+          axis: action.axis
         )
         sharedAppModel.modelTransform.rotation = rotation *
           sharedAppModel.modelTransform.rotation
+      } else {
+        sharedAppModel.modelTransform.translation += action.axis * value * rate * 0.5
       }
-      sharedAppModel.lastModelTransform.scale = sharedAppModel.modelTransform.scale
-      sharedAppModel.lastModelTransform.rotation = sharedAppModel.modelTransform.rotation
-      sharedAppModel.synchronize(kind: .transformOnly)
-      return
+      changed = true
     }
-
+    guard changed else { return }
+    sharedAppModel.lastModelTransform.translation = sharedAppModel.modelTransform.translation
+    sharedAppModel.lastModelTransform.rotation = sharedAppModel.modelTransform.rotation
+    sharedAppModel.synchronize(kind: .transformOnly)
   }
 
   private func shiftedHue(_ color: SIMD4<Float>, by shift: Float) -> SIMD4<Float> {
@@ -2439,7 +2504,7 @@ class ImmersiveInteraction {
              timestamp - firstPress <= spatialStylusDoubleClickInterval {
             lastSpatialStylusModifierPressTimes[sample.id] = nil
             suppressedSpatialStylusModifierIDs.insert(sample.id)
-            if sharedAppModel.removeLastVolumeMarker() {
+            if sharedAppModel.removeLastSceneObject() {
               sharedAppModel.synchronizeMarkers()
             }
           } else {
@@ -2678,7 +2743,6 @@ class ImmersiveInteraction {
       }
       adjustSpatialAccessoryValues(
         sample,
-        mode: controllerTool.interactionMode,
         deltaTime: deltaTime
       )
       spatialAccessoryPrimaryStates[sample.id] = sample.primaryPressed

@@ -126,6 +126,16 @@ enum SpatialControllerFaceButton: String, CaseIterable, Hashable, Sendable {
     "\(rawValue).circle"
   }
 
+  /// The spatial controllers expose the two face buttons on each hand through
+  /// the same generic GameController inputs. Normalize their aliases before
+  /// the controller chirality selects the corresponding shortcut setting.
+  var position: SpatialControllerFaceButtonPosition {
+    switch self {
+      case .a, .x: .primary
+      case .b, .y: .secondary
+    }
+  }
+
   func presentation(controllers: [GCController] = GCController.controllers()) -> (
     name: String,
     systemImage: String
@@ -138,6 +148,60 @@ enum SpatialControllerFaceButton: String, CaseIterable, Hashable, Sendable {
       element?.localizedName ?? fallbackName,
       element?.sfSymbolsName ?? fallbackSystemImage
     )
+  }
+}
+
+enum SpatialControllerFaceButtonPosition: Hashable, Sendable {
+  case primary
+  case secondary
+}
+
+enum SpatialControllerThumbstickAxis {
+  case horizontal
+  case vertical
+}
+
+enum SpatialControllerThumbstickAction: String, CaseIterable, Identifiable {
+  case rotateX
+  case rotateY
+  case rotateZ
+  case translateX
+  case translateY
+  case translateZ
+
+  var id: String { rawValue }
+
+  var title: String {
+    switch self {
+      case .rotateX: String(localized: "controller_thumbstick_rotate_x")
+      case .rotateY: String(localized: "controller_thumbstick_rotate_y")
+      case .rotateZ: String(localized: "controller_thumbstick_rotate_z")
+      case .translateX: String(localized: "controller_thumbstick_translate_x")
+      case .translateY: String(localized: "controller_thumbstick_translate_y")
+      case .translateZ: String(localized: "controller_thumbstick_translate_z")
+    }
+  }
+
+  var systemImage: String {
+    switch self {
+      case .rotateX, .rotateY, .rotateZ: "rotate.3d"
+      case .translateX, .translateY, .translateZ: "move.3d"
+    }
+  }
+
+  var axis: SIMD3<Float> {
+    switch self {
+      case .rotateX, .translateX: SIMD3<Float>(1, 0, 0)
+      case .rotateY, .translateY: SIMD3<Float>(0, 1, 0)
+      case .rotateZ, .translateZ: SIMD3<Float>(0, 0, 1)
+    }
+  }
+
+  var isRotation: Bool {
+    switch self {
+      case .rotateX, .rotateY, .rotateZ: true
+      case .translateX, .translateY, .translateZ: false
+    }
   }
 }
 
@@ -230,8 +294,9 @@ enum SpatialControllerButtonAction: String, CaseIterable, Identifiable {
       case .controllerClippingTool:
         String(localized: "controller_action_controller_clipping_tool")
       case .controllerMarkerTool: String(localized: "controller_action_controller_marker_tool")
-      case .controllerObjectTool: String(localized: "Place Objects")
-      case .nextActiveObject: String(localized: "Next Active Object")
+      case .controllerObjectTool:
+        String(localized: "controller_action_controller_object_tool")
+      case .nextActiveObject: String(localized: "controller_action_next_active_object")
       case .controllerMeasurementTool:
         String(localized: "controller_action_controller_measurement_tool")
       case .controllerAreaMeasurementTool:
@@ -390,12 +455,16 @@ enum SpatialControllerShortcutHandler {
         sharedAppModel.resetClipBoundsToVolume()
         sharedAppModel.synchronize(kind: .full)
       case .deleteLastMarker:
-        if sharedAppModel.removeLastVolumeMarker() {
+        if sharedAppModel.removeLastSceneObject() {
           sharedAppModel.synchronizeMarkers()
         }
       case .deleteSelectedMarkers:
         let selectedIDs = sharedAppModel.selectedVolumeMarkerIDs
-        if sharedAppModel.removeVolumeMarkers(withIDs: selectedIDs) {
+        let removedMarkers = sharedAppModel.removeVolumeMarkers(withIDs: selectedIDs)
+        let removedMesh = sharedAppModel.selectedSceneMeshInstanceID.map {
+          sharedAppModel.removeSceneMeshInstance(id: $0)
+        } ?? false
+        if removedMarkers || removedMesh {
           sharedAppModel.synchronizeMarkers()
         }
       case .toggleSelectedMarkerDirections:

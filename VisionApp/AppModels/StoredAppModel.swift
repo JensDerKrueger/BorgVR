@@ -145,7 +145,11 @@ final class StoredAppModel: ObservableObject {
     "controllerButtonAAction": SpatialControllerButtonAction.nextRenderMode.rawValue,
     "controllerButtonBAction": SpatialControllerButtonAction.nextControllerTool.rawValue,
     "controllerButtonXAction": SpatialControllerButtonAction.toggleCurrentEditor.rawValue,
-    "controllerButtonYAction": SpatialControllerButtonAction.toggleMarkerWindow.rawValue
+    "controllerButtonYAction": SpatialControllerButtonAction.toggleMarkerWindow.rawValue,
+    "leftControllerThumbstickXAction": SpatialControllerThumbstickAction.rotateY.rawValue,
+    "leftControllerThumbstickYAction": SpatialControllerThumbstickAction.translateZ.rawValue,
+    "rightControllerThumbstickXAction": SpatialControllerThumbstickAction.rotateY.rawValue,
+    "rightControllerThumbstickYAction": SpatialControllerThumbstickAction.translateZ.rawValue
   ]
 
   init() {
@@ -283,6 +287,11 @@ final class StoredAppModel: ObservableObject {
   @AppStorage("controllerButtonBAction") var controllerButtonBAction: String = StoredAppModel.string("controllerButtonBAction")
   @AppStorage("controllerButtonXAction") var controllerButtonXAction: String = StoredAppModel.string("controllerButtonXAction")
   @AppStorage("controllerButtonYAction") var controllerButtonYAction: String = StoredAppModel.string("controllerButtonYAction")
+  /// User-configurable model transform actions for each controller thumbstick axis.
+  @AppStorage("leftControllerThumbstickXAction") var leftControllerThumbstickXAction: String = StoredAppModel.string("leftControllerThumbstickXAction")
+  @AppStorage("leftControllerThumbstickYAction") var leftControllerThumbstickYAction: String = StoredAppModel.string("leftControllerThumbstickYAction")
+  @AppStorage("rightControllerThumbstickXAction") var rightControllerThumbstickXAction: String = StoredAppModel.string("rightControllerThumbstickXAction")
+  @AppStorage("rightControllerThumbstickYAction") var rightControllerThumbstickYAction: String = StoredAppModel.string("rightControllerThumbstickYAction")
 
   var stylusStartFunction: SpatialStylusStartFunction {
     get { SpatialStylusStartFunction(rawValue: stylusStartFunctionValue) ?? .lastMode }
@@ -324,15 +333,37 @@ final class StoredAppModel: ObservableObject {
     )
   }
 
-  func controllerAction(for button: SpatialControllerFaceButton) -> SpatialControllerButtonAction {
+  func controllerAction(
+    for button: SpatialControllerFaceButton,
+    chirality: BorgSpatialInputChirality
+  ) -> SpatialControllerButtonAction {
     let rawValue: String
-    switch button {
-      case .a: rawValue = controllerButtonAAction
-      case .b: rawValue = controllerButtonBAction
-      case .x: rawValue = controllerButtonXAction
-      case .y: rawValue = controllerButtonYAction
+    switch (chirality, button.position) {
+      case (.left, .primary): rawValue = controllerButtonXAction
+      case (.left, .secondary): rawValue = controllerButtonYAction
+      case (.right, .primary), (.unspecified, .primary):
+        rawValue = controllerButtonAAction
+      case (.right, .secondary), (.unspecified, .secondary):
+        rawValue = controllerButtonBAction
     }
     return SpatialControllerButtonAction(rawValue: rawValue) ?? .none
+  }
+
+  func controllerThumbstickAction(
+    for chirality: BorgSpatialInputChirality,
+    axis: SpatialControllerThumbstickAxis
+  ) -> SpatialControllerThumbstickAction {
+    let rawValue: String
+    switch (chirality, axis) {
+      case (.left, .horizontal): rawValue = leftControllerThumbstickXAction
+      case (.left, .vertical): rawValue = leftControllerThumbstickYAction
+      case (.right, .horizontal), (.unspecified, .horizontal):
+        rawValue = rightControllerThumbstickXAction
+      case (.right, .vertical), (.unspecified, .vertical):
+        rawValue = rightControllerThumbstickYAction
+    }
+    return SpatialControllerThumbstickAction(rawValue: rawValue) ??
+      (axis == .horizontal ? .rotateY : .translateZ)
   }
 
 

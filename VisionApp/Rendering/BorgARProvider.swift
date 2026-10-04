@@ -236,8 +236,14 @@ final class BorgARProvider {
           let trigger = input.buttons[.trigger]?.pressedInput.value ?? 0
           let grip = input.buttons[.grip]?.pressedInput.value ?? 0
           let thumbstick = input.dpads[.thumbstick]
-          let pressedFaceButtons = Set(SpatialControllerFaceButton.allCases.filter {
-            input.buttons[$0.inputName]?.pressedInput.isPressed == true
+          let pressedPositions = Set(SpatialControllerFaceButton.allCases.compactMap {
+            input.buttons[$0.inputName]?.pressedInput.isPressed == true ? $0.position : nil
+          })
+          let pressedFaceButtons = Set(pressedPositions.map {
+            switch $0 {
+              case .primary: SpatialControllerFaceButton.a
+              case .secondary: SpatialControllerFaceButton.b
+            }
           })
           return BorgSpatialInputSample(
             id: tracked.accessory.id,
