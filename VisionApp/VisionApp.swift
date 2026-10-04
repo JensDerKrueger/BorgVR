@@ -234,6 +234,7 @@ struct VisionApp: App {
         .trackView(name: "MeasurementView")
         .environment(runtimeAppModel)
         .environment(sharedAppModel)
+        .environmentObject(storedAppModel)
     }
     .windowResizability(.contentSize)
     .defaultSize(width: 680, height: 620)

@@ -20,10 +20,7 @@ struct PrivateApplicationView: View {
         .bold()
         .padding()
 
-      ViewThatFits(in: .horizontal) {
-        interactionControls(showTitles: true)
-        interactionControls(showTitles: false)
-      }
+      interactionControls(showTitles: false)
 
       if !sharedAppModel.sharePlayParticipants.isEmpty {
         HStack(spacing: 36) {
@@ -200,23 +197,14 @@ struct PrivateApplicationView: View {
   }
 
   private func interactionControls(showTitles: Bool) -> some View {
-    HStack(alignment: .bottom, spacing: showTitles ? 18 : 12) {
-      VStack(spacing: 8) {
-        InteractionModePicker(
-          selection: interactionModeBinding,
-          showsScreenView: hasSharedScreenView
-        )
-        modeWindowButtons(showTitles: showTitles)
-      }
-      .frame(minWidth: showTitles ? 500 : 390)
-
-      HStack(spacing: showTitles ? 10 : 6) {
-        lightingButton(showTitles: showTitles)
-        editorButton(showTitles: showTitles)
-      }
-      .buttonStyle(.bordered)
-      .fixedSize()
+    VStack(spacing: 8) {
+      InteractionModePicker(
+        selection: interactionModeBinding,
+        showsScreenView: hasSharedScreenView
+      )
+      modeWindowButtons(showTitles: showTitles)
     }
+    .frame(minWidth: showTitles ? 640 : 480)
     .frame(maxWidth: .infinity, alignment: .center)
   }
 
@@ -230,10 +218,20 @@ struct PrivateApplicationView: View {
           CGFloat(columnCount)
       )
       let columnStride = columnWidth + spacing
+      let doubleColumnWidth = columnWidth * 2 + spacing
+      let groupInset: CGFloat = showTitles ? 7 : 11
 
       ZStack(alignment: .leading) {
+        HStack(spacing: showTitles ? 8 : 6) {
+          editorButton(showTitles: showTitles)
+          lightingButton(showTitles: showTitles)
+        }
+        .buttonStyle(.bordered)
+        .frame(width: doubleColumnWidth - groupInset * 2)
+        .offset(x: groupInset)
+
         markerWindowButton(showTitles: showTitles)
-          .frame(width: columnWidth * 2 + spacing)
+          .frame(width: doubleColumnWidth)
           .offset(x: columnStride * 2)
 
         measurementWindowButton(showTitles: showTitles)
