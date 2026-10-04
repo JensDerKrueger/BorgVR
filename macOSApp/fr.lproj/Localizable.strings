@@ -888,3 +888,4 @@
 "measurement_file_error_invalid_geometry" = "Le fichier contient une géométrie de mesure non valide.";
 "measurement_file_error_missing_dataset" = "Les dimensions spatiales du jeu de données actuel ne sont pas encore disponibles.";
 "Project onto Volume" = "Projeter sur le volume";
+"lighting_inactive_warning" = "Les réglages d’éclairage n’ont aucun effet en mode fonction de transfert sans éclairage.";

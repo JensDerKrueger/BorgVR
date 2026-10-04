@@ -1210,5 +1210,6 @@
 "controller_thumbstick_translate_y" = "Translation selon Y";
 "controller_thumbstick_translate_z" = "Translation selon Z";
 "Project onto Volume" = "Projeter sur le volume";
+"lighting_inactive_warning" = "Les réglages d’éclairage n’ont aucun effet en mode fonction de transfert sans éclairage.";
 "Snap to Volume" = "Aligner sur le volume";
 "Place Objects" = "Placer des objets";

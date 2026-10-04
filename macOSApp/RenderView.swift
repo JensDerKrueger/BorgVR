@@ -110,6 +110,7 @@ struct RenderView: View {
 
               DockableEditorPanel(panel: .lightingEditor) {
                 LightingEditorView(
+                  renderMode: renderingParameters.renderMode,
                   lightDirection: $renderingParameters.lightDirection,
                   ambientLightColor: $renderingParameters.ambientLightColor,
                   diffuseLightColor: $renderingParameters.diffuseLightColor,

@@ -59,6 +59,7 @@ final class SharePlayCoordinator: ObservableObject {
   private var sharePlayAuthToken = ""
   private var sharePlayServerRunning = false
   private var sharePlayServerPort = AppSettings.int("sharePlayServerPort")
+  private var sharePlayMeshAssetIDs = Set<UUID>()
   private struct PendingDatasetLoad {
     let uniqueID: String
     let description: String
@@ -66,6 +67,8 @@ final class SharePlayCoordinator: ObservableObject {
   }
   private var pendingDatasetLoad: PendingDatasetLoad?
   private var pendingDatasetLoadTask: Task<Void, Never>?
+  private var sceneMeshResolutionTask: Task<Void, Never>?
+  private var sceneMeshResolutionRetryRequested = false
   private var sessionOriginsByDatasetID: [String: [DatasetOrigin]] = [:]
   private var adHocOriginsByParticipantID: [UUID: [String: [DatasetOrigin]]] = [:]
   private var localParticipantID: UUID?
@@ -159,6 +162,7 @@ final class SharePlayCoordinator: ObservableObject {
 
   func datasetRendererDidLoad() {
     guard isInSession else { return }
+    retryMissingSceneMeshAssets()
     if appModel?.groupSessionHost == true {
       if isScreenViewSynchronized, let renderingParameters {
         sharedScreenViewState = renderingParameters.screenViewState
@@ -222,6 +226,7 @@ final class SharePlayCoordinator: ObservableObject {
 
   func synchronizeMarkers(immediately: Bool = false) {
     guard isInSession else { return }
+    refreshAdvertisedSceneMeshAssetsIfNeeded()
     pendingMarkers = true
     if immediately {
       flushSynchronization()
@@ -233,6 +238,14 @@ final class SharePlayCoordinator: ObservableObject {
       guard !Task.isCancelled else { return }
       await self?.flushPendingSynchronization()
     }
+  }
+
+  private func refreshAdvertisedSceneMeshAssetsIfNeeded() {
+    guard let appModel,
+          let dataset = appModel.activeDataset else { return }
+    let referencedAssetIDs = Set(appModel.sceneMeshInstances.map(\.asset.assetID))
+    guard !referencedAssetIDs.isSubset(of: sharePlayMeshAssetIDs) else { return }
+    Task { await advertiseCurrentLocalDataset() }
   }
 
   func synchronizeMeasurements(immediately: Bool = false) {
@@ -515,6 +528,9 @@ final class SharePlayCoordinator: ObservableObject {
     pendingDatasetLoadTask?.cancel()
     pendingDatasetLoadTask = nil
     pendingDatasetLoad = nil
+    sceneMeshResolutionTask?.cancel()
+    sceneMeshResolutionTask = nil
+    sceneMeshResolutionRetryRequested = false
     hostElectionTask?.cancel()
     hostElectionTask = nil
     localParticipantID = nil
@@ -726,6 +742,7 @@ final class SharePlayCoordinator: ObservableObject {
       if let annotations = try VolumeMarkerSharePlayCodec.decodeIfPresent(data) {
         appModel?.replaceVolumeMarkers(annotations.markers)
         appModel?.replaceSceneMeshInstances(annotations.meshInstances)
+        retryMissingSceneMeshAssets()
         return
       }
       if let measurements = try VolumeMeasurementSharePlayCodec.decodeIfPresent(data) {
@@ -998,6 +1015,11 @@ final class SharePlayCoordinator: ObservableObject {
         if mayShare {
           immediateOrigins.append(origin)
         }
+        let served = ensureServing(dataset: dataset)
+        immediateOrigins.append(contentsOf: served.origins.compactMap { value in
+          guard let endpoint = splitAddressAndPort(value) else { return nil }
+          return DatasetOrigin(address: endpoint.address, port: endpoint.port, password: served.authToken)
+        })
       case .local, .builtIn:
         let served = ensureServing(dataset: dataset)
         immediateOrigins = served.origins.compactMap { value in
@@ -1016,6 +1038,63 @@ final class SharePlayCoordinator: ObservableObject {
       advertised + (sessionOriginsByDatasetID[datasetID] ?? [])
         + DatasetOriginCatalog.shared.origins(for: datasetID)
     )
+  }
+
+  private func retryMissingSceneMeshAssets() {
+    guard isInSession,
+          let appModel,
+          let datasetID = appModel.activeDataset?.uniqueId else { return }
+    appModel.resolveSceneMeshAssets()
+    let missingIDs = Set(appModel.sceneMeshInstances.map(\.asset.assetID)).subtracting(
+      appModel.sceneMeshAssets.keys
+    )
+    guard !missingIDs.isEmpty else { return }
+    guard sceneMeshResolutionTask == nil else {
+      sceneMeshResolutionRetryRequested = true
+      return
+    }
+    let origins = knownOrigins(for: datasetID)
+    guard !origins.isEmpty else { return }
+
+    let generation = sessionGeneration
+    let timeout = max(0.1, appSettings?.timeout ?? AppSettings.double("timeout"))
+    appModel.logger.info(
+      "Searching \(origins.count) known source(s) for \(missingIDs.count) missing shared object asset(s)."
+    )
+    sceneMeshResolutionTask = Task { [weak self] in
+      let result = await Task.detached(priority: .utility) {
+        SceneMeshAssetCatalog.resolveRemoteAssets(
+          assetIDs: missingIDs,
+          origins: origins,
+          timeout: timeout
+        )
+      }.value
+      guard let self, generation == sessionGeneration, isInSession else { return }
+
+      appModel.resolveSceneMeshAssets()
+      for attempt in result.attempts {
+        if attempt.resolvedCount > 0 {
+          appModel.logger.info(
+            "Loaded \(attempt.resolvedCount) shared object asset(s) from \(attempt.endpoint)."
+          )
+        } else if let error = attempt.errorDescription {
+          appModel.logger.warning(
+            "Could not load shared object assets from \(attempt.endpoint): \(error)"
+          )
+        }
+      }
+      if !result.missingIDs.isEmpty {
+        appModel.logger.warning(
+          "\(result.missingIDs.count) shared object asset(s) are still unavailable."
+        )
+      }
+
+      sceneMeshResolutionTask = nil
+      if sceneMeshResolutionRetryRequested {
+        sceneMeshResolutionRetryRequested = false
+        retryMissingSceneMeshAssets()
+      }
+    }
   }
 
   private func mergeSessionOrigins(_ origins: [DatasetOrigin], for datasetID: String) {
@@ -1053,6 +1132,7 @@ final class SharePlayCoordinator: ObservableObject {
       }
       appModel?.logger.info("Received a SharePlay source catalog with \(snapshot.entries.count) server(s).")
       retryPendingDatasetLoad()
+      retryMissingSceneMeshAssets()
     } catch {
       appModel?.logger.warning("Could not decode SharePlay source catalog: \(error.localizedDescription)")
     }
@@ -1060,7 +1140,6 @@ final class SharePlayCoordinator: ObservableObject {
 
   private func advertiseCurrentLocalDataset(to participants: Participants = .all) async {
     guard isInSession, let dataset = appModel?.activeDataset else { return }
-    guard dataset.source == .local || dataset.source == .builtIn else { return }
     let origins = shareOrigins(for: dataset).filter { origin in
       !DatasetOriginCatalog.shared.shareableOrigins(for: dataset.uniqueId).contains(origin)
     }
@@ -1081,6 +1160,7 @@ final class SharePlayCoordinator: ObservableObject {
         DatasetOriginCatalog.deduplicated(advertisement.origins)
       appModel?.logger.info("Received \(advertisement.origins.count) participant source(s) for dataset \(advertisement.datasetID).")
       retryPendingDatasetLoad()
+      retryMissingSceneMeshAssets()
     } catch {
       appModel?.logger.warning("Could not decode SharePlay participant source: \(error.localizedDescription)")
     }
@@ -1209,12 +1289,16 @@ final class SharePlayCoordinator: ObservableObject {
   }
 
   private func ensureServing(dataset: AppModel.DatasetEntry) -> (origins: [String], authToken: String) {
-    guard let datasetInfo = serverDatasetInfo(for: dataset) else {
-      return ([], "")
+    let datasetInfo = serverDatasetInfo(for: dataset)
+    let meshFiles = SceneMeshAssetCatalog.serverFiles(logger: appModel?.logger)
+    let meshAssetIDs = Set(meshFiles.map(\.id))
+    if datasetInfo == nil {
+      guard case .remote = dataset.source, !meshFiles.isEmpty else { return ([], "") }
     }
 
     if sharePlayServerRunning,
-       sharePlayDatasetID == datasetInfo.id {
+       sharePlayDatasetID == dataset.uniqueId,
+       sharePlayMeshAssetIDs == meshAssetIDs {
       return (originAddresses(port: sharePlayServerPort), sharePlayAuthToken)
     }
 
@@ -1234,23 +1318,25 @@ final class SharePlayCoordinator: ObservableObject {
           webServerCertificateData: appSettings?.webServerCertificateData ?? Data(),
           webServerCertificatePassword: appSettings?.webServerCertificatePassword ?? ""
         ),
-        additionalDatasets: [datasetInfo],
-        additionalMeshFiles: SceneMeshAssetCatalog.serverFiles(logger: appModel?.logger),
+        additionalDatasets: datasetInfo.map { [$0] } ?? [],
+        additionalMeshFiles: meshFiles,
         includeScannedDatasets: false
       )
 
-      guard state.isRunning, state.datasets.contains(where: { $0.id == datasetInfo.id }) else {
+      guard state.isRunning,
+            datasetInfo == nil || state.datasets.contains(where: { $0.id == dataset.uniqueId }) else {
         continue
       }
 
-      sharePlayDatasetID = datasetInfo.id
+      sharePlayDatasetID = dataset.uniqueId
       sharePlayAuthToken = authToken
       sharePlayServerRunning = true
       sharePlayServerPort = state.port
+      sharePlayMeshAssetIDs = meshAssetIDs
       return (originAddresses(port: state.port), authToken)
     }
 
-    appModel?.logger.error("SharePlay dataset server did not start for dataset \(datasetInfo.id).")
+    appModel?.logger.error("SharePlay asset server did not start for dataset \(dataset.uniqueId).")
     return ([], "")
   }
 
@@ -1259,6 +1345,7 @@ final class SharePlayCoordinator: ObservableObject {
     sharePlayDatasetID = nil
     sharePlayAuthToken = ""
     sharePlayServerRunning = false
+    sharePlayMeshAssetIDs.removeAll()
   }
 
   private func sharePlayWebPort(for serverPort: Int) -> Int {

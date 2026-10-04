@@ -559,6 +559,95 @@ enum SceneMeshAssetCatalog {
     }
     return storedCount
   }
+
+  struct RemoteResolutionResult: Sendable {
+    struct Attempt: Sendable {
+      let endpoint: String
+      let resolvedCount: Int
+      let errorDescription: String?
+    }
+
+    let resolvedIDs: [UUID]
+    let missingIDs: [UUID]
+    let attempts: [Attempt]
+  }
+
+  /// Fetches only referenced assets that are not already present in the local catalog.
+  static func resolveRemoteAssets(
+    assetIDs: Set<UUID>,
+    origins: [DatasetOrigin],
+    timeout: TimeInterval,
+    byteLimit: Int = remoteMeshByteLimit
+  ) -> RemoteResolutionResult {
+    var missingIDs = assetIDs.filter { load(assetID: $0) == nil }
+    var resolvedIDs: [UUID] = []
+    var attempts: [RemoteResolutionResult.Attempt] = []
+    var transferredBytes = 0
+
+    for origin in DatasetOriginCatalog.deduplicated(origins) where !missingIDs.isEmpty {
+      var resolvedAtOrigin = 0
+      var errors: [String] = []
+      do {
+        let manager = BORGVRRemoteDataManager(
+          host: origin.address,
+          port: UInt16(clamping: origin.port),
+          authSecret: origin.password,
+          logger: nil,
+          notifier: nil
+        )
+        try manager.connect(timeout: max(0.1, timeout))
+        guard manager.supportsMeshes else {
+          attempts.append(.init(
+            endpoint: origin.endpointDescription,
+            resolvedCount: 0,
+            errorDescription: "Server protocol does not support mesh assets."
+          ))
+          continue
+        }
+
+        let remoteMeshes = try manager.requestMeshList()
+        let remoteMeshesByID = Dictionary(uniqueKeysWithValues: remoteMeshes.map { ($0.id, $0) })
+        for assetID in missingIDs.sorted(by: { $0.uuidString < $1.uuidString }) {
+          guard let remoteMesh = remoteMeshesByID[assetID] else { continue }
+          guard remoteMesh.byteCount <= BorgVRMeshFormat.maximumFileByteCount,
+                transferredBytes + remoteMesh.byteCount <= byteLimit else {
+            errors.append("Mesh transfer limit reached before \(assetID.uuidString).")
+            continue
+          }
+          do {
+            let data = try manager.requestMesh(id: assetID)
+            let asset = try SceneMeshDocument.decode(from: data)
+            guard asset.id == assetID else {
+              throw BORGVRRemoteDataManagerError.invalidResponse(
+                reason: "Mesh UUID mismatch for \(assetID.uuidString)."
+              )
+            }
+            try store(asset)
+            missingIDs.remove(assetID)
+            resolvedIDs.append(assetID)
+            resolvedAtOrigin += 1
+            transferredBytes += data.count
+          } catch {
+            errors.append("\(assetID.uuidString): \(error.localizedDescription)")
+          }
+        }
+      } catch {
+        errors.append(error.localizedDescription)
+      }
+
+      attempts.append(.init(
+        endpoint: origin.endpointDescription,
+        resolvedCount: resolvedAtOrigin,
+        errorDescription: errors.isEmpty ? nil : errors.joined(separator: " ")
+      ))
+    }
+
+    return RemoteResolutionResult(
+      resolvedIDs: resolvedIDs,
+      missingIDs: missingIDs.sorted(by: { $0.uuidString < $1.uuidString }),
+      attempts: attempts
+    )
+  }
 }
 
 struct SceneMeshGPUAsset {

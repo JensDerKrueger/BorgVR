@@ -888,3 +888,4 @@
 "measurement_file_error_invalid_geometry" = "El archivo contiene geometría de medición no válida.";
 "measurement_file_error_missing_dataset" = "Las dimensiones espaciales del conjunto de datos actual aún no están disponibles.";
 "Project onto Volume" = "Proyectar sobre el volumen";
+"lighting_inactive_warning" = "Los ajustes de iluminación no tienen efecto en el modo de función de transferencia sin iluminación.";

@@ -15,6 +15,7 @@ final class BackgroundServerController: ObservableObject {
   private var sharePlayAuthToken = ""
   private var sharePlayServerRunning = false
   private var sharePlayServerPort = StoredAppModel.defaultPort + 1
+  private var sharePlayMeshAssetIDs = Set<UUID>()
   private var runningPort = StoredAppModel.defaultPort
 
   init() {
@@ -33,12 +34,16 @@ final class BackgroundServerController: ObservableObject {
   }
 
   func ensureServing(dataset: AppModel.DatasetEntry, using settings: StoredAppModel) -> (origins: [String], authToken: String) {
-    guard let datasetInfo = serverDatasetInfo(for: dataset) else {
-      return ([], "")
+    let datasetInfo = serverDatasetInfo(for: dataset)
+    let meshFiles = SceneMeshAssetCatalog.serverFiles(logger: logger)
+    let meshAssetIDs = Set(meshFiles.map(\.id))
+    if datasetInfo == nil {
+      guard case .remote = dataset.source, !meshFiles.isEmpty else { return ([], "") }
     }
 
     if sharePlayServerRunning,
-       sharePlayDatasetID == datasetInfo.id {
+       sharePlayDatasetID == dataset.uniqueId,
+       sharePlayMeshAssetIDs == meshAssetIDs {
       return (originAddresses(port: sharePlayServerPort), sharePlayAuthToken)
     }
 
@@ -57,23 +62,25 @@ final class BackgroundServerController: ObservableObject {
           webServerCertificateData: settings.webServerCertificateData,
           webServerCertificatePassword: settings.webServerCertificatePassword
         ),
-        additionalDatasets: [datasetInfo],
-        additionalMeshFiles: SceneMeshAssetCatalog.serverFiles(logger: logger),
+        additionalDatasets: datasetInfo.map { [$0] } ?? [],
+        additionalMeshFiles: meshFiles,
         includeScannedDatasets: false
       )
 
-      guard state.isRunning, state.datasets.contains(where: { $0.id == datasetInfo.id }) else {
+      guard state.isRunning,
+            datasetInfo == nil || state.datasets.contains(where: { $0.id == dataset.uniqueId }) else {
         continue
       }
 
-      sharePlayDatasetID = datasetInfo.id
+      sharePlayDatasetID = dataset.uniqueId
       sharePlayAuthToken = authToken
       sharePlayServerRunning = true
       sharePlayServerPort = state.port
+      sharePlayMeshAssetIDs = meshAssetIDs
       return (originAddresses(port: state.port), authToken)
     }
 
-    logger.error("SharePlay dataset server did not start for dataset \(datasetInfo.id).")
+    logger.error("SharePlay asset server did not start for dataset \(dataset.uniqueId).")
     return ([], "")
   }
 
@@ -140,6 +147,13 @@ final class BackgroundServerController: ObservableObject {
     sharePlayDatasetID = nil
     sharePlayAuthToken = ""
     sharePlayServerRunning = false
+    sharePlayMeshAssetIDs.removeAll()
+  }
+
+  func serves(meshAssetIDs: Set<UUID>, for datasetID: String) -> Bool {
+    sharePlayServerRunning
+      && sharePlayDatasetID == datasetID
+      && meshAssetIDs.isSubset(of: sharePlayMeshAssetIDs)
   }
 
   private func serverDatasetInfo(for dataset: AppModel.DatasetEntry) -> DatasetInfo? {

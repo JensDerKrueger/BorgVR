@@ -1210,5 +1210,6 @@
 "controller_thumbstick_translate_y" = "Trasladar a lo largo de Y";
 "controller_thumbstick_translate_z" = "Trasladar a lo largo de Z";
 "Project onto Volume" = "Proyectar sobre el volumen";
+"lighting_inactive_warning" = "Los ajustes de iluminación no tienen efecto en el modo de función de transferencia sin iluminación.";
 "Snap to Volume" = "Ajustar al volumen";
 "Place Objects" = "Colocar objetos";

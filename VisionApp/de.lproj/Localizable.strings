@@ -1204,5 +1204,6 @@
 "controller_thumbstick_translate_y" = "Translation entlang Y";
 "controller_thumbstick_translate_z" = "Translation entlang Z";
 "Project onto Volume" = "Auf Volumen projizieren";
+"lighting_inactive_warning" = "Die Beleuchtungseinstellungen haben im Transferfunktionsmodus ohne Beleuchtung keine Wirkung.";
 "Snap to Volume" = "Am Volumen einrasten";
 "Place Objects" = "Objekte platzieren";

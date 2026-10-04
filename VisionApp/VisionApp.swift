@@ -241,6 +241,7 @@ struct VisionApp: App {
 
     WindowGroup(id: "LightingEditorView") {
       LightingEditorView(
+        renderMode: sharedAppModel.renderMode,
         lightDirection: Binding(
           get: { sharedAppModel.lightDirection },
           set: { sharedAppModel.lightDirection = $0 }

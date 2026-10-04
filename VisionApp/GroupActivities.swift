@@ -49,6 +49,7 @@ class GroupActivityHelper {
   private var sharePlayAuthToken = ""
   private var sharePlayServerRunning = false
   private var sharePlayServerPort = StoredAppModel.int("sharePlayServerPort")
+  private var sharePlayMeshAssetIDs = Set<UUID>()
   private struct PendingDatasetLoad {
     let uniqueID: String
     let description: String
@@ -56,6 +57,8 @@ class GroupActivityHelper {
   }
   private var pendingDatasetLoad: PendingDatasetLoad?
   private var pendingDatasetLoadTask: Task<Void, Never>?
+  private var sceneMeshResolutionTask: Task<Void, Never>?
+  private var sceneMeshResolutionRetryRequested = false
   private var sessionOriginsByDatasetID: [String: [DatasetOrigin]] = [:]
   private var adHocOriginsByParticipantID: [UUID: [String: [DatasetOrigin]]] = [:]
   private var localParticipantID: UUID?
@@ -78,6 +81,7 @@ class GroupActivityHelper {
 
   @MainActor func datasetRendererDidLoad() {
     guard groupSession != nil, let runtimeAppModel else { return }
+    retryMissingSceneMeshAssets()
     if runtimeAppModel.groupSessionHost {
       Task { await sendInitialDataReliably() }
     } else {
@@ -312,6 +316,7 @@ class GroupActivityHelper {
     guard messenger != nil else { return }
     Task {
       guard let sharedAppModel else { return }
+      await refreshAdvertisedSceneMeshAssetsIfNeeded()
       do {
         try await sendData(
           data: sharedAppModel.serializeVolumeMarkersSharePlayState(),
@@ -322,6 +327,15 @@ class GroupActivityHelper {
           .error("Failed to send marker data to all participants: \(error)")
       }
     }
+  }
+
+  @MainActor
+  private func refreshAdvertisedSceneMeshAssetsIfNeeded() async {
+    guard let sharedAppModel,
+          let dataset = runtimeAppModel?.activeDataset else { return }
+    let referencedAssetIDs = Set(sharedAppModel.sceneMeshInstances.map(\.asset.assetID))
+    guard !referencedAssetIDs.isSubset(of: sharePlayMeshAssetIDs) else { return }
+    await advertiseCurrentLocalDataset()
   }
 
   func synchronizeMeasurements() {
@@ -694,6 +708,9 @@ class GroupActivityHelper {
     pendingDatasetLoadTask?.cancel()
     pendingDatasetLoadTask = nil
     pendingDatasetLoad = nil
+    sceneMeshResolutionTask?.cancel()
+    sceneMeshResolutionTask = nil
+    sceneMeshResolutionRetryRequested = false
     hostElectionTask?.cancel()
     hostElectionTask = nil
     localParticipantID = nil
@@ -1070,6 +1087,64 @@ class GroupActivityHelper {
   }
 
   @MainActor
+  private func retryMissingSceneMeshAssets() {
+    guard groupSession != nil,
+          let sharedAppModel,
+          let datasetID = runtimeAppModel?.activeDataset?.uniqueId else { return }
+    sharedAppModel.resolveSceneMeshAssets()
+    let missingIDs = Set(sharedAppModel.sceneMeshInstances.map(\.asset.assetID)).subtracting(
+      sharedAppModel.sceneMeshAssets.keys
+    )
+    guard !missingIDs.isEmpty else { return }
+    guard sceneMeshResolutionTask == nil else {
+      sceneMeshResolutionRetryRequested = true
+      return
+    }
+    let origins = knownOrigins(for: datasetID)
+    guard !origins.isEmpty else { return }
+
+    let generation = sessionGeneration
+    let timeout = max(0.1, storedAppModel?.timeout ?? StoredAppModel.double("timeout"))
+    runtimeAppModel?.logger.info(
+      "Searching \(origins.count) known source(s) for \(missingIDs.count) missing shared object asset(s)."
+    )
+    sceneMeshResolutionTask = Task { [weak self] in
+      let result = await Task.detached(priority: .utility) {
+        SceneMeshAssetCatalog.resolveRemoteAssets(
+          assetIDs: missingIDs,
+          origins: origins,
+          timeout: timeout
+        )
+      }.value
+      guard let self, generation == sessionGeneration, groupSession != nil else { return }
+
+      sharedAppModel.resolveSceneMeshAssets()
+      for attempt in result.attempts {
+        if attempt.resolvedCount > 0 {
+          runtimeAppModel?.logger.info(
+            "Loaded \(attempt.resolvedCount) shared object asset(s) from \(attempt.endpoint)."
+          )
+        } else if let error = attempt.errorDescription {
+          runtimeAppModel?.logger.warning(
+            "Could not load shared object assets from \(attempt.endpoint): \(error)"
+          )
+        }
+      }
+      if !result.missingIDs.isEmpty {
+        runtimeAppModel?.logger.warning(
+          "\(result.missingIDs.count) shared object asset(s) are still unavailable."
+        )
+      }
+
+      sceneMeshResolutionTask = nil
+      if sceneMeshResolutionRetryRequested {
+        sceneMeshResolutionRetryRequested = false
+        retryMissingSceneMeshAssets()
+      }
+    }
+  }
+
+  @MainActor
   private func mergeSessionOrigins(_ origins: [DatasetOrigin], for datasetID: String) {
     guard !datasetID.isEmpty else { return }
     sessionOriginsByDatasetID[datasetID] = DatasetOriginCatalog.deduplicated(
@@ -1107,6 +1182,7 @@ class GroupActivityHelper {
       }
       runtimeAppModel?.logger.info("Received a SharePlay source catalog with \(snapshot.entries.count) server(s).")
       retryPendingDatasetLoad()
+      retryMissingSceneMeshAssets()
     } catch {
       runtimeAppModel?.logger.warning("Could not decode SharePlay source catalog: \(error.localizedDescription)")
     }
@@ -1115,7 +1191,6 @@ class GroupActivityHelper {
   @MainActor
   private func advertiseCurrentLocalDataset(to participants: Participants = .all) async {
     guard groupSession != nil, let dataset = runtimeAppModel?.activeDataset else { return }
-    guard dataset.source == .local || dataset.source == .builtIn else { return }
     let served = ensureServing(dataset: dataset)
     let origins = served.origins.compactMap { value -> DatasetOrigin? in
       guard let endpoint = splitAddressAndPort(value) else { return nil }
@@ -1139,6 +1214,7 @@ class GroupActivityHelper {
         DatasetOriginCatalog.deduplicated(advertisement.origins)
       runtimeAppModel?.logger.info("Received \(advertisement.origins.count) participant source(s) for dataset \(advertisement.datasetID).")
       retryPendingDatasetLoad()
+      retryMissingSceneMeshAssets()
     } catch {
       runtimeAppModel?.logger.warning("Could not decode SharePlay participant source: \(error.localizedDescription)")
     }
@@ -1279,12 +1355,16 @@ class GroupActivityHelper {
 
   @MainActor
   private func ensureServing(dataset: RuntimeAppModel.DatasetEntry) -> (origins: [String], authToken: String) {
-    guard let datasetInfo = serverDatasetInfo(for: dataset) else {
-      return ([], "")
+    let datasetInfo = serverDatasetInfo(for: dataset)
+    let meshFiles = SceneMeshAssetCatalog.serverFiles(logger: runtimeAppModel?.logger)
+    let meshAssetIDs = Set(meshFiles.map(\.id))
+    if datasetInfo == nil {
+      guard case .remote = dataset.source, !meshFiles.isEmpty else { return ([], "") }
     }
 
     if sharePlayServerRunning,
-       sharePlayDatasetID == datasetInfo.id {
+       sharePlayDatasetID == dataset.uniqueId,
+       sharePlayMeshAssetIDs == meshAssetIDs {
       return (originAddresses(port: sharePlayServerPort), sharePlayAuthToken)
     }
 
@@ -1303,23 +1383,25 @@ class GroupActivityHelper {
           webServerCertificateData: storedAppModel?.webServerCertificateData ?? Data(),
           webServerCertificatePassword: storedAppModel?.webServerCertificatePassword ?? ""
         ),
-        additionalDatasets: [datasetInfo],
-        additionalMeshFiles: SceneMeshAssetCatalog.serverFiles(logger: runtimeAppModel?.logger),
+        additionalDatasets: datasetInfo.map { [$0] } ?? [],
+        additionalMeshFiles: meshFiles,
         includeScannedDatasets: false
       )
 
-      guard state.isRunning, state.datasets.contains(where: { $0.id == datasetInfo.id }) else {
+      guard state.isRunning,
+            datasetInfo == nil || state.datasets.contains(where: { $0.id == dataset.uniqueId }) else {
         continue
       }
 
-      sharePlayDatasetID = datasetInfo.id
+      sharePlayDatasetID = dataset.uniqueId
       sharePlayAuthToken = authToken
       sharePlayServerRunning = true
       sharePlayServerPort = state.port
+      sharePlayMeshAssetIDs = meshAssetIDs
       return (originAddresses(port: state.port), authToken)
     }
 
-    runtimeAppModel?.logger.error("SharePlay dataset server did not start for dataset \(datasetInfo.id).")
+    runtimeAppModel?.logger.error("SharePlay asset server did not start for dataset \(dataset.uniqueId).")
     return ([], "")
   }
 
@@ -1329,6 +1411,7 @@ class GroupActivityHelper {
     sharePlayDatasetID = nil
     sharePlayAuthToken = ""
     sharePlayServerRunning = false
+    sharePlayMeshAssetIDs.removeAll()
   }
 
   @MainActor
@@ -1472,6 +1555,16 @@ class GroupActivityHelper {
           )
         }
         sharedAppModel.clearVolumeMeasurementSelection()
+        return
+      }
+      if let annotations = try VolumeMarkerSharePlayCodec.decodeIfPresent(data) {
+        sharedAppModel.volumeMarkers = annotations.markers
+        sharedAppModel.replaceSceneMeshInstances(annotations.meshInstances)
+        sharedAppModel.setVolumeMarkerSelection(
+          sharedAppModel.selectedVolumeMarkerIDs,
+          primary: sharedAppModel.selectedVolumeMarkerID
+        )
+        retryMissingSceneMeshAssets()
         return
       }
       if let screenViewUpdate = try BorgVRScreenViewStateCodec.decodeUpdateIfPresent(data) {

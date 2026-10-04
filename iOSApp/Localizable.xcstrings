@@ -6005,6 +6005,34 @@
         }
       }
     },
+    "lighting_inactive_warning" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Beleuchtungseinstellungen haben im Transferfunktionsmodus ohne Beleuchtung keine Wirkung."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lighting settings have no effect in Transfer Function mode without lighting."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los ajustes de iluminación no tienen efecto en el modo de función de transferencia sin iluminación."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les réglages d’éclairage n’ont aucun effet en mode fonction de transfert sans éclairage."
+          }
+        }
+      }
+    },
     "Load Anyway" : {
       "localizations" : {
         "de" : {

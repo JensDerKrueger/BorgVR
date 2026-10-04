@@ -1210,5 +1210,6 @@
 "controller_thumbstick_translate_y" = "Translate Along Y";
 "controller_thumbstick_translate_z" = "Translate Along Z";
 "Project onto Volume" = "Project onto Volume";
+"lighting_inactive_warning" = "Lighting settings have no effect in Transfer Function mode without lighting.";
 "Snap to Volume" = "Snap to Volume";
 "Place Objects" = "Place Objects";

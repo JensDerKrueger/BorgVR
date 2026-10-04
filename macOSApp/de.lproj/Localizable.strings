@@ -892,3 +892,4 @@
 "measurement_file_error_invalid_geometry" = "Die Datei enthält ungültige Messgeometrie.";
 "measurement_file_error_missing_dataset" = "Die räumlichen Abmessungen des aktuellen Datensatzes sind noch nicht verfügbar.";
 "Project onto Volume" = "Auf Volumen projizieren";
+"lighting_inactive_warning" = "Die Beleuchtungseinstellungen haben im Transferfunktionsmodus ohne Beleuchtung keine Wirkung.";

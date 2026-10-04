@@ -8,6 +8,7 @@ import UIKit
 #endif
 
 struct LightingEditorView: View, Equatable {
+  let renderMode: RenderMode
   @Binding var lightDirection: SIMD3<Float>
   @Binding var ambientLightColor: SIMD3<Float>
   @Binding var diffuseLightColor: SIMD3<Float>
@@ -22,6 +23,7 @@ struct LightingEditorView: View, Equatable {
 
   static func == (lhs: LightingEditorView, rhs: LightingEditorView) -> Bool {
     lhs.lightDirection == rhs.lightDirection &&
+      lhs.renderMode == rhs.renderMode &&
       lhs.ambientLightColor == rhs.ambientLightColor &&
       lhs.diffuseLightColor == rhs.diffuseLightColor &&
       lhs.specularLightColor == rhs.specularLightColor &&
@@ -64,6 +66,16 @@ struct LightingEditorView: View, Equatable {
           .accessibilityLabel("Close lighting editor")
           .help("Close lighting editor")
         }
+      }
+
+      if renderMode == .transferFunction1D {
+        Label("lighting_inactive_warning", systemImage: "exclamationmark.triangle.fill")
+          .font(.callout)
+          .foregroundStyle(.orange)
+          .frame(maxWidth: .infinity, alignment: .leading)
+          .padding(.horizontal, 10)
+          .padding(.vertical, 8)
+          .background(.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 6))
       }
 
       if usesHorizontalLayout {

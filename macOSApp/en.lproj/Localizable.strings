@@ -888,3 +888,4 @@
 "measurement_file_error_invalid_geometry" = "The file contains invalid measurement geometry.";
 "measurement_file_error_missing_dataset" = "The spatial dimensions of the current dataset are not available yet.";
 "Project onto Volume" = "Project onto Volume";
+"lighting_inactive_warning" = "Lighting settings have no effect in Transfer Function mode without lighting.";

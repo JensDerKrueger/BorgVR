@@ -68,8 +68,35 @@ struct RenderView: View {
         .environmentObject(appModel)
         .environmentObject(sharePlay)
     }
+    .sheet(isPresented: $showIsoEditor) {
+      IsovalueEditorView(
+        usesPanelBackground: false,
+        onClose: { showIsoEditor = false }
+      )
+      .environmentObject(renderingParameters)
+      .frame(maxWidth: 720)
+      .padding()
+      .presentationDetents([.height(140), .medium])
+      .presentationDragIndicator(.visible)
+      .presentationBackgroundInteraction(.enabled)
+    }
+    .sheet(isPresented: $showTransferEditor) {
+      TransferFunctionEditorView(
+        usesPanelBackground: false,
+        usesFlexibleCanvasHeight: true,
+        catalogDirectoryURLs: transferFunctionCatalogDirectoryURLs,
+        onClose: { showTransferEditor = false }
+      )
+      .environmentObject(renderingParameters)
+      .frame(maxWidth: 720, maxHeight: .infinity)
+      .padding()
+      .presentationDetents([.height(300), .medium, .large])
+      .presentationDragIndicator(.visible)
+      .presentationBackgroundInteraction(.enabled)
+    }
     .sheet(isPresented: $showLightingEditor) {
       LightingEditorView(
+        renderMode: renderingParameters.renderMode,
         lightDirection: $renderingParameters.lightDirection,
         ambientLightColor: $renderingParameters.ambientLightColor,
         diffuseLightColor: $renderingParameters.diffuseLightColor,
@@ -81,7 +108,12 @@ struct RenderView: View {
         onClose: { showLightingEditor = false }
       )
       .padding()
-      .presentationDetents([.height(240), .medium, .large])
+      .presentationDetents([
+        .height(renderingParameters.renderMode == .transferFunction1D ? 290 : 240),
+        .medium,
+        .large
+      ])
+      .presentationBackgroundInteraction(.enabled)
     }
     .sheet(isPresented: $showMeasurementEditor) {
       MobileMeasurementView()
@@ -132,34 +164,6 @@ struct RenderView: View {
           )
       }
 
-      if showIsoEditor && renderingParameters.renderMode == .isoValue {
-        VStack {
-          Spacer()
-
-          IsovalueEditorView {
-            showIsoEditor = false
-          }
-          .environmentObject(renderingParameters)
-          .padding(.horizontal)
-          .padding(.bottom)
-        }
-        .transition(.move(edge: .bottom).combined(with: .opacity))
-      }
-
-      if showTransferEditor && renderingParameters.renderMode != .isoValue {
-        VStack {
-          Spacer()
-
-          TransferFunctionEditorView(catalogDirectoryURLs: transferFunctionCatalogDirectoryURLs) {
-            showTransferEditor = false
-          }
-          .environmentObject(renderingParameters)
-          .frame(maxWidth: 720)
-          .padding(.horizontal)
-          .padding(.bottom)
-        }
-        .transition(.move(edge: .bottom).combined(with: .opacity))
-      }
     }
   }
 
@@ -259,7 +263,12 @@ struct RenderView: View {
             }
           }
           .pickerStyle(.segmented)
-          .onChange(of: renderingParameters.renderMode) {
+          .onChange(of: renderingParameters.renderMode) { _, mode in
+            if mode == .isoValue {
+              showTransferEditor = false
+            } else {
+              showIsoEditor = false
+            }
             synchronizeState()
           }
 
@@ -341,16 +350,23 @@ struct RenderView: View {
           .accessibilityLabel("Reset")
 
           Button {
-            showLightingEditor = true
+            showLightingEditor.toggle()
           } label: {
             actionLabel(
               "Lighting",
               systemImage: "lightbulb.max",
               compact: compact,
-              color: .primary
+              color: showLightingEditor ? .white : .primary
             )
             .frame(maxWidth: .infinity)
           }
+          .modifier(
+            WindowPresentationButtonStyle(
+              isPresented: showLightingEditor,
+              tint: .accentColor
+            )
+          )
+          .accessibilityAddTraits(showLightingEditor ? .isSelected : [])
           .accessibilityLabel("Lighting")
         }
         .frame(width: doubleColumnWidth - groupInset * 2)
@@ -369,10 +385,17 @@ struct RenderView: View {
             "Editor",
             systemImage: "slider.horizontal.3",
             compact: compact,
-            color: .purple
+            color: currentEditorIsPresented ? .white : .purple
           )
           .frame(maxWidth: .infinity)
         }
+        .modifier(
+          WindowPresentationButtonStyle(
+            isPresented: currentEditorIsPresented,
+            tint: .purple
+          )
+        )
+        .accessibilityAddTraits(currentEditorIsPresented ? .isSelected : [])
         .accessibilityLabel("Editor")
         .frame(width: columnWidth)
         .offset(x: columnStride * 2)
@@ -384,10 +407,17 @@ struct RenderView: View {
             "Objects",
             systemImage: "cube.transparent",
             compact: compact,
-            color: .orange
+            color: showMarkerEditor ? .white : .orange
           )
           .frame(maxWidth: .infinity)
         }
+        .modifier(
+          WindowPresentationButtonStyle(
+            isPresented: showMarkerEditor,
+            tint: .orange
+          )
+        )
+        .accessibilityAddTraits(showMarkerEditor ? .isSelected : [])
         .accessibilityLabel("Objects")
         .frame(width: doubleColumnWidth)
         .offset(x: columnStride * 3)
@@ -399,10 +429,17 @@ struct RenderView: View {
             "measurement_window_title",
             systemImage: "ruler",
             compact: compact,
-            color: .green
+            color: showMeasurementEditor ? .white : .green
           )
           .frame(maxWidth: .infinity)
         }
+        .modifier(
+          WindowPresentationButtonStyle(
+            isPresented: showMeasurementEditor,
+            tint: .green
+          )
+        )
+        .accessibilityAddTraits(showMeasurementEditor ? .isSelected : [])
         .accessibilityLabel(Text("measurement_window_title"))
         .frame(width: columnWidth)
         .offset(x: columnStride * 5)
@@ -410,6 +447,10 @@ struct RenderView: View {
       .buttonStyle(.bordered)
     }
     .frame(height: 38)
+  }
+
+  private var currentEditorIsPresented: Bool {
+    renderingParameters.renderMode == .isoValue ? showIsoEditor : showTransferEditor
   }
 
   @ViewBuilder
@@ -422,12 +463,14 @@ struct RenderView: View {
     if compact {
       Image(systemName: systemImage)
         .foregroundStyle(color)
+        .frame(width: 20, height: 20)
         .padding(.horizontal, 6)
         .accessibilityLabel(title)
     } else {
       HStack(spacing: 6) {
         Image(systemName: systemImage)
           .foregroundStyle(color)
+          .frame(width: 20, height: 20)
         Text(title)
           .foregroundStyle(.primary)
       }
@@ -1154,5 +1197,21 @@ struct RenderView: View {
 
   private func synchronizeFullState() {
     sharePlay.synchronize(kind: .full)
+  }
+}
+
+private struct WindowPresentationButtonStyle: ViewModifier {
+  let isPresented: Bool
+  let tint: Color
+
+  @ViewBuilder
+  func body(content: Content) -> some View {
+    if isPresented {
+      content
+        .buttonStyle(.borderedProminent)
+        .tint(tint)
+    } else {
+      content.buttonStyle(.bordered)
+    }
   }
 }

@@ -416,6 +416,7 @@ struct DetachedPanelContent: View {
         DetachedDockablePanel(panel: panel, minWidth: 380, minHeight: 430) {
           DockableEditorPanel(panel: panel, showsTitle: false) {
             LightingEditorView(
+              renderMode: renderingParameters.renderMode,
               lightDirection: $renderingParameters.lightDirection,
               ambientLightColor: $renderingParameters.ambientLightColor,
               diffuseLightColor: $renderingParameters.diffuseLightColor,

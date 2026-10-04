@@ -136,6 +136,15 @@ struct RenderControlsPanel: View {
       }
 
       HStack(spacing: 8) {
+        if sharePlay.isInSession {
+          Toggle(isOn: screenViewSynchronizationBinding) {
+            Label("Synchronize View", systemImage: "link")
+          }
+          .toggleStyle(.button)
+          .fixedSize()
+          .help("Keep this Mac's view synchronized with other iPhone, iPad, and Mac participants.")
+        }
+
         Picker("Render Mode", selection: $renderingParameters.renderMode) {
           ForEach(RenderMode.allCases) { mode in
             Text(mode.description).tag(mode)
@@ -180,18 +189,6 @@ struct RenderControlsPanel: View {
       .onChange(of: appModel.interactionMode) { _, newValue in
         if selectedInteractionMode != newValue {
           selectedInteractionMode = newValue
-        }
-      }
-
-      if sharePlay.isInSession {
-        HStack {
-          Toggle(isOn: screenViewSynchronizationBinding) {
-            Label("Synchronize View", systemImage: "link")
-          }
-          .toggleStyle(.button)
-          .help("Keep this Mac's view synchronized with other iPhone, iPad, and Mac participants.")
-
-          Spacer()
         }
       }
 
@@ -298,56 +295,82 @@ struct RenderControlsPanel: View {
           .frame(width: columnWidth)
           .offset(x: columnStride * 2)
 
-        objectWindowButton
+        measurementWindowButton
           .frame(width: doubleColumnWidth)
           .offset(x: columnStride * 3)
 
-        measurementWindowButton
+        objectWindowButton
           .frame(width: columnWidth)
           .offset(x: columnStride * 5)
       }
-      .buttonStyle(.bordered)
     }
     .frame(height: 34)
   }
 
   private var lightingWindowButton: some View {
-    Button {
+    let isPresented = docking.isVisible(.lightingEditor)
+    return Button {
       toggleWindow(.lightingEditor)
     } label: {
-      windowButtonLabel("Lighting", systemImage: "lightbulb.max", color: .primary)
+      windowButtonLabel(
+        "Lighting",
+        systemImage: "lightbulb.max",
+        color: isPresented ? .white : .primary
+      )
     }
+    .modifier(WindowPresentationButtonStyle(isPresented: isPresented, tint: .accentColor))
+    .accessibilityAddTraits(isPresented ? .isSelected : [])
     .help("Lighting")
   }
 
   private var editorWindowButton: some View {
-    Button {
+    let panel: DockablePanelID = renderingParameters.renderMode == .isoValue
+      ? .isoEditor
+      : .transferFunctionEditor
+    let isPresented = docking.isVisible(panel)
+    return Button {
       docking.toggleEditor(for: renderingParameters.renderMode)
     } label: {
-      windowButtonLabel("Editor", systemImage: "slider.horizontal.3", color: .purple)
+      windowButtonLabel(
+        "Editor",
+        systemImage: "slider.horizontal.3",
+        color: isPresented ? .white : .purple
+      )
     }
+    .modifier(WindowPresentationButtonStyle(isPresented: isPresented, tint: .purple))
+    .accessibilityAddTraits(isPresented ? .isSelected : [])
     .help("Editor")
   }
 
   private var objectWindowButton: some View {
-    Button {
+    let isPresented = docking.isVisible(.markerEditor)
+    return Button {
       toggleWindow(.markerEditor)
     } label: {
-      windowButtonLabel("Objects", systemImage: "cube.transparent", color: .orange)
+      windowButtonLabel(
+        "Objects",
+        systemImage: "cube.transparent",
+        color: isPresented ? .white : .orange
+      )
     }
+    .modifier(WindowPresentationButtonStyle(isPresented: isPresented, tint: .orange))
+    .accessibilityAddTraits(isPresented ? .isSelected : [])
     .help("Objects")
   }
 
   private var measurementWindowButton: some View {
-    Button {
+    let isPresented = docking.isVisible(.measurementEditor)
+    return Button {
       toggleWindow(.measurementEditor)
     } label: {
       windowButtonLabel(
         "measurement_window_title",
         systemImage: "ruler",
-        color: .green
+        color: isPresented ? .white : .green
       )
     }
+    .modifier(WindowPresentationButtonStyle(isPresented: isPresented, tint: .green))
+    .accessibilityAddTraits(isPresented ? .isSelected : [])
     .help("measurement_window_title")
   }
 
@@ -463,6 +486,22 @@ struct RenderControlsPanel: View {
     copiedWebGPUShareLink = true
     DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
       copiedWebGPUShareLink = false
+    }
+  }
+}
+
+private struct WindowPresentationButtonStyle: ViewModifier {
+  let isPresented: Bool
+  let tint: Color
+
+  @ViewBuilder
+  func body(content: Content) -> some View {
+    if isPresented {
+      content
+        .buttonStyle(.borderedProminent)
+        .tint(tint)
+    } else {
+      content.buttonStyle(.bordered)
     }
   }
 }
