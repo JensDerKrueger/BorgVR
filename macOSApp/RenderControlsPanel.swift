@@ -135,26 +135,42 @@ struct RenderControlsPanel: View {
         .transition(.opacity)
       }
 
-      Picker("Render Mode", selection: $renderingParameters.renderMode) {
-        ForEach(RenderMode.allCases) { mode in
-          Text(mode.description).tag(mode)
+      HStack(spacing: 8) {
+        Picker("Render Mode", selection: $renderingParameters.renderMode) {
+          ForEach(RenderMode.allCases) { mode in
+            Text(mode.description).tag(mode)
+          }
         }
-      }
-      .pickerStyle(.segmented)
-      .onChange(of: renderingParameters.renderMode) { _, newMode in
-        docking.hideIncompatibleEditor(for: newMode)
-        sharePlay.synchronize(kind: .stateOnly)
+        .pickerStyle(.segmented)
+        .onChange(of: renderingParameters.renderMode) { _, newMode in
+          docking.hideIncompatibleEditor(for: newMode)
+          sharePlay.synchronize(kind: .stateOnly)
+        }
+
+        HStack(spacing: 8) {
+          if appSettings.showBrickVisualization {
+            Toggle("Bricks", isOn: $renderingParameters.brickVis)
+              .toggleStyle(.button)
+              .fixedSize()
+              .onChange(of: renderingParameters.brickVis) {
+                sharePlay.synchronize(kind: .stateOnly)
+              }
+          }
+
+          Button {
+            renderingParameters.reset()
+            sharePlay.synchronize(kind: .full)
+            sharePlay.synchronize(kind: .transformOnly)
+            sharePlay.flushSynchronization()
+          } label: {
+            Label("Reset", systemImage: "arrow.counterclockwise")
+          }
+          .fixedSize()
+        }
+        .padding(.leading, 12)
       }
 
-      Picker("Interaktion", selection: $selectedInteractionMode) {
-        Text("Model").tag(AppModel.InteractionMode.model)
-        Text("Clipping").tag(AppModel.InteractionMode.clipping)
-        Text("Transfer").tag(AppModel.InteractionMode.transferEditing)
-        Label("Draw", systemImage: "scribble").tag(AppModel.InteractionMode.drawing)
-        Label("Place", systemImage: "cube").tag(AppModel.InteractionMode.objectPlacement)
-        Text("private_interaction_option_measurement").tag(AppModel.InteractionMode.measurement)
-      }
-      .pickerStyle(.segmented)
+      interactionModePicker
       .onAppear {
         selectedInteractionMode = appModel.interactionMode
       }
@@ -167,68 +183,19 @@ struct RenderControlsPanel: View {
         }
       }
 
-      HStack {
-        if sharePlay.isInSession {
+      if sharePlay.isInSession {
+        HStack {
           Toggle(isOn: screenViewSynchronizationBinding) {
             Label("Synchronize View", systemImage: "link")
           }
           .toggleStyle(.button)
           .help("Keep this Mac's view synchronized with other iPhone, iPad, and Mac participants.")
-        }
 
-        if appSettings.showBrickVisualization {
-          Toggle("Bricks", isOn: $renderingParameters.brickVis)
-            .toggleStyle(.button)
-            .onChange(of: renderingParameters.brickVis) {
-              sharePlay.synchronize(kind: .stateOnly)
-            }
-        }
-
-        Button {
-          renderingParameters.reset()
-          sharePlay.synchronize(kind: .full)
-          sharePlay.synchronize(kind: .transformOnly)
-          sharePlay.flushSynchronization()
-        } label: {
-          Label("Reset", systemImage: "arrow.counterclockwise")
-        }
-
-        Button {
-          docking.toggleEditor(for: renderingParameters.renderMode)
-        } label: {
-          Label("Editor", systemImage: "slider.horizontal.3")
-        }
-
-        Button {
-          if docking.isDetached(.lightingEditor) {
-            openWindow(id: DockablePanelID.lightingEditor.windowID)
-          } else {
-            docking.toggleVisibility(.lightingEditor)
-          }
-        } label: {
-          Label("Lighting", systemImage: "lightbulb.max")
-        }
-
-        Button {
-          if docking.isDetached(.markerEditor) {
-            openWindow(id: DockablePanelID.markerEditor.windowID)
-          } else {
-            docking.toggleVisibility(.markerEditor)
-          }
-        } label: {
-          Label("Objects", systemImage: "cube.transparent")
-        }
-
-        Button {
-          if docking.isDetached(.measurementEditor) {
-            openWindow(id: DockablePanelID.measurementEditor.windowID)
-          } else {
-            docking.toggleVisibility(.measurementEditor)
-          }
-        } label: {
-          Label("measurement_window_title", systemImage: "ruler")
+          Spacer()
         }
       }
+
+      modeWindowButtons
     }
     .padding(12)
     .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 8))
@@ -256,6 +223,170 @@ struct RenderControlsPanel: View {
       }
     } message: {
       Text("Closing this dataset will leave the current SharePlay session.")
+    }
+  }
+
+  private var interactionModePicker: some View {
+    HStack(spacing: 4) {
+      interactionModeSegment(.model, title: "Model", systemImage: "move.3d")
+      interactionModeSegment(.clipping, title: "Clipping", systemImage: "viewfinder")
+      interactionModeSegment(
+        .transferEditing,
+        title: "Transfer",
+        systemImage: "slider.horizontal.3"
+      )
+      interactionModeSegment(.drawing, title: "Draw", systemImage: "scribble")
+      interactionModeSegment(.objectPlacement, title: "Place", systemImage: "cube")
+      interactionModeSegment(
+        .measurement,
+        title: "private_interaction_option_measurement",
+        systemImage: "ruler"
+      )
+    }
+    .padding(4)
+    .background(.secondary.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
+    .accessibilityElement(children: .contain)
+    .accessibilityLabel("Interaktion")
+  }
+
+  private func interactionModeSegment(
+    _ mode: AppModel.InteractionMode,
+    title: LocalizedStringKey,
+    systemImage: String
+  ) -> some View {
+    let selected = selectedInteractionMode == mode
+    let color = interactionModeColor(for: mode)
+
+    return Button {
+      selectedInteractionMode = mode
+    } label: {
+      HStack(spacing: 6) {
+        Image(systemName: systemImage)
+          .foregroundStyle(color)
+        Text(title)
+          .foregroundStyle(.primary)
+      }
+        .font(.callout)
+        .fontWeight(selected ? .semibold : .regular)
+        .lineLimit(1)
+        .frame(maxWidth: .infinity, minHeight: 28)
+        .padding(.horizontal, 5)
+        .background(
+          color.opacity(selected ? 0.22 : 0),
+          in: RoundedRectangle(cornerRadius: 6)
+        )
+        .contentShape(Rectangle())
+    }
+    .buttonStyle(.plain)
+    .accessibilityAddTraits(selected ? .isSelected : [])
+  }
+
+  private var modeWindowButtons: some View {
+    GeometryReader { geometry in
+      let spacing: CGFloat = 4
+      let columnWidth = max(0, (geometry.size.width - spacing * 5) / 6)
+      let columnStride = columnWidth + spacing
+      let doubleColumnWidth = columnWidth * 2 + spacing
+      let groupInset: CGFloat = 8
+
+      ZStack(alignment: .leading) {
+        lightingWindowButton
+          .frame(width: doubleColumnWidth - groupInset * 2)
+          .offset(x: groupInset)
+
+        editorWindowButton
+          .frame(width: columnWidth)
+          .offset(x: columnStride * 2)
+
+        objectWindowButton
+          .frame(width: doubleColumnWidth)
+          .offset(x: columnStride * 3)
+
+        measurementWindowButton
+          .frame(width: columnWidth)
+          .offset(x: columnStride * 5)
+      }
+      .buttonStyle(.bordered)
+    }
+    .frame(height: 34)
+  }
+
+  private var lightingWindowButton: some View {
+    Button {
+      toggleWindow(.lightingEditor)
+    } label: {
+      windowButtonLabel("Lighting", systemImage: "lightbulb.max", color: .primary)
+    }
+    .help("Lighting")
+  }
+
+  private var editorWindowButton: some View {
+    Button {
+      docking.toggleEditor(for: renderingParameters.renderMode)
+    } label: {
+      windowButtonLabel("Editor", systemImage: "slider.horizontal.3", color: .purple)
+    }
+    .help("Editor")
+  }
+
+  private var objectWindowButton: some View {
+    Button {
+      toggleWindow(.markerEditor)
+    } label: {
+      windowButtonLabel("Objects", systemImage: "cube.transparent", color: .orange)
+    }
+    .help("Objects")
+  }
+
+  private var measurementWindowButton: some View {
+    Button {
+      toggleWindow(.measurementEditor)
+    } label: {
+      windowButtonLabel(
+        "measurement_window_title",
+        systemImage: "ruler",
+        color: .green
+      )
+    }
+    .help("measurement_window_title")
+  }
+
+  private func windowButtonLabel(
+    _ title: LocalizedStringKey,
+    systemImage: String,
+    color: Color
+  ) -> some View {
+    ViewThatFits(in: .horizontal) {
+      HStack(spacing: 6) {
+        Image(systemName: systemImage)
+          .foregroundStyle(color)
+        Text(title)
+          .lineLimit(1)
+      }
+      .frame(maxWidth: .infinity)
+
+      Image(systemName: systemImage)
+        .foregroundStyle(color)
+        .frame(maxWidth: .infinity)
+        .accessibilityLabel(title)
+    }
+  }
+
+  private func toggleWindow(_ panel: DockablePanelID) {
+    if docking.isDetached(panel) {
+      openWindow(id: panel.windowID)
+    } else {
+      docking.toggleVisibility(panel)
+    }
+  }
+
+  private func interactionModeColor(for mode: AppModel.InteractionMode) -> Color {
+    switch mode {
+      case .model: .blue
+      case .clipping: .cyan
+      case .transferEditing: .purple
+      case .drawing, .objectPlacement: .orange
+      case .measurement: .green
     }
   }
 

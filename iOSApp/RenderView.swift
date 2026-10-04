@@ -127,7 +127,8 @@ struct RenderView: View {
         case .overlayTop:
           topOverlayControls(
             usesCompactRenderModeLabels: layout.usesCompactRenderModeLabels,
-            usesCompactActionLabels: layout.usesCompactActionLabels
+            usesCompactActionLabels: layout.usesCompactActionLabels,
+            usesCompactInteractionModeLabels: layout.usesCompactInteractionModeLabels
           )
       }
 
@@ -165,7 +166,8 @@ struct RenderView: View {
   @ViewBuilder
   private func topOverlayControls(
     usesCompactRenderModeLabels: Bool,
-    usesCompactActionLabels: Bool
+    usesCompactActionLabels: Bool,
+    usesCompactInteractionModeLabels: Bool
   ) -> some View {
     if showRenderControls {
       VStack(spacing: 8) {
@@ -249,33 +251,18 @@ struct RenderView: View {
           visibilityButton
         }
 
-        Picker("Render Mode", selection: $renderingParameters.renderMode) {
-          ForEach(RenderMode.allCases) { mode in
-            renderModeLabel(for: mode, compact: usesCompactRenderModeLabels)
-              .tag(mode)
+        HStack(spacing: 8) {
+          Picker("Render Mode", selection: $renderingParameters.renderMode) {
+            ForEach(RenderMode.allCases) { mode in
+              renderModeLabel(for: mode, compact: usesCompactRenderModeLabels)
+                .tag(mode)
+            }
           }
-        }
-        .pickerStyle(.segmented)
-        .onChange(of: renderingParameters.renderMode) {
-          synchronizeState()
-        }
-
-        Picker("Interaction", selection: $appModel.interactionMode) {
-          Text("Model").tag(AppModel.InteractionMode.model)
-          Text("Clipping").tag(AppModel.InteractionMode.clipping)
-          Text("Transfer").tag(AppModel.InteractionMode.transferEditing)
-          Label("Draw", systemImage: "scribble").tag(AppModel.InteractionMode.drawing)
-          Label("Place", systemImage: "cube").tag(AppModel.InteractionMode.objectPlacement)
-          Text("private_interaction_option_measurement").tag(AppModel.InteractionMode.measurement)
-        }
-        .pickerStyle(.segmented)
-        .onChange(of: appModel.interactionMode) { _, mode in
-          if mode != .measurement {
-            appModel.clearVolumeMeasurementSelection()
+          .pickerStyle(.segmented)
+          .onChange(of: renderingParameters.renderMode) {
+            synchronizeState()
           }
-        }
 
-        HStack {
           if sharePlay.isInSession {
             Toggle(isOn: screenViewSynchronizationBinding) {
               Label(
@@ -290,77 +277,30 @@ struct RenderView: View {
           }
 
           if appSettings.showBrickVisualization {
-            Toggle("Bricks", isOn: $renderingParameters.brickVis)
-              .toggleStyle(.button)
-              .onChange(of: renderingParameters.brickVis) {
-                synchronizeState()
-              }
-          }
-
-          Button {
-            renderingParameters.reset()
-            synchronizeFullState()
-            synchronizeTransform()
-            sharePlay.flushSynchronization()
-          } label: {
-            actionLabel(
-              "Reset",
-              systemImage: "arrow.counterclockwise",
-              compact: usesCompactActionLabels
-            )
-          }
-          .accessibilityLabel("Reset")
-
-          Button {
-            if renderingParameters.renderMode == .isoValue {
-              showTransferEditor = false
-              showIsoEditor.toggle()
-            } else {
-              showIsoEditor = false
-              showTransferEditor.toggle()
+            Toggle(isOn: $renderingParameters.brickVis) {
+              actionLabel(
+                "Bricks",
+                systemImage: "square.grid.3x3",
+                compact: usesCompactActionLabels,
+                color: .primary
+              )
             }
-          } label: {
-            actionLabel(
-              "Editor",
-              systemImage: "slider.horizontal.3",
-              compact: usesCompactActionLabels
-            )
+            .toggleStyle(.button)
+            .accessibilityLabel("Bricks")
+            .onChange(of: renderingParameters.brickVis) {
+              synchronizeState()
+            }
           }
-          .accessibilityLabel("Editor")
-
-          Button {
-            showMarkerEditor = true
-          } label: {
-            actionLabel(
-              "Objects",
-              systemImage: "cube.transparent",
-              compact: usesCompactActionLabels
-            )
-          }
-          .accessibilityLabel("Objects")
-
-          Button {
-            showMeasurementEditor = true
-          } label: {
-            actionLabel(
-              "measurement_window_title",
-              systemImage: "ruler",
-              compact: usesCompactActionLabels
-            )
-          }
-          .accessibilityLabel(Text("measurement_window_title"))
-
-          Button {
-            showLightingEditor = true
-          } label: {
-            actionLabel(
-              "Lighting",
-              systemImage: "lightbulb.max",
-              compact: usesCompactActionLabels
-            )
-          }
-          .accessibilityLabel("Lighting")
         }
+
+        interactionModePicker(compact: usesCompactInteractionModeLabels)
+        .onChange(of: appModel.interactionMode) { _, mode in
+          if mode != .measurement {
+            appModel.clearVolumeMeasurementSelection()
+          }
+        }
+
+        modeActionButtons(compact: usesCompactActionLabels)
       }
       .padding(12)
       .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 8))
@@ -374,18 +314,209 @@ struct RenderView: View {
     }
   }
 
+  private func modeActionButtons(compact: Bool) -> some View {
+    GeometryReader { geometry in
+      let spacing: CGFloat = 4
+      let columnWidth = max(0, (geometry.size.width - spacing * 5) / 6)
+      let columnStride = columnWidth + spacing
+      let doubleColumnWidth = columnWidth * 2 + spacing
+      let groupInset: CGFloat = compact ? 5 : 7
+
+      ZStack(alignment: .leading) {
+        HStack(spacing: compact ? 5 : 7) {
+          Button {
+            renderingParameters.reset()
+            synchronizeFullState()
+            synchronizeTransform()
+            sharePlay.flushSynchronization()
+          } label: {
+            actionLabel(
+              "Reset",
+              systemImage: "arrow.counterclockwise",
+              compact: compact,
+              color: .primary
+            )
+            .frame(maxWidth: .infinity)
+          }
+          .accessibilityLabel("Reset")
+
+          Button {
+            showLightingEditor = true
+          } label: {
+            actionLabel(
+              "Lighting",
+              systemImage: "lightbulb.max",
+              compact: compact,
+              color: .primary
+            )
+            .frame(maxWidth: .infinity)
+          }
+          .accessibilityLabel("Lighting")
+        }
+        .frame(width: doubleColumnWidth - groupInset * 2)
+        .offset(x: groupInset)
+
+        Button {
+          if renderingParameters.renderMode == .isoValue {
+            showTransferEditor = false
+            showIsoEditor.toggle()
+          } else {
+            showIsoEditor = false
+            showTransferEditor.toggle()
+          }
+        } label: {
+          actionLabel(
+            "Editor",
+            systemImage: "slider.horizontal.3",
+            compact: compact,
+            color: .purple
+          )
+          .frame(maxWidth: .infinity)
+        }
+        .accessibilityLabel("Editor")
+        .frame(width: columnWidth)
+        .offset(x: columnStride * 2)
+
+        Button {
+          showMarkerEditor = true
+        } label: {
+          actionLabel(
+            "Objects",
+            systemImage: "cube.transparent",
+            compact: compact,
+            color: .orange
+          )
+          .frame(maxWidth: .infinity)
+        }
+        .accessibilityLabel("Objects")
+        .frame(width: doubleColumnWidth)
+        .offset(x: columnStride * 3)
+
+        Button {
+          showMeasurementEditor = true
+        } label: {
+          actionLabel(
+            "measurement_window_title",
+            systemImage: "ruler",
+            compact: compact,
+            color: .green
+          )
+          .frame(maxWidth: .infinity)
+        }
+        .accessibilityLabel(Text("measurement_window_title"))
+        .frame(width: columnWidth)
+        .offset(x: columnStride * 5)
+      }
+      .buttonStyle(.bordered)
+    }
+    .frame(height: 38)
+  }
+
   @ViewBuilder
   private func actionLabel(
     _ title: LocalizedStringKey,
     systemImage: String,
-    compact: Bool
+    compact: Bool,
+    color: Color
   ) -> some View {
     if compact {
-      Label(title, systemImage: systemImage)
-        .labelStyle(.iconOnly)
+      Image(systemName: systemImage)
+        .foregroundStyle(color)
         .padding(.horizontal, 6)
+        .accessibilityLabel(title)
     } else {
-      Label(title, systemImage: systemImage)
+      HStack(spacing: 6) {
+        Image(systemName: systemImage)
+          .foregroundStyle(color)
+        Text(title)
+          .foregroundStyle(.primary)
+      }
+    }
+  }
+
+  private func interactionModePicker(compact: Bool) -> some View {
+    HStack(spacing: 4) {
+      interactionModeSegment(.model, title: "Model", systemImage: "move.3d", compact: compact)
+      interactionModeSegment(
+        .clipping,
+        title: "Clipping",
+        systemImage: "viewfinder",
+        compact: compact
+      )
+      interactionModeSegment(
+        .transferEditing,
+        title: "Transfer",
+        systemImage: "slider.horizontal.3",
+        compact: compact
+      )
+      interactionModeSegment(.drawing, title: "Draw", systemImage: "scribble", compact: compact)
+      interactionModeSegment(
+        .objectPlacement,
+        title: "Place",
+        systemImage: "cube",
+        compact: compact
+      )
+      interactionModeSegment(
+        .measurement,
+        title: "private_interaction_option_measurement",
+        systemImage: "ruler",
+        compact: compact
+      )
+    }
+    .padding(4)
+    .background(.secondary.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
+    .accessibilityElement(children: .contain)
+    .accessibilityLabel("Interaction")
+  }
+
+  private func interactionModeSegment(
+    _ mode: AppModel.InteractionMode,
+    title: LocalizedStringKey,
+    systemImage: String,
+    compact: Bool
+  ) -> some View {
+    let selected = appModel.interactionMode == mode
+    let color = interactionModeColor(for: mode)
+
+    return Button {
+      appModel.interactionMode = mode
+    } label: {
+      Group {
+        if compact {
+          Image(systemName: systemImage)
+            .foregroundStyle(color)
+            .accessibilityLabel(title)
+        } else {
+          HStack(spacing: 6) {
+            Image(systemName: systemImage)
+              .foregroundStyle(color)
+            Text(title)
+              .foregroundStyle(.primary)
+          }
+        }
+      }
+      .font(.callout)
+      .fontWeight(selected ? .semibold : .regular)
+      .lineLimit(1)
+      .frame(maxWidth: .infinity, minHeight: 34)
+      .padding(.horizontal, compact ? 3 : 6)
+      .background(
+        color.opacity(selected ? 0.22 : 0),
+        in: RoundedRectangle(cornerRadius: 6)
+      )
+      .contentShape(Rectangle())
+    }
+    .buttonStyle(.plain)
+    .accessibilityAddTraits(selected ? .isSelected : [])
+  }
+
+  private func interactionModeColor(for mode: AppModel.InteractionMode) -> Color {
+    switch mode {
+      case .model: .blue
+      case .clipping: .cyan
+      case .transferEditing: .purple
+      case .drawing, .objectPlacement: .orange
+      case .measurement: .green
     }
   }
 

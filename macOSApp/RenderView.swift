@@ -151,7 +151,7 @@ struct RenderView: View {
           }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .padding(.top, docking.isDockedVisible(.renderControls) ? 190 : 16)
+        .padding(.top, docking.isDockedVisible(.renderControls) ? 230 : 16)
         .padding(.horizontal)
         .padding(.bottom)
       }
