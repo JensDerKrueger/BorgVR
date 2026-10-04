@@ -50,6 +50,57 @@ fragment float4 screenVolumeMarkerFragment(
   return float4(markerColor.rgb * (0.28 + 0.72 * diffuse), markerColor.a);
 }
 
+struct ScreenMeasurementPointInstance {
+  float4 centerAndRadius;
+  float4 color;
+};
+
+struct ScreenMeasurementPointVaryings {
+  float4 position [[position]];
+  float2 localPosition;
+  float4 color;
+};
+
+vertex ScreenMeasurementPointVaryings screenMeasurementPointVertex(
+  uint vertexId [[vertex_id]],
+  uint instanceId [[instance_id]],
+  device const ScreenMeasurementPointInstance *points [[buffer(25)]],
+  constant float4x4 &viewProjection [[buffer(20)]],
+  constant float4x4 &modelMatrix [[buffer(21)]],
+  constant float2 &viewportSize [[buffer(26)]])
+{
+  const float2 corners[6] = {
+    float2(-1.0, -1.0), float2( 1.0, -1.0), float2(-1.0,  1.0),
+    float2( 1.0, -1.0), float2( 1.0,  1.0), float2(-1.0,  1.0)
+  };
+  ScreenMeasurementPointInstance point = points[instanceId];
+  float4 clipPosition = viewProjection * modelMatrix * float4(point.centerAndRadius.xyz, 1.0);
+  float2 safeViewportSize = max(viewportSize, float2(1.0));
+  clipPosition.xy += corners[vertexId] * point.centerAndRadius.w * 2.0 /
+    safeViewportSize * clipPosition.w;
+
+  ScreenMeasurementPointVaryings out;
+  out.position = clipPosition;
+  out.localPosition = corners[vertexId];
+  out.color = point.color;
+  return out;
+}
+
+fragment float4 screenMeasurementPointFragment(
+  ScreenMeasurementPointVaryings in [[stage_in]])
+{
+  float distanceFromCenter = length(in.localPosition);
+  float antialiasWidth = max(fwidth(distanceFromCenter), 0.015);
+  float ring = smoothstep(0.68 - antialiasWidth, 0.68 + antialiasWidth, distanceFromCenter) *
+    (1.0 - smoothstep(0.94 - antialiasWidth, 0.94 + antialiasWidth, distanceFromCenter));
+  float dot = 1.0 - smoothstep(0.20 - antialiasWidth, 0.20 + antialiasWidth, distanceFromCenter);
+  float coverage = max(ring, dot);
+  if (coverage < 0.01) {
+    discard_fragment();
+  }
+  return float4(in.color.rgb, in.color.a * coverage);
+}
+
 struct ScreenSceneMeshVertex {
   float3 position;
   float3 normal;

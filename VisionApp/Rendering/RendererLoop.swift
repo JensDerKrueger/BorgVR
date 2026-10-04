@@ -26,7 +26,7 @@ extension Renderer {
       let color: SIMD4<Float>
     }
 
-    var markers: [VolumeMarker] = []
+    var points: [MeasurementPointRenderInstance] = []
     var lines: [Line] = []
     var labels: [ScreenViewLabelDescriptor] = []
     var surfaces: [Surface] = []
@@ -95,12 +95,6 @@ extension Renderer {
       volumeScale.columns.1.y,
       volumeScale.columns.2.z
     )
-    let safeCoordinateScale = SIMD3<Float>(
-      coordinateScale.x.isFinite ? max(abs(coordinateScale.x), 1e-6) : 1,
-      coordinateScale.y.isFinite ? max(abs(coordinateScale.y), 1e-6) : 1,
-      coordinateScale.z.isFinite ? max(abs(coordinateScale.z), 1e-6) : 1
-    )
-
     func line(
       from start: SIMD3<Float>,
       to end: SIMD3<Float>,
@@ -122,7 +116,6 @@ extension Renderer {
       let selected = sharedAppModel.selectedVolumeMeasurementID == measurement.id
       let color = measurementColor(for: measurement.kind, selected: selected)
       let geometry = measurement.geometry
-      var visualIndex = 0
 
       for (pointIndex, point) in geometry.points.enumerated() {
         let pointSelected = selected &&
@@ -134,40 +127,17 @@ extension Renderer {
         } else {
           outerColor = color
         }
-        result.markers.append(VolumeMarker(
-          id: measurementVisualizationID(measurement.id, visualIndex),
-          name: measurement.name,
-          color: outerColor,
-          geometry: .sphere(VolumeMarkerPoint(
-            position: point.position,
-            radius: pointSelected ? 0.014 : 0.010
-          ))
+        let localPosition = (point.position - SIMD3<Float>(repeating: 0.5)) *
+          coordinateScale
+        result.points.append(MeasurementPointRenderInstance(
+          centerAndRadius: SIMD4<Float>(
+            localPosition,
+            pointSelected ? 9 : (definesAreaPlane ? 8 : 7)
+          ),
+          color: pointSelected
+            ? outerColor
+            : (definesAreaPlane ? SIMD4<Float>(1, 1, 1, 1) : outerColor)
         ))
-        visualIndex += 1
-        if definesAreaPlane {
-          let ringRadius: Float = 0.017
-          let segments = 16
-          let ringAxes = [(0, 1), (0, 2), (1, 2)]
-          for (firstAxis, secondAxis) in ringAxes {
-            let ring = (0...segments).map { segment -> SIMD3<Float> in
-              let angle = Float(segment) / Float(segments) * 2 * .pi
-              var offset = SIMD3<Float>.zero
-              offset[firstAxis] = cos(angle) * ringRadius / safeCoordinateScale[firstAxis]
-              offset[secondAxis] = sin(angle) * ringRadius / safeCoordinateScale[secondAxis]
-              return point.position + offset
-            }
-            for segment in 0..<segments {
-              if let ringLine = line(
-                from: ring[segment],
-                to: ring[segment + 1],
-                color: SIMD4<Float>(1, 1, 1, 1),
-                width: 2.5
-              ) {
-                result.lines.append(ringLine)
-              }
-            }
-          }
-        }
       }
 
       for edge in geometry.edges {
@@ -853,8 +823,9 @@ extension Renderer {
     let sceneMeshInstances = sharedAppModel.sceneMeshInstances +
       (suppressLocalToolWidgets ? [] : spatialSceneObjectPreviewInstances)
     let remoteToolPreviews = sharedAppModel.activeRemoteSpatialToolPreviews()
-    guard !markers.isEmpty || !measurements.markers.isEmpty ||
-      !screenViews.labels.isEmpty || !measurements.surfaces.isEmpty ||
+    guard !markers.isEmpty || !measurements.points.isEmpty ||
+      !measurements.lines.isEmpty || !screenViews.labels.isEmpty ||
+      !measurements.surfaces.isEmpty ||
       !sceneMeshInstances.isEmpty ||
       (!suppressLocalToolWidgets && spatialStylusPreviewPoint != nil) ||
       !remoteToolPreviews.isEmpty ||
@@ -930,7 +901,7 @@ extension Renderer {
       volumeScale.columns.2.z
     )
     markerTubeMeshCache.retainOnly(
-      markerIDs: Set((markers + measurements.markers + toolWidgetMarkers).map(\.id))
+      markerIDs: Set((markers + toolWidgetMarkers).map(\.id))
     )
     measurementSurfaceMeshCache.retainOnly(
       measurementIDs: Set(measurementSnapshot.map(\.id))
@@ -1106,7 +1077,62 @@ extension Renderer {
 
     func drawMeasurements() {
       renderEncoder.pushDebugGroup("Measurements")
-      drawMarkerGeometry(measurements.markers, groupName: "Measurement Points")
+      if !measurements.points.isEmpty {
+        let byteCount = MemoryLayout<MeasurementPointRenderInstance>.stride *
+          measurements.points.count
+        if measurementPointBuffer == nil || measurementPointBufferCapacity < byteCount {
+          var capacity = max(measurementPointBufferCapacity, 4096)
+          while capacity < byteCount {
+            capacity *= 2
+          }
+          measurementPointBuffer = device.makeBuffer(
+            length: capacity,
+            options: .storageModeShared
+          )
+          measurementPointBufferCapacity = capacity
+          measurementPointBuffer?.label = "Measurement Point Instances"
+        }
+        if let measurementPointBuffer {
+          measurements.points.withUnsafeBytes { bytes in
+            guard let baseAddress = bytes.baseAddress else { return }
+            measurementPointBuffer.contents().copyMemory(
+              from: baseAddress,
+              byteCount: bytes.count
+            )
+          }
+          var modelMatrix = lastUnscaledModelMatrix
+          let viewportSizes = drawable.views.map { view in
+            SIMD2<Float>(
+              Float(view.textureMap.viewport.width),
+              Float(view.textureMap.viewport.height)
+            )
+          }
+          renderEncoder.setRenderPipelineState(pipelineStateMeasurementPoint)
+          renderEncoder.setDepthStencilState(depthStateMarker)
+          renderEncoder.setCullMode(.none)
+          bindMarkerViewData()
+          renderEncoder.setVertexBytes(
+            &modelMatrix,
+            length: MemoryLayout<simd_float4x4>.stride,
+            index: 21
+          )
+          renderEncoder.setVertexBuffer(measurementPointBuffer, offset: 0, index: 25)
+          viewportSizes.withUnsafeBufferPointer { buffer in
+            guard let baseAddress = buffer.baseAddress else { return }
+            renderEncoder.setVertexBytes(
+              baseAddress,
+              length: MemoryLayout<SIMD2<Float>>.stride * buffer.count,
+              index: 26
+            )
+          }
+          renderEncoder.drawPrimitives(
+            type: .triangle,
+            vertexStart: 0,
+            vertexCount: 6,
+            instanceCount: measurements.points.count
+          )
+        }
+      }
       if !measurements.lines.isEmpty {
       let byteCount = MemoryLayout<MeasurementVisualization.Line>.stride *
         measurements.lines.count

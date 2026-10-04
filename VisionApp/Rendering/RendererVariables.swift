@@ -59,6 +59,8 @@ final actor Renderer {
   var pipelineStateSceneMesh: MTLRenderPipelineState
   /// Render pipeline state for lightweight screen-space measurement lines.
   var pipelineStateMeasurementLine: MTLRenderPipelineState
+  /// Render pipeline state for compact screen-space measurement control points.
+  var pipelineStateMeasurementPoint: MTLRenderPipelineState
   /// Render pipeline state for screen-view participant labels.
   var pipelineStateScreenViewLabel: MTLRenderPipelineState
   /// Screen-view and measurement labels drawn after the volume pass.
@@ -145,6 +147,9 @@ final actor Renderer {
   /// Reusable instance buffer for lightweight measurement lines.
   var measurementLineBuffer: MTLBuffer?
   var measurementLineBufferCapacity = 0
+  /// Reusable instance buffer for compact measurement-point rings.
+  var measurementPointBuffer: MTLBuffer?
+  var measurementPointBufferCapacity = 0
   /// Cached label textures for shared and detached screen views.
   let screenViewLabelTextureCache: ScreenViewLabelTextureCache
   /// Color texture produced by the marker prepass.
@@ -290,6 +295,7 @@ final actor Renderer {
     self.sceneMeshGPUCache = SceneMeshGPUCache()
     self.measurementSurfaceMeshCache = MeasurementSurfaceMeshCache()
     self.measurementLineBuffer = nil
+    self.measurementPointBuffer = nil
     self.screenViewLabelTextureCache = ScreenViewLabelTextureCache()
     self.sharedAppModel.defaultVolumeStrokeColor = SharedAppModel.saturatedStrokeColor(
       preservingHueOf: storedAppModel.markerDefaultColorSIMD
@@ -373,6 +379,7 @@ final actor Renderer {
        pipelineStateVolumeMarker,
        pipelineStateSceneMesh,
        pipelineStateMeasurementLine,
+       pipelineStateMeasurementPoint,
        pipelineStateScreenViewLabel,
        pipelineStateScreenViewOverlayLabel,
        pipelineStateMarkerComposite,

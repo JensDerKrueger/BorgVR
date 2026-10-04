@@ -41,6 +41,13 @@ enum VolumeMeasurementPresentation {
   }
 }
 
+/// GPU instance shared by the screen and immersive measurement-point shaders.
+/// The radius is expressed in pixels so control points remain compact at every distance.
+struct MeasurementPointRenderInstance {
+  var centerAndRadius: SIMD4<Float>
+  var color: SIMD4<Float>
+}
+
 struct VolumeMeasurementPoint: Identifiable, Equatable {
   let id: UUID
   var position: SIMD3<Float>

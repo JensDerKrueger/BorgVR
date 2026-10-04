@@ -497,6 +497,7 @@ final class ScreenVolumeRendererCore {
     markerRenderer.configure(
       device: device,
       markerPipeline: states.marker,
+      measurementPointPipeline: states.measurementPoint,
       sceneMeshPipeline: states.sceneMesh,
       compositePipeline: states.markerComposite
     )

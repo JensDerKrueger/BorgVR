@@ -28,6 +28,7 @@ enum VolumeRendererPipeline {
     iso: MTLRenderPipelineState,
     brick: MTLRenderPipelineState,
     marker: MTLRenderPipelineState,
+    measurementPoint: MTLRenderPipelineState,
     sceneMesh: MTLRenderPipelineState,
     markerComposite: MTLRenderPipelineState
   ) {
@@ -76,6 +77,12 @@ enum VolumeRendererPipeline {
 
     guard let markerVertexFunction = library.makeFunction(name: "screenVolumeMarkerVertex"),
           let markerFragmentFunction = library.makeFunction(name: "screenVolumeMarkerFragment"),
+          let measurementPointVertexFunction = library.makeFunction(
+            name: "screenMeasurementPointVertex"
+          ),
+          let measurementPointFragmentFunction = library.makeFunction(
+            name: "screenMeasurementPointFragment"
+          ),
           let sceneMeshVertexFunction = library.makeFunction(name: "screenSceneMeshVertex"),
           let sceneMeshFragmentFunction = library.makeFunction(name: "screenSceneMeshFragment"),
           let markerCompositeVertexFunction = library.makeFunction(name: "screenMarkerCompositeVertex"),
@@ -98,6 +105,22 @@ enum VolumeRendererPipeline {
       colorAttachment.destinationAlphaBlendFactor = .oneMinusSourceAlpha
     }
     markerDescriptor.depthAttachmentPixelFormat = depthFormat
+
+    let measurementPointDescriptor = MTLRenderPipelineDescriptor()
+    measurementPointDescriptor.label = "\(labelPrefix) Measurement Point"
+    measurementPointDescriptor.vertexFunction = measurementPointVertexFunction
+    measurementPointDescriptor.fragmentFunction = measurementPointFragmentFunction
+    measurementPointDescriptor.colorAttachments[0].pixelFormat = colorFormat
+    measurementPointDescriptor.depthAttachmentPixelFormat = depthFormat
+    if let colorAttachment = measurementPointDescriptor.colorAttachments[0] {
+      colorAttachment.isBlendingEnabled = true
+      colorAttachment.rgbBlendOperation = .add
+      colorAttachment.alphaBlendOperation = .add
+      colorAttachment.sourceRGBBlendFactor = .sourceAlpha
+      colorAttachment.destinationRGBBlendFactor = .oneMinusSourceAlpha
+      colorAttachment.sourceAlphaBlendFactor = .one
+      colorAttachment.destinationAlphaBlendFactor = .oneMinusSourceAlpha
+    }
 
     let sceneMeshDescriptor = MTLRenderPipelineDescriptor()
     sceneMeshDescriptor.label = "\(labelPrefix) Scene Mesh"
@@ -130,6 +153,7 @@ enum VolumeRendererPipeline {
       try device.makeRenderPipelineState(descriptor: descriptor(label: "\(labelPrefix) Iso", fragmentName: "volumeFragmentShaderIso")),
       try device.makeRenderPipelineState(descriptor: descriptor(label: "\(labelPrefix) Brick", fragmentName: "volumeFragmentShaderBrickVis")),
       try device.makeRenderPipelineState(descriptor: markerDescriptor),
+      try device.makeRenderPipelineState(descriptor: measurementPointDescriptor),
       try device.makeRenderPipelineState(descriptor: sceneMeshDescriptor),
       try device.makeRenderPipelineState(descriptor: compositeDescriptor)
     )
@@ -139,6 +163,7 @@ enum VolumeRendererPipeline {
 @MainActor
 final class ScreenVolumeMarkerRenderer {
   private var markerPipeline: MTLRenderPipelineState?
+  private var measurementPointPipeline: MTLRenderPipelineState?
   private var sceneMeshPipeline: MTLRenderPipelineState?
   private var compositePipeline: MTLRenderPipelineState?
   private var markerDepthState: MTLDepthStencilState?
@@ -147,6 +172,8 @@ final class ScreenVolumeMarkerRenderer {
   private var sphereBuffer: MTLBuffer?
   private var sphereNormalBuffer: MTLBuffer?
   private var sphereVertexCount = 0
+  private var measurementPointBuffer: MTLBuffer?
+  private var measurementPointBufferCapacity = 0
   private let tubeMeshCache = VolumeMarkerTubeMeshCache()
   private let measurementSurfaceMeshCache = MeasurementSurfaceMeshCache()
   private let sceneMeshGPUCache = SceneMeshGPUCache()
@@ -157,10 +184,12 @@ final class ScreenVolumeMarkerRenderer {
   func configure(
     device: MTLDevice,
     markerPipeline: MTLRenderPipelineState,
+    measurementPointPipeline: MTLRenderPipelineState,
     sceneMeshPipeline: MTLRenderPipelineState,
     compositePipeline: MTLRenderPipelineState
   ) {
     self.markerPipeline = markerPipeline
+    self.measurementPointPipeline = measurementPointPipeline
     self.sceneMeshPipeline = sceneMeshPipeline
     self.compositePipeline = compositePipeline
 
@@ -245,6 +274,7 @@ final class ScreenVolumeMarkerRenderer {
     guard drawableSize.width >= 1,
           drawableSize.height >= 1,
           let markerPipeline,
+          let measurementPointPipeline,
           let sceneMeshPipeline,
           let markerDepthState,
           let measurementSurfaceDepthState,
@@ -427,6 +457,7 @@ final class ScreenVolumeMarkerRenderer {
         coordinateScale: coordinateScale,
         device: device
       ) else { return }
+      encoder.setRenderPipelineState(markerPipeline)
       var markerModel = modelMatrix
       var color = color
       encoder.setDepthStencilState(writesDepth ? markerDepthState : measurementSurfaceDepthState)
@@ -470,6 +501,8 @@ final class ScreenVolumeMarkerRenderer {
     for marker in measurementLineMarkers {
       drawTube(for: marker, color: marker.color)
     }
+
+    var measurementPoints: [MeasurementPointRenderInstance] = []
     for measurement in measurements {
       let selected = selectedMeasurementID == measurement.id
       let color = VolumeMeasurementPresentation.color(for: measurement.kind, selected: selected)
@@ -479,12 +512,68 @@ final class ScreenVolumeMarkerRenderer {
         let pointColor = isSelected
           ? SIMD4<Float>(1, 0.22, 0.03, 1)
           : (isPlaneAnchor ? SIMD4<Float>(1, 1, 1, 1) : color)
-        drawSphere(
-          VolumeMarkerPoint(
-            position: point.position,
-            radius: isSelected ? 0.014 : (isPlaneAnchor ? 0.012 : 0.010)
+        let localPosition = simd_make_float3(
+          volumeScale * SIMD4<Float>(
+            point.position - SIMD3<Float>(repeating: 0.5),
+            1
+          )
+        )
+        measurementPoints.append(MeasurementPointRenderInstance(
+          centerAndRadius: SIMD4<Float>(
+            localPosition,
+            isSelected ? 9 : (isPlaneAnchor ? 8 : 7)
           ),
           color: pointColor
+        ))
+      }
+    }
+    if !measurementPoints.isEmpty {
+      let byteCount = MemoryLayout<MeasurementPointRenderInstance>.stride *
+        measurementPoints.count
+      if measurementPointBuffer == nil || measurementPointBufferCapacity < byteCount {
+        var capacity = max(measurementPointBufferCapacity, 4096)
+        while capacity < byteCount {
+          capacity *= 2
+        }
+        measurementPointBuffer = device.makeBuffer(
+          length: capacity,
+          options: .storageModeShared
+        )
+        measurementPointBufferCapacity = capacity
+        measurementPointBuffer?.label = "Screen Measurement Point Instances"
+      }
+      if let measurementPointBuffer {
+        measurementPoints.withUnsafeBytes { bytes in
+          guard let baseAddress = bytes.baseAddress else { return }
+          measurementPointBuffer.contents().copyMemory(
+            from: baseAddress,
+            byteCount: bytes.count
+          )
+        }
+        var markerModel = modelMatrix
+        var viewportSize = SIMD2<Float>(
+          Float(drawableSize.width),
+          Float(drawableSize.height)
+        )
+        encoder.setRenderPipelineState(measurementPointPipeline)
+        encoder.setDepthStencilState(markerDepthState)
+        encoder.setCullMode(.none)
+        encoder.setVertexBytes(
+          &markerModel,
+          length: MemoryLayout<simd_float4x4>.stride,
+          index: 21
+        )
+        encoder.setVertexBuffer(measurementPointBuffer, offset: 0, index: 25)
+        encoder.setVertexBytes(
+          &viewportSize,
+          length: MemoryLayout<SIMD2<Float>>.stride,
+          index: 26
+        )
+        encoder.drawPrimitives(
+          type: .triangle,
+          vertexStart: 0,
+          vertexCount: 6,
+          instanceCount: measurementPoints.count
         )
       }
     }

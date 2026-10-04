@@ -61,6 +61,17 @@ struct MeasurementLineVaryings {
   float4 color;
 };
 
+struct MeasurementPointInstance {
+  float4 centerAndRadius;
+  float4 color;
+};
+
+struct MeasurementPointVaryings {
+  float4 position [[position]];
+  float2 localPosition;
+  float4 color;
+};
+
 vertex VolumeMarkerVaryings vertexShaderVolumeMarker(
   uint vertexId [[vertex_id]],
   ushort ampId [[amplification_id]],
@@ -209,6 +220,48 @@ fragment float4 fragmentShaderMeasurementLine(
   MeasurementLineVaryings in [[stage_in]])
 {
   return in.color;
+}
+
+vertex MeasurementPointVaryings vertexShaderMeasurementPoint(
+  uint vertexId [[vertex_id]],
+  uint instanceId [[instance_id]],
+  ushort ampId [[amplification_id]],
+  device const MeasurementPointInstance *points [[buffer(25)]],
+  constant float4x4 *mvpPerView [[buffer(20)]],
+  constant float4x4 &modelMatrix [[buffer(21)]],
+  constant float2 *viewportSizePerView [[buffer(26)]])
+{
+  const float2 corners[6] = {
+    float2(-1.0, -1.0), float2( 1.0, -1.0), float2(-1.0,  1.0),
+    float2( 1.0, -1.0), float2( 1.0,  1.0), float2(-1.0,  1.0)
+  };
+  MeasurementPointInstance point = points[instanceId];
+  float4 clipPosition = mvpPerView[ampId] * modelMatrix *
+    float4(point.centerAndRadius.xyz, 1.0);
+  float2 viewportSize = max(viewportSizePerView[ampId], float2(1.0));
+  clipPosition.xy += corners[vertexId] * point.centerAndRadius.w * 2.0 /
+    viewportSize * clipPosition.w;
+
+  MeasurementPointVaryings out;
+  out.position = clipPosition;
+  out.localPosition = corners[vertexId];
+  out.color = point.color;
+  return out;
+}
+
+fragment float4 fragmentShaderMeasurementPoint(
+  MeasurementPointVaryings in [[stage_in]])
+{
+  float distanceFromCenter = length(in.localPosition);
+  float antialiasWidth = max(fwidth(distanceFromCenter), 0.015);
+  float ring = smoothstep(0.68 - antialiasWidth, 0.68 + antialiasWidth, distanceFromCenter) *
+    (1.0 - smoothstep(0.94 - antialiasWidth, 0.94 + antialiasWidth, distanceFromCenter));
+  float dot = 1.0 - smoothstep(0.20 - antialiasWidth, 0.20 + antialiasWidth, distanceFromCenter);
+  float coverage = max(ring, dot);
+  if (coverage < 0.01) {
+    discard_fragment();
+  }
+  return float4(in.color.rgb, in.color.a * coverage);
 }
 
 vertex MarkerCompositeVaryings vertexShaderMarkerComposite(

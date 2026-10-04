@@ -37,7 +37,8 @@ extension Renderer {
   (MTLRenderPipelineState, MTLRenderPipelineState, MTLRenderPipelineState,
    MTLRenderPipelineState, MTLRenderPipelineState, MTLRenderPipelineState,
    MTLRenderPipelineState, MTLRenderPipelineState, MTLRenderPipelineState,
-   MTLRenderPipelineState, MTLRenderPipelineState, MTLRenderPipelineState) {
+   MTLRenderPipelineState, MTLRenderPipelineState, MTLRenderPipelineState,
+   MTLRenderPipelineState) {
     // Build a render state pipeline object.
     let shaderSource = try RuntimeMetalShaderLoader.loadSource(named: "Shaders")
 
@@ -114,6 +115,8 @@ extension Renderer {
     let sceneMeshFragmentFunction = library.makeFunction(name: "fragmentShaderSceneMesh")
     let measurementLineVertexFunction = library.makeFunction(name: "vertexShaderMeasurementLine")
     let measurementLineFragmentFunction = library.makeFunction(name: "fragmentShaderMeasurementLine")
+    let measurementPointVertexFunction = library.makeFunction(name: "vertexShaderMeasurementPoint")
+    let measurementPointFragmentFunction = library.makeFunction(name: "fragmentShaderMeasurementPoint")
     let screenViewLabelVertexFunction = library.makeFunction(name: "vertexShaderScreenViewLabel")
     let screenViewLabelFragmentFunction = library.makeFunction(name: "fragmentShaderScreenViewLabel")
     let markerCompositeVertexFunction = library.makeFunction(name: "vertexShaderMarkerComposite")
@@ -155,6 +158,27 @@ extension Renderer {
     pipelineDescriptorMeasurementLine.depthAttachmentPixelFormat = layerRenderer.configuration.depthFormat
     pipelineDescriptorMeasurementLine.maxVertexAmplificationCount = layerRenderer.properties.viewCount
     if let colorAttachment = pipelineDescriptorMeasurementLine.colorAttachments[0] {
+      colorAttachment.isBlendingEnabled = true
+      colorAttachment.rgbBlendOperation = .add
+      colorAttachment.alphaBlendOperation = .add
+      colorAttachment.sourceRGBBlendFactor = .sourceAlpha
+      colorAttachment.destinationRGBBlendFactor = .oneMinusSourceAlpha
+      colorAttachment.sourceAlphaBlendFactor = .one
+      colorAttachment.destinationAlphaBlendFactor = .oneMinusSourceAlpha
+    }
+
+    let pipelineDescriptorMeasurementPoint = MTLRenderPipelineDescriptor()
+    pipelineDescriptorMeasurementPoint.label = "Render Pipeline for Measurement Points"
+    pipelineDescriptorMeasurementPoint.vertexFunction = measurementPointVertexFunction
+    pipelineDescriptorMeasurementPoint.fragmentFunction = measurementPointFragmentFunction
+    pipelineDescriptorMeasurementPoint.rasterSampleCount = rasterSampleCount
+    pipelineDescriptorMeasurementPoint.colorAttachments[0].pixelFormat =
+      layerRenderer.configuration.colorFormat
+    pipelineDescriptorMeasurementPoint.depthAttachmentPixelFormat =
+      layerRenderer.configuration.depthFormat
+    pipelineDescriptorMeasurementPoint.maxVertexAmplificationCount =
+      layerRenderer.properties.viewCount
+    if let colorAttachment = pipelineDescriptorMeasurementPoint.colorAttachments[0] {
       colorAttachment.isBlendingEnabled = true
       colorAttachment.rgbBlendOperation = .add
       colorAttachment.alphaBlendOperation = .add
@@ -276,6 +300,7 @@ extension Renderer {
       try device.makeRenderPipelineState(descriptor: pipelineDescriptorVolumeMarker),
       try device.makeRenderPipelineState(descriptor: pipelineDescriptorSceneMesh),
       try device.makeRenderPipelineState(descriptor: pipelineDescriptorMeasurementLine),
+      try device.makeRenderPipelineState(descriptor: pipelineDescriptorMeasurementPoint),
       try device.makeRenderPipelineState(descriptor: pipelineDescriptorScreenViewLabel),
       try device.makeRenderPipelineState(descriptor: pipelineDescriptorScreenViewOverlayLabel),
       try device.makeRenderPipelineState(descriptor: pipelineDescriptorMarkerComposite),
