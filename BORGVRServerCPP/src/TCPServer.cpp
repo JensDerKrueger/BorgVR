@@ -358,9 +358,12 @@ std::vector<MeshFileInfo> TCPServer::meshFilesSnapshot() const {
 }
 
 bool TCPServer::findMeshFileById(const std::string& id, MeshFileInfo& out) const {
+  const std::string normalizedId = toUpper(id);
   std::lock_guard<std::mutex> lock(datasetsMutex_);
   const auto it = std::find_if(meshFiles_.begin(), meshFiles_.end(),
-                               [&](const MeshFileInfo& mesh) { return mesh.id == id; });
+                               [&](const MeshFileInfo& mesh) {
+                                 return toUpper(mesh.id) == normalizedId;
+                               });
   if (it == meshFiles_.end()) return false;
   out = *it;
   return true;

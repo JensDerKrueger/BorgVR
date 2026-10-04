@@ -53,6 +53,12 @@ std::string trim(const std::string& s) {
   return s.substr(start, end - start);
 }
 
+std::string normalizedMeshId(std::string id) {
+  std::transform(id.begin(), id.end(), id.begin(),
+                 [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+  return id;
+}
+
 std::string endpointName(const ServerSyncEndpoint& endpoint) {
   return endpoint.address + ":" + std::to_string(endpoint.port);
 }
@@ -887,17 +893,23 @@ void ServerSyncManager::run() {
 
       std::unordered_set<std::string> localMeshIds =
         localMeshIds_ ? localMeshIds_() : std::unordered_set<std::string>{};
+      std::unordered_set<std::string> normalizedLocalMeshIds;
+      normalizedLocalMeshIds.reserve(localMeshIds.size());
+      for (const auto& id : localMeshIds) {
+        normalizedLocalMeshIds.insert(normalizedMeshId(id));
+      }
       size_t transferredMeshBytes = 0;
       constexpr size_t kMaximumMeshBytesPerPass = 1024u * 1024u * 1024u;
       for (const auto& snapshot : snapshots) {
         for (const auto& mesh : snapshot.meshes) {
           if (!running_.load()) break;
-          if (localMeshIds.find(mesh.id) != localMeshIds.end()) continue;
+          const std::string normalizedId = normalizedMeshId(mesh.id);
+          if (normalizedLocalMeshIds.find(normalizedId) != normalizedLocalMeshIds.end()) continue;
           if (mesh.byteCount > BorgVRFormat::kMaximumMeshFileBytes ||
               transferredMeshBytes + mesh.byteCount > kMaximumMeshBytesPerPass) continue;
           try {
             if (syncMesh(snapshot.endpoint, mesh, dataDirectory_, logger_)) {
-              localMeshIds.insert(mesh.id);
+              normalizedLocalMeshIds.insert(normalizedId);
               transferredMeshBytes += mesh.byteCount;
               catalogChanged = true;
             }
