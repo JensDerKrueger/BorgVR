@@ -235,11 +235,17 @@ struct MacMarkerView: View {
       contentType: .borgVRMarker,
       defaultFilename: BorgVRMarkerFormat.defaultFilename
     ) { result in
-      if case let .failure(error) = result {
-        markerFileError = error
-        showMarkerFileError = true
+      switch result {
+        case .success:
+          refreshMarkerCatalog()
+        case .failure(let error):
+          markerFileError = error
+          showMarkerFileError = true
       }
     }
+    .fileDialogDefaultDirectory(
+      showLoadFilePicker ? storedAppModel.resolvedDataDirectoryURL() : nil
+    )
     .alert(
       "Object File Error",
       isPresented: $showMarkerFileError,

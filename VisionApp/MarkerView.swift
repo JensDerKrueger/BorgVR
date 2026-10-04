@@ -105,11 +105,15 @@ struct MarkerView: View {
       contentType: .borgVRMarker,
       defaultFilename: BorgVRMarkerFormat.defaultFilename
     ) { result in
-      if case let .failure(error) = result {
-        markerFileError = error
-        showMarkerFileError = true
+      switch result {
+        case .success:
+          refreshMarkerCatalog()
+        case .failure(let error):
+          markerFileError = error
+          showMarkerFileError = true
       }
     }
+    .fileDialogDefaultDirectory(markerStorageDirectoryURL)
     .alert(
       "marker_file_error_title",
       isPresented: $showMarkerFileError,
@@ -137,6 +141,10 @@ struct MarkerView: View {
   }
 
   private var currentDatasetID: String? { runtimeAppModel.activeDataset?.uniqueId }
+
+  private var markerStorageDirectoryURL: URL? {
+    VolumeMarkerCatalog.storageDirectoryURL(logger: runtimeAppModel.logger)
+  }
 
   private var markerSpawnControls: some View {
     VStack(alignment: .leading, spacing: 10) {

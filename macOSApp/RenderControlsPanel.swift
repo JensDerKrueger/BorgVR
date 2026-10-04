@@ -295,11 +295,11 @@ struct RenderControlsPanel: View {
           .frame(width: columnWidth)
           .offset(x: columnStride * 2)
 
-        measurementWindowButton
+        objectWindowButton
           .frame(width: doubleColumnWidth)
           .offset(x: columnStride * 3)
 
-        objectWindowButton
+        measurementWindowButton
           .frame(width: columnWidth)
           .offset(x: columnStride * 5)
       }

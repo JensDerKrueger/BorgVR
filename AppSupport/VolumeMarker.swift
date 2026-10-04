@@ -462,7 +462,6 @@ enum VolumeMarkerCatalog {
       directories.insert(storageURL, at: 0)
     }
     var seenURLs = Set<String>()
-    var seenIDs = Set<String>()
     var result: [VolumeMarkerCatalogEntry] = []
     for (index, directory) in directories.enumerated() {
       guard let urls = try? FileManager.default.contentsOfDirectory(
@@ -476,11 +475,9 @@ enum VolumeMarkerCatalog {
         do {
           let data = try Data(contentsOf: url, options: .mappedIfSafe)
           let contents = try VolumeMarkerDocument.decode(from: data)
-          let id = identifier(for: data)
-          guard seenIDs.insert(id).inserted else { continue }
           result.append(
             VolumeMarkerCatalogEntry(
-              id: id,
+              id: path,
               datasetID: contents.datasetID,
               description: url.deletingPathExtension().lastPathComponent,
               url: url,
@@ -509,10 +506,24 @@ enum VolumeMarkerCatalog {
           byteLimit > 0,
           let directoryURL = storageDirectoryURL(logger: logger) else { return 0 }
     let remoteFiles = try manager.requestMarkerFileList()
-    var existingIDs = Set(entries(currentDatasetID: nil, logger: logger).map(\.id))
     var transferredBytes = 0
     var storedCount = 0
-    for remoteFile in remoteFiles where !existingIDs.contains(remoteFile.id) {
+    for remoteFile in remoteFiles {
+      let filename = sanitizedFilename(remoteFile.description, fallback: remoteFile.id)
+      let preferredURL = directoryURL
+        .appendingPathComponent(filename)
+        .appendingPathExtension(BorgVRMarkerFormat.fileExtension)
+      if file(at: preferredURL, hasIdentifier: remoteFile.id) {
+        continue
+      }
+
+      let fallbackURL = directoryURL
+        .appendingPathComponent("\(filename)-\(remoteFile.id)")
+        .appendingPathExtension(BorgVRMarkerFormat.fileExtension)
+      if file(at: fallbackURL, hasIdentifier: remoteFile.id) {
+        continue
+      }
+
       guard remoteFile.byteCount <= remoteMarkerByteLimit,
             transferredBytes + remoteFile.byteCount <= byteLimit else {
         logger?.warning("Marker sync limit reached before \(remoteFile.id).")
@@ -526,19 +537,12 @@ enum VolumeMarkerCatalog {
       guard contents.datasetID.caseInsensitiveCompare(remoteFile.datasetID) == .orderedSame else {
         throw BORGVRRemoteDataManagerError.invalidResponse(reason: "Marker dataset ID mismatch for \(remoteFile.id).")
       }
-      let filename = sanitizedFilename(remoteFile.description, fallback: remoteFile.id)
-      var targetURL = directoryURL
-        .appendingPathComponent(filename)
-        .appendingPathExtension(BorgVRMarkerFormat.fileExtension)
-      if FileManager.default.fileExists(atPath: targetURL.path) {
-        targetURL = directoryURL
-          .appendingPathComponent("\(filename)-\(remoteFile.id)")
-          .appendingPathExtension(BorgVRMarkerFormat.fileExtension)
-      }
+      let targetURL = FileManager.default.fileExists(atPath: preferredURL.path)
+        ? fallbackURL
+        : preferredURL
       try data.write(to: targetURL, options: .atomic)
       transferredBytes += data.count
       storedCount += 1
-      existingIDs.insert(remoteFile.id)
     }
     if storedCount > 0 {
       NotificationCenter.default.post(name: didChangeNotification, object: nil)
@@ -548,6 +552,11 @@ enum VolumeMarkerCatalog {
 
   static func identifier(for data: Data) -> String {
     Insecure.MD5.hash(data: data).map { String(format: "%02x", $0) }.joined()
+  }
+
+  private static func file(at url: URL, hasIdentifier identifier: String) -> Bool {
+    guard let data = try? Data(contentsOf: url, options: .mappedIfSafe) else { return false }
+    return self.identifier(for: data) == identifier
   }
 
   private static func sanitizedFilename(_ value: String, fallback: String) -> String {

@@ -256,11 +256,15 @@ struct MobileMarkerView: View {
         contentType: .borgVRMarker,
         defaultFilename: BorgVRMarkerFormat.defaultFilename
       ) { result in
-        if case let .failure(error) = result {
-          markerFileError = error
-          showMarkerFileError = true
+        switch result {
+          case .success:
+            refreshMarkerCatalog()
+          case .failure(let error):
+            markerFileError = error
+            showMarkerFileError = true
         }
       }
+      .fileDialogDefaultDirectory(markerStorageDirectoryURL)
       .alert(
         "Object File Error",
         isPresented: $showMarkerFileError,
@@ -283,6 +287,10 @@ struct MobileMarkerView: View {
   }
 
   private var currentDatasetID: String? { appModel.activeDataset?.uniqueId }
+
+  private var markerStorageDirectoryURL: URL? {
+    VolumeMarkerCatalog.storageDirectoryURL(logger: appModel.logger)
+  }
 
   private var selectedSceneObject: SceneMeshInstance? {
     guard let selectedID = appModel.selectedSceneMeshInstanceID else { return nil }

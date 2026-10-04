@@ -132,18 +132,18 @@ struct RenderView: View {
           Spacer(minLength: 0)
 
           HStack(spacing: 16) {
-            if docking.isDockedVisible(.measurementEditor) {
-              DockableEditorPanel(panel: .measurementEditor) {
-                MacMeasurementView()
+            if docking.isDockedVisible(.markerEditor) {
+              DockableEditorPanel(panel: .markerEditor) {
+                MacMarkerView()
               }
               .frame(width: dockedMarkerPanelWidth)
               .frame(maxHeight: .infinity)
               .transition(.move(edge: .trailing).combined(with: .opacity))
             }
 
-            if docking.isDockedVisible(.markerEditor) {
-              DockableEditorPanel(panel: .markerEditor) {
-                MacMarkerView()
+            if docking.isDockedVisible(.measurementEditor) {
+              DockableEditorPanel(panel: .measurementEditor) {
+                MacMeasurementView()
               }
               .frame(width: dockedMarkerPanelWidth)
               .frame(maxHeight: .infinity)
