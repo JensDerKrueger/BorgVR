@@ -69,6 +69,7 @@ enum VolumeRendererPipeline {
       colorAttachment.destinationRGBBlendFactor = .oneMinusSourceAlpha
       colorAttachment.sourceAlphaBlendFactor = .one
       colorAttachment.destinationAlphaBlendFactor = .oneMinusSourceAlpha
+      descriptor.colorAttachments[1].pixelFormat = .r32Float
       descriptor.depthAttachmentPixelFormat = depthFormat
       return descriptor
     }
@@ -110,6 +111,8 @@ enum VolumeRendererPipeline {
     compositeDescriptor.vertexFunction = markerCompositeVertexFunction
     compositeDescriptor.fragmentFunction = markerCompositeFragmentFunction
     compositeDescriptor.colorAttachments[0].pixelFormat = colorFormat
+    compositeDescriptor.colorAttachments[1].pixelFormat = .r32Float
+    compositeDescriptor.colorAttachments[1].writeMask = []
     compositeDescriptor.depthAttachmentPixelFormat = depthFormat
     if let colorAttachment = compositeDescriptor.colorAttachments[0] {
       colorAttachment.isBlendingEnabled = true

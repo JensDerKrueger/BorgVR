@@ -11,6 +11,11 @@ extension UTType {
   )
 }
 
+enum SceneObjectPrototype: Hashable {
+  case sphere
+  case mesh(UUID)
+}
+
 enum SceneMeshTextureEncoding: UInt8 {
   case none = 0
   case png = 1
@@ -27,6 +32,7 @@ struct SceneMeshVertex: Equatable {
 struct SceneMeshReference: Equatable, Hashable {
   var assetID: UUID
   var name: String
+  var assetDescription: String
   var boundsMinimum: SIMD3<Float>
   var boundsMaximum: SIMD3<Float>
 
@@ -43,6 +49,7 @@ struct SceneMeshReference: Equatable, Hashable {
 struct SceneMeshAsset: Identifiable, Equatable {
   var id: UUID
   var name: String
+  var assetDescription: String
   var vertices: [SceneMeshVertex]
   var indices: [UInt32]
   var baseColor: SIMD3<Float>
@@ -55,6 +62,7 @@ struct SceneMeshAsset: Identifiable, Equatable {
     SceneMeshReference(
       assetID: id,
       name: name,
+      assetDescription: assetDescription,
       boundsMinimum: boundsMinimum,
       boundsMaximum: boundsMaximum
     )
@@ -191,7 +199,20 @@ enum SceneMeshDocument {
     writer.write(BorgVRMeshFormat.version)
     writer.write(UInt16(0))
     writer.writeUUID(asset.id)
-    writer.writeString(asset.name, maxCharacterCount: BorgVRMeshFormat.maximumNameCharacterCount)
+    let nameData = encodedText(
+      asset.name,
+      maximumCharacterCount: BorgVRMeshFormat.maximumNameCharacterCount,
+      maximumByteCount: BorgVRMeshFormat.maximumNameByteCount
+    )
+    let descriptionData = encodedText(
+      asset.assetDescription,
+      maximumCharacterCount: BorgVRMeshFormat.maximumDescriptionCharacterCount,
+      maximumByteCount: BorgVRMeshFormat.maximumDescriptionByteCount
+    )
+    writer.write(UInt16(nameData.count))
+    writer.write(UInt16(descriptionData.count))
+    writer.writeBytes(nameData)
+    writer.writeBytes(descriptionData)
     writer.writeSIMD3(asset.baseColor.clamped01)
     writer.writeSIMD3(asset.boundsMinimum)
     writer.writeSIMD3(asset.boundsMaximum)
@@ -233,7 +254,22 @@ enum SceneMeshDocument {
     }
     _ = try reader.read() as UInt16
     let id = try reader.readUUID()
-    let name = try reader.readString(maxByteCount: BorgVRMeshFormat.maximumNameByteCount)
+    let nameByteCount = Int(try reader.read() as UInt16)
+    let descriptionByteCount = Int(try reader.read() as UInt16)
+    guard nameByteCount <= BorgVRMeshFormat.maximumNameByteCount,
+          descriptionByteCount <= BorgVRMeshFormat.maximumDescriptionByteCount else {
+      throw SceneMeshDocumentError.invalidFormat
+    }
+    guard let name = String(
+            data: try reader.readBytes(count: nameByteCount),
+            encoding: .utf8
+          ),
+          let assetDescription = String(
+            data: try reader.readBytes(count: descriptionByteCount),
+            encoding: .utf8
+          ) else {
+      throw SceneMeshDocumentError.invalidFormat
+    }
     let baseColor = try reader.readSIMD3()
     let boundsMinimum = try reader.readSIMD3()
     let boundsMaximum = try reader.readSIMD3()
@@ -282,7 +318,8 @@ enum SceneMeshDocument {
     let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
     return SceneMeshAsset(
       id: id,
-      name: trimmedName.isEmpty ? "Mesh" : trimmedName,
+      name: trimmedName.isEmpty ? "Object" : trimmedName,
+      assetDescription: assetDescription.trimmingCharacters(in: .whitespacesAndNewlines),
       vertices: vertices,
       indices: indices,
       baseColor: baseColor.clamped01,
@@ -291,6 +328,14 @@ enum SceneMeshDocument {
       boundsMinimum: boundsMinimum,
       boundsMaximum: boundsMaximum
     )
+  }
+
+  private static func encodedText(
+    _ value: String,
+    maximumCharacterCount: Int,
+    maximumByteCount: Int
+  ) -> Data {
+    Data(String(value.prefix(maximumCharacterCount)).utf8.prefix(maximumByteCount))
   }
 }
 
@@ -307,6 +352,10 @@ enum SceneMeshInstanceCodec {
       writer.writeUUID(instance.asset.assetID)
       writer.writeString(instance.name, maxCharacterCount: BorgVRMeshFormat.maximumNameCharacterCount)
       writer.writeString(instance.asset.name, maxCharacterCount: BorgVRMeshFormat.maximumNameCharacterCount)
+      writer.writeString(
+        instance.asset.assetDescription,
+        maxCharacterCount: BorgVRMeshFormat.maximumDescriptionCharacterCount
+      )
       writer.writeSIMD3(instance.asset.boundsMinimum)
       writer.writeSIMD3(instance.asset.boundsMaximum)
       writer.writeSIMD3(instance.translationMeters)
@@ -331,6 +380,9 @@ enum SceneMeshInstanceCodec {
       let assetID = try reader.readUUID()
       let rawName = try reader.readString(maxByteCount: BorgVRMeshFormat.maximumNameByteCount)
       let rawAssetName = try reader.readString(maxByteCount: BorgVRMeshFormat.maximumNameByteCount)
+      let assetDescription = try reader.readString(
+        maxByteCount: BorgVRMeshFormat.maximumDescriptionByteCount
+      )
       let boundsMinimum = try reader.readSIMD3()
       let boundsMaximum = try reader.readSIMD3()
       let translation = try reader.readSIMD3()
@@ -347,10 +399,11 @@ enum SceneMeshInstanceCodec {
       let name = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
       instances.append(SceneMeshInstance(
         id: id,
-        name: name.isEmpty ? "Mesh \(index + 1)" : name,
+        name: name.isEmpty ? "Object \(index + 1)" : name,
         asset: SceneMeshReference(
           assetID: assetID,
-          name: assetName.isEmpty ? "Mesh" : assetName,
+          name: assetName.isEmpty ? "Object" : assetName,
+          assetDescription: assetDescription.trimmingCharacters(in: .whitespacesAndNewlines),
           boundsMinimum: boundsMinimum,
           boundsMaximum: boundsMaximum
         ),
@@ -423,22 +476,33 @@ enum SceneMeshAssetCatalog {
     return nil
   }
 
-  static func allAssets(logger: LoggerBase? = nil) -> [SceneMeshAsset] {
-    guard let directory = storageDirectoryURL(logger: logger),
-          let urls = try? FileManager.default.contentsOfDirectory(
-            at: directory,
-            includingPropertiesForKeys: nil,
-            options: .skipsHiddenFiles
-          ) else { return [] }
+  static func allAssets(
+    additionalDirectoryURLs: [URL] = [],
+    logger: LoggerBase? = nil
+  ) -> [SceneMeshAsset] {
+    var directories = additionalDirectoryURLs
+    if let storageDirectory = storageDirectoryURL(logger: logger) {
+      directories.insert(storageDirectory, at: 0)
+    }
+    var visitedDirectories = Set<String>()
     var assets: [UUID: SceneMeshAsset] = [:]
-    for url in urls where url.pathExtension.lowercased() == BorgVRMeshFormat.fileExtension {
-      do {
-        let asset = try SceneMeshDocument.decode(
-          from: Data(contentsOf: url, options: .mappedIfSafe)
-        )
-        assets[asset.id] = asset
-      } catch {
-        logger?.warning("Ignoring mesh file \(url.lastPathComponent): \(error.localizedDescription)")
+    for directory in directories {
+      let canonicalPath = directory.standardizedFileURL.resolvingSymlinksInPath().path
+      guard visitedDirectories.insert(canonicalPath).inserted,
+            let urls = try? FileManager.default.contentsOfDirectory(
+              at: directory,
+              includingPropertiesForKeys: nil,
+              options: .skipsHiddenFiles
+            ) else { continue }
+      for url in urls where url.pathExtension.lowercased() == BorgVRMeshFormat.fileExtension {
+        do {
+          let asset = try SceneMeshDocument.decode(
+            from: Data(contentsOf: url, options: .mappedIfSafe)
+          )
+          assets[asset.id] = asset
+        } catch {
+          logger?.warning("Ignoring mesh file \(url.lastPathComponent): \(error.localizedDescription)")
+        }
       }
     }
     return assets.values.sorted {
@@ -459,6 +523,7 @@ enum SceneMeshAssetCatalog {
         id: asset.id,
         filename: url.path,
         name: asset.name,
+        meshDescription: asset.assetDescription,
         byteCount: byteCount
       )
     }

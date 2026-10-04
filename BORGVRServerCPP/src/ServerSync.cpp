@@ -748,7 +748,7 @@ bool syncMesh(const ServerSyncEndpoint& endpoint,
   RemoteClient client(endpoint, logger);
   client.connectAndAuthenticate();
   const auto payload = client.getMesh(mesh.id);
-  if (payload.size() != mesh.byteCount || payload.size() < 30 ||
+  if (payload.size() != mesh.byteCount || payload.size() < 32 ||
       !std::equal(BorgVRFormat::kMeshMagic.begin(), BorgVRFormat::kMeshMagic.end(), payload.begin()) ||
       payload[8] != static_cast<uint8_t>(BorgVRFormat::kMeshVersion) || payload[9] != 0) {
     throw std::runtime_error("Invalid mesh payload");

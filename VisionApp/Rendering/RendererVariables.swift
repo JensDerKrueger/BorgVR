@@ -61,6 +61,8 @@ final actor Renderer {
   var pipelineStateMeasurementLine: MTLRenderPipelineState
   /// Render pipeline state for screen-view participant labels.
   var pipelineStateScreenViewLabel: MTLRenderPipelineState
+  /// Screen-view and measurement labels drawn after the volume pass.
+  var pipelineStateScreenViewOverlayLabel: MTLRenderPipelineState
   /// Render pipeline state for compositing marker color under the volume.
   var pipelineStateMarkerComposite: MTLRenderPipelineState
   /// Depth stencil state for rendering.
@@ -104,8 +106,15 @@ final actor Renderer {
   let rasterSampleCount: Int
   /// Current index into the memoryless target textures.
   var currentRenderTargetIndex: Int = 0
-  /// An array of memoryless target textures (color and depth) for rendering.
-  var memorylessTargets: [(color: MTLTexture, depth: MTLTexture)?]
+  /// Current index into the CPU-readable interaction-depth textures.
+  var currentInteractionDepthIndex: Int = 0
+  /// An array of memoryless target textures for multisampled rendering.
+  var memorylessTargets: [(color: MTLTexture, depth: MTLTexture, interactionDepth: MTLTexture)?]
+  /// Resolved interaction depth from recent frames.
+  var interactionDepthTextures: [MTLTexture?]
+  /// Matrices matching the interaction texture currently being rendered.
+  var currentTextureToClipMatrices: [simd_float4x4] = []
+  var currentWorldToClipMatrices: [simd_float4x4] = []
 
   /// An ARKit session for augmented reality tracking.
   let borgARProvider : BorgARProvider
@@ -161,6 +170,8 @@ final actor Renderer {
   var spatialControllerSamples: [BorgSpatialInputSample] = []
   /// Local-only spheres at the tracked controller tips.
   var spatialControllerPreviewPoints: [VolumeMarkerPoint] = []
+  /// Local-only previews of the selected imported object at controller or stylus tips.
+  var spatialSceneObjectPreviewInstances: [SceneMeshInstance] = []
   /// Local-only glyphs that show each controller's independently selected tool.
   var spatialControllerModePreviewMarkers: [VolumeMarker] = []
   /// Timestamp and activity state for the most recent SharePlay tool-tip update.
@@ -270,6 +281,7 @@ final actor Renderer {
     self.spatialStylusTipFilterState = nil
     self.spatialStylusPreviewPoint = nil
     self.spatialStylusMeasurementPreviewMarkers = []
+    self.spatialSceneObjectPreviewInstances = []
     self.spatialControllerModePreviewMarkers = []
     self.lastSpatialToolPreviewShareTime = 0
     self.spatialToolPreviewsWereShared = false
@@ -338,6 +350,10 @@ final actor Renderer {
     }
 
     self.memorylessTargets = .init(repeating: nil, count: runtimeAppModel.maxBuffersInFlight)
+    self.interactionDepthTextures = .init(
+      repeating: nil,
+      count: runtimeAppModel.maxBuffersInFlight
+    )
 
     self.uniformBufferVertex = try AlignedBuffer<VertexUniformsArray>(
       device: device,
@@ -358,6 +374,7 @@ final actor Renderer {
        pipelineStateSceneMesh,
        pipelineStateMeasurementLine,
        pipelineStateScreenViewLabel,
+       pipelineStateScreenViewOverlayLabel,
        pipelineStateMarkerComposite,
        pipelineStateTFHUD,
        pipelineStateTFHUDControls) =

@@ -214,7 +214,7 @@ struct macOSApp: App {
     .defaultSize(width: 760, height: 480)
     .restorationBehavior(.disabled)
 
-    WindowGroup("Markers", id: DockablePanelID.markerEditor.windowID) {
+    WindowGroup("Objects", id: DockablePanelID.markerEditor.windowID) {
       DetachedPanelContent(panel: .markerEditor)
         .environmentObject(appModel)
         .environmentObject(renderingParameters)

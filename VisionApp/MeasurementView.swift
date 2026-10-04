@@ -4,6 +4,7 @@ import UniformTypeIdentifiers
 struct MeasurementView: View {
   @Environment(RuntimeAppModel.self) private var runtimeAppModel
   @Environment(SharedAppModel.self) private var sharedAppModel
+  @EnvironmentObject private var storedAppModel: StoredAppModel
 
   @State private var showDeleteAllConfirmation = false
   @State private var showLoadFilePicker = false
@@ -21,16 +22,10 @@ struct MeasurementView: View {
         .bold()
         .frame(maxWidth: .infinity, alignment: .center)
 
-      Picker("private_interaction_picker_label", selection: interactionModeBinding) {
-        Text("private_interaction_option_model").tag("model")
-        Text("private_interaction_option_clipping").tag("clipping")
-        Text("private_interaction_option_marker").tag("marker")
-        Text("private_interaction_option_measurement").tag("measurement")
-        if hasSharedScreenView {
-          Text("Screen View").tag("screenView")
-        }
-      }
-      .pickerStyle(.segmented)
+      InteractionModePicker(
+        selection: interactionModeBinding,
+        showsScreenView: hasSharedScreenView
+      )
 
       Picker("measurement_kind_picker", selection: measurementKindBinding) {
         Label("measurement_kind_length", systemImage: "ruler").tag(VolumeMeasurementKind.length)
@@ -38,6 +33,8 @@ struct MeasurementView: View {
         Label("measurement_kind_volume", systemImage: "cube").tag(VolumeMeasurementKind.volume)
       }
       .pickerStyle(.segmented)
+
+      Toggle("Snap to Volume", isOn: projectMeasurementsOntoVolumeBinding)
 
       HStack {
         Button {
@@ -248,7 +245,7 @@ struct MeasurementView: View {
       get: { runtimeAppModel.interactionMode.rawValue },
       set: { rawValue in
         guard let mode = RuntimeAppModel.InteractionMode(rawValue: rawValue) else { return }
-        if mode != .marker {
+        if mode != .drawing && mode != .objectPlacement {
           sharedAppModel.clearVolumeMarkerSelection()
         }
         if mode != .measurement {
@@ -270,6 +267,13 @@ struct MeasurementView: View {
           sharedAppModel.selectedVolumeMeasurementPointID = nil
         }
       }
+    )
+  }
+
+  private var projectMeasurementsOntoVolumeBinding: Binding<Bool> {
+    Binding(
+      get: { storedAppModel.projectMeasurementsOntoVolume },
+      set: { storedAppModel.projectMeasurementsOntoVolume = $0 }
     )
   }
 

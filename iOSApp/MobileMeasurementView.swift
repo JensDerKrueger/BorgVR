@@ -24,6 +24,8 @@ struct MobileMeasurementView: View {
         }
         .pickerStyle(.segmented)
 
+        Toggle("Project onto Volume", isOn: $appModel.projectMeasurementsOntoVolume)
+
         HStack {
           Button {
             _ = appModel.createVolumeMeasurement()

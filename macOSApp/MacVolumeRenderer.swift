@@ -141,7 +141,7 @@ final class MacVolumeRenderer: NSObject, MTKViewDelegate {
     frame.commandBuffer.addCompletedHandler { [weak self] commandBuffer in
       Task { @MainActor in
         guard let self else { return }
-        let missingBrickCount = self.core.completeFrame(commandBuffer)
+        let missingBrickCount = self.core.completeFrame(frame)
         self.appModel.recordCompletedRenderFrame(
           datasetKey: self.core.loadedDatasetKey,
           missingBrickCount: missingBrickCount

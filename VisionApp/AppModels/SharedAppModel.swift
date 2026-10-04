@@ -37,16 +37,6 @@ enum ScreenViewPresentation {
   }
 }
 
-enum SceneObjectPrototype: Hashable {
-  case sphere
-  case mesh(UUID)
-}
-
-enum HandMarkerTool: String, CaseIterable {
-  case drawing
-  case placement
-}
-
 // MARK: - SharedAppModel
 
 /**
@@ -135,10 +125,9 @@ class SharedAppModel {
   var sceneMeshAssets: [UUID: SceneMeshAsset]
   var sceneMeshInstances: [SceneMeshInstance]
   var selectedSceneMeshInstanceID: UUID?
-  /// Local catalog selection and one-shot placement request. Neither is synchronized.
+  /// Local object catalog selection and optional accessory placement request. Neither is synchronized.
   var selectedSceneObjectPrototype: SceneObjectPrototype
   var armedSceneObjectPrototype: SceneObjectPrototype?
-  var handMarkerTool: HandMarkerTool
   /// Locally selected markers. These are intentionally not synchronized.
   var selectedVolumeMarkerIDs: Set<UUID>
   /// Primary local marker used for direct manipulation.
@@ -227,7 +216,6 @@ class SharedAppModel {
     sceneMeshInstances = []
     selectedSceneObjectPrototype = .sphere
     armedSceneObjectPrototype = nil
-    handMarkerTool = .placement
     selectedSceneMeshInstanceID = nil
     selectedVolumeMarkerIDs = []
     selectedVolumeMarkerID = nil
@@ -239,7 +227,7 @@ class SharedAppModel {
     screenViewNamesVisible = true
     screenViewInteractionActive = false
     defaultVolumeMarkerRadius = VolumeMarkerRadius.sphereDefault
-    defaultVolumeMarkerShowsDirection = true
+    defaultVolumeMarkerShowsDirection = false
     defaultVolumeStrokeRadius = VolumeMarkerRadius.strokeDefault
     defaultVolumeStrokeColor = SIMD4<Float>(1, 0, 0, 1)
     storedVolumeMeasurements = []
@@ -249,6 +237,7 @@ class SharedAppModel {
     groupActivityHelper = GroupActivityHelper(self)
 
     reset()
+    refreshSceneMeshCatalog()
     updateRanges(minValue: 0, maxValue: 1, rangeMax: 1)
   }
 
@@ -306,13 +295,17 @@ class SharedAppModel {
     remoteSpatialToolPreviews.removeAll()
   }
 
-  func nextVolumeMarkerName() -> String {
+  func nextVolumeMarkerName(for kind: VolumeMarkerKind = .sphere) -> String {
+    let baseName = switch kind {
+      case .sphere: String(localized: "Marker")
+      case .stroke: String(localized: "Stroke")
+    }
     let usedNames = Set(volumeMarkers.map(\.name))
-    var markerIndex = volumeMarkers.count + 1
-    while usedNames.contains("Marker \(markerIndex)") {
+    var markerIndex = volumeMarkers.count(where: { $0.kind == kind }) + 1
+    while usedNames.contains("\(baseName) \(markerIndex)") {
       markerIndex += 1
     }
-    return "Marker \(markerIndex)"
+    return "\(baseName) \(markerIndex)"
   }
 
   @MainActor func leaveGroupActivity() {
@@ -409,13 +402,12 @@ class SharedAppModel {
     sceneMeshInstances = []
     selectedSceneObjectPrototype = .sphere
     armedSceneObjectPrototype = nil
-    handMarkerTool = .placement
     selectedSceneMeshInstanceID = nil
     selectedVolumeMarkerID = nil
     remoteSpatialToolPreviews = [:]
     screenViewInteractionActive = false
     defaultVolumeMarkerRadius = VolumeMarkerRadius.sphereDefault
-    defaultVolumeMarkerShowsDirection = true
+    defaultVolumeMarkerShowsDirection = false
     defaultVolumeStrokeRadius = VolumeMarkerRadius.strokeDefault
     defaultVolumeStrokeColor = SIMD4<Float>(1, 0, 0, 1)
     volumeMeasurements = []
@@ -457,12 +449,51 @@ class SharedAppModel {
     }
   }
 
+  func refreshSceneMeshCatalog() {
+    let documentsURLs = FileManager.default.urls(
+      for: .documentDirectory,
+      in: .userDomainMask
+    )
+    for asset in SceneMeshAssetCatalog.allAssets(
+      additionalDirectoryURLs: documentsURLs
+    ) {
+      sceneMeshAssets[asset.id] = asset
+    }
+    validateSelectedSceneObjectPrototype()
+  }
+
+  @discardableResult
+  func validateSelectedSceneObjectPrototype() -> SceneObjectPrototype {
+    guard case .mesh(let assetID) = selectedSceneObjectPrototype else {
+      return selectedSceneObjectPrototype
+    }
+    if sceneMeshAssets[assetID] == nil,
+       let asset = SceneMeshAssetCatalog.load(assetID: assetID) {
+      sceneMeshAssets[assetID] = asset
+    }
+    guard sceneMeshAssets[assetID] != nil else {
+      selectedSceneObjectPrototype = .sphere
+      return .sphere
+    }
+    return selectedSceneObjectPrototype
+  }
+
   func armSelectedSceneObjectForPlacement() {
-    armedSceneObjectPrototype = selectedSceneObjectPrototype
+    armedSceneObjectPrototype = validateSelectedSceneObjectPrototype()
   }
 
   func cancelSceneObjectPlacement() {
     armedSceneObjectPrototype = nil
+  }
+
+  func selectNextSceneObjectPrototype() {
+    refreshSceneMeshCatalog()
+    let meshPrototypes = sceneMeshAssets.values
+      .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+      .map { SceneObjectPrototype.mesh($0.id) }
+    let prototypes: [SceneObjectPrototype] = [.sphere] + meshPrototypes
+    let currentIndex = prototypes.firstIndex(of: selectedSceneObjectPrototype) ?? -1
+    selectedSceneObjectPrototype = prototypes[(currentIndex + 1) % prototypes.count]
   }
 
   @discardableResult

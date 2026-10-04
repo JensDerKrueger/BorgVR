@@ -22,7 +22,7 @@ enum DockablePanelID: String, CaseIterable, Identifiable {
       case .isoEditor:
         return "Isovalue"
       case .markerEditor:
-        return "Markers"
+        return "Objects"
       case .measurementEditor:
         return "measurement_window_title"
       case .lightingEditor:

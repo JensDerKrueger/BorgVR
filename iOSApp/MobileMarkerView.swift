@@ -9,7 +9,6 @@ struct MobileMarkerView: View {
   @State private var confirmDeleteAll = false
   @State private var showLoadFilePicker = false
   @State private var showSaveFilePicker = false
-  @State private var showMeshEditor = false
   @State private var pendingLoadedMarkers: [VolumeMarker] = []
   @State private var pendingLoadedMeshInstances: [SceneMeshInstance] = []
   @State private var showLoadMergeChoice = false
@@ -21,12 +20,26 @@ struct MobileMarkerView: View {
   var body: some View {
     NavigationStack {
       Form {
-        Section("Markers") {
-          if appModel.volumeMarkers.isEmpty {
+        Section("Active Object") {
+          SceneObjectCatalogView(
+            assets: $appModel.sceneMeshAssets,
+            selectedPrototype: $appModel.selectedSceneObjectPrototype,
+            datasetExtentMeters: appModel.activeDatasetMetadata?.physicalExtentMeters,
+            logger: appModel.logger,
+            additionalDirectoryURLs: FileManager.default.urls(
+              for: .documentDirectory,
+              in: .userDomainMask
+            )
+          )
+          Toggle("Project onto Volume", isOn: $appModel.projectObjectsOntoVolume)
+        }
+
+        Section("Objects") {
+          if appModel.volumeMarkers.isEmpty && appModel.sceneMeshInstances.isEmpty {
             ContentUnavailableView(
-              "No Markers",
-              systemImage: "mappin.slash",
-              description: Text("Choose the Marker interaction mode and drag in the rendering view to add a marker.")
+              "No Objects",
+              systemImage: "cube.transparent",
+              description: Text("Choose Draw or Place and interact with the rendering view.")
             )
           } else {
             ForEach(appModel.volumeMarkers) { marker in
@@ -38,7 +51,8 @@ struct MobileMarkerView: View {
                   selection.insert(marker.id)
                 }
                 appModel.setVolumeMarkerSelection(selection, primary: marker.id)
-                appModel.interactionMode = .marker
+                appModel.selectedSceneMeshInstanceID = nil
+                appModel.interactionMode = marker.kind == .stroke ? .drawing : .objectPlacement
               } label: {
                 HStack {
                   Circle()
@@ -57,6 +71,32 @@ struct MobileMarkerView: View {
                   }
                   Spacer()
                   if appModel.selectedVolumeMarkerIDs.contains(marker.id) {
+                    Image(systemName: "checkmark")
+                  }
+                }
+              }
+            }
+            ForEach(appModel.sceneMeshInstances) { instance in
+              Button {
+                appModel.clearVolumeMarkerSelection()
+                appModel.selectedSceneMeshInstanceID = instance.id
+                appModel.interactionMode = .objectPlacement
+              } label: {
+                HStack {
+                  Image(systemName: "cube.fill")
+                    .foregroundStyle(.tint)
+                  VStack(alignment: .leading, spacing: 1) {
+                    Text(instance.name)
+                      .foregroundStyle(.primary)
+                    Text(instance.asset.assetDescription.isEmpty
+                      ? instance.asset.name
+                      : instance.asset.assetDescription)
+                      .font(.caption)
+                      .foregroundStyle(.secondary)
+                      .lineLimit(2)
+                  }
+                  Spacer()
+                  if appModel.selectedSceneMeshInstanceID == instance.id {
                     Image(systemName: "checkmark")
                   }
                 }
@@ -87,16 +127,24 @@ struct MobileMarkerView: View {
           }
         }
 
-        Section("Marker Files") {
-          Button {
-            showMeshEditor = true
-          } label: {
-            Label("Meshes…", systemImage: "cube.transparent")
-          }
+        if let selectedObject = selectedSceneObject {
+          Section("Selected Object") {
+            LabeledContent("Name", value: selectedObject.name)
+            Text(selectedObject.asset.assetDescription.isEmpty
+              ? selectedObject.asset.name
+              : selectedObject.asset.assetDescription)
+              .foregroundStyle(.secondary)
 
+            Button("Delete Selected Object", role: .destructive) {
+              deleteSelectedMarker()
+            }
+          }
+        }
+
+        Section("Object Files") {
           Menu {
             if markerCatalog.isEmpty {
-              Text("No Marker Files Available")
+              Text("No Object Files Available")
             } else {
               ForEach(markerCatalog) { entry in
                 Button {
@@ -111,31 +159,31 @@ struct MobileMarkerView: View {
               }
             }
           } label: {
-            Label("Marker Files", systemImage: "mappin.and.ellipse")
+            Label("Object Files", systemImage: "shippingbox")
           }
 
           Button {
             showLoadFilePicker = true
           } label: {
-            Label("Load Markers…", systemImage: "folder")
+            Label("Load Objects...", systemImage: "folder")
           }
 
           Button {
             showSaveFilePicker = true
           } label: {
-            Label("Save Markers…", systemImage: "square.and.arrow.down")
+            Label("Save Objects...", systemImage: "square.and.arrow.down")
           }
           .disabled(appModel.volumeMarkers.isEmpty && appModel.sceneMeshInstances.isEmpty)
         }
 
         Section {
-          Button("Delete All Markers", role: .destructive) {
+          Button("Delete All Objects", role: .destructive) {
             confirmDeleteAll = true
           }
-          .disabled(appModel.volumeMarkers.isEmpty)
+          .disabled(appModel.volumeMarkers.isEmpty && appModel.sceneMeshInstances.isEmpty)
         }
       }
-      .navigationTitle("Markers")
+      .navigationTitle("Objects")
       .navigationBarTitleDisplayMode(.inline)
       .toolbar {
         ToolbarItem(placement: .confirmationAction) {
@@ -147,45 +195,49 @@ struct MobileMarkerView: View {
         }
       }
       .confirmationDialog(
-        "Delete All Markers?",
+        "Delete All Objects?",
         isPresented: $confirmDeleteAll,
         titleVisibility: .visible
       ) {
-        Button("Delete All Markers", role: .destructive) {
-          if appModel.removeAllVolumeMarkers() {
+        Button("Delete All Objects", role: .destructive) {
+          let hadObjects = !appModel.volumeMarkers.isEmpty || !appModel.sceneMeshInstances.isEmpty
+          _ = appModel.removeAllVolumeMarkers()
+          appModel.sceneMeshInstances.removeAll()
+          appModel.selectedSceneMeshInstanceID = nil
+          if hadObjects {
             synchronizeMarkers()
           }
         }
         Button("Cancel", role: .cancel) {}
       } message: {
-        Text("This removes every marker from the current session.")
+        Text("This removes every annotation object from the current session.")
       }
       .confirmationDialog(
-        "Markers for a Different Dataset",
+        "Objects for a Different Dataset",
         isPresented: $showDatasetMismatchWarning,
         titleVisibility: .visible
       ) {
         Button("Load Anyway") { continueLoadingMarkers() }
         Button("Cancel", role: .cancel) { clearPendingLoad() }
       } message: {
-        Text("This marker file was created for a different dataset. Its positions may not match the current volume. Do you still want to load it?")
+        Text("This object file was created for a different dataset. Its positions may not match the current volume. Do you still want to load it?")
       }
       .confirmationDialog(
-        "Load Markers",
+        "Load Objects",
         isPresented: $showLoadMergeChoice,
         titleVisibility: .visible
       ) {
-        Button("Replace Existing Markers", role: .destructive) {
+        Button("Replace Existing Objects", role: .destructive) {
           applyLoadedMarkers(replacingExisting: true)
         }
-        Button("Add Loaded Markers") {
+        Button("Add Loaded Objects") {
           applyLoadedMarkers(replacingExisting: false)
         }
         Button("Cancel", role: .cancel) {
           clearPendingLoad()
         }
       } message: {
-        Text("Markers already exist in the current session. Do you want to replace them or add the loaded markers?")
+        Text("Objects already exist in the current session. Do you want to replace them or add the loaded objects?")
       }
       .fileImporter(
         isPresented: $showLoadFilePicker,
@@ -193,16 +245,6 @@ struct MobileMarkerView: View {
         allowsMultipleSelection: false
       ) { result in
         loadMarkers(from: result)
-      }
-      .sheet(isPresented: $showMeshEditor) {
-        SceneMeshEditorView(
-          assets: $appModel.sceneMeshAssets,
-          instances: $appModel.sceneMeshInstances,
-          selectedInstanceID: $appModel.selectedSceneMeshInstanceID,
-          datasetExtentMeters: appModel.activeDatasetMetadata?.physicalExtentMeters,
-          logger: appModel.logger,
-          synchronize: synchronizeMarkers
-        )
       }
       .fileExporter(
         isPresented: $showSaveFilePicker,
@@ -220,7 +262,7 @@ struct MobileMarkerView: View {
         }
       }
       .alert(
-        "Marker File Error",
+        "Object File Error",
         isPresented: $showMarkerFileError,
         presenting: markerFileError
       ) { _ in
@@ -242,12 +284,17 @@ struct MobileMarkerView: View {
 
   private var currentDatasetID: String? { appModel.activeDataset?.uniqueId }
 
+  private var selectedSceneObject: SceneMeshInstance? {
+    guard let selectedID = appModel.selectedSceneMeshInstanceID else { return nil }
+    return appModel.sceneMeshInstances.first { $0.id == selectedID }
+  }
+
   private var selectedMarkersTitle: LocalizedStringKey {
-    selectedMarkerIndices.count == 1 ? "Selected Marker" : "Selected Markers"
+    selectedMarkerIndices.count == 1 ? "Selected Object" : "Selected Objects"
   }
 
   private var deleteSelectedMarkersTitle: LocalizedStringKey {
-    selectedMarkerIndices.count == 1 ? "Delete Selected Marker" : "Delete Selected Markers"
+    selectedMarkerIndices.count == 1 ? "Delete Selected Object" : "Delete Selected Objects"
   }
 
   private var selectedMarkerIndex: Int? {
@@ -361,7 +408,14 @@ struct MobileMarkerView: View {
 
   private func deleteSelectedMarker() {
     let selectedIDs = appModel.selectedVolumeMarkerIDs
-    if appModel.removeVolumeMarkers(withIDs: selectedIDs) {
+    let removedMarkers = appModel.removeVolumeMarkers(withIDs: selectedIDs)
+    let removedObject: Bool
+    if let instanceID = appModel.selectedSceneMeshInstanceID {
+      removedObject = appModel.removeSceneMeshInstance(id: instanceID)
+    } else {
+      removedObject = false
+    }
+    if removedMarkers || removedObject {
       synchronizeMarkers()
     }
   }

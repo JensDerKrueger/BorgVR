@@ -16,6 +16,8 @@ enum ScreenDatasetUpdate {
 struct ScreenVolumeEncodedFrame {
   let commandBuffer: MTLCommandBuffer
   let drawable: CAMetalDrawable
+  let interactionDepthTexture: MTLTexture
+  let textureToClip: simd_float4x4
 }
 
 @MainActor
@@ -58,6 +60,11 @@ final class ScreenVolumeRendererCore {
   private let minimumPipelineDrawableWidth: Float = 64
   private let pipelineWidthChangeThreshold: Float = 32
   private let markerRenderer = ScreenVolumeMarkerRenderer()
+  private var interactionDepthTextures: [MTLTexture?] = Array(repeating: nil, count: 3)
+  private var nextInteractionDepthTextureIndex = 0
+  private var interactionDepthSnapshot: VolumeInteractionDepthSnapshot?
+  private var frozenStrokeInteractionDepthSnapshot: VolumeInteractionDepthSnapshot?
+  private var currentTextureToClip = matrix_identity_float4x4
 
   init(
     appModel: AppModel,
@@ -110,8 +117,27 @@ final class ScreenVolumeRendererCore {
     appModel.markerPositionHandler = { [weak self] screenPosition, existingPosition in
       self?.markerPosition(at: screenPosition, preservingDepthOf: existingPosition)
     }
+    appModel.projectedVolumePositionHandler = { [weak self] screenPosition, existingPosition in
+      let snapshot = self?.frozenStrokeInteractionDepthSnapshot ?? self?.interactionDepthSnapshot
+      return snapshot?.normalizedVolumePosition(
+        at: screenPosition,
+        smoothingDepthFrom: self?.frozenStrokeInteractionDepthSnapshot == nil
+          ? nil
+          : existingPosition
+      )
+    }
+    appModel.beginProjectedStrokeHandler = { [weak self] in
+      guard let self, frozenStrokeInteractionDepthSnapshot == nil else { return }
+      frozenStrokeInteractionDepthSnapshot = interactionDepthSnapshot?.frozenCopy()
+    }
+    appModel.endProjectedStrokeHandler = { [weak self] in
+      self?.frozenStrokeInteractionDepthSnapshot = nil
+    }
     appModel.markerHitTestHandler = { [weak self] screenPosition in
       self?.markerHit(at: screenPosition)
+    }
+    appModel.sceneObjectHitTestHandler = { [weak self] screenPosition in
+      self?.sceneObjectHit(at: screenPosition)
     }
     appModel.markerDirectionOriginHandler = { [weak self] screenPosition in
       self?.markerDirectionOrigin(at: screenPosition)
@@ -188,6 +214,18 @@ final class ScreenVolumeRendererCore {
     updateUniforms(for: view)
     updateEmptiness()
 
+    guard let interactionDepthTexture = interactionDepthTexture(
+      device: device,
+      drawableSize: view.drawableSize
+    ) else { return nil }
+    guard let interactionAttachment = renderPassDescriptor.colorAttachments[1] else {
+      return nil
+    }
+    interactionAttachment.texture = interactionDepthTexture
+    interactionAttachment.loadAction = .clear
+    interactionAttachment.storeAction = .store
+    interactionAttachment.clearColor = MTLClearColorMake(-1, 0, 0, 0)
+
     let markerMatrices = markerFrameMatrices(for: view)
     guard let markerTargets = markerRenderer.renderPrepass(
       commandBuffer: commandBuffer,
@@ -251,11 +289,20 @@ final class ScreenVolumeRendererCore {
     )
     renderEncoder.endEncoding()
     updateMeasurementScreenLabels(matrices: markerMatrices)
-    return ScreenVolumeEncodedFrame(commandBuffer: commandBuffer, drawable: drawable)
+    return ScreenVolumeEncodedFrame(
+      commandBuffer: commandBuffer,
+      drawable: drawable,
+      interactionDepthTexture: interactionDepthTexture,
+      textureToClip: currentTextureToClip
+    )
   }
 
-  func completeFrame(_ commandBuffer: MTLCommandBuffer) -> Int {
-    let missingBrickCount = readBackHashTable(commandBuffer: commandBuffer)
+  func completeFrame(_ frame: ScreenVolumeEncodedFrame) -> Int {
+    interactionDepthSnapshot = VolumeInteractionDepthSnapshot(
+      texture: frame.interactionDepthTexture,
+      textureToClip: [frame.textureToClip]
+    )
+    let missingBrickCount = readBackHashTable(commandBuffer: frame.commandBuffer)
     timer.frameRendered()
     return missingBrickCount
   }
@@ -292,6 +339,10 @@ final class ScreenVolumeRendererCore {
     volumeAtlas = nil
     hashTable = nil
     loadedDatasetKey = ""
+    interactionDepthSnapshot = nil
+    frozenStrokeInteractionDepthSnapshot = nil
+    interactionDepthTextures = Array(repeating: nil, count: interactionDepthTextures.count)
+    nextInteractionDepthTextureIndex = 0
     timer.reset()
     clearPipelineStates()
   }
@@ -539,6 +590,65 @@ final class ScreenVolumeRendererCore {
     return closestHit?.id
   }
 
+  private func sceneObjectHit(at normalizedScreenPosition: SIMD2<Float>) -> UUID? {
+    guard let ray = markerRay(at: normalizedScreenPosition),
+          let metadata = appModel.activeDatasetMetadata else { return nil }
+    let extent = metadata.physicalExtentMeters
+    let maximumExtent = max(extent.x, max(extent.y, extent.z))
+    guard maximumExtent.isFinite, maximumExtent > 0 else { return nil }
+
+    var nearest: (id: UUID, distance: Float)?
+    for instance in appModel.sceneMeshInstances where instance.isVisible {
+      let objectToWorld = ray.model *
+        matrixScale(SIMD3<Float>(repeating: 1 / maximumExtent)) *
+        instance.transformMeters
+      let worldToObject = simd_inverse(objectToWorld)
+      let localOrigin4 = worldToObject * SIMD4<Float>(ray.origin, 1)
+      let localDirection4 = worldToObject * SIMD4<Float>(ray.direction, 0)
+      let localOrigin = SIMD3<Float>(localOrigin4.x, localOrigin4.y, localOrigin4.z)
+      let localDirection = SIMD3<Float>(localDirection4.x, localDirection4.y, localDirection4.z)
+      guard let localDistance = rayBoxIntersection(
+        origin: localOrigin,
+        direction: localDirection,
+        minimum: instance.asset.boundsMinimum,
+        maximum: instance.asset.boundsMaximum
+      ) else { continue }
+      let localHit = localOrigin + localDirection * localDistance
+      let worldHit4 = objectToWorld * SIMD4<Float>(localHit, 1)
+      let worldHit = SIMD3<Float>(worldHit4.x, worldHit4.y, worldHit4.z)
+      let distance = simd_dot(worldHit - ray.origin, ray.direction)
+      guard distance >= 0, distance.isFinite else { continue }
+      if nearest == nil || distance < nearest!.distance {
+        nearest = (instance.id, distance)
+      }
+    }
+    return nearest?.id
+  }
+
+  private func rayBoxIntersection(
+    origin: SIMD3<Float>,
+    direction: SIMD3<Float>,
+    minimum: SIMD3<Float>,
+    maximum: SIMD3<Float>
+  ) -> Float? {
+    var nearDistance: Float = -.greatestFiniteMagnitude
+    var farDistance: Float = .greatestFiniteMagnitude
+    for axis in 0..<3 {
+      if abs(direction[axis]) < 0.000_001 {
+        guard origin[axis] >= minimum[axis], origin[axis] <= maximum[axis] else { return nil }
+        continue
+      }
+      let inverseDirection = 1 / direction[axis]
+      let first = (minimum[axis] - origin[axis]) * inverseDirection
+      let second = (maximum[axis] - origin[axis]) * inverseDirection
+      nearDistance = max(nearDistance, min(first, second))
+      farDistance = min(farDistance, max(first, second))
+      guard nearDistance <= farDistance else { return nil }
+    }
+    guard farDistance >= 0 else { return nil }
+    return max(0, nearDistance)
+  }
+
   private func measurementHit(
     at normalizedScreenPosition: SIMD2<Float>
   ) -> AppModel.MeasurementPointHit? {
@@ -738,9 +848,39 @@ final class ScreenVolumeRendererCore {
       textureToClip: projection * viewMatrix * modelMatrix * matrixTranslation(SIMD3<Float>(repeating: -0.5))
     )
     fragmentUniforms.uniforms.1 = fragmentUniforms.uniforms.0
+    currentTextureToClip = fragmentUniforms.uniforms.0.textureToClip
 
     uniformBufferVertex.current = vertexUniforms
     uniformBufferFragment.current = fragmentUniforms
+  }
+
+  private func interactionDepthTexture(
+    device: MTLDevice,
+    drawableSize: CGSize
+  ) -> MTLTexture? {
+    let width = max(1, Int(drawableSize.width))
+    let height = max(1, Int(drawableSize.height))
+    let index = nextInteractionDepthTextureIndex
+    nextInteractionDepthTextureIndex = (index + 1) % interactionDepthTextures.count
+
+    if let texture = interactionDepthTextures[index],
+       texture.width == width,
+       texture.height == height {
+      return texture
+    }
+
+    let descriptor = MTLTextureDescriptor.texture2DDescriptor(
+      pixelFormat: .r32Float,
+      width: width,
+      height: height,
+      mipmapped: false
+    )
+    descriptor.storageMode = .shared
+    descriptor.usage = .renderTarget
+    let texture = device.makeTexture(descriptor: descriptor)
+    texture?.label = "\(pipelineLabelPrefix) Volume Interaction Depth \(index)"
+    interactionDepthTextures[index] = texture
+    return texture
   }
 
   private func updateActiveOversamplingForCurrentMode() {

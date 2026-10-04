@@ -486,11 +486,11 @@ static std::vector<MeshFileInfo> scanMeshDirectory(const std::string& directory,
     if (ec) break;
     if (!entry.is_regular_file(ec) || entry.path().extension() != ".mesh") continue;
     const auto byteCount = entry.file_size(ec);
-    if (ec || byteCount < 30 || byteCount > BorgVRFormat::kMaximumMeshFileBytes) continue;
+    if (ec || byteCount < 32 || byteCount > BorgVRFormat::kMaximumMeshFileBytes) continue;
     std::ifstream file(entry.path(), std::ios::binary);
     std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(file)),
                                std::istreambuf_iterator<char>());
-    const bool validMagic = bytes.size() == byteCount && bytes.size() >= 30 &&
+    const bool validMagic = bytes.size() == byteCount && bytes.size() >= 32 &&
       std::equal(BorgVRFormat::kMeshMagic.begin(), BorgVRFormat::kMeshMagic.end(), bytes.begin());
     const uint16_t version = validMagic
       ? static_cast<uint16_t>(bytes[8] | (static_cast<uint16_t>(bytes[9]) << 8))
@@ -498,16 +498,24 @@ static std::vector<MeshFileInfo> scanMeshDirectory(const std::string& directory,
     const uint16_t nameBytes = validMagic
       ? static_cast<uint16_t>(bytes[28] | (static_cast<uint16_t>(bytes[29]) << 8))
       : 0;
+    const uint16_t descriptionBytes = validMagic
+      ? static_cast<uint16_t>(bytes[30] | (static_cast<uint16_t>(bytes[31]) << 8))
+      : 0;
     if (!validMagic || version != BorgVRFormat::kMeshVersion ||
         nameBytes > BorgVRFormat::kMaximumMeshNameBytes ||
-        30u + static_cast<size_t>(nameBytes) > bytes.size()) {
+        descriptionBytes > BorgVRFormat::kMaximumMeshDescriptionBytes ||
+        32u + static_cast<size_t>(nameBytes) + static_cast<size_t>(descriptionBytes) > bytes.size()) {
       if (logger) logger->warning("Unable to load mesh file " + entry.path().string() + ": invalid header");
       continue;
     }
     MeshFileInfo info;
     info.id = formatUuid(bytes.data() + 12);
     info.filename = entry.path().string();
-    info.name.assign(reinterpret_cast<const char*>(bytes.data() + 30), nameBytes);
+    info.name.assign(reinterpret_cast<const char*>(bytes.data() + 32), nameBytes);
+    info.description.assign(
+      reinterpret_cast<const char*>(bytes.data() + 32 + nameBytes),
+      descriptionBytes
+    );
     if (info.name.empty()) info.name = entry.path().stem().string();
     info.byteCount = bytes.size();
     meshes.push_back(std::move(info));

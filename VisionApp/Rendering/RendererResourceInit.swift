@@ -37,7 +37,7 @@ extension Renderer {
   (MTLRenderPipelineState, MTLRenderPipelineState, MTLRenderPipelineState,
    MTLRenderPipelineState, MTLRenderPipelineState, MTLRenderPipelineState,
    MTLRenderPipelineState, MTLRenderPipelineState, MTLRenderPipelineState,
-   MTLRenderPipelineState, MTLRenderPipelineState) {
+   MTLRenderPipelineState, MTLRenderPipelineState, MTLRenderPipelineState) {
     // Build a render state pipeline object.
     let shaderSource = try RuntimeMetalShaderLoader.loadSource(named: "Shaders")
 
@@ -69,6 +69,7 @@ extension Renderer {
     pipelineDescriptorTF.fragmentFunction = library.makeFunction(name: "fragmentShaderTF")
     pipelineDescriptorTF.rasterSampleCount = rasterSampleCount
     pipelineDescriptorTF.colorAttachments[0].pixelFormat = layerRenderer.configuration.colorFormat
+    pipelineDescriptorTF.colorAttachments[1].pixelFormat = .r32Float
     pipelineDescriptorTF.depthAttachmentPixelFormat = layerRenderer.configuration.depthFormat
     pipelineDescriptorTF.maxVertexAmplificationCount = layerRenderer.properties.viewCount
 
@@ -78,6 +79,7 @@ extension Renderer {
     pipelineDescriptorTFL.fragmentFunction = library.makeFunction(name: "fragmentShaderTFLighting")
     pipelineDescriptorTFL.rasterSampleCount = rasterSampleCount
     pipelineDescriptorTFL.colorAttachments[0].pixelFormat = layerRenderer.configuration.colorFormat
+    pipelineDescriptorTFL.colorAttachments[1].pixelFormat = .r32Float
     pipelineDescriptorTFL.depthAttachmentPixelFormat = layerRenderer.configuration.depthFormat
     pipelineDescriptorTFL.maxVertexAmplificationCount = layerRenderer.properties.viewCount
 
@@ -87,6 +89,7 @@ extension Renderer {
     pipelineDescriptorIso.fragmentFunction = library.makeFunction(name: "fragmentShaderIso")
     pipelineDescriptorIso.rasterSampleCount = rasterSampleCount
     pipelineDescriptorIso.colorAttachments[0].pixelFormat = layerRenderer.configuration.colorFormat
+    pipelineDescriptorIso.colorAttachments[1].pixelFormat = .r32Float
     pipelineDescriptorIso.depthAttachmentPixelFormat = layerRenderer.configuration.depthFormat
     pipelineDescriptorIso.maxVertexAmplificationCount = layerRenderer.properties.viewCount
 
@@ -96,6 +99,7 @@ extension Renderer {
     pipelineDescriptorBrickVis.fragmentFunction = library.makeFunction(name: "fragmentShaderBrickVis")
     pipelineDescriptorBrickVis.rasterSampleCount = rasterSampleCount
     pipelineDescriptorBrickVis.colorAttachments[0].pixelFormat = layerRenderer.configuration.colorFormat
+    pipelineDescriptorBrickVis.colorAttachments[1].pixelFormat = .r32Float
     pipelineDescriptorBrickVis.depthAttachmentPixelFormat = layerRenderer.configuration.depthFormat
     pipelineDescriptorBrickVis.maxVertexAmplificationCount = layerRenderer.properties.viewCount
 
@@ -178,12 +182,37 @@ extension Renderer {
       colorAttachment.destinationAlphaBlendFactor = .oneMinusSourceAlpha
     }
 
+    let pipelineDescriptorScreenViewOverlayLabel = MTLRenderPipelineDescriptor()
+    pipelineDescriptorScreenViewOverlayLabel.label = "Render Pipeline for Screen View Overlay Labels"
+    pipelineDescriptorScreenViewOverlayLabel.vertexFunction = screenViewLabelVertexFunction
+    pipelineDescriptorScreenViewOverlayLabel.fragmentFunction = screenViewLabelFragmentFunction
+    pipelineDescriptorScreenViewOverlayLabel.rasterSampleCount = rasterSampleCount
+    pipelineDescriptorScreenViewOverlayLabel.colorAttachments[0].pixelFormat =
+      layerRenderer.configuration.colorFormat
+    pipelineDescriptorScreenViewOverlayLabel.colorAttachments[1].pixelFormat = .r32Float
+    pipelineDescriptorScreenViewOverlayLabel.colorAttachments[1].writeMask = []
+    pipelineDescriptorScreenViewOverlayLabel.depthAttachmentPixelFormat =
+      layerRenderer.configuration.depthFormat
+    pipelineDescriptorScreenViewOverlayLabel.maxVertexAmplificationCount =
+      layerRenderer.properties.viewCount
+    if let colorAttachment = pipelineDescriptorScreenViewOverlayLabel.colorAttachments[0] {
+      colorAttachment.isBlendingEnabled = true
+      colorAttachment.rgbBlendOperation = .add
+      colorAttachment.alphaBlendOperation = .add
+      colorAttachment.sourceRGBBlendFactor = .one
+      colorAttachment.destinationRGBBlendFactor = .oneMinusSourceAlpha
+      colorAttachment.sourceAlphaBlendFactor = .one
+      colorAttachment.destinationAlphaBlendFactor = .oneMinusSourceAlpha
+    }
+
     let pipelineDescriptorMarkerComposite = MTLRenderPipelineDescriptor()
     pipelineDescriptorMarkerComposite.label = "Render Pipeline for Marker Composite"
     pipelineDescriptorMarkerComposite.vertexFunction = markerCompositeVertexFunction
     pipelineDescriptorMarkerComposite.fragmentFunction = markerCompositeFragmentFunction
     pipelineDescriptorMarkerComposite.rasterSampleCount = rasterSampleCount
     pipelineDescriptorMarkerComposite.colorAttachments[0].pixelFormat = layerRenderer.configuration.colorFormat
+    pipelineDescriptorMarkerComposite.colorAttachments[1].pixelFormat = .r32Float
+    pipelineDescriptorMarkerComposite.colorAttachments[1].writeMask = []
     pipelineDescriptorMarkerComposite.depthAttachmentPixelFormat = layerRenderer.configuration.depthFormat
     pipelineDescriptorMarkerComposite.maxVertexAmplificationCount = layerRenderer.properties.viewCount
 
@@ -203,6 +232,8 @@ extension Renderer {
     pipelineDescriptorTFHUD.fragmentFunction = hudFragmentFunction
     pipelineDescriptorTFHUD.rasterSampleCount = rasterSampleCount
     pipelineDescriptorTFHUD.colorAttachments[0].pixelFormat = layerRenderer.configuration.colorFormat
+    pipelineDescriptorTFHUD.colorAttachments[1].pixelFormat = .r32Float
+    pipelineDescriptorTFHUD.colorAttachments[1].writeMask = []
     pipelineDescriptorTFHUD.depthAttachmentPixelFormat = layerRenderer.configuration.depthFormat
     pipelineDescriptorTFHUD.maxVertexAmplificationCount = layerRenderer.properties.viewCount
 
@@ -222,6 +253,8 @@ extension Renderer {
     pipelineDescriptorTFHUDControls.fragmentFunction = hudControlsFragmentFunction
     pipelineDescriptorTFHUDControls.rasterSampleCount = rasterSampleCount
     pipelineDescriptorTFHUDControls.colorAttachments[0].pixelFormat = layerRenderer.configuration.colorFormat
+    pipelineDescriptorTFHUDControls.colorAttachments[1].pixelFormat = .r32Float
+    pipelineDescriptorTFHUDControls.colorAttachments[1].writeMask = []
     pipelineDescriptorTFHUDControls.depthAttachmentPixelFormat = layerRenderer.configuration.depthFormat
     pipelineDescriptorTFHUDControls.maxVertexAmplificationCount = layerRenderer.properties.viewCount
 
@@ -244,6 +277,7 @@ extension Renderer {
       try device.makeRenderPipelineState(descriptor: pipelineDescriptorSceneMesh),
       try device.makeRenderPipelineState(descriptor: pipelineDescriptorMeasurementLine),
       try device.makeRenderPipelineState(descriptor: pipelineDescriptorScreenViewLabel),
+      try device.makeRenderPipelineState(descriptor: pipelineDescriptorScreenViewOverlayLabel),
       try device.makeRenderPipelineState(descriptor: pipelineDescriptorMarkerComposite),
       try device.makeRenderPipelineState(descriptor: pipelineDescriptorTFHUD),
       try device.makeRenderPipelineState(descriptor: pipelineDescriptorTFHUDControls)

@@ -14,6 +14,7 @@ final class AppModel: ObservableObject {
     _ positionToPreserveDepth: SIMD3<Float>?
   ) -> SIMD3<Float>?
   typealias MarkerHitTestHandler = (_ normalizedScreenPosition: SIMD2<Float>) -> UUID?
+  typealias SceneObjectHitTestHandler = (_ normalizedScreenPosition: SIMD2<Float>) -> UUID?
   typealias MarkerDirectionOriginHandler = (
     _ normalizedScreenPosition: SIMD2<Float>
   ) -> SIMD3<Float>?
@@ -49,7 +50,8 @@ final class AppModel: ObservableObject {
     case model
     case clipping
     case transferEditing
-    case marker
+    case drawing
+    case objectPlacement
     case measurement
 
     var id: String { rawValue }
@@ -134,6 +136,7 @@ final class AppModel: ObservableObject {
   @Published var sceneMeshAssets: [UUID: SceneMeshAsset] = [:]
   @Published var sceneMeshInstances: [SceneMeshInstance] = []
   @Published var selectedSceneMeshInstanceID: UUID?
+  @Published var selectedSceneObjectPrototype: SceneObjectPrototype = .sphere
   @Published var selectedVolumeMarkerIDs: Set<UUID> = []
   @Published var selectedVolumeMarkerID: UUID? {
     didSet {
@@ -150,19 +153,40 @@ final class AppModel: ObservableObject {
   @Published var measurementKind: VolumeMeasurementKind = .length
   @Published var selectedVolumeMeasurementID: UUID?
   @Published var selectedVolumeMeasurementPointID: UUID?
+  @Published var projectObjectsOntoVolume: Bool = {
+    UserDefaults.standard.object(forKey: "projectObjectsOntoVolume") as? Bool ?? true
+  }() {
+    didSet {
+      UserDefaults.standard.set(projectObjectsOntoVolume, forKey: "projectObjectsOntoVolume")
+    }
+  }
+  @Published var projectMeasurementsOntoVolume: Bool = {
+    UserDefaults.standard.object(forKey: "projectMeasurementsOntoVolume") as? Bool ?? true
+  }() {
+    didSet {
+      UserDefaults.standard.set(
+        projectMeasurementsOntoVolume,
+        forKey: "projectMeasurementsOntoVolume"
+      )
+    }
+  }
   @Published private(set) var measurementScreenLabels: [MeasurementScreenLabel] = []
   @Published private(set) var remoteSpatialToolPreviews: [UUID: [SpatialToolPreview]] = [:]
   /// Radius used for sphere markers created locally during this app session.
   var defaultVolumeMarkerRadius = VolumeMarkerRadius.sphereDefault
   /// Direction visibility used for sphere markers created later in this app session.
-  var defaultVolumeMarkerShowsDirection = true
+  var defaultVolumeMarkerShowsDirection = false
   @Published var timer: CPUFrameTimer?
   @Published var performanceModel = PerformanceGraphModel()
   let logger = GUILogger()
   var renderScreenshotHandler: RenderScreenshotHandler?
   var renderDisplaySyncHandler: RenderDisplaySyncHandler?
   var markerPositionHandler: MarkerPositionHandler?
+  var projectedVolumePositionHandler: MarkerPositionHandler?
+  var beginProjectedStrokeHandler: (() -> Void)?
+  var endProjectedStrokeHandler: (() -> Void)?
   var markerHitTestHandler: MarkerHitTestHandler?
+  var sceneObjectHitTestHandler: SceneObjectHitTestHandler?
   var markerDirectionOriginHandler: MarkerDirectionOriginHandler?
   var markerDepthAdjustmentHandler: MarkerDepthAdjustmentHandler?
   var measurementHitTestHandler: MeasurementHitTestHandler?
@@ -183,6 +207,7 @@ final class AppModel: ObservableObject {
 
   init() {
     logger.setMinimumLogLevel(.warning)
+    refreshSceneMeshCatalog()
   }
 
   var activeDataset: DatasetEntry? {
@@ -268,13 +293,17 @@ final class AppModel: ObservableObject {
     logger.setMinimumLogLevel(logLevel.level)
   }
 
-  func nextVolumeMarkerName() -> String {
+  func nextVolumeMarkerName(for kind: VolumeMarkerKind = .sphere) -> String {
+    let baseName = switch kind {
+      case .sphere: String(localized: "Marker")
+      case .stroke: String(localized: "Stroke")
+    }
     let usedNames = Set(volumeMarkers.map(\.name))
-    var markerIndex = volumeMarkers.count + 1
-    while usedNames.contains("Marker \(markerIndex)") {
+    var markerIndex = volumeMarkers.count(where: { $0.kind == kind }) + 1
+    while usedNames.contains("\(baseName) \(markerIndex)") {
       markerIndex += 1
     }
-    return "Marker \(markerIndex)"
+    return "\(baseName) \(markerIndex)"
   }
 
   func replaceVolumeMarkers(_ markers: [VolumeMarker]) {
@@ -287,6 +316,36 @@ final class AppModel: ObservableObject {
     if persist {
       try SceneMeshAssetCatalog.store(asset, logger: logger)
     }
+  }
+
+  func refreshSceneMeshCatalog() {
+    let documentsURLs = FileManager.default.urls(
+      for: .documentDirectory,
+      in: .userDomainMask
+    )
+    for asset in SceneMeshAssetCatalog.allAssets(
+      additionalDirectoryURLs: documentsURLs,
+      logger: logger
+    ) {
+      sceneMeshAssets[asset.id] = asset
+    }
+    validateSelectedSceneObjectPrototype()
+  }
+
+  @discardableResult
+  func validateSelectedSceneObjectPrototype() -> SceneObjectPrototype {
+    guard case .mesh(let assetID) = selectedSceneObjectPrototype else {
+      return selectedSceneObjectPrototype
+    }
+    if sceneMeshAssets[assetID] == nil,
+       let asset = SceneMeshAssetCatalog.load(assetID: assetID, logger: logger) {
+      sceneMeshAssets[assetID] = asset
+    }
+    guard sceneMeshAssets[assetID] != nil else {
+      selectedSceneObjectPrototype = .sphere
+      return .sphere
+    }
+    return selectedSceneObjectPrototype
   }
 
   @discardableResult

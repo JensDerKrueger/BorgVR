@@ -5,6 +5,7 @@ enum SpatialToolMode: String, CaseIterable, Identifiable {
   case model
   case clipping
   case marker
+  case objectPlacement
   case lengthMeasurement
   case areaMeasurement
   case volumeMeasurement
@@ -12,6 +13,7 @@ enum SpatialToolMode: String, CaseIterable, Identifiable {
 
   static let museModes: [Self] = [
     .marker,
+    .objectPlacement,
     .lengthMeasurement,
     .areaMeasurement,
     .volumeMeasurement
@@ -23,7 +25,8 @@ enum SpatialToolMode: String, CaseIterable, Identifiable {
     switch self {
       case .model: .model
       case .clipping: .clipping
-      case .marker: .marker
+      case .marker: .drawing
+      case .objectPlacement: .objectPlacement
       case .lengthMeasurement, .areaMeasurement, .volumeMeasurement: .measurement
       case .screenView: .screenView
     }
@@ -44,7 +47,8 @@ enum SpatialToolMode: String, CaseIterable, Identifiable {
     switch self {
       case .model: String(localized: "accessory_tool_model")
       case .clipping: String(localized: "accessory_tool_clipping")
-      case .marker: String(localized: "settings_stylus_start_marker")
+      case .marker: String(localized: "Draw")
+      case .objectPlacement: String(localized: "Place Objects")
       case .lengthMeasurement: String(localized: "settings_stylus_start_length")
       case .areaMeasurement: String(localized: "settings_stylus_start_area")
       case .volumeMeasurement: String(localized: "settings_stylus_start_volume")
@@ -57,6 +61,7 @@ enum SpatialToolMode: String, CaseIterable, Identifiable {
       case .model: "move.3d"
       case .clipping: "crop"
       case .marker: "pencil.and.outline"
+      case .objectPlacement: "cube.fill"
       case .lengthMeasurement: "ruler"
       case .areaMeasurement: "triangle"
       case .volumeMeasurement: "cube"
@@ -67,6 +72,7 @@ enum SpatialToolMode: String, CaseIterable, Identifiable {
 
 enum SpatialStylusStartFunction: String, CaseIterable, Identifiable {
   case marker
+  case objectPlacement
   case lengthMeasurement
   case areaMeasurement
   case volumeMeasurement
@@ -76,7 +82,8 @@ enum SpatialStylusStartFunction: String, CaseIterable, Identifiable {
 
   var title: String {
     switch self {
-      case .marker: String(localized: "settings_stylus_start_marker")
+      case .marker: String(localized: "Draw")
+      case .objectPlacement: String(localized: "Place Objects")
       case .lengthMeasurement: String(localized: "settings_stylus_start_length")
       case .areaMeasurement: String(localized: "settings_stylus_start_area")
       case .volumeMeasurement: String(localized: "settings_stylus_start_volume")
@@ -87,6 +94,7 @@ enum SpatialStylusStartFunction: String, CaseIterable, Identifiable {
   var systemImage: String {
     switch self {
       case .marker: "pencil.and.outline"
+      case .objectPlacement: "cube.fill"
       case .lengthMeasurement: "ruler"
       case .areaMeasurement: "triangle"
       case .volumeMeasurement: "cube"
@@ -163,6 +171,8 @@ enum SpatialControllerButtonAction: String, CaseIterable, Identifiable {
   case controllerModelTool
   case controllerClippingTool
   case controllerMarkerTool
+  case controllerObjectTool
+  case nextActiveObject
   case controllerMeasurementTool
   case controllerAreaMeasurementTool
   case controllerVolumeMeasurementTool
@@ -190,7 +200,8 @@ enum SpatialControllerButtonAction: String, CaseIterable, Identifiable {
         .general
       case .nextInteractionMode, .modelMode, .clippingMode, .markerMode, .measurementMode,
            .screenViewMode, .nextControllerTool, .controllerModelTool,
-           .controllerClippingTool, .controllerMarkerTool, .controllerMeasurementTool,
+           .controllerClippingTool, .controllerMarkerTool, .controllerObjectTool,
+           .nextActiveObject, .controllerMeasurementTool,
            .controllerAreaMeasurementTool, .controllerVolumeMeasurementTool:
         .interaction
       case .nextRenderMode, .transferFunctionLightingMode, .transferFunctionMode, .isoValueMode:
@@ -219,6 +230,8 @@ enum SpatialControllerButtonAction: String, CaseIterable, Identifiable {
       case .controllerClippingTool:
         String(localized: "controller_action_controller_clipping_tool")
       case .controllerMarkerTool: String(localized: "controller_action_controller_marker_tool")
+      case .controllerObjectTool: String(localized: "Place Objects")
+      case .nextActiveObject: String(localized: "Next Active Object")
       case .controllerMeasurementTool:
         String(localized: "controller_action_controller_measurement_tool")
       case .controllerAreaMeasurementTool:
@@ -263,6 +276,8 @@ enum SpatialControllerButtonAction: String, CaseIterable, Identifiable {
       case .controllerModelTool: "move.3d"
       case .controllerClippingTool: "crop"
       case .controllerMarkerTool: "pencil.and.outline"
+      case .controllerObjectTool: "cube.fill"
+      case .nextActiveObject: "arrow.trianglehead.2.clockwise.rotate.90"
       case .controllerMeasurementTool: "ruler"
       case .controllerAreaMeasurementTool: "triangle"
       case .controllerVolumeMeasurementTool: "cube"
@@ -271,7 +286,7 @@ enum SpatialControllerButtonAction: String, CaseIterable, Identifiable {
       case .transferFunctionMode: "chart.xyaxis.line"
       case .isoValueMode: "square.3.layers.3d.top.filled"
       case .toggleCurrentEditor: "slider.horizontal.3"
-      case .toggleMarkerWindow: "mappin.and.ellipse"
+      case .toggleMarkerWindow: "cube.transparent"
       case .toggleMeasurementWindow: "ruler"
       case .toggleLightingWindow: "lightbulb.max"
       case .toggleInteractionWindow: "hand.draw"
@@ -330,6 +345,10 @@ enum SpatialControllerShortcutHandler {
         storedAppModel.setControllerTool(.clipping, for: chirality)
       case .controllerMarkerTool:
         storedAppModel.setControllerTool(.marker, for: chirality)
+      case .controllerObjectTool:
+        storedAppModel.setControllerTool(.objectPlacement, for: chirality)
+      case .nextActiveObject:
+        sharedAppModel.selectNextSceneObjectPrototype()
       case .controllerMeasurementTool:
         storedAppModel.setControllerTool(.lengthMeasurement, for: chirality)
       case .controllerAreaMeasurementTool:

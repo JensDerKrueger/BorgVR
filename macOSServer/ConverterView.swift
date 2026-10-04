@@ -11,6 +11,7 @@ struct ConverterView: View {
     case importDataset
     case exportDataset
     case importMesh
+    case exportMesh
 
     var id: Self { self }
   }
@@ -46,9 +47,16 @@ struct ConverterView: View {
   @State private var meshInputURL: URL?
   @State private var meshOutputURL: URL?
   @State private var meshName = ""
+  @State private var meshDescription = ""
   @State private var meshStep = 1
   @State private var meshImportDidFinish = false
   @State private var meshImportDidSucceed = false
+  @State private var meshExportInputURL: URL?
+  @State private var meshExportOutputURL: URL?
+  @State private var meshExportStep = 1
+  @State private var meshExportDidFinish = false
+  @State private var meshExportDidSucceed = false
+  @State private var meshExportInputError: String?
 
   @EnvironmentObject var storedAppModel: StoredAppModel
 
@@ -70,9 +78,11 @@ struct ConverterView: View {
         Text("converter_mode_import").tag(Operation.importDataset)
         Text("converter_mode_export").tag(Operation.exportDataset)
         Text("converter_mode_mesh_import").tag(Operation.importMesh)
+        Text("converter_mode_mesh_export").tag(Operation.exportMesh)
       }
       .pickerStyle(.segmented)
-      .frame(maxWidth: 360)
+      .labelsHidden()
+      .frame(maxWidth: 720)
       .disabled(isConverting)
 
       if operation == .importDataset {
@@ -302,8 +312,10 @@ struct ConverterView: View {
       }
       } else if operation == .exportDataset {
         exportContent
-      } else {
+      } else if operation == .importMesh {
         meshImportContent
+      } else {
+        meshExportContent
       }
     }
     .padding()
@@ -395,6 +407,16 @@ struct ConverterView: View {
                     .textFieldStyle(.roundedBorder)
                     .frame(minWidth: 280)
                 }
+                LabeledContent("converter_mesh_description") {
+                  TextField(
+                    "converter_mesh_description",
+                    text: $meshDescription,
+                    axis: .vertical
+                  )
+                  .lineLimit(2...4)
+                  .textFieldStyle(.roundedBorder)
+                  .frame(minWidth: 280)
+                }
                 Button {
                   selectMeshOutputFile()
                 } label: {
@@ -464,7 +486,8 @@ struct ConverterView: View {
             }
             .disabled(
               meshOutputURL == nil ||
-              meshName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+              meshName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
+              meshDescription.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             )
           } else if meshImportDidSucceed {
             Button {
@@ -474,6 +497,243 @@ struct ConverterView: View {
             }
           }
         }
+      }
+    }
+  }
+
+  private var meshExportContent: some View {
+    VStack(spacing: 16) {
+      HStack {
+        Text("converter_mesh_export_title")
+          .font(.title)
+          .bold()
+          .padding()
+        Text(String(
+          format: NSLocalizedString("converter_step_of_total_format", comment: ""),
+          meshExportStep,
+          3
+        ))
+        .font(.subheadline)
+        .foregroundStyle(.secondary)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding()
+      }
+
+      Spacer()
+
+      HStack(alignment: .top) {
+        VStack {
+          wizardStepIcon(meshExportStepSystemImage)
+          Spacer()
+        }
+
+        Group {
+          switch meshExportStep {
+            case 1:
+              VStack(alignment: .leading, spacing: 12) {
+                Text("converter_mesh_export_select_input")
+                  .font(.headline)
+                Text("converter_mesh_export_select_input_help")
+                  .font(.subheadline)
+                  .foregroundStyle(.secondary)
+                Button {
+                  selectMeshExportInputFile()
+                } label: {
+                  Label("converter_mesh_export_select_input", systemImage: "cube.transparent")
+                }
+                Text(
+                  meshExportInputURL?.path
+                    ?? NSLocalizedString("converter_status_no_file", comment: "")
+                )
+                .lineLimit(2)
+                .truncationMode(.middle)
+                .foregroundStyle(meshExportInputURL == nil ? .secondary : .primary)
+                if let meshExportInputError {
+                  Label(meshExportInputError, systemImage: "exclamationmark.triangle.fill")
+                    .font(.callout)
+                    .foregroundStyle(.red)
+                    .fixedSize(horizontal: false, vertical: true)
+                }
+              }
+
+            case 2:
+              VStack(alignment: .leading, spacing: 12) {
+                Text("converter_mesh_export_select_output")
+                  .font(.headline)
+                Text("converter_mesh_export_select_output_help")
+                  .font(.subheadline)
+                  .foregroundStyle(.secondary)
+                Button {
+                  selectMeshExportOutputFile()
+                } label: {
+                  Label("converter_mesh_export_select_output", systemImage: "doc.badge.arrow.up")
+                }
+                Text(
+                  meshExportOutputURL?.path
+                    ?? NSLocalizedString("converter_export_no_output", comment: "")
+                )
+                .lineLimit(2)
+                .truncationMode(.middle)
+                .foregroundStyle(meshExportOutputURL == nil ? .secondary : .primary)
+              }
+
+            default:
+              VStack(alignment: .leading, spacing: 12) {
+                Text(meshExportResultTitle)
+                  .font(.headline)
+                Text(meshExportResultSubtitle)
+                  .font(.subheadline)
+                  .foregroundStyle(.secondary)
+                if isConverting {
+                  ProgressView()
+                    .controlSize(.large)
+                }
+                TextEditor(text: $logText)
+                  .border(Color.secondary.opacity(0.5), width: 1)
+                  .font(.system(.body, design: .monospaced))
+                  .frame(minHeight: 220)
+              }
+          }
+          Spacer()
+        }
+      }
+
+      Spacer()
+
+      if !isConverting {
+        HStack {
+          Button {
+            closeConverter()
+          } label: {
+            Label("converter_back_to_main_menu", systemImage: "chevron.backward.circle")
+          }
+          Spacer()
+          if meshExportStep > 1 && !meshExportDidSucceed {
+            Button {
+              meshExportStep -= 1
+              meshExportDidFinish = false
+            } label: {
+              Label("converter_button_back", systemImage: "chevron.backward")
+            }
+          }
+          if meshExportStep == 1 {
+            Button {
+              meshExportStep = 2
+            } label: {
+              Label("converter_nav_next", systemImage: "chevron.forward")
+            }
+            .disabled(meshExportInputURL == nil)
+          } else if meshExportStep == 2 {
+            Button {
+              meshExportStep = 3
+              startMeshExport()
+            } label: {
+              Label("converter_mesh_export_start", systemImage: "square.and.arrow.up")
+            }
+            .disabled(meshExportOutputURL == nil)
+          } else if meshExportDidSucceed {
+            Button {
+              closeConverter()
+            } label: {
+              Label("converter_nav_close", systemImage: "checkmark.circle")
+            }
+          }
+        }
+      }
+    }
+  }
+
+  private var meshExportStepSystemImage: String {
+    switch meshExportStep {
+      case 1: return "cube.transparent"
+      case 2: return "doc.badge.arrow.up"
+      default:
+        if !meshExportDidFinish { return "arrow.up.doc" }
+        return meshExportDidSucceed ? "checkmark.circle.fill" : "exclamationmark.triangle.fill"
+    }
+  }
+
+  private var meshExportResultTitle: LocalizedStringKey {
+    if !meshExportDidFinish { return "converter_mesh_exporting_title" }
+    return meshExportDidSucceed
+      ? "converter_mesh_export_completed_title"
+      : "converter_mesh_export_failed_title"
+  }
+
+  private var meshExportResultSubtitle: LocalizedStringKey {
+    if !meshExportDidFinish { return "converter_mesh_exporting_help" }
+    return meshExportDidSucceed
+      ? "converter_mesh_export_completed_help"
+      : "converter_mesh_export_failed_help"
+  }
+
+  private func selectMeshExportInputFile() {
+    let panel = NSOpenPanel()
+    panel.canChooseFiles = true
+    panel.canChooseDirectories = false
+    panel.allowsMultipleSelection = false
+    panel.allowedContentTypes = [
+      UTType(filenameExtension: BorgVRMeshFormat.fileExtension) ?? .data
+    ]
+    guard panel.runModal() == .OK, let url = panel.url else { return }
+
+    meshExportInputError = nil
+    let access = url.startAccessingSecurityScopedResource()
+    defer { if access { url.stopAccessingSecurityScopedResource() } }
+    do {
+      try BorgVRMeshOBJExporter.validate(inputURL: url)
+      meshExportInputURL = url
+      meshExportOutputURL = url.deletingPathExtension().appendingPathExtension("obj")
+      meshExportDidFinish = false
+      meshExportDidSucceed = false
+    } catch {
+      meshExportInputURL = nil
+      meshExportOutputURL = nil
+      meshExportInputError = error.localizedDescription
+      logger.error(error.localizedDescription)
+    }
+  }
+
+  private func selectMeshExportOutputFile() {
+    let panel = NSSavePanel()
+    panel.allowedContentTypes = [UTType(filenameExtension: "obj") ?? .data]
+    panel.canCreateDirectories = true
+    panel.nameFieldStringValue = meshExportOutputURL?.lastPathComponent ?? "mesh.obj"
+    panel.directoryURL = meshExportOutputURL?.deletingLastPathComponent()
+    guard panel.runModal() == .OK, let url = panel.url else { return }
+    meshExportOutputURL = url.pathExtension.isEmpty ? url.appendingPathExtension("obj") : url
+  }
+
+  private func startMeshExport() {
+    guard let inputURL = meshExportInputURL,
+          let outputURL = meshExportOutputURL else { return }
+    isConverting = true
+    meshExportDidFinish = false
+    meshExportDidSucceed = false
+    logText = ""
+    let inputAccess = inputURL.startAccessingSecurityScopedResource()
+    let outputDirectory = outputURL.deletingLastPathComponent()
+    let outputAccess = outputDirectory.startAccessingSecurityScopedResource()
+    DispatchQueue.global(qos: .userInitiated).async {
+      var succeeded = false
+      defer {
+        if inputAccess { inputURL.stopAccessingSecurityScopedResource() }
+        if outputAccess { outputDirectory.stopAccessingSecurityScopedResource() }
+      }
+      do {
+        _ = try BorgVRMeshOBJExporter.export(
+          inputURL: inputURL,
+          outputURL: outputURL,
+          logger: logger
+        )
+        succeeded = true
+      } catch {
+        logger.error(error.localizedDescription)
+      }
+      DispatchQueue.main.async {
+        isConverting = false
+        meshExportDidFinish = true
+        meshExportDidSucceed = succeeded
       }
     }
   }
@@ -513,6 +773,7 @@ struct ConverterView: View {
     guard panel.runModal() == .OK, let url = panel.url else { return }
     meshInputURL = url
     meshName = url.deletingPathExtension().lastPathComponent
+    meshDescription = ""
     let outputDirectory = URL(fileURLWithPath: storedAppModel.dataDirectory, isDirectory: true)
     meshOutputURL = outputDirectory
       .appendingPathComponent(meshName)
@@ -544,6 +805,7 @@ struct ConverterView: View {
     meshImportDidSucceed = false
     logText = ""
     let name = meshName
+    let description = meshDescription
     let inputAccess = inputURL.startAccessingSecurityScopedResource()
     let outputDirectory = outputURL.deletingLastPathComponent()
     let outputAccess = outputDirectory.startAccessingSecurityScopedResource()
@@ -562,6 +824,7 @@ struct ConverterView: View {
           inputURL: inputURL,
           outputURL: outputURL,
           name: name,
+          description: description,
           logger: logger
         )
         succeeded = true

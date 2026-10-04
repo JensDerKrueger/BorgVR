@@ -227,7 +227,7 @@ struct VisionApp: App {
         .environmentObject(storedAppModel)
     }
     .windowResizability(.contentSize)
-    .defaultSize(width: 620, height: 560)
+    .defaultSize(width: 1080, height: 520)
 
     WindowGroup(id: "MeasurementView") {
       MeasurementView()
@@ -395,6 +395,8 @@ struct VisionApp: App {
     switch storedAppModel.stylusStartFunction {
       case .marker:
         storedAppModel.stylusTool = .marker
+      case .objectPlacement:
+        storedAppModel.stylusTool = .objectPlacement
       case .lengthMeasurement:
         storedAppModel.stylusTool = .lengthMeasurement
         sharedAppModel.measurementKind = .length

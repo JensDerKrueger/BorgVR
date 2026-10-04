@@ -42,6 +42,7 @@ struct MeshFileInfo {
   let id: UUID
   let filename: String
   let name: String
+  let meshDescription: String
   let byteCount: Int
 }
 
@@ -259,7 +260,7 @@ class DatasetScanner {
     do {
       let resourceValues = try url.resourceValues(forKeys: [.fileSizeKey])
       guard let byteCount = resourceValues.fileSize,
-            byteCount >= 30,
+            byteCount >= 32,
             byteCount <= BorgVRMeshFormat.maximumFileByteCount else {
         throw DatasetScannerError.invalidMeshFile
       }
@@ -269,8 +270,10 @@ class DatasetScanner {
             data.prefix(magic.count) == magic,
             Self.readUInt16(from: data, at: 8) == BorgVRMeshFormat.version,
             let nameByteCount = Self.readUInt16(from: data, at: 28),
+            let descriptionByteCount = Self.readUInt16(from: data, at: 30),
             nameByteCount <= BorgVRMeshFormat.maximumNameByteCount,
-            30 + Int(nameByteCount) <= data.count else {
+            descriptionByteCount <= BorgVRMeshFormat.maximumDescriptionByteCount,
+            32 + Int(nameByteCount) + Int(descriptionByteCount) <= data.count else {
         throw DatasetScannerError.invalidMeshFile
       }
       let uuidBytes = Array(data[12..<28])
@@ -280,14 +283,21 @@ class DatasetScanner {
         uuidBytes[8], uuidBytes[9], uuidBytes[10], uuidBytes[11],
         uuidBytes[12], uuidBytes[13], uuidBytes[14], uuidBytes[15]
       ))
-      let nameData = data[30..<(30 + Int(nameByteCount))]
-      guard let name = String(data: nameData, encoding: .utf8) else {
+      let nameStart = 32
+      let descriptionStart = nameStart + Int(nameByteCount)
+      let nameData = data[nameStart..<descriptionStart]
+      let descriptionData = data[
+        descriptionStart..<(descriptionStart + Int(descriptionByteCount))
+      ]
+      guard let name = String(data: nameData, encoding: .utf8),
+            let meshDescription = String(data: descriptionData, encoding: .utf8) else {
         throw DatasetScannerError.invalidMeshFile
       }
       meshFiles.append(MeshFileInfo(
         id: id,
         filename: url.path,
         name: name.isEmpty ? url.deletingPathExtension().lastPathComponent : name,
+        meshDescription: meshDescription,
         byteCount: data.count
       ))
       logger?.info("Loaded mesh file: \(url.lastPathComponent) (id \(id.uuidString))")

@@ -2,7 +2,14 @@ import CompositorServices
 import Spatial
 import SwiftUI
 
+enum SpatialSceneObjectPreview {
+  case sphere(VolumeMarkerPoint)
+  case mesh(SceneMeshInstance)
+}
+
 class ImmersiveInteraction {
+  private let volumeSnapMaximumDepthDifferenceMeters: Float = 0.05
+  private let volumeSnapDepthSmoothingNewSampleWeight: Float = 0.15
   var sharedAppModel: SharedAppModel
   var storedAppModel: StoredAppModel
   var transferFunctionPanelInteractionState: TransferFunctionPanelInteractionState
@@ -11,6 +18,11 @@ class ImmersiveInteraction {
     SpatialControllerFaceButton,
     BorgSpatialInputChirality
   ) -> Void
+  private let volumeInteractionDepthLock = NSLock()
+  private var volumeInteractionDepthSnapshot: VolumeInteractionDepthSnapshot?
+  private var frozenStrokeInteractionDepthSnapshot: VolumeInteractionDepthSnapshot?
+  private var pendingStrokeProjectionFreezeTokens: Set<UUID> = []
+  private var activeStrokeProjectionFreezeTokens: Set<UUID> = []
 
   private var startTranslation: SIMD3<Float> = .zero
   private var startRotation: simd_quatf = .init(.identity)
@@ -67,7 +79,7 @@ class ImmersiveInteraction {
     let transferFunctionStart: SIMD2<Float>?
     let markerStrokeUsesModifierButton: Bool
   }
-  private var spatialAccessoryAction: SpatialAccessoryAction?
+  private var spatialAccessoryActions: [UUID: SpatialAccessoryAction] = [:]
   private var activeSpatialStylusID: UUID?
   private var activeSpatialStylusMeasurementID: UUID?
   private var activeSpatialStylusMeasurementPointID: UUID?
@@ -98,6 +110,108 @@ class ImmersiveInteraction {
   private var activeSceneObjectPlacement: ActiveSceneObjectPlacement?
   private var activeSceneObjectPlacementSourceID: UUID?
   private var activeSceneObjectPlacementUsesHand = false
+
+  func updateVolumeInteractionDepthSnapshot(
+    _ snapshot: VolumeInteractionDepthSnapshot?
+  ) {
+    volumeInteractionDepthLock.lock()
+    volumeInteractionDepthSnapshot = snapshot
+    if snapshot == nil {
+      frozenStrokeInteractionDepthSnapshot = nil
+      pendingStrokeProjectionFreezeTokens.removeAll()
+      activeStrokeProjectionFreezeTokens.removeAll()
+    } else if !pendingStrokeProjectionFreezeTokens.isEmpty {
+      frozenStrokeInteractionDepthSnapshot = snapshot?.frozenCopy()
+      activeStrokeProjectionFreezeTokens.formUnion(pendingStrokeProjectionFreezeTokens)
+      pendingStrokeProjectionFreezeTokens.removeAll()
+    }
+    volumeInteractionDepthLock.unlock()
+  }
+
+  func beginStrokeProjectionFreeze(token: UUID) {
+    volumeInteractionDepthLock.lock()
+    if activeStrokeProjectionFreezeTokens.isEmpty &&
+       pendingStrokeProjectionFreezeTokens.isEmpty {
+      pendingStrokeProjectionFreezeTokens.insert(token)
+    } else if pendingStrokeProjectionFreezeTokens.isEmpty {
+      activeStrokeProjectionFreezeTokens.insert(token)
+    } else {
+      pendingStrokeProjectionFreezeTokens.insert(token)
+    }
+    volumeInteractionDepthLock.unlock()
+  }
+
+  func endStrokeProjectionFreeze(token: UUID) {
+    volumeInteractionDepthLock.lock()
+    pendingStrokeProjectionFreezeTokens.remove(token)
+    activeStrokeProjectionFreezeTokens.remove(token)
+    if pendingStrokeProjectionFreezeTokens.isEmpty &&
+       activeStrokeProjectionFreezeTokens.isEmpty {
+      frozenStrokeInteractionDepthSnapshot = nil
+    }
+    volumeInteractionDepthLock.unlock()
+  }
+
+  func pendingStrokeProjectionCaptureMarkerIDs() -> Set<UUID> {
+    volumeInteractionDepthLock.lock()
+    let markerIDs = pendingStrokeProjectionFreezeTokens
+    volumeInteractionDepthLock.unlock()
+    return markerIDs
+  }
+
+  func projectedVolumePosition(
+    toward worldPosition: SIMD3<Float>,
+    smoothingDepthFrom previousPosition: SIMD3<Float>? = nil
+  ) -> SIMD3<Float>? {
+    volumeInteractionDepthLock.lock()
+    let snapshot = frozenStrokeInteractionDepthSnapshot ?? volumeInteractionDepthSnapshot
+    volumeInteractionDepthLock.unlock()
+    return snapshot?.normalizedVolumePosition(
+      projectingToward: worldPosition,
+      smoothingDepthFrom: previousPosition,
+      maximumWorldDepthDifference: volumeSnapMaximumDepthDifferenceMeters,
+      depthSmoothingNewSampleWeight: volumeSnapDepthSmoothingNewSampleWeight
+    )
+  }
+
+  private func interactionPosition(
+    fromWorldPosition worldPosition: SIMD3<Float>,
+    datasetInfo: RuntimeAppModel.DatasetInfo,
+    projectsOntoVolume: Bool,
+    smoothingDepthFrom previousPosition: SIMD3<Float>? = nil
+  ) -> SIMD3<Float> {
+    if projectsOntoVolume,
+       let position = projectedVolumePosition(
+         toward: worldPosition,
+         smoothingDepthFrom: previousPosition
+       ) {
+      return position
+    }
+    return markerPosition(fromWorldPosition: worldPosition, datasetInfo: datasetInfo)
+  }
+
+  private func interactionTransform(
+    _ transform: simd_float4x4,
+    datasetInfo: RuntimeAppModel.DatasetInfo,
+    projectsOntoVolume: Bool
+  ) -> simd_float4x4 {
+    guard projectsOntoVolume else { return transform }
+    let worldPosition = SIMD3<Float>(
+      transform.columns.3.x,
+      transform.columns.3.y,
+      transform.columns.3.z
+    )
+    guard let normalizedPosition = projectedVolumePosition(toward: worldPosition) else {
+      return transform
+    }
+    let projectedWorldPosition = transformPoint(
+      markerVolumeMatrix(for: datasetInfo),
+      normalizedPosition - SIMD3<Float>(repeating: 0.5)
+    )
+    var result = transform
+    result.columns.3 = SIMD4<Float>(projectedWorldPosition, 1)
+    return result
+  }
   private var sceneMeshDragState: SceneMeshDragState?
 
   init(sharedAppModel: SharedAppModel,
@@ -450,13 +564,21 @@ class ImmersiveInteraction {
     datasetInfo: RuntimeAppModel.DatasetInfo,
     directionOrigin: SIMD3<Float>?
   ) -> Bool {
-    let pose = datasetPoseMeters(fromWorldTransform: worldTransform, datasetInfo: datasetInfo)
+    let effectiveTransform = interactionTransform(
+      worldTransform,
+      datasetInfo: datasetInfo,
+      projectsOntoVolume: storedAppModel.projectObjectsOntoVolume
+    )
+    let pose = datasetPoseMeters(
+      fromWorldTransform: effectiveTransform,
+      datasetInfo: datasetInfo
+    )
     switch prototype {
       case .sphere:
         let worldPosition = SIMD3<Float>(
-          worldTransform.columns.3.x,
-          worldTransform.columns.3.y,
-          worldTransform.columns.3.z
+          effectiveTransform.columns.3.x,
+          effectiveTransform.columns.3.y,
+          effectiveTransform.columns.3.z
         )
         let position = markerPosition(
           fromWorldPosition: worldPosition,
@@ -489,17 +611,67 @@ class ImmersiveInteraction {
     return true
   }
 
+  func sceneObjectPreview(
+    prototype: SceneObjectPrototype,
+    worldTransform: simd_float4x4,
+    datasetInfo: RuntimeAppModel.DatasetInfo,
+    id: UUID
+  ) -> SpatialSceneObjectPreview? {
+    let effectiveTransform = interactionTransform(
+      worldTransform,
+      datasetInfo: datasetInfo,
+      projectsOntoVolume: storedAppModel.projectObjectsOntoVolume
+    )
+    switch prototype {
+      case .sphere:
+        let worldPosition = SIMD3<Float>(
+          effectiveTransform.columns.3.x,
+          effectiveTransform.columns.3.y,
+          effectiveTransform.columns.3.z
+        )
+        return .sphere(VolumeMarkerPoint(
+          position: markerPosition(
+            fromWorldPosition: worldPosition,
+            datasetInfo: datasetInfo
+          ),
+          radius: sharedAppModel.defaultVolumeMarkerRadius
+        ))
+
+      case .mesh(let assetID):
+        guard let asset = sharedAppModel.sceneMeshAssets[assetID] else { return nil }
+        let pose = datasetPoseMeters(
+          fromWorldTransform: effectiveTransform,
+          datasetInfo: datasetInfo
+        )
+        return .mesh(SceneMeshInstance(
+          id: id,
+          name: asset.name,
+          asset: asset.reference,
+          translationMeters: pose.position,
+          rotation: pose.rotation
+        ))
+    }
+  }
+
   private func updateActiveSceneObjectPlacement(
     worldTransform: simd_float4x4,
     datasetInfo: RuntimeAppModel.DatasetInfo
   ) {
-    let pose = datasetPoseMeters(fromWorldTransform: worldTransform, datasetInfo: datasetInfo)
+    let effectiveTransform = interactionTransform(
+      worldTransform,
+      datasetInfo: datasetInfo,
+      projectsOntoVolume: storedAppModel.projectObjectsOntoVolume
+    )
+    let pose = datasetPoseMeters(
+      fromWorldTransform: effectiveTransform,
+      datasetInfo: datasetInfo
+    )
     switch activeSceneObjectPlacement {
       case .sphere(let markerID):
         let worldPosition = SIMD3<Float>(
-          worldTransform.columns.3.x,
-          worldTransform.columns.3.y,
-          worldTransform.columns.3.z
+          effectiveTransform.columns.3.x,
+          effectiveTransform.columns.3.y,
+          effectiveTransform.columns.3.z
         )
         guard let index = sharedAppModel.volumeMarkers.firstIndex(where: { $0.id == markerID }) else {
           activeSceneObjectPlacement = nil
@@ -547,56 +719,57 @@ class ImmersiveInteraction {
     activeSceneObjectPlacementUsesHand = false
   }
 
-  private func handleArmedSceneObjectPlacement(
+  private func handleSceneObjectPlacement(
     _ event: SpatialEventCollection.Event,
-    datasetInfo: RuntimeAppModel.DatasetInfo
+    datasetInfo: RuntimeAppModel.DatasetInfo,
+    prototype: SceneObjectPrototype
   ) -> Bool {
-    guard let prototype = sharedAppModel.armedSceneObjectPrototype else { return false }
     if sceneMeshDragState != nil || (
+      activeSceneObjectPlacement == nil &&
       event.phase == .active &&
-      ray(from: event).flatMap {
-        sceneMeshHit(
-          origin: $0.origin,
-          direction: $0.direction,
-          datasetInfo: datasetInfo
-        )
-      } != nil
+      selectedSceneMesh(from: event, datasetInfo: datasetInfo) != nil
     ) {
       _ = handleSceneMeshInteraction(event, datasetInfo: datasetInfo)
       return true
     }
     if markerDragID != nil || (
+      activeSceneObjectPlacement == nil &&
       event.phase == .active &&
-      ray(from: event).flatMap {
-        markerHit(
-          origin: $0.origin,
-          direction: $0.direction,
-          datasetInfo: datasetInfo
-        )
-      } != nil
+      selectedMarker(from: event, datasetInfo: datasetInfo) != nil
     ) {
       handleMarkerInteraction(event, datasetInfo: datasetInfo)
+      return true
+    }
+    if prototype == .sphere, activeSceneObjectPlacement == nil {
+      handleMarkerInteraction(
+        event,
+        datasetInfo: datasetInfo,
+        preferExistingMarker: false
+      )
       return true
     }
     switch event.phase {
       case .active:
         guard activeSceneObjectPlacementSourceID == nil else { return true }
-        guard let transform = poseMatrix(event) else { return true }
+        guard let transform = sceneObjectTransform(from: event, datasetInfo: datasetInfo) else {
+          return true
+        }
         if activeSceneObjectPlacement == nil {
-          activeSceneObjectPlacementUsesHand = true
-          _ = beginSceneObjectPlacement(
+          guard beginSceneObjectPlacement(
             prototype: prototype,
             worldTransform: transform,
             datasetInfo: datasetInfo,
             directionOrigin: ray(from: event)?.origin
-          )
+          ) else { return true }
+          activeSceneObjectPlacementUsesHand = true
         }
         updateActiveSceneObjectPlacement(
           worldTransform: transform,
           datasetInfo: datasetInfo
         )
+        sharedAppModel.synchronizeMarkers()
       case .ended:
-        if let transform = poseMatrix(event) {
+        if let transform = sceneObjectTransform(from: event, datasetInfo: datasetInfo) {
           updateActiveSceneObjectPlacement(
             worldTransform: transform,
             datasetInfo: datasetInfo
@@ -615,7 +788,20 @@ class ImmersiveInteraction {
     samples: [BorgSpatialInputSample],
     datasetInfo: RuntimeAppModel.DatasetInfo?
   ) -> Bool {
-    guard let prototype = sharedAppModel.armedSceneObjectPrototype else {
+    let explicitlyArmedPrototype = sharedAppModel.armedSceneObjectPrototype
+    let candidates = samples.filter { sample in
+      guard sample.source == .stylus || sample.source == .controller else { return false }
+      guard !sample.toolTogglePressed else { return false }
+      if explicitlyArmedPrototype != nil { return true }
+      switch sample.source {
+        case .stylus:
+          return storedAppModel.stylusTool == .objectPlacement
+        case .controller:
+          return storedAppModel.controllerTool(for: sample.chirality) == .objectPlacement
+
+      }
+    }
+    guard !candidates.isEmpty || activeSceneObjectPlacementSourceID != nil else {
       if activeSceneObjectPlacement != nil || activeSceneObjectPlacementSourceID != nil {
         if sceneMeshDragState != nil {
           finishSceneMeshDrag(cancelled: true)
@@ -626,9 +812,10 @@ class ImmersiveInteraction {
       }
       return false
     }
+    let prototype = explicitlyArmedPrototype
+      ?? sharedAppModel.validateSelectedSceneObjectPrototype()
     guard let datasetInfo else { return false }
     if activeSceneObjectPlacementUsesHand { return true }
-    let candidates = samples.filter { $0.source == .stylus || $0.source == .controller }
     if let sourceID = activeSceneObjectPlacementSourceID {
       guard let sample = candidates.first(where: { $0.id == sourceID }) else {
         if sceneMeshDragState != nil {
@@ -660,7 +847,7 @@ class ImmersiveInteraction {
       return true
     }
 
-    guard let sample = candidates.first(where: \.primaryPressed) else { return true }
+    guard let sample = candidates.first(where: \.primaryPressed) else { return false }
     activeSceneObjectPlacementSourceID = sample.id
     activeSceneObjectPlacementUsesHand = false
     if let instance = sceneMeshHit(
@@ -724,6 +911,79 @@ class ImmersiveInteraction {
     return nearest?.instance
   }
 
+  private func nearestSceneMesh(
+    to worldPosition: SIMD3<Float>,
+    datasetInfo: RuntimeAppModel.DatasetInfo
+  ) -> SceneMeshInstance? {
+    let maximumExtent = max(
+      datasetInfo.physicalExtentMeters.x,
+      max(datasetInfo.physicalExtentMeters.y, datasetInfo.physicalExtentMeters.z)
+    )
+    guard maximumExtent.isFinite, maximumExtent > 0 else { return nil }
+    let worldFromDataset = sharedAppModel.originFromWorldAnchorMatrix *
+      sharedAppModel.modelTransform.matrix
+    var nearest: (instance: SceneMeshInstance, distance: Float)?
+    for instance in sharedAppModel.sceneMeshInstances where instance.isVisible {
+      let worldFromMesh = worldFromDataset *
+        scaleMatrix(SIMD3<Float>(repeating: 1 / maximumExtent)) *
+        instance.transformMeters
+      let localPosition = transformPoint(worldFromMesh.inverse, worldPosition)
+      let closestLocalPosition = simd_clamp(
+        localPosition,
+        instance.asset.boundsMinimum,
+        instance.asset.boundsMaximum
+      )
+      let closestWorldPosition = transformPoint(worldFromMesh, closestLocalPosition)
+      let distance = simd_distance(worldPosition, closestWorldPosition)
+      guard distance <= 0.08 else { continue }
+      if nearest == nil || distance < nearest!.distance {
+        nearest = (instance, distance)
+      }
+    }
+    return nearest?.instance
+  }
+
+  private func selectedSceneMesh(
+    from event: SpatialEventCollection.Event,
+    datasetInfo: RuntimeAppModel.DatasetInfo
+  ) -> SceneMeshInstance? {
+    if storedAppModel.markerSpawnAtGaze {
+      guard let selectionRay = ray(from: event) else { return nil }
+      return sceneMeshHit(
+        origin: selectionRay.origin,
+        direction: selectionRay.direction,
+        datasetInfo: datasetInfo
+      )
+    }
+    guard let handPosition = inputWorldPosition(from: event) else { return nil }
+    return nearestSceneMesh(to: handPosition, datasetInfo: datasetInfo)
+  }
+
+  private func sceneObjectTransform(
+    from event: SpatialEventCollection.Event,
+    datasetInfo: RuntimeAppModel.DatasetInfo
+  ) -> simd_float4x4? {
+    guard var transform = poseMatrix(event) else { return nil }
+    if storedAppModel.projectObjectsOntoVolume {
+      return transform
+    }
+    guard storedAppModel.markerSpawnAtGaze else { return transform }
+    guard let selectionRay = ray(from: event),
+          let position = rayVolumeHit(
+            origin: selectionRay.origin,
+            direction: selectionRay.direction,
+            datasetInfo: datasetInfo
+          ) else {
+      return nil
+    }
+    let worldPosition = transformPoint(
+      markerVolumeMatrix(for: datasetInfo),
+      position - SIMD3<Float>(repeating: 0.5)
+    )
+    transform.columns.3 = SIMD4<Float>(worldPosition, 1)
+    return transform
+  }
+
   private func rayBoxDistance(
     origin: SIMD3<Float>,
     direction: SIMD3<Float>,
@@ -754,7 +1014,15 @@ class ImmersiveInteraction {
     worldTransform: simd_float4x4,
     datasetInfo: RuntimeAppModel.DatasetInfo
   ) {
-    let pose = datasetPoseMeters(fromWorldTransform: worldTransform, datasetInfo: datasetInfo)
+    let effectiveTransform = interactionTransform(
+      worldTransform,
+      datasetInfo: datasetInfo,
+      projectsOntoVolume: storedAppModel.projectObjectsOntoVolume
+    )
+    let pose = datasetPoseMeters(
+      fromWorldTransform: effectiveTransform,
+      datasetInfo: datasetInfo
+    )
     sceneMeshDragState = SceneMeshDragState(
       instanceID: instance.id,
       inputStartPositionMeters: pose.position,
@@ -777,7 +1045,15 @@ class ImmersiveInteraction {
       sceneMeshDragState = nil
       return
     }
-    let pose = datasetPoseMeters(fromWorldTransform: worldTransform, datasetInfo: datasetInfo)
+    let effectiveTransform = interactionTransform(
+      worldTransform,
+      datasetInfo: datasetInfo,
+      projectsOntoVolume: storedAppModel.projectObjectsOntoVolume
+    )
+    let pose = datasetPoseMeters(
+      fromWorldTransform: effectiveTransform,
+      datasetInfo: datasetInfo
+    )
     sharedAppModel.sceneMeshInstances[index].translationMeters =
       drag.instanceStartTranslationMeters + pose.position - drag.inputStartPositionMeters
     sharedAppModel.sceneMeshInstances[index].rotation =
@@ -805,14 +1081,11 @@ class ImmersiveInteraction {
   ) -> Bool {
     switch event.phase {
       case .active:
-        guard let transform = poseMatrix(event) else { return sceneMeshDragState != nil }
+        guard let transform = sceneObjectTransform(from: event, datasetInfo: datasetInfo) else {
+          return sceneMeshDragState != nil
+        }
         if sceneMeshDragState == nil,
-           let selectionRay = ray(from: event),
-           let instance = sceneMeshHit(
-             origin: selectionRay.origin,
-             direction: selectionRay.direction,
-             datasetInfo: datasetInfo
-           ) {
+           let instance = selectedSceneMesh(from: event, datasetInfo: datasetInfo) {
           beginSceneMeshDrag(
             instance: instance,
             worldTransform: transform,
@@ -825,7 +1098,7 @@ class ImmersiveInteraction {
 
       case .ended:
         guard sceneMeshDragState != nil else { return false }
-        if let transform = poseMatrix(event) {
+        if let transform = sceneObjectTransform(from: event, datasetInfo: datasetInfo) {
           updateSceneMeshDrag(worldTransform: transform, datasetInfo: datasetInfo)
         }
         finishSceneMeshDrag(cancelled: false)
@@ -846,6 +1119,11 @@ class ImmersiveInteraction {
     from event: SpatialEventCollection.Event,
     datasetInfo: RuntimeAppModel.DatasetInfo
   ) -> SIMD3<Float>? {
+    if storedAppModel.projectObjectsOntoVolume,
+       let handPosition = inputWorldPosition(from: event),
+       let position = projectedVolumePosition(toward: handPosition) {
+      return position
+    }
     if storedAppModel.markerSpawnAtGaze {
       guard let ray = ray(from: event),
             let hit = rayVolumeHit(
@@ -944,6 +1222,22 @@ class ImmersiveInteraction {
     return best?.marker
   }
 
+  private func selectedMarker(
+    from event: SpatialEventCollection.Event,
+    datasetInfo: RuntimeAppModel.DatasetInfo
+  ) -> VolumeMarker? {
+    if storedAppModel.markerSpawnAtGaze {
+      guard let selectionRay = ray(from: event) else { return nil }
+      return markerHit(
+        origin: selectionRay.origin,
+        direction: selectionRay.direction,
+        datasetInfo: datasetInfo
+      )
+    }
+    guard let handPosition = inputWorldPosition(from: event) else { return nil }
+    return nearestMarker(to: handPosition, datasetInfo: datasetInfo)
+  }
+
   private func beginMarkerDrag(
     marker: VolumeMarker,
     event: SpatialEventCollection.Event
@@ -985,12 +1279,7 @@ class ImmersiveInteraction {
           let selectionRay = ray(from: event)
 
           if preferExistingMarker,
-             let ray = selectionRay,
-             let existingMarker = markerHit(
-            origin: ray.origin,
-            direction: ray.direction,
-            datasetInfo: datasetInfo
-          ) {
+             let existingMarker = selectedMarker(from: event, datasetInfo: datasetInfo) {
             markerDragID = existingMarker.id
             markerDragHandStart = inputWorldPosition(from: event)
             sharedAppModel.selectedVolumeMarkerID = existingMarker.id
@@ -999,31 +1288,40 @@ class ImmersiveInteraction {
           } else if drawsStroke,
                     let handPosition = inputWorldPosition(from: event) {
             let point = VolumeMarkerPoint(
-              position: markerPosition(
+              position: interactionPosition(
                 fromWorldPosition: handPosition,
-                datasetInfo: datasetInfo
+                datasetInfo: datasetInfo,
+                projectsOntoVolume: storedAppModel.projectObjectsOntoVolume
               ),
               radius: sharedAppModel.defaultVolumeStrokeRadius
             )
             let marker = VolumeMarker.stroke(
-              name: sharedAppModel.nextVolumeMarkerName(),
+              name: sharedAppModel.nextVolumeMarkerName(for: .stroke),
               firstPoint: point,
               color: storedAppModel.markerDefaultColorSIMD
             )
+            if storedAppModel.projectObjectsOntoVolume {
+              beginStrokeProjectionFreeze(token: marker.id)
+            }
             sharedAppModel.volumeMarkers.append(marker)
             sharedAppModel.selectedVolumeMarkerID = marker.id
             sharedAppModel.selectedSceneMeshInstanceID = nil
             handStrokeID = marker.id
             sharedAppModel.synchronizeMarkers()
-          } else if let spawnPosition = markerSpawnPosition(from: event, datasetInfo: datasetInfo),
-                    let directionRay = selectionRay {
+          } else if let spawnPosition = markerSpawnPosition(
+            from: event,
+            datasetInfo: datasetInfo
+          ) {
+            let directionOrigin = selectionRay.map {
+              markerPosition(
+                fromWorldPosition: $0.origin,
+                datasetInfo: datasetInfo
+              )
+            } ?? spawnPosition
             beginMarkerDrag(
               marker: makeMarker(
                 at: spawnPosition,
-                directionOrigin: markerPosition(
-                  fromWorldPosition: directionRay.origin,
-                  datasetInfo: datasetInfo
-                )
+                directionOrigin: directionOrigin
               ),
               event: event
             )
@@ -1035,10 +1333,13 @@ class ImmersiveInteraction {
            let markerIndex = sharedAppModel.volumeMarkers.firstIndex(where: {
              $0.id == handStrokeID
            }) {
+          let previousPosition = sharedAppModel.volumeMarkers[markerIndex].points.last?.position
           let point = VolumeMarkerPoint(
-            position: markerPosition(
+            position: interactionPosition(
               fromWorldPosition: handPosition,
-              datasetInfo: datasetInfo
+              datasetInfo: datasetInfo,
+              projectsOntoVolume: storedAppModel.projectObjectsOntoVolume,
+              smoothingDepthFrom: previousPosition
             ),
             radius: sharedAppModel.defaultVolumeStrokeRadius
           )
@@ -1059,6 +1360,22 @@ class ImmersiveInteraction {
 
         if let handStart = markerDragHandStart,
            let handPosition = inputWorldPosition(from: event) {
+          if storedAppModel.projectObjectsOntoVolume,
+             let markerDragID,
+             let primaryIndex = sharedAppModel.volumeMarkers.firstIndex(where: {
+               $0.id == markerDragID
+             }),
+             let projectedPosition = projectedVolumePosition(toward: handPosition) {
+            let offset = projectedPosition - sharedAppModel.volumeMarkers[primaryIndex].position
+            for index in sharedAppModel.volumeMarkers.indices
+              where sharedAppModel.selectedVolumeMarkerIDs.contains(
+                sharedAppModel.volumeMarkers[index].id
+              ) {
+              sharedAppModel.volumeMarkers[index].translate(by: offset)
+            }
+            sharedAppModel.synchronizeMarkers()
+            return
+          }
           let inverseVolume = markerVolumeMatrix(for: datasetInfo).inverse
           let localDelta = inverseVolume.transformDirection(handPosition - handStart)
           for index in sharedAppModel.volumeMarkers.indices {
@@ -1074,8 +1391,9 @@ class ImmersiveInteraction {
         }
 
       case .ended, .cancelled:
-        if handStrokeID != nil {
-          handStrokeID = nil
+        if let strokeID = handStrokeID {
+          endStrokeProjectionFreeze(token: strokeID)
+          self.handStrokeID = nil
           sharedAppModel.synchronizeMarkers()
         }
         if markerDragID != nil {
@@ -1086,6 +1404,9 @@ class ImmersiveInteraction {
           sharedAppModel.synchronizeMarkers()
         }
       @unknown default:
+        if let strokeID = handStrokeID {
+          endStrokeProjectionFreeze(token: strokeID)
+        }
         handStrokeID = nil
         markerDragID = nil
         markerDragStartPositions.removeAll()
@@ -1302,9 +1623,10 @@ class ImmersiveInteraction {
             sharedAppModel.selectedVolumeMeasurementID = hit.measurementID
             sharedAppModel.selectedVolumeMeasurementPointID = hit.point.id
           } else {
-            let position = markerPosition(
+            let position = interactionPosition(
               fromWorldPosition: handPosition,
-              datasetInfo: datasetInfo
+              datasetInfo: datasetInfo,
+              projectsOntoVolume: storedAppModel.projectMeasurementsOntoVolume
             )
             guard let added = appendMeasurementPoint(
               at: position,
@@ -1321,6 +1643,16 @@ class ImmersiveInteraction {
               let pointID = measurementDragPointID,
               let pointStart = measurementDragPointStart,
               let handStart = measurementDragHandStart else { return }
+        if storedAppModel.projectMeasurementsOntoVolume,
+           let position = projectedVolumePosition(toward: handPosition) {
+          updateMeasurementPoint(
+            measurementID: measurementID,
+            pointID: pointID,
+            position: position,
+            datasetInfo: datasetInfo
+          )
+          return
+        }
         let inverseVolume = markerVolumeMatrix(for: datasetInfo).inverse
         let localDelta = inverseVolume.transformDirection(handPosition - handStart)
         updateMeasurementPoint(
@@ -1457,7 +1789,7 @@ class ImmersiveInteraction {
     tool: SpatialToolMode,
     datasetInfo: RuntimeAppModel.DatasetInfo?
   ) {
-    guard spatialAccessoryAction == nil,
+    guard spatialAccessoryActions[sample.id] == nil,
           activeSpatialStylusID == nil,
           !handInteractionIsActive else { return }
     let transform = sample.gripTransform
@@ -1499,7 +1831,7 @@ class ImmersiveInteraction {
         case .screenView:
           kind = .screenView
           sharedAppModel.screenViewInteractionActive = true
-        case .marker:
+        case .drawing:
           guard let datasetInfo else { return }
           let existingMarker = markerHit(
             origin: sample.aimOrigin,
@@ -1511,7 +1843,10 @@ class ImmersiveInteraction {
             markerID = existingMarker.id
           } else {
             let position: SIMD3<Float>
-            if storedAppModel.markerSpawnAtGaze,
+            if storedAppModel.projectObjectsOntoVolume,
+               let hit = projectedVolumePosition(toward: sample.aimOrigin) {
+              position = hit
+            } else if storedAppModel.markerSpawnAtGaze,
                let hit = rayVolumeHit(
                 origin: sample.aimOrigin,
                 direction: sample.aimDirection,
@@ -1544,6 +1879,8 @@ class ImmersiveInteraction {
             }
           )
           kind = .markerSphere
+        case .objectPlacement:
+          return
         case .measurement:
           guard let datasetInfo, let measurementKind = tool.measurementKind else { return }
           if let hit = measurementPointHit(
@@ -1558,7 +1895,10 @@ class ImmersiveInteraction {
             sharedAppModel.selectedVolumeMeasurementPointID = hit.point.id
           } else {
             let position: SIMD3<Float>
-            if storedAppModel.markerSpawnAtGaze,
+            if storedAppModel.projectMeasurementsOntoVolume,
+               let hit = projectedVolumePosition(toward: sample.aimOrigin) {
+              position = hit
+            } else if storedAppModel.markerSpawnAtGaze,
                let hit = rayVolumeHit(
                 origin: sample.aimOrigin,
                 direction: sample.aimDirection,
@@ -1585,7 +1925,7 @@ class ImmersiveInteraction {
       }
     }
 
-    spatialAccessoryAction = SpatialAccessoryAction(
+    spatialAccessoryActions[sample.id] = SpatialAccessoryAction(
       sourceID: sample.id,
       kind: kind,
       startTransform: transform,
@@ -1606,26 +1946,30 @@ class ImmersiveInteraction {
     datasetInfo: RuntimeAppModel.DatasetInfo?,
     usesModifierButton: Bool
   ) {
-    guard spatialAccessoryAction == nil,
+    guard spatialAccessoryActions[sample.id] == nil,
           activeSpatialStylusID == nil,
           !handInteractionIsActive,
           let datasetInfo else { return }
     let point = VolumeMarkerPoint(
-      position: markerPosition(
+      position: interactionPosition(
         fromWorldPosition: sample.aimOrigin,
-        datasetInfo: datasetInfo
+        datasetInfo: datasetInfo,
+        projectsOntoVolume: storedAppModel.projectObjectsOntoVolume
       ),
       radius: sharedAppModel.defaultVolumeStrokeRadius
     )
     let marker = VolumeMarker.stroke(
-      name: sharedAppModel.nextVolumeMarkerName(),
+      name: sharedAppModel.nextVolumeMarkerName(for: .stroke),
       firstPoint: point,
       color: sharedAppModel.defaultVolumeStrokeColor
     )
+    if storedAppModel.projectObjectsOntoVolume {
+      beginStrokeProjectionFreeze(token: marker.id)
+    }
     sharedAppModel.volumeMarkers.append(marker)
     sharedAppModel.selectedVolumeMarkerID = marker.id
     sharedAppModel.synchronizeMarkers()
-    spatialAccessoryAction = SpatialAccessoryAction(
+    spatialAccessoryActions[sample.id] = SpatialAccessoryAction(
       sourceID: sample.id,
       kind: .markerStroke,
       startTransform: sample.gripTransform,
@@ -1646,7 +1990,7 @@ class ImmersiveInteraction {
     instance: SceneMeshInstance,
     datasetInfo: RuntimeAppModel.DatasetInfo
   ) {
-    guard spatialAccessoryAction == nil,
+    guard spatialAccessoryActions[sample.id] == nil,
           activeSpatialStylusID == nil,
           !handInteractionIsActive else { return }
     beginSceneMeshDrag(
@@ -1654,7 +1998,7 @@ class ImmersiveInteraction {
       worldTransform: sample.aimTransform,
       datasetInfo: datasetInfo
     )
-    spatialAccessoryAction = SpatialAccessoryAction(
+    spatialAccessoryActions[sample.id] = SpatialAccessoryAction(
       sourceID: sample.id,
       kind: .sceneMesh,
       startTransform: sample.aimTransform,
@@ -1674,8 +2018,7 @@ class ImmersiveInteraction {
     _ sample: BorgSpatialInputSample,
     datasetInfo: RuntimeAppModel.DatasetInfo?
   ) {
-    guard let action = spatialAccessoryAction,
-          action.sourceID == sample.id else { return }
+    guard let action = spatialAccessoryActions[sample.id] else { return }
     let currentTransform = sample.gripTransform
     let inverseWorld = sharedAppModel.originFromWorldAnchorMatrix.inverse
     let currentAnchorTransform = inverseWorld * currentTransform
@@ -1745,10 +2088,13 @@ class ImmersiveInteraction {
               let markerIndex = sharedAppModel.volumeMarkers.firstIndex(where: {
                 $0.id == markerID
               }) else { return }
+        let previousPosition = sharedAppModel.volumeMarkers[markerIndex].points.last?.position
         let point = VolumeMarkerPoint(
-          position: markerPosition(
+          position: interactionPosition(
             fromWorldPosition: sample.aimOrigin,
-            datasetInfo: datasetInfo
+            datasetInfo: datasetInfo,
+            projectsOntoVolume: storedAppModel.projectObjectsOntoVolume,
+            smoothingDepthFrom: previousPosition
           ),
           radius: sharedAppModel.defaultVolumeStrokeRadius
         )
@@ -1772,7 +2118,10 @@ class ImmersiveInteraction {
               let measurementID = action.measurementID,
               let pointID = action.measurementPointID else { return }
         let position: SIMD3<Float>
-        if storedAppModel.markerSpawnAtGaze,
+        if storedAppModel.projectMeasurementsOntoVolume,
+           let hit = projectedVolumePosition(toward: sample.aimOrigin) {
+          position = hit
+        } else if storedAppModel.markerSpawnAtGaze,
            let hit = rayVolumeHit(
             origin: sample.aimOrigin,
             direction: sample.aimDirection,
@@ -1838,8 +2187,8 @@ class ImmersiveInteraction {
     }
   }
 
-  private func finishSpatialAccessoryAction() {
-    guard let action = spatialAccessoryAction else { return }
+  private func finishSpatialAccessoryAction(sourceID: UUID) {
+    guard let action = spatialAccessoryActions[sourceID] else { return }
     switch action.kind {
       case .model:
         sharedAppModel.lastModelTransform.translation = sharedAppModel.modelTransform.translation
@@ -1848,7 +2197,10 @@ class ImmersiveInteraction {
       case .clipping:
         sharedAppModel.lastTranslationClipping = translationClipping
         sharedAppModel.synchronize(kind: .stateOnly)
-      case .markerSphere, .markerStroke:
+      case .markerSphere:
+        sharedAppModel.synchronizeMarkers()
+      case .markerStroke:
+        endStrokeProjectionFreeze(token: action.markerID ?? action.sourceID)
         sharedAppModel.synchronizeMarkers()
       case .sceneMesh:
         finishSceneMeshDrag(cancelled: false)
@@ -1866,7 +2218,7 @@ class ImmersiveInteraction {
         transferFunctionPanelMarkerSuppressed = true
         transferFunctionPanelInteractionState.updateHitUV(nil)
     }
-    spatialAccessoryAction = nil
+    spatialAccessoryActions[sourceID] = nil
   }
 
   private func updateScreenView(fromWorldTransform transform: simd_float4x4) {
@@ -1907,16 +2259,11 @@ class ImmersiveInteraction {
     deltaTime: Float
   ) {
     guard activeSpatialStylusID == nil, !handInteractionIsActive else { return }
-    if let action = spatialAccessoryAction,
-       action.sourceID != sample.id {
-      return
-    }
     let stick = sample.adjustment
     guard simd_length(stick) > 0.08 else { return }
     let rate = min(max(deltaTime, 0), 0.05)
 
-    if let action = spatialAccessoryAction,
-       action.sourceID == sample.id,
+    if let action = spatialAccessoryActions[sample.id],
        case .markerStroke = action.kind {
       if abs(stick.y) > 0.08 {
         sharedAppModel.defaultVolumeStrokeRadius = VolumeMarkerRadius.clamp(
@@ -2098,7 +2445,7 @@ class ImmersiveInteraction {
           } else {
             lastSpatialStylusModifierPressTimes[sample.id] = timestamp
           }
-        case .model, .clipping, .screenView:
+        case .objectPlacement, .model, .clipping, .screenView:
           break
       }
     } else if !sample.modifierPressed {
@@ -2122,7 +2469,7 @@ class ImmersiveInteraction {
         activeSpatialStylusID = nil
       }
     } else if requestsAction,
-              spatialAccessoryAction == nil,
+              spatialAccessoryActions.isEmpty,
               !handInteractionIsActive {
       activeSpatialStylusID = sample.id
     }
@@ -2192,9 +2539,10 @@ class ImmersiveInteraction {
       return
     }
 
-    let position = markerPosition(
+    let position = interactionPosition(
       fromWorldPosition: sample.tipPosition,
-      datasetInfo: datasetInfo
+      datasetInfo: datasetInfo,
+      projectsOntoVolume: storedAppModel.projectMeasurementsOntoVolume
     )
     if activeSpatialStylusMeasurementPointID == nil {
       let startsNewMeasurement = spatialStylusStartsNewMeasurement
@@ -2234,15 +2582,15 @@ class ImmersiveInteraction {
   ) {
     let controllers = samples.filter { $0.source == .controller }
     let controllerIDs = Set(controllers.map(\.id))
-    if let action = spatialAccessoryAction,
-       !controllerIDs.contains(action.sourceID) {
-      finishSpatialAccessoryAction()
+    for sourceID in Array(spatialAccessoryActions.keys)
+      where !controllerIDs.contains(sourceID) {
+      finishSpatialAccessoryAction(sourceID: sourceID)
     }
 
     let deltaTime = Float(timestamp - (lastSpatialAccessoryAdjustmentTime ?? timestamp))
     lastSpatialAccessoryAdjustmentTime = timestamp
     for sample in controllers {
-      if spatialAccessoryAction == nil {
+      if spatialAccessoryActions.isEmpty {
         let hit = transferFunctionPanelInteractionState.hitTest(
           origin: sample.aimOrigin,
           direction: sample.aimDirection
@@ -2294,8 +2642,7 @@ class ImmersiveInteraction {
           )
         }
       }
-      if let action = spatialAccessoryAction,
-         action.sourceID == sample.id {
+      if let action = spatialAccessoryActions[sample.id] {
         switch action.kind {
           case .markerStroke:
             let strokePressed = action.markerStrokeUsesModifierButton
@@ -2307,25 +2654,25 @@ class ImmersiveInteraction {
             if strokePressed {
               updateSpatialAccessoryAction(sample, datasetInfo: datasetInfo)
             } else if strokeWasPressed {
-              finishSpatialAccessoryAction()
+              finishSpatialAccessoryAction(sourceID: sample.id)
             }
           case .measurementPoint:
             if sample.primaryPressed {
               updateSpatialAccessoryAction(sample, datasetInfo: datasetInfo)
             } else if wasPressed {
-              finishSpatialAccessoryAction()
+              finishSpatialAccessoryAction(sourceID: sample.id)
             }
           case .sceneMesh:
             if sample.primaryPressed {
               updateSpatialAccessoryAction(sample, datasetInfo: datasetInfo)
             } else if wasPressed {
-              finishSpatialAccessoryAction()
+              finishSpatialAccessoryAction(sourceID: sample.id)
             }
           default:
             if sample.primaryPressed {
               updateSpatialAccessoryAction(sample, datasetInfo: datasetInfo)
             } else if wasPressed {
-              finishSpatialAccessoryAction()
+              finishSpatialAccessoryAction(sourceID: sample.id)
             }
         }
       }
@@ -2528,11 +2875,16 @@ class ImmersiveInteraction {
                            _ transferEditState: RuntimeAppModel.TransferEditState,
                            datasetInfo: RuntimeAppModel.DatasetInfo?,
                            toggleChannel: @escaping @MainActor (Int) -> Void) {
-    guard spatialAccessoryAction == nil, activeSpatialStylusID == nil else { return }
+    guard spatialAccessoryActions.isEmpty, activeSpatialStylusID == nil else { return }
     if let datasetInfo,
        events.count == 1,
        let event = events.first,
-       handleArmedSceneObjectPlacement(event, datasetInfo: datasetInfo) {
+       sharedAppModel.armedSceneObjectPrototype != nil,
+       handleSceneObjectPlacement(
+        event,
+        datasetInfo: datasetInfo,
+        prototype: sharedAppModel.armedSceneObjectPrototype!
+       ) {
       return
     }
     if interactionMode != .screenView {
@@ -2548,7 +2900,7 @@ class ImmersiveInteraction {
       return
     }
 
-    if interactionMode == .marker {
+    if interactionMode == .drawing || interactionMode == .objectPlacement {
       resetQuickMarkerState()
     } else {
       sharedAppModel.selectedVolumeMarkerID = nil
@@ -2558,7 +2910,8 @@ class ImmersiveInteraction {
       sharedAppModel.selectedVolumeMeasurementPointID = nil
     }
 
-    if interactionMode != .marker,
+    if interactionMode != .drawing,
+       interactionMode != .objectPlacement,
        interactionMode != .screenView,
        events.count == 1,
        let event = events.first,
@@ -2586,20 +2939,24 @@ class ImmersiveInteraction {
           default:
             return
         }
-      case .marker:
+      case .drawing:
+        guard let datasetInfo else {
+          return
+        }
+        guard events.count == 1, let event = events.first else { return }
+        handleMarkerInteraction(event, datasetInfo: datasetInfo, drawsStroke: true)
+      case .objectPlacement:
         guard let datasetInfo else {
           return
         }
         switch events.count {
           case 1:
             let event = events.first!
-            if !handleSceneMeshInteraction(event, datasetInfo: datasetInfo) {
-              handleMarkerInteraction(
-                event,
-                datasetInfo: datasetInfo,
-                drawsStroke: sharedAppModel.handMarkerTool == .drawing
-              )
-            }
+            _ = handleSceneObjectPlacement(
+              event,
+              datasetInfo: datasetInfo,
+              prototype: sharedAppModel.validateSelectedSceneObjectPrototype()
+            )
           case 2:
             handleMarkerScaling(events, datasetInfo: datasetInfo)
           default:

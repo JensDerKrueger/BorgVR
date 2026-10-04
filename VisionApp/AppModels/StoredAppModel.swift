@@ -132,6 +132,8 @@ final class StoredAppModel: ObservableObject {
     "shareSpatialStylusPosition": false,
     "sharePlayDisplayName": "",
     "markerSpawnAtGaze": false,
+    "projectObjectsOntoVolume": false,
+    "projectMeasurementsOntoVolume": false,
     "markerDefaultRed": 1.0,
     "markerDefaultGreen": 0.08,
     "markerDefaultBlue": 0.02,
@@ -260,8 +262,12 @@ final class StoredAppModel: ObservableObject {
   @AppStorage("shareSpatialStylusPosition") var shareSpatialStylusPosition: Bool = StoredAppModel.bool("shareSpatialStylusPosition")
   /// Name shown to the other participants in a SharePlay session.
   @AppStorage("sharePlayDisplayName") var sharePlayDisplayName: String = StoredAppModel.string("sharePlayDisplayName")
-  /// Whether Marker mode places new markers at the gaze hit instead of the pinch hand.
+  /// Whether hand-based object interaction uses the gaze ray instead of the pinch position.
   @AppStorage("markerSpawnAtGaze") var markerSpawnAtGaze: Bool = StoredAppModel.bool("markerSpawnAtGaze")
+  /// Whether object placement and drawing should use the visible volume surface.
+  @AppStorage("projectObjectsOntoVolume") var projectObjectsOntoVolume: Bool = StoredAppModel.bool("projectObjectsOntoVolume")
+  /// Whether measurement points should use the visible volume surface.
+  @AppStorage("projectMeasurementsOntoVolume") var projectMeasurementsOntoVolume: Bool = StoredAppModel.bool("projectMeasurementsOntoVolume")
   /// Default marker color components.
   @AppStorage("markerDefaultRed") var markerDefaultRed: Double = StoredAppModel.double("markerDefaultRed")
   @AppStorage("markerDefaultGreen") var markerDefaultGreen: Double = StoredAppModel.double("markerDefaultGreen")

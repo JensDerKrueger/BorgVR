@@ -398,6 +398,15 @@ extension Renderer {
     if drawable.views.count > 1 {
       (uniformBufferVertex.current.uniforms.1, uniformBufferFragment.current.uniforms.1) = uniforms(forViewIndex: 1)
     }
+    currentTextureToClipMatrices = drawable.views.indices.map { index in
+      index == 0
+        ? uniformBufferFragment.current.uniforms.0.textureToClip
+        : uniformBufferFragment.current.uniforms.1.textureToClip
+    }
+    currentWorldToClipMatrices = drawable.views.indices.map { index in
+      let viewMatrix = (originFromDevice * drawable.views[index].transform).inverse
+      return drawable.computeProjection(viewIndex: index) * viewMatrix
+    }
 
     switch sharedAppModel.renderMode {
       case .transferFunction1D, .transferFunction1DLighting:
@@ -426,7 +435,10 @@ extension Renderer {
    - Parameter drawable: The drawable providing the base textures.
    - Returns: A tuple with a color and depth memoryless MTLTexture.
    */
-  private func memorylessRenderTargets(drawable: LayerRenderer.Drawable) -> (color: MTLTexture, depth: MTLTexture) {
+  private func memorylessRenderTargets(
+    drawable: LayerRenderer.Drawable,
+    interactionDepthResolveTexture: MTLTexture
+  ) -> (color: MTLTexture, depth: MTLTexture, interactionDepth: MTLTexture) {
 
     func renderTarget(resolveTexture: MTLTexture, cachedTexture: MTLTexture?) -> MTLTexture {
       if let cachedTexture,
@@ -449,12 +461,54 @@ extension Renderer {
     currentRenderTargetIndex = (currentRenderTargetIndex + 1) % runtimeAppModel.maxBuffersInFlight
 
     let cachedTargets = memorylessTargets[currentRenderTargetIndex]
-    let newTargets = (renderTarget(resolveTexture: drawable.colorTextures[0], cachedTexture: cachedTargets?.color),
-                      renderTarget(resolveTexture: drawable.depthTextures[0], cachedTexture: cachedTargets?.depth))
+    let newTargets = (
+      renderTarget(
+        resolveTexture: drawable.colorTextures[0],
+        cachedTexture: cachedTargets?.color
+      ),
+      renderTarget(
+        resolveTexture: drawable.depthTextures[0],
+        cachedTexture: cachedTargets?.depth
+      ),
+      renderTarget(
+        resolveTexture: interactionDepthResolveTexture,
+        cachedTexture: cachedTargets?.interactionDepth
+      )
+    )
 
     memorylessTargets[currentRenderTargetIndex] = newTargets
 
     return newTargets
+  }
+
+  private func interactionDepthTexture(drawable: LayerRenderer.Drawable) -> MTLTexture {
+    currentInteractionDepthIndex =
+      (currentInteractionDepthIndex + 1) % runtimeAppModel.maxBuffersInFlight
+    let source = drawable.colorTextures[0]
+    let viewCount = max(drawable.views.count, 1)
+    if let texture = interactionDepthTextures[currentInteractionDepthIndex],
+       texture.width == source.width,
+       texture.height == source.height,
+       texture.arrayLength == viewCount {
+      return texture
+    }
+
+    let descriptor = MTLTextureDescriptor.texture2DDescriptor(
+      pixelFormat: .r32Float,
+      width: source.width,
+      height: source.height,
+      mipmapped: false
+    )
+    descriptor.textureType = .type2DArray
+    descriptor.arrayLength = viewCount
+    descriptor.storageMode = .shared
+    descriptor.usage = .renderTarget
+    guard let texture = device.makeTexture(descriptor: descriptor) else {
+      fatalError("Failed to create the volume interaction-depth texture")
+    }
+    texture.label = "Volume Interaction Depth \(currentInteractionDepthIndex)"
+    interactionDepthTextures[currentInteractionDepthIndex] = texture
+    return texture
   }
 
   private func markerRenderTargets(drawable: LayerRenderer.Drawable) -> (color: MTLTexture, depth: MTLTexture) {
@@ -787,17 +841,25 @@ extension Renderer {
     let screenViews = screenViewVisualization()
     let measurementSnapshot = sharedAppModel.volumeMeasurementsSnapshot()
     let measurements = measurementVisualization(measurements: measurementSnapshot)
-    let markers = sharedAppModel.volumeMarkers + screenViews.markers
-    let toolWidgetMarkers = spatialStylusMeasurementPreviewMarkers +
-      spatialControllerModePreviewMarkers
-    let sceneMeshInstances = sharedAppModel.sceneMeshInstances
+    let pendingProjectionCaptureMarkerIDs =
+      immersiveInteraction.pendingStrokeProjectionCaptureMarkerIDs()
+    let suppressLocalToolWidgets = !pendingProjectionCaptureMarkerIDs.isEmpty
+    let markers = (sharedAppModel.volumeMarkers + screenViews.markers).filter {
+      !pendingProjectionCaptureMarkerIDs.contains($0.id)
+    }
+    let toolWidgetMarkers = suppressLocalToolWidgets
+      ? []
+      : spatialStylusMeasurementPreviewMarkers + spatialControllerModePreviewMarkers
+    let sceneMeshInstances = sharedAppModel.sceneMeshInstances +
+      (suppressLocalToolWidgets ? [] : spatialSceneObjectPreviewInstances)
     let remoteToolPreviews = sharedAppModel.activeRemoteSpatialToolPreviews()
     guard !markers.isEmpty || !measurements.markers.isEmpty ||
       !screenViews.labels.isEmpty || !measurements.surfaces.isEmpty ||
       !sceneMeshInstances.isEmpty ||
-      spatialStylusPreviewPoint != nil ||
-      !remoteToolPreviews.isEmpty || !spatialControllerSamples.isEmpty ||
-      !spatialControllerPreviewPoints.isEmpty else {
+      (!suppressLocalToolWidgets && spatialStylusPreviewPoint != nil) ||
+      !remoteToolPreviews.isEmpty ||
+      (!suppressLocalToolWidgets && !spatialControllerSamples.isEmpty) ||
+      (!suppressLocalToolWidgets && !spatialControllerPreviewPoints.isEmpty) else {
       return measurements.labels
     }
 
@@ -1017,22 +1079,24 @@ extension Renderer {
 
     func drawToolWidgets() {
       renderEncoder.pushDebugGroup("Spatial Tool Widgets")
-      drawMarkerGeometry(toolWidgetMarkers, groupName: "Tool Mode Glyphs")
-      if spatialStylusMeasurementPreviewMarkers.isEmpty,
-         let spatialStylusPreviewPoint {
-        drawSphere(
-          spatialStylusPreviewPoint,
-          color: sharedAppModel.defaultVolumeStrokeColor
-        )
-      }
-      for point in spatialControllerPreviewPoints {
-        drawSphere(point, color: sharedAppModel.defaultVolumeStrokeColor)
+      if !suppressLocalToolWidgets {
+        drawMarkerGeometry(toolWidgetMarkers, groupName: "Tool Mode Glyphs")
+        if spatialStylusMeasurementPreviewMarkers.isEmpty,
+           let spatialStylusPreviewPoint {
+          drawSphere(
+            spatialStylusPreviewPoint,
+            color: sharedAppModel.defaultVolumeStrokeColor
+          )
+        }
+        for point in spatialControllerPreviewPoints {
+          drawSphere(point, color: sharedAppModel.defaultVolumeStrokeColor)
+        }
+        for sample in spatialControllerSamples {
+          drawControllerPointer(sample)
+        }
       }
       for preview in remoteToolPreviews {
         drawSphere(preview.point, color: preview.color)
-      }
-      for sample in spatialControllerSamples {
-        drawControllerPointer(sample)
       }
       renderEncoder.popDebugGroup()
     }
@@ -1198,7 +1262,8 @@ extension Renderer {
     drawScreenViewLabels(
       screenViews.labels,
       renderEncoder: renderEncoder,
-      depthStencilState: depthStateMarker
+      depthStencilState: depthStateMarker,
+      pipelineState: pipelineStateScreenViewLabel
     )
     return measurements.labels
   }
@@ -1206,7 +1271,8 @@ extension Renderer {
   private func drawScreenViewLabels(
     _ labels: [ScreenViewLabelDescriptor],
     renderEncoder: MTLRenderCommandEncoder,
-    depthStencilState: MTLDepthStencilState
+    depthStencilState: MTLDepthStencilState,
+    pipelineState: MTLRenderPipelineState
   ) {
     guard !labels.isEmpty else { return }
 
@@ -1214,7 +1280,8 @@ extension Renderer {
       drawScreenViewLabel(
         label,
         renderEncoder: renderEncoder,
-        depthStencilState: depthStencilState
+        depthStencilState: depthStencilState,
+        pipelineState: pipelineState
       )
     }
   }
@@ -1244,10 +1311,11 @@ extension Renderer {
   private func drawScreenViewLabel(
     _ label: ScreenViewLabelDescriptor,
     renderEncoder: MTLRenderCommandEncoder,
-    depthStencilState: MTLDepthStencilState
+    depthStencilState: MTLDepthStencilState,
+    pipelineState: MTLRenderPipelineState
   ) {
 
-    renderEncoder.setRenderPipelineState(pipelineStateScreenViewLabel)
+    renderEncoder.setRenderPipelineState(pipelineState)
     renderEncoder.setDepthStencilState(depthStencilState)
     renderEncoder.setCullMode(.none)
 
@@ -1561,7 +1629,8 @@ extension Renderer {
     drawScreenViewLabels(
       sortedLabels,
       renderEncoder: renderEncoder,
-      depthStencilState: depthStateMarkerComposite
+      depthStencilState: depthStateMarkerComposite,
+      pipelineState: pipelineStateScreenViewOverlayLabel
     )
   }
 
@@ -1586,6 +1655,9 @@ extension Renderer {
 
   private func finishSpatialStylusStroke() {
     let completedStroke = activeSpatialStylusStrokeID != nil
+    if let activeSpatialStylusStrokeID {
+      immersiveInteraction.endStrokeProjectionFreeze(token: activeSpatialStylusStrokeID)
+    }
     activeSpatialStylusStrokeID = nil
     spatialStylusTipFilterState = nil
     if completedStroke {
@@ -1780,6 +1852,8 @@ extension Renderer {
         ]
         paths = [[0, 1, 2, 3]]
         color = sharedAppModel.defaultVolumeStrokeColor
+      case .objectPlacement:
+        return []
       case .screenView:
         worldVertices = [
           center - right * size * 1.25 - up * size * 0.75,
@@ -1882,6 +1956,15 @@ extension Renderer {
     }
 
     spatialStylusPreviewPoint = nil
+    let previousPosition = activeSpatialStylusStrokeID.flatMap { strokeID in
+      sharedAppModel.volumeMarkers.first(where: { $0.id == strokeID })?.points.last?.position
+    }
+    let strokePosition = storedAppModel.projectObjectsOntoVolume
+      ? immersiveInteraction.projectedVolumePosition(
+          toward: filteredTip.position,
+          smoothingDepthFrom: previousPosition
+        ) ?? position
+      : position
     let pointRadius = filteredTip.pressure.map {
       VolumeMarkerRadius.pressureAdjustedStrokeRadius(
         maximumRadius: sharedAppModel.defaultVolumeStrokeRadius,
@@ -1889,7 +1972,7 @@ extension Renderer {
       )
     } ?? sharedAppModel.defaultVolumeStrokeRadius
     let point = VolumeMarkerPoint(
-      position: position,
+      position: strokePosition,
       radius: pointRadius
     )
 
@@ -1910,10 +1993,13 @@ extension Renderer {
     }
 
     let marker = VolumeMarker.stroke(
-      name: sharedAppModel.nextVolumeMarkerName(),
+      name: sharedAppModel.nextVolumeMarkerName(for: .stroke),
       firstPoint: point,
       color: sharedAppModel.defaultVolumeStrokeColor
     )
+    if storedAppModel.projectObjectsOntoVolume {
+      immersiveInteraction.beginStrokeProjectionFreeze(token: marker.id)
+    }
     sharedAppModel.volumeMarkers.append(marker)
     sharedAppModel.selectedVolumeMarkerID = marker.id
     activeSpatialStylusStrokeID = marker.id
@@ -1942,11 +2028,32 @@ extension Renderer {
       )
     }
     spatialControllerSamples = samples.filter { $0.source == .controller }
-    spatialControllerPreviewPoints = spatialControllerSamples.compactMap {
-      spatialToolPreviewPoint(
-        worldPosition: $0.aimOrigin,
-        radius: sharedAppModel.defaultVolumeStrokeRadius
-      )
+    let selectedPrototype = sharedAppModel.validateSelectedSceneObjectPrototype()
+    var objectPreviewInstances: [SceneMeshInstance] = []
+    spatialControllerPreviewPoints = spatialControllerSamples.compactMap { sample in
+      guard storedAppModel.controllerTool(for: sample.chirality) == .objectPlacement else {
+        return spatialToolPreviewPoint(
+          worldPosition: sample.aimOrigin,
+          radius: sharedAppModel.defaultVolumeStrokeRadius
+        )
+      }
+      guard !sample.primaryPressed, let datasetInfo = inputContext.datasetInfo else {
+        return nil
+      }
+      switch immersiveInteraction.sceneObjectPreview(
+        prototype: selectedPrototype,
+        worldTransform: sample.aimTransform,
+        datasetInfo: datasetInfo,
+        id: sample.id
+      ) {
+        case .sphere(let point):
+          return point
+        case .mesh(let instance):
+          objectPreviewInstances.append(instance)
+          return nil
+        case nil:
+          return nil
+      }
     }
     spatialControllerModePreviewMarkers = spatialControllerSamples.flatMap { sample in
       spatialControllerToolPreviewMarkers(
@@ -1954,7 +2061,34 @@ extension Renderer {
         mode: storedAppModel.controllerTool(for: sample.chirality)
       )
     }
-    if let stylusMeasurementKind = storedAppModel.stylusTool.measurementKind {
+    if storedAppModel.stylusTool == .objectPlacement {
+      finishSpatialStylusStroke()
+      spatialStylusRadiusAdjustmentStart = nil
+      spatialStylusMeasurementPreviewMarkers = []
+      immersiveInteraction.handleSpatialStylusMeasurement(
+        nil,
+        datasetInfo: nil,
+        kind: .length
+      )
+      spatialStylusPreviewPoint = nil
+      if let sample = samples.first(where: { $0.source == .stylus }),
+         !sample.primaryPressed,
+         let datasetInfo = inputContext.datasetInfo {
+        switch immersiveInteraction.sceneObjectPreview(
+          prototype: selectedPrototype,
+          worldTransform: sample.aimTransform,
+          datasetInfo: datasetInfo,
+          id: sample.id
+        ) {
+          case .sphere(let point):
+            spatialStylusPreviewPoint = point
+          case .mesh(let instance):
+            objectPreviewInstances.append(instance)
+          case nil:
+            break
+        }
+      }
+    } else if let stylusMeasurementKind = storedAppModel.stylusTool.measurementKind {
       finishSpatialStylusStroke()
       spatialStylusRadiusAdjustmentStart = nil
       immersiveInteraction.handleSpatialStylusMeasurement(
@@ -1982,6 +2116,7 @@ extension Renderer {
       )
       updateSpatialStylusStroke(sample: stylusSample)
     }
+    spatialSceneObjectPreviewInstances = objectPreviewInstances
     var previewPoints = spatialControllerPreviewPoints
     if let spatialStylusPreviewPoint {
       previewPoints.append(spatialStylusPreviewPoint)
@@ -2100,24 +2235,35 @@ extension Renderer {
     )
 
     let renderPassDescriptor = MTLRenderPassDescriptor()
+    let interactionDepthTexture = interactionDepthTexture(drawable: drawable)
 
     if rasterSampleCount > 1 {
-      let renderTargets = memorylessRenderTargets(drawable: drawable)
+      let renderTargets = memorylessRenderTargets(
+        drawable: drawable,
+        interactionDepthResolveTexture: interactionDepthTexture
+      )
       renderPassDescriptor.colorAttachments[0].resolveTexture = drawable.colorTextures[0]
       renderPassDescriptor.colorAttachments[0].texture = renderTargets.color
+      renderPassDescriptor.colorAttachments[1].resolveTexture = interactionDepthTexture
+      renderPassDescriptor.colorAttachments[1].texture = renderTargets.interactionDepth
       renderPassDescriptor.depthAttachment.resolveTexture = drawable.depthTextures[0]
       renderPassDescriptor.depthAttachment.texture = renderTargets.depth
       renderPassDescriptor.colorAttachments[0].storeAction = .multisampleResolve
+      renderPassDescriptor.colorAttachments[1].storeAction = .multisampleResolve
       renderPassDescriptor.depthAttachment.storeAction = .multisampleResolve
     } else {
       renderPassDescriptor.colorAttachments[0].texture = drawable.colorTextures[0]
+      renderPassDescriptor.colorAttachments[1].texture = interactionDepthTexture
       renderPassDescriptor.depthAttachment.texture = drawable.depthTextures[0]
       renderPassDescriptor.colorAttachments[0].storeAction = .store
+      renderPassDescriptor.colorAttachments[1].storeAction = .store
       renderPassDescriptor.depthAttachment.storeAction = .store
     }
 
     renderPassDescriptor.colorAttachments[0].loadAction = .clear
     renderPassDescriptor.colorAttachments[0].clearColor = MTLClearColor(red: 0.0, green: 0.0, blue: 0.0, alpha: 0.0)
+    renderPassDescriptor.colorAttachments[1].loadAction = .clear
+    renderPassDescriptor.colorAttachments[1].clearColor = MTLClearColorMake(-1, 0, 0, 0)
     renderPassDescriptor.depthAttachment.loadAction = .clear
     renderPassDescriptor.depthAttachment.clearDepth = 0.0
     renderPassDescriptor.rasterizationRateMap = rasterizationRateMap
@@ -2223,6 +2369,17 @@ extension Renderer {
 
     commandBuffer.commit()
     commandBuffer.waitUntilCompleted()
+
+    immersiveInteraction.updateVolumeInteractionDepthSnapshot(
+      VolumeInteractionDepthSnapshot(
+        texture: interactionDepthTexture,
+        textureToClip: currentTextureToClipMatrices,
+        worldToClip: currentWorldToClipMatrices,
+        worldFromVolume: lastModelMatrix,
+        headPosition: lastHeadPosition,
+        rasterizationRateMap: rasterizationRateMap
+      )
+    )
 
     readBackHashTable(commandBuffer: commandBuffer)
     updatePerformanceCounters()

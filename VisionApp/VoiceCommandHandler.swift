@@ -647,7 +647,7 @@ final class VoiceCommandHandler {
       patternAliases: LP("voice_patterns_aliases_interaction_activate_marker"),
       condition: VoiceCommandHandler.always,
       handler: { h in
-        h.runtimeAppModel.interactionMode = .marker
+        h.runtimeAppModel.interactionMode = .objectPlacement
         h.speak(L("voice_speak_marker", comment: "Voice: marker mode"))
       },
       description: L(

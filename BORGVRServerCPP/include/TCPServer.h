@@ -44,6 +44,7 @@ struct MeshFileInfo {
   std::string id;
   std::string filename;
   std::string name;
+  std::string description;
   size_t byteCount = 0;
 };
 

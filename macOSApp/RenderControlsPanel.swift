@@ -150,7 +150,8 @@ struct RenderControlsPanel: View {
         Text("Model").tag(AppModel.InteractionMode.model)
         Text("Clipping").tag(AppModel.InteractionMode.clipping)
         Text("Transfer").tag(AppModel.InteractionMode.transferEditing)
-        Text("Marker").tag(AppModel.InteractionMode.marker)
+        Label("Draw", systemImage: "scribble").tag(AppModel.InteractionMode.drawing)
+        Label("Place", systemImage: "cube").tag(AppModel.InteractionMode.objectPlacement)
         Text("private_interaction_option_measurement").tag(AppModel.InteractionMode.measurement)
       }
       .pickerStyle(.segmented)
@@ -215,7 +216,7 @@ struct RenderControlsPanel: View {
             docking.toggleVisibility(.markerEditor)
           }
         } label: {
-          Label("Markers", systemImage: "mappin.and.ellipse")
+          Label("Objects", systemImage: "cube.transparent")
         }
 
         Button {

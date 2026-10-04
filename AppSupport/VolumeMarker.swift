@@ -107,7 +107,7 @@ struct VolumeMarker: Identifiable, Equatable {
     radius: Float,
     color: SIMD4<Float>,
     directionOrigin: SIMD3<Float>,
-    showsDirection: Bool = true
+    showsDirection: Bool = false
   ) {
     self.id = id
     self.name = name

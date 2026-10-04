@@ -24,6 +24,8 @@ struct RenderView: View {
   @State private var showLightingEditor = false
   @State private var showMeasurementEditor = false
   @State private var markerDragID: UUID?
+  @State private var strokeDragID: UUID?
+  @State private var sceneObjectDragID: UUID?
   @State private var measurementDragMeasurementID: UUID?
   @State private var measurementDragPointID: UUID?
   @State private var arcballStartOrientation: simd_quatf?
@@ -262,7 +264,8 @@ struct RenderView: View {
           Text("Model").tag(AppModel.InteractionMode.model)
           Text("Clipping").tag(AppModel.InteractionMode.clipping)
           Text("Transfer").tag(AppModel.InteractionMode.transferEditing)
-          Text("Marker").tag(AppModel.InteractionMode.marker)
+          Label("Draw", systemImage: "scribble").tag(AppModel.InteractionMode.drawing)
+          Label("Place", systemImage: "cube").tag(AppModel.InteractionMode.objectPlacement)
           Text("private_interaction_option_measurement").tag(AppModel.InteractionMode.measurement)
         }
         .pickerStyle(.segmented)
@@ -329,12 +332,12 @@ struct RenderView: View {
             showMarkerEditor = true
           } label: {
             actionLabel(
-              "Markers",
-              systemImage: "mappin.and.ellipse",
+              "Objects",
+              systemImage: "cube.transparent",
               compact: usesCompactActionLabels
             )
           }
-          .accessibilityLabel("Markers")
+          .accessibilityLabel("Objects")
 
           Button {
             showMeasurementEditor = true
@@ -523,8 +526,10 @@ struct RenderView: View {
             synchronizeState()
           case .transferEditing:
             applyTransferInteraction(delta: delta)
-          case .marker:
-            updateMarkerInteraction(atGlobalPoint: value.location)
+          case .drawing:
+            updateStrokeInteraction(atGlobalPoint: value.location)
+          case .objectPlacement:
+            updateObjectInteraction(atGlobalPoint: value.location)
           case .measurement:
             updateMeasurementInteraction(atGlobalPoint: value.location)
         }
@@ -533,25 +538,45 @@ struct RenderView: View {
         previousDragTranslation = .zero
         arcballStartOrientation = nil
         markerDragID = nil
+        strokeDragID = nil
+        appModel.endProjectedStrokeHandler?()
+        sceneObjectDragID = nil
         measurementDragMeasurementID = nil
         measurementDragPointID = nil
         sharePlay.flushSynchronization()
       }
   }
 
-  private func updateMarkerInteraction(atGlobalPoint point: CGPoint) {
+  private func updateObjectInteraction(atGlobalPoint point: CGPoint) {
     guard let screenPosition = renderSurface.normalizedScreenPosition(forGlobalPoint: point) else {
       return
     }
-    if markerDragID == nil {
-      beginMarkerInteraction(at: screenPosition)
+    if markerDragID == nil && sceneObjectDragID == nil {
+      beginObjectInteraction(at: screenPosition)
+    }
+    if let sceneObjectDragID,
+       let index = appModel.sceneMeshInstances.firstIndex(where: { $0.id == sceneObjectDragID }),
+       let extent = appModel.activeDatasetMetadata?.physicalExtentMeters {
+      let safeExtent = simd_max(extent, SIMD3<Float>(repeating: 0.000_001))
+      let currentPosition = appModel.sceneMeshInstances[index].translationMeters / safeExtent +
+        SIMD3<Float>(repeating: 0.5)
+      guard let position = interactionPosition(
+        at: screenPosition,
+        preservingDepthOf: currentPosition,
+        projected: appModel.projectObjectsOntoVolume
+      ) else { return }
+      appModel.sceneMeshInstances[index].translationMeters =
+        (position - SIMD3<Float>(repeating: 0.5)) * extent
+      sharePlay.synchronizeMarkers()
+      return
     }
 
     guard let markerDragID,
           let index = appModel.volumeMarkers.firstIndex(where: { $0.id == markerDragID }),
-          let position = appModel.markerPositionHandler?(
-            screenPosition,
-            appModel.volumeMarkers[index].position
+          let position = interactionPosition(
+            at: screenPosition,
+            preservingDepthOf: appModel.volumeMarkers[index].position,
+            projected: appModel.projectObjectsOntoVolume
           ) else { return }
     let offset = position - appModel.volumeMarkers[index].position
     for selectedIndex in appModel.volumeMarkers.indices
@@ -561,25 +586,96 @@ struct RenderView: View {
     sharePlay.synchronizeMarkers()
   }
 
-  private func beginMarkerInteraction(at screenPosition: SIMD2<Float>) {
-    if let markerID = appModel.markerHitTestHandler?(screenPosition) {
+  private func beginObjectInteraction(at screenPosition: SIMD2<Float>) {
+    if let instanceID = appModel.sceneObjectHitTestHandler?(screenPosition) {
+      appModel.clearVolumeMarkerSelection()
+      appModel.selectedSceneMeshInstanceID = instanceID
+      sceneObjectDragID = instanceID
+    } else if let markerID = appModel.markerHitTestHandler?(screenPosition),
+              appModel.volumeMarkers.first(where: { $0.id == markerID })?.kind == .sphere {
+      appModel.selectedSceneMeshInstanceID = nil
       appModel.selectedVolumeMarkerID = markerID
       markerDragID = markerID
-    } else if let position = appModel.markerPositionHandler?(screenPosition, nil),
-              let directionOrigin = appModel.markerDirectionOriginHandler?(screenPosition) {
-      let marker = VolumeMarker(
-        id: UUID(),
-        name: appModel.nextVolumeMarkerName(),
-        position: position,
-        radius: appModel.defaultVolumeMarkerRadius,
-        color: appModel.defaultVolumeMarkerColor,
-        directionOrigin: directionOrigin,
-        showsDirection: appModel.defaultVolumeMarkerShowsDirection
-      )
-      appModel.volumeMarkers.append(marker)
-      appModel.selectedVolumeMarkerID = marker.id
-      markerDragID = marker.id
+    } else if let position = interactionPosition(
+      at: screenPosition,
+      preservingDepthOf: nil,
+      projected: appModel.projectObjectsOntoVolume
+    ) {
+      switch appModel.validateSelectedSceneObjectPrototype() {
+        case .sphere:
+          guard let directionOrigin = appModel.markerDirectionOriginHandler?(screenPosition) else { return }
+          let marker = VolumeMarker(
+            id: UUID(),
+            name: appModel.nextVolumeMarkerName(),
+            position: position,
+            radius: appModel.defaultVolumeMarkerRadius,
+            color: appModel.defaultVolumeMarkerColor,
+            directionOrigin: directionOrigin,
+            showsDirection: appModel.defaultVolumeMarkerShowsDirection
+          )
+          appModel.volumeMarkers.append(marker)
+          appModel.selectedSceneMeshInstanceID = nil
+          appModel.selectedVolumeMarkerID = marker.id
+          markerDragID = marker.id
+        case .mesh(let assetID):
+          guard let asset = appModel.sceneMeshAssets[assetID],
+                let extent = appModel.activeDatasetMetadata?.physicalExtentMeters else { return }
+          let instance = SceneMeshInstance(
+            name: appModel.nextSceneMeshInstanceName(assetName: asset.name),
+            asset: asset.reference,
+            translationMeters: (position - SIMD3<Float>(repeating: 0.5)) * extent
+          )
+          appModel.sceneMeshInstances.append(instance)
+          appModel.clearVolumeMarkerSelection()
+          appModel.selectedSceneMeshInstanceID = instance.id
+          sceneObjectDragID = instance.id
+      }
       sharePlay.synchronizeMarkers(immediately: true)
+    }
+  }
+
+  private func beginStrokeInteraction(at screenPosition: SIMD2<Float>) {
+    if appModel.projectObjectsOntoVolume {
+      appModel.beginProjectedStrokeHandler?()
+    }
+    guard let position = interactionPosition(
+      at: screenPosition,
+      preservingDepthOf: nil,
+      projected: appModel.projectObjectsOntoVolume
+    ) else {
+      appModel.endProjectedStrokeHandler?()
+      return
+    }
+    let stroke = VolumeMarker.stroke(
+      name: appModel.nextVolumeMarkerName(for: .stroke),
+      firstPoint: VolumeMarkerPoint(position: position, radius: VolumeMarkerRadius.strokeDefault),
+      color: appModel.defaultVolumeMarkerColor
+    )
+    appModel.volumeMarkers.append(stroke)
+    appModel.selectedSceneMeshInstanceID = nil
+    appModel.selectedVolumeMarkerID = stroke.id
+    strokeDragID = stroke.id
+    sharePlay.synchronizeMarkers(immediately: true)
+  }
+
+  private func updateStrokeInteraction(atGlobalPoint point: CGPoint) {
+    guard let screenPosition = renderSurface.normalizedScreenPosition(forGlobalPoint: point) else { return }
+    if strokeDragID == nil { beginStrokeInteraction(at: screenPosition) }
+    guard let strokeDragID,
+          let index = appModel.volumeMarkers.firstIndex(where: { $0.id == strokeDragID }),
+          let position = interactionPosition(
+            at: screenPosition,
+            preservingDepthOf: appModel.volumeMarkers[index].points.last?.position,
+            projected: appModel.projectObjectsOntoVolume
+          ) else { return }
+    let coordinateScale = appModel.activeDatasetMetadata.map {
+      VolumeRenderResources.normalizedVolumeExtent(for: $0)
+    } ?? .one
+    if appModel.volumeMarkers[index].appendStrokePoint(
+      VolumeMarkerPoint(position: position, radius: VolumeMarkerRadius.strokeDefault),
+      coordinateScale: coordinateScale
+    ) {
+      sharePlay.synchronizeMarkers()
     }
   }
 
@@ -590,9 +686,14 @@ struct RenderView: View {
                 forGlobalPoint: value.location
               ) else { return }
         switch appModel.interactionMode {
-          case .marker:
-            beginMarkerInteraction(at: screenPosition)
+          case .drawing:
+            beginStrokeInteraction(at: screenPosition)
+            strokeDragID = nil
+            appModel.endProjectedStrokeHandler?()
+          case .objectPlacement:
+            beginObjectInteraction(at: screenPosition)
             markerDragID = nil
+            sceneObjectDragID = nil
           case .measurement:
             beginMeasurementInteraction(at: screenPosition)
             measurementDragMeasurementID = nil
@@ -602,6 +703,21 @@ struct RenderView: View {
         }
         sharePlay.flushSynchronization()
       }
+  }
+
+  private func interactionPosition(
+    at screenPosition: SIMD2<Float>,
+    preservingDepthOf existingPosition: SIMD3<Float>?,
+    projected: Bool
+  ) -> SIMD3<Float>? {
+    if projected,
+       let position = appModel.projectedVolumePositionHandler?(
+         screenPosition,
+         existingPosition
+       ) {
+      return position
+    }
+    return appModel.markerPositionHandler?(screenPosition, existingPosition)
   }
 
   private func updateMeasurementInteraction(atGlobalPoint point: CGPoint) {
@@ -619,7 +735,11 @@ struct RenderView: View {
           let point = appModel.volumeMeasurements[measurementIndex].points.first(where: {
             $0.id == pointID
           }),
-          let position = appModel.markerPositionHandler?(screenPosition, point.position),
+          let position = interactionPosition(
+            at: screenPosition,
+            preservingDepthOf: point.position,
+            projected: appModel.projectMeasurementsOntoVolume
+          ),
           let extent = appModel.activeDatasetMetadata?.physicalExtentMeters else { return }
     appModel.volumeMeasurements[measurementIndex].setPoint(
       id: pointID,
@@ -640,7 +760,11 @@ struct RenderView: View {
       }
       return
     }
-    guard let position = appModel.markerPositionHandler?(screenPosition, nil),
+    guard let position = interactionPosition(
+            at: screenPosition,
+            preservingDepthOf: nil,
+            projected: appModel.projectMeasurementsOntoVolume
+          ),
           let extent = appModel.activeDatasetMetadata?.physicalExtentMeters else { return }
     var measurementID = appModel.selectedVolumeMeasurementID
     if measurementID.flatMap({ id in
@@ -840,7 +964,7 @@ struct RenderView: View {
         if appModel.interactionMode == .clipping {
           applyDepthAlignedClipping(magnificationDelta: delta)
           synchronizeState()
-        } else if appModel.interactionMode == .marker {
+        } else if appModel.interactionMode == .objectPlacement {
           scaleSelectedMarker(by: Float(delta))
         } else {
           renderingParameters.scale = min(maximumModelScale, max(minimumModelScale, renderingParameters.scale * Float(delta)))

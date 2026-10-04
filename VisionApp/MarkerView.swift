@@ -10,7 +10,6 @@ struct MarkerView: View {
   @State private var showClearAllConfirmation = false
   @State private var showLoadFilePicker = false
   @State private var showSaveFilePicker = false
-  @State private var showMeshEditor = false
   @State private var pendingLoadedMarkers: [VolumeMarker] = []
   @State private var pendingLoadedMeshInstances: [SceneMeshInstance] = []
   @State private var showLoadMergeChoice = false
@@ -20,247 +19,37 @@ struct MarkerView: View {
   @State private var showMarkerFileError = false
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 18) {
+    VStack(alignment: .leading, spacing: 14) {
       Text("marker_window_title")
-        .font(.title)
+        .font(.title2)
         .bold()
         .frame(maxWidth: .infinity, alignment: .center)
 
-      Picker(
-        "private_interaction_picker_label",
-        selection: interactionModeBinding
-      ) {
-        Text("private_interaction_option_model").tag("model")
-        Text("private_interaction_option_clipping").tag("clipping")
-        Text("private_interaction_option_marker").tag("marker")
-        Text("private_interaction_option_measurement").tag("measurement")
-        if hasSharedScreenView {
-          Text("Screen View").tag("screenView")
+      InteractionModePicker(
+        selection: interactionModeBinding,
+        showsScreenView: hasSharedScreenView
+      )
+
+      HStack(alignment: .top, spacing: 18) {
+        VStack(alignment: .leading, spacing: 12) {
+          markerSpawnControls
+          objectCatalog
+          Divider()
+          selectionControls
         }
-      }
-      .pickerStyle(.segmented)
+        .frame(width: 410, alignment: .topLeading)
 
-      HStack {
-        Text("private_marker_spawn_label")
-        Picker(
-          "private_marker_spawn_label",
-          selection: markerSpawnBinding
-        ) {
-          Text("private_marker_spawn_hand").tag(false)
-          Text("private_marker_spawn_gaze").tag(true)
+        Divider()
+
+        VStack(alignment: .leading, spacing: 12) {
+          objectList
+          fileControls
+          deleteControls
         }
-        .pickerStyle(.segmented)
-      }
-
-      VStack(alignment: .leading, spacing: 10) {
-        HStack {
-          Text("Marker Tool")
-            .font(.headline)
-          Picker("Marker Tool", selection: handMarkerToolBinding) {
-            Label("Draw", systemImage: "scribble").tag(HandMarkerTool.drawing)
-            Label("Place", systemImage: "cube").tag(HandMarkerTool.placement)
-          }
-          .pickerStyle(.segmented)
-        }
-
-        if sharedAppModel.handMarkerTool == .placement {
-          ScrollView(.horizontal) {
-            HStack(spacing: 10) {
-              objectCatalogButton(
-                title: String(localized: "Sphere"),
-                systemImage: "circle.fill",
-                prototype: .sphere
-              )
-              ForEach(sortedMeshAssets) { asset in
-                objectCatalogButton(
-                  title: asset.name,
-                  systemImage: "cube.fill",
-                  prototype: .mesh(asset.id)
-                )
-              }
-              Button {
-                showMeshEditor = true
-              } label: {
-                Label("Import Mesh…", systemImage: "plus")
-              }
-            }
-          }
-
-          HStack {
-            Button {
-              if sharedAppModel.armedSceneObjectPrototype == nil {
-                sharedAppModel.armSelectedSceneObjectForPlacement()
-                runtimeAppModel.interactionMode = .marker
-              } else {
-                sharedAppModel.cancelSceneObjectPlacement()
-              }
-            } label: {
-              Label(
-                sharedAppModel.armedSceneObjectPrototype == nil ? "Place" : "End Placement",
-                systemImage: sharedAppModel.armedSceneObjectPrototype == nil
-                  ? "hand.point.up.left" : "xmark"
-              )
-            }
-
-            if sharedAppModel.armedSceneObjectPrototype != nil {
-              Text("Hold a pinch, Muse tip, or controller trigger to position objects.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            }
-          }
-        }
-      }
-
-      if sharedAppModel.volumeMarkers.isEmpty && sharedAppModel.sceneMeshInstances.isEmpty {
-        Text("marker_window_empty")
-          .foregroundStyle(.secondary)
-      } else {
-        List {
-          ForEach(sharedAppModel.volumeMarkers) { marker in
-            Button {
-              toggleSelection(of: marker.id)
-            } label: {
-              HStack {
-                Circle()
-                  .fill(color(from: marker.color))
-                  .frame(width: 18, height: 18)
-                VStack(alignment: .leading) {
-                  Text(marker.name)
-                  Text(
-                    marker.kind == .sphere
-                      ? String(localized: "Sphere")
-                      : String(localized: "Stroke")
-                  )
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                }
-                Spacer()
-                if sharedAppModel.selectedVolumeMarkerIDs.contains(marker.id) {
-                  Image(systemName: "checkmark")
-                }
-              }
-            }
-            .buttonStyle(.plain)
-          }
-          ForEach(sharedAppModel.sceneMeshInstances) { instance in
-            Button {
-              sharedAppModel.selectedSceneMeshInstanceID = instance.id
-              sharedAppModel.clearVolumeMarkerSelection()
-              runtimeAppModel.interactionMode = .marker
-            } label: {
-              HStack {
-                Image(systemName: "cube.fill")
-                  .frame(width: 18, height: 18)
-                VStack(alignment: .leading) {
-                  Text(instance.name)
-                  Text("Mesh")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                }
-                Spacer()
-                if sharedAppModel.selectedSceneMeshInstanceID == instance.id {
-                  Image(systemName: "checkmark")
-                }
-              }
-            }
-            .buttonStyle(.plain)
-          }
-        }
-        .frame(minHeight: 240)
-      }
-
-      Divider()
-
-      VStack(alignment: .leading, spacing: 12) {
-        if let selectedMarkerNameBinding {
-          TextField("marker_window_name_field", text: selectedMarkerNameBinding)
-            .textFieldStyle(.roundedBorder)
-        }
-
-        if let selectedMarkerColorBinding {
-          ColorPicker(
-            "private_marker_color_picker",
-            selection: selectedMarkerColorBinding,
-            supportsOpacity: false
-          )
-
-          HStack {
-            Text("Radius")
-            Slider(value: selectedMarkerRadiusBinding, in: selectedMarkerRadiusRange)
-            Text(selectedMarkerRadiusBinding.wrappedValue, format: .number.precision(.fractionLength(3)))
-              .monospacedDigit()
-              .frame(width: 62, alignment: .trailing)
-          }
-        } else {
-          Text("private_marker_no_selection")
-            .foregroundStyle(.secondary)
-        }
-
-        if let selectedMarkerDirectionBinding {
-          Toggle("Show Direction", isOn: selectedMarkerDirectionBinding)
-        }
-
-        HStack {
-          Button {
-            showMeshEditor = true
-          } label: {
-            Label("Meshes…", systemImage: "cube.transparent")
-          }
-
-          Menu {
-            if markerCatalog.isEmpty {
-              Text("marker_catalog_empty")
-            } else {
-              ForEach(markerCatalog) { entry in
-                Button {
-                  loadMarkers(at: entry.url)
-                } label: {
-                  Label(
-                    entry.displayName,
-                    systemImage: entry.matches(datasetID: currentDatasetID)
-                      ? "checkmark.circle.fill" : "doc"
-                  )
-                }
-              }
-            }
-          } label: {
-            Label("marker_catalog_button", systemImage: "mappin.and.ellipse")
-          }
-
-          Button("marker_load_button") {
-            showLoadFilePicker = true
-          }
-
-          Button("marker_save_button") {
-            showSaveFilePicker = true
-          }
-          .disabled(
-            sharedAppModel.volumeMarkers.isEmpty &&
-              sharedAppModel.sceneMeshInstances.isEmpty
-          )
-        }
-
-        HStack {
-          Button(deleteSelectedMarkersTitle) {
-            deleteSelectedMarkers()
-          }
-          .disabled(
-            sharedAppModel.selectedVolumeMarkerIDs.isEmpty &&
-              sharedAppModel.selectedSceneMeshInstanceID == nil
-          )
-
-          Button("private_marker_clear_all_button") {
-            showClearAllConfirmation = true
-          }
-          .disabled(
-            sharedAppModel.volumeMarkers.isEmpty &&
-              sharedAppModel.sceneMeshInstances.isEmpty
-          )
-        }
-        .padding(.bottom, 24)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
       }
     }
-    .padding()
+    .padding(20)
     .alert(
       "marker_clear_all_confirmation_title",
       isPresented: $showClearAllConfirmation
@@ -306,32 +95,6 @@ struct MarkerView: View {
     ) { result in
       loadMarkers(from: result)
     }
-    .sheet(isPresented: $showMeshEditor) {
-      SceneMeshEditorView(
-        assets: Binding(
-          get: { sharedAppModel.sceneMeshAssets },
-          set: { sharedAppModel.sceneMeshAssets = $0 }
-        ),
-        instances: Binding(
-          get: { sharedAppModel.sceneMeshInstances },
-          set: { sharedAppModel.sceneMeshInstances = $0 }
-        ),
-        selectedInstanceID: Binding(
-          get: { sharedAppModel.selectedSceneMeshInstanceID },
-          set: { sharedAppModel.selectedSceneMeshInstanceID = $0 }
-        ),
-        datasetExtentMeters: runtimeAppModel.activeDatasetInfo?.physicalExtentMeters,
-        logger: runtimeAppModel.logger,
-        synchronize: sharedAppModel.synchronizeMarkers,
-        handleImportedAsset: { asset in
-          sharedAppModel.selectedSceneObjectPrototype = .mesh(asset.id)
-          sharedAppModel.armSelectedSceneObjectForPlacement()
-          runtimeAppModel.interactionMode = .marker
-          showMeshEditor = false
-          return true
-        }
-      )
-    }
     .fileExporter(
       isPresented: $showSaveFilePicker,
       document: VolumeMarkerDocument(
@@ -375,32 +138,180 @@ struct MarkerView: View {
 
   private var currentDatasetID: String? { runtimeAppModel.activeDataset?.uniqueId }
 
-  private var sortedMeshAssets: [SceneMeshAsset] {
-    sharedAppModel.sceneMeshAssets.values.sorted {
-      $0.name.localizedStandardCompare($1.name) == .orderedAscending
+  private var markerSpawnControls: some View {
+    VStack(alignment: .leading, spacing: 10) {
+      HStack {
+        Text("private_marker_spawn_label")
+        Picker("private_marker_spawn_label", selection: markerSpawnBinding) {
+          Text("private_marker_spawn_hand").tag(false)
+          Text("private_marker_spawn_gaze").tag(true)
+        }
+        .pickerStyle(.segmented)
+      }
+      Toggle("Snap to Volume", isOn: projectObjectsOntoVolumeBinding)
+    }
+  }
+
+  private var objectCatalog: some View {
+    SceneObjectCatalogView(
+      assets: Binding(
+        get: { sharedAppModel.sceneMeshAssets },
+        set: { sharedAppModel.sceneMeshAssets = $0 }
+      ),
+      selectedPrototype: Binding(
+        get: { sharedAppModel.selectedSceneObjectPrototype },
+        set: { sharedAppModel.selectedSceneObjectPrototype = $0 }
+      ),
+      datasetExtentMeters: runtimeAppModel.activeDatasetInfo?.physicalExtentMeters,
+      logger: runtimeAppModel.logger,
+      additionalDirectoryURLs: FileManager.default.urls(
+        for: .documentDirectory,
+        in: .userDomainMask
+      )
+    )
+  }
+
+  @ViewBuilder
+  private var objectList: some View {
+    if sharedAppModel.volumeMarkers.isEmpty && sharedAppModel.sceneMeshInstances.isEmpty {
+      ContentUnavailableView(
+        "marker_window_empty",
+        systemImage: "cube.transparent"
+      )
+      .frame(maxWidth: .infinity, minHeight: 210)
+    } else {
+      List {
+        ForEach(sharedAppModel.volumeMarkers) { marker in
+          Button {
+            toggleSelection(of: marker.id)
+          } label: {
+            HStack {
+              Circle()
+                .fill(color(from: marker.color))
+                .frame(width: 18, height: 18)
+              VStack(alignment: .leading) {
+                Text(marker.name)
+                Text(markerKindName(marker.kind))
+                  .font(.caption)
+                  .foregroundStyle(.secondary)
+              }
+              Spacer()
+              if sharedAppModel.selectedVolumeMarkerIDs.contains(marker.id) {
+                Image(systemName: "checkmark")
+              }
+            }
+          }
+          .buttonStyle(.plain)
+        }
+        ForEach(sharedAppModel.sceneMeshInstances) { instance in
+          Button {
+            sharedAppModel.selectedSceneMeshInstanceID = instance.id
+            sharedAppModel.clearVolumeMarkerSelection()
+            runtimeAppModel.interactionMode = .objectPlacement
+          } label: {
+            HStack {
+              Image(systemName: "cube.fill")
+                .frame(width: 18, height: 18)
+              VStack(alignment: .leading) {
+                Text(instance.name)
+                Text(instance.asset.assetDescription.isEmpty
+                  ? instance.asset.name
+                  : instance.asset.assetDescription)
+                  .font(.caption)
+                  .foregroundStyle(.secondary)
+              }
+              Spacer()
+              if sharedAppModel.selectedSceneMeshInstanceID == instance.id {
+                Image(systemName: "checkmark")
+              }
+            }
+          }
+          .buttonStyle(.plain)
+        }
+      }
+      .frame(minHeight: 210)
     }
   }
 
   @ViewBuilder
-  private func objectCatalogButton(
-    title: String,
-    systemImage: String,
-    prototype: SceneObjectPrototype
-  ) -> some View {
-    Button {
-      sharedAppModel.selectedSceneObjectPrototype = prototype
-      sharedAppModel.cancelSceneObjectPlacement()
-    } label: {
-      Label(title, systemImage: systemImage)
-        .padding(.horizontal, 8)
-        .padding(.vertical, 6)
-        .background(
-          sharedAppModel.selectedSceneObjectPrototype == prototype
-            ? Color.accentColor.opacity(0.22) : Color.clear,
-          in: RoundedRectangle(cornerRadius: 6)
-        )
+  private var selectionControls: some View {
+    if let selectedMarkerNameBinding {
+      TextField("marker_window_name_field", text: selectedMarkerNameBinding)
+        .textFieldStyle(.roundedBorder)
     }
-    .buttonStyle(.plain)
+
+    if let selectedMarkerColorBinding {
+      HStack {
+        ColorPicker(
+          "private_marker_color_picker",
+          selection: selectedMarkerColorBinding,
+          supportsOpacity: false
+        )
+        Text("Radius")
+        Slider(value: selectedMarkerRadiusBinding, in: selectedMarkerRadiusRange)
+        Text(selectedMarkerRadiusBinding.wrappedValue, format: .number.precision(.fractionLength(3)))
+          .monospacedDigit()
+          .frame(width: 62, alignment: .trailing)
+      }
+    } else {
+      Text("private_marker_no_selection")
+        .foregroundStyle(.secondary)
+    }
+
+    if let selectedMarkerDirectionBinding {
+      Toggle("Show Direction", isOn: selectedMarkerDirectionBinding)
+    }
+  }
+
+  private var fileControls: some View {
+    HStack {
+      Menu {
+        if markerCatalog.isEmpty {
+          Text("marker_catalog_empty")
+        } else {
+          ForEach(markerCatalog) { entry in
+            Button {
+              loadMarkers(at: entry.url)
+            } label: {
+              Label(
+                entry.displayName,
+                systemImage: entry.matches(datasetID: currentDatasetID)
+                  ? "checkmark.circle.fill" : "doc"
+              )
+            }
+          }
+        }
+      } label: {
+        Label("marker_catalog_button", systemImage: "shippingbox")
+      }
+
+      Button("marker_load_button") { showLoadFilePicker = true }
+
+      Button("marker_save_button") { showSaveFilePicker = true }
+        .disabled(sharedAppModel.volumeMarkers.isEmpty && sharedAppModel.sceneMeshInstances.isEmpty)
+    }
+  }
+
+  private var deleteControls: some View {
+    HStack {
+      Button(deleteSelectedMarkersTitle) { deleteSelectedMarkers() }
+        .disabled(
+          sharedAppModel.selectedVolumeMarkerIDs.isEmpty &&
+            sharedAppModel.selectedSceneMeshInstanceID == nil
+        )
+
+      Button("private_marker_clear_all_button") { showClearAllConfirmation = true }
+        .disabled(sharedAppModel.volumeMarkers.isEmpty && sharedAppModel.sceneMeshInstances.isEmpty)
+    }
+  }
+
+  private func markerKindName(_ kind: VolumeMarkerKind) -> String {
+    switch kind {
+      case .sphere:
+        return String(localized: "Sphere")
+      case .stroke:
+        return String(localized: "Stroke")
+    }
   }
 
   private var deleteSelectedMarkersTitle: LocalizedStringKey {
@@ -422,7 +333,7 @@ struct MarkerView: View {
       get: { runtimeAppModel.interactionMode.rawValue },
       set: { rawValue in
         if let newMode = RuntimeAppModel.InteractionMode(rawValue: rawValue) {
-          if newMode != .marker {
+          if newMode != .drawing && newMode != .objectPlacement {
             sharedAppModel.selectedVolumeMarkerID = nil
           }
           if newMode != .measurement {
@@ -441,16 +352,10 @@ struct MarkerView: View {
     )
   }
 
-  private var handMarkerToolBinding: Binding<HandMarkerTool> {
+  private var projectObjectsOntoVolumeBinding: Binding<Bool> {
     Binding(
-      get: { sharedAppModel.handMarkerTool },
-      set: { tool in
-        sharedAppModel.handMarkerTool = tool
-        if tool == .drawing {
-          sharedAppModel.cancelSceneObjectPlacement()
-        }
-        runtimeAppModel.interactionMode = .marker
-      }
+      get: { storedAppModel.projectObjectsOntoVolume },
+      set: { storedAppModel.projectObjectsOntoVolume = $0 }
     )
   }
 
@@ -470,7 +375,8 @@ struct MarkerView: View {
     }
     sharedAppModel.setVolumeMarkerSelection(selection, primary: markerID)
     if !selection.isEmpty {
-      runtimeAppModel.interactionMode = .marker
+      let marker = sharedAppModel.volumeMarkers.first { $0.id == markerID }
+      runtimeAppModel.interactionMode = marker?.kind == .stroke ? .drawing : .objectPlacement
     }
   }
 
@@ -750,8 +656,6 @@ struct MarkerView: View {
   }
 
   private func refreshMeshCatalog() {
-    for asset in SceneMeshAssetCatalog.allAssets(logger: runtimeAppModel.logger) {
-      sharedAppModel.sceneMeshAssets[asset.id] = asset
-    }
+    sharedAppModel.refreshSceneMeshCatalog()
   }
 }

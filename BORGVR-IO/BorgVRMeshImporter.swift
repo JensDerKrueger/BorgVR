@@ -41,6 +41,7 @@ enum BorgVRMeshImporter {
   private struct ImportedMesh {
     var id = UUID()
     var name: String
+    var meshDescription: String
     var vertices: [Vertex]
     var indices: [UInt32]
     var baseColor = SIMD3<Float>(repeating: 1)
@@ -57,6 +58,7 @@ enum BorgVRMeshImporter {
     inputURL: URL,
     outputURL: URL,
     name: String? = nil,
+    description: String,
     logger: LoggerBase? = nil
   ) throws -> UUID {
     logger?.info("Importing mesh \(inputURL.lastPathComponent). Source coordinates are interpreted as meters.")
@@ -162,6 +164,7 @@ enum BorgVRMeshImporter {
     }
     var imported = ImportedMesh(
       name: sanitizedName(name ?? inputURL.deletingPathExtension().lastPathComponent),
+      meshDescription: sanitizedDescription(description),
       vertices: allVertices,
       indices: allIndices,
       boundsMinimum: minimum,
@@ -307,7 +310,14 @@ enum BorgVRMeshImporter {
 
   private static func sanitizedName(_ name: String) -> String {
     let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-    return String((trimmed.isEmpty ? "Mesh" : trimmed).prefix(BorgVRMeshFormat.maximumNameCharacterCount))
+    return String((trimmed.isEmpty ? "Object" : trimmed).prefix(BorgVRMeshFormat.maximumNameCharacterCount))
+  }
+
+  private static func sanitizedDescription(_ description: String) -> String {
+    String(
+      description.trimmingCharacters(in: .whitespacesAndNewlines)
+        .prefix(BorgVRMeshFormat.maximumDescriptionCharacterCount)
+    )
   }
 
   private static func encode(_ mesh: ImportedMesh) throws -> Data {
@@ -315,8 +325,13 @@ enum BorgVRMeshImporter {
     appendBytes(Data(BorgVRMeshFormat.magicBytes), to: &data)
     append(mesh.id, to: &data, after: BorgVRMeshFormat.version)
     let nameData = Data(mesh.name.utf8.prefix(BorgVRMeshFormat.maximumNameByteCount))
+    let descriptionData = Data(
+      mesh.meshDescription.utf8.prefix(BorgVRMeshFormat.maximumDescriptionByteCount)
+    )
     append(UInt16(nameData.count), to: &data)
+    append(UInt16(descriptionData.count), to: &data)
     appendBytes(nameData, to: &data)
+    appendBytes(descriptionData, to: &data)
     append(mesh.baseColor, to: &data)
     append(mesh.boundsMinimum, to: &data)
     append(mesh.boundsMaximum, to: &data)
@@ -363,4 +378,5 @@ enum BorgVRMeshImporter {
     data.append(bytes)
   }
 }
+
 #endif

@@ -35,7 +35,7 @@ enum BorgVRMarkerFormat {
   static let fileExtension = "marker"
   static let defaultFilename = "BorgVR Markers.marker"
   static let magicBytes = [UInt8]("BVRMARKR".utf8)
-  static let version: UInt16 = 3
+  static let version: UInt16 = 4
   static let headerByteCount = 32
   static let maximumFileByteCount = 64 * 1024 * 1024
   static let maximumMarkerCount = 100_000
@@ -62,13 +62,15 @@ enum BorgVRMeasurementFormat {
 enum BorgVRMeshFormat {
   static let fileExtension = "mesh"
   static let magicBytes = [UInt8]("BVRMESH1".utf8)
-  static let version: UInt16 = 1
+  static let version: UInt16 = 2
   static let maximumFileByteCount = 512 * 1024 * 1024
   static let maximumVertexCount = 10_000_000
   static let maximumIndexCount = 30_000_000
   static let maximumTextureByteCount = 256 * 1024 * 1024
   static let maximumNameCharacterCount = 120
   static let maximumNameByteCount = 1024
+  static let maximumDescriptionCharacterCount = 2000
+  static let maximumDescriptionByteCount = 16 * 1024
 }
 
 enum BorgVRSharePlayProtocol {

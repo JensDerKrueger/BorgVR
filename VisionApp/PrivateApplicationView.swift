@@ -20,43 +20,10 @@ struct PrivateApplicationView: View {
         .bold()
         .padding()
 
-      Picker(
-        "private_interaction_picker_label",
-        selection: Binding(
-          get: { runtimeAppModel.interactionMode.rawValue },
-          set: { (value: String) in
-            if value != "marker" {
-              sharedAppModel.clearVolumeMarkerSelection()
-            }
-            if value != "measurement" {
-              sharedAppModel.selectedVolumeMeasurementPointID = nil
-            }
-            switch value {
-              case "model":
-                runtimeAppModel.interactionMode = .model
-              case "clipping":
-                runtimeAppModel.interactionMode = .clipping
-              case "marker":
-                runtimeAppModel.interactionMode = .marker
-              case "measurement":
-                runtimeAppModel.interactionMode = .measurement
-              case "screenView":
-                runtimeAppModel.interactionMode = .screenView
-              default:
-                break
-            }
-          }
-        )
-      ) {
-        Text("private_interaction_option_model").tag("model")
-        Text("private_interaction_option_clipping").tag("clipping")
-        Text("private_interaction_option_marker").tag("marker")
-        Text("private_interaction_option_measurement").tag("measurement")
-        if hasSharedScreenView {
-          Text("Screen View").tag("screenView")
-        }
+      ViewThatFits(in: .horizontal) {
+        interactionControls(showTitles: true)
+        interactionControls(showTitles: false)
       }
-      .pickerStyle(.segmented)
 
       if !sharedAppModel.sharePlayParticipants.isEmpty {
         HStack(spacing: 36) {
@@ -89,13 +56,6 @@ struct PrivateApplicationView: View {
         }
         .frame(maxWidth: .infinity, alignment: .center)
       }
-
-      ViewThatFits(in: .horizontal) {
-        interactionToolButtons(showTitles: true)
-          .fixedSize(horizontal: true, vertical: false)
-        interactionToolButtons(showTitles: false)
-      }
-      .frame(maxWidth: .infinity, alignment: .center)
 
       Spacer()
 
@@ -222,67 +182,149 @@ struct PrivateApplicationView: View {
     )
   }
 
-  private func interactionToolButtons(showTitles: Bool) -> some View {
-    HStack(spacing: showTitles ? 18 : 28) {
-      Button(action: openSelectedEditor) {
-        toolLabel(editorButtonTitle, systemImage: "slider.horizontal.3", showTitle: showTitles)
-      }
-      .help(editorButtonTitle)
-
-      Button {
-        if !runtimeAppModel.isViewOpen("MarkerView") {
-          openWindow(id: "MarkerView")
+  private var interactionModeBinding: Binding<String> {
+    Binding(
+      get: { runtimeAppModel.interactionMode.rawValue },
+      set: { value in
+        if value != "drawing" && value != "objectPlacement" {
+          sharedAppModel.clearVolumeMarkerSelection()
         }
-      } label: {
-        toolLabel(
-          String(localized: "private_marker_open_button"),
-          systemImage: "mappin.and.ellipse",
-          showTitle: showTitles
-        )
-      }
-      .help(String(localized: "private_marker_open_button"))
-
-      Button {
-        if !runtimeAppModel.isViewOpen("LightingEditorView") {
-          openWindow(id: "LightingEditorView")
+        if value != "measurement" {
+          sharedAppModel.selectedVolumeMeasurementPointID = nil
         }
-      } label: {
-        toolLabel(
-          String(localized: "Lighting"),
-          systemImage: "lightbulb.max",
-          showTitle: showTitles
-        )
-      }
-      .help(String(localized: "Lighting"))
-
-      Button {
-        if !runtimeAppModel.isViewOpen("MeasurementView") {
-          openWindow(id: "MeasurementView")
+        if let mode = RuntimeAppModel.InteractionMode(rawValue: value) {
+          runtimeAppModel.interactionMode = mode
         }
-      } label: {
-        toolLabel(
-          String(localized: "measurement_window_title"),
-          systemImage: "ruler",
-          showTitle: showTitles
-        )
       }
-      .help(String(localized: "measurement_window_title"))
+    )
+  }
+
+  private func interactionControls(showTitles: Bool) -> some View {
+    HStack(alignment: .bottom, spacing: showTitles ? 18 : 12) {
+      VStack(spacing: 8) {
+        InteractionModePicker(
+          selection: interactionModeBinding,
+          showsScreenView: hasSharedScreenView
+        )
+        modeWindowButtons(showTitles: showTitles)
+      }
+      .frame(minWidth: showTitles ? 500 : 390)
+
+      HStack(spacing: showTitles ? 10 : 6) {
+        lightingButton(showTitles: showTitles)
+        editorButton(showTitles: showTitles)
+      }
+      .buttonStyle(.bordered)
+      .fixedSize()
     }
-    .buttonStyle(.bordered)
+    .frame(maxWidth: .infinity, alignment: .center)
+  }
+
+  private func modeWindowButtons(showTitles: Bool) -> some View {
+    GeometryReader { geometry in
+      let columnCount = hasSharedScreenView ? 6 : 5
+      let spacing: CGFloat = 4
+      let columnWidth = max(
+        0,
+        (geometry.size.width - spacing * CGFloat(columnCount - 1)) /
+          CGFloat(columnCount)
+      )
+      let columnStride = columnWidth + spacing
+
+      ZStack(alignment: .leading) {
+        markerWindowButton(showTitles: showTitles)
+          .frame(width: columnWidth * 2 + spacing)
+          .offset(x: columnStride * 2)
+
+        measurementWindowButton(showTitles: showTitles)
+          .frame(width: columnWidth)
+          .offset(x: columnStride * 4)
+      }
+      .buttonStyle(.bordered)
+    }
+    .frame(height: showTitles ? 46 : 40)
+  }
+
+  private func markerWindowButton(showTitles: Bool) -> some View {
+    Button {
+      if !runtimeAppModel.isViewOpen("MarkerView") {
+        openWindow(id: "MarkerView")
+      }
+    } label: {
+      toolLabel(
+        String(localized: "private_marker_open_button"),
+        systemImage: "cube.transparent",
+        color: InteractionModeColor.objects,
+        showTitle: showTitles
+      )
+      .frame(maxWidth: .infinity)
+    }
+    .help(String(localized: "private_marker_open_button"))
+  }
+
+  private func measurementWindowButton(showTitles: Bool) -> some View {
+    Button {
+      if !runtimeAppModel.isViewOpen("MeasurementView") {
+        openWindow(id: "MeasurementView")
+      }
+    } label: {
+      toolLabel(
+        String(localized: "measurement_window_title"),
+        systemImage: "ruler",
+        color: InteractionModeColor.measurement,
+        showTitle: showTitles
+      )
+      .frame(maxWidth: .infinity)
+    }
+    .help(String(localized: "measurement_window_title"))
+  }
+
+  private func lightingButton(showTitles: Bool) -> some View {
+    Button {
+      if !runtimeAppModel.isViewOpen("LightingEditorView") {
+        openWindow(id: "LightingEditorView")
+      }
+    } label: {
+      toolLabel(
+        String(localized: "Lighting"),
+        systemImage: "lightbulb.max",
+        color: .primary,
+        showTitle: showTitles
+      )
+    }
+    .help(String(localized: "Lighting"))
+  }
+
+  private func editorButton(showTitles: Bool) -> some View {
+    Button(action: openSelectedEditor) {
+      toolLabel(
+        editorButtonTitle,
+        systemImage: "slider.horizontal.3",
+        color: .primary,
+        showTitle: showTitles
+      )
+    }
+    .help(editorButtonTitle)
   }
 
   @ViewBuilder
   private func toolLabel(
     _ title: String,
     systemImage: String,
+    color: Color,
     showTitle: Bool
   ) -> some View {
     if showTitle {
-      Label(title, systemImage: systemImage)
+      HStack(spacing: 7) {
+        Image(systemName: systemImage)
+          .foregroundStyle(color)
+        Text(title)
+      }
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
     } else {
       Image(systemName: systemImage)
+        .foregroundStyle(color)
         .frame(width: 44, height: 32)
         .accessibilityLabel(title)
     }
@@ -437,5 +479,73 @@ struct PrivateApplicationView: View {
     )
     voiceHandler = handler
     return handler
+  }
+}
+
+enum InteractionModeColor {
+  static let model = Color.blue
+  static let clipping = Color.cyan
+  static let objects = Color.orange
+  static let measurement = Color.green
+  static let screenView = Color.purple
+
+  static func color(for rawValue: String) -> Color {
+    switch rawValue {
+      case "model": model
+      case "clipping": clipping
+      case "drawing", "objectPlacement": objects
+      case "measurement": measurement
+      case "screenView": screenView
+      default: .primary
+    }
+  }
+}
+
+struct InteractionModePicker: View {
+  @Binding var selection: String
+  let showsScreenView: Bool
+
+  var body: some View {
+    HStack(spacing: 4) {
+      segment("private_interaction_option_model", icon: "move.3d", value: "model")
+      segment("private_interaction_option_clipping", icon: "viewfinder", value: "clipping")
+      segment("Draw", icon: "scribble", value: "drawing")
+      segment("Place", icon: "cube", value: "objectPlacement")
+      segment("private_interaction_option_measurement", icon: "ruler", value: "measurement")
+      if showsScreenView {
+        segment("Screen View", icon: "display", value: "screenView")
+      }
+    }
+    .padding(4)
+    .background(.secondary.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
+    .accessibilityElement(children: .contain)
+    .accessibilityLabel(Text("private_interaction_picker_label"))
+  }
+
+  private func segment(
+    _ title: LocalizedStringKey,
+    icon: String,
+    value: String
+  ) -> some View {
+    let isSelected = selection == value
+    let color = InteractionModeColor.color(for: value)
+    return Button {
+      selection = value
+    } label: {
+      Label(title, systemImage: icon)
+        .font(.callout)
+        .fontWeight(isSelected ? .semibold : .regular)
+        .foregroundStyle(color)
+        .lineLimit(1)
+        .frame(maxWidth: .infinity, minHeight: 34)
+        .padding(.horizontal, 7)
+        .background(
+          color.opacity(isSelected ? 0.24 : 0),
+          in: RoundedRectangle(cornerRadius: 6)
+        )
+        .contentShape(Rectangle())
+    }
+    .buttonStyle(.plain)
+    .accessibilityAddTraits(isSelected ? .isSelected : [])
   }
 }

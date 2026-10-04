@@ -93,6 +93,8 @@ final class BorgARProvider {
 
   private var trackedSpatialAccessories: [TrackedSpatialAccessory] = []
   private var accessoryTrackingProvider: AccessoryTrackingProvider?
+  @MainActor private var connectedSpatialStyli: [ObjectIdentifier: GCStylus] = [:]
+  @MainActor private var connectedSpatialControllers: [ObjectIdentifier: GCController] = [:]
   @MainActor private var accessoryReconfigurationInProgress = false
   @MainActor private var accessoryReconfigurationRequested = false
 
@@ -265,10 +267,15 @@ final class BorgARProvider {
     latestWorldAnchorTransform = nil
     worldAnchorCreationInProgress = false
     do {
+      // Controller discovery is asynchronous. Install the listeners before taking
+      // the initial snapshot so a second accessory cannot connect in between.
+      connectedSpatialStyli.removeAll()
+      connectedSpatialControllers.removeAll()
+      startSpatialAccessoryListeners()
+      registerCurrentlyConnectedSpatialAccessories()
       try await reconfigureSpatialAccessories()
       startWorldAnchorListener()
       startSharingAvailabilityListener()
-      startSpatialAccessoryListeners()
     } catch {
       logger?.error("ARSession failed to start: \(error)")
       fatalError("Failed to initialize ARSession")
@@ -294,15 +301,19 @@ final class BorgARProvider {
 
   @MainActor
   private func reconfigureSpatialAccessories() async throws {
-    let styli = GCStylus.styli.filter {
-      $0.productCategory == GCProductCategorySpatialStylus
-    }
-    let controllers = GCController.controllers().filter {
-      $0.productCategory == GCProductCategorySpatialController
-    }
+    let styli = Array(connectedSpatialStyli.values)
+    let controllers = Array(connectedSpatialControllers.values)
 
+    let existingTracked = stateQueue.sync { trackedSpatialAccessories }
     var tracked: [TrackedSpatialAccessory] = []
     for stylus in styli {
+      if let existing = existingTracked.first(where: { tracked in
+        guard case .stylus(let existingStylus) = tracked.device else { return false }
+        return existingStylus === stylus
+      }) {
+        tracked.append(existing)
+        continue
+      }
       do {
         tracked.append(.init(
           accessory: try await Accessory(device: stylus),
@@ -313,6 +324,13 @@ final class BorgARProvider {
       }
     }
     for controller in controllers {
+      if let existing = existingTracked.first(where: { tracked in
+        guard case .controller(let existingController) = tracked.device else { return false }
+        return existingController === controller
+      }) {
+        tracked.append(existing)
+        continue
+      }
       do {
         tracked.append(.init(
           accessory: try await Accessory(device: controller),
@@ -387,6 +405,7 @@ final class BorgARProvider {
               stylus.productCategory == GCProductCategorySpatialStylus else {
           continue
         }
+        self.connectedSpatialStyli[ObjectIdentifier(stylus)] = stylus
         await self.reconfigureSpatialAccessoriesAfterConnectionChange()
       }
     })
@@ -396,9 +415,10 @@ final class BorgARProvider {
         named: .GCStylusDidDisconnect
       ) {
         guard let self,
-              notification.object is GCStylus else {
+              let stylus = notification.object as? GCStylus else {
           continue
         }
+        self.connectedSpatialStyli[ObjectIdentifier(stylus)] = nil
         await self.reconfigureSpatialAccessoriesAfterConnectionChange()
       }
     })
@@ -412,6 +432,7 @@ final class BorgARProvider {
               controller.productCategory == GCProductCategorySpatialController else {
           continue
         }
+        self.connectedSpatialControllers[ObjectIdentifier(controller)] = controller
         await self.reconfigureSpatialAccessoriesAfterConnectionChange()
       }
     })
@@ -425,9 +446,22 @@ final class BorgARProvider {
               controller.productCategory == GCProductCategorySpatialController else {
           continue
         }
+        self.connectedSpatialControllers[ObjectIdentifier(controller)] = nil
         await self.reconfigureSpatialAccessoriesAfterConnectionChange()
       }
     })
+  }
+
+  @MainActor
+  private func registerCurrentlyConnectedSpatialAccessories() {
+    for stylus in GCStylus.styli
+      where stylus.productCategory == GCProductCategorySpatialStylus {
+      connectedSpatialStyli[ObjectIdentifier(stylus)] = stylus
+    }
+    for controller in GCController.controllers()
+      where controller.productCategory == GCProductCategorySpatialController {
+      connectedSpatialControllers[ObjectIdentifier(controller)] = controller
+    }
   }
 
   // MARK: - World anchor management (async)

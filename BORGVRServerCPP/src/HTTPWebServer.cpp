@@ -775,6 +775,7 @@ bool HTTPWebServer::sendMeshCatalog(TcpSocket& socket, bool closeAfterSend) {
     oss << "    {\n"
         << "      \"id\": \"" << jsonEscape(mesh.id) << "\",\n"
         << "      \"name\": \"" << jsonEscape(mesh.name) << "\",\n"
+        << "      \"description\": \"" << jsonEscape(mesh.description) << "\",\n"
         << "      \"byteCount\": " << mesh.byteCount << ",\n"
         << "      \"url\": \"meshes/" << jsonEscape(mesh.id) << ".mesh\"\n"
         << "    }" << (i + 1 < meshes.size() ? "," : "") << "\n";

@@ -454,6 +454,7 @@ final class HTTPWebServer {
       WebMeshCatalogEntry(
         id: mesh.id.uuidString,
         name: mesh.name,
+        description: mesh.meshDescription,
         byteCount: mesh.byteCount,
         url: "meshes/\(mesh.id.uuidString).mesh"
       )
@@ -1003,6 +1004,7 @@ private struct WebMeshCatalog: Encodable {
 private struct WebMeshCatalogEntry: Encodable {
   let id: String
   let name: String
+  let description: String
   let byteCount: Int
   let url: String
 }

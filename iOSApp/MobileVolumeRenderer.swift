@@ -69,7 +69,7 @@ final class MobileVolumeRenderer: NSObject, MTKViewDelegate, UIGestureRecognizer
     frame.commandBuffer.addCompletedHandler { [weak self] commandBuffer in
       Task { @MainActor in
         guard let self else { return }
-        _ = self.core.completeFrame(commandBuffer)
+        _ = self.core.completeFrame(frame)
         self.frameInFlight = false
       }
     }
@@ -103,7 +103,7 @@ final class MobileVolumeRenderer: NSObject, MTKViewDelegate, UIGestureRecognizer
       case .changed:
         let delta = recognizer.translation(in: view)
         recognizer.setTranslation(.zero, in: view)
-        if appModel.interactionMode == .marker {
+        if appModel.interactionMode == .objectPlacement {
           if core.moveSelectedMarkerInDepth(by: delta.y) {
             sharePlay.synchronizeMarkers()
           }
@@ -116,7 +116,7 @@ final class MobileVolumeRenderer: NSObject, MTKViewDelegate, UIGestureRecognizer
         }
       case .ended, .cancelled, .failed:
         recognizer.setTranslation(.zero, in: view)
-        if appModel.interactionMode == .marker || appModel.interactionMode == .measurement {
+        if appModel.interactionMode == .objectPlacement || appModel.interactionMode == .measurement {
           sharePlay.flushSynchronization()
         }
       default:
