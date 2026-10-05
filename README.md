@@ -263,11 +263,13 @@ LZ4-compressed embedded assets. `src/GeneratedWebAssets.cpp` and
 Run `make CONFIG=debug` for a debug build or, for example:
 
 ```sh
-make run ARGS="12345 64 /path/to/datasets --web-port 8080"
+make run ARGS="--directory /path/to/datasets --port 12345 --max-bricks 64 --web-port 8080"
 ```
 
-The first two arguments select the native dataset-server port and maximum brick batch size. See the
-server's command-line help for password, scan interval, WebGPU port, and sync-server options.
+The Swift and C++ command-line servers use the same option names for their shared features. See the
+server's command-line help for password, scan interval, WebGPU port, and sync-server options. While
+either server is running, enter `l` to list its current datasets, `r` to refresh the catalog, `h` for
+console help, or `q` to stop it.
 
 ### Apple Vision Pro Development
 
@@ -288,10 +290,12 @@ For safety, plain HTTP binds to `localhost` only. HTTPS listens on the local net
 on other devices can use WebGPU through a secure context. Use a reverse proxy such as nginx if you
 intentionally want to expose it outside the local network.
 
-The WebGPU frontend supports the main rendering modes, transfer-function editing, marker files,
-touch controls, and optional persistent caching of downloaded bricks in IndexedDB. Browser storage
-is scoped to the server origin and can be disabled or cleared from the renderer settings. The native
-apps remain the primary high-performance and spatial rendering applications.
+The WebGPU frontend supports the main rendering modes, transfer-function editing, object placement
+files with spheres, strokes, instanced textured meshes, locally loaded measurement files, touch
+controls, and optional persistent caching of downloaded bricks in IndexedDB. Referenced mesh assets
+are resolved through the server mesh catalog. Browser storage is scoped to the server origin and can
+be disabled or cleared from the renderer settings. The native apps remain the primary
+high-performance and spatial rendering applications.
 
 ## Data Files
 

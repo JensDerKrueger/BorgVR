@@ -576,11 +576,72 @@ fn markerFragmentMain(input: MarkerVertexOut) -> @location(0) vec4<f32> {
 }
 `;
 
+const sceneMeshShaderSource = `
+struct MarkerUniforms {
+  mvp: mat4x4<f32>,
+  modelView: mat4x4<f32>,
+};
+
+struct MaterialUniforms {
+  baseColorAlpha: vec4<f32>,
+};
+
+@group(0) @binding(0) var<uniform> uniforms: MarkerUniforms;
+@group(1) @binding(0) var colorTexture: texture_2d<f32>;
+@group(1) @binding(1) var colorSampler: sampler;
+@group(1) @binding(2) var<uniform> material: MaterialUniforms;
+
+struct MeshVertexIn {
+  @location(0) position: vec3<f32>,
+  @location(1) normal: vec3<f32>,
+  @location(2) texcoord: vec2<f32>,
+  @location(3) color: vec3<f32>,
+  @location(4) model0: vec4<f32>,
+  @location(5) model1: vec4<f32>,
+  @location(6) model2: vec4<f32>,
+  @location(7) model3: vec4<f32>,
+  @location(8) normal0: vec4<f32>,
+  @location(9) normal1: vec4<f32>,
+  @location(10) normal2: vec4<f32>,
+};
+
+struct MeshVertexOut {
+  @builtin(position) position: vec4<f32>,
+  @location(0) normalView: vec3<f32>,
+  @location(1) texcoord: vec2<f32>,
+  @location(2) color: vec4<f32>,
+};
+
+@vertex
+fn meshVertexMain(input: MeshVertexIn) -> MeshVertexOut {
+  var output: MeshVertexOut;
+  let instanceModel = mat4x4<f32>(input.model0, input.model1, input.model2, input.model3);
+  let instanceNormal = mat3x3<f32>(input.normal0.xyz, input.normal1.xyz, input.normal2.xyz);
+  let localPosition = instanceModel * vec4<f32>(input.position, 1.0);
+  output.position = uniforms.mvp * localPosition;
+  output.normalView = normalize((uniforms.modelView * vec4<f32>(instanceNormal * input.normal, 0.0)).xyz);
+  output.texcoord = input.texcoord;
+  output.color = vec4<f32>(input.color * material.baseColorAlpha.rgb, material.baseColorAlpha.a);
+  return output;
+}
+
+@fragment
+fn meshFragmentMain(input: MeshVertexOut) -> @location(0) vec4<f32> {
+  let normal = normalize(input.normalView);
+  let diffuse = max(dot(normal, vec3<f32>(0.0, 0.0, 1.0)), 0.0);
+  let textureColor = textureSample(colorTexture, colorSampler, input.texcoord);
+  let color = input.color.rgb * textureColor.rgb * (0.22 + 0.78 * diffuse);
+  return vec4<f32>(clamp(color, vec3<f32>(0.0), vec3<f32>(1.0)), input.color.a);
+}
+`;
+
 const MAX_BRICK_REQUEST_LIST_IDS = 65536;
 const BRICK_REQUEST_READBACK_INTERVAL = 1;
 const UNIFORM_BUFFER_BYTE_LENGTH = 336;
 const MARKER_UNIFORM_BUFFER_BYTE_LENGTH = 128;
 const MARKER_INSTANCE_STRIDE = 32;
+const MESH_VERTEX_STRIDE = 44;
+const MESH_INSTANCE_STRIDE = 112;
 const LEVEL_DATA_STRIDE = 32;
 const DEFAULT_SCREEN_SPACE_ERROR = 1.0;
 const APPLE_MOBILE_RENDER_PIXEL_RATIO = 1.0;
@@ -598,6 +659,7 @@ export class CoordinateCubeRenderer {
     this.format = null;
     this.pipeline = null;
     this.markerPipeline = null;
+    this.sceneMeshPipeline = null;
     this.uniformBuffer = null;
     this.markerUniformBuffer = null;
     this.markerBindGroup = null;
@@ -638,6 +700,17 @@ export class CoordinateCubeRenderer {
     this.markerInstanceCount = 0;
     this.markerTubeDraws = [];
     this.markers = [];
+    this.meshInstances = [];
+    this.meshAssets = new Map();
+    this.measurements = [];
+    this.meshGPUResources = new Map();
+    this.meshDraws = [];
+    this.measurementSurfaceResources = [];
+    this.meshSampler = null;
+    this.whiteMeshTexture = null;
+    this.meshGlobalBindGroup = null;
+    this.annotationUploadGeneration = 0;
+    this.datasetMaximumExtentMeters = 1;
     this.volumeHalfExtent = [
       VOLUME_DISPLAY_HALF_EXTENT,
       VOLUME_DISPLAY_HALF_EXTENT,
@@ -701,10 +774,28 @@ export class CoordinateCubeRenderer {
     return this.brickAtlas?.clearPersistentCache() ?? Promise.resolve();
   }
 
-  setMarkers(markers) {
+  setAnnotations({ markers = [], meshInstances = [], meshAssets = new Map(), measurements = [] } = {}) {
     this.markers = Array.isArray(markers) ? markers : [];
+    this.meshInstances = Array.isArray(meshInstances) ? meshInstances : [];
+    this.meshAssets = meshAssets instanceof Map ? meshAssets : new Map();
+    this.measurements = Array.isArray(measurements) ? measurements : [];
     this.uploadMarkerInstances();
+    const generation = ++this.annotationUploadGeneration;
+    this.uploadSceneGeometry(generation).catch((error) => {
+      if (generation === this.annotationUploadGeneration) {
+        this.reportStatus(`Object rendering failed: ${error.message ?? String(error)}`);
+      }
+    });
     this.drawNow();
+  }
+
+  setMarkers(markers) {
+    this.setAnnotations({
+      markers,
+      meshInstances: this.meshInstances,
+      meshAssets: this.meshAssets,
+      measurements: this.measurements
+    });
   }
 
   profileSnapshot() {
@@ -817,6 +908,7 @@ export class CoordinateCubeRenderer {
       (value, index) => value * manifest.volume.voxelSpacing[index]
     );
     const maxSize = Math.max(...physicalSize);
+    this.datasetMaximumExtentMeters = Math.max(Number.MIN_VALUE, maxSize);
     const extent = physicalSize.map((value) => value / maxSize);
     this.resetView();
     this.level0BrickCount = manifest.levels?.[0]?.brickCount ?? [1, 1, 1];
@@ -847,6 +939,9 @@ export class CoordinateCubeRenderer {
     this.rebuildBindGroup();
     this.frameIndex = 0;
     this.createCubeGeometry(extent);
+    this.uploadSceneGeometry(++this.annotationUploadGeneration).catch((error) => {
+      this.reportStatus(`Object rendering failed: ${error.message ?? String(error)}`);
+    });
     this.hasScene = true;
     this.drawNow();
     this.reportStatus(
@@ -1141,6 +1236,7 @@ export class CoordinateCubeRenderer {
     });
 
     await this.createMarkerPipeline();
+    await this.createSceneMeshPipeline();
 
     this.createBrickRequestBuffers(this.totalBrickCount);
   }
@@ -1204,6 +1300,89 @@ export class CoordinateCubeRenderer {
     });
     this.createMarkerGeometry();
     this.uploadMarkerInstances();
+  }
+
+  async createSceneMeshPipeline() {
+    const shaderModule = this.device.createShaderModule({
+      label: "BorgVR WebGPU object shader",
+      code: sceneMeshShaderSource
+    });
+    const compilationInfo = await shaderModule.getCompilationInfo();
+    const shaderErrors = compilationInfo.messages.filter((message) => message.type === "error");
+    if (shaderErrors.length > 0) {
+      throw new Error(`Object shader compilation failed:\n${shaderErrors.map((message) => message.message).join("\n")}`);
+    }
+    this.sceneMeshPipeline = await this.device.createRenderPipelineAsync({
+      layout: "auto",
+      vertex: {
+        module: shaderModule,
+        entryPoint: "meshVertexMain",
+        buffers: [
+          {
+            arrayStride: MESH_VERTEX_STRIDE,
+            attributes: [
+              { shaderLocation: 0, offset: 0, format: "float32x3" },
+              { shaderLocation: 1, offset: 12, format: "float32x3" },
+              { shaderLocation: 2, offset: 24, format: "float32x2" },
+              { shaderLocation: 3, offset: 32, format: "float32x3" }
+            ]
+          },
+          {
+            arrayStride: MESH_INSTANCE_STRIDE,
+            stepMode: "instance",
+            attributes: [
+              { shaderLocation: 4, offset: 0, format: "float32x4" },
+              { shaderLocation: 5, offset: 16, format: "float32x4" },
+              { shaderLocation: 6, offset: 32, format: "float32x4" },
+              { shaderLocation: 7, offset: 48, format: "float32x4" },
+              { shaderLocation: 8, offset: 64, format: "float32x4" },
+              { shaderLocation: 9, offset: 80, format: "float32x4" },
+              { shaderLocation: 10, offset: 96, format: "float32x4" }
+            ]
+          }
+        ]
+      },
+      fragment: {
+        module: shaderModule,
+        entryPoint: "meshFragmentMain",
+        targets: [{
+          format: this.format,
+          blend: {
+            color: { operation: "add", srcFactor: "src-alpha", dstFactor: "one-minus-src-alpha" },
+            alpha: { operation: "add", srcFactor: "one", dstFactor: "one-minus-src-alpha" }
+          }
+        }]
+      },
+      primitive: { topology: "triangle-list", cullMode: "none" },
+      depthStencil: {
+        depthWriteEnabled: true,
+        depthCompare: "less",
+        format: "depth32float"
+      }
+    });
+    this.meshSampler = this.device.createSampler({
+      addressModeU: "repeat",
+      addressModeV: "repeat",
+      magFilter: "linear",
+      minFilter: "linear",
+      mipmapFilter: "linear"
+    });
+    this.whiteMeshTexture = this.device.createTexture({
+      size: [1, 1],
+      format: "rgba8unorm",
+      usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST
+    });
+    this.device.queue.writeTexture(
+      { texture: this.whiteMeshTexture },
+      new Uint8Array([255, 255, 255, 255]),
+      { bytesPerRow: 4 },
+      [1, 1]
+    );
+    this.meshGlobalBindGroup = this.device.createBindGroup({
+      layout: this.sceneMeshPipeline.getBindGroupLayout(0),
+      entries: [{ binding: 0, resource: { buffer: this.markerUniformBuffer } }]
+    });
+    await this.uploadSceneGeometry(++this.annotationUploadGeneration);
   }
 
   createTextureResources() {
@@ -1452,8 +1631,28 @@ export class CoordinateCubeRenderer {
     if (!this.device) {
       return;
     }
+    const measurementMarkers = [];
+    for (const measurement of this.measurements) {
+      for (const point of measurement.points ?? []) {
+        measurementMarkers.push({
+          type: "sphere",
+          color: measurement.color,
+          points: [{ position: point.position, radius: 0.005 }]
+        });
+      }
+      for (const edge of measurement.edges ?? []) {
+        measurementMarkers.push({
+          type: "stroke",
+          color: measurement.color,
+          points: [
+            { position: edge.start, radius: 0.0015 },
+            { position: edge.end, radius: 0.0015 }
+          ]
+        });
+      }
+    }
     const geometry = buildMarkerRenderGeometry(
-      this.markers,
+      [...this.markers, ...measurementMarkers],
       this.volumeHalfExtent
     );
     const instances = [
@@ -1502,6 +1701,136 @@ export class CoordinateCubeRenderer {
       this.device.queue.writeBuffer(this.markerTubeVertexBuffer, 0, geometry.tubeVertices);
       this.device.queue.writeBuffer(this.markerTubeIndexBuffer, 0, geometry.tubeIndices);
     }
+  }
+
+  async uploadSceneGeometry(generation) {
+    if (!this.device || !this.sceneMeshPipeline || !this.meshGlobalBindGroup || !this.whiteMeshTexture) {
+      return;
+    }
+
+    for (const draw of this.meshDraws) {
+      draw.instanceBuffer?.destroy();
+    }
+    this.meshDraws = [];
+    for (const resource of this.measurementSurfaceResources) {
+      destroyMeshGPUResource(resource);
+    }
+    this.measurementSurfaceResources = [];
+
+    const groupedInstances = new Map();
+    for (const instance of this.meshInstances) {
+      if (!instance.visible) continue;
+      const assetID = instance.assetID.toLowerCase();
+      if (!this.meshAssets.has(assetID)) continue;
+      const group = groupedInstances.get(assetID) ?? [];
+      group.push(instance);
+      groupedInstances.set(assetID, group);
+    }
+
+    for (const [assetID, instances] of groupedInstances) {
+      const asset = this.meshAssets.get(assetID);
+      const resource = await this.meshGPUResource(asset);
+      if (generation !== this.annotationUploadGeneration) return;
+      const instanceData = createMeshInstanceData(instances, this.datasetMaximumExtentMeters);
+      const instanceBuffer = this.device.createBuffer({
+        size: Math.max(MESH_INSTANCE_STRIDE, instanceData.byteLength),
+        usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST
+      });
+      this.device.queue.writeBuffer(instanceBuffer, 0, instanceData);
+      this.meshDraws.push({ resource, instanceBuffer, instanceCount: instances.length });
+    }
+
+    const surfaceAssets = createMeasurementSurfaceAssets(this.measurements, this.volumeHalfExtent);
+    for (const asset of surfaceAssets) {
+      const resource = await this.createMeshGPUResource(asset, asset.alpha);
+      if (generation !== this.annotationUploadGeneration) {
+        destroyMeshGPUResource(resource);
+        return;
+      }
+      this.measurementSurfaceResources.push(resource);
+      const instanceData = identityMeshInstanceData();
+      const instanceBuffer = this.device.createBuffer({
+        size: MESH_INSTANCE_STRIDE,
+        usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST
+      });
+      this.device.queue.writeBuffer(instanceBuffer, 0, instanceData);
+      this.meshDraws.push({ resource, instanceBuffer, instanceCount: 1, measurementSurface: true });
+    }
+    this.drawNow();
+  }
+
+  async meshGPUResource(asset) {
+    const key = asset.id.toLowerCase();
+    const existing = this.meshGPUResources.get(key);
+    if (existing?.sourceAsset === asset) {
+      return existing;
+    }
+    if (existing) {
+      destroyMeshGPUResource(existing);
+      this.meshGPUResources.delete(key);
+    }
+    const resource = await this.createMeshGPUResource(asset, 1);
+    resource.sourceAsset = asset;
+    this.meshGPUResources.set(key, resource);
+    return resource;
+  }
+
+  async createMeshGPUResource(asset, alpha) {
+    const vertexBuffer = this.device.createBuffer({
+      size: Math.max(MESH_VERTEX_STRIDE, asset.vertices.byteLength),
+      usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST
+    });
+    const indexBuffer = this.device.createBuffer({
+      size: Math.max(4, asset.indices.byteLength),
+      usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST
+    });
+    this.device.queue.writeBuffer(vertexBuffer, 0, asset.vertices);
+    this.device.queue.writeBuffer(indexBuffer, 0, asset.indices);
+
+    let texture = this.whiteMeshTexture;
+    let ownsTexture = false;
+    if (asset.textureEncoding && asset.textureData?.byteLength > 0) {
+      const mimeType = asset.textureEncoding === 1 ? "image/png" : "image/jpeg";
+      const bitmap = await createImageBitmap(new Blob([asset.textureData], { type: mimeType }));
+      texture = this.device.createTexture({
+        size: [bitmap.width, bitmap.height],
+        format: "rgba8unorm",
+        usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT
+      });
+      this.device.queue.copyExternalImageToTexture(
+        { source: bitmap, flipY: true },
+        { texture },
+        [bitmap.width, bitmap.height]
+      );
+      bitmap.close();
+      ownsTexture = true;
+    }
+    const materialBuffer = this.device.createBuffer({
+      size: 16,
+      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
+    });
+    this.device.queue.writeBuffer(
+      materialBuffer,
+      0,
+      new Float32Array([...(asset.baseColor ?? [1, 1, 1]), alpha])
+    );
+    const materialBindGroup = this.device.createBindGroup({
+      layout: this.sceneMeshPipeline.getBindGroupLayout(1),
+      entries: [
+        { binding: 0, resource: texture.createView() },
+        { binding: 1, resource: this.meshSampler },
+        { binding: 2, resource: { buffer: materialBuffer } }
+      ]
+    });
+    return {
+      vertexBuffer,
+      indexBuffer,
+      indexCount: asset.indices.length,
+      texture,
+      ownsTexture,
+      materialBuffer,
+      materialBindGroup
+    };
   }
 
   installInteraction() {
@@ -1693,6 +2022,20 @@ export class CoordinateCubeRenderer {
         depthStoreOp: "store"
       }
     });
+    if (this.hasScene &&
+        this.sceneMeshPipeline &&
+        this.meshGlobalBindGroup &&
+        this.meshDraws.length > 0) {
+      markerPass.setPipeline(this.sceneMeshPipeline);
+      markerPass.setBindGroup(0, this.meshGlobalBindGroup);
+      for (const draw of this.meshDraws) {
+        markerPass.setBindGroup(1, draw.resource.materialBindGroup);
+        markerPass.setVertexBuffer(0, draw.resource.vertexBuffer);
+        markerPass.setVertexBuffer(1, draw.instanceBuffer);
+        markerPass.setIndexBuffer(draw.resource.indexBuffer, "uint32");
+        markerPass.drawIndexed(draw.resource.indexCount, draw.instanceCount);
+      }
+    }
     if (this.hasScene &&
         this.markerInstanceCount > 0 &&
         this.markerInstanceBuffer) {
@@ -2271,6 +2614,98 @@ function matrixFromQuaternion(quaternion) {
     2 * (xz + wy), 2 * (yz - wx), 1 - 2 * (xx + yy), 0,
     0, 0, 0, 1
   ];
+}
+
+function createMeshInstanceData(instances, datasetMaximumExtentMeters) {
+  const result = new Float32Array(instances.length * (MESH_INSTANCE_STRIDE / 4));
+  const meterScale = 2 * VOLUME_DISPLAY_HALF_EXTENT / Math.max(datasetMaximumExtentMeters, 1e-12);
+  instances.forEach((instance, index) => {
+    const rotation = matrixFromQuaternion(normalizeQuaternion(instance.rotation));
+    const scaleValues = instance.scale.map((value) => Math.max(Math.abs(value), 0.000001));
+    const model = multiply(
+      scaleTranslation(meterScale, meterScale, meterScale, 0, 0, 0),
+      multiply(
+        translation(...instance.translationMeters),
+        multiply(rotation, scaleTranslation(scaleValues[0], scaleValues[1], scaleValues[2], 0, 0, 0))
+      )
+    );
+    const normal = multiply(
+      rotation,
+      scaleTranslation(1 / scaleValues[0], 1 / scaleValues[1], 1 / scaleValues[2], 0, 0, 0)
+    );
+    const offset = index * (MESH_INSTANCE_STRIDE / 4);
+    result.set(model, offset);
+    result.set([
+      normal[0], normal[1], normal[2], 0,
+      normal[4], normal[5], normal[6], 0,
+      normal[8], normal[9], normal[10], 0
+    ], offset + 16);
+  });
+  return result;
+}
+
+function identityMeshInstanceData() {
+  const result = new Float32Array(MESH_INSTANCE_STRIDE / 4);
+  result.set([
+    1, 0, 0, 0,
+    0, 1, 0, 0,
+    0, 0, 1, 0,
+    0, 0, 0, 1,
+    1, 0, 0, 0,
+    0, 1, 0, 0,
+    0, 0, 1, 0
+  ]);
+  return result;
+}
+
+function createMeasurementSurfaceAssets(measurements, volumeHalfExtent) {
+  const groups = new Map();
+  for (const measurement of measurements) {
+    if (!Array.isArray(measurement.triangles) || measurement.triangles.length < 3) continue;
+    const alpha = measurement.kind === "volume" ? 0.24 : 0.34;
+    const key = `${measurement.kind}:${alpha}`;
+    const group = groups.get(key) ?? { vertices: [], indices: [], alpha };
+    for (let offset = 0; offset + 2 < measurement.triangles.length; offset += 3) {
+      const positions = measurement.triangles.slice(offset, offset + 3).map((point) => [
+        (point[0] - 0.5) * 2 * volumeHalfExtent[0],
+        (point[1] - 0.5) * 2 * volumeHalfExtent[1],
+        (point[2] - 0.5) * 2 * volumeHalfExtent[2]
+      ]);
+      const normal = normalizeVector(cross(
+        positions[1].map((value, axis) => value - positions[0][axis]),
+        positions[2].map((value, axis) => value - positions[0][axis])
+      ));
+      if (!normal.every(Number.isFinite)) continue;
+      for (const position of positions) {
+        group.indices.push(group.indices.length);
+        group.vertices.push(
+          ...position,
+          ...normal,
+          0, 0,
+          measurement.color[0], measurement.color[1], measurement.color[2]
+        );
+      }
+    }
+    groups.set(key, group);
+  }
+  return [...groups.values()]
+    .filter((group) => group.indices.length >= 3)
+    .map((group, index) => ({
+      id: `measurement-surface-${index}`,
+      vertices: new Float32Array(group.vertices),
+      indices: new Uint32Array(group.indices),
+      baseColor: [1, 1, 1],
+      textureEncoding: 0,
+      textureData: new Uint8Array(0),
+      alpha: group.alpha
+    }));
+}
+
+function destroyMeshGPUResource(resource) {
+  resource?.vertexBuffer?.destroy();
+  resource?.indexBuffer?.destroy();
+  resource?.materialBuffer?.destroy();
+  if (resource?.ownsTexture) resource.texture?.destroy();
 }
 
 /*

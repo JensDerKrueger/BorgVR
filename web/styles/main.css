@@ -640,6 +640,57 @@ p {
   font-size: 11px;
 }
 
+.measurement-controls {
+  display: grid;
+  gap: 8px;
+  padding: 3px 9px 9px;
+}
+
+.measurement-list {
+  display: grid;
+  gap: 4px;
+  max-height: 132px;
+  overflow: auto;
+}
+
+.measurement-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: baseline;
+  min-height: 24px;
+  padding: 3px 6px;
+  border-radius: 5px;
+  background: rgba(4, 14, 20, 0.4);
+  font-size: 11px;
+}
+
+.measurement-row span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.measurement-row strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.measurement-empty {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.measurement-action-row {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.measurement-action-row .small-command-button {
+  margin: 0;
+}
+
 .lighting-controls {
   display: grid;
   grid-template-columns: minmax(120px, 180px) minmax(120px, 1fr);

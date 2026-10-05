@@ -11,6 +11,7 @@
 #include <atomic>
 #include <cctype>
 #include <cstdint>
+#include <cstdlib>
 #include <exception>
 #include <filesystem>
 #include <fstream>
@@ -33,6 +34,16 @@
 #ifndef BORGVR_SERVER_VERSION
 #define BORGVR_SERVER_VERSION "2.7"
 #endif
+
+struct ServerConfiguration {
+  std::string datasetDirectory;
+  uint16_t port = 12345;
+  int maxBricksPerGetRequest = 64;
+  std::string password;
+  int scanIntervalSeconds = 10;
+  uint16_t webPort = 0;
+  std::vector<ServerSyncEndpoint> syncServers;
+};
 
 static std::string basenameOf(const std::string& path) {
   const auto slash = path.find_last_of("/\\");
@@ -65,55 +76,80 @@ static bool parseInt(const std::string& s, int& out) {
   }
 }
 
-static void printUsage(const char* filename) {
-  std::cout << "Usage:\n  " << basenameOf(filename)
-            << " port maxBricksPerGetRequest datasetDirectory [scanIntervalSeconds]\n"
-            << "    [--password secret]\n"
-            << "    [--web-port port]\n"
-            << "    [--sync-server address port intervalSeconds [password]]\n\n"
-            << "Examples:\n"
-            << "  " << basenameOf(filename) << " 12345 64 /data/BorgVR\n"
-            << "  " << basenameOf(filename) << " 12345 64 /data/BorgVR --web-port 8080\n"
-            << "  " << basenameOf(filename) << " 12345 64 /data/BorgVR --sync-server 192.168.1.10 12345 300 secret\n";
+static std::string defaultDatasetDirectory() {
+#if defined(_WIN32)
+  const char* home = std::getenv("USERPROFILE");
+#else
+  const char* home = std::getenv("HOME");
+#endif
+  return home && *home ? std::string(home) : std::filesystem::current_path().string();
 }
 
-static void printStartupBanner(uint16_t port,
-                               int maxBricks,
-                               const std::string& datasetDir,
-                               uint16_t webPort,
-                               int scanIntervalSeconds,
-                               bool passwordProtected,
-                               const std::vector<ServerSyncEndpoint>& syncEndpoints) {
+static void printUsage(const char* filename) {
+  const std::string executable = basenameOf(filename);
   std::cout
-    << "\n"
+    << "Usage:\n"
+    << "  " << executable << " [options]\n\n"
+    << "Options:\n"
+    << "  --directory, -d <path>          Directory containing .data, .tf1d, .marker, and .mesh files.\n"
+    << "                                  Defaults to the home directory.\n"
+    << "  --port, -p <port>               Native dataset-server port. Defaults to 12345.\n"
+    << "  --max-bricks, -m <count>        Maximum bricks per GETBRICKS request. Defaults to 64.\n"
+    << "  --password <secret>             Optional password for native and WebGPU clients.\n"
+    << "  --scan-interval <seconds>       Refresh the file catalog periodically.\n"
+    << "                                  Defaults to 10; use 0 to disable rescanning.\n"
+    << "  --web-port <port>               Enable the WebGPU HTTP server on this port.\n"
+    << "  --sync-server <host> <port> <interval> [password]\n"
+    << "                                  Synchronize server content at intervals of at least\n"
+    << "                                  10 seconds. Repeat for fallback sources.\n"
+    << "  --version, -v                   Show the version.\n"
+    << "  --help, -h                      Show this help.\n\n"
+    << "Examples:\n"
+    << "  " << executable << " --directory /data/BorgVR --port 12345\n"
+    << "  " << executable << " -d /data/BorgVR -p 12345 -m 64 --web-port 8080\n"
+    << "  " << executable << " -d /data/BorgVR --sync-server 192.168.1.10 12345 300 secret\n";
+}
+
+static void printStartupBanner(const ServerConfiguration& configuration) {
+  constexpr const char* cyan = "\033[36m";
+  constexpr const char* reset = "\033[0m";
+  std::cout
+    << cyan << "\n"
     << "  ____                   __     ______\n"
     << " | __ )  ___  _ __ __ _ \\ \\   / /  _ \\\n"
     << " |  _ \\ / _ \\| '__/ _` | \\ \\ / /| |_) |\n"
     << " | |_) | (_) | | | (_| |  \\ V / |  _ <\n"
     << " |____/ \\___/|_|  \\__, |   \\_/  |_| \\_\\\n"
     << "                  |___/\n"
-    << "\n"
+    << reset << "\n"
     << " BorgVR Dataset Server\n"
     << " ------------------------------------------------------------\n"
     << " Version           : " << BORGVR_SERVER_VERSION << "\n"
     << " Build             : " << BORGVR_BUILD_TIMESTAMP << "\n"
-    << " Dataset directory : " << datasetDir << "\n"
-    << " Dataset port      : " << port << "\n"
-    << " Max brick batch   : " << maxBricks << "\n"
-    << " Scan interval     : " << scanIntervalSeconds << " s\n"
-    << " Password          : " << (passwordProtected ? "enabled" : "disabled") << "\n";
+    << " Dataset directory : " << configuration.datasetDirectory << "\n"
+    << " Dataset port      : " << configuration.port << "\n"
+    << " Max brick batch   : " << configuration.maxBricksPerGetRequest << "\n"
+    << " Scan interval     : ";
 
-  if (webPort > 0) {
-    std::cout << " WebGPU preview    : http://localhost:" << webPort << "\n";
+  if (configuration.scanIntervalSeconds > 0) {
+    std::cout << configuration.scanIntervalSeconds << " s\n";
   } else {
-    std::cout << " WebGPU preview    : disabled\n";
+    std::cout << "disabled\n";
+  }
+  std::cout << " Password          : "
+            << (configuration.password.empty() ? "disabled" : "enabled") << "\n";
+
+  if (configuration.webPort > 0) {
+    std::cout << " WebGPU frontend   : http://localhost:" << configuration.webPort << "/\n";
+  } else {
+    std::cout << " WebGPU frontend   : disabled\n";
   }
 
-  if (syncEndpoints.empty()) {
+  if (configuration.syncServers.empty()) {
     std::cout << " Sync servers      : disabled\n";
   } else {
-    std::cout << " Sync servers      : " << syncEndpoints.size() << "\n";
-    for (const auto& endpoint : syncEndpoints) {
+    std::cout << " Sync servers      : " << configuration.syncServers.size() << "\n";
+    for (const auto& endpoint : configuration.syncServers) {
       std::cout << "   - " << endpoint.address << ":" << endpoint.port
                 << " every " << endpoint.intervalSeconds << " s"
                 << (endpoint.password.empty() ? "" : " (password)") << "\n";
@@ -523,109 +559,183 @@ static std::vector<MeshFileInfo> scanMeshDirectory(const std::string& directory,
   return meshes;
 }
 
+enum class ArgumentParseResult {
+  Run,
+  ExitSuccess,
+  ExitFailure
+};
+
+static bool requireArgumentValue(int argc,
+                                 char** argv,
+                                 int& index,
+                                 const std::string& option,
+                                 std::string& value,
+                                 const std::shared_ptr<Logger>& logger) {
+  if (index + 1 >= argc) {
+    logger->error("Missing value for " + option + ".");
+    return false;
+  }
+  value = argv[++index];
+  return true;
+}
+
+static ArgumentParseResult parseArguments(int argc,
+                                          char** argv,
+                                          ServerConfiguration& configuration,
+                                          const std::shared_ptr<Logger>& logger) {
+  configuration.datasetDirectory = defaultDatasetDirectory();
+
+  for (int index = 1; index < argc; ++index) {
+    const std::string option = argv[index];
+    std::string value;
+    if (option == "--directory" || option == "-d") {
+      if (!requireArgumentValue(argc, argv, index, option, value, logger)) {
+        return ArgumentParseResult::ExitFailure;
+      }
+      configuration.datasetDirectory = value;
+    } else if (option == "--port" || option == "-p") {
+      if (!requireArgumentValue(argc, argv, index, option, value, logger)) {
+        return ArgumentParseResult::ExitFailure;
+      }
+      if (!parseUint16(value, configuration.port)) {
+        logger->error("Invalid port: " + value);
+        return ArgumentParseResult::ExitFailure;
+      }
+    } else if (option == "--max-bricks" || option == "-m") {
+      if (!requireArgumentValue(argc, argv, index, option, value, logger)) {
+        return ArgumentParseResult::ExitFailure;
+      }
+      if (!parseInt(value, configuration.maxBricksPerGetRequest) ||
+          configuration.maxBricksPerGetRequest <= 0) {
+        logger->error("Invalid max-bricks value: " + value);
+        return ArgumentParseResult::ExitFailure;
+      }
+    } else if (option == "--password") {
+      if (!requireArgumentValue(argc, argv, index, option, configuration.password, logger)) {
+        return ArgumentParseResult::ExitFailure;
+      }
+    } else if (option == "--scan-interval") {
+      if (!requireArgumentValue(argc, argv, index, option, value, logger)) {
+        return ArgumentParseResult::ExitFailure;
+      }
+      if (!parseInt(value, configuration.scanIntervalSeconds) ||
+          configuration.scanIntervalSeconds < 0) {
+        logger->error("Invalid scan interval: " + value);
+        return ArgumentParseResult::ExitFailure;
+      }
+    } else if (option == "--web-port") {
+      if (!requireArgumentValue(argc, argv, index, option, value, logger)) {
+        return ArgumentParseResult::ExitFailure;
+      }
+      if (!parseUint16(value, configuration.webPort)) {
+        logger->error("Invalid WebGPU port: " + value);
+        return ArgumentParseResult::ExitFailure;
+      }
+    } else if (option == "--sync-server") {
+      ServerSyncEndpoint endpoint;
+      if (!requireArgumentValue(argc, argv, index, option, endpoint.address, logger) ||
+          !requireArgumentValue(argc, argv, index, option, value, logger)) {
+        return ArgumentParseResult::ExitFailure;
+      }
+      if (!parseUint16(value, endpoint.port)) {
+        logger->error("Invalid sync server port: " + value);
+        return ArgumentParseResult::ExitFailure;
+      }
+      if (!requireArgumentValue(argc, argv, index, option, value, logger)) {
+        return ArgumentParseResult::ExitFailure;
+      }
+      if (!parseInt(value, endpoint.intervalSeconds) || endpoint.intervalSeconds < 10) {
+        logger->error("Invalid sync server interval: " + value);
+        return ArgumentParseResult::ExitFailure;
+      }
+      if (index + 1 < argc && std::string(argv[index + 1]).rfind("-", 0) != 0) {
+        endpoint.password = argv[++index];
+      }
+      if (!endpoint.usable()) {
+        logger->error("Invalid sync server configuration.");
+        return ArgumentParseResult::ExitFailure;
+      }
+      configuration.syncServers.push_back(std::move(endpoint));
+    } else if (option == "--version" || option == "-v") {
+      std::cout << BORGVR_SERVER_VERSION << "\n";
+      return ArgumentParseResult::ExitSuccess;
+    } else if (option == "--help" || option == "-h") {
+      printUsage(argv[0]);
+      return ArgumentParseResult::ExitSuccess;
+    } else {
+      logger->error("Unknown argument: " + option);
+      return ArgumentParseResult::ExitFailure;
+    }
+  }
+  return ArgumentParseResult::Run;
+}
+
+static std::string datasetDisplayName(const DatasetInfo& dataset) {
+  if (!dataset.datasetDescription.empty()) return dataset.datasetDescription;
+  return std::filesystem::path(dataset.filename).stem().string();
+}
+
+static void printDatasets(const std::vector<DatasetInfo>& datasets) {
+  if (datasets.empty()) {
+    std::cout << "No datasets are currently available.\n" << std::flush;
+    return;
+  }
+
+  std::cout << "Available datasets (" << datasets.size() << "):\n";
+  for (size_t index = 0; index < datasets.size(); ++index) {
+    const auto& dataset = datasets[index];
+    std::cout << "  " << index + 1 << ". " << datasetDisplayName(dataset) << "\n"
+              << "     ID      : " << dataset.id << "\n"
+              << "     Voxels  : " << dataset.width << " x " << dataset.height << " x "
+              << dataset.depth << "\n"
+              << "     Size    : " << std::setprecision(6)
+              << dataset.width * static_cast<double>(dataset.voxelSpacingX) << " x "
+              << dataset.height * static_cast<double>(dataset.voxelSpacingY) << " x "
+              << dataset.depth * static_cast<double>(dataset.voxelSpacingZ) << " m\n";
+  }
+  std::cout << std::flush;
+}
+
+static void printConsoleHelp() {
+  std::cout
+    << "Commands:\n"
+    << "  l  List currently available datasets.\n"
+    << "  r  Refresh the server catalog now.\n"
+    << "  h  Show this command list.\n"
+    << "  q  Stop the server and quit.\n"
+    << std::flush;
+}
+
 int main(int argc, char** argv) {
   SocketSystem sockSys;
   auto logger = std::make_shared<Logger>(LogLevel::Info);
 
-  const bool wantsHelp = argc >= 2 && (std::string(argv[1]) == "--help" || std::string(argv[1]) == "-h");
-  if (wantsHelp || argc < 4) {
-    printUsage(argv[0]);
-    return wantsHelp ? 0 : 1;
+  ServerConfiguration configuration;
+  const auto parseResult = parseArguments(argc, argv, configuration, logger);
+  if (parseResult != ArgumentParseResult::Run) {
+    if (parseResult == ArgumentParseResult::ExitFailure) printUsage(argv[0]);
+    return parseResult == ArgumentParseResult::ExitSuccess ? 0 : 2;
   }
 
-  uint16_t port = 0;
-  if (!parseUint16(argv[1], port)) {
-    std::stringstream ss;
-    ss << "Invalid port: " << argv[1] << "\n";
-    logger->error(ss.str());
-    return 1;
+  std::error_code directoryError;
+  if (!std::filesystem::is_directory(configuration.datasetDirectory, directoryError)) {
+    logger->error("Dataset directory does not exist: " + configuration.datasetDirectory);
+    return 2;
   }
 
-  int maxBricks = 64;
-  int argi = 2;
-  if (argc >= 3) {
-    int tmp = 0;
-    if (parseInt(argv[2], tmp)) {
-      maxBricks = tmp;
-      argi = 3;
-    }
-  }
-  const std::string datasetDir = argv[argi++];
+  printStartupBanner(configuration);
 
-  int scanIntervalSeconds = 10;
-  if (argc > argi) {
-    int tmp = 0;
-    if (parseInt(argv[argi], tmp) && tmp > 0) {
-      scanIntervalSeconds = tmp;
-      ++argi;
-    }
-  }
+  auto datasets = scanDatasetDirectory(configuration.datasetDirectory, logger);
+  auto transferFunctions = scanTransferFunctionDirectory(configuration.datasetDirectory, logger);
+  auto markerFiles = scanMarkerDirectory(configuration.datasetDirectory, logger);
+  auto meshFiles = scanMeshDirectory(configuration.datasetDirectory, logger);
 
-  std::string password;
-  uint16_t webPort = 0;
-  std::vector<ServerSyncEndpoint> syncEndpoints;
-  while (argc > argi) {
-    const std::string option = argv[argi++];
-    if (option == "--password") {
-      if (argc <= argi) {
-        logger->error("Missing value for --password");
-        return 1;
-      }
-      password = argv[argi++];
-    } else if (option == "--web-port") {
-      if (argc <= argi) {
-        logger->error("Missing value for --web-port");
-        return 1;
-      }
-      if (!parseUint16(argv[argi], webPort)) {
-        logger->error(std::string("Invalid web port: ") + argv[argi]);
-        return 1;
-      }
-      ++argi;
-    } else if (option == "--sync-server") {
-      if (argc <= argi + 2) {
-        logger->error("Missing values for --sync-server");
-        return 1;
-      }
-
-      ServerSyncEndpoint endpoint;
-      endpoint.address = argv[argi++];
-      if (!parseUint16(argv[argi], endpoint.port)) {
-        logger->error(std::string("Invalid sync server port: ") + argv[argi]);
-        return 1;
-      }
-      ++argi;
-
-      if (!parseInt(argv[argi], endpoint.intervalSeconds) || endpoint.intervalSeconds <= 0) {
-        logger->error(std::string("Invalid sync server interval: ") + argv[argi]);
-        return 1;
-      }
-      ++argi;
-
-      if (argc > argi && std::string(argv[argi]).rfind("--", 0) != 0) {
-        endpoint.password = argv[argi++];
-      }
-
-      if (!endpoint.usable()) {
-        logger->error("Invalid sync server configuration");
-        return 1;
-      }
-      syncEndpoints.push_back(std::move(endpoint));
-    } else {
-      logger->error("Unknown argument: " + option);
-      printUsage(argv[0]);
-      return 1;
-    }
-  }
-
-  printStartupBanner(port, maxBricks, datasetDir, webPort, scanIntervalSeconds, !password.empty(), syncEndpoints);
-
-  auto datasets = scanDatasetDirectory(datasetDir, logger);
-  auto transferFunctions = scanTransferFunctionDirectory(datasetDir, logger);
-  auto markerFiles = scanMarkerDirectory(datasetDir, logger);
-  auto meshFiles = scanMeshDirectory(datasetDir, logger);
-
-  TCPServer server(port, maxBricks, logger, password);
+  TCPServer server(
+    configuration.port,
+    configuration.maxBricksPerGetRequest,
+    logger,
+    configuration.password
+  );
   server.setDatasets(datasets);
   server.setTransferFunctions(transferFunctions);
   server.setMarkerFiles(markerFiles);
@@ -635,8 +745,13 @@ int main(int argc, char** argv) {
   }
 
   std::unique_ptr<HTTPWebServer> webServer;
-  if (webPort > 0) {
-    webServer = std::make_unique<HTTPWebServer>(webPort, server, logger, password);
+  if (configuration.webPort > 0) {
+    webServer = std::make_unique<HTTPWebServer>(
+      configuration.webPort,
+      server,
+      logger,
+      configuration.password
+    );
     if (!webServer->start()) {
       server.stop();
       return 3;
@@ -644,41 +759,44 @@ int main(int argc, char** argv) {
   }
 
   auto refreshCatalog = [&]() {
-    const auto refreshed = scanDatasetDirectory(datasetDir, logger);
+    const auto refreshed = scanDatasetDirectory(configuration.datasetDirectory, logger);
     server.setDatasets(refreshed);
-    const auto refreshedTransferFunctions = scanTransferFunctionDirectory(datasetDir, logger);
+    const auto refreshedTransferFunctions = scanTransferFunctionDirectory(
+      configuration.datasetDirectory,
+      logger
+    );
     server.setTransferFunctions(refreshedTransferFunctions);
-    server.setMarkerFiles(scanMarkerDirectory(datasetDir, logger));
-    server.setMeshFiles(scanMeshDirectory(datasetDir, logger));
+    server.setMarkerFiles(scanMarkerDirectory(configuration.datasetDirectory, logger));
+    server.setMeshFiles(scanMeshDirectory(configuration.datasetDirectory, logger));
   };
 
   std::unique_ptr<ServerSyncManager> syncManager;
-  if (!syncEndpoints.empty()) {
+  if (!configuration.syncServers.empty()) {
     auto localDatasetIds = [&]() {
       std::unordered_set<std::string> ids;
-      for (const auto& dataset : scanDatasetDirectory(datasetDir, nullptr)) {
+      for (const auto& dataset : scanDatasetDirectory(configuration.datasetDirectory, nullptr)) {
         ids.insert(dataset.id);
       }
       return ids;
     };
     auto localTransferFunctionIds = [&]() {
       std::unordered_set<std::string> ids;
-      for (const auto& tf : scanTransferFunctionDirectory(datasetDir, nullptr)) {
+      for (const auto& tf : scanTransferFunctionDirectory(configuration.datasetDirectory, nullptr)) {
         ids.insert(tf.id);
       }
       return ids;
     };
     auto localMeshIds = [&]() {
       std::unordered_set<std::string> ids;
-      for (const auto& mesh : scanMeshDirectory(datasetDir, nullptr)) {
+      for (const auto& mesh : scanMeshDirectory(configuration.datasetDirectory, nullptr)) {
         ids.insert(mesh.id);
       }
       return ids;
     };
 
     syncManager = std::make_unique<ServerSyncManager>(
-      datasetDir,
-      syncEndpoints,
+      configuration.datasetDirectory,
+      configuration.syncServers,
       localDatasetIds,
       localTransferFunctionIds,
       localMeshIds,
@@ -689,26 +807,43 @@ int main(int argc, char** argv) {
   }
 
   std::atomic<bool> monitorRunning{true};
-  std::thread monitorThread([&]() {
-    while (monitorRunning.load()) {
-      refreshCatalog();
-
-      for (int i = 0; i < scanIntervalSeconds * 10 && monitorRunning.load(); ++i) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+  std::thread monitorThread;
+  if (configuration.scanIntervalSeconds > 0) {
+    monitorThread = std::thread([&]() {
+      while (monitorRunning.load()) {
+        for (int i = 0;
+             i < configuration.scanIntervalSeconds * 10 && monitorRunning.load();
+             ++i) {
+          std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
+        if (monitorRunning.load()) refreshCatalog();
       }
-    }
-  });
+    });
+  }
 
-
-  logger->info("Type 'q' then Enter to quit.");
+  printConsoleHelp();
 
   std::string line;
   while (std::getline(std::cin, line)) {
-    if (line == "q" || line == "Q") {
+    const std::string command = trimCopy(line);
+    if (command == "q" || command == "Q") {
       break;
+    } else if (command == "l" || command == "L") {
+      printDatasets(server.datasetsSnapshot());
+    } else if (command == "r" || command == "R") {
+      refreshCatalog();
+      logger->info("Server catalog refreshed.");
+    } else if (command == "h" || command == "H" || command == "?") {
+      printConsoleHelp();
+    } else if (!command.empty()) {
+      logger->warning("Unknown command: " + command + ". Type 'h' for help.");
     }
   }
 
+  monitorRunning = false;
+  if (monitorThread.joinable()) {
+    monitorThread.join();
+  }
   if (webServer) {
     webServer->stop();
   }
@@ -716,10 +851,6 @@ int main(int argc, char** argv) {
     syncManager->stop();
   }
   server.stop();
-  monitorRunning = false;
-  if (monitorThread.joinable()) {
-    monitorThread.join();
-  }
 
   return 0;
 }

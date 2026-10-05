@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>BorgVR WebGPU</title>
     <link rel="icon" href="./assets/borgvr.jpg">
-    <link rel="stylesheet" href="./styles/main.css?v=20261002-dataset-dimensions">
+    <link rel="stylesheet" href="./styles/main.css?v=20261005-annotations">
   </head>
   <body>
     <main class="app-shell">
@@ -128,21 +128,37 @@
             </div>
           </details>
 
-          <details class="control-panel" data-ui-panel="markers">
-            <summary>Markers</summary>
+          <details class="control-panel" data-ui-panel="objects">
+            <summary>Objects</summary>
             <div class="marker-controls">
               <label>
                 <span>Server file</span>
-                <select id="marker-catalog-select" aria-label="Marker files provided by the server" title="Marker files provided by the server" disabled>
-                  <option value="" selected>No marker files</option>
+                <select id="marker-catalog-select" aria-label="Object files provided by the server" title="Object files provided by the server" disabled>
+                  <option value="" selected>No object files</option>
                 </select>
               </label>
               <div class="marker-action-row">
-                <span id="marker-count" class="marker-count">No markers loaded</span>
-                <button id="marker-load" class="small-command-button" type="button" title="Load marker file locally">Load Locally</button>
+                <span id="marker-count" class="marker-count">No objects loaded</span>
+                <button id="marker-load" class="small-command-button" type="button" title="Load object placement file locally">Load</button>
+                <button id="mesh-load" class="small-command-button" type="button" title="Load referenced object assets locally">Assets</button>
                 <button id="marker-clear" class="small-command-button" type="button" disabled>Clear</button>
               </div>
-              <input id="marker-load-input" type="file" accept=".marker,application/json" hidden>
+              <input id="marker-load-input" type="file" accept=".marker,application/octet-stream" hidden>
+              <input id="mesh-load-input" type="file" accept=".mesh,application/octet-stream" multiple hidden>
+            </div>
+          </details>
+
+          <details class="control-panel" data-ui-panel="measurements">
+            <summary>Measurements</summary>
+            <div class="measurement-controls">
+              <div id="measurement-list" class="measurement-list">
+                <span class="measurement-empty">No measurements loaded</span>
+              </div>
+              <div class="measurement-action-row">
+                <button id="measurement-load" class="small-command-button" type="button">Load</button>
+                <button id="measurement-clear" class="small-command-button" type="button" disabled>Clear</button>
+              </div>
+              <input id="measurement-load-input" type="file" accept=".measurement,application/octet-stream" hidden>
             </div>
           </details>
 
@@ -162,7 +178,7 @@
       </section>
     </main>
 
-    <script type="module" src="./src/app.js?v=20261002-dataset-dimensions"></script>
+    <script type="module" src="./src/app.js?v=20261005-annotations"></script>
   </body>
 </html>
 

@@ -1,26 +1,21 @@
-import { CoordinateCubeRenderer } from "./cube-renderer.js?v=20260928-lighting";
+import { CoordinateCubeRenderer } from "./cube-renderer.js?v=20261005-annotations";
 import { decodeAppleLZ4, encodeLZ4Block } from "./lz4.js?v=20260911-urltf";
 import {
-  MARKER_FILE_HEADER_BYTES,
-  MARKER_FILE_MAGIC,
-  MARKER_FILE_VERSION,
-  MARKER_POSITION_FALLBACK,
-  MARKER_POSITION_MAXIMUM,
-  MARKER_POSITION_MINIMUM,
-  MAX_MARKER_COUNT,
   MAX_MARKER_FILE_BYTES,
-  MAX_MARKER_NAME_BYTES,
-  MAX_MARKER_NAME_CHARACTERS,
-  MAX_MARKER_POINT_COUNT,
+  MAX_MESH_FILE_BYTES,
+  MAX_MEASUREMENT_FILE_BYTES,
   MAX_TRANSFER_FUNCTION_ENTRIES,
   MAX_TRANSFER_FUNCTION_FILE_BYTES,
-  SPHERE_RADIUS_DEFAULT,
-  SPHERE_RADIUS_MAXIMUM,
-  SPHERE_RADIUS_MINIMUM,
-  STROKE_RADIUS_DEFAULT,
-  STROKE_RADIUS_MAXIMUM,
-  STROKE_RADIUS_MINIMUM
-} from "./format-constants.js?v=20260922-marker-direction";
+} from "./format-constants.js?v=20261005-annotations";
+import {
+  parseMarkerFile,
+  parseMeasurementFile,
+  parseMeshFile
+} from "./annotation-formats.js?v=20261005-annotations";
+import {
+  buildMeasurementGeometry,
+  formatMeasurementValue
+} from "./measurement-geometry.js?v=20261005-annotations";
 import { transferFunctionRGBAData } from "./transfer-function.js?v=20260918-format-constants";
 import { installLightingEditor } from "./lighting-editor.js?v=20260928-lighting";
 
@@ -54,6 +49,12 @@ const markerLoad = document.querySelector("#marker-load");
 const markerLoadInput = document.querySelector("#marker-load-input");
 const markerClear = document.querySelector("#marker-clear");
 const markerCount = document.querySelector("#marker-count");
+const meshLoad = document.querySelector("#mesh-load");
+const meshLoadInput = document.querySelector("#mesh-load-input");
+const measurementLoad = document.querySelector("#measurement-load");
+const measurementLoadInput = document.querySelector("#measurement-load-input");
+const measurementClear = document.querySelector("#measurement-clear");
+const measurementList = document.querySelector("#measurement-list");
 const persistentBrickCacheControls = Array.from(document.querySelectorAll("[data-persistent-brick-cache]"));
 const persistentBrickCacheInfoButton = document.querySelector("#persistent-brick-cache-info-button");
 const persistentBrickCacheInfo = document.querySelector("#persistent-brick-cache-info");
@@ -82,6 +83,12 @@ let transferFunctionCatalog = [];
 let transferFunctionCatalogBuffers = new Map();
 let markerFileCatalog = [];
 let markerFileCatalogBuffers = new Map();
+let meshCatalog = [];
+let meshCatalogBuffers = new Map();
+let meshAssets = new Map();
+let currentMarkers = [];
+let currentMeshInstances = [];
+let currentMeasurements = [];
 let rendererStatus = "Initializing WebGPU...";
 let statusVisible = false;
 let controlsCollapsed = false;
@@ -157,12 +164,26 @@ async function main() {
   const catalog = await fetchJSON("./web-data/datasets.json", "catalog");
   await loadTransferFunctionCatalog();
   await loadMarkerFileCatalog();
+  await loadMeshCatalog();
   catalogStatus.textContent = `${catalog.datasets.length} datasets available`;
   if (rendererStatus === "Initializing WebGPU...") {
     setStatus(`${catalog.datasets.length} datasets available`);
   }
   datasetList.replaceChildren(...catalog.datasets.map((dataset) => datasetButton(dataset)));
   await openDatasetFromURL(catalog.datasets);
+}
+
+async function loadMeshCatalog() {
+  try {
+    const catalog = await fetchJSON("./web-data/meshes.json", "objects");
+    meshCatalog = Array.isArray(catalog.meshes)
+      ? catalog.meshes.filter((entry) => entry?.id && entry?.url && isUUID(entry.id))
+      : [];
+  } catch {
+    meshCatalog = [];
+  }
+  meshCatalogBuffers = new Map();
+  meshAssets = new Map();
 }
 
 async function loadMarkerFileCatalog() {
@@ -195,7 +216,7 @@ function updateMarkerCatalogOptions() {
     }
     return displayMarkerFileName(left).localeCompare(displayMarkerFileName(right), undefined, { sensitivity: "base" });
   });
-  const options = [new Option(sortedEntries.length ? "Server Marker Files" : "No marker files", "")];
+  const options = [new Option(sortedEntries.length ? "Server Object Files" : "No object files", "")];
   options[0].selected = true;
   for (const entry of sortedEntries) {
     const matches = entry.datasetID.toLowerCase() === currentDatasetID;
@@ -397,8 +418,16 @@ async function showDataset(dataset) {
     return;
   }
   renderer?.setDataset(currentManifest);
-  renderer?.setMarkers([]);
-  updateMarkerState([]);
+  currentMarkers = [];
+  currentMeshInstances = [];
+  currentMeasurements = [];
+  renderer?.setAnnotations({
+    markers: currentMarkers,
+    meshInstances: currentMeshInstances,
+    meshAssets,
+    measurements: currentMeasurements
+  });
+  updateAnnotationState();
   updateMarkerCatalogOptions();
   isoValue.value = String(renderer.getNormalizedIsoValue());
   applyRenderStateFromURL();
@@ -599,11 +628,11 @@ function installRenderControls() {
         markerCatalogSelect.value = "";
         return;
       }
-      applyMarkers(contents.markers, entry.id);
-      setStatus(`Marker file loaded: ${displayMarkerFileName(entry)}`);
+      await applyMarkerContents(contents, entry.id);
+      setStatus(`Object file loaded: ${displayMarkerFileName(entry)}`);
     } catch (error) {
       markerCatalogSelect.value = "";
-      setStatus(`Marker file load failed: ${error.message ?? String(error)}`);
+      setStatus(`Object file load failed: ${error.message ?? String(error)}`);
     }
   });
 
@@ -619,22 +648,76 @@ function installRenderControls() {
     }
     try {
       if (file.size <= 0 || file.size > MAX_MARKER_FILE_BYTES) {
-        throw new Error("Marker file exceeds the supported size limit.");
+        throw new Error("Object file exceeds the supported size limit.");
       }
       const contents = parseMarkerFile(await file.arrayBuffer());
       if (!confirmMarkerDataset(contents.datasetID)) {
         return;
       }
-      applyMarkers(contents.markers);
-      setStatus(`Marker file loaded: ${file.name}`);
+      await applyMarkerContents(contents);
+      setStatus(`Object file loaded: ${file.name}`);
     } catch (error) {
-      setStatus(`Marker file load failed: ${error.message ?? String(error)}`);
+      setStatus(`Object file load failed: ${error.message ?? String(error)}`);
     }
   });
 
   markerClear?.addEventListener("click", () => {
-    applyMarkers([]);
-    setStatus("Markers cleared.");
+    currentMarkers = [];
+    currentMeshInstances = [];
+    applyAnnotations();
+    if (markerCatalogSelect) markerCatalogSelect.value = "";
+    setStatus("Objects cleared.");
+  });
+
+  meshLoad?.addEventListener("click", () => {
+    meshLoadInput.value = "";
+    meshLoadInput.click();
+  });
+
+  meshLoadInput?.addEventListener("change", async () => {
+    const files = Array.from(meshLoadInput.files ?? []);
+    if (files.length === 0) return;
+    try {
+      for (const file of files) {
+        if (file.size <= 0 || file.size > MAX_MESH_FILE_BYTES) {
+          throw new Error(`${file.name} exceeds the supported object size limit.`);
+        }
+        const asset = parseMeshFile(await file.arrayBuffer());
+        meshAssets.set(asset.id.toLowerCase(), asset);
+      }
+      await applyAnnotations();
+      setStatus(`${files.length} local object asset${files.length === 1 ? "" : "s"} loaded.`);
+    } catch (error) {
+      setStatus(`Object load failed: ${error.message ?? String(error)}`);
+    }
+  });
+
+  measurementLoad?.addEventListener("click", () => {
+    measurementLoadInput.value = "";
+    measurementLoadInput.click();
+  });
+
+  measurementLoadInput?.addEventListener("change", async () => {
+    const file = measurementLoadInput.files?.[0];
+    if (!file) return;
+    try {
+      if (file.size <= 0 || file.size > MAX_MEASUREMENT_FILE_BYTES) {
+        throw new Error("Measurement file exceeds the supported size limit.");
+      }
+      const contents = parseMeasurementFile(await file.arrayBuffer());
+      if (!confirmMeasurementDataset(contents.datasetID)) return;
+      currentMeasurements = contents.measurements;
+      applyAnnotations();
+      setStatus(`Measurements loaded: ${file.name}`);
+    } catch (error) {
+      setStatus(`Measurement load failed: ${error.message ?? String(error)}`);
+    }
+  });
+
+  measurementClear?.addEventListener("click", () => {
+    currentMeasurements = [];
+    applyAnnotations();
+    setStatus("Measurements cleared.");
   });
 
   persistentBrickCacheControls.forEach((control) => {
@@ -667,23 +750,61 @@ function installRenderControls() {
   drawTransferFunctionEditor();
 }
 
-function applyMarkers(markers, catalogID = "") {
-  renderer?.setMarkers(markers);
-  updateMarkerState(markers);
+async function applyMarkerContents(contents, catalogID = "") {
+  currentMarkers = contents.markers;
+  currentMeshInstances = contents.meshInstances;
+  await resolveMeshAssets(currentMeshInstances);
+  applyAnnotations();
   if (markerCatalogSelect) {
     markerCatalogSelect.value = catalogID;
   }
 }
 
-function updateMarkerState(markers) {
-  const count = markers.length;
+function applyAnnotations() {
+  const physicalExtent = currentManifest?.volume?.size?.map(
+    (value, index) => value * currentManifest.volume.voxelSpacing[index]
+  ) ?? [1, 1, 1];
+  const measurementGeometry = buildMeasurementGeometry(currentMeasurements, physicalExtent);
+  renderer?.setAnnotations({
+    markers: currentMarkers,
+    meshInstances: currentMeshInstances,
+    meshAssets,
+    measurements: measurementGeometry
+  });
+  updateAnnotationState(measurementGeometry);
+}
+
+function updateAnnotationState(measurementGeometry = []) {
+  const count = currentMarkers.length + currentMeshInstances.length;
   if (markerCount) {
     markerCount.textContent = count === 0
-      ? "No markers loaded"
-      : `${count} marker${count === 1 ? "" : "s"} loaded`;
+      ? "No objects loaded"
+      : `${count} object${count === 1 ? "" : "s"} loaded`;
   }
   if (markerClear) {
     markerClear.disabled = count === 0;
+  }
+  if (measurementClear) {
+    measurementClear.disabled = currentMeasurements.length === 0;
+  }
+  if (measurementList) {
+    if (measurementGeometry.length === 0) {
+      measurementList.replaceChildren(Object.assign(document.createElement("span"), {
+        className: "measurement-empty",
+        textContent: "No measurements loaded"
+      }));
+    } else {
+      measurementList.replaceChildren(...measurementGeometry.map((measurement) => {
+        const row = document.createElement("div");
+        row.className = "measurement-row";
+        const name = document.createElement("span");
+        name.textContent = measurement.name;
+        const value = document.createElement("strong");
+        value.textContent = formatMeasurementValue(measurement.kind, measurement.value);
+        row.append(name, value);
+        return row;
+      }));
+    }
   }
 }
 
@@ -691,7 +812,14 @@ function confirmMarkerDataset(datasetID) {
   if (!currentManifest?.id || datasetID.toLowerCase() === currentManifest.id.toLowerCase()) {
     return true;
   }
-  return window.confirm("This marker file was created for a different dataset. Load it anyway?");
+  return window.confirm("This object file was created for a different dataset. Load it anyway?");
+}
+
+function confirmMeasurementDataset(datasetID) {
+  if (!currentManifest?.id || datasetID.toLowerCase() === currentManifest.id.toLowerCase()) {
+    return true;
+  }
+  return window.confirm("This measurement file was created for a different dataset. Load it anyway?");
 }
 
 function loadPersistentBrickCacheSetting() {
@@ -1013,165 +1141,66 @@ function markerFileByteCount(entry) {
   return byteCount;
 }
 
-function parseMarkerFile(buffer) {
-  if (!(buffer instanceof ArrayBuffer) || buffer.byteLength <= 0 || buffer.byteLength > MAX_MARKER_FILE_BYTES) {
-    throw new Error("Marker file exceeds the supported size limit.");
-  }
-  const bytes = new Uint8Array(buffer);
-  const view = new DataView(buffer);
-  let offset = 0;
-  const requireBytes = (count) => {
-    if (!Number.isInteger(count) || count < 0 || offset + count > buffer.byteLength) {
-      throw new Error("The marker file is incomplete.");
+async function resolveMeshAssets(instances) {
+  const requiredIDs = [...new Set(
+    instances.filter((instance) => instance.visible).map((instance) => instance.assetID.toLowerCase())
+  )];
+  const missing = requiredIDs.filter((id) => !meshAssets.has(id));
+  const failures = [];
+  await Promise.all(missing.map(async (id) => {
+    const entry = meshCatalog.find((candidate) => candidate.id.toLowerCase() === id);
+    if (!entry) {
+      failures.push(id);
+      return;
     }
-  };
-  const readUint8 = () => {
-    requireBytes(1);
-    return view.getUint8(offset++);
-  };
-  const readUint16 = () => {
-    requireBytes(2);
-    const value = view.getUint16(offset, true);
-    offset += 2;
-    return value;
-  };
-  const readUint32 = () => {
-    requireBytes(4);
-    const value = view.getUint32(offset, true);
-    offset += 4;
-    return value;
-  };
-  const readFloat32 = () => {
-    requireBytes(4);
-    const value = view.getFloat32(offset, true);
-    offset += 4;
-    return value;
-  };
-  const readUUID = () => {
-    requireBytes(16);
-    const hex = Array.from(bytes.subarray(offset, offset + 16), (value) => value.toString(16).padStart(2, "0"));
-    offset += 16;
-    return `${hex.slice(0, 4).join("")}-${hex.slice(4, 6).join("")}-${hex.slice(6, 8).join("")}-${hex.slice(8, 10).join("")}-${hex.slice(10).join("")}`;
-  };
-  const readString = () => {
-    const byteCount = readUint16();
-    if (byteCount > MAX_MARKER_NAME_BYTES) {
-      throw new Error("A marker name exceeds the supported length.");
+    try {
+      const asset = parseMeshFile(await fetchCatalogMesh(entry));
+      if (asset.id.toLowerCase() !== id) {
+        throw new Error(`Object ID mismatch for ${entry.name || entry.id}.`);
+      }
+      meshAssets.set(id, asset);
+    } catch (error) {
+      console.warn(`Could not load object ${id}`, error);
+      failures.push(id);
     }
-    requireBytes(byteCount);
-    const value = new TextDecoder("utf-8", { fatal: true }).decode(bytes.subarray(offset, offset + byteCount));
-    offset += byteCount;
-    return value;
-  };
-
-  requireBytes(MARKER_FILE_HEADER_BYTES);
-  const magic = new TextDecoder("ascii").decode(bytes.subarray(0, 8));
-  offset = 8;
-  const version = readUint16();
-  readUint16();
-  if (magic !== MARKER_FILE_MAGIC || version !== MARKER_FILE_VERSION) {
-    throw new Error("The selected file is not a valid BorgVR marker file.");
+  }));
+  if (failures.length > 0) {
+    setStatus(`${failures.length} referenced object asset${failures.length === 1 ? " is" : "s are"} unavailable.`);
   }
-  const datasetID = readUUID();
-  const markerCount = readUint32();
-  if (markerCount > MAX_MARKER_COUNT) {
-    throw new Error("The marker file contains too many markers or has an invalid marker list.");
-  }
-  const markers = [];
-  let totalPointCount = 0;
-  for (let markerIndex = 0; markerIndex < markerCount; markerIndex += 1) {
-    const typeValue = readUint8();
-    const flags = readUint8();
-    readUint16();
-    if (typeValue !== 1 && typeValue !== 2) {
-      throw new Error(`Marker ${markerIndex + 1} has an unsupported geometry type.`);
-    }
-    const id = readUUID();
-    const rawName = readString().trim();
-    const color = [
-      finiteClamped(readFloat32(), 1, 0, 1),
-      finiteClamped(readFloat32(), 0, 0, 1),
-      finiteClamped(readFloat32(), 0, 0, 1),
-      finiteClamped(readFloat32(), 1, 0, 1)
-    ];
-    const pointCount = readUint32();
-    totalPointCount += pointCount;
-    if (pointCount === 0 || (typeValue === 1 && pointCount !== 1) || totalPointCount > MAX_MARKER_POINT_COUNT) {
-      throw new Error(`Marker ${markerIndex + 1} has invalid or excessive geometry.`);
-    }
-    const points = [];
-    const radiusFallback = typeValue === 1 ? SPHERE_RADIUS_DEFAULT : STROKE_RADIUS_DEFAULT;
-    const radiusMinimum = typeValue === 1 ? SPHERE_RADIUS_MINIMUM : STROKE_RADIUS_MINIMUM;
-    const radiusMaximum = typeValue === 1 ? SPHERE_RADIUS_MAXIMUM : STROKE_RADIUS_MAXIMUM;
-    for (let pointIndex = 0; pointIndex < pointCount; pointIndex += 1) {
-      points.push({
-        position: [
-          finiteClamped(
-            readFloat32(),
-            MARKER_POSITION_FALLBACK,
-            MARKER_POSITION_MINIMUM,
-            MARKER_POSITION_MAXIMUM
-          ),
-          finiteClamped(
-            readFloat32(),
-            MARKER_POSITION_FALLBACK,
-            MARKER_POSITION_MINIMUM,
-            MARKER_POSITION_MAXIMUM
-          ),
-          finiteClamped(
-            readFloat32(),
-            MARKER_POSITION_FALLBACK,
-            MARKER_POSITION_MINIMUM,
-            MARKER_POSITION_MAXIMUM
-          )
-        ],
-        radius: finiteClamped(readFloat32(), radiusFallback, radiusMinimum, radiusMaximum)
-      });
-    }
-    const directionOrigin = typeValue === 1
-      ? [
-          finiteClamped(
-            readFloat32(),
-            MARKER_POSITION_FALLBACK,
-            MARKER_POSITION_MINIMUM,
-            MARKER_POSITION_MAXIMUM
-          ),
-          finiteClamped(
-            readFloat32(),
-            MARKER_POSITION_FALLBACK,
-            MARKER_POSITION_MINIMUM,
-            MARKER_POSITION_MAXIMUM
-          ),
-          finiteClamped(
-            readFloat32(),
-            MARKER_POSITION_FALLBACK,
-            MARKER_POSITION_MINIMUM,
-            MARKER_POSITION_MAXIMUM
-          )
-        ]
-      : null;
-    markers.push({
-      id,
-      name: (rawName || `Marker ${markerIndex + 1}`).slice(0, MAX_MARKER_NAME_CHARACTERS),
-      type: typeValue === 1 ? "sphere" : "stroke",
-      color,
-      points,
-      directionOrigin,
-      showsDirection: typeValue === 1 && (flags & 1) !== 0
-    });
-  }
-  if (offset !== buffer.byteLength) {
-    throw new Error("The marker file contains unexpected trailing data.");
-  }
-  return {
-    datasetID,
-    markers
-  };
 }
 
-function finiteClamped(value, fallback, minimum, maximum) {
-  const number = Number(value);
-  return Number.isFinite(number) ? clamp(number, minimum, maximum) : fallback;
+async function fetchCatalogMesh(entry) {
+  if (!entry?.id || !entry?.url) {
+    throw new Error("Object catalog entry is incomplete.");
+  }
+  const key = entry.id.toLowerCase();
+  if (meshCatalogBuffers.has(key)) {
+    return meshCatalogBuffers.get(key);
+  }
+  const declaredByteCount = boundedCatalogByteCount(entry, MAX_MESH_FILE_BYTES, "Object");
+  const url = new URL(`./web-data/${entry.url}`, window.location.href);
+  const response = await fetch(url, { credentials: "same-origin" });
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}`);
+  }
+  validateResponseContentLength(response, MAX_MESH_FILE_BYTES, "object file");
+  const buffer = await responseArrayBufferWithLimit(response, MAX_MESH_FILE_BYTES, "object file");
+  if (declaredByteCount !== null && buffer.byteLength !== declaredByteCount) {
+    throw new Error(`Object byte count mismatch: expected ${declaredByteCount}, received ${buffer.byteLength}.`);
+  }
+  meshCatalogBuffers.set(key, buffer);
+  return buffer;
+}
+
+function boundedCatalogByteCount(entry, maximum, label) {
+  if (entry.byteCount === undefined || entry.byteCount === null) {
+    return null;
+  }
+  const byteCount = Number(entry.byteCount);
+  if (!Number.isInteger(byteCount) || byteCount <= 0 || byteCount > maximum) {
+    throw new Error(`${label} catalog entry exceeds the supported size limit.`);
+  }
+  return byteCount;
 }
 
 function isUUID(value) {

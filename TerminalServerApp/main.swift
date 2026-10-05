@@ -3,6 +3,15 @@ import Foundation
 
 enum TerminalServerInfo {
   static let version = "2.7"
+  static let defaultMaximumBricksPerRequest = 64
+  static let build: String = {
+    let executable = URL(fileURLWithPath: CommandLine.arguments[0]).standardizedFileURL.path
+    guard let attributes = try? FileManager.default.attributesOfItem(atPath: executable),
+          let date = attributes[.modificationDate] as? Date else {
+      return "unknown"
+    }
+    return ISO8601DateFormatter().string(from: date)
+  }()
 
   static let banner = #"""
    ____                   __     ______
@@ -11,14 +20,13 @@ enum TerminalServerInfo {
   | |_) | (_) | | | (_| |  \ V / |  _ <
   |____/ \___/|_|  \__, |   \_/  |_| \_\
                    |___/
-               Dataset Server \#(version)
   """#
 }
 
 struct ServerConfiguration {
   var dataDirectory = FileManager.default.homeDirectoryForCurrentUser.path
   var port = UInt16(BorgVRSharedDefaults.datasetServerPort)
-  var maxBricksPerGetRequest = BorgVRSharedDefaults.maximumBricksPerRequest
+  var maxBricksPerGetRequest = TerminalServerInfo.defaultMaximumBricksPerRequest
   var password = ""
   var scanIntervalSeconds = 10
   var webPort: UInt16?
@@ -49,12 +57,12 @@ Usage:
   \(executableName) [options]
 
 Options:
-  --directory, -d <path>          Directory containing .data, .tf1d, and .marker files.
+  --directory, -d <path>          Directory containing .data, .tf1d, .marker, and .mesh files.
                                   Defaults to the home directory.
   --port, -p <port>               Native dataset-server port.
                                   Defaults to \(BorgVRSharedDefaults.datasetServerPort).
   --max-bricks, -m <count>        Maximum bricks per GETBRICKS request.
-                                  Defaults to \(BorgVRSharedDefaults.maximumBricksPerRequest).
+                                  Defaults to \(TerminalServerInfo.defaultMaximumBricksPerRequest).
   --password <secret>             Optional password for native and WebGPU clients.
   --scan-interval <seconds>       Refresh the file catalog periodically.
                                   Defaults to 10; use 0 to disable rescanning.
@@ -64,12 +72,15 @@ Options:
   --web-certificate <path>        PKCS#12 certificate (.p12 or .pfx) for HTTPS.
   --web-certificate-password <p>  Password for the PKCS#12 certificate.
   --sync-server <host> <port> <interval> [password]
-                                  Synchronize datasets, transfer functions, and marker
-                                  files from a BorgVR server. The interval is specified
-                                  in seconds and must be at least 10. Repeat this option
-                                  to configure fallback sources.
+                                  Synchronize server content at intervals of at least
+                                  10 seconds. Repeat for fallback sources.
   --version, -v                   Show the version.
   --help, -h                      Show this help.
+
+Examples:
+  \(executableName) --directory /data/BorgVR --port 12345
+  \(executableName) -d /data/BorgVR -p 12345 -m \(TerminalServerInfo.defaultMaximumBricksPerRequest) --web-port 8080
+  \(executableName) -d /data/BorgVR --sync-server 192.168.1.10 12345 300 secret
 """
 
 func fail(_ message: String) -> Never {
@@ -203,7 +214,88 @@ func loadCertificate(from path: String?) -> Data {
   }
 }
 
-print(TerminalServerInfo.banner)
+func printStartupBanner(_ config: ServerConfiguration) {
+  let cyan = "\u{001B}[36m"
+  let reset = "\u{001B}[0m"
+  print("\(cyan)\n\(TerminalServerInfo.banner)\n\(reset)")
+  print(" BorgVR Dataset Server")
+  print(" ------------------------------------------------------------")
+  print(" Version           : \(TerminalServerInfo.version)")
+  print(" Build             : \(TerminalServerInfo.build)")
+  print(" Dataset directory : \(config.dataDirectory)")
+  print(" Dataset port      : \(config.port)")
+  print(" Max brick batch   : \(config.maxBricksPerGetRequest)")
+  if config.scanIntervalSeconds > 0 {
+    print(" Scan interval     : \(config.scanIntervalSeconds) s")
+  } else {
+    print(" Scan interval     : disabled")
+  }
+  print(" Password          : \(config.password.isEmpty ? "disabled" : "enabled")")
+  if let webPort = config.webPort {
+    let scheme = config.useWebServerTLS ? "https" : "http"
+    let effectivePort = webPort == config.port
+      ? (config.port == UInt16.max ? 1 : config.port + 1)
+      : webPort
+    print(" WebGPU frontend   : \(scheme)://localhost:\(effectivePort)/")
+  } else {
+    print(" WebGPU frontend   : disabled")
+  }
+  if config.syncServers.isEmpty {
+    print(" Sync servers      : disabled")
+  } else {
+    print(" Sync servers      : \(config.syncServers.count)")
+    for endpoint in config.syncServers {
+      let password = endpoint.password.isEmpty ? "" : " (password)"
+      print("   - \(endpoint.address):\(endpoint.port) every \(endpoint.intervalSeconds) s\(password)")
+    }
+  }
+  print(" ------------------------------------------------------------\n")
+  fflush(stdout)
+}
+
+func datasetDisplayName(_ dataset: DatasetInfo) -> String {
+  let description = dataset.datasetDescription.trimmingCharacters(in: .whitespacesAndNewlines)
+  if !description.isEmpty { return description }
+  return URL(fileURLWithPath: dataset.filename).deletingPathExtension().lastPathComponent
+}
+
+func formatPhysicalExtent(_ value: Double) -> String {
+  String(format: "%.6g", locale: Locale(identifier: "en_US_POSIX"), value)
+}
+
+func printDatasets(_ datasets: [DatasetInfo]) {
+  guard !datasets.isEmpty else {
+    print("No datasets are currently available.")
+    fflush(stdout)
+    return
+  }
+
+  print("Available datasets (\(datasets.count)):")
+  for (index, dataset) in datasets.enumerated() {
+    let size = dataset.size.count == 3 ? dataset.size : [0, 0, 0]
+    let spacing = dataset.voxelSpacing.count == 3 ? dataset.voxelSpacing : [0, 0, 0]
+    let extent = zip(size, spacing).map { Double($0.0) * Double($0.1) }
+    print("  \(index + 1). \(datasetDisplayName(dataset))")
+    print("     ID      : \(dataset.id)")
+    print("     Voxels  : \(size[0]) x \(size[1]) x \(size[2])")
+    print(
+      "     Size    : \(formatPhysicalExtent(extent[0])) x " +
+      "\(formatPhysicalExtent(extent[1])) x \(formatPhysicalExtent(extent[2])) m"
+    )
+  }
+  fflush(stdout)
+}
+
+func printConsoleHelp() {
+  print("""
+  Commands:
+    l  List currently available datasets.
+    r  Refresh the server catalog now.
+    h  Show this command list.
+    q  Stop the server and quit.
+  """)
+  fflush(stdout)
+}
 
 let config = parseArguments(CommandLine.arguments)
 var isDirectory: ObjCBool = false
@@ -218,6 +310,7 @@ let serverConfiguration = config.serverConfiguration(certificateData: certificat
 let logger = PrintfLogger(useColors: true, etaFormat: .mmss)
 let host = BorgVRServerHost(logger: logger)
 
+printStartupBanner(config)
 logger.info("Scanning server catalog in \(config.dataDirectory)")
 let state = host.start(configuration: serverConfiguration)
 
@@ -231,30 +324,6 @@ if config.webPort != nil, !state.isWebServerRunning {
   host.stop()
   exit(1)
 }
-
-logger.info("Dataset server: port \(state.port), max brick batch \(config.maxBricksPerGetRequest).")
-logger.info("Password protection: \(config.password.isEmpty ? "disabled" : "enabled").")
-if state.isWebServerRunning {
-  let scheme = state.webServerUsesTLS ? "https" : "http"
-  logger.info("WebGPU frontend: \(scheme)://localhost:\(state.webPort)/")
-}
-if config.scanIntervalSeconds > 0 {
-  logger.info("Catalog refresh interval: \(config.scanIntervalSeconds) seconds.")
-} else {
-  logger.info("Periodic catalog refresh is disabled.")
-}
-if config.syncServers.isEmpty {
-  logger.info("Server-to-server synchronization: disabled.")
-} else {
-  logger.info("Server-to-server synchronization: \(config.syncServers.count) source(s).")
-  for endpoint in config.syncServers {
-    logger.info(
-      "  \(endpoint.address):\(endpoint.port), every \(endpoint.intervalSeconds) seconds, " +
-      "password \(endpoint.password.isEmpty ? "not configured" : "configured")."
-    )
-  }
-}
-logger.info("Press Ctrl-C to stop \(executableName).")
 
 signal(SIGINT, SIG_IGN)
 signal(SIGTERM, SIG_IGN)
@@ -304,4 +373,28 @@ if config.scanIntervalSeconds > 0 {
 
 syncManager?.start()
 
+printConsoleHelp()
+while let line = readLine() {
+  let command = line.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+  switch command {
+    case "q":
+      stopAndExit()
+    case "l":
+      let datasets = runtimeQueue.sync { host.state.datasets }
+      printDatasets(datasets)
+    case "r":
+      runtimeQueue.sync {
+        _ = host.refreshCatalog(configuration: serverConfiguration)
+      }
+      logger.info("Server catalog refreshed.")
+    case "h", "?":
+      printConsoleHelp()
+    case "":
+      break
+    default:
+      logger.warning("Unknown command: \(command). Type 'h' for help.")
+  }
+}
+
+logger.info("Standard input closed. Press Ctrl-C to stop \(executableName).")
 dispatchMain()
