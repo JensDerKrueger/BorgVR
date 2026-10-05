@@ -111,9 +111,11 @@ private:
 
     void sendBinaryResponse(const std::vector<uint8_t>& payload);
     bool sendText(const std::string& text);
+    std::string clientLogMessage(const std::string& message) const;
 
     TCPServer& server_;
     TcpSocket socket_;
+    std::string clientAddress_;
     std::thread thread_;
     std::atomic<bool> running_{false};
 

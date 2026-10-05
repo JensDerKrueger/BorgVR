@@ -231,7 +231,10 @@ class TCPServer {
 
   private func handleNewConnection(_ connection: NWConnection) {
     guard activeConnectionCount() < Self.maxActiveConnections else {
-      logger?.warning("Dataset server connection limit reached; rejecting client.")
+      logger?.warning(clientLogMessage(
+        "Dataset server connection limit reached; rejecting client.",
+        connection: connection
+      ))
       connection.cancel()
       return
     }
@@ -241,7 +244,14 @@ class TCPServer {
     connection.stateUpdateHandler = { [weak self, weak connection] state in
       guard let self, let connection else { return }
       switch state {
-        case .cancelled, .waiting, .failed(_):
+        case .waiting(let error), .failed(let error):
+          self.logger?.warning(self.clientLogMessage(
+            "Connection ended with error: \(error.localizedDescription)",
+            connection: connection
+          ))
+          self.closeConnection(for: connection)
+          self.removeActiveConnection(connection)
+        case .cancelled:
           self.closeConnection(for: connection)
           self.removeActiveConnection(connection)
         default:
@@ -250,6 +260,21 @@ class TCPServer {
     }
     connection.start(queue: queue)
     receiveLine(on: connection, buffer: "")
+  }
+
+  private func clientAddress(_ connection: NWConnection) -> String {
+    switch connection.endpoint {
+      case .hostPort(let host, let port):
+        let hostText = host.debugDescription
+        let formattedHost = hostText.contains(":") ? "[\(hostText)]" : hostText
+        return "\(formattedHost):\(port.rawValue)"
+      default:
+        return connection.endpoint.debugDescription
+    }
+  }
+
+  private func clientLogMessage(_ message: String, connection: NWConnection) -> String {
+    "[client \(clientAddress(connection))] \(message)"
   }
 
   // MARK: - Parameter validation helpers
@@ -278,14 +303,14 @@ class TCPServer {
 
       if let error = error {
         self.logger?.warning(
-          String(
+          self.clientLogMessage(String(
             format: L(
               "tcpserver_warning_client_error_disconnect",
               value: "Client disconnected with error: %@.",
               comment: "client disconnected with error"
             ),
             error.localizedDescription
-          )
+          ), connection: connection)
         )
         self.closeConnection(for: connection)
         return
@@ -294,11 +319,11 @@ class TCPServer {
       guard let data = data, !data.isEmpty else {
         if isComplete {
           self.logger?.info(
-            L(
+            self.clientLogMessage(L(
               "tcpserver_info_client_disconnected_normal",
               value: "Client disconnected normally.",
               comment: "client disconnected normally"
-            )
+            ), connection: connection)
           )
           self.closeConnection(for: connection)
         }
@@ -307,7 +332,10 @@ class TCPServer {
 
       var newBuffer = buffer + String(decoding: data, as: UTF8.self)
       if newBuffer.utf8.count > Self.maxCommandBufferBytes {
-        self.logger?.warning("Input buffer too large; disconnecting client.")
+        self.logger?.warning(self.clientLogMessage(
+          "Input buffer too large; disconnecting client.",
+          connection: connection
+        ))
         self.closeConnection(for: connection)
         connection.cancel()
         return
@@ -319,13 +347,21 @@ class TCPServer {
         newBuffer = String(newBuffer[newlineRange.upperBound...])
 
         if request.utf8.count > Self.maxCommandLineBytes {
-          self.logger?.warning("Input line too large; disconnecting client.")
+          self.logger?.warning(self.clientLogMessage(
+            "Input line too large; disconnecting client.",
+            connection: connection
+          ))
           self.closeConnection(for: connection)
           connection.cancel()
           return
         }
 
         if !self.processCommand(request, connection: connection) {
+          let command = request.split(whereSeparator: \.isWhitespace).first.map(String.init) ?? "<empty>"
+          self.logger?.warning(self.clientLogMessage(
+            "Rejected command: \(command)",
+            connection: connection
+          ))
           connection.cancel()
           return
         }
@@ -334,11 +370,11 @@ class TCPServer {
       if isComplete {
         connection.cancel()
         self.logger?.info(
-          L(
+          self.clientLogMessage(L(
             "tcpserver_info_closing_connection_after_processing",
             value: "Closing connection after processing.",
             comment: "closing connection after processing"
-          )
+          ), connection: connection)
         )
         self.closeConnection(for: connection)
       } else {
@@ -421,7 +457,10 @@ class TCPServer {
     let authenticated = authenticatedConnections.contains(connectionID)
     stateLock.unlock()
     if !authenticated {
-      logger?.warning("Rejecting unauthenticated server command.")
+      logger?.warning(clientLogMessage(
+        "Rejecting unauthenticated server command.",
+        connection: connection
+      ))
     }
     return authenticated
   }
@@ -489,7 +528,7 @@ class TCPServer {
     )
 
     guard constantTimeEquals(providedResponse, expectedResponse) else {
-      logger?.warning("Client authentication failed.")
+      logger?.warning(clientLogMessage("Client authentication failed.", connection: connection))
       return sendAuthResult("FAILED", connection: connection)
     }
 
@@ -530,14 +569,14 @@ class TCPServer {
       let dataset = datasets.first(where: { $0.id == idString })
     else {
       logger?.warning(
-        String(
+        clientLogMessage(String(
           format: L(
             "tcpserver_warning_open_unknown_dataset",
             value: "OPEN: unknown dataset id %@.",
             comment: "unknown dataset id in OPEN"
           ),
           String(parameters.first ?? "")
-        )
+        ), connection: connection)
       )
       return false
     }
@@ -545,11 +584,11 @@ class TCPServer {
     let connectionID = ObjectIdentifier(connection)
     if connectionDataset(for: connection) != nil {
       logger?.info(
-        L(
+        clientLogMessage(L(
           "tcpserver_info_closing_previous_dataset",
           value: "Closing previous dataset for connection.",
           comment: "closing previous dataset for connection"
-        )
+        ), connection: connection)
       )
       closeConnection(for: connection)
     }
@@ -558,33 +597,10 @@ class TCPServer {
       setConnectionDataset(ConnectionDataset(dataset: data), for: connection)
 
       let filename = URL(fileURLWithPath: dataset.filename).lastPathComponent
-      if case let .hostPort(host, _) = connection.endpoint {
-        let clientAddress = host.debugDescription
-        logger?.info(
-          String(
-            format: L(
-              "tcpserver_info_opened_dataset_with_client",
-              value: "Opened dataset %@ for %@ (connection %@).",
-              comment: "opened dataset for client with id"
-            ),
-            filename,
-            clientAddress,
-            String(connectionID.hashValue)
-          )
-        )
-      } else {
-        logger?.info(
-          String(
-            format: L(
-              "tcpserver_info_opened_dataset",
-              value: "Opened dataset %@ (connection %@).",
-              comment: "opened dataset with id"
-            ),
-            filename,
-            String(connectionID.hashValue)
-          )
-        )
-      }
+      logger?.info(clientLogMessage(
+        "Opened dataset \(filename) (connection \(connectionID.hashValue)).",
+        connection: connection
+      ))
 
       sendBinaryResponse(
         data: data.getMetadata().toData(),
@@ -593,14 +609,14 @@ class TCPServer {
       return true
     } else {
       logger?.error(
-        String(
+        clientLogMessage(String(
           format: L(
             "tcpserver_error_open_dataset_failed",
             value: "Failed to open dataset %@.",
             comment: "failed to open dataset"
           ),
           String(idString)
-        )
+        ), connection: connection)
       )
       return false
     }
@@ -640,7 +656,7 @@ class TCPServer {
     guard indices.allSatisfy({ $0 >= 0 && $0 < brickCount }) else {
       let rangeText = "0..\((brickCount - 1))"
       logger?.warning(
-        String(
+        clientLogMessage(String(
           format: L(
             "tcpserver_warning_getbricks_index_out_of_range",
             value: "GETBRICKS: index out of range (%@) in %@.",
@@ -648,7 +664,7 @@ class TCPServer {
           ),
           rangeText,
           "\(indices)"
-        )
+        ), connection: connection)
       )
       return false
     }
@@ -675,11 +691,11 @@ class TCPServer {
       return true
     } catch {
       logger?.error(
-        L(
+        clientLogMessage(L(
           "tcpserver_error_getbricks_failed",
           value: "Failed to get bricks:",
           comment: "failed to get bricks"
-        ) + " \(error)"
+        ) + " \(error)", connection: connection)
       )
       return false
     }
@@ -694,11 +710,11 @@ class TCPServer {
     connection.send(content: message, completion: .contentProcessed({ error in
       if let error = error {
         self.logger?.error(
-          L(
+          self.clientLogMessage(L(
             "tcpserver_error_send_binary_failed",
             value: "Failed to send binary response:",
             comment: "failed to send binary response"
-          ) + " \(error)"
+          ) + " \(error)", connection: connection)
         )
       }
     }))
@@ -787,7 +803,10 @@ class TCPServer {
       sendBinaryResponse(data: data, connection: connection)
       return true
     } catch {
-      logger?.error("Failed to read transfer function \(transferFunction.filename): \(error)")
+      logger?.error(clientLogMessage(
+        "Failed to read transfer function \(transferFunction.filename): \(error)",
+        connection: connection
+      ))
       return false
     }
   }
@@ -807,7 +826,10 @@ class TCPServer {
       sendBinaryResponse(data: data, connection: connection)
       return true
     } catch {
-      logger?.error("Failed to read marker file \(markerFile.filename): \(error)")
+      logger?.error(clientLogMessage(
+        "Failed to read marker file \(markerFile.filename): \(error)",
+        connection: connection
+      ))
       return false
     }
   }
@@ -828,7 +850,10 @@ class TCPServer {
       sendBinaryResponse(data: data, connection: connection)
       return true
     } catch {
-      logger?.error("Failed to read mesh file \(mesh.filename): \(error)")
+      logger?.error(clientLogMessage(
+        "Failed to read mesh file \(mesh.filename): \(error)",
+        connection: connection
+      ))
       return false
     }
   }

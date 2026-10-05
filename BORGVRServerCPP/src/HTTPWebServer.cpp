@@ -390,25 +390,42 @@ void HTTPWebServer::acceptLoop() {
     }
 
     if (activeHandlers_.load() >= kMaxActiveHTTPHandlers) {
-      if (logger_) logger_->warning("HTTP/WebGPU connection limit reached; rejecting client");
+      if (logger_) {
+        logger_->warning(
+          "[client " + client.peerAddress() + "] HTTP/WebGPU connection limit reached; rejecting client"
+        );
+      }
       continue;
     }
 
+    const std::string clientAddress = client.peerAddress();
     activeHandlers_.fetch_add(1);
     try {
-      std::thread([this](TcpSocket socket) {
+      std::thread([this, clientAddress](TcpSocket socket) {
         HandlerCounter counter(activeHandlers_, false);
         try {
           handleClient(std::move(socket));
         } catch (const std::exception& e) {
-          if (logger_) logger_->warning(std::string("HTTP client handler aborted: ") + e.what());
+          if (logger_) {
+            logger_->warning(
+              "[client " + clientAddress + "] HTTP client handler aborted: " + e.what()
+            );
+          }
         } catch (...) {
-          if (logger_) logger_->warning("HTTP client handler aborted with an unknown exception.");
+          if (logger_) {
+            logger_->warning(
+              "[client " + clientAddress + "] HTTP client handler aborted with an unknown exception."
+            );
+          }
         }
       }, std::move(client)).detach();
     } catch (const std::exception& e) {
       activeHandlers_.fetch_sub(1);
-      if (logger_) logger_->error(std::string("Failed to start HTTP client thread: ") + e.what());
+      if (logger_) {
+        logger_->error(
+          "[client " + clientAddress + "] Failed to start HTTP client thread: " + e.what()
+        );
+      }
     }
   }
 }
@@ -879,7 +896,11 @@ bool HTTPWebServer::sendDatasetManifest(TcpSocket& socket, const std::string& da
                          {"X-BorgVR-Content", "dataset-manifest-lz4"}},
                         closeAfterSend);
   } catch (const std::exception& e) {
-    if (logger_) logger_->error(std::string("HTTP manifest failed: ") + e.what());
+    if (logger_) {
+      logger_->error(
+        "[client " + socket.peerAddress() + "] HTTP manifest failed: " + e.what()
+      );
+    }
     return sendError(socket, 500, "Internal Server Error", "Unable to open dataset metadata.", closeAfterSend);
   }
 }
@@ -908,7 +929,9 @@ bool HTTPWebServer::sendBrick(TcpSocket& socket, const std::string& datasetID, c
     dataset.getRawBrick(bm, body.data(), body.size());
     return sendResponse(socket, 200, "OK", "application/octet-stream", body, {}, closeAfterSend);
   } catch (const std::exception& e) {
-    if (logger_) logger_->error(std::string("HTTP brick failed: ") + e.what());
+    if (logger_) {
+      logger_->error("[client " + socket.peerAddress() + "] HTTP brick failed: " + e.what());
+    }
     return sendError(socket, 500, "Internal Server Error", "Unable to read brick.", closeAfterSend);
   }
 }
@@ -995,7 +1018,11 @@ bool HTTPWebServer::sendBrickBatch(TcpSocket& socket, const std::string& dataset
                         {{"X-BorgVR-Content", "brick-batch-v1"}},
                         closeAfterSend);
   } catch (const std::exception& e) {
-    if (logger_) logger_->error(std::string("HTTP brick batch failed: ") + e.what());
+    if (logger_) {
+      logger_->error(
+        "[client " + socket.peerAddress() + "] HTTP brick batch failed: " + e.what()
+      );
+    }
     return sendError(socket, 500, "Internal Server Error", "Unable to read brick batch.", closeAfterSend);
   }
 }
@@ -1008,7 +1035,12 @@ bool HTTPWebServer::sendStaticFile(TcpSocket& socket, const std::string& request
 
   const std::vector<uint8_t>* body = decodedEmbeddedWebAsset(asset);
   if (!body) {
-    if (logger_) logger_->error("Embedded web asset decompression failed for " + requestPath);
+    if (logger_) {
+      logger_->error(
+        "[client " + socket.peerAddress() + "] Embedded web asset decompression failed for " +
+        requestPath
+      );
+    }
     return sendError(socket,
                      500,
                      "Internal Server Error",
@@ -1046,13 +1078,20 @@ bool HTTPWebServer::sendResponse(TcpSocket& socket,
   header << "\r\n";
 
   if (!socket.sendAll(header.str())) {
-    if (logger_) logger_->warning("HTTP response header send failed for status " + std::to_string(status));
+    if (logger_) {
+      logger_->warning(
+        "[client " + socket.peerAddress() + "] HTTP response header send failed for status " +
+        std::to_string(status)
+      );
+    }
     return false;
   }
   if (!body.empty() && !socket.sendAll(body)) {
     if (logger_) {
-      logger_->warning("HTTP response body send failed for status " + std::to_string(status) +
-                       " with " + std::to_string(body.size()) + " bytes");
+      logger_->warning(
+        "[client " + socket.peerAddress() + "] HTTP response body send failed for status " +
+        std::to_string(status) + " with " + std::to_string(body.size()) + " bytes"
+      );
     }
     return false;
   }
@@ -1083,7 +1122,12 @@ bool HTTPWebServer::sendChunkedResponse(TcpSocket& socket,
   header << "\r\n";
 
   if (!socket.sendAll(header.str())) {
-    if (logger_) logger_->warning("HTTP chunked response header send failed for status " + std::to_string(status));
+    if (logger_) {
+      logger_->warning(
+        "[client " + socket.peerAddress() + "] HTTP chunked response header send failed for status " +
+        std::to_string(status)
+      );
+    }
     return false;
   }
 
@@ -1097,9 +1141,11 @@ bool HTTPWebServer::sendChunkedResponse(TcpSocket& socket,
         !socket.sendAll(body.data() + offset, chunkSize) ||
         !socket.sendAll("\r\n")) {
       if (logger_) {
-        logger_->warning("HTTP chunked response body send failed for status " + std::to_string(status) +
-                         " at offset " + std::to_string(offset) +
-                         " of " + std::to_string(body.size()) + " bytes");
+        logger_->warning(
+          "[client " + socket.peerAddress() + "] HTTP chunked response body send failed for status " +
+          std::to_string(status) + " at offset " + std::to_string(offset) +
+          " of " + std::to_string(body.size()) + " bytes"
+        );
       }
       return false;
     }
@@ -1108,7 +1154,12 @@ bool HTTPWebServer::sendChunkedResponse(TcpSocket& socket,
   }
 
   if (!socket.sendAll("0\r\n\r\n")) {
-    if (logger_) logger_->warning("HTTP chunked response terminator send failed for status " + std::to_string(status));
+    if (logger_) {
+      logger_->warning(
+        "[client " + socket.peerAddress() + "] HTTP chunked response terminator send failed for status " +
+        std::to_string(status)
+      );
+    }
     return false;
   }
 

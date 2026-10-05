@@ -92,6 +92,42 @@ bool TcpSocket::valid() const {
 #endif
 }
 
+std::string TcpSocket::peerAddress() const {
+  if (!valid()) return "unknown";
+
+  sockaddr_storage address{};
+#if defined(_WIN32)
+  int addressLength = sizeof(address);
+#else
+  socklen_t addressLength = sizeof(address);
+#endif
+  if (::getpeername(
+        sock_,
+        reinterpret_cast<sockaddr*>(&address),
+        &addressLength
+      ) != 0) {
+    return "unknown";
+  }
+
+  char host[NI_MAXHOST]{};
+  char service[NI_MAXSERV]{};
+  if (::getnameinfo(
+        reinterpret_cast<const sockaddr*>(&address),
+        addressLength,
+        host,
+        sizeof(host),
+        service,
+        sizeof(service),
+        NI_NUMERICHOST | NI_NUMERICSERV
+      ) != 0) {
+    return "unknown";
+  }
+
+  const std::string hostText(host);
+  const bool isIPv6 = address.ss_family == AF_INET6;
+  return (isIPv6 ? "[" + hostText + "]" : hostText) + ":" + service;
+}
+
 bool TcpSocket::connectTo(const std::string& host, uint16_t port) {
   close();
 

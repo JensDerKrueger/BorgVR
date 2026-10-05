@@ -436,7 +436,11 @@ void TCPServer::acceptLoop() {
       std::lock_guard<std::mutex> lock(sessionsMutex_);
       pruneSessionsLocked();
       if (sessions_.size() >= kMaxActiveSessions) {
-        if (logger_) logger_->warning("Connection limit reached; rejecting client");
+        if (logger_) {
+          logger_->warning(
+            "[client " + client.peerAddress() + "] Connection limit reached; rejecting client"
+          );
+        }
         continue;
       }
     }
@@ -471,7 +475,7 @@ void TCPServer::pruneSessionsLocked() {
 // ---------------- ClientSession ----------------
 
 TCPServer::ClientSession::ClientSession(TCPServer& server, TcpSocket socket)
-  : server_(server), socket_(std::move(socket)) {}
+  : server_(server), socket_(std::move(socket)), clientAddress_(socket_.peerAddress()) {}
 
 TCPServer::ClientSession::~ClientSession() {
   stop();
@@ -504,11 +508,17 @@ bool TCPServer::ClientSession::sendText(const std::string& text) {
   return socket_.sendAll(text);
 }
 
+std::string TCPServer::ClientSession::clientLogMessage(const std::string& message) const {
+  return "[client " + clientAddress_ + "] " + message;
+}
+
 void TCPServer::ClientSession::sendBinaryResponse(const std::vector<uint8_t>& payload) {
   if (!socket_.valid()) return;
 
   if (payload.size() > static_cast<size_t>(INT32_MAX)) {
-    if (server_.logger_) server_.logger_->error("Binary payload too large for Int32 length prefix.");
+    if (server_.logger_) {
+      server_.logger_->error(clientLogMessage("Binary payload too large for Int32 length prefix."));
+    }
     stop();
     return;
   }
@@ -519,7 +529,7 @@ void TCPServer::ClientSession::sendBinaryResponse(const std::vector<uint8_t>& pa
   msg.insert(msg.end(), payload.begin(), payload.end());
 
   if (!socket_.sendAll(msg)) {
-    if (server_.logger_) server_.logger_->error("Failed to send binary response.");
+    if (server_.logger_) server_.logger_->error(clientLogMessage("Failed to send binary response."));
     stop();
   }
 }
@@ -644,7 +654,7 @@ bool TCPServer::ClientSession::authenticate(const std::vector<std::string>& para
 
   const std::string expected = authResponse(server_.authSecret_, salt_, serverNonce_, clientNonce);
   if (!constantTimeEquals(params[1], expected)) {
-    if (server_.logger_) server_.logger_->warning("Client authentication failed.");
+    if (server_.logger_) server_.logger_->warning(clientLogMessage("Client authentication failed."));
     return sendAuthResult("FAILED");
   }
 
@@ -664,7 +674,9 @@ bool TCPServer::ClientSession::openDataset(const std::vector<std::string>& param
 
   DatasetInfo chosen;
   if (!server_.findDatasetById(id, chosen)) {
-    if (server_.logger_) server_.logger_->warning("OPEN unknown dataset id: " + id);
+    if (server_.logger_) {
+      server_.logger_->warning(clientLogMessage("OPEN unknown dataset id: " + id));
+    }
     return false;
   }
 
@@ -677,14 +689,18 @@ bool TCPServer::ClientSession::openDataset(const std::vector<std::string>& param
     brickBuffer_ = dataset_->allocateBrickBuffer();
 
     if (server_.logger_) {
-      server_.logger_->info("Opened dataset: " + chosen.filename + " (id " + id + ")");
+      server_.logger_->info(
+        clientLogMessage("Opened dataset: " + chosen.filename + " (id " + id + ")")
+      );
     }
 
     const auto bytes = dataset_->metadata().toBytes();
     sendBinaryResponse(bytes);
     return true;
   } catch (const std::exception& e) {
-    if (server_.logger_) server_.logger_->error(std::string("Failed to open dataset: ") + e.what());
+    if (server_.logger_) {
+      server_.logger_->error(clientLogMessage(std::string("Failed to open dataset: ") + e.what()));
+    }
     return false;
   }
 }
@@ -694,13 +710,17 @@ bool TCPServer::ClientSession::getTransferFunction(const std::vector<std::string
 
   TransferFunctionInfo chosen;
   if (!server_.findTransferFunctionById(params[0], chosen)) {
-    if (server_.logger_) server_.logger_->warning("GETTF unknown transfer function id: " + params[0]);
+    if (server_.logger_) {
+      server_.logger_->warning(clientLogMessage("GETTF unknown transfer function id: " + params[0]));
+    }
     return false;
   }
 
   std::ifstream file(chosen.filename, std::ios::binary);
   if (!file) {
-    if (server_.logger_) server_.logger_->error("Failed to open transfer function: " + chosen.filename);
+    if (server_.logger_) {
+      server_.logger_->error(clientLogMessage("Failed to open transfer function: " + chosen.filename));
+    }
     return false;
   }
 
@@ -717,14 +737,26 @@ bool TCPServer::ClientSession::getMarkerFile(const std::vector<std::string>& par
   if (params.size() != 1) return false;
   MarkerFileInfo chosen;
   if (!server_.findMarkerFileById(params[0], chosen)) {
-    if (server_.logger_) server_.logger_->warning("GETMARKER unknown marker file id: " + params[0]);
+    if (server_.logger_) {
+      server_.logger_->warning(clientLogMessage("GETMARKER unknown marker file id: " + params[0]));
+    }
     return false;
   }
   std::ifstream file(chosen.filename, std::ios::binary);
-  if (!file) return false;
+  if (!file) {
+    if (server_.logger_) {
+      server_.logger_->error(clientLogMessage("Failed to open marker file: " + chosen.filename));
+    }
+    return false;
+  }
   std::vector<uint8_t> payload((std::istreambuf_iterator<char>(file)),
                                std::istreambuf_iterator<char>());
-  if (payload.size() != chosen.byteCount) return false;
+  if (payload.size() != chosen.byteCount) {
+    if (server_.logger_) {
+      server_.logger_->error(clientLogMessage("Marker file size changed while reading: " + chosen.filename));
+    }
+    return false;
+  }
   sendBinaryResponse(payload);
   return true;
 }
@@ -733,14 +765,26 @@ bool TCPServer::ClientSession::getMeshFile(const std::vector<std::string>& param
   if (params.size() != 1) return false;
   MeshFileInfo chosen;
   if (!server_.findMeshFileById(params[0], chosen)) {
-    if (server_.logger_) server_.logger_->warning("GETMESH unknown mesh id: " + params[0]);
+    if (server_.logger_) {
+      server_.logger_->warning(clientLogMessage("GETMESH unknown mesh id: " + params[0]));
+    }
     return false;
   }
   std::ifstream file(chosen.filename, std::ios::binary);
-  if (!file) return false;
+  if (!file) {
+    if (server_.logger_) {
+      server_.logger_->error(clientLogMessage("Failed to open mesh file: " + chosen.filename));
+    }
+    return false;
+  }
   std::vector<uint8_t> payload((std::istreambuf_iterator<char>(file)),
                                std::istreambuf_iterator<char>());
-  if (payload.size() != chosen.byteCount) return false;
+  if (payload.size() != chosen.byteCount) {
+    if (server_.logger_) {
+      server_.logger_->error(clientLogMessage("Mesh file size changed while reading: " + chosen.filename));
+    }
+    return false;
+  }
   sendBinaryResponse(payload);
   return true;
 }
@@ -778,8 +822,10 @@ bool TCPServer::ClientSession::getBricks(const std::vector<std::string>& params)
   for (int idx : indices) {
     if (idx < 0 || static_cast<size_t>(idx) >= brickCount) {
       if (server_.logger_) {
-        server_.logger_->warning("GETBRICKS index out of range: " + std::to_string(idx) +
-                                 " (valid 0.." + std::to_string(brickCount - 1) + ")");
+        server_.logger_->warning(clientLogMessage(
+          "GETBRICKS index out of range: " + std::to_string(idx) +
+          " (valid 0.." + std::to_string(brickCount - 1) + ")"
+        ));
       }
       return false;
     }
@@ -807,7 +853,9 @@ bool TCPServer::ClientSession::getBricks(const std::vector<std::string>& params)
       payload.insert(payload.end(), brickBuffer_.begin(), brickBuffer_.begin() + sz);
     }
   } catch (const std::exception& e) {
-    if (server_.logger_) server_.logger_->error(std::string("GETBRICKS failed: ") + e.what());
+    if (server_.logger_) {
+      server_.logger_->error(clientLogMessage(std::string("GETBRICKS failed: ") + e.what()));
+    }
     return false;
   }
 
@@ -829,7 +877,9 @@ bool TCPServer::ClientSession::processCommand(const std::string& line) {
   if (cmd == "AUTH") return authenticate(params);
 
   if (!commandAllowed()) {
-    if (server_.logger_) server_.logger_->warning("Rejecting unauthenticated command.");
+    if (server_.logger_) {
+      server_.logger_->warning(clientLogMessage("Rejecting unauthenticated command."));
+    }
     return false;
   }
 
@@ -849,6 +899,7 @@ bool TCPServer::ClientSession::processCommand(const std::string& line) {
 
 void TCPServer::ClientSession::run() {
   try {
+    if (server_.logger_) server_.logger_->info(clientLogMessage("Client connected."));
 
     std::string buffer;
     buffer.reserve(4096);
@@ -859,7 +910,9 @@ void TCPServer::ClientSession::run() {
     while (running_.load() && server_.running_.load() && socket_.valid()) {
       const int rc = socket_.recvSome(temp, sizeof(temp));
       if (rc < 0) {
-        if (server_.logger_) server_.logger_->warning("Client recv error; disconnecting");
+        if (server_.logger_) {
+          server_.logger_->warning(clientLogMessage("Receive error; disconnecting."));
+        }
         break;
       }
       if (rc == 0) {
@@ -869,7 +922,9 @@ void TCPServer::ClientSession::run() {
 
       buffer.append(reinterpret_cast<const char*>(temp), static_cast<size_t>(rc));
       if (buffer.size() > kMaxLineBytes * 4) {
-        if (server_.logger_) server_.logger_->warning("Input buffer too large; disconnecting");
+        if (server_.logger_) {
+          server_.logger_->warning(clientLogMessage("Input buffer too large; disconnecting."));
+        }
         break;
       }
 
@@ -886,25 +941,36 @@ void TCPServer::ClientSession::run() {
           break;
         }
         if (line.size() > kMaxLineBytes) {
-          if (server_.logger_) server_.logger_->warning("Command line too long; disconnecting");
+          if (server_.logger_) {
+            server_.logger_->warning(clientLogMessage("Command line too long; disconnecting."));
+          }
           running_.store(false);
           break;
         }
 
         if (!processCommand(line)) {
+          if (server_.logger_) {
+            const auto tokens = splitWhitespace(line);
+            const std::string command = tokens.empty() ? "<empty>" : tokens.front();
+            server_.logger_->warning(clientLogMessage("Rejected command: " + command));
+          }
           running_.store(false);
           break;
         }
       }
     }
   } catch (const std::exception& e) {
-    if (server_.logger_) server_.logger_->warning(std::string("Client session aborted: ") + e.what());
+    if (server_.logger_) {
+      server_.logger_->warning(clientLogMessage(std::string("Client session aborted: ") + e.what()));
+    }
   } catch (...) {
-    if (server_.logger_) server_.logger_->warning("Client session aborted with an unknown exception.");
+    if (server_.logger_) {
+      server_.logger_->warning(clientLogMessage("Client session aborted with an unknown exception."));
+    }
   }
 
   stop();
-  if (server_.logger_) server_.logger_->info("Client disconnected");
+  if (server_.logger_) server_.logger_->info(clientLogMessage("Client disconnected."));
 }
 
 /*

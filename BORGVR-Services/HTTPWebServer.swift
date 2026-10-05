@@ -117,7 +117,10 @@ final class HTTPWebServer {
 
   private func handleNewConnection(_ connection: NWConnection) {
     guard activeConnectionCount() < Self.maxActiveConnections else {
-      logger?.warning("\(schemeName)/WebGPU connection limit reached; rejecting client.")
+      logger?.warning(clientLogMessage(
+        "\(schemeName)/WebGPU connection limit reached; rejecting client.",
+        connection: connection
+      ))
       connection.cancel()
       return
     }
@@ -126,7 +129,13 @@ final class HTTPWebServer {
     connection.stateUpdateHandler = { [weak self, weak connection] state in
       guard let self, let connection else { return }
       switch state {
-        case .cancelled, .failed, .waiting:
+        case .failed(let error), .waiting(let error):
+          self.logger?.warning(self.clientLogMessage(
+            "\(self.schemeName)/WebGPU connection ended with error: \(error.localizedDescription).",
+            connection: connection
+          ))
+          self.removeActiveConnection(connection)
+        case .cancelled:
           self.removeActiveConnection(connection)
         default:
           break
@@ -134,6 +143,21 @@ final class HTTPWebServer {
     }
     connection.start(queue: queue)
     receiveRequest(on: connection, data: Data(), handledRequestCount: 0)
+  }
+
+  private func clientAddress(_ connection: NWConnection) -> String {
+    switch connection.endpoint {
+      case .hostPort(let host, let port):
+        let hostText = host.debugDescription
+        let formattedHost = hostText.contains(":") ? "[\(hostText)]" : hostText
+        return "\(formattedHost):\(port.rawValue)"
+      default:
+        return connection.endpoint.debugDescription
+    }
+  }
+
+  private func clientLogMessage(_ message: String, connection: NWConnection) -> String {
+    "[client \(clientAddress(connection))] \(message)"
   }
 
   private func receiveRequest(
@@ -148,7 +172,10 @@ final class HTTPWebServer {
       guard let self else { return }
 
       if let error {
-        self.logger?.warning("HTTP/WebGPU client disconnected with error: \(error.localizedDescription).")
+        self.logger?.warning(self.clientLogMessage(
+          "HTTP/WebGPU client disconnected with error: \(error.localizedDescription).",
+          connection: connection
+        ))
         connection.cancel()
         self.removeActiveConnection(connection)
         return
@@ -249,7 +276,10 @@ final class HTTPWebServer {
         body: Data("Not found.\n".utf8)
       )
     } catch {
-      logger?.error("HTTP/WebGPU request failed for \(request.path): \(error.localizedDescription)")
+      logger?.error(clientLogMessage(
+        "HTTP/WebGPU request failed for \(request.path): \(error.localizedDescription)",
+        connection: connection
+      ))
       response = HTTPResponse(
         status: 500,
         reason: "Internal Server Error",
@@ -787,7 +817,10 @@ final class HTTPWebServer {
       completion: .contentProcessed { [weak self, weak connection] error in
         guard let self, let connection else { return }
         if let error {
-          self.logger?.warning("\(self.schemeName)/WebGPU response send failed: \(error.localizedDescription)")
+          self.logger?.warning(self.clientLogMessage(
+            "\(self.schemeName)/WebGPU response send failed: \(error.localizedDescription)",
+            connection: connection
+          ))
           connection.cancel()
           self.removeActiveConnection(connection)
           return

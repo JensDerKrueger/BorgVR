@@ -38,6 +38,7 @@ public:
 
   bool valid() const;
   SocketHandle handle() const { return sock_; }
+  std::string peerAddress() const;
 
   bool connectTo(const std::string& host, uint16_t port);
   void close();
