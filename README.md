@@ -233,7 +233,7 @@ TerminalServerApp --directory /path/to/datasets --port 12345 --web-port 8080
 `--web-port` also starts the bundled WebGPU frontend. It uses HTTPS with a temporary self-signed
 certificate by default; use `--web-http` for localhost-only HTTP or `--web-certificate` to supply a
 PKCS#12 certificate. Password protection applies to both protocols. Run
-`TerminalServerApp --help` for certificate, scan-interval, and brick-batch options.
+`TerminalServerApp --help` for certificate, scan-interval, brick-batch, and file-logging options.
 
 Remote BorgVR servers can be synchronized into the same directory. The option is repeatable, and
 the optional password is never printed by the server:
@@ -267,8 +267,9 @@ make run ARGS="--directory /path/to/datasets --port 12345 --max-bricks 64 --web-
 ```
 
 The Swift and C++ command-line servers use the same option names for their shared features. See the
-server's command-line help for password, scan interval, WebGPU port, and sync-server options. While
-either server is running, enter `l` to list its current datasets, `r` to refresh the catalog, `h` for
+server's command-line help for password, scan interval, WebGPU port, sync-server, and `--log-file`
+options. While either server is running, enter `l` to list its current datasets, `l0` through `l3`
+to select developer/debug, info, warning, or error output, `r` to refresh the catalog, `h` for
 console help, or `q` to stop it.
 
 ### Apple Vision Pro Development

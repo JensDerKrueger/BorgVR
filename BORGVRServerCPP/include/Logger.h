@@ -1,7 +1,13 @@
 #pragma once
 
+#include <atomic>
+#include <chrono>
+#include <ctime>
+#include <fstream>
+#include <iomanip>
 #include <iostream>
 #include <mutex>
+#include <sstream>
 #include <string>
 
 enum class LogLevel {
@@ -14,9 +20,19 @@ enum class LogLevel {
 class Logger {
 public:
   explicit Logger(LogLevel minLevel = LogLevel::Info, bool useColors = true)
-      : minLevel_(minLevel), useColors_(useColors) {}
+      : minLevel_(static_cast<int>(minLevel)), useColors_(useColors) {}
 
-  void setMinLevel(LogLevel lvl) { minLevel_ = lvl; }
+  void setMinLevel(LogLevel lvl) {
+    minLevel_.store(static_cast<int>(lvl), std::memory_order_relaxed);
+  }
+
+  bool setLogFile(const std::string& path) {
+    std::lock_guard<std::mutex> lock(mu_);
+    file_.close();
+    file_.clear();
+    file_.open(path, std::ios::out | std::ios::app);
+    return file_.is_open();
+  }
 
   void debug(const std::string& msg) { log(LogLevel::Debug, "DEBUG", msg); }
   void info(const std::string& msg) { log(LogLevel::Info, "INFO", msg); }
@@ -24,8 +40,22 @@ public:
   void error(const std::string& msg) { log(LogLevel::Error, "ERROR", msg); }
 
 private:
+  static std::string timestamp() {
+    const auto now = std::chrono::system_clock::now();
+    const std::time_t time = std::chrono::system_clock::to_time_t(now);
+    std::tm localTime{};
+#if defined(_WIN32)
+    localtime_s(&localTime, &time);
+#else
+    localtime_r(&time, &localTime);
+#endif
+    std::ostringstream stream;
+    stream << std::put_time(&localTime, "%Y-%m-%dT%H:%M:%S%z");
+    return stream.str();
+  }
+
   void log(LogLevel lvl, const char* tag, const std::string& msg) {
-    if (static_cast<int>(lvl) < static_cast<int>(minLevel_)) {
+    if (static_cast<int>(lvl) < minLevel_.load(std::memory_order_relaxed)) {
       return;
     }
     std::lock_guard<std::mutex> lock(mu_);
@@ -41,11 +71,16 @@ private:
     std::cerr << color << "[" << tag << "] " << msg;
     if (useColors_) std::cerr << "\033[0m";
     std::cerr << "\n";
+    if (file_.is_open()) {
+      file_ << timestamp() << " [" << tag << "] " << msg << "\n";
+      file_.flush();
+    }
   }
 
   std::mutex mu_;
-  LogLevel minLevel_;
+  std::atomic<int> minLevel_;
   bool useColors_;
+  std::ofstream file_;
 };
 
 /*

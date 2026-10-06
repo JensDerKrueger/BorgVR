@@ -33,6 +33,7 @@ struct ServerConfiguration {
   var useWebServerTLS = true
   var webServerCertificatePath: String?
   var webServerCertificatePassword = ""
+  var logFilePath: String?
   var syncServers: [ServerSyncEndpoint] = []
 
   func serverConfiguration(certificateData: Data) -> BorgVRServerConfiguration {
@@ -71,6 +72,7 @@ Options:
   --web-http                      Use HTTP instead of HTTPS. HTTP only listens on localhost.
   --web-certificate <path>        PKCS#12 certificate (.p12 or .pfx) for HTTPS.
   --web-certificate-password <p>  Password for the PKCS#12 certificate.
+  --log-file <path>               Also append log messages to this file.
   --sync-server <host> <port> <interval> [password]
                                   Synchronize server content at intervals of at least
                                   10 seconds. Repeat for fallback sources.
@@ -79,7 +81,7 @@ Options:
 
 Examples:
   \(executableName) --directory /data/BorgVR --port 12345
-  \(executableName) -d /data/BorgVR -p 12345 -m \(TerminalServerInfo.defaultMaximumBricksPerRequest) --web-port 8080
+  \(executableName) -d /data/BorgVR -p 12345 -m \(TerminalServerInfo.defaultMaximumBricksPerRequest) --web-port 8080 --log-file server.log
   \(executableName) -d /data/BorgVR --sync-server 192.168.1.10 12345 300 secret
 """
 
@@ -145,6 +147,13 @@ func parseArguments(_ args: [String]) -> ServerConfiguration {
 
       case "--web-certificate-password":
         config.webServerCertificatePassword = requireValue(after: argument)
+
+      case "--log-file":
+        let path = requireValue(after: argument).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !path.isEmpty else {
+          fail("Log file path must not be empty.")
+        }
+        config.logFilePath = NSString(string: path).expandingTildeInPath
 
       case "--sync-server":
         let address = requireValue(after: argument)
@@ -231,6 +240,8 @@ func printStartupBanner(_ config: ServerConfiguration) {
     print(" Scan interval     : disabled")
   }
   print(" Password          : \(config.password.isEmpty ? "disabled" : "enabled")")
+  print(" Log level         : info (l1)")
+  print(" Log file          : \(config.logFilePath ?? "disabled")")
   if let webPort = config.webPort {
     let scheme = config.useWebServerTLS ? "https" : "http"
     let effectivePort = webPort == config.port
@@ -290,11 +301,68 @@ func printConsoleHelp() {
   print("""
   Commands:
     l  List currently available datasets.
+    l0 Log developer/debug messages and above.
+    l1 Log informational messages and above.
+    l2 Log warnings and errors.
+    l3 Log errors only.
     r  Refresh the server catalog now.
     h  Show this command list.
     q  Stop the server and quit.
   """)
   fflush(stdout)
+}
+
+final class TerminalLogger: LoggerBase {
+  private let destinations: [LoggerBase]
+  private let lock = NSLock()
+  private var minimumLevel: LogLevel = .info
+
+  init(destinations: [LoggerBase]) {
+    self.destinations = destinations
+    destinations.forEach { $0.setMinimumLogLevel(.dev) }
+  }
+
+  func setMinimumLogLevel(_ level: LogLevel) {
+    lock.lock()
+    minimumLevel = level
+    lock.unlock()
+  }
+
+  private func emit(level: LogLevel, _ action: (LoggerBase) -> Void) {
+    lock.lock()
+    defer { lock.unlock() }
+    guard level >= minimumLevel else { return }
+    destinations.forEach(action)
+  }
+
+  func dev(_ message: String) { emit(level: .dev) { $0.dev(message) } }
+  func info(_ message: String) { emit(level: .info) { $0.info(message) } }
+  func warning(_ message: String) { emit(level: .warning) { $0.warning(message) } }
+  func error(_ message: String) { emit(level: .error) { $0.error(message) } }
+  func progress(_ message: String, _ progress: Double) {
+    emit(level: .dev) { $0.progress(message, progress) }
+  }
+}
+
+func prepareLogFile(at path: String) {
+  let url = URL(fileURLWithPath: path)
+  let parent = url.deletingLastPathComponent()
+  var isDirectory: ObjCBool = false
+  guard FileManager.default.fileExists(atPath: parent.path, isDirectory: &isDirectory),
+        isDirectory.boolValue else {
+    fail("Log file directory does not exist: \(parent.path)")
+  }
+  if !FileManager.default.fileExists(atPath: url.path) {
+    guard FileManager.default.createFile(atPath: url.path, contents: nil) else {
+      fail("Could not create log file at \(path).")
+    }
+  }
+  do {
+    let handle = try FileHandle(forWritingTo: url)
+    try handle.close()
+  } catch {
+    fail("Could not open log file at \(path): \(error.localizedDescription)")
+  }
 }
 
 let config = parseArguments(CommandLine.arguments)
@@ -307,7 +375,19 @@ else {
 
 let certificateData = loadCertificate(from: config.webServerCertificatePath)
 let serverConfiguration = config.serverConfiguration(certificateData: certificateData)
-let logger = PrintfLogger(useColors: true, etaFormat: .mmss)
+var logDestinations: [LoggerBase] = [PrintfLogger(useColors: true, etaFormat: .mmss)]
+if let logFilePath = config.logFilePath {
+  prepareLogFile(at: logFilePath)
+  logDestinations.append(
+    FileLogger(
+      logFilePath: logFilePath,
+      maxFileSize: 10 * 1024 * 1024,
+      flushImmediately: true,
+      enableCompression: false
+    )
+  )
+}
+let logger = TerminalLogger(destinations: logDestinations)
 let host = BorgVRServerHost(logger: logger)
 
 printStartupBanner(config)
@@ -382,6 +462,18 @@ while let line = readLine() {
     case "l":
       let datasets = runtimeQueue.sync { host.state.datasets }
       printDatasets(datasets)
+    case "l0":
+      logger.setMinimumLogLevel(.dev)
+      print("Log level set to developer/debug (l0).")
+    case "l1":
+      logger.setMinimumLogLevel(.info)
+      print("Log level set to info (l1).")
+    case "l2":
+      logger.setMinimumLogLevel(.warning)
+      print("Log level set to warning (l2).")
+    case "l3":
+      logger.setMinimumLogLevel(.error)
+      print("Log level set to error (l3).")
     case "r":
       runtimeQueue.sync {
         _ = host.refreshCatalog(configuration: serverConfiguration)

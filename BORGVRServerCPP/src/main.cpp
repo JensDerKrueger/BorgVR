@@ -42,6 +42,7 @@ struct ServerConfiguration {
   std::string password;
   int scanIntervalSeconds = 10;
   uint16_t webPort = 0;
+  std::string logFile;
   std::vector<ServerSyncEndpoint> syncServers;
 };
 
@@ -99,6 +100,7 @@ static void printUsage(const char* filename) {
     << "  --scan-interval <seconds>       Refresh the file catalog periodically.\n"
     << "                                  Defaults to 10; use 0 to disable rescanning.\n"
     << "  --web-port <port>               Enable the WebGPU HTTP server on this port.\n"
+    << "  --log-file <path>               Also append log messages to this file.\n"
     << "  --sync-server <host> <port> <interval> [password]\n"
     << "                                  Synchronize server content at intervals of at least\n"
     << "                                  10 seconds. Repeat for fallback sources.\n"
@@ -106,7 +108,7 @@ static void printUsage(const char* filename) {
     << "  --help, -h                      Show this help.\n\n"
     << "Examples:\n"
     << "  " << executable << " --directory /data/BorgVR --port 12345\n"
-    << "  " << executable << " -d /data/BorgVR -p 12345 -m 64 --web-port 8080\n"
+    << "  " << executable << " -d /data/BorgVR -p 12345 -m 64 --web-port 8080 --log-file server.log\n"
     << "  " << executable << " -d /data/BorgVR --sync-server 192.168.1.10 12345 300 secret\n";
 }
 
@@ -138,6 +140,9 @@ static void printStartupBanner(const ServerConfiguration& configuration) {
   }
   std::cout << " Password          : "
             << (configuration.password.empty() ? "disabled" : "enabled") << "\n";
+  std::cout << " Log level         : info (l1)\n"
+            << " Log file          : "
+            << (configuration.logFile.empty() ? "disabled" : configuration.logFile) << "\n";
 
   if (configuration.webPort > 0) {
     std::cout << " WebGPU frontend   : http://localhost:" << configuration.webPort << "/\n";
@@ -631,6 +636,14 @@ static ArgumentParseResult parseArguments(int argc,
         logger->error("Invalid WebGPU port: " + value);
         return ArgumentParseResult::ExitFailure;
       }
+    } else if (option == "--log-file") {
+      if (!requireArgumentValue(argc, argv, index, option, configuration.logFile, logger)) {
+        return ArgumentParseResult::ExitFailure;
+      }
+      if (configuration.logFile.empty()) {
+        logger->error("Log file path must not be empty.");
+        return ArgumentParseResult::ExitFailure;
+      }
     } else if (option == "--sync-server") {
       ServerSyncEndpoint endpoint;
       if (!requireArgumentValue(argc, argv, index, option, endpoint.address, logger) ||
@@ -700,6 +713,10 @@ static void printConsoleHelp() {
   std::cout
     << "Commands:\n"
     << "  l  List currently available datasets.\n"
+    << "  l0 Log developer/debug messages and above.\n"
+    << "  l1 Log informational messages and above.\n"
+    << "  l2 Log warnings and errors.\n"
+    << "  l3 Log errors only.\n"
     << "  r  Refresh the server catalog now.\n"
     << "  h  Show this command list.\n"
     << "  q  Stop the server and quit.\n"
@@ -720,6 +737,10 @@ int main(int argc, char** argv) {
   std::error_code directoryError;
   if (!std::filesystem::is_directory(configuration.datasetDirectory, directoryError)) {
     logger->error("Dataset directory does not exist: " + configuration.datasetDirectory);
+    return 2;
+  }
+  if (!configuration.logFile.empty() && !logger->setLogFile(configuration.logFile)) {
+    logger->error("Unable to open log file: " + configuration.logFile);
     return 2;
   }
 
@@ -830,6 +851,18 @@ int main(int argc, char** argv) {
       break;
     } else if (command == "l" || command == "L") {
       printDatasets(server.datasetsSnapshot());
+    } else if (command == "l0" || command == "L0") {
+      logger->setMinLevel(LogLevel::Debug);
+      std::cout << "Log level set to developer/debug (l0).\n" << std::flush;
+    } else if (command == "l1" || command == "L1") {
+      logger->setMinLevel(LogLevel::Info);
+      std::cout << "Log level set to info (l1).\n" << std::flush;
+    } else if (command == "l2" || command == "L2") {
+      logger->setMinLevel(LogLevel::Warning);
+      std::cout << "Log level set to warning (l2).\n" << std::flush;
+    } else if (command == "l3" || command == "L3") {
+      logger->setMinLevel(LogLevel::Error);
+      std::cout << "Log level set to error (l3).\n" << std::flush;
     } else if (command == "r" || command == "R") {
       refreshCatalog();
       logger->info("Server catalog refreshed.");

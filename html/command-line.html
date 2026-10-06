@@ -64,6 +64,7 @@ TerminalConverterApp P &lt;input-file&gt;      &lt;output.data&gt; &lt;descripti
             <div><dt><code>--web-port</code></dt><dd data-de="Aktiviert den eingebetteten WebGPU-Server auf diesem Port.">Enables the embedded WebGPU server on this port.</dd></div>
             <div><dt><code>--web-http</code></dt><dd data-de="Verwendet statt HTTPS lokales HTTP und bindet nur an <code>localhost</code>.">Uses local HTTP instead of HTTPS and binds only to <code>localhost</code>.</dd></div>
             <div><dt><code>--web-certificate</code></dt><dd data-de="PKCS#12-Zertifikat als <code>.p12</code> oder <code>.pfx</code>; das Passwort folgt mit <code>--web-certificate-password</code>.">PKCS#12 certificate as <code>.p12</code> or <code>.pfx</code>; supply its password with <code>--web-certificate-password</code>.</dd></div>
+            <div><dt><code>--log-file</code></dt><dd data-de="Schreibt die Logausgabe zusätzlich in die angegebene Datei.">Also appends log output to the specified file.</dd></div>
           </dl>
           <h3 data-de="Synchronisation">Synchronization</h3>
           <pre><code>TerminalServerApp --directory /srv/borgvr \
@@ -78,15 +79,16 @@ TerminalConverterApp P &lt;input-file&gt;      &lt;output.data&gt; &lt;descripti
           <pre><code>cd BORGVRServerCPP
 make
 make CONFIG=debug
-make run ARGS="12345 64 /path/to/datasets --web-port 8080"</code></pre>
-          <p data-de="Die drei Positionsparameter sind Port, maximale Bricks pro Anfrage und Datensatzverzeichnis. Danach können Scan-Intervall, Passwort, WebGPU-Port und mehrere <code>--sync-server</code>-Optionen folgen.">The three positional arguments are port, maximum bricks per request, and dataset directory. They may be followed by scan interval, password, WebGPU port, and repeatable <code>--sync-server</code> entries.</p>
-          <pre><code>BORGVRServerCPP 12345 64 /data/BorgVR \
+make run ARGS="--directory /path/to/datasets --port 12345 --max-bricks 64 --web-port 8080"</code></pre>
+          <p data-de="Der C++-Server verwendet dieselben Optionsnamen wie der Swift-Server, darunter <code>--directory</code>, <code>--port</code>, <code>--max-bricks</code>, <code>--log-file</code> und wiederholbare <code>--sync-server</code>-Angaben.">The C++ server uses the same option names as the Swift server, including <code>--directory</code>, <code>--port</code>, <code>--max-bricks</code>, <code>--log-file</code>, and repeatable <code>--sync-server</code> entries.</p>
+          <pre><code>BORGVRServerCPP --directory /data/BorgVR --port 12345 --max-bricks 64 \
   --sync-server 192.168.1.10 12345 300 secret</code></pre>
           <p data-de="Unter Windows ist zusätzlich eine Visual-Studio-Solution-Datei enthalten. Die generierten Dateien <code>src/GeneratedWebAssets.cpp</code> und <code>src/GeneratedWebAssets.h</code> sind Build-Artefakte und werden nicht im Repository versioniert.">A Visual Studio solution is also included for Windows. The generated files <code>src/GeneratedWebAssets.cpp</code> and <code>src/GeneratedWebAssets.h</code> are build artifacts and are not tracked in the repository.</p>
         </section>
 
         <section>
           <h2 data-de="Ausgabe und Automatisierung">Output and automation</h2>
+          <p data-de="Während beide Server laufen, wählt <code>l0</code> Entwickler-/Debugausgaben, <code>l1</code> normale Informationen, <code>l2</code> Warnungen und <code>l3</code> ausschließlich Fehler. Der Befehl <code>l</code> listet weiterhin die verfügbaren Datensätze auf.">While either server is running, <code>l0</code> selects developer/debug output, <code>l1</code> normal information, <code>l2</code> warnings, and <code>l3</code> errors only. The <code>l</code> command continues to list available datasets.</p>
           <p data-de="Beide Swift-Werkzeuge geben mit <code>--version</code> ihre Version aus und verwenden bei ungültigen Argumenten einen von null verschiedenen Exit-Code. Der Konverter protokolliert Dimensionen, Brick-Anzahl, Kompressionsstatistik, Wertebereich, Metadaten, Dateigröße und Laufzeit; dadurch lässt er sich gut in reproduzierbare Abläufe integrieren.">Both Swift tools report their version with <code>--version</code> and return a non-zero exit status for invalid arguments. The converter logs dimensions, brick counts, compression statistics, value range, metadata, file size, and elapsed time, making it suitable for reproducible pipelines.</p>
           <div class="button-row"><a class="btn btn--primary" href="https://github.com/JensDerKrueger/BorgVR" data-de="GitHub-Repository">GitHub repository</a><a class="btn btn--ghost" href="./server.html" data-de="Grafische Server-App">Graphical server app</a></div>
         </section>
