@@ -223,7 +223,16 @@ func loadCertificate(from path: String?) -> Data {
   }
 }
 
-func printStartupBanner(_ config: ServerConfiguration) {
+func logLevelDescription(_ level: LogLevel) -> String {
+  switch level {
+    case .dev, .progress: "developer/debug (l0)"
+    case .info: "info (l1)"
+    case .warning: "warning (l2)"
+    case .error: "error (l3)"
+  }
+}
+
+func printStartupBanner(_ config: ServerConfiguration, logLevel: LogLevel = .info) {
   let cyan = "\u{001B}[36m"
   let reset = "\u{001B}[0m"
   print("\(cyan)\n\(TerminalServerInfo.banner)\n\(reset)")
@@ -240,7 +249,7 @@ func printStartupBanner(_ config: ServerConfiguration) {
     print(" Scan interval     : disabled")
   }
   print(" Password          : \(config.password.isEmpty ? "disabled" : "enabled")")
-  print(" Log level         : info (l1)")
+  print(" Log level         : \(logLevelDescription(logLevel))")
   print(" Log file          : \(config.logFilePath ?? "disabled")")
   if let webPort = config.webPort {
     let scheme = config.useWebServerTLS ? "https" : "http"
@@ -305,6 +314,7 @@ func printConsoleHelp() {
     l1 Log informational messages and above.
     l2 Log warnings and errors.
     l3 Log errors only.
+    i  Show the startup and server configuration information.
     r  Refresh the server catalog now.
     h  Show this command list.
     q  Stop the server and quit.
@@ -326,6 +336,12 @@ final class TerminalLogger: LoggerBase {
     lock.lock()
     minimumLevel = level
     lock.unlock()
+  }
+
+  var currentLevel: LogLevel {
+    lock.lock()
+    defer { lock.unlock() }
+    return minimumLevel
   }
 
   private func emit(level: LogLevel, _ action: (LoggerBase) -> Void) {
@@ -390,7 +406,7 @@ if let logFilePath = config.logFilePath {
 let logger = TerminalLogger(destinations: logDestinations)
 let host = BorgVRServerHost(logger: logger)
 
-printStartupBanner(config)
+printStartupBanner(config, logLevel: logger.currentLevel)
 logger.info("Scanning server catalog in \(config.dataDirectory)")
 let state = host.start(configuration: serverConfiguration)
 
@@ -474,6 +490,8 @@ while let line = readLine() {
     case "l3":
       logger.setMinimumLogLevel(.error)
       print("Log level set to error (l3).")
+    case "i":
+      printStartupBanner(config, logLevel: logger.currentLevel)
     case "r":
       runtimeQueue.sync {
         _ = host.refreshCatalog(configuration: serverConfiguration)

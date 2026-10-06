@@ -269,8 +269,8 @@ make run ARGS="--directory /path/to/datasets --port 12345 --max-bricks 64 --web-
 The Swift and C++ command-line servers use the same option names for their shared features. See the
 server's command-line help for password, scan interval, WebGPU port, sync-server, and `--log-file`
 options. While either server is running, enter `l` to list its current datasets, `l0` through `l3`
-to select developer/debug, info, warning, or error output, `r` to refresh the catalog, `h` for
-console help, or `q` to stop it.
+to select developer/debug, info, warning, or error output, `i` to repeat the startup information,
+`r` to refresh the catalog, `h` for console help, or `q` to stop it.
 
 ### Apple Vision Pro Development
 

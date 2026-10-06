@@ -26,6 +26,10 @@ public:
     minLevel_.store(static_cast<int>(lvl), std::memory_order_relaxed);
   }
 
+  LogLevel minLevel() const {
+    return static_cast<LogLevel>(minLevel_.load(std::memory_order_relaxed));
+  }
+
   bool setLogFile(const std::string& path) {
     std::lock_guard<std::mutex> lock(mu_);
     file_.close();

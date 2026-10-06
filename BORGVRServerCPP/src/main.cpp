@@ -112,7 +112,17 @@ static void printUsage(const char* filename) {
     << "  " << executable << " -d /data/BorgVR --sync-server 192.168.1.10 12345 300 secret\n";
 }
 
-static void printStartupBanner(const ServerConfiguration& configuration) {
+static const char* logLevelDescription(LogLevel level) {
+  switch (level) {
+    case LogLevel::Debug: return "developer/debug (l0)";
+    case LogLevel::Info: return "info (l1)";
+    case LogLevel::Warning: return "warning (l2)";
+    case LogLevel::Error: return "error (l3)";
+  }
+  return "unknown";
+}
+
+static void printStartupBanner(const ServerConfiguration& configuration, LogLevel logLevel) {
   constexpr const char* cyan = "\033[36m";
   constexpr const char* reset = "\033[0m";
   std::cout
@@ -140,7 +150,7 @@ static void printStartupBanner(const ServerConfiguration& configuration) {
   }
   std::cout << " Password          : "
             << (configuration.password.empty() ? "disabled" : "enabled") << "\n";
-  std::cout << " Log level         : info (l1)\n"
+  std::cout << " Log level         : " << logLevelDescription(logLevel) << "\n"
             << " Log file          : "
             << (configuration.logFile.empty() ? "disabled" : configuration.logFile) << "\n";
 
@@ -717,6 +727,7 @@ static void printConsoleHelp() {
     << "  l1 Log informational messages and above.\n"
     << "  l2 Log warnings and errors.\n"
     << "  l3 Log errors only.\n"
+    << "  i  Show the startup and server configuration information.\n"
     << "  r  Refresh the server catalog now.\n"
     << "  h  Show this command list.\n"
     << "  q  Stop the server and quit.\n"
@@ -744,7 +755,7 @@ int main(int argc, char** argv) {
     return 2;
   }
 
-  printStartupBanner(configuration);
+  printStartupBanner(configuration, logger->minLevel());
 
   auto datasets = scanDatasetDirectory(configuration.datasetDirectory, logger);
   auto transferFunctions = scanTransferFunctionDirectory(configuration.datasetDirectory, logger);
@@ -863,6 +874,8 @@ int main(int argc, char** argv) {
     } else if (command == "l3" || command == "L3") {
       logger->setMinLevel(LogLevel::Error);
       std::cout << "Log level set to error (l3).\n" << std::flush;
+    } else if (command == "i" || command == "I") {
+      printStartupBanner(configuration, logger->minLevel());
     } else if (command == "r" || command == "R") {
       refreshCatalog();
       logger->info("Server catalog refreshed.");
