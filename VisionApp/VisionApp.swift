@@ -481,6 +481,11 @@ struct VisionApp: App {
         )
         try? sharedAppModel.modelTransform.save(to: fileURL)
       }
+      sharedAppModel.saveAutomaticallyManagedDatasetState(
+        datasetID: dataset.uniqueId,
+        storedAppModel: storedAppModel,
+        logger: runtimeAppModel.logger
+      )
     }
     runtimeAppModel.completeDatasetClose(
       requestID: requestID,

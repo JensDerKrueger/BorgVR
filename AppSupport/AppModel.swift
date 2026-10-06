@@ -637,6 +637,102 @@ final class AppModel: ObservableObject {
     }
   }
 
+  func objectFileURL(for dataset: DatasetEntry? = nil) -> URL? {
+    guard let dataset = dataset ?? activeDataset else { return nil }
+    if case .local = dataset.source {
+      return localCompanionFileURL(
+        for: dataset,
+        fileExtension: BorgVRMarkerFormat.fileExtension
+      )
+    }
+    return DatasetStateStorage.objectFileURL(datasetID: dataset.uniqueId, logger: logger)
+  }
+
+  func measurementFileURL(for dataset: DatasetEntry? = nil) -> URL? {
+    guard let dataset = dataset ?? activeDataset else { return nil }
+    if case .local = dataset.source {
+      return localCompanionFileURL(
+        for: dataset,
+        fileExtension: BorgVRMeasurementFormat.fileExtension
+      )
+    }
+    return DatasetStateStorage.measurementFileURL(datasetID: dataset.uniqueId, logger: logger)
+  }
+
+  func loadAutomaticallyManagedDatasetState(
+    appSettings: AppSettings,
+    metadata: BORGVRMetaData
+  ) {
+    guard let dataset = activeDataset else { return }
+
+    if appSettings.autoloadObjects,
+       let url = objectFileURL(for: dataset),
+       FileManager.default.fileExists(atPath: url.path) {
+      do {
+        let contents = try DatasetStateStorage.loadObjects(
+          datasetID: dataset.uniqueId,
+          from: url
+        )
+        replaceVolumeMarkers(contents.markers)
+        replaceSceneMeshInstances(contents.meshInstances)
+      } catch {
+        logger.warning("Automatically loading objects failed: \(error.localizedDescription)")
+      }
+    }
+
+    if appSettings.autoloadMeasurements,
+       let url = measurementFileURL(for: dataset),
+       FileManager.default.fileExists(atPath: url.path) {
+      do {
+        replaceVolumeMeasurements(try DatasetStateStorage.loadMeasurements(
+          datasetID: dataset.uniqueId,
+          physicalExtent: metadata.physicalExtentMeters,
+          from: url
+        ))
+      } catch {
+        logger.warning("Automatically loading measurements failed: \(error.localizedDescription)")
+      }
+    }
+  }
+
+  func saveAutomaticallyManagedDatasetState(appSettings: AppSettings) {
+    guard let dataset = activeDataset else { return }
+
+    if appSettings.autoloadObjects, let url = objectFileURL(for: dataset) {
+      do {
+        if volumeMarkers.isEmpty && sceneMeshInstances.isEmpty {
+          try DatasetStateStorage.removeFileIfPresent(at: url)
+        } else {
+          try DatasetStateStorage.saveObjects(
+            datasetID: dataset.uniqueId,
+            markers: volumeMarkers,
+            meshInstances: sceneMeshInstances,
+            to: url
+          )
+        }
+      } catch {
+        logger.warning("Automatically saving objects failed: \(error.localizedDescription)")
+      }
+    }
+
+    if appSettings.autoloadMeasurements, let url = measurementFileURL(for: dataset) {
+      do {
+        let measurements = volumeMeasurements.filter { !$0.points.isEmpty }
+        if measurements.isEmpty {
+          try DatasetStateStorage.removeFileIfPresent(at: url)
+        } else {
+          try DatasetStateStorage.saveMeasurements(
+            datasetID: dataset.uniqueId,
+            measurements: measurements,
+            to: url
+          )
+        }
+      } catch {
+        logger.warning("Automatically saving measurements failed: \(error.localizedDescription)")
+      }
+    }
+  }
+
   func datasetRenderKey(for dataset: DatasetEntry?) -> String {
     guard let dataset else { return "" }
     let sourceKey: String
@@ -742,6 +838,21 @@ final class AppModel: ObservableObject {
 
   private func documentsDirectoryURL() -> URL? {
     FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
+  }
+
+  private func localCompanionFileURL(
+    for dataset: DatasetEntry,
+    fileExtension: String
+  ) -> URL? {
+    let datasetURL: URL
+    if dataset.identifier.hasPrefix("/") {
+      datasetURL = URL(fileURLWithPath: dataset.identifier)
+    } else if let documentsURL = documentsDirectoryURL() {
+      datasetURL = documentsURL.appendingPathComponent(dataset.identifier)
+    } else {
+      return nil
+    }
+    return datasetURL.deletingPathExtension().appendingPathExtension(fileExtension)
   }
 
   private func sanitizedTransferFunctionFilename(_ filename: String) -> String {

@@ -116,6 +116,8 @@ final class StoredAppModel: ObservableObject {
     "webServerCertificateData": Data(),
     "sharePlayWebServerPort": BorgVRSharedDefaults.sharePlayWebServerPort,
     "autoloadTF": false,
+    "autoloadObjects": false,
+    "autoloadMeasurements": false,
     "autoloadTransform": false,
     "disableFoveation": false,
     "requestLowResLOD": true,
@@ -236,6 +238,12 @@ final class StoredAppModel: ObservableObject {
   @AppStorage("sharePlayWebServerPort") var sharePlayWebServerPort: Int = StoredAppModel.int("sharePlayWebServerPort")
   /// Whether to automatically load the transfer function.
   @AppStorage("autoloadTF") var autoloadTF: Bool = StoredAppModel.bool("autoloadTF")
+  /// Whether to automatically load and save placed objects and annotations.
+  @AppStorage("autoloadObjects")
+  var autoloadObjects: Bool = StoredAppModel.bool("autoloadObjects")
+  /// Whether to automatically load and save measurements.
+  @AppStorage("autoloadMeasurements")
+  var autoloadMeasurements: Bool = StoredAppModel.bool("autoloadMeasurements")
   /// Whether to automatically load the object transfomration.
   @AppStorage("autoloadTransform") var autoloadTransform: Bool = StoredAppModel.bool("autoloadTransform")
   /// Whether to disable the built-in foveation feature

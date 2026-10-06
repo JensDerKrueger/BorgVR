@@ -155,6 +155,9 @@ struct MobileMeasurementView: View {
         fileError = error
       }
     }
+    .fileDialogDefaultDirectory(
+      DatasetStateStorage.measurementDirectoryURL(logger: appModel.logger)
+    )
     .confirmationDialog("measurement_dataset_mismatch_title", isPresented: $warnsAboutDataset) {
       Button("measurement_dataset_mismatch_load") { continueLoading() }
       Button("Cancel", role: .cancel) { pendingMeasurements = [] }

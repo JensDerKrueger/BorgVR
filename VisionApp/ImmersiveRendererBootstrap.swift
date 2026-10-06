@@ -136,6 +136,14 @@ enum ImmersiveBootstrap {
       )
       try? sharedAppModel.loadTransform(from: fileURL)
     }
+    if let datasetInfo = runtimeAppModel.activeDatasetInfo {
+      sharedAppModel.loadAutomaticallyManagedDatasetState(
+        datasetID: activeDataset.uniqueId,
+        physicalExtent: datasetInfo.physicalExtentMeters,
+        storedAppModel: storedAppModel,
+        logger: runtimeAppModel.logger
+      )
+    }
 
     sharedAppModel.datasetRendererDidLoad()
 

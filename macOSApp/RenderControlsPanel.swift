@@ -16,6 +16,10 @@ struct RenderControlsPanel: View {
   @State private var selectedInteractionMode: AppModel.InteractionMode = .model
   @State private var copiedWebGPUShareLink = false
   @State private var showLeaveSharePlayConfirmation = false
+  @State private var pendingDatasetStateSave: DatasetStateSavePlan?
+  @State private var showDatasetStateOverwriteConfirmation = false
+  @State private var showNoDatasetStateToSave = false
+  @State private var datasetStateSaveError: Error?
 
   var body: some View {
     VStack(spacing: 8) {
@@ -85,6 +89,15 @@ struct RenderControlsPanel: View {
         }
         .accessibilityLabel("dataset_info_button")
         .help("dataset_info_button_help")
+        .buttonStyle(.bordered)
+
+        Button {
+          requestDatasetStateSave()
+        } label: {
+          Image(systemName: "archivebox")
+        }
+        .accessibilityLabel("Save Dataset State")
+        .help("Save Dataset State")
         .buttonStyle(.bordered)
 
         if appSettings.showLogButton {
@@ -220,6 +233,33 @@ struct RenderControlsPanel: View {
       }
     } message: {
       Text("Closing this dataset will leave the current SharePlay session.")
+    }
+    .alert(
+      "Overwrite Existing Files?",
+      isPresented: $showDatasetStateOverwriteConfirmation
+    ) {
+      Button("Cancel", role: .cancel) { pendingDatasetStateSave = nil }
+      Button("Overwrite") {
+        if let plan = pendingDatasetStateSave { saveDatasetState(using: plan) }
+      }
+    } message: {
+      Text("One or more files for this dataset already exist. Do you want to replace them?")
+    }
+    .alert("Nothing to Save", isPresented: $showNoDatasetStateToSave) {
+      Button("OK", role: .cancel) {}
+    } message: {
+      Text("There is no active transfer function and there are no objects or measurements to save.")
+    }
+    .alert(
+      "Unable to Save Dataset State",
+      isPresented: Binding(
+        get: { datasetStateSaveError != nil },
+        set: { if !$0 { datasetStateSaveError = nil } }
+      )
+    ) {
+      Button("OK", role: .cancel) { datasetStateSaveError = nil }
+    } message: {
+      Text(datasetStateSaveError?.localizedDescription ?? "")
     }
   }
 
@@ -443,15 +483,70 @@ struct RenderControlsPanel: View {
        let fileURL = appModel.transferFunctionFileURL() {
       try? renderingParameters.transferFunction.save(to: fileURL)
     }
+    appModel.saveAutomaticallyManagedDatasetState(appSettings: appSettings)
     if leavingSharePlay {
       sharePlay.leaveGroupActivity()
     } else {
       sharePlay.closeSharedDataset()
     }
     appModel.removeAllVolumeMarkers()
+    appModel.replaceSceneMeshInstances([])
     appModel.removeAllVolumeMeasurements()
     docking.resetForDatasetClose()
     appModel.closeDataset(destination: .datasetSelection)
+  }
+
+  private func requestDatasetStateSave() {
+    let plan = makeDatasetStateSavePlan()
+    guard !plan.isEmpty else {
+      showNoDatasetStateToSave = true
+      return
+    }
+    pendingDatasetStateSave = plan
+    if plan.hasExistingFiles {
+      showDatasetStateOverwriteConfirmation = true
+    } else {
+      saveDatasetState(using: plan)
+    }
+  }
+
+  private func makeDatasetStateSavePlan() -> DatasetStateSavePlan {
+    let hasObjects = !appModel.volumeMarkers.isEmpty || !appModel.sceneMeshInstances.isEmpty
+    let hasMeasurements = appModel.volumeMeasurements.contains { !$0.points.isEmpty }
+    return DatasetStateSavePlan(
+      transferFunctionURL: renderingParameters.renderMode == .isoValue
+        ? nil
+        : appModel.transferFunctionFileURL(),
+      objectURL: hasObjects ? appModel.objectFileURL() : nil,
+      measurementURL: hasMeasurements ? appModel.measurementFileURL() : nil
+    )
+  }
+
+  private func saveDatasetState(using plan: DatasetStateSavePlan) {
+    defer { pendingDatasetStateSave = nil }
+    guard let dataset = appModel.activeDataset else { return }
+    do {
+      if let url = plan.transferFunctionURL {
+        try renderingParameters.transferFunction.save(to: url, description: dataset.description)
+      }
+      if let url = plan.objectURL {
+        try DatasetStateStorage.saveObjects(
+          datasetID: dataset.uniqueId,
+          markers: appModel.volumeMarkers,
+          meshInstances: appModel.sceneMeshInstances,
+          to: url
+        )
+      }
+      if let url = plan.measurementURL {
+        try DatasetStateStorage.saveMeasurements(
+          datasetID: dataset.uniqueId,
+          measurements: appModel.volumeMeasurements,
+          to: url
+        )
+      }
+    } catch {
+      datasetStateSaveError = error
+    }
   }
 
   private var canCopyWebGPUShareLink: Bool {

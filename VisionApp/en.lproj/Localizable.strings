@@ -1213,3 +1213,13 @@
 "lighting_inactive_warning" = "Lighting settings have no effect in Transfer Function mode without lighting.";
 "Snap to Volume" = "Snap to Volume";
 "Place Objects" = "Place Objects";
+"settings_toggle_autoload_objects" = "Automatically Load and Save Objects";
+"settings_toggle_autoload_measurements" = "Automatically Load and Save Measurements";
+"Save Dataset State" = "Save Dataset State";
+"Overwrite Existing Files?" = "Overwrite Existing Files?";
+"Overwrite" = "Overwrite";
+"One or more files for this dataset already exist. Do you want to replace them?" = "One or more files for this dataset already exist. Do you want to replace them?";
+"Nothing to Save" = "Nothing to Save";
+"There is no active transfer function and there are no objects or measurements to save." = "There is no active transfer function and there are no objects or measurements to save.";
+"Unable to Save Dataset State" = "Unable to Save Dataset State";
+"The saved data belongs to a different dataset." = "The saved data belongs to a different dataset.";

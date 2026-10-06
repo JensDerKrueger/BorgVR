@@ -207,6 +207,9 @@ struct MeasurementView: View {
     ) { result in
       handleMeasurementExportResult(result)
     }
+    .fileDialogDefaultDirectory(
+      DatasetStateStorage.measurementDirectoryURL(logger: runtimeAppModel.logger)
+    )
     .alert(
       "measurement_file_error_title",
       isPresented: $showMeasurementFileError,

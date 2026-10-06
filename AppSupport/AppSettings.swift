@@ -158,6 +158,8 @@ final class AppSettings: ObservableObject {
     "webServerCertificateData": Data(),
     "sharePlayWebServerPort": BorgVRSharedDefaults.sharePlayWebServerPort,
     "autoloadTF": false,
+    "autoloadObjects": false,
+    "autoloadMeasurements": false,
     "autoloadTransform": false,
     "requestLowResLOD": true,
     "stopOnMiss": false,
@@ -216,6 +218,9 @@ final class AppSettings: ObservableObject {
   @AppStorage("webServerCertificateData") var webServerCertificateData: Data = AppSettings.data("webServerCertificateData")
   @AppStorage("sharePlayWebServerPort") var sharePlayWebServerPort: Int = AppSettings.int("sharePlayWebServerPort")
   @AppStorage("autoloadTF") var autoloadTF: Bool = AppSettings.bool("autoloadTF")
+  @AppStorage("autoloadObjects") var autoloadObjects: Bool = AppSettings.bool("autoloadObjects")
+  @AppStorage("autoloadMeasurements")
+  var autoloadMeasurements: Bool = AppSettings.bool("autoloadMeasurements")
   @AppStorage("autoloadTransform") var autoloadTransform: Bool = AppSettings.bool("autoloadTransform")
   @AppStorage("requestLowResLOD") var requestLowResLOD: Bool = AppSettings.bool("requestLowResLOD")
   @AppStorage("stopOnMiss") var stopOnMiss: Bool = AppSettings.bool("stopOnMiss")
@@ -331,6 +336,8 @@ final class AppSettings: ObservableObject {
 
   func resetGeneralDefaults() {
     autoloadTF = Self.boolDefault("autoloadTF")
+    autoloadObjects = Self.boolDefault("autoloadObjects")
+    autoloadMeasurements = Self.boolDefault("autoloadMeasurements")
     autoloadTransform = Self.boolDefault("autoloadTransform")
     showBrickVisualization = Self.boolDefault("showBrickVisualization")
     showLogButton = Self.boolDefault("showLogButton")

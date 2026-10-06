@@ -1,6 +1,86 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "Automatically load/save measurements" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Messungen automatisch laden/speichern" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Automatically load/save measurements" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Cargar/guardar mediciones automáticamente" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Charger/enregistrer automatiquement les mesures" } }
+      }
+    },
+    "Automatically load/save objects" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Objekte automatisch laden/speichern" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Automatically load/save objects" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Cargar/guardar objetos automáticamente" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Charger/enregistrer automatiquement les objets" } }
+      }
+    },
+    "Nothing to Save" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Nichts zu speichern" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Nothing to Save" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Nada que guardar" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Rien à enregistrer" } }
+      }
+    },
+    "One or more files for this dataset already exist. Do you want to replace them?" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Eine oder mehrere Dateien für diesen Datensatz sind bereits vorhanden. Möchten Sie sie ersetzen?" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "One or more files for this dataset already exist. Do you want to replace them?" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Ya existen uno o varios archivos para este conjunto de datos. ¿Desea reemplazarlos?" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Un ou plusieurs fichiers existent déjà pour ce jeu de données. Voulez-vous les remplacer ?" } }
+      }
+    },
+    "Overwrite" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Überschreiben" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Overwrite" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Sobrescribir" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Remplacer" } }
+      }
+    },
+    "Overwrite Existing Files?" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Vorhandene Dateien überschreiben?" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Overwrite Existing Files?" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "¿Sobrescribir los archivos existentes?" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Remplacer les fichiers existants ?" } }
+      }
+    },
+    "Save Dataset State" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Datensatzzustand speichern" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Save Dataset State" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Guardar estado del conjunto de datos" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Enregistrer l’état du jeu de données" } }
+      }
+    },
+    "There is no active transfer function and there are no objects or measurements to save." : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Es gibt keine aktive Transferfunktion und keine Objekte oder Messungen, die gespeichert werden können." } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "There is no active transfer function and there are no objects or measurements to save." } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "No hay ninguna función de transferencia activa ni objetos o mediciones que guardar." } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Il n’y a aucune fonction de transfert active, ni objet ou mesure à enregistrer." } }
+      }
+    },
+    "The saved data belongs to a different dataset." : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Die gespeicherten Daten gehören zu einem anderen Datensatz." } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "The saved data belongs to a different dataset." } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Los datos guardados pertenecen a otro conjunto de datos." } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Les données enregistrées appartiennent à un autre jeu de données." } }
+      }
+    },
+    "Unable to Save Dataset State" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Datensatzzustand konnte nicht gespeichert werden" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Unable to Save Dataset State" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "No se pudo guardar el estado del conjunto de datos" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Impossible d’enregistrer l’état du jeu de données" } }
+      }
+    },
     "" : {
 
     },

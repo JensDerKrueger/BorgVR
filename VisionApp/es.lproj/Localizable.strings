@@ -1213,3 +1213,13 @@
 "lighting_inactive_warning" = "Los ajustes de iluminación no tienen efecto en el modo de función de transferencia sin iluminación.";
 "Snap to Volume" = "Ajustar al volumen";
 "Place Objects" = "Colocar objetos";
+"settings_toggle_autoload_objects" = "Cargar y guardar objetos automáticamente";
+"settings_toggle_autoload_measurements" = "Cargar y guardar mediciones automáticamente";
+"Save Dataset State" = "Guardar estado del conjunto de datos";
+"Overwrite Existing Files?" = "¿Sobrescribir los archivos existentes?";
+"Overwrite" = "Sobrescribir";
+"One or more files for this dataset already exist. Do you want to replace them?" = "Ya existen uno o varios archivos para este conjunto de datos. ¿Desea reemplazarlos?";
+"Nothing to Save" = "Nada que guardar";
+"There is no active transfer function and there are no objects or measurements to save." = "No hay ninguna función de transferencia activa ni objetos o mediciones que guardar.";
+"Unable to Save Dataset State" = "No se pudo guardar el estado del conjunto de datos";
+"The saved data belongs to a different dataset." = "Los datos guardados pertenecen a otro conjunto de datos.";

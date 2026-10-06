@@ -306,6 +306,8 @@ struct SettingsView: View {
   private var generalSection: some View {
     Section("Behavior") {
       Toggle("Automatically load/save transfer functions", isOn: $appSettings.autoloadTF)
+      Toggle("Automatically load/save objects", isOn: $appSettings.autoloadObjects)
+      Toggle("Automatically load/save measurements", isOn: $appSettings.autoloadMeasurements)
       Toggle("Show Brick Visualization", isOn: $appSettings.showBrickVisualization)
       Toggle("Show Log Button", isOn: $appSettings.showLogButton)
     }

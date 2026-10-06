@@ -242,7 +242,7 @@ final class SharePlayCoordinator: ObservableObject {
 
   private func refreshAdvertisedSceneMeshAssetsIfNeeded() {
     guard let appModel,
-          let dataset = appModel.activeDataset else { return }
+          appModel.activeDataset != nil else { return }
     let referencedAssetIDs = Set(appModel.sceneMeshInstances.map(\.asset.assetID))
     guard !referencedAssetIDs.isSubset(of: sharePlayMeshAssetIDs) else { return }
     Task { await advertiseCurrentLocalDataset() }

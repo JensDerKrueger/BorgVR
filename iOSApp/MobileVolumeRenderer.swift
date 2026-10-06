@@ -4,6 +4,7 @@ import UIKit
 @MainActor
 final class MobileVolumeRenderer: NSObject, MTKViewDelegate, UIGestureRecognizerDelegate {
   private let appModel: AppModel
+  private let appSettings: AppSettings
   private let sharePlay: SharePlayCoordinator
   private let core: ScreenVolumeRendererCore
   private var twoFingerPanRecognizer: UIPanGestureRecognizer?
@@ -16,6 +17,7 @@ final class MobileVolumeRenderer: NSObject, MTKViewDelegate, UIGestureRecognizer
     sharePlay: SharePlayCoordinator
   ) {
     self.appModel = appModel
+    self.appSettings = appSettings
     self.sharePlay = sharePlay
     self.core = ScreenVolumeRendererCore(
       appModel: appModel,
@@ -46,6 +48,10 @@ final class MobileVolumeRenderer: NSObject, MTKViewDelegate, UIGestureRecognizer
         appModel.markRenderedDataset(key: "")
       case .loaded(let key, let metadata):
         appModel.markRenderedDataset(key: key, metadata: metadata)
+        appModel.loadAutomaticallyManagedDatasetState(
+          appSettings: appSettings,
+          metadata: metadata
+        )
         sharePlay.datasetRendererDidLoad()
       case .failed(let key, _):
         appModel.markRenderedDatasetFailed(key: key)

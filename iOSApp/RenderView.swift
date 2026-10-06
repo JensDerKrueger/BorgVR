@@ -1,6 +1,18 @@
 import SwiftUI
 import simd
 
+private enum RenderSheet: String, Identifiable {
+  case log
+  case datasetInfo
+  case objects
+  case isoEditor
+  case transferEditor
+  case lighting
+  case measurements
+
+  var id: String { rawValue }
+}
+
 struct RenderView: View {
   @Environment(\.horizontalSizeClass) private var horizontalSizeClass
   @Environment(\.verticalSizeClass) private var verticalSizeClass
@@ -10,19 +22,13 @@ struct RenderView: View {
   @EnvironmentObject private var serverController: BackgroundServerController
   @EnvironmentObject private var sharePlay: SharePlayCoordinator
 
-  @State private var showTransferEditor = false
-  @State private var showIsoEditor = false
-  @State private var showLog = false
-  @State private var showDatasetInfo = false
+  @State private var presentedSheet: RenderSheet?
   @State private var showRenderControls = true
   @State private var previousDragTranslation = CGSize.zero
   @State private var previousMagnification: CGFloat = 1
   @State private var transferSmoothCenter: Float = 0.25
   @State private var transferSmoothWidth: Float = 0.3
   @State private var copiedWebGPUShareLink = false
-  @State private var showMarkerEditor = false
-  @State private var showLightingEditor = false
-  @State private var showMeasurementEditor = false
   @State private var markerDragID: UUID?
   @State private var strokeDragID: UUID?
   @State private var sceneObjectDragID: UUID?
@@ -30,6 +36,10 @@ struct RenderView: View {
   @State private var measurementDragPointID: UUID?
   @State private var arcballStartOrientation: simd_quatf?
   @State private var showLeaveSharePlayConfirmation = false
+  @State private var pendingDatasetStateSave: DatasetStateSavePlan?
+  @State private var showDatasetStateOverwriteConfirmation = false
+  @State private var showNoDatasetStateToSave = false
+  @State private var datasetStateSaveError: Error?
   @StateObject private var renderSurface = MobileRenderSurface()
 
   private let clippingSensitivity: Float = 0.0012
@@ -52,73 +62,76 @@ struct RenderView: View {
 
       renderContent(for: layout)
     }
-    .sheet(isPresented: $showLog) {
-      LoggerView(logger: appModel.logger)
-    }
-    .sheet(isPresented: $showDatasetInfo) {
-      DatasetInfoView(
-        dataset: appModel.activeDataset,
-        metadata: appModel.activeDatasetMetadata
-      ) {
-        showDatasetInfo = false
+    .sheet(item: $presentedSheet) { sheet in
+      switch sheet {
+        case .log:
+          LoggerView(logger: appModel.logger)
+
+        case .datasetInfo:
+          DatasetInfoView(
+            dataset: appModel.activeDataset,
+            metadata: appModel.activeDatasetMetadata
+          ) {
+            dismissToolSheet(.datasetInfo)
+          }
+
+        case .objects:
+          MobileMarkerView()
+            .environmentObject(appModel)
+            .environmentObject(sharePlay)
+
+        case .isoEditor:
+          IsovalueEditorView(
+            usesPanelBackground: false,
+            onClose: { dismissToolSheet(.isoEditor) }
+          )
+          .environmentObject(renderingParameters)
+          .frame(maxWidth: 720)
+          .padding()
+          .presentationDetents([.height(140), .medium])
+          .presentationDragIndicator(.visible)
+          .presentationBackgroundInteraction(.enabled)
+
+        case .transferEditor:
+          TransferFunctionEditorView(
+            usesPanelBackground: false,
+            usesFlexibleCanvasHeight: true,
+            catalogDirectoryURLs: transferFunctionCatalogDirectoryURLs,
+            onClose: { dismissToolSheet(.transferEditor) }
+          )
+          .environmentObject(renderingParameters)
+          .frame(maxWidth: 720, maxHeight: .infinity)
+          .padding()
+          .presentationDetents([.height(300), .medium, .large])
+          .presentationDragIndicator(.visible)
+          .presentationBackgroundInteraction(.enabled)
+
+        case .lighting:
+          LightingEditorView(
+            renderMode: renderingParameters.renderMode,
+            lightDirection: $renderingParameters.lightDirection,
+            ambientLightColor: $renderingParameters.ambientLightColor,
+            diffuseLightColor: $renderingParameters.diffuseLightColor,
+            specularLightColor: $renderingParameters.specularLightColor,
+            usesPanelBackground: false,
+            usesHorizontalLayout: true,
+            onChange: synchronizeState,
+            onCommit: sharePlay.flushSynchronization,
+            onClose: { dismissToolSheet(.lighting) }
+          )
+          .padding()
+          .presentationDetents([
+            .height(renderingParameters.renderMode == .transferFunction1D ? 290 : 240),
+            .medium,
+            .large
+          ])
+          .presentationBackgroundInteraction(.enabled)
+
+        case .measurements:
+          MobileMeasurementView()
+            .environmentObject(appModel)
+            .environmentObject(sharePlay)
       }
-    }
-    .sheet(isPresented: $showMarkerEditor) {
-      MobileMarkerView()
-        .environmentObject(appModel)
-        .environmentObject(sharePlay)
-    }
-    .sheet(isPresented: $showIsoEditor) {
-      IsovalueEditorView(
-        usesPanelBackground: false,
-        onClose: { showIsoEditor = false }
-      )
-      .environmentObject(renderingParameters)
-      .frame(maxWidth: 720)
-      .padding()
-      .presentationDetents([.height(140), .medium])
-      .presentationDragIndicator(.visible)
-      .presentationBackgroundInteraction(.enabled)
-    }
-    .sheet(isPresented: $showTransferEditor) {
-      TransferFunctionEditorView(
-        usesPanelBackground: false,
-        usesFlexibleCanvasHeight: true,
-        catalogDirectoryURLs: transferFunctionCatalogDirectoryURLs,
-        onClose: { showTransferEditor = false }
-      )
-      .environmentObject(renderingParameters)
-      .frame(maxWidth: 720, maxHeight: .infinity)
-      .padding()
-      .presentationDetents([.height(300), .medium, .large])
-      .presentationDragIndicator(.visible)
-      .presentationBackgroundInteraction(.enabled)
-    }
-    .sheet(isPresented: $showLightingEditor) {
-      LightingEditorView(
-        renderMode: renderingParameters.renderMode,
-        lightDirection: $renderingParameters.lightDirection,
-        ambientLightColor: $renderingParameters.ambientLightColor,
-        diffuseLightColor: $renderingParameters.diffuseLightColor,
-        specularLightColor: $renderingParameters.specularLightColor,
-        usesPanelBackground: false,
-        usesHorizontalLayout: true,
-        onChange: synchronizeState,
-        onCommit: sharePlay.flushSynchronization,
-        onClose: { showLightingEditor = false }
-      )
-      .padding()
-      .presentationDetents([
-        .height(renderingParameters.renderMode == .transferFunction1D ? 290 : 240),
-        .medium,
-        .large
-      ])
-      .presentationBackgroundInteraction(.enabled)
-    }
-    .sheet(isPresented: $showMeasurementEditor) {
-      MobileMeasurementView()
-        .environmentObject(appModel)
-        .environmentObject(sharePlay)
     }
     .alert("Leave SharePlay?", isPresented: $showLeaveSharePlayConfirmation) {
       Button("Cancel", role: .cancel) {}
@@ -128,14 +141,41 @@ struct RenderView: View {
     } message: {
       Text("Closing this dataset will leave the current SharePlay session.")
     }
+    .alert(
+      "Overwrite Existing Files?",
+      isPresented: $showDatasetStateOverwriteConfirmation
+    ) {
+      Button("Cancel", role: .cancel) { pendingDatasetStateSave = nil }
+      Button("Overwrite") {
+        if let plan = pendingDatasetStateSave { saveDatasetState(using: plan) }
+      }
+    } message: {
+      Text("One or more files for this dataset already exist. Do you want to replace them?")
+    }
+    .alert("Nothing to Save", isPresented: $showNoDatasetStateToSave) {
+      Button("OK", role: .cancel) {}
+    } message: {
+      Text("There is no active transfer function and there are no objects or measurements to save.")
+    }
+    .alert(
+      "Unable to Save Dataset State",
+      isPresented: Binding(
+        get: { datasetStateSaveError != nil },
+        set: { if !$0 { datasetStateSaveError = nil } }
+      )
+    ) {
+      Button("OK", role: .cancel) { datasetStateSaveError = nil }
+    } message: {
+      Text(datasetStateSaveError?.localizedDescription ?? "")
+    }
     .onChange(of: appSettings.showBrickVisualization) { _, isVisible in
       guard !isVisible, renderingParameters.brickVis else { return }
       renderingParameters.brickVis = false
       synchronizeState()
     }
     .onChange(of: appSettings.showLogButton) { _, isVisible in
-      if !isVisible {
-        showLog = false
+      if !isVisible, presentedSheet == .log {
+        presentedSheet = nil
       }
     }
   }
@@ -234,7 +274,7 @@ struct RenderView: View {
           }
 
           Button {
-            showDatasetInfo.toggle()
+            toggleToolSheet(.datasetInfo)
           } label: {
             Image(systemName: "info.circle")
           }
@@ -242,9 +282,18 @@ struct RenderView: View {
           .help("dataset_info_button_help")
           .buttonStyle(.bordered)
 
+          Button {
+            requestDatasetStateSave()
+          } label: {
+            Image(systemName: "archivebox")
+          }
+          .accessibilityLabel("Save Dataset State")
+          .help("Save Dataset State")
+          .buttonStyle(.bordered)
+
           if appSettings.showLogButton {
             Button {
-              showLog.toggle()
+              toggleToolSheet(.log)
             } label: {
               Image(systemName: "text.alignleft")
             }
@@ -264,10 +313,10 @@ struct RenderView: View {
           }
           .pickerStyle(.segmented)
           .onChange(of: renderingParameters.renderMode) { _, mode in
-            if mode == .isoValue {
-              showTransferEditor = false
-            } else {
-              showIsoEditor = false
+            if mode == .isoValue, presentedSheet == .transferEditor {
+              presentedSheet = nil
+            } else if mode != .isoValue, presentedSheet == .isoEditor {
+              presentedSheet = nil
             }
             synchronizeState()
           }
@@ -350,36 +399,32 @@ struct RenderView: View {
           .accessibilityLabel("Reset")
 
           Button {
-            showLightingEditor.toggle()
+            toggleToolSheet(.lighting)
           } label: {
             actionLabel(
               "Lighting",
               systemImage: "lightbulb.max",
               compact: compact,
-              color: showLightingEditor ? .white : .primary
+              color: isToolSheetPresented(.lighting) ? .white : .primary
             )
             .frame(maxWidth: .infinity)
           }
           .modifier(
             WindowPresentationButtonStyle(
-              isPresented: showLightingEditor,
+              isPresented: isToolSheetPresented(.lighting),
               tint: .accentColor
             )
           )
-          .accessibilityAddTraits(showLightingEditor ? .isSelected : [])
+          .accessibilityAddTraits(isToolSheetPresented(.lighting) ? .isSelected : [])
           .accessibilityLabel("Lighting")
         }
         .frame(width: doubleColumnWidth - groupInset * 2)
         .offset(x: groupInset)
 
         Button {
-          if renderingParameters.renderMode == .isoValue {
-            showTransferEditor = false
-            showIsoEditor.toggle()
-          } else {
-            showIsoEditor = false
-            showTransferEditor.toggle()
-          }
+          toggleToolSheet(
+            renderingParameters.renderMode == .isoValue ? .isoEditor : .transferEditor
+          )
         } label: {
           actionLabel(
             "Editor",
@@ -401,45 +446,45 @@ struct RenderView: View {
         .offset(x: columnStride * 2)
 
         Button {
-          showMarkerEditor = true
+          toggleToolSheet(.objects)
         } label: {
           actionLabel(
             "Objects",
             systemImage: "cube.transparent",
             compact: compact,
-            color: showMarkerEditor ? .white : .orange
+            color: isToolSheetPresented(.objects) ? .white : .orange
           )
           .frame(maxWidth: .infinity)
         }
         .modifier(
           WindowPresentationButtonStyle(
-            isPresented: showMarkerEditor,
+            isPresented: isToolSheetPresented(.objects),
             tint: .orange
           )
         )
-        .accessibilityAddTraits(showMarkerEditor ? .isSelected : [])
+        .accessibilityAddTraits(isToolSheetPresented(.objects) ? .isSelected : [])
         .accessibilityLabel("Objects")
         .frame(width: doubleColumnWidth)
         .offset(x: columnStride * 3)
 
         Button {
-          showMeasurementEditor = true
+          toggleToolSheet(.measurements)
         } label: {
           actionLabel(
             "measurement_window_title",
             systemImage: "ruler",
             compact: compact,
-            color: showMeasurementEditor ? .white : .green
+            color: isToolSheetPresented(.measurements) ? .white : .green
           )
           .frame(maxWidth: .infinity)
         }
         .modifier(
           WindowPresentationButtonStyle(
-            isPresented: showMeasurementEditor,
+            isPresented: isToolSheetPresented(.measurements),
             tint: .green
           )
         )
-        .accessibilityAddTraits(showMeasurementEditor ? .isSelected : [])
+        .accessibilityAddTraits(isToolSheetPresented(.measurements) ? .isSelected : [])
         .accessibilityLabel(Text("measurement_window_title"))
         .frame(width: columnWidth)
         .offset(x: columnStride * 5)
@@ -450,7 +495,22 @@ struct RenderView: View {
   }
 
   private var currentEditorIsPresented: Bool {
-    renderingParameters.renderMode == .isoValue ? showIsoEditor : showTransferEditor
+    presentedSheet == (
+      renderingParameters.renderMode == .isoValue ? .isoEditor : .transferEditor
+    )
+  }
+
+  private func isToolSheetPresented(_ sheet: RenderSheet) -> Bool {
+    presentedSheet == sheet
+  }
+
+  private func toggleToolSheet(_ sheet: RenderSheet) {
+    presentedSheet = presentedSheet == sheet ? nil : sheet
+  }
+
+  private func dismissToolSheet(_ sheet: RenderSheet) {
+    guard presentedSheet == sheet else { return }
+    presentedSheet = nil
   }
 
   @ViewBuilder
@@ -1177,14 +1237,69 @@ struct RenderView: View {
        let fileURL = appModel.transferFunctionFileURL() {
       try? renderingParameters.transferFunction.save(to: fileURL)
     }
+    appModel.saveAutomaticallyManagedDatasetState(appSettings: appSettings)
     if leavingSharePlay {
       sharePlay.leaveGroupActivity()
     } else {
       sharePlay.closeSharedDataset()
     }
     appModel.removeAllVolumeMarkers()
+    appModel.replaceSceneMeshInstances([])
     appModel.removeAllVolumeMeasurements()
     appModel.closeDataset(destination: .datasetSelection)
+  }
+
+  private func requestDatasetStateSave() {
+    let plan = makeDatasetStateSavePlan()
+    guard !plan.isEmpty else {
+      showNoDatasetStateToSave = true
+      return
+    }
+    pendingDatasetStateSave = plan
+    if plan.hasExistingFiles {
+      showDatasetStateOverwriteConfirmation = true
+    } else {
+      saveDatasetState(using: plan)
+    }
+  }
+
+  private func makeDatasetStateSavePlan() -> DatasetStateSavePlan {
+    let hasObjects = !appModel.volumeMarkers.isEmpty || !appModel.sceneMeshInstances.isEmpty
+    let hasMeasurements = appModel.volumeMeasurements.contains { !$0.points.isEmpty }
+    return DatasetStateSavePlan(
+      transferFunctionURL: renderingParameters.renderMode == .isoValue
+        ? nil
+        : appModel.transferFunctionFileURL(),
+      objectURL: hasObjects ? appModel.objectFileURL() : nil,
+      measurementURL: hasMeasurements ? appModel.measurementFileURL() : nil
+    )
+  }
+
+  private func saveDatasetState(using plan: DatasetStateSavePlan) {
+    defer { pendingDatasetStateSave = nil }
+    guard let dataset = appModel.activeDataset else { return }
+    do {
+      if let url = plan.transferFunctionURL {
+        try renderingParameters.transferFunction.save(to: url, description: dataset.description)
+      }
+      if let url = plan.objectURL {
+        try DatasetStateStorage.saveObjects(
+          datasetID: dataset.uniqueId,
+          markers: appModel.volumeMarkers,
+          meshInstances: appModel.sceneMeshInstances,
+          to: url
+        )
+      }
+      if let url = plan.measurementURL {
+        try DatasetStateStorage.saveMeasurements(
+          datasetID: dataset.uniqueId,
+          measurements: appModel.volumeMeasurements,
+          to: url
+        )
+      }
+    } catch {
+      datasetStateSaveError = error
+    }
   }
 
   private func synchronizeTransform() {

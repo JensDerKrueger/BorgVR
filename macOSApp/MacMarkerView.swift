@@ -128,19 +128,19 @@ struct MacMarkerView: View {
             }
           }
         } label: {
-          Label("Object Files", systemImage: "shippingbox")
+          Label("Files", systemImage: "shippingbox")
         }
 
         Button {
           showLoadFilePicker = true
         } label: {
-          Label("Load Objects...", systemImage: "folder")
+          Label("Load...", systemImage: "folder")
         }
 
         Button {
           showSaveFilePicker = true
         } label: {
-          Label("Save Objects...", systemImage: "square.and.arrow.down")
+          Label("Save...", systemImage: "square.and.arrow.down")
         }
         .disabled(appModel.volumeMarkers.isEmpty && appModel.sceneMeshInstances.isEmpty)
 
@@ -151,10 +151,7 @@ struct MacMarkerView: View {
         Button(role: .destructive) {
           deleteSelectedMarker()
         } label: {
-          Label(
-            deleteSelectedMarkersTitle,
-            systemImage: "trash"
-          )
+          Label("Delete Selection", systemImage: "trash")
         }
         .disabled(selectedMarkerIndices.isEmpty && appModel.selectedSceneMeshInstanceID == nil)
 
@@ -163,7 +160,7 @@ struct MacMarkerView: View {
         Button(role: .destructive) {
           confirmDeleteAll = true
         } label: {
-          Label("Delete All Objects", systemImage: "trash.slash")
+          Label("Delete All", systemImage: "trash.slash")
         }
         .disabled(appModel.volumeMarkers.isEmpty && appModel.sceneMeshInstances.isEmpty)
       }
@@ -267,12 +264,6 @@ struct MacMarkerView: View {
   }
 
   private var currentDatasetID: String? { appModel.activeDataset?.uniqueId }
-
-  private var deleteSelectedMarkersTitle: LocalizedStringKey {
-    appModel.selectedSceneMeshInstanceID != nil || selectedMarkerIndices.count == 1
-      ? "Delete Selected Object"
-      : "Delete Selected Objects"
-  }
 
   private var selectedMarkerIndex: Int? {
     guard let id = appModel.selectedVolumeMarkerID else { return nil }

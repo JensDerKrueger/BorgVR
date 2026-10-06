@@ -201,6 +201,150 @@ struct VolumeMeasurementDocument: FileDocument {
   }
 }
 
+enum DatasetStateStorage {
+  static let measurementDirectoryName = "Measurements"
+
+  static func objectFileURL(datasetID: String, logger: LoggerBase? = nil) -> URL? {
+    guard let directory = VolumeMarkerCatalog.storageDirectoryURL(logger: logger) else {
+      return nil
+    }
+    return directory
+      .appendingPathComponent(sanitizedFilename(datasetID, fallback: "objects"))
+      .appendingPathExtension(BorgVRMarkerFormat.fileExtension)
+  }
+
+  static func measurementFileURL(datasetID: String, logger: LoggerBase? = nil) -> URL? {
+    guard let directory = measurementDirectoryURL(logger: logger) else { return nil }
+    return directory
+      .appendingPathComponent(sanitizedFilename(datasetID, fallback: "measurements"))
+      .appendingPathExtension(BorgVRMeasurementFormat.fileExtension)
+  }
+
+  static func measurementDirectoryURL(logger: LoggerBase? = nil) -> URL? {
+    guard let documentsURL = FileManager.default.urls(
+      for: .documentDirectory,
+      in: .userDomainMask
+    ).first else { return nil }
+    let directoryURL = documentsURL.appendingPathComponent(
+      measurementDirectoryName,
+      isDirectory: true
+    )
+    do {
+      try FileManager.default.createDirectory(
+        at: directoryURL,
+        withIntermediateDirectories: true
+      )
+      return directoryURL
+    } catch {
+      logger?.warning("Measurement directory unavailable: \(error.localizedDescription)")
+      return nil
+    }
+  }
+
+  static func saveObjects(
+    datasetID: String,
+    markers: [VolumeMarker],
+    meshInstances: [SceneMeshInstance],
+    to url: URL
+  ) throws {
+    let data = try VolumeMarkerDocument.encode(
+      datasetID: datasetID,
+      markers: markers,
+      meshInstances: meshInstances
+    )
+    try data.write(to: url, options: .atomic)
+    NotificationCenter.default.post(
+      name: VolumeMarkerCatalog.didChangeNotification,
+      object: nil
+    )
+  }
+
+  static func saveMeasurements(
+    datasetID: String,
+    measurements: [VolumeMeasurement],
+    to url: URL
+  ) throws {
+    let data = try VolumeMeasurementDocument.encode(
+      datasetID: datasetID,
+      measurements: measurements
+    )
+    try data.write(to: url, options: .atomic)
+  }
+
+  static func loadObjects(datasetID: String, from url: URL) throws -> VolumeMarkerDocumentContents {
+    let contents = try VolumeMarkerDocument.decode(
+      from: Data(contentsOf: url, options: .mappedIfSafe)
+    )
+    guard contents.datasetID.caseInsensitiveCompare(datasetID) == .orderedSame else {
+      throw DatasetStateStorageError.datasetMismatch
+    }
+    return contents
+  }
+
+  static func loadMeasurements(
+    datasetID: String,
+    physicalExtent: SIMD3<Float>,
+    from url: URL
+  ) throws -> [VolumeMeasurement] {
+    let contents = try VolumeMeasurementDocument.decode(
+      from: Data(contentsOf: url, options: .mappedIfSafe)
+    )
+    guard contents.datasetID.caseInsensitiveCompare(datasetID) == .orderedSame else {
+      throw DatasetStateStorageError.datasetMismatch
+    }
+    return contents.measurements.map { measurement in
+      VolumeMeasurement(
+        id: measurement.id,
+        name: measurement.name,
+        kind: measurement.kind,
+        points: measurement.points,
+        physicalExtent: physicalExtent
+      )
+    }
+  }
+
+  static func removeFileIfPresent(at url: URL) throws {
+    guard FileManager.default.fileExists(atPath: url.path) else { return }
+    try FileManager.default.removeItem(at: url)
+  }
+
+  private static func sanitizedFilename(_ value: String, fallback: String) -> String {
+    let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "._-"))
+    let scalars = value.unicodeScalars.map { scalar in
+      allowed.contains(scalar) ? Character(scalar) : "_"
+    }
+    let result = String(scalars).trimmingCharacters(in: CharacterSet(charactersIn: "._-"))
+    return result.isEmpty ? fallback : result
+  }
+}
+
+enum DatasetStateStorageError: LocalizedError {
+  case datasetMismatch
+
+  var errorDescription: String? {
+    switch self {
+      case .datasetMismatch:
+        String(localized: "The saved data belongs to a different dataset.")
+    }
+  }
+}
+
+struct DatasetStateSavePlan {
+  let transferFunctionURL: URL?
+  let objectURL: URL?
+  let measurementURL: URL?
+
+  var fileURLs: [URL] {
+    [transferFunctionURL, objectURL, measurementURL].compactMap { $0 }
+  }
+
+  var isEmpty: Bool { fileURLs.isEmpty }
+
+  var hasExistingFiles: Bool {
+    fileURLs.contains { FileManager.default.fileExists(atPath: $0.path) }
+  }
+}
+
 enum VolumeMeasurementExportRecovery {
   static func finish(
     _ result: Result<URL, Error>,

@@ -1213,3 +1213,13 @@
 "lighting_inactive_warning" = "Les réglages d’éclairage n’ont aucun effet en mode fonction de transfert sans éclairage.";
 "Snap to Volume" = "Aligner sur le volume";
 "Place Objects" = "Placer des objets";
+"settings_toggle_autoload_objects" = "Charger et enregistrer automatiquement les objets";
+"settings_toggle_autoload_measurements" = "Charger et enregistrer automatiquement les mesures";
+"Save Dataset State" = "Enregistrer l’état du jeu de données";
+"Overwrite Existing Files?" = "Remplacer les fichiers existants ?";
+"Overwrite" = "Remplacer";
+"One or more files for this dataset already exist. Do you want to replace them?" = "Un ou plusieurs fichiers existent déjà pour ce jeu de données. Voulez-vous les remplacer ?";
+"Nothing to Save" = "Rien à enregistrer";
+"There is no active transfer function and there are no objects or measurements to save." = "Il n’y a aucune fonction de transfert active, ni objet ou mesure à enregistrer.";
+"Unable to Save Dataset State" = "Impossible d’enregistrer l’état du jeu de données";
+"The saved data belongs to a different dataset." = "Les données enregistrées appartiennent à un autre jeu de données.";

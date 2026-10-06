@@ -127,6 +127,11 @@ struct SettingsView: View {
               settingsIntroSection("settings_description_general")
               Section(header: Text("settings_section_general_behavior").bold()) {
                 Toggle("settings_toggle_autoload_tf", isOn: $storedAppModel.autoloadTF)
+                Toggle("settings_toggle_autoload_objects", isOn: $storedAppModel.autoloadObjects)
+                Toggle(
+                  "settings_toggle_autoload_measurements",
+                  isOn: $storedAppModel.autoloadMeasurements
+                )
                 Toggle("settings_toggle_autoload_transform", isOn: $storedAppModel.autoloadTransform)
                 Toggle("settings_toggle_show_notifications", isOn: $storedAppModel.showNotifications)
                   .onChange(of: storedAppModel.showNotifications) { _, newValue in

@@ -12,13 +12,27 @@ struct PrivateApplicationView: View {
   @EnvironmentObject var speech: SpeechHelper
 
   @State private var voiceHandler: VoiceCommandHandler?
+  @State private var pendingDatasetStateSave: DatasetStateSavePlan?
+  @State private var showDatasetStateOverwriteConfirmation = false
+  @State private var showNoDatasetStateToSave = false
+  @State private var datasetStateSaveError: Error?
 
   var body: some View {
     VStack() {
-      Text("private_interaction_title")
-        .font(.title)
-        .bold()
-        .padding()
+      ZStack {
+        Text("private_interaction_title")
+          .font(.title)
+          .bold()
+        HStack {
+          Spacer()
+          Button(action: requestDatasetStateSave) {
+            Image(systemName: "archivebox")
+          }
+          .accessibilityLabel("Save Dataset State")
+          .help("Save Dataset State")
+        }
+      }
+      .padding()
 
       interactionControls(showTitles: false)
 
@@ -144,6 +158,33 @@ struct PrivateApplicationView: View {
       }
     }
     .padding()
+    .alert(
+      "Overwrite Existing Files?",
+      isPresented: $showDatasetStateOverwriteConfirmation
+    ) {
+      Button("Cancel", role: .cancel) { pendingDatasetStateSave = nil }
+      Button("Overwrite") {
+        if let plan = pendingDatasetStateSave { saveDatasetState(using: plan) }
+      }
+    } message: {
+      Text("One or more files for this dataset already exist. Do you want to replace them?")
+    }
+    .alert("Nothing to Save", isPresented: $showNoDatasetStateToSave) {
+      Button("OK", role: .cancel) {}
+    } message: {
+      Text("There is no active transfer function and there are no objects or measurements to save.")
+    }
+    .alert(
+      "Unable to Save Dataset State",
+      isPresented: Binding(
+        get: { datasetStateSaveError != nil },
+        set: { if !$0 { datasetStateSaveError = nil } }
+      )
+    ) {
+      Button("OK", role: .cancel) { datasetStateSaveError = nil }
+    } message: {
+      Text(datasetStateSaveError?.localizedDescription ?? "")
+    }
   }
 
   private func color(_ value: SIMD4<Float>) -> Color {
@@ -348,6 +389,86 @@ struct PrivateApplicationView: View {
 
   private func showVoiceHelp() {
     openWindow(id: "VoiceCommandsView")
+  }
+
+  private func requestDatasetStateSave() {
+    let plan = makeDatasetStateSavePlan()
+    guard !plan.isEmpty else {
+      showNoDatasetStateToSave = true
+      return
+    }
+    pendingDatasetStateSave = plan
+    if plan.hasExistingFiles {
+      showDatasetStateOverwriteConfirmation = true
+    } else {
+      saveDatasetState(using: plan)
+    }
+  }
+
+  private func makeDatasetStateSavePlan() -> DatasetStateSavePlan {
+    guard let dataset = runtimeAppModel.activeDataset else {
+      return DatasetStateSavePlan(
+        transferFunctionURL: nil,
+        objectURL: nil,
+        measurementURL: nil
+      )
+    }
+    let documentsDirectory = FileManager.default.urls(
+      for: .documentDirectory,
+      in: .userDomainMask
+    ).first
+    let transferFunctionURL = documentsDirectory?
+      .appendingPathComponent(dataset.uniqueId)
+      .appendingPathExtension("tf1d")
+    let hasObjects = !sharedAppModel.volumeMarkers.isEmpty ||
+      !sharedAppModel.sceneMeshInstances.isEmpty
+    let hasMeasurements = sharedAppModel.volumeMeasurementsSnapshot().contains {
+      !$0.points.isEmpty
+    }
+    return DatasetStateSavePlan(
+      transferFunctionURL: sharedAppModel.renderMode == .isoValue
+        ? nil
+        : transferFunctionURL,
+      objectURL: hasObjects
+        ? DatasetStateStorage.objectFileURL(
+          datasetID: dataset.uniqueId,
+          logger: runtimeAppModel.logger
+        )
+        : nil,
+      measurementURL: hasMeasurements
+        ? DatasetStateStorage.measurementFileURL(
+          datasetID: dataset.uniqueId,
+          logger: runtimeAppModel.logger
+        )
+        : nil
+    )
+  }
+
+  private func saveDatasetState(using plan: DatasetStateSavePlan) {
+    defer { pendingDatasetStateSave = nil }
+    guard let dataset = runtimeAppModel.activeDataset else { return }
+    do {
+      if let url = plan.transferFunctionURL {
+        try sharedAppModel.transferFunction.save(to: url, description: dataset.description)
+      }
+      if let url = plan.objectURL {
+        try DatasetStateStorage.saveObjects(
+          datasetID: dataset.uniqueId,
+          markers: sharedAppModel.volumeMarkers,
+          meshInstances: sharedAppModel.sceneMeshInstances,
+          to: url
+        )
+      }
+      if let url = plan.measurementURL {
+        try DatasetStateStorage.saveMeasurements(
+          datasetID: dataset.uniqueId,
+          measurements: sharedAppModel.volumeMeasurementsSnapshot(),
+          to: url
+        )
+      }
+    } catch {
+      datasetStateSaveError = error
+    }
   }
 
   private func toggleVoice() {

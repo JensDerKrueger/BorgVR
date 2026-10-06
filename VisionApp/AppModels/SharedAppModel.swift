@@ -373,6 +373,81 @@ class SharedAppModel {
     transferFunction.updateRanges(minValue: minValue, maxValue: maxValue, rangeMax: rangeMax)
   }
 
+  func loadAutomaticallyManagedDatasetState(
+    datasetID: String,
+    physicalExtent: SIMD3<Float>,
+    storedAppModel: StoredAppModel,
+    logger: LoggerBase
+  ) {
+    if storedAppModel.autoloadObjects,
+       let url = DatasetStateStorage.objectFileURL(datasetID: datasetID, logger: logger),
+       FileManager.default.fileExists(atPath: url.path) {
+      do {
+        let contents = try DatasetStateStorage.loadObjects(datasetID: datasetID, from: url)
+        volumeMarkers = contents.markers
+        replaceSceneMeshInstances(contents.meshInstances)
+      } catch {
+        logger.warning("Automatically loading objects failed: \(error.localizedDescription)")
+      }
+    }
+
+    if storedAppModel.autoloadMeasurements,
+       let url = DatasetStateStorage.measurementFileURL(datasetID: datasetID, logger: logger),
+       FileManager.default.fileExists(atPath: url.path) {
+      do {
+        volumeMeasurements = try DatasetStateStorage.loadMeasurements(
+          datasetID: datasetID,
+          physicalExtent: physicalExtent,
+          from: url
+        )
+      } catch {
+        logger.warning("Automatically loading measurements failed: \(error.localizedDescription)")
+      }
+    }
+  }
+
+  func saveAutomaticallyManagedDatasetState(
+    datasetID: String,
+    storedAppModel: StoredAppModel,
+    logger: LoggerBase
+  ) {
+    if storedAppModel.autoloadObjects,
+       let url = DatasetStateStorage.objectFileURL(datasetID: datasetID, logger: logger) {
+      do {
+        if volumeMarkers.isEmpty && sceneMeshInstances.isEmpty {
+          try DatasetStateStorage.removeFileIfPresent(at: url)
+        } else {
+          try DatasetStateStorage.saveObjects(
+            datasetID: datasetID,
+            markers: volumeMarkers,
+            meshInstances: sceneMeshInstances,
+            to: url
+          )
+        }
+      } catch {
+        logger.warning("Automatically saving objects failed: \(error.localizedDescription)")
+      }
+    }
+
+    if storedAppModel.autoloadMeasurements,
+       let url = DatasetStateStorage.measurementFileURL(datasetID: datasetID, logger: logger) {
+      do {
+        let measurements = volumeMeasurementsSnapshot().filter { !$0.points.isEmpty }
+        if measurements.isEmpty {
+          try DatasetStateStorage.removeFileIfPresent(at: url)
+        } else {
+          try DatasetStateStorage.saveMeasurements(
+            datasetID: datasetID,
+            measurements: measurements,
+            to: url
+          )
+        }
+      } catch {
+        logger.warning("Automatically saving measurements failed: \(error.localizedDescription)")
+      }
+    }
+  }
+
   func loadTransform(from url: URL) throws {
     let transform = try Transform.load(from:url)
     self.modelTransform = transform
