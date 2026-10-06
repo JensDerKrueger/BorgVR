@@ -701,7 +701,7 @@ bool TCPServer::ClientSession::openDataset(const std::vector<std::string>& param
   DatasetInfo chosen;
   if (!server_.findDatasetById(id, chosen)) {
     if (server_.logger_) {
-      server_.logger_->warning(clientLogMessage("OPEN unknown dataset id: " + id));
+      server_.logger_->warning(clientLogMessage("OPEN received an invalid dataset id."));
     }
     return false;
   }
@@ -716,7 +716,7 @@ bool TCPServer::ClientSession::openDataset(const std::vector<std::string>& param
 
     if (server_.logger_) {
       server_.logger_->info(
-        clientLogMessage("Opened dataset: " + chosen.filename + " (id " + id + ")")
+        clientLogMessage("Opened dataset: " + chosen.filename + " (id " + chosen.id + ")")
       );
     }
 
@@ -737,7 +737,7 @@ bool TCPServer::ClientSession::getTransferFunction(const std::vector<std::string
   TransferFunctionInfo chosen;
   if (!server_.findTransferFunctionById(params[0], chosen)) {
     if (server_.logger_) {
-      server_.logger_->warning(clientLogMessage("GETTF unknown transfer function id: " + params[0]));
+      server_.logger_->warning(clientLogMessage("GETTF received an invalid transfer function id."));
     }
     return false;
   }
@@ -764,7 +764,7 @@ bool TCPServer::ClientSession::getMarkerFile(const std::vector<std::string>& par
   MarkerFileInfo chosen;
   if (!server_.findMarkerFileById(params[0], chosen)) {
     if (server_.logger_) {
-      server_.logger_->warning(clientLogMessage("GETMARKER unknown marker file id: " + params[0]));
+      server_.logger_->warning(clientLogMessage("GETMARKER received an invalid marker file id."));
     }
     return false;
   }
@@ -792,7 +792,7 @@ bool TCPServer::ClientSession::getMeshFile(const std::vector<std::string>& param
   MeshFileInfo chosen;
   if (!server_.findMeshFileById(params[0], chosen)) {
     if (server_.logger_) {
-      server_.logger_->warning(clientLogMessage("GETMESH unknown mesh id: " + params[0]));
+      server_.logger_->warning(clientLogMessage("GETMESH received an invalid mesh id."));
     }
     return false;
   }
@@ -978,9 +978,9 @@ void TCPServer::ClientSession::run() {
 
         if (!processCommand(line)) {
           if (server_.logger_) {
-            const auto tokens = splitWhitespace(line);
-            const std::string command = tokens.empty() ? "<empty>" : tokens.front();
-            server_.logger_->warning(clientLogMessage("Rejected command: " + command));
+            server_.logger_->warning(clientLogMessage(
+              "Rejected malformed or unsupported protocol command."
+            ));
           }
           running_.store(false);
           break;

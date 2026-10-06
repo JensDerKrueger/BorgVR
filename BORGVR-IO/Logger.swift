@@ -86,6 +86,34 @@ internal enum SharedFormatter {
   }()
 }
 
+enum LogMessageSanitizer {
+  static func sanitize(_ message: String) -> String {
+    var output = ""
+    output.reserveCapacity(message.utf8.count)
+    for scalar in message.unicodeScalars {
+      let value = scalar.value
+      if isUnsafe(value) {
+        output += String(format: "\\u{%X}", value)
+      } else {
+        output.unicodeScalars.append(scalar)
+      }
+    }
+    return output
+  }
+
+  private static func isUnsafe(_ value: UInt32) -> Bool {
+    value < 0x20 ||
+    (value >= 0x7f && value <= 0x9f) ||
+    value == 0x00ad ||
+    value == 0x061c ||
+    (value >= 0x200b && value <= 0x200f) ||
+    (value >= 0x2028 && value <= 0x202e) ||
+    (value >= 0x2060 && value <= 0x206f) ||
+    value == 0xfeff ||
+    (value >= 0xfff9 && value <= 0xfffb)
+  }
+}
+
 // MARK: - MultiplexLogger
 
 /**
@@ -498,7 +526,9 @@ public class PrintfLogger: LoggerBase {
    */
   private func log(_ message: String, color: String, level: String) {
     let prefix = "[\(level)] "
-    print(coloredText("\(prefix)\(message)", color: color))
+    let safeMessage = LogMessageSanitizer.sanitize(message)
+    let terminalReset = useColors ? "\u{001B}(B\u{000F}" : ""
+    print(terminalReset + coloredText("\(prefix)\(safeMessage)", color: color) + terminalReset)
     fflush(stdout)
   }
 
@@ -549,7 +579,8 @@ public class PrintfLogger: LoggerBase {
     let spinner = spinnerFrames[spinnerIndex]
     spinnerIndex = (spinnerIndex + 1) % spinnerFrames.count
     let prefix = "\(spinner)"
-    let msg = "\r\(prefix) \(message) \(bar) \(percentage)% ETA: \(eta)\u{001B}[K"
+    let safeMessage = LogMessageSanitizer.sanitize(message)
+    let msg = "\r\(prefix) \(safeMessage) \(bar) \(percentage)% ETA: \(eta)\u{001B}[K"
     print(coloredText(msg, color: "\u{001B}[36m"), terminator: "")
     fflush(stdout)
 

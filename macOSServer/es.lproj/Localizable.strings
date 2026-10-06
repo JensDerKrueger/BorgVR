@@ -210,8 +210,8 @@
 /* Log: closing connection after processing */
 "tcpserver_info_closing_connection_after_processing" = "Cerrando conexión tras el procesamiento.";
 
-/* Log: unknown dataset id in OPEN – argument: dataset id */
-"tcpserver_warning_open_unknown_dataset" = "OPEN: id de conjunto de datos desconocido %@.";
+/* Log: invalid dataset id in OPEN */
+"tcpserver_warning_open_unknown_dataset" = "OPEN recibió un identificador de conjunto de datos no válido.";
 
 /* Log: closing previous dataset for connection */
 "tcpserver_info_closing_previous_dataset" = "Cerrando el conjunto de datos anterior de la conexión.";

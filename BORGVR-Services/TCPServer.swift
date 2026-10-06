@@ -295,7 +295,9 @@ class TCPServer {
   }
 
   private func clientLogMessage(_ message: String, connection: NWConnection) -> String {
-    "[client \(clientAddress(connection))] \(message)"
+    let address = LogMessageSanitizer.sanitize(clientAddress(connection))
+    let safeMessage = LogMessageSanitizer.sanitize(message)
+    return "[client \(address)] \(safeMessage)"
   }
 
   // MARK: - Parameter validation helpers
@@ -378,9 +380,8 @@ class TCPServer {
         }
 
         if !self.processCommand(request, connection: connection) {
-          let command = request.split(whereSeparator: \.isWhitespace).first.map(String.init) ?? "<empty>"
           self.logger?.warning(self.clientLogMessage(
-            "Rejected command: \(command)",
+            "Rejected malformed or unsupported protocol command.",
             connection: connection
           ))
           connection.cancel()
@@ -586,17 +587,14 @@ class TCPServer {
     guard expectParameterCount(parameters, equals: 1) else { return false }
 
     guard
-      let idString = parameters.first,
-      let dataset = datasets.first(where: { $0.id == idString })
+      let requestedID = parameters.first,
+      let dataset = datasets.first(where: { $0.id == requestedID })
     else {
       logger?.warning(
-        clientLogMessage(String(
-          format: L(
-            "tcpserver_warning_open_unknown_dataset",
-            value: "OPEN: unknown dataset id %@.",
-            comment: "unknown dataset id in OPEN"
-          ),
-          String(parameters.first ?? "")
+        clientLogMessage(L(
+          "tcpserver_warning_open_unknown_dataset",
+          value: "OPEN received an invalid dataset id.",
+          comment: "invalid dataset id in OPEN"
         ), connection: connection)
       )
       return false
@@ -619,7 +617,7 @@ class TCPServer {
 
       let filename = URL(fileURLWithPath: dataset.filename).lastPathComponent
       logger?.info(clientLogMessage(
-        "Opened dataset \(filename) (connection \(connectionID.hashValue)).",
+        "Opened dataset \(filename) (id \(dataset.id), connection \(connectionID.hashValue)).",
         connection: connection
       ))
 
@@ -636,7 +634,7 @@ class TCPServer {
             value: "Failed to open dataset %@.",
             comment: "failed to open dataset"
           ),
-          String(idString)
+          dataset.id
         ), connection: connection)
       )
       return false

@@ -157,7 +157,9 @@ final class HTTPWebServer {
   }
 
   private func clientLogMessage(_ message: String, connection: NWConnection) -> String {
-    "[client \(clientAddress(connection))] \(message)"
+    let address = LogMessageSanitizer.sanitize(clientAddress(connection))
+    let safeMessage = LogMessageSanitizer.sanitize(message)
+    return "[client \(address)] \(safeMessage)"
   }
 
   private func receiveRequest(

@@ -205,8 +205,8 @@
 /* Log: closing connection after processing */
 "tcpserver_info_closing_connection_after_processing" = "Closing connection after processing.";
 
-/* Log: unknown dataset id in OPEN – argument: dataset id */
-"tcpserver_warning_open_unknown_dataset" = "OPEN: unknown dataset id %@.";
+/* Log: invalid dataset id in OPEN */
+"tcpserver_warning_open_unknown_dataset" = "OPEN received an invalid dataset id.";
 
 /* Log: closing previous dataset for connection */
 "tcpserver_info_closing_previous_dataset" = "Closing previous dataset for connection.";
