@@ -329,6 +329,10 @@ final class HTTPWebServer {
       return markerFileCatalogResponse()
     }
 
+    if request.path == "/web-data/measurement-files.json" {
+      return measurementFileCatalogResponse()
+    }
+
     if request.path == "/web-data/meshes.json" {
       return meshCatalogResponse()
     }
@@ -345,6 +349,13 @@ final class HTTPWebServer {
       let id = String(request.path.dropFirst(markerFilePrefix.count))
         .replacingOccurrences(of: ".marker", with: "")
       return try markerFileResponse(id: id)
+    }
+
+    let measurementFilePrefix = "/web-data/measurement-files/"
+    if request.path.hasPrefix(measurementFilePrefix) {
+      let id = String(request.path.dropFirst(measurementFilePrefix.count))
+        .replacingOccurrences(of: ".measurement", with: "")
+      return try measurementFileResponse(id: id)
     }
 
     let meshPrefix = "/web-data/meshes/"
@@ -469,6 +480,47 @@ final class HTTPWebServer {
     }
     let data = try Data(contentsOf: URL(fileURLWithPath: markerFile.filename), options: .mappedIfSafe)
     guard data.count == markerFile.byteCount else {
+      throw HTTPWebServerError.notFound
+    }
+    return HTTPResponse(
+      status: 200,
+      reason: "OK",
+      contentType: "application/octet-stream",
+      body: data
+    )
+  }
+
+  private func measurementFileCatalogResponse() -> HTTPResponse {
+    let entries = datasetServer.measurementFilesSnapshot().map { measurementFile in
+      WebMeasurementFileCatalogEntry(
+        id: measurementFile.id,
+        datasetID: measurementFile.datasetID,
+        description: measurementFile.measurementDescription,
+        byteCount: measurementFile.byteCount,
+        url: "measurement-files/\(measurementFile.id).measurement"
+      )
+    }
+    return jsonResponse(
+      WebMeasurementFileCatalog(
+        format: "borgvr-measurement-files",
+        version: 1,
+        generatedAt: "dynamic",
+        measurementFiles: entries
+      )
+    )
+  }
+
+  private func measurementFileResponse(id: String) throws -> HTTPResponse {
+    guard id.count == 32,
+          id.allSatisfy({ $0.isHexDigit }),
+          let measurementFile = datasetServer.findMeasurementFileById(id) else {
+      throw HTTPWebServerError.notFound
+    }
+    let data = try Data(
+      contentsOf: URL(fileURLWithPath: measurementFile.filename),
+      options: .mappedIfSafe
+    )
+    guard data.count == measurementFile.byteCount else {
       throw HTTPWebServerError.notFound
     }
     return HTTPResponse(
@@ -1020,6 +1072,21 @@ private struct WebMarkerFileCatalog: Encodable {
 }
 
 private struct WebMarkerFileCatalogEntry: Encodable {
+  let id: String
+  let datasetID: String
+  let description: String
+  let byteCount: Int
+  let url: String
+}
+
+private struct WebMeasurementFileCatalog: Encodable {
+  let format: String
+  let version: Int
+  let generatedAt: String
+  let measurementFiles: [WebMeasurementFileCatalogEntry]
+}
+
+private struct WebMeasurementFileCatalogEntry: Encodable {
   let id: String
   let datasetID: String
   let description: String

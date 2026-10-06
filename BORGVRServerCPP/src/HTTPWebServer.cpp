@@ -581,6 +581,10 @@ bool HTTPWebServer::routeRequest(TcpSocket& socket, const Request& request, bool
     return sendMarkerFileCatalog(socket, closeAfterSend);
   }
 
+  if (request.path == "/web-data/measurement-files.json") {
+    return sendMeasurementFileCatalog(socket, closeAfterSend);
+  }
+
   if (request.path == "/web-data/meshes.json") {
     return sendMeshCatalog(socket, closeAfterSend);
   }
@@ -607,6 +611,18 @@ bool HTTPWebServer::routeRequest(TcpSocket& socket, const Request& request, bool
       id.resize(id.size() - suffix.size());
     }
     return sendMarkerFile(socket, id, closeAfterSend);
+  }
+
+  constexpr const char* measurementFilePrefix = "/web-data/measurement-files/";
+  const std::string measurementPrefix(measurementFilePrefix);
+  if (request.path.compare(0, measurementPrefix.size(), measurementPrefix) == 0) {
+    std::string id = request.path.substr(measurementPrefix.size());
+    const std::string suffix = ".measurement";
+    if (id.size() > suffix.size() &&
+        id.compare(id.size() - suffix.size(), suffix.size(), suffix) == 0) {
+      id.resize(id.size() - suffix.size());
+    }
+    return sendMeasurementFile(socket, id, closeAfterSend);
   }
 
   constexpr const char* meshFilePrefix = "/web-data/meshes/";
@@ -761,6 +777,72 @@ bool HTTPWebServer::sendMarkerFile(TcpSocket& socket, const std::string& id, boo
 
   MarkerFileInfo info;
   if (!datasetServer_.findMarkerFileById(id, info)) {
+    return false;
+  }
+
+  std::ifstream input(info.filename, std::ios::binary);
+  if (!input) {
+    return false;
+  }
+  std::vector<uint8_t> body(
+    (std::istreambuf_iterator<char>(input)),
+    std::istreambuf_iterator<char>()
+  );
+  if (body.size() != info.byteCount) {
+    return false;
+  }
+
+  return sendResponse(socket, 200, "OK", "application/octet-stream", body, {}, closeAfterSend);
+}
+
+bool HTTPWebServer::sendMeasurementFileCatalog(TcpSocket& socket, bool closeAfterSend) {
+  const auto measurementFiles = datasetServer_.measurementFilesSnapshot();
+
+  std::ostringstream oss;
+  oss << "{\n"
+      << "  \"format\": \"borgvr-measurement-files\",\n"
+      << "  \"version\": 1,\n"
+      << "  \"generatedAt\": \"dynamic\",\n"
+      << "  \"measurementFiles\": [\n";
+
+  for (size_t i = 0; i < measurementFiles.size(); ++i) {
+    const auto& measurement = measurementFiles[i];
+    oss << "    {\n"
+        << "      \"id\": \"" << jsonEscape(measurement.id) << "\",\n"
+        << "      \"datasetID\": \"" << jsonEscape(measurement.datasetId) << "\",\n"
+        << "      \"description\": \""
+        << jsonEscape(measurement.measurementDescription) << "\",\n"
+        << "      \"byteCount\": " << measurement.byteCount << ",\n"
+        << "      \"url\": \"measurement-files/" << jsonEscape(measurement.id)
+        << ".measurement\"\n"
+        << "    }" << (i + 1 < measurementFiles.size() ? "," : "") << "\n";
+  }
+
+  oss << "  ]\n"
+      << "}\n";
+  return sendTextResponse(
+    socket,
+    200,
+    "OK",
+    "application/json; charset=utf-8",
+    oss.str(),
+    {},
+    closeAfterSend
+  );
+}
+
+bool HTTPWebServer::sendMeasurementFile(TcpSocket& socket,
+                                        const std::string& id,
+                                        bool closeAfterSend) {
+  if (id.size() != 32 ||
+      !std::all_of(id.begin(), id.end(), [](unsigned char c) {
+        return std::isxdigit(c) != 0;
+      })) {
+    return false;
+  }
+
+  MeasurementFileInfo info;
+  if (!datasetServer_.findMeasurementFileById(id, info)) {
     return false;
   }
 

@@ -38,6 +38,14 @@ struct MarkerFileInfo {
   let byteCount: Int
 }
 
+struct MeasurementFileInfo {
+  let id: String
+  let filename: String
+  let datasetID: String
+  let measurementDescription: String
+  let byteCount: Int
+}
+
 struct MeshFileInfo {
   let id: UUID
   let filename: String
@@ -49,6 +57,7 @@ struct MeshFileInfo {
 private enum DatasetScannerError: Error {
   case invalidTransferFunctionFile
   case invalidMarkerFile
+  case invalidMeasurementFile
   case invalidMeshFile
 }
 
@@ -56,6 +65,7 @@ class DatasetScanner {
   private var datasets: [DatasetInfo] = []
   private var transferFunctions: [TransferFunctionInfo] = []
   private var markerFiles: [MarkerFileInfo] = []
+  private var measurementFiles: [MeasurementFileInfo] = []
   private var meshFiles: [MeshFileInfo] = []
   private let directory: String
   private let logger: LoggerBase?
@@ -69,6 +79,7 @@ class DatasetScanner {
     datasets.removeAll()
     transferFunctions.removeAll()
     markerFiles.removeAll()
+    measurementFiles.removeAll()
     meshFiles.removeAll()
     let fileManager = FileManager.default
     let directoryURL = URL(fileURLWithPath: directory)
@@ -87,6 +98,8 @@ class DatasetScanner {
             loadTransferFunction(at: url)
           case "marker":
             loadMarkerFile(at: url)
+          case "measurement":
+            loadMeasurementFile(at: url)
           case "mesh":
             loadMeshFile(at: url)
           default:
@@ -114,6 +127,10 @@ class DatasetScanner {
 
   func getMarkerFiles() -> [MarkerFileInfo] {
     markerFiles
+  }
+
+  func getMeasurementFiles() -> [MeasurementFileInfo] {
+    measurementFiles
   }
 
   func getMeshFiles() -> [MeshFileInfo] {
@@ -253,6 +270,52 @@ class DatasetScanner {
           url.path
         )
       )
+    }
+  }
+
+  private func loadMeasurementFile(at url: URL) {
+    do {
+      let resourceValues = try url.resourceValues(forKeys: [.fileSizeKey])
+      guard let byteCount = resourceValues.fileSize,
+            byteCount > 0,
+            byteCount <= BorgVRMeasurementFormat.maximumFileByteCount else {
+        throw DatasetScannerError.invalidMeasurementFile
+      }
+      let data = try Data(contentsOf: url, options: .mappedIfSafe)
+      let magic = Data(BorgVRMeasurementFormat.magicBytes)
+      guard data.count == byteCount,
+            data.count >= 32,
+            data.prefix(magic.count) == magic,
+            Self.readUInt16(from: data, at: 8) == BorgVRMeasurementFormat.version,
+            let measurementCount = Self.readUInt32(from: data, at: 28),
+            measurementCount <= BorgVRMeasurementFormat.maximumMeasurementCount else {
+        throw DatasetScannerError.invalidMeasurementFile
+      }
+      let uuidBytes = Array(data[12..<28])
+      let datasetID = UUID(uuid: (
+        uuidBytes[0], uuidBytes[1], uuidBytes[2], uuidBytes[3],
+        uuidBytes[4], uuidBytes[5], uuidBytes[6], uuidBytes[7],
+        uuidBytes[8], uuidBytes[9], uuidBytes[10], uuidBytes[11],
+        uuidBytes[12], uuidBytes[13], uuidBytes[14], uuidBytes[15]
+      )).uuidString
+      let id = Insecure.MD5.hash(data: data)
+        .map { String(format: "%02x", $0) }
+        .joined()
+      measurementFiles.append(
+        MeasurementFileInfo(
+          id: id,
+          filename: url.path,
+          datasetID: datasetID,
+          measurementDescription: url.deletingPathExtension().lastPathComponent,
+          byteCount: data.count
+        )
+      )
+      logger?.info(
+        "Loaded measurement file: \(url.lastPathComponent) " +
+        "(dataset \(datasetID), id \(id))"
+      )
+    } catch {
+      logger?.warning("Failed to load measurement file: \(url.path)")
     }
   }
 

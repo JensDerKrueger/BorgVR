@@ -292,11 +292,11 @@ on other devices can use WebGPU through a secure context. Use a reverse proxy su
 intentionally want to expose it outside the local network.
 
 The WebGPU frontend supports the main rendering modes, transfer-function editing, object placement
-files with spheres, strokes, instanced textured meshes, locally loaded measurement files, touch
-controls, and optional persistent caching of downloaded bricks in IndexedDB. Referenced mesh assets
-are resolved through the server mesh catalog. Browser storage is scoped to the server origin and can
-be disabled or cleared from the renderer settings. The native apps remain the primary
-high-performance and spatial rendering applications.
+files with spheres, strokes, instanced textured meshes, server-provided and locally loaded
+measurement files, touch controls, and optional persistent caching of downloaded bricks in
+IndexedDB. Referenced mesh assets are resolved through the server mesh catalog. Browser storage is
+scoped to the server origin and can be disabled or cleared from the renderer settings. The native
+apps remain the primary high-performance and spatial rendering applications.
 
 ## Data Files
 

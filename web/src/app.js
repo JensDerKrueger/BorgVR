@@ -51,6 +51,7 @@ const markerClear = document.querySelector("#marker-clear");
 const markerCount = document.querySelector("#marker-count");
 const meshLoad = document.querySelector("#mesh-load");
 const meshLoadInput = document.querySelector("#mesh-load-input");
+const measurementCatalogSelect = document.querySelector("#measurement-catalog-select");
 const measurementLoad = document.querySelector("#measurement-load");
 const measurementLoadInput = document.querySelector("#measurement-load-input");
 const measurementClear = document.querySelector("#measurement-clear");
@@ -83,6 +84,8 @@ let transferFunctionCatalog = [];
 let transferFunctionCatalogBuffers = new Map();
 let markerFileCatalog = [];
 let markerFileCatalogBuffers = new Map();
+let measurementFileCatalog = [];
+let measurementFileCatalogBuffers = new Map();
 let meshCatalog = [];
 let meshCatalogBuffers = new Map();
 let meshAssets = new Map();
@@ -164,6 +167,7 @@ async function main() {
   const catalog = await fetchJSON("./web-data/datasets.json", "catalog");
   await loadTransferFunctionCatalog();
   await loadMarkerFileCatalog();
+  await loadMeasurementFileCatalog();
   await loadMeshCatalog();
   catalogStatus.textContent = `${catalog.datasets.length} datasets available`;
   if (rendererStatus === "Initializing WebGPU...") {
@@ -230,6 +234,60 @@ function updateMarkerCatalogOptions() {
 }
 
 function displayMarkerFileName(entry) {
+  return entry.description?.trim() || entry.id;
+}
+
+async function loadMeasurementFileCatalog() {
+  try {
+    const catalog = await fetchJSON("./web-data/measurement-files.json", "measurement files");
+    measurementFileCatalog = Array.isArray(catalog.measurementFiles)
+      ? catalog.measurementFiles.filter(validMeasurementCatalogEntry)
+      : [];
+  } catch {
+    measurementFileCatalog = [];
+  }
+  measurementFileCatalogBuffers = new Map();
+  updateMeasurementCatalogOptions();
+}
+
+function validMeasurementCatalogEntry(entry) {
+  return Boolean(entry?.id && entry?.url && isUUID(entry?.datasetID));
+}
+
+function updateMeasurementCatalogOptions() {
+  if (!measurementCatalogSelect) {
+    return;
+  }
+  const currentDatasetID = currentManifest?.id?.toLowerCase() ?? "";
+  const sortedEntries = [...measurementFileCatalog].sort((left, right) => {
+    const leftMatches = left.datasetID.toLowerCase() === currentDatasetID;
+    const rightMatches = right.datasetID.toLowerCase() === currentDatasetID;
+    if (leftMatches !== rightMatches) {
+      return leftMatches ? -1 : 1;
+    }
+    return displayMeasurementFileName(left).localeCompare(
+      displayMeasurementFileName(right),
+      undefined,
+      { sensitivity: "base" }
+    );
+  });
+  const options = [new Option(
+    sortedEntries.length ? "Server Measurement Files" : "No measurement files",
+    ""
+  )];
+  options[0].selected = true;
+  for (const entry of sortedEntries) {
+    const matches = entry.datasetID.toLowerCase() === currentDatasetID;
+    const label = matches
+      ? `${displayMeasurementFileName(entry)} (this dataset)`
+      : displayMeasurementFileName(entry);
+    options.push(new Option(label, entry.id));
+  }
+  measurementCatalogSelect.replaceChildren(...options);
+  measurementCatalogSelect.disabled = sortedEntries.length === 0;
+}
+
+function displayMeasurementFileName(entry) {
   return entry.description?.trim() || entry.id;
 }
 
@@ -429,6 +487,7 @@ async function showDataset(dataset) {
   });
   updateAnnotationState();
   updateMarkerCatalogOptions();
+  updateMeasurementCatalogOptions();
   isoValue.value = String(renderer.getNormalizedIsoValue());
   applyRenderStateFromURL();
   const transferFunctionStatus = await applyTransferFunctionFromURL();
@@ -692,6 +751,27 @@ function installRenderControls() {
     }
   });
 
+  measurementCatalogSelect?.addEventListener("change", async () => {
+    const entry = measurementFileCatalog.find(
+      (candidate) => candidate.id === measurementCatalogSelect.value
+    );
+    if (!entry) {
+      return;
+    }
+    try {
+      const contents = parseMeasurementFile(await fetchCatalogMeasurementFile(entry));
+      if (!confirmMeasurementDataset(contents.datasetID)) {
+        measurementCatalogSelect.value = "";
+        return;
+      }
+      applyMeasurementContents(contents, entry.id);
+      setStatus(`Measurements loaded: ${displayMeasurementFileName(entry)}`);
+    } catch (error) {
+      measurementCatalogSelect.value = "";
+      setStatus(`Measurement load failed: ${error.message ?? String(error)}`);
+    }
+  });
+
   measurementLoad?.addEventListener("click", () => {
     measurementLoadInput.value = "";
     measurementLoadInput.click();
@@ -706,8 +786,7 @@ function installRenderControls() {
       }
       const contents = parseMeasurementFile(await file.arrayBuffer());
       if (!confirmMeasurementDataset(contents.datasetID)) return;
-      currentMeasurements = contents.measurements;
-      applyAnnotations();
+      applyMeasurementContents(contents);
       setStatus(`Measurements loaded: ${file.name}`);
     } catch (error) {
       setStatus(`Measurement load failed: ${error.message ?? String(error)}`);
@@ -717,6 +796,7 @@ function installRenderControls() {
   measurementClear?.addEventListener("click", () => {
     currentMeasurements = [];
     applyAnnotations();
+    if (measurementCatalogSelect) measurementCatalogSelect.value = "";
     setStatus("Measurements cleared.");
   });
 
@@ -757,6 +837,14 @@ async function applyMarkerContents(contents, catalogID = "") {
   applyAnnotations();
   if (markerCatalogSelect) {
     markerCatalogSelect.value = catalogID;
+  }
+}
+
+function applyMeasurementContents(contents, catalogID = "") {
+  currentMeasurements = contents.measurements;
+  applyAnnotations();
+  if (measurementCatalogSelect) {
+    measurementCatalogSelect.value = catalogID;
   }
 }
 
@@ -1137,6 +1225,48 @@ function markerFileByteCount(entry) {
   const byteCount = Number(entry.byteCount);
   if (!Number.isInteger(byteCount) || byteCount <= 0 || byteCount > MAX_MARKER_FILE_BYTES) {
     throw new Error("Marker file catalog entry exceeds the supported size limit.");
+  }
+  return byteCount;
+}
+
+async function fetchCatalogMeasurementFile(entry) {
+  if (!entry?.id || !entry?.url) {
+    throw new Error("Measurement file catalog entry is incomplete.");
+  }
+  const declaredByteCount = measurementFileByteCount(entry);
+  if (measurementFileCatalogBuffers.has(entry.id)) {
+    return measurementFileCatalogBuffers.get(entry.id);
+  }
+
+  const url = new URL(`./web-data/${entry.url}`, window.location.href);
+  const response = await fetch(url, { credentials: "same-origin" });
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}`);
+  }
+  validateResponseContentLength(response, MAX_MEASUREMENT_FILE_BYTES, "measurement file");
+  const buffer = await responseArrayBufferWithLimit(
+    response,
+    MAX_MEASUREMENT_FILE_BYTES,
+    "measurement file"
+  );
+  if (declaredByteCount !== null && buffer.byteLength !== declaredByteCount) {
+    throw new Error(
+      `Measurement file byte count mismatch: expected ${declaredByteCount}, received ${buffer.byteLength}.`
+    );
+  }
+  measurementFileCatalogBuffers.set(entry.id, buffer);
+  return buffer;
+}
+
+function measurementFileByteCount(entry) {
+  if (entry.byteCount === undefined || entry.byteCount === null) {
+    return null;
+  }
+  const byteCount = Number(entry.byteCount);
+  if (!Number.isInteger(byteCount) ||
+      byteCount <= 0 ||
+      byteCount > MAX_MEASUREMENT_FILE_BYTES) {
+    throw new Error("Measurement file catalog entry exceeds the supported size limit.");
   }
   return byteCount;
 }

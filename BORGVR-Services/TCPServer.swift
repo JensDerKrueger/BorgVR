@@ -22,6 +22,7 @@ class TCPServer {
   private var datasets: [DatasetInfo]
   private var transferFunctions: [TransferFunctionInfo]
   private var markerFiles: [MarkerFileInfo]
+  private var measurementFiles: [MeasurementFileInfo]
   private var meshFiles: [MeshFileInfo]
   private let authSecret: String
   private var authChallenges: [ObjectIdentifier: AuthChallenge] = [:]
@@ -57,6 +58,7 @@ class TCPServer {
     datasets: [DatasetInfo] = [],
     transferFunctions: [TransferFunctionInfo] = [],
     markerFiles: [MarkerFileInfo] = [],
+    measurementFiles: [MeasurementFileInfo] = [],
     meshFiles: [MeshFileInfo] = [],
     authSecret: String? = nil
   ) {
@@ -64,6 +66,7 @@ class TCPServer {
     self.datasets = datasets
     self.transferFunctions = transferFunctions
     self.markerFiles = markerFiles
+    self.measurementFiles = measurementFiles
     self.meshFiles = meshFiles
     self.authSecret = BorgVRServerAuthentication.normalizedSecret(authSecret)
 
@@ -171,6 +174,20 @@ class TCPServer {
     return markerFile
   }
 
+  func measurementFilesSnapshot() -> [MeasurementFileInfo] {
+    stateLock.lock()
+    let snapshot = measurementFiles
+    stateLock.unlock()
+    return snapshot
+  }
+
+  func findMeasurementFileById(_ id: String) -> MeasurementFileInfo? {
+    stateLock.lock()
+    let measurementFile = measurementFiles.first(where: { $0.id == id })
+    stateLock.unlock()
+    return measurementFile
+  }
+
   func meshFilesSnapshot() -> [MeshFileInfo] {
     stateLock.lock()
     let snapshot = meshFiles
@@ -189,16 +206,20 @@ class TCPServer {
     datasets: [DatasetInfo],
     transferFunctions: [TransferFunctionInfo],
     markerFiles: [MarkerFileInfo],
+    measurementFiles: [MeasurementFileInfo],
     meshFiles: [MeshFileInfo]
   ) {
     stateLock.lock()
     self.datasets = datasets
     self.transferFunctions = transferFunctions
     self.markerFiles = markerFiles
+    self.measurementFiles = measurementFiles
     self.meshFiles = meshFiles
     stateLock.unlock()
     logger?.info(
-      "Updated server catalog: \(datasets.count) datasets, \(transferFunctions.count) transfer functions, \(markerFiles.count) marker files, \(meshFiles.count) meshes."
+      "Updated server catalog: \(datasets.count) datasets, \(transferFunctions.count) transfer functions, " +
+      "\(markerFiles.count) marker files, \(measurementFiles.count) measurement files, " +
+      "and \(meshFiles.count) meshes."
     )
   }
 

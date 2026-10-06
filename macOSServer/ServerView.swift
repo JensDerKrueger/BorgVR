@@ -36,6 +36,7 @@ struct ServerView: View {
   @State private var datasets: [DatasetInfo] = []
   @State private var transferFunctions: [TransferFunctionInfo] = []
   @State private var markerFiles: [MarkerFileInfo] = []
+  @State private var measurementFiles: [MeasurementFileInfo] = []
   @State private var meshFiles: [MeshFileInfo] = []
   @State private var datasetInfoText: String = L(
     "server_dataset_scanning_message",
@@ -305,6 +306,7 @@ struct ServerView: View {
       datasets = datasetScanner?.getDatasets() ?? []
       transferFunctions = datasetScanner?.getTransferFunctions() ?? []
       markerFiles = datasetScanner?.getMarkerFiles() ?? []
+      measurementFiles = datasetScanner?.getMeasurementFiles() ?? []
       meshFiles = datasetScanner?.getMeshFiles() ?? []
       datasetInfoText = String(
         format: L(
@@ -318,6 +320,7 @@ struct ServerView: View {
         datasets: datasets,
         transferFunctions: transferFunctions,
         markerFiles: markerFiles,
+        measurementFiles: measurementFiles,
         meshFiles: meshFiles
       )
 
@@ -393,6 +396,7 @@ struct ServerView: View {
       datasets: datasets,
       transferFunctions: transferFunctions,
       markerFiles: markerFiles,
+      measurementFiles: measurementFiles,
       meshFiles: meshFiles,
       authSecret: storedAppModel.serverPassword
     )
@@ -452,6 +456,7 @@ struct ServerView: View {
     datasets = datasetScanner?.getDatasets() ?? []
     transferFunctions = datasetScanner?.getTransferFunctions() ?? []
     markerFiles = datasetScanner?.getMarkerFiles() ?? []
+    measurementFiles = datasetScanner?.getMeasurementFiles() ?? []
     meshFiles = datasetScanner?.getMeshFiles() ?? []
     datasetInfoText = String(
       format: L(
@@ -464,6 +469,7 @@ struct ServerView: View {
       datasets: datasets,
       transferFunctions: transferFunctions,
       markerFiles: markerFiles,
+      measurementFiles: measurementFiles,
       meshFiles: meshFiles
     )
   }

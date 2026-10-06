@@ -345,6 +345,32 @@ bool TCPServer::findMarkerFileById(const std::string& id, MarkerFileInfo& out) c
   return true;
 }
 
+void TCPServer::setMeasurementFiles(std::vector<MeasurementFileInfo> measurementFiles) {
+  std::lock_guard<std::mutex> lock(datasetsMutex_);
+  std::sort(measurementFiles.begin(), measurementFiles.end(),
+            [](const MeasurementFileInfo& a, const MeasurementFileInfo& b) {
+    return a.id < b.id;
+  });
+  measurementFiles_ = std::move(measurementFiles);
+}
+
+std::vector<MeasurementFileInfo> TCPServer::measurementFilesSnapshot() const {
+  std::lock_guard<std::mutex> lock(datasetsMutex_);
+  return measurementFiles_;
+}
+
+bool TCPServer::findMeasurementFileById(const std::string& id,
+                                        MeasurementFileInfo& out) const {
+  std::lock_guard<std::mutex> lock(datasetsMutex_);
+  auto it = std::find_if(measurementFiles_.begin(), measurementFiles_.end(),
+                         [&](const MeasurementFileInfo& measurement) {
+    return measurement.id == id;
+  });
+  if (it == measurementFiles_.end()) return false;
+  out = *it;
+  return true;
+}
+
 void TCPServer::setMeshFiles(std::vector<MeshFileInfo> meshFiles) {
   std::lock_guard<std::mutex> lock(datasetsMutex_);
   std::sort(meshFiles.begin(), meshFiles.end(),

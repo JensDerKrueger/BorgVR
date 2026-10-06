@@ -646,6 +646,22 @@ p {
   padding: 3px 9px 9px;
 }
 
+.measurement-controls label {
+  grid-template-columns: 70px minmax(0, 1fr);
+  padding: 0 0 2px;
+}
+
+.measurement-controls select {
+  min-width: 0;
+  width: 100%;
+  min-height: 30px;
+  border: 1px solid rgba(190, 249, 255, 0.18);
+  border-radius: 8px;
+  background: rgba(4, 14, 20, 0.78);
+  color: var(--text);
+  padding: 0 8px;
+}
+
 .measurement-list {
   display: grid;
   gap: 4px;

@@ -92,7 +92,8 @@ static void printUsage(const char* filename) {
     << "Usage:\n"
     << "  " << executable << " [options]\n\n"
     << "Options:\n"
-    << "  --directory, -d <path>          Directory containing .data, .tf1d, .marker, and .mesh files.\n"
+    << "  --directory, -d <path>          Directory containing .data, .tf1d, .marker, .measurement,\n"
+    << "                                  and .mesh files.\n"
     << "                                  Defaults to the home directory.\n"
     << "  --port, -p <port>               Native dataset-server port. Defaults to 12345.\n"
     << "  --max-bricks, -m <count>        Maximum bricks per GETBRICKS request. Defaults to 64.\n"
@@ -526,6 +527,63 @@ static std::vector<MarkerFileInfo> scanMarkerDirectory(const std::string& direct
   return markerFiles;
 }
 
+static std::vector<MeasurementFileInfo> scanMeasurementDirectory(
+    const std::string& directory,
+    std::shared_ptr<Logger> logger) {
+  namespace fs = std::filesystem;
+  std::vector<MeasurementFileInfo> measurementFiles;
+  std::error_code ec;
+  if (!fs::exists(directory, ec) || !fs::is_directory(directory, ec)) {
+    return measurementFiles;
+  }
+
+  for (const auto& entry : fs::directory_iterator(directory, ec)) {
+    if (ec) break;
+    if (!entry.is_regular_file(ec) || entry.path().extension() != ".measurement") continue;
+    const auto byteCount = entry.file_size(ec);
+    if (ec || byteCount == 0 || byteCount > BorgVRFormat::kMaximumMeasurementFileBytes) {
+      continue;
+    }
+    std::ifstream file(entry.path(), std::ios::binary);
+    std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(file)),
+                               std::istreambuf_iterator<char>());
+    const bool validMagic = bytes.size() == byteCount &&
+      bytes.size() >= BorgVRFormat::kMeasurementHeaderBytes &&
+      std::equal(
+        BorgVRFormat::kMeasurementMagic.begin(),
+        BorgVRFormat::kMeasurementMagic.end(),
+        bytes.begin()
+      );
+    const uint16_t version = validMagic
+      ? static_cast<uint16_t>(bytes[8] | (static_cast<uint16_t>(bytes[9]) << 8))
+      : 0;
+    const uint32_t measurementCount = validMagic
+      ? static_cast<uint32_t>(bytes[28]) |
+        (static_cast<uint32_t>(bytes[29]) << 8) |
+        (static_cast<uint32_t>(bytes[30]) << 16) |
+        (static_cast<uint32_t>(bytes[31]) << 24)
+      : 0;
+    if (!validMagic ||
+        version != BorgVRFormat::kMeasurementVersion ||
+        measurementCount > BorgVRFormat::kMaximumMeasurementCount) {
+      if (logger) {
+        logger->warning(
+          "Unable to load measurement file " + entry.path().string() + ": invalid header"
+        );
+      }
+      continue;
+    }
+    MeasurementFileInfo info;
+    info.id = md5Hex(bytes.data(), bytes.size());
+    info.filename = entry.path().string();
+    info.datasetId = formatUuid(bytes.data() + 12);
+    info.measurementDescription = entry.path().stem().string();
+    info.byteCount = bytes.size();
+    measurementFiles.push_back(std::move(info));
+  }
+  return measurementFiles;
+}
+
 static std::vector<MeshFileInfo> scanMeshDirectory(const std::string& directory,
                                                    std::shared_ptr<Logger> logger) {
   namespace fs = std::filesystem;
@@ -760,6 +818,7 @@ int main(int argc, char** argv) {
   auto datasets = scanDatasetDirectory(configuration.datasetDirectory, logger);
   auto transferFunctions = scanTransferFunctionDirectory(configuration.datasetDirectory, logger);
   auto markerFiles = scanMarkerDirectory(configuration.datasetDirectory, logger);
+  auto measurementFiles = scanMeasurementDirectory(configuration.datasetDirectory, logger);
   auto meshFiles = scanMeshDirectory(configuration.datasetDirectory, logger);
 
   TCPServer server(
@@ -771,6 +830,7 @@ int main(int argc, char** argv) {
   server.setDatasets(datasets);
   server.setTransferFunctions(transferFunctions);
   server.setMarkerFiles(markerFiles);
+  server.setMeasurementFiles(measurementFiles);
   server.setMeshFiles(meshFiles);
   if (!server.start()) {
     return 2;

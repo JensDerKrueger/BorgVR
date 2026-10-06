@@ -40,6 +40,14 @@ struct MarkerFileInfo {
   size_t byteCount = 0;
 };
 
+struct MeasurementFileInfo {
+  std::string id;                         // MD5 over the complete .measurement file
+  std::string filename;                   // path to .measurement file
+  std::string datasetId;                  // dataset UUID stored in the file
+  std::string measurementDescription;     // displayed in the web catalog
+  size_t byteCount = 0;
+};
+
 struct MeshFileInfo {
   std::string id;
   std::string filename;
@@ -76,6 +84,9 @@ public:
   void setMarkerFiles(std::vector<MarkerFileInfo> markerFiles);
   std::vector<MarkerFileInfo> markerFilesSnapshot() const;
   bool findMarkerFileById(const std::string& id, MarkerFileInfo& out) const;
+  void setMeasurementFiles(std::vector<MeasurementFileInfo> measurementFiles);
+  std::vector<MeasurementFileInfo> measurementFilesSnapshot() const;
+  bool findMeasurementFileById(const std::string& id, MeasurementFileInfo& out) const;
   void setMeshFiles(std::vector<MeshFileInfo> meshFiles);
   std::vector<MeshFileInfo> meshFilesSnapshot() const;
   bool findMeshFileById(const std::string& id, MeshFileInfo& out) const;
@@ -137,6 +148,7 @@ private:
   std::vector<DatasetInfo> datasets_;
   std::vector<TransferFunctionInfo> transferFunctions_;
   std::vector<MarkerFileInfo> markerFiles_;
+  std::vector<MeasurementFileInfo> measurementFiles_;
   std::vector<MeshFileInfo> meshFiles_;
   mutable std::mutex datasetsMutex_;
 

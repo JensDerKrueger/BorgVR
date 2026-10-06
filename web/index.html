@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>BorgVR WebGPU</title>
     <link rel="icon" href="./assets/borgvr.jpg">
-    <link rel="stylesheet" href="./styles/main.css?v=20261005-annotations">
+    <link rel="stylesheet" href="./styles/main.css?v=20261006-measurement-catalog">
   </head>
   <body>
     <main class="app-shell">
@@ -151,6 +151,12 @@
           <details class="control-panel" data-ui-panel="measurements">
             <summary>Measurements</summary>
             <div class="measurement-controls">
+              <label>
+                <span>Server file</span>
+                <select id="measurement-catalog-select" aria-label="Measurement files provided by the server" title="Measurement files provided by the server" disabled>
+                  <option value="" selected>No measurement files</option>
+                </select>
+              </label>
               <div id="measurement-list" class="measurement-list">
                 <span class="measurement-empty">No measurements loaded</span>
               </div>
@@ -178,7 +184,7 @@
       </section>
     </main>
 
-    <script type="module" src="./src/app.js?v=20261005-annotations"></script>
+    <script type="module" src="./src/app.js?v=20261006-measurement-catalog"></script>
   </body>
 </html>
 
