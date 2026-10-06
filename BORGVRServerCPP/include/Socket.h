@@ -55,9 +55,12 @@ public:
   // - 0 on orderly shutdown
   // - <0 on error
   int recvSome(uint8_t* buffer, size_t capacity);
+  bool lastReceiveTimedOut() const;
+  bool lastReceiveWasPeerDisconnect() const;
 
 private:
   SocketHandle sock_ = kInvalidSocket;
+  int lastReceiveError_ = 0;
 };
 
 class TcpListener {

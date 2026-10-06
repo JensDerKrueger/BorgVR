@@ -910,7 +910,9 @@ void TCPServer::ClientSession::run() {
     while (running_.load() && server_.running_.load() && socket_.valid()) {
       const int rc = socket_.recvSome(temp, sizeof(temp));
       if (rc < 0) {
-        if (server_.logger_) {
+        const bool expectedDisconnect = socket_.lastReceiveTimedOut() ||
+                                        socket_.lastReceiveWasPeerDisconnect();
+        if (server_.logger_ && !expectedDisconnect) {
           server_.logger_->warning(clientLogMessage("Receive error; disconnecting."));
         }
         break;

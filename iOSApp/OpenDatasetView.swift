@@ -322,6 +322,12 @@ struct OpenDatasetView: View {
 
   private func resolveRemoteDataset(_ dataset: AppModel.DatasetEntry) async throws -> AppModel.DatasetEntry {
     guard case let .remote(address, port, password) = dataset.source else { return dataset }
+    if let localDataset = preferredLocalDataset(matching: dataset.uniqueId) {
+      appModel.logger.info(
+        "Using local copy of dataset \(dataset.uniqueId) instead of opening the remote source."
+      )
+      return localDataset
+    }
     let selectedOrigin = DatasetOrigin(address: address, port: port, password: password)
     let origins = DatasetOriginCatalog.deduplicated(
       [selectedOrigin] + DatasetOriginCatalog.shared.origins(for: dataset.uniqueId)
@@ -356,6 +362,14 @@ struct OpenDatasetView: View {
       )
     }
     throw RemoteDatasetOpenError.noReachableOrigin
+  }
+
+  private func preferredLocalDataset(matching uniqueID: String) -> AppModel.DatasetEntry? {
+    let matches = datasets.filter {
+      $0.uniqueId.caseInsensitiveCompare(uniqueID) == .orderedSame
+    }
+    return matches.first(where: { $0.source == .local })
+      ?? matches.first(where: { $0.source == .builtIn })
   }
 
   private func openDataset(_ dataset: AppModel.DatasetEntry) {

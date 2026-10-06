@@ -71,15 +71,19 @@ TcpSocket::~TcpSocket() {
   close();
 }
 
-TcpSocket::TcpSocket(TcpSocket&& other) noexcept : sock_(other.sock_) {
+TcpSocket::TcpSocket(TcpSocket&& other) noexcept
+  : sock_(other.sock_), lastReceiveError_(other.lastReceiveError_) {
   other.sock_ = kInvalidSocket;
+  other.lastReceiveError_ = 0;
 }
 
 TcpSocket& TcpSocket::operator=(TcpSocket&& other) noexcept {
   if (this != &other) {
     close();
     sock_ = other.sock_;
+    lastReceiveError_ = other.lastReceiveError_;
     other.sock_ = kInvalidSocket;
+    other.lastReceiveError_ = 0;
   }
   return *this;
 }
@@ -238,18 +242,51 @@ bool TcpSocket::sendAll(const uint8_t* data, size_t size) {
 }
 
 int TcpSocket::recvSome(uint8_t* buffer, size_t capacity) {
-  if (!valid()) return -1;
+  if (!valid()) {
+    lastReceiveError_ = 0;
+    return -1;
+  }
 #if defined(_WIN32)
   int rc = ::recv(sock_, reinterpret_cast<char*>(buffer), static_cast<int>(capacity), 0);
-  if (rc == SOCKET_ERROR) return -1;
+  if (rc == SOCKET_ERROR) {
+    lastReceiveError_ = WSAGetLastError();
+    return -1;
+  }
+  lastReceiveError_ = 0;
   return rc;
 #else
   ssize_t rc = 0;
   do {
     rc = ::recv(sock_, buffer, capacity, 0);
   } while (rc < 0 && errno == EINTR);
-  if (rc < 0) return -1;
+  if (rc < 0) {
+    lastReceiveError_ = errno;
+    return -1;
+  }
+  lastReceiveError_ = 0;
   return static_cast<int>(rc);
+#endif
+}
+
+bool TcpSocket::lastReceiveTimedOut() const {
+#if defined(_WIN32)
+  return lastReceiveError_ == WSAETIMEDOUT || lastReceiveError_ == WSAEWOULDBLOCK;
+#else
+  return lastReceiveError_ == EAGAIN || lastReceiveError_ == EWOULDBLOCK;
+#endif
+}
+
+bool TcpSocket::lastReceiveWasPeerDisconnect() const {
+#if defined(_WIN32)
+  return lastReceiveError_ == WSAECONNRESET ||
+         lastReceiveError_ == WSAECONNABORTED ||
+         lastReceiveError_ == WSAESHUTDOWN ||
+         lastReceiveError_ == WSAENOTCONN;
+#else
+  return lastReceiveError_ == ECONNRESET ||
+         lastReceiveError_ == ECONNABORTED ||
+         lastReceiveError_ == EPIPE ||
+         lastReceiveError_ == ENOTCONN;
 #endif
 }
 
