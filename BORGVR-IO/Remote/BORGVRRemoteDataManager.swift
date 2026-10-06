@@ -41,8 +41,7 @@ enum BORGVRRemoteDataManagerError: Error, LocalizedError {
  A manager for remote BorgVR dataset operations via a TCP connection.
 
  This class handles the network connection using NWConnection, and allows the user
- to request a dataset list, open a dataset on a new connection, and send/receive
- commands and binary responses.
+ to request catalogs or transfer its connected session to an opened dataset.
  */
 class BORGVRRemoteDataManager {
   struct RemoteTransferFunctionInfo: Equatable {
@@ -66,6 +65,8 @@ class BORGVRRemoteDataManager {
 
   /// The underlying NWConnection for this manager.
   private let connection: NWConnection
+  /// Once transferred, the dataset owns the connection and the manager must no longer use it.
+  private var connectionOwnershipTransferred = false
   /// The local list of datasets.
   private var datasets: [(id: String, description: String)] = []
   /// The remote list of transfer functions.
@@ -118,7 +119,9 @@ class BORGVRRemoteDataManager {
   }
 
   deinit {
-    connection.cancel()
+    if !connectionOwnershipTransferred {
+      connection.cancel()
+    }
     logger?.dev("BORGVRRemoteDataManager deinitialized")
   }
 
@@ -130,6 +133,11 @@ class BORGVRRemoteDataManager {
    established within the timeout period.
    */
   func connect(timeout: Double) throws {
+    guard !connectionOwnershipTransferred else {
+      throw BORGVRRemoteDataManagerError.connectionFailed(
+        reason: "The manager connection is already owned by an open dataset."
+      )
+    }
     try BORGVRRemoteDataManager.connect(connection: connection,
                                         timeout: timeout, logger: logger)
     try BorgVRServerAuthentication.authenticate(
@@ -411,9 +419,10 @@ class BORGVRRemoteDataManager {
   }
 
   /**
-   Opens a dataset on a new connection.
+   Opens a dataset on the manager's authenticated connection.
 
-   A new NWConnection is created and used to open the dataset.
+   Ownership of the connection is transferred to the returned dataset. The manager
+   must not be used for further catalog or dataset requests afterwards.
 
    - Parameters:
    - datasetID: The dataset identifier.
@@ -425,34 +434,30 @@ class BORGVRRemoteDataManager {
   func openDataset(datasetID: String, timeout: Double,
                    localCacheFilename: String? = nil,
                    originProvider: @escaping DatasetOriginProvider = { [] }) throws -> BORGVRRemoteData  {
-    let datasetConnection = NWConnection(
-      host: NWEndpoint.Host(host),
-      port: NWEndpoint.Port(rawValue: port)!,
-      using: .tcp
-    )
+    guard !connectionOwnershipTransferred else {
+      throw BORGVRRemoteDataManagerError.connectionFailed(
+        reason: "The manager connection is already owned by an open dataset."
+      )
+    }
 
-    try BORGVRRemoteDataManager.connect(connection: datasetConnection,
-                                        timeout: timeout, logger: logger)
-    try BorgVRServerAuthentication.authenticate(
-      connection: datasetConnection,
-      secret: authSecret,
-      timeout: timeout,
-      logger: logger
+    let remoteData = try BORGVRRemoteData(
+      connection: connection,
+      datasetID: datasetID,
+      maxBricksPerGetRequest: maxBricksPerGetRequest,
+      targetFilename: localCacheFilename,
+      primaryOrigin: DatasetOrigin(
+        address: host,
+        port: Int(port),
+        password: authSecret
+      ),
+      connectionTimeout: timeout,
+      originProvider: originProvider,
+      authSecret: authSecret,
+      logger: logger,
+      notifier: notifier
     )
-    return try BORGVRRemoteData(connection: datasetConnection,
-                                datasetID: datasetID,
-                                maxBricksPerGetRequest: maxBricksPerGetRequest,
-                                targetFilename: localCacheFilename,
-                                primaryOrigin: DatasetOrigin(
-                                  address: host,
-                                  port: Int(port),
-                                  password: authSecret
-                                ),
-                                connectionTimeout: timeout,
-                                originProvider: originProvider,
-                                authSecret: authSecret,
-                                logger:logger,
-                                notifier: notifier)
+    connectionOwnershipTransferred = remoteData.sourceType != .local
+    return remoteData
   }
 
   /**
@@ -462,6 +467,11 @@ class BORGVRRemoteDataManager {
    - Throws: A BORGVRRemoteDataManagerError if sending fails or times out.
    */
   private func sendCommand(_ command: String) throws {
+    guard !connectionOwnershipTransferred else {
+      throw BORGVRRemoteDataManagerError.connectionFailed(
+        reason: "The manager connection is already owned by an open dataset."
+      )
+    }
     try BorgVRServerAuthentication.sendCommand(command, connection: connection)
   }
 
