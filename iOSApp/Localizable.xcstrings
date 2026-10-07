@@ -1,6 +1,86 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "The dataset state file is invalid." : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Die Datensatzzustandsdatei ist ungültig." } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "The dataset state file is invalid." } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "El archivo de estado del conjunto de datos no es válido." } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Le fichier d’état du jeu de données n’est pas valide." } }
+      }
+    },
+    "Unsupported dataset state version %d." : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Die Datensatzzustandsversion %d wird nicht unterstützt." } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Unsupported dataset state version %d." } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "La versión %d del estado del conjunto de datos no es compatible." } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "La version %d de l’état du jeu de données n’est pas prise en charge." } }
+      }
+    },
+    "The dataset state contains invalid values." : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Der Datensatzzustand enthält ungültige Werte." } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "The dataset state contains invalid values." } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "El estado del conjunto de datos contiene valores no válidos." } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "L’état du jeu de données contient des valeurs non valides." } }
+      }
+    },
+    "The dataset state file is too large." : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Die Datensatzzustandsdatei ist zu groß." } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "The dataset state file is too large." } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "El archivo de estado del conjunto de datos es demasiado grande." } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Le fichier d’état du jeu de données est trop volumineux." } }
+      }
+    },
+    "The spatial view is not available yet." : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Die räumliche Ansicht ist noch nicht verfügbar." } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "The spatial view is not available yet." } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "La vista espacial aún no está disponible." } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "La vue spatiale n’est pas encore disponible." } }
+      }
+    },
+    "Automatically load/save view and rendering state" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Ansicht und Renderzustand automatisch laden/speichern" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Automatically load/save view and rendering state" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Cargar/guardar automáticamente la vista y el estado de renderizado" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Charger/enregistrer automatiquement la vue et l’état de rendu" } }
+      }
+    },
+    "Restore Dataset State" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Datensatzzustand wiederherstellen" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Restore Dataset State" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Restaurar estado del conjunto de datos" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Restaurer l’état du jeu de données" } }
+      }
+    },
+    "Nothing to Restore" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Nichts wiederherzustellen" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Nothing to Restore" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Nada que restaurar" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Rien à restaurer" } }
+      }
+    },
+    "No saved state is available for this dataset." : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Für diesen Datensatz ist kein gespeicherter Zustand verfügbar." } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "No saved state is available for this dataset." } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "No hay ningún estado guardado disponible para este conjunto de datos." } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Aucun état enregistré n’est disponible pour ce jeu de données." } }
+      }
+    },
+    "Unable to Restore Dataset State" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Datensatzzustand konnte nicht wiederhergestellt werden" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Unable to Restore Dataset State" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "No se pudo restaurar el estado del conjunto de datos" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Impossible de restaurer l’état du jeu de données" } }
+      }
+    },
     "Automatically load/save measurements" : {
       "localizations" : {
         "de" : { "stringUnit" : { "state" : "translated", "value" : "Messungen automatisch laden/speichern" } },

@@ -40,6 +40,8 @@ struct RenderView: View {
   @State private var showDatasetStateOverwriteConfirmation = false
   @State private var showNoDatasetStateToSave = false
   @State private var datasetStateSaveError: Error?
+  @State private var showNoDatasetStateToRestore = false
+  @State private var datasetStateRestoreError: Error?
   @StateObject private var renderSurface = MobileRenderSurface()
 
   private let clippingSensitivity: Float = 0.0012
@@ -168,6 +170,22 @@ struct RenderView: View {
     } message: {
       Text(datasetStateSaveError?.localizedDescription ?? "")
     }
+    .alert("Nothing to Restore", isPresented: $showNoDatasetStateToRestore) {
+      Button("OK", role: .cancel) {}
+    } message: {
+      Text("No saved state is available for this dataset.")
+    }
+    .alert(
+      "Unable to Restore Dataset State",
+      isPresented: Binding(
+        get: { datasetStateRestoreError != nil },
+        set: { if !$0 { datasetStateRestoreError = nil } }
+      )
+    ) {
+      Button("OK", role: .cancel) { datasetStateRestoreError = nil }
+    } message: {
+      Text(datasetStateRestoreError?.localizedDescription ?? "")
+    }
     .onChange(of: appSettings.showBrickVisualization) { _, isVisible in
       guard !isVisible, renderingParameters.brickVis else { return }
       renderingParameters.brickVis = false
@@ -289,6 +307,15 @@ struct RenderView: View {
           }
           .accessibilityLabel("Save Dataset State")
           .help("Save Dataset State")
+          .buttonStyle(.bordered)
+
+          Button {
+            restoreDatasetState()
+          } label: {
+            Image(systemName: "arrow.counterclockwise")
+          }
+          .accessibilityLabel("Restore Dataset State")
+          .help("Restore Dataset State")
           .buttonStyle(.bordered)
 
           if appSettings.showLogButton {
@@ -1237,7 +1264,10 @@ struct RenderView: View {
        let fileURL = appModel.transferFunctionFileURL() {
       try? renderingParameters.transferFunction.save(to: fileURL)
     }
-    appModel.saveAutomaticallyManagedDatasetState(appSettings: appSettings)
+    appModel.saveAutomaticallyManagedDatasetState(
+      appSettings: appSettings,
+      renderingParameters: renderingParameters
+    )
     if leavingSharePlay {
       sharePlay.leaveGroupActivity()
     } else {
@@ -1270,6 +1300,7 @@ struct RenderView: View {
       transferFunctionURL: renderingParameters.renderMode == .isoValue
         ? nil
         : appModel.transferFunctionFileURL(),
+      viewStateURL: appModel.viewStateFileURL(),
       objectURL: hasObjects ? appModel.objectFileURL() : nil,
       measurementURL: hasMeasurements ? appModel.measurementFileURL() : nil
     )
@@ -1281,6 +1312,12 @@ struct RenderView: View {
     do {
       if let url = plan.transferFunctionURL {
         try renderingParameters.transferFunction.save(to: url, description: dataset.description)
+      }
+      if let url = plan.viewStateURL {
+        try DatasetStateStorage.saveViewState(
+          renderingParameters.makeDatasetViewState(datasetID: dataset.uniqueId),
+          to: url
+        )
       }
       if let url = plan.objectURL {
         try DatasetStateStorage.saveObjects(
@@ -1299,6 +1336,22 @@ struct RenderView: View {
       }
     } catch {
       datasetStateSaveError = error
+    }
+  }
+
+  private func restoreDatasetState() {
+    do {
+      guard try appModel.restoreSavedDatasetState(
+        renderingParameters: renderingParameters
+      ) else {
+        showNoDatasetStateToRestore = true
+        return
+      }
+      synchronizeFullState()
+      sharePlay.synchronizeMarkers(immediately: true)
+      sharePlay.synchronizeMeasurements(immediately: true)
+    } catch {
+      datasetStateRestoreError = error
     }
   }
 

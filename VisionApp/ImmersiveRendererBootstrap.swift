@@ -130,12 +130,6 @@ enum ImmersiveBootstrap {
       try? sharedAppModel.loadTransferFunction(from: fileURL)
       sharedAppModel.synchronize(kind: .full)
     }
-    if storedAppModel.autoloadTransform {
-      let fileURL = URL(
-        fileURLWithPath: autoURL.deletingPathExtension().path() + ".trafo"
-      )
-      try? sharedAppModel.loadTransform(from: fileURL)
-    }
     if let datasetInfo = runtimeAppModel.activeDatasetInfo {
       sharedAppModel.loadAutomaticallyManagedDatasetState(
         datasetID: activeDataset.uniqueId,

@@ -118,7 +118,7 @@ final class StoredAppModel: ObservableObject {
     "autoloadTF": false,
     "autoloadObjects": false,
     "autoloadMeasurements": false,
-    "autoloadTransform": false,
+    "autoloadRenderState": false,
     "disableFoveation": false,
     "requestLowResLOD": true,
     "stopOnMiss": false,
@@ -244,8 +244,9 @@ final class StoredAppModel: ObservableObject {
   /// Whether to automatically load and save measurements.
   @AppStorage("autoloadMeasurements")
   var autoloadMeasurements: Bool = StoredAppModel.bool("autoloadMeasurements")
-  /// Whether to automatically load the object transfomration.
-  @AppStorage("autoloadTransform") var autoloadTransform: Bool = StoredAppModel.bool("autoloadTransform")
+  /// Whether to automatically load and save the dataset view and rendering state.
+  @AppStorage("autoloadRenderState")
+  var autoloadRenderState: Bool = StoredAppModel.bool("autoloadRenderState")
   /// Whether to disable the built-in foveation feature
   @AppStorage("disableFoveation") var disableFoveation: Bool = StoredAppModel.bool("disableFoveation")
   /// Whether to request a low resolution LOD along with the high res

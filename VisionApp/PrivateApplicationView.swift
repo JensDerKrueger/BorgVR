@@ -16,6 +16,8 @@ struct PrivateApplicationView: View {
   @State private var showDatasetStateOverwriteConfirmation = false
   @State private var showNoDatasetStateToSave = false
   @State private var datasetStateSaveError: Error?
+  @State private var showNoDatasetStateToRestore = false
+  @State private var datasetStateRestoreError: Error?
 
   var body: some View {
     VStack() {
@@ -30,6 +32,11 @@ struct PrivateApplicationView: View {
           }
           .accessibilityLabel("Save Dataset State")
           .help("Save Dataset State")
+          Button(action: restoreDatasetState) {
+            Image(systemName: "arrow.counterclockwise")
+          }
+          .accessibilityLabel("Restore Dataset State")
+          .help("Restore Dataset State")
         }
       }
       .padding()
@@ -184,6 +191,22 @@ struct PrivateApplicationView: View {
       Button("OK", role: .cancel) { datasetStateSaveError = nil }
     } message: {
       Text(datasetStateSaveError?.localizedDescription ?? "")
+    }
+    .alert("Nothing to Restore", isPresented: $showNoDatasetStateToRestore) {
+      Button("OK", role: .cancel) {}
+    } message: {
+      Text("No saved state is available for this dataset.")
+    }
+    .alert(
+      "Unable to Restore Dataset State",
+      isPresented: Binding(
+        get: { datasetStateRestoreError != nil },
+        set: { if !$0 { datasetStateRestoreError = nil } }
+      )
+    ) {
+      Button("OK", role: .cancel) { datasetStateRestoreError = nil }
+    } message: {
+      Text(datasetStateRestoreError?.localizedDescription ?? "")
     }
   }
 
@@ -409,6 +432,7 @@ struct PrivateApplicationView: View {
     guard let dataset = runtimeAppModel.activeDataset else {
       return DatasetStateSavePlan(
         transferFunctionURL: nil,
+        viewStateURL: nil,
         objectURL: nil,
         measurementURL: nil
       )
@@ -429,6 +453,10 @@ struct PrivateApplicationView: View {
       transferFunctionURL: sharedAppModel.renderMode == .isoValue
         ? nil
         : transferFunctionURL,
+      viewStateURL: DatasetStateStorage.viewStateFileURL(
+        datasetID: dataset.uniqueId,
+        logger: runtimeAppModel.logger
+      ),
       objectURL: hasObjects
         ? DatasetStateStorage.objectFileURL(
           datasetID: dataset.uniqueId,
@@ -451,6 +479,12 @@ struct PrivateApplicationView: View {
       if let url = plan.transferFunctionURL {
         try sharedAppModel.transferFunction.save(to: url, description: dataset.description)
       }
+      if let url = plan.viewStateURL {
+        try DatasetStateStorage.saveViewState(
+          try sharedAppModel.makeDatasetViewState(datasetID: dataset.uniqueId),
+          to: url
+        )
+      }
       if let url = plan.objectURL {
         try DatasetStateStorage.saveObjects(
           datasetID: dataset.uniqueId,
@@ -468,6 +502,29 @@ struct PrivateApplicationView: View {
       }
     } catch {
       datasetStateSaveError = error
+    }
+  }
+
+  private func restoreDatasetState() {
+    guard let dataset = runtimeAppModel.activeDataset,
+          let datasetInfo = runtimeAppModel.activeDatasetInfo else {
+      showNoDatasetStateToRestore = true
+      return
+    }
+    do {
+      guard try sharedAppModel.restoreSavedDatasetState(
+        datasetID: dataset.uniqueId,
+        physicalExtent: datasetInfo.physicalExtentMeters,
+        logger: runtimeAppModel.logger
+      ) else {
+        showNoDatasetStateToRestore = true
+        return
+      }
+      sharedAppModel.synchronize(kind: .full)
+      sharedAppModel.synchronizeMarkers()
+      sharedAppModel.synchronizeMeasurements()
+    } catch {
+      datasetStateRestoreError = error
     }
   }
 

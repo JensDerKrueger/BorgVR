@@ -904,3 +904,13 @@
 "Save..." = "Save…";
 "Delete Selection" = "Delete Selection";
 "Delete All" = "Delete All";
+"Automatically load/save view and rendering state" = "Automatically load/save view and rendering state";
+"Restore Dataset State" = "Restore Dataset State";
+"Nothing to Restore" = "Nothing to Restore";
+"No saved state is available for this dataset." = "No saved state is available for this dataset.";
+"Unable to Restore Dataset State" = "Unable to Restore Dataset State";
+"The dataset state file is invalid." = "The dataset state file is invalid.";
+"Unsupported dataset state version %d." = "Unsupported dataset state version %d.";
+"The dataset state contains invalid values." = "The dataset state contains invalid values.";
+"The dataset state file is too large." = "The dataset state file is too large.";
+"The spatial view is not available yet." = "The spatial view is not available yet.";

@@ -1223,3 +1223,13 @@
 "There is no active transfer function and there are no objects or measurements to save." = "No hay ninguna función de transferencia activa ni objetos o mediciones que guardar.";
 "Unable to Save Dataset State" = "No se pudo guardar el estado del conjunto de datos";
 "The saved data belongs to a different dataset." = "Los datos guardados pertenecen a otro conjunto de datos.";
+"settings_toggle_autoload_render_state" = "Cargar y guardar automáticamente la vista y el estado de renderizado";
+"Restore Dataset State" = "Restaurar estado del conjunto de datos";
+"Nothing to Restore" = "Nada que restaurar";
+"No saved state is available for this dataset." = "No hay ningún estado guardado disponible para este conjunto de datos.";
+"Unable to Restore Dataset State" = "No se pudo restaurar el estado del conjunto de datos";
+"The dataset state file is invalid." = "El archivo de estado del conjunto de datos no es válido.";
+"Unsupported dataset state version %d." = "La versión %d del estado del conjunto de datos no es compatible.";
+"The dataset state contains invalid values." = "El estado del conjunto de datos contiene valores no válidos.";
+"The dataset state file is too large." = "El archivo de estado del conjunto de datos es demasiado grande.";
+"The spatial view is not available yet." = "La vista espacial aún no está disponible.";

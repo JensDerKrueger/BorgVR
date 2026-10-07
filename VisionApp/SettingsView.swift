@@ -132,7 +132,10 @@ struct SettingsView: View {
                   "settings_toggle_autoload_measurements",
                   isOn: $storedAppModel.autoloadMeasurements
                 )
-                Toggle("settings_toggle_autoload_transform", isOn: $storedAppModel.autoloadTransform)
+                Toggle(
+                  "settings_toggle_autoload_render_state",
+                  isOn: $storedAppModel.autoloadRenderState
+                )
                 Toggle("settings_toggle_show_notifications", isOn: $storedAppModel.showNotifications)
                   .onChange(of: storedAppModel.showNotifications) { _, newValue in
                     if newValue {

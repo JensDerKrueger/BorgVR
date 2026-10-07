@@ -659,11 +659,35 @@ final class AppModel: ObservableObject {
     return DatasetStateStorage.measurementFileURL(datasetID: dataset.uniqueId, logger: logger)
   }
 
+  func viewStateFileURL(for dataset: DatasetEntry? = nil) -> URL? {
+    guard let dataset = dataset ?? activeDataset else { return nil }
+    if case .local = dataset.source {
+      return localCompanionFileURL(
+        for: dataset,
+        fileExtension: BorgVRDatasetViewStateFormat.fileExtension
+      )
+    }
+    return DatasetStateStorage.viewStateFileURL(datasetID: dataset.uniqueId, logger: logger)
+  }
+
   func loadAutomaticallyManagedDatasetState(
     appSettings: AppSettings,
-    metadata: BORGVRMetaData
+    metadata: BORGVRMetaData,
+    renderingParameters: RenderingParameters
   ) {
     guard let dataset = activeDataset else { return }
+
+    if appSettings.autoloadRenderState,
+       let url = viewStateFileURL(for: dataset),
+       FileManager.default.fileExists(atPath: url.path) {
+      do {
+        renderingParameters.applyDatasetViewState(
+          try DatasetStateStorage.loadViewState(datasetID: dataset.uniqueId, from: url)
+        )
+      } catch {
+        logger.warning("Automatically loading dataset state failed: \(error.localizedDescription)")
+      }
+    }
 
     if appSettings.autoloadObjects,
        let url = objectFileURL(for: dataset),
@@ -695,8 +719,22 @@ final class AppModel: ObservableObject {
     }
   }
 
-  func saveAutomaticallyManagedDatasetState(appSettings: AppSettings) {
+  func saveAutomaticallyManagedDatasetState(
+    appSettings: AppSettings,
+    renderingParameters: RenderingParameters
+  ) {
     guard let dataset = activeDataset else { return }
+
+    if appSettings.autoloadRenderState, let url = viewStateFileURL(for: dataset) {
+      do {
+        try DatasetStateStorage.saveViewState(
+          renderingParameters.makeDatasetViewState(datasetID: dataset.uniqueId),
+          to: url
+        )
+      } catch {
+        logger.warning("Automatically saving dataset state failed: \(error.localizedDescription)")
+      }
+    }
 
     if appSettings.autoloadObjects, let url = objectFileURL(for: dataset) {
       do {
@@ -731,6 +769,45 @@ final class AppModel: ObservableObject {
         logger.warning("Automatically saving measurements failed: \(error.localizedDescription)")
       }
     }
+  }
+
+  @discardableResult
+  func restoreSavedDatasetState(renderingParameters: RenderingParameters) throws -> Bool {
+    guard let dataset = activeDataset else { return false }
+    var restored = false
+
+    if let url = transferFunctionFileURL(for: dataset),
+       FileManager.default.fileExists(atPath: url.path) {
+      try renderingParameters.loadTransferFunction(from: url)
+      restored = true
+    }
+    if let url = viewStateFileURL(for: dataset),
+       FileManager.default.fileExists(atPath: url.path) {
+      renderingParameters.applyDatasetViewState(
+        try DatasetStateStorage.loadViewState(datasetID: dataset.uniqueId, from: url)
+      )
+      restored = true
+    }
+    if let url = objectFileURL(for: dataset),
+       FileManager.default.fileExists(atPath: url.path) {
+      let contents = try DatasetStateStorage.loadObjects(datasetID: dataset.uniqueId, from: url)
+      replaceVolumeMarkers(contents.markers)
+      replaceSceneMeshInstances(contents.meshInstances)
+      restored = true
+    }
+    if let metadata = activeDatasetMetadata,
+       let url = measurementFileURL(for: dataset),
+       FileManager.default.fileExists(atPath: url.path) {
+      replaceVolumeMeasurements(
+        try DatasetStateStorage.loadMeasurements(
+          datasetID: dataset.uniqueId,
+          physicalExtent: metadata.physicalExtentMeters,
+          from: url
+        )
+      )
+      restored = true
+    }
+    return restored
   }
 
   func datasetRenderKey(for dataset: DatasetEntry?) -> String {

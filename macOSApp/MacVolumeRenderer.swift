@@ -46,6 +46,7 @@ final class MacVolumeRenderer: NSObject, MTKViewDelegate {
   private let appSettings: AppSettings
   private let storedAppModel: StoredAppModel
   private let sharePlay: SharePlayCoordinator
+  private let renderingParameters: RenderingParameters
   private let datasetAccess: MacRendererDatasetAccess
   private let core: ScreenVolumeRendererCore
   private var frameInFlight = false
@@ -65,6 +66,7 @@ final class MacVolumeRenderer: NSObject, MTKViewDelegate {
     self.appSettings = appSettings
     self.storedAppModel = storedAppModel
     self.sharePlay = sharePlay
+    self.renderingParameters = renderingParameters
     self.datasetAccess = datasetAccess
     self.core = ScreenVolumeRendererCore(
       appModel: appModel,
@@ -111,7 +113,8 @@ final class MacVolumeRenderer: NSObject, MTKViewDelegate {
         appModel.markRenderedDataset(key: key, metadata: metadata)
         appModel.loadAutomaticallyManagedDatasetState(
           appSettings: appSettings,
-          metadata: metadata
+          metadata: metadata,
+          renderingParameters: renderingParameters
         )
         sharePlay.datasetRendererDidLoad()
       case .failed(let key, _):

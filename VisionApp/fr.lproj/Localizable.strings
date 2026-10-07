@@ -1223,3 +1223,13 @@
 "There is no active transfer function and there are no objects or measurements to save." = "Il n’y a aucune fonction de transfert active, ni objet ou mesure à enregistrer.";
 "Unable to Save Dataset State" = "Impossible d’enregistrer l’état du jeu de données";
 "The saved data belongs to a different dataset." = "Les données enregistrées appartiennent à un autre jeu de données.";
+"settings_toggle_autoload_render_state" = "Charger et enregistrer automatiquement la vue et l’état de rendu";
+"Restore Dataset State" = "Restaurer l’état du jeu de données";
+"Nothing to Restore" = "Rien à restaurer";
+"No saved state is available for this dataset." = "Aucun état enregistré n’est disponible pour ce jeu de données.";
+"Unable to Restore Dataset State" = "Impossible de restaurer l’état du jeu de données";
+"The dataset state file is invalid." = "Le fichier d’état du jeu de données n’est pas valide.";
+"Unsupported dataset state version %d." = "La version %d de l’état du jeu de données n’est pas prise en charge.";
+"The dataset state contains invalid values." = "L’état du jeu de données contient des valeurs non valides.";
+"The dataset state file is too large." = "Le fichier d’état du jeu de données est trop volumineux.";
+"The spatial view is not available yet." = "La vue spatiale n’est pas encore disponible.";

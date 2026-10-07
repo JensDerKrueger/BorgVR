@@ -291,11 +291,6 @@ struct ProfileView: View {
           )
         }
 
-        Spacer()
-        // Auto-load/save toggle
-        Text("profile_toggle_load_save_automatically")
-        Toggle("", isOn: $storedAppModel.autoloadTransform)
-          .labelsHidden()
       }
     }
     .padding()

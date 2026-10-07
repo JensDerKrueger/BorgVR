@@ -331,11 +331,12 @@ enum DatasetStateStorageError: LocalizedError {
 
 struct DatasetStateSavePlan {
   let transferFunctionURL: URL?
+  let viewStateURL: URL?
   let objectURL: URL?
   let measurementURL: URL?
 
   var fileURLs: [URL] {
-    [transferFunctionURL, objectURL, measurementURL].compactMap { $0 }
+    [transferFunctionURL, viewStateURL, objectURL, measurementURL].compactMap { $0 }
   }
 
   var isEmpty: Bool { fileURLs.isEmpty }

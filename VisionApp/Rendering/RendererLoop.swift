@@ -250,7 +250,29 @@ extension Renderer {
 
     self.lastOriginFromDevice = originFromDevice
 
-    sharedAppModel.originFromWorldAnchorMatrix = originFromWorldAnchor
+    // Compute a head-centered transform by averaging eye translations.
+    // originFromView = originFromDevice * view.transform (your existing convention)
+    let leftEyeOriginFromView = originFromDevice * drawable.views[0].transform
+    var headOriginFromView = leftEyeOriginFromView
+
+    if drawable.views.count > 1 {
+      let rightEyeOriginFromView = originFromDevice * drawable.views[1].transform
+
+      let tl = SIMD3<Float>(leftEyeOriginFromView.columns.3.x,
+                            leftEyeOriginFromView.columns.3.y,
+                            leftEyeOriginFromView.columns.3.z)
+      let tr = SIMD3<Float>(rightEyeOriginFromView.columns.3.x,
+                            rightEyeOriginFromView.columns.3.y,
+                            rightEyeOriginFromView.columns.3.z)
+
+      let tc = 0.5 * (tl + tr)
+      headOriginFromView.columns.3 = SIMD4<Float>(tc.x, tc.y, tc.z, 1.0)
+    }
+
+    sharedAppModel.updateSpatialReference(
+      originFromHead: headOriginFromView,
+      originFromWorldAnchor: originFromWorldAnchor
+    )
 
     let unscaledModelMatrix : simd_float4x4
     let modelMatrix : simd_float4x4
@@ -272,25 +294,6 @@ extension Renderer {
     } else {
       unscaledModelMatrix = originFromWorldAnchor * sharedAppModel.modelTransform.matrix
       modelMatrix = unscaledModelMatrix * volumeScale
-    }
-
-    // Compute a head-centered transform by averaging eye translations.
-    // originFromView = originFromDevice * view.transform (your existing convention)
-    let leftEyeOriginFromView = originFromDevice * drawable.views[0].transform
-    var headOriginFromView = leftEyeOriginFromView
-
-    if drawable.views.count > 1 {
-      let rightEyeOriginFromView = originFromDevice * drawable.views[1].transform
-
-      let tl = SIMD3<Float>(leftEyeOriginFromView.columns.3.x,
-                            leftEyeOriginFromView.columns.3.y,
-                            leftEyeOriginFromView.columns.3.z)
-      let tr = SIMD3<Float>(rightEyeOriginFromView.columns.3.x,
-                            rightEyeOriginFromView.columns.3.y,
-                            rightEyeOriginFromView.columns.3.z)
-
-      let tc = 0.5 * (tl + tr)
-      headOriginFromView.columns.3 = SIMD4<Float>(tc.x, tc.y, tc.z, 1.0)
     }
 
     // Place panel in front of head in "view" coordinates:

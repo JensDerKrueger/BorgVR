@@ -1,7 +1,4 @@
-Next Todo:
-
-- Opaque geometry rendering with proper compositing
-
 Possible Futute Additions:
 - DICOM importer UI on vision OS
+- Multi Volume Rendering with registration
 - virtual sampling

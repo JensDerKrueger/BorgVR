@@ -287,6 +287,10 @@ struct SettingsView: View {
       toggleRow("Automatically load/save transfer functions", isOn: $appSettings.autoloadTF)
       toggleRow("Automatically load/save objects", isOn: $appSettings.autoloadObjects)
       toggleRow("Automatically load/save measurements", isOn: $appSettings.autoloadMeasurements)
+      toggleRow(
+        "Automatically load/save view and rendering state",
+        isOn: $appSettings.autoloadRenderState
+      )
       toggleRow("Show Brick Visualization", isOn: $appSettings.showBrickVisualization)
       toggleRow("Show Log Button", isOn: $appSettings.showLogButton)
       pickerRow("Log level", selection: $appSettings.logLevel) {

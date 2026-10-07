@@ -308,6 +308,10 @@ struct SettingsView: View {
       Toggle("Automatically load/save transfer functions", isOn: $appSettings.autoloadTF)
       Toggle("Automatically load/save objects", isOn: $appSettings.autoloadObjects)
       Toggle("Automatically load/save measurements", isOn: $appSettings.autoloadMeasurements)
+      Toggle(
+        "Automatically load/save view and rendering state",
+        isOn: $appSettings.autoloadRenderState
+      )
       Toggle("Show Brick Visualization", isOn: $appSettings.showBrickVisualization)
       Toggle("Show Log Button", isOn: $appSettings.showLogButton)
     }

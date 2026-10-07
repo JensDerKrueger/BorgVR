@@ -1,7 +1,7 @@
 import Foundation
 
 enum ConverterInfo {
-  static let version = "2.8"
+  static let version = "2.9"
 
   static let banner = #"""
    ____                   __     ______

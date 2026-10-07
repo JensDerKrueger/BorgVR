@@ -6,6 +6,7 @@ final class MobileVolumeRenderer: NSObject, MTKViewDelegate, UIGestureRecognizer
   private let appModel: AppModel
   private let appSettings: AppSettings
   private let sharePlay: SharePlayCoordinator
+  private let renderingParameters: RenderingParameters
   private let core: ScreenVolumeRendererCore
   private var twoFingerPanRecognizer: UIPanGestureRecognizer?
   private var frameInFlight = false
@@ -19,6 +20,7 @@ final class MobileVolumeRenderer: NSObject, MTKViewDelegate, UIGestureRecognizer
     self.appModel = appModel
     self.appSettings = appSettings
     self.sharePlay = sharePlay
+    self.renderingParameters = renderingParameters
     self.core = ScreenVolumeRendererCore(
       appModel: appModel,
       appSettings: appSettings,
@@ -50,7 +52,8 @@ final class MobileVolumeRenderer: NSObject, MTKViewDelegate, UIGestureRecognizer
         appModel.markRenderedDataset(key: key, metadata: metadata)
         appModel.loadAutomaticallyManagedDatasetState(
           appSettings: appSettings,
-          metadata: metadata
+          metadata: metadata,
+          renderingParameters: renderingParameters
         )
         sharePlay.datasetRendererDidLoad()
       case .failed(let key, _):

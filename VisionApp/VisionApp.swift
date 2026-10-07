@@ -475,12 +475,6 @@ struct VisionApp: App {
         )
         try? sharedAppModel.transferFunction.save(to: fileURL)
       }
-      if storedAppModel.autoloadTransform {
-        let fileURL = URL(
-          fileURLWithPath: autoURL.deletingPathExtension().path() + ".trafo"
-        )
-        try? sharedAppModel.modelTransform.save(to: fileURL)
-      }
       sharedAppModel.saveAutomaticallyManagedDatasetState(
         datasetID: dataset.uniqueId,
         storedAppModel: storedAppModel,

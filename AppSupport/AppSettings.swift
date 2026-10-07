@@ -160,7 +160,7 @@ final class AppSettings: ObservableObject {
     "autoloadTF": false,
     "autoloadObjects": false,
     "autoloadMeasurements": false,
-    "autoloadTransform": false,
+    "autoloadRenderState": false,
     "requestLowResLOD": true,
     "stopOnMiss": false,
     "renderBackgroundMode": RenderBackgroundMode.gradient.rawValue,
@@ -221,7 +221,8 @@ final class AppSettings: ObservableObject {
   @AppStorage("autoloadObjects") var autoloadObjects: Bool = AppSettings.bool("autoloadObjects")
   @AppStorage("autoloadMeasurements")
   var autoloadMeasurements: Bool = AppSettings.bool("autoloadMeasurements")
-  @AppStorage("autoloadTransform") var autoloadTransform: Bool = AppSettings.bool("autoloadTransform")
+  @AppStorage("autoloadRenderState")
+  var autoloadRenderState: Bool = AppSettings.bool("autoloadRenderState")
   @AppStorage("requestLowResLOD") var requestLowResLOD: Bool = AppSettings.bool("requestLowResLOD")
   @AppStorage("stopOnMiss") var stopOnMiss: Bool = AppSettings.bool("stopOnMiss")
   @AppStorage("renderBackgroundMode") var renderBackgroundMode: String = AppSettings.string("renderBackgroundMode")
@@ -338,7 +339,7 @@ final class AppSettings: ObservableObject {
     autoloadTF = Self.boolDefault("autoloadTF")
     autoloadObjects = Self.boolDefault("autoloadObjects")
     autoloadMeasurements = Self.boolDefault("autoloadMeasurements")
-    autoloadTransform = Self.boolDefault("autoloadTransform")
+    autoloadRenderState = Self.boolDefault("autoloadRenderState")
     showBrickVisualization = Self.boolDefault("showBrickVisualization")
     showLogButton = Self.boolDefault("showLogButton")
     logLevel = Self.stringDefault("logLevel")

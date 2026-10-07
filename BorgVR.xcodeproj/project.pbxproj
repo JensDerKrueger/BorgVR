@@ -126,6 +126,9 @@
 		57A001A62EA2000200000001 /* SceneMeshEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001A52EA2000200000001 /* SceneMeshEditorView.swift */; };
 		57A001A72EA2000200000001 /* SceneMeshEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001A52EA2000200000001 /* SceneMeshEditorView.swift */; };
 		57A001A82EA2000200000001 /* SceneMeshEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001A52EA2000200000001 /* SceneMeshEditorView.swift */; };
+		57A001B12EA3000100000001 /* DatasetViewState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001B02EA3000100000001 /* DatasetViewState.swift */; };
+		57A001B22EA3000100000001 /* DatasetViewState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001B02EA3000100000001 /* DatasetViewState.swift */; };
+		57A001B32EA3000100000001 /* DatasetViewState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001B02EA3000100000001 /* DatasetViewState.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -211,6 +214,7 @@
 		57A001982EA1000300000001 /* MeasurementSurfaceMeshCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeasurementSurfaceMeshCache.swift; sourceTree = "<group>"; };
 		57A001A02EA2000100000001 /* SceneMesh.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneMesh.swift; sourceTree = "<group>"; };
 		57A001A52EA2000200000001 /* SceneMeshEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneMeshEditorView.swift; sourceTree = "<group>"; };
+		57A001B02EA3000100000001 /* DatasetViewState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DatasetViewState.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -494,6 +498,7 @@
 				57A001202E70000300000001 /* AppModel.swift */,
 				57A001212E70000300000001 /* AppSettings.swift */,
 				57A001702E99000500000001 /* AppStoreUpdateChecker.swift */,
+				57A001B02EA3000100000001 /* DatasetViewState.swift */,
 				57A001742E99000600000001 /* DatasetOriginCatalog.swift */,
 				57A001282E70000300000001 /* DatasetInfoView.swift */,
 				57A001292E70000300000001 /* ExternalDatasetImporter.swift */,
@@ -900,6 +905,7 @@
 				57A001992EA1000300000001 /* MeasurementSurfaceMeshCache.swift in Sources */,
 				57A001A12EA2000100000001 /* SceneMesh.swift in Sources */,
 				57A001A62EA2000200000001 /* SceneMeshEditorView.swift in Sources */,
+				57A001B12EA3000100000001 /* DatasetViewState.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -943,6 +949,7 @@
 				57A0019A2EA1000300000001 /* MeasurementSurfaceMeshCache.swift in Sources */,
 				57A001A22EA2000100000001 /* SceneMesh.swift in Sources */,
 				57A001A72EA2000200000001 /* SceneMeshEditorView.swift in Sources */,
+				57A001B22EA3000100000001 /* DatasetViewState.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -971,6 +978,7 @@
 				57A0019B2EA1000300000001 /* MeasurementSurfaceMeshCache.swift in Sources */,
 				57A001A32EA2000100000001 /* SceneMesh.swift in Sources */,
 				57A001A82EA2000200000001 /* SceneMeshEditorView.swift in Sources */,
+				57A001B32EA3000100000001 /* DatasetViewState.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1019,7 +1027,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.8;
+				MARKETING_VERSION = 2.9;
 				PRODUCT_BUNDLE_IDENTIFIER = "de.uni-due.BorgVRVisionApp";
 				PRODUCT_NAME = "BorgVR Mobile";
 				SDKROOT = iphoneos;
@@ -1056,7 +1064,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.8;
+				MARKETING_VERSION = 2.9;
 				PRODUCT_BUNDLE_IDENTIFIER = "de.uni-due.BorgVRVisionApp";
 				PRODUCT_NAME = "BorgVR Mobile";
 				SDKROOT = iphoneos;
@@ -1077,7 +1085,7 @@
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				MACOSX_DEPLOYMENT_TARGET = 15.2;
-				MARKETING_VERSION = 2.8;
+				MARKETING_VERSION = 2.9;
 				PRODUCT_BUNDLE_IDENTIFIER = "de.uni-due.TerminalServerApp";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
@@ -1093,7 +1101,7 @@
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				MACOSX_DEPLOYMENT_TARGET = 15.2;
-				MARKETING_VERSION = 2.8;
+				MARKETING_VERSION = 2.9;
 				PRODUCT_BUNDLE_IDENTIFIER = "de.uni-due.TerminalServerApp";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
@@ -1127,7 +1135,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.2;
-				MARKETING_VERSION = 2.8;
+				MARKETING_VERSION = 2.9;
 				PRODUCT_BUNDLE_IDENTIFIER = "de.uni-due.BorgVRVisionApp";
 				PRODUCT_NAME = BorgVR;
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -1163,7 +1171,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.2;
-				MARKETING_VERSION = 2.8;
+				MARKETING_VERSION = 2.9;
 				PRODUCT_BUNDLE_IDENTIFIER = "de.uni-due.BorgVRVisionApp";
 				PRODUCT_NAME = BorgVR;
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -1198,7 +1206,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.8;
+				MARKETING_VERSION = 2.9;
 				PRODUCT_BUNDLE_IDENTIFIER = "de.uni-due.BorgVRVisionApp";
 				PRODUCT_NAME = BorgVR;
 				SDKROOT = xros;
@@ -1235,7 +1243,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.8;
+				MARKETING_VERSION = 2.9;
 				PRODUCT_BUNDLE_IDENTIFIER = "de.uni-due.BorgVRVisionApp";
 				PRODUCT_NAME = BorgVR;
 				SDKROOT = xros;
@@ -1272,7 +1280,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.2;
-				MARKETING_VERSION = 2.8;
+				MARKETING_VERSION = 2.9;
 				PRODUCT_BUNDLE_IDENTIFIER = "de.uni-due.macOSServer";
 				PRODUCT_NAME = "BorgVR Server";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -1304,7 +1312,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.2;
-				MARKETING_VERSION = 2.8;
+				MARKETING_VERSION = 2.9;
 				PRODUCT_BUNDLE_IDENTIFIER = "de.uni-due.macOSServer";
 				PRODUCT_NAME = "BorgVR Server";
 				PROVISIONING_PROFILE_SPECIFIER = "";

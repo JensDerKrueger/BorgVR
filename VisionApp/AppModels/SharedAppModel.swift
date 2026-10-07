@@ -80,6 +80,10 @@ class SharedAppModel {
 
   /// Current world transformation matrix.
   var originFromWorldAnchorMatrix: simd_float4x4
+  /// Latest tracked head transform in the immersive-space origin.
+  @ObservationIgnored private var originFromHeadMatrix: simd_float4x4
+  @ObservationIgnored private var hasValidHeadPose: Bool
+  @ObservationIgnored private var pendingSpatialViewState: DatasetSpatialViewState?
   /// Current model transform.
   var modelTransform: Transform
   /// Last model transform.
@@ -197,6 +201,9 @@ class SharedAppModel {
    */
   init() {
     originFromWorldAnchorMatrix = matrix_identity_float4x4
+    originFromHeadMatrix = matrix_identity_float4x4
+    hasValidHeadPose = false
+    pendingSpatialViewState = nil
     modelTransform = .init()
     lastModelTransform = .init()
     clipMin = .zero
@@ -379,6 +386,18 @@ class SharedAppModel {
     storedAppModel: StoredAppModel,
     logger: LoggerBase
   ) {
+    if storedAppModel.autoloadRenderState,
+       let url = DatasetStateStorage.viewStateFileURL(datasetID: datasetID, logger: logger),
+       FileManager.default.fileExists(atPath: url.path) {
+      do {
+        applyDatasetViewState(
+          try DatasetStateStorage.loadViewState(datasetID: datasetID, from: url)
+        )
+      } catch {
+        logger.warning("Automatically loading dataset state failed: \(error.localizedDescription)")
+      }
+    }
+
     if storedAppModel.autoloadObjects,
        let url = DatasetStateStorage.objectFileURL(datasetID: datasetID, logger: logger),
        FileManager.default.fileExists(atPath: url.path) {
@@ -411,6 +430,18 @@ class SharedAppModel {
     storedAppModel: StoredAppModel,
     logger: LoggerBase
   ) {
+    if storedAppModel.autoloadRenderState,
+       let url = DatasetStateStorage.viewStateFileURL(datasetID: datasetID, logger: logger) {
+      do {
+        try DatasetStateStorage.saveViewState(
+          try makeDatasetViewState(datasetID: datasetID),
+          to: url
+        )
+      } catch {
+        logger.warning("Automatically saving dataset state failed: \(error.localizedDescription)")
+      }
+    }
+
     if storedAppModel.autoloadObjects,
        let url = DatasetStateStorage.objectFileURL(datasetID: datasetID, logger: logger) {
       do {
@@ -454,6 +485,117 @@ class SharedAppModel {
     self.lastModelTransform = transform
   }
 
+  func updateSpatialReference(
+    originFromHead: simd_float4x4,
+    originFromWorldAnchor: simd_float4x4
+  ) {
+    guard originFromHead.isFiniteAffine, originFromWorldAnchor.isFiniteAffine else { return }
+    originFromHeadMatrix = originFromHead
+    originFromWorldAnchorMatrix = originFromWorldAnchor
+    hasValidHeadPose = true
+
+    guard let pendingSpatialViewState else { return }
+    let worldAnchorFromDataset = simd_inverse(originFromWorldAnchor) *
+      originFromHead * pendingSpatialViewState.headFromDataset
+    guard worldAnchorFromDataset.isFiniteAffine else { return }
+    let transform = Transform(matrix: worldAnchorFromDataset)
+    modelTransform = transform
+    lastModelTransform = transform
+    self.pendingSpatialViewState = nil
+  }
+
+  func makeDatasetViewState(datasetID: String) throws -> DatasetViewState {
+    guard hasValidHeadPose else {
+      throw DatasetViewStateDocumentError.spatialPoseUnavailable
+    }
+    let originFromDataset = originFromWorldAnchorMatrix * modelTransform.matrix
+    let headFromDataset = simd_inverse(originFromHeadMatrix) * originFromDataset
+    guard headFromDataset.isFiniteAffine else {
+      throw DatasetViewStateDocumentError.invalidState
+    }
+    return DatasetViewState(
+      datasetID: datasetID,
+      common: DatasetViewCommonState(
+        renderMode: renderMode,
+        normalizedIsoValue: normIsoValue,
+        clipMin: clipMin,
+        clipMax: clipMax,
+        lighting: BorgVRLightingState(
+          direction: lightDirection,
+          ambientColor: ambientLightColor,
+          diffuseColor: diffuseLightColor,
+          specularColor: specularLightColor
+        )
+      ),
+      screenView: nil,
+      spatialView: DatasetSpatialViewState(headFromDataset: headFromDataset)
+    )
+  }
+
+  func applyDatasetViewState(_ state: DatasetViewState) {
+    renderMode = state.common.renderMode
+    normIsoValue = state.common.normalizedIsoValue
+    clipMin = state.common.clipMin
+    clipMax = state.common.clipMax
+    lastTranslationClipping = Self.translation(
+      fromClipMin: state.common.clipMin,
+      clipMax: state.common.clipMax
+    )
+    applyLightingState(state.common.lighting)
+    if let spatialView = state.spatialView {
+      pendingSpatialViewState = spatialView
+      if hasValidHeadPose {
+        updateSpatialReference(
+          originFromHead: originFromHeadMatrix,
+          originFromWorldAnchor: originFromWorldAnchorMatrix
+        )
+      }
+    }
+  }
+
+  @discardableResult
+  func restoreSavedDatasetState(
+    datasetID: String,
+    physicalExtent: SIMD3<Float>,
+    logger: LoggerBase
+  ) throws -> Bool {
+    var restored = false
+    let documentsDirectory = FileManager.default.urls(
+      for: .documentDirectory,
+      in: .userDomainMask
+    ).first
+
+    if let url = documentsDirectory?
+      .appendingPathComponent(datasetID)
+      .appendingPathExtension("tf1d"),
+       FileManager.default.fileExists(atPath: url.path) {
+      try loadTransferFunction(from: url)
+      restored = true
+    }
+    if let url = DatasetStateStorage.viewStateFileURL(datasetID: datasetID, logger: logger),
+       FileManager.default.fileExists(atPath: url.path) {
+      applyDatasetViewState(try DatasetStateStorage.loadViewState(datasetID: datasetID, from: url))
+      restored = true
+    }
+    if let url = DatasetStateStorage.objectFileURL(datasetID: datasetID, logger: logger),
+       FileManager.default.fileExists(atPath: url.path) {
+      let contents = try DatasetStateStorage.loadObjects(datasetID: datasetID, from: url)
+      volumeMarkers = contents.markers
+      replaceSceneMeshInstances(contents.meshInstances)
+      restored = true
+    }
+    if let url = DatasetStateStorage.measurementFileURL(datasetID: datasetID, logger: logger),
+       FileManager.default.fileExists(atPath: url.path) {
+      volumeMeasurements = try DatasetStateStorage.loadMeasurements(
+        datasetID: datasetID,
+        physicalExtent: physicalExtent,
+        from: url
+      )
+      restored = true
+    }
+    return restored
+  }
+
   /**
    Resets all rendering parameters to default values.
 
@@ -488,6 +630,8 @@ class SharedAppModel {
     volumeMeasurements = []
     selectedVolumeMeasurementID = nil
     selectedVolumeMeasurementPointID = nil
+    hasValidHeadPose = false
+    pendingSpatialViewState = nil
   }
 
   func resetModel() {

@@ -1217,3 +1217,13 @@
 "There is no active transfer function and there are no objects or measurements to save." = "Es gibt keine aktive Transferfunktion und keine Objekte oder Messungen, die gespeichert werden können.";
 "Unable to Save Dataset State" = "Datensatzzustand konnte nicht gespeichert werden";
 "The saved data belongs to a different dataset." = "Die gespeicherten Daten gehören zu einem anderen Datensatz.";
+"settings_toggle_autoload_render_state" = "Ansicht und Renderzustand automatisch laden und speichern";
+"Restore Dataset State" = "Datensatzzustand wiederherstellen";
+"Nothing to Restore" = "Nichts wiederherzustellen";
+"No saved state is available for this dataset." = "Für diesen Datensatz ist kein gespeicherter Zustand verfügbar.";
+"Unable to Restore Dataset State" = "Datensatzzustand konnte nicht wiederhergestellt werden";
+"The dataset state file is invalid." = "Die Datensatzzustandsdatei ist ungültig.";
+"Unsupported dataset state version %d." = "Die Datensatzzustandsversion %d wird nicht unterstützt.";
+"The dataset state contains invalid values." = "Der Datensatzzustand enthält ungültige Werte.";
+"The dataset state file is too large." = "Die Datensatzzustandsdatei ist zu groß.";
+"The spatial view is not available yet." = "Die räumliche Ansicht ist noch nicht verfügbar.";
