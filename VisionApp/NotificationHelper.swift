@@ -45,20 +45,3 @@ enum NotificationHelper {
     UNUserNotificationCenter.current().add(req)
   }
 }
-
-public class GUINotifier: NotificationBase {
-
-  public func silent(title: String, message: String) {
-    NotificationHelper.notify(title: title, body: message, sound: nil)
-  }
-
-  public func normal(title: String, message: String) {
-    NotificationHelper.notify(title: title, body: message, sound: .default)
-  }
-
-  public func critical(title: String, message: String) {
-    NotificationHelper
-      .notify(title: title, body: message, sound: .defaultCritical)
-  }
-}
-

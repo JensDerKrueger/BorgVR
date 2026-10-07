@@ -81,8 +81,6 @@ class RuntimeAppModel {
 
   let logger = GUILogger()
 
-  let notifier = GUINotifier()
-
   /// Periodically write performance to log
   var logPerformance: Bool = false
 

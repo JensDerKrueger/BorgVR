@@ -2,6 +2,13 @@ import Foundation
 import Compression
 import Network
 
+struct BORGVRLocalDatasetCacheCompletion: Sendable {
+  static let notification = Notification.Name("borgvrLocalDatasetCacheDidComplete")
+
+  let datasetID: String
+  let fileURL: URL
+}
+
 /**
  A caching remote data source that retrieves and locally caches volume bricks
  from a remote source.
@@ -23,9 +30,6 @@ final class CachingRemoteDataSource: DataSource {
 
   /// An optional logger for debug and error messages.
   private let logger: LoggerBase?
-
-  /// An optional notifier
-  private let notifier: NotificationBase?
 
   /// How many bricks do we ant to request in a single call?
   private let maxBricksPerGetRequest: Int
@@ -98,7 +102,7 @@ final class CachingRemoteDataSource: DataSource {
        primaryOrigin: DatasetOrigin,
        connectionTimeout: TimeInterval,
        originProvider: @escaping DatasetOriginProvider,
-       authSecret: String? = nil, logger: LoggerBase?, notifier: NotificationBase?) throws {
+       authSecret: String? = nil, logger: LoggerBase?) throws {
     self.remoteDataSource = try RemoteDataSource(connection: connection,
                                                  datasetID: datasetID,
                                                  primaryOrigin: primaryOrigin,
@@ -109,7 +113,6 @@ final class CachingRemoteDataSource: DataSource {
                                                  logger:logger)
     self.targetFilename = filename
     self.logger = logger
-    self.notifier = notifier
     self.maxBricksPerGetRequest = maxBricksPerGetRequest
 
     let metadata = remoteDataSource.getMetadata()
@@ -325,8 +328,6 @@ final class CachingRemoteDataSource: DataSource {
           cachingComplete = true
           logger?.dev("All bricks are locally cached")
           finalizeLocalCopyIfNeeded()
-          notifier?.silent(title:NSLocalizedString("notfication_dataset_downloaded_title",value: "Remote Dataset Complete", comment:""),
-                           message:NSLocalizedString("notfication_dataset_downloaded_text",value: "The dataset has been downloaded in its entirety and is now available locally.", comment:""))
           break
         }
       } catch {
@@ -404,11 +405,19 @@ final class CachingRemoteDataSource: DataSource {
       if fileManager.fileExists(atPath: incompleteURL.path) {
         try fileManager.moveItem(at: incompleteURL, to: completeURL)
       }
-      try remoteDataSource.getMetadata().save(filename: targetFilename)
+      let metadata = remoteDataSource.getMetadata()
+      try metadata.save(filename: targetFilename)
       try? fileManager.removeItem(at: cacheMapURL)
       dataFile = try MemoryMappedFile(filename: targetFilename, readOnly: true)
       localCopyFinalized = true
       logger?.dev("Dataset caching complete, finalized local copy: \(targetFilename)")
+      NotificationCenter.default.post(
+        name: BORGVRLocalDatasetCacheCompletion.notification,
+        object: BORGVRLocalDatasetCacheCompletion(
+          datasetID: metadata.uniqueID,
+          fileURL: completeURL
+        )
+      )
     } catch {
       logger?.error("Error while completing dataset caching: \(error)")
       do {

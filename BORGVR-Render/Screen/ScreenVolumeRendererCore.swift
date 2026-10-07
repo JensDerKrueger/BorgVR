@@ -368,8 +368,7 @@ final class ScreenVolumeRendererCore {
           host: address,
           port: UInt16(port),
           authSecret: password,
-          logger: appModel.logger,
-          notifier: nil
+          logger: appModel.logger
         )
         try manager.connect(timeout: appSettings.timeout)
         let cacheFilename = appSettings.makeLocalCopy

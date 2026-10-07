@@ -113,8 +113,7 @@ final class DatasetCatalogService {
             host: server.address,
             port: UInt16(server.port),
             authSecret: server.password,
-            logger: logger,
-            notifier: nil
+            logger: logger
           )
           try manager.connect(timeout: timeout)
           do {

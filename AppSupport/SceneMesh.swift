@@ -592,8 +592,7 @@ enum SceneMeshAssetCatalog {
           host: origin.address,
           port: UInt16(clamping: origin.port),
           authSecret: origin.password,
-          logger: nil,
-          notifier: nil
+          logger: nil
         )
         try manager.connect(timeout: max(0.1, timeout))
         guard manager.supportsMeshes else {

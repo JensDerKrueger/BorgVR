@@ -46,6 +46,7 @@ final class SharePlayCoordinator: ObservableObject {
   private var storedAppModel: StoredAppModel?
   private var serverController: BackgroundServerController?
   private var subscriptions = Set<AnyCancellable>()
+  private var localDatasetCacheCompletionObservation: AnyCancellable?
   private var pendingCommonState = false
   private var pendingTransferFunction = false
   private var pendingTransform = false
@@ -68,6 +69,7 @@ final class SharePlayCoordinator: ObservableObject {
   private var sceneMeshResolutionRetryRequested = false
   private var sessionOriginsByDatasetID: [String: [DatasetOrigin]] = [:]
   private var adHocOriginsByParticipantID: [UUID: [String: [DatasetOrigin]]] = [:]
+  private var sessionDatasetID: String?
   private var localParticipantID: UUID?
   private var currentHostParticipantID: UUID?
   private var hostElectionTerm: UInt64 = 0
@@ -90,6 +92,19 @@ final class SharePlayCoordinator: ObservableObject {
     self.appSettings = appSettings
     self.storedAppModel = storedAppModel
     self.serverController = serverController
+
+    if localDatasetCacheCompletionObservation == nil {
+      localDatasetCacheCompletionObservation = NotificationCenter.default.publisher(
+        for: BORGVRLocalDatasetCacheCompletion.notification
+      ).sink { [weak self] notification in
+        guard let completion = notification.object as? BORGVRLocalDatasetCacheCompletion else {
+          return
+        }
+        Task { @MainActor [weak self] in
+          self?.handleLocalDatasetCacheCompletion(completion)
+        }
+      }
+    }
 
     if groupStateObservation == nil {
       groupStateObservation = groupStateObserver.$isEligibleForGroupSession
@@ -227,6 +242,7 @@ final class SharePlayCoordinator: ObservableObject {
   func datasetOpened() {
     guard isInSession else { return }
     if appModel?.groupSessionHost == true {
+      setSessionDatasetID(appModel?.activeDataset?.uniqueId)
       resetPendingSynchronizationForDatasetChange()
       sharedScreenViewState = nil
     }
@@ -255,7 +271,7 @@ final class SharePlayCoordinator: ObservableObject {
   func closeSharedDataset() {
     guard isInSession else { return }
     if appModel?.groupSessionHost == true {
-      serverController?.stopSharePlayServer()
+      setSessionDatasetID(nil)
       Task { try? await sendData(Data(), of: .shutdownRequest) }
     } else {
       groupSession?.leave()
@@ -264,7 +280,7 @@ final class SharePlayCoordinator: ObservableObject {
 
   func leaveGroupActivity() {
     clearPendingSharePlayStart()
-    serverController?.stopSharePlayServer()
+    setSessionDatasetID(nil)
     groupSession?.leave()
     appModel?.groupSessionHost = false
     isInSession = false
@@ -376,6 +392,7 @@ final class SharePlayCoordinator: ObservableObject {
     appModel?.logger.info(
       "Configuring delivered SharePlay group session; local participant: \(session.localParticipant.id.uuidString), initial state: \(String(describing: session.state)), active participant count: \(session.activeParticipants.count)."
     )
+    serverController?.stopSharePlayServer()
     resetSessionReceivers()
     sessionGeneration += 1
     let generation = sessionGeneration
@@ -384,6 +401,7 @@ final class SharePlayCoordinator: ObservableObject {
     isInSession = true
     let isHost = session.activity.initiatorID == localBorgVRSharePlayInitiatorID
     appModel?.groupSessionHost = isHost
+    sessionDatasetID = isHost ? appModel?.activeDataset?.uniqueId : nil
     localParticipantID = session.localParticipant.id
     currentHostParticipantID = isHost ? session.localParticipant.id : nil
     hostElectionTerm = 0
@@ -624,6 +642,7 @@ final class SharePlayCoordinator: ObservableObject {
     guard appModel?.groupSessionHost == true else { return }
 
     guard let dataset = appModel?.activeDataset else {
+      setSessionDatasetID(nil)
       try? await sendData(
         InitMessage(uniqueID: "", origins: [], description: "").toData(),
         of: .initMessage,
@@ -631,6 +650,7 @@ final class SharePlayCoordinator: ObservableObject {
       )
       return
     }
+    setSessionDatasetID(dataset.uniqueId)
 
     let message = InitMessage(
       uniqueID: dataset.uniqueId,
@@ -763,6 +783,7 @@ final class SharePlayCoordinator: ObservableObject {
         handleUpdate(data: payload, from: participant)
       case MessageType.shutdownRequest.rawValue:
         guard appModel?.groupSessionHost != true else { return }
+        setSessionDatasetID(nil)
         pendingDatasetLoadTask?.cancel()
         pendingDatasetLoadTask = nil
         pendingDatasetLoad = nil
@@ -862,12 +883,15 @@ final class SharePlayCoordinator: ObservableObject {
     appModel.groupSessionHost = false
 
     guard let message = InitMessage(data: data), !message.uniqueID.isEmpty else {
+      setSessionDatasetID(nil)
       pendingDatasetLoadTask?.cancel()
       pendingDatasetLoadTask = nil
       pendingDatasetLoad = nil
       appModel.waitForSharePlayDataset(reason: .hostDataset)
       return
     }
+
+    setSessionDatasetID(message.uniqueID)
 
     DatasetOriginCatalog.shared.prioritize(message.origins, for: message.uniqueID)
     mergeSessionOrigins(message.origins, for: message.uniqueID)
@@ -877,6 +901,7 @@ final class SharePlayCoordinator: ObservableObject {
     }
 
     if appModel.isOpeningOrRenderingDataset(withUniqueID: message.uniqueID) {
+      Task { await advertiseCurrentLocalDataset() }
       return
     }
 
@@ -1005,8 +1030,7 @@ final class SharePlayCoordinator: ObservableObject {
             host: origin.address,
             port: UInt16(clamping: origin.port),
             authSecret: origin.password,
-            logger: nil,
-            notifier: nil
+            logger: nil
           )
           try manager.connect(timeout: timeout)
           let datasets = try manager.requestDatasetList()
@@ -1217,7 +1241,9 @@ final class SharePlayCoordinator: ObservableObject {
   }
 
   private func advertiseCurrentLocalDataset(to participants: Participants = .all) async {
-    guard isInSession, let dataset = appModel?.activeDataset else { return }
+    guard isInSession,
+          let dataset = appModel?.activeDataset,
+          dataset.uniqueId == sessionDatasetID else { return }
     guard let serverController, let storedAppModel else { return }
     let served = serverController.ensureServing(dataset: dataset, using: storedAppModel)
     let origins = served.origins.compactMap { value -> DatasetOrigin? in
@@ -1229,6 +1255,18 @@ final class SharePlayCoordinator: ObservableObject {
     guard let data = try? DatasetOriginSharePlayCodec.encode(advertisement) else { return }
     appModel?.logger.info("Advertising this Mac as a SharePlay source for dataset \(dataset.uniqueId).")
     try? await sendData(data, of: .datasetOriginAdvertisement, to: participants)
+  }
+
+  private func handleLocalDatasetCacheCompletion(
+    _ completion: BORGVRLocalDatasetCacheCompletion
+  ) {
+    guard isInSession,
+          completion.datasetID == sessionDatasetID,
+          appModel?.activeDataset?.uniqueId == completion.datasetID else { return }
+    appModel?.logger.info(
+      "The SharePlay dataset is now fully cached locally; enabling its ad-hoc source."
+    )
+    Task { await advertiseCurrentLocalDataset() }
   }
 
   private func handleDatasetOriginAdvertisement(data: Data, from participant: Participant) {
@@ -1354,9 +1392,23 @@ final class SharePlayCoordinator: ObservableObject {
     showsHostDeparturePrompt = false
     let isLocalHost = state.hostID == localParticipantID
     appModel?.groupSessionHost = isLocalHost
+    if isLocalHost {
+      setSessionDatasetID(appModel?.activeDataset?.uniqueId)
+    }
     appModel?.logger.info(isLocalHost
       ? "This device took over the SharePlay host role."
       : "A participant took over the SharePlay host role.")
+  }
+
+  private func setSessionDatasetID(_ datasetID: String?) {
+    guard sessionDatasetID != datasetID else { return }
+    serverController?.stopSharePlayServer()
+    sessionDatasetID = datasetID
+    if let datasetID {
+      appModel?.logger.info("SharePlay ad-hoc server is restricted to host dataset \(datasetID).")
+    } else {
+      appModel?.logger.info("SharePlay ad-hoc server stopped because no host dataset is active.")
+    }
   }
 
   private func isParticipantActive(_ participantID: UUID) -> Bool {

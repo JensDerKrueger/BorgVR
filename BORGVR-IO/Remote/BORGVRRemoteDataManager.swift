@@ -75,8 +75,6 @@ class BORGVRRemoteDataManager {
   private var meshes: [RemoteMeshInfo] = []
   /// An optional logger for logging messages.
   private let logger: LoggerBase?
-  /// An optional notifier
-  private let notifier: NotificationBase?
   /// The host of the remote server.
   private let host: String
   /// The port number used to connect to the remote server.
@@ -104,11 +102,9 @@ class BORGVRRemoteDataManager {
     host: String,
     port: UInt16,
     authSecret: String? = nil,
-    logger: LoggerBase?,
-    notifier: NotificationBase?
+    logger: LoggerBase?
   ) {
     self.logger = logger
-    self.notifier = notifier
     self.host = host
     self.port = port
     self.authSecret = BorgVRServerAuthentication.normalizedSecret(authSecret)
@@ -453,8 +449,7 @@ class BORGVRRemoteDataManager {
       connectionTimeout: timeout,
       originProvider: originProvider,
       authSecret: authSecret,
-      logger: logger,
-      notifier: notifier
+      logger: logger
     )
     connectionOwnershipTransferred = remoteData.sourceType != .local
     return remoteData

@@ -57,8 +57,7 @@ enum ImmersiveBootstrap {
             host: address,
             port: UInt16(port),
             authSecret: password,
-            logger: runtimeAppModel.logger,
-            notifier: runtimeAppModel.notifier
+            logger: runtimeAppModel.logger
           )
           try manager.connect(timeout: storedAppModel.timeout)
 

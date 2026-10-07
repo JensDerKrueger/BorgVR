@@ -340,8 +340,7 @@ struct OpenDatasetView: View {
           host: origin.address,
           port: UInt16(clamping: origin.port),
           authSecret: origin.password,
-          logger: nil,
-          notifier: nil
+          logger: nil
         )
         try manager.connect(timeout: timeout)
         return try manager.requestDatasetList()
@@ -407,8 +406,7 @@ struct OpenDatasetView: View {
         host: address,
         port: UInt16(port),
         authSecret: password,
-        logger: nil,
-        notifier: nil
+        logger: nil
       )
       try manager.connect(timeout: timeout)
       _ = try manager.openDataset(datasetID: datasetID, timeout: timeout)
@@ -444,8 +442,7 @@ struct OpenDatasetView: View {
         host: address,
         port: UInt16(port),
         authSecret: password,
-        logger: nil,
-        notifier: nil
+        logger: nil
       )
       try manager.connect(timeout: timeout)
       let remoteData = try manager.openDataset(
@@ -631,8 +628,7 @@ struct OpenDatasetView: View {
             host: server.address,
             port: UInt16(server.port),
             authSecret: server.password,
-            logger: logger,
-            notifier: nil
+            logger: logger
           )
           try manager.connect(timeout: timeout)
           do {

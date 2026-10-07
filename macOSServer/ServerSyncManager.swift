@@ -120,8 +120,7 @@ final class ServerSyncManager {
         host: address,
         port: UInt16(clamping: endpoint.port),
         authSecret: endpoint.password,
-        logger: logger,
-        notifier: nil
+        logger: logger
       )
       try manager.connect(timeout: 10)
       let didStoreTransferFunctions = try syncTransferFunctions(from: manager)
@@ -199,8 +198,7 @@ final class ServerSyncManager {
       host: source.endpoint.address.trimmingCharacters(in: .whitespacesAndNewlines),
       port: UInt16(clamping: source.endpoint.port),
       authSecret: source.endpoint.password,
-      logger: logger,
-      notifier: nil
+      logger: logger
     )
     try manager.connect(timeout: 10)
     try startDatasetSync(

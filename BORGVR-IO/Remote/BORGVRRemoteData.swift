@@ -97,8 +97,7 @@ class BORGVRRemoteData: BORGVRDatasetProtocol {
        connectionTimeout: TimeInterval,
        originProvider: @escaping DatasetOriginProvider,
        authSecret: String? = nil,
-       logger:LoggerBase?,
-       notifier:NotificationBase?) throws {
+       logger:LoggerBase?) throws {
 
     self.logger = logger
 
@@ -121,8 +120,7 @@ class BORGVRRemoteData: BORGVRDatasetProtocol {
             connectionTimeout: connectionTimeout,
             originProvider: originProvider,
             authSecret: authSecret,
-            logger:logger,
-            notifier: notifier
+            logger:logger
           )
         }
       } else {
@@ -136,8 +134,7 @@ class BORGVRRemoteData: BORGVRDatasetProtocol {
           connectionTimeout: connectionTimeout,
           originProvider: originProvider,
           authSecret: authSecret,
-          logger:logger,
-          notifier: notifier)
+          logger:logger)
       }
     } else {
       logger?.dev("Loading remote dataset directly")

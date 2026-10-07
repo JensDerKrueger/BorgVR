@@ -1104,8 +1104,7 @@ struct SettingsView: View {
         host: address,
         port: port,
         authSecret: password,
-        logger: nil,
-        notifier: nil
+        logger: nil
       )
       try manager.connect(timeout: storedAppModel.timeout)
       let datasets = try manager.requestDatasetList()

@@ -34,12 +34,12 @@ final class BackgroundServerController: ObservableObject {
   }
 
   func ensureServing(dataset: AppModel.DatasetEntry, using settings: StoredAppModel) -> (origins: [String], authToken: String) {
-    let datasetInfo = serverDatasetInfo(for: dataset)
+    guard let datasetInfo = serverDatasetInfo(for: dataset, using: settings) else {
+      stopSharePlayServer()
+      return ([], "")
+    }
     let meshFiles = SceneMeshAssetCatalog.serverFiles(logger: logger)
     let meshAssetIDs = Set(meshFiles.map(\.id))
-    if datasetInfo == nil {
-      guard case .remote = dataset.source, !meshFiles.isEmpty else { return ([], "") }
-    }
 
     if sharePlayServerRunning,
        sharePlayDatasetID == dataset.uniqueId,
@@ -62,13 +62,13 @@ final class BackgroundServerController: ObservableObject {
           webServerCertificateData: settings.webServerCertificateData,
           webServerCertificatePassword: settings.webServerCertificatePassword
         ),
-        additionalDatasets: datasetInfo.map { [$0] } ?? [],
+        additionalDatasets: [datasetInfo],
         additionalMeshFiles: meshFiles,
         includeScannedDatasets: false
       )
 
       guard state.isRunning,
-            datasetInfo == nil || state.datasets.contains(where: { $0.id == dataset.uniqueId }) else {
+            state.datasets.contains(where: { $0.id == dataset.uniqueId }) else {
         continue
       }
 
@@ -156,28 +156,40 @@ final class BackgroundServerController: ObservableObject {
       && meshAssetIDs.isSubset(of: sharePlayMeshAssetIDs)
   }
 
-  private func serverDatasetInfo(for dataset: AppModel.DatasetEntry) -> DatasetInfo? {
+  private func serverDatasetInfo(
+    for dataset: AppModel.DatasetEntry,
+    using settings: StoredAppModel
+  ) -> DatasetInfo? {
+    let url: URL
+    let shouldLogMetadataFailure: Bool
     switch dataset.source {
       case .local, .builtIn:
-        let url = URL(fileURLWithPath: dataset.identifier)
-        guard let metadata = try? BORGVRMetaData(url: url) else {
-          logger.error("SharePlay dataset server could not read metadata for \(dataset.identifier).")
-          return nil
-        }
-        return DatasetInfo(
-          id: metadata.uniqueID,
-          filename: url.path,
-          datasetDescription: metadata.datasetDescription.isEmpty ? dataset.description : metadata.datasetDescription,
-          size: [metadata.width, metadata.height, metadata.depth],
-          voxelSpacing: [
-            metadata.voxelSpacingX,
-            metadata.voxelSpacingY,
-            metadata.voxelSpacingZ
-          ]
-        )
+        url = URL(fileURLWithPath: dataset.identifier)
+        shouldLogMetadataFailure = true
       case .remote:
-        return nil
+        url = settings.resolvedDataDirectoryURL()
+          .appendingPathComponent("\(dataset.uniqueId).data")
+        shouldLogMetadataFailure = false
     }
+
+    guard let metadata = try? BORGVRMetaData(url: url),
+          metadata.uniqueID.caseInsensitiveCompare(dataset.uniqueId) == .orderedSame else {
+      if shouldLogMetadataFailure {
+        logger.error("SharePlay dataset server could not read metadata for \(dataset.identifier).")
+      }
+      return nil
+    }
+    return DatasetInfo(
+      id: metadata.uniqueID,
+      filename: url.path,
+      datasetDescription: metadata.datasetDescription.isEmpty ? dataset.description : metadata.datasetDescription,
+      size: [metadata.width, metadata.height, metadata.depth],
+      voxelSpacing: [
+        metadata.voxelSpacingX,
+        metadata.voxelSpacingY,
+        metadata.voxelSpacingZ
+      ]
+    )
   }
 
   private func originAddresses(port: Int) -> [String] {

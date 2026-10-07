@@ -820,8 +820,7 @@ struct SettingsView: View {
             host: trimmedAddress,
             port: port,
             authSecret: password,
-            logger: nil,
-            notifier: nil
+            logger: nil
           )
           try manager.connect(timeout: timeout)
           let datasets = try manager.requestDatasetList()

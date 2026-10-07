@@ -35,6 +35,7 @@ class GroupActivityHelper {
   private weak var runtimeAppModel : RuntimeAppModel? = nil
   private weak var storedAppModel : StoredAppModel? = nil
   private var subscriptions = Set<AnyCancellable>()
+  private var localDatasetCacheCompletionObservation: AnyCancellable?
   private var pendingCommonState = false
   private var pendingTransferFunction = false
   private var pendingTransform = false
@@ -61,6 +62,7 @@ class GroupActivityHelper {
   private var sceneMeshResolutionRetryRequested = false
   private var sessionOriginsByDatasetID: [String: [DatasetOrigin]] = [:]
   private var adHocOriginsByParticipantID: [UUID: [String: [DatasetOrigin]]] = [:]
+  private var sessionDatasetID: String?
   private var localParticipantID: UUID?
   private var currentHostParticipantID: UUID?
   private var hostElectionTerm: UInt64 = 0
@@ -92,7 +94,7 @@ class GroupActivityHelper {
   @MainActor func leaveGroupActivity() {
     guard let runtimeAppModel else { return }
 
-    stopSharePlayServer()
+    setSessionDatasetID(nil)
     self.groupSession?.leave()
     runtimeAppModel.groupSessionHost = false
     resetSessionReceivers()
@@ -102,6 +104,18 @@ class GroupActivityHelper {
     await runtimeAppModel.logger.info("Starting SharePlay group-session observation on this Vision Pro.")
     self.runtimeAppModel = runtimeAppModel
     self.storedAppModel = storedAppModel
+    if localDatasetCacheCompletionObservation == nil {
+      localDatasetCacheCompletionObservation = NotificationCenter.default.publisher(
+        for: BORGVRLocalDatasetCacheCompletion.notification
+      ).sink { [weak self] notification in
+        guard let completion = notification.object as? BORGVRLocalDatasetCacheCompletion else {
+          return
+        }
+        Task { @MainActor [weak self] in
+          self?.handleLocalDatasetCacheCompletion(completion)
+        }
+      }
+    }
     for await session in BorgVRActivity.sessions() {
       await runtimeAppModel.logger.info(
         "SharePlay delivered a group session to this Vision Pro; activity initiator: \(session.activity.initiatorID.uuidString), initial state: \(String(describing: session.state)), active participant count: \(session.activeParticipants.count)."
@@ -122,7 +136,11 @@ class GroupActivityHelper {
       self.groupSession = session
       let localUserStartedActivity = session.activity.initiatorID == localBorgVRSharePlayInitiatorID
       await MainActor.run {
+        self.stopSharePlayServer()
         runtimeAppModel.groupSessionHost = localUserStartedActivity
+        self.sessionDatasetID = localUserStartedActivity
+          ? runtimeAppModel.activeDataset?.uniqueId
+          : nil
       }
       localParticipantID = session.localParticipant.id
       currentHostParticipantID = localUserStartedActivity ? session.localParticipant.id : nil
@@ -219,7 +237,7 @@ class GroupActivityHelper {
 
   @MainActor
   func shutdownGroupsession() async {
-    defer { stopSharePlayServer() }
+    defer { setSessionDatasetID(nil) }
     guard groupSession != nil else { return }
 
     do {
@@ -403,6 +421,7 @@ class GroupActivityHelper {
     runtimeAppModel.logger.dev("sendInitialData")
 
     if let dataset = runtimeAppModel.activeDataset {
+      setSessionDatasetID(dataset.uniqueId)
       let sharedDataset = shareOrigins(for: dataset)
       let initMessage = InitMessage(
         uniqueID: dataset.uniqueId,
@@ -861,6 +880,7 @@ class GroupActivityHelper {
         return
       }
       runtimeAppModel.logger.dev("Received empty dataset in init message, waiting for host")
+      setSessionDatasetID(nil)
       pendingDatasetLoadTask?.cancel()
       pendingDatasetLoadTask = nil
       pendingDatasetLoad = nil
@@ -868,11 +888,14 @@ class GroupActivityHelper {
       return
     }
 
+    setSessionDatasetID(initMessage.uniqueID)
+
     DatasetOriginCatalog.shared.prioritize(initMessage.origins, for: initMessage.uniqueID)
     mergeSessionOrigins(initMessage.origins, for: initMessage.uniqueID)
 
     if runtimeAppModel.isOpeningOrDisplayingDataset(withUniqueID: initMessage.uniqueID) {
       runtimeAppModel.logger.dev("Dataset is already opening or open, ignoring duplicate groupsession init data")
+      Task { await advertiseCurrentLocalDataset() }
       return
     }
 
@@ -1012,8 +1035,7 @@ class GroupActivityHelper {
             host: origin.address,
             port: UInt16(clamping: origin.port),
             authSecret: origin.password,
-            logger: nil,
-            notifier: nil
+            logger: nil
           )
           try manager.connect(timeout: timeout)
           let datasets = try manager.requestDatasetList()
@@ -1190,7 +1212,9 @@ class GroupActivityHelper {
 
   @MainActor
   private func advertiseCurrentLocalDataset(to participants: Participants = .all) async {
-    guard groupSession != nil, let dataset = runtimeAppModel?.activeDataset else { return }
+    guard groupSession != nil,
+          let dataset = runtimeAppModel?.activeDataset,
+          dataset.uniqueId == sessionDatasetID else { return }
     let served = ensureServing(dataset: dataset)
     let origins = served.origins.compactMap { value -> DatasetOrigin? in
       guard let endpoint = splitAddressAndPort(value) else { return nil }
@@ -1201,6 +1225,35 @@ class GroupActivityHelper {
     guard let data = try? DatasetOriginSharePlayCodec.encode(advertisement) else { return }
     runtimeAppModel?.logger.info("Advertising this Apple Vision Pro as a SharePlay source for dataset \(dataset.uniqueId).")
     try? await sendData(data: data, of: .datasetOriginAdvertisement, to: participants)
+  }
+
+  @MainActor
+  private func handleLocalDatasetCacheCompletion(
+    _ completion: BORGVRLocalDatasetCacheCompletion
+  ) {
+    if storedAppModel?.showNotifications == true {
+      NotificationHelper.notify(
+        title: NSLocalizedString(
+          "notfication_dataset_downloaded_title",
+          value: "Remote Dataset Complete",
+          comment: ""
+        ),
+        body: NSLocalizedString(
+          "notfication_dataset_downloaded_text",
+          value: "The dataset has been downloaded in its entirety and is now available locally.",
+          comment: ""
+        ),
+        sound: nil
+      )
+    }
+
+    guard groupSession != nil,
+          completion.datasetID == sessionDatasetID,
+          runtimeAppModel?.activeDataset?.uniqueId == completion.datasetID else { return }
+    runtimeAppModel?.logger.info(
+      "The SharePlay dataset is now fully cached locally; enabling its ad-hoc source."
+    )
+    Task { await advertiseCurrentLocalDataset() }
   }
 
   @MainActor
@@ -1337,9 +1390,24 @@ class GroupActivityHelper {
     runtimeAppModel?.showsHostDeparturePrompt = false
     let isLocalHost = state.hostID == localParticipantID
     runtimeAppModel?.groupSessionHost = isLocalHost
+    if isLocalHost {
+      setSessionDatasetID(runtimeAppModel?.activeDataset?.uniqueId)
+    }
     runtimeAppModel?.logger.info(isLocalHost
       ? "This device took over the SharePlay host role."
       : "A participant took over the SharePlay host role.")
+  }
+
+  @MainActor
+  private func setSessionDatasetID(_ datasetID: String?) {
+    guard sessionDatasetID != datasetID else { return }
+    stopSharePlayServer()
+    sessionDatasetID = datasetID
+    if let datasetID {
+      runtimeAppModel?.logger.info("SharePlay ad-hoc server is restricted to host dataset \(datasetID).")
+    } else {
+      runtimeAppModel?.logger.info("SharePlay ad-hoc server stopped because no host dataset is active.")
+    }
   }
 
   @MainActor
@@ -1355,12 +1423,12 @@ class GroupActivityHelper {
 
   @MainActor
   private func ensureServing(dataset: RuntimeAppModel.DatasetEntry) -> (origins: [String], authToken: String) {
-    let datasetInfo = serverDatasetInfo(for: dataset)
+    guard let datasetInfo = serverDatasetInfo(for: dataset) else {
+      stopSharePlayServer()
+      return ([], "")
+    }
     let meshFiles = SceneMeshAssetCatalog.serverFiles(logger: runtimeAppModel?.logger)
     let meshAssetIDs = Set(meshFiles.map(\.id))
-    if datasetInfo == nil {
-      guard case .remote = dataset.source, !meshFiles.isEmpty else { return ([], "") }
-    }
 
     if sharePlayServerRunning,
        sharePlayDatasetID == dataset.uniqueId,
@@ -1383,13 +1451,13 @@ class GroupActivityHelper {
           webServerCertificateData: storedAppModel?.webServerCertificateData ?? Data(),
           webServerCertificatePassword: storedAppModel?.webServerCertificatePassword ?? ""
         ),
-        additionalDatasets: datasetInfo.map { [$0] } ?? [],
+        additionalDatasets: [datasetInfo],
         additionalMeshFiles: meshFiles,
         includeScannedDatasets: false
       )
 
       guard state.isRunning,
-            datasetInfo == nil || state.datasets.contains(where: { $0.id == dataset.uniqueId }) else {
+            state.datasets.contains(where: { $0.id == dataset.uniqueId }) else {
         continue
       }
 
@@ -1427,27 +1495,39 @@ class GroupActivityHelper {
 
   @MainActor
   private func serverDatasetInfo(for dataset: RuntimeAppModel.DatasetEntry) -> DatasetInfo? {
+    let url: URL
+    let shouldLogMetadataFailure: Bool
     switch dataset.source {
       case .local, .builtIn:
-        let url = URL(fileURLWithPath: dataset.identifier)
-        guard let metadata = try? BORGVRMetaData(url: url) else {
-          runtimeAppModel?.logger.error("SharePlay dataset server could not read metadata for \(dataset.identifier).")
-          return nil
-        }
-        return DatasetInfo(
-          id: metadata.uniqueID,
-          filename: url.path,
-          datasetDescription: metadata.datasetDescription.isEmpty ? dataset.description : metadata.datasetDescription,
-          size: [metadata.width, metadata.height, metadata.depth],
-          voxelSpacing: [
-            metadata.voxelSpacingX,
-            metadata.voxelSpacingY,
-            metadata.voxelSpacingZ
-          ]
-        )
+        url = URL(fileURLWithPath: dataset.identifier)
+        shouldLogMetadataFailure = true
       case .remote:
-        return nil
+        guard let documentsDirectory = FileManager.default.urls(
+          for: .documentDirectory,
+          in: .userDomainMask
+        ).first else { return nil }
+        url = documentsDirectory.appendingPathComponent("\(dataset.uniqueId).data")
+        shouldLogMetadataFailure = false
     }
+
+    guard let metadata = try? BORGVRMetaData(url: url),
+          metadata.uniqueID.caseInsensitiveCompare(dataset.uniqueId) == .orderedSame else {
+      if shouldLogMetadataFailure {
+        runtimeAppModel?.logger.error("SharePlay dataset server could not read metadata for \(dataset.identifier).")
+      }
+      return nil
+    }
+    return DatasetInfo(
+      id: metadata.uniqueID,
+      filename: url.path,
+      datasetDescription: metadata.datasetDescription.isEmpty ? dataset.description : metadata.datasetDescription,
+      size: [metadata.width, metadata.height, metadata.depth],
+      voxelSpacing: [
+        metadata.voxelSpacingX,
+        metadata.voxelSpacingY,
+        metadata.voxelSpacingZ
+      ]
+    )
   }
 
   @MainActor
@@ -1582,6 +1662,7 @@ class GroupActivityHelper {
 
   @MainActor
   func handleShutdown(from: Participant) {
+    setSessionDatasetID(nil)
     runtimeAppModel?.requestDatasetClose(
       destination: .sharePlayWaiting(.hostDataset)
     )
