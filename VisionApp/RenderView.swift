@@ -1,5 +1,25 @@
 import SwiftUI
 
+private struct DatasetStateActionButtonStyle: ButtonStyle {
+  func makeBody(configuration: Configuration) -> some View {
+    configuration.label
+      .font(.headline)
+      .foregroundStyle(.teal)
+      .padding(.horizontal, 14)
+      .frame(minWidth: 106, minHeight: 46)
+      .contentShape(Rectangle())
+      .background(
+        Color.teal.opacity(configuration.isPressed ? 0.22 : 0.13),
+        in: RoundedRectangle(cornerRadius: 10)
+      )
+      .overlay(
+        RoundedRectangle(cornerRadius: 10)
+          .stroke(Color.teal.opacity(0.25), lineWidth: 1)
+      )
+      .opacity(configuration.isPressed ? 0.7 : 1)
+  }
+}
+
 /**
  A SwiftUI view exposing high-level render options for BorgVR.
 
@@ -7,13 +27,12 @@ import SwiftUI
 
  - Select the active render mode (1D transfer function with/without
  lighting, or isovalue rendering).
- - Open the interaction / private application window.
+ - Select the interaction mode and open its associated tools.
  - Optionally open profiling tools.
  - Close the currently active dataset (immersive space).
 
- It also ensures that the `PrivateApplicationView` is opened on first
- appearance and cleans up auxiliary windows plus voice input when the
- view disappears or the scene goes into the background.
+ It also cleans up auxiliary windows plus voice input when the view
+ disappears or the scene goes into the background.
  */
 struct RenderView: View {
   /// Global runtime application model (window state, immersion state, etc.).
@@ -46,47 +65,67 @@ struct RenderView: View {
 
   @State private var copiedWebGPUShareLink = false
   @State private var showLeaveSharePlayConfirmation = false
+  @State private var pendingDatasetStateSave: DatasetStateSavePlan?
+  @State private var showDatasetStateOverwriteConfirmation = false
+  @State private var showNoDatasetStateToSave = false
+  @State private var datasetStateSaveError: Error?
+  @State private var showNoDatasetStateToRestore = false
+  @State private var datasetStateRestoreError: Error?
 
   var body: some View {
     VStack(spacing: 20) {
       Text("render_title")
         .font(.title)
         .bold()
-        .onAppear {
-          if !runtimeAppModel.isViewOpen("PrivateApplicationView") {
-            openWindow(id: "PrivateApplicationView")
-          }
-        }
 
-      Picker(
-        "render_picker_title",
-        selection: Binding(
-          get: { sharedAppModel.renderMode },
-          set: { newValue in
-            sharedAppModel.renderMode = newValue
-            sharedAppModel.synchronize(kind: .stateOnly)
-          }
-        )
-      ) {
-        Text("renderMode_transferFunction1DLighting")
-          .tag(RenderMode.transferFunction1DLighting)
-        Text("renderMode_transferFunction1D")
-          .tag(RenderMode.transferFunction1D)
-        Text("renderMode_isoValue")
-          .tag(RenderMode.isoValue)
+      VStack(spacing: 6) {
+        Text("render_picker_title")
+          .font(.headline)
+          .bold()
+
+        Picker(
+          "render_picker_title",
+          selection: Binding(
+            get: { sharedAppModel.renderMode },
+            set: { newValue in
+              sharedAppModel.renderMode = newValue
+              sharedAppModel.synchronize(kind: .stateOnly)
+            }
+          )
+        ) {
+          Text("renderMode_transferFunction1D")
+            .tag(RenderMode.transferFunction1D)
+          Text("renderMode_transferFunction1DLighting")
+            .tag(RenderMode.transferFunction1DLighting)
+          Text("renderMode_isoValue")
+            .tag(RenderMode.isoValue)
+        }
+        .pickerStyle(.segmented)
       }
-      .pickerStyle(.segmented)
       .padding(.horizontal)
 
-      Button("render_button_open_interaction") {
-        if !runtimeAppModel.isViewOpen("PrivateApplicationView") {
-          openWindow(id: "PrivateApplicationView")
-        }
-      }
+      HandInteractionControlsView()
 
       Spacer()
 
       HStack {
+        HStack(spacing: 8) {
+          Button(action: requestDatasetStateSave) {
+            Label("dataset_state_save_short", systemImage: "tray.and.arrow.down")
+          }
+          .accessibilityLabel("Save Dataset State")
+          .help("Save Dataset State")
+          .buttonStyle(DatasetStateActionButtonStyle())
+
+          Button(action: restoreDatasetState) {
+            Label("dataset_state_load_short", systemImage: "tray.and.arrow.up")
+          }
+          .accessibilityLabel("Restore Dataset State")
+          .help("Restore Dataset State")
+          .buttonStyle(DatasetStateActionButtonStyle())
+        }
+        .padding()
+
         if storedAppModel.showProfiling {
           Button(action: openProfileView) {
             Text("render_button_profiling")
@@ -105,7 +144,9 @@ struct RenderView: View {
               comment: "Title for live collaboration share preview"
             )
           )
-        )
+        ) {
+          Label("render_button_share", systemImage: "shareplay")
+        }
         .simultaneousGesture(
           TapGesture().onEnded {
             sharedAppModel.markLocalActivityStarter()
@@ -159,7 +200,6 @@ struct RenderView: View {
       dismissWindow(id: "PerformanceGraphView")
       dismissWindow(id: "LoggerView")
       dismissWindow(id: "ProfileView")
-      dismissWindow(id: "PrivateApplicationView")
       dismissWindow(id: "MarkerView")
       dismissWindow(id: "MeasurementView")
       dismissWindow(id: "LightingEditorView")
@@ -173,6 +213,49 @@ struct RenderView: View {
       }
     } message: {
       Text("Closing this dataset will leave the current SharePlay session.")
+    }
+    .alert(
+      "Overwrite Existing Files?",
+      isPresented: $showDatasetStateOverwriteConfirmation
+    ) {
+      Button("Cancel", role: .cancel) { pendingDatasetStateSave = nil }
+      Button("Overwrite") {
+        if let plan = pendingDatasetStateSave { saveDatasetState(using: plan) }
+      }
+    } message: {
+      Text("One or more files for this dataset already exist. Do you want to replace them?")
+    }
+    .alert("Nothing to Save", isPresented: $showNoDatasetStateToSave) {
+      Button("OK", role: .cancel) {}
+    } message: {
+      Text("There is no active transfer function and there are no objects or measurements to save.")
+    }
+    .alert(
+      "Unable to Save Dataset State",
+      isPresented: Binding(
+        get: { datasetStateSaveError != nil },
+        set: { if !$0 { datasetStateSaveError = nil } }
+      )
+    ) {
+      Button("OK", role: .cancel) { datasetStateSaveError = nil }
+    } message: {
+      Text(datasetStateSaveError?.localizedDescription ?? "")
+    }
+    .alert("Nothing to Restore", isPresented: $showNoDatasetStateToRestore) {
+      Button("OK", role: .cancel) {}
+    } message: {
+      Text("No saved state is available for this dataset.")
+    }
+    .alert(
+      "Unable to Restore Dataset State",
+      isPresented: Binding(
+        get: { datasetStateRestoreError != nil },
+        set: { if !$0 { datasetStateRestoreError = nil } }
+      )
+    ) {
+      Button("OK", role: .cancel) { datasetStateRestoreError = nil }
+    } message: {
+      Text(datasetStateRestoreError?.localizedDescription ?? "")
     }
     .padding()
   }
@@ -217,6 +300,120 @@ struct RenderView: View {
       sharedAppModel.leaveGroupActivity()
     }
     runtimeAppModel.requestDatasetClose(destination: .datasetSelection)
+  }
+
+  private func requestDatasetStateSave() {
+    let plan = makeDatasetStateSavePlan()
+    guard !plan.isEmpty else {
+      showNoDatasetStateToSave = true
+      return
+    }
+    pendingDatasetStateSave = plan
+    if plan.hasExistingFiles {
+      showDatasetStateOverwriteConfirmation = true
+    } else {
+      saveDatasetState(using: plan)
+    }
+  }
+
+  private func makeDatasetStateSavePlan() -> DatasetStateSavePlan {
+    guard let dataset = runtimeAppModel.activeDataset else {
+      return DatasetStateSavePlan(
+        transferFunctionURL: nil,
+        viewStateURL: nil,
+        objectURL: nil,
+        measurementURL: nil
+      )
+    }
+    let documentsDirectory = FileManager.default.urls(
+      for: .documentDirectory,
+      in: .userDomainMask
+    ).first
+    let transferFunctionURL = documentsDirectory?
+      .appendingPathComponent(dataset.uniqueId)
+      .appendingPathExtension("tf1d")
+    let hasObjects = !sharedAppModel.volumeMarkers.isEmpty ||
+      !sharedAppModel.sceneMeshInstances.isEmpty
+    let hasMeasurements = sharedAppModel.volumeMeasurementsSnapshot().contains {
+      !$0.points.isEmpty
+    }
+    return DatasetStateSavePlan(
+      transferFunctionURL: sharedAppModel.renderMode == .isoValue
+        ? nil
+        : transferFunctionURL,
+      viewStateURL: DatasetStateStorage.viewStateFileURL(
+        datasetID: dataset.uniqueId,
+        logger: runtimeAppModel.logger
+      ),
+      objectURL: hasObjects
+        ? DatasetStateStorage.objectFileURL(
+          datasetID: dataset.uniqueId,
+          logger: runtimeAppModel.logger
+        )
+        : nil,
+      measurementURL: hasMeasurements
+        ? DatasetStateStorage.measurementFileURL(
+          datasetID: dataset.uniqueId,
+          logger: runtimeAppModel.logger
+        )
+        : nil
+    )
+  }
+
+  private func saveDatasetState(using plan: DatasetStateSavePlan) {
+    defer { pendingDatasetStateSave = nil }
+    guard let dataset = runtimeAppModel.activeDataset else { return }
+    do {
+      if let url = plan.transferFunctionURL {
+        try sharedAppModel.transferFunction.save(to: url, description: dataset.description)
+      }
+      if let url = plan.viewStateURL {
+        try DatasetStateStorage.saveViewState(
+          try sharedAppModel.makeDatasetViewState(datasetID: dataset.uniqueId),
+          to: url
+        )
+      }
+      if let url = plan.objectURL {
+        try DatasetStateStorage.saveObjects(
+          datasetID: dataset.uniqueId,
+          markers: sharedAppModel.volumeMarkers,
+          meshInstances: sharedAppModel.sceneMeshInstances,
+          to: url
+        )
+      }
+      if let url = plan.measurementURL {
+        try DatasetStateStorage.saveMeasurements(
+          datasetID: dataset.uniqueId,
+          measurements: sharedAppModel.volumeMeasurementsSnapshot(),
+          to: url
+        )
+      }
+    } catch {
+      datasetStateSaveError = error
+    }
+  }
+
+  private func restoreDatasetState() {
+    guard let dataset = runtimeAppModel.activeDataset,
+          let datasetInfo = runtimeAppModel.activeDatasetInfo else {
+      showNoDatasetStateToRestore = true
+      return
+    }
+    do {
+      guard try sharedAppModel.restoreSavedDatasetState(
+        datasetID: dataset.uniqueId,
+        physicalExtent: datasetInfo.physicalExtentMeters,
+        logger: runtimeAppModel.logger
+      ) else {
+        showNoDatasetStateToRestore = true
+        return
+      }
+      sharedAppModel.synchronize(kind: .full)
+      sharedAppModel.synchronizeMarkers()
+      sharedAppModel.synchronizeMeasurements()
+    } catch {
+      datasetStateRestoreError = error
+    }
   }
 
   private var canCopyWebGPUShareLink: Bool {

@@ -251,8 +251,10 @@
 "prefetch_cancel_button" = "Cancel and Resume Later";
 
 /* Private application: interaction title and picker */
-"private_interaction_title" = "Interaction";
-"private_interaction_picker_label" = "Interaction";
+"private_interaction_title" = "Hand Interaction";
+"private_interaction_picker_label" = "Hand Interaction";
+"private_windows_title" = "Windows";
+"Transfer" = "Transfer";
 
 /* Private application: interaction modes */
 "Active Object" = "Active Object";
@@ -271,12 +273,12 @@
 "Place" = "Place";
 "private_marker_color_picker" = "Marker color";
 "private_marker_no_selection" = "Select a sphere or stroke to change its properties.";
-"marker_load_button" = "Load Objects…";
-"marker_save_button" = "Save Objects…";
-"private_marker_delete_selected_button" = "Delete Selected Object";
-"Delete Selected Markers" = "Delete Selected Objects";
+"marker_load_button" = "Load…";
+"marker_save_button" = "Save…";
+"private_marker_delete_selected_button" = "Delete Selected";
+"Delete Selected Markers" = "Delete Selected";
 "Radius" = "Radius";
-"private_marker_clear_all_button" = "Delete All Objects";
+"private_marker_clear_all_button" = "Delete All";
 "private_marker_open_button" = "Objects…";
 "marker_window_title" = "Objects";
 "private_marker_spawn_label" = "Object interaction";
@@ -294,7 +296,7 @@
 "marker_load_replace_button" = "Replace Existing Objects";
 "marker_load_add_button" = "Add Loaded Objects";
 "marker_file_error_title" = "Object File Error";
-"marker_catalog_button" = "Object Files";
+"marker_catalog_button" = "Files";
 "marker_catalog_empty" = "No Object Files Available";
 "marker_dataset_mismatch_title" = "Objects for a Different Dataset";
 "marker_dataset_mismatch_message" = "This object file was created for a different dataset. Its positions may not match the current volume. Do you still want to load it?";
@@ -675,13 +677,14 @@
 "voice_dataset_full_sentence" = "You are looking at the dataset %@. It is %@ in size, with %d %@ of %d %@ per voxel.";
 "voice_dataset_physical_size_sentence" = "Its physical size is %@.";
 
-"render_title" = "Render Options";
-"render_picker_title" = "Editor";
+"render_title" = "BorgVR Main Menu";
+"render_picker_title" = "Render Mode";
 "renderMode_transferFunction1DLighting" = "Transfer Function with Lighting";
 "renderMode_transferFunction1D" = "Transfer Function";
 "renderMode_isoValue" = "Isovalue";
 "render_button_open_interaction" = "Open Interaction Window";
 "render_button_profiling" = "Profiling Options";
+"render_button_share" = "Share";
 "render_share_preview_title" = "BorgVR Live Collaboration";
 "render_button_close_dataset" = "Close Dataset";
 
@@ -885,6 +888,16 @@
 "Back" = "Back";
 "Reset" = "Reset";
 "Cancel" = "Cancel";
+"Reset Model" = "Reset Model";
+"Reset Clipping" = "Reset Clipping";
+"Reset Model?" = "Reset Model?";
+"Reset Clipping?" = "Reset Clipping?";
+"Reset Transfer Function" = "Reset Transfer Function";
+"tf_reset_default" = "Default";
+"tf_reset_presets" = "Presets";
+"tf_reset_files" = "Files";
+"Do you really want to reset the model transformation?" = "Do you really want to reset the model transformation?";
+"Do you really want to reset the clipping bounds?" = "Do you really want to reset the clipping bounds?";
 "Delete" = "Delete";
 "Clear" = "Clear";
 "Settings" = "Settings";
@@ -1216,6 +1229,8 @@
 "settings_toggle_autoload_objects" = "Automatically Load and Save Objects";
 "settings_toggle_autoload_measurements" = "Automatically Load and Save Measurements";
 "Save Dataset State" = "Save Dataset State";
+"dataset_state_save_short" = "Save";
+"dataset_state_load_short" = "Load";
 "Overwrite Existing Files?" = "Overwrite Existing Files?";
 "Overwrite" = "Overwrite";
 "One or more files for this dataset already exist. Do you want to replace them?" = "One or more files for this dataset already exist. Do you want to replace them?";

@@ -43,6 +43,17 @@ class RuntimeAppModel {
     return task
   }
 
+  /// Transitions through the normal close path after an unrecoverable GPU failure.
+  func renderLoopFailed() {
+    guard renderTask != nil else { return }
+    renderTask = nil
+    requestDatasetClose(
+      destination: groupSessionHost
+        ? .datasetSelection
+        : .sharePlayWaiting(.datasetSource)
+    )
+  }
+
   /// Optional timer for CPU frame tracking.
   var timer: CPUFrameTimer? = nil
 
@@ -83,6 +94,7 @@ class RuntimeAppModel {
 
    - model: Manipulate the 3D model.
    - clipping: Adjust clipping planes.
+   - transferEditing: Edit the transfer function panel.
    - drawing: Draw freehand annotations.
    - objectPlacement: Place and edit opaque scene objects.
    - measurement: Place and edit physical measurement points.
@@ -91,6 +103,7 @@ class RuntimeAppModel {
   enum InteractionMode: String {
     case model = "model"
     case clipping = "clipping"
+    case transferEditing = "transferEditing"
     case drawing = "drawing"
     case objectPlacement = "objectPlacement"
     case measurement = "measurement"
@@ -427,18 +440,6 @@ class RuntimeAppModel {
     startImmersiveSpace(dataset:dataset, asGroupSessionHost:asGroupSessionHost)
   }
 
-  /**
-   Quits the application after a short delay in debug Mode.
-
-   This method schedules an exit call on the main thread with a 0.5 second delay.
-   */
-  func quitApp() {
-#if DEBUG
-    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-      exit(0)
-    }
-#endif
-  }
 }
 
 extension RuntimeAppModel.DatasetInfo {

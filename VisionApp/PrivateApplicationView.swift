@@ -1,6 +1,6 @@
 import SwiftUI
 
-struct PrivateApplicationView: View {
+struct HandInteractionControlsView: View {
   @Environment(RuntimeAppModel.self) private var runtimeAppModel
   @Environment(SharedAppModel.self) private var sharedAppModel
 
@@ -12,34 +12,19 @@ struct PrivateApplicationView: View {
   @EnvironmentObject var speech: SpeechHelper
 
   @State private var voiceHandler: VoiceCommandHandler?
-  @State private var pendingDatasetStateSave: DatasetStateSavePlan?
-  @State private var showDatasetStateOverwriteConfirmation = false
-  @State private var showNoDatasetStateToSave = false
-  @State private var datasetStateSaveError: Error?
-  @State private var showNoDatasetStateToRestore = false
-  @State private var datasetStateRestoreError: Error?
+  @State private var showResetModelConfirmation = false
+  @State private var showResetClippingConfirmation = false
+  @State private var showDeleteAllObjectsConfirmation = false
+  @State private var showDeleteAllMeasurementsConfirmation = false
+  @State private var transferFunctionCatalog: [TransferFunctionCatalogEntry] = []
+  @State private var transferFunctionLoadError: Error?
+  @State private var showTransferFunctionLoadError = false
 
   var body: some View {
-    VStack() {
-      ZStack {
-        Text("private_interaction_title")
-          .font(.title)
-          .bold()
-        HStack {
-          Spacer()
-          Button(action: requestDatasetStateSave) {
-            Image(systemName: "archivebox")
-          }
-          .accessibilityLabel("Save Dataset State")
-          .help("Save Dataset State")
-          Button(action: restoreDatasetState) {
-            Image(systemName: "arrow.counterclockwise")
-          }
-          .accessibilityLabel("Restore Dataset State")
-          .help("Restore Dataset State")
-        }
-      }
-      .padding()
+    VStack(spacing: 10) {
+      Text("private_interaction_title")
+        .font(.headline)
+        .bold()
 
       interactionControls(showTitles: false)
 
@@ -74,31 +59,6 @@ struct PrivateApplicationView: View {
         }
         .frame(maxWidth: .infinity, alignment: .center)
       }
-
-      Spacer()
-
-      VStack {
-        Text("private_reset_section_title")
-          .font(.title3)
-          .bold()
-
-        HStack {
-          Button("private_reset_model_button") {
-            sharedAppModel.resetModel()
-            sharedAppModel.synchronize(kind: .full)
-          }
-          Button("private_reset_clipping_button") {
-            sharedAppModel.resetClipBoundsToVolume()
-            sharedAppModel.synchronize(kind: .full)
-          }
-          Button("private_reset_all_parameters_button") {
-            sharedAppModel.reset()
-            sharedAppModel.synchronize(kind: .full)
-          }
-        }
-      }
-
-      Spacer()
 
       if storedAppModel.enableVoiceInput {
         HStack() {
@@ -164,49 +124,63 @@ struct PrivateApplicationView: View {
         }
       }
     }
-    .padding()
-    .alert(
-      "Overwrite Existing Files?",
-      isPresented: $showDatasetStateOverwriteConfirmation
-    ) {
-      Button("Cancel", role: .cancel) { pendingDatasetStateSave = nil }
-      Button("Overwrite") {
-        if let plan = pendingDatasetStateSave { saveDatasetState(using: plan) }
+    .alert("Reset Model?", isPresented: $showResetModelConfirmation) {
+      Button("Cancel", role: .cancel) {}
+      Button("Reset", role: .destructive) {
+        sharedAppModel.resetModel()
+        sharedAppModel.synchronize(kind: .full)
       }
     } message: {
-      Text("One or more files for this dataset already exist. Do you want to replace them?")
+      Text("Do you really want to reset the model transformation?")
     }
-    .alert("Nothing to Save", isPresented: $showNoDatasetStateToSave) {
-      Button("OK", role: .cancel) {}
+    .alert("Reset Clipping?", isPresented: $showResetClippingConfirmation) {
+      Button("Cancel", role: .cancel) {}
+      Button("Reset", role: .destructive) {
+        sharedAppModel.resetClipBoundsToVolume()
+        sharedAppModel.synchronize(kind: .full)
+      }
     } message: {
-      Text("There is no active transfer function and there are no objects or measurements to save.")
-    }
-    .alert(
-      "Unable to Save Dataset State",
-      isPresented: Binding(
-        get: { datasetStateSaveError != nil },
-        set: { if !$0 { datasetStateSaveError = nil } }
-      )
-    ) {
-      Button("OK", role: .cancel) { datasetStateSaveError = nil }
-    } message: {
-      Text(datasetStateSaveError?.localizedDescription ?? "")
-    }
-    .alert("Nothing to Restore", isPresented: $showNoDatasetStateToRestore) {
-      Button("OK", role: .cancel) {}
-    } message: {
-      Text("No saved state is available for this dataset.")
+      Text("Do you really want to reset the clipping bounds?")
     }
     .alert(
-      "Unable to Restore Dataset State",
-      isPresented: Binding(
-        get: { datasetStateRestoreError != nil },
-        set: { if !$0 { datasetStateRestoreError = nil } }
-      )
+      "marker_clear_all_confirmation_title",
+      isPresented: $showDeleteAllObjectsConfirmation
     ) {
-      Button("OK", role: .cancel) { datasetStateRestoreError = nil }
+      Button("marker_clear_all_confirmation_delete", role: .destructive) {
+        deleteAllObjects()
+      }
+      Button("marker_clear_all_confirmation_cancel", role: .cancel) {}
     } message: {
-      Text(datasetStateRestoreError?.localizedDescription ?? "")
+      Text("marker_clear_all_confirmation_message")
+    }
+    .alert(
+      "measurement_delete_all_confirmation_title",
+      isPresented: $showDeleteAllMeasurementsConfirmation
+    ) {
+      Button("measurement_delete_all_confirmation_delete", role: .destructive) {
+        deleteAllMeasurements()
+      }
+      Button("marker_clear_all_confirmation_cancel", role: .cancel) {}
+    } message: {
+      Text("measurement_delete_all_confirmation_message")
+    }
+    .alert(
+      "tf_editor_import_failed_title",
+      isPresented: $showTransferFunctionLoadError,
+      presenting: transferFunctionLoadError
+    ) { _ in
+      Button("tf_editor_ok_button", role: .cancel) {}
+    } message: { error in
+      Text(error.localizedDescription)
+    }
+    .onAppear(perform: refreshTransferFunctionCatalog)
+    .onReceive(NotificationCenter.default.publisher(
+      for: TransferFunctionCatalog.didChangeNotification
+    )) { _ in
+      refreshTransferFunctionCatalog()
+    }
+    .onChange(of: runtimeAppModel.activeDataset?.uniqueId) { _, _ in
+      refreshTransferFunctionCatalog()
     }
   }
 
@@ -264,8 +238,19 @@ struct PrivateApplicationView: View {
     VStack(spacing: 8) {
       InteractionModePicker(
         selection: interactionModeBinding,
-        showsScreenView: hasSharedScreenView
+        showsScreenView: hasSharedScreenView,
+        resetModel: { showResetModelConfirmation = true },
+        resetClipping: { showResetClippingConfirmation = true },
+        transferFunctionCatalog: transferFunctionCatalog,
+        resetTransfer: resetTransferFunction,
+        loadTransferFunction: loadTransferFunction,
+        resetDrawing: { showDeleteAllObjectsConfirmation = true },
+        resetPlacement: { showDeleteAllObjectsConfirmation = true },
+        resetMeasurement: { showDeleteAllMeasurementsConfirmation = true }
       )
+      Text("private_windows_title")
+        .font(.headline)
+        .bold()
       modeWindowButtons(showTitles: showTitles)
     }
     .frame(minWidth: showTitles ? 640 : 480)
@@ -274,7 +259,7 @@ struct PrivateApplicationView: View {
 
   private func modeWindowButtons(showTitles: Bool) -> some View {
     GeometryReader { geometry in
-      let columnCount = hasSharedScreenView ? 6 : 5
+      let columnCount = hasSharedScreenView ? 7 : 6
       let spacing: CGFloat = 4
       let columnWidth = max(
         0,
@@ -283,24 +268,23 @@ struct PrivateApplicationView: View {
       )
       let columnStride = columnWidth + spacing
       let doubleColumnWidth = columnWidth * 2 + spacing
-      let groupInset: CGFloat = showTitles ? 7 : 11
 
       ZStack(alignment: .leading) {
-        HStack(spacing: showTitles ? 8 : 6) {
-          editorButton(showTitles: showTitles)
-          lightingButton(showTitles: showTitles)
-        }
-        .buttonStyle(.bordered)
-        .frame(width: doubleColumnWidth - groupInset * 2)
-        .offset(x: groupInset)
+        lightingButton(showTitles: showTitles)
+          .frame(width: columnWidth)
+          .offset(x: columnStride)
+
+        editorButton(showTitles: showTitles)
+          .frame(width: columnWidth)
+          .offset(x: columnStride * 2)
 
         markerWindowButton(showTitles: showTitles)
           .frame(width: doubleColumnWidth)
-          .offset(x: columnStride * 2)
+          .offset(x: columnStride * 3)
 
         measurementWindowButton(showTitles: showTitles)
           .frame(width: columnWidth)
-          .offset(x: columnStride * 4)
+          .offset(x: columnStride * 5)
       }
       .buttonStyle(.bordered)
     }
@@ -353,6 +337,7 @@ struct PrivateApplicationView: View {
         color: .primary,
         showTitle: showTitles
       )
+      .frame(maxWidth: .infinity)
     }
     .help(String(localized: "Lighting"))
   }
@@ -362,9 +347,13 @@ struct PrivateApplicationView: View {
       toolLabel(
         editorButtonTitle,
         systemImage: "slider.horizontal.3",
-        color: .primary,
-        showTitle: showTitles
+        color: InteractionModeColor.transfer,
+        showTitle: showTitles,
+        compactWidth: 60,
+        compactHeight: 38,
+        compactFont: .title3
       )
+      .frame(maxWidth: .infinity)
     }
     .help(editorButtonTitle)
   }
@@ -374,7 +363,10 @@ struct PrivateApplicationView: View {
     _ title: String,
     systemImage: String,
     color: Color,
-    showTitle: Bool
+    showTitle: Bool,
+    compactWidth: CGFloat = 44,
+    compactHeight: CGFloat = 32,
+    compactFont: Font = .body
   ) -> some View {
     if showTitle {
       HStack(spacing: 7) {
@@ -386,8 +378,9 @@ struct PrivateApplicationView: View {
         .padding(.vertical, 4)
     } else {
       Image(systemName: systemImage)
+        .font(compactFont)
         .foregroundStyle(color)
-        .frame(width: 44, height: 32)
+        .frame(width: compactWidth, height: compactHeight)
         .accessibilityLabel(title)
     }
   }
@@ -414,118 +407,62 @@ struct PrivateApplicationView: View {
     openWindow(id: "VoiceCommandsView")
   }
 
-  private func requestDatasetStateSave() {
-    let plan = makeDatasetStateSavePlan()
-    guard !plan.isEmpty else {
-      showNoDatasetStateToSave = true
-      return
-    }
-    pendingDatasetStateSave = plan
-    if plan.hasExistingFiles {
-      showDatasetStateOverwriteConfirmation = true
-    } else {
-      saveDatasetState(using: plan)
+  private func deleteAllObjects() {
+    let removedMarkers = sharedAppModel.removeAllVolumeMarkers()
+    let removedMeshes = !sharedAppModel.sceneMeshInstances.isEmpty
+    sharedAppModel.sceneMeshInstances.removeAll()
+    sharedAppModel.selectedSceneMeshInstanceID = nil
+    if removedMarkers || removedMeshes {
+      sharedAppModel.synchronizeMarkers()
     }
   }
 
-  private func makeDatasetStateSavePlan() -> DatasetStateSavePlan {
-    guard let dataset = runtimeAppModel.activeDataset else {
-      return DatasetStateSavePlan(
-        transferFunctionURL: nil,
-        viewStateURL: nil,
-        objectURL: nil,
-        measurementURL: nil
-      )
+  private func deleteAllMeasurements() {
+    if sharedAppModel.removeAllVolumeMeasurements() {
+      sharedAppModel.synchronizeMeasurements()
     }
-    let documentsDirectory = FileManager.default.urls(
-      for: .documentDirectory,
-      in: .userDomainMask
-    ).first
-    let transferFunctionURL = documentsDirectory?
-      .appendingPathComponent(dataset.uniqueId)
-      .appendingPathExtension("tf1d")
-    let hasObjects = !sharedAppModel.volumeMarkers.isEmpty ||
-      !sharedAppModel.sceneMeshInstances.isEmpty
-    let hasMeasurements = sharedAppModel.volumeMeasurementsSnapshot().contains {
-      !$0.points.isEmpty
+  }
+
+  private func resetTransferFunction() {
+    sharedAppModel.transferFunction.reset()
+    sharedAppModel.renderMode = .transferFunction1D
+    sharedAppModel.synchronize(kind: .full)
+  }
+
+  private func loadTransferFunction(_ entry: TransferFunctionCatalogEntry) {
+    do {
+      try sharedAppModel.loadTransferFunction(from: entry.url)
+      sharedAppModel.renderMode = .transferFunction1D
+      sharedAppModel.synchronize(kind: .full)
+    } catch {
+      transferFunctionLoadError = error
+      showTransferFunctionLoadError = true
+      refreshTransferFunctionCatalog()
     }
-    return DatasetStateSavePlan(
-      transferFunctionURL: sharedAppModel.renderMode == .isoValue
-        ? nil
-        : transferFunctionURL,
-      viewStateURL: DatasetStateStorage.viewStateFileURL(
-        datasetID: dataset.uniqueId,
-        logger: runtimeAppModel.logger
+  }
+
+  private func refreshTransferFunctionCatalog() {
+    transferFunctionCatalog = TransferFunctionCatalog.entries(
+      additionalDirectoryURLs: FileManager.default.urls(
+        for: .documentDirectory,
+        in: .userDomainMask
       ),
-      objectURL: hasObjects
-        ? DatasetStateStorage.objectFileURL(
-          datasetID: dataset.uniqueId,
-          logger: runtimeAppModel.logger
-        )
-        : nil,
-      measurementURL: hasMeasurements
-        ? DatasetStateStorage.measurementFileURL(
-          datasetID: dataset.uniqueId,
-          logger: runtimeAppModel.logger
-        )
-        : nil
+      datasetTransferFunctionURL: datasetTransferFunctionURL,
+      logger: runtimeAppModel.logger
     )
   }
 
-  private func saveDatasetState(using plan: DatasetStateSavePlan) {
-    defer { pendingDatasetStateSave = nil }
-    guard let dataset = runtimeAppModel.activeDataset else { return }
-    do {
-      if let url = plan.transferFunctionURL {
-        try sharedAppModel.transferFunction.save(to: url, description: dataset.description)
-      }
-      if let url = plan.viewStateURL {
-        try DatasetStateStorage.saveViewState(
-          try sharedAppModel.makeDatasetViewState(datasetID: dataset.uniqueId),
-          to: url
-        )
-      }
-      if let url = plan.objectURL {
-        try DatasetStateStorage.saveObjects(
-          datasetID: dataset.uniqueId,
-          markers: sharedAppModel.volumeMarkers,
-          meshInstances: sharedAppModel.sceneMeshInstances,
-          to: url
-        )
-      }
-      if let url = plan.measurementURL {
-        try DatasetStateStorage.saveMeasurements(
-          datasetID: dataset.uniqueId,
-          measurements: sharedAppModel.volumeMeasurementsSnapshot(),
-          to: url
-        )
-      }
-    } catch {
-      datasetStateSaveError = error
+  private var datasetTransferFunctionURL: URL? {
+    guard let activeDataset = runtimeAppModel.activeDataset,
+          let documentsURL = FileManager.default.urls(
+            for: .documentDirectory,
+            in: .userDomainMask
+          ).first else {
+      return nil
     }
-  }
-
-  private func restoreDatasetState() {
-    guard let dataset = runtimeAppModel.activeDataset,
-          let datasetInfo = runtimeAppModel.activeDatasetInfo else {
-      showNoDatasetStateToRestore = true
-      return
-    }
-    do {
-      guard try sharedAppModel.restoreSavedDatasetState(
-        datasetID: dataset.uniqueId,
-        physicalExtent: datasetInfo.physicalExtentMeters,
-        logger: runtimeAppModel.logger
-      ) else {
-        showNoDatasetStateToRestore = true
-        return
-      }
-      sharedAppModel.synchronize(kind: .full)
-      sharedAppModel.synchronizeMarkers()
-      sharedAppModel.synchronizeMeasurements()
-    } catch {
-      datasetStateRestoreError = error
-    }
+    return documentsURL
+      .appendingPathComponent(activeDataset.uniqueId)
+      .appendingPathExtension("tf1d")
   }
 
   private func toggleVoice() {
@@ -661,6 +598,7 @@ struct PrivateApplicationView: View {
 enum InteractionModeColor {
   static let model = Color.blue
   static let clipping = Color.cyan
+  static let transfer = Color.purple
   static let objects = Color.orange
   static let measurement = Color.green
   static let screenView = Color.purple
@@ -669,6 +607,7 @@ enum InteractionModeColor {
     switch rawValue {
       case "model": model
       case "clipping": clipping
+      case "transferEditing": transfer
       case "drawing", "objectPlacement": objects
       case "measurement": measurement
       case "screenView": screenView
@@ -680,14 +619,60 @@ enum InteractionModeColor {
 struct InteractionModePicker: View {
   @Binding var selection: String
   let showsScreenView: Bool
+  var resetModel: (() -> Void)? = nil
+  var resetClipping: (() -> Void)? = nil
+  var transferFunctionCatalog: [TransferFunctionCatalogEntry] = []
+  var resetTransfer: (() -> Void)? = nil
+  var loadTransferFunction: ((TransferFunctionCatalogEntry) -> Void)? = nil
+  var resetDrawing: (() -> Void)? = nil
+  var resetPlacement: (() -> Void)? = nil
+  var resetMeasurement: (() -> Void)? = nil
 
   var body: some View {
     HStack(spacing: 4) {
-      segment("private_interaction_option_model", icon: "move.3d", value: "model")
-      segment("private_interaction_option_clipping", icon: "viewfinder", value: "clipping")
-      segment("Draw", icon: "scribble", value: "drawing")
-      segment("Place", icon: "cube", value: "objectPlacement")
-      segment("private_interaction_option_measurement", icon: "ruler", value: "measurement")
+      segment(
+        "private_interaction_option_model",
+        icon: "move.3d",
+        value: "model",
+        resetAction: resetModel,
+        resetTitle: "Reset Model"
+      )
+      segment(
+        "private_interaction_option_clipping",
+        icon: "viewfinder",
+        value: "clipping",
+        resetAction: resetClipping,
+        resetTitle: "Reset Clipping"
+      )
+      segment(
+        "Transfer",
+        icon: "slider.horizontal.3",
+        value: "transferEditing",
+        resetAction: resetTransfer,
+        resetTitle: "Reset Transfer Function",
+        showsTransferFunctionMenu: true
+      )
+      segment(
+        "Draw",
+        icon: "scribble",
+        value: "drawing",
+        resetAction: resetDrawing,
+        resetTitle: "private_marker_clear_all_button"
+      )
+      segment(
+        "Place",
+        icon: "cube",
+        value: "objectPlacement",
+        resetAction: resetPlacement,
+        resetTitle: "private_marker_clear_all_button"
+      )
+      segment(
+        "private_interaction_option_measurement",
+        icon: "ruler",
+        value: "measurement",
+        resetAction: resetMeasurement,
+        resetTitle: "measurement_delete_all_button"
+      )
       if showsScreenView {
         segment("Screen View", icon: "display", value: "screenView")
       }
@@ -701,27 +686,92 @@ struct InteractionModePicker: View {
   private func segment(
     _ title: LocalizedStringKey,
     icon: String,
-    value: String
+    value: String,
+    resetAction: (() -> Void)? = nil,
+    resetTitle: LocalizedStringKey? = nil,
+    showsTransferFunctionMenu: Bool = false
   ) -> some View {
     let isSelected = selection == value
     let color = InteractionModeColor.color(for: value)
-    return Button {
-      selection = value
-    } label: {
-      Label(title, systemImage: icon)
-        .font(.callout)
-        .fontWeight(isSelected ? .semibold : .regular)
-        .foregroundStyle(color)
-        .lineLimit(1)
-        .frame(maxWidth: .infinity, minHeight: 34)
-        .padding(.horizontal, 7)
-        .background(
-          color.opacity(isSelected ? 0.24 : 0),
-          in: RoundedRectangle(cornerRadius: 6)
-        )
-        .contentShape(Rectangle())
+    return VStack(spacing: 2) {
+      if showsTransferFunctionMenu, let resetAction, let resetTitle {
+        Menu {
+          Button(action: resetAction) {
+            Label("tf_reset_default", systemImage: "arrow.counterclockwise")
+          }
+
+          let presets = transferFunctionCatalog.filter { $0.source == .builtIn }
+          if !presets.isEmpty {
+            Section("tf_reset_presets") {
+              ForEach(presets) { entry in
+                Button {
+                  loadTransferFunction?(entry)
+                } label: {
+                  Label(entry.displayName, systemImage: "waveform")
+                }
+              }
+            }
+          }
+
+          let files = transferFunctionCatalog.filter { $0.source != .builtIn }
+          if !files.isEmpty {
+            Section("tf_reset_files") {
+              ForEach(files) { entry in
+                Button {
+                  loadTransferFunction?(entry)
+                } label: {
+                  Label(entry.displayName, systemImage: "doc")
+                }
+              }
+            }
+          }
+        } label: {
+          resetIcon(color: color)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(Text(resetTitle))
+        .help(Text(resetTitle))
+      } else if let resetAction, let resetTitle {
+        Button(action: resetAction) {
+          resetIcon(color: color)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(Text(resetTitle))
+        .help(Text(resetTitle))
+      } else {
+        Color.clear
+          .frame(width: 24, height: 24)
+          .accessibilityHidden(true)
+      }
+
+      Button {
+        selection = value
+      } label: {
+        Label(title, systemImage: icon)
+          .font(.callout)
+          .fontWeight(isSelected ? .semibold : .regular)
+          .foregroundStyle(color)
+          .lineLimit(1)
+          .frame(maxWidth: .infinity, minHeight: 34)
+          .padding(.horizontal, 7)
+          .background(
+            color.opacity(isSelected ? 0.24 : 0),
+            in: RoundedRectangle(cornerRadius: 6)
+          )
+          .contentShape(Rectangle())
+      }
+      .buttonStyle(.plain)
+      .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
-    .buttonStyle(.plain)
-    .accessibilityAddTraits(isSelected ? .isSelected : [])
+    .frame(maxWidth: .infinity)
+  }
+
+  private func resetIcon(color: Color) -> some View {
+    Image(systemName: "arrow.counterclockwise")
+      .font(.caption)
+      .foregroundStyle(color)
+      .frame(width: 24, height: 24)
+      .background(color.opacity(0.12), in: Circle())
+      .contentShape(Circle())
   }
 }

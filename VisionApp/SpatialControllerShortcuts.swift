@@ -365,7 +365,9 @@ enum SpatialControllerButtonAction: String, CaseIterable, Identifiable {
   }
 
   static func actions(in category: Category) -> [Self] {
-    allCases.filter { $0.category == category }
+    allCases.filter {
+      $0.category == category && $0 != .toggleInteractionWindow
+    }
   }
 }
 
@@ -422,8 +424,8 @@ enum SpatialControllerShortcutHandler {
         storedAppModel.setControllerTool(.volumeMeasurement, for: chirality)
       case .nextRenderMode:
         let modes: [RenderMode] = [
-          .transferFunction1DLighting,
           .transferFunction1D,
+          .transferFunction1DLighting,
           .isoValue
         ]
         let currentIndex = modes.firstIndex(of: sharedAppModel.renderMode) ?? -1
@@ -447,7 +449,7 @@ enum SpatialControllerShortcutHandler {
       case .toggleLightingWindow:
         runtimeAppModel.requestAuxiliaryWindowToggle("LightingEditorView")
       case .toggleInteractionWindow:
-        runtimeAppModel.requestAuxiliaryWindowToggle("PrivateApplicationView")
+        break
       case .resetModel:
         sharedAppModel.resetModel()
         sharedAppModel.synchronize(kind: .full)

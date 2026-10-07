@@ -949,7 +949,7 @@ extension Renderer {
     }
 
     func drawControllerPointer(_ sample: BorgSpatialInputSample) {
-      var color = sharedAppModel.defaultVolumeStrokeColor
+      var color = SIMD4<Float>(0.62, 0.65, 0.7, 1)
       var pointerMatrix = sample.aimTransform
       renderEncoder.setVertexBuffer(
         spatialControllerPointerBuffer,
@@ -1744,10 +1744,35 @@ extension Renderer {
     )
   }
 
+  private func spatialToolGlyphPosition(
+    aimTransform: simd_float4x4,
+    distanceBehindTip: Float
+  ) -> SIMD3<Float> {
+    let position = aimTransform * SIMD4<Float>(0, 0, distanceBehindTip, 1)
+    return SIMD3<Float>(position.x, position.y, position.z)
+  }
+
+  private func spatialControllerGlyphPosition(
+    aimTransform: simd_float4x4
+  ) -> SIMD3<Float> {
+    let bodyCenter = spatialToolGlyphPosition(
+      aimTransform: aimTransform,
+      distanceBehindTip: 0.055
+    )
+    let devicePosition = SIMD3<Float>(
+      lastOriginFromDevice.columns.3.x,
+      lastOriginFromDevice.columns.3.y,
+      lastOriginFromDevice.columns.3.z
+    )
+    let towardDevice = devicePosition - bodyCenter
+    guard simd_length_squared(towardDevice) > 0.000_001 else { return bodyCenter }
+    return bodyCenter + simd_normalize(towardDevice) * 0.017
+  }
+
   private func stylusMeasurementPreviewMarkers(
     worldPosition: SIMD3<Float>,
     kind: VolumeMeasurementKind,
-    startsNewMeasurement: Bool,
+    showsPlus: Bool,
     markerIDs: [UUID]
   ) -> [VolumeMarker] {
     let right = simd_normalize(SIMD3<Float>(
@@ -1788,7 +1813,7 @@ extension Renderer {
         ]
         paths = [[0, 1], [0, 2], [0, 3], [1, 2], [1, 3], [2, 3]]
     }
-    if startsNewMeasurement {
+    if showsPlus {
       let center = worldPosition + right * size * 1.55 + up * size * 1.15
       let arm = size * 0.34
       let startIndex = worldVertices.count
@@ -1825,9 +1850,14 @@ extension Renderer {
     }
     if let kind = mode.measurementKind {
       return stylusMeasurementPreviewMarkers(
-        worldPosition: sample.aimOrigin,
+        worldPosition: spatialControllerGlyphPosition(
+          aimTransform: sample.aimTransform
+        ),
         kind: kind,
-        startsNewMeasurement: false,
+        showsPlus: immersiveInteraction.spatialControllerWillExtendMeasurement(
+          sourceID: sample.id,
+          kind: kind
+        ),
         markerIDs: markerIDs
       )
     }
@@ -1847,7 +1877,9 @@ extension Renderer {
       lastOriginFromDevice.columns.2.y,
       lastOriginFromDevice.columns.2.z
     ))
-    let center = sample.aimOrigin
+    let center = spatialControllerGlyphPosition(
+      aimTransform: sample.aimTransform
+    )
     let size: Float = 0.011
     let worldVertices: [SIMD3<Float>]
     let paths: [[Int]]
@@ -2130,9 +2162,12 @@ extension Renderer {
       }
       spatialStylusMeasurementPreviewMarkers = stylusSample.map {
         stylusMeasurementPreviewMarkers(
-          worldPosition: $0.tipPosition,
+          worldPosition: spatialToolGlyphPosition(
+            aimTransform: $0.aimTransform,
+            distanceBehindTip: 0.05
+          ),
           kind: stylusMeasurementKind,
-          startsNewMeasurement: immersiveInteraction.spatialStylusWillStartNewMeasurement,
+          showsPlus: immersiveInteraction.spatialStylusWillExtendMeasurement,
           markerIDs: Self.stylusMeasurementPreviewMarkerIDs
         )
       } ?? []
@@ -2226,31 +2261,33 @@ extension Renderer {
    Renders a single frame. This function manages frame lifecycle, timing, command buffer setup,
    resource binding, and final drawing and presentation.
    */
-  func renderFrame() {
-    guard !Task.isCancelled, layerRenderer.state == .running else { return }
-    guard let frame = layerRenderer.queryNextFrame() else { return }
+  func renderFrame() -> Bool {
+    guard !Task.isCancelled, layerRenderer.state == .running else { return true }
+    guard let frame = layerRenderer.queryNextFrame() else { return true }
 
     frame.startUpdate()
     frame.endUpdate()
 
-    guard let timing = frame.predictTiming() else { return }
+    guard let timing = frame.predictTiming() else { return true }
     LayerRenderer.Clock().wait(until: timing.optimalInputTime)
 
     // Closing an immersive space can happen while waiting for the predicted
     // input time. Do not submit that now-obsolete frame to the GPU.
-    guard !Task.isCancelled, layerRenderer.state == .running else { return }
+    guard !Task.isCancelled, layerRenderer.state == .running else { return true }
 
     let desc = MTLCommandBufferDescriptor()
     desc.errorOptions = .encoderExecutionStatus
     guard let commandBuffer = commandQueue.makeCommandBuffer(descriptor: desc) else {
-      fatalError("Failed to create command buffer")
+      logger?.error("Failed to create render command buffer.")
+      return false
     }
     commandBuffer.label = "BorgVR Command Buffer"
 
-    guard let drawable = frame.queryDrawables().first else { return }
-    guard !Task.isCancelled, layerRenderer.state == .running else { return }
+    guard let drawable = frame.queryDrawables().first else { return true }
+    guard !Task.isCancelled, layerRenderer.state == .running else { return true }
 
     frame.startSubmission()
+    defer { frame.endSubmission() }
     self.updateDynamicBufferState()
 
     self.updateRenderState(drawable: drawable)
@@ -2301,7 +2338,8 @@ extension Renderer {
     }
 
     guard let renderEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: renderPassDescriptor) else {
-      fatalError("Failed to create render encoder")
+      logger?.error("Failed to create render command encoder.")
+      return false
     }
 
     renderEncoder.label = "BorgVR Render Encoder"
@@ -2385,19 +2423,30 @@ extension Renderer {
 
     renderEncoder.endEncoding()
 
-    drawable.encodePresent(commandBuffer: commandBuffer)
+    // The immersive space can be suspended while this frame is being encoded.
+    // Dropping an uncommitted command buffer is safe; submitting it after GPU
+    // access has been revoked terminates the process on visionOS.
+    guard !Task.isCancelled, layerRenderer.state == .running else { return true }
 
-    commandBuffer.addCompletedHandler { cb in
-      if let err = cb.error as NSError? {
-        self.logger?.error("Render Error: \(String(describing: err))")
-        if let info = err.userInfo[MTLCommandBufferEncoderInfoErrorKey] {
-          self.logger?.error("Encoder info: \(String(describing: info))")
-        }
-      }
-    }
+    drawable.encodePresent(commandBuffer: commandBuffer)
 
     commandBuffer.commit()
     commandBuffer.waitUntilCompleted()
+
+    if let error = commandBuffer.error as NSError? {
+      let submissionWasNotPermitted = error.domain == MTLCommandBufferErrorDomain &&
+        error.code == MTLCommandBufferError.notPermitted.rawValue
+      if submissionWasNotPermitted || Task.isCancelled || layerRenderer.state != .running {
+        logger?.info("Render submission stopped because the immersive scene was suspended.")
+        immersiveInteraction.updateVolumeInteractionDepthSnapshot(nil)
+        return true
+      }
+      logger?.error("Render command failed: \(error.localizedDescription)")
+      if let info = error.userInfo[MTLCommandBufferEncoderInfoErrorKey] {
+        logger?.error("Encoder info: \(String(describing: info))")
+      }
+      return false
+    }
 
     immersiveInteraction.updateVolumeInteractionDepthSnapshot(
       VolumeInteractionDepthSnapshot(
@@ -2413,8 +2462,7 @@ extension Renderer {
     readBackHashTable(commandBuffer: commandBuffer)
     updatePerformanceCounters()
 
-    frame.endSubmission()
-
+    return true
   }
 
   // MARK: Actual Loop
@@ -2422,7 +2470,7 @@ extension Renderer {
   /**
    The main render loop. Handles immersive space state transitions and repeatedly calls `renderFrame()`.
    */
-  func renderLoop() {
+  func renderLoop() async {
     while !Task.isCancelled {
       if layerRenderer.state == .invalidated {
         Task { @MainActor in
@@ -2434,7 +2482,7 @@ extension Renderer {
         Task { @MainActor in
           runtimeAppModel.immersiveSpaceState = .inTransition
         }
-        layerRenderer.waitUntilRunning()
+        try? await Task.sleep(nanoseconds: 10_000_000)
         continue
       } else {
         Task { @MainActor in
@@ -2442,8 +2490,15 @@ extension Renderer {
             runtimeAppModel.markImmersiveSpaceOpened()
           }
         }
+        var frameSucceeded = true
         autoreleasepool {
-          self.renderFrame()
+          frameSucceeded = self.renderFrame()
+        }
+        if !frameSucceeded {
+          Task { @MainActor in
+            runtimeAppModel.renderLoopFailed()
+          }
+          return
         }
       }
     }

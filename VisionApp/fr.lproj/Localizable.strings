@@ -251,8 +251,10 @@
 "prefetch_cancel_button" = "Annuler et reprendre plus tard";
 
 /* Private application: interaction title and picker */
-"private_interaction_title" = "Interaction";
-"private_interaction_picker_label" = "Interaction";
+"private_interaction_title" = "Interaction avec les mains";
+"private_interaction_picker_label" = "Interaction avec les mains";
+"private_windows_title" = "Fenêtres";
+"Transfer" = "Transfert";
 
 /* Private application: interaction modes */
 "Active Object" = "Objet actif";
@@ -271,12 +273,12 @@
 "Place" = "Placer";
 "private_marker_color_picker" = "Couleur du marqueur";
 "private_marker_no_selection" = "Sélectionnez une sphère ou un tracé pour modifier ses propriétés.";
-"marker_load_button" = "Charger les objets…";
-"marker_save_button" = "Enregistrer les objets…";
-"private_marker_delete_selected_button" = "Supprimer l’objet sélectionné";
-"Delete Selected Markers" = "Supprimer les objets sélectionnés";
+"marker_load_button" = "Charger…";
+"marker_save_button" = "Enregistrer…";
+"private_marker_delete_selected_button" = "Supprimer la sélection";
+"Delete Selected Markers" = "Supprimer la sélection";
 "Radius" = "Rayon";
-"private_marker_clear_all_button" = "Supprimer tous les objets";
+"private_marker_clear_all_button" = "Tout supprimer";
 "private_marker_open_button" = "Objets…";
 "marker_window_title" = "Objets";
 "private_marker_spawn_label" = "Interaction avec les objets";
@@ -294,7 +296,7 @@
 "marker_load_replace_button" = "Remplacer les objets existants";
 "marker_load_add_button" = "Ajouter les objets chargés";
 "marker_file_error_title" = "Erreur de fichier d’objets";
-"marker_catalog_button" = "Fichiers d’objets";
+"marker_catalog_button" = "Fichiers";
 "marker_catalog_empty" = "Aucun fichier d’objets disponible";
 "marker_dataset_mismatch_title" = "Objets pour un autre jeu de données";
 "marker_dataset_mismatch_message" = "Ce fichier d’objets a été créé pour un autre jeu de données. Ses positions peuvent ne pas correspondre au volume actuel. Voulez-vous tout de même le charger ?";
@@ -675,13 +677,14 @@
 "voice_dataset_full_sentence" = "Vous regardez le jeu de données %@. Sa taille est %@, avec %d %@ de %d %@ par voxel.";
 "voice_dataset_physical_size_sentence" = "Ses dimensions physiques sont de %@.";
 
-"render_title" = "Options de rendu";
-"render_picker_title" = "Éditeur";
+"render_title" = "Menu principal de BorgVR";
+"render_picker_title" = "Mode de rendu";
 "renderMode_transferFunction1DLighting" = "Fonction de transfert avec éclairage";
 "renderMode_transferFunction1D" = "Fonction de transfert";
 "renderMode_isoValue" = "Isovaleur";
 "render_button_open_interaction" = "Ouvrir la fenêtre d’interaction";
 "render_button_profiling" = "Options de profilage";
+"render_button_share" = "Partager";
 "render_share_preview_title" = "Collaboration BorgVR en direct";
 "render_button_close_dataset" = "Fermer le jeu de données";
 
@@ -885,6 +888,16 @@
 "Back" = "Retour";
 "Reset" = "Réinitialiser";
 "Cancel" = "Annuler";
+"Reset Model" = "Réinitialiser le modèle";
+"Reset Clipping" = "Réinitialiser la découpe";
+"Reset Model?" = "Réinitialiser le modèle ?";
+"Reset Clipping?" = "Réinitialiser la découpe ?";
+"Reset Transfer Function" = "Réinitialiser la fonction de transfert";
+"tf_reset_default" = "Par défaut";
+"tf_reset_presets" = "Préréglages";
+"tf_reset_files" = "Fichiers";
+"Do you really want to reset the model transformation?" = "Voulez-vous vraiment réinitialiser la transformation du modèle ?";
+"Do you really want to reset the clipping bounds?" = "Voulez-vous vraiment réinitialiser les limites de découpe ?";
 "Delete" = "Supprimer";
 "Clear" = "Effacer";
 "Settings" = "Réglages";
@@ -1216,6 +1229,8 @@
 "settings_toggle_autoload_objects" = "Charger et enregistrer automatiquement les objets";
 "settings_toggle_autoload_measurements" = "Charger et enregistrer automatiquement les mesures";
 "Save Dataset State" = "Enregistrer l’état du jeu de données";
+"dataset_state_save_short" = "Enregistrer";
+"dataset_state_load_short" = "Charger";
 "Overwrite Existing Files?" = "Remplacer les fichiers existants ?";
 "Overwrite" = "Remplacer";
 "One or more files for this dataset already exist. Do you want to replace them?" = "Un ou plusieurs fichiers existent déjà pour ce jeu de données. Voulez-vous les remplacer ?";

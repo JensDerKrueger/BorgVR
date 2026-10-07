@@ -8,7 +8,7 @@ struct MeasurementView: View {
 
   @State private var showDeleteAllConfirmation = false
   @State private var showLoadFilePicker = false
-  @State private var showSaveFilePicker = false
+  @State private var pendingMeasurementExport: PendingSystemFileExport?
   @State private var pendingLoadedMeasurements: [VolumeMeasurement] = []
   @State private var showLoadMergeChoice = false
   @State private var showDatasetMismatchWarning = false
@@ -21,11 +21,6 @@ struct MeasurementView: View {
         .font(.title)
         .bold()
         .frame(maxWidth: .infinity, alignment: .center)
-
-      InteractionModePicker(
-        selection: interactionModeBinding,
-        showsScreenView: hasSharedScreenView
-      )
 
       Picker("measurement_kind_picker", selection: measurementKindBinding) {
         Label("measurement_kind_length", systemImage: "ruler").tag(VolumeMeasurementKind.length)
@@ -62,7 +57,7 @@ struct MeasurementView: View {
         }
 
         Button {
-          showSaveFilePicker = true
+          prepareMeasurementExport()
         } label: {
           Label("measurement_save_button", systemImage: "square.and.arrow.down")
         }
@@ -124,7 +119,10 @@ struct MeasurementView: View {
           }
         }
 
-        HStack {
+      }
+
+      HStack {
+        if selectedMeasurement != nil {
           Button(role: .destructive) {
             _ = sharedAppModel.removeSelectedVolumeMeasurementPoint()
           } label: {
@@ -137,17 +135,18 @@ struct MeasurementView: View {
           } label: {
             Label("measurement_delete_button", systemImage: "trash")
           }
-
-          Spacer()
-
-          Button(role: .destructive) {
-            showDeleteAllConfirmation = true
-          } label: {
-            Label("measurement_delete_all_button", systemImage: "trash.slash")
-          }
         }
-        .padding(.bottom, 18)
+
+        Spacer()
+
+        Button(role: .destructive) {
+          showDeleteAllConfirmation = true
+        } label: {
+          Label("measurement_delete_all_button", systemImage: "trash.slash")
+        }
+        .disabled(sharedAppModel.volumeMeasurementsSnapshot().isEmpty)
       }
+      .padding(.bottom, 18)
     }
     .padding()
     .alert("measurement_delete_all_confirmation_title", isPresented: $showDeleteAllConfirmation) {
@@ -196,16 +195,16 @@ struct MeasurementView: View {
     ) { result in
       loadMeasurements(from: result)
     }
-    .fileExporter(
-      isPresented: $showSaveFilePicker,
-      document: VolumeMeasurementDocument(
-        datasetID: currentDatasetID,
-        measurements: sharedAppModel.volumeMeasurementsSnapshot()
-      ),
-      contentType: .borgVRMeasurement,
-      defaultFilename: BorgVRMeasurementFormat.defaultFilename
-    ) { result in
-      handleMeasurementExportResult(result)
+    .sheet(item: $pendingMeasurementExport) { export in
+      SystemFileExportPicker(
+        sourceURL: export.sourceURL,
+        defaultDirectoryURL: DatasetStateStorage.measurementDirectoryURL(
+          logger: runtimeAppModel.logger
+        )
+      ) { _ in
+        export.removeTemporaryFiles()
+        pendingMeasurementExport = nil
+      }
     }
     .fileDialogDefaultDirectory(
       DatasetStateStorage.measurementDirectoryURL(logger: runtimeAppModel.logger)
@@ -234,29 +233,6 @@ struct MeasurementView: View {
   private var selectedMeasurement: VolumeMeasurement? {
     guard let id = sharedAppModel.selectedVolumeMeasurementID else { return nil }
     return sharedAppModel.volumeMeasurementsSnapshot().first { $0.id == id }
-  }
-
-  private var hasSharedScreenView: Bool {
-    sharedAppModel.screenSharePlayViewState != nil &&
-      sharedAppModel.sharePlayParticipants.contains {
-        $0.platform == .iOS || $0.platform == .macOS
-      }
-  }
-
-  private var interactionModeBinding: Binding<String> {
-    Binding(
-      get: { runtimeAppModel.interactionMode.rawValue },
-      set: { rawValue in
-        guard let mode = RuntimeAppModel.InteractionMode(rawValue: rawValue) else { return }
-        if mode != .drawing && mode != .objectPlacement {
-          sharedAppModel.clearVolumeMarkerSelection()
-        }
-        if mode != .measurement {
-          sharedAppModel.selectedVolumeMeasurementPointID = nil
-        }
-        runtimeAppModel.interactionMode = mode
-      }
-    )
   }
 
   private var measurementKindBinding: Binding<VolumeMeasurementKind> {
@@ -442,78 +418,19 @@ struct MeasurementView: View {
     showMeasurementFileError = true
   }
 
-  private func handleMeasurementExportResult(_ result: Result<URL, Error>) {
-    guard case let .failure(error) = result else { return }
-    guard isDuplicateFileError(error),
-          let destinationURL = fileURL(from: error) else {
-      presentFileError(error)
-      return
-    }
-
+  private func prepareMeasurementExport() {
     do {
-      try replaceMeasurementFile(at: destinationURL)
+      let data = try VolumeMeasurementDocument.encode(
+        datasetID: currentDatasetID,
+        measurements: sharedAppModel.volumeMeasurementsSnapshot()
+      )
+      pendingMeasurementExport = try PendingSystemFileExport(
+        data: data,
+        defaultFilename: BorgVRMeasurementFormat.defaultFilename,
+        temporaryDirectoryName: "BorgVRMeasurementExports"
+      )
     } catch {
       presentFileError(error)
     }
-  }
-
-  private func replaceMeasurementFile(at url: URL) throws {
-    let data = try VolumeMeasurementDocument.encode(
-      datasetID: currentDatasetID,
-      measurements: sharedAppModel.volumeMeasurementsSnapshot()
-    )
-    let accessed = url.startAccessingSecurityScopedResource()
-    defer {
-      if accessed {
-        url.stopAccessingSecurityScopedResource()
-      }
-    }
-
-    var coordinationError: NSError?
-    var writeError: Error?
-    NSFileCoordinator().coordinate(
-      writingItemAt: url,
-      options: .forReplacing,
-      error: &coordinationError
-    ) { coordinatedURL in
-      do {
-        try data.write(to: coordinatedURL, options: .atomic)
-      } catch {
-        writeError = error
-      }
-    }
-    if let coordinationError {
-      throw coordinationError
-    }
-    if let writeError {
-      throw writeError
-    }
-  }
-
-  private func isDuplicateFileError(_ error: Error) -> Bool {
-    let nsError = error as NSError
-    if nsError.domain == NSOSStatusErrorDomain, nsError.code == -48 {
-      return true
-    }
-    if let underlying = nsError.userInfo[NSUnderlyingErrorKey] as? Error {
-      return isDuplicateFileError(underlying)
-    }
-    return false
-  }
-
-  private func fileURL(from error: Error) -> URL? {
-    let nsError = error as NSError
-    for key in [NSURLErrorKey, "NSURL"] {
-      if let url = nsError.userInfo[key] as? URL {
-        return url
-      }
-    }
-    if let path = nsError.userInfo[NSFilePathErrorKey] as? String {
-      return URL(fileURLWithPath: path)
-    }
-    if let underlying = nsError.userInfo[NSUnderlyingErrorKey] as? Error {
-      return fileURL(from: underlying)
-    }
-    return nil
   }
 }

@@ -37,6 +37,14 @@ class ImmersiveInteraction {
   private var transferFunctionPanelMarkerOpacity: Float = 1
   private var transferFunctionPanelMarkerSuppressed = false
   private var transferFunctionPanelChannelToggleActive = false
+  private var transferGestureStartPosition: SIMD3<Float>?
+  private var transferGestureStartIsoValue: Float?
+  private var transferGestureStartCenter: Float = 0.25
+  private var transferGestureStartShift: Float = 0.3
+  private var transferSmoothStepCenter: Float = 0.25
+  private var transferSmoothStepShift: Float = 0.3
+  private var transferGestureRightDirection = SIMD3<Float>(1, 0, 0)
+  private var transferGestureUpDirection = SIMD3<Float>(0, 1, 0)
   private var markerDragID: UUID?
   private var markerDragStartPositions: [UUID: SIMD3<Float>] = [:]
   private var markerDragHandStart: SIMD3<Float>?
@@ -1918,6 +1926,8 @@ class ImmersiveInteraction {
           kind = .model
         case .clipping:
           kind = .clipping
+        case .transferEditing:
+          return
         case .screenView:
           kind = .screenView
           sharedAppModel.screenViewInteractionActive = true
@@ -2521,6 +2531,7 @@ class ImmersiveInteraction {
     if suppressedSpatialStylusToolToggleIDs.contains(sample.id) {
       return BorgSpatialStylusSample(
         tipPosition: sample.aimOrigin,
+        aimTransform: sample.aimTransform,
         isDrawing: false,
         drawingPressure: nil,
         isAdjustingRadius: false
@@ -2542,6 +2553,7 @@ class ImmersiveInteraction {
     let ownsAction = activeSpatialStylusID == sample.id
     return BorgSpatialStylusSample(
       tipPosition: sample.aimOrigin,
+      aimTransform: sample.aimTransform,
       isDrawing: ownsAction && sample.primaryPressed,
       drawingPressure: ownsAction ? sample.drawingPressure : nil,
       isAdjustingRadius: ownsAction &&
@@ -2557,17 +2569,19 @@ class ImmersiveInteraction {
     let modes = SpatialToolMode.museModes
     let currentIndex = modes.firstIndex(of: storedAppModel.stylusTool) ?? -1
     let nextMode = modes[(currentIndex + 1) % modes.count]
-    storedAppModel.stylusTool = nextMode
-    guard let nextKind = nextMode.measurementKind else {
-      sharedAppModel.selectedVolumeMeasurementID = nil
-      sharedAppModel.selectedVolumeMeasurementPointID = nil
-      return
-    }
+    Task { @MainActor [storedAppModel, sharedAppModel] in
+      storedAppModel.stylusTool = nextMode
+      guard let nextKind = nextMode.measurementKind else {
+        sharedAppModel.selectedVolumeMeasurementID = nil
+        sharedAppModel.selectedVolumeMeasurementPointID = nil
+        return
+      }
 
-    sharedAppModel.measurementKind = nextKind
-    sharedAppModel.selectedVolumeMeasurementID = sharedAppModel.volumeMeasurementsSnapshot()
-      .last(where: { $0.kind == nextKind })?.id
-    sharedAppModel.selectedVolumeMeasurementPointID = nil
+      sharedAppModel.measurementKind = nextKind
+      sharedAppModel.selectedVolumeMeasurementID = sharedAppModel.volumeMeasurementsSnapshot()
+        .last(where: { $0.kind == nextKind })?.id
+      sharedAppModel.selectedVolumeMeasurementPointID = nil
+    }
   }
 
   private func toggleSpatialStylusNewMeasurement() {
@@ -2585,6 +2599,21 @@ class ImmersiveInteraction {
     guard let selectedID = sharedAppModel.selectedVolumeMeasurementID else { return true }
     return !sharedAppModel.volumeMeasurementsSnapshot().contains {
       $0.id == selectedID && $0.kind == kind && !$0.points.isEmpty
+    }
+  }
+
+  var spatialStylusWillExtendMeasurement: Bool {
+    guard storedAppModel.stylusTool.measurementKind != nil else { return false }
+    return !spatialStylusWillStartNewMeasurement
+  }
+
+  func spatialControllerWillExtendMeasurement(
+    sourceID: UUID,
+    kind: VolumeMeasurementKind
+  ) -> Bool {
+    guard let measurementID = spatialAccessoryMeasurementIDs[sourceID] else { return false }
+    return sharedAppModel.volumeMeasurementsSnapshot().contains {
+      $0.id == measurementID && $0.kind == kind && !$0.points.isEmpty
     }
   }
 
@@ -2791,14 +2820,11 @@ class ImmersiveInteraction {
     toggleChannel: @escaping @MainActor (Int) -> Void
   ) -> Bool {
     let isEditingPanel = transferFunctionPanelDragStart != nil
-    let hit: SIMD2<Float>?
-    if let ray = ray(from: event) {
-      hit = transferFunctionPanelInteractionState.hitTest(
-        origin: ray.origin,
-        direction: ray.direction
+    let hit = ray(from: event).flatMap {
+      transferFunctionPanelInteractionState.hitTest(
+        origin: $0.origin,
+        direction: $0.direction
       )
-    } else {
-      hit = nil
     }
 
     if isEditingPanel {
@@ -2820,9 +2846,7 @@ class ImmersiveInteraction {
     switch event.phase {
       case .active:
         if transferFunctionPanelDragStart == nil {
-          guard let hit else {
-            return false
-          }
+          guard let hit else { return false }
           if let channelIndex = transferFunctionChannelIndex(for: hit) {
             if !transferFunctionPanelChannelToggleActive {
               toggleTransferFunctionChannel(
@@ -2836,17 +2860,16 @@ class ImmersiveInteraction {
             transferFunctionPanelInteractionState.updateHitUV(nil)
             return true
           }
-          guard hit.x >= 0,
-                hit.x <= 1,
-                hit.y >= 0,
-                hit.y <= 1 else {
+          guard hit.x >= 0, hit.x <= 1, hit.y >= 0, hit.y <= 1 else {
             return false
           }
           transferFunctionPanelDragStart = hit
           transferFunctionPanelMarkerOpacity = 1
           transferFunctionPanelMarkerSuppressed = false
           if let worldPosition = inputWorldPosition(from: event),
-             let localPoint = transferFunctionPanelInteractionState.localPoint(forWorldPosition: worldPosition) {
+             let localPoint = transferFunctionPanelInteractionState.localPoint(
+              forWorldPosition: worldPosition
+             ) {
             transferFunctionPanelHandStart = localPoint.point
           } else {
             transferFunctionPanelHandStart = nil
@@ -2855,14 +2878,13 @@ class ImmersiveInteraction {
           transferFunctionPanelInteractionState.updateHitUV(hit, opacity: 1)
         }
 
-        guard let start = transferFunctionPanelDragStart else {
-          return true
-        }
-
+        guard let start = transferFunctionPanelDragStart else { return true }
         let delta: SIMD2<Float>
         if let handStart = transferFunctionPanelHandStart,
            let worldPosition = inputWorldPosition(from: event),
-           let localPoint = transferFunctionPanelInteractionState.localPoint(forWorldPosition: worldPosition) {
+           let localPoint = transferFunctionPanelInteractionState.localPoint(
+            forWorldPosition: worldPosition
+           ) {
           delta = SIMD2<Float>(
             (localPoint.point.x - handStart.x) / max(localPoint.size.x, 0.0001),
             (localPoint.point.y - handStart.y) / max(localPoint.size.y, 0.0001)
@@ -2921,6 +2943,7 @@ class ImmersiveInteraction {
         }
         transferFunctionPanelChannelToggleActive = false
         return hit != nil
+
       @unknown default:
         transferFunctionPanelDragStart = nil
         transferFunctionPanelHandStart = nil
@@ -2933,6 +2956,80 @@ class ImmersiveInteraction {
     }
   }
 
+  private func handleTransferGesture(_ event: SpatialEventCollection.Event) {
+    switch event.phase {
+      case .active:
+        guard let position = inputWorldPosition(from: event) else { return }
+        if transferGestureStartPosition == nil {
+          transferGestureStartPosition = position
+          transferGestureStartIsoValue = sharedAppModel.normIsoValue
+          transferGestureStartCenter = transferSmoothStepCenter
+          transferGestureStartShift = transferSmoothStepShift
+          if let ray = ray(from: event) {
+            let worldUp = SIMD3<Float>(0, 1, 0)
+            let right = simd_cross(ray.direction, worldUp)
+            if simd_length_squared(right) > 0.0001 {
+              transferGestureRightDirection = simd_normalize(right)
+              transferGestureUpDirection = simd_normalize(
+                simd_cross(transferGestureRightDirection, ray.direction)
+              )
+            }
+          }
+          return
+        }
+
+        guard let startPosition = transferGestureStartPosition else { return }
+        let delta = position - startPosition
+        let gestureRangeMeters: Float = 0.75
+        let horizontalDelta = simd_dot(delta, transferGestureRightDirection) /
+          gestureRangeMeters
+        let verticalDelta = simd_dot(delta, transferGestureUpDirection) /
+          gestureRangeMeters
+
+        if sharedAppModel.renderMode == .isoValue {
+          let dominantDelta = abs(horizontalDelta) >= abs(verticalDelta)
+            ? horizontalDelta
+            : verticalDelta
+          sharedAppModel.normIsoValue = clamp(
+            (transferGestureStartIsoValue ?? sharedAppModel.normIsoValue) + dominantDelta
+          )
+          sharedAppModel.synchronize(kind: .stateOnly)
+          return
+        }
+
+        guard max(abs(horizontalDelta), abs(verticalDelta)) > 0.001 else { return }
+        transferSmoothStepCenter = clamp(transferGestureStartCenter + horizontalDelta)
+        let rawShift = clamp(transferGestureStartShift + verticalDelta, -1, 1)
+        if abs(rawShift) < 0.01 {
+          transferSmoothStepShift = rawShift < 0 ? -0.01 : 0.01
+        } else {
+          transferSmoothStepShift = rawShift
+        }
+        sharedAppModel.transferFunction.scheduleSmoothSteps([
+          .init(
+            start: transferSmoothStepCenter - transferSmoothStepShift * 0.5,
+            shift: transferSmoothStepShift,
+            channels: [0, 1, 2, 3]
+          )
+        ]) {
+          self.sharedAppModel.synchronize(kind: .full)
+        }
+
+      case .ended, .cancelled:
+        sharedAppModel.flushSynchronization()
+        transferGestureStartPosition = nil
+        transferGestureStartIsoValue = nil
+        transferGestureRightDirection = SIMD3<Float>(1, 0, 0)
+        transferGestureUpDirection = SIMD3<Float>(0, 1, 0)
+
+      @unknown default:
+        transferGestureStartPosition = nil
+        transferGestureStartIsoValue = nil
+        transferGestureRightDirection = SIMD3<Float>(1, 0, 0)
+        transferGestureUpDirection = SIMD3<Float>(0, 1, 0)
+    }
+  }
+
 
   func handleSpatialEvents(_ events: SpatialEventCollection,
                            _ interactionMode: RuntimeAppModel.InteractionMode,
@@ -2940,6 +3037,21 @@ class ImmersiveInteraction {
                            datasetInfo: RuntimeAppModel.DatasetInfo?,
                            toggleChannel: @escaping @MainActor (Int) -> Void) {
     guard spatialAccessoryActions.isEmpty, activeSpatialStylusID == nil else { return }
+    if interactionMode == .transferEditing {
+      guard events.count == 1, let event = events.first else {
+        transferGestureStartPosition = nil
+        transferGestureStartIsoValue = nil
+        return
+      }
+      transferFunctionPanelInteractionState.setFocused(false)
+      transferFunctionPanelInteractionState.updateHitUV(nil)
+      handleTransferGesture(event)
+      return
+    }
+    transferGestureStartPosition = nil
+    transferGestureStartIsoValue = nil
+    transferGestureRightDirection = SIMD3<Float>(1, 0, 0)
+    transferGestureUpDirection = SIMD3<Float>(0, 1, 0)
     if let datasetInfo,
        events.count == 1,
        let event = events.first,
@@ -2963,7 +3075,6 @@ class ImmersiveInteraction {
        ) {
       return
     }
-
     if interactionMode == .drawing || interactionMode == .objectPlacement {
       resetQuickMarkerState()
     } else {
@@ -3003,6 +3114,8 @@ class ImmersiveInteraction {
           default:
             return
         }
+      case .transferEditing:
+        return
       case .drawing:
         guard let datasetInfo else {
           return

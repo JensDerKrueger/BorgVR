@@ -251,8 +251,10 @@
 "prefetch_cancel_button" = "Cancelar y continuar más tarde";
 
 /* Private application: interaction title and picker */
-"private_interaction_title" = "Interacción";
-"private_interaction_picker_label" = "Interacción";
+"private_interaction_title" = "Interacción con las manos";
+"private_interaction_picker_label" = "Interacción con las manos";
+"private_windows_title" = "Ventanas";
+"Transfer" = "Transferencia";
 
 /* Private application: interaction modes */
 "Active Object" = "Objeto activo";
@@ -271,12 +273,12 @@
 "Place" = "Colocar";
 "private_marker_color_picker" = "Color del marcador";
 "private_marker_no_selection" = "Seleccione una esfera o un trazo para cambiar sus propiedades.";
-"marker_load_button" = "Cargar objetos…";
-"marker_save_button" = "Guardar objetos…";
-"private_marker_delete_selected_button" = "Eliminar objeto seleccionado";
-"Delete Selected Markers" = "Eliminar objetos seleccionados";
+"marker_load_button" = "Cargar…";
+"marker_save_button" = "Guardar…";
+"private_marker_delete_selected_button" = "Eliminar selección";
+"Delete Selected Markers" = "Eliminar selección";
 "Radius" = "Radio";
-"private_marker_clear_all_button" = "Eliminar todos los objetos";
+"private_marker_clear_all_button" = "Eliminar todo";
 "private_marker_open_button" = "Objetos…";
 "marker_window_title" = "Objetos";
 "private_marker_spawn_label" = "Interacción con objetos";
@@ -294,7 +296,7 @@
 "marker_load_replace_button" = "Reemplazar objetos existentes";
 "marker_load_add_button" = "Añadir objetos cargados";
 "marker_file_error_title" = "Error de archivo de objetos";
-"marker_catalog_button" = "Archivos de objetos";
+"marker_catalog_button" = "Archivos";
 "marker_catalog_empty" = "No hay archivos de objetos disponibles";
 "marker_dataset_mismatch_title" = "Objetos para otro conjunto de datos";
 "marker_dataset_mismatch_message" = "Este archivo de objetos se creó para otro conjunto de datos. Es posible que sus posiciones no coincidan con el volumen actual. ¿Desea cargarlo de todos modos?";
@@ -675,13 +677,14 @@
 "voice_dataset_full_sentence" = "Estás viendo el conjunto de datos %@. Su tamaño es %@, con %d %@ de %d %@ por vóxel.";
 "voice_dataset_physical_size_sentence" = "Su tamaño físico es %@.";
 
-"render_title" = "Opciones de renderizado";
-"render_picker_title" = "Editor";
+"render_title" = "Menú principal de BorgVR";
+"render_picker_title" = "Modo de renderizado";
 "renderMode_transferFunction1DLighting" = "Función de transferencia con iluminación";
 "renderMode_transferFunction1D" = "Función de transferencia";
 "renderMode_isoValue" = "Isovalor";
 "render_button_open_interaction" = "Abrir ventana de interacción";
 "render_button_profiling" = "Opciones de perfilado";
+"render_button_share" = "Compartir";
 "render_share_preview_title" = "Colaboración en vivo de BorgVR";
 "render_button_close_dataset" = "Cerrar conjunto de datos";
 
@@ -885,6 +888,16 @@
 "Back" = "Atrás";
 "Reset" = "Restablecer";
 "Cancel" = "Cancelar";
+"Reset Model" = "Restablecer modelo";
+"Reset Clipping" = "Restablecer recorte";
+"Reset Model?" = "¿Restablecer el modelo?";
+"Reset Clipping?" = "¿Restablecer el recorte?";
+"Reset Transfer Function" = "Restablecer la función de transferencia";
+"tf_reset_default" = "Predeterminada";
+"tf_reset_presets" = "Preajustes";
+"tf_reset_files" = "Archivos";
+"Do you really want to reset the model transformation?" = "¿Realmente quieres restablecer la transformación del modelo?";
+"Do you really want to reset the clipping bounds?" = "¿Realmente quieres restablecer los límites de recorte?";
 "Delete" = "Eliminar";
 "Clear" = "Borrar";
 "Settings" = "Ajustes";
@@ -1216,6 +1229,8 @@
 "settings_toggle_autoload_objects" = "Cargar y guardar objetos automáticamente";
 "settings_toggle_autoload_measurements" = "Cargar y guardar mediciones automáticamente";
 "Save Dataset State" = "Guardar estado del conjunto de datos";
+"dataset_state_save_short" = "Guardar";
+"dataset_state_load_short" = "Cargar";
 "Overwrite Existing Files?" = "¿Sobrescribir los archivos existentes?";
 "Overwrite" = "Sobrescribir";
 "One or more files for this dataset already exist. Do you want to replace them?" = "Ya existen uno o varios archivos para este conjunto de datos. ¿Desea reemplazarlos?";

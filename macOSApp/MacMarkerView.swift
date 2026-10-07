@@ -232,12 +232,17 @@ struct MacMarkerView: View {
       contentType: .borgVRMarker,
       defaultFilename: BorgVRMarkerFormat.defaultFilename
     ) { result in
-      switch result {
-        case .success:
-          refreshMarkerCatalog()
-        case .failure(let error):
-          markerFileError = error
-          showMarkerFileError = true
+      do {
+        try VolumeMarkerExportRecovery.finish(
+          result,
+          datasetID: currentDatasetID,
+          markers: appModel.volumeMarkers,
+          meshInstances: appModel.sceneMeshInstances
+        )
+        refreshMarkerCatalog()
+      } catch {
+        markerFileError = error
+        showMarkerFileError = true
       }
     }
     .fileDialogDefaultDirectory(

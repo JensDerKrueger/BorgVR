@@ -1,8 +1,8 @@
 import Foundation
 
 enum RenderMode: UInt8, CaseIterable, Identifiable, CustomStringConvertible {
-  case transferFunction1DLighting = 1
   case transferFunction1D = 0
+  case transferFunction1DLighting = 1
   case isoValue = 2
 
   var id: UInt8 { rawValue }

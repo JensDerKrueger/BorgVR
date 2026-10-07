@@ -39,7 +39,6 @@ struct VisionApp: App {
   @StateObject private var voice = VoiceCommandService()
   @StateObject private var speech = SpeechHelper()
 
-  @Environment(\.scenePhase) private var scenePhase
   @Environment(\.openImmersiveSpace) private var openImmersiveSpace
   @Environment(\.dismissImmersiveSpace) private var dismissImmersiveSpace
 
@@ -169,11 +168,6 @@ struct VisionApp: App {
     .environmentObject(speech)
     .windowResizability(.contentSize)
     .defaultSize(width:runtimeAppModel.windowSize.width,height:runtimeAppModel.windowSize.height)
-    .onChange(of: scenePhase) {
-      if scenePhase == .background {
-        quitApp()
-      }
-    }
     .onChange(of: runtimeAppModel.datasetSessionState) { _, newValue in
       queueDatasetSessionTransition(for: newValue)
     }
@@ -204,20 +198,6 @@ struct VisionApp: App {
         )
     }
     .windowResizability(.contentSize)
-
-    // PrivateRenderingParameters Window
-    WindowGroup(id: "PrivateApplicationView") {
-      PrivateApplicationView()
-        .trackView(name: "PrivateApplicationView")
-        .environment(runtimeAppModel)
-        .environment(sharedAppModel)
-        .environmentObject(storedAppModel)
-        .environmentObject(serverController)
-        .environmentObject(voice)
-        .environmentObject(speech)
-    }
-    .windowResizability(.contentSize)
-    .defaultSize(width: 850, height: 400)
 
     WindowGroup(id: "MarkerView") {
       MarkerView()
@@ -259,16 +239,18 @@ struct VisionApp: App {
           set: { sharedAppModel.specularLightColor = $0 }
         ),
         usesPanelBackground: false,
+        usesHorizontalLayout: true,
         onChange: { sharedAppModel.synchronize(kind: .stateOnly) },
         onCommit: sharedAppModel.flushSynchronization
       )
+      .frame(minWidth: 420, minHeight: 300)
       .padding()
       .trackView(name: "LightingEditorView")
       .environment(runtimeAppModel)
       .environment(sharedAppModel)
     }
-    .windowResizability(.contentSize)
-    .defaultSize(width: 440, height: 500)
+    .windowResizability(.contentMinSize)
+    .defaultSize(width: 460, height: 360)
 
     Window("Voice Commands", id: "VoiceCommandsView") {
       VoiceHelpView()
@@ -350,21 +332,6 @@ struct VisionApp: App {
 
     sharePlayDisplayNameDraft = UIDevice.current.name
     showsSharePlayDisplayNameOnboarding = true
-  }
-
-  func quitApp() {
-    let renderTask = runtimeAppModel.cancelRenderLoop()
-    Task { @MainActor in
-      if runtimeAppModel.groupSessionHost && sharedAppModel.isInGroupSession {
-        await sharedAppModel.shutdownGroupsession()
-      }
-      if runtimeAppModel.immersiveSpaceState == .open {
-        await dismissImmersiveSpace()
-      }
-      await renderTask?.value
-      runtimeAppModel.immersiveSpaceState = .closed
-      runtimeAppModel.quitApp()
-    }
   }
 
   @MainActor

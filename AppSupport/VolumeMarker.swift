@@ -356,6 +356,82 @@ struct VolumeMarkerDocument: FileDocument {
   }
 }
 
+enum VolumeMarkerExportRecovery {
+  static func finish(
+    _ result: Result<URL, Error>,
+    datasetID: String?,
+    markers: [VolumeMarker],
+    meshInstances: [SceneMeshInstance]
+  ) throws {
+    guard case let .failure(error) = result else { return }
+    guard isDuplicateFileError(error),
+          let destinationURL = destinationFileURL(from: error) else {
+      throw error
+    }
+
+    let data = try VolumeMarkerDocument.encode(
+      datasetID: datasetID,
+      markers: markers,
+      meshInstances: meshInstances
+    )
+    let accessed = destinationURL.startAccessingSecurityScopedResource()
+    defer {
+      if accessed { destinationURL.stopAccessingSecurityScopedResource() }
+    }
+
+    var coordinationError: NSError?
+    var writeError: Error?
+    NSFileCoordinator().coordinate(
+      writingItemAt: destinationURL,
+      options: .forReplacing,
+      error: &coordinationError
+    ) { coordinatedURL in
+      do {
+        try data.write(to: coordinatedURL, options: .atomic)
+      } catch {
+        writeError = error
+      }
+    }
+    if let coordinationError { throw coordinationError }
+    if let writeError { throw writeError }
+  }
+
+  private static func isDuplicateFileError(_ error: Error) -> Bool {
+    let nsError = error as NSError
+    if nsError.domain == NSOSStatusErrorDomain, nsError.code == -48 { return true }
+    return underlyingErrors(of: nsError).contains(where: isDuplicateFileError)
+  }
+
+  private static func destinationFileURL(from error: Error) -> URL? {
+    let nsError = error as NSError
+    for key in ["NSFileNewItemLocationKey", "NSDestinationURL"] {
+      if let url = nsError.userInfo[key] as? URL { return url }
+      if let path = nsError.userInfo[key] as? String {
+        return URL(fileURLWithPath: path)
+      }
+    }
+    if let path = nsError.userInfo["NSDestinationFilePath"] as? String {
+      return URL(fileURLWithPath: path)
+    }
+    for underlying in underlyingErrors(of: nsError) {
+      if let url = destinationFileURL(from: underlying) { return url }
+    }
+    return nil
+  }
+
+  private static func underlyingErrors(of error: NSError) -> [Error] {
+    var errors: [Error] = []
+    if let underlying = error.userInfo[NSUnderlyingErrorKey] as? Error {
+      errors.append(underlying)
+    }
+    if let multiple = error.userInfo[NSMultipleUnderlyingErrorsKey] as? [Error] {
+      errors.append(contentsOf: multiple)
+    }
+    return errors
+  }
+
+}
+
 struct VolumeMarkerDocumentContents {
   let datasetID: String
   let markers: [VolumeMarker]

@@ -1,5 +1,18 @@
 import SwiftUI
 
+private struct HeaderIconButtonStyle: ButtonStyle {
+  func makeBody(configuration: Configuration) -> some View {
+    configuration.label
+      .frame(width: 26, height: 24)
+      .contentShape(Rectangle())
+      .background(
+        configuration.isPressed ? Color.primary.opacity(0.12) : .clear,
+        in: RoundedRectangle(cornerRadius: 5)
+      )
+      .opacity(configuration.isPressed ? 0.65 : 1)
+  }
+}
+
 struct RenderControlsPanel: View {
   @EnvironmentObject private var appModel: AppModel
   @EnvironmentObject private var renderingParameters: RenderingParameters
@@ -8,6 +21,7 @@ struct RenderControlsPanel: View {
   @EnvironmentObject private var sharePlay: SharePlayCoordinator
   @EnvironmentObject private var docking: DockingController
   @Environment(\.openWindow) private var openWindow
+  @Environment(\.dismissWindow) private var dismissWindow
 
   let isDetachedWindow: Bool
 
@@ -43,105 +57,132 @@ struct RenderControlsPanel: View {
 
         Spacer()
 
-        Button {
-          sharePlay.startSharePlay()
-        } label: {
-          Image(systemName: "shareplay")
-        }
-        .accessibilityLabel(
-          sharePlay.isInSession
-            ? String(localized: "SharePlay active")
-            : String(localized: "Start SharePlay")
-        )
-        .help(
-          sharePlay.isInSession
-            ? String(localized: "SharePlay active")
-            : String(localized: "Start SharePlay")
-        )
-        .buttonStyle(.bordered)
+        headerActionGroup(tint: .green) {
+          Button {
+            sharePlay.startSharePlay()
+          } label: {
+            Image(systemName: "shareplay")
+          }
+          .accessibilityLabel(
+            sharePlay.isInSession
+              ? String(localized: "SharePlay active")
+              : String(localized: "Start SharePlay")
+          )
+          .help(
+            sharePlay.isInSession
+              ? String(localized: "SharePlay active")
+              : String(localized: "Start SharePlay")
+          )
+          .buttonStyle(HeaderIconButtonStyle())
 
-        if sharePlay.isInSession, !sharePlay.participants.isEmpty {
-          Menu {
-            ForEach(sharePlay.participants) { participant in
-              Label(participant.displayName, systemImage: participant.platform.systemImage)
+          if sharePlay.isInSession, !sharePlay.participants.isEmpty {
+            Menu {
+              ForEach(sharePlay.participants) { participant in
+                Label(participant.displayName, systemImage: participant.platform.systemImage)
+              }
+            } label: {
+              Image(systemName: "person.2")
             }
-          } label: {
-            Image(systemName: "person.2")
+            .accessibilityLabel("Participants")
+            .help("Participants")
+            .buttonStyle(HeaderIconButtonStyle())
           }
-          .accessibilityLabel("Participants")
-          .help("Participants")
-          .buttonStyle(.bordered)
+
+          if canCopyWebGPUShareLink {
+            Button {
+              copyWebGPUShareLink()
+            } label: {
+              Image(systemName: copiedWebGPUShareLink ? "checkmark" : "link")
+            }
+            .accessibilityLabel("Copy WebGPU link")
+            .help("Copy WebGPU link")
+            .buttonStyle(HeaderIconButtonStyle())
+          }
         }
 
-        if canCopyWebGPUShareLink {
+        headerActionGroup(tint: .teal) {
           Button {
-            copyWebGPUShareLink()
+            requestDatasetStateSave()
           } label: {
-            Image(systemName: copiedWebGPUShareLink ? "checkmark" : "link")
+            Image(systemName: "tray.and.arrow.down")
           }
-          .accessibilityLabel("Copy WebGPU link")
-          .help("Copy WebGPU link")
-          .buttonStyle(.bordered)
-        }
+          .accessibilityLabel("Save Dataset State")
+          .help("Save Dataset State")
+          .buttonStyle(HeaderIconButtonStyle())
 
-        Button {
-          showDatasetInfo.toggle()
-        } label: {
-          Image(systemName: "info.circle")
-        }
-        .accessibilityLabel("dataset_info_button")
-        .help("dataset_info_button_help")
-        .buttonStyle(.bordered)
-
-        Button {
-          requestDatasetStateSave()
-        } label: {
-          Image(systemName: "archivebox")
-        }
-        .accessibilityLabel("Save Dataset State")
-        .help("Save Dataset State")
-        .buttonStyle(.bordered)
-
-        Button {
-          restoreDatasetState()
-        } label: {
-          Image(systemName: "arrow.counterclockwise")
-        }
-        .accessibilityLabel("Restore Dataset State")
-        .help("Restore Dataset State")
-        .buttonStyle(.bordered)
-
-        if appSettings.showLogButton {
           Button {
-            showLog.toggle()
+            restoreDatasetState()
           } label: {
-            Image(systemName: "text.alignleft")
+            Image(systemName: "tray.and.arrow.up")
           }
-          .accessibilityLabel("Log")
-          .help("Log")
-          .buttonStyle(.bordered)
+          .accessibilityLabel("Restore Dataset State")
+          .help("Restore Dataset State")
+          .buttonStyle(HeaderIconButtonStyle())
         }
 
-        Button {
-          openWindow(id: "PerformanceGraphView")
-        } label: {
-          Image(systemName: "chart.xyaxis.line")
-        }
-        .accessibilityLabel("performance_title")
-        .help("performance_title")
-        .buttonStyle(.bordered)
-
-        DockToggleButton(panel: .renderControls)
-
-        if !isDetachedWindow {
+        headerActionGroup(tint: .blue) {
           Button {
-            docking.hide(.renderControls)
+            showDatasetInfo.toggle()
           } label: {
-            Image(systemName: "eye.slash")
+            Image(systemName: "info.circle")
           }
-          .accessibilityLabel("Hide UI")
-          .help("Hide UI")
-          .buttonStyle(.bordered)
+          .accessibilityLabel("dataset_info_button")
+          .help("dataset_info_button_help")
+          .buttonStyle(HeaderIconButtonStyle())
+
+          if appSettings.showLogButton {
+            Button {
+              showLog.toggle()
+            } label: {
+              Image(systemName: "text.alignleft")
+            }
+            .accessibilityLabel("Log")
+            .help("Log")
+            .buttonStyle(HeaderIconButtonStyle())
+          }
+
+          Button {
+            openWindow(id: "PerformanceGraphView")
+          } label: {
+            Image(systemName: "chart.xyaxis.line")
+          }
+          .accessibilityLabel("performance_title")
+          .help("performance_title")
+          .buttonStyle(HeaderIconButtonStyle())
+        }
+
+        headerActionGroup(tint: .gray) {
+          Button {
+            toggleRenderControlsDocking()
+          } label: {
+            Image(
+              systemName: docking.isDetached(.renderControls)
+                ? DockablePanelID.renderControls.detachedIcon
+                : DockablePanelID.renderControls.dockedIcon
+            )
+          }
+          .accessibilityLabel(
+            docking.isDetached(.renderControls)
+              ? String(localized: "Dock panel")
+              : String(localized: "Detach panel")
+          )
+          .help(
+            docking.isDetached(.renderControls)
+              ? String(localized: "Dock panel")
+              : String(localized: "Detach panel")
+          )
+          .buttonStyle(HeaderIconButtonStyle())
+
+          if !isDetachedWindow {
+            Button {
+              docking.hide(.renderControls)
+            } label: {
+              Image(systemName: "eye.slash")
+            }
+            .accessibilityLabel("Hide UI")
+            .help("Hide UI")
+            .buttonStyle(HeaderIconButtonStyle())
+          }
         }
       }
 
@@ -468,6 +509,29 @@ struct RenderControlsPanel: View {
     } else {
       docking.toggleVisibility(panel)
     }
+  }
+
+  private func toggleRenderControlsDocking() {
+    if docking.isDetached(.renderControls) {
+      docking.dock(.renderControls)
+      dismissWindow(id: DockablePanelID.renderControls.windowID)
+    } else {
+      docking.detach(.renderControls)
+      openWindow(id: DockablePanelID.renderControls.windowID)
+    }
+  }
+
+  private func headerActionGroup<Content: View>(
+    tint: Color,
+    @ViewBuilder content: () -> Content
+  ) -> some View {
+    HStack(spacing: 0) {
+      content()
+    }
+    .padding(2)
+    .foregroundStyle(tint)
+    .background(tint.opacity(0.13), in: Capsule())
+    .overlay(Capsule().stroke(tint.opacity(0.2), lineWidth: 1))
   }
 
   private func interactionModeColor(for mode: AppModel.InteractionMode) -> Color {

@@ -9,7 +9,7 @@ struct MarkerView: View {
 
   @State private var showClearAllConfirmation = false
   @State private var showLoadFilePicker = false
-  @State private var showSaveFilePicker = false
+  @State private var pendingObjectExport: PendingSystemFileExport?
   @State private var pendingLoadedMarkers: [VolumeMarker] = []
   @State private var pendingLoadedMeshInstances: [SceneMeshInstance] = []
   @State private var showLoadMergeChoice = false
@@ -24,11 +24,6 @@ struct MarkerView: View {
         .font(.title2)
         .bold()
         .frame(maxWidth: .infinity, alignment: .center)
-
-      InteractionModePicker(
-        selection: interactionModeBinding,
-        showsScreenView: hasSharedScreenView
-      )
 
       HStack(alignment: .top, spacing: 18) {
         VStack(alignment: .leading, spacing: 12) {
@@ -95,22 +90,20 @@ struct MarkerView: View {
     ) { result in
       loadMarkers(from: result)
     }
-    .fileExporter(
-      isPresented: $showSaveFilePicker,
-      document: VolumeMarkerDocument(
-        datasetID: currentDatasetID,
-        markers: sharedAppModel.volumeMarkers,
-        meshInstances: sharedAppModel.sceneMeshInstances
-      ),
-      contentType: .borgVRMarker,
-      defaultFilename: BorgVRMarkerFormat.defaultFilename
-    ) { result in
-      switch result {
-        case .success:
-          refreshMarkerCatalog()
-        case .failure(let error):
-          markerFileError = error
-          showMarkerFileError = true
+    .sheet(item: $pendingObjectExport) { export in
+      SystemFileExportPicker(
+        sourceURL: export.sourceURL,
+        defaultDirectoryURL: markerStorageDirectoryURL
+      ) { exportedURL in
+        export.removeTemporaryFiles()
+        pendingObjectExport = nil
+        if exportedURL != nil {
+          NotificationCenter.default.post(
+            name: VolumeMarkerCatalog.didChangeNotification,
+            object: nil
+          )
+        }
+        refreshMarkerCatalog()
       }
     }
     .fileDialogDefaultDirectory(markerStorageDirectoryURL)
@@ -295,7 +288,7 @@ struct MarkerView: View {
 
       Button("marker_load_button") { showLoadFilePicker = true }
 
-      Button("marker_save_button") { showSaveFilePicker = true }
+      Button("marker_save_button") { prepareObjectExport() }
         .disabled(sharedAppModel.volumeMarkers.isEmpty && sharedAppModel.sceneMeshInstances.isEmpty)
     }
   }
@@ -329,28 +322,22 @@ struct MarkerView: View {
       : "Delete Selected Markers"
   }
 
-  private var hasSharedScreenView: Bool {
-    sharedAppModel.screenSharePlayViewState != nil &&
-      sharedAppModel.sharePlayParticipants.contains {
-        $0.platform == .iOS || $0.platform == .macOS
-      }
-  }
-
-  private var interactionModeBinding: Binding<String> {
-    Binding(
-      get: { runtimeAppModel.interactionMode.rawValue },
-      set: { rawValue in
-        if let newMode = RuntimeAppModel.InteractionMode(rawValue: rawValue) {
-          if newMode != .drawing && newMode != .objectPlacement {
-            sharedAppModel.selectedVolumeMarkerID = nil
-          }
-          if newMode != .measurement {
-            sharedAppModel.selectedVolumeMeasurementPointID = nil
-          }
-          runtimeAppModel.interactionMode = newMode
-        }
-      }
-    )
+  private func prepareObjectExport() {
+    do {
+      let data = try VolumeMarkerDocument.encode(
+        datasetID: currentDatasetID,
+        markers: sharedAppModel.volumeMarkers,
+        meshInstances: sharedAppModel.sceneMeshInstances
+      )
+      pendingObjectExport = try PendingSystemFileExport(
+        data: data,
+        defaultFilename: BorgVRMarkerFormat.defaultFilename,
+        temporaryDirectoryName: "BorgVRObjectExports"
+      )
+    } catch {
+      markerFileError = error
+      showMarkerFileError = true
+    }
   }
 
   private var markerSpawnBinding: Binding<Bool> {
@@ -665,5 +652,81 @@ struct MarkerView: View {
 
   private func refreshMeshCatalog() {
     sharedAppModel.refreshSceneMeshCatalog()
+  }
+}
+
+struct PendingSystemFileExport: Identifiable {
+  let id = UUID()
+  let sourceURL: URL
+
+  init(
+    data: Data,
+    defaultFilename: String,
+    temporaryDirectoryName: String
+  ) throws {
+    let directoryURL = FileManager.default.temporaryDirectory
+      .appendingPathComponent(temporaryDirectoryName, isDirectory: true)
+      .appendingPathComponent(id.uuidString, isDirectory: true)
+    try FileManager.default.createDirectory(
+      at: directoryURL,
+      withIntermediateDirectories: true
+    )
+    sourceURL = directoryURL.appendingPathComponent(defaultFilename)
+    try data.write(to: sourceURL, options: .atomic)
+  }
+
+  func removeTemporaryFiles() {
+    try? FileManager.default.removeItem(at: sourceURL.deletingLastPathComponent())
+  }
+}
+
+struct SystemFileExportPicker: UIViewControllerRepresentable {
+  let sourceURL: URL
+  let defaultDirectoryURL: URL?
+  let completion: (URL?) -> Void
+
+  func makeCoordinator() -> Coordinator {
+    Coordinator(completion: completion)
+  }
+
+  func makeUIViewController(context: Context) -> UIDocumentPickerViewController {
+    let picker = UIDocumentPickerViewController(
+      forExporting: [sourceURL],
+      asCopy: true
+    )
+    picker.directoryURL = defaultDirectoryURL
+    picker.delegate = context.coordinator
+    return picker
+  }
+
+  func updateUIViewController(
+    _ uiViewController: UIDocumentPickerViewController,
+    context: Context
+  ) {}
+
+  final class Coordinator: NSObject, UIDocumentPickerDelegate {
+    private let completion: (URL?) -> Void
+    private var completed = false
+
+    init(completion: @escaping (URL?) -> Void) {
+      self.completion = completion
+    }
+
+    func documentPicker(
+      _ controller: UIDocumentPickerViewController,
+      didPickDocumentsAt urls: [URL]
+    ) {
+      finish(with: urls.first)
+    }
+
+    func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
+      finish(with: nil)
+    }
+
+    private func finish(with url: URL?) {
+      guard !completed else { return }
+      completed = true
+      completion(url)
+    }
   }
 }

@@ -13,6 +13,27 @@ private enum RenderSheet: String, Identifiable {
   var id: String { rawValue }
 }
 
+private struct HeaderIconButtonStyle: ButtonStyle {
+  var isBordered = false
+
+  func makeBody(configuration: Configuration) -> some View {
+    configuration.label
+      .frame(width: 28, height: 28)
+      .contentShape(Rectangle())
+      .background(
+        isBordered ? Color.primary.opacity(configuration.isPressed ? 0.16 : 0.08) : .clear,
+        in: RoundedRectangle(cornerRadius: 6)
+      )
+      .overlay {
+        if isBordered {
+          RoundedRectangle(cornerRadius: 6)
+            .stroke(Color.primary.opacity(0.16), lineWidth: 1)
+        }
+      }
+      .opacity(configuration.isPressed ? 0.62 : 1)
+  }
+}
+
 struct RenderView: View {
   @Environment(\.horizontalSizeClass) private var horizontalSizeClass
   @Environment(\.verticalSizeClass) private var verticalSizeClass
@@ -233,7 +254,7 @@ struct RenderView: View {
   ) -> some View {
     if showRenderControls {
       VStack(spacing: 8) {
-        HStack {
+        HStack(spacing: 6) {
           Button {
             requestDatasetClose()
           } label: {
@@ -250,85 +271,93 @@ struct RenderView: View {
 
           Spacer()
 
-          ShareLink(
-            item: BorgVRSharePlayActivity(),
-            preview: SharePreview(String(localized: "BorgVR Mobile Live Collaboration"))
-          ) {
-            Image(systemName: "shareplay")
-          }
-          .simultaneousGesture(
-            TapGesture().onEnded {
-              sharePlay.markLocalActivityStarter()
+          headerActionGroup(tint: .green) {
+            ShareLink(
+              item: BorgVRSharePlayActivity(),
+              preview: SharePreview(String(localized: "BorgVR Mobile Live Collaboration"))
+            ) {
+              Image(systemName: "shareplay")
             }
-          )
-          .accessibilityLabel(
-            sharePlay.isInSession
-              ? String(localized: "SharePlay active")
-              : String(localized: "Start SharePlay")
-          )
-          .buttonStyle(.bordered)
-
-          if sharePlay.isInSession, !sharePlay.participants.isEmpty {
-            Menu {
-              ForEach(sharePlay.participants) { participant in
-                Label(participant.displayName, systemImage: participant.platform.systemImage)
+            .simultaneousGesture(
+              TapGesture().onEnded {
+                sharePlay.markLocalActivityStarter()
               }
-            } label: {
-              Image(systemName: "person.2")
+            )
+            .accessibilityLabel(
+              sharePlay.isInSession
+                ? String(localized: "SharePlay active")
+                : String(localized: "Start SharePlay")
+            )
+            .buttonStyle(HeaderIconButtonStyle())
+
+            if sharePlay.isInSession, !sharePlay.participants.isEmpty {
+              Menu {
+                ForEach(sharePlay.participants) { participant in
+                  Label(participant.displayName, systemImage: participant.platform.systemImage)
+                }
+              } label: {
+                Image(systemName: "person.2")
+              }
+              .accessibilityLabel("Participants")
+              .buttonStyle(HeaderIconButtonStyle())
             }
-            .accessibilityLabel("Participants")
-            .buttonStyle(.bordered)
+
+            if canCopyWebGPUShareLink {
+              Button {
+                copyWebGPUShareLink()
+              } label: {
+                Image(systemName: copiedWebGPUShareLink ? "checkmark" : "link")
+              }
+              .accessibilityLabel("Copy WebGPU link")
+              .help("Copy WebGPU link")
+              .buttonStyle(HeaderIconButtonStyle())
+            }
           }
 
-          if canCopyWebGPUShareLink {
+          headerActionGroup(tint: .teal) {
             Button {
-              copyWebGPUShareLink()
+              requestDatasetStateSave()
             } label: {
-              Image(systemName: copiedWebGPUShareLink ? "checkmark" : "link")
+              Image(systemName: "tray.and.arrow.down")
             }
-            .accessibilityLabel("Copy WebGPU link")
-            .help("Copy WebGPU link")
-            .buttonStyle(.bordered)
-          }
+            .accessibilityLabel("Save Dataset State")
+            .help("Save Dataset State")
+            .buttonStyle(HeaderIconButtonStyle())
 
-          Button {
-            toggleToolSheet(.datasetInfo)
-          } label: {
-            Image(systemName: "info.circle")
-          }
-          .accessibilityLabel("dataset_info_button")
-          .help("dataset_info_button_help")
-          .buttonStyle(.bordered)
-
-          Button {
-            requestDatasetStateSave()
-          } label: {
-            Image(systemName: "archivebox")
-          }
-          .accessibilityLabel("Save Dataset State")
-          .help("Save Dataset State")
-          .buttonStyle(.bordered)
-
-          Button {
-            restoreDatasetState()
-          } label: {
-            Image(systemName: "arrow.counterclockwise")
-          }
-          .accessibilityLabel("Restore Dataset State")
-          .help("Restore Dataset State")
-          .buttonStyle(.bordered)
-
-          if appSettings.showLogButton {
             Button {
-              toggleToolSheet(.log)
+              restoreDatasetState()
             } label: {
-              Image(systemName: "text.alignleft")
+              Image(systemName: "tray.and.arrow.up")
             }
-            .accessibilityLabel("Log")
-            .buttonStyle(.bordered)
+            .accessibilityLabel("Restore Dataset State")
+            .help("Restore Dataset State")
+            .buttonStyle(HeaderIconButtonStyle())
           }
 
-          visibilityButton
+          headerActionGroup(tint: .blue) {
+            Button {
+              toggleToolSheet(.datasetInfo)
+            } label: {
+              Image(systemName: "info.circle")
+            }
+            .accessibilityLabel("dataset_info_button")
+            .help("dataset_info_button_help")
+            .buttonStyle(HeaderIconButtonStyle())
+
+            if appSettings.showLogButton {
+              Button {
+                toggleToolSheet(.log)
+              } label: {
+                Image(systemName: "text.alignleft")
+              }
+              .accessibilityLabel("Log")
+              .buttonStyle(HeaderIconButtonStyle())
+            }
+          }
+
+          headerActionGroup(tint: .gray) {
+            visibilityButton(grouped: true)
+          }
         }
 
         HStack(spacing: 8) {
@@ -389,11 +418,12 @@ struct RenderView: View {
       }
       .padding(12)
       .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 8))
-      .padding()
+      .padding(.horizontal, usesCompactActionLabels ? 8 : 16)
+      .padding(.vertical, 16)
     } else {
       HStack {
         Spacer()
-        visibilityButton
+        visibilityButton(grouped: false)
       }
       .padding()
     }
@@ -734,7 +764,8 @@ struct RenderView: View {
     }
   }
 
-  private var visibilityButton: some View {
+  @ViewBuilder
+  private func visibilityButton(grouped: Bool) -> some View {
     Button {
       showRenderControls.toggle()
     } label: {
@@ -745,7 +776,20 @@ struct RenderView: View {
         ? String(localized: "Hide UI")
         : String(localized: "Show UI")
     )
-    .buttonStyle(.bordered)
+    .buttonStyle(grouped ? HeaderIconButtonStyle() : HeaderIconButtonStyle(isBordered: true))
+  }
+
+  private func headerActionGroup<Content: View>(
+    tint: Color,
+    @ViewBuilder content: () -> Content
+  ) -> some View {
+    HStack(spacing: 0) {
+      content()
+    }
+    .padding(2)
+    .foregroundStyle(tint)
+    .background(tint.opacity(0.13), in: Capsule())
+    .overlay(Capsule().stroke(tint.opacity(0.2), lineWidth: 1))
   }
 
   private var doubleTapInteractionGesture: some Gesture {

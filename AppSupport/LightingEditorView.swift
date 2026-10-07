@@ -69,7 +69,15 @@ struct LightingEditorView: View, Equatable {
       }
 
       if renderMode == .transferFunction1D {
-        Label("lighting_inactive_warning", systemImage: "exclamationmark.triangle.fill")
+        HStack(alignment: .top, spacing: 8) {
+          Image(systemName: "exclamationmark.triangle.fill")
+            .padding(.top, 1)
+          Text("lighting_inactive_warning")
+            .lineLimit(nil)
+            .fixedSize(horizontal: false, vertical: true)
+            .multilineTextAlignment(.leading)
+            .layoutPriority(1)
+        }
           .font(.callout)
           .foregroundStyle(.orange)
           .frame(maxWidth: .infinity, alignment: .leading)

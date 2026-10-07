@@ -251,8 +251,10 @@
 "prefetch_cancel_button" = "Abbrechen und später fortsetzen";
 
 /* Private application: interaction title and picker */
-"private_interaction_title" = "Interaktion";
-"private_interaction_picker_label" = "Interaktion";
+"private_interaction_title" = "Handinteraktion";
+"private_interaction_picker_label" = "Handinteraktion";
+"private_windows_title" = "Fenster";
+"Transfer" = "Transfer";
 
 /* Private application: interaction modes */
 "Active Object" = "Aktives Objekt";
@@ -271,12 +273,12 @@
 "Place" = "Platzieren";
 "private_marker_color_picker" = "Markerfarbe";
 "private_marker_no_selection" = "Wählen Sie eine Kugel oder einen Strich aus, um seine Eigenschaften zu ändern.";
-"marker_load_button" = "Objekte laden…";
-"marker_save_button" = "Objekte speichern…";
-"private_marker_delete_selected_button" = "Ausgewähltes Objekt löschen";
-"Delete Selected Markers" = "Ausgewählte Objekte löschen";
+"marker_load_button" = "Laden…";
+"marker_save_button" = "Speichern…";
+"private_marker_delete_selected_button" = "Auswahl löschen";
+"Delete Selected Markers" = "Auswahl löschen";
 "Radius" = "Radius";
-"private_marker_clear_all_button" = "Alle Objekte löschen";
+"private_marker_clear_all_button" = "Alle löschen";
 "private_marker_open_button" = "Objekte…";
 "marker_window_title" = "Objekte";
 "private_marker_spawn_label" = "Objektinteraktion";
@@ -294,7 +296,7 @@
 "marker_load_replace_button" = "Vorhandene Objekte ersetzen";
 "marker_load_add_button" = "Geladene Objekte hinzufügen";
 "marker_file_error_title" = "Objektdateifehler";
-"marker_catalog_button" = "Objektdateien";
+"marker_catalog_button" = "Dateien";
 "marker_catalog_empty" = "Keine Objektdateien verfügbar";
 "marker_dataset_mismatch_title" = "Objekte für einen anderen Datensatz";
 "marker_dataset_mismatch_message" = "Diese Objektdatei wurde für einen anderen Datensatz erstellt. Ihre Positionen passen möglicherweise nicht zum aktuellen Volumen. Möchten Sie sie trotzdem laden?";
@@ -675,13 +677,14 @@
 "voice_dataset_full_sentence" = "Dies ist der Datensatz %@. Er hat die Größe %@ mit %d %@ zu je %d %@ pro Voxel.";
 "voice_dataset_physical_size_sentence" = "Seine physische Größe beträgt %@.";
 
-"render_title" = "Render-Optionen";
-"render_picker_title" = "Editor";
+"render_title" = "BorgVR Hauptmenü";
+"render_picker_title" = "Rendermodus";
 "renderMode_transferFunction1DLighting" = "Transferfunktion mit Beleuchtung";
 "renderMode_transferFunction1D" = "Transferfunktion";
 "renderMode_isoValue" = "Isofläche";
 "render_button_open_interaction" = "Interaktionsfenster öffnen";
 "render_button_profiling" = "Profiling-Optionen";
+"render_button_share" = "Teilen";
 "render_share_preview_title" = "BorgVR Live Collaboration";
 "render_button_close_dataset" = "Datensatz schließen";
 
@@ -879,6 +882,16 @@
 "Back" = "Zurück";
 "Reset" = "Zurücksetzen";
 "Cancel" = "Abbrechen";
+"Reset Model" = "Modell zurücksetzen";
+"Reset Clipping" = "Clipping zurücksetzen";
+"Reset Model?" = "Modell zurücksetzen?";
+"Reset Clipping?" = "Clipping zurücksetzen?";
+"Reset Transfer Function" = "Transferfunktion zurücksetzen";
+"tf_reset_default" = "Standard";
+"tf_reset_presets" = "Voreinstellungen";
+"tf_reset_files" = "Dateien";
+"Do you really want to reset the model transformation?" = "Möchten Sie die Modelltransformation wirklich zurücksetzen?";
+"Do you really want to reset the clipping bounds?" = "Möchten Sie die Clipping-Grenzen wirklich zurücksetzen?";
 "Delete" = "Löschen";
 "Clear" = "Leeren";
 "Settings" = "Einstellungen";
@@ -1210,6 +1223,8 @@
 "settings_toggle_autoload_objects" = "Objekte automatisch laden und speichern";
 "settings_toggle_autoload_measurements" = "Messungen automatisch laden und speichern";
 "Save Dataset State" = "Datensatzzustand speichern";
+"dataset_state_save_short" = "Speichern";
+"dataset_state_load_short" = "Laden";
 "Overwrite Existing Files?" = "Vorhandene Dateien überschreiben?";
 "Overwrite" = "Überschreiben";
 "One or more files for this dataset already exist. Do you want to replace them?" = "Eine oder mehrere Dateien für diesen Datensatz sind bereits vorhanden. Möchten Sie sie ersetzen?";

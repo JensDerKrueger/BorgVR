@@ -353,7 +353,8 @@ enum VolumeMeasurementExportRecovery {
     measurements: [VolumeMeasurement]
   ) throws {
     guard case let .failure(error) = result else { return }
-    guard isDuplicateFileError(error), let destinationURL = fileURL(from: error) else {
+    guard isDuplicateFileError(error),
+          let destinationURL = destinationFileURL(from: error) else {
       throw error
     }
 
@@ -392,16 +393,19 @@ enum VolumeMeasurementExportRecovery {
     return false
   }
 
-  private static func fileURL(from error: Error) -> URL? {
+  private static func destinationFileURL(from error: Error) -> URL? {
     let nsError = error as NSError
-    for key in [NSURLErrorKey, "NSURL"] {
+    for key in ["NSFileNewItemLocationKey", "NSDestinationURL"] {
       if let url = nsError.userInfo[key] as? URL { return url }
+      if let path = nsError.userInfo[key] as? String {
+        return URL(fileURLWithPath: path)
+      }
     }
-    if let path = nsError.userInfo[NSFilePathErrorKey] as? String {
+    if let path = nsError.userInfo["NSDestinationFilePath"] as? String {
       return URL(fileURLWithPath: path)
     }
     if let underlying = nsError.userInfo[NSUnderlyingErrorKey] as? Error {
-      return fileURL(from: underlying)
+      return destinationFileURL(from: underlying)
     }
     return nil
   }

@@ -332,7 +332,7 @@ class GroupActivityHelper {
   @MainActor
   private func refreshAdvertisedSceneMeshAssetsIfNeeded() async {
     guard let sharedAppModel,
-          let dataset = runtimeAppModel?.activeDataset else { return }
+          runtimeAppModel?.activeDataset != nil else { return }
     let referencedAssetIDs = Set(sharedAppModel.sceneMeshInstances.map(\.asset.assetID))
     guard !referencedAssetIDs.isSubset(of: sharePlayMeshAssetIDs) else { return }
     await advertiseCurrentLocalDataset()
