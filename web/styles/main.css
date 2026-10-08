@@ -176,6 +176,45 @@ p {
     #123254;
 }
 
+.measurement-label-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.measurement-value-label {
+  position: absolute;
+  max-width: 180px;
+  padding: 3px 6px;
+  transform: translate(-50%, calc(-100% - 8px));
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.48);
+  border-radius: 4px;
+  background: rgba(5, 16, 22, 0.88);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.32);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.measurement-value-label-length {
+  border-color: rgba(255, 184, 31, 0.9);
+}
+
+.measurement-value-label-area {
+  border-color: rgba(26, 199, 235, 0.9);
+}
+
+.measurement-value-label-volume {
+  border-color: rgba(209, 77, 242, 0.9);
+}
+
 .icon-button {
   display: grid;
   place-items: center;

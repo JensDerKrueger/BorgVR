@@ -1,4 +1,4 @@
-import { CoordinateCubeRenderer } from "./cube-renderer.js?v=20261005-annotations";
+import { CoordinateCubeRenderer } from "./cube-renderer.js?v=20261008-measurement-labels";
 import { decodeAppleLZ4, encodeLZ4Block } from "./lz4.js?v=20260911-urltf";
 import {
   MAX_MARKER_FILE_BYTES,
@@ -56,6 +56,7 @@ const measurementLoad = document.querySelector("#measurement-load");
 const measurementLoadInput = document.querySelector("#measurement-load-input");
 const measurementClear = document.querySelector("#measurement-clear");
 const measurementList = document.querySelector("#measurement-list");
+const measurementLabelOverlay = document.querySelector("#measurement-label-overlay");
 const persistentBrickCacheControls = Array.from(document.querySelectorAll("[data-persistent-brick-cache]"));
 const persistentBrickCacheInfoButton = document.querySelector("#persistent-brick-cache-info-button");
 const persistentBrickCacheInfo = document.querySelector("#persistent-brick-cache-info");
@@ -92,6 +93,7 @@ let meshAssets = new Map();
 let currentMarkers = [];
 let currentMeshInstances = [];
 let currentMeasurements = [];
+const measurementLabels = new Map();
 let rendererStatus = "Initializing WebGPU...";
 let statusVisible = false;
 let controlsCollapsed = false;
@@ -115,6 +117,7 @@ async function main() {
   datasetPanelCollapsed = loadDatasetPanelCollapsedSetting();
   restoreOpenUIPanels();
   renderer = new CoordinateCubeRenderer(canvas);
+  renderer.setMeasurementLabelLayoutCallback(updateMeasurementLabels);
   installLightingEditor({
     canvas: lightingDirectionCanvas,
     ambientInput: ambientLightColor,
@@ -892,6 +895,34 @@ function updateAnnotationState(measurementGeometry = []) {
         row.append(name, value);
         return row;
       }));
+    }
+  }
+}
+
+function updateMeasurementLabels(layout = []) {
+  if (!measurementLabelOverlay) return;
+
+  const activeKeys = new Set();
+  for (const item of layout) {
+    const key = String(item.key);
+    activeKeys.add(key);
+    let label = measurementLabels.get(key);
+    if (!label) {
+      label = document.createElement("span");
+      label.className = `measurement-value-label measurement-value-label-${item.kind}`;
+      measurementLabels.set(key, label);
+      measurementLabelOverlay.append(label);
+    }
+    label.textContent = formatMeasurementValue(item.kind, item.value);
+    label.style.left = `${item.x}px`;
+    label.style.top = `${item.y}px`;
+    label.hidden = !item.visible;
+  }
+
+  for (const [key, label] of measurementLabels) {
+    if (!activeKeys.has(key)) {
+      label.remove();
+      measurementLabels.delete(key);
     }
   }
 }

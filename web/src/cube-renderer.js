@@ -703,6 +703,8 @@ export class CoordinateCubeRenderer {
     this.meshInstances = [];
     this.meshAssets = new Map();
     this.measurements = [];
+    this.measurementLabelLayoutCallback = null;
+    this.currentMVP = null;
     this.meshGPUResources = new Map();
     this.meshDraws = [];
     this.measurementSurfaceResources = [];
@@ -786,6 +788,11 @@ export class CoordinateCubeRenderer {
         this.reportStatus(`Object rendering failed: ${error.message ?? String(error)}`);
       }
     });
+    this.drawNow();
+  }
+
+  setMeasurementLabelLayoutCallback(callback) {
+    this.measurementLabelLayoutCallback = typeof callback === "function" ? callback : null;
     this.drawNow();
   }
 
@@ -2006,6 +2013,9 @@ export class CoordinateCubeRenderer {
     const colorView = this.context.getCurrentTexture().createView();
     if (this.hasScene) {
       this.updateUniforms();
+      this.updateMeasurementLabelLayout();
+    } else {
+      this.measurementLabelLayoutCallback?.([]);
     }
 
     const markerPass = encoder.beginRenderPass({
@@ -2122,6 +2132,7 @@ export class CoordinateCubeRenderer {
     const model = matrixFromQuaternion(this.orientation);
     const modelView = multiply(view, model);
     const mvp = multiply(projection, modelView);
+    this.currentMVP = mvp;
     const cameraTexture = this.cameraPositionInTextureSpace();
     const atlasAxis = this.brickAtlas?.atlasBricksPerAxis || 1;
     const brickSize = this.brickAtlas?.brickSize || 1;
@@ -2236,6 +2247,40 @@ export class CoordinateCubeRenderer {
     ];
   }
 
+  updateMeasurementLabelLayout() {
+    if (!this.measurementLabelLayoutCallback || !this.currentMVP) return;
+    const rect = this.canvas.getBoundingClientRect();
+    const layout = [];
+
+    this.measurements.forEach((measurement, index) => {
+      const point = measurement.points?.[0]?.position;
+      if (!Array.isArray(point) || point.length < 3 || !Number.isFinite(measurement.value)) {
+        return;
+      }
+      const localPoint = [
+        (point[0] - 0.5) * 2 * this.volumeHalfExtent[0],
+        (point[1] - 0.5) * 2 * this.volumeHalfExtent[1],
+        (point[2] - 0.5) * 2 * this.volumeHalfExtent[2],
+        1
+      ];
+      const clip = transformVector4(this.currentMVP, localPoint);
+      const w = clip[3];
+      const ndcX = w !== 0 ? clip[0] / w : 0;
+      const ndcY = w !== 0 ? clip[1] / w : 0;
+      const ndcZ = w !== 0 ? clip[2] / w : 0;
+      layout.push({
+        key: `${measurement.id ?? "measurement"}-${index}`,
+        kind: measurement.kind,
+        value: measurement.value,
+        x: (ndcX * 0.5 + 0.5) * rect.width,
+        y: (0.5 - ndcY * 0.5) * rect.height,
+        visible: w > 0 && ndcZ >= 0 && ndcZ <= 1 &&
+          ndcX >= -1 && ndcX <= 1 && ndcY >= -1 && ndcY <= 1
+      });
+    });
+    this.measurementLabelLayoutCallback(layout);
+  }
+
   applyArcballRotation(clientX, clientY) {
     if (!this.dragStartVector || !this.dragStartOrientation) {
       return;
@@ -2324,6 +2369,15 @@ function multiply(a, b) {
     }
   }
   return out;
+}
+
+function transformVector4(matrix, vector) {
+  return [0, 1, 2, 3].map((row) =>
+    matrix[row] * vector[0] +
+    matrix[4 + row] * vector[1] +
+    matrix[8 + row] * vector[2] +
+    matrix[12 + row] * vector[3]
+  );
 }
 
 function quaternionFromAxisAngle(axis, angle) {
