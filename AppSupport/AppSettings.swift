@@ -126,6 +126,30 @@ final class AppSettings: ObservableObject {
     max(128, min(physicalMemoryMB / 2, maximumAtlasSizeMB))
   }
 
+  private static var defaultOversampling: Double {
+#if os(iOS) || os(macOS)
+    2.0
+#else
+    1.0
+#endif
+  }
+
+  private static var defaultDropFPS: Int {
+#if os(iOS) || os(macOS)
+    10
+#else
+    20
+#endif
+  }
+
+  private static var defaultRecoveryFPS: Int {
+#if os(iOS) || os(macOS)
+    40
+#else
+    100
+#endif
+  }
+
   static let values: [String: Any] = [
     "timeout": 2.0,
     "makeLocalCopy": true,
@@ -140,13 +164,13 @@ final class AppSettings: ObservableObject {
     "maxProbingAttempts": 32,
     "maxBricksPerGetRequest": BorgVRSharedDefaults.maximumBricksPerRequest,
     "atlasSizeMB": defaultAtlasSizeMB,
-    "oversampling": 1.0,
+    "oversampling": defaultOversampling,
     "sampleJitter": false,
     "showBrickVisualization": false,
     "showLogButton": false,
     "oversamplingMode": OversamplingMode.dynamicMode.rawValue,
-    "dropFPS": 20,
-    "recoveryFPS": 100,
+    "dropFPS": defaultDropFPS,
+    "recoveryFPS": defaultRecoveryFPS,
     "enableDatasetServer": false,
     "autoStartServer": false,
     "serverPort": BorgVRSharedDefaults.datasetServerPort,
