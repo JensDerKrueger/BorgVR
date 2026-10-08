@@ -80,9 +80,6 @@ struct ModeSelectionView: View {
     multilineAlignment: TextAlignment
   ) -> some View {
     VStack(alignment: horizontalAlignment, spacing: 8) {
-      borgVRLogo
-        .padding(.bottom, 4)
-
       Text("BorgVR Mobile")
         .font(.largeTitle.weight(.bold))
         .foregroundStyle(.white)
@@ -227,19 +224,6 @@ struct ModeSelectionView: View {
     } else {
       borgVRArtwork
     }
-  }
-
-  private var borgVRLogo: some View {
-    borgVRArtwork
-      .scaledToFill()
-      .frame(width: 72, height: 72)
-      .clipShape(RoundedRectangle(cornerRadius: 12))
-      .overlay {
-        RoundedRectangle(cornerRadius: 12)
-          .stroke(.white.opacity(0.7), lineWidth: 1)
-      }
-      .shadow(color: .black.opacity(0.3), radius: 8, y: 3)
-      .accessibilityHidden(true)
   }
 
   @ViewBuilder
