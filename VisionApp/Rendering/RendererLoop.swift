@@ -271,8 +271,22 @@ extension Renderer {
 
     sharedAppModel.updateSpatialReference(
       originFromHead: headOriginFromView,
-      originFromWorldAnchor: originFromWorldAnchor
+      originFromWorldAnchor: originFromWorldAnchor,
+      worldAnchorID: anchors.worldAnchor?.id
     )
+
+    let spatialAnchorID = anchors.worldAnchor?.id
+    runtimeAppModel.spatialAnchorSessionState.publishActiveAnchor(
+      id: spatialAnchorID,
+      isShared: anchors.worldAnchorIsShared
+    )
+    if lastSpatialAnchorID != spatialAnchorID {
+      lastSpatialAnchorID = spatialAnchorID
+      let sessionSnapshot = runtimeAppModel.spatialAnchorSessionState.snapshot()
+      if sessionSnapshot.sharePlayIsActive && sessionSnapshot.activeAnchorIsShared {
+        sharedAppModel.synchronize(kind: .transformOnly)
+      }
+    }
 
     let unscaledModelMatrix : simd_float4x4
     let modelMatrix : simd_float4x4

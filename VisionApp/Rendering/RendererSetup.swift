@@ -87,7 +87,6 @@ extension Renderer {
                               timer: CPUFrameTimer,
                               dataset: BORGVRDatasetProtocol,
                               datasetID: String,
-                              isHost:Bool,
                               transferFunctionPanelInteractionState: TransferFunctionPanelInteractionState,
                               immersiveInteraction: ImmersiveInteraction,
                               logger: LoggerBase? = nil) {
@@ -101,7 +100,6 @@ extension Renderer {
           sharedAppModel: sharedAppModel,
           timer: timer,
           dataset: dataset,
-          isHost: isHost,
           transferFunctionPanelInteractionState: transferFunctionPanelInteractionState,
           immersiveInteraction: immersiveInteraction,
           logger: logger

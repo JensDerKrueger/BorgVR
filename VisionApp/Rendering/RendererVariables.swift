@@ -95,6 +95,7 @@ final actor Renderer {
   var lastUnscaledModelMatrix: simd_float4x4 = matrix_identity_float4x4
   var lastClipMatrix: simd_float4x4 = matrix_identity_float4x4
   var lastHeadPosition: SIMD3<Float> = .zero
+  var lastSpatialAnchorID: UUID?
 
   /// The BorgVR dataset.
   var borgData: BORGVRDatasetProtocol
@@ -248,7 +249,6 @@ final actor Renderer {
        sharedAppModel: SharedAppModel,
        timer: CPUFrameTimer,
        dataset: BORGVRDatasetProtocol,
-       isHost: Bool,
        transferFunctionPanelInteractionState: TransferFunctionPanelInteractionState,
        immersiveInteraction: ImmersiveInteraction,
        logger: LoggerBase? = nil) throws {
@@ -537,7 +537,7 @@ final actor Renderer {
 
     self.borgARProvider = BorgARProvider(
       logger: logger,
-      groupSessionHost: isHost
+      spatialAnchorSessionState: runtimeAppModel.spatialAnchorSessionState
     )
     self.storedAppModel = storedAppModel
 

@@ -10,6 +10,7 @@ public struct BorgAnchorSample {
   public let originFromWorldAnchor: simd_float4x4?
   public let deviceAnchor: DeviceAnchor?
   public let worldAnchor: WorldAnchor?
+  public let worldAnchorIsShared: Bool
 }
 
 struct BorgSpatialStylusSample {
@@ -79,18 +80,31 @@ final class BorgARProvider {
   }
 
   private let logger: LoggerBase?
+  private let spatialAnchorSessionState: SpatialAnchorSessionState
   let session: ARKitSession
   let provider: WorldTrackingProvider
   private var updatesTask: Task<Void, Never>?
   private var sharingAvailabilityTask: Task<Void, Never>?
   private var accessoryConnectionObservers: [NSObjectProtocol] = []
-  private var isHost: Bool = false
-
-  private(set) var currentWorldAnchor: WorldAnchor?
   private let stateQueue = DispatchQueue(label: "BorgARProvider.state", qos: .userInitiated)
-  private var latestWorldAnchorTransform: simd_float4x4?
-  private var worldAnchorCreationInProgress: Bool = false
-  private var sharingIsAvailable: Bool = false
+
+  private struct PendingWorldAnchorCreation {
+    let token: UUID
+    let anchor: WorldAnchor
+    let transform: simd_float4x4
+    let isShared: Bool
+  }
+
+  private struct WorldAnchorState {
+    var current: WorldAnchor?
+    var latestTransform: simd_float4x4?
+    var currentIsShared = false
+    var sharingIsAvailable = false
+    var pendingCreation: PendingWorldAnchorCreation?
+    var sharedAnchors: [UUID: WorldAnchor] = [:]
+  }
+
+  private var worldAnchorState = WorldAnchorState()
   private enum SpatialAccessoryDevice {
     case stylus(GCStylus)
     case controller(GCController)
@@ -109,11 +123,11 @@ final class BorgARProvider {
   @MainActor private var accessoryReconfigurationRequested = false
   @MainActor private var accessoryRegistrationPending = false
 
-  init(logger: LoggerBase?, groupSessionHost: Bool) {
+  init(logger: LoggerBase?, spatialAnchorSessionState: SpatialAnchorSessionState) {
     self.logger = logger
+    self.spatialAnchorSessionState = spatialAnchorSessionState
     self.provider = WorldTrackingProvider()
     self.session = ARKitSession()
-    self.isHost = groupSessionHost
   }
 
   deinit {
@@ -136,24 +150,23 @@ final class BorgARProvider {
     let deviceAnchor = provider.queryDeviceAnchor(atTimestamp: t)
     drawable.deviceAnchor = deviceAnchor
 
-    //  create a world anchor as soon as we have a device pose.
-    if !worldAnchorCreationInProgress  {
-      if currentWorldAnchor == nil, let deviceAnchor {
-        worldAnchorCreationInProgress = true
-        Task { [weak self] in
-          await self?.createWorldAnchor(
-            using: deviceAnchor
-          )
-        }
-      }
+    if let deviceAnchor {
+      reconcileWorldAnchor(originFromDevice: deviceAnchor.originFromAnchorTransform)
     }
 
-    let worldXf = stateQueue.sync { latestWorldAnchorTransform }
+    let anchorSnapshot = stateQueue.sync {
+      (
+        worldAnchorState.latestTransform,
+        worldAnchorState.current,
+        worldAnchorState.currentIsShared
+      )
+    }
     return .init(
       originFromDevice: deviceAnchor?.originFromAnchorTransform,
-      originFromWorldAnchor: worldXf,
+      originFromWorldAnchor: anchorSnapshot.0,
       deviceAnchor: deviceAnchor,
-      worldAnchor: currentWorldAnchor
+      worldAnchor: anchorSnapshot.1,
+      worldAnchorIsShared: anchorSnapshot.2
     )
   }
 
@@ -280,9 +293,8 @@ final class BorgARProvider {
 
   @MainActor
   public func startARSession() async {
-    currentWorldAnchor = nil
-    latestWorldAnchorTransform = nil
-    worldAnchorCreationInProgress = false
+    stateQueue.sync { worldAnchorState = WorldAnchorState() }
+    spatialAnchorSessionState.publishActiveAnchor(id: nil, isShared: false)
     do {
       // Controller discovery is asynchronous. Install the listeners before taking
       // the initial snapshot so a second accessory cannot connect in between.
@@ -312,14 +324,12 @@ final class BorgARProvider {
     accessoryConnectionObservers.forEach(NotificationCenter.default.removeObserver)
     accessoryConnectionObservers.removeAll()
 
-    currentWorldAnchor = nil
-    latestWorldAnchorTransform = nil
-    worldAnchorCreationInProgress = false
-    sharingIsAvailable = false
     stateQueue.sync {
+      worldAnchorState = WorldAnchorState()
       trackedSpatialAccessories.removeAll()
       accessoryTrackingProvider = nil
     }
+    spatialAnchorSessionState.publishActiveAnchor(id: nil, isShared: false)
     session.stop()
   }
 
@@ -573,53 +583,155 @@ final class BorgARProvider {
 
   // MARK: - World anchor management (async)
 
-  private func createWorldAnchor(using deviceAnchor: DeviceAnchor) async {
+  private func reconcileWorldAnchor(originFromDevice: simd_float4x4) {
     #if targetEnvironment(simulator)
     return
     #else
+    let sessionSnapshot = spatialAnchorSessionState.snapshot()
+    var replacedAnchor: WorldAnchor?
+    var activatedExpectedSharedAnchor = false
+    var creation: PendingWorldAnchorCreation?
 
-    guard currentWorldAnchor == nil else { return }
-
-    let originFromDevice = deviceAnchor.originFromAnchorTransform
-    let intitialTranslation = float4x4(translation: SIMD3<Float>(0, 0, 0))
-    let originFromWorld = originFromDevice * intitialTranslation
-
-    let worldAnchor = WorldAnchor(originFromAnchorTransform: originFromWorld,
-                                  sharedWithNearbyParticipants: sharingIsAvailable && isHost )
-    do {
-      try await provider.addAnchor(worldAnchor)
-      currentWorldAnchor = worldAnchor
-      stateQueue.sync { latestWorldAnchorTransform = originFromWorld }
-
-      if isHost {
-        if sharingIsAvailable {
-          logger?.dev(
-            "Created new shared WorldAnchor as host \(worldAnchor.id)"
-          )
-        } else {
-          logger?.dev(
-            "Created new local WorldAnchor as host \(worldAnchor.id)"
-          )
-        }
-      } else {
-        logger?.dev(
-          "Created new local WorldAnchor as participant \(worldAnchor.id)"
-        )
+    stateQueue.sync {
+      if sessionSnapshot.sharePlayIsActive,
+         !sessionSnapshot.localParticipantIsHost,
+         let expectedID = sessionSnapshot.expectedSharedAnchorID,
+         worldAnchorState.current?.id != expectedID,
+         let sharedAnchor = worldAnchorState.sharedAnchors[expectedID] {
+        replacedAnchor = worldAnchorState.current
+        worldAnchorState.current = sharedAnchor
+        worldAnchorState.latestTransform = sharedAnchor.originFromAnchorTransform
+        worldAnchorState.currentIsShared = true
+        worldAnchorState.pendingCreation = nil
+        activatedExpectedSharedAnchor = true
       }
-    } catch {
-      logger?.error("addAnchor failed: \(error)")
+
+      guard worldAnchorState.pendingCreation == nil else { return }
+
+      let shouldCreateShared = sessionSnapshot.sharePlayIsActive &&
+        sessionSnapshot.localParticipantIsHost &&
+        worldAnchorState.sharingIsAvailable
+      let shouldCreateLocal = !sessionSnapshot.sharePlayIsActive ||
+        (sessionSnapshot.localParticipantIsHost && !worldAnchorState.sharingIsAvailable)
+      guard shouldCreateShared || shouldCreateLocal else { return }
+
+      if worldAnchorState.current != nil,
+         worldAnchorState.currentIsShared == shouldCreateShared {
+        return
+      }
+
+      // Replacements use the exact previous transform so changing between local and
+      // shared anchors cannot move the dataset in the physical room.
+      let transform = worldAnchorState.latestTransform ?? originFromDevice
+      let anchor = WorldAnchor(
+        originFromAnchorTransform: transform,
+        sharedWithNearbyParticipants: shouldCreateShared
+      )
+      let request = PendingWorldAnchorCreation(
+        token: UUID(),
+        anchor: anchor,
+        transform: transform,
+        isShared: shouldCreateShared
+      )
+      worldAnchorState.pendingCreation = request
+      creation = request
     }
-    worldAnchorCreationInProgress = false
+
+    if activatedExpectedSharedAnchor {
+      let anchorDescription = sessionSnapshot.expectedSharedAnchorID?.uuidString ?? "unknown"
+      logger?.dev("Activated expected shared WorldAnchor \(anchorDescription).")
+      publishCurrentAnchor()
+    }
+    if let replacedAnchor {
+      Task { [weak self] in
+        try? await self?.provider.removeAnchor(replacedAnchor)
+      }
+    }
+
+    if let creation {
+      Task { [weak self] in
+        await self?.finishCreatingWorldAnchor(creation)
+      }
+    }
     #endif
   }
 
+  private func finishCreatingWorldAnchor(_ creation: PendingWorldAnchorCreation) async {
+    do {
+      try await provider.addAnchor(creation.anchor)
+    } catch {
+      logger?.error("addAnchor failed: \(error)")
+      stateQueue.sync {
+        if worldAnchorState.pendingCreation?.token == creation.token {
+          worldAnchorState.pendingCreation = nil
+        }
+      }
+      return
+    }
+
+    let sessionSnapshot = spatialAnchorSessionState.snapshot()
+    var replacedAnchor: WorldAnchor?
+    let accepted = stateQueue.sync { () -> Bool in
+      guard worldAnchorState.pendingCreation?.token == creation.token else { return false }
+
+      let sharedAnchorIsStillWanted = sessionSnapshot.sharePlayIsActive &&
+        sessionSnapshot.localParticipantIsHost &&
+        worldAnchorState.sharingIsAvailable
+      let localAnchorIsStillWanted = !sessionSnapshot.sharePlayIsActive ||
+        (sessionSnapshot.localParticipantIsHost && !worldAnchorState.sharingIsAvailable)
+      guard creation.isShared ? sharedAnchorIsStillWanted : localAnchorIsStillWanted else {
+        worldAnchorState.pendingCreation = nil
+        return false
+      }
+
+      replacedAnchor = worldAnchorState.current
+      worldAnchorState.current = creation.anchor
+      worldAnchorState.latestTransform = creation.transform
+      worldAnchorState.currentIsShared = creation.isShared
+      worldAnchorState.pendingCreation = nil
+      if creation.isShared {
+        worldAnchorState.sharedAnchors[creation.anchor.id] = creation.anchor
+      }
+      return true
+    }
+
+    guard accepted else {
+      try? await provider.removeAnchor(creation.anchor)
+      return
+    }
+
+    logger?.dev(
+      creation.isShared
+        ? "Created and activated shared WorldAnchor \(creation.anchor.id)"
+        : "Created and activated local WorldAnchor \(creation.anchor.id)"
+    )
+    publishCurrentAnchor()
+    if let replacedAnchor, replacedAnchor.id != creation.anchor.id {
+      try? await provider.removeAnchor(replacedAnchor)
+    }
+  }
+
   public func clearWorldAnchor() async {
-    guard let existing = currentWorldAnchor else { return }
+    let existing = stateQueue.sync { () -> WorldAnchor? in
+      let existing = worldAnchorState.current
+      worldAnchorState.current = nil
+      worldAnchorState.latestTransform = nil
+      worldAnchorState.currentIsShared = false
+      worldAnchorState.pendingCreation = nil
+      return existing
+    }
+    guard let existing else { return }
     do { try await provider.removeAnchor(existing) } catch {
       logger?.error("removeAnchor failed: \(error)")
     }
-    currentWorldAnchor = nil
-    stateQueue.sync { latestWorldAnchorTransform = nil }
+    spatialAnchorSessionState.publishActiveAnchor(id: nil, isShared: false)
+  }
+
+  private func publishCurrentAnchor() {
+    let snapshot = stateQueue.sync {
+      (worldAnchorState.current?.id, worldAnchorState.currentIsShared)
+    }
+    spatialAnchorSessionState.publishActiveAnchor(id: snapshot.0, isShared: snapshot.1)
   }
 
   // MARK: - Updates
@@ -635,30 +747,45 @@ final class BorgARProvider {
         switch update.event {
           case .added:
             logger?.dev("anchor has been added \(anchor.id)")
-
-            if anchor.isSharedWithNearbyParticipants && anchor.id != self.currentWorldAnchor?.id {
-              if let current = currentWorldAnchor {
-                logger?.dev("Switching from old anchor \(current.id) to new shared anchor \(anchor.id)")
-              } else {
-                logger?.dev("Switching to new shared anchor \(anchor.id)")
+            var shouldRemove = false
+            self.stateQueue.sync {
+              if anchor.isSharedWithNearbyParticipants {
+                self.worldAnchorState.sharedAnchors[anchor.id] = anchor
               }
-              self.currentWorldAnchor = anchor
+              if anchor.id == self.worldAnchorState.current?.id {
+                self.worldAnchorState.current = anchor
+                self.worldAnchorState.latestTransform = anchor.originFromAnchorTransform
+              } else if anchor.id != self.worldAnchorState.pendingCreation?.anchor.id,
+                        !anchor.isSharedWithNearbyParticipants {
+                shouldRemove = true
+              }
             }
-
-            // delete all non-shared anchors that we have not created ourself
-            if self.currentWorldAnchor != nil && anchor.id != self.currentWorldAnchor?.id {
-              try? await provider.removeAnchor(anchor)
-            } else {
-              self.stateQueue.sync { self.latestWorldAnchorTransform = anchor.originFromAnchorTransform }
+            if shouldRemove {
+              try? await self.provider.removeAnchor(anchor)
             }
           case .updated:
-            if anchor.id == self.currentWorldAnchor?.id {
-              self.stateQueue.sync { self.latestWorldAnchorTransform = anchor.originFromAnchorTransform }
+            self.stateQueue.sync {
+              if anchor.isSharedWithNearbyParticipants {
+                self.worldAnchorState.sharedAnchors[anchor.id] = anchor
+              }
+              if anchor.id == self.worldAnchorState.current?.id {
+                self.worldAnchorState.current = anchor
+                self.worldAnchorState.latestTransform = anchor.originFromAnchorTransform
+              }
             }
           case .removed:
-            if anchor.id == self.currentWorldAnchor?.id {
-              self.stateQueue.sync { self.latestWorldAnchorTransform = nil }
-              self.currentWorldAnchor = nil
+            var removedCurrent = false
+            self.stateQueue.sync {
+              self.worldAnchorState.sharedAnchors.removeValue(forKey: anchor.id)
+              if anchor.id == self.worldAnchorState.current?.id {
+                self.worldAnchorState.latestTransform = nil
+                self.worldAnchorState.current = nil
+                self.worldAnchorState.currentIsShared = false
+                removedCurrent = true
+              }
+            }
+            if removedCurrent {
+              self.spatialAnchorSessionState.publishActiveAnchor(id: nil, isShared: false)
               self.logger?.dev("removed current anchor with id: \(anchor.id)")
             } else {
               self.logger?.dev("removed unused anchor with id: \(anchor.id)")
@@ -678,37 +805,13 @@ final class BorgARProvider {
       for await sharingAvailability in self.provider.worldAnchorSharingAvailability {
         if sharingAvailability == .available {
           self.logger?.dev("World anchor sharing is available.")
-          sharingIsAvailable = true
-          if isHost {
-            // TODO: remember transformation and use it for the shared anchor
-            if let wa = currentWorldAnchor {
-              self.logger?.dev("In preparation for a new shared world anchor, removing old world anchor \(wa.id).")
-              try? await provider.removeAnchor(wa)
-            }
-          }
+          self.stateQueue.sync { self.worldAnchorState.sharingIsAvailable = true }
         } else {
           self.logger?.dev("World anchor sharing is not available: \(sharingAvailability)")
-          sharingIsAvailable = false
-
-          if isHost {
-            // TODO: remember transformation and use it for the "normal" anchor
-            if let wa = currentWorldAnchor {
-              self.logger?.dev("removing old shared world anchor \(wa.id).")
-              try? await provider.removeAnchor(wa)
-            }
-          }
+          self.stateQueue.sync { self.worldAnchorState.sharingIsAvailable = false }
         }
       }
     }
-  }
-}
-
-// MARK: - Small math helper
-
-private extension float4x4 {
-  init(translation t: SIMD3<Float>) {
-    self = matrix_identity_float4x4
-    columns.3 = SIMD4<Float>(t.x, t.y, t.z, 1)
   }
 }
 

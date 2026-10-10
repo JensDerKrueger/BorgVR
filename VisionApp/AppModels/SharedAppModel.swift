@@ -39,6 +39,14 @@ enum ScreenViewPresentation {
 
 // MARK: - SharedAppModel
 
+struct VisionSharePlayTransformUpdate {
+  let datasetID: String
+  let anchorID: UUID
+  let revision: UInt64
+  let modelTransform: Transform
+  let lastModelTransform: Transform
+}
+
 /**
  Contains all collaborative state that must be synchronized across multiple instances of the app in
  multi-user scenarios. It provides serialization and deserialization logic for network synchronization,
@@ -84,6 +92,8 @@ class SharedAppModel {
   @ObservationIgnored private var originFromHeadMatrix: simd_float4x4
   @ObservationIgnored private var hasValidHeadPose: Bool
   @ObservationIgnored private var pendingSpatialViewState: DatasetSpatialViewState?
+  @ObservationIgnored private var currentSpatialAnchorID: UUID?
+  @ObservationIgnored private var pendingVisionSharePlayTransform: VisionSharePlayTransformUpdate?
   /// Current model transform.
   var modelTransform: Transform
   /// Last model transform.
@@ -204,6 +214,8 @@ class SharedAppModel {
     originFromHeadMatrix = matrix_identity_float4x4
     hasValidHeadPose = false
     pendingSpatialViewState = nil
+    currentSpatialAnchorID = nil
+    pendingVisionSharePlayTransform = nil
     modelTransform = .init()
     lastModelTransform = .init()
     clipMin = .zero
@@ -487,12 +499,22 @@ class SharedAppModel {
 
   func updateSpatialReference(
     originFromHead: simd_float4x4,
-    originFromWorldAnchor: simd_float4x4
+    originFromWorldAnchor: simd_float4x4,
+    worldAnchorID: UUID?
   ) {
     guard originFromHead.isFiniteAffine, originFromWorldAnchor.isFiniteAffine else { return }
     originFromHeadMatrix = originFromHead
     originFromWorldAnchorMatrix = originFromWorldAnchor
+    currentSpatialAnchorID = worldAnchorID
     hasValidHeadPose = true
+
+    if let pendingVisionSharePlayTransform {
+      guard pendingVisionSharePlayTransform.anchorID == worldAnchorID else { return }
+      applyVisionSharePlayTransform(pendingVisionSharePlayTransform)
+      self.pendingVisionSharePlayTransform = nil
+      pendingSpatialViewState = nil
+      return
+    }
 
     guard let pendingSpatialViewState else { return }
     let worldAnchorFromDataset = simd_inverse(originFromWorldAnchor) *
@@ -547,7 +569,8 @@ class SharedAppModel {
       if hasValidHeadPose {
         updateSpatialReference(
           originFromHead: originFromHeadMatrix,
-          originFromWorldAnchor: originFromWorldAnchorMatrix
+          originFromWorldAnchor: originFromWorldAnchorMatrix,
+          worldAnchorID: currentSpatialAnchorID
         )
       }
     }
@@ -632,6 +655,8 @@ class SharedAppModel {
     selectedVolumeMeasurementPointID = nil
     hasValidHeadPose = false
     pendingSpatialViewState = nil
+    currentSpatialAnchorID = nil
+    pendingVisionSharePlayTransform = nil
   }
 
   func resetModel() {
@@ -1105,12 +1130,19 @@ class SharedAppModel {
     return w.data
   }
 
-  func serializeVisionSharePlayTransform() -> Data {
+  func serializeVisionSharePlayTransform(
+    datasetID: String,
+    anchorID: UUID,
+    revision: UInt64
+  ) -> Data {
     var w = DataWriter()
 
     w.write(BorgVRSharePlayProtocol.magic)
     w.write(BorgVRSharePlayProtocol.PacketKind.visionTransform.rawValue)
-    w.write(UInt8(0))
+    w.write(UInt8(1))
+    w.writeString(datasetID, maxCharacterCount: 128)
+    w.writeUUID(anchorID)
+    w.write(revision)
 
     w.writeSIMD3(modelTransform.translation)
     w.writeQuat(modelTransform.rotation)
@@ -1120,6 +1152,61 @@ class SharedAppModel {
     w.writeSIMD3(lastModelTransform.scale)
 
     return w.data
+  }
+
+  static func decodeVisionSharePlayTransformIfPresent(
+    _ data: Data
+  ) throws -> VisionSharePlayTransformUpdate? {
+    var r = DataReader(data)
+    let magic: UInt32 = try r.read()
+    guard magic == BorgVRSharePlayProtocol.magic else { return nil }
+    let packetKindRaw: UInt8 = try r.read()
+    let flags: UInt8 = try r.read()
+    guard packetKindRaw == BorgVRSharePlayProtocol.PacketKind.visionTransform.rawValue else {
+      return nil
+    }
+    guard flags == 1 else { throw SharedAppModelError.unsupportedPacket(packetKindRaw) }
+
+    let datasetID = try r.readString(maxByteCount: 256)
+    let anchorID = try r.readUUID()
+    let revision: UInt64 = try r.read()
+    let translation = try r.readSIMD3()
+    let rotation = try r.readQuat()
+    let scale = try r.readSIMD3()
+    let lastTranslation = try r.readSIMD3()
+    let lastRotation = try r.readQuat()
+    let lastScale = try r.readSIMD3()
+    guard r.isAtEnd else { throw SharedAppModelError.trailingBytes(r.remainingCount) }
+    return VisionSharePlayTransformUpdate(
+      datasetID: datasetID,
+      anchorID: anchorID,
+      revision: revision,
+      modelTransform: Transform(scale: scale, rotation: rotation, translation: translation),
+      lastModelTransform: Transform(
+        scale: lastScale,
+        rotation: lastRotation,
+        translation: lastTranslation
+      )
+    )
+  }
+
+  func receiveVisionSharePlayTransform(
+    _ update: VisionSharePlayTransformUpdate,
+    activeDatasetID: String,
+    activeAnchorID: UUID?
+  ) {
+    guard update.datasetID == activeDatasetID else { return }
+    guard update.anchorID == activeAnchorID else {
+      pendingVisionSharePlayTransform = update
+      return
+    }
+    applyVisionSharePlayTransform(update)
+    pendingVisionSharePlayTransform = nil
+  }
+
+  private func applyVisionSharePlayTransform(_ update: VisionSharePlayTransformUpdate) {
+    modelTransform = update.modelTransform
+    lastModelTransform = update.lastModelTransform
   }
 
   func serializeVolumeMarkersSharePlayState() -> Data {
@@ -1237,14 +1324,7 @@ class SharedAppModel {
       case .screenTransform:
         throw SharedAppModelError.unsupportedPacket(packetKindRaw)
       case .visionTransform:
-        let tTranslation = try r.readSIMD3()
-        let tRotation = try r.readQuat()
-        let tScale = try r.readSIMD3()
-        let lTranslation = try r.readSIMD3()
-        let lRotation = try r.readQuat()
-        let lScale = try r.readSIMD3()
-        modelTransform = Transform(scale: tScale, rotation: tRotation, translation: tTranslation)
-        lastModelTransform = Transform(scale: lScale, rotation: lRotation, translation: lTranslation)
+        throw SharedAppModelError.unsupportedPacket(packetKindRaw)
       case .volumeMarkers, .spatialToolPreview, .volumeMeasurements:
         throw SharedAppModelError.unsupportedPacket(packetKindRaw)
     }

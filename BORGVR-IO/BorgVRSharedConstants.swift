@@ -75,7 +75,7 @@ enum BorgVRMeshFormat {
 
 enum BorgVRSharePlayProtocol {
   static let magic: UInt32 = 0x4256_5350 // "BVSP"
-  static let version = BorgVRSemanticVersion(major: 2, minor: 7)
+  static let version = BorgVRSemanticVersion(major: 2, minor: 9)
 
   enum MessageType: UInt8 {
     case initMessage = 0x00

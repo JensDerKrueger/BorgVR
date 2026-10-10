@@ -189,7 +189,6 @@ enum ImmersiveBootstrap {
       timer: timer,
       dataset: dataset,
       datasetID: activeDataset.uniqueId,
-      isHost: runtimeAppModel.groupSessionHost,
       transferFunctionPanelInteractionState: transferFunctionPanelInteractionState,
       immersiveInteraction: immersiveInteraction,
       logger: runtimeAppModel.logger

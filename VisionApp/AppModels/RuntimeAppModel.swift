@@ -1,5 +1,58 @@
 import SwiftUI
 
+final class SpatialAnchorSessionState: @unchecked Sendable {
+  struct Snapshot: Sendable {
+    let sharePlayIsActive: Bool
+    let localParticipantIsHost: Bool
+    let expectedSharedAnchorID: UUID?
+    let activeAnchorID: UUID?
+    let activeAnchorIsShared: Bool
+  }
+
+  private let lock = NSLock()
+  private var sharePlayIsActive = false
+  private var localParticipantIsHost = false
+  private var expectedSharedAnchorID: UUID?
+  private var activeAnchorID: UUID?
+  private var activeAnchorIsShared = false
+
+  func updateSession(isActive: Bool, localParticipantIsHost: Bool) {
+    lock.lock()
+    sharePlayIsActive = isActive
+    self.localParticipantIsHost = localParticipantIsHost
+    if !isActive {
+      expectedSharedAnchorID = nil
+    }
+    lock.unlock()
+  }
+
+  func expectSharedAnchor(_ anchorID: UUID?) {
+    lock.lock()
+    expectedSharedAnchorID = anchorID
+    lock.unlock()
+  }
+
+  func publishActiveAnchor(id: UUID?, isShared: Bool) {
+    lock.lock()
+    activeAnchorID = id
+    activeAnchorIsShared = id != nil && isShared
+    lock.unlock()
+  }
+
+  func snapshot() -> Snapshot {
+    lock.lock()
+    let snapshot = Snapshot(
+      sharePlayIsActive: sharePlayIsActive,
+      localParticipantIsHost: localParticipantIsHost,
+      expectedSharedAnchorID: expectedSharedAnchorID,
+      activeAnchorID: activeAnchorID,
+      activeAnchorIsShared: activeAnchorIsShared
+    )
+    lock.unlock()
+    return snapshot
+  }
+}
+
 // MARK: - RuntimeAppModel
 
 /**
@@ -60,10 +113,23 @@ class RuntimeAppModel {
   /// Model for performance graphing.
   var performanceModel: PerformanceGraphModel = PerformanceGraphModel()
 
-  var groupSessionHost : Bool = false
+  let spatialAnchorSessionState = SpatialAnchorSessionState()
+  var sharePlaySessionIsActive = false {
+    didSet { updateSpatialAnchorSessionState() }
+  }
+  var groupSessionHost : Bool = false {
+    didSet { updateSpatialAnchorSessionState() }
+  }
   var sharePlayDatasetSource: DatasetOrigin?
   var showsHostDeparturePrompt = false
   var protocolCompatibilityIssue: BorgVRSharePlayCompatibilityIssue?
+
+  private func updateSpatialAnchorSessionState() {
+    spatialAnchorSessionState.updateSession(
+      isActive: sharePlaySessionIsActive,
+      localParticipantIsHost: groupSessionHost
+    )
+  }
 
   enum NavigationState {
     case start

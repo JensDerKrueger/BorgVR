@@ -41,6 +41,10 @@ class GroupActivityHelper {
   private var pendingTransform = false
   private var pendingScreenViewState: BorgVRScreenViewState?
   private var synchronizationTask: Task<Void, Never>?
+  private var visionTransformRevision: UInt64 = 0
+  private var receivedVisionTransformRevisionByParticipantID: [UUID: UInt64] = [:]
+  private var lastVisionTransformSendBlockReason: String?
+  private var hasReportedVisionTransformSendState = false
   private var knownParticipants = Set<Participant>()
   private var protocolHandshake = BorgVRSharePlayHandshakeState()
   private var participantInfoByID: [UUID: BorgVRSharePlayParticipantInfo] = [:]
@@ -137,6 +141,7 @@ class GroupActivityHelper {
       let localUserStartedActivity = session.activity.initiatorID == localBorgVRSharePlayInitiatorID
       await MainActor.run {
         self.stopSharePlayServer()
+        runtimeAppModel.sharePlaySessionIsActive = true
         runtimeAppModel.groupSessionHost = localUserStartedActivity
         self.sessionDatasetID = localUserStartedActivity
           ? runtimeAppModel.activeDataset?.uniqueId
@@ -164,6 +169,10 @@ class GroupActivityHelper {
           self.adHocOriginsByParticipantID = self.adHocOriginsByParticipantID.filter {
             activeIDs.contains($0.key)
           }
+          self.receivedVisionTransformRevisionByParticipantID =
+            self.receivedVisionTransformRevisionByParticipantID.filter {
+              activeIDs.contains($0.key)
+            }
           self.protocolHandshake.retainParticipants(activeIDs)
           Task { @MainActor in
             if !newParticipants.isEmpty || !departedParticipants.isEmpty {
@@ -313,10 +322,11 @@ class GroupActivityHelper {
         )
       }
       if shouldSendTransform {
-        try await sendData(
-          data: sharedAppModel.serializeVisionSharePlayTransform(),
-          of: .renderingUpdate
-        )
+        if let data = makeVisionTransformData() {
+          try await sendData(data: data, of: .renderingUpdate)
+        } else {
+          pendingTransform = true
+        }
       }
       if let screenViewState {
         try await sendData(
@@ -327,6 +337,60 @@ class GroupActivityHelper {
     } catch {
       runtimeAppModel?.logger
         .error("Failed to send synchronize data to all participants: \(error)")
+    }
+  }
+
+  @MainActor
+  private func makeVisionTransformData() -> Data? {
+    guard let runtimeAppModel,
+          let sharedAppModel,
+          let datasetID = runtimeAppModel.activeDataset?.uniqueId else { return nil }
+    let anchorSnapshot = runtimeAppModel.spatialAnchorSessionState.snapshot()
+    guard anchorSnapshot.sharePlayIsActive else {
+      reportVisionTransformSendBlock("the SharePlay session is not active")
+      return nil
+    }
+
+    let anchorID: UUID
+    if anchorSnapshot.localParticipantIsHost {
+      guard anchorSnapshot.activeAnchorIsShared,
+            let activeAnchorID = anchorSnapshot.activeAnchorID else {
+        reportVisionTransformSendBlock("the host has no active shared WorldAnchor")
+        return nil
+      }
+      anchorID = activeAnchorID
+    } else {
+      guard let expectedAnchorID = anchorSnapshot.expectedSharedAnchorID else {
+        reportVisionTransformSendBlock("the client has not received the host WorldAnchor ID")
+        return nil
+      }
+      guard anchorSnapshot.activeAnchorID == expectedAnchorID else {
+        reportVisionTransformSendBlock("the client is not rendering with the host WorldAnchor")
+        return nil
+      }
+      anchorID = expectedAnchorID
+    }
+
+    reportVisionTransformSendBlock(nil)
+    visionTransformRevision &+= 1
+    return sharedAppModel.serializeVisionSharePlayTransform(
+      datasetID: datasetID,
+      anchorID: anchorID,
+      revision: visionTransformRevision
+    )
+  }
+
+  @MainActor
+  private func reportVisionTransformSendBlock(_ reason: String?) {
+    guard !hasReportedVisionTransformSendState || reason != lastVisionTransformSendBlockReason else {
+      return
+    }
+    hasReportedVisionTransformSendState = true
+    lastVisionTransformSendBlockReason = reason
+    if let reason {
+      runtimeAppModel?.logger.dev("SharePlay transform pending because \(reason).")
+    } else {
+      runtimeAppModel?.logger.dev("SharePlay transform sending is ready.")
     }
   }
 
@@ -437,11 +501,9 @@ class GroupActivityHelper {
           of: .renderingUpdate,
           to: to
         )
-        try await sendData(
-          data: sharedAppModel.serializeVisionSharePlayTransform(),
-          of: .renderingUpdate,
-          to: to
-        )
+        if let transformData = makeVisionTransformData() {
+          try await sendData(data: transformData, of: .renderingUpdate, to: to)
+        }
         try await sendData(
           data: sharedAppModel.serializeVolumeMarkersSharePlayState(),
           of: .renderingUpdate,
@@ -718,6 +780,10 @@ class GroupActivityHelper {
     pendingTransferFunction = false
     pendingTransform = false
     pendingScreenViewState = nil
+    visionTransformRevision = 0
+    receivedVisionTransformRevisionByParticipantID.removeAll()
+    lastVisionTransformSendBlockReason = nil
+    hasReportedVisionTransformSendState = false
     knownParticipants.removeAll()
     protocolHandshake.reset()
     participantInfoByID.removeAll()
@@ -736,6 +802,7 @@ class GroupActivityHelper {
     currentHostParticipantID = nil
     hostClaims.removeAll()
     runtimeAppModel?.showsHostDeparturePrompt = false
+    runtimeAppModel?.sharePlaySessionIsActive = false
     sharedAppModel?.sharePlayParticipants = []
     sharedAppModel?.screenSharePlayViewState = nil
     sharedAppModel?.detachedScreenSharePlayViewStates = [:]
@@ -1615,6 +1682,26 @@ class GroupActivityHelper {
   func handleUpdate(data: Data, from: Participant) {
     guard let sharedAppModel else { return }
     do {
+      if let transformUpdate = try SharedAppModel.decodeVisionSharePlayTransformIfPresent(data) {
+        guard let runtimeAppModel,
+              runtimeAppModel.activeDataset?.uniqueId == transformUpdate.datasetID else {
+          runtimeAppModel?.logger.warning(
+            "Ignored a SharePlay transform for a dataset that is not active."
+          )
+          return
+        }
+        let previousRevision = receivedVisionTransformRevisionByParticipantID[from.id] ?? 0
+        guard transformUpdate.revision > previousRevision else { return }
+        receivedVisionTransformRevisionByParticipantID[from.id] = transformUpdate.revision
+        runtimeAppModel.spatialAnchorSessionState.expectSharedAnchor(transformUpdate.anchorID)
+        let activeAnchorID = runtimeAppModel.spatialAnchorSessionState.snapshot().activeAnchorID
+        sharedAppModel.receiveVisionSharePlayTransform(
+          transformUpdate,
+          activeDatasetID: transformUpdate.datasetID,
+          activeAnchorID: activeAnchorID
+        )
+        return
+      }
       if let previews = try SpatialToolPreviewSharePlayCodec.decodeIfPresent(data) {
         sharedAppModel.updateRemoteSpatialToolPreviews(
           previews,
