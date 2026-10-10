@@ -1,166 +1,6 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
-    "The dataset state file is invalid." : {
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Die Datensatzzustandsdatei ist ungültig." } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "The dataset state file is invalid." } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "El archivo de estado del conjunto de datos no es válido." } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Le fichier d’état du jeu de données n’est pas valide." } }
-      }
-    },
-    "Unsupported dataset state version %d." : {
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Die Datensatzzustandsversion %d wird nicht unterstützt." } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Unsupported dataset state version %d." } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "La versión %d del estado del conjunto de datos no es compatible." } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "La version %d de l’état du jeu de données n’est pas prise en charge." } }
-      }
-    },
-    "The dataset state contains invalid values." : {
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Der Datensatzzustand enthält ungültige Werte." } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "The dataset state contains invalid values." } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "El estado del conjunto de datos contiene valores no válidos." } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "L’état du jeu de données contient des valeurs non valides." } }
-      }
-    },
-    "The dataset state file is too large." : {
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Die Datensatzzustandsdatei ist zu groß." } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "The dataset state file is too large." } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "El archivo de estado del conjunto de datos es demasiado grande." } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Le fichier d’état du jeu de données est trop volumineux." } }
-      }
-    },
-    "The spatial view is not available yet." : {
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Die räumliche Ansicht ist noch nicht verfügbar." } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "The spatial view is not available yet." } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "La vista espacial aún no está disponible." } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "La vue spatiale n’est pas encore disponible." } }
-      }
-    },
-    "Automatically load/save view and rendering state" : {
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Ansicht und Renderzustand automatisch laden/speichern" } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Automatically load/save view and rendering state" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Cargar/guardar automáticamente la vista y el estado de renderizado" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Charger/enregistrer automatiquement la vue et l’état de rendu" } }
-      }
-    },
-    "Restore Dataset State" : {
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Datensatzzustand wiederherstellen" } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Restore Dataset State" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Restaurar estado del conjunto de datos" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Restaurer l’état du jeu de données" } }
-      }
-    },
-    "Nothing to Restore" : {
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Nichts wiederherzustellen" } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Nothing to Restore" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Nada que restaurar" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Rien à restaurer" } }
-      }
-    },
-    "No saved state is available for this dataset." : {
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Für diesen Datensatz ist kein gespeicherter Zustand verfügbar." } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "No saved state is available for this dataset." } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "No hay ningún estado guardado disponible para este conjunto de datos." } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Aucun état enregistré n’est disponible pour ce jeu de données." } }
-      }
-    },
-    "Unable to Restore Dataset State" : {
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Datensatzzustand konnte nicht wiederhergestellt werden" } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Unable to Restore Dataset State" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "No se pudo restaurar el estado del conjunto de datos" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Impossible de restaurer l’état du jeu de données" } }
-      }
-    },
-    "Automatically load/save measurements" : {
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Messungen automatisch laden/speichern" } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Automatically load/save measurements" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Cargar/guardar mediciones automáticamente" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Charger/enregistrer automatiquement les mesures" } }
-      }
-    },
-    "Automatically load/save objects" : {
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Objekte automatisch laden/speichern" } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Automatically load/save objects" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Cargar/guardar objetos automáticamente" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Charger/enregistrer automatiquement les objets" } }
-      }
-    },
-    "Nothing to Save" : {
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Nichts zu speichern" } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Nothing to Save" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Nada que guardar" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Rien à enregistrer" } }
-      }
-    },
-    "One or more files for this dataset already exist. Do you want to replace them?" : {
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Eine oder mehrere Dateien für diesen Datensatz sind bereits vorhanden. Möchten Sie sie ersetzen?" } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "One or more files for this dataset already exist. Do you want to replace them?" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Ya existen uno o varios archivos para este conjunto de datos. ¿Desea reemplazarlos?" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Un ou plusieurs fichiers existent déjà pour ce jeu de données. Voulez-vous les remplacer ?" } }
-      }
-    },
-    "Overwrite" : {
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Überschreiben" } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Overwrite" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Sobrescribir" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Remplacer" } }
-      }
-    },
-    "Overwrite Existing Files?" : {
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Vorhandene Dateien überschreiben?" } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Overwrite Existing Files?" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "¿Sobrescribir los archivos existentes?" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Remplacer les fichiers existants ?" } }
-      }
-    },
-    "Save Dataset State" : {
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Datensatzzustand speichern" } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Save Dataset State" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Guardar estado del conjunto de datos" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Enregistrer l’état du jeu de données" } }
-      }
-    },
-    "There is no active transfer function and there are no objects or measurements to save." : {
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Es gibt keine aktive Transferfunktion und keine Objekte oder Messungen, die gespeichert werden können." } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "There is no active transfer function and there are no objects or measurements to save." } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "No hay ninguna función de transferencia activa ni objetos o mediciones que guardar." } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Il n’y a aucune fonction de transfert active, ni objet ou mesure à enregistrer." } }
-      }
-    },
-    "The saved data belongs to a different dataset." : {
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Die gespeicherten Daten gehören zu einem anderen Datensatz." } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "The saved data belongs to a different dataset." } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Los datos guardados pertenecen a otro conjunto de datos." } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Les données enregistrées appartiennent à un autre jeu de données." } }
-      }
-    },
-    "Unable to Save Dataset State" : {
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Datensatzzustand konnte nicht gespeichert werden" } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Unable to Save Dataset State" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "No se pudo guardar el estado del conjunto de datos" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Impossible d’enregistrer l’état du jeu de données" } }
-      }
-    },
     "" : {
 
     },
@@ -1004,6 +844,62 @@
         }
       }
     },
+    "Automatically load/save measurements" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Messungen automatisch laden/speichern"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Automatically load/save measurements"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cargar/guardar mediciones automáticamente"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Charger/enregistrer automatiquement les mesures"
+          }
+        }
+      }
+    },
+    "Automatically load/save objects" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Objekte automatisch laden/speichern"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Automatically load/save objects"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cargar/guardar objetos automáticamente"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Charger/enregistrer automatiquement les objets"
+          }
+        }
+      }
+    },
     "Automatically load/save transfer functions" : {
       "localizations" : {
         "de" : {
@@ -1028,6 +924,34 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Charger/enregistrer automatiquement les fonctions de transfert"
+          }
+        }
+      }
+    },
+    "Automatically load/save view and rendering state" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ansicht und Renderzustand automatisch laden/speichern"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Automatically load/save view and rendering state"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cargar/guardar automáticamente la vista y el estado de renderizado"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Charger/enregistrer automatiquement la vue et l’état de rendu"
           }
         }
       }
@@ -8893,6 +8817,34 @@
         }
       }
     },
+    "No saved state is available for this dataset." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Für diesen Datensatz ist kein gespeicherter Zustand verfügbar."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No saved state is available for this dataset."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No hay ningún estado guardado disponible para este conjunto de datos."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aucun état enregistré n’est disponible pour ce jeu de données."
+          }
+        }
+      }
+    },
     "No script active" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -8924,6 +8876,7 @@
     },
     "notfication_dataset_downloaded_text" : {
       "comment" : "Text displayed in a notification when the remote dataset has been downloaded.",
+      "extractionState" : "stale",
       "isCommentAutoGenerated" : true,
       "localizations" : {
         "de" : {
@@ -8954,6 +8907,7 @@
     },
     "notfication_dataset_downloaded_title" : {
       "comment" : "Title of a notification that is shown when the remote dataset has been downloaded.",
+      "extractionState" : "stale",
       "isCommentAutoGenerated" : true,
       "localizations" : {
         "de" : {
@@ -8978,6 +8932,62 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Jeu de données distant complet"
+          }
+        }
+      }
+    },
+    "Nothing to Restore" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nichts wiederherzustellen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nothing to Restore"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nada que restaurar"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rien à restaurer"
+          }
+        }
+      }
+    },
+    "Nothing to Save" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nichts zu speichern"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nothing to Save"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nada que guardar"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rien à enregistrer"
           }
         }
       }
@@ -9146,6 +9156,34 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "OK"
+          }
+        }
+      }
+    },
+    "One or more files for this dataset already exist. Do you want to replace them?" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eine oder mehrere Dateien für diesen Datensatz sind bereits vorhanden. Möchten Sie sie ersetzen?"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "One or more files for this dataset already exist. Do you want to replace them?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ya existen uno o varios archivos para este conjunto de datos. ¿Desea reemplazarlos?"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Un ou plusieurs fichiers existent déjà pour ce jeu de données. Voulez-vous les remplacer ?"
           }
         }
       }
@@ -9430,6 +9468,62 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Mode de suréchantillonnage"
+          }
+        }
+      }
+    },
+    "Overwrite" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Überschreiben"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Overwrite"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sobrescribir"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remplacer"
+          }
+        }
+      }
+    },
+    "Overwrite Existing Files?" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vorhandene Dateien überschreiben?"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Overwrite Existing Files?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Sobrescribir los archivos existentes?"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remplacer les fichiers existants ?"
           }
         }
       }
@@ -10610,6 +10704,34 @@
         }
       }
     },
+    "Project onto Volume" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Auf Volumen projizieren"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Project onto Volume"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Proyectar sobre el volumen"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Projeter sur le volume"
+          }
+        }
+      }
+    },
     "Radius" : {
       "localizations" : {
         "de" : {
@@ -11352,6 +11474,34 @@
         }
       }
     },
+    "Restore Dataset State" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Datensatzzustand wiederherstellen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Restore Dataset State"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Restaurar estado del conjunto de datos"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Restaurer l’état du jeu de données"
+          }
+        }
+      }
+    },
     "Rotation" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -11492,6 +11642,34 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Échantillonnage"
+          }
+        }
+      }
+    },
+    "Save Dataset State" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Datensatzzustand speichern"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Save Dataset State"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Guardar estado del conjunto de datos"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enregistrer l’état du jeu de données"
           }
         }
       }
@@ -13950,6 +14128,90 @@
         }
       }
     },
+    "The dataset state contains invalid values." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der Datensatzzustand enthält ungültige Werte."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The dataset state contains invalid values."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El estado del conjunto de datos contiene valores no válidos."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L’état du jeu de données contient des valeurs non valides."
+          }
+        }
+      }
+    },
+    "The dataset state file is invalid." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Datensatzzustandsdatei ist ungültig."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The dataset state file is invalid."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El archivo de estado del conjunto de datos no es válido."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le fichier d’état du jeu de données n’est pas valide."
+          }
+        }
+      }
+    },
+    "The dataset state file is too large." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Datensatzzustandsdatei ist zu groß."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The dataset state file is too large."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El archivo de estado del conjunto de datos es demasiado grande."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le fichier d’état du jeu de données est trop volumineux."
+          }
+        }
+      }
+    },
     "The documents directory is not available." : {
       "localizations" : {
         "de" : {
@@ -14276,6 +14538,34 @@
         }
       }
     },
+    "The saved data belongs to a different dataset." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die gespeicherten Daten gehören zu einem anderen Datensatz."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The saved data belongs to a different dataset."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los datos guardados pertenecen a otro conjunto de datos."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les données enregistrées appartiennent à un autre jeu de données."
+          }
+        }
+      }
+    },
     "The section will be reset to its default values." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -14394,6 +14684,62 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "L’hôte SharePlay a quitté la session. Vous pouvez reprendre le rôle d’hôte, quitter la session ou continuer sans hôte."
+          }
+        }
+      }
+    },
+    "The spatial view is not available yet." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die räumliche Ansicht ist noch nicht verfügbar."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The spatial view is not available yet."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La vista espacial aún no está disponible."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La vue spatiale n’est pas encore disponible."
+          }
+        }
+      }
+    },
+    "There is no active transfer function and there are no objects or measurements to save." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Es gibt keine aktive Transferfunktion und keine Objekte oder Messungen, die gespeichert werden können."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "There is no active transfer function and there are no objects or measurements to save."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No hay ninguna función de transferencia activa ni objetos o mediciones que guardar."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Il n’y a aucune fonction de transfert active, ni objet ou mesure à enregistrer."
           }
         }
       }
@@ -14969,6 +15315,62 @@
         }
       }
     },
+    "Unable to Restore Dataset State" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Datensatzzustand konnte nicht wiederhergestellt werden"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unable to Restore Dataset State"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo restaurar el estado del conjunto de datos"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossible de restaurer l’état du jeu de données"
+          }
+        }
+      }
+    },
+    "Unable to Save Dataset State" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Datensatzzustand konnte nicht gespeichert werden"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unable to Save Dataset State"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo guardar el estado del conjunto de datos"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossible d’enregistrer l’état du jeu de données"
+          }
+        }
+      }
+    },
     "uncompressed" : {
       "localizations" : {
         "de" : {
@@ -14993,6 +15395,34 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "non compressé"
+          }
+        }
+      }
+    },
+    "Unsupported dataset state version %d." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Datensatzzustandsversion %d wird nicht unterstützt."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unsupported dataset state version %d."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La versión %d del estado del conjunto de datos no es compatible."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La version %d de l’état du jeu de données n’est pas prise en charge."
           }
         }
       }
@@ -15811,34 +16241,6 @@
     "Your installed BorgVR version is too old for this SharePlay session. Please update to version %@ or later." : {
       "comment" : "A localized message describing a compatibility issue where the local BorgVR version is too old for a SharePlay session. The argument is the required version of BorgVR.",
       "isCommentAutoGenerated" : true
-    },
-    "Project onto Volume" : {
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Auf Volumen projizieren"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Project onto Volume"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Proyectar sobre el volumen"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Projeter sur le volume"
-          }
-        }
-      }
     },
     "Zeroes" : {
       "localizations" : {
