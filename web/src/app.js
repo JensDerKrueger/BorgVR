@@ -1,4 +1,4 @@
-import { CoordinateCubeRenderer } from "./cube-renderer.js?v=20261008-measurement-labels";
+import { CoordinateCubeRenderer } from "./cube-renderer.js?v=20261014-multichannel";
 import { decodeAppleLZ4, encodeLZ4Block } from "./lz4.js?v=20260911-urltf";
 import {
   MAX_MARKER_FILE_BYTES,
@@ -35,6 +35,8 @@ const persistentUIPanels = Array.from(document.querySelectorAll("[data-ui-panel]
 const renderModeButtons = Array.from(document.querySelectorAll("[data-render-mode]"));
 const editorPanels = Array.from(document.querySelectorAll("[data-editor-mode]"));
 const transferEditorCanvas = document.querySelector("#tf-editor-canvas");
+const tfDataChannelRow = document.querySelector("#tf-data-channel-row");
+const tfDataChannel = document.querySelector("#tf-data-channel");
 const tfChannelButtons = Array.from(document.querySelectorAll("[data-tf-channel]"));
 const tfSave = document.querySelector("#tf-save");
 const tfLoad = document.querySelector("#tf-load");
@@ -479,6 +481,7 @@ async function showDataset(dataset) {
     return;
   }
   renderer?.setDataset(currentManifest);
+  updateTransferFunctionDataChannels();
   currentMarkers = [];
   currentMeshInstances = [];
   currentMeasurements = [];
@@ -571,6 +574,12 @@ function installRenderControls() {
       selectRenderMode(mode);
       updateURLState();
     });
+  });
+
+  tfDataChannel?.addEventListener("change", () => {
+    renderer?.selectTransferFunctionChannel(Number(tfDataChannel.value));
+    clearTransferFunctionSelection();
+    drawTransferFunctionEditor();
   });
 
   tfChannelButtons.forEach((button) => {
@@ -833,6 +842,20 @@ function installRenderControls() {
   drawTransferFunctionEditor();
 }
 
+function updateTransferFunctionDataChannels() {
+  if (!renderer || !tfDataChannel || !tfDataChannelRow) {
+    return;
+  }
+  const channelCount = renderer.getTransferFunctionChannelCount();
+  tfDataChannel.replaceChildren(
+    ...Array.from({ length: channelCount }, (_, channel) =>
+      new Option(`Channel ${channel + 1}`, String(channel))
+    )
+  );
+  tfDataChannel.value = String(renderer.selectedTransferFunctionChannel);
+  tfDataChannelRow.hidden = channelCount <= 1;
+}
+
 async function applyMarkerContents(contents, catalogID = "") {
   currentMarkers = contents.markers;
   currentMeshInstances = contents.meshInstances;
@@ -1074,27 +1097,45 @@ async function applyTransferFunctionFromURL() {
     return "";
   }
 
-  const encoded = requestedTransferFunction();
-  if (!encoded) {
+  const encodedTransferFunctions = requestedTransferFunctions();
+  if (!encodedTransferFunctions.some(Boolean)) {
     return "";
   }
 
   try {
-    const transferFunction = decodeTransferFunctionURLValue(encoded);
-    renderer?.loadTransferFunction(transferFunction);
-    const matchingEntry = await selectMatchingCatalogTransferFunction(transferFunction);
+    const loadedTransferFunctions = [];
+    for (let channel = 0; channel < encodedTransferFunctions.length; channel += 1) {
+      const encoded = encodedTransferFunctions[channel];
+      if (!encoded) {
+        continue;
+      }
+      const transferFunction = decodeTransferFunctionURLValue(encoded);
+      renderer?.loadTransferFunction(transferFunction, channel);
+      loadedTransferFunctions.push(transferFunction);
+    }
+    const matchingEntry = loadedTransferFunctions.length === 1
+      ? await selectMatchingCatalogTransferFunction(loadedTransferFunctions[0])
+      : null;
     if (matchingEntry) {
       return `Transfer function loaded from URL: ${displayTransferFunctionName(matchingEntry)}.`;
     }
-    return "Transfer function loaded from URL.";
+    return loadedTransferFunctions.length === 1
+      ? "Transfer function loaded from URL."
+      : `${loadedTransferFunctions.length} transfer functions loaded from URL.`;
   } catch (error) {
     return `Transfer function URL parameter ignored: ${error.message ?? String(error)}`;
   }
 }
 
-function requestedTransferFunction() {
+function requestedTransferFunctions() {
   const params = new URLSearchParams(window.location.search);
-  return params.get(TRANSFER_FUNCTION_URL_PARAMETER) || params.get("tf") || "";
+  const count = Math.min(4, renderer?.getTransferFunctionChannelCount() ?? 1);
+  return Array.from({ length: count }, (_, channel) => {
+    if (channel === 0) {
+      return params.get(TRANSFER_FUNCTION_URL_PARAMETER) || params.get("tf") || "";
+    }
+    return params.get(`${TRANSFER_FUNCTION_URL_PARAMETER}${channel + 1}`) || "";
+  });
 }
 
 function applyRenderStateFromURL() {
@@ -1129,21 +1170,29 @@ function requestedIsoValue() {
 function updateURLState() {
   const url = new URL(window.location.href);
   url.searchParams.delete("tf");
+  for (let channel = 1; channel <= 4; channel += 1) {
+    url.searchParams.delete(channel === 1
+      ? TRANSFER_FUNCTION_URL_PARAMETER
+      : `${TRANSFER_FUNCTION_URL_PARAMETER}${channel}`);
+  }
   url.searchParams.delete("renderMode");
   url.searchParams.delete("isoValue");
   url.searchParams.delete("isovalue");
   url.searchParams.set(RENDER_MODE_URL_PARAMETER, currentRenderMode);
 
   if (currentRenderMode === "iso") {
-    url.searchParams.delete(TRANSFER_FUNCTION_URL_PARAMETER);
     url.searchParams.set(ISO_VALUE_URL_PARAMETER, normalizedIsoValueForURL());
   } else {
     url.searchParams.delete(ISO_VALUE_URL_PARAMETER);
-    const buffer = renderer?.serializeTransferFunction();
-    if (buffer?.byteLength) {
-      url.searchParams.set(TRANSFER_FUNCTION_URL_PARAMETER, encodeTransferFunctionURLValue(buffer));
-    } else {
-      url.searchParams.delete(TRANSFER_FUNCTION_URL_PARAMETER);
+    const count = Math.min(4, renderer?.getTransferFunctionChannelCount() ?? 1);
+    for (let channel = 0; channel < count; channel += 1) {
+      const buffer = renderer?.serializeTransferFunction(channel);
+      if (buffer?.byteLength) {
+        url.searchParams.set(
+          channel === 0 ? TRANSFER_FUNCTION_URL_PARAMETER : `${TRANSFER_FUNCTION_URL_PARAMETER}${channel + 1}`,
+          encodeTransferFunctionURLValue(buffer)
+        );
+      }
     }
   }
 
@@ -1161,8 +1210,12 @@ function updateTransferFunctionURL() {
 
 function clearTransferFunctionURL() {
   const url = new URL(window.location.href);
-  url.searchParams.delete(TRANSFER_FUNCTION_URL_PARAMETER);
   url.searchParams.delete("tf");
+  for (let channel = 1; channel <= 4; channel += 1) {
+    url.searchParams.delete(channel === 1
+      ? TRANSFER_FUNCTION_URL_PARAMETER
+      : `${TRANSFER_FUNCTION_URL_PARAMETER}${channel}`);
+  }
   window.history.replaceState(null, "", url);
 }
 

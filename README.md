@@ -187,7 +187,7 @@ for one- and multi-component data with 1-, 2-, or 4-byte components.
 The creation mode has this general form:
 
 ```sh
-TerminalConverterApp C <algorithm> <bytes-per-component> <components> \
+TerminalConverterApp C <algorithm[,algorithm...]> <bytes-per-component> <components> \
   <size-x> <size-y> <size-z> <output.data> <description> <brick-size> <overlap>
 ```
 
@@ -201,15 +201,19 @@ The following algorithm identifiers are available:
 - `G`: periodic gyroid field
 - `P`: 3D Shepp-Logan phantom
 - `T`: frequency chirp with a calibration region aligned to the generated brick boundaries
+- `U`: scalar UInt32 full-range test data for validating packed 32-bit rendering
 
 The analytical generators run slice by slice on Metal and automatically fall back to a
-multithreaded CPU implementation. They support one-component 8-, 16-, and 32-bit output. The Julia
+multithreaded CPU implementation. For multi-channel output, provide one comma-separated algorithm
+identifier per channel in channel order; a single identifier is applied to every channel. Multi-channel datasets
+support 8 or 16 bits per channel, while scalar datasets additionally support 32 bits. The Julia
 preset suppresses its early, nearly spherical escape bands so that the later fractal structures
-occupy the useful value range. For example, this creates a 16-bit `512³` Julia volume:
+occupy the useful value range. For example, this creates a two-channel 16-bit volume containing a
+Mandelbulb and a quaternion Julia set:
 
 ```sh
-TerminalConverterApp C J 2 1 512 512 512 QuaternionJulia.data \
-  "Quaternion Julia set" 64 2
+TerminalConverterApp C F,J 2 2 512 512 512 MandelbulbJulia.data \
+  "Mandelbulb and quaternion Julia set" 64 2
 ```
 
 Use `TerminalConverterApp --help` for the complete argument list.

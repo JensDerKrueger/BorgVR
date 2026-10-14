@@ -918,3 +918,5 @@
 "The dataset state contains invalid values." = "Der Datensatzzustand enthält ungültige Werte.";
 "The dataset state file is too large." = "Die Datensatzzustandsdatei ist zu groß.";
 "The spatial view is not available yet." = "Die räumliche Ansicht ist noch nicht verfügbar.";
+"tf_data_channel" = "Datenkanal";
+"tf_data_channel_format" = "Kanal %d";

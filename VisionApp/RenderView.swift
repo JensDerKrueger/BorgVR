@@ -436,7 +436,7 @@ struct RenderView: View {
     return WebGPUShareLink.datasetURL(
       baseURL: baseURL,
       datasetID: dataset.uniqueId,
-      transferFunction: sharedAppModel.transferFunction,
+      transferFunctions: Array(sharedAppModel.activeTransferFunctions),
       renderMode: sharedAppModel.renderMode,
       normalizedIsoValue: sharedAppModel.normIsoValue
     )

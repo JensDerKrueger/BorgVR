@@ -310,7 +310,7 @@ final actor Renderer {
         device: device,
         maxMemory: atlasSizeMB * 1024 * 1024,
         borgData: borgData,
-        transferFunction: sharedAppModel.transferFunction,
+        transferFunctions: Array(sharedAppModel.activeTransferFunctions),
         isoValue: sharedAppModel.isoValue,
         logger: logger
       )
@@ -541,7 +541,7 @@ final actor Renderer {
     )
     self.storedAppModel = storedAppModel
 
-    sharedAppModel.transferFunction.initMetal(device: device)
+    sharedAppModel.initTransferFunctionMetal(device: device)
 
     logger?.dev("Renderer initialized")
   }

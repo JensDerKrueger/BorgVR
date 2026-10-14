@@ -552,6 +552,49 @@ func computeLinear(filename: String, sizeX: Int, sizeY: Int, sizeZ: Int,
   writeMetadataFile(filename: filename, sizeX: sizeX, sizeY: sizeY, sizeZ: sizeZ, bytesPerVoxel: bytesPerVoxel, componentCount: componentCount)
 }
 
+/**
+ Generates a scalar UInt32 test volume whose smooth three-dimensional ramp spans
+ the complete integer range. Unlike a sequential test, even small volumes use
+ all four bytes and therefore exercise packed RGBA sampling in the renderers.
+ */
+func computeUInt32TestVolume(filename: String,
+                             sizeX: Int,
+                             sizeY: Int,
+                             sizeZ: Int,
+                             logger: LoggerBase? = nil) throws {
+  let fileURL = URL(fileURLWithPath: filename)
+  let voxelCount = sizeX * sizeY * sizeZ
+  let memoryMappedFile = try MemoryMappedFile(
+    filename: fileURL.path(),
+    size: Int64(voxelCount * MemoryLayout<UInt32>.stride)
+  )
+  defer { try? memoryMappedFile.close() }
+
+  let pointer = memoryMappedFile.mappedMemory
+  for z in 0..<sizeZ {
+    if sizeZ > 1 {
+      logger?.progress("Generating UInt32 Test Volume", Double(z) / Double(sizeZ - 1))
+    }
+    DispatchQueue.concurrentPerform(iterations: sizeY) { y in
+      for x in 0..<sizeX {
+        let nx = sizeX > 1 ? Double(x) / Double(sizeX - 1) : 0
+        let ny = sizeY > 1 ? Double(y) / Double(sizeY - 1) : 0
+        let nz = sizeZ > 1 ? Double(z) / Double(sizeZ - 1) : 0
+        let normalizedValue = (nx + 2 * ny + 4 * nz) / 7
+        let value = normalizedValue >= 1
+          ? UInt32.max
+          : UInt32((normalizedValue * Double(UInt32.max)).rounded())
+        let position = z * sizeY * sizeX + y * sizeX + x
+        pointer.advanced(by: position * MemoryLayout<UInt32>.stride).storeBytes(
+          of: value.littleEndian,
+          as: UInt32.self
+        )
+      }
+    }
+  }
+  logger?.info("Finished writing UInt32 test data to \(filename)")
+}
+
 /*
  Copyright (c) 2026 Computer Graphics and Visualization Group, University of
  Duisburg-Essen

@@ -99,9 +99,10 @@ struct PageMetadata {
 /**
  An error type for volume atlas operations.
  */
-enum VolumeAtlasError: Error {
+enum VolumeAtlasError: Error, LocalizedError {
   /// Indicates that the 3D texture atlas creation failed.
   case failedToCreateTexture
+  case unsupportedFormat(bytesPerComponent: Int, componentCount: Int)
 
   /// A localized description of the error.
   var errorDescription: String? {
@@ -109,6 +110,9 @@ enum VolumeAtlasError: Error {
       case .failedToCreateTexture:
         return "Failed to create the 3D texture atlas. Make sure the device has " +
         "enough memory and supports the requested format."
+      case .unsupportedFormat(let bytesPerComponent, let componentCount):
+        return "Unsupported volume format: \(componentCount) channel(s) with " +
+        "\(bytesPerComponent * 8) bits per channel."
     }
   }
 }
@@ -123,12 +127,15 @@ class VolumeAtlas {
   private var device: MTLDevice
   /// The 3D texture atlas storing voxel data.
   var atlasTexture: MTLTexture!
+  private var secondaryAtlasTexture: MTLTexture?
+  private var primaryUploadStorage: [UInt8] = []
+  private var secondaryUploadStorage: [UInt8] = []
   private var levelTable: MTLBuffer!
   private var metaBuffer: MTLBuffer!
   private var metaStorage: [UInt32] = []
   private var pageMetadata: [PageMetadata] = []
   private var brickToPage: [Int: Int] = [:]
-  private var transferFunction: TransferFunction1D
+  private var transferFunctions: [TransferFunction1D]
   private var purgeDataOnNextPage = false
   private var elementsInBuffer = 0
 
@@ -169,29 +176,32 @@ class VolumeAtlas {
    - Throws: VolumeAtlasError if texture creation fails.
    */
   init(device: MTLDevice, maxMemory: Int, borgData: BORGVRDatasetProtocol,
-       transferFunction: TransferFunction1D, isoValue: Float,
+       transferFunctions: [TransferFunction1D], isoValue: Float,
        logger: LoggerBase? = nil) throws {
+
+    let metadata = borgData.getMetadata()
+    let pixelFormats = try VolumeAtlas.getPixelFormats(
+      bytesPerComponent: metadata.bytesPerComponent,
+      componentCount: metadata.componentCount
+    )
 
     self.device = device
     self.borgData = borgData
     self.borgBuffer = borgData.allocateBrickBuffer()
     self.logger = logger
-    self.transferFunction = transferFunction
+    self.transferFunctions = transferFunctions
     self.asyncEmptinessUpdater = AsyncEmptinessUpdater(
       borgData: borgData,
-      transferFunction: transferFunction,
+      transferFunctions: transferFunctions,
       isoValue: isoValue,
       logger: logger
     )
 
-    let metadata = self.borgData.getMetadata()
     let brickSize = metadata.brickSize
-    let pixelFormat = VolumeAtlas.getPixelFormat(
+    let bytesPerVoxel = VolumeAtlas.textureBytesPerVoxel(
       bytesPerComponent: metadata.bytesPerComponent,
       componentCount: metadata.componentCount
     )
-
-    let bytesPerVoxel = metadata.bytesPerComponent * metadata.componentCount
     let minimumAtlasMemory = max(1, brickSize * brickSize * brickSize * bytesPerVoxel)
     var atlasBudget = max(maxMemory, minimumAtlasMemory)
     var atlasLayout: (width: Int, height: Int, depth: Int, inCoreBrickCount: Int)?
@@ -208,16 +218,24 @@ class VolumeAtlas {
 
       let atlasDescriptor = MTLTextureDescriptor()
       atlasDescriptor.textureType = .type3D
-      atlasDescriptor.pixelFormat = pixelFormat
+      atlasDescriptor.pixelFormat = pixelFormats.primary
       atlasDescriptor.width = layout.width
       atlasDescriptor.height = layout.height
       atlasDescriptor.depth = layout.depth
       atlasDescriptor.usage = [.shaderRead]
       atlasDescriptor.storageMode = .shared
 
-      if let atlasTexture = device.makeTexture(descriptor: atlasDescriptor) {
+      let primaryTexture = device.makeTexture(descriptor: atlasDescriptor)
+      var secondaryTexture: MTLTexture?
+      if let secondaryFormat = pixelFormats.secondary {
+        atlasDescriptor.pixelFormat = secondaryFormat
+        secondaryTexture = device.makeTexture(descriptor: atlasDescriptor)
+      }
+      if let atlasTexture = primaryTexture,
+         pixelFormats.secondary == nil || secondaryTexture != nil {
         atlasLayout = layout
         createdAtlasTexture = atlasTexture
+        self.secondaryAtlasTexture = secondaryTexture
         if atlasBudget < maxMemory {
           logger?.warning(
             "Atlas allocation fell back from \(maxMemory / 1024 / 1024) MB " +
@@ -345,17 +363,105 @@ class VolumeAtlas {
    */
   private func replaceAtlasBrick(x: Int, y: Int, z: Int,
                                  data: UnsafeMutablePointer<UInt8>) {
-    let brickSize = self.borgData.getMetadata().brickSize
+    let metadata = borgData.getMetadata()
+    let brickSize = metadata.brickSize
     let region = MTLRegion(
       origin: MTLOrigin(x: x * brickSize, y: y * brickSize, z: z * brickSize),
       size: MTLSize(width: brickSize, height: brickSize, depth: brickSize)
     )
-    atlasTexture.replace(region: region,
-                         mipmapLevel: 0,
-                         slice: 0,
-                         withBytes: data,
-                         bytesPerRow: bytesPerRow,
-                         bytesPerImage: bytesPerImage)
+    let voxelCount = brickSize * brickSize * brickSize
+    if metadata.bytesPerComponent == 1 && metadata.componentCount == 3 {
+      let outputCount = voxelCount * 4
+      if primaryUploadStorage.count != outputCount {
+        primaryUploadStorage = [UInt8](repeating: 0, count: outputCount)
+      }
+      for voxel in 0..<voxelCount {
+        let source = voxel * 3
+        let destination = voxel * 4
+        primaryUploadStorage[destination] = data[source]
+        primaryUploadStorage[destination + 1] = data[source + 1]
+        primaryUploadStorage[destination + 2] = data[source + 2]
+        primaryUploadStorage[destination + 3] = 0
+      }
+      replace(
+        texture: atlasTexture,
+        region: region,
+        bytes: primaryUploadStorage,
+        bytesPerVoxel: 4,
+        brickSize: brickSize
+      )
+      return
+    }
+
+    if metadata.bytesPerComponent == 2 && metadata.componentCount >= 3 {
+      let secondaryBytesPerVoxel = (metadata.componentCount - 2) * 2
+      let primaryCount = voxelCount * 4
+      let secondaryCount = voxelCount * secondaryBytesPerVoxel
+      if primaryUploadStorage.count != primaryCount {
+        primaryUploadStorage = [UInt8](repeating: 0, count: primaryCount)
+      }
+      if secondaryUploadStorage.count != secondaryCount {
+        secondaryUploadStorage = [UInt8](repeating: 0, count: secondaryCount)
+      }
+      let sourceBytesPerVoxel = metadata.componentCount * 2
+      for voxel in 0..<voxelCount {
+        let source = voxel * sourceBytesPerVoxel
+        let primaryDestination = voxel * 4
+        for byte in 0..<4 {
+          primaryUploadStorage[primaryDestination + byte] = data[source + byte]
+        }
+        let secondaryDestination = voxel * secondaryBytesPerVoxel
+        for byte in 0..<secondaryBytesPerVoxel {
+          secondaryUploadStorage[secondaryDestination + byte] = data[source + 4 + byte]
+        }
+      }
+      replace(
+        texture: atlasTexture,
+        region: region,
+        bytes: primaryUploadStorage,
+        bytesPerVoxel: 4,
+        brickSize: brickSize
+      )
+      if let secondaryAtlasTexture {
+        replace(
+          texture: secondaryAtlasTexture,
+          region: region,
+          bytes: secondaryUploadStorage,
+          bytesPerVoxel: secondaryBytesPerVoxel,
+          brickSize: brickSize
+        )
+      }
+      return
+    }
+
+    atlasTexture.replace(
+      region: region,
+      mipmapLevel: 0,
+      slice: 0,
+      withBytes: data,
+      bytesPerRow: bytesPerRow,
+      bytesPerImage: bytesPerImage
+    )
+  }
+
+  private func replace(
+    texture: MTLTexture,
+    region: MTLRegion,
+    bytes: [UInt8],
+    bytesPerVoxel: Int,
+    brickSize: Int
+  ) {
+    bytes.withUnsafeBytes { rawBytes in
+      guard let baseAddress = rawBytes.baseAddress else { return }
+      texture.replace(
+        region: region,
+        mipmapLevel: 0,
+        slice: 0,
+        withBytes: baseAddress,
+        bytesPerRow: brickSize * bytesPerVoxel,
+        bytesPerImage: brickSize * brickSize * bytesPerVoxel
+      )
+    }
   }
 
   /**
@@ -374,6 +480,10 @@ class VolumeAtlas {
       updateMetaBuffer()
     }
     encoder.setFragmentTexture(atlasTexture, index: atlasIndex)
+    encoder.setFragmentTexture(
+      secondaryAtlasTexture ?? atlasTexture,
+      index: TextureIndex.volumeAtlasSecondary.rawValue
+    )
     encoder.setFragmentBuffer(metaBuffer, offset: 0, index: metaIndex)
     encoder.setFragmentBuffer(levelTable, offset: 0, index: levelIndex)
   }
@@ -387,20 +497,34 @@ class VolumeAtlas {
    - componentCount: The number of components per voxel.
    - Returns: The corresponding MTLPixelFormat.
    */
-  static func getPixelFormat(bytesPerComponent: Int, componentCount: Int) -> MTLPixelFormat {
+  static func getPixelFormats(
+    bytesPerComponent: Int,
+    componentCount: Int
+  ) throws -> (primary: MTLPixelFormat, secondary: MTLPixelFormat?) {
     switch (bytesPerComponent, componentCount) {
-      case (1, 1): return .r8Unorm
-      case (1, 2): return .rg8Unorm
-      case (1, 4): return .rgba8Unorm
-      case (2, 1): return .r16Unorm
-      case (2, 2): return .rg16Unorm
-      case (2, 4): return .rgba16Unorm
-      case (4, 1): return .r32Uint
-      case (4, 2): return .rg32Uint
-      case (4, 4): return .rgba32Uint
+      case (1, 1): return (.r8Unorm, nil)
+      case (1, 2): return (.rg8Unorm, nil)
+      case (1, 3), (1, 4): return (.rgba8Unorm, nil)
+      case (2, 1): return (.rg8Unorm, nil)
+      case (2, 2): return (.rgba8Unorm, nil)
+      case (2, 3): return (.rgba8Unorm, .rg8Unorm)
+      case (2, 4): return (.rgba8Unorm, .rgba8Unorm)
+      // A scalar UInt32 is stored byte-for-byte in RGBA8. The shader combines
+      // the four filtered UNORM channels back into one normalized scalar.
+      case (4, 1): return (.rgba8Unorm, nil)
       default:
-        fatalError("Unsupported format: \(bytesPerComponent)-bytes, \(componentCount) components")
+        throw VolumeAtlasError.unsupportedFormat(
+          bytesPerComponent: bytesPerComponent,
+          componentCount: componentCount
+        )
     }
+  }
+
+  static func textureBytesPerVoxel(bytesPerComponent: Int, componentCount: Int) -> Int {
+    if bytesPerComponent == 1 && componentCount == 3 {
+      return 4
+    }
+    return bytesPerComponent * componentCount
   }
 
   /**
@@ -426,8 +550,9 @@ class VolumeAtlas {
 
    - Parameter transferFunction: The transfer function for emptiness computation.
    */
-  func updateEmptiness(transferFunction: TransferFunction1D) {
-    asyncEmptinessUpdater.updateTransferFunction(transferFunction: transferFunction)
+  func updateEmptiness(transferFunctions: [TransferFunction1D]) {
+    self.transferFunctions = transferFunctions
+    asyncEmptinessUpdater.updateTransferFunctions(transferFunctions)
   }
 
   /**
@@ -512,7 +637,7 @@ class VolumeAtlas {
       }
       
       if asyncEmptinessUpdater.brickIsEmpty(brickMetadata: metaData[newBrickID],
-                                            useTF: transferFunction) {
+                                            useTransferFunctions: transferFunctions) {
         metaStorage[newBrickID] = BI_EMPTY
         continue
       }
@@ -546,6 +671,7 @@ class VolumeAtlas {
         break
       }
 
+      // Update Brick meta data
       if pageMetadata[insertionPos].containsVisibleBrick() {
         metaStorage[pageMetadata[insertionPos].brickID] = BI_MISSING
       } else {
@@ -589,7 +715,10 @@ class VolumeAtlas {
                                                         height: Int,
                                                         depth: Int,
                                                         inCoreBrickCount: Int) {
-    let bytesPerVoxel = bytesPerComponent * componentCount
+    let bytesPerVoxel = textureBytesPerVoxel(
+      bytesPerComponent: bytesPerComponent,
+      componentCount: componentCount
+    )
     let brickVolume = brickSize * brickSize * brickSize
     let brickMemory = brickVolume * bytesPerVoxel
 

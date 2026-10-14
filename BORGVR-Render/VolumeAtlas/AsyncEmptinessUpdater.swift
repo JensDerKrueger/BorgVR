@@ -59,8 +59,8 @@ class AsyncEmptinessUpdater {
   private var hasChanged: Bool = false
   /// Lock for synchronizing transfer function updates.
   private let transferFunctionLock = NSLock()
-  /// The transfer function used to determine brick emptiness.
-  private var transferFunction = TransferFunction1D()
+  /// The transfer functions used to determine brick emptiness.
+  private var transferFunctions = [TransferFunction1D()]
   /// The current isovalue used when render mode is isoValue.
   private var isoValue: Int = 0
   /// The BorgVR dataset protocol instance providing volume data.
@@ -89,13 +89,13 @@ class AsyncEmptinessUpdater {
    - isoValue: The normalized isovalue (as a Float) to be converted to an integer.
    */
   init(borgData: BORGVRDatasetProtocol,
-       transferFunction: TransferFunction1D,
+       transferFunctions: [TransferFunction1D],
        isoValue: Float,
        logger: LoggerBase?) {
     self.borgData = borgData
     self.logger = logger
     self.isoValue = intIsoValue(normIsoValue: isoValue)
-    self.transferFunction = TransferFunction1D(copyFrom: transferFunction)
+    self.transferFunctions = transferFunctions.map { TransferFunction1D(copyFrom: $0) }
     computeChildTable()
 
     initialSynchronousUpdate()
@@ -178,10 +178,15 @@ class AsyncEmptinessUpdater {
    - useTF: The transfer function to use when evaluating emptiness.
    - Returns: True if the brick is considered empty; otherwise, false.
    */
-  func brickIsEmpty(brickMetadata: BrickMetadata, useTF: TransferFunction1D) -> Bool {
+  func brickIsEmpty(
+    brickMetadata: BrickMetadata,
+    useTransferFunctions: [TransferFunction1D]
+  ) -> Bool {
     switch renderMode {
       case .transferFunction1D, .transferFunction1DLighting:
-        return useTF.isBrickEmpty(brickMetadata: brickMetadata)
+        return useTransferFunctions.allSatisfy {
+          $0.isBrickEmpty(brickMetadata: brickMetadata)
+        }
       case .isoValue:
         return isoValue > brickMetadata.maxValue
     }
@@ -206,7 +211,7 @@ class AsyncEmptinessUpdater {
       let brickCount = self.borgData.getMetadata().brickMetadata.count
 
       // We'll use these to detect changes in the emptiness state.
-      var emptinessTF: TransferFunction1D!
+      var emptinessTransferFunctions: [TransferFunction1D] = []
       lastEmptiness = []
 
       while true {
@@ -223,9 +228,11 @@ class AsyncEmptinessUpdater {
         self.restartLock.withLock { self.shouldRestart = false }
 
         // If in transfer function render mode, make a local copy.
-        if renderMode == .transferFunction1D {
+        if renderMode == .transferFunction1D || renderMode == .transferFunction1DLighting {
           self.transferFunctionLock.withLock {
-            emptinessTF = TransferFunction1D(copyFrom: self.transferFunction)
+            emptinessTransferFunctions = self.transferFunctions.map {
+              TransferFunction1D(copyFrom: $0)
+            }
           }
         }
 
@@ -235,7 +242,7 @@ class AsyncEmptinessUpdater {
           if self.shouldRestart { break }
           let brickMetadata = self.borgData.getMetadata().brickMetadata[index]
           currentEmptiness[index] = self.brickIsEmpty(brickMetadata: brickMetadata,
-                                                      useTF: emptinessTF)
+                                                      useTransferFunctions: emptinessTransferFunctions)
         }
         if self.shouldRestart { continue }
 
@@ -311,7 +318,7 @@ class AsyncEmptinessUpdater {
     // Compute the emptiness for each brick.
     let emptiness = (0..<brickCount).map { index in
       brickIsEmpty(brickMetadata: metadata.brickMetadata[index],
-                   useTF: transferFunction)
+                   useTransferFunctions: transferFunctions)
     }
 
     // Update metaStorage based on computed emptiness.
@@ -359,12 +366,15 @@ class AsyncEmptinessUpdater {
 
    - Parameter transferFunction: The new transfer function.
    */
-  func updateTransferFunction(transferFunction: TransferFunction1D) {
+  func updateTransferFunctions(_ transferFunctions: [TransferFunction1D]) {
     transferFunctionLock.withLock {
-      if self.renderMode != .transferFunction1D ||
-          transferFunction.emptinessSignificantChange(self.transferFunction) {
+      let changed = transferFunctions.count != self.transferFunctions.count ||
+        zip(transferFunctions, self.transferFunctions).contains {
+          $0.emptinessSignificantChange($1)
+        }
+      if self.renderMode != .transferFunction1D || changed {
         self.renderMode = .transferFunction1D
-        self.transferFunction = TransferFunction1D(copyFrom: transferFunction)
+        self.transferFunctions = transferFunctions.map { TransferFunction1D(copyFrom: $0) }
         restartLock.withLock {
           self.shouldRestart = true
         }
@@ -380,7 +390,8 @@ class AsyncEmptinessUpdater {
    - Returns: The corresponding integer isovalue.
    */
   private func intIsoValue(normIsoValue: Float) -> Int {
-    return Int(normIsoValue * Float(1 << (8 * borgData.getMetadata().bytesPerComponent) - 1))
+    let normalizedValue = min(max(Double(normIsoValue), 0), 1)
+    return Int((normalizedValue * Double(borgData.getMetadata().rangeMax)).rounded())
   }
 
   /**

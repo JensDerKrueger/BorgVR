@@ -27,6 +27,10 @@ struct TransferFunctionEditorView: View {
 
   private var editorContent: some View {
     VStack(spacing: 10) {
+      if renderingParameters.componentCount > 1 {
+        dataChannelPicker
+      }
+
       if usesFlexibleCanvasHeight {
         transferFunctionCanvas
           .frame(minHeight: 150, maxHeight: .infinity)
@@ -54,6 +58,22 @@ struct TransferFunctionEditorView: View {
       Button("tf_save_dialog_cancel_button", role: .cancel) {}
     } message: {
       Text("tf_save_dialog_message")
+    }
+  }
+
+  private var dataChannelPicker: some View {
+    Picker(
+      "tf_data_channel",
+      selection: $renderingParameters.selectedTransferFunctionChannel
+    ) {
+      ForEach(0..<renderingParameters.componentCount, id: \.self) { channel in
+        Text(String(format: String(localized: "tf_data_channel_format"), channel + 1))
+          .tag(channel)
+      }
+    }
+    .pickerStyle(.segmented)
+    .onChange(of: renderingParameters.selectedTransferFunctionChannel) {
+      lastPaintPoint = nil
     }
   }
 

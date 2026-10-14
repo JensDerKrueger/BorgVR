@@ -103,7 +103,7 @@ export class BrickAtlas {
     };
   }
 
-  reset(manifest, transferFunction = null, options = {}) {
+  reset(manifest, transferFunctions = null, options = {}) {
     this.generation += 1;
     this.destroy();
     this.resetState();
@@ -116,16 +116,20 @@ export class BrickAtlas {
     this.uncompressedBrickByteLength = this.brickSize * this.brickSize * this.brickSize * this.bytesPerVoxel;
     this.datasetCompression = normalizeCompressionName(manifest.bricking?.compression) ?? "none";
     this.dataRangeMax = manifest.volume?.dataRange?.[1] ?? ((2 ** (8 * this.bytesPerComponent)) - 1);
-    this.textureFormat = this.bytesPerComponent === 1 ? "r8unorm" : "r16float";
-    this.textureBytesPerVoxel = this.bytesPerComponent === 1 ? 1 : 2;
+    const textureLayout = volumeTextureLayout(this.componentCount, this.bytesPerComponent);
+    this.textureFormat = textureLayout.primaryFormat;
+    this.textureBytesPerVoxel = textureLayout.primaryBytesPerVoxel;
+    this.secondaryTextureFormat = textureLayout.secondaryFormat;
+    this.secondaryTextureBytesPerVoxel = textureLayout.secondaryBytesPerVoxel;
     this.totalBrickCount = manifest.bricks.length;
     this.brickMeta = new Uint32Array(this.totalBrickCount);
     this.brickMeta.fill(BI_MISSING);
-    this.brickClassification = classifyBricks(manifest, transferFunction, options);
+    this.brickClassification = classifyBricks(manifest, transferFunctions, options);
     this.brickMeta.set(this.brickClassification.meta);
 
     const maxTextureBricks = Math.max(1, Math.floor(this.device.limits.maxTextureDimension3D / this.brickSize));
-    const brickTextureBytes = this.brickSize * this.brickSize * this.brickSize * this.textureBytesPerVoxel;
+    const brickTextureBytes = this.brickSize * this.brickSize * this.brickSize *
+      (this.textureBytesPerVoxel + this.secondaryTextureBytesPerVoxel);
     const maxMemoryBricks = Math.max(1, Math.floor(Math.cbrt(atlasMemoryBudgetBytes() / Math.max(1, brickTextureBytes))));
     const maxAtlasBricksPerAxis = Math.min(maxTextureBricks, maxMemoryBricks);
     const targetSlots = Math.min(Math.max(1, this.totalBrickCount), maxAtlasBricksPerAxis ** 3);
@@ -133,17 +137,20 @@ export class BrickAtlas {
     this.slotCapacity = targetSlots;
     this.textureSize = this.atlasBricksPerAxis * this.brickSize;
 
-    if (this.componentCount !== 1 || (this.bytesPerComponent !== 1 && this.bytesPerComponent !== 2)) {
-      this.statusCallback?.(`Atlas ready, but ${this.componentCount} x ${8 * this.bytesPerComponent}-bit bricks need a later texture-format path.`);
-      return;
-    }
-
     this.texture = this.device.createTexture({
       size: [this.textureSize, this.textureSize, this.textureSize],
       dimension: "3d",
       format: this.textureFormat,
       usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST
     });
+    if (this.secondaryTextureFormat) {
+      this.secondaryTexture = this.device.createTexture({
+        size: [this.textureSize, this.textureSize, this.textureSize],
+        dimension: "3d",
+        format: this.secondaryTextureFormat,
+        usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST
+      });
+    }
     const maxStorageBufferBindingSize = this.device.limits.maxStorageBufferBindingSize ?? this.device.limits.maxBufferSize;
     if (this.brickMeta.byteLength > maxStorageBufferBindingSize) {
       throw new Error(`Brick metadata buffer needs ${formatMiB(this.brickMeta.byteLength)}, but WebGPU only allows ${formatMiB(maxStorageBufferBindingSize)} storage-buffer bindings.`);
@@ -158,17 +165,17 @@ export class BrickAtlas {
     this.createWorker();
     this.configureWorker();
     this.statusCallback?.(
-      `Atlas ready: ${this.textureSize}³ ${this.textureFormat} voxels, ${this.slotCapacity} slots for ${this.totalBrickCount} bricks`
+      `Atlas ready: ${this.textureSize}³ ${this.textureFormat}${this.secondaryTextureFormat ? ` + ${this.secondaryTextureFormat}` : ""} voxels, ${this.slotCapacity} slots for ${this.totalBrickCount} bricks`
     );
     this.prefetchCoarsestLevel();
   }
 
-  reclassify(transferFunction = null, options = {}) {
+  reclassify(transferFunctions = null, options = {}) {
     if (!this.manifest || !this.brickMetaBuffer || this.brickMeta.length === 0) {
       return;
     }
 
-    this.brickClassification = classifyBricks(this.manifest, transferFunction, options);
+    this.brickClassification = classifyBricks(this.manifest, transferFunctions, options);
     const nextMeta = new Uint32Array(this.brickClassification.meta);
     for (const [brickID, slot] of this.loadedBricks) {
       if (nextMeta[brickID] === BI_MISSING) {
@@ -207,6 +214,7 @@ export class BrickAtlas {
   destroy() {
     this.destroyWorker();
     this.texture?.destroy();
+    this.secondaryTexture?.destroy();
     this.brickMetaBuffer?.destroy();
   }
 
@@ -216,7 +224,7 @@ export class BrickAtlas {
       return;
     }
     try {
-      this.worker = new Worker(new URL("./brick-worker.js?v=20260914-cache-summary", import.meta.url), { type: "module" });
+      this.worker = new Worker(new URL("./brick-worker.js?v=20261014-multichannel", import.meta.url), { type: "module" });
       this.worker.onmessage = (event) => this.handleWorkerMessage(event.data);
       this.worker.onerror = (event) => {
         for (const request of this.workerRequests.values()) {
@@ -246,9 +254,11 @@ export class BrickAtlas {
           uncompressedByteLength: brick.uncompressedByteLength ?? null
         })),
         brickSize: this.brickSize,
+        componentCount: this.componentCount,
         bytesPerComponent: this.bytesPerComponent,
         bytesPerVoxel: this.bytesPerVoxel,
         textureBytesPerVoxel: this.textureBytesPerVoxel,
+        secondaryTextureBytesPerVoxel: this.secondaryTextureBytesPerVoxel,
         dataRangeMax: this.dataRangeMax,
         uncompressedBrickByteLength: this.uncompressedBrickByteLength,
         datasetCompression: this.datasetCompression,
@@ -386,11 +396,14 @@ export class BrickAtlas {
     this.dataRangeMax = 1;
     this.textureFormat = "r8unorm";
     this.textureBytesPerVoxel = 1;
+    this.secondaryTextureFormat = null;
+    this.secondaryTextureBytesPerVoxel = 0;
     this.totalBrickCount = 0;
     this.atlasBricksPerAxis = 0;
     this.slotCapacity = 0;
     this.textureSize = 0;
     this.texture = null;
+    this.secondaryTexture = null;
     this.brickMetaBuffer = null;
     this.brickMeta = new Uint32Array(0);
     this.freeSlots = [];
@@ -797,27 +810,50 @@ export class BrickAtlas {
     const bytesPerRow = align(this.brickSize * this.textureBytesPerVoxel, 256);
     const rowsPerImage = this.brickSize;
     const paddedData = new Uint8Array(bytesPerRow * rowsPerImage * this.brickSize);
+    const secondaryBytesPerRow = this.secondaryTexture
+      ? align(this.brickSize * this.secondaryTextureBytesPerVoxel, 256)
+      : 0;
+    const secondaryData = this.secondaryTexture
+      ? new Uint8Array(secondaryBytesPerRow * rowsPerImage * this.brickSize)
+      : null;
     const sourceBytesPerRow = this.brickSize * this.bytesPerVoxel;
 
     for (let z = 0; z < this.brickSize; z += 1) {
       for (let y = 0; y < this.brickSize; y += 1) {
         const sourceOffset = (z * this.brickSize + y) * sourceBytesPerRow;
         const destinationOffset = (z * rowsPerImage + y) * bytesPerRow;
-        if (this.bytesPerComponent === 1) {
-          paddedData.set(brickData.subarray(sourceOffset, sourceOffset + sourceBytesPerRow), destinationOffset);
-        } else {
-          for (let x = 0; x < this.brickSize; x += 1) {
-            const sourceVoxelOffset = sourceOffset + x * this.bytesPerVoxel;
-            const value = brickData[sourceVoxelOffset] | (brickData[sourceVoxelOffset + 1] << 8);
-            const normalizedValue = Math.min(1, Math.max(0, value / Math.max(1, this.dataRangeMax)));
-            writeUInt16LE(paddedData, destinationOffset + x * this.textureBytesPerVoxel, float32ToFloat16Bits(normalizedValue));
+        const secondaryDestinationOffset = (z * rowsPerImage + y) * secondaryBytesPerRow;
+        for (let x = 0; x < this.brickSize; x += 1) {
+          const sourceVoxelOffset = sourceOffset + x * this.bytesPerVoxel;
+          const primaryVoxelOffset = destinationOffset + x * this.textureBytesPerVoxel;
+          const primaryComponentCount = Math.min(this.componentCount, 2);
+          const primaryByteCount = this.bytesPerComponent === 1
+            ? this.componentCount
+            : primaryComponentCount * this.bytesPerComponent;
+          paddedData.set(
+            brickData.subarray(sourceVoxelOffset, sourceVoxelOffset + primaryByteCount),
+            primaryVoxelOffset
+          );
+          if (secondaryData) {
+            const secondarySourceOffset = sourceVoxelOffset + 2 * this.bytesPerComponent;
+            const secondaryByteCount = (this.componentCount - 2) * this.bytesPerComponent;
+            secondaryData.set(
+              brickData.subarray(secondarySourceOffset, secondarySourceOffset + secondaryByteCount),
+              secondaryDestinationOffset + x * this.secondaryTextureBytesPerVoxel
+            );
           }
         }
       }
     }
     this.recordProfile("uploadPrepareMs", now() - prepareStart);
-    this.profile.uploadedBytes += paddedData.byteLength;
-    return { data: paddedData, bytesPerRow, rowsPerImage };
+    this.profile.uploadedBytes += paddedData.byteLength + (secondaryData?.byteLength ?? 0);
+    return {
+      data: paddedData,
+      bytesPerRow,
+      rowsPerImage,
+      secondaryData,
+      secondaryBytesPerRow
+    };
   }
 
   uploadPreparedBrick(slot, preparedBrick) {
@@ -829,6 +865,17 @@ export class BrickAtlas {
       { bytesPerRow: preparedBrick.bytesPerRow, rowsPerImage: preparedBrick.rowsPerImage },
       [this.brickSize, this.brickSize, this.brickSize]
     );
+    if (this.secondaryTexture && preparedBrick.secondaryData) {
+      this.device.queue.writeTexture(
+        { texture: this.secondaryTexture, origin },
+        preparedBrick.secondaryData,
+        {
+          bytesPerRow: preparedBrick.secondaryBytesPerRow,
+          rowsPerImage: preparedBrick.rowsPerImage
+        },
+        [this.brickSize, this.brickSize, this.brickSize]
+      );
+    }
     this.recordProfile("uploadSubmitMs", now() - uploadStart);
   }
 
@@ -894,13 +941,16 @@ function createAtlasProfile() {
   };
 }
 
-function classifyBricks(manifest, transferFunction, options = {}) {
+function classifyBricks(manifest, transferFunctions, options = {}) {
   const bricks = manifest.bricks ?? [];
   const meta = new Uint32Array(bricks.length);
   meta.fill(BI_MISSING);
   const renderMode = options.renderMode ?? 0;
 
-  if (!transferFunction && renderMode !== 2) {
+  const activeTransferFunctions = Array.isArray(transferFunctions)
+    ? transferFunctions.filter(Boolean)
+    : (transferFunctions ? [transferFunctions] : []);
+  if (activeTransferFunctions.length === 0 && renderMode !== 2) {
     return { meta, emptyCount: 0, childEmptyCount: 0, fullyOpaqueCount: 0 };
   }
 
@@ -919,8 +969,12 @@ function classifyBricks(manifest, transferFunction, options = {}) {
       empty[brick.index] = maxValue < isoRawValue;
       fullyOpaque[brick.index] = false;
     } else {
-      empty[brick.index] = transferFunction.isRangeEmpty(minValue, maxValue, rangeMax);
-      fullyOpaque[brick.index] = transferFunction.isRangeFullyOpaque(minValue, maxValue, rangeMax);
+      empty[brick.index] = activeTransferFunctions.every(
+        (transferFunction) => transferFunction.isRangeEmpty(minValue, maxValue, rangeMax)
+      );
+      fullyOpaque[brick.index] = activeTransferFunctions.some(
+        (transferFunction) => transferFunction.isRangeFullyOpaque(minValue, maxValue, rangeMax)
+      );
     }
   }
 
@@ -955,6 +1009,44 @@ function classifyBricks(manifest, transferFunction, options = {}) {
   }
 
   return { meta, emptyCount, childEmptyCount, fullyOpaqueCount };
+}
+
+function volumeTextureLayout(componentCount, bytesPerComponent) {
+  if (componentCount < 1 || componentCount > 4) {
+    throw new Error(`WebGPU supports one to four volume channels, not ${componentCount}.`);
+  }
+  if (bytesPerComponent === 4) {
+    if (componentCount !== 1) {
+      throw new Error("Multi-channel volumes with more than 16 bits per channel are not supported.");
+    }
+    return {
+      primaryFormat: "rgba8unorm",
+      primaryBytesPerVoxel: 4,
+      secondaryFormat: null,
+      secondaryBytesPerVoxel: 0
+    };
+  }
+  if (bytesPerComponent === 1) {
+    return {
+      primaryFormat: componentCount === 1
+        ? "r8unorm"
+        : (componentCount === 2 ? "rg8unorm" : "rgba8unorm"),
+      primaryBytesPerVoxel: componentCount === 1 ? 1 : (componentCount === 2 ? 2 : 4),
+      secondaryFormat: null,
+      secondaryBytesPerVoxel: 0
+    };
+  }
+  if (bytesPerComponent === 2) {
+    return {
+      primaryFormat: componentCount === 1 ? "rg8unorm" : "rgba8unorm",
+      primaryBytesPerVoxel: componentCount === 1 ? 2 : 4,
+      secondaryFormat: componentCount >= 3
+        ? (componentCount === 3 ? "rg8unorm" : "rgba8unorm")
+        : null,
+      secondaryBytesPerVoxel: componentCount === 3 ? 2 : (componentCount === 4 ? 4 : 0)
+    };
+  }
+  throw new Error(`Unsupported volume format: ${componentCount} x ${8 * bytesPerComponent}-bit.`);
 }
 
 function clamp(value, min, max) {
@@ -1053,36 +1145,6 @@ function buildChildTable(levels, totalBrickCount) {
   }
 
   return childTable;
-}
-
-function writeUInt16LE(data, offset, value) {
-  data[offset] = value & 0xff;
-  data[offset + 1] = (value >> 8) & 0xff;
-}
-
-function float32ToFloat16Bits(value) {
-  const floatView = new Float32Array(1);
-  const intView = new Uint32Array(floatView.buffer);
-  floatView[0] = value;
-
-  const bits = intView[0];
-  const sign = (bits >>> 16) & 0x8000;
-  let exponent = ((bits >>> 23) & 0xff) - 127 + 15;
-  let mantissa = bits & 0x7fffff;
-
-  if (exponent <= 0) {
-    if (exponent < -10) {
-      return sign;
-    }
-    mantissa = (mantissa | 0x800000) >>> (1 - exponent);
-    return sign | ((mantissa + 0x1000) >>> 13);
-  }
-
-  if (exponent >= 31) {
-    return sign | 0x7c00;
-  }
-
-  return sign | (exponent << 10) | ((mantissa + 0x1000) >>> 13);
 }
 
 function align(value, alignment) {

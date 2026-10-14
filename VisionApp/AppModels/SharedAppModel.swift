@@ -1,4 +1,5 @@
 import Foundation
+import Metal
 import RealityKit
 
 enum ScreenViewPresentation {
@@ -55,6 +56,7 @@ struct VisionSharePlayTransformUpdate {
 */
 @Observable
 class SharedAppModel {
+  static let maximumTransferFunctionCount = 4
   static func saturatedStrokeColor(preservingHueOf color: SIMD4<Float>) -> SIMD4<Float> {
     let maximum = max(color.x, color.y, color.z)
     let minimum = min(color.x, color.y, color.z)
@@ -106,8 +108,16 @@ class SharedAppModel {
   /// last translationvector used when the previous event ended
   var lastTranslationClipping: SIMD3<Float>
 
-  /// The 1D transfer function for color mapping.
-  var transferFunction: TransferFunction1D
+  /// One independently editable 1D transfer function per volume component.
+  let transferFunctions: [TransferFunction1D]
+  private(set) var componentCount: Int
+  var selectedTransferFunctionChannel: Int
+  var transferFunction: TransferFunction1D {
+    transferFunctions[min(max(selectedTransferFunctionChannel, 0), componentCount - 1)]
+  }
+  var activeTransferFunctions: ArraySlice<TransferFunction1D> {
+    transferFunctions.prefix(componentCount)
+  }
 
   /// Normalized isovalue between 0.0 and 1.0.
   var normIsoValue: Float
@@ -221,7 +231,9 @@ class SharedAppModel {
     clipMin = .zero
     clipMax = .zero
     lastTranslationClipping = .zero
-    transferFunction = .init()
+    transferFunctions = (0..<Self.maximumTransferFunctionCount).map { _ in TransferFunction1D() }
+    componentCount = 1
+    selectedTransferFunctionChannel = 0
     normIsoValue = 0
     renderMode = .transferFunction1D
     brickVis = false
@@ -371,15 +383,13 @@ class SharedAppModel {
    - maxValue: The new maximum data value.
    - rangeMax: The overall maximum range value.
    */
-  func updateRanges(minValue: Int, maxValue: Int, rangeMax: Int) {
+  func updateRanges(minValue: Int, maxValue: Int, rangeMax: Int, componentCount: Int = 1) {
     self.minValue = minValue
     self.maxValue = maxValue
     self.rangeMax = rangeMax
-    self.transferFunction.updateRanges(
-      minValue: minValue,
-      maxValue: maxValue,
-      rangeMax: rangeMax
-    )
+    self.componentCount = min(max(componentCount, 1), Self.maximumTransferFunctionCount)
+    selectedTransferFunctionChannel = min(selectedTransferFunctionChannel, self.componentCount - 1)
+    updateTransferFunctionRanges()
   }
 
   func loadTransferFunction(from url: URL) throws {
@@ -632,7 +642,10 @@ class SharedAppModel {
   func reset() {
     resetModel()
     resetClipBoundsToVolume()
-    transferFunction.reset()
+    for transferFunction in transferFunctions {
+      transferFunction.reset()
+    }
+    selectedTransferFunctionChannel = 0
     resetIsoValue()
     renderMode = .transferFunction1D
     brickVis = false
@@ -1020,7 +1033,7 @@ class SharedAppModel {
   /// Magic identifier for serialized RenderingParamaters blobs.
   private static let streamMagic: UInt32 = 0x5250_414D // "RPAM"
   /// Protocl format version.
-  private static let streamVersion: UInt16 = 2
+  private static let streamVersion: UInt16 = 4
 
   enum UpdateKind {
     case full          // includes TF
@@ -1082,9 +1095,9 @@ class SharedAppModel {
     w.write(normIsoValue)
     w.write(renderMode.serialize())
     w.write(UInt8(brickVis ? 1 : 0))
-    w.write(Int32(minValue))
-    w.write(Int32(maxValue))
-    w.write(Int32(rangeMax))
+    w.write(Int64(minValue))
+    w.write(Int64(maxValue))
+    w.write(Int64(rangeMax))
     w.write(UInt8(purgeAtlas ? 1 : 0))
     w.writeSIMD3(lightDirection)
     w.writeSIMD3(ambientLightColor)
@@ -1093,9 +1106,7 @@ class SharedAppModel {
 
     // Optional transfer function block
     if case .full = kind {
-      let tfData = transferFunction.serialize()
-      w.write(UInt32(tfData.count))
-      w.writeRaw(tfData)
+      writeTransferFunctions(to: &w)
     }
 
     return w.data
@@ -1113,18 +1124,16 @@ class SharedAppModel {
     w.write(normIsoValue)
     w.write(renderMode.serialize())
     w.write(UInt8(brickVis ? 1 : 0))
-    w.write(Int32(minValue))
-    w.write(Int32(maxValue))
-    w.write(Int32(rangeMax))
+    w.write(Int64(minValue))
+    w.write(Int64(maxValue))
+    w.write(Int64(rangeMax))
     w.writeSIMD3(lightDirection)
     w.writeSIMD3(ambientLightColor)
     w.writeSIMD3(diffuseLightColor)
     w.writeSIMD3(specularLightColor)
 
     if includeTransferFunction {
-      let tfData = transferFunction.serialize()
-      w.write(UInt32(tfData.count))
-      w.writeRaw(tfData)
+      writeTransferFunctions(to: &w)
     }
 
     return w.data
@@ -1235,7 +1244,9 @@ class SharedAppModel {
     let magic: UInt32 = try r.read()
     guard magic == Self.streamMagic else { throw SharedAppModelError.badMagic }
     let version: UInt16 = try r.read()
-    guard version == Self.streamVersion else { throw SharedAppModelError.unsupportedVersion(version) }
+    guard version == 2 || version == 3 || version == Self.streamVersion else {
+      throw SharedAppModelError.unsupportedVersion(version)
+    }
     let flags: UInt16 = try r.read()
     let kind = UpdateKind.from(flags: flags)
 
@@ -1263,9 +1274,15 @@ class SharedAppModel {
     self.normIsoValue = try r.read()
     self.renderMode = RenderMode.deserialize(try r.read())
     self.brickVis = (try r.read() as UInt8) != 0
-    self.minValue = Int(try r.read() as Int32)
-    self.maxValue = Int(try r.read() as Int32)
-    self.rangeMax = Int(try r.read() as Int32)
+    if version >= 3 {
+      self.minValue = Int(try r.read() as Int64)
+      self.maxValue = Int(try r.read() as Int64)
+      self.rangeMax = Int(try r.read() as Int64)
+    } else {
+      self.minValue = Int(try r.read() as Int32)
+      self.maxValue = Int(try r.read() as Int32)
+      self.rangeMax = Int(try r.read() as Int32)
+    }
     self.purgeAtlas = (try r.read() as UInt8) != 0
     applyLightingState(BorgVRLightingState(
       direction: try r.readSIMD3(),
@@ -1276,16 +1293,16 @@ class SharedAppModel {
 
     // Optional TF
     if case .full = kind {
-      let tfLen: UInt32 = try r.read()
-      let tfData = try r.readRaw(Int(tfLen))
-      try? self.transferFunction.update(from: tfData)
-      // Make sure TF sees the new ranges (defensive)
+      if version >= 4 {
+        try readTransferFunctions(from: &r)
+      } else {
+        let tfLen: UInt32 = try r.read()
+        let tfData = try r.readRaw(Int(tfLen))
+        try? transferFunctions[0].update(from: tfData)
+      }
     }
 
-    // Keep TF’s range consistent even if TF blob does not follow.
-    self.transferFunction.updateRanges(minValue: self.minValue,
-                                       maxValue: self.maxValue,
-                                       rangeMax: self.rangeMax)
+    updateTransferFunctionRanges()
 
     // Strictness check
     if !r.isAtEnd { throw SharedAppModelError.trailingBytes(r.remainingCount) }
@@ -1341,9 +1358,9 @@ class SharedAppModel {
     normIsoValue = try r.read()
     renderMode = RenderMode.deserialize(try r.read())
     brickVis = (try r.read() as UInt8) != 0
-    minValue = Int(try r.read() as Int32)
-    maxValue = Int(try r.read() as Int32)
-    rangeMax = Int(try r.read() as Int32)
+    minValue = Int(try r.read() as Int64)
+    maxValue = Int(try r.read() as Int64)
+    rangeMax = Int(try r.read() as Int64)
     applyLightingState(BorgVRLightingState(
       direction: try r.readSIMD3(),
       ambientColor: try r.readSIMD3(),
@@ -1352,14 +1369,59 @@ class SharedAppModel {
     ))
 
     if includesTransferFunction {
-      let tfLen: UInt32 = try r.read()
-      let tfData = try r.readRaw(Int(tfLen))
-      try? transferFunction.update(from: tfData)
+      try readTransferFunctions(from: &r)
     }
 
-    transferFunction.updateRanges(minValue: minValue,
-                                  maxValue: maxValue,
-                                  rangeMax: rangeMax)
+    updateTransferFunctionRanges()
+  }
+
+  func initTransferFunctionMetal(device: MTLDevice) {
+    for transferFunction in transferFunctions {
+      transferFunction.initMetal(device: device)
+    }
+  }
+
+  func bindTransferFunctions(to encoder: MTLRenderCommandEncoder) throws {
+    let indices = [
+      TextureIndex.transferFunction.rawValue,
+      TextureIndex.transferFunction2.rawValue,
+      TextureIndex.transferFunction3.rawValue,
+      TextureIndex.transferFunction4.rawValue
+    ]
+    for index in transferFunctions.indices {
+      try transferFunctions[index].bind(to: encoder, index: indices[index])
+    }
+  }
+
+  private func writeTransferFunctions(to writer: inout DataWriter) {
+    writer.write(UInt8(componentCount))
+    writer.write(UInt8(selectedTransferFunctionChannel))
+    for transferFunction in activeTransferFunctions {
+      let data = transferFunction.serialize()
+      writer.write(UInt32(data.count))
+      writer.writeRaw(data)
+    }
+  }
+
+  private func readTransferFunctions(from reader: inout DataReader) throws {
+    let count = Int(try reader.read() as UInt8)
+    let selectedChannel = Int(try reader.read() as UInt8)
+    guard (1...Self.maximumTransferFunctionCount).contains(count) else {
+      throw SharedAppModelError.unsupportedTransferFunctionCount(count)
+    }
+    componentCount = count
+    selectedTransferFunctionChannel = min(selectedChannel, count - 1)
+    for index in 0..<count {
+      let length: UInt32 = try reader.read()
+      let data = try reader.readRaw(Int(length))
+      try transferFunctions[index].update(from: data)
+    }
+  }
+
+  private func updateTransferFunctionRanges() {
+    for transferFunction in transferFunctions {
+      transferFunction.updateRanges(minValue: minValue, maxValue: maxValue, rangeMax: rangeMax)
+    }
   }
 
   private func applyLightingState(_ state: BorgVRLightingState) {
@@ -1392,6 +1454,7 @@ enum SharedAppModelError: Error, CustomStringConvertible {
   case outOfBounds
   case invalidString
   case trailingBytes(Int)
+  case unsupportedTransferFunctionCount(Int)
 
   var description: String {
     switch self {
@@ -1401,6 +1464,8 @@ enum SharedAppModelError: Error, CustomStringConvertible {
       case .outOfBounds: return "Unexpected end of data."
       case .invalidString: return "Invalid string data."
       case .trailingBytes(let n): return "Trailing \(n) byte(s) after record."
+      case .unsupportedTransferFunctionCount(let count):
+        return "Unsupported transfer-function count \(count)."
     }
   }
 }

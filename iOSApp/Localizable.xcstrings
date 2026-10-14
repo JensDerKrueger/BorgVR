@@ -4,6 +4,22 @@
     "" : {
 
     },
+    "tf_data_channel" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Datenkanal" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Data channel" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Canal de datos" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Canal de données" } }
+      }
+    },
+    "tf_data_channel_format" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Kanal %d" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Channel %d" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Canal %d" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Canal %d" } }
+      }
+    },
     "(password)" : {
       "extractionState" : "stale",
       "localizations" : {

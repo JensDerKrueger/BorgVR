@@ -10,6 +10,116 @@ using namespace metal;
 #define MAX_RETRIES 10
 #endif
 
+#ifndef VOLUME_SCALAR_UINT32_PACKED
+#define VOLUME_SCALAR_UINT32_PACKED 0
+#endif
+
+#ifndef VOLUME_COMPONENT_COUNT
+#define VOLUME_COMPONENT_COUNT 1
+#endif
+
+#ifndef VOLUME_BYTES_PER_COMPONENT
+#define VOLUME_BYTES_PER_COMPONENT 1
+#endif
+
+inline float decodePackedUInt16(float2 bytes) {
+  return dot(bytes, float2(1.0, 256.0)) / 257.0;
+}
+
+inline float4 sampleVolumeComponents(texture3d<float, access::sample> volume,
+                                     texture3d<float, access::sample> secondaryVolume,
+                                     sampler volumeSampler,
+                                     float3 coordinates) {
+  float4 primary = volume.sample(volumeSampler, coordinates);
+#if VOLUME_SCALAR_UINT32_PACKED
+  return float4(
+    dot(primary, float4(1.0, 256.0, 65536.0, 16777216.0)) / 16843009.0,
+    0.0,
+    0.0,
+    0.0
+  );
+#elif VOLUME_BYTES_PER_COMPONENT == 2
+  float4 result = float4(
+    decodePackedUInt16(primary.rg),
+#if VOLUME_COMPONENT_COUNT >= 2
+    decodePackedUInt16(primary.ba),
+#else
+    0.0,
+#endif
+    0.0,
+    0.0
+  );
+#if VOLUME_COMPONENT_COUNT >= 3
+  float4 secondary = secondaryVolume.sample(volumeSampler, coordinates);
+  result.z = decodePackedUInt16(secondary.rg);
+#if VOLUME_COMPONENT_COUNT >= 4
+  result.w = decodePackedUInt16(secondary.ba);
+#endif
+#endif
+  return result;
+#else
+#if VOLUME_COMPONENT_COUNT == 1
+  return float4(primary.x, 0.0, 0.0, 0.0);
+#elif VOLUME_COMPONENT_COUNT == 2
+  return float4(primary.xy, 0.0, 0.0);
+#elif VOLUME_COMPONENT_COUNT == 3
+  return float4(primary.xyz, 0.0);
+#else
+  return primary;
+#endif
+#endif
+}
+
+inline float sampleVolumeScalar(texture3d<float, access::sample> volume,
+                                texture3d<float, access::sample> secondaryVolume,
+                                sampler volumeSampler,
+                                float3 coordinates) {
+  float4 components = sampleVolumeComponents(
+    volume,
+    secondaryVolume,
+    volumeSampler,
+    coordinates
+  );
+  return dot(components, float4(1.0)) / float(VOLUME_COMPONENT_COUNT);
+}
+
+inline float4 sampleTransferFunctions(float4 components,
+                                      float transferBias,
+                                      sampler transferSampler,
+                                      texture1d<half, access::sample> transferFunction1,
+                                      texture1d<half, access::sample> transferFunction2,
+                                      texture1d<half, access::sample> transferFunction3,
+                                      texture1d<half, access::sample> transferFunction4) {
+  float4 sample1 = float4(transferFunction1.sample(
+    transferSampler,
+    components.x * transferBias
+  ));
+  float3 premultipliedColor = sample1.rgb * sample1.a;
+  float alphaSum = sample1.a;
+#if VOLUME_COMPONENT_COUNT >= 2
+  float4 sample2 = float4(transferFunction2.sample(transferSampler, components.y * transferBias));
+  premultipliedColor += sample2.rgb * sample2.a;
+  alphaSum += sample2.a;
+#endif
+#if VOLUME_COMPONENT_COUNT >= 3
+  float4 sample3 = float4(transferFunction3.sample(transferSampler, components.z * transferBias));
+  premultipliedColor += sample3.rgb * sample3.a;
+  alphaSum += sample3.a;
+#endif
+#if VOLUME_COMPONENT_COUNT >= 4
+  float4 sample4 = float4(transferFunction4.sample(transferSampler, components.w * transferBias));
+  premultipliedColor += sample4.rgb * sample4.a;
+  alphaSum += sample4.a;
+#endif
+  if (alphaSum <= 1e-6) {
+    return float4(0.0);
+  }
+  return float4(
+    clamp(premultipliedColor / alphaSum, 0.0, 1.0),
+    min(alphaSum, 1.0)
+  );
+}
+
 /**
  Performs under compositing of two RGBA colors.
 
@@ -143,15 +253,16 @@ inline half3 lighting(half3 position,
 float3 computeGradient(
                        float3 vCenter,
                        float3 sampleDelta,
-                       texture3d<half, access::sample> volume [[texture(0)]],
+                       texture3d<float, access::sample> volume [[texture(0)]],
+                       texture3d<float, access::sample> secondaryVolume,
                        sampler s
                        ) {
-  float fVolumValXp = volume.sample(s, vCenter + float3(+sampleDelta.x, 0, 0)).r;
-  float fVolumValXm = volume.sample(s, vCenter + float3(-sampleDelta.x, 0, 0)).r;
-  float fVolumValYp = volume.sample(s, vCenter + float3(0, +sampleDelta.y, 0)).r;
-  float fVolumValYm = volume.sample(s, vCenter + float3(0, -sampleDelta.y, 0)).r;
-  float fVolumValZp = volume.sample(s, vCenter + float3(0, 0, +sampleDelta.z)).r;
-  float fVolumValZm = volume.sample(s, vCenter + float3(0, 0, -sampleDelta.z)).r;
+  float fVolumValXp = sampleVolumeScalar(volume, secondaryVolume, s, vCenter + float3(+sampleDelta.x, 0, 0));
+  float fVolumValXm = sampleVolumeScalar(volume, secondaryVolume, s, vCenter + float3(-sampleDelta.x, 0, 0));
+  float fVolumValYp = sampleVolumeScalar(volume, secondaryVolume, s, vCenter + float3(0, +sampleDelta.y, 0));
+  float fVolumValYm = sampleVolumeScalar(volume, secondaryVolume, s, vCenter + float3(0, -sampleDelta.y, 0));
+  float fVolumValZp = sampleVolumeScalar(volume, secondaryVolume, s, vCenter + float3(0, 0, +sampleDelta.z));
+  float fVolumValZm = sampleVolumeScalar(volume, secondaryVolume, s, vCenter + float3(0, 0, -sampleDelta.z));
 
   return float3(
                 fVolumValXp - fVolumValXm,
@@ -186,10 +297,11 @@ float3 computeNormal(
                      float3 vCenter,
                      float3 volSize,
                      float3 DomainScale,
-                     texture3d<half, access::sample> volume [[texture(0)]],
+                     texture3d<float, access::sample> volume [[texture(0)]],
+                     texture3d<float, access::sample> secondaryVolume,
                      sampler s
                      ) {
-  float3 vGradient = computeGradient(vCenter, 1/volSize, volume, s);
+  float3 vGradient = computeGradient(vCenter, 1/volSize, volume, secondaryVolume, s);
   float3 vNormal   = vGradient * DomainScale;
   return safeNormalize(vNormal);
 }
@@ -209,14 +321,15 @@ inline float3 refineIsosurface(
                                float3 vRayDir,
                                float3 vCurrentPos,
                                float fIsoval,
-                               texture3d<half, access::sample> volume [[texture(0)]],
+                               texture3d<float, access::sample> volume [[texture(0)]],
+                               texture3d<float, access::sample> secondaryVolume,
                                sampler s
                                ) {
   vRayDir    /= 2.0;
   vCurrentPos -= vRayDir;
   for (int i = 0; i < 5; i++) {
     vRayDir /= 2.0;
-    float voxel = volume.sample(s, vCurrentPos).x;
+    float voxel = sampleVolumeScalar(volume, secondaryVolume, s, vCurrentPos);
     if (voxel >= fIsoval) {
       vCurrentPos -= vRayDir;
     } else {

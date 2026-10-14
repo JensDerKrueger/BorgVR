@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>BorgVR WebGPU</title>
     <link rel="icon" href="./assets/borgvr.jpg">
-    <link rel="stylesheet" href="./styles/main.css?v=20261008-measurement-labels">
+    <link rel="stylesheet" href="./styles/main.css?v=20261014-multichannel">
   </head>
   <body>
     <main class="app-shell">
@@ -72,7 +72,13 @@
           </div>
 
           <section id="tf-editor" class="control-panel editor-panel" data-editor-mode="transfer">
-            <div class="panel-title">Transfer Function</div>
+            <div class="tf-panel-heading">
+              <div class="panel-title">Transfer Function</div>
+              <label id="tf-data-channel-row" class="tf-data-channel-row" hidden>
+                <span>Data channel</span>
+                <select id="tf-data-channel" aria-label="Volume data channel"></select>
+              </label>
+            </div>
             <canvas id="tf-editor-canvas" class="tf-editor-canvas" width="512" height="180" aria-label="Transfer function editor"></canvas>
             <div class="editor-toolbar">
               <div class="tf-channel-row" aria-label="Transfer function channels">
@@ -185,7 +191,7 @@
       </section>
     </main>
 
-    <script type="module" src="./src/app.js?v=20261008-measurement-labels"></script>
+    <script type="module" src="./src/app.js?v=20261014-multichannel"></script>
   </body>
 </html>
 

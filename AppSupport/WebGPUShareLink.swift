@@ -20,7 +20,7 @@ enum WebGPUShareLink {
   static func datasetURL(
     baseURL: URL,
     datasetID: String,
-    transferFunction: TransferFunction1D,
+    transferFunctions: [TransferFunction1D],
     renderMode: RenderMode,
     normalizedIsoValue: Float
   ) -> URL? {
@@ -32,10 +32,15 @@ enum WebGPUShareLink {
     if renderMode == .isoValue {
       queryItems.append(URLQueryItem(name: "iso", value: normalizedIsoValueURLString(normalizedIsoValue)))
     } else {
-      guard let encodedTransferFunction = encodeTransferFunctionURLValue(transferFunction) else {
-        return nil
+      for (index, transferFunction) in transferFunctions.prefix(4).enumerated() {
+        guard let encodedTransferFunction = encodeTransferFunctionURLValue(transferFunction) else {
+          return nil
+        }
+        queryItems.append(URLQueryItem(
+          name: index == 0 ? "TF" : "TF\(index + 1)",
+          value: encodedTransferFunction
+        ))
       }
-      queryItems.append(URLQueryItem(name: "TF", value: encodedTransferFunction))
     }
 
     var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false)

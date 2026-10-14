@@ -686,7 +686,7 @@ struct RenderControlsPanel: View {
     return WebGPUShareLink.datasetURL(
       baseURL: baseURL,
       datasetID: dataset.uniqueId,
-      transferFunction: renderingParameters.transferFunction,
+      transferFunctions: Array(renderingParameters.activeTransferFunctions),
       renderMode: renderingParameters.renderMode,
       normalizedIsoValue: renderingParameters.normIsoValue
     )

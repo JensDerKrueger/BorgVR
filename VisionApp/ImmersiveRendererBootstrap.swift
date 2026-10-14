@@ -120,7 +120,8 @@ enum ImmersiveBootstrap {
     // sample counts keep the active dataset normalization.
     sharedAppModel.updateRanges(minValue: dataset.getMetadata().minValue,
                                 maxValue: dataset.getMetadata().maxValue,
-                                rangeMax: dataset.getMetadata().rangeMax)
+                                rangeMax: dataset.getMetadata().rangeMax,
+                                componentCount: dataset.getMetadata().componentCount)
 
     if storedAppModel.autoloadTF {
       let fileURL = URL(

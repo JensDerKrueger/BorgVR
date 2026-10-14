@@ -1248,3 +1248,5 @@
 "The dataset state contains invalid values." = "L’état du jeu de données contient des valeurs non valides.";
 "The dataset state file is too large." = "Le fichier d’état du jeu de données est trop volumineux.";
 "The spatial view is not available yet." = "La vue spatiale n’est pas encore disponible.";
+"tf_data_channel" = "Canal de données";
+"tf_data_channel_format" = "Canal %d";

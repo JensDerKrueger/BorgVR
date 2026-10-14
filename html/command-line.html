@@ -31,7 +31,7 @@ TerminalConverterApp P &lt;input-file&gt;      &lt;output.data&gt; &lt;descripti
           <pre><code>TerminalConverterApp E &lt;input.data&gt; &lt;output.nrrd&gt; &lt;lod&gt;</code></pre>
           <p data-de="Der Export rekonstruiert die gewählte Detailstufe als unkomprimierte Inline-NRRD-Datei. LoD <code>0</code> enthält die volle Auflösung; höhere Werte wählen die gespeicherten, heruntergerechneten Stufen. Brick-Überlappung und Randauffüllung werden dabei entfernt und der physikalische Voxelabstand an die Detailstufe angepasst.">Export reconstructs the selected level of detail as an uncompressed inline NRRD file. LoD <code>0</code> contains the full resolution; higher values select the stored downsampled levels. Brick overlap and boundary padding are removed, and physical voxel spacing is adjusted for the selected level.</p>
           <h3 data-de="Synthetische Datensätze">Synthetic datasets</h3>
-          <pre><code>TerminalConverterApp C &lt;algorithm&gt; &lt;bytes-per-component&gt; &lt;components&gt; \
+          <pre><code>TerminalConverterApp C &lt;algorithm[,algorithm...]&gt; &lt;bytes-per-component&gt; &lt;components&gt; \
   &lt;size-x&gt; &lt;size-y&gt; &lt;size-z&gt; &lt;output.data&gt; &lt;description&gt; \
   &lt;brick-size&gt; &lt;overlap&gt;</code></pre>
           <div class="table-wrap"><table><thead><tr><th>ID</th><th data-de="Generator">Generator</th><th data-de="Ausführung">Execution</th></tr></thead><tbody>
@@ -43,10 +43,11 @@ TerminalConverterApp P &lt;input-file&gt;      &lt;output.data&gt; &lt;descripti
             <tr><td><code>G</code></td><td>Gyroid</td><td data-de="Metal, automatischer CPU-Fallback">Metal with automatic CPU fallback</td></tr>
             <tr><td><code>P</code></td><td data-de="3D-Shepp-Logan-Phantom">3D Shepp-Logan phantom</td><td data-de="Metal, automatischer CPU-Fallback">Metal with automatic CPU fallback</td></tr>
             <tr><td><code>T</code></td><td data-de="Frequenz-Chirp mit Brick-Grenztest">Frequency chirp with brick-boundary test</td><td data-de="Metal, automatischer CPU-Fallback">Metal with automatic CPU fallback</td></tr>
+            <tr><td><code>U</code></td><td data-de="Skalarer UInt32-Test über den gesamten Wertebereich">Scalar full-range UInt32 test</td><td>CPU</td></tr>
           </tbody></table></div>
-          <p data-de="Die GPU-Generatoren arbeiten Schicht für Schicht, sodass auch große Volumen erzeugt werden können, ohne das gesamte Ergebnis gleichzeitig im GPU-Speicher zu halten. Der Konverter unterstützt Komponenten mit 1, 2 oder 4 Byte und kann mehrkanalige BorgVR-Dateien schreiben.">GPU generators operate slice by slice, allowing large volumes to be created without keeping the complete result in GPU memory. The converter supports 1-, 2-, or 4-byte components and can write multi-component BorgVR files.</p>
-          <pre><code>TerminalConverterApp C J 2 1 512 512 512 QuaternionJulia.data \
-  "Quaternion Julia set" 64 2</code></pre>
+          <p data-de="Die GPU-Generatoren arbeiten Schicht für Schicht, sodass auch große Volumen erzeugt werden können, ohne das gesamte Ergebnis gleichzeitig im GPU-Speicher zu halten. Für Mehrkanaldaten wird in Kanalreihenfolge pro Kanal ein durch Komma getrenntes Generator-Kürzel angegeben; ein einzelnes Kürzel wird für alle Kanäle verwendet. Mehrkanaldaten unterstützen 8 oder 16 Bit pro Kanal, skalare Daten zusätzlich 32 Bit.">GPU generators operate slice by slice, allowing large volumes to be created without keeping the complete result in GPU memory. For multi-channel data, provide one comma-separated generator identifier per channel in channel order; one identifier is applied to every channel. Multi-channel data supports 8 or 16 bits per channel, while scalar data additionally supports 32 bits.</p>
+          <pre><code>TerminalConverterApp C F,J 2 2 512 512 512 MandelbulbJulia.data \
+  "Mandelbulb and quaternion Julia set" 64 2</code></pre>
           <p><code>TerminalConverterApp --help</code> <span data-de="zeigt die vollständige Syntax;">shows complete syntax;</span> <code>--version</code> <span data-de="gibt die Programmversion aus.">prints the tool version.</span></p>
         </section>
 

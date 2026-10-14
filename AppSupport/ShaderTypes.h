@@ -89,7 +89,11 @@ typedef NS_ENUM(EnumBackingType, TextureIndex)
   TextureIndexMarkerColor      = 2,   ///< Opaque marker color prepass texture.
   TextureIndexMarkerDepth      = 3,   ///< Opaque marker depth prepass texture.
   TextureIndexScreenViewLabel  = 4,   ///< Rasterized screen-view participant label.
-  TextureIndexSceneMeshColor   = 5    ///< Embedded opaque scene-mesh color texture.
+  TextureIndexSceneMeshColor   = 5,   ///< Embedded opaque scene-mesh color texture.
+  TextureIndexVolumeAtlasSecondary = 6, ///< Remaining packed 16-bit channels.
+  TextureIndexTransferFunction2 = 7,  ///< Transfer function for volume component 2.
+  TextureIndexTransferFunction3 = 8,  ///< Transfer function for volume component 3.
+  TextureIndexTransferFunction4 = 9   ///< Transfer function for volume component 4.
 };
 
 /**

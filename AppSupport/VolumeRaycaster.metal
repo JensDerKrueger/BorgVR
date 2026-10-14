@@ -243,8 +243,12 @@ vertex VertexToFragment VOLUME_VERTEX_SHADER_NAME(
  */
 fragment VolumeFragmentOutput VOLUME_FRAGMENT_SHADER_TF_NAME(
                                 VertexToFragment in [[stage_in]] VOLUME_SHADER_AMP_PARAMETER,
-                                texture3d<half> volumeAtlas   [[texture(TextureIndexVolumeAtlas)]],
+                                texture3d<float> volumeAtlas  [[texture(TextureIndexVolumeAtlas)]],
+                                texture3d<float> secondaryVolumeAtlas [[texture(TextureIndexVolumeAtlasSecondary)]],
                                 texture1d<half> transferFunc  [[texture(TextureIndexTransferFunction)]],
+                                texture1d<half> transferFunc2 [[texture(TextureIndexTransferFunction2)]],
+                                texture1d<half> transferFunc3 [[texture(TextureIndexTransferFunction3)]],
+                                texture1d<half> transferFunc4 [[texture(TextureIndexTransferFunction4)]],
                                 device const FragmentUniformsArray& uniformsArray [[buffer(FragmentBufferIndexUniforms)]],
                                 device const LevelData* levelData                [[buffer(FragmentBufferIndexLevelTable)]],
                                 device const uint* brickMeta                     [[buffer(FragmentBufferIndexBrickMeta)]],
@@ -344,8 +348,18 @@ fragment VolumeFragmentOutput VOLUME_FRAGMENT_SHADER_TF_NAME(
                                 sampleT
                                 );
 
-        float volumeValue = volumeAtlas.sample(s, poolCoords).r;
-        float4 current = float4(transferFunc.sample(s, volumeValue * uniforms.transferBias));
+        float4 volumeValues = sampleVolumeComponents(
+          volumeAtlas, secondaryVolumeAtlas, s, poolCoords
+        );
+        float4 current = sampleTransferFunctions(
+          volumeValues,
+          uniforms.transferBias,
+          s,
+          transferFunc,
+          transferFunc2,
+          transferFunc3,
+          transferFunc4
+        );
         current.a = 1.0 - pow(1.0 - current.a, ocFactor);
         float contribution = (1.0 - interactionOpacity) * current.a;
         if (contribution > strongestContribution) {
@@ -413,8 +427,12 @@ fragment VolumeFragmentOutput VOLUME_FRAGMENT_SHADER_TF_NAME(
  */
 fragment VolumeFragmentOutput VOLUME_FRAGMENT_SHADER_TF_LIGHTING_NAME(
                                 VertexToFragment in [[stage_in]] VOLUME_SHADER_AMP_PARAMETER,
-                                texture3d<half> volumeAtlas   [[texture(TextureIndexVolumeAtlas)]],
+                                texture3d<float> volumeAtlas  [[texture(TextureIndexVolumeAtlas)]],
+                                texture3d<float> secondaryVolumeAtlas [[texture(TextureIndexVolumeAtlasSecondary)]],
                                 texture1d<half> transferFunc  [[texture(TextureIndexTransferFunction)]],
+                                texture1d<half> transferFunc2 [[texture(TextureIndexTransferFunction2)]],
+                                texture1d<half> transferFunc3 [[texture(TextureIndexTransferFunction3)]],
+                                texture1d<half> transferFunc4 [[texture(TextureIndexTransferFunction4)]],
                                 device const FragmentUniformsArray& uniformsArray [[buffer(FragmentBufferIndexUniforms)]],
                                 device const LevelData* levelData                [[buffer(FragmentBufferIndexLevelTable)]],
                                 device const uint* brickMeta                   [[buffer(FragmentBufferIndexBrickMeta)]],
@@ -513,8 +531,18 @@ fragment VolumeFragmentOutput VOLUME_FRAGMENT_SHADER_TF_LIGHTING_NAME(
                                 brickResult.poolBrickInfo.poolExitCoords,
                                 sampleT
                                 );
-        float volumeValue = volumeAtlas.sample(s, poolCoords).r;
-        float4 current = float4(transferFunc.sample(s, volumeValue * uniforms.transferBias));
+        float4 volumeValues = sampleVolumeComponents(
+          volumeAtlas, secondaryVolumeAtlas, s, poolCoords
+        );
+        float4 current = sampleTransferFunctions(
+          volumeValues,
+          uniforms.transferBias,
+          s,
+          transferFunc,
+          transferFunc2,
+          transferFunc3,
+          transferFunc4
+        );
         // Opacity correction
         current.a = 1.0 - pow(1.0 - current.a, ocFactor);
         float contribution = (1.0 - interactionOpacity) * current.a;
@@ -529,6 +557,7 @@ fragment VolumeFragmentOutput VOLUME_FRAGMENT_SHADER_TF_LIGHTING_NAME(
                                         poolCoords, POOL_SIZE,
                                         float3(1,1,1),
                                         volumeAtlas,
+                                        secondaryVolumeAtlas,
                                         s
                                         );
 
@@ -599,7 +628,8 @@ fragment VolumeFragmentOutput VOLUME_FRAGMENT_SHADER_TF_LIGHTING_NAME(
  */
 fragment VolumeFragmentOutput VOLUME_FRAGMENT_SHADER_ISO_NAME(
                                  VertexToFragment in [[stage_in]] VOLUME_SHADER_AMP_PARAMETER,
-                                 texture3d<half> volumeAtlas                      [[texture(TextureIndexVolumeAtlas)]],
+                                 texture3d<float> volumeAtlas                     [[texture(TextureIndexVolumeAtlas)]],
+                                 texture3d<float> secondaryVolumeAtlas            [[texture(TextureIndexVolumeAtlasSecondary)]],
                                  device const FragmentUniformsArray& uniformsArray [[buffer(FragmentBufferIndexUniforms)]],
                                  device const LevelData* levelData                 [[buffer(FragmentBufferIndexLevelTable)]],
                                  device const uint* brickMeta                    [[buffer(FragmentBufferIndexBrickMeta)]],
@@ -673,19 +703,21 @@ fragment VolumeFragmentOutput VOLUME_FRAGMENT_SHADER_ISO_NAME(
                                 brickResult.poolBrickInfo.poolExitCoords,
                                 sampleT
                                 );
-        float value = volumeAtlas.sample(s, poolCoords).r;
+        float value = sampleVolumeScalar(volumeAtlas, secondaryVolumeAtlas, s, poolCoords);
         if (value >= uniforms.isoValue) {
           poolCoords = refineIsosurface(
                                         voxelSpaceDirection,
                                         poolCoords,
                                         uniforms.isoValue,
                                         volumeAtlas,
+                                        secondaryVolumeAtlas,
                                         s
                                         );
           float3 normal = computeNormal(
                                         poolCoords, POOL_SIZE,
                                         float3(1,1,1),
                                         volumeAtlas,
+                                        secondaryVolumeAtlas,
                                         s
                                         );
           half3 posInView    = half3((uniforms.modelView * float4((sampleNormCoords - 0.5),1)).xyz);

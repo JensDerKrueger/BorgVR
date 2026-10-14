@@ -32,7 +32,7 @@
 #endif
 
 #ifndef BORGVR_SERVER_VERSION
-#define BORGVR_SERVER_VERSION "2.9"
+#define BORGVR_SERVER_VERSION "3.0"
 #endif
 
 struct ServerConfiguration {

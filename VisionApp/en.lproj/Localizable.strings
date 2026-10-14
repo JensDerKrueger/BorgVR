@@ -1248,3 +1248,5 @@
 "The dataset state contains invalid values." = "The dataset state contains invalid values.";
 "The dataset state file is too large." = "The dataset state file is too large.";
 "The spatial view is not available yet." = "The spatial view is not available yet.";
+"tf_data_channel" = "Data channel";
+"tf_data_channel_format" = "Channel %d";

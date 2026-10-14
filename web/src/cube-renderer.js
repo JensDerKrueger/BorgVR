@@ -1,4 +1,4 @@
-import { BrickAtlas } from "./brick-atlas.js?v=20260915-mobile-budget";
+import { BrickAtlas } from "./brick-atlas.js?v=20261014-multichannel";
 import { buildMarkerRenderGeometry } from "./marker-tube-mesh.js?v=20260922-marker-direction";
 import { createDefaultTransferFunction } from "./transfer-function.js?v=20260907-range-fix";
 
@@ -38,7 +38,7 @@ struct BrickRequestList {
 @group(0) @binding(2) var<storage, read_write> brickRequestList: BrickRequestList;
 @group(0) @binding(3) var volumeAtlas: texture_3d<f32>;
 @group(0) @binding(4) var volumeSampler: sampler;
-@group(0) @binding(5) var transferFunction: texture_2d<f32>;
+@group(0) @binding(5) var transferFunction1: texture_2d<f32>;
 @group(0) @binding(6) var transferSampler: sampler;
 
 struct BrickMeta {
@@ -61,6 +61,10 @@ struct LevelTable {
 
 @group(0) @binding(8) var<storage, read> levelTable: LevelTable;
 @group(0) @binding(9) var markerDepthTexture: texture_depth_2d;
+@group(0) @binding(10) var transferFunction2: texture_2d<f32>;
+@group(0) @binding(11) var transferFunction3: texture_2d<f32>;
+@group(0) @binding(12) var transferFunction4: texture_2d<f32>;
+@group(0) @binding(13) var secondaryVolumeAtlas: texture_3d<f32>;
 
 const BI_MISSING: u32 = 0u;
 const BI_CHILD_EMPTY: u32 = 1u;
@@ -330,10 +334,10 @@ fn lookupBrick(point: vec3<f32>, direction: vec3<f32>, requestedLOD: u32) -> Bri
   return result;
 }
 
-fn sampleAtlasBrick(brickIndex: u32, brickCoords: vec3<u32>, lod: u32, point: vec3<f32>) -> f32 {
+fn sampleAtlasComponents(brickIndex: u32, brickCoords: vec3<u32>, lod: u32, point: vec3<f32>) -> vec4<f32> {
   let brickInfo = brickInfoFor(brickIndex);
   if (brickInfo < BI_FLAG_COUNT) {
-    return 0.0;
+    return vec4<f32>(0.0);
   }
 
   let slot = brickInfo - BI_FLAG_COUNT;
@@ -362,7 +366,83 @@ fn sampleAtlasBrick(brickIndex: u32, brickCoords: vec3<u32>, lod: u32, point: ve
     f32(slotCoord.z)
   ) * brickSize + localVoxel;
   let atlasCoords = (atlasVoxel + vec3<f32>(0.5)) / atlasSize;
-  return textureSampleLevel(volumeAtlas, volumeSampler, atlasCoords, 0.0).r;
+  let primary = textureSampleLevel(volumeAtlas, volumeSampler, atlasCoords, 0.0);
+  let componentCount = u32(uniforms.dataInfo.w + 0.5);
+  let bytesPerComponent = u32(uniforms.lodInfo.w + 0.5);
+  if (bytesPerComponent == 4u) {
+    // A little-endian UInt32 occupies RGBA. The weighted sum is linear and
+    // therefore preserves the texture unit's trilinear interpolation.
+    return vec4<f32>(
+      dot(primary, vec4<f32>(1.0, 256.0, 65536.0, 16777216.0)) / 16843009.0,
+      0.0,
+      0.0,
+      0.0
+    );
+  }
+  if (bytesPerComponent == 2u) {
+    var components = vec4<f32>(
+      dot(primary.rg, vec2<f32>(1.0, 256.0)) / 257.0,
+      0.0,
+      0.0,
+      0.0
+    );
+    if (componentCount >= 2u) {
+      components.y = dot(primary.ba, vec2<f32>(1.0, 256.0)) / 257.0;
+    }
+    if (componentCount >= 3u) {
+      let secondary = textureSampleLevel(secondaryVolumeAtlas, volumeSampler, atlasCoords, 0.0);
+      components.z = dot(secondary.rg, vec2<f32>(1.0, 256.0)) / 257.0;
+      if (componentCount >= 4u) {
+        components.w = dot(secondary.ba, vec2<f32>(1.0, 256.0)) / 257.0;
+      }
+    }
+    return components;
+  }
+  return primary;
+}
+
+fn sampleAtlasBrick(brickIndex: u32, brickCoords: vec3<u32>, lod: u32, point: vec3<f32>) -> f32 {
+  let components = sampleAtlasComponents(brickIndex, brickCoords, lod, point);
+  let componentCount = max(u32(uniforms.dataInfo.w + 0.5), 1u);
+  var value = components.x;
+  if (componentCount >= 2u) { value = value + components.y; }
+  if (componentCount >= 3u) { value = value + components.z; }
+  if (componentCount >= 4u) { value = value + components.w; }
+  return value / f32(componentCount);
+}
+
+fn sampleTransferFunctions(components: vec4<f32>) -> vec4<f32> {
+  let componentCount = max(u32(uniforms.dataInfo.w + 0.5), 1u);
+  let sample1 = textureSampleLevel(
+    transferFunction1,
+    transferSampler,
+    vec2<f32>(components.x * uniforms.dataInfo.x, 0.5),
+    0.0
+  );
+  var premultipliedColor = sample1.rgb * sample1.a;
+  var alphaSum = sample1.a;
+  if (componentCount >= 2u) {
+    let sample2 = textureSampleLevel(transferFunction2, transferSampler, vec2<f32>(components.y * uniforms.dataInfo.x, 0.5), 0.0);
+    premultipliedColor = premultipliedColor + sample2.rgb * sample2.a;
+    alphaSum = alphaSum + sample2.a;
+  }
+  if (componentCount >= 3u) {
+    let sample3 = textureSampleLevel(transferFunction3, transferSampler, vec2<f32>(components.z * uniforms.dataInfo.x, 0.5), 0.0);
+    premultipliedColor = premultipliedColor + sample3.rgb * sample3.a;
+    alphaSum = alphaSum + sample3.a;
+  }
+  if (componentCount >= 4u) {
+    let sample4 = textureSampleLevel(transferFunction4, transferSampler, vec2<f32>(components.w * uniforms.dataInfo.x, 0.5), 0.0);
+    premultipliedColor = premultipliedColor + sample4.rgb * sample4.a;
+    alphaSum = alphaSum + sample4.a;
+  }
+  if (alphaSum <= 0.000001) {
+    return vec4<f32>(0.0);
+  }
+  return vec4<f32>(
+    clamp(premultipliedColor / alphaSum, vec3<f32>(0.0), vec3<f32>(1.0)),
+    min(alphaSum, 1.0)
+  );
 }
 
 fn safeNormalize(vector: vec3<f32>) -> vec3<f32> {
@@ -498,7 +578,13 @@ fn fragmentMain(input: VertexOut) -> @location(0) vec4<f32> {
         if (markerOccludesPoint(samplePoint, markerDepth)) {
           break;
         }
-        let scalar = sampleAtlasBrick(brick.index, brick.coords, brick.lod, samplePoint);
+        let components = sampleAtlasComponents(brick.index, brick.coords, brick.lod, samplePoint);
+        let componentCount = max(u32(uniforms.dataInfo.w + 0.5), 1u);
+        var scalar = components.x;
+        if (componentCount >= 2u) { scalar = scalar + components.y; }
+        if (componentCount >= 3u) { scalar = scalar + components.z; }
+        if (componentCount >= 4u) { scalar = scalar + components.w; }
+        scalar = scalar / f32(componentCount);
 
         if (renderMode == RENDER_MODE_ISO) {
           if (scalar >= isoValue) {
@@ -509,7 +595,7 @@ fn fragmentMain(input: VertexOut) -> @location(0) vec4<f32> {
           continue;
         }
 
-        let tf = textureSampleLevel(transferFunction, transferSampler, vec2<f32>(scalar * uniforms.dataInfo.x, 0.5), 0.0);
+        let tf = sampleTransferFunctions(components);
         let alpha = 1.0 - pow(1.0 - tf.a, ocFactor);
         var sampleColor = tf.rgb;
         if (renderMode == RENDER_MODE_TF_LIGHTING && alpha > 0.01) {
@@ -665,6 +751,9 @@ export class CoordinateCubeRenderer {
     this.markerBindGroup = null;
     this.bindGroup = null;
     this.brickAtlas = null;
+    this.transferFunctions = [];
+    this.transferFunctionTextures = [];
+    this.selectedTransferFunctionChannel = 0;
     this.transferFunction = null;
     this.transferFunctionTexture = null;
     this.transferFunctionSampler = null;
@@ -730,6 +819,8 @@ export class CoordinateCubeRenderer {
     this.isoValue = 0.1;
     this.dataRange = [0, 1];
     this.valueRange = [0, 1];
+    this.componentCount = 1;
+    this.bytesPerComponent = 1;
     this.clipMin = [0, 0, 0];
     this.clipMax = [1, 1, 1];
     this.lightDirection = [0, 0, 1];
@@ -932,6 +1023,18 @@ export class CoordinateCubeRenderer {
     const byteRangeMax = (2 ** (8 * (manifest.volume?.bytesPerComponent ?? 1))) - 1;
     this.dataRange = manifest.volume?.dataRange ?? [0, byteRangeMax];
     this.valueRange = manifest.volume?.valueRange ?? this.dataRange;
+    this.componentCount = manifest.volume?.componentCount ?? 1;
+    this.bytesPerComponent = manifest.volume?.bytesPerComponent ?? 1;
+    if (this.componentCount < 1 || this.componentCount > 4) {
+      throw new Error(`WebGPU supports one to four volume channels, not ${this.componentCount}.`);
+    }
+    if (this.componentCount > 1 && this.bytesPerComponent > 2) {
+      throw new Error("Multi-channel volumes with more than 16 bits per channel are not supported.");
+    }
+    this.selectTransferFunctionChannel(
+      Math.min(this.selectedTransferFunctionChannel, this.componentCount - 1),
+      false
+    );
     const dataRangeMax = this.dataRange[1] ?? byteRangeMax;
     const valueRangeMax = this.valueRange[1] ?? dataRangeMax;
     this.transferBias = dataRangeMax / Math.max(1, valueRangeMax);
@@ -939,7 +1042,7 @@ export class CoordinateCubeRenderer {
     this.totalBrickCount = manifest.bricks?.length ?? this.level0BrickCount[0] * this.level0BrickCount[1] * this.level0BrickCount[2];
     this.createLevelDataBuffer(manifest);
     this.createBrickRequestBuffers(this.totalBrickCount);
-    this.brickAtlas?.reset(manifest, this.transferFunction, {
+    this.brickAtlas?.reset(manifest, this.activeTransferFunctions(), {
       renderMode: this.renderMode,
       isoRawValue: this.isoRawValue
     });
@@ -989,6 +1092,27 @@ export class CoordinateCubeRenderer {
 
   getNormalizedIsoValue() {
     return this.normIsoValue;
+  }
+
+  activeTransferFunctions() {
+    return this.transferFunctions.slice(0, Math.max(1, this.componentCount));
+  }
+
+  selectTransferFunctionChannel(channel, redraw = true) {
+    const nextChannel = Math.min(
+      Math.max(0, Math.trunc(channel)),
+      Math.max(0, this.componentCount - 1)
+    );
+    this.selectedTransferFunctionChannel = nextChannel;
+    this.transferFunction = this.transferFunctions[nextChannel] ?? null;
+    this.transferFunctionTexture = this.transferFunctionTextures[nextChannel] ?? null;
+    if (redraw) {
+      this.drawNow();
+    }
+  }
+
+  getTransferFunctionChannelCount() {
+    return Math.max(1, this.componentCount);
   }
 
   setLighting({ direction, ambientColor, diffuseColor, specularColor }) {
@@ -1051,20 +1175,26 @@ export class CoordinateCubeRenderer {
     return this.transferFunction?.data ?? new Uint8Array(0);
   }
 
-  serializeTransferFunction() {
-    if (!this.transferFunction) {
+  serializeTransferFunction(channel = this.selectedTransferFunctionChannel) {
+    const transferFunction = this.transferFunctions[channel];
+    if (!transferFunction) {
       return new ArrayBuffer(0);
     }
-    return this.transferFunction.serializeNative();
+    return transferFunction.serializeNative();
   }
 
-  loadTransferFunction(buffer) {
-    if (!this.transferFunction || !this.device) {
+  loadTransferFunction(buffer, channel = this.selectedTransferFunctionChannel) {
+    const transferFunction = this.transferFunctions[channel];
+    if (!transferFunction || !this.device) {
       return;
     }
-    this.transferFunction.loadNative(buffer);
-    this.recreateTransferFunctionTexture();
-    this.finishTransferFunctionEdit();
+    transferFunction.loadNative(buffer);
+    this.recreateTransferFunctionTexture(channel);
+    this.updateTransferFunctionTexture(channel);
+    if (this.renderMode !== RENDER_MODES.get("iso")) {
+      this.reclassifyCurrentDataset();
+    }
+    this.drawNow();
   }
 
   finishTransferFunctionEdit() {
@@ -1098,7 +1228,7 @@ export class CoordinateCubeRenderer {
     if (!this.hasScene || !this.brickAtlas?.manifest) {
       return;
     }
-    this.brickAtlas.reclassify(this.transferFunction, {
+    this.brickAtlas.reclassify(this.activeTransferFunctions(), {
       renderMode: this.renderMode,
       isoRawValue: this.isoRawValue
     });
@@ -1151,16 +1281,21 @@ export class CoordinateCubeRenderer {
     }
   }
 
-  recreateTransferFunctionTexture() {
-    if (!this.transferFunction || !this.device) {
+  recreateTransferFunctionTexture(channel = this.selectedTransferFunctionChannel) {
+    if (!this.device) {
       return;
     }
-    this.transferFunctionTexture?.destroy();
-    this.transferFunctionTexture = this.device.createTexture({
-      size: [this.transferFunction.width, 1, 1],
+    const transferFunction = this.transferFunctions[channel];
+    if (!transferFunction) {
+      return;
+    }
+    this.transferFunctionTextures[channel]?.destroy();
+    this.transferFunctionTextures[channel] = this.device.createTexture({
+      size: [transferFunction.width, 1, 1],
       format: "rgba8unorm",
       usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST
     });
+    this.selectTransferFunctionChannel(this.selectedTransferFunctionChannel, false);
     this.rebuildBindGroup();
   }
 
@@ -1393,7 +1528,12 @@ export class CoordinateCubeRenderer {
   }
 
   createTextureResources() {
-    this.transferFunction = createDefaultTransferFunction();
+    this.transferFunctions = Array.from(
+      { length: 4 },
+      () => createDefaultTransferFunction()
+    );
+    this.transferFunctionTextures = Array(4).fill(null);
+    this.selectTransferFunctionChannel(0, false);
     this.transferFunctionSampler = this.device.createSampler({
       addressModeU: "clamp-to-edge",
       addressModeV: "clamp-to-edge",
@@ -1410,7 +1550,7 @@ export class CoordinateCubeRenderer {
     this.fallbackVolumeTexture = this.device.createTexture({
       size: [1, 1, 1],
       dimension: "3d",
-      format: "r16float",
+      format: "rgba8unorm",
       usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST
     });
     this.fallbackBrickMetaBuffer = this.device.createBuffer({
@@ -1428,19 +1568,23 @@ export class CoordinateCubeRenderer {
       overlap: 0,
       levels: [{ level: 0, brickCount: [1, 1, 1], firstBrick: 0, size: [1, 1, 1] }]
     }));
-    this.recreateTransferFunctionTexture();
-    this.updateTransferFunctionTexture();
+    for (let channel = 0; channel < this.transferFunctions.length; channel += 1) {
+      this.recreateTransferFunctionTexture(channel);
+      this.updateTransferFunctionTexture(channel);
+    }
   }
 
-  updateTransferFunctionTexture() {
-    if (!this.transferFunction || !this.transferFunctionTexture) {
+  updateTransferFunctionTexture(channel = this.selectedTransferFunctionChannel) {
+    const transferFunction = this.transferFunctions[channel];
+    const transferFunctionTexture = this.transferFunctionTextures[channel];
+    if (!transferFunction || !transferFunctionTexture) {
       return;
     }
     this.device.queue.writeTexture(
-      { texture: this.transferFunctionTexture },
-      this.transferFunction.data,
-      { bytesPerRow: this.transferFunction.width * 4, rowsPerImage: 1 },
-      [this.transferFunction.width, 1, 1]
+      { texture: transferFunctionTexture },
+      transferFunction.data,
+      { bytesPerRow: transferFunction.width * 4, rowsPerImage: 1 },
+      [transferFunction.width, 1, 1]
     );
   }
 
@@ -1513,7 +1657,8 @@ export class CoordinateCubeRenderer {
         !this.uniformBuffer ||
         !this.brickRequestBitsetBuffer ||
         !this.brickRequestListBuffer ||
-        !this.transferFunctionTexture ||
+        this.transferFunctionTextures.length < 4 ||
+        this.transferFunctionTextures.some((texture) => !texture) ||
         !this.transferFunctionSampler ||
         !this.volumeSampler ||
         !this.fallbackVolumeTexture ||
@@ -1524,6 +1669,7 @@ export class CoordinateCubeRenderer {
     }
 
     const volumeTexture = this.brickAtlas?.texture ?? this.fallbackVolumeTexture;
+    const secondaryVolumeTexture = this.brickAtlas?.secondaryTexture ?? this.fallbackVolumeTexture;
     const brickMetaBuffer = this.brickAtlas?.brickMetaBuffer ?? this.fallbackBrickMetaBuffer;
     const levelDataBuffer = this.levelDataBuffer ?? this.fallbackLevelDataBuffer;
     this.bindGroup = this.device.createBindGroup({
@@ -1534,11 +1680,15 @@ export class CoordinateCubeRenderer {
         { binding: 2, resource: { buffer: this.brickRequestListBuffer } },
         { binding: 3, resource: volumeTexture.createView() },
         { binding: 4, resource: this.volumeSampler },
-        { binding: 5, resource: this.transferFunctionTexture.createView() },
+        { binding: 5, resource: this.transferFunctionTextures[0].createView() },
         { binding: 6, resource: this.transferFunctionSampler },
         { binding: 7, resource: { buffer: brickMetaBuffer } },
         { binding: 8, resource: { buffer: levelDataBuffer } },
-        { binding: 9, resource: this.markerDepthTexture.createView() }
+        { binding: 9, resource: this.markerDepthTexture.createView() },
+        { binding: 10, resource: this.transferFunctionTextures[1].createView() },
+        { binding: 11, resource: this.transferFunctionTextures[2].createView() },
+        { binding: 12, resource: this.transferFunctionTextures[3].createView() },
+        { binding: 13, resource: secondaryVolumeTexture.createView() }
       ]
     });
   }
@@ -2165,8 +2315,8 @@ export class CoordinateCubeRenderer {
       this.level0Size[0], this.level0Size[1], this.level0Size[2], 0,
       cubeMin[0], cubeMin[1], cubeMin[2], 0,
       cubeMax[0], cubeMax[1], cubeMax[2], 0,
-      this.levelCount, lodFactor, this.levelZeroWorldSpaceError, 1,
-      this.transferBias, this.renderMode, this.isoValue, 1,
+      this.levelCount, lodFactor, this.levelZeroWorldSpaceError, this.bytesPerComponent,
+      this.transferBias, this.renderMode, this.isoValue, this.componentCount,
       this.volumeHalfExtent[0], this.volumeHalfExtent[1], this.volumeHalfExtent[2], 0,
       textureLightDirection[0], textureLightDirection[1], textureLightDirection[2], 0,
       this.ambientLightColor[0], this.ambientLightColor[1], this.ambientLightColor[2], 0,

@@ -86,6 +86,23 @@ struct TransferFunctionEditorView: View {
         .font(.title)
         .bold()
 
+      if sharedAppModel.componentCount > 1 {
+        Picker(
+          "tf_data_channel",
+          selection: Binding(
+            get: { sharedAppModel.selectedTransferFunctionChannel },
+            set: { sharedAppModel.selectedTransferFunctionChannel = $0 }
+          )
+        ) {
+          ForEach(0..<sharedAppModel.componentCount, id: \.self) { channel in
+            Text(String(format: String(localized: "tf_data_channel_format"), channel + 1))
+              .tag(channel)
+          }
+        }
+        .pickerStyle(.segmented)
+        .padding(.horizontal)
+      }
+
       // Drawing canvas with transfer function preview
       GeometryReader { geometry in
         ZStack {

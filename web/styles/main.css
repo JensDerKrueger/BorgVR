@@ -602,6 +602,32 @@ p {
   font-weight: 720;
 }
 
+.tf-panel-heading {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.control-panel .tf-data-channel-row {
+  display: flex;
+  grid-template-columns: none;
+  gap: 6px;
+  padding: 5px 9px;
+}
+
+.tf-data-channel-row[hidden] {
+  display: none;
+}
+
+.tf-data-channel-row select {
+  min-height: 26px;
+  border: 1px solid rgba(190, 249, 255, 0.18);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--soft);
+}
+
 .control-panel label {
   display: grid;
   grid-template-columns: 58px 1fr;

@@ -397,7 +397,9 @@ extension Renderer {
 
     switch sharedAppModel.renderMode {
       case .transferFunction1D, .transferFunction1DLighting:
-        volumeAtlas.updateEmptiness(transferFunction: sharedAppModel.transferFunction)
+        volumeAtlas.updateEmptiness(
+          transferFunctions: Array(sharedAppModel.activeTransferFunctions)
+        )
       case .isoValue:
         volumeAtlas.updateEmptiness(isoValue: sharedAppModel.isoValue)
     }
@@ -571,15 +573,6 @@ extension Renderer {
 
     if !missingBricks.isEmpty {
       let intArray = missingBricks.map { Int($0) }.sorted(by: >)
-      let metadata = borgData.getMetadata()
-
-      for entry in intArray {
-        for level in (1..<metadata.levelMetadata.count).reversed() {
-          if entry > metadata.levelMetadata[level].prevBricks {
-            break
-          }
-        }
-      }
 
       try? volumeAtlas.pageIn(IDs: intArray)
     }
@@ -2393,7 +2386,7 @@ extension Renderer {
     renderEncoder.setVertexBuffer(cubeBuffer, offset: 0, index: VertexBufferIndex.meshPositions.rawValue)
 
     do {
-      try sharedAppModel.transferFunction.bind(to: renderEncoder, index: TextureIndex.transferFunction.rawValue)
+      try sharedAppModel.bindTransferFunctions(to: renderEncoder)
     } catch {
       logger?.error("Failed to bind transfer function texture: \(error)")
     }

@@ -1056,12 +1056,14 @@ public class BrickedVolumeReorganizer {
     }
   }
 
-  /** Computes the scalar minimum and maximum without building a histogram. */
-  func computeMinMax(data: [UInt8]) -> (minValue: Int, maxValue: Int) {
-    if inputVolume.componentCount != 1 {
-      return (minValue: 0, maxValue: 0)
-    }
+  /**
+   Computes a conservative minimum and maximum across every component.
 
+   Multi-channel brick metadata stores one shared range. The union of all
+   component ranges may retain more bricks than separate per-channel ranges,
+   but it must never classify a visible brick as empty.
+   */
+  func computeMinMax(data: [UInt8]) -> (minValue: Int, maxValue: Int) {
     switch inputVolume.bytesPerComponent {
       case 1:
         guard let minValue = data.min(), let maxValue = data.max() else {

@@ -1,7 +1,7 @@
 import Foundation
 
 enum ConverterInfo {
-  static let version = "2.9"
+  static let version = "3.0"
 
   static let banner = #"""
    ____                   __     ______
@@ -44,6 +44,7 @@ enum Mode: String {
  - GyroidData: A periodic gyroid field.
  - SheppLoganData: A 3D Shepp-Logan phantom.
  - FrequencyChirpData: A frequency chirp with brick-boundary calibration planes.
+ - UInt32TestData: A scalar test volume spanning the complete UInt32 range.
  */
 enum DatasetType: String {
   case LinearData = "L"
@@ -54,6 +55,7 @@ enum DatasetType: String {
   case GyroidData = "G"
   case SheppLoganData = "P"
   case FrequencyChirpData = "T"
+  case UInt32TestData = "U"
 
   var analyticKind: AnalyticVolumeKind? {
     switch self {
@@ -62,9 +64,32 @@ enum DatasetType: String {
       case .GyroidData: .gyroid
       case .SheppLoganData: .sheppLogan
       case .FrequencyChirpData: .frequencyChirp
-      case .LinearData, .FloatFractalData, .DoubleFractalData: nil
+      case .LinearData, .FloatFractalData, .DoubleFractalData, .UInt32TestData: nil
     }
   }
+
+  var displayName: String {
+    switch self {
+      case .LinearData: "Linear"
+      case .FloatFractalData: "Mandelbulb"
+      case .DoubleFractalData: "Double-precision Mandelbulb"
+      case .QuaternionJuliaData: "Quaternion Julia"
+      case .MandelboxData: "Mandelbox"
+      case .GyroidData: "Gyroid"
+      case .SheppLoganData: "3D Shepp-Logan"
+      case .FrequencyChirpData: "Frequency chirp"
+      case .UInt32TestData: "UInt32 test pattern"
+    }
+  }
+}
+
+func parseDatasetTypes(_ value: String) -> [DatasetType]? {
+  let tokens = value.split(separator: ",", omittingEmptySubsequences: false)
+  guard !tokens.isEmpty else { return nil }
+  let types = tokens.compactMap {
+    DatasetType(rawValue: $0.trimmingCharacters(in: .whitespacesAndNewlines).uppercased())
+  }
+  return types.count == tokens.count ? types : nil
 }
 
 /**
@@ -111,7 +136,7 @@ struct ExportModeParameters {
 /**
  Parameters specific to demo data creation mode.
 
- - datasetType: The linear or Mandelbulb dataset variant to generate.
+ - datasetTypes: The synthetic dataset variant generated for each channel.
  - byteDepth: The bit depth per voxel.
  - componentCount: The number of components per voxel.
  - sizeX: The volume size along the X axis.
@@ -120,7 +145,7 @@ struct ExportModeParameters {
  - common: Shared parameters such as output filename and brick configuration.
  */
 struct CreateModeParameters {
-  let datasetType: DatasetType
+  let datasetTypes: [DatasetType]
   let byteDepth: Int
   let componentCount: Int
   let sizeX: Int
@@ -179,7 +204,10 @@ Mode E — Export one BorgVR LoD as an uncompressed NRRD volume
 
 Mode C — Create a volume file using a specified algorithm
     \(executableName) C <algorithm> <byte_depth> <component_count> <size_x> <size_y> <size_z> <output_filename> <description> <max_brick_size> <overlap>
-        algorithm         : L = linear
+        algorithm         : One algorithm for every channel, or a comma-separated list
+                            with one algorithm per channel (for example F,J)
+                            The list order defines channel 0, channel 1, and so on
+                            L = linear
                             F = Float Mandelbulb with automatic Metal acceleration
                             D = Double CPU Mandelbulb
                             J = Quaternion sine Julia set
@@ -187,8 +215,9 @@ Mode C — Create a volume file using a specified algorithm
                             G = Gyroid
                             P = 3D Shepp-Logan phantom
                             T = Frequency chirp and brick-boundary test
+                            U = Scalar UInt32 full-range test volume
         byte_depth        : Bytes per component (1, 2, or 4)
-        component_count   : Number of components per voxel (e.g., 1 for grayscale, 3 for RGB)
+        component_count   : Number of volume channels (1 through 4)
         size_x            : Volume size along X (positive integer)
         size_y            : Volume size along Y (positive integer)
         size_z            : Volume size along Z (positive integer)
@@ -288,7 +317,7 @@ func parseArguments(_ args: [String]) -> (Mode, Any) {
 
     case .DemoDataCreation:
       guard args.count == 12,
-            let datasetType = DatasetType(rawValue: args[2]),
+            let datasetTypes = parseDatasetTypes(args[2]),
             let byteDepth = Int(args[3]),
             [1, 2, 4].contains(byteDepth),
             let componentCount = Int(args[4]), componentCount > 0,
@@ -302,16 +331,31 @@ func parseArguments(_ args: [String]) -> (Mode, Any) {
         logger.error("Error: Invalid arguments for mode C.\n\(usageErrorMessage)")
         exit(1)
       }
-      guard datasetType == .LinearData || componentCount == 1 else {
-        logger.error("Error: Analytical volume generation supports exactly one component per voxel.")
+      guard datasetTypes.count == componentCount || datasetTypes.count == 1 else {
+        logger.error("Error: Specify either one algorithm or exactly one algorithm per channel.")
         exit(1)
       }
-      guard datasetType == .LinearData || (sizeX > 1 && sizeY > 1 && sizeZ > 1) else {
+      guard componentCount <= 4 else {
+        logger.error("Error: The renderer supports at most four volume channels.")
+        exit(1)
+      }
+      guard componentCount == 1 || byteDepth <= 2 else {
+        logger.error("Error: Multi-channel volumes support at most 16 bits per channel.")
+        exit(1)
+      }
+      guard !datasetTypes.contains(.UInt32TestData) || (byteDepth == 4 && componentCount == 1) else {
+        logger.error("Error: UInt32 test data requires byte depth 4 and exactly one component.")
+        exit(1)
+      }
+      guard datasetTypes.allSatisfy({ $0 == .LinearData }) ||
+              (sizeX > 1 && sizeY > 1 && sizeZ > 1) else {
         logger.error("Error: Analytical volume generation requires at least two samples on every axis.")
         exit(1)
       }
       let params = CreateModeParameters(
-        datasetType: datasetType,
+        datasetTypes: datasetTypes.count == 1
+          ? Array(repeating: datasetTypes[0], count: componentCount)
+          : datasetTypes,
         byteDepth: byteDepth,
         componentCount: componentCount,
         sizeX: sizeX,
@@ -579,6 +623,146 @@ func convertQVISVolume(_ params: HeaderFileModeParameters) {
   }
 }
 
+private func generateScalarVolume(datasetType: DatasetType,
+                                  outputURL: URL,
+                                  params: CreateModeParameters) throws -> String {
+  switch datasetType {
+    case .LinearData:
+      try computeLinear(filename: outputURL.path,
+                        sizeX: params.sizeX,
+                        sizeY: params.sizeY,
+                        sizeZ: params.sizeZ,
+                        bytesPerVoxel: params.byteDepth,
+                        componentCount: 1,
+                        logger: logger)
+      return "Linear data"
+    case .UInt32TestData:
+      try computeUInt32TestVolume(filename: outputURL.path,
+                                  sizeX: params.sizeX,
+                                  sizeY: params.sizeY,
+                                  sizeZ: params.sizeZ,
+                                  logger: logger)
+      return "Scalar UInt32 full-range test data"
+    case .DoubleFractalData:
+      try computeMandelbulb(filename: outputURL.path,
+                            sizeX: params.sizeX,
+                            sizeY: params.sizeY,
+                            sizeZ: params.sizeZ,
+                            bytesPerVoxel: params.byteDepth,
+                            logger: logger)
+      return "Double-precision CPU Mandelbulb"
+    case .FloatFractalData:
+      let backend = try computeMandelbulbFloat(filename: outputURL.path,
+                                               sizeX: params.sizeX,
+                                               sizeY: params.sizeY,
+                                               sizeZ: params.sizeZ,
+                                               bytesPerVoxel: params.byteDepth,
+                                               logger: logger)
+      return backend.metaDescription
+    case .QuaternionJuliaData,
+         .MandelboxData,
+         .GyroidData,
+         .SheppLoganData,
+         .FrequencyChirpData:
+      guard let kind = datasetType.analyticKind else {
+        preconditionFailure("Missing analytical volume kind")
+      }
+      let backend = try computeAnalyticVolume(
+        kind: kind,
+        filename: outputURL.path,
+        sizeX: params.sizeX,
+        sizeY: params.sizeY,
+        sizeZ: params.sizeZ,
+        bytesPerVoxel: params.byteDepth,
+        brickStride: params.common.maxBrickSize - 2 * params.common.overlap,
+        logger: logger
+      )
+      return "\(kind.displayName), generated using \(backend.displayName)"
+  }
+}
+
+private func interleaveVolumeChannels(inputURLs: [URL],
+                                      outputURL: URL,
+                                      voxelCount: Int,
+                                      bytesPerComponent: Int) throws {
+  precondition(!inputURLs.isEmpty)
+  if inputURLs.count == 1 {
+    try FileManager.default.copyItem(at: inputURLs[0], to: outputURL)
+    return
+  }
+
+  let inputFiles = try inputURLs.map { try MemoryMappedFile(filename: $0.path) }
+  defer {
+    for inputFile in inputFiles {
+      try? inputFile.close()
+    }
+  }
+
+  let expectedChannelSize = Int64(voxelCount * bytesPerComponent)
+  guard inputFiles.allSatisfy({ $0.fileSize == expectedChannelSize }) else {
+    throw CocoaError(.fileReadCorruptFile)
+  }
+
+  let outputFile = try MemoryMappedFile(
+    filename: outputURL.path,
+    size: expectedChannelSize * Int64(inputFiles.count)
+  )
+  defer { try? outputFile.close() }
+
+  let sourceAddresses = inputFiles.map { UInt(bitPattern: $0.mappedMemory) }
+  let outputAddress = UInt(bitPattern: outputFile.mappedMemory)
+  let workerCount = min(max(ProcessInfo.processInfo.activeProcessorCount, 1), voxelCount)
+  let voxelsPerWorker = (voxelCount + workerCount - 1) / workerCount
+
+  DispatchQueue.concurrentPerform(iterations: workerCount) { worker in
+    let start = worker * voxelsPerWorker
+    let end = min(start + voxelsPerWorker, voxelCount)
+    guard start < end,
+          let outputPointer = UnsafeMutableRawPointer(bitPattern: outputAddress) else { return }
+
+    switch bytesPerComponent {
+      case 1:
+        let destination = outputPointer.assumingMemoryBound(to: UInt8.self)
+        let sources = sourceAddresses.compactMap {
+          UnsafeRawPointer(bitPattern: $0)?.assumingMemoryBound(to: UInt8.self)
+        }
+        guard sources.count == inputFiles.count else { return }
+        for voxel in start..<end {
+          let destinationBase = voxel * sources.count
+          for channel in sources.indices {
+            destination[destinationBase + channel] = sources[channel][voxel]
+          }
+        }
+      case 2:
+        let destination = outputPointer.assumingMemoryBound(to: UInt16.self)
+        let sources = sourceAddresses.compactMap {
+          UnsafeRawPointer(bitPattern: $0)?.assumingMemoryBound(to: UInt16.self)
+        }
+        guard sources.count == inputFiles.count else { return }
+        for voxel in start..<end {
+          let destinationBase = voxel * sources.count
+          for channel in sources.indices {
+            destination[destinationBase + channel] = sources[channel][voxel]
+          }
+        }
+      default:
+        for voxel in start..<end {
+          for channel in sourceAddresses.indices {
+            guard let source = UnsafeRawPointer(bitPattern: sourceAddresses[channel]) else {
+              continue
+            }
+            outputPointer.advanced(
+              by: (voxel * sourceAddresses.count + channel) * bytesPerComponent
+            ).copyMemory(
+              from: source.advanced(by: voxel * bytesPerComponent),
+              byteCount: bytesPerComponent
+            )
+          }
+        }
+    }
+  }
+}
+
 /**
  Generates a synthetic volume dataset and converts it into the BorgVR file format.
 
@@ -593,57 +777,42 @@ func generateVolume(_ params: CreateModeParameters) {
     let uuid = UUID().uuidString
     let tempURL = tempDir.appendingPathComponent(uuid)
 
-    logger.info("Generating volume...")
+    logger.info("Generating \(params.componentCount)-channel volume...")
 
-    let metaDesc : String
-    switch params.datasetType {
-      case .LinearData:
-        metaDesc = "Linear data"
-        try computeLinear(filename: tempURL.path,
-                          sizeX: params.sizeX,
-                          sizeY: params.sizeY,
-                          sizeZ: params.sizeZ,
-                          bytesPerVoxel: params.byteDepth,
-                          componentCount: params.componentCount,
-                          logger: logger)
-      case .DoubleFractalData:
-        metaDesc = "Double-precision CPU fractal data"
-        try computeMandelbulb(filename: tempURL.path,
-                              sizeX: params.sizeX,
-                              sizeY: params.sizeY,
-                              sizeZ: params.sizeZ,
-                              bytesPerVoxel: params.byteDepth,
-                              logger: logger)
-      case .FloatFractalData:
-        let backend = try computeMandelbulbFloat(
-          filename: tempURL.path,
-          sizeX: params.sizeX,
-          sizeY: params.sizeY,
-          sizeZ: params.sizeZ,
-          bytesPerVoxel: params.byteDepth,
-          logger: logger
-        )
-        metaDesc = backend.metaDescription
-      case .QuaternionJuliaData,
-           .MandelboxData,
-           .GyroidData,
-           .SheppLoganData,
-           .FrequencyChirpData:
-        guard let kind = params.datasetType.analyticKind else {
-          preconditionFailure("Missing analytical volume kind")
-        }
-        let backend = try computeAnalyticVolume(
-          kind: kind,
-          filename: tempURL.path,
-          sizeX: params.sizeX,
-          sizeY: params.sizeY,
-          sizeZ: params.sizeZ,
-          bytesPerVoxel: params.byteDepth,
-          brickStride: params.common.maxBrickSize - 2 * params.common.overlap,
-          logger: logger
-        )
-        metaDesc = "\(kind.displayName), generated using \(backend.displayName)"
+    let channelURLs = params.datasetTypes.indices.map {
+      tempDir.appendingPathComponent("\(uuid)-channel-\($0)")
     }
+    defer {
+      try? FileManager.default.removeItem(at: tempURL)
+      for channelURL in channelURLs {
+        try? FileManager.default.removeItem(at: channelURL)
+        try? FileManager.default.removeItem(
+          at: channelURL.deletingPathExtension().appendingPathExtension("dat")
+        )
+      }
+    }
+
+    var channelDescriptions: [String] = []
+    for (channel, datasetType) in params.datasetTypes.enumerated() {
+      logger.info("Generating channel \(channel + 1)/\(params.componentCount): \(datasetType.displayName)")
+      channelDescriptions.append(
+        try generateScalarVolume(
+          datasetType: datasetType,
+          outputURL: channelURLs[channel],
+          params: params
+        )
+      )
+    }
+
+    try interleaveVolumeChannels(
+      inputURLs: channelURLs,
+      outputURL: tempURL,
+      voxelCount: params.sizeX * params.sizeY * params.sizeZ,
+      bytesPerComponent: params.byteDepth
+    )
+    let metaDesc = channelDescriptions.enumerated().map {
+      "Channel \($0.offset): \($0.element)"
+    }.joined(separator: "; ")
 
     logger.info("Converting generated volume to BorgVR file format ...")
 
@@ -663,7 +832,6 @@ func generateVolume(_ params: CreateModeParameters) {
                          datasetDescription: params.common.datasetDescription,
                          metaDescription: metaDesc)
 
-    try FileManager.default.removeItem(at: tempURL)
   } catch {
     logger.error("Error: \(error.localizedDescription)")
     exit(1)

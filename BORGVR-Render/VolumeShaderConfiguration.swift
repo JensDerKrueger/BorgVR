@@ -55,6 +55,11 @@ enum VolumeShaderCompiler {
       "HASHTABLE_SIZE": NSNumber(value: hashTableSize),
       "MAX_PROBING_ATTEMPTS": NSNumber(value: configuration.maximumProbingAttempts),
       "MAX_ITERATIONS": NSNumber(value: maximumIterations),
+      "VOLUME_COMPONENT_COUNT": NSNumber(value: metadata.componentCount),
+      "VOLUME_BYTES_PER_COMPONENT": NSNumber(value: metadata.bytesPerComponent),
+      "VOLUME_SCALAR_UINT32_PACKED": NSNumber(
+        value: metadata.bytesPerComponent == 4 && metadata.componentCount == 1 ? 1 : 0
+      ),
       "REQUEST_LOWRES_LOD": NSNumber(value: configuration.requestsLowResolutionLOD ? 1 : 0),
       "STOP_ON_MISS": NSNumber(value: configuration.stopsOnMissingBrick ? 1 : 0)
     ]

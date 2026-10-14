@@ -93,7 +93,7 @@ final class ScreenVolumeRendererCore {
     self.view = view
     self.device = view.device
     self.commandQueue = view.device?.makeCommandQueue()
-    renderingParameters.transferFunction.initMetal(device: view.device!)
+    renderingParameters.initTransferFunctionMetal(device: view.device!)
 
     let depthDescriptor = MTLDepthStencilDescriptor()
     depthDescriptor.depthCompareFunction = .greater
@@ -274,7 +274,7 @@ final class ScreenVolumeRendererCore {
       levelIndex: FragmentBufferIndex.levelTable.rawValue
     )
     do {
-      try renderingParameters.transferFunction.bind(to: renderEncoder, index: TextureIndex.transferFunction.rawValue)
+      try renderingParameters.bindTransferFunctions(to: renderEncoder)
     } catch {
       appModel.logger.error("Failed to bind transfer function: \(error.localizedDescription)")
     }
@@ -396,7 +396,8 @@ final class ScreenVolumeRendererCore {
     renderingParameters.updateRanges(
       minValue: metadata.minValue,
       maxValue: metadata.maxValue,
-      rangeMax: metadata.rangeMax
+      rangeMax: metadata.rangeMax,
+      componentCount: metadata.componentCount
     )
     if appSettings.autoloadTF, let tfURL = appModel.transferFunctionFileURL(for: activeDataset) {
       try? renderingParameters.loadTransferFunction(from: tfURL)
@@ -409,7 +410,7 @@ final class ScreenVolumeRendererCore {
       device: device,
       maxMemory: atlasSizeMB * 1024 * 1024,
       borgData: newDataset,
-      transferFunction: renderingParameters.transferFunction,
+      transferFunctions: Array(renderingParameters.activeTransferFunctions),
       isoValue: renderingParameters.isoValue,
       logger: appModel.logger
     )
@@ -941,7 +942,9 @@ final class ScreenVolumeRendererCore {
     guard let volumeAtlas else { return }
     switch renderingParameters.renderMode {
       case .transferFunction1D, .transferFunction1DLighting:
-        volumeAtlas.updateEmptiness(transferFunction: renderingParameters.transferFunction)
+        volumeAtlas.updateEmptiness(
+          transferFunctions: Array(renderingParameters.activeTransferFunctions)
+        )
       case .isoValue:
         volumeAtlas.updateEmptiness(isoValue: renderingParameters.isoValue)
     }

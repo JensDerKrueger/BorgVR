@@ -64,14 +64,19 @@ async function loadBatch(message) {
     const prepareStart = now();
     const prepared = prepareBrickUploadData(requestConfig, brickData);
     profile.uploadPrepareMs += now() - prepareStart;
-    profile.uploadedBytes += prepared.data.byteLength;
+    profile.uploadedBytes += prepared.data.byteLength + (prepared.secondaryData?.byteLength ?? 0);
     preparedBricks.push({
       brickID,
       data: prepared.data,
       bytesPerRow: prepared.bytesPerRow,
-      rowsPerImage: prepared.rowsPerImage
+      rowsPerImage: prepared.rowsPerImage,
+      secondaryData: prepared.secondaryData,
+      secondaryBytesPerRow: prepared.secondaryBytesPerRow
     });
     transferList.push(prepared.data.buffer);
+    if (prepared.secondaryData) {
+      transferList.push(prepared.secondaryData.buffer);
+    }
   }
 
   self.postMessage({
@@ -230,26 +235,49 @@ function prepareBrickUploadData(cfg, brickData) {
   const bytesPerRow = align(cfg.brickSize * cfg.textureBytesPerVoxel, 256);
   const rowsPerImage = cfg.brickSize;
   const paddedData = new Uint8Array(bytesPerRow * rowsPerImage * cfg.brickSize);
+  const secondaryBytesPerRow = cfg.secondaryTextureBytesPerVoxel > 0
+    ? align(cfg.brickSize * cfg.secondaryTextureBytesPerVoxel, 256)
+    : 0;
+  const secondaryData = secondaryBytesPerRow > 0
+    ? new Uint8Array(secondaryBytesPerRow * rowsPerImage * cfg.brickSize)
+    : null;
   const sourceBytesPerRow = cfg.brickSize * cfg.bytesPerVoxel;
 
   for (let z = 0; z < cfg.brickSize; z += 1) {
     for (let y = 0; y < cfg.brickSize; y += 1) {
       const sourceOffset = (z * cfg.brickSize + y) * sourceBytesPerRow;
       const destinationOffset = (z * rowsPerImage + y) * bytesPerRow;
-      if (cfg.bytesPerComponent === 1) {
-        paddedData.set(brickData.subarray(sourceOffset, sourceOffset + sourceBytesPerRow), destinationOffset);
-      } else {
-        for (let x = 0; x < cfg.brickSize; x += 1) {
-          const sourceVoxelOffset = sourceOffset + x * cfg.bytesPerVoxel;
-          const value = brickData[sourceVoxelOffset] | (brickData[sourceVoxelOffset + 1] << 8);
-          const normalizedValue = Math.min(1, Math.max(0, value / Math.max(1, cfg.dataRangeMax)));
-          writeUInt16LE(paddedData, destinationOffset + x * cfg.textureBytesPerVoxel, float32ToFloat16Bits(normalizedValue));
+      const secondaryDestinationOffset = (z * rowsPerImage + y) * secondaryBytesPerRow;
+      for (let x = 0; x < cfg.brickSize; x += 1) {
+        const sourceVoxelOffset = sourceOffset + x * cfg.bytesPerVoxel;
+        const primaryVoxelOffset = destinationOffset + x * cfg.textureBytesPerVoxel;
+        const primaryComponentCount = Math.min(cfg.componentCount, 2);
+        const primaryByteCount = cfg.bytesPerComponent === 1
+          ? cfg.componentCount
+          : primaryComponentCount * cfg.bytesPerComponent;
+        paddedData.set(
+          brickData.subarray(sourceVoxelOffset, sourceVoxelOffset + primaryByteCount),
+          primaryVoxelOffset
+        );
+        if (secondaryData) {
+          const secondarySourceOffset = sourceVoxelOffset + 2 * cfg.bytesPerComponent;
+          const secondaryByteCount = (cfg.componentCount - 2) * cfg.bytesPerComponent;
+          secondaryData.set(
+            brickData.subarray(secondarySourceOffset, secondarySourceOffset + secondaryByteCount),
+            secondaryDestinationOffset + x * cfg.secondaryTextureBytesPerVoxel
+          );
         }
       }
     }
   }
 
-  return { data: paddedData, bytesPerRow, rowsPerImage };
+  return {
+    data: paddedData,
+    bytesPerRow,
+    rowsPerImage,
+    secondaryData,
+    secondaryBytesPerRow
+  };
 }
 
 function createProfile() {
@@ -514,36 +542,6 @@ function normalizeCompressionName(value) {
     return value;
   }
   return null;
-}
-
-function writeUInt16LE(data, offset, value) {
-  data[offset] = value & 0xff;
-  data[offset + 1] = (value >> 8) & 0xff;
-}
-
-function float32ToFloat16Bits(value) {
-  const floatView = new Float32Array(1);
-  const intView = new Uint32Array(floatView.buffer);
-  floatView[0] = value;
-
-  const bits = intView[0];
-  const sign = (bits >>> 16) & 0x8000;
-  let exponent = ((bits >>> 23) & 0xff) - 127 + 15;
-  let mantissa = bits & 0x7fffff;
-
-  if (exponent <= 0) {
-    if (exponent < -10) {
-      return sign;
-    }
-    mantissa = (mantissa | 0x800000) >>> (1 - exponent);
-    return sign | ((mantissa + 0x1000) >>> 13);
-  }
-
-  if (exponent >= 31) {
-    return sign | 0x7c00;
-  }
-
-  return sign | (exponent << 10) | ((mantissa + 0x1000) >>> 13);
 }
 
 function align(value, alignment) {

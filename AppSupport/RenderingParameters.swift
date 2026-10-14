@@ -1,4 +1,5 @@
 import Foundation
+import Metal
 import simd
 
 struct TransferEditing {
@@ -10,7 +11,8 @@ struct TransferEditing {
 
 final class RenderingParameters: ObservableObject {
   private static let streamMagic: UInt32 = 0x5250_494F // "RPIO"
-  private static let streamVersion: UInt16 = 2
+  private static let streamVersion: UInt16 = 4
+  static let maximumTransferFunctionCount = 4
 
   private static let defaultOrientation =
     simd_quatf(angle: 0.25, axis: SIMD3<Float>(1, 0, 0)) *
@@ -22,7 +24,15 @@ final class RenderingParameters: ObservableObject {
   @Published var clippingTranslation = SIMD3<Float>(0, 0, 0)
   @Published var clipMin = SIMD3<Float>(0, 0, 0)
   @Published var clipMax = SIMD3<Float>(1, 1, 1)
-  @Published var transferFunction = TransferFunction1D()
+  let transferFunctions = (0..<maximumTransferFunctionCount).map { _ in TransferFunction1D() }
+  @Published private(set) var componentCount = 1
+  @Published var selectedTransferFunctionChannel = 0
+  var transferFunction: TransferFunction1D {
+    transferFunctions[min(max(selectedTransferFunctionChannel, 0), componentCount - 1)]
+  }
+  var activeTransferFunctions: ArraySlice<TransferFunction1D> {
+    transferFunctions.prefix(componentCount)
+  }
   @Published var transferEditing = TransferEditing()
   @Published var normIsoValue: Float = 0.1
   @Published var renderMode: RenderMode = .transferFunction1D
@@ -41,11 +51,13 @@ final class RenderingParameters: ObservableObject {
     normIsoValue * Float(maxValue) / Float(max(rangeMax, 1))
   }
 
-  func updateRanges(minValue: Int, maxValue: Int, rangeMax: Int) {
+  func updateRanges(minValue: Int, maxValue: Int, rangeMax: Int, componentCount: Int = 1) {
     self.minValue = minValue
     self.maxValue = maxValue
     self.rangeMax = rangeMax
-    transferFunction.updateRanges(minValue: minValue, maxValue: maxValue, rangeMax: rangeMax)
+    self.componentCount = min(max(componentCount, 1), Self.maximumTransferFunctionCount)
+    selectedTransferFunctionChannel = min(selectedTransferFunctionChannel, self.componentCount - 1)
+    updateTransferFunctionRanges()
   }
 
   func loadTransferFunction(from url: URL) throws {
@@ -82,7 +94,10 @@ final class RenderingParameters: ObservableObject {
     clippingTranslation = SIMD3<Float>(0, 0, 0)
     clipMin = SIMD3<Float>(0, 0, 0)
     clipMax = SIMD3<Float>(1, 1, 1)
-    transferFunction.reset()
+    for transferFunction in transferFunctions {
+      transferFunction.reset()
+    }
+    selectedTransferFunctionChannel = 0
     transferEditing = TransferEditing()
     normIsoValue = 0.1
     renderMode = .transferFunction1D
@@ -138,18 +153,16 @@ final class RenderingParameters: ObservableObject {
     writer.write(normIsoValue)
     writer.write(renderMode.serialize())
     writer.write(UInt8(brickVis ? 1 : 0))
-    writer.write(Int32(minValue))
-    writer.write(Int32(maxValue))
-    writer.write(Int32(rangeMax))
+    writer.write(Int64(minValue))
+    writer.write(Int64(maxValue))
+    writer.write(Int64(rangeMax))
     writer.writeSIMD3(lightDirection)
     writer.writeSIMD3(ambientLightColor)
     writer.writeSIMD3(diffuseLightColor)
     writer.writeSIMD3(specularLightColor)
 
     if case .full = kind {
-      let tfData = transferFunction.serialize()
-      writer.write(UInt32(tfData.count))
-      writer.writeRaw(tfData)
+      writeTransferFunctions(to: &writer)
     }
 
     return writer.data
@@ -167,18 +180,16 @@ final class RenderingParameters: ObservableObject {
     writer.write(normIsoValue)
     writer.write(renderMode.serialize())
     writer.write(UInt8(brickVis ? 1 : 0))
-    writer.write(Int32(minValue))
-    writer.write(Int32(maxValue))
-    writer.write(Int32(rangeMax))
+    writer.write(Int64(minValue))
+    writer.write(Int64(maxValue))
+    writer.write(Int64(rangeMax))
     writer.writeSIMD3(lightDirection)
     writer.writeSIMD3(ambientLightColor)
     writer.writeSIMD3(diffuseLightColor)
     writer.writeSIMD3(specularLightColor)
 
     if includeTransferFunction {
-      let tfData = transferFunction.serialize()
-      writer.write(UInt32(tfData.count))
-      writer.writeRaw(tfData)
+      writeTransferFunctions(to: &writer)
     }
 
     return writer.data
@@ -236,7 +247,9 @@ final class RenderingParameters: ObservableObject {
     let magic: UInt32 = try reader.read()
     guard magic == Self.streamMagic else { throw RenderingParametersUpdateError.badMagic }
     let version: UInt16 = try reader.read()
-    guard version == Self.streamVersion else { throw RenderingParametersUpdateError.unsupportedVersion(version) }
+    guard version == 2 || version == 3 || version == Self.streamVersion else {
+      throw RenderingParametersUpdateError.unsupportedVersion(version)
+    }
     let flags: UInt16 = try reader.read()
     let kind = UpdateKind.from(flags: flags)
 
@@ -254,9 +267,15 @@ final class RenderingParameters: ObservableObject {
     normIsoValue = try reader.read()
     renderMode = RenderMode.deserialize(try reader.read())
     brickVis = (try reader.read() as UInt8) != 0
-    minValue = Int(try reader.read() as Int32)
-    maxValue = Int(try reader.read() as Int32)
-    rangeMax = Int(try reader.read() as Int32)
+    if version >= 3 {
+      minValue = Int(try reader.read() as Int64)
+      maxValue = Int(try reader.read() as Int64)
+      rangeMax = Int(try reader.read() as Int64)
+    } else {
+      minValue = Int(try reader.read() as Int32)
+      maxValue = Int(try reader.read() as Int32)
+      rangeMax = Int(try reader.read() as Int32)
+    }
     applyLightingState(BorgVRLightingState(
       direction: try reader.readSIMD3(),
       ambientColor: try reader.readSIMD3(),
@@ -265,13 +284,17 @@ final class RenderingParameters: ObservableObject {
     ))
 
     if case .full = kind {
-      let tfLength: UInt32 = try reader.read()
-      let tfData = try reader.readRaw(Int(tfLength))
       objectWillChange.send()
-      try? transferFunction.update(from: tfData)
+      if version >= 4 {
+        try readTransferFunctions(from: &reader)
+      } else {
+        let tfLength: UInt32 = try reader.read()
+        let tfData = try reader.readRaw(Int(tfLength))
+        try? transferFunctions[0].update(from: tfData)
+      }
     }
 
-    transferFunction.updateRanges(minValue: minValue, maxValue: maxValue, rangeMax: rangeMax)
+    updateTransferFunctionRanges()
 
     if !reader.isAtEnd {
       throw RenderingParametersUpdateError.trailingBytes(reader.remainingCount)
@@ -287,9 +310,9 @@ final class RenderingParameters: ObservableObject {
     normIsoValue = try reader.read()
     renderMode = RenderMode.deserialize(try reader.read())
     brickVis = (try reader.read() as UInt8) != 0
-    minValue = Int(try reader.read() as Int32)
-    maxValue = Int(try reader.read() as Int32)
-    rangeMax = Int(try reader.read() as Int32)
+    minValue = Int(try reader.read() as Int64)
+    maxValue = Int(try reader.read() as Int64)
+    rangeMax = Int(try reader.read() as Int64)
     applyLightingState(BorgVRLightingState(
       direction: try reader.readSIMD3(),
       ambientColor: try reader.readSIMD3(),
@@ -298,13 +321,60 @@ final class RenderingParameters: ObservableObject {
     ))
 
     if includesTransferFunction {
-      let tfLength: UInt32 = try reader.read()
-      let tfData = try reader.readRaw(Int(tfLength))
       objectWillChange.send()
-      try? transferFunction.update(from: tfData)
+      try readTransferFunctions(from: &reader)
     }
 
-    transferFunction.updateRanges(minValue: minValue, maxValue: maxValue, rangeMax: rangeMax)
+    updateTransferFunctionRanges()
+  }
+
+  func initTransferFunctionMetal(device: MTLDevice) {
+    for transferFunction in transferFunctions {
+      transferFunction.initMetal(device: device)
+    }
+  }
+
+  func bindTransferFunctions(to encoder: MTLRenderCommandEncoder) throws {
+    let indices = [
+      TextureIndex.transferFunction.rawValue,
+      TextureIndex.transferFunction2.rawValue,
+      TextureIndex.transferFunction3.rawValue,
+      TextureIndex.transferFunction4.rawValue
+    ]
+    for index in transferFunctions.indices {
+      try transferFunctions[index].bind(to: encoder, index: indices[index])
+    }
+  }
+
+  private func writeTransferFunctions(to writer: inout DataWriter) {
+    writer.write(UInt8(componentCount))
+    writer.write(UInt8(selectedTransferFunctionChannel))
+    for transferFunction in activeTransferFunctions {
+      let data = transferFunction.serialize()
+      writer.write(UInt32(data.count))
+      writer.writeRaw(data)
+    }
+  }
+
+  private func readTransferFunctions(from reader: inout DataReader) throws {
+    let count = Int(try reader.read() as UInt8)
+    let selectedChannel = Int(try reader.read() as UInt8)
+    guard (1...Self.maximumTransferFunctionCount).contains(count) else {
+      throw RenderingParametersUpdateError.unsupportedTransferFunctionCount(count)
+    }
+    componentCount = count
+    selectedTransferFunctionChannel = min(selectedChannel, count - 1)
+    for index in 0..<count {
+      let length: UInt32 = try reader.read()
+      let data = try reader.readRaw(Int(length))
+      try transferFunctions[index].update(from: data)
+    }
+  }
+
+  private func updateTransferFunctionRanges() {
+    for transferFunction in transferFunctions {
+      transferFunction.updateRanges(minValue: minValue, maxValue: maxValue, rangeMax: rangeMax)
+    }
   }
 
   private func applyLightingState(_ state: BorgVRLightingState) {
@@ -334,6 +404,7 @@ enum RenderingParametersUpdateError: Error, LocalizedError {
   case unsupportedPacket(UInt8)
   case outOfBounds
   case trailingBytes(Int)
+  case unsupportedTransferFunctionCount(Int)
 
   var errorDescription: String? {
     switch self {
@@ -347,6 +418,8 @@ enum RenderingParametersUpdateError: Error, LocalizedError {
         return "Unexpected end of rendering parameter update."
       case .trailingBytes(let count):
         return "Rendering parameter update has \(count) trailing bytes."
+      case .unsupportedTransferFunctionCount(let count):
+        return "Unsupported transfer-function count \(count)."
     }
   }
 }
