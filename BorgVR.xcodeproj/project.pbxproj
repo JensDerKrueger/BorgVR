@@ -827,7 +827,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "if [ -n \"$TARGET_BUILD_DIR\" ] && [ -n \"$FULL_PRODUCT_NAME\" ]; then\n  /usr/bin/xattr -rd com.apple.quarantine \"$TARGET_BUILD_DIR/$FULL_PRODUCT_NAME\" 2>/dev/null || true\nfi\n";
+			shellScript = "if [ -n \"$TARGET_BUILD_DIR\" ] && [ -n \"$FULL_PRODUCT_NAME\" ]; then\n  product=\"$TARGET_BUILD_DIR/$FULL_PRODUCT_NAME\"\n  if [ -e \"$product\" ]; then\n    /usr/bin/xattr -rd com.apple.quarantine \"$product\"\n    if /usr/bin/xattr -lr \"$product\" 2>/dev/null | /usr/bin/grep -q \"com.apple.quarantine\"; then\n      echo \"error: Quarantine attributes remain in $product\"\n      exit 1\n    fi\n  fi\nfi\n";
 		};
 		560B8BEC2E5C59000042E45B /* Strip Quarantine Attributes */ = {
 			isa = PBXShellScriptBuildPhase;
@@ -846,7 +846,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "if [ -n \"$TARGET_BUILD_DIR\" ] && [ -n \"$FULL_PRODUCT_NAME\" ]; then\n  /usr/bin/xattr -rd com.apple.quarantine \"$TARGET_BUILD_DIR/$FULL_PRODUCT_NAME\" 2>/dev/null || true\nfi\n";
+			shellScript = "if [ -n \"$TARGET_BUILD_DIR\" ] && [ -n \"$FULL_PRODUCT_NAME\" ]; then\n  product=\"$TARGET_BUILD_DIR/$FULL_PRODUCT_NAME\"\n  if [ -e \"$product\" ]; then\n    /usr/bin/xattr -rd com.apple.quarantine \"$product\"\n    if /usr/bin/xattr -lr \"$product\" 2>/dev/null | /usr/bin/grep -q \"com.apple.quarantine\"; then\n      echo \"error: Quarantine attributes remain in $product\"\n      exit 1\n    fi\n  fi\nfi\n";
 		};
 		560B8BED2E5C59000042E45B /* Strip Quarantine Attributes */ = {
 			isa = PBXShellScriptBuildPhase;
@@ -865,7 +865,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "if [ -n \"$TARGET_BUILD_DIR\" ] && [ -n \"$FULL_PRODUCT_NAME\" ]; then\n  /usr/bin/xattr -rd com.apple.quarantine \"$TARGET_BUILD_DIR/$FULL_PRODUCT_NAME\" 2>/dev/null || true\nfi\n";
+			shellScript = "if [ -n \"$TARGET_BUILD_DIR\" ] && [ -n \"$FULL_PRODUCT_NAME\" ]; then\n  product=\"$TARGET_BUILD_DIR/$FULL_PRODUCT_NAME\"\n  if [ -e \"$product\" ]; then\n    /usr/bin/xattr -rd com.apple.quarantine \"$product\"\n    if /usr/bin/xattr -lr \"$product\" 2>/dev/null | /usr/bin/grep -q \"com.apple.quarantine\"; then\n      echo \"error: Quarantine attributes remain in $product\"\n      exit 1\n    fi\n  fi\nfi\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
@@ -1118,7 +1118,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 19;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -1154,7 +1154,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 19;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_HARDENED_RUNTIME = YES;
