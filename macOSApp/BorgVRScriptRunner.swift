@@ -68,6 +68,7 @@ final class BorgVRScriptRunner: ObservableObject {
   private weak var storedAppModel: StoredAppModel?
   private weak var sharePlay: SharePlayCoordinator?
   private weak var docking: DockingController?
+  private var commandService: BorgVRScreenCommandService?
 
   private var outputSubdirectory = ""
   private var logFileURL: URL?
@@ -106,7 +107,8 @@ final class BorgVRScriptRunner: ObservableObject {
     appSettings: AppSettings,
     storedAppModel: StoredAppModel,
     sharePlay: SharePlayCoordinator,
-    docking: DockingController
+    docking: DockingController,
+    commandService: BorgVRScreenCommandService
   ) {
     self.appModel = appModel
     self.renderingParameters = renderingParameters
@@ -114,6 +116,7 @@ final class BorgVRScriptRunner: ObservableObject {
     self.storedAppModel = storedAppModel
     self.sharePlay = sharePlay
     self.docking = docking
+    self.commandService = commandService
 
     if !commandsRegistered {
       registerCommands()
@@ -1071,42 +1074,47 @@ final class BorgVRScriptRunner: ObservableObject {
   }
 
   private func resetRendering() -> CommandResultCode {
-    renderingParameters?.reset()
-    sharePlay?.synchronize(kind: .full)
-    return .success
+    do {
+      try commandService?.reset(.all)
+      return commandService == nil ? .callbackError : .success
+    } catch {
+      logError(error.localizedDescription)
+      return .callbackError
+    }
   }
 
   private func addRotation(axis: SIMD3<Float>, degrees: Float) -> CommandResultCode {
-    guard let parameters = renderingParameters else { return .callbackError }
-    let radians = degrees * .pi / 180
-    let rotation = simd_quatf(angle: radians, axis: axis)
-    parameters.orientation = simd_normalize(rotation * parameters.orientation)
-    synchronizeTransform()
-    return .success
+    do {
+      guard let commandService else { return .callbackError }
+      try commandService.rotate(axis: axis, degrees: degrees)
+      return .success
+    } catch {
+      return .invalidArguments
+    }
   }
 
   private func setScale(_ scale: Float) -> CommandResultCode {
-    guard scale > 0, let parameters = renderingParameters else { return .invalidArguments }
-    parameters.scale = scale
-    synchronizeTransform()
-    return .success
+    guard scale > 0, let commandService else { return .invalidArguments }
+    do {
+      try commandService.setTransform(
+        rotation: nil,
+        translation: nil,
+        scale: SIMD3<Float>(repeating: scale)
+      )
+      return .success
+    } catch {
+      return .invalidArguments
+    }
   }
 
   private func setRenderMode(_ value: String) -> CommandResultCode {
-    guard let parameters = renderingParameters else { return .callbackError }
-    switch value.lowercased() {
-      case "tf", "transfer", "transferfunction", "transferfunction1d":
-        parameters.renderMode = .transferFunction1D
-      case "tflighting", "tfillum", "illum", "lighting":
-        parameters.renderMode = .transferFunction1DLighting
-      case "iso", "isovalue":
-        parameters.renderMode = .isoValue
-      default:
-        return .invalidArguments
+    guard let commandService else { return .callbackError }
+    do {
+      try commandService.setRenderMode(value)
+      return .success
+    } catch {
+      return .invalidArguments
     }
-    docking?.hideIncompatibleEditor(for: parameters.renderMode)
-    synchronizeState()
-    return .success
   }
 
   private func setRenderMethod(_ index: Int) -> CommandResultCode {
@@ -1119,7 +1127,6 @@ final class BorgVRScriptRunner: ObservableObject {
   }
 
   private func setClip(_ args: [CommandArg]) -> CommandResultCode {
-    guard let parameters = renderingParameters else { return .callbackError }
     let minValues = SIMD3<Float>(
       clamp(args.float(0)),
       clamp(args.float(2)),
@@ -1135,11 +1142,13 @@ final class BorgVRScriptRunner: ObservableObject {
           minValues.z <= maxValues.z else {
       return .invalidArguments
     }
-    parameters.clipMin = minValues
-    parameters.clipMax = maxValues
-    parameters.clippingTranslation = SIMD3<Float>(0, 0, 0)
-    synchronizeState()
-    return .success
+    do {
+      guard let commandService else { return .callbackError }
+      try commandService.setClipping(minimum: minValues, maximum: maxValues)
+      return .success
+    } catch {
+      return .invalidArguments
+    }
   }
 
   private func setIsoValue(rawValue: Float) -> CommandResultCode {
@@ -1153,9 +1162,13 @@ final class BorgVRScriptRunner: ObservableObject {
   }
 
   private func setIsoValue(normalizedValue: Float) -> CommandResultCode {
-    renderingParameters?.normIsoValue = clamp(normalizedValue)
-    synchronizeState()
-    return .success
+    do {
+      guard let commandService else { return .callbackError }
+      try commandService.setNormalizedIsoValue(clamp(normalizedValue))
+      return .success
+    } catch {
+      return .invalidArguments
+    }
   }
 
   private func loadTransferFunction(filename: String) -> CommandResultCode {
@@ -1188,21 +1201,28 @@ final class BorgVRScriptRunner: ObservableObject {
   }
 
   private func setLightDirection(_ args: [CommandArg]) -> CommandResultCode {
-    guard let parameters = renderingParameters else { return .callbackError }
     let direction = SIMD3<Float>(args.float(0), args.float(1), args.float(2))
     guard isFinite(direction), simd_length_squared(direction) > 0.000_001 else {
       return .invalidArguments
     }
-    parameters.lightDirection = simd_normalize(direction)
-    synchronizeLighting()
-    return .success
+    do {
+      guard let commandService else { return .callbackError }
+      try commandService.setLighting(
+        direction: direction,
+        ambient: nil,
+        diffuse: nil,
+        specular: nil
+      )
+      return .success
+    } catch {
+      return .invalidArguments
+    }
   }
 
   private func setLightColor(
     _ keyPath: ReferenceWritableKeyPath<RenderingParameters, SIMD3<Float>>,
     arguments: [CommandArg]
   ) -> CommandResultCode {
-    guard let parameters = renderingParameters else { return .callbackError }
     let color = SIMD3<Float>(arguments.float(0), arguments.float(1), arguments.float(2))
     guard isFinite(color),
           color.x >= 0, color.x <= 1,
@@ -1210,20 +1230,29 @@ final class BorgVRScriptRunner: ObservableObject {
           color.z >= 0, color.z <= 1 else {
       return .invalidArguments
     }
-    parameters[keyPath: keyPath] = color
-    synchronizeLighting()
+    do {
+      guard let commandService else { return .callbackError }
+      if keyPath == \RenderingParameters.ambientLightColor {
+        try commandService.setLighting(direction: nil, ambient: color, diffuse: nil, specular: nil)
+      } else if keyPath == \RenderingParameters.diffuseLightColor {
+        try commandService.setLighting(direction: nil, ambient: nil, diffuse: color, specular: nil)
+      } else {
+        try commandService.setLighting(direction: nil, ambient: nil, diffuse: nil, specular: color)
+      }
+    } catch {
+      return .invalidArguments
+    }
     return .success
   }
 
   private func resetLighting() -> CommandResultCode {
-    guard let parameters = renderingParameters else { return .callbackError }
-    let defaults = BorgVRLightingState.default
-    parameters.lightDirection = defaults.direction
-    parameters.ambientLightColor = defaults.ambientColor
-    parameters.diffuseLightColor = defaults.diffuseColor
-    parameters.specularLightColor = defaults.specularColor
-    synchronizeLighting()
-    return .success
+    do {
+      guard let commandService else { return .callbackError }
+      try commandService.reset(.lighting)
+      return .success
+    } catch {
+      return .callbackError
+    }
   }
 
   private func addSphereMarker(

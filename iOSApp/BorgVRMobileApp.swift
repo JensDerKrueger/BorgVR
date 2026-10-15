@@ -8,6 +8,7 @@ struct BorgVRMobileApp: App {
   @StateObject private var sharePlay = SharePlayCoordinator()
   @StateObject private var serverController = BackgroundServerController()
   @StateObject private var updateChecker = AppStoreUpdateChecker()
+  @StateObject private var mcpController = BorgVRMCPServerController()
   @AppStorage("sharePlayDisplayNameOnboardingCompleted")
   private var sharePlayDisplayNameOnboardingCompleted = false
   @State private var showsSharePlayDisplayNameOnboarding = false
@@ -57,6 +58,7 @@ struct BorgVRMobileApp: App {
         .environmentObject(sharePlay)
         .environmentObject(serverController)
         .environmentObject(updateChecker)
+        .environmentObject(mcpController)
         .task {
           await presentSharePlayDisplayNameOnboardingIfNeeded()
         }
@@ -67,6 +69,7 @@ struct BorgVRMobileApp: App {
             appSettings: appSettings
           )
           appModel.setLogLevel(appSettings.logLevel)
+          configureMCP()
         }
         .onChange(of: sharePlay.hasObservedGroupSession) { _, hasObservedSession in
           if hasObservedSession {
@@ -114,6 +117,10 @@ struct BorgVRMobileApp: App {
         .onChange(of: appSettings.webServerCertificateData) { _, _ in
           serverController.restartIfRunning(using: appSettings)
         }
+        .onChange(of: appSettings.enableMCPServer) { _, _ in applyMCPConfiguration() }
+        .onChange(of: appSettings.mcpServerPort) { _, _ in applyMCPConfiguration() }
+        .onChange(of: appSettings.mcpAllowRemoteConnections) { _, _ in applyMCPConfiguration() }
+        .onChange(of: appSettings.mcpAccessToken) { _, _ in applyMCPConfiguration() }
         .task {
           if appSettings.enableDatasetServer && appSettings.autoStartServer {
             serverController.start(using: appSettings)
@@ -124,6 +131,107 @@ struct BorgVRMobileApp: App {
         }
     }
     .handlesExternalEvents(matching: [BorgVRSharePlayActivity.activityIdentifier])
+  }
+
+  @MainActor
+  private func configureMCP() {
+    let service = BorgVRScreenCommandService(
+      appModel: appModel,
+      renderingParameters: renderingParameters,
+      synchronizeTransform: { sharePlay.synchronize(kind: .transformOnly) },
+      synchronizeState: { sharePlay.synchronize(kind: .stateOnly) },
+      synchronizeFullState: { sharePlay.synchronize(kind: .full) },
+      datasetListProvider: {
+        await loadMCPDatasetRecords().map(\.catalogEntry)
+      },
+      datasetOpener: { id in
+        try await openMCPDataset(id: id)
+      },
+      datasetCloser: {
+        closeMCPDataset()
+      }
+    )
+    mcpController.configure(commandService: service, logger: appModel.logger)
+    applyMCPConfiguration()
+  }
+
+  @MainActor
+  private func loadMCPDatasetRecords() async -> [BorgVRMCPDatasetRecord] {
+    let documentsDirectory = FileManager.default.urls(
+      for: .documentDirectory,
+      in: .userDomainMask
+    ).first
+    return await BorgVRMCPDatasetCatalog.load(
+      localDirectory: documentsDirectory,
+      servers: appSettings.servers,
+      timeout: appSettings.timeout
+    )
+  }
+
+  @MainActor
+  private func openMCPDataset(id: String) async throws {
+    let records = await loadMCPDatasetRecords()
+    guard let record = records.first(where: { $0.catalogEntry.id == id }) else {
+      throw BorgVRMCPCommandError.datasetNotFound(id)
+    }
+    let entry: AppModel.DatasetEntry
+    switch record.preferredLocation {
+      case .local(let url):
+        entry = AppModel.DatasetEntry(
+          identifier: url.path,
+          description: record.catalogEntry.description,
+          source: .local,
+          uniqueId: record.catalogEntry.id
+        )
+      case .builtIn(let url):
+        entry = AppModel.DatasetEntry(
+          identifier: url.path,
+          description: record.catalogEntry.description,
+          source: .builtIn,
+          uniqueId: record.catalogEntry.id
+        )
+      case .remote(let address, let port, let password):
+        entry = AppModel.DatasetEntry(
+          identifier: record.catalogEntry.id,
+          description: record.catalogEntry.description,
+          source: .remote(address: address, port: port, password: password),
+          uniqueId: record.catalogEntry.id
+        )
+    }
+    appModel.openDataset(entry, asGroupSessionHost: sharePlay.isInSession ? nil : true)
+    sharePlay.datasetOpened()
+  }
+
+  @MainActor
+  private func closeMCPDataset() {
+    guard appModel.activeDataset != nil else { return }
+    if appSettings.autoloadTF,
+       let fileURL = appModel.transferFunctionFileURL() {
+      try? renderingParameters.transferFunction.save(to: fileURL)
+    }
+    appModel.saveAutomaticallyManagedDatasetState(
+      appSettings: appSettings,
+      renderingParameters: renderingParameters
+    )
+    if sharePlay.isInSession, !appModel.groupSessionHost {
+      sharePlay.leaveGroupActivity()
+    } else {
+      sharePlay.closeSharedDataset()
+    }
+    appModel.removeAllVolumeMarkers()
+    appModel.replaceSceneMeshInstances([])
+    appModel.removeAllVolumeMeasurements()
+    appModel.closeDataset(destination: .datasetSelection)
+  }
+
+  @MainActor
+  private func applyMCPConfiguration() {
+    mcpController.apply(BorgVRMCPConfiguration(
+      enabled: appSettings.enableMCPServer,
+      port: appSettings.mcpServerPort,
+      allowRemoteConnections: appSettings.mcpAllowRemoteConnections,
+      accessToken: appSettings.mcpAccessToken
+    ))
   }
 
   @MainActor

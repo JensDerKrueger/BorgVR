@@ -88,9 +88,7 @@ final class RenderingParameters: ObservableObject {
   }
 
   func reset() {
-    orientation = RenderingParameters.defaultOrientation
-    scale = 1.0
-    pan = SIMD2<Float>(0, 0)
+    resetTransform()
     clippingTranslation = SIMD3<Float>(0, 0, 0)
     clipMin = SIMD3<Float>(0, 0, 0)
     clipMax = SIMD3<Float>(1, 1, 1)
@@ -103,6 +101,12 @@ final class RenderingParameters: ObservableObject {
     renderMode = .transferFunction1D
     brickVis = false
     applyLightingState(.default)
+  }
+
+  func resetTransform() {
+    orientation = RenderingParameters.defaultOrientation
+    scale = 1.0
+    pan = SIMD2<Float>(0, 0)
   }
 
   enum UpdateKind {

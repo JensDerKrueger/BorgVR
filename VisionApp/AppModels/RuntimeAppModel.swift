@@ -84,6 +84,7 @@ class RuntimeAppModel {
 
   /// The dedicated task that owns the compositor render loop.
   var renderTask: Task<Void, Never>?
+  @ObservationIgnored let mcpRenderBridge = VisionMCPRenderBridge()
 
   /**
    Requests an orderly render-loop shutdown and returns the task so callers can

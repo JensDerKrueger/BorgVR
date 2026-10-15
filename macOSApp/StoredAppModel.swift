@@ -50,6 +50,19 @@ final class StoredAppModel : ObservableObject {
   static let defaultSharePlayWebServerPort = BorgVRSharedDefaults.sharePlayWebServerPort
   @AppStorage("sharePlayWebServerPort") var sharePlayWebServerPort: Int = defaultSharePlayWebServerPort
 
+  static let defaultEnableMCPServer = BorgVRMCPDefaults.enabled
+  @AppStorage("enableMCPServer") var enableMCPServer: Bool = defaultEnableMCPServer
+
+  static let defaultMCPServerPort = BorgVRMCPDefaults.port
+  @AppStorage("mcpServerPort") var mcpServerPort: Int = defaultMCPServerPort
+
+  static let defaultMCPAllowRemoteConnections = BorgVRMCPDefaults.allowRemoteConnections
+  @AppStorage("mcpAllowRemoteConnections")
+  var mcpAllowRemoteConnections: Bool = defaultMCPAllowRemoteConnections
+
+  static let defaultMCPAccessToken = BorgVRMCPDefaults.accessToken
+  @AppStorage("mcpAccessToken") var mcpAccessToken: String = defaultMCPAccessToken
+
   static let defaultSharePlayDisplayName = ""
   @AppStorage("sharePlayDisplayName") var sharePlayDisplayName: String = defaultSharePlayDisplayName
 
@@ -92,6 +105,13 @@ final class StoredAppModel : ObservableObject {
     sharePlayWebServerPort = StoredAppModel.defaultSharePlayWebServerPort
   }
 
+  func resetMCPDefaults() {
+    enableMCPServer = Self.defaultEnableMCPServer
+    mcpServerPort = Self.defaultMCPServerPort
+    mcpAllowRemoteConnections = Self.defaultMCPAllowRemoteConnections
+    mcpAccessToken = Self.defaultMCPAccessToken
+  }
+
   func resetSharePlayDefaults() {
     sharePlayDisplayName = StoredAppModel.defaultSharePlayDisplayName
   }
@@ -101,6 +121,7 @@ final class StoredAppModel : ObservableObject {
     resetImportDefaults()
     resetBackgroundServerDefaults()
     resetAdHocServerDefaults()
+    resetMCPDefaults()
     resetSharePlayDefaults()
   }
 

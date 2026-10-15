@@ -129,6 +129,14 @@
 		57A001B12EA3000100000001 /* DatasetViewState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001B02EA3000100000001 /* DatasetViewState.swift */; };
 		57A001B22EA3000100000001 /* DatasetViewState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001B02EA3000100000001 /* DatasetViewState.swift */; };
 		57A001B32EA3000100000001 /* DatasetViewState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001B02EA3000100000001 /* DatasetViewState.swift */; };
+		57A001C12EB0000100000001 /* BorgVRScreenCommandService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001C02EB0000100000001 /* BorgVRScreenCommandService.swift */; };
+		57A001C22EB0000100000001 /* BorgVRScreenCommandService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001C02EB0000100000001 /* BorgVRScreenCommandService.swift */; };
+		57A001D12EB0000200000001 /* MetalScreenshotEncoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001D02EB0000200000001 /* MetalScreenshotEncoder.swift */; };
+		57A001D22EB0000200000001 /* MetalScreenshotEncoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001D02EB0000200000001 /* MetalScreenshotEncoder.swift */; };
+		57A001D32EB0000200000001 /* MetalScreenshotEncoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001D02EB0000200000001 /* MetalScreenshotEncoder.swift */; };
+		57A001E12EB0000300000001 /* MCPSettingsControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001E02EB0000300000001 /* MCPSettingsControls.swift */; };
+		57A001E22EB0000300000001 /* MCPSettingsControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001E02EB0000300000001 /* MCPSettingsControls.swift */; };
+		57A001E32EB0000300000001 /* MCPSettingsControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001E02EB0000300000001 /* MCPSettingsControls.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -215,6 +223,9 @@
 		57A001A02EA2000100000001 /* SceneMesh.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneMesh.swift; sourceTree = "<group>"; };
 		57A001A52EA2000200000001 /* SceneMeshEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneMeshEditorView.swift; sourceTree = "<group>"; };
 		57A001B02EA3000100000001 /* DatasetViewState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DatasetViewState.swift; sourceTree = "<group>"; };
+		57A001C02EB0000100000001 /* BorgVRScreenCommandService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BorgVRScreenCommandService.swift; sourceTree = "<group>"; };
+		57A001D02EB0000200000001 /* MetalScreenshotEncoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetalScreenshotEncoder.swift; sourceTree = "<group>"; };
+		57A001E02EB0000300000001 /* MCPSettingsControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPSettingsControls.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -494,6 +505,9 @@
 		57A000102E70000100000001 /* AppSupport */ = {
 			isa = PBXGroup;
 			children = (
+				57A001C02EB0000100000001 /* BorgVRScreenCommandService.swift */,
+				57A001E02EB0000300000001 /* MCPSettingsControls.swift */,
+				57A001D02EB0000200000001 /* MetalScreenshotEncoder.swift */,
 				57A001202E70000300000001 /* AppModel.swift */,
 				57A001212E70000300000001 /* AppSettings.swift */,
 				57A001702E99000500000001 /* AppStoreUpdateChecker.swift */,
@@ -874,6 +888,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				57A001C12EB0000100000001 /* BorgVRScreenCommandService.swift in Sources */,
+				57A001D12EB0000200000001 /* MetalScreenshotEncoder.swift in Sources */,
+				57A001E12EB0000300000001 /* MCPSettingsControls.swift in Sources */,
 				57A001712E99000500000001 /* AppStoreUpdateChecker.swift in Sources */,
 				57A001752E99000600000001 /* DatasetOriginCatalog.swift in Sources */,
 				57A000302E70000200000001 /* FilePickerView.swift in Sources */,
@@ -919,6 +936,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				57A001C22EB0000100000001 /* BorgVRScreenCommandService.swift in Sources */,
+				57A001D22EB0000200000001 /* MetalScreenshotEncoder.swift in Sources */,
+				57A001E22EB0000300000001 /* MCPSettingsControls.swift in Sources */,
 				57A001722E99000500000001 /* AppStoreUpdateChecker.swift in Sources */,
 				57A001762E99000600000001 /* DatasetOriginCatalog.swift in Sources */,
 				57A000342E70000200000001 /* GPUHashtable.swift in Sources */,
@@ -956,6 +976,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				57A001D32EB0000200000001 /* MetalScreenshotEncoder.swift in Sources */,
+				57A001E32EB0000300000001 /* MCPSettingsControls.swift in Sources */,
 				57A001732E99000500000001 /* AppStoreUpdateChecker.swift in Sources */,
 				57A001772E99000600000001 /* DatasetOriginCatalog.swift in Sources */,
 				57A000372E70000200000001 /* FilePickerView.swift in Sources */,

@@ -10,6 +10,8 @@ final class MobileVolumeRenderer: NSObject, MTKViewDelegate, UIGestureRecognizer
   private let core: ScreenVolumeRendererCore
   private var twoFingerPanRecognizer: UIPanGestureRecognizer?
   private var frameInFlight = false
+  private var pendingScreenshotURL: URL?
+  private var pendingScreenshotCompletion: ((Result<URL, Error>) -> Void)?
 
   init(
     appModel: AppModel,
@@ -40,6 +42,27 @@ final class MobileVolumeRenderer: NSObject, MTKViewDelegate, UIGestureRecognizer
   func attach(to view: MTKView) {
     core.attach(to: view)
     installInteractionGestures(on: view)
+    appModel.renderScreenshotHandler = { [weak self] requestedURL, _, completion in
+      Task { @MainActor in
+        guard let self else {
+          completion(.failure(AppModelError.rendererUnavailable))
+          return
+        }
+        guard self.pendingScreenshotCompletion == nil else {
+          completion(.failure(BorgVRMCPCommandError.screenshotUnavailable))
+          return
+        }
+        guard self.appModel.activeDataset != nil else {
+          completion(.failure(BorgVRMCPCommandError.noDataset))
+          return
+        }
+        self.pendingScreenshotURL = requestedURL ?? FileManager.default.temporaryDirectory
+          .appendingPathComponent("BorgVR-\(UUID().uuidString)")
+          .appendingPathExtension("png")
+        self.pendingScreenshotCompletion = completion
+        view.draw()
+      }
+    }
   }
 
   func updateIfNeeded(for view: MTKView) {
@@ -75,15 +98,64 @@ final class MobileVolumeRenderer: NSObject, MTKViewDelegate, UIGestureRecognizer
       return
     }
 
+    let screenshot = makeScreenshotReadback(
+      from: frame.drawable.texture,
+      commandBuffer: frame.commandBuffer
+    )
     frame.commandBuffer.addCompletedHandler { [weak self] commandBuffer in
       Task { @MainActor in
         guard let self else { return }
-        _ = self.core.completeFrame(frame)
+        let missingBrickCount = self.core.completeFrame(frame)
+        self.appModel.recordCompletedRenderFrame(
+          datasetKey: self.core.loadedDatasetKey,
+          missingBrickCount: missingBrickCount
+        )
+        self.finishScreenshot(screenshot)
         self.frameInFlight = false
       }
     }
     frame.commandBuffer.present(frame.drawable)
     frame.commandBuffer.commit()
+  }
+
+  private struct PendingScreenshot {
+    let url: URL
+    let completion: (Result<URL, Error>) -> Void
+    let readback: MetalScreenshotReadback
+  }
+
+  private func makeScreenshotReadback(
+    from texture: MTLTexture,
+    commandBuffer: MTLCommandBuffer
+  ) -> PendingScreenshot? {
+    guard let url = pendingScreenshotURL,
+          let completion = pendingScreenshotCompletion else { return nil }
+    pendingScreenshotURL = nil
+    pendingScreenshotCompletion = nil
+    do {
+      return PendingScreenshot(
+        url: url,
+        completion: completion,
+        readback: try MetalScreenshotEncoder.encodeReadback(
+          from: texture,
+          commandBuffer: commandBuffer
+        )
+      )
+    } catch {
+      completion(.failure(error))
+      return nil
+    }
+  }
+
+  private func finishScreenshot(_ screenshot: PendingScreenshot?) {
+    guard let screenshot else { return }
+    do {
+      let data = try MetalScreenshotEncoder.pngData(from: screenshot.readback)
+      try data.write(to: screenshot.url, options: .atomic)
+      screenshot.completion(.success(screenshot.url))
+    } catch {
+      screenshot.completion(.failure(error))
+    }
   }
 
   private func installInteractionGestures(on view: MTKView) {

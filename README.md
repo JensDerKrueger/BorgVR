@@ -111,6 +111,19 @@ The current development version is **3.0**. The SharePlay wire protocol is versi
 - Scriptable QVIS, NRRD, PVM, and DICOM import, BorgVR LoD export, and configurable import
   brick size, overlap, and border handling.
 
+### MCP Automation
+
+- The visionOS, iOS/iPadOS, and macOS renderers contain an optional Model Context Protocol
+  server at `/mcp`, independent of the dataset and WebGPU servers.
+- MCP clients can inspect the active dataset and visualization state, change the render mode,
+  model/view transform, isovalue, clipping, and lighting, wait for completed render frames, and
+  retrieve the current rendered view as a PNG image.
+- The MCP adapter and the macOS `.gsc` interpreter use the same application command layer for
+  shared visualization operations.
+- MCP is disabled by default and listens on `localhost` unless network access is enabled. In that
+  mode it listens on all network interfaces over unencrypted HTTP and may be internet-reachable,
+  depending on the surrounding network configuration. Connections require a generated bearer token.
+
 ### WebGPU
 
 - Responsive desktop and mobile UI with touch interaction and shareable renderer URLs.

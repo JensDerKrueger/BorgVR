@@ -1640,6 +1640,7 @@ extension Renderer {
 
     renderEncoder.popDebugGroup()
     renderEncoder.endEncoding()
+
     return (targets.color, targets.depth, measurementLabels)
   }
 
@@ -2439,12 +2440,28 @@ extension Renderer {
     // access has been revoked terminates the process on visionOS.
     guard !Task.isCancelled, layerRenderer.state == .running else { return true }
 
+    let mcpScreenshotRequest = runtimeAppModel.mcpRenderBridge.takeScreenshotRequest()
+    var mcpScreenshotReadback: MetalScreenshotReadback?
+    var mcpScreenshotError: Error?
+    if mcpScreenshotRequest != nil {
+      do {
+        mcpScreenshotReadback = try MetalScreenshotEncoder.encodeReadback(
+          from: drawable.colorTextures[0],
+          slice: 0,
+          commandBuffer: commandBuffer
+        )
+      } catch {
+        mcpScreenshotError = error
+      }
+    }
+
     drawable.encodePresent(commandBuffer: commandBuffer)
 
     commandBuffer.commit()
     commandBuffer.waitUntilCompleted()
 
     if let error = commandBuffer.error as NSError? {
+      mcpScreenshotRequest?.completion(.failure(error))
       let submissionWasNotPermitted = error.domain == MTLCommandBufferErrorDomain &&
         error.code == MTLCommandBufferError.notPermitted.rawValue
       if submissionWasNotPermitted || Task.isCancelled || layerRenderer.state != .running {
@@ -2457,6 +2474,22 @@ extension Renderer {
         logger?.error("Encoder info: \(String(describing: info))")
       }
       return false
+    }
+
+    let completedFrame = runtimeAppModel.mcpRenderBridge.recordFrame()
+    if let request = mcpScreenshotRequest, let error = mcpScreenshotError {
+      request.completion(.failure(error))
+    } else if let request = mcpScreenshotRequest, let readback = mcpScreenshotReadback {
+      do {
+        request.completion(.success(BorgVRMCPImage(
+          pngData: try MetalScreenshotEncoder.pngData(from: readback),
+          width: readback.width,
+          height: readback.height,
+          renderedFrame: completedFrame
+        )))
+      } catch {
+        request.completion(.failure(error))
+      }
     }
 
     immersiveInteraction.updateVolumeInteractionDepthSnapshot(

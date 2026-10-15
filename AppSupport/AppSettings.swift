@@ -57,7 +57,7 @@ enum AppLogLevel: String, CaseIterable, Identifiable {
   }
 }
 
-struct StoredServer: Identifiable, Codable, Equatable {
+struct StoredServer: Identifiable, Codable, Equatable, Sendable {
   var id: UUID = UUID()
   var address: String
   var port: Int
@@ -181,6 +181,10 @@ final class AppSettings: ObservableObject {
     "webServerUsesTLS": true,
     "webServerCertificateData": Data(),
     "sharePlayWebServerPort": BorgVRSharedDefaults.sharePlayWebServerPort,
+    "enableMCPServer": BorgVRMCPDefaults.enabled,
+    "mcpServerPort": BorgVRMCPDefaults.port,
+    "mcpAllowRemoteConnections": BorgVRMCPDefaults.allowRemoteConnections,
+    "mcpAccessToken": BorgVRMCPDefaults.accessToken,
     "autoloadTF": false,
     "autoloadObjects": false,
     "autoloadMeasurements": false,
@@ -241,6 +245,11 @@ final class AppSettings: ObservableObject {
   @AppStorage("webServerUsesTLS") var webServerUsesTLS: Bool = AppSettings.bool("webServerUsesTLS")
   @AppStorage("webServerCertificateData") var webServerCertificateData: Data = AppSettings.data("webServerCertificateData")
   @AppStorage("sharePlayWebServerPort") var sharePlayWebServerPort: Int = AppSettings.int("sharePlayWebServerPort")
+  @AppStorage("enableMCPServer") var enableMCPServer: Bool = AppSettings.bool("enableMCPServer")
+  @AppStorage("mcpServerPort") var mcpServerPort: Int = AppSettings.int("mcpServerPort")
+  @AppStorage("mcpAllowRemoteConnections")
+  var mcpAllowRemoteConnections: Bool = AppSettings.bool("mcpAllowRemoteConnections")
+  @AppStorage("mcpAccessToken") var mcpAccessToken: String = AppSettings.string("mcpAccessToken")
   @AppStorage("autoloadTF") var autoloadTF: Bool = AppSettings.bool("autoloadTF")
   @AppStorage("autoloadObjects") var autoloadObjects: Bool = AppSettings.bool("autoloadObjects")
   @AppStorage("autoloadMeasurements")
@@ -429,6 +438,13 @@ final class AppSettings: ObservableObject {
     sharePlayWebServerPort = Self.intDefault("sharePlayWebServerPort")
   }
 
+  func resetMCPDefaults() {
+    enableMCPServer = BorgVRMCPDefaults.enabled
+    mcpServerPort = BorgVRMCPDefaults.port
+    mcpAllowRemoteConnections = BorgVRMCPDefaults.allowRemoteConnections
+    mcpAccessToken = BorgVRMCPDefaults.accessToken
+  }
+
   var webServerCertificatePassword: String {
     get { WebServerCertificatePasswordStore.load() }
     set { try? WebServerCertificatePasswordStore.save(newValue) }
@@ -461,6 +477,7 @@ final class AppSettings: ObservableObject {
     resetBackgroundServerDefaults()
     resetWebServerDefaults()
     resetAdHocServerDefaults()
+    resetMCPDefaults()
     resetSharePlayDefaults()
   }
 

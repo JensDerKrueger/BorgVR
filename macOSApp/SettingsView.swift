@@ -22,6 +22,7 @@ private enum SettingsResetSection: String, Identifiable {
   case backgroundServer
   case adHocServer
   case externalDataSources
+  case mcp
 
   var id: String { rawValue }
 
@@ -35,6 +36,7 @@ private enum SettingsResetSection: String, Identifiable {
       case .backgroundServer: return "Background server"
       case .adHocServer: return "Ad-hoc server"
       case .externalDataSources: return "External data sources"
+      case .mcp: return "MCP"
     }
   }
 
@@ -52,6 +54,7 @@ private enum SettingsPage: String, CaseIterable, Identifiable {
   case externalDataSources
   case servers
   case sharePlay
+  case mcp
 
   var id: String { rawValue }
 
@@ -65,6 +68,7 @@ private enum SettingsPage: String, CaseIterable, Identifiable {
       case .servers: return "Servers"
       case .externalDataSources: return "External data sources"
       case .sharePlay: return "SharePlay"
+      case .mcp: return "MCP"
     }
   }
 
@@ -78,6 +82,7 @@ private enum SettingsPage: String, CaseIterable, Identifiable {
       case .servers: return "server.rack"
       case .externalDataSources: return "network"
       case .sharePlay: return "shareplay"
+      case .mcp: return "terminal"
     }
   }
 }
@@ -87,6 +92,7 @@ struct SettingsView: View {
   @EnvironmentObject private var appSettings: AppSettings
   @EnvironmentObject private var storedAppModel: StoredAppModel
   @EnvironmentObject private var updateChecker: AppStoreUpdateChecker
+  @EnvironmentObject private var mcpController: BorgVRMCPServerController
 
   @State private var serverAddress = ""
   @State private var serverPort = String(BorgVRSharedDefaults.datasetServerPort)
@@ -202,6 +208,24 @@ struct SettingsView: View {
         externalDataSourceSettings
       case .sharePlay:
         sharePlaySettings
+      case .mcp:
+        mcpSettings
+    }
+  }
+
+  private var mcpSettings: some View {
+    settingsGroup(
+      "Model Context Protocol",
+      description: "Allow trusted AI agents and MCP clients to inspect and control the current BorgVR visualization. The MCP server is independent of the dataset and WebGPU servers."
+    ) {
+      MCPSettingsControls(
+        enabled: $storedAppModel.enableMCPServer,
+        port: $storedAppModel.mcpServerPort,
+        allowRemoteConnections: $storedAppModel.mcpAllowRemoteConnections,
+        accessToken: $storedAppModel.mcpAccessToken,
+        statusText: mcpController.statusText
+      )
+      resetButton(for: .mcp)
     }
   }
 
@@ -759,6 +783,8 @@ struct SettingsView: View {
         serverAddress = ""
         serverPort = String(BorgVRSharedDefaults.datasetServerPort)
         serverPassword = ""
+      case .mcp:
+        storedAppModel.resetMCPDefaults()
     }
   }
 }

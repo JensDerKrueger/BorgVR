@@ -115,6 +115,10 @@ final class StoredAppModel: ObservableObject {
     "webServerUsesTLS": true,
     "webServerCertificateData": Data(),
     "sharePlayWebServerPort": BorgVRSharedDefaults.sharePlayWebServerPort,
+    "enableMCPServer": BorgVRMCPDefaults.enabled,
+    "mcpServerPort": BorgVRMCPDefaults.port,
+    "mcpAllowRemoteConnections": BorgVRMCPDefaults.allowRemoteConnections,
+    "mcpAccessToken": BorgVRMCPDefaults.accessToken,
     "autoloadTF": false,
     "autoloadObjects": false,
     "autoloadMeasurements": false,
@@ -236,6 +240,11 @@ final class StoredAppModel: ObservableObject {
   @AppStorage("webServerCertificateData") var webServerCertificateData: Data = StoredAppModel.data("webServerCertificateData")
   /// Preferred port for the temporary WebGPU frontend used by SharePlay hosts.
   @AppStorage("sharePlayWebServerPort") var sharePlayWebServerPort: Int = StoredAppModel.int("sharePlayWebServerPort")
+  @AppStorage("enableMCPServer") var enableMCPServer: Bool = StoredAppModel.bool("enableMCPServer")
+  @AppStorage("mcpServerPort") var mcpServerPort: Int = StoredAppModel.int("mcpServerPort")
+  @AppStorage("mcpAllowRemoteConnections")
+  var mcpAllowRemoteConnections: Bool = StoredAppModel.bool("mcpAllowRemoteConnections")
+  @AppStorage("mcpAccessToken") var mcpAccessToken: String = StoredAppModel.string("mcpAccessToken")
   /// Whether to automatically load the transfer function.
   @AppStorage("autoloadTF") var autoloadTF: Bool = StoredAppModel.bool("autoloadTF")
   /// Whether to automatically load and save placed objects and annotations.
@@ -491,6 +500,13 @@ final class StoredAppModel: ObservableObject {
       ?? BorgVRSharedDefaults.sharePlayServerPort
     sharePlayWebServerPort = Self.values["sharePlayWebServerPort"] as? Int
       ?? BorgVRSharedDefaults.sharePlayWebServerPort
+  }
+
+  func resetMCPDefaults() {
+    enableMCPServer = BorgVRMCPDefaults.enabled
+    mcpServerPort = BorgVRMCPDefaults.port
+    mcpAllowRemoteConnections = BorgVRMCPDefaults.allowRemoteConnections
+    mcpAccessToken = BorgVRMCPDefaults.accessToken
   }
 
   private func loadServers() {

@@ -30,6 +30,7 @@ struct VisionApp: App {
   @StateObject private var storedAppModel = StoredAppModel()
   @StateObject private var serverController = BackgroundServerController()
   @StateObject private var updateChecker = AppStoreUpdateChecker()
+  @StateObject private var mcpController = BorgVRMCPServerController()
   @AppStorage("sharePlayDisplayNameOnboardingCompleted")
   private var sharePlayDisplayNameOnboardingCompleted = false
   @State private var showsSharePlayDisplayNameOnboarding = false
@@ -93,6 +94,7 @@ struct VisionApp: App {
         .environment(runtimeAppModel)
         .environmentObject(serverController)
         .environmentObject(updateChecker)
+        .environmentObject(mcpController)
         .onOpenURL { url in
           Task {
             await handleOpenRequest(url:url)
@@ -115,6 +117,9 @@ struct VisionApp: App {
             runtimeAppModel: runtimeAppModel,
             storedAppModel: storedAppModel
           )
+        }
+        .task {
+          configureMCP()
         }
         .task {
           if storedAppModel.enableDatasetServer && storedAppModel.autoStartServer {
@@ -159,6 +164,10 @@ struct VisionApp: App {
         .onChange(of: storedAppModel.webServerCertificateData) { _, _ in
           serverController.restartIfRunning(using: storedAppModel)
         }
+        .onChange(of: storedAppModel.enableMCPServer) { _, _ in applyMCPConfiguration() }
+        .onChange(of: storedAppModel.mcpServerPort) { _, _ in applyMCPConfiguration() }
+        .onChange(of: storedAppModel.mcpAllowRemoteConnections) { _, _ in applyMCPConfiguration() }
+        .onChange(of: storedAppModel.mcpAccessToken) { _, _ in applyMCPConfiguration() }
     }
     .environment(runtimeAppModel)
     .environment(sharedAppModel)
@@ -166,6 +175,7 @@ struct VisionApp: App {
     .environmentObject(serverController)
     .environmentObject(voice)
     .environmentObject(speech)
+    .environmentObject(mcpController)
     .windowResizability(.contentSize)
     .defaultSize(width:runtimeAppModel.windowSize.width,height:runtimeAppModel.windowSize.height)
     .onChange(of: runtimeAppModel.datasetSessionState) { _, newValue in
@@ -283,6 +293,7 @@ struct VisionApp: App {
         .environment(sharedAppModel)
         .environmentObject(storedAppModel)
         .environmentObject(serverController)
+        .environmentObject(mcpController)
     }
     .windowResizability(.contentSize)
     .defaultSize(width:800,height:1200)
@@ -312,6 +323,93 @@ struct VisionApp: App {
     .immersionStyle(selection: .constant(runtimeAppModel.mixedImmersionStyle ? .mixed : .full), in: runtimeAppModel.mixedImmersionStyle ? .mixed : .full)
     .persistentSystemOverlays(.hidden)
     .handlesExternalEvents(matching: [groupActivityIdentifier])
+  }
+
+  @MainActor
+  private func configureMCP() {
+    let service = VisionBorgVRCommandService(
+      runtimeAppModel: runtimeAppModel,
+      sharedAppModel: sharedAppModel,
+      datasetListProvider: {
+        await loadMCPDatasetRecords().map(\.catalogEntry)
+      },
+      datasetOpener: { id in
+        try await openMCPDataset(id: id)
+      },
+      datasetCloser: {
+        closeMCPDataset()
+      }
+    )
+    mcpController.configure(commandService: service, logger: runtimeAppModel.logger)
+    applyMCPConfiguration()
+  }
+
+  @MainActor
+  private func loadMCPDatasetRecords() async -> [BorgVRMCPDatasetRecord] {
+    let documentsDirectory = FileManager.default.urls(
+      for: .documentDirectory,
+      in: .userDomainMask
+    ).first
+    return await BorgVRMCPDatasetCatalog.load(
+      localDirectory: documentsDirectory,
+      servers: storedAppModel.servers,
+      timeout: storedAppModel.timeout
+    )
+  }
+
+  @MainActor
+  private func openMCPDataset(id: String) async throws {
+    let records = await loadMCPDatasetRecords()
+    guard let record = records.first(where: { $0.catalogEntry.id == id }) else {
+      throw BorgVRMCPCommandError.datasetNotFound(id)
+    }
+    let entry: RuntimeAppModel.DatasetEntry
+    switch record.preferredLocation {
+      case .local(let url):
+        entry = RuntimeAppModel.DatasetEntry(
+          identifier: url.path,
+          description: record.catalogEntry.description,
+          source: .local,
+          uniqueId: record.catalogEntry.id
+        )
+      case .builtIn(let url):
+        entry = RuntimeAppModel.DatasetEntry(
+          identifier: url.path,
+          description: record.catalogEntry.description,
+          source: .builtIn,
+          uniqueId: record.catalogEntry.id
+        )
+      case .remote(let address, let port, let password):
+        entry = RuntimeAppModel.DatasetEntry(
+          identifier: record.catalogEntry.id,
+          description: record.catalogEntry.description,
+          source: .remote(address: address, port: port, password: password),
+          uniqueId: record.catalogEntry.id
+        )
+    }
+    runtimeAppModel.startImmersiveSpace(
+      dataset: entry,
+      asGroupSessionHost: !sharedAppModel.isInGroupSession || runtimeAppModel.groupSessionHost
+    )
+  }
+
+  @MainActor
+  private func closeMCPDataset() {
+    guard runtimeAppModel.activeDataset != nil else { return }
+    if sharedAppModel.isInGroupSession, !runtimeAppModel.groupSessionHost {
+      sharedAppModel.leaveGroupActivity()
+    }
+    runtimeAppModel.requestDatasetClose(destination: .datasetSelection)
+  }
+
+  @MainActor
+  private func applyMCPConfiguration() {
+    mcpController.apply(BorgVRMCPConfiguration(
+      enabled: storedAppModel.enableMCPServer,
+      port: storedAppModel.mcpServerPort,
+      allowRemoteConnections: storedAppModel.mcpAllowRemoteConnections,
+      accessToken: storedAppModel.mcpAccessToken
+    ))
   }
 
   @MainActor

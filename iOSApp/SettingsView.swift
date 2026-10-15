@@ -18,6 +18,7 @@ private enum SettingsResetSection: String, Identifiable {
   case backgroundServer
   case webServer
   case adHocServer
+  case mcp
 
   var id: String { rawValue }
 
@@ -31,6 +32,7 @@ private enum SettingsResetSection: String, Identifiable {
       case .backgroundServer: return String(localized: "Background server")
       case .webServer: return String(localized: "WebGPU web server")
       case .adHocServer: return String(localized: "Ad-hoc server")
+      case .mcp: return String(localized: "MCP")
     }
   }
 }
@@ -48,6 +50,7 @@ private enum SettingsPage: String, CaseIterable, Identifiable {
   case remoteDatasets
   case localServer
   case sharePlay
+  case mcp
 
   var id: String { rawValue }
 
@@ -60,6 +63,7 @@ private enum SettingsPage: String, CaseIterable, Identifiable {
       case .remoteDatasets: "Remote datasets"
       case .localServer: "Local server"
       case .sharePlay: "SharePlay"
+      case .mcp: "MCP"
     }
   }
 
@@ -72,6 +76,7 @@ private enum SettingsPage: String, CaseIterable, Identifiable {
       case .remoteDatasets: "network"
       case .localServer: "server.rack"
       case .sharePlay: "shareplay"
+      case .mcp: "terminal"
     }
   }
 }
@@ -82,6 +87,7 @@ struct SettingsView: View {
   @EnvironmentObject private var appModel: AppModel
   @EnvironmentObject var appSettings: AppSettings
   @EnvironmentObject private var updateChecker: AppStoreUpdateChecker
+  @EnvironmentObject private var mcpController: BorgVRMCPServerController
 
   @State private var tempPort = ""
   @State private var tempServerAddress = ""
@@ -272,6 +278,22 @@ struct SettingsView: View {
             TextField("SharePlay display name", text: $appSettings.sharePlayDisplayName)
               .textInputAutocapitalization(.words)
           }
+        }
+      case .mcp:
+        settingsPage(
+          title: page.title,
+          description: "Allow trusted AI agents and MCP clients to inspect and control the current BorgVR visualization. The MCP server is independent of the dataset and WebGPU servers."
+        ) {
+          Section("Model Context Protocol") {
+            MCPSettingsControls(
+              enabled: $appSettings.enableMCPServer,
+              port: $appSettings.mcpServerPort,
+              allowRemoteConnections: $appSettings.mcpAllowRemoteConnections,
+              accessToken: $appSettings.mcpAccessToken,
+              statusText: mcpController.statusText
+            )
+          }
+          resetButton(for: .mcp)
         }
     }
   }
@@ -866,6 +888,8 @@ struct SettingsView: View {
         appSettings.resetWebServerDefaults()
       case .adHocServer:
         appSettings.resetAdHocServerDefaults()
+      case .mcp:
+        appSettings.resetMCPDefaults()
     }
     validationMessage = nil
     loadTemporaryValues()

@@ -38,6 +38,7 @@ private enum VisionSettingsPage: String, CaseIterable, Identifiable {
   case localServer
   case importSettings
   case sharePlay
+  case mcp
 
   var id: String { rawValue }
 
@@ -51,6 +52,7 @@ private enum VisionSettingsPage: String, CaseIterable, Identifiable {
       case .localServer: "settings_tab_local_server"
       case .importSettings: "settings_tab_import"
       case .sharePlay: "SharePlay"
+      case .mcp: "MCP"
     }
   }
 
@@ -64,6 +66,7 @@ private enum VisionSettingsPage: String, CaseIterable, Identifiable {
       case .localServer: "server.rack"
       case .importSettings: "square.and.arrow.down"
       case .sharePlay: "shareplay"
+      case .mcp: "terminal"
     }
   }
 }
@@ -73,6 +76,7 @@ struct SettingsView: View {
   @Environment(RuntimeAppModel.self) private var runtimeAppModel
   @EnvironmentObject var storedAppModel: StoredAppModel
   @EnvironmentObject private var updateChecker: AppStoreUpdateChecker
+  @EnvironmentObject private var mcpController: BorgVRMCPServerController
 
   // Temporary state for input validation
   @State private var tempPixelError: String = ""
@@ -654,6 +658,27 @@ struct SettingsView: View {
               Text("settings_border_repeat").tag("repeat")
             }
             .pickerStyle(.segmented)
+          }
+
+        }
+          }
+
+          if selectedSettingsPage == .mcp {
+        Form {
+          settingsIntroSection(
+            "Allow trusted AI agents and MCP clients to inspect and control the current BorgVR visualization. The MCP server is independent of the dataset and WebGPU servers."
+          )
+          Section(header: Text("Model Context Protocol").bold()) {
+            MCPSettingsControls(
+              enabled: $storedAppModel.enableMCPServer,
+              port: $storedAppModel.mcpServerPort,
+              allowRemoteConnections: $storedAppModel.mcpAllowRemoteConnections,
+              accessToken: $storedAppModel.mcpAccessToken,
+              statusText: mcpController.statusText
+            )
+            Button("Reset") {
+              storedAppModel.resetMCPDefaults()
+            }
           }
         }
           }
