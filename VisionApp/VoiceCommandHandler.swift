@@ -564,7 +564,9 @@ final class VoiceCommandHandler {
       patternAliases: LP("voice_patterns_aliases_tf_reset"),
       condition: VoiceCommandHandler.always,
       handler: { h in
-        h.sharedAppModel.transferFunction.reset()
+        h.sharedAppModel.transferFunction(
+          channel: h.runtimeAppModel.selectedTransferFunctionChannel
+        ).reset()
         h.sharedAppModel.synchronize(kind: .full)
       },
       description: L(

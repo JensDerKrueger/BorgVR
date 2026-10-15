@@ -11,7 +11,7 @@ struct TransferEditing {
 
 final class RenderingParameters: ObservableObject {
   private static let streamMagic: UInt32 = 0x5250_494F // "RPIO"
-  private static let streamVersion: UInt16 = 4
+  private static let streamVersion: UInt16 = 5
   static let maximumTransferFunctionCount = 4
 
   private static let defaultOrientation =
@@ -347,8 +347,8 @@ final class RenderingParameters: ObservableObject {
   }
 
   private func writeTransferFunctions(to writer: inout DataWriter) {
+    // The selected editor channel is local UI state and must not be synchronized.
     writer.write(UInt8(componentCount))
-    writer.write(UInt8(selectedTransferFunctionChannel))
     for transferFunction in activeTransferFunctions {
       let data = transferFunction.serialize()
       writer.write(UInt32(data.count))
@@ -358,12 +358,12 @@ final class RenderingParameters: ObservableObject {
 
   private func readTransferFunctions(from reader: inout DataReader) throws {
     let count = Int(try reader.read() as UInt8)
-    let selectedChannel = Int(try reader.read() as UInt8)
     guard (1...Self.maximumTransferFunctionCount).contains(count) else {
       throw RenderingParametersUpdateError.unsupportedTransferFunctionCount(count)
     }
     componentCount = count
-    selectedTransferFunctionChannel = min(selectedChannel, count - 1)
+    // Keep the local editor selection, clamped to the received dataset channel count.
+    selectedTransferFunctionChannel = min(selectedTransferFunctionChannel, count - 1)
     for index in 0..<count {
       let length: UInt32 = try reader.read()
       let data = try reader.readRaw(Int(length))

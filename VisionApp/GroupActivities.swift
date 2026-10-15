@@ -1739,9 +1739,15 @@ class GroupActivityHelper {
         return
       }
       if try sharedAppModel.applySharePlayUpdate(from: data) {
+        runtimeAppModel?.clampSelectedTransferFunctionChannel(
+          to: sharedAppModel.componentCount
+        )
         return
       }
       try sharedAppModel.applyUpdate(from: data)
+      runtimeAppModel?.clampSelectedTransferFunctionChannel(
+        to: sharedAppModel.componentCount
+      )
     } catch {
       print("Failed to apply update: \(error)")
     }

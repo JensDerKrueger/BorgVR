@@ -16,6 +16,7 @@ final class TransferFunctionPanelInteractionState {
     var hitUV: SIMD2<Float>?
     var hitOpacity: Float = 1
     var channelMask: UInt32 = 0
+    var selectedTransferFunctionChannel = 0
   }
 
   private let lock = NSLock()
@@ -52,6 +53,19 @@ final class TransferFunctionPanelInteractionState {
     lock.lock()
     state.channelMask = channelMask
     lock.unlock()
+  }
+
+  func updateSelectedTransferFunctionChannel(_ channel: Int) {
+    lock.lock()
+    state.selectedTransferFunctionChannel = max(channel, 0)
+    lock.unlock()
+  }
+
+  func selectedTransferFunctionChannel() -> Int {
+    lock.lock()
+    let channel = state.selectedTransferFunctionChannel
+    lock.unlock()
+    return channel
   }
 
   func shaderState() -> (isFocused: Bool, hitUV: SIMD2<Float>?, hitOpacity: Float, channelMask: UInt32) {

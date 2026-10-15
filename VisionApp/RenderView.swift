@@ -365,7 +365,9 @@ struct RenderView: View {
     guard let dataset = runtimeAppModel.activeDataset else { return }
     do {
       if let url = plan.transferFunctionURL {
-        try sharedAppModel.transferFunction.save(to: url, description: dataset.description)
+        try sharedAppModel.transferFunction(
+          channel: runtimeAppModel.selectedTransferFunctionChannel
+        ).save(to: url, description: dataset.description)
       }
       if let url = plan.viewStateURL {
         try DatasetStateStorage.saveViewState(

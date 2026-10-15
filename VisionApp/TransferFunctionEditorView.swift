@@ -36,6 +36,10 @@ struct TransferFunctionEditorView: View {
   @State private var showICloudExporter = false
   @State private var transferFunctionCatalog: [TransferFunctionCatalogEntry] = []
 
+  private var transferFunction: TransferFunction1D {
+    sharedAppModel.transferFunction(channel: runtimeAppModel.selectedTransferFunctionChannel)
+  }
+
   // MARK: - Gesture Handler
 
   /**
@@ -72,7 +76,7 @@ struct TransferFunctionEditorView: View {
         channels: [3]
       ))
     }
-    sharedAppModel.transferFunction.scheduleSmoothSteps(operations) {
+    transferFunction.scheduleSmoothSteps(operations) {
       self.sharedAppModel.synchronize(kind: .full)
     }
   }
@@ -90,8 +94,8 @@ struct TransferFunctionEditorView: View {
         Picker(
           "tf_data_channel",
           selection: Binding(
-            get: { sharedAppModel.selectedTransferFunctionChannel },
-            set: { sharedAppModel.selectedTransferFunctionChannel = $0 }
+            get: { runtimeAppModel.selectedTransferFunctionChannel },
+            set: { runtimeAppModel.selectedTransferFunctionChannel = $0 }
           )
         ) {
           ForEach(0..<sharedAppModel.componentCount, id: \.self) { channel in
@@ -110,8 +114,8 @@ struct TransferFunctionEditorView: View {
             // Draw ribbon and checkerboard background
             let ribbonHeight: CGFloat = 20
             let ribbonRect = CGRect(x: 0, y: 0, width: size.width, height: ribbonHeight)
-            sharedAppModel.transferFunction.drawCheckerboard(in: context, rect: ribbonRect)
-            sharedAppModel.transferFunction.drawRibbon(in: context, rect: ribbonRect)
+            transferFunction.drawCheckerboard(in: context, rect: ribbonRect)
+            transferFunction.drawRibbon(in: context, rect: ribbonRect)
 
             // Draw grid and curves below the ribbon. Two samples per display point preserve
             // the visible curve without constructing paths for all 65,536 possible entries.
@@ -121,8 +125,8 @@ struct TransferFunctionEditorView: View {
               width: size.width,
               height: size.height - ribbonHeight - 5
             )
-            sharedAppModel.transferFunction.drawGrid(in: context, rect: drawingRect)
-            sharedAppModel.transferFunction.drawCurves(
+            transferFunction.drawGrid(in: context, rect: drawingRect)
+            transferFunction.drawCurves(
               in: context,
               rect: drawingRect,
               maxSampleCount: max(Int(size.width.rounded(.up)) * 2, 2)
@@ -130,7 +134,7 @@ struct TransferFunctionEditorView: View {
           }
           .background(Color(.systemGray6))
           .border(Color.gray, width: 2)
-          .id(sharedAppModel.transferFunction.revision)
+          .id(transferFunction.revision)
 
           // Transparent layer to capture drag gestures
           Color.clear
@@ -290,9 +294,9 @@ struct TransferFunctionEditorView: View {
                   .appendingPathComponent(name)
                   .appendingPathExtension("tf1d")
                 do {
-                  try sharedAppModel.transferFunction.save(to: url, description: saveDescription)
+                  try transferFunction.save(to: url, description: saveDescription)
                   try TransferFunctionCatalog.store(
-                    transferFunction: sharedAppModel.transferFunction,
+                    transferFunction: transferFunction,
                     description: saveDescription
                   )
                   refreshTransferFunctionCatalog()
@@ -330,7 +334,7 @@ struct TransferFunctionEditorView: View {
                   } label: {
                     Label(
                       entry.displayName,
-                      systemImage: sharedAppModel.transferFunction.identifier == entry.id ? "checkmark" : "waveform"
+                      systemImage: transferFunction.identifier == entry.id ? "checkmark" : "waveform"
                     )
                   }
                 }
@@ -367,7 +371,10 @@ struct TransferFunctionEditorView: View {
                     if url.startAccessingSecurityScopedResource() {
                       defer { url.stopAccessingSecurityScopedResource() }
                       do {
-                        try sharedAppModel.loadTransferFunction(from: url)
+                        try sharedAppModel.loadTransferFunction(
+                          from: url,
+                          channel: runtimeAppModel.selectedTransferFunctionChannel
+                        )
                         sharedAppModel.synchronize(kind: .full)
                       } catch {
                         importError = error
@@ -389,7 +396,7 @@ struct TransferFunctionEditorView: View {
             .fileExporter(
               isPresented: $showICloudExporter,
               document: TransferFunctionDocument(
-                transferFunction: sharedAppModel.transferFunction
+                transferFunction: transferFunction
               ),
               contentType: .data,
               defaultFilename: "TransferFunction.tf1d"
@@ -419,7 +426,7 @@ struct TransferFunctionEditorView: View {
   }
 
   private var currentTransferFunctionCatalogEntry: TransferFunctionCatalogEntry? {
-    let currentID = sharedAppModel.transferFunction.identifier
+    let currentID = transferFunction.identifier
     return transferFunctionCatalog.first { $0.id == currentID }
   }
 
@@ -451,7 +458,10 @@ struct TransferFunctionEditorView: View {
 
   private func loadCatalogTransferFunction(_ entry: TransferFunctionCatalogEntry) {
     do {
-      try sharedAppModel.loadTransferFunction(from: entry.url)
+      try sharedAppModel.loadTransferFunction(
+        from: entry.url,
+        channel: runtimeAppModel.selectedTransferFunctionChannel
+      )
       sharedAppModel.renderMode = .transferFunction1D
       sharedAppModel.synchronize(kind: .full)
     } catch {
@@ -474,6 +484,7 @@ struct TransferFunctionEditorView: View {
 struct FilePickerDialog: View {
   /// The rendering parameters containing the transfer function.
   var sharedAppModel: SharedAppModel
+  @Environment(RuntimeAppModel.self) private var runtimeAppModel
   /// Binding controlling presentation.
   @Binding var isPresented: Bool
   /// URLs of available `.tf1d` files.
@@ -488,7 +499,10 @@ struct FilePickerDialog: View {
       List(availableFiles, id: \.self) { fileURL in
         Button(action: {
           do {
-            try sharedAppModel.loadTransferFunction(from: fileURL)
+            try sharedAppModel.loadTransferFunction(
+              from: fileURL,
+              channel: runtimeAppModel.selectedTransferFunctionChannel
+            )
             sharedAppModel.synchronize(kind: .full)
             isPresented = false
           } catch {

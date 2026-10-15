@@ -364,7 +364,9 @@ extension Renderer {
           isoValue: sharedAppModel.isoValue,
           oversampling: activeOversampling,
           sampleJitter: storedAppModel.sampleJitter ? 1 : 0,
-          transferBias: sharedAppModel.transferFunction.textureBias,
+          transferBias: sharedAppModel.transferFunction(
+            channel: transferFunctionPanelInteractionState.selectedTransferFunctionChannel()
+          ).textureBias,
           cameraPosInTextureSpace: simd_make_float3(viewToTexture * simd_float4(0, 0, 0, 1)),
           cameraPosInTextureSpaceVoxelScaled: simd_make_float3(viewToTextureVoxelScaled * simd_float4(0, 0, 0, 1)),
           cubeBounds: (clipMin, clipMax),
@@ -651,7 +653,9 @@ extension Renderer {
     renderEncoder.setCullMode(.none)
     renderEncoder.setDepthStencilState(depthStateHUD)
     do {
-      try sharedAppModel.transferFunction.bind(to: renderEncoder, index: 0)
+      try sharedAppModel.transferFunction(
+        channel: transferFunctionPanelInteractionState.selectedTransferFunctionChannel()
+      ).bind(to: renderEncoder, index: 0)
     } catch {
       logger?.error("Failed to bind TF texture for panel: \(error)")
     }

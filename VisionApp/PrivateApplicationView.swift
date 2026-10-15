@@ -424,14 +424,19 @@ struct HandInteractionControlsView: View {
   }
 
   private func resetTransferFunction() {
-    sharedAppModel.transferFunction.reset()
+    sharedAppModel.transferFunction(
+      channel: runtimeAppModel.selectedTransferFunctionChannel
+    ).reset()
     sharedAppModel.renderMode = .transferFunction1D
     sharedAppModel.synchronize(kind: .full)
   }
 
   private func loadTransferFunction(_ entry: TransferFunctionCatalogEntry) {
     do {
-      try sharedAppModel.loadTransferFunction(from: entry.url)
+      try sharedAppModel.loadTransferFunction(
+        from: entry.url,
+        channel: runtimeAppModel.selectedTransferFunctionChannel
+      )
       sharedAppModel.renderMode = .transferFunction1D
       sharedAppModel.synchronize(kind: .full)
     } catch {

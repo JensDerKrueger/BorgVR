@@ -112,6 +112,7 @@ enum ImmersiveBootstrap {
 
     // Reset rendering parameters and optionally autoload TF/Transform
     sharedAppModel.reset()
+    runtimeAppModel.selectedTransferFunctionChannel = 0
 
     let documentsDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
     let autoURL = documentsDirectory.appendingPathComponent(activeDataset.uniqueId)

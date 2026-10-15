@@ -2281,7 +2281,9 @@ class ImmersiveInteraction {
             channels: [3]
           ))
         }
-        sharedAppModel.transferFunction.scheduleSmoothSteps(operations) {
+        sharedAppModel.transferFunction(
+          channel: transferFunctionPanelInteractionState.selectedTransferFunctionChannel()
+        ).scheduleSmoothSteps(operations) {
           self.sharedAppModel.synchronize(kind: .full)
         }
     }
@@ -2924,7 +2926,9 @@ class ImmersiveInteraction {
             channels: [3]
           ))
         }
-        sharedAppModel.transferFunction.scheduleSmoothSteps(operations) {
+        sharedAppModel.transferFunction(
+          channel: transferFunctionPanelInteractionState.selectedTransferFunctionChannel()
+        ).scheduleSmoothSteps(operations) {
           self.sharedAppModel.synchronize(kind: .full)
         }
         return true
@@ -3005,7 +3009,9 @@ class ImmersiveInteraction {
         } else {
           transferSmoothStepShift = rawShift
         }
-        sharedAppModel.transferFunction.scheduleSmoothSteps([
+        sharedAppModel.transferFunction(
+          channel: transferFunctionPanelInteractionState.selectedTransferFunctionChannel()
+        ).scheduleSmoothSteps([
           .init(
             start: transferSmoothStepCenter - transferSmoothStepShift * 0.5,
             shift: transferSmoothStepShift,

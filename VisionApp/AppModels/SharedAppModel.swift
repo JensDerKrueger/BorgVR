@@ -111,9 +111,8 @@ class SharedAppModel {
   /// One independently editable 1D transfer function per volume component.
   let transferFunctions: [TransferFunction1D]
   private(set) var componentCount: Int
-  var selectedTransferFunctionChannel: Int
-  var transferFunction: TransferFunction1D {
-    transferFunctions[min(max(selectedTransferFunctionChannel, 0), componentCount - 1)]
+  func transferFunction(channel: Int) -> TransferFunction1D {
+    transferFunctions[min(max(channel, 0), componentCount - 1)]
   }
   var activeTransferFunctions: ArraySlice<TransferFunction1D> {
     transferFunctions.prefix(componentCount)
@@ -233,7 +232,6 @@ class SharedAppModel {
     lastTranslationClipping = .zero
     transferFunctions = (0..<Self.maximumTransferFunctionCount).map { _ in TransferFunction1D() }
     componentCount = 1
-    selectedTransferFunctionChannel = 0
     normIsoValue = 0
     renderMode = .transferFunction1D
     brickVis = false
@@ -388,16 +386,17 @@ class SharedAppModel {
     self.maxValue = maxValue
     self.rangeMax = rangeMax
     self.componentCount = min(max(componentCount, 1), Self.maximumTransferFunctionCount)
-    selectedTransferFunctionChannel = min(selectedTransferFunctionChannel, self.componentCount - 1)
     updateTransferFunctionRanges()
   }
 
-  func loadTransferFunction(from url: URL) throws {
+  func loadTransferFunction(from url: URL, channel: Int = 0) throws {
+    let transferFunction = transferFunction(channel: channel)
     try transferFunction.load(from: url)
     transferFunction.updateRanges(minValue: minValue, maxValue: maxValue, rangeMax: rangeMax)
   }
 
-  func loadTransferFunction(from data: Data) throws {
+  func loadTransferFunction(from data: Data, channel: Int = 0) throws {
+    let transferFunction = transferFunction(channel: channel)
     try transferFunction.load(from: data)
     transferFunction.updateRanges(minValue: minValue, maxValue: maxValue, rangeMax: rangeMax)
   }
@@ -645,7 +644,6 @@ class SharedAppModel {
     for transferFunction in transferFunctions {
       transferFunction.reset()
     }
-    selectedTransferFunctionChannel = 0
     resetIsoValue()
     renderMode = .transferFunction1D
     brickVis = false
@@ -1033,7 +1031,7 @@ class SharedAppModel {
   /// Magic identifier for serialized RenderingParamaters blobs.
   private static let streamMagic: UInt32 = 0x5250_414D // "RPAM"
   /// Protocl format version.
-  private static let streamVersion: UInt16 = 4
+  private static let streamVersion: UInt16 = 5
 
   enum UpdateKind {
     case full          // includes TF
@@ -1394,8 +1392,8 @@ class SharedAppModel {
   }
 
   private func writeTransferFunctions(to writer: inout DataWriter) {
+    // The selected editor channel is local UI state and must not be synchronized.
     writer.write(UInt8(componentCount))
-    writer.write(UInt8(selectedTransferFunctionChannel))
     for transferFunction in activeTransferFunctions {
       let data = transferFunction.serialize()
       writer.write(UInt32(data.count))
@@ -1405,12 +1403,10 @@ class SharedAppModel {
 
   private func readTransferFunctions(from reader: inout DataReader) throws {
     let count = Int(try reader.read() as UInt8)
-    let selectedChannel = Int(try reader.read() as UInt8)
     guard (1...Self.maximumTransferFunctionCount).contains(count) else {
       throw SharedAppModelError.unsupportedTransferFunctionCount(count)
     }
     componentCount = count
-    selectedTransferFunctionChannel = min(selectedChannel, count - 1)
     for index in 0..<count {
       let length: UInt32 = try reader.read()
       let data = try reader.readRaw(Int(length))

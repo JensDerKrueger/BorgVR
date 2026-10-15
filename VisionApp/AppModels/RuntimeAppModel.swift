@@ -178,6 +178,23 @@ class RuntimeAppModel {
     didSet { spatialInputContext.update(mode: interactionMode) }
   }
 
+  /// Locally selected transfer-function channel in the editor.
+  /// This is UI state and must never be synchronized through SharePlay.
+  var selectedTransferFunctionChannel = 0 {
+    didSet {
+      transferFunctionPanelInteractionState?.updateSelectedTransferFunctionChannel(
+        selectedTransferFunctionChannel
+      )
+    }
+  }
+
+  func clampSelectedTransferFunctionChannel(to componentCount: Int) {
+    selectedTransferFunctionChannel = min(
+      max(selectedTransferFunctionChannel, 0),
+      max(componentCount - 1, 0)
+    )
+  }
+
   /// Lock-protected bridge read by the compositor render thread.
   let spatialInputContext = SpatialInputRuntimeContext()
 
@@ -220,7 +237,13 @@ class RuntimeAppModel {
   }
 
   /// Shared renderer-side interaction state for the immersive transfer function panel.
-  var transferFunctionPanelInteractionState: TransferFunctionPanelInteractionState?
+  var transferFunctionPanelInteractionState: TransferFunctionPanelInteractionState? {
+    didSet {
+      transferFunctionPanelInteractionState?.updateSelectedTransferFunctionChannel(
+        selectedTransferFunctionChannel
+      )
+    }
+  }
 
   var openViews: [String: Int] = [:]
 
