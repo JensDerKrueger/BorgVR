@@ -676,10 +676,13 @@ final class BorgVRMCPServer: @unchecked Sendable {
   }
 
   private func isAuthorized(_ authorization: String?) -> Bool {
+    guard configuration.allowRemoteConnections else {
+      return true
+    }
     authenticationLock.lock()
     let token = accessToken.trimmingCharacters(in: .whitespacesAndNewlines)
     authenticationLock.unlock()
-    guard !token.isEmpty else { return !configuration.allowRemoteConnections }
+    guard !token.isEmpty else { return false }
     return authorization == "Bearer \(token)"
   }
 

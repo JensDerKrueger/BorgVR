@@ -137,6 +137,9 @@
 		57A001E12EB0000300000001 /* MCPSettingsControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001E02EB0000300000001 /* MCPSettingsControls.swift */; };
 		57A001E22EB0000300000001 /* MCPSettingsControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001E02EB0000300000001 /* MCPSettingsControls.swift */; };
 		57A001E32EB0000300000001 /* MCPSettingsControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001E02EB0000300000001 /* MCPSettingsControls.swift */; };
+		57A001F12EC0000100000001 /* ScreenOpaqueGeometryShaders.metal in Resources */ = {isa = PBXBuildFile; fileRef = 57A001F02EC0000100000001 /* ScreenOpaqueGeometryShaders.metal */; };
+		57A001F22EC0000100000001 /* ScreenOpaqueGeometryShaders.metal in Resources */ = {isa = PBXBuildFile; fileRef = 57A001F02EC0000100000001 /* ScreenOpaqueGeometryShaders.metal */; };
+		57A001F32EC0000100000001 /* ScreenOpaqueGeometryShaders.metal in Resources */ = {isa = PBXBuildFile; fileRef = 57A001F02EC0000100000001 /* ScreenOpaqueGeometryShaders.metal */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -226,6 +229,7 @@
 		57A001C02EB0000100000001 /* BorgVRScreenCommandService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BorgVRScreenCommandService.swift; sourceTree = "<group>"; };
 		57A001D02EB0000200000001 /* MetalScreenshotEncoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetalScreenshotEncoder.swift; sourceTree = "<group>"; };
 		57A001E02EB0000300000001 /* MCPSettingsControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPSettingsControls.swift; sourceTree = "<group>"; };
+		57A001F02EC0000100000001 /* ScreenOpaqueGeometryShaders.metal */ = {isa = PBXFileReference; explicitFileType = text; path = ScreenOpaqueGeometryShaders.metal; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -531,6 +535,7 @@
 				57A001222E70000300000001 /* RenderingParameters.swift */,
 				57A000242E70000200000001 /* RuntimeMetalShaderLoader.swift */,
 				57A000252E70000200000001 /* RuntimeVolumeShaders.metal */,
+				57A001F02EC0000100000001 /* ScreenOpaqueGeometryShaders.metal */,
 				57A000272E70000200000001 /* ShaderTypes.h */,
 				57A000282E70000200000001 /* TextFileDocument.swift */,
 				57A001542E70000300000001 /* TransferFunctionCatalog.swift */,
@@ -769,6 +774,7 @@
 				560B90012E9150000042E45B /* web in Resources */,
 				57A001552E70000300000001 /* TransferFunctions in Resources */,
 				57A000412E70000200000001 /* RuntimeVolumeShaders.metal in Resources */,
+				57A001F12EC0000100000001 /* ScreenOpaqueGeometryShaders.metal in Resources */,
 				57A0004C2E70000200000001 /* VolumeRaycaster.metal in Resources */,
 				57A000422E70000200000001 /* ShaderTypes.h in Resources */,
 				57A000432E70000200000001 /* VolumeAtlas.h in Resources */,
@@ -787,6 +793,7 @@
 				560C60DA2E91000000000001 /* c60_32.data in Resources */,
 				560C60DB2E91000000000001 /* head_32.data in Resources */,
 				57A000462E70000200000001 /* RuntimeVolumeShaders.metal in Resources */,
+				57A001F22EC0000100000001 /* ScreenOpaqueGeometryShaders.metal in Resources */,
 				57A0004D2E70000200000001 /* VolumeRaycaster.metal in Resources */,
 				57A000482E70000200000001 /* ShaderTypes.h in Resources */,
 				57A000492E70000200000001 /* VolumeAtlas.h in Resources */,
@@ -805,6 +812,7 @@
 				56730FE52E6B79000091976B /* head_32.data in Resources */,
 				56730FE32E6B78990091976B /* c60_32.data in Resources */,
 				57A0004E2E70000200000001 /* VolumeRaycaster.metal in Resources */,
+				57A001F32EC0000100000001 /* ScreenOpaqueGeometryShaders.metal in Resources */,
 				57A0004F2E70000200000001 /* VisionInteractionShaders.metal in Resources */,
 				57A000522E70000200000001 /* ShaderTypes.h in Resources */,
 				57A000532E70000200000001 /* VolumeAtlas.h in Resources */,
