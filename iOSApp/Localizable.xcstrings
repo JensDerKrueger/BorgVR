@@ -4889,6 +4889,62 @@
         }
       }
     },
+    "Hide Measurements" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Messpunkte ausblenden"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hide Measurements"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ocultar mediciones"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Masquer les mesures"
+          }
+        }
+      }
+    },
+    "Hide Objects" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Objekte ausblenden"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hide Objects"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ocultar objetos"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Masquer les objets"
+          }
+        }
+      }
+    },
     "Hide UI" : {
       "localizations" : {
         "de" : {
@@ -16266,6 +16322,14 @@
         "fr" : { "stringUnit" : { "state" : "translated", "value" : "Jeton d’accès" } }
       }
     },
+    "Access token copied to the clipboard." : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Zugriffstoken wurde in die Zwischenablage kopiert." } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Access token copied to the clipboard." } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Token de acceso copiado al portapapeles." } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Le jeton d’accès a été copié dans le presse-papiers." } }
+      }
+    },
     "Allow connections from the network" : {
       "localizations" : {
         "de" : { "stringUnit" : { "state" : "translated", "value" : "Verbindungen aus dem Netzwerk erlauben" } },
@@ -16312,6 +16376,46 @@
         "en" : { "stringUnit" : { "state" : "translated", "value" : "Generate access token" } },
         "es" : { "stringUnit" : { "state" : "translated", "value" : "Generar token de acceso" } },
         "fr" : { "stringUnit" : { "state" : "translated", "value" : "Générer un jeton d’accès" } }
+      }
+    },
+    "Generate and copy access token" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Zugriffstoken erzeugen und kopieren" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Generate and copy access token" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Generar y copiar token de acceso" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Générer et copier le jeton d’accès" } }
+      }
+    },
+    "Show access token" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Zugriffstoken anzeigen" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Show access token" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Mostrar token de acceso" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Afficher le jeton d’accès" } }
+      }
+    },
+    "Hide access token" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Zugriffstoken ausblenden" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Hide access token" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Ocultar token de acceso" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Masquer le jeton d’accès" } }
+      }
+    },
+    "Copy access token" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Zugriffstoken kopieren" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Copy access token" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Copiar token de acceso" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Copier le jeton d’accès" } }
+      }
+    },
+    "Use this value as the Bearer token in the MCP client's Authorization header." : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Verwenden Sie diesen Wert als Bearer-Token im Authorization-Header des MCP-Clients." } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Use this value as the Bearer token in the MCP client's Authorization header." } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Use este valor como token Bearer en el encabezado Authorization del cliente MCP." } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Utilisez cette valeur comme jeton Bearer dans l’en-tête Authorization du client MCP." } }
       }
     },
     "network" : {
@@ -16362,12 +16466,12 @@
         "fr" : { "stringUnit" : { "state" : "translated", "value" : "Model Context Protocol" } }
       }
     },
-    "The MCP server listens on all network interfaces and uses unencrypted HTTP. Depending on the network configuration, it may also be reachable from the internet." : {
+    "Remote MCP connections use HTTPS. Unless a custom PKCS#12 identity is imported, BorgVR creates a temporary self-signed certificate." : {
       "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Der MCP-Server lauscht auf allen Netzwerkschnittstellen und verwendet unverschlüsseltes HTTP. Abhängig von der Netzwerkkonfiguration kann er auch aus dem Internet erreichbar sein." } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "The MCP server listens on all network interfaces and uses unencrypted HTTP. Depending on the network configuration, it may also be reachable from the internet." } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "El servidor MCP escucha en todas las interfaces de red y utiliza HTTP sin cifrar. Según la configuración de la red, también puede ser accesible desde Internet." } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Le serveur MCP écoute sur toutes les interfaces réseau et utilise HTTP sans chiffrement. Selon la configuration du réseau, il peut également être accessible depuis Internet." } }
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "MCP-Verbindungen aus dem Netzwerk verwenden HTTPS. Wenn keine eigene PKCS#12-Identität importiert wird, erzeugt BorgVR ein temporäres selbstsigniertes Zertifikat." } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Remote MCP connections use HTTPS. Unless a custom PKCS#12 identity is imported, BorgVR creates a temporary self-signed certificate." } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Las conexiones MCP desde la red utilizan HTTPS. Si no se importa una identidad PKCS#12 personalizada, BorgVR crea un certificado autofirmado temporal." } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Les connexions MCP depuis le réseau utilisent HTTPS. Si aucune identité PKCS#12 personnalisée n'est importée, BorgVR crée un certificat auto-signé temporaire." } }
       }
     },
     "The MCP endpoint is available only on this device." : {

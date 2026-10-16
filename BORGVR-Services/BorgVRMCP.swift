@@ -13,9 +13,27 @@ struct BorgVRMCPConfiguration: Equatable, Sendable {
   var port: Int
   var allowRemoteConnections: Bool
   var accessToken: String
+  var tlsCertificateData: Data = Data()
+  var tlsCertificatePassword: String = ""
 
   var normalizedPort: UInt16 {
     UInt16(clamping: min(max(port, 1), 65_535))
+  }
+
+  var usesTLS: Bool {
+    allowRemoteConnections
+  }
+
+  var scheme: String {
+    usesTLS ? "https" : "http"
+  }
+
+  func hasSameListenerConfiguration(as other: Self) -> Bool {
+    enabled == other.enabled
+      && normalizedPort == other.normalizedPort
+      && allowRemoteConnections == other.allowRemoteConnections
+      && tlsCertificateData == other.tlsCertificateData
+      && tlsCertificatePassword == other.tlsCertificatePassword
   }
 }
 
@@ -262,6 +280,11 @@ struct BorgVRMCPLightingState: Codable, Sendable {
   var specular: [Float]
 }
 
+struct BorgVRMCPAnnotationVisibilityState: Codable, Sendable {
+  var objects: Bool
+  var measurements: Bool
+}
+
 struct BorgVRMCPApplicationState: Codable, Sendable {
   var applicationVersion: String
   var platform: String
@@ -274,6 +297,7 @@ struct BorgVRMCPApplicationState: Codable, Sendable {
   var clipMinimum: [Float]
   var clipMaximum: [Float]
   var lighting: BorgVRMCPLightingState
+  var annotationVisibility: BorgVRMCPAnnotationVisibilityState
   var objectCount: Int
   var measurementCount: Int
 }
@@ -353,6 +377,7 @@ protocol BorgVRMCPCommandService: AnyObject {
     diffuse: SIMD3<Float>?,
     specular: SIMD3<Float>?
   ) throws
+  func setAnnotationVisibility(objects: Bool?, measurements: Bool?) throws
   func reset(_ scope: BorgVRMCPResetScope) throws
   func waitUntilRendered(after frame: UInt64, timeout: TimeInterval) async throws
   func captureScreenshot() async throws -> BorgVRMCPImage

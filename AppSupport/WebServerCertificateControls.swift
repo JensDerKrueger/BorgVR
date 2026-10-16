@@ -2,7 +2,34 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 struct WebServerCertificateControls: View {
+  enum PasswordStore {
+    case webServer
+    case mcpServer
+
+    func load() -> String {
+      switch self {
+        case .webServer: WebServerCertificatePasswordStore.load()
+        case .mcpServer: MCPServerCertificatePasswordStore.load()
+      }
+    }
+
+    func save(_ password: String) throws {
+      switch self {
+        case .webServer: try WebServerCertificatePasswordStore.save(password)
+        case .mcpServer: try MCPServerCertificatePasswordStore.save(password)
+      }
+    }
+
+    func delete() {
+      switch self {
+        case .webServer: WebServerCertificatePasswordStore.delete()
+        case .mcpServer: MCPServerCertificatePasswordStore.delete()
+      }
+    }
+  }
+
   @Binding var certificateData: Data
+  var passwordStore: PasswordStore = .webServer
 
   @State private var isImporterPresented = false
   @State private var importStatus: String?
@@ -28,7 +55,7 @@ struct WebServerCertificateControls: View {
         Button(role: .destructive) {
           certificateData = Data()
           passwordText = ""
-          WebServerCertificatePasswordStore.delete()
+          passwordStore.delete()
           passwordStatus = nil
           importStatus = "Custom certificate removed."
         } label: {
@@ -50,7 +77,7 @@ struct WebServerCertificateControls: View {
       }
     }
     .onAppear {
-      passwordText = WebServerCertificatePasswordStore.load()
+      passwordText = passwordStore.load()
     }
     .fileImporter(
       isPresented: $isImporterPresented,
@@ -73,7 +100,7 @@ struct WebServerCertificateControls: View {
       set: { newValue in
         passwordText = newValue
         do {
-          try WebServerCertificatePasswordStore.save(newValue)
+          try passwordStore.save(newValue)
           passwordStatus = newValue.isEmpty ? nil : "Password saved in the Keychain."
         } catch {
           passwordStatus = "Password could not be saved: \(error.localizedDescription)"
@@ -97,7 +124,7 @@ struct WebServerCertificateControls: View {
 
       certificateData = try Data(contentsOf: url)
       importStatus = "\(url.lastPathComponent) importiert."
-      passwordText = WebServerCertificatePasswordStore.load()
+      passwordText = passwordStore.load()
     } catch {
       importStatus = "Certificate could not be imported: \(error.localizedDescription)"
     }

@@ -30,6 +30,7 @@ struct MeasurementView: View {
       .pickerStyle(.segmented)
 
       Toggle("Snap to Volume", isOn: projectMeasurementsOntoVolumeBinding)
+      Toggle("Hide Measurements", isOn: measurementsHiddenBinding)
 
       HStack {
         Button {
@@ -253,6 +254,13 @@ struct MeasurementView: View {
     Binding(
       get: { storedAppModel.projectMeasurementsOntoVolume },
       set: { storedAppModel.projectMeasurementsOntoVolume = $0 }
+    )
+  }
+
+  private var measurementsHiddenBinding: Binding<Bool> {
+    Binding(
+      get: { sharedAppModel.measurementsHidden },
+      set: { sharedAppModel.measurementsHidden = $0 }
     )
   }
 

@@ -223,6 +223,7 @@ struct SettingsView: View {
         port: $storedAppModel.mcpServerPort,
         allowRemoteConnections: $storedAppModel.mcpAllowRemoteConnections,
         accessToken: $storedAppModel.mcpAccessToken,
+        certificateData: $storedAppModel.mcpServerCertificateData,
         statusText: mcpController.statusText
       )
       resetButton(for: .mcp)

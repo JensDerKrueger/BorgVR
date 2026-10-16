@@ -97,6 +97,26 @@ enum WebServerCertificatePasswordStore {
   }
 }
 
+enum MCPServerCertificatePasswordStore {
+  private static let account = "mcpServerCertificatePassword"
+
+  static func load() -> String {
+    (try? KeychainSecretStore.string(account: account)) ?? ""
+  }
+
+  static func save(_ password: String) throws {
+    if password.isEmpty {
+      try KeychainSecretStore.delete(account: account)
+    } else {
+      try KeychainSecretStore.setString(password, account: account)
+    }
+  }
+
+  static func delete() {
+    try? KeychainSecretStore.delete(account: account)
+  }
+}
+
 private enum KeychainSecretError: LocalizedError {
   case invalidData
   case unexpectedStatus(OSStatus)

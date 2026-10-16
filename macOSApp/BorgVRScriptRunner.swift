@@ -440,6 +440,16 @@ final class BorgVRScriptRunner: ObservableObject {
       self?.resetLighting() ?? .callbackError
     }
 
+    register("hideobjects", [.bool]) { [weak self] args in
+      self?.setAnnotationVisibility(objectsHidden: args.bool(0), measurementsHidden: nil)
+        ?? .callbackError
+    }
+
+    register("hidemeasurements", [.bool]) { [weak self] args in
+      self?.setAnnotationVisibility(objectsHidden: nil, measurementsHidden: args.bool(0))
+        ?? .callbackError
+    }
+
     register("addspheremarker", [.string, .float, .float, .float, .float, .float, .float, .float]) { [weak self] args in
       self?.addSphereMarker(args, directional: false) ?? .callbackError
     }
@@ -1249,6 +1259,22 @@ final class BorgVRScriptRunner: ObservableObject {
     do {
       guard let commandService else { return .callbackError }
       try commandService.reset(.lighting)
+      return .success
+    } catch {
+      return .callbackError
+    }
+  }
+
+  private func setAnnotationVisibility(
+    objectsHidden: Bool?,
+    measurementsHidden: Bool?
+  ) -> CommandResultCode {
+    do {
+      guard let commandService else { return .callbackError }
+      try commandService.setAnnotationVisibility(
+        objects: objectsHidden.map { !$0 },
+        measurements: measurementsHidden.map { !$0 }
+      )
       return .success
     } catch {
       return .callbackError

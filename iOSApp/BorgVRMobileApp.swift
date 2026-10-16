@@ -121,6 +121,7 @@ struct BorgVRMobileApp: App {
         .onChange(of: appSettings.mcpServerPort) { _, _ in applyMCPConfiguration() }
         .onChange(of: appSettings.mcpAllowRemoteConnections) { _, _ in applyMCPConfiguration() }
         .onChange(of: appSettings.mcpAccessToken) { _, _ in applyMCPConfiguration() }
+        .onChange(of: appSettings.mcpServerCertificateData) { _, _ in applyMCPConfiguration() }
         .task {
           if appSettings.enableDatasetServer && appSettings.autoStartServer {
             serverController.start(using: appSettings)
@@ -230,7 +231,9 @@ struct BorgVRMobileApp: App {
       enabled: appSettings.enableMCPServer,
       port: appSettings.mcpServerPort,
       allowRemoteConnections: appSettings.mcpAllowRemoteConnections,
-      accessToken: appSettings.mcpAccessToken
+      accessToken: appSettings.mcpAccessToken,
+      tlsCertificateData: appSettings.mcpServerCertificateData,
+      tlsCertificatePassword: appSettings.mcpServerCertificatePassword
     ))
   }
 

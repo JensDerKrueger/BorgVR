@@ -290,6 +290,7 @@ struct SettingsView: View {
               port: $appSettings.mcpServerPort,
               allowRemoteConnections: $appSettings.mcpAllowRemoteConnections,
               accessToken: $appSettings.mcpAccessToken,
+              certificateData: $appSettings.mcpServerCertificateData,
               statusText: mcpController.statusText
             )
           }

@@ -159,6 +159,7 @@ struct macOSApp: App {
         .onChange(of: storedAppModel.mcpServerPort) { _, _ in applyMCPConfiguration() }
         .onChange(of: storedAppModel.mcpAllowRemoteConnections) { _, _ in applyMCPConfiguration() }
         .onChange(of: storedAppModel.mcpAccessToken) { _, _ in applyMCPConfiguration() }
+        .onChange(of: storedAppModel.mcpServerCertificateData) { _, _ in applyMCPConfiguration() }
         .onOpenURL { url in
           openExternalDataset(url)
         }
@@ -373,7 +374,9 @@ struct macOSApp: App {
       enabled: storedAppModel.enableMCPServer,
       port: storedAppModel.mcpServerPort,
       allowRemoteConnections: storedAppModel.mcpAllowRemoteConnections,
-      accessToken: storedAppModel.mcpAccessToken
+      accessToken: storedAppModel.mcpAccessToken,
+      tlsCertificateData: storedAppModel.mcpServerCertificateData,
+      tlsCertificatePassword: storedAppModel.mcpServerCertificatePassword
     ))
   }
 

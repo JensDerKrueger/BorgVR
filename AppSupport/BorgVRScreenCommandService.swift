@@ -91,6 +91,10 @@ final class BorgVRScreenCommandService: BorgVRMCPCommandService {
         diffuse: parameters.diffuseLightColor.mcpArray,
         specular: parameters.specularLightColor.mcpArray
       ),
+      annotationVisibility: BorgVRMCPAnnotationVisibilityState(
+        objects: !appModel.objectsHidden,
+        measurements: !appModel.measurementsHidden
+      ),
       objectCount: appModel.volumeMarkers.count + appModel.sceneMeshInstances.count,
       measurementCount: appModel.volumeMeasurements.count
     )
@@ -214,6 +218,17 @@ final class BorgVRScreenCommandService: BorgVRMCPCommandService {
     synchronizeState()
   }
 
+  func setAnnotationVisibility(objects: Bool?, measurements: Bool?) throws {
+    guard let appModel else { throw BorgVRMCPCommandError.rendererUnavailable }
+    guard objects != nil || measurements != nil else {
+      throw BorgVRMCPCommandError.invalidArgument(
+        "At least one annotation visibility value is required."
+      )
+    }
+    if let objects { appModel.objectsHidden = !objects }
+    if let measurements { appModel.measurementsHidden = !measurements }
+  }
+
   func reset(_ scope: BorgVRMCPResetScope) throws {
     guard let parameters = renderingParameters else {
       throw BorgVRMCPCommandError.rendererUnavailable
@@ -307,6 +322,10 @@ final class BorgVRScreenCommandService: BorgVRMCPCommandService {
       clipMaximum: [1, 1, 1],
       lighting: BorgVRMCPLightingState(
         direction: [0, 0, 1], ambient: [0, 0, 0], diffuse: [0, 0, 0], specular: [0, 0, 0]
+      ),
+      annotationVisibility: BorgVRMCPAnnotationVisibilityState(
+        objects: true,
+        measurements: true
       ),
       objectCount: 0,
       measurementCount: 0

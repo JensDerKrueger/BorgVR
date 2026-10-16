@@ -59,7 +59,7 @@ final class ScreenVolumeRendererCore {
   private let fieldOfViewY = BorgVRScreenViewState.defaultVerticalFieldOfView
   private let minimumPipelineDrawableWidth: Float = 64
   private let pipelineWidthChangeThreshold: Float = 32
-  private let markerRenderer = ScreenVolumeMarkerRenderer()
+  private let opaqueGeometryRenderer = ScreenOpaqueGeometryRenderer()
   private var interactionDepthTextures: [MTLTexture?] = Array(repeating: nil, count: 3)
   private var nextInteractionDepthTextureIndex = 0
   private var interactionDepthSnapshot: VolumeInteractionDepthSnapshot?
@@ -227,12 +227,14 @@ final class ScreenVolumeRendererCore {
     interactionAttachment.clearColor = MTLClearColorMake(-1, 0, 0, 0)
 
     let markerMatrices = markerFrameMatrices(for: view)
-    guard let markerTargets = markerRenderer.renderPrepass(
+    guard let markerTargets = opaqueGeometryRenderer.render(
       commandBuffer: commandBuffer,
       device: device,
       drawableSize: view.drawableSize,
       colorFormat: view.colorPixelFormat,
       depthFormat: view.depthStencilPixelFormat,
+      showsObjects: !appModel.objectsHidden,
+      showsMeasurements: !appModel.measurementsHidden,
       markers: appModel.volumeMarkers,
       sceneMeshAssets: appModel.sceneMeshAssets,
       sceneMeshInstances: appModel.sceneMeshInstances,
@@ -279,10 +281,10 @@ final class ScreenVolumeRendererCore {
       appModel.logger.error("Failed to bind transfer function: \(error.localizedDescription)")
     }
     hashTable.bind(to: renderEncoder, index: FragmentBufferIndex.hashTable.rawValue)
-    markerRenderer.bindDepth(markerTargets.depth, to: renderEncoder)
+    opaqueGeometryRenderer.bindDepth(markerTargets.depth, to: renderEncoder)
 
     renderEncoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: vertexCount)
-    markerRenderer.composite(
+    opaqueGeometryRenderer.composite(
       colorTexture: markerTargets.color,
       depthTexture: markerTargets.depth,
       to: renderEncoder
@@ -330,7 +332,7 @@ final class ScreenVolumeRendererCore {
     pipelineStateMarker = nil
     pipelineStateMarkerComposite = nil
     pipelineDrawableWidth = 0
-    markerRenderer.resetTargets()
+    opaqueGeometryRenderer.resetTargets()
   }
 
   private func clearDatasetResources() {
@@ -494,7 +496,7 @@ final class ScreenVolumeRendererCore {
     pipelineStateBrickVis = states.brick
     pipelineStateMarker = states.marker
     pipelineStateMarkerComposite = states.markerComposite
-    markerRenderer.configure(
+    opaqueGeometryRenderer.configure(
       device: device,
       markerPipeline: states.marker,
       measurementPointPipeline: states.measurementPoint,
@@ -709,7 +711,7 @@ final class ScreenVolumeRendererCore {
   private func updateMeasurementScreenLabels(
     matrices: (projection: simd_float4x4, view: simd_float4x4, model: simd_float4x4)
   ) {
-    guard !appModel.volumeMeasurements.isEmpty else {
+    guard !appModel.measurementsHidden, !appModel.volumeMeasurements.isEmpty else {
       appModel.updateMeasurementScreenLabels([])
       return
     }

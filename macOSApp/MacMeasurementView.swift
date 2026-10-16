@@ -24,6 +24,8 @@ struct MacMeasurementView: View {
 
       Toggle("Project onto Volume", isOn: $appModel.projectMeasurementsOntoVolume)
 
+      Toggle("Hide Measurements", isOn: $appModel.measurementsHidden)
+
       HStack {
         Button {
           _ = appModel.createVolumeMeasurement()

@@ -63,6 +63,10 @@ final class StoredAppModel : ObservableObject {
   static let defaultMCPAccessToken = BorgVRMCPDefaults.accessToken
   @AppStorage("mcpAccessToken") var mcpAccessToken: String = defaultMCPAccessToken
 
+  static let defaultMCPServerCertificateData = Data()
+  @AppStorage("mcpServerCertificateData")
+  var mcpServerCertificateData: Data = defaultMCPServerCertificateData
+
   static let defaultSharePlayDisplayName = ""
   @AppStorage("sharePlayDisplayName") var sharePlayDisplayName: String = defaultSharePlayDisplayName
 
@@ -110,6 +114,8 @@ final class StoredAppModel : ObservableObject {
     mcpServerPort = Self.defaultMCPServerPort
     mcpAllowRemoteConnections = Self.defaultMCPAllowRemoteConnections
     mcpAccessToken = Self.defaultMCPAccessToken
+    mcpServerCertificateData = Self.defaultMCPServerCertificateData
+    MCPServerCertificatePasswordStore.delete()
   }
 
   func resetSharePlayDefaults() {
@@ -128,6 +134,11 @@ final class StoredAppModel : ObservableObject {
   var webServerCertificatePassword: String {
     get { WebServerCertificatePasswordStore.load() }
     set { try? WebServerCertificatePasswordStore.save(newValue) }
+  }
+
+  var mcpServerCertificatePassword: String {
+    get { MCPServerCertificatePasswordStore.load() }
+    set { try? MCPServerCertificatePasswordStore.save(newValue) }
   }
 
   func setDataDirectoryURL(_ url: URL) {

@@ -1264,4 +1264,12 @@
 "MCP command service is not available." = "MCP command service is not available.";
 "network" = "network";
 "MCP server on %@, port %d" = "MCP server on %@, port %d";
-"The MCP server listens on all network interfaces and uses unencrypted HTTP. Depending on the network configuration, it may also be reachable from the internet." = "The MCP server listens on all network interfaces and uses unencrypted HTTP. Depending on the network configuration, it may also be reachable from the internet.";
+"Remote MCP connections use HTTPS. Unless a custom PKCS#12 identity is imported, BorgVR creates a temporary self-signed certificate." = "Remote MCP connections use HTTPS. Unless a custom PKCS#12 identity is imported, BorgVR creates a temporary self-signed certificate.";
+"Hide Objects" = "Hide Objects";
+"Hide Measurements" = "Hide Measurements";
+"Show access token" = "Show access token";
+"Hide access token" = "Hide access token";
+"Copy access token" = "Copy access token";
+"Generate and copy access token" = "Generate and copy access token";
+"Access token copied to the clipboard." = "Access token copied to the clipboard.";
+"Use this value as the Bearer token in the MCP client's Authorization header." = "Use this value as the Bearer token in the MCP client's Authorization header.";

@@ -30,6 +30,9 @@ struct MacMarkerView: View {
       Toggle("Project onto Volume", isOn: $appModel.projectObjectsOntoVolume)
         .frame(maxWidth: .infinity, alignment: .leading)
 
+      Toggle("Hide Objects", isOn: $appModel.objectsHidden)
+        .frame(maxWidth: .infinity, alignment: .leading)
+
       if appModel.volumeMarkers.isEmpty && appModel.sceneMeshInstances.isEmpty {
         ContentUnavailableView(
           "No Objects",

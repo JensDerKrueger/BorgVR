@@ -32,6 +32,7 @@ struct MobileMarkerView: View {
             )
           )
           Toggle("Project onto Volume", isOn: $appModel.projectObjectsOntoVolume)
+          Toggle("Hide Objects", isOn: $appModel.objectsHidden)
         }
 
         Section("Objects") {

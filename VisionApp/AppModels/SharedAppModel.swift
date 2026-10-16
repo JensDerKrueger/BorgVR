@@ -147,6 +147,7 @@ class SharedAppModel {
   var volumeMarkers: [VolumeMarker]
   var sceneMeshAssets: [UUID: SceneMeshAsset]
   var sceneMeshInstances: [SceneMeshInstance]
+  var objectsHidden: Bool
   var selectedSceneMeshInstanceID: UUID?
   /// Local object catalog selection and optional accessory placement request. Neither is synchronized.
   var selectedSceneObjectPrototype: SceneObjectPrototype
@@ -205,6 +206,7 @@ class SharedAppModel {
       }
     }
   }
+  var measurementsHidden: Bool
   /// Measurement type used when the next measurement is created.
   var measurementKind: VolumeMeasurementKind
   /// Locally selected measurement and control point.
@@ -243,6 +245,7 @@ class SharedAppModel {
     volumeMarkers = []
     sceneMeshAssets = [:]
     sceneMeshInstances = []
+    objectsHidden = false
     selectedSceneObjectPrototype = .sphere
     armedSceneObjectPrototype = nil
     selectedSceneMeshInstanceID = nil
@@ -260,6 +263,7 @@ class SharedAppModel {
     defaultVolumeStrokeRadius = VolumeMarkerRadius.strokeDefault
     defaultVolumeStrokeColor = SIMD4<Float>(1, 0, 0, 1)
     storedVolumeMeasurements = []
+    measurementsHidden = false
     measurementKind = .length
     selectedVolumeMeasurementID = nil
     selectedVolumeMeasurementPointID = nil

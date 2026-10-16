@@ -135,6 +135,7 @@ final class AppModel: ObservableObject {
   @Published var volumeMarkers: [VolumeMarker] = []
   @Published var sceneMeshAssets: [UUID: SceneMeshAsset] = [:]
   @Published var sceneMeshInstances: [SceneMeshInstance] = []
+  @Published var objectsHidden = false
   @Published var selectedSceneMeshInstanceID: UUID?
   @Published var selectedSceneObjectPrototype: SceneObjectPrototype = .sphere
   @Published var selectedVolumeMarkerIDs: Set<UUID> = []
@@ -150,6 +151,7 @@ final class AppModel: ObservableObject {
     }
   }
   @Published var volumeMeasurements: [VolumeMeasurement] = []
+  @Published var measurementsHidden = false
   @Published var measurementKind: VolumeMeasurementKind = .length
   @Published var selectedVolumeMeasurementID: UUID?
   @Published var selectedVolumeMeasurementPointID: UUID?
@@ -248,6 +250,8 @@ final class AppModel: ObservableObject {
       groupSessionHost = asGroupSessionHost
     }
     sharePlayDatasetSource = nil
+    objectsHidden = false
+    measurementsHidden = false
     resetRenderedDatasetState()
     datasetSessionState = .opening(dataset: dataset, requestID: UUID())
   }

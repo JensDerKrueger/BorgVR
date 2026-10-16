@@ -168,6 +168,7 @@ struct VisionApp: App {
         .onChange(of: storedAppModel.mcpServerPort) { _, _ in applyMCPConfiguration() }
         .onChange(of: storedAppModel.mcpAllowRemoteConnections) { _, _ in applyMCPConfiguration() }
         .onChange(of: storedAppModel.mcpAccessToken) { _, _ in applyMCPConfiguration() }
+        .onChange(of: storedAppModel.mcpServerCertificateData) { _, _ in applyMCPConfiguration() }
     }
     .environment(runtimeAppModel)
     .environment(sharedAppModel)
@@ -179,6 +180,10 @@ struct VisionApp: App {
     .windowResizability(.contentSize)
     .defaultSize(width:runtimeAppModel.windowSize.width,height:runtimeAppModel.windowSize.height)
     .onChange(of: runtimeAppModel.datasetSessionState) { _, newValue in
+      if case .opening = newValue {
+        sharedAppModel.objectsHidden = false
+        sharedAppModel.measurementsHidden = false
+      }
       queueDatasetSessionTransition(for: newValue)
     }
 
@@ -408,7 +413,9 @@ struct VisionApp: App {
       enabled: storedAppModel.enableMCPServer,
       port: storedAppModel.mcpServerPort,
       allowRemoteConnections: storedAppModel.mcpAllowRemoteConnections,
-      accessToken: storedAppModel.mcpAccessToken
+      accessToken: storedAppModel.mcpAccessToken,
+      tlsCertificateData: storedAppModel.mcpServerCertificateData,
+      tlsCertificatePassword: storedAppModel.mcpServerCertificatePassword
     ))
   }
 

@@ -73,6 +73,10 @@ setdiffuselight(float,float,float)
 setspecularlight(float,float,float)
 resetlighting()
 
+# Local annotation visibility. These commands never delete data.
+hideobjects(bool)
+hidemeasurements(bool)
+
 # Markers
 # Put names and paths containing spaces in single or double quotes.
 # Sphere: name, position xyz, radius, RGB

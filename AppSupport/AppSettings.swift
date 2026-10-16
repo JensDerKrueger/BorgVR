@@ -185,6 +185,7 @@ final class AppSettings: ObservableObject {
     "mcpServerPort": BorgVRMCPDefaults.port,
     "mcpAllowRemoteConnections": BorgVRMCPDefaults.allowRemoteConnections,
     "mcpAccessToken": BorgVRMCPDefaults.accessToken,
+    "mcpServerCertificateData": Data(),
     "autoloadTF": false,
     "autoloadObjects": false,
     "autoloadMeasurements": false,
@@ -250,6 +251,8 @@ final class AppSettings: ObservableObject {
   @AppStorage("mcpAllowRemoteConnections")
   var mcpAllowRemoteConnections: Bool = AppSettings.bool("mcpAllowRemoteConnections")
   @AppStorage("mcpAccessToken") var mcpAccessToken: String = AppSettings.string("mcpAccessToken")
+  @AppStorage("mcpServerCertificateData")
+  var mcpServerCertificateData: Data = AppSettings.data("mcpServerCertificateData")
   @AppStorage("autoloadTF") var autoloadTF: Bool = AppSettings.bool("autoloadTF")
   @AppStorage("autoloadObjects") var autoloadObjects: Bool = AppSettings.bool("autoloadObjects")
   @AppStorage("autoloadMeasurements")
@@ -443,11 +446,18 @@ final class AppSettings: ObservableObject {
     mcpServerPort = BorgVRMCPDefaults.port
     mcpAllowRemoteConnections = BorgVRMCPDefaults.allowRemoteConnections
     mcpAccessToken = BorgVRMCPDefaults.accessToken
+    mcpServerCertificateData = Data()
+    MCPServerCertificatePasswordStore.delete()
   }
 
   var webServerCertificatePassword: String {
     get { WebServerCertificatePasswordStore.load() }
     set { try? WebServerCertificatePasswordStore.save(newValue) }
+  }
+
+  var mcpServerCertificatePassword: String {
+    get { MCPServerCertificatePasswordStore.load() }
+    set { try? MCPServerCertificatePasswordStore.save(newValue) }
   }
 
   func resetLODDefaults(resetOversamplingThresholds: Bool = true) {

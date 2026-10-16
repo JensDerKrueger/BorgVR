@@ -119,6 +119,7 @@ final class StoredAppModel: ObservableObject {
     "mcpServerPort": BorgVRMCPDefaults.port,
     "mcpAllowRemoteConnections": BorgVRMCPDefaults.allowRemoteConnections,
     "mcpAccessToken": BorgVRMCPDefaults.accessToken,
+    "mcpServerCertificateData": Data(),
     "autoloadTF": false,
     "autoloadObjects": false,
     "autoloadMeasurements": false,
@@ -245,6 +246,8 @@ final class StoredAppModel: ObservableObject {
   @AppStorage("mcpAllowRemoteConnections")
   var mcpAllowRemoteConnections: Bool = StoredAppModel.bool("mcpAllowRemoteConnections")
   @AppStorage("mcpAccessToken") var mcpAccessToken: String = StoredAppModel.string("mcpAccessToken")
+  @AppStorage("mcpServerCertificateData")
+  var mcpServerCertificateData: Data = StoredAppModel.data("mcpServerCertificateData")
   /// Whether to automatically load the transfer function.
   @AppStorage("autoloadTF") var autoloadTF: Bool = StoredAppModel.bool("autoloadTF")
   /// Whether to automatically load and save placed objects and annotations.
@@ -471,6 +474,11 @@ final class StoredAppModel: ObservableObject {
     set { try? WebServerCertificatePasswordStore.save(newValue) }
   }
 
+  var mcpServerCertificatePassword: String {
+    get { MCPServerCertificatePasswordStore.load() }
+    set { try? MCPServerCertificatePasswordStore.save(newValue) }
+  }
+
   private func initializeMarkerDefaultColorIfNeeded() {
     guard !markerDefaultColorInitialized else {
       return
@@ -507,6 +515,8 @@ final class StoredAppModel: ObservableObject {
     mcpServerPort = BorgVRMCPDefaults.port
     mcpAllowRemoteConnections = BorgVRMCPDefaults.allowRemoteConnections
     mcpAccessToken = BorgVRMCPDefaults.accessToken
+    mcpServerCertificateData = Data()
+    MCPServerCertificatePasswordStore.delete()
   }
 
   private func loadServers() {

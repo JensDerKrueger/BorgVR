@@ -150,6 +150,7 @@ struct MarkerView: View {
         .pickerStyle(.segmented)
       }
       Toggle("Snap to Volume", isOn: projectObjectsOntoVolumeBinding)
+      Toggle("Hide Objects", isOn: objectsHiddenBinding)
     }
   }
 
@@ -351,6 +352,13 @@ struct MarkerView: View {
     Binding(
       get: { storedAppModel.projectObjectsOntoVolume },
       set: { storedAppModel.projectObjectsOntoVolume = $0 }
+    )
+  }
+
+  private var objectsHiddenBinding: Binding<Bool> {
+    Binding(
+      get: { sharedAppModel.objectsHidden },
+      set: { sharedAppModel.objectsHidden = $0 }
     )
   }
 

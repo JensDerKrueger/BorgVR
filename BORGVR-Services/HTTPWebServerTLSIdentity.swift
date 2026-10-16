@@ -2,11 +2,15 @@ import Foundation
 import Security
 
 enum HTTPWebServerTLSIdentity {
-  static func create(pkcs12Data: Data = Data(), password: String = "") throws -> SecIdentity {
+  static func create(
+    pkcs12Data: Data = Data(),
+    password: String = "",
+    commonName: String = "BorgVR Local WebGPU Server"
+  ) throws -> SecIdentity {
     if !pkcs12Data.isEmpty {
       return try identity(fromPKCS12: pkcs12Data, password: password)
     }
-    return try createSelfSigned()
+    return try createSelfSigned(commonName: commonName)
   }
 
   private static func identity(fromPKCS12 data: Data, password: String) throws -> SecIdentity {
@@ -25,7 +29,7 @@ enum HTTPWebServerTLSIdentity {
     return identity
   }
 
-  private static func createSelfSigned() throws -> SecIdentity {
+  private static func createSelfSigned(commonName: String) throws -> SecIdentity {
     let attributes: [String: Any] = [
       kSecAttrKeyType as String: kSecAttrKeyTypeRSA,
       kSecAttrKeySizeInBits as String: 2048,
@@ -48,12 +52,12 @@ enum HTTPWebServerTLSIdentity {
       DER.explicit(0, DER.integer([0x02])),
       DER.integer(serial),
       DER.rsaSHA256AlgorithmIdentifier,
-      subjectName(),
+      subjectName(commonName: commonName),
       DER.sequence([
         DER.generalizedTime(now.addingTimeInterval(-300)),
         DER.generalizedTime(now.addingTimeInterval(10 * 365 * 24 * 60 * 60))
       ]),
-      subjectName(),
+      subjectName(commonName: commonName),
       subjectPublicKeyInfo(publicKeyData),
       DER.explicit(3, extensions())
     ])
@@ -81,12 +85,12 @@ enum HTTPWebServerTLSIdentity {
     return identity
   }
 
-  private static func subjectName() -> Data {
+  private static func subjectName(commonName: String) -> Data {
     DER.sequence([
       DER.set([
         DER.sequence([
           DER.oid("2.5.4.3"),
-          DER.utf8String("BorgVR Local WebGPU Server")
+          DER.utf8String(commonName)
         ])
       ])
     ])

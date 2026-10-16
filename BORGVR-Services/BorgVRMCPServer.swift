@@ -1,6 +1,7 @@
 import Combine
 import Foundation
 import Network
+import Security
 
 @MainActor
 final class BorgVRMCPServerController: ObservableObject {
@@ -11,6 +12,7 @@ final class BorgVRMCPServerController: ObservableObject {
   private var commandService: (any BorgVRMCPCommandService)?
   private var configuration: BorgVRMCPConfiguration?
   private var logger: LoggerBase?
+  private var serverGeneration = 0
 
   func configure(
     commandService: any BorgVRMCPCommandService,
@@ -29,11 +31,33 @@ final class BorgVRMCPServerController: ObservableObject {
       statusText = String(localized: "MCP command service is not available.")
       return
     }
-    if self.configuration == configuration, isRunning { return }
+    guard !configuration.allowRemoteConnections ||
+            !configuration.accessToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+      stop()
+      statusText = String(
+        localized: "An access token is required before remote MCP connections can be enabled."
+      )
+      return
+    }
+    if self.configuration == configuration,
+       let server,
+       server.lastError == nil {
+      return
+    }
+    if let currentConfiguration = self.configuration,
+       currentConfiguration.hasSameListenerConfiguration(as: configuration),
+       let server,
+       server.lastError == nil {
+      server.updateAccessToken(configuration.accessToken)
+      self.configuration = configuration
+      statusText = statusDescription(for: configuration)
+      return
+    }
     start(configuration)
   }
 
   func stop() {
+    serverGeneration += 1
     server?.stop()
     server = nil
     configuration = nil
@@ -44,6 +68,8 @@ final class BorgVRMCPServerController: ObservableObject {
   private func start(_ configuration: BorgVRMCPConfiguration) {
     server?.stop()
     guard let commandService else { return }
+    serverGeneration += 1
+    let generation = serverGeneration
 
     let newServer = BorgVRMCPServer(
       configuration: configuration,
@@ -51,19 +77,21 @@ final class BorgVRMCPServerController: ObservableObject {
       logger: logger,
       stateDidChange: { [weak self] running, error in
         Task { @MainActor [weak self] in
-          guard let self, self.configuration == configuration else { return }
+          guard let self,
+                self.serverGeneration == generation,
+                let activeConfiguration = self.configuration else { return }
           self.isRunning = running
           if let error {
             self.statusText = error
           } else if running {
-            self.statusText = self.statusDescription(for: configuration)
+            self.statusText = self.statusDescription(for: activeConfiguration)
           }
         }
       }
     )
-    newServer.start()
     server = newServer
     self.configuration = configuration
+    newServer.start()
     isRunning = newServer.isRunning
     if let error = newServer.lastError {
       statusText = error
@@ -97,8 +125,11 @@ final class BorgVRMCPServer: @unchecked Sendable {
   private let stateDidChange: @Sendable (Bool, String?) -> Void
   private let queue = DispatchQueue(label: "BorgVRMCPServer")
   private let connectionLock = NSLock()
+  private let authenticationLock = NSLock()
   private var connections: [NWConnection] = []
   private var listener: NWListener?
+  private var tlsIdentity: sec_identity_t?
+  private var accessToken: String
 
   private(set) var isRunning = false
   private(set) var lastError: String?
@@ -113,20 +144,23 @@ final class BorgVRMCPServer: @unchecked Sendable {
     self.commandService = commandService
     self.logger = logger
     self.stateDidChange = stateDidChange
+    accessToken = configuration.accessToken
+  }
+
+  func updateAccessToken(_ accessToken: String) {
+    authenticationLock.lock()
+    self.accessToken = accessToken
+    authenticationLock.unlock()
   }
 
   func start() {
     lastError = nil
     do {
-      let parameters = NWParameters.tcp
-      if !configuration.allowRemoteConnections {
-        guard let address = IPv4Address("127.0.0.1") else {
-          throw BorgVRMCPServerError.localhostBindingFailed
-        }
-        parameters.requiredLocalEndpoint = .hostPort(host: .ipv4(address), port: .any)
-      } else if configuration.accessToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+      if configuration.allowRemoteConnections,
+         configuration.accessToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
         throw BorgVRMCPServerError.remoteAccessRequiresToken
       }
+      let parameters = try listenerParameters()
       let port = NWEndpoint.Port(rawValue: configuration.normalizedPort) ?? 8765
       let listener = try NWListener(using: parameters, on: port)
       listener.newConnectionHandler = { [weak self] connection in
@@ -152,7 +186,9 @@ final class BorgVRMCPServer: @unchecked Sendable {
       }
       self.listener = listener
       listener.start(queue: queue)
-      logger?.info("MCP server started on port \(configuration.normalizedPort).")
+      logger?.info(
+        "MCP \(configuration.scheme.uppercased()) server started on port \(configuration.normalizedPort)."
+      )
     } catch {
       lastError = error.localizedDescription
       logger?.error(error.localizedDescription)
@@ -169,10 +205,36 @@ final class BorgVRMCPServer: @unchecked Sendable {
       return connections
     }
     active.forEach { $0.cancel() }
+    tlsIdentity = nil
     if isRunning {
       logger?.info("MCP server stopped.")
     }
     isRunning = false
+  }
+
+  private func listenerParameters() throws -> NWParameters {
+    guard configuration.usesTLS else {
+      let parameters = NWParameters.tcp
+      guard let address = IPv4Address("127.0.0.1") else {
+        throw BorgVRMCPServerError.localhostBindingFailed
+      }
+      parameters.requiredLocalEndpoint = .hostPort(host: .ipv4(address), port: .any)
+      return parameters
+    }
+
+    let identity = try HTTPWebServerTLSIdentity.create(
+      pkcs12Data: configuration.tlsCertificateData,
+      password: configuration.tlsCertificatePassword,
+      commonName: "BorgVR MCP Server"
+    )
+    guard let protocolIdentity = sec_identity_create(identity) else {
+      throw BorgVRMCPServerError.tlsIdentityCreationFailed
+    }
+    tlsIdentity = protocolIdentity
+
+    let tlsOptions = NWProtocolTLS.Options()
+    sec_protocol_options_set_local_identity(tlsOptions.securityProtocolOptions, protocolIdentity)
+    return NWParameters(tls: tlsOptions, tcp: NWProtocolTCP.Options())
   }
 
   private func accept(_ connection: NWConnection) {
@@ -426,6 +488,12 @@ final class BorgVRMCPServer: @unchecked Sendable {
           specular: try optionalVector3("specular", in: arguments)
         )
         return structuredToolResult(await service.applicationState())
+      case "set_annotation_visibility":
+        try await service.setAnnotationVisibility(
+          objects: try optionalBool("objects", in: arguments),
+          measurements: try optionalBool("measurements", in: arguments)
+        )
+        return structuredToolResult(await service.applicationState())
       case "reset_state":
         let rawScope = arguments["scope"] as? String ?? BorgVRMCPResetScope.all.rawValue
         guard let scope = BorgVRMCPResetScope(rawValue: rawScope) else {
@@ -499,6 +567,14 @@ final class BorgVRMCPServer: @unchecked Sendable {
       tool("set_lighting", "Set any subset of light direction and RGB light colors.", properties: [
         "direction": vector3, "ambient": vector3, "diffuse": vector3, "specular": vector3
       ]),
+      tool(
+        "set_annotation_visibility",
+        "Show or hide object annotations (markers, strokes, and placed meshes) or the complete measurement visualization (points, lines, surfaces, and labels) without deleting them.",
+        properties: [
+          "objects": ["type": "boolean"],
+          "measurements": ["type": "boolean"]
+        ]
+      ),
       tool("reset_state", "Reset a visualization state group.", properties: [
         "scope": ["type": "string", "enum": BorgVRMCPResetScope.allCases.map(\.rawValue)]
       ]),
@@ -553,6 +629,14 @@ final class BorgVRMCPServer: @unchecked Sendable {
     return result
   }
 
+  private func optionalBool(_ key: String, in arguments: [String: Any]) throws -> Bool? {
+    guard let rawValue = arguments[key] else { return nil }
+    guard let value = rawValue as? Bool else {
+      throw BorgVRMCPCommandError.invalidArgument("Argument '\(key)' must be a boolean.")
+    }
+    return value
+  }
+
   private func vector3(_ key: String, in arguments: [String: Any]) throws -> SIMD3<Float> {
     guard let value = try optionalVector3(key, in: arguments) else {
       throw BorgVRMCPCommandError.invalidArgument("Missing three-component argument '\(key)'.")
@@ -592,7 +676,9 @@ final class BorgVRMCPServer: @unchecked Sendable {
   }
 
   private func isAuthorized(_ authorization: String?) -> Bool {
-    let token = configuration.accessToken.trimmingCharacters(in: .whitespacesAndNewlines)
+    authenticationLock.lock()
+    let token = accessToken.trimmingCharacters(in: .whitespacesAndNewlines)
+    authenticationLock.unlock()
     guard !token.isEmpty else { return !configuration.allowRemoteConnections }
     return authorization == "Bearer \(token)"
   }
@@ -771,6 +857,7 @@ private struct MCPHTTPRequest {
 private enum BorgVRMCPServerError: LocalizedError {
   case localhostBindingFailed
   case remoteAccessRequiresToken
+  case tlsIdentityCreationFailed
   case methodNotFound(String)
   case unknownTool(String)
 
@@ -780,6 +867,8 @@ private enum BorgVRMCPServerError: LocalizedError {
         return "The MCP server could not bind to localhost."
       case .remoteAccessRequiresToken:
         return "Remote MCP connections require an access token."
+      case .tlsIdentityCreationFailed:
+        return "Could not create the MCP HTTPS identity."
       case .methodNotFound:
         return "MCP method not found."
       case .unknownTool:

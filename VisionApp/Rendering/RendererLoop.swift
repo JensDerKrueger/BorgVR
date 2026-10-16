@@ -522,7 +522,7 @@ extension Renderer {
       descriptor.usage = [.renderTarget, .shaderRead]
       descriptor.storageMode = .private
       markerColorTexture = device.makeTexture(descriptor: descriptor)
-      markerColorTexture?.label = "Volume Marker Color"
+      markerColorTexture?.label = "Opaque Geometry Color"
     }
 
     let needsNewDepth = markerDepthTexture == nil ||
@@ -541,7 +541,7 @@ extension Renderer {
       descriptor.usage = [.renderTarget, .shaderRead]
       descriptor.storageMode = .private
       markerDepthTexture = device.makeTexture(descriptor: descriptor)
-      markerDepthTexture?.label = "Volume Marker Depth"
+      markerDepthTexture?.label = "Opaque Geometry Depth"
     }
 
     return (markerColorTexture!, markerDepthTexture!)
@@ -774,7 +774,6 @@ extension Renderer {
     datasetMaximumExtentMeters: Float,
     renderEncoder: MTLRenderCommandEncoder
   ) {
-    sceneMeshGPUCache.retainOnly(assetIDs: Set(instances.map(\.asset.assetID)))
     guard datasetMaximumExtentMeters.isFinite, datasetMaximumExtentMeters > 0 else { return }
 
     renderEncoder.pushDebugGroup("Scene Meshes")
@@ -824,28 +823,35 @@ extension Renderer {
                                   drawable: LayerRenderer.Drawable) -> [ScreenViewLabelDescriptor] {
     let screenViews = screenViewVisualization()
     let measurementSnapshot = sharedAppModel.volumeMeasurementsSnapshot()
-    let measurements = measurementVisualization(measurements: measurementSnapshot)
     let pendingProjectionCaptureMarkerIDs =
       immersiveInteraction.pendingStrokeProjectionCaptureMarkerIDs()
     let suppressLocalToolWidgets = !pendingProjectionCaptureMarkerIDs.isEmpty
-    let markers = (sharedAppModel.volumeMarkers + screenViews.markers).filter {
+    let persistentMarkers = sharedAppModel.volumeMarkers.filter {
+      !pendingProjectionCaptureMarkerIDs.contains($0.id)
+    }
+    let screenViewMarkers = screenViews.markers.filter {
       !pendingProjectionCaptureMarkerIDs.contains($0.id)
     }
     let toolWidgetMarkers = suppressLocalToolWidgets
       ? []
       : spatialStylusMeasurementPreviewMarkers + spatialControllerModePreviewMarkers
-    let sceneMeshInstances = sharedAppModel.sceneMeshInstances +
-      (suppressLocalToolWidgets ? [] : spatialSceneObjectPreviewInstances)
+    let persistentMeshInstances = sharedAppModel.sceneMeshInstances
+    let previewMeshInstances = suppressLocalToolWidgets ? [] : spatialSceneObjectPreviewInstances
+    let visibleMeshInstances = (sharedAppModel.objectsHidden ? [] : persistentMeshInstances) +
+      previewMeshInstances
+    sceneMeshGPUCache.retainOnly(assetIDs: Set(visibleMeshInstances.map(\.asset.assetID)))
     let remoteToolPreviews = sharedAppModel.activeRemoteSpatialToolPreviews()
-    guard !markers.isEmpty || !measurements.points.isEmpty ||
-      !measurements.lines.isEmpty || !screenViews.labels.isEmpty ||
-      !measurements.surfaces.isEmpty ||
-      !sceneMeshInstances.isEmpty ||
+    guard (!sharedAppModel.objectsHidden &&
+             (!persistentMarkers.isEmpty || !persistentMeshInstances.isEmpty)) ||
+      (!sharedAppModel.measurementsHidden && !measurementSnapshot.isEmpty) ||
+      !screenViewMarkers.isEmpty ||
+      !screenViews.labels.isEmpty ||
+      !previewMeshInstances.isEmpty ||
       (!suppressLocalToolWidgets && spatialStylusPreviewPoint != nil) ||
       !remoteToolPreviews.isEmpty ||
       (!suppressLocalToolWidgets && !spatialControllerSamples.isEmpty) ||
       (!suppressLocalToolWidgets && !spatialControllerPreviewPoints.isEmpty) else {
-      return measurements.labels
+      return []
     }
 
     renderEncoder.setRenderPipelineState(pipelineStateVolumeMarker)
@@ -854,7 +860,7 @@ extension Renderer {
     renderEncoder.setFrontFacing(.counterClockwise)
 
     let viewCount = drawable.views.count
-    guard viewCount > 0 else { return measurements.labels }
+    guard viewCount > 0 else { return [] }
     var mvp = [simd_float4x4](repeating: matrix_identity_float4x4, count: viewCount)
     var eyePositions = [SIMD3<Float>](repeating: .zero, count: viewCount)
     for i in 0..<viewCount {
@@ -895,13 +901,6 @@ extension Renderer {
       physicalExtent.x,
       max(physicalExtent.y, physicalExtent.z)
     )
-    drawSceneMeshes(
-      sceneMeshInstances,
-      datasetMaximumExtentMeters: datasetMaximumExtentMeters,
-      renderEncoder: renderEncoder
-    )
-    renderEncoder.setRenderPipelineState(pipelineStateVolumeMarker)
-
     renderEncoder.setVertexBuffer(
       markerSphereBuffer,
       offset: 0,
@@ -915,10 +914,12 @@ extension Renderer {
       volumeScale.columns.2.z
     )
     markerTubeMeshCache.retainOnly(
-      markerIDs: Set((markers + toolWidgetMarkers).map(\.id))
+      markerIDs: Set((persistentMarkers + screenViewMarkers + toolWidgetMarkers).map(\.id))
     )
     measurementSurfaceMeshCache.retainOnly(
-      measurementIDs: Set(measurementSnapshot.map(\.id))
+      measurementIDs: sharedAppModel.measurementsHidden
+        ? []
+        : Set(measurementSnapshot.map(\.id))
     )
 
     func color(for marker: VolumeMarker) -> SIMD4<Float> {
@@ -1062,9 +1063,27 @@ extension Renderer {
       renderEncoder.popDebugGroup()
     }
 
+    func drawObjects() {
+      guard !sharedAppModel.objectsHidden else { return }
+
+      drawSceneMeshes(
+        persistentMeshInstances,
+        datasetMaximumExtentMeters: datasetMaximumExtentMeters,
+        renderEncoder: renderEncoder
+      )
+      renderEncoder.setRenderPipelineState(pipelineStateVolumeMarker)
+      drawMarkerGeometry(persistentMarkers, groupName: "Objects")
+    }
+
     func drawToolWidgets() {
       renderEncoder.pushDebugGroup("Spatial Tool Widgets")
       if !suppressLocalToolWidgets {
+        drawSceneMeshes(
+          previewMeshInstances,
+          datasetMaximumExtentMeters: datasetMaximumExtentMeters,
+          renderEncoder: renderEncoder
+        )
+        renderEncoder.setRenderPipelineState(pipelineStateVolumeMarker)
         drawMarkerGeometry(toolWidgetMarkers, groupName: "Tool Mode Glyphs")
         if spatialStylusMeasurementPreviewMarkers.isEmpty,
            let spatialStylusPreviewPoint {
@@ -1086,10 +1105,16 @@ extension Renderer {
       renderEncoder.popDebugGroup()
     }
 
-    drawMarkerGeometry(markers, groupName: "Markers")
+    drawObjects()
+    drawMarkerGeometry(screenViewMarkers, groupName: "Screen View Avatars")
     drawToolWidgets()
 
+    var measurementLabels: [ScreenViewLabelDescriptor] = []
     func drawMeasurements() {
+      guard !sharedAppModel.measurementsHidden else { return }
+
+      let measurements = measurementVisualization(measurements: measurementSnapshot)
+      measurementLabels = measurements.labels
       renderEncoder.pushDebugGroup("Measurements")
       if !measurements.points.isEmpty {
         let byteCount = MemoryLayout<MeasurementPointRenderInstance>.stride *
@@ -1305,7 +1330,7 @@ extension Renderer {
       depthStencilState: depthStateMarker,
       pipelineState: pipelineStateScreenViewLabel
     )
-    return measurements.labels
+    return measurementLabels
   }
 
   private func drawScreenViewLabels(
