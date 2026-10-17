@@ -2,17 +2,57 @@ import SwiftUI
 
 @main
 struct BorgVRMobileApp: App {
-  @State private var appModel = AppModel()
-  @State private var renderingParameters = RenderingParameters()
-  @StateObject private var appSettings = AppSettings()
-  @StateObject private var sharePlay = SharePlayCoordinator()
-  @StateObject private var serverController = BackgroundServerController()
-  @StateObject private var updateChecker = AppStoreUpdateChecker()
-  @StateObject private var mcpController = BorgVRMCPServerController()
+  @State private var appModel: AppModel
+  @State private var renderingParameters: RenderingParameters
+  @StateObject private var appSettings: AppSettings
+  @StateObject private var sharePlay: SharePlayCoordinator
+  @StateObject private var serverController: BackgroundServerController
+  @StateObject private var updateChecker: AppStoreUpdateChecker
+  @StateObject private var mcpController: BorgVRMCPServerController
+  @StateObject private var session: ScreenBorgVRSession
   @AppStorage("sharePlayDisplayNameOnboardingCompleted")
   private var sharePlayDisplayNameOnboardingCompleted = false
   @State private var showsSharePlayDisplayNameOnboarding = false
   @State private var sharePlayDisplayNameDraft = ""
+
+  init() {
+    let appModel = AppModel()
+    let renderingParameters = RenderingParameters()
+    let appSettings = AppSettings()
+    let sharePlay = SharePlayCoordinator()
+    let serverController = BackgroundServerController()
+    let updateChecker = AppStoreUpdateChecker()
+    let mcpController = BorgVRMCPServerController()
+    let session = ScreenBorgVRSession.screen(
+      appModel: appModel,
+      renderingParameters: renderingParameters,
+      appSettings: appSettings,
+      synchronizeTransform: { [weak sharePlay] in
+        sharePlay?.synchronize(kind: .transformOnly)
+      },
+      synchronizeState: { [weak sharePlay] in
+        sharePlay?.synchronize(kind: .stateOnly)
+      },
+      synchronizeFullState: { [weak sharePlay] in
+        sharePlay?.synchronize(kind: .full)
+      },
+      synchronizeObjects: { [weak sharePlay] in
+        sharePlay?.synchronizeMarkers()
+      },
+      synchronizeMeasurements: { [weak sharePlay] in
+        sharePlay?.synchronizeMeasurements()
+      }
+    )
+
+    _appModel = State(initialValue: appModel)
+    _renderingParameters = State(initialValue: renderingParameters)
+    _appSettings = StateObject(wrappedValue: appSettings)
+    _sharePlay = StateObject(wrappedValue: sharePlay)
+    _serverController = StateObject(wrappedValue: serverController)
+    _updateChecker = StateObject(wrappedValue: updateChecker)
+    _mcpController = StateObject(wrappedValue: mcpController)
+    _session = StateObject(wrappedValue: session)
+  }
 
   var body: some Scene {
     WindowGroup {
@@ -59,6 +99,7 @@ struct BorgVRMobileApp: App {
         .environmentObject(serverController)
         .environmentObject(updateChecker)
         .environmentObject(mcpController)
+        .environmentObject(session)
         .task {
           await presentSharePlayDisplayNameOnboardingIfNeeded()
         }
@@ -137,11 +178,7 @@ struct BorgVRMobileApp: App {
   @MainActor
   private func configureMCP() {
     let service = BorgVRScreenCommandService(
-      appModel: appModel,
-      renderingParameters: renderingParameters,
-      synchronizeTransform: { sharePlay.synchronize(kind: .transformOnly) },
-      synchronizeState: { sharePlay.synchronize(kind: .stateOnly) },
-      synchronizeFullState: { sharePlay.synchronize(kind: .full) },
+      session: session,
       datasetListProvider: {
         await loadMCPDatasetRecords().map(\.catalogEntry)
       },

@@ -12,6 +12,7 @@ class ImmersiveInteraction {
   private let volumeSnapDepthSmoothingNewSampleWeight: Float = 0.15
   var sharedAppModel: SharedAppModel
   var storedAppModel: StoredAppModel
+  let session: VisionBorgVRSession
   var transferFunctionPanelInteractionState: TransferFunctionPanelInteractionState
   private let toggleTransferFunctionChannelFromAccessory: @MainActor (Int) -> Void
   private let performControllerFaceButtonFromAccessory: @MainActor (
@@ -75,6 +76,7 @@ class ImmersiveInteraction {
     }
 
     let sourceID: UUID
+    let commandSource: BorgVRCommandSource
     let kind: Kind
     let startTransform: simd_float4x4
     let startModelTranslation: SIMD3<Float>
@@ -117,6 +119,7 @@ class ImmersiveInteraction {
   }
   private var activeSceneObjectPlacement: ActiveSceneObjectPlacement?
   private var activeSceneObjectPlacementSourceID: UUID?
+  private var activeSceneObjectPlacementCommandSource: BorgVRCommandSource = .hand
   private var activeSceneObjectPlacementUsesHand = false
 
   func updateVolumeInteractionDepthSnapshot(
@@ -222,7 +225,8 @@ class ImmersiveInteraction {
   }
   private var sceneMeshDragState: SceneMeshDragState?
 
-  init(sharedAppModel: SharedAppModel,
+  init(session: VisionBorgVRSession,
+       sharedAppModel: SharedAppModel,
        storedAppModel: StoredAppModel,
        transferFunctionPanelInteractionState: TransferFunctionPanelInteractionState,
        toggleTransferFunctionChannel: @escaping @MainActor (Int) -> Void,
@@ -230,11 +234,33 @@ class ImmersiveInteraction {
          SpatialControllerFaceButton,
          BorgSpatialInputChirality
        ) -> Void) {
+    self.session = session
     self.sharedAppModel = sharedAppModel
     self.storedAppModel = storedAppModel
     self.transferFunctionPanelInteractionState = transferFunctionPanelInteractionState
     self.toggleTransferFunctionChannelFromAccessory = toggleTransferFunctionChannel
     self.performControllerFaceButtonFromAccessory = performControllerFaceButton
+  }
+
+  private func commandSource(for sample: BorgSpatialInputSample) -> BorgVRCommandSource {
+    switch sample.source {
+      case .stylus:
+        return .muse
+      case .controller:
+        let hand = switch sample.chirality {
+          case .left: "left"
+          case .right: "right"
+          case .unspecified: "unspecified"
+        }
+        return .controller(hand)
+    }
+  }
+
+  private func commit(
+    _ domain: BorgVRMutationDomain,
+    source: BorgVRCommandSource
+  ) {
+    session.submitExternalMutation(source: source, domain: domain)
   }
 
   func distanceBetweenVectors(v1: SIMD3<Double>, v2: SIMD3<Double>) -> Double {
@@ -258,6 +284,7 @@ class ImmersiveInteraction {
           }
         case .cancelled, .ended:
           sharedAppModel.lastModelTransform.scale = sharedAppModel.modelTransform.scale
+          commit(.visualization, source: .hand)
           sharedAppModel.synchronize(kind: .transformOnly)
           tmpDistance = 0
         default:
@@ -270,6 +297,7 @@ class ImmersiveInteraction {
         tmpDistance = distance
       }
       sharedAppModel.modelTransform.scale = SIMD3(repeating: sharedAppModel.lastModelTransform.scale.x * (Float(distance - tmpDistance) + 1))
+      commit(.visualization, source: .hand)
       sharedAppModel.synchronize(kind: .transformOnly)
     }
   }
@@ -303,6 +331,7 @@ class ImmersiveInteraction {
         let translate = inverseWorld.transformDirection(SIMD3<Float>(pose.pose3D.position.vector) - startTranslation)
 
         sharedAppModel.modelTransform.translation = sharedAppModel.lastModelTransform.translation + translate
+        commit(.visualization, source: .hand)
         sharedAppModel.synchronize(kind: .transformOnly)
       }
     case .cancelled, .ended:
@@ -436,6 +465,7 @@ class ImmersiveInteraction {
             sharedAppModel.clipMax.z = 1+translationClipping.z
           }
           
+          commit(.visualization, source: .hand)
           sharedAppModel.synchronize(kind: .stateOnly)
         }
       case .cancelled, .ended:
@@ -772,6 +802,7 @@ class ImmersiveInteraction {
           activeSceneObjectPlacementUsesHand = true
         }
         if updateHandSceneMeshPlacement(event: event, datasetInfo: datasetInfo) {
+          commit(.objects, source: .hand)
           sharedAppModel.synchronizeMarkers()
         }
 
@@ -803,10 +834,12 @@ class ImmersiveInteraction {
           break
       }
     } else if activeSceneObjectPlacement != nil {
+      commit(.objects, source: activeSceneObjectPlacementCommandSource)
       sharedAppModel.synchronizeMarkers()
     }
     activeSceneObjectPlacement = nil
     activeSceneObjectPlacementSourceID = nil
+    activeSceneObjectPlacementCommandSource = .hand
     activeSceneObjectPlacementUsesHand = false
   }
 
@@ -865,6 +898,7 @@ class ImmersiveInteraction {
           worldTransform: transform,
           datasetInfo: datasetInfo
         )
+        commit(.objects, source: .hand)
         sharedAppModel.synchronizeMarkers()
       case .ended:
         if let transform = sceneObjectTransform(from: event, datasetInfo: datasetInfo) {
@@ -936,7 +970,10 @@ class ImmersiveInteraction {
         )
       } else {
         if sceneMeshDragState != nil {
-          finishSceneMeshDrag(cancelled: false)
+          finishSceneMeshDrag(
+            cancelled: false,
+            source: activeSceneObjectPlacementCommandSource
+          )
           activeSceneObjectPlacementSourceID = nil
         } else {
           finishSceneObjectPlacement(cancelled: false)
@@ -947,6 +984,7 @@ class ImmersiveInteraction {
 
     guard let sample = candidates.first(where: \.primaryPressed) else { return false }
     activeSceneObjectPlacementSourceID = sample.id
+    activeSceneObjectPlacementCommandSource = commandSource(for: sample)
     activeSceneObjectPlacementUsesHand = false
     if let instance = sceneMeshHit(
       origin: sample.aimOrigin,
@@ -1158,7 +1196,10 @@ class ImmersiveInteraction {
       pose.rotation * drag.inputStartRotation.inverse * drag.instanceStartRotation
   }
 
-  private func finishSceneMeshDrag(cancelled: Bool) {
+  private func finishSceneMeshDrag(
+    cancelled: Bool,
+    source: BorgVRCommandSource = .hand
+  ) {
     guard let drag = sceneMeshDragState else { return }
     if cancelled,
        let index = sharedAppModel.sceneMeshInstances.firstIndex(where: {
@@ -1168,6 +1209,7 @@ class ImmersiveInteraction {
         drag.instanceStartTranslationMeters
       sharedAppModel.sceneMeshInstances[index].rotation = drag.instanceStartRotation
     } else if !cancelled {
+      commit(.objects, source: source)
       sharedAppModel.synchronizeMarkers()
     }
     sceneMeshDragState = nil
@@ -1346,6 +1388,7 @@ class ImmersiveInteraction {
     sharedAppModel.selectedVolumeMarkerID = marker.id
     sharedAppModel.selectedSceneMeshInstanceID = nil
     captureMarkerDragStartPositions()
+    commit(.objects, source: .hand)
     sharedAppModel.synchronizeMarkers()
   }
 
@@ -1405,6 +1448,7 @@ class ImmersiveInteraction {
             sharedAppModel.selectedVolumeMarkerID = marker.id
             sharedAppModel.selectedSceneMeshInstanceID = nil
             handStrokeID = marker.id
+            commit(.objects, source: .hand)
             sharedAppModel.synchronizeMarkers()
           } else if let spawnPosition = markerSpawnPosition(
             from: event,
@@ -1447,6 +1491,7 @@ class ImmersiveInteraction {
             point,
             coordinateScale: coordinateScale
           ) {
+            commit(.objects, source: .hand)
             sharedAppModel.synchronizeMarkers()
           }
           return
@@ -1471,6 +1516,7 @@ class ImmersiveInteraction {
               ) {
               sharedAppModel.volumeMarkers[index].translate(by: offset)
             }
+            commit(.objects, source: .hand)
             sharedAppModel.synchronizeMarkers()
             return
           }
@@ -1485,6 +1531,7 @@ class ImmersiveInteraction {
               BorgVRMarkerFormat.positionRange.upperBound
             )
           }
+          commit(.objects, source: .hand)
           sharedAppModel.synchronizeMarkers()
         }
 
@@ -1492,6 +1539,7 @@ class ImmersiveInteraction {
         if let strokeID = handStrokeID {
           endStrokeProjectionFreeze(token: strokeID)
           self.handStrokeID = nil
+          commit(.objects, source: .hand)
           sharedAppModel.synchronizeMarkers()
         }
         if markerDragID != nil {
@@ -1499,6 +1547,7 @@ class ImmersiveInteraction {
           markerDragStartPositions.removeAll()
           markerDragHandStart = nil
           quickMarkerDragActive = false
+          commit(.objects, source: .hand)
           sharedAppModel.synchronizeMarkers()
         }
       @unknown default:
@@ -1572,6 +1621,7 @@ class ImmersiveInteraction {
     } else {
       sharedAppModel.defaultVolumeStrokeRadius = primaryRadius
     }
+    commit(.objects, source: .hand)
     sharedAppModel.synchronizeMarkers()
 
     if events.contains(where: { $0.phase == .ended || $0.phase == .cancelled }) {
@@ -1636,7 +1686,8 @@ class ImmersiveInteraction {
     datasetInfo: RuntimeAppModel.DatasetInfo,
     forceNewMeasurement: Bool = false,
     kind requestedKind: VolumeMeasurementKind? = nil,
-    preferredMeasurementID: UUID? = nil
+    preferredMeasurementID: UUID? = nil,
+    source: BorgVRCommandSource = .hand
   ) -> (measurementID: UUID, pointID: UUID)? {
     let selectedID = forceNewMeasurement
       ? nil
@@ -1667,6 +1718,7 @@ class ImmersiveInteraction {
     let measurementID = result.measurementID
     sharedAppModel.selectedVolumeMeasurementID = measurementID
     sharedAppModel.selectedVolumeMeasurementPointID = result.pointID
+    commit(.measurements, source: source)
     return result
   }
 
@@ -1674,7 +1726,8 @@ class ImmersiveInteraction {
     measurementID: UUID,
     pointID: UUID,
     position: SIMD3<Float>,
-    datasetInfo: RuntimeAppModel.DatasetInfo
+    datasetInfo: RuntimeAppModel.DatasetInfo,
+    source: BorgVRCommandSource = .hand
   ) {
     sharedAppModel.mutateVolumeMeasurements { measurements in
       guard let index = measurements.firstIndex(where: {
@@ -1686,13 +1739,19 @@ class ImmersiveInteraction {
         physicalExtent: datasetInfo.physicalExtentMeters
       )
     }
+    commit(.measurements, source: source)
   }
 
-  private func removeMeasurementPoint(measurementID: UUID, pointID: UUID) {
+  private func removeMeasurementPoint(
+    measurementID: UUID,
+    pointID: UUID,
+    source: BorgVRCommandSource = .hand
+  ) {
     _ = sharedAppModel.removeVolumeMeasurementPoint(
       measurementID: measurementID,
       pointID: pointID
     )
+    commit(.measurements, source: source)
   }
 
   private func handleMeasurementInteraction(
@@ -1970,6 +2029,7 @@ class ImmersiveInteraction {
             sharedAppModel.volumeMarkers.append(marker)
             sharedAppModel.selectedVolumeMarkerID = marker.id
             markerID = marker.id
+            commit(.objects, source: commandSource(for: sample))
             sharedAppModel.synchronizeMarkers()
           }
           markerStartPositions = Dictionary(
@@ -2015,7 +2075,8 @@ class ImmersiveInteraction {
               at: position,
               datasetInfo: datasetInfo,
               kind: measurementKind,
-              preferredMeasurementID: spatialAccessoryMeasurementIDs[sample.id]
+              preferredMeasurementID: spatialAccessoryMeasurementIDs[sample.id],
+              source: commandSource(for: sample)
             ) else { return }
             measurementID = added.measurementID
             measurementPointID = added.pointID
@@ -2027,6 +2088,7 @@ class ImmersiveInteraction {
 
     spatialAccessoryActions[sample.id] = SpatialAccessoryAction(
       sourceID: sample.id,
+      commandSource: commandSource(for: sample),
       kind: kind,
       startTransform: transform,
       startModelTranslation: sharedAppModel.modelTransform.translation,
@@ -2068,9 +2130,11 @@ class ImmersiveInteraction {
     }
     sharedAppModel.volumeMarkers.append(marker)
     sharedAppModel.selectedVolumeMarkerID = marker.id
+    commit(.objects, source: commandSource(for: sample))
     sharedAppModel.synchronizeMarkers()
     spatialAccessoryActions[sample.id] = SpatialAccessoryAction(
       sourceID: sample.id,
+      commandSource: commandSource(for: sample),
       kind: .markerStroke,
       startTransform: sample.gripTransform,
       startModelTranslation: sharedAppModel.modelTransform.translation,
@@ -2100,6 +2164,7 @@ class ImmersiveInteraction {
     )
     spatialAccessoryActions[sample.id] = SpatialAccessoryAction(
       sourceID: sample.id,
+      commandSource: commandSource(for: sample),
       kind: .sceneMesh,
       startTransform: sample.aimTransform,
       startModelTranslation: sharedAppModel.modelTransform.translation,
@@ -2137,6 +2202,7 @@ class ImmersiveInteraction {
         sharedAppModel.modelTransform.rotation = currentRotation * startRotation.inverse *
           action.startModelRotation
         sharedAppModel.modelTransform.translation = action.startModelTranslation + translationDelta
+        commit(.visualization, source: action.commandSource)
         sharedAppModel.synchronize(kind: .transformOnly)
 
       case .clipping:
@@ -2158,6 +2224,7 @@ class ImmersiveInteraction {
           localDelta.y >= 0 ? 1 : 1 + localDelta.y,
           localDelta.z >= 0 ? 1 : 1 + localDelta.z
         )
+        commit(.visualization, source: action.commandSource)
         sharedAppModel.synchronize(kind: .stateOnly)
 
       case .markerSphere:
@@ -2180,6 +2247,7 @@ class ImmersiveInteraction {
             BorgVRMarkerFormat.positionRange.upperBound
           )
         }
+        commit(.objects, source: action.commandSource)
         sharedAppModel.synchronizeMarkers()
 
       case .markerStroke:
@@ -2203,6 +2271,7 @@ class ImmersiveInteraction {
           point,
           coordinateScale: scale
         ) {
+          commit(.objects, source: action.commandSource)
           sharedAppModel.synchronizeMarkers()
         }
 
@@ -2238,7 +2307,8 @@ class ImmersiveInteraction {
           measurementID: measurementID,
           pointID: pointID,
           position: position,
-          datasetInfo: datasetInfo
+          datasetInfo: datasetInfo,
+          source: action.commandSource
         )
 
       case .screenView:
@@ -2284,6 +2354,7 @@ class ImmersiveInteraction {
         sharedAppModel.transferFunction(
           channel: transferFunctionPanelInteractionState.selectedTransferFunctionChannel()
         ).scheduleSmoothSteps(operations) {
+          self.commit(.transferFunction, source: action.commandSource)
           self.sharedAppModel.synchronize(kind: .full)
         }
     }
@@ -2295,17 +2366,21 @@ class ImmersiveInteraction {
       case .model:
         sharedAppModel.lastModelTransform.translation = sharedAppModel.modelTransform.translation
         sharedAppModel.lastModelTransform.rotation = sharedAppModel.modelTransform.rotation
+        commit(.visualization, source: action.commandSource)
         sharedAppModel.synchronize(kind: .transformOnly)
       case .clipping:
         sharedAppModel.lastTranslationClipping = translationClipping
+        commit(.visualization, source: action.commandSource)
         sharedAppModel.synchronize(kind: .stateOnly)
       case .markerSphere:
+        commit(.objects, source: action.commandSource)
         sharedAppModel.synchronizeMarkers()
       case .markerStroke:
         endStrokeProjectionFreeze(token: action.markerID ?? action.sourceID)
+        commit(.objects, source: action.commandSource)
         sharedAppModel.synchronizeMarkers()
       case .sceneMesh:
-        finishSceneMeshDrag(cancelled: false)
+        finishSceneMeshDrag(cancelled: false, source: action.commandSource)
       case .measurementPoint:
         break
       case .screenView:
@@ -2388,6 +2463,7 @@ class ImmersiveInteraction {
     guard changed else { return }
     sharedAppModel.lastModelTransform.translation = sharedAppModel.modelTransform.translation
     sharedAppModel.lastModelTransform.rotation = sharedAppModel.modelTransform.rotation
+    commit(.visualization, source: commandSource(for: sample))
     sharedAppModel.synchronize(kind: .transformOnly)
   }
 
@@ -2517,6 +2593,7 @@ class ImmersiveInteraction {
             lastSpatialStylusModifierPressTimes[sample.id] = nil
             suppressedSpatialStylusModifierIDs.insert(sample.id)
             if sharedAppModel.removeLastSceneObject() {
+              commit(.objects, source: commandSource(for: sample))
               sharedAppModel.synchronizeMarkers()
             }
           } else {
@@ -2571,8 +2648,9 @@ class ImmersiveInteraction {
     let modes = SpatialToolMode.museModes
     let currentIndex = modes.firstIndex(of: storedAppModel.stylusTool) ?? -1
     let nextMode = modes[(currentIndex + 1) % modes.count]
-    Task { @MainActor [storedAppModel, sharedAppModel] in
+    Task { @MainActor [storedAppModel, sharedAppModel, session] in
       storedAppModel.stylusTool = nextMode
+      session.commitExternalMutation(source: .muse, domain: .interaction)
       guard let nextKind = nextMode.measurementKind else {
         sharedAppModel.selectedVolumeMeasurementID = nil
         sharedAppModel.selectedVolumeMeasurementPointID = nil
@@ -2654,7 +2732,8 @@ class ImmersiveInteraction {
         at: position,
         datasetInfo: datasetInfo,
         forceNewMeasurement: startsNewMeasurement,
-        kind: kind
+        kind: kind,
+        source: .muse
       ) {
         spatialStylusStartsNewMeasurement = false
         activeSpatialStylusMeasurementID = added.measurementID
@@ -2667,7 +2746,8 @@ class ImmersiveInteraction {
       measurementID: measurementID,
       pointID: pointID,
       position: position,
-      datasetInfo: datasetInfo
+      datasetInfo: datasetInfo,
+      source: .muse
     )
   }
 
@@ -2929,6 +3009,7 @@ class ImmersiveInteraction {
         sharedAppModel.transferFunction(
           channel: transferFunctionPanelInteractionState.selectedTransferFunctionChannel()
         ).scheduleSmoothSteps(operations) {
+          self.commit(.transferFunction, source: .hand)
           self.sharedAppModel.synchronize(kind: .full)
         }
         return true
@@ -2997,6 +3078,7 @@ class ImmersiveInteraction {
           sharedAppModel.normIsoValue = clamp(
             (transferGestureStartIsoValue ?? sharedAppModel.normIsoValue) + dominantDelta
           )
+          commit(.visualization, source: .hand)
           sharedAppModel.synchronize(kind: .stateOnly)
           return
         }
@@ -3018,6 +3100,7 @@ class ImmersiveInteraction {
             channels: [0, 1, 2, 3]
           )
         ]) {
+          self.commit(.transferFunction, source: .hand)
           self.sharedAppModel.synchronize(kind: .full)
         }
 

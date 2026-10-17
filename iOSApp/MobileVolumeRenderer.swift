@@ -3,6 +3,7 @@ import UIKit
 
 @MainActor
 final class MobileVolumeRenderer: NSObject, MTKViewDelegate, UIGestureRecognizerDelegate {
+  private let session: ScreenBorgVRSession
   private let appModel: AppModel
   private let appSettings: AppSettings
   private let sharePlay: SharePlayCoordinator
@@ -14,19 +15,19 @@ final class MobileVolumeRenderer: NSObject, MTKViewDelegate, UIGestureRecognizer
   private var pendingScreenshotCompletion: ((Result<URL, Error>) -> Void)?
 
   init(
-    appModel: AppModel,
-    appSettings: AppSettings,
-    renderingParameters: RenderingParameters,
+    session: ScreenBorgVRSession,
     sharePlay: SharePlayCoordinator
   ) {
+    let appModel = session.runtimeState
+    let appSettings = session.settingsState
+    let renderingParameters = session.visualizationState
+    self.session = session
     self.appModel = appModel
     self.appSettings = appSettings
     self.sharePlay = sharePlay
     self.renderingParameters = renderingParameters
     self.core = ScreenVolumeRendererCore(
-      appModel: appModel,
-      appSettings: appSettings,
-      renderingParameters: renderingParameters,
+      session: session,
       pipelineLabelPrefix: "iOS",
       loadLocalDataset: { try BORGVRFileData(filename: $0) },
       remoteCacheFilename: { datasetID in
@@ -186,14 +187,18 @@ final class MobileVolumeRenderer: NSObject, MTKViewDelegate, UIGestureRecognizer
         recognizer.setTranslation(.zero, in: view)
         if appModel.interactionMode == .objectPlacement {
           if core.moveSelectedMarkerInDepth(by: delta.y) {
+            session.commitExternalMutation(source: .touch, domain: .objects)
             sharePlay.synchronizeMarkers()
           }
         } else if appModel.interactionMode == .measurement {
           if core.moveSelectedMeasurementPointInDepth(by: delta.y) {
+            session.commitExternalMutation(source: .touch, domain: .measurements)
             sharePlay.synchronizeMeasurements()
           }
         } else {
           core.panModel(by: delta, in: view)
+          session.commitExternalMutation(source: .touch, domain: .visualization)
+          sharePlay.synchronize(kind: .transformOnly)
         }
       case .ended, .cancelled, .failed:
         recognizer.setTranslation(.zero, in: view)

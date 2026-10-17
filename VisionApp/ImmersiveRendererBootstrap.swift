@@ -32,9 +32,11 @@ private enum SpatialControllerEventRouting {
 enum ImmersiveBootstrap {
   @MainActor
   static func run(layerRenderer: LayerRenderer,
-                  runtimeAppModel: RuntimeAppModel,
-                  storedAppModel: StoredAppModel,
-                  sharedAppModel: SharedAppModel) {
+                  session: VisionBorgVRSession) {
+
+    let runtimeAppModel = session.runtimeState
+    let storedAppModel = session.settingsState
+    let sharedAppModel = session.visualizationState
 
     SpatialControllerEventRouting.install()
 
@@ -169,12 +171,14 @@ enum ImmersiveBootstrap {
       SpatialControllerShortcutHandler.perform(
         storedAppModel.controllerAction(for: button, chirality: chirality),
         for: chirality,
+        session: session,
         runtimeAppModel: runtimeAppModel,
         sharedAppModel: sharedAppModel,
         storedAppModel: storedAppModel
       )
     }
     let immersiveInteraction = ImmersiveInteraction(
+      session: session,
       sharedAppModel: sharedAppModel,
       storedAppModel: storedAppModel,
       transferFunctionPanelInteractionState: transferFunctionPanelInteractionState,
@@ -185,9 +189,7 @@ enum ImmersiveBootstrap {
     // Start renderer
     Renderer.startRenderLoop(
       layerRenderer,
-      runtimeAppModel: runtimeAppModel,
-      storedAppModel: storedAppModel,
-      sharedAppModel: sharedAppModel,
+      session: session,
       timer: timer,
       dataset: dataset,
       datasetID: activeDataset.uniqueId,

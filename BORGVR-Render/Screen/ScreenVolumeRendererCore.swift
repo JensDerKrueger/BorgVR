@@ -23,6 +23,7 @@ struct ScreenVolumeEncodedFrame {
 @MainActor
 final class ScreenVolumeRendererCore {
   private weak var view: MTKView?
+  private let session: ScreenBorgVRSession
   private let appModel: AppModel
   private let appSettings: AppSettings
   private let renderingParameters: RenderingParameters
@@ -67,15 +68,17 @@ final class ScreenVolumeRendererCore {
   private var currentTextureToClip = matrix_identity_float4x4
 
   init(
-    appModel: AppModel,
-    appSettings: AppSettings,
-    renderingParameters: RenderingParameters,
+    session: ScreenBorgVRSession,
     pipelineLabelPrefix: String,
     loadLocalDataset: @escaping (String) throws -> BORGVRDatasetProtocol,
     remoteCacheFilename: @escaping (String) -> String?,
     releaseDatasetAccess: @escaping () -> Void = {},
     fallbackDrawableScale: @escaping (MTKView) -> CGFloat
   ) {
+    let appModel = session.runtimeState
+    let appSettings = session.settingsState
+    let renderingParameters = session.visualizationState
+    self.session = session
     self.appModel = appModel
     self.appSettings = appSettings
     self.renderingParameters = renderingParameters
@@ -211,8 +214,10 @@ final class ScreenVolumeRendererCore {
         Float(view.drawableSize.width / view.drawableSize.height)
       )
     }
-    updateUniforms(for: view)
-    updateEmptiness()
+    session.publishRenderSnapshot()
+    let frameState = session.renderSnapshot()
+    updateUniforms(for: view, state: frameState)
+    updateEmptiness(state: frameState)
 
     guard let interactionDepthTexture = interactionDepthTexture(
       device: device,
@@ -233,8 +238,8 @@ final class ScreenVolumeRendererCore {
       drawableSize: view.drawableSize,
       colorFormat: view.colorPixelFormat,
       depthFormat: view.depthStencilPixelFormat,
-      showsObjects: !appModel.objectsHidden,
-      showsMeasurements: !appModel.measurementsHidden,
+      showsObjects: frameState.objectsVisible,
+      showsMeasurements: frameState.measurementsVisible,
       markers: appModel.volumeMarkers,
       sceneMeshAssets: appModel.sceneMeshAssets,
       sceneMeshInstances: appModel.sceneMeshInstances,
@@ -260,7 +265,7 @@ final class ScreenVolumeRendererCore {
     renderEncoder.setFrontFacing(.counterClockwise)
     renderEncoder.setDepthStencilState(depthState)
 
-    guard let pipelineState = activePipelineState() else {
+    guard let pipelineState = activePipelineState(for: frameState) else {
       renderEncoder.endEncoding()
       return nil
     }
@@ -309,12 +314,14 @@ final class ScreenVolumeRendererCore {
     return missingBrickCount
   }
 
-  private func activePipelineState() -> MTLRenderPipelineState? {
-    if renderingParameters.brickVis {
+  private func activePipelineState(
+    for state: BorgVRVisualizationSnapshot
+  ) -> MTLRenderPipelineState? {
+    if state.brickVisualization {
       return pipelineStateBrickVis
     }
 
-    switch renderingParameters.renderMode {
+    switch state.renderMode {
       case .transferFunction1D:
         return pipelineStateTF
       case .transferFunction1DLighting:
@@ -791,7 +798,10 @@ final class ScreenVolumeRendererCore {
     return localPosition + SIMD3<Float>(repeating: 0.5)
   }
 
-  private func updateUniforms(for view: MTKView) {
+  private func updateUniforms(
+    for view: MTKView,
+    state: BorgVRVisualizationSnapshot
+  ) {
     guard let dataset,
           let uniformBufferVertex,
           let uniformBufferFragment else { return }
@@ -804,10 +814,11 @@ final class ScreenVolumeRendererCore {
     let aspect = Float(max(view.drawableSize.width, 1) / max(view.drawableSize.height, 1))
     let projection = matrixPerspective(fovyRadians: fieldOfViewY, aspect: aspect, nearZ: 0.05, farZ: 100)
     let viewMatrix = matrixTranslation(SIMD3<Float>(0, 0, -cameraDistance))
+    let transform = state.transform
     let unscaledModelMatrix =
-      matrixTranslation(SIMD3<Float>(renderingParameters.pan.x, renderingParameters.pan.y, 0)) *
-      simd_float4x4(renderingParameters.orientation) *
-      matrixScale(SIMD3<Float>(repeating: renderingParameters.scale))
+      matrixTranslation(transform.translation) *
+      simd_float4x4(simd_quatf(vector: transform.rotation)) *
+      matrixScale(transform.scale)
     let modelMatrix = unscaledModelMatrix * volumeScale
 
     let textureOffset = matrixTranslation(SIMD3<Float>(0.5, 0.5, 0.5))
@@ -818,8 +829,8 @@ final class ScreenVolumeRendererCore {
       Float(metadata.height),
       Float(metadata.depth)
     )
-    let clipMin = renderingParameters.clipMin + borderSize
-    let clipMax = renderingParameters.clipMax - borderSize
+    let clipMin = state.clipMinimum + borderSize
+    let clipMax = state.clipMaximum - borderSize
     let clipScale = clipMax - clipMin
     let clipMatrix = matrixTranslation(0.5 * (clipMax + clipMin - SIMD3<Float>(repeating: 1))) *
       matrixScale(clipScale)
@@ -833,19 +844,19 @@ final class ScreenVolumeRendererCore {
 
     var fragmentUniforms = FragmentUniformsArray()
     fragmentUniforms.uniforms.0 = FragmentUniforms(
-      isoValue: renderingParameters.isoValue,
+      isoValue: state.isoValue,
       oversampling: activeOversampling,
       sampleJitter: appSettings.sampleJitter ? 1 : 0,
-      transferBias: renderingParameters.transferFunction.textureBias,
+      transferBias: state.transferBias,
       cameraPosInTextureSpace: simd_make_float3(viewToTexture * SIMD4<Float>(0, 0, 0, 1)),
       cameraPosInTextureSpaceVoxelScaled: simd_make_float3(
         viewToNormalizedVolume * SIMD4<Float>(0, 0, 0, 1)
       ),
       cubeBounds: (clipMin, clipMax),
-      lightDirection: SIMD4<Float>(renderingParameters.lightDirection, 0),
-      ambientLightColor: SIMD4<Float>(renderingParameters.ambientLightColor, 0),
-      diffuseLightColor: SIMD4<Float>(renderingParameters.diffuseLightColor, 0),
-      specularLightColor: SIMD4<Float>(renderingParameters.specularLightColor, 0),
+      lightDirection: SIMD4<Float>(state.lighting.direction, 0),
+      ambientLightColor: SIMD4<Float>(state.lighting.ambient, 0),
+      diffuseLightColor: SIMD4<Float>(state.lighting.diffuse, 0),
+      specularLightColor: SIMD4<Float>(state.lighting.specular, 0),
       modelView: viewMatrix * modelMatrix,
       modelViewIT: simd_transpose(simd_inverse(viewMatrix * modelMatrix)),
       textureToClip: projection * viewMatrix * modelMatrix * matrixTranslation(SIMD3<Float>(repeating: -0.5))
@@ -940,15 +951,15 @@ final class ScreenVolumeRendererCore {
     }
   }
 
-  private func updateEmptiness() {
+  private func updateEmptiness(state: BorgVRVisualizationSnapshot) {
     guard let volumeAtlas else { return }
-    switch renderingParameters.renderMode {
+    switch state.renderMode {
       case .transferFunction1D, .transferFunction1DLighting:
         volumeAtlas.updateEmptiness(
           transferFunctions: Array(renderingParameters.activeTransferFunctions)
         )
       case .isoValue:
-        volumeAtlas.updateEmptiness(isoValue: renderingParameters.isoValue)
+        volumeAtlas.updateEmptiness(isoValue: state.isoValue)
     }
   }
 

@@ -55,12 +55,13 @@ final class MacVolumeRenderer: NSObject, MTKViewDelegate {
   private var pendingScreenshotCompletion: ((Result<URL, Error>) -> Void)?
 
   init(
-    appModel: AppModel,
-    appSettings: AppSettings,
-    renderingParameters: RenderingParameters,
+    session: ScreenBorgVRSession,
     storedAppModel: StoredAppModel,
     sharePlay: SharePlayCoordinator
   ) {
+    let appModel = session.runtimeState
+    let appSettings = session.settingsState
+    let renderingParameters = session.visualizationState
     let datasetAccess = MacRendererDatasetAccess(storedAppModel: storedAppModel)
     self.appModel = appModel
     self.appSettings = appSettings
@@ -69,9 +70,7 @@ final class MacVolumeRenderer: NSObject, MTKViewDelegate {
     self.renderingParameters = renderingParameters
     self.datasetAccess = datasetAccess
     self.core = ScreenVolumeRendererCore(
-      appModel: appModel,
-      appSettings: appSettings,
-      renderingParameters: renderingParameters,
+      session: session,
       pipelineLabelPrefix: "BorgVR",
       loadLocalDataset: { try datasetAccess.load(filename: $0) },
       remoteCacheFilename: { datasetAccess.remoteCacheFilename(datasetID: $0) },

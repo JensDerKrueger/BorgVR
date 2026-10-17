@@ -10,11 +10,9 @@ struct RenderDragUpdate {
 }
 
 struct MacMetalView: NSViewRepresentable {
-  @EnvironmentObject private var appModel: AppModel
-  @EnvironmentObject private var renderingParameters: RenderingParameters
-  @EnvironmentObject var appSettings: AppSettings
   @EnvironmentObject private var storedAppModel: StoredAppModel
   @EnvironmentObject private var sharePlay: SharePlayCoordinator
+  @EnvironmentObject private var session: ScreenBorgVRSession
   var onDragDelta: (CGSize) -> Void = { _ in }
   var onDragUpdate: (RenderDragUpdate) -> Void = { _ in }
   var onDragEnded: () -> Void = {}
@@ -25,9 +23,7 @@ struct MacMetalView: NSViewRepresentable {
 
   func makeCoordinator() -> MacVolumeRenderer {
     MacVolumeRenderer(
-      appModel: appModel,
-      appSettings: appSettings,
-      renderingParameters: renderingParameters,
+      session: session,
       storedAppModel: storedAppModel,
       sharePlay: sharePlay
     )

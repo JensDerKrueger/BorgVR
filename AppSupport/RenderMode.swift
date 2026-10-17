@@ -1,6 +1,6 @@
 import Foundation
 
-enum RenderMode: UInt8, CaseIterable, Identifiable, CustomStringConvertible {
+enum RenderMode: UInt8, CaseIterable, Identifiable, CustomStringConvertible, Sendable {
   case transferFunction1D = 0
   case transferFunction1DLighting = 1
   case isoValue = 2

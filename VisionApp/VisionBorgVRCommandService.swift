@@ -65,21 +65,18 @@ final class VisionBorgVRCommandService: BorgVRMCPCommandService {
   typealias DatasetOpener = (String) async throws -> Void
   typealias DatasetCloser = () async throws -> Void
 
-  private weak var runtimeAppModel: RuntimeAppModel?
-  private weak var sharedAppModel: SharedAppModel?
+  private let session: VisionBorgVRSession
   private let datasetListProvider: DatasetListProvider
   private let datasetOpener: DatasetOpener
   private let datasetCloser: DatasetCloser
 
   init(
-    runtimeAppModel: RuntimeAppModel,
-    sharedAppModel: SharedAppModel,
+    session: VisionBorgVRSession,
     datasetListProvider: @escaping DatasetListProvider,
     datasetOpener: @escaping DatasetOpener,
     datasetCloser: @escaping DatasetCloser
   ) {
-    self.runtimeAppModel = runtimeAppModel
-    self.sharedAppModel = sharedAppModel
+    self.session = session
     self.datasetListProvider = datasetListProvider
     self.datasetOpener = datasetOpener
     self.datasetCloser = datasetCloser
@@ -98,9 +95,8 @@ final class VisionBorgVRCommandService: BorgVRMCPCommandService {
   }
 
   func applicationState() -> BorgVRMCPApplicationState {
-    guard let runtime = runtimeAppModel, let shared = sharedAppModel else {
-      return unavailableState
-    }
+    let runtime = session.runtimeState
+    let state = session.currentSnapshot()
     let info = runtime.activeDatasetInfo
     let dataset = runtime.activeDataset.map {
       BorgVRMCPDatasetState(
@@ -110,40 +106,38 @@ final class VisionBorgVRCommandService: BorgVRMCPCommandService {
         physicalExtentMeters: info.map { $0.physicalExtentMeters.mcpArray }
       )
     }
-    let transform = shared.modelTransform
     return BorgVRMCPApplicationState(
       applicationVersion: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "Unknown",
       platform: "visionOS",
       dataset: dataset,
       rendererReady: runtime.immersiveSpaceState == .open && info != nil,
       completedFrame: runtime.mcpRenderBridge.completedFrameCount,
-      renderMode: mcpName(for: shared.renderMode),
-      normalizedIsoValue: shared.normIsoValue,
+      renderMode: mcpName(for: state.renderMode),
+      normalizedIsoValue: state.normalizedIsoValue,
       transform: BorgVRMCPTransformState(
-        rotation: transform.rotation.vector.mcpArray,
-        translation: transform.translation.mcpArray,
-        scale: transform.scale.mcpArray
+        rotation: state.transform.rotation.mcpArray,
+        translation: state.transform.translation.mcpArray,
+        scale: state.transform.scale.mcpArray
       ),
-      clipMinimum: shared.clipMin.mcpArray,
-      clipMaximum: shared.clipMax.mcpArray,
+      clipMinimum: state.clipMinimum.mcpArray,
+      clipMaximum: state.clipMaximum.mcpArray,
       lighting: BorgVRMCPLightingState(
-        direction: shared.lightDirection.mcpArray,
-        ambient: shared.ambientLightColor.mcpArray,
-        diffuse: shared.diffuseLightColor.mcpArray,
-        specular: shared.specularLightColor.mcpArray
+        direction: state.lighting.direction.mcpArray,
+        ambient: state.lighting.ambient.mcpArray,
+        diffuse: state.lighting.diffuse.mcpArray,
+        specular: state.lighting.specular.mcpArray
       ),
       annotationVisibility: BorgVRMCPAnnotationVisibilityState(
-        objects: !shared.objectsHidden,
-        measurements: !shared.measurementsHidden
+        objects: state.objectsVisible,
+        measurements: state.measurementsVisible
       ),
-      objectCount: shared.volumeMarkers.count + shared.sceneMeshInstances.count,
-      measurementCount: shared.volumeMeasurements.count
+      objectCount: state.objectCount,
+      measurementCount: state.measurementCount
     )
   }
 
   func setRenderMode(_ mode: String) throws {
-    guard let shared = sharedAppModel else { throw BorgVRMCPCommandError.rendererUnavailable }
-    shared.renderMode = switch mode.lowercased() {
+    let renderMode: RenderMode = switch mode.lowercased() {
       case "tf", "transfer", "transfer_function", "transferfunction", "transferfunction1d":
         .transferFunction1D
       case "lighting", "transfer_function_lighting", "tflighting", "transferfunction1dlighting":
@@ -153,7 +147,7 @@ final class VisionBorgVRCommandService: BorgVRMCPCommandService {
       default:
         throw BorgVRMCPCommandError.invalidArgument("Unknown render mode.")
     }
-    shared.synchronize(kind: .stateOnly)
+    try session.perform(.setRenderMode(renderMode), source: .mcp)
   }
 
   func setTransform(
@@ -161,66 +155,26 @@ final class VisionBorgVRCommandService: BorgVRMCPCommandService {
     translation: SIMD3<Float>?,
     scale: SIMD3<Float>?
   ) throws {
-    guard let shared = sharedAppModel else { throw BorgVRMCPCommandError.rendererUnavailable }
-    var transform = shared.modelTransform
-    if let rotation {
-      guard simd_length_squared(rotation) > 0.000_001 else {
-        throw BorgVRMCPCommandError.invalidArgument("Rotation quaternion must not be zero.")
-      }
-      transform.rotation = simd_normalize(simd_quatf(vector: rotation))
-    }
+    var transform = session.currentSnapshot().transform
+    if let rotation { transform.rotation = rotation }
     if let translation { transform.translation = translation }
-    if let scale {
-      guard scale.x > 0, scale.y > 0, scale.z > 0 else {
-        throw BorgVRMCPCommandError.invalidArgument("Scale must be positive.")
-      }
-      transform.scale = scale
-    }
-    shared.modelTransform = transform
-    shared.lastModelTransform = transform
-    shared.synchronize(kind: .transformOnly)
+    if let scale { transform.scale = scale }
+    try session.perform(.setTransform(transform), source: .mcp)
   }
 
   func rotate(axis: SIMD3<Float>, degrees: Float) throws {
-    guard let shared = sharedAppModel else { throw BorgVRMCPCommandError.rendererUnavailable }
-    guard simd_length_squared(axis) > 0.000_001 else {
-      throw BorgVRMCPCommandError.invalidArgument("Rotation axis must not be zero.")
-    }
-    var transform = shared.modelTransform
-    let delta = simd_quatf(
-      angle: degrees * .pi / 180,
-      axis: simd_normalize(axis)
-    )
-    transform.rotation = simd_normalize(delta * transform.rotation)
-    shared.modelTransform = transform
-    shared.lastModelTransform = transform
-    shared.synchronize(kind: .transformOnly)
+    try session.perform(.rotate(axis: axis, degrees: degrees), source: .mcp)
   }
 
   func setNormalizedIsoValue(_ value: Float) throws {
-    guard let shared = sharedAppModel else { throw BorgVRMCPCommandError.rendererUnavailable }
-    guard value.isFinite, (0...1).contains(value) else {
-      throw BorgVRMCPCommandError.invalidArgument("Normalized isovalue must be between zero and one.")
-    }
-    shared.normIsoValue = value
-    shared.synchronize(kind: .stateOnly)
+    try session.perform(.setNormalizedIsoValue(value), source: .mcp)
   }
 
   func setClipping(minimum: SIMD3<Float>, maximum: SIMD3<Float>) throws {
-    guard let shared = sharedAppModel else { throw BorgVRMCPCommandError.rendererUnavailable }
-    guard minimum.x >= 0, minimum.y >= 0, minimum.z >= 0,
-          maximum.x <= 1, maximum.y <= 1, maximum.z <= 1,
-          minimum.x <= maximum.x,
-          minimum.y <= maximum.y,
-          minimum.z <= maximum.z else {
-      throw BorgVRMCPCommandError.invalidArgument(
-        "Clipping bounds must be ordered and contained in zero to one."
-      )
-    }
-    shared.clipMin = minimum
-    shared.clipMax = maximum
-    shared.lastTranslationClipping = .zero
-    shared.synchronize(kind: .stateOnly)
+    try session.perform(
+      .setClipping(minimum: minimum, maximum: maximum),
+      source: .mcp
+    )
   }
 
   func setLighting(
@@ -229,64 +183,80 @@ final class VisionBorgVRCommandService: BorgVRMCPCommandService {
     diffuse: SIMD3<Float>?,
     specular: SIMD3<Float>?
   ) throws {
-    guard let shared = sharedAppModel else { throw BorgVRMCPCommandError.rendererUnavailable }
-    if let direction {
-      guard simd_length_squared(direction) > 0.000_001 else {
-        throw BorgVRMCPCommandError.invalidArgument("Light direction must not be zero.")
-      }
-      shared.lightDirection = simd_normalize(direction)
-    }
-    if let ambient { shared.ambientLightColor = try validatedColor(ambient) }
-    if let diffuse { shared.diffuseLightColor = try validatedColor(diffuse) }
-    if let specular { shared.specularLightColor = try validatedColor(specular) }
-    shared.synchronize(kind: .stateOnly)
+    try session.perform(
+      .setLighting(
+        direction: direction,
+        ambient: ambient,
+        diffuse: diffuse,
+        specular: specular
+      ),
+      source: .mcp
+    )
   }
 
   func setAnnotationVisibility(objects: Bool?, measurements: Bool?) throws {
-    guard let shared = sharedAppModel else {
-      throw BorgVRMCPCommandError.rendererUnavailable
-    }
-    guard objects != nil || measurements != nil else {
-      throw BorgVRMCPCommandError.invalidArgument(
-        "At least one annotation visibility value is required."
-      )
-    }
-    if let objects { shared.objectsHidden = !objects }
-    if let measurements { shared.measurementsHidden = !measurements }
+    try session.perform(
+      .setAnnotationVisibility(objects: objects, measurements: measurements),
+      source: .mcp
+    )
+  }
+
+  func listMeshAssets() -> [BorgVRMeshAssetCommandState] {
+    let shared = session.visualizationState
+    shared.refreshSceneMeshCatalog()
+    return shared.sceneMeshAssets.values
+      .map(BorgVRMeshAssetCommandState.init)
+      .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+  }
+
+  func listObjects() -> [BorgVRObjectCommandState] {
+    let shared = session.visualizationState
+    return shared.volumeMarkers.map { .marker(BorgVRMarkerCommandState($0)) }
+      + shared.sceneMeshInstances.map { .mesh(BorgVRMeshInstanceCommandState($0)) }
+  }
+
+  func upsertObject(_ object: BorgVRObjectCommandState) throws {
+    try session.perform(.upsertObject(object), source: .mcp)
+  }
+
+  func removeObject(id: UUID) throws {
+    try session.perform(.removeObject(id), source: .mcp)
+  }
+
+  func clearObjects() throws {
+    try session.perform(.clearObjects, source: .mcp)
+  }
+
+  func listMeasurements() -> [BorgVRMeasurementCommandState] {
+    session.visualizationState.volumeMeasurementsSnapshot()
+      .map(BorgVRMeasurementCommandState.init)
+  }
+
+  func upsertMeasurement(_ measurement: BorgVRMeasurementCommandState) throws {
+    try session.perform(.upsertMeasurement(measurement), source: .mcp)
+  }
+
+  func removeMeasurement(id: UUID) throws {
+    try session.perform(.removeMeasurement(id), source: .mcp)
+  }
+
+  func clearMeasurements() throws {
+    try session.perform(.clearMeasurements, source: .mcp)
   }
 
   func reset(_ scope: BorgVRMCPResetScope) throws {
-    guard let shared = sharedAppModel else { throw BorgVRMCPCommandError.rendererUnavailable }
-    switch scope {
-      case .all:
-        shared.resetModel()
-        shared.resetClipBoundsToVolume()
-        for transferFunction in shared.transferFunctions { transferFunction.reset() }
-        shared.resetIsoValue()
-        shared.renderMode = .transferFunction1D
-        shared.brickVis = false
-        applyDefaultLighting(to: shared)
-        shared.synchronize(kind: .full)
-      case .transform:
-        shared.resetModel()
-        shared.synchronize(kind: .transformOnly)
-      case .clipping:
-        shared.resetClipBoundsToVolume()
-        shared.synchronize(kind: .stateOnly)
-      case .transferFunction:
-        let channel = runtimeAppModel?.selectedTransferFunctionChannel ?? 0
-        shared.transferFunction(channel: channel).reset()
-        shared.synchronize(kind: .full)
-      case .lighting:
-        applyDefaultLighting(to: shared)
-        shared.synchronize(kind: .stateOnly)
+    let sessionScope: BorgVRStateResetScope = switch scope {
+      case .all: .all
+      case .transform: .transform
+      case .clipping: .clipping
+      case .transferFunction: .transferFunction
+      case .lighting: .lighting
     }
+    try session.perform(.reset(sessionScope), source: .mcp)
   }
 
   func waitUntilRendered(after frame: UInt64, timeout: TimeInterval) async throws {
-    guard let bridge = runtimeAppModel?.mcpRenderBridge else {
-      throw BorgVRMCPCommandError.rendererUnavailable
-    }
+    let bridge = session.runtimeState.mcpRenderBridge
     let clock = ContinuousClock()
     let deadline = clock.now + .seconds(timeout)
     while bridge.completedFrameCount <= frame {
@@ -297,7 +267,7 @@ final class VisionBorgVRCommandService: BorgVRMCPCommandService {
   }
 
   func captureScreenshot() async throws -> BorgVRMCPImage {
-    guard let runtime = runtimeAppModel else { throw BorgVRMCPCommandError.rendererUnavailable }
+    let runtime = session.runtimeState
     guard runtime.activeDataset != nil else { throw BorgVRMCPCommandError.noDataset }
     let requestID = UUID()
     return try await withCheckedThrowingContinuation {
@@ -312,50 +282,6 @@ final class VisionBorgVRCommandService: BorgVRMCPCommandService {
         gate.resume(with: .failure(BorgVRMCPCommandError.timeout))
       }
     }
-  }
-
-  private var unavailableState: BorgVRMCPApplicationState {
-    BorgVRMCPApplicationState(
-      applicationVersion: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "Unknown",
-      platform: "visionOS",
-      dataset: nil,
-      rendererReady: false,
-      completedFrame: 0,
-      renderMode: "transfer_function",
-      normalizedIsoValue: 0,
-      transform: BorgVRMCPTransformState(
-        rotation: [0, 0, 0, 1], translation: [0, 0, 0], scale: [1, 1, 1]
-      ),
-      clipMinimum: [0, 0, 0],
-      clipMaximum: [1, 1, 1],
-      lighting: BorgVRMCPLightingState(
-        direction: [0, 0, 1], ambient: [0, 0, 0], diffuse: [0, 0, 0], specular: [0, 0, 0]
-      ),
-      annotationVisibility: BorgVRMCPAnnotationVisibilityState(
-        objects: true,
-        measurements: true
-      ),
-      objectCount: 0,
-      measurementCount: 0
-    )
-  }
-
-  private func applyDefaultLighting(to shared: SharedAppModel) {
-    let lighting = BorgVRLightingState.default
-    shared.lightDirection = lighting.direction
-    shared.ambientLightColor = lighting.ambientColor
-    shared.diffuseLightColor = lighting.diffuseColor
-    shared.specularLightColor = lighting.specularColor
-  }
-
-  private func validatedColor(_ value: SIMD3<Float>) throws -> SIMD3<Float> {
-    guard value.x.isFinite, value.y.isFinite, value.z.isFinite,
-          (0...1).contains(value.x),
-          (0...1).contains(value.y),
-          (0...1).contains(value.z) else {
-      throw BorgVRMCPCommandError.invalidArgument("Light colors must be between zero and one.")
-    }
-    return value
   }
 
   private func mcpName(for mode: RenderMode) -> String {

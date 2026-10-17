@@ -373,13 +373,23 @@ enum SpatialControllerButtonAction: String, CaseIterable, Identifiable {
 
 @MainActor
 enum SpatialControllerShortcutHandler {
+  @MainActor
   static func perform(
     _ action: SpatialControllerButtonAction,
     for chirality: BorgSpatialInputChirality,
+    session: VisionBorgVRSession,
     runtimeAppModel: RuntimeAppModel,
     sharedAppModel: SharedAppModel,
     storedAppModel: StoredAppModel
   ) {
+    let controllerName: String
+    switch chirality {
+      case .left: controllerName = "left"
+      case .right: controllerName = "right"
+      case .unspecified: controllerName = "unspecified"
+    }
+    let source = BorgVRCommandSource.controller(controllerName)
+    defer { session.commitExternalMutation(source: source, domain: .interaction) }
     switch action {
       case .none:
         break
@@ -429,13 +439,13 @@ enum SpatialControllerShortcutHandler {
           .isoValue
         ]
         let currentIndex = modes.firstIndex(of: sharedAppModel.renderMode) ?? -1
-        setRenderMode(modes[(currentIndex + 1) % modes.count], sharedAppModel: sharedAppModel)
+        try? session.perform(.setRenderMode(modes[(currentIndex + 1) % modes.count]), source: source)
       case .transferFunctionLightingMode:
-        setRenderMode(.transferFunction1DLighting, sharedAppModel: sharedAppModel)
+        try? session.perform(.setRenderMode(.transferFunction1DLighting), source: source)
       case .transferFunctionMode:
-        setRenderMode(.transferFunction1D, sharedAppModel: sharedAppModel)
+        try? session.perform(.setRenderMode(.transferFunction1D), source: source)
       case .isoValueMode:
-        setRenderMode(.isoValue, sharedAppModel: sharedAppModel)
+        try? session.perform(.setRenderMode(.isoValue), source: source)
       case .toggleCurrentEditor:
         let isIso = sharedAppModel.renderMode == .isoValue
         runtimeAppModel.requestAuxiliaryWindowToggle(
@@ -451,13 +461,12 @@ enum SpatialControllerShortcutHandler {
       case .toggleInteractionWindow:
         break
       case .resetModel:
-        sharedAppModel.resetModel()
-        sharedAppModel.synchronize(kind: .full)
+        try? session.perform(.reset(.transform), source: source)
       case .resetClipping:
-        sharedAppModel.resetClipBoundsToVolume()
-        sharedAppModel.synchronize(kind: .full)
+        try? session.perform(.reset(.clipping), source: source)
       case .deleteLastMarker:
         if sharedAppModel.removeLastSceneObject() {
+          session.commitExternalMutation(source: source, domain: .objects)
           sharedAppModel.synchronizeMarkers()
         }
       case .deleteSelectedMarkers:
@@ -467,6 +476,7 @@ enum SpatialControllerShortcutHandler {
           sharedAppModel.removeSceneMeshInstance(id: $0)
         } ?? false
         if removedMarkers || removedMesh {
+          session.commitExternalMutation(source: source, domain: .objects)
           sharedAppModel.synchronizeMarkers()
         }
       case .toggleSelectedMarkerDirections:
@@ -486,9 +496,12 @@ enum SpatialControllerShortcutHandler {
           sharedAppModel.volumeMarkers[index].showsDirection = showDirections
         }
         sharedAppModel.defaultVolumeMarkerShowsDirection = showDirections
+        session.commitExternalMutation(source: source, domain: .objects)
         sharedAppModel.synchronizeMarkers()
       case .deleteSelectedMeasurementPoint:
-        _ = sharedAppModel.removeSelectedVolumeMeasurementPoint()
+        if sharedAppModel.removeSelectedVolumeMeasurementPoint() {
+          session.commitExternalMutation(source: source, domain: .measurements)
+        }
     }
   }
 
@@ -513,8 +526,4 @@ enum SpatialControllerShortcutHandler {
     storedAppModel.setControllerTool(tools[(currentIndex + 1) % tools.count], for: chirality)
   }
 
-  private static func setRenderMode(_ mode: RenderMode, sharedAppModel: SharedAppModel) {
-    sharedAppModel.renderMode = mode
-    sharedAppModel.synchronize(kind: .stateOnly)
-  }
 }

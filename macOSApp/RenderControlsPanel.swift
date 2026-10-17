@@ -19,6 +19,7 @@ struct RenderControlsPanel: View {
   @EnvironmentObject private var appSettings: AppSettings
   @EnvironmentObject private var serverController: BackgroundServerController
   @EnvironmentObject private var sharePlay: SharePlayCoordinator
+  @EnvironmentObject private var session: ScreenBorgVRSession
   @EnvironmentObject private var docking: DockingController
   @Environment(\.openWindow) private var openWindow
   @Environment(\.dismissWindow) private var dismissWindow
@@ -210,16 +211,12 @@ struct RenderControlsPanel: View {
           .help("Keep this Mac's view synchronized with other iPhone, iPad, and Mac participants.")
         }
 
-        Picker("Render Mode", selection: $renderingParameters.renderMode) {
+        Picker("Render Mode", selection: renderModeBinding) {
           ForEach(RenderMode.allCases) { mode in
             Text(mode.description).tag(mode)
           }
         }
         .pickerStyle(.segmented)
-        .onChange(of: renderingParameters.renderMode) { _, newMode in
-          docking.hideIncompatibleEditor(for: newMode)
-          sharePlay.synchronize(kind: .stateOnly)
-        }
 
         HStack(spacing: 8) {
           if appSettings.showBrickVisualization {
@@ -227,12 +224,14 @@ struct RenderControlsPanel: View {
               .toggleStyle(.button)
               .fixedSize()
               .onChange(of: renderingParameters.brickVis) {
+                session.commitExternalMutation(source: .userInterface, domain: .visualization)
                 sharePlay.synchronize(kind: .stateOnly)
               }
           }
 
           Button {
             renderingParameters.reset()
+            session.commitExternalMutation(source: .userInterface, domain: .visualization)
             sharePlay.synchronize(kind: .full)
             sharePlay.synchronize(kind: .transformOnly)
             sharePlay.flushSynchronization()
@@ -561,6 +560,19 @@ struct RenderControlsPanel: View {
     )
   }
 
+  private var renderModeBinding: Binding<RenderMode> {
+    Binding(
+      get: { renderingParameters.renderMode },
+      set: { newMode in
+        guard newMode != renderingParameters.renderMode else { return }
+        Task { @MainActor in
+          await Task.yield()
+          try? session.perform(.setRenderMode(newMode), source: .userInterface)
+        }
+      }
+    )
+  }
+
   private func requestDatasetClose() {
     if sharePlay.isInSession, !appModel.groupSessionHost {
       showLeaveSharePlayConfirmation = true
@@ -658,6 +670,9 @@ struct RenderControlsPanel: View {
         showNoDatasetStateToRestore = true
         return
       }
+      session.commitExternalMutation(source: .userInterface, domain: .visualization)
+      session.commitExternalMutation(source: .userInterface, domain: .objects)
+      session.commitExternalMutation(source: .userInterface, domain: .measurements)
       sharePlay.synchronize(kind: .full)
       sharePlay.synchronizeMarkers()
       sharePlay.synchronizeMeasurements()

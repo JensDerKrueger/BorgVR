@@ -36,20 +36,69 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 struct macOSApp: App {
   @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
-  @StateObject private var appModel = AppModel()
-  @StateObject private var renderingParameters = RenderingParameters()
-  @StateObject private var appSettings = AppSettings()
-  @StateObject private var storedAppModel = StoredAppModel()
-  @StateObject private var serverController = BackgroundServerController()
-  @StateObject private var sharePlay = SharePlayCoordinator()
-  @StateObject private var docking = DockingController()
-  @StateObject private var scriptRunner = BorgVRScriptRunner()
-  @StateObject private var updateChecker = AppStoreUpdateChecker()
-  @StateObject private var mcpController = BorgVRMCPServerController()
+  @StateObject private var appModel: AppModel
+  @StateObject private var renderingParameters: RenderingParameters
+  @StateObject private var appSettings: AppSettings
+  @StateObject private var storedAppModel: StoredAppModel
+  @StateObject private var serverController: BackgroundServerController
+  @StateObject private var sharePlay: SharePlayCoordinator
+  @StateObject private var docking: DockingController
+  @StateObject private var scriptRunner: BorgVRScriptRunner
+  @StateObject private var updateChecker: AppStoreUpdateChecker
+  @StateObject private var mcpController: BorgVRMCPServerController
+  @StateObject private var session: ScreenBorgVRSession
   @AppStorage("sharePlayDisplayNameOnboardingCompleted")
   private var sharePlayDisplayNameOnboardingCompleted = false
   @State private var showsSharePlayDisplayNameOnboarding = false
   @State private var sharePlayDisplayNameDraft = ""
+
+  init() {
+    let appModel = AppModel()
+    let renderingParameters = RenderingParameters()
+    let appSettings = AppSettings()
+    let storedAppModel = StoredAppModel()
+    let serverController = BackgroundServerController()
+    let sharePlay = SharePlayCoordinator()
+    let docking = DockingController()
+    let scriptRunner = BorgVRScriptRunner()
+    let updateChecker = AppStoreUpdateChecker()
+    let mcpController = BorgVRMCPServerController()
+    let session = ScreenBorgVRSession.screen(
+      appModel: appModel,
+      renderingParameters: renderingParameters,
+      appSettings: appSettings,
+      synchronizeTransform: { [weak sharePlay] in
+        sharePlay?.synchronize(kind: .transformOnly)
+      },
+      synchronizeState: { [weak sharePlay] in
+        sharePlay?.synchronize(kind: .stateOnly)
+      },
+      synchronizeFullState: { [weak sharePlay] in
+        sharePlay?.synchronize(kind: .full)
+      },
+      synchronizeObjects: { [weak sharePlay] in
+        sharePlay?.synchronizeMarkers()
+      },
+      synchronizeMeasurements: { [weak sharePlay] in
+        sharePlay?.synchronizeMeasurements()
+      },
+      renderModeDidChange: { [weak docking] mode in
+        docking?.hideIncompatibleEditor(for: mode)
+      }
+    )
+
+    _appModel = StateObject(wrappedValue: appModel)
+    _renderingParameters = StateObject(wrappedValue: renderingParameters)
+    _appSettings = StateObject(wrappedValue: appSettings)
+    _storedAppModel = StateObject(wrappedValue: storedAppModel)
+    _serverController = StateObject(wrappedValue: serverController)
+    _sharePlay = StateObject(wrappedValue: sharePlay)
+    _docking = StateObject(wrappedValue: docking)
+    _scriptRunner = StateObject(wrappedValue: scriptRunner)
+    _updateChecker = StateObject(wrappedValue: updateChecker)
+    _mcpController = StateObject(wrappedValue: mcpController)
+    _session = StateObject(wrappedValue: session)
+  }
 
   var body: some Scene {
     WindowGroup("BorgVR") {
@@ -102,6 +151,7 @@ struct macOSApp: App {
         .environmentObject(sharePlay)
         .environmentObject(docking)
         .environmentObject(scriptRunner)
+        .environmentObject(session)
         .environmentObject(updateChecker)
         .environmentObject(mcpController)
         .frame(minWidth: 980, minHeight: 680)
@@ -121,6 +171,7 @@ struct macOSApp: App {
           scriptRunner.configure(
             appModel: appModel,
             renderingParameters: renderingParameters,
+            session: session,
             appSettings: appSettings,
             storedAppModel: storedAppModel,
             sharePlay: sharePlay,
@@ -183,6 +234,7 @@ struct macOSApp: App {
         .environmentObject(sharePlay)
         .environmentObject(docking)
         .environmentObject(scriptRunner)
+        .environmentObject(session)
     }
     .defaultSize(width: 720, height: 260)
 
@@ -196,6 +248,7 @@ struct macOSApp: App {
         .environmentObject(sharePlay)
         .environmentObject(docking)
         .environmentObject(scriptRunner)
+        .environmentObject(session)
     }
     .defaultSize(width: 820, height: 320)
 
@@ -209,6 +262,7 @@ struct macOSApp: App {
         .environmentObject(sharePlay)
         .environmentObject(docking)
         .environmentObject(scriptRunner)
+        .environmentObject(session)
     }
     .defaultSize(width: 560, height: 180)
 
@@ -235,6 +289,7 @@ struct macOSApp: App {
         .environmentObject(sharePlay)
         .environmentObject(docking)
         .environmentObject(scriptRunner)
+        .environmentObject(session)
     }
     .defaultSize(width: 520, height: 560)
 
@@ -248,6 +303,7 @@ struct macOSApp: App {
         .environmentObject(sharePlay)
         .environmentObject(docking)
         .environmentObject(scriptRunner)
+        .environmentObject(session)
     }
     .defaultSize(width: 520, height: 600)
 
@@ -261,6 +317,7 @@ struct macOSApp: App {
         .environmentObject(sharePlay)
         .environmentObject(docking)
         .environmentObject(scriptRunner)
+        .environmentObject(session)
     }
     .defaultSize(width: 430, height: 500)
     .commands {
@@ -281,12 +338,7 @@ struct macOSApp: App {
   @MainActor
   private func makeCommandService() -> BorgVRScreenCommandService {
     BorgVRScreenCommandService(
-      appModel: appModel,
-      renderingParameters: renderingParameters,
-      synchronizeTransform: { sharePlay.synchronize(kind: .transformOnly) },
-      synchronizeState: { sharePlay.synchronize(kind: .stateOnly) },
-      synchronizeFullState: { sharePlay.synchronize(kind: .full) },
-      renderModeDidChange: { docking.hideIncompatibleEditor(for: $0) },
+      session: session,
       datasetListProvider: {
         await loadMCPDatasetRecords().map(\.catalogEntry)
       },

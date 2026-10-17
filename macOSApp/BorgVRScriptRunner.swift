@@ -64,6 +64,7 @@ final class BorgVRScriptRunner: ObservableObject {
 
   private weak var appModel: AppModel?
   private weak var renderingParameters: RenderingParameters?
+  private weak var session: ScreenBorgVRSession?
   private weak var appSettings: AppSettings?
   private weak var storedAppModel: StoredAppModel?
   private weak var sharePlay: SharePlayCoordinator?
@@ -104,6 +105,7 @@ final class BorgVRScriptRunner: ObservableObject {
   func configure(
     appModel: AppModel,
     renderingParameters: RenderingParameters,
+    session: ScreenBorgVRSession,
     appSettings: AppSettings,
     storedAppModel: StoredAppModel,
     sharePlay: SharePlayCoordinator,
@@ -112,6 +114,7 @@ final class BorgVRScriptRunner: ObservableObject {
   ) {
     self.appModel = appModel
     self.renderingParameters = renderingParameters
+    self.session = session
     self.appSettings = appSettings
     self.storedAppModel = storedAppModel
     self.sharePlay = sharePlay
@@ -342,10 +345,32 @@ final class BorgVRScriptRunner: ObservableObject {
     }
 
     register("resetrotation", []) { [weak self] _ in
-      guard let parameters = self?.renderingParameters else { return .callbackError }
-      parameters.orientation = simd_quatf(ix: 0, iy: 0, iz: 0, r: 1)
-      self?.synchronizeTransform()
-      return .success
+      guard let self, let session = self.session else { return .callbackError }
+      var transform = session.currentSnapshot().transform
+      transform.rotation = SIMD4<Float>(0, 0, 0, 1)
+      do {
+        try session.perform(.setTransform(transform), source: .gsc)
+        return .success
+      } catch {
+        return .callbackError
+      }
+    }
+
+    register("setrotationquaternion", [.float, .float, .float, .float]) { [weak self] args in
+      guard let self, let session = self.session else { return .callbackError }
+      var transform = session.currentSnapshot().transform
+      transform.rotation = SIMD4<Float>(
+        args.float(0),
+        args.float(1),
+        args.float(2),
+        args.float(3)
+      )
+      do {
+        try session.perform(.setTransform(transform), source: .gsc)
+        return .success
+      } catch {
+        return .invalidArguments
+      }
     }
 
     register("addrotationx", [.float]) { [weak self] args in
@@ -361,10 +386,15 @@ final class BorgVRScriptRunner: ObservableObject {
     }
 
     register("settranslation", [.float, .float]) { [weak self] args in
-      guard let parameters = self?.renderingParameters else { return .callbackError }
-      parameters.pan = SIMD2<Float>(args.float(0), args.float(1))
-      self?.synchronizeTransform()
-      return .success
+      guard let self, let session = self.session else { return .callbackError }
+      var transform = session.currentSnapshot().transform
+      transform.translation = SIMD3<Float>(args.float(0), args.float(1), 0)
+      do {
+        try session.perform(.setTransform(transform), source: .gsc)
+        return .success
+      } catch {
+        return .callbackError
+      }
     }
 
     register("zoom", [.float]) { [weak self] args in
@@ -388,12 +418,13 @@ final class BorgVRScriptRunner: ObservableObject {
     }
 
     register("resetclip", []) { [weak self] _ in
-      guard let parameters = self?.renderingParameters else { return .callbackError }
-      parameters.clipMin = SIMD3<Float>(0, 0, 0)
-      parameters.clipMax = SIMD3<Float>(1, 1, 1)
-      parameters.clippingTranslation = SIMD3<Float>(0, 0, 0)
-      self?.synchronizeState()
-      return .success
+      guard let session = self?.session else { return .callbackError }
+      do {
+        try session.perform(.reset(.clipping), source: .gsc)
+        return .success
+      } catch {
+        return .callbackError
+      }
     }
 
     register("isovalue", [.float]) { [weak self] args in
@@ -418,6 +449,16 @@ final class BorgVRScriptRunner: ObservableObject {
 
     register("savetf", [.string]) { [weak self] args in
       self?.saveTransferFunction(filename: args.string(0)) ?? .callbackError
+    }
+
+    register("resettf", []) { [weak self] _ in
+      guard let session = self?.session else { return .callbackError }
+      do {
+        try session.perform(.reset(.transferFunction), source: .gsc)
+        return .success
+      } catch {
+        return .callbackError
+      }
     }
 
     register("setlightdirection", [.float, .float, .float]) { [weak self] args in
@@ -483,6 +524,59 @@ final class BorgVRScriptRunner: ObservableObject {
 
     register("savemarkers", [.string]) { [weak self] args in
       self?.saveMarkers(filename: args.string(0)) ?? .callbackError
+    }
+
+    register(
+      "setspheremarker",
+      [
+        .string, .string,
+        .float, .float, .float, .float,
+        .float, .float, .float, .float,
+        .bool, .float, .float, .float
+      ]
+    ) { [weak self] args in
+      self?.setSphereMarker(args) ?? .callbackError
+    }
+
+    register(
+      "setstrokemarker",
+      [.string, .string, .float, .float, .float, .float, .restString]
+    ) { [weak self] args in
+      self?.setStrokeMarker(args) ?? .callbackError
+    }
+
+    register(
+      "setmeshinstance",
+      [
+        .string, .string, .string,
+        .float, .float, .float,
+        .float, .float, .float, .float,
+        .float, .float, .float,
+        .bool
+      ]
+    ) { [weak self] args in
+      self?.setMeshInstance(args) ?? .callbackError
+    }
+
+    register("removeobject", [.string]) { [weak self] args in
+      self?.removeObject(identifier: args.string(0)) ?? .callbackError
+    }
+
+    register("clearobjects", []) { [weak self] _ in
+      self?.performAnnotationCommand(.clearObjects) ?? .callbackError
+    }
+
+    register("setmeasurement", [.string, .string, .string, .restString]) {
+      [weak self] args in
+      self?.setMeasurement(args) ?? .callbackError
+    }
+
+    register("removemeasurement", [.string]) { [weak self] args in
+      self?.removeMeasurement(identifier: args.string(0)) ?? .callbackError
+    }
+
+    register("clearmeasurements", []) { [weak self] _ in
+      self?.performAnnotationCommand(.clearMeasurements) ?? .callbackError
     }
 
     register("setbackground", [.double, .double, .double, .double]) { [weak self] args in
@@ -1085,8 +1179,9 @@ final class BorgVRScriptRunner: ObservableObject {
 
   private func resetRendering() -> CommandResultCode {
     do {
-      try commandService?.reset(.all)
-      return commandService == nil ? .callbackError : .success
+      guard let session else { return .callbackError }
+      try session.perform(.reset(.all), source: .gsc)
+      return .success
     } catch {
       logError(error.localizedDescription)
       return .callbackError
@@ -1095,8 +1190,8 @@ final class BorgVRScriptRunner: ObservableObject {
 
   private func addRotation(axis: SIMD3<Float>, degrees: Float) -> CommandResultCode {
     do {
-      guard let commandService else { return .callbackError }
-      try commandService.rotate(axis: axis, degrees: degrees)
+      guard let session else { return .callbackError }
+      try session.perform(.rotate(axis: axis, degrees: degrees), source: .gsc)
       return .success
     } catch {
       return .invalidArguments
@@ -1104,13 +1199,11 @@ final class BorgVRScriptRunner: ObservableObject {
   }
 
   private func setScale(_ scale: Float) -> CommandResultCode {
-    guard scale > 0, let commandService else { return .invalidArguments }
+    guard scale > 0, let session else { return .invalidArguments }
     do {
-      try commandService.setTransform(
-        rotation: nil,
-        translation: nil,
-        scale: SIMD3<Float>(repeating: scale)
-      )
+      var transform = session.currentSnapshot().transform
+      transform.scale = SIMD3<Float>(repeating: scale)
+      try session.perform(.setTransform(transform), source: .gsc)
       return .success
     } catch {
       return .invalidArguments
@@ -1118,9 +1211,20 @@ final class BorgVRScriptRunner: ObservableObject {
   }
 
   private func setRenderMode(_ value: String) -> CommandResultCode {
-    guard let commandService else { return .callbackError }
+    guard let session else { return .callbackError }
+    let mode: RenderMode
+    switch value.lowercased() {
+      case "tf", "transfer", "transfer_function", "transferfunction", "transferfunction1d":
+        mode = .transferFunction1D
+      case "lighting", "transfer_function_lighting", "tflighting", "transferfunction1dlighting":
+        mode = .transferFunction1DLighting
+      case "iso", "isovalue":
+        mode = .isoValue
+      default:
+        return .invalidArguments
+    }
     do {
-      try commandService.setRenderMode(value)
+      try session.perform(.setRenderMode(mode), source: .gsc)
       return .success
     } catch {
       return .invalidArguments
@@ -1153,8 +1257,11 @@ final class BorgVRScriptRunner: ObservableObject {
       return .invalidArguments
     }
     do {
-      guard let commandService else { return .callbackError }
-      try commandService.setClipping(minimum: minValues, maximum: maxValues)
+      guard let session else { return .callbackError }
+      try session.perform(
+        .setClipping(minimum: minValues, maximum: maxValues),
+        source: .gsc
+      )
       return .success
     } catch {
       return .invalidArguments
@@ -1163,18 +1270,28 @@ final class BorgVRScriptRunner: ObservableObject {
 
   private func setIsoValue(rawValue: Float) -> CommandResultCode {
     guard let parameters = renderingParameters,
-          parameters.maxValue > 0 else {
+          parameters.maxValue > 0,
+          let session else {
       return .callbackError
     }
-    parameters.normIsoValue = clamp(rawValue * Float(max(parameters.rangeMax, 1)) / Float(parameters.maxValue))
-    synchronizeState()
-    return .success
+    do {
+      let value = clamp(
+        rawValue * Float(max(parameters.rangeMax, 1)) / Float(parameters.maxValue)
+      )
+      try session.perform(.setNormalizedIsoValue(value), source: .gsc)
+      return .success
+    } catch {
+      return .invalidArguments
+    }
   }
 
   private func setIsoValue(normalizedValue: Float) -> CommandResultCode {
     do {
-      guard let commandService else { return .callbackError }
-      try commandService.setNormalizedIsoValue(clamp(normalizedValue))
+      guard let session else { return .callbackError }
+      try session.perform(
+        .setNormalizedIsoValue(clamp(normalizedValue)),
+        source: .gsc
+      )
       return .success
     } catch {
       return .invalidArguments
@@ -1216,12 +1333,10 @@ final class BorgVRScriptRunner: ObservableObject {
       return .invalidArguments
     }
     do {
-      guard let commandService else { return .callbackError }
-      try commandService.setLighting(
-        direction: direction,
-        ambient: nil,
-        diffuse: nil,
-        specular: nil
+      guard let session else { return .callbackError }
+      try session.perform(
+        .setLighting(direction: direction, ambient: nil, diffuse: nil, specular: nil),
+        source: .gsc
       )
       return .success
     } catch {
@@ -1241,13 +1356,22 @@ final class BorgVRScriptRunner: ObservableObject {
       return .invalidArguments
     }
     do {
-      guard let commandService else { return .callbackError }
+      guard let session else { return .callbackError }
       if keyPath == \RenderingParameters.ambientLightColor {
-        try commandService.setLighting(direction: nil, ambient: color, diffuse: nil, specular: nil)
+        try session.perform(
+          .setLighting(direction: nil, ambient: color, diffuse: nil, specular: nil),
+          source: .gsc
+        )
       } else if keyPath == \RenderingParameters.diffuseLightColor {
-        try commandService.setLighting(direction: nil, ambient: nil, diffuse: color, specular: nil)
+        try session.perform(
+          .setLighting(direction: nil, ambient: nil, diffuse: color, specular: nil),
+          source: .gsc
+        )
       } else {
-        try commandService.setLighting(direction: nil, ambient: nil, diffuse: nil, specular: color)
+        try session.perform(
+          .setLighting(direction: nil, ambient: nil, diffuse: nil, specular: color),
+          source: .gsc
+        )
       }
     } catch {
       return .invalidArguments
@@ -1257,8 +1381,8 @@ final class BorgVRScriptRunner: ObservableObject {
 
   private func resetLighting() -> CommandResultCode {
     do {
-      guard let commandService else { return .callbackError }
-      try commandService.reset(.lighting)
+      guard let session else { return .callbackError }
+      try session.perform(.reset(.lighting), source: .gsc)
       return .success
     } catch {
       return .callbackError
@@ -1270,10 +1394,13 @@ final class BorgVRScriptRunner: ObservableObject {
     measurementsHidden: Bool?
   ) -> CommandResultCode {
     do {
-      guard let commandService else { return .callbackError }
-      try commandService.setAnnotationVisibility(
-        objects: objectsHidden.map { !$0 },
-        measurements: measurementsHidden.map { !$0 }
+      guard let session else { return .callbackError }
+      try session.perform(
+        .setAnnotationVisibility(
+          objects: objectsHidden.map { !$0 },
+          measurements: measurementsHidden.map { !$0 }
+        ),
+        source: .gsc
       )
       return .success
     } catch {
@@ -1285,7 +1412,6 @@ final class BorgVRScriptRunner: ObservableObject {
     _ args: [CommandArg],
     directional: Bool
   ) -> CommandResultCode {
-    guard let appModel else { return .callbackError }
     let name = markerName(args.string(0))
     let position = SIMD3<Float>(args.float(1), args.float(2), args.float(3))
     let radius = args.float(4)
@@ -1321,13 +1447,13 @@ final class BorgVRScriptRunner: ObservableObject {
       )
     }
 
-    appModel.volumeMarkers.append(marker)
-    synchronizeMarkers()
+    guard performAnnotationCommand(
+      .upsertObject(.marker(BorgVRMarkerCommandState(marker)))
+    ) == .success else { return .callbackError }
     return logInfo("Marker added: \(name) [\(marker.id.uuidString)]")
   }
 
   private func addStrokeMarker(_ args: [CommandArg]) -> CommandResultCode {
-    guard let appModel else { return .callbackError }
     let name = markerName(args.string(0))
     let radius = args.float(1)
     let color = SIMD4<Float>(args.float(2), args.float(3), args.float(4), 1)
@@ -1364,8 +1490,9 @@ final class BorgVRScriptRunner: ObservableObject {
       color: color,
       geometry: .stroke(points)
     )
-    appModel.volumeMarkers.append(marker)
-    synchronizeMarkers()
+    guard performAnnotationCommand(
+      .upsertObject(.marker(BorgVRMarkerCommandState(marker)))
+    ) == .success else { return .callbackError }
     return logInfo("Stroke marker added: \(name) [\(marker.id.uuidString)]")
   }
 
@@ -1381,17 +1508,18 @@ final class BorgVRScriptRunner: ObservableObject {
     }
     guard let index else { return .invalidArguments }
     let marker = appModel.volumeMarkers[index]
-    guard appModel.removeVolumeMarkers(withIDs: [marker.id]) else {
+    guard performAnnotationCommand(.removeObject(marker.id)) == .success else {
       return .callbackError
     }
-    synchronizeMarkers()
     return logInfo("Marker removed: \(marker.name) [\(marker.id.uuidString)]")
   }
 
   private func clearMarkers() -> CommandResultCode {
     guard let appModel else { return .callbackError }
-    if appModel.removeAllVolumeMarkers() {
-      synchronizeMarkers()
+    for marker in appModel.volumeMarkers {
+      guard performAnnotationCommand(.removeObject(marker.id)) == .success else {
+        return .callbackError
+      }
     }
     return .success
   }
@@ -1450,6 +1578,145 @@ final class BorgVRScriptRunner: ObservableObject {
     }
   }
 
+  private func setSphereMarker(_ args: [CommandArg]) -> CommandResultCode {
+    guard let id = UUID(uuidString: args.string(0)) else { return .invalidArguments }
+    let name = markerName(args.string(1))
+    let position = SIMD3<Float>(args.float(2), args.float(3), args.float(4))
+    let radius = args.float(5)
+    let color = SIMD4<Float>(args.float(6), args.float(7), args.float(8), args.float(9))
+    let showsDirection = args.bool(10)
+    let origin = SIMD3<Float>(args.float(11), args.float(12), args.float(13))
+    let state = BorgVRMarkerCommandState(
+      id: id,
+      name: name,
+      kind: .sphere,
+      color: color,
+      points: [
+        BorgVRMarkerPointCommandState(position: position, radius: radius)
+      ],
+      directionOrigin: showsDirection ? origin : nil,
+      showsDirection: showsDirection
+    )
+    return performAnnotationCommand(.upsertObject(.marker(state)))
+  }
+
+  private func setStrokeMarker(_ args: [CommandArg]) -> CommandResultCode {
+    guard let id = UUID(uuidString: args.string(0)) else { return .invalidArguments }
+    let tokens = args.strings(6)
+    guard !tokens.isEmpty,
+          tokens.count.isMultiple(of: 4),
+          tokens.count / 4 <= VolumeMarker.maximumInteractiveStrokePointCount else {
+      return .invalidArguments
+    }
+    var points: [BorgVRMarkerPointCommandState] = []
+    points.reserveCapacity(tokens.count / 4)
+    for index in stride(from: 0, to: tokens.count, by: 4) {
+      guard let x = Float(tokens[index]),
+            let y = Float(tokens[index + 1]),
+            let z = Float(tokens[index + 2]),
+            let radius = Float(tokens[index + 3]) else {
+        return .invalidArguments
+      }
+      points.append(BorgVRMarkerPointCommandState(
+        position: SIMD3<Float>(x, y, z),
+        radius: radius
+      ))
+    }
+    let state = BorgVRMarkerCommandState(
+      id: id,
+      name: markerName(args.string(1)),
+      kind: .stroke,
+      color: SIMD4<Float>(args.float(2), args.float(3), args.float(4), args.float(5)),
+      points: points,
+      directionOrigin: nil,
+      showsDirection: false
+    )
+    return performAnnotationCommand(.upsertObject(.marker(state)))
+  }
+
+  private func setMeshInstance(_ args: [CommandArg]) -> CommandResultCode {
+    guard let id = UUID(uuidString: args.string(0)),
+          let assetID = UUID(uuidString: args.string(1)) else {
+      return .invalidArguments
+    }
+    let state = BorgVRMeshInstanceCommandState(
+      id: id,
+      assetID: assetID,
+      name: args.string(2),
+      translationMeters: SIMD3<Float>(args.float(3), args.float(4), args.float(5)),
+      rotation: SIMD4<Float>(args.float(6), args.float(7), args.float(8), args.float(9)),
+      scale: SIMD3<Float>(args.float(10), args.float(11), args.float(12)),
+      isVisible: args.bool(13)
+    )
+    return performAnnotationCommand(.upsertObject(.mesh(state)))
+  }
+
+  private func removeObject(identifier: String) -> CommandResultCode {
+    guard let appModel else { return .callbackError }
+    let id = UUID(uuidString: identifier)
+      ?? appModel.volumeMarkers.first(where: {
+        $0.name.caseInsensitiveCompare(identifier) == .orderedSame
+      })?.id
+      ?? appModel.sceneMeshInstances.first(where: {
+        $0.name.caseInsensitiveCompare(identifier) == .orderedSame
+      })?.id
+    guard let id else { return .invalidArguments }
+    return performAnnotationCommand(.removeObject(id))
+  }
+
+  private func setMeasurement(_ args: [CommandArg]) -> CommandResultCode {
+    guard let id = UUID(uuidString: args.string(0)),
+          let kind = VolumeMeasurementKind(rawValue: args.string(1)) else {
+      return .invalidArguments
+    }
+    let tokens = args.strings(3)
+    guard tokens.count.isMultiple(of: 4),
+          tokens.count / 4 <= BorgVRMeasurementFormat.maximumPointCount else {
+      return .invalidArguments
+    }
+    var points: [BorgVRMeasurementPointCommandState] = []
+    points.reserveCapacity(tokens.count / 4)
+    for index in stride(from: 0, to: tokens.count, by: 4) {
+      guard let pointID = UUID(uuidString: tokens[index]),
+            let x = Float(tokens[index + 1]),
+            let y = Float(tokens[index + 2]),
+            let z = Float(tokens[index + 3]) else {
+        return .invalidArguments
+      }
+      points.append(BorgVRMeasurementPointCommandState(
+        id: pointID,
+        position: SIMD3<Float>(x, y, z)
+      ))
+    }
+    let state = BorgVRMeasurementCommandState(
+      id: id,
+      name: args.string(2),
+      kind: kind,
+      points: points
+    )
+    return performAnnotationCommand(.upsertMeasurement(state))
+  }
+
+  private func removeMeasurement(identifier: String) -> CommandResultCode {
+    guard let appModel else { return .callbackError }
+    let id = UUID(uuidString: identifier)
+      ?? appModel.volumeMeasurements.first(where: {
+        $0.name.caseInsensitiveCompare(identifier) == .orderedSame
+      })?.id
+    guard let id else { return .invalidArguments }
+    return performAnnotationCommand(.removeMeasurement(id))
+  }
+
+  private func performAnnotationCommand(_ command: BorgVRCommand) -> CommandResultCode {
+    guard let session else { return .callbackError }
+    do {
+      try session.perform(command, source: .gsc)
+      return .success
+    } catch {
+      return .invalidArguments
+    }
+  }
+
   private func markersWithUniqueIDs(_ markers: [VolumeMarker]) -> [VolumeMarker] {
     var usedIDs = Set(appModel?.volumeMarkers.map(\.id) ?? [])
     return markers.map { marker in
@@ -1486,6 +1753,7 @@ final class BorgVRScriptRunner: ObservableObject {
   }
 
   private func synchronizeMarkers() {
+    session?.commitExternalMutation(source: .gsc, domain: .objects)
     sharePlay?.synchronizeMarkers()
     sharePlay?.flushSynchronization()
   }

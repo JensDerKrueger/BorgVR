@@ -193,6 +193,10 @@ final actor Renderer {
   /// The layer renderer used for rendering.
   let layerRenderer: LayerRenderer
   /// The application model containing global settings.
+  let session: VisionBorgVRSession
+  /// Immutable value state used by every volume-rendering decision in the current frame.
+  var frameState: BorgVRVisualizationSnapshot
+  /// Temporary runtime state for the active app process.
   let runtimeAppModel: RuntimeAppModel
   /// Application settings.
   let storedAppModel: StoredAppModel
@@ -244,14 +248,16 @@ final actor Renderer {
    - logger: An optional logger.
    */
   init(_ layerRenderer: LayerRenderer,
-       runtimeAppModel: RuntimeAppModel,
-       storedAppModel: StoredAppModel,
-       sharedAppModel: SharedAppModel,
+       session: VisionBorgVRSession,
        timer: CPUFrameTimer,
        dataset: BORGVRDatasetProtocol,
        transferFunctionPanelInteractionState: TransferFunctionPanelInteractionState,
        immersiveInteraction: ImmersiveInteraction,
        logger: LoggerBase? = nil) throws {
+
+    let runtimeAppModel = session.runtimeState
+    let storedAppModel = session.settingsState
+    let sharedAppModel = session.visualizationState
 
     logger?.info("Loading dataset \(dataset.getMetadata().datasetDescription)")
     logger?
@@ -272,6 +278,8 @@ final actor Renderer {
     self.logger = logger
 
     self.layerRenderer = layerRenderer
+    self.session = session
+    self.frameState = session.renderSnapshot()
     self.device = layerRenderer.device
     self.commandQueue = self.device.makeCommandQueue()!
     self.runtimeAppModel = runtimeAppModel

@@ -290,12 +290,17 @@ extension Renderer {
 
     let unscaledModelMatrix : simd_float4x4
     let modelMatrix : simd_float4x4
+    let frameModelTransform = Transform(
+      scale: frameState.transform.scale,
+      rotation: simd_normalize(simd_quatf(vector: frameState.transform.rotation)),
+      translation: frameState.transform.translation
+    )
     if autoRotationAngle > 0 {
       let autoRotationMatrix = rotationYMatrix(degrees: autoRotationAngle)
 
-      let rot = sharedAppModel.modelTransform.rotation
-      let trans = sharedAppModel.modelTransform.translation
-      let scale = sharedAppModel.modelTransform.scale
+      let rot = simd_quatf(vector: frameState.transform.rotation)
+      let trans = frameState.transform.translation
+      let scale = frameState.transform.scale
 
       let model = Transform(
         scale: scale,
@@ -306,7 +311,7 @@ extension Renderer {
       unscaledModelMatrix = originFromWorldAnchor * model
       modelMatrix = unscaledModelMatrix * volumeScale
     } else {
-      unscaledModelMatrix = originFromWorldAnchor * sharedAppModel.modelTransform.matrix
+      unscaledModelMatrix = originFromWorldAnchor * frameModelTransform.matrix
       modelMatrix = unscaledModelMatrix * volumeScale
     }
 
@@ -339,12 +344,12 @@ extension Renderer {
       let projection = drawable.computeProjection(viewIndex: viewIndex)
 
       let viewToTexture = Transform(translation: SIMD3<Float>(0.5, 0.5, 0.5)).matrix * simd_inverse(viewMatrix * modelMatrix)
-      let viewToTextureVoxelScaled = Transform(translation: SIMD3<Float>(0.5, 0.5, 0.5)).matrix * simd_inverse(viewMatrix * originFromWorldAnchor * sharedAppModel.modelTransform.matrix)
+      let viewToTextureVoxelScaled = Transform(translation: SIMD3<Float>(0.5, 0.5, 0.5)).matrix * simd_inverse(viewMatrix * originFromWorldAnchor * frameModelTransform.matrix)
 
       let metadata = borgData.getMetadata()
       let borderSize = Float(metadata.overlap + 1) / SIMD3<Float>(Float(metadata.width), Float(metadata.height), Float(metadata.depth))
-      let clipMin = sharedAppModel.clipMin + borderSize
-      let clipMax = sharedAppModel.clipMax - borderSize
+      let clipMin = frameState.clipMinimum + borderSize
+      let clipMax = frameState.clipMaximum - borderSize
 
       let clipScale = (clipMax - clipMin)
       let clipMatrix = Transform(
@@ -361,19 +366,17 @@ extension Renderer {
         VertexUniforms(modelViewProjectionMatrix: projection * viewMatrix * modelMatrix * clipMatrix,
                        clipMatrix: clipMatrix),
         FragmentUniforms(
-          isoValue: sharedAppModel.isoValue,
+          isoValue: frameState.isoValue,
           oversampling: activeOversampling,
           sampleJitter: storedAppModel.sampleJitter ? 1 : 0,
-          transferBias: sharedAppModel.transferFunction(
-            channel: transferFunctionPanelInteractionState.selectedTransferFunctionChannel()
-          ).textureBias,
+          transferBias: frameState.transferBias,
           cameraPosInTextureSpace: simd_make_float3(viewToTexture * simd_float4(0, 0, 0, 1)),
           cameraPosInTextureSpaceVoxelScaled: simd_make_float3(viewToTextureVoxelScaled * simd_float4(0, 0, 0, 1)),
           cubeBounds: (clipMin, clipMax),
-          lightDirection: SIMD4<Float>(sharedAppModel.lightDirection, 0),
-          ambientLightColor: SIMD4<Float>(sharedAppModel.ambientLightColor, 0),
-          diffuseLightColor: SIMD4<Float>(sharedAppModel.diffuseLightColor, 0),
-          specularLightColor: SIMD4<Float>(sharedAppModel.specularLightColor, 0),
+          lightDirection: SIMD4<Float>(frameState.lighting.direction, 0),
+          ambientLightColor: SIMD4<Float>(frameState.lighting.ambient, 0),
+          diffuseLightColor: SIMD4<Float>(frameState.lighting.diffuse, 0),
+          specularLightColor: SIMD4<Float>(frameState.lighting.specular, 0),
           modelView: viewMatrix * modelMatrix,
           modelViewIT: simd_transpose(simd_inverse(viewMatrix * modelMatrix)),
           textureToClip: projection * viewMatrix * modelMatrix * Transform(
@@ -397,13 +400,13 @@ extension Renderer {
       return drawable.computeProjection(viewIndex: index) * viewMatrix
     }
 
-    switch sharedAppModel.renderMode {
+    switch frameState.renderMode {
       case .transferFunction1D, .transferFunction1DLighting:
         volumeAtlas.updateEmptiness(
           transferFunctions: Array(sharedAppModel.activeTransferFunctions)
         )
       case .isoValue:
-        volumeAtlas.updateEmptiness(isoValue: sharedAppModel.isoValue)
+        volumeAtlas.updateEmptiness(isoValue: frameState.isoValue)
     }
   }
 
@@ -1764,7 +1767,7 @@ extension Renderer {
     guard abs(local.w) > 0.000_001 else { return nil }
     let position = SIMD3<Float>(local.x, local.y, local.z) / local.w +
       SIMD3<Float>(repeating: 0.5)
-    let modelScale = simd_abs(sharedAppModel.modelTransform.scale)
+    let modelScale = simd_abs(frameState.transform.scale)
     let averageModelScale = max(
       (modelScale.x + modelScale.y + modelScale.z) / 3,
       0.000_001
@@ -2078,7 +2081,7 @@ extension Renderer {
        let markerIndex = sharedAppModel.volumeMarkers.firstIndex(where: {
          $0.id == activeSpatialStylusStrokeID
        }) {
-      let modelScale = simd_abs(sharedAppModel.modelTransform.scale)
+      let modelScale = simd_abs(frameState.transform.scale)
       _ = sharedAppModel.volumeMarkers[markerIndex].appendStrokePoint(
         point,
         coordinateScale: SIMD3<Float>(
@@ -2327,6 +2330,7 @@ extension Renderer {
     defer { frame.endSubmission() }
     self.updateDynamicBufferState()
 
+    frameState = session.refreshRenderSnapshot()
     self.updateRenderState(drawable: drawable)
     self.updateSpatialAccessoryInteractions(drawable: drawable)
 
@@ -2383,10 +2387,10 @@ extension Renderer {
     renderEncoder.setCullMode(.front)
     renderEncoder.setFrontFacing(.counterClockwise)
 
-    if sharedAppModel.brickVis {
+    if frameState.brickVisualization {
       renderEncoder.setRenderPipelineState(pipelineStateBrickVis)
     } else {
-      switch sharedAppModel.renderMode {
+      switch frameState.renderMode {
         case .isoValue:
           renderEncoder.setRenderPipelineState(pipelineStateIso)
         case .transferFunction1D:

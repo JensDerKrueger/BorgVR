@@ -7,6 +7,7 @@ struct RenderView: View {
   @EnvironmentObject var appSettings: AppSettings
   @EnvironmentObject private var storedAppModel: StoredAppModel
   @EnvironmentObject private var sharePlay: SharePlayCoordinator
+  @EnvironmentObject private var session: ScreenBorgVRSession
   @EnvironmentObject private var docking: DockingController
   @Environment(\.openWindow) private var openWindow
   @Environment(\.dismissWindow) private var dismissWindow
@@ -117,7 +118,7 @@ struct RenderView: View {
                   specularLightColor: $renderingParameters.specularLightColor,
                   usesPanelBackground: false,
                   showsTitle: false,
-                  onChange: { sharePlay.synchronize(kind: .stateOnly) },
+                  onChange: synchronizeState,
                   onCommit: sharePlay.flushSynchronization,
                   onClose: { docking.hide(.lightingEditor) }
                 )
@@ -162,12 +163,15 @@ struct RenderView: View {
       updateDetachedPanelWindows()
     }
     .onChange(of: renderingParameters.renderMode) {
-      updateDetachedPanelWindows()
+      Task { @MainActor in
+        await Task.yield()
+        updateDetachedPanelWindows()
+      }
     }
     .onChange(of: appSettings.showBrickVisualization) { _, isVisible in
       guard !isVisible, renderingParameters.brickVis else { return }
       renderingParameters.brickVis = false
-      sharePlay.synchronize(kind: .stateOnly)
+      synchronizeState()
     }
   }
 
@@ -242,7 +246,7 @@ struct RenderView: View {
   private func toggleInteractionMode() {
     if appModel.interactionMode == .measurement {
       if appModel.removeSelectedVolumeMeasurementPoint() {
-        sharePlay.synchronizeMeasurements()
+        synchronizeMeasurements()
       }
       return
     }
@@ -257,6 +261,7 @@ struct RenderView: View {
         appModel.clearVolumeMeasurementSelection()
       }
       appModel.interactionMode = mode
+      session.commitExternalMutation(source: .mouse, domain: .interaction)
     }
   }
 
@@ -388,7 +393,7 @@ struct RenderView: View {
         appModel.selectedSceneMeshInstanceID = instance.id
         sceneObjectDragID = instance.id
     }
-    sharePlay.synchronizeMarkers()
+    synchronizeMarkers()
   }
 
   private func updateObjectInteraction(update: RenderDragUpdate) {
@@ -413,7 +418,7 @@ struct RenderView: View {
       ) else { return }
       appModel.sceneMeshInstances[index].translationMeters =
         (position - SIMD3<Float>(repeating: 0.5)) * extent
-      sharePlay.synchronizeMarkers()
+      synchronizeMarkers()
       return
     }
     guard let markerDragID,
@@ -429,7 +434,7 @@ struct RenderView: View {
       where appModel.selectedVolumeMarkerIDs.contains(appModel.volumeMarkers[selectedIndex].id) {
       appModel.volumeMarkers[selectedIndex].translate(by: offset)
     }
-    sharePlay.synchronizeMarkers()
+    synchronizeMarkers()
   }
 
   private func beginStrokeInteraction(update: RenderDragUpdate) {
@@ -458,7 +463,7 @@ struct RenderView: View {
     appModel.selectedSceneMeshInstanceID = nil
     appModel.selectedVolumeMarkerID = stroke.id
     strokeDragID = stroke.id
-    sharePlay.synchronizeMarkers()
+    synchronizeMarkers()
   }
 
   private func updateStrokeInteraction(update: RenderDragUpdate) {
@@ -478,7 +483,7 @@ struct RenderView: View {
       VolumeMarkerPoint(position: position, radius: VolumeMarkerRadius.strokeDefault),
       coordinateScale: coordinateScale
     ) {
-      sharePlay.synchronizeMarkers()
+      synchronizeMarkers()
     }
   }
 
@@ -492,7 +497,7 @@ struct RenderView: View {
     if appModel.volumeMarkers[index].kind == .sphere {
       appModel.defaultVolumeMarkerRadius = appModel.volumeMarkers[index].radius
     }
-    sharePlay.synchronizeMarkers()
+    synchronizeMarkers()
   }
 
   private func moveSelectedMarkerInDepth(by scrollDelta: CGFloat) {
@@ -508,7 +513,7 @@ struct RenderView: View {
       where appModel.selectedVolumeMarkerIDs.contains(appModel.volumeMarkers[selectedIndex].id) {
       appModel.volumeMarkers[selectedIndex].translate(by: offset)
     }
-    sharePlay.synchronizeMarkers()
+    synchronizeMarkers()
   }
 
   private func normalizedPosition(for update: RenderDragUpdate) -> SIMD2<Float>? {
@@ -571,7 +576,7 @@ struct RenderView: View {
     appModel.selectedVolumeMeasurementPointID = pointID
     measurementDragMeasurementID = measurementID
     measurementDragPointID = pointID
-    sharePlay.synchronizeMeasurements()
+    synchronizeMeasurements()
   }
 
   private func updateMeasurementInteraction(update: RenderDragUpdate) {
@@ -592,7 +597,7 @@ struct RenderView: View {
       position: position,
       physicalExtent: extent
     )
-    sharePlay.synchronizeMeasurements()
+    synchronizeMeasurements()
   }
 
   private func moveSelectedMeasurementPointInDepth(by delta: CGFloat) {
@@ -611,7 +616,7 @@ struct RenderView: View {
       position: position,
       physicalExtent: extent
     )
-    sharePlay.synchronizeMeasurements()
+    synchronizeMeasurements()
   }
 
   private var measurementLabels: some View {
@@ -656,7 +661,7 @@ struct RenderView: View {
       shift: parameters.width,
       channels: [0, 1, 2, 3]
     )
-    sharePlay.synchronize(kind: .full)
+    synchronizeFullState()
   }
 
   private func transferSmoothParameters(for update: RenderDragUpdate) -> (center: Float, width: Float) {
@@ -809,14 +814,27 @@ struct RenderView: View {
   }
 
   private func synchronizeTransform() {
+    session.commitExternalMutation(source: .mouse, domain: .visualization)
     sharePlay.synchronize(kind: .transformOnly)
   }
 
   private func synchronizeState() {
+    session.commitExternalMutation(source: .mouse, domain: .visualization)
     sharePlay.synchronize(kind: .stateOnly)
   }
 
   private func synchronizeFullState() {
+    session.commitExternalMutation(source: .mouse, domain: .transferFunction)
     sharePlay.synchronize(kind: .full)
+  }
+
+  private func synchronizeMarkers() {
+    session.commitExternalMutation(source: .mouse, domain: .objects)
+    sharePlay.synchronizeMarkers()
+  }
+
+  private func synchronizeMeasurements() {
+    session.commitExternalMutation(source: .mouse, domain: .measurements)
+    sharePlay.synchronizeMeasurements()
   }
 }

@@ -1,7 +1,7 @@
 import Foundation
 import simd
 
-enum VolumeMeasurementKind: String, CaseIterable, Identifiable {
+enum VolumeMeasurementKind: String, CaseIterable, Codable, Identifiable, Sendable {
   case length
   case area
   case volume

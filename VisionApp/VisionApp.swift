@@ -25,23 +25,50 @@ struct VisionApp: App {
 
   @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
-  @State private var runtimeAppModel = RuntimeAppModel()
-  @State private var sharedAppModel = SharedAppModel()
-  @StateObject private var storedAppModel = StoredAppModel()
-  @StateObject private var serverController = BackgroundServerController()
-  @StateObject private var updateChecker = AppStoreUpdateChecker()
-  @StateObject private var mcpController = BorgVRMCPServerController()
+  @State private var runtimeAppModel: RuntimeAppModel
+  @State private var sharedAppModel: SharedAppModel
+  @StateObject private var storedAppModel: StoredAppModel
+  @StateObject private var serverController: BackgroundServerController
+  @StateObject private var updateChecker: AppStoreUpdateChecker
+  @StateObject private var mcpController: BorgVRMCPServerController
+  @StateObject private var session: VisionBorgVRSession
   @AppStorage("sharePlayDisplayNameOnboardingCompleted")
   private var sharePlayDisplayNameOnboardingCompleted = false
   @State private var showsSharePlayDisplayNameOnboarding = false
   @State private var sharePlayDisplayNameDraft = ""
   @State private var immersiveSpaceTransitionTask: Task<Void, Never>?
 
-  @StateObject private var voice = VoiceCommandService()
-  @StateObject private var speech = SpeechHelper()
+  @StateObject private var voice: VoiceCommandService
+  @StateObject private var speech: SpeechHelper
 
   @Environment(\.openImmersiveSpace) private var openImmersiveSpace
   @Environment(\.dismissImmersiveSpace) private var dismissImmersiveSpace
+
+  init() {
+    let runtimeAppModel = RuntimeAppModel()
+    let sharedAppModel = SharedAppModel()
+    let storedAppModel = StoredAppModel()
+    let serverController = BackgroundServerController()
+    let updateChecker = AppStoreUpdateChecker()
+    let mcpController = BorgVRMCPServerController()
+    let voice = VoiceCommandService()
+    let speech = SpeechHelper()
+    let session = VisionBorgVRSession.vision(
+      sharedAppModel: sharedAppModel,
+      runtimeAppModel: runtimeAppModel,
+      storedAppModel: storedAppModel
+    )
+
+    _runtimeAppModel = State(initialValue: runtimeAppModel)
+    _sharedAppModel = State(initialValue: sharedAppModel)
+    _storedAppModel = StateObject(wrappedValue: storedAppModel)
+    _serverController = StateObject(wrappedValue: serverController)
+    _updateChecker = StateObject(wrappedValue: updateChecker)
+    _mcpController = StateObject(wrappedValue: mcpController)
+    _session = StateObject(wrappedValue: session)
+    _voice = StateObject(wrappedValue: voice)
+    _speech = StateObject(wrappedValue: speech)
+  }
 
   var body: some Scene {
     WindowGroup(id: "main") {
@@ -177,6 +204,7 @@ struct VisionApp: App {
     .environmentObject(voice)
     .environmentObject(speech)
     .environmentObject(mcpController)
+    .environmentObject(session)
     .windowResizability(.contentSize)
     .defaultSize(width:runtimeAppModel.windowSize.width,height:runtimeAppModel.windowSize.height)
     .onChange(of: runtimeAppModel.datasetSessionState) { _, newValue in
@@ -319,9 +347,7 @@ struct VisionApp: App {
       CompositorLayer(configuration: ContentStageConfiguration(disableFoveation: storedAppModel.disableFoveation)) {
         @MainActor layerRenderer in
         ImmersiveBootstrap.run(layerRenderer: layerRenderer,
-                               runtimeAppModel: runtimeAppModel,
-                               storedAppModel: storedAppModel,
-                               sharedAppModel: sharedAppModel)
+                               session: session)
       }
       .upperLimbVisibility(storedAppModel.showHandsAndAccessories ? .visible : .hidden)
     }
@@ -333,8 +359,7 @@ struct VisionApp: App {
   @MainActor
   private func configureMCP() {
     let service = VisionBorgVRCommandService(
-      runtimeAppModel: runtimeAppModel,
-      sharedAppModel: sharedAppModel,
+      session: session,
       datasetListProvider: {
         await loadMCPDatasetRecords().map(\.catalogEntry)
       },

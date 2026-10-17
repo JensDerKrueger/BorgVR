@@ -81,23 +81,20 @@ extension Renderer {
    */
   @MainActor
   static func startRenderLoop(_ layerRenderer: LayerRenderer,
-                              runtimeAppModel: RuntimeAppModel,
-                              storedAppModel: StoredAppModel,
-                              sharedAppModel: SharedAppModel,
+                              session: VisionBorgVRSession,
                               timer: CPUFrameTimer,
                               dataset: BORGVRDatasetProtocol,
                               datasetID: String,
                               transferFunctionPanelInteractionState: TransferFunctionPanelInteractionState,
                               immersiveInteraction: ImmersiveInteraction,
                               logger: LoggerBase? = nil) {
+    let runtimeAppModel = session.runtimeState
     runtimeAppModel.renderTask?.cancel()
     runtimeAppModel.renderTask = Task(executorPreference: RendererTaskExecutor.shared) {
       do {
         let renderer = try Renderer(
           layerRenderer,
-          runtimeAppModel: runtimeAppModel,
-          storedAppModel: storedAppModel,
-          sharedAppModel: sharedAppModel,
+          session: session,
           timer: timer,
           dataset: dataset,
           transferFunctionPanelInteractionState: transferFunctionPanelInteractionState,

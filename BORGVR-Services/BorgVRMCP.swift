@@ -378,6 +378,15 @@ protocol BorgVRMCPCommandService: AnyObject {
     specular: SIMD3<Float>?
   ) throws
   func setAnnotationVisibility(objects: Bool?, measurements: Bool?) throws
+  func listMeshAssets() -> [BorgVRMeshAssetCommandState]
+  func listObjects() -> [BorgVRObjectCommandState]
+  func upsertObject(_ object: BorgVRObjectCommandState) throws
+  func removeObject(id: UUID) throws
+  func clearObjects() throws
+  func listMeasurements() -> [BorgVRMeasurementCommandState]
+  func upsertMeasurement(_ measurement: BorgVRMeasurementCommandState) throws
+  func removeMeasurement(id: UUID) throws
+  func clearMeasurements() throws
   func reset(_ scope: BorgVRMCPResetScope) throws
   func waitUntilRendered(after frame: UInt64, timeout: TimeInterval) async throws
   func captureScreenshot() async throws -> BorgVRMCPImage

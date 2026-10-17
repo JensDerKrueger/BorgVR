@@ -47,6 +47,7 @@ background(string,double,double,double,double,double,double)
 
 # Transform
 resetrotation()
+setrotationquaternion(float, float, float, float)
 addrotationx(float)
 addrotationy(float)
 addrotationz(float)
@@ -65,6 +66,7 @@ settffile(string)
 loadtf(string)
 savetffile(string)
 savetf(string)
+resettf()
 
 # Lighting (RGB components use the 0...1 range)
 setlightdirection(float,float,float)
@@ -91,6 +93,21 @@ clearmarkers()
 loadmarkers(string)
 loadmarkers(string,bool)
 savemarkers(string)
+
+# Deterministic annotation commands used by interaction recording.
+# These commands create or replace the entry with the supplied UUID.
+setspheremarker(string,string,float,float,float,float,float,float,float,float,bool,float,float,float)
+# UUID, name, RGBA, followed by xyzw point groups where w is the point radius.
+setstrokemarker(string,string,float,float,float,float,restString)
+# Instance UUID, asset UUID, name, translation xyz, quaternion xyzw, scale xyz, visible.
+setmeshinstance(string,string,string,float,float,float,float,float,float,float,float,float,float,bool)
+removeobject(string)
+clearobjects()
+
+# Measurement UUID, kind (length/area/volume), name, followed by point UUID/xyz groups.
+setmeasurement(string,string,string,restString)
+removemeasurement(string)
+clearmeasurements()
 
 # Performance
 resetfps()

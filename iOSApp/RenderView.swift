@@ -42,6 +42,7 @@ struct RenderView: View {
   @EnvironmentObject var appSettings: AppSettings
   @EnvironmentObject private var serverController: BackgroundServerController
   @EnvironmentObject private var sharePlay: SharePlayCoordinator
+  @EnvironmentObject private var session: ScreenBorgVRSession
 
   @State private var presentedSheet: RenderSheet?
   @State private var showRenderControls = true
@@ -640,6 +641,7 @@ struct RenderView: View {
 
     return Button {
       appModel.interactionMode = mode
+      session.commitExternalMutation(source: .touch, domain: .interaction)
     } label: {
       Group {
         if compact {
@@ -797,11 +799,12 @@ struct RenderView: View {
       .onEnded {
         if appModel.interactionMode == .measurement {
           if appModel.removeSelectedVolumeMeasurementPoint() {
-            sharePlay.synchronizeMeasurements(immediately: true)
+            synchronizeMeasurements(immediately: true)
           }
           return
         }
         appModel.interactionMode = appModel.interactionMode == .clipping ? .model : .clipping
+        session.commitExternalMutation(source: .touch, domain: .interaction)
       }
   }
 
@@ -872,7 +875,7 @@ struct RenderView: View {
       ) else { return }
       appModel.sceneMeshInstances[index].translationMeters =
         (position - SIMD3<Float>(repeating: 0.5)) * extent
-      sharePlay.synchronizeMarkers()
+      synchronizeMarkers()
       return
     }
 
@@ -888,7 +891,7 @@ struct RenderView: View {
       where appModel.selectedVolumeMarkerIDs.contains(appModel.volumeMarkers[selectedIndex].id) {
       appModel.volumeMarkers[selectedIndex].translate(by: offset)
     }
-    sharePlay.synchronizeMarkers()
+    synchronizeMarkers()
   }
 
   private func beginObjectInteraction(at screenPosition: SIMD2<Float>) {
@@ -935,7 +938,7 @@ struct RenderView: View {
           appModel.selectedSceneMeshInstanceID = instance.id
           sceneObjectDragID = instance.id
       }
-      sharePlay.synchronizeMarkers(immediately: true)
+      synchronizeMarkers(immediately: true)
     }
   }
 
@@ -960,7 +963,7 @@ struct RenderView: View {
     appModel.selectedSceneMeshInstanceID = nil
     appModel.selectedVolumeMarkerID = stroke.id
     strokeDragID = stroke.id
-    sharePlay.synchronizeMarkers(immediately: true)
+    synchronizeMarkers(immediately: true)
   }
 
   private func updateStrokeInteraction(atGlobalPoint point: CGPoint) {
@@ -980,7 +983,7 @@ struct RenderView: View {
       VolumeMarkerPoint(position: position, radius: VolumeMarkerRadius.strokeDefault),
       coordinateScale: coordinateScale
     ) {
-      sharePlay.synchronizeMarkers()
+      synchronizeMarkers()
     }
   }
 
@@ -1051,7 +1054,7 @@ struct RenderView: View {
       position: position,
       physicalExtent: extent
     )
-    sharePlay.synchronizeMeasurements()
+    synchronizeMeasurements()
   }
 
   private func beginMeasurementInteraction(at screenPosition: SIMD2<Float>) {
@@ -1092,7 +1095,7 @@ struct RenderView: View {
     appModel.selectedVolumeMeasurementPointID = pointID
     measurementDragMeasurementID = measurementID
     measurementDragPointID = pointID
-    sharePlay.synchronizeMeasurements(immediately: true)
+    synchronizeMeasurements(immediately: true)
   }
 
   private var measurementLabels: some View {
@@ -1186,7 +1189,7 @@ struct RenderView: View {
       shift: transferSmoothWidth,
       channels: [0, 1, 2, 3]
     )
-    sharePlay.synchronize(kind: .full)
+    synchronizeFullState()
   }
 
   private func clamp(_ value: Float, _ lowerBound: Float = 0, _ upperBound: Float = 1) -> Float {
@@ -1292,7 +1295,7 @@ struct RenderView: View {
     if appModel.volumeMarkers[index].kind == .sphere {
       appModel.defaultVolumeMarkerRadius = appModel.volumeMarkers[index].radius
     }
-    sharePlay.synchronizeMarkers()
+    synchronizeMarkers()
   }
 
   private func requestDatasetClose() {
@@ -1392,23 +1395,36 @@ struct RenderView: View {
         return
       }
       synchronizeFullState()
-      sharePlay.synchronizeMarkers(immediately: true)
-      sharePlay.synchronizeMeasurements(immediately: true)
+      synchronizeMarkers(immediately: true)
+      synchronizeMeasurements(immediately: true)
     } catch {
       datasetStateRestoreError = error
     }
   }
 
   private func synchronizeTransform() {
+    session.commitExternalMutation(source: .touch, domain: .visualization)
     sharePlay.synchronize(kind: .transformOnly)
   }
 
   private func synchronizeState() {
+    session.commitExternalMutation(source: .touch, domain: .visualization)
     sharePlay.synchronize(kind: .stateOnly)
   }
 
   private func synchronizeFullState() {
+    session.commitExternalMutation(source: .touch, domain: .transferFunction)
     sharePlay.synchronize(kind: .full)
+  }
+
+  private func synchronizeMarkers(immediately: Bool = false) {
+    session.commitExternalMutation(source: .touch, domain: .objects)
+    sharePlay.synchronizeMarkers(immediately: immediately)
+  }
+
+  private func synchronizeMeasurements(immediately: Bool = false) {
+    session.commitExternalMutation(source: .touch, domain: .measurements)
+    sharePlay.synchronizeMeasurements(immediately: immediately)
   }
 }
 

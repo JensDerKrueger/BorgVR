@@ -33,17 +33,13 @@ final class MobileRenderSurface: ObservableObject {
 }
 
 struct MobileMetalView: UIViewRepresentable {
-  @EnvironmentObject private var appModel: AppModel
-  @EnvironmentObject private var renderingParameters: RenderingParameters
-  @EnvironmentObject var appSettings: AppSettings
   @EnvironmentObject private var sharePlay: SharePlayCoordinator
+  @EnvironmentObject private var session: ScreenBorgVRSession
   let renderSurface: MobileRenderSurface
 
   func makeCoordinator() -> MobileVolumeRenderer {
     MobileVolumeRenderer(
-      appModel: appModel,
-      appSettings: appSettings,
-      renderingParameters: renderingParameters,
+      session: session,
       sharePlay: sharePlay
     )
   }

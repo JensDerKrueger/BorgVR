@@ -494,6 +494,88 @@ final class BorgVRMCPServer: @unchecked Sendable {
           measurements: try optionalBool("measurements", in: arguments)
         )
         return structuredToolResult(await service.applicationState())
+      case "list_mesh_assets":
+        return structuredToolResult(await service.listMeshAssets())
+      case "list_objects":
+        return structuredToolResult(await service.listObjects())
+      case "upsert_sphere_marker":
+        let id = try optionalUUID("id", in: arguments) ?? UUID()
+        let showsDirection = try optionalBool("shows_direction", in: arguments) ?? false
+        let directionOrigin = try optionalVector3("direction_origin", in: arguments)
+        guard !showsDirection || directionOrigin != nil else {
+          throw BorgVRMCPCommandError.invalidArgument(
+            "Argument 'direction_origin' is required when 'shows_direction' is true."
+          )
+        }
+        let state = BorgVRMarkerCommandState(
+          id: id,
+          name: try optionalString("name", in: arguments) ?? "Marker",
+          kind: .sphere,
+          color: try optionalVector4("color", in: arguments) ?? SIMD4<Float>(1, 1, 1, 1),
+          points: [BorgVRMarkerPointCommandState(
+            position: try vector3("position", in: arguments),
+            radius: try optionalFloat("radius", in: arguments) ?? VolumeMarkerRadius.sphereDefault
+          )],
+          directionOrigin: directionOrigin,
+          showsDirection: showsDirection
+        )
+        let object = BorgVRObjectCommandState.marker(state)
+        try await service.upsertObject(object)
+        return structuredToolResult(object)
+      case "upsert_stroke_marker":
+        let points = try markerPoints("points", in: arguments)
+        let state = BorgVRMarkerCommandState(
+          id: try optionalUUID("id", in: arguments) ?? UUID(),
+          name: try optionalString("name", in: arguments) ?? "Stroke",
+          kind: .stroke,
+          color: try optionalVector4("color", in: arguments) ?? SIMD4<Float>(1, 1, 1, 1),
+          points: points,
+          directionOrigin: nil,
+          showsDirection: false
+        )
+        let object = BorgVRObjectCommandState.marker(state)
+        try await service.upsertObject(object)
+        return structuredToolResult(object)
+      case "upsert_mesh_instance":
+        let state = BorgVRMeshInstanceCommandState(
+          id: try optionalUUID("id", in: arguments) ?? UUID(),
+          assetID: try uuid("asset_id", in: arguments),
+          name: try optionalString("name", in: arguments) ?? "Object",
+          translationMeters: try optionalVector3("translation_meters", in: arguments) ?? .zero,
+          rotation: try optionalVector4("rotation", in: arguments) ?? SIMD4<Float>(0, 0, 0, 1),
+          scale: try optionalVector3("scale", in: arguments) ?? .one,
+          isVisible: try optionalBool("visible", in: arguments) ?? true
+        )
+        let object = BorgVRObjectCommandState.mesh(state)
+        try await service.upsertObject(object)
+        return structuredToolResult(object)
+      case "remove_object":
+        try await service.removeObject(id: try uuid("id", in: arguments))
+        return structuredToolResult(await service.listObjects())
+      case "clear_objects":
+        try await service.clearObjects()
+        return structuredToolResult(await service.listObjects())
+      case "list_measurements":
+        return structuredToolResult(await service.listMeasurements())
+      case "upsert_measurement":
+        let rawKind = try string("kind", in: arguments)
+        guard let kind = VolumeMeasurementKind(rawValue: rawKind) else {
+          throw BorgVRMCPCommandError.invalidArgument("Unknown measurement kind.")
+        }
+        let state = BorgVRMeasurementCommandState(
+          id: try optionalUUID("id", in: arguments) ?? UUID(),
+          name: try optionalString("name", in: arguments) ?? "Measurement",
+          kind: kind,
+          points: try measurementPoints("points", in: arguments)
+        )
+        try await service.upsertMeasurement(state)
+        return structuredToolResult(state)
+      case "remove_measurement":
+        try await service.removeMeasurement(id: try uuid("id", in: arguments))
+        return structuredToolResult(await service.listMeasurements())
+      case "clear_measurements":
+        try await service.clearMeasurements()
+        return structuredToolResult(await service.listMeasurements())
       case "reset_state":
         let rawScope = arguments["scope"] as? String ?? BorgVRMCPResetScope.all.rawValue
         guard let scope = BorgVRMCPResetScope(rawValue: rawScope) else {
@@ -536,6 +618,24 @@ final class BorgVRMCPServer: @unchecked Sendable {
     let vector4: [String: Any] = [
       "type": "array", "items": ["type": "number"], "minItems": 4, "maxItems": 4
     ]
+    let markerPoint: [String: Any] = [
+      "type": "object",
+      "properties": [
+        "position": vector3,
+        "radius": ["type": "number"]
+      ],
+      "required": ["position", "radius"],
+      "additionalProperties": false
+    ]
+    let measurementPoint: [String: Any] = [
+      "type": "object",
+      "properties": [
+        "id": ["type": "string"],
+        "position": vector3
+      ],
+      "required": ["position"],
+      "additionalProperties": false
+    ]
     return [
       tool(
         "list_datasets",
@@ -575,6 +675,85 @@ final class BorgVRMCPServer: @unchecked Sendable {
           "measurements": ["type": "boolean"]
         ]
       ),
+      tool(
+        "list_mesh_assets",
+        "List mesh assets that can be instantiated as opaque objects."
+      ),
+      tool(
+        "list_objects",
+        "List sphere markers, stroke markers, and placed mesh instances."
+      ),
+      tool(
+        "upsert_sphere_marker",
+        "Create or replace a sphere marker. Positions and radii use normalized volume coordinates.",
+        properties: [
+          "id": ["type": "string"],
+          "name": ["type": "string"],
+          "position": vector3,
+          "radius": ["type": "number"],
+          "color": vector4,
+          "direction_origin": vector3,
+          "shows_direction": ["type": "boolean"]
+        ],
+        required: ["position"]
+      ),
+      tool(
+        "upsert_stroke_marker",
+        "Create or replace a stroke marker from normalized volume points.",
+        properties: [
+          "id": ["type": "string"],
+          "name": ["type": "string"],
+          "color": vector4,
+          "points": [
+            "type": "array", "items": markerPoint, "minItems": 1,
+            "maxItems": VolumeMarker.maximumInteractiveStrokePointCount
+          ]
+        ],
+        required: ["points"]
+      ),
+      tool(
+        "upsert_mesh_instance",
+        "Create or replace an instance of a listed mesh asset. Translation is in meters.",
+        properties: [
+          "id": ["type": "string"],
+          "asset_id": ["type": "string"],
+          "name": ["type": "string"],
+          "translation_meters": vector3,
+          "rotation": vector4,
+          "scale": vector3,
+          "visible": ["type": "boolean"]
+        ],
+        required: ["asset_id"]
+      ),
+      tool(
+        "remove_object",
+        "Remove one sphere marker, stroke marker, or mesh instance by UUID.",
+        properties: ["id": ["type": "string"]],
+        required: ["id"]
+      ),
+      tool("clear_objects", "Remove all sphere markers, strokes, and mesh instances."),
+      tool("list_measurements", "List all length, area, and volume measurements."),
+      tool(
+        "upsert_measurement",
+        "Create or replace a measurement from normalized volume points.",
+        properties: [
+          "id": ["type": "string"],
+          "name": ["type": "string"],
+          "kind": ["type": "string", "enum": ["length", "area", "volume"]],
+          "points": [
+            "type": "array", "items": measurementPoint,
+            "maxItems": BorgVRMeasurementFormat.maximumPointCount
+          ]
+        ],
+        required: ["kind", "points"]
+      ),
+      tool(
+        "remove_measurement",
+        "Remove one measurement by UUID.",
+        properties: ["id": ["type": "string"]],
+        required: ["id"]
+      ),
+      tool("clear_measurements", "Remove all measurements."),
       tool("reset_state", "Reset a visualization state group.", properties: [
         "scope": ["type": "string", "enum": BorgVRMCPResetScope.allCases.map(\.rawValue)]
       ]),
@@ -618,6 +797,29 @@ final class BorgVRMCPServer: @unchecked Sendable {
     return value
   }
 
+  private func optionalString(_ key: String, in arguments: [String: Any]) throws -> String? {
+    guard let rawValue = arguments[key] else { return nil }
+    guard let value = rawValue as? String else {
+      throw BorgVRMCPCommandError.invalidArgument("Argument '\(key)' must be a string.")
+    }
+    return value
+  }
+
+  private func uuid(_ key: String, in arguments: [String: Any]) throws -> UUID {
+    guard let value = UUID(uuidString: try string(key, in: arguments)) else {
+      throw BorgVRMCPCommandError.invalidArgument("Argument '\(key)' must be a UUID.")
+    }
+    return value
+  }
+
+  private func optionalUUID(_ key: String, in arguments: [String: Any]) throws -> UUID? {
+    guard let value = try optionalString(key, in: arguments) else { return nil }
+    guard let id = UUID(uuidString: value) else {
+      throw BorgVRMCPCommandError.invalidArgument("Argument '\(key)' must be a UUID.")
+    }
+    return id
+  }
+
   private func float(_ key: String, in arguments: [String: Any]) throws -> Float {
     guard let value = arguments[key] as? NSNumber else {
       throw BorgVRMCPCommandError.invalidArgument("Missing numeric argument '\(key)'.")
@@ -627,6 +829,11 @@ final class BorgVRMCPServer: @unchecked Sendable {
       throw BorgVRMCPCommandError.invalidArgument("Argument '\(key)' must be finite.")
     }
     return result
+  }
+
+  private func optionalFloat(_ key: String, in arguments: [String: Any]) throws -> Float? {
+    guard arguments[key] != nil else { return nil }
+    return try float(key, in: arguments)
   }
 
   private func optionalBool(_ key: String, in arguments: [String: Any]) throws -> Bool? {
@@ -666,6 +873,41 @@ final class BorgVRMCPServer: @unchecked Sendable {
       throw BorgVRMCPCommandError.invalidArgument("Argument '\(key)' must be finite.")
     }
     return value
+  }
+
+  private func markerPoints(
+    _ key: String,
+    in arguments: [String: Any]
+  ) throws -> [BorgVRMarkerPointCommandState] {
+    guard let rows = arguments[key] as? [[String: Any]], !rows.isEmpty else {
+      throw BorgVRMCPCommandError.invalidArgument(
+        "Argument '\(key)' must contain at least one marker point."
+      )
+    }
+    return try rows.map { row in
+      BorgVRMarkerPointCommandState(
+        position: try vector3("position", in: row),
+        radius: try float("radius", in: row)
+      )
+    }
+  }
+
+  private func measurementPoints(
+    _ key: String,
+    in arguments: [String: Any]
+  ) throws -> [BorgVRMeasurementPointCommandState] {
+    guard let rows = arguments[key] as? [[String: Any]] else {
+      throw BorgVRMCPCommandError.invalidArgument("Argument '\(key)' must be an array.")
+    }
+    guard rows.count <= BorgVRMeasurementFormat.maximumPointCount else {
+      throw BorgVRMCPCommandError.invalidArgument("Argument '\(key)' contains too many points.")
+    }
+    return try rows.map { row in
+      BorgVRMeasurementPointCommandState(
+        id: try optionalUUID("id", in: row) ?? UUID(),
+        position: try vector3("position", in: row)
+      )
+    }
   }
 
   private func originIsAllowed(_ origin: String?) -> Bool {
