@@ -8,7 +8,7 @@ import AppKit
 
 enum WebGPUShareLink {
   static func serverBaseURL(port: Int) -> URL? {
-    guard let host = localNetworkHost() else { return nil }
+    guard let host = localNetworkHosts().first else { return nil }
     var components = URLComponents()
     components.scheme = "https"
     components.host = host
@@ -219,10 +219,10 @@ enum WebGPUShareLink {
       .replacingOccurrences(of: "=", with: "")
   }
 
-  private static func localNetworkHost() -> String? {
+  static func localNetworkHosts() -> [String] {
     var interfaces: UnsafeMutablePointer<ifaddrs>?
     guard getifaddrs(&interfaces) == 0, let firstInterface = interfaces else {
-      return nil
+      return []
     }
     defer { freeifaddrs(interfaces) }
 
@@ -261,7 +261,8 @@ enum WebGPUShareLink {
       }
     }
 
-    return (preferredAddresses + fallbackAddresses).first
+    var seen = Set<String>()
+    return (preferredAddresses + fallbackAddresses).filter { seen.insert($0).inserted }
   }
 }
 

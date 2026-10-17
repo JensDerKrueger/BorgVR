@@ -1,5 +1,15 @@
 import SwiftUI
 
+private let mcpPortNumberFormatter: NumberFormatter = {
+  let formatter = NumberFormatter()
+  formatter.numberStyle = .none
+  formatter.usesGroupingSeparator = false
+  formatter.allowsFloats = false
+  formatter.minimum = 1
+  formatter.maximum = 65535
+  return formatter
+}()
+
 struct MCPSettingsControls: View {
   @Binding var enabled: Bool
   @Binding var port: Int
@@ -15,7 +25,7 @@ struct MCPSettingsControls: View {
     let endpointPort = min(max(port, 1), 65_535)
     Toggle("Enable MCP server", isOn: $enabled)
     if enabled {
-      TextField("MCP server port", value: $port, format: .number.grouping(.never))
+      TextField("MCP server port", value: clampedPortBinding, formatter: mcpPortNumberFormatter)
 #if os(iOS) || os(visionOS)
         .keyboardType(.numberPad)
 #endif
@@ -85,8 +95,22 @@ struct MCPSettingsControls: View {
           .foregroundStyle(.secondary)
       }
       LabeledContent("Endpoint") {
-        Text("\(allowRemoteConnections ? "https" : "http")://\(allowRemoteConnections ? "<device-address>" : "127.0.0.1"):\(endpointPort)/mcp")
-          .textSelection(.enabled)
+        VStack(alignment: .trailing, spacing: 6) {
+          ForEach(endpointURLs(port: endpointPort), id: \.self) { endpointURL in
+            HStack(spacing: 8) {
+              Text(verbatim: endpointURL)
+                .font(.system(.footnote, design: .monospaced))
+                .textSelection(.enabled)
+              Button {
+                WebGPUShareLink.copyToPasteboard(endpointURL)
+              } label: {
+                Image(systemName: "doc.on.doc")
+              }
+              .buttonStyle(.borderless)
+              .help("Copy endpoint")
+            }
+          }
+        }
       }
       Text(statusText)
         .font(.footnote)
@@ -96,6 +120,20 @@ struct MCPSettingsControls: View {
 
   private var trimmedAccessToken: String {
     accessToken.trimmingCharacters(in: .whitespacesAndNewlines)
+  }
+
+  private var clampedPortBinding: Binding<Int> {
+    Binding(
+      get: { port },
+      set: { port = min(65535, max(1, $0)) }
+    )
+  }
+
+  private func endpointURLs(port: Int) -> [String] {
+    guard allowRemoteConnections else {
+      return ["http://127.0.0.1:\(port)/mcp"]
+    }
+    return WebGPUShareLink.localNetworkHosts().map { "https://\($0):\(port)/mcp" }
   }
 
   private func copyAccessToken() {
