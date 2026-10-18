@@ -304,18 +304,12 @@ final class BorgVRScriptRunner: ObservableObject {
     register("setimportbricksize", [.int]) { [weak self] args in
       self?.setImportBrickSize(args.int(0)) ?? .callbackError
     }
-    register("setimportbrickssize", [.int]) { [weak self] args in
-      self?.setImportBrickSize(args.int(0)) ?? .callbackError
-    }
 
     register("setimportoverlap", [.int]) { [weak self] args in
       self?.setImportOverlap(args.int(0)) ?? .callbackError
     }
 
     register("setbordermode", [.int]) { [weak self] args in
-      self?.setImportBorderMode(args.int(0)) ?? .callbackError
-    }
-    register("setbaordermode", [.int]) { [weak self] args in
       self?.setImportBorderMode(args.int(0)) ?? .callbackError
     }
 

@@ -7,16 +7,16 @@
   <title>BorgVR WebGPU Renderer</title>
   <meta name="description" content="How to use the BorgVR WebGPU renderer in desktop and mobile browsers." />
   <link rel="canonical" href="https://www.jens-krueger.com/BorgVR/webgpu.html" />
-  <link rel="stylesheet" href="./style.css" />
+  <link rel="stylesheet" href="./style.css?v=3.0" />
   <script src="./i18n.js"></script>
 </head>
 <body>
   <a class="skip" href="#main" data-de="Zum Inhalt springen">Skip to content</a>
-  <header class="topbar"><div class="container topbar__inner"><a class="brand" href="./"><img class="brand__logo" src="./borgvr.png" alt="" /><span class="brand__text" data-de="BorgVR-Handbuch">BorgVR Guide</span></a><nav class="nav"><a class="nav__link" href="./concepts.html" data-de="Grundlagen">Concepts</a><a class="nav__link" href="./support.html">Support</a><a class="nav__link" href="./privacy.html" data-de="Datenschutz">Privacy</a></nav></div></header>
+  <header class="topbar"><div class="container topbar__inner"><a class="brand" href="./"><img class="brand__logo" src="./borgvr-hero.webp" alt="" /><span class="brand__text" data-de="BorgVR-Handbuch">BorgVR Guide</span></a><nav class="nav"><a class="nav__link" href="./concepts.html" data-de="Grundlagen">Concepts</a><a class="nav__link" href="./gsc.html">GSC</a><a class="nav__link" href="./mcp.html">MCP</a><a class="nav__link" href="./support.html">Support</a><a class="nav__link" href="./privacy.html" data-de="Datenschutz">Privacy</a></nav></div></header>
   <main id="main">
-    <header class="doc-header"><div class="container doc-header__grid"><div><p class="eyebrow" data-de="Browser-Renderer">Browser renderer</p><h1 class="doc-title">BorgVR WebGPU</h1><p class="lead" data-de="Einen vom BorgVR-Server bereitgestellten Datensatz direkt im Browser untersuchen, ohne eine native App zu installieren.">Explore a dataset served by BorgVR directly in the browser without installing a native application.</p></div><img class="doc-header__image" src="./mandelbulb-background.jpg" alt="WebGPU-compatible volume dataset" data-de-attr="alt:WebGPU-kompatibler Volumendatensatz" /></div></header>
+    <header class="doc-header"><div class="container doc-header__grid"><div><p class="eyebrow" data-de="Browser-Renderer">Browser renderer</p><h1 class="doc-title">BorgVR WebGPU</h1><p class="lead" data-de="Mehrkanal-Volumendaten, Objekte und Messungen direkt im Browser untersuchen, ohne eine native App zu installieren.">Explore multi-channel volume data, objects, and measurements directly in the browser without installing a native application.</p></div><img class="doc-header__image" src="./mandelbulb-background.jpg" alt="WebGPU-compatible volume dataset" data-de-attr="alt:WebGPU-kompatibler Volumendatensatz" /></div></header>
     <div class="container docs-shell">
-      <aside class="docs-nav" aria-label="Manual sections"><p class="docs-nav__title" data-de="Handbuch">Manual</p><a class="docs-nav__link" href="./concepts.html" data-de="Grundlagen">Concepts</a><a class="docs-nav__link" href="./visionos.html">visionOS</a><a class="docs-nav__link" href="./ios.html">iPhone &amp; iPad</a><a class="docs-nav__link" href="./macos.html">macOS</a><a class="docs-nav__link" href="./server.html" data-de="Server-App">Server app</a><a class="docs-nav__link" aria-current="page" href="./webgpu.html">WebGPU</a><a class="docs-nav__link" href="./command-line.html" data-de="Kommandozeile">Command line</a></aside>
+      <aside class="docs-nav" aria-label="Manual sections"><p class="docs-nav__title" data-de="Handbuch">Manual</p><a class="docs-nav__link" href="./concepts.html" data-de="Grundlagen">Concepts</a><a class="docs-nav__link" href="./visionos.html">visionOS</a><a class="docs-nav__link" href="./ios.html">iPhone &amp; iPad</a><a class="docs-nav__link" href="./macos.html">macOS</a><a class="docs-nav__link" href="./server.html" data-de="Server-App">Server app</a><a class="docs-nav__link" aria-current="page" href="./webgpu.html">WebGPU</a><a class="docs-nav__link" href="./command-line.html" data-de="Kommandozeile">Command line</a><a class="docs-nav__link" href="./gsc.html">GSC</a><a class="docs-nav__link" href="./mcp.html">MCP</a></aside>
       <article class="doc-content">
         <section>
           <h2 data-de="Voraussetzungen und Verbindung">Requirements and connection</h2>
@@ -35,10 +35,12 @@
           <ul>
             <li data-de="Ziehen rotiert das Modell; eine Zwei-Finger-Geste oder Ziehen mit der rechten Maustaste verschiebt es.">Drag rotates the model; two-finger or secondary dragging translates it.</li>
             <li data-de="Mit dem Mausrad oder einer Pinch-Geste zoomen Sie. Auf dem iPhone verwendet BorgVR eine echte Zwei-Finger-Pinch-Geste.">The mouse wheel or pinch zooms. On iPhone, BorgVR uses a true two-finger pinch gesture.</li>
-            <li data-de="Transferfunktion, beleuchtete Transferfunktion und Isowert entsprechen den nativen Render-Modi.">Transfer function, illuminated transfer function, and isosurface correspond to the native rendering modes.</li>
+            <li data-de="Transferfunktion, beleuchtete Transferfunktion und Isofläche entsprechen den nativen Render-Modi. Der Beleuchtungseditor steuert Lichtrichtung sowie Ambient-, Diffuse- und Specular-Farbe.">Transfer function, illuminated transfer function, and isosurface correspond to the native rendering modes. The lighting editor controls light direction and ambient, diffuse, and specular colors.</li>
+            <li data-de="Mehrkanaldatensätze verwenden bis zu vier unabhängige Transferfunktionen. Die Datenkanalauswahl im Editor bestimmt, welche RGBA-Kurve Sie bearbeiten; beim Rendern werden alle Kanalbeiträge zusammengesetzt.">Multi-channel datasets use up to four independent transfer functions. The data-channel selector determines which RGBA curve you edit; rendering composites all channel contributions.</li>
             <li data-de="Objektdateien aus dem Serverkatalog können geladen werden; Kugeln, Striche und instanzierte, texturierte Polygonobjekte werden gemeinsam mit dem Volumen dargestellt.">Object files from the server catalog can be loaded; spheres, strokes, and instanced textured polygon objects render together with the volume.</li>
             <li data-de="Messungsdateien aus dem Serverkatalog oder aus lokalen Dateien visualisieren Längen, Flächen und Volumen und zeigen die berechneten Werte in einer passenden physikalischen Einheit an.">Measurement files from the server catalog or local files visualize lengths, areas, and volumes and show their values in an appropriate physical unit.</li>
           </ul>
+          <p data-de="Die Datensatzliste zeigt Beschreibung, physikalische Größe und Voxelanzahl. Die Infoansicht ergänzt Komponentenanzahl, Bitbreite, Brick- und LoD-Angaben. Objekt- und Messungsdateien besitzen eigene Serverauswahllisten und können zusätzlich lokal geöffnet werden.">The dataset list shows description, physical dimensions, and voxel count. Dataset information adds component count, bit depth, brick, and LoD details. Object and measurement files have separate server selectors and may also be opened locally.</p>
         </section>
 
         <section>
@@ -58,13 +60,13 @@
 
         <section>
           <h2 data-de="Grenzen gegenüber nativen Apps">Differences from native apps</h2>
-          <p data-de="WebGPU eignet sich besonders zum schnellen Teilen eines Datensatzes und für Systeme ohne installierte BorgVR-App. Die nativen Apps bieten weiterhin die umfassendste Integration: SharePlay, lokale Konvertierung, Hintergrundserver, systemweite Dateiverwaltung und auf Vision Pro räumliche Hand- und Stiftinteraktion.">WebGPU is especially useful for quickly sharing a dataset and for systems without an installed BorgVR app. Native apps still provide the deepest integration: SharePlay, local conversion, background servers, system file management, and on Vision Pro spatial hand and stylus interaction.</p>
+          <p data-de="WebGPU eignet sich besonders zum schnellen Teilen eines Datensatzes und für Systeme ohne installierte BorgVR-App. Rendering, Mehrkanal-Transferfunktionen, Beleuchtung, Objekte und Messungen stehen zur Verfügung. Die nativen Apps bieten darüber hinaus SharePlay, Bearbeitung räumlicher Annotationen, lokale Konvertierung, Datensatzzustände, MCP, Hintergrundserver, systemweite Dateiverwaltung und auf Vision Pro räumliche Hand-, Stift- und Controller-Interaktion.">WebGPU is especially useful for quickly sharing a dataset and for systems without an installed BorgVR app. Rendering, multi-channel transfer functions, lighting, objects, and measurements are available. Native apps additionally provide SharePlay, editing of spatial annotations, local conversion, dataset state, MCP, background servers, system file management, and spatial hand, stylus, and controller interaction on Vision Pro.</p>
           <div class="button-row"><a class="btn btn--primary" href="./server.html" data-de="WebGPU-Server einrichten">Set up a WebGPU server</a><a class="btn btn--ghost" href="./concepts.html" data-de="Grundlagen lesen">Read the concepts</a></div>
         </section>
       </article>
     </div>
   </main>
   <footer class="footer"><div class="container footer__inner"><span class="footer__brand">© 2026 Jens Krueger</span><div class="footer__right"><a class="footer__link" href="./" data-de="Zur Handbuch-Startseite">Guide home</a><a class="footer__link" href="./support.html">Support</a></div></div></footer>
-  <script>window.BorgVRI18n.applyTranslations({en:{title:"BorgVR WebGPU Renderer",metaDescription:"How to use the BorgVR WebGPU renderer in desktop and mobile browsers."},de:{title:"BorgVR WebGPU-Renderer",metaDescription:"Den BorgVR-WebGPU-Renderer in Desktop- und Mobilbrowsern verwenden."}});</script>
+  <script>window.BorgVRI18n.applyTranslations({en:{title:"BorgVR WebGPU Renderer",metaDescription:"Use multi-channel volume rendering, lighting, objects, and measurements in desktop and mobile browsers."},de:{title:"BorgVR WebGPU-Renderer",metaDescription:"Mehrkanal-Volumenrendering, Beleuchtung, Objekte und Messungen in Desktop- und Mobilbrowsern verwenden."}});</script>
 </body>
 </html>

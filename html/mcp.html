@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="color-scheme" content="dark" />
+  <title>BorgVR MCP Automation</title>
+  <meta name="description" content="Connect trusted AI agents and MCP clients to BorgVR on visionOS, iOS, iPadOS, and macOS." />
+  <link rel="canonical" href="https://www.jens-krueger.com/BorgVR/mcp.html" />
+  <link rel="stylesheet" href="./style.css?v=3.0" />
+  <script src="./i18n.js"></script>
+</head>
+<body>
+  <a class="skip" href="#main" data-de="Zum Inhalt springen">Skip to content</a>
+  <header class="topbar"><div class="container topbar__inner">
+    <a class="brand" href="./"><img class="brand__logo" src="./borgvr-hero.webp" alt="" /><span class="brand__text" data-de="BorgVR-Handbuch">BorgVR Guide</span></a>
+    <nav class="nav"><a class="nav__link" href="./concepts.html" data-de="Grundlagen">Concepts</a><a class="nav__link" href="./gsc.html">GSC</a><a class="nav__link" aria-current="page" href="./mcp.html">MCP</a><a class="nav__link" href="./support.html">Support</a><a class="nav__link" href="./privacy.html" data-de="Datenschutz">Privacy</a></nav>
+  </div></header>
+  <main id="main">
+    <header class="doc-header"><div class="container doc-header__grid">
+      <div><p class="eyebrow" data-de="Agentensteuerung">Agent control</p><h1 class="doc-title">Model Context Protocol</h1><p class="lead" data-de="Vertrauenswürdige KI-Agenten können Datensätze untersuchen, die Visualisierung steuern und das gerenderte Bild auswerten, ohne die Benutzeroberfläche fernzusteuern.">Trusted AI agents can inspect datasets, control the visualization, and evaluate rendered images without driving the user interface remotely.</p></div>
+      <img class="doc-header__image" src="./mandelbulb-background.jpg" alt="Mandelbulb volume controlled through BorgVR" data-de-attr="alt:Über BorgVR gesteuertes Mandelbulb-Volumen" />
+    </div></header>
+    <div class="container docs-shell">
+      <aside class="docs-nav" aria-label="Manual sections"><p class="docs-nav__title" data-de="Handbuch">Manual</p><a class="docs-nav__link" href="./concepts.html" data-de="Grundlagen">Concepts</a><a class="docs-nav__link" href="./visionos.html">visionOS</a><a class="docs-nav__link" href="./ios.html">iPhone &amp; iPad</a><a class="docs-nav__link" href="./macos.html">macOS</a><a class="docs-nav__link" href="./server.html" data-de="Server-App">Server app</a><a class="docs-nav__link" href="./webgpu.html">WebGPU</a><a class="docs-nav__link" href="./command-line.html" data-de="Kommandozeile">Command line</a><a class="docs-nav__link" href="./gsc.html">GSC</a><a class="docs-nav__link" aria-current="page" href="./mcp.html">MCP</a></aside>
+      <article class="doc-content">
+        <section>
+          <h2 data-de="Was MCP in BorgVR ermöglicht">What BorgVR MCP provides</h2>
+          <p data-de="Alle drei nativen Renderer enthalten denselben optionalen MCP-Server. Er arbeitet unabhängig von Datensatz- und WebGPU-Servern und greift auf dieselbe zentrale Befehlslogik wie die macOS-Skriptsprache zu. Ein Agent kann dadurch reproduzierbar handeln, statt Schaltflächen per Maus oder Blicksteuerung zu bedienen.">All three native renderers contain the same optional MCP server. It is independent of the dataset and WebGPU servers and uses the same central command layer as the macOS scripting language. An agent can therefore act reproducibly instead of operating buttons through mouse or gaze control.</p>
+          <ul class="feature-list">
+            <li data-de="Datensatzkatalog mit vollständigen Metadaten und bekannten Quellen lesen, Datensätze öffnen und schließen">Read the dataset catalog with complete metadata and known origins, then open or close datasets</li>
+            <li data-de="Rendermodus, Isowert, Transformation, Clipping und Beleuchtung lesen und ändern">Read and change rendering mode, isovalue, transform, clipping, and lighting</li>
+            <li data-de="Objekte, Kugel- und Strichmarker, Mesh-Instanzen sowie Längen-, Flächen- und Volumenmessungen verwalten">Manage objects, sphere and stroke markers, mesh instances, and length, area, and volume measurements</li>
+            <li data-de="Objekte oder die gesamte Messungsdarstellung ausblenden, ohne Daten zu löschen">Hide objects or the complete measurement visualization without deleting data</li>
+            <li data-de="Auf einen fertig gerenderten Frame warten und das aktuelle Bild als PNG abrufen">Wait for a completed rendered frame and retrieve the current view as a PNG image</li>
+          </ul>
+        </section>
+        <section>
+          <h2 data-de="MCP aktivieren">Enabling MCP</h2>
+          <ol>
+            <li data-de="Öffnen Sie in BorgVR die Einstellungen und wählen Sie den Bereich <strong>MCP</strong>.">Open BorgVR Settings and select the <strong>MCP</strong> section.</li>
+            <li data-de="Aktivieren Sie <strong>MCP-Server aktivieren</strong> und wählen Sie bei Bedarf einen anderen Port. Der Standardport ist <code>8765</code>.">Enable <strong>Enable MCP server</strong> and choose another port if required. The default is <code>8765</code>.</li>
+            <li data-de="Übernehmen Sie einen der angezeigten Endpunkte in die Konfiguration Ihres MCP-Clients.">Add one of the displayed endpoints to the configuration of your MCP client.</li>
+          </ol>
+          <div class="callout"><strong data-de="Nur dieses Gerät">This device only</strong><span data-de="Ohne Netzwerkfreigabe lauscht BorgVR ausschließlich unter <code>http://127.0.0.1:8765/mcp</code>. Für lokale Verbindungen sind weder TLS noch Zugriffstoken erforderlich.">Without network access enabled, BorgVR listens only at <code>http://127.0.0.1:8765/mcp</code>. Local connections require neither TLS nor an access token.</span></div>
+        </section>
+        <section>
+          <h2 data-de="Zugriff aus dem Netzwerk">Access from the network</h2>
+          <p data-de="Wenn Sie <strong>Verbindungen aus dem Netzwerk erlauben</strong> aktivieren, bindet BorgVR den MCP-Server an alle verfügbaren Netzwerkschnittstellen und zeigt für jede erreichbare Adresse einen HTTPS-Endpunkt an. Abhängig von Router, Firewall und Portweiterleitung kann dieser Dienst auch außerhalb Ihres lokalen Netzes erreichbar sein.">When <strong>Allow connections from the network</strong> is enabled, BorgVR binds the MCP server to all available network interfaces and displays an HTTPS endpoint for every reachable address. Depending on router, firewall, and port forwarding, the service may also be reachable from outside the local network.</p>
+          <ul>
+            <li data-de="Erzeugen Sie ein Zugriffstoken oder tragen Sie ein eigenes ein. Der Client sendet es als <code>Authorization: Bearer …</code>.">Generate an access token or enter your own. The client sends it as <code>Authorization: Bearer …</code>.</li>
+            <li data-de="Die Schaltfläche zum Erzeugen kopiert das neue Token direkt in die Zwischenablage.">The generation button copies the new token directly to the clipboard.</li>
+            <li data-de="Netzwerkverbindungen verwenden HTTPS. Ohne importierte PKCS#12-Identität erstellt BorgVR bei jedem Serverstart ein temporäres selbstsigniertes Zertifikat.">Network connections use HTTPS. Without an imported PKCS#12 identity, BorgVR creates a temporary self-signed certificate whenever the server starts.</li>
+          </ul>
+          <div class="callout callout--warm"><strong data-de="Vertrauensgrenze">Trust boundary</strong><span data-de="Ein verbundener MCP-Client kann Datensätze öffnen, die Visualisierung verändern, Annotationen und Messungen bearbeiten sowie Screenshots lesen. Geben Sie Endpunkt und Token nur an vertrauenswürdige Systeme weiter.">A connected MCP client can open datasets, change the visualization, edit annotations and measurements, and read screenshots. Share the endpoint and token only with trusted systems.</span></div>
+        </section>
+        <section>
+          <h2 data-de="Typischer Agentenablauf">Typical agent workflow</h2>
+          <ol>
+            <li data-de="Der Agent liest mit <code>list_datasets</code> Metadaten und Quellen und öffnet den gewünschten Datensatz mit <code>open_dataset</code>.">The agent uses <code>list_datasets</code> to inspect metadata and origins, then opens the selected dataset with <code>open_dataset</code>.</li>
+            <li data-de="Er prüft <code>get_application_state</code>, verändert Ansicht und Renderparameter und blendet bei Bedarf Objekte oder Messungen aus.">It inspects <code>get_application_state</code>, changes the view and rendering parameters, and hides objects or measurements when required.</li>
+            <li data-de="Nach jeder Änderung wartet er mit <code>wait_until_rendered</code> auf einen neuen vollständigen Frame und ruft anschließend <code>capture_screenshot</code> auf.">After each change it uses <code>wait_until_rendered</code> to wait for a new completed frame, then calls <code>capture_screenshot</code>.</li>
+            <li data-de="Durch mehrere Ansichten, Rendermodi, Isowerte oder Clipping-Bereiche kann der Agent die sichtbaren Strukturen systematisch vergleichen.">By comparing multiple views, rendering modes, isovalues, or clipping ranges, the agent can inspect visible structures systematically.</li>
+          </ol>
+          <p data-de="Die von <code>tools/list</code> gelieferten JSON-Schemas sind die verbindliche Referenz für Argumentnamen und Wertebereiche.">The JSON schemas returned by <code>tools/list</code> are the authoritative reference for argument names and value ranges.</p>
+        </section>
+        <section>
+          <h2 data-de="Fehlersuche">Troubleshooting</h2>
+          <dl class="definition-list">
+            <div><dt data-de="Leere Antwort oder keine Verbindung">Empty response or no connection</dt><dd data-de="Prüfen Sie, ob Schema und Endpunkt zusammenpassen: lokal <code>http</code>, bei Netzwerkfreigabe <code>https</code>.">Verify that scheme and endpoint match: local access uses <code>http</code>, network access uses <code>https</code>.</dd></div>
+            <div><dt data-de="Nicht autorisiert">Unauthorized</dt><dd data-de="Bei Netzwerkzugriff muss der Authorization-Header exakt das aktuell angezeigte Bearer-Token enthalten. Lokal auf demselben Gerät wird kein Token geprüft.">For network access, the Authorization header must contain exactly the currently displayed bearer token. Local access on the same device does not check a token.</dd></div>
+            <div><dt data-de="Zertifikatsfehler">Certificate error</dt><dd data-de="Vertrauen Sie dem selbstsignierten Zertifikat ausdrücklich oder importieren Sie eine eigene PKCS#12-Identität. Manche extern gehosteten Agenten können private oder lokale IP-Adressen grundsätzlich nicht erreichen.">Explicitly trust the self-signed certificate or import your own PKCS#12 identity. Some externally hosted agents cannot reach private or local IP addresses at all.</dd></div>
+          </dl>
+        </section>
+      </article>
+    </div>
+  </main>
+  <footer class="footer"><div class="container footer__inner"><span class="footer__brand">© 2026 Jens Krueger</span><div class="footer__right"><a class="footer__link" href="./" data-de="Zur Handbuch-Startseite">Guide home</a><a class="footer__link" href="./support.html">Support</a></div></div></footer>
+  <script>window.BorgVRI18n.applyTranslations({en:{title:"BorgVR MCP Automation",metaDescription:"Connect trusted AI agents and MCP clients to BorgVR on visionOS, iOS, iPadOS, and macOS."},de:{title:"BorgVR MCP-Automatisierung",metaDescription:"Vertrauenswürdige KI-Agenten und MCP-Clients mit BorgVR auf visionOS, iOS, iPadOS und macOS verbinden."}});</script>
+</body>
+</html>

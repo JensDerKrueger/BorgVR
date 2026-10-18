@@ -7,16 +7,16 @@
   <title>BorgVR Command-Line Tools</title>
   <meta name="description" content="Reference for the BorgVR converter, Swift dataset server, and C++ dataset server." />
   <link rel="canonical" href="https://www.jens-krueger.com/BorgVR/command-line.html" />
-  <link rel="stylesheet" href="./style.css" />
+  <link rel="stylesheet" href="./style.css?v=3.0" />
   <script src="./i18n.js"></script>
 </head>
 <body>
   <a class="skip" href="#main" data-de="Zum Inhalt springen">Skip to content</a>
-  <header class="topbar"><div class="container topbar__inner"><a class="brand" href="./"><img class="brand__logo" src="./borgvr.png" alt="" /><span class="brand__text" data-de="BorgVR-Handbuch">BorgVR Guide</span></a><nav class="nav"><a class="nav__link" href="./concepts.html" data-de="Grundlagen">Concepts</a><a class="nav__link" href="./support.html">Support</a><a class="nav__link" href="./privacy.html" data-de="Datenschutz">Privacy</a></nav></div></header>
+  <header class="topbar"><div class="container topbar__inner"><a class="brand" href="./"><img class="brand__logo" src="./borgvr-hero.webp" alt="" /><span class="brand__text" data-de="BorgVR-Handbuch">BorgVR Guide</span></a><nav class="nav"><a class="nav__link" href="./concepts.html" data-de="Grundlagen">Concepts</a><a class="nav__link" href="./gsc.html">GSC</a><a class="nav__link" href="./mcp.html">MCP</a><a class="nav__link" href="./support.html">Support</a><a class="nav__link" href="./privacy.html" data-de="Datenschutz">Privacy</a></nav></div></header>
   <main id="main">
     <header class="doc-header"><div class="container doc-header__grid"><div><p class="eyebrow" data-de="Referenz">Reference</p><h1 class="doc-title" data-de="Kommandozeilenwerkzeuge">Command-line tools</h1><p class="lead" data-de="Datensätze automatisiert konvertieren oder erzeugen und Swift- beziehungsweise C++-Server ohne grafische Oberfläche betreiben.">Convert or generate datasets in automated workflows and operate Swift or C++ servers without a graphical interface.</p></div><img class="doc-header__image" src="./mandelbulb-background.jpg" alt="Synthetic Mandelbulb dataset" data-de-attr="alt:Synthetischer Mandelbulb-Datensatz" /></div></header>
     <div class="container docs-shell">
-      <aside class="docs-nav" aria-label="Manual sections"><p class="docs-nav__title" data-de="Handbuch">Manual</p><a class="docs-nav__link" href="./concepts.html" data-de="Grundlagen">Concepts</a><a class="docs-nav__link" href="./visionos.html">visionOS</a><a class="docs-nav__link" href="./ios.html">iPhone &amp; iPad</a><a class="docs-nav__link" href="./macos.html">macOS</a><a class="docs-nav__link" href="./server.html" data-de="Server-App">Server app</a><a class="docs-nav__link" href="./webgpu.html">WebGPU</a><a class="docs-nav__link" aria-current="page" href="./command-line.html" data-de="Kommandozeile">Command line</a></aside>
+      <aside class="docs-nav" aria-label="Manual sections"><p class="docs-nav__title" data-de="Handbuch">Manual</p><a class="docs-nav__link" href="./concepts.html" data-de="Grundlagen">Concepts</a><a class="docs-nav__link" href="./visionos.html">visionOS</a><a class="docs-nav__link" href="./ios.html">iPhone &amp; iPad</a><a class="docs-nav__link" href="./macos.html">macOS</a><a class="docs-nav__link" href="./server.html" data-de="Server-App">Server app</a><a class="docs-nav__link" href="./webgpu.html">WebGPU</a><a class="docs-nav__link" aria-current="page" href="./command-line.html" data-de="Kommandozeile">Command line</a><a class="docs-nav__link" href="./gsc.html">GSC</a><a class="docs-nav__link" href="./mcp.html">MCP</a></aside>
       <article class="doc-content">
         <section>
           <h2>TerminalConverterApp</h2>
@@ -53,11 +53,11 @@ TerminalConverterApp P &lt;input-file&gt;      &lt;output.data&gt; &lt;descripti
 
         <section>
           <h2>TerminalServerApp</h2>
-          <p data-de="Der Swift-Server veröffentlicht <code>.data</code>-, <code>.tf1d</code>- und <code>.marker</code>-Dateien aus einem Verzeichnis. Der Katalog wird standardmäßig alle zehn Sekunden aktualisiert.">The Swift server publishes <code>.data</code>, <code>.tf1d</code>, and <code>.marker</code> files from one directory. By default, it refreshes the catalog every ten seconds.</p>
+          <p data-de="Der Swift-Server veröffentlicht <code>.data</code>-, <code>.tf1d</code>-, <code>.mesh</code>-, <code>.marker</code>- und <code>.measurement</code>-Dateien aus einem Verzeichnis. Der Katalog wird standardmäßig alle zehn Sekunden aktualisiert.">The Swift server publishes <code>.data</code>, <code>.tf1d</code>, <code>.mesh</code>, <code>.marker</code>, and <code>.measurement</code> files from one directory. By default, it refreshes the catalog every ten seconds.</p>
           <pre><code>TerminalServerApp --directory /path/to/datasets \
   --port 12345 --web-port 8080</code></pre>
           <dl class="definition-list">
-            <div><dt><code>--directory, -d</code></dt><dd data-de="Verzeichnis mit Datensätzen, Transferfunktionen und Markern; Standard ist das Benutzerverzeichnis.">Directory containing datasets, transfer functions, and markers; defaults to the home directory.</dd></div>
+            <div><dt><code>--directory, -d</code></dt><dd data-de="Verzeichnis mit Datensätzen, Transferfunktionen, Meshes, Objekt- und Messungsdateien; Standard ist das Benutzerverzeichnis.">Directory containing datasets, transfer functions, meshes, object files, and measurements; defaults to the home directory.</dd></div>
             <div><dt><code>--port, -p</code></dt><dd data-de="Port des nativen BorgVR-Protokolls.">Native BorgVR protocol port.</dd></div>
             <div><dt><code>--max-bricks, -m</code></dt><dd data-de="Maximale Anzahl von Bricks pro GETBRICKS-Anfrage.">Maximum number of bricks per GETBRICKS request.</dd></div>
             <div><dt><code>--password</code></dt><dd data-de="Optionales Passwort für native und WebGPU-Clients.">Optional password for native and WebGPU clients.</dd></div>
@@ -71,7 +71,7 @@ TerminalConverterApp P &lt;input-file&gt;      &lt;output.data&gt; &lt;descripti
           <pre><code>TerminalServerApp --directory /srv/borgvr \
   --sync-server server-a.example 12345 300 secret \
   --sync-server server-b.example 12345 300</code></pre>
-          <p data-de="<code>--sync-server</code> kann mehrfach angegeben werden. Das Intervall muss mindestens zehn Sekunden betragen; das optionale Passwort wird in der Konsolenausgabe nicht angezeigt. Datensätze, Transferfunktionen und Markerdateien werden synchronisiert, unvollständige Übertragungen fortgesetzt und bei stockender Übertragung alternative Quellen verwendet."><code>--sync-server</code> is repeatable. The interval must be at least ten seconds; the optional password is not echoed in runtime output. Datasets, transfer functions, and marker files are synchronized, incomplete transfers resume, and alternate sources are tried after a stall.</p>
+          <p data-de="<code>--sync-server</code> kann mehrfach angegeben werden. Das Intervall muss mindestens zehn Sekunden betragen; das optionale Passwort wird in der Konsolenausgabe nicht angezeigt. Datensätze, Transferfunktionen, Markerdateien und Mesh-Assets werden synchronisiert, unvollständige Datensatzübertragungen fortgesetzt und bei stockender Übertragung alternative Quellen verwendet."><code>--sync-server</code> is repeatable. The interval must be at least ten seconds; the optional password is not echoed in runtime output. Datasets, transfer functions, marker files, and mesh assets are synchronized, incomplete dataset transfers resume, and alternate sources are tried after a stall.</p>
         </section>
 
         <section>

@@ -1,0 +1,372 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="color-scheme" content="dark" />
+  <title>Graphics Script for BorgVR</title>
+  <meta name="description" content="Complete GSC language and command reference for automating BorgVR on macOS, with practical example programs." />
+  <link rel="canonical" href="https://www.jens-krueger.com/BorgVR/gsc.html" />
+  <link rel="stylesheet" href="./style.css?v=3.0" />
+  <script src="./i18n.js"></script>
+</head>
+<body>
+  <a class="skip" href="#main" data-de="Zum Inhalt springen">Skip to content</a>
+  <header class="topbar">
+    <div class="container topbar__inner">
+      <a class="brand" href="./" aria-label="BorgVR manual">
+        <img class="brand__logo" src="./borgvr-hero.webp" alt="" />
+        <span class="brand__text" data-de="BorgVR-Handbuch">BorgVR Guide</span>
+      </a>
+      <nav class="nav" aria-label="Navigation">
+        <a class="nav__link" href="./concepts.html" data-de="Grundlagen">Concepts</a>
+        <a class="nav__link" aria-current="page" href="./gsc.html">GSC</a>
+        <a class="nav__link" href="./mcp.html">MCP</a>
+        <a class="nav__link" href="./support.html">Support</a>
+        <a class="nav__link" href="./privacy.html" data-de="Datenschutz">Privacy</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main">
+    <header class="doc-header">
+      <div class="container doc-header__grid">
+        <div>
+          <p class="eyebrow">Graphics Script</p>
+          <h1 class="doc-title" data-de="BorgVR mit GSC automatisieren">Automate BorgVR with GSC</h1>
+          <p class="lead" data-de="GSC-Skripte steuern den macOS-Renderer, importieren Datensätze, erzeugen reproduzierbare Ansichten und exportieren Bildserien. Diese Seite beschreibt die Sprache und alle BorgVR-Befehle.">GSC scripts control the macOS renderer, import datasets, create reproducible views, and export image sequences. This page documents the language and every BorgVR command.</p>
+        </div>
+        <img class="doc-header__image" src="./borgvr-hero.webp" alt="BorgVR" />
+      </div>
+    </header>
+
+    <div class="container docs-shell">
+      <aside class="docs-nav" aria-label="Manual sections">
+        <p class="docs-nav__title" data-de="Handbuch">Manual</p>
+        <a class="docs-nav__link" href="./concepts.html" data-de="Grundlagen">Concepts</a>
+        <a class="docs-nav__link" href="./visionos.html">visionOS</a>
+        <a class="docs-nav__link" href="./ios.html">iPhone &amp; iPad</a>
+        <a class="docs-nav__link" href="./macos.html">macOS</a>
+        <a class="docs-nav__link" href="./server.html" data-de="Server-App">Server app</a>
+        <a class="docs-nav__link" href="./webgpu.html">WebGPU</a>
+        <a class="docs-nav__link" href="./command-line.html" data-de="Kommandozeile">Command line</a>
+        <a class="docs-nav__link" aria-current="page" href="./gsc.html">GSC</a>
+        <a class="docs-nav__link" href="./mcp.html">MCP</a>
+      </aside>
+
+      <article class="doc-content doc-content--wide">
+        <section id="overview">
+          <h2 data-de="Über Graphics Script">About Graphics Script</h2>
+          <p data-de="Graphics Script (GSC) ist eine zeilenorientierte Sprache für reproduzierbare Grafikabläufe. BorgVR für macOS führt Dateien mit der Endung <code>.gsc</code> aus. Skripte können über das Skript-Menü geöffnet oder direkt auf den BorgVR-Startbildschirm gezogen werden.">Graphics Script (GSC) is a line-oriented language for reproducible graphics workflows. BorgVR for macOS executes files with the <code>.gsc</code> extension. Open a script from the Script menu or drag it onto the BorgVR start screen.</p>
+          <p data-de="Während der Ausführung zeigt ein eigenes Fenster Logmeldungen, Fehler und den Fortschritt längerer Importe. BorgVR wartet bei Eingabedialogen, Importen, Screenshots und Ladebefehlen automatisch, bevor die nächste Anweisung ausgeführt wird.">A dedicated window shows log messages, errors, and long-running import progress while a script executes. BorgVR automatically waits for input dialogs, imports, screenshots, and loading commands before advancing.</p>
+          <div class="callout">
+            <strong data-de="Grafischer Editor">Graphical editor</strong>
+            <span data-de="Der <a href='https://github.com/JensDerKrueger/GraphicsScriptEditor'>Graphics Script Editor</a> bietet Syntaxunterstützung und eine grafische Umgebung zum Erstellen von GSC-Dateien.">The <a href="https://github.com/JensDerKrueger/GraphicsScriptEditor">Graphics Script Editor</a> provides syntax support and a graphical environment for creating GSC files.</span>
+          </div>
+          <nav class="page-toc" aria-label="On this page">
+            <a href="#running" data-de="Ausführen">Running scripts</a>
+            <a href="#language" data-de="Sprache">Language</a>
+            <a href="#examples" data-de="Beispiele">Examples</a>
+            <a href="#commands" data-de="Befehle">Commands</a>
+            <a href="#annotations" data-de="Objekte und Messungen">Objects and measurements</a>
+          </nav>
+        </section>
+
+        <section id="running">
+          <h2 data-de="Skripte ausführen und aufzeichnen">Run and record scripts</h2>
+          <ol>
+            <li data-de="Speichern Sie den Quelltext als UTF-8-Datei mit der Endung <code>.gsc</code>.">Save the source as a UTF-8 file with the <code>.gsc</code> extension.</li>
+            <li data-de="Öffnen Sie die Datei in BorgVR für macOS über das Skript-Menü oder per Drag-and-drop auf den Startbildschirm.">Open it in BorgVR for macOS from the Script menu or by dragging it onto the start screen.</li>
+            <li data-de="Verfolgen Sie Ausführung und Fehler im Skript-Log. Ein Abbruchdialog oder ein fehlerhafter Befehl beendet das Skript.">Follow execution and errors in the script log. Cancelling an input dialog or encountering an invalid command stops the script.</li>
+          </ol>
+          <p data-de="Mit <strong>Aufzeichnung starten</strong> und <strong>Stoppen und speichern</strong> kann BorgVR interaktive Änderungen als GSC-Datei erfassen. Aufeinanderfolgende Transformationen, Clipping-Änderungen und Transferfunktionsbearbeitungen werden zusammengefasst. Der aktuell geöffnete Datensatz wird als erster Befehl gespeichert.">Use <strong>Start recording</strong> and <strong>Stop and save</strong> to capture interactive changes as a GSC file. Consecutive transforms, clipping changes, and transfer-function edits are coalesced. The currently open dataset is saved as the first command.</p>
+          <div class="callout callout--warm">
+            <strong data-de="Pfade und Ausgabeverzeichnis">Paths and output directory</strong>
+            <span data-de="Absolute Pfade werden direkt verwendet. Relative Pfade beziehen sich auf das aktuelle Skript-Ausgabeverzeichnis, das mit <code>setdir</code> gesetzt wird. Namen mit Leerzeichen müssen in einfache oder doppelte Anführungszeichen gesetzt werden.">Absolute paths are used directly. Relative paths are resolved below the current script output directory selected with <code>setdir</code>. Put names containing spaces in single or double quotes.</span>
+          </div>
+        </section>
+
+        <section id="language">
+          <h2 data-de="Sprachgrundlagen">Language basics</h2>
+          <div class="type-strip" aria-label="GSC value types">
+            <code>bool</code><code>int</code><code>int64</code><code>float</code><code>double</code><code>string</code><code>restString</code>
+          </div>
+          <dl class="definition-list">
+            <div><dt data-de="Befehle">Commands</dt><dd data-de="Jede nicht leere Zeile enthält einen Befehl und seine durch Leerraum getrennten Argumente. Befehlsnamen unterscheiden Groß- und Kleinschreibung.">Each non-empty line contains one command followed by whitespace-separated arguments. Command names are case-sensitive.</dd></div>
+            <div><dt data-de="Kommentare">Comments</dt><dd data-de="Alles ab <code>#</code> bis zum Zeilenende ist ein Kommentar.">Everything from <code>#</code> to the end of the line is a comment.</dd></div>
+            <div><dt data-de="Zeichenketten">Strings</dt><dd data-de="Einfache und doppelte Anführungszeichen gruppieren Text mit Leerzeichen. Innerhalb eines Strings maskiert der Backslash das folgende Zeichen.">Single and double quotes group text containing spaces. Inside a quoted string, a backslash escapes the next character.</dd></div>
+            <div><dt data-de="Boolesche Werte">Boolean values</dt><dd><code>1/0</code>, <code>true/false</code>, <code>on/off</code>, <code>yes/no</code></dd></div>
+            <div><dt data-de="Abschnitte">Execution batches</dt><dd data-de="Eine wirklich leere Zeile beendet einen Ausführungsabschnitt. BorgVR kann dadurch einen Frame oder einen asynchronen Vorgang abschließen, bevor der nächste Abschnitt beginnt. Reine Kommentarzeilen erzeugen keinen Abschnitt.">A truly empty line ends an execution batch. This lets BorgVR complete a frame or asynchronous operation before the next batch starts. Comment-only lines do not create a batch boundary.</dd></div>
+          </dl>
+
+          <h3 data-de="Variablen und Ausdrücke">Variables and expressions</h3>
+          <div class="code-example">
+            <div class="code-example__head"><span class="code-example__title" data-de="Variablen">Variables</span><span class="code-example__meta">GSC</span></div>
+            <pre><code># A literal value
+set steps 72
+
+# Integer expressions support +, -, *, / and normal precedence
+set degrees 360 / $steps
+
+# $name and ${name} substitute variables inside any token
+log "Rendering $steps frames at ${degrees} degrees"
+
+# $$ produces a literal dollar sign
+log "Cost: $$10"
+
+unset degrees</code></pre>
+          </div>
+          <p data-de="<code>set</code> speichert entweder einen einzelnen Wert, das Ergebnis einer ganzzahligen Rechnung oder den Rückgabewert einer Eingabefunktion. Ganzzahlige Ausdrücke unterstützen <code>+</code>, <code>-</code>, <code>*</code> und <code>/</code>; Multiplikation und Division haben Vorrang. Klammern sind nicht vorgesehen."><code>set</code> stores a single value, the result of an integer expression, or the return value of an input function. Integer expressions support <code>+</code>, <code>-</code>, <code>*</code>, and <code>/</code>; multiplication and division take precedence. Parentheses are not supported.</p>
+
+          <h3 data-de="Schleifen und Bedingungen">Loops and conditions</h3>
+          <div class="code-example">
+            <div class="code-example__head"><span class="code-example__title" data-de="Kontrollfluss">Control flow</span><span class="code-example__meta">GSC</span></div>
+            <pre><code>repeat 4 as index
+  if $index == 0
+    log "First pass"
+  else
+    log "Pass $index"
+  endif
+endrepeat</code></pre>
+          </div>
+          <p data-de="<code>repeat Anzahl</code> wiederholt den Block bis <code>endrepeat</code>. Mit <code>as name</code> wird ein nullbasierter Zähler bereitgestellt. <code>if</code> akzeptiert einen Bool-/Ganzzahlwert oder einen Vergleich. Für Zahlen stehen <code>== != &lt; &lt;= &gt; &gt;=</code> zur Verfügung, für Text <code>==</code> und <code>!=</code>. Blöcke dürfen verschachtelt werden."><code>repeat count</code> repeats the block through <code>endrepeat</code>. Add <code>as name</code> for a zero-based counter. <code>if</code> accepts a Boolean/integer value or a comparison. Numbers support <code>== != &lt; &lt;= &gt; &gt;=</code>; strings support <code>==</code> and <code>!=</code>. Blocks may be nested.</p>
+
+          <h3 data-de="Interaktive Rückgabewerte">Interactive return values</h3>
+          <p data-de="Die Funktionen <code>input</code>, <code>fileinput</code> und <code>dirinput</code> werden rechts von <code>set</code> verwendet. Der Interpreter wartet auf den Dialog. Abbrechen beendet das gesamte Skript.">Use <code>input</code>, <code>fileinput</code>, and <code>dirinput</code> on the right side of <code>set</code>. The interpreter waits for the dialog. Cancelling stops the entire script.</p>
+          <pre><code>set title input "Dataset description"
+set source fileinput "Choose a QVIS, NRRD, or PVM file"
+set dicom dirinput "Choose a DICOM directory"</code></pre>
+        </section>
+
+        <section id="examples">
+          <h2 data-de="Beispielprogramme">Example programs</h2>
+
+          <h3 data-de="Datensatz öffnen und Bildschirmfoto erzeugen">Open a dataset and capture a screenshot</h3>
+          <div class="code-example">
+            <div class="code-example__head"><span class="code-example__title">single-view.gsc</span><span class="code-example__meta" data-de="Reproduzierbare Ansicht">Reproducible view</span></div>
+            <pre><code># Use the dataset UUID shown in BorgVR's information panel
+opendataset "59DBB8EB-1674-4DAE-94D3-369E63D5A418"
+waitloaded
+
+rendermode lighting
+setrotationquaternion 0 0 0 1
+settranslation 0 0
+setscale 1.15
+clip 0 1 0 1 0 1
+setlightdirection -0.4 0.5 0.75
+waitframes 2
+screenshot "single-view.png"</code></pre>
+          </div>
+
+          <h3 data-de="360-Grad-Bildserie">360-degree image sequence</h3>
+          <div class="code-example">
+            <div class="code-example__head"><span class="code-example__title">turntable.gsc</span><span class="code-example__meta">72 frames</span></div>
+            <pre><code>opendataset "59DBB8EB-1674-4DAE-94D3-369E63D5A418"
+waitloaded
+setdir "rotation-frames"
+resize 1280 720
+rendermode tf
+resetrotation
+
+repeat 72 as frame
+  screenshot "frame_${frame}.png"
+  addrotationy 5
+  waitframes 1
+endrepeat</code></pre>
+          </div>
+
+          <h3 data-de="Datei importieren">Import a volume file</h3>
+          <div class="code-example">
+            <div class="code-example__head"><span class="code-example__title">import-volume.gsc</span><span class="code-example__meta" data-de="Interaktive Eingabe">Interactive input</span></div>
+            <pre><code>set source fileinput "Choose a QVIS, NRRD, or PVM volume"
+set destination input "BorgVR output filename"
+set description input "Dataset description"
+
+setimportbricksize 32
+setimportoverlap 2
+setbordermode 0
+importfile "$source" "$destination" "$description"
+log "Import completed: $destination"</code></pre>
+          </div>
+
+          <h3 data-de="Isoflächen vergleichen">Compare isovalues</h3>
+          <div class="code-example">
+            <div class="code-example__head"><span class="code-example__title">iso-sweep.gsc</span><span class="code-example__meta">GSC</span></div>
+            <pre><code>opendataset "59DBB8EB-1674-4DAE-94D3-369E63D5A418"
+waitloaded
+setdir "iso-sweep"
+rendermode iso
+
+repeat 9 as step
+  set value 1 + $step
+  isovalueNormalized 0.$value
+  waitframes 2
+  screenshot "iso-0.${value}.png"
+endrepeat</code></pre>
+          </div>
+
+          <h3 data-de="Objekt und Messung anlegen">Create an object and a measurement</h3>
+          <div class="code-example">
+            <div class="code-example__head"><span class="code-example__title">annotations.gsc</span><span class="code-example__meta" data-de="Deterministische UUIDs">Deterministic UUIDs</span></div>
+            <pre><code># Sphere: UUID, name, xyz, radius, RGBA, direction flag, direction origin
+setspheremarker "A1111111-1111-4111-8111-111111111111" "Target" 0.1 0.2 0.3 0.01 1 0.25 0.1 1 false 0 0 0
+
+# Length measurement: measurement UUID, kind, name, then point UUID/xyz groups
+setmeasurement "B2222222-2222-4222-8222-222222222222" length "Reference length" "C3333333-3333-4333-8333-333333333333" 0 0 0 "D4444444-4444-4444-8444-444444444444" 0.1 0 0</code></pre>
+          </div>
+        </section>
+
+        <section id="commands">
+          <h2 data-de="Vollständige Befehlsreferenz">Complete command reference</h2>
+          <p data-de="Argumentnamen in spitzen Klammern sind Platzhalter. Eckige Klammern kennzeichnen eine optionale Überladung. Koordinaten und Farben werden als Fließkommazahlen geschrieben; Farbekomponenten liegen im Bereich 0 bis 1.">Names in angle brackets are placeholders. Square brackets indicate an optional overload. Coordinates and colors are floating-point values; color components use the range 0 through 1.</p>
+
+          <h3 data-de="Sprache und Ablauf">Language and execution</h3>
+          <div class="table-wrap"><table class="command-table"><thead><tr><th data-de="Syntax">Syntax</th><th data-de="Wirkung">Effect</th></tr></thead><tbody>
+            <tr><td><code>set &lt;name&gt; &lt;value|expression|function&gt;</code></td><td data-de="Setzt eine Variable auf einen Wert, eine Ganzzahlrechnung oder einen Funktionsrückgabewert.">Assigns a literal, integer expression, or function return value to a variable.</td></tr>
+            <tr><td><code>unset &lt;name&gt;</code></td><td data-de="Entfernt eine Variable.">Removes a variable.</td></tr>
+            <tr><td><code>repeat &lt;count&gt; [as &lt;name&gt;]</code><br /><code>endrepeat</code></td><td data-de="Wiederholt einen Block, optional mit nullbasiertem Zähler.">Repeats a block, optionally with a zero-based counter.</td></tr>
+            <tr><td><code>if &lt;condition&gt;</code><br /><code>else</code><br /><code>endif</code></td><td data-de="Führt einen bedingten Block aus. <code>else</code> ist optional.">Runs a conditional block. <code>else</code> is optional.</td></tr>
+            <tr><td><code>noop &lt;milliseconds&gt;</code></td><td data-de="Wartet die angegebene Zeit ohne die App zu blockieren.">Waits for the specified time without blocking the app.</td></tr>
+            <tr><td><code>input &lt;prompt&gt;</code></td><td data-de="Öffnet ein Textfeld und liefert den eingegebenen Text. Nur mit <code>set</code> verwenden.">Opens a text field and returns the entered text. Use only with <code>set</code>.</td></tr>
+            <tr><td><code>fileinput &lt;prompt&gt;</code></td><td data-de="Öffnet eine Dateiauswahl und liefert den Pfad. Nur mit <code>set</code> verwenden.">Opens a file picker and returns its path. Use only with <code>set</code>.</td></tr>
+            <tr><td><code>dirinput &lt;prompt&gt;</code></td><td data-de="Öffnet eine Verzeichnisauswahl und liefert den Pfad. Nur mit <code>set</code> verwenden.">Opens a directory picker and returns its path. Use only with <code>set</code>.</td></tr>
+          </tbody></table></div>
+
+          <h3 data-de="Log und Anwendung">Logging and application</h3>
+          <div class="table-wrap"><table class="command-table"><thead><tr><th data-de="Befehl">Command</th><th data-de="Wirkung">Effect</th></tr></thead><tbody>
+            <tr><td><code>log &lt;text...&gt;</code></td><td data-de="Schreibt Text in das Skript-Log.">Writes text to the script log.</td></tr>
+            <tr><td><code>logfile &lt;file&gt;</code></td><td data-de="Leitet weitere Logausgabe zusätzlich in eine Datei.">Also writes subsequent log output to a file.</td></tr>
+            <tr><td><code>clearlog</code></td><td data-de="Leert die konfigurierte Logdatei.">Clears the configured log file.</td></tr>
+            <tr><td><code>logtime</code></td><td data-de="Schreibt den aktuellen ISO-8601-Zeitstempel.">Logs the current ISO 8601 timestamp.</td></tr>
+            <tr><td><code>logGPUInfo [bool]</code></td><td data-de="Schreibt Metal-Geräteinformationen; der optionale Bool-Wert steuert die Ausgabe der GPU-Familien.">Logs Metal device information; the optional Boolean controls GPU-family output.</td></tr>
+            <tr><td><code>setdir &lt;directory&gt;</code></td><td data-de="Setzt bzw. erzeugt das Ausgabeverzeichnis für relative Pfade.">Selects and creates the output directory used for relative paths.</td></tr>
+            <tr><td><code>screenshot [file]</code></td><td data-de="Speichert den nächsten vollständig gerenderten Frame als PNG.">Saves the next completed rendered frame as a PNG.</td></tr>
+            <tr><td><code>resize &lt;width&gt; &lt;height&gt;</code></td><td data-de="Ändert die Inhaltsgröße des BorgVR-Fensters in Pixeln.">Changes the BorgVR window content size in pixels.</td></tr>
+            <tr><td><code>quit</code></td><td data-de="Beendet BorgVR.">Terminates BorgVR.</td></tr>
+          </tbody></table></div>
+
+          <h3 data-de="Datensätze, Import und Export">Datasets, import, and export</h3>
+          <div class="table-wrap"><table class="command-table"><thead><tr><th data-de="Befehl">Command</th><th data-de="Wirkung">Effect</th></tr></thead><tbody>
+            <tr><td><code>opendataset &lt;dataset-uuid&gt;</code></td><td data-de="Sucht den Datensatz im lokalen und entfernten Katalog, öffnet ihn und wartet auf den Renderer.">Finds the dataset in the local and remote catalog, opens it, and waits for the renderer.</td></tr>
+            <tr><td><code>importfile &lt;source&gt; &lt;destination&gt; &lt;description&gt;</code></td><td data-de="Importiert eine QVIS-, NRRD-/NHDR- oder PVM-Datei als BorgVR-Datensatz.">Imports a QVIS, NRRD/NHDR, or PVM file as a BorgVR dataset.</td></tr>
+            <tr><td><code>importdirectory &lt;source&gt; &lt;destination&gt; &lt;description&gt;</code></td><td data-de="Importiert ein DICOM-Verzeichnis.">Imports a DICOM directory.</td></tr>
+            <tr><td><code>exportdataset &lt;source.data&gt; &lt;destination.nrrd&gt; &lt;lod&gt;</code></td><td data-de="Exportiert das gewählte LoD unkomprimiert als NRRD; LoD 0 ist die volle Auflösung.">Exports the selected LoD as an uncompressed NRRD; LoD 0 is full resolution.</td></tr>
+            <tr><td><code>setimportbricksize &lt;int&gt;</code></td><td data-de="Überschreibt die Brick-Kantenlänge für folgende Importe.">Overrides the brick edge length for subsequent imports.</td></tr>
+            <tr><td><code>setimportoverlap &lt;int&gt;</code></td><td data-de="Überschreibt die Überlappung für folgende Importe.">Overrides overlap for subsequent imports.</td></tr>
+            <tr><td><code>setbordermode &lt;0|1|2&gt;</code></td><td data-de="Setzt die Randbehandlung: 0 = Nullwerte, 1 = Randwert, 2 = Wiederholung.">Sets border handling: 0 = zero fill, 1 = clamp, 2 = repeat.</td></tr>
+          </tbody></table></div>
+
+          <h3 data-de="Synchronisation und Leistung">Synchronization and performance</h3>
+          <div class="table-wrap"><table class="command-table"><thead><tr><th data-de="Befehl">Command</th><th data-de="Wirkung">Effect</th></tr></thead><tbody>
+            <tr><td><code>waitframes &lt;count&gt;</code></td><td data-de="Wartet auf die angegebene Zahl weiterer Renderframes.">Waits for the specified number of additional rendered frames.</td></tr>
+            <tr><td><code>waitloaded [empty-readbacks]</code></td><td data-de="Wartet, bis das Paging für den aktuellen Datensatz zur Ruhe kommt. Standard sind drei leere Brick-Rücklesungen.">Waits until paging for the active dataset settles. The default is three empty brick readbacks.</td></tr>
+            <tr><td><code>waitidle [empty-readbacks]</code></td><td data-de="Alias für <code>waitloaded</code>.">Alias for <code>waitloaded</code>.</td></tr>
+            <tr><td><code>resetfps</code></td><td data-de="Setzt die Leistungsstatistik zurück.">Resets performance statistics.</td></tr>
+            <tr><td><code>setfpswindow &lt;seconds&gt;</code></td><td data-de="Setzt die Länge des Messfensters für FPS-Statistiken.">Sets the measurement-window length for FPS statistics.</td></tr>
+            <tr><td><code>logfps</code></td><td data-de="Wartet auf ein vollständiges Messfenster und schreibt detaillierte FPS- und Paging-Werte.">Waits for a complete measurement window and logs detailed FPS and paging values.</td></tr>
+            <tr><td><code>setDisplaySync &lt;bool&gt;</code></td><td data-de="Schaltet die Synchronisation der Renderausgabe mit dem Display ein oder aus.">Enables or disables render-output synchronization with the display.</td></tr>
+          </tbody></table></div>
+
+          <h3 data-de="Rendering und Hintergrund">Rendering and background</h3>
+          <div class="table-wrap"><table class="command-table"><thead><tr><th data-de="Befehl">Command</th><th data-de="Wirkung">Effect</th></tr></thead><tbody>
+            <tr><td><code>reset</code></td><td data-de="Setzt alle Renderparameter zurück.">Resets all rendering parameters.</td></tr>
+            <tr><td><code>rendermode &lt;tf|lighting|iso&gt;</code></td><td data-de="Wählt Transferfunktion, beleuchtete Transferfunktion oder Isofläche. Auch die ausgeschriebenen Aliase werden akzeptiert.">Selects transfer function, illuminated transfer function, or isosurface. Spelled-out aliases are also accepted.</td></tr>
+            <tr><td><code>setmethod &lt;0|1|2&gt;</code></td><td data-de="Numerischer Alias: 0 = TF, 1 = TF + Beleuchtung, 2 = Iso.">Numeric alias: 0 = TF, 1 = TF + lighting, 2 = iso.</td></tr>
+            <tr><td><code>background &lt;solid|gradient&gt;</code></td><td data-de="Wählt den Hintergrundmodus mit den aktuell gespeicherten Farben.">Selects the background mode using the stored colors.</td></tr>
+            <tr><td><code>background solid &lt;r&gt; &lt;g&gt; &lt;b&gt;</code></td><td data-de="Setzt einen deckenden einfarbigen Hintergrund.">Sets an opaque solid background.</td></tr>
+            <tr><td><code>background gradient &lt;r1&gt; &lt;g1&gt; &lt;b1&gt; &lt;r2&gt; &lt;g2&gt; &lt;b2&gt;</code></td><td data-de="Setzt die beiden Farben des Farbverlaufs.">Sets both gradient colors.</td></tr>
+            <tr><td><code>setbackground &lt;r&gt; &lt;g&gt; &lt;b&gt; &lt;a&gt;</code></td><td data-de="Setzt einen einfarbigen Hintergrund einschließlich Alpha.">Sets a solid background including alpha.</td></tr>
+          </tbody></table></div>
+
+          <h3 data-de="Transformation">Transform</h3>
+          <div class="table-wrap"><table class="command-table"><thead><tr><th data-de="Befehl">Command</th><th data-de="Wirkung">Effect</th></tr></thead><tbody>
+            <tr><td><code>resetrotation</code></td><td data-de="Setzt nur die Modellrotation zurück.">Resets only model rotation.</td></tr>
+            <tr><td><code>setrotationquaternion &lt;x&gt; &lt;y&gt; &lt;z&gt; &lt;w&gt;</code></td><td data-de="Setzt die Modellrotation als Quaternion.">Sets model rotation as a quaternion.</td></tr>
+            <tr><td><code>addrotationx &lt;degrees&gt;</code></td><td data-de="Addiert eine Rotation um die X-Achse.">Adds a rotation around the X axis.</td></tr>
+            <tr><td><code>addrotationy &lt;degrees&gt;</code></td><td data-de="Addiert eine Rotation um die Y-Achse.">Adds a rotation around the Y axis.</td></tr>
+            <tr><td><code>addrotationz &lt;degrees&gt;</code></td><td data-de="Addiert eine Rotation um die Z-Achse.">Adds a rotation around the Z axis.</td></tr>
+            <tr><td><code>settranslation &lt;x&gt; &lt;y&gt;</code></td><td data-de="Setzt die Translation in der Bildebene und setzt Z auf null.">Sets image-plane translation and resets Z to zero.</td></tr>
+            <tr><td><code>zoom &lt;scale&gt;</code><br /><code>setscale &lt;scale&gt;</code></td><td data-de="Setzt eine gleichmäßige positive Modellskalierung.">Sets a uniform positive model scale.</td></tr>
+          </tbody></table></div>
+
+          <h3 data-de="Clipping und Isofläche">Clipping and isosurface</h3>
+          <div class="table-wrap"><table class="command-table"><thead><tr><th data-de="Befehl">Command</th><th data-de="Wirkung">Effect</th></tr></thead><tbody>
+            <tr><td><code>clip &lt;xmin&gt; &lt;xmax&gt; &lt;ymin&gt; &lt;ymax&gt; &lt;zmin&gt; &lt;zmax&gt;</code></td><td data-de="Setzt die normalisierten Clipping-Grenzen im Bereich 0 bis 1.">Sets normalized clipping bounds in the range 0 through 1.</td></tr>
+            <tr><td><code>resetclip</code></td><td data-de="Entfernt das Clipping.">Resets clipping.</td></tr>
+            <tr><td><code>isovalue &lt;dataset-value&gt;</code></td><td data-de="Setzt den Isowert in den skalaren Werten des Datensatzes.">Sets the isovalue in dataset scalar units.</td></tr>
+            <tr><td><code>isovalueNormalized &lt;0...1&gt;</code></td><td data-de="Setzt den normalisierten Isowert.">Sets the normalized isovalue.</td></tr>
+          </tbody></table></div>
+
+          <h3 data-de="Transferfunktion und Beleuchtung">Transfer function and lighting</h3>
+          <div class="table-wrap"><table class="command-table"><thead><tr><th data-de="Befehl">Command</th><th data-de="Wirkung">Effect</th></tr></thead><tbody>
+            <tr><td><code>loadtf &lt;file&gt;</code><br /><code>settffile &lt;file&gt;</code></td><td data-de="Lädt eine <code>.tf1d</code>-Transferfunktion.">Loads a <code>.tf1d</code> transfer function.</td></tr>
+            <tr><td><code>savetf &lt;file&gt;</code><br /><code>savetffile &lt;file&gt;</code></td><td data-de="Speichert die aktuelle Transferfunktion.">Saves the current transfer function.</td></tr>
+            <tr><td><code>settransferfunction &lt;data-channel&gt; &lt;base64&gt;</code></td><td data-de="Ersetzt die vollständige RGBA-Transferfunktion des nullbasierten Datenkanals durch Base64-kodierte 8-Bit-Samples. Dieser Befehl unterstützt Mehrkanaldatensätze und wird vor allem von der Interaktionsaufzeichnung erzeugt.">Replaces the complete RGBA transfer function of the zero-based data channel with base64-encoded 8-bit samples. This supports multi-channel datasets and is primarily generated by interaction recording.</td></tr>
+            <tr><td><code>resettf</code></td><td data-de="Setzt die Transferfunktion auf den Standard zurück.">Resets the transfer function to its default.</td></tr>
+            <tr><td><code>setlightdirection &lt;x&gt; &lt;y&gt; &lt;z&gt;</code></td><td data-de="Setzt und normalisiert eine von null verschiedene Lichtrichtung.">Sets and normalizes a non-zero light direction.</td></tr>
+            <tr><td><code>setambientlight &lt;r&gt; &lt;g&gt; &lt;b&gt;</code></td><td data-de="Setzt die Ambient-Lichtfarbe.">Sets the ambient-light color.</td></tr>
+            <tr><td><code>setdiffuselight &lt;r&gt; &lt;g&gt; &lt;b&gt;</code></td><td data-de="Setzt die diffuse Lichtfarbe.">Sets the diffuse-light color.</td></tr>
+            <tr><td><code>setspecularlight &lt;r&gt; &lt;g&gt; &lt;b&gt;</code></td><td data-de="Setzt die spekulare Lichtfarbe.">Sets the specular-light color.</td></tr>
+            <tr><td><code>resetlighting</code></td><td data-de="Setzt Richtung und Lichtfarben zurück.">Resets light direction and colors.</td></tr>
+          </tbody></table></div>
+        </section>
+
+        <section id="annotations">
+          <h2 data-de="Objekte, Marker und Messungen">Objects, markers, and measurements</h2>
+          <p data-de="Positionen sind normalisierte Volumenkoordinaten. Farben verwenden RGB bzw. RGBA im Bereich 0 bis 1. Die einfachen <code>add...</code>-Befehle erzeugen neue UUIDs; die deterministischen <code>set...</code>-Befehle erzeugen oder ersetzen genau die angegebene UUID und eignen sich für aufgezeichnete Skripte.">Positions use normalized volume coordinates. Colors use RGB or RGBA in the range 0 through 1. Simple <code>add...</code> commands create new UUIDs; deterministic <code>set...</code> commands create or replace the supplied UUID and are suited to recorded scripts.</p>
+
+          <h3 data-de="Sichtbarkeit und Markerdateien">Visibility and marker files</h3>
+          <div class="table-wrap"><table class="command-table"><thead><tr><th data-de="Befehl">Command</th><th data-de="Wirkung">Effect</th></tr></thead><tbody>
+            <tr><td><code>hideobjects &lt;bool&gt;</code></td><td data-de="Blendet alle Objekte lokal aus oder wieder ein, ohne Daten zu löschen.">Locally hides or shows all objects without deleting data.</td></tr>
+            <tr><td><code>hidemeasurements &lt;bool&gt;</code></td><td data-de="Blendet alle Messungen lokal aus oder wieder ein, ohne Daten zu löschen.">Locally hides or shows all measurements without deleting data.</td></tr>
+            <tr><td><code>loadmarkers &lt;file&gt; [replace]</code></td><td data-de="Lädt eine <code>.marker</code>-Datei. Ohne Bool-Wert werden bestehende Objekte ersetzt; <code>false</code> fügt mit eindeutigen UUIDs hinzu.">Loads a <code>.marker</code> file. Existing objects are replaced by default; <code>false</code> merges with unique UUIDs.</td></tr>
+            <tr><td><code>savemarkers &lt;file&gt;</code></td><td data-de="Speichert die aktuellen Marker und Objektinstanzen.">Saves current markers and object instances.</td></tr>
+            <tr><td><code>removemarker &lt;uuid|name&gt;</code></td><td data-de="Entfernt den ersten passenden Kugel- oder Strichmarker.">Removes the first matching sphere or stroke marker.</td></tr>
+            <tr><td><code>clearmarkers</code></td><td data-de="Entfernt alle Kugel- und Strichmarker, aber keine Mesh-Instanzen.">Removes all sphere and stroke markers, but not mesh instances.</td></tr>
+            <tr><td><code>removeobject &lt;uuid|name&gt;</code></td><td data-de="Entfernt einen Marker oder eine platzierte Mesh-Instanz.">Removes a marker or placed mesh instance.</td></tr>
+            <tr><td><code>clearobjects</code></td><td data-de="Entfernt alle Objekte.">Removes all objects.</td></tr>
+          </tbody></table></div>
+
+          <h3 data-de="Marker erzeugen">Create markers</h3>
+          <div class="table-wrap"><table class="command-table"><thead><tr><th data-de="Befehl">Command</th><th data-de="Argumente und Wirkung">Arguments and effect</th></tr></thead><tbody>
+            <tr><td><code>addspheremarker &lt;name&gt; &lt;x&gt; &lt;y&gt; &lt;z&gt; &lt;radius&gt; &lt;r&gt; &lt;g&gt; &lt;b&gt;</code></td><td data-de="Erzeugt einen neuen Kugelmarker.">Creates a new sphere marker.</td></tr>
+            <tr><td><code>adddirectionalmarker &lt;name&gt; &lt;x&gt; &lt;y&gt; &lt;z&gt; &lt;radius&gt; &lt;r&gt; &lt;g&gt; &lt;b&gt; &lt;ox&gt; &lt;oy&gt; &lt;oz&gt;</code></td><td data-de="Erzeugt einen Kugelmarker mit Richtungsstrahl zum Ursprung <code>o</code>.">Creates a sphere marker with a direction ray toward origin <code>o</code>.</td></tr>
+            <tr><td><code>addstrokemarker &lt;name&gt; &lt;radius&gt; &lt;r&gt; &lt;g&gt; &lt;b&gt; &lt;x y z...&gt;</code></td><td data-de="Erzeugt einen Strich aus mindestens einem XYZ-Punkt; alle Punkte erhalten denselben Radius.">Creates a stroke from one or more XYZ points; all points receive the same radius.</td></tr>
+            <tr><td><code>setspheremarker &lt;uuid&gt; &lt;name&gt; &lt;x y z&gt; &lt;radius&gt; &lt;r g b a&gt; &lt;direction-bool&gt; &lt;ox oy oz&gt;</code></td><td data-de="Erzeugt oder ersetzt einen Kugelmarker mit fester UUID.">Creates or replaces a sphere marker with a fixed UUID.</td></tr>
+            <tr><td><code>setstrokemarker &lt;uuid&gt; &lt;name&gt; &lt;r g b a&gt; &lt;x y z radius...&gt;</code></td><td data-de="Erzeugt oder ersetzt einen Strich mit individuellem Radius pro Punkt.">Creates or replaces a stroke with an individual radius for every point.</td></tr>
+          </tbody></table></div>
+
+          <h3 data-de="Mesh-Instanzen und Messungen">Mesh instances and measurements</h3>
+          <div class="table-wrap"><table class="command-table"><thead><tr><th data-de="Befehl">Command</th><th data-de="Argumente und Wirkung">Arguments and effect</th></tr></thead><tbody>
+            <tr><td><code>setmeshinstance &lt;uuid&gt; &lt;asset-uuid&gt; &lt;name&gt; &lt;tx ty tz&gt; &lt;qx qy qz qw&gt; &lt;sx sy sz&gt; &lt;visible&gt;</code></td><td data-de="Erzeugt oder ersetzt eine Instanz eines bereits bekannten Mesh-Assets mit Translation in Metern, Quaternion-Rotation und Skalierung.">Creates or replaces an instance of a known mesh asset using translation in meters, quaternion rotation, and scale.</td></tr>
+            <tr><td><code>setmeasurement &lt;uuid&gt; &lt;length|area|volume&gt; &lt;name&gt; &lt;point-uuid x y z...&gt;</code></td><td data-de="Erzeugt oder ersetzt eine Messung. Jeder Punkt besteht aus UUID und XYZ-Position.">Creates or replaces a measurement. Every point consists of a UUID and XYZ position.</td></tr>
+            <tr><td><code>removemeasurement &lt;uuid|name&gt;</code></td><td data-de="Entfernt die erste passende Messung.">Removes the first matching measurement.</td></tr>
+            <tr><td><code>clearmeasurements</code></td><td data-de="Entfernt alle Messungen.">Removes all measurements.</td></tr>
+          </tbody></table></div>
+
+          <div class="callout callout--warm">
+            <strong data-de="Mesh-Abhängigkeit">Mesh dependency</strong>
+            <span data-de="<code>setmeshinstance</code> referenziert ein Asset über seine UUID. Das Asset muss bereits lokal oder über eine bekannte Serverquelle verfügbar sein. Der Befehl bettet keine Mesh-Daten in das Skript ein."><code>setmeshinstance</code> references an asset by UUID. The asset must already be available locally or from a known server source. The command does not embed mesh data in the script.</span>
+          </div>
+        </section>
+      </article>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <div class="container footer__inner">
+      <span class="footer__brand">© 2026 Jens Krueger</span>
+      <div class="footer__right">
+        <a class="footer__link" href="./" data-de="Zur Handbuch-Startseite">Guide home</a>
+        <a class="footer__link" href="https://github.com/JensDerKrueger/GraphicsScriptEditor">Graphics Script Editor</a>
+      </div>
+    </div>
+  </footer>
+  <script>
+    window.BorgVRI18n.applyTranslations({
+      en: { title: "Graphics Script for BorgVR", metaDescription: "Complete GSC language and command reference for automating BorgVR on macOS, with practical example programs." },
+      de: { title: "Graphics Script für BorgVR", metaDescription: "Vollständige GSC-Sprach- und Befehlsreferenz zur Automatisierung von BorgVR unter macOS mit praktischen Beispielprogrammen." }
+    });
+  </script>
+</body>
+</html>

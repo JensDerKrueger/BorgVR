@@ -21,12 +21,9 @@ importdirectory(string,string,string)
 # Export one BorgVR LoD as an uncompressed inline NRRD; LoD 0 is full resolution.
 exportdataset(string,string,int)
 setimportbricksize(int)
-# Accepted alias matching the original command proposal.
-setimportbrickssize(int)
 setimportoverlap(int)
 # Border modes: 0 = zeroes, 1 = clamp to border, 2 = repeat.
 setbordermode(int)
-setbaordermode(int)
 
 # Dataset control
 opendataset(string)
