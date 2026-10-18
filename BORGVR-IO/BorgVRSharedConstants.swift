@@ -75,7 +75,7 @@ enum BorgVRMeshFormat {
 
 enum BorgVRSharePlayProtocol {
   static let magic: UInt32 = 0x4256_5350 // "BVSP"
-  static let version = BorgVRSemanticVersion(major: 3, minor: 0)
+  static let version = BorgVRSemanticVersion(major: 3, minor: 1)
 
   enum MessageType: UInt8 {
     case initMessage = 0x00
@@ -89,6 +89,15 @@ enum BorgVRSharePlayProtocol {
     case hostClaim = 0x08
     case hostState = 0x09
     case protocolVersion = 0x0A
+
+    var carriesStateVersion: Bool {
+      switch self {
+        case .initMessage, .renderingUpdate, .shutdownRequest:
+          return true
+        default:
+          return false
+      }
+    }
   }
 
   enum PacketKind: UInt8 {
@@ -98,6 +107,50 @@ enum BorgVRSharePlayProtocol {
     case volumeMarkers = 4
     case spatialToolPreview = 5
     case volumeMeasurements = 6
+  }
+}
+
+struct BorgVRSharePlayStateVersion: Equatable, Hashable, Sendable {
+  let sessionID: UUID
+  let revision: UInt64
+
+  init(sessionID: UUID = UUID(), revision: UInt64 = 1) {
+    self.sessionID = sessionID
+    self.revision = revision
+  }
+
+  var nextRevision: Self {
+    Self(sessionID: sessionID, revision: revision &+ 1)
+  }
+}
+
+struct BorgVRSharePlayStateEnvelope: Sendable {
+  let version: BorgVRSharePlayStateVersion
+  let payload: Data
+}
+
+enum BorgVRSharePlayStateEnvelopeCodec {
+  static func encode(
+    _ payload: Data,
+    version: BorgVRSharePlayStateVersion
+  ) -> Data {
+    var writer = BorgVRSharePlayDataWriter()
+    writer.write(version.sessionID)
+    writer.write(version.revision)
+    writer.write(payload)
+    return writer.data
+  }
+
+  static func decode(_ data: Data) throws -> BorgVRSharePlayStateEnvelope {
+    var reader = BorgVRSharePlayDataReader(data)
+    let version = BorgVRSharePlayStateVersion(
+      sessionID: try reader.readUUID(),
+      revision: try reader.read()
+    )
+    return BorgVRSharePlayStateEnvelope(
+      version: version,
+      payload: reader.readRemainingData()
+    )
   }
 }
 
@@ -435,6 +488,7 @@ enum BorgVRScreenViewStateCodec {
 
 enum BorgVRSharePlayProtocolError: Error {
   case unexpectedEnd
+  case missingStateVersion
   case invalidProtocolVersion
   case invalidParticipantInfo
   case invalidScreenViewState
@@ -450,6 +504,15 @@ private struct BorgVRSharePlayDataWriter {
 
   mutating func write(_ value: Float) {
     write(value.bitPattern)
+  }
+
+  mutating func write(_ value: UUID) {
+    var uuid = value.uuid
+    withUnsafeBytes(of: &uuid) { data.append(contentsOf: $0) }
+  }
+
+  mutating func write(_ value: Data) {
+    data.append(value)
   }
 }
 
@@ -478,6 +541,24 @@ private struct BorgVRSharePlayDataReader {
 
   mutating func read() throws -> Float {
     Float(bitPattern: try read())
+  }
+
+  mutating func readUUID() throws -> UUID {
+    let size = MemoryLayout<uuid_t>.size
+    guard offset + size <= data.count else {
+      throw BorgVRSharePlayProtocolError.unexpectedEnd
+    }
+    var uuid: uuid_t = (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+    _ = withUnsafeMutableBytes(of: &uuid) { destination in
+      data.copyBytes(to: destination, from: offset..<(offset + size))
+    }
+    offset += size
+    return UUID(uuid: uuid)
+  }
+
+  mutating func readRemainingData() -> Data {
+    defer { offset = data.count }
+    return Data(data[offset...])
   }
 }
 

@@ -70,6 +70,8 @@ final class SharePlayCoordinator: ObservableObject {
   private var sessionOriginsByDatasetID: [String: [DatasetOrigin]] = [:]
   private var adHocOriginsByParticipantID: [UUID: [String: [DatasetOrigin]]] = [:]
   private var sessionDatasetID: String?
+  private var stateVersion: BorgVRSharePlayStateVersion?
+  private var requestedStateVersion: BorgVRSharePlayStateVersion?
   private var localParticipantID: UUID?
   private var currentHostParticipantID: UUID?
   private var hostElectionTerm: UInt64 = 0
@@ -242,6 +244,7 @@ final class SharePlayCoordinator: ObservableObject {
   func datasetOpened() {
     guard isInSession else { return }
     if appModel?.groupSessionHost == true {
+      advanceHostStateVersion()
       setSessionDatasetID(appModel?.activeDataset?.uniqueId)
       resetPendingSynchronizationForDatasetChange()
       sharedScreenViewState = nil
@@ -262,15 +265,16 @@ final class SharePlayCoordinator: ObservableObject {
       if isScreenViewSynchronized, let renderingParameters {
         sharedScreenViewState = renderingParameters.screenViewState
       }
-      Task { await sendInitialDataReliably() }
+      Task { await sendInitialData() }
     } else {
-      Task { await requestInitialStateReliably() }
+      Task { await requestInitialState() }
     }
   }
 
   func closeSharedDataset() {
     guard isInSession else { return }
     if appModel?.groupSessionHost == true {
+      advanceHostStateVersion()
       setSessionDatasetID(nil)
       Task { try? await sendData(Data(), of: .shutdownRequest) }
     } else {
@@ -402,6 +406,8 @@ final class SharePlayCoordinator: ObservableObject {
     let isHost = session.activity.initiatorID == localBorgVRSharePlayInitiatorID
     appModel?.groupSessionHost = isHost
     sessionDatasetID = isHost ? appModel?.activeDataset?.uniqueId : nil
+    stateVersion = isHost ? BorgVRSharePlayStateVersion() : nil
+    requestedStateVersion = nil
     localParticipantID = session.localParticipant.id
     currentHostParticipantID = isHost ? session.localParticipant.id : nil
     hostElectionTerm = 0
@@ -481,7 +487,16 @@ final class SharePlayCoordinator: ObservableObject {
     to participants: Participants = .all
   ) async throws {
     guard let messenger else { return }
-    try await messenger.send(Data([messageType.rawValue]) + data, to: participants)
+    let payload: Data
+    if messageType.carriesStateVersion {
+      guard let stateVersion else {
+        throw BorgVRSharePlayProtocolError.missingStateVersion
+      }
+      payload = BorgVRSharePlayStateEnvelopeCodec.encode(data, version: stateVersion)
+    } else {
+      payload = data
+    }
+    try await messenger.send(Data([messageType.rawValue]) + payload, to: participants)
   }
 
   private func sendParticipantInfo(to participants: Participants = .all) async {
@@ -531,9 +546,9 @@ final class SharePlayCoordinator: ObservableObject {
         await advertiseCurrentLocalDataset(to: .only(Set([participant])))
         await sendCurrentHostState(to: .only(Set([participant])))
         if appModel?.groupSessionHost == true {
-          await sendInitialDataReliably(to: .only(Set([participant])))
+          await sendInitialData(to: .only(Set([participant])))
         } else {
-          await requestInitialStateReliably(to: .only(Set([participant])))
+          await requestInitialState(to: .only(Set([participant])))
         }
       }
     } catch {
@@ -618,6 +633,8 @@ final class SharePlayCoordinator: ObservableObject {
     sceneMeshResolutionTask?.cancel()
     sceneMeshResolutionTask = nil
     sceneMeshResolutionRetryRequested = false
+    stateVersion = nil
+    requestedStateVersion = nil
     hostElectionTask?.cancel()
     hostElectionTask = nil
     localParticipantID = nil
@@ -698,15 +715,7 @@ final class SharePlayCoordinator: ObservableObject {
     }
   }
 
-  private func sendInitialDataReliably(to participants: Participants = .all) async {
-    await sendInitialData(to: participants)
-    try? await Task.sleep(nanoseconds: 250_000_000)
-    await sendInitialData(to: participants)
-  }
-
-  private func requestInitialStateReliably(to participants: Participants = .all) async {
-    try? await sendData(Data(), of: .stateRequest, to: participants)
-    try? await Task.sleep(nanoseconds: 250_000_000)
+  private func requestInitialState(to participants: Participants = .all) async {
     try? await sendData(Data(), of: .stateRequest, to: participants)
   }
 
@@ -764,7 +773,7 @@ final class SharePlayCoordinator: ObservableObject {
   private func handleIncoming(data: Data, from participant: Participant, sessionGeneration generation: Int) {
     guard generation == sessionGeneration, isInSession else { return }
     guard let firstByte = data.first else { return }
-    let payload = Data(data.dropFirst())
+    var payload = Data(data.dropFirst())
 
     if firstByte == MessageType.protocolVersion.rawValue {
       handleProtocolVersion(data: payload, from: participant)
@@ -775,13 +784,30 @@ final class SharePlayCoordinator: ObservableObject {
       return
     }
 
-    switch firstByte {
-      case MessageType.initMessage.rawValue:
+    guard let messageType = MessageType(rawValue: firstByte) else {
+      appModel?.logger.error("Invalid SharePlay message type: \(firstByte)")
+      return
+    }
+    if messageType.carriesStateVersion {
+      do {
+        let envelope = try BorgVRSharePlayStateEnvelopeCodec.decode(payload)
+        guard acceptStateVersion(envelope.version, for: messageType, from: participant) else {
+          return
+        }
+        payload = envelope.payload
+      } catch {
+        appModel?.logger.error("Invalid SharePlay state envelope: \(error)")
+        return
+      }
+    }
+
+    switch messageType {
+      case .initMessage:
         guard appModel?.groupSessionHost != true else { return }
         handleInit(data: payload, sessionGeneration: generation)
-      case MessageType.renderingUpdate.rawValue:
+      case .renderingUpdate:
         handleUpdate(data: payload, from: participant)
-      case MessageType.shutdownRequest.rawValue:
+      case .shutdownRequest:
         guard appModel?.groupSessionHost != true else { return }
         setSessionDatasetID(nil)
         pendingDatasetLoadTask?.cancel()
@@ -790,12 +816,12 @@ final class SharePlayCoordinator: ObservableObject {
         appModel?.removeAllVolumeMarkers()
         appModel?.removeAllVolumeMeasurements()
         appModel?.closeDataset(destination: .sharePlayWaiting(.hostDataset))
-      case MessageType.stateRequest.rawValue:
+      case .stateRequest:
         guard appModel?.groupSessionHost == true else { return }
-        Task { await sendInitialDataReliably(to: .only(Set([participant]))) }
-      case MessageType.participantInfo.rawValue:
+        Task { await sendInitialData(to: .only(Set([participant]))) }
+      case .participantInfo:
         handleParticipantInfo(data: payload, from: participant)
-      case MessageType.screenViewRequest.rawValue:
+      case .screenViewRequest:
         guard let renderingParameters else { return }
         Task {
           let state = isScreenViewSynchronized
@@ -807,17 +833,63 @@ final class SharePlayCoordinator: ObservableObject {
             to: .only(Set([participant]))
           )
         }
-      case MessageType.originCatalogSnapshot.rawValue:
+      case .originCatalogSnapshot:
         handleOriginCatalogSnapshot(data: payload)
-      case MessageType.datasetOriginAdvertisement.rawValue:
+      case .datasetOriginAdvertisement:
         handleDatasetOriginAdvertisement(data: payload, from: participant)
-      case MessageType.hostClaim.rawValue:
+      case .hostClaim:
         handleHostClaim(data: payload)
-      case MessageType.hostState.rawValue:
+      case .hostState:
         handleHostState(data: payload)
-      default:
-        appModel?.logger.error("Invalid SharePlay message type: \(firstByte)")
+      case .protocolVersion:
+        break
     }
+  }
+
+  private func acceptStateVersion(
+    _ incoming: BorgVRSharePlayStateVersion,
+    for messageType: MessageType,
+    from participant: Participant
+  ) -> Bool {
+    if messageType == .initMessage || messageType == .shutdownRequest {
+      guard appModel?.groupSessionHost != true else { return false }
+      if let currentHostParticipantID,
+         currentHostParticipantID != participant.id {
+        return false
+      }
+      if let stateVersion,
+         stateVersion.sessionID == incoming.sessionID,
+         incoming.revision < stateVersion.revision {
+        return false
+      }
+      currentHostParticipantID = currentHostParticipantID ?? participant.id
+      stateVersion = incoming
+      requestedStateVersion = nil
+      return true
+    }
+
+    guard stateVersion == incoming else {
+      if appModel?.groupSessionHost == true {
+        Task { await sendInitialData(to: .only(Set([participant]))) }
+      } else if stateVersion?.sessionID != incoming.sessionID
+                  || (stateVersion?.revision ?? 0) < incoming.revision {
+        if requestedStateVersion != incoming {
+          requestedStateVersion = incoming
+          appModel?.logger.info(
+            "Received a SharePlay update for an unknown state version; requesting the current initial state."
+          )
+          Task { await requestInitialState() }
+        }
+      }
+      return false
+    }
+    return true
+  }
+
+  private func advanceHostStateVersion() {
+    guard appModel?.groupSessionHost == true else { return }
+    stateVersion = stateVersion?.nextRevision ?? BorgVRSharePlayStateVersion()
+    requestedStateVersion = nil
   }
 
   private func handleUpdate(data: Data, from participant: Participant) {
@@ -1364,7 +1436,7 @@ final class SharePlayCoordinator: ObservableObject {
     if winner == localParticipantID {
       Task {
         await sendCurrentHostState()
-        await sendInitialDataReliably()
+        await sendInitialData()
       }
     }
   }
@@ -1384,6 +1456,7 @@ final class SharePlayCoordinator: ObservableObject {
   }
 
   private func applyHostState(_ state: BorgVRSharePlayHostState) {
+    let previousHostParticipantID = currentHostParticipantID
     hostElectionTerm = state.term
     currentHostParticipantID = state.hostID
     hostClaims = [state.term: [state.hostID]]
@@ -1393,7 +1466,14 @@ final class SharePlayCoordinator: ObservableObject {
     let isLocalHost = state.hostID == localParticipantID
     appModel?.groupSessionHost = isLocalHost
     if isLocalHost {
+      if previousHostParticipantID != localParticipantID || stateVersion == nil {
+        stateVersion = BorgVRSharePlayStateVersion()
+        requestedStateVersion = nil
+      }
       setSessionDatasetID(appModel?.activeDataset?.uniqueId)
+    } else if previousHostParticipantID != state.hostID {
+      stateVersion = nil
+      requestedStateVersion = nil
     }
     appModel?.logger.info(isLocalHost
       ? "This device took over the SharePlay host role."
