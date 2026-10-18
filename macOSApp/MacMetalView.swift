@@ -20,6 +20,7 @@ struct MacMetalView: NSViewRepresentable {
   var onMagnificationDelta: (CGFloat) -> Void = { _ in }
   var onMagnificationEnded: () -> Void = {}
   var onDoubleTap: () -> Void = {}
+  var onKeyboardShortcut: (MacRenderShortcut) -> Void = { _ in }
 
   func makeCoordinator() -> MacVolumeRenderer {
     MacVolumeRenderer(
@@ -42,20 +43,20 @@ struct MacMetalView: NSViewRepresentable {
     view.framebufferOnly = false
     view.preferredFramesPerSecond = 60
     view.delegate = context.coordinator
-    configureInteractionCallbacks(for: view, renderer: context.coordinator)
+    configureInteractionCallbacks(for: view)
     context.coordinator.attach(to: view)
     return view
   }
 
   func updateNSView(_ view: InteractiveMTKView, context: Context) {
-    configureInteractionCallbacks(for: view, renderer: context.coordinator)
+    configureInteractionCallbacks(for: view)
     let coordinator = context.coordinator
     DispatchQueue.main.async {
       coordinator.updateIfNeeded(for: view)
     }
   }
 
-  private func configureInteractionCallbacks(for view: InteractiveMTKView, renderer: MacVolumeRenderer) {
+  private func configureInteractionCallbacks(for view: InteractiveMTKView) {
     view.onDragDelta = onDragDelta
     view.onDragUpdate = onDragUpdate
     view.onDragEnded = onDragEnded
@@ -63,9 +64,7 @@ struct MacMetalView: NSViewRepresentable {
     view.onMagnificationDelta = onMagnificationDelta
     view.onMagnificationEnded = onMagnificationEnded
     view.onDoubleTap = onDoubleTap
-    view.onScreenshotRequested = {
-      renderer.saveScreenshotToDataDirectory()
-    }
+    view.onKeyboardShortcut = onKeyboardShortcut
   }
 }
 
@@ -77,7 +76,7 @@ final class InteractiveMTKView: MTKView {
   var onMagnificationDelta: (CGFloat) -> Void = { _ in }
   var onMagnificationEnded: () -> Void = {}
   var onDoubleTap: () -> Void = {}
-  var onScreenshotRequested: () -> Void = {}
+  var onKeyboardShortcut: (MacRenderShortcut) -> Void = { _ in }
 
   private var lastDragLocation: CGPoint?
 
@@ -164,20 +163,11 @@ final class InteractiveMTKView: MTKView {
   }
 
   override func keyDown(with event: NSEvent) {
-    let modifierFlags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-    let commandModifiers: NSEvent.ModifierFlags = [.command, .control, .option]
-    guard modifierFlags.intersection(commandModifiers).isEmpty,
-          let key = event.charactersIgnoringModifiers?.lowercased() else {
+    guard let shortcut = MacRenderShortcut(event: event) else {
       super.keyDown(with: event)
       return
     }
-
-    switch key {
-      case "s":
-        onScreenshotRequested()
-      default:
-        super.keyDown(with: event)
-    }
+    onKeyboardShortcut(shortcut)
   }
 
   private func handleMouseDrag(_ event: NSEvent) {

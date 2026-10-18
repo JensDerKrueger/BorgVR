@@ -66,6 +66,8 @@ settffile(string)
 loadtf(string)
 savetffile(string)
 savetf(string)
+# Replaces one complete RGBA transfer-function channel from base64-encoded sample bytes.
+settransferfunction(int,string)
 resettf()
 
 # Lighting (RGB components use the 0...1 range)

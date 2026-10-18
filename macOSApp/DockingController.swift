@@ -46,6 +46,8 @@ final class DockingController: ObservableObject {
 
   @Published private var visiblePanels: Set<DockablePanelID>
   @Published private var detachedPanels: Set<DockablePanelID>
+  @Published var showsLog = false
+  @Published var showsDatasetInfo = false
   private var datasetLifecycleClosingPanels: Set<DockablePanelID> = []
   private var transientClosingPanels: Set<DockablePanelID> = []
 
@@ -111,6 +113,8 @@ final class DockingController: ObservableObject {
   }
 
   func resetForDatasetClose() {
+    showsLog = false
+    showsDatasetInfo = false
     datasetLifecycleClosingPanels.formUnion(detachedPanels)
     detachedPanels.removeAll()
     visiblePanels.removeAll()
@@ -355,6 +359,7 @@ struct DetachedPanelContent: View {
   @EnvironmentObject private var storedAppModel: StoredAppModel
   @EnvironmentObject private var docking: DockingController
   @EnvironmentObject private var sharePlay: SharePlayCoordinator
+  @EnvironmentObject private var session: ScreenBorgVRSession
 
   let panel: DockablePanelID
 
@@ -374,7 +379,13 @@ struct DetachedPanelContent: View {
               TransferFunctionEditorView(
                 usesPanelBackground: false,
                 usesFlexibleCanvasHeight: true,
-                catalogDirectoryURLs: transferFunctionCatalogDirectoryURLs
+                catalogDirectoryURLs: transferFunctionCatalogDirectoryURLs,
+                onMutation: {
+                  session.commitExternalMutation(
+                    source: .userInterface,
+                    domain: .transferFunction
+                  )
+                }
               ) {
                 docking.close(panel)
               }

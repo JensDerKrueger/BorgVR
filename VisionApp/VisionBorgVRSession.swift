@@ -64,6 +64,16 @@ extension BorgVRSession where VisualizationState == SharedAppModel,
             sharedAppModel.clipMax = maximum
             sharedAppModel.lastTranslationClipping = .zero
             sharedAppModel.synchronize(kind: .stateOnly)
+          case .setTransferFunction(let snapshot):
+            guard sharedAppModel.transferFunctions.indices.contains(snapshot.channel),
+                  sharedAppModel.transferFunctions[snapshot.channel].data.count ==
+                    snapshot.samples.count else {
+              throw BorgVRSessionCommandError.invalidTransferFunction
+            }
+            try sharedAppModel.transferFunctions[snapshot.channel].updateData(
+              with: snapshot.samples
+            )
+            sharedAppModel.synchronize(kind: .full)
           case .setLighting(let direction, let ambient, let diffuse, let specular):
             if let direction {
               guard simd_length_squared(direction) > 0.000_001 else {
@@ -219,6 +229,11 @@ extension BorgVRSession where VisualizationState == SharedAppModel,
           meshInstances: sharedAppModel.sceneMeshInstances,
           measurements: sharedAppModel.volumeMeasurementsSnapshot()
         )
+      },
+      transferFunctionSnapshotProvider: {
+        sharedAppModel.activeTransferFunctions.enumerated().map { channel, transferFunction in
+          BorgVRTransferFunctionSnapshot(channel: channel, samples: transferFunction.data)
+        }
       }
     )
   }

@@ -451,6 +451,11 @@ final class BorgVRScriptRunner: ObservableObject {
       self?.saveTransferFunction(filename: args.string(0)) ?? .callbackError
     }
 
+    register("settransferfunction", [.int, .string]) { [weak self] args in
+      self?.setTransferFunction(channel: args.int(0), encodedSamples: args.string(1))
+        ?? .callbackError
+    }
+
     register("resettf", []) { [weak self] _ in
       guard let session = self?.session else { return .callbackError }
       do {
@@ -1324,6 +1329,44 @@ final class BorgVRScriptRunner: ObservableObject {
     } catch {
       logError("Transfer function could not be saved: \(error.localizedDescription)")
       return .callbackError
+    }
+  }
+
+  private func setTransferFunction(
+    channel: Int,
+    encodedSamples: String
+  ) -> CommandResultCode {
+    guard let parameters = renderingParameters,
+          let session,
+          parameters.transferFunctions.indices.contains(channel),
+          let bytes = Data(base64Encoded: encodedSamples),
+          bytes.count == parameters.transferFunctions[channel].data.count * 4 else {
+      return .invalidArguments
+    }
+
+    var samples: [SIMD4<UInt8>] = []
+    samples.reserveCapacity(bytes.count / 4)
+    var index = bytes.startIndex
+    while index < bytes.endIndex {
+      samples.append(SIMD4<UInt8>(
+        bytes[index],
+        bytes[bytes.index(index, offsetBy: 1)],
+        bytes[bytes.index(index, offsetBy: 2)],
+        bytes[bytes.index(index, offsetBy: 3)]
+      ))
+      index = bytes.index(index, offsetBy: 4)
+    }
+
+    do {
+      try session.perform(
+        .setTransferFunction(
+          BorgVRTransferFunctionSnapshot(channel: channel, samples: samples)
+        ),
+        source: .gsc
+      )
+      return .success
+    } catch {
+      return .invalidArguments
     }
   }
 

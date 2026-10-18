@@ -321,16 +321,31 @@ struct macOSApp: App {
     }
     .defaultSize(width: 430, height: 500)
     .commands {
+      CommandGroup(after: .newItem) {
+        Button("modeselection_open_dataset") {
+          appModel.navigationState = .selectData
+        }
+        .macKeyboardShortcut(.openDataset)
+        .disabled(appModel.activeDataset != nil)
+
+        Button("modeselection_import") {
+          appModel.navigationState = .importData
+        }
+        .macKeyboardShortcut(.importExport)
+        .disabled(appModel.activeDataset != nil)
+      }
+
       CommandMenu("Script") {
         Button("Run Script...") {
           scriptRunner.showOpenPanelAndRun()
         }
-        .keyboardShortcut("r", modifiers: [.command, .shift])
+        .macKeyboardShortcut(.runScript)
 
         Button("Stop Script") {
           scriptRunner.stopScript()
         }
         .disabled(!scriptRunner.isRunning)
+        .macKeyboardShortcut(.stopScript)
       }
     }
   }

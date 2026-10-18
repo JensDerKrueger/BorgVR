@@ -386,6 +386,19 @@ pre code { padding: 0; background: none; }
 }
 
 table { width: 100%; border-collapse: collapse; min-width: 560px; }
+kbd {
+  display: inline-block;
+  min-width: 1.7em;
+  padding: 0.15rem 0.42rem;
+  border: 1px solid var(--line);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
+  font: 600 0.9em/1.2 ui-monospace, SFMono-Regular, Menlo, monospace;
+  text-align: center;
+  white-space: nowrap;
+}
 th, td { padding: 12px 14px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
 th { background: var(--surface-raised); }
 td { color: var(--muted); }

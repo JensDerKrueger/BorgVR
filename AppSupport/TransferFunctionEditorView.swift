@@ -8,8 +8,10 @@ struct TransferFunctionEditorView: View {
   var usesPanelBackground = true
   var usesFlexibleCanvasHeight = false
   var catalogDirectoryURLs: [URL] = []
+  var onMutation: (() -> Void)?
   var onClose: (() -> Void)?
   @State private var lastPaintPoint: CGPoint?
+  @State private var previewRefreshToken: UInt64 = 0
   @State private var transferFunctionCatalog: [TransferFunctionCatalogEntry] = []
   @State private var saveDescription = ""
   @State private var showingSaveDescriptionPrompt = false
@@ -81,7 +83,8 @@ struct TransferFunctionEditorView: View {
     GeometryReader { geometry in
       CachedTransferFunctionPreview(
         transferFunction: renderingParameters.transferFunction,
-        revision: renderingParameters.transferFunction.revision
+        revision: renderingParameters.transferFunction.revision,
+        refreshToken: previewRefreshToken
       )
       .clipShape(RoundedRectangle(cornerRadius: 8))
       .contentShape(Rectangle())
@@ -207,6 +210,7 @@ struct TransferFunctionEditorView: View {
       Button {
         renderingParameters.objectWillChange.send()
         renderingParameters.transferFunction.reset()
+        onMutation?()
         sharePlay.synchronize(kind: .full)
       } label: {
         Image(systemName: "arrow.counterclockwise")
@@ -308,7 +312,6 @@ struct TransferFunctionEditorView: View {
 
     let current = normalizedPaintPoint(point, in: size)
     let channels = selectedChannels
-    renderingParameters.objectWillChange.send()
 
     if let lastPaintPoint {
       let previous = normalizedPaintPoint(lastPaintPoint, in: size)
@@ -330,6 +333,8 @@ struct TransferFunctionEditorView: View {
     }
 
     lastPaintPoint = point
+    previewRefreshToken &+= 1
+    onMutation?()
     sharePlay.synchronize(kind: .full)
   }
 
@@ -406,6 +411,7 @@ struct TransferFunctionEditorView: View {
     do {
       renderingParameters.objectWillChange.send()
       try renderingParameters.loadTransferFunction(from: fileURL)
+      onMutation?()
       sharePlay.synchronize(kind: .full)
       appModel.logger.info(
         String(localized: "tf_editor_load_success") + " \(fileURL.lastPathComponent)"
@@ -422,6 +428,7 @@ struct TransferFunctionEditorView: View {
       renderingParameters.objectWillChange.send()
       try renderingParameters.loadTransferFunction(from: entry.url)
       renderingParameters.renderMode = .transferFunction1D
+      onMutation?()
       sharePlay.synchronize(kind: .full)
       appModel.logger.info(
         String(localized: "tf_editor_load_success") + " \(entry.url.lastPathComponent)"
@@ -436,13 +443,16 @@ struct TransferFunctionEditorView: View {
 
 private struct CachedTransferFunctionPreview: View {
   private struct CacheKey: Hashable {
+    let transferFunctionID: ObjectIdentifier
     let revision: UInt64
+    let refreshToken: UInt64
     let pixelWidth: Int
     let pixelHeight: Int
   }
 
   let transferFunction: TransferFunction1D
   let revision: UInt64
+  let refreshToken: UInt64
 
   @Environment(\.displayScale) private var displayScale
   @State private var cachedImage: CGImage?
@@ -454,7 +464,9 @@ private struct CachedTransferFunctionPreview: View {
         height: max(1, geometry.size.height)
       )
       let key = CacheKey(
+        transferFunctionID: ObjectIdentifier(transferFunction),
         revision: revision,
+        refreshToken: refreshToken,
         pixelWidth: max(1, Int((size.width * displayScale).rounded())),
         pixelHeight: max(1, Int((size.height * displayScale).rounded()))
       )
@@ -467,6 +479,10 @@ private struct CachedTransferFunctionPreview: View {
         } else {
           Color.black
         }
+      }
+      .transaction { transaction in
+        transaction.animation = nil
+        transaction.disablesAnimations = true
       }
       .task(id: key) {
         cachedImage = renderImage(size: size, scale: displayScale)

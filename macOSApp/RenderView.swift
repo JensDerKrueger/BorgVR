@@ -47,7 +47,8 @@ struct RenderView: View {
         onPointerDown: beginInteraction(update:),
         onMagnificationDelta: applyMagnificationDelta(_:),
         onMagnificationEnded: finishInteractionGesture,
-        onDoubleTap: toggleInteractionMode
+        onDoubleTap: toggleInteractionMode,
+        onKeyboardShortcut: handleKeyboardShortcut(_:)
       )
         .ignoresSafeArea()
 
@@ -86,7 +87,13 @@ struct RenderView: View {
           DockableEditorPanel(panel: .transferFunctionEditor, maxWidth: 720) {
             TransferFunctionEditorView(
               usesPanelBackground: false,
-              catalogDirectoryURLs: transferFunctionCatalogDirectoryURLs
+              catalogDirectoryURLs: transferFunctionCatalogDirectoryURLs,
+              onMutation: {
+                session.commitExternalMutation(
+                  source: .userInterface,
+                  domain: .transferFunction
+                )
+              }
             ) {
               docking.hide(.transferFunctionEditor)
             }
@@ -173,6 +180,23 @@ struct RenderView: View {
       renderingParameters.brickVis = false
       synchronizeState()
     }
+    .onChange(of: appSettings.showLogButton) { _, isVisible in
+      if !isVisible {
+        docking.showsLog = false
+      }
+    }
+    .sheet(isPresented: $docking.showsLog) {
+      LoggerView(logger: appModel.logger)
+    }
+    .sheet(isPresented: $docking.showsDatasetInfo) {
+      DatasetInfoView(
+        dataset: appModel.activeDataset,
+        metadata: appModel.activeDatasetMetadata
+      ) {
+        docking.showsDatasetInfo = false
+      }
+      .frame(minWidth: 420, minHeight: 360)
+    }
   }
 
   @ViewBuilder
@@ -201,8 +225,103 @@ struct RenderView: View {
       Image(systemName: "eye")
     }
     .accessibilityLabel("Show UI")
-    .help("Show UI")
+    .help(MacRenderShortcut.help("Show UI", shortcut: .toggleControls))
     .buttonStyle(.bordered)
+  }
+
+  private func handleKeyboardShortcut(_ shortcut: MacRenderShortcut) {
+    switch shortcut {
+      case .model:
+        applyInteractionModeSelection(.model)
+      case .clipping:
+        applyInteractionModeSelection(.clipping)
+      case .transferInteraction:
+        applyInteractionModeSelection(.transferEditing)
+      case .drawing:
+        applyInteractionModeSelection(.drawing)
+      case .placement:
+        applyInteractionModeSelection(.objectPlacement)
+      case .measurement:
+        applyInteractionModeSelection(.measurement)
+      case .transferFunctionRendering:
+        setRenderMode(.transferFunction1D)
+      case .lightingRendering:
+        setRenderMode(.transferFunction1DLighting)
+      case .isoRendering:
+        setRenderMode(.isoValue)
+      case .screenshot:
+        appModel.requestRenderScreenshot(to: nil, accessURL: nil) { result in
+          if case let .failure(error) = result {
+            appModel.logger.error(error.localizedDescription)
+          }
+        }
+      case .reset:
+        try? session.perform(.reset(.all), source: .userInterface)
+        sharePlay.flushSynchronization()
+      case .bricks:
+        guard appSettings.showBrickVisualization else { return }
+        renderingParameters.brickVis.toggle()
+        session.commitExternalMutation(source: .userInterface, domain: .visualization)
+        sharePlay.synchronize(kind: .stateOnly)
+      case .synchronizeView:
+        guard sharePlay.isInSession else { return }
+        sharePlay.setScreenViewSynchronizationEnabled(!sharePlay.isScreenViewSynchronized)
+      case .editor:
+        togglePanel(renderingParameters.renderMode == .isoValue ? .isoEditor : .transferFunctionEditor)
+      case .lighting:
+        togglePanel(.lightingEditor)
+      case .objects:
+        togglePanel(.markerEditor)
+      case .measurements:
+        togglePanel(.measurementEditor)
+      case .performance:
+        openWindow(id: "PerformanceGraphView")
+      case .log:
+        guard appSettings.showLogButton else { return }
+        docking.showsLog.toggle()
+      case .datasetInfo:
+        docking.showsDatasetInfo.toggle()
+      case .docking:
+        toggleRenderControlsDocking()
+      case .toggleControls:
+        toggleRenderControlsVisibility()
+    }
+  }
+
+  private func setRenderMode(_ mode: RenderMode) {
+    guard renderingParameters.renderMode != mode else { return }
+    try? session.perform(.setRenderMode(mode), source: .userInterface)
+  }
+
+  private func togglePanel(_ panel: DockablePanelID) {
+    if docking.isDetached(panel) {
+      openWindow(id: panel.windowID)
+    } else {
+      docking.toggleVisibility(panel)
+    }
+  }
+
+  private func toggleRenderControlsDocking() {
+    if docking.isDetached(.renderControls) {
+      docking.dock(.renderControls)
+      dismissWindow(id: DockablePanelID.renderControls.windowID)
+    } else {
+      docking.detach(.renderControls)
+      openWindow(id: DockablePanelID.renderControls.windowID)
+    }
+  }
+
+  private func toggleRenderControlsVisibility() {
+    if docking.isDetached(.renderControls) {
+      if docking.isVisible(.renderControls) {
+        docking.close(.renderControls)
+        dismissWindow(id: DockablePanelID.renderControls.windowID)
+      } else {
+        docking.show(.renderControls)
+      }
+    } else {
+      docking.toggleVisibility(.renderControls)
+    }
   }
 
   private var transferFunctionCatalogDirectoryURLs: [URL] {

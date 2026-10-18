@@ -113,11 +113,19 @@ struct ModeSelectionView: View {
       Spacer(minLength: 32)
 
       VStack(spacing: 14) {
-        commandButton("modeselection_open_dataset", systemImage: "folder") {
+        commandButton(
+          "modeselection_open_dataset",
+          systemImage: "folder",
+          shortcut: .openDataset
+        ) {
           appModel.navigationState = .selectData
         }
 
-        commandButton("modeselection_import", systemImage: "arrow.up.arrow.down.square") {
+        commandButton(
+          "modeselection_import",
+          systemImage: "arrow.up.arrow.down.square",
+          shortcut: .importExport
+        ) {
           appModel.navigationState = .importData
         }
 
@@ -204,18 +212,23 @@ struct ModeSelectionView: View {
   }
 
   private func commandButton(
-    _ title: LocalizedStringKey,
+    _ title: String,
     systemImage: String,
+    shortcut: MacKeyboardShortcut? = nil,
     action: @escaping () -> Void
   ) -> some View {
     Button(action: action) {
-      Label(title, systemImage: systemImage)
+      Label(LocalizedStringKey(title), systemImage: systemImage)
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.vertical, 6)
     }
     .buttonStyle(.bordered)
     .controlSize(.large)
     .frame(maxWidth: .infinity)
+    .help(
+      shortcut.map { MacKeyboardShortcut.help(title, shortcut: $0) }
+        ?? String(localized: String.LocalizationValue(title))
+    )
   }
 }
 

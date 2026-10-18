@@ -44,6 +44,19 @@ struct BorgVRLightingSnapshot: Equatable, Sendable {
   var specular: SIMD3<Float>
 }
 
+struct BorgVRTransferFunctionSnapshot: Equatable, Sendable {
+  let channel: Int
+  let samples: [SIMD4<UInt8>]
+
+  var base64EncodedSamples: String {
+    var bytes = Data(capacity: samples.count * 4)
+    for sample in samples {
+      bytes.append(contentsOf: [sample.x, sample.y, sample.z, sample.w])
+    }
+    return bytes.base64EncodedString()
+  }
+}
+
 struct BorgVRVisualizationSnapshot: Equatable, Sendable {
   var transform: BorgVRTransformSnapshot
   var clipMinimum: SIMD3<Float>
@@ -67,6 +80,7 @@ enum BorgVRCommand: Sendable {
   case rotate(axis: SIMD3<Float>, degrees: Float)
   case setNormalizedIsoValue(Float)
   case setClipping(minimum: SIMD3<Float>, maximum: SIMD3<Float>)
+  case setTransferFunction(BorgVRTransferFunctionSnapshot)
   case setLighting(
     direction: SIMD3<Float>?,
     ambient: SIMD3<Float>?,
@@ -112,6 +126,8 @@ struct BorgVRCommandEvent: Sendable {
         return "isovalueNormalized \(value)"
       case .setClipping(let minimum, let maximum):
         return "clip \(minimum.x) \(maximum.x) \(minimum.y) \(maximum.y) \(minimum.z) \(maximum.z)"
+      case .setTransferFunction(let transferFunction):
+        return "settransferfunction \(transferFunction.channel) \(gscQuote(transferFunction.base64EncodedSamples))"
       case .setLighting(let direction, let ambient, let diffuse, let specular):
         var statements: [String] = []
         if let direction {
@@ -172,6 +188,7 @@ enum BorgVRSessionCommandError: Error, LocalizedError {
   case invalidClipping
   case invalidLightDirection
   case invalidLightColor
+  case invalidTransferFunction
   case emptyAnnotationVisibility
   case invalidAnnotation
   case annotationNotFound
@@ -185,6 +202,7 @@ enum BorgVRSessionCommandError: Error, LocalizedError {
       case .invalidClipping: "Clipping bounds must be ordered and contained in zero to one."
       case .invalidLightDirection: "Light direction must not be zero."
       case .invalidLightColor: "Light colors must be between zero and one."
+      case .invalidTransferFunction: "The transfer function data is invalid."
       case .emptyAnnotationVisibility: "At least one annotation visibility value is required."
       case .invalidAnnotation: "The annotation data is invalid."
       case .annotationNotFound: "The requested annotation was not found."
@@ -201,6 +219,7 @@ final class BorgVRSession<VisualizationState: AnyObject, RuntimeState: AnyObject
   typealias CommandHandler = (BorgVRCommand, BorgVRCommandSource) throws -> Void
   typealias SnapshotProvider = () -> BorgVRVisualizationSnapshot
   typealias AnnotationSnapshotProvider = () -> BorgVRAnnotationSnapshot
+  typealias TransferFunctionSnapshotProvider = () -> [BorgVRTransferFunctionSnapshot]
   typealias CommandObserver = (BorgVRCommandEvent) -> Void
 
   nonisolated(unsafe) let visualizationState: VisualizationState
@@ -211,12 +230,14 @@ final class BorgVRSession<VisualizationState: AnyObject, RuntimeState: AnyObject
   private let commandHandler: CommandHandler
   nonisolated(unsafe) private let snapshotProvider: SnapshotProvider
   private let annotationSnapshotProvider: AnnotationSnapshotProvider
+  private let transferFunctionSnapshotProvider: TransferFunctionSnapshotProvider
   nonisolated private let snapshotLock = NSLock()
   nonisolated(unsafe) private var cachedSnapshot: BorgVRVisualizationSnapshot
   private var cachedAnnotationSnapshot: BorgVRAnnotationSnapshot
   private var commandObservers: [UUID: CommandObserver] = [:]
   private var recordedEvents: [BorgVRCommandEvent] = []
   private var recordsCommands = false
+  @Published private(set) var isCommandRecording = false
 
   init(
     visualizationState: VisualizationState,
@@ -224,7 +245,8 @@ final class BorgVRSession<VisualizationState: AnyObject, RuntimeState: AnyObject
     settingsState: SettingsState,
     commandHandler: @escaping CommandHandler,
     snapshotProvider: @escaping SnapshotProvider,
-    annotationSnapshotProvider: @escaping AnnotationSnapshotProvider = { .empty }
+    annotationSnapshotProvider: @escaping AnnotationSnapshotProvider = { .empty },
+    transferFunctionSnapshotProvider: @escaping TransferFunctionSnapshotProvider = { [] }
   ) {
     self.visualizationState = visualizationState
     self.runtimeState = runtimeState
@@ -232,6 +254,7 @@ final class BorgVRSession<VisualizationState: AnyObject, RuntimeState: AnyObject
     self.commandHandler = commandHandler
     self.snapshotProvider = snapshotProvider
     self.annotationSnapshotProvider = annotationSnapshotProvider
+    self.transferFunctionSnapshotProvider = transferFunctionSnapshotProvider
     self.cachedSnapshot = snapshotProvider()
     self.cachedAnnotationSnapshot = annotationSnapshotProvider()
   }
@@ -345,12 +368,14 @@ final class BorgVRSession<VisualizationState: AnyObject, RuntimeState: AnyObject
     lock.withLock {
       recordedEvents.removeAll(keepingCapacity: true)
       recordsCommands = true
+      isCommandRecording = true
     }
   }
 
   func stopCommandRecording() -> [BorgVRCommandEvent] {
     lock.withLock {
       recordsCommands = false
+      isCommandRecording = false
       return recordedEvents
     }
   }
@@ -365,8 +390,7 @@ final class BorgVRSession<VisualizationState: AnyObject, RuntimeState: AnyObject
     let event = BorgVRCommandEvent(command: command, source: source, timestamp: Date())
     if recordsCommands, source != .sharePlay {
       if let lastIndex = recordedEvents.indices.last,
-         recordedEvents[lastIndex].source == source,
-         command.replacesRecordedAnnotationCommand(recordedEvents[lastIndex].command) {
+         command.replacesRecordedCommand(recordedEvents[lastIndex].command) {
         recordedEvents[lastIndex] = event
       } else {
         recordedEvents.append(event)
@@ -413,7 +437,22 @@ final class BorgVRSession<VisualizationState: AnyObject, RuntimeState: AnyObject
       ))
     }
     if before.transferFunctionRevisions != after.transferFunctionRevisions {
-      commands.append(.mutation(.transferFunction))
+      let snapshots = Dictionary(
+        uniqueKeysWithValues: transferFunctionSnapshotProvider().map { ($0.channel, $0) }
+      )
+      for channel in after.transferFunctionRevisions.indices where
+        channel >= before.transferFunctionRevisions.count ||
+        before.transferFunctionRevisions[channel] != after.transferFunctionRevisions[channel] {
+        if let snapshot = snapshots[channel] {
+          commands.append(.setTransferFunction(snapshot))
+        }
+      }
+      if !commands.contains(where: { command in
+        if case .setTransferFunction = command { return true }
+        return false
+      }) {
+        commands.append(.mutation(.transferFunction))
+      }
     }
     if commands.isEmpty, domain != .objects, domain != .measurements {
       commands.append(.mutation(domain))
@@ -483,8 +522,14 @@ final class BorgVRSession<VisualizationState: AnyObject, RuntimeState: AnyObject
 }
 
 private extension BorgVRCommand {
-  func replacesRecordedAnnotationCommand(_ previous: BorgVRCommand) -> Bool {
+  func replacesRecordedCommand(_ previous: BorgVRCommand) -> Bool {
     switch (self, previous) {
+      case (.setTransform, .setTransform),
+           (.setNormalizedIsoValue, .setNormalizedIsoValue),
+           (.setClipping, .setClipping):
+        true
+      case (.setTransferFunction(let current), .setTransferFunction(let old)):
+        current.channel == old.channel
       case (.upsertObject(let current), .upsertObject(let old)):
         current.id == old.id
       case (.upsertMeasurement(let current), .upsertMeasurement(let old)):
@@ -578,6 +623,17 @@ extension BorgVRSession where VisualizationState == RenderingParameters,
             renderingParameters.clipMax = maximum
             renderingParameters.clippingTranslation = .zero
             synchronizeState()
+          case .setTransferFunction(let snapshot):
+            guard renderingParameters.transferFunctions.indices.contains(snapshot.channel),
+                  renderingParameters.transferFunctions[snapshot.channel].data.count ==
+                    snapshot.samples.count else {
+              throw BorgVRSessionCommandError.invalidTransferFunction
+            }
+            renderingParameters.objectWillChange.send()
+            try renderingParameters.transferFunctions[snapshot.channel].updateData(
+              with: snapshot.samples
+            )
+            synchronizeFullState()
           case .setLighting(let direction, let ambient, let diffuse, let specular):
             if let direction {
               guard simd_length_squared(direction) > 0.000_001 else {
@@ -732,6 +788,11 @@ extension BorgVRSession where VisualizationState == RenderingParameters,
           meshInstances: appModel.sceneMeshInstances,
           measurements: appModel.volumeMeasurements
         )
+      },
+      transferFunctionSnapshotProvider: {
+        renderingParameters.activeTransferFunctions.enumerated().map { channel, transferFunction in
+          BorgVRTransferFunctionSnapshot(channel: channel, samples: transferFunction.data)
+        }
       }
     )
   }

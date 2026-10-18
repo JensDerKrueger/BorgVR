@@ -604,6 +604,12 @@
 "Run Script..." = "Run Script...";
 "Run Script" = "Run Script";
 "Stop Script" = "Stop Script";
+"Start Recording" = "Start Recording";
+"Stop and Save" = "Stop and Save";
+"Save Recording" = "Save Recording";
+"Save the recorded interactions as a GSC script." = "Save the recorded interactions as a GSC script.";
+"Unable to Save Recording" = "Unable to Save Recording";
+"BorgVR Recording" = "BorgVR Recording";
 "No script active" = "No script active";
 "Choose a BorgVR gsc script." = "Choose a BorgVR gsc script.";
 "Script could not be loaded: \\(result)" = "Script could not be loaded: \\(result)";

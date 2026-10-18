@@ -1,4 +1,6 @@
+import AppKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 private struct HeaderIconButtonStyle: ButtonStyle {
   func makeBody(configuration: Configuration) -> some View {
@@ -26,8 +28,6 @@ struct RenderControlsPanel: View {
 
   let isDetachedWindow: Bool
 
-  @State private var showLog = false
-  @State private var showDatasetInfo = false
   @State private var selectedInteractionMode: AppModel.InteractionMode = .model
   @State private var copiedWebGPUShareLink = false
   @State private var showLeaveSharePlayConfirmation = false
@@ -37,6 +37,8 @@ struct RenderControlsPanel: View {
   @State private var datasetStateSaveError: Error?
   @State private var showNoDatasetStateToRestore = false
   @State private var datasetStateRestoreError: Error?
+  @State private var recordingSaveError: Error?
+  @State private var recordingDatasetID: String?
 
   var body: some View {
     VStack(spacing: 8) {
@@ -47,7 +49,8 @@ struct RenderControlsPanel: View {
           Image(systemName: "xmark")
         }
         .accessibilityLabel("Close")
-        .help("Close")
+        .help(MacKeyboardShortcut.help("Close", shortcut: .closeDataset))
+        .macKeyboardShortcut(.closeDataset)
         .buttonStyle(.borderedProminent)
 
         Spacer()
@@ -70,10 +73,12 @@ struct RenderControlsPanel: View {
               : String(localized: "Start SharePlay")
           )
           .help(
-            sharePlay.isInSession
-              ? String(localized: "SharePlay active")
-              : String(localized: "Start SharePlay")
+            MacKeyboardShortcut.help(
+              sharePlay.isInSession ? "SharePlay active" : "Start SharePlay",
+              shortcut: .startSharePlay
+            )
           )
+          .macKeyboardShortcut(.startSharePlay)
           .buttonStyle(HeaderIconButtonStyle())
 
           if sharePlay.isInSession, !sharePlay.participants.isEmpty {
@@ -96,7 +101,8 @@ struct RenderControlsPanel: View {
               Image(systemName: copiedWebGPUShareLink ? "checkmark" : "link")
             }
             .accessibilityLabel("Copy WebGPU link")
-            .help("Copy WebGPU link")
+            .help(MacKeyboardShortcut.help("Copy WebGPU link", shortcut: .copyWebGPULink))
+            .macKeyboardShortcut(.copyWebGPULink)
             .buttonStyle(HeaderIconButtonStyle())
           }
         }
@@ -108,7 +114,8 @@ struct RenderControlsPanel: View {
             Image(systemName: "tray.and.arrow.down")
           }
           .accessibilityLabel("Save Dataset State")
-          .help("Save Dataset State")
+          .help(MacKeyboardShortcut.help("Save Dataset State", shortcut: .saveDatasetState))
+          .macKeyboardShortcut(.saveDatasetState)
           .buttonStyle(HeaderIconButtonStyle())
 
           Button {
@@ -117,28 +124,55 @@ struct RenderControlsPanel: View {
             Image(systemName: "tray.and.arrow.up")
           }
           .accessibilityLabel("Restore Dataset State")
-          .help("Restore Dataset State")
+          .help(MacKeyboardShortcut.help("Restore Dataset State", shortcut: .restoreDatasetState))
+          .macKeyboardShortcut(.restoreDatasetState)
+          .buttonStyle(HeaderIconButtonStyle())
+        }
+
+        headerActionGroup(tint: .red) {
+          Button {
+            recordingDatasetID = appModel.activeDataset?.uniqueId
+            session.startCommandRecording()
+          } label: {
+            Image(systemName: session.isCommandRecording ? "record.circle.fill" : "record.circle")
+          }
+          .disabled(session.isCommandRecording)
+          .accessibilityLabel("Start Recording")
+          .help(MacKeyboardShortcut.help("Start Recording", shortcut: .startRecording))
+          .macKeyboardShortcut(.startRecording)
+          .buttonStyle(HeaderIconButtonStyle())
+
+          Button {
+            stopRecordingAndSave()
+          } label: {
+            Image(systemName: session.isCommandRecording ? "stop.circle.fill" : "stop.circle")
+          }
+          .disabled(!session.isCommandRecording)
+          .accessibilityLabel("Stop and Save")
+          .help(MacKeyboardShortcut.help("Stop and Save", shortcut: .stopRecording))
+          .macKeyboardShortcut(.stopRecording)
           .buttonStyle(HeaderIconButtonStyle())
         }
 
         headerActionGroup(tint: .blue) {
           Button {
-            showDatasetInfo.toggle()
+            docking.showsDatasetInfo.toggle()
           } label: {
             Image(systemName: "info.circle")
           }
           .accessibilityLabel("dataset_info_button")
-          .help("dataset_info_button_help")
+          .help(MacKeyboardShortcut.help("dataset_info_button_help", shortcut: .datasetInfo))
+          .macKeyboardShortcut(.datasetInfo)
           .buttonStyle(HeaderIconButtonStyle())
 
           if appSettings.showLogButton {
             Button {
-              showLog.toggle()
+              docking.showsLog.toggle()
             } label: {
               Image(systemName: "text.alignleft")
             }
             .accessibilityLabel("Log")
-            .help("Log")
+            .help(MacRenderShortcut.help("Log", shortcut: .log))
             .buttonStyle(HeaderIconButtonStyle())
           }
 
@@ -148,7 +182,7 @@ struct RenderControlsPanel: View {
             Image(systemName: "chart.xyaxis.line")
           }
           .accessibilityLabel("performance_title")
-          .help("performance_title")
+          .help(MacRenderShortcut.help("performance_title", shortcut: .performance))
           .buttonStyle(HeaderIconButtonStyle())
         }
 
@@ -168,9 +202,10 @@ struct RenderControlsPanel: View {
               : String(localized: "Detach panel")
           )
           .help(
-            docking.isDetached(.renderControls)
-              ? String(localized: "Dock panel")
-              : String(localized: "Detach panel")
+            MacRenderShortcut.help(
+              docking.isDetached(.renderControls) ? "Dock panel" : "Detach panel",
+              shortcut: .docking
+            )
           )
           .buttonStyle(HeaderIconButtonStyle())
 
@@ -181,7 +216,7 @@ struct RenderControlsPanel: View {
               Image(systemName: "eye.slash")
             }
             .accessibilityLabel("Hide UI")
-            .help("Hide UI")
+            .help(MacRenderShortcut.help("Hide UI", shortcut: .toggleControls))
             .buttonStyle(HeaderIconButtonStyle())
           }
         }
@@ -208,7 +243,8 @@ struct RenderControlsPanel: View {
           }
           .toggleStyle(.button)
           .fixedSize()
-          .help("Keep this Mac's view synchronized with other iPhone, iPad, and Mac participants.")
+          .help(MacKeyboardShortcut.help("Synchronize View", shortcut: .synchronizeView))
+          .macKeyboardShortcut(.synchronizeView)
         }
 
         Picker("Render Mode", selection: renderModeBinding) {
@@ -217,12 +253,14 @@ struct RenderControlsPanel: View {
           }
         }
         .pickerStyle(.segmented)
+        .help("7: TF · 8: TF + Lighting · 9: Iso")
 
         HStack(spacing: 8) {
           if appSettings.showBrickVisualization {
             Toggle("Bricks", isOn: $renderingParameters.brickVis)
               .toggleStyle(.button)
               .fixedSize()
+              .help(MacRenderShortcut.help("Bricks", shortcut: .bricks))
               .onChange(of: renderingParameters.brickVis) {
                 session.commitExternalMutation(source: .userInterface, domain: .visualization)
                 sharePlay.synchronize(kind: .stateOnly)
@@ -239,6 +277,7 @@ struct RenderControlsPanel: View {
             Label("Reset", systemImage: "arrow.counterclockwise")
           }
           .fixedSize()
+          .help(MacRenderShortcut.help("Reset", shortcut: .reset))
         }
         .padding(.leading, 12)
       }
@@ -260,21 +299,9 @@ struct RenderControlsPanel: View {
     }
     .padding(12)
     .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 8))
-    .sheet(isPresented: $showLog) {
-      LoggerView(logger: appModel.logger)
-    }
-    .sheet(isPresented: $showDatasetInfo) {
-      DatasetInfoView(
-        dataset: appModel.activeDataset,
-        metadata: appModel.activeDatasetMetadata
-      ) {
-        showDatasetInfo = false
-      }
-      .frame(minWidth: 420, minHeight: 360)
-    }
     .onChange(of: appSettings.showLogButton) { _, isVisible in
       if !isVisible {
-        showLog = false
+        docking.showsLog = false
       }
     }
     .alert("Leave SharePlay?", isPresented: $showLeaveSharePlayConfirmation) {
@@ -328,6 +355,17 @@ struct RenderControlsPanel: View {
     } message: {
       Text(datasetStateRestoreError?.localizedDescription ?? "")
     }
+    .alert(
+      "Unable to Save Recording",
+      isPresented: Binding(
+        get: { recordingSaveError != nil },
+        set: { if !$0 { recordingSaveError = nil } }
+      )
+    ) {
+      Button("OK", role: .cancel) { recordingSaveError = nil }
+    } message: {
+      Text(recordingSaveError?.localizedDescription ?? "")
+    }
   }
 
   private var interactionModePicker: some View {
@@ -355,7 +393,7 @@ struct RenderControlsPanel: View {
 
   private func interactionModeSegment(
     _ mode: AppModel.InteractionMode,
-    title: LocalizedStringKey,
+    title: String,
     systemImage: String
   ) -> some View {
     let selected = selectedInteractionMode == mode
@@ -367,7 +405,7 @@ struct RenderControlsPanel: View {
       HStack(spacing: 6) {
         Image(systemName: systemImage)
           .foregroundStyle(color)
-        Text(title)
+        Text(LocalizedStringKey(title))
           .foregroundStyle(.primary)
       }
         .font(.callout)
@@ -383,6 +421,7 @@ struct RenderControlsPanel: View {
     }
     .buttonStyle(.plain)
     .accessibilityAddTraits(selected ? .isSelected : [])
+    .help(interactionModeHelp(title: title, mode: mode))
   }
 
   private var modeWindowButtons: some View {
@@ -427,7 +466,7 @@ struct RenderControlsPanel: View {
     }
     .modifier(WindowPresentationButtonStyle(isPresented: isPresented, tint: .accentColor))
     .accessibilityAddTraits(isPresented ? .isSelected : [])
-    .help("Lighting")
+    .help(MacRenderShortcut.help("Lighting", shortcut: .lighting))
   }
 
   private var editorWindowButton: some View {
@@ -446,7 +485,7 @@ struct RenderControlsPanel: View {
     }
     .modifier(WindowPresentationButtonStyle(isPresented: isPresented, tint: .purple))
     .accessibilityAddTraits(isPresented ? .isSelected : [])
-    .help("Editor")
+    .help(MacRenderShortcut.help("Editor", shortcut: .editor))
   }
 
   private var objectWindowButton: some View {
@@ -462,7 +501,7 @@ struct RenderControlsPanel: View {
     }
     .modifier(WindowPresentationButtonStyle(isPresented: isPresented, tint: .orange))
     .accessibilityAddTraits(isPresented ? .isSelected : [])
-    .help("Objects")
+    .help(MacRenderShortcut.help("Objects", shortcut: .objects))
   }
 
   private var measurementWindowButton: some View {
@@ -478,7 +517,7 @@ struct RenderControlsPanel: View {
     }
     .modifier(WindowPresentationButtonStyle(isPresented: isPresented, tint: .green))
     .accessibilityAddTraits(isPresented ? .isSelected : [])
-    .help("measurement_window_title")
+    .help(MacRenderShortcut.help("measurement_window_title", shortcut: .measurements))
   }
 
   private func windowButtonLabel(
@@ -541,6 +580,22 @@ struct RenderControlsPanel: View {
       case .drawing, .objectPlacement: .orange
       case .measurement: .green
     }
+  }
+
+  private func interactionModeHelp(
+    title: String,
+    mode: AppModel.InteractionMode
+  ) -> String {
+    let shortcut: MacRenderShortcut
+    switch mode {
+      case .model: shortcut = .model
+      case .clipping: shortcut = .clipping
+      case .transferEditing: shortcut = .transferInteraction
+      case .drawing: shortcut = .drawing
+      case .objectPlacement: shortcut = .placement
+      case .measurement: shortcut = .measurement
+    }
+    return MacRenderShortcut.help(title, shortcut: shortcut)
   }
 
   private func applyInteractionModeSelection(_ mode: AppModel.InteractionMode) {
@@ -679,6 +734,48 @@ struct RenderControlsPanel: View {
     } catch {
       datasetStateRestoreError = error
     }
+  }
+
+  private func stopRecordingAndSave() {
+    _ = session.stopCommandRecording()
+    let recordedInteractions = session.recordedGSCScript()
+    var scriptSections: [String] = []
+    if let recordingDatasetID {
+      scriptSections.append("# Dataset\nopendataset \(gscQuote(recordingDatasetID))")
+    }
+    if !recordedInteractions.isEmpty {
+      scriptSections.append("# Recorded interactions\n\(recordedInteractions)")
+    }
+    let script = scriptSections.joined(separator: "\n\n")
+    recordingDatasetID = nil
+    let panel = NSSavePanel()
+    panel.title = String(localized: "Save Recording")
+    panel.message = String(localized: "Save the recorded interactions as a GSC script.")
+    panel.canCreateDirectories = true
+    panel.allowedContentTypes = [UTType(filenameExtension: "gsc") ?? .plainText]
+    panel.nameFieldStringValue = recordingFilename
+    panel.begin { response in
+      guard response == .OK, let url = panel.url else { return }
+      Task { @MainActor in
+        do {
+          let output = script.isEmpty || script.hasSuffix("\n") ? script : script + "\n"
+          try output.write(to: url, atomically: true, encoding: .utf8)
+        } catch {
+          recordingSaveError = error
+        }
+      }
+    }
+  }
+
+  private var recordingFilename: String {
+    let source = appModel.activeDataset?.description ?? String(localized: "BorgVR Recording")
+    let invalidCharacters = CharacterSet(charactersIn: "/:")
+      .union(.newlines)
+      .union(.controlCharacters)
+    let sanitized = source.components(separatedBy: invalidCharacters).joined(separator: "-")
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+    let basename = sanitized.isEmpty ? String(localized: "BorgVR Recording") : sanitized
+    return basename + ".gsc"
   }
 
   private var canCopyWebGPUShareLink: Bool {

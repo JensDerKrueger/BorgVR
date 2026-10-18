@@ -2304,15 +2304,28 @@ extension Renderer {
   func renderFrame() -> Bool {
     guard !Task.isCancelled, layerRenderer.state == .running else { return true }
     guard let frame = layerRenderer.queryNextFrame() else { return true }
+    guard let timing = frame.predictTiming() else { return true }
 
     frame.startUpdate()
+    updateDynamicBufferState()
+    frameState = session.refreshRenderSnapshot()
     frame.endUpdate()
 
-    guard let timing = frame.predictTiming() else { return true }
     LayerRenderer.Clock().wait(until: timing.optimalInputTime)
 
     // Closing an immersive space can happen while waiting for the predicted
     // input time. Do not submit that now-obsolete frame to the GPU.
+    guard !Task.isCancelled, layerRenderer.state == .running else { return true }
+
+    var submissionEnded = false
+    frame.startSubmission()
+    defer {
+      if !submissionEnded {
+        frame.endSubmission()
+      }
+    }
+
+    guard let drawable = frame.queryDrawables().first else { return true }
     guard !Task.isCancelled, layerRenderer.state == .running else { return true }
 
     let desc = MTLCommandBufferDescriptor()
@@ -2323,14 +2336,6 @@ extension Renderer {
     }
     commandBuffer.label = "BorgVR Command Buffer"
 
-    guard let drawable = frame.queryDrawables().first else { return true }
-    guard !Task.isCancelled, layerRenderer.state == .running else { return true }
-
-    frame.startSubmission()
-    defer { frame.endSubmission() }
-    self.updateDynamicBufferState()
-
-    frameState = session.refreshRenderSnapshot()
     self.updateRenderState(drawable: drawable)
     self.updateSpatialAccessoryInteractions(drawable: drawable)
 
@@ -2487,6 +2492,8 @@ extension Renderer {
     drawable.encodePresent(commandBuffer: commandBuffer)
 
     commandBuffer.commit()
+    frame.endSubmission()
+    submissionEnded = true
     commandBuffer.waitUntilCompleted()
 
     if let error = commandBuffer.error as NSError? {

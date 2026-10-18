@@ -51,6 +51,48 @@
         </section>
 
         <section>
+          <h2 data-de="Tastaturkurzbefehle">Keyboard shortcuts</h2>
+          <p data-de="Einzeltasten steuern den Renderer, wenn die Renderfläche den Tastaturfokus besitzt. Dadurch lösen Texteingaben keine Renderaktionen aus. App-Befehle mit ⌘ benötigen keinen Fokus auf der Renderfläche. Die Kurzbefehle werden außerdem in den Tooltips der Schaltflächen angezeigt.">Single-key shortcuts control the renderer while the rendering view has keyboard focus, so typing in a text field never triggers a rendering action. App commands using ⌘ do not require focus on the rendering view. Button tooltips also show their shortcuts.</p>
+          <div class="table-wrap"><table><thead><tr><th data-de="Bereich">Area</th><th data-de="Funktion">Action</th><th data-de="Kurzbefehl">Shortcut</th></tr></thead><tbody>
+            <tr><td rowspan="6" data-de="Handinteraktion">Interaction</td><td data-de="Modell">Model</td><td><kbd>1</kbd></td></tr>
+            <tr><td>Clipping</td><td><kbd>2</kbd></td></tr>
+            <tr><td>Transfer</td><td><kbd>3</kbd></td></tr>
+            <tr><td data-de="Zeichnen">Draw</td><td><kbd>4</kbd></td></tr>
+            <tr><td data-de="Platzieren">Place</td><td><kbd>5</kbd></td></tr>
+            <tr><td data-de="Messen">Measure</td><td><kbd>6</kbd></td></tr>
+            <tr><td rowspan="3" data-de="Rendermodus">Rendering mode</td><td>TF</td><td><kbd>7</kbd></td></tr>
+            <tr><td data-de="TF + Beleuchtung">TF + lighting</td><td><kbd>8</kbd></td></tr>
+            <tr><td>Iso</td><td><kbd>9</kbd></td></tr>
+            <tr><td rowspan="12" data-de="Renderansicht">Rendering view</td><td data-de="Bildschirmfoto">Screenshot</td><td><kbd>S</kbd></td></tr>
+            <tr><td data-de="Alle Renderparameter zurücksetzen">Reset all rendering parameters</td><td><kbd>R</kbd></td></tr>
+            <tr><td data-de="Brick-Visualisierung umschalten">Toggle brick visualization</td><td><kbd>B</kbd></td></tr>
+            <tr><td data-de="Ansicht synchronisieren">Synchronize view</td><td><kbd>V</kbd></td></tr>
+            <tr><td data-de="Bedienoberfläche ein-/ausblenden">Show or hide controls</td><td><kbd>Tab</kbd></td></tr>
+            <tr><td data-de="TF-/Iso-Editor">TF/isovalue editor</td><td><kbd>E</kbd></td></tr>
+            <tr><td data-de="Beleuchtung">Lighting</td><td><kbd>L</kbd></td></tr>
+            <tr><td data-de="Objekte">Objects</td><td><kbd>O</kbd></td></tr>
+            <tr><td data-de="Messungen">Measurements</td><td><kbd>M</kbd></td></tr>
+            <tr><td data-de="Leistung">Performance</td><td><kbd>P</kbd></td></tr>
+            <tr><td>Log</td><td><kbd>G</kbd></td></tr>
+            <tr><td data-de="Datensatzinfo">Dataset information</td><td><kbd>I</kbd></td></tr>
+            <tr><td data-de="Fenster">Windows</td><td data-de="Rendersteuerung an-/abdocken">Dock or detach rendering controls</td><td><kbd>D</kbd></td></tr>
+            <tr><td rowspan="13" data-de="App-Befehle">App commands</td><td data-de="Datensatz öffnen">Open dataset</td><td><kbd>⌘O</kbd></td></tr>
+            <tr><td data-de="Import / Export">Import / Export</td><td><kbd>⇧⌘O</kbd></td></tr>
+            <tr><td data-de="Datensatzzustand speichern">Save dataset state</td><td><kbd>⌘S</kbd></td></tr>
+            <tr><td data-de="Datensatzzustand wiederherstellen">Restore dataset state</td><td><kbd>⌘R</kbd></td></tr>
+            <tr><td data-de="Datensatzinfo">Dataset information</td><td><kbd>⌘I</kbd></td></tr>
+            <tr><td data-de="Datensatz schließen">Close dataset</td><td><kbd>⇧⌘W</kbd></td></tr>
+            <tr><td data-de="Aufzeichnung starten">Start recording</td><td><kbd>⌥⌘R</kbd></td></tr>
+            <tr><td data-de="Aufzeichnung beenden und speichern">Stop and save recording</td><td><kbd>⌥⌘S</kbd></td></tr>
+            <tr><td data-de="Skript ausführen">Run script</td><td><kbd>⇧⌘R</kbd></td></tr>
+            <tr><td data-de="Skript stoppen">Stop script</td><td><kbd>⌘.</kbd></td></tr>
+            <tr><td data-de="SharePlay starten">Start SharePlay</td><td><kbd>⇧⌘P</kbd></td></tr>
+            <tr><td data-de="Ansicht synchronisieren">Synchronize view</td><td><kbd>⌥⌘V</kbd></td></tr>
+            <tr><td data-de="WebGPU-Link kopieren">Copy WebGPU link</td><td><kbd>⌥⌘C</kbd></td></tr>
+          </tbody></table></div>
+        </section>
+
+        <section>
           <h2 data-de="Import, lokale Dateien und Server">Import, local files, and servers</h2>
           <p data-de="Die integrierte Konvertierung erzeugt BorgVR-Dateien aus DICOM, NRRD/NHDR, PVM und QVIS. Im Exportmodus kann jede gespeicherte Detailstufe einer BorgVR-Datei als flaches, unkomprimiertes NRRD-Volumen rekonstruiert werden. Für wiederholte oder serverseitige Abläufe stehen zusätzlich die grafische Server-App, GSC-Skripte und der Kommandozeilen-Konverter bereit.">The integrated converter creates BorgVR files from DICOM, NRRD/NHDR, PVM, and QVIS. Export mode reconstructs any stored BorgVR level of detail as a flat, uncompressed NRRD volume. The GUI server utility, GSC scripts, and command-line converter are also available for repeated or server-side workflows.</p>
           <p data-de="Remote-Server werden mit Hostname, Port und optionalem Passwort angelegt. Der Verbindungstest meldet erreichbare Datensätze und Transferfunktionen. Zeitlimit, progressives Laden und das Speichern lokaler Kopien gelten für alle Remote-Quellen.">Remote servers are configured with hostname, port, and optional password. The connection test reports available datasets and transfer functions. Timeout, progressive loading, and retaining a local copy apply to all remote sources.</p>
