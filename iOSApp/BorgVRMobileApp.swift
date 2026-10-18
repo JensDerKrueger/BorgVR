@@ -19,7 +19,9 @@ struct BorgVRMobileApp: App {
     let appModel = AppModel()
     let renderingParameters = RenderingParameters()
     let appSettings = AppSettings()
-    let sharePlay = SharePlayCoordinator()
+    let sharePlay = SharePlayCoordinator(
+      platformAdapter: iOSSharePlayPlatformAdapter(appSettings: appSettings)
+    )
     let serverController = BackgroundServerController()
     let updateChecker = AppStoreUpdateChecker()
     let mcpController = BorgVRMCPServerController()

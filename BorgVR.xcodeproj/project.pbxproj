@@ -146,6 +146,15 @@
 		57A002112ED0000200000001 /* BorgVRAnnotationCommands.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A002102ED0000200000001 /* BorgVRAnnotationCommands.swift */; };
 		57A002122ED0000200000001 /* BorgVRAnnotationCommands.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A002102ED0000200000001 /* BorgVRAnnotationCommands.swift */; };
 		57A002132ED0000200000001 /* BorgVRAnnotationCommands.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A002102ED0000200000001 /* BorgVRAnnotationCommands.swift */; };
+		57A002212ED1000100000001 /* BorgVRSharePlaySessionEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A002202ED1000100000001 /* BorgVRSharePlaySessionEngine.swift */; };
+		57A002222ED1000100000001 /* BorgVRSharePlaySessionEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A002202ED1000100000001 /* BorgVRSharePlaySessionEngine.swift */; };
+		57A002232ED1000100000001 /* BorgVRSharePlaySessionEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A002202ED1000100000001 /* BorgVRSharePlaySessionEngine.swift */; };
+		57A002312ED2000100000001 /* SharePlayCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A002302ED2000100000001 /* SharePlayCoordinator.swift */; };
+		57A002322ED2000100000001 /* SharePlayCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A002302ED2000100000001 /* SharePlayCoordinator.swift */; };
+		57A002412ED2000200000001 /* BorgVRSharePlayPlatformAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A002402ED2000200000001 /* BorgVRSharePlayPlatformAdapter.swift */; };
+		57A002422ED2000200000001 /* BorgVRSharePlayPlatformAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A002402ED2000200000001 /* BorgVRSharePlayPlatformAdapter.swift */; };
+		57A002512ED2000300000001 /* BorgVRSharePlayAdHocServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A002502ED2000300000001 /* BorgVRSharePlayAdHocServer.swift */; };
+		57A002522ED2000300000001 /* BorgVRSharePlayAdHocServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A002502ED2000300000001 /* BorgVRSharePlayAdHocServer.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -238,6 +247,10 @@
 		57A001F02EC0000100000001 /* ScreenOpaqueGeometryShaders.metal */ = {isa = PBXFileReference; explicitFileType = text; path = ScreenOpaqueGeometryShaders.metal; sourceTree = "<group>"; };
 		57A002002ED0000100000001 /* BorgVRSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BorgVRSession.swift; sourceTree = "<group>"; };
 		57A002102ED0000200000001 /* BorgVRAnnotationCommands.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BorgVRAnnotationCommands.swift; sourceTree = "<group>"; };
+		57A002202ED1000100000001 /* BorgVRSharePlaySessionEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BorgVRSharePlaySessionEngine.swift; sourceTree = "<group>"; };
+		57A002302ED2000100000001 /* SharePlayCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharePlayCoordinator.swift; sourceTree = "<group>"; };
+		57A002402ED2000200000001 /* BorgVRSharePlayPlatformAdapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BorgVRSharePlayPlatformAdapter.swift; sourceTree = "<group>"; };
+		57A002502ED2000300000001 /* BorgVRSharePlayAdHocServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BorgVRSharePlayAdHocServer.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -518,6 +531,10 @@
 			isa = PBXGroup;
 			children = (
 				57A002102ED0000200000001 /* BorgVRAnnotationCommands.swift */,
+				57A002502ED2000300000001 /* BorgVRSharePlayAdHocServer.swift */,
+				57A002402ED2000200000001 /* BorgVRSharePlayPlatformAdapter.swift */,
+				57A002202ED1000100000001 /* BorgVRSharePlaySessionEngine.swift */,
+				57A002302ED2000100000001 /* SharePlayCoordinator.swift */,
 				57A002002ED0000100000001 /* BorgVRSession.swift */,
 				57A001C02EB0000100000001 /* BorgVRScreenCommandService.swift */,
 				57A001E02EB0000300000001 /* MCPSettingsControls.swift */,
@@ -907,6 +924,10 @@
 			buildActionMask = 2147483647;
 			files = (
 				57A002112ED0000200000001 /* BorgVRAnnotationCommands.swift in Sources */,
+				57A002512ED2000300000001 /* BorgVRSharePlayAdHocServer.swift in Sources */,
+				57A002412ED2000200000001 /* BorgVRSharePlayPlatformAdapter.swift in Sources */,
+				57A002212ED1000100000001 /* BorgVRSharePlaySessionEngine.swift in Sources */,
+				57A002312ED2000100000001 /* SharePlayCoordinator.swift in Sources */,
 				57A002012ED0000100000001 /* BorgVRSession.swift in Sources */,
 				57A001C12EB0000100000001 /* BorgVRScreenCommandService.swift in Sources */,
 				57A001D12EB0000200000001 /* MetalScreenshotEncoder.swift in Sources */,
@@ -957,6 +978,10 @@
 			buildActionMask = 2147483647;
 			files = (
 				57A002122ED0000200000001 /* BorgVRAnnotationCommands.swift in Sources */,
+				57A002522ED2000300000001 /* BorgVRSharePlayAdHocServer.swift in Sources */,
+				57A002422ED2000200000001 /* BorgVRSharePlayPlatformAdapter.swift in Sources */,
+				57A002222ED1000100000001 /* BorgVRSharePlaySessionEngine.swift in Sources */,
+				57A002322ED2000100000001 /* SharePlayCoordinator.swift in Sources */,
 				57A002022ED0000100000001 /* BorgVRSession.swift in Sources */,
 				57A001C22EB0000100000001 /* BorgVRScreenCommandService.swift in Sources */,
 				57A001D22EB0000200000001 /* MetalScreenshotEncoder.swift in Sources */,
@@ -999,6 +1024,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				57A002132ED0000200000001 /* BorgVRAnnotationCommands.swift in Sources */,
+				57A002232ED1000100000001 /* BorgVRSharePlaySessionEngine.swift in Sources */,
 				57A002032ED0000100000001 /* BorgVRSession.swift in Sources */,
 				57A001D32EB0000200000001 /* MetalScreenshotEncoder.swift in Sources */,
 				57A001E32EB0000300000001 /* MCPSettingsControls.swift in Sources */,

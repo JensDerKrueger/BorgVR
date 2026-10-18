@@ -58,7 +58,12 @@ struct macOSApp: App {
     let appSettings = AppSettings()
     let storedAppModel = StoredAppModel()
     let serverController = BackgroundServerController()
-    let sharePlay = SharePlayCoordinator()
+    let sharePlay = SharePlayCoordinator(
+      platformAdapter: MacSharePlayPlatformAdapter(
+        storedAppModel: storedAppModel,
+        serverController: serverController
+      )
+    )
     let docking = DockingController()
     let scriptRunner = BorgVRScriptRunner()
     let updateChecker = AppStoreUpdateChecker()
@@ -162,9 +167,7 @@ struct macOSApp: App {
           sharePlay.startObservingSessions(
             appModel: appModel,
             renderingParameters: renderingParameters,
-            appSettings: appSettings,
-            storedAppModel: storedAppModel,
-            serverController: serverController
+            appSettings: appSettings
           )
           appModel.setLogLevel(appSettings.logLevel)
           let commandService = makeCommandService()

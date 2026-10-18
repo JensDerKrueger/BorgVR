@@ -1,4 +1,3 @@
-import Darwin
 import Foundation
 
 @MainActor
@@ -9,18 +8,13 @@ final class BackgroundServerController: ObservableObject {
   @Published private(set) var shareableWebServerURL: URL?
 
   private let serverHost: BorgVRServerHost
-  private let sharePlayServerHost: BorgVRServerHost
+  private let sharePlayServer: BorgVRSharePlayAdHocServer
   private let logger = GUILogger()
-  private var sharePlayDatasetID: String?
-  private var sharePlayAuthToken = ""
-  private var sharePlayServerRunning = false
-  private var sharePlayServerPort = StoredAppModel.defaultPort + 1
-  private var sharePlayMeshAssetIDs = Set<UUID>()
   private var runningPort = StoredAppModel.defaultPort
 
   init() {
     self.serverHost = BorgVRServerHost(logger: logger)
-    self.sharePlayServerHost = BorgVRServerHost(logger: logger)
+    self.sharePlayServer = BorgVRSharePlayAdHocServer(logger: logger)
   }
 
   func start(using settings: StoredAppModel) {
@@ -33,55 +27,34 @@ final class BackgroundServerController: ObservableObject {
     startServer(using: settings, additionalDatasets: [])
   }
 
-  func ensureServing(dataset: AppModel.DatasetEntry, using settings: StoredAppModel) -> (origins: [String], authToken: String) {
-    guard let datasetInfo = serverDatasetInfo(for: dataset, using: settings) else {
-      stopSharePlayServer()
-      return ([], "")
+  func ensureServing(
+    dataset: AppModel.DatasetEntry,
+    using settings: StoredAppModel
+  ) -> [DatasetOrigin] {
+    let fileURL: URL
+    switch dataset.source {
+      case .local, .builtIn:
+        fileURL = URL(fileURLWithPath: dataset.identifier)
+      case .remote:
+        fileURL = settings.resolvedDataDirectoryURL()
+          .appendingPathComponent("\(dataset.uniqueId).data")
     }
-    let meshFiles = SceneMeshAssetCatalog.serverFiles(logger: logger)
-    let meshAssetIDs = Set(meshFiles.map(\.id))
-
-    if sharePlayServerRunning,
-       sharePlayDatasetID == dataset.uniqueId,
-       sharePlayMeshAssetIDs == meshAssetIDs {
-      return (originAddresses(port: sharePlayServerPort), sharePlayAuthToken)
-    }
-
-    stopSharePlayServer()
-    let authToken = BorgVRServerAuthentication.randomToken()
-    for port in sharePlayCandidatePorts(preferredPort: settings.sharePlayServerPort) {
-      let state = sharePlayServerHost.start(
-        configuration: BorgVRServerConfiguration(
-          dataDirectory: "",
-          port: port,
-          maxBricksPerGetRequest: settings.maxBricksPerGetRequest,
-          authSecret: authToken,
-          enableWebServer: settings.enableWebServer,
-          webPort: sharePlayWebPort(for: port, settings: settings),
-          useWebServerTLS: settings.webServerUsesTLS,
-          webServerCertificateData: settings.webServerCertificateData,
-          webServerCertificatePassword: settings.webServerCertificatePassword
-        ),
-        additionalDatasets: [datasetInfo],
-        additionalMeshFiles: meshFiles,
-        includeScannedDatasets: false
-      )
-
-      guard state.isRunning,
-            state.datasets.contains(where: { $0.id == dataset.uniqueId }) else {
-        continue
-      }
-
-      sharePlayDatasetID = dataset.uniqueId
-      sharePlayAuthToken = authToken
-      sharePlayServerRunning = true
-      sharePlayServerPort = state.port
-      sharePlayMeshAssetIDs = meshAssetIDs
-      return (originAddresses(port: state.port), authToken)
-    }
-
-    logger.error("SharePlay asset server did not start for dataset \(dataset.uniqueId).")
-    return ([], "")
+    let hostname = Host.current().localizedName.map { [$0] } ?? []
+    return sharePlayServer.ensureServing(
+      dataset: dataset,
+      fileURL: fileURL,
+      settings: BorgVRSharePlayAdHocServerSettings(
+        preferredServerPort: settings.sharePlayServerPort,
+        maximumBricksPerRequest: settings.maxBricksPerGetRequest,
+        enablesWebServer: settings.enableWebServer,
+        preferredWebServerPort: settings.sharePlayWebServerPort,
+        usesWebServerTLS: settings.webServerUsesTLS,
+        webServerCertificateData: settings.webServerCertificateData,
+        webServerCertificatePassword: settings.webServerCertificatePassword,
+        excludedPorts: [runningPort]
+      ),
+      additionalHostnames: hostname
+    )
   }
 
   private func startServer(using settings: StoredAppModel, additionalDatasets: [DatasetInfo]) {
@@ -143,145 +116,10 @@ final class BackgroundServerController: ObservableObject {
   }
 
   func stopSharePlayServer() {
-    sharePlayServerHost.stop()
-    sharePlayDatasetID = nil
-    sharePlayAuthToken = ""
-    sharePlayServerRunning = false
-    sharePlayMeshAssetIDs.removeAll()
+    sharePlayServer.stop()
   }
 
   func serves(meshAssetIDs: Set<UUID>, for datasetID: String) -> Bool {
-    sharePlayServerRunning
-      && sharePlayDatasetID == datasetID
-      && meshAssetIDs.isSubset(of: sharePlayMeshAssetIDs)
-  }
-
-  private func serverDatasetInfo(
-    for dataset: AppModel.DatasetEntry,
-    using settings: StoredAppModel
-  ) -> DatasetInfo? {
-    let url: URL
-    let shouldLogMetadataFailure: Bool
-    switch dataset.source {
-      case .local, .builtIn:
-        url = URL(fileURLWithPath: dataset.identifier)
-        shouldLogMetadataFailure = true
-      case .remote:
-        url = settings.resolvedDataDirectoryURL()
-          .appendingPathComponent("\(dataset.uniqueId).data")
-        shouldLogMetadataFailure = false
-    }
-
-    guard let metadata = try? BORGVRMetaData(url: url),
-          metadata.uniqueID.caseInsensitiveCompare(dataset.uniqueId) == .orderedSame else {
-      if shouldLogMetadataFailure {
-        logger.error("SharePlay dataset server could not read metadata for \(dataset.identifier).")
-      }
-      return nil
-    }
-    return DatasetInfo(
-      id: metadata.uniqueID,
-      filename: url.path,
-      datasetDescription: metadata.datasetDescription.isEmpty ? dataset.description : metadata.datasetDescription,
-      size: [metadata.width, metadata.height, metadata.depth],
-      voxelSpacing: [
-        metadata.voxelSpacingX,
-        metadata.voxelSpacingY,
-        metadata.voxelSpacingZ
-      ]
-    )
-  }
-
-  private func originAddresses(port: Int) -> [String] {
-    var addresses = Self.localIPv4Addresses()
-    if let hostname = Host.current().localizedName, !hostname.isEmpty {
-      addresses.append(hostname)
-    }
-
-    var seen = Set<String>()
-    let uniqueAddresses = addresses.filter { address in
-      seen.insert(address).inserted
-    }
-
-    guard !uniqueAddresses.isEmpty else {
-      logger.error("SharePlay dataset server could not determine a local network address.")
-      return []
-    }
-    return uniqueAddresses.map { "\($0):\(port)" }
-  }
-
-  private func sharePlayCandidatePorts(preferredPort: Int) -> [Int] {
-    let basePort = min(65534, max(1024, preferredPort))
-    var ports: [Int] = [basePort]
-    for offset in 1...64 {
-      let port = basePort + offset
-      if port <= 65535 {
-        ports.append(port)
-      }
-    }
-    for offset in 1...64 {
-      let port = basePort - offset
-      if port >= 1024 {
-        ports.append(port)
-      }
-    }
-
-    var seen = Set<Int>()
-    return ports.filter { port in
-      port != runningPort && seen.insert(port).inserted
-    }
-  }
-
-  private func sharePlayWebPort(for serverPort: Int, settings: StoredAppModel) -> Int {
-    if settings.sharePlayWebServerPort == settings.sharePlayServerPort {
-      return min(65535, max(1, serverPort + 1))
-    }
-    return settings.sharePlayWebServerPort
-  }
-
-  private static func localIPv4Addresses() -> [String] {
-    var interfaces: UnsafeMutablePointer<ifaddrs>?
-    guard getifaddrs(&interfaces) == 0, let firstInterface = interfaces else {
-      return []
-    }
-    defer { freeifaddrs(interfaces) }
-
-    var preferredAddresses: [String] = []
-    var fallbackAddresses: [String] = []
-    var pointer: UnsafeMutablePointer<ifaddrs>? = firstInterface
-    while let interface = pointer?.pointee {
-      defer { pointer = interface.ifa_next }
-
-      let flags = Int32(interface.ifa_flags)
-      guard (flags & IFF_UP) != 0,
-            (flags & IFF_LOOPBACK) == 0,
-            let addressPointer = interface.ifa_addr,
-            addressPointer.pointee.sa_family == UInt8(AF_INET)
-      else {
-        continue
-      }
-
-      var hostname = [CChar](repeating: 0, count: Int(NI_MAXHOST))
-      let result = getnameinfo(
-        addressPointer,
-        socklen_t(addressPointer.pointee.sa_len),
-        &hostname,
-        socklen_t(hostname.count),
-        nil,
-        0,
-        NI_NUMERICHOST
-      )
-      guard result == 0 else { continue }
-
-      let address = String(cString: hostname)
-      let name = String(cString: interface.ifa_name)
-      if name.hasPrefix("en") {
-        preferredAddresses.append(address)
-      } else {
-        fallbackAddresses.append(address)
-      }
-    }
-
-    return preferredAddresses + fallbackAddresses
+    sharePlayServer.serves(meshAssetIDs: meshAssetIDs, for: datasetID)
   }
 }
