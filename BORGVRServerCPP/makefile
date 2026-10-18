@@ -68,7 +68,7 @@ else
   LDFLAGS  := $(LDFLAGS_BASE)
 endif
 
-.PHONY: all clean run print-vars FORCE
+.PHONY: all clean run test print-vars FORCE
 
 all: $(BUILD_DIR)/$(TARGET)
 
@@ -99,6 +99,9 @@ $(BUILD_DIR)/obj/%.o: $(SRC_DIR)/%.cpp
 
 run: all
 	./$(BUILD_DIR)/$(TARGET) $(ARGS)
+
+test:
+	sh ../Scripts/test-auth-crypto.sh
 
 clean:
 	rm -rf $(BUILD_DIR)

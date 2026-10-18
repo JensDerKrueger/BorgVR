@@ -194,6 +194,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="src\BorgVRAuthCrypto.cpp" />
     <ClCompile Include="src\BORGVRFileData.cpp" />
     <ClCompile Include="src\BORGVRMetaData.cpp" />
     <ClCompile Include="src\GeneratedWebAssets.cpp" />
@@ -207,6 +208,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\BinaryIO.h" />
+    <ClInclude Include="include\BorgVRAuthCrypto.h" />
     <ClInclude Include="include\BORGVRDataBase.h" />
     <ClInclude Include="include\BORGVRFileData.h" />
     <ClInclude Include="include\BORGVRMetaData.h" />
