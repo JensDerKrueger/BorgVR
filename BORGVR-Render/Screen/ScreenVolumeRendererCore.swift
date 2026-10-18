@@ -46,6 +46,7 @@ final class ScreenVolumeRendererCore {
   private var vertexCount = 0
   private var uniformBufferVertex: AlignedBuffer<VertexUniformsArray>?
   private var uniformBufferFragment: AlignedBuffer<FragmentUniformsArray>?
+  private var renderTransferFunctions: RenderTransferFunctionSet?
 
   private var dataset: BORGVRDatasetProtocol?
   private var volumeAtlas: VolumeAtlas?
@@ -96,7 +97,7 @@ final class ScreenVolumeRendererCore {
     self.view = view
     self.device = view.device
     self.commandQueue = view.device?.makeCommandQueue()
-    renderingParameters.initTransferFunctionMetal(device: view.device!)
+    renderTransferFunctions = RenderTransferFunctionSet(device: view.device!)
 
     let depthDescriptor = MTLDepthStencilDescriptor()
     depthDescriptor.depthCompareFunction = .greater
@@ -214,9 +215,14 @@ final class ScreenVolumeRendererCore {
         Float(view.drawableSize.width / view.drawableSize.height)
       )
     }
-    session.publishRenderSnapshot()
-    let frameState = session.renderSnapshot()
-    updateUniforms(for: view, state: frameState)
+    let frame = session.frameSnapshot()
+    let frameState = frame.visualization
+    do {
+      try renderTransferFunctions?.synchronize(with: frame.transferFunctions)
+    } catch {
+      appModel.logger.error("Failed to update render transfer functions: \(error.localizedDescription)")
+    }
+    updateUniforms(for: view, state: frameState, settings: frame.settings)
     updateEmptiness(state: frameState)
 
     guard let interactionDepthTexture = interactionDepthTexture(
@@ -240,21 +246,18 @@ final class ScreenVolumeRendererCore {
       depthFormat: view.depthStencilPixelFormat,
       showsObjects: frameState.objectsVisible,
       showsMeasurements: frameState.measurementsVisible,
-      markers: appModel.volumeMarkers,
-      sceneMeshAssets: appModel.sceneMeshAssets,
-      sceneMeshInstances: appModel.sceneMeshInstances,
-      spatialToolPreviews: appModel.activeRemoteSpatialToolPreviews(),
-      selectedMarkerIDs: appModel.selectedVolumeMarkerIDs,
-      measurements: appModel.volumeMeasurements,
-      selectedMeasurementID: appModel.selectedVolumeMeasurementID,
-      selectedMeasurementPointID: appModel.selectedVolumeMeasurementPointID,
+      markers: frame.annotations.markers,
+      sceneMeshAssets: frame.annotations.meshAssets,
+      sceneMeshInstances: frame.annotations.meshInstances,
+      spatialToolPreviews: frame.annotations.remoteToolPreviews.filter(\.isActive),
+      selectedMarkerIDs: frame.annotations.selectedMarkerIDs,
+      measurements: frame.annotations.measurements,
+      selectedMeasurementID: frame.annotations.selectedMeasurementID,
+      selectedMeasurementPointID: frame.annotations.selectedMeasurementPointID,
       viewProjection: markerMatrices.projection * markerMatrices.view,
       modelMatrix: markerMatrices.model,
       volumeScale: volumeScale,
-      datasetMaximumExtentMeters: appModel.activeDatasetMetadata.map { metadata in
-        let extent = metadata.physicalExtentMeters
-        return max(extent.x, max(extent.y, extent.z))
-      } ?? 1,
+      datasetMaximumExtentMeters: frame.annotations.datasetMaximumExtentMeters,
       eyePosition: SIMD3<Float>(0, 0, cameraDistance)
     ),
     let renderEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: renderPassDescriptor) else {
@@ -281,7 +284,7 @@ final class ScreenVolumeRendererCore {
       levelIndex: FragmentBufferIndex.levelTable.rawValue
     )
     do {
-      try renderingParameters.bindTransferFunctions(to: renderEncoder)
+      try renderTransferFunctions?.bind(to: renderEncoder)
     } catch {
       appModel.logger.error("Failed to bind transfer function: \(error.localizedDescription)")
     }
@@ -295,7 +298,11 @@ final class ScreenVolumeRendererCore {
       to: renderEncoder
     )
     renderEncoder.endEncoding()
-    updateMeasurementScreenLabels(matrices: markerMatrices)
+    updateMeasurementScreenLabels(
+      matrices: markerMatrices,
+      annotations: frame.annotations,
+      measurementsVisible: frameState.measurementsVisible
+    )
     return ScreenVolumeEncodedFrame(
       commandBuffer: commandBuffer,
       drawable: drawable,
@@ -716,14 +723,17 @@ final class ScreenVolumeRendererCore {
   }
 
   private func updateMeasurementScreenLabels(
-    matrices: (projection: simd_float4x4, view: simd_float4x4, model: simd_float4x4)
+    matrices: (projection: simd_float4x4, view: simd_float4x4, model: simd_float4x4),
+    annotations: BorgVRRenderAnnotationsSnapshot,
+    measurementsVisible: Bool
   ) {
-    guard !appModel.measurementsHidden, !appModel.volumeMeasurements.isEmpty else {
+    guard measurementsVisible, !annotations.measurements.isEmpty else {
       appModel.updateMeasurementScreenLabels([])
       return
     }
     let transform = matrices.projection * matrices.view * matrices.model * volumeScale
-    let labels = appModel.volumeMeasurements.compactMap { measurement -> AppModel.MeasurementScreenLabel? in
+    let labels = annotations.measurements.compactMap {
+      measurement -> AppModel.MeasurementScreenLabel? in
       guard let point = measurement.points.first,
             let text = measurement.formattedValue() else { return nil }
       let clip = transform * SIMD4<Float>(point.position - SIMD3<Float>(repeating: 0.5), 1)
@@ -736,7 +746,7 @@ final class ScreenVolumeRendererCore {
         position: SIMD2<Float>((ndc.x + 1) * 0.5, (1 - ndc.y) * 0.5),
         color: VolumeMeasurementPresentation.color(
           for: measurement.kind,
-          selected: appModel.selectedVolumeMeasurementID == measurement.id
+          selected: annotations.selectedMeasurementID == measurement.id
         )
       )
     }
@@ -800,7 +810,8 @@ final class ScreenVolumeRendererCore {
 
   private func updateUniforms(
     for view: MTKView,
-    state: BorgVRVisualizationSnapshot
+    state: BorgVRVisualizationSnapshot,
+    settings: BorgVRRenderSettingsSnapshot
   ) {
     guard let dataset,
           let uniformBufferVertex,
@@ -846,7 +857,7 @@ final class ScreenVolumeRendererCore {
     fragmentUniforms.uniforms.0 = FragmentUniforms(
       isoValue: state.isoValue,
       oversampling: activeOversampling,
-      sampleJitter: appSettings.sampleJitter ? 1 : 0,
+      sampleJitter: settings.sampleJitter ? 1 : 0,
       transferBias: state.transferBias,
       cameraPosInTextureSpace: simd_make_float3(viewToTexture * SIMD4<Float>(0, 0, 0, 1)),
       cameraPosInTextureSpaceVoxelScaled: simd_make_float3(
@@ -952,11 +963,11 @@ final class ScreenVolumeRendererCore {
   }
 
   private func updateEmptiness(state: BorgVRVisualizationSnapshot) {
-    guard let volumeAtlas else { return }
+    guard let volumeAtlas, let renderTransferFunctions else { return }
     switch state.renderMode {
       case .transferFunction1D, .transferFunction1DLighting:
         volumeAtlas.updateEmptiness(
-          transferFunctions: Array(renderingParameters.activeTransferFunctions)
+          transferFunctions: renderTransferFunctions.activeTransferFunctions
         )
       case .isoValue:
         volumeAtlas.updateEmptiness(isoValue: state.isoValue)

@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import Observation
 import simd
 
 enum BorgVRCommandSource: Equatable, Sendable {
@@ -23,7 +24,7 @@ enum BorgVRStateResetScope: String, Sendable {
   case lighting
 }
 
-enum BorgVRMutationDomain: String, Sendable {
+enum BorgVRMutationDomain: String, Hashable, Sendable {
   case visualization
   case transferFunction
   case objects
@@ -47,6 +48,13 @@ struct BorgVRLightingSnapshot: Equatable, Sendable {
 struct BorgVRTransferFunctionSnapshot: Equatable, Sendable {
   let channel: Int
   let samples: [SIMD4<UInt8>]
+  let revision: UInt64
+
+  init(channel: Int, samples: [SIMD4<UInt8>], revision: UInt64 = 0) {
+    self.channel = channel
+    self.samples = samples
+    self.revision = revision
+  }
 
   var base64EncodedSamples: String {
     var bytes = Data(capacity: samples.count * 4)
@@ -72,6 +80,119 @@ struct BorgVRVisualizationSnapshot: Equatable, Sendable {
   var objectCount: Int
   var measurementCount: Int
   var transferFunctionRevisions: [UInt64]
+}
+
+struct BorgVRRenderAnnotationsSnapshot: Sendable {
+  let markers: [VolumeMarker]
+  let meshAssets: [UUID: SceneMeshAsset]
+  let meshInstances: [SceneMeshInstance]
+  let measurements: [VolumeMeasurement]
+  let remoteToolPreviews: [SpatialToolPreview]
+  let selectedMarkerIDs: Set<UUID>
+  let selectedMeasurementID: UUID?
+  let selectedMeasurementPointID: UUID?
+  let datasetMaximumExtentMeters: Float
+  let localToolColor: SIMD4<Float>
+
+  static let empty = BorgVRRenderAnnotationsSnapshot(
+    markers: [],
+    meshAssets: [:],
+    meshInstances: [],
+    measurements: [],
+    remoteToolPreviews: [],
+    selectedMarkerIDs: [],
+    selectedMeasurementID: nil,
+    selectedMeasurementPointID: nil,
+    datasetMaximumExtentMeters: 1,
+    localToolColor: SIMD4<Float>(1, 0, 0, 1)
+  )
+}
+
+struct BorgVRSpatialViewsSnapshot: Sendable {
+  let participants: [BorgVRSharePlayParticipant]
+  let sharedView: BorgVRScreenViewState?
+  let detachedViews: [UUID: BorgVRScreenViewState]
+  let namesVisible: Bool
+  let interactionActive: Bool
+
+  static let empty = BorgVRSpatialViewsSnapshot(
+    participants: [],
+    sharedView: nil,
+    detachedViews: [:],
+    namesVisible: true,
+    interactionActive: false
+  )
+}
+
+struct BorgVRRenderSettingsSnapshot: Sendable {
+  let sampleJitter: Bool
+  let transferFunctionDisplayMode: Int
+  let purgeAtlas: Bool
+
+  static let `default` = BorgVRRenderSettingsSnapshot(
+    sampleJitter: false,
+    transferFunctionDisplayMode: 0,
+    purgeAtlas: false
+  )
+}
+
+struct BorgVRFrameSnapshot: Sendable {
+  let visualization: BorgVRVisualizationSnapshot
+  let transferFunctions: [BorgVRTransferFunctionSnapshot]
+  let annotations: BorgVRRenderAnnotationsSnapshot
+  let spatialViews: BorgVRSpatialViewsSnapshot
+  let settings: BorgVRRenderSettingsSnapshot
+}
+
+/// Publishes immutable render state without making the renderer cross an actor boundary.
+/// Snapshot construction happens on MainActor; a frame only retains the latest finished value.
+private final class BorgVRRenderSnapshotStore: @unchecked Sendable {
+  private let lock = NSLock()
+  private var snapshot: BorgVRFrameSnapshot
+
+  init(_ snapshot: BorgVRFrameSnapshot) {
+    self.snapshot = snapshot
+  }
+
+  func load() -> BorgVRFrameSnapshot {
+    lock.withLock { snapshot }
+  }
+
+  func publish(_ snapshot: BorgVRFrameSnapshot) {
+    lock.withLock { self.snapshot = snapshot }
+  }
+}
+
+private final class BorgVRExternalMutationMailbox: @unchecked Sendable {
+  struct Pending {
+    let source: BorgVRCommandSource
+    let domains: Set<BorgVRMutationDomain>
+  }
+
+  private let lock = NSLock()
+  private var source: BorgVRCommandSource = .userInterface
+  private var domains: Set<BorgVRMutationDomain> = []
+  private var deliveryScheduled = false
+
+  func enqueue(source: BorgVRCommandSource, domain: BorgVRMutationDomain) -> Bool {
+    lock.withLock {
+      self.source = source
+      domains.insert(domain)
+      guard !deliveryScheduled else { return false }
+      deliveryScheduled = true
+      return true
+    }
+  }
+
+  func takePending() -> Pending? {
+    lock.withLock {
+      guard deliveryScheduled else { return nil }
+      let pending = Pending(source: source, domains: domains)
+      domains.removeAll(keepingCapacity: true)
+      deliveryScheduled = false
+      return pending
+    }
+  }
 }
 
 enum BorgVRCommand: Sendable {
@@ -217,7 +338,7 @@ enum BorgVRSessionCommandError: Error, LocalizedError {
 @MainActor
 final class BorgVRSession<VisualizationState: AnyObject, RuntimeState: AnyObject, SettingsState: AnyObject>: ObservableObject, @unchecked Sendable {
   typealias CommandHandler = (BorgVRCommand, BorgVRCommandSource) throws -> Void
-  typealias SnapshotProvider = () -> BorgVRVisualizationSnapshot
+  typealias SnapshotProvider = () -> BorgVRFrameSnapshot
   typealias AnnotationSnapshotProvider = () -> BorgVRAnnotationSnapshot
   typealias TransferFunctionSnapshotProvider = () -> [BorgVRTransferFunctionSnapshot]
   typealias CommandObserver = (BorgVRCommandEvent) -> Void
@@ -228,12 +349,15 @@ final class BorgVRSession<VisualizationState: AnyObject, RuntimeState: AnyObject
 
   private let lock = NSRecursiveLock()
   private let commandHandler: CommandHandler
-  nonisolated(unsafe) private let snapshotProvider: SnapshotProvider
+  private let snapshotProvider: SnapshotProvider
   private let annotationSnapshotProvider: AnnotationSnapshotProvider
   private let transferFunctionSnapshotProvider: TransferFunctionSnapshotProvider
-  nonisolated private let snapshotLock = NSLock()
-  nonisolated(unsafe) private var cachedSnapshot: BorgVRVisualizationSnapshot
+  nonisolated private let renderSnapshotStore: BorgVRRenderSnapshotStore
+  nonisolated private let externalMutationMailbox = BorgVRExternalMutationMailbox()
   private var cachedAnnotationSnapshot: BorgVRAnnotationSnapshot
+  private var snapshotObservationCancellables: Set<AnyCancellable> = []
+  private var snapshotRefreshScheduled = false
+  private var tracksObservationSnapshotChanges = false
   private var commandObservers: [UUID: CommandObserver] = [:]
   private var recordedEvents: [BorgVRCommandEvent] = []
   private var recordsCommands = false
@@ -255,7 +379,7 @@ final class BorgVRSession<VisualizationState: AnyObject, RuntimeState: AnyObject
     self.snapshotProvider = snapshotProvider
     self.annotationSnapshotProvider = annotationSnapshotProvider
     self.transferFunctionSnapshotProvider = transferFunctionSnapshotProvider
-    self.cachedSnapshot = snapshotProvider()
+    self.renderSnapshotStore = BorgVRRenderSnapshotStore(snapshotProvider())
     self.cachedAnnotationSnapshot = annotationSnapshotProvider()
   }
 
@@ -282,8 +406,8 @@ final class BorgVRSession<VisualizationState: AnyObject, RuntimeState: AnyObject
     let annotationsBefore = cachedAnnotationSnapshot
     let result = try mutation()
     let after = snapshotProvider()
-    snapshotLock.withLock { cachedSnapshot = after }
-    let commands = inferredCommands(from: before, to: after, fallback: domain)
+    renderSnapshotStore.publish(after)
+    let commands = inferredCommands(from: before, to: after.visualization, fallback: domain)
     let annotationCommands = inferredAnnotationCommands(
       from: annotationsBefore,
       to: refreshAnnotationSnapshot(for: domain),
@@ -306,8 +430,8 @@ final class BorgVRSession<VisualizationState: AnyObject, RuntimeState: AnyObject
     let before = renderSnapshot()
     let annotationsBefore = cachedAnnotationSnapshot
     let after = snapshotProvider()
-    snapshotLock.withLock { cachedSnapshot = after }
-    let commands = inferredCommands(from: before, to: after, fallback: domain)
+    renderSnapshotStore.publish(after)
+    let commands = inferredCommands(from: before, to: after.visualization, fallback: domain)
     let annotationCommands = inferredAnnotationCommands(
       from: annotationsBefore,
       to: refreshAnnotationSnapshot(for: domain),
@@ -324,13 +448,56 @@ final class BorgVRSession<VisualizationState: AnyObject, RuntimeState: AnyObject
     source: BorgVRCommandSource,
     domain: BorgVRMutationDomain
   ) {
+    guard externalMutationMailbox.enqueue(source: source, domain: domain) else { return }
     Task { @MainActor [weak self] in
-      self?.commitExternalMutation(source: source, domain: domain)
+      self?.commitPendingExternalMutations()
+    }
+  }
+
+  private func commitPendingExternalMutations() {
+    guard let pending = externalMutationMailbox.takePending() else { return }
+    lock.lock()
+    defer { lock.unlock() }
+    let before = renderSnapshot()
+    let annotationsBefore = cachedAnnotationSnapshot
+    let after = snapshotProvider()
+    renderSnapshotStore.publish(after)
+
+    let fallback = pending.domains.sorted { $0.rawValue < $1.rawValue }.first ?? .interaction
+    var commands = inferredCommands(
+      from: before,
+      to: after.visualization,
+      fallback: fallback
+    )
+    let annotationAfter = annotationSnapshotProvider()
+    if pending.domains.contains(.objects) {
+      commands += inferredAnnotationCommands(
+        from: annotationsBefore,
+        to: annotationAfter,
+        domain: .objects
+      )
+    }
+    if pending.domains.contains(.measurements) {
+      commands += inferredAnnotationCommands(
+        from: annotationsBefore,
+        to: annotationAfter,
+        domain: .measurements
+      )
+    }
+    if pending.domains.contains(.objects) || pending.domains.contains(.measurements) {
+      cachedAnnotationSnapshot = annotationAfter
+    }
+    for command in commands {
+      emit(command, source: pending.source)
     }
   }
 
   nonisolated func renderSnapshot() -> BorgVRVisualizationSnapshot {
-    snapshotLock.withLock { cachedSnapshot }
+    renderSnapshotStore.load().visualization
+  }
+
+  nonisolated func frameSnapshot() -> BorgVRFrameSnapshot {
+    renderSnapshotStore.load()
   }
 
   func currentSnapshot() -> BorgVRVisualizationSnapshot {
@@ -339,16 +506,55 @@ final class BorgVRSession<VisualizationState: AnyObject, RuntimeState: AnyObject
   }
 
   func publishRenderSnapshot() {
-    _ = refreshRenderSnapshot()
+    renderSnapshotStore.publish(snapshotProvider())
   }
 
-  /// Captures the wrapped domains once for a render frame. Vision currently has both MainActor
-  /// UI bindings and render-actor device input, so access is serialized by each domain's existing
-  /// synchronization while this method freezes the resulting value state.
-  nonisolated func refreshRenderSnapshot() -> BorgVRVisualizationSnapshot {
-    let snapshot = snapshotProvider()
-    snapshotLock.withLock { cachedSnapshot = snapshot }
-    return snapshot
+  /// Tracks ObservableObject changes without rebuilding state in every screen-rendering frame.
+  /// ObservableObject emits before mutation, so publication is coalesced onto the next MainActor turn.
+  func trackRenderSnapshotChanges<P: Publisher>(from publishers: [P])
+  where P.Output == Void, P.Failure == Never {
+    for publisher in publishers {
+      publisher
+        .sink { [weak self] in
+          Task { @MainActor [weak self] in
+            self?.scheduleRenderSnapshotRefresh()
+          }
+        }
+        .store(in: &snapshotObservationCancellables)
+    }
+  }
+
+  /// Tracks the properties read by the visionOS snapshot provider. Observation callbacks are
+  /// one-shot, so every publication installs tracking for the next change.
+  func trackObservedRenderSnapshotChanges() {
+    tracksObservationSnapshotChanges = true
+    publishObservedRenderSnapshot()
+  }
+
+  private func scheduleRenderSnapshotRefresh() {
+    guard !snapshotRefreshScheduled else { return }
+    snapshotRefreshScheduled = true
+    Task { @MainActor [weak self] in
+      await Task.yield()
+      guard let self else { return }
+      self.snapshotRefreshScheduled = false
+      if self.tracksObservationSnapshotChanges {
+        self.publishObservedRenderSnapshot()
+      } else {
+        self.publishRenderSnapshot()
+      }
+    }
+  }
+
+  private func publishObservedRenderSnapshot() {
+    let snapshot = withObservationTracking {
+      snapshotProvider()
+    } onChange: { [weak self] in
+      Task { @MainActor [weak self] in
+        self?.scheduleRenderSnapshotRefresh()
+      }
+    }
+    renderSnapshotStore.publish(snapshot)
   }
 
   @discardableResult
@@ -567,7 +773,7 @@ extension BorgVRSession where VisualizationState == RenderingParameters,
     synchronizeMeasurements: @escaping () -> Void = {},
     renderModeDidChange: @escaping (RenderMode) -> Void = { _ in }
   ) -> ScreenBorgVRSession {
-    ScreenBorgVRSession(
+    let session = ScreenBorgVRSession(
       visualizationState: renderingParameters,
       runtimeState: appModel,
       settingsState: appSettings,
@@ -752,7 +958,15 @@ extension BorgVRSession where VisualizationState == RenderingParameters,
       },
       snapshotProvider: {
         let orientation = renderingParameters.orientation.vector
-        return BorgVRVisualizationSnapshot(
+        let transferFunctions = renderingParameters.activeTransferFunctions.enumerated().map {
+          channel, transferFunction in
+          BorgVRTransferFunctionSnapshot(
+            channel: channel,
+            samples: transferFunction.data,
+            revision: transferFunction.revision
+          )
+        }
+        let visualization = BorgVRVisualizationSnapshot(
           transform: BorgVRTransformSnapshot(
             rotation: orientation,
             translation: SIMD3<Float>(
@@ -781,6 +995,35 @@ extension BorgVRSession where VisualizationState == RenderingParameters,
           measurementCount: appModel.volumeMeasurements.count,
           transferFunctionRevisions: renderingParameters.activeTransferFunctions.map(\.revision)
         )
+        let maximumExtent: Float
+        if let metadata = appModel.activeDatasetMetadata {
+          let extent = metadata.physicalExtentMeters
+          maximumExtent = max(extent.x, max(extent.y, extent.z))
+        } else {
+          maximumExtent = 1
+        }
+        return BorgVRFrameSnapshot(
+          visualization: visualization,
+          transferFunctions: transferFunctions,
+          annotations: BorgVRRenderAnnotationsSnapshot(
+            markers: appModel.volumeMarkers,
+            meshAssets: appModel.sceneMeshAssets,
+            meshInstances: appModel.sceneMeshInstances,
+            measurements: appModel.volumeMeasurements,
+            remoteToolPreviews: appModel.activeRemoteSpatialToolPreviews(),
+            selectedMarkerIDs: appModel.selectedVolumeMarkerIDs,
+            selectedMeasurementID: appModel.selectedVolumeMeasurementID,
+            selectedMeasurementPointID: appModel.selectedVolumeMeasurementPointID,
+            datasetMaximumExtentMeters: maximumExtent,
+            localToolColor: SIMD4<Float>(1, 0, 0, 1)
+          ),
+          spatialViews: .empty,
+          settings: BorgVRRenderSettingsSnapshot(
+            sampleJitter: appSettings.sampleJitter,
+            transferFunctionDisplayMode: 0,
+            purgeAtlas: false
+          )
+        )
       },
       annotationSnapshotProvider: {
         BorgVRAnnotationSnapshot(
@@ -791,10 +1034,21 @@ extension BorgVRSession where VisualizationState == RenderingParameters,
       },
       transferFunctionSnapshotProvider: {
         renderingParameters.activeTransferFunctions.enumerated().map { channel, transferFunction in
-          BorgVRTransferFunctionSnapshot(channel: channel, samples: transferFunction.data)
+          BorgVRTransferFunctionSnapshot(
+            channel: channel,
+            samples: transferFunction.data,
+            revision: transferFunction.revision
+          )
         }
       }
     )
+    session.trackRenderSnapshotChanges(from: [
+      renderingParameters.objectWillChange,
+      appModel.objectWillChange,
+      appSettings.objectWillChange
+    ])
+    session.trackObservedRenderSnapshotChanges()
+    return session
   }
 }
 #endif

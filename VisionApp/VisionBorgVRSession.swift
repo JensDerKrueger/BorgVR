@@ -11,7 +11,7 @@ extension BorgVRSession where VisualizationState == SharedAppModel,
     runtimeAppModel: RuntimeAppModel,
     storedAppModel: StoredAppModel
   ) -> VisionBorgVRSession {
-    VisionBorgVRSession(
+    let session = VisionBorgVRSession(
       visualizationState: sharedAppModel,
       runtimeState: runtimeAppModel,
       settingsState: storedAppModel,
@@ -195,7 +195,16 @@ extension BorgVRSession where VisualizationState == SharedAppModel,
       },
       snapshotProvider: {
         let transform = sharedAppModel.modelTransform
-        return BorgVRVisualizationSnapshot(
+        let measurements = sharedAppModel.volumeMeasurementsSnapshot()
+        let transferFunctions = sharedAppModel.activeTransferFunctions.enumerated().map {
+          channel, transferFunction in
+          BorgVRTransferFunctionSnapshot(
+            channel: channel,
+            samples: transferFunction.data,
+            revision: transferFunction.revision
+          )
+        }
+        let visualization = BorgVRVisualizationSnapshot(
           transform: BorgVRTransformSnapshot(
             rotation: transform.rotation.vector,
             translation: transform.translation,
@@ -219,8 +228,43 @@ extension BorgVRSession where VisualizationState == SharedAppModel,
           objectsVisible: !sharedAppModel.objectsHidden,
           measurementsVisible: !sharedAppModel.measurementsHidden,
           objectCount: sharedAppModel.volumeMarkers.count + sharedAppModel.sceneMeshInstances.count,
-          measurementCount: sharedAppModel.volumeMeasurementsSnapshot().count,
+          measurementCount: measurements.count,
           transferFunctionRevisions: sharedAppModel.activeTransferFunctions.map(\.revision)
+        )
+        let maximumExtent: Float
+        if let dataset = runtimeAppModel.activeDatasetInfo {
+          let extent = dataset.physicalExtentMeters
+          maximumExtent = max(extent.x, max(extent.y, extent.z))
+        } else {
+          maximumExtent = 1
+        }
+        return BorgVRFrameSnapshot(
+          visualization: visualization,
+          transferFunctions: transferFunctions,
+          annotations: BorgVRRenderAnnotationsSnapshot(
+            markers: sharedAppModel.volumeMarkers,
+            meshAssets: sharedAppModel.sceneMeshAssets,
+            meshInstances: sharedAppModel.sceneMeshInstances,
+            measurements: measurements,
+            remoteToolPreviews: sharedAppModel.activeRemoteSpatialToolPreviews(),
+            selectedMarkerIDs: sharedAppModel.selectedVolumeMarkerIDs,
+            selectedMeasurementID: sharedAppModel.selectedVolumeMeasurementID,
+            selectedMeasurementPointID: sharedAppModel.selectedVolumeMeasurementPointID,
+            datasetMaximumExtentMeters: maximumExtent,
+            localToolColor: sharedAppModel.defaultVolumeStrokeColor
+          ),
+          spatialViews: BorgVRSpatialViewsSnapshot(
+            participants: sharedAppModel.sharePlayParticipants,
+            sharedView: sharedAppModel.screenSharePlayViewState,
+            detachedViews: sharedAppModel.detachedScreenSharePlayViewStates,
+            namesVisible: sharedAppModel.screenViewNamesVisible,
+            interactionActive: sharedAppModel.screenViewInteractionActive
+          ),
+          settings: BorgVRRenderSettingsSnapshot(
+            sampleJitter: storedAppModel.sampleJitter,
+            transferFunctionDisplayMode: storedAppModel.tfMode,
+            purgeAtlas: sharedAppModel.purgeAtlas
+          )
         )
       },
       annotationSnapshotProvider: {
@@ -232,10 +276,17 @@ extension BorgVRSession where VisualizationState == SharedAppModel,
       },
       transferFunctionSnapshotProvider: {
         sharedAppModel.activeTransferFunctions.enumerated().map { channel, transferFunction in
-          BorgVRTransferFunctionSnapshot(channel: channel, samples: transferFunction.data)
+          BorgVRTransferFunctionSnapshot(
+            channel: channel,
+            samples: transferFunction.data,
+            revision: transferFunction.revision
+          )
         }
       }
     )
+    session.trackRenderSnapshotChanges(from: [storedAppModel.objectWillChange])
+    session.trackObservedRenderSnapshotChanges()
+    return session
   }
 }
 

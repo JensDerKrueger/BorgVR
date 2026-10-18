@@ -6,6 +6,8 @@ import Foundation
 final class SyncSemaphore {
   /// The stored continuation to resume waiting tasks.
   private var continuation: CheckedContinuation<Void, Never>? = nil
+  /// Remembers a signal sent before a waiter registered.
+  private var isSignalled = false
   /// An NSLock to protect access to the continuation.
   private let lock = NSLock()
 
@@ -13,10 +15,15 @@ final class SyncSemaphore {
    Signals the semaphore, resuming any waiting task.
    */
   func signal() {
-    lock.withLock({
-      continuation?.resume()
-      continuation = nil
-    })
+    let continuation = lock.withLock { () -> CheckedContinuation<Void, Never>? in
+      guard let continuation = self.continuation else {
+        isSignalled = true
+        return nil
+      }
+      self.continuation = nil
+      return continuation
+    }
+    continuation?.resume()
   }
 
   /**
@@ -24,9 +31,17 @@ final class SyncSemaphore {
    */
   func wait() async {
     await withCheckedContinuation { continuation in
-      lock.withLock({
+      let resumeImmediately = lock.withLock {
+        if isSignalled {
+          isSignalled = false
+          return true
+        }
         self.continuation = continuation
-      })
+        return false
+      }
+      if resumeImmediately {
+        continuation.resume()
+      }
     }
   }
 }
@@ -37,6 +52,19 @@ final class SyncSemaphore {
  a transfer function or an isovalue, and updates associated metadata.
  */
 class AsyncEmptinessUpdater {
+  private enum EvaluationMode: Equatable {
+    case transferFunction
+    case isoValue
+  }
+
+  /// One immutable CPU-side input for an entire emptiness pass.
+  private struct EvaluationState {
+    let mode: EvaluationMode
+    let transferFunctions: [TransferFunction1D]
+    let isoValue: Int
+    let revision: UInt64
+  }
+
   // MARK: - Asynchronous Emptiness Variables
 
   /// The background task performing emptiness updates.
@@ -49,20 +77,13 @@ class AsyncEmptinessUpdater {
   private var shouldStop: Bool = false
   /// Lock for controlling access to metadata storage.
   private let storageLock = NSLock()
-  /// Lock for coordinating restart requests.
-  private let restartLock = NSLock()
-  /// Indicates if the updater should restart its processing loop.
-  private var shouldRestart: Bool = false
+  /// Protects the immutable input published to the background task.
+  private let evaluationLock = NSLock()
+  private var evaluationState: EvaluationState
   /// Lock for tracking changes in emptiness.
   private let hasChangedLock = NSLock()
   /// Flag indicating whether the emptiness data has changed.
   private var hasChanged: Bool = false
-  /// Lock for synchronizing transfer function updates.
-  private let transferFunctionLock = NSLock()
-  /// The transfer functions used to determine brick emptiness.
-  private var transferFunctions = [TransferFunction1D()]
-  /// The current isovalue used when render mode is isoValue.
-  private var isoValue: Int = 0
   /// The BorgVR dataset protocol instance providing volume data.
   private var borgData: BORGVRDatasetProtocol
   /// An array storing metadata flags for each brick.
@@ -73,8 +94,6 @@ class AsyncEmptinessUpdater {
   private var pageMetadata: [PageMetadata] = []
   /// A table mapping each brick to its child bricks.
   private var childTable: [[Int]] = []
-  /// The current render mode.
-  private var renderMode: RenderMode = .transferFunction1D
   /// The last computed emptiness state for each brick.
   private var lastEmptiness: [Bool] = []
   /// An optional logger for debug and error messages.
@@ -92,10 +111,18 @@ class AsyncEmptinessUpdater {
        transferFunctions: [TransferFunction1D],
        isoValue: Float,
        logger: LoggerBase?) {
+    let normalizedIsoValue = min(max(Double(isoValue), 0), 1)
+    let integerIsoValue = Int(
+      (normalizedIsoValue * Double(borgData.getMetadata().rangeMax)).rounded()
+    )
     self.borgData = borgData
     self.logger = logger
-    self.isoValue = intIsoValue(normIsoValue: isoValue)
-    self.transferFunctions = transferFunctions.map { TransferFunction1D(copyFrom: $0) }
+    self.evaluationState = EvaluationState(
+      mode: .transferFunction,
+      transferFunctions: transferFunctions.map { TransferFunction1D(copyFrom: $0) },
+      isoValue: integerIsoValue,
+      revision: 0
+    )
     computeChildTable()
 
     initialSynchronousUpdate()
@@ -178,18 +205,26 @@ class AsyncEmptinessUpdater {
    - useTF: The transfer function to use when evaluating emptiness.
    - Returns: True if the brick is considered empty; otherwise, false.
    */
-  func brickIsEmpty(
+  private func brickIsEmpty(
     brickMetadata: BrickMetadata,
-    useTransferFunctions: [TransferFunction1D]
+    evaluation: EvaluationState
   ) -> Bool {
-    switch renderMode {
-      case .transferFunction1D, .transferFunction1DLighting:
-        return useTransferFunctions.allSatisfy {
+    switch evaluation.mode {
+      case .transferFunction:
+        return evaluation.transferFunctions.allSatisfy {
           $0.isBrickEmpty(brickMetadata: brickMetadata)
         }
       case .isoValue:
-        return isoValue > brickMetadata.maxValue
+        return evaluation.isoValue > brickMetadata.maxValue
     }
+  }
+
+  func brickIsEmpty(brickMetadata: BrickMetadata) -> Bool {
+    brickIsEmpty(brickMetadata: brickMetadata, evaluation: currentEvaluation())
+  }
+
+  private func currentEvaluation() -> EvaluationState {
+    evaluationLock.withLock { evaluationState }
   }
 
   /**
@@ -210,13 +245,10 @@ class AsyncEmptinessUpdater {
 
       let brickCount = self.borgData.getMetadata().brickMetadata.count
 
-      // We'll use these to detect changes in the emptiness state.
-      var emptinessTransferFunctions: [TransferFunction1D] = []
-      lastEmptiness = []
+      var completedRevision = self.currentEvaluation().revision
 
       while true {
-        // Wait until signalled to restart, unless already scheduled.
-        if !self.shouldRestart {
+        if self.currentEvaluation().revision == completedRevision {
           await self.waitSemaphore.wait()
         }
 
@@ -224,36 +256,27 @@ class AsyncEmptinessUpdater {
         let shouldExit = self.stopLock.withLock { return self.shouldStop }
         if shouldExit { return }
 
-        // Reset the restart flag.
-        self.restartLock.withLock { self.shouldRestart = false }
-
-        // If in transfer function render mode, make a local copy.
-        if renderMode == .transferFunction1D || renderMode == .transferFunction1DLighting {
-          self.transferFunctionLock.withLock {
-            emptinessTransferFunctions = self.transferFunctions.map {
-              TransferFunction1D(copyFrom: $0)
-            }
-          }
-        }
+        let evaluation = self.currentEvaluation()
+        guard evaluation.revision != completedRevision else { continue }
 
         // Compute current emptiness per brick.
         var currentEmptiness = Array(repeating: false, count: brickCount)
         for index in 0..<brickCount {
-          if self.shouldRestart { break }
           let brickMetadata = self.borgData.getMetadata().brickMetadata[index]
-          currentEmptiness[index] = self.brickIsEmpty(brickMetadata: brickMetadata,
-                                                      useTransferFunctions: emptinessTransferFunctions)
+          currentEmptiness[index] = self.brickIsEmpty(
+            brickMetadata: brickMetadata,
+            evaluation: evaluation
+          )
         }
-        if self.shouldRestart { continue }
+        guard self.currentEvaluation().revision == evaluation.revision else { continue }
 
         // Only update metaStorage if emptiness has changed.
-        if lastEmptiness != currentEmptiness {
+        let previousEmptiness = self.storageLock.withLock { self.lastEmptiness }
+        if previousEmptiness != currentEmptiness {
           var currentEmptinessHasChanged = false
 
           self.storageLock.withLock {
             for index in 0..<currentEmptiness.count {
-              if self.shouldRestart { break }
-
               if currentEmptiness[index] {
                 // If a brick that was paged in is now empty.
                 if self.metaStorage[index] >= BI_FLAG_COUNT,
@@ -285,15 +308,14 @@ class AsyncEmptinessUpdater {
                 }
               }
             }
+            self.lastEmptiness = currentEmptiness
           }
 
-          if self.shouldRestart { continue }
-
           self.hasChangedLock.withLock {
-            self.lastEmptiness = currentEmptiness
             self.hasChanged = currentEmptinessHasChanged
           }
         }
+        completedRevision = evaluation.revision
       }
     }
   }
@@ -316,9 +338,9 @@ class AsyncEmptinessUpdater {
     metaStorage = Array(repeating: BI_MISSING, count: brickCount)
 
     // Compute the emptiness for each brick.
+    let evaluation = currentEvaluation()
     let emptiness = (0..<brickCount).map { index in
-      brickIsEmpty(brickMetadata: metadata.brickMetadata[index],
-                   useTransferFunctions: transferFunctions)
+      brickIsEmpty(brickMetadata: metadata.brickMetadata[index], evaluation: evaluation)
     }
 
     // Update metaStorage based on computed emptiness.
@@ -367,20 +389,21 @@ class AsyncEmptinessUpdater {
    - Parameter transferFunction: The new transfer function.
    */
   func updateTransferFunctions(_ transferFunctions: [TransferFunction1D]) {
-    transferFunctionLock.withLock {
-      let changed = transferFunctions.count != self.transferFunctions.count ||
-        zip(transferFunctions, self.transferFunctions).contains {
+    let changed = evaluationLock.withLock { () -> Bool in
+      let changed = transferFunctions.count != evaluationState.transferFunctions.count ||
+        zip(transferFunctions, evaluationState.transferFunctions).contains {
           $0.emptinessSignificantChange($1)
         }
-      if self.renderMode != .transferFunction1D || changed {
-        self.renderMode = .transferFunction1D
-        self.transferFunctions = transferFunctions.map { TransferFunction1D(copyFrom: $0) }
-        restartLock.withLock {
-          self.shouldRestart = true
-        }
-        waitSemaphore.signal()
-      }
+      guard evaluationState.mode != .transferFunction || changed else { return false }
+      evaluationState = EvaluationState(
+        mode: .transferFunction,
+        transferFunctions: transferFunctions.map { TransferFunction1D(copyFrom: $0) },
+        isoValue: evaluationState.isoValue,
+        revision: evaluationState.revision &+ 1
+      )
+      return true
     }
+    if changed { waitSemaphore.signal() }
   }
 
   /**
@@ -401,14 +424,19 @@ class AsyncEmptinessUpdater {
    */
   func updateIsoValue(isoValue: Float) {
     let intIsoValue = intIsoValue(normIsoValue: isoValue)
-    guard self.renderMode != .isoValue || self.isoValue != intIsoValue else { return }
-
-    self.isoValue = intIsoValue
-    self.renderMode = .isoValue
-    restartLock.withLock {
-      self.shouldRestart = true
+    let changed = evaluationLock.withLock { () -> Bool in
+      guard evaluationState.mode != .isoValue || evaluationState.isoValue != intIsoValue else {
+        return false
+      }
+      evaluationState = EvaluationState(
+        mode: .isoValue,
+        transferFunctions: evaluationState.transferFunctions,
+        isoValue: intIsoValue,
+        revision: evaluationState.revision &+ 1
+      )
+      return true
     }
-    waitSemaphore.signal()
+    if changed { waitSemaphore.signal() }
   }
 
   /**
@@ -427,11 +455,16 @@ class AsyncEmptinessUpdater {
       self.pageMetadata = pageMetadata
       self.brickToPage = brickToPage
       lastEmptiness = []
-      restartLock.withLock {
-        self.shouldRestart = true
-      }
-      waitSemaphore.signal()
     }
+    evaluationLock.withLock {
+      evaluationState = EvaluationState(
+        mode: evaluationState.mode,
+        transferFunctions: evaluationState.transferFunctions,
+        isoValue: evaluationState.isoValue,
+        revision: evaluationState.revision &+ 1
+      )
+    }
+    waitSemaphore.signal()
   }
 
   /**

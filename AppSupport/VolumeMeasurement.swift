@@ -43,12 +43,12 @@ enum VolumeMeasurementPresentation {
 
 /// GPU instance shared by the screen and immersive measurement-point shaders.
 /// The radius is expressed in pixels so control points remain compact at every distance.
-struct MeasurementPointRenderInstance {
+struct MeasurementPointRenderInstance: Sendable {
   var centerAndRadius: SIMD4<Float>
   var color: SIMD4<Float>
 }
 
-struct VolumeMeasurementPoint: Identifiable, Equatable {
+struct VolumeMeasurementPoint: Identifiable, Equatable, Sendable {
   let id: UUID
   var position: SIMD3<Float>
 
@@ -58,8 +58,8 @@ struct VolumeMeasurementPoint: Identifiable, Equatable {
   }
 }
 
-struct VolumeMeasurementGeometry {
-  struct Edge {
+struct VolumeMeasurementGeometry: Sendable {
+  struct Edge: Sendable {
     let start: SIMD3<Float>
     let end: SIMD3<Float>
   }
@@ -71,7 +71,7 @@ struct VolumeMeasurementGeometry {
   var value: Double?
 }
 
-struct VolumeMeasurement: Identifiable {
+struct VolumeMeasurement: Identifiable, Sendable {
   let id: UUID
   var name: String
   let kind: VolumeMeasurementKind

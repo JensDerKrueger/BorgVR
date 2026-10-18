@@ -135,7 +135,6 @@ class VolumeAtlas {
   private var metaStorage: [UInt32] = []
   private var pageMetadata: [PageMetadata] = []
   private var brickToPage: [Int: Int] = [:]
-  private var transferFunctions: [TransferFunction1D]
   private var purgeDataOnNextPage = false
   private var elementsInBuffer = 0
 
@@ -189,7 +188,6 @@ class VolumeAtlas {
     self.borgData = borgData
     self.borgBuffer = borgData.allocateBrickBuffer()
     self.logger = logger
-    self.transferFunctions = transferFunctions
     self.asyncEmptinessUpdater = AsyncEmptinessUpdater(
       borgData: borgData,
       transferFunctions: transferFunctions,
@@ -551,7 +549,6 @@ class VolumeAtlas {
    - Parameter transferFunction: The transfer function for emptiness computation.
    */
   func updateEmptiness(transferFunctions: [TransferFunction1D]) {
-    self.transferFunctions = transferFunctions
     asyncEmptinessUpdater.updateTransferFunctions(transferFunctions)
   }
 
@@ -636,8 +633,7 @@ class VolumeAtlas {
         continue
       }
       
-      if asyncEmptinessUpdater.brickIsEmpty(brickMetadata: metaData[newBrickID],
-                                            useTransferFunctions: transferFunctions) {
+      if asyncEmptinessUpdater.brickIsEmpty(brickMetadata: metaData[newBrickID]) {
         metaStorage[newBrickID] = BI_EMPTY
         continue
       }

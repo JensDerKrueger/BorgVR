@@ -11,12 +11,12 @@ extension UTType {
   )
 }
 
-struct VolumeMarkerPoint: Equatable {
+struct VolumeMarkerPoint: Equatable, Sendable {
   var position: SIMD3<Float>
   var radius: Float
 }
 
-struct SpatialToolPreview: Equatable {
+struct SpatialToolPreview: Equatable, Sendable {
   static let expirationInterval: TimeInterval = 0.35
 
   var point: VolumeMarkerPoint
@@ -28,12 +28,12 @@ struct SpatialToolPreview: Equatable {
   }
 }
 
-enum VolumeMarkerGeometry: Equatable {
+enum VolumeMarkerGeometry: Equatable, Sendable {
   case sphere(VolumeMarkerPoint)
   case stroke([VolumeMarkerPoint])
 }
 
-enum VolumeMarkerKind: UInt8 {
+enum VolumeMarkerKind: UInt8, Sendable {
   case sphere = 1
   case stroke = 2
 }
@@ -87,7 +87,7 @@ enum VolumeMarkerPresentation {
   }
 }
 
-struct VolumeMarker: Identifiable, Equatable {
+struct VolumeMarker: Identifiable, Equatable, Sendable {
   static let strokePointSpacingDiameterFactor: Float = 0.35
   static let directionRadiusFactor: Float = 0.1
   static let maximumInteractiveStrokePointCount = 100_000

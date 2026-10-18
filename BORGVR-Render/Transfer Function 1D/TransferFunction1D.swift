@@ -711,6 +711,64 @@ class TransferFunction1D: Equatable {
   }
 }
 
+/// Renderer-owned transfer functions updated from immutable session snapshots.
+/// Sample arrays and Metal textures are touched only when a channel revision changes.
+final class RenderTransferFunctionSet {
+  private static let textureIndices = [
+    TextureIndex.transferFunction.rawValue,
+    TextureIndex.transferFunction2.rawValue,
+    TextureIndex.transferFunction3.rawValue,
+    TextureIndex.transferFunction4.rawValue
+  ]
+
+  private let device: MTLDevice
+  private var transferFunctions: [TransferFunction1D]
+  private var revisions: [UInt64?]
+  private(set) var activeCount = 1
+
+  init(device: MTLDevice, maximumChannelCount: Int = 4) {
+    self.device = device
+    transferFunctions = (0..<maximumChannelCount).map { _ in
+      let transferFunction = TransferFunction1D()
+      transferFunction.initMetal(device: device)
+      return transferFunction
+    }
+    revisions = Array(repeating: nil, count: maximumChannelCount)
+  }
+
+  func synchronize(with snapshots: [BorgVRTransferFunctionSnapshot]) throws {
+    activeCount = min(max(snapshots.count, 1), transferFunctions.count)
+    for snapshot in snapshots where transferFunctions.indices.contains(snapshot.channel) {
+      guard revisions[snapshot.channel] != snapshot.revision else { continue }
+      if transferFunctions[snapshot.channel].data.count != snapshot.samples.count {
+        let replacement = TransferFunction1D(count: snapshot.samples.count)
+        replacement.initMetal(device: device)
+        transferFunctions[snapshot.channel] = replacement
+      }
+      try transferFunctions[snapshot.channel].updateData(with: snapshot.samples)
+      revisions[snapshot.channel] = snapshot.revision
+    }
+  }
+
+  func bind(to encoder: MTLRenderCommandEncoder) throws {
+    for (transferFunction, textureIndex) in zip(
+      transferFunctions,
+      Self.textureIndices
+    ) {
+      try transferFunction.bind(to: encoder, index: textureIndex)
+    }
+  }
+
+  func bind(channel: Int, to encoder: MTLRenderCommandEncoder, index: Int) throws {
+    let channel = min(max(channel, 0), activeCount - 1)
+    try transferFunctions[channel].bind(to: encoder, index: index)
+  }
+
+  var activeTransferFunctions: [TransferFunction1D] {
+    Array(transferFunctions.prefix(activeCount))
+  }
+}
+
 /*
  Copyright (c) 2026 Computer Graphics and Visualization Group, University of Duisburg-
  Essen

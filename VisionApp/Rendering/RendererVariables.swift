@@ -194,8 +194,12 @@ final actor Renderer {
   let layerRenderer: LayerRenderer
   /// The application model containing global settings.
   let session: VisionBorgVRSession
-  /// Immutable value state used by every volume-rendering decision in the current frame.
+  /// Immutable state used by every rendering decision in the current frame.
+  var frameSnapshot: BorgVRFrameSnapshot
   var frameState: BorgVRVisualizationSnapshot
+  /// Renderer-owned TF objects; synchronized only when a snapshot revision changes.
+  let renderTransferFunctions: RenderTransferFunctionSet
+  var atlasPurgeHandled = false
   /// Temporary runtime state for the active app process.
   let runtimeAppModel: RuntimeAppModel
   /// Application settings.
@@ -277,9 +281,15 @@ final actor Renderer {
     OversamplingMode.dynamicMode.rawValue
     self.logger = logger
 
+    let initialFrameSnapshot = session.frameSnapshot()
+    let renderTransferFunctions = RenderTransferFunctionSet(device: layerRenderer.device)
+    try renderTransferFunctions.synchronize(with: initialFrameSnapshot.transferFunctions)
+
     self.layerRenderer = layerRenderer
     self.session = session
-    self.frameState = session.renderSnapshot()
+    self.frameSnapshot = initialFrameSnapshot
+    self.frameState = initialFrameSnapshot.visualization
+    self.renderTransferFunctions = renderTransferFunctions
     self.device = layerRenderer.device
     self.commandQueue = self.device.makeCommandQueue()!
     self.runtimeAppModel = runtimeAppModel
@@ -318,8 +328,8 @@ final actor Renderer {
         device: device,
         maxMemory: atlasSizeMB * 1024 * 1024,
         borgData: borgData,
-        transferFunctions: Array(sharedAppModel.activeTransferFunctions),
-        isoValue: sharedAppModel.isoValue,
+        transferFunctions: renderTransferFunctions.activeTransferFunctions,
+        isoValue: initialFrameSnapshot.visualization.isoValue,
         logger: logger
       )
       logger?.dev("VolumeAtlas created successfully.")

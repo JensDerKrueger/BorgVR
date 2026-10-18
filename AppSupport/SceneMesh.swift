@@ -11,25 +11,25 @@ extension UTType {
   )
 }
 
-enum SceneObjectPrototype: Hashable {
+enum SceneObjectPrototype: Hashable, Sendable {
   case sphere
   case mesh(UUID)
 }
 
-enum SceneMeshTextureEncoding: UInt8 {
+enum SceneMeshTextureEncoding: UInt8, Sendable {
   case none = 0
   case png = 1
   case jpeg = 2
 }
 
-struct SceneMeshVertex: Equatable {
+struct SceneMeshVertex: Equatable, Sendable {
   var position: SIMD3<Float>
   var normal: SIMD3<Float>
   var texcoord: SIMD2<Float>
   var color: SIMD3<Float>
 }
 
-struct SceneMeshReference: Equatable, Hashable {
+struct SceneMeshReference: Equatable, Hashable, Sendable {
   var assetID: UUID
   var name: String
   var assetDescription: String
@@ -46,7 +46,7 @@ struct SceneMeshReference: Equatable, Hashable {
   }
 }
 
-struct SceneMeshAsset: Identifiable, Equatable {
+struct SceneMeshAsset: Identifiable, Equatable, Sendable {
   var id: UUID
   var name: String
   var assetDescription: String
@@ -73,7 +73,7 @@ struct SceneMeshAsset: Identifiable, Equatable {
   }
 }
 
-struct SceneMeshInstance: Identifiable, Equatable {
+struct SceneMeshInstance: Identifiable, Equatable, Sendable {
   var id: UUID
   var name: String
   var asset: SceneMeshReference

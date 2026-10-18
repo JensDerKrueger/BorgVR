@@ -113,13 +113,13 @@ extension Renderer {
     }
 
     for measurement in measurements {
-      let selected = sharedAppModel.selectedVolumeMeasurementID == measurement.id
+      let selected = frameSnapshot.annotations.selectedMeasurementID == measurement.id
       let color = measurementColor(for: measurement.kind, selected: selected)
       let geometry = measurement.geometry
 
       for (pointIndex, point) in geometry.points.enumerated() {
         let pointSelected = selected &&
-          sharedAppModel.selectedVolumeMeasurementPointID == point.id
+          frameSnapshot.annotations.selectedMeasurementPointID == point.id
         let definesAreaPlane = measurement.kind == .area && pointIndex < 3
         let outerColor: SIMD4<Float>
         if pointSelected {
@@ -239,9 +239,14 @@ extension Renderer {
    - deviceAnchor: The device anchor containing the transform of the Vision Pro.
    */
   private func updateRenderState(drawable: LayerRenderer.Drawable) {
-    if sharedAppModel.purgeAtlas {
+    if frameSnapshot.settings.purgeAtlas, !atlasPurgeHandled {
       volumeAtlas.purge()
-      sharedAppModel.purgeAtlas = false
+      atlasPurgeHandled = true
+      Task { @MainActor [weak sharedAppModel] in
+        sharedAppModel?.purgeAtlas = false
+      }
+    } else if !frameSnapshot.settings.purgeAtlas {
+      atlasPurgeHandled = false
     }
 
     let anchors = borgARProvider.getAnchors(for: drawable)
@@ -368,7 +373,7 @@ extension Renderer {
         FragmentUniforms(
           isoValue: frameState.isoValue,
           oversampling: activeOversampling,
-          sampleJitter: storedAppModel.sampleJitter ? 1 : 0,
+          sampleJitter: frameSnapshot.settings.sampleJitter ? 1 : 0,
           transferBias: frameState.transferBias,
           cameraPosInTextureSpace: simd_make_float3(viewToTexture * simd_float4(0, 0, 0, 1)),
           cameraPosInTextureSpaceVoxelScaled: simd_make_float3(viewToTextureVoxelScaled * simd_float4(0, 0, 0, 1)),
@@ -403,7 +408,7 @@ extension Renderer {
     switch frameState.renderMode {
       case .transferFunction1D, .transferFunction1DLighting:
         volumeAtlas.updateEmptiness(
-          transferFunctions: Array(sharedAppModel.activeTransferFunctions)
+          transferFunctions: renderTransferFunctions.activeTransferFunctions
         )
       case .isoValue:
         volumeAtlas.updateEmptiness(isoValue: frameState.isoValue)
@@ -656,9 +661,11 @@ extension Renderer {
     renderEncoder.setCullMode(.none)
     renderEncoder.setDepthStencilState(depthStateHUD)
     do {
-      try sharedAppModel.transferFunction(
-        channel: transferFunctionPanelInteractionState.selectedTransferFunctionChannel()
-      ).bind(to: renderEncoder, index: 0)
+      try renderTransferFunctions.bind(
+        channel: transferFunctionPanelInteractionState.selectedTransferFunctionChannel(),
+        to: renderEncoder,
+        index: 0
+      )
     } catch {
       logger?.error("Failed to bind TF texture for panel: \(error)")
     }
@@ -668,7 +675,8 @@ extension Renderer {
 
     var panelSize : SIMD2<Float>
     var panelWorldForPicking = tfPanelWorldMatrix
-    if storedAppModel.tfMode == TransferFunctionDisplayMode.HUD.rawValue {
+    if frameSnapshot.settings.transferFunctionDisplayMode ==
+      TransferFunctionDisplayMode.HUD.rawValue {
       for i in 0..<viewCount {
         let view = drawable.views[i]
         let viewMatrix = (lastOriginFromDevice * view.transform).inverse
@@ -784,7 +792,7 @@ extension Renderer {
     renderEncoder.setDepthStencilState(depthStateMarker)
     renderEncoder.setCullMode(.back)
     for instance in instances where instance.isVisible {
-      guard let asset = sharedAppModel.sceneMeshAssets[instance.asset.assetID],
+      guard let asset = frameSnapshot.annotations.meshAssets[instance.asset.assetID],
             let gpuAsset = sceneMeshGPUCache.asset(for: asset, device: device) else {
         continue
       }
@@ -825,11 +833,11 @@ extension Renderer {
   private func drawOpaqueGeometry(_ renderEncoder: MTLRenderCommandEncoder,
                                   drawable: LayerRenderer.Drawable) -> [ScreenViewLabelDescriptor] {
     let screenViews = screenViewVisualization()
-    let measurementSnapshot = sharedAppModel.volumeMeasurementsSnapshot()
+    let measurementSnapshot = frameSnapshot.annotations.measurements
     let pendingProjectionCaptureMarkerIDs =
       immersiveInteraction.pendingStrokeProjectionCaptureMarkerIDs()
     let suppressLocalToolWidgets = !pendingProjectionCaptureMarkerIDs.isEmpty
-    let persistentMarkers = sharedAppModel.volumeMarkers.filter {
+    let persistentMarkers = frameSnapshot.annotations.markers.filter {
       !pendingProjectionCaptureMarkerIDs.contains($0.id)
     }
     let screenViewMarkers = screenViews.markers.filter {
@@ -838,15 +846,15 @@ extension Renderer {
     let toolWidgetMarkers = suppressLocalToolWidgets
       ? []
       : spatialStylusMeasurementPreviewMarkers + spatialControllerModePreviewMarkers
-    let persistentMeshInstances = sharedAppModel.sceneMeshInstances
+    let persistentMeshInstances = frameSnapshot.annotations.meshInstances
     let previewMeshInstances = suppressLocalToolWidgets ? [] : spatialSceneObjectPreviewInstances
-    let visibleMeshInstances = (sharedAppModel.objectsHidden ? [] : persistentMeshInstances) +
+    let visibleMeshInstances = (frameState.objectsVisible ? persistentMeshInstances : []) +
       previewMeshInstances
     sceneMeshGPUCache.retainOnly(assetIDs: Set(visibleMeshInstances.map(\.asset.assetID)))
-    let remoteToolPreviews = sharedAppModel.activeRemoteSpatialToolPreviews()
-    guard (!sharedAppModel.objectsHidden &&
+    let remoteToolPreviews = frameSnapshot.annotations.remoteToolPreviews.filter(\.isActive)
+    guard (frameState.objectsVisible &&
              (!persistentMarkers.isEmpty || !persistentMeshInstances.isEmpty)) ||
-      (!sharedAppModel.measurementsHidden && !measurementSnapshot.isEmpty) ||
+      (frameState.measurementsVisible && !measurementSnapshot.isEmpty) ||
       !screenViewMarkers.isEmpty ||
       !screenViews.labels.isEmpty ||
       !previewMeshInstances.isEmpty ||
@@ -920,15 +928,15 @@ extension Renderer {
       markerIDs: Set((persistentMarkers + screenViewMarkers + toolWidgetMarkers).map(\.id))
     )
     measurementSurfaceMeshCache.retainOnly(
-      measurementIDs: sharedAppModel.measurementsHidden
-        ? []
-        : Set(measurementSnapshot.map(\.id))
+      measurementIDs: frameState.measurementsVisible
+        ? Set(measurementSnapshot.map(\.id))
+        : []
     )
 
     func color(for marker: VolumeMarker) -> SIMD4<Float> {
       VolumeMarkerPresentation.color(
         for: marker,
-        isSelected: sharedAppModel.selectedVolumeMarkerIDs.contains(marker.id)
+        isSelected: frameSnapshot.annotations.selectedMarkerIDs.contains(marker.id)
       )
     }
 
@@ -1067,7 +1075,7 @@ extension Renderer {
     }
 
     func drawObjects() {
-      guard !sharedAppModel.objectsHidden else { return }
+      guard frameState.objectsVisible else { return }
 
       drawSceneMeshes(
         persistentMeshInstances,
@@ -1092,11 +1100,11 @@ extension Renderer {
            let spatialStylusPreviewPoint {
           drawSphere(
             spatialStylusPreviewPoint,
-            color: sharedAppModel.defaultVolumeStrokeColor
+            color: frameSnapshot.annotations.localToolColor
           )
         }
         for point in spatialControllerPreviewPoints {
-          drawSphere(point, color: sharedAppModel.defaultVolumeStrokeColor)
+          drawSphere(point, color: frameSnapshot.annotations.localToolColor)
         }
         for sample in spatialControllerSamples {
           drawControllerPointer(sample)
@@ -1114,7 +1122,7 @@ extension Renderer {
 
     var measurementLabels: [ScreenViewLabelDescriptor] = []
     func drawMeasurements() {
-      guard !sharedAppModel.measurementsHidden else { return }
+      guard frameState.measurementsVisible else { return }
 
       let measurements = measurementVisualization(measurements: measurementSnapshot)
       measurementLabels = measurements.labels
@@ -1427,31 +1435,32 @@ extension Renderer {
   }
 
   private func screenViewVisualization() -> ScreenViewVisualization {
-    let screenParticipants = sharedAppModel.sharePlayParticipants.filter {
+    let spatialViews = frameSnapshot.spatialViews
+    let screenParticipants = spatialViews.participants.filter {
       $0.platform == .iOS || $0.platform == .macOS
     }
     guard !screenParticipants.isEmpty else { return ScreenViewVisualization() }
 
     var result = ScreenViewVisualization()
-    if let state = sharedAppModel.screenSharePlayViewState {
+    if let state = spatialViews.sharedView {
       let sharedView = screenViewVisualizationMarkers(
         state: state,
         markerID: nil,
         name: String(localized: "Shared View"),
         color: ScreenViewPresentation.sharedColor,
-        interactionActive: sharedAppModel.screenViewInteractionActive
+        interactionActive: spatialViews.interactionActive
       )
       result.markers += sharedView.markers
-      if sharedAppModel.screenViewNamesVisible {
+      if spatialViews.namesVisible {
         result.labels.append(sharedView.label)
       }
     }
 
     let detachedParticipants = screenParticipants.filter {
-      sharedAppModel.detachedScreenSharePlayViewStates[$0.id] != nil
+      spatialViews.detachedViews[$0.id] != nil
     }
     for participant in detachedParticipants {
-      guard let state = sharedAppModel.detachedScreenSharePlayViewStates[participant.id] else {
+      guard let state = spatialViews.detachedViews[participant.id] else {
         continue
       }
       let detachedView = screenViewVisualizationMarkers(
@@ -1462,7 +1471,7 @@ extension Renderer {
         interactionActive: false
       )
       result.markers += detachedView.markers
-      if sharedAppModel.screenViewNamesVisible {
+      if spatialViews.namesVisible {
         result.labels.append(detachedView.label)
       }
     }
@@ -2308,7 +2317,13 @@ extension Renderer {
 
     frame.startUpdate()
     updateDynamicBufferState()
-    frameState = session.refreshRenderSnapshot()
+    frameSnapshot = session.frameSnapshot()
+    frameState = frameSnapshot.visualization
+    do {
+      try renderTransferFunctions.synchronize(with: frameSnapshot.transferFunctions)
+    } catch {
+      logger?.error("Failed to update render transfer functions: \(error.localizedDescription)")
+    }
     frame.endUpdate()
 
     LayerRenderer.Clock().wait(until: timing.optimalInputTime)
@@ -2425,7 +2440,7 @@ extension Renderer {
     renderEncoder.setVertexBuffer(cubeBuffer, offset: 0, index: VertexBufferIndex.meshPositions.rawValue)
 
     do {
-      try sharedAppModel.bindTransferFunctions(to: renderEncoder)
+      try renderTransferFunctions.bind(to: renderEncoder)
     } catch {
       logger?.error("Failed to bind transfer function texture: \(error)")
     }
@@ -2456,7 +2471,8 @@ extension Renderer {
       drawable: drawable
     )
 
-    if storedAppModel.tfMode != TransferFunctionDisplayMode.windowOnly.rawValue {
+    if frameSnapshot.settings.transferFunctionDisplayMode !=
+      TransferFunctionDisplayMode.windowOnly.rawValue {
       renderTransferfunction(renderEncoder, drawable: drawable)
     } else {
       transferFunctionPanelInteractionState.updatePanel(
