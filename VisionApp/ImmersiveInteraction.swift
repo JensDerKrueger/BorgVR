@@ -2467,36 +2467,6 @@ class ImmersiveInteraction {
     sharedAppModel.synchronize(kind: .transformOnly)
   }
 
-  private func shiftedHue(_ color: SIMD4<Float>, by shift: Float) -> SIMD4<Float> {
-    let maximum = max(color.x, color.y, color.z)
-    let minimum = min(color.x, color.y, color.z)
-    let delta = maximum - minimum
-    var hue: Float = 0
-    if delta > 0.000_001 {
-      if maximum == color.x {
-        hue = (color.y - color.z) / delta / 6
-      } else if maximum == color.y {
-        hue = ((color.z - color.x) / delta + 2) / 6
-      } else {
-        hue = ((color.x - color.y) / delta + 4) / 6
-      }
-    }
-    hue = hue + shift - floor(hue + shift)
-    let sector = hue * 6
-    let index = Int(floor(sector)) % 6
-    let fraction = sector - floor(sector)
-    let rgb: SIMD3<Float>
-    switch index {
-      case 0: rgb = SIMD3<Float>(1, fraction, 0)
-      case 1: rgb = SIMD3<Float>(1 - fraction, 1, 0)
-      case 2: rgb = SIMD3<Float>(0, 1, fraction)
-      case 3: rgb = SIMD3<Float>(0, 1 - fraction, 1)
-      case 4: rgb = SIMD3<Float>(fraction, 0, 1)
-      default: rgb = SIMD3<Float>(1, 0, 1 - fraction)
-    }
-    return SIMD4<Float>(rgb, color.w)
-  }
-
   private var handInteractionIsActive: Bool {
     startTranslation != .zero ||
       startTranslationClipping != .zero ||

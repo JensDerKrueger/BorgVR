@@ -505,20 +505,6 @@ final class SharePlayCoordinator: ObservableObject {
     }
   }
 
-  private func establishInitialScreenView(sessionGeneration generation: Int) async {
-    await sendParticipantInfo()
-    try? await sendData(Data(), of: .screenViewRequest)
-    try? await Task.sleep(nanoseconds: 400_000_000)
-    guard generation == sessionGeneration,
-          isInSession,
-          isScreenViewSynchronized,
-          sharedScreenViewState == nil,
-          let renderingParameters else { return }
-    let state = renderingParameters.screenViewState
-    sharedScreenViewState = state
-    try? await sendScreenViewState(state, isShared: true)
-  }
-
   private func handleParticipantInfo(data: Data, from participant: Participant) {
     do {
       let info = try BorgVRSharePlayParticipantInfoCodec.decode(data)

@@ -1811,11 +1811,6 @@ final class BorgVRScriptRunner: ObservableObject {
     value.x.isFinite && value.y.isFinite && value.z.isFinite && value.w.isFinite
   }
 
-  private func synchronizeLighting() {
-    synchronizeState()
-    sharePlay?.flushSynchronization()
-  }
-
   private func synchronizeMarkers() {
     session?.commitExternalMutation(source: .gsc, domain: .objects)
     sharePlay?.synchronizeMarkers()
@@ -2013,10 +2008,6 @@ final class BorgVRScriptRunner: ObservableObject {
     pendingWaitLoadedStartReadback = nil
     pendingWaitLoadedFrameTarget = nil
     pendingWaitLoadedDatasetKey = nil
-  }
-
-  private func synchronizeTransform() {
-    sharePlay?.synchronize(kind: .transformOnly)
   }
 
   private func synchronizeState() {
