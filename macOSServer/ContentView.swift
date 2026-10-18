@@ -13,7 +13,9 @@ struct ContentView: View {
       case .start:
         ModeSelectionView()
       case .importData:
-        ConverterView()
+        ConverterView(onClose: {
+          runtimeAppModel.currentState = .start
+        })
       case .serveData:
         ServerView()
       case .settings:

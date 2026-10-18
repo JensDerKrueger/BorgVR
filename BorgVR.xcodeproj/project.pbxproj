@@ -155,6 +155,10 @@
 		57A002422ED2000200000001 /* BorgVRSharePlayPlatformAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A002402ED2000200000001 /* BorgVRSharePlayPlatformAdapter.swift */; };
 		57A002512ED2000300000001 /* BorgVRSharePlayAdHocServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A002502ED2000300000001 /* BorgVRSharePlayAdHocServer.swift */; };
 		57A002522ED2000300000001 /* BorgVRSharePlayAdHocServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A002502ED2000300000001 /* BorgVRSharePlayAdHocServer.swift */; };
+		57A002612ED3000100000001 /* ConverterView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A002602ED3000100000001 /* ConverterView.swift */; };
+		57A002622ED3000100000001 /* ConverterView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A002602ED3000100000001 /* ConverterView.swift */; };
+		57A002712ED3000200000001 /* DicomSlicePreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A002702ED3000200000001 /* DicomSlicePreview.swift */; };
+		57A002722ED3000200000001 /* DicomSlicePreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A002702ED3000200000001 /* DicomSlicePreview.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -251,6 +255,8 @@
 		57A002302ED2000100000001 /* SharePlayCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharePlayCoordinator.swift; sourceTree = "<group>"; };
 		57A002402ED2000200000001 /* BorgVRSharePlayPlatformAdapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BorgVRSharePlayPlatformAdapter.swift; sourceTree = "<group>"; };
 		57A002502ED2000300000001 /* BorgVRSharePlayAdHocServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BorgVRSharePlayAdHocServer.swift; sourceTree = "<group>"; };
+		57A002602ED3000100000001 /* ConverterView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConverterView.swift; sourceTree = "<group>"; };
+		57A002702ED3000200000001 /* DicomSlicePreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DicomSlicePreview.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -282,17 +288,11 @@
 			);
 			target = 560C00012E00000000000010 /* macOSApp */;
 		};
-		560D0A6A2D98B98100EAD023 /* Exceptions for "BORGVR-Render" folder in "macOSServer" target */ = {
+		57A002802ED3000300000001 /* Exceptions for "BORGVR-Services" folder in "macOSServer" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
-				Helpers/AlignedBuffer.swift,
-				Helpers/RingBuffer.swift,
-				"Performance Tracking/CPUFrameTimer.swift",
-				"Performance Tracking/FrameTimerProtocol.swift",
-				"Performance Tracking/GPUFrameTimer.swift",
-				"Performance Tracking/PerformanceGraph.swift",
-				"Transfer Function 1D/TransferFunction1D.swift",
-				"Transfer Function 1D/TransferFunction1DUI.swift",
+				BorgVRMCP.swift,
+				BorgVRMCPServer.swift,
 			);
 			target = 5655824A2D4E5D6F008E7CE6 /* macOSServer */;
 		};
@@ -382,6 +382,9 @@
 		};
 		560B00012E00000000000001 /* BORGVR-Services */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				57A002802ED3000300000001 /* Exceptions for "BORGVR-Services" folder in "macOSServer" target */,
+			);
 			path = "BORGVR-Services";
 			sourceTree = "<group>";
 		};
@@ -395,9 +398,6 @@
 		};
 		560D09552D98280400EAD023 /* BORGVR-Render */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-				560D0A6A2D98B98100EAD023 /* Exceptions for "BORGVR-Render" folder in "macOSServer" target */,
-			);
 			path = "BORGVR-Render";
 			sourceTree = "<group>";
 		};
@@ -534,6 +534,8 @@
 				57A002502ED2000300000001 /* BorgVRSharePlayAdHocServer.swift */,
 				57A002402ED2000200000001 /* BorgVRSharePlayPlatformAdapter.swift */,
 				57A002202ED1000100000001 /* BorgVRSharePlaySessionEngine.swift */,
+				57A002602ED3000100000001 /* ConverterView.swift */,
+				57A002702ED3000200000001 /* DicomSlicePreview.swift */,
 				57A002302ED2000100000001 /* SharePlayCoordinator.swift */,
 				57A002002ED0000100000001 /* BorgVRSession.swift */,
 				57A001C02EB0000100000001 /* BorgVRScreenCommandService.swift */,
@@ -981,6 +983,8 @@
 				57A002522ED2000300000001 /* BorgVRSharePlayAdHocServer.swift in Sources */,
 				57A002422ED2000200000001 /* BorgVRSharePlayPlatformAdapter.swift in Sources */,
 				57A002222ED1000100000001 /* BorgVRSharePlaySessionEngine.swift in Sources */,
+				57A002612ED3000100000001 /* ConverterView.swift in Sources */,
+				57A002712ED3000200000001 /* DicomSlicePreview.swift in Sources */,
 				57A002322ED2000100000001 /* SharePlayCoordinator.swift in Sources */,
 				57A002022ED0000100000001 /* BorgVRSession.swift in Sources */,
 				57A001C22EB0000100000001 /* BorgVRScreenCommandService.swift in Sources */,
@@ -1057,6 +1061,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				57A002622ED3000100000001 /* ConverterView.swift in Sources */,
+				57A002722ED3000200000001 /* DicomSlicePreview.swift in Sources */,
 				57A0014F2E70000300000001 /* KeychainSecretStore.swift in Sources */,
 				57A001472E70000300000001 /* WebAssetProvider.swift in Sources */,
 				57A0014B2E70000300000001 /* WebServerCertificateControls.swift in Sources */,

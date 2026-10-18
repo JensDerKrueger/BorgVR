@@ -42,7 +42,17 @@ struct ContentView: View {
           case .settings:
             SettingsView()
           case .importData:
-            ConverterView()
+            ConverterView(
+              onClose: {
+                appModel.navigationState = .start
+              },
+              onMeshImport: { outputURL in
+                NotificationCenter.default.post(
+                  name: SceneMeshAssetCatalog.didChangeNotification,
+                  object: outputURL
+                )
+              }
+            )
           case .selectData:
             OpenDatasetView()
         }

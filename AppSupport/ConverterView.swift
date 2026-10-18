@@ -61,16 +61,20 @@ struct ConverterView: View {
   @EnvironmentObject var storedAppModel: StoredAppModel
 
   @StateObject private var dicomPreviewModel = DicomSlicePreviewModel()
-
-
-  /**
-   The shared application model environment object that manages global state.
-   */
-  @Environment(RuntimeAppModel.self) private var runtimeAppModel
+  private let onClose: () -> Void
+  private let onMeshImport: (URL) -> Void
 
   // Create an instance of our GUI logger.
   // (It starts with no bindings until we set them in onAppear.)
   private var logger = GUILogger()
+
+  init(
+    onClose: @escaping () -> Void,
+    onMeshImport: @escaping (URL) -> Void = { _ in }
+  ) {
+    self.onClose = onClose
+    self.onMeshImport = onMeshImport
+  }
 
   var body: some View {
     VStack(spacing: 16) {
@@ -260,7 +264,7 @@ struct ConverterView: View {
         HStack {
 
           Button {
-            runtimeAppModel.currentState = .start
+            closeConverter()
           } label: {
             Label("converter_back_to_main_menu", systemImage: "chevron.backward.circle")
           }
@@ -290,7 +294,7 @@ struct ConverterView: View {
                 step += 1
                 startConversion()
               default:
-                runtimeAppModel.currentState = .start
+                closeConverter()
             }
           } label: {
             Label(
@@ -333,7 +337,7 @@ struct ConverterView: View {
       switch result {
         case .success(let urls):
           if let selectedURL = urls.first {
-            storedAppModel.dataDirectory = selectedURL.path
+            storedAppModel.setDataDirectoryURL(selectedURL)
           }
         case .failure(let error):
           logger.error(
@@ -835,12 +839,15 @@ struct ConverterView: View {
         isConverting = false
         meshImportDidFinish = true
         meshImportDidSucceed = succeeded
+        if succeeded {
+          onMeshImport(outputURL)
+        }
       }
     }
   }
 
   private func closeConverter() {
-    runtimeAppModel.currentState = .start
+    onClose()
   }
 
   private var exportContent: some View {
@@ -980,7 +987,7 @@ struct ConverterView: View {
       if !isConverting {
         HStack {
           Button {
-            runtimeAppModel.currentState = .start
+            closeConverter()
           } label: {
             Label("converter_back_to_main_menu", systemImage: "chevron.backward.circle")
           }
@@ -1016,7 +1023,7 @@ struct ConverterView: View {
             .disabled(exportOutputFile.isEmpty)
           } else if exportDidSucceed {
             Button {
-              runtimeAppModel.currentState = .start
+              closeConverter()
             } label: {
               Label("converter_nav_close", systemImage: "checkmark.circle")
             }
@@ -1339,8 +1346,9 @@ struct ConverterView: View {
 
         let bricksize = storedAppModel.brickSize
 
-        let directoryURL = URL(fileURLWithPath: storedAppModel.dataDirectory)
-        let outputFilePath = directoryURL.appendingPathComponent(outputFile).path
+        let outputFilePath = storedAppModel.withDataDirectoryAccess { directoryURL in
+          directoryURL.appendingPathComponent(outputFile).path
+        }
 
         let borderMode: ExtensionStrategy
         switch storedAppModel.borderModeString {

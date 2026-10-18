@@ -1,6 +1,6 @@
-import SwiftUI
 import CoreGraphics
 import CoreImage
+import SwiftUI
 
 // MARK: - Public View
 

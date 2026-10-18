@@ -87,6 +87,14 @@ final class StoredAppModel : ObservableObject {
     get { WebServerCertificatePasswordStore.load() }
     set { try? WebServerCertificatePasswordStore.save(newValue) }
   }
+
+  func setDataDirectoryURL(_ url: URL) {
+    dataDirectory = url.path
+  }
+
+  func withDataDirectoryAccess<T>(_ body: (URL) throws -> T) rethrows -> T {
+    try body(URL(fileURLWithPath: dataDirectory, isDirectory: true))
+  }
 }
 
 /*
