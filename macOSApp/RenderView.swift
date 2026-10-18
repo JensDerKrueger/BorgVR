@@ -28,10 +28,6 @@ struct RenderView: View {
   private let clippingPinchSensitivity: Float = 0.45
   private let transferSmoothCenterSensitivity: Float = 0.003
   private let transferSmoothSlopeSensitivity: Float = 0.003
-  private let minimumTransferSmoothWidth: Float = 0.02
-  private let maximumTransferSmoothWidth: Float = 1.0
-  private let minimumModelScale: Float = 0.2
-  private let maximumModelScale: Float = 20
   private let dockedLightingPanelWidth: CGFloat = 340
   private let dockedMarkerPanelWidth: CGFloat = 380
   private let markerDepthScrollSensitivity: Float = 0.003
@@ -425,7 +421,13 @@ struct RenderView: View {
     } else if appModel.interactionMode == .objectPlacement {
       scaleSelectedMarker(by: Float(delta))
     } else {
-      renderingParameters.scale = min(maximumModelScale, max(minimumModelScale, renderingParameters.scale * Float(delta)))
+      renderingParameters.scale = min(
+        ScreenInteractionLimits.modelScale.upperBound,
+        max(
+          ScreenInteractionLimits.modelScale.lowerBound,
+          renderingParameters.scale * Float(delta)
+        )
+      )
       synchronizeTransform()
     }
   }
@@ -791,7 +793,10 @@ struct RenderView: View {
     if update.isDirectPointer {
       let center = clamp(Float(update.location.x / update.viewSize.width))
       let steepness = clamp(Float(update.location.y / update.viewSize.height))
-      let width = maximumTransferSmoothWidth - steepness * (maximumTransferSmoothWidth - minimumTransferSmoothWidth)
+      let width = ScreenInteractionLimits.transferSmoothWidth.upperBound - steepness * (
+        ScreenInteractionLimits.transferSmoothWidth.upperBound -
+        ScreenInteractionLimits.transferSmoothWidth.lowerBound
+      )
       return (center, width)
     }
 
@@ -799,8 +804,8 @@ struct RenderView: View {
       clamp(transferSmoothCenter + Float(update.delta.width) * transferSmoothCenterSensitivity),
       clamp(
         transferSmoothWidth - Float(update.delta.height) * transferSmoothSlopeSensitivity,
-        minimumTransferSmoothWidth,
-        maximumTransferSmoothWidth
+        ScreenInteractionLimits.transferSmoothWidth.lowerBound,
+        ScreenInteractionLimits.transferSmoothWidth.upperBound
       )
     )
   }

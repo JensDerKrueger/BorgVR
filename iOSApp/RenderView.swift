@@ -70,10 +70,6 @@ struct RenderView: View {
   private let clippingPinchSensitivity: Float = 0.45
   private let transferSmoothCenterSensitivity: Float = 0.003
   private let transferSmoothSlopeSensitivity: Float = 0.003
-  private let minimumTransferSmoothWidth: Float = 0.02
-  private let maximumTransferSmoothWidth: Float = 1.0
-  private let minimumModelScale: Float = 0.2
-  private let maximumModelScale: Float = 20
 
   var body: some View {
     GeometryReader { proxy in
@@ -1181,8 +1177,8 @@ struct RenderView: View {
     transferSmoothCenter = clamp(transferSmoothCenter + Float(delta.width) * transferSmoothCenterSensitivity)
     transferSmoothWidth = clamp(
       transferSmoothWidth - Float(delta.height) * transferSmoothSlopeSensitivity,
-      minimumTransferSmoothWidth,
-      maximumTransferSmoothWidth
+      ScreenInteractionLimits.transferSmoothWidth.lowerBound,
+      ScreenInteractionLimits.transferSmoothWidth.upperBound
     )
     renderingParameters.transferFunction.smoothStep(
       start: transferSmoothCenter - transferSmoothWidth * 0.5,
@@ -1275,7 +1271,13 @@ struct RenderView: View {
         } else if appModel.interactionMode == .objectPlacement {
           scaleSelectedMarker(by: Float(delta))
         } else {
-          renderingParameters.scale = min(maximumModelScale, max(minimumModelScale, renderingParameters.scale * Float(delta)))
+          renderingParameters.scale = min(
+            ScreenInteractionLimits.modelScale.upperBound,
+            max(
+              ScreenInteractionLimits.modelScale.lowerBound,
+              renderingParameters.scale * Float(delta)
+            )
+          )
           synchronizeTransform()
         }
       }

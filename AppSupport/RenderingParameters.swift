@@ -9,6 +9,11 @@ struct TransferEditing {
   var opacity: Bool = true
 }
 
+enum ScreenInteractionLimits {
+  static let modelScale: ClosedRange<Float> = 0.2...20
+  static let transferSmoothWidth: ClosedRange<Float> = 0.02...1
+}
+
 final class RenderingParameters: ObservableObject {
   private static let streamMagic: UInt32 = 0x5250_494F // "RPIO"
   private static let streamVersion: UInt16 = 5
