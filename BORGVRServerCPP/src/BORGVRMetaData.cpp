@@ -3,13 +3,92 @@
 #include "BORGVRDataBase.h"
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <cstring>
 #include <fstream>
+#include <limits>
 #include <stdexcept>
 
 static constexpr const char* kMagic = "BORGVR";
 static constexpr size_t kMagicLen = 6;
+
+namespace {
+constexpr size_t kMaximumStringLength = 1'048'576;
+constexpr int kMaximumComponentCount = 1024;
+constexpr size_t kBrickMetadataRecordSize = 4 * sizeof(int64_t);
+
+int checked_int(int64_t value, const char* context) {
+  if (value < static_cast<int64_t>(std::numeric_limits<int>::min()) ||
+      value > static_cast<int64_t>(std::numeric_limits<int>::max())) {
+    throw BorgVRException(BorgVRDataErrorCode::InvalidArgument,
+                          std::string("Invalid ") + context + ": value is not representable.");
+  }
+  return static_cast<int>(value);
+}
+
+bool is_valid_uuid(const std::string& value) {
+  if (value.size() != 36) return false;
+  for (size_t i = 0; i < value.size(); ++i) {
+    if (i == 8 || i == 13 || i == 18 || i == 23) {
+      if (value[i] != '-') return false;
+    } else if (!std::isxdigit(static_cast<unsigned char>(value[i]))) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool is_valid_utf8(const std::string& value) {
+  const auto* bytes = reinterpret_cast<const uint8_t*>(value.data());
+  size_t index = 0;
+  while (index < value.size()) {
+    const uint8_t first = bytes[index];
+    if (first <= 0x7f) {
+      ++index;
+      continue;
+    }
+
+    size_t continuationCount = 0;
+    uint8_t secondMinimum = 0x80;
+    uint8_t secondMaximum = 0xbf;
+    if (first >= 0xc2 && first <= 0xdf) {
+      continuationCount = 1;
+    } else if (first >= 0xe0 && first <= 0xef) {
+      continuationCount = 2;
+      if (first == 0xe0) secondMinimum = 0xa0;
+      if (first == 0xed) secondMaximum = 0x9f;
+    } else if (first >= 0xf0 && first <= 0xf4) {
+      continuationCount = 3;
+      if (first == 0xf0) secondMinimum = 0x90;
+      if (first == 0xf4) secondMaximum = 0x8f;
+    } else {
+      return false;
+    }
+
+    if (continuationCount > value.size() - index - 1) return false;
+    const uint8_t second = bytes[index + 1];
+    if (second < secondMinimum || second > secondMaximum) return false;
+    for (size_t continuation = 2; continuation <= continuationCount; ++continuation) {
+      const uint8_t byte = bytes[index + continuation];
+      if (byte < 0x80 || byte > 0xbf) return false;
+    }
+    index += continuationCount + 1;
+  }
+  return true;
+}
+
+int64_t component_range_max(int bytesPerComponent) {
+  switch (bytesPerComponent) {
+    case 1: return std::numeric_limits<uint8_t>::max();
+    case 2: return std::numeric_limits<uint16_t>::max();
+    case 4: return std::numeric_limits<uint32_t>::max();
+    default:
+      throw BorgVRException(BorgVRDataErrorCode::InvalidArgument,
+                            "Invalid bytesPerComponent: supported values are 1, 2, and 4.");
+  }
+}
+}  // namespace
 
 BORGVRMetaData::BORGVRMetaData(const std::string& filename) {
   loadFromFile(filename);
@@ -34,8 +113,9 @@ void BORGVRMetaData::loadFromFile(const std::string& filename) {
   if (fileSize <= 0) {
     throw BorgVRException(BorgVRDataErrorCode::IoError, "Invalid file size.");
   }
-  if (static_cast<uint64_t>(fileSize) < metaOffset) {
-    throw BorgVRException(BorgVRDataErrorCode::IoError, "Metadata offset beyond end of file.");
+  if (metaOffset < 8 || static_cast<uint64_t>(fileSize) <= metaOffset) {
+    throw BorgVRException(BorgVRDataErrorCode::IoError,
+                          "Metadata offset must point inside the dataset file.");
   }
 
   const size_t metaSize = static_cast<size_t>(fileSize - static_cast<std::streamoff>(metaOffset));
@@ -48,6 +128,14 @@ void BORGVRMetaData::loadFromFile(const std::string& filename) {
   }
 
   parseFromBytes(meta.data(), meta.size());
+
+  for (const auto& brick : brickMetadata_) {
+    const auto brickEnd = static_cast<uint64_t>(brick.offset) + static_cast<uint64_t>(brick.size);
+    if (brickEnd > metaOffset) {
+      throw BorgVRException(BorgVRDataErrorCode::InvalidArgument,
+                            "Brick data extends into or beyond the metadata section.");
+    }
+  }
 }
 
 void BORGVRMetaData::parseFromBytes(const uint8_t* data, size_t size) {
@@ -67,27 +155,60 @@ void BORGVRMetaData::parseFromBytes(const uint8_t* data, size_t size) {
                           " (expected " + std::to_string(kVersion) + ")");
   }
 
-  width_ = static_cast<int>(br.read_i64("width"));
-  height_ = static_cast<int>(br.read_i64("height"));
-  depth_ = static_cast<int>(br.read_i64("depth"));
+  width_ = checked_int(br.read_i64("width"), "width");
+  height_ = checked_int(br.read_i64("height"), "height");
+  depth_ = checked_int(br.read_i64("depth"), "depth");
 
-  componentCount_ = static_cast<int>(br.read_i64("componentCount"));
-  bytesPerComponent_ = static_cast<int>(br.read_i64("bytesPerComponent"));
+  componentCount_ = checked_int(br.read_i64("componentCount"), "componentCount");
+  bytesPerComponent_ = checked_int(br.read_i64("bytesPerComponent"), "bytesPerComponent");
 
   voxelSpacingX_ = br.read_f32("voxelSpacingX");
   voxelSpacingY_ = br.read_f32("voxelSpacingY");
   voxelSpacingZ_ = br.read_f32("voxelSpacingZ");
 
-  brickSize_ = static_cast<int>(br.read_i64("brickSize"));
-  overlap_ = static_cast<int>(br.read_i64("overlap"));
-  minValue_ = static_cast<int>(br.read_i64("minValue"));
-  maxValue_ = static_cast<int>(br.read_i64("maxValue"));
+  brickSize_ = checked_int(br.read_i64("brickSize"), "brickSize");
+  overlap_ = checked_int(br.read_i64("overlap"), "overlap");
+  minValue_ = br.read_i64("minValue");
+  maxValue_ = br.read_i64("maxValue");
 
   compression_ = br.read_bool("compression");
 
-  uniqueID_ = br.read_string("uniqueID");
-  datasetDescription_ = br.read_string("datasetDescription");
-  metaDescription_ = br.read_string("metaDescription");
+  if (width_ <= 0 || height_ <= 0 || depth_ <= 0) {
+    throw BorgVRException(BorgVRDataErrorCode::InvalidArgument,
+                          "Volume dimensions must be greater than zero.");
+  }
+  if (componentCount_ <= 0 || componentCount_ > kMaximumComponentCount) {
+    throw BorgVRException(BorgVRDataErrorCode::InvalidArgument,
+                          "Component count is outside the supported range.");
+  }
+  const int64_t rangeMax = component_range_max(bytesPerComponent_);
+  if (!std::isfinite(voxelSpacingX_) || voxelSpacingX_ <= 0.0f ||
+      !std::isfinite(voxelSpacingY_) || voxelSpacingY_ <= 0.0f ||
+      !std::isfinite(voxelSpacingZ_) || voxelSpacingZ_ <= 0.0f) {
+    throw BorgVRException(BorgVRDataErrorCode::InvalidArgument,
+                          "Voxel spacing values must be finite and greater than zero.");
+  }
+  if (brickSize_ <= 0 || overlap_ < 0 || overlap_ > (brickSize_ - 1) / 2) {
+    throw BorgVRException(BorgVRDataErrorCode::InvalidArgument,
+                          "Brick size must be greater than twice the overlap.");
+  }
+  if (minValue_ < 0 || minValue_ > maxValue_ || maxValue_ > rangeMax) {
+    throw BorgVRException(BorgVRDataErrorCode::InvalidArgument,
+                          "Dataset value range does not fit the declared component type.");
+  }
+
+  uniqueID_ = br.read_string("uniqueID", kMaximumStringLength);
+  datasetDescription_ = br.read_string("datasetDescription", kMaximumStringLength);
+  metaDescription_ = br.read_string("metaDescription", kMaximumStringLength);
+  if (!is_valid_utf8(uniqueID_) ||
+      !is_valid_utf8(datasetDescription_) ||
+      !is_valid_utf8(metaDescription_)) {
+    throw BorgVRException(BorgVRDataErrorCode::InvalidArgument,
+                          "Metadata contains invalid UTF-8 text.");
+  }
+  if (!is_valid_uuid(uniqueID_)) {
+    throw BorgVRException(BorgVRDataErrorCode::InvalidArgument, "Invalid dataset UUID.");
+  }
 
   const int64_t metadataCount64 = br.read_i64("brickMetadataCount");
   const int64_t dataOffset64 = br.read_i64("brickDataOffset");
@@ -97,11 +218,30 @@ void BORGVRMetaData::parseFromBytes(const uint8_t* data, size_t size) {
 
   computeLevelMetadata();
 
+  const auto& lastLevel = levelMetadata_.back();
+  const int64_t lastLevelBrickCount = static_cast<int64_t>(lastLevel.totalBricks.x) *
+                                      static_cast<int64_t>(lastLevel.totalBricks.y) *
+                                      static_cast<int64_t>(lastLevel.totalBricks.z);
+  const int64_t expectedMetadataCount = static_cast<int64_t>(lastLevel.prevBricks) +
+                                        lastLevelBrickCount;
+  if (metadataCount64 != expectedMetadataCount) {
+    throw BorgVRException(BorgVRDataErrorCode::InvalidArgument,
+                          "Brick metadata count does not match the volume hierarchy.");
+  }
+
   if (dataOffset64 > 0) {
+    if (static_cast<uint64_t>(dataOffset64) > std::numeric_limits<size_t>::max()) {
+      throw BorgVRException(BorgVRDataErrorCode::InvalidArgument,
+                            "Brick metadata offset is not representable.");
+    }
     br.skip(static_cast<size_t>(dataOffset64), "brickDataOffset");
   }
 
   const size_t metadataCount = static_cast<size_t>(metadataCount64);
+  if (metadataCount > br.remaining() / kBrickMetadataRecordSize) {
+    throw BorgVRException(BorgVRDataErrorCode::InvalidArgument,
+                          "Brick metadata records are truncated.");
+  }
   brickMetadata_.clear();
   brickMetadata_.reserve(metadataCount);
 
@@ -111,6 +251,13 @@ void BORGVRMetaData::parseFromBytes(const uint8_t* data, size_t size) {
     bm.size = br.read_i64("brick size");
     bm.minValue = br.read_i64("brick minValue");
     bm.maxValue = br.read_i64("brick maxValue");
+    if (bm.offset < 8 || bm.size <= 0 ||
+        bm.offset > std::numeric_limits<int64_t>::max() - bm.size) {
+      throw BorgVRException(BorgVRDataErrorCode::InvalidArgument, "Invalid brick byte range.");
+    }
+    if (bm.minValue < 0 || bm.minValue > bm.maxValue || bm.maxValue > rangeMax) {
+      throw BorgVRException(BorgVRDataErrorCode::InvalidArgument, "Invalid brick value range.");
+    }
     brickMetadata_.push_back(bm);
   }
 }
@@ -169,19 +316,31 @@ const BrickMetadata& BORGVRMetaData::getBrickMetadata(int level, int x, int y, i
 }
 
 Vec3<int> BORGVRMetaData::calculateOutputBrickCount(Vec3<int> size, int brickSize, int overlap) {
+  if (size.x <= 0 || size.y <= 0 || size.z <= 0) {
+    throw BorgVRException(BorgVRDataErrorCode::InvalidArgument,
+                          "Volume dimensions must be greater than zero.");
+  }
+  if (brickSize <= 0 || overlap < 0 || overlap > (brickSize - 1) / 2) {
+    throw BorgVRException(BorgVRDataErrorCode::InvalidArgument,
+                          "Brick size must be greater than twice the overlap.");
+  }
   const int effectiveSize = brickSize - 2 * overlap;
   Vec3<int> out{};
-  out.x = (size.x + effectiveSize - 1) / effectiveSize;
-  out.y = (size.y + effectiveSize - 1) / effectiveSize;
-  out.z = (size.z + effectiveSize - 1) / effectiveSize;
+  out.x = (size.x - 1) / effectiveSize + 1;
+  out.y = (size.y - 1) / effectiveSize + 1;
+  out.z = (size.z - 1) / effectiveSize + 1;
   return out;
 }
 
 int BORGVRMetaData::calculateLevelCount(Vec3<int> size, int brickSize, int overlap) {
   const auto brickCount = calculateOutputBrickCount(size, brickSize, overlap);
-  const int m = std::max({brickCount.x, brickCount.y, brickCount.z});
-  if (m <= 1) return 1;
-  return 1 + static_cast<int>(std::ceil(std::log2(static_cast<double>(m))));
+  int maximumBrickCount = std::max({brickCount.x, brickCount.y, brickCount.z});
+  int levelCount = 1;
+  while (maximumBrickCount > 1) {
+    maximumBrickCount = maximumBrickCount / 2 + maximumBrickCount % 2;
+    ++levelCount;
+  }
+  return levelCount;
 }
 
 void BORGVRMetaData::computeLevelMetadata() {
@@ -203,11 +362,29 @@ void BORGVRMetaData::computeLevelMetadata() {
 
     levelMetadata_.push_back(lm);
 
-    levelWidth = std::max(1, (levelWidth + 1) / 2);
-    levelHeight = std::max(1, (levelHeight + 1) / 2);
-    levelDepth = std::max(1, (levelDepth + 1) / 2);
+    levelWidth = std::max(1, levelWidth / 2 + levelWidth % 2);
+    levelHeight = std::max(1, levelHeight / 2 + levelHeight % 2);
+    levelDepth = std::max(1, levelDepth / 2 + levelDepth % 2);
 
-    prevBricks += lm.totalBricks.x * lm.totalBricks.y * lm.totalBricks.z;
+    const int64_t brickCountX = lm.totalBricks.x;
+    const int64_t brickCountY = lm.totalBricks.y;
+    const int64_t brickCountZ = lm.totalBricks.z;
+    if (brickCountX > std::numeric_limits<int64_t>::max() / brickCountY) {
+      throw BorgVRException(BorgVRDataErrorCode::InvalidArgument,
+                            "Brick hierarchy exceeds the supported integer range.");
+    }
+    const int64_t brickCountXY = brickCountX * brickCountY;
+    if (brickCountXY > std::numeric_limits<int64_t>::max() / brickCountZ) {
+      throw BorgVRException(BorgVRDataErrorCode::InvalidArgument,
+                            "Brick hierarchy exceeds the supported integer range.");
+    }
+    const int64_t levelBrickCount = brickCountXY * brickCountZ;
+    const int64_t nextBrickCount = static_cast<int64_t>(prevBricks) + levelBrickCount;
+    if (nextBrickCount > std::numeric_limits<int>::max()) {
+      throw BorgVRException(BorgVRDataErrorCode::InvalidArgument,
+                            "Brick hierarchy exceeds the supported integer range.");
+    }
+    prevBricks = static_cast<int>(nextBrickCount);
   }
 }
 

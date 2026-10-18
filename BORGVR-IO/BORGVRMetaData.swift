@@ -18,6 +18,7 @@ enum BORGVRError: Swift.Error, LocalizedError {
   // String / UUID issues
   case invalidStringEncoding
   case invalidUUID(String)
+  case invalidValue(context: String, reason: String)
 
   // Other
   case other(String)
@@ -38,8 +39,91 @@ enum BORGVRError: Swift.Error, LocalizedError {
         return "Invalid UTF-8 string encoding in metadata."
       case .invalidUUID(let s):
         return "Invalid UUID string: \(s)"
+      case .invalidValue(let context, let reason):
+        return "Invalid \(context) in BORGVR metadata: \(reason)"
       case .other(let msg):
         return msg
+    }
+  }
+}
+
+// MARK: - Binary metadata reader
+
+private struct BORGVRBinaryReader {
+  let data: Data
+  private(set) var offset: Int
+
+  init(data: Data, offset: Int = 0) {
+    self.data = data
+    self.offset = offset
+  }
+
+  var remainingCount: Int {
+    data.count - offset
+  }
+
+  mutating func readInteger<T: FixedWidthInteger>(_ type: T.Type,
+                                                   context: String) throws -> T {
+    let byteCount = MemoryLayout<T>.size
+    try require(byteCount, context: context)
+
+    var value: T = 0
+    let end = offset + byteCount
+    _ = withUnsafeMutableBytes(of: &value) { destination in
+      data.copyBytes(to: destination, from: offset..<end)
+    }
+    offset = end
+    return T(littleEndian: value)
+  }
+
+  mutating func readFloat(context: String) throws -> Float {
+    let bits: UInt32 = try readInteger(UInt32.self, context: context)
+    return Float(bitPattern: bits)
+  }
+
+  mutating func readBool(context: String) throws -> Bool {
+    let raw: UInt8 = try readInteger(UInt8.self, context: context)
+    guard raw <= 1 else {
+      throw BORGVRError.invalidValue(context: context,
+                                     reason: "expected 0 or 1, found \(raw)")
+    }
+    return raw == 1
+  }
+
+  mutating func readData(length: Int, context: String) throws -> Data {
+    try require(length, context: context)
+    let end = offset + length
+    let value = data.subdata(in: offset..<end)
+    offset = end
+    return value
+  }
+
+  mutating func readString(context: String, maximumByteCount: Int) throws -> String {
+    let length64: Int64 = try readInteger(Int64.self, context: "\(context).length")
+    guard length64 >= 0, let length = Int(exactly: length64) else {
+      throw BORGVRError.invalidValue(context: "\(context).length",
+                                     reason: "negative or not representable")
+    }
+    guard length <= maximumByteCount else {
+      throw BORGVRError.invalidValue(context: "\(context).length",
+                                     reason: "exceeds \(maximumByteCount) bytes")
+    }
+    let stringData = try readData(length: length, context: context)
+    guard let string = String(data: stringData, encoding: .utf8) else {
+      throw BORGVRError.invalidStringEncoding
+    }
+    return string
+  }
+
+  mutating func skip(_ count: Int, context: String) throws {
+    try require(count, context: context)
+    offset += count
+  }
+
+  private func require(_ count: Int, context: String) throws {
+    guard count >= 0, offset >= 0, offset <= data.count,
+          count <= data.count - offset else {
+      throw BORGVRError.unexpectedEndOfData(context: context)
     }
   }
 }
@@ -82,27 +166,35 @@ final class BrickMetadata: Codable, CustomStringConvertible {
   }
 
   /**
-   Initializes a new `BrickMetadata` by reading from a binary data blob.
+   Initializes a new `BrickMetadata` from the current position of a checked binary reader.
 
-   - Parameter data: The data blob containing serialized metadata.
-   - Parameter offset: On input, the byte offset in `data` at which to start reading; advanced past read bytes.
-   - Parameter componentCount: The number of components per voxel (unused by this class).
+   - Parameter reader: The reader whose position is advanced past the brick record.
    - Throws: An error if the data is invalid or out of bounds.
    */
-  init(fromData data: Data, offset: inout Int, componentCount: Int) throws {
-    func read<T: FixedWidthInteger>(_ context: String) throws -> T {
-      guard offset + MemoryLayout<T>.size <= data.count else {
-        throw BORGVRError.unexpectedEndOfData(context: context)
+  fileprivate init(from reader: inout BORGVRBinaryReader) throws {
+    func intValue(_ rawValue: Int64, context: String) throws -> Int {
+      guard let value = Int(exactly: rawValue) else {
+        throw BORGVRError.invalidValue(context: context, reason: "not representable")
       }
-      let value: T = data.loadLE(at: offset)
-      offset += MemoryLayout<T>.size
       return value
     }
 
-    self.offset   = Int(try read("brick offset") as Int64)
-    self.size     = Int(try read("brick size") as Int64)
-    self.minValue = Int(try read("brick minValue") as Int64)
-    self.maxValue = Int(try read("brick maxValue") as Int64)
+    self.offset = try intValue(
+      reader.readInteger(Int64.self, context: "brick offset"),
+      context: "brick offset"
+    )
+    self.size = try intValue(
+      reader.readInteger(Int64.self, context: "brick size"),
+      context: "brick size"
+    )
+    self.minValue = try intValue(
+      reader.readInteger(Int64.self, context: "brick minValue"),
+      context: "brick minValue"
+    )
+    self.maxValue = try intValue(
+      reader.readInteger(Int64.self, context: "brick maxValue"),
+      context: "brick maxValue"
+    )
   }
 
   /**
@@ -179,6 +271,10 @@ final class BORGVRMetaData: CustomStringConvertible, Codable {
   private static let magicBytes = "BORGVR".data(using: .utf8)!
   /// The version of the metadata format.
   private static let version: Int = 3
+  private static let maximumStringByteCount = 1_048_576
+  private static let maximumComponentCount = 1024
+  private static let maximumDimension = Int(Int32.max)
+  private static let brickMetadataRecordSize = 4 * MemoryLayout<Int64>.size
 
   /// The original volume width.
   private(set) var width: Int = 0
@@ -208,8 +304,15 @@ final class BORGVRMetaData: CustomStringConvertible, Codable {
 
   /// The maximum component value based on the number of bytes per component.
   var rangeMax: Int {
-    get {
-      return (1 << (bytesPerComponent * 8)) - 1
+    switch bytesPerComponent {
+      case 1:
+        return Int(UInt8.max)
+      case 2:
+        return Int(UInt16.max)
+      case 4:
+        return Int(UInt32.max)
+      default:
+        return 0
     }
   }
 
@@ -262,11 +365,15 @@ final class BORGVRMetaData: CustomStringConvertible, Codable {
    - Returns: A `Vec3<Int>` indicating the number of bricks along each dimension.
    */
   static func calculateOutputBrickCount(size: Vec3<Int>, brickSize: Int, overlap: Int) -> Vec3<Int> {
+    precondition(size.x > 0 && size.y > 0 && size.z > 0,
+                 "Volume dimensions must be positive.")
+    precondition(brickSize > 0 && overlap >= 0 && overlap <= (brickSize - 1) / 2,
+                 "Brick size must be greater than twice the overlap.")
     let effectiveSize = brickSize - 2 * overlap
     return Vec3<Int>(
-      x: (size.x + effectiveSize - 1) / effectiveSize,
-      y: (size.y + effectiveSize - 1) / effectiveSize,
-      z: (size.z + effectiveSize - 1) / effectiveSize
+      x: (size.x - 1) / effectiveSize + 1,
+      y: (size.y - 1) / effectiveSize + 1,
+      z: (size.z - 1) / effectiveSize + 1
     )
   }
 
@@ -280,7 +387,13 @@ final class BORGVRMetaData: CustomStringConvertible, Codable {
    */
   static func calculateLevelCount(size: Vec3<Int>, brickSize: Int, overlap: Int) -> Int {
     let brickCount = calculateOutputBrickCount(size: size, brickSize: brickSize, overlap: overlap)
-    return 1 + Int(ceil(log2(Double(max(brickCount.x, brickCount.y, brickCount.z)))))
+    var maximumBrickCount = max(brickCount.x, brickCount.y, brickCount.z)
+    var levelCount = 1
+    while maximumBrickCount > 1 {
+      maximumBrickCount = (maximumBrickCount + 1) / 2
+      levelCount += 1
+    }
+    return levelCount
   }
 
   /**
@@ -394,7 +507,6 @@ final class BORGVRMetaData: CustomStringConvertible, Codable {
    */
   init(fromData: Data) throws {
     try self.fromData(fromData)
-    computeLevelMetadata()
   }
 
   /**
@@ -417,21 +529,78 @@ final class BORGVRMetaData: CustomStringConvertible, Codable {
    and the number of bricks per level. It also computes a cumulative count of bricks from all previous levels.
    */
   func computeLevelMetadata() {
-    self.levelMetadata.removeAll()
+    do {
+      let result = try BORGVRMetaData.makeLevelMetadata(
+        width: width,
+        height: height,
+        depth: depth,
+        brickSize: brickSize,
+        overlap: overlap
+      )
+      self.levelMetadata = result.levels
+    } catch {
+      preconditionFailure("Invalid programmatically created BORGVR metadata: \(error.localizedDescription)")
+    }
+  }
+
+  private static func makeLevelMetadata(width: Int,
+                                        height: Int,
+                                        depth: Int,
+                                        brickSize: Int,
+                                        overlap: Int) throws -> (levels: [LevelMetadata], brickCount: Int) {
+    guard width > 0, height > 0, depth > 0,
+          width <= maximumDimension,
+          height <= maximumDimension,
+          depth <= maximumDimension else {
+      throw BORGVRError.invalidValue(
+        context: "volume dimensions",
+        reason: "each dimension must be in 1...\(maximumDimension)"
+      )
+    }
+    guard brickSize > 0, brickSize <= maximumDimension else {
+      throw BORGVRError.invalidValue(
+        context: "brickSize",
+        reason: "must be in 1...\(maximumDimension)"
+      )
+    }
+    guard overlap >= 0, overlap <= (brickSize - 1) / 2 else {
+      throw BORGVRError.invalidValue(
+        context: "overlap",
+        reason: "brickSize must be greater than twice the overlap"
+      )
+    }
+
     let size = Vec3<Int>(x: width, y: height, z: depth)
-    let levelCount = BORGVRMetaData.calculateLevelCount(size: size, brickSize: brickSize, overlap: overlap)
+    let levelCount = calculateLevelCount(size: size, brickSize: brickSize, overlap: overlap)
+    var levels: [LevelMetadata] = []
+    levels.reserveCapacity(levelCount)
     var levelWidth = width
     var levelHeight = height
     var levelDepth = depth
     var prevBricks = 0
     for _ in 0..<levelCount {
       let nextLevel = LevelMetadata(levelWidth, levelHeight, levelDepth, brickSize, overlap, prevBricks)
-      self.levelMetadata.append(nextLevel)
+      let (xyCount, xyOverflow) = nextLevel.totalBricks.x.multipliedReportingOverflow(
+        by: nextLevel.totalBricks.y
+      )
+      let (levelBrickCount, xyzOverflow) = xyCount.multipliedReportingOverflow(
+        by: nextLevel.totalBricks.z
+      )
+      let (nextBrickCount, sumOverflow) = prevBricks.addingReportingOverflow(levelBrickCount)
+      guard !xyOverflow, !xyzOverflow, !sumOverflow else {
+        throw BORGVRError.invalidValue(
+          context: "brick hierarchy",
+          reason: "brick count exceeds the supported integer range"
+        )
+      }
+
+      levels.append(nextLevel)
       levelWidth = max(1, (levelWidth + 1) / 2)
       levelHeight = max(1, (levelHeight + 1) / 2)
       levelDepth = max(1, (levelDepth + 1) / 2)
-      prevBricks += nextLevel.totalBricks.x * nextLevel.totalBricks.y * nextLevel.totalBricks.z
+      prevBricks = nextBrickCount
     }
+    return (levels, prevBricks)
   }
 
   /**
@@ -518,14 +687,23 @@ final class BORGVRMetaData: CustomStringConvertible, Codable {
       let fileHandle = try FileHandle(forReadingFrom: url)
       defer { fileHandle.closeFile() }
 
-      let offset = try fileHandle.read(upToCount: 8)
-      guard let offset = offset, offset.count == 8 else {
+      let offsetData = try fileHandle.read(upToCount: 8)
+      guard let offsetData, offsetData.count == 8 else {
         throw BORGVRError.fileReadFailed("Unable to read metadata offset (expected 8 bytes).")
       }
-      let offsetMetaData = offset.withUnsafeBytes { $0.load(as: UInt64.self) }
-      try fileHandle.seek(toOffset: offsetMetaData)
+      var offsetReader = BORGVRBinaryReader(data: offsetData)
+      let metadataOffset = try offsetReader.readInteger(UInt64.self, context: "metadata offset")
+      let fileSize = try fileHandle.seekToEnd()
+      guard metadataOffset >= 8, metadataOffset < fileSize else {
+        throw BORGVRError.invalidValue(
+          context: "metadata offset",
+          reason: "must point inside the dataset file"
+        )
+      }
+
+      try fileHandle.seek(toOffset: metadataOffset)
       let fileData = fileHandle.readDataToEndOfFile()
-      try fromData(fileData)
+      try fromData(fileData, brickDataUpperBound: metadataOffset)
     } catch let e as BORGVRError {
       throw e
     } catch {
@@ -539,88 +717,157 @@ final class BORGVRMetaData: CustomStringConvertible, Codable {
    - Parameter data: The data blob containing serialized metadata.
    - Throws: An error if the data is invalid or incomplete.
    */
-  func fromData(_ data: Data) throws {
-    var offset = 0
+  func fromData(_ data: Data, brickDataUpperBound: UInt64? = nil) throws {
+    var reader = BORGVRBinaryReader(data: data)
 
-    func ensure(_ count: Int, context: String) throws {
-      guard offset + count <= data.count else {
-        throw BORGVRError.unexpectedEndOfData(context: context)
+    func readInt(_ context: String) throws -> Int {
+      let rawValue = try reader.readInteger(Int64.self, context: context)
+      guard let value = Int(exactly: rawValue) else {
+        throw BORGVRError.invalidValue(context: context, reason: "not representable")
       }
-    }
-
-    func read<T>(_ type: T.Type, context: String) throws -> T {
-      try ensure(MemoryLayout<T>.size, context: context)
-      var value: T!
-      let valueData = data.subdata(in: offset..<offset + MemoryLayout<T>.size)
-      valueData.withUnsafeBytes { rawBuffer in
-        value = rawBuffer.load(as: T.self)
-      }
-      offset += MemoryLayout<T>.size
       return value
     }
 
-    func readData(length: Int, context: String) throws -> Data {
-      try ensure(length, context: context)
-      let value = data.subdata(in: offset..<offset + length)
-      offset += length
-      return value
-    }
-
-    func readString(context: String) throws -> String {
-      let length: Int64 = try read(Int64.self, context: "\(context).length")
-      let stringData = try readData(length: Int(length), context: context)
-      guard let string = String(data: stringData, encoding: .utf8) else {
-        throw BORGVRError.invalidStringEncoding
-      }
-      return string
-    }
-
-    let magic = try readData(length: BORGVRMetaData.magicBytes.count, context: "magicBytes")
+    let magic = try reader.readData(length: BORGVRMetaData.magicBytes.count, context: "magicBytes")
     guard magic == BORGVRMetaData.magicBytes else {
       throw BORGVRError.invalidMagicBytes
     }
 
-    let fileVersion: Int64 = try read(Int64.self, context: "version")
+    let fileVersion = try reader.readInteger(Int64.self, context: "version")
     guard fileVersion == BORGVRMetaData.version else {
       throw BORGVRError.unsupportedVersion(found: fileVersion, expected: BORGVRMetaData.version)
     }
 
-    self.width            = Int(try read(Int64.self, context: "width"))
-    self.height           = Int(try read(Int64.self, context: "height"))
-    self.depth            = Int(try read(Int64.self, context: "depth"))
-    self.componentCount   = Int(try read(Int64.self, context: "componentCount"))
-    self.bytesPerComponent = Int(try read(Int64.self, context: "bytesPerComponent"))
-    self.voxelSpacingX    = try read(Float.self, context: "voxelSpacingX")
-    self.voxelSpacingY    = try read(Float.self, context: "voxelSpacingY")
-    self.voxelSpacingZ    = try read(Float.self, context: "voxelSpacingZ")
-    self.brickSize        = Int(try read(Int64.self, context: "brickSize"))
-    self.overlap          = Int(try read(Int64.self, context: "overlap"))
-    self.minValue         = Int(try read(Int64.self, context: "minValue"))
-    self.maxValue         = Int(try read(Int64.self, context: "maxValue"))
-    self.compression      = try read(Bool.self, context: "compression")
+    self.width = try readInt("width")
+    self.height = try readInt("height")
+    self.depth = try readInt("depth")
+    self.componentCount = try readInt("componentCount")
+    self.bytesPerComponent = try readInt("bytesPerComponent")
+    self.voxelSpacingX = try reader.readFloat(context: "voxelSpacingX")
+    self.voxelSpacingY = try reader.readFloat(context: "voxelSpacingY")
+    self.voxelSpacingZ = try reader.readFloat(context: "voxelSpacingZ")
+    self.brickSize = try readInt("brickSize")
+    self.overlap = try readInt("overlap")
+    self.minValue = try readInt("minValue")
+    self.maxValue = try readInt("maxValue")
+    self.compression = try reader.readBool(context: "compression")
 
-    let uniqueIDStr = try readString(context: "uniqueID")
+    try validateHeaderValues()
+    let levelResult = try BORGVRMetaData.makeLevelMetadata(
+      width: width,
+      height: height,
+      depth: depth,
+      brickSize: brickSize,
+      overlap: overlap
+    )
+
+    let uniqueIDStr = try reader.readString(
+      context: "uniqueID",
+      maximumByteCount: BORGVRMetaData.maximumStringByteCount
+    )
     if UUID(uuidString: uniqueIDStr) != nil {
       self.uniqueID = uniqueIDStr
     } else {
       throw BORGVRError.invalidUUID(uniqueIDStr)
     }
 
-    self.datasetDescription = try readString(context: "datasetDescription")
-    self.metaDescription = try readString(context: "metaDescription")
-    let metadataCount     = Int(try read(Int64.self, context: "brickMetadataCount"))
-    let dataOffset        = Int(try read(Int64.self, context: "brickDataOffset"))
+    self.datasetDescription = try reader.readString(
+      context: "datasetDescription",
+      maximumByteCount: BORGVRMetaData.maximumStringByteCount
+    )
+    self.metaDescription = try reader.readString(
+      context: "metaDescription",
+      maximumByteCount: BORGVRMetaData.maximumStringByteCount
+    )
+    let metadataCount = try readInt("brickMetadataCount")
+    let dataOffset = try readInt("brickDataOffset")
 
-    computeLevelMetadata()
+    guard metadataCount >= 0 else {
+      throw BORGVRError.invalidValue(context: "brickMetadataCount", reason: "must not be negative")
+    }
+    guard metadataCount == levelResult.brickCount else {
+      throw BORGVRError.invalidValue(
+        context: "brickMetadataCount",
+        reason: "expected \(levelResult.brickCount), found \(metadataCount)"
+      )
+    }
+    guard dataOffset >= 0 else {
+      throw BORGVRError.invalidValue(context: "brickDataOffset", reason: "must not be negative")
+    }
+    try reader.skip(dataOffset, context: "brickDataOffset")
 
-    if dataOffset > 0 {
-      offset += dataOffset
+    let (metadataByteCount, metadataByteCountOverflow) = metadataCount.multipliedReportingOverflow(
+      by: BORGVRMetaData.brickMetadataRecordSize
+    )
+    guard !metadataByteCountOverflow, metadataByteCount <= reader.remainingCount else {
+      throw BORGVRError.unexpectedEndOfData(context: "brick metadata records")
     }
 
     self.brickMetadata = []
+    self.brickMetadata.reserveCapacity(metadataCount)
     for _ in 0..<metadataCount {
-      let brickMeta = try BrickMetadata(fromData: data, offset: &offset, componentCount: componentCount)
+      let brickMeta = try BrickMetadata(from: &reader)
+      try validate(brick: brickMeta, brickDataUpperBound: brickDataUpperBound)
       self.brickMetadata.append(brickMeta)
+    }
+    self.levelMetadata = levelResult.levels
+  }
+
+  private func validateHeaderValues() throws {
+    guard componentCount > 0, componentCount <= BORGVRMetaData.maximumComponentCount else {
+      throw BORGVRError.invalidValue(
+        context: "componentCount",
+        reason: "must be in 1...\(BORGVRMetaData.maximumComponentCount)"
+      )
+    }
+    guard bytesPerComponent == 1 || bytesPerComponent == 2 || bytesPerComponent == 4 else {
+      throw BORGVRError.invalidValue(
+        context: "bytesPerComponent",
+        reason: "supported values are 1, 2, and 4"
+      )
+    }
+    guard voxelSpacingX.isFinite, voxelSpacingX > 0,
+          voxelSpacingY.isFinite, voxelSpacingY > 0,
+          voxelSpacingZ.isFinite, voxelSpacingZ > 0 else {
+      throw BORGVRError.invalidValue(
+        context: "voxel spacing",
+        reason: "all values must be finite and greater than zero"
+      )
+    }
+    guard minValue >= 0, minValue <= maxValue, maxValue <= rangeMax else {
+      throw BORGVRError.invalidValue(
+        context: "value range",
+        reason: "must be ordered and fit the declared component type"
+      )
+    }
+  }
+
+  private func validate(brick: BrickMetadata, brickDataUpperBound: UInt64?) throws {
+    guard brick.offset >= 8 else {
+      throw BORGVRError.invalidValue(context: "brick offset", reason: "must be at least 8")
+    }
+    guard brick.size > 0 else {
+      throw BORGVRError.invalidValue(context: "brick size", reason: "must be greater than zero")
+    }
+    let (brickEnd, overflow) = brick.offset.addingReportingOverflow(brick.size)
+    guard !overflow else {
+      throw BORGVRError.invalidValue(context: "brick range", reason: "offset plus size overflows")
+    }
+    guard brick.minValue >= 0,
+          brick.minValue <= brick.maxValue,
+          brick.maxValue <= rangeMax else {
+      throw BORGVRError.invalidValue(
+        context: "brick value range",
+        reason: "must be ordered and fit the declared component type"
+      )
+    }
+    if let brickDataUpperBound {
+      guard UInt64(brickEnd) <= brickDataUpperBound else {
+        throw BORGVRError.invalidValue(
+          context: "brick range",
+          reason: "extends into or beyond the metadata section"
+        )
+      }
     }
   }
 
@@ -810,25 +1057,6 @@ extension Data {
     self.append(utf8Data)
   }
 
-  /// Loads a value of type `T` from the given byte offset.
-  func load<T>(at offset: Int, as type: T.Type = T.self) -> T {
-    var value: T!
-    let valueData = self.subdata(in: offset..<offset + MemoryLayout<T>.size)
-    valueData.withUnsafeBytes { rawBuffer in
-      value = rawBuffer.load(as: T.self)
-    }
-    return value
-  }
-
-  /// Loads a little-endian integer from the given offset.
-  func loadLE<T: FixedWidthInteger>(at offset: Int) -> T {
-    T(littleEndian: load(at: offset))
-  }
-
-  /// Loads a big-endian integer from the given offset.
-  func loadBE<T: FixedWidthInteger>(at offset: Int) -> T {
-    T(bigEndian: load(at: offset))
-  }
 }
 
 /*

@@ -51,8 +51,8 @@ public:
   int bytesPerComponent() const { return bytesPerComponent_; }
   int brickSize() const { return brickSize_; }
   int overlap() const { return overlap_; }
-  int minValue() const { return minValue_; }
-  int maxValue() const { return maxValue_; }
+  int64_t minValue() const { return minValue_; }
+  int64_t maxValue() const { return maxValue_; }
   bool compression() const { return compression_; }
 
   const std::string& uniqueID() const { return uniqueID_; }
@@ -86,8 +86,8 @@ private:
   int brickSize_ = 0;
   int overlap_ = 0;
 
-  int minValue_ = 0;
-  int maxValue_ = 0;
+  int64_t minValue_ = 0;
+  int64_t maxValue_ = 0;
 
   bool compression_ = false;
 

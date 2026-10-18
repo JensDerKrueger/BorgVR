@@ -88,6 +88,7 @@ public:
   BinaryReader(const uint8_t* data, size_t size) : data_(data), size_(size), off_(0) {}
 
   size_t offset() const { return off_; }
+  size_t remaining() const { return size_ - off_; }
 
   void skip(size_t n, const char* context) {
     require(n, context);
@@ -115,13 +116,19 @@ public:
 
   bool read_bool(const char* context) {
     auto b = read_u8(context);
-    return b != 0;
+    if (b > 1) {
+      throw std::runtime_error(std::string("Invalid Boolean value while reading ") + context);
+    }
+    return b == 1;
   }
 
-  std::string read_string(const char* context) {
+  std::string read_string(const char* context, size_t maximumLength) {
     const int64_t len64 = read_i64((std::string(context) + ".length").c_str());
     if (len64 < 0) {
       throw std::runtime_error(std::string("Invalid string length while reading ") + context);
+    }
+    if (static_cast<uint64_t>(len64) > static_cast<uint64_t>(maximumLength)) {
+      throw std::runtime_error(std::string("String is too long while reading ") + context);
     }
     const size_t len = static_cast<size_t>(len64);
     require(len, context);
@@ -132,7 +139,7 @@ public:
 
 private:
   void require(size_t n, const char* context) const {
-    if (off_ + n > size_) {
+    if (off_ > size_ || n > size_ - off_) {
       throw std::runtime_error(std::string("Unexpected end of data while reading ") + context);
     }
   }
