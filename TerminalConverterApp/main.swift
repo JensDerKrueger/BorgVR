@@ -374,24 +374,6 @@ func parseArguments(_ args: [String]) -> (Mode, Any) {
   return result
 }
 
-/**
- Converts a raw volume file into the BorgVR file format.
-
- This function reads volume data from a raw file using a `RawFileAccessor` and then uses a `BrickedVolumeReorganizer`
- to partition the volume into bricks. The reorganized data is written to an output file.
-
- - Parameters:
- - inputFilename: The path to the raw input volume file.
- - size: A vector representing the dimensions (width, height, depth) of the volume.
- - maxBrickSize: The maximum brick size to use for partitioning the volume.
- - bytesPerComponent: The number of bytes per component in the volume.
- - componentCount: The number of components stored for each voxel.
- - voxelSpacing: A vector containing the physical spacing of one voxel along each axis.
- - overlap: The overlap between adjacent bricks.
- - outputFilename: The name of the output file to create.
- - description: A short description of the dataset.
- - Throws: An error if reading or reorganizing the volume fails.
- */
 func convertRawVolume(inputFilename: String,
                       offset: Int,
                       size: Vec3<Int>,
@@ -403,173 +385,58 @@ func convertRawVolume(inputFilename: String,
                       outputFilename: String,
                       datasetDescription: String,
                       metaDescription:String) throws {
-  let volume = try RawFileAccessor(
-    filename: inputFilename,
-    size: size,
-    bytesPerComponent: bytesPerComponent,
-    componentCount: componentCount,
-    voxelSpacing: voxelSpacing,
-    offset: offset,
-    readOnly: true
-  )
-
-  // Create a reorganizer to partition the volume into bricks.
-  let reorganizer = BrickedVolumeReorganizer(
-    inputVolume: volume,
-    brickSize: maxBrickSize,
-    overlap: overlap,
-    extensionStrategy: .fillZeroes
-  )
-  try reorganizer
-    .reorganize(
-      to: outputFilename,
+  try BorgVRVolumeConversionService.convert(
+    BorgVRVolumeConversionRequest(
+      source: .raw(
+        BorgVRRawVolumeSource(
+          url: URL(fileURLWithPath: inputFilename),
+          offset: offset,
+          size: size,
+          bytesPerComponent: bytesPerComponent,
+          componentCount: componentCount,
+          voxelSpacing: voxelSpacing
+        )
+      ),
+      destinationURL: URL(fileURLWithPath: outputFilename),
       datasetDescription: datasetDescription,
       metaDescription: metaDescription,
-      useCompressor: true,
+      settings: BorgVRVolumeConversionSettings(
+        brickSize: maxBrickSize,
+        overlap: overlap,
+        useCompression: true,
+        extensionStrategy: .fillZeroes
+      )
+    ),
+    logger: logger
+  )
+}
+
+func convertDICOMStack(_ params: DicomModeParameters) {
+  do {
+    try BorgVRVolumeConversionService.convert(
+      BorgVRVolumeConversionRequest(
+        source: .dicomDirectory(
+          URL(fileURLWithPath: params.inputDirectory, isDirectory: true)
+        ),
+        destinationURL: URL(fileURLWithPath: params.common.outputFilename),
+        datasetDescription: params.common.datasetDescription,
+        metaDescription: "",
+        settings: conversionSettings(for: params.common)
+      ),
       logger: logger
     )
-}
-
-/**
- Converts a DICOM dataset from a specified directory into a BorgVR file format.
-
- This function scans the input directory for DICOM files, decodes them into a volume,
- writes the raw volume to a temporary file, and then converts the raw volume to the BorgVR format.
-
- - Parameter params: The parameters for DICOM conversion.
- */
-func convertDICOMStack(_ params: DicomModeParameters) {
-  let directory = URL(fileURLWithPath: params.inputDirectory, isDirectory: true)
-
-  do {
-    let fileManager = FileManager.default
-    let files = try fileManager.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
-    let dicomFiles = files.filter { $0.isFileURL }
-
-    logger.info("Scanning directory for DICOM files...")
-
-    guard !dicomFiles.isEmpty else {
-      logger.error("No files found in directory.")
-      exit(1)
-    }
-
-    logger.info(String(format: "Found %d DICOM files.", dicomFiles.count))
-
-    let dicomVolume = try DicomParser.decodeVolume(from: dicomFiles)
-
-    let tempDir = FileManager.default.temporaryDirectory
-    let uuid = UUID().uuidString
-    let tempURL = tempDir.appendingPathComponent(uuid)
-
-    logger.info("Converting DICOM stack to temporary raw file...")
-
-    try dicomVolume.voxelData.withUnsafeBytes { try Data($0).write(to: tempURL) }
-
-    logger.info("Converting raw file to BorgVR file format...")
-
-    var parts: [String] = []
-    parts.append(dicomVolume.modality.map { "\($0) scan" } ?? "Scan")
-    if let name = dicomVolume.patientName {
-      parts.append("of \(name)")
-    }
-    if let date = dicomVolume.seriesDate {
-      parts.append("at \(date)")
-    }
-    let desc = parts.joined(separator: " ").replacingOccurrences(of: "^", with: ", ")
-
-    try convertRawVolume(inputFilename: tempURL.path,
-                         offset: 0,
-                         size: Vec3<Int>(x: dicomVolume.width,
-                                         y: dicomVolume.height,
-                                         z: dicomVolume.depth),
-                         maxBrickSize: params.common.maxBrickSize,
-                         bytesPerComponent: dicomVolume.bytesPerVoxel,
-                         componentCount: 1,
-                         voxelSpacing: Vec3<Float>(x: dicomVolume.voxelSpacing.x,
-                                                   y: dicomVolume.voxelSpacing.y,
-                                                   z: dicomVolume.voxelSpacing.z),
-                         overlap: params.common.overlap,
-                         outputFilename: params.common.outputFilename,
-                         datasetDescription: params.common.datasetDescription,
-                         metaDescription:desc)
-
-    try FileManager.default.removeItem(at: tempURL)
   } catch {
     logger.error("Error: \(error.localizedDescription)")
     exit(1)
   }
 }
 
-/**
- Converts a NRRD volume file into the BorgVR file format.
-
- This function opens a NRRD volume using a header parser, determines the associated raw volume file,
- and then converts the raw volume to the BorgVR format.
-
- - Parameter params: The parameters for NRRD conversion.
- */
 func convertNRRDVolume(_ params: HeaderFileModeParameters) {
-  do {
-    logger.info("Opening NRRD volume ...")
-
-    let parser = try NRRDParser(filename: params.inputFilename)
-
-    logger.info("Converting NRRD volume to BorgVR file format ...")
-
-    let fileNameWithoutExtension = URL(fileURLWithPath: params.inputFilename).deletingPathExtension().lastPathComponent
-
-    try convertRawVolume(inputFilename: parser.absoluteFilename,
-                         offset: parser.offset,
-                         size: parser.size,
-                         maxBrickSize: params.common.maxBrickSize,
-                         bytesPerComponent: parser.bytesPerComponent,
-                         componentCount: parser.components,
-                         voxelSpacing: parser.voxelSpacing,
-                         overlap: params.common.overlap,
-                         outputFilename: params.common.outputFilename,
-                         datasetDescription: params.common.datasetDescription,
-                         metaDescription: "Converted from NRRD Volume \(fileNameWithoutExtension)")
-
-    if parser.dataIsTempCopy {
-      try FileManager.default.removeItem(at: URL(fileURLWithPath: parser.absoluteFilename))
-    }
-  } catch {
-    logger.error("Error: \(error.localizedDescription)")
-    exit(1)
-  }
+  convertFileVolume(params, formatName: "NRRD")
 }
 
-/** Converts a PVM, PVM2, or PVM3 volume into the BorgVR file format. */
 func convertPVMVolume(_ params: HeaderFileModeParameters) {
-  do {
-    logger.info("Opening PVM volume ...")
-    let parser = try PVMParser(filename: params.inputFilename)
-    defer {
-      if parser.dataIsTempCopy {
-        try? FileManager.default.removeItem(atPath: parser.absoluteFilename)
-      }
-    }
-
-    logger.info("Converting PVM volume to BorgVR file format ...")
-    let sourceName = URL(fileURLWithPath: params.inputFilename)
-      .deletingPathExtension().lastPathComponent
-    try convertRawVolume(
-      inputFilename: parser.absoluteFilename,
-      offset: parser.offset,
-      size: parser.size,
-      maxBrickSize: params.common.maxBrickSize,
-      bytesPerComponent: parser.bytesPerComponent,
-      componentCount: parser.components,
-      voxelSpacing: parser.voxelSpacing,
-      overlap: params.common.overlap,
-      outputFilename: params.common.outputFilename,
-      datasetDescription: params.common.datasetDescription,
-      metaDescription: "Converted from PVM Volume \(sourceName)"
-    )
-  } catch {
-    logger.error("Error: \(error.localizedDescription)")
-    exit(1)
-  }
+  convertFileVolume(params, formatName: "PVM")
 }
 
 /// Exports one level of a BorgVR dataset as a flat, uncompressed inline NRRD file.
@@ -588,39 +455,38 @@ func exportFlatVolume(_ params: ExportModeParameters) {
 }
 
 
-/**
- Converts a QVIS volume file into the BorgVR file format.
-
- This function opens a QVIS volume using a header parser, determines the associated raw volume file,
- and then converts the raw volume to the BorgVR format.
-
- - Parameter params: The parameters for QVIS conversion.
- */
 func convertQVISVolume(_ params: HeaderFileModeParameters) {
+  convertFileVolume(params, formatName: "QVIS")
+}
+
+private func convertFileVolume(_ params: HeaderFileModeParameters, formatName: String) {
   do {
-    logger.info("Opening QVIS volume ...")
-
-    let parser = try QVISParser(filename: params.inputFilename)
-
-    logger.info("Converting QVIS volume to BorgVR file format ...")
-
-    let fileNameWithoutExtension = URL(fileURLWithPath: params.inputFilename).deletingPathExtension().lastPathComponent
-
-    try convertRawVolume(inputFilename: parser.absoluteFilename,
-                         offset: 0,
-                         size: parser.size,
-                         maxBrickSize: params.common.maxBrickSize,
-                         bytesPerComponent: parser.bytesPerComponent,
-                         componentCount: parser.components,
-                         voxelSpacing: parser.voxelSpacing,
-                         overlap: params.common.overlap,
-                         outputFilename: params.common.outputFilename,
-                         datasetDescription: params.common.datasetDescription,
-                         metaDescription:"Converted from QVIS Volume \(fileNameWithoutExtension)")
+    let sourceURL = URL(fileURLWithPath: params.inputFilename)
+    try BorgVRVolumeConversionService.convert(
+      BorgVRVolumeConversionRequest(
+        source: .file(sourceURL),
+        destinationURL: URL(fileURLWithPath: params.common.outputFilename),
+        datasetDescription: params.common.datasetDescription,
+        metaDescription: "Converted from \(formatName) Volume \(sourceURL.deletingPathExtension().lastPathComponent)",
+        settings: conversionSettings(for: params.common)
+      ),
+      logger: logger
+    )
   } catch {
     logger.error("Error: \(error.localizedDescription)")
     exit(1)
   }
+}
+
+private func conversionSettings(
+  for parameters: CommonParameters
+) -> BorgVRVolumeConversionSettings {
+  BorgVRVolumeConversionSettings(
+    brickSize: parameters.maxBrickSize,
+    overlap: parameters.overlap,
+    useCompression: true,
+    extensionStrategy: .fillZeroes
+  )
 }
 
 private func generateScalarVolume(datasetType: DatasetType,

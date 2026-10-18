@@ -69,16 +69,27 @@ final class DicomParser {
    - Throws: `DicomParsingError` if parsing fails at any step.
    - Returns: A `DicomVolume` containing the reconstructed volume.
    */
-  static func decodeVolume(from dicomFiles: [URL]) throws -> DicomVolume {
+  static func decodeVolume(
+    from dicomFiles: [URL],
+    logger: LoggerBase? = nil,
+    cancellationToken: BorgVRVolumeConversionCancellationToken? = nil
+  ) throws -> DicomVolume {
     // Parse headers and slice data for each file, ignoring those that fail
-    let parsed: [(DicomFile, DicomSlice)] = dicomFiles.compactMap { url in
+    var parsed: [(DicomFile, DicomSlice)] = []
+    parsed.reserveCapacity(dicomFiles.count)
+    for (index, url) in dicomFiles.enumerated() {
+      try cancellationToken?.checkCancellation()
       do {
         let file = try parseDicomHeader(from: url)
         let slice = try openSlice(from: file)
-        return (file, slice)
+        parsed.append((file, slice))
       } catch {
-        return nil
+        // A DICOM directory can contain unrelated files. Keep scanning.
       }
+      logger?.progress(
+        "Reading DICOM files",
+        Double(index + 1) / Double(dicomFiles.count)
+      )
     }
 
     guard !parsed.isEmpty else {
@@ -169,12 +180,17 @@ final class DicomParser {
 
     // Decode each slice and copy its pixels into the buffer
     for (i, (file, slice)) in sorted.enumerated() {
+      try cancellationToken?.checkCancellation()
       let offset = i * width * height * bytesPerVoxel
       let pixels = try slice.decodedPixels(using: file.transferSyntax.pixelDataEncoding)
       guard pixels.count == width * height * bytesPerVoxel else {
         throw DicomParsingError.invalidElementValue(DicomTag.pixelData)
       }
       buffer.replaceSubrange(offset..<offset + pixels.count, with: pixels)
+      logger?.progress(
+        "Decoding DICOM volume",
+        Double(i + 1) / Double(sorted.count)
+      )
     }
 
     let metaSource = parsed.first!.1

@@ -317,6 +317,7 @@
 				BORGVRFileData.swift,
 				BORGVRMetaData.swift,
 				BorgVRSharedConstants.swift,
+				BorgVRVolumeConversionService.swift,
 				BrickedVolumeReorganizer.swift,
 				DICOM.swift,
 				DICOMVRMap.swift,

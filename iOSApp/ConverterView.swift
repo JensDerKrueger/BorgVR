@@ -201,36 +201,6 @@ struct ConverterView: View {
         }
         defer { metadataURL.stopAccessingSecurityScopedResource() }
 
-        let parser = try VolumeFileParserFactory.parser(for: inputFile)
-        defer {
-          if parser.dataIsTempCopy {
-            try? FileManager.default.removeItem(atPath: parser.absoluteFilename)
-          }
-        }
-
-        let rawURL = URL(fileURLWithPath: parser.absoluteFilename)
-        let rawNeedsSecurityScope = !parser.dataIsTempCopy
-        if rawNeedsSecurityScope && !rawURL.startAccessingSecurityScopedResource() {
-          throw FileError.noPermission(
-            String(format: String(localized: "error_no_permission_file_format"), rawURL.path)
-          )
-        }
-        defer {
-          if rawNeedsSecurityScope {
-            rawURL.stopAccessingSecurityScopedResource()
-          }
-        }
-
-        let volume = try RawFileAccessor(
-          filename: parser.absoluteFilename,
-          size: parser.size,
-          bytesPerComponent: parser.bytesPerComponent,
-          componentCount: parser.components,
-          voxelSpacing: parser.voxelSpacing,
-          offset: parser.offset,
-          readOnly: true
-        )
-
         let borderMode: ExtensionStrategy
         switch appSettings.borderMode {
           case "border":
@@ -245,17 +215,19 @@ struct ConverterView: View {
         ? String(format: String(localized: "dataset_description_converted_from_format"), metadataURL.deletingPathExtension().lastPathComponent)
         : description
 
-        let reorganizer = BrickedVolumeReorganizer(
-          inputVolume: volume,
-          brickSize: appSettings.brickSize,
-          overlap: appSettings.brickOverlap,
-          extensionStrategy: borderMode
-        )
-        try reorganizer.reorganize(
-          to: outputFile,
-          datasetDescription: actualDescription,
-          metaDescription: String(localized: "Imported with BorgVR Mobile"),
-          useCompressor: appSettings.enableCompression,
+        try BorgVRVolumeConversionService.convert(
+          BorgVRVolumeConversionRequest(
+            source: .file(metadataURL),
+            destinationURL: URL(fileURLWithPath: outputFile),
+            datasetDescription: actualDescription,
+            metaDescription: String(localized: "Imported with BorgVR Mobile"),
+            settings: BorgVRVolumeConversionSettings(
+              brickSize: appSettings.brickSize,
+              overlap: appSettings.brickOverlap,
+              useCompression: appSettings.enableCompression,
+              extensionStrategy: borderMode
+            )
+          ),
           logger: logger
         )
         logger.info(String(format: String(localized: "log_finished_conversion_format"), timer.stop()))

@@ -90,6 +90,7 @@ final class BorgVRScriptRunner: ObservableObject {
   private var scriptInputURLs: [String: URL] = [:]
   private var pendingScriptImport: ScriptImportRequest?
   private var pendingScriptImportResult: CommandResultCode?
+  private var scriptImportCancellationToken: BorgVRVolumeConversionCancellationToken?
   private var pendingScriptExport: ScriptExportRequest?
   private var pendingScriptExportResult: CommandResultCode?
   private var importBrickSizeOverride: Int?
@@ -182,6 +183,8 @@ final class BorgVRScriptRunner: ObservableObject {
   func stopScript() {
     executionTask?.cancel()
     executionTask = nil
+    scriptImportCancellationToken?.cancel()
+    scriptImportCancellationToken = nil
     pendingDatasetID = nil
     pendingDatasetDescription = nil
     pendingDatasetResult = nil
@@ -816,7 +819,7 @@ final class BorgVRScriptRunner: ObservableObject {
       return .callbackError
     }
 
-    let settings = ScriptDatasetConverter.Settings(
+    let settings = BorgVRVolumeConversionSettings(
       brickSize: importBrickSizeOverride ?? storedAppModel.brickSize,
       overlap: importOverlapOverride ?? storedAppModel.brickOverlap,
       useCompression: storedAppModel.enableCompression,
@@ -824,15 +827,45 @@ final class BorgVRScriptRunner: ObservableObject {
         for: storedAppModel.borderModeString
       )
     )
-    guard settings.isValid else {
+    do {
+      try settings.validate()
+    } catch {
       logError(
-        "Invalid import settings: brick size \(settings.brickSize), overlap \(settings.overlap)"
+        "Invalid import settings: \(error.localizedDescription)"
       )
       return .invalidArguments
     }
 
     let sourceURL = scriptPathURL(source, isDirectory: kind == .dicomDirectory)
     let destinationURL = scriptOutputURL(destination, defaultExtension: "data")
+    let conversionSource: BorgVRVolumeConversionSource
+    let defaultDatasetDescription: String
+    let sourceDescription: String
+    switch kind {
+      case .file:
+        conversionSource = .file(sourceURL)
+        defaultDatasetDescription = "Imported from \(sourceURL.deletingPathExtension().lastPathComponent)"
+        let formatName: String
+        switch sourceURL.pathExtension.lowercased() {
+          case "dat": formatName = "QVIS"
+          case "pvm": formatName = "PVM"
+          default: formatName = "NRRD"
+        }
+        sourceDescription = "Imported from \(formatName) volume \(sourceURL.deletingPathExtension().lastPathComponent)"
+      case .dicomDirectory:
+        conversionSource = .dicomDirectory(sourceURL)
+        sourceDescription = "Imported from DICOM directory \(sourceURL.lastPathComponent)"
+        defaultDatasetDescription = sourceDescription
+    }
+    let conversionRequest = BorgVRVolumeConversionRequest(
+      source: conversionSource,
+      destinationURL: destinationURL,
+      datasetDescription: datasetDescription.isEmpty
+        ? defaultDatasetDescription
+        : datasetDescription,
+      metaDescription: sourceDescription,
+      settings: settings
+    )
     let request = ScriptImportRequest(
       id: UUID(),
       kind: kind,
@@ -861,30 +894,18 @@ final class BorgVRScriptRunner: ObservableObject {
         }
       }
     )
-    let importContext = ScriptDatasetConverter.Context(settings: settings, logger: scriptLogger)
+    let cancellationToken = BorgVRVolumeConversionCancellationToken()
+    scriptImportCancellationToken = cancellationToken
     logInfo("Import started: \(sourceURL.path) -> \(destinationURL.path)")
 
     DispatchQueue.global(qos: .userInitiated).async { [weak self] in
       let result: Result<Void, Error>
       do {
-        switch kind {
-          case .file:
-            try ScriptDatasetConverter.importFile(
-              from: sourceURL,
-              to: destinationURL,
-              datasetDescription: datasetDescription,
-              settings: importContext.settings,
-              logger: importContext.logger
-            )
-          case .dicomDirectory:
-            try ScriptDatasetConverter.importDICOMDirectory(
-              from: sourceURL,
-              to: destinationURL,
-              datasetDescription: datasetDescription,
-              settings: importContext.settings,
-              logger: importContext.logger
-            )
-        }
+        try BorgVRVolumeConversionService.convert(
+          conversionRequest,
+          logger: scriptLogger,
+          cancellationToken: cancellationToken
+        )
         result = .success(())
       } catch {
         result = .failure(error)
@@ -912,6 +933,7 @@ final class BorgVRScriptRunner: ObservableObject {
     result: Result<Void, Error>
   ) {
     guard pendingScriptImport?.id == requestID else { return }
+    scriptImportCancellationToken = nil
     switch result {
       case .success:
         scriptProgressText = ""
@@ -2173,176 +2195,6 @@ private final class ScriptExecutionLogger: LoggerBase, @unchecked Sendable {
     lock.lock()
     defer { lock.unlock() }
     return minimumLogLevel <= level
-  }
-}
-
-private enum ScriptDatasetConverter {
-  struct Settings: @unchecked Sendable {
-    let brickSize: Int
-    let overlap: Int
-    let useCompression: Bool
-    let extensionStrategy: ExtensionStrategy
-
-    var isValid: Bool {
-      brickSize >= 1 && overlap >= 1 && brickSize - 2 * overlap >= 1
-    }
-  }
-
-  final class Context: @unchecked Sendable {
-    let settings: Settings
-    let logger: LoggerBase
-
-    init(settings: Settings, logger: LoggerBase) {
-      self.settings = settings
-      self.logger = logger
-    }
-  }
-
-  enum ImportError: LocalizedError {
-    case unsupportedFileType(String)
-    case noDICOMFiles
-
-    var errorDescription: String? {
-      switch self {
-        case let .unsupportedFileType(pathExtension):
-          return "Unsupported import file type: \(pathExtension)"
-        case .noDICOMFiles:
-          return "The directory does not contain any DICOM files."
-      }
-    }
-  }
-
-  static func importFile(
-    from sourceURL: URL,
-    to destinationURL: URL,
-    datasetDescription: String,
-    settings: Settings,
-    logger: LoggerBase
-  ) throws {
-    try FileManager.default.createDirectory(
-      at: destinationURL.deletingLastPathComponent(),
-      withIntermediateDirectories: true
-    )
-
-    let sourceName = sourceURL.deletingPathExtension().lastPathComponent
-    let description = datasetDescription.isEmpty ? "Imported from \(sourceName)" : datasetDescription
-    let fileExtension = sourceURL.pathExtension.lowercased()
-    guard VolumeFileParserFactory.supportedExtensions.contains(fileExtension) else {
-      throw ImportError.unsupportedFileType(sourceURL.pathExtension)
-    }
-    let parser = try VolumeFileParserFactory.parser(for: sourceURL.path)
-    defer {
-      if parser.dataIsTempCopy {
-        try? FileManager.default.removeItem(atPath: parser.absoluteFilename)
-      }
-    }
-    let formatName: String
-    switch fileExtension {
-      case "dat": formatName = "QVIS"
-      case "pvm": formatName = "PVM"
-      default: formatName = "NRRD"
-    }
-    try convertRawVolume(
-      inputFilename: parser.absoluteFilename,
-      offset: parser.offset,
-      size: parser.size,
-      bytesPerComponent: parser.bytesPerComponent,
-      componentCount: parser.components,
-      voxelSpacing: parser.voxelSpacing,
-      destinationURL: destinationURL,
-      datasetDescription: description,
-      metaDescription: "Imported from \(formatName) volume \(sourceName)",
-      settings: settings,
-      logger: logger
-    )
-  }
-
-  static func importDICOMDirectory(
-    from sourceURL: URL,
-    to destinationURL: URL,
-    datasetDescription: String,
-    settings: Settings,
-    logger: LoggerBase
-  ) throws {
-    let files = try FileManager.default.contentsOfDirectory(
-      at: sourceURL,
-      includingPropertiesForKeys: [.isRegularFileKey],
-      options: [.skipsHiddenFiles]
-    ).filter { url in
-      (try? url.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true
-    }
-    guard !files.isEmpty else { throw ImportError.noDICOMFiles }
-
-    logger.info("Scanning DICOM directory: \(sourceURL.path)")
-    let volume = try DicomParser.decodeVolume(from: files)
-    let temporaryURL = FileManager.default.temporaryDirectory
-      .appendingPathComponent(UUID().uuidString)
-    defer { try? FileManager.default.removeItem(at: temporaryURL) }
-    try volume.voxelData.withUnsafeBytes { bytes in
-      try Data(bytes).write(to: temporaryURL)
-    }
-
-    try FileManager.default.createDirectory(
-      at: destinationURL.deletingLastPathComponent(),
-      withIntermediateDirectories: true
-    )
-    let directoryName = sourceURL.lastPathComponent
-    try convertRawVolume(
-      inputFilename: temporaryURL.path,
-      offset: 0,
-      size: Vec3<Int>(x: volume.width, y: volume.height, z: volume.depth),
-      bytesPerComponent: volume.bytesPerVoxel,
-      componentCount: 1,
-      voxelSpacing: Vec3<Float>(
-        x: volume.voxelSpacing.x,
-        y: volume.voxelSpacing.y,
-        z: volume.voxelSpacing.z
-      ),
-      destinationURL: destinationURL,
-      datasetDescription: datasetDescription.isEmpty
-        ? "Imported from DICOM directory \(directoryName)"
-        : datasetDescription,
-      metaDescription: "Imported from DICOM directory \(directoryName)",
-      settings: settings,
-      logger: logger
-    )
-  }
-
-  private static func convertRawVolume(
-    inputFilename: String,
-    offset: Int,
-    size: Vec3<Int>,
-    bytesPerComponent: Int,
-    componentCount: Int,
-    voxelSpacing: Vec3<Float>,
-    destinationURL: URL,
-    datasetDescription: String,
-    metaDescription: String,
-    settings: Settings,
-    logger: LoggerBase
-  ) throws {
-    let volume = try RawFileAccessor(
-      filename: inputFilename,
-      size: size,
-      bytesPerComponent: bytesPerComponent,
-      componentCount: componentCount,
-      voxelSpacing: voxelSpacing,
-      offset: offset,
-      readOnly: true
-    )
-    let reorganizer = BrickedVolumeReorganizer(
-      inputVolume: volume,
-      brickSize: settings.brickSize,
-      overlap: settings.overlap,
-      extensionStrategy: settings.extensionStrategy
-    )
-    try reorganizer.reorganize(
-      to: destinationURL.path,
-      datasetDescription: datasetDescription,
-      metaDescription: metaDescription,
-      useCompressor: settings.useCompression,
-      logger: logger
-    )
   }
 }
 

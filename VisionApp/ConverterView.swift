@@ -371,42 +371,6 @@ struct ConverterView: View {
         }
         defer { datURL.stopAccessingSecurityScopedResource() }
 
-        let parser = try VolumeFileParserFactory.parser(for: inputFile)
-        defer {
-          if parser.dataIsTempCopy {
-            try? FileManager.default.removeItem(atPath: parser.absoluteFilename)
-          }
-        }
-
-        let rawURL = URL(fileURLWithPath: parser.absoluteFilename)
-        let rawNeedsSecurityScope = !parser.dataIsTempCopy
-        guard !rawNeedsSecurityScope || rawURL.startAccessingSecurityScopedResource() else {
-          throw FileError.noPermission(
-            String(
-              format: NSLocalizedString(
-                "converter_no_permission_access_file",
-                comment: "No permission to access file"
-              ),
-              rawURL.path
-            )
-          )
-        }
-        defer {
-          if rawNeedsSecurityScope {
-            rawURL.stopAccessingSecurityScopedResource()
-          }
-        }
-
-        let volume = try RawFileAccessor(
-          filename: parser.absoluteFilename,
-          size: parser.size,
-          bytesPerComponent: parser.bytesPerComponent,
-          componentCount: parser.components,
-          voxelSpacing: parser.voxelSpacing,
-          offset: parser.offset,
-          readOnly: true
-        )
-
         let baseFilename = URL(fileURLWithPath: inputFile)
           .deletingPathExtension()
           .lastPathComponent
@@ -450,17 +414,19 @@ struct ConverterView: View {
             )
         }
 
-        let reorganizer = BrickedVolumeReorganizer(
-          inputVolume: volume,
-          brickSize: storedAppModel.brickSize,
-          overlap: storedAppModel.brickOverlap,
-          extensionStrategy: borderMode
-        )
-        try reorganizer.reorganize(
-          to: outputFile,
-          datasetDescription: actualDesc,
-          metaDescription: metaDesc,
-          useCompressor: storedAppModel.enableCompression,
+        try BorgVRVolumeConversionService.convert(
+          BorgVRVolumeConversionRequest(
+            source: .file(datURL),
+            destinationURL: URL(fileURLWithPath: outputFile),
+            datasetDescription: actualDesc,
+            metaDescription: metaDesc,
+            settings: BorgVRVolumeConversionSettings(
+              brickSize: storedAppModel.brickSize,
+              overlap: storedAppModel.brickOverlap,
+              useCompression: storedAppModel.enableCompression,
+              extensionStrategy: borderMode
+            )
+          ),
           logger: logger
         )
       }

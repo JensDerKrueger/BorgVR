@@ -1248,66 +1248,6 @@ struct ConverterView: View {
     }
   }
 
-  /**
-   Converts a raw volume file into the BorgVR file format.
-
-   This function reads volume data from a raw file using a `RawFileAccessor` and then uses a `BrickedVolumeReorganizer`
-   to partition the volume into bricks. The reorganized data is written to an output file.
-
-   - Parameters:
-   - inputFilename: The path to the raw input volume file.
-   - size: A vector representing the dimensions (width, height, depth) of the volume.
-   - maxBrickSize: The maximum brick size to use for partitioning the volume.
-   - bytesPerComponent: The number of bytes per component in the volume.
-   - componentCount: The number of components stored for each voxel.
-   - voxelSpacing: A vector containing the physical spacing of one voxel along each axis.
-   - overlap: The overlap between adjacent bricks.
-   - outputFilename: The name of the output file to create.
-   - description: A short description of the dataset.
-   - Throws: An error if reading or reorganizing the volume fails.
-   */
-  func convertRawVolume(
-    inputFilename: String,
-    offset: Int,
-    size: Vec3<Int>,
-    maxBrickSize: Int,
-    bytesPerComponent: Int,
-    componentCount: Int,
-    voxelSpacing: Vec3<Float>,
-    overlap: Int,
-    outputFilename: String,
-    datasetDescription: String,
-    metaDescription: String,
-    useCompressor: Bool,
-    extensionStrategy: ExtensionStrategy
-  ) throws {
-    let volume = try RawFileAccessor(
-      filename: inputFilename,
-      size: size,
-      bytesPerComponent: bytesPerComponent,
-      componentCount: componentCount,
-      voxelSpacing: voxelSpacing,
-      offset: offset,
-      readOnly: true
-    )
-
-    // Create a reorganizer to partition the volume into bricks.
-    let reorganizer = BrickedVolumeReorganizer(
-      inputVolume: volume,
-      brickSize: maxBrickSize,
-      overlap: overlap,
-      extensionStrategy: extensionStrategy
-    )
-    try reorganizer
-      .reorganize(
-        to: outputFilename,
-        datasetDescription: datasetDescription,
-        metaDescription: metaDescription,
-        useCompressor: useCompressor,
-        logger: logger
-      )
-  }
-
   /// Starts the conversion process.
   /// In this demo, the conversion process is simulated with a loop.
   func startConversion() {
@@ -1344,8 +1284,6 @@ struct ConverterView: View {
 
       do {
 
-        let bricksize = storedAppModel.brickSize
-
         let outputFilePath = storedAppModel.withDataDirectoryAccess { directoryURL in
           directoryURL.appendingPathComponent(outputFile).path
         }
@@ -1371,102 +1309,49 @@ struct ConverterView: View {
             )
         }
 
-        if inputFile != "" {
+        let source: BorgVRVolumeConversionSource
+        let sourceDescription: String
+        if !inputFile.isEmpty {
           let sourceURL = URL(fileURLWithPath: inputFile)
-          let parser = try VolumeFileParserFactory.parser(for: inputFile)
-          defer {
-            if parser.dataIsTempCopy {
-              try? FileManager.default.removeItem(atPath: parser.absoluteFilename)
-            }
-          }
           let descriptionKey: String
           switch sourceURL.pathExtension.lowercased() {
             case "dat": descriptionKey = "converter_desc_from_qvis"
             case "pvm": descriptionKey = "converter_desc_from_pvm"
             default: descriptionKey = "converter_desc_from_nrrd"
           }
-          let sourceDescription = String(
+          sourceDescription = String(
             format: NSLocalizedString(descriptionKey, comment: ""),
             sourceURL.deletingPathExtension().lastPathComponent
           )
+          source = .file(sourceURL)
+        } else {
+          let directory = URL(fileURLWithPath: inputDirectory, isDirectory: true)
+          sourceDescription = String(
+            format: NSLocalizedString("converter_desc_from_dicom_stack", comment: ""),
+            directory.lastPathComponent
+          )
+          source = .dicomDirectory(directory)
+        }
 
-          try convertRawVolume(
-            inputFilename: parser.absoluteFilename,
-            offset: parser.offset,
-            size: parser.size,
-            maxBrickSize: bricksize,
-            bytesPerComponent: parser.bytesPerComponent,
-            componentCount: parser.components,
-            voxelSpacing: parser.voxelSpacing,
-            overlap: storedAppModel.brickOverlap,
-            outputFilename: appendExtensionIfNeeded(to: outputFilePath, ext: "data"),
+        try BorgVRVolumeConversionService.convert(
+          BorgVRVolumeConversionRequest(
+            source: source,
+            destinationURL: URL(
+              fileURLWithPath: appendExtensionIfNeeded(to: outputFilePath, ext: "data")
+            ),
             datasetDescription: datasetDescription.isEmpty
               ? sourceDescription
               : datasetDescription,
             metaDescription: sourceDescription,
-            useCompressor: storedAppModel.enableCompression,
-            extensionStrategy: borderMode
-          )
-        } else {
-          let directory = URL(fileURLWithPath: inputDirectory, isDirectory: true)
-          let dicomVolume = try getDicomVolume(directory: directory)
-
-          let tempDir = FileManager.default.temporaryDirectory
-          let uuid = UUID().uuidString
-          let tempURL = tempDir.appendingPathComponent(uuid)
-
-          logger.info(
-            L(
-              "converter_log_info_converting_dicom_to_temp_raw",
-              comment: "Log: converting DICOM stack to temporary raw file"
+            settings: BorgVRVolumeConversionSettings(
+              brickSize: storedAppModel.brickSize,
+              overlap: storedAppModel.brickOverlap,
+              useCompression: storedAppModel.enableCompression,
+              extensionStrategy: borderMode
             )
-          )
-
-          try dicomVolume.voxelData.withUnsafeBytes { try Data($0).write(to: tempURL) }
-
-          let dirName = URL(fileURLWithPath: inputDirectory).lastPathComponent
-
-          logger.info(
-            L(
-              "converter_log_info_converting_raw_to_borgvr",
-              comment: "Log: converting raw file to BorgVR format"
-            )
-          )
-
-          try convertRawVolume(
-            inputFilename: tempURL.path,
-            offset: 0,
-            size: Vec3<Int>(
-              x: dicomVolume.width,
-              y: dicomVolume.height,
-              z: dicomVolume.depth
-            ),
-            maxBrickSize: bricksize,
-            bytesPerComponent: dicomVolume.bytesPerVoxel,
-            componentCount: 1,
-            voxelSpacing: Vec3<Float>(
-              x: dicomVolume.voxelSpacing.x,
-              y: dicomVolume.voxelSpacing.y,
-              z: dicomVolume.voxelSpacing.z
-            ),
-            overlap: storedAppModel.brickOverlap,
-            outputFilename: appendExtensionIfNeeded(to: outputFilePath, ext: "data"),
-            datasetDescription: datasetDescription == ""
-            ? String(
-              format: NSLocalizedString("converter_desc_from_dicom_stack", comment: ""),
-              dirName
-            )
-            : datasetDescription,
-            metaDescription: String(
-              format: NSLocalizedString("converter_desc_from_dicom_stack", comment: ""),
-              dirName
-            ),
-            useCompressor: storedAppModel.enableCompression,
-            extensionStrategy: borderMode
-          )
-
-          try FileManager.default.removeItem(at: tempURL)
-        }
+          ),
+          logger: logger
+        )
       } catch let error as QVISParser.Error {
         logger.error(
           String(
@@ -1534,41 +1419,6 @@ struct ConverterView: View {
         )
       )
     }
-  }
-
-  func getDicomVolume(directory: URL) throws -> DicomParser.DicomVolume {
-    let fileManager = FileManager.default
-    let files = try fileManager.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
-    let dicomFiles = files.filter { $0.isFileURL }
-
-    logger.info(
-      L(
-        "converter_log_info_scanning_dicom_dir",
-        comment: "Log: scanning directory for DICOM files"
-      )
-    )
-
-    guard !dicomFiles.isEmpty else {
-      logger.error(
-        L(
-          "converter_log_error_no_files_in_directory",
-          comment: "Log: no files found in directory"
-        )
-      )
-      throw DicomParser.DicomParsingError.noValidFilesFound
-    }
-
-    logger.info(
-      String(
-        format: L(
-          "converter_log_info_found_dicom_files",
-          comment: "Log: number of found DICOM files"
-        ),
-        dicomFiles.count
-      )
-    )
-
-    return try DicomParser.decodeVolume(from: dicomFiles)
   }
 
   func firstValidDicom(in urls: [URL]) -> DicomParser.DicomFile? {

@@ -5,7 +5,7 @@ import os
 /**
  Strategies for handling voxels when extending volume boundaries.
  */
-public enum ExtensionStrategy: Equatable {
+public enum ExtensionStrategy: Equatable, Sendable {
   /// Extend by filling missing voxels with zeroes.
   case fillZeroes
   /// Extend by clamping to the nearest valid voxel.
@@ -388,13 +388,23 @@ public class BrickedVolumeReorganizer {
    - useCompressor: Whether to use compression (currently LZ4) for each
    brick.
    - logger: An optional logger to track progress.
+   - cancellationToken: An optional cooperative cancellation token.
    - Throws: An error if any file or I/O operation fails.
    */
   public func reorganize(to filename: String,
                          datasetDescription: String,
                          metaDescription: String,
                          useCompressor: Bool = false,
-                         logger: LoggerBase? = nil) throws {
+                         logger: LoggerBase? = nil,
+                         cancellationToken: BorgVRVolumeConversionCancellationToken? = nil) throws {
+
+    try cancellationToken?.checkCancellation()
+    defer {
+      for name in cleanupList {
+        try? FileManager.default.removeItem(atPath: name)
+      }
+      cleanupList.removeAll()
+    }
 
     let representableMaximum = (1 << (inputVolume.bytesPerComponent * 8)) - 1
     var maxValue = inputVolume.componentCount == 1 ? 0 : representableMaximum
@@ -448,7 +458,8 @@ public class BrickedVolumeReorganizer {
         at: filePos,
         metaData: metaData,
         useCompressor: useCompressor,
-        logger: logger
+        logger: logger,
+        cancellationToken: cancellationToken
       )
       if level < levelCount - 1 {
         // Create a temporary file for the subsampled volume.
@@ -462,7 +473,8 @@ public class BrickedVolumeReorganizer {
             volume: source,
             minValue: &minValue,
             maxValue: &maxValue,
-            logger: logger
+            logger: logger,
+            cancellationToken: cancellationToken
           )
           logger?.dev(
             String(
@@ -479,7 +491,8 @@ public class BrickedVolumeReorganizer {
           source = try subsample(
             tempName: tempURL.path,
             volume: source,
-            logger: logger
+            logger: logger,
+            cancellationToken: cancellationToken
           )
         }
       }
@@ -493,11 +506,7 @@ public class BrickedVolumeReorganizer {
     try memoryMappedFile.close()
     try truncateFile(atPath: filename, toLength: UInt64(filePos))
 
-    // Clean up temporary files.
-    for name in cleanupList {
-      try FileManager.default.removeItem(atPath: name)
-    }
-
+    try cancellationToken?.checkCancellation()
     metaData.updateMinMax(minValue: minValue, maxValue: maxValue)
     logger?.dev(
       L(
@@ -624,14 +633,16 @@ public class BrickedVolumeReorganizer {
                  volume: VolumeDataAccessor,
                  minValue: inout Int,
                  maxValue: inout Int,
-                 logger: LoggerBase? = nil) throws -> VolumeDataAccessor {
+                 logger: LoggerBase? = nil,
+                 cancellationToken: BorgVRVolumeConversionCancellationToken? = nil) throws -> VolumeDataAccessor {
     return try subsampleGeneric(
       tempName: tempName,
       volume: volume,
       minMaxComputation: Enabled.self,
       minValue: &minValue,
       maxValue: &maxValue,
-      logger: logger
+      logger: logger,
+      cancellationToken: cancellationToken
     )
   }
 
@@ -649,7 +660,8 @@ public class BrickedVolumeReorganizer {
    */
   func subsample(tempName: String,
                  volume: VolumeDataAccessor,
-                 logger: LoggerBase? = nil) throws -> VolumeDataAccessor {
+                 logger: LoggerBase? = nil,
+                 cancellationToken: BorgVRVolumeConversionCancellationToken? = nil) throws -> VolumeDataAccessor {
     var d1 = 0
     var d2 = 0
     return try subsampleGeneric(
@@ -658,7 +670,8 @@ public class BrickedVolumeReorganizer {
       minMaxComputation: Disabled.self,
       minValue: &d1,
       maxValue: &d2,
-      logger: logger
+      logger: logger,
+      cancellationToken: cancellationToken
     )
   }
 
@@ -684,8 +697,10 @@ public class BrickedVolumeReorganizer {
     minMaxComputation: T.Type,
     minValue: inout Int,
     maxValue: inout Int,
-    logger: LoggerBase? = nil
+    logger: LoggerBase? = nil,
+    cancellationToken: BorgVRVolumeConversionCancellationToken? = nil
   ) throws -> VolumeDataAccessor {
+    try cancellationToken?.checkCancellation()
     logger?.info(
       L(
         "bricked_log_subsampling_start",
@@ -717,14 +732,15 @@ public class BrickedVolumeReorganizer {
     )
 
     if let rawVolume = volume as? RawFileAccessor {
-      subsampleRaw(
+      try subsampleRaw(
         source: rawVolume,
         target: target,
         newSize: newSize,
         minMaxComputation: minMaxComputation,
         minValue: &minValue,
         maxValue: &maxValue,
-        logger: logger
+        logger: logger,
+        cancellationToken: cancellationToken
       )
       return target
     }
@@ -734,6 +750,7 @@ public class BrickedVolumeReorganizer {
         var data = [UInt8](repeating: 0, count: volume.componentCount)
         var sum = [UInt16](repeating: 0, count: volume.componentCount)
         for z in 0..<newSize.z {
+          try cancellationToken?.checkCancellation()
           logger?.progress(
             L(
               "bricked_log_subsampling_progress_title",
@@ -791,6 +808,7 @@ public class BrickedVolumeReorganizer {
         var data = [UInt16](repeating: 0, count: volume.componentCount)
         var sum = [UInt32](repeating: 0, count: volume.componentCount)
         for z in 0..<newSize.z {
+          try cancellationToken?.checkCancellation()
           logger?.progress(
             L(
               "bricked_log_subsampling_progress_title",
@@ -848,6 +866,7 @@ public class BrickedVolumeReorganizer {
         var data = [UInt32](repeating: 0, count: volume.componentCount)
         var sum = [UInt64](repeating: 0, count: volume.componentCount)
         for z in 0..<newSize.z {
+          try cancellationToken?.checkCancellation()
           logger?.progress(
             L(
               "bricked_log_subsampling_progress_title",
@@ -927,11 +946,12 @@ public class BrickedVolumeReorganizer {
     minMaxComputation: T.Type,
     minValue: inout Int,
     maxValue: inout Int,
-    logger: LoggerBase?
-  ) {
+    logger: LoggerBase?,
+    cancellationToken: BorgVRVolumeConversionCancellationToken?
+  ) throws {
     switch source.bytesPerComponent {
       case 1:
-        subsampleRawValues(
+        try subsampleRawValues(
           source: source.mappedMemory.assumingMemoryBound(to: UInt8.self),
           target: target.mappedMemory.assumingMemoryBound(to: UInt8.self),
           sourceSize: source.size,
@@ -941,10 +961,11 @@ public class BrickedVolumeReorganizer {
           minMaxComputation: minMaxComputation,
           minValue: &minValue,
           maxValue: &maxValue,
-          logger: logger
+          logger: logger,
+          cancellationToken: cancellationToken
         )
       case 2:
-        subsampleRawValues(
+        try subsampleRawValues(
           source: source.mappedMemory.assumingMemoryBound(to: UInt16.self),
           target: target.mappedMemory.assumingMemoryBound(to: UInt16.self),
           sourceSize: source.size,
@@ -954,10 +975,11 @@ public class BrickedVolumeReorganizer {
           minMaxComputation: minMaxComputation,
           minValue: &minValue,
           maxValue: &maxValue,
-          logger: logger
+          logger: logger,
+          cancellationToken: cancellationToken
         )
       case 4:
-        subsampleRawValues(
+        try subsampleRawValues(
           source: source.mappedMemory.assumingMemoryBound(to: UInt32.self),
           target: target.mappedMemory.assumingMemoryBound(to: UInt32.self),
           sourceSize: source.size,
@@ -967,7 +989,8 @@ public class BrickedVolumeReorganizer {
           minMaxComputation: minMaxComputation,
           minValue: &minValue,
           maxValue: &maxValue,
-          logger: logger
+          logger: logger,
+          cancellationToken: cancellationToken
         )
       default:
         fatalError("\(#function): Unsupported data byte \(source.bytesPerComponent)")
@@ -997,11 +1020,13 @@ public class BrickedVolumeReorganizer {
     minMaxComputation: Toggle.Type,
     minValue: inout Int,
     maxValue: inout Int,
-    logger: LoggerBase?
-  ) {
+    logger: LoggerBase?,
+    cancellationToken: BorgVRVolumeConversionCancellationToken?
+  ) throws {
     var sums = [Accumulator](repeating: 0, count: componentCount)
 
     for z in 0..<targetSize.z {
+      try cancellationToken?.checkCancellation()
       logger?.progress(
         L(
           "bricked_log_subsampling_progress_title",
@@ -1112,7 +1137,8 @@ public class BrickedVolumeReorganizer {
                                   metaData: BORGVRMetaData,
                                   useCompressor: Bool,
                                   totalBricks: Int,
-                                  logger: LoggerBase?) -> Int {
+                                  logger: LoggerBase?,
+                                  cancellationToken: BorgVRVolumeConversionCancellationToken?) throws -> Int {
     let bStride = brickSize - 2 * overlap
     var coordinates: [BrickCoordinate] = []
     coordinates.reserveCapacity(totalBricks)
@@ -1136,6 +1162,7 @@ public class BrickedVolumeReorganizer {
     var uncompressedBrickCounter = 0
 
     for batchStart in stride(from: 0, to: coordinates.count, by: batchSize) {
+      try cancellationToken?.checkCancellation()
       let currentBatchCount = min(batchSize, coordinates.count - batchStart)
       let store = PreparedBrickStore(count: currentBatchCount)
       let currentWorkerCount = min(workerCount, currentBatchCount)
@@ -1149,6 +1176,9 @@ public class BrickedVolumeReorganizer {
           to: currentBatchCount,
           by: currentWorkerCount
         ) {
+          if cancellationToken?.isCancelled == true {
+            break
+          }
           let coordinate = coordinates[batchStart + localIndex]
           let isBoundary = self.isBoundaryBrick(
             volumeSize: sourceReference.source.size,
@@ -1195,6 +1225,7 @@ public class BrickedVolumeReorganizer {
         }
       }
 
+      try cancellationToken?.checkCancellation()
       for localIndex in 0..<currentBatchCount {
         let brick = store.value(at: localIndex)
         _ = brick.data.withUnsafeBytes { sourceBuffer in
@@ -1268,7 +1299,9 @@ public class BrickedVolumeReorganizer {
                        at startPos: Int,
                        metaData: BORGVRMetaData,
                        useCompressor: Bool = false,
-                       logger: LoggerBase? = nil) throws -> Int {
+                       logger: LoggerBase? = nil,
+                       cancellationToken: BorgVRVolumeConversionCancellationToken? = nil) throws -> Int {
+    try cancellationToken?.checkCancellation()
     var filePos = startPos
 
     let brickCount = BORGVRMetaData.calculateOutputBrickCount(
@@ -1292,14 +1325,15 @@ public class BrickedVolumeReorganizer {
     )
 
     if let rawSource = source as? RawFileAccessor {
-      return reorganizeRawLevel(
+      return try reorganizeRawLevel(
         from: rawSource,
         to: target,
         at: startPos,
         metaData: metaData,
         useCompressor: useCompressor,
         totalBricks: totalBricks,
-        logger: logger
+        logger: logger,
+        cancellationToken: cancellationToken
       )
     }
 
@@ -1316,6 +1350,7 @@ public class BrickedVolumeReorganizer {
     var uncompressedBrickCounter = 0
 
     for z in stride(from: 0, to: source.size.z, by: bStride) {
+      try cancellationToken?.checkCancellation()
       for y in stride(from: 0, to: source.size.y, by: bStride) {
         for x in stride(from: 0, to: source.size.x, by: bStride) {
           let isBoundary = isBoundaryBrick(
