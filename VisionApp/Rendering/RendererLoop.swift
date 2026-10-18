@@ -2320,7 +2320,13 @@ extension Renderer {
     frameSnapshot = session.frameSnapshot()
     frameState = frameSnapshot.visualization
     do {
-      try renderTransferFunctions.synchronize(with: frameSnapshot.transferFunctions)
+      let metadata = borgData.getMetadata()
+      try renderTransferFunctions.synchronize(
+        with: frameSnapshot.transferFunctions,
+        minValue: metadata.minValue,
+        maxValue: metadata.maxValue,
+        rangeMax: metadata.rangeMax
+      )
     } catch {
       logger?.error("Failed to update render transfer functions: \(error.localizedDescription)")
     }

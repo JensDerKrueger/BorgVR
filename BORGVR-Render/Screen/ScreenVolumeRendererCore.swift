@@ -218,7 +218,14 @@ final class ScreenVolumeRendererCore {
     let frame = session.frameSnapshot()
     let frameState = frame.visualization
     do {
-      try renderTransferFunctions?.synchronize(with: frame.transferFunctions)
+      if let metadata = dataset?.getMetadata() {
+        try renderTransferFunctions?.synchronize(
+          with: frame.transferFunctions,
+          minValue: metadata.minValue,
+          maxValue: metadata.maxValue,
+          rangeMax: metadata.rangeMax
+        )
+      }
     } catch {
       appModel.logger.error("Failed to update render transfer functions: \(error.localizedDescription)")
     }

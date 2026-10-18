@@ -629,7 +629,10 @@ class TransferFunction1D: Equatable {
    - Returns: True if a significant change is detected; otherwise, false.
    */
   func emptinessSignificantChange(_ other: TransferFunction1D) -> Bool {
-    return other.data.count != data.count || other.minIndex != minIndex || other.maxIndex != maxIndex
+    return other.data.count != data.count ||
+      other.minIndex != minIndex ||
+      other.maxIndex != maxIndex ||
+      other.bias != bias
   }
 
   /**
@@ -736,17 +739,28 @@ final class RenderTransferFunctionSet {
     revisions = Array(repeating: nil, count: maximumChannelCount)
   }
 
-  func synchronize(with snapshots: [BorgVRTransferFunctionSnapshot]) throws {
+  func synchronize(
+    with snapshots: [BorgVRTransferFunctionSnapshot],
+    minValue: Int,
+    maxValue: Int,
+    rangeMax: Int
+  ) throws {
     activeCount = min(max(snapshots.count, 1), transferFunctions.count)
     for snapshot in snapshots where transferFunctions.indices.contains(snapshot.channel) {
-      guard revisions[snapshot.channel] != snapshot.revision else { continue }
-      if transferFunctions[snapshot.channel].data.count != snapshot.samples.count {
-        let replacement = TransferFunction1D(count: snapshot.samples.count)
-        replacement.initMetal(device: device)
-        transferFunctions[snapshot.channel] = replacement
+      if revisions[snapshot.channel] != snapshot.revision {
+        if transferFunctions[snapshot.channel].data.count != snapshot.samples.count {
+          let replacement = TransferFunction1D(count: snapshot.samples.count)
+          replacement.initMetal(device: device)
+          transferFunctions[snapshot.channel] = replacement
+        }
+        try transferFunctions[snapshot.channel].updateData(with: snapshot.samples)
+        revisions[snapshot.channel] = snapshot.revision
       }
-      try transferFunctions[snapshot.channel].updateData(with: snapshot.samples)
-      revisions[snapshot.channel] = snapshot.revision
+      transferFunctions[snapshot.channel].updateRanges(
+        minValue: minValue,
+        maxValue: maxValue,
+        rangeMax: rangeMax
+      )
     }
   }
 

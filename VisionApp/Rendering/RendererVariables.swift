@@ -283,7 +283,13 @@ final actor Renderer {
 
     let initialFrameSnapshot = session.frameSnapshot()
     let renderTransferFunctions = RenderTransferFunctionSet(device: layerRenderer.device)
-    try renderTransferFunctions.synchronize(with: initialFrameSnapshot.transferFunctions)
+    let metadata = dataset.getMetadata()
+    try renderTransferFunctions.synchronize(
+      with: initialFrameSnapshot.transferFunctions,
+      minValue: metadata.minValue,
+      maxValue: metadata.maxValue,
+      rangeMax: metadata.rangeMax
+    )
 
     self.layerRenderer = layerRenderer
     self.session = session
@@ -337,8 +343,6 @@ final actor Renderer {
       logger?.error("Failed to create volume atlas: \(error)")
       throw error
     }
-
-    let metadata = borgData.getMetadata()
 
     let maxInitialBricks = StoredAppModel.int("initialBricks")
     do {
