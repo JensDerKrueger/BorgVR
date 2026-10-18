@@ -159,6 +159,12 @@
 		57A002622ED3000100000001 /* ConverterView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A002602ED3000100000001 /* ConverterView.swift */; };
 		57A002712ED3000200000001 /* DicomSlicePreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A002702ED3000200000001 /* DicomSlicePreview.swift */; };
 		57A002722ED3000200000001 /* DicomSlicePreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A002702ED3000200000001 /* DicomSlicePreview.swift */; };
+		57A002812ED4000100000001 /* DatasetOpenWorkflow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A002802ED4000100000001 /* DatasetOpenWorkflow.swift */; };
+		57A002822ED4000100000001 /* DatasetOpenWorkflow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A002802ED4000100000001 /* DatasetOpenWorkflow.swift */; };
+		57A002912ED4000200000001 /* OpenDatasetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A002902ED4000200000001 /* OpenDatasetView.swift */; };
+		57A002922ED4000200000001 /* OpenDatasetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A002902ED4000200000001 /* OpenDatasetView.swift */; };
+		57A002A12ED4000300000001 /* WaitingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A002A02ED4000300000001 /* WaitingView.swift */; };
+		57A002A22ED4000300000001 /* WaitingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A002A02ED4000300000001 /* WaitingView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -257,6 +263,9 @@
 		57A002502ED2000300000001 /* BorgVRSharePlayAdHocServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BorgVRSharePlayAdHocServer.swift; sourceTree = "<group>"; };
 		57A002602ED3000100000001 /* ConverterView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConverterView.swift; sourceTree = "<group>"; };
 		57A002702ED3000200000001 /* DicomSlicePreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DicomSlicePreview.swift; sourceTree = "<group>"; };
+		57A002802ED4000100000001 /* DatasetOpenWorkflow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DatasetOpenWorkflow.swift; sourceTree = "<group>"; };
+		57A002902ED4000200000001 /* OpenDatasetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenDatasetView.swift; sourceTree = "<group>"; };
+		57A002A02ED4000300000001 /* WaitingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WaitingView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -537,6 +546,9 @@
 				57A002202ED1000100000001 /* BorgVRSharePlaySessionEngine.swift */,
 				57A002602ED3000100000001 /* ConverterView.swift */,
 				57A002702ED3000200000001 /* DicomSlicePreview.swift */,
+				57A002802ED4000100000001 /* DatasetOpenWorkflow.swift */,
+				57A002902ED4000200000001 /* OpenDatasetView.swift */,
+				57A002A02ED4000300000001 /* WaitingView.swift */,
 				57A002302ED2000100000001 /* SharePlayCoordinator.swift */,
 				57A002002ED0000100000001 /* BorgVRSession.swift */,
 				57A001C02EB0000100000001 /* BorgVRScreenCommandService.swift */,
@@ -930,6 +942,9 @@
 				57A002512ED2000300000001 /* BorgVRSharePlayAdHocServer.swift in Sources */,
 				57A002412ED2000200000001 /* BorgVRSharePlayPlatformAdapter.swift in Sources */,
 				57A002212ED1000100000001 /* BorgVRSharePlaySessionEngine.swift in Sources */,
+				57A002812ED4000100000001 /* DatasetOpenWorkflow.swift in Sources */,
+				57A002912ED4000200000001 /* OpenDatasetView.swift in Sources */,
+				57A002A12ED4000300000001 /* WaitingView.swift in Sources */,
 				57A002312ED2000100000001 /* SharePlayCoordinator.swift in Sources */,
 				57A002012ED0000100000001 /* BorgVRSession.swift in Sources */,
 				57A001C12EB0000100000001 /* BorgVRScreenCommandService.swift in Sources */,
@@ -986,6 +1001,9 @@
 				57A002222ED1000100000001 /* BorgVRSharePlaySessionEngine.swift in Sources */,
 				57A002612ED3000100000001 /* ConverterView.swift in Sources */,
 				57A002712ED3000200000001 /* DicomSlicePreview.swift in Sources */,
+				57A002822ED4000100000001 /* DatasetOpenWorkflow.swift in Sources */,
+				57A002922ED4000200000001 /* OpenDatasetView.swift in Sources */,
+				57A002A22ED4000300000001 /* WaitingView.swift in Sources */,
 				57A002322ED2000100000001 /* SharePlayCoordinator.swift in Sources */,
 				57A002022ED0000100000001 /* BorgVRSession.swift in Sources */,
 				57A001C22EB0000100000001 /* BorgVRScreenCommandService.swift in Sources */,

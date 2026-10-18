@@ -7,7 +7,6 @@ struct WaitingView: View {
   var body: some View {
     VStack(spacing: 18) {
       Spacer()
-
       Image("borgvr")
         .resizable()
         .scaledToFit()
@@ -18,7 +17,6 @@ struct WaitingView: View {
         ? "Waiting for Data Source"
         : "Waiting for SharePlay Host")
         .font(.title2.bold())
-
       Text(appModel.sharePlayWaitingReason == .datasetSource
         ? "BorgVR is waiting for a participant to make the current dataset available."
         : "Waiting for the host to select and open a dataset.")
@@ -49,7 +47,6 @@ struct WaitingView: View {
         Label("Leave SharePlay", systemImage: "rectangle.portrait.and.arrow.right")
       }
       .buttonStyle(.borderedProminent)
-
       Spacer()
     }
     .padding()

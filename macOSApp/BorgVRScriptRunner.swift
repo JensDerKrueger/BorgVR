@@ -1167,7 +1167,12 @@ final class BorgVRScriptRunner: ObservableObject {
     Task { [weak self] in
       let catalog = DatasetCatalogService(
         appSettings: appSettings,
-        storedAppModel: storedAppModel,
+        storage: DatasetStorageAccess(
+          directoryURL: storedAppModel.resolvedDataDirectoryURL(),
+          beginAccess: { storedAppModel.startAccessingDataDirectory() },
+          endAccess: { storedAppModel.stopAccessingDataDirectory($0) },
+          accessError: { storedAppModel.lastDataDirectoryAccessError }
+        ),
         logger: appModel.logger
       )
       guard let dataset = await catalog.dataset(matchingID: id) else {
