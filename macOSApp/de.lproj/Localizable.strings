@@ -338,7 +338,7 @@
 "log_level_dev" = "Entwicklung";
 "log_level_progress" = "Fortschritt";
 "log_level_info" = "Info";
-"log_level_warning" = "Warnungen";
+"log_level_warning" = "Warnung";
 "log_level_error" = "Fehler";
 
 "tf_editor_save" = "Transferfunktion speichern";

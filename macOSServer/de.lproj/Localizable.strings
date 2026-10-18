@@ -521,7 +521,7 @@
 "tf_save_dialog_message" = "Geben Sie eine Beschreibung für diese Transferfunktion ein.";
 
 /* Server log polish */
-"log_level_warning" = "WARNUNG";
+"log_level_warning" = "Warnung";
 "log_level_error" = "FEHLER";
 "datasetscanner_info_loaded_transfer_function" = "Transferfunktion geladen: %@ (%@, ID %@)";
 "datasetscanner_warning_failed_load_transfer_function" = "Transferfunktionsdatei konnte nicht geladen werden: %@";

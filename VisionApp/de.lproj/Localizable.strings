@@ -147,6 +147,9 @@
 /* Logger view: log level - warnings and up */
 "logger_log_level_warning" = "Ab Warnungen";
 
+/* Prefix for warning messages in the log */
+"log_level_warning" = "Warnung";
+
 /* Logger view: log level - only errors */
 "logger_log_level_error" = "Nur Fehler";
 
