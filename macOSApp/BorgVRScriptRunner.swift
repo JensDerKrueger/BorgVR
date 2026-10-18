@@ -2145,8 +2145,7 @@ private final class ScriptExecutionLogger: LoggerBase, @unchecked Sendable {
   private let destination: LoggerBase
   private let onMessage: @Sendable (LogLevel, String) -> Void
   private let onProgress: @Sendable (String, Double) -> Void
-  private let lock = NSLock()
-  private var minimumLogLevel: LogLevel = .dev
+  private let filter = LogLevelFilter(minimumLevel: .dev)
 
   init(
     destination: LoggerBase,
@@ -2185,9 +2184,7 @@ private final class ScriptExecutionLogger: LoggerBase, @unchecked Sendable {
   }
 
   func setMinimumLogLevel(_ level: LogLevel) {
-    lock.lock()
-    minimumLogLevel = level
-    lock.unlock()
+    filter.setMinimumLevel(level)
     destination.setMinimumLogLevel(level)
   }
 
@@ -2197,9 +2194,7 @@ private final class ScriptExecutionLogger: LoggerBase, @unchecked Sendable {
   }
 
   private func shouldEmit(_ level: LogLevel) -> Bool {
-    lock.lock()
-    defer { lock.unlock() }
-    return minimumLogLevel <= level
+    filter.allows(level)
   }
 }
 

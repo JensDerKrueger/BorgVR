@@ -165,6 +165,10 @@
 		57A002922ED4000200000001 /* OpenDatasetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A002902ED4000200000001 /* OpenDatasetView.swift */; };
 		57A002A12ED4000300000001 /* WaitingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A002A02ED4000300000001 /* WaitingView.swift */; };
 		57A002A22ED4000300000001 /* WaitingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A002A02ED4000300000001 /* WaitingView.swift */; };
+		57A002B12ED5000100000001 /* GUILogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A002B02ED5000100000001 /* GUILogger.swift */; };
+		57A002B22ED5000100000001 /* GUILogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A002B02ED5000100000001 /* GUILogger.swift */; };
+		57A002B32ED5000100000001 /* GUILogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A002B02ED5000100000001 /* GUILogger.swift */; };
+		57A002B42ED5000100000001 /* GUILogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A002B02ED5000100000001 /* GUILogger.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -266,6 +270,7 @@
 		57A002802ED4000100000001 /* DatasetOpenWorkflow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DatasetOpenWorkflow.swift; sourceTree = "<group>"; };
 		57A002902ED4000200000001 /* OpenDatasetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenDatasetView.swift; sourceTree = "<group>"; };
 		57A002A02ED4000300000001 /* WaitingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WaitingView.swift; sourceTree = "<group>"; };
+		57A002B02ED5000100000001 /* GUILogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GUILogger.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -540,6 +545,7 @@
 		57A000102E70000100000001 /* AppSupport */ = {
 			isa = PBXGroup;
 			children = (
+				57A002B02ED5000100000001 /* GUILogger.swift */,
 				57A002102ED0000200000001 /* BorgVRAnnotationCommands.swift */,
 				57A002502ED2000300000001 /* BorgVRSharePlayAdHocServer.swift */,
 				57A002402ED2000200000001 /* BorgVRSharePlayPlatformAdapter.swift */,
@@ -938,6 +944,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				57A002B12ED5000100000001 /* GUILogger.swift in Sources */,
 				57A002112ED0000200000001 /* BorgVRAnnotationCommands.swift in Sources */,
 				57A002512ED2000300000001 /* BorgVRSharePlayAdHocServer.swift in Sources */,
 				57A002412ED2000200000001 /* BorgVRSharePlayPlatformAdapter.swift in Sources */,
@@ -995,6 +1002,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				57A002B22ED5000100000001 /* GUILogger.swift in Sources */,
 				57A002122ED0000200000001 /* BorgVRAnnotationCommands.swift in Sources */,
 				57A002522ED2000300000001 /* BorgVRSharePlayAdHocServer.swift in Sources */,
 				57A002422ED2000200000001 /* BorgVRSharePlayPlatformAdapter.swift in Sources */,
@@ -1046,6 +1054,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				57A002B32ED5000100000001 /* GUILogger.swift in Sources */,
 				57A002132ED0000200000001 /* BorgVRAnnotationCommands.swift in Sources */,
 				57A002232ED1000100000001 /* BorgVRSharePlaySessionEngine.swift in Sources */,
 				57A002032ED0000100000001 /* BorgVRSession.swift in Sources */,
@@ -1080,6 +1089,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				57A002B42ED5000100000001 /* GUILogger.swift in Sources */,
 				57A002622ED3000100000001 /* ConverterView.swift in Sources */,
 				57A002722ED3000200000001 /* DicomSlicePreview.swift in Sources */,
 				57A0014F2E70000300000001 /* KeychainSecretStore.swift in Sources */,

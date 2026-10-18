@@ -322,44 +322,6 @@ func printConsoleHelp() {
   fflush(stdout)
 }
 
-final class TerminalLogger: LoggerBase {
-  private let destinations: [LoggerBase]
-  private let lock = NSLock()
-  private var minimumLevel: LogLevel = .info
-
-  init(destinations: [LoggerBase]) {
-    self.destinations = destinations
-    destinations.forEach { $0.setMinimumLogLevel(.dev) }
-  }
-
-  func setMinimumLogLevel(_ level: LogLevel) {
-    lock.lock()
-    minimumLevel = level
-    lock.unlock()
-  }
-
-  var currentLevel: LogLevel {
-    lock.lock()
-    defer { lock.unlock() }
-    return minimumLevel
-  }
-
-  private func emit(level: LogLevel, _ action: (LoggerBase) -> Void) {
-    lock.lock()
-    defer { lock.unlock() }
-    guard level >= minimumLevel else { return }
-    destinations.forEach(action)
-  }
-
-  func dev(_ message: String) { emit(level: .dev) { $0.dev(message) } }
-  func info(_ message: String) { emit(level: .info) { $0.info(message) } }
-  func warning(_ message: String) { emit(level: .warning) { $0.warning(message) } }
-  func error(_ message: String) { emit(level: .error) { $0.error(message) } }
-  func progress(_ message: String, _ progress: Double) {
-    emit(level: .dev) { $0.progress(message, progress) }
-  }
-}
-
 func prepareLogFile(at path: String) {
   let url = URL(fileURLWithPath: path)
   let parent = url.deletingLastPathComponent()
@@ -403,7 +365,7 @@ if let logFilePath = config.logFilePath {
     )
   )
 }
-let logger = TerminalLogger(destinations: logDestinations)
+let logger = MultiplexLogger(loggers: logDestinations, minimumLogLevel: .info)
 let host = BorgVRServerHost(logger: logger)
 
 printStartupBanner(config, logLevel: logger.currentLevel)
