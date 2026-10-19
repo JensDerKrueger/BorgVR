@@ -25,6 +25,56 @@ enum VisionVolumeRendererError: Error {
   }
 }
 
+private final class VisionRendererPerformanceMailbox: @unchecked Sendable {
+  struct Pending {
+    let slowdownSteps: Int
+    let recoverySteps: Int
+  }
+
+  private let lock = NSLock()
+  private var slowdownSteps = 0
+  private var recoverySteps = 0
+  private var recoveryFinished = false
+
+  func requestSlowdown() {
+    lock.lock()
+    slowdownSteps += 1
+    recoverySteps = 0
+    recoveryFinished = false
+    lock.unlock()
+  }
+
+  func requestRecovery() -> Bool {
+    lock.lock()
+    defer { lock.unlock() }
+    if recoveryFinished {
+      recoveryFinished = false
+      return false
+    }
+    recoverySteps += 1
+    return true
+  }
+
+  func takePending() -> Pending {
+    lock.lock()
+    let pending = Pending(
+      slowdownSteps: slowdownSteps,
+      recoverySteps: recoverySteps
+    )
+    slowdownSteps = 0
+    recoverySteps = 0
+    lock.unlock()
+    return pending
+  }
+
+  func markRecoveryFinished() {
+    lock.lock()
+    recoverySteps = 0
+    recoveryFinished = true
+    lock.unlock()
+  }
+}
+
 
 /**
  An actor responsible for rendering volume data with Metal.
@@ -226,12 +276,13 @@ final actor VisionVolumeRenderer {
   /// An optional logger for debug and error messages.
   let logger: LoggerBase?
 
-  nonisolated(unsafe) var autoRotationAngle : Float
+  var autoRotationAngle: Float
+  var autoRotationStartTime: CFTimeInterval
+  var lastRotationCaptureRequestID: UInt64
 
-  var autoRotationStartTime : CFTimeInterval
-
-  /// The current active oversampling factor (nonisolated).
-  nonisolated(unsafe) var activeOversampling: Float
+  /// Performance callbacks enqueue requests here; only the renderer actor changes the factor.
+  private let performanceAdjustmentMailbox: VisionRendererPerformanceMailbox
+  var activeOversampling: Float
 
   // MARK: Init
 
@@ -307,6 +358,8 @@ final actor VisionVolumeRenderer {
 
     self.autoRotationAngle = 0
     self.autoRotationStartTime = 0
+    self.lastRotationCaptureRequestID = initialFrameSnapshot.settings.rotationCaptureRequestID
+    self.performanceAdjustmentMailbox = VisionRendererPerformanceMailbox()
     self.activeSpatialStylusStrokeID = nil
     self.spatialStylusTipFilterState = nil
     self.spatialStylusPreviewPoint = nil
@@ -908,22 +961,35 @@ extension VisionVolumeRenderer {
     timer.recoveryThreshold = Double(self.recoveryFPS)
     timer.minimumDropDuration = 0.5
 
-    timer.onPerformanceTooSlow = { [weak self] fps, percentMissed in
-      guard let self = self else { return }
-      if self.activeOversampling < 0.5 {
-        return
-      }
-      self.activeOversampling -= 0.1
+    let performanceAdjustmentMailbox = self.performanceAdjustmentMailbox
+    timer.onPerformanceTooSlow = { _, _ in
+      performanceAdjustmentMailbox.requestSlowdown()
     }
 
-    timer.onPerformanceRecovered = { [weak self] fps, percentAbove in
-      guard let self = self else { return false }
-      if self.activeOversampling >= self.initialOversampling {
+    timer.onPerformanceRecovered = { _, _ in
+      performanceAdjustmentMailbox.requestRecovery()
+    }
+  }
+
+  private func applyPendingPerformanceAdjustments() {
+    let pending = performanceAdjustmentMailbox.takePending()
+
+    for _ in 0..<pending.slowdownSteps {
+      guard activeOversampling >= 0.5 else { break }
+      activeOversampling -= 0.1
+    }
+
+    for _ in 0..<pending.recoverySteps {
+      guard activeOversampling < initialOversampling else {
         activeOversampling = initialOversampling
-        return false
+        performanceAdjustmentMailbox.markRecoveryFinished()
+        break
       }
-      self.activeOversampling += 0.1
-      return true
+      activeOversampling = min(initialOversampling, activeOversampling + 0.1)
+      if activeOversampling >= initialOversampling {
+        performanceAdjustmentMailbox.markRecoveryFinished()
+        break
+      }
     }
   }
 }
@@ -1519,6 +1585,7 @@ extension VisionVolumeRenderer {
    */
   func updatePerformanceCounters() {
     timer.frameRendered()
+    applyPendingPerformanceAdjustments()
 
     let last = timer.lastFPS
     let avg = timer.averageFPS
@@ -1537,22 +1604,28 @@ extension VisionVolumeRenderer {
       }
     }
 
+    let rotationCaptureRequestID = frameSnapshot.settings.rotationCaptureRequestID
+    if rotationCaptureRequestID != lastRotationCaptureRequestID {
+      lastRotationCaptureRequestID = rotationCaptureRequestID
+      logger?.info("Start Rotation")
+      autoRotationAngle = 1
+    }
+
+    let runtimeAppModel = self.runtimeAppModel
+    let recoveryThreshold = Double(recoveryFPS)
+    let dropThreshold = Double(dropFPS)
+    let samplingRate = Double(activeOversampling)
+    let baseSamplingRate = Double(initialOversampling)
     DispatchQueue.main.async {
-      self.runtimeAppModel.performanceModel.history.recoveryThreshold = Double(self.recoveryFPS)
-      self.runtimeAppModel.performanceModel.history.dropThreshold = Double(self.dropFPS)
-      self.runtimeAppModel.performanceModel.history.add(last: last,
-                                                 avg: avg,
-                                                 smoothed: smoothed,
-                                                 samplingRate: Double(self.activeOversampling),
-                                                 baseSamplingRate: Double(self.initialOversampling))
+      runtimeAppModel.performanceModel.history.recoveryThreshold = recoveryThreshold
+      runtimeAppModel.performanceModel.history.dropThreshold = dropThreshold
+      runtimeAppModel.performanceModel.history.add(last: last,
+                                                    avg: avg,
+                                                    smoothed: smoothed,
+                                                    samplingRate: samplingRate,
+                                                    baseSamplingRate: baseSamplingRate)
 
-      if self.runtimeAppModel.startRotationCapture {
-        self.logger?.info("Start Rotation")
-        self.autoRotationAngle = 1
-        self.runtimeAppModel.startRotationCapture = false
-      }
-
-      if self.runtimeAppModel.logPerformance {
+      if runtimeAppModel.logPerformance {
         struct State {
           static var lastTime = CACurrentMediaTime()
         }
@@ -1561,7 +1634,7 @@ extension VisionVolumeRenderer {
         let elapsed = currentTime - State.lastTime
 
         if elapsed >= 2.0 {
-          self.logger?
+          runtimeAppModel.logger
             .info("Last FPS: \(last), Avg FPS: \(avg), Smoothed FPS: \(smoothed)")
           State.lastTime = currentTime
         }

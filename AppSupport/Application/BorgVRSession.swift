@@ -128,11 +128,13 @@ struct BorgVRRenderSettingsSnapshot: Sendable {
   let sampleJitter: Bool
   let transferFunctionDisplayMode: Int
   let purgeAtlas: Bool
+  let rotationCaptureRequestID: UInt64
 
   static let `default` = BorgVRRenderSettingsSnapshot(
     sampleJitter: false,
     transferFunctionDisplayMode: 0,
-    purgeAtlas: false
+    purgeAtlas: false,
+    rotationCaptureRequestID: 0
   )
 }
 
@@ -1021,7 +1023,8 @@ extension BorgVRSession where VisualizationState == RenderingParameters,
           settings: BorgVRRenderSettingsSnapshot(
             sampleJitter: appSettings.sampleJitter,
             transferFunctionDisplayMode: 0,
-            purgeAtlas: false
+            purgeAtlas: false,
+            rotationCaptureRequestID: 0
           )
         )
       },

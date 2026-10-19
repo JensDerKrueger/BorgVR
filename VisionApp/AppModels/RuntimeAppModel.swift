@@ -151,8 +151,8 @@ class RuntimeAppModel {
   /// Periodically write performance to log
   var logPerformance: Bool = false
 
-  /// rotate the dataset by 360° and record the performance
-  var startRotationCapture: Bool = false
+  /// Monotonic request ID for rotating the dataset by 360 degrees and recording performance.
+  var rotationCaptureRequestID: UInt64 = 0
 
   /**
    Modes of user interaction within the application.

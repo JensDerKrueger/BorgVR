@@ -52,6 +52,10 @@ forbid_path VisionApp/Rendering/RendererSetup.swift
 forbid_path VisionApp/ImmersiveRendererBootstrap.swift
 require_pattern 'final actor VisionVolumeRenderer' VisionApp/Rendering/VisionVolumeRenderer.swift
 require_pattern 'VisionVolumeRenderer\.startRenderLoop' VisionApp/VisionVolumeRendererBootstrap.swift
+forbid_pattern 'nonisolated\(unsafe\).*autoRotationAngle' VisionApp/Rendering/VisionVolumeRenderer.swift
+forbid_pattern 'nonisolated\(unsafe\).*activeOversampling' VisionApp/Rendering/VisionVolumeRenderer.swift
+require_pattern 'VisionRendererPerformanceMailbox' VisionApp/Rendering/VisionVolumeRenderer.swift
+require_pattern 'rotationCaptureRequestID' VisionApp/Rendering/VisionVolumeRenderer.swift
 
 # Shared converter UI and conversion implementation.
 require_file AppSupport/Datasets/ConverterView.swift

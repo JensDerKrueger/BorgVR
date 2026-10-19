@@ -356,7 +356,7 @@ struct ProfileView: View {
         preRotationCountdown = nil
         preRotationTimer?.invalidate()
         DispatchQueue.main.async {
-          runtimeAppModel.startRotationCapture = true
+          runtimeAppModel.rotationCaptureRequestID &+= 1
         }
       }
     }
