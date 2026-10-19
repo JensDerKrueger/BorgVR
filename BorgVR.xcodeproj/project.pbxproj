@@ -302,14 +302,6 @@
 			);
 			target = 560C00012E00000000000010 /* macOSApp */;
 		};
-		57A002802ED3000300000001 /* Exceptions for "BORGVR-Services" folder in "macOSServer" target */ = {
-			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-			membershipExceptions = (
-				BorgVRMCP.swift,
-				BorgVRMCPServer.swift,
-			);
-			target = 5655824A2D4E5D6F008E7CE6 /* macOSServer */;
-		};
 		5634F94F2EB7FC67006B02FF /* Exceptions for "BORGVR-IO" folder in "macOSServer" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
@@ -345,9 +337,9 @@
 				PVMParser.swift,
 				QVISParser.swift,
 				RawFileAccessor.swift,
+				Remote/BorgVRBinaryFrameReceiver.swift,
 				Remote/BORGVRRemoteData.swift,
 				Remote/BORGVRRemoteDataManager.swift,
-				Remote/BorgVRBinaryFrameReceiver.swift,
 				Remote/BorgVRServerAuthentication.swift,
 				Remote/CacheMap.swift,
 				Remote/CachingRemoteDataSource.swift,
@@ -362,6 +354,14 @@
 				VolumeFileParser.swift,
 			);
 			target = 564183772D649679003A1EC4 /* VisionApp */;
+		};
+		57A002802ED3000300000001 /* Exceptions for "BORGVR-Services" folder in "macOSServer" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				BorgVRMCP.swift,
+				BorgVRMCPServer.swift,
+			);
+			target = 5655824A2D4E5D6F008E7CE6 /* macOSServer */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
@@ -544,63 +544,135 @@
 			name = Frameworks;
 			sourceTree = "<group>";
 		};
-		57A000102E70000100000001 /* AppSupport */ = {
+		57A010002EF0000100000001 /* Application */ = {
 			isa = PBXGroup;
 			children = (
-				57A002B02ED5000100000001 /* GUILogger.swift */,
-				57A002102ED0000200000001 /* BorgVRAnnotationCommands.swift */,
-				57A002502ED2000300000001 /* BorgVRSharePlayAdHocServer.swift */,
-				57A002402ED2000200000001 /* BorgVRSharePlayPlatformAdapter.swift */,
-				57A002202ED1000100000001 /* BorgVRSharePlaySessionEngine.swift */,
-				57A002602ED3000100000001 /* ConverterView.swift */,
-				57A002702ED3000200000001 /* DicomSlicePreview.swift */,
-				57A002802ED4000100000001 /* DatasetOpenWorkflow.swift */,
-				57A002902ED4000200000001 /* OpenDatasetView.swift */,
-				57A002A02ED4000300000001 /* WaitingView.swift */,
-				57A002302ED2000100000001 /* SharePlayCoordinator.swift */,
-				57A002002ED0000100000001 /* BorgVRSession.swift */,
-				57A001C02EB0000100000001 /* BorgVRScreenCommandService.swift */,
-				57A001E02EB0000300000001 /* MCPSettingsControls.swift */,
-				57A001D02EB0000200000001 /* MetalScreenshotEncoder.swift */,
 				57A001202E70000300000001 /* AppModel.swift */,
 				57A001212E70000300000001 /* AppSettings.swift */,
 				57A001702E99000500000001 /* AppStoreUpdateChecker.swift */,
-				57A001B02EA3000100000001 /* DatasetViewState.swift */,
-				57A001742E99000600000001 /* DatasetOriginCatalog.swift */,
-				57A001282E70000300000001 /* DatasetInfoView.swift */,
-				57A001292E70000300000001 /* ExternalDatasetImporter.swift */,
-				57A000202E70000200000001 /* FilePickerView.swift */,
-				57A000212E70000200000001 /* GPUHashtable.swift */,
-				57A000222E70000200000001 /* GPUHashtable.h */,
-				57A000232E70000200000001 /* Helper.h */,
-				57A001262E70000300000001 /* IsovalueEditorView.swift */,
+				57A002002ED0000100000001 /* BorgVRSession.swift */,
 				57A0012C2E70000300000001 /* KeychainSecretStore.swift */,
-				57A001802EA0000100000001 /* LightingEditorView.swift */,
+			);
+			path = Application;
+			sourceTree = "<group>";
+		};
+		57A010012EF0000100000001 /* Datasets */ = {
+			isa = PBXGroup;
+			children = (
+				57A002602ED3000100000001 /* ConverterView.swift */,
+				57A001282E70000300000001 /* DatasetInfoView.swift */,
+				57A002802ED4000100000001 /* DatasetOpenWorkflow.swift */,
+				57A001742E99000600000001 /* DatasetOriginCatalog.swift */,
+				57A001B02EA3000100000001 /* DatasetViewState.swift */,
+				57A002702ED3000200000001 /* DicomSlicePreview.swift */,
+				57A001292E70000300000001 /* ExternalDatasetImporter.swift */,
+				57A002902ED4000200000001 /* OpenDatasetView.swift */,
+				57A002A02ED4000300000001 /* WaitingView.swift */,
+			);
+			path = Datasets;
+			sourceTree = "<group>";
+		};
+		57A010022EF0000100000001 /* Annotations */ = {
+			isa = PBXGroup;
+			children = (
+				57A002102ED0000200000001 /* BorgVRAnnotationCommands.swift */,
 				57A001982EA1000300000001 /* MeasurementSurfaceMeshCache.swift */,
 				57A001A02EA2000100000001 /* SceneMesh.swift */,
 				57A001A52EA2000200000001 /* SceneMeshEditorView.swift */,
-				57A001232E70000300000001 /* LoggerView.swift */,
-				57A001242E70000300000001 /* MatrixUtilities.swift */,
-				57A001642E99000200000001 /* RenderMode.swift */,
-				57A001222E70000300000001 /* RenderingParameters.swift */,
-				57A000242E70000200000001 /* RuntimeMetalShaderLoader.swift */,
-				57A000252E70000200000001 /* RuntimeVolumeShaders.metal */,
-				57A001F02EC0000100000001 /* ScreenOpaqueGeometryShaders.metal */,
-				57A000272E70000200000001 /* ShaderTypes.h */,
-				57A000282E70000200000001 /* TextFileDocument.swift */,
-				57A001542E70000300000001 /* TransferFunctionCatalog.swift */,
-				57A001252E70000300000001 /* TransferFunctionEditorView.swift */,
-				57A0012A2E70000300000001 /* WebAssetProvider.swift */,
-				57A001602E99000100000001 /* WebGPUShareLink.swift */,
-				57A0012B2E70000300000001 /* WebServerCertificateControls.swift */,
-				57A000292E70000200000001 /* VolumeAtlas.h */,
-				57A001272E70000300000001 /* VolumeRendererPipeline.swift */,
 				57A001682E99000300000001 /* VolumeMarker.swift */,
 				57A0016C2E99000400000001 /* VolumeMarkerTubeMesh.swift */,
 				57A001902EA1000100000001 /* VolumeMeasurement.swift */,
 				57A001942EA1000200000001 /* VolumeMeasurementDocument.swift */,
-				57A0002A2E70000200000001 /* VolumeRaycaster.metal */,
+			);
+			path = Annotations;
+			sourceTree = "<group>";
+		};
+		57A010032EF0000100000001 /* Rendering */ = {
+			isa = PBXGroup;
+			children = (
+				57A000212E70000200000001 /* GPUHashtable.swift */,
+				57A001262E70000300000001 /* IsovalueEditorView.swift */,
+				57A001802EA0000100000001 /* LightingEditorView.swift */,
+				57A001242E70000300000001 /* MatrixUtilities.swift */,
+				57A001D02EB0000200000001 /* MetalScreenshotEncoder.swift */,
+				57A001642E99000200000001 /* RenderMode.swift */,
+				57A001222E70000300000001 /* RenderingParameters.swift */,
+				57A000242E70000200000001 /* RuntimeMetalShaderLoader.swift */,
+				57A010042EF0000100000001 /* Shaders */,
+				57A001542E70000300000001 /* TransferFunctionCatalog.swift */,
+				57A001252E70000300000001 /* TransferFunctionEditorView.swift */,
+				57A001272E70000300000001 /* VolumeRendererPipeline.swift */,
+			);
+			path = Rendering;
+			sourceTree = "<group>";
+		};
+		57A010042EF0000100000001 /* Shaders */ = {
+			isa = PBXGroup;
+			children = (
+				57A000222E70000200000001 /* GPUHashtable.h */,
+				57A000232E70000200000001 /* Helper.h */,
+				57A000252E70000200000001 /* RuntimeVolumeShaders.metal */,
+				57A001F02EC0000100000001 /* ScreenOpaqueGeometryShaders.metal */,
+				57A000272E70000200000001 /* ShaderTypes.h */,
 				57A0002B2E70000200000001 /* VisionInteractionShaders.metal */,
+				57A000292E70000200000001 /* VolumeAtlas.h */,
+				57A0002A2E70000200000001 /* VolumeRaycaster.metal */,
+			);
+			path = Shaders;
+			sourceTree = "<group>";
+		};
+		57A010052EF0000100000001 /* SharePlay */ = {
+			isa = PBXGroup;
+			children = (
+				57A002502ED2000300000001 /* BorgVRSharePlayAdHocServer.swift */,
+				57A002402ED2000200000001 /* BorgVRSharePlayPlatformAdapter.swift */,
+				57A002202ED1000100000001 /* BorgVRSharePlaySessionEngine.swift */,
+				57A002302ED2000100000001 /* SharePlayCoordinator.swift */,
+			);
+			path = SharePlay;
+			sourceTree = "<group>";
+		};
+		57A010062EF0000100000001 /* Automation */ = {
+			isa = PBXGroup;
+			children = (
+				57A001C02EB0000100000001 /* BorgVRScreenCommandService.swift */,
+				57A001E02EB0000300000001 /* MCPSettingsControls.swift */,
+			);
+			path = Automation;
+			sourceTree = "<group>";
+		};
+		57A010072EF0000100000001 /* Web */ = {
+			isa = PBXGroup;
+			children = (
+				57A0012A2E70000300000001 /* WebAssetProvider.swift */,
+				57A001602E99000100000001 /* WebGPUShareLink.swift */,
+				57A0012B2E70000300000001 /* WebServerCertificateControls.swift */,
+			);
+			path = Web;
+			sourceTree = "<group>";
+		};
+		57A010082EF0000100000001 /* UI */ = {
+			isa = PBXGroup;
+			children = (
+				57A000202E70000200000001 /* FilePickerView.swift */,
+				57A002B02ED5000100000001 /* GUILogger.swift */,
+				57A001232E70000300000001 /* LoggerView.swift */,
+				57A000282E70000200000001 /* TextFileDocument.swift */,
+			);
+			path = UI;
+			sourceTree = "<group>";
+		};
+		57A000102E70000100000001 /* AppSupport */ = {
+			isa = PBXGroup;
+			children = (
+				57A010022EF0000100000001 /* Annotations */,
+				57A010002EF0000100000001 /* Application */,
+				57A010062EF0000100000001 /* Automation */,
+				57A010012EF0000100000001 /* Datasets */,
+				57A010032EF0000100000001 /* Rendering */,
+				57A010052EF0000100000001 /* SharePlay */,
+				57A010082EF0000100000001 /* UI */,
+				57A010072EF0000100000001 /* Web */,
 			);
 			path = AppSupport;
 			sourceTree = "<group>";
@@ -1141,7 +1213,7 @@
 				SDKROOT = iphoneos;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_OBJC_BRIDGING_HEADER = AppSupport/ShaderTypes.h;
+				SWIFT_OBJC_BRIDGING_HEADER = AppSupport/Rendering/Shaders/ShaderTypes.h;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -1178,7 +1250,7 @@
 				SDKROOT = iphoneos;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_OBJC_BRIDGING_HEADER = AppSupport/ShaderTypes.h;
+				SWIFT_OBJC_BRIDGING_HEADER = AppSupport/Rendering/Shaders/ShaderTypes.h;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				VALIDATE_PRODUCT = YES;
@@ -1248,7 +1320,7 @@
 				PRODUCT_NAME = BorgVR;
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_OBJC_BRIDGING_HEADER = AppSupport/ShaderTypes.h;
+				SWIFT_OBJC_BRIDGING_HEADER = AppSupport/Rendering/Shaders/ShaderTypes.h;
 				SWIFT_VERSION = 5.0;
 			};
 			name = Debug;
@@ -1285,7 +1357,7 @@
 				PRODUCT_NAME = BorgVR;
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_OBJC_BRIDGING_HEADER = AppSupport/ShaderTypes.h;
+				SWIFT_OBJC_BRIDGING_HEADER = AppSupport/Rendering/Shaders/ShaderTypes.h;
 				SWIFT_VERSION = 5.0;
 				VALIDATE_PRODUCT = YES;
 			};
@@ -1321,7 +1393,7 @@
 				SDKROOT = xros;
 				SUPPORTED_PLATFORMS = "xros xrsimulator";
 				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_OBJC_BRIDGING_HEADER = AppSupport/ShaderTypes.h;
+				SWIFT_OBJC_BRIDGING_HEADER = AppSupport/Rendering/Shaders/ShaderTypes.h;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 7;
 				XROS_DEPLOYMENT_TARGET = 26.0;
@@ -1358,7 +1430,7 @@
 				SDKROOT = xros;
 				SUPPORTED_PLATFORMS = "xros xrsimulator";
 				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_OBJC_BRIDGING_HEADER = AppSupport/ShaderTypes.h;
+				SWIFT_OBJC_BRIDGING_HEADER = AppSupport/Rendering/Shaders/ShaderTypes.h;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 7;
 				VALIDATE_PRODUCT = YES;

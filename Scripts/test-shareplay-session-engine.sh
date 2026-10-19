@@ -10,9 +10,9 @@ mkdir -p "$BUILD_DIR" "$SWIFT_MODULE_CACHE"
 swiftc \
   -module-cache-path "$SWIFT_MODULE_CACHE" \
   "$ROOT/BORGVR-IO/BorgVRSharedConstants.swift" \
-  "$ROOT/AppSupport/DatasetOriginCatalog.swift" \
+  "$ROOT/AppSupport/Datasets/DatasetOriginCatalog.swift" \
   "$ROOT/Tests/SharePlaySessionEngineTestSupport.swift" \
-  "$ROOT/AppSupport/BorgVRSharePlaySessionEngine.swift" \
+  "$ROOT/AppSupport/SharePlay/BorgVRSharePlaySessionEngine.swift" \
   "$ROOT/Tests/SharePlaySessionEngineTests.swift" \
   -o "$BUILD_DIR/shareplay-session-tests"
 

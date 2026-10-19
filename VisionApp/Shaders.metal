@@ -15,5 +15,5 @@
 #endif
 #define VOLUME_SHADER_USES_MARKER_TEXTURES 1
 
-#include "../AppSupport/VolumeRaycaster.metal"
-#include "../AppSupport/VisionInteractionShaders.metal"
+#include "../AppSupport/Rendering/Shaders/VolumeRaycaster.metal"
+#include "../AppSupport/Rendering/Shaders/VisionInteractionShaders.metal"

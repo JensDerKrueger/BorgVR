@@ -32,13 +32,13 @@ forbid_pattern() {
 }
 
 # Shared SharePlay coordination and immutable render snapshots.
-require_file AppSupport/SharePlayCoordinator.swift
-require_file AppSupport/BorgVRSharePlaySessionEngine.swift
+require_file AppSupport/SharePlay/SharePlayCoordinator.swift
+require_file AppSupport/SharePlay/BorgVRSharePlaySessionEngine.swift
 require_file macOSApp/MacSharePlayPlatformAdapter.swift
 require_file iOSApp/iOSSharePlayPlatformAdapter.swift
 forbid_path macOSApp/SharePlayCoordinator.swift
 forbid_path iOSApp/SharePlayCoordinator.swift
-require_pattern 'BorgVRRenderSnapshotStore' AppSupport/BorgVRSession.swift
+require_pattern 'BorgVRRenderSnapshotStore' AppSupport/Application/BorgVRSession.swift
 require_pattern 'BorgVRFrameSnapshot' VisionApp/VisionBorgVRSession.swift
 require_pattern 'revision: evaluationState\.revision &\+ 1' BORGVR-Render/VolumeAtlas/AsyncEmptinessUpdater.swift
 
@@ -54,22 +54,22 @@ require_pattern 'final actor VisionVolumeRenderer' VisionApp/Rendering/VisionVol
 require_pattern 'VisionVolumeRenderer\.startRenderLoop' VisionApp/VisionVolumeRendererBootstrap.swift
 
 # Shared converter UI and conversion implementation.
-require_file AppSupport/ConverterView.swift
-require_file AppSupport/DicomSlicePreview.swift
+require_file AppSupport/Datasets/ConverterView.swift
+require_file AppSupport/Datasets/DicomSlicePreview.swift
 forbid_path macOSApp/ConverterView.swift
 forbid_path macOSServer/ConverterView.swift
 forbid_path macOSApp/DicomSlicePreview.swift
 forbid_path macOSServer/DicomSlicePreview.swift
-require_pattern 'BorgVRVolumeConversionService\.convert' AppSupport/ConverterView.swift
+require_pattern 'BorgVRVolumeConversionService\.convert' AppSupport/Datasets/ConverterView.swift
 require_pattern 'BorgVRVolumeConversionService\.convert' macOSApp/BorgVRScriptRunner.swift
 require_pattern 'BorgVRVolumeConversionService\.convert' TerminalConverterApp/main.swift
 require_pattern 'BorgVRVolumeConversionService\.convert' iOSApp/ConverterView.swift
 require_pattern 'BorgVRVolumeConversionService\.convert' VisionApp/ConverterView.swift
 
 # Shared dataset-open workflow and catalog.
-require_file AppSupport/DatasetOpenWorkflow.swift
-require_file AppSupport/OpenDatasetView.swift
-require_file AppSupport/WaitingView.swift
+require_file AppSupport/Datasets/DatasetOpenWorkflow.swift
+require_file AppSupport/Datasets/OpenDatasetView.swift
+require_file AppSupport/Datasets/WaitingView.swift
 forbid_path macOSApp/OpenDatasetView.swift
 forbid_path iOSApp/OpenDatasetView.swift
 forbid_path macOSApp/WaitingView.swift
@@ -79,19 +79,30 @@ catalog_count=$(rg -l 'final class DatasetCatalogService' --glob '*.swift' | wc 
 [ "$catalog_count" -eq 1 ] || fail "expected one DatasetCatalogService, found $catalog_count"
 
 # Logger layering and removed dead implementations.
-require_file AppSupport/GUILogger.swift
+require_file AppSupport/UI/GUILogger.swift
 forbid_pattern 'class (OSLogger|HTMLLogger|JSONLogger|CSVLogger)' BORGVR-IO/Logger.swift
 forbid_pattern 'GUILogger' BORGVR-IO/Logger.swift
 forbid_pattern 'shiftedHue' VisionApp/ImmersiveInteraction.swift
 forbid_pattern 'synchronizeLighting|synchronizeTransform' macOSApp/BorgVRScriptRunner.swift
-forbid_pattern 'establishInitialScreenView' AppSupport/SharePlayCoordinator.swift
+forbid_pattern 'establishInitialScreenView' AppSupport/SharePlay/SharePlayCoordinator.swift
 
 # Removed backup assets and centralized screen interaction constants.
 forbid_path Assets.xcassets.disabled
-require_pattern 'enum ScreenInteractionLimits' AppSupport/RenderingParameters.swift
+require_pattern 'enum ScreenInteractionLimits' AppSupport/Rendering/RenderingParameters.swift
 require_pattern 'ScreenInteractionLimits\.modelScale' macOSApp/RenderView.swift
 require_pattern 'ScreenInteractionLimits\.modelScale' iOSApp/RenderView.swift
 require_pattern 'ScreenInteractionLimits\.transferSmoothWidth' macOSApp/RenderView.swift
 require_pattern 'ScreenInteractionLimits\.transferSmoothWidth' iOSApp/RenderView.swift
+
+# AppSupport mirrors its stable responsibility boundaries in both the file system and Xcode.
+for directory in Annotations Application Automation Datasets Rendering SharePlay UI Web; do
+  [ -d "AppSupport/$directory" ] || fail "missing AppSupport/$directory"
+done
+require_file AppSupport/Rendering/Shaders/ShaderTypes.h
+require_pattern 'path = Application;' BorgVR.xcodeproj/project.pbxproj
+require_pattern 'path = Shaders;' BorgVR.xcodeproj/project.pbxproj
+require_pattern 'AppSupport/Rendering/Shaders/ShaderTypes\.h' BorgVR.xcodeproj/project.pbxproj
+forbid_path AppSupport/AppModel.swift
+forbid_path AppSupport/ShaderTypes.h
 
 printf 'Refactoring structure tests passed\n'
