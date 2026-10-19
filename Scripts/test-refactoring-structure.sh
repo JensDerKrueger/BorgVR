@@ -107,6 +107,9 @@ forbid_pattern 'establishInitialScreenView' AppSupport/SharePlay/SharePlayCoordi
 
 # Removed backup assets and centralized screen interaction constants.
 forbid_path Assets.xcassets.disabled
+forbid_path macOSApp/MacMeasurementView.jpg
+forbid_path macOSApp/borgvr.png
+require_file macOSApp/Assets.xcassets/borgvr.imageset/borgvr.png
 require_pattern 'enum ScreenInteractionLimits' AppSupport/Rendering/RenderingParameters.swift
 require_pattern 'ScreenInteractionLimits\.modelScale' macOSApp/RenderView.swift
 require_pattern 'ScreenInteractionLimits\.modelScale' iOSApp/RenderView.swift
