@@ -731,7 +731,9 @@ public class BrickedVolumeReorganizer {
       readOnly: false
     )
 
-    if let rawVolume = volume as? RawFileAccessor {
+    if let rawVolume = volume as? RawFileAccessor,
+       rawVolume.supportsAlignedTypedAccess,
+       target.supportsAlignedTypedAccess {
       try subsampleRaw(
         source: rawVolume,
         target: target,

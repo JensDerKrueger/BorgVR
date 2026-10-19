@@ -29,6 +29,8 @@ public class RawFileAccessor: VolumeDataAccessor {
     case readOnlyAccessViolation
     /// The requested reinterpretation type size is incompatible with the data size.
     case incompatibleTypeSize
+    /// The supplied volume layout is empty, negative, or cannot be represented safely.
+    case invalidVolumeDescription
 
     /// A localized description for each error case.
     public var errorDescription: String? {
@@ -43,6 +45,8 @@ public class RawFileAccessor: VolumeDataAccessor {
           return "Attempted to write to a file opened in read-only mode."
         case .incompatibleTypeSize:
           return "The total byte count is not compatible with the requested type size."
+        case .invalidVolumeDescription:
+          return "The volume dimensions, component layout, or file offset are invalid."
       }
     }
   }
@@ -57,6 +61,16 @@ public class RawFileAccessor: VolumeDataAccessor {
 
   /// Byte offset within the file where volume data begins.
   private let offset: Int
+
+  /// Number of voxels and bytes validated during initialization.
+  private let checkedVoxelCount: Int
+  private let checkedVoxelByteSize: Int
+  private let checkedVolumeByteCount: Int
+
+  /// Whether the mapped payload may be accessed through naturally aligned typed pointers.
+  var supportsAlignedTypedAccess: Bool {
+    Int(bitPattern: mappedMemory) % bytesPerComponent == 0
+  }
 
   // MARK: - Initialization
 
@@ -82,21 +96,94 @@ public class RawFileAccessor: VolumeDataAccessor {
               voxelSpacing: Vec3<Float>,
               offset: Int = 0,
               readOnly: Bool = true) throws {
+    let layout = try Self.checkedLayout(
+      size: size,
+      bytesPerComponent: bytesPerComponent,
+      componentCount: componentCount,
+      offset: offset
+    )
     self.offset = offset
-
-    // Compute expected file size including header offset.
-    let expectedFileSize = size.x * size.y * size.z
-    * bytesPerComponent * componentCount
-    + offset
+    self.checkedVoxelCount = layout.voxelCount
+    self.checkedVoxelByteSize = layout.voxelByteSize
+    self.checkedVolumeByteCount = layout.volumeByteCount
 
     self.memoryMappedFile = try MemoryMappedFile(filename: filename, readOnly: readOnly)
+    guard self.memoryMappedFile.fileSize >= Int64(layout.requiredFileSize) else {
+      throw Error.fileSizeMismatch
+    }
     self.mappedMemory = self.memoryMappedFile.mappedMemory.advanced(by: offset)
     super.init(size: size, bytesPerComponent: bytesPerComponent,
                componentCount: componentCount, voxelSpacing: voxelSpacing, readOnly: readOnly)
+  }
 
-    guard self.memoryMappedFile.fileSize >= expectedFileSize else {
-      throw Error.fileSizeMismatch
+  private static func checkedLayout(
+    size: Vec3<Int>,
+    bytesPerComponent: Int,
+    componentCount: Int,
+    offset: Int
+  ) throws -> (
+    voxelCount: Int,
+    voxelByteSize: Int,
+    volumeByteCount: Int,
+    requiredFileSize: Int
+  ) {
+    guard size.x > 0, size.y > 0, size.z > 0,
+          bytesPerComponent > 0, componentCount > 0, offset >= 0 else {
+      throw Error.invalidVolumeDescription
     }
+
+    let xy = size.x.multipliedReportingOverflow(by: size.y)
+    guard !xy.overflow else { throw Error.invalidVolumeDescription }
+    let voxelCount = xy.partialValue.multipliedReportingOverflow(by: size.z)
+    guard !voxelCount.overflow else { throw Error.invalidVolumeDescription }
+    let voxelByteSize = bytesPerComponent.multipliedReportingOverflow(by: componentCount)
+    guard !voxelByteSize.overflow else { throw Error.invalidVolumeDescription }
+    let volumeByteCount = voxelCount.partialValue.multipliedReportingOverflow(
+      by: voxelByteSize.partialValue
+    )
+    guard !volumeByteCount.overflow else { throw Error.invalidVolumeDescription }
+    let requiredFileSize = offset.addingReportingOverflow(volumeByteCount.partialValue)
+    guard !requiredFileSize.overflow else { throw Error.invalidVolumeDescription }
+
+    return (
+      voxelCount.partialValue,
+      voxelByteSize.partialValue,
+      volumeByteCount.partialValue,
+      requiredFileSize.partialValue
+    )
+  }
+
+  private func checkedByteRange(x: Int, y: Int, z: Int, count: Int) throws -> Range<Int> {
+    guard (0..<size.x).contains(x),
+          (0..<size.y).contains(y),
+          (0..<size.z).contains(z),
+          count >= 0 else {
+      throw Error.outOfBoundsAccess
+    }
+
+    let zy = z.multipliedReportingOverflow(by: size.y)
+    guard !zy.overflow else { throw Error.outOfBoundsAccess }
+    let row = zy.partialValue.addingReportingOverflow(y)
+    guard !row.overflow else { throw Error.outOfBoundsAccess }
+    let rowStart = row.partialValue.multipliedReportingOverflow(by: size.x)
+    guard !rowStart.overflow else { throw Error.outOfBoundsAccess }
+    let startVoxel = rowStart.partialValue.addingReportingOverflow(x)
+    guard !startVoxel.overflow else { throw Error.outOfBoundsAccess }
+    let endVoxel = startVoxel.partialValue.addingReportingOverflow(count)
+    guard !endVoxel.overflow, endVoxel.partialValue <= checkedVoxelCount else {
+      throw Error.outOfBoundsAccess
+    }
+
+    let startByte = startVoxel.partialValue.multipliedReportingOverflow(
+      by: checkedVoxelByteSize
+    )
+    let byteCount = count.multipliedReportingOverflow(by: checkedVoxelByteSize)
+    guard !startByte.overflow, !byteCount.overflow else { throw Error.outOfBoundsAccess }
+    let endByte = startByte.partialValue.addingReportingOverflow(byteCount.partialValue)
+    guard !endByte.overflow, endByte.partialValue <= checkedVolumeByteCount else {
+      throw Error.outOfBoundsAccess
+    }
+    return startByte.partialValue..<endByte.partialValue
   }
 
   // MARK: - Data Access
@@ -117,31 +204,28 @@ public class RawFileAccessor: VolumeDataAccessor {
   public override func getData<T: FixedWidthInteger>(
     x: Int, y: Int, z: Int, count: Int = 1
   ) throws -> [T] {
-    // Bounds check
-    guard (0..<size.x).contains(x),
-          (0..<size.y).contains(y),
-          (0..<size.z).contains(z) else {
-      throw Error.outOfBoundsAccess
-    }
-
-    // Compute linear byte index
-    let index = calculateIndex(x: x, y: y, z: z)
-
-    // Total bytes to read
-    let totalBytes = count * componentCount * bytesPerComponent
+    let byteRange = try checkedByteRange(x: x, y: y, z: z, count: count)
+    let totalBytes = byteRange.count
 
     // Ensure alignment with requested type
-    guard totalBytes % MemoryLayout<T>.size == 0 else {
+    guard totalBytes % MemoryLayout<T>.stride == 0 else {
       throw Error.incompatibleTypeSize
     }
 
-    // Create buffer pointer
-    let rawPointer = mappedMemory.advanced(by: index)
-    let buffer = UnsafeRawBufferPointer(start: rawPointer, count: totalBytes)
-
-    // Bind to type T and return array
-    let typedBuffer = buffer.bindMemory(to: T.self)
-    return Array(typedBuffer)
+    var result = [T](
+      repeating: 0,
+      count: totalBytes / MemoryLayout<T>.stride
+    )
+    if totalBytes > 0 {
+      _ = result.withUnsafeMutableBytes { destination in
+        memcpy(
+          destination.baseAddress!,
+          mappedMemory.advanced(by: byteRange.lowerBound),
+          totalBytes
+        )
+      }
+    }
+    return result
   }
 
   /**
@@ -161,33 +245,26 @@ public class RawFileAccessor: VolumeDataAccessor {
   public override func setData<T: FixedWidthInteger>(
     x: Int, y: Int, z: Int, data: [T], count: Int = 1
   ) throws {
-    // Bounds check
-    guard (0..<size.x).contains(x),
-          (0..<size.y).contains(y),
-          (0..<size.z).contains(z) else {
-      throw Error.outOfBoundsAccess
-    }
+    let byteRange = try checkedByteRange(x: x, y: y, z: z, count: count)
 
     // Prevent writes if read-only
     guard !readOnly else {
       throw Error.readOnlyAccessViolation
     }
 
-    // Compute byte index
-    let index = calculateIndex(x: x, y: y, z: z)
-
-    // Expected total bytes
-    let totalBytes = count * componentCount * bytesPerComponent
+    let totalBytes = byteRange.count
 
     // Verify provided data size
-    guard data.count * MemoryLayout<T>.size == totalBytes else {
+    let suppliedBytes = data.count.multipliedReportingOverflow(by: MemoryLayout<T>.stride)
+    guard !suppliedBytes.overflow, suppliedBytes.partialValue == totalBytes else {
       throw Error.incompatibleTypeSize
     }
 
     // Copy data into mapped memory
-    let destination = mappedMemory.advanced(by: index)
-    let _ = data.withUnsafeBytes { srcBuffer in
-      memcpy(destination, srcBuffer.baseAddress, srcBuffer.count)
+    guard totalBytes > 0 else { return }
+    let destination = mappedMemory.advanced(by: byteRange.lowerBound)
+    _ = data.withUnsafeBytes { srcBuffer in
+      memcpy(destination, srcBuffer.baseAddress!, totalBytes)
     }
   }
 
