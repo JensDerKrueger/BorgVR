@@ -27,12 +27,30 @@ total=0
 passed=0
 failed=0
 failed_tests=
+include_integration=false
 
-printf '%sBorgVR test suite%s\n\n' "$BOLD" "$RESET"
+case "${1:-}" in
+  "") ;;
+  --full) include_integration=true ;;
+  -h|--help)
+    printf 'Usage: %s [--full]\n' "$(basename "$0")"
+    printf '  --full  Also build all Apple application targets.\n'
+    exit 0
+    ;;
+  *)
+    printf 'Unknown option: %s\n' "$1" >&2
+    exit 2
+    ;;
+esac
 
-for test_script in "$SCRIPT_DIR"/test-*.sh; do
-  [ -f "$test_script" ] || continue
+if [ "$include_integration" = true ]; then
+  printf '%sBorgVR full test suite%s\n\n' "$BOLD" "$RESET"
+else
+  printf '%sBorgVR test suite%s\n\n' "$BOLD" "$RESET"
+fi
 
+run_test_script() {
+  test_script=$1
   total=$((total + 1))
   test_name=$(basename "$test_script" .sh)
   log_file="$LOG_DIR/$test_name.log"
@@ -54,7 +72,19 @@ for test_script in "$SCRIPT_DIR"/test-*.sh; do
     printf '%sFAIL%s (%ss, exit %s)\n' "$RED" "$RESET" "$elapsed" "$status"
     sed 's/^/      /' "$log_file"
   fi
+}
+
+for test_script in "$SCRIPT_DIR"/test-*.sh; do
+  [ -f "$test_script" ] || continue
+  run_test_script "$test_script"
 done
+
+if [ "$include_integration" = true ]; then
+  for test_script in "$SCRIPT_DIR"/integration-*.sh; do
+    [ -f "$test_script" ] || continue
+    run_test_script "$test_script"
+  done
+fi
 
 if [ "$total" -eq 0 ]; then
   printf '%sNo test scripts found.%s\n' "$RED" "$RESET"

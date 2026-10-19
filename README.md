@@ -183,6 +183,23 @@ Common schemes:
 For App Store or device builds, configure your Apple development team and signing settings in Xcode.
 The project uses the shared bundle identifier configured in the Xcode project.
 
+### Tests
+
+Run the fast unit, parser, conversion, protocol, and structure test suite with:
+
+```sh
+Scripts/run-test-suite.sh
+```
+
+Use the full mode to additionally compile all six Apple application targets:
+
+```sh
+Scripts/run-test-suite.sh --full
+```
+
+Set `VERBOSE=1` to include the successful test logs in the report. Failed test logs are always
+shown, and the suite exits with a nonzero status if any test or build fails.
+
 ### Command-Line Volume Generator
 
 The `TerminalConverterApp` scheme converts DICOM, QVIS, NRRD, and PVM input, exports any LoD of a
