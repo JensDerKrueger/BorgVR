@@ -346,7 +346,7 @@ struct VisionApp: App {
     ImmersiveSpace(id: runtimeAppModel.immersiveSpaceID) {
       CompositorLayer(configuration: ContentStageConfiguration(disableFoveation: storedAppModel.disableFoveation)) {
         @MainActor layerRenderer in
-        ImmersiveBootstrap.run(layerRenderer: layerRenderer,
+        VisionVolumeRendererBootstrap.run(layerRenderer: layerRenderer,
                                session: session)
       }
       .upperLimbVisibility(storedAppModel.showHandsAndAccessories ? .visible : .hidden)

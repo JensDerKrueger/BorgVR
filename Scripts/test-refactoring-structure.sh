@@ -42,6 +42,17 @@ require_pattern 'BorgVRRenderSnapshotStore' AppSupport/BorgVRSession.swift
 require_pattern 'BorgVRFrameSnapshot' VisionApp/VisionBorgVRSession.swift
 require_pattern 'revision: evaluationState\.revision &\+ 1' BORGVR-Render/VolumeAtlas/AsyncEmptinessUpdater.swift
 
+# The visionOS renderer follows the same one-file naming convention as the screen renderers.
+require_file VisionApp/Rendering/VisionVolumeRenderer.swift
+require_file VisionApp/VisionVolumeRendererBootstrap.swift
+forbid_path VisionApp/Rendering/RendererVariables.swift
+forbid_path VisionApp/Rendering/RendererResourceInit.swift
+forbid_path VisionApp/Rendering/RendererLoop.swift
+forbid_path VisionApp/Rendering/RendererSetup.swift
+forbid_path VisionApp/ImmersiveRendererBootstrap.swift
+require_pattern 'final actor VisionVolumeRenderer' VisionApp/Rendering/VisionVolumeRenderer.swift
+require_pattern 'VisionVolumeRenderer\.startRenderLoop' VisionApp/VisionVolumeRendererBootstrap.swift
+
 # Shared converter UI and conversion implementation.
 require_file AppSupport/ConverterView.swift
 require_file AppSupport/DicomSlicePreview.swift

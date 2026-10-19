@@ -29,7 +29,7 @@ private enum SpatialControllerEventRouting {
   }
 }
 
-enum ImmersiveBootstrap {
+enum VisionVolumeRendererBootstrap {
   @MainActor
   static func run(layerRenderer: LayerRenderer,
                   session: VisionBorgVRSession) {
@@ -187,7 +187,7 @@ enum ImmersiveBootstrap {
     )
 
     // Start renderer
-    Renderer.startRenderLoop(
+    VisionVolumeRenderer.startRenderLoop(
       layerRenderer,
       session: session,
       timer: timer,

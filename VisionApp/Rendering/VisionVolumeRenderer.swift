@@ -2,12 +2,937 @@ import CompositorServices
 import Foundation
 import Metal
 import MetalKit
-import simd
-import Spatial
 import Observation
 import RealityKit
+import simd
+import Spatial
 
-extension Renderer {
+// MARK: Custom Error
+
+/**
+ An error type representing failures in the renderer.
+ */
+enum VisionVolumeRendererError: Error {
+  /// Indicates that the provided vertex descriptor is invalid.
+  case badVertexDescriptor
+
+  /// A localized description of the error.
+  var errorDescription: String? {
+    switch self {
+      case .badVertexDescriptor:
+        return "Vertex Descriptor is invalid"
+    }
+  }
+}
+
+
+/**
+ An actor responsible for rendering volume data with Metal.
+
+ The VisionVolumeRenderer actor creates and manages Metal objects such as buffers,
+ pipeline states, and command queues. It also manages volume data and
+ transfers data between CPU and GPU for rendering. The renderer uses an
+ ARKit session for spatial tracking and integrates with a volume atlas.
+ */
+final actor VisionVolumeRenderer {
+
+  // MARK: Variables
+
+  /// The Metal device used for rendering.
+  let device: MTLDevice
+  /// The command queue for issuing rendering commands.
+  let commandQueue: MTLCommandQueue
+  /// A dynamic buffer for vertex uniforms.
+  var uniformBufferVertex: AlignedBuffer<VertexUniformsArray>
+  /// A dynamic buffer for fragment uniforms.
+  var uniformBufferFragment: AlignedBuffer<FragmentUniformsArray>
+  /// Render pipeline state for transfer function rendering.
+  var pipelineStateTF: MTLRenderPipelineState
+  /// Render pipeline state for transfer function rendering with lighting.
+  var pipelineStateTFL: MTLRenderPipelineState
+  /// Render pipeline state for isosurface rendering.
+  var pipelineStateIso: MTLRenderPipelineState
+  /// Render pipeline state for visualizing bricks.
+  var pipelineStateBrickVis: MTLRenderPipelineState
+  /// Render pipeline state for opaque volume markers.
+  var pipelineStateVolumeMarker: MTLRenderPipelineState
+  /// Render pipeline state for opaque scene meshes.
+  var pipelineStateSceneMesh: MTLRenderPipelineState
+  /// Render pipeline state for lightweight screen-space measurement lines.
+  var pipelineStateMeasurementLine: MTLRenderPipelineState
+  /// Render pipeline state for compact screen-space measurement control points.
+  var pipelineStateMeasurementPoint: MTLRenderPipelineState
+  /// Render pipeline state for screen-view participant labels.
+  var pipelineStateScreenViewLabel: MTLRenderPipelineState
+  /// Screen-view and measurement labels drawn after the volume pass.
+  var pipelineStateScreenViewOverlayLabel: MTLRenderPipelineState
+  /// Render pipeline state for compositing marker color under the volume.
+  var pipelineStateMarkerComposite: MTLRenderPipelineState
+  /// Depth stencil state for rendering.
+  var depthState: MTLDepthStencilState
+  /// Depth stencil state for marker geometry.
+  var depthStateMarker: MTLDepthStencilState
+  /// Marker depth test without writes, used for back-to-front transparent geometry.
+  var depthStateMarkerReadOnly: MTLDepthStencilState
+  /// Depth stencil state for marker compositing.
+  var depthStateMarkerComposite: MTLDepthStencilState
+
+  /// Render pipeline state for the transfer function HUD overlay.
+  var pipelineStateTFHUD: MTLRenderPipelineState
+  /// Render pipeline state for transfer function HUD channel controls.
+  var pipelineStateTFHUDControls: MTLRenderPipelineState
+  /// Depth stencil state for the HUD overlay (no depth writes, always passes).
+  var depthStateHUD: MTLDepthStencilState
+  // TF panel (3D HUD) configuration
+  var tfPanelSizeMeters = SIMD2<Float>(0.55, 0.20)   // width, height in meters
+  var tfPanelDistance: Float = 0.80                  // meters in front of head
+  var tfPanelYOffset: Float = -0.18                  // meters down
+  var tfPanelXOffset: Float = 0.0
+
+  // Updated each frame in updateRenderState
+  var lastOriginFromDevice: simd_float4x4 = matrix_identity_float4x4
+  var tfPanelWorldMatrix: simd_float4x4 = matrix_identity_float4x4
+  var lastModelMatrix: simd_float4x4 = matrix_identity_float4x4
+  var lastUnscaledModelMatrix: simd_float4x4 = matrix_identity_float4x4
+  var lastClipMatrix: simd_float4x4 = matrix_identity_float4x4
+  var lastHeadPosition: SIMD3<Float> = .zero
+  var lastSpatialAnchorID: UUID?
+
+  /// The BorgVR dataset.
+  var borgData: BORGVRDatasetProtocol
+  /// The volume atlas used for managing brick data.
+  var volumeAtlas: VolumeAtlas
+  /// A matrix representing the scale applied to the volume.
+  var volumeScale: float4x4
+  /// A GPU hashtable for indexing volume bricks.
+  var hashTable: GPUHashtable
+  /// The number of samples per pixel used during rasterization.
+  let rasterSampleCount: Int
+  /// Current index into the memoryless target textures.
+  var currentRenderTargetIndex: Int = 0
+  /// Current index into the CPU-readable interaction-depth textures.
+  var currentInteractionDepthIndex: Int = 0
+  /// An array of memoryless target textures for multisampled rendering.
+  var memorylessTargets: [(color: MTLTexture, depth: MTLTexture, interactionDepth: MTLTexture)?]
+  /// Resolved interaction depth from recent frames.
+  var interactionDepthTextures: [MTLTexture?]
+  /// Matrices matching the interaction texture currently being rendered.
+  var currentTextureToClipMatrices: [simd_float4x4] = []
+  var currentWorldToClipMatrices: [simd_float4x4] = []
+
+  /// An ARKit session for augmented reality tracking.
+  let borgARProvider : BorgARProvider
+
+  /// Current rotation value for the scene.
+  var rotation: Float = 0
+
+  /// A buffer containing vertex data for a cube.
+  let cubeBuffer: MTLBuffer
+  /// A buffer containing marker sphere vertex positions.
+  let markerSphereBuffer: MTLBuffer
+  /// A buffer containing marker sphere normals.
+  let markerSphereNormalBuffer: MTLBuffer
+  /// The number of vertices in the marker sphere buffer.
+  let markerSphereVertexCount: Int
+  /// A tapered pointer rendered at each tracked spatial controller's aim pose.
+  let spatialControllerPointerBuffer: MTLBuffer
+  let spatialControllerPointerNormalBuffer: MTLBuffer
+  let spatialControllerPointerVertexCount: Int
+  /// Cached tube meshes for stroke markers.
+  let markerTubeMeshCache: VolumeMarkerTubeMeshCache
+  /// Cached GPU resources for imported scene meshes.
+  let sceneMeshGPUCache: SceneMeshGPUCache
+  /// White fallback used when a scene mesh has no embedded texture.
+  let sceneMeshWhiteTexture: MTLTexture
+  /// Cached triangle meshes for area and volume measurements.
+  let measurementSurfaceMeshCache: MeasurementSurfaceMeshCache
+  /// Reusable instance buffer for lightweight measurement lines.
+  var measurementLineBuffer: MTLBuffer?
+  var measurementLineBufferCapacity = 0
+  /// Reusable instance buffer for compact measurement-point rings.
+  var measurementPointBuffer: MTLBuffer?
+  var measurementPointBufferCapacity = 0
+  /// Cached label textures for shared and detached screen views.
+  let screenViewLabelTextureCache: ScreenViewLabelTextureCache
+  /// Color texture produced by the marker prepass.
+  var markerColorTexture: MTLTexture?
+  /// Depth texture produced by the marker prepass.
+  var markerDepthTexture: MTLTexture?
+  /// Parameter data copied from the drawable rasterization-rate map for shader-side foveation decisions.
+  var rasterizationRateMapBuffer: MTLBuffer?
+  /// The number of vertices in the cube buffer.
+  let vertexCount: Int
+  /// Stroke currently created by a connected spatial stylus.
+  var activeSpatialStylusStrokeID: UUID?
+  /// Smoothed surface-writing input from the pressure-sensitive stylus tip.
+  var spatialStylusTipFilterState: (
+    position: SIMD3<Float>,
+    pressure: Float
+  )?
+  /// Local-only preview sphere shown at the tracked stylus tip.
+  var spatialStylusPreviewPoint: VolumeMarkerPoint?
+  /// Local-only tool glyph shown at the stylus tip while measuring.
+  var spatialStylusMeasurementPreviewMarkers: [VolumeMarker] = []
+  /// Controller poses sampled for the current frame and rendered as local-only pointers.
+  var spatialControllerSamples: [BorgSpatialInputSample] = []
+  /// Local-only spheres at the tracked controller tips.
+  var spatialControllerPreviewPoints: [VolumeMarkerPoint] = []
+  /// Local-only previews of the selected imported object at controller or stylus tips.
+  var spatialSceneObjectPreviewInstances: [SceneMeshInstance] = []
+  /// Local-only glyphs that show each controller's independently selected tool.
+  var spatialControllerModePreviewMarkers: [VolumeMarker] = []
+  /// Timestamp and activity state for the most recent SharePlay tool-tip update.
+  var lastSpatialToolPreviewShareTime: TimeInterval
+  var spatialToolPreviewsWereShared: Bool
+  /// Initial state while the primary stylus button adjusts stroke radius.
+  var spatialStylusRadiusAdjustmentStart: (
+    position: SIMD3<Float>,
+    radius: Float,
+    hue: Float
+  )?
+
+  /// The layer renderer used for rendering.
+  let layerRenderer: LayerRenderer
+  /// The application model containing global settings.
+  let session: VisionBorgVRSession
+  /// Immutable state used by every rendering decision in the current frame.
+  var frameSnapshot: BorgVRFrameSnapshot
+  var frameState: BorgVRVisualizationSnapshot
+  /// VisionVolumeRenderer-owned TF objects; synchronized only when a snapshot revision changes.
+  let renderTransferFunctions: RenderTransferFunctionSet
+  var atlasPurgeHandled = false
+  /// Temporary runtime state for the active app process.
+  let runtimeAppModel: RuntimeAppModel
+  /// Application settings.
+  let storedAppModel: StoredAppModel
+  /// Rendering parameters such as transfer functions and isosurface values.
+  let sharedAppModel: SharedAppModel
+  /// Shared picking state for the transfer function HUD/object panel.
+  let transferFunctionPanelInteractionState: TransferFunctionPanelInteractionState
+  /// Shared semantic interaction layer for hands, styli, and spatial controllers.
+  let immersiveInteraction: ImmersiveInteraction
+  /// Thread-safe snapshot of UI-owned interaction state.
+  let spatialInputContext: SpatialInputRuntimeContext
+  /// A CPU frame timer.
+  let timer: CPUFrameTimer
+  /// The initial oversampling factor.
+  let initialOversampling: Float
+  /// The drop FPS threshold.
+  let dropFPS: Int
+  /// The recovery FPS threshold.
+  let recoveryFPS: Int
+  /// A flag indicating whether dynamic oversampling is enabled.
+  let dynamicOverSampling: Bool
+  /// An optional logger for debug and error messages.
+  let logger: LoggerBase?
+
+  nonisolated(unsafe) var autoRotationAngle : Float
+
+  var autoRotationStartTime : CFTimeInterval
+
+  /// The current active oversampling factor (nonisolated).
+  nonisolated(unsafe) var activeOversampling: Float
+
+  // MARK: Init
+
+  /**
+   Initializes a new VisionVolumeRenderer with the given parameters.
+
+   This initializer creates all necessary Metal objects, pages in initial volume bricks,
+   configures uniform buffers, builds render pipelines, and sets up AR and spatial
+   tracking using ARKit.
+
+   - Parameters:
+   - layerRenderer: The layer renderer to be used.
+   - runtimeAppModel: The global application model.
+   - storedAppModel: Application settings.
+   - sharedAppModel: Rendering parameters including transfer function and
+   isosurface value.
+   - timer: A CPU frame timer.
+   - dataset: The BorgVR dataset.
+   - logger: An optional logger.
+   */
+  init(_ layerRenderer: LayerRenderer,
+       session: VisionBorgVRSession,
+       timer: CPUFrameTimer,
+       dataset: BORGVRDatasetProtocol,
+       transferFunctionPanelInteractionState: TransferFunctionPanelInteractionState,
+       immersiveInteraction: ImmersiveInteraction,
+       logger: LoggerBase? = nil) throws {
+
+    let runtimeAppModel = session.runtimeState
+    let storedAppModel = session.settingsState
+    let sharedAppModel = session.visualizationState
+
+    logger?.info("Loading dataset \(dataset.getMetadata().datasetDescription)")
+    logger?
+      .info(
+        "  dimensions: \(dataset.getMetadata().width) x \(dataset.getMetadata().height) x \(dataset.getMetadata().depth)"
+      )
+    logger?.info("  voxel spacing: \(dataset.getMetadata().voxelSpacingX) x \(dataset.getMetadata().voxelSpacingY) x \(dataset.getMetadata().voxelSpacingZ)")
+    logger?.info("  brickSize: \(dataset.getMetadata().brickSize)")
+
+
+    self.timer = timer
+    self.initialOversampling = Float(storedAppModel.oversampling)
+    self.activeOversampling = self.initialOversampling
+    self.dropFPS = storedAppModel.dropFPS
+    self.recoveryFPS = storedAppModel.recoveryFPS
+    self.dynamicOverSampling = storedAppModel.oversamplingMode ==
+    OversamplingMode.dynamicMode.rawValue
+    self.logger = logger
+
+    let initialFrameSnapshot = session.frameSnapshot()
+    let renderTransferFunctions = RenderTransferFunctionSet(device: layerRenderer.device)
+    let metadata = dataset.getMetadata()
+    try renderTransferFunctions.synchronize(
+      with: initialFrameSnapshot.transferFunctions,
+      minValue: metadata.minValue,
+      maxValue: metadata.maxValue,
+      rangeMax: metadata.rangeMax
+    )
+
+    self.layerRenderer = layerRenderer
+    self.session = session
+    self.frameSnapshot = initialFrameSnapshot
+    self.frameState = initialFrameSnapshot.visualization
+    self.renderTransferFunctions = renderTransferFunctions
+    self.device = layerRenderer.device
+    self.commandQueue = self.device.makeCommandQueue()!
+    self.runtimeAppModel = runtimeAppModel
+    self.sharedAppModel = sharedAppModel
+    self.transferFunctionPanelInteractionState = transferFunctionPanelInteractionState
+    self.immersiveInteraction = immersiveInteraction
+    self.spatialInputContext = runtimeAppModel.spatialInputContext
+
+    self.autoRotationAngle = 0
+    self.autoRotationStartTime = 0
+    self.activeSpatialStylusStrokeID = nil
+    self.spatialStylusTipFilterState = nil
+    self.spatialStylusPreviewPoint = nil
+    self.spatialStylusMeasurementPreviewMarkers = []
+    self.spatialSceneObjectPreviewInstances = []
+    self.spatialControllerModePreviewMarkers = []
+    self.lastSpatialToolPreviewShareTime = 0
+    self.spatialToolPreviewsWereShared = false
+    self.spatialStylusRadiusAdjustmentStart = nil
+    self.markerTubeMeshCache = VolumeMarkerTubeMeshCache()
+    self.sceneMeshGPUCache = SceneMeshGPUCache()
+    self.measurementSurfaceMeshCache = MeasurementSurfaceMeshCache()
+    self.measurementLineBuffer = nil
+    self.measurementPointBuffer = nil
+    self.screenViewLabelTextureCache = ScreenViewLabelTextureCache()
+    self.sharedAppModel.defaultVolumeStrokeColor = SharedAppModel.saturatedStrokeColor(
+      preservingHueOf: storedAppModel.markerDefaultColorSIMD
+    )
+
+    self.borgData = dataset
+
+    let atlasSizeMB = StoredAppModel.int("atlasSizeMB")
+
+    do {
+      volumeAtlas = try VolumeAtlas(
+        device: device,
+        maxMemory: atlasSizeMB * 1024 * 1024,
+        borgData: borgData,
+        transferFunctions: renderTransferFunctions.activeTransferFunctions,
+        isoValue: initialFrameSnapshot.visualization.isoValue,
+        logger: logger
+      )
+      logger?.dev("VolumeAtlas created successfully.")
+    } catch {
+      logger?.error("Failed to create volume atlas: \(error)")
+      throw error
+    }
+
+    let maxInitialBricks = StoredAppModel.int("initialBricks")
+    do {
+      try VolumeRenderResources.pageInInitialBricks(
+        atlas: volumeAtlas,
+        dataset: borgData,
+        maximumCount: maxInitialBricks
+      )
+      logger?.dev("Initial bricks paged in successfully.")
+    } catch {
+      logger?.warning("Failed to page in all of the initial bricks: \(error)")
+    }
+
+    let minHashTableSize = StoredAppModel.int("minHashTableSize")
+    let minTableElementCount = VolumeRenderResources.minimumHashTableElementCount(
+      metadata: metadata,
+      representedMemoryMB: minHashTableSize
+    )
+
+    logger?.dev("Size of Bricks represented by the Hash Table is \(minHashTableSize) MB. That means a minimum of \(minTableElementCount) table elements.")
+
+    self.hashTable = GPUHashtable(minTableElementCount: minTableElementCount, device: device, logger: logger)
+
+    self.volumeScale = VolumeRenderResources.volumeScale(for: metadata)
+
+
+    let device = self.device
+    if runtimeAppModel.useMultisamplingIfAvailable && device.supports32BitMSAA &&
+        device.supportsTextureSampleCount(4) {
+      self.rasterSampleCount = 4
+    } else {
+      self.rasterSampleCount = 1
+    }
+
+    self.memorylessTargets = .init(repeating: nil, count: runtimeAppModel.maxBuffersInFlight)
+    self.interactionDepthTextures = .init(
+      repeating: nil,
+      count: runtimeAppModel.maxBuffersInFlight
+    )
+
+    self.uniformBufferVertex = try AlignedBuffer<VertexUniformsArray>(
+      device: device,
+      capacity: runtimeAppModel.maxBuffersInFlight
+    )
+
+    self.uniformBufferFragment = try AlignedBuffer<FragmentUniformsArray>(
+      device: device,
+      capacity: runtimeAppModel.maxBuffersInFlight
+    )
+
+    do {
+      (pipelineStateTF,
+       pipelineStateTFL,
+       pipelineStateIso,
+       pipelineStateBrickVis,
+       pipelineStateVolumeMarker,
+       pipelineStateSceneMesh,
+       pipelineStateMeasurementLine,
+       pipelineStateMeasurementPoint,
+       pipelineStateScreenViewLabel,
+       pipelineStateScreenViewOverlayLabel,
+       pipelineStateMarkerComposite,
+       pipelineStateTFHUD,
+       pipelineStateTFHUDControls) =
+      try VisionVolumeRenderer.buildRenderPipelinesWithDevice(
+        device: device,
+        layerRenderer: layerRenderer,
+        rasterSampleCount: rasterSampleCount,
+        borgVRMetaData: borgData.getMetadata(),
+        hasTable: hashTable
+      )
+    } catch {
+      fatalError("Unable to compile render pipeline state. Error info: \(error)")
+    }
+
+    let whiteTextureDescriptor = MTLTextureDescriptor.texture2DDescriptor(
+      pixelFormat: .rgba8Unorm_srgb,
+      width: 1,
+      height: 1,
+      mipmapped: false
+    )
+    whiteTextureDescriptor.usage = .shaderRead
+    guard let sceneMeshWhiteTexture = device.makeTexture(descriptor: whiteTextureDescriptor) else {
+      fatalError("Unable to allocate the scene mesh fallback texture.")
+    }
+    var opaqueWhite: UInt32 = 0xFFFF_FFFF
+    sceneMeshWhiteTexture.replace(
+      region: MTLRegionMake2D(0, 0, 1, 1),
+      mipmapLevel: 0,
+      withBytes: &opaqueWhite,
+      bytesPerRow: MemoryLayout<UInt32>.size
+    )
+    self.sceneMeshWhiteTexture = sceneMeshWhiteTexture
+
+    let depthStateDescriptor = MTLDepthStencilDescriptor()
+    depthStateDescriptor.depthCompareFunction = .greater
+    depthStateDescriptor.isDepthWriteEnabled = true
+    self.depthState = device.makeDepthStencilState(descriptor: depthStateDescriptor)!
+
+    let markerDepthStateDescriptor = MTLDepthStencilDescriptor()
+    markerDepthStateDescriptor.depthCompareFunction = .greater
+    markerDepthStateDescriptor.isDepthWriteEnabled = true
+    self.depthStateMarker = device.makeDepthStencilState(descriptor: markerDepthStateDescriptor)!
+
+    let markerReadOnlyDepthStateDescriptor = MTLDepthStencilDescriptor()
+    markerReadOnlyDepthStateDescriptor.depthCompareFunction = .greater
+    markerReadOnlyDepthStateDescriptor.isDepthWriteEnabled = false
+    self.depthStateMarkerReadOnly = device.makeDepthStencilState(
+      descriptor: markerReadOnlyDepthStateDescriptor
+    )!
+
+    let markerCompositeDepthStateDescriptor = MTLDepthStencilDescriptor()
+    markerCompositeDepthStateDescriptor.depthCompareFunction = .always
+    markerCompositeDepthStateDescriptor.isDepthWriteEnabled = true
+    self.depthStateMarkerComposite = device.makeDepthStencilState(descriptor: markerCompositeDepthStateDescriptor)!
+
+    let hudDepthStateDescriptor = MTLDepthStencilDescriptor()
+    hudDepthStateDescriptor.depthCompareFunction = .always
+    hudDepthStateDescriptor.isDepthWriteEnabled = true
+    self.depthStateHUD = device.makeDepthStencilState(descriptor: hudDepthStateDescriptor)!
+
+    let cube = Tesselation.genBrick(
+      center: SIMD3<Float>(x: 0, y: 0, z: 0),
+      size: SIMD3<Float>(x: 1, y: 1, z: 1),
+      texScale: SIMD3<Float>(x: 1, y: 1, z: 1)
+    ).unpack()
+
+    let alignedVertexDataCount = (cube.vertices.count + 15) & -16
+    let vertexDataSize = MemoryLayout<SIMD3<Float>>.stride *
+    alignedVertexDataCount
+
+    var alignedVertices = cube.vertices
+    let paddingCount = alignedVertexDataCount - cube.vertices.count
+    let paddingElement = SIMD3<Float>(0, 0, 0)
+    alignedVertices.append(contentsOf: Array(
+      repeating: paddingElement, count: paddingCount))
+    cubeBuffer = self.device.makeBuffer(
+      length: vertexDataSize,
+      options: [MTLResourceOptions.storageModeShared]
+    )!
+    cubeBuffer.contents().copyMemory(from: alignedVertices, byteCount: vertexDataSize)
+
+    vertexCount = cube.vertices.count
+
+    let sphere = Tesselation.genSphere(
+      center: SIMD3<Float>(repeating: 0),
+      radius: 1,
+      sectorCount: 32,
+      stackCount: 16
+    ).unpack()
+    let alignedSphereVertexDataCount = (sphere.vertices.count + 15) & -16
+    let sphereVertexDataSize = MemoryLayout<SIMD3<Float>>.stride *
+    alignedSphereVertexDataCount
+    var alignedSphereVertices = sphere.vertices
+    let spherePaddingCount = alignedSphereVertexDataCount - sphere.vertices.count
+    alignedSphereVertices.append(contentsOf: Array(
+      repeating: paddingElement, count: spherePaddingCount))
+    markerSphereBuffer = self.device.makeBuffer(
+      length: sphereVertexDataSize,
+      options: [MTLResourceOptions.storageModeShared]
+    )!
+    markerSphereBuffer.contents().copyMemory(
+      from: alignedSphereVertices,
+      byteCount: sphereVertexDataSize
+    )
+    var alignedSphereNormals = sphere.normals
+    alignedSphereNormals.append(contentsOf: Array(
+      repeating: SIMD3<Float>(0, 1, 0), count: spherePaddingCount))
+    markerSphereNormalBuffer = self.device.makeBuffer(
+      length: sphereVertexDataSize,
+      options: [MTLResourceOptions.storageModeShared]
+    )!
+    markerSphereNormalBuffer.contents().copyMemory(
+      from: alignedSphereNormals,
+      byteCount: sphereVertexDataSize
+    )
+    markerSphereVertexCount = sphere.vertices.count
+
+    let controllerPointer = Tesselation.genPointerCone(
+      radius: 0.012,
+      height: 0.055,
+      sectorCount: 24
+    ).unpack()
+    let alignedPointerVertexCount = (controllerPointer.vertices.count + 15) & -16
+    let pointerBufferSize = MemoryLayout<SIMD3<Float>>.stride * alignedPointerVertexCount
+    let pointerPaddingCount = alignedPointerVertexCount - controllerPointer.vertices.count
+    var alignedPointerVertices = controllerPointer.vertices
+    alignedPointerVertices.append(contentsOf: Array(
+      repeating: paddingElement,
+      count: pointerPaddingCount
+    ))
+    spatialControllerPointerBuffer = self.device.makeBuffer(
+      length: pointerBufferSize,
+      options: [MTLResourceOptions.storageModeShared]
+    )!
+    spatialControllerPointerBuffer.contents().copyMemory(
+      from: alignedPointerVertices,
+      byteCount: pointerBufferSize
+    )
+    var alignedPointerNormals = controllerPointer.normals
+    alignedPointerNormals.append(contentsOf: Array(
+      repeating: SIMD3<Float>(0, 0, -1),
+      count: pointerPaddingCount
+    ))
+    spatialControllerPointerNormalBuffer = self.device.makeBuffer(
+      length: pointerBufferSize,
+      options: [MTLResourceOptions.storageModeShared]
+    )!
+    spatialControllerPointerNormalBuffer.contents().copyMemory(
+      from: alignedPointerNormals,
+      byteCount: pointerBufferSize
+    )
+    spatialControllerPointerVertexCount = controllerPointer.vertices.count
+
+    self.borgARProvider = BorgARProvider(
+      logger: logger,
+      spatialAnchorSessionState: runtimeAppModel.spatialAnchorSessionState
+    )
+    self.storedAppModel = storedAppModel
+
+    sharedAppModel.initTransferFunctionMetal(device: device)
+
+    logger?.dev("VisionVolumeRenderer initialized")
+  }
+
+  deinit {
+    logger?.dev("VisionVolumeRenderer deinitialized")
+    borgARProvider.stopARSession()
+    let model = runtimeAppModel
+    Task { @MainActor in
+      // The system can destroy the renderer directly when the user presses Home.
+      // Route that through the dataset state machine so SharePlay participants are
+      // notified before the dataset selection is shown.
+      model.immersiveSpaceWasClosedBySystem()
+    }
+  }
+
+}
+
+
+
+// MARK: - Resource setup
+
+extension VisionVolumeRenderer {
+
+  // MARK: Pipeline Setup
+
+  /**
+   Builds and returns three render pipeline states used for rendering volume data.
+
+   This function compiles shader code from the "Shaders.metal" file with custom preprocessor
+   macros calculated from the BorgVR metadata and application settings. It returns render
+   pipeline states for the transfer function, isosurface, and brick visualization passes.
+
+   - Parameters:
+   - device: The Metal device used for creating the pipeline states.
+   - layerRenderer: The layer renderer providing configuration information.
+   - rasterSampleCount: The raster sample count to be used.
+   - borgVRMetaData: The metadata of the BorgVR dataset.
+   - hasTable: A GPU hashtable used for indexing volume data.
+   - Returns: A tuple containing three render pipeline states:
+   - The pipeline state for transfer function (TF) rendering.
+   - The pipeline state for isosurface (Iso) rendering.
+   - The pipeline state for brick visualization.
+   - Throws: An error if the render pipeline state creation fails.
+   */
+  static func buildRenderPipelinesWithDevice(device: MTLDevice,
+                                             layerRenderer: LayerRenderer,
+                                             rasterSampleCount: Int,
+                                             borgVRMetaData: BORGVRMetaData,
+                                             hasTable: GPUHashtable) throws ->
+  (MTLRenderPipelineState, MTLRenderPipelineState, MTLRenderPipelineState,
+   MTLRenderPipelineState, MTLRenderPipelineState, MTLRenderPipelineState,
+   MTLRenderPipelineState, MTLRenderPipelineState, MTLRenderPipelineState,
+   MTLRenderPipelineState, MTLRenderPipelineState, MTLRenderPipelineState,
+   MTLRenderPipelineState) {
+    // Build a render state pipeline object.
+    let shaderSource = try RuntimeMetalShaderLoader.loadSource(named: "Shaders")
+
+    let compileOptions = VolumeShaderCompiler.compileOptions(
+      metadata: borgVRMetaData,
+      hashTableSize: hasTable.size,
+      configuration: VolumeShaderConfiguration(
+        screenSpaceError: StoredAppModel.float("screenSpaceError"),
+        atlasSizeMB: StoredAppModel.int("atlasSizeMB"),
+        maximumProbingAttempts: StoredAppModel.int("maxProbingAttempts"),
+        requestsLowResolutionLOD: StoredAppModel.bool("requestLowResLOD"),
+        stopsOnMissingBrick: StoredAppModel.bool("stopOnMiss"),
+        fieldOfViewRadians: 1.663,
+        drawableWidth: 1888
+      )
+    )
+    var preprocessorMacros = compileOptions.preprocessorMacros ?? [:]
+    preprocessorMacros["VOLUME_SHADER_USES_RATE_MAP"] = NSNumber(
+      value: layerRenderer.configuration.isFoveationEnabled ? 1 : 0
+    )
+    compileOptions.preprocessorMacros = preprocessorMacros
+
+    let library = try device.makeLibrary(source: shaderSource, options: compileOptions)
+    let vertexFunction = library.makeFunction(name: "vertexShader")
+
+    let pipelineDescriptorTF = MTLRenderPipelineDescriptor()
+    pipelineDescriptorTF.label = "Render Pipeline for 1D TF"
+    pipelineDescriptorTF.vertexFunction = vertexFunction
+    pipelineDescriptorTF.fragmentFunction = library.makeFunction(name: "fragmentShaderTF")
+    pipelineDescriptorTF.rasterSampleCount = rasterSampleCount
+    pipelineDescriptorTF.colorAttachments[0].pixelFormat = layerRenderer.configuration.colorFormat
+    pipelineDescriptorTF.colorAttachments[1].pixelFormat = .r32Float
+    pipelineDescriptorTF.depthAttachmentPixelFormat = layerRenderer.configuration.depthFormat
+    pipelineDescriptorTF.maxVertexAmplificationCount = layerRenderer.properties.viewCount
+
+    let pipelineDescriptorTFL = MTLRenderPipelineDescriptor()
+    pipelineDescriptorTFL.label = "Render Pipeline for 1D TF with Lighting"
+    pipelineDescriptorTFL.vertexFunction = vertexFunction
+    pipelineDescriptorTFL.fragmentFunction = library.makeFunction(name: "fragmentShaderTFLighting")
+    pipelineDescriptorTFL.rasterSampleCount = rasterSampleCount
+    pipelineDescriptorTFL.colorAttachments[0].pixelFormat = layerRenderer.configuration.colorFormat
+    pipelineDescriptorTFL.colorAttachments[1].pixelFormat = .r32Float
+    pipelineDescriptorTFL.depthAttachmentPixelFormat = layerRenderer.configuration.depthFormat
+    pipelineDescriptorTFL.maxVertexAmplificationCount = layerRenderer.properties.viewCount
+
+    let pipelineDescriptorIso = MTLRenderPipelineDescriptor()
+    pipelineDescriptorIso.label = "Render Pipeline for Lit Isosurfaces"
+    pipelineDescriptorIso.vertexFunction = vertexFunction
+    pipelineDescriptorIso.fragmentFunction = library.makeFunction(name: "fragmentShaderIso")
+    pipelineDescriptorIso.rasterSampleCount = rasterSampleCount
+    pipelineDescriptorIso.colorAttachments[0].pixelFormat = layerRenderer.configuration.colorFormat
+    pipelineDescriptorIso.colorAttachments[1].pixelFormat = .r32Float
+    pipelineDescriptorIso.depthAttachmentPixelFormat = layerRenderer.configuration.depthFormat
+    pipelineDescriptorIso.maxVertexAmplificationCount = layerRenderer.properties.viewCount
+
+    let pipelineDescriptorBrickVis = MTLRenderPipelineDescriptor()
+    pipelineDescriptorBrickVis.label = "Render Pipeline visualizing the brick structure"
+    pipelineDescriptorBrickVis.vertexFunction = vertexFunction
+    pipelineDescriptorBrickVis.fragmentFunction = library.makeFunction(name: "fragmentShaderBrickVis")
+    pipelineDescriptorBrickVis.rasterSampleCount = rasterSampleCount
+    pipelineDescriptorBrickVis.colorAttachments[0].pixelFormat = layerRenderer.configuration.colorFormat
+    pipelineDescriptorBrickVis.colorAttachments[1].pixelFormat = .r32Float
+    pipelineDescriptorBrickVis.depthAttachmentPixelFormat = layerRenderer.configuration.depthFormat
+    pipelineDescriptorBrickVis.maxVertexAmplificationCount = layerRenderer.properties.viewCount
+
+    // TF HUD overlay pipeline (2D screen-space panel)
+    let hudVertexFunction = library.makeFunction(name: "vertexShaderTFPanel")
+    let hudFragmentFunction = library.makeFunction(name: "fragmentShaderTFHUD")
+    let hudControlsVertexFunction = library.makeFunction(name: "vertexShaderTFChannelControls")
+    let hudControlsFragmentFunction = library.makeFunction(name: "fragmentShaderTFChannelControls")
+    let markerVertexFunction = library.makeFunction(name: "vertexShaderVolumeMarker")
+    let markerFragmentFunction = library.makeFunction(name: "fragmentShaderVolumeMarker")
+    let sceneMeshVertexFunction = library.makeFunction(name: "vertexShaderSceneMesh")
+    let sceneMeshFragmentFunction = library.makeFunction(name: "fragmentShaderSceneMesh")
+    let measurementLineVertexFunction = library.makeFunction(name: "vertexShaderMeasurementLine")
+    let measurementLineFragmentFunction = library.makeFunction(name: "fragmentShaderMeasurementLine")
+    let measurementPointVertexFunction = library.makeFunction(name: "vertexShaderMeasurementPoint")
+    let measurementPointFragmentFunction = library.makeFunction(name: "fragmentShaderMeasurementPoint")
+    let screenViewLabelVertexFunction = library.makeFunction(name: "vertexShaderScreenViewLabel")
+    let screenViewLabelFragmentFunction = library.makeFunction(name: "fragmentShaderScreenViewLabel")
+    let markerCompositeVertexFunction = library.makeFunction(name: "vertexShaderMarkerComposite")
+    let markerCompositeFragmentFunction = library.makeFunction(name: "fragmentShaderMarkerComposite")
+
+    let pipelineDescriptorVolumeMarker = MTLRenderPipelineDescriptor()
+    pipelineDescriptorVolumeMarker.label = "Render Pipeline for Volume Markers"
+    pipelineDescriptorVolumeMarker.vertexFunction = markerVertexFunction
+    pipelineDescriptorVolumeMarker.fragmentFunction = markerFragmentFunction
+    pipelineDescriptorVolumeMarker.rasterSampleCount = rasterSampleCount
+    pipelineDescriptorVolumeMarker.colorAttachments[0].pixelFormat = layerRenderer.configuration.colorFormat
+    pipelineDescriptorVolumeMarker.depthAttachmentPixelFormat = layerRenderer.configuration.depthFormat
+    pipelineDescriptorVolumeMarker.maxVertexAmplificationCount = layerRenderer.properties.viewCount
+    if let colorAttachment = pipelineDescriptorVolumeMarker.colorAttachments[0] {
+      colorAttachment.isBlendingEnabled = true
+      colorAttachment.rgbBlendOperation = .add
+      colorAttachment.alphaBlendOperation = .add
+      colorAttachment.sourceRGBBlendFactor = .sourceAlpha
+      colorAttachment.destinationRGBBlendFactor = .oneMinusSourceAlpha
+      colorAttachment.sourceAlphaBlendFactor = .one
+      colorAttachment.destinationAlphaBlendFactor = .oneMinusSourceAlpha
+    }
+
+    let pipelineDescriptorSceneMesh = MTLRenderPipelineDescriptor()
+    pipelineDescriptorSceneMesh.label = "Render Pipeline for Opaque Scene Meshes"
+    pipelineDescriptorSceneMesh.vertexFunction = sceneMeshVertexFunction
+    pipelineDescriptorSceneMesh.fragmentFunction = sceneMeshFragmentFunction
+    pipelineDescriptorSceneMesh.rasterSampleCount = rasterSampleCount
+    pipelineDescriptorSceneMesh.colorAttachments[0].pixelFormat = layerRenderer.configuration.colorFormat
+    pipelineDescriptorSceneMesh.depthAttachmentPixelFormat = layerRenderer.configuration.depthFormat
+    pipelineDescriptorSceneMesh.maxVertexAmplificationCount = layerRenderer.properties.viewCount
+
+    let pipelineDescriptorMeasurementLine = MTLRenderPipelineDescriptor()
+    pipelineDescriptorMeasurementLine.label = "Render Pipeline for Measurement Lines"
+    pipelineDescriptorMeasurementLine.vertexFunction = measurementLineVertexFunction
+    pipelineDescriptorMeasurementLine.fragmentFunction = measurementLineFragmentFunction
+    pipelineDescriptorMeasurementLine.rasterSampleCount = rasterSampleCount
+    pipelineDescriptorMeasurementLine.colorAttachments[0].pixelFormat = layerRenderer.configuration.colorFormat
+    pipelineDescriptorMeasurementLine.depthAttachmentPixelFormat = layerRenderer.configuration.depthFormat
+    pipelineDescriptorMeasurementLine.maxVertexAmplificationCount = layerRenderer.properties.viewCount
+    if let colorAttachment = pipelineDescriptorMeasurementLine.colorAttachments[0] {
+      colorAttachment.isBlendingEnabled = true
+      colorAttachment.rgbBlendOperation = .add
+      colorAttachment.alphaBlendOperation = .add
+      colorAttachment.sourceRGBBlendFactor = .sourceAlpha
+      colorAttachment.destinationRGBBlendFactor = .oneMinusSourceAlpha
+      colorAttachment.sourceAlphaBlendFactor = .one
+      colorAttachment.destinationAlphaBlendFactor = .oneMinusSourceAlpha
+    }
+
+    let pipelineDescriptorMeasurementPoint = MTLRenderPipelineDescriptor()
+    pipelineDescriptorMeasurementPoint.label = "Render Pipeline for Measurement Points"
+    pipelineDescriptorMeasurementPoint.vertexFunction = measurementPointVertexFunction
+    pipelineDescriptorMeasurementPoint.fragmentFunction = measurementPointFragmentFunction
+    pipelineDescriptorMeasurementPoint.rasterSampleCount = rasterSampleCount
+    pipelineDescriptorMeasurementPoint.colorAttachments[0].pixelFormat =
+      layerRenderer.configuration.colorFormat
+    pipelineDescriptorMeasurementPoint.depthAttachmentPixelFormat =
+      layerRenderer.configuration.depthFormat
+    pipelineDescriptorMeasurementPoint.maxVertexAmplificationCount =
+      layerRenderer.properties.viewCount
+    if let colorAttachment = pipelineDescriptorMeasurementPoint.colorAttachments[0] {
+      colorAttachment.isBlendingEnabled = true
+      colorAttachment.rgbBlendOperation = .add
+      colorAttachment.alphaBlendOperation = .add
+      colorAttachment.sourceRGBBlendFactor = .sourceAlpha
+      colorAttachment.destinationRGBBlendFactor = .oneMinusSourceAlpha
+      colorAttachment.sourceAlphaBlendFactor = .one
+      colorAttachment.destinationAlphaBlendFactor = .oneMinusSourceAlpha
+    }
+
+    let pipelineDescriptorScreenViewLabel = MTLRenderPipelineDescriptor()
+    pipelineDescriptorScreenViewLabel.label = "Render Pipeline for Screen View Labels"
+    pipelineDescriptorScreenViewLabel.vertexFunction = screenViewLabelVertexFunction
+    pipelineDescriptorScreenViewLabel.fragmentFunction = screenViewLabelFragmentFunction
+    pipelineDescriptorScreenViewLabel.rasterSampleCount = rasterSampleCount
+    pipelineDescriptorScreenViewLabel.colorAttachments[0].pixelFormat = layerRenderer.configuration.colorFormat
+    pipelineDescriptorScreenViewLabel.depthAttachmentPixelFormat = layerRenderer.configuration.depthFormat
+    pipelineDescriptorScreenViewLabel.maxVertexAmplificationCount = layerRenderer.properties.viewCount
+    if let colorAttachment = pipelineDescriptorScreenViewLabel.colorAttachments[0] {
+      colorAttachment.isBlendingEnabled = true
+      colorAttachment.rgbBlendOperation = .add
+      colorAttachment.alphaBlendOperation = .add
+      colorAttachment.sourceRGBBlendFactor = .one
+      colorAttachment.destinationRGBBlendFactor = .oneMinusSourceAlpha
+      colorAttachment.sourceAlphaBlendFactor = .one
+      colorAttachment.destinationAlphaBlendFactor = .oneMinusSourceAlpha
+    }
+
+    let pipelineDescriptorScreenViewOverlayLabel = MTLRenderPipelineDescriptor()
+    pipelineDescriptorScreenViewOverlayLabel.label = "Render Pipeline for Screen View Overlay Labels"
+    pipelineDescriptorScreenViewOverlayLabel.vertexFunction = screenViewLabelVertexFunction
+    pipelineDescriptorScreenViewOverlayLabel.fragmentFunction = screenViewLabelFragmentFunction
+    pipelineDescriptorScreenViewOverlayLabel.rasterSampleCount = rasterSampleCount
+    pipelineDescriptorScreenViewOverlayLabel.colorAttachments[0].pixelFormat =
+      layerRenderer.configuration.colorFormat
+    pipelineDescriptorScreenViewOverlayLabel.colorAttachments[1].pixelFormat = .r32Float
+    pipelineDescriptorScreenViewOverlayLabel.colorAttachments[1].writeMask = []
+    pipelineDescriptorScreenViewOverlayLabel.depthAttachmentPixelFormat =
+      layerRenderer.configuration.depthFormat
+    pipelineDescriptorScreenViewOverlayLabel.maxVertexAmplificationCount =
+      layerRenderer.properties.viewCount
+    if let colorAttachment = pipelineDescriptorScreenViewOverlayLabel.colorAttachments[0] {
+      colorAttachment.isBlendingEnabled = true
+      colorAttachment.rgbBlendOperation = .add
+      colorAttachment.alphaBlendOperation = .add
+      colorAttachment.sourceRGBBlendFactor = .one
+      colorAttachment.destinationRGBBlendFactor = .oneMinusSourceAlpha
+      colorAttachment.sourceAlphaBlendFactor = .one
+      colorAttachment.destinationAlphaBlendFactor = .oneMinusSourceAlpha
+    }
+
+    let pipelineDescriptorMarkerComposite = MTLRenderPipelineDescriptor()
+    pipelineDescriptorMarkerComposite.label = "Render Pipeline for Marker Composite"
+    pipelineDescriptorMarkerComposite.vertexFunction = markerCompositeVertexFunction
+    pipelineDescriptorMarkerComposite.fragmentFunction = markerCompositeFragmentFunction
+    pipelineDescriptorMarkerComposite.rasterSampleCount = rasterSampleCount
+    pipelineDescriptorMarkerComposite.colorAttachments[0].pixelFormat = layerRenderer.configuration.colorFormat
+    pipelineDescriptorMarkerComposite.colorAttachments[1].pixelFormat = .r32Float
+    pipelineDescriptorMarkerComposite.colorAttachments[1].writeMask = []
+    pipelineDescriptorMarkerComposite.depthAttachmentPixelFormat = layerRenderer.configuration.depthFormat
+    pipelineDescriptorMarkerComposite.maxVertexAmplificationCount = layerRenderer.properties.viewCount
+
+    if let ca = pipelineDescriptorMarkerComposite.colorAttachments[0] {
+      ca.isBlendingEnabled = true
+      ca.rgbBlendOperation = .add
+      ca.alphaBlendOperation = .add
+      ca.sourceRGBBlendFactor = .oneMinusDestinationAlpha
+      ca.destinationRGBBlendFactor = .one
+      ca.sourceAlphaBlendFactor = .oneMinusDestinationAlpha
+      ca.destinationAlphaBlendFactor = .one
+    }
+
+    let pipelineDescriptorTFHUD = MTLRenderPipelineDescriptor()
+    pipelineDescriptorTFHUD.label = "Render Pipeline for TF HUD"
+    pipelineDescriptorTFHUD.vertexFunction = hudVertexFunction
+    pipelineDescriptorTFHUD.fragmentFunction = hudFragmentFunction
+    pipelineDescriptorTFHUD.rasterSampleCount = rasterSampleCount
+    pipelineDescriptorTFHUD.colorAttachments[0].pixelFormat = layerRenderer.configuration.colorFormat
+    pipelineDescriptorTFHUD.colorAttachments[1].pixelFormat = .r32Float
+    pipelineDescriptorTFHUD.colorAttachments[1].writeMask = []
+    pipelineDescriptorTFHUD.depthAttachmentPixelFormat = layerRenderer.configuration.depthFormat
+    pipelineDescriptorTFHUD.maxVertexAmplificationCount = layerRenderer.properties.viewCount
+
+    if let ca = pipelineDescriptorTFHUD.colorAttachments[0] {
+      ca.isBlendingEnabled = true
+      ca.rgbBlendOperation = .add
+      ca.alphaBlendOperation = .add
+      ca.sourceRGBBlendFactor = .sourceAlpha
+      ca.destinationRGBBlendFactor = .oneMinusSourceAlpha
+      ca.sourceAlphaBlendFactor = .one
+      ca.destinationAlphaBlendFactor = .oneMinusSourceAlpha
+    }
+
+    let pipelineDescriptorTFHUDControls = MTLRenderPipelineDescriptor()
+    pipelineDescriptorTFHUDControls.label = "Render Pipeline for TF HUD Channel Controls"
+    pipelineDescriptorTFHUDControls.vertexFunction = hudControlsVertexFunction
+    pipelineDescriptorTFHUDControls.fragmentFunction = hudControlsFragmentFunction
+    pipelineDescriptorTFHUDControls.rasterSampleCount = rasterSampleCount
+    pipelineDescriptorTFHUDControls.colorAttachments[0].pixelFormat = layerRenderer.configuration.colorFormat
+    pipelineDescriptorTFHUDControls.colorAttachments[1].pixelFormat = .r32Float
+    pipelineDescriptorTFHUDControls.colorAttachments[1].writeMask = []
+    pipelineDescriptorTFHUDControls.depthAttachmentPixelFormat = layerRenderer.configuration.depthFormat
+    pipelineDescriptorTFHUDControls.maxVertexAmplificationCount = layerRenderer.properties.viewCount
+
+    if let ca = pipelineDescriptorTFHUDControls.colorAttachments[0] {
+      ca.isBlendingEnabled = true
+      ca.rgbBlendOperation = .add
+      ca.alphaBlendOperation = .add
+      ca.sourceRGBBlendFactor = .sourceAlpha
+      ca.destinationRGBBlendFactor = .oneMinusSourceAlpha
+      ca.sourceAlphaBlendFactor = .one
+      ca.destinationAlphaBlendFactor = .oneMinusSourceAlpha
+    }
+
+    return (
+      try device.makeRenderPipelineState(descriptor: pipelineDescriptorTF),
+      try device.makeRenderPipelineState(descriptor: pipelineDescriptorTFL),
+      try device.makeRenderPipelineState(descriptor: pipelineDescriptorIso),
+      try device.makeRenderPipelineState(descriptor: pipelineDescriptorBrickVis),
+      try device.makeRenderPipelineState(descriptor: pipelineDescriptorVolumeMarker),
+      try device.makeRenderPipelineState(descriptor: pipelineDescriptorSceneMesh),
+      try device.makeRenderPipelineState(descriptor: pipelineDescriptorMeasurementLine),
+      try device.makeRenderPipelineState(descriptor: pipelineDescriptorMeasurementPoint),
+      try device.makeRenderPipelineState(descriptor: pipelineDescriptorScreenViewLabel),
+      try device.makeRenderPipelineState(descriptor: pipelineDescriptorScreenViewOverlayLabel),
+      try device.makeRenderPipelineState(descriptor: pipelineDescriptorMarkerComposite),
+      try device.makeRenderPipelineState(descriptor: pipelineDescriptorTFHUD),
+      try device.makeRenderPipelineState(descriptor: pipelineDescriptorTFHUDControls)
+    )
+  }
+
+  func initRenderLoop() async {
+    initPerformanceTracking()
+    await borgARProvider.startARSession()
+  }
+
+  /**
+   Initializes performance tracking for dynamic oversampling.
+
+   This method sets up the CPU frame timer's thresholds and callback closures so that the renderer
+   can dynamically adjust the oversampling factor based on current performance (FPS).
+   */
+  func initPerformanceTracking() {
+    guard self.dynamicOverSampling else { return }
+
+    timer.dropThreshold = Double(self.dropFPS)
+    timer.recoveryThreshold = Double(self.recoveryFPS)
+    timer.minimumDropDuration = 0.5
+
+    timer.onPerformanceTooSlow = { [weak self] fps, percentMissed in
+      guard let self = self else { return }
+      if self.activeOversampling < 0.5 {
+        return
+      }
+      self.activeOversampling -= 0.1
+    }
+
+    timer.onPerformanceRecovered = { [weak self] fps, percentAbove in
+      guard let self = self else { return false }
+      if self.activeOversampling >= self.initialOversampling {
+        activeOversampling = initialOversampling
+        return false
+      }
+      self.activeOversampling += 0.1
+      return true
+    }
+  }
+}
+
+
+
+// MARK: - Frame rendering
+
+extension VisionVolumeRenderer {
 
   private struct ScreenViewVisualization {
     var markers: [VolumeMarker] = []
@@ -650,8 +1575,6 @@ extension Renderer {
     uniformBufferVertex.advance()
     uniformBufferFragment.advance()
   }
-
-  
 
   private func renderTransferfunction(_ renderEncoder: MTLRenderCommandEncoder,
                                       drawable: LayerRenderer.Drawable) {
@@ -2607,24 +3530,142 @@ extension Renderer {
   }
 }
 
+
+
+// MARK: - Render-loop startup
+
+// MARK: - LayerRenderer.Clock.Instant.Duration Extension
+
+/**
+ An extension on `LayerRenderer.Clock.Instant.Duration` that provides a computed
+ property to convert the duration into a `TimeInterval`.
+
+ The conversion accounts for the attoseconds and seconds components of the
+ duration.
+ */
+extension LayerRenderer.Clock.Instant.Duration {
+  var timeInterval: TimeInterval {
+    let nanoseconds = TimeInterval(components.attoseconds / 1_000_000_000)
+    return TimeInterval(components.seconds) + (nanoseconds /
+                                               TimeInterval(NSEC_PER_SEC))
+  }
+}
+
+// MARK: - VisionVolumeRendererTaskExecutor
+
+/**
+ A task executor for rendering tasks that executes jobs on a dedicated serial
+ dispatch queue.
+
+ This executor conforms to the `TaskExecutor` protocol and is used to run
+ rendering jobs on a high-priority, user-interactive queue.
+ */
+final class VisionVolumeRendererTaskExecutor: TaskExecutor {
+  /// A serial dispatch queue dedicated to rendering tasks.
+  private let queue = DispatchQueue(label: "RenderThreadQueue", qos: .userInteractive)
+
+  /**
+   Enqueues a job for execution on the render thread.
+
+   - Parameter job: The unowned job to be executed.
+   */
+  func enqueue(_ job: UnownedJob) {
+    queue.async {
+      job.runSynchronously(on: self.asUnownedSerialExecutor())
+    }
+  }
+
+  /**
+   Converts the current executor into an unowned serial task executor.
+
+   - Returns: An `UnownedTaskExecutor` that wraps this executor.
+   */
+  func asUnownedSerialExecutor() -> UnownedTaskExecutor {
+    return UnownedTaskExecutor(ordinary: self)
+  }
+
+  /// A shared singleton instance of `VisionVolumeRendererTaskExecutor`.
+  static var shared: VisionVolumeRendererTaskExecutor = VisionVolumeRendererTaskExecutor()
+}
+
+// MARK: - VisionVolumeRenderer Extension for AR Session and Render Loop
+
+/**
+ An extension on `VisionVolumeRenderer` that provides methods for starting the AR session and
+ the render loop.
+ */
+extension VisionVolumeRenderer {
+  /**
+   Starts the render loop for the renderer.
+
+   This method creates a rendering task using the shared
+   `VisionVolumeRendererTaskExecutor`. It performs the following:
+   - Instantiates a `VisionVolumeRenderer` with the provided parameters.
+   - Initializes performance tracking.
+   - Starts the AR session.
+   - Begins the render loop.
+
+   - Parameters:
+   - layerRenderer: The layer renderer instance used for rendering.
+   - runtimeAppModel: The shared application model.
+   - appSetings: The application settings.
+   - sharedAppModel: The parameters used for rendering.
+   - timer: A CPU frame timer.
+   - dataset: The dataset to be rendered.
+   */
+  @MainActor
+  static func startRenderLoop(_ layerRenderer: LayerRenderer,
+                              session: VisionBorgVRSession,
+                              timer: CPUFrameTimer,
+                              dataset: BORGVRDatasetProtocol,
+                              datasetID: String,
+                              transferFunctionPanelInteractionState: TransferFunctionPanelInteractionState,
+                              immersiveInteraction: ImmersiveInteraction,
+                              logger: LoggerBase? = nil) {
+    let runtimeAppModel = session.runtimeState
+    runtimeAppModel.renderTask?.cancel()
+    runtimeAppModel.renderTask = Task(executorPreference: VisionVolumeRendererTaskExecutor.shared) {
+      do {
+        let renderer = try VisionVolumeRenderer(
+          layerRenderer,
+          session: session,
+          timer: timer,
+          dataset: dataset,
+          transferFunctionPanelInteractionState: transferFunctionPanelInteractionState,
+          immersiveInteraction: immersiveInteraction,
+          logger: logger
+        )
+
+        await renderer.initRenderLoop()
+        guard !Task.isCancelled else { return }
+        await runtimeAppModel.markDatasetRendererReady(uniqueID: datasetID)
+        await renderer.renderLoop()
+      } catch {
+        logger?.error("Failed to start render loop: \(error)")
+      }
+    }
+  }
+}
+
+
 /*
  Copyright (c) 2026 Computer Graphics and Visualization Group, University of
  Duisburg-Essen
 
  Permission is hereby granted, free of charge, to any person obtaining a copy of
  this software and associated documentation files (the "Software"), to deal in the
- Software without restriction, including without limitation the rights to use, copy,
- modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and
- to permit persons to whom the Software is furnished to do so, subject to the following
- conditions:
+ Software without restriction, including without limitation the rights to use,
+ copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the
+ Software, and to permit persons to whom the Software is furnished to do so, subject
+ to the following conditions:
 
- The above copyright notice and this permission notice shall be included in all copies
- or substantial portions of the Software.
+ The above copyright notice and this permission notice shall be included in all
+ copies or substantial portions of the Software.
 
- THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
- INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
- PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
- HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF
- CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR
- THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+ WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
