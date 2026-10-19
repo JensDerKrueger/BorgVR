@@ -57,6 +57,13 @@ forbid_pattern 'nonisolated\(unsafe\).*activeOversampling' VisionApp/Rendering/V
 require_pattern 'VisionRendererPerformanceMailbox' VisionApp/Rendering/VisionVolumeRenderer.swift
 require_pattern 'rotationCaptureRequestID' VisionApp/Rendering/VisionVolumeRenderer.swift
 
+# Screen screenshot timeouts cancel their renderer request and reject stale GPU completions.
+require_file AppSupport/Automation/ScreenScreenshotRequestQueue.swift
+require_pattern 'cancelRenderScreenshot' AppSupport/Application/AppModel.swift
+require_pattern 'cancelRenderScreenshot' AppSupport/Automation/BorgVRScreenCommandService.swift
+forbid_pattern 'pendingScreenshot(URL|AccessURL|Completion)' macOSApp/MacVolumeRenderer.swift
+forbid_pattern 'pendingScreenshot(URL|Completion)' iOSApp/MobileVolumeRenderer.swift
+
 # Shared converter UI and conversion implementation.
 require_file AppSupport/Datasets/ConverterView.swift
 require_file AppSupport/Datasets/DicomSlicePreview.swift

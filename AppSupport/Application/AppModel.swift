@@ -4,10 +4,12 @@ import SwiftUI
 @MainActor
 final class AppModel: ObservableObject {
   typealias RenderScreenshotHandler = (
+    _ id: UUID,
     _ url: URL?,
     _ accessURL: URL?,
     _ completion: @escaping (Result<URL, Error>) -> Void
   ) -> Void
+  typealias RenderScreenshotCancelHandler = (_ id: UUID, _ error: Error) -> Void
   typealias RenderDisplaySyncHandler = (_ enabled: Bool) -> Void
   typealias MarkerPositionHandler = (
     _ normalizedScreenPosition: SIMD2<Float>,
@@ -182,6 +184,7 @@ final class AppModel: ObservableObject {
   @Published var performanceModel = PerformanceGraphModel()
   let logger = GUILogger()
   var renderScreenshotHandler: RenderScreenshotHandler?
+  var renderScreenshotCancelHandler: RenderScreenshotCancelHandler?
   var renderDisplaySyncHandler: RenderDisplaySyncHandler?
   var markerPositionHandler: MarkerPositionHandler?
   var projectedVolumePositionHandler: MarkerPositionHandler?
@@ -599,16 +602,23 @@ final class AppModel: ObservableObject {
     remoteSpatialToolPreviews.removeAll()
   }
 
+  @discardableResult
   func requestRenderScreenshot(
+    id: UUID = UUID(),
     to url: URL?,
     accessURL: URL?,
     completion: @escaping (Result<URL, Error>) -> Void
-  ) {
+  ) -> UUID {
     guard let renderScreenshotHandler else {
       completion(.failure(AppModelError.rendererUnavailable))
-      return
+      return id
     }
-    renderScreenshotHandler(url, accessURL, completion)
+    renderScreenshotHandler(id, url, accessURL, completion)
+    return id
+  }
+
+  func cancelRenderScreenshot(id: UUID, error: Error) {
+    renderScreenshotCancelHandler?(id, error)
   }
 
   func setRenderDisplaySyncEnabled(_ enabled: Bool) {

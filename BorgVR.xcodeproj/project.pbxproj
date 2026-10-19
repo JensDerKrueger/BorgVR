@@ -131,6 +131,8 @@
 		57A001B32EA3000100000001 /* DatasetViewState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001B02EA3000100000001 /* DatasetViewState.swift */; };
 		57A001C12EB0000100000001 /* BorgVRScreenCommandService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001C02EB0000100000001 /* BorgVRScreenCommandService.swift */; };
 		57A001C22EB0000100000001 /* BorgVRScreenCommandService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001C02EB0000100000001 /* BorgVRScreenCommandService.swift */; };
+		57A003012EF1000100000001 /* ScreenScreenshotRequestQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A003002EF1000100000001 /* ScreenScreenshotRequestQueue.swift */; };
+		57A003022EF1000100000001 /* ScreenScreenshotRequestQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A003002EF1000100000001 /* ScreenScreenshotRequestQueue.swift */; };
 		57A001D12EB0000200000001 /* MetalScreenshotEncoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001D02EB0000200000001 /* MetalScreenshotEncoder.swift */; };
 		57A001D22EB0000200000001 /* MetalScreenshotEncoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001D02EB0000200000001 /* MetalScreenshotEncoder.swift */; };
 		57A001D32EB0000200000001 /* MetalScreenshotEncoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001D02EB0000200000001 /* MetalScreenshotEncoder.swift */; };
@@ -256,6 +258,7 @@
 		57A001A52EA2000200000001 /* SceneMeshEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneMeshEditorView.swift; sourceTree = "<group>"; };
 		57A001B02EA3000100000001 /* DatasetViewState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DatasetViewState.swift; sourceTree = "<group>"; };
 		57A001C02EB0000100000001 /* BorgVRScreenCommandService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BorgVRScreenCommandService.swift; sourceTree = "<group>"; };
+		57A003002EF1000100000001 /* ScreenScreenshotRequestQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenScreenshotRequestQueue.swift; sourceTree = "<group>"; };
 		57A001D02EB0000200000001 /* MetalScreenshotEncoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetalScreenshotEncoder.swift; sourceTree = "<group>"; };
 		57A001E02EB0000300000001 /* MCPSettingsControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPSettingsControls.swift; sourceTree = "<group>"; };
 		57A001F02EC0000100000001 /* ScreenOpaqueGeometryShaders.metal */ = {isa = PBXFileReference; explicitFileType = text; path = ScreenOpaqueGeometryShaders.metal; sourceTree = "<group>"; };
@@ -637,6 +640,7 @@
 			children = (
 				57A001C02EB0000100000001 /* BorgVRScreenCommandService.swift */,
 				57A001E02EB0000300000001 /* MCPSettingsControls.swift */,
+				57A003002EF1000100000001 /* ScreenScreenshotRequestQueue.swift */,
 			);
 			path = Automation;
 			sourceTree = "<group>";
@@ -1029,6 +1033,7 @@
 				57A002312ED2000100000001 /* SharePlayCoordinator.swift in Sources */,
 				57A002012ED0000100000001 /* BorgVRSession.swift in Sources */,
 				57A001C12EB0000100000001 /* BorgVRScreenCommandService.swift in Sources */,
+				57A003012EF1000100000001 /* ScreenScreenshotRequestQueue.swift in Sources */,
 				57A001D12EB0000200000001 /* MetalScreenshotEncoder.swift in Sources */,
 				57A001E12EB0000300000001 /* MCPSettingsControls.swift in Sources */,
 				57A001712E99000500000001 /* AppStoreUpdateChecker.swift in Sources */,
@@ -1089,6 +1094,7 @@
 				57A002322ED2000100000001 /* SharePlayCoordinator.swift in Sources */,
 				57A002022ED0000100000001 /* BorgVRSession.swift in Sources */,
 				57A001C22EB0000100000001 /* BorgVRScreenCommandService.swift in Sources */,
+				57A003022EF1000100000001 /* ScreenScreenshotRequestQueue.swift in Sources */,
 				57A001D22EB0000200000001 /* MetalScreenshotEncoder.swift in Sources */,
 				57A001E22EB0000300000001 /* MCPSettingsControls.swift in Sources */,
 				57A001722E99000500000001 /* AppStoreUpdateChecker.swift in Sources */,

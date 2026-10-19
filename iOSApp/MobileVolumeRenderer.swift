@@ -11,8 +11,7 @@ final class MobileVolumeRenderer: NSObject, MTKViewDelegate, UIGestureRecognizer
   private let core: ScreenVolumeRendererCore
   private var twoFingerPanRecognizer: UIPanGestureRecognizer?
   private var frameInFlight = false
-  private var pendingScreenshotURL: URL?
-  private var pendingScreenshotCompletion: ((Result<URL, Error>) -> Void)?
+  private let screenshotRequests = ScreenScreenshotRequestQueue()
 
   init(
     session: ScreenBorgVRSession,
@@ -43,26 +42,38 @@ final class MobileVolumeRenderer: NSObject, MTKViewDelegate, UIGestureRecognizer
   func attach(to view: MTKView) {
     core.attach(to: view)
     installInteractionGestures(on: view)
-    appModel.renderScreenshotHandler = { [weak self] requestedURL, _, completion in
+    appModel.renderScreenshotHandler = { [weak self, weak view] id, requestedURL, _, completion in
       Task { @MainActor in
         guard let self else {
           completion(.failure(AppModelError.rendererUnavailable))
-          return
-        }
-        guard self.pendingScreenshotCompletion == nil else {
-          completion(.failure(BorgVRMCPCommandError.screenshotUnavailable))
           return
         }
         guard self.appModel.activeDataset != nil else {
           completion(.failure(BorgVRMCPCommandError.noDataset))
           return
         }
-        self.pendingScreenshotURL = requestedURL ?? FileManager.default.temporaryDirectory
+        let url = requestedURL ?? FileManager.default.temporaryDirectory
           .appendingPathComponent("BorgVR-\(UUID().uuidString)")
           .appendingPathExtension("png")
-        self.pendingScreenshotCompletion = completion
+        let request = ScreenScreenshotRequest(
+          id: id,
+          url: url,
+          accessURL: nil,
+          completion: completion
+        )
+        guard self.screenshotRequests.enqueue(request) else {
+          completion(.failure(BorgVRMCPCommandError.screenshotUnavailable))
+          return
+        }
+        guard let view else {
+          self.cancelScreenshot(id: id, error: AppModelError.rendererUnavailable)
+          return
+        }
         view.draw()
       }
+    }
+    appModel.renderScreenshotCancelHandler = { [weak self] id, error in
+      self?.cancelScreenshot(id: id, error: error)
     }
   }
 
@@ -71,8 +82,10 @@ final class MobileVolumeRenderer: NSObject, MTKViewDelegate, UIGestureRecognizer
       case .unchanged:
         break
       case .cleared:
+        cancelAllScreenshots(error: AppModelError.rendererUnavailable)
         appModel.markRenderedDataset(key: "")
       case .loaded(let key, let metadata):
+        cancelAllScreenshots(error: BorgVRMCPCommandError.screenshotUnavailable)
         appModel.markRenderedDataset(key: key, metadata: metadata)
         appModel.loadAutomaticallyManagedDatasetState(
           appSettings: appSettings,
@@ -81,6 +94,7 @@ final class MobileVolumeRenderer: NSObject, MTKViewDelegate, UIGestureRecognizer
         )
         sharePlay.datasetRendererDidLoad()
       case .failed(let key, _):
+        cancelAllScreenshots(error: AppModelError.rendererUnavailable)
         appModel.markRenderedDatasetFailed(key: key)
     }
   }
@@ -120,8 +134,7 @@ final class MobileVolumeRenderer: NSObject, MTKViewDelegate, UIGestureRecognizer
   }
 
   private struct PendingScreenshot {
-    let url: URL
-    let completion: (Result<URL, Error>) -> Void
+    let id: UUID
     let readback: MetalScreenshotReadback
   }
 
@@ -129,33 +142,46 @@ final class MobileVolumeRenderer: NSObject, MTKViewDelegate, UIGestureRecognizer
     from texture: MTLTexture,
     commandBuffer: MTLCommandBuffer
   ) -> PendingScreenshot? {
-    guard let url = pendingScreenshotURL,
-          let completion = pendingScreenshotCompletion else { return nil }
-    pendingScreenshotURL = nil
-    pendingScreenshotCompletion = nil
+    guard let request = screenshotRequests.takePending() else { return nil }
     do {
       return PendingScreenshot(
-        url: url,
-        completion: completion,
+        id: request.id,
         readback: try MetalScreenshotEncoder.encodeReadback(
           from: texture,
           commandBuffer: commandBuffer
         )
       )
     } catch {
-      completion(.failure(error))
+      finishScreenshotRequest(id: request.id, result: .failure(error))
       return nil
     }
   }
 
   private func finishScreenshot(_ screenshot: PendingScreenshot?) {
-    guard let screenshot else { return }
+    guard let screenshot,
+          let request = screenshotRequests.complete(id: screenshot.id) else { return }
     do {
       let data = try MetalScreenshotEncoder.pngData(from: screenshot.readback)
-      try data.write(to: screenshot.url, options: .atomic)
-      screenshot.completion(.success(screenshot.url))
+      try data.write(to: request.url, options: .atomic)
+      request.completion(.success(request.url))
     } catch {
-      screenshot.completion(.failure(error))
+      request.completion(.failure(error))
+    }
+  }
+
+  private func finishScreenshotRequest(id: UUID, result: Result<URL, Error>) {
+    guard let request = screenshotRequests.complete(id: id) else { return }
+    request.completion(result)
+  }
+
+  private func cancelScreenshot(id: UUID, error: Error) {
+    guard let request = screenshotRequests.cancel(id: id) else { return }
+    request.completion(.failure(error))
+  }
+
+  private func cancelAllScreenshots(error: Error) {
+    for request in screenshotRequests.cancelAll() {
+      request.completion(.failure(error))
     }
   }
 

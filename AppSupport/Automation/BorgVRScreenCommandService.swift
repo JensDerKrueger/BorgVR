@@ -229,14 +229,27 @@ final class BorgVRScreenCommandService: BorgVRMCPCommandService {
       .appendingPathExtension("png")
     defer { try? FileManager.default.removeItem(at: temporaryURL) }
 
+    let requestID = UUID()
     let url = try await withCheckedThrowingContinuation {
       (continuation: CheckedContinuation<URL, Error>) in
       let gate = BorgVRMCPContinuationGate(continuation)
-      appModel.requestRenderScreenshot(to: temporaryURL, accessURL: nil) { result in
+      appModel.requestRenderScreenshot(
+        id: requestID,
+        to: temporaryURL,
+        accessURL: nil
+      ) { result in
         gate.resume(with: result)
       }
-      Task {
-        try? await Task.sleep(for: .seconds(10))
+      Task { @MainActor in
+        do {
+          try await Task.sleep(for: .seconds(10))
+        } catch {
+          return
+        }
+        appModel.cancelRenderScreenshot(
+          id: requestID,
+          error: BorgVRMCPCommandError.timeout
+        )
         gate.resume(with: .failure(BorgVRMCPCommandError.timeout))
       }
     }

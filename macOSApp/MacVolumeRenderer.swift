@@ -50,9 +50,7 @@ final class MacVolumeRenderer: NSObject, MTKViewDelegate {
   private let datasetAccess: MacRendererDatasetAccess
   private let core: ScreenVolumeRendererCore
   private var frameInFlight = false
-  private var pendingScreenshotURL: URL?
-  private var pendingScreenshotAccessURL: URL?
-  private var pendingScreenshotCompletion: ((Result<URL, Error>) -> Void)?
+  private let screenshotRequests = ScreenScreenshotRequestQueue()
 
   init(
     session: ScreenBorgVRSession,
@@ -85,14 +83,22 @@ final class MacVolumeRenderer: NSObject, MTKViewDelegate {
   func attach(to view: MTKView) {
     self.view = view
     core.attach(to: view)
-    appModel.renderScreenshotHandler = { [weak self] url, accessURL, completion in
+    appModel.renderScreenshotHandler = { [weak self] id, url, accessURL, completion in
       Task { @MainActor in
         guard let self else {
           completion(.failure(AppModelError.rendererUnavailable))
           return
         }
-        self.saveScreenshot(to: url, accessURL: accessURL, completion: completion)
+        self.enqueueScreenshot(
+          id: id,
+          to: url,
+          accessURL: accessURL,
+          completion: completion
+        )
       }
+    }
+    appModel.renderScreenshotCancelHandler = { [weak self] id, error in
+      self?.cancelScreenshot(id: id, error: error)
     }
     appModel.renderDisplaySyncHandler = { [weak self] enabled in
       self?.setDisplaySyncEnabled(enabled)
@@ -105,9 +111,11 @@ final class MacVolumeRenderer: NSObject, MTKViewDelegate {
       case .unchanged:
         break
       case .cleared:
+        cancelAllScreenshots(error: AppModelError.rendererUnavailable)
         appModel.markRenderedDataset(key: "")
         resetRenderTracking()
       case .loaded(let key, let metadata):
+        cancelAllScreenshots(error: BorgVRMCPCommandError.screenshotUnavailable)
         resetRenderTracking()
         appModel.markRenderedDataset(key: key, metadata: metadata)
         appModel.loadAutomaticallyManagedDatasetState(
@@ -117,6 +125,7 @@ final class MacVolumeRenderer: NSObject, MTKViewDelegate {
         )
         sharePlay.datasetRendererDidLoad()
       case .failed(let key, _):
+        cancelAllScreenshots(error: AppModelError.rendererUnavailable)
         appModel.markRenderedDatasetFailed(key: key)
     }
     if !appModel.renderDisplaySyncEnabled {
@@ -163,14 +172,15 @@ final class MacVolumeRenderer: NSObject, MTKViewDelegate {
   }
 
   func saveScreenshotToDataDirectory() {
-    saveScreenshot(to: nil, accessURL: nil) { [weak appModel] result in
+    appModel.requestRenderScreenshot(to: nil, accessURL: nil) { [weak appModel] result in
       if case let .failure(error) = result {
         appModel?.logger.error(error.localizedDescription)
       }
     }
   }
 
-  func saveScreenshot(
+  private func enqueueScreenshot(
+    id: UUID,
     to requestedURL: URL?,
     accessURL requestedAccessURL: URL?,
     completion: @escaping (Result<URL, Error>) -> Void
@@ -181,7 +191,9 @@ final class MacVolumeRenderer: NSObject, MTKViewDelegate {
       return
     }
 
-    let accessURL = requestedAccessURL ?? storedAppModel.startAccessingDataDirectory()
+    let accessURL = requestedAccessURL ?? (
+      requestedURL == nil ? storedAppModel.startAccessingDataDirectory() : nil
+    )
     let screenshotURL = requestedURL ?? uniqueScreenshotURL(
       in: storedAppModel.resolvedDataDirectoryURL()
     )
@@ -202,15 +214,19 @@ final class MacVolumeRenderer: NSObject, MTKViewDelegate {
       return
     }
 
-    pendingScreenshotURL = screenshotURL
-    pendingScreenshotAccessURL = accessURL
-    pendingScreenshotCompletion = completion
-    guard let view else {
-      pendingScreenshotURL = nil
-      pendingScreenshotAccessURL = nil
-      pendingScreenshotCompletion = nil
+    let request = ScreenScreenshotRequest(
+      id: id,
+      url: screenshotURL,
+      accessURL: accessURL,
+      completion: completion
+    )
+    guard screenshotRequests.enqueue(request) else {
       storedAppModel.stopAccessingDataDirectory(accessURL)
-      completion(.failure(AppModelError.rendererUnavailable))
+      completion(.failure(BorgVRMCPCommandError.screenshotUnavailable))
+      return
+    }
+    guard let view else {
+      cancelScreenshot(id: id, error: AppModelError.rendererUnavailable)
       return
     }
     view.draw()
@@ -250,9 +266,7 @@ final class MacVolumeRenderer: NSObject, MTKViewDelegate {
   }
 
   private struct ScreenshotCapture {
-    let url: URL
-    let accessURL: URL?
-    let completion: ((Result<URL, Error>) -> Void)?
+    let id: UUID
     let buffer: MTLBuffer
     let width: Int
     let height: Int
@@ -263,19 +277,13 @@ final class MacVolumeRenderer: NSObject, MTKViewDelegate {
     from texture: MTLTexture,
     on commandBuffer: MTLCommandBuffer
   ) -> ScreenshotCapture? {
-    guard let url = pendingScreenshotURL else { return nil }
-    let accessURL = pendingScreenshotAccessURL
-    let completion = pendingScreenshotCompletion
-    pendingScreenshotURL = nil
-    pendingScreenshotAccessURL = nil
-    pendingScreenshotCompletion = nil
+    guard let request = screenshotRequests.takePending() else { return nil }
 
     let width = texture.width
     let height = texture.height
     guard width > 0, height > 0 else {
-      storedAppModel.stopAccessingDataDirectory(accessURL)
       appModel.logger.warning(String(localized: "screenshot_failed_empty"))
-      completion?(.failure(ScreenshotError.emptyTexture))
+      finishScreenshotRequest(id: request.id, result: .failure(ScreenshotError.emptyTexture))
       return nil
     }
 
@@ -285,9 +293,8 @@ final class MacVolumeRenderer: NSObject, MTKViewDelegate {
     let byteCount = bytesPerRow * height
     guard let buffer = texture.device.makeBuffer(length: byteCount, options: .storageModeShared),
           let blitEncoder = commandBuffer.makeBlitCommandEncoder() else {
-      storedAppModel.stopAccessingDataDirectory(accessURL)
       appModel.logger.error(String(localized: "screenshot_failed_readback"))
-      completion?(.failure(ScreenshotError.readbackFailed))
+      finishScreenshotRequest(id: request.id, result: .failure(ScreenshotError.readbackFailed))
       return nil
     }
 
@@ -305,9 +312,7 @@ final class MacVolumeRenderer: NSObject, MTKViewDelegate {
     blitEncoder.endEncoding()
 
     return ScreenshotCapture(
-      url: url,
-      accessURL: accessURL,
-      completion: completion,
+      id: request.id,
       buffer: buffer,
       width: width,
       height: height,
@@ -316,20 +321,21 @@ final class MacVolumeRenderer: NSObject, MTKViewDelegate {
   }
 
   private func finishScreenshotCapture(_ capture: ScreenshotCapture?) {
-    guard let capture else { return }
+    guard let capture,
+          let request = screenshotRequests.complete(id: capture.id) else { return }
     defer {
-      storedAppModel.stopAccessingDataDirectory(capture.accessURL)
+      storedAppModel.stopAccessingDataDirectory(request.accessURL)
     }
 
     do {
-      try writeScreenshot(capture)
+      try writeScreenshot(capture, to: request.url)
       appModel.logger.info(
         String(
           format: String(localized: "screenshot_saved_format"),
-          capture.url.lastPathComponent
+          request.url.lastPathComponent
         )
       )
-      capture.completion?(.success(capture.url))
+      request.completion(.success(request.url))
     } catch {
       appModel.logger.error(
         String(
@@ -337,11 +343,30 @@ final class MacVolumeRenderer: NSObject, MTKViewDelegate {
           error.localizedDescription
         )
       )
-      capture.completion?(.failure(error))
+      request.completion(.failure(error))
     }
   }
 
-  private func writeScreenshot(_ capture: ScreenshotCapture) throws {
+  private func finishScreenshotRequest(id: UUID, result: Result<URL, Error>) {
+    guard let request = screenshotRequests.complete(id: id) else { return }
+    storedAppModel.stopAccessingDataDirectory(request.accessURL)
+    request.completion(result)
+  }
+
+  private func cancelScreenshot(id: UUID, error: Error) {
+    guard let request = screenshotRequests.cancel(id: id) else { return }
+    storedAppModel.stopAccessingDataDirectory(request.accessURL)
+    request.completion(.failure(error))
+  }
+
+  private func cancelAllScreenshots(error: Error) {
+    for request in screenshotRequests.cancelAll() {
+      storedAppModel.stopAccessingDataDirectory(request.accessURL)
+      request.completion(.failure(error))
+    }
+  }
+
+  private func writeScreenshot(_ capture: ScreenshotCapture, to url: URL) throws {
     let byteCount = capture.bytesPerRow * capture.height
     let data = Data(bytes: capture.buffer.contents(), count: byteCount)
     guard let dataProvider = CGDataProvider(data: data as CFData) else {
@@ -369,7 +394,7 @@ final class MacVolumeRenderer: NSObject, MTKViewDelegate {
     }
 
     guard let destination = CGImageDestinationCreateWithURL(
-      capture.url as CFURL,
+      url as CFURL,
       UTType.png.identifier as CFString,
       1,
       nil
