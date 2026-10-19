@@ -6,6 +6,84 @@ import ImageIO
  */
 final class DicomParser {
 
+  private static let undefinedLength = Int(UInt32.max)
+  private static let maximumSequenceDepth = 64
+  private static let maximumDecodedSliceBytes = 512 * 1024 * 1024
+
+  private enum Endianness {
+    case little
+    case big
+  }
+
+  private struct ByteReader {
+    let data: Data
+    let endianness: Endianness
+
+    func checkedEnd(offset: Int, length: Int) throws -> Int {
+      guard offset >= 0, length >= 0, offset <= data.count, length <= data.count - offset else {
+        throw DicomParsingError.incompleteElementHeader
+      }
+      return offset + length
+    }
+
+    func uint16(at offset: Int) throws -> UInt16 {
+      let end = try checkedEnd(offset: offset, length: 2)
+      let startIndex = data.index(data.startIndex, offsetBy: offset)
+      let endIndex = data.index(data.startIndex, offsetBy: end)
+      let bytes = data[startIndex..<endIndex]
+      let first = UInt16(bytes[bytes.startIndex])
+      let second = UInt16(bytes[bytes.index(after: bytes.startIndex)])
+      switch endianness {
+        case .little: return first | (second << 8)
+        case .big: return (first << 8) | second
+      }
+    }
+
+    func uint32(at offset: Int) throws -> UInt32 {
+      let end = try checkedEnd(offset: offset, length: 4)
+      let startIndex = data.index(data.startIndex, offsetBy: offset)
+      let endIndex = data.index(data.startIndex, offsetBy: end)
+      let bytes = data[startIndex..<endIndex]
+      let values = bytes.map(UInt32.init)
+      switch endianness {
+        case .little:
+          return values[0] | (values[1] << 8) | (values[2] << 16) | (values[3] << 24)
+        case .big:
+          return (values[0] << 24) | (values[1] << 16) | (values[2] << 8) | values[3]
+      }
+    }
+
+    func bytes(at offset: Int, count: Int) throws -> Data {
+      let end = try checkedEnd(offset: offset, length: count)
+      let startIndex = data.index(data.startIndex, offsetBy: offset)
+      let endIndex = data.index(data.startIndex, offsetBy: end)
+      return data.subdata(in: startIndex..<endIndex)
+    }
+  }
+
+  private static func endianness(for encoding: DataElementEncoding) -> Endianness {
+    encoding == .explicitVRBigEndian ? .big : .little
+  }
+
+  private static func checkedProduct(
+    _ values: Int...,
+    maximum: Int = Int.max,
+    tag: DicomTag
+  ) throws -> Int {
+    var result = 1
+    for value in values {
+      guard value >= 0 else {
+        throw DicomParsingError.invalidElementValue(tag)
+      }
+      let (product, overflow) = result.multipliedReportingOverflow(by: value)
+      guard !overflow, product <= maximum else {
+        throw DicomParsingError.invalidElementValue(tag)
+      }
+      result = product
+    }
+    return result
+  }
+
   /**
    A representation of a decoded 3D volume from a series of DICOM slices.
 
@@ -176,14 +254,19 @@ final class DicomParser {
 
     let depth = sorted.count
     // Allocate a buffer for all voxel data
-    var buffer = [UInt8](repeating: 0, count: width * height * depth * bytesPerVoxel)
+    let volumeByteCount = try checkedProduct(
+      width, height, depth, bytesPerVoxel,
+      tag: .pixelData
+    )
+    var buffer = [UInt8](repeating: 0, count: volumeByteCount)
 
     // Decode each slice and copy its pixels into the buffer
     for (i, (file, slice)) in sorted.enumerated() {
       try cancellationToken?.checkCancellation()
-      let offset = i * width * height * bytesPerVoxel
+      let sliceByteCount = try checkedProduct(width, height, bytesPerVoxel, tag: .pixelData)
+      let offset = try checkedProduct(i, sliceByteCount, tag: .pixelData)
       let pixels = try slice.decodedPixels(using: file.transferSyntax.pixelDataEncoding)
-      guard pixels.count == width * height * bytesPerVoxel else {
+      guard pixels.count == sliceByteCount else {
         throw DicomParsingError.invalidElementValue(DicomTag.pixelData)
       }
       buffer.replaceSubrange(offset..<offset + pixels.count, with: pixels)
@@ -333,8 +416,14 @@ final class DicomParser {
           // Calculate expected byte count for the uncompressed image
           let bits = Int(bitsAllocated ?? 8)
           let expectedBytesPerPixel = (bits + 7) / 8
-          let totalPixels = Int(rows) * Int(columns) * Int(samplesPerPixel ?? 1)
-          let expectedByteCount = totalPixels * expectedBytesPerPixel
+          let expectedByteCount = try DicomParser.checkedProduct(
+            Int(rows),
+            Int(columns),
+            Int(samplesPerPixel ?? 1),
+            expectedBytesPerPixel,
+            maximum: DicomParser.maximumDecodedSliceBytes,
+            tag: .pixelData
+          )
 
           guard pixelData.count >= expectedByteCount else {
             throw DicomParsingError.invalidElementValue(DicomTag.pixelData)
@@ -434,19 +523,29 @@ final class DicomParser {
       var fragments: [Data] = []
       var isFirstItem = true
 
-      while offset + 8 <= pixelData.count {
-        let group = pixelData.readUInt16LE(at: offset)
-        let element = pixelData.readUInt16LE(at: offset + 2)
-        let length = pixelData.readUInt32LE(at: offset + 4)
+      let reader = ByteReader(data: pixelData, endianness: .little)
+      var foundDelimiter = false
+
+      while offset < pixelData.count {
+        guard pixelData.count - offset >= 8 else {
+          throw DicomParsingError.invalidElementValue(.pixelData)
+        }
+        let group = try reader.uint16(at: offset)
+        let element = try reader.uint16(at: offset + 2)
+        let length = try reader.uint32(at: offset + 4)
         offset += 8
 
         if (group, element) == (0xFFFE, 0xE000) {
-          let itemLength = Int(length)
-          guard offset + itemLength <= pixelData.count else {
+          guard length != UInt32.max else {
             throw DicomParsingError.invalidElementValue(DicomTag.pixelData)
           }
-
-          let itemData = pixelData.subdata(in: offset..<offset + itemLength)
+          let itemLength = Int(length)
+          let itemData: Data
+          do {
+            itemData = try reader.bytes(at: offset, count: itemLength)
+          } catch {
+            throw DicomParsingError.invalidElementValue(.pixelData)
+          }
 
           // Skip Basic Offset Table (first item)
           if isFirstItem {
@@ -459,12 +558,19 @@ final class DicomParser {
 
         } else if (group, element) == (0xFFFE, 0xE0DD) {
           // Sequence Delimitation Item
+          guard length == 0 else {
+            throw DicomParsingError.invalidElementValue(.pixelData)
+          }
+          foundDelimiter = true
           break
         } else {
-          break
+          throw DicomParsingError.invalidElementValue(.pixelData)
         }
       }
 
+      guard foundDelimiter, !isFirstItem else {
+        throw DicomParsingError.invalidElementValue(.pixelData)
+      }
       return fragments
     }
 
@@ -481,39 +587,64 @@ final class DicomParser {
       }
 
       // Read segment count and offsets
-      let numberOfSegments = Int(UInt32(littleEndian:
-                                          data[0..<4].withUnsafeBytes { $0.load(as: UInt32.self) }))
+      let reader = ByteReader(data: data, endianness: .little)
+      let numberOfSegments = Int(try reader.uint32(at: 0))
       guard numberOfSegments > 0, numberOfSegments <= 15 else {
         throw DicomParsingError.invalidElementValue(DicomTag.pixelData)
       }
 
       var segmentOffsets: [Int] = []
       for i in 0..<numberOfSegments {
-        let offset = Int(UInt32(littleEndian:
-                                  data[4 + i * 4..<8 + i * 4].withUnsafeBytes { $0.load(as: UInt32.self) }))
+        let offset = Int(try reader.uint32(at: 4 + i * 4))
         segmentOffsets.append(offset)
       }
 
+      guard segmentOffsets.first == 64,
+            segmentOffsets.allSatisfy({ (64...data.count).contains($0) }),
+            zip(segmentOffsets, segmentOffsets.dropFirst()).allSatisfy({ $0 <= $1 }) else {
+        throw DicomParsingError.invalidElementValue(.pixelData)
+      }
+
       // Decode each segment separately
-      let totalPixels = Int(rows) * Int(columns) * Int(samplesPerPixel ?? 1)
-      let bytesPerPixel = Int((bitsAllocated ?? 8 + 7) / 8)
+      let pixelCount = try DicomParser.checkedProduct(
+        Int(rows), Int(columns),
+        maximum: DicomParser.maximumDecodedSliceBytes,
+        tag: .pixelData
+      )
+      let sampleCount = Int(samplesPerPixel ?? 1)
+      let bytesPerSample = Int(((bitsAllocated ?? 8) + 7) / 8)
+      let requiredSegments = try DicomParser.checkedProduct(
+        sampleCount, bytesPerSample,
+        tag: .pixelData
+      )
+      guard numberOfSegments == requiredSegments else {
+        throw DicomParsingError.invalidElementValue(.pixelData)
+      }
       var decodedSegments: [[UInt8]] = Array(repeating: [], count: numberOfSegments)
       for i in 0..<numberOfSegments {
         let start = segmentOffsets[i]
         let end = (i + 1 < numberOfSegments) ? segmentOffsets[i + 1] : data.count
-        let segmentData = data[start..<end]
-        decodedSegments[i] = try decodeRLESegment(segmentData)
+        guard start <= end else {
+          throw DicomParsingError.invalidElementValue(.pixelData)
+        }
+        let segmentData = try reader.bytes(at: start, count: end - start)
+        decodedSegments[i] = try decodeRLESegment(segmentData, expectedByteCount: pixelCount)
       }
 
       // Interleave segments into final pixel array
-      var result = [UInt8](repeating: 0, count: totalPixels * bytesPerPixel)
-      for pixelIndex in 0..<totalPixels {
-        for bytePlane in 0..<bytesPerPixel {
-          let segment = decodedSegments[bytePlane]
-          guard pixelIndex < segment.count else {
-            throw DicomParsingError.invalidElementValue(DicomTag.pixelData)
+      let resultByteCount = try DicomParser.checkedProduct(
+        pixelCount, sampleCount, bytesPerSample,
+        maximum: DicomParser.maximumDecodedSliceBytes,
+        tag: .pixelData
+      )
+      var result = [UInt8](repeating: 0, count: resultByteCount)
+      for pixelIndex in 0..<pixelCount {
+        for sampleIndex in 0..<sampleCount {
+          for bytePlane in 0..<bytesPerSample {
+            let segmentIndex = sampleIndex * bytesPerSample + bytePlane
+            let outputIndex = (pixelIndex * sampleCount + sampleIndex) * bytesPerSample + bytePlane
+            result[outputIndex] = decodedSegments[segmentIndex][pixelIndex]
           }
-          result[pixelIndex * bytesPerPixel + bytePlane] = segment[pixelIndex]
         }
       }
 
@@ -527,8 +658,9 @@ final class DicomParser {
      - Throws: `DicomParsingError.invalidElementValue` on corruption.
      - Returns: The decoded byte array for that segment.
      */
-    private func decodeRLESegment(_ segment: Data) throws -> [UInt8] {
+    private func decodeRLESegment(_ segment: Data, expectedByteCount: Int) throws -> [UInt8] {
       var output: [UInt8] = []
+      output.reserveCapacity(expectedByteCount)
       var i = 0
       while i < segment.count {
         let control = Int8(bitPattern: segment[i])
@@ -538,6 +670,9 @@ final class DicomParser {
           guard i + count <= segment.count else {
             throw DicomParsingError.invalidElementValue(DicomTag.pixelData)
           }
+          guard output.count <= expectedByteCount - count else {
+            throw DicomParsingError.invalidElementValue(.pixelData)
+          }
           output.append(contentsOf: segment[i..<i+count])
           i += count
         } else if control >= -127 {
@@ -546,9 +681,16 @@ final class DicomParser {
           }
           let value = segment[i]
           i += 1
-          output.append(contentsOf: repeatElement(value, count: 1 - Int(control)))
+          let count = 1 - Int(control)
+          guard output.count <= expectedByteCount - count else {
+            throw DicomParsingError.invalidElementValue(.pixelData)
+          }
+          output.append(contentsOf: repeatElement(value, count: count))
         }
         // -128 is a no-op
+      }
+      guard output.count == expectedByteCount else {
+        throw DicomParsingError.invalidElementValue(.pixelData)
       }
       return output
     }
@@ -641,63 +783,81 @@ final class DicomParser {
    - Returns: A tuple containing the parsed `DicomElement` and the offset to the next element.
    */
   static func readElement(at startOffset: Int, in data: Data, using encoding: DataElementEncoding) throws -> (element: DicomElement, nextOffset: Int) {
-    guard startOffset + 8 <= data.count else {
-      throw DicomParsingError.incompleteElementHeader
+    let requestedReader = ByteReader(data: data, endianness: endianness(for: encoding))
+    let littleEndianReader = ByteReader(data: data, endianness: .little)
+    _ = try requestedReader.checkedEnd(offset: startOffset, length: 8)
+
+    // File-meta information is always Explicit VR Little Endian, even when the dataset is big endian.
+    let littleEndianGroup = try littleEndianReader.uint16(at: startOffset)
+    let actualEncoding: DataElementEncoding = littleEndianGroup == 0x0002
+      ? .explicitVRLittleEndian
+      : encoding
+    let reader = ByteReader(data: data, endianness: endianness(for: actualEncoding))
+    let group = try reader.uint16(at: startOffset)
+    let element = try reader.uint16(at: startOffset + 2)
+    let tag = DicomTag(group, element)
+    var offset = startOffset + 4
+
+    // Item and delimitation tags have no VR field and always use the 8-byte item header.
+    if group == 0xFFFE {
+      let rawLength = try reader.uint32(at: offset)
+      offset += 4
+      let length = Int(rawLength)
+      let nextOffset: Int
+      if rawLength == UInt32.max {
+        nextOffset = offset
+      } else {
+        nextOffset = try reader.checkedEnd(offset: offset, length: length)
+      }
+      return (
+        element: DicomElement(
+          tag: tag,
+          vr: "NA",
+          length: length,
+          valueOffset: offset,
+          isSequence: false
+        ),
+        nextOffset: nextOffset
+      )
     }
 
-    let groupRange = startOffset..<startOffset+2
-    let elementRange = startOffset+2..<startOffset+4
-    var offset = startOffset+4
-
-    let group = encoding == .explicitVRBigEndian
-    ? UInt16(bigEndian: data.subdata(in: groupRange).withUnsafeBytes { $0.load(as: UInt16.self) })
-    : UInt16(littleEndian: data.subdata(in: groupRange).withUnsafeBytes { $0.load(as: UInt16.self) })
-
-    let element = encoding == .explicitVRBigEndian
-    ? UInt16(bigEndian: data.subdata(in: elementRange).withUnsafeBytes { $0.load(as: UInt16.self) })
-    : UInt16(littleEndian: data.subdata(in: elementRange).withUnsafeBytes { $0.load(as: UInt16.self) })
-
-    let tag = DicomTag(group, element)
-
-    let actualEncoding: DataElementEncoding = (group == 0x0002) ? .explicitVRLittleEndian : encoding
-
     let vr: String
-    let length: Int
+    let rawLength: UInt32
 
     if actualEncoding == .implicitVRLittleEndian {
       vr = inferredVR(for: tag)
-      length = Int(UInt32(littleEndian: data.subdata(in: offset..<offset+4).withUnsafeBytes { $0.load(as: UInt32.self) }))
+      rawLength = try reader.uint32(at: offset)
       offset += 4
     } else {
-      vr = String(data: data.subdata(in: offset..<offset+2), encoding: .ascii) ?? "UN"
+      vr = String(data: try reader.bytes(at: offset, count: 2), encoding: .ascii) ?? "UN"
       offset += 2
 
       let isLongVR = ["OB", "OW", "OF", "SQ", "UT", "UN"].contains(vr)
 
       if isLongVR {
+        _ = try reader.checkedEnd(offset: offset, length: 6)
         offset += 2 // skip the 2 reserved bytes
-        length = Int(UInt32(littleEndian: data.subdata(in: offset..<offset+4).withUnsafeBytes { $0.load(as: UInt32.self) }))
+        rawLength = try reader.uint32(at: offset)
         offset += 4
       } else {
-        length = Int(UInt16(littleEndian: data.subdata(in: offset..<offset+2).withUnsafeBytes { $0.load(as: UInt16.self) }))
+        rawLength = UInt32(try reader.uint16(at: offset))
         offset += 2
       }
     }
 
-    // if length is 0xFFFFFFFF we hit an undef length SQ
-    // since we don't know all the private tags we may
-    // have missclassified them as UN so switch to SQ now
-    if length == 0xFFFFFFFF {
+    let length = Int(rawLength)
+    if rawLength == UInt32.max {
       return (
         element: DicomElement(tag: tag, vr: "SQ", length: length, valueOffset: offset, isSequence: true),
-        nextOffset: offset + length
-      )
-    } else {
-      return (
-        element: DicomElement(tag: tag, vr: vr, length: length, valueOffset: offset, isSequence: vr == "SQ"),
-        nextOffset: offset + length
+        nextOffset: offset
       )
     }
+
+    let nextOffset = try reader.checkedEnd(offset: offset, length: length)
+    return (
+      element: DicomElement(tag: tag, vr: vr, length: length, valueOffset: offset, isSequence: vr == "SQ"),
+      nextOffset: nextOffset
+    )
   }
 
   /**
@@ -713,7 +873,8 @@ final class DicomParser {
       throw DicomParsingError.fileTooSmall
     }
 
-    guard String(data: data.subdata(in: 128..<132), encoding: .ascii) == "DICM" else {
+    let reader = ByteReader(data: data, endianness: .little)
+    guard String(data: try reader.bytes(at: 128, count: 4), encoding: .ascii) == "DICM" else {
       throw DicomParsingError.missingDICMPrefix
     }
 
@@ -721,31 +882,25 @@ final class DicomParser {
     var transferSyntaxUID: String?
 
     // Scan file meta-information for TransferSyntaxUID tag
-    while offset + 8 <= data.count {
-      let group = UInt16(littleEndian: data.subdata(in: offset..<offset+2).withUnsafeBytes { $0.load(as: UInt16.self) })
-      let element = UInt16(littleEndian: data.subdata(in: offset+2..<offset+4).withUnsafeBytes { $0.load(as: UInt16.self) })
-      let tag = DicomTag(group, element)
-
-      let vr = String(data: data.subdata(in: offset+4..<offset+6), encoding: .ascii) ?? ""
-      let length: Int
-      let valueOffset: Int
-
-      if ["OB", "OW", "OF", "SQ", "UT", "UN"].contains(vr) {
-        length = Int(UInt32(littleEndian: data.subdata(in: offset+8..<offset+12).withUnsafeBytes { $0.load(as: UInt32.self) }))
-        valueOffset = offset + 12
-      } else {
-        length = Int(UInt16(littleEndian: data.subdata(in: offset+6..<offset+8).withUnsafeBytes { $0.load(as: UInt16.self) }))
-        valueOffset = offset + 8
-      }
+    while offset < data.count {
+      let parsed = try readElement(at: offset, in: data, using: .explicitVRLittleEndian)
+      let tag = parsed.element.tag
+      guard tag.group == 0x0002 else { break }
 
       if tag == .transferSyntaxUID {
-        let uidData = data.subdata(in: valueOffset..<valueOffset+length)
+        let uidData = try reader.bytes(
+          at: parsed.element.valueOffset,
+          count: parsed.element.length
+        )
         transferSyntaxUID = String(data: uidData, encoding: .ascii)?
           .trimmingCharacters(in: .controlCharacters.union(.whitespaces))
         break
       }
 
-      offset = valueOffset + length
+      guard parsed.nextOffset > offset else {
+        throw DicomParsingError.incompleteElementHeader
+      }
+      offset = parsed.nextOffset
     }
 
     guard let uid = transferSyntaxUID else {
@@ -771,17 +926,24 @@ final class DicomParser {
 
     /// Recursively scan data elements, handling sequences and undefined lengths.
     func scanElements(in data: Data, startingAt offset: Int, using encoding: DataElementEncoding, depth: Int = 0) throws -> Int {
+      guard depth <= maximumSequenceDepth else {
+        throw DicomParsingError.invalidElementValue(DicomTag(0xFFFE, 0xE000))
+      }
       var currentOffset = offset
       let startOffset = offset
       var visitedOffsets = Set<Int>()
+      let reader = ByteReader(data: data, endianness: endianness(for: encoding))
 
-      while currentOffset + 8 <= data.count, !visitedOffsets.contains(currentOffset) {
+      while currentOffset < data.count, !visitedOffsets.contains(currentOffset) {
         visitedOffsets.insert(currentOffset)
 
         var (element, nextOffset) = try readElement(at: currentOffset, in: data, using: encoding)
 
         // Stop at sequence delimitation
         if element.tag.group == 0xFFFE {
+          guard element.tag.element == 0xE00D || element.tag.element == 0xE0DD else {
+            throw DicomParsingError.invalidElementValue(element.tag)
+          }
           currentOffset = nextOffset
           return currentOffset - startOffset
         }
@@ -791,31 +953,42 @@ final class DicomParser {
           var pixelOffset = element.valueOffset
 
           // Walk Item (FFFE,E000) blocks until Sequence Delimitation Item (FFFE,E0DD).
-          while pixelOffset + 8 <= data.count {
-            let itemGroup = UInt16(littleEndian:
-                                    data.subdata(in: pixelOffset..<pixelOffset+2).withUnsafeBytes { $0.load(as: UInt16.self) })
-            let itemElement = UInt16(littleEndian:
-                                      data.subdata(in: pixelOffset+2..<pixelOffset+4).withUnsafeBytes { $0.load(as: UInt16.self) })
+          var foundDelimiter = false
+          while pixelOffset < data.count {
+            guard data.count - pixelOffset >= 8 else {
+              throw DicomParsingError.invalidElementValue(.pixelData)
+            }
+            let itemGroup = try reader.uint16(at: pixelOffset)
+            let itemElement = try reader.uint16(at: pixelOffset + 2)
             let itemTag = DicomTag(itemGroup, itemElement)
+            let itemLength = try reader.uint32(at: pixelOffset + 4)
 
             if itemTag.group == 0xFFFE && itemTag.element == 0xE000 {
-              let itemLength = UInt32(littleEndian:
-                                        data.subdata(in: pixelOffset+4..<pixelOffset+8).withUnsafeBytes { $0.load(as: UInt32.self) })
-              let next = pixelOffset + 8 + Int(itemLength)
-              guard next <= data.count else {
+              guard itemLength != UInt32.max else {
                 throw DicomParsingError.invalidElementValue(DicomTag.pixelData)
               }
-              pixelOffset = next
+              pixelOffset = try reader.checkedEnd(
+                offset: pixelOffset + 8,
+                length: Int(itemLength)
+              )
               continue
             }
 
             if itemTag.group == 0xFFFE && itemTag.element == 0xE0DD {
+              guard itemLength == 0 else {
+                throw DicomParsingError.invalidElementValue(.pixelData)
+              }
               // Include the 8-byte delimiter header.
               pixelOffset += 8
+              foundDelimiter = true
               break
             }
 
-            break
+            throw DicomParsingError.invalidElementValue(.pixelData)
+          }
+
+          guard foundDelimiter else {
+            throw DicomParsingError.invalidElementValue(.pixelData)
           }
 
           let encapsulatedLength = pixelOffset - element.valueOffset
@@ -837,42 +1010,69 @@ final class DicomParser {
 
         // Recurse into sequences
         if element.isSequence {
-          let subrangeEnd = element.length == 0xFFFFFFFF
-          ? data.count
-          : element.valueOffset + element.length
+          let hasUndefinedLength = element.length == undefinedLength
+          let subrangeEnd = hasUndefinedLength ? data.count : nextOffset
           var itemOffset = element.valueOffset
           var maxOffset = itemOffset
+          var foundDelimiter = false
 
-          while itemOffset + 8 <= subrangeEnd {
+          while itemOffset < subrangeEnd {
+            guard subrangeEnd - itemOffset >= 8 else {
+              throw DicomParsingError.invalidElementValue(element.tag)
+            }
             let itemTag = DicomTag(
-              UInt16(littleEndian: data.subdata(in: itemOffset..<itemOffset+2).withUnsafeBytes { $0.load(as: UInt16.self) }),
-              UInt16(littleEndian: data.subdata(in: itemOffset+2..<itemOffset+4).withUnsafeBytes { $0.load(as: UInt16.self) })
+              try reader.uint16(at: itemOffset),
+              try reader.uint16(at: itemOffset + 2)
             )
+            let itemLength = try reader.uint32(at: itemOffset + 4)
             if itemTag.group == 0xFFFE && itemTag.element == 0xE000 {
-              let itemLength = UInt32(littleEndian:
-                                        data.subdata(in: itemOffset+4..<itemOffset+8).withUnsafeBytes { $0.load(as: UInt32.self) })
               let itemDataStart = itemOffset + 8
-              let itemDataEnd = itemLength == 0xFFFFFFFF
-              ? subrangeEnd
-              : itemDataStart + Int(itemLength)
-              let itemData = data.subdata(in: itemDataStart..<min(itemDataEnd, data.count))
-              let consumed = try scanElements(in: itemData, startingAt: 0, using: encoding, depth: depth + 1)
-              itemOffset = itemLength == 0xFFFFFFFF
-              ? itemDataStart + consumed
-              : itemDataEnd
+              if itemLength == UInt32.max {
+                let consumed = try scanElements(
+                  in: data,
+                  startingAt: itemDataStart,
+                  using: encoding,
+                  depth: depth + 1
+                )
+                itemOffset = itemDataStart + consumed
+              } else {
+                let itemDataEnd = try reader.checkedEnd(
+                  offset: itemDataStart,
+                  length: Int(itemLength)
+                )
+                guard itemDataEnd <= subrangeEnd else {
+                  throw DicomParsingError.invalidElementValue(element.tag)
+                }
+                _ = try scanElements(
+                  in: try reader.bytes(at: itemDataStart, count: Int(itemLength)),
+                  startingAt: 0,
+                  using: encoding,
+                  depth: depth + 1
+                )
+                itemOffset = itemDataEnd
+              }
               maxOffset = itemOffset
             } else if itemTag.group == 0xFFFE && itemTag.element == 0xE0DD {
+              guard itemLength == 0 else {
+                throw DicomParsingError.invalidElementValue(element.tag)
+              }
               maxOffset = itemOffset + 8
+              foundDelimiter = true
               break
             } else {
-              break
+              throw DicomParsingError.invalidElementValue(element.tag)
             }
           }
-          currentOffset = element.length == 0xFFFFFFFF //0xFFFE_ffff
-          ? maxOffset
-          : nextOffset
+          if hasUndefinedLength, !foundDelimiter {
+            throw DicomParsingError.invalidElementValue(element.tag)
+          }
+          currentOffset = hasUndefinedLength ? maxOffset : nextOffset
         } else {
           currentOffset = nextOffset
+        }
+
+        guard currentOffset > startOffset else {
+          throw DicomParsingError.incompleteElementHeader
         }
       }
       return currentOffset - startOffset
@@ -923,37 +1123,37 @@ final class DicomParser {
     // Helper to read UInt16 values
     func readUInt16(tag: DicomTag) -> UInt16? {
       guard let elem = elements[tag], elem.length >= 2 else { return nil }
-      return dicom.rawData.subdata(in: elem.valueOffset..<elem.valueOffset+2)
-        .withUnsafeBytes { $0.load(as: UInt16.self) }
+      let reader = ByteReader(
+        data: dicom.rawData,
+        endianness: endianness(for: dicom.transferSyntax.elementEncoding)
+      )
+      return try? reader.uint16(at: elem.valueOffset)
     }
 
     // Helper to read Float from ASCII value
     func readFloat(tag: DicomTag) -> Float? {
       guard let elem = elements[tag] else { return nil }
-      let str = String(
-        data: dicom.rawData.subdata(in: elem.valueOffset..<elem.valueOffset+elem.length),
-        encoding: .ascii
-      )?.trimmingCharacters(in: .whitespaces)
+      let reader = ByteReader(data: dicom.rawData, endianness: .little)
+      guard let bytes = try? reader.bytes(at: elem.valueOffset, count: elem.length) else { return nil }
+      let str = String(data: bytes, encoding: .ascii)?.trimmingCharacters(in: .whitespaces)
       return str.flatMap(Float.init)
     }
 
     // Helper to read ASCII value
     func readString(tag: DicomTag) -> String? {
       guard let elem = elements[tag] else { return nil }
-      let str = String(
-        data: dicom.rawData.subdata(in: elem.valueOffset..<elem.valueOffset+elem.length),
-        encoding: .ascii
-      )?.trimmingCharacters(in: .whitespaces)
+      let reader = ByteReader(data: dicom.rawData, endianness: .little)
+      guard let bytes = try? reader.bytes(at: elem.valueOffset, count: elem.length) else { return nil }
+      let str = String(data: bytes, encoding: .ascii)?.trimmingCharacters(in: .whitespaces)
       return str
     }
 
     // Helper to read tuple of floats separated by backslashes
     func readFloatTuple(tag: DicomTag, count: Int) -> [Float]? {
       guard let elem = elements[tag] else { return nil }
-      let str = String(
-        data: dicom.rawData.subdata(in: elem.valueOffset..<elem.valueOffset+elem.length),
-        encoding: .ascii
-      )
+      let reader = ByteReader(data: dicom.rawData, endianness: .little)
+      guard let bytes = try? reader.bytes(at: elem.valueOffset, count: elem.length) else { return nil }
+      let str = String(data: bytes, encoding: .ascii)
       let parts = str?
         .split(separator: "\\")
         .compactMap { Float($0.trimmingCharacters(in: .whitespaces)) }
@@ -963,10 +1163,9 @@ final class DicomParser {
     // Helper to read instance number as Int
     func readInstanceNumber(tag: DicomTag) -> Int? {
       guard let elem = elements[tag] else { return nil }
-      let str = String(
-        data: dicom.rawData.subdata(in: elem.valueOffset..<elem.valueOffset+elem.length),
-        encoding: .ascii
-      )?.trimmingCharacters(in: .whitespaces)
+      let reader = ByteReader(data: dicom.rawData, endianness: .little)
+      guard let bytes = try? reader.bytes(at: elem.valueOffset, count: elem.length) else { return nil }
+      let str = String(data: bytes, encoding: .ascii)?.trimmingCharacters(in: .whitespaces)
       return str.flatMap(Int.init)
     }
 
@@ -975,11 +1174,11 @@ final class DicomParser {
     let pixelData: Data
     if let elem = elements[.pixelData] {
       let start = elem.valueOffset
-      let end = start + elem.length
-      guard start >= 0, end >= start, end <= dicom.rawData.count else {
+      let reader = ByteReader(data: dicom.rawData, endianness: .little)
+      guard let bytes = try? reader.bytes(at: start, count: elem.length) else {
         throw DicomParsingError.invalidElementValue(DicomTag.pixelData)
       }
-      pixelData = dicom.rawData.subdata(in: start..<end)
+      pixelData = bytes
     } else {
       pixelData = Data()
     }
@@ -1002,23 +1201,6 @@ final class DicomParser {
       patientName: readString(tag:.patientName),
       seriesDate: readString(tag:.seriesDate)
     )
-  }
-}
-
-private extension Data {
-  @inline(__always)
-  func readUInt16LE(at offset: Int) -> UInt16 {
-    let i = startIndex + offset
-    return UInt16(self[i]) | (UInt16(self[i + 1]) << 8)
-  }
-
-  @inline(__always)
-  func readUInt32LE(at offset: Int) -> UInt32 {
-    let i = startIndex + offset
-    return UInt32(self[i])
-    | (UInt32(self[i + 1]) << 8)
-    | (UInt32(self[i + 2]) << 16)
-    | (UInt32(self[i + 3]) << 24)
   }
 }
 
