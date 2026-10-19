@@ -180,7 +180,7 @@ final class AppModel: ObservableObject {
   var defaultVolumeMarkerRadius = VolumeMarkerRadius.sphereDefault
   /// Direction visibility used for sphere markers created later in this app session.
   var defaultVolumeMarkerShowsDirection = false
-  @Published var timer: CPUFrameTimer?
+  @Published var timer: GPUFrameTimer?
   @Published var performanceModel = PerformanceGraphModel()
   let logger = GUILogger()
   var renderScreenshotHandler: RenderScreenshotHandler?

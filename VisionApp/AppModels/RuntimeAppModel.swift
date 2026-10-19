@@ -109,7 +109,7 @@ class RuntimeAppModel {
   }
 
   /// Optional timer for CPU frame tracking.
-  var timer: CPUFrameTimer? = nil
+  var timer: GPUFrameTimer? = nil
 
   /// Model for performance graphing.
   var performanceModel: PerformanceGraphModel = PerformanceGraphModel()

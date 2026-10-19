@@ -56,7 +56,7 @@ final class ScreenVolumeRendererCore {
   private var pipelineDrawableWidth: Float = 0
   private(set) var activeOversampling: Float = 1
   private var configuredOversamplingMode = ""
-  let timer = CPUFrameTimer()
+  let timer = GPUFrameTimer()
   private let cameraDistance = BorgVRScreenViewState.cameraDistance
   private let fieldOfViewY = BorgVRScreenViewState.defaultVerticalFieldOfView
   private let minimumPipelineDrawableWidth: Float = 64
@@ -324,7 +324,7 @@ final class ScreenVolumeRendererCore {
       textureToClip: [frame.textureToClip]
     )
     let missingBrickCount = readBackHashTable(commandBuffer: frame.commandBuffer)
-    timer.frameRendered()
+    timer.recordCompletedFrame(frame.commandBuffer)
     return missingBrickCount
   }
 

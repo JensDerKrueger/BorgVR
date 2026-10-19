@@ -1,164 +1,299 @@
 import Foundation
 import Metal
+import QuartzCore
+
+public enum GPUFrameTimingSource: Equatable {
+  case unavailable
+  case gpu
+  case cpuFallback
+}
 
 /**
- A GPU-based frame timer that tracks frame rates and monitors performance
- using Metal command buffers.
+ Tracks the execution rate of completed Metal frames.
 
- GPUFrameTimer conforms to FrameTimerProtocol and calculates various FPS
- metrics (last, average, smoothed, min, and max FPS) based on GPU command buffer
- timings. It updates its statistics when a command buffer completes, and it
- triggers performance state transitions and recovery callbacks as needed.
+ Valid Metal GPU timestamps are the preferred source. Some environments, most notably
+ simulators, can return zero timestamps even for completed command buffers. In that case the
+ timer falls back to the interval between command-buffer completions instead of silently
+ stopping its statistics.
  */
-public class GPUFrameTimer: FrameTimerProtocol {
-  /// The FPS measured for the last completed frame.
-  public private(set) var lastFPS: Double = 0
-  /// The average FPS computed over the recorded frame history.
-  public private(set) var averageFPS: Double = 0
-  /// The exponentially smoothed FPS value.
-  public private(set) var smoothedFPS: Double = 0
-  /// The minimum FPS recorded.
-  public private(set) var minFPS: Double = Double.greatestFiniteMagnitude
-  /// The maximum FPS recorded.
-  public private(set) var maxFPS: Double = 0
+public final class GPUFrameTimer: FrameTimerProtocol, @unchecked Sendable {
+  private struct FrameSample {
+    let timestamp: CFTimeInterval
+    let duration: CFTimeInterval
+  }
 
-  /// A ring buffer storing recent frame timestamps.
-  private var frameTimestamps = RingBuffer<CFTimeInterval>()
-  /// The maximum duration (in seconds) for which frame history is retained.
-  private let maxHistoryDuration: CFTimeInterval = 5
-  /// The smoothing factor used for exponential moving average calculation.
-  private let smoothingFactor: Double = 0.1
-  /// Indicates whether the exponential moving average has been initialized.
-  private var emaInitialized = false
-
-  /// An optional logger used to output FPS metrics.
+  private let lock = NSRecursiveLock()
   private let logger: LoggerBase?
 
-  /// Callback triggered when the performance state changes.
-  public var onStateChanged: ((PerformanceState) -> Void)?
+  private var samples = RingBuffer<FrameSample>()
+  private var measurementStartTimestamp: CFTimeInterval = 0
+  private var lastCompletionTimestamp: CFTimeInterval = 0
+  private var lastSampleTimestamp: CFTimeInterval = 0
+  private var emaInitialized = false
+  private var didReportFallback = false
+  private let smoothingFactor = 0.1
 
-  // Performance thresholds.
-  public var dropThreshold: Double = 30.0
-  public var recoveryThreshold: Double = 35.0
-  public var minimumDropDuration: TimeInterval = 2.0
+  private var storedLastFPS: Double = 0
+  private var storedAverageFPS: Double = 0
+  private var storedSmoothedFPS: Double = 0
+  private var storedMinFPS = Double.greatestFiniteMagnitude
+  private var storedMaxFPS: Double = 0
+  private var storedRenderedFrameCount: UInt64 = 0
+  private var storedTimingSource: GPUFrameTimingSource = .unavailable
+  private var storedGPUTimingSampleCount: UInt64 = 0
+  private var storedFallbackTimingSampleCount: UInt64 = 0
+  private var storedHistoryDuration: CFTimeInterval = 5
 
-  /// Callback invoked when performance is too slow.
-  public var onPerformanceTooSlow: ((Double, Double) -> Void)?
-  /// Callback invoked during performance recovery. Returns true if a recovery step
-  /// was executed.
-  public var onPerformanceRecovered: ((Double, Double) -> Bool)?
-
-  /// The current performance state.
+  private var storedOnStateChanged: ((PerformanceState) -> Void)?
+  private var storedOnPerformanceTooSlow: ((Double, Double) -> Void)?
+  private var storedOnPerformanceRecovered: ((Double, Double) -> Bool)?
+  private var storedDropThreshold = 30.0
+  private var storedRecoveryThreshold = 35.0
+  private var storedMinimumDropDuration: TimeInterval = 2.0
   private var state: PerformanceState = .normal
 
-  /**
-   Initializes a new GPUFrameTimer.
-
-   - Parameter logger: An optional LoggerBase instance for logging performance data.
-   */
   public init(logger: LoggerBase? = nil) {
     self.logger = logger
   }
 
-  /**
-   Registers a completion handler on the provided Metal command buffer to update
-   FPS metrics when the command buffer completes.
+  public var lastFPS: Double { withLock { storedLastFPS } }
+  public var averageFPS: Double { withLock { storedAverageFPS } }
+  public var smoothedFPS: Double { withLock { storedSmoothedFPS } }
+  public var minFPS: Double { withLock { storedMinFPS } }
+  public var maxFPS: Double { withLock { storedMaxFPS } }
+  public var renderedFrameCount: UInt64 { withLock { storedRenderedFrameCount } }
+  public var timingSource: GPUFrameTimingSource { withLock { storedTimingSource } }
+  public var gpuTimingSampleCount: UInt64 { withLock { storedGPUTimingSampleCount } }
+  public var fallbackTimingSampleCount: UInt64 { withLock { storedFallbackTimingSampleCount } }
 
-   - Parameter commandBuffer: The MTLCommandBuffer whose GPU execution time is used
-   to calculate FPS.
-   */
-  public func frameCompleted(with commandBuffer: MTLCommandBuffer) {
-    commandBuffer.addCompletedHandler { [weak self] commandBuffer in
-      guard let self = self else { return }
-
-      // Clamp the duration to a maximum of 1 second.
-      let duration = min(commandBuffer.gpuEndTime - commandBuffer.gpuStartTime, 1.0)
-      guard duration > 0 else { return }
-
-      let fps = 1.0 / duration
-      let timestamp = commandBuffer.gpuEndTime
-
-      self.updateStats(now: timestamp, fps: fps)
+  public var historyDuration: CFTimeInterval {
+    get { withLock { storedHistoryDuration } }
+    set {
+      withLock {
+        storedHistoryDuration = max(0.1, newValue)
+        purgeOldSamples(currentTime: lastSampleTimestamp)
+        updateAverageFPS()
+      }
     }
   }
 
+  public var measurementDuration: CFTimeInterval {
+    withLock {
+      guard measurementStartTimestamp > 0 else { return 0 }
+      return max(0, CACurrentMediaTime() - measurementStartTimestamp)
+    }
+  }
+
+  public var hasCompleteMeasurementWindow: Bool {
+    withLock {
+      guard storedRenderedFrameCount > 0, measurementStartTimestamp > 0 else { return false }
+      return CACurrentMediaTime() - measurementStartTimestamp >= storedHistoryDuration
+    }
+  }
+
+  public var onStateChanged: ((PerformanceState) -> Void)? {
+    get { withLock { storedOnStateChanged } }
+    set { withLock { storedOnStateChanged = newValue } }
+  }
+
+  public var dropThreshold: Double {
+    get { withLock { storedDropThreshold } }
+    set { withLock { storedDropThreshold = newValue } }
+  }
+
+  public var recoveryThreshold: Double {
+    get { withLock { storedRecoveryThreshold } }
+    set { withLock { storedRecoveryThreshold = newValue } }
+  }
+
+  public var minimumDropDuration: TimeInterval {
+    get { withLock { storedMinimumDropDuration } }
+    set { withLock { storedMinimumDropDuration = newValue } }
+  }
+
+  public var onPerformanceTooSlow: ((Double, Double) -> Void)? {
+    get { withLock { storedOnPerformanceTooSlow } }
+    set { withLock { storedOnPerformanceTooSlow = newValue } }
+  }
+
+  public var onPerformanceRecovered: ((Double, Double) -> Bool)? {
+    get { withLock { storedOnPerformanceRecovered } }
+    set { withLock { storedOnPerformanceRecovered = newValue } }
+  }
+
   /**
-   Updates FPS statistics and handles performance state transitions.
-
-   - Parameters:
-   - now: The current GPU timestamp.
-   - fps: The calculated frames per second from the command buffer.
+   Records a command buffer after Metal has completed it. GPU timestamps are not valid before that
+   point according to the Metal API contract.
    */
-  private func updateStats(now: CFTimeInterval, fps: Double) {
-    lastFPS = fps
+  public func recordCompletedFrame(_ commandBuffer: MTLCommandBuffer) {
+    recordCompletedFrame(
+      gpuStartTime: commandBuffer.gpuStartTime,
+      gpuEndTime: commandBuffer.gpuEndTime,
+      completedAt: CACurrentMediaTime()
+    )
+  }
 
+  /**
+   Scalar entry point used by renderers and tests. The completion timestamp must use the host clock.
+   */
+  public func recordCompletedFrame(
+    gpuStartTime: CFTimeInterval,
+    gpuEndTime: CFTimeInterval,
+    completedAt: CFTimeInterval = CACurrentMediaTime()
+  ) {
+    withLock {
+      let previousCompletionTimestamp = lastCompletionTimestamp
+      if completedAt.isFinite, completedAt > 0 {
+        lastCompletionTimestamp = completedAt
+      }
+
+      let hasValidGPUTimestamps = gpuStartTime.isFinite &&
+        gpuEndTime.isFinite &&
+        gpuStartTime > 0 &&
+        gpuEndTime > gpuStartTime
+
+      let duration: CFTimeInterval
+      let timestamp: CFTimeInterval
+      if hasValidGPUTimestamps {
+        duration = min(gpuEndTime - gpuStartTime, 1)
+        timestamp = gpuEndTime
+        storedTimingSource = .gpu
+        storedGPUTimingSampleCount &+= 1
+        if didReportFallback {
+          logger?.info("Metal GPU frame timing is available again.")
+          didReportFallback = false
+        }
+      } else {
+        guard previousCompletionTimestamp > 0,
+              completedAt.isFinite,
+              completedAt > previousCompletionTimestamp else {
+          reportFallbackIfNeeded()
+          return
+        }
+        duration = min(completedAt - previousCompletionTimestamp, 1)
+        timestamp = completedAt
+        storedTimingSource = .cpuFallback
+        storedFallbackTimingSampleCount &+= 1
+        reportFallbackIfNeeded()
+      }
+
+      guard duration > 0 else { return }
+      recordSample(timestamp: timestamp, duration: duration)
+    }
+  }
+
+  public func reset() {
+    withLock {
+      samples.removeAll()
+      measurementStartTimestamp = 0
+      lastCompletionTimestamp = 0
+      lastSampleTimestamp = 0
+      storedLastFPS = 0
+      storedAverageFPS = 0
+      storedSmoothedFPS = 0
+      storedMinFPS = Double.greatestFiniteMagnitude
+      storedMaxFPS = 0
+      storedRenderedFrameCount = 0
+      storedTimingSource = .unavailable
+      storedGPUTimingSampleCount = 0
+      storedFallbackTimingSampleCount = 0
+      emaInitialized = false
+      didReportFallback = false
+      state = .normal
+    }
+    logger?.dev("GPU FPS stats reset.")
+  }
+
+  private func recordSample(timestamp: CFTimeInterval, duration: CFTimeInterval) {
+    if measurementStartTimestamp == 0 {
+      measurementStartTimestamp = timestamp
+    }
+    lastSampleTimestamp = timestamp
+    storedRenderedFrameCount &+= 1
+
+    let fps = 1 / duration
+    storedLastFPS = fps
     if emaInitialized {
-      smoothedFPS = (smoothingFactor * fps) + ((1 - smoothingFactor) * smoothedFPS)
+      storedSmoothedFPS = smoothingFactor * fps + (1 - smoothingFactor) * storedSmoothedFPS
     } else {
-      smoothedFPS = fps
+      storedSmoothedFPS = fps
       emaInitialized = true
     }
+    storedMinFPS = min(storedMinFPS, fps)
+    storedMaxFPS = max(storedMaxFPS, fps)
 
-    minFPS = min(minFPS, fps)
-    maxFPS = max(maxFPS, fps)
+    samples.append(FrameSample(timestamp: timestamp, duration: duration))
+    purgeOldSamples(currentTime: timestamp)
+    updateAverageFPS()
 
-    frameTimestamps.append(now)
-    purgeOldFrames(currentTime: now)
-
-    if frameTimestamps.count > 1 {
-      let duration = frameTimestamps.last! - frameTimestamps.first!
-      averageFPS = Double(frameTimestamps.count - 1) / duration
-    }
-
-    logger?.dev("GPU FPS: \(String(format: "%.1f", fps))")
-    handleStateTransition(now: now, fps: fps)
+    logger?.dev(
+      "GPU FPS: \(String(format: "%.1f", fps)) " +
+      "(source: \(storedTimingSource == .gpu ? "Metal" : "completion fallback"))"
+    )
+    handleStateTransition(now: timestamp, fps: fps)
   }
 
-  /**
-   Handles transitions between performance states based on the current FPS.
+  private func updateAverageFPS() {
+    guard !samples.isEmpty else {
+      storedAverageFPS = 0
+      return
+    }
+    let accumulatedGPUTime = samples.reduce(0) { $0 + $1.duration }
+    storedAverageFPS = accumulatedGPUTime > 0
+      ? Double(samples.count) / accumulatedGPUTime
+      : 0
+  }
 
-   - Parameters:
-   - now: The current timestamp.
-   - fps: The current frames per second.
-   */
+  private func purgeOldSamples(currentTime: CFTimeInterval) {
+    guard currentTime > 0 else { return }
+    let cutoff = currentTime - storedHistoryDuration
+    while let first = samples.first, first.timestamp < cutoff {
+      samples.removeFirst()
+    }
+  }
+
+  private func reportFallbackIfNeeded() {
+    guard !didReportFallback else { return }
+    didReportFallback = true
+    logger?.warning(
+      "Metal returned no valid GPU timestamps; frame timing uses command-buffer completions."
+    )
+  }
+
   private func handleStateTransition(now: CFTimeInterval, fps: Double) {
     switch state {
       case .normal:
-        if fps < dropThreshold {
+        if fps < storedDropThreshold {
           updateState(to: .tooSlow(startTime: now))
           logger?.warning("Entered low-performance state at \(fps) FPS.")
-          let percentBelow = max(0, (dropThreshold - fps) / dropThreshold)
-          onPerformanceTooSlow?(fps, percentBelow)
+          let percentBelow = max(0, (storedDropThreshold - fps) / storedDropThreshold)
+          storedOnPerformanceTooSlow?(fps, percentBelow)
         }
       case .tooSlow(let startTime):
-        if fps >= recoveryThreshold, (now - startTime) >= minimumDropDuration {
+        if fps >= storedRecoveryThreshold,
+           now - startTime >= storedMinimumDropDuration {
           updateState(to: .recovering)
           logger?.dev("Performance recovering from low state at \(fps) FPS.")
           attemptRecovery(fps: fps)
-        } else if fps < dropThreshold {
-          let percentBelow = max(0, (dropThreshold - fps) / dropThreshold)
-          onPerformanceTooSlow?(fps, percentBelow)
+        } else if fps < storedDropThreshold {
+          let percentBelow = max(0, (storedDropThreshold - fps) / storedDropThreshold)
+          storedOnPerformanceTooSlow?(fps, percentBelow)
         }
       case .recovering:
-        if fps < dropThreshold {
+        if fps < storedDropThreshold {
           updateState(to: .tooSlow(startTime: now))
           logger?.warning("Recovery interrupted, back to low-performance state.")
-          let percentBelow = max(0, (dropThreshold - fps) / dropThreshold)
-          onPerformanceTooSlow?(fps, percentBelow)
-        } else if fps >= recoveryThreshold {
+          let percentBelow = max(0, (storedDropThreshold - fps) / storedDropThreshold)
+          storedOnPerformanceTooSlow?(fps, percentBelow)
+        } else if fps >= storedRecoveryThreshold {
           attemptRecovery(fps: fps)
         }
     }
   }
 
-  /**
-   Attempts a recovery step if performance has improved.
-
-   - Parameter fps: The current frames per second.
-   */
   private func attemptRecovery(fps: Double) {
-    let percentAbove = max(0, (fps - recoveryThreshold) / recoveryThreshold)
-    if let recovered = onPerformanceRecovered?(fps, percentAbove), recovered {
+    let percentAbove = max(0, (fps - storedRecoveryThreshold) / storedRecoveryThreshold)
+    if let recovered = storedOnPerformanceRecovered?(fps, percentAbove), recovered {
       logger?.dev("Recovery step executed.")
     } else {
       logger?.dev("All recovery steps complete. Returning to normal state.")
@@ -166,46 +301,16 @@ public class GPUFrameTimer: FrameTimerProtocol {
     }
   }
 
-  /**
-   Removes old frame timestamps that are outside the maximum history duration.
-
-   - Parameter currentTime: The current timestamp.
-   */
-  private func purgeOldFrames(currentTime: CFTimeInterval) {
-    let cutoff = currentTime - maxHistoryDuration
-    while let first = frameTimestamps.first, first < cutoff {
-      frameTimestamps.removeFirst()
-    }
-  }
-
-  /**
-   Resets all FPS metrics and frame history.
-
-   This method clears the frame history, resets all statistics, and sets the performance state
-   back to normal.
-   */
-  public func reset() {
-    frameTimestamps.removeAll()
-    lastFPS = 0
-    smoothedFPS = 0
-    averageFPS = 0
-    minFPS = Double.greatestFiniteMagnitude
-    maxFPS = 0
-    emaInitialized = false
-    state = .normal
-
-    logger?.dev("GPU FPS stats reset.")
-  }
-
-  /**
-   Updates the performance state and notifies observers of the change.
-
-   - Parameter newState: The new performance state.
-   */
   private func updateState(to newState: PerformanceState) {
     guard state != newState else { return }
     state = newState
-    onStateChanged?(newState)
+    storedOnStateChanged?(newState)
+  }
+
+  private func withLock<T>(_ body: () -> T) -> T {
+    lock.lock()
+    defer { lock.unlock() }
+    return body()
   }
 }
 

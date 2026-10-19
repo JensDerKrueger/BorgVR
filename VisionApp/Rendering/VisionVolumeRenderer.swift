@@ -263,8 +263,8 @@ final actor VisionVolumeRenderer {
   let immersiveInteraction: ImmersiveInteraction
   /// Thread-safe snapshot of UI-owned interaction state.
   let spatialInputContext: SpatialInputRuntimeContext
-  /// A CPU frame timer.
-  let timer: CPUFrameTimer
+  /// A GPU frame timer with a completion-time fallback.
+  let timer: GPUFrameTimer
   /// The initial oversampling factor.
   let initialOversampling: Float
   /// The drop FPS threshold.
@@ -299,13 +299,13 @@ final actor VisionVolumeRenderer {
    - storedAppModel: Application settings.
    - sharedAppModel: Rendering parameters including transfer function and
    isosurface value.
-   - timer: A CPU frame timer.
+   - timer: A GPU frame timer with a completion-time fallback.
    - dataset: The BorgVR dataset.
    - logger: An optional logger.
    */
   init(_ layerRenderer: LayerRenderer,
        session: VisionBorgVRSession,
-       timer: CPUFrameTimer,
+       timer: GPUFrameTimer,
        dataset: BORGVRDatasetProtocol,
        transferFunctionPanelInteractionState: TransferFunctionPanelInteractionState,
        immersiveInteraction: ImmersiveInteraction,
@@ -951,7 +951,7 @@ extension VisionVolumeRenderer {
   /**
    Initializes performance tracking for dynamic oversampling.
 
-   This method sets up the CPU frame timer's thresholds and callback closures so that the renderer
+   This method sets up the GPU frame timer's thresholds and callback closures so that the renderer
    can dynamically adjust the oversampling factor based on current performance (FPS).
    */
   func initPerformanceTracking() {
@@ -1584,7 +1584,6 @@ extension VisionVolumeRenderer {
    Updates performance counters and appends results to the performance model history.
    */
   func updatePerformanceCounters() {
-    timer.frameRendered()
     applyPendingPerformanceAdjustments()
 
     let last = timer.lastFPS
@@ -3530,6 +3529,8 @@ extension VisionVolumeRenderer {
       return false
     }
 
+    timer.recordCompletedFrame(commandBuffer)
+
     let completedFrame = runtimeAppModel.mcpRenderBridge.recordFrame()
     if let request = mcpScreenshotRequest, let error = mcpScreenshotError {
       request.completion(.failure(error))
@@ -3683,13 +3684,13 @@ extension VisionVolumeRenderer {
    - runtimeAppModel: The shared application model.
    - appSetings: The application settings.
    - sharedAppModel: The parameters used for rendering.
-   - timer: A CPU frame timer.
+   - timer: A GPU frame timer with a completion-time fallback.
    - dataset: The dataset to be rendered.
    */
   @MainActor
   static func startRenderLoop(_ layerRenderer: LayerRenderer,
                               session: VisionBorgVRSession,
-                              timer: CPUFrameTimer,
+                              timer: GPUFrameTimer,
                               dataset: BORGVRDatasetProtocol,
                               datasetID: String,
                               transferFunctionPanelInteractionState: TransferFunctionPanelInteractionState,

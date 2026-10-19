@@ -109,7 +109,7 @@ enum VisionVolumeRendererBootstrap {
     runtimeAppModel.activeDatasetInfo = RuntimeAppModel.DatasetInfo(meta: dataset.getMetadata())
 
     // Timer setup
-    let timer = CPUFrameTimer()
+    let timer = GPUFrameTimer()
     runtimeAppModel.timer = timer
 
     // Reset rendering parameters and optionally autoload TF/Transform

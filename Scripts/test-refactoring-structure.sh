@@ -57,6 +57,14 @@ forbid_pattern 'nonisolated\(unsafe\).*activeOversampling' VisionApp/Rendering/V
 require_pattern 'VisionRendererPerformanceMailbox' VisionApp/Rendering/VisionVolumeRenderer.swift
 require_pattern 'rotationCaptureRequestID' VisionApp/Rendering/VisionVolumeRenderer.swift
 
+# Render performance uses completed Metal GPU timestamps with a tested fallback.
+require_pattern 'let timer = GPUFrameTimer\(\)' BORGVR-Render/Screen/ScreenVolumeRendererCore.swift
+require_pattern 'let timer = GPUFrameTimer\(\)' VisionApp/VisionVolumeRendererBootstrap.swift
+require_pattern 'timer\.recordCompletedFrame\(commandBuffer\)' VisionApp/Rendering/VisionVolumeRenderer.swift
+require_pattern 'timer\.recordCompletedFrame\(frame\.commandBuffer\)' BORGVR-Render/Screen/ScreenVolumeRendererCore.swift
+forbid_pattern 'CPUFrameTimer' BORGVR-Render/Screen/ScreenVolumeRendererCore.swift
+forbid_pattern 'CPUFrameTimer' VisionApp/Rendering/VisionVolumeRenderer.swift
+
 # Screen screenshot timeouts cancel their renderer request and reject stale GPU completions.
 require_file AppSupport/Automation/ScreenScreenshotRequestQueue.swift
 require_pattern 'cancelRenderScreenshot' AppSupport/Application/AppModel.swift
