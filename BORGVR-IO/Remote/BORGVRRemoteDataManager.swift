@@ -319,7 +319,7 @@ class BORGVRRemoteDataManager {
     let expectedByteCount = transferFunctions.first { $0.id == id }?.byteCount
     try sendCommand("GETTF \(id)")
     let data = try receiveBinaryData(
-      maximumPayloadSize: BorgVRTransferFunctionFormat.maximumFileByteCount
+      maximumPayloadSize: expectedByteCount ?? BorgVRTransferFunctionFormat.maximumFileByteCount
     )
     if let expectedByteCount, data.count != expectedByteCount {
       throw BORGVRRemoteDataManagerError.invalidResponse(
@@ -366,7 +366,9 @@ class BORGVRRemoteDataManager {
     }
     let expectedByteCount = markerFiles.first { $0.id == id }?.byteCount
     try sendCommand("GETMARKER \(id)")
-    let data = try receiveBinaryData(maximumPayloadSize: BorgVRMarkerFormat.maximumFileByteCount)
+    let data = try receiveBinaryData(
+      maximumPayloadSize: expectedByteCount ?? BorgVRMarkerFormat.maximumFileByteCount
+    )
     if let expectedByteCount, data.count != expectedByteCount {
       throw BORGVRRemoteDataManagerError.invalidResponse(reason: "Marker file byte count mismatch.")
     }
@@ -407,7 +409,9 @@ class BORGVRRemoteDataManager {
     }
     let expectedByteCount = meshes.first { $0.id == id }?.byteCount
     try sendCommand("GETMESH \(id.uuidString)")
-    let data = try receiveBinaryData(maximumPayloadSize: BorgVRMeshFormat.maximumFileByteCount)
+    let data = try receiveBinaryData(
+      maximumPayloadSize: expectedByteCount ?? BorgVRMeshFormat.maximumFileByteCount
+    )
     if let expectedByteCount, data.count != expectedByteCount {
       throw BORGVRRemoteDataManagerError.invalidResponse(reason: "Mesh byte count mismatch.")
     }
@@ -485,75 +489,13 @@ class BORGVRRemoteDataManager {
 
   private func receiveBinaryData(
     timeout: TimeInterval = 15.0,
-    maximumPayloadSize: Int? = nil
+    maximumPayloadSize: Int
   ) throws -> Data {
-    var sizeData = Data()
-    while sizeData.count < MemoryLayout<UInt32>.size {
-      let chunk = try receiveData(
-        minimumLength: 1,
-        maximumLength: MemoryLayout<UInt32>.size - sizeData.count,
-        timeout: timeout
-      )
-      sizeData.append(chunk)
-    }
-
-    let payloadSize = Int(
-      UInt32(sizeData[0]) |
-      (UInt32(sizeData[1]) << 8) |
-      (UInt32(sizeData[2]) << 16) |
-      (UInt32(sizeData[3]) << 24)
+    try BorgVRBinaryFrameReceiver.receive(
+      connection: connection,
+      timeout: timeout,
+      maximumPayloadSize: maximumPayloadSize
     )
-    guard payloadSize >= 0 else {
-      throw BORGVRRemoteDataManagerError.invalidResponse(reason: "Invalid binary response size.")
-    }
-    if let maximumPayloadSize, payloadSize > maximumPayloadSize {
-      throw BORGVRRemoteDataManagerError.invalidResponse(
-        reason: "Binary response exceeds the supported size limit."
-      )
-    }
-
-    var payload = Data()
-    while payload.count < payloadSize {
-      let remaining = payloadSize - payload.count
-      let chunk = try receiveData(
-        minimumLength: 1,
-        maximumLength: min(remaining, 64 * 1024),
-        timeout: timeout
-      )
-      payload.append(chunk)
-    }
-    return payload
-  }
-
-  private func receiveData(
-    minimumLength: Int,
-    maximumLength: Int,
-    timeout: TimeInterval
-  ) throws -> Data {
-    let semaphore = DispatchSemaphore(value: 0)
-    var chunk: Data?
-    var receiveError: Error?
-
-    connection.receive(
-      minimumIncompleteLength: minimumLength,
-      maximumLength: maximumLength
-    ) { data, _, _, error in
-      chunk = data
-      receiveError = error
-      semaphore.signal()
-    }
-
-    let result = semaphore.wait(timeout: .now() + timeout)
-    if result == .timedOut {
-      throw BORGVRRemoteDataManagerError.timeout(seconds: timeout)
-    }
-    if let receiveError {
-      throw BORGVRRemoteDataManagerError.receiveFailed(reason: receiveError.localizedDescription)
-    }
-    guard let chunk, !chunk.isEmpty else {
-      throw BORGVRRemoteDataManagerError.receiveFailed(reason: "Missing binary response data.")
-    }
-    return chunk
   }
 
   private static func isMD5Identifier(_ id: String) -> Bool {

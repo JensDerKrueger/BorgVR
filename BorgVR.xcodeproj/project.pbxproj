@@ -347,6 +347,7 @@
 				RawFileAccessor.swift,
 				Remote/BORGVRRemoteData.swift,
 				Remote/BORGVRRemoteDataManager.swift,
+				Remote/BorgVRBinaryFrameReceiver.swift,
 				Remote/BorgVRServerAuthentication.swift,
 				Remote/CacheMap.swift,
 				Remote/CachingRemoteDataSource.swift,

@@ -10,6 +10,7 @@ import Network
  connection. It sends commands and receives binary responses, handling decompression when necessary.
  */
 final class RemoteDataSource: DataSource {
+  private static let maximumMetadataPayloadSize = 256 * 1024 * 1024
   private struct OriginFailure {
     var retryAfter: Date
     var delay: TimeInterval
@@ -78,15 +79,27 @@ final class RemoteDataSource: DataSource {
     // Send the OPEN command to the server with the dataset ID.
     try RemoteDataSource.sendCommand("OPEN \(datasetID)", connection: connection)
     // Receive the binary response containing the metadata.
-    let responseData = try RemoteDataSource.receiveBinaryData(connection: connection)
+    let responseData = try BorgVRBinaryFrameReceiver.receive(
+      connection: connection,
+      timeout: connectionTimeout,
+      maximumPayloadSize: Self.maximumMetadataPayloadSize
+    )
 
     // Parse the metadata from the received data.
     self.metadata = try BORGVRMetaData(fromData: responseData)
     self.isOpen = true
 
     // Compute the full brick size based on metadata.
-    self.fullBrickSize = metadata.brickSize * metadata.brickSize * metadata.brickSize *
-    metadata.componentCount * metadata.bytesPerComponent
+    self.fullBrickSize = try Self.checkedByteCount(
+      [
+        metadata.brickSize,
+        metadata.brickSize,
+        metadata.brickSize,
+        metadata.componentCount,
+        metadata.bytesPerComponent
+      ],
+      context: "full brick"
+    )
 
     // Allocate compression buffers if compression is enabled.
     if metadata.compression {
@@ -257,6 +270,10 @@ final class RemoteDataSource: DataSource {
   }
 
   private func requestBrickData(_ indices: [Int]) throws -> Data {
+    let expectedPayloadSize = try Self.checkedSum(
+      indices.map { metadata.brickMetadata[$0].size },
+      context: "brick response"
+    )
     var reconnectedOrigins = Set<String>()
 
     while true {
@@ -270,7 +287,11 @@ final class RemoteDataSource: DataSource {
       let command = "GETBRICKS " + indices.map(String.init).joined(separator: " ")
       do {
         try RemoteDataSource.sendCommand(command, connection: connection)
-        let response = try RemoteDataSource.receiveBinaryData(connection: connection)
+        let response = try BorgVRBinaryFrameReceiver.receive(
+          connection: connection,
+          timeout: connectionTimeout,
+          maximumPayloadSize: expectedPayloadSize
+        )
         originFailures[currentOrigin.identityKey] = nil
         return response
       } catch {
@@ -369,7 +390,11 @@ final class RemoteDataSource: DataSource {
       }
 
       try RemoteDataSource.sendCommand("OPEN \(datasetID)", connection: newConnection)
-      let metadataData = try RemoteDataSource.receiveBinaryData(connection: newConnection)
+      let metadataData = try BorgVRBinaryFrameReceiver.receive(
+        connection: newConnection,
+        timeout: connectionTimeout,
+        maximumPayloadSize: Self.maximumMetadataPayloadSize
+      )
       let candidateMetadata = try BORGVRMetaData(fromData: metadataData)
       guard candidateMetadata.toData() == metadata.toData() else {
         throw BORGVRRemoteDataManagerError.invalidResponse(
@@ -406,59 +431,35 @@ final class RemoteDataSource: DataSource {
     }
   }
 
-  /**
-   Receives binary data from the specified connection.
-
-   The function first reads a 4-byte size prefix, then receives a payload of that size.
-
-   - Parameter connection: The NWConnection to receive data from.
-   - Returns: The received Data payload.
-   - Throws: A network error if reception times out or fails.
-   */
-  static private func receiveBinaryData(connection: NWConnection) throws -> Data {
-    var receivedData: Data?
-    var sendError: BORGVRDataError?
-
-    // Receive the size prefix (4 bytes for UInt32).
-    let sizeSemaphore = DispatchSemaphore(value: 0)
-    var dataSize: UInt32 = 0
-    connection.receive(minimumIncompleteLength: 4, maximumLength: 4) { sizeData, _, _, error in
-      defer { sizeSemaphore.signal() }
-      guard let sizeData = sizeData, sizeData.count == 4 else {
-        sendError = .networkError(message: "Missing size prefix")
-        return
+  private static func checkedByteCount(_ factors: [Int], context: String) throws -> Int {
+    var result = 1
+    for factor in factors {
+      guard factor > 0 else {
+        throw BORGVRDataError.networkError(message: "Invalid \(context) byte count.")
       }
-      dataSize = sizeData.withUnsafeBytes { $0.load(as: UInt32.self) }
-    }
-
-    if sizeSemaphore.wait(timeout: .now() + 15) == .timedOut {
-      throw BORGVRDataError.networkError(message: "Timeout while waiting for data size")
-    }
-
-    // Receive the payload.
-    let dataSemaphore = DispatchSemaphore(value: 0)
-    connection.receive(minimumIncompleteLength: Int(dataSize), maximumLength: Int(dataSize)) { data, _, _, error in
-      defer {
-        dataSemaphore.signal()
-
+      let (product, overflow) = result.multipliedReportingOverflow(by: factor)
+      guard !overflow else {
+        throw BORGVRDataError.networkError(message: "The \(context) byte count overflows.")
       }
-      if let data = data {
-        receivedData = data
-      } else if let error = error {
-        sendError = .networkError(message: "Failed to receive data: \(error)")
+      result = product
+    }
+    return result
+  }
+
+  private static func checkedSum(_ values: [Int], context: String) throws -> Int {
+    var result = 0
+    for value in values {
+      guard value > 0 else {
+        throw BORGVRDataError.networkError(message: "Invalid \(context) byte count.")
       }
+      let (sum, overflow) = result.addingReportingOverflow(value)
+      guard !overflow else {
+        throw BORGVRDataError.networkError(message: "The \(context) byte count overflows.")
+      }
+      result = sum
     }
-
-    if dataSemaphore.wait(timeout: .now() + 50) == .timedOut {
-      throw BORGVRDataError.networkError(message: "Timeout while waiting for data")
-    }
-
-    if let error = sendError {
-      throw error
-    }
-
-    guard let result = receivedData else {
-      throw BORGVRDataError.networkError(message: "Data was nil after receive")
+    guard result > 0 else {
+      throw BORGVRDataError.networkError(message: "Invalid \(context) byte count.")
     }
     return result
   }
