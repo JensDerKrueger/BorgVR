@@ -351,6 +351,7 @@
 				Remote/BorgVRServerAuthentication.swift,
 				Remote/CacheMap.swift,
 				Remote/CachingRemoteDataSource.swift,
+				Remote/CachingRemoteLifecycle.swift,
 				Remote/DataSource.swift,
 				Remote/KeyValuePairHandler.swift,
 				Remote/LocalDataSource.swift,
