@@ -102,10 +102,8 @@ struct BorgVRMobileApp: App {
         .environmentObject(updateChecker)
         .environmentObject(mcpController)
         .environmentObject(session)
-        .task {
-          await presentSharePlayDisplayNameOnboardingIfNeeded()
-        }
         .onAppear {
+          presentSharePlayDisplayNameOnboardingIfNeeded()
           sharePlay.startObservingSessions(
             appModel: appModel,
             renderingParameters: renderingParameters,
@@ -113,11 +111,6 @@ struct BorgVRMobileApp: App {
           )
           appModel.setLogLevel(appSettings.logLevel)
           configureMCP()
-        }
-        .onChange(of: sharePlay.hasObservedGroupSession) { _, hasObservedSession in
-          if hasObservedSession {
-            showsSharePlayDisplayNameOnboarding = false
-          }
         }
         .onChange(of: appSettings.logLevel) { _, newValue in
           appModel.setLogLevel(newValue)
@@ -277,7 +270,7 @@ struct BorgVRMobileApp: App {
   }
 
   @MainActor
-  private func presentSharePlayDisplayNameOnboardingIfNeeded() async {
+  private func presentSharePlayDisplayNameOnboardingIfNeeded() {
     guard !sharePlayDisplayNameOnboardingCompleted,
           !showsSharePlayDisplayNameOnboarding else { return }
     let configuredName = appSettings.sharePlayDisplayName.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -285,11 +278,6 @@ struct BorgVRMobileApp: App {
       sharePlayDisplayNameOnboardingCompleted = true
       return
     }
-
-    try? await Task.sleep(nanoseconds: 1_000_000_000)
-    guard !Task.isCancelled,
-          !sharePlay.hasObservedGroupSession,
-          !sharePlay.isInSession else { return }
 
     sharePlayDisplayNameDraft = UIDevice.current.name
     showsSharePlayDisplayNameOnboarding = true

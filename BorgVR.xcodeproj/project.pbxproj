@@ -131,8 +131,6 @@
 		57A001B32EA3000100000001 /* DatasetViewState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001B02EA3000100000001 /* DatasetViewState.swift */; };
 		57A001C12EB0000100000001 /* BorgVRScreenCommandService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001C02EB0000100000001 /* BorgVRScreenCommandService.swift */; };
 		57A001C22EB0000100000001 /* BorgVRScreenCommandService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001C02EB0000100000001 /* BorgVRScreenCommandService.swift */; };
-		57A003012EF1000100000001 /* ScreenScreenshotRequestQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A003002EF1000100000001 /* ScreenScreenshotRequestQueue.swift */; };
-		57A003022EF1000100000001 /* ScreenScreenshotRequestQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A003002EF1000100000001 /* ScreenScreenshotRequestQueue.swift */; };
 		57A001D12EB0000200000001 /* MetalScreenshotEncoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001D02EB0000200000001 /* MetalScreenshotEncoder.swift */; };
 		57A001D22EB0000200000001 /* MetalScreenshotEncoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001D02EB0000200000001 /* MetalScreenshotEncoder.swift */; };
 		57A001D32EB0000200000001 /* MetalScreenshotEncoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A001D02EB0000200000001 /* MetalScreenshotEncoder.swift */; };
@@ -171,6 +169,8 @@
 		57A002B22ED5000100000001 /* GUILogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A002B02ED5000100000001 /* GUILogger.swift */; };
 		57A002B32ED5000100000001 /* GUILogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A002B02ED5000100000001 /* GUILogger.swift */; };
 		57A002B42ED5000100000001 /* GUILogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A002B02ED5000100000001 /* GUILogger.swift */; };
+		57A003012EF1000100000001 /* ScreenScreenshotRequestQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A003002EF1000100000001 /* ScreenScreenshotRequestQueue.swift */; };
+		57A003022EF1000100000001 /* ScreenScreenshotRequestQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A003002EF1000100000001 /* ScreenScreenshotRequestQueue.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -258,7 +258,6 @@
 		57A001A52EA2000200000001 /* SceneMeshEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneMeshEditorView.swift; sourceTree = "<group>"; };
 		57A001B02EA3000100000001 /* DatasetViewState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DatasetViewState.swift; sourceTree = "<group>"; };
 		57A001C02EB0000100000001 /* BorgVRScreenCommandService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BorgVRScreenCommandService.swift; sourceTree = "<group>"; };
-		57A003002EF1000100000001 /* ScreenScreenshotRequestQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenScreenshotRequestQueue.swift; sourceTree = "<group>"; };
 		57A001D02EB0000200000001 /* MetalScreenshotEncoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetalScreenshotEncoder.swift; sourceTree = "<group>"; };
 		57A001E02EB0000300000001 /* MCPSettingsControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPSettingsControls.swift; sourceTree = "<group>"; };
 		57A001F02EC0000100000001 /* ScreenOpaqueGeometryShaders.metal */ = {isa = PBXFileReference; explicitFileType = text; path = ScreenOpaqueGeometryShaders.metal; sourceTree = "<group>"; };
@@ -274,6 +273,7 @@
 		57A002902ED4000200000001 /* OpenDatasetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenDatasetView.swift; sourceTree = "<group>"; };
 		57A002A02ED4000300000001 /* WaitingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WaitingView.swift; sourceTree = "<group>"; };
 		57A002B02ED5000100000001 /* GUILogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GUILogger.swift; sourceTree = "<group>"; };
+		57A003002EF1000100000001 /* ScreenScreenshotRequestQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenScreenshotRequestQueue.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -547,6 +547,21 @@
 			name = Frameworks;
 			sourceTree = "<group>";
 		};
+		57A000102E70000100000001 /* AppSupport */ = {
+			isa = PBXGroup;
+			children = (
+				57A010022EF0000100000001 /* Annotations */,
+				57A010002EF0000100000001 /* Application */,
+				57A010062EF0000100000001 /* Automation */,
+				57A010012EF0000100000001 /* Datasets */,
+				57A010032EF0000100000001 /* Rendering */,
+				57A010052EF0000100000001 /* SharePlay */,
+				57A010082EF0000100000001 /* UI */,
+				57A010072EF0000100000001 /* Web */,
+			);
+			path = AppSupport;
+			sourceTree = "<group>";
+		};
 		57A010002EF0000100000001 /* Application */ = {
 			isa = PBXGroup;
 			children = (
@@ -664,21 +679,6 @@
 				57A000282E70000200000001 /* TextFileDocument.swift */,
 			);
 			path = UI;
-			sourceTree = "<group>";
-		};
-		57A000102E70000100000001 /* AppSupport */ = {
-			isa = PBXGroup;
-			children = (
-				57A010022EF0000100000001 /* Annotations */,
-				57A010002EF0000100000001 /* Application */,
-				57A010062EF0000100000001 /* Automation */,
-				57A010012EF0000100000001 /* Datasets */,
-				57A010032EF0000100000001 /* Rendering */,
-				57A010052EF0000100000001 /* SharePlay */,
-				57A010082EF0000100000001 /* UI */,
-				57A010072EF0000100000001 /* Web */,
-			);
-			path = AppSupport;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */

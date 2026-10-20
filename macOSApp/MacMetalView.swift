@@ -19,7 +19,7 @@ struct MacMetalView: NSViewRepresentable {
   var onPointerDown: (RenderDragUpdate) -> Void = { _ in }
   var onMagnificationDelta: (CGFloat) -> Void = { _ in }
   var onMagnificationEnded: () -> Void = {}
-  var onDoubleTap: () -> Void = {}
+  var onDoubleClick: () -> Bool = { false }
   var onKeyboardShortcut: (MacRenderShortcut) -> Void = { _ in }
 
   func makeCoordinator() -> MacVolumeRenderer {
@@ -63,7 +63,7 @@ struct MacMetalView: NSViewRepresentable {
     view.onPointerDown = onPointerDown
     view.onMagnificationDelta = onMagnificationDelta
     view.onMagnificationEnded = onMagnificationEnded
-    view.onDoubleTap = onDoubleTap
+    view.onDoubleClick = onDoubleClick
     view.onKeyboardShortcut = onKeyboardShortcut
   }
 }
@@ -75,7 +75,7 @@ final class InteractiveMTKView: MTKView {
   var onPointerDown: (RenderDragUpdate) -> Void = { _ in }
   var onMagnificationDelta: (CGFloat) -> Void = { _ in }
   var onMagnificationEnded: () -> Void = {}
-  var onDoubleTap: () -> Void = {}
+  var onDoubleClick: () -> Bool = { false }
   var onKeyboardShortcut: (MacRenderShortcut) -> Void = { _ in }
 
   private var lastDragLocation: CGPoint?
@@ -99,8 +99,7 @@ final class InteractiveMTKView: MTKView {
   override func mouseDown(with event: NSEvent) {
     window?.makeFirstResponder(self)
     lastDragLocation = convert(event.locationInWindow, from: nil)
-    if event.clickCount >= 2 {
-      onDoubleTap()
+    if event.clickCount >= 2, onDoubleClick() {
       lastDragLocation = nil
       return
     }

@@ -43,7 +43,7 @@ struct RenderView: View {
         onPointerDown: beginInteraction(update:),
         onMagnificationDelta: applyMagnificationDelta(_:),
         onMagnificationEnded: finishInteractionGesture,
-        onDoubleTap: toggleInteractionMode,
+        onDoubleClick: handleDoubleClick,
         onKeyboardShortcut: handleKeyboardShortcut(_:)
       )
         .ignoresSafeArea()
@@ -358,15 +358,12 @@ struct RenderView: View {
     }
   }
 
-  private func toggleInteractionMode() {
-    if appModel.interactionMode == .measurement {
-      if appModel.removeSelectedVolumeMeasurementPoint() {
-        synchronizeMeasurements()
-      }
-      return
+  private func handleDoubleClick() -> Bool {
+    guard appModel.interactionMode == .measurement else { return false }
+    if appModel.removeSelectedVolumeMeasurementPoint() {
+      synchronizeMeasurements()
     }
-    let newMode: AppModel.InteractionMode = appModel.interactionMode == .clipping ? .model : .clipping
-    applyInteractionModeSelection(newMode)
+    return true
   }
 
   private func applyInteractionModeSelection(_ mode: AppModel.InteractionMode) {

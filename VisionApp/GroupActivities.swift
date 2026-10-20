@@ -96,7 +96,7 @@ class GroupActivityHelper {
   }
 
   func configureSession(runtimeAppModel:RuntimeAppModel, storedAppModel: StoredAppModel) async {
-    await runtimeAppModel.logger.info("Starting SharePlay group-session observation on this Vision Pro.")
+    runtimeAppModel.logger.info("Starting SharePlay group-session observation on this Vision Pro.")
     self.runtimeAppModel = runtimeAppModel
     self.storedAppModel = storedAppModel
     if localDatasetCacheCompletionObservation == nil {
@@ -112,12 +112,9 @@ class GroupActivityHelper {
       }
     }
     for await session in BorgVRActivity.sessions() {
-      await runtimeAppModel.logger.info(
+      runtimeAppModel.logger.info(
         "SharePlay delivered a group session to this Vision Pro; activity initiator: \(session.activity.initiatorID.uuidString), initial state: \(String(describing: session.state)), active participant count: \(session.activeParticipants.count)."
       )
-      await MainActor.run {
-        self.sharedAppModel?.hasObservedGroupSession = true
-      }
       await resetSessionReceivers()
       sessionGeneration += 1
       let generation = sessionGeneration
@@ -210,9 +207,9 @@ class GroupActivityHelper {
       self.messenger = messenger
 
       if let pose = systemCoordinator.localParticipantState.pose {
-        await runtimeAppModel.logger.dev("Joined groupsession with pose \(pose)")
+        runtimeAppModel.logger.dev("Joined groupsession with pose \(pose)")
       } else {
-        await runtimeAppModel.logger.dev("Joined groupsession no pose available")
+        runtimeAppModel.logger.dev("Joined groupsession no pose available")
       }
 
       messageTask = Task.detached { [weak self] in
@@ -221,11 +218,11 @@ class GroupActivityHelper {
           await self?.handleIncoming(data: data, from: context.source, sessionGeneration: generation)
         }
       }
-      await runtimeAppModel.logger.info(
+      runtimeAppModel.logger.info(
         "Calling session.join() for the delivered SharePlay group session."
       )
       session.join()
-      await runtimeAppModel.logger.info(
+      runtimeAppModel.logger.info(
         "session.join() returned; current state: \(String(describing: session.state))."
       )
       Task { await self.sendProtocolVersion() }
@@ -391,7 +388,7 @@ class GroupActivityHelper {
           of: .renderingUpdate
         )
       } catch {
-        await runtimeAppModel?.logger
+        runtimeAppModel?.logger
           .error("Failed to send marker data to all participants: \(error)")
       }
     }
@@ -416,7 +413,7 @@ class GroupActivityHelper {
           of: .renderingUpdate
         )
       } catch {
-        await runtimeAppModel?.logger.error(
+        runtimeAppModel?.logger.error(
           "Failed to send measurement data to all participants: \(error)"
         )
       }
@@ -455,7 +452,7 @@ class GroupActivityHelper {
           of: .renderingUpdate
         )
       } catch {
-        await runtimeAppModel?.logger.error(
+        runtimeAppModel?.logger.error(
           "Failed to send spatial tool previews: \(error)"
         )
       }

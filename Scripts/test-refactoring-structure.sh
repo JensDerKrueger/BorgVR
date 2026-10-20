@@ -104,6 +104,17 @@ forbid_pattern 'GUILogger' BORGVR-IO/Logger.swift
 forbid_pattern 'shiftedHue' VisionApp/ImmersiveInteraction.swift
 forbid_pattern 'synchronizeLighting|synchronizeTransform' macOSApp/BorgVRScriptRunner.swift
 forbid_pattern 'establishInitialScreenView' AppSupport/SharePlay/SharePlayCoordinator.swift
+forbid_pattern 'toggleInteractionMode|onDoubleTap' macOSApp/RenderView.swift
+forbid_pattern 'onDoubleTap' macOSApp/MacMetalView.swift
+for file in \
+  AppSupport/SharePlay/SharePlayCoordinator.swift \
+  macOSApp/macOSApp.swift \
+  iOSApp/BorgVRMobileApp.swift \
+  VisionApp/AppModels/SharedAppModel.swift \
+  VisionApp/GroupActivities.swift \
+  VisionApp/VisionApp.swift; do
+  forbid_pattern 'hasObservedGroupSession' "$file"
+done
 
 # Removed backup assets and centralized screen interaction constants.
 forbid_path Assets.xcassets.disabled

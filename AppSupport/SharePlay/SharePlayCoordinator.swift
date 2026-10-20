@@ -31,7 +31,6 @@ struct BorgVRSharePlayActivity: GroupActivity, Transferable {
 @MainActor
 final class SharePlayCoordinator: ObservableObject {
   @Published private(set) var isInSession = false
-  @Published private(set) var hasObservedGroupSession = false
   @Published private(set) var participants: [BorgVRSharePlayParticipant] = []
   @Published private(set) var isScreenViewSynchronized = true
   @Published private(set) var showsSystemSharePlayJoinInstructions = false
@@ -349,7 +348,6 @@ final class SharePlayCoordinator: ObservableObject {
 
   private func configure(_ session: GroupSession<BorgVRSharePlayActivity>) {
     clearPendingSharePlayStart()
-    hasObservedGroupSession = true
     appModel?.logger.info(
       "Configuring delivered SharePlay group session; local participant: \(session.localParticipant.id.uuidString), initial state: \(String(describing: session.state)), active participant count: \(session.activeParticipants.count)."
     )

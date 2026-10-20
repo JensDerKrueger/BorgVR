@@ -170,8 +170,6 @@ class SharedAppModel {
   var remoteSpatialToolPreviews: [UUID: [SpatialToolPreview]]
   /// Participants announced in the current SharePlay session.
   var sharePlayParticipants: [BorgVRSharePlayParticipant]
-  /// Remains true after this app process has received a SharePlay session.
-  var hasObservedGroupSession: Bool
   /// Shared camera used by all iOS and macOS participants.
   var screenSharePlayViewState: BorgVRScreenViewState?
   /// Private cameras of iOS and macOS participants that left shared-view synchronization.
@@ -253,7 +251,6 @@ class SharedAppModel {
     selectedVolumeMarkerID = nil
     remoteSpatialToolPreviews = [:]
     sharePlayParticipants = []
-    hasObservedGroupSession = false
     screenSharePlayViewState = nil
     detachedScreenSharePlayViewStates = [:]
     screenViewNamesVisible = true

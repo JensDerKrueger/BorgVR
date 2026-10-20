@@ -160,10 +160,8 @@ struct macOSApp: App {
         .environmentObject(updateChecker)
         .environmentObject(mcpController)
         .frame(minWidth: 980, minHeight: 680)
-        .task {
-          await presentSharePlayDisplayNameOnboardingIfNeeded()
-        }
         .onAppear {
+          presentSharePlayDisplayNameOnboardingIfNeeded()
           sharePlay.startObservingSessions(
             appModel: appModel,
             renderingParameters: renderingParameters,
@@ -183,11 +181,6 @@ struct macOSApp: App {
           )
           mcpController.configure(commandService: commandService, logger: appModel.logger)
           applyMCPConfiguration()
-        }
-        .onChange(of: sharePlay.hasObservedGroupSession) { _, hasObservedSession in
-          if hasObservedSession {
-            showsSharePlayDisplayNameOnboarding = false
-          }
         }
         .onChange(of: appSettings.logLevel) { _, newValue in
           appModel.setLogLevel(newValue)
@@ -451,7 +444,7 @@ struct macOSApp: App {
   }
 
   @MainActor
-  private func presentSharePlayDisplayNameOnboardingIfNeeded() async {
+  private func presentSharePlayDisplayNameOnboardingIfNeeded() {
     guard !sharePlayDisplayNameOnboardingCompleted,
           !showsSharePlayDisplayNameOnboarding else { return }
     let configuredName = storedAppModel.sharePlayDisplayName
@@ -460,11 +453,6 @@ struct macOSApp: App {
       sharePlayDisplayNameOnboardingCompleted = true
       return
     }
-
-    try? await Task.sleep(nanoseconds: 1_000_000_000)
-    guard !Task.isCancelled,
-          !sharePlay.hasObservedGroupSession,
-          !sharePlay.isInSession else { return }
 
     sharePlayDisplayNameDraft = Host.current().localizedName ?? ProcessInfo.processInfo.hostName
     showsSharePlayDisplayNameOnboarding = true
