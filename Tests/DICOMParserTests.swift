@@ -196,6 +196,30 @@ private func testValidTransferSyntaxHeader() throws {
   }
 }
 
+private func testOrientationBasis() throws {
+  let orientation = DicomParser.orientationBasis(
+    from: [0, 2, 0, -3, 0.01, 0]
+  )
+  guard let orientation else {
+    throw TestFailure.failed("A valid DICOM orientation was rejected")
+  }
+
+  try expect(abs(orientation.xAxis.x) < 0.0001, "DICOM X axis was decoded incorrectly")
+  try expect(abs(orientation.xAxis.y - 1) < 0.0001, "DICOM X axis was not normalized")
+  try expect(abs(orientation.yAxis.x + 1) < 0.0001, "DICOM Y axis was decoded incorrectly")
+  try expect(abs(orientation.xAxis.dot(orientation.yAxis)) < 0.0001,
+             "DICOM axes were not orthogonalized")
+  try expect(abs(orientation.zAxis.z - 1) < 0.0001,
+             "DICOM slice normal was decoded incorrectly")
+}
+
+private func testInvalidOrientationBasis() throws {
+  try expect(
+    DicomParser.orientationBasis(from: [1, 0, 0, 2, 0, 0]) == nil,
+    "A degenerate DICOM orientation was accepted"
+  )
+}
+
 @main
 private enum DICOMParserTestRunner {
   static func main() throws {
@@ -209,6 +233,8 @@ private enum DICOMParserTestRunner {
     try testOversizedEncapsulatedFragment()
     try testTruncatedMetaHeader()
     try testValidTransferSyntaxHeader()
+    try testOrientationBasis()
+    try testInvalidOrientationBasis()
     print("DICOM parser tests passed")
   }
 }

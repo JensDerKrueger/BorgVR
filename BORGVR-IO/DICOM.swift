@@ -85,6 +85,18 @@ final class DicomParser {
   }
 
   /**
+   An orthonormal basis describing a DICOM volume's axes in patient coordinates.
+
+   `xAxis` follows increasing voxel-column indices, `yAxis` follows increasing
+   voxel-row indices, and `zAxis` is the right-handed slice normal.
+   */
+  struct DicomOrientation: Equatable, Sendable {
+    let xAxis: Vec3<Float>
+    let yAxis: Vec3<Float>
+    let zAxis: Vec3<Float>
+  }
+
+  /**
    A representation of a decoded 3D volume from a series of DICOM slices.
 
    - Parameters:
@@ -93,6 +105,7 @@ final class DicomParser {
    - depth: The number of slices in the volume.
    - bytesPerVoxel: The number of bytes used to represent each voxel.
    - voxelSpacing: The physical voxel spacing in meters along the x, y, and z dimensions.
+   - orientation: The volume axes in DICOM patient coordinates, if available.
    - voxelData: A flat array of voxel intensities in ZYX order.
    */
   struct DicomVolume {
@@ -106,6 +119,8 @@ final class DicomParser {
     let bytesPerVoxel: Int
     /// Physical voxel spacing in meters for each axis (x, y, z).
     let voxelSpacing: (x: Float, y: Float, z: Float)
+    /// Orthonormal volume axes in DICOM patient coordinates.
+    let orientation: DicomOrientation?
     /// Flat voxel data array in Z-Y-X order.
     let voxelData: [UInt8]
 
@@ -116,15 +131,32 @@ final class DicomParser {
 
   private static func normalize(_ v: Vec3<Float>) -> Vec3<Float>? {
     let len = sqrt(v.dot(v))
-    guard len > 1e-8 else { return nil }
+    guard len.isFinite, len > 1e-8 else { return nil }
     return Vec3<Float>(x: v.x / len, y: v.y / len, z: v.z / len)
   }
 
-  private static func sliceNormal(from orientation: [Float]?) -> Vec3<Float>? {
-    guard let o = orientation, o.count == 6 else { return nil }
-    let row = Vec3<Float>(x: o[0], y: o[1], z: o[2])
-    let col = Vec3<Float>(x: o[3], y: o[4], z: o[5])
-    return normalize(row.cross(col))
+  static func orientationBasis(
+    from imageOrientationPatient: [Float]?
+  ) -> DicomOrientation? {
+    guard let values = imageOrientationPatient,
+          values.count == 6,
+          values.allSatisfy(\.isFinite) else {
+      return nil
+    }
+
+    let rawXAxis = Vec3<Float>(x: values[0], y: values[1], z: values[2])
+    let rawYAxis = Vec3<Float>(x: values[3], y: values[4], z: values[5])
+    guard let xAxis = normalize(rawXAxis) else { return nil }
+
+    // DICOM direction cosines should be orthogonal. Remove small acquisition
+    // and serialization errors before this basis is used for registration.
+    let orthogonalY = rawYAxis - xAxis * rawYAxis.dot(xAxis)
+    guard let yAxis = normalize(orthogonalY),
+          let zAxis = normalize(xAxis.cross(yAxis)) else {
+      return nil
+    }
+
+    return DicomOrientation(xAxis: xAxis, yAxis: yAxis, zAxis: zAxis)
   }
 
   private static func median(_ values: [Float]) -> Float? {
@@ -201,8 +233,11 @@ final class DicomParser {
     // Prefer geometry-based ordering + Z spacing from positions projected onto slice normal.
     var sorted = filtered
     var sliceSpacingZ: Float? = nil
+    let orientation = orientationBasis(
+      from: filtered.compactMap({ $0.1.orientation }).first
+    )
 
-    if let normal = sliceNormal(from: filtered.compactMap({ $0.1.orientation }).first) {
+    if let normal = orientation?.zAxis {
       let allHavePosition = filtered.allSatisfy { $0.1.position != nil }
 
       if allHavePosition {
@@ -284,6 +319,7 @@ final class DicomParser {
       depth: depth,
       bytesPerVoxel: bytesPerVoxel,
       voxelSpacing: voxelSpacing,
+      orientation: orientation,
       voxelData: buffer,
       modality: metaSource.modality,
       patientName: metaSource.patientName,
