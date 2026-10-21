@@ -1365,7 +1365,7 @@ extension VisionVolumeRenderer {
           isoValue: frameState.isoValue,
           oversampling: activeOversampling,
           sampleJitter: frameSnapshot.settings.sampleJitter ? 1 : 0,
-          transferBias: frameState.transferBias,
+          transferBias: frameState.transferBiases,
           cameraPosInTextureSpace: simd_make_float3(viewToTexture * simd_float4(0, 0, 0, 1)),
           cameraPosInTextureSpaceVoxelScaled: simd_make_float3(viewToTextureVoxelScaled * simd_float4(0, 0, 0, 1)),
           cubeBounds: (clipMin, clipMax),

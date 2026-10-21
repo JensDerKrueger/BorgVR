@@ -216,9 +216,7 @@ extension BorgVRSession where VisualizationState == SharedAppModel,
           isoValue: sharedAppModel.isoValue,
           renderMode: sharedAppModel.renderMode,
           brickVisualization: sharedAppModel.brickVis,
-          transferBias: sharedAppModel.transferFunction(
-            channel: runtimeAppModel.selectedTransferFunctionChannel
-          ).textureBias,
+          transferBiases: sharedAppModel.transferBiases,
           lighting: BorgVRLightingSnapshot(
             direction: sharedAppModel.lightDirection,
             ambient: sharedAppModel.ambientLightColor,

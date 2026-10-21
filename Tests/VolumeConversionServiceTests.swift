@@ -29,6 +29,17 @@ private func expectThrows(
   } catch {}
 }
 
+private final class CapturingLogger: LoggerBase {
+  private(set) var infoMessages: [String] = []
+
+  func dev(_ message: String) {}
+  func info(_ message: String) { infoMessages.append(message) }
+  func warning(_ message: String) {}
+  func error(_ message: String) {}
+  func progress(_ message: String, _ progress: Double) {}
+  func setMinimumLogLevel(_ level: LogLevel) {}
+}
+
 private func testSettingsAndCancellation() throws {
   try expectThrows("Zero brick size was accepted") {
     try BorgVRVolumeConversionSettings(
@@ -160,6 +171,7 @@ private func testDICOMFusionInterleavesChannels() throws {
       ),
       orientation: nil,
       origin: nil,
+      frameOfReferenceUID: nil,
       channels: [BorgVRUnbrickedVolumeChannelMetadata(
         description: description,
         modality: nil,
@@ -187,6 +199,42 @@ private func testDICOMFusionInterleavesChannels() throws {
   try expect(
     fusedData == Data([1, 10, 2, 20, 3, 30, 4, 40]),
     "Fusion did not interleave the two channels"
+  )
+
+  let brickedURL = directory.appendingPathComponent("fused.data")
+  let accessor = try RawFileAccessor(
+    filename: fusedURL.path,
+    size: size,
+    bytesPerComponent: 1,
+    componentCount: 2,
+    voxelSpacing: spacing
+  )
+  try BrickedVolumeReorganizer(
+    inputVolume: accessor,
+    brickSize: 4,
+    overlap: 1,
+    extensionStrategy: .clamp
+  ).reorganize(
+    to: brickedURL.path,
+    datasetDescription: "Fused",
+    metaDescription: "Component range test"
+  )
+  let metadata = try BORGVRMetaData(url: brickedURL)
+  try expect(
+    metadata.componentRanges == [
+      BORGVRComponentRange(minValue: 1, maxValue: 4),
+      BORGVRComponentRange(minValue: 10, maxValue: 40)
+    ],
+    "Bricking did not preserve per-component dataset ranges"
+  )
+  try expect(
+    metadata.brickMetadata.allSatisfy {
+      $0.componentRanges == [
+        BORGVRComponentRange(minValue: 1, maxValue: 4),
+        BORGVRComponentRange(minValue: 10, maxValue: 40)
+      ]
+    },
+    "Bricking did not preserve per-component brick ranges"
   )
 }
 
@@ -224,6 +272,7 @@ private func testDICOMFusionUsesPatientGeometry() throws {
       ),
       orientation: orientation,
       origin: origin,
+      frameOfReferenceUID: "shared-frame",
       channels: []
     )
   }
@@ -292,22 +341,29 @@ private func testDICOMFusionTrilinearFiltering() throws {
       ),
       orientation: orientation,
       origin: .zero,
+      frameOfReferenceUID: nil,
       channels: []
     )
   }
 
+  let reference = volume(
+    url: referenceURL,
+    size: Vec3<Int>(x: 3, y: 1, z: 1),
+    spacing: Vec3<Float>(x: 0.5, y: 1, z: 1)
+  )
+  let moving = volume(
+    url: movingURL,
+    size: Vec3<Int>(x: 2, y: 1, z: 1),
+    spacing: Vec3<Float>(x: 1, y: 1, z: 1)
+  )
   _ = try BorgVRDICOMVolumeFusion.fuse(
-    reference: volume(
-      url: referenceURL,
-      size: Vec3<Int>(x: 3, y: 1, z: 1),
-      spacing: Vec3<Float>(x: 0.5, y: 1, z: 1)
+    reference: reference,
+    moving: moving,
+    referenceToMoving: BorgVRVoxelTransform(
+      metricTransform: .identity,
+      referenceSpacing: reference.source.voxelSpacing,
+      movingSpacing: moving.source.voxelSpacing
     ),
-    moving: volume(
-      url: movingURL,
-      size: Vec3<Int>(x: 2, y: 1, z: 1),
-      spacing: Vec3<Float>(x: 1, y: 1, z: 1)
-    ),
-    referenceToMoving: .identity,
     filter: .trilinear,
     outputURL: fusedURL,
     logger: nil,
@@ -343,6 +399,7 @@ private func testRegistrationDownsamplingHandlesAnisotropyAndOddSizes() throws {
     ),
     orientation: nil,
     origin: nil,
+    frameOfReferenceUID: nil,
     channels: [BorgVRUnbrickedVolumeChannelMetadata(
       description: "Pyramid test",
       modality: nil,
@@ -418,6 +475,7 @@ private func testRegistrationDownsamplingPreservesPaddingOnlyRegions() throws {
     ),
     orientation: nil,
     origin: nil,
+    frameOfReferenceUID: nil,
     channels: [BorgVRUnbrickedVolumeChannelMetadata(
       description: "Padding test",
       modality: nil,
@@ -526,6 +584,7 @@ private func testRecursiveRegistrationPreservesDICOMInitialTransform() throws {
       ),
       orientation: orientation,
       origin: origin,
+      frameOfReferenceUID: "shared-frame",
       channels: []
     )
   }
@@ -537,10 +596,342 @@ private func testRecursiveRegistrationPreservesDICOMInitialTransform() throws {
   )
   let transformedOrigin = transform.applying(to: .zero)
   try expect(
-    abs(transformedOrigin.x - 0.06) < 0.0001
-      && abs(transformedOrigin.y - 0.1) < 0.0001
-      && abs(transformedOrigin.z - 0.05) < 0.0001,
+    abs(transformedOrigin.x - 60) < 0.0001
+      && abs(transformedOrigin.y - 50) < 0.0001
+      && abs(transformedOrigin.z - (50.0 / 3.0)) < 0.0001,
     "Recursive registration did not preserve the DICOM initial transform"
+  )
+}
+
+private func testVoxelTransformCombinesSpacingRotationAndTranslation() throws {
+  let metricTransform = BorgVRRigidTransform(
+    xAxis: Vec3<Float>(x: 0, y: 1, z: 0),
+    yAxis: Vec3<Float>(x: -1, y: 0, z: 0),
+    zAxis: Vec3<Float>(x: 0, y: 0, z: 1),
+    translation: Vec3<Float>(x: 0.006, y: 0.01, z: -0.012)
+  )
+  let transform = BorgVRVoxelTransform(
+    metricTransform: metricTransform,
+    referenceSpacing: Vec3<Float>(x: 0.002, y: 0.004, z: 0.006),
+    movingSpacing: Vec3<Float>(x: 0.001, y: 0.005, z: 0.003)
+  )
+  let result = transform.applying(to: Vec3<Float>(x: 2, y: 3, z: 4))
+  try expect(
+    abs(result.x + 6) < 0.0001
+      && abs(result.y - 2.8) < 0.0001
+      && abs(result.z - 4) < 0.0001,
+    "Voxel transform did not combine spacing, rotation and translation correctly"
+  )
+}
+
+private func testRegistrationCentersVolumesFromDifferentDICOMFrames() throws {
+  let directory = FileManager.default.temporaryDirectory
+    .appendingPathComponent("borgvr-registration-frame-tests-\(UUID().uuidString)")
+  try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+  defer { try? FileManager.default.removeItem(at: directory) }
+
+  let referenceURL = directory.appendingPathComponent("reference.raw")
+  let movingURL = directory.appendingPathComponent("moving.raw")
+  let referenceSize = Vec3<Int>(x: 5, y: 3, z: 3)
+  let movingSize = Vec3<Int>(x: 9, y: 5, z: 3)
+  try Data(repeating: 10, count: referenceSize.x * referenceSize.y * referenceSize.z)
+    .write(to: referenceURL)
+  try Data(repeating: 10, count: movingSize.x * movingSize.y * movingSize.z)
+    .write(to: movingURL)
+  let orientation = DicomParser.DicomOrientation(
+    xAxis: Vec3<Float>(x: 1, y: 0, z: 0),
+    yAxis: Vec3<Float>(x: 0, y: 1, z: 0),
+    zAxis: Vec3<Float>(x: 0, y: 0, z: 1)
+  )
+
+  func volume(
+    url: URL,
+    size: Vec3<Int>,
+    spacing: Vec3<Float>,
+    origin: Vec3<Float>,
+    frame: String
+  ) -> BorgVRUnbrickedVolume {
+    BorgVRUnbrickedVolume(
+      source: BorgVRRawVolumeSource(
+        url: url,
+        offset: 0,
+        size: size,
+        bytesPerComponent: 1,
+        componentCount: 1,
+        voxelSpacing: spacing
+      ),
+      orientation: orientation,
+      origin: origin,
+      frameOfReferenceUID: frame,
+      channels: []
+    )
+  }
+
+  let transform = try BorgVRDICOMRigidRegistration.register(
+    reference: volume(
+      url: referenceURL,
+      size: referenceSize,
+      spacing: Vec3<Float>(x: 0.002, y: 0.003, z: 0.004),
+      origin: Vec3<Float>(x: -10, y: 20, z: -30),
+      frame: "reference-frame"
+    ),
+    moving: volume(
+      url: movingURL,
+      size: movingSize,
+      spacing: Vec3<Float>(x: 0.001, y: 0.002, z: 0.006),
+      origin: Vec3<Float>(x: 100, y: -200, z: 300),
+      frame: "moving-frame"
+    ),
+    logger: nil
+  )
+  let mappedCenter = transform.applying(to: Vec3<Float>(x: 2, y: 1, z: 1))
+  try expect(
+    (mappedCenter - Vec3<Float>(x: 4, y: 2, z: 1)).magnitude < 0.0001,
+    "Registration used incomparable DICOM origins instead of aligning physical centers"
+  )
+}
+
+private func testRegistrationRecoversTranslation() throws {
+  let directory = FileManager.default.temporaryDirectory
+    .appendingPathComponent("borgvr-registration-optimization-tests-\(UUID().uuidString)")
+  try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+  defer { try? FileManager.default.removeItem(at: directory) }
+
+  let referenceURL = directory.appendingPathComponent("reference.raw")
+  let movingURL = directory.appendingPathComponent("moving.raw")
+  let size = Vec3<Int>(x: 25, y: 25, z: 25)
+  var referenceValues = [UInt8](repeating: 0, count: size.x * size.y * size.z)
+  var movingValues = referenceValues
+  for z in 5..<20 {
+    for y in 5..<20 {
+      for x in 5..<18 {
+        let value = UInt8(1 + (x * 17 + y * 31 + z * 47 + x * y * 3) % 240)
+        referenceValues[(z * size.y + y) * size.x + x] = value
+        movingValues[(z * size.y + y) * size.x + x + 2] = 241 - value
+      }
+    }
+  }
+  try Data(referenceValues).write(to: referenceURL)
+  try Data(movingValues).write(to: movingURL)
+
+  let orientation = DicomParser.DicomOrientation(
+    xAxis: Vec3<Float>(x: 1, y: 0, z: 0),
+    yAxis: Vec3<Float>(x: 0, y: 1, z: 0),
+    zAxis: Vec3<Float>(x: 0, y: 0, z: 1)
+  )
+  let spacing = Vec3<Float>(x: 0.001, y: 0.001, z: 0.001)
+  func volume(url: URL) -> BorgVRUnbrickedVolume {
+    BorgVRUnbrickedVolume(
+      source: BorgVRRawVolumeSource(
+        url: url,
+        offset: 0,
+        size: size,
+        bytesPerComponent: 1,
+        componentCount: 1,
+        voxelSpacing: spacing
+      ),
+      orientation: orientation,
+      origin: .zero,
+      frameOfReferenceUID: nil,
+      channels: [BorgVRUnbrickedVolumeChannelMetadata(
+        description: "Registration optimization test",
+        modality: nil,
+        patientName: nil,
+        seriesDate: nil,
+        isSigned: false,
+        pixelPaddingValue: 0
+      )]
+    )
+  }
+
+  let transform = try BorgVRDICOMRigidRegistration.register(
+    reference: volume(url: referenceURL),
+    moving: volume(url: movingURL),
+    logger: nil
+  )
+  let transformedOrigin = transform.applying(to: .zero)
+  try expect(
+    abs(transformedOrigin.x - 2) < 0.3,
+    "NMI registration did not recover the known X translation"
+  )
+  try expect(
+    abs(transformedOrigin.y) < 0.3 && abs(transformedOrigin.z) < 0.3,
+    "NMI registration introduced an unexpected transverse translation"
+  )
+}
+
+private func testSelfRegistrationHasPerfectMetricAndOverlap() throws {
+  let directory = FileManager.default.temporaryDirectory
+    .appendingPathComponent("borgvr-self-registration-tests-\(UUID().uuidString)")
+  try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+  defer { try? FileManager.default.removeItem(at: directory) }
+
+  let sourceURL = directory.appendingPathComponent("volume.raw")
+  let size = Vec3<Int>(x: 33, y: 35, z: 37)
+  var values = [UInt16]()
+  values.reserveCapacity(size.x * size.y * size.z)
+  for z in 0..<size.z {
+    for y in 0..<size.y {
+      for x in 0..<size.x {
+        values.append(UInt16((x * 37 + y * 79 + z * 131 + x * y * 7) % 4096))
+      }
+    }
+  }
+  try values.withUnsafeBytes { try Data($0).write(to: sourceURL) }
+
+  let volume = BorgVRUnbrickedVolume(
+    source: BorgVRRawVolumeSource(
+      url: sourceURL,
+      offset: 0,
+      size: size,
+      bytesPerComponent: 2,
+      componentCount: 1,
+      voxelSpacing: Vec3<Float>(x: 0.0007, y: 0.0011, z: 0.0019)
+    ),
+    orientation: DicomParser.DicomOrientation(
+      xAxis: Vec3<Float>(x: 1, y: 0, z: 0),
+      yAxis: Vec3<Float>(x: 0, y: 1, z: 0),
+      zAxis: Vec3<Float>(x: 0, y: 0, z: 1)
+    ),
+    origin: .zero,
+    frameOfReferenceUID: nil,
+    channels: [BorgVRUnbrickedVolumeChannelMetadata(
+      description: "Self-registration test",
+      modality: nil,
+      patientName: nil,
+      seriesDate: nil,
+      isSigned: false,
+      pixelPaddingValue: nil
+    )]
+  )
+  let logger = CapturingLogger()
+  _ = try BorgVRDICOMRigidRegistration.register(
+    reference: volume,
+    moving: volume,
+    logger: logger
+  )
+
+  let optimizationMessages = logger.infoMessages.filter {
+    $0.contains("DICOM registration level optimized")
+  }
+  try expect(!optimizationMessages.isEmpty, "Self-registration produced no metric output")
+  try expect(
+    optimizationMessages.allSatisfy {
+      $0.contains("NMI 2.000000 -> 2.000000")
+        && $0.contains("overlap 100.0% -> 100.0%")
+    },
+    "Self-registration did not produce perfect NMI and overlap at every level"
+  )
+}
+
+private func testRegistrationRecoversRotationAroundVolumeCenter() throws {
+  let directory = FileManager.default.temporaryDirectory
+    .appendingPathComponent("borgvr-registration-rotation-tests-\(UUID().uuidString)")
+  try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+  defer { try? FileManager.default.removeItem(at: directory) }
+
+  let referenceURL = directory.appendingPathComponent("reference.raw")
+  let movingURL = directory.appendingPathComponent("moving.raw")
+  let size = Vec3<Int>(x: 25, y: 25, z: 25)
+  let center = Vec3<Double>(x: 12, y: 12, z: 12)
+  let expectedAngle = 4.0 * Double.pi / 180
+  let cosine = cos(expectedAngle)
+  let sine = sin(expectedAngle)
+
+  func intensity(x: Double, y: Double, z: Double) -> UInt8 {
+    func gaussian(
+      center: Vec3<Double>,
+      width: Vec3<Double>,
+      amplitude: Double
+    ) -> Double {
+      let dx = (x - center.x) / width.x
+      let dy = (y - center.y) / width.y
+      let dz = (z - center.z) / width.z
+      return amplitude * exp(-(dx * dx + dy * dy + dz * dz))
+    }
+    let value = 5
+      + gaussian(
+        center: Vec3<Double>(x: 7, y: 10, z: 9),
+        width: Vec3<Double>(x: 3, y: 5, z: 4),
+        amplitude: 135
+      )
+      + gaussian(
+        center: Vec3<Double>(x: 17, y: 15, z: 14),
+        width: Vec3<Double>(x: 4, y: 2, z: 5),
+        amplitude: 95
+      )
+      + gaussian(
+        center: Vec3<Double>(x: 14, y: 6, z: 18),
+        width: Vec3<Double>(x: 2, y: 3, z: 2),
+        amplitude: 55
+      )
+    return UInt8(clamping: Int(value.rounded()))
+  }
+
+  var referenceValues = [UInt8]()
+  var movingValues = [UInt8]()
+  referenceValues.reserveCapacity(size.x * size.y * size.z)
+  movingValues.reserveCapacity(size.x * size.y * size.z)
+  for z in 0..<size.z {
+    for y in 0..<size.y {
+      for x in 0..<size.x {
+        referenceValues.append(intensity(x: Double(x), y: Double(y), z: Double(z)))
+        let dx = Double(x) - center.x
+        let dy = Double(y) - center.y
+        let referenceX = cosine * dx + sine * dy + center.x
+        let referenceY = -sine * dx + cosine * dy + center.y
+        movingValues.append(
+          intensity(x: referenceX, y: referenceY, z: Double(z))
+        )
+      }
+    }
+  }
+  try Data(referenceValues).write(to: referenceURL)
+  try Data(movingValues).write(to: movingURL)
+
+  let orientation = DicomParser.DicomOrientation(
+    xAxis: Vec3<Float>(x: 1, y: 0, z: 0),
+    yAxis: Vec3<Float>(x: 0, y: 1, z: 0),
+    zAxis: Vec3<Float>(x: 0, y: 0, z: 1)
+  )
+  func volume(url: URL) -> BorgVRUnbrickedVolume {
+    BorgVRUnbrickedVolume(
+      source: BorgVRRawVolumeSource(
+        url: url,
+        offset: 0,
+        size: size,
+        bytesPerComponent: 1,
+        componentCount: 1,
+        voxelSpacing: Vec3<Float>(x: 0.001, y: 0.001, z: 0.001)
+      ),
+      orientation: orientation,
+      origin: .zero,
+      frameOfReferenceUID: nil,
+      channels: [BorgVRUnbrickedVolumeChannelMetadata(
+        description: "Registration rotation test",
+        modality: nil,
+        patientName: nil,
+        seriesDate: nil,
+        isSigned: false,
+        pixelPaddingValue: nil
+      )]
+    )
+  }
+
+  let transform = try BorgVRDICOMRigidRegistration.register(
+    reference: volume(url: referenceURL),
+    moving: volume(url: movingURL),
+    logger: nil
+  )
+  let recoveredAngle = atan2(Double(transform.xAxis.y), Double(transform.xAxis.x))
+  try expect(
+    abs(recoveredAngle - expectedAngle) < 1.5 * Double.pi / 180,
+    "NMI registration did not recover the known Z rotation"
+  )
+  let voxelCenter = Vec3<Float>(x: 12, y: 12, z: 12)
+  try expect(
+    (transform.applying(to: voxelCenter) - voxelCenter).magnitude < 1,
+    "Registration rotation did not preserve the volume center"
   )
 }
 
@@ -556,6 +947,11 @@ private enum VolumeConversionServiceTestRunner {
     try testRegistrationDownsamplingPreservesPaddingOnlyRegions()
     try testRegistrationDownsamplingPreservesSignedSamples()
     try testRecursiveRegistrationPreservesDICOMInitialTransform()
+    try testVoxelTransformCombinesSpacingRotationAndTranslation()
+    try testRegistrationCentersVolumesFromDifferentDICOMFrames()
+    try testSelfRegistrationHasPerfectMetricAndOverlap()
+    try testRegistrationRecoversTranslation()
+    try testRegistrationRecoversRotationAroundVolumeCenter()
     print("Volume conversion service tests passed")
   }
 }

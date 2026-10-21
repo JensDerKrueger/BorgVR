@@ -351,7 +351,7 @@ fragment VolumeFragmentOutput VOLUME_FRAGMENT_SHADER_TF_NAME(
         float4 volumeValues = sampleVolumeComponents(
           volumeAtlas, secondaryVolumeAtlas, s, poolCoords
         );
-        float4 current = sampleTransferFunctions(
+        TransferFunctionSamples transferSamples = sampleTransferFunctions(
           volumeValues,
           uniforms.transferBias,
           s,
@@ -360,15 +360,18 @@ fragment VolumeFragmentOutput VOLUME_FRAGMENT_SHADER_TF_NAME(
           transferFunc3,
           transferFunc4
         );
-        current.a = 1.0 - pow(1.0 - current.a, ocFactor);
-        float contribution = (1.0 - interactionOpacity) * current.a;
-        if (contribution > strongestContribution) {
-          strongestContribution = contribution;
-          interactionPosition = sampleNormCoords;
-        }
-        interactionOpacity += contribution;
-        if (!stoppedAtOpaqueGeometry) {
-          accColor = underFloat(current, accColor);
+        for (int channel = 0; channel < VOLUME_COMPONENT_COUNT; ++channel) {
+          float4 current = transferSamples.values[channel];
+          current.a = 1.0 - pow(1.0 - current.a, ocFactor);
+          float contribution = (1.0 - interactionOpacity) * current.a;
+          if (contribution > strongestContribution) {
+            strongestContribution = contribution;
+            interactionPosition = sampleNormCoords;
+          }
+          interactionOpacity += contribution;
+          if (!stoppedAtOpaqueGeometry) {
+            accColor = underFloat(current, accColor);
+          }
         }
 
         // The visible color may stop at opaque geometry, while interaction depth
@@ -534,7 +537,7 @@ fragment VolumeFragmentOutput VOLUME_FRAGMENT_SHADER_TF_LIGHTING_NAME(
         float4 volumeValues = sampleVolumeComponents(
           volumeAtlas, secondaryVolumeAtlas, s, poolCoords
         );
-        float4 current = sampleTransferFunctions(
+        TransferFunctionSamples transferSamples = sampleTransferFunctions(
           volumeValues,
           uniforms.transferBias,
           s,
@@ -543,39 +546,61 @@ fragment VolumeFragmentOutput VOLUME_FRAGMENT_SHADER_TF_LIGHTING_NAME(
           transferFunc3,
           transferFunc4
         );
-        // Opacity correction
-        current.a = 1.0 - pow(1.0 - current.a, ocFactor);
-        float contribution = (1.0 - interactionOpacity) * current.a;
-        if (contribution > strongestContribution) {
-          strongestContribution = contribution;
-          interactionPosition = sampleNormCoords;
-        }
-        interactionOpacity += contribution;
-
-        if (current.a > 0.01) {
-          float3 normal = computeNormal(
-                                        poolCoords, POOL_SIZE,
-                                        float3(1,1,1),
-                                        volumeAtlas,
-                                        secondaryVolumeAtlas,
-                                        s
-                                        );
-
-          half3 posInView    = half3((uniforms.modelView * float4((sampleNormCoords - 0.5),1)).xyz);
-          half3 normalInView = half3(normalize((uniforms.modelViewIT * float4(normal,0)).xyz));
-          current.rgb = float3(lighting(
-                                          posInView,
-                                          normalInView,
-                                          half3(current.rgb),
-                                          half3(uniforms.lightDirection.xyz),
-                                          half3(uniforms.ambientLightColor.xyz),
-                                          half3(uniforms.diffuseLightColor.xyz),
-                                          half3(uniforms.specularLightColor.xyz)
-                                          ));
+        bool needsLighting = false;
+        for (int channel = 0; channel < VOLUME_COMPONENT_COUNT; ++channel) {
+          float correctedAlpha = 1.0 - pow(
+            1.0 - transferSamples.values[channel].a,
+            ocFactor
+          );
+          needsLighting = needsLighting || correctedAlpha > 0.01;
         }
 
-        if (!stoppedAtOpaqueGeometry) {
-          accColor = underFloat(current, accColor);
+        half3 posInView = half3(0.0);
+        ComponentGradients componentGradients;
+        if (needsLighting) {
+          componentGradients = computeComponentGradients(
+            poolCoords,
+            1.0 / float3(POOL_SIZE),
+            volumeAtlas,
+            secondaryVolumeAtlas,
+            s
+          );
+          posInView = half3((uniforms.modelView * float4((sampleNormCoords - 0.5),1)).xyz);
+        }
+
+        for (int channel = 0; channel < VOLUME_COMPONENT_COUNT; ++channel) {
+          float4 current = transferSamples.values[channel];
+          current.a = 1.0 - pow(1.0 - current.a, ocFactor);
+          float contribution = (1.0 - interactionOpacity) * current.a;
+          if (contribution > strongestContribution) {
+            strongestContribution = contribution;
+            interactionPosition = sampleNormCoords;
+          }
+          interactionOpacity += contribution;
+
+          if (current.a > 0.01) {
+            float3 normal = componentNormal(
+              componentGradients,
+              channel,
+              float3(1, 1, 1)
+            );
+            half3 normalInView = half3(safeNormalize(
+              (uniforms.modelViewIT * float4(normal, 0)).xyz
+            ));
+            current.rgb = float3(lighting(
+                                            posInView,
+                                            normalInView,
+                                            half3(current.rgb),
+                                            half3(uniforms.lightDirection.xyz),
+                                            half3(uniforms.ambientLightColor.xyz),
+                                            half3(uniforms.diffuseLightColor.xyz),
+                                            half3(uniforms.specularLightColor.xyz)
+                                            ));
+          }
+
+          if (!stoppedAtOpaqueGeometry) {
+            accColor = underFloat(current, accColor);
+          }
         }
 
         // The visible color may stop at opaque geometry, while interaction depth

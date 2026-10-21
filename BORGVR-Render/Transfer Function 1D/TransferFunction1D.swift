@@ -267,8 +267,9 @@ class TransferFunction1D: Equatable {
    - rangeMax: The maximum value of the overall range.
    */
   func updateRanges(minValue: Int, maxValue: Int, rangeMax: Int) {
-    bias = Float(maxValue) / Float(data.count - 1)
-    textureBias = Float(rangeMax) / Float(maxValue)
+    let safeMaximum = max(maxValue, 1)
+    bias = Float(safeMaximum) / Float(max(data.count - 1, 1))
+    textureBias = Float(max(rangeMax, 1)) / Float(safeMaximum)
   }
 
   /// Resets the transfer function by applying a default smooth step function.
@@ -641,12 +642,16 @@ class TransferFunction1D: Equatable {
    - Parameter brickMetadata: The metadata for the brick.
    - Returns: True if the brick is considered empty; otherwise, false.
    */
-  func isBrickEmpty(brickMetadata: BrickMetadata) -> Bool {
+  func isBrickEmpty(brickMetadata: BrickMetadata, component: Int) -> Bool {
     guard minIndex >= 0, maxIndex >= 0 else {
       return true
     }
-    let minBrickValue = brickMetadata.minValue
-    let maxBrickValue = brickMetadata.maxValue
+    guard brickMetadata.componentRanges.indices.contains(component) else {
+      return false
+    }
+    let range = brickMetadata.componentRanges[component]
+    let minBrickValue = range.minValue
+    let maxBrickValue = range.maxValue
     return (minBrickValue > Int(ceil(Float(self.maxIndex) * bias))) ||
     (maxBrickValue < Int(Float(self.minIndex) * bias))
   }

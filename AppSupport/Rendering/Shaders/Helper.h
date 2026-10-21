@@ -83,41 +83,42 @@ inline float sampleVolumeScalar(texture3d<float, access::sample> volume,
   return dot(components, float4(1.0)) / float(VOLUME_COMPONENT_COUNT);
 }
 
-inline float4 sampleTransferFunctions(float4 components,
-                                      float transferBias,
+struct TransferFunctionSamples {
+  float4 values[4];
+};
+
+inline TransferFunctionSamples sampleTransferFunctions(
+                                      float4 components,
+                                      float4 transferBias,
                                       sampler transferSampler,
                                       texture1d<half, access::sample> transferFunction1,
                                       texture1d<half, access::sample> transferFunction2,
                                       texture1d<half, access::sample> transferFunction3,
                                       texture1d<half, access::sample> transferFunction4) {
-  float4 sample1 = float4(transferFunction1.sample(
+  TransferFunctionSamples samples;
+  samples.values[0] = float4(transferFunction1.sample(
     transferSampler,
-    components.x * transferBias
+    components.x * transferBias.x
   ));
-  float3 premultipliedColor = sample1.rgb * sample1.a;
-  float alphaSum = sample1.a;
 #if VOLUME_COMPONENT_COUNT >= 2
-  float4 sample2 = float4(transferFunction2.sample(transferSampler, components.y * transferBias));
-  premultipliedColor += sample2.rgb * sample2.a;
-  alphaSum += sample2.a;
+  samples.values[1] = float4(transferFunction2.sample(
+    transferSampler,
+    components.y * transferBias.y
+  ));
 #endif
 #if VOLUME_COMPONENT_COUNT >= 3
-  float4 sample3 = float4(transferFunction3.sample(transferSampler, components.z * transferBias));
-  premultipliedColor += sample3.rgb * sample3.a;
-  alphaSum += sample3.a;
+  samples.values[2] = float4(transferFunction3.sample(
+    transferSampler,
+    components.z * transferBias.z
+  ));
 #endif
 #if VOLUME_COMPONENT_COUNT >= 4
-  float4 sample4 = float4(transferFunction4.sample(transferSampler, components.w * transferBias));
-  premultipliedColor += sample4.rgb * sample4.a;
-  alphaSum += sample4.a;
+  samples.values[3] = float4(transferFunction4.sample(
+    transferSampler,
+    components.w * transferBias.w
+  ));
 #endif
-  if (alphaSum <= 1e-6) {
-    return float4(0.0);
-  }
-  return float4(
-    clamp(premultipliedColor / alphaSum, 0.0, 1.0),
-    min(alphaSum, 1.0)
-  );
+  return samples;
 }
 
 /**
@@ -271,6 +272,39 @@ float3 computeGradient(
                 ) / 2.0;
 }
 
+struct ComponentGradients {
+  float4 x;
+  float4 y;
+  float4 z;
+};
+
+inline ComponentGradients computeComponentGradients(
+                                     float3 center,
+                                     float3 sampleDelta,
+                                     texture3d<float, access::sample> volume,
+                                     texture3d<float, access::sample> secondaryVolume,
+                                     sampler volumeSampler) {
+  float4 xp = sampleVolumeComponents(
+    volume, secondaryVolume, volumeSampler, center + float3(sampleDelta.x, 0, 0)
+  );
+  float4 xm = sampleVolumeComponents(
+    volume, secondaryVolume, volumeSampler, center - float3(sampleDelta.x, 0, 0)
+  );
+  float4 yp = sampleVolumeComponents(
+    volume, secondaryVolume, volumeSampler, center + float3(0, sampleDelta.y, 0)
+  );
+  float4 ym = sampleVolumeComponents(
+    volume, secondaryVolume, volumeSampler, center - float3(0, sampleDelta.y, 0)
+  );
+  float4 zp = sampleVolumeComponents(
+    volume, secondaryVolume, volumeSampler, center + float3(0, 0, sampleDelta.z)
+  );
+  float4 zm = sampleVolumeComponents(
+    volume, secondaryVolume, volumeSampler, center - float3(0, 0, sampleDelta.z)
+  );
+  return ComponentGradients{(xp - xm) * 0.5, (yp - ym) * 0.5, (zp - zm) * 0.5};
+}
+
 /**
  Safely normalizes a vector, returning zero if the length is zero.
 
@@ -280,6 +314,16 @@ float3 computeGradient(
 inline float3 safeNormalize(float3 v) {
   float len = length(v);
   return (len > 0.0) ? (v / len) : float3(0);
+}
+
+inline float3 componentNormal(ComponentGradients gradients,
+                              int component,
+                              float3 domainScale) {
+  return safeNormalize(float3(
+    gradients.x[component],
+    gradients.y[component],
+    gradients.z[component]
+  ) * domainScale);
 }
 
 /**

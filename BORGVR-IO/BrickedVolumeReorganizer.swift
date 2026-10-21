@@ -32,6 +32,7 @@ public class BrickedVolumeReorganizer {
     let data: [UInt8]
     let minValue: Int
     let maxValue: Int
+    let componentRanges: [BORGVRComponentRange]
     let isCompressed: Bool
   }
 
@@ -406,9 +407,12 @@ public class BrickedVolumeReorganizer {
       cleanupList.removeAll()
     }
 
-    let representableMaximum = (1 << (inputVolume.bytesPerComponent * 8)) - 1
-    var maxValue = inputVolume.componentCount == 1 ? 0 : representableMaximum
-    var minValue = inputVolume.componentCount == 1 ? representableMaximum : 0
+    let componentRanges = try computeComponentRanges(
+      in: inputVolume,
+      cancellationToken: cancellationToken
+    )
+    let minValue = componentRanges.map(\.minValue).min() ?? 0
+    let maxValue = componentRanges.map(\.maxValue).max() ?? 0
 
     // Create metadata for the volume.
     let metaData = BORGVRMetaData(
@@ -428,6 +432,7 @@ public class BrickedVolumeReorganizer {
       datasetDescription: datasetDescription,
       metaDescription: metaDescription
     )
+    metaData.updateComponentRanges(componentRanges)
 
     let levelCount = BORGVRMetaData.calculateLevelCount(
       size: inputVolume.size,
@@ -467,34 +472,12 @@ public class BrickedVolumeReorganizer {
         let uniqueFileName = UUID().uuidString
         let tempURL = tempDirectory.appendingPathComponent(uniqueFileName)
 
-        if level == 0 && inputVolume.componentCount == 1 {
-          source = try subsample(
-            tempName: tempURL.path,
-            volume: source,
-            minValue: &minValue,
-            maxValue: &maxValue,
-            logger: logger,
-            cancellationToken: cancellationToken
-          )
-          logger?.dev(
-            String(
-              format: L(
-                "bricked_log_minmax",
-                value: "Min value: %d, Max value: %d",
-                comment: "Log: min and max values"
-              ),
-              minValue,
-              maxValue
-            )
-          )
-        } else {
-          source = try subsample(
-            tempName: tempURL.path,
-            volume: source,
-            logger: logger,
-            cancellationToken: cancellationToken
-          )
-        }
+        source = try subsample(
+          tempName: tempURL.path,
+          volume: source,
+          logger: logger,
+          cancellationToken: cancellationToken
+        )
       }
     }
 
@@ -507,7 +490,6 @@ public class BrickedVolumeReorganizer {
     try truncateFile(atPath: filename, toLength: UInt64(filePos))
 
     try cancellationToken?.checkCancellation()
-    metaData.updateMinMax(minValue: minValue, maxValue: maxValue)
     logger?.dev(
       L(
         "bricked_log_writing_metadata",
@@ -592,6 +574,71 @@ public class BrickedVolumeReorganizer {
     }
     if Int(value) > maxValue {
       maxValue = Int(value)
+    }
+  }
+
+  private func computeComponentRanges(
+    in volume: VolumeDataAccessor,
+    cancellationToken: BorgVRVolumeConversionCancellationToken?
+  ) throws -> [BORGVRComponentRange] {
+    let representableMaximum = (1 << (volume.bytesPerComponent * 8)) - 1
+    var minimums = [Int](repeating: representableMaximum, count: volume.componentCount)
+    var maximums = [Int](repeating: 0, count: volume.componentCount)
+
+    func accumulate<T: FixedWidthInteger>(_ values: UnsafeBufferPointer<T>) {
+      for index in values.indices {
+        let component = index % volume.componentCount
+        let value = Int(values[index])
+        minimums[component] = min(minimums[component], value)
+        maximums[component] = max(maximums[component], value)
+      }
+    }
+
+    if let rawVolume = volume as? RawFileAccessor, rawVolume.supportsAlignedTypedAccess {
+      try cancellationToken?.checkCancellation()
+      let valueCount = volume.totalVoxels * volume.componentCount
+      switch volume.bytesPerComponent {
+        case 1:
+          accumulate(UnsafeBufferPointer(
+            start: rawVolume.mappedMemory.assumingMemoryBound(to: UInt8.self),
+            count: valueCount
+          ))
+        case 2:
+          accumulate(UnsafeBufferPointer(
+            start: rawVolume.mappedMemory.assumingMemoryBound(to: UInt16.self),
+            count: valueCount
+          ))
+        case 4:
+          accumulate(UnsafeBufferPointer(
+            start: rawVolume.mappedMemory.assumingMemoryBound(to: UInt32.self),
+            count: valueCount
+          ))
+        default:
+          preconditionFailure("Unsupported component size \(volume.bytesPerComponent)")
+      }
+    } else {
+      for z in 0..<volume.size.z {
+        try cancellationToken?.checkCancellation()
+        for y in 0..<volume.size.y {
+          switch volume.bytesPerComponent {
+            case 1:
+              let row: [UInt8] = try volume.getData(x: 0, y: y, z: z, count: volume.size.x)
+              row.withUnsafeBufferPointer(accumulate)
+            case 2:
+              let row: [UInt16] = try volume.getData(x: 0, y: y, z: z, count: volume.size.x)
+              row.withUnsafeBufferPointer(accumulate)
+            case 4:
+              let row: [UInt32] = try volume.getData(x: 0, y: y, z: z, count: volume.size.x)
+              row.withUnsafeBufferPointer(accumulate)
+            default:
+              preconditionFailure("Unsupported component size \(volume.bytesPerComponent)")
+          }
+        }
+      }
+    }
+
+    return minimums.indices.map {
+      BORGVRComponentRange(minValue: minimums[$0], maxValue: maximums[$0])
     }
   }
 
@@ -1090,43 +1137,45 @@ public class BrickedVolumeReorganizer {
    component ranges may retain more bricks than separate per-channel ranges,
    but it must never classify a visible brick as empty.
    */
-  func computeMinMax(data: [UInt8]) -> (minValue: Int, maxValue: Int) {
+  func computeComponentMinMax(data: [UInt8]) -> [BORGVRComponentRange] {
     switch inputVolume.bytesPerComponent {
       case 1:
-        guard let minValue = data.min(), let maxValue = data.max() else {
-          return (minValue: 0, maxValue: 0)
+        return data.withUnsafeBytes { rawBuffer in
+          computeComponentMinMax(values: rawBuffer.bindMemory(to: UInt8.self))
         }
-        return (minValue: Int(minValue), maxValue: Int(maxValue))
       case 2:
         guard data.count % 2 == 0 else {
-          return (minValue: 0, maxValue: 0)
+          return []
         }
         return data.withUnsafeBytes { rawBuffer in
-          computeMinMax(values: rawBuffer.bindMemory(to: UInt16.self))
+          computeComponentMinMax(values: rawBuffer.bindMemory(to: UInt16.self))
         }
       case 4:
         guard data.count % 4 == 0 else {
-          return (minValue: 0, maxValue: 0)
+          return []
         }
         return data.withUnsafeBytes { rawBuffer in
-          computeMinMax(values: rawBuffer.bindMemory(to: UInt32.self))
+          computeComponentMinMax(values: rawBuffer.bindMemory(to: UInt32.self))
         }
       default:
-        return (minValue: 0, maxValue: 0)
+        return []
     }
   }
 
-  private func computeMinMax<T: FixedWidthInteger>(
+  private func computeComponentMinMax<T: FixedWidthInteger>(
     values: UnsafeBufferPointer<T>
-  ) -> (minValue: Int, maxValue: Int) {
-    guard let first = values.first else { return (minValue: 0, maxValue: 0) }
-    var minimum = first
-    var maximum = first
-    for value in values.dropFirst() {
-      minimum = min(minimum, value)
-      maximum = max(maximum, value)
+  ) -> [BORGVRComponentRange] {
+    guard !values.isEmpty else { return [] }
+    var minimums = [T](repeating: T.max, count: inputVolume.componentCount)
+    var maximums = [T](repeating: T.min, count: inputVolume.componentCount)
+    for index in values.indices {
+      let component = index % inputVolume.componentCount
+      minimums[component] = min(minimums[component], values[index])
+      maximums[component] = max(maximums[component], values[index])
     }
-    return (minValue: Int(minimum), maxValue: Int(maximum))
+    return minimums.indices.map {
+      BORGVRComponentRange(minValue: Int(minimums[$0]), maxValue: Int(maximums[$0]))
+    }
   }
 
   /**
@@ -1197,7 +1246,9 @@ public class BrickedVolumeReorganizer {
             brickData: &brickData
           )
 
-          let stats = self.computeMinMax(data: brickData)
+          let componentRanges = self.computeComponentMinMax(data: brickData)
+          let minValue = componentRanges.map(\.minValue).min() ?? 0
+          let maxValue = componentRanges.map(\.maxValue).max() ?? 0
           if useCompressor,
              let compressedSize = self.compress(
                data: brickData,
@@ -1207,8 +1258,9 @@ public class BrickedVolumeReorganizer {
             store.set(
               PreparedBrick(
                 data: Array(compressionBuffer[0..<compressedSize]),
-                minValue: stats.minValue,
-                maxValue: stats.maxValue,
+                minValue: minValue,
+                maxValue: maxValue,
+                componentRanges: componentRanges,
                 isCompressed: true
               ),
               at: localIndex
@@ -1217,8 +1269,9 @@ public class BrickedVolumeReorganizer {
             store.set(
               PreparedBrick(
                 data: brickData,
-                minValue: stats.minValue,
-                maxValue: stats.maxValue,
+                minValue: minValue,
+                maxValue: maxValue,
+                componentRanges: componentRanges,
                 isCompressed: false
               ),
               at: localIndex
@@ -1241,7 +1294,8 @@ public class BrickedVolumeReorganizer {
           offset: filePos,
           size: brick.data.count,
           minValue: brick.minValue,
-          maxValue: brick.maxValue
+          maxValue: brick.maxValue,
+          componentRanges: brick.componentRanges
         )
         filePos += brick.data.count
         completedBrickCount += 1
@@ -1375,7 +1429,9 @@ public class BrickedVolumeReorganizer {
             .assumingMemoryBound(to: UInt8.self)
 
           var brickSizeInBytes = 0
-          let stats = computeMinMax(data: brickData)
+          let componentRanges = computeComponentMinMax(data: brickData)
+          let minValue = componentRanges.map(\.minValue).min() ?? 0
+          let maxValue = componentRanges.map(\.maxValue).max() ?? 0
 
           if useCompressor {
             if let compressedSize = compress(
@@ -1401,8 +1457,9 @@ public class BrickedVolumeReorganizer {
           metaData.append(
             offset: filePos,
             size: brickSizeInBytes,
-            minValue: stats.minValue,
-            maxValue: stats.maxValue
+            minValue: minValue,
+            maxValue: maxValue,
+            componentRanges: componentRanges
           )
           filePos += brickSizeInBytes
           brickIndex += 1

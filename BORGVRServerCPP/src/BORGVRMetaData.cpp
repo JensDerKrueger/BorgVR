@@ -16,7 +16,6 @@ static constexpr size_t kMagicLen = 6;
 namespace {
 constexpr size_t kMaximumStringLength = 1'048'576;
 constexpr int kMaximumComponentCount = 1024;
-constexpr size_t kBrickMetadataRecordSize = 4 * sizeof(int64_t);
 
 int checked_int(int64_t value, const char* context) {
   if (value < static_cast<int64_t>(std::numeric_limits<int>::min()) ||
@@ -171,6 +170,20 @@ void BORGVRMetaData::parseFromBytes(const uint8_t* data, size_t size) {
   minValue_ = br.read_i64("minValue");
   maxValue_ = br.read_i64("maxValue");
 
+  const int64_t componentRangeCount = br.read_i64("componentRangeCount");
+  if (componentRangeCount != componentCount_) {
+    throw BorgVRException(BorgVRDataErrorCode::InvalidArgument,
+                          "Component range count does not match component count.");
+  }
+  componentRanges_.clear();
+  componentRanges_.reserve(static_cast<size_t>(componentRangeCount));
+  for (int64_t component = 0; component < componentRangeCount; ++component) {
+    ComponentRange range;
+    range.minValue = br.read_i64("component minValue");
+    range.maxValue = br.read_i64("component maxValue");
+    componentRanges_.push_back(range);
+  }
+
   compression_ = br.read_bool("compression");
 
   if (width_ <= 0 || height_ <= 0 || depth_ <= 0) {
@@ -195,6 +208,20 @@ void BORGVRMetaData::parseFromBytes(const uint8_t* data, size_t size) {
   if (minValue_ < 0 || minValue_ > maxValue_ || maxValue_ > rangeMax) {
     throw BorgVRException(BorgVRDataErrorCode::InvalidArgument,
                           "Dataset value range does not fit the declared component type.");
+  }
+  int64_t componentMinimum = rangeMax;
+  int64_t componentMaximum = 0;
+  for (const auto& range : componentRanges_) {
+    if (range.minValue < 0 || range.minValue > range.maxValue || range.maxValue > rangeMax) {
+      throw BorgVRException(BorgVRDataErrorCode::InvalidArgument,
+                            "Component value range does not fit the declared component type.");
+    }
+    componentMinimum = std::min(componentMinimum, range.minValue);
+    componentMaximum = std::max(componentMaximum, range.maxValue);
+  }
+  if (componentMinimum != minValue_ || componentMaximum != maxValue_) {
+    throw BorgVRException(BorgVRDataErrorCode::InvalidArgument,
+                          "Dataset value range is not the union of its component ranges.");
   }
 
   uniqueID_ = br.read_string("uniqueID", kMaximumStringLength);
@@ -238,7 +265,9 @@ void BORGVRMetaData::parseFromBytes(const uint8_t* data, size_t size) {
   }
 
   const size_t metadataCount = static_cast<size_t>(metadataCount64);
-  if (metadataCount > br.remaining() / kBrickMetadataRecordSize) {
+  const size_t brickMetadataRecordSize =
+      static_cast<size_t>(4 + 2 * componentCount_) * sizeof(int64_t);
+  if (metadataCount > br.remaining() / brickMetadataRecordSize) {
     throw BorgVRException(BorgVRDataErrorCode::InvalidArgument,
                           "Brick metadata records are truncated.");
   }
@@ -251,12 +280,33 @@ void BORGVRMetaData::parseFromBytes(const uint8_t* data, size_t size) {
     bm.size = br.read_i64("brick size");
     bm.minValue = br.read_i64("brick minValue");
     bm.maxValue = br.read_i64("brick maxValue");
+    bm.componentRanges.reserve(static_cast<size_t>(componentCount_));
+    for (int component = 0; component < componentCount_; ++component) {
+      ComponentRange range;
+      range.minValue = br.read_i64("brick component minValue");
+      range.maxValue = br.read_i64("brick component maxValue");
+      bm.componentRanges.push_back(range);
+    }
     if (bm.offset < 8 || bm.size <= 0 ||
         bm.offset > std::numeric_limits<int64_t>::max() - bm.size) {
       throw BorgVRException(BorgVRDataErrorCode::InvalidArgument, "Invalid brick byte range.");
     }
     if (bm.minValue < 0 || bm.minValue > bm.maxValue || bm.maxValue > rangeMax) {
       throw BorgVRException(BorgVRDataErrorCode::InvalidArgument, "Invalid brick value range.");
+    }
+    int64_t brickMinimum = rangeMax;
+    int64_t brickMaximum = 0;
+    for (const auto& range : bm.componentRanges) {
+      if (range.minValue < 0 || range.minValue > range.maxValue || range.maxValue > rangeMax) {
+        throw BorgVRException(BorgVRDataErrorCode::InvalidArgument,
+                              "Invalid brick component value range.");
+      }
+      brickMinimum = std::min(brickMinimum, range.minValue);
+      brickMaximum = std::max(brickMaximum, range.maxValue);
+    }
+    if (brickMinimum != bm.minValue || brickMaximum != bm.maxValue) {
+      throw BorgVRException(BorgVRDataErrorCode::InvalidArgument,
+                            "Brick value range is not the union of its component ranges.");
     }
     brickMetadata_.push_back(bm);
   }
@@ -284,6 +334,11 @@ std::vector<uint8_t> BORGVRMetaData::toBytes() const {
   append_i64_le(out, static_cast<int64_t>(overlap_));
   append_i64_le(out, static_cast<int64_t>(minValue_));
   append_i64_le(out, static_cast<int64_t>(maxValue_));
+  append_i64_le(out, static_cast<int64_t>(componentRanges_.size()));
+  for (const auto& range : componentRanges_) {
+    append_i64_le(out, range.minValue);
+    append_i64_le(out, range.maxValue);
+  }
 
   append_bool(out, compression_);
 
@@ -301,6 +356,10 @@ std::vector<uint8_t> BORGVRMetaData::toBytes() const {
     append_i64_le(out, b.size);
     append_i64_le(out, b.minValue);
     append_i64_le(out, b.maxValue);
+    for (const auto& range : b.componentRanges) {
+      append_i64_le(out, range.minValue);
+      append_i64_le(out, range.maxValue);
+    }
   }
 
   return out;

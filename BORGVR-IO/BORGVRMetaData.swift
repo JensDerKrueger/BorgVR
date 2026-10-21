@@ -145,10 +145,12 @@ final class BrickMetadata: Codable, CustomStringConvertible {
   let offset: Int
   /// The size in bytes of this brick’s data.
   let size: Int
-  /// The minimum intensity value that appears (first histogram bin with non-zero count).
+  /// The minimum across all component ranges. TF visibility uses `componentRanges`.
   let minValue: Int
-  /// The maximum intensity value that appears (last histogram bin with non-zero count).
+  /// The maximum across all component ranges. TF visibility uses `componentRanges`.
   let maxValue: Int
+  /// One value range per volume component.
+  let componentRanges: [BORGVRComponentRange]
 
   /**
    Initializes a new `BrickMetadata` with all fields.
@@ -158,11 +160,16 @@ final class BrickMetadata: Codable, CustomStringConvertible {
    - Parameter minValue: The minimum intensity value.
    - Parameter maxValue: The maximum intensity value.
    */
-  init(offset: Int, size: Int, minValue: Int, maxValue: Int) {
+  init(offset: Int,
+       size: Int,
+       minValue: Int,
+       maxValue: Int,
+       componentRanges: [BORGVRComponentRange]) {
     self.offset = offset
     self.size = size
     self.minValue = minValue
     self.maxValue = maxValue
+    self.componentRanges = componentRanges
   }
 
   /**
@@ -171,7 +178,7 @@ final class BrickMetadata: Codable, CustomStringConvertible {
    - Parameter reader: The reader whose position is advanced past the brick record.
    - Throws: An error if the data is invalid or out of bounds.
    */
-  fileprivate init(from reader: inout BORGVRBinaryReader) throws {
+  fileprivate init(from reader: inout BORGVRBinaryReader, componentCount: Int) throws {
     func intValue(_ rawValue: Int64, context: String) throws -> Int {
       guard let value = Int(exactly: rawValue) else {
         throw BORGVRError.invalidValue(context: context, reason: "not representable")
@@ -195,6 +202,18 @@ final class BrickMetadata: Codable, CustomStringConvertible {
       reader.readInteger(Int64.self, context: "brick maxValue"),
       context: "brick maxValue"
     )
+    self.componentRanges = try (0..<componentCount).map { component in
+      BORGVRComponentRange(
+        minValue: try intValue(
+          reader.readInteger(Int64.self, context: "brick component \(component) minValue"),
+          context: "brick component \(component) minValue"
+        ),
+        maxValue: try intValue(
+          reader.readInteger(Int64.self, context: "brick component \(component) maxValue"),
+          context: "brick component \(component) maxValue"
+        )
+      )
+    }
   }
 
   /**
@@ -208,12 +227,16 @@ final class BrickMetadata: Codable, CustomStringConvertible {
     data.append(Data(from: Int64(size)))
     data.append(Data(from: Int64(minValue)))
     data.append(Data(from: Int64(maxValue)))
+    for range in componentRanges {
+      data.append(Data(from: range.minValue))
+      data.append(Data(from: range.maxValue))
+    }
     return data
   }
 
   /// A textual description of the brick metadata for debugging purposes.
   public var description: String {
-    return "(offset: \(offset), size: \(size), minValue: \(minValue), maxValue: \(maxValue))"
+    return "(offset: \(offset), size: \(size), minValue: \(minValue), maxValue: \(maxValue), componentRanges: \(componentRanges))"
   }
 }
 
@@ -255,6 +278,13 @@ final class LevelMetadata: Codable, CustomStringConvertible {
   }
 }
 
+// MARK: - Component ranges
+
+struct BORGVRComponentRange: Codable, Equatable, Sendable {
+  let minValue: Int
+  let maxValue: Int
+}
+
 // MARK: - BORGVRMetaData
 
 /**
@@ -270,11 +300,10 @@ final class BORGVRMetaData: CustomStringConvertible, Codable {
   /// Magic bytes used for file identification.
   private static let magicBytes = "BORGVR".data(using: .utf8)!
   /// The version of the metadata format.
-  private static let version: Int = 3
+  private static let version: Int = 4
   private static let maximumStringByteCount = 1_048_576
   private static let maximumComponentCount = 1024
   private static let maximumDimension = Int(Int32.max)
-  private static let brickMetadataRecordSize = 4 * MemoryLayout<Int64>.size
 
   /// The original volume width.
   private(set) var width: Int = 0
@@ -320,10 +349,12 @@ final class BORGVRMetaData: CustomStringConvertible, Codable {
   private(set) var brickSize: Int = 0
   /// The overlap (in voxels) between adjacent bricks.
   private(set) var overlap: Int = 0
-  /// The minimum intensity value in the volume.
+  /// The minimum across all component ranges, used by scalar modes such as ISO.
   private(set) var minValue: Int = 0
-  /// The maximum intensity value in the volume.
+  /// The maximum across all component ranges, used by scalar modes such as ISO.
   private(set) var maxValue: Int = 0
+  /// The actual value range of each component.
+  private(set) var componentRanges: [BORGVRComponentRange] = []
   /// A flag indicating whether compression is enabled.
   private(set) var compression: Bool = false
   /// A unique ID generated at time of creation
@@ -346,6 +377,7 @@ final class BORGVRMetaData: CustomStringConvertible, Codable {
     brick size \(brickSize), overlap \(overlap), \
     compression: \(compression ? "yes" : "no"), \
     min/max: \(minValue)/\(maxValue), \
+    component ranges: \(componentRanges.map { "\($0.minValue)/\($0.maxValue)" }.joined(separator: ", ")), \
     levels: \(levelMetadata.count), \
     bricks: \(brickMetadata.count), \
     label: “\(datasetDescription)”, \
@@ -471,6 +503,10 @@ final class BORGVRMetaData: CustomStringConvertible, Codable {
     self.overlap = overlap
     self.minValue = minValue
     self.maxValue = maxValue
+    self.componentRanges = Array(
+      repeating: BORGVRComponentRange(minValue: minValue, maxValue: maxValue),
+      count: componentCount
+    )
     self.compression = compression
     self.datasetDescription = datasetDescription
     self.metaDescription = metaDescription
@@ -518,6 +554,13 @@ final class BORGVRMetaData: CustomStringConvertible, Codable {
   func updateMinMax(minValue: Int, maxValue: Int) {
     self.minValue = minValue
     self.maxValue = maxValue
+  }
+
+  func updateComponentRanges(_ componentRanges: [BORGVRComponentRange]) {
+    precondition(componentRanges.count == componentCount)
+    self.componentRanges = componentRanges
+    self.minValue = componentRanges.map(\.minValue).min() ?? 0
+    self.maxValue = componentRanges.map(\.maxValue).max() ?? 0
   }
 
   // MARK: - Private Methods
@@ -611,8 +654,23 @@ final class BORGVRMetaData: CustomStringConvertible, Codable {
    - Parameter minValue: The minimum intensity value in the brick.
    - Parameter maxValue: The maximum intensity value in the brick.
    */
-  func append(offset: Int, size: Int, minValue: Int, maxValue: Int) {
-    let brick = BrickMetadata(offset: offset, size: size, minValue: minValue, maxValue: maxValue)
+  func append(offset: Int,
+              size: Int,
+              minValue: Int,
+              maxValue: Int,
+              componentRanges: [BORGVRComponentRange]? = nil) {
+    let ranges = componentRanges ?? Array(
+      repeating: BORGVRComponentRange(minValue: minValue, maxValue: maxValue),
+      count: componentCount
+    )
+    precondition(ranges.count == componentCount)
+    let brick = BrickMetadata(
+      offset: offset,
+      size: size,
+      minValue: minValue,
+      maxValue: maxValue,
+      componentRanges: ranges
+    )
     self.brickMetadata.append(brick)
   }
 
@@ -637,6 +695,11 @@ final class BORGVRMetaData: CustomStringConvertible, Codable {
     data.append(Data(from: overlap))
     data.append(Data(from: minValue))
     data.append(Data(from: maxValue))
+    data.append(Data(from: Int64(componentRanges.count)))
+    for range in componentRanges {
+      data.append(Data(from: range.minValue))
+      data.append(Data(from: range.maxValue))
+    }
     data.append(Data(from: compression))
     data.appendString(uniqueID)
     data.appendString(datasetDescription)
@@ -750,6 +813,19 @@ final class BORGVRMetaData: CustomStringConvertible, Codable {
     self.overlap = try readInt("overlap")
     self.minValue = try readInt("minValue")
     self.maxValue = try readInt("maxValue")
+    let componentRangeCount = try readInt("componentRangeCount")
+    guard componentRangeCount == componentCount else {
+      throw BORGVRError.invalidValue(
+        context: "componentRangeCount",
+        reason: "expected \(componentCount), found \(componentRangeCount)"
+      )
+    }
+    self.componentRanges = try (0..<componentRangeCount).map { component in
+      BORGVRComponentRange(
+        minValue: try readInt("componentRanges[\(component)].minValue"),
+        maxValue: try readInt("componentRanges[\(component)].maxValue")
+      )
+    }
     self.compression = try reader.readBool(context: "compression")
 
     try validateHeaderValues()
@@ -796,8 +872,9 @@ final class BORGVRMetaData: CustomStringConvertible, Codable {
     }
     try reader.skip(dataOffset, context: "brickDataOffset")
 
+    let brickMetadataRecordSize = (4 + 2 * componentCount) * MemoryLayout<Int64>.size
     let (metadataByteCount, metadataByteCountOverflow) = metadataCount.multipliedReportingOverflow(
-      by: BORGVRMetaData.brickMetadataRecordSize
+      by: brickMetadataRecordSize
     )
     guard !metadataByteCountOverflow, metadataByteCount <= reader.remainingCount else {
       throw BORGVRError.unexpectedEndOfData(context: "brick metadata records")
@@ -806,7 +883,7 @@ final class BORGVRMetaData: CustomStringConvertible, Codable {
     self.brickMetadata = []
     self.brickMetadata.reserveCapacity(metadataCount)
     for _ in 0..<metadataCount {
-      let brickMeta = try BrickMetadata(from: &reader)
+      let brickMeta = try BrickMetadata(from: &reader, componentCount: componentCount)
       try validate(brick: brickMeta, brickDataUpperBound: brickDataUpperBound)
       self.brickMetadata.append(brickMeta)
     }
@@ -840,6 +917,29 @@ final class BORGVRMetaData: CustomStringConvertible, Codable {
         reason: "must be ordered and fit the declared component type"
       )
     }
+    guard componentRanges.count == componentCount else {
+      throw BORGVRError.invalidValue(
+        context: "component ranges",
+        reason: "must contain one range per component"
+      )
+    }
+    for (component, range) in componentRanges.enumerated() {
+      guard range.minValue >= 0,
+            range.minValue <= range.maxValue,
+            range.maxValue <= rangeMax else {
+        throw BORGVRError.invalidValue(
+          context: "component range \(component)",
+          reason: "must be ordered and fit the declared component type"
+        )
+      }
+    }
+    guard componentRanges.map(\.minValue).min() == minValue,
+          componentRanges.map(\.maxValue).max() == maxValue else {
+      throw BORGVRError.invalidValue(
+        context: "value range",
+        reason: "must equal the union of the component ranges"
+      )
+    }
   }
 
   private func validate(brick: BrickMetadata, brickDataUpperBound: UInt64?) throws {
@@ -859,6 +959,29 @@ final class BORGVRMetaData: CustomStringConvertible, Codable {
       throw BORGVRError.invalidValue(
         context: "brick value range",
         reason: "must be ordered and fit the declared component type"
+      )
+    }
+    guard brick.componentRanges.count == componentCount else {
+      throw BORGVRError.invalidValue(
+        context: "brick component ranges",
+        reason: "must contain one range per component"
+      )
+    }
+    for (component, range) in brick.componentRanges.enumerated() {
+      guard range.minValue >= 0,
+            range.minValue <= range.maxValue,
+            range.maxValue <= rangeMax else {
+        throw BORGVRError.invalidValue(
+          context: "brick component range \(component)",
+          reason: "must be ordered and fit the declared component type"
+        )
+      }
+    }
+    guard brick.componentRanges.map(\.minValue).min() == brick.minValue,
+          brick.componentRanges.map(\.maxValue).max() == brick.maxValue else {
+      throw BORGVRError.invalidValue(
+        context: "brick value range",
+        reason: "must equal the union of the brick component ranges"
       )
     }
     if let brickDataUpperBound {

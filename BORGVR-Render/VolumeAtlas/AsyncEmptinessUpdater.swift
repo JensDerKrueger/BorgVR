@@ -211,8 +211,11 @@ class AsyncEmptinessUpdater {
   ) -> Bool {
     switch evaluation.mode {
       case .transferFunction:
-        return evaluation.transferFunctions.allSatisfy {
-          $0.isBrickEmpty(brickMetadata: brickMetadata)
+        return evaluation.transferFunctions.enumerated().allSatisfy { component, transferFunction in
+          transferFunction.isBrickEmpty(
+            brickMetadata: brickMetadata,
+            component: component
+          )
         }
       case .isoValue:
         return evaluation.isoValue > brickMetadata.maxValue

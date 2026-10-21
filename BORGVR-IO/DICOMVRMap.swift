@@ -32,6 +32,7 @@ public struct DicomTag: Equatable, Hashable {
   static let pixelSpacing = DicomTag(0x0028, 0x0030)
   static let imagePositionPatient = DicomTag(0x0020, 0x0032)
   static let imageOrientationPatient = DicomTag(0x0020, 0x0037)
+  static let frameOfReferenceUID = DicomTag(0x0020, 0x0052)
   static let instanceNumber = DicomTag(0x0020, 0x0013)
   static let modality = DicomTag(0x0008, 0x0060)
   static let patientName = DicomTag(0x0010, 0x0010)

@@ -22,7 +22,8 @@ private func readInt64(from data: Data, at offset: Int) -> Int64 {
 }
 
 private func brickCountOffset(in data: Data) -> Int {
-  var offset = 99
+  let componentCount = Int(readInt64(from: data, at: 38))
+  var offset = 107 + componentCount * 16
   for _ in 0..<3 {
     let length = Int(readInt64(from: data, at: offset))
     offset += 8 + length
@@ -73,7 +74,13 @@ private func expectRejection(_ name: String, data: Data) throws {
 private enum BORGVRMetaDataParserTests {
   static func main() throws {
     let valid = makeValidMetadata()
-    _ = try BORGVRMetaData(fromData: valid)
+    if CommandLine.arguments.count > 1 {
+      try valid.write(to: URL(fileURLWithPath: CommandLine.arguments[1]))
+    }
+    let parsed = try BORGVRMetaData(fromData: valid)
+    guard parsed.componentRanges == [BORGVRComponentRange(minValue: 0, maxValue: 255)] else {
+      throw TestFailure.expectedRejection("component range round trip")
+    }
 
     try expectRejection("truncated metadata", data: Data(valid.dropLast()))
 
@@ -98,19 +105,22 @@ private enum BORGVRMetaDataParserTests {
     try expectRejection("invalid brick stride", data: invalidOverlap)
 
     var invalidBoolean = valid
-    invalidBoolean[98] = 2
+    let componentCount = Int(readInt64(from: valid, at: 38))
+    let compressionOffset = 106 + componentCount * 16
+    invalidBoolean[compressionOffset] = 2
     try expectRejection("invalid Boolean", data: invalidBoolean)
 
     var negativeStringLength = valid
-    writeInt64(-1, to: &negativeStringLength, at: 99)
+    let firstStringOffset = compressionOffset + 1
+    writeInt64(-1, to: &negativeStringLength, at: firstStringOffset)
     try expectRejection("negative string length", data: negativeStringLength)
 
     var oversizedStringLength = valid
-    writeInt64(1_048_577, to: &oversizedStringLength, at: 99)
+    writeInt64(1_048_577, to: &oversizedStringLength, at: firstStringOffset)
     try expectRejection("oversized string length", data: oversizedStringLength)
 
-    let uniqueIDLength = Int(readInt64(from: valid, at: 99))
-    let datasetDescriptionStart = 99 + 8 + uniqueIDLength + 8
+    let uniqueIDLength = Int(readInt64(from: valid, at: firstStringOffset))
+    let datasetDescriptionStart = firstStringOffset + 8 + uniqueIDLength + 8
     var invalidUTF8 = valid
     invalidUTF8[datasetDescriptionStart] = 0xff
     try expectRejection("invalid UTF-8", data: invalidUTF8)

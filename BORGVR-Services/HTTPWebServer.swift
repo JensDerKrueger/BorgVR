@@ -586,8 +586,12 @@ final class HTTPWebServer {
     }
 
     let brickValues = metadata.brickMetadata.flatMap { brick in
-      [brick.minValue, brick.maxValue, brick.size]
+      [brick.minValue, brick.maxValue, brick.size] + brick.componentRanges.flatMap {
+        [$0.minValue, $0.maxValue]
+      }
     }
+    let brickFields = ["min", "max", "byteLength"] +
+      (0..<metadata.componentCount).flatMap { ["component\($0)Min", "component\($0)Max"] }
 
     let manifest = WebDatasetManifest(
       format: "borgvr-web-dataset",
@@ -609,6 +613,7 @@ final class HTTPWebServer {
         valueType: "uint",
         endianness: "little",
         valueRange: [metadata.minValue, metadata.maxValue],
+        componentRanges: metadata.componentRanges.map { [$0.minValue, $0.maxValue] },
         dataRange: [0, metadata.rangeMax]
       ),
       bricking: WebDatasetBricking(
@@ -621,8 +626,8 @@ final class HTTPWebServer {
       ),
       levels: levels,
       brickMetadata: WebDatasetBrickMetadata(
-        format: "min-max-byteLength-v1",
-        fields: ["min", "max", "byteLength"],
+        format: "component-min-max-byteLength-v2",
+        fields: brickFields,
         values: brickValues
       )
     )
@@ -1133,6 +1138,7 @@ private struct WebDatasetVolume: Encodable {
   let valueType: String
   let endianness: String
   let valueRange: [Int]
+  let componentRanges: [[Int]]
   let dataRange: [Int]
 }
 

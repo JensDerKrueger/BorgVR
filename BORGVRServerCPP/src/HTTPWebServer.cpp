@@ -922,6 +922,13 @@ bool HTTPWebServer::sendDatasetManifest(TcpSocket& socket, const std::string& da
         << "    \"valueType\": \"uint\",\n"
         << "    \"endianness\": \"little\",\n"
         << "    \"valueRange\": [" << md.minValue() << ", " << md.maxValue() << "],\n"
+        << "    \"componentRanges\": [";
+    for (size_t component = 0; component < md.componentRanges().size(); ++component) {
+      if (component > 0) oss << ", ";
+      const auto& range = md.componentRanges()[component];
+      oss << "[" << range.minValue << ", " << range.maxValue << "]";
+    }
+    oss << "],\n"
         << "    \"dataRange\": [0, " << dataRangeMax << "]\n"
         << "  },\n"
         << "  \"bricking\": {\n"
@@ -949,15 +956,22 @@ bool HTTPWebServer::sendDatasetManifest(TcpSocket& socket, const std::string& da
 
     oss << "  ],\n"
         << "  \"brickMetadata\": {\n"
-        << "    \"format\": \"min-max-byteLength-v1\",\n"
-        << "    \"fields\": [\"min\", \"max\", \"byteLength\"],\n"
+        << "    \"format\": \"component-min-max-byteLength-v2\",\n"
+        << "    \"fields\": [\"min\", \"max\", \"byteLength\"";
+    for (int component = 0; component < md.componentCount(); ++component) {
+      oss << ", \"component" << component << "Min\", \"component" << component << "Max\"";
+    }
+    oss << "],\n"
         << "    \"values\": [\n";
 
     const auto& bricks = md.brickMetadata();
     for (size_t i = 0; i < bricks.size(); ++i) {
       const auto& bm = bricks[i];
-      oss << "      " << bm.minValue << ", " << bm.maxValue << ", " << bm.size
-          << (i + 1 < bricks.size() ? "," : "") << "\n";
+      oss << "      " << bm.minValue << ", " << bm.maxValue << ", " << bm.size;
+      for (const auto& range : bm.componentRanges) {
+        oss << ", " << range.minValue << ", " << range.maxValue;
+      }
+      oss << (i + 1 < bricks.size() ? "," : "") << "\n";
     }
 
     oss << "    ]\n"

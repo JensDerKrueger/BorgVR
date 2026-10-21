@@ -51,28 +51,52 @@ final class RenderingParameters: ObservableObject {
   @Published var minValue: Int = 0
   @Published var maxValue: Int = 1
   @Published var rangeMax: Int = 1
+  private(set) var componentRanges = [BORGVRComponentRange(minValue: 0, maxValue: 1)]
+
+  var transferBiases: SIMD4<Float> {
+    var result = SIMD4<Float>(repeating: 1)
+    for channel in 0..<min(componentCount, 4) {
+      result[channel] = transferFunctions[channel].textureBias
+    }
+    return result
+  }
 
   var isoValue: Float {
     normIsoValue * Float(maxValue) / Float(max(rangeMax, 1))
   }
 
-  func updateRanges(minValue: Int, maxValue: Int, rangeMax: Int, componentCount: Int = 1) {
+  func updateRanges(minValue: Int,
+                    maxValue: Int,
+                    rangeMax: Int,
+                    componentCount: Int = 1,
+                    componentRanges: [BORGVRComponentRange]? = nil) {
     self.minValue = minValue
     self.maxValue = maxValue
     self.rangeMax = rangeMax
     self.componentCount = min(max(componentCount, 1), Self.maximumTransferFunctionCount)
+    self.componentRanges = normalizedComponentRanges(componentRanges)
     selectedTransferFunctionChannel = min(selectedTransferFunctionChannel, self.componentCount - 1)
     updateTransferFunctionRanges()
   }
 
   func loadTransferFunction(from url: URL) throws {
     try transferFunction.load(from: url)
-    transferFunction.updateRanges(minValue: minValue, maxValue: maxValue, rangeMax: rangeMax)
+    let range = componentRange(for: selectedTransferFunctionChannel)
+    transferFunction.updateRanges(
+      minValue: range.minValue,
+      maxValue: range.maxValue,
+      rangeMax: rangeMax
+    )
   }
 
   func loadTransferFunction(from data: Data) throws {
     try transferFunction.load(from: data)
-    transferFunction.updateRanges(minValue: minValue, maxValue: maxValue, rangeMax: rangeMax)
+    let range = componentRange(for: selectedTransferFunctionChannel)
+    transferFunction.updateRanges(
+      minValue: range.minValue,
+      maxValue: range.maxValue,
+      rangeMax: rangeMax
+    )
   }
 
   @discardableResult
@@ -381,9 +405,31 @@ final class RenderingParameters: ObservableObject {
   }
 
   private func updateTransferFunctionRanges() {
-    for transferFunction in transferFunctions {
-      transferFunction.updateRanges(minValue: minValue, maxValue: maxValue, rangeMax: rangeMax)
+    for (channel, transferFunction) in transferFunctions.enumerated() {
+      let range = componentRange(for: channel)
+      transferFunction.updateRanges(
+        minValue: range.minValue,
+        maxValue: range.maxValue,
+        rangeMax: rangeMax
+      )
     }
+  }
+
+  private func normalizedComponentRanges(
+    _ ranges: [BORGVRComponentRange]?
+  ) -> [BORGVRComponentRange] {
+    let fallback = BORGVRComponentRange(minValue: minValue, maxValue: maxValue)
+    guard let ranges, ranges.count >= componentCount else {
+      return Array(repeating: fallback, count: componentCount)
+    }
+    return Array(ranges.prefix(componentCount))
+  }
+
+  private func componentRange(for channel: Int) -> BORGVRComponentRange {
+    guard componentRanges.indices.contains(channel) else {
+      return BORGVRComponentRange(minValue: minValue, maxValue: maxValue)
+    }
+    return componentRanges[channel]
   }
 
   private func applyLightingState(_ state: BorgVRLightingState) {

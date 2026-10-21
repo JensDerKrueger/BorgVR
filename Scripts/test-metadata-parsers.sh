@@ -14,7 +14,7 @@ swiftc \
   "$ROOT/BORGVR-IO/BORGVRMetaData.swift" \
   "$ROOT/Tests/BORGVRMetaDataParserTests.swift" \
   -o "$BUILD_DIR/swift-metadata-parser-tests"
-"$BUILD_DIR/swift-metadata-parser-tests"
+"$BUILD_DIR/swift-metadata-parser-tests" "$BUILD_DIR/valid-metadata.bin"
 
 "${CXX:-c++}" \
   -std=c++17 \
@@ -25,4 +25,4 @@ swiftc \
   "$ROOT/BORGVRServerCPP/src/BORGVRMetaData.cpp" \
   "$ROOT/Tests/BORGVRMetaDataParserTests.cpp" \
   -o "$BUILD_DIR/cpp-metadata-parser-tests"
-"$BUILD_DIR/cpp-metadata-parser-tests" "$ROOT/c60_32.data"
+"$BUILD_DIR/cpp-metadata-parser-tests" "$BUILD_DIR/valid-metadata.bin"

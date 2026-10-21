@@ -110,6 +110,7 @@ struct BorgVRUnbrickedVolume: Sendable {
   let source: BorgVRRawVolumeSource
   let orientation: DicomParser.DicomOrientation?
   let origin: Vec3<Float>?
+  let frameOfReferenceUID: String?
   let channels: [BorgVRUnbrickedVolumeChannelMetadata]
 }
 
@@ -117,7 +118,7 @@ enum BorgVRDICOMVolumeFusion {
   static func fuse(
     reference: BorgVRUnbrickedVolume,
     moving: BorgVRUnbrickedVolume,
-    referenceToMoving: BorgVRRigidTransform,
+    referenceToMoving: BorgVRVoxelTransform,
     filter: BorgVRVolumeResamplingFilter,
     outputURL: URL,
     logger: LoggerBase?,
@@ -191,10 +192,7 @@ enum BorgVRDICOMVolumeFusion {
             + x * bytesPerComponent
           let movingCoordinate = continuousMovingVoxelCoordinate(
             forReference: Vec3<Int>(x: x, y: y, z: z),
-            reference: reference,
-            moving: moving,
-            referenceToMoving: referenceToMoving,
-            usesPatientGeometry: usesPatientGeometry
+            referenceToMoving: referenceToMoving
           )
           let outputOffset = (y * size.x + x) * outputVoxelByteCount
           for byte in 0..<bytesPerComponent {
@@ -237,35 +235,21 @@ enum BorgVRDICOMVolumeFusion {
       ),
       orientation: reference.orientation,
       origin: reference.origin,
+      frameOfReferenceUID: reference.frameOfReferenceUID,
       channels: reference.channels + moving.channels
     )
   }
 
   private static func continuousMovingVoxelCoordinate(
     forReference coordinate: Vec3<Int>,
-    reference: BorgVRUnbrickedVolume,
-    moving: BorgVRUnbrickedVolume,
-    referenceToMoving: BorgVRRigidTransform,
-    usesPatientGeometry: Bool
+    referenceToMoving: BorgVRVoxelTransform
   ) -> Vec3<Float>? {
-    guard usesPatientGeometry else {
-      return coordinate.x < moving.source.size.x
-        && coordinate.y < moving.source.size.y
-        && coordinate.z < moving.source.size.z
-        ? Vec3<Float>(x: Float(coordinate.x), y: Float(coordinate.y), z: Float(coordinate.z))
-        : nil
-    }
-
-    let referencePoint = Vec3<Float>(
-      x: Float(coordinate.x) * reference.source.voxelSpacing.x,
-      y: Float(coordinate.y) * reference.source.voxelSpacing.y,
-      z: Float(coordinate.z) * reference.source.voxelSpacing.z
-    )
-    let movingPoint = referenceToMoving.applying(to: referencePoint)
-    let floatingCoordinate = Vec3<Float>(
-      x: movingPoint.x / moving.source.voxelSpacing.x,
-      y: movingPoint.y / moving.source.voxelSpacing.y,
-      z: movingPoint.z / moving.source.voxelSpacing.z
+    let floatingCoordinate = referenceToMoving.applying(
+      to: Vec3<Float>(
+        x: Float(coordinate.x),
+        y: Float(coordinate.y),
+        z: Float(coordinate.z)
+      )
     )
     guard floatingCoordinate.x.isFinite,
           floatingCoordinate.y.isFinite,
@@ -695,6 +679,7 @@ public enum BorgVRVolumeConversionService {
       ),
       orientation: volume.orientation,
       origin: volume.origin,
+      frameOfReferenceUID: volume.frameOfReferenceUID,
       channels: [BorgVRUnbrickedVolumeChannelMetadata(
         description: dicomDescription(for: volume),
         modality: volume.modality,

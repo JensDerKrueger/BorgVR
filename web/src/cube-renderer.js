@@ -1,4 +1,4 @@
-import { BrickAtlas } from "./brick-atlas.js?v=20261014-multichannel";
+import { BrickAtlas } from "./brick-atlas.js?v=20261021-component-ranges";
 import { buildMarkerRenderGeometry } from "./marker-tube-mesh.js?v=20260922-marker-direction";
 import { createDefaultTransferFunction } from "./transfer-function.js?v=20260907-range-fix";
 
@@ -16,6 +16,7 @@ struct Uniforms {
   cubeMax: vec4<f32>,
   lodInfo: vec4<f32>,
   dataInfo: vec4<f32>,
+  transferBias: vec4<f32>,
   volumeInfo: vec4<f32>,
   lightDirection: vec4<f32>,
   ambientLightColor: vec4<f32>,
@@ -411,38 +412,32 @@ fn sampleAtlasBrick(brickIndex: u32, brickCoords: vec3<u32>, lod: u32, point: ve
   return value / f32(componentCount);
 }
 
-fn sampleTransferFunctions(components: vec4<f32>) -> vec4<f32> {
+struct TransferFunctionSamples {
+  values: array<vec4<f32>, 4>,
+};
+
+fn sampleTransferFunctions(components: vec4<f32>) -> TransferFunctionSamples {
   let componentCount = max(u32(uniforms.dataInfo.w + 0.5), 1u);
-  let sample1 = textureSampleLevel(
+  var samples: TransferFunctionSamples;
+  samples.values[0] = textureSampleLevel(
     transferFunction1,
     transferSampler,
-    vec2<f32>(components.x * uniforms.dataInfo.x, 0.5),
+    vec2<f32>(components.x * uniforms.transferBias.x, 0.5),
     0.0
   );
-  var premultipliedColor = sample1.rgb * sample1.a;
-  var alphaSum = sample1.a;
+  samples.values[1] = vec4<f32>(0.0);
+  samples.values[2] = vec4<f32>(0.0);
+  samples.values[3] = vec4<f32>(0.0);
   if (componentCount >= 2u) {
-    let sample2 = textureSampleLevel(transferFunction2, transferSampler, vec2<f32>(components.y * uniforms.dataInfo.x, 0.5), 0.0);
-    premultipliedColor = premultipliedColor + sample2.rgb * sample2.a;
-    alphaSum = alphaSum + sample2.a;
+    samples.values[1] = textureSampleLevel(transferFunction2, transferSampler, vec2<f32>(components.y * uniforms.transferBias.y, 0.5), 0.0);
   }
   if (componentCount >= 3u) {
-    let sample3 = textureSampleLevel(transferFunction3, transferSampler, vec2<f32>(components.z * uniforms.dataInfo.x, 0.5), 0.0);
-    premultipliedColor = premultipliedColor + sample3.rgb * sample3.a;
-    alphaSum = alphaSum + sample3.a;
+    samples.values[2] = textureSampleLevel(transferFunction3, transferSampler, vec2<f32>(components.z * uniforms.transferBias.z, 0.5), 0.0);
   }
   if (componentCount >= 4u) {
-    let sample4 = textureSampleLevel(transferFunction4, transferSampler, vec2<f32>(components.w * uniforms.dataInfo.x, 0.5), 0.0);
-    premultipliedColor = premultipliedColor + sample4.rgb * sample4.a;
-    alphaSum = alphaSum + sample4.a;
+    samples.values[3] = textureSampleLevel(transferFunction4, transferSampler, vec2<f32>(components.w * uniforms.transferBias.w, 0.5), 0.0);
   }
-  if (alphaSum <= 0.000001) {
-    return vec4<f32>(0.0);
-  }
-  return vec4<f32>(
-    clamp(premultipliedColor / alphaSum, vec3<f32>(0.0), vec3<f32>(1.0)),
-    min(alphaSum, 1.0)
-  );
+  return samples;
 }
 
 fn safeNormalize(vector: vec3<f32>) -> vec3<f32> {
@@ -462,6 +457,40 @@ fn computeNormalForBrick(brickIndex: u32, brickCoords: vec3<u32>, lod: u32, poin
   let zp = sampleAtlasBrick(brickIndex, brickCoords, lod, point + vec3<f32>(0.0, 0.0, delta.z));
   let zm = sampleAtlasBrick(brickIndex, brickCoords, lod, point - vec3<f32>(0.0, 0.0, delta.z));
   return safeNormalize(vec3<f32>(xp - xm, yp - ym, zp - zm));
+}
+
+struct ComponentGradients {
+  x: vec4<f32>,
+  y: vec4<f32>,
+  z: vec4<f32>,
+};
+
+fn computeComponentGradientsForBrick(
+  brickIndex: u32,
+  brickCoords: vec3<u32>,
+  lod: u32,
+  point: vec3<f32>
+) -> ComponentGradients {
+  let delta = vec3<f32>(1.0) / levelVoxelSize(lod);
+  let xp = sampleAtlasComponents(brickIndex, brickCoords, lod, point + vec3<f32>(delta.x, 0.0, 0.0));
+  let xm = sampleAtlasComponents(brickIndex, brickCoords, lod, point - vec3<f32>(delta.x, 0.0, 0.0));
+  let yp = sampleAtlasComponents(brickIndex, brickCoords, lod, point + vec3<f32>(0.0, delta.y, 0.0));
+  let ym = sampleAtlasComponents(brickIndex, brickCoords, lod, point - vec3<f32>(0.0, delta.y, 0.0));
+  let zp = sampleAtlasComponents(brickIndex, brickCoords, lod, point + vec3<f32>(0.0, 0.0, delta.z));
+  let zm = sampleAtlasComponents(brickIndex, brickCoords, lod, point - vec3<f32>(0.0, 0.0, delta.z));
+  var gradients: ComponentGradients;
+  gradients.x = (xp - xm) * 0.5;
+  gradients.y = (yp - ym) * 0.5;
+  gradients.z = (zp - zm) * 0.5;
+  return gradients;
+}
+
+fn componentNormal(gradients: ComponentGradients, component: u32) -> vec3<f32> {
+  return safeNormalize(vec3<f32>(
+    gradients.x[component],
+    gradients.y[component],
+    gradients.z[component]
+  ));
 }
 
 fn refineIsosurfaceForBrick(
@@ -595,15 +624,33 @@ fn fragmentMain(input: VertexOut) -> @location(0) vec4<f32> {
           continue;
         }
 
-        let tf = sampleTransferFunctions(components);
-        let alpha = 1.0 - pow(1.0 - tf.a, ocFactor);
-        var sampleColor = tf.rgb;
-        if (renderMode == RENDER_MODE_TF_LIGHTING && alpha > 0.01) {
-          let normal = computeNormalForBrick(brick.index, brick.coords, brick.lod, samplePoint);
-          sampleColor = lighting(samplePoint, normal, sampleColor);
+        let transferSamples = sampleTransferFunctions(components);
+        var componentGradients: ComponentGradients;
+        componentGradients.x = vec4<f32>(0.0);
+        componentGradients.y = vec4<f32>(0.0);
+        componentGradients.z = vec4<f32>(0.0);
+        if (renderMode == RENDER_MODE_TF_LIGHTING) {
+          componentGradients = computeComponentGradientsForBrick(
+            brick.index, brick.coords, brick.lod, samplePoint
+          );
         }
-        accumulatedColor = accumulatedColor + (1.0 - accumulatedAlpha) * sampleColor * alpha;
-        accumulatedAlpha = accumulatedAlpha + (1.0 - accumulatedAlpha) * alpha;
+        for (var channel = 0u; channel < 4u; channel = channel + 1u) {
+          if (channel >= componentCount) {
+            break;
+          }
+          let transferSample = transferSamples.values[channel];
+          let alpha = 1.0 - pow(1.0 - transferSample.a, ocFactor);
+          var sampleColor = transferSample.rgb;
+          if (renderMode == RENDER_MODE_TF_LIGHTING && alpha > 0.01) {
+            sampleColor = lighting(
+              samplePoint,
+              componentNormal(componentGradients, channel),
+              sampleColor
+            );
+          }
+          accumulatedColor = accumulatedColor + (1.0 - accumulatedAlpha) * sampleColor * alpha;
+          accumulatedAlpha = accumulatedAlpha + (1.0 - accumulatedAlpha) * alpha;
+        }
         if (accumulatedAlpha > 0.99) {
           break;
         }
@@ -723,7 +770,7 @@ fn meshFragmentMain(input: MeshVertexOut) -> @location(0) vec4<f32> {
 
 const MAX_BRICK_REQUEST_LIST_IDS = 65536;
 const BRICK_REQUEST_READBACK_INTERVAL = 1;
-const UNIFORM_BUFFER_BYTE_LENGTH = 336;
+const UNIFORM_BUFFER_BYTE_LENGTH = 352;
 const MARKER_UNIFORM_BUFFER_BYTE_LENGTH = 128;
 const MARKER_INSTANCE_STRIDE = 32;
 const MESH_VERTEX_STRIDE = 44;
@@ -812,13 +859,14 @@ export class CoordinateCubeRenderer {
     this.levelCount = 1;
     this.levelZeroWorldSpaceError = 1;
     this.screenSpaceError = DEFAULT_SCREEN_SPACE_ERROR;
-    this.transferBias = 1;
+    this.transferBiases = [1, 1, 1, 1];
     this.renderMode = RENDER_MODES.get("tf");
     this.normIsoValue = 0.1;
     this.isoRawValue = 0.1;
     this.isoValue = 0.1;
     this.dataRange = [0, 1];
     this.valueRange = [0, 1];
+    this.componentRanges = [[0, 1]];
     this.componentCount = 1;
     this.bytesPerComponent = 1;
     this.clipMin = [0, 0, 0];
@@ -1023,6 +1071,7 @@ export class CoordinateCubeRenderer {
     const byteRangeMax = (2 ** (8 * (manifest.volume?.bytesPerComponent ?? 1))) - 1;
     this.dataRange = manifest.volume?.dataRange ?? [0, byteRangeMax];
     this.valueRange = manifest.volume?.valueRange ?? this.dataRange;
+    this.componentRanges = manifest.volume?.componentRanges ?? [this.valueRange];
     this.componentCount = manifest.volume?.componentCount ?? 1;
     this.bytesPerComponent = manifest.volume?.bytesPerComponent ?? 1;
     if (this.componentCount < 1 || this.componentCount > 4) {
@@ -1036,8 +1085,10 @@ export class CoordinateCubeRenderer {
       false
     );
     const dataRangeMax = this.dataRange[1] ?? byteRangeMax;
-    const valueRangeMax = this.valueRange[1] ?? dataRangeMax;
-    this.transferBias = dataRangeMax / Math.max(1, valueRangeMax);
+    this.transferBiases = [0, 1, 2, 3].map((channel) => {
+      const range = this.componentRanges[channel] ?? this.valueRange;
+      return dataRangeMax / Math.max(1, range?.[1] ?? dataRangeMax);
+    });
     this.updateIsoValue();
     this.totalBrickCount = manifest.bricks?.length ?? this.level0BrickCount[0] * this.level0BrickCount[1] * this.level0BrickCount[2];
     this.createLevelDataBuffer(manifest);
@@ -2316,7 +2367,8 @@ export class CoordinateCubeRenderer {
       cubeMin[0], cubeMin[1], cubeMin[2], 0,
       cubeMax[0], cubeMax[1], cubeMax[2], 0,
       this.levelCount, lodFactor, this.levelZeroWorldSpaceError, this.bytesPerComponent,
-      this.transferBias, this.renderMode, this.isoValue, this.componentCount,
+      0, this.renderMode, this.isoValue, this.componentCount,
+      ...this.transferBiases,
       this.volumeHalfExtent[0], this.volumeHalfExtent[1], this.volumeHalfExtent[2], 0,
       textureLightDirection[0], textureLightDirection[1], textureLightDirection[2], 0,
       this.ambientLightColor[0], this.ambientLightColor[1], this.ambientLightColor[2], 0,
@@ -2665,12 +2717,18 @@ function normalizeManifestRanges(manifest) {
     : (Array.isArray(volume.dataRange) ? volume.dataRange : [0, byteRangeMax]);
   const dataRange = Array.isArray(volume.dataRange) ? volume.dataRange : [0, byteRangeMax];
   const dataRangeMax = Math.max(byteRangeMax, dataRange[1] ?? 0, valueRange[1] ?? 0);
+  const componentCount = Math.max(1, volume.componentCount ?? 1);
+  const componentRanges = Array.isArray(volume.componentRanges) &&
+    volume.componentRanges.length >= componentCount
+    ? volume.componentRanges.slice(0, componentCount)
+    : Array.from({ length: componentCount }, () => valueRange);
 
   return {
     ...manifest,
     volume: {
       ...volume,
       valueRange,
+      componentRanges,
       dataRange: [0, dataRangeMax]
     }
   };
@@ -2690,15 +2748,26 @@ function normalizeManifestBricks(manifest) {
     return manifest;
   }
 
-  const brickCount = Math.floor(values.length / 3);
+  const componentCount = Math.max(1, manifest.volume?.componentCount ?? 1);
+  const stride = 3 + 2 * componentCount;
+  const brickCount = Math.floor(values.length / stride);
   const bricks = new Array(brickCount);
   for (let index = 0; index < brickCount; index += 1) {
-    const offset = index * 3;
+    const offset = index * stride;
+    const componentRanges = new Array(componentCount);
+    for (let component = 0; component < componentCount; component += 1) {
+      const rangeOffset = offset + 3 + 2 * component;
+      componentRanges[component] = [
+        values[rangeOffset] ?? values[offset] ?? 0,
+        values[rangeOffset + 1] ?? values[offset + 1] ?? values[offset] ?? 0
+      ];
+    }
     bricks[index] = {
       index,
       min: values[offset] ?? 0,
       max: values[offset + 1] ?? values[offset] ?? 0,
-      byteLength: values[offset + 2] ?? 0
+      byteLength: values[offset + 2] ?? 0,
+      componentRanges
     };
   }
 

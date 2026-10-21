@@ -73,7 +73,7 @@ struct BorgVRVisualizationSnapshot: Equatable, Sendable {
   var isoValue: Float
   var renderMode: RenderMode
   var brickVisualization: Bool
-  var transferBias: Float
+  var transferBiases: SIMD4<Float>
   var lighting: BorgVRLightingSnapshot
   var objectsVisible: Bool
   var measurementsVisible: Bool
@@ -984,7 +984,7 @@ extension BorgVRSession where VisualizationState == RenderingParameters,
           isoValue: renderingParameters.isoValue,
           renderMode: renderingParameters.renderMode,
           brickVisualization: renderingParameters.brickVis,
-          transferBias: renderingParameters.transferFunction.textureBias,
+          transferBiases: renderingParameters.transferBiases,
           lighting: BorgVRLightingSnapshot(
             direction: renderingParameters.lightDirection,
             ambient: renderingParameters.ambientLightColor,

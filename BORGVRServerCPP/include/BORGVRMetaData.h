@@ -11,11 +11,17 @@ struct Vec3 {
   T z{};
 };
 
+struct ComponentRange {
+  int64_t minValue = 0;
+  int64_t maxValue = 0;
+};
+
 struct BrickMetadata {
   int64_t offset = 0;  // absolute byte offset in the dataset file
   int64_t size = 0;    // stored byte size (may be compressed)
-  int64_t minValue = 0;
-  int64_t maxValue = 0;
+  int64_t minValue = 0;  // union of componentRanges; not used for TF visibility
+  int64_t maxValue = 0;  // union of componentRanges; not used for TF visibility
+  std::vector<ComponentRange> componentRanges;
 };
 
 struct LevelMetadata {
@@ -26,7 +32,7 @@ struct LevelMetadata {
 
 class BORGVRMetaData {
 public:
-  static constexpr int kVersion = 3;
+  static constexpr int kVersion = 4;
 
   BORGVRMetaData() = default;
   explicit BORGVRMetaData(const std::string& filename);
@@ -53,6 +59,7 @@ public:
   int overlap() const { return overlap_; }
   int64_t minValue() const { return minValue_; }
   int64_t maxValue() const { return maxValue_; }
+  const std::vector<ComponentRange>& componentRanges() const { return componentRanges_; }
   bool compression() const { return compression_; }
 
   const std::string& uniqueID() const { return uniqueID_; }
@@ -88,6 +95,7 @@ private:
 
   int64_t minValue_ = 0;
   int64_t maxValue_ = 0;
+  std::vector<ComponentRange> componentRanges_;
 
   bool compression_ = false;
 

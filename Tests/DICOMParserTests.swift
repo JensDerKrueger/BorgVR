@@ -76,6 +76,7 @@ private func makeSlice(
     pixelSpacing: nil,
     position: nil,
     orientation: nil,
+    frameOfReferenceUID: nil,
     instanceNumber: nil,
     modality: nil,
     patientName: nil,
@@ -297,6 +298,50 @@ private func testSignedPixelPaddingValue() throws {
   try expect(value == Int32(expected), "Signed Pixel Padding Value was decoded incorrectly")
 }
 
+private func testFrameOfReferenceUID() throws {
+  var data = Data(repeating: 0, count: 132)
+  appendExplicitElement(
+    group: 0x0028,
+    element: 0x0010,
+    vr: "US",
+    value: uint16Data(1),
+    to: &data
+  )
+  appendExplicitElement(
+    group: 0x0028,
+    element: 0x0011,
+    vr: "US",
+    value: uint16Data(1),
+    to: &data
+  )
+  appendExplicitElement(
+    group: 0x0020,
+    element: 0x0052,
+    vr: "UI",
+    value: Data("1.2.3.4\0".utf8),
+    to: &data
+  )
+  appendExplicitElement(
+    group: 0x7FE0,
+    element: 0x0010,
+    vr: "US",
+    value: uint16Data(0),
+    to: &data
+  )
+  let file = DicomParser.DicomFile(
+    transferSyntax: DicomParser.TransferSyntaxInfo(
+      elementEncoding: .explicitVRLittleEndian,
+      pixelDataEncoding: .uncompressed
+    ),
+    rawData: data
+  )
+  let slice = try DicomParser.openSlice(from: file)
+  try expect(
+    slice.frameOfReferenceUID == "1.2.3.4",
+    "Frame of Reference UID was decoded incorrectly"
+  )
+}
+
 @main
 private enum DICOMParserTestRunner {
   static func main() throws {
@@ -314,6 +359,7 @@ private enum DICOMParserTestRunner {
     try testInvalidOrientationBasis()
     try testUnsignedPixelPaddingValue()
     try testSignedPixelPaddingValue()
+    try testFrameOfReferenceUID()
     print("DICOM parser tests passed")
   }
 }

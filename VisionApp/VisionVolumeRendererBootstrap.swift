@@ -124,7 +124,8 @@ enum VisionVolumeRendererBootstrap {
     sharedAppModel.updateRanges(minValue: dataset.getMetadata().minValue,
                                 maxValue: dataset.getMetadata().maxValue,
                                 rangeMax: dataset.getMetadata().rangeMax,
-                                componentCount: dataset.getMetadata().componentCount)
+                                componentCount: dataset.getMetadata().componentCount,
+                                componentRanges: dataset.getMetadata().componentRanges)
 
     if storedAppModel.autoloadTF {
       let fileURL = URL(

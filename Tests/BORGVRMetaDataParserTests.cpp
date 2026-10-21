@@ -2,7 +2,9 @@
 
 #include <cstdint>
 #include <functional>
+#include <fstream>
 #include <iostream>
+#include <iterator>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -24,7 +26,8 @@ int64_t read_i64(const std::vector<uint8_t>& data, size_t offset) {
 }
 
 size_t brick_count_offset(const std::vector<uint8_t>& data) {
-  size_t offset = 99;
+  const auto componentCount = static_cast<size_t>(read_i64(data, 38));
+  size_t offset = 107 + componentCount * 16;
   for (int index = 0; index < 3; ++index) {
     const auto length = static_cast<size_t>(read_i64(data, offset));
     offset += 8 + length;
@@ -50,10 +53,16 @@ int main(int argc, char** argv) {
     return 2;
   }
 
-  BORGVRMetaData source(argv[1]);
-  const auto valid = source.toBytes();
+  std::ifstream input(argv[1], std::ios::binary);
+  if (!input) throw std::runtime_error("Unable to open metadata test fixture.");
+  const std::vector<uint8_t> valid(
+      (std::istreambuf_iterator<char>(input)),
+      std::istreambuf_iterator<char>());
   BORGVRMetaData parsed;
   parsed.parseFromBytes(valid.data(), valid.size());
+  if (parsed.componentRanges().size() != static_cast<size_t>(parsed.componentCount())) {
+    throw std::runtime_error("Component ranges did not survive metadata round trip.");
+  }
 
   auto truncated = valid;
   truncated.pop_back();
@@ -83,19 +92,22 @@ int main(int argc, char** argv) {
   expect_rejection("invalid brick stride", invalidOverlap);
 
   auto invalidBoolean = valid;
-  invalidBoolean[98] = 2;
+  const size_t componentCount = static_cast<size_t>(read_i64(valid, 38));
+  const size_t compressionOffset = 106 + componentCount * 16;
+  invalidBoolean[compressionOffset] = 2;
   expect_rejection("invalid Boolean", invalidBoolean);
 
   auto negativeStringLength = valid;
-  write_i64(negativeStringLength, 99, -1);
+  const size_t firstStringOffset = compressionOffset + 1;
+  write_i64(negativeStringLength, firstStringOffset, -1);
   expect_rejection("negative string length", negativeStringLength);
 
   auto oversizedStringLength = valid;
-  write_i64(oversizedStringLength, 99, 1'048'577);
+  write_i64(oversizedStringLength, firstStringOffset, 1'048'577);
   expect_rejection("oversized string length", oversizedStringLength);
 
-  const size_t uniqueIDLength = static_cast<size_t>(read_i64(valid, 99));
-  const size_t datasetDescriptionStart = 99 + 8 + uniqueIDLength + 8;
+  const size_t uniqueIDLength = static_cast<size_t>(read_i64(valid, firstStringOffset));
+  const size_t datasetDescriptionStart = firstStringOffset + 8 + uniqueIDLength + 8;
   auto invalidUTF8 = valid;
   invalidUTF8.at(datasetDescriptionStart) = 0xff;
   expect_rejection("invalid UTF-8", invalidUTF8);

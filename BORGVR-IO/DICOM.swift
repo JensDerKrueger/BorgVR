@@ -107,6 +107,7 @@ final class DicomParser {
    - voxelSpacing: The physical voxel spacing in meters along the x, y, and z dimensions.
    - orientation: The volume axes in DICOM patient coordinates, if available.
    - origin: The center of the first voxel in DICOM patient coordinates, in meters.
+   - frameOfReferenceUID: Identifies the patient coordinate frame containing the volume.
    - isSigned: Whether voxel samples use a signed integer representation.
    - pixelPaddingValue: The stored value used for pixels outside the scanned object.
    - voxelData: A flat array of voxel intensities in ZYX order.
@@ -126,6 +127,8 @@ final class DicomParser {
     let orientation: DicomOrientation?
     /// Center of voxel (0, 0, 0) in DICOM patient coordinates, in meters.
     let origin: Vec3<Float>?
+    /// DICOM coordinate-frame identifier shared by spatially registered series.
+    let frameOfReferenceUID: String?
     /// Whether the stored voxel samples use signed integers.
     let isSigned: Bool
     /// Stored pixel value that represents padding rather than image content.
@@ -316,6 +319,16 @@ final class DicomParser {
       throw DicomParsingError.invalidElementValue(.pixelRepresentation)
     }
     let isSigned = pixelRepresentations.first == 1
+    let frameOfReferenceUIDs = Set(sorted.compactMap { $0.1.frameOfReferenceUID })
+    let frameOfReferenceUID: String?
+    if frameOfReferenceUIDs.count <= 1 {
+      frameOfReferenceUID = frameOfReferenceUIDs.first
+    } else {
+      frameOfReferenceUID = nil
+      logger?.warning(
+        "Ignoring inconsistent Frame of Reference UID metadata in the DICOM series."
+      )
+    }
 
 
     let depth = sorted.count
@@ -352,6 +365,7 @@ final class DicomParser {
       voxelSpacing: voxelSpacing,
       orientation: orientation,
       origin: origin,
+      frameOfReferenceUID: frameOfReferenceUID,
       isSigned: isSigned,
       pixelPaddingValue: pixelPaddingValue,
       voxelData: buffer,
@@ -468,6 +482,8 @@ final class DicomParser {
     let position: (Float, Float, Float)?
     /// Orientation direction cosines (six values).
     let orientation: [Float]?
+    /// Identifier of the patient coordinate frame containing this slice.
+    let frameOfReferenceUID: String?
     /// Instance number for ordering slices.
     let instanceNumber: Int?
 
@@ -1182,6 +1198,7 @@ final class DicomParser {
       (.pixelSpacing, true),
       (.imagePositionPatient, true),
       (.imageOrientationPatient, true),
+      (.frameOfReferenceUID, true),
       (.instanceNumber, true),
       (.modality, true),
       (.patientName, true),
@@ -1217,7 +1234,9 @@ final class DicomParser {
       guard let elem = elements[tag] else { return nil }
       let reader = ByteReader(data: dicom.rawData, endianness: .little)
       guard let bytes = try? reader.bytes(at: elem.valueOffset, count: elem.length) else { return nil }
-      let str = String(data: bytes, encoding: .ascii)?.trimmingCharacters(in: .whitespaces)
+      let str = String(data: bytes, encoding: .ascii)?.trimmingCharacters(
+        in: .controlCharacters.union(.whitespaces)
+      )
       return str
     }
 
@@ -1281,6 +1300,7 @@ final class DicomParser {
       pixelSpacing: readFloatTuple(tag: .pixelSpacing, count: 2).flatMap { ($0[0], $0[1]) },
       position: readFloatTuple(tag: .imagePositionPatient, count: 3).flatMap { ($0[0], $0[1], $0[2]) },
       orientation: readFloatTuple(tag: .imageOrientationPatient, count: 6),
+      frameOfReferenceUID: readString(tag: .frameOfReferenceUID),
       instanceNumber: readInstanceNumber(tag: .instanceNumber),
       modality: readString(tag:.modality),
       patientName: readString(tag:.patientName),

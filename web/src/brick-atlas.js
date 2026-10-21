@@ -956,6 +956,7 @@ function classifyBricks(manifest, transferFunctions, options = {}) {
 
   const range = manifest.volume?.valueRange ?? manifest.volume?.dataRange ?? [0, 255];
   const rangeMax = Math.max(1, range[1] ?? 255);
+  const componentRanges = manifest.volume?.componentRanges ?? [];
   const levels = [...(manifest.levels ?? [])].sort((a, b) => a.level - b.level);
   const childTable = buildChildTable(levels, bricks.length);
   const empty = new Array(bricks.length).fill(false);
@@ -970,10 +971,26 @@ function classifyBricks(manifest, transferFunctions, options = {}) {
       fullyOpaque[brick.index] = false;
     } else {
       empty[brick.index] = activeTransferFunctions.every(
-        (transferFunction) => transferFunction.isRangeEmpty(minValue, maxValue, rangeMax)
+        (transferFunction, channel) => {
+          const channelRange = brick.componentRanges?.[channel];
+          const componentRange = componentRanges[channel];
+          if (!channelRange || !componentRange) {
+            return false;
+          }
+          const componentRangeMax = Math.max(1, componentRange[1] ?? 1);
+          return transferFunction.isRangeEmpty(channelRange[0], channelRange[1], componentRangeMax);
+        }
       );
       fullyOpaque[brick.index] = activeTransferFunctions.some(
-        (transferFunction) => transferFunction.isRangeFullyOpaque(minValue, maxValue, rangeMax)
+        (transferFunction, channel) => {
+          const channelRange = brick.componentRanges?.[channel];
+          const componentRange = componentRanges[channel];
+          if (!channelRange || !componentRange) {
+            return false;
+          }
+          const componentRangeMax = Math.max(1, componentRange[1] ?? 1);
+          return transferFunction.isRangeFullyOpaque(channelRange[0], channelRange[1], componentRangeMax);
+        }
       );
     }
   }

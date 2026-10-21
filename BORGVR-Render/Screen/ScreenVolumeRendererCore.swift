@@ -420,7 +420,8 @@ final class ScreenVolumeRendererCore {
       minValue: metadata.minValue,
       maxValue: metadata.maxValue,
       rangeMax: metadata.rangeMax,
-      componentCount: metadata.componentCount
+      componentCount: metadata.componentCount,
+      componentRanges: metadata.componentRanges
     )
     if appSettings.autoloadTF, let tfURL = appModel.transferFunctionFileURL(for: activeDataset) {
       try? renderingParameters.loadTransferFunction(from: tfURL)
@@ -865,7 +866,7 @@ final class ScreenVolumeRendererCore {
       isoValue: state.isoValue,
       oversampling: activeOversampling,
       sampleJitter: settings.sampleJitter ? 1 : 0,
-      transferBias: state.transferBias,
+      transferBias: state.transferBiases,
       cameraPosInTextureSpace: simd_make_float3(viewToTexture * SIMD4<Float>(0, 0, 0, 1)),
       cameraPosInTextureSpaceVoxelScaled: simd_make_float3(
         viewToNormalizedVolume * SIMD4<Float>(0, 0, 0, 1)
