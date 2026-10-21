@@ -2,6 +2,7 @@ import Foundation
 
 protocol LoggerBase {
   func progress(_ message: String, _ progress: Double)
+  func warning(_ message: String)
 }
 
 final class BorgVRVolumeConversionCancellationToken {

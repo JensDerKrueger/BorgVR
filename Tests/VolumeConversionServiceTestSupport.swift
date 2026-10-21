@@ -21,6 +21,12 @@ enum VolumeFileParserFactory {
 }
 
 enum DicomParser {
+  struct DicomOrientation: Equatable, Sendable {
+    let xAxis: Vec3<Float>
+    let yAxis: Vec3<Float>
+    let zAxis: Vec3<Float>
+  }
+
   struct DicomVolume {
     let voxelData: Data
     let width: Int
@@ -28,6 +34,9 @@ enum DicomParser {
     let depth: Int
     let bytesPerVoxel: Int
     let voxelSpacing: Vec3<Float>
+    let orientation: DicomOrientation?
+    let origin: Vec3<Float>?
+    let pixelPaddingValue: Int32?
     let modality: String?
     let patientName: String?
     let seriesDate: String?

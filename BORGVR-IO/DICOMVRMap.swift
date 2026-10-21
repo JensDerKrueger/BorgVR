@@ -26,6 +26,7 @@ public struct DicomTag: Equatable, Hashable {
   static let bitsStored = DicomTag(0x0028, 0x0101)
   static let highBit = DicomTag(0x0028, 0x0102)
   static let pixelRepresentation = DicomTag(0x0028, 0x0103)
+  static let pixelPaddingValue = DicomTag(0x0028, 0x0120)
   static let sliceThickness = DicomTag(0x0018, 0x0050)
   static let spaceBetweenSlices = DicomTag(0x0018, 0x0088)
   static let pixelSpacing = DicomTag(0x0028, 0x0030)

@@ -19,6 +19,7 @@ swiftc \
   "$ROOT/BORGVR-IO/BORGVRMetaData.swift" \
   "$ROOT/BORGVR-IO/BrickedVolumeReorganizer.swift" \
   "$ROOT/Tests/VolumeConversionServiceTestSupport.swift" \
+  "$ROOT/BORGVR-IO/BorgVRDICOMRigidRegistration.swift" \
   "$ROOT/BORGVR-IO/BorgVRVolumeConversionService.swift" \
   "$ROOT/Tests/VolumeConversionServiceTests.swift" \
   -o "$BUILD_DIR/volume-conversion-tests"

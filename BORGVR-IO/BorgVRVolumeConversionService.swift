@@ -81,10 +81,294 @@ public struct BorgVRRawVolumeSource: Sendable {
   }
 }
 
+public enum BorgVRVolumeResamplingFilter: String, Sendable {
+  case nearestNeighbor
+  case trilinear
+}
+
 public enum BorgVRVolumeConversionSource: Sendable {
   case file(URL)
   case dicomDirectory(URL)
+  case registeredDICOMPair(
+    reference: URL,
+    moving: URL,
+    filter: BorgVRVolumeResamplingFilter
+  )
   case raw(BorgVRRawVolumeSource)
+}
+
+struct BorgVRUnbrickedVolumeChannelMetadata: Sendable {
+  let description: String
+  let modality: String?
+  let patientName: String?
+  let seriesDate: String?
+  let pixelPaddingValue: Int32?
+}
+
+struct BorgVRUnbrickedVolume: Sendable {
+  let source: BorgVRRawVolumeSource
+  let orientation: DicomParser.DicomOrientation?
+  let origin: Vec3<Float>?
+  let channels: [BorgVRUnbrickedVolumeChannelMetadata]
+}
+
+enum BorgVRDICOMVolumeFusion {
+  static func fuse(
+    reference: BorgVRUnbrickedVolume,
+    moving: BorgVRUnbrickedVolume,
+    movingToReference: BorgVRRigidTransform,
+    filter: BorgVRVolumeResamplingFilter,
+    outputURL: URL,
+    logger: LoggerBase?,
+    cancellationToken: BorgVRVolumeConversionCancellationToken?
+  ) throws -> BorgVRUnbrickedVolume {
+    guard reference.source.componentCount == 1,
+          moving.source.componentCount == 1,
+          reference.source.bytesPerComponent == moving.source.bytesPerComponent,
+          [1, 2, 4].contains(reference.source.bytesPerComponent) else {
+      throw BorgVRVolumeConversionError.incompatibleDICOMSampleFormats
+    }
+
+    let usesPatientGeometry = reference.orientation != nil
+      && reference.origin != nil
+      && moving.orientation != nil
+      && moving.origin != nil
+    if !usesPatientGeometry && reference.source.size != moving.source.size {
+      throw BorgVRVolumeConversionError.missingDICOMGeometryForFusion
+    }
+
+    let referenceAccessor = try RawFileAccessor(
+      filename: reference.source.url.path,
+      size: reference.source.size,
+      bytesPerComponent: reference.source.bytesPerComponent,
+      componentCount: 1,
+      voxelSpacing: reference.source.voxelSpacing,
+      offset: reference.source.offset,
+      readOnly: true
+    )
+    let movingAccessor = try RawFileAccessor(
+      filename: moving.source.url.path,
+      size: moving.source.size,
+      bytesPerComponent: moving.source.bytesPerComponent,
+      componentCount: 1,
+      voxelSpacing: moving.source.voxelSpacing,
+      offset: moving.source.offset,
+      readOnly: true
+    )
+
+    let fileManager = FileManager.default
+    if fileManager.fileExists(atPath: outputURL.path) {
+      try fileManager.removeItem(at: outputURL)
+    }
+    guard fileManager.createFile(atPath: outputURL.path, contents: nil) else {
+      throw BorgVRVolumeConversionError.cannotCreateTemporaryVolume(outputURL)
+    }
+    let output = try FileHandle(forWritingTo: outputURL)
+    defer { try? output.close() }
+
+    let size = reference.source.size
+    let bytesPerComponent = reference.source.bytesPerComponent
+    let outputVoxelByteCount = try checkedProduct(bytesPerComponent, 2)
+    let outputSliceByteCount = try checkedProduct(
+      size.x, size.y, outputVoxelByteCount
+    )
+    let referenceSliceStride = try checkedProduct(size.x, size.y, bytesPerComponent)
+    let referenceRowStride = try checkedProduct(size.x, bytesPerComponent)
+    let movingSliceStride = try checkedProduct(
+      moving.source.size.x, moving.source.size.y, bytesPerComponent
+    )
+    let movingRowStride = try checkedProduct(moving.source.size.x, bytesPerComponent)
+
+    logger?.info("Fusing DICOM series into a two-channel intermediate volume.")
+    for z in 0..<size.z {
+      try cancellationToken?.checkCancellation()
+      var outputSlice = [UInt8](repeating: 0, count: outputSliceByteCount)
+      for y in 0..<size.y {
+        for x in 0..<size.x {
+          let referenceOffset = z * referenceSliceStride + y * referenceRowStride
+            + x * bytesPerComponent
+          let movingCoordinate = continuousMovingVoxelCoordinate(
+            forReference: Vec3<Int>(x: x, y: y, z: z),
+            reference: reference,
+            moving: moving,
+            movingToReference: movingToReference,
+            usesPatientGeometry: usesPatientGeometry
+          )
+          let outputOffset = (y * size.x + x) * outputVoxelByteCount
+          for byte in 0..<bytesPerComponent {
+            outputSlice[outputOffset + byte] = referenceAccessor.mappedMemory
+              .load(fromByteOffset: referenceOffset + byte, as: UInt8.self)
+          }
+          if let movingCoordinate,
+             let movingValue = sampleMovingVolume(
+               accessor: movingAccessor,
+               coordinate: movingCoordinate,
+               size: moving.source.size,
+               bytesPerComponent: bytesPerComponent,
+               sliceStride: movingSliceStride,
+               rowStride: movingRowStride,
+               filter: filter
+             ) {
+            writeUnsignedSample(
+              movingValue,
+              to: &outputSlice,
+              at: outputOffset + bytesPerComponent,
+              bytesPerComponent: bytesPerComponent
+            )
+          }
+        }
+      }
+      try output.write(contentsOf: Data(outputSlice))
+      logger?.progress("Fusing DICOM volumes", Double(z + 1) / Double(size.z))
+    }
+
+    return BorgVRUnbrickedVolume(
+      source: BorgVRRawVolumeSource(
+        url: outputURL,
+        offset: 0,
+        size: size,
+        bytesPerComponent: bytesPerComponent,
+        componentCount: 2,
+        voxelSpacing: reference.source.voxelSpacing
+      ),
+      orientation: reference.orientation,
+      origin: reference.origin,
+      channels: reference.channels + moving.channels
+    )
+  }
+
+  private static func continuousMovingVoxelCoordinate(
+    forReference coordinate: Vec3<Int>,
+    reference: BorgVRUnbrickedVolume,
+    moving: BorgVRUnbrickedVolume,
+    movingToReference: BorgVRRigidTransform,
+    usesPatientGeometry: Bool
+  ) -> Vec3<Float>? {
+    guard usesPatientGeometry,
+          let referenceOrientation = reference.orientation,
+          let referenceOrigin = reference.origin,
+          let movingOrientation = moving.orientation,
+          let movingOrigin = moving.origin else {
+      return coordinate.x < moving.source.size.x
+        && coordinate.y < moving.source.size.y
+        && coordinate.z < moving.source.size.z
+        ? Vec3<Float>(x: Float(coordinate.x), y: Float(coordinate.y), z: Float(coordinate.z))
+        : nil
+    }
+
+    let referencePoint = referenceOrigin
+      + referenceOrientation.xAxis * (Float(coordinate.x) * reference.source.voxelSpacing.x)
+      + referenceOrientation.yAxis * (Float(coordinate.y) * reference.source.voxelSpacing.y)
+      + referenceOrientation.zAxis * (Float(coordinate.z) * reference.source.voxelSpacing.z)
+    let movingPoint = movingToReference.inverseApplying(to: referencePoint)
+    let delta = movingPoint - movingOrigin
+    let floatingCoordinate = Vec3<Float>(
+      x: delta.dot(movingOrientation.xAxis) / moving.source.voxelSpacing.x,
+      y: delta.dot(movingOrientation.yAxis) / moving.source.voxelSpacing.y,
+      z: delta.dot(movingOrientation.zAxis) / moving.source.voxelSpacing.z
+    )
+    guard floatingCoordinate.x.isFinite,
+          floatingCoordinate.y.isFinite,
+          floatingCoordinate.z.isFinite else {
+      return nil
+    }
+    return floatingCoordinate
+  }
+
+  private static func sampleMovingVolume(
+    accessor: RawFileAccessor,
+    coordinate: Vec3<Float>,
+    size: Vec3<Int>,
+    bytesPerComponent: Int,
+    sliceStride: Int,
+    rowStride: Int,
+    filter: BorgVRVolumeResamplingFilter
+  ) -> Double? {
+    switch filter {
+      case .nearestNeighbor:
+        guard let x = Int(exactly: coordinate.x.rounded()),
+              let y = Int(exactly: coordinate.y.rounded()),
+              let z = Int(exactly: coordinate.z.rounded()),
+              (0..<size.x).contains(x),
+              (0..<size.y).contains(y),
+              (0..<size.z).contains(z) else {
+          return nil
+        }
+        return readUnsignedSample(
+          from: accessor.mappedMemory,
+          at: z * sliceStride + y * rowStride + x * bytesPerComponent,
+          bytesPerComponent: bytesPerComponent
+        )
+      case .trilinear:
+        guard coordinate.x >= 0, coordinate.x <= Float(size.x - 1),
+              coordinate.y >= 0, coordinate.y <= Float(size.y - 1),
+              coordinate.z >= 0, coordinate.z <= Float(size.z - 1) else {
+          return nil
+        }
+        let x0 = Int(coordinate.x.rounded(.down))
+        let y0 = Int(coordinate.y.rounded(.down))
+        let z0 = Int(coordinate.z.rounded(.down))
+        let x1 = min(x0 + 1, size.x - 1)
+        let y1 = min(y0 + 1, size.y - 1)
+        let z1 = min(z0 + 1, size.z - 1)
+        let tx = Double(coordinate.x - Float(x0))
+        let ty = Double(coordinate.y - Float(y0))
+        let tz = Double(coordinate.z - Float(z0))
+
+        func sample(_ x: Int, _ y: Int, _ z: Int) -> Double {
+          readUnsignedSample(
+            from: accessor.mappedMemory,
+            at: z * sliceStride + y * rowStride + x * bytesPerComponent,
+            bytesPerComponent: bytesPerComponent
+          )
+        }
+        let c00 = sample(x0, y0, z0) * (1 - tx) + sample(x1, y0, z0) * tx
+        let c10 = sample(x0, y1, z0) * (1 - tx) + sample(x1, y1, z0) * tx
+        let c01 = sample(x0, y0, z1) * (1 - tx) + sample(x1, y0, z1) * tx
+        let c11 = sample(x0, y1, z1) * (1 - tx) + sample(x1, y1, z1) * tx
+        let c0 = c00 * (1 - ty) + c10 * ty
+        let c1 = c01 * (1 - ty) + c11 * ty
+        return c0 * (1 - tz) + c1 * tz
+    }
+  }
+
+  private static func readUnsignedSample(
+    from pointer: UnsafeMutableRawPointer,
+    at offset: Int,
+    bytesPerComponent: Int
+  ) -> Double {
+    var value: UInt32 = 0
+    for byte in 0..<bytesPerComponent {
+      let part = UInt32(pointer.load(fromByteOffset: offset + byte, as: UInt8.self))
+      value |= part << UInt32(byte * 8)
+    }
+    return Double(value)
+  }
+
+  private static func writeUnsignedSample(
+    _ value: Double,
+    to data: inout [UInt8],
+    at offset: Int,
+    bytesPerComponent: Int
+  ) {
+    let maximum = Double(UInt64(1) << UInt64(bytesPerComponent * 8)) - 1
+    let rounded = UInt64(min(max(value.rounded(), 0), maximum))
+    for byte in 0..<bytesPerComponent {
+      data[offset + byte] = UInt8(truncatingIfNeeded: rounded >> UInt64(byte * 8))
+    }
+  }
+
+  private static func checkedProduct(_ values: Int...) throws -> Int {
+    var result = 1
+    for value in values {
+      let next = result.multipliedReportingOverflow(by: value)
+      guard value >= 0, !next.overflow else {
+        throw BorgVRVolumeConversionError.invalidIntermediateVolumeSize
+      }
+      result = next.partialValue
+    }
+    return result
+  }
 }
 
 public struct BorgVRVolumeConversionRequest: Sendable {
@@ -113,6 +397,10 @@ public enum BorgVRVolumeConversionError: LocalizedError {
   case invalidBrickSize(Int)
   case invalidOverlap(overlap: Int, brickSize: Int)
   case noDICOMFiles(URL)
+  case incompatibleDICOMSampleFormats
+  case missingDICOMGeometryForFusion
+  case cannotCreateTemporaryVolume(URL)
+  case invalidIntermediateVolumeSize
 
   public var errorDescription: String? {
     switch self {
@@ -122,6 +410,14 @@ public enum BorgVRVolumeConversionError: LocalizedError {
         return "Invalid overlap \(overlap) for brick size \(brickSize)."
       case .noDICOMFiles(let url):
         return "The directory does not contain any DICOM files: \(url.path)"
+      case .incompatibleDICOMSampleFormats:
+        return "The DICOM series use incompatible sample formats."
+      case .missingDICOMGeometryForFusion:
+        return "The DICOM series have different grids and do not provide enough spatial geometry to fuse them."
+      case .cannotCreateTemporaryVolume(let url):
+        return "The temporary intermediate volume could not be created: \(url.path)"
+      case .invalidIntermediateVolumeSize:
+        return "The intermediate volume is too large to represent safely."
     }
   }
 }
@@ -159,6 +455,16 @@ public enum BorgVRVolumeConversionService {
       case .dicomDirectory(let directoryURL):
         try convertDICOMDirectory(
           directoryURL,
+          request: request,
+          stagedURL: stagedURL,
+          logger: logger,
+          cancellationToken: cancellationToken
+        )
+      case .registeredDICOMPair(let referenceURL, let movingURL, let filter):
+        try convertRegisteredDICOMPair(
+          referenceURL: referenceURL,
+          movingURL: movingURL,
+          filter: filter,
           request: request,
           stagedURL: stagedURL,
           logger: logger,
@@ -223,6 +529,95 @@ public enum BorgVRVolumeConversionService {
     logger: LoggerBase?,
     cancellationToken: BorgVRVolumeConversionCancellationToken?
   ) throws {
+    let volume = try decodeDICOMDirectory(
+      directoryURL,
+      logger: logger,
+      cancellationToken: cancellationToken
+    )
+    let temporaryURL = volume.source.url
+    defer { try? FileManager.default.removeItem(at: temporaryURL) }
+
+    let effectiveRequest = BorgVRVolumeConversionRequest(
+      source: request.source,
+      destinationURL: request.destinationURL,
+      datasetDescription: request.datasetDescription,
+      metaDescription: request.metaDescription.isEmpty
+        ? volume.channels.map(\.description).joined(separator: " + ")
+        : request.metaDescription,
+      settings: request.settings
+    )
+    try convertRaw(
+      volume.source,
+      request: effectiveRequest,
+      stagedURL: stagedURL,
+      logger: logger,
+      cancellationToken: cancellationToken
+    )
+  }
+
+  private static func convertRegisteredDICOMPair(
+    referenceURL: URL,
+    movingURL: URL,
+    filter: BorgVRVolumeResamplingFilter,
+    request: BorgVRVolumeConversionRequest,
+    stagedURL: URL,
+    logger: LoggerBase?,
+    cancellationToken: BorgVRVolumeConversionCancellationToken?
+  ) throws {
+    let reference = try decodeDICOMDirectory(
+      referenceURL,
+      logger: logger,
+      cancellationToken: cancellationToken
+    )
+    defer { try? FileManager.default.removeItem(at: reference.source.url) }
+    let moving = try decodeDICOMDirectory(
+      movingURL,
+      logger: logger,
+      cancellationToken: cancellationToken
+    )
+    defer { try? FileManager.default.removeItem(at: moving.source.url) }
+
+    let transform = try BorgVRDICOMRigidRegistration.register(
+      reference: reference,
+      moving: moving,
+      logger: logger
+    )
+    let fusedURL = FileManager.default.temporaryDirectory
+      .appendingPathComponent("borgvr-fused-\(UUID().uuidString).raw")
+    defer { try? FileManager.default.removeItem(at: fusedURL) }
+    let fused = try BorgVRDICOMVolumeFusion.fuse(
+      reference: reference,
+      moving: moving,
+      movingToReference: transform,
+      filter: filter,
+      outputURL: fusedURL,
+      logger: logger,
+      cancellationToken: cancellationToken
+    )
+
+    let effectiveRequest = BorgVRVolumeConversionRequest(
+      source: request.source,
+      destinationURL: request.destinationURL,
+      datasetDescription: request.datasetDescription,
+      metaDescription: request.metaDescription.isEmpty
+        ? fused.channels.map(\.description).joined(separator: " + ")
+        : request.metaDescription,
+      settings: request.settings
+    )
+    try convertRaw(
+      fused.source,
+      request: effectiveRequest,
+      stagedURL: stagedURL,
+      logger: logger,
+      cancellationToken: cancellationToken
+    )
+  }
+
+  private static func decodeDICOMDirectory(
+    _ directoryURL: URL,
+    logger: LoggerBase?,
+    cancellationToken: BorgVRVolumeConversionCancellationToken?
+  ) throws -> BorgVRUnbrickedVolume {
     let files = try FileManager.default.contentsOfDirectory(
       at: directoryURL,
       includingPropertiesForKeys: [.isRegularFileKey],
@@ -246,23 +641,15 @@ public enum BorgVRVolumeConversionService {
     try cancellationToken?.checkCancellation()
 
     let temporaryURL = FileManager.default.temporaryDirectory
-      .appendingPathComponent(UUID().uuidString)
-    defer { try? FileManager.default.removeItem(at: temporaryURL) }
-    try volume.voxelData.withUnsafeBytes { bytes in
-      try Data(bytes).write(to: temporaryURL)
+      .appendingPathComponent("borgvr-dicom-\(UUID().uuidString).raw")
+    do {
+      try Data(volume.voxelData).write(to: temporaryURL)
+    } catch {
+      try? FileManager.default.removeItem(at: temporaryURL)
+      throw error
     }
-
-    let effectiveRequest = BorgVRVolumeConversionRequest(
-      source: request.source,
-      destinationURL: request.destinationURL,
-      datasetDescription: request.datasetDescription,
-      metaDescription: request.metaDescription.isEmpty
-        ? dicomDescription(for: volume)
-        : request.metaDescription,
-      settings: request.settings
-    )
-    try convertRaw(
-      BorgVRRawVolumeSource(
+    return BorgVRUnbrickedVolume(
+      source: BorgVRRawVolumeSource(
         url: temporaryURL,
         offset: 0,
         size: Vec3<Int>(x: volume.width, y: volume.height, z: volume.depth),
@@ -274,10 +661,15 @@ public enum BorgVRVolumeConversionService {
           z: volume.voxelSpacing.z
         )
       ),
-      request: effectiveRequest,
-      stagedURL: stagedURL,
-      logger: logger,
-      cancellationToken: cancellationToken
+      orientation: volume.orientation,
+      origin: volume.origin,
+      channels: [BorgVRUnbrickedVolumeChannelMetadata(
+        description: dicomDescription(for: volume),
+        modality: volume.modality,
+        patientName: volume.patientName,
+        seriesDate: volume.seriesDate,
+        pixelPaddingValue: volume.pixelPaddingValue
+      )]
     )
   }
 

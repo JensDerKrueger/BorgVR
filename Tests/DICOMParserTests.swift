@@ -35,6 +35,12 @@ private func appendUInt32LE(_ value: UInt32, to data: inout Data) {
   data.append(UInt8(truncatingIfNeeded: value >> 24))
 }
 
+private func uint16Data(_ value: UInt16) -> Data {
+  var data = Data()
+  appendUInt16LE(value, to: &data)
+  return data
+}
+
 private func appendExplicitElement(
   group: UInt16,
   element: UInt16,
@@ -64,6 +70,7 @@ private func makeSlice(
     bitsAllocated: bits,
     bitsStored: bits,
     pixelRepresentation: 0,
+    pixelPaddingValue: nil,
     sliceThickness: nil,
     spaceBetweenSlices: nil,
     pixelSpacing: nil,
@@ -220,6 +227,76 @@ private func testInvalidOrientationBasis() throws {
   )
 }
 
+private func decodedPaddingValue(
+  pixelRepresentation: UInt16,
+  rawPaddingValue: UInt16,
+  paddingVR: String
+) throws -> Int32? {
+  var data = Data(repeating: 0, count: 132)
+  appendExplicitElement(
+    group: 0x0028,
+    element: 0x0010,
+    vr: "US",
+    value: uint16Data(1),
+    to: &data
+  )
+  appendExplicitElement(
+    group: 0x0028,
+    element: 0x0011,
+    vr: "US",
+    value: uint16Data(1),
+    to: &data
+  )
+  appendExplicitElement(
+    group: 0x0028,
+    element: 0x0103,
+    vr: "US",
+    value: uint16Data(pixelRepresentation),
+    to: &data
+  )
+  appendExplicitElement(
+    group: 0x0028,
+    element: 0x0120,
+    vr: paddingVR,
+    value: uint16Data(rawPaddingValue),
+    to: &data
+  )
+  appendExplicitElement(
+    group: 0x7FE0,
+    element: 0x0010,
+    vr: "US",
+    value: uint16Data(0),
+    to: &data
+  )
+  let file = DicomParser.DicomFile(
+    transferSyntax: DicomParser.TransferSyntaxInfo(
+      elementEncoding: .explicitVRLittleEndian,
+      pixelDataEncoding: .uncompressed
+    ),
+    rawData: data
+  )
+  return try DicomParser.openSlice(from: file).pixelPaddingValue
+}
+
+private func testUnsignedPixelPaddingValue() throws {
+  let value = try decodedPaddingValue(
+    pixelRepresentation: 0,
+    rawPaddingValue: 65530,
+    paddingVR: "US"
+  )
+  try expect(value == 65530, "Unsigned Pixel Padding Value was decoded incorrectly")
+}
+
+private func testSignedPixelPaddingValue() throws {
+  let expected = Int16(-1024)
+  let value = try decodedPaddingValue(
+    pixelRepresentation: 1,
+    rawPaddingValue: UInt16(bitPattern: expected),
+    paddingVR: "SS"
+  )
+  try expect(value == Int32(expected), "Signed Pixel Padding Value was decoded incorrectly")
+}
+
 @main
 private enum DICOMParserTestRunner {
   static func main() throws {
@@ -235,6 +312,8 @@ private enum DICOMParserTestRunner {
     try testValidTransferSyntaxHeader()
     try testOrientationBasis()
     try testInvalidOrientationBasis()
+    try testUnsignedPixelPaddingValue()
+    try testSignedPixelPaddingValue()
     print("DICOM parser tests passed")
   }
 }

@@ -3,11 +3,23 @@
 
 /* Step 1 */
 "converter_step1_title" = "Select Input Source";
-"converter_step1_subtitle" = "Choose a file (QVIS/NRRD/PVM) or a directory with DICOM files.";
+"converter_step1_subtitle" = "Choose a volume file, one DICOM series, or two DICOM series to register and fuse.";
+"converter_import_source_kind" = "Input type";
+"converter_import_source_file" = "Volume File";
+"converter_import_source_dicom" = "DICOM Series";
+"converter_import_source_dicom_pair" = "DICOM Fusion";
 "converter_button_select_input_file" = "Select Input File";
 "converter_status_no_file" = "No file selected";
 "converter_button_select_input_dir" = "Select Input Directory";
+"converter_button_select_reference_dir" = "Select Reference Series";
+"converter_button_select_moving_dir" = "Select Moving Series";
+"converter_dicom_reference_series" = "Reference series";
+"converter_dicom_moving_series" = "Moving series";
+"converter_dicom_resampling_filter" = "Resampling";
+"converter_dicom_filter_trilinear" = "Trilinear";
+"converter_dicom_filter_nearest" = "Nearest Neighbor";
 "converter_status_no_directory" = "No directory selected";
+"converter_desc_from_registered_dicom_pair" = "Registered fusion of DICOM series %@ and %@";
 "converter_bpp_format" = "%hu bits/pixel";
 
 

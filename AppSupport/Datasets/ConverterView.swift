@@ -16,10 +16,27 @@ struct ConverterView: View {
     var id: Self { self }
   }
 
+  private enum ImportSourceKind: String, CaseIterable, Identifiable {
+    case volumeFile
+    case dicomDirectory
+    case dicomPair
+
+    var id: Self { self }
+  }
+
+  private enum DICOMDirectoryRole {
+    case single
+    case reference
+    case moving
+  }
+
   // UI state properties.
   @State private var operation: Operation = .importDataset
+  @State private var importSourceKind: ImportSourceKind = .volumeFile
   @State private var inputFile: String = ""
   @State private var inputDirectory: String = ""
+  @State private var movingInputDirectory: String = ""
+  @State private var dicomResamplingFilter: BorgVRVolumeResamplingFilter = .trilinear
   @State private var outputFile: String = ""
   @State private var datasetDescription: String = ""
   @State private var logText: String = ""
@@ -61,6 +78,7 @@ struct ConverterView: View {
   @EnvironmentObject var storedAppModel: StoredAppModel
 
   @StateObject private var dicomPreviewModel = DicomSlicePreviewModel()
+  @StateObject private var movingDicomPreviewModel = DicomSlicePreviewModel()
   private let onClose: () -> Void
   private let onMeshImport: (URL) -> Void
 
@@ -130,34 +148,80 @@ struct ConverterView: View {
                   .font(.subheadline)
                   .foregroundStyle(.secondary)
 
-                if inputDirectory.isEmpty == false {
-                  DicomSlicePreview(model: dicomPreviewModel)
-                    .frame(height: 420)
-                    .padding()
+                Picker("converter_import_source_kind", selection: $importSourceKind) {
+                  Text("converter_import_source_file").tag(ImportSourceKind.volumeFile)
+                  Text("converter_import_source_dicom").tag(ImportSourceKind.dicomDirectory)
+                  Text("converter_import_source_dicom_pair").tag(ImportSourceKind.dicomPair)
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .onChange(of: importSourceKind) { _, _ in
+                  refreshImportSuggestion()
                 }
 
-                HStack {
-                  Button {
-                    selectInputFile()
-                  } label: {
-                    Label("converter_button_select_input_file", systemImage: "doc")
-                  }
-                  Text(inputFile.isEmpty ? NSLocalizedString("converter_status_no_file", comment: "") : inputFile)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                    .foregroundStyle(inputFile.isEmpty ? .secondary : .primary)
-                }
-
-                HStack {
-                  Button {
-                    selectInputDirectory()
-                  } label: {
-                    Label("converter_button_select_input_dir", systemImage: "folder")
-                  }
-                  Text(inputDirectory.isEmpty ? NSLocalizedString("converter_status_no_directory", comment: "") : inputDirectory)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                    .foregroundStyle(inputDirectory.isEmpty ? .secondary : .primary)
+                switch importSourceKind {
+                  case .volumeFile:
+                    HStack {
+                      Button {
+                        selectInputFile()
+                      } label: {
+                        Label("converter_button_select_input_file", systemImage: "doc")
+                      }
+                      Text(inputFile.isEmpty
+                           ? NSLocalizedString("converter_status_no_file", comment: "")
+                           : inputFile)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .foregroundStyle(inputFile.isEmpty ? .secondary : .primary)
+                    }
+                  case .dicomDirectory:
+                    if inputDirectory.isEmpty == false {
+                      DicomSlicePreview(model: dicomPreviewModel)
+                        .frame(height: 420)
+                        .padding()
+                    }
+                    dicomDirectorySelector(
+                      role: .single,
+                      buttonKey: "converter_button_select_input_dir",
+                      path: inputDirectory
+                    )
+                  case .dicomPair:
+                    HStack(alignment: .top, spacing: 16) {
+                      VStack(alignment: .leading, spacing: 8) {
+                        Text("converter_dicom_reference_series").font(.headline)
+                        if inputDirectory.isEmpty == false {
+                          DicomSlicePreview(model: dicomPreviewModel)
+                            .frame(height: 300)
+                        }
+                        dicomDirectorySelector(
+                          role: .reference,
+                          buttonKey: "converter_button_select_reference_dir",
+                          path: inputDirectory
+                        )
+                      }
+                      VStack(alignment: .leading, spacing: 8) {
+                        Text("converter_dicom_moving_series").font(.headline)
+                        if movingInputDirectory.isEmpty == false {
+                          DicomSlicePreview(model: movingDicomPreviewModel)
+                            .frame(height: 300)
+                        }
+                        dicomDirectorySelector(
+                          role: .moving,
+                          buttonKey: "converter_button_select_moving_dir",
+                          path: movingInputDirectory
+                        )
+                      }
+                    }
+                    Picker(
+                      "converter_dicom_resampling_filter",
+                      selection: $dicomResamplingFilter
+                    ) {
+                      Text("converter_dicom_filter_trilinear")
+                        .tag(BorgVRVolumeResamplingFilter.trilinear)
+                      Text("converter_dicom_filter_nearest")
+                        .tag(BorgVRVolumeResamplingFilter.nearestNeighbor)
+                    }
+                    .pickerStyle(.segmented)
                 }
               }
             case 2:
@@ -283,7 +347,7 @@ struct ConverterView: View {
             // Validate minimal inputs for each step before advancing
             switch step {
               case 1:
-                if !inputFile.isEmpty || !inputDirectory.isEmpty { step += 1 }
+                if hasValidImportInput { step += 1 }
               case 2:
                 if !storedAppModel.dataDirectory.isEmpty { step += 1 }
               case 3:
@@ -305,7 +369,7 @@ struct ConverterView: View {
             )
           }
           .disabled(
-            (step == 1 && (inputFile.isEmpty && inputDirectory.isEmpty)) ||
+            (step == 1 && !hasValidImportInput) ||
             (step == 2 && storedAppModel.dataDirectory.isEmpty) ||
             (step == 3 && outputFile.isEmpty) ||
             (step == 5 && brickSizeErrorMsg != nil) ||
@@ -1170,6 +1234,38 @@ struct ConverterView: View {
   }
 
   /// Presents an NSOpenPanel to allow file selection (macOS only).
+  private var hasValidImportInput: Bool {
+    switch importSourceKind {
+      case .volumeFile:
+        return !inputFile.isEmpty
+      case .dicomDirectory:
+        return !inputDirectory.isEmpty
+      case .dicomPair:
+        return !inputDirectory.isEmpty && !movingInputDirectory.isEmpty
+    }
+  }
+
+  @ViewBuilder
+  private func dicomDirectorySelector(
+    role: DICOMDirectoryRole,
+    buttonKey: LocalizedStringKey,
+    path: String
+  ) -> some View {
+    VStack(alignment: .leading, spacing: 6) {
+      Button {
+        selectInputDirectory(role: role)
+      } label: {
+        Label(buttonKey, systemImage: "folder")
+      }
+      Text(path.isEmpty
+           ? NSLocalizedString("converter_status_no_directory", comment: "")
+           : path)
+        .lineLimit(1)
+        .truncationMode(.middle)
+        .foregroundStyle(path.isEmpty ? .secondary : .primary)
+    }
+  }
+
   func selectInputFile() {
     let panel = NSOpenPanel()
     panel.canChooseFiles = true
@@ -1186,7 +1282,7 @@ struct ConverterView: View {
       if url.startAccessingSecurityScopedResource() {
         defer { url.stopAccessingSecurityScopedResource() }
         inputFile = url.path
-        inputDirectory = ""
+        importSourceKind = .volumeFile
         outputFile = URL(fileURLWithPath: inputFile)
           .deletingPathExtension().lastPathComponent
         datasetDescription = String(
@@ -1213,7 +1309,7 @@ struct ConverterView: View {
     }
   }
 
-  func selectInputDirectory() {
+  private func selectInputDirectory(role: DICOMDirectoryRole = .single) {
     let panel = NSOpenPanel()
     panel.canChooseFiles = false
     panel.canChooseDirectories = true
@@ -1222,11 +1318,25 @@ struct ConverterView: View {
       if url.startAccessingSecurityScopedResource() {
         defer { url.stopAccessingSecurityScopedResource() }
 
-        dicomPreviewModel.setDirectory(url)
-
-        inputDirectory = url.path
-        inputFile = ""
-        (outputFile, datasetDescription) = generateDescriptionSuggestion(from: inputDirectory)
+        switch role {
+          case .single:
+            importSourceKind = .dicomDirectory
+            dicomPreviewModel.setDirectory(url)
+            inputDirectory = url.path
+            (outputFile, datasetDescription) = generateDescriptionSuggestion(
+              from: inputDirectory
+            )
+          case .reference:
+            importSourceKind = .dicomPair
+            dicomPreviewModel.setDirectory(url)
+            inputDirectory = url.path
+            updateDICOMPairSuggestion()
+          case .moving:
+            importSourceKind = .dicomPair
+            movingDicomPreviewModel.setDirectory(url)
+            movingInputDirectory = url.path
+            updateDICOMPairSuggestion()
+        }
       } else {
         logger.error(
           L(
@@ -1237,6 +1347,48 @@ struct ConverterView: View {
       }
     }
 
+  }
+
+  private func updateDICOMPairSuggestion() {
+    guard !inputDirectory.isEmpty else { return }
+    let referenceName = URL(
+      fileURLWithPath: inputDirectory,
+      isDirectory: true
+    ).lastPathComponent
+    outputFile = referenceName + "_fusion"
+    guard !movingInputDirectory.isEmpty else {
+      datasetDescription = generateDescriptionSuggestion(from: inputDirectory).1
+      return
+    }
+    let movingName = URL(
+      fileURLWithPath: movingInputDirectory,
+      isDirectory: true
+    ).lastPathComponent
+    datasetDescription = String(
+      format: NSLocalizedString("converter_desc_from_registered_dicom_pair", comment: ""),
+      referenceName,
+      movingName
+    )
+  }
+
+  private func refreshImportSuggestion() {
+    switch importSourceKind {
+      case .volumeFile:
+        guard !inputFile.isEmpty else { return }
+        let url = URL(fileURLWithPath: inputFile)
+        outputFile = url.deletingPathExtension().lastPathComponent
+        datasetDescription = String(
+          format: NSLocalizedString("converter_desc_from_file", comment: ""),
+          outputFile
+        )
+      case .dicomDirectory:
+        guard !inputDirectory.isEmpty else { return }
+        (outputFile, datasetDescription) = generateDescriptionSuggestion(
+          from: inputDirectory
+        )
+      case .dicomPair:
+        updateDICOMPairSuggestion()
+    }
   }
 
   func appendExtensionIfNeeded(to filename: String, ext: String) -> String {
@@ -1251,7 +1403,7 @@ struct ConverterView: View {
   /// Starts the conversion process.
   /// In this demo, the conversion process is simulated with a loop.
   func startConversion() {
-    guard (!inputFile.isEmpty || !inputDirectory.isEmpty), !outputFile.isEmpty else {
+    guard hasValidImportInput, !outputFile.isEmpty else {
       logger.error(
         L(
           "converter_log_error_missing_input_or_output",
@@ -1311,26 +1463,43 @@ struct ConverterView: View {
 
         let source: BorgVRVolumeConversionSource
         let sourceDescription: String
-        if !inputFile.isEmpty {
-          let sourceURL = URL(fileURLWithPath: inputFile)
-          let descriptionKey: String
-          switch sourceURL.pathExtension.lowercased() {
-            case "dat": descriptionKey = "converter_desc_from_qvis"
-            case "pvm": descriptionKey = "converter_desc_from_pvm"
-            default: descriptionKey = "converter_desc_from_nrrd"
-          }
-          sourceDescription = String(
-            format: NSLocalizedString(descriptionKey, comment: ""),
-            sourceURL.deletingPathExtension().lastPathComponent
-          )
-          source = .file(sourceURL)
-        } else {
-          let directory = URL(fileURLWithPath: inputDirectory, isDirectory: true)
-          sourceDescription = String(
-            format: NSLocalizedString("converter_desc_from_dicom_stack", comment: ""),
-            directory.lastPathComponent
-          )
-          source = .dicomDirectory(directory)
+        switch importSourceKind {
+          case .volumeFile:
+            let sourceURL = URL(fileURLWithPath: inputFile)
+            let descriptionKey: String
+            switch sourceURL.pathExtension.lowercased() {
+              case "dat": descriptionKey = "converter_desc_from_qvis"
+              case "pvm": descriptionKey = "converter_desc_from_pvm"
+              default: descriptionKey = "converter_desc_from_nrrd"
+            }
+            sourceDescription = String(
+              format: NSLocalizedString(descriptionKey, comment: ""),
+              sourceURL.deletingPathExtension().lastPathComponent
+            )
+            source = .file(sourceURL)
+          case .dicomDirectory:
+            let directory = URL(fileURLWithPath: inputDirectory, isDirectory: true)
+            sourceDescription = String(
+              format: NSLocalizedString("converter_desc_from_dicom_stack", comment: ""),
+              directory.lastPathComponent
+            )
+            source = .dicomDirectory(directory)
+          case .dicomPair:
+            let reference = URL(fileURLWithPath: inputDirectory, isDirectory: true)
+            let moving = URL(fileURLWithPath: movingInputDirectory, isDirectory: true)
+            sourceDescription = String(
+              format: NSLocalizedString(
+                "converter_desc_from_registered_dicom_pair",
+                comment: ""
+              ),
+              reference.lastPathComponent,
+              moving.lastPathComponent
+            )
+            source = .registeredDICOMPair(
+              reference: reference,
+              moving: moving,
+              filter: dicomResamplingFilter
+            )
         }
 
         try BorgVRVolumeConversionService.convert(

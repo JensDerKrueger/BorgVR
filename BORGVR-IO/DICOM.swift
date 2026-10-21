@@ -106,6 +106,8 @@ final class DicomParser {
    - bytesPerVoxel: The number of bytes used to represent each voxel.
    - voxelSpacing: The physical voxel spacing in meters along the x, y, and z dimensions.
    - orientation: The volume axes in DICOM patient coordinates, if available.
+   - origin: The center of the first voxel in DICOM patient coordinates, in meters.
+   - pixelPaddingValue: The stored value used for pixels outside the scanned object.
    - voxelData: A flat array of voxel intensities in ZYX order.
    */
   struct DicomVolume {
@@ -121,6 +123,10 @@ final class DicomParser {
     let voxelSpacing: (x: Float, y: Float, z: Float)
     /// Orthonormal volume axes in DICOM patient coordinates.
     let orientation: DicomOrientation?
+    /// Center of voxel (0, 0, 0) in DICOM patient coordinates, in meters.
+    let origin: Vec3<Float>?
+    /// Stored pixel value that represents padding rather than image content.
+    let pixelPaddingValue: Int32?
     /// Flat voxel data array in Z-Y-X order.
     let voxelData: [UInt8]
 
@@ -285,6 +291,23 @@ final class DicomParser {
       y: inPlane.y * millimetersToMeters,
       z: z * millimetersToMeters
     )
+    let origin = sorted.first?.1.position.map {
+      Vec3<Float>(
+        x: $0.0 * millimetersToMeters,
+        y: $0.1 * millimetersToMeters,
+        z: $0.2 * millimetersToMeters
+      )
+    }
+    let paddingValues = Set(sorted.compactMap { $0.1.pixelPaddingValue })
+    let pixelPaddingValue: Int32?
+    if paddingValues.count <= 1 {
+      pixelPaddingValue = paddingValues.first
+    } else {
+      pixelPaddingValue = nil
+      logger?.warning(
+        "Ignoring inconsistent Pixel Padding Value metadata in the DICOM series."
+      )
+    }
 
 
     let depth = sorted.count
@@ -320,6 +343,8 @@ final class DicomParser {
       bytesPerVoxel: bytesPerVoxel,
       voxelSpacing: voxelSpacing,
       orientation: orientation,
+      origin: origin,
+      pixelPaddingValue: pixelPaddingValue,
       voxelData: buffer,
       modality: metaSource.modality,
       patientName: metaSource.patientName,
@@ -422,6 +447,8 @@ final class DicomParser {
     let bitsStored: UInt16?
     /// Pixel representation (e.g., signed vs unsigned).
     let pixelRepresentation: UInt16?
+    /// Stored pixel value that represents padding rather than image content.
+    let pixelPaddingValue: Int32?
     /// Physical slice thickness (if provided).
     let sliceThickness: Float?
     /// Physical space between slices (if provided).
@@ -1140,6 +1167,7 @@ final class DicomParser {
       (.bitsAllocated, true),
       (.bitsStored, true),
       (.pixelRepresentation, true),
+      (.pixelPaddingValue, true),
       (.sliceThickness, true),
       (.spaceBetweenSlices, true),
       (.pixelSpacing, true),
@@ -1207,6 +1235,17 @@ final class DicomParser {
 
     let rows = readUInt16(tag: .rows) ?? 0
     let columns = readUInt16(tag: .columns) ?? 0
+    let pixelRepresentation = readUInt16(tag: .pixelRepresentation)
+    let pixelPaddingValue: Int32? = {
+      guard let element = elements[.pixelPaddingValue],
+            let rawValue = readUInt16(tag: .pixelPaddingValue) else {
+        return nil
+      }
+      let isSigned = pixelRepresentation == 1 || element.vr == "SS"
+      return isSigned
+        ? Int32(Int16(bitPattern: rawValue))
+        : Int32(rawValue)
+    }()
     let pixelData: Data
     if let elem = elements[.pixelData] {
       let start = elem.valueOffset
@@ -1226,7 +1265,8 @@ final class DicomParser {
       samplesPerPixel: readUInt16(tag: .samplesPerPixel),
       bitsAllocated: readUInt16(tag: .bitsAllocated),
       bitsStored: readUInt16(tag: .bitsStored),
-      pixelRepresentation: readUInt16(tag: .pixelRepresentation),
+      pixelRepresentation: pixelRepresentation,
+      pixelPaddingValue: pixelPaddingValue,
       sliceThickness: readFloat(tag: .sliceThickness),
       spaceBetweenSlices: readFloat(tag: .spaceBetweenSlices),
       pixelSpacing: readFloatTuple(tag: .pixelSpacing, count: 2).flatMap { ($0[0], $0[1]) },
