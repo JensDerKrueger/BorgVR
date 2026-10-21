@@ -102,6 +102,7 @@ struct BorgVRUnbrickedVolumeChannelMetadata: Sendable {
   let modality: String?
   let patientName: String?
   let seriesDate: String?
+  let isSigned: Bool
   let pixelPaddingValue: Int32?
 }
 
@@ -116,7 +117,7 @@ enum BorgVRDICOMVolumeFusion {
   static func fuse(
     reference: BorgVRUnbrickedVolume,
     moving: BorgVRUnbrickedVolume,
-    movingToReference: BorgVRRigidTransform,
+    referenceToMoving: BorgVRRigidTransform,
     filter: BorgVRVolumeResamplingFilter,
     outputURL: URL,
     logger: LoggerBase?,
@@ -168,6 +169,7 @@ enum BorgVRDICOMVolumeFusion {
 
     let size = reference.source.size
     let bytesPerComponent = reference.source.bytesPerComponent
+    let movingIsSigned = moving.channels.first?.isSigned ?? false
     let outputVoxelByteCount = try checkedProduct(bytesPerComponent, 2)
     let outputSliceByteCount = try checkedProduct(
       size.x, size.y, outputVoxelByteCount
@@ -191,7 +193,7 @@ enum BorgVRDICOMVolumeFusion {
             forReference: Vec3<Int>(x: x, y: y, z: z),
             reference: reference,
             moving: moving,
-            movingToReference: movingToReference,
+            referenceToMoving: referenceToMoving,
             usesPatientGeometry: usesPatientGeometry
           )
           let outputOffset = (y * size.x + x) * outputVoxelByteCount
@@ -207,13 +209,15 @@ enum BorgVRDICOMVolumeFusion {
                bytesPerComponent: bytesPerComponent,
                sliceStride: movingSliceStride,
                rowStride: movingRowStride,
+               isSigned: movingIsSigned,
                filter: filter
              ) {
-            writeUnsignedSample(
+            writeSample(
               movingValue,
               to: &outputSlice,
               at: outputOffset + bytesPerComponent,
-              bytesPerComponent: bytesPerComponent
+              bytesPerComponent: bytesPerComponent,
+              isSigned: movingIsSigned
             )
           }
         }
@@ -241,14 +245,10 @@ enum BorgVRDICOMVolumeFusion {
     forReference coordinate: Vec3<Int>,
     reference: BorgVRUnbrickedVolume,
     moving: BorgVRUnbrickedVolume,
-    movingToReference: BorgVRRigidTransform,
+    referenceToMoving: BorgVRRigidTransform,
     usesPatientGeometry: Bool
   ) -> Vec3<Float>? {
-    guard usesPatientGeometry,
-          let referenceOrientation = reference.orientation,
-          let referenceOrigin = reference.origin,
-          let movingOrientation = moving.orientation,
-          let movingOrigin = moving.origin else {
+    guard usesPatientGeometry else {
       return coordinate.x < moving.source.size.x
         && coordinate.y < moving.source.size.y
         && coordinate.z < moving.source.size.z
@@ -256,16 +256,16 @@ enum BorgVRDICOMVolumeFusion {
         : nil
     }
 
-    let referencePoint = referenceOrigin
-      + referenceOrientation.xAxis * (Float(coordinate.x) * reference.source.voxelSpacing.x)
-      + referenceOrientation.yAxis * (Float(coordinate.y) * reference.source.voxelSpacing.y)
-      + referenceOrientation.zAxis * (Float(coordinate.z) * reference.source.voxelSpacing.z)
-    let movingPoint = movingToReference.inverseApplying(to: referencePoint)
-    let delta = movingPoint - movingOrigin
+    let referencePoint = Vec3<Float>(
+      x: Float(coordinate.x) * reference.source.voxelSpacing.x,
+      y: Float(coordinate.y) * reference.source.voxelSpacing.y,
+      z: Float(coordinate.z) * reference.source.voxelSpacing.z
+    )
+    let movingPoint = referenceToMoving.applying(to: referencePoint)
     let floatingCoordinate = Vec3<Float>(
-      x: delta.dot(movingOrientation.xAxis) / moving.source.voxelSpacing.x,
-      y: delta.dot(movingOrientation.yAxis) / moving.source.voxelSpacing.y,
-      z: delta.dot(movingOrientation.zAxis) / moving.source.voxelSpacing.z
+      x: movingPoint.x / moving.source.voxelSpacing.x,
+      y: movingPoint.y / moving.source.voxelSpacing.y,
+      z: movingPoint.z / moving.source.voxelSpacing.z
     )
     guard floatingCoordinate.x.isFinite,
           floatingCoordinate.y.isFinite,
@@ -282,6 +282,7 @@ enum BorgVRDICOMVolumeFusion {
     bytesPerComponent: Int,
     sliceStride: Int,
     rowStride: Int,
+    isSigned: Bool,
     filter: BorgVRVolumeResamplingFilter
   ) -> Double? {
     switch filter {
@@ -294,10 +295,11 @@ enum BorgVRDICOMVolumeFusion {
               (0..<size.z).contains(z) else {
           return nil
         }
-        return readUnsignedSample(
+        return readSample(
           from: accessor.mappedMemory,
           at: z * sliceStride + y * rowStride + x * bytesPerComponent,
-          bytesPerComponent: bytesPerComponent
+          bytesPerComponent: bytesPerComponent,
+          isSigned: isSigned
         )
       case .trilinear:
         guard coordinate.x >= 0, coordinate.x <= Float(size.x - 1),
@@ -316,10 +318,11 @@ enum BorgVRDICOMVolumeFusion {
         let tz = Double(coordinate.z - Float(z0))
 
         func sample(_ x: Int, _ y: Int, _ z: Int) -> Double {
-          readUnsignedSample(
+          readSample(
             from: accessor.mappedMemory,
             at: z * sliceStride + y * rowStride + x * bytesPerComponent,
-            bytesPerComponent: bytesPerComponent
+            bytesPerComponent: bytesPerComponent,
+            isSigned: isSigned
           )
         }
         let c00 = sample(x0, y0, z0) * (1 - tx) + sample(x1, y0, z0) * tx
@@ -332,11 +335,24 @@ enum BorgVRDICOMVolumeFusion {
     }
   }
 
-  private static func readUnsignedSample(
+  private static func readSample(
     from pointer: UnsafeMutableRawPointer,
     at offset: Int,
-    bytesPerComponent: Int
+    bytesPerComponent: Int,
+    isSigned: Bool
   ) -> Double {
+    if isSigned {
+      switch bytesPerComponent {
+        case 1:
+          return Double(pointer.load(fromByteOffset: offset, as: Int8.self))
+        case 2:
+          return Double(pointer.load(fromByteOffset: offset, as: Int16.self))
+        case 4:
+          return Double(pointer.load(fromByteOffset: offset, as: Int32.self))
+        default:
+          return 0
+      }
+    }
     var value: UInt32 = 0
     for byte in 0..<bytesPerComponent {
       let part = UInt32(pointer.load(fromByteOffset: offset + byte, as: UInt8.self))
@@ -345,14 +361,29 @@ enum BorgVRDICOMVolumeFusion {
     return Double(value)
   }
 
-  private static func writeUnsignedSample(
+  private static func writeSample(
     _ value: Double,
     to data: inout [UInt8],
     at offset: Int,
-    bytesPerComponent: Int
+    bytesPerComponent: Int,
+    isSigned: Bool
   ) {
-    let maximum = Double(UInt64(1) << UInt64(bytesPerComponent * 8)) - 1
-    let rounded = UInt64(min(max(value.rounded(), 0), maximum))
+    let rounded: UInt64
+    if isSigned {
+      switch bytesPerComponent {
+        case 1:
+          rounded = UInt64(UInt8(bitPattern: Int8(clamping: Int64(value.rounded()))))
+        case 2:
+          rounded = UInt64(UInt16(bitPattern: Int16(clamping: Int64(value.rounded()))))
+        case 4:
+          rounded = UInt64(UInt32(bitPattern: Int32(clamping: Int64(value.rounded()))))
+        default:
+          return
+      }
+    } else {
+      let maximum = Double(UInt64(1) << UInt64(bytesPerComponent * 8)) - 1
+      rounded = UInt64(min(max(value.rounded(), 0), maximum))
+    }
     for byte in 0..<bytesPerComponent {
       data[offset + byte] = UInt8(truncatingIfNeeded: rounded >> UInt64(byte * 8))
     }
@@ -580,7 +611,8 @@ public enum BorgVRVolumeConversionService {
     let transform = try BorgVRDICOMRigidRegistration.register(
       reference: reference,
       moving: moving,
-      logger: logger
+      logger: logger,
+      cancellationToken: cancellationToken
     )
     let fusedURL = FileManager.default.temporaryDirectory
       .appendingPathComponent("borgvr-fused-\(UUID().uuidString).raw")
@@ -588,7 +620,7 @@ public enum BorgVRVolumeConversionService {
     let fused = try BorgVRDICOMVolumeFusion.fuse(
       reference: reference,
       moving: moving,
-      movingToReference: transform,
+      referenceToMoving: transform,
       filter: filter,
       outputURL: fusedURL,
       logger: logger,
@@ -668,6 +700,7 @@ public enum BorgVRVolumeConversionService {
         modality: volume.modality,
         patientName: volume.patientName,
         seriesDate: volume.seriesDate,
+        isSigned: volume.isSigned,
         pixelPaddingValue: volume.pixelPaddingValue
       )]
     )

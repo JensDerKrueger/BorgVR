@@ -107,6 +107,7 @@ final class DicomParser {
    - voxelSpacing: The physical voxel spacing in meters along the x, y, and z dimensions.
    - orientation: The volume axes in DICOM patient coordinates, if available.
    - origin: The center of the first voxel in DICOM patient coordinates, in meters.
+   - isSigned: Whether voxel samples use a signed integer representation.
    - pixelPaddingValue: The stored value used for pixels outside the scanned object.
    - voxelData: A flat array of voxel intensities in ZYX order.
    */
@@ -125,6 +126,8 @@ final class DicomParser {
     let orientation: DicomOrientation?
     /// Center of voxel (0, 0, 0) in DICOM patient coordinates, in meters.
     let origin: Vec3<Float>?
+    /// Whether the stored voxel samples use signed integers.
+    let isSigned: Bool
     /// Stored pixel value that represents padding rather than image content.
     let pixelPaddingValue: Int32?
     /// Flat voxel data array in Z-Y-X order.
@@ -308,6 +311,11 @@ final class DicomParser {
         "Ignoring inconsistent Pixel Padding Value metadata in the DICOM series."
       )
     }
+    let pixelRepresentations = Set(sorted.compactMap { $0.1.pixelRepresentation })
+    guard pixelRepresentations.count <= 1 else {
+      throw DicomParsingError.invalidElementValue(.pixelRepresentation)
+    }
+    let isSigned = pixelRepresentations.first == 1
 
 
     let depth = sorted.count
@@ -344,6 +352,7 @@ final class DicomParser {
       voxelSpacing: voxelSpacing,
       orientation: orientation,
       origin: origin,
+      isSigned: isSigned,
       pixelPaddingValue: pixelPaddingValue,
       voxelData: buffer,
       modality: metaSource.modality,

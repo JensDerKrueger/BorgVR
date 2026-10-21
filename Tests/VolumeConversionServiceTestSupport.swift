@@ -36,6 +36,7 @@ enum DicomParser {
     let voxelSpacing: Vec3<Float>
     let orientation: DicomOrientation?
     let origin: Vec3<Float>?
+    let isSigned: Bool
     let pixelPaddingValue: Int32?
     let modality: String?
     let patientName: String?
