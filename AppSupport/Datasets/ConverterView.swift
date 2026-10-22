@@ -44,6 +44,8 @@ struct ConverterView: View {
   @State private var progressValue: Double = 0.0
 
   @State private var isConverting: Bool = false
+  @State private var conversionCancellationToken: BorgVRVolumeConversionCancellationToken?
+  @State private var conversionCancellationRequested = false
   @State private var showDirectoryPicker = false
 
   @State private var tempBrickSize: String = ""
@@ -309,6 +311,14 @@ struct ConverterView: View {
                   Text(progressText)
                   ProgressView(value: progressValue)
                     .padding(.leading)
+                  if conversionCancellationToken != nil {
+                    Button(role: .cancel) {
+                      cancelConversion()
+                    } label: {
+                      Label("Cancel", systemImage: "xmark.circle")
+                    }
+                    .disabled(conversionCancellationRequested)
+                  }
                 }
                 TextEditor(text: $logText)
                   .border(Color.secondary.opacity(0.5), width: 1)
@@ -1427,6 +1437,9 @@ struct ConverterView: View {
       )
     )
 #endif
+    let cancellationToken = BorgVRVolumeConversionCancellationToken()
+    conversionCancellationToken = cancellationToken
+    conversionCancellationRequested = false
     isConverting = true
 
     // Run the conversion on a background thread.
@@ -1519,8 +1532,11 @@ struct ConverterView: View {
               extensionStrategy: borderMode
             )
           ),
-          logger: logger
+          logger: logger,
+          cancellationToken: cancellationToken
         )
+      } catch is CancellationError {
+        logger.info(String(localized: "Conversion cancelled."))
       } catch let error as QVISParser.Error {
         logger.error(
           String(
@@ -1575,6 +1591,8 @@ struct ConverterView: View {
         )
       }
       DispatchQueue.main.async {
+        conversionCancellationToken = nil
+        conversionCancellationRequested = false
         isConverting = false
       }
       let total = timer.stop()
@@ -1588,6 +1606,12 @@ struct ConverterView: View {
         )
       )
     }
+  }
+
+  private func cancelConversion() {
+    guard let conversionCancellationToken, !conversionCancellationRequested else { return }
+    conversionCancellationRequested = true
+    conversionCancellationToken.cancel()
   }
 
   func firstValidDicom(in urls: [URL]) -> DicomParser.DicomFile? {

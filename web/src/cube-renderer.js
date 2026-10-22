@@ -1,4 +1,4 @@
-import { BrickAtlas } from "./brick-atlas.js?v=20261021-component-ranges";
+import { BrickAtlas } from "./brick-atlas.js?v=20261022-iso-min";
 import { buildMarkerRenderGeometry } from "./marker-tube-mesh.js?v=20260922-marker-direction";
 import { createDefaultTransferFunction } from "./transfer-function.js?v=20260907-range-fix";
 
@@ -406,10 +406,10 @@ fn sampleAtlasBrick(brickIndex: u32, brickCoords: vec3<u32>, lod: u32, point: ve
   let components = sampleAtlasComponents(brickIndex, brickCoords, lod, point);
   let componentCount = max(u32(uniforms.dataInfo.w + 0.5), 1u);
   var value = components.x;
-  if (componentCount >= 2u) { value = value + components.y; }
-  if (componentCount >= 3u) { value = value + components.z; }
-  if (componentCount >= 4u) { value = value + components.w; }
-  return value / f32(componentCount);
+  if (componentCount >= 2u) { value = min(value, components.y); }
+  if (componentCount >= 3u) { value = min(value, components.z); }
+  if (componentCount >= 4u) { value = min(value, components.w); }
+  return value;
 }
 
 struct TransferFunctionSamples {
@@ -610,10 +610,9 @@ fn fragmentMain(input: VertexOut) -> @location(0) vec4<f32> {
         let components = sampleAtlasComponents(brick.index, brick.coords, brick.lod, samplePoint);
         let componentCount = max(u32(uniforms.dataInfo.w + 0.5), 1u);
         var scalar = components.x;
-        if (componentCount >= 2u) { scalar = scalar + components.y; }
-        if (componentCount >= 3u) { scalar = scalar + components.z; }
-        if (componentCount >= 4u) { scalar = scalar + components.w; }
-        scalar = scalar / f32(componentCount);
+        if (componentCount >= 2u) { scalar = min(scalar, components.y); }
+        if (componentCount >= 3u) { scalar = min(scalar, components.z); }
+        if (componentCount >= 4u) { scalar = min(scalar, components.w); }
 
         if (renderMode == RENDER_MODE_ISO) {
           if (scalar >= isoValue) {

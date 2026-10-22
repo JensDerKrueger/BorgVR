@@ -967,7 +967,10 @@ function classifyBricks(manifest, transferFunctions, options = {}) {
     const maxValue = brick.max ?? brick.maxValue ?? minValue;
     if (renderMode === 2) {
       const isoRawValue = options.isoRawValue ?? clamp(options.isoValue ?? 0.5, 0, 1) * rangeMax;
-      empty[brick.index] = maxValue < isoRawValue;
+      const scalarMaximum = Array.isArray(brick.componentRanges) && brick.componentRanges.length > 0
+        ? Math.min(...brick.componentRanges.map((channelRange) => channelRange?.[1] ?? maxValue))
+        : maxValue;
+      empty[brick.index] = scalarMaximum < isoRawValue;
       fullyOpaque[brick.index] = false;
     } else {
       empty[brick.index] = activeTransferFunctions.every(

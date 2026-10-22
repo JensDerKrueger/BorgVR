@@ -311,6 +311,13 @@ struct BorgVRMCPImage: Sendable {
   var renderedFrame: UInt64
 }
 
+struct BorgVRMCPIsoSurfaceExport: Codable, Sendable {
+  var outputPath: String
+  var vertexCount: Int
+  var triangleCount: Int
+  var normalizedIsoValue: Float
+}
+
 enum BorgVRMCPResetScope: String, CaseIterable, Sendable {
   case all
   case transform
@@ -323,6 +330,7 @@ enum BorgVRMCPCommandError: LocalizedError {
   case invalidArgument(String)
   case noDataset
   case rendererUnavailable
+  case isoSurfaceUnavailable
   case screenshotUnavailable
   case timeout
   case unsupported(String)
@@ -333,6 +341,7 @@ enum BorgVRMCPCommandError: LocalizedError {
       case .invalidArgument(let message): return message
       case .noDataset: return "No dataset is open."
       case .rendererUnavailable: return "The renderer is not available."
+      case .isoSurfaceUnavailable: return "Isosurface extraction is not available."
       case .screenshotUnavailable: return "Screenshot capture is not available."
       case .timeout: return "The renderer did not finish before the timeout."
       case .unsupported(let message): return message
@@ -391,6 +400,10 @@ protocol BorgVRMCPCommandService: AnyObject {
   func clearMeasurements() throws
   func reset(_ scope: BorgVRMCPResetScope) throws
   func waitUntilRendered(after frame: UInt64, timeout: TimeInterval) async throws
+  func exportIsoSurface(
+    to outputURL: URL,
+    normalizedIsoValue: Float?
+  ) async throws -> BorgVRMCPIsoSurfaceExport
   func captureScreenshot() async throws -> BorgVRMCPImage
 }
 

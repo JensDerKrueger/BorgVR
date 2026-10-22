@@ -218,7 +218,9 @@ class AsyncEmptinessUpdater {
           )
         }
       case .isoValue:
-        return evaluation.isoValue > brickMetadata.maxValue
+        let scalarMaximum = brickMetadata.componentRanges.map(\.maxValue).min()
+          ?? brickMetadata.maxValue
+        return evaluation.isoValue > scalarMaximum
     }
   }
 

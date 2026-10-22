@@ -323,10 +323,10 @@
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				BORGVRDataBase.swift,
+				BorgVRDICOMRigidRegistration.swift,
 				BORGVRFileData.swift,
 				BORGVRMetaData.swift,
 				BorgVRSharedConstants.swift,
-				BorgVRDICOMRigidRegistration.swift,
 				BorgVRVolumeConversionService.swift,
 				BrickedVolumeReorganizer.swift,
 				DICOM.swift,
@@ -1196,7 +1196,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = iOSApp/BorgVRMobile.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 7;
+				CURRENT_PROJECT_VERSION = 9;
 				DEVELOPMENT_ASSET_PATHS = "";
 				DEVELOPMENT_TEAM = L8Q6MVX7ZF;
 				ENABLE_PREVIEWS = YES;
@@ -1214,7 +1214,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 3.0;
+				MARKETING_VERSION = 3.1;
 				PRODUCT_BUNDLE_IDENTIFIER = "de.uni-due.BorgVRVisionApp";
 				PRODUCT_NAME = "BorgVR Mobile";
 				SDKROOT = iphoneos;
@@ -1233,7 +1233,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = iOSApp/BorgVRMobile.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 7;
+				CURRENT_PROJECT_VERSION = 9;
 				DEVELOPMENT_ASSET_PATHS = "";
 				DEVELOPMENT_TEAM = L8Q6MVX7ZF;
 				ENABLE_PREVIEWS = YES;
@@ -1251,7 +1251,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 3.0;
+				MARKETING_VERSION = 3.1;
 				PRODUCT_BUNDLE_IDENTIFIER = "de.uni-due.BorgVRVisionApp";
 				PRODUCT_NAME = "BorgVR Mobile";
 				SDKROOT = iphoneos;
@@ -1272,7 +1272,7 @@
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				MACOSX_DEPLOYMENT_TARGET = 15.2;
-				MARKETING_VERSION = 3.0;
+				MARKETING_VERSION = 3.1;
 				PRODUCT_BUNDLE_IDENTIFIER = "de.uni-due.TerminalServerApp";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
@@ -1288,7 +1288,7 @@
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				MACOSX_DEPLOYMENT_TARGET = 15.2;
-				MARKETING_VERSION = 3.0;
+				MARKETING_VERSION = 3.1;
 				PRODUCT_BUNDLE_IDENTIFIER = "de.uni-due.TerminalServerApp";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
@@ -1306,7 +1306,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 19;
+				CURRENT_PROJECT_VERSION = 21;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -1322,7 +1322,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.2;
-				MARKETING_VERSION = 3.0;
+				MARKETING_VERSION = 3.1;
 				PRODUCT_BUNDLE_IDENTIFIER = "de.uni-due.BorgVRVisionApp";
 				PRODUCT_NAME = BorgVR;
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -1342,7 +1342,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 19;
+				CURRENT_PROJECT_VERSION = 21;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "";
 				DEVELOPMENT_TEAM = L8Q6MVX7ZF;
@@ -1359,7 +1359,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.2;
-				MARKETING_VERSION = 3.0;
+				MARKETING_VERSION = 3.1;
 				PRODUCT_BUNDLE_IDENTIFIER = "de.uni-due.BorgVRVisionApp";
 				PRODUCT_NAME = BorgVR;
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -1378,12 +1378,13 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = VisionApp/VisionApp.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 3;
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = VisionApp/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = BorgVR;
+				INFOPLIST_KEY_GCSupportsControllerUserInteraction = YES;
 				INFOPLIST_KEY_NSAccessoryTrackingUsageDescription = "BorgVR tracks connected spatial controllers and styli so you can interact with volumes and create markers.";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "BorgVR uses the local network to load datasets from other BorgVR devices and servers and, when sharing is enabled, to make datasets available to collaborators and the WebGPU renderer.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "The microphone is used to let you interact with the app using voice commands instead of traditional UI controls.";
@@ -1394,7 +1395,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 3.0;
+				MARKETING_VERSION = 3.1;
 				PRODUCT_BUNDLE_IDENTIFIER = "de.uni-due.BorgVRVisionApp";
 				PRODUCT_NAME = BorgVR;
 				SDKROOT = xros;
@@ -1415,12 +1416,13 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = VisionApp/VisionApp.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 3;
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = VisionApp/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = BorgVR;
+				INFOPLIST_KEY_GCSupportsControllerUserInteraction = YES;
 				INFOPLIST_KEY_NSAccessoryTrackingUsageDescription = "BorgVR tracks connected spatial controllers and styli so you can interact with volumes and create markers.";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "BorgVR uses the local network to load datasets from other BorgVR devices and servers and, when sharing is enabled, to make datasets available to collaborators and the WebGPU renderer.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "The microphone is used to let you interact with the app using voice commands instead of traditional UI controls.";
@@ -1431,7 +1433,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 3.0;
+				MARKETING_VERSION = 3.1;
 				PRODUCT_BUNDLE_IDENTIFIER = "de.uni-due.BorgVRVisionApp";
 				PRODUCT_NAME = BorgVR;
 				SDKROOT = xros;
@@ -1468,7 +1470,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.2;
-				MARKETING_VERSION = 3.0;
+				MARKETING_VERSION = 3.1;
 				PRODUCT_BUNDLE_IDENTIFIER = "de.uni-due.macOSServer";
 				PRODUCT_NAME = "BorgVR Server";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -1500,7 +1502,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.2;
-				MARKETING_VERSION = 3.0;
+				MARKETING_VERSION = 3.1;
 				PRODUCT_BUNDLE_IDENTIFIER = "de.uni-due.macOSServer";
 				PRODUCT_NAME = "BorgVR Server";
 				PROVISIONING_PROFILE_SPECIFIER = "";

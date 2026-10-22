@@ -220,6 +220,50 @@ final class BorgVRScreenCommandService: BorgVRMCPCommandService {
     }
   }
 
+  func exportIsoSurface(
+    to outputURL: URL,
+    normalizedIsoValue: Float?
+  ) async throws -> BorgVRMCPIsoSurfaceExport {
+    let appModel = session.runtimeState
+    guard appModel.activeDataset != nil else {
+      throw BorgVRMCPCommandError.noDataset
+    }
+    guard let handler = appModel.isoSurfaceExtractionHandler else {
+      throw BorgVRMCPCommandError.isoSurfaceUnavailable
+    }
+
+    let isoValue = normalizedIsoValue ?? session.currentSnapshot().normalizedIsoValue
+    guard isoValue.isFinite, (0...1).contains(isoValue) else {
+      throw BorgVRMCPCommandError.invalidArgument(
+        "The normalized isovalue must be in the range zero to one."
+      )
+    }
+
+    let token = BorgVRIsoSurfaceExtractor.CancellationToken()
+    let hasSecurityAccess = outputURL.startAccessingSecurityScopedResource()
+    return try await withTaskCancellationHandler {
+      try await withCheckedThrowingContinuation {
+        (continuation: CheckedContinuation<BorgVRMCPIsoSurfaceExport, Error>) in
+        let gate = BorgVRMCPContinuationGate(continuation)
+        handler(outputURL, Double(isoValue), token, { _ in }, { result in
+          if hasSecurityAccess {
+            outputURL.stopAccessingSecurityScopedResource()
+          }
+          gate.resume(with: result.map { extraction in
+            BorgVRMCPIsoSurfaceExport(
+              outputPath: extraction.outputURL.path,
+              vertexCount: extraction.vertexCount,
+              triangleCount: extraction.triangleCount,
+              normalizedIsoValue: isoValue
+            )
+          })
+        })
+      }
+    } onCancel: {
+      token.cancel()
+    }
+  }
+
   func captureScreenshot() async throws -> BorgVRMCPImage {
     let appModel = session.runtimeState
     guard appModel.activeDataset != nil else { throw BorgVRMCPCommandError.noDataset }

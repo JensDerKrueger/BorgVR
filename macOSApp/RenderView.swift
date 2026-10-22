@@ -1,4 +1,6 @@
+import AppKit
 import SwiftUI
+import UniformTypeIdentifiers
 import simd
 
 struct RenderView: View {
@@ -22,6 +24,11 @@ struct RenderView: View {
   @State private var measurementDragPointID: UUID?
   @State private var arcballStartLocation: CGPoint?
   @State private var arcballStartOrientation: simd_quatf?
+  @State private var isExtractingIsoSurface = false
+  @State private var isoSurfaceExtractionProgress = 0.0
+  @State private var isoSurfaceExtractionCancellationRequested = false
+  @State private var isoSurfaceExtractionToken: BorgVRIsoSurfaceExtractor.CancellationToken?
+  @State private var isoSurfaceExtractionError: String?
 
   private let modelRotationSensitivity: Float = 0.006
   private let clippingSensitivity: Float = 0.0012
@@ -193,6 +200,35 @@ struct RenderView: View {
       }
       .frame(minWidth: 420, minHeight: 360)
     }
+    .sheet(isPresented: $isExtractingIsoSurface) {
+      VStack(alignment: .leading, spacing: 18) {
+        Text("Extracting Isosurface")
+          .font(.headline)
+        ProgressView(value: isoSurfaceExtractionProgress)
+        Text(isoSurfaceExtractionProgress, format: .percent.precision(.fractionLength(0)))
+          .foregroundStyle(.secondary)
+          .monospacedDigit()
+        HStack {
+          Spacer()
+          Button(isoSurfaceExtractionCancellationRequested ? "Cancelling..." : "Cancel") {
+            isoSurfaceExtractionCancellationRequested = true
+            isoSurfaceExtractionToken?.cancel()
+          }
+          .disabled(isoSurfaceExtractionCancellationRequested)
+        }
+      }
+      .padding(24)
+      .frame(width: 380)
+      .interactiveDismissDisabled()
+    }
+    .alert("Isosurface Export Failed", isPresented: Binding(
+      get: { isoSurfaceExtractionError != nil },
+      set: { if !$0 { isoSurfaceExtractionError = nil } }
+    )) {
+      Button("OK") { isoSurfaceExtractionError = nil }
+    } message: {
+      Text(isoSurfaceExtractionError ?? "")
+    }
   }
 
   @ViewBuilder
@@ -251,6 +287,8 @@ struct RenderView: View {
             appModel.logger.error(error.localizedDescription)
           }
         }
+      case .extractIsosurface:
+        presentIsoSurfaceSavePanel()
       case .reset:
         try? session.perform(.reset(.all), source: .userInterface)
         sharePlay.flushSynchronization()
@@ -282,6 +320,90 @@ struct RenderView: View {
       case .toggleControls:
         toggleRenderControlsVisibility()
     }
+  }
+
+  private func presentIsoSurfaceSavePanel() {
+    guard renderingParameters.renderMode == .isoValue,
+          appModel.activeDataset != nil else { return }
+    guard appModel.isoSurfaceExtractionHandler != nil else {
+      isoSurfaceExtractionError = String(localized: "The renderer is not ready for extraction.")
+      return
+    }
+
+    let panel = NSSavePanel()
+    panel.title = String(localized: "Extract Isosurface")
+    panel.prompt = String(localized: "Export")
+    panel.allowedContentTypes = [UTType(filenameExtension: "obj") ?? .data]
+    panel.canCreateDirectories = true
+    panel.isExtensionHidden = false
+    panel.directoryURL = storedAppModel.resolvedDataDirectoryURL()
+    panel.nameFieldStringValue = suggestedIsoSurfaceFilename()
+
+    let completion: (NSApplication.ModalResponse) -> Void = { response in
+      guard response == .OK, let outputURL = panel.url else { return }
+      startIsoSurfaceExtraction(to: outputURL)
+    }
+    if let window = NSApp.keyWindow {
+      panel.beginSheetModal(for: window, completionHandler: completion)
+    } else {
+      panel.begin(completionHandler: completion)
+    }
+  }
+
+  private func startIsoSurfaceExtraction(to outputURL: URL) {
+    guard let handler = appModel.isoSurfaceExtractionHandler else {
+      isoSurfaceExtractionError = String(localized: "The renderer is not ready for extraction.")
+      return
+    }
+    let token = BorgVRIsoSurfaceExtractor.CancellationToken()
+    let hasSecurityAccess = outputURL.startAccessingSecurityScopedResource()
+    let normalizedIsoValue = Double(renderingParameters.isoValue)
+
+    isoSurfaceExtractionToken = token
+    isoSurfaceExtractionProgress = 0
+    isoSurfaceExtractionCancellationRequested = false
+    isExtractingIsoSurface = true
+
+    handler(outputURL, normalizedIsoValue, token, { progress in
+      DispatchQueue.main.async {
+        isoSurfaceExtractionProgress = min(max(progress, 0), 1)
+      }
+    }, { result in
+      DispatchQueue.main.async {
+        if hasSecurityAccess {
+          outputURL.stopAccessingSecurityScopedResource()
+        }
+        isExtractingIsoSurface = false
+        isoSurfaceExtractionToken = nil
+        isoSurfaceExtractionCancellationRequested = false
+        switch result {
+          case .success(let extraction):
+            appModel.logger.info(
+              String(
+                format: String(localized: "Isosurface saved with %lld triangles: %@"),
+                Int64(extraction.triangleCount),
+                extraction.outputURL.path
+              )
+            )
+          case .failure(let error):
+            if error is CancellationError {
+              appModel.logger.info(String(localized: "Isosurface extraction cancelled."))
+            } else {
+              isoSurfaceExtractionError = error.localizedDescription
+              appModel.logger.error(error.localizedDescription)
+            }
+        }
+      }
+    })
+  }
+
+  private func suggestedIsoSurfaceFilename() -> String {
+    let source = appModel.activeDataset?.description ?? "BorgVR"
+    let invalidCharacters = CharacterSet.alphanumerics.inverted
+    let stem = source.components(separatedBy: invalidCharacters)
+      .filter { !$0.isEmpty }
+      .joined(separator: "-")
+    return "\(stem.isEmpty ? "BorgVR" : stem)-isosurface.obj"
   }
 
   private func setRenderMode(_ mode: RenderMode) {

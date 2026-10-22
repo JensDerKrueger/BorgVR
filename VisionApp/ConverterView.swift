@@ -48,6 +48,8 @@ struct ConverterView: View {
   @State private var showFilePicker = false
   /// A flag indicating whether a file operation is currently in progress.
   @State private var isWorking: Bool = false
+  @State private var conversionCancellationToken: BorgVRVolumeConversionCancellationToken?
+  @State private var conversionCancellationRequested = false
 
   @State private var isExporting = false
   @State private var exportURL: URL?
@@ -167,6 +169,14 @@ struct ConverterView: View {
           ProgressView()
             .progressViewStyle(CircularProgressViewStyle())
             .padding()
+          if conversionCancellationToken != nil {
+            Button(role: .cancel) {
+              cancelConversion()
+            } label: {
+              Label("Cancel", systemImage: "xmark.circle")
+            }
+            .disabled(conversionCancellationRequested)
+          }
         }
       }
 
@@ -343,6 +353,9 @@ struct ConverterView: View {
     )
 #endif
 
+    let cancellationToken = BorgVRVolumeConversionCancellationToken()
+    conversionCancellationToken = cancellationToken
+    conversionCancellationRequested = false
     isWorking = true
 
     // Perform conversion on background thread
@@ -351,6 +364,8 @@ struct ConverterView: View {
       timer.start()
       defer {
         DispatchQueue.main.async {
+          conversionCancellationToken = nil
+          conversionCancellationRequested = false
           isWorking = false
           inputFile = ""
         }
@@ -427,8 +442,12 @@ struct ConverterView: View {
               extensionStrategy: borderMode
             )
           ),
-          logger: logger
+          logger: logger,
+          cancellationToken: cancellationToken
         )
+      }
+      catch is CancellationError {
+        logger.info(String(localized: "Conversion cancelled."))
       }
       catch let error as QVISParser.Error {
         logger.error(
@@ -507,6 +526,12 @@ struct ConverterView: View {
         )
       )
     }
+  }
+
+  private func cancelConversion() {
+    guard let conversionCancellationToken, !conversionCancellationRequested else { return }
+    conversionCancellationRequested = true
+    conversionCancellationToken.cancel()
   }
 }
 

@@ -16,6 +16,8 @@ struct ConverterView: View {
   @State private var progressValue = 0.0
   @State private var showFilePicker = false
   @State private var isWorking = false
+  @State private var conversionCancellationToken: BorgVRVolumeConversionCancellationToken?
+  @State private var conversionCancellationRequested = false
   @State private var isExporting = false
   @State private var mode: Mode = .unknown
 
@@ -73,6 +75,14 @@ struct ConverterView: View {
             Text(progressText)
               .font(.caption)
               .foregroundStyle(.secondary)
+            if conversionCancellationToken != nil {
+              Button(role: .cancel) {
+                cancelConversion()
+              } label: {
+                Label("Cancel", systemImage: "xmark.circle")
+              }
+              .disabled(conversionCancellationRequested)
+            }
           }
         }
 
@@ -180,6 +190,9 @@ struct ConverterView: View {
     let outputFilename = URL(fileURLWithPath: inputFile).deletingPathExtension().lastPathComponent + ".data"
     let outputFile = documentsDirectory.appendingPathComponent(outputFilename).path
 
+    let cancellationToken = BorgVRVolumeConversionCancellationToken()
+    conversionCancellationToken = cancellationToken
+    conversionCancellationRequested = false
     isWorking = true
     logger.info(String(format: String(localized: "log_starting_conversion_format"), outputFilename))
 
@@ -188,6 +201,8 @@ struct ConverterView: View {
       timer.start()
       defer {
         DispatchQueue.main.async {
+          conversionCancellationToken = nil
+          conversionCancellationRequested = false
           isWorking = false
           inputFile = ""
           mode = .unknown
@@ -228,13 +243,22 @@ struct ConverterView: View {
               extensionStrategy: borderMode
             )
           ),
-          logger: logger
+          logger: logger,
+          cancellationToken: cancellationToken
         )
         logger.info(String(format: String(localized: "log_finished_conversion_format"), timer.stop()))
+      } catch is CancellationError {
+        logger.info(String(localized: "Conversion cancelled."))
       } catch {
         logger.error(String(format: String(localized: "log_import_failed_format"), error.localizedDescription))
       }
     }
+  }
+
+  private func cancelConversion() {
+    guard let conversionCancellationToken, !conversionCancellationRequested else { return }
+    conversionCancellationRequested = true
+    conversionCancellationToken.cancel()
   }
 }
 

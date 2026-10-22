@@ -154,6 +154,10 @@ final class ScreenVolumeRendererCore {
     }
   }
 
+  func datasetForReadOnlyOperation() -> BORGVRDatasetProtocol? {
+    dataset
+  }
+
   func updateIfNeeded(for view: MTKView) -> ScreenDatasetUpdate {
     let key = appModel.activeDatasetRenderKey
     guard key != loadedDatasetKey else { return .unchanged }

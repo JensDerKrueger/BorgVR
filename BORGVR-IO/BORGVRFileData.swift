@@ -30,6 +30,8 @@ final class BORGVRFileData: BORGVRDatasetProtocol {
 
   /// The expected full brick size in bytes.
   private let fullBrickSize: Int
+  /// Protects the shared decompression buffers during concurrent read-only operations.
+  private let brickReadLock = NSLock()
 
   // MARK: Initialization
 
@@ -94,6 +96,8 @@ final class BORGVRFileData: BORGVRDatasetProtocol {
    decompression fails, or the decompressed size does not match the expected full brick size.
    */
   public func getBrick(index: Int, outputBuffer: UnsafeMutablePointer<UInt8>) throws {
+    brickReadLock.lock()
+    defer { brickReadLock.unlock() }
     // Retrieve the metadata for the requested brick and load the brick.
     try getBrick(brickMeta: metadata.getBrickMetadata(index: index), outputBuffer: outputBuffer)
   }
@@ -125,6 +129,8 @@ final class BORGVRFileData: BORGVRDatasetProtocol {
    */
   public func getBrick(level: Int, x: Int, y: Int, z: Int,
                        outputBuffer: UnsafeMutablePointer<UInt8>) throws {
+    brickReadLock.lock()
+    defer { brickReadLock.unlock() }
     // Retrieve the metadata for the requested brick and load the brick.
     try getBrick(brickMeta: metadata.getBrickMetadata(level: level, x: x, y: y, z: z),
                  outputBuffer: outputBuffer)

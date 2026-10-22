@@ -42,6 +42,7 @@ enum MacRenderShortcut: String {
   case lightingRendering = "8"
   case isoRendering = "9"
   case screenshot = "s"
+  case extractIsosurface = "x"
   case reset = "r"
   case bricks = "b"
   case synchronizeView = "v"

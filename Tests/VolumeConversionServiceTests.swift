@@ -40,6 +40,44 @@ private final class CapturingLogger: LoggerBase {
   func setMinimumLogLevel(_ level: LogLevel) {}
 }
 
+private final class OneShotDelayedDataset: BORGVRDatasetProtocol {
+  private let source: BORGVRDatasetProtocol
+  private let lock = NSLock()
+  private var hasDelayedBrick = false
+
+  init(source: BORGVRDatasetProtocol) {
+    self.source = source
+  }
+
+  func newRequest() {
+    source.newRequest()
+  }
+
+  func getMetadata() -> BORGVRMetaData {
+    source.getMetadata()
+  }
+
+  func getBrick(index: Int, outputBuffer: UnsafeMutablePointer<UInt8>) throws {
+    let shouldDelay = lock.withLock {
+      guard !hasDelayedBrick else { return false }
+      hasDelayedBrick = true
+      return true
+    }
+    if shouldDelay {
+      throw BORGVRDataError.brickNotYetAvailable(index: index)
+    }
+    try source.getBrick(index: index, outputBuffer: outputBuffer)
+  }
+
+  func getFirstBrick(outputBuffer: UnsafeMutablePointer<UInt8>) throws {
+    try source.getFirstBrick(outputBuffer: outputBuffer)
+  }
+
+  func allocateBrickBuffer() -> UnsafeMutablePointer<UInt8> {
+    source.allocateBrickBuffer()
+  }
+}
+
 private func testSettingsAndCancellation() throws {
   try expectThrows("Zero brick size was accepted") {
     try BorgVRVolumeConversionSettings(
@@ -235,6 +273,139 @@ private func testDICOMFusionInterleavesChannels() throws {
       ]
     },
     "Bricking did not preserve per-component brick ranges"
+  )
+}
+
+private func testIsoSurfaceExtractionUsesUniqueCellsAndChannelMinimum() throws {
+  let directory = FileManager.default.temporaryDirectory
+    .appendingPathComponent("borgvr-isosurface-tests-\(UUID().uuidString)")
+  try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+  defer { try? FileManager.default.removeItem(at: directory) }
+
+  func extract(
+    componentCount: Int,
+    brickSize: Int,
+    overlap: Int,
+    name: String,
+    voxelSpacing: Vec3<Float> = Vec3<Float>(x: 0.1, y: 0.2, z: 0.3)
+  ) throws -> Int {
+    let size = Vec3<Int>(x: 4, y: 4, z: 4)
+    let rawURL = directory.appendingPathComponent("\(name).raw")
+    let dataURL = directory.appendingPathComponent("\(name).data")
+    let objURL = directory.appendingPathComponent("\(name).obj")
+    var values = [UInt8]()
+    values.reserveCapacity(size.x * size.y * size.z * componentCount)
+    for _ in 0..<size.z {
+      for _ in 0..<size.y {
+        for x in 0..<size.x {
+          values.append(x >= 2 ? 255 : 0)
+          if componentCount == 2 {
+            // With a channel maximum this would make every voxel solid. The
+            // channel minimum must retain the plane from the first channel.
+            values.append(255)
+          }
+        }
+      }
+    }
+    try Data(values).write(to: rawURL)
+    let accessor = try RawFileAccessor(
+      filename: rawURL.path,
+      size: size,
+      bytesPerComponent: 1,
+      componentCount: componentCount,
+      voxelSpacing: voxelSpacing
+    )
+    try BrickedVolumeReorganizer(
+      inputVolume: accessor,
+      brickSize: brickSize,
+      overlap: overlap,
+      extensionStrategy: .clamp
+    ).reorganize(
+      to: dataURL.path,
+      datasetDescription: "Isosurface test",
+      metaDescription: "Marching Cubes regression test"
+    )
+
+    let source = try BORGVRFileData(filename: dataURL.path)
+    let result = try BorgVRIsoSurfaceExtractor.extract(
+      dataset: name == "overlap" ? OneShotDelayedDataset(source: source) : source,
+      normalizedIsoValue: 0.5,
+      outputURL: objURL
+    )
+    _ = try BorgVRIsoSurfaceExtractor.extract(
+      dataset: BORGVRFileData(filename: dataURL.path),
+      normalizedIsoValue: 0.5,
+      outputURL: objURL
+    )
+    let obj = try String(contentsOf: objURL, encoding: .utf8)
+    let faces = obj.split(separator: "\n").filter { $0.hasPrefix("f ") }
+    try expect(result.triangleCount == faces.count, "OBJ face count differs from result")
+    return faces.count
+  }
+
+  let overlappingFaceCount = try extract(
+    componentCount: 1, brickSize: 4, overlap: 1, name: "overlap"
+  )
+  try expect(
+    overlappingFaceCount == 18,
+    "Overlapping bricks duplicated or omitted level-zero cells"
+  )
+  let multiChannelFaceCount = try extract(
+    componentCount: 2, brickSize: 2, overlap: 0, name: "minimum"
+  )
+  try expect(
+    multiChannelFaceCount == 18,
+    "Multi-channel extraction did not use the component minimum"
+  )
+  let picometerFaceCount = try extract(
+    componentCount: 1,
+    brickSize: 4,
+    overlap: 1,
+    name: "picometer",
+    voxelSpacing: Vec3<Float>(repeating: 1.1e-11)
+  )
+  try expect(
+    picometerFaceCount == 18,
+    "Physical-scale degeneracy check rejected a picometer-sized isosurface"
+  )
+}
+
+private func testMarchingCubes33Cases() throws {
+  let edgeCorners = [
+    (0, 1), (1, 2), (2, 3), (3, 0),
+    (4, 5), (5, 6), (6, 7), (7, 4),
+    (0, 4), (1, 5), (2, 6), (3, 7)
+  ]
+  for mask in 1..<255 {
+    let values = (0..<8).map { mask & (1 << $0) == 0 ? -1.0 : 1.0 }
+    let triangles = BorgVRMarchingCubes33.triangles(values: values, threshold: 0)
+    let complement = BorgVRMarchingCubes33.triangles(
+      values: values.map(-),
+      threshold: 0
+    )
+    try expect(
+      triangles.count == complement.count,
+      "Complementary MC33 cases produced different triangle counts for mask \(mask)"
+    )
+    for edge in triangles.flatMap(\.edges) where edge < 12 {
+      let corners = edgeCorners[edge]
+      try expect(
+        values[corners.0].sign != values[corners.1].sign,
+        "MC33 case \(mask) referenced an edge without an isosurface crossing"
+      )
+    }
+  }
+
+  // Case 10.1.1 examples from Vega et al. 2019, Figure 7 and Section 3.
+  let firstCase10 = [-7.0, 2, 3, -6, 3, -6, -7, 2]
+  let secondCase10 = [-12.0, 4, 6, -10, 3, -5, -6, 2]
+  try expect(
+    BorgVRMarchingCubes33.triangles(values: firstCase10, threshold: 0).count == 4,
+    "The corrected MC33 interior test misclassified the first case 10.1.1 regression"
+  )
+  try expect(
+    BorgVRMarchingCubes33.triangles(values: secondCase10, threshold: 0).count == 4,
+    "The corrected MC33 interior test misclassified the second case 10.1.1 regression"
   )
 }
 
@@ -941,6 +1112,8 @@ private enum VolumeConversionServiceTestRunner {
     try testSettingsAndCancellation()
     try testRawConversionAndAtomicReplacement()
     try testDICOMFusionInterleavesChannels()
+    try testIsoSurfaceExtractionUsesUniqueCellsAndChannelMinimum()
+    try testMarchingCubes33Cases()
     try testDICOMFusionUsesPatientGeometry()
     try testDICOMFusionTrilinearFiltering()
     try testRegistrationDownsamplingHandlesAnisotropyAndOddSizes()

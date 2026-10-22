@@ -266,6 +266,13 @@ final class VisionBorgVRCommandService: BorgVRMCPCommandService {
     }
   }
 
+  func exportIsoSurface(
+    to outputURL: URL,
+    normalizedIsoValue: Float?
+  ) async throws -> BorgVRMCPIsoSurfaceExport {
+    throw BorgVRMCPCommandError.isoSurfaceUnavailable
+  }
+
   func captureScreenshot() async throws -> BorgVRMCPImage {
     let runtime = session.runtimeState
     guard runtime.activeDataset != nil else { throw BorgVRMCPCommandError.noDataset }

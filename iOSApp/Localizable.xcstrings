@@ -1781,6 +1781,34 @@
         }
       }
     },
+    "Conversion cancelled." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Konvertierung abgebrochen."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Conversion cancelled."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Conversión cancelada."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Conversion annulée."
+          }
+        }
+      }
+    },
     "Certificate" : {
       "extractionState" : "stale",
       "localizations" : {

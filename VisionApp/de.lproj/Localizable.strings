@@ -1270,3 +1270,4 @@
 "Generate and copy access token" = "Zugriffstoken erzeugen und kopieren";
 "Access token copied to the clipboard." = "Zugriffstoken wurde in die Zwischenablage kopiert.";
 "Use this value as the Bearer token in the MCP client's Authorization header." = "Verwenden Sie diesen Wert als Bearer-Token im Authorization-Header des MCP-Clients.";
+"Conversion cancelled." = "Konvertierung abgebrochen.";

@@ -50,6 +50,17 @@ final class BorgVRScriptRunner: ObservableObject {
     }
   }
 
+  private struct ScriptIsoSurfaceExportRequest: Equatable {
+    let id: UUID
+    let destination: String
+    let normalizedIsoValue: Float
+
+    static func == (lhs: ScriptIsoSurfaceExportRequest, rhs: ScriptIsoSurfaceExportRequest) -> Bool {
+      lhs.destination == rhs.destination &&
+      lhs.normalizedIsoValue == rhs.normalizedIsoValue
+    }
+  }
+
   @Published private(set) var isRunning = false
   @Published private(set) var statusText = String(localized: "No script active")
   @Published private(set) var scriptURL: URL?
@@ -93,6 +104,9 @@ final class BorgVRScriptRunner: ObservableObject {
   private var scriptImportCancellationToken: BorgVRVolumeConversionCancellationToken?
   private var pendingScriptExport: ScriptExportRequest?
   private var pendingScriptExportResult: CommandResultCode?
+  private var pendingIsoSurfaceExport: ScriptIsoSurfaceExportRequest?
+  private var pendingIsoSurfaceExportResult: CommandResultCode?
+  private var isoSurfaceExportTask: Task<Void, Never>?
   private var importBrickSizeOverride: Int?
   private var importOverlapOverride: Int?
   private var importBorderModeOverride: ExtensionStrategy?
@@ -100,6 +114,7 @@ final class BorgVRScriptRunner: ObservableObject {
 
   deinit {
     executionTask?.cancel()
+    isoSurfaceExportTask?.cancel()
     storedAppModel?.stopAccessingDataDirectory(logFileAccessURL)
   }
 
@@ -185,6 +200,8 @@ final class BorgVRScriptRunner: ObservableObject {
     executionTask = nil
     scriptImportCancellationToken?.cancel()
     scriptImportCancellationToken = nil
+    isoSurfaceExportTask?.cancel()
+    isoSurfaceExportTask = nil
     pendingDatasetID = nil
     pendingDatasetDescription = nil
     pendingDatasetResult = nil
@@ -201,6 +218,8 @@ final class BorgVRScriptRunner: ObservableObject {
     pendingScriptImportResult = nil
     pendingScriptExport = nil
     pendingScriptExportResult = nil
+    pendingIsoSurfaceExport = nil
+    pendingIsoSurfaceExportResult = nil
     scriptProgressText = ""
     scriptProgressValue = nil
     if isRunning {
@@ -301,6 +320,20 @@ final class BorgVRScriptRunner: ObservableObject {
         source: args.string(0),
         destination: args.string(1),
         level: args.int(2)
+      ) ?? .callbackError
+    }
+
+    register("exportisosurface", [.string]) { [weak self] args in
+      self?.exportIsoSurface(
+        destination: args.string(0),
+        normalizedIsoValue: self?.renderingParameters?.isoValue
+      ) ?? .callbackError
+    }
+
+    register("exportisosurface", [.string, .float]) { [weak self] args in
+      self?.exportIsoSurface(
+        destination: args.string(0),
+        normalizedIsoValue: args.float(1)
       ) ?? .callbackError
     }
 
@@ -1055,6 +1088,90 @@ final class BorgVRScriptRunner: ObservableObject {
       case .failure(let error):
         logError("Export failed: \(error.localizedDescription)")
         pendingScriptExportResult = .callbackError
+    }
+  }
+
+  private func exportIsoSurface(
+    destination: String,
+    normalizedIsoValue: Float?
+  ) -> CommandResultCode {
+    guard let normalizedIsoValue,
+          normalizedIsoValue.isFinite,
+          (0...1).contains(normalizedIsoValue) else {
+      return .invalidArguments
+    }
+
+    if let pendingIsoSurfaceExport,
+       pendingIsoSurfaceExport.destination == destination,
+       pendingIsoSurfaceExport.normalizedIsoValue == normalizedIsoValue {
+      guard let result = pendingIsoSurfaceExportResult else {
+        return .waitingNoop
+      }
+      self.pendingIsoSurfaceExport = nil
+      pendingIsoSurfaceExportResult = nil
+      return result
+    }
+
+    guard pendingIsoSurfaceExport == nil,
+          pendingScriptExport == nil,
+          pendingScriptImport == nil,
+          !destination.isEmpty,
+          let commandService,
+          let storedAppModel else {
+      return .invalidArguments
+    }
+
+    let destinationURL = scriptOutputURL(destination, defaultExtension: "obj")
+    let request = ScriptIsoSurfaceExportRequest(
+      id: UUID(),
+      destination: destination,
+      normalizedIsoValue: normalizedIsoValue
+    )
+    pendingIsoSurfaceExport = request
+    pendingIsoSurfaceExportResult = nil
+    scriptProgressText = String(localized: "Extracting isosurface")
+    scriptProgressValue = nil
+    logInfo(
+      "Isosurface export started: \(destinationURL.path), normalized isovalue \(normalizedIsoValue)"
+    )
+
+    let dataDirectoryAccessURL = storedAppModel.startAccessingDataDirectory()
+    isoSurfaceExportTask = Task { [weak self] in
+      let result: Result<BorgVRMCPIsoSurfaceExport, Error>
+      do {
+        result = .success(
+          try await commandService.exportIsoSurface(
+            to: destinationURL,
+            normalizedIsoValue: normalizedIsoValue
+          )
+        )
+      } catch {
+        result = .failure(error)
+      }
+      storedAppModel.stopAccessingDataDirectory(dataDirectoryAccessURL)
+      self?.completeIsoSurfaceExport(requestID: request.id, result: result)
+    }
+    return .waitingNoop
+  }
+
+  private func completeIsoSurfaceExport(
+    requestID: UUID,
+    result: Result<BorgVRMCPIsoSurfaceExport, Error>
+  ) {
+    guard pendingIsoSurfaceExport?.id == requestID else { return }
+    isoSurfaceExportTask = nil
+    scriptProgressText = ""
+    scriptProgressValue = nil
+    switch result {
+      case .success(let extraction):
+        logInfo(
+          "Isosurface export completed: \(extraction.outputPath), " +
+          "\(extraction.vertexCount) vertices, \(extraction.triangleCount) triangles"
+        )
+        pendingIsoSurfaceExportResult = .success
+      case .failure(let error):
+        logError("Isosurface export failed: \(error.localizedDescription)")
+        pendingIsoSurfaceExportResult = .callbackError
     }
   }
 

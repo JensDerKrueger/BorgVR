@@ -20,6 +20,10 @@ importfile(string,string,string)
 importdirectory(string,string,string)
 # Export one BorgVR LoD as an uncompressed inline NRRD; LoD 0 is full resolution.
 exportdataset(string,string,int)
+# Export the current dataset as an OBJ isosurface. The optional value overrides the current
+# normalized isovalue and must be in the range 0...1.
+exportisosurface(string)
+exportisosurface(string,float)
 setimportbricksize(int)
 setimportoverlap(int)
 # Border modes: 0 = zeroes, 1 = clamp to border, 2 = repeat.

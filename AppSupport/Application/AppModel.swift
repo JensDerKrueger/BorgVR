@@ -11,6 +11,13 @@ final class AppModel: ObservableObject {
   ) -> Void
   typealias RenderScreenshotCancelHandler = (_ id: UUID, _ error: Error) -> Void
   typealias RenderDisplaySyncHandler = (_ enabled: Bool) -> Void
+  typealias IsoSurfaceExtractionHandler = (
+    _ outputURL: URL,
+    _ normalizedIsoValue: Double,
+    _ cancellationToken: BorgVRIsoSurfaceExtractor.CancellationToken,
+    _ progress: @escaping @Sendable (Double) -> Void,
+    _ completion: @escaping @Sendable (Result<BorgVRIsoSurfaceExtractor.Result, Error>) -> Void
+  ) -> Void
   typealias MarkerPositionHandler = (
     _ normalizedScreenPosition: SIMD2<Float>,
     _ positionToPreserveDepth: SIMD3<Float>?
@@ -186,6 +193,7 @@ final class AppModel: ObservableObject {
   var renderScreenshotHandler: RenderScreenshotHandler?
   var renderScreenshotCancelHandler: RenderScreenshotCancelHandler?
   var renderDisplaySyncHandler: RenderDisplaySyncHandler?
+  var isoSurfaceExtractionHandler: IsoSurfaceExtractionHandler?
   var markerPositionHandler: MarkerPositionHandler?
   var projectedVolumePositionHandler: MarkerPositionHandler?
   var beginProjectedStrokeHandler: (() -> Void)?

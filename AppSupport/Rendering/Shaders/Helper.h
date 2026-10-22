@@ -80,7 +80,17 @@ inline float sampleVolumeScalar(texture3d<float, access::sample> volume,
     volumeSampler,
     coordinates
   );
-  return dot(components, float4(1.0)) / float(VOLUME_COMPONENT_COUNT);
+  float value = components.x;
+#if VOLUME_COMPONENT_COUNT >= 2
+  value = min(value, components.y);
+#endif
+#if VOLUME_COMPONENT_COUNT >= 3
+  value = min(value, components.z);
+#endif
+#if VOLUME_COMPONENT_COUNT >= 4
+  value = min(value, components.w);
+#endif
+  return value;
 }
 
 struct TransferFunctionSamples {

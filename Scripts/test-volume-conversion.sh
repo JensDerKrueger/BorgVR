@@ -16,7 +16,12 @@ swiftc \
   "$ROOT/BORGVR-IO/VolumeDataAccessor.swift" \
   "$ROOT/BORGVR-IO/MemoryMappedFile.swift" \
   "$ROOT/BORGVR-IO/RawFileAccessor.swift" \
+  "$ROOT/BORGVR-IO/BORGVRDataBase.swift" \
   "$ROOT/BORGVR-IO/BORGVRMetaData.swift" \
+  "$ROOT/BORGVR-IO/BORGVRFileData.swift" \
+  "$ROOT/BORGVR-IO/BorgVRMarchingCubes33.swift" \
+  "$ROOT/BORGVR-IO/BorgVRMetalIsoSurfaceClassifier.swift" \
+  "$ROOT/BORGVR-IO/BorgVRIsoSurfaceExtractor.swift" \
   "$ROOT/BORGVR-IO/BrickedVolumeReorganizer.swift" \
   "$ROOT/Tests/VolumeConversionServiceTestSupport.swift" \
   "$ROOT/BORGVR-IO/BorgVRDICOMRigidRegistration.swift" \

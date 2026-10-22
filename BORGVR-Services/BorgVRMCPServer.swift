@@ -589,6 +589,20 @@ final class BorgVRMCPServer: @unchecked Sendable {
         let timeout = min(max((arguments["timeout_seconds"] as? NSNumber)?.doubleValue ?? 10, 0.1), 120)
         try await service.waitUntilRendered(after: frame, timeout: timeout)
         return structuredToolResult(await service.applicationState())
+      case "export_isosurface":
+        let path = try string("output_path", in: arguments)
+        guard NSString(string: path).isAbsolutePath else {
+          throw BorgVRMCPCommandError.invalidArgument(
+            "Argument 'output_path' must be an absolute path on the BorgVR host."
+          )
+        }
+        let normalizedIsoValue = try optionalFloat("normalized_iso_value", in: arguments)
+        return structuredToolResult(
+          try await service.exportIsoSurface(
+            to: URL(fileURLWithPath: path),
+            normalizedIsoValue: normalizedIsoValue
+          )
+        )
       case "capture_screenshot":
         let image = try await service.captureScreenshot()
         let metadata: [String: Any] = [
@@ -761,6 +775,15 @@ final class BorgVRMCPServer: @unchecked Sendable {
         "after_frame": ["type": "integer", "minimum": 0],
         "timeout_seconds": ["type": "number", "minimum": 0.1, "maximum": 120]
       ]),
+      tool(
+        "export_isosurface",
+        "Extract the current dataset as an OBJ isosurface using the supplied or current normalized isovalue. The output path is an absolute path on the BorgVR host.",
+        properties: [
+          "output_path": ["type": "string"],
+          "normalized_iso_value": ["type": "number", "minimum": 0, "maximum": 1]
+        ],
+        required: ["output_path"]
+      ),
       tool("capture_screenshot", "Capture the current rendered view as a PNG image.")
     ]
   }

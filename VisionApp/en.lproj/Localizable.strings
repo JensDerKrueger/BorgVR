@@ -1273,3 +1273,4 @@
 "Generate and copy access token" = "Generate and copy access token";
 "Access token copied to the clipboard." = "Access token copied to the clipboard.";
 "Use this value as the Bearer token in the MCP client's Authorization header." = "Use this value as the Bearer token in the MCP client's Authorization header.";
+"Conversion cancelled." = "Conversion cancelled.";

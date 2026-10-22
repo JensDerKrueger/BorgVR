@@ -32,7 +32,7 @@
             <li data-de="Rendermodus, Isowert, Transformation, Clipping und Beleuchtung lesen und ändern">Read and change rendering mode, isovalue, transform, clipping, and lighting</li>
             <li data-de="Objekte, Kugel- und Strichmarker, Mesh-Instanzen sowie Längen-, Flächen- und Volumenmessungen verwalten">Manage objects, sphere and stroke markers, mesh instances, and length, area, and volume measurements</li>
             <li data-de="Objekte oder die gesamte Messungsdarstellung ausblenden, ohne Daten zu löschen">Hide objects or the complete measurement visualization without deleting data</li>
-            <li data-de="Auf einen fertig gerenderten Frame warten und das aktuelle Bild als PNG abrufen">Wait for a completed rendered frame and retrieve the current view as a PNG image</li>
+            <li data-de="Auf einen fertig gerenderten Frame warten, das aktuelle Bild als PNG abrufen und auf macOS Isoflächen als OBJ exportieren">Wait for a completed rendered frame, retrieve the current view as a PNG image, and export isosurfaces as OBJ on macOS</li>
           </ul>
         </section>
         <section>
@@ -60,6 +60,7 @@
             <li data-de="Der Agent liest mit <code>list_datasets</code> Metadaten und Quellen und öffnet den gewünschten Datensatz mit <code>open_dataset</code>.">The agent uses <code>list_datasets</code> to inspect metadata and origins, then opens the selected dataset with <code>open_dataset</code>.</li>
             <li data-de="Er prüft <code>get_application_state</code>, verändert Ansicht und Renderparameter und blendet bei Bedarf Objekte oder Messungen aus.">It inspects <code>get_application_state</code>, changes the view and rendering parameters, and hides objects or measurements when required.</li>
             <li data-de="Nach jeder Änderung wartet er mit <code>wait_until_rendered</code> auf einen neuen vollständigen Frame und ruft anschließend <code>capture_screenshot</code> auf.">After each change it uses <code>wait_until_rendered</code> to wait for a new completed frame, then calls <code>capture_screenshot</code>.</li>
+            <li data-de="Auf macOS kann er mit <code>export_isosurface</code> den aktuellen Datensatz beim aktuellen oder explizit angegebenen normalisierten Isowert als OBJ-Datei speichern.">On macOS it can use <code>export_isosurface</code> to save the current dataset as an OBJ file at the current or an explicitly supplied normalized isovalue.</li>
             <li data-de="Durch mehrere Ansichten, Rendermodi, Isowerte oder Clipping-Bereiche kann der Agent die sichtbaren Strukturen systematisch vergleichen.">By comparing multiple views, rendering modes, isovalues, or clipping ranges, the agent can inspect visible structures systematically.</li>
           </ol>
           <p data-de="Die von <code>tools/list</code> gelieferten JSON-Schemas sind die verbindliche Referenz für Argumentnamen und Wertebereiche.">The JSON schemas returned by <code>tools/list</code> are the authoritative reference for argument names and value ranges.</p>

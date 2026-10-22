@@ -1,4 +1,4 @@
-import { CoordinateCubeRenderer } from "./cube-renderer.js?v=20261021-component-ranges";
+import { CoordinateCubeRenderer } from "./cube-renderer.js?v=20261022-iso-min";
 import { decodeAppleLZ4, encodeLZ4Block } from "./lz4.js?v=20260911-urltf";
 import {
   MAX_MARKER_FILE_BYTES,

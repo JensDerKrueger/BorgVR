@@ -41,6 +41,10 @@ private final class MacRendererDatasetAccess {
 
 @MainActor
 final class MacVolumeRenderer: NSObject, MTKViewDelegate {
+  private struct SendableDataset: @unchecked Sendable {
+    let value: BORGVRDatasetProtocol
+  }
+
   private weak var view: MTKView?
   private let appModel: AppModel
   private let appSettings: AppSettings
@@ -102,6 +106,29 @@ final class MacVolumeRenderer: NSObject, MTKViewDelegate {
     }
     appModel.renderDisplaySyncHandler = { [weak self] enabled in
       self?.setDisplaySyncEnabled(enabled)
+    }
+    appModel.isoSurfaceExtractionHandler = { [weak self] outputURL, normalizedIsoValue,
+      cancellationToken, progress, completion in
+      guard let self,
+            let dataset = core.datasetForReadOnlyOperation() else {
+        completion(.failure(AppModelError.rendererUnavailable))
+        return
+      }
+      let sendableDataset = SendableDataset(value: dataset)
+      let logger = appModel.logger
+      DispatchQueue.global(qos: .userInitiated).async {
+        let result = Result {
+          try BorgVRIsoSurfaceExtractor.extract(
+            dataset: sendableDataset.value,
+            normalizedIsoValue: normalizedIsoValue,
+            outputURL: outputURL,
+            logger: logger,
+            cancellationToken: cancellationToken,
+            progress: progress
+          )
+        }
+        completion(result)
+      }
     }
     setDisplaySyncEnabled(appModel.renderDisplaySyncEnabled)
   }
