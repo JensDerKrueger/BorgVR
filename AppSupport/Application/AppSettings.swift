@@ -168,6 +168,7 @@ final class AppSettings: ObservableObject {
     "sampleJitter": false,
     "showBrickVisualization": false,
     "showLogButton": false,
+    "hideBuiltInDatasets": false,
     "oversamplingMode": OversamplingMode.dynamicMode.rawValue,
     "dropFPS": defaultDropFPS,
     "recoveryFPS": defaultRecoveryFPS,
@@ -233,6 +234,8 @@ final class AppSettings: ObservableObject {
   @AppStorage("showBrickVisualization")
   var showBrickVisualization: Bool = AppSettings.bool("showBrickVisualization")
   @AppStorage("showLogButton") var showLogButton: Bool = AppSettings.bool("showLogButton")
+  @AppStorage("hideBuiltInDatasets")
+  var hideBuiltInDatasets: Bool = AppSettings.bool("hideBuiltInDatasets")
   @AppStorage("oversamplingMode") var oversamplingMode: String = AppSettings.string("oversamplingMode")
   @AppStorage("dropFPS") var dropFPS: Int = AppSettings.int("dropFPS")
   @AppStorage("recoveryFPS") var recoveryFPS: Int = AppSettings.int("recoveryFPS")
@@ -378,6 +381,7 @@ final class AppSettings: ObservableObject {
     autoloadRenderState = Self.boolDefault("autoloadRenderState")
     showBrickVisualization = Self.boolDefault("showBrickVisualization")
     showLogButton = Self.boolDefault("showLogButton")
+    hideBuiltInDatasets = Self.boolDefault("hideBuiltInDatasets")
     logLevel = Self.stringDefault("logLevel")
   }
 

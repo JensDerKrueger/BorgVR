@@ -317,32 +317,16 @@ struct macOSApp: App {
     }
     .defaultSize(width: 430, height: 500)
     .commands {
-      CommandGroup(after: .newItem) {
-        Button("modeselection_open_dataset") {
-          appModel.navigationState = .selectData
-        }
-        .macKeyboardShortcut(.openDataset)
-        .disabled(appModel.activeDataset != nil)
-
-        Button("modeselection_import") {
-          appModel.navigationState = .importData
-        }
-        .macKeyboardShortcut(.importExport)
-        .disabled(appModel.activeDataset != nil)
-      }
-
-      CommandMenu("Script") {
-        Button("Run Script...") {
-          scriptRunner.showOpenPanelAndRun()
-        }
-        .macKeyboardShortcut(.runScript)
-
-        Button("Stop Script") {
-          scriptRunner.stopScript()
-        }
-        .disabled(!scriptRunner.isRunning)
-        .macKeyboardShortcut(.stopScript)
-      }
+      BorgVRMenuCommands(
+        appModel: appModel,
+        renderingParameters: renderingParameters,
+        appSettings: appSettings,
+        serverController: serverController,
+        sharePlay: sharePlay,
+        docking: docking,
+        scriptRunner: scriptRunner,
+        session: session
+      )
     }
   }
 
@@ -484,5 +468,347 @@ struct macOSApp: App {
         )
       }
     }
+  }
+}
+
+private struct BorgVRMenuCommands: Commands {
+  @ObservedObject var appModel: AppModel
+  @ObservedObject var renderingParameters: RenderingParameters
+  @ObservedObject var appSettings: AppSettings
+  @ObservedObject var serverController: BackgroundServerController
+  @ObservedObject var sharePlay: SharePlayCoordinator
+  @ObservedObject var docking: DockingController
+  @ObservedObject var scriptRunner: BorgVRScriptRunner
+  @ObservedObject var session: ScreenBorgVRSession
+
+  var body: some Commands {
+    CommandGroup(replacing: .newItem) {
+      Button {
+        appModel.navigationState = .selectData
+      } label: {
+        menuLabel("modeselection_open_dataset", systemImage: "folder")
+      }
+      .macKeyboardShortcut(.openDataset)
+      .disabled(hasActiveDataset)
+
+      Button {
+        appModel.navigationState = .importData
+      } label: {
+        menuLabel("modeselection_import", systemImage: "arrow.up.arrow.down.square")
+      }
+      .macKeyboardShortcut(.importExport)
+      .disabled(hasActiveDataset)
+    }
+
+    CommandGroup(replacing: .appSettings) {
+      Button {
+        appModel.navigationState = .settings
+      } label: {
+        menuLabel("Settings", systemImage: "gearshape")
+      }
+      .keyboardShortcut(",", modifiers: .command)
+      .disabled(hasActiveDataset)
+    }
+
+    CommandMenu("Dataset") {
+      Button {
+        docking.request(.closeDataset)
+      } label: {
+        menuLabel("Close Dataset", systemImage: "xmark.circle")
+      }
+      .macKeyboardShortcut(.closeDataset)
+      .disabled(!hasActiveDataset)
+
+      Divider()
+
+      Button {
+        docking.request(.saveDatasetState)
+      } label: {
+        menuLabel("Save Dataset State", systemImage: "tray.and.arrow.down")
+      }
+      .macKeyboardShortcut(.saveDatasetState)
+      .disabled(!hasActiveDataset)
+
+      Button {
+        docking.request(.restoreDatasetState)
+      } label: {
+        menuLabel("Restore Dataset State", systemImage: "tray.and.arrow.up")
+      }
+      .macKeyboardShortcut(.restoreDatasetState)
+      .disabled(!hasActiveDataset)
+
+      Divider()
+
+      Button {
+        docking.request(.render(.datasetInfo))
+      } label: {
+        menuLabel("dataset_info_button", systemImage: "info.circle")
+      }
+      .macKeyboardShortcut(.datasetInfo)
+      .disabled(!hasActiveDataset)
+    }
+
+    CommandMenu("Interaction") {
+      selectionCommand(
+        "Model",
+        systemImage: "move.3d",
+        shortcut: .model,
+        isSelected: appModel.interactionMode == .model
+      )
+      selectionCommand(
+        "Clipping",
+        systemImage: "viewfinder",
+        shortcut: .clipping,
+        isSelected: appModel.interactionMode == .clipping
+      )
+      selectionCommand(
+        "Transfer",
+        systemImage: "slider.horizontal.3",
+        shortcut: .transferInteraction,
+        isSelected: appModel.interactionMode == .transferEditing
+      )
+      Divider()
+      selectionCommand(
+        "Draw",
+        systemImage: "scribble",
+        shortcut: .drawing,
+        isSelected: appModel.interactionMode == .drawing
+      )
+      selectionCommand(
+        "Place",
+        systemImage: "cube",
+        shortcut: .placement,
+        isSelected: appModel.interactionMode == .objectPlacement
+      )
+      selectionCommand(
+        "private_interaction_option_measurement",
+        systemImage: "ruler",
+        shortcut: .measurement,
+        isSelected: appModel.interactionMode == .measurement
+      )
+    }
+
+    CommandMenu("Rendering") {
+      selectionCommand(
+        "Transfer Function",
+        systemImage: "chart.xyaxis.line",
+        shortcut: .transferFunctionRendering,
+        isSelected: renderingParameters.renderMode == .transferFunction1D
+      )
+      selectionCommand(
+        "Transfer function + lighting",
+        systemImage: "lightbulb.max",
+        shortcut: .lightingRendering,
+        isSelected: renderingParameters.renderMode == .transferFunction1DLighting
+      )
+      selectionCommand(
+        "Isovalue",
+        systemImage: "square.3.layers.3d.top.filled",
+        shortcut: .isoRendering,
+        isSelected: renderingParameters.renderMode == .isoValue
+      )
+
+      Divider()
+
+      Button {
+        docking.request(.render(.extractIsosurface))
+      } label: {
+        menuLabel("Extract Isosurface", systemImage: "square.and.arrow.up")
+      }
+      .macRenderShortcut(.extractIsosurface)
+      .disabled(!hasActiveDataset || renderingParameters.renderMode != .isoValue)
+
+      renderCommand("Screenshot", systemImage: "camera", shortcut: .screenshot)
+      renderCommand("Reset", systemImage: "arrow.counterclockwise", shortcut: .reset)
+
+      Button {
+        docking.request(.render(.bricks))
+      } label: {
+        menuLabel("Bricks", systemImage: "cube.transparent")
+      }
+      .macRenderShortcut(.bricks)
+      .disabled(!hasActiveDataset || !appSettings.showBrickVisualization)
+    }
+
+    CommandMenu("Panels") {
+      renderCommand("Editor", systemImage: "slider.horizontal.3", shortcut: .editor)
+      renderCommand("Lighting", systemImage: "lightbulb.max", shortcut: .lighting)
+      renderCommand("Objects", systemImage: "cube.transparent", shortcut: .objects)
+      renderCommand(
+        "measurement_window_title",
+        systemImage: "ruler",
+        shortcut: .measurements
+      )
+
+      Divider()
+
+      renderCommand(
+        "performance_title",
+        systemImage: "chart.xyaxis.line",
+        shortcut: .performance
+      )
+
+      if appSettings.showLogButton {
+        renderCommand("Log", systemImage: "text.alignleft", shortcut: .log)
+      }
+
+      Divider()
+
+      renderCommand(
+        docking.isVisible(.renderControls) ? "Hide UI" : "Show UI",
+        systemImage: docking.isVisible(.renderControls) ? "eye.slash" : "eye",
+        shortcut: .toggleControls
+      )
+      renderCommand(
+        docking.isDetached(.renderControls) ? "Dock panel" : "Detach panel",
+        systemImage: docking.isDetached(.renderControls)
+          ? DockablePanelID.renderControls.detachedIcon
+          : DockablePanelID.renderControls.dockedIcon,
+        shortcut: .docking
+      )
+    }
+
+    CommandMenu("SharePlay") {
+      Button {
+        sharePlay.startSharePlay()
+      } label: {
+        menuLabel("Start SharePlay", systemImage: "shareplay")
+      }
+      .macKeyboardShortcut(.startSharePlay)
+      .disabled(!hasActiveDataset)
+
+      Button {
+        docking.request(.render(.synchronizeView))
+      } label: {
+        menuLabel("Synchronize View", systemImage: "link")
+      }
+      .macKeyboardShortcut(.synchronizeView)
+      .disabled(!hasActiveDataset || !sharePlay.isInSession)
+
+      Divider()
+
+      Button {
+        copyWebGPUShareLink()
+      } label: {
+        menuLabel("Copy WebGPU link", systemImage: "link.badge.plus")
+      }
+      .macKeyboardShortcut(.copyWebGPULink)
+      .disabled(!canCopyWebGPUShareLink)
+    }
+
+    CommandMenu("Script") {
+      Button {
+        scriptRunner.showOpenPanelAndRun()
+      } label: {
+        menuLabel("Run Script...", systemImage: "play.circle")
+      }
+      .macKeyboardShortcut(.runScript)
+
+      Button {
+        scriptRunner.stopScript()
+      } label: {
+        menuLabel("Stop Script", systemImage: "stop.circle")
+      }
+      .disabled(!scriptRunner.isRunning)
+      .macKeyboardShortcut(.stopScript)
+
+      Divider()
+
+      Button {
+        docking.request(.startRecording)
+      } label: {
+        menuLabel("Start Recording", systemImage: "record.circle")
+      }
+      .macKeyboardShortcut(.startRecording)
+      .disabled(!hasActiveDataset || session.isCommandRecording)
+
+      Button {
+        docking.request(.stopRecording)
+      } label: {
+        menuLabel("Stop and Save", systemImage: "stop.circle.fill")
+      }
+      .macKeyboardShortcut(.stopRecording)
+      .disabled(!session.isCommandRecording)
+    }
+
+    CommandGroup(replacing: .help) {
+      Button {
+        NSApplication.shared.showHelp(nil)
+      } label: {
+        menuLabel("BorgVR Help", systemImage: "questionmark.circle")
+      }
+      .keyboardShortcut("?", modifiers: .command)
+    }
+  }
+
+  private var hasActiveDataset: Bool {
+    appModel.activeDataset != nil
+  }
+
+  private func renderCommand(
+    _ title: String,
+    systemImage: String,
+    shortcut: MacRenderShortcut
+  ) -> some View {
+    Button {
+      docking.request(.render(shortcut))
+    } label: {
+      menuLabel(LocalizedStringKey(title), systemImage: systemImage)
+    }
+    .macRenderShortcut(shortcut)
+    .disabled(!hasActiveDataset)
+  }
+
+  private func selectionCommand(
+    _ title: String,
+    systemImage: String,
+    shortcut: MacRenderShortcut,
+    isSelected: Bool
+  ) -> some View {
+    Toggle(
+      isOn: Binding(
+        get: { isSelected },
+        set: { shouldSelect in
+          guard shouldSelect else { return }
+          docking.request(.render(shortcut))
+        }
+      )
+    ) {
+      menuLabel(LocalizedStringKey(title), systemImage: systemImage)
+    }
+    .macRenderShortcut(shortcut)
+    .disabled(!hasActiveDataset)
+  }
+
+  private func menuLabel(
+    _ title: LocalizedStringKey,
+    systemImage: String
+  ) -> some View {
+    Label(title, systemImage: systemImage)
+      .labelStyle(.titleAndIcon)
+  }
+
+  private var canCopyWebGPUShareLink: Bool {
+    guard let baseURL = serverController.shareableWebServerURL,
+          let dataset = appModel.activeDataset,
+          serverController.datasets.contains(where: {
+            $0.id.caseInsensitiveCompare(dataset.uniqueId) == .orderedSame
+          }) else {
+      return false
+    }
+    return baseURL.scheme == "https"
+  }
+
+  private func copyWebGPUShareLink() {
+    guard let baseURL = serverController.shareableWebServerURL,
+          let dataset = appModel.activeDataset else { return }
+    guard let url = WebGPUShareLink.datasetURL(
+      baseURL: baseURL,
+      datasetID: dataset.uniqueId,
+      transferFunctions: Array(renderingParameters.activeTransferFunctions),
+      renderMode: renderingParameters.renderMode,
+      normalizedIsoValue: renderingParameters.normIsoValue
+    ) else { return }
+    WebGPUShareLink.copyToPasteboard(url.absoluteString)
   }
 }

@@ -775,6 +775,8 @@
 "Keep this Mac's view synchronized with other iPhone, iPad, and Mac participants." = "Keep this Mac's view synchronized with other iPhone, iPad, and Mac participants.";
 "Show Brick Visualization" = "Show Brick Visualization";
 "Show Log Button" = "Show Log Button";
+"Hide built-in datasets" = "Hide built-in datasets";
+"Built-in datasets are hidden. Import a dataset, configure a remote server, or show built-in datasets again in Settings." = "Built-in datasets are hidden. Import a dataset, configure a remote server, or show built-in datasets again in Settings.";
 "Delete Selected Markers" = "Delete Selected Markers";
 "Waiting for Data Source" = "Waiting for Data Source";
 "BorgVR is waiting for a participant to make the current dataset available." = "BorgVR is waiting for a participant to make the current dataset available.";
@@ -974,3 +976,12 @@
 "component count must be positive" = "component count must be positive";
 "brick size and overlap do not define a positive stride" = "brick size and overlap do not define a positive stride";
 "voxel spacing must be finite and positive" = "voxel spacing must be finite and positive";
+"Dataset" = "Dataset";
+"Panels" = "Panels";
+"Close Dataset" = "Close Dataset";
+"Screenshot" = "Screenshot";
+"Clipping" = "Clipping";
+"Transfer" = "Transfer";
+"Editor" = "Editor";
+"Bricks" = "Bricks";
+"BorgVR Help" = "BorgVR Help";

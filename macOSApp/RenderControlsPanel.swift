@@ -1,6 +1,5 @@
 import AppKit
 import SwiftUI
-import UniformTypeIdentifiers
 
 private struct HeaderIconButtonStyle: ButtonStyle {
   func makeBody(configuration: Configuration) -> some View {
@@ -30,27 +29,17 @@ struct RenderControlsPanel: View {
 
   @State private var selectedInteractionMode: AppModel.InteractionMode = .model
   @State private var copiedWebGPUShareLink = false
-  @State private var showLeaveSharePlayConfirmation = false
-  @State private var pendingDatasetStateSave: DatasetStateSavePlan?
-  @State private var showDatasetStateOverwriteConfirmation = false
-  @State private var showNoDatasetStateToSave = false
-  @State private var datasetStateSaveError: Error?
-  @State private var showNoDatasetStateToRestore = false
-  @State private var datasetStateRestoreError: Error?
-  @State private var recordingSaveError: Error?
-  @State private var recordingDatasetID: String?
 
   var body: some View {
     VStack(spacing: 8) {
       HStack {
         Button {
-          requestDatasetClose()
+          docking.request(.closeDataset)
         } label: {
           Image(systemName: "xmark")
         }
         .accessibilityLabel("Close")
         .help(MacKeyboardShortcut.help("Close", shortcut: .closeDataset))
-        .macKeyboardShortcut(.closeDataset)
         .buttonStyle(.borderedProminent)
 
         Spacer()
@@ -78,7 +67,6 @@ struct RenderControlsPanel: View {
               shortcut: .startSharePlay
             )
           )
-          .macKeyboardShortcut(.startSharePlay)
           .buttonStyle(HeaderIconButtonStyle())
 
           if sharePlay.isInSession, !sharePlay.participants.isEmpty {
@@ -102,55 +90,49 @@ struct RenderControlsPanel: View {
             }
             .accessibilityLabel("Copy WebGPU link")
             .help(MacKeyboardShortcut.help("Copy WebGPU link", shortcut: .copyWebGPULink))
-            .macKeyboardShortcut(.copyWebGPULink)
             .buttonStyle(HeaderIconButtonStyle())
           }
         }
 
         headerActionGroup(tint: .teal) {
           Button {
-            requestDatasetStateSave()
+            docking.request(.saveDatasetState)
           } label: {
             Image(systemName: "tray.and.arrow.down")
           }
           .accessibilityLabel("Save Dataset State")
           .help(MacKeyboardShortcut.help("Save Dataset State", shortcut: .saveDatasetState))
-          .macKeyboardShortcut(.saveDatasetState)
           .buttonStyle(HeaderIconButtonStyle())
 
           Button {
-            restoreDatasetState()
+            docking.request(.restoreDatasetState)
           } label: {
             Image(systemName: "tray.and.arrow.up")
           }
           .accessibilityLabel("Restore Dataset State")
           .help(MacKeyboardShortcut.help("Restore Dataset State", shortcut: .restoreDatasetState))
-          .macKeyboardShortcut(.restoreDatasetState)
           .buttonStyle(HeaderIconButtonStyle())
         }
 
         headerActionGroup(tint: .red) {
           Button {
-            recordingDatasetID = appModel.activeDataset?.uniqueId
-            session.startCommandRecording()
+            docking.request(.startRecording)
           } label: {
             Image(systemName: session.isCommandRecording ? "record.circle.fill" : "record.circle")
           }
           .disabled(session.isCommandRecording)
           .accessibilityLabel("Start Recording")
           .help(MacKeyboardShortcut.help("Start Recording", shortcut: .startRecording))
-          .macKeyboardShortcut(.startRecording)
           .buttonStyle(HeaderIconButtonStyle())
 
           Button {
-            stopRecordingAndSave()
+            docking.request(.stopRecording)
           } label: {
             Image(systemName: session.isCommandRecording ? "stop.circle.fill" : "stop.circle")
           }
           .disabled(!session.isCommandRecording)
           .accessibilityLabel("Stop and Save")
           .help(MacKeyboardShortcut.help("Stop and Save", shortcut: .stopRecording))
-          .macKeyboardShortcut(.stopRecording)
           .buttonStyle(HeaderIconButtonStyle())
         }
 
@@ -162,7 +144,6 @@ struct RenderControlsPanel: View {
           }
           .accessibilityLabel("dataset_info_button")
           .help(MacKeyboardShortcut.help("dataset_info_button_help", shortcut: .datasetInfo))
-          .macKeyboardShortcut(.datasetInfo)
           .buttonStyle(HeaderIconButtonStyle())
 
           if appSettings.showLogButton {
@@ -244,7 +225,6 @@ struct RenderControlsPanel: View {
           .toggleStyle(.button)
           .fixedSize()
           .help(MacKeyboardShortcut.help("Synchronize View", shortcut: .synchronizeView))
-          .macKeyboardShortcut(.synchronizeView)
         }
 
         Picker("Render Mode", selection: renderModeBinding) {
@@ -254,6 +234,17 @@ struct RenderControlsPanel: View {
         }
         .pickerStyle(.segmented)
         .help("7: TF · 8: TF + Lighting · 9: Iso")
+
+        if renderingParameters.renderMode == .isoValue {
+          Button {
+            docking.request(.render(.extractIsosurface))
+          } label: {
+            Image(systemName: "square.and.arrow.up")
+          }
+          .fixedSize()
+          .accessibilityLabel("Extract Isosurface")
+          .help(MacRenderShortcut.help("Extract Isosurface", shortcut: .extractIsosurface))
+        }
 
         HStack(spacing: 8) {
           if appSettings.showBrickVisualization {
@@ -303,68 +294,6 @@ struct RenderControlsPanel: View {
       if !isVisible {
         docking.showsLog = false
       }
-    }
-    .alert("Leave SharePlay?", isPresented: $showLeaveSharePlayConfirmation) {
-      Button("Cancel", role: .cancel) {}
-      Button("Leave SharePlay", role: .destructive) {
-        closeDataset(leavingSharePlay: true)
-      }
-    } message: {
-      Text("Closing this dataset will leave the current SharePlay session.")
-    }
-    .alert(
-      "Overwrite Existing Files?",
-      isPresented: $showDatasetStateOverwriteConfirmation
-    ) {
-      Button("Cancel", role: .cancel) { pendingDatasetStateSave = nil }
-      Button("Overwrite") {
-        if let plan = pendingDatasetStateSave { saveDatasetState(using: plan) }
-      }
-    } message: {
-      Text("One or more files for this dataset already exist. Do you want to replace them?")
-    }
-    .alert("Nothing to Save", isPresented: $showNoDatasetStateToSave) {
-      Button("OK", role: .cancel) {}
-    } message: {
-      Text("There is no active transfer function and there are no objects or measurements to save.")
-    }
-    .alert(
-      "Unable to Save Dataset State",
-      isPresented: Binding(
-        get: { datasetStateSaveError != nil },
-        set: { if !$0 { datasetStateSaveError = nil } }
-      )
-    ) {
-      Button("OK", role: .cancel) { datasetStateSaveError = nil }
-    } message: {
-      Text(datasetStateSaveError?.localizedDescription ?? "")
-    }
-    .alert("Nothing to Restore", isPresented: $showNoDatasetStateToRestore) {
-      Button("OK", role: .cancel) {}
-    } message: {
-      Text("No saved state is available for this dataset.")
-    }
-    .alert(
-      "Unable to Restore Dataset State",
-      isPresented: Binding(
-        get: { datasetStateRestoreError != nil },
-        set: { if !$0 { datasetStateRestoreError = nil } }
-      )
-    ) {
-      Button("OK", role: .cancel) { datasetStateRestoreError = nil }
-    } message: {
-      Text(datasetStateRestoreError?.localizedDescription ?? "")
-    }
-    .alert(
-      "Unable to Save Recording",
-      isPresented: Binding(
-        get: { recordingSaveError != nil },
-        set: { if !$0 { recordingSaveError = nil } }
-      )
-    ) {
-      Button("OK", role: .cancel) { recordingSaveError = nil }
-    } message: {
-      Text(recordingSaveError?.localizedDescription ?? "")
     }
   }
 
@@ -626,156 +555,6 @@ struct RenderControlsPanel: View {
         }
       }
     )
-  }
-
-  private func requestDatasetClose() {
-    if sharePlay.isInSession, !appModel.groupSessionHost {
-      showLeaveSharePlayConfirmation = true
-    } else {
-      closeDataset(leavingSharePlay: false)
-    }
-  }
-
-  private func closeDataset(leavingSharePlay: Bool) {
-    if appSettings.autoloadTF,
-       let fileURL = appModel.transferFunctionFileURL() {
-      try? renderingParameters.transferFunction.save(to: fileURL)
-    }
-    appModel.saveAutomaticallyManagedDatasetState(
-      appSettings: appSettings,
-      renderingParameters: renderingParameters
-    )
-    if leavingSharePlay {
-      sharePlay.leaveGroupActivity()
-    } else {
-      sharePlay.closeSharedDataset()
-    }
-    appModel.removeAllVolumeMarkers()
-    appModel.replaceSceneMeshInstances([])
-    appModel.removeAllVolumeMeasurements()
-    docking.resetForDatasetClose()
-    appModel.closeDataset(destination: .datasetSelection)
-  }
-
-  private func requestDatasetStateSave() {
-    let plan = makeDatasetStateSavePlan()
-    guard !plan.isEmpty else {
-      showNoDatasetStateToSave = true
-      return
-    }
-    pendingDatasetStateSave = plan
-    if plan.hasExistingFiles {
-      showDatasetStateOverwriteConfirmation = true
-    } else {
-      saveDatasetState(using: plan)
-    }
-  }
-
-  private func makeDatasetStateSavePlan() -> DatasetStateSavePlan {
-    let hasObjects = !appModel.volumeMarkers.isEmpty || !appModel.sceneMeshInstances.isEmpty
-    let hasMeasurements = appModel.volumeMeasurements.contains { !$0.points.isEmpty }
-    return DatasetStateSavePlan(
-      transferFunctionURL: renderingParameters.renderMode == .isoValue
-        ? nil
-        : appModel.transferFunctionFileURL(),
-      viewStateURL: appModel.viewStateFileURL(),
-      objectURL: hasObjects ? appModel.objectFileURL() : nil,
-      measurementURL: hasMeasurements ? appModel.measurementFileURL() : nil
-    )
-  }
-
-  private func saveDatasetState(using plan: DatasetStateSavePlan) {
-    defer { pendingDatasetStateSave = nil }
-    guard let dataset = appModel.activeDataset else { return }
-    do {
-      if let url = plan.transferFunctionURL {
-        try renderingParameters.transferFunction.save(to: url, description: dataset.description)
-      }
-      if let url = plan.viewStateURL {
-        try DatasetStateStorage.saveViewState(
-          renderingParameters.makeDatasetViewState(datasetID: dataset.uniqueId),
-          to: url
-        )
-      }
-      if let url = plan.objectURL {
-        try DatasetStateStorage.saveObjects(
-          datasetID: dataset.uniqueId,
-          markers: appModel.volumeMarkers,
-          meshInstances: appModel.sceneMeshInstances,
-          to: url
-        )
-      }
-      if let url = plan.measurementURL {
-        try DatasetStateStorage.saveMeasurements(
-          datasetID: dataset.uniqueId,
-          measurements: appModel.volumeMeasurements,
-          to: url
-        )
-      }
-    } catch {
-      datasetStateSaveError = error
-    }
-  }
-
-  private func restoreDatasetState() {
-    do {
-      guard try appModel.restoreSavedDatasetState(
-        renderingParameters: renderingParameters
-      ) else {
-        showNoDatasetStateToRestore = true
-        return
-      }
-      session.commitExternalMutation(source: .userInterface, domain: .visualization)
-      session.commitExternalMutation(source: .userInterface, domain: .objects)
-      session.commitExternalMutation(source: .userInterface, domain: .measurements)
-      sharePlay.synchronize(kind: .full)
-      sharePlay.synchronizeMarkers()
-      sharePlay.synchronizeMeasurements()
-    } catch {
-      datasetStateRestoreError = error
-    }
-  }
-
-  private func stopRecordingAndSave() {
-    _ = session.stopCommandRecording()
-    let recordedInteractions = session.recordedGSCScript()
-    var scriptSections: [String] = []
-    if let recordingDatasetID {
-      scriptSections.append("# Dataset\nopendataset \(gscQuote(recordingDatasetID))")
-    }
-    if !recordedInteractions.isEmpty {
-      scriptSections.append("# Recorded interactions\n\(recordedInteractions)")
-    }
-    let script = scriptSections.joined(separator: "\n\n")
-    recordingDatasetID = nil
-    let panel = NSSavePanel()
-    panel.title = String(localized: "Save Recording")
-    panel.message = String(localized: "Save the recorded interactions as a GSC script.")
-    panel.canCreateDirectories = true
-    panel.allowedContentTypes = [UTType(filenameExtension: "gsc") ?? .plainText]
-    panel.nameFieldStringValue = recordingFilename
-    panel.begin { response in
-      guard response == .OK, let url = panel.url else { return }
-      Task { @MainActor in
-        do {
-          let output = script.isEmpty || script.hasSuffix("\n") ? script : script + "\n"
-          try output.write(to: url, atomically: true, encoding: .utf8)
-        } catch {
-          recordingSaveError = error
-        }
-      }
-    }
-  }
-
-  private var recordingFilename: String {
-    let source = appModel.activeDataset?.description ?? String(localized: "BorgVR Recording")
-    let invalidCharacters = CharacterSet(charactersIn: "/:")
-      .union(.newlines)
-      .union(.controlCharacters)
-    let sanitized = source.components(separatedBy: invalidCharacters).joined(separator: "-")
-      .trimmingCharacters(in: .whitespacesAndNewlines)
-    let basename = sanitized.isEmpty ? String(localized: "BorgVR Recording") : sanitized
-    return basename + ".gsc"
   }
 
   private var canCopyWebGPUShareLink: Bool {

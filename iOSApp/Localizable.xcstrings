@@ -5214,6 +5214,62 @@
         }
       }
     },
+    "Hide built-in datasets" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eingebaute Datensätze ausblenden"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hide built-in datasets"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ocultar conjuntos de datos integrados"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Masquer les jeux de données intégrés"
+          }
+        }
+      }
+    },
+    "Built-in datasets are hidden. Import a dataset, configure a remote server, or show built-in datasets again in Settings." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eingebaute Datensätze sind ausgeblendet. Importieren Sie einen Datensatz, konfigurieren Sie einen Remote-Server oder blenden Sie eingebaute Datensätze in den Einstellungen wieder ein."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Built-in datasets are hidden. Import a dataset, configure a remote server, or show built-in datasets again in Settings."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los conjuntos de datos integrados están ocultos. Importe un conjunto de datos, configure un servidor remoto o vuelva a mostrar los conjuntos de datos integrados en Ajustes."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les jeux de données intégrés sont masqués. Importez un jeu de données, configurez un serveur distant ou affichez à nouveau les jeux de données intégrés dans Réglages."
+          }
+        }
+      }
+    },
     "Hide Measurements" : {
       "localizations" : {
         "de" : {

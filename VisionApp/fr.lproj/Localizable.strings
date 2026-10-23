@@ -203,6 +203,7 @@
 
 /* Open dataset: empty state message */
 "open_no_datasets_message" = "**Aucun jeu de données valide trouvé**\n\nPour ajouter des jeux de données, vous avez deux possibilités :\n\n- **Importer un jeu de données :** utilisez l’option \"Importer un jeu de données\" dans le menu principal.\n- **Se connecter à un serveur de jeux de données :**  \n  saisissez l’adresse du serveur dans les réglages, puis revenez à cette fenêtre.";
+"open_no_datasets_built_in_hidden_message" = "**Aucun jeu de données valide trouvé**\n\nLes jeux de données intégrés sont actuellement masqués dans Réglages. Importez un jeu de données, connectez-vous à un serveur ou désactivez \"Masquer les jeux de données intégrés\".";
 
 /* Open dataset: dataset description suffixes */
 "open_dataset_description_local_suffix" = "%@ - local";
@@ -408,6 +409,7 @@
 "settings_toggle_share_stylus_position" = "Partager les positions des outils";
 "settings_share_stylus_position_description" = "Affiche les pointes de votre stylet spatial et des contrôleurs suivis aux autres participants SharePlay.";
 "settings_toggle_show_notifications" = "Afficher les notifications (autorisation requise)";
+"settings_toggle_hide_built_in_datasets" = "Masquer les jeux de données intégrés";
 "settings_toggle_enable_voice_input" = "Activer l’entrée vocale (autorisation requise)";
 "settings_toggle_autostart_voice" = "Démarrer automatiquement l’entrée vocale";
 "settings_toggle_enable_voice_feedback" = "Activer le retour vocal";

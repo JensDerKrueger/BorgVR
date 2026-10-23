@@ -206,6 +206,7 @@
 
 /* Open dataset: empty state message */
 "open_no_datasets_message" = "**Keine gültigen Datensätze gefunden**\n\nZum Hinzufügen von Datensätzen haben Sie zwei Möglichkeiten:\n\n- **Datensatz importieren:** Verwenden Sie im Hauptmenü die Option „Datensatz importieren“.\n- **Mit Datensatz-Server verbinden:**  \n  Geben Sie die Serveradresse im Einstellungsdialog ein und kehren Sie dann zu diesem Fenster zurück.";
+"open_no_datasets_built_in_hidden_message" = "**Keine gültigen Datensätze gefunden**\n\nEingebaute Datensätze sind derzeit in den Einstellungen ausgeblendet. Importieren Sie einen Datensatz, verbinden Sie sich mit einem Datensatz-Server oder deaktivieren Sie „Eingebaute Datensätze ausblenden“.";
 
 /* Open dataset: dataset description suffixes */
 "open_dataset_description_local_suffix" = "%@ - Lokal";
@@ -411,6 +412,7 @@
 "settings_toggle_share_stylus_position" = "Werkzeugpositionen teilen";
 "settings_share_stylus_position_description" = "Zeigt anderen SharePlay-Teilnehmern die Spitzen Ihres räumlichen Stifts und der erfassten Controller.";
 "settings_toggle_show_notifications" = "Benachrichtigungen anzeigen (erfordert Berechtigung)";
+"settings_toggle_hide_built_in_datasets" = "Eingebaute Datensätze ausblenden";
 "settings_toggle_enable_voice_input" = "Spracheingabe aktivieren (erfordert Berechtigung)";
 "settings_toggle_autostart_voice" = "Spracheingabe automatisch starten";
 "settings_toggle_enable_voice_feedback" = "Sprachfeedback aktivieren";

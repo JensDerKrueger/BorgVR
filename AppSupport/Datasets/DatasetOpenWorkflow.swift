@@ -89,9 +89,10 @@ final class DatasetCatalogService {
 
   func loadDatasets(
     includeRemote: Bool = true,
+    includeBuiltIn: Bool = true,
     remoteLoadStarted: (() -> Void)? = nil
   ) async -> [AppModel.DatasetEntry] {
-    var loaded = loadLocalDatasets()
+    var loaded = loadLocalDatasets(includeBuiltIn: includeBuiltIn)
     if includeRemote {
       remoteLoadStarted?()
       loaded.append(contentsOf: await loadRemoteDatasets())
@@ -124,7 +125,7 @@ final class DatasetCatalogService {
     )
   }
 
-  private func loadLocalDatasets() -> [AppModel.DatasetEntry] {
+  private func loadLocalDatasets(includeBuiltIn: Bool) -> [AppModel.DatasetEntry] {
     var loaded: [AppModel.DatasetEntry] = []
     let accessURL = storage.beginAccess()
     defer { storage.endAccess(accessURL) }
@@ -163,7 +164,8 @@ final class DatasetCatalogService {
       localAccessError = String(localized: "The documents directory is not available.")
     }
 
-    if let datasetURLs = Bundle.main.urls(forResourcesWithExtension: "data", subdirectory: nil) {
+    if includeBuiltIn,
+       let datasetURLs = Bundle.main.urls(forResourcesWithExtension: "data", subdirectory: nil) {
       for url in datasetURLs {
         if let metadata = try? BORGVRMetaData(url: url) {
           loaded.append(
@@ -322,7 +324,9 @@ final class DatasetOpenWorkflow: ObservableObject {
       storage: storage,
       logger: logger
     )
-    let loaded = await catalog.loadDatasets {
+    let loaded = await catalog.loadDatasets(
+      includeBuiltIn: !appSettings.hideBuiltInDatasets
+    ) {
       self.statusText = String(localized: "Checking remote server ...")
     }
     dataDirectoryAccessMessage = catalog.localAccessError

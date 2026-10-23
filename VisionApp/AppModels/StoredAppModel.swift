@@ -129,6 +129,7 @@ final class StoredAppModel: ObservableObject {
     "stopOnMiss": false,
     "showProfiling": false,
     "showNotifications": false,
+    "hideBuiltInDatasets": false,
     "enableVoiceInput": false,
     "autostartVoiceInput": false,
     "enableVoiceOutput": false,
@@ -269,6 +270,9 @@ final class StoredAppModel: ObservableObject {
   @AppStorage("showProfiling") var showProfiling: Bool = StoredAppModel.bool("showProfiling")
   /// Whether the app displays notifictaions of background events
   @AppStorage("showNotifications") var showNotifications: Bool = StoredAppModel.bool("showNotifications")
+  /// Whether bundled example datasets are omitted from the dataset picker.
+  @AppStorage("hideBuiltInDatasets")
+  var hideBuiltInDatasets: Bool = StoredAppModel.bool("hideBuiltInDatasets")
   /// Whether the voice input is eabled
   @AppStorage("enableVoiceInput") var enableVoiceInput: Bool = StoredAppModel.bool("enableVoiceInput")
   /// Whether the voice starts automatically when a dataset is opened

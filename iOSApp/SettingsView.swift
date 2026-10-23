@@ -337,6 +337,7 @@ struct SettingsView: View {
       )
       Toggle("Show Brick Visualization", isOn: $appSettings.showBrickVisualization)
       Toggle("Show Log Button", isOn: $appSettings.showLogButton)
+      Toggle("Hide built-in datasets", isOn: $appSettings.hideBuiltInDatasets)
     }
 
     Section("Diagnostics") {

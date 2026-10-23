@@ -31,6 +31,20 @@ struct MacKeyboardShortcut {
   }
 }
 
+enum MacCommand: Equatable {
+  case render(MacRenderShortcut)
+  case closeDataset
+  case saveDatasetState
+  case restoreDatasetState
+  case startRecording
+  case stopRecording
+}
+
+struct MacCommandRequest: Equatable {
+  let id = UUID()
+  let command: MacCommand
+}
+
 enum MacRenderShortcut: String {
   case model = "1"
   case clipping = "2"
@@ -60,6 +74,10 @@ enum MacRenderShortcut: String {
     self == .toggleControls ? "Tab" : rawValue.uppercased()
   }
 
+  var keyEquivalent: KeyEquivalent {
+    self == .toggleControls ? .tab : KeyEquivalent(Character(rawValue))
+  }
+
   static func help(_ title: String, shortcut: MacRenderShortcut) -> String {
     "\(String(localized: String.LocalizationValue(title))) (\(shortcut.displayName))"
   }
@@ -81,5 +99,9 @@ enum MacRenderShortcut: String {
 extension View {
   func macKeyboardShortcut(_ shortcut: MacKeyboardShortcut) -> some View {
     keyboardShortcut(shortcut.key, modifiers: shortcut.modifiers)
+  }
+
+  func macRenderShortcut(_ shortcut: MacRenderShortcut) -> some View {
+    keyboardShortcut(shortcut.keyEquivalent, modifiers: [])
   }
 }

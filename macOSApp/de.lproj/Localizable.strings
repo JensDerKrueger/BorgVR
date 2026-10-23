@@ -779,6 +779,8 @@
 "Keep this Mac's view synchronized with other iPhone, iPad, and Mac participants." = "Hält die Ansicht dieses Macs mit anderen iPhone-, iPad- und Mac-Teilnehmern synchron.";
 "Show Brick Visualization" = "Brick-Visualisierung anzeigen";
 "Show Log Button" = "Log-Schaltfläche anzeigen";
+"Hide built-in datasets" = "Eingebaute Datensätze ausblenden";
+"Built-in datasets are hidden. Import a dataset, configure a remote server, or show built-in datasets again in Settings." = "Eingebaute Datensätze sind ausgeblendet. Importieren Sie einen Datensatz, konfigurieren Sie einen Remote-Server oder blenden Sie eingebaute Datensätze in den Einstellungen wieder ein.";
 "Delete Selected Markers" = "Ausgewählte Marker löschen";
 "Waiting for Data Source" = "Warten auf Datenquelle";
 "BorgVR is waiting for a participant to make the current dataset available." = "BorgVR wartet darauf, dass ein Teilnehmer eine Quelle für den aktuellen Datensatz bereitstellt.";
@@ -978,3 +980,12 @@
 "component count must be positive" = "die Komponentenanzahl muss positiv sein";
 "brick size and overlap do not define a positive stride" = "Brickgröße und Überlappung ergeben keine positive Schrittweite";
 "voxel spacing must be finite and positive" = "die Voxelabstände müssen endlich und positiv sein";
+"Dataset" = "Datensatz";
+"Panels" = "Fenster";
+"Close Dataset" = "Datensatz schließen";
+"Screenshot" = "Bildschirmfoto";
+"Clipping" = "Clipping";
+"Transfer" = "Transfer";
+"Editor" = "Editor";
+"Bricks" = "Bricks";
+"BorgVR Help" = "BorgVR-Hilfe";

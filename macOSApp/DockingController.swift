@@ -48,6 +48,7 @@ final class DockingController: ObservableObject {
   @Published private var detachedPanels: Set<DockablePanelID>
   @Published var showsLog = false
   @Published var showsDatasetInfo = false
+  @Published private(set) var commandRequest: MacCommandRequest? = nil
   private var datasetLifecycleClosingPanels: Set<DockablePanelID> = []
   private var transientClosingPanels: Set<DockablePanelID> = []
 
@@ -91,6 +92,10 @@ final class DockingController: ObservableObject {
     } else {
       show(panel)
     }
+  }
+
+  func request(_ command: MacCommand) {
+    commandRequest = MacCommandRequest(command: command)
   }
 
   func detach(_ panel: DockablePanelID) {

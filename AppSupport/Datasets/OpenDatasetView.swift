@@ -22,10 +22,7 @@ struct OpenDatasetView: View {
           ContentUnavailableView(
             "No datasets found",
             systemImage: "externaldrive.badge.questionmark",
-            description: Text(
-              workflow.dataDirectoryAccessMessage
-                ?? String(localized: "Import a dataset or configure a remote server in Settings.")
-            )
+            description: Text(emptyDatasetDescription)
           )
           .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
@@ -76,6 +73,9 @@ struct OpenDatasetView: View {
         }
       }
       .task { await refresh() }
+      .onChange(of: appSettings.hideBuiltInDatasets) { _, _ in
+        Task { await refresh() }
+      }
     }
   }
 
@@ -263,5 +263,15 @@ struct OpenDatasetView: View {
 #else
     Color(.systemGroupedBackground)
 #endif
+  }
+
+  private var emptyDatasetDescription: String {
+    let message = String(
+      localized: "Built-in datasets are hidden. Import a dataset, configure a remote server, or show built-in datasets again in Settings."
+    )
+    if let accessMessage = workflow.dataDirectoryAccessMessage {
+      return "\(accessMessage)\n\n\(message)"
+    }
+    return message
   }
 }

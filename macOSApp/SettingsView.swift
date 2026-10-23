@@ -318,6 +318,7 @@ struct SettingsView: View {
       )
       toggleRow("Show Brick Visualization", isOn: $appSettings.showBrickVisualization)
       toggleRow("Show Log Button", isOn: $appSettings.showLogButton)
+      toggleRow("Hide built-in datasets", isOn: $appSettings.hideBuiltInDatasets)
       pickerRow("Log level", selection: $appSettings.logLevel) {
         ForEach(AppLogLevel.allCases) { level in
           Text(level.label).tag(level.rawValue)

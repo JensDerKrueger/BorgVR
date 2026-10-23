@@ -203,6 +203,7 @@
 
 /* Open dataset: empty state message */
 "open_no_datasets_message" = "**No Valid Datasets Found**\n\nTo add datasets, you have two options:\n\n- **Import Dataset:** Use the \"Import a Dataset\" option in the main menu.\n- **Connect to a Dataset Server:**  \n  Enter the server address in the settings dialog and then return to this window.";
+"open_no_datasets_built_in_hidden_message" = "**No Valid Datasets Found**\n\nBuilt-in datasets are currently hidden in Settings. Import a dataset, connect to a dataset server, or turn off \"Hide built-in datasets\".";
 
 /* Open dataset: dataset description suffixes */
 "open_dataset_description_local_suffix" = "%@ - Local";
@@ -408,6 +409,7 @@
 "settings_toggle_share_stylus_position" = "Share Tool Positions";
 "settings_share_stylus_position_description" = "Show the tips of your spatial stylus and tracked controllers to other SharePlay participants.";
 "settings_toggle_show_notifications" = "Show Notifications (requires permission)";
+"settings_toggle_hide_built_in_datasets" = "Hide built-in datasets";
 "settings_toggle_enable_voice_input" = "Enable Voice Input (requires permission)";
 "settings_toggle_autostart_voice" = "Automatically Start Voice Input";
 "settings_toggle_enable_voice_feedback" = "Enable Voice Feedback";

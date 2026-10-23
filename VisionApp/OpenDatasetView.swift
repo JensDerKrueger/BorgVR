@@ -92,7 +92,7 @@ struct OpenDatasetView: View {
           .padding(.top)
 
         if datasets.isEmpty && !isLoading {
-          Text("open_no_datasets_message")
+          Text("open_no_datasets_built_in_hidden_message")
             .padding()
         } else {
           List {
@@ -350,6 +350,9 @@ struct OpenDatasetView: View {
           .padding()
         }
         .onAppear {
+          Task { await loadDatasetFilesAsync() }
+        }
+        .onChange(of: storedAppModel.hideBuiltInDatasets) { _, _ in
           Task { await loadDatasetFilesAsync() }
         }
       }
@@ -770,7 +773,8 @@ struct OpenDatasetView: View {
       }
     }
 
-    if let datasetURLs = Bundle.main.urls(
+    if !storedAppModel.hideBuiltInDatasets,
+       let datasetURLs = Bundle.main.urls(
       forResourcesWithExtension: "data",
       subdirectory: nil
     ) {
@@ -803,6 +807,7 @@ struct OpenDatasetView: View {
     await MainActor.run {
       isLoading = true
       loadingStage = .scanningFiles
+      selectedIndex = nil
       datasets.removeAll()
     }
     try? await Task.sleep(nanoseconds: 20_000_000)

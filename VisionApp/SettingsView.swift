@@ -150,6 +150,7 @@ struct SettingsView: View {
                       }
                     }
                   }
+                Toggle("settings_toggle_hide_built_in_datasets", isOn: $storedAppModel.hideBuiltInDatasets)
               }
 
               Section(header: Text("Updates").bold()) {

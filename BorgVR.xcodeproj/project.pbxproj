@@ -18,6 +18,7 @@
 		560B90022E9150000042E45B /* web in Resources */ = {isa = PBXBuildFile; fileRef = 560B90002E9150000042E45B /* web */; };
 		560B90032E9150000042E45B /* web in Resources */ = {isa = PBXBuildFile; fileRef = 560B90002E9150000042E45B /* web */; };
 		560B90042E9150000042E45B /* web in Resources */ = {isa = PBXBuildFile; fileRef = 560B90002E9150000042E45B /* web */; };
+		560C70012F20000100000001 /* html in Resources */ = {isa = PBXBuildFile; fileRef = 560C70002F20000100000001 /* html */; };
 		560C60DA2E91000000000001 /* c60_32.data in Resources */ = {isa = PBXBuildFile; fileRef = 56730FE22E6B78990091976B /* c60_32.data */; };
 		560C60DB2E91000000000001 /* head_32.data in Resources */ = {isa = PBXBuildFile; fileRef = 56730FE42E6B79000091976B /* head_32.data */; };
 		56730FE32E6B78990091976B /* c60_32.data in Resources */ = {isa = PBXBuildFile; fileRef = 56730FE22E6B78990091976B /* c60_32.data */; };
@@ -210,6 +211,7 @@
 		560A00012E00000000000001 /* TerminalServerApp */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = TerminalServerApp; sourceTree = BUILT_PRODUCTS_DIR; };
 		560B8BE72E5C57580042E45B /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		560B90002E9150000042E45B /* web */ = {isa = PBXFileReference; lastKnownFileType = folder; path = web; sourceTree = "<group>"; };
+		560C70002F20000100000001 /* html */ = {isa = PBXFileReference; lastKnownFileType = folder; path = html; sourceTree = "<group>"; };
 		560C00012E00000000000001 /* BorgVR.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BorgVR.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		564183782D649679003A1EC4 /* BorgVR.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BorgVR.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		5655824B2D4E5D6F008E7CE6 /* BorgVR Server.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "BorgVR Server.app"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -512,6 +514,7 @@
 				569701382D9D8F1400BB74CC /* Todo.txt */,
 				560B8BE72E5C57580042E45B /* PrivacyInfo.xcprivacy */,
 				560B90002E9150000042E45B /* web */,
+				560C70002F20000100000001 /* html */,
 				57A001532E70000300000001 /* TransferFunctions */,
 				57A000102E70000100000001 /* AppSupport */,
 				560B00012E00000000000001 /* BORGVR-Services */,
@@ -916,6 +919,7 @@
 			files = (
 				560B8BEA2E5C575A0042E45B /* PrivacyInfo.xcprivacy in Resources */,
 				560B90022E9150000042E45B /* web in Resources */,
+				560C70012F20000100000001 /* html in Resources */,
 				57A001562E70000300000001 /* TransferFunctions in Resources */,
 				560C60DA2E91000000000001 /* c60_32.data in Resources */,
 				560C60DB2E91000000000001 /* head_32.data in Resources */,

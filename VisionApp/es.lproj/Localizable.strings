@@ -203,6 +203,7 @@
 
 /* Open dataset: empty state message */
 "open_no_datasets_message" = "**No se encontraron conjuntos de datos válidos**\n\nPara añadir conjuntos de datos tienes dos opciones:\n\n- **Importar conjunto de datos:** usa la opción \"Importar un conjunto de datos\" en el menú principal.\n- **Conectarse a un servidor de conjuntos de datos:**  \n  introduce la dirección del servidor en los ajustes y vuelve a esta ventana.";
+"open_no_datasets_built_in_hidden_message" = "**No se encontraron conjuntos de datos válidos**\n\nLos conjuntos de datos integrados están ocultos actualmente en Ajustes. Importe un conjunto de datos, conéctese a un servidor o desactive \"Ocultar conjuntos de datos integrados\".";
 
 /* Open dataset: dataset description suffixes */
 "open_dataset_description_local_suffix" = "%@ - local";
@@ -408,6 +409,7 @@
 "settings_toggle_share_stylus_position" = "Compartir posiciones de herramientas";
 "settings_share_stylus_position_description" = "Muestra las puntas del lápiz espacial y de los mandos rastreados a los demás participantes de SharePlay.";
 "settings_toggle_show_notifications" = "Mostrar notificaciones (requiere permiso)";
+"settings_toggle_hide_built_in_datasets" = "Ocultar conjuntos de datos integrados";
 "settings_toggle_enable_voice_input" = "Activar entrada de voz (requiere permiso)";
 "settings_toggle_autostart_voice" = "Iniciar automáticamente la entrada de voz";
 "settings_toggle_enable_voice_feedback" = "Activar respuesta de voz";
