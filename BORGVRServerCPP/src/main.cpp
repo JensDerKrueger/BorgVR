@@ -842,6 +842,7 @@ int main(int argc, char** argv) {
       configuration.webPort,
       server,
       logger,
+      BORGVR_SERVER_VERSION,
       configuration.password
     );
     if (!webServer->start()) {

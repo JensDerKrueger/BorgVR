@@ -2,6 +2,12 @@ import Foundation
 
 enum WebAssetProvider {
   static let resourceDirectoryName = "web"
+  static let applicationVersionPlaceholder = "__BORGVR_APPLICATION_VERSION__"
+
+  static var applicationVersion: String {
+    Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
+      ?? "Unknown"
+  }
 
   static func rootURL(in bundle: Bundle = .main) -> URL? {
     bundle.url(forResource: resourceDirectoryName, withExtension: nil)
@@ -40,6 +46,29 @@ enum WebAssetProvider {
     default:
       return "application/octet-stream"
     }
+  }
+
+  static func data(at url: URL, applicationVersion: String) throws -> Data {
+    let data = try Data(contentsOf: url)
+    guard url.lastPathComponent == "index.html",
+          let html = String(data: data, encoding: .utf8) else {
+      return data
+    }
+    return Data(
+      html.replacingOccurrences(
+        of: applicationVersionPlaceholder,
+        with: escapedHTML(applicationVersion)
+      ).utf8
+    )
+  }
+
+  private static func escapedHTML(_ text: String) -> String {
+    text
+      .replacingOccurrences(of: "&", with: "&amp;")
+      .replacingOccurrences(of: "<", with: "&lt;")
+      .replacingOccurrences(of: ">", with: "&gt;")
+      .replacingOccurrences(of: "\"", with: "&quot;")
+      .replacingOccurrences(of: "'", with: "&#39;")
   }
 
   private static func normalizedRequestPath(_ requestPath: String) -> String? {

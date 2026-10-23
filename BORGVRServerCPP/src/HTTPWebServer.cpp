@@ -20,6 +20,7 @@ constexpr size_t kHTTPChunkBytes = 16 * 1024;
 constexpr size_t kAppleLZ4BlockBytes = 64 * 1024;
 constexpr size_t kMaxHTTPBrickBatchCount = 128;
 constexpr int kMaxActiveHTTPHandlers = 128;
+constexpr const char* kApplicationVersionPlaceholder = "__BORGVR_APPLICATION_VERSION__";
 
 struct EmbeddedWebAssetCache {
   std::vector<std::vector<uint8_t>> bodies;
@@ -98,6 +99,34 @@ std::string lowerCopy(std::string s) {
   std::transform(s.begin(), s.end(), s.begin(),
                  [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
   return s;
+}
+
+std::string htmlEscape(const std::string& text) {
+  std::string escaped;
+  escaped.reserve(text.size());
+  for (const char character : text) {
+    switch (character) {
+      case '&': escaped += "&amp;"; break;
+      case '<': escaped += "&lt;"; break;
+      case '>': escaped += "&gt;"; break;
+      case '\"': escaped += "&quot;"; break;
+      case '\'': escaped += "&#39;"; break;
+      default: escaped += character; break;
+    }
+  }
+  return escaped;
+}
+
+std::vector<uint8_t> replacingApplicationVersion(const std::vector<uint8_t>& body,
+                                                  const std::string& applicationVersion) {
+  std::string html(body.begin(), body.end());
+  const std::string replacement = htmlEscape(applicationVersion);
+  size_t offset = 0;
+  while ((offset = html.find(kApplicationVersionPlaceholder, offset)) != std::string::npos) {
+    html.replace(offset, std::strlen(kApplicationVersionPlaceholder), replacement);
+    offset += replacement.size();
+  }
+  return std::vector<uint8_t>(html.begin(), html.end());
 }
 
 bool constantTimeEquals(const std::string& a, const std::string& b) {
@@ -339,10 +368,12 @@ std::vector<uint8_t> encodeAppleLZ4Stream(const std::string& text) {
 HTTPWebServer::HTTPWebServer(uint16_t port,
                              TCPServer& datasetServer,
                              std::shared_ptr<Logger> logger,
+                             std::string applicationVersion,
                              std::string authSecret)
   : port_(port),
     datasetServer_(datasetServer),
     logger_(std::move(logger)),
+    applicationVersion_(std::move(applicationVersion)),
     authSecret_(trimCopy(authSecret)) {}
 
 HTTPWebServer::~HTTPWebServer() {
@@ -1142,6 +1173,12 @@ bool HTTPWebServer::sendStaticFile(TcpSocket& socket, const std::string& request
                      "Internal Server Error",
                      "Unable to decode embedded web asset.",
                      closeAfterSend);
+  }
+  if (std::strcmp(asset->path, "/index.html") == 0) {
+    const auto renderedBody = replacingApplicationVersion(*body, applicationVersion_);
+    return sendResponse(
+      socket, 200, "OK", asset->contentType, renderedBody, {}, closeAfterSend
+    );
   }
   return sendResponse(socket, 200, "OK", asset->contentType, *body, {}, closeAfterSend);
 }

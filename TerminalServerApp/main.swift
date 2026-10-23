@@ -42,6 +42,7 @@ struct ServerConfiguration {
       port: Int(port),
       maxBricksPerGetRequest: maxBricksPerGetRequest,
       authSecret: password,
+      applicationVersion: TerminalServerInfo.version,
       startDatasetServer: true,
       enableWebServer: webPort != nil,
       webPort: Int(webPort ?? 8080),

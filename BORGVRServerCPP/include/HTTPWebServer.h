@@ -15,6 +15,7 @@ public:
   HTTPWebServer(uint16_t port,
                 TCPServer& datasetServer,
                 std::shared_ptr<Logger> logger,
+                std::string applicationVersion,
                 std::string authSecret = "");
 
   ~HTTPWebServer();
@@ -85,6 +86,7 @@ private:
   uint16_t port_;
   TCPServer& datasetServer_;
   std::shared_ptr<Logger> logger_;
+  std::string applicationVersion_;
   std::string authSecret_;
 
   std::atomic<bool> running_{false};

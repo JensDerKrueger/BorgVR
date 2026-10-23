@@ -13,6 +13,7 @@ final class HTTPWebServer {
   private let port: NWEndpoint.Port
   private let queue = DispatchQueue(label: "HTTPWebServerQueue")
   private let datasetServer: TCPServer
+  private let applicationVersion: String
   private let authSecret: String
   private let useTLS: Bool
   private let tlsCertificateData: Data
@@ -31,6 +32,7 @@ final class HTTPWebServer {
     port: UInt16,
     datasetServer: TCPServer,
     logger: LoggerBase? = nil,
+    applicationVersion: String = WebAssetProvider.applicationVersion,
     authSecret: String? = nil,
     useTLS: Bool = false,
     tlsCertificateData: Data = Data(),
@@ -39,6 +41,7 @@ final class HTTPWebServer {
     self.port = NWEndpoint.Port(rawValue: port) ?? 8080
     self.datasetServer = datasetServer
     self.logger = logger
+    self.applicationVersion = applicationVersion
     self.authSecret = BorgVRServerAuthentication.normalizedSecret(authSecret)
     self.useTLS = useTLS
     self.tlsCertificateData = tlsCertificateData
@@ -742,7 +745,10 @@ final class HTTPWebServer {
       throw HTTPWebServerError.notFound
     }
 
-    let body = try Data(contentsOf: url)
+    let body = try WebAssetProvider.data(
+      at: url,
+      applicationVersion: applicationVersion
+    )
     return HTTPResponse(status: 200, reason: "OK", contentType: WebAssetProvider.contentType(for: url.path), body: body)
   }
 

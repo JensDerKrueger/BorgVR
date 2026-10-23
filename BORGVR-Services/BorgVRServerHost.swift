@@ -5,6 +5,7 @@ struct BorgVRServerConfiguration {
   var port: Int
   var maxBricksPerGetRequest: Int
   var authSecret: String = ""
+  var applicationVersion: String = WebAssetProvider.applicationVersion
   var startDatasetServer: Bool = true
   var enableWebServer: Bool = false
   var webPort: Int = 8080
@@ -92,6 +93,7 @@ final class BorgVRServerHost {
         port: webPort,
         datasetServer: newServer,
         logger: logger,
+        applicationVersion: configuration.applicationVersion,
         authSecret: configuration.authSecret,
         useTLS: configuration.useWebServerTLS,
         tlsCertificateData: configuration.webServerCertificateData,
