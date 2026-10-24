@@ -115,6 +115,24 @@ struct BorgVRUnbrickedVolume: Sendable {
 }
 
 enum BorgVRDICOMVolumeFusion {
+  private struct WriteContext {
+    let referenceAccessor: RawFileAccessor
+    let movingAccessor: RawFileAccessor
+    let movingSize: Vec3<Int>
+    let movingPaddingValue: Int32?
+    let referenceToMoving: BorgVRVoxelTransform
+    let filter: BorgVRVolumeResamplingFilter
+    let output: FileHandle
+    let size: Vec3<Int>
+    let bytesPerComponent: Int
+    let outputSliceByteCount: Int
+    let outputVoxelByteCount: Int
+    let referenceSliceStride: Int
+    let referenceRowStride: Int
+    let logger: LoggerBase?
+    let cancellationToken: BorgVRVolumeConversionCancellationToken?
+  }
+
   static func fuse(
     reference: BorgVRUnbrickedVolume,
     moving: BorgVRUnbrickedVolume,
@@ -177,51 +195,40 @@ enum BorgVRDICOMVolumeFusion {
     )
     let referenceSliceStride = try checkedProduct(size.x, size.y, bytesPerComponent)
     let referenceRowStride = try checkedProduct(size.x, bytesPerComponent)
-    let movingSliceStride = try checkedProduct(
-      moving.source.size.x, moving.source.size.y, bytesPerComponent
-    )
-    let movingRowStride = try checkedProduct(moving.source.size.x, bytesPerComponent)
 
     logger?.info("Fusing DICOM series into a two-channel intermediate volume.")
-    for z in 0..<size.z {
-      try cancellationToken?.checkCancellation()
-      var outputSlice = [UInt8](repeating: 0, count: outputSliceByteCount)
-      for y in 0..<size.y {
-        for x in 0..<size.x {
-          let referenceOffset = z * referenceSliceStride + y * referenceRowStride
-            + x * bytesPerComponent
-          let movingCoordinate = continuousMovingVoxelCoordinate(
-            forReference: Vec3<Int>(x: x, y: y, z: z),
-            referenceToMoving: referenceToMoving
-          )
-          let outputOffset = (y * size.x + x) * outputVoxelByteCount
-          for byte in 0..<bytesPerComponent {
-            outputSlice[outputOffset + byte] = referenceAccessor.mappedMemory
-              .load(fromByteOffset: referenceOffset + byte, as: UInt8.self)
-          }
-          if let movingCoordinate,
-             let movingValue = sampleMovingVolume(
-               accessor: movingAccessor,
-               coordinate: movingCoordinate,
-               size: moving.source.size,
-               bytesPerComponent: bytesPerComponent,
-               sliceStride: movingSliceStride,
-               rowStride: movingRowStride,
-               isSigned: movingIsSigned,
-               filter: filter
-             ) {
-            writeSample(
-              movingValue,
-              to: &outputSlice,
-              at: outputOffset + bytesPerComponent,
-              bytesPerComponent: bytesPerComponent,
-              isSigned: movingIsSigned
-            )
-          }
-        }
-      }
-      try output.write(contentsOf: Data(outputSlice))
-      logger?.progress("Fusing DICOM volumes", Double(z + 1) / Double(size.z))
+    let context = WriteContext(
+      referenceAccessor: referenceAccessor,
+      movingAccessor: movingAccessor,
+      movingSize: moving.source.size,
+      movingPaddingValue: moving.channels.first?.pixelPaddingValue,
+      referenceToMoving: referenceToMoving,
+      filter: filter,
+      output: output,
+      size: size,
+      bytesPerComponent: bytesPerComponent,
+      outputSliceByteCount: outputSliceByteCount,
+      outputVoxelByteCount: outputVoxelByteCount,
+      referenceSliceStride: referenceSliceStride,
+      referenceRowStride: referenceRowStride,
+      logger: logger,
+      cancellationToken: cancellationToken
+    )
+    switch (bytesPerComponent, movingIsSigned) {
+      case (1, false):
+        try writeFusedVolume(movingType: UInt8.self, context: context)
+      case (1, true):
+        try writeFusedVolume(movingType: Int8.self, context: context)
+      case (2, false):
+        try writeFusedVolume(movingType: UInt16.self, context: context)
+      case (2, true):
+        try writeFusedVolume(movingType: Int16.self, context: context)
+      case (4, false):
+        try writeFusedVolume(movingType: UInt32.self, context: context)
+      case (4, true):
+        try writeFusedVolume(movingType: Int32.self, context: context)
+      default:
+        throw BorgVRVolumeConversionError.incompatibleDICOMSampleFormats
     }
 
     return BorgVRUnbrickedVolume(
@@ -238,6 +245,66 @@ enum BorgVRDICOMVolumeFusion {
       frameOfReferenceUID: reference.frameOfReferenceUID,
       channels: reference.channels + moving.channels
     )
+  }
+
+  private static func writeFusedVolume<MovingValue: FixedWidthInteger>(
+    movingType: MovingValue.Type,
+    context: WriteContext
+  ) throws {
+    _ = movingType
+    guard context.movingAccessor.supportsAlignedTypedAccess,
+          MemoryLayout<MovingValue>.size == context.bytesPerComponent else {
+      throw BorgVRVolumeConversionError.incompatibleDICOMSampleFormats
+    }
+    let sampler = BorgVRIntegerVolumeSampler(
+      values: UnsafePointer(
+        context.movingAccessor.mappedMemory.assumingMemoryBound(to: MovingValue.self)
+      ),
+      size: context.movingSize,
+      paddingValue: context.movingPaddingValue.map { MovingValue(truncatingIfNeeded: $0) }
+    )
+
+    for z in 0..<context.size.z {
+      try context.cancellationToken?.checkCancellation()
+      var outputSlice = [UInt8](repeating: 0, count: context.outputSliceByteCount)
+      for y in 0..<context.size.y {
+        for x in 0..<context.size.x {
+          let referenceOffset = z * context.referenceSliceStride
+            + y * context.referenceRowStride + x * context.bytesPerComponent
+          let movingCoordinate = continuousMovingVoxelCoordinate(
+            forReference: Vec3<Int>(x: x, y: y, z: z),
+            referenceToMoving: context.referenceToMoving
+          )
+          let outputOffset = (y * context.size.x + x) * context.outputVoxelByteCount
+          for byte in 0..<context.bytesPerComponent {
+            outputSlice[outputOffset + byte] = context.referenceAccessor.mappedMemory
+              .load(fromByteOffset: referenceOffset + byte, as: UInt8.self)
+          }
+          guard let movingCoordinate else { continue }
+          let movingValue: Double?
+          switch context.filter {
+            case .nearestNeighbor:
+              movingValue = sampler.nearestNeighbor(at: movingCoordinate)
+            case .trilinear:
+              movingValue = sampler.trilinear(at: movingCoordinate)
+          }
+          if let movingValue {
+            writeSample(
+              movingValue,
+              to: &outputSlice,
+              at: outputOffset + context.bytesPerComponent,
+              bytesPerComponent: context.bytesPerComponent,
+              isSigned: MovingValue.isSigned
+            )
+          }
+        }
+      }
+      try context.output.write(contentsOf: Data(outputSlice))
+      context.logger?.progress(
+        "Fusing DICOM volumes",
+        Double(z + 1) / Double(context.size.z)
+      )
+    }
   }
 
   private static func continuousMovingVoxelCoordinate(
@@ -257,92 +324,6 @@ enum BorgVRDICOMVolumeFusion {
       return nil
     }
     return floatingCoordinate
-  }
-
-  private static func sampleMovingVolume(
-    accessor: RawFileAccessor,
-    coordinate: Vec3<Float>,
-    size: Vec3<Int>,
-    bytesPerComponent: Int,
-    sliceStride: Int,
-    rowStride: Int,
-    isSigned: Bool,
-    filter: BorgVRVolumeResamplingFilter
-  ) -> Double? {
-    switch filter {
-      case .nearestNeighbor:
-        guard let x = Int(exactly: coordinate.x.rounded()),
-              let y = Int(exactly: coordinate.y.rounded()),
-              let z = Int(exactly: coordinate.z.rounded()),
-              (0..<size.x).contains(x),
-              (0..<size.y).contains(y),
-              (0..<size.z).contains(z) else {
-          return nil
-        }
-        return readSample(
-          from: accessor.mappedMemory,
-          at: z * sliceStride + y * rowStride + x * bytesPerComponent,
-          bytesPerComponent: bytesPerComponent,
-          isSigned: isSigned
-        )
-      case .trilinear:
-        guard coordinate.x >= 0, coordinate.x <= Float(size.x - 1),
-              coordinate.y >= 0, coordinate.y <= Float(size.y - 1),
-              coordinate.z >= 0, coordinate.z <= Float(size.z - 1) else {
-          return nil
-        }
-        let x0 = Int(coordinate.x.rounded(.down))
-        let y0 = Int(coordinate.y.rounded(.down))
-        let z0 = Int(coordinate.z.rounded(.down))
-        let x1 = min(x0 + 1, size.x - 1)
-        let y1 = min(y0 + 1, size.y - 1)
-        let z1 = min(z0 + 1, size.z - 1)
-        let tx = Double(coordinate.x - Float(x0))
-        let ty = Double(coordinate.y - Float(y0))
-        let tz = Double(coordinate.z - Float(z0))
-
-        func sample(_ x: Int, _ y: Int, _ z: Int) -> Double {
-          readSample(
-            from: accessor.mappedMemory,
-            at: z * sliceStride + y * rowStride + x * bytesPerComponent,
-            bytesPerComponent: bytesPerComponent,
-            isSigned: isSigned
-          )
-        }
-        let c00 = sample(x0, y0, z0) * (1 - tx) + sample(x1, y0, z0) * tx
-        let c10 = sample(x0, y1, z0) * (1 - tx) + sample(x1, y1, z0) * tx
-        let c01 = sample(x0, y0, z1) * (1 - tx) + sample(x1, y0, z1) * tx
-        let c11 = sample(x0, y1, z1) * (1 - tx) + sample(x1, y1, z1) * tx
-        let c0 = c00 * (1 - ty) + c10 * ty
-        let c1 = c01 * (1 - ty) + c11 * ty
-        return c0 * (1 - tz) + c1 * tz
-    }
-  }
-
-  private static func readSample(
-    from pointer: UnsafeMutableRawPointer,
-    at offset: Int,
-    bytesPerComponent: Int,
-    isSigned: Bool
-  ) -> Double {
-    if isSigned {
-      switch bytesPerComponent {
-        case 1:
-          return Double(pointer.load(fromByteOffset: offset, as: Int8.self))
-        case 2:
-          return Double(pointer.load(fromByteOffset: offset, as: Int16.self))
-        case 4:
-          return Double(pointer.load(fromByteOffset: offset, as: Int32.self))
-        default:
-          return 0
-      }
-    }
-    var value: UInt32 = 0
-    for byte in 0..<bytesPerComponent {
-      let part = UInt32(pointer.load(fromByteOffset: offset + byte, as: UInt8.self))
-      value |= part << UInt32(byte * 8)
-    }
-    return Double(value)
   }
 
   private static func writeSample(

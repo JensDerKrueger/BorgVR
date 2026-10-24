@@ -276,6 +276,98 @@ private func testDICOMFusionInterleavesChannels() throws {
   )
 }
 
+private func testIntegerVolumeSamplerHandlesInterpolationAndPadding() throws {
+  let size = Vec3<Int>(x: 2, y: 2, z: 2)
+  let values: [Int16] = [0, 10, 20, 30, 40, 50, 60, 70]
+  try values.withUnsafeBufferPointer { buffer in
+    let sampler = BorgVRIntegerVolumeSampler(
+      values: buffer.baseAddress!,
+      size: size,
+      paddingValue: nil
+    )
+    try expect(
+      sampler.nearestNeighbor(at: Vec3<Float>(repeating: 0.6)) == 70,
+      "Nearest-neighbor sampling returned the wrong voxel"
+    )
+    try expect(
+      sampler.trilinear(at: Vec3<Float>(repeating: 0.5)) == 35,
+      "Trilinear sampling returned the wrong interpolation"
+    )
+
+    let paddedSampler = BorgVRIntegerVolumeSampler(
+      values: buffer.baseAddress!,
+      size: size,
+      paddingValue: 70
+    )
+    try expect(
+      paddedSampler.nearestNeighbor(at: Vec3<Float>(repeating: 1)) == nil,
+      "Nearest-neighbor sampling treated padding as image data"
+    )
+    try expect(
+      paddedSampler.trilinear(at: Vec3<Float>(repeating: 0.5)) == nil,
+      "Trilinear sampling treated padding as image data"
+    )
+  }
+}
+
+private func testDICOMFusionTreatsMovingPaddingAsMissing() throws {
+  let directory = FileManager.default.temporaryDirectory
+    .appendingPathComponent("borgvr-dicom-fusion-padding-tests-\(UUID().uuidString)")
+  try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+  defer { try? FileManager.default.removeItem(at: directory) }
+
+  let referenceURL = directory.appendingPathComponent("reference.raw")
+  let movingURL = directory.appendingPathComponent("moving.raw")
+  let fusedURL = directory.appendingPathComponent("fused.raw")
+  try Data([1, 2]).write(to: referenceURL)
+  try Data([10, 255]).write(to: movingURL)
+  let size = Vec3<Int>(x: 2, y: 1, z: 1)
+  let spacing = Vec3<Float>(repeating: 0.1)
+
+  func volume(
+    url: URL,
+    description: String,
+    paddingValue: Int32?
+  ) -> BorgVRUnbrickedVolume {
+    BorgVRUnbrickedVolume(
+      source: BorgVRRawVolumeSource(
+        url: url,
+        offset: 0,
+        size: size,
+        bytesPerComponent: 1,
+        componentCount: 1,
+        voxelSpacing: spacing
+      ),
+      orientation: nil,
+      origin: nil,
+      frameOfReferenceUID: nil,
+      channels: [BorgVRUnbrickedVolumeChannelMetadata(
+        description: description,
+        modality: nil,
+        patientName: nil,
+        seriesDate: nil,
+        isSigned: false,
+        pixelPaddingValue: paddingValue
+      )]
+    )
+  }
+
+  _ = try BorgVRDICOMVolumeFusion.fuse(
+    reference: volume(url: referenceURL, description: "Reference", paddingValue: nil),
+    moving: volume(url: movingURL, description: "Moving", paddingValue: 255),
+    referenceToMoving: .identity,
+    filter: .nearestNeighbor,
+    outputURL: fusedURL,
+    logger: nil,
+    cancellationToken: nil
+  )
+  let fusedData = try Data(contentsOf: fusedURL)
+  try expect(
+    fusedData == Data([1, 10, 2, 0]),
+    "DICOM fusion copied padding into the moving channel"
+  )
+}
+
 private func testIsoSurfaceExtractionUsesUniqueCellsAndChannelMinimum() throws {
   let directory = FileManager.default.temporaryDirectory
     .appendingPathComponent("borgvr-isosurface-tests-\(UUID().uuidString)")
@@ -1112,6 +1204,8 @@ private enum VolumeConversionServiceTestRunner {
     try testSettingsAndCancellation()
     try testRawConversionAndAtomicReplacement()
     try testDICOMFusionInterleavesChannels()
+    try testIntegerVolumeSamplerHandlesInterpolationAndPadding()
+    try testDICOMFusionTreatsMovingPaddingAsMissing()
     try testIsoSurfaceExtractionUsesUniqueCellsAndChannelMinimum()
     try testMarchingCubes33Cases()
     try testDICOMFusionUsesPatientGeometry()

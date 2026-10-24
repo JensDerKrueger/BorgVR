@@ -241,7 +241,7 @@ enum BorgVRRegistrationDownsampler {
   }
 }
 
-struct BorgVRVoxelTransform: Sendable {
+struct BorgVRVoxelTransform: Sendable, CustomStringConvertible {
   let xAxis: Vec3<Float>
   let yAxis: Vec3<Float>
   let zAxis: Vec3<Float>
@@ -298,6 +298,18 @@ struct BorgVRVoxelTransform: Sendable {
       + yAxis * point.y
       + zAxis * point.z
       + translation
+  }
+
+  var description: String {
+    let rows: [[Float]] = [
+      [xAxis.x, yAxis.x, zAxis.x, translation.x],
+      [xAxis.y, yAxis.y, zAxis.y, translation.y],
+      [xAxis.z, yAxis.z, zAxis.z, translation.z],
+      [0, 0, 0, 1]
+    ]
+    return rows.map { row in
+      "[" + row.map { String(format: "%8.2f", $0) }.joined(separator: " ") + " ]"
+    }.joined(separator: "\n")
   }
 }
 
@@ -362,6 +374,65 @@ struct BorgVRRigidTransform: Sendable {
   }
 }
 
+extension BorgVRUnbrickedVolume {
+  var metricCenter: Vec3<Float> {
+    Vec3<Float>(
+      x: Float(max(0, source.size.x - 1)) * source.voxelSpacing.x * 0.5,
+      y: Float(max(0, source.size.y - 1)) * source.voxelSpacing.y * 0.5,
+      z: Float(max(0, source.size.z - 1)) * source.voxelSpacing.z * 0.5
+    )
+  }
+
+  func dicomTransform(to moving: BorgVRUnbrickedVolume) -> BorgVRRigidTransform? {
+    guard let frameOfReferenceUID,
+          frameOfReferenceUID == moving.frameOfReferenceUID,
+          let origin,
+          let movingOrigin = moving.origin,
+          let movingOrientation = moving.orientation,
+          let rotation = orientationTransform(to: moving) else {
+      return nil
+    }
+    let originDelta = origin - movingOrigin
+    return BorgVRRigidTransform(
+      xAxis: rotation.xAxis,
+      yAxis: rotation.yAxis,
+      zAxis: rotation.zAxis,
+      translation: Vec3<Float>(
+        x: originDelta.dot(movingOrientation.xAxis),
+        y: originDelta.dot(movingOrientation.yAxis),
+        z: originDelta.dot(movingOrientation.zAxis)
+      )
+    )
+  }
+
+  fileprivate func orientationTransform(
+    to moving: BorgVRUnbrickedVolume
+  ) -> BorgVRRigidTransform? {
+    guard let orientation,
+          let movingOrientation = moving.orientation else {
+      return nil
+    }
+    return BorgVRRigidTransform(
+      xAxis: Vec3<Float>(
+        x: movingOrientation.xAxis.dot(orientation.xAxis),
+        y: movingOrientation.yAxis.dot(orientation.xAxis),
+        z: movingOrientation.zAxis.dot(orientation.xAxis)
+      ),
+      yAxis: Vec3<Float>(
+        x: movingOrientation.xAxis.dot(orientation.yAxis),
+        y: movingOrientation.yAxis.dot(orientation.yAxis),
+        z: movingOrientation.zAxis.dot(orientation.yAxis)
+      ),
+      zAxis: Vec3<Float>(
+        x: movingOrientation.xAxis.dot(orientation.zAxis),
+        y: movingOrientation.yAxis.dot(orientation.zAxis),
+        z: movingOrientation.zAxis.dot(orientation.zAxis)
+      ),
+      translation: .zero
+    )
+  }
+}
+
 private struct BorgVRRegistrationMetricEvaluator {
   let sampleCount: Int
   let binCount: Int
@@ -388,11 +459,9 @@ private final class BorgVRNormalizedMutualInformation<
   private let movingAccessor: RawFileAccessor
   private let binCount: Int
   private let referenceSamples: [ReferenceSample]
-  private let movingValues: UnsafePointer<MovingValue>
-  private let movingSize: Vec3<Int>
+  private let movingSampler: BorgVRIntegerVolumeSampler<MovingValue>
   private let referenceSpacing: Vec3<Float>
   private let movingSpacing: Vec3<Float>
-  private let movingPadding: MovingValue?
   private let movingMinimum: Double
   private let movingBinScale: Double
   private let cancellationToken: BorgVRVolumeConversionCancellationToken?
@@ -431,19 +500,23 @@ private final class BorgVRNormalizedMutualInformation<
     let referenceValues = UnsafePointer(
       referenceAccessor.mappedMemory.assumingMemoryBound(to: ReferenceValue.self)
     )
-    movingValues = UnsafePointer(
+    let movingValues = UnsafePointer(
       movingAccessor.mappedMemory.assumingMemoryBound(to: MovingValue.self)
     )
-    movingSize = moving.size
     referenceSpacing = reference.source.voxelSpacing
     movingSpacing = moving.source.voxelSpacing
     self.cancellationToken = cancellationToken
     let referencePadding = reference.pixelPaddingValue.map {
       ReferenceValue(truncatingIfNeeded: $0)
     }
-    movingPadding = moving.pixelPaddingValue.map {
+    let movingPadding = moving.pixelPaddingValue.map {
       MovingValue(truncatingIfNeeded: $0)
     }
+    movingSampler = BorgVRIntegerVolumeSampler(
+      values: movingValues,
+      size: moving.size,
+      paddingValue: movingPadding
+    )
 
     let referenceStride = Self.samplingStride(for: reference.size)
     var rawSamples: [(position: Vec3<Float>, value: Double)] = []
@@ -557,7 +630,7 @@ private final class BorgVRNormalizedMutualInformation<
         y: Self.snapToVoxel(movingPoint.y),
         z: Self.snapToVoxel(movingPoint.z)
       )
-      guard let movingValue = interpolatedMovingValue(at: movingCoordinate) else {
+      guard let movingValue = movingSampler.trilinear(at: movingCoordinate) else {
         continue
       }
       let movingBin = Self.histogramBin(
@@ -606,49 +679,6 @@ private final class BorgVRNormalizedMutualInformation<
       nmi: (referenceEntropy + movingEntropy) / jointEntropy,
       overlap: overlap
     )
-  }
-
-  private func interpolatedMovingValue(at coordinate: Vec3<Float>) -> Double? {
-    guard coordinate.x.isFinite,
-          coordinate.y.isFinite,
-          coordinate.z.isFinite,
-          coordinate.x >= 0,
-          coordinate.x <= Float(movingSize.x - 1),
-          coordinate.y >= 0,
-          coordinate.y <= Float(movingSize.y - 1),
-          coordinate.z >= 0,
-          coordinate.z <= Float(movingSize.z - 1) else {
-      return nil
-    }
-
-    let x0 = Int(coordinate.x.rounded(.down))
-    let y0 = Int(coordinate.y.rounded(.down))
-    let z0 = Int(coordinate.z.rounded(.down))
-    let x1 = min(x0 + 1, movingSize.x - 1)
-    let y1 = min(y0 + 1, movingSize.y - 1)
-    let z1 = min(z0 + 1, movingSize.z - 1)
-    let tx = Double(coordinate.x - Float(x0))
-    let ty = Double(coordinate.y - Float(y0))
-    let tz = Double(coordinate.z - Float(z0))
-
-    guard let c000 = movingValue(x: x0, y: y0, z: z0, weight: (1 - tx) * (1 - ty) * (1 - tz)),
-          let c100 = movingValue(x: x1, y: y0, z: z0, weight: tx * (1 - ty) * (1 - tz)),
-          let c010 = movingValue(x: x0, y: y1, z: z0, weight: (1 - tx) * ty * (1 - tz)),
-          let c110 = movingValue(x: x1, y: y1, z: z0, weight: tx * ty * (1 - tz)),
-          let c001 = movingValue(x: x0, y: y0, z: z1, weight: (1 - tx) * (1 - ty) * tz),
-          let c101 = movingValue(x: x1, y: y0, z: z1, weight: tx * (1 - ty) * tz),
-          let c011 = movingValue(x: x0, y: y1, z: z1, weight: (1 - tx) * ty * tz),
-          let c111 = movingValue(x: x1, y: y1, z: z1, weight: tx * ty * tz) else {
-      return nil
-    }
-    return c000 + c100 + c010 + c110 + c001 + c101 + c011 + c111
-  }
-
-  private func movingValue(x: Int, y: Int, z: Int, weight: Double) -> Double? {
-    guard weight > 0 else { return 0 }
-    let value = movingValues[(z * movingSize.y + y) * movingSize.x + x]
-    guard value != movingPadding else { return nil }
-    return Double(value) * weight
   }
 
   private static func entropy(_ histogram: [Double], totalWeight: Double) -> Double {
@@ -717,7 +747,7 @@ private enum BorgVRRigidRegistrationOptimizer {
     let transform: BorgVRRigidTransform
     let initialEvaluation: BorgVRRegistrationMetricEvaluation
     let finalEvaluation: BorgVRRegistrationMetricEvaluation
-    let evaluationCount: Int
+    let triedTransformationCount: Int
   }
 
   static func optimize(
@@ -760,11 +790,15 @@ private enum BorgVRRigidRegistrationOptimizer {
       initialOverlap: initialEvaluation.overlap,
       minimumOverlap: minimumOverlap
     )
-    var evaluationCount = 1
-    let maximumEvaluationCount = 240
+    var triedTransformationCount = 0
+    let candidateCountPerRound = 12
+    let maximumOptimizationRoundCount = 100
+    let maximumTriedTransformationCount = maximumOptimizationRoundCount
+      * candidateCountPerRound
     let scoreEpsilon = 1e-5
 
-    while evaluationCount + 12 <= maximumEvaluationCount {
+    while triedTransformationCount + candidateCountPerRound
+      <= maximumTriedTransformationCount {
       var bestTransform = currentTransform
       var bestEvaluation = currentEvaluation
       var bestMerit = currentMerit
@@ -784,7 +818,7 @@ private enum BorgVRRigidRegistrationOptimizer {
             initialOverlap: initialEvaluation.overlap,
             minimumOverlap: minimumOverlap
           )
-          evaluationCount += 1
+          triedTransformationCount += 1
           if candidateMerit > bestMerit + scoreEpsilon {
             bestMerit = candidateMerit
             bestEvaluation = candidateEvaluation
@@ -817,7 +851,7 @@ private enum BorgVRRigidRegistrationOptimizer {
       transform: currentTransform,
       initialEvaluation: initialEvaluation,
       finalEvaluation: currentEvaluation,
-      evaluationCount: evaluationCount
+      triedTransformationCount: triedTransformationCount
     )
   }
 
@@ -912,9 +946,10 @@ enum BorgVRDICOMRigidRegistration {
       throw BorgVRVolumeConversionError.incompatibleDICOMSampleFormats
     }
 
-    let usesSharedFrame = canUseSharedDICOMFrame(reference: reference, moving: moving)
-    let initialTransform = dicomInitialTransform(reference: reference, moving: moving)
-    if usesSharedFrame {
+    let sharedFrameTransform = reference.dicomTransform(to: moving)
+    let initialTransform = sharedFrameTransform
+      ?? centeredInitialTransform(reference: reference, moving: moving)
+    if sharedFrameTransform != nil {
       logger?.info("Initializing DICOM registration from the shared Frame of Reference.")
     } else {
       logger?.info(
@@ -926,9 +961,7 @@ enum BorgVRDICOMRigidRegistration {
       referenceSpacing: reference.source.voxelSpacing,
       movingSpacing: moving.source.voxelSpacing
     )
-    logger?.info(
-      "Initial DICOM voxel transform:\n" + formattedMatrix(initialVoxelTransform)
-    )
+    logger?.info("Initial DICOM voxel transform:\n\(initialVoxelTransform)")
     logger?.info("Starting recursive rigid DICOM registration.")
     let result = try register(
       level: Level(
@@ -944,20 +977,8 @@ enum BorgVRDICOMRigidRegistration {
       referenceSpacing: reference.source.voxelSpacing,
       movingSpacing: moving.source.voxelSpacing
     )
-    logger?.info("Final DICOM voxel transform:\n" + formattedMatrix(voxelTransform))
+    logger?.info("Final DICOM voxel transform:\n\(voxelTransform)")
     return voxelTransform
-  }
-
-  private static func formattedMatrix(_ transform: BorgVRVoxelTransform) -> String {
-    let rows: [[Float]] = [
-      [transform.xAxis.x, transform.yAxis.x, transform.zAxis.x, transform.translation.x],
-      [transform.xAxis.y, transform.yAxis.y, transform.zAxis.y, transform.translation.y],
-      [transform.xAxis.z, transform.yAxis.z, transform.zAxis.z, transform.translation.z],
-      [0, 0, 0, 1]
-    ]
-    return rows.map { row in
-      "[" + row.map { String(format: "%8.2f", $0) }.joined(separator: " ") + " ]"
-    }.joined(separator: "\n")
   }
 
   private static func register(
@@ -1030,7 +1051,7 @@ enum BorgVRDICOMRigidRegistration {
       logger?.info(
         "DICOM registration level optimized using \(evaluator.sampleCount) samples, "
           + "\(evaluator.binCount) x \(evaluator.binCount) histogram bins and "
-          + "\(max(0, result.evaluationCount - 1)) tried transformations (NMI "
+          + "\(result.triedTransformationCount) tried transformations (NMI "
           + String(format: "%.6f", result.initialEvaluation.nmi)
           + " -> " + String(format: "%.6f", result.finalEvaluation.nmi)
           + ", overlap " + String(format: "%.1f%%", result.initialEvaluation.overlap * 100)
@@ -1199,84 +1220,16 @@ enum BorgVRDICOMRigidRegistration {
     )
   }
 
-  private static func dicomInitialTransform(
+  private static func centeredInitialTransform(
     reference: BorgVRUnbrickedVolume,
     moving: BorgVRUnbrickedVolume
   ) -> BorgVRRigidTransform {
-    let rotation: BorgVRRigidTransform
-    if let referenceOrientation = reference.orientation,
-       let movingOrientation = moving.orientation {
-      rotation = BorgVRRigidTransform(
-        xAxis: Vec3<Float>(
-          x: movingOrientation.xAxis.dot(referenceOrientation.xAxis),
-          y: movingOrientation.yAxis.dot(referenceOrientation.xAxis),
-          z: movingOrientation.zAxis.dot(referenceOrientation.xAxis)
-        ),
-        yAxis: Vec3<Float>(
-          x: movingOrientation.xAxis.dot(referenceOrientation.yAxis),
-          y: movingOrientation.yAxis.dot(referenceOrientation.yAxis),
-          z: movingOrientation.zAxis.dot(referenceOrientation.yAxis)
-        ),
-        zAxis: Vec3<Float>(
-          x: movingOrientation.xAxis.dot(referenceOrientation.zAxis),
-          y: movingOrientation.yAxis.dot(referenceOrientation.zAxis),
-          z: movingOrientation.zAxis.dot(referenceOrientation.zAxis)
-        ),
-        translation: .zero
-      )
-    } else {
-      rotation = .identity
-    }
-
-    if canUseSharedDICOMFrame(reference: reference, moving: moving),
-       let referenceOrigin = reference.origin,
-       let movingOrigin = moving.origin,
-       let movingOrientation = moving.orientation {
-      let originDelta = referenceOrigin - movingOrigin
-      return BorgVRRigidTransform(
-        xAxis: rotation.xAxis,
-        yAxis: rotation.yAxis,
-        zAxis: rotation.zAxis,
-        translation: Vec3<Float>(
-          x: originDelta.dot(movingOrientation.xAxis),
-          y: originDelta.dot(movingOrientation.yAxis),
-          z: originDelta.dot(movingOrientation.zAxis)
-        )
-      )
-    }
-
-    let referenceCenter = metricCenter(of: reference)
-    let movingCenter = metricCenter(of: moving)
+    let rotation = reference.orientationTransform(to: moving) ?? .identity
     return BorgVRRigidTransform(
       xAxis: rotation.xAxis,
       yAxis: rotation.yAxis,
       zAxis: rotation.zAxis,
-      translation: movingCenter - rotation.applying(to: referenceCenter)
-    )
-  }
-
-  private static func canUseSharedDICOMFrame(
-    reference: BorgVRUnbrickedVolume,
-    moving: BorgVRUnbrickedVolume
-  ) -> Bool {
-    guard let referenceFrame = reference.frameOfReferenceUID,
-          let movingFrame = moving.frameOfReferenceUID else {
-      return false
-    }
-    return referenceFrame == movingFrame
-      && reference.orientation != nil
-      && reference.origin != nil
-      && moving.orientation != nil
-      && moving.origin != nil
-  }
-
-  private static func metricCenter(
-    of volume: BorgVRUnbrickedVolume
-  ) -> Vec3<Float> {
-    Vec3<Float>(
-      x: Float(max(0, volume.source.size.x - 1)) * volume.source.voxelSpacing.x * 0.5,
-      y: Float(max(0, volume.source.size.y - 1)) * volume.source.voxelSpacing.y * 0.5,
-      z: Float(max(0, volume.source.size.z - 1)) * volume.source.voxelSpacing.z * 0.5
+      translation: moving.metricCenter - rotation.applying(to: reference.metricCenter)
     )
   }
 }

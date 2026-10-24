@@ -16,6 +16,7 @@ swiftc \
   "$ROOT/BORGVR-IO/VolumeDataAccessor.swift" \
   "$ROOT/BORGVR-IO/MemoryMappedFile.swift" \
   "$ROOT/BORGVR-IO/RawFileAccessor.swift" \
+  "$ROOT/BORGVR-IO/BorgVRIntegerVolumeSampler.swift" \
   "$ROOT/BORGVR-IO/BORGVRDataBase.swift" \
   "$ROOT/BORGVR-IO/BORGVRMetaData.swift" \
   "$ROOT/BORGVR-IO/BORGVRFileData.swift" \
