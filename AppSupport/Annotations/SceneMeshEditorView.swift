@@ -20,6 +20,7 @@ struct SceneObjectCatalogView: View {
             .tag(SceneObjectPrototype.mesh(asset.id))
         }
       }
+      .screenControlMenu()
 
       Text(selectedObjectDescription)
         .font(.caption)

@@ -203,6 +203,7 @@ struct RenderView: View {
       dismissWindow(id: "MarkerView")
       dismissWindow(id: "MeasurementView")
       dismissWindow(id: "LightingEditorView")
+      dismissWindow(id: "VolumeBrushEditorView")
       dismissWindow(id: "VoiceCommandsView")
       voice.stopListening()
     }

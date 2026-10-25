@@ -76,6 +76,7 @@ struct MobileMarkerView: View {
                   }
                 }
               }
+              .buttonStyle(.plain)
             }
             ForEach(appModel.sceneMeshInstances) { instance in
               Button {
@@ -85,7 +86,7 @@ struct MobileMarkerView: View {
               } label: {
                 HStack {
                   Image(systemName: "cube.fill")
-                    .foregroundStyle(.tint)
+                    .foregroundStyle(.primary)
                   VStack(alignment: .leading, spacing: 1) {
                     Text(instance.name)
                       .foregroundStyle(.primary)
@@ -102,6 +103,7 @@ struct MobileMarkerView: View {
                   }
                 }
               }
+              .buttonStyle(.plain)
             }
           }
         }
@@ -162,18 +164,21 @@ struct MobileMarkerView: View {
           } label: {
             Label("Object Files", systemImage: "shippingbox")
           }
+          .screenControlMenu()
 
           Button {
             showLoadFilePicker = true
           } label: {
             Label("Load Objects...", systemImage: "folder")
           }
+          .screenControlButtons()
 
           Button {
             showSaveFilePicker = true
           } label: {
             Label("Save Objects...", systemImage: "square.and.arrow.down")
           }
+          .screenControlButtons()
           .disabled(appModel.volumeMarkers.isEmpty && appModel.sceneMeshInstances.isEmpty)
         }
 
@@ -181,6 +186,7 @@ struct MobileMarkerView: View {
           Button("Delete All Objects", role: .destructive) {
             confirmDeleteAll = true
           }
+          .screenControlButtons()
           .disabled(appModel.volumeMarkers.isEmpty && appModel.sceneMeshInstances.isEmpty)
         }
       }
@@ -193,6 +199,7 @@ struct MobileMarkerView: View {
           } label: {
             Label("Done", systemImage: "checkmark")
           }
+          .screenControlButtons()
         }
       }
       .confirmationDialog(

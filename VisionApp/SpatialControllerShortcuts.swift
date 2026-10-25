@@ -10,13 +10,17 @@ enum SpatialToolMode: String, CaseIterable, Identifiable {
   case areaMeasurement
   case volumeMeasurement
   case screenView
+  case erase
+  case restore
 
   static let museModes: [Self] = [
     .marker,
     .objectPlacement,
     .lengthMeasurement,
     .areaMeasurement,
-    .volumeMeasurement
+    .volumeMeasurement,
+    .erase,
+    .restore
   ]
 
   var id: String { rawValue }
@@ -29,6 +33,7 @@ enum SpatialToolMode: String, CaseIterable, Identifiable {
       case .objectPlacement: .objectPlacement
       case .lengthMeasurement, .areaMeasurement, .volumeMeasurement: .measurement
       case .screenView: .screenView
+      case .erase, .restore: .volumeEditing
     }
   }
 
@@ -53,6 +58,8 @@ enum SpatialToolMode: String, CaseIterable, Identifiable {
       case .areaMeasurement: String(localized: "settings_stylus_start_area")
       case .volumeMeasurement: String(localized: "settings_stylus_start_volume")
       case .screenView: String(localized: "controller_action_screen_view_mode")
+      case .erase: String(localized: "Erase")
+      case .restore: String(localized: "Restore")
     }
   }
 
@@ -66,6 +73,8 @@ enum SpatialToolMode: String, CaseIterable, Identifiable {
       case .areaMeasurement: "triangle"
       case .volumeMeasurement: "cube"
       case .screenView: "rectangle.on.rectangle"
+      case .erase: "eraser.fill"
+      case .restore: "arrow.uturn.backward"
     }
   }
 }
@@ -77,6 +86,8 @@ enum SpatialStylusStartFunction: String, CaseIterable, Identifiable {
   case areaMeasurement
   case volumeMeasurement
   case lastMode
+  case erase
+  case restore
 
   var id: String { rawValue }
 
@@ -88,6 +99,8 @@ enum SpatialStylusStartFunction: String, CaseIterable, Identifiable {
       case .areaMeasurement: String(localized: "settings_stylus_start_area")
       case .volumeMeasurement: String(localized: "settings_stylus_start_volume")
       case .lastMode: String(localized: "settings_stylus_start_last_mode")
+      case .erase: String(localized: "Erase")
+      case .restore: String(localized: "Restore")
     }
   }
 
@@ -99,6 +112,8 @@ enum SpatialStylusStartFunction: String, CaseIterable, Identifiable {
       case .areaMeasurement: "triangle"
       case .volumeMeasurement: "cube"
       case .lastMode: "clock.arrow.circlepath"
+      case .erase: "eraser.fill"
+      case .restore: "arrow.uturn.backward"
     }
   }
 }
@@ -240,6 +255,8 @@ enum SpatialControllerButtonAction: String, CaseIterable, Identifiable {
   case controllerMeasurementTool
   case controllerAreaMeasurementTool
   case controllerVolumeMeasurementTool
+  case controllerEraseTool
+  case controllerRestoreTool
   case nextRenderMode
   case transferFunctionLightingMode
   case transferFunctionMode
@@ -266,7 +283,8 @@ enum SpatialControllerButtonAction: String, CaseIterable, Identifiable {
            .screenViewMode, .nextControllerTool, .controllerModelTool,
            .controllerClippingTool, .controllerMarkerTool, .controllerObjectTool,
            .nextActiveObject, .controllerMeasurementTool,
-           .controllerAreaMeasurementTool, .controllerVolumeMeasurementTool:
+           .controllerAreaMeasurementTool, .controllerVolumeMeasurementTool,
+           .controllerEraseTool, .controllerRestoreTool:
         .interaction
       case .nextRenderMode, .transferFunctionLightingMode, .transferFunctionMode, .isoValueMode:
         .rendering
@@ -303,6 +321,8 @@ enum SpatialControllerButtonAction: String, CaseIterable, Identifiable {
         String(localized: "controller_action_controller_area_measurement_tool")
       case .controllerVolumeMeasurementTool:
         String(localized: "controller_action_controller_volume_measurement_tool")
+      case .controllerEraseTool: String(localized: "Erase")
+      case .controllerRestoreTool: String(localized: "Restore")
       case .nextRenderMode: String(localized: "controller_action_next_render_mode")
       case .transferFunctionLightingMode:
         String(localized: "controller_action_tf_lighting_mode")
@@ -346,6 +366,8 @@ enum SpatialControllerButtonAction: String, CaseIterable, Identifiable {
       case .controllerMeasurementTool: "ruler"
       case .controllerAreaMeasurementTool: "triangle"
       case .controllerVolumeMeasurementTool: "cube"
+      case .controllerEraseTool: "eraser.fill"
+      case .controllerRestoreTool: "arrow.uturn.backward"
       case .nextRenderMode: "rectangle.3.group"
       case .transferFunctionLightingMode: "lightbulb"
       case .transferFunctionMode: "chart.xyaxis.line"
@@ -432,6 +454,10 @@ enum SpatialControllerShortcutHandler {
         storedAppModel.setControllerTool(.areaMeasurement, for: chirality)
       case .controllerVolumeMeasurementTool:
         storedAppModel.setControllerTool(.volumeMeasurement, for: chirality)
+      case .controllerEraseTool:
+        storedAppModel.setControllerTool(.erase, for: chirality)
+      case .controllerRestoreTool:
+        storedAppModel.setControllerTool(.restore, for: chirality)
       case .nextRenderMode:
         let modes: [RenderMode] = [
           .transferFunction1D,

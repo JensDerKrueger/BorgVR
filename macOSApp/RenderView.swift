@@ -19,6 +19,7 @@ struct RenderView: View {
   @State private var restoredDetachedPanelWindows: Set<DockablePanelID> = []
   @State private var markerDragID: UUID?
   @State private var strokeDragID: UUID?
+  @State private var brushPosition: SIMD3<Float>?
   @State private var sceneObjectDragID: UUID?
   @State private var measurementDragMeasurementID: UUID?
   @State private var measurementDragPointID: UUID?
@@ -60,7 +61,10 @@ struct RenderView: View {
         onMagnificationDelta: applyMagnificationDelta(_:),
         onMagnificationEnded: finishInteractionGesture,
         onDoubleClick: handleDoubleClick,
-        onKeyboardShortcut: handleKeyboardShortcut(_:)
+        onKeyboardShortcut: handleKeyboardShortcut(_:),
+        onModifierFlagsChanged: updateVolumeBrushModifiers(_:),
+        onPointerHover: updateVolumeBrushHover(_:),
+        tracksPointerHover: appModel.interactionMode == .volumeEditing
       )
         .ignoresSafeArea()
 
@@ -122,26 +126,34 @@ struct RenderView: View {
 
       if docking.isDockedVisible(.markerEditor) ||
          docking.isDockedVisible(.measurementEditor) ||
-         docking.isDockedVisible(.lightingEditor) {
+         docking.isDockedVisible(.lightingEditor) ||
+         docking.isDockedVisible(.volumeBrushEditor) {
         HStack(alignment: .top, spacing: 16) {
-          if docking.isDockedVisible(.lightingEditor) {
-            VStack {
+          if docking.isDockedVisible(.lightingEditor) || docking.isDockedVisible(.volumeBrushEditor) {
+            VStack(spacing: 16) {
               Spacer(minLength: 0)
 
-              DockableEditorPanel(panel: .lightingEditor) {
-                LightingEditorView(
-                  renderMode: renderingParameters.renderMode,
-                  lightDirection: $renderingParameters.lightDirection,
-                  ambientLightColor: $renderingParameters.ambientLightColor,
-                  diffuseLightColor: $renderingParameters.diffuseLightColor,
-                  specularLightColor: $renderingParameters.specularLightColor,
-                  usesPanelBackground: false,
-                  showsTitle: false,
-                  onChange: synchronizeState,
-                  onCommit: sharePlay.flushSynchronization,
-                  onClose: { docking.hide(.lightingEditor) }
-                )
-                .equatable()
+              if docking.isDockedVisible(.lightingEditor) {
+                DockableEditorPanel(panel: .lightingEditor) {
+                  LightingEditorView(
+                    renderMode: renderingParameters.renderMode,
+                    lightDirection: $renderingParameters.lightDirection,
+                    ambientLightColor: $renderingParameters.ambientLightColor,
+                    diffuseLightColor: $renderingParameters.diffuseLightColor,
+                    specularLightColor: $renderingParameters.specularLightColor,
+                    usesPanelBackground: false,
+                    showsTitle: false,
+                    onChange: synchronizeState,
+                    onCommit: sharePlay.flushSynchronization,
+                    onClose: { docking.hide(.lightingEditor) }
+                  )
+                  .equatable()
+                }
+              }
+              if docking.isDockedVisible(.volumeBrushEditor) {
+                DockableEditorPanel(panel: .volumeBrushEditor) {
+                  VolumeBrushControls(model: appModel.volumeBrush)
+                }
               }
             }
             .frame(width: dockedLightingPanelWidth)
@@ -333,7 +345,7 @@ struct RenderView: View {
     }
     .accessibilityLabel("Show UI")
     .help(MacRenderShortcut.help("Show UI", shortcut: .toggleControls))
-    .buttonStyle(.bordered)
+    .screenControlButtons()
   }
 
   private func handleCommand(_ command: MacCommand) {
@@ -356,6 +368,12 @@ struct RenderView: View {
 
   private func handleKeyboardShortcut(_ shortcut: MacRenderShortcut) {
     switch shortcut {
+      case .erase, .restore:
+        appModel.volumeBrush.mode = shortcut == .erase ? .erase : .restore
+        applyInteractionModeSelection(.volumeEditing)
+      case .smallerBrush, .largerBrush:
+        appModel.volumeBrush.radius = min(0.15, max(0.002,
+          appModel.volumeBrush.radius * (shortcut == .smallerBrush ? 0.8 : 1.25)))
       case .model:
         applyInteractionModeSelection(.model)
       case .clipping:
@@ -368,6 +386,8 @@ struct RenderView: View {
         applyInteractionModeSelection(.objectPlacement)
       case .measurement:
         applyInteractionModeSelection(.measurement)
+      case .volumeEditing:
+        applyInteractionModeSelection(.volumeEditing)
       case .transferFunctionRendering:
         setRenderMode(.transferFunction1D)
       case .lightingRendering:
@@ -417,7 +437,7 @@ struct RenderView: View {
 
   private func presentIsoSurfaceSavePanel() {
     guard renderingParameters.renderMode == .isoValue,
-          appModel.activeDataset != nil else { return }
+          appModel.activeDataset != nil, appModel.volumeBrush.canExport else { return }
     guard appModel.isoSurfaceExtractionHandler != nil else {
       isoSurfaceExtractionError = String(localized: "The renderer is not ready for extraction.")
       return
@@ -690,7 +710,7 @@ struct RenderView: View {
   }
 
   private var dockedEditorLeadingPadding: CGFloat {
-    docking.isDockedVisible(.lightingEditor)
+    docking.isDockedVisible(.lightingEditor) || docking.isDockedVisible(.volumeBrushEditor)
       ? dockedLightingPanelWidth + 32
       : 16
   }
@@ -744,6 +764,14 @@ struct RenderView: View {
 
   private func applyInteractionDrag(update: RenderDragUpdate) {
     switch appModel.interactionMode {
+      case .volumeEditing:
+        if update.isDirectPointer { applyVolumeBrush(update) }
+        else if let position = brushPosition {
+          brushPosition = appModel.markerDepthAdjustmentHandler?(position, Float(update.delta.height) * markerDepthScrollSensitivity)
+          if let brushPosition {
+            appModel.volumeBrush.context.showPreview(at: brushPosition, mode: volumeBrushMode(for: update.modifierFlags))
+          }
+        }
       case .model:
         if update.isDirectPointer {
           rotateModel(to: update.location, in: update.viewSize)
@@ -777,7 +805,9 @@ struct RenderView: View {
 
   private func applyMagnificationDelta(_ delta: CGFloat) {
     guard delta > 0 else { return }
-    if appModel.interactionMode == .clipping {
+    if appModel.interactionMode == .volumeEditing {
+      appModel.volumeBrush.radius = min(0.15, max(0.002, appModel.volumeBrush.radius * Double(delta)))
+    } else if appModel.interactionMode == .clipping {
       applyDepthAlignedClipping(magnificationDelta: delta)
       synchronizeState()
     } else if appModel.interactionMode == .objectPlacement {
@@ -795,6 +825,7 @@ struct RenderView: View {
   }
 
   private func finishInteractionGesture() {
+    appModel.volumeBrush.context.finish(source: "pointer")
     arcballStartLocation = nil
     arcballStartOrientation = nil
     markerDragID = nil
@@ -808,6 +839,9 @@ struct RenderView: View {
 
   private func beginInteraction(update: RenderDragUpdate) {
     switch appModel.interactionMode {
+      case .volumeEditing:
+        if appModel.volumeBrush.projectsOntoVolume { appModel.beginProjectedStrokeHandler?() }
+        applyVolumeBrush(update)
       case .model:
         arcballStartLocation = update.location
         arcballStartOrientation = renderingParameters.orientation
@@ -820,6 +854,37 @@ struct RenderView: View {
       case .clipping, .transferEditing:
         break
     }
+  }
+
+  private func applyVolumeBrush(_ update: RenderDragUpdate) {
+    guard let screenPosition = normalizedPosition(for: update),
+          let position = interactionPosition(at: screenPosition, preservingDepthOf: brushPosition,
+                                             projected: appModel.volumeBrush.projectsOntoVolume) else { return }
+    brushPosition = position
+    appModel.volumeBrush.context.apply(at: position, source: "pointer", mode: volumeBrushMode(for: update.modifierFlags))
+  }
+
+  private func updateVolumeBrushHover(_ update: RenderDragUpdate?) {
+    guard appModel.interactionMode == .volumeEditing,
+          let update, let screenPosition = normalizedPosition(for: update),
+          let position = interactionPosition(at: screenPosition, preservingDepthOf: brushPosition,
+                                             projected: appModel.volumeBrush.projectsOntoVolume) else {
+      appModel.volumeBrush.context.finish(source: "pointer")
+      return
+    }
+    if brushPosition != position { brushPosition = position }
+    appModel.volumeBrush.context.showPreview(at: position, mode: volumeBrushMode(for: update.modifierFlags))
+  }
+
+  private func volumeBrushMode(for modifiers: NSEvent.ModifierFlags) -> BorgVRVolumeBrushMode {
+    let selected = appModel.volumeBrush.mode
+    return modifiers.contains(.shift) ? (selected == .erase ? .restore : .erase) : selected
+  }
+
+  private func updateVolumeBrushModifiers(_ modifiers: NSEvent.ModifierFlags) {
+    guard appModel.interactionMode == .volumeEditing,
+          let position = appModel.volumeBrush.context.previewPosition() else { return }
+    appModel.volumeBrush.context.showPreview(at: position, mode: volumeBrushMode(for: modifiers))
   }
 
   private func beginObjectInteraction(update: RenderDragUpdate) {

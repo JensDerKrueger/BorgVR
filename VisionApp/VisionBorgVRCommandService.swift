@@ -132,8 +132,15 @@ final class VisionBorgVRCommandService: BorgVRMCPCommandService {
         measurements: state.measurementsVisible
       ),
       objectCount: state.objectCount,
-      measurementCount: state.measurementCount
+      measurementCount: state.measurementCount,
+      volumeEditing: volumeEditing.volumeEditingState()
     )
+  }
+
+  var volumeEditing: any BorgVRVolumeEditingCommands { session.runtimeState.volumeBrush }
+
+  func activateVolumeEditing() {
+    session.runtimeState.interactionMode = .volumeEditing
   }
 
   func setRenderMode(_ mode: String) throws {

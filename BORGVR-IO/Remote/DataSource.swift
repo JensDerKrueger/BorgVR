@@ -15,6 +15,8 @@ protocol DataSource {
    */
   func getBrick(index: Int, outputBuffer: UnsafeMutablePointer<UInt8>) throws
 
+  func getRawBrick(index: Int, outputBuffer: UnsafeMutablePointer<UInt8>) throws -> Int?
+
   /**
    Loads the first brick from the dataset and writes its data into the provided output buffer.
    In contrast to getBrick, this call is always synchronous.

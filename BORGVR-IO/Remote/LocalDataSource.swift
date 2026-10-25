@@ -36,6 +36,10 @@ final class LocalDataSource: DataSource {
     try localFile.getBrick(index: index, outputBuffer: outputBuffer)
   }
 
+  func getRawBrick(index: Int, outputBuffer: UnsafeMutablePointer<UInt8>) throws -> Int? {
+    try localFile.getRawBrick(index: index, outputBuffer: outputBuffer)
+  }
+
   /**
    Loads the first brick from the local data source. In contrast to getBrick, this call is always synchronous.
 

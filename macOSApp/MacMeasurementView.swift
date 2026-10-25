@@ -75,8 +75,8 @@ struct MacMeasurementView: View {
                 appModel.selectedVolumeMeasurementPointID = point.id
                 appModel.interactionMode = .measurement
               }
-              .buttonStyle(.bordered)
-              .tint(appModel.selectedVolumeMeasurementPointID == point.id ? .accentColor : nil)
+              .buttonStyle(ScreenControlButtonStyle(accent: .green,
+                isSelected: appModel.selectedVolumeMeasurementPointID == point.id))
             }
           }
         }
@@ -112,6 +112,7 @@ struct MacMeasurementView: View {
         .disabled(appModel.volumeMeasurements.isEmpty)
       }
     }
+    .screenControlButtons()
     .fileImporter(
       isPresented: $importsMeasurements,
       allowedContentTypes: [.borgVRMeasurement],

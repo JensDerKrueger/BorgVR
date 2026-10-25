@@ -42,6 +42,7 @@ struct VisionApp: App {
   @StateObject private var speech: SpeechHelper
 
   @Environment(\.openImmersiveSpace) private var openImmersiveSpace
+  @Environment(\.scenePhase) private var scenePhase
   @Environment(\.dismissImmersiveSpace) private var dismissImmersiveSpace
 
   init() {
@@ -73,6 +74,8 @@ struct VisionApp: App {
   var body: some Scene {
     WindowGroup(id: "main") {
       ContentView()
+        .onChange(of: scenePhase, initial: true) { _, phase in BorgVRVolumeEditGPUAvailability.setApplicationActive(phase == .active) }
+        .volumeEditSelectionDialog(model: runtimeAppModel.volumeBrush)
         .appStoreUpdateAlert(using: updateChecker)
         .alert(
           "Choose your SharePlay name",
@@ -292,6 +295,21 @@ struct VisionApp: App {
     .windowResizability(.contentMinSize)
     .defaultSize(width: 460, height: 360)
 
+    WindowGroup(id: "VolumeBrushEditorView") {
+      VStack(spacing: 12) {
+        Text("Brush")
+          .font(.headline)
+          .frame(maxWidth: .infinity)
+        VolumeBrushControls(model: runtimeAppModel.volumeBrush)
+      }
+      .padding()
+      .frame(minWidth: 420, minHeight: 400)
+      .trackView(name: "VolumeBrushEditorView")
+      .environment(runtimeAppModel)
+    }
+    .windowResizability(.contentMinSize)
+    .defaultSize(width: 460, height: 500)
+
     Window("Voice Commands", id: "VoiceCommandsView") {
       VoiceHelpView()
         .environment(runtimeAppModel)
@@ -414,6 +432,15 @@ struct VisionApp: App {
           uniqueId: record.catalogEntry.id
         )
     }
+    let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
+    let editURL: URL?
+    switch entry.source {
+      case .builtIn: editURL = nil
+      case .local: editURL = URL(fileURLWithPath: entry.identifier)
+      case .remote: editURL = documents?.appendingPathComponent("\(entry.uniqueId).data")
+    }
+    try await runtimeAppModel.volumeBrush.prepareOpening(datasetID: entry.uniqueId,
+      datasetURL: editURL, interactive: false)
     runtimeAppModel.startImmersiveSpace(
       dataset: entry,
       asGroupSessionHost: !sharedAppModel.isInGroupSession || runtimeAppModel.groupSessionHost
@@ -484,6 +511,8 @@ struct VisionApp: App {
   @MainActor
   private func applySpatialStylusStartFunction() {
     switch storedAppModel.stylusStartFunction {
+      case .erase: storedAppModel.stylusTool = .erase
+      case .restore: storedAppModel.stylusTool = .restore
       case .marker:
         storedAppModel.stylusTool = .marker
       case .objectPlacement:
@@ -591,9 +620,11 @@ struct VisionApp: App {
         throw FileError.noPermission("Invalid file \(url)")
       }
 
-      let localURL : URL
-      if let existingURL = findlocalFile(id: externalMeta.uniqueID) {
-        localURL = existingURL
+      let localURL: URL
+      let source: RuntimeAppModel.DatasetSource
+      if let existing = findLocalDataset(id: externalMeta.uniqueID) {
+        localURL = existing.url
+        source = existing.source
       } else {
         guard let copyURL = copyFile(from: url, toDir: documentsDirectory, logger: nil) else {
           throw FileError
@@ -602,11 +633,18 @@ struct VisionApp: App {
             )
         }
         localURL = copyURL
+        source = .local
       }
 
+      let editURL: URL?
+      switch source {
+        case .builtIn: editURL = nil
+        default: editURL = localURL
+      }
+      try await runtimeAppModel.volumeBrush.prepareOpening(datasetID: externalMeta.uniqueID, datasetURL: editURL)
       runtimeAppModel.startImmersiveSpace(identifier: localURL.path(),
                                    description: externalMeta.description,
-                                   source: .local,
+                                   source: source,
                                    uniqueId: externalMeta.uniqueID,
                                    asGroupSessionHost: true)
     } catch {

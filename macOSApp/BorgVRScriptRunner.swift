@@ -61,6 +61,16 @@ final class BorgVRScriptRunner: ObservableObject {
     }
   }
 
+  private enum VolumeEditOperation: Equatable {
+    case select(UUID?)
+    case create(String, Bool)
+    case apply(BorgVRVolumeBrushMode, [BorgVRVolumeBrushSample])
+    case discard
+    case wait(Double)
+    case prepare
+    case export(String, String?, String?)
+  }
+
   @Published private(set) var isRunning = false
   @Published private(set) var statusText = String(localized: "No script active")
   @Published private(set) var scriptURL: URL?
@@ -107,6 +117,9 @@ final class BorgVRScriptRunner: ObservableObject {
   private var pendingIsoSurfaceExport: ScriptIsoSurfaceExportRequest?
   private var pendingIsoSurfaceExportResult: CommandResultCode?
   private var isoSurfaceExportTask: Task<Void, Never>?
+  private var volumeEditTask: Task<Void, Never>?
+  private var pendingVolumeEdit: (id: UUID, operation: VolumeEditOperation)?
+  private var pendingVolumeEditResult: CommandResultCode?
   private var importBrickSizeOverride: Int?
   private var importOverlapOverride: Int?
   private var importBorderModeOverride: ExtensionStrategy?
@@ -115,6 +128,7 @@ final class BorgVRScriptRunner: ObservableObject {
   deinit {
     executionTask?.cancel()
     isoSurfaceExportTask?.cancel()
+    volumeEditTask?.cancel()
     storedAppModel?.stopAccessingDataDirectory(logFileAccessURL)
   }
 
@@ -196,6 +210,10 @@ final class BorgVRScriptRunner: ObservableObject {
   }
 
   func stopScript() {
+    volumeEditTask?.cancel()
+    volumeEditTask = nil
+    pendingVolumeEdit = nil
+    pendingVolumeEditResult = nil
     executionTask?.cancel()
     executionTask = nil
     scriptImportCancellationToken?.cancel()
@@ -337,10 +355,78 @@ final class BorgVRScriptRunner: ObservableObject {
       ) ?? .callbackError
     }
 
+    register("setvolumebrush", [.string, .double, .bool]) { [weak self] args in
+      guard let self, let service = self.commandService else { return .callbackError }
+      do {
+        try service.volumeEditing.configureVolumeBrush(mode: BorgVRVolumeEditingArguments.mode(args.string(0)),
+          radiusFraction: args.double(1), projectsOntoVolume: args.bool(2))
+        service.activateVolumeEditing()
+        return .success
+      } catch { self.logError(error.localizedDescription); return .invalidArguments }
+    }
+    register("selecteditstate", [.string]) { [weak self] args in
+      let value = args.string(0)
+      let id = value == "original" ? nil : UUID(uuidString: value)
+      guard value == "original" || id != nil else { return .invalidArguments }
+      return self?.runVolumeEdit(.select(id)) ?? .callbackError
+    }
+    for (command, empty) in [("neweditstate", true), ("duplicateeditstate", false)] {
+      register(command, [.string]) { [weak self] args in self?.runVolumeEdit(.create(args.string(0), empty)) ?? .callbackError }
+    }
+    register("renameeditstate", [.string, .string]) { [weak self] args in
+      guard let self, let id = UUID(uuidString: args.string(0)), let editor = self.commandService?.volumeEditing else { return .invalidArguments }
+      do { try editor.renameState(id, name: args.string(1)); return .success }
+      catch { self.logError(error.localizedDescription); return .callbackError }
+    }
+    register("deleteeditstate", [.string]) { [weak self] args in
+      guard let self, let id = UUID(uuidString: args.string(0)), let editor = self.commandService?.volumeEditing else { return .invalidArguments }
+      do { try editor.deleteState(id); return .success }
+      catch { self.logError(error.localizedDescription); return .callbackError }
+    }
+    register("logeditstates", []) { [weak self] _ in
+      guard let self, let editor = self.commandService?.volumeEditing else { return .callbackError }
+      do {
+        let data = try JSONEncoder().encode(editor.volumeEditingState())
+        return self.logInfo(String(decoding: data, as: UTF8.self))
+      } catch { return .callbackError }
+    }
+    for mode in [BorgVRVolumeBrushMode.erase, .restore] {
+      register(mode == .erase ? "erasevolume" : "restorevolume", [.double, .double, .double, .double]) { [weak self] args in
+        self?.runVolumeEdit(.apply(mode, [.init(center: SIMD3(args.double(0), args.double(1), args.double(2)),
+          radius: args.double(3))])) ?? .callbackError
+      }
+    }
+    register("editvolume", [.string, .restString]) { [weak self] args in
+      guard let self, case let .strings(words)? = args.last else { return .invalidArguments }
+      do {
+        return self.runVolumeEdit(.apply(try BorgVRVolumeEditingArguments.mode(args.string(0)),
+          try BorgVRVolumeEditingArguments.samples(text: words.joined(separator: " "))))
+      } catch { self.logError(error.localizedDescription); return .invalidArguments }
+    }
+    register("clearvolumeedits", []) { [weak self] _ in self?.runVolumeEdit(.discard) ?? .callbackError }
+    register("waitvolumeedits", []) { [weak self] _ in self?.runVolumeEdit(.wait(30)) ?? .callbackError }
+    register("preparevolumeedits", []) { [weak self] _ in self?.runVolumeEdit(.prepare) ?? .callbackError }
+    register("waitvolumeedits", [.double]) { [weak self] args in
+      self?.runVolumeEdit(.wait(args.double(0))) ?? .callbackError
+    }
+    register("exportediteddataset", [.string]) { [weak self] args in
+      self?.runVolumeEdit(.export(args.string(0), nil, nil)) ?? .callbackError
+    }
+    register("exportediteddataset", [.string, .string, .string]) { [weak self] args in
+      self?.runVolumeEdit(.export(args.string(0), args.string(1), args.string(2))) ?? .callbackError
+    }
+    registerValue("hasvolumeedits", []) { [weak self] _ in
+      guard let service = self?.commandService else { return .status(.callbackError) }
+      return .value(service.volumeEditing.volumeEditingState().hasEdits ? "true" : "false")
+    }
+    registerValue("volumeeditsbusy", []) { [weak self] _ in
+      guard let service = self?.commandService else { return .status(.callbackError) }
+      return .value(service.volumeEditing.volumeEditingState().isUpdatingBricks ? "true" : "false")
+    }
+
     register("setimportbricksize", [.int]) { [weak self] args in
       self?.setImportBrickSize(args.int(0)) ?? .callbackError
     }
-
     register("setimportoverlap", [.int]) { [weak self] args in
       self?.setImportOverlap(args.int(0)) ?? .callbackError
     }
@@ -1154,6 +1240,73 @@ final class BorgVRScriptRunner: ObservableObject {
     return .waitingNoop
   }
 
+  private func runVolumeEdit(_ operation: VolumeEditOperation) -> CommandResultCode {
+    if let pendingVolumeEdit {
+      guard pendingVolumeEdit.operation == operation else { return .invalidArguments }
+      guard let result = pendingVolumeEditResult else { return .waitingNoop }
+      self.pendingVolumeEdit = nil
+      pendingVolumeEditResult = nil
+      return result
+    }
+    guard let service = commandService, let storedAppModel else { return .callbackError }
+    let id = UUID()
+    pendingVolumeEdit = (id, operation)
+    pendingVolumeEditResult = nil
+    let access = storedAppModel.startAccessingDataDirectory()
+    volumeEditTask = Task { [weak self] in
+      defer { storedAppModel.stopAccessingDataDirectory(access) }
+      do {
+        try Task.checkCancellation()
+        switch operation {
+          case .select(let id): try await service.volumeEditing.selectState(id)
+          case .create(let name, let empty): try await service.volumeEditing.duplicateState(name: name, empty: empty)
+          case .apply(let mode, let samples):
+            try await service.volumeEditing.editVolume(mode: mode, samples: samples)
+          case .discard:
+            try await service.volumeEditing.discardVolumeEdits()
+          case .wait(let timeout):
+            try await service.volumeEditing.waitForVolumeEdits(timeout: timeout)
+          case .prepare:
+            try await service.volumeEditing.prepareVolumeEdits()
+          case .export(let path, let name, let description):
+            guard let self else { throw CancellationError() }
+            guard !path.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+              throw BorgVRVolumeEditingCommandError.invalidArgument("Export destination must not be empty.")
+            }
+            let output = self.scriptOutputURL(path, defaultExtension: "data")
+            self.logInfo("Edited dataset export started: \(output.path)")
+            let job = try service.volumeEditing.startVolumeExport(to: output, name: name, description: description)
+            self.scriptProgressText = String(localized: "Export Edited Dataset")
+            self.scriptProgressValue = 0
+            let progressTask = Task { [weak self] in
+              while !Task.isCancelled {
+                guard let self, self.pendingVolumeEdit?.id == id else { return }
+                guard let current = service.volumeEditing.volumeEditingState().export, current.id == job.id else { return }
+                self.scriptProgressValue = current.progress
+                do { try await Task.sleep(for: .milliseconds(100)) } catch { return }
+              }
+            }
+            defer { progressTask.cancel() }
+            _ = try await service.volumeEditing.waitForVolumeExport(id: job.id)
+            guard self.pendingVolumeEdit?.id == id else { return }
+            self.logInfo("Edited dataset export completed: \(output.path)")
+        }
+        guard let self, self.pendingVolumeEdit?.id == id else { return }
+        self.pendingVolumeEditResult = .success
+      } catch {
+        guard let self, self.pendingVolumeEdit?.id == id else { return }
+        self.logError("Volume edit command failed: \(error.localizedDescription)")
+        self.pendingVolumeEditResult = .callbackError
+      }
+      if let self, self.pendingVolumeEdit?.id == id {
+        self.volumeEditTask = nil
+        self.scriptProgressValue = nil
+        self.scriptProgressText = ""
+      }
+    }
+    return .waitingNoop
+  }
+
   private func completeIsoSurfaceExport(
     requestID: UUID,
     result: Result<BorgVRMCPIsoSurfaceExport, Error>
@@ -1298,6 +1451,15 @@ final class BorgVRScriptRunner: ObservableObject {
       }
 
       let openable = catalog.openableDataset(from: dataset)
+      let accessURL = storedAppModel.startAccessingDataDirectory()
+      defer { storedAppModel.stopAccessingDataDirectory(accessURL) }
+      do {
+        try await appModel.volumeBrush.prepareOpening(datasetID: openable.uniqueId,
+          datasetURL: openable.editStorageURL(directoryURL: storedAppModel.resolvedDataDirectoryURL()), interactive: false)
+      } catch {
+        await self?.completeDatasetOpen(result: .callbackError, message: error.localizedDescription)
+        return
+      }
       appModel.openDataset(
         openable,
         asGroupSessionHost: self?.sharePlay?.isInSession == true ? nil : true

@@ -170,6 +170,10 @@ class BORGVRRemoteData: BORGVRDatasetProtocol {
     try self.brickDataSource.getBrick(index: index, outputBuffer: outputBuffer)
   }
 
+  func getRawBrick(index: Int, outputBuffer: UnsafeMutablePointer<UInt8>) throws -> Int? {
+    try brickDataSource.getRawBrick(index: index, outputBuffer: outputBuffer)
+  }
+
   /**
    Retrieves the first brick and writes its data into the provided output buffer.
    In contrast to getBrick, this call is always synchronous.

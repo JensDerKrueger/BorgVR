@@ -8,6 +8,7 @@ enum DockablePanelID: String, CaseIterable, Identifiable {
   case markerEditor
   case measurementEditor
   case lightingEditor
+  case volumeBrushEditor
 
   var id: String { rawValue }
   var windowID: String { "dockable.\(rawValue)" }
@@ -27,6 +28,8 @@ enum DockablePanelID: String, CaseIterable, Identifiable {
         return "measurement_window_title"
       case .lightingEditor:
         return "Lighting"
+      case .volumeBrushEditor:
+        return "Brush"
     }
   }
 
@@ -186,7 +189,7 @@ final class DockingController: ObservableObject {
 
   private func isCompatible(_ panel: DockablePanelID, with renderMode: RenderMode) -> Bool {
     switch panel {
-      case .renderControls, .markerEditor, .measurementEditor, .lightingEditor:
+      case .renderControls, .markerEditor, .measurementEditor, .lightingEditor, .volumeBrushEditor:
         return true
       case .transferFunctionEditor:
         return renderMode != .isoValue
@@ -360,6 +363,7 @@ struct DockableEditorPanel<Content: View>: View {
 }
 
 struct DetachedPanelContent: View {
+  @EnvironmentObject private var appModel: AppModel
   @EnvironmentObject private var renderingParameters: RenderingParameters
   @EnvironmentObject private var storedAppModel: StoredAppModel
   @EnvironmentObject private var docking: DockingController
@@ -443,6 +447,12 @@ struct DetachedPanelContent: View {
               onClose: { docking.close(panel) }
             )
             .equatable()
+          }
+        }
+      case .volumeBrushEditor:
+        DetachedDockablePanel(panel: panel, minWidth: 360, minHeight: 380) {
+          DockableEditorPanel(panel: panel) {
+            VolumeBrushControls(model: appModel.volumeBrush)
           }
         }
     }

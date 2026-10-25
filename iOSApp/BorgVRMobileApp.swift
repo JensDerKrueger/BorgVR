@@ -2,6 +2,7 @@ import SwiftUI
 
 @main
 struct BorgVRMobileApp: App {
+  @Environment(\.scenePhase) private var scenePhase
   @State private var appModel: AppModel
   @State private var renderingParameters: RenderingParameters
   @StateObject private var appSettings: AppSettings
@@ -59,6 +60,8 @@ struct BorgVRMobileApp: App {
   var body: some Scene {
     WindowGroup {
       ContentView()
+        .onChange(of: scenePhase, initial: true) { _, phase in BorgVRVolumeEditGPUAvailability.setApplicationActive(phase == .active) }
+        .volumeEditSelectionDialog(model: appModel.volumeBrush)
         .appStoreUpdateAlert(using: updateChecker)
         .sheet(isPresented: $showsSharePlayDisplayNameOnboarding) {
           SharePlayDisplayNameOnboardingView(name: $sharePlayDisplayNameDraft) {
@@ -231,6 +234,8 @@ struct BorgVRMobileApp: App {
           uniqueId: record.catalogEntry.id
         )
     }
+    try await appModel.volumeBrush.prepareOpening(datasetID: entry.uniqueId,
+      datasetURL: entry.editStorageURL(directoryURL: FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first), interactive: false)
     appModel.openDataset(entry, asGroupSessionHost: sharePlay.isInSession ? nil : true)
     sharePlay.datasetOpened()
   }
@@ -298,6 +303,8 @@ struct BorgVRMobileApp: App {
           into: documentsDirectory,
           logger: appModel.logger
         )
+        try await appModel.volumeBrush.prepareOpening(datasetID: dataset.uniqueId,
+          datasetURL: dataset.editStorageURL(directoryURL: FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first))
         appModel.openDataset(dataset, asGroupSessionHost: true)
         sharePlay.datasetOpened()
       } catch {

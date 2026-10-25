@@ -7,6 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		57CC00000000000000000001 /* ScreenControlStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57CC00000000000000000000 /* ScreenControlStyle.swift */; };
+		57CC00000000000000000002 /* ScreenControlStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57CC00000000000000000000 /* ScreenControlStyle.swift */; };
+		57CC00000000000000000003 /* ScreenControlStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57CC00000000000000000000 /* ScreenControlStyle.swift */; };
 		111111111111111111111701 /* c60_32.data in Resources */ = {isa = PBXBuildFile; fileRef = 56730FE22E6B78990091976B /* c60_32.data */; };
 		111111111111111111111702 /* head_32.data in Resources */ = {isa = PBXBuildFile; fileRef = 56730FE42E6B79000091976B /* head_32.data */; };
 		560A00012E00000000000031 /* web in CopyFiles */ = {isa = PBXBuildFile; fileRef = 560B90002E9150000042E45B /* web */; };
@@ -18,9 +21,9 @@
 		560B90022E9150000042E45B /* web in Resources */ = {isa = PBXBuildFile; fileRef = 560B90002E9150000042E45B /* web */; };
 		560B90032E9150000042E45B /* web in Resources */ = {isa = PBXBuildFile; fileRef = 560B90002E9150000042E45B /* web */; };
 		560B90042E9150000042E45B /* web in Resources */ = {isa = PBXBuildFile; fileRef = 560B90002E9150000042E45B /* web */; };
-		560C70012F20000100000001 /* html in Resources */ = {isa = PBXBuildFile; fileRef = 560C70002F20000100000001 /* html */; };
 		560C60DA2E91000000000001 /* c60_32.data in Resources */ = {isa = PBXBuildFile; fileRef = 56730FE22E6B78990091976B /* c60_32.data */; };
 		560C60DB2E91000000000001 /* head_32.data in Resources */ = {isa = PBXBuildFile; fileRef = 56730FE42E6B79000091976B /* head_32.data */; };
+		560C70012F20000100000001 /* html in Resources */ = {isa = PBXBuildFile; fileRef = 560C70002F20000100000001 /* html */; };
 		56730FE32E6B78990091976B /* c60_32.data in Resources */ = {isa = PBXBuildFile; fileRef = 56730FE22E6B78990091976B /* c60_32.data */; };
 		56730FE52E6B79000091976B /* head_32.data in Resources */ = {isa = PBXBuildFile; fileRef = 56730FE42E6B79000091976B /* head_32.data */; };
 		57A000302E70000200000001 /* FilePickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A000202E70000200000001 /* FilePickerView.swift */; };
@@ -172,6 +175,18 @@
 		57A002B42ED5000100000001 /* GUILogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A002B02ED5000100000001 /* GUILogger.swift */; };
 		57A003012EF1000100000001 /* ScreenScreenshotRequestQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A003002EF1000100000001 /* ScreenScreenshotRequestQueue.swift */; };
 		57A003022EF1000100000001 /* ScreenScreenshotRequestQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A003002EF1000100000001 /* ScreenScreenshotRequestQueue.swift */; };
+		57ED00000000000000000001 /* VolumeBrushControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57ED00000000000000000000 /* VolumeBrushControls.swift */; };
+		57ED00000000000000000002 /* VolumeBrushControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57ED00000000000000000000 /* VolumeBrushControls.swift */; };
+		57ED00000000000000000003 /* VolumeBrushControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57ED00000000000000000000 /* VolumeBrushControls.swift */; };
+		57ED00000000000000000011 /* VolumeBrushModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57ED00000000000000000010 /* VolumeBrushModel.swift */; };
+		57ED00000000000000000012 /* VolumeBrushModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57ED00000000000000000010 /* VolumeBrushModel.swift */; };
+		57ED00000000000000000013 /* VolumeBrushModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57ED00000000000000000010 /* VolumeBrushModel.swift */; };
+		57ED00000000000000000021 /* VolumeEditingCommands.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57ED00000000000000000020 /* VolumeEditingCommands.swift */; };
+		57ED00000000000000000022 /* VolumeEditingCommands.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57ED00000000000000000020 /* VolumeEditingCommands.swift */; };
+		57ED00000000000000000023 /* VolumeEditingCommands.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57ED00000000000000000020 /* VolumeEditingCommands.swift */; };
+		57ED00000000000000000031 /* BorgVRVolumeEditCollaboration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57ED00000000000000000030 /* BorgVRVolumeEditCollaboration.swift */; };
+		57ED00000000000000000032 /* BorgVRVolumeEditCollaboration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57ED00000000000000000030 /* BorgVRVolumeEditCollaboration.swift */; };
+		57ED00000000000000000033 /* BorgVRVolumeEditCollaboration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57ED00000000000000000030 /* BorgVRVolumeEditCollaboration.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -207,12 +222,13 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		57CC00000000000000000000 /* ScreenControlStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenControlStyle.swift; sourceTree = "<group>"; };
 		111111111111111111111101 /* BorgVR Mobile.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "BorgVR Mobile.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		560A00012E00000000000001 /* TerminalServerApp */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = TerminalServerApp; sourceTree = BUILT_PRODUCTS_DIR; };
 		560B8BE72E5C57580042E45B /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		560B90002E9150000042E45B /* web */ = {isa = PBXFileReference; lastKnownFileType = folder; path = web; sourceTree = "<group>"; };
-		560C70002F20000100000001 /* html */ = {isa = PBXFileReference; lastKnownFileType = folder; path = html; sourceTree = "<group>"; };
 		560C00012E00000000000001 /* BorgVR.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BorgVR.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		560C70002F20000100000001 /* html */ = {isa = PBXFileReference; lastKnownFileType = folder; path = html; sourceTree = "<group>"; };
 		564183782D649679003A1EC4 /* BorgVR.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BorgVR.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		5655824B2D4E5D6F008E7CE6 /* BorgVR Server.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "BorgVR Server.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		56730FE22E6B78990091976B /* c60_32.data */ = {isa = PBXFileReference; lastKnownFileType = file; path = c60_32.data; sourceTree = "<group>"; };
@@ -276,6 +292,10 @@
 		57A002A02ED4000300000001 /* WaitingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WaitingView.swift; sourceTree = "<group>"; };
 		57A002B02ED5000100000001 /* GUILogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GUILogger.swift; sourceTree = "<group>"; };
 		57A003002EF1000100000001 /* ScreenScreenshotRequestQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenScreenshotRequestQueue.swift; sourceTree = "<group>"; };
+		57ED00000000000000000000 /* VolumeBrushControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VolumeBrushControls.swift; sourceTree = "<group>"; };
+		57ED00000000000000000010 /* VolumeBrushModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VolumeBrushModel.swift; sourceTree = "<group>"; };
+		57ED00000000000000000020 /* VolumeEditingCommands.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VolumeEditingCommands.swift; sourceTree = "<group>"; };
+		57ED00000000000000000030 /* BorgVRVolumeEditCollaboration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BorgVRVolumeEditCollaboration.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -324,12 +344,22 @@
 		564183972D649734003A1EC4 /* Exceptions for "BORGVR-IO" folder in "VisionApp" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
+				BorgVRCPUVolumeEditExecutor.swift,
 				BORGVRDataBase.swift,
 				BorgVRDICOMRigidRegistration.swift,
+				BorgVREditableVolumeData.swift,
 				BORGVRFileData.swift,
+				BorgVRIntegerVolumeSampler.swift,
 				BORGVRMetaData.swift,
 				BorgVRSharedConstants.swift,
 				BorgVRVolumeConversionService.swift,
+				BorgVRVolumeEditBrickCache.swift,
+				BorgVRVolumeEditDataSource.swift,
+				BorgVRVolumeEditMaterializer.swift,
+				BorgVRMetalVolumeEditProcessor.swift,
+				BorgVRVolumeEditJournal.swift,
+				BorgVRVolumeEditMask.swift,
+				BorgVRVolumeEditStates.swift,
 				BrickedVolumeReorganizer.swift,
 				DICOM.swift,
 				DICOMVRMap.swift,
@@ -612,9 +642,12 @@
 		57A010032EF0000100000001 /* Rendering */ = {
 			isa = PBXGroup;
 			children = (
+				57CC00000000000000000000 /* ScreenControlStyle.swift */,
 				57A000212E70000200000001 /* GPUHashtable.swift */,
 				57A001262E70000300000001 /* IsovalueEditorView.swift */,
 				57A001802EA0000100000001 /* LightingEditorView.swift */,
+				57ED00000000000000000000 /* VolumeBrushControls.swift */,
+				57ED00000000000000000010 /* VolumeBrushModel.swift */,
 				57A001242E70000300000001 /* MatrixUtilities.swift */,
 				57A001D02EB0000200000001 /* MetalScreenshotEncoder.swift */,
 				57A001642E99000200000001 /* RenderMode.swift */,
@@ -649,6 +682,7 @@
 				57A002502ED2000300000001 /* BorgVRSharePlayAdHocServer.swift */,
 				57A002402ED2000200000001 /* BorgVRSharePlayPlatformAdapter.swift */,
 				57A002202ED1000100000001 /* BorgVRSharePlaySessionEngine.swift */,
+				57ED00000000000000000030 /* BorgVRVolumeEditCollaboration.swift */,
 				57A002302ED2000100000001 /* SharePlayCoordinator.swift */,
 			);
 			path = SharePlay;
@@ -658,6 +692,7 @@
 			isa = PBXGroup;
 			children = (
 				57A001C02EB0000100000001 /* BorgVRScreenCommandService.swift */,
+				57ED00000000000000000020 /* VolumeEditingCommands.swift */,
 				57A001E02EB0000300000001 /* MCPSettingsControls.swift */,
 				57A003002EF1000100000001 /* ScreenScreenshotRequestQueue.swift */,
 			);
@@ -1032,6 +1067,7 @@
 				57A002512ED2000300000001 /* BorgVRSharePlayAdHocServer.swift in Sources */,
 				57A002412ED2000200000001 /* BorgVRSharePlayPlatformAdapter.swift in Sources */,
 				57A002212ED1000100000001 /* BorgVRSharePlaySessionEngine.swift in Sources */,
+				57ED00000000000000000031 /* BorgVRVolumeEditCollaboration.swift in Sources */,
 				57A002812ED4000100000001 /* DatasetOpenWorkflow.swift in Sources */,
 				57A002912ED4000200000001 /* OpenDatasetView.swift in Sources */,
 				57A002A12ED4000300000001 /* WaitingView.swift in Sources */,
@@ -1050,6 +1086,10 @@
 				57A001362E70000300000001 /* IsovalueEditorView.swift in Sources */,
 				57A0014C2E70000300000001 /* KeychainSecretStore.swift in Sources */,
 				57A001812EA0000100000001 /* LightingEditorView.swift in Sources */,
+				57CC00000000000000000001 /* ScreenControlStyle.swift in Sources */,
+				57ED00000000000000000001 /* VolumeBrushControls.swift in Sources */,
+				57ED00000000000000000021 /* VolumeEditingCommands.swift in Sources */,
+				57ED00000000000000000011 /* VolumeBrushModel.swift in Sources */,
 				57A001332E70000300000001 /* LoggerView.swift in Sources */,
 				57A001342E70000300000001 /* MatrixUtilities.swift in Sources */,
 				57A001652E99000200000001 /* RenderMode.swift in Sources */,
@@ -1091,6 +1131,7 @@
 				57A002522ED2000300000001 /* BorgVRSharePlayAdHocServer.swift in Sources */,
 				57A002422ED2000200000001 /* BorgVRSharePlayPlatformAdapter.swift in Sources */,
 				57A002222ED1000100000001 /* BorgVRSharePlaySessionEngine.swift in Sources */,
+				57ED00000000000000000032 /* BorgVRVolumeEditCollaboration.swift in Sources */,
 				57A002612ED3000100000001 /* ConverterView.swift in Sources */,
 				57A002712ED3000200000001 /* DicomSlicePreview.swift in Sources */,
 				57A002822ED4000100000001 /* DatasetOpenWorkflow.swift in Sources */,
@@ -1110,6 +1151,10 @@
 				57A0013E2E70000300000001 /* IsovalueEditorView.swift in Sources */,
 				57A0014D2E70000300000001 /* KeychainSecretStore.swift in Sources */,
 				57A001822EA0000100000001 /* LightingEditorView.swift in Sources */,
+				57CC00000000000000000002 /* ScreenControlStyle.swift in Sources */,
+				57ED00000000000000000002 /* VolumeBrushControls.swift in Sources */,
+				57ED00000000000000000022 /* VolumeEditingCommands.swift in Sources */,
+				57ED00000000000000000012 /* VolumeBrushModel.swift in Sources */,
 				57A0013B2E70000300000001 /* LoggerView.swift in Sources */,
 				57A0013C2E70000300000001 /* MatrixUtilities.swift in Sources */,
 				57A001662E99000200000001 /* RenderMode.swift in Sources */,
@@ -1142,6 +1187,7 @@
 				57A002B32ED5000100000001 /* GUILogger.swift in Sources */,
 				57A002132ED0000200000001 /* BorgVRAnnotationCommands.swift in Sources */,
 				57A002232ED1000100000001 /* BorgVRSharePlaySessionEngine.swift in Sources */,
+				57ED00000000000000000033 /* BorgVRVolumeEditCollaboration.swift in Sources */,
 				57A002032ED0000100000001 /* BorgVRSession.swift in Sources */,
 				57A001D32EB0000200000001 /* MetalScreenshotEncoder.swift in Sources */,
 				57A001E32EB0000300000001 /* MCPSettingsControls.swift in Sources */,
@@ -1151,6 +1197,10 @@
 				57A000382E70000200000001 /* GPUHashtable.swift in Sources */,
 				57A0014E2E70000300000001 /* KeychainSecretStore.swift in Sources */,
 				57A001832EA0000100000001 /* LightingEditorView.swift in Sources */,
+				57CC00000000000000000003 /* ScreenControlStyle.swift in Sources */,
+				57ED00000000000000000003 /* VolumeBrushControls.swift in Sources */,
+				57ED00000000000000000023 /* VolumeEditingCommands.swift in Sources */,
+				57ED00000000000000000013 /* VolumeBrushModel.swift in Sources */,
 				57A001A42EA2000100000001 /* MatrixUtilities.swift in Sources */,
 				57A000392E70000200000001 /* RuntimeMetalShaderLoader.swift in Sources */,
 				57A001672E99000200000001 /* RenderMode.swift in Sources */,
@@ -1218,7 +1268,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 3.1;
+				MARKETING_VERSION = 3.2;
 				PRODUCT_BUNDLE_IDENTIFIER = "de.uni-due.BorgVRVisionApp";
 				PRODUCT_NAME = "BorgVR Mobile";
 				SDKROOT = iphoneos;
@@ -1255,7 +1305,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 3.1;
+				MARKETING_VERSION = 3.2;
 				PRODUCT_BUNDLE_IDENTIFIER = "de.uni-due.BorgVRVisionApp";
 				PRODUCT_NAME = "BorgVR Mobile";
 				SDKROOT = iphoneos;
@@ -1276,7 +1326,7 @@
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				MACOSX_DEPLOYMENT_TARGET = 15.2;
-				MARKETING_VERSION = 3.1;
+				MARKETING_VERSION = 3.2;
 				PRODUCT_BUNDLE_IDENTIFIER = "de.uni-due.TerminalServerApp";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
@@ -1292,7 +1342,7 @@
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				MACOSX_DEPLOYMENT_TARGET = 15.2;
-				MARKETING_VERSION = 3.1;
+				MARKETING_VERSION = 3.2;
 				PRODUCT_BUNDLE_IDENTIFIER = "de.uni-due.TerminalServerApp";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
@@ -1326,7 +1376,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.2;
-				MARKETING_VERSION = 3.1;
+				MARKETING_VERSION = 3.2;
 				PRODUCT_BUNDLE_IDENTIFIER = "de.uni-due.BorgVRVisionApp";
 				PRODUCT_NAME = BorgVR;
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -1363,7 +1413,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.2;
-				MARKETING_VERSION = 3.1;
+				MARKETING_VERSION = 3.2;
 				PRODUCT_BUNDLE_IDENTIFIER = "de.uni-due.BorgVRVisionApp";
 				PRODUCT_NAME = BorgVR;
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -1399,7 +1449,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 3.1;
+				MARKETING_VERSION = 3.2;
 				PRODUCT_BUNDLE_IDENTIFIER = "de.uni-due.BorgVRVisionApp";
 				PRODUCT_NAME = BorgVR;
 				SDKROOT = xros;
@@ -1437,7 +1487,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 3.1;
+				MARKETING_VERSION = 3.2;
 				PRODUCT_BUNDLE_IDENTIFIER = "de.uni-due.BorgVRVisionApp";
 				PRODUCT_NAME = BorgVR;
 				SDKROOT = xros;
@@ -1474,7 +1524,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.2;
-				MARKETING_VERSION = 3.1;
+				MARKETING_VERSION = 3.2;
 				PRODUCT_BUNDLE_IDENTIFIER = "de.uni-due.macOSServer";
 				PRODUCT_NAME = "BorgVR Server";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -1506,7 +1556,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.2;
-				MARKETING_VERSION = 3.1;
+				MARKETING_VERSION = 3.2;
 				PRODUCT_BUNDLE_IDENTIFIER = "de.uni-due.macOSServer";
 				PRODUCT_NAME = "BorgVR Server";
 				PROVISIONING_PROFILE_SPECIFIER = "";

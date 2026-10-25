@@ -46,7 +46,7 @@ enum VisionVolumeRendererBootstrap {
     }
 
     // Acquire dataset (local vs remote)
-    let dataset: BORGVRDatasetProtocol
+    var dataset: BORGVRDatasetProtocol
     do {
       switch activeDataset.source {
         case .local, .builtIn:
@@ -106,6 +106,15 @@ enum VisionVolumeRendererBootstrap {
       return
     }
 
+    let editDatasetURL: URL?
+    switch activeDataset.source {
+      case .builtIn: editDatasetURL = nil
+      case .local: editDatasetURL = URL(fileURLWithPath: activeDataset.identifier)
+      case .remote:
+        editDatasetURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first?
+          .appendingPathComponent("\(activeDataset.identifier).data")
+    }
+    dataset = runtimeAppModel.volumeBrush.open(dataset, datasetURL: editDatasetURL, logger: runtimeAppModel.logger)
     runtimeAppModel.activeDatasetInfo = RuntimeAppModel.DatasetInfo(meta: dataset.getMetadata())
 
     // Timer setup
@@ -180,6 +189,7 @@ enum VisionVolumeRendererBootstrap {
     }
     let immersiveInteraction = ImmersiveInteraction(
       session: session,
+      volumeBrushContext: runtimeAppModel.volumeBrush.context,
       sharedAppModel: sharedAppModel,
       storedAppModel: storedAppModel,
       transferFunctionPanelInteractionState: transferFunctionPanelInteractionState,

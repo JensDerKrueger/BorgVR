@@ -311,6 +311,23 @@ final class CachingRemoteDataSource: DataSource {
     throw BORGVRDataError.brickNotYetAvailable(index: index)
   }
 
+  func getRawBrick(index: Int, outputBuffer: UnsafeMutablePointer<UInt8>) throws -> Int? {
+    let metadata = getMetadata()
+    guard metadata.brickMetadata.indices.contains(index) else {
+      throw BORGVRDataError.networkError(message: "Brick request contains an invalid index.")
+    }
+    guard cacheMap.isSet(index: index) else {
+      enqueue(index: index)
+      throw BORGVRDataError.brickNotYetAvailable(index: index)
+    }
+    let brickMeta = metadata.brickMetadata[index]
+    try metadata.validateStoredBrickByteCount(brickMeta.size, fullBrickByteCount: fullBrickSize)
+    return dataFileLock.withLock {
+      memcpy(outputBuffer, dataFile.mappedMemory.advanced(by: brickMeta.offset), brickMeta.size)
+      return brickMeta.size
+    }
+  }
+
   private func enqueue(index: Int) {
     let inserted = requestQueueLock.sync {
       guard !requestQueue.contains(index) else { return false }
@@ -460,6 +477,7 @@ final class CachingRemoteDataSource: DataSource {
    */
   private func getLocalBrick(index: Int, outputBuffer: UnsafeMutablePointer<UInt8>) throws {
     let brickMeta = getMetadata().brickMetadata[index]
+    try getMetadata().validateStoredBrickByteCount(brickMeta.size, fullBrickByteCount: fullBrickSize)
     dataFileLock.lock()
     defer { dataFileLock.unlock() }
 

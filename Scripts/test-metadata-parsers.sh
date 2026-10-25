@@ -12,6 +12,9 @@ swiftc \
   "$ROOT/BORGVR-IO/Vector.swift" \
   "$ROOT/BORGVR-IO/IOExtensions.swift" \
   "$ROOT/BORGVR-IO/BORGVRMetaData.swift" \
+  "$ROOT/BORGVR-IO/BORGVRDataBase.swift" \
+  "$ROOT/BORGVR-IO/MemoryMappedFile.swift" \
+  "$ROOT/BORGVR-IO/BORGVRFileData.swift" \
   "$ROOT/Tests/BORGVRMetaDataParserTests.swift" \
   -o "$BUILD_DIR/swift-metadata-parser-tests"
 "$BUILD_DIR/swift-metadata-parser-tests" "$BUILD_DIR/valid-metadata.bin"

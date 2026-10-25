@@ -67,6 +67,23 @@ final class SharePlayCoordinator: ObservableObject {
   private var eligibilityObservation: AnyCancellable?
   private var lastGroupSessionEligibility: Bool?
   private var awaitsSessionFromSharingController = false
+  private var editCollaboration: BorgVRVolumeEditCollaboration?
+
+  private func refreshEditCollaboration() {
+    guard let appModel, let localID = sessionEngine.localParticipantID, isInSession else { return }
+    if editCollaboration == nil {
+      editCollaboration = BorgVRVolumeEditCollaboration(model: appModel.volumeBrush, send: { [weak self] data, target in
+        guard let self, self.messenger != nil else { throw CancellationError() }
+        if let target {
+          guard let participant = self.knownParticipants.first(where: { $0.id == target }) else { throw CancellationError() }
+          try await self.sendData(data, of: .volumeEditing, to: .only(Set([participant])))
+        } else { try await self.sendData(data, of: .volumeEditing) }
+      }, log: { [weak appModel] in appModel?.logger.warning($0) },
+        info: { [weak appModel] in appModel?.logger.info($0) })
+    }
+    editCollaboration?.configure(localID: localID, hostID: sessionEngine.currentHostParticipantID,
+      datasetID: sessionEngine.sessionDatasetID, participants: Set(knownParticipants.map(\.id)))
+  }
 
   init(platformAdapter: BorgVRSharePlayPlatformAdapter) {
     self.platformAdapter = platformAdapter
@@ -416,6 +433,7 @@ final class SharePlayCoordinator: ObservableObject {
 
     let messenger = GroupSessionMessenger(session: session)
     self.messenger = messenger
+    refreshEditCollaboration()
     messageTask = Task.detached { [weak self] in
       for await (data, context) in messenger.messages(of: Data.self) {
         if Task.isCancelled { return }
@@ -528,10 +546,13 @@ final class SharePlayCoordinator: ObservableObject {
   }
 
   private func publishParticipants() {
+    refreshEditCollaboration()
     participants = sessionEngine.participants
   }
 
   private func resetSessionReceivers() {
+    editCollaboration?.stop()
+    editCollaboration = nil
     messageTask?.cancel()
     messageTask = nil
     groupSession = nil
@@ -594,6 +615,7 @@ final class SharePlayCoordinator: ObservableObject {
     guard appModel?.groupSessionHost == true else { return }
 
     await sendDatasetAnnouncement(to: participants)
+    refreshEditCollaboration()
     guard appModel?.activeDataset != nil else { return }
     if let renderingParameters {
       try? await sendData(
@@ -625,6 +647,12 @@ final class SharePlayCoordinator: ObservableObject {
         of: .renderingUpdate,
         to: participants
       )
+    }
+    switch participants {
+      case .all: await editCollaboration?.sendSnapshot()
+      case .only(let members):
+        for participant in members { await editCollaboration?.sendSnapshot(to: participant.id) }
+      @unknown default: break
     }
   }
 
@@ -700,6 +728,9 @@ final class SharePlayCoordinator: ObservableObject {
     }
 
     switch message.type {
+      case .volumeEditing:
+        refreshEditCollaboration()
+        editCollaboration?.receive(message.payload, from: participant.id)
       case .initMessage:
         guard appModel?.groupSessionHost != true else { return }
         handleInit(data: message.payload, sessionGeneration: generation)
@@ -1263,6 +1294,7 @@ final class SharePlayCoordinator: ObservableObject {
     hostElectionTask = nil
     showsHostDeparturePrompt = false
     appModel?.groupSessionHost = transition.isLocalHost
+    refreshEditCollaboration()
     if transition.isLocalHost {
       setSessionDatasetID(appModel?.activeDataset?.uniqueId)
     }
@@ -1273,6 +1305,7 @@ final class SharePlayCoordinator: ObservableObject {
 
   private func setSessionDatasetID(_ datasetID: String?) {
     guard sessionEngine.setSessionDatasetID(datasetID) else { return }
+    refreshEditCollaboration()
     platformAdapter.stopSharePlayServer()
     if let datasetID {
       appModel?.logger.info("SharePlay ad-hoc server is restricted to host dataset \(datasetID).")

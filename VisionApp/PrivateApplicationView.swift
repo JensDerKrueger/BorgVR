@@ -16,6 +16,7 @@ struct HandInteractionControlsView: View {
   @State private var showResetClippingConfirmation = false
   @State private var showDeleteAllObjectsConfirmation = false
   @State private var showDeleteAllMeasurementsConfirmation = false
+  @State private var showDiscardAllEditsConfirmation = false
   @State private var transferFunctionCatalog: [TransferFunctionCatalogEntry] = []
   @State private var transferFunctionLoadError: Error?
   @State private var showTransferFunctionLoadError = false
@@ -27,6 +28,7 @@ struct HandInteractionControlsView: View {
         .bold()
 
       interactionControls(showTitles: false)
+      VolumeEditSynchronizationStatus(model: runtimeAppModel.volumeBrush)
 
       if !sharedAppModel.sharePlayParticipants.isEmpty {
         HStack(spacing: 36) {
@@ -164,6 +166,14 @@ struct HandInteractionControlsView: View {
     } message: {
       Text("measurement_delete_all_confirmation_message")
     }
+    .alert("Discard All Volume Edits?", isPresented: $showDiscardAllEditsConfirmation) {
+      Button("Cancel", role: .cancel) {}
+      Button("Discard All Edits", role: .destructive) {
+        runtimeAppModel.volumeBrush.discardAllEdits()
+      }
+    } message: {
+      Text("All edits in the active state will be removed. During SharePlay this clears the shared state for everyone. Other states and the original dataset are preserved.")
+    }
     .alert(
       "tf_editor_import_failed_title",
       isPresented: $showTransferFunctionLoadError,
@@ -239,6 +249,7 @@ struct HandInteractionControlsView: View {
       InteractionModePicker(
         selection: interactionModeBinding,
         showsScreenView: hasSharedScreenView,
+        volumeBrush: runtimeAppModel.volumeBrush,
         resetModel: { showResetModelConfirmation = true },
         resetClipping: { showResetClippingConfirmation = true },
         transferFunctionCatalog: transferFunctionCatalog,
@@ -246,7 +257,8 @@ struct HandInteractionControlsView: View {
         loadTransferFunction: loadTransferFunction,
         resetDrawing: { showDeleteAllObjectsConfirmation = true },
         resetPlacement: { showDeleteAllObjectsConfirmation = true },
-        resetMeasurement: { showDeleteAllMeasurementsConfirmation = true }
+        resetMeasurement: { showDeleteAllMeasurementsConfirmation = true },
+        resetEdits: { showDiscardAllEditsConfirmation = true }
       )
       Text("private_windows_title")
         .font(.headline)
@@ -259,7 +271,7 @@ struct HandInteractionControlsView: View {
 
   private func modeWindowButtons(showTitles: Bool) -> some View {
     GeometryReader { geometry in
-      let columnCount = hasSharedScreenView ? 7 : 6
+      let columnCount = hasSharedScreenView ? 8 : 7
       let spacing: CGFloat = 4
       let columnWidth = max(
         0,
@@ -285,6 +297,10 @@ struct HandInteractionControlsView: View {
         measurementWindowButton(showTitles: showTitles)
           .frame(width: columnWidth)
           .offset(x: columnStride * 5)
+
+        brushWindowButton(showTitles: showTitles)
+          .frame(width: columnWidth)
+          .offset(x: columnStride * 6)
       }
       .buttonStyle(.bordered)
     }
@@ -340,6 +356,28 @@ struct HandInteractionControlsView: View {
       .frame(maxWidth: .infinity)
     }
     .help(String(localized: "Lighting"))
+  }
+
+  private func brushWindowButton(showTitles: Bool) -> some View {
+    let isPresented = runtimeAppModel.isViewOpen("VolumeBrushEditorView")
+    return Button {
+      if isPresented {
+        dismissWindow(id: "VolumeBrushEditorView")
+      } else {
+        openWindow(id: "VolumeBrushEditorView")
+      }
+    } label: {
+      toolLabel(
+        String(localized: "Brush"),
+        systemImage: "eraser",
+        color: isPresented ? .white : .red,
+        showTitle: showTitles
+      )
+      .frame(maxWidth: .infinity)
+    }
+    .tint(isPresented ? Color.red : nil)
+    .accessibilityAddTraits(isPresented ? .isSelected : [])
+    .help(String(localized: "Brush"))
   }
 
   private func editorButton(showTitles: Bool) -> some View {
@@ -615,6 +653,7 @@ enum InteractionModeColor {
       case "transferEditing": transfer
       case "drawing", "objectPlacement": objects
       case "measurement": measurement
+      case "volumeEditing": .red
       case "screenView": screenView
       default: .primary
     }
@@ -624,6 +663,7 @@ enum InteractionModeColor {
 struct InteractionModePicker: View {
   @Binding var selection: String
   let showsScreenView: Bool
+  let volumeBrush: VolumeBrushModel
   var resetModel: (() -> Void)? = nil
   var resetClipping: (() -> Void)? = nil
   var transferFunctionCatalog: [TransferFunctionCatalogEntry] = []
@@ -632,6 +672,7 @@ struct InteractionModePicker: View {
   var resetDrawing: (() -> Void)? = nil
   var resetPlacement: (() -> Void)? = nil
   var resetMeasurement: (() -> Void)? = nil
+  var resetEdits: (() -> Void)? = nil
 
   var body: some View {
     HStack(spacing: 4) {
@@ -678,6 +719,8 @@ struct InteractionModePicker: View {
         resetAction: resetMeasurement,
         resetTitle: "measurement_delete_all_button"
       )
+      segment("Edit", icon: "eraser", value: "volumeEditing",
+        resetAction: resetEdits, resetTitle: "Discard All Edits")
       if showsScreenView {
         segment("Screen View", icon: "display", value: "screenView")
       }
@@ -752,7 +795,21 @@ struct InteractionModePicker: View {
       Button {
         selection = value
       } label: {
-        Label(title, systemImage: icon)
+        ViewThatFits(in: .horizontal) {
+          Label(title, systemImage: icon).fixedSize(horizontal: true, vertical: false)
+          if value == "volumeEditing" || value == "screenView" {
+            VStack(spacing: 0) {
+              Image(systemName: icon)
+              Text(title)
+                .font(.caption)
+                .lineLimit(value == "screenView" ? 2 : 1)
+                .multilineTextAlignment(.center)
+                .minimumScaleFactor(0.75)
+            }
+          } else {
+            Image(systemName: icon)
+          }
+        }
           .font(.callout)
           .fontWeight(isSelected ? .semibold : .regular)
           .foregroundStyle(color)
@@ -767,6 +824,11 @@ struct InteractionModePicker: View {
       }
       .buttonStyle(.plain)
       .accessibilityAddTraits(isSelected ? .isSelected : [])
+      .accessibilityLabel(Text(title))
+      .help(Text(title))
+      .overlay(alignment: .topTrailing) {
+        if value == "volumeEditing" { VolumeBrushActivityIndicator(model: volumeBrush) }
+      }
     }
     .frame(maxWidth: .infinity)
   }

@@ -18,10 +18,10 @@ func copyFile(from sourceURL: URL, toDir destinationDirURL: URL, logger: GUILogg
   }
 }
 
-func findlocalFile(id : String) -> URL? {
+func findLocalDataset(id: String) -> (url: URL, source: RuntimeAppModel.DatasetSource)? {
   let localDatasets = listLocalDatasets()
   if let match = localDatasets.first(where: { $0.0 == id }) {
-    return match.1
+    return (match.1, match.2)
   }
   return nil
 }

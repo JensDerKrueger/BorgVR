@@ -55,6 +55,7 @@ struct DatasetInfoView: View {
           } label: {
             Label("Close", systemImage: "xmark")
           }
+          .screenControlButtons()
         }
       }
     }

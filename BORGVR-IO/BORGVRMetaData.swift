@@ -302,7 +302,7 @@ final class BORGVRMetaData: CustomStringConvertible, Codable {
   /// The version of the metadata format.
   private static let version: Int = 4
   private static let maximumStringByteCount = 1_048_576
-  private static let maximumComponentCount = 1024
+  static let maximumComponentCount = 1024
   private static let maximumDimension = Int(Int32.max)
 
   /// The original volume width.
@@ -554,6 +554,18 @@ final class BORGVRMetaData: CustomStringConvertible, Codable {
   func updateMinMax(minValue: Int, maxValue: Int) {
     self.minValue = minValue
     self.maxValue = maxValue
+  }
+
+  func editExportMetadata() -> BORGVRMetaData {
+    // The output builds its own brick table; do not serialize and decode the
+    // potentially enormous original table merely to copy the volume properties.
+    let copy = BORGVRMetaData(width: width, height: height, depth: depth,
+      componentCount: componentCount, bytePerComponent: bytesPerComponent,
+      voxelSpacingX: voxelSpacingX, voxelSpacingY: voxelSpacingY, voxelSpacingZ: voxelSpacingZ,
+      brickSize: brickSize, overlap: overlap, minValue: minValue, maxValue: maxValue,
+      compression: compression, datasetDescription: datasetDescription, metaDescription: metaDescription)
+    copy.updateComponentRanges(componentRanges)
+    return copy
   }
 
   func updateComponentRanges(_ componentRanges: [BORGVRComponentRange]) {
@@ -814,6 +826,10 @@ final class BORGVRMetaData: CustomStringConvertible, Codable {
     self.minValue = try readInt("minValue")
     self.maxValue = try readInt("maxValue")
     let componentRangeCount = try readInt("componentRangeCount")
+    guard componentCount > 0, componentCount <= Self.maximumComponentCount else {
+      throw BORGVRError.invalidValue(context: "componentCount",
+        reason: "must be in 1...\(Self.maximumComponentCount)")
+    }
     guard componentRangeCount == componentCount else {
       throw BORGVRError.invalidValue(
         context: "componentRangeCount",
@@ -829,6 +845,7 @@ final class BORGVRMetaData: CustomStringConvertible, Codable {
     self.compression = try reader.readBool(context: "compression")
 
     try validateHeaderValues()
+    let fullBrickByteCount = try self.fullBrickByteCount()
     let levelResult = try BORGVRMetaData.makeLevelMetadata(
       width: width,
       height: height,
@@ -884,7 +901,7 @@ final class BORGVRMetaData: CustomStringConvertible, Codable {
     self.brickMetadata.reserveCapacity(metadataCount)
     for _ in 0..<metadataCount {
       let brickMeta = try BrickMetadata(from: &reader, componentCount: componentCount)
-      try validate(brick: brickMeta, brickDataUpperBound: brickDataUpperBound)
+      try validate(brick: brickMeta, fullBrickByteCount: fullBrickByteCount, brickDataUpperBound: brickDataUpperBound)
       self.brickMetadata.append(brickMeta)
     }
     self.levelMetadata = levelResult.levels
@@ -942,13 +959,30 @@ final class BORGVRMetaData: CustomStringConvertible, Codable {
     }
   }
 
-  private func validate(brick: BrickMetadata, brickDataUpperBound: UInt64?) throws {
+  func fullBrickByteCount() throws -> Int {
+    var count = 1
+    for factor in [brickSize, brickSize, brickSize, componentCount, bytesPerComponent] {
+      let (product, overflow) = count.multipliedReportingOverflow(by: factor)
+      guard factor > 0, !overflow, product > 0 else {
+        throw BORGVRError.invalidValue(context: "full brick size", reason: "byte count exceeds the supported integer range")
+      }
+      count = product
+    }
+    return count
+  }
+
+  func validateStoredBrickByteCount(_ count: Int, fullBrickByteCount: Int) throws {
+    guard count > 0, count <= fullBrickByteCount, compression || count == fullBrickByteCount else {
+      throw BORGVRError.invalidValue(context: "brick size",
+        reason: "stored bytes must fit a full brick; uncompressed bricks must have exactly the full size")
+    }
+  }
+
+  private func validate(brick: BrickMetadata, fullBrickByteCount: Int, brickDataUpperBound: UInt64?) throws {
     guard brick.offset >= 8 else {
       throw BORGVRError.invalidValue(context: "brick offset", reason: "must be at least 8")
     }
-    guard brick.size > 0 else {
-      throw BORGVRError.invalidValue(context: "brick size", reason: "must be greater than zero")
-    }
+    try validateStoredBrickByteCount(brick.size, fullBrickByteCount: fullBrickByteCount)
     let (brickEnd, overflow) = brick.offset.addingReportingOverflow(brick.size)
     guard !overflow else {
       throw BORGVRError.invalidValue(context: "brick range", reason: "offset plus size overflows")

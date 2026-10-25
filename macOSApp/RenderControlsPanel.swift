@@ -4,6 +4,7 @@ import SwiftUI
 private struct HeaderIconButtonStyle: ButtonStyle {
   func makeBody(configuration: Configuration) -> some View {
     configuration.label
+      .foregroundStyle(.primary)
       .frame(width: 26, height: 24)
       .contentShape(Rectangle())
       .background(
@@ -32,6 +33,7 @@ struct RenderControlsPanel: View {
 
   var body: some View {
     VStack(spacing: 8) {
+      VolumeEditSynchronizationStatus(model: appModel.volumeBrush)
       HStack {
         Button {
           docking.request(.closeDataset)
@@ -223,6 +225,7 @@ struct RenderControlsPanel: View {
             Label("Synchronize View", systemImage: "link")
           }
           .toggleStyle(.button)
+          .buttonStyle(ScreenControlButtonStyle(accent: .green, isSelected: sharePlay.isScreenViewSynchronized))
           .fixedSize()
           .help(MacKeyboardShortcut.help("Synchronize View", shortcut: .synchronizeView))
         }
@@ -233,7 +236,11 @@ struct RenderControlsPanel: View {
           }
         }
         .pickerStyle(.segmented)
-        .help("7: TF · 8: TF + Lighting · 9: Iso")
+        .help([
+          MacRenderShortcut.help("Transfer Function", shortcut: .transferFunctionRendering),
+          MacRenderShortcut.help("Transfer function + lighting", shortcut: .lightingRendering),
+          MacRenderShortcut.help("Isovalue", shortcut: .isoRendering)
+        ].joined(separator: " · "))
 
         if renderingParameters.renderMode == .isoValue {
           Button {
@@ -244,12 +251,14 @@ struct RenderControlsPanel: View {
           .fixedSize()
           .accessibilityLabel("Extract Isosurface")
           .help(MacRenderShortcut.help("Extract Isosurface", shortcut: .extractIsosurface))
+          .modifier(VolumeExportAvailability(model: appModel.volumeBrush))
         }
 
         HStack(spacing: 8) {
           if appSettings.showBrickVisualization {
             Toggle("Bricks", isOn: $renderingParameters.brickVis)
               .toggleStyle(.button)
+              .buttonStyle(ScreenControlButtonStyle(isSelected: renderingParameters.brickVis))
               .fixedSize()
               .help(MacRenderShortcut.help("Bricks", shortcut: .bricks))
               .onChange(of: renderingParameters.brickVis) {
@@ -281,6 +290,8 @@ struct RenderControlsPanel: View {
         applyInteractionModeSelection(newValue)
       }
       .onChange(of: appModel.interactionMode) { _, newValue in
+        appModel.volumeBrush.context.finish(source: "pointer")
+        appModel.endProjectedStrokeHandler?()
         if selectedInteractionMode != newValue {
           selectedInteractionMode = newValue
         }
@@ -313,6 +324,7 @@ struct RenderControlsPanel: View {
         title: "private_interaction_option_measurement",
         systemImage: "ruler"
       )
+      interactionModeSegment(.volumeEditing, title: "Edit Volume", systemImage: "eraser")
     }
     .padding(4)
     .background(.secondary.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
@@ -331,32 +343,42 @@ struct RenderControlsPanel: View {
     return Button {
       selectedInteractionMode = mode
     } label: {
-      HStack(spacing: 6) {
-        Image(systemName: systemImage)
-          .foregroundStyle(color)
-        Text(LocalizedStringKey(title))
-          .foregroundStyle(.primary)
+      ViewThatFits(in: .horizontal) {
+        HStack(spacing: 6) {
+          Image(systemName: systemImage).foregroundStyle(.primary)
+          Text(LocalizedStringKey(title)).foregroundStyle(.primary)
+        }
+        .fixedSize(horizontal: true, vertical: false)
+        Image(systemName: systemImage).foregroundStyle(.primary)
       }
         .font(.callout)
         .fontWeight(selected ? .semibold : .regular)
         .lineLimit(1)
         .frame(maxWidth: .infinity, minHeight: 28)
         .padding(.horizontal, 5)
-        .background(
-          color.opacity(selected ? 0.22 : 0),
-          in: RoundedRectangle(cornerRadius: 6)
-        )
+        .background(ScreenControlAppearance.surface, in: RoundedRectangle(cornerRadius: 6))
+        .overlay {
+          RoundedRectangle(cornerRadius: 6)
+            .strokeBorder(color.opacity(selected ? 1 : 0.3), lineWidth: selected ? 2 : 1)
+        }
+        .overlay(alignment: .bottom) {
+          Capsule().fill(color).frame(width: 18, height: 2).padding(.bottom, 3)
+        }
         .contentShape(Rectangle())
     }
     .buttonStyle(.plain)
     .accessibilityAddTraits(selected ? .isSelected : [])
     .help(interactionModeHelp(title: title, mode: mode))
+    .accessibilityLabel(Text(LocalizedStringKey(title)))
+    .overlay(alignment: .topTrailing) {
+      if mode == .volumeEditing { VolumeBrushActivityIndicator(model: appModel.volumeBrush) }
+    }
   }
 
   private var modeWindowButtons: some View {
     GeometryReader { geometry in
       let spacing: CGFloat = 4
-      let columnWidth = max(0, (geometry.size.width - spacing * 5) / 6)
+      let columnWidth = max(0, (geometry.size.width - spacing * 6) / 7)
       let columnStride = columnWidth + spacing
       let doubleColumnWidth = columnWidth * 2 + spacing
       let groupInset: CGFloat = 8
@@ -377,6 +399,10 @@ struct RenderControlsPanel: View {
         measurementWindowButton
           .frame(width: columnWidth)
           .offset(x: columnStride * 5)
+
+        brushWindowButton
+          .frame(width: columnWidth)
+          .offset(x: columnStride * 6)
       }
     }
     .frame(height: 34)
@@ -390,10 +416,10 @@ struct RenderControlsPanel: View {
       windowButtonLabel(
         "Lighting",
         systemImage: "lightbulb.max",
-        color: isPresented ? .white : .primary
+        color: .primary
       )
     }
-    .modifier(WindowPresentationButtonStyle(isPresented: isPresented, tint: .accentColor))
+    .modifier(WindowPresentationButtonStyle(isPresented: isPresented, tint: .secondary))
     .accessibilityAddTraits(isPresented ? .isSelected : [])
     .help(MacRenderShortcut.help("Lighting", shortcut: .lighting))
   }
@@ -409,7 +435,7 @@ struct RenderControlsPanel: View {
       windowButtonLabel(
         "Editor",
         systemImage: "slider.horizontal.3",
-        color: isPresented ? .white : .purple
+        color: .primary
       )
     }
     .modifier(WindowPresentationButtonStyle(isPresented: isPresented, tint: .purple))
@@ -425,7 +451,7 @@ struct RenderControlsPanel: View {
       windowButtonLabel(
         "Objects",
         systemImage: "cube.transparent",
-        color: isPresented ? .white : .orange
+        color: .primary
       )
     }
     .modifier(WindowPresentationButtonStyle(isPresented: isPresented, tint: .orange))
@@ -441,12 +467,24 @@ struct RenderControlsPanel: View {
       windowButtonLabel(
         "measurement_window_title",
         systemImage: "ruler",
-        color: isPresented ? .white : .green
+        color: .primary
       )
     }
     .modifier(WindowPresentationButtonStyle(isPresented: isPresented, tint: .green))
     .accessibilityAddTraits(isPresented ? .isSelected : [])
     .help(MacRenderShortcut.help("measurement_window_title", shortcut: .measurements))
+  }
+
+  private var brushWindowButton: some View {
+    let isPresented = docking.isVisible(.volumeBrushEditor)
+    return Button {
+      toggleWindow(.volumeBrushEditor)
+    } label: {
+      windowButtonLabel("Brush", systemImage: "eraser", color: .primary)
+    }
+    .modifier(WindowPresentationButtonStyle(isPresented: isPresented, tint: .red))
+    .accessibilityAddTraits(isPresented ? .isSelected : [])
+    .help("Brush")
   }
 
   private func windowButtonLabel(
@@ -496,9 +534,9 @@ struct RenderControlsPanel: View {
       content()
     }
     .padding(2)
-    .foregroundStyle(tint)
-    .background(tint.opacity(0.13), in: Capsule())
-    .overlay(Capsule().stroke(tint.opacity(0.2), lineWidth: 1))
+    .foregroundStyle(.primary)
+    .background(ScreenControlAppearance.surface, in: Capsule())
+    .overlay(Capsule().strokeBorder(tint.opacity(0.65), lineWidth: 1.5))
   }
 
   private func interactionModeColor(for mode: AppModel.InteractionMode) -> Color {
@@ -508,6 +546,7 @@ struct RenderControlsPanel: View {
       case .transferEditing: .purple
       case .drawing, .objectPlacement: .orange
       case .measurement: .green
+      case .volumeEditing: .red
     }
   }
 
@@ -523,6 +562,7 @@ struct RenderControlsPanel: View {
       case .drawing: shortcut = .drawing
       case .objectPlacement: shortcut = .placement
       case .measurement: shortcut = .measurement
+      case .volumeEditing: shortcut = .volumeEditing
     }
     return MacRenderShortcut.help(title, shortcut: shortcut)
   }
@@ -597,14 +637,7 @@ private struct WindowPresentationButtonStyle: ViewModifier {
   let isPresented: Bool
   let tint: Color
 
-  @ViewBuilder
   func body(content: Content) -> some View {
-    if isPresented {
-      content
-        .buttonStyle(.borderedProminent)
-        .tint(tint)
-    } else {
-      content.buttonStyle(.bordered)
-    }
+    content.buttonStyle(ScreenControlButtonStyle(accent: tint, isSelected: isPresented, showsAccent: true))
   }
 }

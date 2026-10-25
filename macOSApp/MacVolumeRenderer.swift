@@ -116,17 +116,31 @@ final class MacVolumeRenderer: NSObject, MTKViewDelegate {
       }
       let sendableDataset = SendableDataset(value: dataset)
       let logger = appModel.logger
-      DispatchQueue.global(qos: .userInitiated).async {
-        let result = Result {
-          try BorgVRIsoSurfaceExtractor.extract(
-            dataset: sendableDataset.value,
-            normalizedIsoValue: normalizedIsoValue,
-            outputURL: outputURL,
-            logger: logger,
-            cancellationToken: cancellationToken,
-            progress: progress
-          )
-        }
+      let edits = appModel.volumeBrush
+      let exportID: UUID
+      do { exportID = try edits.beginReadOnlyExport { cancellationToken.cancel() } }
+      catch { completion(.failure(error)); return }
+      Task {
+        let result: Result<BorgVRIsoSurfaceExtractor.Result, Error>
+        do {
+          try await edits.prepareReadOnlyExport(id: exportID)
+          try cancellationToken.checkCancellation()
+          result = await withCheckedContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {
+              continuation.resume(returning: Result {
+                try BorgVRIsoSurfaceExtractor.extract(
+                  dataset: sendableDataset.value,
+                  normalizedIsoValue: normalizedIsoValue,
+                  outputURL: outputURL,
+                  logger: logger,
+                  cancellationToken: cancellationToken,
+                  progress: progress
+                )
+              })
+            }
+          }
+        } catch { result = .failure(error) }
+        edits.finishReadOnlyExport(id: exportID)
         completion(result)
       }
     }

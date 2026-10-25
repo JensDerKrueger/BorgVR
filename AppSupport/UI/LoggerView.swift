@@ -17,6 +17,7 @@ struct LoggerView: View {
           } label: {
             Label("Done", systemImage: "checkmark")
           }
+          .screenControlButtons()
         }
         .onAppear {
           logger.setLogBinding($text)

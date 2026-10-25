@@ -48,8 +48,7 @@ final class BORGVRFileData: BORGVRDatasetProtocol {
     // Open the data file specified in the metadata.
     memoryMappedFile = try MemoryMappedFile(filename: filename)
     // Compute the expected size of a full brick.
-    fullBrickSize = metadata.brickSize * metadata.brickSize * metadata.brickSize *
-    metadata.componentCount * metadata.bytesPerComponent
+    fullBrickSize = try metadata.fullBrickByteCount()
     // If compression is enabled, allocate buffers for scratch space and temporary compressed data.
     if metadata.compression {
       let scratchBufferSize = compression_decode_scratch_buffer_size(COMPRESSION_LZ4)
@@ -99,7 +98,7 @@ final class BORGVRFileData: BORGVRDatasetProtocol {
     brickReadLock.lock()
     defer { brickReadLock.unlock() }
     // Retrieve the metadata for the requested brick and load the brick.
-    try getBrick(brickMeta: metadata.getBrickMetadata(index: index), outputBuffer: outputBuffer)
+    try getBrick(brickMeta: brickMetadata(at: index), outputBuffer: outputBuffer)
   }
 
   /**
@@ -148,12 +147,7 @@ final class BORGVRFileData: BORGVRDatasetProtocol {
    */
   private func getBrick(brickMeta: BrickMetadata,
                         outputBuffer: UnsafeMutablePointer<UInt8>) throws {
-    // Ensure that the memory-mapped file is available.
-    let baseMemory = memoryMappedFile.mappedMemory
-
-    // Calculate a pointer to the start of the brick data.
-    let brickPointer = baseMemory.advanced(by: brickMeta.offset)
-      .assumingMemoryBound(to: UInt8.self)
+    let brickPointer = try validatedBrickPointer(brickMeta)
 
     // If compression is enabled and the stored brick size is less than the full brick size,
     // decompress the brick data.
@@ -199,13 +193,30 @@ final class BORGVRFileData: BORGVRDatasetProtocol {
    */
   func getRawBrick(brickMeta: BrickMetadata,
                    outputBuffer: UnsafeMutablePointer<UInt8>) throws {
-    // Ensure that the memory-mapped file is available.
-    let baseMemory = memoryMappedFile.mappedMemory
-    
-    // Calculate a pointer to the start of the brick data.
-    let brickPointer = baseMemory.advanced(by: brickMeta.offset)
-      .assumingMemoryBound(to: UInt8.self)
+    let brickPointer = try validatedBrickPointer(brickMeta)
     memcpy(outputBuffer, brickPointer, brickMeta.size)
+  }
+
+  func getRawBrick(index: Int, outputBuffer: UnsafeMutablePointer<UInt8>) throws -> Int? {
+    let brickMeta = try brickMetadata(at: index)
+    try getRawBrick(brickMeta: brickMeta, outputBuffer: outputBuffer)
+    return brickMeta.size
+  }
+
+  private func brickMetadata(at index: Int) throws -> BrickMetadata {
+    guard metadata.brickMetadata.indices.contains(index) else {
+      throw BORGVRError.invalidValue(context: "brick index", reason: "outside the dataset's brick table")
+    }
+    return metadata.brickMetadata[index]
+  }
+
+  private func validatedBrickPointer(_ brick: BrickMetadata) throws -> UnsafePointer<UInt8> {
+    try metadata.validateStoredBrickByteCount(brick.size, fullBrickByteCount: fullBrickSize)
+    guard let mappedSize = Int(exactly: memoryMappedFile.fileSize), brick.offset >= 8,
+          brick.offset <= mappedSize, brick.size <= mappedSize - brick.offset else {
+      throw BORGVRError.invalidValue(context: "brick range", reason: "outside the mapped dataset file")
+    }
+    return UnsafePointer(memoryMappedFile.mappedMemory.advanced(by: brick.offset).assumingMemoryBound(to: UInt8.self))
   }
 
   /**

@@ -142,9 +142,18 @@ class VolumeAtlas {
   private let logger: LoggerBase?
 
   private var pageFrame = 1 // Must start at 1, as 0 signals "empty"
+  private var observedContentRevision: UInt64 = 0
+  private var observedBrushGeneration: UInt64 = 0
+  private var pendingEditedBrickIDs: Set<Int> = []
+  private var brushRenderer: VolumeAtlasBrushRenderer?
+  private var gpuBrushAttached = false
+  private var pageEditRevisions: [Int: UInt64] = [:]
+  private var pendingGPUFrame: (command: MTLCommandBuffer, revisions: [Int: (brick: Int, revision: UInt64)])?
+  private var gpuBrushSource: BorgVRVolumeGPUBrushSource? { borgData as? BorgVRVolumeGPUBrushSource }
   private var brickStorage = (0, 0, 0)
 
   private var borgData: BORGVRDatasetProtocol
+  var isContentReady: Bool { borgData.isContentReady }
   private var borgBuffer: UnsafeMutablePointer<UInt8>
 
   private var asyncEmptinessUpdater: AsyncEmptinessUpdater
@@ -220,7 +229,7 @@ class VolumeAtlas {
       atlasDescriptor.width = layout.width
       atlasDescriptor.height = layout.height
       atlasDescriptor.depth = layout.depth
-      atlasDescriptor.usage = [.shaderRead]
+      atlasDescriptor.usage = [.shaderRead, .shaderWrite]
       atlasDescriptor.storageMode = .shared
 
       let primaryTexture = device.makeTexture(descriptor: atlasDescriptor)
@@ -260,6 +269,13 @@ class VolumeAtlas {
     let inCoreBrickCount = atlasLayout.inCoreBrickCount
     self.brickStorage = (width / brickSize, height / brickSize, depth / brickSize)
     self.atlasTexture = createdAtlasTexture
+    if gpuBrushSource != nil {
+      do {
+        brushRenderer = try VolumeAtlasBrushRenderer(device: device, metadata: metadata)
+      } catch {
+        logger?.warning("GPU volume brushes unavailable; using CPU editing: \(error.localizedDescription)")
+      }
+    }
 
     // Create metadata buffer.
     let brickCount = metadata.brickMetadata.count
@@ -321,19 +337,27 @@ class VolumeAtlas {
     logger?.dev("Paging in lowest-res brick")
 
     // Ensure the lowest-res single brick is paged in at position 0, so it always is guaranteed to be resident
+    let initialRevision = gpuBrushSource?.gpuReadableRevision(index: brickCount - 1) ?? 0
     try borgData.getFirstBrick(outputBuffer: borgBuffer)
     replaceAtlasBrick(x: 0, y: 0, z: 0, data: borgBuffer)
     let lastBrickIndex = brickCount - 1
     metaStorage[lastBrickIndex] = UInt32(0 + BrickIDFlags.BI_FLAG_COUNT.rawValue)
     brickToPage[lastBrickIndex] = 0
     pageMetadata[0].set(brickID: lastBrickIndex, arrivalIndex: Int.max - 1)
+    pageEditRevisions[0] = initialRevision
 
     updateMetaBuffer()
 
     logger?.dev("VolumeAtlas initialized")
+    borgData.updateResidentBrickIDs(Set(pageMetadata.map(\.brickID).filter { $0 >= 0 }))
+    if brushRenderer != nil {
+      gpuBrushSource?.attachGPUBrushRenderer()
+      gpuBrushAttached = true
+    }
   }
 
   deinit {
+    if gpuBrushAttached { gpuBrushSource?.detachGPUBrushRenderer() }
     asyncEmptinessUpdater.terminateBackgroundTask()
     borgBuffer.deallocate()
     logger?.dev("VolumeAtlas deinitialized")
@@ -473,10 +497,6 @@ class VolumeAtlas {
    */
   func bind(to encoder: MTLRenderCommandEncoder,
             atlasIndex: Int, metaIndex: Int, levelIndex: Int) {
-    if let newMetaStorage = asyncEmptinessUpdater.inCoreDataHasChanged() {
-      metaStorage = newMetaStorage
-      updateMetaBuffer()
-    }
     encoder.setFragmentTexture(atlasTexture, index: atlasIndex)
     encoder.setFragmentTexture(
       secondaryAtlasTexture ?? atlasTexture,
@@ -484,6 +504,126 @@ class VolumeAtlas {
     )
     encoder.setFragmentBuffer(metaBuffer, offset: 0, index: metaIndex)
     encoder.setFragmentBuffer(levelTable, offset: 0, index: levelIndex)
+  }
+
+  /// Called before opening any render encoder. All brush work uses the frame's
+  /// existing command buffer, so no extra submissions or GPU/CPU waits are needed.
+  func prepareFrame(commandBuffer: MTLCommandBuffer) {
+    finishGPUBrushFrame()
+    if let source = gpuBrushSource, observedBrushGeneration != source.gpuBrushGeneration {
+      observedBrushGeneration = source.gpuBrushGeneration
+      pageEditRevisions.removeAll()
+      pendingEditedBrickIDs.formUnion(brickToPage.keys)
+    }
+    if let newMetaStorage = asyncEmptinessUpdater.inCoreDataHasChanged() {
+      metaStorage = newMetaStorage
+      updateMetaBuffer()
+    }
+    refreshEditedBricks()
+    guard let brushRenderer, let source = gpuBrushSource else { return }
+    let history = source.gpuBrushHistory()
+    guard let first = history.first, let latest = history.last else { return }
+    let metadata = borgData.getMetadata()
+    brushRenderer.retainOriginals(for: Set(brickToPage.keys))
+    let candidates = brickToPage.filter { _, page in
+      guard pageEditRevisions[page] != nil else { return false }
+      let revision = pageEditRevisions[page] ?? 0
+      return revision < latest.revision && revision >= first.revision - 1
+    }
+    guard let earliest = candidates.values.map({ pageEditRevisions[$0] ?? 0 }).min(),
+          let encoder = commandBuffer.makeComputeCommandEncoder() else { return }
+    encoder.label = "Volume brushes: all resident LODs"
+    let batches = history.filter { $0.revision > earliest }.map { brushRenderer.prepare($0) }
+    var revisions: [Int: (brick: Int, revision: UInt64)] = [:]
+    for (id, page) in candidates {
+      var revision = pageEditRevisions[page] ?? 0
+      let (x, y, z) = IDToCoords(pageIndex: page)
+      for prepared in batches {
+        guard let batch = prepared else { break }
+        guard batch.revision > revision else { continue }
+        guard brushRenderer.encode(batch, brickID: id,
+          pageOrigin: SIMD3(x, y, z) &* metadata.brickSize,
+          primary: atlasTexture, secondary: secondaryAtlasTexture, source: source,
+          encoder: encoder) else { break }
+        revision = batch.revision
+      }
+      revisions[page] = (id, revision)
+    }
+    encoder.endEncoding()
+    pendingGPUFrame = (commandBuffer, revisions)
+  }
+
+  private func finishGPUBrushFrame() {
+    guard let pending = pendingGPUFrame else { return }
+    // Encoding is not execution: a frame can be abandoned before commit. Only
+    // acknowledge successful GPU work, otherwise replay the idempotent operations.
+    if pending.command.status == .completed {
+      for (page, update) in pending.revisions where pageMetadata[page].brickID == update.brick {
+        pageEditRevisions[page] = max(pageEditRevisions[page] ?? 0, update.revision)
+      }
+    }
+    pendingGPUFrame = nil
+  }
+
+  private func refreshEditedBricks() {
+    let revision = borgData.contentRevision
+    let changed = revision != observedContentRevision
+    if changed {
+      let ids = borgData.changedBrickIDs(since: observedContentRevision)
+      observedContentRevision = revision
+      for id in ids where metaStorage.indices.contains(id) {
+        let empty = borgData.visibilityMetadata(index: id).map {
+          asyncEmptinessUpdater.brickIsEmpty(brickMetadata: $0)
+        } ?? false
+        if let page = brickToPage[id] {
+          pendingEditedBrickIDs.insert(id)
+          // A restore can make a previously empty resident page visible immediately.
+          metaStorage[id] = empty ? UInt32(BrickIDFlags.BI_EMPTY.rawValue)
+            : UInt32(page) + UInt32(BrickIDFlags.BI_FLAG_COUNT.rawValue)
+        }
+        else {
+          metaStorage[id] = UInt32(empty ? BrickIDFlags.BI_EMPTY.rawValue : BrickIDFlags.BI_MISSING.rawValue)
+        }
+      }
+    }
+    guard changed || !pendingEditedBrickIDs.isEmpty else { return }
+    var uploaded = false
+    for id in Array(pendingEditedBrickIDs) {
+      guard let page = brickToPage[id], pageMetadata[page].brickID == id else {
+        pendingEditedBrickIDs.remove(id)
+        continue
+      }
+      do {
+        let readableRevision = gpuBrushSource?.gpuReadableRevision(index: id)
+        if brushRenderer != nil, readableRevision == nil || readableRevision! < (pageEditRevisions[page] ?? 0) {
+          continue
+        }
+        let fineCount = borgData.getMetadata().levelMetadata.dropFirst().first?.prevBricks ?? metaStorage.count
+        if brushRenderer != nil, id < fineCount, readableRevision == pageEditRevisions[page] {
+          // The GPU already has these exact voxels; only min/max/emptiness changed.
+          pendingEditedBrickIDs.remove(id)
+          continue
+        }
+        try borgData.getBrick(index: id, outputBuffer: borgBuffer)
+        let (x, y, z) = IDToCoords(pageIndex: page)
+        replaceAtlasBrick(x: x, y: y, z: z, data: borgBuffer)
+        pageEditRevisions[page] = readableRevision ?? 0
+        let empty = borgData.visibilityMetadata(index: id).map {
+          asyncEmptinessUpdater.brickIsEmpty(brickMetadata: $0)
+        } ?? false
+        metaStorage[id] = empty ? UInt32(BrickIDFlags.BI_EMPTY.rawValue)
+          : UInt32(page) + UInt32(BrickIDFlags.BI_FLAG_COUNT.rawValue)
+        uploaded = true
+        pendingEditedBrickIDs.remove(id)
+      } catch {
+        // The old page remains valid until the complete replacement is ready.
+      }
+    }
+    guard changed || uploaded else { return }
+    asyncEmptinessUpdater.updateMetadata(metaStorage: metaStorage, brickToPage: brickToPage,
+                                        pageMetadata: pageMetadata)
+    asyncEmptinessUpdater.invalidateDataset()
+    updateMetaBuffer()
   }
 
   /**
@@ -580,6 +720,7 @@ class VolumeAtlas {
    - Throws: A PageError if the working set exceeds capacity.
    */
   func pageIn(IDs: [Int]) throws {
+    finishGPUBrushFrame()
     var incompleteIndex = 0
     let BI_MISSING = UInt32(BrickIDFlags.BI_MISSING.rawValue)
     let BI_EMPTY = UInt32(BrickIDFlags.BI_EMPTY.rawValue)
@@ -618,8 +759,6 @@ class VolumeAtlas {
       }
       .map { $0.offset }
 
-    let metaData = borgData.getMetadata().brickMetadata
-
     borgData.newRequest()
 
     var insertionIndex = 0
@@ -633,7 +772,8 @@ class VolumeAtlas {
         continue
       }
       
-      if asyncEmptinessUpdater.brickIsEmpty(brickMetadata: metaData[newBrickID]) {
+      if let effectiveMetadata = borgData.visibilityMetadata(index: newBrickID),
+         asyncEmptinessUpdater.brickIsEmpty(brickMetadata: effectiveMetadata) {
         metaStorage[newBrickID] = BI_EMPTY
         continue
       }
@@ -648,6 +788,7 @@ class VolumeAtlas {
         }
       }
 
+      let readableRevision = gpuBrushSource?.gpuReadableRevision(index: newBrickID) ?? 0
       do {
         try borgData.getBrick(index: newBrickID, outputBuffer: borgBuffer)
       } catch BORGVRDataError.brickNotYetAvailable {
@@ -674,17 +815,21 @@ class VolumeAtlas {
         elementsInBuffer+=1
       }
       let pageIndex = pageMetadata[insertionPos].pageID
+      let previousBrickID = pageMetadata[insertionPos].brickID
+      if brickToPage[previousBrickID] == pageIndex { brickToPage[previousBrickID] = nil }
       pageMetadata[insertionPos].set(brickID: newBrickID, arrivalIndex: pageFrame)
       brickToPage[newBrickID] = pageIndex
       metaStorage[newBrickID] = UInt32(pageIndex) + BI_FLAG_COUNT
 
       let (x, y, z) = IDToCoords(pageIndex: pageIndex)
       replaceAtlasBrick(x: x, y: y, z: z, data: borgBuffer)
+      pageEditRevisions[pageIndex] = readableRevision
     }
 
     asyncEmptinessUpdater.updateMetadata(metaStorage: metaStorage,
                                          brickToPage: brickToPage,
                                          pageMetadata: pageMetadata)
+    borgData.updateResidentBrickIDs(Set(pageMetadata.map(\.brickID).filter { $0 >= 0 }))
     updateMetaBuffer()
     pageFrame += 1
 

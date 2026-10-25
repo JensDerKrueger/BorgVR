@@ -302,6 +302,7 @@ struct BorgVRMCPApplicationState: Codable, Sendable {
   var annotationVisibility: BorgVRMCPAnnotationVisibilityState
   var objectCount: Int
   var measurementCount: Int
+  var volumeEditing: BorgVRVolumeEditingState? = nil
 }
 
 struct BorgVRMCPImage: Sendable {
@@ -369,6 +370,8 @@ final class BorgVRMCPContinuationGate<Value>: @unchecked Sendable {
 
 @MainActor
 protocol BorgVRMCPCommandService: AnyObject {
+  var volumeEditing: any BorgVRVolumeEditingCommands { get }
+  func activateVolumeEditing()
   func listDatasets() async throws -> [BorgVRMCPDatasetCatalogEntry]
   func openDataset(id: String) async throws
   func closeDataset() async throws

@@ -1,5 +1,16 @@
 import Foundation
 
+extension AppModel.DatasetEntry {
+  func editStorageURL(directoryURL: URL?) -> URL? {
+    switch source {
+      case .builtIn: return nil
+      case .local:
+        return identifier.hasPrefix("/") ? URL(fileURLWithPath: identifier) : directoryURL?.appendingPathComponent(identifier)
+      case .remote: return directoryURL?.appendingPathComponent("\(uniqueId).data")
+    }
+  }
+}
+
 @MainActor
 struct DatasetStorageAccess {
   let directoryURL: URL?
@@ -429,11 +440,17 @@ final class DatasetOpenWorkflow: ObservableObject {
         storage: storage,
         logger: appModel.logger
       )
+      let openable = catalog.openableDataset(from: datasetToOpen)
+      let access = storage.beginAccess()
+      defer { storage.endAccess(access) }
+      try await appModel.volumeBrush.prepareOpening(datasetID: openable.uniqueId,
+        datasetURL: openable.editStorageURL(directoryURL: storage.directoryURL))
       appModel.openDataset(
-        catalog.openableDataset(from: datasetToOpen),
+        openable,
         asGroupSessionHost: sharePlay.isInSession ? nil : true
       )
       sharePlay.datasetOpened()
+    } catch is CancellationError {
     } catch RemoteDatasetOpenError.downloadCancelled {
       appModel.logger.info(String(localized: "Remote dataset download paused."))
     } catch {

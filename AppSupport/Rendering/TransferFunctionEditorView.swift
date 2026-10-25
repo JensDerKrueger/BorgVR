@@ -226,6 +226,7 @@ struct TransferFunctionEditorView: View {
       .help("Done")
       .accessibilityLabel("Done")
     }
+    .screenControlButtons()
   }
 
   private func transferFunctionMenu(menuMaxWidth: CGFloat?) -> some View {
@@ -249,6 +250,7 @@ struct TransferFunctionEditorView: View {
     }
     .help("tf_catalog_menu")
     .accessibilityLabel("tf_catalog_menu")
+    .screenControlMenu()
   }
 
   private func channelButton(

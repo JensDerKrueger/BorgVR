@@ -52,9 +52,14 @@ enum MacRenderShortcut: String {
   case drawing = "4"
   case placement = "5"
   case measurement = "6"
-  case transferFunctionRendering = "7"
-  case lightingRendering = "8"
-  case isoRendering = "9"
+  case volumeEditing = "7"
+  case erase = "k"
+  case restore = "u"
+  case smallerBrush = "["
+  case largerBrush = "]"
+  case transferFunctionRendering = "shift+1"
+  case lightingRendering = "shift+2"
+  case isoRendering = "shift+3"
   case screenshot = "s"
   case extractIsosurface = "x"
   case reset = "r"
@@ -71,11 +76,30 @@ enum MacRenderShortcut: String {
   case toggleControls = "tab"
 
   var displayName: String {
-    self == .toggleControls ? "Tab" : rawValue.uppercased()
+    switch self {
+      case .transferFunctionRendering: "⇧1"
+      case .lightingRendering: "⇧2"
+      case .isoRendering: "⇧3"
+      case .toggleControls: "Tab"
+      default: rawValue.uppercased()
+    }
+  }
+
+  var modifiers: EventModifiers {
+    switch self {
+      case .transferFunctionRendering, .lightingRendering, .isoRendering: .shift
+      default: []
+    }
   }
 
   var keyEquivalent: KeyEquivalent {
-    self == .toggleControls ? .tab : KeyEquivalent(Character(rawValue))
+    switch self {
+      case .transferFunctionRendering: "1"
+      case .lightingRendering: "2"
+      case .isoRendering: "3"
+      case .toggleControls: .tab
+      default: KeyEquivalent(Character(rawValue))
+    }
   }
 
   static func help(_ title: String, shortcut: MacRenderShortcut) -> String {
@@ -91,6 +115,15 @@ enum MacRenderShortcut: String {
       self = .toggleControls
       return
     }
+    if modifiers.contains(.shift) {
+      // Ignoring modifiers still preserves Shift, e.g. "!" on Shift+1.
+      switch event.characters(byApplyingModifiers: []) {
+        case "1": self = .transferFunctionRendering; return
+        case "2": self = .lightingRendering; return
+        case "3": self = .isoRendering; return
+        default: break
+      }
+    }
     guard let key = event.charactersIgnoringModifiers?.lowercased() else { return nil }
     self.init(rawValue: key)
   }
@@ -102,6 +135,6 @@ extension View {
   }
 
   func macRenderShortcut(_ shortcut: MacRenderShortcut) -> some View {
-    keyboardShortcut(shortcut.keyEquivalent, modifiers: [])
+    keyboardShortcut(shortcut.keyEquivalent, modifiers: shortcut.modifiers)
   }
 }

@@ -67,6 +67,7 @@ struct LightingEditorView: View, Equatable {
           .help("Close lighting editor")
         }
       }
+      .screenControlButtons()
 
       if renderMode == .transferFunction1D {
         HStack(alignment: .top, spacing: 8) {

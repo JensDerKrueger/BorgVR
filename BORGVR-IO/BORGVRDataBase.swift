@@ -54,6 +54,12 @@ enum BORGVRDataError: Error, LocalizedError {
  - Allocate a new memory buffer suitable for storing a brick.
  */
 protocol BORGVRDatasetProtocol {
+  var isContentReady: Bool { get }
+
+  var contentRevision: UInt64 { get }
+  func visibilityMetadata(index: Int) -> BrickMetadata?
+  func changedBrickIDs(since revision: UInt64) -> [Int]
+  func updateResidentBrickIDs(_ ids: Set<Int>)
 
   /// let the dataset know that new requests are coming
   /// an async dataset may use this to invalidate outstanding
@@ -72,6 +78,10 @@ protocol BORGVRDatasetProtocol {
    */
   func getBrick(index: Int, outputBuffer: UnsafeMutablePointer<UInt8>) throws
 
+  /// Copies the stored payload (possibly compressed), returning its byte count.
+  /// The buffer must hold a full decoded brick. Nil means raw access is unsupported.
+  func getRawBrick(index: Int, outputBuffer: UnsafeMutablePointer<UInt8>) throws -> Int?
+
   /**
    Loads the first brick from the dataset into the provided output buffer.
    In contrast to getBrick, this call is always synchronous.
@@ -88,6 +98,15 @@ protocol BORGVRDatasetProtocol {
    - Note: The caller is responsible for deallocating the returned buffer.
    */
   func allocateBrickBuffer() -> UnsafeMutablePointer<UInt8>
+}
+
+extension BORGVRDatasetProtocol {
+  var isContentReady: Bool { true }
+  func getRawBrick(index: Int, outputBuffer: UnsafeMutablePointer<UInt8>) throws -> Int? { nil }
+  var contentRevision: UInt64 { 0 }
+  func visibilityMetadata(index: Int) -> BrickMetadata? { getMetadata().brickMetadata[index] }
+  func changedBrickIDs(since revision: UInt64) -> [Int] { [] }
+  func updateResidentBrickIDs(_ ids: Set<Int>) {}
 }
 
 /*

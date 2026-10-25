@@ -457,6 +457,65 @@ final class BorgVRMCPServer: @unchecked Sendable {
       case "get_application_state":
         let state = await service.applicationState()
         return structuredToolResult(state)
+      case "get_volume_edit_state":
+        return structuredToolResult(await service.volumeEditing.volumeEditingState())
+      case "select_edit_state":
+        let value = try string("id", in: arguments)
+        let id = value == "original" ? nil : UUID(uuidString: value)
+        guard value == "original" || id != nil else { throw BorgVRMCPCommandError.invalidArgument("id must be a UUID or original.") }
+        try await service.volumeEditing.selectState(id)
+        return structuredToolResult(await service.volumeEditing.volumeEditingState())
+      case "create_edit_state":
+        let name = try optionalString("name", in: arguments) ?? ""
+        let duplicate = try BorgVRVolumeEditingArguments.boolean(arguments["duplicate"]) ?? false
+        try await service.volumeEditing.duplicateState(name: name, empty: !duplicate)
+        return structuredToolResult(await service.volumeEditing.volumeEditingState())
+      case "rename_edit_state":
+        try await service.volumeEditing.renameState(uuid("id", in: arguments), name: string("name", in: arguments))
+        return structuredToolResult(await service.volumeEditing.volumeEditingState())
+      case "delete_edit_state":
+        guard try BorgVRVolumeEditingArguments.boolean(arguments["confirm"]) == true else {
+          throw BorgVRMCPCommandError.invalidArgument("Deleting an edit state requires confirm: true.")
+        }
+        try await service.volumeEditing.deleteState(uuid("id", in: arguments))
+        return structuredToolResult(await service.volumeEditing.volumeEditingState())
+      case "configure_volume_brush":
+        let mode = try optionalString("mode", in: arguments).map(BorgVRVolumeEditingArguments.mode)
+        let radius = try arguments["radius_fraction"].map { try BorgVRVolumeEditingArguments.number($0) }
+        let projection = try BorgVRVolumeEditingArguments.boolean(arguments["project_onto_volume"])
+        let activate = try BorgVRVolumeEditingArguments.boolean(arguments["activate"]) ?? false
+        try await service.volumeEditing.configureVolumeBrush(mode: mode, radiusFraction: radius, projectsOntoVolume: projection)
+        if activate { await service.activateVolumeEditing() }
+        return structuredToolResult(await service.volumeEditing.volumeEditingState())
+      case "edit_volume":
+        let mode = try BorgVRVolumeEditingArguments.mode(string("mode", in: arguments))
+        let samples = try BorgVRVolumeEditingArguments.samples(arguments["samples"])
+        try await service.volumeEditing.editVolume(mode: mode, samples: samples)
+        return structuredToolResult(await service.volumeEditing.volumeEditingState())
+      case "discard_volume_edits":
+        guard try BorgVRVolumeEditingArguments.boolean(arguments["confirm"]) == true else {
+          throw BorgVRMCPCommandError.invalidArgument("Discarding all edits requires confirm: true.")
+        }
+        try await service.volumeEditing.discardVolumeEdits()
+        return structuredToolResult(await service.volumeEditing.volumeEditingState())
+      case "wait_volume_edits":
+        let timeout = try arguments["timeout_seconds"].map { try BorgVRVolumeEditingArguments.number($0) } ?? 30
+        try await service.volumeEditing.waitForVolumeEdits(timeout: timeout)
+        return structuredToolResult(await service.volumeEditing.volumeEditingState())
+      case "prepare_volume_edits":
+        try await service.volumeEditing.prepareVolumeEdits()
+        return structuredToolResult(await service.volumeEditing.volumeEditingState())
+      case "export_edited_dataset":
+        let path = try string("output_path", in: arguments)
+        guard NSString(string: path).isAbsolutePath else {
+          throw BorgVRMCPCommandError.invalidArgument("output_path must be an absolute .data file path on this device.")
+        }
+        let job = try await service.volumeEditing.startVolumeExport(to: URL(fileURLWithPath: path),
+          name: optionalString("name", in: arguments), description: optionalString("description", in: arguments))
+        return structuredToolResult(job)
+      case "cancel_volume_export":
+        try await service.volumeEditing.cancelVolumeExport(id: uuid("id", in: arguments))
+        return structuredToolResult(await service.volumeEditing.volumeEditingState())
       case "set_render_mode":
         let mode = try string("mode", in: arguments)
         try await service.setRenderMode(mode)
@@ -663,6 +722,38 @@ final class BorgVRMCPServer: @unchecked Sendable {
       ),
       tool("close_dataset", "Close the current dataset and return to dataset selection."),
       tool("get_application_state", "Return the active dataset and visualization state."),
+      tool("get_volume_edit_state", "Return local brush settings, edit status, pending brick count, and the latest export job with progress and status."),
+      tool("select_edit_state", "Select a saved edit state UUID, or original. Available states and activeStateID are in get_volume_edit_state.savedStates. Not allowed during SharePlay.",
+        properties: ["id": ["type": "string"]], required: ["id"]),
+      tool("create_edit_state", "Create and select an empty edit state, or duplicate the current state when duplicate is true. Optional name; not allowed during SharePlay.",
+        properties: ["name": ["type": "string"], "duplicate": ["type": "boolean"]]),
+      tool("rename_edit_state", "Rename a personal saved edit state by UUID. Not allowed during SharePlay.",
+        properties: ["id": ["type": "string"], "name": ["type": "string"]], required: ["id", "name"]),
+      tool("delete_edit_state", "Delete one INACTIVE personal edit state and its cache; original and other states remain intact. Not allowed during SharePlay; requires confirm: true.",
+        properties: ["id": ["type": "string"], "confirm": ["type": "boolean", "enum": [true]]], required: ["id", "confirm"]),
+      tool("configure_volume_brush", "Configure the interactive brush. activate selects the Edit hand/mouse/touch mode, not Muse/PSVR modes; default false.", properties: [
+        "mode": ["type": "string", "enum": ["erase", "restore"]],
+        "radius_fraction": ["type": "number", "minimum": BorgVRVolumeBrushLimits.radiusFraction.lowerBound,
+          "maximum": BorgVRVolumeBrushLimits.radiusFraction.upperBound],
+        "project_onto_volume": ["type": "boolean"], "activate": ["type": "boolean"]
+      ]),
+      tool("edit_volume", "Apply spherical erase/restore samples to the active edit state; synchronized when in SharePlay. Coordinates and radius are meters from the volume minimum corner, independent of view, brush settings, and projection. Returns when committed; brick jobs may still run. No interpolation between samples.", properties: [
+        "mode": ["type": "string", "enum": ["erase", "restore"]],
+        "samples": ["type": "array", "minItems": 1, "maxItems": BorgVRVolumeBrushLimits.maximumSampleCount,
+          "items": ["type": "object", "properties": ["center_meters": vector3,
+            "radius_meters": ["type": "number", "exclusiveMinimum": 0]],
+            "required": ["center_meters", "radius_meters"], "additionalProperties": false]]
+      ], required: ["mode", "samples"]),
+      tool("discard_volume_edits", "Clear all edits in the active state, preserving original and other states. During SharePlay this restores the shared state for everyone. Requires explicit confirmation.",
+        properties: ["confirm": ["type": "boolean", "enum": [true]]], required: ["confirm"]),
+      tool("wait_volume_edits", "Wait for local background brick updates; default timeout 30 seconds. May time out for unavailable remote bricks.",
+        properties: ["timeout_seconds": ["type": "number", "exclusiveMinimum": 0, "maximum": 86400]]),
+      tool("prepare_volume_edits", "Finish pending edit bricks with foreground priority, exact bottom-up rebuilding and Metal acceleration when available. Waits for persistence; cancellable without losing edits.", properties: [:]),
+      tool("export_edited_dataset", "Start an asynchronous local .data export of the original plus current edits. Preserves source compression; original unchanged; existing destination refused. Poll get_volume_edit_state, cancel with cancel_volume_export. Paths refer to the app device and must be sandbox-accessible.", properties: [
+        "output_path": ["type": "string"], "name": ["type": "string"], "description": ["type": "string"]
+      ], required: ["output_path"]),
+      tool("cancel_volume_export", "Cancel the export with this job UUID, never a different job. Partial output is removed; recorded edits remain.",
+        properties: ["id": ["type": "string"]], required: ["id"]),
       tool("set_render_mode", "Select transfer-function, lit transfer-function, or isovalue rendering.", properties: [
         "mode": ["type": "string", "enum": ["transfer_function", "transfer_function_lighting", "isovalue"]]
       ], required: ["mode"]),

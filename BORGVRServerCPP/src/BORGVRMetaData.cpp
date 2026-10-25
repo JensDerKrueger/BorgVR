@@ -205,6 +205,13 @@ void BORGVRMetaData::parseFromBytes(const uint8_t* data, size_t size) {
     throw BorgVRException(BorgVRDataErrorCode::InvalidArgument,
                           "Brick size must be greater than twice the overlap.");
   }
+  int64_t fullBrickByteCount = 1;
+  for (const int factor : {brickSize_, brickSize_, brickSize_, componentCount_, bytesPerComponent_}) {
+    if (fullBrickByteCount > std::numeric_limits<int64_t>::max() / factor) {
+      throw BorgVRException(BorgVRDataErrorCode::InvalidArgument, "Full brick byte count overflows.");
+    }
+    fullBrickByteCount *= factor;
+  }
   if (minValue_ < 0 || minValue_ > maxValue_ || maxValue_ > rangeMax) {
     throw BorgVRException(BorgVRDataErrorCode::InvalidArgument,
                           "Dataset value range does not fit the declared component type.");
@@ -290,6 +297,10 @@ void BORGVRMetaData::parseFromBytes(const uint8_t* data, size_t size) {
     if (bm.offset < 8 || bm.size <= 0 ||
         bm.offset > std::numeric_limits<int64_t>::max() - bm.size) {
       throw BorgVRException(BorgVRDataErrorCode::InvalidArgument, "Invalid brick byte range.");
+    }
+    if (bm.size > fullBrickByteCount || (!compression_ && bm.size != fullBrickByteCount)) {
+      throw BorgVRException(BorgVRDataErrorCode::InvalidArgument,
+                            "Stored brick size does not fit the declared brick layout.");
     }
     if (bm.minValue < 0 || bm.minValue > bm.maxValue || bm.maxValue > rangeMax) {
       throw BorgVRException(BorgVRDataErrorCode::InvalidArgument, "Invalid brick value range.");

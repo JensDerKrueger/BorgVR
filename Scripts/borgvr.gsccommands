@@ -29,6 +29,34 @@ setimportoverlap(int)
 # Border modes: 0 = zeroes, 1 = clamp to border, 2 = repeat.
 setbordermode(int)
 
+# Volume editing. During SharePlay operations affect the shared edit state.
+# Saved-state UUIDs are listed by logeditstates; use original for the unedited volume.
+logeditstates()
+selecteditstate(string)
+neweditstate(string)
+duplicateeditstate(string)
+renameeditstate(string,string)
+# Delete an inactive state only; these management commands are disabled during SharePlay.
+deleteeditstate(string)
+# Interactive brush: erase|restore, radius as fraction of largest extent (0.002...0.15), projection.
+setvolumebrush(string,double,bool)
+# Physical center x y z and radius, all in meters from the volume minimum corner.
+erasevolume(double,double,double,double)
+restorevolume(double,double,double,double)
+# erase|restore followed by x y z radius groups; no interpolation between samples.
+editvolume(string,restString)
+clearvolumeedits()
+# Wait for background brick updates, optional timeout in seconds (default 30).
+waitvolumeedits()
+preparevolumeedits()
+waitvolumeedits(double)
+hasvolumeedits() -> bool
+volumeeditsbusy() -> bool
+# New .data file from original plus edits; optional dataset name and description.
+# Waits for completion, reports progress; stopping the script cancels the export.
+exportediteddataset(string)
+exportediteddataset(string,string,string)
+
 # Dataset control
 opendataset(string)
 

@@ -172,6 +172,7 @@ class RuntimeAppModel {
     case drawing = "drawing"
     case objectPlacement = "objectPlacement"
     case measurement = "measurement"
+    case volumeEditing = "volumeEditing"
     case screenView = "screenView"
   }
   /// The current interaction mode.
@@ -198,6 +199,7 @@ class RuntimeAppModel {
 
   /// Lock-protected bridge read by the compositor render thread.
   let spatialInputContext = SpatialInputRuntimeContext()
+  let volumeBrush = VolumeBrushModel(projectsOntoVolume: false)
 
   /**
    Represents toggles for editing individual channels of the transfer function.
@@ -473,6 +475,7 @@ class RuntimeAppModel {
   }
 
   func requestDatasetClose(destination: DatasetCloseDestination = .datasetSelection) {
+    volumeBrush.close()
     if case .closing = datasetSessionState { return }
     guard activeDataset != nil || immersiveSpaceState != .closed || renderTask != nil else {
       completeDatasetClose(destination: destination)

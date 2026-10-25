@@ -7,6 +7,7 @@ struct RenderDragUpdate {
   let location: CGPoint
   let viewSize: CGSize
   let isDirectPointer: Bool
+  var modifierFlags: NSEvent.ModifierFlags = []
 }
 
 struct MacMetalView: NSViewRepresentable {
@@ -21,6 +22,9 @@ struct MacMetalView: NSViewRepresentable {
   var onMagnificationEnded: () -> Void = {}
   var onDoubleClick: () -> Bool = { false }
   var onKeyboardShortcut: (MacRenderShortcut) -> Void = { _ in }
+  var onModifierFlagsChanged: (NSEvent.ModifierFlags) -> Void = { _ in }
+  var onPointerHover: (RenderDragUpdate?) -> Void = { _ in }
+  var tracksPointerHover = false
 
   func makeCoordinator() -> MacVolumeRenderer {
     MacVolumeRenderer(
@@ -65,6 +69,9 @@ struct MacMetalView: NSViewRepresentable {
     view.onMagnificationEnded = onMagnificationEnded
     view.onDoubleClick = onDoubleClick
     view.onKeyboardShortcut = onKeyboardShortcut
+    view.onModifierFlagsChanged = onModifierFlagsChanged
+    view.onPointerHover = onPointerHover
+    view.tracksPointerHover = tracksPointerHover
   }
 }
 
@@ -77,8 +84,17 @@ final class InteractiveMTKView: MTKView {
   var onMagnificationEnded: () -> Void = {}
   var onDoubleClick: () -> Bool = { false }
   var onKeyboardShortcut: (MacRenderShortcut) -> Void = { _ in }
+  var onModifierFlagsChanged: (NSEvent.ModifierFlags) -> Void = { _ in }
+  var onPointerHover: (RenderDragUpdate?) -> Void = { _ in }
+  var tracksPointerHover = false {
+    didSet {
+      guard tracksPointerHover != oldValue else { return }
+      DispatchQueue.main.async { [weak self] in self?.updatePointerHover() }
+    }
+  }
 
   private var lastDragLocation: CGPoint?
+  private var hoverTrackingArea: NSTrackingArea?
 
   override var acceptsFirstResponder: Bool {
     true
@@ -92,8 +108,41 @@ final class InteractiveMTKView: MTKView {
     super.viewDidMoveToWindow()
     DispatchQueue.main.async { [weak self] in
       guard let self else { return }
+      self.window?.acceptsMouseMovedEvents = true
       self.window?.makeFirstResponder(self)
     }
+  }
+
+  override func updateTrackingAreas() {
+    super.updateTrackingAreas()
+    if let hoverTrackingArea { removeTrackingArea(hoverTrackingArea) }
+    let area = NSTrackingArea(rect: .zero,
+      options: [.mouseMoved, .mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect],
+      owner: self, userInfo: nil)
+    addTrackingArea(area)
+    hoverTrackingArea = area
+  }
+
+  override func mouseEntered(with event: NSEvent) { updatePointerHover() }
+  override func mouseMoved(with event: NSEvent) { updatePointerHover() }
+  override func mouseExited(with event: NSEvent) {
+    if lastDragLocation == nil { onPointerHover(nil) }
+  }
+
+  private func updatePointerHover() {
+    guard lastDragLocation == nil else { return }
+    guard tracksPointerHover, let window, window.isKeyWindow,
+          let contentView = window.contentView else { onPointerHover(nil); return }
+    let point = window.mouseLocationOutsideOfEventStream
+    let location = convert(point, from: nil)
+    // Tracking areas also cover SwiftUI overlays. Do not show the brush over controls.
+    guard bounds.contains(location),
+          contentView.hitTest(contentView.convert(point, from: nil)) === self else {
+      onPointerHover(nil)
+      return
+    }
+    onPointerHover(RenderDragUpdate(delta: .zero, location: location, viewSize: bounds.size,
+                                    isDirectPointer: true, modifierFlags: NSEvent.modifierFlags))
   }
 
   override func mouseDown(with event: NSEvent) {
@@ -109,7 +158,8 @@ final class InteractiveMTKView: MTKView {
           delta: .zero,
           location: lastDragLocation,
           viewSize: bounds.size,
-          isDirectPointer: true
+          isDirectPointer: true,
+          modifierFlags: event.modifierFlags
         )
       )
     }
@@ -130,26 +180,31 @@ final class InteractiveMTKView: MTKView {
   override func mouseUp(with event: NSEvent) {
     lastDragLocation = nil
     onDragEnded()
+    updatePointerHover()
   }
 
   override func rightMouseUp(with event: NSEvent) {
     lastDragLocation = nil
     onDragEnded()
+    updatePointerHover()
   }
 
   override func otherMouseUp(with event: NSEvent) {
     lastDragLocation = nil
     onDragEnded()
+    updatePointerHover()
   }
 
   override func scrollWheel(with event: NSEvent) {
     guard event.momentumPhase == [] else { return }
     let delta = CGSize(width: event.scrollingDeltaX, height: -event.scrollingDeltaY)
     if delta != .zero {
-      emitDrag(delta: delta, location: convert(event.locationInWindow, from: nil), isDirectPointer: false)
+      emitDrag(delta: delta, location: convert(event.locationInWindow, from: nil),
+               isDirectPointer: false, modifierFlags: event.modifierFlags)
     }
     if event.phase == .ended || event.phase == .cancelled {
       onDragEnded()
+      updatePointerHover()
     }
   }
 
@@ -158,6 +213,7 @@ final class InteractiveMTKView: MTKView {
     onMagnificationDelta(magnificationDelta)
     if event.phase == .ended || event.phase == .cancelled {
       onMagnificationEnded()
+      updatePointerHover()
     }
   }
 
@@ -167,6 +223,11 @@ final class InteractiveMTKView: MTKView {
       return
     }
     onKeyboardShortcut(shortcut)
+  }
+
+  override func flagsChanged(with event: NSEvent) {
+    onModifierFlagsChanged(event.modifierFlags)
+    super.flagsChanged(with: event)
   }
 
   private func handleMouseDrag(_ event: NSEvent) {
@@ -180,18 +241,20 @@ final class InteractiveMTKView: MTKView {
       width: location.x - lastDragLocation.x,
       height: lastDragLocation.y - location.y
     )
-    emitDrag(delta: delta, location: location, isDirectPointer: true)
+    emitDrag(delta: delta, location: location, isDirectPointer: true, modifierFlags: event.modifierFlags)
     self.lastDragLocation = location
   }
 
-  private func emitDrag(delta: CGSize, location: CGPoint, isDirectPointer: Bool) {
+  private func emitDrag(delta: CGSize, location: CGPoint, isDirectPointer: Bool,
+                        modifierFlags: NSEvent.ModifierFlags) {
     onDragDelta(delta)
     onDragUpdate(
       RenderDragUpdate(
         delta: delta,
         location: location,
         viewSize: bounds.size,
-        isDirectPointer: isDirectPointer
+        isDirectPointer: isDirectPointer,
+        modifierFlags: modifierFlags
       )
     )
   }

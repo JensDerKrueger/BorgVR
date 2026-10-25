@@ -86,8 +86,8 @@ struct MobileMeasurementView: View {
                   appModel.selectedVolumeMeasurementPointID = point.id
                   appModel.interactionMode = .measurement
                 }
-                .buttonStyle(.bordered)
-                .tint(appModel.selectedVolumeMeasurementPointID == point.id ? .accentColor : nil)
+                .buttonStyle(ScreenControlButtonStyle(accent: .green,
+                  isSelected: appModel.selectedVolumeMeasurementPointID == point.id))
               }
             }
           }
@@ -123,11 +123,13 @@ struct MobileMeasurementView: View {
           .disabled(appModel.volumeMeasurements.isEmpty)
         }
       }
+      .screenControlButtons()
       .padding()
       .navigationTitle("measurement_window_title")
       .toolbar {
         ToolbarItem(placement: .confirmationAction) {
           Button("Done", systemImage: "checkmark") { dismiss() }
+            .screenControlButtons()
         }
       }
     }

@@ -108,6 +108,7 @@ struct macOSApp: App {
   var body: some Scene {
     WindowGroup("BorgVR") {
       ContentView()
+        .volumeEditSelectionDialog(model: appModel.volumeBrush)
         .appStoreUpdateAlert(using: updateChecker)
         .alert(
           "Choose your SharePlay name",
@@ -303,6 +304,20 @@ struct macOSApp: App {
     }
     .defaultSize(width: 520, height: 600)
 
+    WindowGroup("Brush", id: DockablePanelID.volumeBrushEditor.windowID) {
+      DetachedPanelContent(panel: .volumeBrushEditor)
+        .environmentObject(appModel)
+        .environmentObject(renderingParameters)
+        .environmentObject(appSettings)
+        .environmentObject(storedAppModel)
+        .environmentObject(serverController)
+        .environmentObject(sharePlay)
+        .environmentObject(docking)
+        .environmentObject(scriptRunner)
+        .environmentObject(session)
+    }
+    .defaultSize(width: 400, height: 430)
+
     WindowGroup("Lighting", id: DockablePanelID.lightingEditor.windowID) {
       DetachedPanelContent(panel: .lightingEditor)
         .environmentObject(appModel)
@@ -387,6 +402,10 @@ struct macOSApp: App {
           uniqueId: record.catalogEntry.id
         )
     }
+    let accessURL = storedAppModel.startAccessingDataDirectory()
+    defer { storedAppModel.stopAccessingDataDirectory(accessURL) }
+    try await appModel.volumeBrush.prepareOpening(datasetID: entry.uniqueId,
+      datasetURL: entry.editStorageURL(directoryURL: storedAppModel.resolvedDataDirectoryURL()), interactive: false)
     appModel.openDataset(entry, asGroupSessionHost: sharePlay.isInSession ? nil : true)
     docking.resetForDatasetClose()
     sharePlay.datasetOpened()
@@ -455,6 +474,8 @@ struct macOSApp: App {
           into: storedAppModel.resolvedDataDirectoryURL(),
           logger: appModel.logger
         )
+        try await appModel.volumeBrush.prepareOpening(datasetID: dataset.uniqueId,
+          datasetURL: dataset.editStorageURL(directoryURL: storedAppModel.resolvedDataDirectoryURL()))
         appModel.openDataset(dataset, asGroupSessionHost: true)
         docking.resetForDatasetClose()
         sharePlay.datasetOpened()
@@ -549,6 +570,13 @@ private struct BorgVRMenuCommands: Commands {
     }
 
     CommandMenu("Interaction") {
+      selectionCommand("Erase", systemImage: "eraser.fill", shortcut: .erase,
+        isSelected: appModel.interactionMode == .volumeEditing && appModel.volumeBrush.mode == .erase)
+      selectionCommand("Restore", systemImage: "arrow.uturn.backward", shortcut: .restore,
+        isSelected: appModel.interactionMode == .volumeEditing && appModel.volumeBrush.mode == .restore)
+      Button("Smaller Brush") { docking.request(.render(.smallerBrush)) }.macRenderShortcut(.smallerBrush)
+      Button("Larger Brush") { docking.request(.render(.largerBrush)) }.macRenderShortcut(.largerBrush)
+      Divider()
       selectionCommand(
         "Model",
         systemImage: "move.3d",
@@ -585,6 +613,12 @@ private struct BorgVRMenuCommands: Commands {
         systemImage: "ruler",
         shortcut: .measurement,
         isSelected: appModel.interactionMode == .measurement
+      )
+      selectionCommand(
+        "Edit Volume",
+        systemImage: "eraser",
+        shortcut: .volumeEditing,
+        isSelected: appModel.interactionMode == .volumeEditing
       )
     }
 

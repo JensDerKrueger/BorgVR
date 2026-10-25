@@ -8,6 +8,7 @@ enum SpatialSceneObjectPreview {
 }
 
 class ImmersiveInteraction {
+  let volumeBrushContext: VolumeBrushContext
   private let volumeSnapMaximumDepthDifferenceMeters: Float = 0.05
   private let volumeSnapDepthSmoothingNewSampleWeight: Float = 0.15
   var sharedAppModel: SharedAppModel
@@ -53,6 +54,9 @@ class ImmersiveInteraction {
   private var markerScaleStartDistance: Float = 0
   private var markerScaleStartRadii: [UUID: Float] = [:]
   private var handStrokeID: UUID?
+  private var brushModifierPositions: [UUID: Float] = [:]
+  private var brushProjectionTokens: [String: UUID] = [:]
+  private var brushScaleDistance: Float?
   private var quickMarkerDragActive = false
   private var quickMarkerCandidateTime: Date?
   private var quickMarkerCandidatePosition: SIMD3<Float>?
@@ -226,6 +230,7 @@ class ImmersiveInteraction {
   private var sceneMeshDragState: SceneMeshDragState?
 
   init(session: VisionBorgVRSession,
+       volumeBrushContext: VolumeBrushContext,
        sharedAppModel: SharedAppModel,
        storedAppModel: StoredAppModel,
        transferFunctionPanelInteractionState: TransferFunctionPanelInteractionState,
@@ -235,6 +240,7 @@ class ImmersiveInteraction {
          BorgSpatialInputChirality
        ) -> Void) {
     self.session = session
+    self.volumeBrushContext = volumeBrushContext
     self.sharedAppModel = sharedAppModel
     self.storedAppModel = storedAppModel
     self.transferFunctionPanelInteractionState = transferFunctionPanelInteractionState
@@ -1981,6 +1987,8 @@ class ImmersiveInteraction {
     } else {
 
       switch tool.interactionMode {
+        case .volumeEditing:
+          return
         case .model:
           kind = .model
         case .clipping:
@@ -2484,6 +2492,7 @@ class ImmersiveInteraction {
 
   func spatialStylusSample(
     from samples: [BorgSpatialInputSample],
+    datasetInfo: RuntimeAppModel.DatasetInfo?,
     timestamp: TimeInterval
   ) -> BorgSpatialStylusSample? {
     let styli = samples.filter { $0.source == .stylus }
@@ -2569,6 +2578,21 @@ class ImmersiveInteraction {
           } else {
             lastSpatialStylusModifierPressTimes[sample.id] = timestamp
           }
+        case .erase, .restore:
+          if let firstPress = lastSpatialStylusModifierPressTimes[sample.id],
+             timestamp - firstPress <= spatialStylusDoubleClickInterval {
+            lastSpatialStylusModifierPressTimes[sample.id] = nil
+            suppressedSpatialStylusModifierIDs.insert(sample.id)
+            brushModifierPositions[sample.id] = nil
+            finishVolumeBrush(source: sample.id.uuidString)
+            let nextMode: SpatialToolMode = storedAppModel.stylusTool == .erase ? .restore : .erase
+            Task { @MainActor [storedAppModel, session] in
+              storedAppModel.stylusTool = nextMode
+              session.commitExternalMutation(source: .muse, domain: .interaction)
+            }
+          } else {
+            lastSpatialStylusModifierPressTimes[sample.id] = timestamp
+          }
         case .objectPlacement, .model, .clipping, .screenView:
           break
       }
@@ -2600,6 +2624,26 @@ class ImmersiveInteraction {
     }
 
     let ownsAction = activeSpatialStylusID == sample.id
+    if storedAppModel.stylusTool != .erase && storedAppModel.stylusTool != .restore {
+      finishVolumeBrush(source: sample.id.uuidString)
+    }
+    if storedAppModel.stylusTool == .erase || storedAppModel.stylusTool == .restore {
+      let mode: BorgVRVolumeBrushMode = storedAppModel.stylusTool == .erase ? .erase : .restore
+      if sample.primaryPressed, let datasetInfo {
+        applyVolumeBrush(worldPosition: sample.aimOrigin, datasetInfo: datasetInfo,
+          source: sample.id.uuidString, mode: mode)
+      } else { finishVolumeBrush(source: sample.id.uuidString) }
+      if let datasetInfo {
+        previewVolumeBrush(worldPosition: sample.aimOrigin, datasetInfo: datasetInfo,
+          source: sample.id.uuidString, mode: mode)
+      }
+      if sample.modifierPressed, !suppressedSpatialStylusModifierIDs.contains(sample.id) {
+        if let previous = brushModifierPositions[sample.id] {
+          volumeBrushContext.scaleRadius(by: exp(Double(sample.aimOrigin.y - previous) * 8))
+        }
+        brushModifierPositions[sample.id] = sample.aimOrigin.y
+      } else { brushModifierPositions[sample.id] = nil }
+    }
     return BorgSpatialStylusSample(
       tipPosition: sample.aimOrigin,
       aimTransform: sample.aimTransform,
@@ -2753,6 +2797,24 @@ class ImmersiveInteraction {
         }
       }
       let controllerTool = storedAppModel.controllerTool(for: sample.chirality)
+      if controllerTool == .erase || controllerTool == .restore {
+        let mode: BorgVRVolumeBrushMode = controllerTool == .erase ? .erase : .restore
+        if sample.primaryPressed, let datasetInfo {
+          applyVolumeBrush(worldPosition: sample.aimOrigin, datasetInfo: datasetInfo,
+            source: sample.id.uuidString, mode: mode)
+        } else { finishVolumeBrush(source: sample.id.uuidString) }
+        if let datasetInfo {
+          previewVolumeBrush(worldPosition: sample.aimOrigin, datasetInfo: datasetInfo,
+            source: sample.id.uuidString, mode: mode)
+        }
+        if sample.modifierPressed {
+          volumeBrushContext.scaleRadius(by: exp(Double(sample.adjustment.y * min(max(deltaTime, 0), 0.1)) * 2))
+        } else { adjustSpatialAccessoryValues(sample, deltaTime: deltaTime) }
+        spatialAccessoryPrimaryStates[sample.id] = sample.primaryPressed
+        spatialAccessoryFaceButtonStates[sample.id] = sample.pressedFaceButtons
+        continue
+      }
+      finishVolumeBrush(source: sample.id.uuidString)
       if sample.modifierPressed && !wasModifierPressed {
         beginSpatialAccessoryStroke(
           sample,
@@ -3096,6 +3158,30 @@ class ImmersiveInteraction {
                            datasetInfo: RuntimeAppModel.DatasetInfo?,
                            toggleChannel: @escaping @MainActor (Int) -> Void) {
     guard spatialAccessoryActions.isEmpty, activeSpatialStylusID == nil else { return }
+    if interactionMode == .volumeEditing {
+      if events.count == 2 {
+        let positions = events.compactMap { inputWorldPosition(from: $0) }
+        if positions.count == 2 {
+          let distance = simd_distance(positions[0], positions[1])
+          if let previous = brushScaleDistance, previous > 0.01, distance > 0.01 {
+            volumeBrushContext.scaleRadius(by: Double(distance / previous))
+          }
+          brushScaleDistance = distance
+        }
+        finishVolumeBrush(source: "hand")
+        return
+      }
+      brushScaleDistance = nil
+      guard let datasetInfo, let event = events.first else { return }
+      switch event.phase {
+        case .active:
+          if let position = inputWorldPosition(from: event) {
+            applyVolumeBrush(worldPosition: position, datasetInfo: datasetInfo, source: "hand")
+          }
+        default: finishVolumeBrush(source: "hand")
+      }
+      return
+    }
     if interactionMode == .transferEditing {
       guard events.count == 1, let event = events.first else {
         transferGestureStartPosition = nil
@@ -3155,6 +3241,7 @@ class ImmersiveInteraction {
     }
 
     switch interactionMode {
+      case .volumeEditing: return
       case .model:
         switch events.count {
         case 1:
@@ -3210,6 +3297,45 @@ class ImmersiveInteraction {
         }
         handleScreenViewInteraction(event)
     }
+  }
+
+  private func applyVolumeBrush(worldPosition: SIMD3<Float>, datasetInfo: RuntimeAppModel.DatasetInfo,
+                                source: String, mode: BorgVRVolumeBrushMode? = nil) {
+    if volumeBrushContext.settings().projectsOntoVolume, brushProjectionTokens[source] == nil {
+      let token = UUID()
+      brushProjectionTokens[source] = token
+      beginStrokeProjectionFreeze(token: token)
+      return
+    }
+    let position = interactionPosition(fromWorldPosition: worldPosition, datasetInfo: datasetInfo,
+      projectsOntoVolume: volumeBrushContext.settings().projectsOntoVolume)
+    volumeBrushContext.apply(at: position, source: source, mode: mode)
+  }
+
+  private func finishVolumeBrush(source: String) {
+    volumeBrushContext.finish(source: source)
+    if let token = brushProjectionTokens.removeValue(forKey: source) { endStrokeProjectionFreeze(token: token) }
+  }
+
+  func updateVolumeBrushSources(activeIDs: Set<String>, handMode: RuntimeAppModel.InteractionMode) {
+    for source in Array(brushProjectionTokens.keys) where UUID(uuidString: source) != nil && !activeIDs.contains(source) {
+      finishVolumeBrush(source: source)
+    }
+    if handMode != .volumeEditing {
+      finishVolumeBrush(source: "hand")
+      brushScaleDistance = nil
+    }
+    if !volumeBrushContext.settings().projectsOntoVolume {
+      for token in brushProjectionTokens.values { endStrokeProjectionFreeze(token: token) }
+      brushProjectionTokens.removeAll()
+    }
+  }
+
+  private func previewVolumeBrush(worldPosition: SIMD3<Float>, datasetInfo: RuntimeAppModel.DatasetInfo,
+                                  source: String, mode: BorgVRVolumeBrushMode) {
+    let position = interactionPosition(fromWorldPosition: worldPosition, datasetInfo: datasetInfo,
+      projectsOntoVolume: volumeBrushContext.settings().projectsOntoVolume)
+    volumeBrushContext.showPreview(at: position, source: source, mode: mode)
   }
 }
 

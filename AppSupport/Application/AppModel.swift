@@ -62,6 +62,7 @@ final class AppModel: ObservableObject {
     case drawing
     case objectPlacement
     case measurement
+    case volumeEditing
 
     var id: String { rawValue }
   }
@@ -141,6 +142,7 @@ final class AppModel: ObservableObject {
   @Published var sharePlayDatasetSource: DatasetOrigin?
   @Published var groupSessionHost = true
   @Published var interactionMode: InteractionMode = .model
+  let volumeBrush = VolumeBrushModel()
   @Published var volumeMarkers: [VolumeMarker] = []
   @Published var sceneMeshAssets: [UUID: SceneMeshAsset] = [:]
   @Published var sceneMeshInstances: [SceneMeshInstance] = []

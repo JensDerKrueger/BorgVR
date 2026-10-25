@@ -211,7 +211,9 @@ final class MobileVolumeRenderer: NSObject, MTKViewDelegate, UIGestureRecognizer
       case .changed:
         let delta = recognizer.translation(in: view)
         recognizer.setTranslation(.zero, in: view)
-        if appModel.interactionMode == .objectPlacement {
+        if appModel.interactionMode == .volumeEditing {
+          core.moveVolumeBrushInDepth(by: delta.y)
+        } else if appModel.interactionMode == .objectPlacement {
           if core.moveSelectedMarkerInDepth(by: delta.y) {
             session.commitExternalMutation(source: .touch, domain: .objects)
             sharePlay.synchronizeMarkers()

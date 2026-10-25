@@ -45,7 +45,7 @@ struct IsovalueEditorView: View {
         }
         .help("Close isovalue editor")
         .accessibilityLabel("Close isovalue editor")
-        .buttonStyle(.bordered)
+        .screenControlButtons()
       }
     }
   }

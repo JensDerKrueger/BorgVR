@@ -9,6 +9,7 @@ private enum RenderSheet: String, Identifiable {
   case transferEditor
   case lighting
   case measurements
+  case volumeBrush
 
   var id: String { rawValue }
 }
@@ -18,10 +19,11 @@ private struct HeaderIconButtonStyle: ButtonStyle {
 
   func makeBody(configuration: Configuration) -> some View {
     configuration.label
+      .foregroundStyle(.primary)
       .frame(width: 28, height: 28)
       .contentShape(Rectangle())
       .background(
-        isBordered ? Color.primary.opacity(configuration.isPressed ? 0.16 : 0.08) : .clear,
+        isBordered ? ScreenControlAppearance.surface : .clear,
         in: RoundedRectangle(cornerRadius: 6)
       )
       .overlay {
@@ -31,6 +33,31 @@ private struct HeaderIconButtonStyle: ButtonStyle {
         }
       }
       .opacity(configuration.isPressed ? 0.62 : 1)
+  }
+}
+
+private struct ModeActionButtonStyle: ButtonStyle {
+  var isPresented = false
+  var tint: Color = .primary
+  var horizontalInset: CGFloat = 4
+
+  func makeBody(configuration: Configuration) -> some View {
+    configuration.label
+      .foregroundStyle(.primary)
+      .frame(maxWidth: .infinity)
+      .frame(height: 34)
+      .background(ScreenControlAppearance.surface, in: RoundedRectangle(cornerRadius: 6))
+      .overlay {
+        RoundedRectangle(cornerRadius: 6)
+          .strokeBorder(isPresented ? tint : tint.opacity(0.35), lineWidth: isPresented ? 2 : 1)
+      }
+      .overlay(alignment: .bottom) {
+        Capsule().fill(tint).frame(width: 18, height: 2).padding(.bottom, 3)
+      }
+      .opacity(configuration.isPressed ? 0.65 : 1)
+      .padding(.horizontal, horizontalInset)
+      .padding(.vertical, 2)
+      .contentShape(Rectangle())
   }
 }
 
@@ -53,6 +80,7 @@ struct RenderView: View {
   @State private var copiedWebGPUShareLink = false
   @State private var markerDragID: UUID?
   @State private var strokeDragID: UUID?
+  @State private var brushPosition: SIMD3<Float>?
   @State private var sceneObjectDragID: UUID?
   @State private var measurementDragMeasurementID: UUID?
   @State private var measurementDragPointID: UUID?
@@ -94,6 +122,13 @@ struct RenderView: View {
           ) {
             dismissToolSheet(.datasetInfo)
           }
+
+        case .volumeBrush:
+          VolumeBrushControls(model: appModel.volumeBrush)
+            .padding()
+            .presentationDetents([.height(440), .large])
+            .presentationDragIndicator(.visible)
+            .presentationBackgroundInteraction(.enabled)
 
         case .objects:
           MobileMarkerView()
@@ -383,6 +418,7 @@ struct RenderView: View {
               .labelStyle(.iconOnly)
             }
             .toggleStyle(.button)
+            .buttonStyle(ScreenControlButtonStyle(accent: .green, isSelected: sharePlay.isScreenViewSynchronized))
             .accessibilityLabel("Synchronize View")
             .accessibilityHint("Keep this device's view synchronized with other iPhone, iPad, and Mac participants.")
           }
@@ -397,6 +433,7 @@ struct RenderView: View {
               )
             }
             .toggleStyle(.button)
+            .buttonStyle(ScreenControlButtonStyle(isSelected: renderingParameters.brickVis))
             .accessibilityLabel("Bricks")
             .onChange(of: renderingParameters.brickVis) {
               synchronizeState()
@@ -404,8 +441,11 @@ struct RenderView: View {
           }
         }
 
+        VolumeEditSynchronizationStatus(model: appModel.volumeBrush)
         interactionModePicker(compact: usesCompactInteractionModeLabels)
         .onChange(of: appModel.interactionMode) { _, mode in
+          appModel.volumeBrush.context.finish(source: "touch")
+          appModel.endProjectedStrokeHandler?()
           if mode != .measurement {
             appModel.clearVolumeMeasurementSelection()
           }
@@ -429,20 +469,20 @@ struct RenderView: View {
   private func modeActionButtons(compact: Bool) -> some View {
     GeometryReader { geometry in
       let spacing: CGFloat = 4
-      let columnWidth = max(0, (geometry.size.width - spacing * 5) / 6)
+      let columnWidth = max(0, (geometry.size.width - spacing * 6) / 7)
       let columnStride = columnWidth + spacing
       let doubleColumnWidth = columnWidth * 2 + spacing
-      let groupInset: CGFloat = compact ? 5 : 7
+      let buttonInset: CGFloat = compact ? 4 : 6
 
       ZStack(alignment: .leading) {
-        HStack(spacing: compact ? 5 : 7) {
+        HStack(spacing: spacing) {
           Button {
             renderingParameters.reset()
             synchronizeFullState()
             synchronizeTransform()
             sharePlay.flushSynchronization()
           } label: {
-            actionLabel(
+            modeActionLabel(
               "Reset",
               systemImage: "arrow.counterclockwise",
               compact: compact,
@@ -450,48 +490,52 @@ struct RenderView: View {
             )
             .frame(maxWidth: .infinity)
           }
+          .buttonStyle(ModeActionButtonStyle(horizontalInset: buttonInset))
           .accessibilityLabel("Reset")
+          .frame(width: columnWidth)
 
           Button {
             toggleToolSheet(.lighting)
           } label: {
-            actionLabel(
+            modeActionLabel(
               "Lighting",
               systemImage: "lightbulb.max",
               compact: compact,
-              color: isToolSheetPresented(.lighting) ? .white : .primary
+              color: .primary
             )
             .frame(maxWidth: .infinity)
           }
-          .modifier(
-            WindowPresentationButtonStyle(
+          .buttonStyle(
+            ModeActionButtonStyle(
               isPresented: isToolSheetPresented(.lighting),
-              tint: .accentColor
+              tint: .secondary,
+              horizontalInset: buttonInset
             )
           )
           .accessibilityAddTraits(isToolSheetPresented(.lighting) ? .isSelected : [])
           .accessibilityLabel("Lighting")
+          .frame(width: columnWidth)
         }
-        .frame(width: doubleColumnWidth - groupInset * 2)
-        .offset(x: groupInset)
+        .frame(width: doubleColumnWidth)
 
         Button {
           toggleToolSheet(
             renderingParameters.renderMode == .isoValue ? .isoEditor : .transferEditor
           )
         } label: {
-          actionLabel(
+          modeActionLabel(
             "Editor",
             systemImage: "slider.horizontal.3",
             compact: compact,
-            color: currentEditorIsPresented ? .white : .purple
+            color: .primary
           )
           .frame(maxWidth: .infinity)
         }
-        .modifier(
-          WindowPresentationButtonStyle(
+        .buttonStyle(
+          ModeActionButtonStyle(
             isPresented: currentEditorIsPresented,
-            tint: .purple
+            tint: .purple,
+            horizontalInset: buttonInset
           )
         )
         .accessibilityAddTraits(currentEditorIsPresented ? .isSelected : [])
@@ -502,18 +546,19 @@ struct RenderView: View {
         Button {
           toggleToolSheet(.objects)
         } label: {
-          actionLabel(
+          modeActionLabel(
             "Objects",
             systemImage: "cube.transparent",
             compact: compact,
-            color: isToolSheetPresented(.objects) ? .white : .orange
+            color: .primary
           )
           .frame(maxWidth: .infinity)
         }
-        .modifier(
-          WindowPresentationButtonStyle(
+        .buttonStyle(
+          ModeActionButtonStyle(
             isPresented: isToolSheetPresented(.objects),
-            tint: .orange
+            tint: .orange,
+            horizontalInset: buttonInset
           )
         )
         .accessibilityAddTraits(isToolSheetPresented(.objects) ? .isSelected : [])
@@ -524,28 +569,71 @@ struct RenderView: View {
         Button {
           toggleToolSheet(.measurements)
         } label: {
-          actionLabel(
+          modeActionLabel(
             "measurement_window_title",
             systemImage: "ruler",
             compact: compact,
-            color: isToolSheetPresented(.measurements) ? .white : .green
+            color: .primary
           )
           .frame(maxWidth: .infinity)
         }
-        .modifier(
-          WindowPresentationButtonStyle(
+        .buttonStyle(
+          ModeActionButtonStyle(
             isPresented: isToolSheetPresented(.measurements),
-            tint: .green
+            tint: .green,
+            horizontalInset: buttonInset
           )
         )
         .accessibilityAddTraits(isToolSheetPresented(.measurements) ? .isSelected : [])
         .accessibilityLabel(Text("measurement_window_title"))
         .frame(width: columnWidth)
         .offset(x: columnStride * 5)
+
+        Button {
+          toggleToolSheet(.volumeBrush)
+        } label: {
+          modeActionLabel(
+            "Brush",
+            systemImage: "eraser",
+            compact: compact,
+            color: .primary
+          )
+          .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(
+          ModeActionButtonStyle(
+            isPresented: isToolSheetPresented(.volumeBrush),
+            tint: .red,
+            horizontalInset: buttonInset
+          )
+        )
+        .accessibilityAddTraits(isToolSheetPresented(.volumeBrush) ? .isSelected : [])
+        .accessibilityLabel("Brush")
+        .frame(width: columnWidth)
+        .offset(x: columnStride * 6)
       }
-      .buttonStyle(.bordered)
     }
     .frame(height: 38)
+    .padding(.horizontal, 4)
+  }
+
+  private func modeActionLabel(
+    _ title: LocalizedStringKey,
+    systemImage: String,
+    compact: Bool,
+    color: Color
+  ) -> some View {
+    ViewThatFits(in: .horizontal) {
+      if !compact {
+        Label(title, systemImage: systemImage)
+          .lineLimit(1)
+          .fixedSize(horizontal: true, vertical: false)
+      }
+      Image(systemName: systemImage)
+        .frame(width: 20, height: 20)
+        .accessibilityLabel(title)
+    }
+    .foregroundStyle(color)
   }
 
   private var currentEditorIsPresented: Bool {
@@ -619,6 +707,7 @@ struct RenderView: View {
         systemImage: "ruler",
         compact: compact
       )
+      interactionModeSegment(.volumeEditing, title: "Edit Volume", systemImage: "eraser", compact: compact)
     }
     .padding(4)
     .background(.secondary.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
@@ -642,12 +731,12 @@ struct RenderView: View {
       Group {
         if compact {
           Image(systemName: systemImage)
-            .foregroundStyle(color)
+            .foregroundStyle(.primary)
             .accessibilityLabel(title)
         } else {
           HStack(spacing: 6) {
             Image(systemName: systemImage)
-              .foregroundStyle(color)
+              .foregroundStyle(.primary)
             Text(title)
               .foregroundStyle(.primary)
           }
@@ -658,13 +747,20 @@ struct RenderView: View {
       .lineLimit(1)
       .frame(maxWidth: .infinity, minHeight: 34)
       .padding(.horizontal, compact ? 3 : 6)
-      .background(
-        color.opacity(selected ? 0.22 : 0),
-        in: RoundedRectangle(cornerRadius: 6)
-      )
+      .background(ScreenControlAppearance.surface, in: RoundedRectangle(cornerRadius: 6))
+      .overlay {
+        RoundedRectangle(cornerRadius: 6)
+          .strokeBorder(color.opacity(selected ? 1 : 0.3), lineWidth: selected ? 2 : 1)
+      }
+      .overlay(alignment: .bottom) {
+        Capsule().fill(color).frame(width: 18, height: 2).padding(.bottom, 3)
+      }
       .contentShape(Rectangle())
     }
     .buttonStyle(.plain)
+    .overlay(alignment: .topTrailing) {
+      if mode == .volumeEditing { VolumeBrushActivityIndicator(model: appModel.volumeBrush) }
+    }
     .accessibilityAddTraits(selected ? .isSelected : [])
   }
 
@@ -675,6 +771,7 @@ struct RenderView: View {
       case .transferEditing: .purple
       case .drawing, .objectPlacement: .orange
       case .measurement: .green
+      case .volumeEditing: .red
     }
   }
 
@@ -785,14 +882,15 @@ struct RenderView: View {
       content()
     }
     .padding(2)
-    .foregroundStyle(tint)
-    .background(tint.opacity(0.13), in: Capsule())
-    .overlay(Capsule().stroke(tint.opacity(0.2), lineWidth: 1))
+    .foregroundStyle(.primary)
+    .background(ScreenControlAppearance.surface, in: Capsule())
+    .overlay(Capsule().strokeBorder(tint.opacity(0.65), lineWidth: 1.5))
   }
 
   private var doubleTapInteractionGesture: some Gesture {
     TapGesture(count: 2)
       .onEnded {
+        if appModel.interactionMode == .volumeEditing { return }
         if appModel.interactionMode == .measurement {
           if appModel.removeSelectedVolumeMeasurementPoint() {
             synchronizeMeasurements(immediately: true)
@@ -814,6 +912,9 @@ struct RenderView: View {
         previousDragTranslation = value.translation
 
         switch appModel.interactionMode {
+          case .volumeEditing:
+            guard let screen = renderSurface.normalizedScreenPosition(forGlobalPoint: value.location) else { return }
+            applyVolumeBrush(at: screen)
           case .model:
             guard let start = renderSurface.localPointAndSize(forGlobalPoint: value.startLocation),
                   let current = renderSurface.localPointAndSize(forGlobalPoint: value.location) else {
@@ -839,6 +940,7 @@ struct RenderView: View {
         }
       }
       .onEnded { _ in
+        appModel.volumeBrush.context.finish(source: "touch")
         previousDragTranslation = .zero
         arcballStartOrientation = nil
         markerDragID = nil
@@ -990,6 +1092,10 @@ struct RenderView: View {
                 forGlobalPoint: value.location
               ) else { return }
         switch appModel.interactionMode {
+          case .volumeEditing:
+            applyVolumeBrush(at: screenPosition)
+            appModel.volumeBrush.context.finish(source: "touch")
+            appModel.endProjectedStrokeHandler?()
           case .drawing:
             beginStrokeInteraction(at: screenPosition)
             strokeDragID = nil
@@ -1007,6 +1113,15 @@ struct RenderView: View {
         }
         sharePlay.flushSynchronization()
       }
+  }
+
+  private func applyVolumeBrush(at screenPosition: SIMD2<Float>) {
+    if appModel.volumeBrush.projectsOntoVolume { appModel.beginProjectedStrokeHandler?() }
+    guard let position = interactionPosition(at: screenPosition,
+      preservingDepthOf: appModel.volumeBrush.context.previewPosition() ?? brushPosition,
+      projected: appModel.volumeBrush.projectsOntoVolume) else { return }
+    brushPosition = position
+    appModel.volumeBrush.context.apply(at: position, source: "touch")
   }
 
   private func interactionPosition(
@@ -1265,7 +1380,9 @@ struct RenderView: View {
       .onChanged { value in
         let delta = value.magnification / previousMagnification
         previousMagnification = value.magnification
-        if appModel.interactionMode == .clipping {
+        if appModel.interactionMode == .volumeEditing {
+          appModel.volumeBrush.radius = min(0.15, max(0.002, appModel.volumeBrush.radius * Double(delta)))
+        } else if appModel.interactionMode == .clipping {
           applyDepthAlignedClipping(magnificationDelta: delta)
           synchronizeState()
         } else if appModel.interactionMode == .objectPlacement {

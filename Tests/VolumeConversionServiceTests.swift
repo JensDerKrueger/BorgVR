@@ -1200,13 +1200,22 @@ private func testRegistrationRecoversRotationAroundVolumeCenter() throws {
 
 @main
 private enum VolumeConversionServiceTestRunner {
-  static func main() throws {
+  static func main() async throws {
+    if let directory = ProcessInfo.processInfo.environment["BORGVR_PROFILE_EDIT_STATE"],
+       let dataset = ProcessInfo.processInfo.environment["BORGVR_PROFILE_DATASET"] {
+      try profileExistingEditState(directory: URL(fileURLWithPath: directory), dataset: URL(fileURLWithPath: dataset))
+      return
+    }
     try testSettingsAndCancellation()
+    try runVolumeEditTests()
+    try await runVolumeEditingAutomationTests()
+    try await runVolumeEditCollaborationTests()
     try testRawConversionAndAtomicReplacement()
     try testDICOMFusionInterleavesChannels()
     try testIntegerVolumeSamplerHandlesInterpolationAndPadding()
     try testDICOMFusionTreatsMovingPaddingAsMissing()
     try testIsoSurfaceExtractionUsesUniqueCellsAndChannelMinimum()
+    try runIsoSurfaceEditTests()
     try testMarchingCubes33Cases()
     try testDICOMFusionUsesPatientGeometry()
     try testDICOMFusionTrilinearFiltering()

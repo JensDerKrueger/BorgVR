@@ -228,6 +228,15 @@ class AsyncEmptinessUpdater {
     brickIsEmpty(brickMetadata: brickMetadata, evaluation: currentEvaluation())
   }
 
+  func invalidateDataset() {
+    evaluationLock.withLock {
+      evaluationState = EvaluationState(mode: evaluationState.mode,
+        transferFunctions: evaluationState.transferFunctions, isoValue: evaluationState.isoValue,
+        revision: evaluationState.revision &+ 1)
+    }
+    waitSemaphore.signal()
+  }
+
   private func currentEvaluation() -> EvaluationState {
     evaluationLock.withLock { evaluationState }
   }
@@ -263,17 +272,17 @@ class AsyncEmptinessUpdater {
 
         let evaluation = self.currentEvaluation()
         guard evaluation.revision != completedRevision else { continue }
+        let contentRevision = self.borgData.contentRevision
 
         // Compute current emptiness per brick.
         var currentEmptiness = Array(repeating: false, count: brickCount)
         for index in 0..<brickCount {
-          let brickMetadata = self.borgData.getMetadata().brickMetadata[index]
-          currentEmptiness[index] = self.brickIsEmpty(
-            brickMetadata: brickMetadata,
-            evaluation: evaluation
-          )
+          currentEmptiness[index] = self.borgData.visibilityMetadata(index: index).map {
+            self.brickIsEmpty(brickMetadata: $0, evaluation: evaluation)
+          } ?? false
         }
-        guard self.currentEvaluation().revision == evaluation.revision else { continue }
+        guard self.currentEvaluation().revision == evaluation.revision,
+              self.borgData.contentRevision == contentRevision else { continue }
 
         // Only update metaStorage if emptiness has changed.
         let previousEmptiness = self.storageLock.withLock { self.lastEmptiness }
@@ -345,7 +354,9 @@ class AsyncEmptinessUpdater {
     // Compute the emptiness for each brick.
     let evaluation = currentEvaluation()
     let emptiness = (0..<brickCount).map { index in
-      brickIsEmpty(brickMetadata: metadata.brickMetadata[index], evaluation: evaluation)
+      borgData.visibilityMetadata(index: index).map {
+        brickIsEmpty(brickMetadata: $0, evaluation: evaluation)
+      } ?? false
     }
 
     // Update metaStorage based on computed emptiness.

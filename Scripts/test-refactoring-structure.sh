@@ -72,6 +72,14 @@ require_pattern 'cancelRenderScreenshot' AppSupport/Automation/BorgVRScreenComma
 forbid_pattern 'pendingScreenshot(URL|AccessURL|Completion)' macOSApp/MacVolumeRenderer.swift
 forbid_pattern 'pendingScreenshot(URL|Completion)' iOSApp/MobileVolumeRenderer.swift
 
+# Entering Edit mode never opens its settings; its separate tool button owns presentation.
+forbid_pattern 'if mode == \.volumeEditing.*presentedSheet' iOSApp/RenderView.swift
+require_pattern 'toggleToolSheet\(\.volumeBrush\)' iOSApp/RenderView.swift
+forbid_pattern 'VolumeBrushControls' VisionApp/PrivateApplicationView.swift
+require_pattern 'openWindow\(id: "VolumeBrushEditorView"\)' VisionApp/PrivateApplicationView.swift
+require_pattern 'WindowGroup\(id: "VolumeBrushEditorView"\)' VisionApp/VisionApp.swift
+require_pattern 'dismissWindow\(id: "VolumeBrushEditorView"\)' VisionApp/RenderView.swift
+
 # Shared converter UI and conversion implementation.
 require_file AppSupport/Datasets/ConverterView.swift
 require_file AppSupport/Datasets/DicomSlicePreview.swift
@@ -89,6 +97,12 @@ require_pattern 'BorgVRVolumeConversionService\.convert' VisionApp/ConverterView
 require_file AppSupport/Datasets/DatasetOpenWorkflow.swift
 require_file AppSupport/Datasets/OpenDatasetView.swift
 require_file AppSupport/Datasets/WaitingView.swift
+# Keep bundled SharePlay datasets distinct from writable local files, so their
+# edits never resolve to a sidecar inside the signed app bundle.
+require_pattern 'func findLocalDataset.*source: RuntimeAppModel.DatasetSource' VisionApp/FileOperations.swift
+require_pattern 'return \(match\.1, match\.2\)' VisionApp/FileOperations.swift
+require_pattern 'source: localDataset\.source' VisionApp/GroupActivities.swift
+require_pattern 'case \.builtIn: editDatasetURL = nil' VisionApp/VisionVolumeRendererBootstrap.swift
 forbid_path macOSApp/OpenDatasetView.swift
 forbid_path iOSApp/OpenDatasetView.swift
 forbid_path macOSApp/WaitingView.swift

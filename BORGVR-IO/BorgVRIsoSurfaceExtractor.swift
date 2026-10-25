@@ -306,16 +306,13 @@ enum BorgVRIsoSurfaceExtractor {
             min(origin.z + brickStride, size.z - 1)
           )
           let hasCells = origin.x < cellEnd.x && origin.y < cellEnd.y && origin.z < cellEnd.z
+          let brickIndex = level.prevBricks + brickX + brickY * brickCount.x + brickZ * brickCount.x * brickCount.y
+          // Edits can create crossings in previously uniform bricks. Unknown
+          // current bounds must be read, never culled using original-file ranges.
           let shouldProcess = hasCells && (
-            metadata.overlap == 0 || brickMayIntersect(
-              metadata: metadata.getBrickMetadata(
-                level: 0,
-                x: brickX,
-                y: brickY,
-                z: brickZ
-              ),
-              threshold: threshold
-            )
+            metadata.overlap == 0 || (dataset.visibilityMetadata(index: brickIndex).map {
+              brickMayIntersect(metadata: $0, threshold: threshold)
+            } ?? true)
           )
           jobs.append(
             BrickJob(

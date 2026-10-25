@@ -14,7 +14,7 @@ The project is intended for interactive exploration of large volumetric datasets
 native Metal renderers, dataset conversion tools, local and remote dataset servers, SharePlay
 collaboration, and a WebGPU browser frontend served directly by the dataset server.
 
-The current development version is **3.1**. The SharePlay wire protocol is version **3.0**.
+The current development version is **3.2**. The SharePlay wire protocol is version **3.2**.
 
 ## What Is Included
 
@@ -110,6 +110,8 @@ The current development version is **3.1**. The SharePlay wire protocol is versi
 - Synchronous text, file, and directory input functions for interactive scripts.
 - Scriptable QVIS, NRRD, PVM, and DICOM import, BorgVR LoD export, and configurable import
   brick size, overlap, and border handling.
+- Local erase/restore brushes, sample batches in physical meters, background-job status and
+  waiting, discarding edits, and cancellable edited-dataset export with progress.
 
 ### MCP Automation
 
@@ -120,8 +122,19 @@ The current development version is **3.1**. The SharePlay wire protocol is versi
   retrieve the current rendered view as a PNG image.
 - The MCP adapter and the macOS `.gsc` interpreter use the same application command layer for
   shared visualization operations.
+- Both also use one local volume-editing implementation for erase/restore, brush configuration,
+  edit status, discarding edits, and edited-dataset export. MCP export jobs expose progress and
+  cancellation; GSC waits for completion. SharePlay uses a separate shared edit state and synchronizes erase/restore cursors.
+- Pending edit bricks finish automatically before opening, without an additional prompt. Opening and export
+  share an exact bottom-up CPU/Metal builder with bounded caches and child-brick reuse, independent
+  of the renderer's GPU preview. GSC `preparevolumeedits` and MCP `prepare_volume_edits` expose
+  foreground preparation without discarding recorded edits on cancellation.
+- Edit caches keep raw/LZ4 brick payloads and a persisted table of contents. Normal reopening
+  reads only that table; recovery scans are reserved for missing or damaged tables. Unchanged
+  mask checkpoints are not rewritten when switching states. Masks use compact binary tree tags
+  for checkpoint storage and SharePlay snapshots rather than per-node property-list objects.
 - MCP is disabled by default and listens on `localhost` unless network access is enabled. In that
-  mode it listens on all network interfaces over unencrypted HTTP and may be internet-reachable,
+  mode it listens on all network interfaces over HTTPS and may be internet-reachable,
   depending on the surrounding network configuration. Connections require a generated bearer token.
 
 ### WebGPU

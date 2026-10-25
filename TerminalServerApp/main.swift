@@ -2,7 +2,7 @@ import Dispatch
 import Foundation
 
 enum TerminalServerInfo {
-  static let version = "3.1"
+  static let version = "3.2"
   static let defaultMaximumBricksPerRequest = 64
   static let build: String = {
     let executable = URL(fileURLWithPath: CommandLine.arguments[0]).standardizedFileURL.path

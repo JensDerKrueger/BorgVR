@@ -158,6 +158,12 @@ final class ScreenVolumeRendererCore {
     dataset
   }
 
+  func moveVolumeBrushInDepth(by delta: CGFloat) {
+    guard let position = appModel.volumeBrush.context.previewPosition(),
+          let shifted = markerPosition(position, offsetAlongViewRayBy: Float(delta) * 0.003) else { return }
+    appModel.volumeBrush.context.showPreview(at: shifted, source: "touch")
+  }
+
   func updateIfNeeded(for view: MTKView) -> ScreenDatasetUpdate {
     let key = appModel.activeDatasetRenderKey
     guard key != loadedDatasetKey else { return .unchanged }
@@ -235,6 +241,7 @@ final class ScreenVolumeRendererCore {
     }
     updateUniforms(for: view, state: frameState, settings: frame.settings)
     updateEmptiness(state: frameState)
+    volumeAtlas.prepareFrame(commandBuffer: commandBuffer)
 
     guard let interactionDepthTexture = interactionDepthTexture(
       device: device,
@@ -249,17 +256,18 @@ final class ScreenVolumeRendererCore {
     interactionAttachment.clearColor = MTLClearColorMake(-1, 0, 0, 0)
 
     let markerMatrices = markerFrameMatrices(for: view)
+    let brushMarkers = appModel.volumeBrush.context.previewMarkers()
     guard let markerTargets = opaqueGeometryRenderer.render(
       commandBuffer: commandBuffer,
       device: device,
       drawableSize: view.drawableSize,
       colorFormat: view.colorPixelFormat,
       depthFormat: view.depthStencilPixelFormat,
-      showsObjects: frameState.objectsVisible,
+      showsObjects: frameState.objectsVisible || !brushMarkers.isEmpty,
       showsMeasurements: frameState.measurementsVisible,
-      markers: frame.annotations.markers,
+      markers: (frameState.objectsVisible ? frame.annotations.markers : []) + brushMarkers,
       sceneMeshAssets: frame.annotations.meshAssets,
-      sceneMeshInstances: frame.annotations.meshInstances,
+      sceneMeshInstances: frameState.objectsVisible ? frame.annotations.meshInstances : [],
       spatialToolPreviews: frame.annotations.remoteToolPreviews.filter(\.isActive),
       selectedMarkerIDs: frame.annotations.selectedMarkerIDs,
       measurements: frame.annotations.measurements,
@@ -302,7 +310,9 @@ final class ScreenVolumeRendererCore {
     hashTable.bind(to: renderEncoder, index: FragmentBufferIndex.hashTable.rawValue)
     opaqueGeometryRenderer.bindDepth(markerTargets.depth, to: renderEncoder)
 
-    renderEncoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: vertexCount)
+    if volumeAtlas.isContentReady {
+      renderEncoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: vertexCount)
+    }
     opaqueGeometryRenderer.composite(
       colorTexture: markerTargets.color,
       depthTexture: markerTargets.depth,
@@ -361,6 +371,7 @@ final class ScreenVolumeRendererCore {
   }
 
   private func clearDatasetResources() {
+    appModel.volumeBrush.close()
     releaseDatasetAccess()
     dataset = nil
     volumeAtlas = nil
@@ -379,6 +390,7 @@ final class ScreenVolumeRendererCore {
       throw BORGVRError.other("Metal device unavailable while loading the dataset.")
     }
     let newDataset: BORGVRDatasetProtocol
+    var datasetURL: URL?
     guard let activeDataset = appModel.activeDataset else {
       throw BORGVRError.other("No active dataset is available to load.")
     }
@@ -388,6 +400,7 @@ final class ScreenVolumeRendererCore {
         newDataset = try BORGVRFileData(filename: activeDataset.identifier)
       case .local:
         newDataset = try loadLocalDataset(activeDataset.identifier)
+        datasetURL = URL(fileURLWithPath: activeDataset.identifier)
       case let .remote(address, port, password):
         let primaryOrigin = DatasetOrigin(address: address, port: port, password: password)
         let datasetID = activeDataset.identifier
@@ -398,9 +411,9 @@ final class ScreenVolumeRendererCore {
           logger: appModel.logger
         )
         try manager.connect(timeout: appSettings.timeout)
-        let cacheFilename = appSettings.makeLocalCopy
-          ? remoteCacheFilename(activeDataset.identifier)
-          : nil
+        let localFilename = remoteCacheFilename(activeDataset.identifier)
+        datasetURL = localFilename.map { URL(fileURLWithPath: $0) }
+        let cacheFilename = appSettings.makeLocalCopy ? localFilename : nil
         if let cacheFilename {
           appModel.logger.dev("Remote dataset will be cached at \(cacheFilename)")
         }
@@ -416,7 +429,8 @@ final class ScreenVolumeRendererCore {
         )
     }
 
-    dataset = newDataset
+    let editableDataset = appModel.volumeBrush.open(newDataset, datasetURL: datasetURL, logger: appModel.logger)
+    dataset = editableDataset
     timer.reset()
     renderingParameters.reset()
     let metadata = newDataset.getMetadata()
@@ -437,7 +451,7 @@ final class ScreenVolumeRendererCore {
     volumeAtlas = try VolumeAtlas(
       device: device,
       maxMemory: atlasSizeMB * 1024 * 1024,
-      borgData: newDataset,
+      borgData: editableDataset,
       transferFunctions: Array(renderingParameters.activeTransferFunctions),
       isoValue: renderingParameters.isoValue,
       logger: appModel.logger
@@ -445,7 +459,7 @@ final class ScreenVolumeRendererCore {
     if let volumeAtlas {
       try? VolumeRenderResources.pageInInitialBricks(
         atlas: volumeAtlas,
-        dataset: newDataset,
+        dataset: editableDataset,
         maximumCount: appSettings.initialBricks
       )
     }

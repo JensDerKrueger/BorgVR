@@ -236,7 +236,6 @@ class TCPServer {
     let connections = activeConnectionsSnapshot()
     connections.forEach { connection in
       closeConnection(for: connection)
-      connection.cancel()
     }
     removeAllActiveConnections()
     isRunning = false
@@ -271,10 +270,8 @@ class TCPServer {
             connection: connection
           ))
           self.closeConnection(for: connection)
-          self.removeActiveConnection(connection)
         case .cancelled:
           self.closeConnection(for: connection)
-          self.removeActiveConnection(connection)
         default:
           break
       }
@@ -360,7 +357,6 @@ class TCPServer {
           connection: connection
         ))
         self.closeConnection(for: connection)
-        connection.cancel()
         return
       }
 
@@ -375,7 +371,6 @@ class TCPServer {
             connection: connection
           ))
           self.closeConnection(for: connection)
-          connection.cancel()
           return
         }
 
@@ -384,13 +379,12 @@ class TCPServer {
             "Rejected malformed or unsupported protocol command.",
             connection: connection
           ))
-          connection.cancel()
+          self.closeConnection(for: connection)
           return
         }
       }
 
       if isComplete {
-        connection.cancel()
         self.logger?.info(
           self.clientLogMessage(L(
             "tcpserver_info_closing_connection_after_processing",
@@ -609,7 +603,7 @@ class TCPServer {
           comment: "closing previous dataset for connection"
         ), connection: connection)
       )
-      closeConnection(for: connection)
+      closeDataset(for: connection)
     }
 
     if let data = try? BORGVRFileData(filename: dataset.filename) {
@@ -901,18 +895,20 @@ class TCPServer {
     connectionDatasets.removeValue(forKey: connectionID)
     authChallenges.removeValue(forKey: connectionID)
     authenticatedConnections.remove(connectionID)
+    activeConnections.removeAll(where: { $0 === connection })
+    stateLock.unlock()
+    connection.cancel()
+  }
+
+  private func closeDataset(for connection: NWConnection) {
+    stateLock.lock()
+    connectionDatasets.removeValue(forKey: ObjectIdentifier(connection))
     stateLock.unlock()
   }
 
   private func appendActiveConnection(_ connection: NWConnection) {
     stateLock.lock()
     activeConnections.append(connection)
-    stateLock.unlock()
-  }
-
-  private func removeActiveConnection(_ connection: NWConnection) {
-    stateLock.lock()
-    activeConnections.removeAll(where: { $0 === connection })
     stateLock.unlock()
   }
 

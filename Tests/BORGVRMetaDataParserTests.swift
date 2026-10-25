@@ -96,6 +96,13 @@ private enum BORGVRMetaDataParserTests {
     writeInt64(3, to: &invalidComponentSize, at: 46)
     try expectRejection("unsupported component size", data: invalidComponentSize)
 
+    for count in [Int64(-1), 0, 1025, Int64.max] {
+      var invalidComponentCount = valid
+      writeInt64(count, to: &invalidComponentCount, at: 38)
+      writeInt64(count, to: &invalidComponentCount, at: 98)
+      try expectRejection("invalid component count before range allocation", data: invalidComponentCount)
+    }
+
     var invalidSpacing = valid
     invalidSpacing.replaceSubrange(54..<58, with: [0x00, 0x00, 0xc0, 0x7f])
     try expectRejection("non-finite voxel spacing", data: invalidSpacing)
@@ -143,6 +150,82 @@ private enum BORGVRMetaDataParserTests {
     writeInt64(Int64.max, to: &overflowingBrickRange, at: firstBrickOffset)
     try expectRejection("overflowing brick range", data: overflowingBrickRange)
 
+    for size in [Int64(-1), 0, 65] {
+      var invalidBrickSize = valid
+      writeInt64(size, to: &invalidBrickSize, at: firstBrickOffset + 8)
+      try expectRejection("invalid stored brick size \(size)", data: invalidBrickSize)
+    }
+
+    var shortUncompressed = valid
+    shortUncompressed[compressionOffset] = 0
+    try expectRejection("short uncompressed brick", data: shortUncompressed)
+
+    var fullStoredBrick = valid
+    writeInt64(64, to: &fullStoredBrick, at: firstBrickOffset + 8)
+    _ = try BORGVRMetaData(fromData: fullStoredBrick)
+
+    var overflowingFullBrickSize = valid
+    writeInt64(Int64(Int32.max), to: &overflowingFullBrickSize, at: 66)
+    try expectRejection("overflowing full brick byte count", data: overflowingFullBrickSize)
+
+    try testFileReaderBounds()
+
     print("Swift BORGVR metadata parser tests passed.")
   }
+}
+
+private func testFileReaderBounds() throws {
+  let directory = FileManager.default.temporaryDirectory.appendingPathComponent("borgvr-brick-bounds-\(UUID())")
+  try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+  defer { try? FileManager.default.removeItem(at: directory) }
+  func writeDataset(storedSize: Int, name: String) throws -> URL {
+    let metadata = BORGVRMetaData(width: 2, height: 2, depth: 2, componentCount: 1,
+      bytePerComponent: 1, voxelSpacingX: 1, voxelSpacingY: 1, voxelSpacingZ: 1,
+      brickSize: 2, overlap: 0, minValue: 0, maxValue: 255, compression: false,
+      datasetDescription: "Bounds test", metaDescription: "")
+    metadata.append(offset: 8, size: storedSize, minValue: 0, maxValue: 255)
+    var data = Data(from: UInt64(8 + storedSize))
+    data.append(contentsOf: repeatElement(UInt8(42), count: storedSize))
+    data.append(metadata.toData())
+    let url = directory.appendingPathComponent(name)
+    try data.write(to: url)
+    return url
+  }
+  for size in [7, 9] {
+    let url = try writeDataset(storedSize: size, name: "invalid-\(size).data")
+    do {
+      _ = try BORGVRFileData(filename: url.path)
+      throw TestFailure.expectedRejection("invalid brick file opened")
+    } catch is BORGVRError {}
+  }
+  let url = try writeDataset(storedSize: 8, name: "valid.data")
+  let reader = try BORGVRFileData(filename: url.path)
+  let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: 16)
+  defer { buffer.deallocate() }
+  buffer.initialize(repeating: 77, count: 16)
+  try reader.getBrick(index: 0, outputBuffer: buffer)
+  guard Array(UnsafeBufferPointer(start: buffer, count: 8)) == Array(repeating: 42, count: 8), buffer[8] == 77 else {
+    throw TestFailure.expectedRejection("valid decoded brick changed its buffer boundary")
+  }
+  _ = try reader.getRawBrick(index: 0, outputBuffer: buffer)
+  let ranges = [BORGVRComponentRange(minValue: 0, maxValue: 255)]
+  for brick in [BrickMetadata(offset: 8, size: 9, minValue: 0, maxValue: 255, componentRanges: ranges),
+                BrickMetadata(offset: 8, size: 7, minValue: 0, maxValue: 255, componentRanges: ranges),
+                BrickMetadata(offset: Int.max, size: 8, minValue: 0, maxValue: 255, componentRanges: ranges)] {
+    do {
+      try reader.getRawBrick(brickMeta: brick, outputBuffer: buffer)
+      throw TestFailure.expectedRejection("raw copy accepted invalid brick bounds")
+    } catch is BORGVRError {}
+  }
+  for index in [-1, 1] {
+    do {
+      try reader.getBrick(index: index, outputBuffer: buffer)
+      throw TestFailure.expectedRejection("decoded copy accepted invalid index")
+    } catch is BORGVRError {}
+    do {
+      _ = try reader.getRawBrick(index: index, outputBuffer: buffer)
+      throw TestFailure.expectedRejection("raw copy accepted invalid index")
+    } catch is BORGVRError {}
+  }
+  guard buffer[8] == 77 else { throw TestFailure.expectedRejection("invalid raw copy overwrote the sentinel") }
 }

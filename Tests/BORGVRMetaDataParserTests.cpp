@@ -129,6 +129,23 @@ int main(int argc, char** argv) {
   write_i64(overflowingBrickRange, metadataCountOffset + 16, INT64_MAX);
   expect_rejection("overflowing brick range", overflowingBrickRange);
 
+  for (const int64_t size : {-1, 0, 65}) {
+    auto invalidBrickSize = valid;
+    write_i64(invalidBrickSize, metadataCountOffset + 24, size);
+    expect_rejection("invalid stored brick size", invalidBrickSize);
+  }
+  auto shortUncompressed = valid;
+  shortUncompressed[compressionOffset] = 0;
+  expect_rejection("short uncompressed brick", shortUncompressed);
+
+  auto fullStoredBrick = valid;
+  write_i64(fullStoredBrick, metadataCountOffset + 24, 64);
+  parsed.parseFromBytes(fullStoredBrick.data(), fullStoredBrick.size());
+
+  auto overflowingFullBrickSize = valid;
+  write_i64(overflowingFullBrickSize, 66, INT32_MAX);
+  expect_rejection("overflowing full brick byte count", overflowingFullBrickSize);
+
   std::cout << "C++ BORGVR metadata parser tests passed.\n";
   return 0;
 }

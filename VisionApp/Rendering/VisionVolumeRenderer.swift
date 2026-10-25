@@ -1835,7 +1835,7 @@ extension VisionVolumeRenderer {
     let persistentMarkers = frameSnapshot.annotations.markers.filter {
       !pendingProjectionCaptureMarkerIDs.contains($0.id)
     }
-    let screenViewMarkers = screenViews.markers.filter {
+    let screenViewMarkers = (screenViews.markers + (suppressLocalToolWidgets ? [] : immersiveInteraction.volumeBrushContext.previewMarkers())).filter {
       !pendingProjectionCaptureMarkerIDs.contains($0.id)
     }
     let toolWidgetMarkers = suppressLocalToolWidgets
@@ -2921,14 +2921,32 @@ extension VisionVolumeRenderer {
       lastOriginFromDevice.columns.2.y,
       lastOriginFromDevice.columns.2.z
     ))
-    let center = spatialControllerGlyphPosition(
-      aimTransform: sample.aimTransform
-    )
+    let center = sample.source == .stylus
+      ? spatialToolGlyphPosition(aimTransform: sample.aimTransform, distanceBehindTip: 0.05)
+      : spatialControllerGlyphPosition(aimTransform: sample.aimTransform)
     let size: Float = 0.011
     let worldVertices: [SIMD3<Float>]
     let paths: [[Int]]
     let color: SIMD4<Float>
     switch mode {
+      case .erase, .restore:
+        let sign = center + right * size * 1.7 + up * size * 0.75
+        let arm = size * 0.34
+        worldVertices = [
+          center - right * size * 0.9 - up * size * 0.25,
+          center - right * size * 0.35 - up * size * 0.8,
+          center + right * size * 0.2 - up * size * 0.8,
+          center + right * size,
+          center + right * size * 0.2 + up * size * 0.8,
+          center - right * size * 0.35 + up * size * 0.15,
+          center + right * size * 0.45 - up * size * 0.55,
+          sign - right * arm, sign + right * arm,
+          sign - up * arm, sign + up * arm
+        ]
+        paths = mode == .restore
+          ? [[0, 1, 2, 3, 4, 0], [5, 6], [7, 8], [9, 10]]
+          : [[0, 1, 2, 3, 4, 0], [5, 6], [7, 8]]
+        color = mode == .erase ? SIMD4(1, 0.2, 0.2, 1) : SIMD4(0.2, 1, 0.5, 1)
       case .model:
         worldVertices = [
           center - right * size, center + right * size,
@@ -3116,13 +3134,17 @@ extension VisionVolumeRenderer {
       .duration(to: drawable.frameTiming.trackableAnchorTime)
       .timeInterval
     let samples = borgARProvider.getSpatialInputSamples(atTimestamp: timestamp)
+    immersiveInteraction.volumeBrushContext.pruneDevicePreviews(activeIDs: Set(samples.map { $0.id.uuidString }))
     let inputContext = spatialInputContext.snapshot()
+    immersiveInteraction.updateVolumeBrushSources(activeIDs: Set(samples.map { $0.id.uuidString }),
+                                                  handMode: inputContext.mode)
     let placementConsumesAccessories = immersiveInteraction.handleArmedSceneObjectPlacement(
       samples: samples,
       datasetInfo: inputContext.datasetInfo
     )
     let stylusSample = placementConsumesAccessories ? nil : immersiveInteraction.spatialStylusSample(
       from: samples,
+      datasetInfo: inputContext.datasetInfo,
       timestamp: timestamp
     )
     if !placementConsumesAccessories {
@@ -3136,6 +3158,8 @@ extension VisionVolumeRenderer {
     let selectedPrototype = sharedAppModel.validateSelectedSceneObjectPrototype()
     var objectPreviewInstances: [SceneMeshInstance] = []
     spatialControllerPreviewPoints = spatialControllerSamples.compactMap { sample in
+      let tool = storedAppModel.controllerTool(for: sample.chirality)
+      if tool == .erase || tool == .restore { return nil }
       guard storedAppModel.controllerTool(for: sample.chirality) == .objectPlacement else {
         return spatialToolPreviewPoint(
           worldPosition: sample.aimOrigin,
@@ -3166,7 +3190,13 @@ extension VisionVolumeRenderer {
         mode: storedAppModel.controllerTool(for: sample.chirality)
       )
     }
-    if storedAppModel.stylusTool == .objectPlacement {
+    if storedAppModel.stylusTool == .erase || storedAppModel.stylusTool == .restore {
+      finishSpatialStylusStroke()
+      spatialStylusPreviewPoint = nil
+      spatialStylusMeasurementPreviewMarkers = samples.filter { $0.source == .stylus }.flatMap {
+        spatialControllerToolPreviewMarkers(sample: $0, mode: storedAppModel.stylusTool)
+      }
+    } else if storedAppModel.stylusTool == .objectPlacement {
       finishSpatialStylusStroke()
       spatialStylusRadiusAdjustmentStart = nil
       spatialStylusMeasurementPreviewMarkers = []
@@ -3354,6 +3384,7 @@ extension VisionVolumeRenderer {
 
     self.updateRenderState(drawable: drawable)
     self.updateSpatialAccessoryInteractions(drawable: drawable)
+    volumeAtlas.prepareFrame(commandBuffer: commandBuffer)
 
     let rasterizationRateMap = drawable.rasterizationRateMaps.first
     let opaqueGeometryTargets = renderOpaqueGeometry(
@@ -3457,7 +3488,9 @@ extension VisionVolumeRenderer {
       index: TextureIndex.markerDepth.rawValue
     )
 
-    renderEncoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: self.vertexCount)
+    if volumeAtlas.isContentReady {
+      renderEncoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: self.vertexCount)
+    }
 
     renderEncoder.popDebugGroup()
 

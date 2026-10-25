@@ -63,6 +63,24 @@ class GroupActivityHelper {
   private var sceneMeshResolutionRetryRequested = false
   private var stateVersionDatasetID: String?
   private var hostElectionTask: Task<Void, Never>?
+  private var editCollaboration: BorgVRVolumeEditCollaboration?
+
+  @MainActor
+  private func refreshEditCollaboration() {
+    guard let runtimeAppModel, let localID = sessionEngine.localParticipantID, groupSession != nil else { return }
+    if editCollaboration == nil {
+      editCollaboration = BorgVRVolumeEditCollaboration(model: runtimeAppModel.volumeBrush, send: { [weak self] data, target in
+        guard let self, self.messenger != nil else { throw CancellationError() }
+        if let target {
+          guard let participant = self.knownParticipants.first(where: { $0.id == target }) else { throw CancellationError() }
+          try await self.sendData(data: data, of: .volumeEditing, to: .only(Set([participant])))
+        } else { try await self.sendData(data: data, of: .volumeEditing) }
+      }, log: { [weak runtimeAppModel] in runtimeAppModel?.logger.warning($0) },
+        info: { [weak runtimeAppModel] in runtimeAppModel?.logger.info($0) })
+    }
+    editCollaboration?.configure(localID: localID, hostID: sessionEngine.currentHostParticipantID,
+      datasetID: sessionEngine.sessionDatasetID, participants: Set(knownParticipants.map(\.id)))
+  }
 
   init(_ sharedAppModel: SharedAppModel) {
     self.sharedAppModel = sharedAppModel
@@ -205,6 +223,7 @@ class GroupActivityHelper {
 
       let messenger = GroupSessionMessenger(session: session)
       self.messenger = messenger
+      await refreshEditCollaboration()
 
       if let pose = systemCoordinator.localParticipantState.pose {
         runtimeAppModel.logger.dev("Joined groupsession with pose \(pose)")
@@ -470,6 +489,7 @@ class GroupActivityHelper {
     if let dataset = runtimeAppModel.activeDataset {
       advanceHostStateVersionIfNeeded(for: dataset.uniqueId)
       setSessionDatasetID(dataset.uniqueId)
+      refreshEditCollaboration()
       let sharedDataset = shareOrigins(for: dataset)
       let initMessage = BorgVRSharePlayDatasetAnnouncement(
         uniqueID: dataset.uniqueId,
@@ -504,6 +524,12 @@ class GroupActivityHelper {
             of: .renderingUpdate,
             to: to
           )
+        }
+        switch to {
+          case .all: await editCollaboration?.sendSnapshot()
+          case .only(let members):
+            for participant in members { await editCollaboration?.sendSnapshot(to: participant.id) }
+          @unknown default: break
         }
       } catch {
         runtimeAppModel.logger.error("Failed to send init data to all participants: \(error)")
@@ -556,6 +582,9 @@ class GroupActivityHelper {
     }
 
     switch message.type {
+      case .volumeEditing:
+        refreshEditCollaboration()
+        editCollaboration?.receive(message.payload, from: from.id)
       case .initMessage:
         guard !runtimeAppModel.groupSessionHost else { return }
         handleInit(data: message.payload, from: from, sessionGeneration: generation)
@@ -774,6 +803,7 @@ class GroupActivityHelper {
 
   @MainActor
   private func publishParticipants() {
+    refreshEditCollaboration()
     let participants = sessionEngine.participants
     sharedAppModel?.sharePlayParticipants = participants
     publishDetachedScreenViews()
@@ -798,6 +828,8 @@ class GroupActivityHelper {
 
   @MainActor
   private func resetSessionReceivers() {
+    editCollaboration?.stop()
+    editCollaboration = nil
     messageTask?.cancel()
     messageTask = nil
     groupSession = nil
@@ -906,7 +938,8 @@ class GroupActivityHelper {
       return
     }
 
-    if let localFile = findlocalFile(id : initMessage.uniqueID) {
+    if let localDataset = findLocalDataset(id: initMessage.uniqueID) {
+      let localFile = localDataset.url
       runtimeAppModel.logger.info("Found SharePlay dataset \(initMessage.uniqueID) locally at \(localFile.path()).")
       pendingDatasetLoadTask?.cancel()
       pendingDatasetLoadTask = nil
@@ -914,7 +947,7 @@ class GroupActivityHelper {
 
       runtimeAppModel.startImmersiveSpace(identifier: localFile.path(),
                                    description: initMessage.description,
-                                   source: .local,
+                                   source: localDataset.source,
                                    uniqueId: initMessage.uniqueID,
                                    asGroupSessionHost: false)
       Task { await advertiseCurrentLocalDataset() }
@@ -1351,6 +1384,7 @@ class GroupActivityHelper {
     hostElectionTask = nil
     runtimeAppModel?.showsHostDeparturePrompt = false
     runtimeAppModel?.groupSessionHost = transition.isLocalHost
+    refreshEditCollaboration()
     if transition.isLocalHost {
       stateVersionDatasetID = runtimeAppModel?.activeDataset?.uniqueId
       setSessionDatasetID(runtimeAppModel?.activeDataset?.uniqueId)
@@ -1365,6 +1399,7 @@ class GroupActivityHelper {
   @MainActor
   private func setSessionDatasetID(_ datasetID: String?) {
     guard sessionEngine.setSessionDatasetID(datasetID) else { return }
+    refreshEditCollaboration()
     stopSharePlayServer()
     if let datasetID {
       runtimeAppModel?.logger.info("SharePlay ad-hoc server is restricted to host dataset \(datasetID).")

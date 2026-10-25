@@ -69,7 +69,7 @@ struct MacMarkerView: View {
             } label: {
               HStack {
                 Image(systemName: "cube.fill")
-                  .foregroundStyle(.tint)
+                  .foregroundStyle(.primary)
                 VStack(alignment: .leading, spacing: 1) {
                   Text(instance.name)
                     .lineLimit(1)
@@ -133,6 +133,7 @@ struct MacMarkerView: View {
         } label: {
           Label("Files", systemImage: "shippingbox")
         }
+        .screenControlMenu()
 
         Button {
           showLoadFilePicker = true
@@ -149,6 +150,7 @@ struct MacMarkerView: View {
 
         Spacer()
       }
+      .screenControlButtons()
 
       HStack {
         Button(role: .destructive) {
@@ -167,6 +169,7 @@ struct MacMarkerView: View {
         }
         .disabled(appModel.volumeMarkers.isEmpty && appModel.sceneMeshInstances.isEmpty)
       }
+      .screenControlButtons()
     }
     .padding(20)
     .confirmationDialog(

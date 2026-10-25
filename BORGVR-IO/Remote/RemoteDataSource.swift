@@ -186,6 +186,11 @@ final class RemoteDataSource: DataSource {
     try getBrick(index: minResBrick, outputBuffer: outputBuffer)
   }
 
+  func getRawBrick(index: Int, outputBuffer: UnsafeMutablePointer<UInt8>) throws -> Int? {
+    let bricks = try getRawBricks(indices: [index], outputBuffer: outputBuffer, outputBufferSize: fullBrickSize)
+    return bricks.first?.size
+  }
+
   /**
    Loads a brick from the remote dataset at the specified index and writes its data into the provided buffer.
 
@@ -205,6 +210,7 @@ final class RemoteDataSource: DataSource {
       throw BORGVRDataError.networkError(message: "Brick request contains an invalid index.")
     }
     let brickMeta = metadata.brickMetadata[index]
+    try metadata.validateStoredBrickByteCount(brickMeta.size, fullBrickByteCount: fullBrickSize)
     let responseData = try requestBrickData([index])
     guard responseData.count == brickMeta.size else {
       throw BORGVRDataError.networkError(

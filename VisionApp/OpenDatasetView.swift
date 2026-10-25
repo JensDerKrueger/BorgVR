@@ -260,10 +260,21 @@ struct OpenDatasetView: View {
           Button {
             Task { @MainActor in
               if let index = selectedIndex, datasets.indices.contains(index) {
-                switch datasets[index].source {
+                let selected = datasets[index]
+                let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
+                let editURL: URL?
+                switch selected.source {
+                  case .builtIn: editURL = nil
+                  case .local:
+                    editURL = selected.identifier.hasPrefix("/") ? URL(fileURLWithPath: selected.identifier) : documents?.appendingPathComponent(selected.identifier)
+                  case .remote: editURL = documents?.appendingPathComponent("\(selected.uniqueId).data")
+                }
+                do { try await runtimeAppModel.volumeBrush.prepareOpening(datasetID: selected.uniqueId, datasetURL: editURL) }
+                catch { return }
+                switch selected.source {
                   case .builtIn:
                     runtimeAppModel.startImmersiveSpace(
-                      dataset: datasets[index],
+                      dataset: selected,
                       asGroupSessionHost: true
                     )
                   case .local:
@@ -272,22 +283,20 @@ struct OpenDatasetView: View {
                       in: .userDomainMask
                     ).first!
 
-                    let localFilename = documentsDirectory
-                      .appendingPathComponent(
-                        (datasets[index].identifier)
-                      ).relativePath
+                    let localFilename = selected.identifier.hasPrefix("/") ? selected.identifier :
+                      documentsDirectory.appendingPathComponent(selected.identifier).path
 
                     runtimeAppModel.startImmersiveSpace(
                       identifier: localFilename,
-                      description: datasets[index].description,
-                      source: datasets[index].source,
-                      uniqueId: datasets[index].uniqueId,
+                      description: selected.description,
+                      source: selected.source,
+                      uniqueId: selected.uniqueId,
                       asGroupSessionHost: true
                     )
 
                   case let .remote(addr, port, password):
                     guard let resolvedDataset = await resolveRemoteDataset(
-                      datasets[index],
+                      selected,
                       fallback: DatasetOrigin(address: addr, port: port, password: password)
                     ) else {
                       runtimeAppModel.logger.error(
