@@ -624,11 +624,22 @@ fn fragmentMain(input: VertexOut) -> @location(0) vec4<f32> {
         }
 
         let transferSamples = sampleTransferFunctions(components);
+        var correctedAlphas = vec4<f32>(0.0);
+        var needsLighting = false;
+        for (var channel = 0u; channel < 4u; channel = channel + 1u) {
+          if (channel >= componentCount) {
+            break;
+          }
+          let alpha = 1.0 - pow(1.0 - transferSamples.values[channel].a, ocFactor);
+          correctedAlphas[channel] = alpha;
+          needsLighting = needsLighting || alpha > 0.01;
+        }
+
         var componentGradients: ComponentGradients;
         componentGradients.x = vec4<f32>(0.0);
         componentGradients.y = vec4<f32>(0.0);
         componentGradients.z = vec4<f32>(0.0);
-        if (renderMode == RENDER_MODE_TF_LIGHTING) {
+        if (renderMode == RENDER_MODE_TF_LIGHTING && needsLighting) {
           componentGradients = computeComponentGradientsForBrick(
             brick.index, brick.coords, brick.lod, samplePoint
           );
@@ -638,7 +649,7 @@ fn fragmentMain(input: VertexOut) -> @location(0) vec4<f32> {
             break;
           }
           let transferSample = transferSamples.values[channel];
-          let alpha = 1.0 - pow(1.0 - transferSample.a, ocFactor);
+          let alpha = correctedAlphas[channel];
           var sampleColor = transferSample.rgb;
           if (renderMode == RENDER_MODE_TF_LIGHTING && alpha > 0.01) {
             sampleColor = lighting(
