@@ -1294,10 +1294,14 @@ bool HTTPWebServer::sendResponse(TcpSocket& socket,
   }
   if (!body.empty() && !socket.sendAll(body)) {
     if (logger_) {
-      logger_->warning(
+      const std::string message =
         "[client " + socket.peerAddress() + "] HTTP response body send failed for status " +
-        std::to_string(status) + " with " + std::to_string(body.size()) + " bytes"
-      );
+        std::to_string(status) + " with " + std::to_string(body.size()) + " bytes";
+      if (status == 401) {
+        logger_->debug(message);
+      } else {
+        logger_->warning(message);
+      }
     }
     return false;
   }
