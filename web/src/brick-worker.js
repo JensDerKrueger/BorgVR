@@ -166,7 +166,11 @@ async function fetchSingleBrick(cfg, brickID, profile) {
   }
   const cachedData = await readCachedStoredBrick(cfg, brickID, profile);
   if (cachedData) {
-    return new Map([[brickID, decodeStoredBrick(cfg, brick, cachedData, profile)]]);
+    try {
+      return new Map([[brickID, decodeStoredBrick(cfg, brick, cachedData, profile)]]);
+    } catch {
+      await removeCachedBrick(cfg, brickID);
+    }
   }
 
   const brickName = String(brick.index).padStart(6, "0");
@@ -189,9 +193,9 @@ async function fetchSingleBrick(cfg, brickID, profile) {
   profile.fetchBodyMs += now() - bodyStart;
   profile.serverBricks += 1;
   profile.serverBytes += data.byteLength;
+  const decoded = decodeStoredBrick(cfg, brick, data, profile);
   await writeCachedStoredBrick(cfg, brickID, data, profile);
-
-  return new Map([[brickID, decodeStoredBrick(cfg, brick, data, profile)]]);
+  return new Map([[brickID, decoded]]);
 }
 
 function decodeStoredBrick(cfg, brick, data, profile) {
@@ -324,7 +328,11 @@ async function readCachedBricks(cfg, brickIDs, profile) {
         }
         profile.cacheHits += 1;
         profile.cacheHitBytes += record.data.byteLength;
-        result.set(brickID, decodeStoredBrick(cfg, brick, new Uint8Array(record.data), profile));
+        try {
+          result.set(brickID, decodeStoredBrick(cfg, brick, new Uint8Array(record.data), profile));
+        } catch {
+          await removeCachedBrick(cfg, brickID);
+        }
       }
     } finally {
       db.close();
@@ -353,6 +361,22 @@ async function readCachedStoredBrick(cfg, brickID, profile) {
     }
   } catch {
     return null;
+  }
+}
+
+async function removeCachedBrick(cfg, brickID) {
+  try {
+    const db = await openPersistentCacheDB();
+    try {
+      await new Promise((resolve, reject) => {
+        const transaction = db.transaction(CACHE_STORE, "readwrite");
+        transaction.objectStore(CACHE_STORE).delete(cacheKey(cfg, brickID));
+        transaction.oncomplete = () => resolve();
+        transaction.onerror = transaction.onabort = () => reject(transaction.error);
+      });
+    } finally { db.close(); }
+  } catch {
+    // Refetch still works when browser storage is temporarily unavailable.
   }
 }
 
