@@ -62,6 +62,7 @@ private struct ModeActionButtonStyle: ButtonStyle {
 }
 
 struct RenderView: View {
+  @Environment(\.colorScheme) private var colorScheme
   @Environment(\.horizontalSizeClass) private var horizontalSizeClass
   @Environment(\.verticalSizeClass) private var verticalSizeClass
   @EnvironmentObject private var appModel: AppModel
@@ -300,6 +301,9 @@ struct RenderView: View {
           Text(appModel.activeDataset?.description ?? "BorgVR Mobile")
             .font(.headline)
             .italic(appModel.isDatasetStreaming)
+            .foregroundStyle(ScreenControlAppearance.datasetTitleColor(
+              isStreaming: appModel.isDatasetStreaming, colorScheme: colorScheme
+            ))
             .lineLimit(1)
 
           Spacer()

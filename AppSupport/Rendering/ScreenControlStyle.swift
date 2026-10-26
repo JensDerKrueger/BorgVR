@@ -2,6 +2,13 @@ import SwiftUI
 
 #if os(macOS) || os(iOS)
 enum ScreenControlAppearance {
+  static func datasetTitleColor(isStreaming: Bool, colorScheme: ColorScheme) -> Color {
+    guard isStreaming else { return .primary }
+    return colorScheme == .dark
+      ? Color(red: 1, green: 0.45, blue: 0.4)
+      : Color(red: 0.6, green: 0.08, blue: 0.08)
+  }
+
   static var surface: Color {
     #if os(macOS)
     Color(nsColor: .controlBackgroundColor)

@@ -16,6 +16,7 @@ private struct HeaderIconButtonStyle: ButtonStyle {
 }
 
 struct RenderControlsPanel: View {
+  @Environment(\.colorScheme) private var colorScheme
   @EnvironmentObject private var appModel: AppModel
   @EnvironmentObject private var renderingParameters: RenderingParameters
   @EnvironmentObject private var appSettings: AppSettings
@@ -49,6 +50,9 @@ struct RenderControlsPanel: View {
         Text(appModel.activeDataset?.description ?? "BorgVR")
           .font(.headline)
           .italic(appModel.isDatasetStreaming)
+          .foregroundStyle(ScreenControlAppearance.datasetTitleColor(
+            isStreaming: appModel.isDatasetStreaming, colorScheme: colorScheme
+          ))
           .lineLimit(1)
 
         Spacer()
