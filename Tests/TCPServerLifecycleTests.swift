@@ -127,8 +127,27 @@ private func testAuthenticatedDatasetSwitch() throws {
 @main
 private enum TCPServerLifecycleTests {
   static func main() throws {
+    try testListenerReadiness()
     try testDisconnects()
     try testAuthenticatedDatasetSwitch()
     print("TCP server lifecycle and authenticated dataset-switch tests passed.")
   }
+}
+
+private func testListenerReadiness() throws {
+  let first = try startServer()
+  defer { first.stop() }
+  let duplicate = TCPServer(port: first.port.rawValue, maxBricksPerGetRequest: 64, datasets: [])
+  duplicate.start()
+  defer { duplicate.stop() }
+  try expect(!duplicate.isRunning, "Listener reported success before readiness")
+  try eventually("Occupied-port startup did not report failure") { duplicate.lastError != nil }
+  try expect(!duplicate.isRunning, "Failed listener reported itself as running")
+  first.stop()
+  try expect(!first.isRunning, "Stopped listener remained running")
+  // A stale ready callback must not revive a stopped generation.
+  let state = BorgVRListenerState()
+  let generation = state.begin()
+  state.stop()
+  try expect(!state.finish(generation, running: true), "Stale listener callback was accepted")
 }

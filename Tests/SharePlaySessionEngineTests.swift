@@ -158,7 +158,7 @@ private func testHostElectionAndParticipantCleanup() throws {
   let higherID = UUID(uuidString: "30000000-0000-0000-0000-000000000002")!
   var engine = BorgVRSharePlaySessionEngine()
   engine.beginSession(
-    localParticipantID: localID,
+    localParticipantID: lowerID,
     activeParticipantIDs: [localID, lowerID, higherID],
     isHost: false,
     datasetID: nil
@@ -168,16 +168,77 @@ private func testHostElectionAndParticipantCleanup() throws {
   guard let transition = engine.resolveHostElection(term: 0) else {
     throw TestFailure.failed("Host election did not resolve")
   }
-  try expect(transition.hostID == lowerID, "Host election was not deterministic")
+  try expect(transition.hostID == higherID, "Arbiter did not accept the first request")
 
   _ = engine.setParticipantInfo(
     .init(platform: .macOS, displayName: "Remote", sharesScreenView: true),
-    for: lowerID
+    for: higherID
   )
-  let change = engine.updateActiveParticipants([localID, higherID])
-  try expect(change.departedIDs == [lowerID], "Departed participant was not reported")
+  let change = engine.updateActiveParticipants([localID, lowerID])
+  try expect(change.departedIDs == [higherID], "Departed participant was not reported")
   try expect(change.hostDeparted, "Host departure was not reported")
-  try expect(engine.participants.allSatisfy { $0.id != lowerID }, "Participant metadata leaked")
+  try expect(engine.participants.allSatisfy { $0.id != higherID }, "Participant metadata leaked")
+}
+
+private func testAuthoritativeHostElection() throws {
+  let ids = (1...4).map { UUID(uuidString: String(format: "00000000-0000-0000-0000-%012d", $0))! }
+  let oldHost = ids[3], arbiter = ids[0], first = ids[2], second = ids[1]
+  func makeEngine(_ local: UUID) -> BorgVRSharePlaySessionEngine {
+    var engine = BorgVRSharePlaySessionEngine()
+    engine.beginSession(localParticipantID: local, activeParticipantIDs: Set(ids), isHost: false, datasetID: nil)
+    _ = engine.receiveHostState(.init(term: 0, hostID: oldHost), from: oldHost)
+    _ = engine.updateActiveParticipants(Set(ids.dropLast()))
+    return engine
+  }
+  var authority = makeEngine(arbiter)
+  var a = makeEngine(first), b = makeEngine(second)
+  let requestA = a.makeLocalHostClaim()!, requestB = b.makeLocalHostClaim()!
+  _ = authority.registerHostClaim(requestA)
+  try expect(a.resolveHostElection(term: 1) == nil, "Non-arbiter elected a host")
+  let decision = authority.resolveHostElection(term: 1)!
+  try expect(decision.hostID == first, "Arbiter selected a different request")
+  _ = authority.registerHostClaim(requestB)
+  try expect(authority.resolveHostElection(term: 1) == nil, "Late request caused a second election")
+  let state = authority.currentHostState()!
+  try expect(b.receiveHostState(state, from: first) == nil, "Candidate impersonated the arbiter")
+  try expect(b.receiveHostState(state, from: arbiter)?.hostID == first, "Peer rejected the arbiter decision")
+  try expect(a.receiveHostState(state, from: arbiter)?.isLocalHost == true, "Winner did not become host")
+  try expect(a.receiveHostState(state, from: arbiter) == nil, "Duplicate decision was applied twice")
+  var survivor = makeEngine(second)
+  _ = survivor.makeLocalHostClaim()
+  _ = survivor.updateActiveParticipants([first, second])
+  try expect(survivor.receiveHostState(state, from: arbiter) == nil, "Departed arbiter changed the host")
+  try expect(survivor.resolveHostElection(term: 1)?.hostID == second, "New arbiter did not resolve pending requests")
+  var lagging = BorgVRSharePlaySessionEngine()
+  lagging.beginSession(localParticipantID: second, activeParticipantIDs: Set(ids), isHost: false, datasetID: nil)
+  _ = lagging.receiveHostState(.init(term: 0, hostID: oldHost), from: oldHost)
+  try expect(lagging.receiveHostState(state, from: arbiter)?.hostID == first,
+    "Delayed membership event prevented a valid election decision")
+  var laggingArbiter = BorgVRSharePlaySessionEngine()
+  laggingArbiter.beginSession(localParticipantID: arbiter, activeParticipantIDs: Set(ids), isHost: false, datasetID: nil)
+  _ = laggingArbiter.receiveHostState(.init(term: 0, hostID: oldHost), from: oldHost)
+  _ = laggingArbiter.registerHostClaim(requestB)
+  try expect(laggingArbiter.resolveHostElection(term: 1) == nil, "Early claim prematurely replaced a host")
+  _ = laggingArbiter.updateActiveParticipants(Set(ids.dropLast()))
+  try expect(laggingArbiter.resolveHostElection(term: 1)?.hostID == second, "Membership publication lost an early claim")
+}
+
+private func testCredentialReferences() throws {
+  let vault = TestCredentialVault()
+  let encoder = JSONEncoder(), decoder = JSONDecoder()
+  encoder.userInfo[.serverCredentialVault] = vault
+  decoder.userInfo[.serverCredentialVault] = vault
+  let servers = [StoredServer(address: "private", port: 1234, password: "secret-credential"),
+                 StoredServer(address: "public", port: 1234)]
+  let data = try encoder.encode(servers)
+  let serialized = String(decoding: data, as: UTF8.self)
+  try expect(!serialized.contains("secret-credential") && !serialized.contains("password"), "Stored servers contain plaintext credentials")
+  let restored = try decoder.decode([StoredServer].self, from: data)
+  try expect(restored == servers, "Credential references did not round-trip")
+  let origin = DatasetOrigin(address: "shared", port: 1234, password: "wire-secret")
+  let wireOrigin = try JSONDecoder().decode(DatasetOrigin.self, from: JSONEncoder().encode(origin))
+  try expect(wireOrigin == origin,
+    "Moving persistence credentials broke permitted SharePlay credentials")
 }
 
 private func testOriginsAndDatasetAnnouncement() throws {
@@ -223,6 +284,15 @@ private func testOriginsAndDatasetAnnouncement() throws {
   )
 }
 
+private final class TestCredentialVault: ServerCredentialVault {
+  var secrets: [UUID: String] = [:]
+  func reference(for secret: String) throws -> UUID {
+    if let item = secrets.first(where: { $0.value == secret }) { return item.key }
+    let id = UUID(); secrets[id] = secret; return id
+  }
+  func secret(for reference: UUID) throws -> String { secrets[reference]! }
+}
+
 private func testDatasetOriginCatalogPersistenceAndPrivacy() throws {
   let suiteName = "borgvr-origin-tests-\(UUID().uuidString)"
   guard let defaults = UserDefaults(suiteName: suiteName) else {
@@ -233,7 +303,8 @@ private func testDatasetOriginCatalogPersistenceAndPrivacy() throws {
   let publicOrigin = DatasetOrigin(address: "public.example", port: 1234, password: "")
   let privateOrigin = DatasetOrigin(address: "private.example", port: 4321, password: "secret")
   let remoteOrigin = DatasetOrigin(address: "remote.example", port: 9876, password: "remote")
-  let catalog = DatasetOriginCatalog(defaults: defaults)
+  let vault = TestCredentialVault()
+  let catalog = DatasetOriginCatalog(defaults: defaults, credentials: vault)
   catalog.recordServerSnapshot(
     origin: publicOrigin,
     datasetIDs: ["a", "b"],
@@ -261,7 +332,9 @@ private func testDatasetOriginCatalogPersistenceAndPrivacy() throws {
     "Remotely learned credentials became shareable"
   )
 
-  let reloaded = DatasetOriginCatalog(defaults: defaults)
+  let stored = String(data: defaults.data(forKey: "borgvr.dataset-origin-catalog.v1")!, encoding: .utf8)!
+  try expect(!stored.contains("secret") && !stored.contains("\"password\""), "Origin cache exposed a password")
+  let reloaded = DatasetOriginCatalog(defaults: defaults, credentials: vault)
   try expect(
     reloaded.origins(for: "a") == catalog.origins(for: "a"),
     "Origin catalog did not persist"
@@ -283,6 +356,8 @@ private enum SharePlaySessionEngineTestRunner {
     try testVersionAndWireCodecs()
     try testHandshakeAndStateInitialization()
     try testHostElectionAndParticipantCleanup()
+    try testAuthoritativeHostElection()
+    try testCredentialReferences()
     try testOriginsAndDatasetAnnouncement()
     try testDatasetOriginCatalogPersistenceAndPrivacy()
     print("SharePlay protocol and session-engine tests passed")

@@ -63,7 +63,6 @@ final class CachingRemoteDataSource: DataSource {
 
   /// A background dispatch queue for caching work.
   private let workerQueue = DispatchQueue(label: "CachingWorkerQueue", qos: .background)
-  private let workerQueueKey = DispatchSpecificKey<Void>()
 
   /// The background worker task.
   private var workerTask: DispatchWorkItem?
@@ -211,7 +210,6 @@ final class CachingRemoteDataSource: DataSource {
     self.requestQueue = []
 
     // Start background worker.
-    workerQueue.setSpecific(key: workerQueueKey, value: ())
     let task = DispatchWorkItem { [weak self] in
       self?.backgroundWorkerLoop()
     }
@@ -230,11 +228,9 @@ final class CachingRemoteDataSource: DataSource {
    */
   func stopWorker() {
     guard lifecycle.requestStop() else { return }
+    remoteDataSource.stop()
     workerTask?.cancel()
     requestSemaphore.signal() // Wake worker if waiting.
-    if DispatchQueue.getSpecific(key: workerQueueKey) == nil {
-      workerQueue.sync(flags: .barrier) {}
-    }
   }
 
   deinit {
@@ -426,6 +422,7 @@ final class CachingRemoteDataSource: DataSource {
           _ = requestSemaphore.wait(timeout: .now() + 5)
         }
       } catch {
+        if lifecycle.isTerminated { break }
         // Keep failed prefetch ranges eligible. Otherwise a temporary outage
         // advances lastIndex past bricks that will never be considered again.
         if let highestFailedIndex = indicesToProcess.max() {

@@ -166,7 +166,7 @@ struct BorgVRSharePlaySessionEngine {
 
   enum HostClaimRegistration: Sendable {
     case ignored
-    case scheduleResolution(term: UInt64)
+    case resolutionRequested(term: UInt64)
   }
 
   private(set) var activeParticipantIDs = Set<UUID>()
@@ -179,7 +179,10 @@ struct BorgVRSharePlaySessionEngine {
 
   private var protocolHandshake = BorgVRSharePlayHandshakeState()
   private var requestedStateVersion: BorgVRSharePlayStateVersion?
-  private var hostClaims: [UInt64: Set<UUID>] = [:]
+  private var hostClaims: [UUID] = []
+  private var deferredHostClaims: [UUID] = []
+  private var hostArbiterID: UUID?
+  private var hasKnownHost = false
   private var sessionOriginsByDatasetID: [String: [DatasetOrigin]] = [:]
   private var adHocOriginsByParticipantID: [UUID: [String: [DatasetOrigin]]] = [:]
 
@@ -209,6 +212,7 @@ struct BorgVRSharePlaySessionEngine {
     self.localParticipantID = localParticipantID
     self.activeParticipantIDs = activeParticipantIDs
     currentHostParticipantID = isHost ? localParticipantID : nil
+    hasKnownHost = isHost
     sessionDatasetID = isHost ? datasetID : nil
     stateVersion = isHost ? BorgVRSharePlayStateVersion() : nil
   }
@@ -221,9 +225,12 @@ struct BorgVRSharePlaySessionEngine {
     localParticipantID = nil
     currentHostParticipantID = nil
     hostElectionTerm = 0
+    hostArbiterID = nil
+    hasKnownHost = false
     protocolHandshake.reset()
     requestedStateVersion = nil
     hostClaims.removeAll()
+    deferredHostClaims.removeAll()
     sessionOriginsByDatasetID.removeAll()
     adHocOriginsByParticipantID.removeAll()
   }
@@ -244,13 +251,16 @@ struct BorgVRSharePlaySessionEngine {
        !participantIDs.contains(currentHostParticipantID) {
       self.currentHostParticipantID = nil
       hostElectionTerm &+= 1
-      hostClaims = [hostElectionTerm: []]
+      hostClaims = deferredHostClaims
+      deferredHostClaims.removeAll()
+      hostArbiterID = nil
       stateVersion = nil
       requestedStateVersion = nil
       hostDeparted = true
     } else {
       hostDeparted = false
     }
+    hostClaims = hostClaims.filter(isParticipantActive)
 
     return ParticipantChange(
       joinedIDs: joinedIDs,
@@ -307,6 +317,7 @@ struct BorgVRSharePlaySessionEngine {
         return .reject
       }
       currentHostParticipantID = currentHostParticipantID ?? participantID
+      hasKnownHost = true
       stateVersion = incoming
       requestedStateVersion = nil
       return .accept
@@ -331,7 +342,8 @@ struct BorgVRSharePlaySessionEngine {
     guard let currentHostParticipantID else { return nil }
     return BorgVRSharePlayHostState(
       term: hostElectionTerm,
-      hostID: currentHostParticipantID
+      hostID: currentHostParticipantID,
+      arbiterID: hostArbiterID
     )
   }
 
@@ -342,50 +354,70 @@ struct BorgVRSharePlaySessionEngine {
       term: hostElectionTerm,
       candidateID: localParticipantID
     )
-    guard case .scheduleResolution = registerHostClaim(claim) else { return nil }
+    guard case .resolutionRequested = registerHostClaim(claim) else { return nil }
     return claim
   }
 
   mutating func registerHostClaim(
     _ claim: BorgVRSharePlayHostClaim
   ) -> HostClaimRegistration {
-    guard claim.term >= hostElectionTerm,
-          isParticipantActive(claim.candidateID) else { return .ignored }
-    if claim.term > hostElectionTerm {
-      hostElectionTerm = claim.term
-      currentHostParticipantID = nil
-      stateVersion = nil
-      requestedStateVersion = nil
-      hostClaims.removeAll()
+    guard isParticipantActive(claim.candidateID) else { return .ignored }
+    if currentHostParticipantID != nil, claim.term == (hostElectionTerm &+ 1) {
+      // Reliable messages may precede the local active-participant publication.
+      if !deferredHostClaims.contains(claim.candidateID) { deferredHostClaims.append(claim.candidateID) }
+      return .ignored
     }
-    hostClaims[claim.term, default: []].insert(claim.candidateID)
-    return .scheduleResolution(term: claim.term)
+    guard currentHostParticipantID == nil,
+          claim.term == hostElectionTerm else { return .ignored }
+    if !hostClaims.contains(claim.candidateID) {
+      hostClaims.append(claim.candidateID)
+    }
+    return .resolutionRequested(term: claim.term)
   }
 
   mutating func resolveHostElection(
     term: UInt64
   ) -> HostTransition? {
-    guard term == hostElectionTerm else { return nil }
-    let candidates = (hostClaims[term] ?? []).filter(isParticipantActive)
-    guard let winner = candidates.min(by: { $0.uuidString < $1.uuidString }) else {
-      return nil
-    }
+    guard currentHostParticipantID == nil, term == hostElectionTerm,
+          electionArbiterID == localParticipantID,
+          let winner = hostClaims.first(where: isParticipantActive) else { return nil }
     return applyHostState(
-      BorgVRSharePlayHostState(term: term, hostID: winner)
+      BorgVRSharePlayHostState(term: term, hostID: winner, arbiterID: localParticipantID)
     )
   }
 
   mutating func receiveHostState(
-    _ state: BorgVRSharePlayHostState
+    _ state: BorgVRSharePlayHostState,
+    from participantID: UUID
   ) -> HostTransition? {
     guard isParticipantActive(state.hostID),
           state.term >= hostElectionTerm else { return nil }
-    if state.term == hostElectionTerm,
-       let existing = currentHostParticipantID,
-       existing.uuidString < state.hostID.uuidString {
-      return nil
+    if !hasKnownHost && currentHostParticipantID == nil {
+      // A joining participant learns the already elected host directly from that host.
+      guard participantID == state.hostID else { return nil }
+    } else {
+      guard currentHostParticipantID != state.hostID,
+            let arbiterID = state.arbiterID,
+            participantID == arbiterID else { return nil }
+      if let currentHostParticipantID {
+        // Membership publication can lag behind the arbiter's decision.
+        guard state.term == (hostElectionTerm &+ 1),
+              arbiterID == smallestParticipant(excluding: currentHostParticipantID) else { return nil }
+      } else {
+        guard state.term == hostElectionTerm,
+              arbiterID == electionArbiterID else { return nil }
+      }
     }
     return applyHostState(state)
+  }
+
+  private var electionArbiterID: UUID? { smallestParticipant(excluding: nil) }
+
+  private func smallestParticipant(excluding excluded: UUID?) -> UUID? {
+    var participants = activeParticipantIDs
+    if let localParticipantID { participants.insert(localParticipantID) }
+    if let excluded { participants.remove(excluded) }
+    return participants.min { $0.uuidString < $1.uuidString }
   }
 
   mutating func mergeSessionOrigins(
@@ -442,7 +474,10 @@ struct BorgVRSharePlaySessionEngine {
     let previousHostID = currentHostParticipantID
     hostElectionTerm = state.term
     currentHostParticipantID = state.hostID
-    hostClaims = [state.term: [state.hostID]]
+    hostArbiterID = state.arbiterID
+    hasKnownHost = true
+    hostClaims.removeAll()
+    deferredHostClaims.removeAll()
     let localHost = state.hostID == localParticipantID
     if localHost {
       if previousHostID != localParticipantID || stateVersion == nil {

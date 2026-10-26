@@ -43,42 +43,7 @@ struct DatasetStorageAccess {
   }
 }
 
-enum RemoteDatasetOpenError: LocalizedError {
-  case documentsDirectoryUnavailable
-  case downloadStalled
-  case downloadCancelled
-  case noReachableOrigin
 
-  var errorDescription: String? {
-    switch self {
-      case .documentsDirectoryUnavailable:
-        return String(localized: "The documents directory is not available.")
-      case .downloadStalled:
-        return String(localized: "The remote download is no longer making progress.")
-      case .downloadCancelled:
-        return String(localized: "The remote download was paused.")
-      case .noReachableOrigin:
-        return String(localized: "The dataset is not available from any known source.")
-    }
-  }
-}
-
-private final class RemoteDatasetDownloadCancellation: @unchecked Sendable {
-  private let lock = NSLock()
-  private var cancelled = false
-
-  var isCancelled: Bool {
-    lock.lock()
-    defer { lock.unlock() }
-    return cancelled
-  }
-
-  func cancel() {
-    lock.lock()
-    cancelled = true
-    lock.unlock()
-  }
-}
 
 @MainActor
 final class DatasetCatalogService {
@@ -313,7 +278,7 @@ final class DatasetOpenWorkflow: ObservableObject {
   @Published private(set) var dataDirectoryAccessMessage: String?
 
   private var openingTask: Task<Void, Never>?
-  private var downloadCancellation: RemoteDatasetDownloadCancellation?
+  private var downloadCancellation: RemoteRequestCancellation?
 
   var selectedDataset: AppModel.DatasetEntry? {
     guard let selectedDatasetKey else { return nil }
@@ -422,7 +387,7 @@ final class DatasetOpenWorkflow: ObservableObject {
       let resolved = try await resolveRemoteDataset(dataset, settings: appSettings)
       let datasetToOpen: AppModel.DatasetEntry
       if case .remote = resolved.source, !appSettings.progressiveLoading {
-        let cancellation = RemoteDatasetDownloadCancellation()
+        let cancellation = RemoteRequestCancellation()
         downloadCancellation = cancellation
         datasetToOpen = try await downloadRemoteDatasetBeforeOpening(
           resolved,
@@ -532,7 +497,7 @@ final class DatasetOpenWorkflow: ObservableObject {
     _ dataset: AppModel.DatasetEntry,
     settings: AppSettings,
     storage: DatasetStorageAccess,
-    cancellation: RemoteDatasetDownloadCancellation
+    cancellation: RemoteRequestCancellation
   ) async throws -> AppModel.DatasetEntry {
     guard case let .remote(address, port, password) = dataset.source else { return dataset }
     guard let directoryURL = storage.directoryURL else {
@@ -545,70 +510,20 @@ final class DatasetOpenWorkflow: ObservableObject {
     let primaryOrigin = DatasetOrigin(address: address, port: port, password: password)
     let timeout = settings.timeout
     let cachePath = directoryURL.appendingPathComponent("\(datasetID).data").path
-    let incompletePath = cachePath + ".incomplete"
-    let stallTimeout = max(30.0, timeout * 10.0)
 
     statusText = String(localized: "Downloading remote dataset locally ...")
     openProgress = 0
-
-    let localPath = try await Task.detached(priority: .userInitiated) {
-      if cancellation.isCancelled {
-        throw RemoteDatasetOpenError.downloadCancelled
-      }
-      let manager = BORGVRRemoteDataManager(
-        host: address,
-        port: UInt16(clamping: port),
-        authSecret: password,
-        logger: nil
-      )
-      try manager.connect(timeout: timeout)
-      let remoteData = try manager.openDataset(
-        datasetID: datasetID,
-        timeout: timeout,
-        localCacheFilename: cachePath,
-        originProvider: {
-          DatasetOriginCatalog.deduplicated(
-            [primaryOrigin] + DatasetOriginCatalog.shared.origins(for: datasetID)
-          )
+    let localURL = try await RemoteDatasetDownloader.download(datasetID: datasetID, origin: primaryOrigin,
+      to: URL(fileURLWithPath: cachePath), timeout: timeout, cancellation: cancellation,
+      originProvider: {
+        DatasetOriginCatalog.deduplicated([primaryOrigin] + DatasetOriginCatalog.shared.origins(for: datasetID))
+      }, progress: { [weak self] value in
+        Task { @MainActor in
+          self?.openProgress = value
+          self?.statusText = self?.downloadProgressText(progress: value) ?? ""
         }
-      )
-
-      let brickBuffer = remoteData.allocateBrickBuffer()
-      defer { brickBuffer.deallocate() }
-      for index in remoteData.getMetadata().brickMetadata.indices {
-        if cancellation.isCancelled {
-          throw RemoteDatasetOpenError.downloadCancelled
-        }
-        try? remoteData.getBrick(index: index, outputBuffer: brickBuffer)
-      }
-
-      var lastProgress = -1.0
-      var lastProgressDate = Date()
-      while true {
-        if cancellation.isCancelled {
-          throw RemoteDatasetOpenError.downloadCancelled
-        }
-        let progress = remoteData.localRatio
-        if progress > lastProgress + 0.001 {
-          lastProgress = progress
-          lastProgressDate = Date()
-          await MainActor.run {
-            self.openProgress = progress
-            self.statusText = self.downloadProgressText(progress: progress)
-          }
-        }
-        if progress >= 1.0,
-           FileManager.default.fileExists(atPath: cachePath),
-           !FileManager.default.fileExists(atPath: incompletePath) {
-          break
-        }
-        if Date().timeIntervalSince(lastProgressDate) > stallTimeout {
-          throw RemoteDatasetOpenError.downloadStalled
-        }
-        try await Task.sleep(for: .milliseconds(200))
-      }
-      return remoteData.localFile ?? cachePath
-    }.value
+      })
+    let localPath = localURL.path
 
     let metadataSummary = (try? BORGVRMetaData(url: URL(fileURLWithPath: localPath)))
       .map { DatasetCatalogService.metadataSummary(for: $0) } ?? dataset.metadataSummary

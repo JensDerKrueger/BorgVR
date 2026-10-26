@@ -373,6 +373,7 @@ struct BorgVRSharePlayHostClaim: Codable, Equatable, Sendable {
 struct BorgVRSharePlayHostState: Codable, Equatable, Sendable {
   let term: UInt64
   let hostID: UUID
+  var arbiterID: UUID? = nil
 }
 
 enum BorgVRSharePlayHostCodec {
@@ -487,12 +488,22 @@ enum BorgVRScreenViewStateCodec {
   }
 }
 
-enum BorgVRSharePlayProtocolError: Error {
+enum BorgVRSharePlayProtocolError: LocalizedError {
   case unexpectedEnd
   case missingStateVersion
   case invalidProtocolVersion
   case invalidParticipantInfo
   case invalidScreenViewState
+
+  var errorDescription: String? {
+    switch self {
+      case .unexpectedEnd: return "Incomplete SharePlay message."
+      case .missingStateVersion: return "The SharePlay host state version is not available yet."
+      case .invalidProtocolVersion: return "Invalid SharePlay protocol version message."
+      case .invalidParticipantInfo: return "Invalid SharePlay participant information."
+      case .invalidScreenViewState: return "Invalid SharePlay screen-view state."
+    }
+  }
 }
 
 private struct BorgVRSharePlayDataWriter {

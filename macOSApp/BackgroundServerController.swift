@@ -11,6 +11,7 @@ final class BackgroundServerController: ObservableObject {
   private let sharePlayServer: BorgVRSharePlayAdHocServer
   private let logger = GUILogger()
   private var runningPort = StoredAppModel.defaultPort
+  private var startupTask: Task<Void, Never>?
 
   init() {
     self.serverHost = BorgVRServerHost(logger: logger)
@@ -24,13 +25,14 @@ final class BackgroundServerController: ObservableObject {
     }
 
     _ = settings.activateDataDirectoryAccess()
-    startServer(using: settings, additionalDatasets: [])
+    startupTask?.cancel()
+    startupTask = Task { await startServer(using: settings, additionalDatasets: []) }
   }
 
   func ensureServing(
     dataset: AppModel.DatasetEntry,
     using settings: StoredAppModel
-  ) -> [DatasetOrigin] {
+  ) async -> [DatasetOrigin] {
     let fileURL: URL
     switch dataset.source {
       case .local, .builtIn:
@@ -40,7 +42,7 @@ final class BackgroundServerController: ObservableObject {
           .appendingPathComponent("\(dataset.uniqueId).data")
     }
     let hostname = Host.current().localizedName.map { [$0] } ?? []
-    return sharePlayServer.ensureServing(
+    return await sharePlayServer.ensureServing(
       dataset: dataset,
       fileURL: fileURL,
       settings: BorgVRSharePlayAdHocServerSettings(
@@ -57,8 +59,9 @@ final class BackgroundServerController: ObservableObject {
     )
   }
 
-  private func startServer(using settings: StoredAppModel, additionalDatasets: [DatasetInfo]) {
-    let state = serverHost.start(
+  private func startServer(using settings: StoredAppModel, additionalDatasets: [DatasetInfo]) async {
+    guard !Task.isCancelled else { return }
+    let state = await serverHost.start(
       configuration: BorgVRServerConfiguration(
         dataDirectory: settings.dataDirectory,
         port: settings.port,
@@ -74,6 +77,7 @@ final class BackgroundServerController: ObservableObject {
       additionalMeshFiles: SceneMeshAssetCatalog.serverFiles(logger: logger)
     )
 
+    guard !Task.isCancelled else { return }
     datasets = state.datasets
     isRunning = state.isRunning
     runningPort = state.port
@@ -109,6 +113,7 @@ final class BackgroundServerController: ObservableObject {
   }
 
   func stop() {
+    startupTask?.cancel(); startupTask = nil
     serverHost.stop()
     shareableWebServerURL = nil
     isRunning = false

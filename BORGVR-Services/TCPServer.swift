@@ -1,6 +1,62 @@
 import Network
 import Foundation
 
+/// Shares listener readiness with async callers without blocking a UI thread.
+final class BorgVRListenerState: @unchecked Sendable {
+  private let lock = NSLock()
+  private var generation = UUID()
+  private var running = false
+  private var failure: String?
+  private var outcome: Bool? = false
+  private var waiters: [CheckedContinuation<Bool, Never>] = []
+
+  var isRunning: Bool { lock.withLock { running } }
+  var error: String? { lock.withLock { failure } }
+
+  func begin() -> UUID {
+    let (id, previous) = lock.withLock {
+      generation = UUID(); running = false; failure = nil; outcome = nil
+      let previous = waiters; waiters.removeAll()
+      return (generation, previous)
+    }
+    for waiter in previous { waiter.resume(returning: false) }
+    return id
+  }
+
+  @discardableResult
+  func finish(_ id: UUID, running: Bool, error: String? = nil) -> Bool {
+    let pending = lock.withLock { () -> [CheckedContinuation<Bool, Never>]? in
+      guard generation == id else { return nil }
+      self.running = running; failure = error; outcome = running
+      let pending = waiters; waiters.removeAll()
+      return pending
+    }
+    guard let pending else { return false }
+    for waiter in pending { waiter.resume(returning: running) }
+    return true
+  }
+
+  func stop() {
+    let pending = lock.withLock {
+      generation = UUID(); running = false; failure = nil; outcome = false
+      let pending = waiters; waiters.removeAll()
+      return pending
+    }
+    for waiter in pending { waiter.resume(returning: false) }
+  }
+
+  func waitUntilReady() async -> Bool {
+    await withCheckedContinuation { continuation in
+      let ready = lock.withLock { () -> Bool? in
+        if let outcome { return outcome }
+        waiters.append(continuation)
+        return nil
+      }
+      if let ready { continuation.resume(returning: ready) }
+    }
+  }
+}
+
 class TCPServer {
   static let protocolVersionName = BorgVRServerProtocol.currentVersionName
   private static let maxCommandLineBytes = 8 * 1024
@@ -11,8 +67,9 @@ class TCPServer {
   let queue = DispatchQueue(label: "TCPServerQueue")
   var listener: NWListener?
   var activeConnections: [NWConnection] = []
-  var isRunning = false
-  var lastError: String?
+  private let listenerState = BorgVRListenerState()
+  var isRunning: Bool { listenerState.isRunning }
+  var lastError: String? { listenerState.error }
   var logger: LoggerBase?
 
   // Maximum number of bricks allowed in a single GETBRICKS request
@@ -108,14 +165,14 @@ class TCPServer {
   }
 
   func start() {
-    lastError = nil
+    let generation = listenerState.begin()
     do {
       listener = try NWListener(using: .tcp, on: port)
     } catch {
       let message = L("tcpserver_error_create_listener",
                       value: "Could not create listener:",
                       comment: "failed to create TCP listener") + " \(error)"
-      lastError = message
+      listenerState.finish(generation, running: false, error: message)
       logger?.error(message)
       return
     }
@@ -123,21 +180,24 @@ class TCPServer {
     listener?.newConnectionHandler = { [weak self] connection in
       self?.handleNewConnection(connection)
     }
-
+    listener?.stateUpdateHandler = { [weak self] state in
+      guard let self else { return }
+      switch state {
+        case .ready:
+          guard self.listenerState.finish(generation, running: true) else { return }
+          self.logger?.info("Server with protocol version \(Self.protocolVersionName) started on port \(self.port).")
+        case .failed(let error):
+          guard self.listenerState.finish(generation, running: false, error: error.localizedDescription) else { return }
+          self.logger?.error("Dataset listener failed: \(error.localizedDescription)")
+        case .cancelled:
+          self.listenerState.finish(generation, running: false)
+        default: break
+      }
+    }
     listener?.start(queue: queue)
-    isRunning = true
-    logger?.info(
-      String(
-        format: L(
-          "tcpserver_info_server_started",
-          value: "Server with protocol version %@ started on port %@.",
-          comment: "server started with protocol version and port"
-        ),
-        TCPServer.protocolVersionName,
-        String(describing: port)
-      )
-    )
   }
+
+  func waitUntilReady() async -> Bool { await listenerState.waitUntilReady() }
 
   func datasetsSnapshot() -> [DatasetInfo] {
     stateLock.lock()
@@ -232,14 +292,13 @@ class TCPServer {
   }
 
   func stop() {
+    listenerState.stop()
     listener?.cancel()
     let connections = activeConnectionsSnapshot()
     connections.forEach { connection in
       closeConnection(for: connection)
     }
     removeAllActiveConnections()
-    isRunning = false
-    lastError = nil
     logger?.info(
       L(
         "tcpserver_info_server_stopped",
@@ -606,7 +665,8 @@ class TCPServer {
       closeDataset(for: connection)
     }
 
-    if let data = try? BORGVRFileData(filename: dataset.filename) {
+    do {
+      let data = try BORGVRFileData(filename: dataset.filename)
       setConnectionDataset(ConnectionDataset(dataset: data), for: connection)
 
       let filename = URL(fileURLWithPath: dataset.filename).lastPathComponent
@@ -620,7 +680,7 @@ class TCPServer {
         connection: connection
       )
       return true
-    } else {
+    } catch {
       logger?.error(
         clientLogMessage(String(
           format: L(
@@ -629,7 +689,7 @@ class TCPServer {
             comment: "failed to open dataset"
           ),
           dataset.id
-        ), connection: connection)
+        ) + " \(error.localizedDescription)", connection: connection)
       )
       return false
     }

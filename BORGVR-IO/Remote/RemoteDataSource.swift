@@ -3,6 +3,32 @@ import Foundation
 import Compression
 import Network
 
+/// Cancellation never needs the request lock held by a blocking network read.
+final class RemoteRequestCancellation: @unchecked Sendable {
+  private let lock = NSLock()
+  private var cancelled = false
+  private var handlers: [UUID: @Sendable () -> Void] = [:]
+  var isCancelled: Bool { lock.withLock { cancelled } }
+  func check() throws { if isCancelled { throw CancellationError() } }
+
+  @discardableResult
+  func register(_ handler: @escaping @Sendable () -> Void) -> UUID {
+    let id = UUID()
+    let invoke = lock.withLock { if cancelled { return true }; handlers[id] = handler; return false }
+    if invoke { handler() }
+    return id
+  }
+  func remove(_ id: UUID) { _ = lock.withLock { handlers.removeValue(forKey: id) } }
+  func cancel() {
+    let pending = lock.withLock {
+      cancelled = true
+      let pending = Array(handlers.values); handlers.removeAll()
+      return pending
+    }
+    for handler in pending { handler() }
+  }
+}
+
 /**
  A remote data source for BorgVR volume data.
 
@@ -31,6 +57,8 @@ final class RemoteDataSource: DataSource {
   private var connectionIsUsable = true
   private var originFailures: [String: OriginFailure] = [:]
   private let requestLock = NSLock()
+  private let cancellation = RemoteRequestCancellation()
+  private var connectionRegistration: UUID?
   /// Indicates whether the remote dataset is open.
   private var isOpen: Bool
   /// The metadata for the remote dataset.
@@ -113,7 +141,10 @@ final class RemoteDataSource: DataSource {
       compressionScratchBuffer = nil
       compressedDataBuffer = nil
     }
+    connectionRegistration = cancellation.register { [weak connection] in connection?.cancel() }
   }
+
+  func stop() { cancellation.cancel() }
 
   deinit {
     // Clean up allocated buffers and cancel the connection.
@@ -283,6 +314,7 @@ final class RemoteDataSource: DataSource {
     var reconnectedOrigins = Set<String>()
 
     while true {
+      try cancellation.check()
       if !connectionIsUsable {
         try connectToAvailableOrigin(excluding: &reconnectedOrigins)
       }
@@ -301,6 +333,7 @@ final class RemoteDataSource: DataSource {
         originFailures[currentOrigin.identityKey] = nil
         return response
       } catch {
+        try cancellation.check()
         let failedOrigin = currentOrigin
         connection.cancel()
         connectionIsUsable = false
@@ -330,6 +363,7 @@ final class RemoteDataSource: DataSource {
     let now = Date()
 
     for origin in candidates where !attemptedOrigins.contains(origin.identityKey) {
+      try cancellation.check()
       if let failure = originFailures[origin.identityKey], failure.retryAfter > now {
         continue
       }
@@ -365,8 +399,12 @@ final class RemoteDataSource: DataSource {
       port: port,
       using: .tcp
     )
+    let registration = cancellation.register { [weak newConnection] in newConnection?.cancel() }
+    var accepted = false
+    defer { if !accepted { cancellation.remove(registration) } }
 
     do {
+      try cancellation.check()
       try BORGVRRemoteDataManager.connect(
         connection: newConnection,
         timeout: connectionTimeout,
@@ -408,7 +446,11 @@ final class RemoteDataSource: DataSource {
         )
       }
 
+      try cancellation.check()
       connection.cancel()
+      if let connectionRegistration { cancellation.remove(connectionRegistration) }
+      connectionRegistration = registration
+      accepted = true
       connection = newConnection
       currentOrigin = origin
       maxBricksPerGetRequest = requestLimit

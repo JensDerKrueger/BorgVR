@@ -25,8 +25,9 @@ final class HTTPWebServer {
   private var activeConnections: [NWConnection] = []
   private let stateLock = NSLock()
 
-  private(set) var isRunning = false
-  private(set) var lastError: String?
+  private let listenerState = BorgVRListenerState()
+  var isRunning: Bool { listenerState.isRunning }
+  var lastError: String? { listenerState.error }
 
   init(
     port: UInt16,
@@ -49,12 +50,12 @@ final class HTTPWebServer {
   }
 
   func start() {
-    lastError = nil
+    let generation = listenerState.begin()
     do {
       listener = try NWListener(using: listenerParameters(), on: port)
     } catch {
       let message = "Could not create \(schemeName)/WebGPU listener: \(error.localizedDescription)"
-      lastError = message
+      listenerState.finish(generation, running: false, error: message)
       logger?.error(message)
       return
     }
@@ -62,19 +63,33 @@ final class HTTPWebServer {
     listener?.newConnectionHandler = { [weak self] connection in
       self?.handleNewConnection(connection)
     }
+    listener?.stateUpdateHandler = { [weak self] state in
+      guard let self else { return }
+      switch state {
+        case .ready:
+          guard self.listenerState.finish(generation, running: true) else { return }
+          self.logger?.info("\(self.schemeName)/WebGPU server started on \(self.listenScopeDescription) port \(self.port).")
+        case .failed(let error):
+          guard self.listenerState.finish(generation, running: false, error: error.localizedDescription) else { return }
+          self.logger?.error("WebGPU listener failed: \(error.localizedDescription)")
+        case .cancelled:
+          self.listenerState.finish(generation, running: false)
+        default: break
+      }
+    }
     listener?.start(queue: queue)
-    isRunning = true
-    logger?.info("\(schemeName)/WebGPU server started on \(listenScopeDescription) port \(port).")
   }
 
+  func waitUntilReady() async -> Bool { await listenerState.waitUntilReady() }
+
   func stop() {
+    listenerState.stop()
     listener?.cancel()
     let connections = activeConnectionsSnapshot()
     connections.forEach { connection in
       connection.cancel()
       removeActiveConnection(connection)
     }
-    isRunning = false
     tlsIdentity = nil
     logger?.info("\(schemeName)/WebGPU server stopped.")
   }

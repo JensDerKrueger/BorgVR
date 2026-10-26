@@ -21,6 +21,8 @@ final class BorgVRSharePlayAdHocServer {
   private var isRunning = false
   private var port = 0
   private var meshAssetIDs = Set<UUID>()
+  private var startup: (datasetID: String, task: Task<[DatasetOrigin], Never>)?
+  private var generation = UUID()
 
   init(logger: GUILogger = GUILogger()) {
     self.logger = logger
@@ -32,7 +34,24 @@ final class BorgVRSharePlayAdHocServer {
     fileURL: URL?,
     settings: BorgVRSharePlayAdHocServerSettings,
     additionalHostnames: [String] = []
-  ) -> [DatasetOrigin] {
+  ) async -> [DatasetOrigin] {
+    if isRunning, datasetID == dataset.uniqueId,
+       meshAssetIDs == Set(SceneMeshAssetCatalog.serverFiles(logger: logger).map(\.id)) {
+      return origins(port: port, authToken: authToken, additionalHostnames: additionalHostnames)
+    }
+    if let startup, startup.datasetID == dataset.uniqueId { return await startup.task.value }
+    stop()
+    let generation = self.generation
+    let task = Task { await startServing(dataset: dataset, fileURL: fileURL, settings: settings, additionalHostnames: additionalHostnames, generation: generation) }
+    startup = (dataset.uniqueId, task)
+    let result = await task.value
+    if self.generation == generation { startup = nil }
+    return result
+  }
+
+  private func startServing(dataset: AppModel.DatasetEntry, fileURL: URL?, settings: BorgVRSharePlayAdHocServerSettings,
+                            additionalHostnames: [String], generation: UUID) async -> [DatasetOrigin] {
+    guard !Task.isCancelled, self.generation == generation else { return [] }
     guard let fileURL,
           let datasetInfo = datasetInfo(for: dataset, fileURL: fileURL) else {
       stop()
@@ -51,13 +70,13 @@ final class BorgVRSharePlayAdHocServer {
       )
     }
 
-    stop()
     let newAuthToken = BorgVRServerAuthentication.randomToken()
     for candidatePort in candidatePorts(
       preferredPort: settings.preferredServerPort,
       excludedPorts: settings.excludedPorts
     ) {
-      let state = serverHost.start(
+      guard !Task.isCancelled, self.generation == generation else { return [] }
+      let state = await serverHost.start(
         configuration: BorgVRServerConfiguration(
           dataDirectory: "",
           port: candidatePort,
@@ -78,7 +97,8 @@ final class BorgVRSharePlayAdHocServer {
         includeScannedDatasets: false
       )
 
-      guard state.isRunning,
+      guard !Task.isCancelled, self.generation == generation else { return [] }
+      guard state.serverError == nil, state.isRunning,
             state.datasets.contains(where: { $0.id == dataset.uniqueId }) else {
         continue
       }
@@ -88,6 +108,7 @@ final class BorgVRSharePlayAdHocServer {
       isRunning = true
       port = state.port
       meshAssetIDs = requestedMeshAssetIDs
+      logger.info("SharePlay ad-hoc dataset server is ready on port \(state.port) for dataset \(dataset.uniqueId).")
       return origins(
         port: state.port,
         authToken: newAuthToken,
@@ -106,6 +127,8 @@ final class BorgVRSharePlayAdHocServer {
   }
 
   func stop() {
+    generation = UUID()
+    startup?.task.cancel(); startup = nil
     serverHost.stop()
     datasetID = nil
     authToken = ""
@@ -118,11 +141,17 @@ final class BorgVRSharePlayAdHocServer {
     for dataset: AppModel.DatasetEntry,
     fileURL: URL
   ) -> DatasetInfo? {
-    guard let metadata = try? BORGVRMetaData(url: fileURL),
-          metadata.uniqueID.caseInsensitiveCompare(dataset.uniqueId) == .orderedSame else {
+    let metadata: BORGVRMetaData
+    do {
+      metadata = try BORGVRMetaData(url: fileURL)
+    } catch {
       if dataset.source.isLocalFile {
-        logger.error("SharePlay dataset server could not read metadata for \(dataset.identifier).")
+        logger.error("SharePlay dataset server could not read metadata for \(dataset.identifier): \(error.localizedDescription)")
       }
+      return nil
+    }
+    guard metadata.uniqueID.caseInsensitiveCompare(dataset.uniqueId) == .orderedSame else {
+      logger.error("SharePlay dataset server found a different dataset in the selected file.")
       return nil
     }
     return DatasetInfo(

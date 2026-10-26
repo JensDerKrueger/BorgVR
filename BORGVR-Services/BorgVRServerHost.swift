@@ -30,8 +30,12 @@ final class BorgVRServerHost {
   private var webServer: HTTPWebServer?
   private let logger: LoggerBase?
   private var catalogFingerprint = Set<String>()
+  private var startGeneration = UUID()
+  private let lock = NSRecursiveLock()
 
-  private(set) var state = BorgVRServerState(
+  var state: BorgVRServerState { lock.withLock { storedState } }
+
+  private var storedState = BorgVRServerState(
     isRunning: false,
     datasets: [],
     port: StoredServerDefaults.port,
@@ -52,73 +56,83 @@ final class BorgVRServerHost {
     additionalDatasets: [DatasetInfo] = [],
     additionalMeshFiles: [MeshFileInfo] = [],
     includeScannedDatasets: Bool = true
-  ) -> BorgVRServerState {
-    stop()
+  ) async -> BorgVRServerState {
+    guard !Task.isCancelled else { return state }
+    let (generation, catalog, newServer, newWebServer, serverPort, webPort) = lock.withLock {
+      stop()
+      let generation = startGeneration
 
-    let catalog = loadCatalog(
-      configuration: configuration,
-      additionalDatasets: additionalDatasets,
-      additionalMeshFiles: additionalMeshFiles,
-      includeScannedDatasets: includeScannedDatasets,
-      scanLogger: logger
-    )
-    logger?.info(
-      "Server catalog contains \(catalog.datasets.count) datasets, " +
-      "\(catalog.transferFunctions.count) transfer functions, and " +
-      "\(catalog.markerFiles.count) marker files, " +
-      "\(catalog.measurementFiles.count) measurement files, and " +
-      "\(catalog.meshFiles.count) meshes."
-    )
-
-    let serverPort = UInt16(clamping: configuration.port)
-    let newServer = TCPServer(
-      port: serverPort,
-      maxBricksPerGetRequest: configuration.maxBricksPerGetRequest,
-      logger: logger,
-      datasets: catalog.datasets,
-      transferFunctions: catalog.transferFunctions,
-      markerFiles: catalog.markerFiles,
-      measurementFiles: catalog.measurementFiles,
-      meshFiles: catalog.meshFiles,
-      authSecret: configuration.authSecret
-    )
-    if configuration.startDatasetServer {
-      newServer.start()
-    }
-
-    let webPort = effectiveWebPort(configuration: configuration, serverPort: serverPort)
-    let newWebServer: HTTPWebServer?
-    if configuration.enableWebServer {
-      let server = HTTPWebServer(
-        port: webPort,
-        datasetServer: newServer,
-        logger: logger,
-        applicationVersion: configuration.applicationVersion,
-        authSecret: configuration.authSecret,
-        useTLS: configuration.useWebServerTLS,
-        tlsCertificateData: configuration.webServerCertificateData,
-        tlsCertificatePassword: configuration.webServerCertificatePassword
+      let catalog = loadCatalog(
+        configuration: configuration,
+        additionalDatasets: additionalDatasets,
+        additionalMeshFiles: additionalMeshFiles,
+        includeScannedDatasets: includeScannedDatasets,
+        scanLogger: logger
       )
-      server.start()
-      newWebServer = server
-    } else {
-      newWebServer = nil
-    }
+      logger?.info(
+        "Server catalog contains \(catalog.datasets.count) datasets, "
+          + "\(catalog.transferFunctions.count) transfer functions, and "
+          + "\(catalog.markerFiles.count) marker files, "
+          + "\(catalog.measurementFiles.count) measurement files, and "
+          + "\(catalog.meshFiles.count) meshes."
+      )
 
-    server = newServer
-    webServer = newWebServer
-    catalogFingerprint = fingerprint(for: catalog)
-    state = BorgVRServerState(
-      isRunning: newServer.isRunning || (newWebServer?.isRunning ?? false),
-      datasets: catalog.datasets,
-      port: Int(serverPort),
-      serverError: newServer.lastError,
-      isWebServerRunning: newWebServer?.isRunning ?? false,
-      webPort: Int(webPort),
-      webServerUsesTLS: configuration.useWebServerTLS,
-      webServerError: newWebServer?.lastError
-    )
-    return state
+      let serverPort = UInt16(clamping: configuration.port)
+      let newServer = TCPServer(
+        port: serverPort,
+        maxBricksPerGetRequest: configuration.maxBricksPerGetRequest,
+        logger: logger,
+        datasets: catalog.datasets,
+        transferFunctions: catalog.transferFunctions,
+        markerFiles: catalog.markerFiles,
+        measurementFiles: catalog.measurementFiles,
+        meshFiles: catalog.meshFiles,
+        authSecret: configuration.authSecret
+      )
+      if configuration.startDatasetServer {
+        newServer.start()
+      }
+
+      let webPort = effectiveWebPort(configuration: configuration, serverPort: serverPort)
+      let newWebServer: HTTPWebServer?
+      if configuration.enableWebServer {
+        let server = HTTPWebServer(
+          port: webPort,
+          datasetServer: newServer,
+          logger: logger,
+          applicationVersion: configuration.applicationVersion,
+          authSecret: configuration.authSecret,
+          useTLS: configuration.useWebServerTLS,
+          tlsCertificateData: configuration.webServerCertificateData,
+          tlsCertificatePassword: configuration.webServerCertificatePassword
+        )
+        server.start()
+        newWebServer = server
+      } else {
+        newWebServer = nil
+      }
+
+      server = newServer
+      webServer = newWebServer
+      return (generation, catalog, newServer, newWebServer, serverPort, webPort)
+    }
+    if configuration.startDatasetServer { _ = await newServer.waitUntilReady() }
+    if let newWebServer { _ = await newWebServer.waitUntilReady() }
+    return lock.withLock {
+      guard generation == startGeneration else { return storedState }
+      catalogFingerprint = fingerprint(for: catalog)
+      storedState = BorgVRServerState(
+        isRunning: newServer.isRunning || (newWebServer?.isRunning ?? false),
+        datasets: catalog.datasets,
+        port: Int(serverPort),
+        serverError: newServer.lastError,
+        isWebServerRunning: newWebServer?.isRunning ?? false,
+        webPort: Int(webPort),
+        webServerUsesTLS: configuration.useWebServerTLS,
+        webServerError: newWebServer?.lastError
+      )
+      return storedState
+    }
   }
 
   @discardableResult
@@ -128,49 +142,56 @@ final class BorgVRServerHost {
     additionalMeshFiles: [MeshFileInfo] = [],
     includeScannedDatasets: Bool = true
   ) -> Bool {
-    guard let server else { return false }
+    lock.withLock {
+      guard let server else { return false }
 
-    let catalog = loadCatalog(
-      configuration: configuration,
-      additionalDatasets: additionalDatasets,
-      additionalMeshFiles: additionalMeshFiles,
-      includeScannedDatasets: includeScannedDatasets,
-      scanLogger: nil
-    )
-    let refreshedFingerprint = fingerprint(for: catalog)
-    guard refreshedFingerprint != catalogFingerprint else { return false }
+      let catalog = loadCatalog(
+        configuration: configuration,
+        additionalDatasets: additionalDatasets,
+        additionalMeshFiles: additionalMeshFiles,
+        includeScannedDatasets: includeScannedDatasets,
+        scanLogger: nil
+      )
+      let refreshedFingerprint = fingerprint(for: catalog)
+      guard refreshedFingerprint != catalogFingerprint else { return false }
 
-    server.updateCatalog(
-      datasets: catalog.datasets,
-      transferFunctions: catalog.transferFunctions,
-      markerFiles: catalog.markerFiles,
-      measurementFiles: catalog.measurementFiles,
-      meshFiles: catalog.meshFiles
-    )
-    catalogFingerprint = refreshedFingerprint
-    state.datasets = catalog.datasets
-    return true
+      server.updateCatalog(
+        datasets: catalog.datasets,
+        transferFunctions: catalog.transferFunctions,
+        markerFiles: catalog.markerFiles,
+        measurementFiles: catalog.measurementFiles,
+        meshFiles: catalog.meshFiles
+      )
+      catalogFingerprint = refreshedFingerprint
+      storedState.datasets = catalog.datasets
+      return true
+    }
   }
 
   func stop() {
-    webServer?.stop()
-    webServer = nil
-    server?.stop()
-    server = nil
-    catalogFingerprint.removeAll()
-    state = BorgVRServerState(
-      isRunning: false,
-      datasets: [],
-      port: state.port,
-      serverError: nil,
-      isWebServerRunning: false,
-      webPort: state.webPort,
-      webServerUsesTLS: state.webServerUsesTLS,
-      webServerError: nil
-    )
+    lock.withLock {
+      startGeneration = UUID()
+      webServer?.stop()
+      webServer = nil
+      server?.stop()
+      server = nil
+      catalogFingerprint.removeAll()
+      storedState = BorgVRServerState(
+        isRunning: false,
+        datasets: [],
+        port: storedState.port,
+        serverError: nil,
+        isWebServerRunning: false,
+        webPort: storedState.webPort,
+        webServerUsesTLS: storedState.webServerUsesTLS,
+        webServerError: nil
+      )
+    }
   }
 
-  private func mergedDatasets(_ scannedDatasets: [DatasetInfo], additionalDatasets: [DatasetInfo]) -> [DatasetInfo] {
+  private func mergedDatasets(_ scannedDatasets: [DatasetInfo], additionalDatasets: [DatasetInfo])
+    -> [DatasetInfo]
+  {
     var datasets = scannedDatasets
     var knownIDs = Set(scannedDatasets.map(\.id))
 
@@ -189,7 +210,8 @@ final class BorgVRServerHost {
     var transferFunctions = scannedTransferFunctions
     var knownIDs = Set(scannedTransferFunctions.map(\.id))
 
-    for transferFunction in additionalTransferFunctions where !knownIDs.contains(transferFunction.id) {
+    for transferFunction in additionalTransferFunctions
+    where !knownIDs.contains(transferFunction.id) {
       transferFunctions.append(transferFunction)
       knownIDs.insert(transferFunction.id)
     }
@@ -256,19 +278,28 @@ final class BorgVRServerHost {
   }
 
   private func fingerprint(for catalog: ServerCatalog) -> Set<String> {
-    Set(catalog.datasets.map {
-      "dataset|\($0.id)|\($0.filename)|\($0.datasetDescription)|\(fileFingerprint(at: $0.filename))"
-    })
-      .union(catalog.transferFunctions.map {
+    Set(
+      catalog.datasets.map {
+        "dataset|\($0.id)|\($0.filename)|\($0.datasetDescription)|\(fileFingerprint(at: $0.filename))"
+      }
+    )
+    .union(
+      catalog.transferFunctions.map {
         "transfer-function|\($0.id)|\($0.filename)|\($0.transferFunctionDescription)|\($0.byteCount)"
-      })
-      .union(catalog.markerFiles.map {
+      }
+    )
+    .union(
+      catalog.markerFiles.map {
         "marker|\($0.id)|\($0.filename)|\($0.datasetID)|\($0.markerDescription)|\($0.byteCount)"
-      })
-      .union(catalog.measurementFiles.map {
+      }
+    )
+    .union(
+      catalog.measurementFiles.map {
         "measurement|\($0.id)|\($0.filename)|\($0.datasetID)|\($0.measurementDescription)|\($0.byteCount)"
-      })
-      .union(catalog.meshFiles.map {
+      }
+    )
+    .union(
+      catalog.meshFiles.map {
         "mesh|\($0.id.uuidString)|\($0.filename)|\($0.name)|\($0.byteCount)"
       })
   }
@@ -278,15 +309,19 @@ final class BorgVRServerHost {
       return "missing"
     }
     let size = (attributes[.size] as? NSNumber)?.uint64Value ?? 0
-    let modificationDate = (attributes[.modificationDate] as? Date)?.timeIntervalSinceReferenceDate ?? 0
+    let modificationDate =
+      (attributes[.modificationDate] as? Date)?.timeIntervalSinceReferenceDate ?? 0
     return "\(size)|\(modificationDate)"
   }
 
-  private func effectiveWebPort(configuration: BorgVRServerConfiguration, serverPort: UInt16) -> UInt16 {
+  private func effectiveWebPort(configuration: BorgVRServerConfiguration, serverPort: UInt16)
+    -> UInt16
+  {
     var webPort = UInt16(clamping: configuration.webPort)
     if configuration.startDatasetServer, webPort == serverPort {
       webPort = serverPort == UInt16.max ? 1 : serverPort + 1
-      logger?.warning("WebGPU web server port matches the dataset server port. Using \(webPort) instead.")
+      logger?.warning(
+        "WebGPU web server port matches the dataset server port. Using \(webPort) instead.")
     }
     return webPort
   }

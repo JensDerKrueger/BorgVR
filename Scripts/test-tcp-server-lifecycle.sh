@@ -20,6 +20,7 @@ swiftc \
   "$ROOT/BORGVR-IO/Remote/BorgVRServerAuthentication.swift" \
   "$ROOT/BORGVR-Services/TCPServer.swift" \
   "$ROOT/Tests/TCPServerTestSupport.swift" \
+  "$ROOT/Tests/RemoteDataManagerErrorTestStub.swift" \
   "$ROOT/Tests/TCPServerLifecycleTests.swift" \
   -o "$BUILD_DIR/tcp-server-lifecycle-tests"
 

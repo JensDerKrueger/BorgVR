@@ -77,6 +77,8 @@ struct OpenDatasetView: View {
   )
   @State private var prefetchContinue = true
   @State private var prefetchWasCancelled = false
+  @State private var prefetchCancellation: RemoteRequestCancellation?
+  @State private var downloadError: String?
 
   @Environment(RuntimeAppModel.self) private var runtimeAppModel
   @EnvironmentObject var storedAppModel: StoredAppModel
@@ -361,6 +363,7 @@ struct OpenDatasetView: View {
         .onAppear {
           Task { await loadDatasetFilesAsync() }
         }
+        .onDisappear { prefetchCancellation?.cancel() }
         .onChange(of: storedAppModel.hideBuiltInDatasets) { _, _ in
           Task { await loadDatasetFilesAsync() }
         }
@@ -373,7 +376,11 @@ struct OpenDatasetView: View {
           continueExecution: $prefetchContinue,
           wasCancelled: $prefetchWasCancelled
         )
+        .onChange(of: prefetchContinue) { _, value in if !value { prefetchCancellation?.cancel() } }
       }
+      .alert("Error", isPresented: Binding(get: { downloadError != nil }, set: { if !$0 { downloadError = nil } })) {
+        Button("OK", role: .cancel) { downloadError = nil }
+      } message: { Text(downloadError ?? "") }
 
       if isLoading {
         ZStack {
@@ -623,112 +630,43 @@ struct OpenDatasetView: View {
     prefetchWasCancelled = false
     showPrefetchDialog = true
 
-    DispatchQueue.global(qos: .userInitiated).async {
 
-      let logger: GUILogger = GUILogger()
-      logger.setProgressBinding($prefetchStatusText, $prefetchProgress)
-      logger.setMinimumLogLevel(.dev)
-      var entryForLocalCopy: RuntimeAppModel.DatasetEntry? = nil
-
+    prefetchCancellation?.cancel()
+    let cancellation = RemoteRequestCancellation()
+    prefetchCancellation = cancellation
+    Task { @MainActor in
+      defer {
+        if prefetchCancellation === cancellation {
+          showPrefetchDialog = false
+          prefetchCancellation = nil
+        }
+      }
       do {
-        let primaryOrigin = DatasetOrigin(
-          address: serverAddress,
-          port: serverPort,
-          password: authSecret
-        )
-        let manager = BORGVRRemoteDataManager(
-          host: serverAddress,
-          port: UInt16(serverPort),
-          authSecret: authSecret,
-          logger: logger
-        )
-        try manager.connect(timeout: storedAppModel.timeout)
-
-        if let documentsURL = FileManager.default.urls(
-          for: .documentDirectory,
-          in: .userDomainMask
-        ).first {
-
-          let fileURL = documentsURL.appendingPathComponent(
-            "\(datasetID).data"
-          )
-
-          let dataset = try manager.openDataset(
-            datasetID: datasetID,
-            timeout: storedAppModel.timeout,
-            localCacheFilename: fileURL.path,
-            originProvider: {
-              DatasetOriginCatalog.deduplicated(
-                [primaryOrigin] + DatasetOriginCatalog.shared.origins(for: datasetID)
-              )
-            }
-          )
-
-          entryForLocalCopy = RuntimeAppModel.DatasetEntry(
-            identifier: fileURL.path,
-            description: dataset.getMetadata().description,
-            source: .local,
-            uniqueId: dataset.getMetadata().uniqueID
-          )
-
-          let count = dataset.getMetadata().brickMetadata.count
-          let b = dataset.allocateBrickBuffer()
-          defer { b.deallocate() }
-          for i in 0..<count {
-            do {
-              try dataset.getBrick(index: i, outputBuffer: b)
-            } catch {
-            }
-          }
-
-          DispatchQueue.main.async {
-            prefetchStatusText = String(
-              format: NSLocalizedString(
-                "open_prefetch_loading_bricks_count",
-                comment: "Prefetch status: loading N bricks"
-              ),
-              count
-            )
-          }
-
-          while dataset.localRatio < 1.0 {
-            if !prefetchContinue { break }
-            let completed = Int(dataset.localRatio * Double(count))
-            let percentString = String(
-              format: "%.2f",
-              dataset.localRatio * 100
-            )
-            DispatchQueue.main.async {
-              prefetchProgress = dataset.localRatio
-              prefetchStatusText = String(
-                format: NSLocalizedString(
-                  "open_prefetch_loading_bricks_progress",
-                  comment: "Prefetch status with progress (completed, total, percent)"
-                ),
-                completed,
-                count,
-                percentString
-              )
-            }
-            Thread.sleep(forTimeInterval: 1)
-          }
+        guard let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
+          throw RemoteDatasetOpenError.documentsDirectoryUnavailable
         }
+        let origin = DatasetOrigin(address: serverAddress, port: serverPort, password: authSecret)
+        let url = try await RemoteDatasetDownloader.download(datasetID: datasetID, origin: origin,
+          to: documents.appendingPathComponent("\(datasetID).data"), timeout: storedAppModel.timeout,
+          cancellation: cancellation,
+          originProvider: { DatasetOriginCatalog.deduplicated([origin] + DatasetOriginCatalog.shared.origins(for: datasetID)) },
+          progress: { value in
+            Task { @MainActor in
+              guard prefetchCancellation === cancellation, !cancellation.isCancelled else { return }
+              prefetchProgress = value
+              prefetchStatusText = value.formatted(.percent.precision(.fractionLength(1)))
+            }
+          })
+        guard prefetchCancellation === cancellation, !cancellation.isCancelled, prefetchContinue else { return }
+        let metadata = try BORGVRMetaData(url: url)
+        runtimeAppModel.startImmersiveSpace(dataset: .init(identifier: url.path,
+          description: metadata.datasetDescription, source: .local, uniqueId: metadata.uniqueID),
+          asGroupSessionHost: asGroupSessionHost)
+      } catch is CancellationError {
       } catch {
-      }
-
-      DispatchQueue.main.async {
-        showPrefetchDialog = false
-      }
-
-      if prefetchContinue {
-        Task { @MainActor in
-          if let entryForLocalCopy {
-            runtimeAppModel.startImmersiveSpace(
-              dataset: entryForLocalCopy,
-              asGroupSessionHost: asGroupSessionHost
-            )
-          }
-        }
+        guard prefetchCancellation === cancellation, !cancellation.isCancelled else { return }
+        runtimeAppModel.logger.error("Could not download dataset: \(error.localizedDescription)")
+        downloadError = error.localizedDescription
       }
     }
   }

@@ -1,6 +1,63 @@
 import Network
 import Foundation
 
+enum RemoteDatasetOpenError: LocalizedError {
+  case documentsDirectoryUnavailable, downloadStalled, downloadCancelled, noReachableOrigin
+  var errorDescription: String? {
+    switch self {
+      case .documentsDirectoryUnavailable: String(localized: "The documents directory is not available.")
+      case .downloadStalled: String(localized: "The remote download is no longer making progress.")
+      case .downloadCancelled: String(localized: "The remote download was paused.")
+      case .noReachableOrigin: String(localized: "The dataset is not available from any known source.")
+    }
+  }
+}
+
+enum RemoteDatasetDownloader {
+  static func download(datasetID: String, origin: DatasetOrigin, to target: URL, timeout: TimeInterval,
+                       cancellation: RemoteRequestCancellation, originProvider: @escaping DatasetOriginProvider,
+                       progress: @escaping @Sendable (Double) -> Void) async throws -> URL {
+    try await withTaskCancellationHandler {
+      try await Task.detached(priority: .userInitiated) {
+        try cancellation.check()
+        let manager = BORGVRRemoteDataManager(host: origin.address, port: UInt16(clamping: origin.port),
+          authSecret: origin.password, logger: nil)
+        let connecting = cancellation.register { [weak manager] in manager?.cancel() }
+        defer { cancellation.remove(connecting) }
+        do {
+          try manager.connect(timeout: timeout)
+          try cancellation.check()
+          let dataset = try manager.openDataset(datasetID: datasetID, timeout: timeout,
+            localCacheFilename: target.path, originProvider: originProvider)
+          let downloading = cancellation.register { [weak dataset] in dataset?.stop() }
+          defer { cancellation.remove(downloading); dataset.stop() }
+          guard dataset.getMetadata().uniqueID.caseInsensitiveCompare(datasetID) == .orderedSame else {
+            throw BORGVRRemoteDataManagerError.invalidResponse(reason: "Downloaded dataset ID does not match the request.")
+          }
+          let clock = ContinuousClock()
+          var lastProgress = -1.0, lastChange = clock.now
+          let stallTimeout = max(30, timeout * 10)
+          let incomplete = target.appendingPathExtension("incomplete")
+          while true {
+            try cancellation.check()
+            let value = dataset.localRatio
+            if value > lastProgress + 0.001 {
+              lastProgress = value; lastChange = clock.now; progress(value)
+            }
+            if value >= 1, FileManager.default.fileExists(atPath: target.path),
+               !FileManager.default.fileExists(atPath: incomplete.path) { return target }
+            if lastChange.duration(to: clock.now) > .seconds(stallTimeout) { throw RemoteDatasetOpenError.downloadStalled }
+            try await Task.sleep(for: .milliseconds(200))
+          }
+        } catch {
+          if cancellation.isCancelled { throw CancellationError() }
+          throw error
+        }
+      }.value
+    } onCancel: { cancellation.cancel() }
+  }
+}
+
 /**
  A remote volume data handler that wraps a brick data source.
 
@@ -152,10 +209,13 @@ class BORGVRRemoteData: BORGVRDatasetProtocol {
   }
 
   deinit {
-    if let cachingSource = brickDataSource as? CachingRemoteDataSource {
-      cachingSource.stopWorker()
-    }
+    stop()
     logger?.dev("BORGVRRemoteData deinitialized")
+  }
+
+  func stop() {
+    (brickDataSource as? CachingRemoteDataSource)?.stopWorker()
+    (brickDataSource as? RemoteDataSource)?.stop()
   }
 
   /**

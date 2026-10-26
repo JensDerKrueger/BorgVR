@@ -1,6 +1,48 @@
 import Network
 import Foundation
 
+/// Shared, cancellable source probing for screen and spatial SharePlay clients.
+enum BorgVRRemoteOriginResolver {
+  @MainActor
+  static func firstReachable(_ origins: [DatasetOrigin], datasetID: String, timeout: TimeInterval,
+                             logger: LoggerBase?,
+                             checking: (DatasetOrigin) -> Void,
+                             receivedCatalog: (DatasetOrigin, [String]) -> Void) async -> DatasetOrigin? {
+    let cancellation = RemoteRequestCancellation()
+    return await withTaskCancellationHandler {
+      for origin in origins {
+        guard !Task.isCancelled, !cancellation.isCancelled else { return nil }
+        checking(origin)
+        logger?.info("Checking \(origin.address):\(origin.port) for SharePlay dataset \(datasetID).")
+        let result = await Task.detached(priority: .userInitiated) { () -> (ids: [String]?, error: String?) in
+          let manager = BORGVRRemoteDataManager(host: origin.address, port: UInt16(clamping: origin.port),
+            authSecret: origin.password, logger: nil)
+          let registration = cancellation.register { [weak manager] in manager?.cancel() }
+          defer { cancellation.remove(registration); manager.cancel() }
+          do {
+            try cancellation.check()
+            try manager.connect(timeout: timeout)
+            try cancellation.check()
+            return (try manager.requestDatasetList().map(\.id), nil)
+          } catch { return (nil, error.localizedDescription) }
+        }.value
+        guard !Task.isCancelled, !cancellation.isCancelled else { return nil }
+        if let ids = result.ids {
+          receivedCatalog(origin, ids)
+          if ids.contains(datasetID) {
+            logger?.info("Found SharePlay dataset \(datasetID) at \(origin.address):\(origin.port).")
+            return origin
+          }
+          logger?.info("Source \(origin.address):\(origin.port) is reachable but does not provide dataset \(datasetID).")
+        } else {
+          logger?.warning("Could not query \(origin.address):\(origin.port): \(result.error ?? "Unknown network error")")
+        }
+      }
+      return nil
+    } onCancel: { cancellation.cancel() }
+  }
+}
+
 /**
  A set of errors that may occur when using the remote data manager.
  */
@@ -121,6 +163,8 @@ class BORGVRRemoteDataManager {
     logger?.dev("BORGVRRemoteDataManager deinitialized")
   }
 
+  func cancel() { connection.cancel() }
+
   /**
    Establishes a connection to the remote server with a timeout.
 
@@ -176,6 +220,9 @@ class BORGVRRemoteDataManager {
           stateLock.lock()
           success = true
           stateLock.unlock()
+          semaphore.signal()
+        case .cancelled:
+          stateLock.withLock { failureReason = "Connection cancelled." }
           semaphore.signal()
         case .failed(let error):
           logger?.error("Connection failed: \(error)")

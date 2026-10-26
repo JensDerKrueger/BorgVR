@@ -11,10 +11,11 @@ final class iOSSharePlayPlatformAdapter: BorgVRSharePlayPlatformAdapter {
   }
 
   private let appSettings: AppSettings
-  private let adHocServer = BorgVRSharePlayAdHocServer()
+  private let adHocServer: BorgVRSharePlayAdHocServer
 
-  init(appSettings: AppSettings) {
+  init(appSettings: AppSettings, logger: GUILogger) {
     self.appSettings = appSettings
+    adHocServer = BorgVRSharePlayAdHocServer(logger: logger)
   }
 
   func activate(
@@ -51,8 +52,8 @@ final class iOSSharePlayPlatformAdapter: BorgVRSharePlayPlatformAdapter {
     )
   }
 
-  func ensureServing(dataset: AppModel.DatasetEntry) -> [DatasetOrigin] {
-    adHocServer.ensureServing(
+  func ensureServing(dataset: AppModel.DatasetEntry) async -> [DatasetOrigin] {
+    await adHocServer.ensureServing(
       dataset: dataset,
       fileURL: fileURL(for: dataset),
       settings: BorgVRSharePlayAdHocServerSettings(

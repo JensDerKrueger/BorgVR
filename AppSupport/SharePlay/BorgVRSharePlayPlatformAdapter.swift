@@ -25,7 +25,7 @@ protocol BorgVRSharePlayPlatformAdapter: AnyObject {
     description: String
   ) -> AppModel.DatasetEntry?
 
-  func ensureServing(dataset: AppModel.DatasetEntry) -> [DatasetOrigin]
+  func ensureServing(dataset: AppModel.DatasetEntry) async -> [DatasetOrigin]
   func serves(meshAssetIDs: Set<UUID>, for datasetID: String) -> Bool
   func stopSharePlayServer()
 }

@@ -47,6 +47,8 @@ class GroupActivityHelper {
   private var sessionEngine = BorgVRSharePlaySessionEngine()
   private var screenViewStateByParticipantID: [UUID: BorgVRScreenViewState] = [:]
   private let sharePlayServerHost = BorgVRServerHost(logger: GUILogger())
+  private var serverStartup: (datasetID: String, task: Task<(origins: [String], authToken: String), Never>)?
+  private var serverGeneration = UUID()
   private var sharePlayDatasetID: String?
   private var sharePlayAuthToken = ""
   private var sharePlayServerRunning = false
@@ -62,7 +64,6 @@ class GroupActivityHelper {
   private var sceneMeshResolutionTask: Task<Void, Never>?
   private var sceneMeshResolutionRetryRequested = false
   private var stateVersionDatasetID: String?
-  private var hostElectionTask: Task<Void, Never>?
   private var editCollaboration: BorgVRVolumeEditCollaboration?
 
   @MainActor
@@ -258,8 +259,6 @@ class GroupActivityHelper {
     }
 
     do {
-      try await sendData(data: Data(), of: .shutdownRequest)
-      try? await Task.sleep(nanoseconds: 100_000_000)
       try await sendData(data: Data(), of: .shutdownRequest)
     } catch {
       runtimeAppModel?.logger
@@ -485,12 +484,16 @@ class GroupActivityHelper {
     guard runtimeAppModel.groupSessionHost else { return }
 
     runtimeAppModel.logger.dev("sendInitialData")
+    let generation = sessionGeneration
 
     if let dataset = runtimeAppModel.activeDataset {
       advanceHostStateVersionIfNeeded(for: dataset.uniqueId)
       setSessionDatasetID(dataset.uniqueId)
       refreshEditCollaboration()
-      let sharedDataset = shareOrigins(for: dataset)
+      let sharedDataset = await shareOrigins(for: dataset)
+      guard generation == sessionGeneration, groupSession != nil,
+            runtimeAppModel.groupSessionHost,
+            runtimeAppModel.activeDataset?.uniqueId == dataset.uniqueId else { return }
       let initMessage = BorgVRSharePlayDatasetAnnouncement(
         uniqueID: dataset.uniqueId,
         origins: sharedDataset,
@@ -612,9 +615,9 @@ class GroupActivityHelper {
       case .datasetOriginAdvertisement:
         handleDatasetOriginAdvertisement(data: message.payload, from: from)
       case .hostClaim:
-        handleHostClaim(data: message.payload)
+        handleHostClaim(data: message.payload, from: from.id)
       case .hostState:
-        handleHostState(data: message.payload)
+        handleHostState(data: message.payload, from: from.id)
       case .protocolVersion:
         break
     }
@@ -853,8 +856,6 @@ class GroupActivityHelper {
     sceneMeshResolutionTask = nil
     sceneMeshResolutionRetryRequested = false
     stateVersionDatasetID = nil
-    hostElectionTask?.cancel()
-    hostElectionTask = nil
     runtimeAppModel?.showsHostDeparturePrompt = false
     runtimeAppModel?.sharePlaySessionIsActive = false
     sharedAppModel?.sharePlayParticipants = []
@@ -1008,7 +1009,7 @@ class GroupActivityHelper {
     guard let runtimeAppModel else { return }
 
     guard let remoteSource = await firstReachableOrigin(origins, datasetID: uniqueID) else {
-      guard generation == sessionGeneration,
+      guard !Task.isCancelled, generation == sessionGeneration,
             groupSession != nil,
             pendingDatasetLoad?.uniqueID == uniqueID else { return }
       runtimeAppModel.sharePlayDatasetSource = nil
@@ -1048,66 +1049,20 @@ class GroupActivityHelper {
     }
   }
 
-  private func firstReachableOrigin(
-    _ origins: [DatasetOrigin],
-    datasetID: String
-  ) async -> DatasetOrigin? {
-    let timeout = await MainActor.run {
-      max(0.1, storedAppModel?.timeout ?? StoredAppModel.double("timeout"))
-    }
-    for origin in origins {
-      guard !Task.isCancelled else { return nil }
-      await MainActor.run {
-        runtimeAppModel?.sharePlayDatasetSource = origin
+  @MainActor
+  private func firstReachableOrigin(_ origins: [DatasetOrigin], datasetID: String) async -> DatasetOrigin? {
+    await BorgVRRemoteOriginResolver.firstReachable(
+      origins, datasetID: datasetID, timeout: max(0.1, storedAppModel?.timeout ?? StoredAppModel.double("timeout")), logger: runtimeAppModel?.logger,
+      checking: { [weak self] origin in self?.runtimeAppModel?.sharePlayDatasetSource = origin },
+      receivedCatalog: { origin, ids in
+        DatasetOriginCatalog.shared.recordServerSnapshot(origin: origin, datasetIDs: ids,
+          allowsSharing: DatasetOriginCatalog.shared.sharingAllowed(for: origin))
       }
-      await logInfo("Checking \(origin.address):\(origin.port) for SharePlay dataset \(datasetID).")
-      let result = await Task.detached(priority: .userInitiated) {
-        do {
-          let manager = BORGVRRemoteDataManager(
-            host: origin.address,
-            port: UInt16(clamping: origin.port),
-            authSecret: origin.password,
-            logger: nil
-          )
-          try manager.connect(timeout: timeout)
-          let datasets = try manager.requestDatasetList()
-          DatasetOriginCatalog.shared.recordServerSnapshot(
-            origin: origin,
-            datasetIDs: datasets.map(\.id),
-            allowsSharing: DatasetOriginCatalog.shared.sharingAllowed(for: origin)
-          )
-          return (datasets.contains { $0.id == datasetID }, "")
-        } catch {
-          return (false, error.localizedDescription)
-        }
-      }.value
-
-      if result.0 {
-        await logInfo("Found SharePlay dataset \(datasetID) at \(origin.address):\(origin.port).")
-        return origin
-      }
-      if result.1.isEmpty {
-        await logInfo("Source \(origin.address):\(origin.port) is reachable but does not provide dataset \(datasetID).")
-      } else {
-        await logWarning("Could not query \(origin.address):\(origin.port): \(result.1)")
-      }
-    }
-
-    return nil
+    )
   }
 
   @MainActor
-  private func logInfo(_ message: String) {
-    runtimeAppModel?.logger.info(message)
-  }
-
-  @MainActor
-  private func logWarning(_ message: String) {
-    runtimeAppModel?.logger.warning(message)
-  }
-
-  @MainActor
-  private func shareOrigins(for dataset: RuntimeAppModel.DatasetEntry) -> [DatasetOrigin] {
+  private func shareOrigins(for dataset: RuntimeAppModel.DatasetEntry) async -> [DatasetOrigin] {
     var immediateOrigins: [DatasetOrigin] = []
     switch dataset.source {
       case .remote(let address, let port, let password):
@@ -1120,7 +1075,7 @@ class GroupActivityHelper {
           immediateOrigins.append(origin)
         }
       case .local, .builtIn:
-        let served = ensureServing(dataset: dataset)
+        let served = await ensureServing(dataset: dataset)
         immediateOrigins = served.origins.compactMap { value in
           guard let endpoint = splitAddressAndPort(value) else { return nil }
           return DatasetOrigin(address: endpoint.address, port: endpoint.port, password: served.authToken)
@@ -1230,7 +1185,8 @@ class GroupActivityHelper {
     guard groupSession != nil,
           let dataset = runtimeAppModel?.activeDataset,
           dataset.uniqueId == sessionEngine.sessionDatasetID else { return }
-    let served = ensureServing(dataset: dataset)
+    let served = await ensureServing(dataset: dataset)
+    guard groupSession != nil, dataset.uniqueId == sessionEngine.sessionDatasetID else { return }
     let origins = served.origins.compactMap { value -> DatasetOrigin? in
       guard let endpoint = splitAddressAndPort(value) else { return nil }
       return DatasetOrigin(address: endpoint.address, port: endpoint.port, password: served.authToken)
@@ -1296,7 +1252,7 @@ class GroupActivityHelper {
     guard groupSession != nil,
           let claim = sessionEngine.makeLocalHostClaim() else { return }
     runtimeAppModel?.showsHostDeparturePrompt = false
-    scheduleHostElectionResolution(term: claim.term)
+    resolveHostElection(term: claim.term)
     Task {
       guard let data = try? BorgVRSharePlayHostCodec.encode(claim) else { return }
       try? await sendData(data: data, of: .hostClaim)
@@ -1312,7 +1268,8 @@ class GroupActivityHelper {
   private func handleHostParticipantChanges(
     _ change: BorgVRSharePlaySessionEngine.ParticipantChange
   ) {
-    guard change.hostDeparted else { return }
+    resolveHostElection(term: sessionEngine.hostElectionTerm)
+    guard change.hostDeparted, sessionEngine.currentHostParticipantID == nil else { return }
     runtimeAppModel?.groupSessionHost = false
     runtimeAppModel?.showsHostDeparturePrompt = true
     runtimeAppModel?.logger.warning("The SharePlay host left the session; waiting for a new host.")
@@ -1326,11 +1283,11 @@ class GroupActivityHelper {
   }
 
   @MainActor
-  private func handleHostClaim(data: Data) {
+  private func handleHostClaim(data: Data, from participantID: UUID) {
     guard let claim = try? BorgVRSharePlayHostCodec.decode(
       BorgVRSharePlayHostClaim.self,
       from: data
-    ) else { return }
+    ), claim.candidateID == participantID else { return }
     registerHostClaim(claim)
   }
 
@@ -1339,19 +1296,9 @@ class GroupActivityHelper {
     switch sessionEngine.registerHostClaim(claim) {
       case .ignored:
         return
-      case .scheduleResolution(let term):
+      case .resolutionRequested(let term):
         runtimeAppModel?.groupSessionHost = false
-        scheduleHostElectionResolution(term: term)
-    }
-  }
-
-  @MainActor
-  private func scheduleHostElectionResolution(term: UInt64) {
-    hostElectionTask?.cancel()
-    hostElectionTask = Task { @MainActor [weak self] in
-      try? await Task.sleep(nanoseconds: 350_000_000)
-      guard !Task.isCancelled else { return }
-      self?.resolveHostElection(term: term)
+        resolveHostElection(term: term)
     }
   }
 
@@ -1359,29 +1306,26 @@ class GroupActivityHelper {
   private func resolveHostElection(term: UInt64) {
     guard let transition = sessionEngine.resolveHostElection(term: term) else { return }
     applyHostTransition(transition)
-    if transition.isLocalHost {
-      Task {
-        await sendCurrentHostState()
-        await sendInitialData()
-      }
+    Task {
+      await sendCurrentHostState()
+      if transition.isLocalHost { await sendInitialData() }
     }
   }
 
   @MainActor
-  private func handleHostState(data: Data) {
+  private func handleHostState(data: Data, from participantID: UUID) {
     guard let state = try? BorgVRSharePlayHostCodec.decode(
       BorgVRSharePlayHostState.self,
       from: data
-    ), let transition = sessionEngine.receiveHostState(state) else { return }
+    ), let transition = sessionEngine.receiveHostState(state, from: participantID) else { return }
     applyHostTransition(transition)
+    if transition.isLocalHost { Task { await sendInitialData() } }
   }
 
   @MainActor
   private func applyHostTransition(
     _ transition: BorgVRSharePlaySessionEngine.HostTransition
   ) {
-    hostElectionTask?.cancel()
-    hostElectionTask = nil
     runtimeAppModel?.showsHostDeparturePrompt = false
     runtimeAppModel?.groupSessionHost = transition.isLocalHost
     refreshEditCollaboration()
@@ -1415,7 +1359,24 @@ class GroupActivityHelper {
   }
 
   @MainActor
-  private func ensureServing(dataset: RuntimeAppModel.DatasetEntry) -> (origins: [String], authToken: String) {
+  private func ensureServing(dataset: RuntimeAppModel.DatasetEntry) async -> (origins: [String], authToken: String) {
+    if let startup = serverStartup, startup.datasetID == dataset.uniqueId { return await startup.task.value }
+    if sharePlayServerRunning, sharePlayDatasetID == dataset.uniqueId,
+       sharePlayMeshAssetIDs == Set(SceneMeshAssetCatalog.serverFiles(logger: runtimeAppModel?.logger).map(\.id)) {
+      return (originAddresses(port: sharePlayServerPort), sharePlayAuthToken)
+    }
+    stopSharePlayServer()
+    let generation = serverGeneration
+    let task = Task { @MainActor in await self.startServing(dataset: dataset, generation: generation) }
+    serverStartup = (dataset.uniqueId, task)
+    let result = await task.value
+    if serverGeneration == generation { serverStartup = nil }
+    return result
+  }
+
+  @MainActor
+  private func startServing(dataset: RuntimeAppModel.DatasetEntry, generation: UUID) async -> (origins: [String], authToken: String) {
+    guard !Task.isCancelled, serverGeneration == generation else { return ([], "") }
     guard let datasetInfo = serverDatasetInfo(for: dataset) else {
       stopSharePlayServer()
       return ([], "")
@@ -1429,10 +1390,10 @@ class GroupActivityHelper {
       return (originAddresses(port: sharePlayServerPort), sharePlayAuthToken)
     }
 
-    stopSharePlayServer()
     let authToken = BorgVRServerAuthentication.randomToken()
     for port in sharePlayCandidatePorts(preferredPort: storedAppModel?.sharePlayServerPort ?? sharePlayServerPort) {
-      let state = sharePlayServerHost.start(
+      guard !Task.isCancelled, serverGeneration == generation else { return ([], "") }
+      let state = await sharePlayServerHost.start(
         configuration: BorgVRServerConfiguration(
           dataDirectory: "",
           port: port,
@@ -1449,7 +1410,8 @@ class GroupActivityHelper {
         includeScannedDatasets: false
       )
 
-      guard state.isRunning,
+      guard !Task.isCancelled, serverGeneration == generation else { return ([], "") }
+      guard state.serverError == nil, state.isRunning,
             state.datasets.contains(where: { $0.id == dataset.uniqueId }) else {
         continue
       }
@@ -1468,6 +1430,8 @@ class GroupActivityHelper {
 
   @MainActor
   private func stopSharePlayServer() {
+    serverGeneration = UUID()
+    serverStartup?.task.cancel(); serverStartup = nil
     sharePlayServerHost.stop()
     sharePlayDatasetID = nil
     sharePlayAuthToken = ""

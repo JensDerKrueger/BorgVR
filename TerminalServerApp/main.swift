@@ -371,7 +371,7 @@ let host = BorgVRServerHost(logger: logger)
 
 printStartupBanner(config, logLevel: logger.currentLevel)
 logger.info("Scanning server catalog in \(config.dataDirectory)")
-let state = host.start(configuration: serverConfiguration)
+let state = await host.start(configuration: serverConfiguration)
 
 guard state.isRunning, state.serverError == nil else {
   logger.error(state.serverError ?? "Dataset server did not start.")

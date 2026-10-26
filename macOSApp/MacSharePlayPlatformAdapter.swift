@@ -80,8 +80,8 @@ final class MacSharePlayPlatformAdapter: BorgVRSharePlayPlatformAdapter {
     )
   }
 
-  func ensureServing(dataset: AppModel.DatasetEntry) -> [DatasetOrigin] {
-    serverController.ensureServing(dataset: dataset, using: storedAppModel)
+  func ensureServing(dataset: AppModel.DatasetEntry) async -> [DatasetOrigin] {
+    await serverController.ensureServing(dataset: dataset, using: storedAppModel)
   }
 
   func serves(meshAssetIDs: Set<UUID>, for datasetID: String) -> Bool {

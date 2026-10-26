@@ -8,6 +8,7 @@ final class BackgroundServerController: ObservableObject {
   @Published private(set) var shareableWebServerURL: URL?
 
   private let serverHost = BorgVRServerHost(logger: GUILogger())
+  private var startupTask: Task<Void, Never>?
 
   func start(using settings: StoredAppModel) {
     guard settings.enableDatasetServer else {
@@ -15,9 +16,15 @@ final class BackgroundServerController: ObservableObject {
       return
     }
 
+    startupTask?.cancel()
+    startupTask = Task { await startServer(using: settings) }
+  }
+
+  private func startServer(using settings: StoredAppModel) async {
     let documentsDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
     let dataDirectory = documentsDirectory?.path ?? ""
-    let state = serverHost.start(
+    guard !Task.isCancelled else { return }
+    let state = await serverHost.start(
       configuration: BorgVRServerConfiguration(
         dataDirectory: dataDirectory,
         port: settings.serverPort,
@@ -35,6 +42,7 @@ final class BackgroundServerController: ObservableObject {
       includeScannedDatasets: documentsDirectory != nil
     )
 
+    guard !Task.isCancelled else { return }
     datasets = state.datasets
     isRunning = state.isRunning
     shareableWebServerURL = state.isWebServerRunning && state.webServerUsesTLS
@@ -76,6 +84,7 @@ final class BackgroundServerController: ObservableObject {
   }
 
   func stop() {
+    startupTask?.cancel(); startupTask = nil
     serverHost.stop()
     datasets = []
     shareableWebServerURL = nil
