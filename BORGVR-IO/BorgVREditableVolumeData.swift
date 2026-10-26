@@ -2,6 +2,16 @@ import Foundation
 import Compression
 
 enum BorgVRVolumeEditStorage {
+  static func removeDataset(at datasetURL: URL) throws {
+    guard datasetURL.isFileURL, datasetURL.pathExtension.lowercased() == "data" else {
+      throw BorgVRVolumeEditError.invalidGeometry
+    }
+    for url in [datasetURL, datasetURL.appendingPathExtension("edits")] {
+      do { try FileManager.default.removeItem(at: url) }
+      catch let error as CocoaError where error.code == .fileNoSuchFile || error.code == .fileReadNoSuchFile {}
+    }
+  }
+
   static func directory(datasetURL: URL?, datasetID: String, applicationSupportURL: URL) throws -> URL {
     guard let id = UUID(uuidString: datasetID)?.uuidString else { throw BorgVRVolumeEditError.incompatibleDataset }
     let builtin = applicationSupportURL.appendingPathComponent("BorgVR/VolumeEdits", isDirectory: true)

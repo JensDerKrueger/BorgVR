@@ -661,6 +661,25 @@ private func testAdjacentEditStorage() throws {
   try check(replacement != adjacent, "A new dataset at the same path reused an old sidecar")
   try check(try BorgVRVolumeEditStorage.directory(datasetURL: nil, datasetID: id,
     applicationSupportURL: support) == builtin, "Built-in dataset storage moved out of Application Support")
+  for directory in [adjacent, replacement, builtin] {
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    try Data([1]).write(to: directory.appendingPathComponent("journal"))
+  }
+  try Data([2]).write(to: dataURL)
+  let markerURL = dataURL.deletingPathExtension().appendingPathExtension("marker")
+  try Data([3]).write(to: markerURL)
+  try BorgVRVolumeEditStorage.removeDataset(at: dataURL)
+  try check(!FileManager.default.fileExists(atPath: dataURL.path) &&
+    !FileManager.default.fileExists(atPath: dataURL.appendingPathExtension("edits").path),
+    "Deleting a local dataset retained its file or one of its edit variants")
+  try check(FileManager.default.fileExists(atPath: builtin.path) &&
+    FileManager.default.fileExists(atPath: markerURL.path),
+    "Dataset deletion removed unrelated files")
+  try BorgVRVolumeEditStorage.removeDataset(at: dataURL)
+  try Data([4]).write(to: dataURL)
+  try BorgVRVolumeEditStorage.removeDataset(at: dataURL)
+  try check(!FileManager.default.fileExists(atPath: dataURL.path),
+    "Dataset deletion required an edit sidecar")
 }
 
 private func testDiscardAllEditsDuringBackgroundWork() throws {

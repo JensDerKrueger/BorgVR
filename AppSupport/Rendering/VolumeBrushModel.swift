@@ -395,6 +395,19 @@ final class VolumeBrushModel: ObservableObject, BorgVRVolumeEditingCommands {
       applicationSupportURL: support), datasetID: datasetID)
   }
 
+  func deleteClosedDataset(at url: URL, datasetID: String) async throws {
+    let generation = datasetGeneration
+    await closingTask?.value
+    try Task.checkCancellation()
+    guard datasetGeneration == generation,
+          dataSource?.getMetadata().uniqueID != datasetID,
+          openingRequest?.datasetID != datasetID else {
+      throw BorgVRVolumeEditingCommandError.busy
+    }
+    // Closing drains persistence and hierarchy workers before their storage disappears.
+    try BorgVRVolumeEditStorage.removeDataset(at: url)
+  }
+
   func prepareOpening(datasetID: String, datasetURL: URL?, interactive: Bool = true) async throws {
     await closingTask?.value
     guard !isInSharePlay || isSharePlayHost else { return }

@@ -62,9 +62,8 @@ struct OpenDatasetView: View {
   @State private var datasets: [RuntimeAppModel.DatasetEntry] = []
   @State private var selectedIndex: Int?
   @State private var showDeleteConfirmation = false
-  @State private var datasetToDelete: IndexSet?
-  @State private var datasetToDeleteName: String?
-  @State private var datasetToDeleteDescription: String?
+  @State private var datasetToDelete: RuntimeAppModel.DatasetEntry?
+  @State private var isDeleting = false
 
   @State private var isLoading = false
   @State private var loadingStage: LoadingStage = .idle
@@ -149,9 +148,7 @@ struct OpenDatasetView: View {
 
                   if datasets[index].source == .local {
                     Button(action: {
-                      datasetToDelete = IndexSet(integer: index)
-                      datasetToDeleteName = datasets[index].identifier
-                      datasetToDeleteDescription = datasets[index].description
+                      datasetToDelete = datasets[index]
                       showDeleteConfirmation = true
                     }) {
                       Image(systemName: "trash")
@@ -181,7 +178,7 @@ struct OpenDatasetView: View {
                 "open_delete_confirmation_title",
                 comment: "Confirm deletion of dataset (name)"
               ),
-              datasetToDeleteDescription
+              datasetToDelete?.description
               ?? NSLocalizedString(
                 "open_delete_default_dataset_name",
                 comment: "Fallback name for dataset in delete dialog"
@@ -204,10 +201,8 @@ struct OpenDatasetView: View {
               ),
               role: .destructive
             ) {
-              if let datasetsToDelete = datasetToDelete,
-                 let datasetToDelete = datasetsToDelete.first {
-                deleteDataset(at: datasetToDelete)
-                Task { await loadDatasetFilesAsync() }
+              if let datasetToDelete {
+                Task { await deleteDataset(datasetToDelete) }
               }
             }
           }
@@ -368,6 +363,10 @@ struct OpenDatasetView: View {
           Task { await loadDatasetFilesAsync() }
         }
       }
+      .disabled(isDeleting)
+      .overlay {
+        if isDeleting { ProgressView().controlSize(.large) }
+      }
       .sheet(isPresented: $showPrefetchDialog) {
         PrefetchDialog(
           isPresented: $showPrefetchDialog,
@@ -438,18 +437,25 @@ struct OpenDatasetView: View {
     return 1
   }
 
-  private func deleteDataset(at index: Int) {
-    let documentsDirectory = FileManager.default.urls(
+  @MainActor
+  private func deleteDataset(_ dataset: RuntimeAppModel.DatasetEntry) async {
+    guard !isLoading, !isDeleting, dataset.source == .local else { return }
+    isDeleting = true
+    defer { isDeleting = false }
+    guard let documentsDirectory = FileManager.default.urls(
       for: .documentDirectory,
       in: .userDomainMask
-    ).first!
-    let inputFile = documentsDirectory
-      .appendingPathComponent((datasets[index].identifier)).relativePath
-    let fileURL = URL(fileURLWithPath: inputFile)
+    ).first else { return }
+    let fileURL = dataset.identifier.hasPrefix("/")
+      ? URL(fileURLWithPath: dataset.identifier)
+      : documentsDirectory.appendingPathComponent(dataset.identifier)
+    let selectedIdentifier = selectedIndex.flatMap { datasets.indices.contains($0) ? datasets[$0].identifier : nil }
 
     do {
-      try FileManager.default.removeItem(at: fileURL)
-      datasets.remove(at: index)
+      guard runtimeAppModel.activeDataset?.uniqueId != dataset.uniqueId else {
+        throw BorgVRVolumeEditingCommandError.busy
+      }
+      try await runtimeAppModel.volumeBrush.deleteClosedDataset(at: fileURL, datasetID: dataset.uniqueId)
     } catch {
       runtimeAppModel.logger.error(
         String(
@@ -461,9 +467,9 @@ struct OpenDatasetView: View {
         )
       )
     }
-
-    if let selected = selectedIndex, datasets.indices.contains(selected) == false {
-      selectedIndex = nil
+    if !FileManager.default.fileExists(atPath: fileURL.path) {
+      datasets.removeAll { $0.source == .local && $0.identifier == dataset.identifier }
+      selectedIndex = selectedIdentifier.flatMap { id in datasets.firstIndex { $0.identifier == id } }
     }
   }
 
@@ -750,7 +756,9 @@ struct OpenDatasetView: View {
     return datasets
   }
 
+  @MainActor
   private func loadDatasetFilesAsync() async {
+    guard !isDeleting, !isLoading else { return }
     await MainActor.run {
       isLoading = true
       loadingStage = .scanningFiles

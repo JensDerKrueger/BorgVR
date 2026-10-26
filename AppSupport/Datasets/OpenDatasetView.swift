@@ -42,7 +42,7 @@ struct OpenDatasetView: View {
         }
       }
       .overlay {
-        if workflow.isOpening || (workflow.isLoading && !workflow.datasets.isEmpty) {
+        if workflow.isDeleting || workflow.isOpening || (workflow.isLoading && !workflow.datasets.isEmpty) {
           loadingPanel
             .padding(22)
             .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
@@ -64,11 +64,13 @@ struct OpenDatasetView: View {
       .confirmationDialog("Delete dataset?", isPresented: $showDeleteConfirmation) {
         Button("Delete", role: .destructive) {
           if let pendingDeleteKey {
-            workflow.deleteDataset(
-              withKey: pendingDeleteKey,
-              storage: storage,
-              logger: appModel.logger
-            )
+            Task {
+              await workflow.deleteDataset(
+                withKey: pendingDeleteKey,
+                storage: storage,
+                appModel: appModel
+              )
+            }
           }
         }
       }
@@ -76,6 +78,7 @@ struct OpenDatasetView: View {
       .onChange(of: appSettings.hideBuiltInDatasets) { _, _ in
         Task { await refresh() }
       }
+      .disabled(workflow.isDeleting)
     }
   }
 

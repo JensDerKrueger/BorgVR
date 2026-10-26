@@ -272,6 +272,7 @@ final class DatasetOpenWorkflow: ObservableObject {
   @Published var selectedDatasetKey: String?
   @Published private(set) var isLoading = false
   @Published private(set) var isOpening = false
+  @Published private(set) var isDeleting = false
   @Published private(set) var statusText = ""
   @Published private(set) var openProgress: Double?
   @Published var openErrorMessage: String?
@@ -290,7 +291,7 @@ final class DatasetOpenWorkflow: ObservableObject {
     storage: DatasetStorageAccess,
     logger: LoggerBase
   ) async {
-    guard !isOpening else { return }
+    guard !isOpening && !isDeleting else { return }
     isLoading = true
     statusText = String(localized: "Reading local datasets ...")
     await Task.yield()
@@ -322,7 +323,7 @@ final class DatasetOpenWorkflow: ObservableObject {
     sharePlay: SharePlayCoordinator,
     storage: DatasetStorageAccess
   ) {
-    guard !isLoading && !isOpening else { return }
+    guard !isLoading && !isOpening && !isDeleting else { return }
     selectedDatasetKey = dataset.selectionKey
     openingTask?.cancel()
     openingTask = Task { [weak self] in
@@ -341,9 +342,12 @@ final class DatasetOpenWorkflow: ObservableObject {
     openingTask?.cancel()
   }
 
-  func deleteDataset(withKey key: String, storage: DatasetStorageAccess, logger: LoggerBase) {
-    guard let dataset = datasets.first(where: { $0.selectionKey == key }),
+  func deleteDataset(withKey key: String, storage: DatasetStorageAccess, appModel: AppModel) async {
+    guard !isLoading, !isOpening, !isDeleting,
+          let dataset = datasets.first(where: { $0.selectionKey == key }),
           dataset.source == .local else { return }
+    isDeleting = true
+    defer { isDeleting = false }
     let accessURL = storage.beginAccess()
     defer { storage.endAccess(accessURL) }
     let fileURL: URL
@@ -352,17 +356,22 @@ final class DatasetOpenWorkflow: ObservableObject {
     } else if let directoryURL = storage.directoryURL {
       fileURL = directoryURL.appendingPathComponent(dataset.identifier)
     } else {
-      logger.error(String(localized: "The documents directory is not available."))
+      appModel.logger.error(String(localized: "The documents directory is not available."))
       return
     }
     do {
-      try FileManager.default.removeItem(at: fileURL)
+      guard appModel.activeDataset?.uniqueId != dataset.uniqueId else {
+        throw BorgVRVolumeEditingCommandError.busy
+      }
+      try await appModel.volumeBrush.deleteClosedDataset(at: fileURL, datasetID: dataset.uniqueId)
+    } catch {
+      appModel.logger.error("Error deleting dataset or its edits: \(error.localizedDescription)")
+    }
+    if !FileManager.default.fileExists(atPath: fileURL.path) {
       datasets.removeAll { $0.selectionKey == key }
       if selectedDatasetKey == key {
         selectedDatasetKey = nil
       }
-    } catch {
-      logger.error("Error deleting file: \(error.localizedDescription)")
     }
   }
 

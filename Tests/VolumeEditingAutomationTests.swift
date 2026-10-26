@@ -173,7 +173,33 @@ func runVolumeEditingAutomationTests() async throws {
   try await testSharePlayCancelsExport(source: source, root: root, leaveBeforeCompletion: false)
   try await testSharePlayCancelsExport(source: source, root: root, leaveBeforeCompletion: true)
   try await testClosingDuringExport(source: source, root: root)
+  try await testDeletingClosedDataset(root: root)
   print("Volume editing automation tests passed")
+}
+
+@MainActor
+private func testDeletingClosedDataset(root: URL) async throws {
+  let url = root.appendingPathComponent("delete-with-pending-edits.data")
+  let source = try makeEditExportSource(EditTestDataset(bytesPerComponent: 2), compressed: true, url: url)
+  let model = VolumeBrushModel()
+  defer { model.close() }
+  _ = model.open(source, datasetURL: url)
+  try await model.waitForStateReady()
+  try await model.editVolume(mode: .erase, samples: [.init(center: SIMD3(1, 1, 1), radius: 0.7)])
+  do {
+    try await model.deleteClosedDataset(at: url, datasetID: source.getMetadata().uniqueID)
+    throw EditingAutomationTestError(message: "Deleted a dataset while it was still open")
+  } catch BorgVRVolumeEditingCommandError.busy {}
+  try require(FileManager.default.fileExists(atPath: url.path + ".edits"),
+    "Deleting an active dataset removed its edits")
+  model.close()
+  try await model.deleteClosedDataset(at: url, datasetID: source.getMetadata().uniqueID)
+  try require(!FileManager.default.fileExists(atPath: url.path) &&
+    !FileManager.default.fileExists(atPath: url.path + ".edits"),
+    "Dataset deletion returned before closed workers and their storage were removed")
+  for _ in 0..<20 { await Task.yield() }
+  try require(!FileManager.default.fileExists(atPath: url.path + ".edits"),
+    "A closed background worker recreated deleted edits")
 }
 
 @MainActor
