@@ -6,6 +6,8 @@ BUILD_DIR="${TMPDIR:-/tmp}/borgvr-cpp-server-security-tests"
 
 mkdir -p "$BUILD_DIR"
 
+"${MAKE:-make}" -C "$ROOT/BORGVRServerCPP" src/GeneratedWebAssets.cpp src/GeneratedWebAssets.h
+
 "${CXX:-c++}" \
   -std=c++17 \
   -Wall \
