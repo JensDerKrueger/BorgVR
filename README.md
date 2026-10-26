@@ -14,7 +14,7 @@ The project is intended for interactive exploration of large volumetric datasets
 native Metal renderers, dataset conversion tools, local and remote dataset servers, SharePlay
 collaboration, and a WebGPU browser frontend served directly by the dataset server.
 
-The current development version is **3.2**. The SharePlay wire protocol is version **3.2**.
+The current development version is **3.3**. The SharePlay wire protocol is version **3.3**.
 
 ## What Is Included
 
@@ -30,7 +30,9 @@ The current development version is **3.2**. The SharePlay wire protocol is versi
 - **BORGVRServerCPP**: cross-platform C++17 implementation of the dataset server protocol,
   including synchronization and the embedded WebGPU frontend.
 - **web**: responsive WebGPU renderer served directly by a BorgVR server.
-- **html**: static support, privacy, and landing pages for app distribution.
+- **html**: bilingual user guide, embedded macOS Help, support, and privacy pages.
+  Start with the [manual](html/index.html) or the guide to
+  [datasets, edit states, and SharePlay](html/datasets.html).
 
 ## Features
 
@@ -159,7 +161,7 @@ macOSServer/            macOS server/converter app target
 TerminalServerApp/      Swift command-line dataset server
 TerminalConverterApp/   Swift command-line converter
 web/                    WebGPU browser frontend
-html/                   App support/privacy website pages
+html/                   User guide, macOS Help, support and privacy pages
 Scripts/                Example macOS scripting files and command definitions
 TransferFunctions/      Bundled transfer-function presets
 ```

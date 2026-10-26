@@ -1,5 +1,3 @@
 Possible Futute Additions:
-- Multi Volume DICOM import with registration
-- Erase Tool
 - virtual sampling
 - DICOM importer UI on vision OS

@@ -14,7 +14,7 @@
   <a class="skip" href="#main" data-de="Zum Inhalt springen">Skip to content</a>
   <header class="topbar">
     <div class="container topbar__inner">
-      <a class="brand" href="./" aria-label="BorgVR manual">
+      <a class="brand" href="./index.html" aria-label="BorgVR manual">
         <img class="brand__logo" src="./borgvr-hero.webp" alt="" />
         <span class="brand__text" data-de="BorgVR-Handbuch">BorgVR Guide</span>
       </a>
@@ -52,9 +52,10 @@
         <a class="docs-nav__link" href="./command-line.html" data-de="Kommandozeile">Command line</a>
         <a class="docs-nav__link" aria-current="page" href="./gsc.html">GSC</a>
         <a class="docs-nav__link" href="./mcp.html">MCP</a>
-      </aside>
+      <a class="docs-nav__link" href="./datasets.html" data-de="Daten und Bearbeitungen">Data and edits</a></aside>
 
       <article class="doc-content doc-content--wide">
+        <div class="callout"><strong data-de="Bearbeitungsstände und Dateien">Edit states and files</strong><span data-de="Die <a href='./datasets.html'>Anleitung für Daten und Bearbeitungsstände</a> erklärt, welche Dateien gespeichert werden, wie persönliche Varianten und SharePlay zusammenpassen und wann sich Export, Zurücksetzen oder Löschen unterscheiden. Skriptbefehle umgehen keine SharePlay- oder Export-Sperren.">The <a href="./datasets.html">Data and Edit States guide</a> explains stored files, personal variants and SharePlay, and the differences between exporting, resetting, and deleting. Script commands do not bypass SharePlay or export restrictions.</span></div>
         <section id="overview">
           <h2 data-de="Über Graphics Script">About Graphics Script</h2>
           <p data-de="Graphics Script (GSC) ist eine zeilenorientierte Sprache für reproduzierbare Grafikabläufe. BorgVR für macOS führt Dateien mit der Endung <code>.gsc</code> aus. Skripte können über das Skript-Menü geöffnet oder direkt auf den BorgVR-Startbildschirm gezogen werden.">Graphics Script (GSC) is a line-oriented language for reproducible graphics workflows. BorgVR for macOS executes files with the <code>.gsc</code> extension. Open a script from the Script menu or drag it onto the BorgVR start screen.</p>
@@ -259,13 +260,14 @@ setmeasurement "B2222222-2222-4222-8222-222222222222" length "Reference length" 
 
           <h3 data-de="Volumen bearbeiten">Volume editing</h3>
           <p data-de="Datensatz- und Isoflächenexport sind während SharePlay gesperrt. Während eines laufenden Exports werden Bearbeitungen und Stand-Wechsel abgelehnt. Beginnt SharePlay während eines Exports, wird dieser abgebrochen.">Dataset and isosurface exports are disabled during SharePlay. Edits and edit-state changes are rejected while an export is running. Starting SharePlay cancels a running export.</p>
-          <p data-de="Diese Befehle bearbeiten den aktuell geöffneten Datensatz lokal. Das Original bleibt unverändert; Änderungen werden im gewählten Bearbeitungsstand gesichert und während SharePlay gemeinsam ausgeführt. Pinselzentren und Radien sind echte Meter ab der unteren Datensatzecke, unabhängig von Rotation, Zoom und Projektionsschalter. Eine Löschung setzt alle Kanäle auf 0; Restore stellt die Originalwerte wieder her.">These commands edit the currently open dataset locally. The original remains unchanged; edits are saved in the selected state and are shared during SharePlay. Brush centers and radii are physical meters from the volume minimum corner, independent of rotation, zoom, and projection settings. Erase sets all channels to 0; restore recovers original values.</p>
+          <p data-de="Diese Befehle bearbeiten den aktuell geöffneten Datensatz lokal. Das Original bleibt unverändert; Änderungen werden im gewählten Bearbeitungsstand gesichert und während SharePlay gemeinsam ausgeführt. Pinselzentren und Radien sind echte Meter ab der unteren Datensatzecke, unabhängig von Rotation, Zoom und Projektionsschalter. Eine Löschung setzt die ausgewählten Kanäle auf 0; Restore stellt nur deren Originalwerte wieder her. Standardmäßig sind alle Kanäle gewählt.">These commands edit the currently open dataset locally. The original remains unchanged; edits are saved in the selected state and are shared during SharePlay. Brush centers and radii are physical meters from the volume minimum corner, independent of rotation, zoom, and projection settings. Erase sets the selected channels to 0; restore recovers only their original values. All channels are selected by default.</p>
           <div class="table-wrap"><table class="command-table"><thead><tr><th data-de="Befehl">Command</th><th data-de="Wirkung">Effect</th></tr></thead><tbody>
             <tr><td><code>logeditstates</code></td><td data-de="Listet gespeicherte Stände mit UUID und den aktiven Stand im Log.">Lists saved state UUIDs and the active state in the log.</td></tr>
             <tr><td><code>selecteditstate &lt;uuid|original&gt;</code></td><td data-de="Wechselt zum gewählten Stand und wartet auf den Abschluss.">Switches to the selected state and waits for completion.</td></tr>
             <tr><td><code>neweditstate &lt;name&gt;</code> / <code>duplicateeditstate &lt;name&gt;</code></td><td data-de="Erzeugt einen leeren Stand bzw. eine Kopie und aktiviert ihn.">Creates and activates an empty state or a copy.</td></tr>
             <tr><td><code>renameeditstate &lt;uuid&gt; &lt;name&gt;</code> / <code>deleteeditstate &lt;uuid&gt;</code></td><td data-de="Benennt einen Stand um bzw. löscht einen inaktiven Stand. Die Stand-Verwaltung ist während SharePlay gesperrt.">Renames a state or deletes an inactive state. State management is disabled during SharePlay.</td></tr>
             <tr><td><code>setvolumebrush &lt;erase|restore&gt; &lt;radius-fraction&gt; &lt;project&gt;</code></td><td data-de="Konfiguriert den interaktiven Pinsel und aktiviert den Editiermodus für Maus/Touch. Radius: 0.002 bis 0.15 der größten Datensatzausdehnung. Verändert noch keine Voxel.">Configures the interactive brush and activates mouse/touch editing. Radius: 0.002 to 0.15 of the largest dataset extent. Does not modify voxels yet.</td></tr>
+            <tr><td><code>setvolumeeditchannels &lt;channels&gt;</code></td><td data-de="Wählt die Kanäle für interaktiven Pinsel und nachfolgende Erase-/Restore-Befehle: &quot;all&quot; oder eine Zeichenkette mit ab 1 nummerierten Kanälen, z. B. &quot;1,3&quot;. Mindestens ein gültiger Kanal ist erforderlich. Öffnen setzt auf alle Kanäle zurück; Alle Bearbeitungen verwerfen bleibt davon unabhängig.">Selects channels for the interactive brush and subsequent erase/restore commands: &quot;all&quot; or a string of one-based channel numbers, e.g. &quot;1,3&quot;. At least one valid channel is required. Opening resets to all channels; Discard All Edits is independent of this selection.</td></tr>
             <tr><td><code>erasevolume &lt;x&gt; &lt;y&gt; &lt;z&gt; &lt;radius&gt;</code></td><td data-de="Löscht eine Kugel an der angegebenen Position; alle vier Werte in Metern.">Erases a sphere at the supplied position; all four values are in meters.</td></tr>
             <tr><td><code>restorevolume &lt;x&gt; &lt;y&gt; &lt;z&gt; &lt;radius&gt;</code></td><td data-de="Stellt die Originalwerte innerhalb einer Kugel wieder her; unberührte Bricks werden übersprungen.">Restores original values inside a sphere; untouched bricks are skipped.</td></tr>
             <tr><td><code>editvolume &lt;erase|restore&gt; &lt;x y z radius...&gt;</code></td><td data-de="Verarbeitet bis zu 65536 Kugeln als einen Batch, ohne zusätzliche Interpolation zwischen ihnen. Alle Samplewerte sind Meter. Die Ausführung wartet auf die Journalaufnahme, nicht auf alle Brick-Hintergrundjobs.">Processes up to 65536 spheres as one batch, without interpolation between them. All sample values are meters. Execution waits for journaling, not for every background brick job.</td></tr>
@@ -383,7 +385,7 @@ exportediteddataset "edited.data" "Edited volume" "Sphere erased and partly rest
     <div class="container footer__inner">
       <span class="footer__brand">© 2026 Jens Krueger</span>
       <div class="footer__right">
-        <a class="footer__link" href="./" data-de="Zur Handbuch-Startseite">Guide home</a>
+        <a class="footer__link" href="./index.html" data-de="Zur Handbuch-Startseite">Guide home</a>
         <a class="footer__link" href="https://github.com/JensDerKrueger/GraphicsScriptEditor">Graphics Script Editor</a>
       </div>
     </div>
