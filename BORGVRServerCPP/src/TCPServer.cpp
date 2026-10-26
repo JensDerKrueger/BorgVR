@@ -13,6 +13,15 @@
 namespace {
 
 constexpr size_t kMaxActiveSessions = 128;
+constexpr int kMaximumAuthenticationAttempts = 3;
+
+#ifndef BORGVR_PARTIAL_INPUT_TIMEOUT_MS
+#define BORGVR_PARTIAL_INPUT_TIMEOUT_MS 30000
+#endif
+
+#ifndef BORGVR_AUTHENTICATION_TIMEOUT_MS
+#define BORGVR_AUTHENTICATION_TIMEOUT_MS 30000
+#endif
 
 }
 
@@ -363,16 +372,17 @@ void TCPServer::ClientSession::sendBinaryResponse(const std::vector<uint8_t>& pa
     return;
   }
 
-  std::vector<uint8_t> msg;
-  msg.reserve(4 + payload.size());
-  append_i32_le(msg, static_cast<int32_t>(payload.size()));
-  msg.insert(msg.end(), payload.begin(), payload.end());
+  std::vector<uint8_t> header;
+  header.reserve(4);
+  append_i32_le(header, static_cast<int32_t>(payload.size()));
 
-  if (!socket_.sendAll(msg)) {
+  if (!socket_.sendAll(header) || !socket_.sendAll(payload)) {
     if (server_.logger_) server_.logger_->error(clientLogMessage("Failed to send binary response."));
     stop();
   }
 }
+
+static std::string protocolLineText(std::string text);
 
 bool TCPServer::ClientSession::sendList(const std::vector<std::string>& params) {
   if (!params.empty()) return false;
@@ -382,7 +392,7 @@ bool TCPServer::ClientSession::sendList(const std::vector<std::string>& params) 
   std::ostringstream oss;
   for (size_t i = 0; i < datasets.size(); ++i) {
     const auto& d = datasets[i];
-    oss << d.id << " " << d.datasetDescription;
+    oss << d.id << " " << protocolLineText(d.datasetDescription);
     if (i + 1 < datasets.size()) oss << "\n";
   }
   oss << "\n\n";
@@ -479,18 +489,30 @@ bool TCPServer::ClientSession::sendAuthResult(const std::string& result) {
 }
 
 bool TCPServer::ClientSession::authenticate(const std::vector<std::string>& params) {
+  const auto rejectAuthentication = [&]() {
+    ++failedAuthenticationAttempts_;
+    const int delayMilliseconds = 200 << std::min(failedAuthenticationAttempts_ - 1, 2);
+    std::this_thread::sleep_for(std::chrono::milliseconds(delayMilliseconds));
+    const bool sent = sendAuthResult("FAILED");
+    if (failedAuthenticationAttempts_ >= kMaximumAuthenticationAttempts) {
+      running_.store(false);
+    }
+    return sent;
+  };
+
   if (server_.authSecret_.empty()) {
     authenticated_ = true;
+    failedAuthenticationAttempts_ = 0;
     return sendAuthResult("OK");
   }
   if (params.size() != 2 || salt_.empty() || serverNonce_.empty()) {
-    return sendAuthResult("FAILED");
+    return rejectAuthentication();
   }
 
   std::vector<uint8_t> clientNonce;
   if (!BorgVRAuthCrypto::base64Decode(params[0], clientNonce) ||
       clientNonce.size() != 32) {
-    return sendAuthResult("FAILED");
+    return rejectAuthentication();
   }
 
   const std::string expected = BorgVRAuthCrypto::authResponse(
@@ -498,10 +520,11 @@ bool TCPServer::ClientSession::authenticate(const std::vector<std::string>& para
   );
   if (!BorgVRAuthCrypto::constantTimeEquals(params[1], expected)) {
     if (server_.logger_) server_.logger_->warning(clientLogMessage("Client authentication failed."));
-    return sendAuthResult("FAILED");
+    return rejectAuthentication();
   }
 
   authenticated_ = true;
+  failedAuthenticationAttempts_ = 0;
   salt_.clear();
   serverNonce_.clear();
   return sendAuthResult("OK");
@@ -678,7 +701,16 @@ bool TCPServer::ClientSession::getBricks(const std::vector<std::string>& params)
   for (int idx : indices) {
     const auto& bm = md.getBrickMetadata(idx);
     if (bm.size < 0) return false;
-    totalSize += static_cast<size_t>(bm.size);
+    const size_t brickSize = static_cast<size_t>(bm.size);
+    if (brickSize > static_cast<size_t>(INT32_MAX) - totalSize) {
+      if (server_.logger_) {
+        server_.logger_->warning(clientLogMessage(
+          "GETBRICKS response exceeds the protocol size limit."
+        ));
+      }
+      return false;
+    }
+    totalSize += brickSize;
   }
 
   std::vector<uint8_t> payload;
@@ -747,6 +779,9 @@ void TCPServer::ClientSession::run() {
     std::string buffer;
     buffer.reserve(4096);
     constexpr size_t kMaxLineBytes = 8 * 1024;
+    const auto sessionStartedAt = std::chrono::steady_clock::now();
+    auto partialCommandStartedAt = sessionStartedAt;
+    bool hasPartialCommand = false;
 
     uint8_t temp[1024];
 
@@ -765,7 +800,27 @@ void TCPServer::ClientSession::run() {
         break;
       }
 
+      const bool bufferWasEmpty = buffer.empty();
       buffer.append(reinterpret_cast<const char*>(temp), static_cast<size_t>(rc));
+      const auto now = std::chrono::steady_clock::now();
+      if (bufferWasEmpty && !buffer.empty()) {
+        partialCommandStartedAt = now;
+        hasPartialCommand = true;
+      }
+      if (!server_.authSecret_.empty() && !authenticated_ &&
+          now - sessionStartedAt > std::chrono::milliseconds(BORGVR_AUTHENTICATION_TIMEOUT_MS)) {
+        if (server_.logger_) {
+          server_.logger_->warning(clientLogMessage("Authentication deadline exceeded; disconnecting."));
+        }
+        break;
+      }
+      if (hasPartialCommand &&
+          now - partialCommandStartedAt > std::chrono::milliseconds(BORGVR_PARTIAL_INPUT_TIMEOUT_MS)) {
+        if (server_.logger_) {
+          server_.logger_->warning(clientLogMessage("Command receive deadline exceeded; disconnecting."));
+        }
+        break;
+      }
       if (buffer.size() > kMaxLineBytes * 4) {
         if (server_.logger_) {
           server_.logger_->warning(clientLogMessage("Input buffer too large; disconnecting."));
@@ -779,6 +834,12 @@ void TCPServer::ClientSession::run() {
 
         std::string line = buffer.substr(0, pos);
         buffer.erase(0, pos + 1);
+        if (buffer.empty()) {
+          hasPartialCommand = false;
+        } else {
+          partialCommandStartedAt = now;
+          hasPartialCommand = true;
+        }
 
         line = trim(line);
         if (line.empty()) {
@@ -800,6 +861,9 @@ void TCPServer::ClientSession::run() {
             ));
           }
           running_.store(false);
+          break;
+        }
+        if (!running_.load()) {
           break;
         }
       }

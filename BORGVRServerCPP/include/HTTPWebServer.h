@@ -40,7 +40,7 @@ private:
   void acceptLoop();
   void handleClient(TcpSocket socket);
 
-  bool parseRequest(TcpSocket& socket, Request& request) const;
+  bool parseRequest(TcpSocket& socket, std::string& receiveBuffer, Request& request) const;
   bool isAuthorized(const Request& request) const;
   bool shouldCloseConnection(const Request& request, int handledRequestCount) const;
   bool routeRequest(TcpSocket& socket, const Request& request, bool closeAfterSend);

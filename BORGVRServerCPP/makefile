@@ -102,6 +102,7 @@ run: all
 
 test:
 	sh ../Scripts/test-auth-crypto.sh
+	sh ../Scripts/test-cpp-server-security.sh
 
 clean:
 	rm -rf $(BUILD_DIR)

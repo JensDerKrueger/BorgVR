@@ -20,7 +20,12 @@ constexpr size_t kHTTPChunkBytes = 16 * 1024;
 constexpr size_t kAppleLZ4BlockBytes = 64 * 1024;
 constexpr size_t kMaxHTTPBrickBatchCount = 128;
 constexpr int kMaxActiveHTTPHandlers = 128;
+constexpr int kMaximumAuthenticationAttempts = 3;
 constexpr const char* kApplicationVersionPlaceholder = "__BORGVR_APPLICATION_VERSION__";
+
+#ifndef BORGVR_PARTIAL_INPUT_TIMEOUT_MS
+#define BORGVR_PARTIAL_INPUT_TIMEOUT_MS 30000
+#endif
 
 struct EmbeddedWebAssetCache {
   std::vector<std::vector<uint8_t>> bodies;
@@ -99,6 +104,37 @@ std::string lowerCopy(std::string s) {
   std::transform(s.begin(), s.end(), s.begin(),
                  [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
   return s;
+}
+
+bool isHTTPToken(const std::string& text) {
+  if (text.empty()) return false;
+  for (const unsigned char character : text) {
+    const bool alphaNumeric = std::isalnum(character) != 0;
+    const bool punctuation = character == '!' || character == '#' || character == '$' ||
+      character == '%' || character == '&' || character == '\'' || character == '*' ||
+      character == '+' || character == '-' || character == '.' || character == '^' ||
+      character == '_' || character == '`' || character == '|' || character == '~';
+    if (!alphaNumeric && !punctuation) return false;
+  }
+  return true;
+}
+
+bool containsUnsafeHTTPText(const std::string& text) {
+  return std::any_of(text.begin(), text.end(), [](unsigned char character) {
+    return character == 0 || character == '\r' || character == '\n' ||
+      (character < 0x20 && character != '\t') || character == 0x7f;
+  });
+}
+
+bool hasStrictCRLFLineEndings(const std::string& text) {
+  for (size_t index = 0; index < text.size(); ++index) {
+    if (text[index] == '\r') {
+      if (index + 1 >= text.size() || text[index + 1] != '\n') return false;
+    } else if (text[index] == '\n') {
+      if (index == 0 || text[index - 1] != '\r') return false;
+    }
+  }
+  return true;
 }
 
 std::string htmlEscape(const std::string& text) {
@@ -463,13 +499,16 @@ void HTTPWebServer::acceptLoop() {
 
 void HTTPWebServer::handleClient(TcpSocket socket) {
   int handledRequestCount = 0;
+  int failedAuthenticationAttempts = 0;
+  std::string receiveBuffer;
+  receiveBuffer.reserve(4096);
   while (running_.load()) {
     Request request;
-    if (!parseRequest(socket, request)) {
+    if (!parseRequest(socket, receiveBuffer, request)) {
       return;
     }
     ++handledRequestCount;
-    const bool closeAfterSend = shouldCloseConnection(request, handledRequestCount);
+    bool closeAfterSend = shouldCloseConnection(request, handledRequestCount);
 
     if (request.method == "OPTIONS") {
       sendTextResponse(socket, 204, "No Content", "text/plain; charset=utf-8", "",
@@ -487,10 +526,16 @@ void HTTPWebServer::handleClient(TcpSocket socket) {
     }
 
     if (!isAuthorized(request)) {
+      ++failedAuthenticationAttempts;
+      const int delayMilliseconds = 200 << std::min(failedAuthenticationAttempts - 1, 2);
+      std::this_thread::sleep_for(std::chrono::milliseconds(delayMilliseconds));
+      closeAfterSend = closeAfterSend ||
+        failedAuthenticationAttempts >= kMaximumAuthenticationAttempts;
       sendUnauthorized(socket, closeAfterSend);
       if (closeAfterSend) return;
       continue;
     }
+    failedAuthenticationAttempts = 0;
 
     if (!routeRequest(socket, request, closeAfterSend)) {
       sendError(socket, 404, "Not Found", "No resource exists at this path.", closeAfterSend);
@@ -501,58 +546,86 @@ void HTTPWebServer::handleClient(TcpSocket socket) {
   }
 }
 
-bool HTTPWebServer::parseRequest(TcpSocket& socket, Request& request) const {
-  std::string buffer;
-  buffer.reserve(4096);
+bool HTTPWebServer::parseRequest(TcpSocket& socket,
+                                 std::string& receiveBuffer,
+                                 Request& request) const {
   uint8_t temp[1024];
 
   constexpr size_t kMaxHeaderBytes = 32 * 1024;
-  while (buffer.find("\r\n\r\n") == std::string::npos &&
-         buffer.find("\n\n") == std::string::npos &&
-         buffer.size() < kMaxHeaderBytes) {
+  const auto startedAt = std::chrono::steady_clock::now();
+  while (receiveBuffer.find("\r\n\r\n") == std::string::npos) {
+    if (receiveBuffer.size() >= kMaxHeaderBytes ||
+        std::chrono::steady_clock::now() - startedAt >
+          std::chrono::milliseconds(BORGVR_PARTIAL_INPUT_TIMEOUT_MS)) {
+      return false;
+    }
     const int rc = socket.recvSome(temp, sizeof(temp));
     if (rc <= 0) return false;
-    buffer.append(reinterpret_cast<const char*>(temp), static_cast<size_t>(rc));
+    receiveBuffer.append(reinterpret_cast<const char*>(temp), static_cast<size_t>(rc));
   }
 
-  const auto headerEndCRLF = buffer.find("\r\n\r\n");
-  const auto headerEndLF = buffer.find("\n\n");
-  size_t headerEnd = std::string::npos;
-  if (headerEndCRLF != std::string::npos) {
-    headerEnd = headerEndCRLF;
-  } else if (headerEndLF != std::string::npos) {
-    headerEnd = headerEndLF;
-  }
-  if (headerEnd == std::string::npos) {
+  const size_t headerEnd = receiveBuffer.find("\r\n\r\n");
+  constexpr size_t delimiterLength = 4;
+  if (headerEnd == std::string::npos || headerEnd > kMaxHeaderBytes) {
     return false;
   }
 
-  std::string headerText = buffer.substr(0, headerEnd);
-  std::replace(headerText.begin(), headerText.end(), '\r', '\n');
+  const std::string headerText = receiveBuffer.substr(0, headerEnd);
+  receiveBuffer.erase(0, headerEnd + delimiterLength);
+  if (!hasStrictCRLFLineEndings(headerText)) return false;
 
   std::istringstream lines(headerText);
   std::string line;
   if (!std::getline(lines, line)) return false;
+  if (!line.empty() && line.back() == '\r') line.pop_back();
 
   {
     std::istringstream firstLine(trimCopy(line));
     firstLine >> request.method >> request.target >> request.version;
-    if (request.method.empty() || request.target.empty()) return false;
-    if (request.version.empty()) request.version = "HTTP/1.0";
+    std::string unexpected;
+    if (request.method.empty() || request.target.empty() || request.version.empty() ||
+        (firstLine >> unexpected) ||
+        (request.version != "HTTP/1.0" && request.version != "HTTP/1.1") ||
+        !isHTTPToken(request.method) || containsUnsafeHTTPText(request.target)) {
+      return false;
+    }
   }
 
   request.path = urlDecode(stripQueryAndFragment(request.target));
-  if (request.path.empty() || request.path[0] != '/') {
+  if (request.path.empty() || containsUnsafeHTTPText(request.path)) return false;
+  if (request.path[0] != '/') {
     request.path = "/" + request.path;
   }
 
+  bool sawContentLength = false;
+  bool sawHost = false;
   while (std::getline(lines, line)) {
+    if (!line.empty() && line.back() == '\r') line.pop_back();
+    if (!line.empty() && (line.front() == ' ' || line.front() == '\t')) return false;
     line = trimCopy(line);
     if (line.empty()) continue;
     const auto colon = line.find(':');
-    if (colon == std::string::npos) continue;
-    request.headers.emplace_back(trimCopy(line.substr(0, colon)), trimCopy(line.substr(colon + 1)));
+    if (colon == std::string::npos) return false;
+    const std::string name = trimCopy(line.substr(0, colon));
+    const std::string value = trimCopy(line.substr(colon + 1));
+    if (!isHTTPToken(name) || containsUnsafeHTTPText(value)) return false;
+
+    const std::string lowerName = lowerCopy(name);
+    if (lowerName == "transfer-encoding") return false;
+    if (lowerName == "host") {
+      if (sawHost || value.empty()) return false;
+      sawHost = true;
+    }
+    if (lowerName == "content-length") {
+      if (sawContentLength) return false;
+      sawContentLength = true;
+      size_t contentLength = 0;
+      if (!parseUnsigned(value, contentLength) || contentLength != 0) return false;
+    }
+    request.headers.emplace_back(name, value);
   }
+
+  if (request.version == "HTTP/1.1" && !sawHost) return false;
 
   return true;
 }

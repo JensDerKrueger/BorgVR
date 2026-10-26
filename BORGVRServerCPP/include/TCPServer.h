@@ -136,6 +136,7 @@ private:
     bool authenticated_{false};
     std::vector<uint8_t> salt_;
     std::vector<uint8_t> serverNonce_;
+    int failedAuthenticationAttempts_ = 0;
   };
 
   void acceptLoop();

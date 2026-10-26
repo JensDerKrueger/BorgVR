@@ -3,6 +3,7 @@
 #include "BORGVRMetaData.h"
 #include "BinaryIO.h"
 #include "BorgVRAuthCrypto.h"
+#include "ProtocolValidation.h"
 #include "Socket.h"
 #include "TCPServer.h"
 
@@ -50,12 +51,6 @@ std::string trim(const std::string& s) {
   size_t end = s.size();
   while (end > start && std::isspace(static_cast<unsigned char>(s[end - 1]))) --end;
   return s.substr(start, end - start);
-}
-
-std::string normalizedMeshId(std::string id) {
-  std::transform(id.begin(), id.end(), id.begin(),
-                 [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-  return id;
 }
 
 std::string endpointName(const ServerSyncEndpoint& endpoint) {
@@ -186,7 +181,9 @@ public:
       RemoteDataset dataset;
       dataset.id = space == std::string::npos ? line : line.substr(0, space);
       dataset.description = space == std::string::npos ? "" : trim(line.substr(space + 1));
-      if (!dataset.id.empty()) out.push_back(std::move(dataset));
+      if (BorgVRProtocolValidation::isCanonicalUUID(dataset.id)) {
+        out.push_back(std::move(dataset));
+      }
     }
     return out;
   }
@@ -208,7 +205,10 @@ public:
       std::string description;
       std::getline(iss, description);
       tf.description = trim(description);
-      if (!tf.id.empty()) out.push_back(std::move(tf));
+      if (BorgVRProtocolValidation::isHexIdentifier(tf.id, 32) &&
+          tf.byteCount > 0 && tf.byteCount <= kMaxTransferFunctionBytes) {
+        out.push_back(std::move(tf));
+      }
     }
     return out;
   }
@@ -235,7 +235,7 @@ public:
       std::string name;
       std::getline(iss, name);
       mesh.name = trim(name);
-      if (!mesh.id.empty() && mesh.byteCount > 0 &&
+      if (BorgVRProtocolValidation::isCanonicalUUID(mesh.id) && mesh.byteCount > 0 &&
           mesh.byteCount <= BorgVRFormat::kMaximumMeshFileBytes) {
         out.push_back(std::move(mesh));
       }
@@ -468,6 +468,9 @@ bool downloadDatasetFromSource(const ServerSyncEndpoint& endpoint,
 
   BORGVRMetaData metadata;
   metadata.parseFromBytes(metadataBytes.data(), metadataBytes.size());
+  if (!BorgVRProtocolValidation::identifiersEqual(metadata.uniqueID(), dataset.id)) {
+    throw std::runtime_error("Dataset UUID does not match the requested catalog entry");
+  }
   const auto dataSize = datasetPayloadSize(metadata);
   const auto brickCount = metadata.brickMetadata().size();
   if (brickCount == 0) {
@@ -551,8 +554,8 @@ bool syncTransferFunction(const ServerSyncEndpoint& endpoint,
   RemoteClient client(endpoint, logger);
   client.connectAndAuthenticate();
   const auto payload = client.getTransferFunction(tf.id);
-  if (payload.empty()) {
-    throw std::runtime_error("Transfer function payload is empty");
+  if (payload.size() != tf.byteCount) {
+    throw std::runtime_error("Transfer function payload size does not match its catalog entry");
   }
 
   const std::string name = safeFilename(tf.description, tf.id);
@@ -594,10 +597,9 @@ bool syncMesh(const ServerSyncEndpoint& endpoint,
     }
     return stream.str();
   }();
-  std::string requestedId = mesh.id;
-  std::transform(requestedId.begin(), requestedId.end(), requestedId.begin(),
-                 [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-  if (payloadId != requestedId) throw std::runtime_error("Mesh UUID mismatch");
+  if (!BorgVRProtocolValidation::identifiersEqual(payloadId, mesh.id)) {
+    throw std::runtime_error("Mesh UUID mismatch");
+  }
 
   const std::string name = safeFilename(mesh.name, mesh.id);
   std::filesystem::path path = std::filesystem::path(dataDirectory) / (name + ".mesh");
@@ -722,14 +724,15 @@ void ServerSyncManager::run() {
       std::unordered_set<std::string> normalizedLocalMeshIds;
       normalizedLocalMeshIds.reserve(localMeshIds.size());
       for (const auto& id : localMeshIds) {
-        normalizedLocalMeshIds.insert(normalizedMeshId(id));
+        normalizedLocalMeshIds.insert(BorgVRProtocolValidation::lowercaseIdentifier(id));
       }
       size_t transferredMeshBytes = 0;
       constexpr size_t kMaximumMeshBytesPerPass = 1024u * 1024u * 1024u;
       for (const auto& snapshot : snapshots) {
         for (const auto& mesh : snapshot.meshes) {
           if (!running_.load()) break;
-          const std::string normalizedId = normalizedMeshId(mesh.id);
+          const std::string normalizedId =
+            BorgVRProtocolValidation::lowercaseIdentifier(mesh.id);
           if (normalizedLocalMeshIds.find(normalizedId) != normalizedLocalMeshIds.end()) continue;
           if (mesh.byteCount > BorgVRFormat::kMaximumMeshFileBytes ||
               transferredMeshBytes + mesh.byteCount > kMaximumMeshBytesPerPass) continue;

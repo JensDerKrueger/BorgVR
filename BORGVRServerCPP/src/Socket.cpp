@@ -16,7 +16,6 @@
   #include <netinet/in.h>
   #include <signal.h>
   #include <sys/socket.h>
-  #include <sys/select.h>
   #include <sys/time.h>
   #include <unistd.h>
 #endif
@@ -25,20 +24,15 @@ namespace {
 
 constexpr size_t kSendChunkBytes = 16 * 1024;
 
+#ifndef BORGVR_SOCKET_RECEIVE_TIMEOUT_MS
+#define BORGVR_SOCKET_RECEIVE_TIMEOUT_MS 15000
+#endif
+
+#ifndef BORGVR_SOCKET_SEND_TIMEOUT_MS
+#define BORGVR_SOCKET_SEND_TIMEOUT_MS 60000
+#endif
+
 #if !defined(_WIN32)
-bool waitUntilWritable(SocketHandle socket) {
-  fd_set writeSet;
-  FD_ZERO(&writeSet);
-  FD_SET(socket, &writeSet);
-
-  int rc = 0;
-  do {
-    rc = ::select(socket + 1, nullptr, &writeSet, nullptr, nullptr);
-  } while (rc < 0 && errno == EINTR);
-
-  return rc > 0;
-}
-
 void makeBlocking(SocketHandle socket) {
   const int flags = ::fcntl(socket, F_GETFL, 0);
   if (flags >= 0) {
@@ -160,7 +154,8 @@ bool TcpSocket::connectTo(const std::string& host, uint16_t port) {
 
     if (::connect(candidate, addr->ai_addr, static_cast<int>(addr->ai_addrlen)) == 0) {
       sock_ = candidate;
-      setReceiveTimeoutMilliseconds(15000);
+      setReceiveTimeoutMilliseconds(BORGVR_SOCKET_RECEIVE_TIMEOUT_MS);
+      setSendTimeoutMilliseconds(BORGVR_SOCKET_SEND_TIMEOUT_MS);
       ::freeaddrinfo(addresses);
       return true;
     }
@@ -209,6 +204,19 @@ void TcpSocket::setReceiveTimeoutMilliseconds(int milliseconds) {
 #endif
 }
 
+void TcpSocket::setSendTimeoutMilliseconds(int milliseconds) {
+  if (!valid() || milliseconds <= 0) return;
+#if defined(_WIN32)
+  const DWORD timeout = static_cast<DWORD>(milliseconds);
+  ::setsockopt(sock_, SOL_SOCKET, SO_SNDTIMEO, reinterpret_cast<const char*>(&timeout), sizeof(timeout));
+#else
+  timeval timeout{};
+  timeout.tv_sec = milliseconds / 1000;
+  timeout.tv_usec = (milliseconds % 1000) * 1000;
+  ::setsockopt(sock_, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
+#endif
+}
+
 bool TcpSocket::sendAll(const uint8_t* data, size_t size) {
   if (!valid()) return false;
   size_t sent = 0;
@@ -229,9 +237,6 @@ bool TcpSocket::sendAll(const uint8_t* data, size_t size) {
     ssize_t rc = ::send(sock_, data + sent, chunkSize, sendFlags);
     if (rc < 0) {
       if (errno == EINTR) continue;
-      if (errno == EAGAIN || errno == EWOULDBLOCK) {
-        if (waitUntilWritable(sock_)) continue;
-      }
       return false;
     }
 #endif
@@ -373,7 +378,8 @@ TcpSocket TcpListener::accept() {
   makeBlocking(s);
 #endif
   TcpSocket socket{s};
-  socket.setReceiveTimeoutMilliseconds(15000);
+  socket.setReceiveTimeoutMilliseconds(BORGVR_SOCKET_RECEIVE_TIMEOUT_MS);
+  socket.setSendTimeoutMilliseconds(BORGVR_SOCKET_SEND_TIMEOUT_MS);
   return socket;
 }
 

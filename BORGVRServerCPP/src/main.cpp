@@ -98,6 +98,7 @@ static void printUsage(const char* filename) {
     << "  --port, -p <port>               Native dataset-server port. Defaults to 12345.\n"
     << "  --max-bricks, -m <count>        Maximum bricks per GETBRICKS request. Defaults to 64.\n"
     << "  --password <secret>             Optional password for native and WebGPU clients.\n"
+    << "                                  BORGVR_SERVER_PASSWORD is used when this option is absent.\n"
     << "  --scan-interval <seconds>       Refresh the file catalog periodically.\n"
     << "                                  Defaults to 10; use 0 to disable rescanning.\n"
     << "  --web-port <port>               Enable the WebGPU HTTP server on this port.\n"
@@ -797,6 +798,9 @@ int main(int argc, char** argv) {
   auto logger = std::make_shared<Logger>(LogLevel::Info);
 
   ServerConfiguration configuration;
+  if (const char* password = std::getenv("BORGVR_SERVER_PASSWORD")) {
+    configuration.password = password;
+  }
   const auto parseResult = parseArguments(argc, argv, configuration, logger);
   if (parseResult != ArgumentParseResult::Run) {
     if (parseResult == ArgumentParseResult::ExitFailure) printUsage(argv[0]);
