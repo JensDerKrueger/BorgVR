@@ -51,6 +51,29 @@ struct VolumeBrushControls: View {
         Label("Restore", systemImage: "arrow.uturn.backward").tag(BorgVRVolumeBrushMode.restore)
       }
       .pickerStyle(.segmented)
+      if model.componentCount > 1 {
+        DisclosureGroup("Edit Channels") {
+          Toggle("All Channels", isOn: Binding(get: { model.channels == .all }, set: { all in
+            try? model.setVolumeBrushChannels(all ? .all : .selected([0]))
+          }))
+          ScrollView {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 140))], alignment: .leading, spacing: 8) {
+              ForEach(0..<model.componentCount, id: \.self) { channel in
+                Toggle(String(format: String(localized: "Channel %lld"), Int64(channel + 1)), isOn: Binding(
+                  get: { model.channels.contains(channel) },
+                  set: { enabled in
+                    var selected = (0..<model.componentCount).filter { model.channels.contains($0) }
+                    selected.removeAll { $0 == channel }
+                    if enabled { selected.append(channel) }
+                    try? model.setVolumeBrushChannels(.selected(selected))
+                  }))
+                  .disabled(model.channels == .selected([channel]))
+              }
+            }
+          }
+          .frame(maxHeight: 144)
+        }
+      }
       HStack {
         Text("Radius")
         Slider(value: $model.radius, in: BorgVRVolumeBrushLimits.radiusFraction)

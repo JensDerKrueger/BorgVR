@@ -7,6 +7,7 @@ private struct VolumeEditProposal: Codable, Sendable {
   let id: UUID
   let mode: BorgVRVolumeBrushMode
   let samples: [BorgVRVolumeBrushSample]
+  let channels: BorgVRVolumeEditChannels
 }
 
 private struct VolumeEditSnapshotHeader: Codable, Sendable {
@@ -97,10 +98,10 @@ final class BorgVRVolumeEditCollaboration {
     model.isSharePlayHost = isHost
     model.setSharePlayActive(true)
     if changedDataset || (changedHost && hostID != nil) { model.beginSharedStateSynchronization() }
-    model.context.setEditHandler { [weak self] mode, samples, token, completion in
+    model.context.setEditHandler { [weak self] mode, samples, channels, token, completion in
       Task { @MainActor in
         guard let self else { completion(CancellationError()); return }
-        await self.submit(mode: mode, samples: samples, cancellationToken: token, completion: completion)
+        await self.submit(mode: mode, samples: samples, channels: channels, cancellationToken: token, completion: completion)
       }
     }
     model.sharedDiscard = { [weak self] in
@@ -354,6 +355,7 @@ final class BorgVRVolumeEditCollaboration {
         case .proposal(let proposal):
           guard isHost, proposal.stateID == epoch, !proposal.samples.isEmpty, proposal.samples.count <= 128 else { return }
           for sample in proposal.samples { try sample.validate() }
+          _ = try proposal.channels.validated(componentCount: model.componentCount)
           guard proposals.count < 4096 else { throw BorgVRVolumeEditError.invalidBufferSize }
           proposals.append((participant, proposal)); process()
         case .commit(let stateID, let batch):
@@ -361,6 +363,7 @@ final class BorgVRVolumeEditCollaboration {
           if let epoch, epoch != stateID { self.epoch = nil; commits.removeAll(); requested = false; datasetReady(); return }
           guard !batch.samples.isEmpty, batch.samples.count <= 128 else { throw BorgVRVolumeEditError.invalidBrush }
           for sample in batch.samples { try sample.validate() }
+          _ = try batch.channels.validated(componentCount: model.componentCount)
           guard commits.count < 4096 || commits[batch.revision] != nil else {
             commits.removeAll(); requested = true
             Task { [weak self] in await self?.transmit(.request, to: self?.hostID) }
@@ -379,7 +382,7 @@ final class BorgVRVolumeEditCollaboration {
           model.cancelSharedPredictions()
           for id in pendingOrder {
             guard let item = pending[id] else { continue }
-            model.predictSharedBrush(id: id, mode: item.proposal.mode, samples: item.proposal.samples)
+            model.predictSharedBrush(id: id, mode: item.proposal.mode, samples: item.proposal.samples, channels: item.proposal.channels)
           }
         case .status(let stateID, let hostRevision):
           guard !isHost, participant == hostID, !installing, decodingTransferID == nil, pendingSnapshot == nil,
@@ -419,7 +422,7 @@ final class BorgVRVolumeEditCollaboration {
         info("Shared edit state ready, revision \(revision).")
         for id in pendingOrder {
           guard let item = pending[id] else { continue }
-          model.predictSharedBrush(id: id, mode: item.proposal.mode, samples: item.proposal.samples)
+          model.predictSharedBrush(id: id, mode: item.proposal.mode, samples: item.proposal.samples, channels: item.proposal.channels)
           await transmit(.proposal(item.proposal), to: hostID)
         }
         if pendingSnapshot != nil { datasetReady() }
@@ -437,18 +440,20 @@ final class BorgVRVolumeEditCollaboration {
   }
 
   private func submit(mode: BorgVRVolumeBrushMode, samples: [BorgVRVolumeBrushSample],
+                      channels: BorgVRVolumeEditChannels = .all,
                       cancellationToken: BorgVRVolumeConversionCancellationToken? = nil,
                       completion: @escaping @Sendable (Error?) -> Void) async {
     do {
       try cancellationToken?.checkCancellation()
+      let channels = try channels.validated(componentCount: model.componentCount)
       if isHost { try await ensureHostState() }
       guard let epoch, let localID, !installing else { throw BorgVRVolumeEditingCommandError.busy }
       guard pending.count < 4096 else { throw BorgVRVolumeEditingCommandError.busy }
       for start in stride(from: 0, to: samples.count, by: 128) {
         try cancellationToken?.checkCancellation()
         let proposal = VolumeEditProposal(stateID: epoch, id: UUID(), mode: mode,
-          samples: Array(samples[start..<min(samples.count, start + 128)]))
-        model.predictSharedBrush(id: proposal.id, mode: mode, samples: proposal.samples)
+          samples: Array(samples[start..<min(samples.count, start + 128)]), channels: channels)
+        model.predictSharedBrush(id: proposal.id, mode: mode, samples: proposal.samples, channels: channels)
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
           pending[proposal.id] = (proposal, { error in
             if let error { continuation.resume(throwing: error) } else { continuation.resume() }
@@ -487,7 +492,8 @@ final class BorgVRVolumeEditCollaboration {
                 continue
               }
               guard snapshot.revision < UInt64.max - 1 else { throw BorgVRVolumeEditError.invalidRevision }
-              let batch = BorgVRVolumeBrushBatch(id: proposal.id, revision: snapshot.revision + 1, mode: proposal.mode, samples: proposal.samples)
+              let batch = BorgVRVolumeBrushBatch(id: proposal.id, revision: snapshot.revision + 1,
+                mode: proposal.mode, samples: proposal.samples, channels: proposal.channels)
               try await model.applyConfirmed(batch)
               guard self.generation == generation else { break }
               revision = batch.revision

@@ -7,6 +7,7 @@ final class VolumeAtlasBrushRenderer {
   struct PreparedBatch {
     let revision: UInt64
     let mode: BorgVRVolumeBrushMode
+    fileprivate let byteSelection: UInt32?
     fileprivate let geometry: [BorgVRVolumeBrushGeometry]
     fileprivate let spheres: MTLBuffer
     fileprivate let affectedBrickIDs: Set<Int>?
@@ -17,10 +18,12 @@ final class VolumeAtlasBrushRenderer {
     var size: SIMD4<Int32>
     var spacing: SIMD4<Float>
     var layout: SIMD4<UInt32>
+    var selection: SIMD4<UInt32>
   }
 
   private let device: MTLDevice
   private let pipeline: MTLComputePipelineState
+  private let partialPipeline: MTLComputePipelineState?
   private let metadata: BORGVRMetaData
   private var originals: [Int: MTLBuffer] = [:]
   private var originalOrder: [Int] = []
@@ -46,6 +49,13 @@ final class VolumeAtlasBrushRenderer {
     }
     self.dummy = dummy
     pipeline = try device.makeComputePipelineState(function: function)
+    if metadata.componentCount > 1, device.readWriteTextureSupport == .tier2 {
+      options.preprocessorMacros = ["BORGVR_PARTIAL_CHANNELS": NSNumber(value: 1)]
+      let partialLibrary = try device.makeLibrary(source: Self.shader, options: options)
+      partialPipeline = try partialLibrary.makeFunction(name: "volumeBrush").map {
+        try device.makeComputePipelineState(function: $0)
+      }
+    } else { partialPipeline = nil }
   }
 
   func retainOriginals(for residents: Set<Int>) {
@@ -57,6 +67,14 @@ final class VolumeAtlasBrushRenderer {
 
   func prepare(_ batch: BorgVRVolumeBrushBatch) -> PreparedBatch? {
     let m = metadata
+    guard let channels = try? batch.channels.validated(componentCount: m.componentCount) else { return nil }
+    var byteSelection: UInt32?
+    if case .selected(let selected) = channels {
+      guard partialPipeline != nil, m.componentCount * m.bytesPerComponent <= 8 else { return nil }
+      byteSelection = selected.reduce(UInt32(0)) { bits, channel in
+        bits | (((UInt32(1) << m.bytesPerComponent) - 1) << (channel * m.bytesPerComponent))
+      }
+    }
     let size = SIMD3(m.width, m.height, m.depth)
     let spacing = SIMD3(Double(m.voxelSpacingX), Double(m.voxelSpacingY), Double(m.voxelSpacingZ))
     let geometry = batch.samples.compactMap {
@@ -67,7 +85,7 @@ final class VolumeAtlasBrushRenderer {
             length: geometry.count * MemoryLayout<SIMD4<Float>>.stride, options: .storageModeShared) else {
       return nil
     }
-    return PreparedBatch(revision: batch.revision, mode: batch.mode, geometry: geometry, spheres: spheres,
+    return PreparedBatch(revision: batch.revision, mode: batch.mode, byteSelection: byteSelection, geometry: geometry, spheres: spheres,
                          affectedBrickIDs: batch.affectedBrickIDs.map { Set($0) })
   }
 
@@ -115,7 +133,10 @@ final class VolumeAtlasBrushRenderer {
       }
     } else { original = dummy }
 
-    encoder.setComputePipelineState(pipeline)
+    if batch.byteSelection != nil {
+      guard let partialPipeline else { return false }
+      encoder.setComputePipelineState(partialPipeline)
+    } else { encoder.setComputePipelineState(pipeline) }
     encoder.setBuffer(original, offset: 0, index: 1)
     encoder.setBuffer(batch.spheres, offset: 0, index: 2)
     var parameters = Parameters(
@@ -124,7 +145,8 @@ final class VolumeAtlasBrushRenderer {
       size: SIMD4(SIMD3<Int32>(truncatingIfNeeded: size), batch.mode == .restore ? 1 : 0),
       spacing: SIMD4(geometry[0].spacing, 0),
       layout: SIMD4(UInt32(m.brickSize), UInt32(m.componentCount * m.bytesPerComponent), 0,
-                    UInt32(min(4, m.componentCount * m.bytesPerComponent))))
+                    UInt32(min(4, m.componentCount * m.bytesPerComponent))),
+      selection: SIMD4(batch.byteSelection ?? 0, 0, 0, 0))
     func dispatch(_ texture: MTLTexture) {
       encoder.setTexture(texture, index: 0)
       encoder.setBytes(&parameters, length: MemoryLayout<Parameters>.stride, index: 0)
@@ -151,11 +173,16 @@ final class VolumeAtlasBrushRenderer {
       int4 size;
       float4 spacing;
       uint4 layout;
+      uint4 selection;
     };
     kernel void volumeBrush(constant Parameters &p [[buffer(0)]],
                             device const uchar *original [[buffer(1)]],
                             device const float4 *spheres [[buffer(2)]],
+    #if BORGVR_PARTIAL_CHANNELS
+                            texture3d<float, access::read_write> atlas [[texture(0)]],
+    #else
                             texture3d<float, access::write> atlas [[texture(0)]],
+    #endif
                             uint3 id [[thread_position_in_grid]]) {
       int factor = 1 << p.origin.w;
       int3 levelSize = (p.size.xyz - 1) / factor + 1;
@@ -175,11 +202,23 @@ final class VolumeAtlasBrushRenderer {
         if (distance <= spheres[i].w * spheres[i].w) { covered = true; break; }
       }
       if (!covered) return;
+    #if BORGVR_PARTIAL_CHANNELS
+      float4 value = atlas.read(id + p.page.xyz);
+      for (uint c = 0; c < p.layout.w; ++c) {
+        if (p.selection.x & (1u << (p.layout.z + c))) value[c] = 0;
+      }
+    #else
       float4 value = float4(0);
+    #endif
       if (p.size.w) {
         uint3 local = uint3(voxel - p.origin.xyz);
         uint offset = ((local.z * p.layout.x + local.y) * p.layout.x + local.x) * p.layout.y;
-        for (uint c = 0; c < p.layout.w; ++c) value[c] = float(original[offset + p.layout.z + c]) / 255.0f;
+        for (uint c = 0; c < p.layout.w; ++c) {
+    #if BORGVR_PARTIAL_CHANNELS
+          if (!(p.selection.x & (1u << (p.layout.z + c)))) continue;
+    #endif
+          value[c] = float(original[offset + p.layout.z + c]) / 255.0f;
+        }
       }
       atlas.write(value, id + p.page.xyz);
     }

@@ -103,7 +103,7 @@ final class BorgVRMetalVolumeEditProcessor: @unchecked Sendable {
     for (uint b = 0; b < width; ++b) value |= uint(data[offset + b]) << (b * 8);
     return value;
   }
-  bool erased(uint3 p, uint3 size, device const uint2* nodes) {
+  uint erasedNode(uint3 p, uint3 size, device const uint2* nodes) {
     uint node = 0; uint3 low = 0, high = size;
     while (nodes[node].x == 2) {
       uint3 halves = (high - low) / 2;
@@ -113,7 +113,7 @@ final class BorgVRMetalVolumeEditProcessor: @unchecked Sendable {
       high = select(low + halves, high, side > 0 || counts == 1);
       low += halves * side;
     }
-    return nodes[node].x == 1;
+    return node;
   }
   kernel void rebuildEditBrick(device const uchar* source [[buffer(0)]],
       device uchar* output [[buffer(1)]], device const uint2* nodes [[buffer(2)]],
@@ -124,11 +124,13 @@ final class BorgVRMetalVolumeEditProcessor: @unchecked Sendable {
     if (v >= voxels) return;
     int3 raw = p.origin.xyz + int3(v % b, (v / b) % b, v / (b * b));
     uint3 pos = uint3(clamp(raw, int3(0), int3(p.size.xyz) - 1));
-    bool isErased = p.origin.w == 0 && erased(pos, p.size.xyz, nodes);
+    uint node = p.origin.w == 0 ? erasedNode(pos, p.size.xyz, nodes) : 0;
     for (uint c = 0; c < components; ++c) {
       uint value = 0;
       if (p.origin.w == 0) {
         uint3 local = uint3(int3(pos) - p.origin.xyz);
+        bool isErased = nodes[node].x == 1 ||
+          (nodes[node].x == 3 && (nodes[nodes[node].y + c / 32].x & (1u << (c % 32))));
         if (!isErased) value = readValue(source, (((local.z * b + local.y) * b + local.x) * components + c) * width, width);
       } else {
         uint low = 0, high = 0, count = 0;

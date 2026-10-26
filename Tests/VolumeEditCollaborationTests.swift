@@ -53,11 +53,12 @@ private func eventually(_ message: String, _ predicate: () async throws -> Bool)
 }
 
 private func equalMasks(_ a: BorgVRVolumeEditMask, _ b: BorgVRVolumeEditMask) -> Bool {
-  guard a.size == b.size, a.spacing == b.spacing else { return false }
+  guard a.size == b.size, a.spacing == b.spacing, a.componentCount == b.componentCount else { return false }
   for z in 0..<a.size.z { for y in 0..<a.size.y { for x in 0..<a.size.x {
     let low = SIMD3(x, y, z)
-    let region = BorgVRVoxelRegion(lower: low, upper: low &+ SIMD3(repeating: 1))
-    if a.coverage(in: region) != b.coverage(in: region) { return false }
+    for channel in 0..<a.componentCount {
+      if a.isErased(at: low, component: channel) != b.isErased(at: low, component: channel) { return false }
+    }
   } } }
   return true
 }
@@ -156,6 +157,8 @@ func runVolumeEditCollaborationTests() async throws {
       "Rejected command changed the shared state or its catalog")
   }
 
+  try host.setVolumeBrushChannels(.selected([0]))
+  try client.setVolumeBrushChannels(.selected([1]))
   let first = Task { try await host.editVolume(mode: .erase, samples: [.init(center: SIMD3(1, 1, 1), radius: 0.8)]) }
   let second = Task { try await client.editVolume(mode: .restore, samples: [.init(center: SIMD3(0.8, 1, 1), radius: 0.4)]) }
   try await first.value; try await second.value
@@ -163,6 +166,10 @@ func runVolumeEditCollaborationTests() async throws {
     let a = try await host.stateSnapshot(), b = try await client.stateSnapshot()
     return a.revision == b.revision && equalMasks(a.mask, b.mask)
   }
+  try verify(host.channels == .selected([0]) && client.channels == .selected([1]), "Peer changed local channel selection")
+  let sharedMask = try await host.stateSnapshot().mask
+  try verify(sharedMask.isErased(at: SIMD3(4, 1, 0), component: 0) &&
+    !sharedMask.isErased(at: SIMD3(4, 1, 0), component: 1), "Shared operation lost its channel selection")
 
   client.context.showPreview(at: SIMD3(0.3, 0.4, 0.5), source: "test", mode: .restore)
   try await eventually("Remote restore cursor missing") { host.context.previewMarkers().count == 1 }
@@ -222,7 +229,7 @@ func runVolumeEditCollaborationTests() async throws {
   let clientCatalog = try VolumeBrushModel.catalog(datasetID: datasetID, datasetURL: clientURL)
   for (catalog, id, personal) in [(hostCatalog, hostPersonalID, hostPersonal), (clientCatalog, clientPersonalID, clientPersonal)] {
     let journal = try BorgVRVolumeEditJournal(directory: catalog.directory(for: id), datasetID: datasetID,
-      size: personal.mask.size, spacing: personal.mask.spacing)
+      size: personal.mask.size, spacing: personal.mask.spacing, componentCount: personal.mask.componentCount)
     try verify(equalMasks(journal.snapshot().mask, personal.mask), "Personal sidecar was modified by the session")
     try journal.closeStorage()
   }

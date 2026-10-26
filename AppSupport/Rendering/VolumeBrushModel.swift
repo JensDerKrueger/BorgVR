@@ -15,6 +15,7 @@ final class VolumeBrushContext: @unchecked Sendable {
     var mode: BorgVRVolumeBrushMode = .erase
     var radius: Float = 0.03 // fraction of the largest physical dataset extent
     var projectsOntoVolume = true
+    var channels: BorgVRVolumeEditChannels = .all
   }
   private let lock = NSLock()
   private var state = State()
@@ -23,7 +24,7 @@ final class VolumeBrushContext: @unchecked Sendable {
   private struct Preview { let id: UUID; let position: SIMD3<Float>; let mode: BorgVRVolumeBrushMode }
   private var previews: [String: Preview] = [:]
   private var remotePreviews: [UUID: (cursors: [BorgVRVolumeBrushCursor], received: TimeInterval)] = [:]
-  typealias EditHandler = @Sendable (BorgVRVolumeBrushMode, [BorgVRVolumeBrushSample], BorgVRVolumeConversionCancellationToken, @escaping @Sendable (Error?) -> Void) -> Void
+  typealias EditHandler = @Sendable (BorgVRVolumeBrushMode, [BorgVRVolumeBrushSample], BorgVRVolumeEditChannels, BorgVRVolumeConversionCancellationToken, @escaping @Sendable (Error?) -> Void) -> Void
   private var editHandler: EditHandler?
   private var editingEnabled = true
   var radiusChanged: (@Sendable (Double) -> Void)?
@@ -53,19 +54,21 @@ final class VolumeBrushContext: @unchecked Sendable {
     lock.withLock { dataset }?.editingStatus()
   }
   func applySamples(_ samples: [BorgVRVolumeBrushSample], mode: BorgVRVolumeBrushMode,
+                    channels: BorgVRVolumeEditChannels? = nil,
                     cancellationToken: BorgVRVolumeConversionCancellationToken,
                     completion: @escaping @Sendable (Error?) -> Void) {
-    let (enabled, handler, current) = lock.withLock { (editingEnabled, editHandler, dataset) }
+    let (enabled, handler, current, channels) = lock.withLock { (editingEnabled, editHandler, dataset, channels ?? state.channels) }
     guard enabled else { completion(BorgVRVolumeEditingCommandError.busy); return }
-    if let handler { handler(mode, samples, cancellationToken, completion); return }
+    if let handler { handler(mode, samples, channels, cancellationToken, completion); return }
     guard let current else {
       completion(BorgVRVolumeEditingCommandError.unavailable); return
     }
-    current.brush(samples, mode: mode, cancellationToken: cancellationToken, completion: completion)
+    current.brush(samples, mode: mode, channels: channels, cancellationToken: cancellationToken, completion: completion)
   }
   func update(_ state: State) {
     lock.withLock {
-      if state.mode != self.state.mode || state.projectsOntoVolume != self.state.projectsOntoVolume {
+      if state.mode != self.state.mode || state.projectsOntoVolume != self.state.projectsOntoVolume ||
+          state.channels != self.state.channels {
         previous.removeAll()
       }
       self.state = state
@@ -147,7 +150,7 @@ final class VolumeBrushContext: @unchecked Sendable {
       return (dataset, state, samples)
     }
     if let (_, settings, samples) = input {
-      applySamples(samples, mode: mode ?? settings.mode, cancellationToken: .init()) { [weak self] error in
+      applySamples(samples, mode: mode ?? settings.mode, channels: settings.channels, cancellationToken: .init()) { [weak self] error in
         guard let error else { return }
         if error is CancellationError { return }
         if case BorgVRVolumeEditError.editingBlocked = error { return }
@@ -182,6 +185,8 @@ final class VolumeBrushModel: ObservableObject, BorgVRVolumeEditingCommands {
   @Published var mode: BorgVRVolumeBrushMode = .erase { didSet { synchronize() } }
   @Published var radius: Double = 0.03 { didSet { synchronize() } }
   @Published var projectsOntoVolume = true { didSet { synchronize() } }
+  @Published private(set) var channels: BorgVRVolumeEditChannels = .all
+  @Published private(set) var componentCount = 1
   @Published private(set) var error: String?
   @Published private(set) var physicalMaximum: Float = 1
   @Published private(set) var exportPhase = ExportPhase.options
@@ -241,7 +246,12 @@ final class VolumeBrushModel: ObservableObject, BorgVRVolumeEditingCommands {
   }
 
   private func synchronize() {
-    context.update(.init(mode: mode, radius: Float(radius), projectsOntoVolume: projectsOntoVolume))
+    context.update(.init(mode: mode, radius: Float(radius), projectsOntoVolume: projectsOntoVolume, channels: channels))
+  }
+
+  func setVolumeBrushChannels(_ channels: BorgVRVolumeEditChannels) throws {
+    self.channels = try channels.validated(componentCount: componentCount)
+    synchronize()
   }
 
   private func updateEditingAvailability() {
@@ -294,6 +304,9 @@ final class VolumeBrushModel: ObservableObject, BorgVRVolumeEditingCommands {
     isWaitingForSharedState = isInSharePlay
     do {
       let metadata = source.getMetadata()
+      componentCount = metadata.componentCount
+      channels = .all
+      synchronize()
       let catalog = try Self.catalog(datasetID: metadata.uniqueID, datasetURL: datasetURL)
       states = try catalog.states()
       let choice = preparedChoice?.datasetID == metadata.uniqueID ? preparedChoice?.stateID : lastSelectedID(catalog: catalog)
@@ -552,7 +565,8 @@ final class VolumeBrushModel: ObservableObject, BorgVRVolumeEditingCommands {
     let previous = try await stateSnapshot()
     guard !isInSharePlay, !isExporting, !isRestoringPersonalState, dataSource === source else { throw BorgVRVolumeEditingCommandError.busy }
     let state = makeState(datasetID: source.catalog.datasetID, kind: empty ? .local : .copy, name: name)
-    let mask = empty ? try BorgVRVolumeEditMask(size: previous.mask.size, spacing: previous.mask.spacing) : previous.mask
+    let mask = empty ? try BorgVRVolumeEditMask(size: previous.mask.size, spacing: previous.mask.spacing,
+      componentCount: previous.mask.componentCount) : previous.mask
     try await activate(state, snapshot: .init(datasetID: state.datasetID, stateID: state.id, revision: 0, mask: mask))
   }
 
@@ -647,8 +661,9 @@ final class VolumeBrushModel: ObservableObject, BorgVRVolumeEditingCommands {
     dataSource?.setSharedReady(false)
   }
 
-  func predictSharedBrush(id: UUID, mode: BorgVRVolumeBrushMode, samples: [BorgVRVolumeBrushSample]) {
-    dataSource?.predict(id: id, mode: mode, samples: samples)
+  func predictSharedBrush(id: UUID, mode: BorgVRVolumeBrushMode, samples: [BorgVRVolumeBrushSample],
+                          channels: BorgVRVolumeEditChannels = .all) {
+    dataSource?.predict(id: id, mode: mode, samples: samples, channels: channels)
   }
 
   func cancelSharedPredictions() { dataSource?.cancelPredictions() }
@@ -656,7 +671,8 @@ final class VolumeBrushModel: ObservableObject, BorgVRVolumeEditingCommands {
   func applyConfirmed(_ batch: BorgVRVolumeBrushBatch) async throws {
     guard let source = dataSource else { throw BorgVRVolumeEditingCommandError.unavailable }
     try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-      source.brush(batch.samples, mode: batch.mode, operationID: batch.id, expectedRevision: batch.revision) { error in
+      source.brush(batch.samples, mode: batch.mode, channels: batch.channels,
+        operationID: batch.id, expectedRevision: batch.revision) { error in
         if let error { continuation.resume(throwing: error) } else { continuation.resume() }
       }
     }
@@ -745,7 +761,8 @@ final class VolumeBrushModel: ObservableObject, BorgVRVolumeEditingCommands {
       hasEdits: status?.hasEdits ?? false, isUpdatingBricks: status?.isUpdatingBricks ?? false,
       pendingBrickCount: status?.pendingBrickCount ?? 0, mode: mode, radiusFraction: radius,
       radiusMeters: radius * Double(physicalMaximum), projectsOntoVolume: projectsOntoVolume, export: exportJob,
-      activeStateID: activeState?.id, savedStates: states, shared: isInSharePlay, waitingForSharedState: isWaitingForSharedState)
+      activeStateID: activeState?.id, savedStates: states, shared: isInSharePlay, waitingForSharedState: isWaitingForSharedState,
+      componentCount: componentCount, channels: (0..<componentCount).filter { channels.contains($0) }.map { $0 + 1 })
   }
 
   func configureVolumeBrush(mode: BorgVRVolumeBrushMode?, radiusFraction: Double?, projectsOntoVolume: Bool?) throws {

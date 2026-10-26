@@ -719,6 +719,49 @@ class TransferFunction1D: Equatable {
   }
 }
 
+/// Dataset companions are separate from saving a single TF preset in the editor.
+enum DatasetTransferFunctionStorage {
+  static func fileURLs(baseURL: URL, componentCount: Int) -> [URL] {
+    guard componentCount > 0 else { return [] }
+    if componentCount == 1 { return [baseURL] }
+    return (0..<componentCount).map { channel in
+      baseURL.deletingPathExtension()
+        .appendingPathExtension("channel-\(channel + 1)")
+        .appendingPathExtension("tf1d")
+    }
+  }
+
+  static func save(_ transferFunctions: [TransferFunction1D], to urls: [URL], description: String = "") throws {
+    guard !transferFunctions.isEmpty, transferFunctions.count == urls.count else {
+      throw TransferFunction1DError.mismatchedDataCount(expected: transferFunctions.count, found: urls.count)
+    }
+    for (channel, pair) in zip(transferFunctions, urls).enumerated() {
+      let (transferFunction, url) = pair
+      try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+      let channelDescription = description.isEmpty || transferFunctions.count == 1 ? description :
+        "\(description) - \(String(format: String(localized: "Channel %lld"), Int64(channel + 1)))"
+      try transferFunction.save(to: url, description: channelDescription)
+    }
+  }
+
+  @discardableResult
+  static func load(_ transferFunctions: [TransferFunction1D], from urls: [URL]) throws -> Bool {
+    guard !transferFunctions.isEmpty, transferFunctions.count == urls.count else {
+      throw TransferFunction1DError.mismatchedDataCount(expected: transferFunctions.count, found: urls.count)
+    }
+    // Validate every available channel before mutating any TF. Missing files do
+    // not shift channels or copy one channel's TF into another.
+    let files = try urls.enumerated().compactMap { channel, url -> (Int, Data)? in
+      guard FileManager.default.fileExists(atPath: url.path) else { return nil }
+      let data = try Data(contentsOf: url)
+      _ = try TransferFunction1D(from: data)
+      return (channel, data)
+    }
+    for (channel, data) in files { try transferFunctions[channel].load(from: data) }
+    return !files.isEmpty
+  }
+}
+
 /// Renderer-owned transfer functions updated from immutable session snapshots.
 /// Sample arrays and Metal textures are touched only when a channel revision changes.
 final class RenderTransferFunctionSet {

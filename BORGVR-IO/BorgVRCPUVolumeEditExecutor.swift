@@ -53,7 +53,7 @@ final class BorgVRCPUVolumeEditExecutor: BorgVRVolumeEditExecutor {
     guard metadata.brickMetadata.indices.contains(index) else {
       throw BorgVRVolumeEditError.invalidBrick
     }
-    guard mask.size == SIMD3(metadata.width, metadata.height, metadata.depth),
+    guard mask.componentCount == metadata.componentCount, mask.size == SIMD3(metadata.width, metadata.height, metadata.depth),
           mask.spacing == SIMD3(Double(metadata.voxelSpacingX), Double(metadata.voxelSpacingY),
                                 Double(metadata.voxelSpacingZ)) else {
       throw BorgVRVolumeEditError.incompatibleDataset
@@ -175,7 +175,8 @@ final class BorgVRCPUVolumeEditExecutor: BorgVRVolumeEditExecutor {
       let low = coordinate &* factor
       let high = SIMD3(min(low.x + factor, mask.size.x), min(low.y + factor, mask.size.y),
                        min(low.z + factor, mask.size.z))
-      let coverage = mask.coverage(in: BorgVRVoxelRegion(lower: low, upper: high))
+      let coverage = mask.coverage(in: BorgVRVoxelRegion(lower: low, upper: high),
+        channels: metadata.componentCount == 1 ? .all : .selected([component]))
       let result: UInt64
       switch coverage {
         case .erased: result = 0

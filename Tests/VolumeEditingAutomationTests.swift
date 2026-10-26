@@ -63,6 +63,17 @@ func runVolumeEditingAutomationTests() async throws {
   let edited = model.open(source, datasetURL: sourceURL)
   try await model.waitForStateReady()
   try require(model.volumeEditingState().available, "Editor unavailable after open")
+  try model.setVolumeBrushChannels(BorgVRVolumeEditingArguments.channels("2"))
+  try require(model.channels == .selected([1]) && model.context.settings().channels == .selected([1]) &&
+    model.volumeEditingState().channels == [2] && model.componentCount == 2,
+    "GUI/automation channel selection or one-based MCP state differs")
+  do {
+    try model.setVolumeBrushChannels(.selected([2]))
+    throw EditingAutomationTestError(message: "Out-of-range channel accepted")
+  } catch BorgVRVolumeEditError.invalidBrush {}
+  try require(model.channels == .selected([1]), "Rejected channel changed the selection")
+  try model.setVolumeBrushChannels(BorgVRVolumeEditingArguments.channels([NSNumber(value: 2), NSNumber(value: 1)]))
+  try require(model.channels == .all, "Selecting all channels did not normalize to the fast path")
   for timeout in [0.0, -1, .infinity, 100_000] {
     do { try await model.waitForVolumeEdits(timeout: timeout); throw EditingAutomationTestError(message: "Invalid timeout accepted") }
     catch BorgVRVolumeEditingCommandError.invalidArgument {}

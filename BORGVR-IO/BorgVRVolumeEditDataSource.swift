@@ -23,7 +23,7 @@ final class BorgVRVolumeEditDataSource: BORGVRDatasetProtocol, BorgVRVolumeGPUBr
   private var initialLowReady = false
   private var preparationReady = true
   private var editsBlocked = false
-  private var predictions: [(id: UUID, mode: BorgVRVolumeBrushMode, samples: [BorgVRVolumeBrushSample])] = []
+  private var predictions: [(id: UUID, mode: BorgVRVolumeBrushMode, samples: [BorgVRVolumeBrushSample], channels: BorgVRVolumeEditChannels)] = []
   var didRecord: (@Sendable () -> Void)?
   private let backgroundWorkChanged: @Sendable (Bool) -> Void
 
@@ -176,15 +176,18 @@ final class BorgVRVolumeEditDataSource: BORGVRDatasetProtocol, BorgVRVolumeGPUBr
       let revision = current.recordedBrushRevision
       guard revision < UInt64.max - UInt64(predictions.count) else { return current.gpuBrushHistory() }
       return current.gpuBrushHistory() + predictions.enumerated().map { index, prediction in
-        .init(id: prediction.id, revision: revision + UInt64(index) + 1, mode: prediction.mode, samples: prediction.samples)
+        .init(id: prediction.id, revision: revision + UInt64(index) + 1, mode: prediction.mode,
+          samples: prediction.samples, channels: prediction.channels)
       }
     }
   }
 
-  func predict(id: UUID, mode: BorgVRVolumeBrushMode, samples: [BorgVRVolumeBrushSample]) {
+  func predict(id: UUID, mode: BorgVRVolumeBrushMode, samples: [BorgVRVolumeBrushSample],
+               channels: BorgVRVolumeEditChannels = .all) {
     lock.withLock {
       guard !editsBlocked, !transitioning, predictions.count < 4096, !predictions.contains(where: { $0.id == id }) else { return }
-      predictions.append((id, mode, samples))
+      guard let channels = try? channels.validated(componentCount: getMetadata().componentCount) else { return }
+      predictions.append((id, mode, samples, channels))
     }
   }
 
@@ -227,6 +230,7 @@ final class BorgVRVolumeEditDataSource: BORGVRDatasetProtocol, BorgVRVolumeGPUBr
   }
 
   func brush(_ samples: [BorgVRVolumeBrushSample], mode: BorgVRVolumeBrushMode,
+             channels: BorgVRVolumeEditChannels = .all,
              cancellationToken: BorgVRVolumeConversionCancellationToken? = nil,
              operationID: UUID = UUID(), expectedRevision: UInt64? = nil,
              completion: (@Sendable (Error?) -> Void)? = nil) {
@@ -241,7 +245,7 @@ final class BorgVRVolumeEditDataSource: BORGVRDatasetProtocol, BorgVRVolumeGPUBr
         do {
           try cancellationToken?.checkCancellation()
           if !manifestRegistered { try catalog.save(state); manifestRegistered = true }
-          current.recordBrush(samples, mode: mode, cancellationToken: cancellationToken,
+          current.recordBrush(samples, mode: mode, channels: channels, cancellationToken: cancellationToken,
             operationID: operationID, expectedRevision: expectedRevision, onRecorded: { [weak self] in self?.confirmed($0) }) { [weak self] error in
             if error == nil { self?.didRecord?() }
             completion?(error)

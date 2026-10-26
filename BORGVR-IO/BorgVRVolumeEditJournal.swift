@@ -37,15 +37,17 @@ final class BorgVRVolumeEditJournal {
   private var checkpointDirty = false
   private var journalDirty = false
   private static let maximumFrameBytes = 16 * 1024 * 1024
-  private static let checkpointVersion = 2
+  private static let checkpointVersion = 3
 
   init(directory: URL, datasetID: String, size: SIMD3<Int>, spacing: SIMD3<Double>,
+       componentCount: Int = 1,
        initialSnapshot: BorgVRVolumeEditSnapshot? = nil, persistOriginalSnapshot: Bool = false) throws {
-    let mask = try BorgVRVolumeEditMask(size: size, spacing: spacing)
+    let mask = try BorgVRVolumeEditMask(size: size, spacing: spacing, componentCount: componentCount)
     checkpointURL = directory.appendingPathComponent("mask.checkpoint")
     journalURL = directory.appendingPathComponent("brush.journal")
     if let snapshot = initialSnapshot {
-      guard snapshot.datasetID == datasetID, snapshot.mask.size == size, snapshot.mask.spacing == spacing else {
+      guard snapshot.datasetID == datasetID, snapshot.mask.size == size, snapshot.mask.spacing == spacing,
+            snapshot.mask.componentCount == componentCount else {
         throw BorgVRVolumeEditError.incompatibleDataset
       }
       try Self.validateNewDirectory(directory)
@@ -58,7 +60,7 @@ final class BorgVRVolumeEditJournal {
     } else if FileManager.default.fileExists(atPath: checkpointURL.path) {
       state = try PropertyListDecoder().decode(Checkpoint.self, from: Data(contentsOf: checkpointURL))
       guard state.version == Self.checkpointVersion, state.datasetID == datasetID,
-            state.mask.size == size, state.mask.spacing == spacing else {
+            state.mask.size == size, state.mask.spacing == spacing, state.mask.componentCount == componentCount else {
         throw BorgVRVolumeEditError.incompatibleDataset
       }
     } else {
@@ -269,6 +271,7 @@ final class BorgVRVolumeEditJournal {
           !batch.samples.isEmpty, batch.samples.count <= BorgVRVolumeBrushLimits.maximumSampleCount,
           !state.operationIDs.contains(batch.id) else { throw BorgVRVolumeEditError.invalidRevision }
     for sample in batch.samples { try sample.validate() }
+    _ = try batch.channels.validated(componentCount: state.mask.componentCount)
     guard batch.affectedBrickIDs?.allSatisfy({ $0 >= 0 }) != false else {
       throw BorgVRVolumeEditError.invalidBrick
     }
@@ -282,7 +285,7 @@ final class BorgVRVolumeEditJournal {
       state.brickRevisions = nil
     }
     for sample in batch.samples {
-      try state.mask.apply(sample, mode: batch.mode)
+      try state.mask.apply(sample, mode: batch.mode, channels: batch.channels)
       var low = SIMD3<Int>.zero
       var high = SIMD3<Int>.zero
       for axis in 0..<3 {

@@ -31,7 +31,7 @@ func profileExistingEditState(directory: URL, dataset: URL) throws {
     let journal = try measure("Decode/validate edit journal") {
       try BorgVRVolumeEditJournal(directory: temporary, datasetID: m.uniqueID,
         size: SIMD3(m.width, m.height, m.depth),
-        spacing: SIMD3(Double(m.voxelSpacingX), Double(m.voxelSpacingY), Double(m.voxelSpacingZ)))
+        spacing: SIMD3(Double(m.voxelSpacingX), Double(m.voxelSpacingY), Double(m.voxelSpacingZ)), componentCount: m.componentCount)
     }
     let snapshot = journal.snapshot()
     print("Revision \(snapshot.revision), tracked bricks \(snapshot.brickRevisions?.count ?? -1), pending regions \(snapshot.pending.count)")
@@ -62,7 +62,7 @@ func profileExistingEditState(directory: URL, dataset: URL) throws {
     for id in residents { try edited.getBrick(index: id, outputBuffer: buffer) }
   }
   var mask = try BorgVRVolumeEditMask(size: SIMD3(m.width, m.height, m.depth),
-    spacing: SIMD3(Double(m.voxelSpacingX), Double(m.voxelSpacingY), Double(m.voxelSpacingZ)))
+    spacing: SIMD3(Double(m.voxelSpacingX), Double(m.voxelSpacingY), Double(m.voxelSpacingZ)), componentCount: m.componentCount)
   var seed: UInt64 = 42
   let extent = SIMD3<Double>(mask.size) * mask.spacing
   func coordinate() -> Double {
@@ -212,6 +212,10 @@ final class EditTestDataset: BORGVRDatasetProtocol {
 
 func runVolumeEditTests() throws {
   try testCompactEditMask()
+  try testChannelEditMask()
+  try testChannelEditMaterialization()
+  try testWideChannelEditMaterialization()
+  try testChannelEditPersistence()
   try testSourceCacheResidentEviction()
   let size = SIMD3<Int>(7, 5, 3)
   let spacing = SIMD3<Double>(0.25, 0.5, 1)
@@ -220,7 +224,7 @@ func runVolumeEditTests() throws {
   for width in [1, 2, 4] {
     let source = EditTestDataset(bytesPerComponent: width)
     let oracle = EditTestDataset(bytesPerComponent: width)
-    var mask = try BorgVRVolumeEditMask(size: size, spacing: spacing)
+    var mask = try BorgVRVolumeEditMask(size: size, spacing: spacing, componentCount: 2)
     let emptySnapshot = mask
     try mask.apply(sphere, mode: .erase)
     try mask.apply(restore, mode: .restore)
@@ -313,7 +317,7 @@ func runVolumeEditTests() throws {
   let source = EditTestDataset(bytesPerComponent: 2)
   let unavailable = UnavailableEditDataset(source)
   let executor = try BorgVRCPUVolumeEditExecutor(source: unavailable, border: .clamp)
-  var offlineMask = try BorgVRVolumeEditMask(size: size, spacing: spacing)
+  var offlineMask = try BorgVRVolumeEditMask(size: size, spacing: spacing, componentCount: 2)
   try offlineMask.apply(BorgVRVolumeBrushSample(center: .zero, radius: 100), mode: .erase)
   for index in source.metadata.brickMetadata.indices {
     let result = try executor.materialize(index: index, mask: offlineMask, revision: 1)
@@ -325,6 +329,163 @@ func runVolumeEditTests() throws {
     throw EditTestError(message: "Restore fabricated missing source data")
   } catch BORGVRDataError.brickNotYetAvailable {}
   print("Volume edit CPU tests passed")
+}
+
+private func testChannelEditMask() throws {
+  let full = BorgVRVolumeBrushSample(center: SIMD3(repeating: 0.5), radius: 100)
+  let encoder = PropertyListEncoder(); encoder.outputFormat = .binary
+  for count in [1, 2, 32, 33, 65, BORGVRMetaData.maximumComponentCount] {
+    var mask = try BorgVRVolumeEditMask(size: SIMD3(7, 5, 3), spacing: SIMD3(repeating: 1), componentCount: count)
+    let selected = BorgVRVolumeEditChannels.selected([count - 1])
+    try mask.apply(full, mode: .erase, channels: selected)
+    try check(mask.isErased(at: .zero, component: count - 1), "Selected channel was not erased")
+    try check(count == 1 || !mask.isErased(at: .zero, component: 0), "Erase changed an unselected channel")
+    try check(mask.coverage(in: mask.bounds, channels: selected) == .erased, "Channel coverage lost a full erase")
+    if count > 1 {
+      try check(mask.coverage(in: mask.bounds) == .mixed, "Partial channels incorrectly became a fully erased brick")
+      try check(mask.coverage(in: mask.bounds, channels: .selected([0])) == .original,
+        "Restore cannot skip an untouched channel")
+    }
+    let data = try encoder.encode(mask)
+    let decoded = try PropertyListDecoder().decode(BorgVRVolumeEditMask.self, from: data)
+    try check(decoded.componentCount == count && decoded.computeNodes() == mask.computeNodes(),
+      "Channel mask did not round-trip")
+    try mask.apply(full, mode: .erase)
+    try check(mask.computeNodes() == [SIMD2(1, 0)], "Full erase lost its single-node fast path")
+    try mask.apply(full, mode: .restore, channels: selected)
+    try check(!mask.isErased(at: .zero, component: count - 1), "Selected restore did not restore its channel")
+    try check(count == 1 || mask.isErased(at: .zero, component: 0), "Restore resurrected another channel")
+    try mask.apply(full, mode: .restore)
+    try check(mask.isOriginal && mask.computeNodes() == [SIMD2(0, 0)], "Full restore did not collapse the tree")
+  }
+  var single = try BorgVRVolumeEditMask(size: SIMD3(7, 5, 3), spacing: SIMD3(repeating: 1))
+  var explicit = single
+  let brush = BorgVRVolumeBrushSample(center: SIMD3(2, 2, 1), radius: 1.3)
+  try single.apply(brush, mode: .erase)
+  try explicit.apply(brush, mode: .erase, channels: .selected([0]))
+  try check(single.computeNodes() == explicit.computeNodes(), "Single-channel edits changed the compact tree layout")
+  let container = try PropertyListSerialization.propertyList(from: encoder.encode(explicit), format: nil) as! [String: Any]
+  let nodes = container["nodes"] as! Data
+  try check(nodes.allSatisfy { $0 <= 2 }, "Single-channel mask contains per-channel payloads")
+  for selection in [BorgVRVolumeEditChannels.selected([]), .selected([-1]), .selected([1]), .selected([0, 0])] {
+    do {
+      try single.apply(full, mode: .erase, channels: selection)
+      throw EditTestError(message: "Invalid channel selection accepted")
+    } catch BorgVRVolumeEditError.invalidBrush {}
+  }
+}
+
+private func testChannelEditMaterialization() throws {
+  for width in [1, 2, 4] {
+    let source = EditTestDataset(bytesPerComponent: width), oracle = EditTestDataset(bytesPerComponent: width)
+    let m = source.metadata
+    var mask = try BorgVRVolumeEditMask(size: SIMD3(m.width, m.height, m.depth),
+      spacing: SIMD3(0.25, 0.5, 1), componentCount: 2)
+    let operations: [(BorgVRVolumeBrushMode, BorgVRVolumeEditChannels, BorgVRVolumeBrushSample)] = [
+      (.erase, .selected([0]), .init(center: SIMD3(0.9, 1.2, 1.4), radius: 0.85)),
+      (.erase, .selected([1]), .init(center: SIMD3(1.1, 1.1, 1.3), radius: 0.65)),
+      (.restore, .selected([0]), .init(center: SIMD3(1.1, 1.2, 1.4), radius: 0.5)),
+      (.erase, .all, .init(center: .zero, radius: 100)),
+      (.restore, .selected([1]), .init(center: .zero, radius: 100)),
+      (.restore, .all, .init(center: .zero, radius: 100))
+    ]
+    for (step, operation) in operations.enumerated() {
+      let (mode, channels, sample) = operation
+      try mask.apply(sample, mode: mode, channels: channels)
+      for z in 0..<m.depth { for y in 0..<m.height { for x in 0..<m.width {
+        let point = (SIMD3<Double>(SIMD3(x, y, z)) + SIMD3<Double>(repeating: 0.5)) * mask.spacing
+        let delta = point - sample.center
+        guard delta.x * delta.x + delta.y * delta.y + delta.z * delta.z <= sample.radius * sample.radius else { continue }
+        for c in 0..<2 where channels.contains(c) {
+          let offset = ((z * m.height + y) * m.width + x) * 2 + c
+          oracle.levels[0][offset] = mode == .erase ? 0 : source.levels[0][offset]
+        }
+      } } }
+      oracle.rebuildLevels()
+      let reference = try BorgVRCPUVolumeEditExecutor(source: source, border: .clamp)
+      for gpu in [false, true] {
+        let builder = try BorgVRVolumeEditMaterializer(source: source, usesMetal: gpu)
+        for id in m.brickMetadata.indices.reversed() {
+          let expected = oracle.bytes(index: id, border: .clamp)
+          let actual = try builder.materialize(index: id, mask: mask, revision: UInt64(step + 1), revisions: nil,
+            useGPU: gpu, cached: { _, _ in nil }, store: { _ in }, isCancelled: { false })
+          let cpu = try reference.materialize(index: id, mask: mask, revision: UInt64(step + 1))
+          try check(actual.bytes == expected && cpu.bytes == expected,
+            "Channel edit differs from dense oracle: width \(width), step \(step), brick \(id), GPU \(gpu)")
+          try check(actual.componentRanges == cpu.componentRanges, "Per-channel min/max differ")
+        }
+        if gpu, step < 3, MTLCreateSystemDefaultDevice() != nil {
+          try check(builder.metalBrickCount > 0, "Partial-channel GPU rebuild fell back to CPU")
+        }
+      }
+    }
+  }
+}
+
+private func testChannelEditPersistence() throws {
+  let directory = FileManager.default.temporaryDirectory.appendingPathComponent("borgvr-channel-edits-\(UUID())")
+  defer { try? FileManager.default.removeItem(at: directory) }
+  let source = EditTestDataset(bytesPerComponent: 2), m = source.metadata
+  let edited = try BorgVREditableVolumeData(source: source, directory: directory, logger: nil)
+  let full = BorgVRVolumeBrushSample(center: .zero, radius: 100)
+  try waitForEditOperation { edited.brush([full], mode: .erase, channels: .selected([0]), completion: $0) }
+  let revision = edited.journal.snapshot().revision
+  try waitForEditOperation { edited.brush([full], mode: .restore, channels: .selected([1]), completion: $0) }
+  try check(edited.journal.snapshot().revision == revision, "Restore of an untouched channel enqueued brick work")
+  try waitForEditOperation { edited.shutdown(completion: $0) }
+  let reopened = try BorgVREditableVolumeData(source: source, directory: directory, logger: nil)
+  try waitForEditOperation {
+    reopened.preparePendingEdits(cancellationToken: .init(), progress: { _ in }, completion: $0)
+  }
+  let snapshot = reopened.journal.snapshot()
+  try check(snapshot.mask.componentCount == 2 && snapshot.mask.isErased(at: .zero, component: 0) &&
+    !snapshot.mask.isErased(at: .zero, component: 1), "Reopening lost the channel mask")
+  let output = source.allocateBrickBuffer()
+  defer { output.deallocate() }
+  let oracle = EditTestDataset(bytesPerComponent: 2)
+  for i in stride(from: 0, to: oracle.levels[0].count, by: 2) { oracle.levels[0][i] = 0 }
+  oracle.rebuildLevels()
+  for id in m.brickMetadata.indices {
+    try reopened.getBrick(index: id, outputBuffer: output)
+    let expected = oracle.bytes(index: id, border: .clamp)
+    try check(Array(UnsafeBufferPointer(start: output, count: expected.count)) == expected,
+      "Cached multichannel brick changed after reopening")
+  }
+  try waitForEditOperation { reopened.brush([full], mode: .restore, channels: .selected([0]), completion: $0) }
+  try check(reopened.journal.snapshot().mask.isOriginal, "Final channel restore did not release the mask")
+  try waitForEditOperation { reopened.shutdown(completion: $0) }
+}
+
+private final class WideChannelEditDataset: BORGVRDatasetProtocol {
+  let metadata = BORGVRMetaData(width: 1, height: 1, depth: 1, componentCount: 65, bytePerComponent: 2,
+    voxelSpacingX: 1, voxelSpacingY: 1, voxelSpacingZ: 1, brickSize: 4, overlap: 1,
+    minValue: 0, maxValue: 65, compression: false, datasetDescription: "Wide channels", metaDescription: "")
+  let bytes: [UInt8] = (0..<(64 * 65)).flatMap { [UInt8($0 % 65 + 1), UInt8(0)] }
+  init() { metadata.append(offset: 0, size: bytes.count, minValue: 1, maxValue: 65) }
+  func getMetadata() -> BORGVRMetaData { metadata }
+  func newRequest() {}
+  func allocateBrickBuffer() -> UnsafeMutablePointer<UInt8> { .allocate(capacity: bytes.count) }
+  func getBrick(index: Int, outputBuffer: UnsafeMutablePointer<UInt8>) throws {
+    bytes.withUnsafeBytes { _ = memcpy(outputBuffer, $0.baseAddress!, bytes.count) }
+  }
+  func getFirstBrick(outputBuffer: UnsafeMutablePointer<UInt8>) throws { try getBrick(index: 0, outputBuffer: outputBuffer) }
+}
+
+private func testWideChannelEditMaterialization() throws {
+  let source = WideChannelEditDataset()
+  var mask = try BorgVRVolumeEditMask(size: SIMD3(repeating: 1), spacing: SIMD3(repeating: 1), componentCount: 65)
+  try mask.apply(.init(center: SIMD3(repeating: 0.5), radius: 1), mode: .erase, channels: .selected([0, 31, 32, 64]))
+  var expected = source.bytes
+  for voxel in 0..<64 { for channel in [0, 31, 32, 64] { expected[(voxel * 65 + channel) * 2] = 0 } }
+  for gpu in [false, true] {
+    let builder = try BorgVRVolumeEditMaterializer(source: source, usesMetal: gpu)
+    let actual = try builder.materialize(index: 0, mask: mask, revision: 1, revisions: nil,
+      useGPU: gpu, cached: { _, _ in nil }, store: { _ in }, isCancelled: { false })
+    try check(actual.bytes == expected, "Channel bits beyond 32/64 failed in CPU/Metal rebuilding")
+    if gpu, MTLCreateSystemDefaultDevice() != nil {
+      try check(builder.metalBrickCount == 1, "Wide-channel GPU test did not run on Metal")
+    }
+  }
 }
 
 private func testFailedEditActivationPreservesPreviousState() throws {
@@ -411,7 +572,7 @@ private func testMaterializerCacheCompletion() throws {
   let source = EditTestDataset(bytesPerComponent: 1), m = source.metadata
   let builder = try BorgVRVolumeEditMaterializer(source: source, usesMetal: false)
   var mask = try BorgVRVolumeEditMask(size: SIMD3(m.width, m.height, m.depth),
-    spacing: SIMD3(Double(m.voxelSpacingX), Double(m.voxelSpacingY), Double(m.voxelSpacingZ)))
+    spacing: SIMD3(Double(m.voxelSpacingX), Double(m.voxelSpacingY), Double(m.voxelSpacingZ)), componentCount: m.componentCount)
   try mask.apply(.init(center: .zero, radius: 100), mode: .erase)
   var completions = 0
   func read(_ cached: @escaping BorgVRVolumeEditMaterializer.Lookup,
@@ -736,7 +897,7 @@ private func testDiscardAllEditsDuringBackgroundWork() throws {
   let reopened = try BorgVRVolumeEditJournal(directory: directory, datasetID: source.metadata.uniqueID,
     size: SIMD3(source.metadata.width, source.metadata.height, source.metadata.depth),
     spacing: SIMD3(Double(source.metadata.voxelSpacingX), Double(source.metadata.voxelSpacingY),
-                  Double(source.metadata.voxelSpacingZ)))
+                  Double(source.metadata.voxelSpacingZ)), componentCount: source.metadata.componentCount)
   try check(reopened.snapshot().revision == dataset.journal.snapshot().revision && !reopened.snapshot().mask.isOriginal,
             "A new edit after discard was not durable")
   executor.resume.signal()
@@ -864,7 +1025,7 @@ private func testBottomUpEditMaterialization() throws {
     let source = EditTestDataset(bytesPerComponent: width)
     let m = source.getMetadata()
     var mask = try BorgVRVolumeEditMask(size: SIMD3(m.width, m.height, m.depth),
-      spacing: SIMD3(Double(m.voxelSpacingX), Double(m.voxelSpacingY), Double(m.voxelSpacingZ)))
+      spacing: SIMD3(Double(m.voxelSpacingX), Double(m.voxelSpacingY), Double(m.voxelSpacingZ)), componentCount: m.componentCount)
     try mask.apply(.init(center: SIMD3(0.9, 1.2, 1.4), radius: 0.85), mode: .erase)
     try mask.apply(.init(center: SIMD3(1.1, 1.2, 1.4), radius: 0.5), mode: .restore)
     let reference = try BorgVRCPUVolumeEditExecutor(source: source, border: .clamp)
@@ -933,9 +1094,9 @@ private func testReopenReusesOnlyAffectedBrickVersions() throws {
     ($0, source.bytes(index: $0, border: .clamp))
   })
   var versions: [Int: UInt64] = [:]
-  var mask = try BorgVRVolumeEditMask(size: size, spacing: spacing)
+  var mask = try BorgVRVolumeEditMask(size: size, spacing: spacing, componentCount: 2)
   do {
-    let journal = try BorgVRVolumeEditJournal(directory: directory, datasetID: m.uniqueID, size: size, spacing: spacing)
+    let journal = try BorgVRVolumeEditJournal(directory: directory, datasetID: m.uniqueID, size: size, spacing: spacing, componentCount: m.componentCount)
     let cache = try BorgVRVolumeEditBrickCache(url: directory.appendingPathComponent("bricks.cache"),
                                              editStateID: journal.snapshot().editStateID)
     for (step, sample) in [first, second].enumerated() {
@@ -1009,7 +1170,7 @@ private func testReopenReusesOnlyAffectedBrickVersions() throws {
   let third = BorgVRVolumeBrushSample(center: SIMD3(0.375, 0.25, 0.5), radius: 0.1)
   try mask.apply(third, mode: .erase)
   do {
-    let journal = try BorgVRVolumeEditJournal(directory: directory, datasetID: m.uniqueID, size: size, spacing: spacing)
+    let journal = try BorgVRVolumeEditJournal(directory: directory, datasetID: m.uniqueID, size: size, spacing: spacing, componentCount: m.componentCount)
     let changed = try m.brickMetadata.indices.filter {
       try executor.materialize(index: $0, mask: mask, revision: 3).bytes != expected[$0]
     }
@@ -1041,7 +1202,7 @@ private func testReopenReusesOnlyAffectedBrickVersions() throws {
   try waitForClose()
   // A fully restored mask bypasses stale sidecar data altogether.
   do {
-    let journal = try BorgVRVolumeEditJournal(directory: directory, datasetID: m.uniqueID, size: size, spacing: spacing)
+    let journal = try BorgVRVolumeEditJournal(directory: directory, datasetID: m.uniqueID, size: size, spacing: spacing, componentCount: m.componentCount)
     try journal.append(BorgVRVolumeBrushBatch(id: UUID(), revision: 4, mode: .restore,
       samples: [.init(center: .zero, radius: 100)], affectedBrickIDs: Array(m.brickMetadata.indices)))
     try journal.checkpoint()
@@ -1520,7 +1681,7 @@ private func testRawEditExport() throws {
       do {
         let journal = try BorgVRVolumeEditJournal(directory: edits, datasetID: m.uniqueID,
           size: SIMD3(m.width, m.height, m.depth),
-          spacing: SIMD3(Double(m.voxelSpacingX), Double(m.voxelSpacingY), Double(m.voxelSpacingZ)))
+          spacing: SIMD3(Double(m.voxelSpacingX), Double(m.voxelSpacingY), Double(m.voxelSpacingZ)), componentCount: m.componentCount)
         try journal.append(.init(id: UUID(), revision: 1, mode: .erase,
           samples: [.init(center: SIMD3(0.125, 0.25, 0.5), radius: 0.1)],
           affectedBrickIDs: Array(m.brickMetadata.indices)))
@@ -1587,7 +1748,7 @@ private func testPendingCompressedEditExport() throws {
   do {
     let journal = try BorgVRVolumeEditJournal(directory: edits, datasetID: m.uniqueID,
       size: SIMD3(m.width, m.height, m.depth),
-      spacing: SIMD3(Double(m.voxelSpacingX), Double(m.voxelSpacingY), Double(m.voxelSpacingZ)))
+      spacing: SIMD3(Double(m.voxelSpacingX), Double(m.voxelSpacingY), Double(m.voxelSpacingZ)), componentCount: m.componentCount)
     try journal.append(.init(id: UUID(), revision: 1, mode: .erase,
       samples: [.init(center: SIMD3(0.125, 0.25, 0.5), radius: 0.1)],
       affectedBrickIDs: Array(m.brickMetadata.indices)))

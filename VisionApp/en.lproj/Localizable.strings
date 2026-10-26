@@ -1314,3 +1314,8 @@
 "All edits in the active state will be removed. During SharePlay this clears the shared state for everyone. Other states and the original dataset are preserved." = "All edits in the active state will be removed. During SharePlay this clears the shared state for everyone. Other states and the original dataset are preserved.";
 "Preparing Edit State" = "Preparing Edit State";
 "Finishing pending volume updates before opening." = "Finishing pending volume updates before opening.";
+
+// Per-channel volume editing
+"Edit Channels" = "Edit Channels";
+"All Channels" = "All Channels";
+"Channel %lld" = "Channel %lld";

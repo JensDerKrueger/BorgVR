@@ -2,6 +2,33 @@ import Foundation
 import CoreFoundation
 
 enum BorgVRVolumeEditingArguments {
+  static func channels(_ value: Any) throws -> BorgVRVolumeEditChannels {
+    if let text = value as? String {
+      if text.lowercased() == "all" { return .all }
+      let parts = text.split(whereSeparator: { $0.isWhitespace || $0 == "," })
+      guard !parts.isEmpty, parts.count <= BORGVRMetaData.maximumComponentCount else {
+        throw BorgVRVolumeEditingCommandError.invalidArgument("Provide all or a list of one-based channel numbers.")
+      }
+      let indices = try parts.map { part -> Int in
+        guard let channel = Int(part), channel > 0, channel <= BORGVRMetaData.maximumComponentCount else {
+          throw BorgVRVolumeEditingCommandError.invalidArgument("Channel numbers must be positive integers.")
+        }
+        return channel - 1
+      }
+      return .selected(indices)
+    }
+    guard let list = value as? [Any], !list.isEmpty, list.count <= BORGVRMetaData.maximumComponentCount else {
+      throw BorgVRVolumeEditingCommandError.invalidArgument("Provide all or a list of one-based channel numbers.")
+    }
+    return .selected(try list.map { value in
+      let channel = try number(value)
+      guard channel >= 1, channel <= Double(BORGVRMetaData.maximumComponentCount), channel.rounded() == channel else {
+        throw BorgVRVolumeEditingCommandError.invalidArgument("Channel numbers must be positive integers.")
+      }
+      return Int(channel) - 1
+    })
+  }
+
   static func mode(_ value: String) throws -> BorgVRVolumeBrushMode {
     guard let mode = BorgVRVolumeBrushMode(rawValue: value.lowercased()) else {
       throw BorgVRVolumeEditingCommandError.invalidArgument("Brush mode must be erase or restore.")
@@ -85,6 +112,8 @@ struct BorgVRVolumeEditingState: Codable, Sendable {
   var savedStates: [BorgVRVolumeEditState] = []
   var shared: Bool = false
   var waitingForSharedState: Bool = false
+  var componentCount: Int = 1
+  var channels: [Int] = [1]
 }
 
 enum BorgVRVolumeEditingCommandError: LocalizedError {
@@ -116,6 +145,7 @@ protocol BorgVRVolumeEditingCommands: AnyObject {
   func deleteState(_ id: UUID) throws
   func volumeEditingState() -> BorgVRVolumeEditingState
   func configureVolumeBrush(mode: BorgVRVolumeBrushMode?, radiusFraction: Double?, projectsOntoVolume: Bool?) throws
+  func setVolumeBrushChannels(_ channels: BorgVRVolumeEditChannels) throws
   func editVolume(mode: BorgVRVolumeBrushMode, samples: [BorgVRVolumeBrushSample]) async throws
   func discardVolumeEdits() async throws
   func waitForVolumeEdits(timeout: TimeInterval) async throws

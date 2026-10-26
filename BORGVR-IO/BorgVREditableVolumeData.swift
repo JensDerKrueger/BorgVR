@@ -284,6 +284,7 @@ final class BorgVREditableVolumeData: BORGVRDatasetProtocol, BorgVRVolumeGPUBrus
     journal = try BorgVRVolumeEditJournal(directory: directory, datasetID: m.uniqueID,
       size: SIMD3(m.width, m.height, m.depth),
       spacing: SIMD3(Double(m.voxelSpacingX), Double(m.voxelSpacingY), Double(m.voxelSpacingZ)),
+      componentCount: m.componentCount,
       initialSnapshot: initialSnapshot, persistOriginalSnapshot: persistOriginalSnapshot)
     cache = try BorgVRVolumeEditBrickCache(url: directory.appendingPathComponent("bricks.cache"),
                                           editStateID: journal.snapshot().editStateID)
@@ -437,16 +438,16 @@ final class BorgVREditableVolumeData: BORGVRDatasetProtocol, BorgVRVolumeGPUBrus
     }
   }
 
-  private static func eraseBounds(_ previous: BrickMetadata?) -> BrickMetadata? {
+  private static func eraseBounds(_ previous: BrickMetadata?, channels: BorgVRVolumeEditChannels = .all) -> BrickMetadata? {
     guard let previous else { return nil }
     if previous.componentRanges.allSatisfy({ $0.minValue == 0 }) { return previous }
     // Erase can only lower values. Include zero and intermediate values from
     // filtering/LOD averaging, but never expand the previous upper bounds.
+    let ranges = previous.componentRanges.enumerated().map { channel, range in
+      channels.contains(channel) ? BORGVRComponentRange(minValue: 0, maxValue: range.maxValue) : range
+    }
     return BrickMetadata(offset: previous.offset, size: previous.size,
-      minValue: 0, maxValue: previous.maxValue,
-      componentRanges: previous.componentRanges.map {
-        BORGVRComponentRange(minValue: 0, maxValue: $0.maxValue)
-      })
+      minValue: ranges.map(\.minValue).min() ?? 0, maxValue: previous.maxValue, componentRanges: ranges)
   }
 
   func changedBrickIDs(since oldRevision: UInt64) -> [Int] {
@@ -565,14 +566,16 @@ final class BorgVREditableVolumeData: BORGVRDatasetProtocol, BorgVRVolumeGPUBrus
   }
 
   func brush(_ samples: [BorgVRVolumeBrushSample], mode: BorgVRVolumeBrushMode,
+             channels: BorgVRVolumeEditChannels = .all,
              cancellationToken: BorgVRVolumeConversionCancellationToken? = nil,
              operationID: UUID = UUID(), expectedRevision: UInt64? = nil,
              completion: (@Sendable (Error?) -> Void)? = nil) {
-    recordBrush(samples, mode: mode, cancellationToken: cancellationToken, operationID: operationID,
+    recordBrush(samples, mode: mode, channels: channels, cancellationToken: cancellationToken, operationID: operationID,
       expectedRevision: expectedRevision, onRecorded: nil, completion: completion)
   }
 
   func recordBrush(_ samples: [BorgVRVolumeBrushSample], mode: BorgVRVolumeBrushMode,
+             channels: BorgVRVolumeEditChannels = .all,
              cancellationToken: BorgVRVolumeConversionCancellationToken? = nil,
              operationID: UUID = UUID(), expectedRevision: UInt64? = nil,
              onRecorded: (@Sendable (BorgVRVolumeBrushBatch) -> Void)? = nil,
@@ -586,15 +589,16 @@ final class BorgVREditableVolumeData: BORGVRDatasetProtocol, BorgVRVolumeGPUBrus
           throw BorgVRVolumeEditError.invalidRevision
         }
         for sample in samples { try sample.validate() }
+        let channels = try channels.validated(componentCount: getMetadata().componentCount)
         let snapshot = journal.snapshot()
         guard snapshot.revision < UInt64.max else { throw BorgVRVolumeEditError.invalidRevision }
-        let ids = affectedBrickIDs(samples, restoring: mode == .restore ? snapshot.mask : nil)
+        let ids = affectedBrickIDs(samples, restoring: mode == .restore ? snapshot.mask : nil, channels: channels)
         guard !ids.isEmpty || expectedRevision != nil else { completion?(nil); return }
         if let expectedRevision, expectedRevision != snapshot.revision + 1 {
           throw BorgVRVolumeEditError.invalidRevision
         }
         let batch = BorgVRVolumeBrushBatch(id: operationID, revision: snapshot.revision + 1,
-          mode: mode, samples: samples, affectedBrickIDs: ids)
+          mode: mode, samples: samples, channels: channels, affectedBrickIDs: ids)
         try journal.append(batch) { [self] recorded in
           lock.withLock {
             recordedRevision = recorded.revision
@@ -604,7 +608,7 @@ final class BorgVREditableVolumeData: BORGVRDatasetProtocol, BorgVRVolumeGPUBrus
             for id in ids {
               let previous = desired[id] == nil ? source.visibilityMetadata(index: id)
                 : ranges[id] ?? pendingEraseRanges[id]
-              pendingEraseRanges[id] = mode == .erase ? Self.eraseBounds(previous) : nil
+              pendingEraseRanges[id] = mode == .erase ? Self.eraseBounds(previous, channels: channels) : nil
               desired[id] = recorded.revision
               persistenceFailures[id] = nil
               ranges[id] = nil
@@ -1071,7 +1075,8 @@ final class BorgVREditableVolumeData: BORGVRDatasetProtocol, BorgVRVolumeGPUBrus
   }
 
   private func affectedBrickIDs(_ samples: [BorgVRVolumeBrushSample],
-                                restoring mask: BorgVRVolumeEditMask? = nil) -> [Int] {
+                                restoring mask: BorgVRVolumeEditMask? = nil,
+                                channels: BorgVRVolumeEditChannels = .all) -> [Int] {
     if mask?.isOriginal == true { return [] }
     let m = getMetadata()
     let stride = m.brickSize - 2 * m.overlap
@@ -1093,7 +1098,7 @@ final class BorgVREditableVolumeData: BORGVRDatasetProtocol, BorgVRVolumeGPUBrus
           guard !ids.contains(id) else { continue }
           // Include halos and every fine voxel contributing to a coarse LOD.
           // Pending CPU results do not matter: the current mask is authoritative.
-          if let mask, mask.coverage(in: Self.brickFootprint(index: id, level: level, metadata: m)) == .original {
+          if let mask, mask.coverage(in: Self.brickFootprint(index: id, level: level, metadata: m), channels: channels) == .original {
             continue
           }
           ids.insert(id)

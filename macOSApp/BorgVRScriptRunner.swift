@@ -355,6 +355,13 @@ final class BorgVRScriptRunner: ObservableObject {
       ) ?? .callbackError
     }
 
+    register("setvolumeeditchannels", [.string]) { [weak self] args in
+      guard let self, let service = self.commandService else { return .callbackError }
+      do {
+        try service.volumeEditing.setVolumeBrushChannels(BorgVRVolumeEditingArguments.channels(args.string(0)))
+        return .success
+      } catch { self.logError(error.localizedDescription); return .invalidArguments }
+    }
     register("setvolumebrush", [.string, .double, .bool]) { [weak self] args in
       guard let self, let service = self.commandService else { return .callbackError }
       do {

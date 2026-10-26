@@ -5,6 +5,28 @@ enum BorgVRVolumeBrushMode: String, Codable, Sendable {
   case restore
 }
 
+/// Zero-based data channels, not the bytes/components of an atlas texture.
+enum BorgVRVolumeEditChannels: Codable, Equatable, Sendable {
+  case all
+  case selected([Int])
+
+  func validated(componentCount: Int) throws -> Self {
+    guard componentCount > 0, componentCount <= BORGVRMetaData.maximumComponentCount else {
+      throw BorgVRVolumeEditError.invalidGeometry
+    }
+    guard case .selected(let channels) = self else { return .all }
+    guard !channels.isEmpty, channels.count <= componentCount,
+          channels.allSatisfy({ $0 >= 0 && $0 < componentCount }), Set(channels).count == channels.count else {
+      throw BorgVRVolumeEditError.invalidBrush
+    }
+    return channels.count == componentCount ? .all : .selected(channels.sorted())
+  }
+
+  func contains(_ channel: Int) -> Bool {
+    switch self { case .all: return true; case .selected(let channels): return channels.contains(channel) }
+  }
+}
+
 enum BorgVRVolumeBrushLimits {
   static let radiusFraction = 0.002...0.15
   static let maximumSampleCount = 65536
@@ -42,6 +64,7 @@ struct BorgVRVolumeBrushBatch: Codable, Sendable {
   let revision: UInt64
   let mode: BorgVRVolumeBrushMode
   let samples: [BorgVRVolumeBrushSample]
+  var channels: BorgVRVolumeEditChannels = .all
   var affectedBrickIDs: [Int]? = nil
 }
 
@@ -144,19 +167,29 @@ struct BorgVRVoxelRegion: Codable, Equatable, Sendable {
 
 /// Immutable value snapshots allow a worker to finish an older revision while editing continues.
 struct BorgVRVolumeEditMask: Codable, Sendable {
-  indirect enum Node: Sendable {
+  indirect enum Node: Equatable, Sendable {
     case original
     case erased
+    case channels([UInt32])
     case mixed([Node])
+
+    func isErased(component: Int) -> Bool {
+      switch self {
+        case .erased: return true
+        case .channels(let words): return words[component / 32] & (UInt32(1) << (component % 32)) != 0
+        default: return false
+      }
+    }
   }
 
   enum Coverage { case original, erased, mixed }
 
   let size: SIMD3<Int>
   let spacing: SIMD3<Double>
+  let componentCount: Int
   private(set) var root: Node = .original
 
-  init(size: SIMD3<Int>, spacing: SIMD3<Double>) throws {
+  init(size: SIMD3<Int>, spacing: SIMD3<Double>, componentCount: Int = 1) throws {
     guard size.x > 0, size.y > 0, size.z > 0,
           size.x <= Int(Int32.max), size.y <= Int(Int32.max), size.z <= Int(Int32.max),
           spacing.x.isFinite, spacing.y.isFinite, spacing.z.isFinite,
@@ -166,22 +199,30 @@ struct BorgVRVolumeEditMask: Codable, Sendable {
           (Double(size.z) * spacing.z).isFinite else {
       throw BorgVRVolumeEditError.invalidGeometry
     }
+    _ = try BorgVRVolumeEditChannels.all.validated(componentCount: componentCount)
     self.size = size
     self.spacing = spacing
+    self.componentCount = componentCount
   }
 
-  private enum CodingKeys: String, CodingKey { case size, spacing, nodes }
+  private enum CodingKeys: String, CodingKey { case size, spacing, componentCount, nodes }
 
   func encode(to encoder: Encoder) throws {
     var values = encoder.container(keyedBy: CodingKeys.self)
     try values.encode(size, forKey: .size)
     try values.encode(spacing, forKey: .spacing)
+    try values.encode(componentCount, forKey: .componentCount)
     // Preorder tags: child counts follow from the voxel region, not from the file.
     var nodes = Data()
     func append(_ node: Node) {
       switch node {
         case .original: nodes.append(0)
         case .erased: nodes.append(1)
+        case .channels(let words):
+          nodes.append(3)
+          for word in words {
+            for byte in 0..<4 { nodes.append(UInt8(truncatingIfNeeded: word >> (byte * 8))) }
+          }
         case .mixed(let children):
           nodes.append(2)
           for child in children { append(child) }
@@ -194,7 +235,8 @@ struct BorgVRVolumeEditMask: Codable, Sendable {
   init(from decoder: Decoder) throws {
     let values = try decoder.container(keyedBy: CodingKeys.self)
     try self.init(size: values.decode(SIMD3<Int>.self, forKey: .size),
-                  spacing: values.decode(SIMD3<Double>.self, forKey: .spacing))
+                  spacing: values.decode(SIMD3<Double>.self, forKey: .spacing),
+                  componentCount: values.decode(Int.self, forKey: .componentCount))
     let nodes = try values.decode(Data.self, forKey: .nodes)
     let bounds = bounds
     root = try nodes.withUnsafeBytes { buffer in
@@ -207,6 +249,20 @@ struct BorgVRVolumeEditMask: Codable, Sendable {
         switch tag {
           case 0: return .original
           case 1: return .erased
+          case 3:
+            let count = (componentCount + 31) / 32
+            guard componentCount > 1, count <= (bytes.count - offset) / 4 else {
+              throw BorgVRVolumeEditError.corruptJournal
+            }
+            var words = [UInt32](repeating: 0, count: count)
+            for index in words.indices {
+              for byte in 0..<4 { words[index] |= UInt32(bytes[offset + byte]) << (byte * 8) }
+              offset += 4
+            }
+            let full = fullChannelWords
+            guard words != full, words.contains(where: { $0 != 0 }),
+                  words.last! & ~full.last! == 0 else { throw BorgVRVolumeEditError.corruptJournal }
+            return .channels(words)
           case 2:
             let regions = region.children
             guard regions.count > 1, regions.count <= bytes.count - offset else {
@@ -226,19 +282,57 @@ struct BorgVRVolumeEditMask: Codable, Sendable {
   private(set) var identity = UUID()
   var isOriginal: Bool { if case .original = root { return true }; return false }
 
-  mutating func apply(_ sample: BorgVRVolumeBrushSample, mode: BorgVRVolumeBrushMode) throws {
+  private var fullChannelWords: [UInt32] {
+    var words = [UInt32](repeating: .max, count: (componentCount + 31) / 32)
+    if componentCount % 32 != 0 { words[words.count - 1] = (UInt32(1) << (componentCount % 32)) - 1 }
+    return words
+  }
+
+  mutating func apply(_ sample: BorgVRVolumeBrushSample, mode: BorgVRVolumeBrushMode,
+                      channels: BorgVRVolumeEditChannels = .all) throws {
     try sample.validate()
+    let channels = try channels.validated(componentCount: componentCount)
+    let selectedWords: [UInt32]?
+    if case .selected(let indices) = channels {
+      var words = [UInt32](repeating: 0, count: (componentCount + 31) / 32)
+      for c in indices { words[c / 32] |= UInt32(1) << (c % 32) }
+      selectedWords = words
+    } else { selectedWords = nil }
     identity = UUID()
     let geometry = BorgVRVolumeBrushGeometry(size: size, spacing: spacing, sample: sample)
-    root = applying(sample, geometry: geometry, mode: mode, node: root, region: bounds)
+    root = applying(sample, geometry: geometry, mode: mode, selectedWords: selectedWords, node: root, region: bounds)
+  }
+
+  private func updating(_ node: Node, mode: BorgVRVolumeBrushMode, selectedWords: [UInt32]?) -> Node? {
+    guard let selectedWords else { return mode == .erase ? .erased : .original }
+    var words: [UInt32]
+    switch node {
+      case .mixed: return nil
+      case .original: words = .init(repeating: 0, count: selectedWords.count)
+      case .erased: words = fullChannelWords
+      case .channels(let existing): words = existing
+    }
+    for i in words.indices {
+      if mode == .erase { words[i] |= selectedWords[i] } else { words[i] &= ~selectedWords[i] }
+    }
+    if words.allSatisfy({ $0 == 0 }) { return .original }
+    if words == fullChannelWords { return .erased }
+    return .channels(words)
   }
 
   private func applying(
     _ sample: BorgVRVolumeBrushSample, geometry: BorgVRVolumeBrushGeometry?, mode: BorgVRVolumeBrushMode,
-    node: Node, region: BorgVRVoxelRegion
+    selectedWords: [UInt32]?, node: Node, region: BorgVRVoxelRegion
   ) -> Node {
     if case .original = node, mode == .restore { return node }
     if case .erased = node, mode == .erase { return node }
+    let updated = updating(node, mode: mode, selectedWords: selectedWords)
+    if let updated {
+      switch node {
+        case .mixed: break
+        default: if updated == node { return node }
+      }
+    }
     let outside: Bool, inside: Bool
     if let geometry {
       let (nearest, farthest) = geometry.squaredBounds(region)
@@ -261,13 +355,14 @@ struct BorgVRVolumeEditMask: Codable, Sendable {
       inside = farthestSquared <= radiusSquared
     }
     guard !outside else { return node }
-    if inside { return mode == .erase ? .erased : .original }
+    if inside, let updated { return updated }
     let regions = region.children
     var children: [Node]
     if case .mixed(let existing) = node { children = existing }
     else { children = Array(repeating: node, count: regions.count) }
     for index in regions.indices {
-      children[index] = applying(sample, geometry: geometry, mode: mode, node: children[index], region: regions[index])
+      children[index] = applying(sample, geometry: geometry, mode: mode, selectedWords: selectedWords,
+                                node: children[index], region: regions[index])
     }
     if children.allSatisfy({ if case .original = $0 { return true }; return false }) {
       return .original
@@ -275,17 +370,22 @@ struct BorgVRVolumeEditMask: Codable, Sendable {
     if children.allSatisfy({ if case .erased = $0 { return true }; return false }) {
       return .erased
     }
+    if case .channels = children[0], children.allSatisfy({ $0 == children[0] }) { return children[0] }
     return .mixed(children)
   }
 
-  func coverage(in region: BorgVRVoxelRegion) -> Coverage {
+  func coverage(in region: BorgVRVoxelRegion, channels: BorgVRVolumeEditChannels = .all) -> Coverage {
     func query(_ node: Node, _ nodeRegion: BorgVRVoxelRegion) -> Coverage? {
       guard nodeRegion.intersects(region) else { return nil }
       switch node {
         case .original: return .original
         case .erased: return .erased
+        case .channels(let words):
+          guard case .selected(let selected) = channels else { return .mixed }
+          let erased = selected.reduce(0) { $0 + (words[$1 / 32] & (UInt32(1) << ($1 % 32)) != 0 ? 1 : 0) }
+          return erased == 0 ? .original : erased == selected.count ? .erased : .mixed
         case .mixed(let children):
-          if region.contains(nodeRegion) { return .mixed }
+          if channels == .all, region.contains(nodeRegion) { return .mixed }
           let results = zip(children, nodeRegion.children).compactMap { query($0, $1) }
           if results.allSatisfy({ $0 == .original }) { return .original }
           if results.allSatisfy({ $0 == .erased }) { return .erased }
@@ -296,8 +396,14 @@ struct BorgVRVolumeEditMask: Codable, Sendable {
   }
 
   /// Allocation-free point query for canonical CPU rebuilding.
-  func isErased(at point: SIMD3<Int>) -> Bool {
-    guard point.x >= 0, point.y >= 0, point.z >= 0, point.x < size.x, point.y < size.y, point.z < size.z else { return false }
+  func isErased(at point: SIMD3<Int>, component: Int = 0) -> Bool {
+    guard component >= 0, component < componentCount else { return false }
+    return erasedChannels(at: point).isErased(component: component)
+  }
+
+  /// One tree traversal per voxel, shared by all of its channels.
+  func erasedChannels(at point: SIMD3<Int>) -> Node {
+    guard point.x >= 0, point.y >= 0, point.z >= 0, point.x < size.x, point.y < size.y, point.z < size.z else { return .original }
     var node = root, low = SIMD3<Int>.zero, high = size
     while case .mixed(let children) = node {
       let half = (high &- low) / 2
@@ -310,8 +416,7 @@ struct BorgVRVolumeEditMask: Codable, Sendable {
         low[axis] += half[axis] * side[axis]
       }
     }
-    if case .erased = node { return true }
-    return false
+    return node
   }
 
   /// Compact immutable tree for compute jobs; children use the same x/y/z order as bounds.children.
@@ -321,6 +426,9 @@ struct BorgVRVolumeEditMask: Codable, Sendable {
       switch node {
         case .original: result[index] = SIMD2(0, 0)
         case .erased: result[index] = SIMD2(1, 0)
+        case .channels(let words):
+          result[index] = SIMD2(3, UInt32(result.count))
+          result.append(contentsOf: words.map { SIMD2($0, 0) })
         case .mixed(let children):
           let first = result.count
           result[index] = SIMD2(2, UInt32(first))

@@ -40,6 +40,7 @@ renameeditstate(string,string)
 deleteeditstate(string)
 # Interactive brush: erase|restore, radius as fraction of largest extent (0.002...0.15), projection.
 setvolumebrush(string,double,bool)
+setvolumeeditchannels(string)
 # Physical center x y z and radius, all in meters from the volume minimum corner.
 erasevolume(double,double,double,double)
 restorevolume(double,double,double,double)

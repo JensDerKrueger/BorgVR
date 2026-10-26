@@ -139,6 +139,7 @@ private final class PackedBrushFixture: BORGVRDatasetProtocol, BorgVRVolumeGPUBr
 @main
 private enum VolumeAtlasEditTests {
   static func main() throws {
+    try datasetTransferFunctionFiles()
     guard let device = MTLCreateSystemDefaultDevice(), let queue = device.makeCommandQueue() else {
       print("SKIP: Metal device unavailable for atlas edit regression")
       return
@@ -395,6 +396,56 @@ private enum VolumeAtlasEditTests {
       "Pending prediction was not replayed after canonical state reconciliation")
   }
 
+  static func datasetTransferFunctionFiles() throws {
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent("borgvr-dataset-tfs-\(UUID())")
+    defer { try? FileManager.default.removeItem(at: root) }
+    for count in 1...4 {
+      let baseURL = root.appendingPathComponent("\(count)/volume.tf1d")
+      let urls = DatasetTransferFunctionStorage.fileURLs(baseURL: baseURL, componentCount: count)
+      try expect(urls.count == count && Set(urls).count == count, "TF filenames collide across channels")
+      try expect(count == 1 ? urls == [baseURL] : urls.last!.lastPathComponent == "volume.channel-\(count).tf1d",
+        "Dataset TF naming is inconsistent")
+      let originals = (0..<count).map { channel in
+        let tf = TransferFunction1D(count: 256 << channel)
+        tf.smoothStep(start: Float(channel + 1) * 0.1, shift: 0.2, channels: [0, 1, 2, 3], reverse: channel % 2 == 0)
+        return tf
+      }
+      try DatasetTransferFunctionStorage.save(originals, to: urls, description: "Dataset")
+      try expect(urls.allSatisfy { FileManager.default.fileExists(atPath: $0.path) }, "Save skipped a TF channel")
+      let targets = (0..<count).map { _ in TransferFunction1D(count: 128) }
+      try expect(try DatasetTransferFunctionStorage.load(targets, from: urls), "Saved TFs were not found")
+      for channel in 0..<count {
+        try expect(targets[channel].data == originals[channel].data, "Saved TF samples/count assigned to wrong channel")
+        try expect(try TransferFunction1D.fileDescription(from: Data(contentsOf: urls[channel])).contains("Dataset"),
+          "Dataset TF description was lost")
+      }
+      if count > 1 {
+        // An unrelated single preset must not be used as a fallback for a missing channel.
+        try originals[0].save(to: baseURL)
+        try FileManager.default.removeItem(at: urls[0])
+        targets[0].reset()
+        let untouched = targets[0].data
+        try expect(try DatasetTransferFunctionStorage.load(targets, from: urls), "Missing TF hid other saved channels")
+        try expect(targets[0].data == untouched && targets[1].data == originals[1].data,
+          "Missing TF shifted channel indices or loaded a legacy fallback")
+        try DatasetTransferFunctionStorage.save(originals, to: urls)
+      }
+      for target in targets { target.reset() }
+      let before = targets.map(\.data)
+      try Data([1, 2, 3]).write(to: urls[count - 1])
+      var rejected = false
+      do { _ = try DatasetTransferFunctionStorage.load(targets, from: urls) } catch { rejected = true }
+      try expect(rejected && targets.map(\.data) == before, "Invalid later TF partially changed earlier channels")
+      try DatasetTransferFunctionStorage.save(originals, to: urls)
+      let saved = try urls.map { try Data(contentsOf: $0) }
+      rejected = false
+      do { try DatasetTransferFunctionStorage.save(originals, to: []) } catch { rejected = true }
+      try expect(rejected && (try urls.map { try Data(contentsOf: $0) }) == saved,
+        "Inconsistent save plan overwrote a channel")
+    }
+    print("Dataset TF save/load tests passed for 1-4 independent channels")
+  }
+
   static func packedBrushes(device: MTLDevice, queue: MTLCommandQueue) throws {
     for (bytes, channels) in [(1, 1), (1, 2), (1, 3), (1, 4), (2, 1), (2, 2), (2, 3), (2, 4), (4, 1)] {
       for scale: Float in [1, 1e-12] {
@@ -403,7 +454,7 @@ private enum VolumeAtlasEditTests {
         let renderer = try VolumeAtlasBrushRenderer(device: device, metadata: m)
         let executor = try BorgVRCPUVolumeEditExecutor(source: source, border: .clamp)
         let spacing = SIMD3(Double(m.voxelSpacingX), Double(m.voxelSpacingY), Double(m.voxelSpacingZ))
-        var mask = try BorgVRVolumeEditMask(size: SIMD3(m.width, m.height, m.depth), spacing: spacing)
+        var mask = try BorgVRVolumeEditMask(size: SIMD3(m.width, m.height, m.depth), spacing: spacing, componentCount: channels)
         let formats = try VolumeAtlas.getPixelFormats(bytesPerComponent: bytes, componentCount: channels)
         let count = m.levelMetadata[1].prevBricks
         // One atlas slot per fine brick, with a spare untouched voxel column.
@@ -439,12 +490,17 @@ private enum VolumeAtlasEditTests {
                     .init(center: SIMD3(6.5, 4.5, 2.5) * spacing, radius: Double(scale) * 0.75)]),
           (.restore, [.init(center: SIMD3(1.5, 2.5, 1.5) * spacing, radius: Double(scale) * 1.4)]),
           (.erase, [.init(center: SIMD3(0.5, 0.5, 0.5) * spacing, radius: Double(scale) * 0.5)]),
+          (.restore, [.init(center: SIMD3(3, 2, 1) * spacing, radius: Double(scale) * 100)]),
+          (.erase, [.init(center: SIMD3(2.5, 2.5, 1.5) * spacing, radius: Double(scale) * 2)]),
+          (.erase, [.init(center: SIMD3(3, 2, 1) * spacing, radius: Double(scale) * 100)]),
+          (.restore, [.init(center: SIMD3(3, 2, 1) * spacing, radius: Double(scale) * 100)]),
           (.restore, [.init(center: SIMD3(3, 2, 1) * spacing, radius: Double(scale) * 100)])
         ]
         for (step, operation) in operations.enumerated() {
+          let selection: BorgVRVolumeEditChannels = step == 4 || step == 6 ? .selected([channels - 1]) : .all
           let batch = BorgVRVolumeBrushBatch(id: UUID(), revision: UInt64(step + 1),
-            mode: operation.0, samples: operation.1)
-          for sample in batch.samples { try mask.apply(sample, mode: batch.mode) }
+            mode: operation.0, samples: operation.1, channels: selection)
+          for sample in batch.samples { try mask.apply(sample, mode: batch.mode, channels: selection) }
           let prepared = renderer.prepare(batch)!
           let command = queue.makeCommandBuffer()!
           let encoder = command.makeComputeCommandEncoder()!

@@ -484,6 +484,9 @@ final class BorgVRMCPServer: @unchecked Sendable {
         let radius = try arguments["radius_fraction"].map { try BorgVRVolumeEditingArguments.number($0) }
         let projection = try BorgVRVolumeEditingArguments.boolean(arguments["project_onto_volume"])
         let activate = try BorgVRVolumeEditingArguments.boolean(arguments["activate"]) ?? false
+        if let channels = arguments["channels"] {
+          try await service.volumeEditing.setVolumeBrushChannels(BorgVRVolumeEditingArguments.channels(channels))
+        }
         try await service.volumeEditing.configureVolumeBrush(mode: mode, radiusFraction: radius, projectsOntoVolume: projection)
         if activate { await service.activateVolumeEditing() }
         return structuredToolResult(await service.volumeEditing.volumeEditingState())
@@ -733,11 +736,15 @@ final class BorgVRMCPServer: @unchecked Sendable {
         properties: ["id": ["type": "string"], "confirm": ["type": "boolean", "enum": [true]]], required: ["id", "confirm"]),
       tool("configure_volume_brush", "Configure the interactive brush. activate selects the Edit hand/mouse/touch mode, not Muse/PSVR modes; default false.", properties: [
         "mode": ["type": "string", "enum": ["erase", "restore"]],
+        "channels": ["oneOf": [["type": "string", "enum": ["all"]],
+          ["type": "array", "minItems": 1, "maxItems": BORGVRMetaData.maximumComponentCount,
+            "uniqueItems": true, "items": ["type": "integer", "minimum": 1]]],
+          "description": "All or one-based channel numbers. Applies to interactive and edit_volume operations; defaults to all on dataset opening."],
         "radius_fraction": ["type": "number", "minimum": BorgVRVolumeBrushLimits.radiusFraction.lowerBound,
           "maximum": BorgVRVolumeBrushLimits.radiusFraction.upperBound],
         "project_onto_volume": ["type": "boolean"], "activate": ["type": "boolean"]
       ]),
-      tool("edit_volume", "Apply spherical erase/restore samples to the active edit state; synchronized when in SharePlay. Coordinates and radius are meters from the volume minimum corner, independent of view, brush settings, and projection. Returns when committed; brick jobs may still run. No interpolation between samples.", properties: [
+      tool("edit_volume", "Apply spherical erase/restore samples to the active edit state using the channels from configure_volume_brush; synchronized when in SharePlay. Coordinates and radius are meters from the volume minimum corner, independent of view, interactive radius, and projection. Returns when committed; brick jobs may still run. No interpolation between samples.", properties: [
         "mode": ["type": "string", "enum": ["erase", "restore"]],
         "samples": ["type": "array", "minItems": 1, "maxItems": BorgVRVolumeBrushLimits.maximumSampleCount,
           "items": ["type": "object", "properties": ["center_meters": vector3,

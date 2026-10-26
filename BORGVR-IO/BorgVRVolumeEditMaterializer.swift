@@ -55,7 +55,8 @@ final class BorgVRVolumeEditMaterializer: BorgVRVolumeEditExecutor, @unchecked S
                    revisions: [Int: UInt64]?, useGPU: Bool,
                    cached: @escaping Lookup, store: @escaping (BorgVRMaterializedEditBrick) throws -> Void,
                    isCancelled: @escaping () -> Bool) throws -> BorgVRMaterializedEditBrick {
-    guard metadata.brickMetadata.indices.contains(index), mask.size == SIMD3(metadata.width, metadata.height, metadata.depth),
+    guard mask.componentCount == metadata.componentCount, metadata.brickMetadata.indices.contains(index),
+      mask.size == SIMD3(metadata.width, metadata.height, metadata.depth),
       mask.spacing == SIMD3(Double(metadata.voxelSpacingX), Double(metadata.voxelSpacingY), Double(metadata.voxelSpacingZ)) else {
       throw BorgVRVolumeEditError.incompatibleDataset
     }
@@ -167,12 +168,14 @@ final class BorgVRVolumeEditMaterializer: BorgVRVolumeEditExecutor, @unchecked S
       let raw = input.origin &+ SIMD3(v % b, (v / b) % b, v / (b * b))
       let p = SIMD3(min(max(0, raw.x), input.size.x - 1), min(max(0, raw.y), input.size.y - 1),
         min(max(0, raw.z), input.size.z - 1))
-      let erased = input.level == 0 && mask.isErased(at: p)
+      let erased = input.level == 0 ? mask.erasedChannels(at: p) : .original
       for component in 0..<components {
         var value: UInt64 = 0
         if input.level == 0 {
           let local = p &- input.origin
-          if !erased { value = read((((local.z * b + local.y) * b + local.x) * components + component) * width) }
+          if !erased.isErased(component: component) {
+            value = read((((local.z * b + local.y) * b + local.x) * components + component) * width)
+          }
         } else {
           var count: UInt64 = 0
           for dz in 0..<2 { for dy in 0..<2 { for dx in 0..<2 {
