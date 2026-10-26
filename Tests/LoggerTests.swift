@@ -143,6 +143,22 @@ private enum LoggerTestRunner {
     try testFilterAndSanitizer()
     try testMultiplexFilteringAndConcurrency()
     try testFileFilteringConcurrencyAndRotation()
+    try testBoundedGUIBuffer()
     print("Logger tests passed")
   }
+}
+
+private func testBoundedGUIBuffer() throws {
+  var buffer = BoundedLogBuffer()
+  for index in 0..<5000 { buffer.append("entry-\(index)") }
+  let lines = buffer.text.split(separator: "\n")
+  try expect(buffer.count == 4000 && lines.count == 4000, "GUI log exceeded its entry limit")
+  try expect(lines.first == "entry-1000" && lines.last == "entry-4999", "GUI log lost FIFO order")
+  var small = BoundedLogBuffer(maximumEntries: 100, maximumBytes: 128)
+  for _ in 0..<100 { small.append("ä😀") }
+  try expect(small.byteCount <= 128, "GUI log exceeded its byte limit")
+  small.append(String(repeating: "😀", count: 1000))
+  try expect(small.byteCount <= 128 && small.text.contains("[message truncated]"), "Oversized GUI entry was not bounded")
+  small.removeAll()
+  try expect(small.count == 0 && small.byteCount == 0 && small.text.isEmpty, "GUI log clear did not reset the FIFO")
 }

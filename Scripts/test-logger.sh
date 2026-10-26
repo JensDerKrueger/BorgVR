@@ -10,6 +10,7 @@ mkdir -p "$BUILD_DIR" "$SWIFT_MODULE_CACHE"
 swiftc \
   -module-cache-path "$SWIFT_MODULE_CACHE" \
   "$ROOT/BORGVR-IO/Logger.swift" \
+  "$ROOT/AppSupport/UI/GUILogger.swift" \
   "$ROOT/Tests/LoggerTests.swift" \
   -o "$BUILD_DIR/logger-tests"
 
