@@ -343,7 +343,6 @@ final class BorgVRSession<VisualizationState: AnyObject, RuntimeState: AnyObject
   typealias SnapshotProvider = () -> BorgVRFrameSnapshot
   typealias AnnotationSnapshotProvider = () -> BorgVRAnnotationSnapshot
   typealias TransferFunctionSnapshotProvider = () -> [BorgVRTransferFunctionSnapshot]
-  typealias CommandObserver = (BorgVRCommandEvent) -> Void
 
   nonisolated(unsafe) let visualizationState: VisualizationState
   nonisolated(unsafe) let runtimeState: RuntimeState
@@ -360,7 +359,6 @@ final class BorgVRSession<VisualizationState: AnyObject, RuntimeState: AnyObject
   private var snapshotObservationCancellables: Set<AnyCancellable> = []
   private var snapshotRefreshScheduled = false
   private var tracksObservationSnapshotChanges = false
-  private var commandObservers: [UUID: CommandObserver] = [:]
   private var recordedEvents: [BorgVRCommandEvent] = []
   private var recordsCommands = false
   @Published private(set) var isCommandRecording = false
@@ -559,19 +557,6 @@ final class BorgVRSession<VisualizationState: AnyObject, RuntimeState: AnyObject
     renderSnapshotStore.publish(snapshot)
   }
 
-  @discardableResult
-  func observeCommands(_ observer: @escaping CommandObserver) -> UUID {
-    lock.withLock {
-      let id = UUID()
-      commandObservers[id] = observer
-      return id
-    }
-  }
-
-  func removeCommandObserver(_ id: UUID) {
-    lock.withLock { _ = commandObservers.removeValue(forKey: id) }
-  }
-
   func startCommandRecording() {
     lock.withLock {
       recordedEvents.removeAll(keepingCapacity: true)
@@ -603,9 +588,6 @@ final class BorgVRSession<VisualizationState: AnyObject, RuntimeState: AnyObject
       } else {
         recordedEvents.append(event)
       }
-    }
-    for observer in commandObservers.values {
-      observer(event)
     }
   }
 

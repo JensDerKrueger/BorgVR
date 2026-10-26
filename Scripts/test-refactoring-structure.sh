@@ -39,11 +39,18 @@ require_file iOSApp/iOSSharePlayPlatformAdapter.swift
 forbid_path macOSApp/SharePlayCoordinator.swift
 forbid_path iOSApp/SharePlayCoordinator.swift
 require_pattern 'BorgVRRenderSnapshotStore' AppSupport/Application/BorgVRSession.swift
+require_pattern 'volumeBrush\.close\(\)' AppSupport/Application/AppModel.swift
 require_pattern 'BorgVRFrameSnapshot' VisionApp/VisionBorgVRSession.swift
 require_pattern 'revision: evaluationState\.revision &\+ 1' BORGVR-Render/VolumeAtlas/AsyncEmptinessUpdater.swift
 
-# The visionOS renderer follows the same one-file naming convention as the screen renderers.
+# The visionOS orchestrator delegates resource ownership and non-volume drawing.
 require_file VisionApp/Rendering/VisionVolumeRenderer.swift
+require_file VisionApp/Rendering/VisionOpaqueGeometryRenderer.swift
+require_file VisionApp/Rendering/VisionFrameResources.swift
+require_file VisionApp/Rendering/VisionRenderLoopLifecycle.swift
+require_pattern 'opaqueGeometryRenderer.render' VisionApp/Rendering/VisionVolumeRenderer.swift
+forbid_pattern 'func draw(SceneMeshes|OpaqueGeometry|ScreenViewLabels)' VisionApp/Rendering/VisionVolumeRenderer.swift
+forbid_pattern 'Task.sleep' VisionApp/Rendering/VisionRenderLoopLifecycle.swift
 require_file VisionApp/VisionVolumeRendererBootstrap.swift
 forbid_path VisionApp/Rendering/RendererVariables.swift
 forbid_path VisionApp/Rendering/RendererResourceInit.swift

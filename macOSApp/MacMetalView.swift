@@ -123,21 +123,21 @@ final class InteractiveMTKView: MTKView {
     hoverTrackingArea = area
   }
 
-  override func mouseEntered(with event: NSEvent) { updatePointerHover() }
-  override func mouseMoved(with event: NSEvent) { updatePointerHover() }
+  override func mouseEntered(with event: NSEvent) { updatePointerHover(at: event.locationInWindow) }
+  override func mouseMoved(with event: NSEvent) { updatePointerHover(at: event.locationInWindow) }
   override func mouseExited(with event: NSEvent) {
-    if lastDragLocation == nil { onPointerHover(nil) }
+    // Rebuilding tracking areas can deliver an exit even though the pointer is
+    // already inside the replacement area. Check its current target first.
+    updatePointerHover()
   }
 
-  private func updatePointerHover() {
+  private func updatePointerHover(at windowPoint: NSPoint? = nil) {
     guard lastDragLocation == nil else { return }
-    guard tracksPointerHover, let window, window.isKeyWindow,
-          let contentView = window.contentView else { onPointerHover(nil); return }
-    let point = window.mouseLocationOutsideOfEventStream
+    guard tracksPointerHover, let window, window.isKeyWindow else { onPointerHover(nil); return }
+    let point = windowPoint ?? window.mouseLocationOutsideOfEventStream
     let location = convert(point, from: nil)
     // Tracking areas also cover SwiftUI overlays. Do not show the brush over controls.
-    guard bounds.contains(location),
-          contentView.hitTest(contentView.convert(point, from: nil)) === self else {
+    guard MacRenderPointerHitTest.isOverRenderSurface(at: point, in: self) else {
       onPointerHover(nil)
       return
     }

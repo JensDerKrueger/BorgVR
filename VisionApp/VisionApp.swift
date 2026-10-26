@@ -535,11 +535,11 @@ struct VisionApp: App {
 
   @MainActor
   private func openSpace(requestID: UUID) async {
-    if runtimeAppModel.immersiveSpaceState == .open {
+    if runtimeAppModel.immersiveSpaceState == .open || runtimeAppModel.renderTask != nil {
       runtimeAppModel.immersiveSpaceState = .inTransition
       let renderTask = runtimeAppModel.cancelRenderLoop()
-      await renderTask?.value
       await dismissImmersiveSpace()
+      await renderTask?.value
     }
 
     runtimeAppModel.immersiveSpaceState = .inTransition
@@ -578,10 +578,12 @@ struct VisionApp: App {
       runtimeAppModel.immersiveSpaceState = .inTransition
     }
     let renderTask = runtimeAppModel.cancelRenderLoop()
-    await renderTask?.value
     if !immersiveSpaceWasAlreadyClosed {
+      // Invalidate the compositor before joining a render task that may be
+      // servicing layer events inside waitUntilRunning().
       await dismissImmersiveSpace()
     }
+    await renderTask?.value
     runtimeAppModel.immersiveSpaceState = .closed
 
     let documentsDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!

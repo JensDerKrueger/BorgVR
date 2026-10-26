@@ -228,10 +228,6 @@ final class RenderingParameters: ObservableObject {
     return writer.data
   }
 
-  func serializeScreenSharePlayTransform() -> Data {
-    BorgVRScreenViewStateCodec.encode(screenViewState)
-  }
-
   @discardableResult
   func applySharePlayUpdate(from data: Data) throws -> Bool {
     if let screenViewState = try BorgVRScreenViewStateCodec.decodeIfPresent(data) {

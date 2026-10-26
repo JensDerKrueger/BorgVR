@@ -170,19 +170,6 @@ final class BorgARProvider {
     )
   }
 
-  func getSpatialStylusSample(atTimestamp timestamp: TimeInterval) -> BorgSpatialStylusSample? {
-    guard let sample = getSpatialInputSamples(atTimestamp: timestamp).first(where: {
-      $0.source == .stylus
-    }) else { return nil }
-    return BorgSpatialStylusSample(
-      tipPosition: sample.aimOrigin,
-      aimTransform: sample.aimTransform,
-      isDrawing: sample.primaryPressed,
-      drawingPressure: sample.drawingPressure,
-      isAdjustingRadius: !sample.primaryPressed && sample.modifierPressed
-    )
-  }
-
   func getSpatialInputSamples(atTimestamp timestamp: TimeInterval) -> [BorgSpatialInputSample] {
     stateQueue.sync {
       guard let accessoryTrackingProvider,
