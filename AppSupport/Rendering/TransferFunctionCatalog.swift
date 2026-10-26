@@ -359,8 +359,13 @@ enum TransferFunctionCatalog {
   }
 
   private static func isDatasetAutosave(_ entry: TransferFunctionCatalogEntry) -> Bool {
-    entry.description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
-      UUID(uuidString: entry.url.deletingPathExtension().lastPathComponent) != nil
+    guard entry.description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return false }
+    var stem = entry.url.deletingPathExtension()
+    if stem.pathExtension.hasPrefix("channel-"),
+       let channel = Int(stem.pathExtension.dropFirst("channel-".count)), channel > 0 {
+      stem.deletePathExtension()
+    }
+    return UUID(uuidString: stem.lastPathComponent) != nil
   }
 
   private static func matchesDatasetTransferFunctionURL(_ lhs: URL, _ rhs: URL?) -> Bool {

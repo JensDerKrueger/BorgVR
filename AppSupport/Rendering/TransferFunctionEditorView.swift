@@ -66,7 +66,7 @@ struct TransferFunctionEditorView: View {
   private var dataChannelPicker: some View {
     Picker(
       "tf_data_channel",
-      selection: $renderingParameters.selectedTransferFunctionChannel
+      selection: dataChannelSelection
     ) {
       ForEach(0..<renderingParameters.componentCount, id: \.self) { channel in
         Text(String(format: String(localized: "tf_data_channel_format"), channel + 1))
@@ -76,7 +76,27 @@ struct TransferFunctionEditorView: View {
     .pickerStyle(.segmented)
     .onChange(of: renderingParameters.selectedTransferFunctionChannel) {
       lastPaintPoint = nil
+      refreshTransferFunctionCatalog()
     }
+  }
+
+  private var dataChannelSelection: Binding<Int> {
+    #if os(macOS)
+    // AppKit's segmented-control callback runs inside SwiftUI's UpdateGroup.
+    // Publish the model change after that callback, not during the view update.
+    Binding(
+      get: { renderingParameters.selectedTransferFunctionChannel },
+      set: { channel in
+        Task { @MainActor in
+          guard (0..<renderingParameters.componentCount).contains(channel),
+                renderingParameters.selectedTransferFunctionChannel != channel else { return }
+          renderingParameters.selectedTransferFunctionChannel = channel
+        }
+      }
+    )
+    #else
+    $renderingParameters.selectedTransferFunctionChannel
+    #endif
   }
 
   private var transferFunctionCanvas: some View {
@@ -357,7 +377,10 @@ struct TransferFunctionEditorView: View {
   }
 
   private var transferFunctionFileURL: URL? {
-    appModel.transferFunctionFileURL()
+    guard let baseURL = appModel.transferFunctionFileURL() else { return nil }
+    let urls = DatasetTransferFunctionStorage.fileURLs(baseURL: baseURL, componentCount: renderingParameters.componentCount)
+    let channel = min(max(renderingParameters.selectedTransferFunctionChannel, 0), urls.count - 1)
+    return urls[channel]
   }
 
   private var currentTransferFunctionID: String {
@@ -383,7 +406,7 @@ struct TransferFunctionEditorView: View {
   private func refreshTransferFunctionCatalog() {
     transferFunctionCatalog = TransferFunctionCatalog.entries(
       additionalDirectoryURLs: catalogDirectoryURLs,
-      datasetTransferFunctionURL: appModel.transferFunctionFileURL(),
+      datasetTransferFunctionURL: transferFunctionFileURL,
       logger: appModel.logger
     )
   }

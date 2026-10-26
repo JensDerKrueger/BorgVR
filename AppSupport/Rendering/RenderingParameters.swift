@@ -99,6 +99,23 @@ final class RenderingParameters: ObservableObject {
     )
   }
 
+  func saveDatasetTransferFunctions(to urls: [URL], description: String = "") throws {
+    try DatasetTransferFunctionStorage.save(Array(activeTransferFunctions), to: urls, description: description)
+  }
+
+  func saveDatasetTransferFunctions(to baseURL: URL, description: String = "") throws {
+    try saveDatasetTransferFunctions(to: DatasetTransferFunctionStorage.fileURLs(
+      baseURL: baseURL, componentCount: componentCount), description: description)
+  }
+
+  @discardableResult
+  func loadDatasetTransferFunctions(from baseURL: URL) throws -> Bool {
+    let loaded = try DatasetTransferFunctionStorage.load(Array(activeTransferFunctions), from:
+      DatasetTransferFunctionStorage.fileURLs(baseURL: baseURL, componentCount: componentCount))
+    if loaded { updateTransferFunctionRanges(); objectWillChange.send() }
+    return loaded
+  }
+
   @discardableResult
   func updateViewportAspectRatio(_ aspectRatio: Float) -> Bool {
     guard aspectRatio.isFinite, aspectRatio > 0 else { return false }

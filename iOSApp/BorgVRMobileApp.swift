@@ -245,7 +245,7 @@ struct BorgVRMobileApp: App {
     guard appModel.activeDataset != nil else { return }
     if appSettings.autoloadTF,
        let fileURL = appModel.transferFunctionFileURL() {
-      try? renderingParameters.transferFunction.save(to: fileURL)
+      try? renderingParameters.saveDatasetTransferFunctions(to: fileURL)
     }
     appModel.saveAutomaticallyManagedDatasetState(
       appSettings: appSettings,

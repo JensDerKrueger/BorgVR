@@ -657,7 +657,7 @@ final class AppModel: ObservableObject {
     renderDisplaySyncHandler?(enabled)
   }
 
-  func transferFunctionFileURL(for dataset: DatasetEntry? = nil) -> URL? {
+  func transferFunctionFileURL(for dataset: DatasetEntry? = nil, componentCount: Int? = nil) -> URL? {
     guard let dataset = dataset ?? activeDataset else { return nil }
 
     switch dataset.source {
@@ -671,7 +671,9 @@ final class AppModel: ObservableObject {
           return nil
         }
         let localURL = datasetURL.deletingPathExtension().appendingPathExtension("tf1d")
-        movePersistentTransferFunctionIfNeeded(for: dataset, to: localURL)
+        movePersistentTransferFunctionIfNeeded(for: dataset, to: localURL,
+          componentCount: componentCount ?? min(activeDatasetMetadata?.componentCount ?? 1,
+            RenderingParameters.maximumTransferFunctionCount))
         return localURL
 
       case .builtIn:
@@ -821,10 +823,8 @@ final class AppModel: ObservableObject {
     guard let dataset = activeDataset else { return false }
     var restored = false
 
-    if let url = transferFunctionFileURL(for: dataset),
-       FileManager.default.fileExists(atPath: url.path) {
-      try renderingParameters.loadTransferFunction(from: url)
-      restored = true
+    if let url = transferFunctionFileURL(for: dataset, componentCount: renderingParameters.componentCount) {
+      restored = try renderingParameters.loadDatasetTransferFunctions(from: url)
     }
     if let url = viewStateFileURL(for: dataset),
        FileManager.default.fileExists(atPath: url.path) {
@@ -938,23 +938,23 @@ final class AppModel: ObservableObject {
     return directoryURL.appendingPathComponent(stem).appendingPathExtension("tf1d")
   }
 
-  private func movePersistentTransferFunctionIfNeeded(for dataset: DatasetEntry, to localURL: URL) {
+  private func movePersistentTransferFunctionIfNeeded(for dataset: DatasetEntry, to localURL: URL, componentCount: Int) {
     guard let persistentURL = persistentTransferFunctionFileURL(for: dataset),
           persistentURL != localURL else {
       return
     }
 
+    let sourceURLs = DatasetTransferFunctionStorage.fileURLs(baseURL: persistentURL, componentCount: componentCount)
+    let targetURLs = DatasetTransferFunctionStorage.fileURLs(baseURL: localURL, componentCount: componentCount)
     let fileManager = FileManager.default
-    guard fileManager.fileExists(atPath: persistentURL.path),
-          !fileManager.fileExists(atPath: localURL.path) else {
-      return
-    }
-
-    do {
-      try fileManager.moveItem(at: persistentURL, to: localURL)
-      logger.info("Transfer function migrated to \(localURL.lastPathComponent)")
-    } catch {
-      logger.warning("Transfer function migration failed: \(error.localizedDescription)")
+    for (source, target) in zip(sourceURLs, targetURLs) {
+      guard fileManager.fileExists(atPath: source.path), !fileManager.fileExists(atPath: target.path) else { continue }
+      do {
+        try fileManager.moveItem(at: source, to: target)
+        logger.info("Transfer function moved to \(target.lastPathComponent)")
+      } catch {
+        logger.warning("Moving transfer function failed: \(error.localizedDescription)")
+      }
     }
   }
 

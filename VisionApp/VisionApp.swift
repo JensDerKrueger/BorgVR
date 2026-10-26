@@ -593,9 +593,7 @@ struct VisionApp: App {
         let fileURL = URL(
           fileURLWithPath: autoURL.deletingPathExtension().path() + ".tf1d"
         )
-        try? sharedAppModel.transferFunction(
-          channel: runtimeAppModel.selectedTransferFunctionChannel
-        ).save(to: fileURL)
+        try? sharedAppModel.saveDatasetTransferFunctions(to: fileURL)
       }
       sharedAppModel.saveAutomaticallyManagedDatasetState(
         datasetID: dataset.uniqueId,

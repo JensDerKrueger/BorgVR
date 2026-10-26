@@ -140,7 +140,7 @@ enum VisionVolumeRendererBootstrap {
       let fileURL = URL(
         fileURLWithPath: autoURL.deletingPathExtension().path() + ".tf1d"
       )
-      try? sharedAppModel.loadTransferFunction(from: fileURL)
+      _ = try? sharedAppModel.loadDatasetTransferFunctions(from: fileURL)
       sharedAppModel.synchronize(kind: .full)
     }
     if let datasetInfo = runtimeAppModel.activeDatasetInfo {

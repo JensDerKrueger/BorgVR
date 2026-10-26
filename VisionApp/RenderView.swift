@@ -320,7 +320,7 @@ struct RenderView: View {
   private func makeDatasetStateSavePlan() -> DatasetStateSavePlan {
     guard let dataset = runtimeAppModel.activeDataset else {
       return DatasetStateSavePlan(
-        transferFunctionURL: nil,
+        transferFunctionURLs: [],
         viewStateURL: nil,
         objectURL: nil,
         measurementURL: nil
@@ -339,9 +339,9 @@ struct RenderView: View {
       !$0.points.isEmpty
     }
     return DatasetStateSavePlan(
-      transferFunctionURL: sharedAppModel.renderMode == .isoValue
-        ? nil
-        : transferFunctionURL,
+      transferFunctionURLs: sharedAppModel.renderMode == .isoValue ? [] : transferFunctionURL.map {
+        DatasetTransferFunctionStorage.fileURLs(baseURL: $0, componentCount: sharedAppModel.componentCount)
+      } ?? [],
       viewStateURL: DatasetStateStorage.viewStateFileURL(
         datasetID: dataset.uniqueId,
         logger: runtimeAppModel.logger
@@ -365,10 +365,8 @@ struct RenderView: View {
     defer { pendingDatasetStateSave = nil }
     guard let dataset = runtimeAppModel.activeDataset else { return }
     do {
-      if let url = plan.transferFunctionURL {
-        try sharedAppModel.transferFunction(
-          channel: runtimeAppModel.selectedTransferFunctionChannel
-        ).save(to: url, description: dataset.description)
+      if !plan.transferFunctionURLs.isEmpty {
+        try sharedAppModel.saveDatasetTransferFunctions(to: plan.transferFunctionURLs, description: dataset.description)
       }
       if let url = plan.viewStateURL {
         try DatasetStateStorage.saveViewState(

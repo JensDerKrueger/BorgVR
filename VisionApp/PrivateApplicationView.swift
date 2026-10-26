@@ -184,6 +184,9 @@ struct HandInteractionControlsView: View {
       Text(error.localizedDescription)
     }
     .onAppear(perform: refreshTransferFunctionCatalog)
+    .onChange(of: runtimeAppModel.selectedTransferFunctionChannel) {
+      refreshTransferFunctionCatalog()
+    }
     .onReceive(NotificationCenter.default.publisher(
       for: TransferFunctionCatalog.didChangeNotification
     )) { _ in
@@ -503,9 +506,12 @@ struct HandInteractionControlsView: View {
           ).first else {
       return nil
     }
-    return documentsURL
+    let baseURL = documentsURL
       .appendingPathComponent(activeDataset.uniqueId)
       .appendingPathExtension("tf1d")
+    let urls = DatasetTransferFunctionStorage.fileURLs(baseURL: baseURL, componentCount: sharedAppModel.componentCount)
+    let channel = min(max(runtimeAppModel.selectedTransferFunctionChannel, 0), urls.count - 1)
+    return urls[channel]
   }
 
   private func toggleVoice() {

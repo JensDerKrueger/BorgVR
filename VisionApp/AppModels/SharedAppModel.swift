@@ -425,6 +425,23 @@ class SharedAppModel {
     )
   }
 
+  func saveDatasetTransferFunctions(to urls: [URL], description: String = "") throws {
+    try DatasetTransferFunctionStorage.save(Array(activeTransferFunctions), to: urls, description: description)
+  }
+
+  func saveDatasetTransferFunctions(to baseURL: URL, description: String = "") throws {
+    try saveDatasetTransferFunctions(to: DatasetTransferFunctionStorage.fileURLs(
+      baseURL: baseURL, componentCount: componentCount), description: description)
+  }
+
+  @discardableResult
+  func loadDatasetTransferFunctions(from baseURL: URL) throws -> Bool {
+    let loaded = try DatasetTransferFunctionStorage.load(Array(activeTransferFunctions), from:
+      DatasetTransferFunctionStorage.fileURLs(baseURL: baseURL, componentCount: componentCount))
+    if loaded { updateTransferFunctionRanges() }
+    return loaded
+  }
+
   func loadAutomaticallyManagedDatasetState(
     datasetID: String,
     physicalExtent: SIMD3<Float>,
@@ -623,10 +640,8 @@ class SharedAppModel {
 
     if let url = documentsDirectory?
       .appendingPathComponent(datasetID)
-      .appendingPathExtension("tf1d"),
-       FileManager.default.fileExists(atPath: url.path) {
-      try loadTransferFunction(from: url)
-      restored = true
+      .appendingPathExtension("tf1d") {
+      restored = try loadDatasetTransferFunctions(from: url)
     }
     if let url = DatasetStateStorage.viewStateFileURL(datasetID: datasetID, logger: logger),
        FileManager.default.fileExists(atPath: url.path) {

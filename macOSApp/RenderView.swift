@@ -530,7 +530,7 @@ struct RenderView: View {
   private func closeDataset(leavingSharePlay: Bool) {
     if appSettings.autoloadTF,
        let fileURL = appModel.transferFunctionFileURL() {
-      try? renderingParameters.transferFunction.save(to: fileURL)
+      try? renderingParameters.saveDatasetTransferFunctions(to: fileURL)
     }
     appModel.saveAutomaticallyManagedDatasetState(
       appSettings: appSettings,
@@ -566,9 +566,10 @@ struct RenderView: View {
     let hasObjects = !appModel.volumeMarkers.isEmpty || !appModel.sceneMeshInstances.isEmpty
     let hasMeasurements = appModel.volumeMeasurements.contains { !$0.points.isEmpty }
     return DatasetStateSavePlan(
-      transferFunctionURL: renderingParameters.renderMode == .isoValue
-        ? nil
-        : appModel.transferFunctionFileURL(),
+      transferFunctionURLs: renderingParameters.renderMode == .isoValue ? [] :
+        appModel.transferFunctionFileURL().map {
+          DatasetTransferFunctionStorage.fileURLs(baseURL: $0, componentCount: renderingParameters.componentCount)
+        } ?? [],
       viewStateURL: appModel.viewStateFileURL(),
       objectURL: hasObjects ? appModel.objectFileURL() : nil,
       measurementURL: hasMeasurements ? appModel.measurementFileURL() : nil
@@ -579,8 +580,8 @@ struct RenderView: View {
     defer { pendingDatasetStateSave = nil }
     guard let dataset = appModel.activeDataset else { return }
     do {
-      if let url = plan.transferFunctionURL {
-        try renderingParameters.transferFunction.save(to: url, description: dataset.description)
+      if !plan.transferFunctionURLs.isEmpty {
+        try renderingParameters.saveDatasetTransferFunctions(to: plan.transferFunctionURLs, description: dataset.description)
       }
       if let url = plan.viewStateURL {
         try DatasetStateStorage.saveViewState(
