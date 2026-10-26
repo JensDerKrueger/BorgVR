@@ -347,67 +347,10 @@ struct DatasetStateSavePlan {
 }
 
 enum VolumeMeasurementExportRecovery {
-  static func finish(
-    _ result: Result<URL, Error>,
-    datasetID: String?,
-    measurements: [VolumeMeasurement]
-  ) throws {
-    guard case let .failure(error) = result else { return }
-    guard isDuplicateFileError(error),
-          let destinationURL = destinationFileURL(from: error) else {
-      throw error
+  static func finish(_ result: Result<URL, Error>, datasetID: String?, measurements: [VolumeMeasurement]) throws {
+    try CoordinatedFileExportRecovery.finish(result) {
+      try VolumeMeasurementDocument.encode(datasetID: datasetID, measurements: measurements)
     }
-
-    let data = try VolumeMeasurementDocument.encode(
-      datasetID: datasetID,
-      measurements: measurements
-    )
-    let accessed = destinationURL.startAccessingSecurityScopedResource()
-    defer {
-      if accessed { destinationURL.stopAccessingSecurityScopedResource() }
-    }
-
-    var coordinationError: NSError?
-    var writeError: Error?
-    NSFileCoordinator().coordinate(
-      writingItemAt: destinationURL,
-      options: .forReplacing,
-      error: &coordinationError
-    ) { coordinatedURL in
-      do {
-        try data.write(to: coordinatedURL, options: .atomic)
-      } catch {
-        writeError = error
-      }
-    }
-    if let coordinationError { throw coordinationError }
-    if let writeError { throw writeError }
-  }
-
-  private static func isDuplicateFileError(_ error: Error) -> Bool {
-    let nsError = error as NSError
-    if nsError.domain == NSOSStatusErrorDomain, nsError.code == -48 { return true }
-    if let underlying = nsError.userInfo[NSUnderlyingErrorKey] as? Error {
-      return isDuplicateFileError(underlying)
-    }
-    return false
-  }
-
-  private static func destinationFileURL(from error: Error) -> URL? {
-    let nsError = error as NSError
-    for key in ["NSFileNewItemLocationKey", "NSDestinationURL"] {
-      if let url = nsError.userInfo[key] as? URL { return url }
-      if let path = nsError.userInfo[key] as? String {
-        return URL(fileURLWithPath: path)
-      }
-    }
-    if let path = nsError.userInfo["NSDestinationFilePath"] as? String {
-      return URL(fileURLWithPath: path)
-    }
-    if let underlying = nsError.userInfo[NSUnderlyingErrorKey] as? Error {
-      return destinationFileURL(from: underlying)
-    }
-    return nil
   }
 }
 
