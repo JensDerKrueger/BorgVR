@@ -48,6 +48,7 @@ struct RenderControlsPanel: View {
 
         Text(appModel.activeDataset?.description ?? "BorgVR")
           .font(.headline)
+          .italic(appModel.isDatasetStreaming)
           .lineLimit(1)
 
         Spacer()

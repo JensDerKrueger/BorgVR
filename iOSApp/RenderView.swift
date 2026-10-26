@@ -299,6 +299,7 @@ struct RenderView: View {
 
           Text(appModel.activeDataset?.description ?? "BorgVR Mobile")
             .font(.headline)
+            .italic(appModel.isDatasetStreaming)
             .lineLimit(1)
 
           Spacer()

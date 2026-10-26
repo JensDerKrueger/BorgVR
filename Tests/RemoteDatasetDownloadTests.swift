@@ -96,6 +96,14 @@ private enum RemoteDatasetDownloadTests {
       [invalidOrigin], datasetID: metadata.uniqueID, timeout: 5, logger: nil,
       checking: { _ in }, receivedCatalog: { _, _ in })
     try expect(rejectedOrigin == nil, "Ad-hoc server accepted an invalid password")
+    let streamed = try await Task.detached {
+      let manager = BORGVRRemoteDataManager(host: origin.address, port: UInt16(origin.port),
+        authSecret: origin.password, logger: nil)
+      try manager.connect(timeout: 5)
+      return try manager.openDataset(datasetID: metadata.uniqueID, timeout: 5)
+    }.value
+    try expect(streamed.localRatio < 1, "A non-caching source was reported as fully local")
+    streamed.stop()
     let target = directory.appendingPathComponent("download.data")
     let downloaded = try await RemoteDatasetDownloader.download(
       datasetID: metadata.uniqueID,
@@ -111,6 +119,14 @@ private enum RemoteDatasetDownloadTests {
     try expect(
       buffer[0] == 42 && completed.getMetadata().uniqueID == metadata.uniqueID,
       "Finalized download contains invalid data")
+    let cached = try await Task.detached {
+      let manager = BORGVRRemoteDataManager(host: origin.address, port: UInt16(origin.port),
+        authSecret: origin.password, logger: nil)
+      try manager.connect(timeout: 5)
+      return try manager.openDataset(datasetID: metadata.uniqueID, timeout: 5, localCacheFilename: target.path)
+    }.value
+    try expect(cached.localRatio == 1, "An existing complete cache was reported as streaming")
+    cached.stop()
 
     let stalled = try StallingServer()
     let stalledOrigin = try await stalled.start()

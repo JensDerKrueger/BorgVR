@@ -141,12 +141,15 @@ final class AppModel: ObservableObject {
           // The render view may already be gone, so its cleanup is not a
           // reliable owner of edit-worker shutdown or the active-state lifetime.
           volumeBrush.close()
+          trackDatasetStreaming(nil)
         case .opening, .rendering, .closing:
           break
       }
     }
   }
   @Published private(set) var activeDatasetMetadata: BORGVRMetaData?
+  @Published private(set) var isDatasetStreaming = false
+  private weak var streamingDataSource: BORGVRRemoteData?
   @Published var sharePlayDatasetSource: DatasetOrigin?
   @Published var groupSessionHost = true
   @Published var interactionMode: InteractionMode = .model
@@ -231,6 +234,16 @@ final class AppModel: ObservableObject {
   init() {
     logger.setMinimumLogLevel(.warning)
     refreshSceneMeshCatalog()
+  }
+
+  func trackDatasetStreaming(_ source: BORGVRDatasetProtocol?) {
+    streamingDataSource = source as? BORGVRRemoteData
+    refreshDatasetStreamingStatus()
+  }
+
+  func refreshDatasetStreamingStatus() {
+    let streaming = (streamingDataSource?.localRatio ?? 1) < 1
+    if isDatasetStreaming != streaming { isDatasetStreaming = streaming }
   }
 
   var activeDataset: DatasetEntry? {

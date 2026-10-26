@@ -372,6 +372,7 @@ final class ScreenVolumeRendererCore {
 
   private func clearDatasetResources() {
     appModel.volumeBrush.close()
+    appModel.trackDatasetStreaming(nil)
     releaseDatasetAccess()
     dataset = nil
     volumeAtlas = nil
@@ -429,6 +430,7 @@ final class ScreenVolumeRendererCore {
         )
     }
 
+    appModel.trackDatasetStreaming(newDataset)
     let editableDataset = appModel.volumeBrush.open(newDataset, datasetURL: datasetURL, logger: appModel.logger)
     dataset = editableDataset
     timer.reset()

@@ -1153,6 +1153,7 @@ final class SharePlayCoordinator: ObservableObject {
   private func handleLocalDatasetCacheCompletion(
     _ completion: BORGVRLocalDatasetCacheCompletion
   ) {
+    appModel?.refreshDatasetStreamingStatus()
     guard isInSession,
           completion.datasetID == sessionEngine.sessionDatasetID,
           appModel?.activeDataset?.uniqueId == completion.datasetID else { return }
