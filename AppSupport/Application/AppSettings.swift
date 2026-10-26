@@ -120,6 +120,7 @@ final class AppSettings: ObservableObject {
     "brickOverlap": BorgVRSharedDefaults.brickOverlap,
     "enableCompression": BorgVRSharedDefaults.compressionEnabled,
     "borderMode": BorgVRSharedDefaults.borderMode,
+    "normalizeIsoSurfaceExport": false,
     "screenSpaceError": 0.25,
     "initialBricks": 4000,
     "minHashTableSize": 16,
@@ -185,6 +186,8 @@ final class AppSettings: ObservableObject {
   @AppStorage("brickOverlap") var brickOverlap: Int = AppSettings.int("brickOverlap")
   @AppStorage("enableCompression") var enableCompression: Bool = AppSettings.bool("enableCompression")
   @AppStorage("borderMode") var borderMode: String = AppSettings.string("borderMode")
+  @AppStorage("normalizeIsoSurfaceExport")
+  var normalizeIsoSurfaceExport: Bool = AppSettings.bool("normalizeIsoSurfaceExport")
   @AppStorage("screenSpaceError") var screenSpaceError: Double = AppSettings.double("screenSpaceError")
   @AppStorage("initialBricks") var initialBricks: Int = AppSettings.int("initialBricks")
   @AppStorage("minHashTableSize") var minHashTableSize: Int = AppSettings.int("minHashTableSize")
@@ -384,6 +387,10 @@ final class AppSettings: ObservableObject {
     borderMode = Self.stringDefault("borderMode")
   }
 
+  func resetExportDefaults() {
+    normalizeIsoSurfaceExport = Self.boolDefault("normalizeIsoSurfaceExport")
+  }
+
   func resetRemoteDefaults() {
     timeout = Self.doubleDefault("timeout")
     makeLocalCopy = Self.boolDefault("makeLocalCopy")
@@ -454,6 +461,7 @@ final class AppSettings: ObservableObject {
     resetRenderingDefaults()
     resetPerformanceDefaults()
     resetImportDefaults()
+    resetExportDefaults()
     resetRemoteDefaults()
     resetBackgroundServerDefaults()
     resetWebServerDefaults()

@@ -116,6 +116,7 @@ final class MacVolumeRenderer: NSObject, MTKViewDelegate {
       }
       let sendableDataset = SendableDataset(value: dataset)
       let logger = appModel.logger
+      let normalize = self.appSettings.normalizeIsoSurfaceExport
       let edits = appModel.volumeBrush
       let exportID: UUID
       do { exportID = try edits.beginReadOnlyExport { cancellationToken.cancel() } }
@@ -132,6 +133,7 @@ final class MacVolumeRenderer: NSObject, MTKViewDelegate {
                   dataset: sendableDataset.value,
                   normalizedIsoValue: normalizedIsoValue,
                   outputURL: outputURL,
+                  normalize: normalize,
                   logger: logger,
                   cancellationToken: cancellationToken,
                   progress: progress

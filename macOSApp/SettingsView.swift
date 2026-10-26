@@ -19,6 +19,7 @@ private enum SettingsResetSection: String, Identifiable {
   case rendering
   case performance
   case importSettings
+  case exportSettings
   case backgroundServer
   case adHocServer
   case externalDataSources
@@ -33,6 +34,7 @@ private enum SettingsResetSection: String, Identifiable {
       case .rendering: return "Rendering"
       case .performance: return "Performance"
       case .importSettings: return "Import"
+      case .exportSettings: return "Export"
       case .backgroundServer: return "Background server"
       case .adHocServer: return "Ad-hoc server"
       case .externalDataSources: return "External data sources"
@@ -51,6 +53,7 @@ private enum SettingsPage: String, CaseIterable, Identifiable {
   case performance
   case dataSource
   case importSettings
+  case exportSettings
   case externalDataSources
   case servers
   case sharePlay
@@ -65,6 +68,7 @@ private enum SettingsPage: String, CaseIterable, Identifiable {
       case .rendering: return "Rendering"
       case .performance: return "Performance"
       case .importSettings: return "Import"
+      case .exportSettings: return "Export"
       case .servers: return "Servers"
       case .externalDataSources: return "External data sources"
       case .sharePlay: return "SharePlay"
@@ -79,6 +83,7 @@ private enum SettingsPage: String, CaseIterable, Identifiable {
       case .rendering: return "paintpalette"
       case .performance: return "gauge.with.dots.needle.50percent"
       case .importSettings: return "square.and.arrow.down"
+      case .exportSettings: return "square.and.arrow.up"
       case .servers: return "server.rack"
       case .externalDataSources: return "network"
       case .sharePlay: return "shareplay"
@@ -202,6 +207,8 @@ struct SettingsView: View {
         performanceSettings
       case .importSettings:
         importSettings
+      case .exportSettings:
+        exportSettings
       case .servers:
         serverSettings
       case .externalDataSources:
@@ -333,6 +340,16 @@ struct SettingsView: View {
         .foregroundStyle(.secondary)
         .fixedSize(horizontal: false, vertical: true)
       resetButton(for: .general)
+    }
+  }
+
+  private var exportSettings: some View {
+    settingsGroup(
+      "Isosurface Export",
+      description: "Normalize the longest dataset axis to -1 ... 1 while preserving proportions. When disabled, exported coordinates use meters."
+    ) {
+      toggleRow("Normalize isosurface export", isOn: $appSettings.normalizeIsoSurfaceExport)
+      resetButton(for: .exportSettings)
     }
   }
 
@@ -775,6 +792,8 @@ struct SettingsView: View {
       case .importSettings:
         appSettings.resetImportDefaults()
         storedAppModel.resetImportDefaults()
+      case .exportSettings:
+        appSettings.resetExportDefaults()
       case .backgroundServer:
         appSettings.maxBricksPerGetRequest = AppSettings.values["maxBricksPerGetRequest"] as? Int
           ?? BorgVRSharedDefaults.maximumBricksPerRequest

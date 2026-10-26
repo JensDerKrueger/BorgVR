@@ -1,4 +1,5 @@
 import Foundation
+import simd
 
 private enum TestFailure: Error, CustomStringConvertible {
   case failed(String)
@@ -432,6 +433,40 @@ private func testIsoSurfaceExtractionUsesUniqueCellsAndChannelMinimum() throws {
     let obj = try String(contentsOf: objURL, encoding: .utf8)
     let faces = obj.split(separator: "\n").filter { $0.hasPrefix("f ") }
     try expect(result.triangleCount == faces.count, "OBJ face count differs from result")
+
+    let normalizedURL = directory.appendingPathComponent("\(name)-normalized.obj")
+    let normalizedResult = try BorgVRIsoSurfaceExtractor.extract(
+      dataset: source, normalizedIsoValue: 0.5, outputURL: normalizedURL, normalize: true
+    )
+    let normalizedOBJ = try String(contentsOf: normalizedURL, encoding: .utf8)
+    func lines(_ text: String, prefix: String) -> [Substring] {
+      text.split(separator: "\n").filter { $0.hasPrefix(prefix) }
+    }
+    let vertices = lines(obj, prefix: "v ")
+    let normalizedVertices = lines(normalizedOBJ, prefix: "v ")
+    try expect(vertices.count == normalizedVertices.count &&
+      result.triangleCount == normalizedResult.triangleCount,
+      "Normalization changed the extracted geometry")
+    let scale = 2 / max(Double(size.x) * Double(voxelSpacing.x),
+                        Double(size.y) * Double(voxelSpacing.y),
+                        Double(size.z) * Double(voxelSpacing.z))
+    for (physical, normalized) in zip(vertices, normalizedVertices) {
+      let physicalCoordinates = physical.split(separator: " ").dropFirst().compactMap { Double($0) }
+      let normalizedCoordinates = normalized.split(separator: " ").dropFirst().compactMap { Double($0) }
+      try expect(physicalCoordinates.count == 3 && normalizedCoordinates.count == 3,
+                 "Exported vertex coordinates are invalid")
+      for (coordinate, normalizedCoordinate) in zip(physicalCoordinates, normalizedCoordinates) {
+        try expect(abs(normalizedCoordinate - coordinate * scale) < 0.000001 &&
+          abs(normalizedCoordinate) <= 1,
+          "Normalization did not uniformly scale the source volume to [-1, 1]")
+      }
+    }
+    try expect(lines(obj, prefix: "vn ") == lines(normalizedOBJ, prefix: "vn ") &&
+      faces == lines(normalizedOBJ, prefix: "f "),
+      "Normalization changed normals, topology or winding")
+    try expect(obj.contains("Coordinates are expressed in meters.") &&
+      normalizedOBJ.contains("coordinates are unitless."),
+      "OBJ header does not describe the export coordinate system")
     return faces.count
   }
 
@@ -460,6 +495,115 @@ private func testIsoSurfaceExtractionUsesUniqueCellsAndChannelMinimum() throws {
     picometerFaceCount == 18,
     "Physical-scale degeneracy check rejected a picometer-sized isosurface"
   )
+  _ = try extract(componentCount: 1, brickSize: 4, overlap: 1, name: "longest-x",
+                  voxelSpacing: Vec3<Float>(x: 0.6, y: 0.2, z: 0.1))
+}
+
+private func testIsoSurfaceInterpolatesSampleGradients() throws {
+  let directory = FileManager.default.temporaryDirectory
+    .appendingPathComponent("borgvr-isosurface-normals-\(UUID())")
+  try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+  let previousBackend = ProcessInfo.processInfo.environment["BORGVR_DISABLE_METAL_ISOSURFACE"]
+  defer {
+    try? FileManager.default.removeItem(at: directory)
+    if let previousBackend { setenv("BORGVR_DISABLE_METAL_ISOSURFACE", previousBackend, 1) }
+    else { unsetenv("BORGVR_DISABLE_METAL_ISOSURFACE") }
+  }
+
+  func checkField(name: String, size: Vec3<Int>, spacing: Vec3<Float>, threshold: Double,
+                  requiresCenter: Bool = false, sample: (SIMD3<Int>) -> UInt16) throws {
+    let rawURL = directory.appendingPathComponent(name + ".raw")
+    var data = Data()
+    for z in 0..<size.z { for y in 0..<size.y { for x in 0..<size.x {
+      let value = sample(SIMD3(x, y, z))
+      data.append(UInt8(truncatingIfNeeded: value))
+      data.append(UInt8(truncatingIfNeeded: value >> 8))
+    } } }
+    try data.write(to: rawURL)
+    let dimensions = SIMD3(size.x, size.y, size.z)
+    let physicalSpacing = SIMD3(Double(spacing.x), Double(spacing.y), Double(spacing.z))
+
+    func expectedNormal(at voxel: SIMD3<Double>) -> SIMD3<Double> {
+      let lower = SIMD3(Int(floor(voxel.x)), Int(floor(voxel.y)), Int(floor(voxel.z)))
+      let fraction = voxel - SIMD3(Double(lower.x), Double(lower.y), Double(lower.z))
+      var gradient = SIMD3<Double>.zero
+      for z in 0...1 { for y in 0...1 { for x in 0...1 {
+        let position = simd_clamp(lower &+ SIMD3(x, y, z), .zero, dimensions &- SIMD3(repeating: 1))
+        let weight = (x == 0 ? 1 - fraction.x : fraction.x) *
+          (y == 0 ? 1 - fraction.y : fraction.y) * (z == 0 ? 1 - fraction.z : fraction.z)
+        for axis in 0..<3 {
+          var before = position
+          var after = position
+          before[axis] = max(0, position[axis] - 1)
+          after[axis] = min(dimensions[axis] - 1, position[axis] + 1)
+          gradient[axis] += weight * (Double(sample(after)) - Double(sample(before))) /
+            (Double(after[axis] - before[axis]) * physicalSpacing[axis])
+        }
+      } } }
+      return simd_length_squared(gradient) > 0 ? -simd_normalize(gradient) : .zero
+    }
+
+    for (brickSize, overlap) in [(4, 0), (4, 1), (8, 2)] {
+      let dataURL = directory.appendingPathComponent("\(name)-\(brickSize)-\(overlap).data")
+      let accessor = try RawFileAccessor(filename: rawURL.path, size: size,
+        bytesPerComponent: 2, componentCount: 1, voxelSpacing: spacing)
+      try BrickedVolumeReorganizer(inputVolume: accessor, brickSize: brickSize, overlap: overlap,
+        extensionStrategy: .fillZeroes).reorganize(to: dataURL.path,
+          datasetDescription: name, metaDescription: "")
+      let source = try BORGVRFileData(filename: dataURL.path)
+      var cpuOutput: [Substring] = []
+      for cpu in [true, false] {
+        setenv("BORGVR_DISABLE_METAL_ISOSURFACE", cpu ? "1" : "0", 1)
+        let objURL = directory.appendingPathComponent("\(name)-\(brickSize)-\(overlap)-\(cpu).obj")
+        try BorgVRIsoSurfaceExtractor.extract(dataset: source,
+          normalizedIsoValue: threshold / 65535, outputURL: objURL)
+        let output = try String(contentsOf: objURL, encoding: .utf8).split(separator: "\n").filter {
+          $0.hasPrefix("v ") || $0.hasPrefix("vn ") || $0.hasPrefix("f ")
+        }
+        if cpu { cpuOutput = output }
+        else { try expect(output == cpuOutput, "CPU and Metal normals or geometry differ: \(name)") }
+        var position = SIMD3<Double>.zero
+        var normals: [SIMD3<Double>: SIMD3<Double>] = [:]
+        var foundCenter = false
+        for line in output {
+          let fields = line.split(separator: " ")
+          guard fields[0] == "v" || fields[0] == "vn" else { continue }
+          let vector = SIMD3(Double(fields[1])!, Double(fields[2])!, Double(fields[3])!)
+          if fields[0] == "v" { position = vector; continue }
+          try expect(vector.x.isFinite && vector.y.isFinite && vector.z.isFinite &&
+            abs(simd_length(vector) - 1) < 0.000001, "Invalid surface normal: \(name)")
+          let voxel = position / physicalSpacing +
+            SIMD3(Double(size.x), Double(size.y), Double(size.z)) / 2 - SIMD3(repeating: 0.5)
+          let expected = expectedNormal(at: voxel)
+          if simd_length_squared(expected) > 0 {
+            try expect(simd_length(vector - expected) < 0.00001,
+              "Surface normal does not interpolate sample gradients: \(name), \(voxel)")
+          }
+          if let previous = normals[position] {
+            try expect(simd_length(previous - vector) < 0.000001,
+              "Shared surface point has inconsistent normals across cells/bricks: \(name)")
+          }
+          normals[position] = vector
+          if simd_length(voxel - SIMD3(repeating: 1.5)) < 0.000001 { foundCenter = true }
+        }
+        try expect(!requiresCenter || foundCenter, "MC33 interior vertex was not tested")
+      }
+    }
+  }
+
+  try checkField(name: "anisotropic-curve", size: Vec3(x: 7, y: 6, z: 5),
+    spacing: Vec3(x: 0.25, y: 0.5, z: 0.75), threshold: 320) { p in
+      UInt16(100 + 8 * p.x * p.x + 4 * p.y * p.y + 2 * p.z * p.z)
+    }
+  let corners = [SIMD3(0, 0, 0), SIMD3(1, 0, 0), SIMD3(1, 1, 0), SIMD3(0, 1, 0),
+                 SIMD3(0, 0, 1), SIMD3(1, 0, 1), SIMD3(1, 1, 1), SIMD3(0, 1, 1)]
+  try checkField(name: "mc33-center", size: Vec3(x: 4, y: 4, z: 4),
+    spacing: Vec3(x: 0.25, y: 0.5, z: 0.75), threshold: 100, requiresCenter: true) { p in
+      if let corner = corners.firstIndex(of: p &- SIMD3(repeating: 1)) {
+        return 90 & (1 << corner) != 0 ? 200 : 0
+      }
+      return UInt16(100 + 30 * p.x + 20 * p.y + 10 * p.z)
+    }
 }
 
 private func testMarchingCubes33Cases() throws {
@@ -1215,6 +1359,7 @@ private enum VolumeConversionServiceTestRunner {
     try testIntegerVolumeSamplerHandlesInterpolationAndPadding()
     try testDICOMFusionTreatsMovingPaddingAsMissing()
     try testIsoSurfaceExtractionUsesUniqueCellsAndChannelMinimum()
+    try testIsoSurfaceInterpolatesSampleGradients()
     try runIsoSurfaceEditTests()
     try testMarchingCubes33Cases()
     try testDICOMFusionUsesPatientGeometry()

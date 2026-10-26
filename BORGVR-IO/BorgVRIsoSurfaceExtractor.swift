@@ -206,6 +206,7 @@ enum BorgVRIsoSurfaceExtractor {
     dataset: BORGVRDatasetProtocol,
     normalizedIsoValue: Double,
     outputURL requestedOutputURL: URL,
+    normalize: Bool = false,
     logger: LoggerBase? = nil,
     cancellationToken: CancellationToken? = nil,
     progress: @escaping @Sendable (Double) -> Void = { _ in }
@@ -228,6 +229,9 @@ enum BorgVRIsoSurfaceExtractor {
       Double(metadata.voxelSpacingY),
       Double(metadata.voxelSpacingZ)
     )
+    let longestAxis = max(Double(size.x) * spacing.x, Double(size.y) * spacing.y,
+                          Double(size.z) * spacing.z)
+    let positionScale = normalize ? 2 / longestAxis : 1
 
     let fileManager = FileManager.default
     let directory = outputURL.deletingLastPathComponent()
@@ -357,7 +361,7 @@ enum BorgVRIsoSurfaceExtractor {
         let textFormattingStart = Date()
         DispatchQueue.concurrentPerform(iterations: meshes.count) { index in
           fragmentStorage.store(
-            format(meshes[index], baseIndex: baseIndices[index]),
+            format(meshes[index], baseIndex: baseIndices[index], positionScale: positionScale),
             at: index
           )
         }
@@ -399,6 +403,7 @@ enum BorgVRIsoSurfaceExtractor {
       faceURL: faceURL,
       sourceDescription: metadata.datasetDescription,
       isoValue: threshold,
+      normalize: normalize,
       cancellationToken: cancellationToken
     )
     try cancellationToken?.checkCancellation()
@@ -528,10 +533,13 @@ enum BorgVRIsoSurfaceExtractor {
             values: values,
             threshold: context.threshold
           )
-          appendCell(
+          try appendCell(
             origin: cellOrigin,
             values: values,
             triangles: cellTriangles,
+            reader: reader,
+            brickOrigin: job.origin,
+            brick: brick,
             context: context,
             to: &mesh
           )
@@ -605,10 +613,13 @@ enum BorgVRIsoSurfaceExtractor {
               )
             )
           }
-          appendCell(
+          try appendCell(
             origin: cellOrigin,
             values: values,
             triangles: triangles,
+            reader: reader,
+            brickOrigin: job.origin,
+            brick: brick,
             context: context,
             to: &mesh
           )
@@ -622,10 +633,16 @@ enum BorgVRIsoSurfaceExtractor {
     origin: SIMD3<Int>,
     values: [Double],
     triangles: [BorgVRMarchingCubes33.Triangle],
+    reader: BrickReader,
+    brickOrigin: SIMD3<Int>,
+    brick: LoadedBrick,
     context: ExtractionContext,
     to mesh: inout BrickMesh
-  ) {
+  ) throws {
     guard !triangles.isEmpty else { return }
+    let gradients = try cornerOffsets.map { offset in
+      try reader.gradient(at: origin &+ offset, brickOrigin: brickOrigin, brick: brick)
+    }
     var used = Array(repeating: false, count: 13)
     for triangle in triangles {
       guard triangle.firstEdge < used.count,
@@ -641,6 +658,7 @@ enum BorgVRIsoSurfaceExtractor {
         edge: $0,
         cellOrigin: origin,
         values: values,
+        gradients: gradients,
         threshold: context.threshold,
         volumeSize: context.volumeSize,
         spacing: context.spacing
@@ -699,11 +717,11 @@ enum BorgVRIsoSurfaceExtractor {
     mesh.triangles.append(contentsOf: validTriangles)
   }
 
-  private static func format(_ mesh: BrickMesh, baseIndex: Int) -> BrickFragment {
+  private static func format(_ mesh: BrickMesh, baseIndex: Int, positionScale: Double) -> BrickFragment {
     var vertices = ""
     vertices.reserveCapacity(mesh.vertices.count * 80)
     for vertex in mesh.vertices {
-      vertices.append(objVertex(vertex.position))
+      vertices.append(objVertex(vertex.position * positionScale))
       vertices.append(objNormal(vertex.normal))
     }
 
@@ -749,6 +767,7 @@ enum BorgVRIsoSurfaceExtractor {
     edge: Int,
     cellOrigin: SIMD3<Int>,
     values: [Double],
+    gradients: [SIMD3<Double>],
     threshold: Double,
     volumeSize: Vec3<Int>,
     spacing: SIMD3<Double>
@@ -767,7 +786,7 @@ enum BorgVRIsoSurfaceExtractor {
       )
       return Vertex(
         position: (voxel + SIMD3<Double>(repeating: 0.5) - center) * spacing,
-        normal: trilinearGradient(values: values, local: local, spacing: spacing)
+        normal: gradients.reduce(.zero, +) / 8
       )
     }
     let corners = edgeCorners[edge]
@@ -797,31 +816,9 @@ enum BorgVRIsoSurfaceExtractor {
     let position = (voxel + SIMD3<Double>(repeating: 0.5) - center) * spacing
     return Vertex(
       position: position,
-      normal: trilinearGradient(values: values, local: local, spacing: spacing)
+      normal: simd_mix(gradients[corners.0], gradients[corners.1],
+                       SIMD3<Double>(repeating: interpolation))
     )
-  }
-
-  private static func trilinearGradient(
-    values: [Double],
-    local: SIMD3<Double>,
-    spacing: SIMD3<Double>
-  ) -> SIMD3<Double> {
-    let x = local.x
-    let y = local.y
-    let z = local.z
-    let dx = (1 - y) * (1 - z) * (values[1] - values[0]) +
-      y * (1 - z) * (values[2] - values[3]) +
-      (1 - y) * z * (values[5] - values[4]) +
-      y * z * (values[6] - values[7])
-    let dy = (1 - x) * (1 - z) * (values[3] - values[0]) +
-      x * (1 - z) * (values[2] - values[1]) +
-      (1 - x) * z * (values[7] - values[4]) +
-      x * z * (values[6] - values[5])
-    let dz = (1 - x) * (1 - y) * (values[4] - values[0]) +
-      x * (1 - y) * (values[5] - values[1]) +
-      (1 - x) * y * (values[7] - values[3]) +
-      x * y * (values[6] - values[2])
-    return SIMD3<Double>(dx / spacing.x, dy / spacing.y, dz / spacing.z)
   }
 
   private static func normalized(
@@ -846,6 +843,7 @@ enum BorgVRIsoSurfaceExtractor {
     faceURL: URL,
     sourceDescription: String,
     isoValue: Double,
+    normalize: Bool,
     cancellationToken: CancellationToken?
   ) throws {
     _ = FileManager.default.createFile(atPath: outputURL.path, contents: nil)
@@ -855,7 +853,8 @@ enum BorgVRIsoSurfaceExtractor {
     # BorgVR Marching Cubes isosurface
     # Source: \(sourceDescription.replacingOccurrences(of: "\n", with: " "))
     # Raw isovalue: \(isoValue)
-    # Coordinates are expressed in meters and centered on the source volume.
+    # Coordinates are centered on the source volume.
+    # \(normalize ? "The longest source-volume axis is normalized to [-1, 1]; coordinates are unitless." : "Coordinates are expressed in meters.")
     o BorgVR_Isosurface
 
     """
@@ -940,6 +939,7 @@ enum BorgVRIsoSurfaceExtractor {
     private let stride: Int
     private var cache: [Int: LoadedBrick] = [:]
     private var accessOrder: [Int] = []
+    private var gradients: [SIMD3<Int>: SIMD3<Double>] = [:]
     private let maximumCachedBrickCount = 16
 
     init(
@@ -952,6 +952,37 @@ enum BorgVRIsoSurfaceExtractor {
       self.cancellationToken = cancellationToken
       self.level = metadata.levelMetadata[0]
       self.stride = metadata.brickSize - 2 * metadata.overlap
+    }
+
+    func gradient(at position: SIMD3<Int>, brickOrigin: SIMD3<Int>,
+                  brick: LoadedBrick) throws -> SIMD3<Double> {
+      if let cached = gradients[position] { return cached }
+      let size = SIMD3(level.size.x, level.size.y, level.size.z)
+      let spacing = SIMD3(Double(metadata.voxelSpacingX), Double(metadata.voxelSpacingY),
+                          Double(metadata.voxelSpacingZ))
+      var gradient = SIMD3<Double>.zero
+      for axis in 0..<3 {
+        var before = position
+        var after = position
+        before[axis] = max(0, position[axis] - 1)
+        after[axis] = min(size[axis] - 1, position[axis] + 1)
+        let lower = try scalar(at: before, brickOrigin: brickOrigin, brick: brick)
+        let upper = try scalar(at: after, brickOrigin: brickOrigin, brick: brick)
+        gradient[axis] = (upper - lower) / (Double(after[axis] - before[axis]) * spacing[axis])
+      }
+      gradients[position] = gradient
+      return gradient
+    }
+
+    private func scalar(at position: SIMD3<Int>, brickOrigin: SIMD3<Int>,
+                        brick: LoadedBrick) throws -> Double {
+      let local = position &- brickOrigin &+ SIMD3(repeating: metadata.overlap)
+      if local.x >= 0, local.y >= 0, local.z >= 0,
+         local.x < metadata.brickSize, local.y < metadata.brickSize, local.z < metadata.brickSize {
+        return brick.scalar(x: local.x, y: local.y, z: local.z)
+      }
+      // A narrow or absent overlap may not contain the central-difference neighbors.
+      return try scalar(x: position.x, y: position.y, z: position.z)
     }
 
     func scalar(x: Int, y: Int, z: Int) throws -> Double {

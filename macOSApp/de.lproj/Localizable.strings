@@ -1024,3 +1024,11 @@
 "All edits in the active state will be removed. During SharePlay this clears the shared state for everyone. Other states and the original dataset are preserved." = "Alle Bearbeitungen im aktiven Stand werden entfernt. Während SharePlay wird damit der gemeinsame Stand für alle zurückgesetzt. Andere Stände und der Originaldatensatz bleiben erhalten.";
 "Preparing Edit State" = "Bearbeitungsstand vorbereiten";
 "Finishing pending volume updates before opening." = "Ausstehende Volumen-Aktualisierungen werden vor dem Öffnen abgeschlossen.";
+"Isosurface Export" = "Isoflächenexport";
+"Normalize isosurface export" = "Isoflächenexport normalisieren";
+"Normalize the longest dataset axis to -1 ... 1 while preserving proportions. When disabled, exported coordinates use meters." = "Die längste Datensatzachse auf -1 bis +1 normalisieren und dabei die Proportionen erhalten. Wenn deaktiviert, werden Koordinaten in Metern exportiert.";
+
+// Per-channel volume editing
+"Edit Channels" = "Kanäle bearbeiten";
+"All Channels" = "Alle Kanäle";
+"Channel %lld" = "Kanal %lld";
