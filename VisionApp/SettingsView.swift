@@ -537,6 +537,7 @@ struct SettingsView: View {
                 .frame(width: 100)
               }
               SecureField("settings_label_dataset_server_password", text: $storedAppModel.serverPassword)
+              if let error = storedAppModel.credentialStorageError { Text(error).foregroundStyle(.red) }
               Stepper(value: $storedAppModel.maxBricksPerGetRequest, in: 1...1000) {
                 Text(String(format: NSLocalizedString("settings_label_max_bricks_per_request_format", comment: "Maximum bricks per request"), storedAppModel.maxBricksPerGetRequest))
               }

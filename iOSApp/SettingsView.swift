@@ -527,6 +527,7 @@ struct SettingsView: View {
         Toggle("Start server automatically", isOn: $appSettings.autoStartServer)
         portField("Port", value: $appSettings.serverPort)
         secureFieldRow("Server password (optional)", text: $appSettings.serverPassword)
+        if let error = appSettings.credentialStorageError { Text(error).foregroundStyle(.red) }
         Stepper(value: $appSettings.maxBricksPerGetRequest, in: 1...1000) {
           Text(String(format: String(localized: "Max. bricks per request: %d"), appSettings.maxBricksPerGetRequest))
         }

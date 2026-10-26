@@ -1,6 +1,111 @@
 import Foundation
 import Security
 
+protocol ServerCredentialVault: AnyObject {
+  func reference(for secret: String) throws -> UUID
+  func secret(for reference: UUID) throws -> String
+}
+
+extension CodingUserInfoKey {
+  static let serverCredentialVault = CodingUserInfoKey(rawValue: "serverCredentialVault")!
+}
+
+final class KeychainServerCredentialVault: ServerCredentialVault {
+  static let shared = KeychainServerCredentialVault()
+  private let lock = NSLock()
+  private var references: [String: UUID] = [:]
+  func reference(for secret: String) throws -> UUID {
+    try lock.withLock {
+      if let id = references[secret] { return id }
+      let id = UUID()
+      try KeychainSecretStore.setString(secret, account: "server-credential.\(id.uuidString)")
+      references[secret] = id
+      return id
+    }
+  }
+  func secret(for reference: UUID) throws -> String {
+    guard
+      let secret = try KeychainSecretStore.string(
+        account: "server-credential.\(reference.uuidString)")
+    else {
+      throw KeychainSecretError.invalidData
+    }
+    lock.withLock { references[secret] = reference }
+    return secret
+  }
+}
+
+struct StoredServerCredential: Codable, Equatable, Sendable {
+  var value: String
+  init(_ value: String = "") { self.value = value }
+  init(from decoder: Decoder) throws {
+    let container = try decoder.singleValueContainer()
+    let vault =
+      decoder.userInfo[.serverCredentialVault] as? ServerCredentialVault
+      ?? KeychainServerCredentialVault.shared
+    if container.decodeNil() {
+      value = ""
+    } else {
+      value = try vault.secret(for: container.decode(UUID.self))
+    }
+  }
+  func encode(to encoder: Encoder) throws {
+    var container = encoder.singleValueContainer()
+    if value.isEmpty { try container.encodeNil(); return }
+    let vault =
+      encoder.userInfo[.serverCredentialVault] as? ServerCredentialVault
+      ?? KeychainServerCredentialVault.shared
+    try container.encode(vault.reference(for: value))
+  }
+}
+
+struct StoredDatasetOrigin: Codable {
+  let address: String
+  let port: Int
+  let credential: StoredServerCredential
+  init(_ origin: DatasetOrigin) {
+    address = origin.address; port = origin.port; credential = .init(origin.password)
+  }
+  var origin: DatasetOrigin { .init(address: address, port: port, password: credential.value) }
+}
+
+struct StoredServer: Identifiable, Codable, Equatable, Sendable {
+  var id: UUID
+  var address: String
+  var port: Int
+  private var credential: StoredServerCredential
+  var password: String {
+    get { credential.value }
+    set { credential.value = newValue }
+  }
+  var shareViaSharePlay: Bool
+  init(
+    id: UUID = UUID(), address: String, port: Int, password: String = "",
+    shareViaSharePlay: Bool = false
+  ) {
+    self.id = id; self.address = address; self.port = port
+    credential = .init(password); self.shareViaSharePlay = shareViaSharePlay
+  }
+}
+
+enum DatasetServerPasswordStore {
+  private static let account = "dataset-server-password"
+  static func load() -> String {
+    UserDefaults.standard.removeObject(forKey: "serverPassword")
+    return (try? KeychainSecretStore.string(account: account)) ?? ""
+  }
+  static func save(_ password: String) -> String? {
+    do {
+      if password.isEmpty {
+        try KeychainSecretStore.delete(account: account)
+      } else {
+        try KeychainSecretStore.setString(password, account: account)
+      }
+      return nil
+    } catch { return error.localizedDescription }
+  }
+}
+
 enum KeychainSecretStore {
   static func string(account: String) throws -> String? {
     var query = baseQuery(account: account)
@@ -69,17 +174,8 @@ enum WebServerCertificatePasswordStore {
   private static let legacyDefaultsKey = "webServerCertificatePassword"
 
   static func load() -> String {
-    if let password = try? KeychainSecretStore.string(account: account) {
-      return password
-    }
-
-    let legacyPassword = UserDefaults.standard.string(forKey: legacyDefaultsKey) ?? ""
-    guard !legacyPassword.isEmpty else {
-      return ""
-    }
-
-    try? save(legacyPassword)
-    return legacyPassword
+    UserDefaults.standard.removeObject(forKey: legacyDefaultsKey)
+    return (try? KeychainSecretStore.string(account: account)) ?? ""
   }
 
   static func save(_ password: String) throws {

@@ -45,9 +45,13 @@ final class DatasetOriginCatalog: @unchecked Sendable {
   static let shared = DatasetOriginCatalog()
 
   private struct Record: Codable {
-    let origin: DatasetOrigin
+    private let source: StoredDatasetOrigin
+    var origin: DatasetOrigin { source.origin }
     let sequence: UInt64
     let allowsSharing: Bool
+    init(origin: DatasetOrigin, sequence: UInt64, allowsSharing: Bool) {
+      source = .init(origin); self.sequence = sequence; self.allowsSharing = allowsSharing
+    }
   }
 
   private struct Storage: Codable {
@@ -57,16 +61,21 @@ final class DatasetOriginCatalog: @unchecked Sendable {
 
   private let lock = NSLock()
   private let defaults: UserDefaults
+  private let credentials: ServerCredentialVault
   private let storageKey = "borgvr.dataset-origin-catalog.v1"
   private var storage: Storage
 
-  init(defaults: UserDefaults = .standard) {
+  init(defaults: UserDefaults = .standard, credentials: ServerCredentialVault = KeychainServerCredentialVault.shared) {
     self.defaults = defaults
+    self.credentials = credentials
+    let decoder = JSONDecoder()
+    decoder.userInfo[.serverCredentialVault] = credentials
     if let data = defaults.data(forKey: storageKey),
-       let decoded = try? JSONDecoder().decode(Storage.self, from: data) {
+       let decoded = try? decoder.decode(Storage.self, from: data) {
       storage = decoded
     } else {
       storage = Storage()
+      defaults.removeObject(forKey: storageKey)
     }
   }
 
@@ -244,7 +253,9 @@ final class DatasetOriginCatalog: @unchecked Sendable {
   }
 
   private func persist() {
-    guard let data = try? JSONEncoder().encode(storage) else { return }
+    let encoder = JSONEncoder()
+    encoder.userInfo[.serverCredentialVault] = credentials
+    guard let data = try? encoder.encode(storage) else { return }
     defaults.set(data, forKey: storageKey)
   }
 }

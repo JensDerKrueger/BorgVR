@@ -404,6 +404,7 @@ struct SettingsView: View {
           toggleRow("Start server automatically", isOn: $storedAppModel.autoStartServer)
           portField("Port", value: $storedAppModel.port)
           secureFieldRow("Server password (optional)", text: $storedAppModel.serverPassword)
+          if let error = storedAppModel.credentialStorageError { Text(error).foregroundStyle(.red) }
           toggleRow("Start WebGPU web server", isOn: $storedAppModel.enableWebServer)
           toggleRow("Use HTTPS", isOn: $storedAppModel.webServerUsesTLS)
           if !storedAppModel.webServerUsesTLS {

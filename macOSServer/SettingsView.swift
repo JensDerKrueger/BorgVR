@@ -69,6 +69,7 @@ struct SettingsView: View {
                   .textFieldStyle(RoundedBorderTextFieldStyle())
                   .frame(width: 220)
                   .accentColor(.blue)
+                if let error = storedAppModel.credentialStorageError { Text(error).foregroundStyle(.red) }
               }
               GridRow {
                 Text("WebGPU web server")

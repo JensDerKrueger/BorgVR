@@ -1,5 +1,25 @@
 import SwiftUI
 
+private struct StoredSyncEndpoint: Codable {
+  let id: UUID
+  let address: String
+  let port: Int
+  let credential: StoredServerCredential
+  let intervalSeconds: Int
+
+  init(_ endpoint: ServerSyncEndpoint) {
+    id = endpoint.id
+    address = endpoint.address
+    port = endpoint.port
+    credential = .init(endpoint.password)
+    intervalSeconds = endpoint.intervalSeconds
+  }
+
+  var endpoint: ServerSyncEndpoint {
+    .init(id: id, address: address, port: port, password: credential.value, intervalSeconds: intervalSeconds)
+  }
+}
+
 final class StoredAppModel : ObservableObject {
 
   static let defaultBrickSize = BorgVRSharedDefaults.brickSize
@@ -24,7 +44,10 @@ final class StoredAppModel : ObservableObject {
   @AppStorage("serverPort") var port: Int = defaultPort
 
   static let defaultServerPassword: String = ""
-  @AppStorage("serverPassword") var serverPassword: String = defaultServerPassword
+  @Published private(set) var credentialStorageError: String?
+  @Published var serverPassword = DatasetServerPasswordStore.load() {
+    didSet { credentialStorageError = DatasetServerPasswordStore.save(serverPassword) }
+  }
 
   static let defaultEnableWebServer: Bool = false
   @AppStorage("enableWebServer") var enableWebServer: Bool = defaultEnableWebServer
@@ -46,20 +69,32 @@ final class StoredAppModel : ObservableObject {
 
   @AppStorage("syncServers") private var syncServersData: Data = Data()
 
+  init() {
+    guard !syncServersData.isEmpty else { return }
+    do { _ = try JSONDecoder().decode([StoredSyncEndpoint].self, from: syncServersData) }
+    catch is DecodingError { syncServersData = Data() }
+    catch { credentialStorageError = error.localizedDescription }
+  }
+
   var syncServers: [ServerSyncEndpoint] {
     get {
       guard !syncServersData.isEmpty,
             let servers = try? JSONDecoder().decode(
-              [ServerSyncEndpoint].self,
+              [StoredSyncEndpoint].self,
               from: syncServersData
             ) else {
         return []
       }
-      return servers
+      return servers.map(\.endpoint)
     }
     set {
       objectWillChange.send()
-      syncServersData = (try? JSONEncoder().encode(newValue)) ?? Data()
+      do {
+        syncServersData = try JSONEncoder().encode(newValue.map(StoredSyncEndpoint.init))
+        credentialStorageError = nil
+      } catch {
+        credentialStorageError = error.localizedDescription
+      }
     }
   }
 

@@ -57,44 +57,6 @@ enum AppLogLevel: String, CaseIterable, Identifiable {
   }
 }
 
-struct StoredServer: Identifiable, Codable, Equatable, Sendable {
-  var id: UUID = UUID()
-  var address: String
-  var port: Int
-  var password: String = ""
-  var shareViaSharePlay: Bool = false
-
-  init(
-    id: UUID = UUID(),
-    address: String,
-    port: Int,
-    password: String = "",
-    shareViaSharePlay: Bool = false
-  ) {
-    self.id = id
-    self.address = address
-    self.port = port
-    self.password = password
-    self.shareViaSharePlay = shareViaSharePlay
-  }
-
-  private enum CodingKeys: String, CodingKey {
-    case id
-    case address
-    case port
-    case password
-    case shareViaSharePlay
-  }
-
-  init(from decoder: Decoder) throws {
-    let container = try decoder.container(keyedBy: CodingKeys.self)
-    id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
-    address = try container.decode(String.self, forKey: .address)
-    port = try container.decode(Int.self, forKey: .port)
-    password = try container.decodeIfPresent(String.self, forKey: .password) ?? ""
-    shareViaSharePlay = try container.decodeIfPresent(Bool.self, forKey: .shareViaSharePlay) ?? false
-  }
-}
 
 final class AppSettings: ObservableObject {
   private static let maximum3DTextureDimension = 2048
@@ -242,7 +204,10 @@ final class AppSettings: ObservableObject {
   @AppStorage("enableDatasetServer") var enableDatasetServer: Bool = AppSettings.bool("enableDatasetServer")
   @AppStorage("autoStartServer") var autoStartServer: Bool = AppSettings.bool("autoStartServer")
   @AppStorage("serverPort") var serverPort: Int = AppSettings.int("serverPort")
-  @AppStorage("serverPassword") var serverPassword: String = AppSettings.string("serverPassword")
+  @Published private(set) var credentialStorageError: String?
+  @Published var serverPassword = DatasetServerPasswordStore.load() {
+    didSet { credentialStorageError = DatasetServerPasswordStore.save(serverPassword) }
+  }
   @AppStorage("sharePlayServerPort") var sharePlayServerPort: Int = AppSettings.int("sharePlayServerPort")
   @AppStorage("enableWebServer") var enableWebServer: Bool = AppSettings.bool("enableWebServer")
   @AppStorage("webServerPort") var webServerPort: Int = AppSettings.int("webServerPort")
@@ -359,15 +324,17 @@ final class AppSettings: ObservableObject {
     isLoadingServers = true
     defer { isLoadingServers = false }
 
-    if let decoded = try? JSONDecoder().decode([StoredServer].self, from: serversData) {
-      servers = decoded
-    }
+    guard !serversData.isEmpty else { return }
+    do { servers = try JSONDecoder().decode([StoredServer].self, from: serversData) }
+    catch is DecodingError { serversData = Data() }
+    catch { credentialStorageError = error.localizedDescription }
   }
 
   private func saveServers() {
-    if let data = try? JSONEncoder().encode(servers) {
-      serversData = data
-    }
+    do {
+      serversData = try JSONEncoder().encode(servers)
+      credentialStorageError = nil
+    } catch { credentialStorageError = error.localizedDescription }
   }
 
   private func clampAtlasSizeToSupportedRange() {

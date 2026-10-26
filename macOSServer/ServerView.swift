@@ -30,6 +30,7 @@ struct ServerView: View {
   @State private var server: TCPServer?
   @State private var webServer: HTTPWebServer?
   @State private var syncManager: ServerSyncManager?
+  @State private var startupTask: Task<Void, Never>?
 
   /// Dataset scanner for the directory
   @State private var datasetScanner: DatasetScanner?
@@ -373,6 +374,7 @@ struct ServerView: View {
   }
 
   private func stopServer() {
+    startupTask?.cancel(); startupTask = nil
     syncManager?.stop()
     syncManager = nil
     syncStatus = .idle
@@ -414,12 +416,22 @@ struct ServerView: View {
       )
       webServer?.start()
     }
-    startSyncManager()
-    statusText = L(
-      "server_status_running",
-      comment: "Server status when the server is running"
-    )
-    statusColor = .green
+    startupTask?.cancel()
+    let pendingServer = server, pendingWebServer = webServer
+    startupTask = Task { @MainActor in
+      let ready = await pendingServer?.waitUntilReady() ?? false
+      if let pendingWebServer { _ = await pendingWebServer.waitUntilReady() }
+      guard !Task.isCancelled, server === pendingServer else { return }
+      if ready {
+        startSyncManager()
+        statusText = L("server_status_running", comment: "Server status when the server is running")
+        statusColor = .green
+      } else {
+        statusText = pendingServer?.lastError ?? "Server could not be started"
+        statusColor = .red
+        isRunningServer = false
+      }
+    }
   }
 
   private var resolvedWebServerPort: Int {

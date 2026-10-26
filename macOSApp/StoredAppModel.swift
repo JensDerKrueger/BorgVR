@@ -30,7 +30,10 @@ final class StoredAppModel : ObservableObject {
   @AppStorage("serverPort") var port: Int = defaultPort
 
   static let defaultServerPassword: String = ""
-  @AppStorage("serverPassword") var serverPassword: String = defaultServerPassword
+  @Published private(set) var credentialStorageError: String?
+  @Published var serverPassword = DatasetServerPasswordStore.load() {
+    didSet { credentialStorageError = DatasetServerPasswordStore.save(serverPassword) }
+  }
 
   static let defaultSharePlayServerPort = BorgVRSharedDefaults.sharePlayServerPort
   @AppStorage("sharePlayServerPort") var sharePlayServerPort: Int = defaultSharePlayServerPort
