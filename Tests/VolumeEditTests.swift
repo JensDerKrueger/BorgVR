@@ -278,6 +278,8 @@ func runVolumeEditTests() throws {
   try testBottomUpEditMaterialization()
   try testMaterializerCacheCompletion()
   try testEditedBrickCacheRecovery()
+  try testFailedEditActivationPreservesPreviousState()
+  try testTransientEditPersistenceRecovery()
   try testEditedHierarchyRecoveryIsIdempotent()
   try testEditedBrickRecoveryCancellation()
   if ProcessInfo.processInfo.environment["BORGVR_EDIT_BENCHMARK"] == "1" {
@@ -323,6 +325,57 @@ func runVolumeEditTests() throws {
     throw EditTestError(message: "Restore fabricated missing source data")
   } catch BORGVRDataError.brickNotYetAvailable {}
   print("Volume edit CPU tests passed")
+}
+
+private func testFailedEditActivationPreservesPreviousState() throws {
+  let root = FileManager.default.temporaryDirectory.appendingPathComponent("borgvr-activation-recovery-\(UUID())")
+  defer { try? FileManager.default.removeItem(at: root) }
+  let base = EditTestDataset(bytesPerComponent: 2)
+  let catalog = try BorgVRVolumeEditCatalog(root: root, datasetID: base.metadata.uniqueID)
+  let source = BorgVRVolumeEditDataSource(original: base, catalog: catalog, logger: nil, backgroundWorkChanged: { _ in })
+  defer { try? waitForEditOperation { source.shutdown(completion: $0) } }
+  func state() -> BorgVRVolumeEditState {
+    .init(id: UUID(), datasetID: base.metadata.uniqueID, name: "Test", kind: .local, createdAt: Date(), modifiedAt: Date())
+  }
+  let previous = state()
+  try waitForEditOperation { source.activate(previous, completion: $0) }
+  let brush = BorgVRVolumeBrushSample(center: .zero, radius: 100)
+  try waitForEditOperation { source.brush([brush], mode: .erase, completion: $0) }
+  let mask = try BorgVRVolumeEditMask(size: SIMD3(7, 5, 3), spacing: SIMD3(0.25, 0.5, 1))
+  let invalid = BorgVRVolumeEditSnapshot(datasetID: UUID().uuidString, stateID: UUID(), revision: 0, mask: mask)
+  do {
+    try waitForEditOperation { source.activate(state(), snapshot: invalid, completion: $0) }
+    throw EditTestError(message: "Invalid state switch succeeded")
+  } catch BorgVRVolumeEditError.incompatibleDataset {}
+  try check(source.editingStatus() != nil, "Failed switch destroyed the previous source")
+  try waitForEditOperation { source.brush([brush], mode: .restore, completion: $0) }
+}
+
+private func testTransientEditPersistenceRecovery() throws {
+  let root = FileManager.default.temporaryDirectory.appendingPathComponent("borgvr-persistence-recovery-\(UUID())")
+  defer { try? FileManager.default.removeItem(at: root) }
+  let base = EditTestDataset(bytesPerComponent: 2)
+  let source = try BorgVREditableVolumeData(source: base, directory: root, logger: nil)
+  defer { try? waitForEditOperation { source.shutdown(completion: $0) } }
+  let cacheURL = root.appendingPathComponent("bricks.cache")
+  try FileManager.default.createDirectory(at: cacheURL, withIntermediateDirectories: true)
+  try waitForEditOperation { source.brush([.init(center: .zero, radius: 100)], mode: .erase, completion: $0) }
+  do {
+    try prepareEdits(source)
+    throw EditTestError(message: "Unwritable cache reported success")
+  } catch is EditTestError { throw EditTestError(message: "Unwritable cache reported success") }
+  catch {}
+  let revision = source.contentRevision
+  try FileManager.default.removeItem(at: cacheURL)
+  try prepareEdits(source)
+  try check(source.contentRevision == revision, "Persistence retry unnecessarily invalidated the renderer")
+  try waitForEditOperation { source.shutdown(completion: $0) }
+  let reopened = try BorgVREditableVolumeData(source: base, directory: root, logger: nil,
+    executor: UnexpectedEditExecutor())
+  defer { try? waitForEditOperation { reopened.shutdown(completion: $0) } }
+  let buffer = base.allocateBrickBuffer()
+  defer { buffer.deallocate() }
+  for id in base.metadata.brickMetadata.indices { try reopened.getBrick(index: id, outputBuffer: buffer) }
 }
 
 private final class EditExportResult: @unchecked Sendable {

@@ -242,7 +242,7 @@ private struct VolumeEditSelectionView: View {
               .buttonStyle(.borderless)
               .accessibilityLabel("Delete Edit State")
               .help("Delete Edit State")
-              .disabled(model.isInSharePlay || model.activeState?.id == state.id)
+              .disabled(!model.canDeleteOpeningState(state.id, requestID: request.id))
           }
         }
       }

@@ -38,38 +38,69 @@ final class BorgVRVolumeEditDataSource: BORGVRDatasetProtocol, BorgVRVolumeGPUBr
     lock.withLock { pendingTransitions += 1; transitioning = true }
     queue.async { [self] in
       var activationError: Error?
+      let previous = lock.withLock { (current, self.state) }
+      var previousClosed = false
+      var candidate: BorgVREditableVolumeData?
       do {
-        if let old = lock.withLock({ current }) {
-          let closed = DispatchSemaphore(value: 0)
-          // The semaphore publishes the worker's result before this queue reads it.
-          nonisolated(unsafe) var closeError: Error?
-          old.shutdown { error in closeError = error; closed.signal() }
-          closed.wait()
-          if let closeError { throw closeError }
-        }
         guard !lock.withLock({ stopped }) else { throw CancellationError() }
-        let directory = try catalog.directory(for: state.id)
-        let next = try BorgVREditableVolumeData(source: original, directory: directory, logger: logger,
-          backgroundWorkChanged: backgroundWorkChanged, initialSnapshot: snapshot,
-          persistOriginalSnapshot: state.kind != .sharePlay)
-        if let snapshot, !snapshot.mask.isOriginal || state.kind != .sharePlay { try catalog.save(state) }
-        manifestRegistered = FileManager.default.fileExists(atPath: directory.appendingPathComponent("edit-state.plist").path)
-        lock.withLock {
-          baseRevision += (current?.contentRevision ?? 0) + 1
-          switchRevision = baseRevision
-          generation &+= 1
-          storageGeneration &+= 1
-          current = next; self.state = state; transitioning = pendingTransitions > 1
-          initialLowReady = preserveAppearance
-          predictions.removeAll()
-          for _ in 0..<renderers { next.attachGPUBrushRenderer() }
-          next.updateResidentBrickIDs(residents)
+        if previous.1?.id == state.id {
+          guard snapshot == nil else { throw BorgVRVolumeEditError.invalidRevision }
+        } else {
+          let directory = try catalog.directory(for: state.id)
+          let next = try BorgVREditableVolumeData(source: original, directory: directory, logger: logger,
+            backgroundWorkChanged: backgroundWorkChanged, initialSnapshot: snapshot,
+            persistOriginalSnapshot: state.kind != .sharePlay)
+          candidate = next
+          if let snapshot, !snapshot.mask.isOriginal || state.kind != .sharePlay { try catalog.save(state) }
+          if let old = previous.0 {
+            previousClosed = true
+            let closed = DispatchSemaphore(value: 0)
+            nonisolated(unsafe) var closeError: Error?
+            old.shutdown { error in closeError = error; closed.signal() }
+            closed.wait()
+            if let closeError { throw closeError }
+          }
+          guard !lock.withLock({ stopped }) else { throw CancellationError() }
+          install(next, state: state, preserveAppearance: preserveAppearance)
+          candidate = nil
         }
-        next.prepareForRendering()
-      } catch { activationError = error }
+      } catch {
+        activationError = error
+        if let candidate {
+          let closed = DispatchSemaphore(value: 0)
+          candidate.shutdown { _ in closed.signal() }
+          closed.wait()
+        }
+        if previousClosed, !lock.withLock({ stopped }), let state = previous.1 {
+          do {
+            let restored = try BorgVREditableVolumeData(source: original,
+              directory: catalog.directory(for: state.id), logger: logger, backgroundWorkChanged: backgroundWorkChanged)
+            install(restored, state: state, preserveAppearance: false)
+          } catch {
+            lock.withLock { current = nil; self.state = nil }
+            activationError = error
+          }
+        }
+      }
       lock.withLock { pendingTransitions -= 1; transitioning = pendingTransitions > 0 || stopped }
       completion(activationError)
     }
+  }
+
+  private func install(_ next: BorgVREditableVolumeData, state: BorgVRVolumeEditState, preserveAppearance: Bool) {
+    manifestRegistered = (try? catalog.directory(for: state.id))
+      .map { FileManager.default.fileExists(atPath: $0.appendingPathComponent("edit-state.plist").path) } ?? false
+    lock.withLock {
+      baseRevision += (current?.contentRevision ?? 0) + 1
+      switchRevision = baseRevision
+      generation &+= 1; storageGeneration &+= 1
+      current = next; self.state = state
+      initialLowReady = preserveAppearance
+      predictions.removeAll()
+      for _ in 0..<renderers { next.attachGPUBrushRenderer() }
+      next.updateResidentBrickIDs(residents)
+    }
+    next.prepareForRendering()
   }
 
   func shutdown(completion: @escaping @Sendable (Error?) -> Void) {

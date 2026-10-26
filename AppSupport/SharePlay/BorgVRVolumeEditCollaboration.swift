@@ -148,7 +148,8 @@ final class BorgVRVolumeEditCollaboration {
   }
 
   private func datasetReady() {
-    guard model.volumeEditingState().datasetID == datasetID, hostID != nil, !installing, !model.isOpeningState else { return }
+    guard let datasetID, model.volumeEditingState().datasetID == datasetID,
+          hostID != nil, !installing, !model.isOpeningState else { return }
     if let snapshot = pendingSnapshot { install(snapshot); return }
     if isHost, epoch != nil, model.isWaitingForSharedState {
       invalidatePending()
@@ -157,6 +158,7 @@ final class BorgVRVolumeEditCollaboration {
     if isHost, epoch == nil, preparing == nil {
       Task { [weak self] in
         do { try await self?.ensureHostState(); await self?.sendSnapshot() }
+        catch is CancellationError {}
         catch { self?.log("Edit state initialization failed: \(error.localizedDescription)") }
       }
     } else if !isHost, (epoch == nil || model.isWaitingForSharedState), !requested {
@@ -552,6 +554,7 @@ final class BorgVRVolumeEditCollaboration {
   }
   private func transmit(_ packet: VolumeEditPacket, to participant: UUID?) async {
     do { try await send(encode(packet), participant) }
+    catch is CancellationError {}
     catch { log("Edit synchronization transport failed: \(error.localizedDescription)") }
   }
 }

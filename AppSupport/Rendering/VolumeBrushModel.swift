@@ -199,7 +199,13 @@ final class VolumeBrushModel: ObservableObject, BorgVRVolumeEditingCommands {
   @Published private(set) var isWaitingForSharedState = false { didSet { updateEditingAvailability() } }
   @Published private(set) var isRestoringPersonalState = false { didSet { updateEditingAvailability() } }
   @Published private(set) var isExporting = false { didSet { updateEditingAvailability() } }
-  var isSharePlayHost = false
+  @Published var isSharePlayHost = false {
+    didSet {
+      if isInSharePlay, !isSharePlayHost, let request = openingRequest {
+        cancelOpeningSelection(id: request.id)
+      }
+    }
+  }
   @Published var openingRequest: VolumeEditOpeningRequest?
   @Published private(set) var preparationID: UUID?
   @Published private(set) var preparationProgress = 0.0
@@ -425,9 +431,13 @@ final class VolumeBrushModel: ObservableObject, BorgVRVolumeEditingCommands {
     continuation?.resume(throwing: CancellationError())
   }
 
+  func canDeleteOpeningState(_ id: UUID, requestID: UUID) -> Bool {
+    (!isInSharePlay || isSharePlayHost) && !isExporting && !isRestoringPersonalState &&
+      !isDiscardingEdits && openingRequest?.id == requestID && activeState?.id != id && workingState?.id != id
+  }
+
   func deleteOpeningState(_ id: UUID, requestID: UUID) throws {
-    guard !isInSharePlay, !isExporting, !isRestoringPersonalState, let request = openingRequest,
-      request.id == requestID, activeState?.id != id else {
+    guard canDeleteOpeningState(id, requestID: requestID), let request = openingRequest else {
       throw BorgVRVolumeEditingCommandError.busy
     }
     try request.catalog.delete(id)

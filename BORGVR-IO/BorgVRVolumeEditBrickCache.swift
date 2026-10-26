@@ -89,6 +89,7 @@ final class BorgVRVolumeEditBrickCache {
   private var tableDirty = false
   private var hasStoredTable = false
   private var needsRecovery = false
+  private var failedAppendOffset: UInt64?
   private(set) var openedUsingTableOfContents = false
   private(set) var recoveredRecordCount = 0
   private static let maximumRecordSize = 256 * 1024 * 1024
@@ -220,6 +221,12 @@ final class BorgVRVolumeEditBrickCache {
 
   func store(_ brick: BorgVRMaterializedEditBrick, synchronize: Bool = true) throws {
     try lock.withLock {
+      if needsRecovery, let offset = failedAppendOffset, let handle {
+        try handle.truncate(atOffset: offset)
+        try handle.seek(toOffset: offset)
+        dataEnd = offset; hasStoredTable = false; tableDirty = true
+        needsRecovery = false; failedAppendOffset = nil
+      }
       guard !needsRecovery else { throw BorgVRVolumeEditError.corruptJournal }
       guard brick.index >= 0, brick.bytes.count <= Self.maximumRecordSize,
         brick.componentRanges.count <= BORGVRMetaData.maximumComponentCount,
@@ -255,7 +262,7 @@ final class BorgVRVolumeEditBrickCache {
         if synchronize { try file.synchronize() }
         entries[brick.index] = entry
         dataEnd += UInt64(entry.length)
-      } catch { needsRecovery = true; throw error }
+      } catch { needsRecovery = true; failedAppendOffset = dataEnd; throw error }
     }
   }
 

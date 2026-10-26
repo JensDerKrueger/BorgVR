@@ -238,7 +238,7 @@ final class BorgVREditableVolumeData: BORGVRDatasetProtocol, BorgVRVolumeGPUBrus
   private var persistencePending: [Int: BorgVRMaterializedEditBrick] = [:]
   private var persistenceRunning = false
   private var persistenceActive: BorgVRMaterializedEditBrick?
-  private var persistenceError: Error?
+  private var persistenceFailures: [Int: (revision: UInt64, error: Error)] = [:]
   private static let readyBudget = 32 * 1024 * 1024
   private var changes: [(UInt64, [Int])] = []
   private var revision: UInt64 = 0
@@ -330,13 +330,13 @@ final class BorgVREditableVolumeData: BORGVRDatasetProtocol, BorgVRVolumeGPUBrus
     lock.withLock {
       guard !stopped else { return nil }
       return BorgVRVolumeEditStatus(datasetID: getMetadata().uniqueID, hasEdits: maskHasEdits,
-        isUpdatingBricks: pendingBrickUpdates, pendingBrickCount: dirtyIDs.count)
+        isUpdatingBricks: pendingBrickUpdates, pendingBrickCount: dirtyIDs.union(persistenceFailures.keys).count)
     }
   }
 
   private var pendingBrickUpdates: Bool {
     !stopped && (resetting || !dirtyIDs.isEmpty || !queued.isEmpty ||
-      !persistencePending.isEmpty || persistenceActive != nil)
+      !persistencePending.isEmpty || persistenceActive != nil || !persistenceFailures.isEmpty)
   }
 
   /// Call with the dataset lock held (or before publishing the initialized object).
@@ -470,7 +470,7 @@ final class BorgVREditableVolumeData: BORGVRDatasetProtocol, BorgVRVolumeGPUBrus
       return try materializer.materialize(index: index, mask: mask, revision: revision, revisions: revisions,
         useGPU: foreground, cached: { [self] id, target in try cachedMaterializedBrick(index: id, revision: target) },
         store: { [self] result in
-          guard lock.withLock({ desired[result.index] == result.revision && dirtyIDs.contains(result.index) }) else { return }
+          guard lock.withLock({ shouldCommit(result) }) else { return }
           while lock.withLock({ persistencePending.values.reduce(0) { $0 + $1.bytes.count } > Self.readyBudget }) {
             if cancelled() { throw CancellationError() }
             _ = persistenceSpace.wait(timeout: .now() + 0.05)
@@ -596,6 +596,7 @@ final class BorgVREditableVolumeData: BORGVRDatasetProtocol, BorgVRVolumeGPUBrus
                 : ranges[id] ?? pendingEraseRanges[id]
               pendingEraseRanges[id] = mode == .erase ? Self.eraseBounds(previous) : nil
               desired[id] = recorded.revision
+              persistenceFailures[id] = nil
               ranges[id] = nil
               dirtyIDs.insert(id)
             }
@@ -661,7 +662,7 @@ final class BorgVREditableVolumeData: BORGVRDatasetProtocol, BorgVRVolumeGPUBrus
           maskHasEdits = false
           readyBricks.removeAll(); readyOrder.removeAll(); readyBytes = 0
           backgroundIDs.removeAll(); persistencePending.removeAll()
-          persistenceError = nil
+          persistenceFailures.removeAll()
           brushHistory.removeAll(); recordedRevision = revision
           publish(Array(getMetadata().brickMetadata.indices))
         }
@@ -784,7 +785,7 @@ final class BorgVREditableVolumeData: BORGVRDatasetProtocol, BorgVRVolumeGPUBrus
     guard accepted else { completion(CancellationError()); return }
     worker.async { [self] in
       let snapshot = journal.snapshot()
-      let pending = lock.withLock { dirtyIDs.sorted() }
+      let pending = lock.withLock { Array(dirtyIDs.union(persistenceFailures.keys)).sorted() }
       DispatchQueue.global(qos: .userInitiated).async { [self] in
         var failure: Error?
         do {
@@ -812,12 +813,19 @@ final class BorgVREditableVolumeData: BORGVRDatasetProtocol, BorgVRVolumeGPUBrus
   }
 
   private func flushPreparedEdits(cancellationToken: BorgVRVolumeConversionCancellationToken?) throws {
-    while persistenceJobs.wait(timeout: .now() + 0.05) == .timedOut {
-      try cancellationToken?.checkCancellation()
-      if lock.withLock({ stopped || resetting }) { throw CancellationError() }
+    try waitForPersistence(cancellationToken: cancellationToken)
+    let failures = lock.withLock { persistenceFailures.map { ($0.key, $0.value.revision) } }
+    if !failures.isEmpty {
+      let snapshot = journal.snapshot()
+      for (index, revision) in failures {
+        try cancellationToken?.checkCancellation()
+        _ = try materialize(index: index, mask: snapshot.mask, revision: revision,
+          revisions: snapshot.brickRevisions, foreground: true,
+          isCancelled: { cancellationToken?.isCancelled == true })
+      }
+      try waitForPersistence(cancellationToken: cancellationToken)
     }
-    try cancellationToken?.checkCancellation()
-    if let error = lock.withLock({ persistenceError }) { throw error }
+    if let error = lock.withLock({ persistenceFailures.values.first?.error }) { throw error }
     if lock.withLock({ stopped || resetting }) { throw CancellationError() }
     try cache.synchronize()
     try worker.sync {
@@ -826,6 +834,14 @@ final class BorgVREditableVolumeData: BORGVRDatasetProtocol, BorgVRVolumeGPUBrus
         try journal.checkpoint()
       }
     }
+  }
+
+  private func waitForPersistence(cancellationToken: BorgVRVolumeConversionCancellationToken?) throws {
+    while persistenceJobs.wait(timeout: .now() + 0.05) == .timedOut {
+      try cancellationToken?.checkCancellation()
+      if lock.withLock({ stopped || resetting }) { throw CancellationError() }
+    }
+    try cancellationToken?.checkCancellation()
   }
 
   private func finishForegroundWork() {
@@ -954,31 +970,50 @@ final class BorgVREditableVolumeData: BORGVRDatasetProtocol, BorgVRVolumeGPUBrus
     return try writer.encode(computed)
   }
 
+  private func shouldCommit(_ result: BorgVRMaterializedEditBrick) -> Bool {
+    let retry = persistenceFailures[result.index]?.revision == result.revision
+    let current =
+      desired[result.index] == result.revision
+      || (retry && desired[result.index] == nil && result.matchesOriginal)
+    let alreadyPersisting =
+      persistencePending[result.index]?.revision == result.revision
+      || (persistenceActive?.index == result.index
+        && persistenceActive?.revision == result.revision)
+    return current && (dirtyIDs.contains(result.index) || (retry && !alreadyPersisting))
+  }
+
   private func commit(_ result: BorgVRMaterializedEditBrick) {
     let startPersistence = lock.withLock { () -> Bool in
       guard !stopped, !resetting else { return false }
-      guard desired[result.index] == result.revision, dirtyIDs.contains(result.index) else { return false }
-      if let previous = readyBricks.removeValue(forKey: result.index) { readyBytes -= previous.bytes.count }
-      readyOrder.removeAll { $0 == result.index }
-      dirtyIDs.remove(result.index)
-      pendingEraseRanges[result.index] = nil
-      readyBricks[result.index] = result
-      readyOrder.append(result.index)
-      readyBytes += result.bytes.count
-      while readyBytes > Self.readyBudget, readyOrder.count > 1 {
-        let evicted = readyOrder.removeFirst()
-        if let brick = readyBricks.removeValue(forKey: evicted) { readyBytes -= brick.bytes.count }
+      guard shouldCommit(result) else { return false }
+      if dirtyIDs.contains(result.index) {
+        if let previous = readyBricks.removeValue(forKey: result.index) {
+          readyBytes -= previous.bytes.count
+        }
+        readyOrder.removeAll { $0 == result.index }
+        dirtyIDs.remove(result.index)
+        pendingEraseRanges[result.index] = nil
+        readyBricks[result.index] = result
+        readyOrder.append(result.index)
+        readyBytes += result.bytes.count
+        while readyBytes > Self.readyBudget, readyOrder.count > 1 {
+          let evicted = readyOrder.removeFirst()
+          if let brick = readyBricks.removeValue(forKey: evicted) {
+            readyBytes -= brick.bytes.count
+          }
+        }
+        if result.matchesOriginal {
+          desired[result.index] = nil
+          ranges[result.index] = nil
+        } else {
+          ranges[result.index] = BrickMetadata(
+            offset: 0, size: result.bytes.count,
+            minValue: result.componentRanges.map(\.minValue).min() ?? 0,
+            maxValue: result.componentRanges.map(\.maxValue).max() ?? 0,
+            componentRanges: result.componentRanges)
+        }
+        publish([result.index])
       }
-      if result.matchesOriginal {
-        desired[result.index] = nil
-        ranges[result.index] = nil
-      } else {
-        ranges[result.index] = BrickMetadata(offset: 0, size: result.bytes.count,
-          minValue: result.componentRanges.map(\.minValue).min() ?? 0,
-          maxValue: result.componentRanges.map(\.maxValue).max() ?? 0,
-          componentRanges: result.componentRanges)
-      }
-      publish([result.index])
       persistencePending[result.index] = result
       updateBackgroundWorkStatus()
       guard !persistenceRunning else { return false }
@@ -1003,9 +1038,20 @@ final class BorgVREditableVolumeData: BORGVRDatasetProtocol, BorgVRVolumeGPUBrus
       return next
     }
     guard let next else { return }
-    do { try cache.store(next, synchronize: lock.withLock { foregroundJobs == 0 }) }
+    do {
+      try cache.store(next, synchronize: lock.withLock { foregroundJobs == 0 })
+      lock.withLock {
+        if let failure = persistenceFailures[next.index], failure.revision <= next.revision {
+          persistenceFailures[next.index] = nil
+        }
+      }
+    }
     catch {
-      lock.withLock { persistenceError = error }
+      lock.withLock {
+        if desired[next.index] == next.revision || (desired[next.index] == nil && next.matchesOriginal) {
+          persistenceFailures[next.index] = (next.revision, error)
+        }
+      }
       logger?.warning("Could not persist an edited brick: \(error.localizedDescription)")
     }
     lock.withLock { persistenceActive = nil; updateBackgroundWorkStatus() }

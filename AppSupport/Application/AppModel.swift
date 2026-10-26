@@ -136,6 +136,14 @@ final class AppModel: ObservableObject {
       logger.dev(
         "Dataset session: \(oldValue.logDescription) -> \(datasetSessionState.logDescription)"
       )
+      switch datasetSessionState {
+        case .inactive, .waitingForSharePlay, .resolving:
+          // The render view may already be gone, so its cleanup is not a
+          // reliable owner of edit-worker shutdown or the active-state lifetime.
+          volumeBrush.close()
+        case .opening, .rendering, .closing:
+          break
+      }
     }
   }
   @Published private(set) var activeDatasetMetadata: BORGVRMetaData?

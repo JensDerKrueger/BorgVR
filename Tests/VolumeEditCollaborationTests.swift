@@ -70,6 +70,8 @@ func runVolumeEditCollaborationTests() async throws {
   let source = try makeEditExportSource(EditTestDataset(bytesPerComponent: 2), compressed: true,
     url: root.appendingPathComponent("original.data"))
   let datasetID = source.getMetadata().uniqueID
+  try await testUnannouncedDatasetDoesNotRequestEdits(source: source, root: root)
+  try await testOpeningStateDeletionDuringSharePlay(source: source, root: root)
   try await testUntouchedSharePlay(source: source, root: root)
   let host = VolumeBrushModel(), client = VolumeBrushModel(), late = VolumeBrushModel()
   let hostURL = root.appendingPathComponent("host.data"), clientURL = root.appendingPathComponent("client.data")
@@ -263,6 +265,82 @@ func runVolumeEditCollaborationTests() async throws {
 
   print("Volume edit collaboration and state catalog tests passed")
   try await testHeadEditInitialization(root: root)
+}
+
+@MainActor
+private func testUnannouncedDatasetDoesNotRequestEdits(source: BORGVRDatasetProtocol, root: URL) async throws {
+  let model = VolumeBrushModel()
+  var attempts = 0
+  var warnings: [String] = []
+  let collaboration = BorgVRVolumeEditCollaboration(model: model,
+    send: { _, _ in attempts += 1; throw CancellationError() },
+    log: { warnings.append($0) }, info: { _ in })
+  defer { collaboration.stop(); model.close() }
+  let localID = UUID(), hostID = UUID()
+  collaboration.configure(localID: localID, hostID: hostID, datasetID: nil)
+  for _ in 0..<20 { await Task.yield() }
+  try verify(attempts == 0 && warnings.isEmpty,
+    "Edit synchronization started before any dataset was announced: \(warnings)")
+  _ = model.open(source, datasetURL: root.appendingPathComponent("unannounced-client.data"))
+  try await model.waitForStateReady()
+  collaboration.configure(localID: localID, hostID: hostID, datasetID: source.getMetadata().uniqueID)
+  try await eventually("Loaded dataset never requested its shared edit state") { attempts == 1 }
+  try verify(warnings.isEmpty, "Normal transport cancellation was logged as a failure: \(warnings)")
+}
+
+@MainActor
+private func testOpeningStateDeletionDuringSharePlay(source: BORGVRDatasetProtocol, root: URL) async throws {
+  let model = VolumeBrushModel()
+  defer { model.close() }
+  let datasetID = source.getMetadata().uniqueID
+  let url = root.appendingPathComponent("opening-state-deletion.data")
+  _ = model.open(source, datasetURL: url)
+  try await model.waitForStateReady()
+  try await model.duplicateState(name: "Unused variant", empty: true)
+  let unusedID = model.activeState!.id
+  try await model.duplicateState(name: "Active variant", empty: true)
+  let activeID = model.activeState!.id
+  let catalog = try VolumeBrushModel.catalog(datasetID: datasetID, datasetURL: url)
+  model.isSharePlayHost = true
+  model.setSharePlayActive(true)
+
+  let opening = Task { try await model.prepareOpening(datasetID: datasetID, datasetURL: url) }
+  try await eventually("Host did not receive the opening-state selection") { model.openingRequest != nil }
+  let requestID = model.openingRequest!.id
+  try verify(model.canDeleteOpeningState(unusedID, requestID: requestID), "SharePlay host cannot delete an unused opening variant")
+  try verify(!model.canDeleteOpeningState(activeID, requestID: requestID), "Active variant became deletable")
+  do {
+    try model.deleteOpeningState(activeID, requestID: requestID)
+    throw EditCollaborationFailure(message: "Host deleted the active variant")
+  } catch BorgVRVolumeEditingCommandError.busy {}
+  do {
+    try model.deleteOpeningState(unusedID, requestID: UUID())
+    throw EditCollaborationFailure(message: "Stale opening dialog deleted a variant")
+  } catch BorgVRVolumeEditingCommandError.busy {}
+  try model.deleteOpeningState(unusedID, requestID: requestID)
+  try verify(!(try catalog.states()).contains { $0.id == unusedID }, "Host deletion did not remove the variant")
+  try verify((try catalog.states()).contains { $0.id == activeID } && model.activeState?.id == activeID,
+    "Deleting an unused opening variant changed the active state")
+  model.isSharePlayHost = false
+  try verify(model.openingRequest == nil, "Losing host authority left its opening dialog active")
+  do { try await opening.value; throw EditCollaborationFailure(message: "Client retained host opening authority") }
+  catch is CancellationError {}
+  try verify(!model.canDeleteOpeningState(activeID, requestID: requestID), "Client retained delete permission")
+  do {
+    try model.deleteOpeningState(activeID, requestID: requestID)
+    throw EditCollaborationFailure(message: "Client deleted a saved variant")
+  } catch BorgVRVolumeEditingCommandError.busy {}
+
+  model.close()
+  model.isSharePlayHost = true
+  let reopen = Task { try await model.prepareOpening(datasetID: datasetID, datasetURL: url) }
+  try await eventually("Host could not reopen the edit-state selection") { model.openingRequest != nil }
+  let newRequestID = model.openingRequest!.id
+  try verify(model.canDeleteOpeningState(activeID, requestID: newRequestID), "Closed variant remained incorrectly protected")
+  try model.deleteOpeningState(activeID, requestID: newRequestID)
+  model.completeOpeningSelection(id: newRequestID, stateID: nil)
+  try await reopen.value
+  try verify(try catalog.states().isEmpty, "Deleting the final opening variant failed")
 }
 
 @MainActor
