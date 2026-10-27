@@ -606,6 +606,23 @@ private func testIsoSurfaceInterpolatesSampleGradients() throws {
     }
 }
 
+private func testEmptyDICOMDirectory() throws {
+  let directory = FileManager.default.temporaryDirectory
+    .appendingPathComponent("borgvr-empty-dicom-\(UUID())")
+  try FileManager.default.createDirectory(at: directory.appendingPathComponent("subfolder"),
+    withIntermediateDirectories: true)
+  defer { try? FileManager.default.removeItem(at: directory) }
+  do {
+    try BorgVRVolumeConversionService.convert(.init(source: .dicomDirectory(directory),
+      destinationURL: directory.appendingPathComponent("output.data"), datasetDescription: "Test",
+      metaDescription: "", settings: .init(brickSize: 8, overlap: 2, useCompression: false,
+        extensionStrategy: .clamp)))
+    throw TestFailure.failed("An empty DICOM directory was accepted")
+  } catch BorgVRVolumeConversionError.noDICOMFiles(let url) {
+    try expect(url == directory, "The error does not identify the selected DICOM directory")
+  }
+}
+
 private func testMarchingCubes33Cases() throws {
   let edgeCorners = [
     (0, 1), (1, 2), (2, 3), (3, 0),
@@ -1356,6 +1373,7 @@ private enum VolumeConversionServiceTestRunner {
     try await runVolumeEditCollaborationTests()
     try testRawConversionAndAtomicReplacement()
     try testDICOMFusionInterleavesChannels()
+    try testEmptyDICOMDirectory()
     try testIntegerVolumeSamplerHandlesInterpolationAndPadding()
     try testDICOMFusionTreatsMovingPaddingAsMissing()
     try testIsoSurfaceExtractionUsesUniqueCellsAndChannelMinimum()

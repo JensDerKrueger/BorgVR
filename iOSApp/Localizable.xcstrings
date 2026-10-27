@@ -1,149 +1,67 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
-    "Edit Channels": {
+    "DICOM Fusion": {
       "extractionState": "manual",
       "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Edit Channels"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Kanäle bearbeiten"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Canales a editar"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Canaux à modifier"
-          }
-        }
+        "en": { "stringUnit": { "state": "translated", "value": "DICOM Fusion" } },
+        "de": { "stringUnit": { "state": "translated", "value": "DICOM-Fusion" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Fusión DICOM" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Fusion DICOM" } }
       }
     },
-    "All Channels": {
+    "Reference series": {
       "extractionState": "manual",
       "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "All Channels"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Alle Kanäle"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Todos los canales"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tous les canaux"
-          }
-        }
+        "en": { "stringUnit": { "state": "translated", "value": "Reference series" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Referenzserie" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Serie de referencia" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Série de référence" } }
       }
     },
-    "Channel %lld": {
+    "Series to register": {
       "extractionState": "manual",
       "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Channel %lld"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Kanal %lld"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Canal %lld"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Canal %lld"
-          }
-        }
+        "en": { "stringUnit": { "state": "translated", "value": "Series to register" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Zu registrierende Serie" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Serie por registrar" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Série à recaler" } }
       }
     },
-    "Preparing Edit State": {
+    "Resampling": {
       "extractionState": "manual",
       "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Preparing Edit State"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Bearbeitungsstand vorbereiten"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Préparation de l’état"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Preparar estado de edición"
-          }
-        }
+        "en": { "stringUnit": { "state": "translated", "value": "Resampling" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Abtastung" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Remuestreo" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Rééchantillonnage" } }
       }
     },
-    "Finishing pending volume updates before opening.": {
+    "Trilinear": {
       "extractionState": "manual",
       "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Finishing pending volume updates before opening."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ausstehende Volumen-Aktualisierungen werden vor dem Öffnen abgeschlossen."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Finalisation des mises à jour du volume avant l’ouverture."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Completando las actualizaciones pendientes del volumen antes de abrirlo."
-          }
-        }
+        "en": { "stringUnit": { "state": "translated", "value": "Trilinear" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Trilinear" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Trilineal" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Trilinéaire" } }
+      }
+    },
+    "Nearest Neighbor": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Nearest Neighbor" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Nearest Neighbor" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Vecino más cercano" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Plus proche voisin" } }
+      }
+    },
+    "No directory selected": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "No directory selected" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Kein Ordner ausgewählt" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Ninguna carpeta seleccionada" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Aucun dossier sélectionné" } }
       }
     },
     "" : {
@@ -900,6 +818,35 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Actualiser"
+          }
+        }
+      }
+    },
+    "All Channels" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alle Kanäle"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "All Channels"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Todos los canales"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tous les canaux"
           }
         }
       }
@@ -2103,6 +2050,35 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Le certificat n’a pas pu être importé : \\(error.localizedDescription)"
+          }
+        }
+      }
+    },
+    "Channel %lld" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kanal %lld"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Channel %lld"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Canal %lld"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Canal %lld"
           }
         }
       }
@@ -5087,6 +5063,35 @@
         }
       }
     },
+    "Edit Channels" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kanäle bearbeiten"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Edit Channels"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Canales a editar"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Canaux à modifier"
+          }
+        }
+      }
+    },
     "Edit Copy" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -5435,6 +5440,7 @@
       }
     },
     "error_no_permission_file_format" : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -5693,6 +5699,35 @@
         }
       }
     },
+    "Finishing pending volume updates before opening." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ausstehende Volumen-Aktualisierungen werden vor dem Öffnen abgeschlossen."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Finishing pending volume updates before opening."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Completando las actualizaciones pendientes del volumen antes de abrirlo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Finalisation des mises à jour du volume avant l’ouverture."
+          }
+        }
+      }
+    },
     "For `.dat` and `.nhdr`, iOS also needs access to the referenced raw data file." : {
       "localizations" : {
         "de" : {
@@ -5717,6 +5752,35 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Pour `.dat` et `.nhdr`, iOS doit aussi accéder au fichier de données brutes référencé."
+          }
+        }
+      }
+    },
+    "For a DICOM series, select the folder containing its slice files." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Für eine DICOM-Serie wählen Sie den Ordner mit den Schichtdateien aus."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "For a DICOM series, select the folder containing its slice files."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Para una serie DICOM, seleccione la carpeta que contiene los archivos de los cortes."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pour une série DICOM, sélectionnez le dossier contenant les fichiers des coupes."
           }
         }
       }
@@ -12015,6 +12079,35 @@
         }
       }
     },
+    "Preparing Edit State" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bearbeitungsstand vorbereiten"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Preparing Edit State"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Preparar estado de edición"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Préparation de l’état"
+          }
+        }
+      }
+    },
     "private_interaction_option_measurement" : {
       "localizations" : {
         "de" : {
@@ -13618,6 +13711,35 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Script gestoppt"
+          }
+        }
+      }
+    },
+    "Select DICOM folder" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "DICOM-Ordner wählen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Select DICOM folder"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Seleccionar carpeta DICOM"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choisir un dossier DICOM"
           }
         }
       }

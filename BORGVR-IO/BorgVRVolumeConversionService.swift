@@ -615,13 +615,22 @@ public enum BorgVRVolumeConversionService {
     logger: LoggerBase?,
     cancellationToken: BorgVRVolumeConversionCancellationToken?
   ) throws -> BorgVRUnbrickedVolume {
-    let files = try FileManager.default.contentsOfDirectory(
-      at: directoryURL,
-      includingPropertiesForKeys: [.isRegularFileKey],
-      options: [.skipsHiddenFiles]
-    ).filter { url in
-      (try? url.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true
+    var listingResult: Result<[URL], Swift.Error>?
+    var coordinationError: NSError?
+    NSFileCoordinator().coordinate(readingItemAt: directoryURL, options: [], error: &coordinationError) { url in
+      listingResult = Result {
+        try FileManager.default.contentsOfDirectory(
+          at: url,
+          includingPropertiesForKeys: [.isRegularFileKey],
+          options: [.skipsHiddenFiles]
+        ).filter { url in
+          try url.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile == true
+        }
+      }
     }
+    if let coordinationError { throw coordinationError }
+    guard let listingResult else { throw CocoaError(.fileReadUnknown) }
+    let files = try listingResult.get()
     guard !files.isEmpty else {
       throw BorgVRVolumeConversionError.noDICOMFiles(directoryURL)
     }

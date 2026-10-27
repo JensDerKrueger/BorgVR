@@ -1,3 +1,2 @@
 Possible Futute Additions:
 - virtual sampling
-- DICOM importer UI on vision OS

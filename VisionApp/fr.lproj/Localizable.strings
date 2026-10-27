@@ -1319,3 +1319,12 @@
 "Edit Channels" = "Canaux à modifier";
 "All Channels" = "Tous les canaux";
 "Channel %lld" = "Canal %lld";
+"Select DICOM folder" = "Choisir un dossier DICOM";
+"DICOM Fusion" = "Fusion DICOM";
+"Reference series" = "Série de référence";
+"Series to register" = "Série à recaler";
+"Resampling" = "Rééchantillonnage";
+"Trilinear" = "Trilinéaire";
+"Nearest Neighbor" = "Plus proche voisin";
+"No directory selected" = "Aucun dossier sélectionné";
+"Select a volume file or a DICOM folder. For QVIS and NHDR, select both the metadata and referenced raw data files." = "Sélectionnez un fichier de volume ou un dossier DICOM. Pour QVIS et NHDR, sélectionnez les métadonnées et les fichiers de données brutes correspondants.";

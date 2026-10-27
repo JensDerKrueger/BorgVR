@@ -956,7 +956,14 @@ final class DicomParser {
    - Returns: A `DicomFile` containing raw data and transfer syntax.
    */
   static func parseDicomHeader(from file: URL) throws -> DicomFile {
-    let data = try Data(contentsOf: file)
+    var readResult: Result<Data, Swift.Error>?
+    var coordinationError: NSError?
+    NSFileCoordinator().coordinate(readingItemAt: file, options: [], error: &coordinationError) { url in
+      readResult = Result { try Data(contentsOf: url) }
+    }
+    if let coordinationError { throw coordinationError }
+    guard let readResult else { throw CocoaError(.fileReadUnknown) }
+    let data = try readResult.get()
     guard data.count > 132 else {
       throw DicomParsingError.fileTooSmall
     }

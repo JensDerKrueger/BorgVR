@@ -2,18 +2,42 @@ import SwiftUI
 import UniformTypeIdentifiers
 import UIKit
 
+/// Keeps the original picker URLs and their sandbox grants alive for an import.
+final class VolumeImportSourceAccess: @unchecked Sendable {
+  let url: URL
+  private let accessedURLs: [URL]
+
+  init(url: URL, selectedURLs: [URL]) {
+    self.url = url
+    accessedURLs = selectedURLs.filter { $0.startAccessingSecurityScopedResource() }
+  }
+
+  deinit {
+    for url in accessedURLs { url.stopAccessingSecurityScopedResource() }
+  }
+}
+
 // MARK: - FilePickerView
 
 /**
  A SwiftUI wrapper for `UIDocumentPickerViewController` to allow file picking in SwiftUI.
 
- Presents a document picker that allows the user to select files of any type. When the user selects one or more files,
- the coordinator filters them for supported volume file extensions (`.nrrd`, `.nhdr`, `.dat`, `.pvm`, `.data`) and invokes
- the `onFilePicked` closure with the first matching URL or `nil` if none match.
+ Presents an open-in-place picker for volume files or a DICOM directory.
+ All selected file URLs are retained so detached raw data stays accessible too.
  */
 struct FilePickerView: UIViewControllerRepresentable {
-  /// Closure invoked when the user selects a file. Passes the picked file URL or `nil`.
-  var onFilePicked: (URL?) -> Void
+  enum Mode: String, Identifiable {
+    case files
+    case dicomDirectory
+    case dicomReference
+    case dicomRegistered
+
+    var id: String { rawValue }
+    var selectsDirectory: Bool { self != .files }
+  }
+
+  let mode: Mode
+  var onSourcePicked: (VolumeImportSourceAccess?) -> Void
 
   /**
    Creates the coordinator instance that acts as the `UIDocumentPickerViewControllerDelegate`.
@@ -29,9 +53,11 @@ struct FilePickerView: UIViewControllerRepresentable {
    - Returns: A configured `UIDocumentPickerViewController` allowing item selection.
    */
   func makeUIViewController(context: Context) -> UIDocumentPickerViewController {
-    let picker = UIDocumentPickerViewController(forOpeningContentTypes: [UTType.item])
+    let picker = UIDocumentPickerViewController(
+      forOpeningContentTypes: mode.selectsDirectory ? [.folder] : [.item], asCopy: false
+    )
     picker.delegate = context.coordinator
-    picker.allowsMultipleSelection = true
+    picker.allowsMultipleSelection = mode == .files
     return picker
   }
 
@@ -66,7 +92,7 @@ struct FilePickerView: UIViewControllerRepresentable {
      Called when the user picks one or more documents.
 
      Filters the selected URLs for supported file extensions and passes the first match
-     to the `onFilePicked` closure; otherwise, passes `nil`.
+     to the `onSourcePicked` closure; otherwise, passes `nil`.
 
      - Parameters:
      - controller: The document picker controller.
@@ -75,13 +101,18 @@ struct FilePickerView: UIViewControllerRepresentable {
     func documentPicker(_ controller: UIDocumentPickerViewController,
                         didPickDocumentsAt urls: [URL]) {
       if let url = urls.first(where: {
+        if parent.mode.selectsDirectory { return true }
         let ext = $0.pathExtension.lowercased()
         return VolumeFileParserFactory.supportedExtensions.contains(ext) || ext == "data"
       }) {
-        parent.onFilePicked(url)
+        parent.onSourcePicked(VolumeImportSourceAccess(url: url, selectedURLs: urls))
       } else {
-        parent.onFilePicked(nil)
+        parent.onSourcePicked(nil)
       }
+    }
+
+    func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
+      parent.onSourcePicked(nil)
     }
   }
 }

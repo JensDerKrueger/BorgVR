@@ -342,6 +342,42 @@ private func testFrameOfReferenceUID() throws {
   )
 }
 
+private func testReadingDICOMDirectoryContents() throws {
+  let directory = FileManager.default.temporaryDirectory
+    .appendingPathComponent("borgvr-dicom-directory-\(UUID())")
+  try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+  defer { try? FileManager.default.removeItem(at: directory) }
+  for index in 0..<3 {
+    var data = Data(repeating: 0, count: 128)
+    data.append(Data("DICM".utf8))
+    appendExplicitElement(group: 0x0002, element: 0x0010, vr: "UI",
+      value: Data("1.2.840.10008.1.2.1\0".utf8), to: &data)
+    let fields: [(UInt16, UInt16)] = [(0x0010, 2), (0x0011, 2), (0x0002, 1),
+                                     (0x0100, 8), (0x0101, 8), (0x0103, 0)]
+    for (element, value) in fields {
+      appendExplicitElement(group: 0x0028, element: element, vr: "US",
+        value: uint16Data(value), to: &data)
+    }
+    appendExplicitElement(group: 0x0020, element: 0x0013, vr: "IS",
+      value: Data("\(index) ".utf8), to: &data)
+    appendExplicitElement(group: 0x0020, element: 0x0032, vr: "DS",
+      value: Data("0\\0\\\(index) ".utf8), to: &data)
+    appendExplicitElement(group: 0x0020, element: 0x0037, vr: "DS",
+      value: Data("1\\0\\0\\0\\1\\0 ".utf8), to: &data)
+    appendExplicitElement(group: 0x7FE0, element: 0x0010, vr: "US",
+      value: Data(repeating: UInt8(index + 1), count: 4), to: &data)
+    try data.write(to: directory.appendingPathComponent("slice-\(index)"))
+  }
+  try Data("Unrelated file".utf8).write(to: directory.appendingPathComponent("README.txt"))
+  let files = try FileManager.default.contentsOfDirectory(at: directory,
+    includingPropertiesForKeys: nil)
+  let volume = try DicomParser.decodeVolume(from: files)
+  try expect(volume.width == 2 && volume.height == 2 && volume.depth == 3,
+    "DICOM directory contents were not read as one volume")
+  try expect(volume.voxelData == [1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3],
+    "Coordinated DICOM reads changed slice ordering or pixel data")
+}
+
 @main
 private enum DICOMParserTestRunner {
   static func main() throws {
@@ -360,6 +396,7 @@ private enum DICOMParserTestRunner {
     try testUnsignedPixelPaddingValue()
     try testSignedPixelPaddingValue()
     try testFrameOfReferenceUID()
+    try testReadingDICOMDirectoryContents()
     print("DICOM parser tests passed")
   }
 }

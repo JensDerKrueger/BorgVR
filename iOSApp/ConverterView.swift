@@ -10,11 +10,14 @@ struct ConverterView: View {
   @EnvironmentObject var appSettings: AppSettings
 
   @State private var inputFile = ""
+  @State private var inputAccess: VolumeImportSourceAccess?
+  @State private var registeredInputAccess: VolumeImportSourceAccess?
+  @State private var dicomResamplingFilter: BorgVRVolumeResamplingFilter = .trilinear
+  @State private var filePickerMode: FilePickerView.Mode?
   @State private var datasetDescription = ""
   @State private var logText = ""
   @State private var progressText = ""
   @State private var progressValue = 0.0
-  @State private var showFilePicker = false
   @State private var isWorking = false
   @State private var conversionCancellationToken: BorgVRVolumeConversionCancellationToken?
   @State private var conversionCancellationRequested = false
@@ -27,6 +30,8 @@ struct ConverterView: View {
     case unknown
     case copy
     case convert
+    case dicom
+    case dicomFusion
   }
 
   var body: some View {
@@ -38,50 +43,70 @@ struct ConverterView: View {
           Text("For `.dat` and `.nhdr`, iOS also needs access to the referenced raw data file.")
             .font(.caption)
             .foregroundStyle(.secondary)
+          Text("For a DICOM series, select the folder containing its slice files.")
+            .font(.caption)
+            .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
 
-        HStack {
-          Button {
-            showFilePicker = true
-          } label: {
-            Label("Select input volume", systemImage: "doc.badge.plus")
+        ViewThatFits(in: .horizontal) {
+          HStack { sourceButtons }
+          VStack(alignment: .leading) { sourceButtons }
+        }
+
+        if mode == .dicomFusion {
+          VStack(alignment: .leading, spacing: 10) {
+            dicomDirectoryRow("Reference series", access: inputAccess, pickerMode: .dicomReference)
+            dicomDirectoryRow("Series to register", access: registeredInputAccess, pickerMode: .dicomRegistered)
+            Picker("Resampling", selection: $dicomResamplingFilter) {
+              Text("Trilinear").tag(BorgVRVolumeResamplingFilter.trilinear)
+              Text("Nearest Neighbor").tag(BorgVRVolumeResamplingFilter.nearestNeighbor)
+            }
           }
           .disabled(isWorking)
-
+        } else {
           Text(inputFile.isEmpty ? String(localized: "No file selected") : inputFile)
             .lineLimit(1)
             .truncationMode(.middle)
             .foregroundStyle(.secondary)
         }
 
-        if mode == .convert {
+        if mode == .convert || mode == .dicom || mode == .dicomFusion {
           TextField("Dataset description", text: $datasetDescription)
             .textFieldStyle(.roundedBorder)
+            .disabled(isWorking)
         }
 
         HStack {
-          Button(mode == .copy ? String(localized: "Copy data") : String(localized: "Start conversion")) {
-            logText = ""
-            mode == .copy ? copyData() : startConversion(description: datasetDescription)
+          if !isWorking {
+            Button(mode == .copy ? String(localized: "Copy data") : String(localized: "Start conversion")) {
+              logText = ""
+              mode == .copy ? copyData() : startConversion(description: datasetDescription)
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(!canStartImport)
           }
-          .buttonStyle(.borderedProminent)
-          .disabled(isWorking || inputFile.isEmpty || mode == .unknown)
 
           if isWorking {
-            ProgressView()
-            ProgressView(value: progressValue)
-              .frame(maxWidth: 220)
-            Text(progressText)
-              .font(.caption)
-              .foregroundStyle(.secondary)
-            if conversionCancellationToken != nil {
-              Button(role: .cancel) {
-                cancelConversion()
-              } label: {
-                Label("Cancel", systemImage: "xmark.circle")
+            VStack(alignment: .leading, spacing: 8) {
+              HStack {
+                ProgressView()
+                ProgressView(value: progressValue)
+                  .frame(maxWidth: .infinity)
+                if conversionCancellationToken != nil {
+                  Button(role: .cancel) {
+                    cancelConversion()
+                  } label: {
+                    Label("Cancel", systemImage: "xmark.circle")
+                  }
+                  .fixedSize()
+                  .disabled(conversionCancellationRequested)
+                }
               }
-              .disabled(conversionCancellationRequested)
+              Text(progressText)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
             }
           }
         }
@@ -114,24 +139,37 @@ struct ConverterView: View {
           }
         }
       }
-      .sheet(isPresented: $showFilePicker) {
-        FilePickerView { url in
-          if let url {
-            let fileExtension = url.pathExtension.lowercased()
-            switch fileExtension {
-              case "dat", "nrrd", "nhdr", "pvm":
-                mode = .convert
-              case "data":
-                mode = .copy
-              default:
-                mode = .unknown
+      .sheet(item: $filePickerMode) { pickerMode in
+        FilePickerView(mode: pickerMode) { access in
+          if let access {
+            let url = access.url
+            switch pickerMode {
+              case .dicomRegistered:
+                registeredInputAccess = access
+                mode = .dicomFusion
+              case .dicomReference:
+                inputAccess = access
+                inputFile = url.path
+                mode = .dicomFusion
+              case .dicomDirectory, .files:
+                inputAccess = access
+                inputFile = url.path
+                registeredInputAccess = nil
+                if pickerMode == .dicomDirectory {
+                  mode = .dicom
+                } else {
+                  switch url.pathExtension.lowercased() {
+                    case "dat", "nrrd", "nhdr", "pvm":
+                      mode = .convert
+                    case "data":
+                      mode = .copy
+                    default:
+                      mode = .unknown
+                  }
+                }
             }
-            inputFile = url.path
-          } else {
-            mode = .unknown
-            inputFile = ""
           }
-          showFilePicker = false
+          filePickerMode = nil
         }
       }
       .fileExporter(
@@ -148,23 +186,67 @@ struct ConverterView: View {
     }
   }
 
+  @ViewBuilder
+  private var sourceButtons: some View {
+    Button {
+      filePickerMode = .files
+    } label: {
+      Label("Select input volume", systemImage: "doc.badge.plus")
+    }
+    .disabled(isWorking)
+    Button {
+      filePickerMode = .dicomDirectory
+    } label: {
+      Label("Select DICOM folder", systemImage: "folder")
+    }
+    .disabled(isWorking)
+    Button {
+      if mode != .dicomFusion {
+        if mode != .dicom {
+          inputAccess = nil
+          inputFile = ""
+        }
+        registeredInputAccess = nil
+        mode = .dicomFusion
+      }
+      filePickerMode = inputAccess == nil ? .dicomReference : .dicomRegistered
+    } label: {
+      Label("DICOM Fusion", systemImage: "square.3.layers.3d")
+    }
+    .disabled(isWorking)
+  }
+
+  private var canStartImport: Bool {
+    mode != .unknown && inputAccess != nil && (mode != .dicomFusion || registeredInputAccess != nil)
+  }
+
+  private func dicomDirectoryRow(_ title: LocalizedStringKey, access: VolumeImportSourceAccess?,
+                                 pickerMode: FilePickerView.Mode) -> some View {
+    VStack(alignment: .leading, spacing: 4) {
+      Button { filePickerMode = pickerMode } label: { Label(title, systemImage: "folder") }
+      Text(access?.url.lastPathComponent ?? String(localized: "No directory selected"))
+        .font(.caption)
+        .lineLimit(1)
+        .truncationMode(.middle)
+        .foregroundStyle(.secondary)
+    }
+  }
+
   private func copyData() {
+    guard let inputAccess else { return }
     isWorking = true
     DispatchQueue.global(qos: .userInitiated).async {
+      defer { withExtendedLifetime(inputAccess) {} }
       defer {
         DispatchQueue.main.async {
           isWorking = false
           inputFile = ""
+          self.inputAccess = nil
           mode = .unknown
         }
       }
 
-      let fileURL = URL(fileURLWithPath: inputFile)
-      guard fileURL.startAccessingSecurityScopedResource() else {
-        logger.error(String(format: String(localized: "error_no_permission_file_format"), fileURL.path))
-        return
-      }
-      defer { fileURL.stopAccessingSecurityScopedResource() }
+      let fileURL = inputAccess.url
 
       let documentsDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
       let destinationURL = documentsDirectory.appendingPathComponent(fileURL.lastPathComponent)
@@ -181,13 +263,25 @@ struct ConverterView: View {
   }
 
   private func startConversion(description: String) {
-    guard !inputFile.isEmpty else {
+    guard canStartImport, let inputAccess else {
       logger.error(String(localized: "Input file not specified."))
       return
     }
 
     let documentsDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
-    let outputFilename = URL(fileURLWithPath: inputFile).deletingPathExtension().lastPathComponent + ".data"
+    let inputURL = inputAccess.url
+    let registeredInputAccess = mode == .dicomFusion ? self.registeredInputAccess : nil
+    let source: BorgVRVolumeConversionSource
+    let stem: String
+    if let registeredInputAccess {
+      source = .registeredDICOMPair(reference: inputURL, moving: registeredInputAccess.url,
+                                    filter: dicomResamplingFilter)
+      stem = inputURL.lastPathComponent + "-fused"
+    } else {
+      source = mode == .dicom ? .dicomDirectory(inputURL) : .file(inputURL)
+      stem = mode == .dicom ? inputURL.lastPathComponent : inputURL.deletingPathExtension().lastPathComponent
+    }
+    let outputFilename = stem + ".data"
     let outputFile = documentsDirectory.appendingPathComponent(outputFilename).path
 
     let cancellationToken = BorgVRVolumeConversionCancellationToken()
@@ -197,6 +291,7 @@ struct ConverterView: View {
     logger.info(String(format: String(localized: "log_starting_conversion_format"), outputFilename))
 
     DispatchQueue.global(qos: .userInitiated).async {
+      defer { withExtendedLifetime((inputAccess, registeredInputAccess)) {} }
       let timer = HighResolutionTimer()
       timer.start()
       defer {
@@ -205,17 +300,13 @@ struct ConverterView: View {
           conversionCancellationRequested = false
           isWorking = false
           inputFile = ""
+          self.inputAccess = nil
+          self.registeredInputAccess = nil
           mode = .unknown
         }
       }
 
       do {
-        let metadataURL = URL(fileURLWithPath: inputFile)
-        guard metadataURL.startAccessingSecurityScopedResource() else {
-          throw FileError.noPermission(String(format: String(localized: "error_no_permission_file_format"), metadataURL.path))
-        }
-        defer { metadataURL.stopAccessingSecurityScopedResource() }
-
         let borderMode: ExtensionStrategy
         switch appSettings.borderMode {
           case "border":
@@ -227,12 +318,12 @@ struct ConverterView: View {
         }
 
         let actualDescription = description.isEmpty
-        ? String(format: String(localized: "dataset_description_converted_from_format"), metadataURL.deletingPathExtension().lastPathComponent)
+        ? String(format: String(localized: "dataset_description_converted_from_format"), stem)
         : description
 
         try BorgVRVolumeConversionService.convert(
           BorgVRVolumeConversionRequest(
-            source: .file(metadataURL),
+            source: source,
             destinationURL: URL(fileURLWithPath: outputFile),
             datasetDescription: actualDescription,
             metaDescription: String(localized: "Imported with BorgVR Mobile"),
