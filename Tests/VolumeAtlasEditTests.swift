@@ -88,6 +88,10 @@ private final class GPUAtlasFixture: EditableAtlasFixture, BorgVRVolumeGPUBrushS
 private final class PackedBrushFixture: BORGVRDatasetProtocol, BorgVRVolumeGPUBrushSource {
   let metadata: BORGVRMetaData
   var originalAvailable = true
+  var history: [BorgVRVolumeBrushBatch] = []
+  var readableRevision: UInt64? = 0
+  var blockCPUReads = false
+  private(set) var cpuReads = 0
   init(bytes: Int, channels: Int, scale: Float) {
     metadata = BORGVRMetaData(width: 7, height: 5, depth: 3, componentCount: channels,
       bytePerComponent: bytes, voxelSpacingX: scale, voxelSpacingY: scale * 2,
@@ -108,6 +112,8 @@ private final class PackedBrushFixture: BORGVRDatasetProtocol, BorgVRVolumeGPUBr
     try getBrick(index: metadata.brickMetadata.count - 1, outputBuffer: outputBuffer)
   }
   func getBrick(index: Int, outputBuffer: UnsafeMutablePointer<UInt8>) throws {
+    cpuReads += 1
+    guard !blockCPUReads else { throw BORGVRDataError.brickNotYetAvailable(index: index) }
     let bytes = original(index)
     _ = bytes.withUnsafeBytes { memcpy(outputBuffer, $0.baseAddress!, bytes.count) }
   }
@@ -131,8 +137,8 @@ private final class PackedBrushFixture: BORGVRDatasetProtocol, BorgVRVolumeGPUBr
   }
   func attachGPUBrushRenderer() {}
   func detachGPUBrushRenderer() {}
-  func gpuBrushHistory() -> [BorgVRVolumeBrushBatch] { [] }
-  func gpuReadableRevision(index: Int) -> UInt64? { 0 }
+  func gpuBrushHistory() -> [BorgVRVolumeBrushBatch] { history }
+  func gpuReadableRevision(index: Int) -> UInt64? { readableRevision }
   func cachedOriginalBrick(index: Int) -> [UInt8]? { originalAvailable ? original(index) : nil }
 }
 
@@ -268,6 +274,7 @@ private enum VolumeAtlasEditTests {
     hiddenAtlas.updateEmptiness(isoValue: 0)
     try awaitFlag({ !isEmpty($0) }, "ISO zero incorrectly skipped pending erased data")
     try gpuAtlas(device: device, queue: queue, tf: tf, pipeline: pipeline, target: target)
+    try channelRestoreBeforeCPU(device: device, queue: queue, tf: tf, target: target)
     try packedBrushes(device: device, queue: queue)
     print("Volume atlas edit regression tests passed")
   }
@@ -394,6 +401,76 @@ private enum VolumeAtlasEditTests {
     predicted.readableRevision = 1
     try expect(try render(0, using: predictedAtlas).y == 128,
       "Pending prediction was not replayed after canonical state reconciliation")
+  }
+
+  static func channelRestoreBeforeCPU(device: MTLDevice, queue: MTLCommandQueue,
+                                     tf: TransferFunction1D, target: MTLTexture) throws {
+    let dataset = PackedBrushFixture(bytes: 2, channels: 2, scale: 1)
+    let atlas = try VolumeAtlas(device: device, maxMemory: 65536, borgData: dataset,
+      transferFunctions: [tf, tf], isoValue: 0.5)
+    try atlas.pageIn(IDs: [0])
+    let readsBeforeBrush = dataset.cpuReads
+    dataset.blockCPUReads = true
+    dataset.readableRevision = nil
+    let library = try device.makeLibrary(source: """
+      #include <metal_stdlib>
+      using namespace metal;
+      vertex float4 v(uint id [[vertex_id]]) {
+        float2 p[] = {float2(-1,-1), float2(3,-1), float2(-1,3)};
+        return float4(p[id], 0, 1);
+      }
+      fragment uint4 f(constant uint *meta [[buffer(1)]],
+                       constant uint &id [[buffer(3)]],
+                       texture3d<float, access::read> atlas [[texture(0)]]) {
+        uint page = meta[id] - \(BrickIDFlags.BI_FLAG_COUNT.rawValue);
+        uint width = atlas.get_width() / 4, height = atlas.get_height() / 4;
+        uint3 p = uint3(page % width, (page / width) % height, page / (width * height)) * 4;
+        return uint4(round(atlas.read(p) * 255));
+      }
+      """, options: nil)
+    let descriptor = MTLRenderPipelineDescriptor()
+    descriptor.vertexFunction = library.makeFunction(name: "v")
+    descriptor.fragmentFunction = library.makeFunction(name: "f")
+    descriptor.colorAttachments[0].pixelFormat = .rgba32Uint
+    let pipeline = try device.makeRenderPipelineState(descriptor: descriptor)
+    func render(_ id: Int) throws -> SIMD4<UInt32> {
+      let command = queue.makeCommandBuffer()!
+      atlas.prepareFrame(commandBuffer: command)
+      let pass = MTLRenderPassDescriptor()
+      pass.colorAttachments[0].texture = target
+      pass.colorAttachments[0].loadAction = .dontCare
+      pass.colorAttachments[0].storeAction = .store
+      let encoder = command.makeRenderCommandEncoder(descriptor: pass)!
+      encoder.setRenderPipelineState(pipeline)
+      atlas.bind(to: encoder, atlasIndex: 0, metaIndex: 1, levelIndex: 2)
+      var index = UInt32(id)
+      encoder.setFragmentBytes(&index, length: 4, index: 3)
+      encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
+      encoder.endEncoding()
+      command.commit(); command.waitUntilCompleted()
+      if let error = command.error { throw error }
+      var pixel = SIMD4<UInt32>.zero
+      target.getBytes(&pixel, bytesPerRow: 16, from: MTLRegionMake2D(0, 0, 1, 1), mipmapLevel: 0)
+      return pixel
+    }
+    let overview = dataset.metadata.brickMetadata.count - 1
+    let original = try render(0)
+    let all = BorgVRVolumeBrushSample(center: .zero, radius: 100)
+    dataset.history = [.init(id: UUID(), revision: 1, mode: .erase, samples: [all])]
+    try expect(try render(0) == .zero, "All-channel GPU erase waited for CPU materialization")
+    dataset.originalAvailable = false
+    dataset.history.append(.init(id: UUID(), revision: 2, mode: .restore, samples: [all], channels: .selected([1])))
+    try expect(try render(0) == .zero, "Channel restore ran without immutable originals")
+    dataset.originalAvailable = true
+    let partial = SIMD4<UInt32>(0, 0, original.z, original.w)
+    try expect(try render(0) == partial && render(overview) == partial,
+      "Channel restore waited for pending CPU bricks or changed the other channel")
+    dataset.history.append(.init(id: UUID(), revision: 3, mode: .erase, samples: [all], channels: .selected([1])))
+    try expect(try render(0) == .zero, "Channel GPU erase waited for CPU materialization")
+    dataset.history.append(.init(id: UUID(), revision: 4, mode: .restore, samples: [all]))
+    try expect(try render(0) == original, "All-channel restore regressed after a partial restore")
+    try expect(dataset.cpuReads == readsBeforeBrush, "GPU restore requested a canonical CPU brick")
+    print("Channel restore updates fine/coarse atlas pages without CPU materialization")
   }
 
   static func datasetTransferFunctionFiles() throws {

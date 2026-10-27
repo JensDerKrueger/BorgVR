@@ -374,6 +374,25 @@ struct BorgVRVolumeEditMask: Codable, Sendable {
     return .mixed(children)
   }
 
+  /// Restore admission only needs one edited voxel, not a full coverage classification.
+  func hasEdits(in region: BorgVRVoxelRegion, channels: BorgVRVolumeEditChannels = .all) -> Bool {
+    guard !region.isEmpty else { return false }
+    func query(_ node: Node, _ nodeRegion: BorgVRVoxelRegion) -> Bool {
+      guard nodeRegion.intersects(region) else { return false }
+      switch node {
+        case .original: return false
+        case .erased: return true
+        case .channels(let words):
+          guard case .selected(let selected) = channels else { return true }
+          return selected.contains { words[$0 / 32] & (UInt32(1) << ($0 % 32)) != 0 }
+        case .mixed(let children):
+          if channels == .all, region.contains(nodeRegion) { return true }
+          return zip(children, nodeRegion.children).contains { query($0, $1) }
+      }
+    }
+    return query(root, bounds)
+  }
+
   func coverage(in region: BorgVRVoxelRegion, channels: BorgVRVolumeEditChannels = .all) -> Coverage {
     func query(_ node: Node, _ nodeRegion: BorgVRVoxelRegion) -> Coverage? {
       guard nodeRegion.intersects(region) else { return nil }

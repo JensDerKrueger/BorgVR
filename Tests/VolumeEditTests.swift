@@ -373,6 +373,28 @@ private func testChannelEditMask() throws {
       throw EditTestError(message: "Invalid channel selection accepted")
     } catch BorgVRVolumeEditError.invalidBrush {}
   }
+  var mixed = try BorgVRVolumeEditMask(size: SIMD3(11, 7, 5), spacing: SIMD3(repeating: 1), componentCount: 65)
+  for i in 0..<12 {
+    try mixed.apply(.init(center: SIMD3(Double(i % 11) + 0.5, Double(i % 7) + 0.5, Double(i % 5) + 0.5),
+                         radius: 1.7), mode: i % 3 == 0 ? .restore : .erase,
+                    channels: i % 2 == 0 ? .all : .selected([0, 31, 32, 64]))
+    for selection in [BorgVRVolumeEditChannels.all, .selected([0]), .selected([1]), .selected([31, 32, 64])] {
+      for x in -1...11 {
+        let region = BorgVRVoxelRegion(lower: SIMD3(x, -1, 0), upper: SIMD3(x + 3, 8, 6))
+        var expected = false
+        for z in 0..<5 { for y in 0..<7 { for vx in max(0, x)..<min(11, x + 3) {
+          if (0..<65).contains(where: { selection.contains($0) && mixed.isErased(at: SIMD3(vx, y, z), component: $0) }) {
+            expected = true
+          }
+        } } }
+        try check(mixed.hasEdits(in: region, channels: selection) == expected,
+          "Restore admission disagrees with voxel edits at a channel/region boundary")
+      }
+    }
+  }
+  try check(!mixed.hasEdits(in: .init(lower: .zero, upper: .zero)), "Empty restore region contains edits")
+  try check(!mixed.hasEdits(in: .init(lower: SIMD3(repeating: 100), upper: SIMD3(repeating: 101))),
+    "Out-of-volume restore region contains edits")
 }
 
 private func testChannelEditMaterialization() throws {

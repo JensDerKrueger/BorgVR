@@ -1098,7 +1098,7 @@ final class BorgVREditableVolumeData: BORGVRDatasetProtocol, BorgVRVolumeGPUBrus
           guard !ids.contains(id) else { continue }
           // Include halos and every fine voxel contributing to a coarse LOD.
           // Pending CPU results do not matter: the current mask is authoritative.
-          if let mask, mask.coverage(in: Self.brickFootprint(index: id, level: level, metadata: m), channels: channels) == .original {
+          if let mask, !mask.hasEdits(in: Self.brickFootprint(index: id, level: level, metadata: m), channels: channels) {
             continue
           }
           ids.insert(id)
