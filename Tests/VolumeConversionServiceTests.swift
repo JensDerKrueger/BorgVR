@@ -1372,6 +1372,7 @@ private enum VolumeConversionServiceTestRunner {
     try await runVolumeEditingAutomationTests()
     try await runVolumeEditCollaborationTests()
     try testRawConversionAndAtomicReplacement()
+    try I3MParserTests.run()
     try testDICOMFusionInterleavesChannels()
     try testEmptyDICOMDirectory()
     try testIntegerVolumeSamplerHandlesInterpolationAndPadding()

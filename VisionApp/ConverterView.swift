@@ -156,12 +156,10 @@ struct ConverterView: View {
                   mode = .dicom
                 } else {
                   switch url.pathExtension.lowercased() {
-                    case "dat", "nrrd", "nhdr", "pvm":
-                      self.mode = .convert
                     case "data":
                       self.mode = .copy
                     default:
-                      self.mode = .unknown
+                      self.mode = VolumeFileParserFactory.supportedExtensions.contains(url.pathExtension.lowercased()) ? .convert : .unknown
                   }
                 }
             }

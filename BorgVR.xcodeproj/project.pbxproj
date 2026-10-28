@@ -368,6 +368,7 @@
 				DICOM.swift,
 				DICOMVRMap.swift,
 				HighResolutionTimer.swift,
+				I3MParser.swift,
 				IOExtensions.swift,
 				Jpeg2000Reader.swift,
 				JpegLosslessReader.swift,

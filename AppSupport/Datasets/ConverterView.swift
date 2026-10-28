@@ -1282,12 +1282,7 @@ struct ConverterView: View {
     panel.canChooseDirectories = false
     panel.allowsMultipleSelection = false
     panel.allowsOtherFileTypes = true
-    if let qvisType = UTType(filenameExtension: "dat"),
-       let nrrdType = UTType(filenameExtension: "nrrd"),
-       let nhdrType = UTType(filenameExtension: "nhdr"),
-       let pvmType = UTType(filenameExtension: "pvm") {
-      panel.allowedContentTypes = [qvisType, nrrdType, nhdrType, pvmType]
-    }
+    panel.allowedContentTypes = VolumeFileParserFactory.supportedExtensions.compactMap { UTType(filenameExtension: $0) }
     if panel.runModal() == .OK, let url = panel.url {
       if url.startAccessingSecurityScopedResource() {
         defer { url.stopAccessingSecurityScopedResource() }
@@ -1483,6 +1478,7 @@ struct ConverterView: View {
             switch sourceURL.pathExtension.lowercased() {
               case "dat": descriptionKey = "converter_desc_from_qvis"
               case "pvm": descriptionKey = "converter_desc_from_pvm"
+              case "i3m", "zip": descriptionKey = "converter_desc_from_file"
               default: descriptionKey = "converter_desc_from_nrrd"
             }
             sourceDescription = String(

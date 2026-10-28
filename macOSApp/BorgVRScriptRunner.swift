@@ -975,6 +975,7 @@ final class BorgVRScriptRunner: ObservableObject {
         switch sourceURL.pathExtension.lowercased() {
           case "dat": formatName = "QVIS"
           case "pvm": formatName = "PVM"
+          case "i3m", "zip": formatName = "IV3Dm"
           default: formatName = "NRRD"
         }
         sourceDescription = "Imported from \(formatName) volume \(sourceURL.deletingPathExtension().lastPathComponent)"

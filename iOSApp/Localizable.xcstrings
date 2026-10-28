@@ -2395,6 +2395,34 @@
         }
       }
     },
+    "Clear Log" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Protokoll löschen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Clear Log"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Borrar registro"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Effacer le journal"
+          }
+        }
+      }
+    },
     "Clipping" : {
       "localizations" : {
         "de" : {
@@ -6289,6 +6317,34 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Importer un jeu de données"
+          }
+        }
+      }
+    },
+    "Import Log" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Import-Protokoll"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Import Log"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Registro de importación"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Journal d’importation"
           }
         }
       }
@@ -13253,6 +13309,34 @@
         }
       }
     },
+    "Save Log" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Protokoll speichern"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Save Log"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Guardar registro"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enregistrer le journal"
+          }
+        }
+      }
+    },
     "Save Markers…" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -15005,30 +15089,30 @@
         }
       }
     },
-    "Supported formats are QVIS `.dat` + `.raw`, NRRD/NHDR, PVM, and native BorgVR `.data` files." : {
+    "Supported formats are QVIS `.dat` + `.raw`, NRRD/NHDR, PVM, IV3Dm (`.i3m` / `.i3m.zip`), and native BorgVR `.data` files." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Unterstützt werden QVIS `.dat` + `.raw`, NRRD/NHDR, PVM und native BorgVR `.data`-Dateien."
+            "value" : "Unterstützt werden QVIS `.dat` + `.raw`, NRRD/NHDR, PVM, IV3Dm (`.i3m` / `.i3m.zip`) und native BorgVR `.data`-Dateien."
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Supported formats are QVIS `.dat` + `.raw`, NRRD/NHDR, PVM, and native BorgVR `.data` files."
+            "value" : "Supported formats are QVIS `.dat` + `.raw`, NRRD/NHDR, PVM, IV3Dm (`.i3m` / `.i3m.zip`), and native BorgVR `.data` files."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Se admiten QVIS `.dat` + `.raw`, NRRD/NHDR, PVM y archivos nativos BorgVR `.data`."
+            "value" : "Se admiten QVIS `.dat` + `.raw`, NRRD/NHDR, PVM, IV3Dm (`.i3m` / `.i3m.zip`) y archivos nativos BorgVR `.data`."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Les formats pris en charge sont QVIS `.dat` + `.raw`, NRRD/NHDR, PVM et les fichiers BorgVR natifs `.data`."
+            "value" : "Les formats pris en charge sont QVIS `.dat` + `.raw`, NRRD/NHDR, PVM, IV3Dm (`.i3m` / `.i3m.zip`) et les fichiers BorgVR natifs `.data`."
           }
         }
       }

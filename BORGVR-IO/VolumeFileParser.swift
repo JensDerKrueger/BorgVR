@@ -47,7 +47,7 @@ public enum VolumeFileParserFactory {
     }
   }
 
-  public static let supportedExtensions = ["dat", "nrrd", "nhdr", "pvm"]
+  public static let supportedExtensions = ["dat", "nrrd", "nhdr", "pvm", "i3m", "zip"]
 
   public static func parser(for filename: String) throws -> VolumeFileParser {
     switch URL(fileURLWithPath: filename).pathExtension.lowercased() {
@@ -57,6 +57,8 @@ public enum VolumeFileParserFactory {
         return try NRRDParser(filename: filename)
       case "pvm":
         return try PVMParser(filename: filename)
+      case "i3m", "zip":
+        return try I3MParser(filename: filename)
       default:
         throw Error.unsupportedFileType(URL(fileURLWithPath: filename).pathExtension)
     }

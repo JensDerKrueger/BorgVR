@@ -29,6 +29,7 @@ enum Mode: String {
   case QVISConversion = "Q"
   case NRRDConversion = "N"
   case PVMConversion = "P"
+  case I3MConversion = "I"
   case FlatVolumeExport = "E"
   case DemoDataCreation = "C"
 }
@@ -196,6 +197,14 @@ Mode P — Read a PVM, PVM2, or PVM3 file
         max_brick_size    : Positive integer specifying the maximum brick size
         overlap           : Positive integer specifying the overlap between bricks
 
+Mode I — Read an ImageVis3D Mobile (IV3Dm) volume
+    \(executableName) I <input_filename> <output_filename> <description> <max_brick_size> <overlap>
+        input_filename    : Path to an .i3m file or a ZIP containing one .i3m volume
+        output_filename   : Name of the output file to create
+        description       : Short description of the dataset
+        max_brick_size    : Positive integer specifying the maximum brick size
+        overlap           : Positive integer specifying the overlap between bricks
+
 Mode E — Export one BorgVR LoD as an uncompressed NRRD volume
     \(executableName) E <input_filename> <output_filename> <lod>
         input_filename    : Path to the BorgVR .data file
@@ -281,9 +290,9 @@ func parseArguments(_ args: [String]) -> (Mode, Any) {
       )
       result.1 = params
 
-    case .QVISConversion, .NRRDConversion, .PVMConversion:
+    case .QVISConversion, .NRRDConversion, .PVMConversion, .I3MConversion:
       guard args.count == 7 else {
-        logger.error("Error: Invalid number of arguments for mode Q, N, or P.\n\(usageErrorMessage)")
+        logger.error("Error: Invalid number of arguments for mode Q, N, P, or I.\n\(usageErrorMessage)")
         exit(1)
       }
       guard let maxBrickSize = Int(args[5]), maxBrickSize > 0,
@@ -728,6 +737,9 @@ switch mode {
   case .PVMConversion:
     guard let params = params as? HeaderFileModeParameters else { exit(1) }
     convertPVMVolume(params)
+  case .I3MConversion:
+    guard let params = params as? HeaderFileModeParameters else { exit(1) }
+    convertFileVolume(params, formatName: "IV3Dm")
   case .FlatVolumeExport:
     guard let params = params as? ExportModeParameters else { exit(1) }
     exportFlatVolume(params)

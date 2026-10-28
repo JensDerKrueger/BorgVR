@@ -36,86 +36,118 @@ struct ConverterView: View {
 
   var body: some View {
     NavigationStack {
-      VStack(spacing: 14) {
-        VStack(alignment: .leading, spacing: 8) {
-          Text("Supported formats are QVIS `.dat` + `.raw`, NRRD/NHDR, PVM, and native BorgVR `.data` files.")
-            .foregroundStyle(.secondary)
-          Text("For `.dat` and `.nhdr`, iOS also needs access to the referenced raw data file.")
-            .font(.caption)
-            .foregroundStyle(.secondary)
-          Text("For a DICOM series, select the folder containing its slice files.")
-            .font(.caption)
-            .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-
-        ViewThatFits(in: .horizontal) {
-          HStack { sourceButtons }
-          VStack(alignment: .leading) { sourceButtons }
-        }
-
-        if mode == .dicomFusion {
-          VStack(alignment: .leading, spacing: 10) {
-            dicomDirectoryRow("Reference series", access: inputAccess, pickerMode: .dicomReference)
-            dicomDirectoryRow("Series to register", access: registeredInputAccess, pickerMode: .dicomRegistered)
-            Picker("Resampling", selection: $dicomResamplingFilter) {
-              Text("Trilinear").tag(BorgVRVolumeResamplingFilter.trilinear)
-              Text("Nearest Neighbor").tag(BorgVRVolumeResamplingFilter.nearestNeighbor)
-            }
+      ScrollView {
+        VStack(spacing: 14) {
+          VStack(alignment: .leading, spacing: 8) {
+            Text("Supported formats are QVIS `.dat` + `.raw`, NRRD/NHDR, PVM, IV3Dm (`.i3m` / `.i3m.zip`), and native BorgVR `.data` files.")
+              .foregroundStyle(.secondary)
+            Text("For `.dat` and `.nhdr`, iOS also needs access to the referenced raw data file.")
+              .font(.caption)
+              .foregroundStyle(.secondary)
+            Text("For a DICOM series, select the folder containing its slice files.")
+              .font(.caption)
+              .foregroundStyle(.secondary)
           }
-          .disabled(isWorking)
-        } else {
-          Text(inputFile.isEmpty ? String(localized: "No file selected") : inputFile)
-            .lineLimit(1)
-            .truncationMode(.middle)
-            .foregroundStyle(.secondary)
-        }
+          .frame(maxWidth: .infinity, alignment: .leading)
 
-        if mode == .convert || mode == .dicom || mode == .dicomFusion {
-          TextField("Dataset description", text: $datasetDescription)
-            .textFieldStyle(.roundedBorder)
-            .disabled(isWorking)
-        }
-
-        HStack {
-          if !isWorking {
-            Button(mode == .copy ? String(localized: "Copy data") : String(localized: "Start conversion")) {
-              logText = ""
-              mode == .copy ? copyData() : startConversion(description: datasetDescription)
-            }
-            .buttonStyle(.borderedProminent)
-            .disabled(!canStartImport)
+          ViewThatFits(in: .horizontal) {
+            HStack { sourceButtons }
+            VStack(alignment: .leading) { sourceButtons }
           }
 
-          if isWorking {
-            VStack(alignment: .leading, spacing: 8) {
-              HStack {
-                ProgressView()
-                ProgressView(value: progressValue)
-                  .frame(maxWidth: .infinity)
-                if conversionCancellationToken != nil {
-                  Button(role: .cancel) {
-                    cancelConversion()
-                  } label: {
-                    Label("Cancel", systemImage: "xmark.circle")
-                  }
-                  .fixedSize()
-                  .disabled(conversionCancellationRequested)
-                }
+          if mode == .dicomFusion {
+            VStack(alignment: .leading, spacing: 10) {
+              dicomDirectoryRow("Reference series", access: inputAccess, pickerMode: .dicomReference)
+              dicomDirectoryRow("Series to register", access: registeredInputAccess, pickerMode: .dicomRegistered)
+              Picker("Resampling", selection: $dicomResamplingFilter) {
+                Text("Trilinear").tag(BorgVRVolumeResamplingFilter.trilinear)
+                Text("Nearest Neighbor").tag(BorgVRVolumeResamplingFilter.nearestNeighbor)
               }
-              Text(progressText)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+            }
+            .disabled(isWorking)
+          } else {
+            Text(inputFile.isEmpty ? String(localized: "No file selected") : inputFile)
+              .lineLimit(1)
+              .truncationMode(.middle)
+              .foregroundStyle(.secondary)
+          }
+
+          if mode == .convert || mode == .dicom || mode == .dicomFusion {
+            TextField("Dataset description", text: $datasetDescription)
+              .textFieldStyle(.roundedBorder)
+              .disabled(isWorking)
+          }
+
+          HStack {
+            if !isWorking {
+              Button(mode == .copy ? String(localized: "Copy data") : String(localized: "Start conversion")) {
+                logText = ""
+                mode == .copy ? copyData() : startConversion(description: datasetDescription)
+              }
+              .buttonStyle(.borderedProminent)
+              .disabled(!canStartImport)
+            }
+
+            if isWorking {
+              VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                  ProgressView()
+                  ProgressView(value: progressValue)
+                    .frame(maxWidth: .infinity)
+                  if conversionCancellationToken != nil {
+                    Button(role: .cancel) {
+                      cancelConversion()
+                    } label: {
+                      Label("Cancel", systemImage: "xmark.circle")
+                    }
+                    .fixedSize()
+                    .disabled(conversionCancellationRequested)
+                  }
+                }
+                Text(progressText)
+                  .font(.caption)
+                  .foregroundStyle(.secondary)
+                  .fixedSize(horizontal: false, vertical: true)
+              }
             }
           }
-        }
 
-        TextEditor(text: $logText)
-          .font(.system(.body, design: .monospaced))
-          .border(Color.secondary.opacity(0.35))
+          VStack(spacing: 8) {
+            HStack {
+              Text("Import Log")
+                .font(.headline)
+              Spacer()
+              HStack {
+                Button {
+                  logText = ""
+                } label: {
+                  Label("Clear Log", systemImage: "trash")
+                }
+                .help("Clear Log")
+                Button {
+                  isExporting = true
+                } label: {
+                  Label("Save Log", systemImage: "square.and.arrow.down")
+                }
+                .help("Save Log")
+              }
+              .labelStyle(.iconOnly)
+              .buttonStyle(.bordered)
+              .controlSize(.small)
+              .disabled(logText.isEmpty)
+            }
+            Text(logText)
+              .font(.system(.body, design: .monospaced))
+              .textSelection(.enabled)
+              .fixedSize(horizontal: false, vertical: true)
+              .frame(maxWidth: .infinity, minHeight: 220, alignment: .topLeading)
+              .padding(8)
+              .border(Color.secondary.opacity(0.35))
+          }
+        }
+        .padding()
       }
-      .padding()
+      .scrollDismissesKeyboard(.interactively)
       .navigationTitle("Import")
       .toolbar {
         ToolbarItem(placement: .topBarLeading) {
@@ -125,18 +157,6 @@ struct ConverterView: View {
             Label("Back", systemImage: "chevron.backward")
           }
             .disabled(isWorking)
-        }
-        ToolbarItemGroup(placement: .topBarTrailing) {
-          Button {
-            logText = ""
-          } label: {
-            Label("Clear", systemImage: "trash")
-          }
-          Button {
-            isExporting = true
-          } label: {
-            Label("Export", systemImage: "square.and.arrow.up")
-          }
         }
       }
       .sheet(item: $filePickerMode) { pickerMode in
@@ -159,12 +179,10 @@ struct ConverterView: View {
                   mode = .dicom
                 } else {
                   switch url.pathExtension.lowercased() {
-                    case "dat", "nrrd", "nhdr", "pvm":
-                      mode = .convert
                     case "data":
                       mode = .copy
                     default:
-                      mode = .unknown
+                      mode = VolumeFileParserFactory.supportedExtensions.contains(url.pathExtension.lowercased()) ? .convert : .unknown
                   }
                 }
             }

@@ -11,6 +11,11 @@ swiftc \
   "${BORGVR_EDIT_TEST_OPTIMIZATION:--Onone}" \
   -module-cache-path "$SWIFT_MODULE_CACHE" \
   "$ROOT/BORGVR-IO/Vector.swift" \
+  "$ROOT/BORGVR-IO/VolumeFileParser.swift" \
+  "$ROOT/BORGVR-IO/QVISParser.swift" \
+  "$ROOT/BORGVR-IO/NRRDParser.swift" \
+  "$ROOT/BORGVR-IO/PVMParser.swift" \
+  "$ROOT/BORGVR-IO/I3MParser.swift" \
   "$ROOT/BORGVR-IO/IOExtensions.swift" \
   "$ROOT/BORGVR-IO/Logger.swift" \
   "$ROOT/BORGVR-IO/VolumeDataAccessing.swift" \
@@ -45,7 +50,8 @@ swiftc \
   "$ROOT/Tests/VolumeEditCollaborationTests.swift" \
   "$ROOT/Tests/IsoSurfaceEditTests.swift" \
   "$ROOT/Tests/VolumeConversionServiceTests.swift" \
+  "$ROOT/Tests/I3MParserTests.swift" \
   "$ROOT/Tests/VolumeEditTests.swift" \
   -o "$BUILD_DIR/volume-conversion-tests"
 
-"$BUILD_DIR/volume-conversion-tests"
+"$BUILD_DIR/volume-conversion-tests" "$@"
