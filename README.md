@@ -89,7 +89,7 @@ The current development version is **3.3**. The SharePlay wire protocol is versi
 
 ### Data And Servers
 
-- Dataset import and conversion from BorgVR, QVIS, NRRD/NHDR, PVM/PVM2/PVM3, and DICOM workflows,
+- Dataset import and conversion from BorgVR, QVIS, NRRD/NHDR, PVM/PVM2/PVM3, IV3Dm, and DICOM workflows,
   including physical DICOM spacing.
 - BorgVR datasets can be exported at any stored LoD as a flat, uncompressed NRRD volume while
   retaining the corresponding voxel spacing.
@@ -110,7 +110,7 @@ The current development version is **3.3**. The SharePlay wire protocol is versi
   provides a graphical environment for conveniently creating and editing `.gsc` scripts for the
   macOS renderer.
 - Synchronous text, file, and directory input functions for interactive scripts.
-- Scriptable QVIS, NRRD, PVM, and DICOM import, BorgVR LoD export, and configurable import
+- Scriptable QVIS, NRRD, PVM, IV3Dm, and DICOM import, BorgVR LoD export, and configurable import
   brick size, overlap, and border handling.
 - Local erase/restore brushes, sample batches in physical meters, background-job status and
   waiting, discarding edits, and cancellable edited-dataset export with progress.
@@ -217,7 +217,7 @@ shown, and the suite exits with a nonzero status if any test or build fails.
 
 ### Command-Line Volume Generator
 
-The `TerminalConverterApp` scheme converts DICOM, QVIS, NRRD, and PVM input, exports any LoD of a
+The `TerminalConverterApp` scheme converts DICOM, QVIS, NRRD, PVM, and IV3Dm input, exports any LoD of a
 BorgVR dataset as a flat volume, and can create reproducible synthetic volumes. Export uses one
 deliberately simple interchange representation: an uncompressed inline NRRD file.
 
@@ -267,6 +267,17 @@ PVM import accepts PVM, PVM2, and PVM3 streams, including the `DDS v3d` and bloc
 `DDS v3e` wrappers. The decoder is implemented directly in BorgVR. Because PVM spacing is
 relative rather than an absolute physical unit, BorgVR preserves its proportions and normalizes
 the longest dataset extent to one meter during import.
+
+ImageVis3D Mobile (IV3Dm) import reads version 1 `.i3m` volumes and ZIP archives containing a
+single `.i3m` volume, including the original `.i3m.zip` datasets. It imports the 8-bit scalar
+values, discards the stored gradients (BorgVR calculates its own), and preserves relative voxel
+spacing with a longest extent of one meter. Companion transfer functions, scene metadata, and
+geometry are not imported. Archives containing multiple volumes must be unpacked and imported
+one volume at a time. For example:
+
+```sh
+TerminalConverterApp I c60.i3m.zip c60.data "C60 from ImageVis3D Mobile" 64 2
+```
 
 ### Swift Dataset Server
 
