@@ -74,6 +74,7 @@ func runVolumeEditCollaborationTests() async throws {
   try await testUnannouncedDatasetDoesNotRequestEdits(source: source, root: root)
   try await testOpeningStateDeletionDuringSharePlay(source: source, root: root)
   try await testUntouchedSharePlay(source: source, root: root)
+  try await testInvalidOpeningStateRecovery(source: source, root: root)
   let host = VolumeBrushModel(), client = VolumeBrushModel(), late = VolumeBrushModel()
   let hostURL = root.appendingPathComponent("host.data"), clientURL = root.appendingPathComponent("client.data")
   _ = host.open(source, datasetURL: hostURL)
@@ -293,6 +294,63 @@ private func testUnannouncedDatasetDoesNotRequestEdits(source: BORGVRDatasetProt
   collaboration.configure(localID: localID, hostID: hostID, datasetID: source.getMetadata().uniqueID)
   try await eventually("Loaded dataset never requested its shared edit state") { attempts == 1 }
   try verify(warnings.isEmpty, "Normal transport cancellation was logged as a failure: \(warnings)")
+}
+
+@MainActor
+private func testInvalidOpeningStateRecovery(source: BORGVRDatasetProtocol, root: URL) async throws {
+  for version in [2, 999, 3, -1] {
+    let url = root.appendingPathComponent("invalid-opening-\(version).data")
+    let catalog = try VolumeBrushModel.catalog(datasetID: source.getMetadata().uniqueID, datasetURL: url)
+    let state = BorgVRVolumeEditState(id: UUID(), datasetID: catalog.datasetID, name: "Invalid",
+      kind: .local, createdAt: Date(), modifiedAt: Date())
+    try catalog.save(state)
+    let directory = try catalog.directory(for: state.id)
+    let checkpointURL = directory.appendingPathComponent("mask.checkpoint")
+    // An obsolete header must be rejected before decoding missing mask fields.
+    let checkpoint = try PropertyListSerialization.data(fromPropertyList: ["version": version], format: .binary, options: 0)
+    if version != -1 { try checkpoint.write(to: checkpointURL) }
+    let journalURL = directory.appendingPathComponent("brush.journal")
+    let journal = Data("saved journal must not be overwritten".utf8)
+    try journal.write(to: journalURL)
+    let preference = "volumeEditState.\(catalog.root.path)"
+    UserDefaults.standard.set(state.id.uuidString, forKey: preference)
+    defer { UserDefaults.standard.removeObject(forKey: preference) }
+
+    let model = VolumeBrushModel()
+    defer { model.close() }
+    let edited = model.open(source, datasetURL: url)
+    try await model.waitForStateReady()
+    try await eventually("Invalid edit state left the renderer blank") { edited.isContentReady }
+    try verify(model.activeState == nil && model.context.editingStatus()?.hasEdits == false,
+      "Invalid edit state did not fall back to Original")
+    try verify(model.openingError != nil && model.error?.contains("original dataset") == true,
+      "Fallback silently hid the opening error")
+    try verify(try await model.stateSnapshot().mask.isOriginal, "Fallback changed the original volume")
+
+    do {
+      try await model.selectState(state.id)
+      throw EditCollaborationFailure(message: "Unsupported or damaged edit state was accepted")
+    } catch BorgVRVolumeEditError.unsupportedCheckpointVersion(let actual) {
+      try verify(version == actual && version != 3 && version != -1, "Wrong unsupported format version")
+    } catch BorgVRVolumeEditError.corruptJournal {
+      try verify(version == 3 || version == -1, "Obsolete checkpoint was reported as damaged")
+    }
+    try verify(model.activeState == nil && edited.isContentReady,
+      "Failed state switch destroyed the original renderer")
+    try await model.selectState(nil)
+    try verify(model.error == nil, "Switching to Original retained the previous error")
+    try await model.duplicateState(name: "New usable state", empty: true)
+    try verify(model.activeState?.id != nil && model.activeState?.id != state.id,
+      "Opening failure disabled subsequent editing")
+    if version != -1 {
+      try verify(try Data(contentsOf: checkpointURL) == checkpoint, "Rejected checkpoint was modified")
+    } else {
+      try verify(!FileManager.default.fileExists(atPath: checkpointURL.path), "Missing checkpoint was silently recreated")
+    }
+    try verify(try Data(contentsOf: journalURL) == journal, "Rejected journal was modified")
+    try verify(!FileManager.default.fileExists(atPath: directory.appendingPathComponent("bricks.cache").path),
+      "Rejected edit state acquired a brick cache")
+  }
 }
 
 @MainActor

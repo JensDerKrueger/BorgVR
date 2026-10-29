@@ -127,12 +127,12 @@ enum BorgVRVolumeEditingCommandError: LocalizedError {
 
   var errorDescription: String? {
     switch self {
-      case .unavailable: "No editable dataset is open."
-      case .busy: "A conflicting volume-edit operation is already active."
+      case .unavailable: String(localized: "No editable dataset is open.")
+      case .busy: String(localized: "A conflicting volume-edit operation is already active.")
       case .exportUnavailableDuringSharePlay: String(localized: "Exports are unavailable during SharePlay.")
       case .invalidArgument(let message), .exportFailed(let message): message
-      case .unknownExport: "The requested export is not the current export job."
-      case .timeout: "Volume edits did not finish before the timeout."
+      case .unknownExport: String(localized: "The requested export is not the current export job.")
+      case .timeout: String(localized: "Volume edits did not finish before the timeout.")
     }
   }
 }

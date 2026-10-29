@@ -229,6 +229,11 @@ private struct VolumeEditSelectionModifier: ViewModifier {
           .interactiveDismissDisabled()
       }
     }
+    .alert("Edit State Error", isPresented: Binding(
+      get: { model.openingError != nil },
+      set: { if !$0 { model.openingError = nil } }
+    )) { Button("OK", role: .cancel) { model.openingError = nil } }
+    message: { Text(model.openingError ?? "") }
   }
 }
 

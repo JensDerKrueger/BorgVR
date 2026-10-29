@@ -117,7 +117,7 @@ struct BorgVRVolumeBrushGeometry {
   }
 }
 
-enum BorgVRVolumeEditError: Error {
+enum BorgVRVolumeEditError: LocalizedError {
   case invalidBrush
   case invalidGeometry
   case invalidRevision
@@ -126,6 +126,22 @@ enum BorgVRVolumeEditError: Error {
   case corruptJournal
   case incompatibleDataset
   case editingBlocked
+  case unsupportedCheckpointVersion(Int)
+
+  var errorDescription: String? {
+    switch self {
+      case .invalidBrush: String(localized: "The volume brush parameters are invalid.")
+      case .invalidGeometry: String(localized: "The edit state contains invalid volume geometry.")
+      case .invalidRevision: String(localized: "The edit state revision is invalid.")
+      case .invalidBrick: String(localized: "The edit state refers to an invalid volume brick.")
+      case .invalidBufferSize: String(localized: "The edit state contains an invalid data buffer.")
+      case .corruptJournal: String(localized: "The edit state is damaged or incomplete.")
+      case .incompatibleDataset: String(localized: "The edit state does not match this dataset.")
+      case .editingBlocked: String(localized: "Volume editing is temporarily unavailable.")
+      case .unsupportedCheckpointVersion(let version):
+        String(format: String(localized: "Edit state format version %lld is not supported by this version of BorgVR."), Int64(version))
+    }
+  }
 }
 
 struct BorgVRVoxelRegion: Codable, Equatable, Sendable {

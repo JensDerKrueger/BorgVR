@@ -9,6 +9,7 @@ struct BorgVRVolumeEditWork: Codable, Sendable {
 /// Serializes durable edits, not renderer access. Workers retain immutable snapshots.
 /// A torn trailing frame is discarded; corruption of a complete frame is reported.
 final class BorgVRVolumeEditJournal {
+  private struct Header: Decodable { let version: Int }
   private struct Checkpoint: Codable {
     let version: Int
     let datasetID: String
@@ -58,12 +59,24 @@ final class BorgVRVolumeEditJournal {
       try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
       try writeCheckpoint()
     } else if FileManager.default.fileExists(atPath: checkpointURL.path) {
-      state = try PropertyListDecoder().decode(Checkpoint.self, from: Data(contentsOf: checkpointURL))
-      guard state.version == Self.checkpointVersion, state.datasetID == datasetID,
+      let data = try Data(contentsOf: checkpointURL)
+      do {
+        let version = try PropertyListDecoder().decode(Header.self, from: data).version
+        guard version == Self.checkpointVersion else {
+          throw BorgVRVolumeEditError.unsupportedCheckpointVersion(version)
+        }
+        state = try PropertyListDecoder().decode(Checkpoint.self, from: data)
+      } catch is DecodingError { throw BorgVRVolumeEditError.corruptJournal }
+      guard state.datasetID == datasetID,
             state.mask.size == size, state.mask.spacing == spacing, state.mask.componentCount == componentCount else {
         throw BorgVRVolumeEditError.incompatibleDataset
       }
     } else {
+      // A journal may have been truncated after checkpointing. Without its
+      // checkpoint it cannot safely reconstruct the saved edits.
+      guard !["brush.journal", "bricks.cache", "edit-state.plist"].contains(where: {
+        FileManager.default.fileExists(atPath: directory.appendingPathComponent($0).path)
+      }) else { throw BorgVRVolumeEditError.corruptJournal }
       state = Checkpoint(version: Self.checkpointVersion, datasetID: datasetID, editStateID: UUID(), revision: 0,
                          mask: mask, pending: [], operationIDs: [], brickRevisions: [:])
     }

@@ -188,6 +188,7 @@ final class VolumeBrushModel: ObservableObject, BorgVRVolumeEditingCommands {
   @Published private(set) var channels: BorgVRVolumeEditChannels = .all
   @Published private(set) var componentCount = 1
   @Published private(set) var error: String?
+  @Published var openingError: String?
   @Published private(set) var physicalMaximum: Float = 1
   @Published private(set) var exportPhase = ExportPhase.options
   @Published private(set) var exportProgress = 0.0
@@ -345,7 +346,24 @@ final class VolumeBrushModel: ObservableObject, BorgVRVolumeEditingCommands {
         await previousClose?.value
         guard !Task.isCancelled, let self, self.datasetGeneration == generation else { return }
         do { try await self.activate(state, snapshot: nil, displayAsOriginal: selected == nil) }
-        catch { if self.datasetGeneration == generation { self.error = error.localizedDescription; self.isOpeningState = false } }
+        catch {
+          guard !Task.isCancelled, self.datasetGeneration == generation else { return }
+          let failure = error
+          if selected != nil {
+            do {
+              let original = self.makeState(datasetID: catalog.datasetID, kind: .local)
+              try await self.activate(original, snapshot: nil, displayAsOriginal: true)
+              guard self.datasetGeneration == generation else { return }
+              self.error = String(format: String(localized: "The selected edit state could not be opened: %@\nThe original dataset has been opened instead. Your saved edits have not been changed."), failure.localizedDescription)
+            } catch {
+              guard self.datasetGeneration == generation else { return }
+              self.error = failure.localizedDescription + "\n" + error.localizedDescription
+            }
+          } else { self.error = failure.localizedDescription }
+          self.openingError = self.error
+          self.isOpeningState = false
+          logger?.warning(self.error ?? failure.localizedDescription)
+        }
       }
       physicalMaximum = max(metadata.physicalExtentMeters.x, metadata.physicalExtentMeters.y,
                             metadata.physicalExtentMeters.z)
@@ -377,6 +395,7 @@ final class VolumeBrushModel: ObservableObject, BorgVRVolumeEditingCommands {
       }
     }
     dataSource = nil
+    openingError = nil
     activeState = nil
     workingState = nil
     sessionStateID = nil
@@ -481,12 +500,17 @@ final class VolumeBrushModel: ObservableObject, BorgVRVolumeEditingCommands {
     UserDefaults.standard.string(forKey: "volumeEditState.\(catalog.root.path)").flatMap(UUID.init(uuidString:))
   }
 
-  func waitForStateReady() async throws {
+  private func waitForStateTransition() async throws {
     let generation = datasetGeneration
     while isOpeningState {
       try await Task.sleep(for: .milliseconds(10))
       guard generation == datasetGeneration else { throw CancellationError() }
     }
+    guard dataSource != nil else { throw BorgVRVolumeEditingCommandError.unavailable }
+  }
+
+  func waitForStateReady() async throws {
+    try await waitForStateTransition()
     guard dataSource?.editingStatus() != nil else { throw BorgVRVolumeEditingCommandError.unavailable }
   }
 
@@ -543,9 +567,10 @@ final class VolumeBrushModel: ObservableObject, BorgVRVolumeEditingCommands {
 
   func selectState(_ id: UUID?) async throws {
     guard !isInSharePlay, !isExporting, !isRestoringPersonalState else { throw BorgVRVolumeEditingCommandError.busy }
-    try await waitForStateReady()
+    try await waitForStateTransition()
     guard !isInSharePlay, !isExporting, !isRestoringPersonalState else { throw BorgVRVolumeEditingCommandError.busy }
     try await activatePersonalState(id)
+    error = nil
   }
 
   private func activatePersonalState(_ id: UUID?) async throws {
