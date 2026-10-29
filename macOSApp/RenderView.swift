@@ -368,6 +368,14 @@ struct RenderView: View {
 
   private func handleKeyboardShortcut(_ shortcut: MacRenderShortcut) {
     switch shortcut {
+      case .translateLeft:
+        translateModel(by: SIMD2<Float>(-0.02, 0))
+      case .translateRight:
+        translateModel(by: SIMD2<Float>(0.02, 0))
+      case .translateUp:
+        translateModel(by: SIMD2<Float>(0, 0.02))
+      case .translateDown:
+        translateModel(by: SIMD2<Float>(0, -0.02))
       case .erase, .restore:
         appModel.volumeBrush.mode = shortcut == .erase ? .erase : .restore
         applyInteractionModeSelection(.volumeEditing)
@@ -1363,6 +1371,13 @@ struct RenderView: View {
       renderingParameters.clipMin[axis] = 0
       renderingParameters.clipMax[axis] = 1 + translation
     }
+  }
+
+  private func translateModel(by offset: SIMD2<Float>) {
+    var transform = session.currentSnapshot().transform
+    transform.translation += SIMD3<Float>(offset.x, offset.y, 0)
+    try? session.perform(.setTransform(transform), source: .userInterface)
+    sharePlay.flushSynchronization()
   }
 
   private func synchronizeTransform() {

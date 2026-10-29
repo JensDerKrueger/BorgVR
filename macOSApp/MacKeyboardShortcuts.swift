@@ -74,6 +74,10 @@ enum MacRenderShortcut: String {
   case datasetInfo = "i"
   case docking = "d"
   case toggleControls = "tab"
+  case translateLeft = "left"
+  case translateRight = "right"
+  case translateUp = "up"
+  case translateDown = "down"
 
   var displayName: String {
     switch self {
@@ -81,6 +85,10 @@ enum MacRenderShortcut: String {
       case .lightingRendering: "⇧2"
       case .isoRendering: "⇧3"
       case .toggleControls: "Tab"
+      case .translateLeft: "\u{2190}"
+      case .translateRight: "\u{2192}"
+      case .translateUp: "\u{2191}"
+      case .translateDown: "\u{2193}"
       default: rawValue.uppercased()
     }
   }
@@ -98,6 +106,10 @@ enum MacRenderShortcut: String {
       case .lightingRendering: "2"
       case .isoRendering: "3"
       case .toggleControls: .tab
+      case .translateLeft: .leftArrow
+      case .translateRight: .rightArrow
+      case .translateUp: .upArrow
+      case .translateDown: .downArrow
       default: KeyEquivalent(Character(rawValue))
     }
   }
@@ -110,6 +122,19 @@ enum MacRenderShortcut: String {
     let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
     let disallowedModifiers: NSEvent.ModifierFlags = [.command, .control, .option]
     guard modifiers.intersection(disallowedModifiers).isEmpty else { return nil }
+
+    switch event.keyCode {
+      case 123...126:
+        guard !modifiers.contains(.shift) else { return nil }
+        switch event.keyCode {
+          case 123: self = .translateLeft
+          case 124: self = .translateRight
+          case 125: self = .translateDown
+          default: self = .translateUp
+        }
+        return
+      default: break
+    }
 
     if event.keyCode == 48 {
       self = .toggleControls

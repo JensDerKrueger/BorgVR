@@ -44,6 +44,23 @@ private enum MacKeyboardShortcutTests {
     try check(shortcut("k", code: 40) == .erase && shortcut("u", code: 32) == .restore,
               "Erase/Restore shortcuts changed")
     try check(shortcut("\t", code: 48) == .toggleControls, "Tab shortcut changed")
+    let arrows: [(UInt16, Int, MacRenderShortcut, KeyEquivalent)] = [
+      (123, NSLeftArrowFunctionKey, .translateLeft, .leftArrow),
+      (124, NSRightArrowFunctionKey, .translateRight, .rightArrow),
+      (125, NSDownArrowFunctionKey, .translateDown, .downArrow),
+      (126, NSUpArrowFunctionKey, .translateUp, .upArrow)
+    ]
+    for (code, character, expected, equivalent) in arrows {
+      let characters = String(UnicodeScalar(UInt32(character))!)
+      try check(shortcut(characters, code: code, flags: [.function, .numericPad]) == expected,
+                "Arrow key did not translate in the expected direction")
+      try check(expected.keyEquivalent == equivalent && expected.modifiers.isEmpty,
+                "Arrow key equivalent is incorrect")
+      for flag: NSEvent.ModifierFlags in [.command, .control, .option, .shift] {
+        try check(shortcut(characters, code: code, flags: flag) == nil,
+                  "Modified arrow key triggered translation")
+      }
+    }
     print("Mac keyboard shortcut tests passed")
   }
 }
