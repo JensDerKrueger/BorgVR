@@ -117,9 +117,15 @@ struct SettingsView: View {
 
   var body: some View {
     VStack(spacing: 20) {
-      Text("settings_title_borgvr")
-        .font(.largeTitle)
-        .bold()
+      HStack {
+        Text("settings_title_borgvr")
+          .font(.largeTitle)
+          .bold()
+        Spacer()
+        SettingsFileControls { storedAppModel.settingsStore() }
+          .labelStyle(.iconOnly)
+          .controlSize(.large)
+      }
 
       HStack(spacing: 0) {
         settingsSidebar
@@ -130,7 +136,6 @@ struct SettingsView: View {
             Form {
               settingsIntroSection("settings_description_general")
               Section(header: Text("settings_section_general_behavior").bold()) {
-                SettingsFileControls { storedAppModel.settingsStore() }
                 Toggle("settings_toggle_autoload_tf", isOn: $storedAppModel.autoloadTF)
                 Toggle("settings_toggle_autoload_objects", isOn: $storedAppModel.autoloadObjects)
                 Toggle(

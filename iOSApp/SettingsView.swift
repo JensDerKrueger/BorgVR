@@ -171,8 +171,16 @@ struct SettingsView: View {
   private func settingsNavigation(isWideLayout: Bool) -> some View {
     NavigationSplitView {
       settingsSidebar
+        .toolbar {
+          ToolbarItem(placement: .topBarTrailing) { settingsFileControls }
+        }
     } detail: {
       settingsDetail(for: selectedSettingsPage ?? .general)
+        .toolbar {
+          if !isWideLayout {
+            ToolbarItem(placement: .topBarTrailing) { settingsFileControls }
+          }
+        }
     }
     .navigationSplitViewStyle(.balanced)
     .onAppear {
@@ -185,6 +193,11 @@ struct SettingsView: View {
         selectedSettingsPage = .general
       }
     }
+  }
+
+  private var settingsFileControls: some View {
+    SettingsFileControls { appSettings.settingsStore() }
+      .labelStyle(.iconOnly)
   }
 
   private var settingsSidebar: some View {
@@ -328,9 +341,6 @@ struct SettingsView: View {
 
   @ViewBuilder
   private var generalSection: some View {
-    Section("Settings files") {
-      SettingsFileControls { appSettings.settingsStore() }
-    }
     Section("Behavior") {
       Toggle("Automatically load/save transfer functions", isOn: $appSettings.autoloadTF)
       Toggle("Automatically load/save objects", isOn: $appSettings.autoloadObjects)
