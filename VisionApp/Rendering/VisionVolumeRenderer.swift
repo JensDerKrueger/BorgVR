@@ -104,6 +104,7 @@ final actor VisionVolumeRenderer {
   var pipelineStateIso: MTLRenderPipelineState
   /// Render pipeline state for visualizing bricks.
   var pipelineStateBrickVis: MTLRenderPipelineState
+  private let pipelineStateBoundingBoxDepth: MTLRenderPipelineState
   private let opaqueGeometryRenderer: VisionOpaqueGeometryRenderer
   /// Depth stencil state for volume rendering.
   var depthState: MTLDepthStencilState
@@ -387,6 +388,7 @@ final actor VisionVolumeRenderer {
     let pipelineStateScreenViewLabel: MTLRenderPipelineState
     let pipelineStateScreenViewOverlayLabel: MTLRenderPipelineState
     let pipelineStateMarkerComposite: MTLRenderPipelineState
+    let pipelineStateMarkerCompositeDepth: MTLRenderPipelineState
     do {
       (pipelineStateTF,
        pipelineStateTFL,
@@ -400,7 +402,9 @@ final actor VisionVolumeRenderer {
        pipelineStateScreenViewOverlayLabel,
        pipelineStateMarkerComposite,
        pipelineStateTFHUD,
-       pipelineStateTFHUDControls) =
+       pipelineStateTFHUDControls,
+       pipelineStateMarkerCompositeDepth,
+       pipelineStateBoundingBoxDepth) =
       try VisionVolumeRenderer.buildRenderPipelinesWithDevice(
         device: device,
         layerRenderer: layerRenderer,
@@ -413,7 +417,8 @@ final actor VisionVolumeRenderer {
     }
 
     let depthStateDescriptor = MTLDepthStencilDescriptor()
-    depthStateDescriptor.depthCompareFunction = .greater
+    // Transparent rays still write interaction depth, with zero compositor depth.
+    depthStateDescriptor.depthCompareFunction = .always
     depthStateDescriptor.isDepthWriteEnabled = true
     self.depthState = device.makeDepthStencilState(descriptor: depthStateDescriptor)!
 
@@ -453,7 +458,8 @@ final actor VisionVolumeRenderer {
       pipelineStateMeasurementPoint: pipelineStateMeasurementPoint,
       pipelineStateScreenViewLabel: pipelineStateScreenViewLabel,
       pipelineStateScreenViewOverlayLabel: pipelineStateScreenViewOverlayLabel,
-      pipelineStateMarkerComposite: pipelineStateMarkerComposite
+      pipelineStateMarkerComposite: pipelineStateMarkerComposite,
+      pipelineStateMarkerCompositeDepth: pipelineStateMarkerCompositeDepth
     )
 
     self.borgARProvider = BorgARProvider(
@@ -517,7 +523,7 @@ extension VisionVolumeRenderer {
    MTLRenderPipelineState, MTLRenderPipelineState, MTLRenderPipelineState,
    MTLRenderPipelineState, MTLRenderPipelineState, MTLRenderPipelineState,
    MTLRenderPipelineState, MTLRenderPipelineState, MTLRenderPipelineState,
-   MTLRenderPipelineState) {
+   MTLRenderPipelineState, MTLRenderPipelineState, MTLRenderPipelineState) {
     // Build a render state pipeline object.
     let shaderSource = try RuntimeMetalShaderLoader.loadSource(named: "Shaders")
 
@@ -582,6 +588,12 @@ extension VisionVolumeRenderer {
     pipelineDescriptorBrickVis.colorAttachments[1].pixelFormat = .r32Float
     pipelineDescriptorBrickVis.depthAttachmentPixelFormat = layerRenderer.configuration.depthFormat
     pipelineDescriptorBrickVis.maxVertexAmplificationCount = layerRenderer.properties.viewCount
+
+    let pipelineDescriptorBoundingBoxDepth = pipelineDescriptorTF.copy() as! MTLRenderPipelineDescriptor
+    pipelineDescriptorBoundingBoxDepth.label = "Temporary Bounding Box Reprojection Depth"
+    pipelineDescriptorBoundingBoxDepth.fragmentFunction = library.makeFunction(name: "fragmentShaderBoundingBoxDepth")
+    pipelineDescriptorBoundingBoxDepth.colorAttachments[0].writeMask = []
+    pipelineDescriptorBoundingBoxDepth.colorAttachments[1].writeMask = []
 
     // TF HUD overlay pipeline (2D screen-space panel)
     let hudVertexFunction = library.makeFunction(name: "vertexShaderTFPanel")
@@ -729,6 +741,11 @@ extension VisionVolumeRenderer {
       ca.destinationAlphaBlendFactor = .one
     }
 
+    let pipelineDescriptorMarkerCompositeDepth = pipelineDescriptorMarkerComposite.copy() as! MTLRenderPipelineDescriptor
+    pipelineDescriptorMarkerCompositeDepth.label = "Render Pipeline for Opaque Geometry Depth Composite"
+    pipelineDescriptorMarkerCompositeDepth.colorAttachments[0].writeMask = []
+    pipelineDescriptorMarkerCompositeDepth.colorAttachments[0].isBlendingEnabled = false
+
     let pipelineDescriptorTFHUD = MTLRenderPipelineDescriptor()
     pipelineDescriptorTFHUD.label = "Render Pipeline for TF HUD"
     pipelineDescriptorTFHUD.vertexFunction = hudVertexFunction
@@ -784,7 +801,9 @@ extension VisionVolumeRenderer {
       try device.makeRenderPipelineState(descriptor: pipelineDescriptorScreenViewOverlayLabel),
       try device.makeRenderPipelineState(descriptor: pipelineDescriptorMarkerComposite),
       try device.makeRenderPipelineState(descriptor: pipelineDescriptorTFHUD),
-      try device.makeRenderPipelineState(descriptor: pipelineDescriptorTFHUDControls)
+      try device.makeRenderPipelineState(descriptor: pipelineDescriptorTFHUDControls),
+      try device.makeRenderPipelineState(descriptor: pipelineDescriptorMarkerCompositeDepth),
+      try device.makeRenderPipelineState(descriptor: pipelineDescriptorBoundingBoxDepth)
     )
   }
 
@@ -1926,14 +1945,10 @@ extension VisionVolumeRenderer {
     // input time. Do not submit that now-obsolete frame to the GPU.
     guard !Task.isCancelled, layerRenderer.state == .running else { return true }
 
-    var submissionEnded = false
     frame.startSubmission()
-    defer {
-      if !submissionEnded {
-        frame.endSubmission()
-      }
-    }
 
+    // A suspended frame is abandoned, not ended: endSubmission requires its
+    // drawable to have reached encodePresent, so it must not run from defer.
     guard let drawable = frame.queryDrawables().first else { return true }
     guard !Task.isCancelled, layerRenderer.state == .running else { return true }
 
@@ -1986,6 +2001,7 @@ extension VisionVolumeRenderer {
       renderPassDescriptor.colorAttachments[0].storeAction = .multisampleResolve
       renderPassDescriptor.colorAttachments[1].storeAction = .multisampleResolve
       renderPassDescriptor.depthAttachment.storeAction = .multisampleResolve
+      renderPassDescriptor.depthAttachment.depthResolveFilter = .max
     } else {
       renderPassDescriptor.colorAttachments[0].texture = drawable.colorTextures[0]
       renderPassDescriptor.colorAttachments[1].texture = interactionDepthTexture
@@ -2094,6 +2110,19 @@ extension VisionVolumeRenderer {
       transferFunctionPanelInteractionState.setFocused(false)
     }
 
+    // Temporary test: overwrite final compositor depth with the same bounding-box
+    // back faces used by the raycaster. Color and interaction depth are write-masked.
+    renderEncoder.pushDebugGroup("Temporary Bounding Box Reprojection Depth")
+    renderEncoder.setRenderPipelineState(pipelineStateBoundingBoxDepth)
+    renderEncoder.setDepthStencilState(depthState)
+    renderEncoder.setCullMode(.front)
+    renderEncoder.setFrontFacing(.counterClockwise)
+    renderEncoder.setViewports(viewports)
+    uniformBufferVertex.bindVertex(to: renderEncoder, index: VertexBufferIndex.uniforms.rawValue)
+    renderEncoder.setVertexBuffer(cubeBuffer, offset: 0, index: VertexBufferIndex.meshPositions.rawValue)
+    renderEncoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: vertexCount)
+    renderEncoder.popDebugGroup()
+
     renderEncoder.endEncoding()
 
     // The immersive space can be suspended while this frame is being encoded.
@@ -2120,7 +2149,6 @@ extension VisionVolumeRenderer {
 
     commandBuffer.commit()
     frame.endSubmission()
-    submissionEnded = true
     commandBuffer.waitUntilCompleted()
 
     if let error = commandBuffer.error as NSError? {

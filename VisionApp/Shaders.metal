@@ -14,6 +14,10 @@
 #define VOLUME_SHADER_USES_RATE_MAP 1
 #endif
 #define VOLUME_SHADER_USES_MARKER_TEXTURES 1
+#define VOLUME_SHADER_WRITES_REPROJECTION_DEPTH 1
 
 #include "../AppSupport/Rendering/Shaders/VolumeRaycaster.metal"
 #include "../AppSupport/Rendering/Shaders/VisionInteractionShaders.metal"
+
+// Temporary reprojection test: keep rasterized bounding-box depth only.
+fragment void fragmentShaderBoundingBoxDepth() {}

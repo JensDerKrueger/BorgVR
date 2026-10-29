@@ -218,7 +218,7 @@ final class BorgVRVolumeEditDataSource: BORGVRDatasetProtocol, BorgVRVolumeGPUBr
     }
   }
   func gpuReadableRevision(index: Int) -> UInt64? { lock.withLock { transitioning ? nil : current?.gpuReadableRevision(index: index) } }
-  func cachedOriginalBrick(index: Int) -> [UInt8]? { lock.withLock { current }?.cachedOriginalBrick(index: index) }
+  func cachedOriginalBrick(index: Int) -> BorgVRVolumeOriginalBrick? { lock.withLock { current }?.cachedOriginalBrick(index: index) }
 
   func snapshot(completion: @escaping @Sendable (Result<BorgVRVolumeEditSnapshot, Error>) -> Void) {
     queue.async { [self] in

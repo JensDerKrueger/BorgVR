@@ -25,9 +25,6 @@ final class VolumeAtlasBrushRenderer {
   private let pipeline: MTLComputePipelineState
   private let partialPipeline: MTLComputePipelineState?
   private let metadata: BORGVRMetaData
-  private var originals: [Int: MTLBuffer] = [:]
-  private var originalOrder: [Int] = []
-  private var originalBytes = 0
   private let dummy: MTLBuffer
 
   init(device: MTLDevice, metadata: BORGVRMetaData) throws {
@@ -56,13 +53,6 @@ final class VolumeAtlasBrushRenderer {
         try device.makeComputePipelineState(function: $0)
       }
     } else { partialPipeline = nil }
-  }
-
-  func retainOriginals(for residents: Set<Int>) {
-    for id in Array(originals.keys) where !residents.contains(id) {
-      originalBytes -= originals.removeValue(forKey: id)!.length
-      originalOrder.removeAll { $0 == id }
-    }
   }
 
   func prepare(_ batch: BorgVRVolumeBrushBatch) -> PreparedBatch? {
@@ -115,22 +105,12 @@ final class VolumeAtlasBrushRenderer {
 
     let original: MTLBuffer
     if batch.mode == .restore {
-      if let cached = originals[brickID] { original = cached }
-      else {
-        guard let bytes = source.cachedOriginalBrick(index: brickID),
-              bytes.count == m.brickSize * m.brickSize * m.brickSize * m.componentCount * m.bytesPerComponent,
-              let buffer = device.makeBuffer(bytes: bytes, length: bytes.count, options: .storageModeShared) else {
-          return false
-        }
-        original = buffer
-        originals[brickID] = buffer
-        originalOrder.append(brickID)
-        originalBytes += buffer.length
-        while originalBytes > 32 * 1024 * 1024, originalOrder.count > 1 {
-          let evicted = originalOrder.removeFirst()
-          originalBytes -= originals.removeValue(forKey: evicted)!.length
-        }
+      guard let brick = source.cachedOriginalBrick(index: brickID),
+            brick.count == m.brickSize * m.brickSize * m.brickSize * m.componentCount * m.bytesPerComponent,
+            let buffer = brick.metalBuffer(device: device) else {
+        return false
       }
+      original = buffer
     } else { original = dummy }
 
     if batch.byteSelection != nil {

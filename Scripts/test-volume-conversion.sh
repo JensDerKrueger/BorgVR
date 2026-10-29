@@ -27,6 +27,7 @@ swiftc \
   "$ROOT/BORGVR-IO/BORGVRMetaData.swift" \
   "$ROOT/BORGVR-IO/BORGVRFileData.swift" \
   "$ROOT/BORGVR-IO/BorgVRVolumeEditMask.swift" \
+  "$ROOT/BORGVR-IO/BorgVRVolumeOriginalBrick.swift" \
   "$ROOT/BORGVR-IO/BorgVRVolumeEditStates.swift" \
   "$ROOT/BORGVR-IO/BorgVRVolumeEditDataSource.swift" \
   "$ROOT/BORGVR-IO/BorgVRCPUVolumeEditExecutor.swift" \

@@ -76,7 +76,7 @@ protocol BorgVRVolumeGPUBrushSource: AnyObject {
   func gpuBrushHistory() -> [BorgVRVolumeBrushBatch]
   /// Lower bound included in a subsequent successful CPU read; nil while that brick is dirty.
   func gpuReadableRevision(index: Int) -> UInt64?
-  func cachedOriginalBrick(index: Int) -> [UInt8]?
+  func cachedOriginalBrick(index: Int) -> BorgVRVolumeOriginalBrick?
 }
 
 extension BorgVRVolumeGPUBrushSource {

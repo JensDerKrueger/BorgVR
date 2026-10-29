@@ -15,6 +15,7 @@ swiftc \
   "$ROOT/BORGVR-IO/BORGVRMetaData.swift" \
   "$ROOT/BORGVR-IO/BorgVRSharedConstants.swift" \
   "$ROOT/BORGVR-IO/BorgVRVolumeEditMask.swift" \
+  "$ROOT/BORGVR-IO/BorgVRVolumeOriginalBrick.swift" \
   "$ROOT/BORGVR-IO/BorgVRCPUVolumeEditExecutor.swift" \
   "$ROOT/BORGVR-Render/Helpers/AlignedBuffer.swift" \
   "$ROOT/BORGVR-Render/Transfer Function 1D/TransferFunction1D.swift" \

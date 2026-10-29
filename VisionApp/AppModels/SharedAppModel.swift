@@ -567,6 +567,12 @@ class SharedAppModel {
     }
 
     guard let pendingSpatialViewState else { return }
+    #if !targetEnvironment(simulator)
+    // The first compositor frames can arrive before ARKit has activated the local
+    // WorldAnchor. Applying the saved pose against identity here would bake in a
+    // second offset once the real anchor appears a few frames later.
+    guard worldAnchorID != nil else { return }
+    #endif
     let worldAnchorFromDataset = simd_inverse(originFromWorldAnchor) *
       originFromHead * pendingSpatialViewState.headFromDataset
     guard worldAnchorFromDataset.isFiniteAffine else { return }
@@ -580,6 +586,11 @@ class SharedAppModel {
     guard hasValidHeadPose else {
       throw DatasetViewStateDocumentError.spatialPoseUnavailable
     }
+    #if !targetEnvironment(simulator)
+    guard currentSpatialAnchorID != nil else {
+      throw DatasetViewStateDocumentError.spatialPoseUnavailable
+    }
+    #endif
     let originFromDataset = originFromWorldAnchorMatrix * modelTransform.matrix
     let headFromDataset = simd_inverse(originFromHeadMatrix) * originFromDataset
     guard headFromDataset.isFiniteAffine else {

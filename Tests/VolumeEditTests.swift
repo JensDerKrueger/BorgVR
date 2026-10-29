@@ -1024,7 +1024,7 @@ private func testCompactEditMask() throws {
 
 private func testSourceCacheResidentEviction() throws {
   let source = EditTestDataset(bytesPerComponent: 2)
-  let cache = VolumeEditSourceCache(source, budget: 512)
+  let cache = VolumeEditSourceCache(source, budget: 2 * Int(getpagesize()))
   let buffer = source.allocateBrickBuffer()
   defer { buffer.deallocate() }
   cache.updateResidentBrickIDs([0, 1])
@@ -1039,6 +1039,48 @@ private func testSourceCacheResidentEviction() throws {
   try cache.getBrick(index: 4, outputBuffer: buffer)
   try check(cache.cachedBrick(index: 4) != nil && [0, 3, 4].filter { cache.cachedBrick(index: $0) != nil }.count == 2,
     "All-resident cache exceeded its byte budget")
+
+  guard let device = MTLCreateSystemDefaultDevice(), let queue = device.makeCommandQueue() else { return }
+  let command = queue.makeCommandBuffer()!
+  let destination = device.makeBuffer(length: 256, options: .storageModeShared)!
+  try cache.getBrick(index: 4, outputBuffer: buffer)
+  let expected = Array(UnsafeBufferPointer(start: buffer, count: 256))
+  weak var evicted: BorgVRVolumeOriginalBrick?
+  do {
+    let brick = cache.cachedBrick(index: 4)!
+    evicted = brick
+    guard let metal = brick.metalBuffer(device: device) else {
+      throw EditTestError(message: "Could not wrap shared original storage for Metal")
+    }
+    try check(brick.withUnsafeBytes { $0.baseAddress == UnsafeRawPointer(metal.contents()) },
+      "CPU and GPU originals are separate allocations")
+    try check(brick.metalBuffer(device: device) === metal, "Repeated restore recreated the Metal wrapper")
+    try check(metal.length == brick.allocatedByteCount && metal.length % Int(getpagesize()) == 0,
+      "Cache budget omitted Metal's page-alignment padding")
+    let encoder = command.makeBlitCommandEncoder()!
+    encoder.copy(from: metal, sourceOffset: 0, to: destination, destinationOffset: 0, size: 256)
+    encoder.endEncoding()
+  }
+  // Evict the originals before submitting the already encoded GPU read. Only
+  // the command's Metal reference may keep that immutable allocation alive.
+  cache.updateResidentBrickIDs([5, 6])
+  for id in [5, 6] { try cache.getBrick(index: id, outputBuffer: buffer) }
+  try check(cache.cachedBrick(index: 4) == nil && evicted == nil,
+    "Evicted original retained its Metal wrapper in a reference cycle")
+  command.commit(); command.waitUntilCompleted()
+  if let error = command.error { throw error }
+  let actual = Array(UnsafeBufferPointer(start: destination.contents().assumingMemoryBound(to: UInt8.self), count: 256))
+  try check(actual == expected, "Eviction released original bytes before GPU completion")
+  try DispatchQueue.global(qos: .utility).sync {
+    let cpuBuffer = source.allocateBrickBuffer()
+    defer { cpuBuffer.deallocate() }
+    for id in [5, 6, 5, 6] {
+      try cache.getBrick(index: id, outputBuffer: cpuBuffer)
+      try check(cache.cachedBrick(index: id)?.withUnsafeBytes { $0.elementsEqual(UnsafeBufferPointer(start: cpuBuffer, count: 256)) } == true,
+        "Background CPU read disagrees with the shared original storage")
+    }
+  }
+  print("Original cache shares CPU/Metal storage and survives eviction before GPU submission")
 }
 
 private func testBottomUpEditMaterialization() throws {
@@ -1468,7 +1510,8 @@ private func testGPUBrushHistoryDoesNotWaitForCPUBricks() throws {
   try check(history.map(\.revision) == [1, 2] && history[0].mode == .erase && history[1].mode == .restore,
             "GPU history lost operation order")
   try check(dataset.gpuReadableRevision(index: 0) == nil, "Stale CPU brick was advertised as current")
-  try check(dataset.cachedOriginalBrick(index: 0) == original, "GPU restore lost its immutable source")
+  try check(dataset.cachedOriginalBrick(index: 0)?.withUnsafeBytes { Array($0) } == original,
+    "GPU restore lost its immutable source")
   do {
     try dataset.getBrick(index: 0, outputBuffer: buffer)
     throw EditTestError(message: "Pending GPU edit returned stale CPU bytes")

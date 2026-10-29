@@ -27,6 +27,10 @@ using namespace metal;
 #define VOLUME_SHADER_USES_MARKER_TEXTURES 0
 #endif
 
+#ifndef VOLUME_SHADER_WRITES_REPROJECTION_DEPTH
+#define VOLUME_SHADER_WRITES_REPROJECTION_DEPTH 0
+#endif
+
 #if VOLUME_SHADER_USES_AMPLIFICATION
 #define VOLUME_SHADER_AMP_PARAMETER , ushort amp_id [[amplification_id]]
 #define VOLUME_SHADER_UNIFORM_INDEX amp_id
@@ -82,29 +86,56 @@ typedef struct {
 typedef struct {
   half4 color [[color(0)]];
   float interactionDepth [[color(1)]];
+#if VOLUME_SHADER_WRITES_REPROJECTION_DEPTH
+  float depth [[depth(any)]];
+#endif
 } VolumeFragmentOutput;
 
 inline VolumeFragmentOutput volumeFragmentOutput(half4 color) {
   VolumeFragmentOutput out;
   out.color = color;
   out.interactionDepth = -1.0;
+#if VOLUME_SHADER_WRITES_REPROJECTION_DEPTH
+  out.depth = 0.0;
+#endif
   return out;
+}
+
+inline float volumePositionDepth(FragmentUniforms uniforms, float3 position) {
+  float4 clip = uniforms.textureToClip * float4(position, 1.0);
+  return all(isfinite(clip)) && clip.w > 1e-6 ? clip.z / clip.w : -1.0;
 }
 
 inline VolumeFragmentOutput volumeFragmentOutput(half4 color,
                                                  FragmentUniforms uniforms,
                                                  float3 interactionPosition) {
-  VolumeFragmentOutput out;
-  out.color = color;
-  float4 clip = uniforms.textureToClip * float4(interactionPosition, 1.0);
-  out.interactionDepth = abs(clip.w) > 1e-6 ? clip.z / clip.w : -1.0;
+  VolumeFragmentOutput out = volumeFragmentOutput(color);
+  out.interactionDepth = volumePositionDepth(uniforms, interactionPosition);
+#if VOLUME_SHADER_WRITES_REPROJECTION_DEPTH
+  // The compositor needs the raycast hit, not the rasterized bounding-box exit.
+  out.depth = color.a > 0 ? clamp(out.interactionDepth, 0.0, 1.0) : 0.0;
+#endif
   return out;
 }
 
-inline half4 visibleVolumeColor(bool stoppedAtOpaqueGeometry,
-                                float4 colorAtOpaqueGeometry,
-                                float4 accumulatedColor) {
-  return half4(stoppedAtOpaqueGeometry ? colorAtOpaqueGeometry : accumulatedColor);
+inline VolumeFragmentOutput visibleVolumeOutput(bool stoppedAtOpaqueGeometry,
+                                                float4 colorAtOpaqueGeometry,
+                                                float4 accumulatedColor,
+                                                FragmentUniforms uniforms,
+                                                bool hasInteraction,
+                                                float3 interactionPosition,
+                                                float3 positionAtOpaqueGeometry) {
+  half4 color = half4(stoppedAtOpaqueGeometry ? colorAtOpaqueGeometry : accumulatedColor);
+  VolumeFragmentOutput out = hasInteraction
+    ? volumeFragmentOutput(color, uniforms, interactionPosition)
+    : volumeFragmentOutput(color);
+#if VOLUME_SHADER_WRITES_REPROJECTION_DEPTH
+  // Picking continues behind geometry, but reprojection must follow visible color.
+  if (stoppedAtOpaqueGeometry && color.a > 0) {
+    out.depth = clamp(volumePositionDepth(uniforms, positionAtOpaqueGeometry), 0.0, 1.0);
+  }
+#endif
+  return out;
 }
 
 inline float effectiveOversampling(float baseOversampling,
@@ -175,27 +206,42 @@ inline float markerDepthAtFragment(float4 fragmentPosition,
 #endif
 }
 
-inline bool sampleReachedMarker(FragmentUniforms uniforms,
-                                float3 sampleNormCoords,
-                                float markerDepth) {
-  if (markerDepth <= 0.0) {
-    return false;
-  }
-  float4 clip = uniforms.textureToClip * float4(sampleNormCoords, 1.0);
-  float sampleDepth = clip.z / clip.w;
-  return sampleDepth <= markerDepth + 0.00001;
-}
 #else
 inline float markerDepthAtFragment(float4 fragmentPosition, uint layerIndex) {
   return 0.0;
 }
-
-inline bool sampleReachedMarker(FragmentUniforms uniforms,
-                                float3 sampleNormCoords,
-                                float markerDepth) {
-  return false;
-}
 #endif
+
+// Clip z and w are affine along the ray. Prepare z - depth * w once,
+// leaving only scalar interpolation and a sign-aware comparison per sample.
+inline float4 prepareMarkerDepthTest(FragmentUniforms uniforms,
+                                     float3 entryPoint,
+                                     float3 exitPoint,
+                                     float markerDepth) {
+#if VOLUME_SHADER_USES_MARKER_TEXTURES
+  if (markerDepth > 0.0) {
+    float2 entry = (uniforms.textureToClip * float4(entryPoint, 1.0)).zw;
+    float2 exit = (uniforms.textureToClip * float4(exitPoint, 1.0)).zw;
+    float limit = markerDepth + 0.00001;
+    return float4(entry.x - limit * entry.y, exit.x - limit * exit.y,
+                  entry.y, exit.y);
+  }
+#endif
+  return float4(1.0);
+}
+
+inline bool sampleReachedMarker(float4 depthTest, float sampleT) {
+#if VOLUME_SHADER_USES_MARKER_TEXTURES
+  float planeDistance = mix(depthTest.x, depthTest.y, sampleT);
+  float clipW = mix(depthTest.z, depthTest.w, sampleT);
+  if (clipW > 0.0) return planeDistance <= 0.0;
+  if (clipW < 0.0) return planeDistance >= 0.0;
+  // At the camera plane, preserve the original infinity/NaN comparison.
+  return clipW == 0.0 && (signbit(clipW) ? planeDistance > 0.0 : planeDistance < 0.0);
+#else
+  return false;
+#endif
+}
 
 // MARK: - Vertex Shader
 
@@ -232,7 +278,9 @@ vertex VertexToFragment VOLUME_VERTEX_SHADER_NAME(
 
  - Parameters:
  - in: Interpolated vertex-to-fragment data (position + exit).
- - amp_id: Amplification ID for multithreaded draws.
+ - viewIndex: Eye index for the per-view uniforms and sampling phase.
+ - markerDepth: Opaque geometry depth, or zero for the geometry-free specialization.
+ - oversampling: Effective sample density, including the rasterization rate map.
  - volumeAtlas: 3D texture atlas containing volume bricks.
  - transferFunc: 1D transfer function texture.
  - uniformsArray: Double-buffered fragment uniforms for camera and rendering parameters.
@@ -241,29 +289,21 @@ vertex VertexToFragment VOLUME_VERTEX_SHADER_NAME(
  - hashBuffer: Atomic hash table buffer for missing-brick tracking.
  - Returns: The accumulated RGBA color after compositing along the ray.
  */
-fragment VolumeFragmentOutput VOLUME_FRAGMENT_SHADER_TF_NAME(
-                                VertexToFragment in [[stage_in]] VOLUME_SHADER_AMP_PARAMETER,
-                                texture3d<float> volumeAtlas  [[texture(TextureIndexVolumeAtlas)]],
-                                texture3d<float> secondaryVolumeAtlas [[texture(TextureIndexVolumeAtlasSecondary)]],
-                                texture1d<half> transferFunc  [[texture(TextureIndexTransferFunction)]],
-                                texture1d<half> transferFunc2 [[texture(TextureIndexTransferFunction2)]],
-                                texture1d<half> transferFunc3 [[texture(TextureIndexTransferFunction3)]],
-                                texture1d<half> transferFunc4 [[texture(TextureIndexTransferFunction4)]],
-                                device const FragmentUniformsArray& uniformsArray [[buffer(FragmentBufferIndexUniforms)]],
-                                device const LevelData* levelData                [[buffer(FragmentBufferIndexLevelTable)]],
-                                device const uint* brickMeta                     [[buffer(FragmentBufferIndexBrickMeta)]],
-                                device atomic_uint* hashBuffer                   [[buffer(FragmentBufferIndexHashTable)]]
-                                VOLUME_SHADER_RATE_MAP_PARAMETER
-                                VOLUME_SHADER_MARKER_PARAMETER
-                                ) {
-  FragmentUniforms uniforms = uniformsArray.uniforms[VOLUME_SHADER_UNIFORM_INDEX];
-  float markerDepth = markerDepthAtFragment(in.position,
-                                            uint(VOLUME_SHADER_UNIFORM_INDEX)
-                                            VOLUME_SHADER_MARKER_ARGUMENT);
-  float oversampling = effectiveOversampling(uniforms.oversampling,
-                                             in.position,
-                                             uint(VOLUME_SHADER_UNIFORM_INDEX)
-                                             VOLUME_SHADER_RATE_MAP_ARGUMENT);
+template<bool OpaqueGeometry>
+inline VolumeFragmentOutput raycastTransferFunction(
+                                VertexToFragment in, uint viewIndex,
+                                float markerDepth, float oversampling,
+                                texture3d<float> volumeAtlas,
+                                texture3d<float> secondaryVolumeAtlas,
+                                texture1d<half> transferFunc,
+                                texture1d<half> transferFunc2,
+                                texture1d<half> transferFunc3,
+                                texture1d<half> transferFunc4,
+                                device const FragmentUniformsArray& uniformsArray,
+                                device const LevelData* levelData,
+                                device const uint* brickMeta,
+                                device atomic_uint* hashBuffer) {
+  FragmentUniforms uniforms = uniformsArray.uniforms[viewIndex];
   constexpr sampler s(address::clamp_to_border, filter::linear);
 
   // Compute ray entry and exit in texture space
@@ -276,13 +316,16 @@ fragment VolumeFragmentOutput VOLUME_FRAGMENT_SHADER_TF_NAME(
   // If ray is too short, return transparent
   if (rayLength < 1e-6) return volumeFragmentOutput(half4(0));
 
+  float3 inverseDirection = inverseBrickRayDirection(direction);
+  float4 markerDepthTest = prepareMarkerDepthTest(uniforms, entryPoint, exitPoint, markerDepth);
+
   // Compute distances for LOD selection
   float entryDepth = distanceFromCameraInNormalizedVolumeSpace(uniforms, entryPoint);
   float exitDepth  = distanceFromCameraInNormalizedVolumeSpace(uniforms, exitPoint);
 
   float3 voxelSpaceDirection = transformToPoolSpace(direction, oversampling);
   float  stepSize            = length(voxelSpaceDirection);
-  float  samplePhase         = samplingPhase(uniforms, entryPoint, direction, uint(VOLUME_SHADER_UNIFORM_INDEX), 0.5);
+  float  samplePhase         = samplingPhase(uniforms, entryPoint, direction, viewIndex, 0.5);
 
   // Initialize ray marching
   float3 currentPos = entryPoint;
@@ -291,6 +334,7 @@ fragment VolumeFragmentOutput VOLUME_FRAGMENT_SHADER_TF_NAME(
   float interactionOpacity = 0;
   bool stoppedAtOpaqueGeometry = false;
   float3 interactionPosition = float3(0);
+  float3 positionAtOpaqueGeometry = float3(0);
   float strongestContribution = 0;
   float t           = 0;
   uint  brickCount  = 0;
@@ -301,7 +345,7 @@ fragment VolumeFragmentOutput VOLUME_FRAGMENT_SHADER_TF_NAME(
     uint  iLOD         = computeLOD(currentDepth);
 
     BrickInformation brickResult = getBrick(
-                                            currentPos, iLOD, direction,
+                                            currentPos, iLOD, direction, inverseDirection,
                                             uniforms.cubeBounds,
                                             brickMeta, levelData,
                                             hashBuffer, false
@@ -309,17 +353,13 @@ fragment VolumeFragmentOutput VOLUME_FRAGMENT_SHADER_TF_NAME(
 
 #if STOP_ON_MISS == 1
     if (brickResult.substitute) {
-      return strongestContribution > 0
-        ? volumeFragmentOutput(visibleVolumeColor(stoppedAtOpaqueGeometry,
-                                                  colorAtOpaqueGeometry,
-                                                  accColor),
-                               uniforms, interactionPosition)
-        : volumeFragmentOutput(visibleVolumeColor(stoppedAtOpaqueGeometry,
-                                                  colorAtOpaqueGeometry,
-                                                  accColor));
+      return visibleVolumeOutput(stoppedAtOpaqueGeometry, colorAtOpaqueGeometry, accColor,
+                                 uniforms, strongestContribution > 0, interactionPosition,
+                                 positionAtOpaqueGeometry);
     }
 #endif
 
+    float brickExitT = t + brickResult.rayExitDelta;
     if (!brickResult.empty) {
       // Number of samples within this brick
       float segmentLength = length(brickResult.poolBrickInfo.poolExitCoords
@@ -337,9 +377,10 @@ fragment VolumeFragmentOutput VOLUME_FRAGMENT_SHADER_TF_NAME(
                                       brickResult.normExitCoords,
                                       sampleT
                                       );
-        if (!stoppedAtOpaqueGeometry &&
-            sampleReachedMarker(uniforms, sampleNormCoords, markerDepth)) {
+        if (OpaqueGeometry && !stoppedAtOpaqueGeometry && markerDepth > 0.0 &&
+            sampleReachedMarker(markerDepthTest, mix(t, brickExitT, sampleT))) {
           colorAtOpaqueGeometry = accColor;
+          positionAtOpaqueGeometry = interactionPosition;
           stoppedAtOpaqueGeometry = true;
         }
         float3 poolCoords = mix(
@@ -377,41 +418,63 @@ fragment VolumeFragmentOutput VOLUME_FRAGMENT_SHADER_TF_NAME(
         // The visible color may stop at opaque geometry, while interaction depth
         // keeps searching the volume independently.
         if (interactionOpacity > 0.99) {
-          return volumeFragmentOutput(
-            visibleVolumeColor(stoppedAtOpaqueGeometry, colorAtOpaqueGeometry, accColor),
-            uniforms,
-            interactionPosition
-          );
+          return visibleVolumeOutput(stoppedAtOpaqueGeometry, colorAtOpaqueGeometry, accColor,
+                                     uniforms, true, interactionPosition, positionAtOpaqueGeometry);
         }
       }
     }
 
     // Advance to the next brick
     currentPos = brickResult.normExitCoords;
-    t = length(entryPoint - currentPos) / rayLength;
+    t = brickExitT;
 
     // Safety cap to prevent infinite loops
     brickCount++;
     if (brickCount == MAX_ITERATIONS) {
-      return strongestContribution > 0
-        ? volumeFragmentOutput(visibleVolumeColor(stoppedAtOpaqueGeometry,
-                                                  colorAtOpaqueGeometry,
-                                                  accColor),
-                               uniforms, interactionPosition)
-        : volumeFragmentOutput(visibleVolumeColor(stoppedAtOpaqueGeometry,
-                                                  colorAtOpaqueGeometry,
-                                                  accColor));
+      return visibleVolumeOutput(stoppedAtOpaqueGeometry, colorAtOpaqueGeometry, accColor,
+                                 uniforms, strongestContribution > 0, interactionPosition,
+                                 positionAtOpaqueGeometry);
     }
   }
 
-  return strongestContribution > 0
-    ? volumeFragmentOutput(visibleVolumeColor(stoppedAtOpaqueGeometry,
-                                              colorAtOpaqueGeometry,
-                                              accColor),
-                           uniforms, interactionPosition)
-    : volumeFragmentOutput(visibleVolumeColor(stoppedAtOpaqueGeometry,
-                                              colorAtOpaqueGeometry,
-                                              accColor));
+  return visibleVolumeOutput(stoppedAtOpaqueGeometry, colorAtOpaqueGeometry, accColor,
+                             uniforms, strongestContribution > 0, interactionPosition,
+                             positionAtOpaqueGeometry);
+}
+
+fragment VolumeFragmentOutput VOLUME_FRAGMENT_SHADER_TF_NAME(
+                                VertexToFragment in [[stage_in]] VOLUME_SHADER_AMP_PARAMETER,
+                                texture3d<float> volumeAtlas [[texture(TextureIndexVolumeAtlas)]],
+                                texture3d<float> secondaryVolumeAtlas [[texture(TextureIndexVolumeAtlasSecondary)]],
+                                texture1d<half> transferFunc [[texture(TextureIndexTransferFunction)]],
+                                texture1d<half> transferFunc2 [[texture(TextureIndexTransferFunction2)]],
+                                texture1d<half> transferFunc3 [[texture(TextureIndexTransferFunction3)]],
+                                texture1d<half> transferFunc4 [[texture(TextureIndexTransferFunction4)]],
+                                device const FragmentUniformsArray& uniformsArray [[buffer(FragmentBufferIndexUniforms)]],
+                                device const LevelData* levelData [[buffer(FragmentBufferIndexLevelTable)]],
+                                device const uint* brickMeta [[buffer(FragmentBufferIndexBrickMeta)]],
+                                device atomic_uint* hashBuffer [[buffer(FragmentBufferIndexHashTable)]]
+                                VOLUME_SHADER_RATE_MAP_PARAMETER
+                                VOLUME_SHADER_MARKER_PARAMETER) {
+  float markerDepth = markerDepthAtFragment(in.position,
+                                            uint(VOLUME_SHADER_UNIFORM_INDEX)
+                                            VOLUME_SHADER_MARKER_ARGUMENT);
+  float oversampling = effectiveOversampling(uniformsArray.uniforms[VOLUME_SHADER_UNIFORM_INDEX].oversampling,
+                                             in.position,
+                                             uint(VOLUME_SHADER_UNIFORM_INDEX)
+                                             VOLUME_SHADER_RATE_MAP_ARGUMENT);
+  // Specialize per ray: most pixels have no geometry depth and need no state
+  // for stopping visible color while independently continuing the picking ray.
+  if (markerDepth > 0.0) {
+    return raycastTransferFunction<true>(
+      in, uint(VOLUME_SHADER_UNIFORM_INDEX), markerDepth, oversampling,
+      volumeAtlas, secondaryVolumeAtlas, transferFunc, transferFunc2, transferFunc3, transferFunc4,
+      uniformsArray, levelData, brickMeta, hashBuffer);
+  }
+  return raycastTransferFunction<false>(
+    in, uint(VOLUME_SHADER_UNIFORM_INDEX), 0.0, oversampling,
+    volumeAtlas, secondaryVolumeAtlas, transferFunc, transferFunc2, transferFunc3, transferFunc4,
+    uniformsArray, levelData, brickMeta, hashBuffer);
 }
 
 /**
@@ -463,6 +526,9 @@ fragment VolumeFragmentOutput VOLUME_FRAGMENT_SHADER_TF_LIGHTING_NAME(
   // If ray is too short, return transparent
   if (rayLength < 1e-6) return volumeFragmentOutput(half4(0));
 
+  float3 inverseDirection = inverseBrickRayDirection(direction);
+  float4 markerDepthTest = prepareMarkerDepthTest(uniforms, entryPoint, exitPoint, markerDepth);
+
   // Compute distances for LOD selection
   float entryDepth = distanceFromCameraInNormalizedVolumeSpace(uniforms, entryPoint);
   float exitDepth  = distanceFromCameraInNormalizedVolumeSpace(uniforms, exitPoint);
@@ -478,6 +544,7 @@ fragment VolumeFragmentOutput VOLUME_FRAGMENT_SHADER_TF_LIGHTING_NAME(
   float interactionOpacity = 0;
   bool stoppedAtOpaqueGeometry = false;
   float3 interactionPosition = float3(0);
+  float3 positionAtOpaqueGeometry = float3(0);
   float strongestContribution = 0;
   float t           = 0;
   uint  brickCount  = 0;
@@ -488,7 +555,7 @@ fragment VolumeFragmentOutput VOLUME_FRAGMENT_SHADER_TF_LIGHTING_NAME(
     uint  iLOD         = computeLOD(currentDepth);
 
     BrickInformation brickResult = getBrick(
-                                            currentPos, iLOD, direction,
+                                            currentPos, iLOD, direction, inverseDirection,
                                             uniforms.cubeBounds,
                                             brickMeta, levelData,
                                             hashBuffer, false
@@ -496,17 +563,13 @@ fragment VolumeFragmentOutput VOLUME_FRAGMENT_SHADER_TF_LIGHTING_NAME(
 
 #if STOP_ON_MISS == 1
     if (brickResult.substitute) {
-      return strongestContribution > 0
-        ? volumeFragmentOutput(visibleVolumeColor(stoppedAtOpaqueGeometry,
-                                                  colorAtOpaqueGeometry,
-                                                  accColor),
-                               uniforms, interactionPosition)
-        : volumeFragmentOutput(visibleVolumeColor(stoppedAtOpaqueGeometry,
-                                                  colorAtOpaqueGeometry,
-                                                  accColor));
+      return visibleVolumeOutput(stoppedAtOpaqueGeometry, colorAtOpaqueGeometry, accColor,
+                                 uniforms, strongestContribution > 0, interactionPosition,
+                                 positionAtOpaqueGeometry);
     }
 #endif
 
+    float brickExitT = t + brickResult.rayExitDelta;
     if (!brickResult.empty) {
       // Number of samples within this brick
       float segmentLength = length(brickResult.poolBrickInfo.poolExitCoords
@@ -524,9 +587,10 @@ fragment VolumeFragmentOutput VOLUME_FRAGMENT_SHADER_TF_LIGHTING_NAME(
                                       brickResult.normExitCoords,
                                       sampleT
                                       );
-        if (!stoppedAtOpaqueGeometry &&
-            sampleReachedMarker(uniforms, sampleNormCoords, markerDepth)) {
+        if (!stoppedAtOpaqueGeometry && markerDepth > 0.0 &&
+            sampleReachedMarker(markerDepthTest, mix(t, brickExitT, sampleT))) {
           colorAtOpaqueGeometry = accColor;
+          positionAtOpaqueGeometry = interactionPosition;
           stoppedAtOpaqueGeometry = true;
         }
         float3 poolCoords = mix(
@@ -606,41 +670,28 @@ fragment VolumeFragmentOutput VOLUME_FRAGMENT_SHADER_TF_LIGHTING_NAME(
         // The visible color may stop at opaque geometry, while interaction depth
         // keeps searching the volume independently.
         if (interactionOpacity > 0.99) {
-          return volumeFragmentOutput(
-            visibleVolumeColor(stoppedAtOpaqueGeometry, colorAtOpaqueGeometry, accColor),
-            uniforms,
-            interactionPosition
-          );
+          return visibleVolumeOutput(stoppedAtOpaqueGeometry, colorAtOpaqueGeometry, accColor,
+                                     uniforms, true, interactionPosition, positionAtOpaqueGeometry);
         }
       }
     }
 
     // Advance to the next brick
     currentPos = brickResult.normExitCoords;
-    t = length(entryPoint - currentPos) / rayLength;
+    t = brickExitT;
 
     // Safety cap to prevent infinite loops
     brickCount++;
     if (brickCount == MAX_ITERATIONS) {
-      return strongestContribution > 0
-        ? volumeFragmentOutput(visibleVolumeColor(stoppedAtOpaqueGeometry,
-                                                  colorAtOpaqueGeometry,
-                                                  accColor),
-                               uniforms, interactionPosition)
-        : volumeFragmentOutput(visibleVolumeColor(stoppedAtOpaqueGeometry,
-                                                  colorAtOpaqueGeometry,
-                                                  accColor));
+      return visibleVolumeOutput(stoppedAtOpaqueGeometry, colorAtOpaqueGeometry, accColor,
+                                 uniforms, strongestContribution > 0, interactionPosition,
+                                 positionAtOpaqueGeometry);
     }
   }
 
-  return strongestContribution > 0
-    ? volumeFragmentOutput(visibleVolumeColor(stoppedAtOpaqueGeometry,
-                                              colorAtOpaqueGeometry,
-                                              accColor),
-                           uniforms, interactionPosition)
-    : volumeFragmentOutput(visibleVolumeColor(stoppedAtOpaqueGeometry,
-                                              colorAtOpaqueGeometry,
-                                              accColor));
+  return visibleVolumeOutput(stoppedAtOpaqueGeometry, colorAtOpaqueGeometry, accColor,
+                             uniforms, strongestContribution > 0, interactionPosition,
+                             positionAtOpaqueGeometry);
 }
 
 // MARK: - Isosurface Fragment Shader
@@ -680,6 +731,9 @@ fragment VolumeFragmentOutput VOLUME_FRAGMENT_SHADER_ISO_NAME(
 
   if (rayLength < 1e-6) return volumeFragmentOutput(half4(0));
 
+  float3 inverseDirection = inverseBrickRayDirection(direction);
+  float4 markerDepthTest = prepareMarkerDepthTest(uniforms, entryPoint, exitPoint, markerDepth);
+
   float entryDepth = distanceFromCameraInNormalizedVolumeSpace(uniforms, entryPoint);
   float exitDepth  = distanceFromCameraInNormalizedVolumeSpace(uniforms, exitPoint);
 
@@ -697,7 +751,7 @@ fragment VolumeFragmentOutput VOLUME_FRAGMENT_SHADER_ISO_NAME(
     uint  iLOD         = computeLOD(currentDepth);
 
     BrickInformation brickResult = getBrick(
-                                            currentPos, iLOD, direction,
+                                            currentPos, iLOD, direction, inverseDirection,
                                             uniforms.cubeBounds,
                                             brickMeta, levelData,
                                             hashBuffer, false
@@ -706,6 +760,7 @@ fragment VolumeFragmentOutput VOLUME_FRAGMENT_SHADER_ISO_NAME(
     if (brickResult.substitute) return volumeFragmentOutput(half4(0));
 #endif
     
+    float brickExitT = t + brickResult.rayExitDelta;
     if (!brickResult.empty) {
       int iSteps = int(ceil(
                             length(brickResult.poolBrickInfo.poolExitCoords
@@ -719,8 +774,8 @@ fragment VolumeFragmentOutput VOLUME_FRAGMENT_SHADER_ISO_NAME(
                                       brickResult.normExitCoords,
                                       sampleT
                                       );
-        if (!stoppedAtOpaqueGeometry &&
-            sampleReachedMarker(uniforms, sampleNormCoords, markerDepth)) {
+        if (!stoppedAtOpaqueGeometry && markerDepth > 0.0 &&
+            sampleReachedMarker(markerDepthTest, mix(t, brickExitT, sampleT))) {
           stoppedAtOpaqueGeometry = true;
         }
         float3 poolCoords = mix(
@@ -766,7 +821,7 @@ fragment VolumeFragmentOutput VOLUME_FRAGMENT_SHADER_ISO_NAME(
     }
 
     currentPos = brickResult.normExitCoords;
-    t = length(entryPoint - brickResult.normExitCoords) / rayLength;
+    t = brickExitT;
 
     // Safety cap to prevent infinite loops
     brickCount++;
@@ -801,6 +856,7 @@ fragment VolumeFragmentOutput VOLUME_FRAGMENT_SHADER_BRICK_VIS_NAME(
 
   if (rayLength < 1e-6) return volumeFragmentOutput(half4(0));
 
+  float3 inverseDirection = inverseBrickRayDirection(direction);
   float entryDepth = distanceFromCameraInNormalizedVolumeSpace(uniforms, entryPoint);
   float exitDepth  = distanceFromCameraInNormalizedVolumeSpace(uniforms, exitPoint);
 
@@ -814,7 +870,7 @@ fragment VolumeFragmentOutput VOLUME_FRAGMENT_SHADER_BRICK_VIS_NAME(
     uint  iLOD         = computeLOD(currentDepth);
 
     BrickInformation brickResult = getBrick(
-                                            currentPos, iLOD, direction,
+                                            currentPos, iLOD, direction, inverseDirection,
                                             uniforms.cubeBounds,
                                             brickMeta, levelData,
                                             hashBuffer, true
@@ -828,7 +884,7 @@ fragment VolumeFragmentOutput VOLUME_FRAGMENT_SHADER_BRICK_VIS_NAME(
     }
 
     currentPos = brickResult.normExitCoords;
-    t = length(entryPoint - brickResult.normExitCoords) / rayLength;
+    t += brickResult.rayExitDelta;
 
     // Safety cap to prevent infinite loops
     brickCount++;

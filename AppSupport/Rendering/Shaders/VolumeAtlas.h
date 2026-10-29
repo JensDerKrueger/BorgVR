@@ -56,7 +56,12 @@ BrickCorners getBrickCorners(uint4 brickCoords, device const LevelData *levelArr
   return c;
 }
 
-float brickAxisExit(float point, float dir, float brickMin, float brickMax,
+float3 inverseBrickRayDirection(float3 direction) {
+  bool3 parallel = abs(direction) < 1e-8;
+  return select(1.0 / select(direction, float3(1.0), parallel), float3(0), parallel);
+}
+
+float brickAxisExit(float point, float dir, float inverseDir, float brickMin, float brickMax,
                     float cubeMin, float cubeMax) {
   const float eps = 1e-8;
   if (abs(dir) < eps) {
@@ -64,21 +69,21 @@ float brickAxisExit(float point, float dir, float brickMin, float brickMax,
   }
 
   float boundary = dir > 0.0 ? min(brickMax, cubeMax) : max(brickMin, cubeMin);
-  return max((boundary - point) / dir, 0.0);
+  return max((boundary - point) * inverseDir, 0.0);
 }
 
-float3 brickExit(float3 pointInBrick, float3 dir, float3 cubeBounds[2],
-                 BrickCorners corners) {
+float brickExitParameter(float3 pointInBrick, float3 dir, float3 inverseDir,
+                         float3 cubeBounds[2], BrickCorners corners) {
   float3 tIntersect = float3(
-    brickAxisExit(pointInBrick.x, dir.x, corners.values[0].x, corners.values[1].x,
+    brickAxisExit(pointInBrick.x, dir.x, inverseDir.x, corners.values[0].x, corners.values[1].x,
                   cubeBounds[0].x, cubeBounds[1].x),
-    brickAxisExit(pointInBrick.y, dir.y, corners.values[0].y, corners.values[1].y,
+    brickAxisExit(pointInBrick.y, dir.y, inverseDir.y, corners.values[0].y, corners.values[1].y,
                   cubeBounds[0].y, cubeBounds[1].y),
-    brickAxisExit(pointInBrick.z, dir.z, corners.values[0].z, corners.values[1].z,
+    brickAxisExit(pointInBrick.z, dir.z, inverseDir.z, corners.values[0].z, corners.values[1].z,
                   cubeBounds[0].z, cubeBounds[1].z)
   );
 
-  return pointInBrick + min(min(tIntersect.x, tIntersect.y), tIntersect.z) * dir;
+  return min(min(tIntersect.x, tIntersect.y), tIntersect.z);
 }
 
 uint3 infoToCoords(uint brickInfo) {
@@ -90,31 +95,21 @@ uint3 infoToCoords(uint brickInfo) {
   return vBrickCoords;
 }
 
-BrickCorners brickPoolCoords(uint brickInfo) {
-  uint3 poolVoxelPos = infoToCoords(brickInfo) * BRICK_SIZE;
-  BrickCorners c;
-  c.values[0] = (float3(poolVoxelPos)            / POOL_SIZE)+ OVERLAP_STEP;
-  c.values[1] = (float3(poolVoxelPos+BRICK_SIZE) / POOL_SIZE)- OVERLAP_STEP;
-  return c;
-}
-
 struct PoolBrickInformation {
   float3 poolEntryCoords;   // pool-local coordinates of the brick entry point
   float3 poolExitCoords;    // pool-local coordinates of the brick exit point
-  float3 normToPoolScale;   // scaling from dataset to brick coordinates
-  float3 normToPoolTrans;   // translation from dataset to brick coordinates
 };
 
 PoolBrickInformation normCoordsToPoolCoords(float3 normEntryCoords,
                                             float3 normExitCoords,
                                             BrickCorners corners,
+                                            float3 fractionalBrickLayout,
                                             uint brickInfo) {
   PoolBrickInformation info;
-  BrickCorners poolCorners = brickPoolCoords(brickInfo);
-  info.normToPoolScale = (poolCorners.values[1]-poolCorners.values[0])/(corners.values[1]-corners.values[0]);
-  info.normToPoolTrans = poolCorners.values[0]-corners.values[0]*info.normToPoolScale;
-  info.poolEntryCoords  = (normEntryCoords * info.normToPoolScale + info.normToPoolTrans);
-  info.poolExitCoords   = (normExitCoords  * info.normToPoolScale + info.normToPoolTrans);
+  float3 poolMin = float3(infoToCoords(brickInfo) * BRICK_SIZE) / POOL_SIZE + OVERLAP_STEP;
+  float3 scale = fractionalBrickLayout * (float(BRICK_INNER_SIZE) / POOL_SIZE);
+  info.poolEntryCoords = (normEntryCoords - corners.values[0]) * scale + poolMin;
+  info.poolExitCoords = (normExitCoords - corners.values[0]) * scale + poolMin;
   return info;
 }
 
@@ -123,12 +118,14 @@ struct BrickInformation {
   uint brickIndex;
   bool empty;
   bool substitute;
+  float rayExitDelta;       // increment of the original entry-to-exit ray parameter
   float3 normExitCoords;
   PoolBrickInformation poolBrickInfo;
 };
 
 BrickInformation getBrick(float3 normEntryCoords, uint iLOD,
                           float3 direction,
+                          float3 inverseDirection,
                           float3 cubeBounds[2],
                           device const uint *brickMeta,
                           device const LevelData *levelArray,
@@ -193,12 +190,15 @@ BrickInformation getBrick(float3 normEntryCoords, uint iLOD,
   }
 
   BrickCorners corners = getBrickCorners(brickCoords, levelArray);
-  info.normExitCoords = brickExit(normEntryCoords, direction, cubeBounds, corners);
+  info.rayExitDelta = brickExitParameter(normEntryCoords, direction, inverseDirection,
+                                        cubeBounds, corners);
+  info.normExitCoords = normEntryCoords + info.rayExitDelta * direction;
   if (info.empty) return info;
 
   info.poolBrickInfo = normCoordsToPoolCoords(normEntryCoords,
                                               info.normExitCoords,
                                               corners,
+                                              levelArray[info.LOD].fractionalBrickLayout,
                                               brickInfo);
 
   return info;

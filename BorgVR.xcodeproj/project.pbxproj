@@ -364,6 +364,7 @@
 				BorgVRVolumeEditMask.swift,
 				BorgVRVolumeEditMaterializer.swift,
 				BorgVRVolumeEditStates.swift,
+				BorgVRVolumeOriginalBrick.swift,
 				BrickedVolumeReorganizer.swift,
 				DICOM.swift,
 				DICOMVRMap.swift,

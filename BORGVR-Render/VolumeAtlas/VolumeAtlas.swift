@@ -524,7 +524,6 @@ class VolumeAtlas {
     let history = source.gpuBrushHistory()
     guard let first = history.first, let latest = history.last else { return }
     let metadata = borgData.getMetadata()
-    brushRenderer.retainOriginals(for: Set(brickToPage.keys))
     let candidates = brickToPage.filter { _, page in
       guard pageEditRevisions[page] != nil else { return false }
       let revision = pageEditRevisions[page] ?? 0

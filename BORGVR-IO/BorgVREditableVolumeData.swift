@@ -60,11 +60,12 @@ enum BorgVRVolumeEditStorage {
 final class VolumeEditSourceCache: BORGVRDatasetProtocol {
   private let source: BORGVRDatasetProtocol
   private let lock = NSLock()
-  private var bricks: [Int: [UInt8]] = [:]
+  private var bricks: [Int: BorgVRVolumeOriginalBrick] = [:]
   private var nonresidentBricks: Set<Int> = []
   private var residents: Set<Int> = []
   private var byteCount = 0
   private let brickBytes: Int
+  private let allocatedBrickBytes: Int
   private let budget: Int
 
   init(_ source: BORGVRDatasetProtocol, budget: Int = 32 * 1024 * 1024) {
@@ -72,6 +73,7 @@ final class VolumeEditSourceCache: BORGVRDatasetProtocol {
     self.budget = budget
     let m = source.getMetadata()
     brickBytes = m.brickSize * m.brickSize * m.brickSize * m.componentCount * m.bytesPerComponent
+    allocatedBrickBytes = BorgVRVolumeOriginalBrick.allocationSize(for: brickBytes) ?? Int.max
   }
 
   func newRequest() { source.newRequest() }
@@ -84,7 +86,7 @@ final class VolumeEditSourceCache: BORGVRDatasetProtocol {
       nonresidentBricks = Set(bricks.keys).subtracting(ids)
     }
   }
-  func cachedBrick(index: Int) -> [UInt8]? { lock.withLock { bricks[index] } }
+  func cachedBrick(index: Int) -> BorgVRVolumeOriginalBrick? { lock.withLock { bricks[index] } }
 
   func getRawBrick(index: Int, outputBuffer: UnsafeMutablePointer<UInt8>) throws -> Int? {
     do { return try source.getRawBrick(index: index, outputBuffer: outputBuffer) }
@@ -98,7 +100,7 @@ final class VolumeEditSourceCache: BORGVRDatasetProtocol {
 
   func getBrick(index: Int, outputBuffer: UnsafeMutablePointer<UInt8>) throws {
     if let cached = lock.withLock({ bricks[index] }) {
-      _ = cached.withUnsafeBytes { memcpy(outputBuffer, $0.baseAddress!, cached.count) }
+      cached.copyBytes(to: outputBuffer)
       return
     }
     try source.getBrick(index: index, outputBuffer: outputBuffer)
@@ -112,17 +114,19 @@ final class VolumeEditSourceCache: BORGVRDatasetProtocol {
 
   private func retain(_ index: Int, buffer: UnsafeMutablePointer<UInt8>) {
     lock.withLock {
-      guard bricks[index] == nil, brickBytes <= budget else { return }
-      while byteCount + brickBytes > budget {
+      guard bricks[index] == nil, allocatedBrickBytes <= budget else { return }
+      if byteCount > budget - allocatedBrickBytes, nonresidentBricks.isEmpty, !residents.contains(index) { return }
+      guard let brick = BorgVRVolumeOriginalBrick(copying: UnsafeRawBufferPointer(start: buffer, count: brickBytes)) else { return }
+      while byteCount > budget - allocatedBrickBytes {
         // Prefer resident originals. Skip an uncached nonresident request when
         // the budget is already occupied entirely by atlas residents.
         guard let evicted = nonresidentBricks.first ?? (residents.contains(index) ? bricks.keys.first : nil) else { return }
         nonresidentBricks.remove(evicted)
-        if let old = bricks.removeValue(forKey: evicted) { byteCount -= old.count }
+        if let old = bricks.removeValue(forKey: evicted) { byteCount -= old.allocatedByteCount }
       }
-      bricks[index] = Array(UnsafeBufferPointer(start: buffer, count: brickBytes))
+      bricks[index] = brick
       if !residents.contains(index) { nonresidentBricks.insert(index) }
-      byteCount += brickBytes
+      byteCount += brick.allocatedByteCount
     }
   }
 }
@@ -369,7 +373,7 @@ final class BorgVREditableVolumeData: BORGVRDatasetProtocol, BorgVRVolumeGPUBrus
   func gpuReadableRevision(index: Int) -> UInt64? {
     lock.withLock { dirtyIDs.contains(index) ? nil : recordedRevision }
   }
-  func cachedOriginalBrick(index: Int) -> [UInt8]? {
+  func cachedOriginalBrick(index: Int) -> BorgVRVolumeOriginalBrick? {
     if let bytes = source.cachedBrick(index: index) { return bytes }
     if lock.withLock({ !stopped && !resetting && originalRequests.insert(index).inserted }) {
       originalWorker.async { [self] in

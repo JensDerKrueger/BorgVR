@@ -3160,19 +3160,29 @@ class ImmersiveInteraction {
     guard spatialAccessoryActions.isEmpty, activeSpatialStylusID == nil else { return }
     if interactionMode == .volumeEditing {
       if events.count == 2 {
-        let positions = events.compactMap { inputWorldPosition(from: $0) }
-        if positions.count == 2 {
-          let distance = simd_distance(positions[0], positions[1])
-          if let previous = brushScaleDistance, previous > 0.01, distance > 0.01 {
-            volumeBrushContext.scaleRadius(by: Double(distance / previous))
-          }
-          brushScaleDistance = distance
-        }
         finishVolumeBrush(source: "hand")
+        let positions = events.compactMap { event -> SIMD3<Float>? in
+          guard event.phase == .active else { return nil }
+          return inputWorldPosition(from: event)
+        }
+        guard positions.count == 2, let datasetInfo else {
+          brushScaleDistance = nil
+          return
+        }
+        let distance = simd_distance(positions[0], positions[1])
+        if let previous = brushScaleDistance, previous > 0.01, distance > 0.01 {
+          volumeBrushContext.scaleRadius(by: Double(distance / previous))
+        }
+        brushScaleDistance = distance
+        previewVolumeBrush(worldPosition: (positions[0] + positions[1]) * 0.5,
+          datasetInfo: datasetInfo, source: "hand", mode: volumeBrushContext.settings().mode)
         return
       }
       brushScaleDistance = nil
-      guard let datasetInfo, let event = events.first else { return }
+      guard let datasetInfo, let event = events.first else {
+        finishVolumeBrush(source: "hand")
+        return
+      }
       switch event.phase {
         case .active:
           if let position = inputWorldPosition(from: event) {

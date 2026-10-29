@@ -46,12 +46,14 @@ final class VisionOpaqueGeometryRenderer {
   var pipelineStateScreenViewOverlayLabel: MTLRenderPipelineState
   /// Render pipeline state for compositing marker color under the volume.
   var pipelineStateMarkerComposite: MTLRenderPipelineState
+  let pipelineStateMarkerCompositeDepth: MTLRenderPipelineState
   /// Depth stencil state for marker geometry.
   var depthStateMarker: MTLDepthStencilState
   /// Marker depth test without writes, used for back-to-front transparent geometry.
   var depthStateMarkerReadOnly: MTLDepthStencilState
   /// Depth stencil state for marker compositing.
   var depthStateMarkerComposite: MTLDepthStencilState
+  let depthStateOverlayLabel: MTLDepthStencilState
 
   /// A buffer containing marker sphere vertex positions.
   let markerSphereBuffer: MTLBuffer
@@ -92,7 +94,8 @@ final class VisionOpaqueGeometryRenderer {
     pipelineStateMeasurementPoint: MTLRenderPipelineState,
     pipelineStateScreenViewLabel: MTLRenderPipelineState,
     pipelineStateScreenViewOverlayLabel: MTLRenderPipelineState,
-    pipelineStateMarkerComposite: MTLRenderPipelineState
+    pipelineStateMarkerComposite: MTLRenderPipelineState,
+    pipelineStateMarkerCompositeDepth: MTLRenderPipelineState
   ) {
     self.device = device
     self.layerRenderer = layerRenderer
@@ -103,6 +106,7 @@ final class VisionOpaqueGeometryRenderer {
     self.pipelineStateScreenViewLabel = pipelineStateScreenViewLabel
     self.pipelineStateScreenViewOverlayLabel = pipelineStateScreenViewOverlayLabel
     self.pipelineStateMarkerComposite = pipelineStateMarkerComposite
+    self.pipelineStateMarkerCompositeDepth = pipelineStateMarkerCompositeDepth
     self.markerTubeMeshCache = VolumeMarkerTubeMeshCache()
     self.sceneMeshGPUCache = SceneMeshGPUCache()
     self.measurementSurfaceMeshCache = MeasurementSurfaceMeshCache()
@@ -142,9 +146,11 @@ final class VisionOpaqueGeometryRenderer {
 
     let markerCompositeDepthStateDescriptor = MTLDepthStencilDescriptor()
     markerCompositeDepthStateDescriptor.depthCompareFunction = .always
-    markerCompositeDepthStateDescriptor.isDepthWriteEnabled = true
+    markerCompositeDepthStateDescriptor.isDepthWriteEnabled = false
     self.depthStateMarkerComposite = device.makeDepthStencilState(
       descriptor: markerCompositeDepthStateDescriptor)!
+    markerCompositeDepthStateDescriptor.isDepthWriteEnabled = true
+    self.depthStateOverlayLabel = device.makeDepthStencilState(descriptor: markerCompositeDepthStateDescriptor)!
 
     let paddingElement = SIMD3<Float>.zero
     let sphere = Tesselation.genSphere(
@@ -1385,7 +1391,7 @@ final class VisionOpaqueGeometryRenderer {
       frame: frame,
       sortedLabels,
       renderEncoder: renderEncoder,
-      depthStencilState: depthStateMarkerComposite,
+      depthStencilState: depthStateOverlayLabel,
       pipelineState: pipelineStateScreenViewOverlayLabel
     )
   }
@@ -1407,6 +1413,12 @@ final class VisionOpaqueGeometryRenderer {
       depthTexture,
       index: TextureIndex.markerDepth.rawValue
     )
+    renderEncoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 6)
+
+    // Color is composited underneath the volume regardless of depth. Merge depth
+    // separately so geometry behind visible volume cannot replace its hit depth.
+    renderEncoder.setRenderPipelineState(pipelineStateMarkerCompositeDepth)
+    renderEncoder.setDepthStencilState(depthStateMarker)
     renderEncoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 6)
     renderEncoder.popDebugGroup()
   }

@@ -69,13 +69,18 @@ private final class GPUAtlasFixture: EditableAtlasFixture, BorgVRVolumeGPUBrushS
   var enabled = false
   var originalAvailable = true
   var originalRequests: [Int] = []
+  private var originals: [Int: BorgVRVolumeOriginalBrick] = [:]
   func attachGPUBrushRenderer() { enabled = true }
   func detachGPUBrushRenderer() { enabled = false }
   func gpuBrushHistory() -> [BorgVRVolumeBrushBatch] { history }
   func gpuReadableRevision(index: Int) -> UInt64? { readableRevision }
-  func cachedOriginalBrick(index: Int) -> [UInt8]? {
+  func cachedOriginalBrick(index: Int) -> BorgVRVolumeOriginalBrick? {
     originalRequests.append(index)
-    return originalAvailable ? Array(repeating: 128, count: 8) : nil
+    guard originalAvailable else { return nil }
+    if let brick = originals[index] { return brick }
+    let brick = [UInt8](repeating: 128, count: 8).withUnsafeBytes { BorgVRVolumeOriginalBrick(copying: $0) }
+    originals[index] = brick
+    return brick
   }
   func brush(_ mode: BorgVRVolumeBrushMode) {
     history.append(BorgVRVolumeBrushBatch(id: UUID(), revision: (history.last?.revision ?? 0) + 1,
@@ -92,6 +97,7 @@ private final class PackedBrushFixture: BORGVRDatasetProtocol, BorgVRVolumeGPUBr
   var readableRevision: UInt64? = 0
   var blockCPUReads = false
   private(set) var cpuReads = 0
+  private var originals: [Int: BorgVRVolumeOriginalBrick] = [:]
   init(bytes: Int, channels: Int, scale: Float) {
     metadata = BORGVRMetaData(width: 7, height: 5, depth: 3, componentCount: channels,
       bytePerComponent: bytes, voxelSpacingX: scale, voxelSpacingY: scale * 2,
@@ -139,7 +145,13 @@ private final class PackedBrushFixture: BORGVRDatasetProtocol, BorgVRVolumeGPUBr
   func detachGPUBrushRenderer() {}
   func gpuBrushHistory() -> [BorgVRVolumeBrushBatch] { history }
   func gpuReadableRevision(index: Int) -> UInt64? { readableRevision }
-  func cachedOriginalBrick(index: Int) -> [UInt8]? { originalAvailable ? original(index) : nil }
+  func cachedOriginalBrick(index: Int) -> BorgVRVolumeOriginalBrick? {
+    guard originalAvailable else { return nil }
+    if let brick = originals[index] { return brick }
+    let brick = original(index).withUnsafeBytes { BorgVRVolumeOriginalBrick(copying: $0) }
+    originals[index] = brick
+    return brick
+  }
 }
 
 @main
