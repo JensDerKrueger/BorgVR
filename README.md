@@ -14,7 +14,7 @@ The project is intended for interactive exploration of large volumetric datasets
 native Metal renderers, dataset conversion tools, local and remote dataset servers, SharePlay
 collaboration, and a WebGPU browser frontend served directly by the dataset server.
 
-The current development version is **3.3**. The SharePlay wire protocol is version **3.3**.
+The current development version is **3.4**. The SharePlay wire protocol is version **3.3**.
 
 ## What Is Included
 
