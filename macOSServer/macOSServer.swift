@@ -14,10 +14,13 @@ struct macOSServerApp: App {
   @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
   @State private var showingAbout = false
+  @StateObject private var settingsFiles = SettingsFileController()
 
   var body: some Scene {
     WindowGroup("macosserver_window_title") {
       ContentView()
+        .onOpenURL { settingsFiles.open($0, store: storedAppModel.settingsStore()) }
+        .settingsImportDialogs(settingsFiles)
         .onAppear {
           NSWindow.allowsAutomaticWindowTabbing = false
         }

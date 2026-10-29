@@ -131,7 +131,14 @@ struct SettingsView: View {
       }
     }
     .toolbar {
-      ToolbarItem(placement: .cancellationAction) {
+      ToolbarItem(placement: .primaryAction) {
+        SettingsFileControls {
+          appSettings.settingsStore(overrides: storedAppModel.settingsArchiveEntries,
+            didImport: { storedAppModel.objectWillChange.send() })
+        }
+        .labelStyle(.iconOnly)
+      }
+      ToolbarItem(placement: .primaryAction) {
         Button("Back") {
           appModel.navigationState = .start
         }
@@ -367,6 +374,15 @@ struct SettingsView: View {
                     range: 1...16,
                     step: 1)
       toggleRow("Compression", isOn: $storedAppModel.enableCompression)
+      toggleRow("Quantize imports to 8 bits per channel", isOn: $storedAppModel.quantizeImportsTo8Bit)
+      Text("Maps each channel's value range to 0...255, permanently reducing intensity precision. Existing 8-bit data is unchanged.")
+        .font(.callout)
+        .foregroundStyle(.secondary)
+        .fixedSize(horizontal: false, vertical: true)
+      pickerRow("DICOM fusion interpolation", selection: $storedAppModel.dicomResamplingFilter) {
+        Text("converter_dicom_filter_trilinear").tag(BorgVRVolumeResamplingFilter.trilinear)
+        Text("converter_dicom_filter_nearest").tag(BorgVRVolumeResamplingFilter.nearestNeighbor)
+      }
       pickerRow("Borders", selection: $storedAppModel.borderModeString) {
         Text("Zeroes").tag("zeroes")
         Text("Border").tag("border")

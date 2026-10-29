@@ -36,6 +36,8 @@ struct SettingsView: View {
         Text("settings_title")
           .font(.title)
           .bold()
+        Spacer()
+        SettingsFileControls { storedAppModel.settingsStore() }
       }
 
       TabView {
@@ -297,6 +299,28 @@ struct SettingsView: View {
                   .labelsHidden()
               }
               GridRow {
+                Text("Quantize imports to 8 bits per channel")
+                  .gridColumnAlignment(.trailing)
+                Toggle("Quantize imports to 8 bits per channel", isOn: $storedAppModel.quantizeImportsTo8Bit)
+                  .labelsHidden()
+              }
+              GridRow {
+                EmptyView()
+                Text("Maps each channel's value range to 0...255, permanently reducing intensity precision. Existing 8-bit data is unchanged.")
+                  .font(.caption)
+                  .foregroundStyle(.secondary)
+                  .fixedSize(horizontal: false, vertical: true)
+              }
+              GridRow {
+                Text("DICOM fusion interpolation")
+                  .gridColumnAlignment(.trailing)
+                Picker("DICOM fusion interpolation", selection: $storedAppModel.dicomResamplingFilter) {
+                  Text("converter_dicom_filter_trilinear").tag(BorgVRVolumeResamplingFilter.trilinear)
+                  Text("converter_dicom_filter_nearest").tag(BorgVRVolumeResamplingFilter.nearestNeighbor)
+                }
+                .labelsHidden()
+              }
+              GridRow {
                 Text("settings_border_label")
                   .gridColumnAlignment(.trailing)
                   .frame(minWidth: 120, alignment: .trailing)
@@ -342,6 +366,13 @@ struct SettingsView: View {
     }
     .keyboardShortcut(.cancelAction)
     .padding(24)
+    .onReceive(NotificationCenter.default.publisher(for: .borgVRSettingsImported)) { _ in
+      tempPort = String(storedAppModel.port)
+      tempBrickCount = String(storedAppModel.maxBricksPerGetRequest)
+      tempBrickSize = String(storedAppModel.brickSize)
+      tempBrickOverlap = String(storedAppModel.brickOverlap)
+      syncServers = storedAppModel.syncServers
+    }
     .alert("Reset settings?", isPresented: $showResetConfirmation) {
       Button("Cancel", role: .cancel) {}
       Button("Reset", role: .destructive) {

@@ -1,4 +1,5 @@
 import Foundation
+import Combine
 import SwiftUI
 
 @MainActor
@@ -38,6 +39,7 @@ final class AppStoreUpdateChecker: ObservableObject {
   private let session: URLSession
   private let bundle: Bundle
   private var isChecking = false
+  private var settingsImportSubscription: AnyCancellable?
 
   @Published private(set) var availableUpdate: AvailableUpdate?
   @Published var checksEnabled: Bool {
@@ -66,6 +68,13 @@ final class AppStoreUpdateChecker: ObservableObject {
     } else {
       self.checksEnabled = defaults.bool(forKey: DefaultsKey.checksEnabled)
     }
+    settingsImportSubscription = NotificationCenter.default.publisher(for: .borgVRSettingsImported)
+      .sink { [weak self] _ in
+        Task { @MainActor in
+          guard let self else { return }
+          self.checksEnabled = self.defaults.object(forKey: DefaultsKey.checksEnabled) as? Bool ?? true
+        }
+      }
   }
 
   func runPeriodicChecks() async {

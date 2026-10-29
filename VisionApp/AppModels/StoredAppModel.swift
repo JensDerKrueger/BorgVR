@@ -55,6 +55,8 @@ final class StoredAppModel: ObservableObject {
     "brickSize": BorgVRSharedDefaults.brickSize,
     "brickOverlap": BorgVRSharedDefaults.brickOverlap,
     "enableCompression": BorgVRSharedDefaults.compressionEnabled,
+    "quantizeImportsTo8Bit": false,
+    "dicomResamplingFilter": BorgVRVolumeResamplingFilter.trilinear.rawValue,
     "borderMode": BorgVRSharedDefaults.borderMode,
     "screenSpaceError": 1.0,
     "initialBricks": 4000,
@@ -127,6 +129,28 @@ final class StoredAppModel: ObservableObject {
     loadServers()
   }
 
+  @MainActor
+  func settingsStore() -> BorgVRSettingsStore {
+    var values = Self.values
+    values["appStoreUpdateChecksEnabled"] = true
+    let extra = BorgVRSettingsStore.Entry.credentials(serverPassword: Binding(
+      get: { self.serverPassword }, set: { self.serverPassword = $0 }
+    )) + [SettingsServerRecord.servers(read: { self.servers }, write: { self.servers = $0 })]
+    let tools = Set(SpatialToolMode.allCases.map(\.rawValue))
+    let buttons = Set(SpatialControllerButtonAction.allCases.map(\.rawValue))
+    let sticks = Set(SpatialControllerThumbstickAction.allCases.map(\.rawValue))
+    return BorgVRSettingsStore(defaultValues: values, overrides: extra,
+      maximumAtlasSizeMB: Int(ProcessInfo.processInfo.physicalMemory / 1024 / 1024),
+      allowedStrings: [
+        "stylusStartFunction": Set(SpatialStylusStartFunction.allCases.map(\.rawValue)),
+        "stylusToolMode": tools, "leftControllerToolMode": tools, "rightControllerToolMode": tools,
+        "controllerButtonAAction": buttons, "controllerButtonBAction": buttons,
+        "controllerButtonXAction": buttons, "controllerButtonYAction": buttons,
+        "leftControllerThumbstickXAction": sticks, "leftControllerThumbstickYAction": sticks,
+        "rightControllerThumbstickXAction": sticks, "rightControllerThumbstickYAction": sticks
+      ], didImport: { self.objectWillChange.send() })
+  }
+
   // MARK: - Network Settings
 
   /// The address and port of the remote servers
@@ -157,6 +181,8 @@ final class StoredAppModel: ObservableObject {
   @AppStorage("brickOverlap") var brickOverlap: Int = StoredAppModel.int("brickOverlap")
   /// Whether to compress bricks when sending over network.
   @AppStorage("enableCompression") var enableCompression: Bool = StoredAppModel.bool("enableCompression")
+  @AppStorage("quantizeImportsTo8Bit") var quantizeImportsTo8Bit = false
+  @AppStorage("dicomResamplingFilter") var dicomResamplingFilter = BorgVRVolumeResamplingFilter.trilinear
   /// The border mode used for brick edges (e.g., "zeroes" or "clamp").
   @AppStorage("borderMode") var borderMode: String = StoredAppModel.string("borderMode")
 

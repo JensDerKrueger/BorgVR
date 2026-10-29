@@ -112,6 +112,103 @@ private func testSettingsAndCancellation() throws {
   }
 }
 
+private final class QuantizationCancellationLogger: LoggerBase {
+  let token: BorgVRVolumeConversionCancellationToken
+  init(_ token: BorgVRVolumeConversionCancellationToken) { self.token = token }
+  func dev(_ message: String) {}
+  func info(_ message: String) {}
+  func warning(_ message: String) {}
+  func error(_ message: String) {}
+  func progress(_ message: String, _ progress: Double) {
+    if message == "Quantizing volume" { token.cancel() }
+  }
+  func setMinimumLogLevel(_ level: LogLevel) {}
+}
+
+private func testVolumeQuantization() throws {
+  let directory = FileManager.default.temporaryDirectory
+    .appendingPathComponent("borgvr-quantization-tests-\(UUID().uuidString)")
+  try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+  defer { try? FileManager.default.removeItem(at: directory) }
+  let inputURL = directory.appendingPathComponent("input.raw")
+  let outputURL = directory.appendingPathComponent("quantized.raw")
+  let spacing = Vec3<Float>(x: 0.001, y: 0.002, z: 0.003)
+
+  func source<Value: FixedWidthInteger>(
+    _ values: [Value], channels: Int
+  ) throws -> RawFileAccessor {
+    var data = Data([0xAA]) // Deliberately unaligned payload.
+    values.withUnsafeBytes { data.append(contentsOf: $0) }
+    try data.write(to: inputURL)
+    return try RawFileAccessor(filename: inputURL.path,
+      size: Vec3(x: values.count / channels, y: 1, z: 1),
+      bytesPerComponent: MemoryLayout<Value>.stride, componentCount: channels,
+      voxelSpacing: spacing, offset: 1)
+  }
+  func check<Value: FixedWidthInteger>(
+    _ values: [Value], channels: Int, expected: [UInt8], signed: [Bool] = []
+  ) throws {
+    let original = try source(values, channels: channels)
+    let before = try Data(contentsOf: inputURL)
+    let logger = CapturingLogger()
+    let result = try BorgVRVolumeQuantizer.quantize(original, signedComponents: signed, to: outputURL,
+      logger: logger)
+    let actual: [UInt8] = try result.getData(x: 0, y: 0, z: 0, count: result.totalVoxels)
+    try expect(actual == expected, "Incorrect quantized samples: \(actual), expected \(expected)")
+    try expect(result.bytesPerComponent == 1 && result.componentCount == channels,
+      "Quantization changed the channel layout")
+    try expect(result.size == original.size && result.voxelSpacing == spacing,
+      "Quantization changed physical geometry")
+    let after = try Data(contentsOf: inputURL)
+    try expect(after == before, "Quantization modified the original")
+    if MemoryLayout<Value>.stride == 1 {
+      try expect(result === original, "Existing 8-bit samples were requantized")
+    } else {
+      try expect(logger.infoMessages.filter { $0.contains("original value range") }.count == channels,
+        "Quantization did not log the original range of every channel")
+      if signed.first == true {
+        try expect(logger.infoMessages.contains { $0.contains("-32768...32767") },
+          "Signed range was logged as unsigned values")
+      }
+    }
+  }
+
+  try check([UInt16](arrayLiteral: 100, 1000, 150, 3000, 200, 5000), channels: 2,
+    expected: [0, 0, 128, 128, 255, 255])
+  try check([UInt32](arrayLiteral: 0, 2_147_483_648, .max), channels: 1,
+    expected: [0, 128, 255])
+  try check([UInt16](arrayLiteral: 0, 9, 0, 9), channels: 2, expected: [0, 255, 0, 255])
+  try check([UInt16](arrayLiteral: 0x8000, 10, 0, 20, 0x7FFF, 30), channels: 2,
+    expected: [0, 0, 128, 128, 255, 255], signed: [true, false])
+  try check([UInt8](arrayLiteral: 20, 40, 60), channels: 1, expected: [20, 40, 60])
+
+  let original = try source([UInt16](arrayLiteral: 100, 150, 200), channels: 1)
+  try FileManager.default.removeItem(at: outputURL)
+  let token = BorgVRVolumeConversionCancellationToken()
+  try expectThrows("Quantization ignored cancellation") {
+    _ = try BorgVRVolumeQuantizer.quantize(original, to: outputURL,
+      logger: QuantizationCancellationLogger(token), cancellationToken: token)
+  }
+  try expect(!FileManager.default.fileExists(atPath: outputURL.path),
+    "Cancelled quantization left an incomplete temporary volume")
+
+  for enabled in [false, true] {
+    let destination = directory.appendingPathComponent("converted-\(enabled).data")
+    try BorgVRVolumeConversionService.convert(.init(
+      source: .raw(.init(url: inputURL, offset: 1, size: original.size,
+        bytesPerComponent: 2, componentCount: 1, voxelSpacing: spacing)),
+      destinationURL: destination, datasetDescription: "Quantized", metaDescription: "",
+      settings: .init(brickSize: 4, overlap: 1, useCompression: false,
+        extensionStrategy: .clamp, quantizeTo8Bit: enabled)))
+    let metadata = try BORGVRMetaData(filename: destination.path)
+    try expect(metadata.bytesPerComponent == (enabled ? 1 : 2), "Import ignored quantization setting")
+    try expect(metadata.minValue == (enabled ? 0 : 100) && metadata.maxValue == (enabled ? 255 : 200),
+      "Imported value range is incorrect")
+    try expect(metadata.voxelSpacingX == spacing.x && metadata.voxelSpacingY == spacing.y
+      && metadata.voxelSpacingZ == spacing.z, "Import changed voxel spacing")
+  }
+}
+
 private func testRawConversionAndAtomicReplacement() throws {
   let directory = FileManager.default.temporaryDirectory
     .appendingPathComponent("borgvr-conversion-tests-\(UUID().uuidString)")
@@ -1368,6 +1465,7 @@ private enum VolumeConversionServiceTestRunner {
       return
     }
     try testSettingsAndCancellation()
+    try testVolumeQuantization()
     try runVolumeEditTests()
     try await runVolumeEditingAutomationTests()
     try await runVolumeEditCollaborationTests()

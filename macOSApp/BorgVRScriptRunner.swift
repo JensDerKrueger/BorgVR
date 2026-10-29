@@ -951,7 +951,8 @@ final class BorgVRScriptRunner: ObservableObject {
       useCompression: storedAppModel.enableCompression,
       extensionStrategy: importBorderModeOverride ?? Self.extensionStrategy(
         for: storedAppModel.borderModeString
-      )
+      ),
+      quantizeTo8Bit: storedAppModel.quantizeImportsTo8Bit
     )
     do {
       try settings.validate()

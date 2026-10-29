@@ -1,6 +1,759 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "The volume brush parameters are invalid.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The volume brush parameters are invalid."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Parameter des Volumenpinsels sind ungültig."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Los parámetros del pincel de volumen no son válidos."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Les paramètres du pinceau de volume ne sont pas valides."
+          }
+        }
+      }
+    },
+    "The edit state contains invalid volume geometry.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The edit state contains invalid volume geometry."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Bearbeitungsstand enthält ungültige Volumengeometrie."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El estado de edición contiene una geometría de volumen no válida."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "L’état de modification contient une géométrie de volume non valide."
+          }
+        }
+      }
+    },
+    "The edit state revision is invalid.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The edit state revision is invalid."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Revision des Bearbeitungsstands ist ungültig."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La revisión del estado de edición no es válida."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La révision de l’état de modification n’est pas valide."
+          }
+        }
+      }
+    },
+    "The edit state refers to an invalid volume brick.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The edit state refers to an invalid volume brick."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Bearbeitungsstand verweist auf einen ungültigen Volumenblock."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El estado de edición hace referencia a un bloque de volumen no válido."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "L’état de modification fait référence à un bloc de volume non valide."
+          }
+        }
+      }
+    },
+    "The edit state contains an invalid data buffer.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The edit state contains an invalid data buffer."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Bearbeitungsstand enthält einen ungültigen Datenpuffer."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El estado de edición contiene un búfer de datos no válido."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "L’état de modification contient un tampon de données non valide."
+          }
+        }
+      }
+    },
+    "The edit state is damaged or incomplete.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The edit state is damaged or incomplete."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Bearbeitungsstand ist beschädigt oder unvollständig."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El estado de edición está dañado o incompleto."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "L’état de modification est endommagé ou incomplet."
+          }
+        }
+      }
+    },
+    "The edit state does not match this dataset.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The edit state does not match this dataset."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Bearbeitungsstand passt nicht zu diesem Datensatz."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El estado de edición no corresponde a este conjunto de datos."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "L’état de modification ne correspond pas à ce jeu de données."
+          }
+        }
+      }
+    },
+    "Volume editing is temporarily unavailable.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Volume editing is temporarily unavailable."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Volumenbearbeitung ist vorübergehend nicht verfügbar."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La edición de volumen no está disponible temporalmente."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La modification du volume est temporairement indisponible."
+          }
+        }
+      }
+    },
+    "Edit state format version %lld is not supported by this version of BorgVR.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Edit state format version %lld is not supported by this version of BorgVR."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bearbeitungsstände im Dateiformat %lld werden von dieser BorgVR-Version nicht unterstützt."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esta versión de BorgVR no admite la versión %lld del formato de estados de edición."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cette version de BorgVR ne prend pas en charge la version %lld du format des états de modification."
+          }
+        }
+      }
+    },
+    "No editable dataset is open.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No editable dataset is open."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Es ist kein bearbeitbarer Datensatz geöffnet."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No hay ningún conjunto de datos editable abierto."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aucun jeu de données modifiable n’est ouvert."
+          }
+        }
+      }
+    },
+    "A conflicting volume-edit operation is already active.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A conflicting volume-edit operation is already active."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Es läuft bereits eine andere Volumenbearbeitung, die diesen Vorgang blockiert."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ya hay una operación de edición de volumen incompatible en curso."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Une autre opération de modification du volume bloque cette action."
+          }
+        }
+      }
+    },
+    "The requested export is not the current export job.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The requested export is not the current export job."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der angeforderte Export ist nicht der aktuelle Exportauftrag."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La exportación solicitada no es la tarea de exportación actual."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "L’export demandé n’est pas la tâche d’export actuelle."
+          }
+        }
+      }
+    },
+    "Volume edits did not finish before the timeout.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Volume edits did not finish before the timeout."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Volumenbearbeitung wurde nicht innerhalb des Zeitlimits abgeschlossen."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Las modificaciones del volumen no finalizaron dentro del tiempo límite."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Les modifications du volume ne se sont pas terminées dans le délai imparti."
+          }
+        }
+      }
+    },
+    "The selected edit state could not be opened: %@\nThe original dataset has been opened instead. Your saved edits have not been changed.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The selected edit state could not be opened: %@\nThe original dataset has been opened instead. Your saved edits have not been changed."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der gewählte Bearbeitungsstand konnte nicht geöffnet werden: %@\nStattdessen wurde der Originaldatensatz geöffnet. Ihre gespeicherten Bearbeitungen wurden nicht verändert."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudo abrir el estado de edición seleccionado: %@\nSe ha abierto el conjunto de datos original. Las modificaciones guardadas no han cambiado."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impossible d’ouvrir l’état de modification sélectionné : %@\nLe jeu de données original a été ouvert à la place. Vos modifications enregistrées n’ont pas été modifiées."
+          }
+        }
+      }
+    },
+    "Import settings": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Import settings"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Einstellungen importieren"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Importar ajustes"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Importer les réglages"
+          }
+        }
+      }
+    },
+    "Export settings": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Export settings"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Einstellungen exportieren"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Exportar ajustes"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Exporter les réglages"
+          }
+        }
+      }
+    },
+    "Settings files": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Settings files"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Einstellungsdateien"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Archivos de ajustes"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fichiers de réglages"
+          }
+        }
+      }
+    },
+    "Import settings?": {
+      "generatesSymbol": false,
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Import settings?"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Einstellungen importieren?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Importar ajustes?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Importer les réglages ?"
+          }
+        }
+      }
+    },
+    "Include passwords, access tokens, and certificates": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Include passwords, access tokens, and certificates"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Passwörter, Zugriffstoken und Zertifikate einschließen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Incluir contraseñas, tokens de acceso y certificados"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inclure les mots de passe, jetons d’accès et certificats"
+          }
+        }
+      }
+    },
+    "Settings files are unencrypted JSON. Included credentials can be read by anyone with access to the file. Device-specific folder permissions and caches are not exported.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Settings files are unencrypted JSON. Included credentials can be read by anyone with access to the file. Device-specific folder permissions and caches are not exported."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Einstellungsdateien enthalten unverschlüsseltes JSON. Enthaltene Zugangsdaten sind für jeden lesbar, der Zugriff auf die Datei hat. Gerätespezifische Ordnerfreigaben und Caches werden nicht exportiert."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Los archivos de ajustes son JSON sin cifrar. Cualquier persona con acceso al archivo puede leer las credenciales incluidas. No se exportan los permisos de carpetas ni las cachés específicos del dispositivo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Les fichiers de réglages sont au format JSON non chiffré. Toute personne ayant accès au fichier peut lire les identifiants inclus. Les autorisations de dossiers et les caches propres à l’appareil ne sont pas exportés."
+          }
+        }
+      }
+    },
+    "Apply the settings in this file? Missing and unsupported settings stay unchanged. This can also change network services, remote-control access, and stored credentials.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apply the settings in this file? Missing and unsupported settings stay unchanged. This can also change network services, remote-control access, and stored credentials."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Einstellungen aus dieser Datei übernehmen? Fehlende und nicht unterstützte Einstellungen bleiben unverändert. Dabei können auch Netzwerkdienste, Fernsteuerungszugriff und gespeicherte Zugangsdaten geändert werden."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Aplicar los ajustes de este archivo? Los ajustes ausentes o no compatibles no se modificarán. Esto también puede cambiar los servicios de red, el acceso de control remoto y las credenciales guardadas."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Appliquer les réglages de ce fichier ? Les réglages absents ou non pris en charge restent inchangés. Cela peut aussi modifier les services réseau, l’accès à distance et les identifiants enregistrés."
+          }
+        }
+      }
+    },
+    "Imported %lld settings; ignored %lld unsupported entries.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Imported %lld settings; ignored %lld unsupported entries."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld Einstellungen importiert; %lld nicht unterstützte Einträge ignoriert."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se han importado %lld ajustes; se han ignorado %lld entradas no compatibles."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld réglages importés ; %lld entrées non prises en charge ignorées."
+          }
+        }
+      }
+    },
+    "This is not a valid BorgVR settings file.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This is not a valid BorgVR settings file."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dies ist keine gültige BorgVR-Einstellungsdatei."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Este archivo de ajustes de BorgVR no es válido."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ce fichier de réglages BorgVR n’est pas valide."
+          }
+        }
+      }
+    },
+    "Invalid setting: %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Invalid setting: %@"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ungültige Einstellung: %@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajuste no válido: %@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Réglage non valide : %@"
+          }
+        }
+      }
+    },
+    "This setting is not supported on this device.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This setting is not supported on this device."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diese Einstellung wird auf diesem Gerät nicht unterstützt."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Este ajuste no es compatible con este dispositivo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ce réglage n’est pas pris en charge sur cet appareil."
+          }
+        }
+      }
+    },
+    "Quantize imports to 8 bits per channel": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Quantize imports to 8 bits per channel" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Importe auf 8 Bit pro Kanal quantisieren" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Cuantizar importaciones a 8 bits por canal" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Quantifier les imports sur 8 bits par canal" } }
+      }
+    },
+    "Maps each channel's value range to 0...255, permanently reducing intensity precision. Existing 8-bit data is unchanged.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Maps each channel's value range to 0...255, permanently reducing intensity precision. Existing 8-bit data is unchanged." } },
+        "de": { "stringUnit": { "state": "translated", "value": "Bildet den Wertebereich jedes Kanals auf 0...255 ab und reduziert dauerhaft die Intensitätspräzision. Vorhandene 8-Bit-Daten bleiben unverändert." } },
+        "es": { "stringUnit": { "state": "translated", "value": "Ajusta el rango de valores de cada canal a 0...255, reduciendo permanentemente la precisión de intensidad. Los datos existentes de 8 bits no cambian." } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Ramène la plage de valeurs de chaque canal à 0...255, en réduisant définitivement la précision des intensités. Les données existantes sur 8 bits restent inchangées." } }
+      }
+    },
+    "DICOM fusion interpolation": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "DICOM fusion interpolation" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Interpolation bei DICOM-Fusion" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Interpolación de la fusión DICOM" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Interpolation de la fusion DICOM" } }
+      }
+    },
     "DICOM Fusion": {
       "extractionState": "manual",
       "localizations": {

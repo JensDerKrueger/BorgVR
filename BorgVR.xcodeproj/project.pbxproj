@@ -7,6 +7,10 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		57AF10000000000000000001 /* SettingsFileControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57AF10000000000000000000 /* SettingsFileControls.swift */; };
+		57AF10000000000000000002 /* SettingsFileControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57AF10000000000000000000 /* SettingsFileControls.swift */; };
+		57AF10000000000000000003 /* SettingsFileControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57AF10000000000000000000 /* SettingsFileControls.swift */; };
+		57AF10000000000000000004 /* SettingsFileControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57AF10000000000000000000 /* SettingsFileControls.swift */; };
 		111111111111111111111701 /* c60_32.data in Resources */ = {isa = PBXBuildFile; fileRef = 56730FE22E6B78990091976B /* c60_32.data */; };
 		111111111111111111111702 /* head_32.data in Resources */ = {isa = PBXBuildFile; fileRef = 56730FE42E6B79000091976B /* head_32.data */; };
 		560A00012E00000000000031 /* web in CopyFiles */ = {isa = PBXBuildFile; fileRef = 560B90002E9150000042E45B /* web */; };
@@ -225,6 +229,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		57AF10000000000000000000 /* SettingsFileControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsFileControls.swift; sourceTree = "<group>"; };
 		111111111111111111111101 /* BorgVR Mobile.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "BorgVR Mobile.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		560A00012E00000000000001 /* TerminalServerApp */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = TerminalServerApp; sourceTree = BUILT_PRODUCTS_DIR; };
 		560B8BE72E5C57580042E45B /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
@@ -303,6 +308,11 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		57AF10000000000000000010 /* Exceptions for "macOSServer" folder in "macOSServer" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (Info.plist,);
+			target = 5655824A2D4E5D6F008E7CE6 /* macOSServer */;
+		};
 		111111111111111111111204 /* Exceptions for "BORGVR-IO" folder in "iOSApp" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
@@ -357,6 +367,7 @@
 				BORGVRMetaData.swift,
 				BorgVRMetalVolumeEditProcessor.swift,
 				BorgVRSharedConstants.swift,
+				BorgVRSettingsArchive.swift,
 				BorgVRVolumeConversionService.swift,
 				BorgVRVolumeEditBrickCache.swift,
 				BorgVRVolumeEditDataSource.swift,
@@ -365,6 +376,7 @@
 				BorgVRVolumeEditMaterializer.swift,
 				BorgVRVolumeEditStates.swift,
 				BorgVRVolumeOriginalBrick.swift,
+				BorgVRVolumeQuantizer.swift,
 				BrickedVolumeReorganizer.swift,
 				DICOM.swift,
 				DICOMVRMap.swift,
@@ -471,6 +483,7 @@
 		};
 		5655824C2D4E5D6F008E7CE6 /* macOSServer */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (57AF10000000000000000010 /* Exceptions for "macOSServer" folder in "macOSServer" target */,);
 			path = macOSServer;
 			sourceTree = "<group>";
 		};
@@ -723,6 +736,7 @@
 				57A002B02ED5000100000001 /* GUILogger.swift */,
 				57A001232E70000300000001 /* LoggerView.swift */,
 				57A000282E70000200000001 /* TextFileDocument.swift */,
+				57AF10000000000000000000 /* SettingsFileControls.swift */,
 			);
 			path = UI;
 			sourceTree = "<group>";
@@ -1105,6 +1119,7 @@
 				57A001422E70000300000001 /* ExternalDatasetImporter.swift in Sources */,
 				57A000322E70000200000001 /* RuntimeMetalShaderLoader.swift in Sources */,
 				57A000332E70000200000001 /* TextFileDocument.swift in Sources */,
+				57AF10000000000000000001 /* SettingsFileControls.swift in Sources */,
 				57A001352E70000300000001 /* TransferFunctionEditorView.swift in Sources */,
 				57A001442E70000300000001 /* WebAssetProvider.swift in Sources */,
 				57A001612E99000100000001 /* WebGPUShareLink.swift in Sources */,
@@ -1171,6 +1186,7 @@
 				57A001432E70000300000001 /* ExternalDatasetImporter.swift in Sources */,
 				57A000352E70000200000001 /* RuntimeMetalShaderLoader.swift in Sources */,
 				57A000362E70000200000001 /* TextFileDocument.swift in Sources */,
+				57AF10000000000000000002 /* SettingsFileControls.swift in Sources */,
 				57A0013D2E70000300000001 /* TransferFunctionEditorView.swift in Sources */,
 				57A001452E70000300000001 /* WebAssetProvider.swift in Sources */,
 				57A001622E99000100000001 /* WebGPUShareLink.swift in Sources */,
@@ -1214,6 +1230,7 @@
 				57A000392E70000200000001 /* RuntimeMetalShaderLoader.swift in Sources */,
 				57A001672E99000200000001 /* RenderMode.swift in Sources */,
 				57A0003A2E70000200000001 /* TextFileDocument.swift in Sources */,
+				57AF10000000000000000003 /* SettingsFileControls.swift in Sources */,
 				57A001462E70000300000001 /* WebAssetProvider.swift in Sources */,
 				57A001632E99000100000001 /* WebGPUShareLink.swift in Sources */,
 				57A0014A2E70000300000001 /* WebServerCertificateControls.swift in Sources */,
@@ -1234,6 +1251,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				57AF10000000000000000004 /* SettingsFileControls.swift in Sources */,
 				57A002B42ED5000100000001 /* GUILogger.swift in Sources */,
 				57A002622ED3000100000001 /* ConverterView.swift in Sources */,
 				57A002722ED3000200000001 /* DicomSlicePreview.swift in Sources */,
@@ -1527,6 +1545,7 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = macOSServer/Info.plist;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.education";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -1559,6 +1578,7 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = macOSServer/Info.plist;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.education";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (

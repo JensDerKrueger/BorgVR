@@ -30,17 +30,20 @@ public struct BorgVRVolumeConversionSettings: Sendable {
   public let overlap: Int
   public let useCompression: Bool
   public let extensionStrategy: ExtensionStrategy
+  public let quantizeTo8Bit: Bool
 
   public init(
     brickSize: Int,
     overlap: Int,
     useCompression: Bool,
-    extensionStrategy: ExtensionStrategy
+    extensionStrategy: ExtensionStrategy,
+    quantizeTo8Bit: Bool = false
   ) {
     self.brickSize = brickSize
     self.overlap = overlap
     self.useCompression = useCompression
     self.extensionStrategy = extensionStrategy
+    self.quantizeTo8Bit = quantizeTo8Bit
   }
 
   public func validate() throws {
@@ -547,7 +550,8 @@ public enum BorgVRVolumeConversionService {
       request: effectiveRequest,
       stagedURL: stagedURL,
       logger: logger,
-      cancellationToken: cancellationToken
+      cancellationToken: cancellationToken,
+      signedComponents: volume.channels.map(\.isSigned)
     )
   }
 
@@ -606,7 +610,8 @@ public enum BorgVRVolumeConversionService {
       request: effectiveRequest,
       stagedURL: stagedURL,
       logger: logger,
-      cancellationToken: cancellationToken
+      cancellationToken: cancellationToken,
+      signedComponents: fused.channels.map(\.isSigned)
     )
   }
 
@@ -686,10 +691,11 @@ public enum BorgVRVolumeConversionService {
     request: BorgVRVolumeConversionRequest,
     stagedURL: URL,
     logger: LoggerBase?,
-    cancellationToken: BorgVRVolumeConversionCancellationToken?
+    cancellationToken: BorgVRVolumeConversionCancellationToken?,
+    signedComponents: [Bool] = []
   ) throws {
     try cancellationToken?.checkCancellation()
-    let volume = try RawFileAccessor(
+    var volume = try RawFileAccessor(
       filename: source.url.path,
       size: source.size,
       bytesPerComponent: source.bytesPerComponent,
@@ -698,6 +704,15 @@ public enum BorgVRVolumeConversionService {
       offset: source.offset,
       readOnly: true
     )
+    let quantizedURL = FileManager.default.temporaryDirectory
+      .appendingPathComponent("borgvr-quantized-\(UUID().uuidString).raw")
+    defer { try? FileManager.default.removeItem(at: quantizedURL) }
+    if request.settings.quantizeTo8Bit, source.bytesPerComponent > 1 {
+      volume = try BorgVRVolumeQuantizer.quantize(
+        volume, signedComponents: signedComponents, to: quantizedURL,
+        logger: logger, cancellationToken: cancellationToken
+      )
+    }
     let reorganizer = BrickedVolumeReorganizer(
       inputVolume: volume,
       brickSize: request.settings.brickSize,

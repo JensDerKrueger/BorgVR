@@ -36,6 +36,7 @@ struct VisionApp: App {
   private var sharePlayDisplayNameOnboardingCompleted = false
   @State private var showsSharePlayDisplayNameOnboarding = false
   @State private var sharePlayDisplayNameDraft = ""
+  @StateObject private var settingsFiles = SettingsFileController()
   @State private var immersiveSpaceTransitionTask: Task<Void, Never>?
 
   @StateObject private var voice: VoiceCommandService
@@ -126,10 +127,15 @@ struct VisionApp: App {
         .environmentObject(updateChecker)
         .environmentObject(mcpController)
         .onOpenURL { url in
+          if settingsFiles.open(url, store: storedAppModel.settingsStore()) {
+            showsSharePlayDisplayNameOnboarding = false
+            return
+          }
           Task {
             await handleOpenRequest(url:url)
           }
         }
+        .settingsImportDialogs(settingsFiles)
         .task {
           GroupActivityHelper.registerGroupActivity()
         }

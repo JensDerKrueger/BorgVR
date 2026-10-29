@@ -120,6 +120,7 @@ struct SettingsView: View {
       settingsNavigation(isWideLayout: layout.isRegularWidth)
     }
     .onAppear(perform: loadTemporaryValues)
+    .onReceive(NotificationCenter.default.publisher(for: .borgVRSettingsImported)) { _ in loadTemporaryValues() }
     .onDisappear(perform: saveSettings)
     .sheet(isPresented: $showingAddServerSheet) {
       addServerSheet
@@ -327,6 +328,9 @@ struct SettingsView: View {
 
   @ViewBuilder
   private var generalSection: some View {
+    Section("Settings files") {
+      SettingsFileControls { appSettings.settingsStore() }
+    }
     Section("Behavior") {
       Toggle("Automatically load/save transfer functions", isOn: $appSettings.autoloadTF)
       Toggle("Automatically load/save objects", isOn: $appSettings.autoloadObjects)
@@ -401,6 +405,15 @@ struct SettingsView: View {
       textFieldRow("Brick size (voxels)", text: $tempBrickSize, keyboardType: .numberPad)
       textFieldRow("Overlap (voxels)", text: $tempBrickOverlap, keyboardType: .numberPad)
       Toggle("Compression", isOn: $appSettings.enableCompression)
+      Toggle("Quantize imports to 8 bits per channel", isOn: $appSettings.quantizeImportsTo8Bit)
+      Text("Maps each channel's value range to 0...255, permanently reducing intensity precision. Existing 8-bit data is unchanged.")
+        .font(.caption)
+        .foregroundStyle(.secondary)
+        .fixedSize(horizontal: false, vertical: true)
+      Picker("DICOM fusion interpolation", selection: $appSettings.dicomResamplingFilter) {
+        Text("Trilinear").tag(BorgVRVolumeResamplingFilter.trilinear)
+        Text("Nearest Neighbor").tag(BorgVRVolumeResamplingFilter.nearestNeighbor)
+      }
       Picker("Borders", selection: $appSettings.borderMode) {
         Text("Zeroes").tag("zeroes")
         Text("Border").tag("border")

@@ -15,6 +15,7 @@ struct BorgVRMobileApp: App {
   private var sharePlayDisplayNameOnboardingCompleted = false
   @State private var showsSharePlayDisplayNameOnboarding = false
   @State private var sharePlayDisplayNameDraft = ""
+  @StateObject private var settingsFiles = SettingsFileController()
 
   init() {
     let appModel = AppModel()
@@ -167,8 +168,13 @@ struct BorgVRMobileApp: App {
           }
         }
         .onOpenURL { url in
+          if settingsFiles.open(url, store: appSettings.settingsStore()) {
+            showsSharePlayDisplayNameOnboarding = false
+            return
+          }
           openExternalDataset(url)
         }
+        .settingsImportDialogs(settingsFiles)
     }
     .handlesExternalEvents(matching: [BorgVRSharePlayActivity.activityIdentifier])
   }

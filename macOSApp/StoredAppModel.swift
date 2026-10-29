@@ -13,6 +13,8 @@ final class StoredAppModel : ObservableObject {
 
   static let defaultEnableCompression = BorgVRSharedDefaults.compressionEnabled
   @AppStorage("enableCompression") var enableCompression: Bool = defaultEnableCompression
+  @AppStorage("quantizeImportsTo8Bit") var quantizeImportsTo8Bit = false
+  @AppStorage("dicomResamplingFilter") var dicomResamplingFilter = BorgVRVolumeResamplingFilter.trilinear
 
   static let defaultLastMinute: Bool = false
   @AppStorage("lastMinute") var lastMinute: Bool = defaultLastMinute
@@ -79,6 +81,14 @@ final class StoredAppModel : ObservableObject {
   static let defaultDataDirectory: String = FileManager.default.homeDirectoryForCurrentUser.path
   @AppStorage("dataDirectory") var dataDirectory: String = defaultDataDirectory
 
+  @MainActor
+  var settingsArchiveEntries: [BorgVRSettingsStore.Entry] {
+    BorgVRSettingsStore.Entry.credentials(serverPassword: Binding(
+      get: { self.serverPassword }, set: { self.serverPassword = $0 }
+    )) + [.init(key: "lastMinute", defaultValue: Self.defaultLastMinute,
+      read: { _ in self.lastMinute }, write: { self.lastMinute = $0 as! Bool })]
+  }
+
   func resetDataSourceDefaults() {
     deactivateDataDirectoryAccess()
     dataDirectory = StoredAppModel.defaultDataDirectory
@@ -87,6 +97,8 @@ final class StoredAppModel : ObservableObject {
   }
 
   func resetImportDefaults() {
+    quantizeImportsTo8Bit = false
+    dicomResamplingFilter = .trilinear
     brickSize = StoredAppModel.defaultBrickSize
     brickOverlap = StoredAppModel.defaultBrickOverlap
     enableCompression = StoredAppModel.defaultEnableCompression

@@ -119,6 +119,8 @@ final class AppSettings: ObservableObject {
     "brickSize": BorgVRSharedDefaults.brickSize,
     "brickOverlap": BorgVRSharedDefaults.brickOverlap,
     "enableCompression": BorgVRSharedDefaults.compressionEnabled,
+    "quantizeImportsTo8Bit": false,
+    "dicomResamplingFilter": BorgVRVolumeResamplingFilter.trilinear.rawValue,
     "borderMode": BorgVRSharedDefaults.borderMode,
     "normalizeIsoSurfaceExport": false,
     "screenSpaceError": 0.25,
@@ -185,6 +187,8 @@ final class AppSettings: ObservableObject {
   @AppStorage("brickSize") var brickSize: Int = AppSettings.int("brickSize")
   @AppStorage("brickOverlap") var brickOverlap: Int = AppSettings.int("brickOverlap")
   @AppStorage("enableCompression") var enableCompression: Bool = AppSettings.bool("enableCompression")
+  @AppStorage("quantizeImportsTo8Bit") var quantizeImportsTo8Bit = false
+  @AppStorage("dicomResamplingFilter") var dicomResamplingFilter = BorgVRVolumeResamplingFilter.trilinear
   @AppStorage("borderMode") var borderMode: String = AppSettings.string("borderMode")
   @AppStorage("normalizeIsoSurfaceExport")
   var normalizeIsoSurfaceExport: Bool = AppSettings.bool("normalizeIsoSurfaceExport")
@@ -279,6 +283,20 @@ final class AppSettings: ObservableObject {
   init() {
     clampAtlasSizeToSupportedRange()
     loadServers()
+  }
+
+  @MainActor
+  func settingsStore(overrides: [BorgVRSettingsStore.Entry] = [], didImport: @escaping () -> Void = {}) -> BorgVRSettingsStore {
+    var values = Self.values
+    values["appStoreUpdateChecksEnabled"] = true
+    let extra = BorgVRSettingsStore.Entry.credentials(serverPassword: Binding(
+      get: { self.serverPassword }, set: { self.serverPassword = $0 }
+    )) + [SettingsServerRecord.servers(read: { self.servers }, write: { self.servers = $0 })]
+    return BorgVRSettingsStore(defaultValues: values, overrides: extra + overrides,
+      maximumAtlasSizeMB: Self.maximumAtlasSizeMB, didImport: {
+        self.objectWillChange.send()
+        didImport()
+      })
   }
 
   static func int(_ key: String) -> Int {
@@ -381,6 +399,8 @@ final class AppSettings: ObservableObject {
   }
 
   func resetImportDefaults() {
+    quantizeImportsTo8Bit = false
+    dicomResamplingFilter = .trilinear
     brickSize = Self.intDefault("brickSize")
     brickOverlap = Self.intDefault("brickOverlap")
     enableCompression = Self.boolDefault("enableCompression")

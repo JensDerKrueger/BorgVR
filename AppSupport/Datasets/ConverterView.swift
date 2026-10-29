@@ -36,7 +36,6 @@ struct ConverterView: View {
   @State private var inputFile: String = ""
   @State private var inputDirectory: String = ""
   @State private var movingInputDirectory: String = ""
-  @State private var dicomResamplingFilter: BorgVRVolumeResamplingFilter = .trilinear
   @State private var outputFile: String = ""
   @State private var datasetDescription: String = ""
   @State private var logText: String = ""
@@ -214,16 +213,6 @@ struct ConverterView: View {
                         )
                       }
                     }
-                    Picker(
-                      "converter_dicom_resampling_filter",
-                      selection: $dicomResamplingFilter
-                    ) {
-                      Text("converter_dicom_filter_trilinear")
-                        .tag(BorgVRVolumeResamplingFilter.trilinear)
-                      Text("converter_dicom_filter_nearest")
-                        .tag(BorgVRVolumeResamplingFilter.nearestNeighbor)
-                    }
-                    .pickerStyle(.segmented)
                 }
               }
             case 2:
@@ -1507,7 +1496,7 @@ struct ConverterView: View {
             source = .registeredDICOMPair(
               reference: reference,
               moving: moving,
-              filter: dicomResamplingFilter
+              filter: storedAppModel.dicomResamplingFilter
             )
         }
 
@@ -1525,7 +1514,8 @@ struct ConverterView: View {
               brickSize: storedAppModel.brickSize,
               overlap: storedAppModel.brickOverlap,
               useCompression: storedAppModel.enableCompression,
-              extensionStrategy: borderMode
+              extensionStrategy: borderMode,
+              quantizeTo8Bit: storedAppModel.quantizeImportsTo8Bit
             )
           ),
           logger: logger,

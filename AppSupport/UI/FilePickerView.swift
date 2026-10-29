@@ -138,3 +138,79 @@ struct FilePickerView: UIViewControllerRepresentable {
  CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR
  THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
+
+struct PendingSystemFileExport: Identifiable {
+  let id = UUID()
+  let sourceURL: URL
+
+  init(
+    data: Data,
+    defaultFilename: String,
+    temporaryDirectoryName: String
+  ) throws {
+    let directoryURL = FileManager.default.temporaryDirectory
+      .appendingPathComponent(temporaryDirectoryName, isDirectory: true)
+      .appendingPathComponent(id.uuidString, isDirectory: true)
+    try FileManager.default.createDirectory(
+      at: directoryURL,
+      withIntermediateDirectories: true
+    )
+    sourceURL = directoryURL.appendingPathComponent(defaultFilename)
+    try data.write(to: sourceURL, options: .atomic)
+  }
+
+  func removeTemporaryFiles() {
+    try? FileManager.default.removeItem(at: sourceURL.deletingLastPathComponent())
+  }
+}
+
+struct SystemFileExportPicker: UIViewControllerRepresentable {
+  let sourceURL: URL
+  let defaultDirectoryURL: URL?
+  let completion: (URL?) -> Void
+
+  func makeCoordinator() -> Coordinator {
+    Coordinator(completion: completion)
+  }
+
+  func makeUIViewController(context: Context) -> UIDocumentPickerViewController {
+    let picker = UIDocumentPickerViewController(
+      forExporting: [sourceURL],
+      asCopy: true
+    )
+    picker.directoryURL = defaultDirectoryURL
+    picker.delegate = context.coordinator
+    return picker
+  }
+
+  func updateUIViewController(
+    _ uiViewController: UIDocumentPickerViewController,
+    context: Context
+  ) {}
+
+  final class Coordinator: NSObject, UIDocumentPickerDelegate {
+    private let completion: (URL?) -> Void
+    private var completed = false
+
+    init(completion: @escaping (URL?) -> Void) {
+      self.completion = completion
+    }
+
+    func documentPicker(
+      _ controller: UIDocumentPickerViewController,
+      didPickDocumentsAt urls: [URL]
+    ) {
+      finish(with: urls.first)
+    }
+
+    func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
+      finish(with: nil)
+    }
+
+    private func finish(with url: URL?) {
+      guard !completed else { return }
+      completed = true
+      completion(url)
+    }
+  }
+}

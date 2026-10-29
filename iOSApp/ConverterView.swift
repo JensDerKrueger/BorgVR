@@ -12,7 +12,6 @@ struct ConverterView: View {
   @State private var inputFile = ""
   @State private var inputAccess: VolumeImportSourceAccess?
   @State private var registeredInputAccess: VolumeImportSourceAccess?
-  @State private var dicomResamplingFilter: BorgVRVolumeResamplingFilter = .trilinear
   @State private var filePickerMode: FilePickerView.Mode?
   @State private var datasetDescription = ""
   @State private var logText = ""
@@ -59,10 +58,6 @@ struct ConverterView: View {
             VStack(alignment: .leading, spacing: 10) {
               dicomDirectoryRow("Reference series", access: inputAccess, pickerMode: .dicomReference)
               dicomDirectoryRow("Series to register", access: registeredInputAccess, pickerMode: .dicomRegistered)
-              Picker("Resampling", selection: $dicomResamplingFilter) {
-                Text("Trilinear").tag(BorgVRVolumeResamplingFilter.trilinear)
-                Text("Nearest Neighbor").tag(BorgVRVolumeResamplingFilter.nearestNeighbor)
-              }
             }
             .disabled(isWorking)
           } else {
@@ -293,7 +288,7 @@ struct ConverterView: View {
     let stem: String
     if let registeredInputAccess {
       source = .registeredDICOMPair(reference: inputURL, moving: registeredInputAccess.url,
-                                    filter: dicomResamplingFilter)
+                                    filter: appSettings.dicomResamplingFilter)
       stem = inputURL.lastPathComponent + "-fused"
     } else {
       source = mode == .dicom ? .dicomDirectory(inputURL) : .file(inputURL)
@@ -349,7 +344,8 @@ struct ConverterView: View {
               brickSize: appSettings.brickSize,
               overlap: appSettings.brickOverlap,
               useCompression: appSettings.enableCompression,
-              extensionStrategy: borderMode
+              extensionStrategy: borderMode,
+              quantizeTo8Bit: appSettings.quantizeImportsTo8Bit
             )
           ),
           logger: logger,

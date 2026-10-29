@@ -130,6 +130,7 @@ struct SettingsView: View {
             Form {
               settingsIntroSection("settings_description_general")
               Section(header: Text("settings_section_general_behavior").bold()) {
+                SettingsFileControls { storedAppModel.settingsStore() }
                 Toggle("settings_toggle_autoload_tf", isOn: $storedAppModel.autoloadTF)
                 Toggle("settings_toggle_autoload_objects", isOn: $storedAppModel.autoloadObjects)
                 Toggle(
@@ -653,6 +654,15 @@ struct SettingsView: View {
               "settings_toggle_compression",
               isOn: $storedAppModel.enableCompression
             )
+            Toggle("Quantize imports to 8 bits per channel", isOn: $storedAppModel.quantizeImportsTo8Bit)
+            Text("Maps each channel's value range to 0...255, permanently reducing intensity precision. Existing 8-bit data is unchanged.")
+              .font(.caption)
+              .foregroundStyle(.secondary)
+              .fixedSize(horizontal: false, vertical: true)
+            Picker("DICOM fusion interpolation", selection: $storedAppModel.dicomResamplingFilter) {
+              Text("Trilinear").tag(BorgVRVolumeResamplingFilter.trilinear)
+              Text("Nearest Neighbor").tag(BorgVRVolumeResamplingFilter.nearestNeighbor)
+            }
 
             Picker("settings_picker_borders", selection: $storedAppModel.borderMode) {
               Text("settings_border_zeroes").tag("zeroes")
@@ -847,6 +857,19 @@ struct SettingsView: View {
       .padding(.horizontal)
     }
     .padding()
+    .onReceive(NotificationCenter.default.publisher(for: .borgVRSettingsImported)) { _ in
+      tempTimeout = String(storedAppModel.timeout)
+      tempPixelError = String(storedAppModel.screenSpaceError)
+      tempInitialBricks = String(storedAppModel.initialBricks)
+      tempHashSize = String(storedAppModel.minHashTableSize)
+      tempMaxProbingAttempts = String(storedAppModel.maxProbingAttempts)
+      tempAtlasSize = String(storedAppModel.atlasSizeMB)
+      tempOversampling = String(storedAppModel.oversampling)
+      tempBrickSize = String(storedAppModel.brickSize)
+      tempBrickOverlap = String(storedAppModel.brickOverlap)
+      didLoadServersForEditing = false
+      loadServersForEditingIfNeeded()
+    }
     .onDisappear {
       syncServersToStoredModel()
 

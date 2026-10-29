@@ -51,6 +51,7 @@ struct macOSApp: App {
   private var sharePlayDisplayNameOnboardingCompleted = false
   @State private var showsSharePlayDisplayNameOnboarding = false
   @State private var sharePlayDisplayNameDraft = ""
+  @StateObject private var settingsFiles = SettingsFileController()
 
   init() {
     let appModel = AppModel()
@@ -209,8 +210,15 @@ struct macOSApp: App {
         .onChange(of: storedAppModel.mcpAccessToken) { _, _ in applyMCPConfiguration() }
         .onChange(of: storedAppModel.mcpServerCertificateData) { _, _ in applyMCPConfiguration() }
         .onOpenURL { url in
+          if settingsFiles.open(url, store: appSettings.settingsStore(
+            overrides: storedAppModel.settingsArchiveEntries,
+            didImport: { storedAppModel.objectWillChange.send() })) {
+            showsSharePlayDisplayNameOnboarding = false
+            return
+          }
           openExternalDataset(url)
         }
+        .settingsImportDialogs(settingsFiles)
         .task {
           _ = storedAppModel.activateDataDirectoryAccess()
           if storedAppModel.enableDatasetServer && storedAppModel.autoStartServer {

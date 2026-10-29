@@ -38,7 +38,6 @@ struct ConverterView: View {
   @State private var inputFile: String = ""
   @State private var inputAccess: VolumeImportSourceAccess?
   @State private var registeredInputAccess: VolumeImportSourceAccess?
-  @State private var dicomResamplingFilter: BorgVRVolumeResamplingFilter = .trilinear
   @State private var filePickerMode: FilePickerView.Mode?
   /// The text log displaying progress, errors, and status messages.
   @State private var logText: String = ""
@@ -172,11 +171,6 @@ struct ConverterView: View {
         HStack(alignment: .top, spacing: 24) {
           dicomDirectoryRow("Reference series", access: inputAccess, pickerMode: .dicomReference)
           dicomDirectoryRow("Series to register", access: registeredInputAccess, pickerMode: .dicomRegistered)
-        }
-        .disabled(isWorking)
-        Picker("Resampling", selection: $dicomResamplingFilter) {
-          Text("Trilinear").tag(BorgVRVolumeResamplingFilter.trilinear)
-          Text("Nearest Neighbor").tag(BorgVRVolumeResamplingFilter.nearestNeighbor)
         }
         .disabled(isWorking)
       }
@@ -401,7 +395,7 @@ struct ConverterView: View {
     let baseFilename: String
     if let registeredInputAccess {
       source = .registeredDICOMPair(reference: inputURL, moving: registeredInputAccess.url,
-                                    filter: dicomResamplingFilter)
+                                    filter: storedAppModel.dicomResamplingFilter)
       baseFilename = inputURL.lastPathComponent + "-fused"
     } else {
       source = mode == .dicom ? .dicomDirectory(inputURL) : .file(inputURL)
@@ -497,7 +491,8 @@ struct ConverterView: View {
               brickSize: storedAppModel.brickSize,
               overlap: storedAppModel.brickOverlap,
               useCompression: storedAppModel.enableCompression,
-              extensionStrategy: borderMode
+              extensionStrategy: borderMode,
+              quantizeTo8Bit: storedAppModel.quantizeImportsTo8Bit
             )
           ),
           logger: logger,

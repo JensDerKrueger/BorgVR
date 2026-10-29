@@ -43,6 +43,7 @@ swiftc \
   "$ROOT/Tests/VolumeConversionServiceTestSupport.swift" \
   "$ROOT/BORGVR-IO/BorgVRDICOMRigidRegistration.swift" \
   "$ROOT/BORGVR-IO/BorgVRVolumeConversionService.swift" \
+  "$ROOT/BORGVR-IO/BorgVRVolumeQuantizer.swift" \
   "$ROOT/AppSupport/Automation/VolumeEditingCommands.swift" \
   "$ROOT/AppSupport/Rendering/VolumeBrushModel.swift" \
   "$ROOT/AppSupport/SharePlay/BorgVRVolumeEditCollaboration.swift" \

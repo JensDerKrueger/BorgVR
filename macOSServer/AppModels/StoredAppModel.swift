@@ -30,6 +30,8 @@ final class StoredAppModel : ObservableObject {
 
   static let defaultEnableCompression = BorgVRSharedDefaults.compressionEnabled
   @AppStorage("enableCompression") var enableCompression: Bool = defaultEnableCompression
+  @AppStorage("quantizeImportsTo8Bit") var quantizeImportsTo8Bit = false
+  @AppStorage("dicomResamplingFilter") var dicomResamplingFilter = BorgVRVolumeResamplingFilter.trilinear
 
   static let defaultLastMinute: Bool = false
   @AppStorage("lastMinute") var lastMinute: Bool = defaultLastMinute
@@ -67,6 +69,36 @@ final class StoredAppModel : ObservableObject {
   static let defaultDataDirectory: String = FileManager.default.homeDirectoryForCurrentUser.path
   @AppStorage("dataDirectory") var dataDirectory: String = defaultDataDirectory
 
+  @MainActor
+  func settingsStore() -> BorgVRSettingsStore {
+    let values: [String: Any] = [
+      "brickSize": Self.defaultBrickSize, "brickOverlap": Self.defaultBrickOverlap,
+      "enableCompression": Self.defaultEnableCompression, "quantizeImportsTo8Bit": false,
+      "dicomResamplingFilter": "trilinear", "lastMinute": Self.defaultLastMinute,
+      "autoStartServer": Self.defaultAutoStartServer, "borderMode": Self.defaultBorderModeString,
+      "serverPort": Self.defaultPort, "enableWebServer": Self.defaultEnableWebServer,
+      "webServerPort": Self.defaultWebServerPort, "webServerUsesTLS": Self.defaultWebServerUsesTLS,
+      "webServerCertificateData": Self.defaultWebServerCertificateData,
+      "maxBricksPerGetRequest": Self.defaultMaxBricksPerGetRequest
+    ]
+    let extra = BorgVRSettingsStore.Entry.credentials(serverPassword: Binding(
+      get: { self.serverPassword }, set: { self.serverPassword = $0 }
+    ), includeMCP: false) + [SettingsServerRecord.entry(key: "syncServers", read: {
+      self.syncServers.map { .init(id: $0.id, address: $0.address, port: $0.port,
+        password: $0.password, intervalSeconds: $0.intervalSeconds) }
+    }, write: { records in
+      let previous = self.syncServers
+      self.syncServers = records.map { record in
+        .init(id: record.id, address: record.address, port: record.port,
+          password: record.password ?? previous.first(where: {
+            $0.id == record.id || ($0.address == record.address && $0.port == record.port)
+          })?.password ?? "", intervalSeconds: record.intervalSeconds ?? 300)
+      }
+    })]
+    return BorgVRSettingsStore(defaultValues: values, overrides: extra,
+      didImport: { self.objectWillChange.send() })
+  }
+
   @AppStorage("syncServers") private var syncServersData: Data = Data()
 
   init() {
@@ -99,6 +131,8 @@ final class StoredAppModel : ObservableObject {
   }
 
   func resetToDefaults() {
+    quantizeImportsTo8Bit = false
+    dicomResamplingFilter = .trilinear
     brickSize = StoredAppModel.defaultBrickSize
     brickOverlap = StoredAppModel.defaultBrickOverlap
     enableCompression = StoredAppModel.defaultEnableCompression
