@@ -7,10 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		57AF10000000000000000001 /* SettingsFileControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57AF10000000000000000000 /* SettingsFileControls.swift */; };
-		57AF10000000000000000002 /* SettingsFileControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57AF10000000000000000000 /* SettingsFileControls.swift */; };
-		57AF10000000000000000003 /* SettingsFileControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57AF10000000000000000000 /* SettingsFileControls.swift */; };
-		57AF10000000000000000004 /* SettingsFileControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57AF10000000000000000000 /* SettingsFileControls.swift */; };
 		111111111111111111111701 /* c60_32.data in Resources */ = {isa = PBXBuildFile; fileRef = 56730FE22E6B78990091976B /* c60_32.data */; };
 		111111111111111111111702 /* head_32.data in Resources */ = {isa = PBXBuildFile; fileRef = 56730FE42E6B79000091976B /* head_32.data */; };
 		560A00012E00000000000031 /* web in CopyFiles */ = {isa = PBXBuildFile; fileRef = 560B90002E9150000042E45B /* web */; };
@@ -179,6 +175,10 @@
 		57A009012F00000100000001 /* CoordinatedFileExportRecovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A009002F00000100000001 /* CoordinatedFileExportRecovery.swift */; };
 		57A009022F00000100000001 /* CoordinatedFileExportRecovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A009002F00000100000001 /* CoordinatedFileExportRecovery.swift */; };
 		57A009032F00000100000001 /* CoordinatedFileExportRecovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57A009002F00000100000001 /* CoordinatedFileExportRecovery.swift */; };
+		57AF10000000000000000001 /* SettingsFileControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57AF10000000000000000000 /* SettingsFileControls.swift */; };
+		57AF10000000000000000002 /* SettingsFileControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57AF10000000000000000000 /* SettingsFileControls.swift */; };
+		57AF10000000000000000003 /* SettingsFileControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57AF10000000000000000000 /* SettingsFileControls.swift */; };
+		57AF10000000000000000004 /* SettingsFileControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57AF10000000000000000000 /* SettingsFileControls.swift */; };
 		57CC00000000000000000001 /* ScreenControlStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57CC00000000000000000000 /* ScreenControlStyle.swift */; };
 		57CC00000000000000000002 /* ScreenControlStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57CC00000000000000000000 /* ScreenControlStyle.swift */; };
 		57CC00000000000000000003 /* ScreenControlStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57CC00000000000000000000 /* ScreenControlStyle.swift */; };
@@ -229,7 +229,6 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		57AF10000000000000000000 /* SettingsFileControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsFileControls.swift; sourceTree = "<group>"; };
 		111111111111111111111101 /* BorgVR Mobile.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "BorgVR Mobile.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		560A00012E00000000000001 /* TerminalServerApp */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = TerminalServerApp; sourceTree = BUILT_PRODUCTS_DIR; };
 		560B8BE72E5C57580042E45B /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
@@ -300,6 +299,7 @@
 		57A002B02ED5000100000001 /* GUILogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GUILogger.swift; sourceTree = "<group>"; };
 		57A003002EF1000100000001 /* ScreenScreenshotRequestQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenScreenshotRequestQueue.swift; sourceTree = "<group>"; };
 		57A009002F00000100000001 /* CoordinatedFileExportRecovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoordinatedFileExportRecovery.swift; sourceTree = "<group>"; };
+		57AF10000000000000000000 /* SettingsFileControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsFileControls.swift; sourceTree = "<group>"; };
 		57CC00000000000000000000 /* ScreenControlStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenControlStyle.swift; sourceTree = "<group>"; };
 		57ED00000000000000000000 /* VolumeBrushControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VolumeBrushControls.swift; sourceTree = "<group>"; };
 		57ED00000000000000000010 /* VolumeBrushModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VolumeBrushModel.swift; sourceTree = "<group>"; };
@@ -308,11 +308,6 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		57AF10000000000000000010 /* Exceptions for "macOSServer" folder in "macOSServer" target */ = {
-			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-			membershipExceptions = (Info.plist,);
-			target = 5655824A2D4E5D6F008E7CE6 /* macOSServer */;
-		};
 		111111111111111111111204 /* Exceptions for "BORGVR-IO" folder in "iOSApp" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
@@ -366,8 +361,8 @@
 				BorgVRIntegerVolumeSampler.swift,
 				BORGVRMetaData.swift,
 				BorgVRMetalVolumeEditProcessor.swift,
-				BorgVRSharedConstants.swift,
 				BorgVRSettingsArchive.swift,
+				BorgVRSharedConstants.swift,
 				BorgVRVolumeConversionService.swift,
 				BorgVRVolumeEditBrickCache.swift,
 				BorgVRVolumeEditDataSource.swift,
@@ -414,6 +409,13 @@
 			membershipExceptions = (
 				BorgVRMCP.swift,
 				BorgVRMCPServer.swift,
+			);
+			target = 5655824A2D4E5D6F008E7CE6 /* macOSServer */;
+		};
+		57AF10000000000000000010 /* Exceptions for "macOSServer" folder in "macOSServer" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
 			);
 			target = 5655824A2D4E5D6F008E7CE6 /* macOSServer */;
 		};
@@ -483,7 +485,9 @@
 		};
 		5655824C2D4E5D6F008E7CE6 /* macOSServer */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (57AF10000000000000000010 /* Exceptions for "macOSServer" folder in "macOSServer" target */,);
+			exceptions = (
+				57AF10000000000000000010 /* Exceptions for "macOSServer" folder in "macOSServer" target */,
+			);
 			path = macOSServer;
 			sourceTree = "<group>";
 		};

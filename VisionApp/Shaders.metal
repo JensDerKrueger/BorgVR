@@ -19,5 +19,5 @@
 #include "../AppSupport/Rendering/Shaders/VolumeRaycaster.metal"
 #include "../AppSupport/Rendering/Shaders/VisionInteractionShaders.metal"
 
-// Temporary reprojection test: keep rasterized bounding-box depth only.
+// Reduce distortions in low-FPS scenarios by keeping rasterized bounding-box depth.
 fragment void fragmentShaderBoundingBoxDepth() {}

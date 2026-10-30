@@ -1191,7 +1191,7 @@ extension VisionVolumeRenderer {
       try renderTransferFunctions.bind(
         channel: transferFunctionPanelInteractionState.selectedTransferFunctionChannel(),
         to: renderEncoder,
-        index: 0
+        index: TextureIndex.transferFunction.rawValue
       )
     } catch {
       logger?.error("Failed to bind TF texture for panel: \(error)")
