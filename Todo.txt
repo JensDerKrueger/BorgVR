@@ -1,2 +1,0 @@
-Possible Futute Additions:
-- virtual sampling
