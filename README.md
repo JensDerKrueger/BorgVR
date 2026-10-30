@@ -46,8 +46,15 @@ The current development version is **3.4**. The SharePlay wire protocol is versi
   arcball, shared across native clients and WebGPU.
 - GPU-guided brick requests with progressive paging into a brick atlas.
 - Interactive transfer-function editors and persistent transfer-function catalogs.
+- Up to four data channels with 8 or 16 bits per channel, plus scalar 32-bit integer volumes.
+  Each channel has its own value range and transfer function; brick visibility accounts for
+  every channel rather than relying on a single combined range.
 - Physical voxel spacing is preserved through import and LoD generation. Dataset information
   reports real-world extents using suitable metric units while rendering remains normalized.
+- Native object and measurement tools can project onto the volume surface. On visionOS,
+  optional snapping follows the eye-to-tool ray; projected strokes use depth smoothing.
+- macOS menus expose visualization commands and shortcuts, including arrow-key volume
+  translation, with the bilingual HTML manual available as built-in Help.
 
 ### Collaboration
 
@@ -59,22 +66,31 @@ The current development version is **3.4**. The SharePlay wire protocol is versi
   and spatial screen-view visualization and manipulation on Apple Vision Pro.
 - Host handover, explicit leave/waiting states, and synchronized initial state for participants
   joining an active session.
-- Optional ad-hoc dataset servers and a persistent origin catalog. Participants exchange known
-  sources, retry unavailable endpoints, and can recover an active remote renderer through another
-  server that provides the same dataset.
+- Optional ad-hoc dataset servers limited to the session's active dataset, and a persistent
+  origin catalog. Participants exchange shareable sources, retry unavailable endpoints, and can
+  recover an active remote renderer through another server that provides the same dataset.
+  A participant can become an additional source when its local download completes.
+- Password-protected sources have an explicit sharing permission. Sources not allowed to be
+  shared remain private; dataset payloads are fetched from servers, not tunneled through SharePlay.
 
-### Markers And Spatial Input
+### Objects And Spatial Input
 
-- Named and colored spherical markers on all native clients and in WebGPU.
-- Directional sphere markers and tube-rendered stroke markers with a shared binary `.marker`
-  format and dataset identity checks.
-- Multi-selection, marker import/export, server catalogs, editing, and synchronized initial state
-  for new SharePlay participants.
-- Hand-based marker placement on Apple Vision Pro, including configurable quick markers.
+- Named and colored spheres, optional direction rays, freehand strokes, and instanced opaque
+  meshes on all native clients and in WebGPU.
+- OBJ and STL import into BorgVR's self-contained `.mesh` format, with descriptions, positions,
+  normals, vertex colors, texture coordinates, and embedded texture support. Mesh export to OBJ
+  is available through the macOS import/export tools.
+- Mesh coordinates are in meters. Native placement warns about objects whose size differs
+  substantially from the dataset, and each instance has its own transform.
+- Separate drawing and placement modes, multi-selection, server object catalogs, and binary
+  `.marker` files that store spheres, strokes, and mesh instances with dataset identity checks.
+  SharePlay synchronizes placements and resolves missing mesh assets through available sources.
+- Hand-based drawing, object placement, and picking on Apple Vision Pro.
 - Logitech Muse spatial-stylus drawing on visionOS 26 or newer, with live stroke radius and
-  color controls, pressure-sensitive drawing, and selectable marker or measurement tools.
+  color controls, pressure-sensitive drawing, and configurable tools when opening a dataset.
 - Independent left- and right-hand PlayStation VR2 Sense controller tools with configurable
-  button actions, volume manipulation, stroke drawing, measurement, and shared tip previews.
+  button and thumbstick-axis actions, volume manipulation, drawing, placement, measurement,
+  and shared tip previews. Controller and Muse tool modes are independent of the hand mode.
 
 ### Measurements
 
@@ -83,9 +99,59 @@ The current development version is **3.4**. The SharePlay wire protocol is versi
 - Editable control points, real-time values with automatically selected metric units, and
   rendering integrated with the volume depth/compositing pipeline.
 - Measurement synchronization through SharePlay and a dataset-aware binary `.measurement`
-  format for local save/load workflows.
+  format for local save/load workflows, including server catalogs in WebGPU.
 - Direct hand, Logitech Muse, and PlayStation VR2 Sense controller measurement interaction on
   Apple Vision Pro.
+
+### Volume Editing And Saved State
+
+- Non-destructive spherical erase and restore brushes on all three native rendering platforms,
+  with per-channel selection for multi-channel volumes. Restoring recovers original voxel values,
+  including where erase strokes overlap.
+- Original data remains unchanged. Named edit variants are stored in a `.data.edits` companion
+  directory, can be reopened or managed separately, and can be exported as a new `.data` dataset.
+  SharePlay maintains a shared edit state and synchronizes brush operations and cursors.
+- Background brick updates and LoD rebuilding keep edits consistent across resolution levels.
+  Incompatible edit states are rejected rather than silently applied to a different source volume.
+- One-click dataset-state save/restore combines visualization settings, all channel transfer
+  functions outside Iso mode, objects, and measurements when present, with overwrite confirmation.
+- Separate automatic load/save settings for transfer functions, objects, measurements, and
+  visualization state. Saved visualization state includes render mode, isovalue, clipping,
+  lighting, and transforms; visionOS stores its spatial transform relative to the viewer's head.
+
+### DICOM Fusion And Conversion
+
+- DICOM directory selection on macOS, iOS/iPadOS, and visionOS, including sandbox-safe folder
+  access without selecting every slice individually.
+- Two-directory DICOM fusion into a two-channel volume. A coarse-to-fine rigid registration
+  uses normalized mutual information (NMI), physical voxel spacing, DICOM orientation, and
+  frame-of-reference information to align the second volume to the reference grid.
+- The reference channel is retained; the registered channel is resampled using configurable
+  trilinear or nearest-neighbor interpolation, with zero outside its bounds. DICOM pixel padding
+  is excluded from registration sampling.
+- Optional per-channel 8-bit import quantization maps each nonconstant channel's observed range
+  to 0...255 before bricking and LoD generation. The original ranges are written to the log.
+  This is lossy and trades intensity precision for smaller storage and texture payloads.
+
+### Isosurface Export
+
+- Full-resolution OBJ isosurface extraction in the macOS renderer using Marching Cubes 33,
+  with Metal-accelerated classification when available and a CPU fallback.
+- Extraction uses the normal brick-access interface for local and remote datasets, handles
+  brick overlaps without duplicate cells, skips non-intersecting bricks, and reports progress
+  with cancellation. Vertex normals interpolate central-difference sample gradients.
+- Coordinates are exported in meters by default. An optional setting normalizes the longest
+  dataset axis to `[-1, 1]` instead.
+- Available from the macOS UI and menu, the `X` shortcut in Iso mode, `.gsc` commands, and MCP.
+
+### Portable Settings
+
+- Export and import application settings as registered JSON-based `.borgvrsettings` files.
+  Open a settings file on another native app to apply the supported entries after confirmation.
+- Imports leave absent settings unchanged and ignore unknown or unsupported entries, allowing
+  files to be shared between platforms and application versions.
+- Export asks whether to include passwords, access tokens, and certificates. Files containing
+  credentials are sensitive, unencrypted JSON and should only be shared through trusted channels.
 
 ### Data And Servers
 
@@ -94,7 +160,7 @@ The current development version is **3.4**. The SharePlay wire protocol is versi
 - BorgVR datasets can be exported at any stored LoD as a flat, uncompressed NRRD volume while
   retaining the corresponding voxel spacing.
 - Password-protected Swift and C++ dataset servers serving datasets, transfer functions,
-  and marker files.
+  object placements, meshes, and measurement files.
 - Periodic server-to-server synchronization in the macOS server and C++ server, including
   resumable downloads of incomplete datasets.
 - Optional HTTPS WebGPU hosting from the Swift server with generated self-signed certificates
@@ -143,8 +209,12 @@ The current development version is **3.4**. The SharePlay wire protocol is versi
 
 - Responsive desktop and mobile UI with touch interaction and shareable renderer URLs.
 - Optional persistent brick cache backed by IndexedDB, including cache statistics and clearing.
-- Dataset-specific transfer-function and marker catalogs loaded from the server.
-- Sphere and tube-mesh marker rendering.
+- Per-channel transfer-function editing, lighting, and physical dataset dimensions.
+- Server-provided transfer-function, object, mesh, and measurement catalogs, plus local
+  annotation-file loading.
+- Spheres, strokes, textured mesh instances, and length/area/volume measurement visualization
+  with value labels. Opaque objects are rendered separately and composited with the volume.
+- The displayed application version is supplied by the serving BorgVR server.
 
 ## Repository Layout
 
@@ -282,8 +352,8 @@ TerminalConverterApp I c60.i3m.zip c60.data "C60 from ImageVis3D Mobile" 64 2
 ### Swift Dataset Server
 
 The `TerminalServerApp` scheme builds the standalone Swift server. It serves datasets, transfer
-functions, and marker files from one directory and refreshes that catalog every ten seconds by
-default. For example:
+functions, object placements, meshes, and measurements from one directory and refreshes that
+catalog every ten seconds by default. For example:
 
 ```sh
 TerminalServerApp --directory /path/to/datasets --port 12345 --web-port 8080
@@ -303,8 +373,9 @@ TerminalServerApp --directory /srv/borgvr \
   --sync-server server-b.example 12345 300
 ```
 
-Synchronization includes datasets, transfer functions, and marker files. When more than one
-configured server offers a dataset, another source is tried if the current transfer stalls.
+Synchronization includes datasets, transfer functions, object placement files, and mesh assets.
+When more than one configured server offers a dataset, another source is tried if the current
+transfer stalls.
 
 ### C++ Dataset Server
 
@@ -331,6 +402,10 @@ options. While either server is running, enter `l` to list its current datasets,
 to select developer/debug, info, warning, or error output, `i` to repeat the startup information,
 `r` to refresh the catalog, `h` for console help, or `q` to stop it.
 
+The C++ server also accepts its password through `BORGVR_SERVER_PASSWORD` when `--password` is
+omitted. Its network layer bounds requests and response batches and applies connection timeouts.
+Rejected commands and invalid client-supplied dataset IDs are not echoed into logs.
+
 ### Apple Vision Pro Development
 
 Short setup notes for pairing and enabling development on Apple Vision Pro are kept in
@@ -340,7 +415,8 @@ Short setup notes for pairing and enabling development on Apple Vision Pro are k
 
 BorgVR can expose datasets through its native server protocol. The Swift server can also start a
 small HTTP/HTTPS server that serves the WebGPU frontend and dataset resources to a browser. Both
-server implementations publish compatible dataset, transfer-function, and marker catalogs.
+server implementations publish compatible dataset, transfer-function, object, mesh, and
+measurement catalogs.
 
 The WebGPU server is disabled by default. When enabled, HTTPS is enabled by default because remote
 browser WebGPU access generally requires a secure context. If no certificate is configured, BorgVR
@@ -359,13 +435,21 @@ apps remain the primary high-performance and spatial rendering applications.
 
 ## Data Files
 
-BorgVR uses four application-specific file types:
+BorgVR uses the following application-specific files:
 
 - `.data`: metadata followed by bricked, optionally compressed volume data.
-- `.tf1d`: one-dimensional transfer functions and their display metadata.
-- `.marker`: binary directional sphere and stroke annotations, including the unique ID of their
-  source dataset.
+- `.tf1d`: a one-dimensional transfer function and its display metadata; multi-channel
+  dataset saves use separate files for the channel transfer functions.
+- `.marker`: binary sphere, stroke, and mesh-instance placements, including the unique ID of
+  their source dataset. Mesh instances refer to separately stored mesh assets.
+- `.mesh`: self-contained opaque mesh assets with a unique ID, description, vertex attributes,
+  and optional embedded textures; coordinates are in meters.
 - `.measurement`: binary length, area, and volume measurements associated with a source dataset.
+- `.state`: dataset-specific visualization parameters and screen/spatial transforms.
+- `.borgvrsettings`: portable JSON application settings, optionally including credentials.
+
+Non-destructive edit variants and their caches live in a `.data.edits` companion directory,
+not in the original `.data` file. Keep both together when backing up edited datasets.
 
 Loading markers or measurements created for another dataset requires explicit confirmation. The
 repository includes small sample datasets for testing. Larger datasets should be kept outside the
