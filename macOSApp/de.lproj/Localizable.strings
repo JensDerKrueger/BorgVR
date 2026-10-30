@@ -532,6 +532,8 @@
 "Oversampling mode" = "Oversampling-Modus";
 "Oversampling factor" = "Oversampling-Faktor";
 "Randomized sample phase" = "Zufällige Sampling-Phase";
+"Alpha epsilon" = "Alpha-Epsilon";
+"Bricks with TF alpha below this threshold may be skipped. The transfer function stays unchanged. Zero disables the threshold." = "Bricks mit TF-Alpha unterhalb dieses Schwellwerts können übersprungen werden. Die Transferfunktion bleibt unverändert. Bei 0 ist der Schwellwert deaktiviert.";
 "Drop FPS" = "FPS zum Reduzieren";
 "Recovery FPS" = "FPS zur Erholung";
 "Log level" = "Log-Level";

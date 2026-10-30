@@ -1,7 +1,7 @@
 import Foundation
 import Metal
 
-// RenderTransferFunctionSet's session DTO is unrelated to this isolated atlas test.
+// Minimal session DTO for the isolated renderer/atlas tests.
 struct BorgVRTransferFunctionSnapshot {
   let channel: Int
   let samples: [SIMD4<UInt8>]
@@ -162,6 +162,9 @@ private enum VolumeAtlasEditTests {
       print("SKIP: Metal device unavailable for atlas edit regression")
       return
     }
+    try rendererTransferFunctionRanges(device: device)
+    try rendererAlphaEpsilon(device: device)
+    try linearTransferFunctionBounds(device: device)
     let dataset = EditableAtlasFixture()
     let tf = TransferFunction1D(count: 256)
     tf.initMetal(device: device)
@@ -285,10 +288,175 @@ private enum VolumeAtlasEditTests {
     try awaitFlag(isEmpty, "Pending erase bounds were not used in ISO mode")
     hiddenAtlas.updateEmptiness(isoValue: 0)
     try awaitFlag({ !isEmpty($0) }, "ISO zero incorrectly skipped pending erased data")
+    let epsilonRenderer = RenderTransferFunctionSet(device: device)
+    let weakSnapshot = BorgVRTransferFunctionSnapshot(channel: 0,
+      samples: [SIMD4<UInt8>](repeating: SIMD4(255, 255, 255, 1), count: 256), revision: 1)
+    let weakRanges = [BORGVRComponentRange(minValue: 0, maxValue: 255)]
+    try epsilonRenderer.synchronize(with: [weakSnapshot], componentRanges: weakRanges, rangeMax: 255)
+    let epsilonAtlas = try VolumeAtlas(device: device, maxMemory: 1024,
+      borgData: EditableAtlasFixture(), transferFunctions: epsilonRenderer.activeTransferFunctions, isoValue: 0.5)
+    try expect(!isEmpty(try render(0, using: epsilonAtlas).x), "Zero epsilon hid weakly visible data")
+    func awaitEpsilonFlag(empty: Bool) throws {
+      for _ in 0..<200 {
+        if isEmpty(try render(0, using: epsilonAtlas).x) == empty { return }
+        Thread.sleep(forTimeInterval: 0.005)
+      }
+      throw AtlasTestFailure(message: "Epsilon change did not update the GPU brick flags")
+    }
+    try epsilonRenderer.synchronize(with: [weakSnapshot], componentRanges: weakRanges,
+      rangeMax: 255, alphaEpsilon: 0.004)
+    epsilonAtlas.updateEmptiness(transferFunctions: epsilonRenderer.activeTransferFunctions)
+    try awaitEpsilonFlag(empty: true)
+    try epsilonRenderer.synchronize(with: [weakSnapshot], componentRanges: weakRanges, rangeMax: 255)
+    epsilonAtlas.updateEmptiness(transferFunctions: epsilonRenderer.activeTransferFunctions)
+    try awaitEpsilonFlag(empty: false)
+    print("Alpha epsilon updates GPU empty/nonempty flags in both directions")
     try gpuAtlas(device: device, queue: queue, tf: tf, pipeline: pipeline, target: target)
     try channelRestoreBeforeCPU(device: device, queue: queue, tf: tf, target: target)
     try packedBrushes(device: device, queue: queue)
     print("Volume atlas edit regression tests passed")
+  }
+
+  static func rendererTransferFunctionRanges(device: MTLDevice) throws {
+    for bytes in [1, 2, 4] {
+      let rangeMax = bytes == 4 ? Int(UInt32.max) : (1 << (bytes * 8)) - 1
+      let maxima = bytes == 1 ? [63, 255, 127, 31]
+        : bytes == 2 ? [19958, 31785, 8000, 12000]
+        : [Int(UInt32.max), 1_000_000, 2_000_000, 500_000]
+      for channels in 1...4 {
+        let renderTFs = RenderTransferFunctionSet(device: device)
+        for pass in 0..<2 {
+          let ranges = maxima.prefix(channels).map {
+            BORGVRComponentRange(minValue: 0, maxValue: $0 / (pass + 1))
+          }
+          let snapshots = (0..<channels).reversed().map { channel in
+            BorgVRTransferFunctionSnapshot(channel: channel,
+              samples: (0..<256).map { SIMD4<UInt8>(255, 255, 255, $0 < 128 ? 0 : 255) },
+              revision: 1)
+          }
+          try renderTFs.synchronize(with: snapshots, componentRanges: ranges, rangeMax: rangeMax)
+          let active = renderTFs.activeTransferFunctions
+          try expect(active.count == channels, "Renderer lost an active TF channel")
+          let transparent = BrickMetadata(offset: 0, size: 0, minValue: 0,
+            maxValue: ranges.map { $0.maxValue / 4 }.max()!,
+            componentRanges: ranges.map { .init(minValue: 0, maxValue: $0.maxValue / 4) })
+          try expect(active.indices.allSatisfy { active[$0].isBrickEmpty(brickMetadata: transparent, component: $0) },
+            "Transparent channels must permit empty-space skipping")
+          for channel in 0..<channels {
+            let expectedBias = Float(rangeMax) / Float(ranges[channel].maxValue)
+            try expect(abs(active[channel].textureBias / expectedBias - 1) < 0.000001,
+              "Renderer TF \(channel) uses the global rather than channel maximum (\(bytes)-byte, \(channels) channels, pass \(pass))")
+            var brickRanges = ranges.map { BORGVRComponentRange(minValue: 0, maxValue: $0.maxValue / 4) }
+            let visibleValue = ranges[channel].maxValue * 3 / 4
+            brickRanges[channel] = .init(minValue: visibleValue, maxValue: visibleValue)
+            let visible = BrickMetadata(offset: 0, size: 0, minValue: 0,
+              maxValue: brickRanges.map(\.maxValue).max()!, componentRanges: brickRanges)
+            try expect(!active[channel].isBrickEmpty(brickMetadata: visible, component: channel),
+              "Visible channel \(channel) was incorrectly skipped")
+            try expect(!active.indices.allSatisfy { active[$0].isBrickEmpty(brickMetadata: visible, component: $0) },
+              "One visible channel must keep the complete brick nonempty")
+          }
+        }
+      }
+    }
+    print("Renderer TF normalization and empty-space skipping passed (1-4 channels, 8/16/32-bit, unchanged TF revisions)")
+  }
+
+  static func rendererAlphaEpsilon(device: MTLDevice) throws {
+    let renderer = RenderTransferFunctionSet(device: device)
+    let ranges = [BORGVRComponentRange(minValue: 0, maxValue: 255),
+                  BORGVRComponentRange(minValue: 0, maxValue: 1000)]
+    var samples = [SIMD4<UInt8>](repeating: SIMD4(17, 31, 63, 0), count: 256)
+    samples[64].w = 1; samples[128].w = 2
+    var strongSamples = samples
+    strongSamples[192].w = 255
+    let snapshots = [BorgVRTransferFunctionSnapshot(channel: 0, samples: samples, revision: 1),
+                     BorgVRTransferFunctionSnapshot(channel: 1, samples: strongSamples, revision: 1)]
+    let original = snapshots.map(\.samples)
+    func sync(_ epsilon: Float) throws {
+      try renderer.synchronize(with: snapshots, componentRanges: ranges, rangeMax: 65535,
+        alphaEpsilon: epsilon)
+    }
+    try sync(0)
+    try expect(renderer.activeTransferFunctions.map(\.data) == original, "Zero epsilon altered TF samples")
+    let revisions = renderer.activeTransferFunctions.map(\.revision)
+    try sync(0)
+    try expect(renderer.activeTransferFunctions.map(\.revision) == revisions,
+      "Unchanged epsilon reuploaded TF samples")
+    try sync(2.0 / 255)
+    for tf in renderer.activeTransferFunctions {
+      try expect(tf.minIndex == 128,
+        "Emptiness must ignore alpha below, but not at, the threshold")
+    }
+    try expect(renderer.activeTransferFunctions.map(\.data) == original &&
+      renderer.activeTransferFunctions.map(\.revision) == revisions,
+      "Epsilon changed the rendered TF samples or triggered a texture upload")
+    let previous = TransferFunction1D(copyFrom: renderer.activeTransferFunctions[0])
+    try sync(0.01)
+    let active = renderer.activeTransferFunctions
+    let brick = BrickMetadata(offset: 0, size: 0, minValue: 0, maxValue: 1000, componentRanges: ranges)
+    try expect(active[0].isBrickEmpty(brickMetadata: brick, component: 0),
+      "A channel entirely below epsilon must become empty")
+    try expect(active[1].data[192].w == 255 && !active[1].isBrickEmpty(brickMetadata: brick, component: 1),
+      "Ignoring weak values hid a strong feature")
+    try expect(active[0].emptinessSignificantChange(previous),
+      "The background emptiness updater was not notified of threshold changes")
+    let copy = TransferFunction1D(copyFrom: active[0])
+    copy.initMetal(device: device)
+    try copy.updateData(with: samples)
+    try expect(copy.isBrickEmpty(brickMetadata: brick, component: 0),
+      "A background TF copy lost its emptiness threshold")
+    try sync(0.01)
+    try expect(active.map(\.data) == original && active.map(\.revision) == revisions,
+      "Classification-only changes modified the rendered TF")
+    try sync(0)
+    try expect(active[0].minIndex == 64 && active.map(\.data) == original &&
+      snapshots.map(\.samples) == original && active.map(\.revision) == revisions,
+      "Disabling epsilon did not restore classification without changing the TFs")
+    samples[80].w = 1; samples[96].w = 10
+    try renderer.synchronize(with: [.init(channel: 0, samples: samples, revision: 2)],
+      componentRanges: ranges, rangeMax: 65535, alphaEpsilon: 0.01)
+    try expect(renderer.activeTransferFunctions[0].minIndex == 96 &&
+      renderer.activeTransferFunctions[0].data == samples,
+      "A changed TF bypassed the emptiness threshold or altered its rendered samples")
+    for epsilon: Float in [0.02, 0] {
+      try renderer.synchronize(with: [snapshots[0]], componentRanges: ranges, rangeMax: 65535,
+        alphaEpsilon: epsilon)
+      try sync(epsilon)
+      try expect(renderer.activeTransferFunctions[1].minIndex == (epsilon == 0 ? 64 : 192),
+        "A reactivated channel retained an outdated epsilon")
+      try expect(renderer.activeTransferFunctions.map(\.data) == original,
+        "Reactivating a channel changed its rendered TF")
+    }
+    print("Alpha epsilon passed: classification only, unchanged TF samples/revisions, boundary, copies, channels and reset")
+  }
+
+  static func linearTransferFunctionBounds(device: MTLDevice) throws {
+    for count in [256, 4096] {
+      let tf = TransferFunction1D(count: count)
+      let maximum = 19958
+      let index = count == 256 ? 23 : 370
+      var samples = [SIMD4<UInt8>](repeating: .zero, count: count)
+      samples[index].w = 255
+      tf.initMetal(device: device)
+      try tf.updateData(with: samples)
+      tf.updateRanges(minValue: 0, maxValue: maximum, rangeMax: 65535)
+      let center = Int((Double(index) + 0.5) * Double(maximum) / Double(count))
+      for value in (center - 2 * maximum / count - 2)...(center + 2 * maximum / count + 2) {
+        let coordinate = Float(value) / 65535 * tf.textureBias * Float(count) - 0.5
+        let alpha = max(0, 1 - abs(coordinate - Float(index)))
+        let brick = BrickMetadata(offset: 0, size: 0, minValue: value, maxValue: value,
+          componentRanges: [.init(minValue: value, maxValue: value)])
+        if alpha > 0 {
+          try expect(!tf.isBrickEmpty(brickMetadata: brick, component: 0),
+            "Linear TF filtering has visible support outside the old index bounds")
+        } else if abs(coordinate - Float(index)) > 1.01 {
+          try expect(tf.isBrickEmpty(brickMetadata: brick, component: 0),
+            "Scalar values outside TF support were not skipped")
+        }
+      }
+    }
+    print("TF empty-space bounds include linear interpolation at both support edges")
   }
 
   static func gpuAtlas(device: MTLDevice, queue: MTLCommandQueue, tf: TransferFunction1D,

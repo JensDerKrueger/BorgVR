@@ -126,12 +126,14 @@ struct BorgVRSpatialViewsSnapshot: Sendable {
 
 struct BorgVRRenderSettingsSnapshot: Sendable {
   let sampleJitter: Bool
+  let alphaEpsilon: Float
   let transferFunctionDisplayMode: Int
   let purgeAtlas: Bool
   let rotationCaptureRequestID: UInt64
 
   static let `default` = BorgVRRenderSettingsSnapshot(
     sampleJitter: false,
+    alphaEpsilon: 0,
     transferFunctionDisplayMode: 0,
     purgeAtlas: false,
     rotationCaptureRequestID: 0
@@ -1004,6 +1006,7 @@ extension BorgVRSession where VisualizationState == RenderingParameters,
           spatialViews: .empty,
           settings: BorgVRRenderSettingsSnapshot(
             sampleJitter: appSettings.sampleJitter,
+            alphaEpsilon: Float(appSettings.alphaEpsilon),
             transferFunctionDisplayMode: 0,
             purgeAtlas: false,
             rotationCaptureRequestID: 0

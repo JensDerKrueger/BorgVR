@@ -281,9 +281,9 @@ final actor VisionVolumeRenderer {
     let metadata = dataset.getMetadata()
     try renderTransferFunctions.synchronize(
       with: initialFrameSnapshot.transferFunctions,
-      minValue: metadata.minValue,
-      maxValue: metadata.maxValue,
-      rangeMax: metadata.rangeMax
+      componentRanges: metadata.componentRanges,
+      rangeMax: metadata.rangeMax,
+      alphaEpsilon: initialFrameSnapshot.settings.alphaEpsilon
     )
 
     self.layerRenderer = layerRenderer
@@ -1930,9 +1930,9 @@ extension VisionVolumeRenderer {
       let metadata = borgData.getMetadata()
       try renderTransferFunctions.synchronize(
         with: frameSnapshot.transferFunctions,
-        minValue: metadata.minValue,
-        maxValue: metadata.maxValue,
-        rangeMax: metadata.rangeMax
+        componentRanges: metadata.componentRanges,
+        rangeMax: metadata.rangeMax,
+        alphaEpsilon: frameSnapshot.settings.alphaEpsilon
       )
     } catch {
       logger?.error("Failed to update render transfer functions: \(error.localizedDescription)")

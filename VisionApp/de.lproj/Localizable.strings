@@ -400,6 +400,8 @@
 "settings_toggle_autoload_transform" = "Transformation automatisch laden und speichern";
 "settings_toggle_disable_foveation" = "Foveation deaktivieren";
 "settings_toggle_sample_jitter" = "Zufällige Sampling-Phase";
+"Alpha epsilon" = "Alpha-Epsilon";
+"Bricks with TF alpha below this threshold may be skipped. The transfer function stays unchanged. Zero disables the threshold." = "Bricks mit TF-Alpha unterhalb dieses Schwellwerts können übersprungen werden. Die Transferfunktion bleibt unverändert. Bei 0 ist der Schwellwert deaktiviert.";
 "settings_toggle_quick_marker" = "Quick Marker";
 "settings_quick_marker_info_button" = "Quick-Marker-Info";
 "settings_quick_marker_info_title" = "Quick Marker";

@@ -281,6 +281,9 @@ struct SettingsView: View {
                        step: 0.1,
                        format: "%.1f")
       toggleRow("Randomized sample phase", isOn: $appSettings.sampleJitter)
+      doubleStepperRow("Alpha epsilon", value: $appSettings.alphaEpsilon,
+                       range: 0...1, step: 0.001, format: "%.3f")
+        .help("Bricks with TF alpha below this threshold may be skipped. The transfer function stays unchanged. Zero disables the threshold.")
       if appSettings.oversamplingMode == OversamplingMode.dynamicMode.rawValue {
         intStepperRow("Drop FPS",
                       value: $appSettings.dropFPS,

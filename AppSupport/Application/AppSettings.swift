@@ -131,6 +131,7 @@ final class AppSettings: ObservableObject {
     "atlasSizeMB": defaultAtlasSizeMB,
     "oversampling": defaultOversampling,
     "sampleJitter": false,
+    "alphaEpsilon": 0.0,
     "showBrickVisualization": false,
     "showLogButton": false,
     "hideBuiltInDatasets": false,
@@ -200,6 +201,7 @@ final class AppSettings: ObservableObject {
   @AppStorage("atlasSizeMB") var atlasSizeMB: Int = AppSettings.int("atlasSizeMB")
   @AppStorage("oversampling") var oversampling: Double = AppSettings.double("oversampling")
   @AppStorage("sampleJitter") var sampleJitter: Bool = AppSettings.bool("sampleJitter")
+  @AppStorage("alphaEpsilon") var alphaEpsilon: Double = AppSettings.double("alphaEpsilon")
   @AppStorage("showBrickVisualization")
   var showBrickVisualization: Bool = AppSettings.bool("showBrickVisualization")
   @AppStorage("showLogButton") var showLogButton: Bool = AppSettings.bool("showLogButton")
@@ -376,6 +378,7 @@ final class AppSettings: ObservableObject {
   func resetRenderingDefaults() {
     oversampling = Self.doubleDefault("oversampling")
     sampleJitter = Self.boolDefault("sampleJitter")
+    alphaEpsilon = Self.doubleDefault("alphaEpsilon")
     oversamplingMode = Self.stringDefault("oversamplingMode")
     dropFPS = Self.intDefault("dropFPS")
     recoveryFPS = Self.intDefault("recoveryFPS")

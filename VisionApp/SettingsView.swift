@@ -392,6 +392,15 @@ struct SettingsView: View {
                 }
 
                 Toggle("settings_toggle_sample_jitter", isOn: $storedAppModel.sampleJitter)
+                Stepper(value: $storedAppModel.alphaEpsilon, in: 0...1, step: 0.001) {
+                  HStack {
+                    Text("Alpha epsilon")
+                    Spacer()
+                    Text(storedAppModel.alphaEpsilon, format: .number.precision(.fractionLength(3)))
+                      .monospacedDigit()
+                  }
+                }
+                .help("Bricks with TF alpha below this threshold may be skipped. The transfer function stays unchanged. Zero disables the threshold.")
 
                 if storedAppModel.oversamplingMode == OversamplingMode.dynamicMode.rawValue {
                   HStack {

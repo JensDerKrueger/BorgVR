@@ -13058,6 +13058,64 @@
         }
       }
     },
+    "Alpha epsilon": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alpha epsilon"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alpha-Epsilon"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Epsilon alpha"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Épsilon alfa"
+          }
+        }
+      }
+    },
+    "Bricks with TF alpha below this threshold may be skipped. The transfer function stays unchanged. Zero disables the threshold.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bricks with TF alpha below this threshold may be skipped. The transfer function stays unchanged. Zero disables the threshold."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bricks mit TF-Alpha unterhalb dieses Schwellwerts können übersprungen werden. Die Transferfunktion bleibt unverändert. Bei 0 ist der Schwellwert deaktiviert."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Les briques dont l’alpha TF est inférieur à ce seuil peuvent être ignorées. La fonction de transfert reste inchangée. La valeur 0 désactive le seuil."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Los bloques con alfa TF inferior a este umbral pueden omitirse. La función de transferencia no cambia. El valor 0 desactiva el umbral."
+          }
+        }
+      }
+    },
     "Randomized sample phase" : {
       "localizations" : {
         "de" : {

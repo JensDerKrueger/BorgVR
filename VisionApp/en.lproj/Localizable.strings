@@ -397,6 +397,8 @@
 "settings_toggle_autoload_transform" = "Automatically Load and Save Transformation";
 "settings_toggle_disable_foveation" = "Disable Foveation";
 "settings_toggle_sample_jitter" = "Randomized Sample Phase";
+"Alpha epsilon" = "Alpha epsilon";
+"Bricks with TF alpha below this threshold may be skipped. The transfer function stays unchanged. Zero disables the threshold." = "Bricks with TF alpha below this threshold may be skipped. The transfer function stays unchanged. Zero disables the threshold.";
 "settings_toggle_quick_marker" = "Quick Marker";
 "settings_quick_marker_info_button" = "Quick Marker info";
 "settings_quick_marker_info_title" = "Quick Marker";

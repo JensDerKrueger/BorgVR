@@ -55,12 +55,13 @@ class TransferFunction1D: Equatable {
   /// Incremented whenever the sample data changes so views can redraw without hashing the array.
   private(set) var revision: UInt64 = 0
 
-  /// The minimum index with a non-zero alpha value.
+  /// The minimum index whose alpha contributes to the brick visibility test.
   private(set) var minIndex: Int = -1
-  /// The maximum index with a non-zero alpha value.
+  /// The maximum index whose alpha contributes to the brick visibility test.
   private(set) var maxIndex: Int = -1
+  private var alphaEpsilon: Float = 0
 
-  /// A bias factor used for mapping data indices.
+  /// Raw scalar width of one TF texel, used by the linear-filter support bounds.
   private var bias: Float = 1.0
   /// A factor used for adjusting texture lookup.
   private(set) var textureBias: Float = 1.0
@@ -101,6 +102,7 @@ class TransferFunction1D: Equatable {
     self.revision = other.revision
     self.minIndex = other.minIndex
     self.maxIndex = other.maxIndex
+    self.alphaEpsilon = other.alphaEpsilon
     self.texture = nil
     self.textureNeedsUpload = true
     self.device = nil
@@ -268,7 +270,7 @@ class TransferFunction1D: Equatable {
    */
   func updateRanges(minValue: Int, maxValue: Int, rangeMax: Int) {
     let safeMaximum = max(maxValue, 1)
-    bias = Float(safeMaximum) / Float(max(data.count - 1, 1))
+    bias = Float(safeMaximum) / Float(max(data.count, 1))
     textureBias = Float(max(rangeMax, 1)) / Float(safeMaximum)
   }
 
@@ -528,14 +530,14 @@ class TransferFunction1D: Equatable {
   /**
    Updates the minimum and maximum indices based on the alpha channel values.
 
-   Only indices with a non-zero alpha value are considered.
+   Only nonzero alpha values at or above the emptiness threshold are considered.
    */
   private func updateMinMaxIndices() {
     var newMin: Int? = nil
     var newMax: Int? = nil
 
     for (index, value) in data.enumerated() {
-      if value.w > 0 {
+      if value.w > 0 && Float(value.w) / 255 >= alphaEpsilon {
         if newMin == nil {
           newMin = index
         }
@@ -545,6 +547,14 @@ class TransferFunction1D: Equatable {
 
     self.minIndex = newMin ?? -1
     self.maxIndex = newMax ?? -1
+  }
+
+  /// Changes only brick classification; sample data and the GPU texture stay unchanged.
+  func updateEmptinessThreshold(alphaEpsilon: Float) {
+    let epsilon = alphaEpsilon.isFinite ? min(max(alphaEpsilon, 0), 1) : 0
+    guard self.alphaEpsilon != epsilon else { return }
+    self.alphaEpsilon = epsilon
+    updateMinMaxIndices()
   }
 
   /**
@@ -652,8 +662,11 @@ class TransferFunction1D: Equatable {
     let range = brickMetadata.componentRanges[component]
     let minBrickValue = range.minValue
     let maxBrickValue = range.maxValue
-    return (minBrickValue > Int(ceil(Float(self.maxIndex) * bias))) ||
-    (maxBrickValue < Int(Float(self.minIndex) * bias))
+    // Normalized texture sampling places texel centers at (index + 0.5) / count.
+    // Linear filtering extends each nonzero texel's support by one texel in either direction.
+    let minimumVisibleValue = ((Float(minIndex) - 0.5) * bias).nextDown
+    let maximumVisibleValue = ((Float(maxIndex) + 1.5) * bias).nextUp
+    return Float(minBrickValue) > maximumVisibleValue || Float(maxBrickValue) < minimumVisibleValue
   }
 
   /// Serializes the transfer function into a Data object.
@@ -789,12 +802,17 @@ final class RenderTransferFunctionSet {
 
   func synchronize(
     with snapshots: [BorgVRTransferFunctionSnapshot],
-    minValue: Int,
-    maxValue: Int,
-    rangeMax: Int
+    componentRanges: [BORGVRComponentRange],
+    rangeMax: Int,
+    alphaEpsilon: Float = 0
   ) throws {
     activeCount = min(max(snapshots.count, 1), transferFunctions.count)
     for snapshot in snapshots where transferFunctions.indices.contains(snapshot.channel) {
+      guard componentRanges.indices.contains(snapshot.channel) else {
+        throw TransferFunction1DError.mismatchedDataCount(
+          expected: snapshot.channel + 1, found: componentRanges.count
+        )
+      }
       if revisions[snapshot.channel] != snapshot.revision {
         if transferFunctions[snapshot.channel].data.count != snapshot.samples.count {
           let replacement = TransferFunction1D(count: snapshot.samples.count)
@@ -804,9 +822,11 @@ final class RenderTransferFunctionSet {
         try transferFunctions[snapshot.channel].updateData(with: snapshot.samples)
         revisions[snapshot.channel] = snapshot.revision
       }
+      transferFunctions[snapshot.channel].updateEmptinessThreshold(alphaEpsilon: alphaEpsilon)
+      let range = componentRanges[snapshot.channel]
       transferFunctions[snapshot.channel].updateRanges(
-        minValue: minValue,
-        maxValue: maxValue,
+        minValue: range.minValue,
+        maxValue: range.maxValue,
         rangeMax: rangeMax
       )
     }

@@ -65,6 +65,7 @@ final class StoredAppModel: ObservableObject {
     "atlasSizeMB": 1500,
     "oversampling": 1.0,
     "sampleJitter": false,
+    "alphaEpsilon": 0.0,
     "oversamplingMode": OversamplingMode.dynamicMode.rawValue,
     "dropFPS": 20,
     "recoveryFPS": 100,
@@ -202,6 +203,7 @@ final class StoredAppModel: ObservableObject {
   @AppStorage("oversampling") var oversampling: Double = StoredAppModel.double("oversampling")
   /// Whether to randomize the per-ray sampling phase.
   @AppStorage("sampleJitter") var sampleJitter: Bool = StoredAppModel.bool("sampleJitter")
+  @AppStorage("alphaEpsilon") var alphaEpsilon: Double = StoredAppModel.double("alphaEpsilon")
   /// The oversampling mode ("static" or "dynamic").
   @AppStorage("oversamplingMode") var oversamplingMode: String = StoredAppModel.string("oversamplingMode")
   /// Target frames per second below which the step size is increase.

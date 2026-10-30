@@ -397,6 +397,8 @@
 "settings_toggle_autoload_transform" = "Charger et enregistrer automatiquement la transformation";
 "settings_toggle_disable_foveation" = "Désactiver la fovéation";
 "settings_toggle_sample_jitter" = "Phase d’échantillonnage aléatoire";
+"Alpha epsilon" = "Epsilon alpha";
+"Bricks with TF alpha below this threshold may be skipped. The transfer function stays unchanged. Zero disables the threshold." = "Les briques dont l’alpha TF est inférieur à ce seuil peuvent être ignorées. La fonction de transfert reste inchangée. La valeur 0 désactive le seuil.";
 "settings_toggle_quick_marker" = "Marqueur rapide";
 "settings_quick_marker_info_button" = "Infos sur le marqueur rapide";
 "settings_quick_marker_info_title" = "Marqueur rapide";

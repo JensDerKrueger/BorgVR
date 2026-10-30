@@ -231,9 +231,9 @@ final class ScreenVolumeRendererCore {
       if let metadata = dataset?.getMetadata() {
         try renderTransferFunctions?.synchronize(
           with: frame.transferFunctions,
-          minValue: metadata.minValue,
-          maxValue: metadata.maxValue,
-          rangeMax: metadata.rangeMax
+          componentRanges: metadata.componentRanges,
+          rangeMax: metadata.rangeMax,
+          alphaEpsilon: frame.settings.alphaEpsilon
         )
       }
     } catch {

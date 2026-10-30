@@ -528,6 +528,8 @@
 "Oversampling mode" = "Modo de sobremuestreo";
 "Oversampling factor" = "Factor de sobremuestreo";
 "Randomized sample phase" = "Fase de muestreo aleatoria";
+"Alpha epsilon" = "Épsilon alfa";
+"Bricks with TF alpha below this threshold may be skipped. The transfer function stays unchanged. Zero disables the threshold." = "Los bloques con alfa TF inferior a este umbral pueden omitirse. La función de transferencia no cambia. El valor 0 desactiva el umbral.";
 "Drop FPS" = "FPS para reducir";
 "Recovery FPS" = "FPS de recuperación";
 "Log level" = "Nivel de registro";

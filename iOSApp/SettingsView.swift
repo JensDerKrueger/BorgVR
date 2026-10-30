@@ -406,6 +406,15 @@ struct SettingsView: View {
         }
       }
       Toggle("Randomized sample phase", isOn: $appSettings.sampleJitter)
+      Stepper(value: $appSettings.alphaEpsilon, in: 0...1, step: 0.001) {
+        HStack {
+          Text("Alpha epsilon")
+          Spacer()
+          Text(appSettings.alphaEpsilon, format: .number.precision(.fractionLength(3)))
+            .monospacedDigit()
+        }
+      }
+      .help("Bricks with TF alpha below this threshold may be skipped. The transfer function stays unchanged. Zero disables the threshold.")
       resetButton(for: .rendering)
     }
   }
