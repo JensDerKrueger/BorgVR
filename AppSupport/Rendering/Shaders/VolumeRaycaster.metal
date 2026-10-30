@@ -836,8 +836,8 @@ fragment VolumeFragmentOutput VOLUME_FRAGMENT_SHADER_ISO_NAME(
 /**
  Visualizes brick occupancy by coloring empty vs. loaded bricks along the ray.
 
- - If a brick is empty, adds a semi-transparent green.
- - If loaded, adds a semi-transparent red.
+ - Empty bricks are green, resident bricks red, and missing bricks blue.
+ - Empty runs are not coalesced: every brick must contribute the same weight.
  */
 fragment VolumeFragmentOutput VOLUME_FRAGMENT_SHADER_BRICK_VIS_NAME(
                                       VertexToFragment in [[stage_in]] VOLUME_SHADER_AMP_PARAMETER,
@@ -873,11 +873,12 @@ fragment VolumeFragmentOutput VOLUME_FRAGMENT_SHADER_BRICK_VIS_NAME(
                                             currentPos, iLOD, direction, inverseDirection,
                                             uniforms.cubeBounds,
                                             brickMeta, levelData,
-                                            hashBuffer, true
+                                            hashBuffer, true, false
                                             );
 
-    // Color code: empty bricks green, loaded bricks red
-    if (brickResult.empty) {
+    if (brickResult.substitute) {
+      accColor += half4(0, 0, 0.1, 0.1);
+    } else if (brickResult.empty) {
       accColor += half4(0, 0.1, 0, 0.1);
     } else {
       accColor += half4(0.1, 0, 0, 0.1);

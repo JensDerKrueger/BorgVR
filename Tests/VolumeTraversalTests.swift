@@ -45,6 +45,34 @@ private enum VolumeTraversalTests {
       float4 entry, exit, boundsMin, boundsMax;
       uint4 options;
     };
+    kernel void compareBrickVisualization(
+      device const LevelData *levels [[buffer(0)]],
+      device const uint *metadata [[buffer(1)]],
+      device atomic_uint *requests [[buffer(2)]],
+      device uint4 *results [[buffer(3)]],
+      constant uint &brickCount [[buffer(4)]],
+      uint index [[thread_position_in_grid]]) {
+      float3 entry = float3(0, 0.5 / levels[0].fractionalBrickLayout.y,
+                              0.5 / levels[0].fractionalBrickLayout.z);
+      float3 direction = float3(1, 0, 0);
+      float3 inverseDirection = inverseBrickRayDirection(direction);
+      float3 bounds[2] = {float3(0), float3(1)};
+      float3 position = entry;
+      float t = 0;
+      uint4 counts = uint4(0);
+      for (uint step = 0; step < MAX_ITERATIONS && t < 0.9999; ++step) {
+        auto brick = getBrick(position, 0, direction, inverseDirection, bounds,
+          metadata + (index & 1) * brickCount, levels, requests, true, index >= 2);
+        if (brick.substitute) ++counts.z;
+        else if (brick.empty) ++counts.y;
+        else ++counts.x;
+        ++counts.w;
+        position = brick.normExitCoords;
+        t += brick.rayExitDelta;
+      }
+      results[index] = counts;
+    }
+
     kernel void compareTraversal(
       device const TraversalCase *cases [[buffer(0)]],
       device const LevelData *levels [[buffer(1)]],
@@ -128,6 +156,71 @@ private enum VolumeTraversalTests {
       results[index] = float4(maxExitError, maxPoolError, maxParameterError, float(failure));
     }
     """
+
+  private static func brickVisualization(
+    device: MTLDevice, queue: MTLCommandQueue, library: MTLLibrary,
+    levels: [TraversalLevel], counts: [SIMD3<Int>], brickCount: Int
+  ) throws {
+    var metadata = [UInt32](repeating: 3, count: brickCount * 2)
+    func index(_ lod: Int, _ x: Int, _ y: Int, _ z: Int) -> Int {
+      Int(levels[lod].prevBricks) + x + counts[lod].x * (y + counts[lod].y * z)
+    }
+    // Both rays cross the same two empty bricks. Only off-ray children become
+    // empty in the second scenario, allowing their parent to become skippable.
+    for scenario in 0..<2 {
+      let offset = scenario * brickCount
+      for z in 0..<(scenario + 1) { for y in 0..<(scenario + 1) { for x in 0..<2 {
+        metadata[offset + index(0, x, y, z)] = 1
+      } } }
+      for lod in 1..<levels.count {
+        let count = counts[lod], children = counts[lod - 1]
+        for z in 0..<count.z { for y in 0..<count.y { for x in 0..<count.x {
+          var empty = true
+          for cz in (2 * z)..<min(2 * z + 2, children.z) {
+            for cy in (2 * y)..<min(2 * y + 2, children.y) {
+              for cx in (2 * x)..<min(2 * x + 2, children.x) {
+                empty = empty && metadata[offset + index(lod - 1, cx, cy, cz)] == 1
+              }
+            }
+          }
+          if empty { metadata[offset + index(lod, x, y, z)] = 1 }
+        } } }
+      }
+    }
+    func buffer<T>(_ values: [T]) -> MTLBuffer {
+      values.withUnsafeBytes {
+        device.makeBuffer(bytes: $0.baseAddress!, length: $0.count, options: .storageModeShared)!
+      }
+    }
+    let pipeline = try device.makeComputePipelineState(
+      function: library.makeFunction(name: "compareBrickVisualization")!)
+    let requests = buffer([UInt32](repeating: .max, count: 64))
+    let output = buffer([SIMD4<UInt32>](repeating: .zero, count: 4))
+    let inputs = [buffer(levels), buffer(metadata), requests, output]
+    let command = queue.makeCommandBuffer()!
+    let encoder = command.makeComputeCommandEncoder()!
+    encoder.setComputePipelineState(pipeline)
+    for (i, input) in inputs.enumerated() { encoder.setBuffer(input, offset: 0, index: i) }
+    var count = UInt32(brickCount)
+    encoder.setBytes(&count, length: MemoryLayout<UInt32>.size, index: 4)
+    encoder.dispatchThreads(MTLSize(width: 4, height: 1, depth: 1),
+      threadsPerThreadgroup: MTLSize(width: 4, height: 1, depth: 1))
+    encoder.endEncoding()
+    command.commit()
+    command.waitUntilCompleted()
+    if let error = command.error { throw error }
+    let results = output.contents().bindMemory(to: SIMD4<UInt32>.self, capacity: 4)
+    let expected = SIMD4<UInt32>(UInt32(counts[0].x - 2), 2, 0, UInt32(counts[0].x))
+    try require(results[0] == expected && results[1] == expected,
+      "Brick visualization changed with off-ray emptiness: \(results[0]), \(results[1]); expected \(expected)")
+    if levels[0].fractionalBrickLayout.x == 2 * levels[1].fractionalBrickLayout.x {
+      try require(results[3].y < results[2].y,
+        "Expected hierarchical traversal to reproduce lost green contributions: \(results[2]), \(results[3])")
+    }
+    let requested = requests.contents().bindMemory(to: UInt32.self, capacity: 64)
+    try require((0..<64).allSatisfy { requested[$0] == .max },
+      "Brick visualization must not request missing bricks")
+  }
 
   static func main() throws {
     guard let device = MTLCreateSystemDefaultDevice(), let queue = device.makeCommandQueue() else {
@@ -242,6 +335,10 @@ private enum VolumeTraversalTests {
           "VOLUME_SIZE": NSString(string: "float3(1)")
         ]
         let library = try device.makeLibrary(source: shader, options: options)
+        if counts[0].x >= 3 && counts[0].y >= 2 && counts[0].z >= 2 {
+          try brickVisualization(device: device, queue: queue, library: library,
+            levels: levels, counts: counts, brickCount: brickCount)
+        }
         let pipeline = try device.makeComputePipelineState(function: library.makeFunction(name: "compareTraversal")!)
         func buffer<T>(_ values: [T]) -> MTLBuffer {
           values.withUnsafeBytes {

@@ -239,7 +239,6 @@
 		5655824B2D4E5D6F008E7CE6 /* BorgVR Server.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "BorgVR Server.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		56730FE22E6B78990091976B /* c60_32.data */ = {isa = PBXFileReference; lastKnownFileType = file; path = c60_32.data; sourceTree = "<group>"; };
 		56730FE42E6B79000091976B /* head_32.data */ = {isa = PBXFileReference; lastKnownFileType = file; path = head_32.data; sourceTree = "<group>"; };
-		569701382D9D8F1400BB74CC /* Todo.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = Todo.txt; sourceTree = "<group>"; };
 		569701392D9D8F3E00BB74CC /* readme.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = readme.txt; sourceTree = "<group>"; };
 		569EA3F62CD449C400D8FADD /* TerminalConverterApp */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = TerminalConverterApp; sourceTree = BUILT_PRODUCTS_DIR; };
 		57A000202E70000200000001 /* FilePickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FilePickerView.swift; sourceTree = "<group>"; };
@@ -564,7 +563,6 @@
 				56730FE22E6B78990091976B /* c60_32.data */,
 				56730FE42E6B79000091976B /* head_32.data */,
 				569701392D9D8F3E00BB74CC /* readme.txt */,
-				569701382D9D8F1400BB74CC /* Todo.txt */,
 				560B8BE72E5C57580042E45B /* PrivacyInfo.xcprivacy */,
 				560B90002E9150000042E45B /* web */,
 				560C70002F20000100000001 /* html */,

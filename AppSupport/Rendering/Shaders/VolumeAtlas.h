@@ -130,7 +130,8 @@ BrickInformation getBrick(float3 normEntryCoords, uint iLOD,
                           device const uint *brickMeta,
                           device const LevelData *levelArray,
                           device atomic_uint* hashBuffer,
-                          bool dontRequest) {
+                          bool dontRequest,
+                          bool allowEmptySpaceLeaping = true) {
 
   BrickInformation info;
   info.LOD = iLOD;
@@ -171,7 +172,7 @@ BrickInformation getBrick(float3 normEntryCoords, uint iLOD,
   // next line check for BI_EMPTY or BI_CHILD_EMPTY (BI_MISSING is
   // excluded by code above!)
   info.empty = (brickInfo <= BI_EMPTY);
-  if (info.empty) {
+  if (info.empty && allowEmptySpaceLeaping) {
     // when we find an empty brick check if the lower resolutions are also empty
     // this allows us to potentially skip a larger region
     for (uint lowResLOD = info.LOD+1; lowResLOD<LEVEL_COUNT;++lowResLOD) {
