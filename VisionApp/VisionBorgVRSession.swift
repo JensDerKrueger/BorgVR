@@ -261,6 +261,8 @@ extension BorgVRSession where VisualizationState == SharedAppModel,
           settings: BorgVRRenderSettingsSnapshot(
             sampleJitter: storedAppModel.sampleJitter,
             alphaEpsilon: Float(storedAppModel.alphaEpsilon),
+            subbrickSkipping: storedAppModel.subbrickSkipping,
+            opacityAdaptiveSampling: storedAppModel.opacityAdaptiveSampling,
             transferFunctionDisplayMode: storedAppModel.tfMode,
             purgeAtlas: sharedAppModel.purgeAtlas,
             rotationCaptureRequestID: runtimeAppModel.rotationCaptureRequestID

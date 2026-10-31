@@ -116,6 +116,9 @@ PoolBrickInformation normCoordsToPoolCoords(float3 normEntryCoords,
 struct BrickInformation {
   uint LOD;
   uint brickIndex;
+#if VOLUME_SUBBRICK_SKIPPING
+  uint pageIndex;
+#endif
   bool empty;
   bool substitute;
   float rayExitDelta;       // increment of the original entry-to-exit ray parameter
@@ -131,7 +134,7 @@ BrickInformation getBrick(float3 normEntryCoords, uint iLOD,
                           device const LevelData *levelArray,
                           device atomic_uint* hashBuffer,
                           bool dontRequest,
-                          bool allowEmptySpaceLeaping = true) {
+                          bool useResidentFallback = false) {
 
   BrickInformation info;
   info.LOD = iLOD;
@@ -147,32 +150,31 @@ BrickInformation getBrick(float3 normEntryCoords, uint iLOD,
   info.substitute = brickInfo == BI_MISSING;
 
   // cache miss
-  if (!dontRequest && brickInfo == BI_MISSING) {
-    reportMissingBrick(brickIndex, hashBuffer);
+  if ((!dontRequest || useResidentFallback) && brickInfo == BI_MISSING) {
+    if (!dontRequest) reportMissingBrick(brickIndex, hashBuffer);
 
     // look for lower res
     uint startLOD = info.LOD;
     int lastBrickIndex = brickIndex;
-    do {
+    while (brickInfo == BI_MISSING && info.LOD + 1 < LEVEL_COUNT) {
       lastBrickIndex = brickIndex;
       info.LOD++;
       brickCoords = computeBrickCoords(normEntryCoords, levelArray,
                                        info.LOD, direction);
       brickIndex  = getBrickIndex(brickCoords, levelArray);
       brickInfo   = brickMeta[brickIndex];
-    } while (brickInfo == BI_MISSING);
+    }
 
 #if REQUEST_LOWRES_LOD == 1
-    if(startLOD < info.LOD) {
+    if(!dontRequest && startLOD < info.LOD) {
       reportMissingBrick(lastBrickIndex,hashBuffer);
     }
 #endif
   }
 
-  // next line check for BI_EMPTY or BI_CHILD_EMPTY (BI_MISSING is
-  // excluded by code above!)
+  // Missing data also skips sampling when no resident fallback is available.
   info.empty = (brickInfo <= BI_EMPTY);
-  if (info.empty && allowEmptySpaceLeaping) {
+  if (info.empty) {
     // when we find an empty brick check if the lower resolutions are also empty
     // this allows us to potentially skip a larger region
     for (uint lowResLOD = info.LOD+1; lowResLOD<LEVEL_COUNT;++lowResLOD) {
@@ -196,6 +198,10 @@ BrickInformation getBrick(float3 normEntryCoords, uint iLOD,
   info.normExitCoords = normEntryCoords + info.rayExitDelta * direction;
   if (info.empty) return info;
 
+#if VOLUME_SUBBRICK_SKIPPING
+  info.pageIndex = brickInfo - BI_FLAG_COUNT;
+#endif
+
   info.poolBrickInfo = normCoordsToPoolCoords(normEntryCoords,
                                               info.normExitCoords,
                                               corners,
@@ -209,6 +215,85 @@ uint computeLOD(float dist) {
   return min(uint(LEVEL_COUNT-1),
              uint(log2(LOD_FACTOR*(dist)/LEVEL_ZERO_WORLD_SPACE_ERROR)));
 }
+
+#if VOLUME_SUBBRICK_SKIPPING
+#ifndef VOLUME_SUBBRICK_DIVISIONS
+#define VOLUME_SUBBRICK_DIVISIONS 2
+#endif
+#define SUBBRICK_CELL_COUNT (VOLUME_SUBBRICK_DIVISIONS * VOLUME_SUBBRICK_DIVISIONS * VOLUME_SUBBRICK_DIVISIONS)
+#define SUBBRICK_MASK_STRIDE (1 + (SUBBRICK_CELL_COUNT + 31) / 32)
+
+bool subbrickCellVisible(device const uint *masks, uint page, uint cell) {
+  return (masks[page * SUBBRICK_MASK_STRIDE + 1 + cell / 32] & (1u << (cell & 31))) != 0;
+}
+
+int3 subbrickParallelCell(float3 local) {
+  float overlap = float((BRICK_SIZE - BRICK_INNER_SIZE) / 2);
+  uint3 voxel = uint3(max(local - overlap, float3(0)));
+  return int3(min(((voxel + 1) * VOLUME_SUBBRICK_DIVISIONS - 1) / BRICK_INNER_SIZE,
+                  uint3(VOLUME_SUBBRICK_DIVISIONS - 1)));
+}
+
+struct SubbrickSampleTraversal {
+  int3 cuts[VOLUME_SUBBRICK_DIVISIONS > 1 ? VOLUME_SUBBRICK_DIVISIONS - 1 : 1];
+  int3 initialCell;
+  int3 direction;
+};
+
+SubbrickSampleTraversal prepareSubbrickTraversal(PoolBrickInformation pool, uint pageIndex,
+                                                 int steps, float phase) {
+  float3 start = pool.poolEntryCoords * POOL_SIZE - float3(infoToCoords(pageIndex + BI_FLAG_COUNT) * BRICK_SIZE);
+  float3 delta = (pool.poolExitCoords - pool.poolEntryCoords) * POOL_SIZE;
+  bool3 changing = abs(delta) > 1e-7;
+  SubbrickSampleTraversal result;
+  result.initialCell = select(subbrickParallelCell(start),
+    select(int3(0), int3(VOLUME_SUBBRICK_DIVISIONS - 1), delta < 0), changing);
+  result.direction = select(int3(0), select(int3(1), int3(-1), delta < 0), changing);
+  #pragma unroll
+  for (int plane = 1; plane < VOLUME_SUBBRICK_DIVISIONS; ++plane) {
+    float boundary = float((BRICK_SIZE - BRICK_INNER_SIZE) / 2 +
+                            plane * BRICK_INNER_SIZE / VOLUME_SUBBRICK_DIVISIONS);
+    float3 cut = ceil((boundary - start) / select(float3(1), delta, changing) * float(steps) - phase);
+    result.cuts[plane - 1] = select(int3(steps), int3(clamp(cut, float3(0), float3(steps))), changing);
+  }
+  return result;
+}
+
+// Return a span of the original sample indices, never a new sampling phase.
+int subbrickSampleEnd(SubbrickSampleTraversal traversal, int index, int steps,
+                      thread uint &cell) {
+  int3 coordinate = traversal.initialCell, ends = int3(steps);
+  #pragma unroll
+  for (int plane = 0; plane < VOLUME_SUBBRICK_DIVISIONS - 1; ++plane) {
+    bool3 crossed = int3(index) >= traversal.cuts[plane];
+    coordinate += int3(crossed) * traversal.direction;
+    ends = min(ends, select(traversal.cuts[plane], int3(steps), crossed));
+  }
+  cell = uint(coordinate.x + VOLUME_SUBBRICK_DIVISIONS *
+              (coordinate.y + VOLUME_SUBBRICK_DIVISIONS * coordinate.z));
+  return min(ends.x, min(ends.y, ends.z));
+}
+
+// Continuous traversal for the diagnostic view, including empty/missing bricks.
+float subbrickRayEnd(float3 start, float3 delta, float t, thread uint &cell) {
+  bool3 changing = abs(delta) > 1e-7;
+  int3 coordinate = select(subbrickParallelCell(start),
+    select(int3(0), int3(VOLUME_SUBBRICK_DIVISIONS - 1), delta < 0), changing);
+  int3 step = select(int3(0), select(int3(1), int3(-1), delta < 0), changing);
+  float3 end = float3(1);
+  for (int plane = 1; plane < VOLUME_SUBBRICK_DIVISIONS; ++plane) {
+    float boundary = float((BRICK_SIZE - BRICK_INNER_SIZE) / 2 +
+                            plane * BRICK_INNER_SIZE / VOLUME_SUBBRICK_DIVISIONS);
+    float3 cut = (boundary - start) / select(float3(1), delta, changing);
+    bool3 crossed = cut <= t;
+    coordinate += int3(crossed) * step;
+    end = min(end, select(float3(1), cut, changing & !crossed));
+  }
+  cell = uint(coordinate.x + VOLUME_SUBBRICK_DIVISIONS *
+              (coordinate.y + VOLUME_SUBBRICK_DIVISIONS * coordinate.z));
+  return min(end.x, min(end.y, end.z));
+}
+#endif
 
 float3 getSampleDelta() {
   return 1.0/POOL_SIZE;

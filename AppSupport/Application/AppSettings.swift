@@ -132,6 +132,8 @@ final class AppSettings: ObservableObject {
     "oversampling": defaultOversampling,
     "sampleJitter": false,
     "alphaEpsilon": 0.0,
+    "subbrickSkipping": true,
+    "opacityAdaptiveSampling": true,
     "showBrickVisualization": false,
     "showLogButton": false,
     "hideBuiltInDatasets": false,
@@ -202,6 +204,12 @@ final class AppSettings: ObservableObject {
   @AppStorage("oversampling") var oversampling: Double = AppSettings.double("oversampling")
   @AppStorage("sampleJitter") var sampleJitter: Bool = AppSettings.bool("sampleJitter")
   @AppStorage("alphaEpsilon") var alphaEpsilon: Double = AppSettings.double("alphaEpsilon")
+  @AppStorage("subbrickSkipping") var subbrickSkipping: Bool = AppSettings.bool("subbrickSkipping") {
+    didSet { objectWillChange.send() }
+  }
+  @AppStorage("opacityAdaptiveSampling") var opacityAdaptiveSampling: Bool = AppSettings.bool("opacityAdaptiveSampling") {
+    didSet { objectWillChange.send() }
+  }
   @AppStorage("showBrickVisualization")
   var showBrickVisualization: Bool = AppSettings.bool("showBrickVisualization")
   @AppStorage("showLogButton") var showLogButton: Bool = AppSettings.bool("showLogButton")
@@ -379,6 +387,8 @@ final class AppSettings: ObservableObject {
     oversampling = Self.doubleDefault("oversampling")
     sampleJitter = Self.boolDefault("sampleJitter")
     alphaEpsilon = Self.doubleDefault("alphaEpsilon")
+    subbrickSkipping = Self.boolDefault("subbrickSkipping")
+    opacityAdaptiveSampling = Self.boolDefault("opacityAdaptiveSampling")
     oversamplingMode = Self.stringDefault("oversamplingMode")
     dropFPS = Self.intDefault("dropFPS")
     recoveryFPS = Self.intDefault("recoveryFPS")

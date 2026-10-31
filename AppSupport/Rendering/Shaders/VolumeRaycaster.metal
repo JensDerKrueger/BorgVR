@@ -60,6 +60,14 @@ using namespace metal;
 #define VOLUME_SHADER_MARKER_ARGUMENT
 #endif
 
+#if VOLUME_SUBBRICK_SKIPPING
+#define VOLUME_SHADER_SUBBRICK_PARAMETER , device const uint *subbrickMasks [[buffer(FragmentBufferIndexSubbrickMasks)]], constant uint &subbrickEnabled [[buffer(FragmentBufferIndexSubbrickEnabled)]]
+#define VOLUME_SHADER_SUBBRICK_ARGUMENT , subbrickMasks, subbrickEnabled
+#else
+#define VOLUME_SHADER_SUBBRICK_PARAMETER
+#define VOLUME_SHADER_SUBBRICK_ARGUMENT
+#endif
+
 #ifndef VOLUME_VERTEX_SHADER_NAME
 #define VOLUME_VERTEX_SHADER_NAME volumeVertexShader
 #endif
@@ -273,6 +281,12 @@ vertex VertexToFragment VOLUME_VERTEX_SHADER_NAME(
 
 // MARK: - Transfer Function Fragment Shader
 
+// Integer spans stay on the base sampling lattice and stop at the current cell boundary.
+inline int opacitySamplingSpan(float accumulatedOpacity, int remaining) {
+  int span = accumulatedOpacity >= 0.85 ? 4 : (accumulatedOpacity >= 0.5 ? 2 : 1);
+  return min(span, remaining);
+}
+
 /**
  Performs volume raymarching with a 1D transfer function.
 
@@ -289,7 +303,7 @@ vertex VertexToFragment VOLUME_VERTEX_SHADER_NAME(
  - hashBuffer: Atomic hash table buffer for missing-brick tracking.
  - Returns: The accumulated RGBA color after compositing along the ray.
  */
-template<bool OpaqueGeometry>
+template<bool OpaqueGeometry, bool AdaptiveSampling = false>
 inline VolumeFragmentOutput raycastTransferFunction(
                                 VertexToFragment in, uint viewIndex,
                                 float markerDepth, float oversampling,
@@ -302,7 +316,11 @@ inline VolumeFragmentOutput raycastTransferFunction(
                                 device const FragmentUniformsArray& uniformsArray,
                                 device const LevelData* levelData,
                                 device const uint* brickMeta,
-                                device atomic_uint* hashBuffer) {
+                                device atomic_uint* hashBuffer
+#if VOLUME_SUBBRICK_SKIPPING
+                                , device const uint *subbrickMasks, uint subbrickEnabled
+#endif
+                                ) {
   FragmentUniforms uniforms = uniformsArray.uniforms[viewIndex];
   constexpr sampler s(address::clamp_to_border, filter::linear);
 
@@ -369,61 +387,87 @@ inline VolumeFragmentOutput raycastTransferFunction(
       float actualStepScale = segmentLength / max(float(iSteps) * stepSize, 1e-6);
       float ocFactor = float(1 << iLOD) * actualStepScale / oversampling;
 
-      // Sample along the ray segment in this brick
-      for (int i = 0; i < iSteps; ++i) {
-        float sampleT = (float(i) + samplePhase) / float(iSteps);
-        float3 sampleNormCoords = mix(
-                                      currentPos,
-                                      brickResult.normExitCoords,
-                                      sampleT
-                                      );
-        if (OpaqueGeometry && !stoppedAtOpaqueGeometry && markerDepth > 0.0 &&
-            sampleReachedMarker(markerDepthTest, mix(t, brickExitT, sampleT))) {
-          colorAtOpaqueGeometry = accColor;
-          positionAtOpaqueGeometry = interactionPosition;
-          stoppedAtOpaqueGeometry = true;
-        }
-        float3 poolCoords = mix(
-                                brickResult.poolBrickInfo.poolEntryCoords,
-                                brickResult.poolBrickInfo.poolExitCoords,
-                                sampleT
-                                );
-
-        float4 volumeValues = sampleVolumeComponents(
-          volumeAtlas, secondaryVolumeAtlas, s, poolCoords
-        );
-        TransferFunctionSamples transferSamples = sampleTransferFunctions(
-          volumeValues,
-          uniforms.transferBias,
-          s,
-          transferFunc,
-          transferFunc2,
-          transferFunc3,
-          transferFunc4
-        );
-        for (int channel = 0; channel < VOLUME_COMPONENT_COUNT; ++channel) {
-          float4 current = transferSamples.values[channel];
-          current.a = 1.0 - pow(1.0 - current.a, ocFactor);
-          float contribution = (1.0 - interactionOpacity) * current.a;
-          if (contribution > strongestContribution) {
-            strongestContribution = contribution;
-            interactionPosition = sampleNormCoords;
-          }
-          interactionOpacity += contribution;
-          if (!stoppedAtOpaqueGeometry) {
-            accColor = underFloat(current, accColor);
+      #if VOLUME_SUBBRICK_SKIPPING
+      uint visibility = subbrickEnabled ? subbrickMasks[brickResult.pageIndex * SUBBRICK_MASK_STRIDE] : 2u;
+      SubbrickSampleTraversal subbricks;
+      if (visibility == 1u) {
+        subbricks = prepareSubbrickTraversal(brickResult.poolBrickInfo,
+          brickResult.pageIndex, iSteps, samplePhase);
+      }
+      #endif
+      int segmentStart = 0;
+      #if VOLUME_SUBBRICK_SKIPPING
+      if (visibility == 0u) segmentStart = iSteps;
+      #endif
+      while (segmentStart < iSteps) {
+        int segmentEnd = iSteps;
+        #if VOLUME_SUBBRICK_SKIPPING
+        if (visibility == 1u) {
+          uint cell;
+          segmentEnd = subbrickSampleEnd(subbricks, segmentStart, iSteps, cell);
+          if (!subbrickCellVisible(subbrickMasks, brickResult.pageIndex, cell)) {
+            segmentStart = segmentEnd; continue;
           }
         }
+        #endif
+        for (int i = segmentStart; i < segmentEnd;) {
+          int span = AdaptiveSampling ? opacitySamplingSpan(interactionOpacity, segmentEnd - i) : 1;
+          float sampleOcFactor = ocFactor * float(span);
+          float sampleT = (float(i) + samplePhase * float(span)) / float(iSteps);
+          float3 sampleNormCoords = mix(
+                                        currentPos,
+                                        brickResult.normExitCoords,
+                                        sampleT
+                                        );
+          if (OpaqueGeometry && !stoppedAtOpaqueGeometry && markerDepth > 0.0 &&
+              sampleReachedMarker(markerDepthTest, mix(t, brickExitT, sampleT))) {
+            colorAtOpaqueGeometry = accColor;
+            positionAtOpaqueGeometry = interactionPosition;
+            stoppedAtOpaqueGeometry = true;
+          }
+          float3 poolCoords = mix(
+                                  brickResult.poolBrickInfo.poolEntryCoords,
+                                  brickResult.poolBrickInfo.poolExitCoords,
+                                  sampleT
+                                  );
 
-        // The visible color may stop at opaque geometry, while interaction depth
-        // keeps searching the volume independently.
-        if (interactionOpacity > 0.99) {
-          return visibleVolumeOutput(stoppedAtOpaqueGeometry, colorAtOpaqueGeometry, accColor,
-                                     uniforms, true, interactionPosition, positionAtOpaqueGeometry);
+          float4 volumeValues = sampleVolumeComponents(
+            volumeAtlas, secondaryVolumeAtlas, s, poolCoords
+          );
+          TransferFunctionSamples transferSamples = sampleTransferFunctions(
+            volumeValues,
+            uniforms.transferBias,
+            s,
+            transferFunc,
+            transferFunc2,
+            transferFunc3,
+            transferFunc4
+          );
+          for (int channel = 0; channel < VOLUME_COMPONENT_COUNT; ++channel) {
+            float4 current = transferSamples.values[channel];
+            current.a = 1.0 - pow(1.0 - current.a, sampleOcFactor);
+            float contribution = (1.0 - interactionOpacity) * current.a;
+            if (contribution > strongestContribution) {
+              strongestContribution = contribution;
+              interactionPosition = sampleNormCoords;
+            }
+            interactionOpacity += contribution;
+            if (!stoppedAtOpaqueGeometry) {
+              accColor = underFloat(current, accColor);
+            }
+          }
+
+          // The visible color may stop at opaque geometry, while interaction depth
+          // keeps searching the volume independently.
+          if (interactionOpacity > 0.99) {
+            return visibleVolumeOutput(stoppedAtOpaqueGeometry, colorAtOpaqueGeometry, accColor,
+                                       uniforms, true, interactionPosition, positionAtOpaqueGeometry);
+          }
+          i += span;
         }
+        segmentStart = segmentEnd;
       }
     }
-
     // Advance to the next brick
     currentPos = brickResult.normExitCoords;
     t = brickExitT;
@@ -455,7 +499,8 @@ fragment VolumeFragmentOutput VOLUME_FRAGMENT_SHADER_TF_NAME(
                                 device const uint* brickMeta [[buffer(FragmentBufferIndexBrickMeta)]],
                                 device atomic_uint* hashBuffer [[buffer(FragmentBufferIndexHashTable)]]
                                 VOLUME_SHADER_RATE_MAP_PARAMETER
-                                VOLUME_SHADER_MARKER_PARAMETER) {
+                                VOLUME_SHADER_MARKER_PARAMETER
+                                VOLUME_SHADER_SUBBRICK_PARAMETER) {
   float markerDepth = markerDepthAtFragment(in.position,
                                             uint(VOLUME_SHADER_UNIFORM_INDEX)
                                             VOLUME_SHADER_MARKER_ARGUMENT);
@@ -465,16 +510,30 @@ fragment VolumeFragmentOutput VOLUME_FRAGMENT_SHADER_TF_NAME(
                                              VOLUME_SHADER_RATE_MAP_ARGUMENT);
   // Specialize per ray: most pixels have no geometry depth and need no state
   // for stopping visible color while independently continuing the picking ray.
+  #if VOLUME_OPACITY_ADAPTIVE_SAMPLING
+  if (uniformsArray.uniforms[VOLUME_SHADER_UNIFORM_INDEX].opacityAdaptiveSampling != 0) {
+    if (markerDepth > 0.0) {
+      return raycastTransferFunction<true, true>(
+        in, uint(VOLUME_SHADER_UNIFORM_INDEX), markerDepth, oversampling,
+        volumeAtlas, secondaryVolumeAtlas, transferFunc, transferFunc2, transferFunc3, transferFunc4,
+        uniformsArray, levelData, brickMeta, hashBuffer VOLUME_SHADER_SUBBRICK_ARGUMENT);
+    }
+    return raycastTransferFunction<false, true>(
+      in, uint(VOLUME_SHADER_UNIFORM_INDEX), 0.0, oversampling,
+      volumeAtlas, secondaryVolumeAtlas, transferFunc, transferFunc2, transferFunc3, transferFunc4,
+      uniformsArray, levelData, brickMeta, hashBuffer VOLUME_SHADER_SUBBRICK_ARGUMENT);
+  }
+  #endif
   if (markerDepth > 0.0) {
     return raycastTransferFunction<true>(
       in, uint(VOLUME_SHADER_UNIFORM_INDEX), markerDepth, oversampling,
       volumeAtlas, secondaryVolumeAtlas, transferFunc, transferFunc2, transferFunc3, transferFunc4,
-      uniformsArray, levelData, brickMeta, hashBuffer);
+      uniformsArray, levelData, brickMeta, hashBuffer VOLUME_SHADER_SUBBRICK_ARGUMENT);
   }
   return raycastTransferFunction<false>(
     in, uint(VOLUME_SHADER_UNIFORM_INDEX), 0.0, oversampling,
     volumeAtlas, secondaryVolumeAtlas, transferFunc, transferFunc2, transferFunc3, transferFunc4,
-    uniformsArray, levelData, brickMeta, hashBuffer);
+    uniformsArray, levelData, brickMeta, hashBuffer VOLUME_SHADER_SUBBRICK_ARGUMENT);
 }
 
 /**
@@ -491,29 +550,25 @@ fragment VolumeFragmentOutput VOLUME_FRAGMENT_SHADER_TF_NAME(
  - hashBuffer: Atomic hash table buffer for missing-brick tracking.
  - Returns: The accumulated RGBA color after compositing along the ray.
  */
-fragment VolumeFragmentOutput VOLUME_FRAGMENT_SHADER_TF_LIGHTING_NAME(
-                                VertexToFragment in [[stage_in]] VOLUME_SHADER_AMP_PARAMETER,
-                                texture3d<float> volumeAtlas  [[texture(TextureIndexVolumeAtlas)]],
-                                texture3d<float> secondaryVolumeAtlas [[texture(TextureIndexVolumeAtlasSecondary)]],
-                                texture1d<half> transferFunc  [[texture(TextureIndexTransferFunction)]],
-                                texture1d<half> transferFunc2 [[texture(TextureIndexTransferFunction2)]],
-                                texture1d<half> transferFunc3 [[texture(TextureIndexTransferFunction3)]],
-                                texture1d<half> transferFunc4 [[texture(TextureIndexTransferFunction4)]],
-                                device const FragmentUniformsArray& uniformsArray [[buffer(FragmentBufferIndexUniforms)]],
-                                device const LevelData* levelData                [[buffer(FragmentBufferIndexLevelTable)]],
-                                device const uint* brickMeta                   [[buffer(FragmentBufferIndexBrickMeta)]],
-                                device atomic_uint* hashBuffer                   [[buffer(FragmentBufferIndexHashTable)]]
-                                VOLUME_SHADER_RATE_MAP_PARAMETER
-                                VOLUME_SHADER_MARKER_PARAMETER
+template<bool AdaptiveSampling = false>
+inline VolumeFragmentOutput raycastTransferFunctionLighting(
+                                VertexToFragment in, uint viewIndex,
+                                float markerDepth, float oversampling,
+                                texture3d<float> volumeAtlas,
+                                texture3d<float> secondaryVolumeAtlas,
+                                texture1d<half> transferFunc,
+                                texture1d<half> transferFunc2,
+                                texture1d<half> transferFunc3,
+                                texture1d<half> transferFunc4,
+                                device const FragmentUniformsArray& uniformsArray,
+                                device const LevelData* levelData,
+                                device const uint* brickMeta,
+                                device atomic_uint* hashBuffer
+#if VOLUME_SUBBRICK_SKIPPING
+                                , device const uint *subbrickMasks, uint subbrickEnabled
+#endif
                                 ) {
-  FragmentUniforms uniforms = uniformsArray.uniforms[VOLUME_SHADER_UNIFORM_INDEX];
-  float markerDepth = markerDepthAtFragment(in.position,
-                                            uint(VOLUME_SHADER_UNIFORM_INDEX)
-                                            VOLUME_SHADER_MARKER_ARGUMENT);
-  float oversampling = effectiveOversampling(uniforms.oversampling,
-                                             in.position,
-                                             uint(VOLUME_SHADER_UNIFORM_INDEX)
-                                             VOLUME_SHADER_RATE_MAP_ARGUMENT);
+  FragmentUniforms uniforms = uniformsArray.uniforms[viewIndex];
   constexpr sampler s(address::clamp_to_border, filter::linear);
 
   // Compute ray entry and exit in texture space
@@ -535,7 +590,7 @@ fragment VolumeFragmentOutput VOLUME_FRAGMENT_SHADER_TF_LIGHTING_NAME(
 
   float3 voxelSpaceDirection = transformToPoolSpace(direction, oversampling);
   float  stepSize            = length(voxelSpaceDirection);
-  float  samplePhase         = samplingPhase(uniforms, entryPoint, direction, uint(VOLUME_SHADER_UNIFORM_INDEX), 0.5);
+  float  samplePhase         = samplingPhase(uniforms, entryPoint, direction, viewIndex, 0.5);
 
   // Initialize ray marching
   float3 currentPos = entryPoint;
@@ -579,100 +634,127 @@ fragment VolumeFragmentOutput VOLUME_FRAGMENT_SHADER_TF_LIGHTING_NAME(
       float actualStepScale = segmentLength / max(float(iSteps) * stepSize, 1e-6);
       float ocFactor = float(1 << iLOD) * actualStepScale / oversampling;
 
-      // Sample along the ray segment in this brick
-      for (int i = 0; i < iSteps; ++i) {
-        float sampleT = (float(i) + samplePhase) / float(iSteps);
-        float3 sampleNormCoords = mix(
-                                      currentPos,
-                                      brickResult.normExitCoords,
-                                      sampleT
-                                      );
-        if (!stoppedAtOpaqueGeometry && markerDepth > 0.0 &&
-            sampleReachedMarker(markerDepthTest, mix(t, brickExitT, sampleT))) {
-          colorAtOpaqueGeometry = accColor;
-          positionAtOpaqueGeometry = interactionPosition;
-          stoppedAtOpaqueGeometry = true;
-        }
-        float3 poolCoords = mix(
-                                brickResult.poolBrickInfo.poolEntryCoords,
-                                brickResult.poolBrickInfo.poolExitCoords,
-                                sampleT
-                                );
-        float4 volumeValues = sampleVolumeComponents(
-          volumeAtlas, secondaryVolumeAtlas, s, poolCoords
-        );
-        TransferFunctionSamples transferSamples = sampleTransferFunctions(
-          volumeValues,
-          uniforms.transferBias,
-          s,
-          transferFunc,
-          transferFunc2,
-          transferFunc3,
-          transferFunc4
-        );
-        bool needsLighting = false;
-        for (int channel = 0; channel < VOLUME_COMPONENT_COUNT; ++channel) {
-          float correctedAlpha = 1.0 - pow(
-            1.0 - transferSamples.values[channel].a,
-            ocFactor
-          );
-          needsLighting = needsLighting || correctedAlpha > 0.01;
-        }
-
-        half3 posInView = half3(0.0);
-        ComponentGradients componentGradients;
-        if (needsLighting) {
-          componentGradients = computeComponentGradients(
-            poolCoords,
-            1.0 / float3(POOL_SIZE),
-            volumeAtlas,
-            secondaryVolumeAtlas,
-            s
-          );
-          posInView = half3((uniforms.modelView * float4((sampleNormCoords - 0.5),1)).xyz);
-        }
-
-        for (int channel = 0; channel < VOLUME_COMPONENT_COUNT; ++channel) {
-          float4 current = transferSamples.values[channel];
-          current.a = 1.0 - pow(1.0 - current.a, ocFactor);
-          float contribution = (1.0 - interactionOpacity) * current.a;
-          if (contribution > strongestContribution) {
-            strongestContribution = contribution;
-            interactionPosition = sampleNormCoords;
+      #if VOLUME_SUBBRICK_SKIPPING
+      uint visibility = subbrickEnabled ? subbrickMasks[brickResult.pageIndex * SUBBRICK_MASK_STRIDE] : 2u;
+      SubbrickSampleTraversal subbricks;
+      if (visibility == 1u) {
+        subbricks = prepareSubbrickTraversal(brickResult.poolBrickInfo,
+          brickResult.pageIndex, iSteps, samplePhase);
+      }
+      #endif
+      int segmentStart = 0;
+      #if VOLUME_SUBBRICK_SKIPPING
+      if (visibility == 0u) segmentStart = iSteps;
+      #endif
+      while (segmentStart < iSteps) {
+        int segmentEnd = iSteps;
+        #if VOLUME_SUBBRICK_SKIPPING
+        if (visibility == 1u) {
+          uint cell;
+          segmentEnd = subbrickSampleEnd(subbricks, segmentStart, iSteps, cell);
+          if (!subbrickCellVisible(subbrickMasks, brickResult.pageIndex, cell)) {
+            segmentStart = segmentEnd; continue;
           }
-          interactionOpacity += contribution;
-
-          if (current.a > 0.01) {
-            float3 normal = componentNormal(
-              componentGradients,
-              channel,
-              float3(1, 1, 1)
+        }
+        #endif
+        for (int i = segmentStart; i < segmentEnd;) {
+          int span = AdaptiveSampling ? opacitySamplingSpan(interactionOpacity, segmentEnd - i) : 1;
+          float sampleOcFactor = ocFactor * float(span);
+          float sampleT = (float(i) + samplePhase * float(span)) / float(iSteps);
+          float3 sampleNormCoords = mix(
+                                        currentPos,
+                                        brickResult.normExitCoords,
+                                        sampleT
+                                        );
+          if (!stoppedAtOpaqueGeometry && markerDepth > 0.0 &&
+              sampleReachedMarker(markerDepthTest, mix(t, brickExitT, sampleT))) {
+            colorAtOpaqueGeometry = accColor;
+            positionAtOpaqueGeometry = interactionPosition;
+            stoppedAtOpaqueGeometry = true;
+          }
+          float3 poolCoords = mix(
+                                  brickResult.poolBrickInfo.poolEntryCoords,
+                                  brickResult.poolBrickInfo.poolExitCoords,
+                                  sampleT
+                                  );
+          float4 volumeValues = sampleVolumeComponents(
+            volumeAtlas, secondaryVolumeAtlas, s, poolCoords
+          );
+          TransferFunctionSamples transferSamples = sampleTransferFunctions(
+            volumeValues,
+            uniforms.transferBias,
+            s,
+            transferFunc,
+            transferFunc2,
+            transferFunc3,
+            transferFunc4
+          );
+          bool needsLighting = false;
+          for (int channel = 0; channel < VOLUME_COMPONENT_COUNT; ++channel) {
+            float correctedAlpha = 1.0 - pow(
+              1.0 - transferSamples.values[channel].a,
+              sampleOcFactor
             );
-            half3 normalInView = half3(safeNormalize(
-              (uniforms.modelViewIT * float4(normal, 0)).xyz
-            ));
-            current.rgb = float3(lighting(
-                                            posInView,
-                                            normalInView,
-                                            half3(current.rgb),
-                                            half3(uniforms.lightDirection.xyz),
-                                            half3(uniforms.ambientLightColor.xyz),
-                                            half3(uniforms.diffuseLightColor.xyz),
-                                            half3(uniforms.specularLightColor.xyz)
-                                            ));
+            needsLighting = needsLighting || correctedAlpha > 0.01;
           }
 
-          if (!stoppedAtOpaqueGeometry) {
-            accColor = underFloat(current, accColor);
+          half3 posInView = half3(0.0);
+          ComponentGradients componentGradients;
+          if (needsLighting) {
+            componentGradients = computeComponentGradients(
+              poolCoords,
+              1.0 / float3(POOL_SIZE),
+              volumeAtlas,
+              secondaryVolumeAtlas,
+              s
+            );
+            posInView = half3((uniforms.modelView * float4((sampleNormCoords - 0.5),1)).xyz);
           }
-        }
 
-        // The visible color may stop at opaque geometry, while interaction depth
-        // keeps searching the volume independently.
-        if (interactionOpacity > 0.99) {
-          return visibleVolumeOutput(stoppedAtOpaqueGeometry, colorAtOpaqueGeometry, accColor,
-                                     uniforms, true, interactionPosition, positionAtOpaqueGeometry);
+          for (int channel = 0; channel < VOLUME_COMPONENT_COUNT; ++channel) {
+            float4 current = transferSamples.values[channel];
+            current.a = 1.0 - pow(1.0 - current.a, sampleOcFactor);
+            float contribution = (1.0 - interactionOpacity) * current.a;
+            if (contribution > strongestContribution) {
+              strongestContribution = contribution;
+              interactionPosition = sampleNormCoords;
+            }
+            interactionOpacity += contribution;
+
+            if (current.a > 0.01) {
+              float3 normal = componentNormal(
+                componentGradients,
+                channel,
+                float3(1, 1, 1)
+              );
+              half3 normalInView = half3(safeNormalize(
+                (uniforms.modelViewIT * float4(normal, 0)).xyz
+              ));
+              current.rgb = float3(lighting(
+                                              posInView,
+                                              normalInView,
+                                              half3(current.rgb),
+                                              half3(uniforms.lightDirection.xyz),
+                                              half3(uniforms.ambientLightColor.xyz),
+                                              half3(uniforms.diffuseLightColor.xyz),
+                                              half3(uniforms.specularLightColor.xyz)
+                                              ));
+            }
+
+            if (!stoppedAtOpaqueGeometry) {
+              accColor = underFloat(current, accColor);
+            }
+          }
+
+          // The visible color may stop at opaque geometry, while interaction depth
+          // keeps searching the volume independently.
+          if (interactionOpacity > 0.99) {
+            return visibleVolumeOutput(stoppedAtOpaqueGeometry, colorAtOpaqueGeometry, accColor,
+                                       uniforms, true, interactionPosition, positionAtOpaqueGeometry);
+          }
+          i += span;
         }
+        segmentStart = segmentEnd;
       }
     }
 
@@ -694,6 +776,40 @@ fragment VolumeFragmentOutput VOLUME_FRAGMENT_SHADER_TF_LIGHTING_NAME(
                              positionAtOpaqueGeometry);
 }
 
+fragment VolumeFragmentOutput VOLUME_FRAGMENT_SHADER_TF_LIGHTING_NAME(
+                                VertexToFragment in [[stage_in]] VOLUME_SHADER_AMP_PARAMETER,
+                                texture3d<float> volumeAtlas [[texture(TextureIndexVolumeAtlas)]],
+                                texture3d<float> secondaryVolumeAtlas [[texture(TextureIndexVolumeAtlasSecondary)]],
+                                texture1d<half> transferFunc [[texture(TextureIndexTransferFunction)]],
+                                texture1d<half> transferFunc2 [[texture(TextureIndexTransferFunction2)]],
+                                texture1d<half> transferFunc3 [[texture(TextureIndexTransferFunction3)]],
+                                texture1d<half> transferFunc4 [[texture(TextureIndexTransferFunction4)]],
+                                device const FragmentUniformsArray& uniformsArray [[buffer(FragmentBufferIndexUniforms)]],
+                                device const LevelData* levelData [[buffer(FragmentBufferIndexLevelTable)]],
+                                device const uint* brickMeta [[buffer(FragmentBufferIndexBrickMeta)]],
+                                device atomic_uint* hashBuffer [[buffer(FragmentBufferIndexHashTable)]]
+                                VOLUME_SHADER_RATE_MAP_PARAMETER
+                                VOLUME_SHADER_MARKER_PARAMETER
+                                VOLUME_SHADER_SUBBRICK_PARAMETER) {
+  float markerDepth = markerDepthAtFragment(in.position, uint(VOLUME_SHADER_UNIFORM_INDEX)
+                                            VOLUME_SHADER_MARKER_ARGUMENT);
+  float oversampling = effectiveOversampling(uniformsArray.uniforms[VOLUME_SHADER_UNIFORM_INDEX].oversampling,
+                                             in.position, uint(VOLUME_SHADER_UNIFORM_INDEX)
+                                             VOLUME_SHADER_RATE_MAP_ARGUMENT);
+  #if VOLUME_OPACITY_ADAPTIVE_SAMPLING
+  if (uniformsArray.uniforms[VOLUME_SHADER_UNIFORM_INDEX].opacityAdaptiveSampling != 0) {
+    return raycastTransferFunctionLighting<true>(
+      in, uint(VOLUME_SHADER_UNIFORM_INDEX), markerDepth, oversampling,
+      volumeAtlas, secondaryVolumeAtlas, transferFunc, transferFunc2, transferFunc3, transferFunc4,
+      uniformsArray, levelData, brickMeta, hashBuffer VOLUME_SHADER_SUBBRICK_ARGUMENT);
+  }
+  #endif
+  return raycastTransferFunctionLighting<false>(
+    in, uint(VOLUME_SHADER_UNIFORM_INDEX), markerDepth, oversampling,
+    volumeAtlas, secondaryVolumeAtlas, transferFunc, transferFunc2, transferFunc3, transferFunc4,
+    uniformsArray, levelData, brickMeta, hashBuffer VOLUME_SHADER_SUBBRICK_ARGUMENT);
+}
+
 // MARK: - Isosurface Fragment Shader
 
 /**
@@ -712,6 +828,7 @@ fragment VolumeFragmentOutput VOLUME_FRAGMENT_SHADER_ISO_NAME(
                                  device atomic_uint* hashBuffer                    [[buffer(FragmentBufferIndexHashTable)]]
                                  VOLUME_SHADER_RATE_MAP_PARAMETER
                                  VOLUME_SHADER_MARKER_PARAMETER
+                                 VOLUME_SHADER_SUBBRICK_PARAMETER
                                  ) {
   FragmentUniforms uniforms = uniformsArray.uniforms[VOLUME_SHADER_UNIFORM_INDEX];
   float markerDepth = markerDepthAtFragment(in.position,
@@ -767,56 +884,81 @@ fragment VolumeFragmentOutput VOLUME_FRAGMENT_SHADER_ISO_NAME(
                                    - brickResult.poolBrickInfo.poolEntryCoords) / stepSize
                             ));
       iSteps = min(int(2*BRICK_SIZE*oversampling),iSteps);
-      for (int i = 0; i < iSteps; ++i) {
-        float sampleT = (float(i) + samplePhase) / float(iSteps);
-        float3 sampleNormCoords = mix(
-                                      currentPos,
-                                      brickResult.normExitCoords,
-                                      sampleT
-                                      );
-        if (!stoppedAtOpaqueGeometry && markerDepth > 0.0 &&
-            sampleReachedMarker(markerDepthTest, mix(t, brickExitT, sampleT))) {
-          stoppedAtOpaqueGeometry = true;
+      #if VOLUME_SUBBRICK_SKIPPING
+      uint visibility = subbrickEnabled ? subbrickMasks[brickResult.pageIndex * SUBBRICK_MASK_STRIDE] : 2u;
+      SubbrickSampleTraversal subbricks;
+      if (visibility == 1u) {
+        subbricks = prepareSubbrickTraversal(brickResult.poolBrickInfo,
+          brickResult.pageIndex, iSteps, samplePhase);
+      }
+      #endif
+      int segmentStart = 0;
+      #if VOLUME_SUBBRICK_SKIPPING
+      if (visibility == 0u) segmentStart = iSteps;
+      #endif
+      while (segmentStart < iSteps) {
+        int segmentEnd = iSteps;
+        #if VOLUME_SUBBRICK_SKIPPING
+        if (visibility == 1u) {
+          uint cell;
+          segmentEnd = subbrickSampleEnd(subbricks, segmentStart, iSteps, cell);
+          if (!subbrickCellVisible(subbrickMasks, brickResult.pageIndex, cell)) {
+            segmentStart = segmentEnd; continue;
+          }
         }
-        float3 poolCoords = mix(
-                                brickResult.poolBrickInfo.poolEntryCoords,
-                                brickResult.poolBrickInfo.poolExitCoords,
-                                sampleT
-                                );
-        float value = sampleVolumeScalar(volumeAtlas, secondaryVolumeAtlas, s, poolCoords);
-        if (value >= uniforms.isoValue) {
-          poolCoords = refineIsosurface(
-                                        voxelSpaceDirection,
-                                        poolCoords,
-                                        uniforms.isoValue,
-                                        volumeAtlas,
-                                        secondaryVolumeAtlas,
-                                        s
+        #endif
+        for (int i = segmentStart; i < segmentEnd; ++i) {
+          float sampleT = (float(i) + samplePhase) / float(iSteps);
+          float3 sampleNormCoords = mix(
+                                        currentPos,
+                                        brickResult.normExitCoords,
+                                        sampleT
                                         );
-          float3 normal = computeNormal(
-                                        poolCoords, POOL_SIZE,
-                                        float3(1,1,1),
-                                        volumeAtlas,
-                                        secondaryVolumeAtlas,
-                                        s
-                                        );
-          half3 posInView    = half3((uniforms.modelView * float4((sampleNormCoords - 0.5),1)).xyz);
-          half3 normalInView = half3(normalize((uniforms.modelViewIT * float4(normal,0)).xyz));
-          half3 color = lighting(
-                                 posInView,
-                                 normalInView,
-                                 half3(0.5,0.5,0.5),
-                                 half3(uniforms.lightDirection.xyz),
-                                 half3(uniforms.ambientLightColor.xyz),
-                                 half3(uniforms.diffuseLightColor.xyz),
-                                 half3(uniforms.specularLightColor.xyz)
-                                 );
-          return volumeFragmentOutput(
-            stoppedAtOpaqueGeometry ? half4(0) : half4(color, 1),
-            uniforms,
-            sampleNormCoords
-          );
+          if (!stoppedAtOpaqueGeometry && markerDepth > 0.0 &&
+              sampleReachedMarker(markerDepthTest, mix(t, brickExitT, sampleT))) {
+            stoppedAtOpaqueGeometry = true;
+          }
+          float3 poolCoords = mix(
+                                  brickResult.poolBrickInfo.poolEntryCoords,
+                                  brickResult.poolBrickInfo.poolExitCoords,
+                                  sampleT
+                                  );
+          float value = sampleVolumeScalar(volumeAtlas, secondaryVolumeAtlas, s, poolCoords);
+          if (value >= uniforms.isoValue) {
+            poolCoords = refineIsosurface(
+                                          voxelSpaceDirection,
+                                          poolCoords,
+                                          uniforms.isoValue,
+                                          volumeAtlas,
+                                          secondaryVolumeAtlas,
+                                          s
+                                          );
+            float3 normal = computeNormal(
+                                          poolCoords, POOL_SIZE,
+                                          float3(1,1,1),
+                                          volumeAtlas,
+                                          secondaryVolumeAtlas,
+                                          s
+                                          );
+            half3 posInView    = half3((uniforms.modelView * float4((sampleNormCoords - 0.5),1)).xyz);
+            half3 normalInView = half3(normalize((uniforms.modelViewIT * float4(normal,0)).xyz));
+            half3 color = lighting(
+                                   posInView,
+                                   normalInView,
+                                   half3(0.5,0.5,0.5),
+                                   half3(uniforms.lightDirection.xyz),
+                                   half3(uniforms.ambientLightColor.xyz),
+                                   half3(uniforms.diffuseLightColor.xyz),
+                                   half3(uniforms.specularLightColor.xyz)
+                                   );
+            return volumeFragmentOutput(
+              stoppedAtOpaqueGeometry ? half4(0) : half4(color, 1),
+              uniforms,
+              sampleNormCoords
+            );
+          }
         }
+        segmentStart = segmentEnd;
       }
     }
 
@@ -834,10 +976,11 @@ fragment VolumeFragmentOutput VOLUME_FRAGMENT_SHADER_ISO_NAME(
 // MARK: - Brick Visualization Fragment Shader
 
 /**
- Visualizes brick occupancy by coloring empty vs. loaded bricks along the ray.
+ Visualizes the hierarchical traversal, including empty-region leaps and resident fallback.
 
- - Empty bricks are green, resident bricks red, and missing bricks blue.
- - Empty runs are not coalesced: every brick must contribute the same weight.
+ - Empty regions are green, resident regions red, and missing/fallback regions blue.
+ - Subblocks are shown only for partially visible resident pages.
+ - Each traversed unit contributes once; the diagnostic view never requests data.
  */
 fragment VolumeFragmentOutput VOLUME_FRAGMENT_SHADER_BRICK_VIS_NAME(
                                       VertexToFragment in [[stage_in]] VOLUME_SHADER_AMP_PARAMETER,
@@ -845,6 +988,7 @@ fragment VolumeFragmentOutput VOLUME_FRAGMENT_SHADER_BRICK_VIS_NAME(
                                       device const LevelData* levelData                 [[buffer(FragmentBufferIndexLevelTable)]],
                                       device const uint* brickMeta                    [[buffer(FragmentBufferIndexBrickMeta)]],
                                       device atomic_uint* hashBuffer                    [[buffer(FragmentBufferIndexHashTable)]]
+                                      VOLUME_SHADER_SUBBRICK_PARAMETER
                                       ) {
   FragmentUniforms uniforms = uniformsArray.uniforms[VOLUME_SHADER_UNIFORM_INDEX];
 
@@ -873,13 +1017,41 @@ fragment VolumeFragmentOutput VOLUME_FRAGMENT_SHADER_BRICK_VIS_NAME(
                                             currentPos, iLOD, direction, inverseDirection,
                                             uniforms.cubeBounds,
                                             brickMeta, levelData,
-                                            hashBuffer, true, false
+                                            hashBuffer, true, true
                                             );
 
-    if (brickResult.substitute) {
-      accColor += half4(0, 0, 0.1, 0.1);
-    } else if (brickResult.empty) {
+    uint4 coords = computeBrickCoords(currentPos, levelData, brickResult.LOD, direction);
+    uint resolvedState = brickMeta[getBrickIndex(coords, levelData)];
+    bool empty = brickResult.empty && resolvedState != BI_MISSING;
+    #if VOLUME_SUBBRICK_SKIPPING
+    bool subdivide = false;
+    if (subbrickEnabled && !brickResult.empty) {
+      uint visibility = subbrickMasks[brickResult.pageIndex * SUBBRICK_MASK_STRIDE];
+      empty = visibility == 0u;
+      subdivide = visibility == 1u;
+    }
+    if (subdivide) {
+      BrickCorners corners = getBrickCorners(coords, levelData);
+      float3 scale = levelData[brickResult.LOD].fractionalBrickLayout * float(BRICK_INNER_SIZE);
+      float overlap = float((BRICK_SIZE - BRICK_INNER_SIZE) / 2);
+      float3 localStart = (currentPos - corners.values[0]) * scale + overlap;
+      float3 localDelta = (brickResult.normExitCoords - currentPos) * scale;
+      float cellT = 0;
+      for (uint step = 0; step < 3 * VOLUME_SUBBRICK_DIVISIONS && cellT < 1; ++step) {
+        uint cell;
+        float end = subbrickRayEnd(localStart, localDelta, cellT, cell);
+        bool cellEmpty = !subbrickCellVisible(subbrickMasks, brickResult.pageIndex, cell);
+        accColor += cellEmpty ? half4(0, 0.1, 0, 0.1) :
+          (brickResult.substitute ? half4(0, 0, 0.1, 0.1) : half4(0.1, 0, 0, 0.1));
+        if (end <= cellT) break;
+        cellT = end;
+      }
+    } else
+    #endif
+    if (empty) {
       accColor += half4(0, 0.1, 0, 0.1);
+    } else if (brickResult.substitute) {
+      accColor += half4(0, 0, 0.1, 0.1);
     } else {
       accColor += half4(0.1, 0, 0, 0.1);
     }

@@ -1036,6 +1036,7 @@ extension VisionVolumeRenderer {
           isoValue: frameState.isoValue,
           oversampling: activeOversampling,
           sampleJitter: frameSnapshot.settings.sampleJitter ? 1 : 0,
+          opacityAdaptiveSampling: frameSnapshot.settings.opacityAdaptiveSampling ? 1 : 0,
           transferBias: frameState.transferBiases,
           cameraPosInTextureSpace: simd_make_float3(viewToTexture * simd_float4(0, 0, 0, 1)),
           cameraPosInTextureSpaceVoxelScaled: simd_make_float3(viewToTextureVoxelScaled * simd_float4(0, 0, 0, 1)),
@@ -1963,6 +1964,14 @@ extension VisionVolumeRenderer {
     self.updateRenderState(drawable: drawable)
     self.updateSpatialAccessoryInteractions(drawable: drawable)
     volumeAtlas.prepareFrame(commandBuffer: commandBuffer)
+    do {
+      try volumeAtlas.prepareSubbrickSkipping(commandBuffer: commandBuffer,
+        transferFunctions: renderTransferFunctions.activeTransferFunctions,
+        enabled: frameSnapshot.settings.subbrickSkipping,
+        isoValue: frameState.renderMode == .isoValue ? frameState.isoValue : nil)
+    } catch {
+      logger?.error("Subbrick skipping unavailable: \(error.localizedDescription)")
+    }
 
     let rasterizationRateMap = drawable.rasterizationRateMaps.first
     let opaqueGeometryTargets = opaqueGeometryRenderer.render(

@@ -242,6 +242,14 @@ final class ScreenVolumeRendererCore {
     updateUniforms(for: view, state: frameState, settings: frame.settings)
     updateEmptiness(state: frameState)
     volumeAtlas.prepareFrame(commandBuffer: commandBuffer)
+    do {
+      try volumeAtlas.prepareSubbrickSkipping(commandBuffer: commandBuffer,
+        transferFunctions: renderTransferFunctions?.activeTransferFunctions ?? [],
+        enabled: frame.settings.subbrickSkipping,
+        isoValue: frameState.renderMode == .isoValue ? frameState.isoValue : nil)
+    } catch {
+      appModel.logger.error("Subbrick skipping unavailable: \(error.localizedDescription)")
+    }
 
     guard let interactionDepthTexture = interactionDepthTexture(
       device: device,
@@ -887,6 +895,7 @@ final class ScreenVolumeRendererCore {
       isoValue: state.isoValue,
       oversampling: activeOversampling,
       sampleJitter: settings.sampleJitter ? 1 : 0,
+      opacityAdaptiveSampling: settings.opacityAdaptiveSampling ? 1 : 0,
       transferBias: state.transferBiases,
       cameraPosInTextureSpace: simd_make_float3(viewToTexture * SIMD4<Float>(0, 0, 0, 1)),
       cameraPosInTextureSpaceVoxelScaled: simd_make_float3(

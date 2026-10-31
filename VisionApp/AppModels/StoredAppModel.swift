@@ -66,6 +66,8 @@ final class StoredAppModel: ObservableObject {
     "oversampling": 1.0,
     "sampleJitter": false,
     "alphaEpsilon": 0.0,
+    "subbrickSkipping": true,
+    "opacityAdaptiveSampling": true,
     "oversamplingMode": OversamplingMode.dynamicMode.rawValue,
     "dropFPS": 20,
     "recoveryFPS": 100,
@@ -204,6 +206,12 @@ final class StoredAppModel: ObservableObject {
   /// Whether to randomize the per-ray sampling phase.
   @AppStorage("sampleJitter") var sampleJitter: Bool = StoredAppModel.bool("sampleJitter")
   @AppStorage("alphaEpsilon") var alphaEpsilon: Double = StoredAppModel.double("alphaEpsilon")
+  @AppStorage("subbrickSkipping") var subbrickSkipping: Bool = StoredAppModel.bool("subbrickSkipping") {
+    didSet { objectWillChange.send() }
+  }
+  @AppStorage("opacityAdaptiveSampling") var opacityAdaptiveSampling: Bool = StoredAppModel.bool("opacityAdaptiveSampling") {
+    didSet { objectWillChange.send() }
+  }
   /// The oversampling mode ("static" or "dynamic").
   @AppStorage("oversamplingMode") var oversamplingMode: String = StoredAppModel.string("oversamplingMode")
   /// Target frames per second below which the step size is increase.

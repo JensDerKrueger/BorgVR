@@ -75,7 +75,9 @@ typedef NS_ENUM(EnumBackingType, FragmentBufferIndex)
   FragmentBufferIndexLevelTable = 1,  ///< Buffer containing LOD level information.
   FragmentBufferIndexBrickMeta  = 2,  ///< Buffer containing per-brick metadata.
   FragmentBufferIndexHashTable  = 3,  ///< Buffer used as the GPU-side hash table.
-  FragmentBufferIndexRateMap    = 4   ///< Rasterization-rate-map parameters for foveated rendering.
+  FragmentBufferIndexRateMap    = 4,  ///< Rasterization-rate-map parameters for foveated rendering.
+  FragmentBufferIndexSubbrickMasks = 5,
+  FragmentBufferIndexSubbrickEnabled = 6
 };
 
 /**
@@ -103,6 +105,7 @@ typedef NS_ENUM(EnumBackingType, TextureIndex)
  - isoValue:                        Threshold for isosurface rendering.
  - oversampling:                   Raymarching oversampling factor.
  - sampleJitter:                   Enables randomized per-ray sampling phase.
+ - opacityAdaptiveSampling:       Enables opacity-dependent TF sampling distances.
  - transferBias:                   Per-component biases for transfer function lookup.
  - cameraPosInTextureSpace:        Camera position in normalized texture coords.
  - cameraPosInTextureSpaceVoxelScaled:
@@ -115,6 +118,7 @@ typedef struct {
   float isoValue;
   float oversampling;
   float sampleJitter;
+  uint opacityAdaptiveSampling;
   vector_float4 transferBias;
   vector_float3 cameraPosInTextureSpace;
   vector_float3 cameraPosInTextureSpaceVoxelScaled;

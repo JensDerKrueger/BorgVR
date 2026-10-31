@@ -529,6 +529,8 @@
 "Oversampling factor" = "Oversampling factor";
 "Randomized sample phase" = "Randomized sample phase";
 "Alpha epsilon" = "Alpha epsilon";
+"Subbrick skipping" = "Subbrick skipping";
+"Opacity-adaptive sampling" = "Opacity-adaptive sampling";
 "Bricks with TF alpha below this threshold may be skipped. The transfer function stays unchanged. Zero disables the threshold." = "Bricks with TF alpha below this threshold may be skipped. The transfer function stays unchanged. Zero disables the threshold.";
 "Drop FPS" = "Drop FPS";
 "Recovery FPS" = "Recovery FPS";

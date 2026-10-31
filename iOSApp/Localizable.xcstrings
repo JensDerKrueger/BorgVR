@@ -13058,6 +13058,64 @@
         }
       }
     },
+    "Opacity-adaptive sampling": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opacity-adaptive sampling"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opazitätsabhängiges Sampling"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Échantillonnage adapté à l’opacité"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Muestreo adaptado a la opacidad"
+          }
+        }
+      }
+    },
+    "Subbrick skipping": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Subbrick skipping"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Subblock-Skipping"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Saut des sous-blocs"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Omitir subbloques"
+          }
+        }
+      }
+    },
     "Alpha epsilon": {
       "extractionState": "manual",
       "localizations": {

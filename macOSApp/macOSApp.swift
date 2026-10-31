@@ -670,6 +670,18 @@ private struct BorgVRMenuCommands: Commands {
       }
       .macRenderShortcut(.bricks)
       .disabled(!hasActiveDataset || !appSettings.showBrickVisualization)
+
+      Divider()
+
+      Toggle(isOn: $appSettings.subbrickSkipping) {
+        menuLabel("Subbrick skipping", systemImage: "cube.transparent")
+      }
+      .disabled(!hasActiveDataset)
+
+      Toggle(isOn: $appSettings.opacityAdaptiveSampling) {
+        menuLabel("Opacity-adaptive sampling", systemImage: "circle.lefthalf.filled")
+      }
+      .disabled(!hasActiveDataset || renderingParameters.renderMode == .isoValue)
     }
 
     CommandMenu("Panels") {

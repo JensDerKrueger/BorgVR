@@ -37,6 +37,11 @@ enum VolumeShaderCompiler {
       "LEVEL_COUNT": NSNumber(value: metadata.levelMetadata.count),
       "BRICK_SIZE": NSNumber(value: metadata.brickSize),
       "BRICK_INNER_SIZE": NSNumber(value: metadata.brickSize - metadata.overlap * 2),
+      "VOLUME_OPACITY_ADAPTIVE_SAMPLING": NSNumber(value: 1),
+      "VOLUME_SUBBRICK_SKIPPING": NSNumber(value:
+        VolumeAtlasSubbrickCache.divisions(brickSize: metadata.brickSize, overlap: metadata.overlap) > 1 ? 1 : 0),
+      "VOLUME_SUBBRICK_DIVISIONS": NSNumber(value:
+        VolumeAtlasSubbrickCache.divisions(brickSize: metadata.brickSize, overlap: metadata.overlap)),
       "OVERLAP_STEP": NSString(
         string: "float3(\(Float(metadata.overlap) / Float(atlasWidth)),\(Float(metadata.overlap) / Float(atlasHeight)),\(Float(metadata.overlap) / Float(atlasDepth)))"
       ),

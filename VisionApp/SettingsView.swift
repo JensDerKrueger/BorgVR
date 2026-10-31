@@ -392,6 +392,8 @@ struct SettingsView: View {
                 }
 
                 Toggle("settings_toggle_sample_jitter", isOn: $storedAppModel.sampleJitter)
+                Toggle("Subbrick skipping", isOn: $storedAppModel.subbrickSkipping)
+                Toggle("Opacity-adaptive sampling", isOn: $storedAppModel.opacityAdaptiveSampling)
                 Stepper(value: $storedAppModel.alphaEpsilon, in: 0...1, step: 0.001) {
                   HStack {
                     Text("Alpha epsilon")

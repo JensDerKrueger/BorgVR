@@ -151,6 +151,9 @@ class VolumeAtlas {
   private var pendingGPUFrame: (command: MTLCommandBuffer, revisions: [Int: (brick: Int, revision: UInt64)])?
   private var gpuBrushSource: BorgVRVolumeGPUBrushSource? { borgData as? BorgVRVolumeGPUBrushSource }
   private var brickStorage = (0, 0, 0)
+  private var subbrickCache: VolumeAtlasSubbrickCache?
+  private var subbrickSkippingEnabled = false
+  private var subbrickSetupFailed = false
 
   private var borgData: BORGVRDatasetProtocol
   var isContentReady: Bool { borgData.isContentReady }
@@ -385,6 +388,7 @@ class VolumeAtlas {
    */
   private func replaceAtlasBrick(x: Int, y: Int, z: Int,
                                  data: UnsafeMutablePointer<UInt8>) {
+    subbrickCache?.invalidate(page: x + brickStorage.0 * (y + brickStorage.1 * z))
     let metadata = borgData.getMetadata()
     let brickSize = metadata.brickSize
     let region = MTLRegion(
@@ -504,6 +508,34 @@ class VolumeAtlas {
     )
     encoder.setFragmentBuffer(metaBuffer, offset: 0, index: metaIndex)
     encoder.setFragmentBuffer(levelTable, offset: 0, index: levelIndex)
+    encoder.setFragmentBuffer(subbrickCache?.masks ?? metaBuffer, offset: 0,
+      index: FragmentBufferIndex.subbrickMasks.rawValue)
+    var enabled: UInt32 = subbrickSkippingEnabled ? 1 : 0
+    encoder.setFragmentBytes(&enabled, length: MemoryLayout<UInt32>.size,
+      index: FragmentBufferIndex.subbrickEnabled.rawValue)
+  }
+
+  func prepareSubbrickSkipping(commandBuffer: MTLCommandBuffer,
+                              transferFunctions: [TransferFunction1D], enabled: Bool,
+                              isoValue: Float? = nil) throws {
+    subbrickSkippingEnabled = false
+    guard enabled else { subbrickSetupFailed = false; return }
+    let metadata = borgData.getMetadata()
+    let count = VolumeAtlasSubbrickCache.divisions(brickSize: metadata.brickSize, overlap: metadata.overlap)
+    guard count > 1, !subbrickSetupFailed else { return }
+    if subbrickCache == nil {
+      do {
+        subbrickCache = try VolumeAtlasSubbrickCache(device: device, metadata: metadata,
+                                                   capacity: pageMetadata.count, divisions: count)
+      } catch {
+        // Keep rendering normally instead of retrying a failed allocation/compiler every frame.
+        subbrickSetupFailed = true
+        throw error
+      }
+    }
+    subbrickSkippingEnabled = subbrickCache?.prepare(command: commandBuffer, primary: atlasTexture,
+      secondary: secondaryAtlasTexture, pages: Array(Set(brickToPage.values)),
+      transferFunctions: transferFunctions, isoValue: isoValue) == true
   }
 
   /// Called before opening any render encoder. All brush work uses the frame's
@@ -547,6 +579,7 @@ class VolumeAtlas {
         revision = batch.revision
       }
       revisions[page] = (id, revision)
+      subbrickCache?.invalidate(page: page)
     }
     encoder.endEncoding()
     pendingGPUFrame = (commandBuffer, revisions)

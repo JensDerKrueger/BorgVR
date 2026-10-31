@@ -406,6 +406,8 @@ struct SettingsView: View {
         }
       }
       Toggle("Randomized sample phase", isOn: $appSettings.sampleJitter)
+      Toggle("Subbrick skipping", isOn: $appSettings.subbrickSkipping)
+      Toggle("Opacity-adaptive sampling", isOn: $appSettings.opacityAdaptiveSampling)
       Stepper(value: $appSettings.alphaEpsilon, in: 0...1, step: 0.001) {
         HStack {
           Text("Alpha epsilon")
