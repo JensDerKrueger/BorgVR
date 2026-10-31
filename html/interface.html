@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="color-scheme" content="dark" />
+  <title>BorgVR interface tour</title>
+  <meta name="description" content="A screenshot-based tour of the BorgVR interface: rendering, clipping, transfer functions, lighting, objects, measurements, and volume editing." />
+  <link rel="canonical" href="https://www.jens-krueger.com/BorgVR/interface.html" />
+  <link rel="stylesheet" href="./style.css?v=3.5-guide" />
+  <script src="./i18n.js"></script>
+</head>
+<body>
+  <a class="skip" href="#main" data-de="Zum Inhalt springen">Skip to content</a>
+  <header class="topbar"><div class="container topbar__inner">
+    <a class="brand" href="./index.html"><img class="brand__logo" src="./borgvr-hero.webp" alt="" /><span class="brand__text" data-de="BorgVR-Handbuch">BorgVR Guide</span></a>
+    <nav class="nav" aria-label="Navigation">
+      <a class="nav__link" href="./concepts.html" data-de="Grundlagen">Concepts</a>
+      <a class="nav__link" href="./macos.html" data-de="macOS-Anleitung">macOS guide</a>
+      <a class="nav__link" href="./datasets.html" data-de="Daten und Bearbeitungen">Data and edits</a>
+      <span class="language-picker" aria-label="Language" data-de-attr="aria-label:Sprache"><a href="?lang=en" data-language="en" lang="en">English</a><a href="?lang=de" data-language="de" lang="de">Deutsch</a></span>
+    </nav>
+  </div></header>
+  <main id="main">
+    <header class="doc-header"><div class="container">
+      <p class="eyebrow" data-de="Bebilderte Anleitung">Illustrated guide</p>
+      <h1 class="doc-title" data-de="Die BorgVR-Oberfläche">The BorgVR interface</h1>
+      <p class="lead" data-de="Vom ersten Datensatz bis zum gespeicherten Ergebnis: Diese Tour erklärt die Bedienleiste und die wichtigsten Werkzeuge anhand echter App-Aufnahmen.">From the first dataset to a saved result: this tour explains the control bar and the main tools using real app screenshots.</p>
+      <p class="capture-note" data-de="Die Aufnahmen zeigen BorgVR 3.5 für macOS mit deutscher Oberfläche und den eingebauten Beispielen C60 und Visible Human. Jede Werkzeugaufnahme zeigt nur die zum Beispiel gehörenden Objekte, Messungen oder Edits. Englische Bezeichnungen werden im Text mit erklärt. Auf iPhone, iPad und Vision Pro sind dieselben Aufgaben anders angeordnet; die plattformspezifischen Anleitungen beschreiben die jeweiligen Gesten und Fenster.">The screenshots show BorgVR 3.5 for macOS with its German interface and the built-in C60 and Visible Human examples. Each tool capture contains only the objects, measurements, or edits relevant to that example. The text also gives the English control names. iPhone, iPad, and Vision Pro arrange these tasks differently; their platform guides explain the corresponding gestures and windows.</p>
+      <nav class="page-toc" aria-label="On this page" data-de-attr="aria-label:Auf dieser Seite">
+        <a href="#start" data-de="Start">Start</a><a href="#workspace" data-de="Übersicht">Overview</a><a href="#controls" data-de="Bedienleiste">Controls</a><a href="#clipping">Clipping</a><a href="#transfer" data-de="Transferfunktion und Licht">Transfer function and light</a><a href="#iso" data-de="Isofläche">Isosurface</a><a href="#objects" data-de="Objekte">Objects</a><a href="#measurements" data-de="Messungen">Measurements</a><a href="#editing" data-de="Bearbeiten">Editing</a><a href="#saving" data-de="Speichern">Saving</a>
+      </nav>
+    </div></header>
+    <div class="container docs-shell">
+      <aside class="docs-nav" aria-label="Manual sections" data-de-attr="aria-label:Handbuchkapitel">
+        <p class="docs-nav__title" data-de="Handbuch">Manual</p>
+        <a class="docs-nav__link" aria-current="page" href="./interface.html" data-de="Bebilderte UI-Tour">Illustrated UI tour</a>
+        <a class="docs-nav__link" href="./concepts.html" data-de="Grundlagen">Concepts</a>
+        <a class="docs-nav__link" href="./visionos.html">visionOS</a>
+        <a class="docs-nav__link" href="./ios.html">iPhone &amp; iPad</a>
+        <a class="docs-nav__link" href="./macos.html">macOS</a>
+        <a class="docs-nav__link" href="./server.html" data-de="Server-App">Server app</a>
+        <a class="docs-nav__link" href="./datasets.html" data-de="Daten und Bearbeitungen">Data and edits</a>
+      </aside>
+      <article class="doc-content">
+        <section id="start">
+          <h2 data-de="1. Einen Datensatz öffnen">1. Open a dataset</h2>
+          <figure class="guide-figure">
+            <a href="./screenshots/macos-start.webp"><img src="./screenshots/macos-start.webp" width="2400" height="1640" alt="BorgVR start screen with Open Dataset, Import/Export, Settings, and Info" data-de-attr="alt:BorgVR-Startbildschirm mit Datensatz öffnen, Import/Export, Einstellungen und Info" /></a>
+            <figcaption data-de="Der Startbildschirm trennt das Öffnen vorhandener BorgVR-Daten vom Import anderer Formate.">The start screen separates opening existing BorgVR data from importing other formats.</figcaption>
+          </figure>
+          <ol>
+            <li data-de="<strong>Datensatz öffnen / Open Dataset:</strong> Öffnet die Auswahl für eingebaute, lokale und vom Server angebotene BorgVR-Datensätze. Wählen Sie für einen ersten Versuch den eingebauten C60-Datensatz."><strong>Open Dataset / Datensatz öffnen:</strong> Opens the selector for built-in, local, and server-provided BorgVR datasets. Try the built-in C60 dataset first.</li>
+            <li data-de="<strong>Importieren / exportieren:</strong> Wandelt Ausgangsdaten in das BorgVR-Format um oder exportiert vorhandene Daten. Das ist nicht der normale Öffnen-Dialog."><strong>Import / Export:</strong> Converts source data to BorgVR format or exports existing data. This is not the normal Open dialog.</li>
+            <li data-de="<strong>Einstellungen / Settings:</strong> Verwaltet unter anderem Datenquellen, Darstellung, Import und automatische Speicherung. Die Import-/Export-Buttons im Kopf der Einstellungen übertragen die gesamte Konfiguration als <code>.borgvrsettings</code>-Datei."><strong>Settings / Einstellungen:</strong> Configures data sources, rendering, import, and automatic saving. The import/export buttons in the settings header transfer the entire configuration as a <code>.borgvrsettings</code> file.</li>
+          </ol>
+        </section>
+
+        <section id="workspace">
+          <h2 data-de="2. Render-Modus und Interaktion unterscheiden">2. Distinguish rendering from interaction</h2>
+          <figure class="guide-figure">
+            <a href="./screenshots/macos-overview.webp"><img src="./screenshots/macos-overview.webp" width="2400" height="1640" loading="lazy" alt="C60 rendering with the rendering modes above the seven interaction modes" data-de-attr="alt:C60-Darstellung mit Render-Modi über den sieben Interaktionsmodi" /></a>
+            <figcaption data-de="Oben wird festgelegt, wie das Volumen aussieht. Die farbige Reihe darunter bestimmt, was eine Interaktion im Bild verändert.">The upper selector controls how the volume looks. The color-coded row below controls what interaction with the image changes.</figcaption>
+          </figure>
+          <p data-de="<strong>Transferfunktion, Transferfunktion + Licht und Isowert</strong> sind Render-Modi. Sie bestimmen die Bildberechnung. <strong>Modell, Clipping, Transfer, Zeichnen, Platzieren, Messen und Volumen bearbeiten</strong> sind Interaktionsmodi. Sie bestimmen, was Ziehen oder Klicken bewirkt. Ein Wechsel des Interaktionsmodus öffnet nicht automatisch das zugehörige Werkzeugfenster."><strong>Transfer Function, Transfer Function + Lighting, and Isovalue</strong> are rendering modes: they determine how the image is calculated. <strong>Model, Clipping, Transfer, Draw, Place, Measure, and Edit Volume</strong> are interaction modes: they determine what dragging or clicking does. Selecting an interaction mode does not automatically open its tool window.</p>
+          <p data-de="Beginnen Sie mit <strong>Modell</strong>: Ziehen rotiert das Volumen per Arcball, die Pfeiltasten verschieben es in der Bildebene und eine Zoom-Geste ändert die Größe. Die Renderfläche muss für Tastaturbefehle den Fokus besitzen.">Start with <strong>Model</strong>: drag to rotate the volume with an arcball, use the arrow keys to translate it in the image plane, and use a zoom gesture to change its size. Keyboard commands require focus on the rendering area.</p>
+        </section>
+
+        <section id="controls">
+          <h2 data-de="3. Die Bedienleiste lesen">3. Read the control bar</h2>
+          <figure class="guide-figure">
+            <a href="./screenshots/macos-toolbar.webp"><img src="./screenshots/macos-toolbar.webp" width="2336" height="394" loading="lazy" alt="Detail of the grouped actions, individual reset buttons, interaction modes, and tool buttons" data-de-attr="alt:Detail der gruppierten Aktionen, einzelnen Reset-Buttons, Interaktionsmodi und Werkzeug-Buttons" /></a>
+            <figcaption data-de="Ausschnitt derselben App-Aufnahme. Die kleinen Reset-Pfeile stehen direkt über ihrem Interaktionsmodus.">A detail from the same app capture. Each small reset arrow sits directly above its interaction mode.</figcaption>
+          </figure>
+          <dl class="definition-list">
+            <div><dt data-de="Obere Symbolgruppen">Top icon groups</dt><dd data-de="Das X schließt den Datensatz. Rechts folgen SharePlay, das zusammengehörige Paar zum Speichern/Wiederherstellen des Datensatzzustands, Aufnahme, Info/Leistung sowie Abdocken/Ausblenden. Zusätzliche Schaltflächen hängen von Sitzung und Einstellungen ab.">The X closes the dataset. On the right are SharePlay, the paired dataset-state save/restore buttons, recording, information/performance, and detach/hide controls. Additional actions depend on the session and settings.</dd></div>
+            <div><dt data-de="Farben">Colors</dt><dd data-de="Blau gehört zu Modell, Cyan zu Clipping, Violett zu Transfer, Orange zu Zeichnen/Platzieren, Grün zu Messen und Rot zur Volumenbearbeitung. Die Farbe verbindet Modus, gezielten Reset und zugehöriges Werkzeug. Eine hervorgehobene Werkzeug-Schaltfläche zeigt ein geöffnetes Fenster an.">Blue identifies Model, cyan Clipping, purple Transfer, orange Draw/Place, green Measure, and red volume editing. Color connects each mode to its targeted reset and tool. A highlighted tool button indicates an open window.</dd></div>
+            <div><dt data-de="Werkzeuge öffnen">Open tools</dt><dd data-de="Beleuchtung und Editor öffnen die Darstellungswerkzeuge. Objekte gehört zu Zeichnen und Platzieren, Messungen zu Messen und Pinsel zu Volumen bearbeiten. Das Symbol mit überlappenden Rechtecken an einem Panel löst es in ein eigenes Fenster.">Lighting and Editor open visualization tools. Objects belongs to Draw and Place, Measurements to Measure, and Brush to Edit Volume. The overlapping-rectangles icon on a panel detaches it into a separate window.</dd></div>
+          </dl>
+          <h3 data-de="Gezielt zurücksetzen">Reset only what you intend</h3>
+          <p data-de="Die kleinen Pfeile setzen nur den jeweiligen Bereich zurück und fragen vorher nach. Modell setzt Rotation, Verschiebung und Skalierung zurück; Clipping entfernt die Schnitte; Transfer setzt die aktuelle Transferfunktion beziehungsweise den Isowert zurück. Über Zeichnen und Platzieren werden alle Objekte, über Messen alle Messungen und über Bearbeiten alle Edits des aktiven Bearbeitungsstands entfernt. <strong>Zeichnen und Platzieren verwenden dieselbe Objektliste.</strong>">The small arrows reset only their corresponding area and ask for confirmation. Model resets rotation, translation, and scale; Clipping removes the cuts; Transfer resets the current transfer function or isovalue. Draw and Place clear all objects, Measure clears all measurements, and Edit clears the active edit state. <strong>Draw and Place use the same object list.</strong></p>
+        </section>
+
+        <section id="clipping">
+          <h2 data-de="4. Mit Clip-Ebenen ins Volumen schauen">4. Look inside with clipping planes</h2>
+          <figure class="guide-figure">
+            <a href="./screenshots/macos-clipping.webp"><img src="./screenshots/macos-clipping.webp" width="2400" height="1640" loading="lazy" alt="Two clipping planes expose internal structures in the built-in Visible Human dataset, without objects or measurements" data-de-attr="alt:Zwei Clip-Ebenen legen innere Strukturen des eingebauten Visible-Human-Datensatzes frei, ohne Objekte oder Messungen" /></a>
+            <figcaption data-de="Visible Human mit zwei Clip-Ebenen: Die ebenen Schnittflächen zeigen die inneren Strukturen. Für dieses Beispiel wurden keine Voxel gelöscht; Clipping verändert nur den sichtbaren Ausschnitt.">Visible Human with two clipping planes: the flat cut faces reveal internal structures. No voxels were erased for this example; clipping changes only the visible region.</figcaption>
+          </figure>
+          <ol>
+            <li data-de="Öffnen Sie den eingebauten Visible-Human-Datensatz und wählen Sie <strong>Transferfunktion + Licht</strong>. Drehen Sie ihn zunächst im Modus <strong>Modell</strong> in eine passende Ansicht.">Open the built-in Visible Human dataset and choose <strong>Transfer Function + Lighting</strong>. First use <strong>Model</strong> mode to rotate it into a suitable view.</li>
+            <li data-de="Wechseln Sie zu <strong>Clipping</strong>. Horizontales und vertikales Ziehen verschiebt die zur Ansicht passenden Clip-Ebenen. Eine Zoom-Geste verschiebt die Ebene in Blickrichtung.">Switch to <strong>Clipping</strong>. Horizontal and vertical dragging move the view-aligned clipping planes. A zoom gesture moves the plane along the viewing direction.</li>
+            <li data-de="Wechseln Sie wieder zu <strong>Modell</strong>, um auf die freigelegten Schnittflächen zu schauen. Die Clip-Ebenen bleiben dabei relativ zum Volumen erhalten. Anders als beim Pinsel wird keine Bearbeitungsvariante benötigt.">Return to <strong>Model</strong> to look at the exposed cut faces. The clipping planes remain fixed relative to the volume. Unlike brush editing, this requires no edit-state variant.</li>
+          </ol>
+          <p data-de="Um Null gibt es eine kleine Einrastzone. Bewegen Sie eine Ebene zurück, bis die Achse ungeclippt ist. Erst nach weiterer Bewegung über diese Zone hinaus beginnt die gegenüberliegende Ebene zu schneiden. Der kleine Reset-Pfeil über <strong>Clipping</strong> entfernt nach Bestätigung alle Schnitte, ohne Objekte, Messungen oder Edits zu löschen.">A small snap zone around zero makes it easier to unclip an axis. Move a plane back into this zone; only after moving beyond it does the opposite plane begin cutting. The small reset arrow above <strong>Clipping</strong> removes all cuts after confirmation, without deleting objects, measurements, or edits.</p>
+        </section>
+
+        <section id="transfer">
+          <h2 data-de="5. Transferfunktion und Beleuchtung einstellen">5. Adjust transfer function and lighting</h2>
+          <figure class="guide-figure">
+            <a href="./screenshots/macos-transfer-lighting.webp"><img src="./screenshots/macos-transfer-lighting.webp" width="2400" height="1640" loading="lazy" alt="Lighting preview sphere on the left and RGBA transfer-function editor at the bottom right" data-de-attr="alt:Beleuchtete Vorschaukugel links und RGBA-Transferfunktionseditor unten rechts" /></a>
+            <figcaption data-de="Beleuchtung und Transferfunktion können gleichzeitig offen sein. Die Vorschaukugel zeigt nur die Beleuchtung, nicht den Datensatz.">Lighting and the transfer function can be open together. The preview sphere shows the lighting, not the dataset.</figcaption>
+          </figure>
+          <ol>
+            <li data-de="Wählen Sie <strong>Transferfunktion + Licht</strong> und öffnen Sie <strong>Editor</strong>. Die Kurve ordnet Datenwerten Farbe und Opazität zu. R, G und B wählen Farbkomponenten; A steht für Alpha/Opazität. Die Buchstaben sind keine Auswahl der Datenkanäle.">Select <strong>Transfer Function + Lighting</strong> and open <strong>Editor</strong>. The curve maps data values to color and opacity. R, G, and B select color components; A selects alpha/opacity. These letters do not select data channels.</li>
+            <li data-de="Bei Mehrkanaldaten wählen Sie zusätzlich den Datenkanal. Jeder Kanal hat eine eigene Transferfunktion. Das C60-Beispiel besitzt nur einen Kanal, daher ist diese zusätzliche Auswahl hier nicht zu sehen.">For multichannel data, also select the data channel. Each has its own transfer function. The C60 example has one channel, so this additional selector is not shown here.</li>
+            <li data-de="Öffnen Sie <strong>Beleuchtung / Lighting</strong>. Ziehen auf der Vorschaukugel ändert die Lichtrichtung. Die drei Farbauswahlen steuern Umgebungslicht, diffuses Licht und Glanzlicht.">Open <strong>Lighting / Beleuchtung</strong>. Drag the preview sphere to change the light direction. The three color controls set ambient, diffuse, and specular light.</li>
+          </ol>
+          <div class="callout"><strong data-de="Keine Wirkung der Lichtregler?">Light controls have no effect?</strong><span data-de="Im reinen Transferfunktionsmodus wird keine Beleuchtung berechnet. Wechseln Sie zu Transferfunktion + Licht oder Isowert; der Beleuchtungseditor weist auf diesen Unterschied hin.">Plain Transfer Function mode does not calculate lighting. Switch to Transfer Function + Lighting or Isovalue; the lighting editor warns about this distinction.</span></div>
+        </section>
+
+        <section id="iso">
+          <h2 data-de="6. Eine Isofläche untersuchen">6. Inspect an isosurface</h2>
+          <figure class="guide-figure">
+            <a href="./screenshots/macos-isovalue.webp"><img src="./screenshots/macos-isovalue.webp" width="2400" height="1640" loading="lazy" alt="Isovalue rendering with its slider below the volume and the extraction icon beside the rendering-mode selector" data-de-attr="alt:Isowert-Darstellung mit Schieberegler unter dem Volumen und Extraktionssymbol neben der Render-Modus-Auswahl" /></a>
+            <figcaption data-de="C60 bei Isowert 0,75: Die höheren Werte legen eine offene, ringförmige Struktur frei. Objekte und Messungen sind für diese Aufnahme entfernt. Der Editor zeigt statt der TF-Kurven einen Isowert-Regler.">C60 at isovalue 0.75: the higher threshold reveals an open, ring-like structure. Objects and measurements have been removed for this capture. The editor shows an isovalue slider instead of TF curves.</figcaption>
+          </figure>
+          <p data-de="Wählen Sie <strong>Isowert / Isovalue</strong> und verschieben Sie den Regler, um eine andere Oberfläche sichtbar zu machen. Auf macOS erscheint rechts neben der Render-Auswahl ein zusätzliches Export-Symbol. Es extrahiert die Isofläche mit dem aktuellen Wert als OBJ-Datei; alternativ drücken Sie <kbd>X</kbd> bei fokussierter Renderfläche. Berechnung und Speichern besitzen Fortschritt und Abbrechen.">Choose <strong>Isovalue / Isowert</strong> and move the slider to reveal a different surface. On macOS, an additional export icon appears to the right of the rendering selector. It extracts the surface at the current value to an OBJ file; alternatively, press <kbd>X</kbd> with the rendering area focused. Extraction provides progress and cancellation.</p>
+        </section>
+
+        <section id="objects">
+          <h2 data-de="7. Zeichnen und Objekte platzieren">7. Draw and place objects</h2>
+          <figure class="guide-figure">
+            <a href="./screenshots/macos-objects.webp"><img src="./screenshots/macos-objects.webp" width="2400" height="1640" loading="lazy" alt="Objects panel showing a named sphere and a stroke in the same list" data-de-attr="alt:Objektfenster mit einer benannten Kugel und einem Linienzug in derselben Liste" /></a>
+            <figcaption data-de="Kugeln, Linienzüge und platzierte Polygonobjekte stehen gemeinsam in der Objektliste.">Spheres, strokes, and placed polygon objects share the Objects list.</figcaption>
+          </figure>
+          <ol>
+            <li data-de="Öffnen Sie <strong>Objekte / Objects</strong>. Unter <strong>Aktives Objekt / Active Object</strong> wählen Sie die eingebaute Kugel oder eine bekannte importierte Objektvorlage.">Open <strong>Objects / Objekte</strong>. Use <strong>Active Object / Aktives Objekt</strong> to choose the built-in sphere or a known imported object asset.</li>
+            <li data-de="Wählen Sie <strong>Platzieren / Place</strong> und klicken Sie ins Renderbild. Mit <strong>Auf Volumen projizieren / Project onto Volume</strong> wird die sichtbare Volumentiefe für die Platzierung verwendet.">Select <strong>Place / Platzieren</strong> and click the rendering. <strong>Project onto Volume / Auf Volumen projizieren</strong> uses the visible volume depth for placement.</li>
+            <li data-de="Wählen Sie <strong>Zeichnen / Draw</strong> und ziehen Sie im Bild, um einen Linienzug zu erzeugen. Der Screenshot enthält beides: die Kugel Ringstruktur und einen Linienzug.">Select <strong>Draw / Zeichnen</strong> and drag over the image to create a stroke. The screenshot contains both a sphere named Ringstruktur and a stroke.</li>
+            <li data-de="Wählen Sie Einträge in der Liste, um Namen, Farbe und Radius zu ändern. Die Liste unterstützt Mehrfachauswahl. Bei Kugeln kann zusätzlich eine Richtung angezeigt werden.">Select entries in the list to edit their names, color, and radius. The list supports multiple selection. Spheres can additionally display a direction.</li>
+          </ol>
+          <p data-de="<strong>Dateien / Files</strong> und <strong>Laden / Load</strong> laden gespeicherte Objektzusammenstellungen, nicht neue Polygonvorlagen. <strong>Speichern / Save</strong> schreibt die Zusammenstellung als <code>.marker</code>-Datei. Der Objekt-Import im Import-/Export-Dialog erzeugt dagegen eine neue <code>.mesh</code>-Vorlage aus OBJ oder STL."><strong>Files / Dateien</strong> and <strong>Load / Laden</strong> load saved annotation collections, not new polygon assets. <strong>Save / Speichern</strong> writes the collection as a <code>.marker</code> file. Object import in the Import/Export dialog instead creates a new <code>.mesh</code> asset from OBJ or STL.</p>
+        </section>
+
+        <section id="measurements">
+          <h2 data-de="8. Längen, Flächen und Volumen messen">8. Measure lengths, areas, and volumes</h2>
+          <figure class="guide-figure">
+            <a href="./screenshots/macos-measurements.webp"><img src="./screenshots/macos-measurements.webp" width="2400" height="1640" loading="lazy" alt="Measurements window with a three-point path, its physical length, and individual point controls" data-de-attr="alt:Messungsfenster mit einem Pfad aus drei Punkten, physikalischer Länge und einzelnen Punkt-Buttons" /></a>
+            <figcaption data-de="Die Länge ist die Summe aller Segmente. Der C60-Datensatz ist ein molekulares Beispiel; deshalb erscheinen hier Pikometer.">Length is the sum of all segments. C60 is a molecular example, so the units here are picometers.</figcaption>
+          </figure>
+          <ol>
+            <li data-de="Öffnen Sie <strong>Messungen / Measurements</strong>, wählen Sie Länge, Fläche oder Volumen und aktivieren Sie den Interaktionsmodus <strong>Messen / Measure</strong>.">Open <strong>Measurements / Messungen</strong>, select length, area, or volume, and activate <strong>Measure / Messen</strong> interaction mode.</li>
+            <li data-de="Setzen Sie die Punkte im Renderbild. Eine Länge benötigt mindestens zwei Punkte und kann beliebig viele Segmente besitzen. Eine Fläche benötigt drei nicht kollineare Punkte; weitere Punkte werden auf deren Ebene projiziert. Ein Volumen benötigt mindestens vier Punkte, die nicht alle in einer Ebene liegen.">Place points in the rendering. A length needs at least two points and may contain multiple segments. An area needs three non-collinear points; further points project onto their plane. A volume needs at least four points that do not all lie in one plane.</li>
+            <li data-de="Flächen und Volumen verwenden die konvexe Hülle der Punkte. <strong>Neue Messung / New Measurement</strong> beginnt einen getrennten Eintrag. Punkt-Buttons wählen einzelne Punkte; Punkt löschen entfernt nur diesen Punkt, Messung löschen den gewählten Eintrag.">Areas and volumes use the points' convex hull. <strong>New Measurement / Neue Messung</strong> starts a separate entry. Point buttons select individual points; Delete Point removes that point, while Delete Measurement removes the selected entry.</li>
+          </ol>
+          <p data-de="BorgVR berechnet mit den physikalischen Voxelabständen und wählt Einheiten für Länge, Fläche und Volumen unabhängig voneinander. Die Zuverlässigkeit der Größenangabe hängt von korrekten Voxelabständen im Datensatz ab. Laden und Speichern verwenden <code>.measurement</code>-Dateien.">BorgVR calculates using physical voxel spacing and chooses length, area, and volume units independently. Reliable physical dimensions depend on correct spacing in the dataset. Load and Save use <code>.measurement</code> files.</p>
+        </section>
+
+        <section id="editing">
+          <h2 data-de="9. Volumen bearbeiten, ohne das Original zu verändern">9. Edit a volume without changing the original</h2>
+          <figure class="guide-figure">
+            <a href="./screenshots/macos-editing-before.webp"><img src="./screenshots/macos-editing-before.webp" width="2400" height="1640" loading="lazy" alt="Before editing: the unchanged Visible Human with a separate demonstration edit state and a 3.92 cm brush radius" data-de-attr="alt:Vor der Bearbeitung: unveränderter Visible Human mit einem eigenen Beispiel-Bearbeitungsstand und 3,92 cm Pinselradius" /></a>
+            <figcaption data-de="Vorher: Der Visible Human ist unverändert, Clipping ist ausgeschaltet. Für das Beispiel wurde ein eigener Bearbeitungsstand angelegt; Marker und Messungen sind nicht vorhanden.">Before: Visible Human is unchanged and clipping is disabled. A separate edit state has been created for the example; no objects or measurements are present.</figcaption>
+          </figure>
+          <figure class="guide-figure">
+            <a href="./screenshots/macos-editing.webp"><img src="./screenshots/macos-editing.webp" width="2400" height="1640" loading="lazy" alt="After editing: the spherical Erase brush has removed volume data at the forehead and temple of Visible Human" data-de-attr="alt:Nach der Bearbeitung: Der Kugelpinsel im Modus Löschen hat Volumendaten an Stirn und Schläfe des Visible Human entfernt" /></a>
+            <figcaption data-de="Nachher, bei unveränderter Ansicht und Transferfunktion: Mit dem Kugelpinsel wurden Bereiche an Stirn und Schläfe entfernt. Die Vertiefungen gehören zum bearbeiteten Volumen, nicht zu Markern oder Messungen. Das Original bleibt unverändert.">After, with the same view and transfer function: the spherical brush has removed regions at the forehead and temple. The cavities are part of the edited volume, not markers or measurements. The original remains unchanged.</figcaption>
+          </figure>
+          <p data-de="Wählen Sie <strong>Volumen bearbeiten</strong> und öffnen Sie <strong>Pinsel</strong>. Legen Sie mit dem Plus einen eigenen Bearbeitungsstand an, wählen Sie <strong>Löschen</strong>, stellen Sie den Radius ein und ziehen Sie über das Volumen. Im Beispiel ist <strong>Auf Volumen projizieren</strong> aktiv, sodass der Pinsel an der sichtbaren Oberfläche ansetzt. Mit <strong>Wiederherstellen</strong> lassen sich ursprüngliche Werte gezielt zurückholen; der kleine rote Reset-Pfeil verwirft nach Nachfrage alle Edits des aktiven Stands.">Select <strong>Edit Volume</strong> and open <strong>Brush</strong>. Create a separate edit state with Plus, select <strong>Erase</strong>, set the radius, and drag over the volume. Here, <strong>Project onto Volume</strong> is enabled, so the brush starts at the visible surface. Use <strong>Restore</strong> to bring back original values locally; the small red reset arrow discards all edits in the active state after confirmation.</p>
+          <ul>
+            <li data-de="<strong>Löschen / Erase</strong> setzt Werte im Kugelpinsel auf 0. <strong>Wiederherstellen / Restore</strong> holt die ursprünglichen Datenwerte zurück. Der Radius wird in einer zum Datensatz passenden physikalischen Einheit angezeigt."><strong>Erase / Löschen</strong> sets values inside the spherical brush to zero. <strong>Restore / Wiederherstellen</strong> brings back the original values. The radius is displayed in a physical unit appropriate to the dataset.</li>
+            <li data-de="Das Plus erzeugt einen neuen Bearbeitungsstand, die Kopie dupliziert den aktuellen. Umbenennen und Löschen beziehen sich auf den ausgewählten Stand. Die Originaldatei bleibt unverändert.">Plus creates a new edit state; the copy button duplicates the current one. Rename and Delete apply to the selected state. The original dataset file remains unchanged.</li>
+            <li data-de="Bei Mehrkanaldaten lässt sich im Pinsel-Fenster auswählen, welche Datenkanäle bearbeitet werden. Der Screenshot zeigt einen einkanaligen Datensatz.">For multichannel volumes, the Brush panel lets you choose which data channels to edit. The screenshot shows a single-channel dataset.</li>
+            <li data-de="Ein roter Punkt am Edit-Modus bedeutet, dass noch Bricks aktualisiert werden. Diese Arbeit läuft bevorzugt von hoher zu niedriger Auflösung. Der Punkt bedeutet nicht automatisch, dass Netzwerkdaten übertragen werden.">A red dot on Edit means brick updates are still pending. Background work prioritizes fine resolution before coarse levels. The dot does not necessarily indicate network transfer.</li>
+          </ul>
+          <p data-de="Beim Wiederöffnen eines Bearbeitungsstands kann <strong>Bearbeitungsstand vorbereiten</strong> erscheinen. <strong>Abbrechen</strong> öffnet den Datensatz mit den noch ausstehenden Edits; die Arbeit wird im Hintergrund fortgesetzt. Es verwirft die Edits nicht. Das ist besonders bei Remote-Datensätzen hilfreich.">Reopening an edit state may display <strong>Preparing Edit State</strong>. <strong>Cancel</strong> opens the dataset with edits still pending and continues the work in the background; it does not discard those edits. This is especially useful with remote data.</p>
+        </section>
+
+        <section id="saving">
+          <h2 data-de="10. Das richtige Ergebnis speichern">10. Save the right result</h2>
+          <dl class="definition-list">
+            <div><dt data-de="Datensatzzustand">Dataset state</dt><dd data-de="Das Tray-Symbol mit Pfeil nach unten in der oberen Leiste speichert Transferfunktionen, Objekte, Messungen und Ansichtsparameter unter dem Datensatznamen. Das benachbarte Symbol mit Pfeil nach oben stellt sie wieder her. Bereits vorhandene Dateien werden nicht ohne Nachfrage überschrieben.">The tray with a downward arrow in the top bar saves transfer functions, objects, measurements, and view parameters under the dataset name. Its upward-arrow neighbor restores them. Existing files are not overwritten without confirmation.</dd></div>
+            <div><dt data-de="Einzelne Werkzeuge">Individual tools</dt><dd data-de="Die Laden-/Speichern-Buttons im jeweiligen Werkzeug verwalten gezielt Transferfunktionen, Objekt- oder Messungsdateien. So können Sie beispielsweise Messungen separat weitergeben.">Load/Save controls inside a tool manage transfer-function, object, or measurement files specifically. Use these to share measurements separately, for example.</dd></div>
+            <div><dt data-de="Bearbeiteter Datensatz">Edited dataset</dt><dd data-de="Edits werden separat vom Original gespeichert. Erst <strong>Bearbeiteten Datensatz exportieren / Export Edited Dataset</strong> im Pinsel-Fenster schreibt eine eigenständige neue <code>.data</code>-Datei mit eingearbeiteten Änderungen und eigener Datensatz-ID. Das ist etwas anderes als Datensatzzustand speichern.">Edits are stored separately from the original. <strong>Export Edited Dataset / Bearbeiteten Datensatz exportieren</strong> in the Brush panel writes a standalone new <code>.data</code> file with the edits applied and a new dataset ID. This is different from Save Dataset State.</dd></div>
+          </dl>
+          <div class="callout"><strong data-de="Gemeinsam arbeiten">Collaborate</strong><span data-de="SharePlay überträgt die gemeinsamen Darstellungsparameter, Objekte, Messungen und den gemeinsamen Bearbeitungsstand. Ansicht synchronisieren kann die lokale Kamera davon entkoppeln, ohne diese anderen Daten zu trennen. Details zum Beitreten, zu Datenquellen und zum Host-Wechsel stehen in den Plattformanleitungen.">SharePlay synchronizes shared visualization parameters, objects, measurements, and the shared edit state. Synchronize View can detach the local camera without separating those other data. See the platform guides for joining, dataset origins, and host changes.</span></div>
+          <div class="button-row"><a class="btn btn--ghost" href="./macos.html" data-de="macOS und Kurzbefehle">macOS and shortcuts</a><a class="btn btn--ghost" href="./ios.html">iPhone &amp; iPad</a><a class="btn btn--ghost" href="./visionos.html">Apple Vision Pro</a><a class="btn btn--ghost" href="./datasets.html" data-de="Dateien und Bearbeitungsstände">Files and edit states</a></div>
+        </section>
+      </article>
+    </div>
+  </main>
+  <footer class="footer"><div class="container footer__inner"><span class="footer__brand">© 2026 Jens Krueger</span><div class="footer__right"><a class="footer__link" href="./index.html" data-de="Zur Handbuch-Startseite">Guide home</a><a class="footer__link" href="./support.html">Support</a></div></div></footer>
+  <script>window.BorgVRI18n.applyTranslations({en:{title:"BorgVR interface tour",metaDescription:"Real screenshots explain rendering modes, controls, transfer functions, lighting, objects, measurements, and volume editing."},de:{title:"Die BorgVR-Oberfläche in Bildern",metaDescription:"Echte Screenshots erklären Render-Modi, Bedienleiste, Transferfunktionen, Beleuchtung, Objekte, Messungen und Volumenbearbeitung."}});</script>
+</body>
+</html>

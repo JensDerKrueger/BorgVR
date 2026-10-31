@@ -1,5 +1,7 @@
 (function () {
   function pickLocale() {
+    const requested = new URLSearchParams(window.location.search).get("lang");
+    if (requested === "en" || requested === "de") return requested;
     const language = (navigator.language || navigator.userLanguage || "en").toLowerCase();
     return language.startsWith("de") ? "de" : "en";
   }
@@ -9,6 +11,10 @@
     const copy = translations[locale] || translations.en || {};
 
     document.documentElement.lang = locale;
+
+    document.querySelectorAll("[data-language]").forEach((link) => {
+      link.setAttribute("aria-current", String(link.getAttribute("data-language") === locale));
+    });
 
     if (copy.title) {
       document.title = copy.title;
@@ -78,6 +84,19 @@
             element.setAttribute(attributeName, value);
           }
         });
+      });
+    }
+
+    // Run after translated HTML has inserted its links, including in offline help.
+    if (new URLSearchParams(window.location.search).has("lang")) {
+      document.querySelectorAll('a[href]').forEach((link) => {
+        const href = link.getAttribute("href");
+        if (!href || href.startsWith("#") || link.hasAttribute("data-language")) return;
+        const destination = new URL(href, window.location.href);
+        if (destination.origin === window.location.origin && destination.pathname.endsWith(".html")) {
+          destination.searchParams.set("lang", locale);
+          link.setAttribute("href", destination.href);
+        }
       });
     }
   }
