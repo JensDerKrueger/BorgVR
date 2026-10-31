@@ -98,36 +98,46 @@ struct ConverterView: View {
         .padding()
 
       // File selection row
-      HStack {
-
-        Button {
-          filePickerMode = .files
-        } label: {
-          Label("converter_select_input_volume", systemImage: "cube")
-        }
-        .disabled(isWorking)
-
-        Button {
-          filePickerMode = .dicomDirectory
-        } label: {
-          Label("Select DICOM folder", systemImage: "folder")
-        }
-        .disabled(isWorking)
-
-        Button {
-          if mode != .dicomFusion {
-            if mode != .dicom {
-              inputAccess = nil
-              inputFile = ""
-            }
-            registeredInputAccess = nil
-            mode = .dicomFusion
+      VStack(alignment: .leading, spacing: 12) {
+        HStack {
+          Button {
+            filePickerMode = .files
+          } label: {
+            Label("converter_select_input_volume", systemImage: "cube")
           }
-          filePickerMode = inputAccess == nil ? .dicomReference : .dicomRegistered
-        } label: {
-          Label("DICOM Fusion", systemImage: "square.3.layers.3d")
+          .disabled(isWorking)
+
+          Button {
+            filePickerMode = .zarrDirectory
+          } label: {
+            Label("Select Zarr folder", systemImage: "folder")
+          }
+          .disabled(isWorking)
         }
-        .disabled(isWorking)
+
+        HStack {
+          Button {
+            filePickerMode = .dicomDirectory
+          } label: {
+            Label("Select DICOM folder", systemImage: "folder")
+          }
+          .disabled(isWorking)
+
+          Button {
+            if mode != .dicomFusion {
+              if mode != .dicom {
+                inputAccess = nil
+                inputFile = ""
+              }
+              registeredInputAccess = nil
+              mode = .dicomFusion
+            }
+            filePickerMode = inputAccess == nil ? .dicomReference : .dicomRegistered
+          } label: {
+            Label("DICOM Fusion", systemImage: "square.3.layers.3d")
+          }
+          .disabled(isWorking)
+        }
 
         if mode != .dicomFusion {
           Text(inputFile)
@@ -147,12 +157,14 @@ struct ConverterView: View {
                 inputAccess = access
                 inputFile = url.path
                 mode = .dicomFusion
-              case .dicomDirectory, .files:
+              case .dicomDirectory, .zarrDirectory, .files:
                 inputAccess = access
                 inputFile = url.path
                 registeredInputAccess = nil
                 if pickerMode == .dicomDirectory {
                   mode = .dicom
+                } else if pickerMode == .zarrDirectory {
+                  mode = .convert
                 } else {
                   switch url.pathExtension.lowercased() {
                     case "data":

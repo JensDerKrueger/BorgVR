@@ -10,9 +10,9 @@ mkdir -p "$BUILD_DIR" "$SWIFT_MODULE_CACHE"
 swiftc \
   -module-cache-path "$SWIFT_MODULE_CACHE" \
   "$ROOT/BORGVR-IO/Vector.swift" \
-  "$ROOT/BORGVR-IO/DICOMVRMap.swift" \
+  "$ROOT/BORGVR-IO/Importers/DICOM/DICOMVRMap.swift" \
   "$ROOT/Tests/DICOMParserTestSupport.swift" \
-  "$ROOT/BORGVR-IO/DICOM.swift" \
+  "$ROOT/BORGVR-IO/Importers/DICOM/DICOM.swift" \
   "$ROOT/Tests/DICOMParserTests.swift" \
   -o "$BUILD_DIR/dicom-parser-tests"
 

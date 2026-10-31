@@ -38,6 +38,10 @@ final class StoredAppModel : ObservableObject {
 
   static let defaultAutoStartServer: Bool = false
   @AppStorage("autoStartServer") var autoStartServer: Bool = defaultAutoStartServer
+  @AppStorage("autoImportEnabled") var autoImportEnabled = false
+  @AppStorage("autoImportDirectory") var autoImportDirectory = ""
+  @AppStorage("autoImportInterval") var autoImportInterval = 10
+  @AppStorage("autoImportMode") var autoImportMode = BorgVRAutoImportMode.automatic
 
   static let defaultBorderModeString = BorgVRSharedDefaults.borderMode
   @AppStorage("borderMode") var borderModeString: String = defaultBorderModeString
@@ -76,6 +80,8 @@ final class StoredAppModel : ObservableObject {
       "enableCompression": Self.defaultEnableCompression, "quantizeImportsTo8Bit": false,
       "dicomResamplingFilter": "trilinear", "lastMinute": Self.defaultLastMinute,
       "autoStartServer": Self.defaultAutoStartServer, "borderMode": Self.defaultBorderModeString,
+      "autoImportEnabled": false, "autoImportDirectory": "", "autoImportInterval": 10,
+      "autoImportMode": BorgVRAutoImportMode.automatic.rawValue,
       "serverPort": Self.defaultPort, "enableWebServer": Self.defaultEnableWebServer,
       "webServerPort": Self.defaultWebServerPort, "webServerUsesTLS": Self.defaultWebServerUsesTLS,
       "webServerCertificateData": Self.defaultWebServerCertificateData,
@@ -138,6 +144,10 @@ final class StoredAppModel : ObservableObject {
     enableCompression = StoredAppModel.defaultEnableCompression
     lastMinute = StoredAppModel.defaultLastMinute
     autoStartServer = StoredAppModel.defaultAutoStartServer
+    autoImportEnabled = false
+    autoImportDirectory = ""
+    autoImportInterval = 10
+    autoImportMode = .automatic
     borderModeString = StoredAppModel.defaultBorderModeString
 
     port = StoredAppModel.defaultPort

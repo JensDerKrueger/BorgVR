@@ -1,5 +1,16 @@
 /* Localizable.strings (de) — additions for ConverterView */
 
+"auto_import_title" = "Auto-Import";
+"auto_import_enabled" = "Bei laufendem Server automatisch importieren";
+"auto_import_directory" = "Eingangsverzeichnis für Auto-Import";
+"auto_import_interval_format" = "Alle %d Sekunden prüfen";
+"auto_import_description" = "Überwacht das Eingangsverzeichnis und importiert neue Datensätze.";
+"auto_import_guided_description" = "Importiert die in import.json angegebenen Datensätze.";
+"auto_import_mode" = "Importmodus";
+"auto_import_automatic" = "Automatischer Import";
+"auto_import_guided" = "Geführter Import";
+"auto_import_copy_example" = "import.json-Beispiel in die Zwischenablage kopieren";
+"auto_import_deletion_warning" = "Quelldaten werden nach erfolgreichem Import gelöscht. Wählen Sie ein eigenes Eingangsverzeichnis, nicht Ihr Originaldatenarchiv. Das Zielverzeichnis muss außerhalb liegen.";
 "converter_import_title" = "Datensatz importieren";
 "converter_step_of_total_format" = "Schritt %d von %d";
 

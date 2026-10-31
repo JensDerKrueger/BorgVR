@@ -1,3 +1,14 @@
+"auto_import_title" = "Importation automatique";
+"auto_import_enabled" = "Importer automatiquement lorsque le serveur fonctionne";
+"auto_import_directory" = "Dossier d’entrée pour l’importation automatique";
+"auto_import_interval_format" = "Vérifier toutes les %d secondes";
+"auto_import_description" = "Surveille le dossier d’entrée et importe les nouveaux jeux de données.";
+"auto_import_guided_description" = "Importe les jeux de données indiqués dans import.json.";
+"auto_import_mode" = "Mode d’importation";
+"auto_import_automatic" = "Importation automatique";
+"auto_import_guided" = "Importation guidée";
+"auto_import_copy_example" = "Copier un exemple de import.json dans le presse-papiers";
+"auto_import_deletion_warning" = "Les sources sont supprimées après une importation réussie. Choisissez un dossier d’entrée dédié, pas votre archive d’originaux. Le dossier de sortie doit se trouver en dehors de celui-ci.";
 "converter_import_title" = "Importer un jeu de données";
 "converter_step_of_total_format" = "Étape %d sur %d";
 

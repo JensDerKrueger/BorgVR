@@ -51,6 +51,7 @@ public final class QVISParser: VolumeFileParser {
 
   /// The file name of the volume data object, resolved to an absolute path.
   public let absoluteFilename: String
+  public var sourceFiles: [URL] { [URL(fileURLWithPath: absoluteFilename)] }
 
   /// The resolution of the volume in voxels along x, y, and z axes.
   public let size: Vec3<Int>

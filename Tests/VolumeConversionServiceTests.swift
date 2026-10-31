@@ -1464,6 +1464,7 @@ private enum VolumeConversionServiceTestRunner {
       try profileExistingEditState(directory: URL(fileURLWithPath: directory), dataset: URL(fileURLWithPath: dataset))
       return
     }
+    try runAutoImporterTests()
     try testSettingsAndCancellation()
     try testVolumeQuantization()
     try runVolumeEditTests()

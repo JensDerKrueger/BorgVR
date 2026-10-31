@@ -29,6 +29,7 @@ struct SettingsView: View {
   @State private var brickOverlapErrorMsg: String?
   @State private var syncServers: [ServerSyncEndpoint] = []
   @State private var showResetConfirmation = false
+  @State private var showAutoImportDirectoryPicker = false
 
   var body: some View {
     VStack(alignment: .leading, spacing: 16) {
@@ -244,6 +245,49 @@ struct SettingsView: View {
           Label("settings_tab_server", systemImage: "server.rack")
         }
 
+        VStack(alignment: .leading, spacing: 16) {
+          Toggle("auto_import_enabled", isOn: $storedAppModel.autoImportEnabled)
+          HStack(spacing: 10) {
+            Picker("auto_import_mode", selection: $storedAppModel.autoImportMode) {
+              Text("auto_import_automatic").tag(BorgVRAutoImportMode.automatic)
+              Text("auto_import_guided").tag(BorgVRAutoImportMode.guided)
+            }
+            .pickerStyle(.segmented)
+            .frame(maxWidth: 440)
+            Button {
+              NSPasteboard.general.clearContents()
+              NSPasteboard.general.setString(BorgVRAutoImportManifest.example, forType: .string)
+            } label: {
+              Image(systemName: "info.circle")
+            }
+            .help("auto_import_copy_example")
+            .accessibilityLabel(Text("auto_import_copy_example"))
+          }
+          HStack {
+            TextField("auto_import_directory", text: $storedAppModel.autoImportDirectory)
+              .textFieldStyle(.roundedBorder)
+            Button { showAutoImportDirectoryPicker = true } label: {
+              Image(systemName: "folder")
+            }
+            .help("auto_import_directory")
+          }
+          Stepper(value: $storedAppModel.autoImportInterval, in: 1...3600) {
+            Text(String(format: NSLocalizedString("auto_import_interval_format", comment: "Check interval"),
+              storedAppModel.autoImportInterval))
+          }
+          Text(LocalizedStringKey(storedAppModel.autoImportMode == .guided
+            ? "auto_import_guided_description" : "auto_import_description"))
+            .font(.callout)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+          Label("auto_import_deletion_warning", systemImage: "exclamationmark.triangle")
+            .foregroundStyle(.orange)
+            .fixedSize(horizontal: false, vertical: true)
+          Spacer()
+        }
+        .padding()
+        .tabItem { Label("auto_import_title", systemImage: "folder.badge.gearshape") }
+
         // Import Tab
         VStack(alignment: .leading, spacing: 12) {
           GroupBox(label: Text("settings_import_group_title").bold()) {
@@ -366,6 +410,9 @@ struct SettingsView: View {
     }
     .keyboardShortcut(.cancelAction)
     .padding(24)
+    .fileImporter(isPresented: $showAutoImportDirectoryPicker, allowedContentTypes: [.folder]) { result in
+      if case .success(let url) = result { storedAppModel.autoImportDirectory = url.path }
+    }
     .onReceive(NotificationCenter.default.publisher(for: .borgVRSettingsImported)) { _ in
       tempPort = String(storedAppModel.port)
       tempBrickCount = String(storedAppModel.maxBricksPerGetRequest)

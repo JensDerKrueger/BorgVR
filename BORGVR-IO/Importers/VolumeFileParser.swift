@@ -9,6 +9,9 @@ import Foundation
  */
 public protocol VolumeFileParser {
 
+  /// Original sidecar files, excluding temporary decoded voxel data.
+  var sourceFiles: [URL] { get }
+
   /// The absolute path to the volume file on disk.
   var absoluteFilename: String { get }
 
@@ -34,6 +37,10 @@ public protocol VolumeFileParser {
   var dataIsTempCopy: Bool { get }
 }
 
+extension VolumeFileParser {
+  public var sourceFiles: [URL] { [] }
+}
+
 /// Creates the appropriate parser for a supported volume-file extension.
 public enum VolumeFileParserFactory {
   public enum Error: Swift.Error, LocalizedError {
@@ -47,9 +54,13 @@ public enum VolumeFileParserFactory {
     }
   }
 
-  public static let supportedExtensions = ["dat", "nrrd", "nhdr", "pvm", "i3m", "zip"]
+  public static let supportedExtensions = ["dat", "nrrd", "nhdr", "pvm", "i3m", "zip", "ozx", "zarr"]
 
-  public static func parser(for filename: String) throws -> VolumeFileParser {
+  public static func parser(for filename: String, cancellationCheck: (() throws -> Void)? = nil,
+                            progress: ((Double) -> Void)? = nil) throws -> VolumeFileParser {
+    if try URL(fileURLWithPath: filename).resourceValues(forKeys: [.isDirectoryKey]).isDirectory == true {
+      return try ZarrParser(filename: filename, cancellationCheck: cancellationCheck, progress: progress)
+    }
     switch URL(fileURLWithPath: filename).pathExtension.lowercased() {
       case "dat":
         return try QVISParser(filename: filename)
@@ -59,6 +70,10 @@ public enum VolumeFileParserFactory {
         return try PVMParser(filename: filename)
       case "i3m", "zip":
         return try I3MParser(filename: filename)
+      case "ozx", "zarr":
+        return try ZarrParser(filename: filename, cancellationCheck: cancellationCheck, progress: progress)
+      case "json" where URL(fileURLWithPath: filename).lastPathComponent == "zarr.json":
+        return try ZarrParser(filename: filename, cancellationCheck: cancellationCheck, progress: progress)
       default:
         throw Error.unsupportedFileType(URL(fileURLWithPath: filename).pathExtension)
     }

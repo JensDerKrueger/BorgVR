@@ -2,7 +2,7 @@ import Dispatch
 import Foundation
 
 enum TerminalServerInfo {
-  static let version = "3.4"
+  static let version = "3.5"
   static let defaultMaximumBricksPerRequest = 64
   static let build: String = {
     let executable = URL(fileURLWithPath: CommandLine.arguments[0]).standardizedFileURL.path
@@ -34,6 +34,9 @@ struct ServerConfiguration {
   var webServerCertificatePath: String?
   var webServerCertificatePassword = ""
   var logFilePath: String?
+  var autoImportDirectory: String?
+  var autoImportInterval = BorgVRAutoImporter.defaultInterval
+  var autoImportMode = BorgVRAutoImportMode.automatic
   var syncServers: [ServerSyncEndpoint] = []
 
   func serverConfiguration(certificateData: Data) -> BorgVRServerConfiguration {
@@ -66,6 +69,7 @@ Options:
   --max-bricks, -m <count>        Maximum bricks per GETBRICKS request.
                                   Defaults to \(TerminalServerInfo.defaultMaximumBricksPerRequest).
   --password <secret>             Optional password for native and WebGPU clients.
+                                  BORGVR_SERVER_PASSWORD is used when this option is absent.
   --scan-interval <seconds>       Refresh the file catalog periodically.
                                   Defaults to 10; use 0 to disable rescanning.
   --web-port <port>               Enable the WebGPU server on this port.
@@ -74,6 +78,10 @@ Options:
   --web-certificate <path>        PKCS#12 certificate (.p12 or .pfx) for HTTPS.
   --web-certificate-password <p>  Password for the PKCS#12 certificate.
   --log-file <path>               Also append log messages to this file.
+  --auto-import <path>            Watch an input directory and import stable sources.
+                                  Successfully imported sources are deleted.
+  --auto-import-interval <sec>    Time between stability checks (default: 10).
+  --auto-import-mode <mode>       automatic (default) or guided (reads import.json).
   --sync-server <host> <port> <interval> [password]
                                   Synchronize server content at intervals of at least
                                   10 seconds. Repeat for fallback sources.
@@ -93,6 +101,7 @@ func fail(_ message: String) -> Never {
 
 func parseArguments(_ args: [String]) -> ServerConfiguration {
   var config = ServerConfiguration()
+  config.password = ProcessInfo.processInfo.environment["BORGVR_SERVER_PASSWORD"] ?? ""
   var index = 1
 
   func requireValue(after option: String) -> String {
@@ -125,6 +134,26 @@ func parseArguments(_ args: [String]) -> ServerConfiguration {
 
       case "--password":
         config.password = requireValue(after: argument)
+
+      case "--auto-import":
+        let path = requireValue(after: argument)
+        guard !path.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+          fail("Auto-import input directory must not be empty.")
+        }
+        config.autoImportDirectory = NSString(string: path).expandingTildeInPath
+
+      case "--auto-import-interval":
+        guard let interval = TimeInterval(requireValue(after: argument)),
+              BorgVRAutoImporter.allowedIntervals.contains(interval) else {
+          fail("Auto-import interval must be between 0.1 and 86400 seconds.")
+        }
+        config.autoImportInterval = interval
+
+      case "--auto-import-mode":
+        guard let mode = BorgVRAutoImportMode(rawValue: requireValue(after: argument)) else {
+          fail("Auto-import mode must be automatic or guided.")
+        }
+        config.autoImportMode = mode
 
       case "--scan-interval":
         let value = requireValue(after: argument)
@@ -250,6 +279,9 @@ func printStartupBanner(_ config: ServerConfiguration, logLevel: LogLevel = .inf
     print(" Scan interval     : disabled")
   }
   print(" Password          : \(config.password.isEmpty ? "disabled" : "enabled")")
+  if let directory = config.autoImportDirectory {
+    print(" Auto-import       : \(directory) (\(config.autoImportMode.rawValue), every \(config.autoImportInterval) s; sources deleted after import)")
+  }
   print(" Log level         : \(logLevelDescription(logLevel))")
   print(" Log file          : \(config.logFilePath ?? "disabled")")
   if let webPort = config.webPort {
@@ -368,6 +400,19 @@ if let logFilePath = config.logFilePath {
 }
 let logger = MultiplexLogger(loggers: logDestinations, minimumLogLevel: .info)
 let host = BorgVRServerHost(logger: logger)
+let autoImporter: BorgVRAutoImporter?
+do {
+  autoImporter = try config.autoImportDirectory.map { directory in
+    try BorgVRAutoImporter(input: URL(fileURLWithPath: directory, isDirectory: true),
+      output: URL(fileURLWithPath: config.dataDirectory, isDirectory: true),
+      interval: config.autoImportInterval,
+      mode: config.autoImportMode,
+      settings: BorgVRVolumeConversionSettings(brickSize: BorgVRSharedDefaults.brickSize,
+        overlap: BorgVRSharedDefaults.brickOverlap, useCompression: BorgVRSharedDefaults.compressionEnabled,
+        extensionStrategy: .fillZeroes), logger: logger,
+      onImported: { [host, serverConfiguration] _ in _ = host.refreshCatalog(configuration: serverConfiguration) })
+  }
+} catch { fail(error.localizedDescription) }
 
 printStartupBanner(config, logLevel: logger.currentLevel)
 logger.info("Scanning server catalog in \(config.dataDirectory)")
@@ -407,6 +452,7 @@ let syncManager: ServerSyncManager? = config.syncServers.isEmpty ? nil : ServerS
 
 func stopAndExit() {
   logger.info("Stopping server...")
+  autoImporter?.stop()
   catalogTimer?.cancel()
   catalogTimer = nil
   syncManager?.stop()
@@ -431,6 +477,7 @@ if config.scanIntervalSeconds > 0 {
 }
 
 syncManager?.start()
+autoImporter?.start()
 
 printConsoleHelp()
 while let line = readLine() {

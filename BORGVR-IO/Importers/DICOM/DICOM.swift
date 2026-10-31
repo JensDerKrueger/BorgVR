@@ -113,6 +113,7 @@ final class DicomParser {
    - voxelData: A flat array of voxel intensities in ZYX order.
    */
   struct DicomVolume {
+    var sourceFiles: [URL] = []
     /// The width (columns) of each 2D slice.
     let width: Int
     /// The height (rows) of each 2D slice.
@@ -197,14 +198,14 @@ final class DicomParser {
     cancellationToken: BorgVRVolumeConversionCancellationToken? = nil
   ) throws -> DicomVolume {
     // Parse headers and slice data for each file, ignoring those that fail
-    var parsed: [(DicomFile, DicomSlice)] = []
+    var parsed: [(DicomFile, DicomSlice, URL)] = []
     parsed.reserveCapacity(dicomFiles.count)
     for (index, url) in dicomFiles.enumerated() {
       try cancellationToken?.checkCancellation()
       do {
         let file = try parseDicomHeader(from: url)
         let slice = try openSlice(from: file)
-        parsed.append((file, slice))
+        parsed.append((file, slice, url))
       } catch {
         // A DICOM directory can contain unrelated files. Keep scanning.
       }
@@ -226,7 +227,7 @@ final class DicomParser {
     let bytesPerVoxel = Int((first.bitsAllocated ?? 8 + 7) / 8) * Int(first.samplesPerPixel ?? 1)
 
     // Filter out slices that do not match the dimensions
-    let filtered = parsed.filter { (_, slice) in
+    let filtered = parsed.filter { (_, slice, _) in
       Int(slice.columns) == width && Int(slice.rows) == height
     }
 
@@ -340,7 +341,7 @@ final class DicomParser {
     var buffer = [UInt8](repeating: 0, count: volumeByteCount)
 
     // Decode each slice and copy its pixels into the buffer
-    for (i, (file, slice)) in sorted.enumerated() {
+    for (i, (file, slice, _)) in sorted.enumerated() {
       try cancellationToken?.checkCancellation()
       let sliceByteCount = try checkedProduct(width, height, bytesPerVoxel, tag: .pixelData)
       let offset = try checkedProduct(i, sliceByteCount, tag: .pixelData)
@@ -358,6 +359,7 @@ final class DicomParser {
     let metaSource = parsed.first!.1
 
     return DicomVolume(
+      sourceFiles: sorted.map { $0.2 },
       width: width,
       height: height,
       depth: depth,

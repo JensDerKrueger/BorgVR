@@ -115,6 +115,7 @@ struct BorgVRUnbrickedVolume: Sendable {
   let origin: Vec3<Float>?
   let frameOfReferenceUID: String?
   let channels: [BorgVRUnbrickedVolumeChannelMetadata]
+  var sourceFiles: [URL] = []
 }
 
 enum BorgVRDICOMVolumeFusion {
@@ -376,19 +377,22 @@ public struct BorgVRVolumeConversionRequest: Sendable {
   public let datasetDescription: String
   public let metaDescription: String
   public let settings: BorgVRVolumeConversionSettings
+  public let physicalSizeMeters: Vec3<Float>?
 
   public init(
     source: BorgVRVolumeConversionSource,
     destinationURL: URL,
     datasetDescription: String,
     metaDescription: String,
-    settings: BorgVRVolumeConversionSettings
+    settings: BorgVRVolumeConversionSettings,
+    physicalSizeMeters: Vec3<Float>? = nil
   ) {
     self.source = source
     self.destinationURL = destinationURL
     self.datasetDescription = datasetDescription
     self.metaDescription = metaDescription
     self.settings = settings
+    self.physicalSizeMeters = physicalSizeMeters
   }
 }
 
@@ -490,7 +494,9 @@ public enum BorgVRVolumeConversionService {
     logger: LoggerBase?,
     cancellationToken: BorgVRVolumeConversionCancellationToken?
   ) throws {
-    let parser = try VolumeFileParserFactory.parser(for: sourceURL.path)
+    let parser = try VolumeFileParserFactory.parser(for: sourceURL.path,
+      cancellationCheck: { try cancellationToken?.checkCancellation() },
+      progress: { logger?.progress("Reading Zarr volume", $0) })
     defer {
       if parser.dataIsTempCopy {
         try? FileManager.default.removeItem(atPath: parser.absoluteFilename)
@@ -521,13 +527,14 @@ public enum BorgVRVolumeConversionService {
     )
   }
 
-  private static func convertDICOMDirectory(
+  @discardableResult
+  static func convertDICOMDirectory(
     _ directoryURL: URL,
     request: BorgVRVolumeConversionRequest,
     stagedURL: URL,
     logger: LoggerBase?,
     cancellationToken: BorgVRVolumeConversionCancellationToken?
-  ) throws {
+  ) throws -> [URL] {
     let volume = try decodeDICOMDirectory(
       directoryURL,
       logger: logger,
@@ -543,7 +550,8 @@ public enum BorgVRVolumeConversionService {
       metaDescription: request.metaDescription.isEmpty
         ? volume.channels.map(\.description).joined(separator: " + ")
         : request.metaDescription,
-      settings: request.settings
+      settings: request.settings,
+      physicalSizeMeters: request.physicalSizeMeters
     )
     try convertRaw(
       volume.source,
@@ -553,6 +561,7 @@ public enum BorgVRVolumeConversionService {
       cancellationToken: cancellationToken,
       signedComponents: volume.channels.map(\.isSigned)
     )
+    return volume.sourceFiles
   }
 
   private static func convertRegisteredDICOMPair(
@@ -603,7 +612,8 @@ public enum BorgVRVolumeConversionService {
       metaDescription: request.metaDescription.isEmpty
         ? fused.channels.map(\.description).joined(separator: " + ")
         : request.metaDescription,
-      settings: request.settings
+      settings: request.settings,
+      physicalSizeMeters: request.physicalSizeMeters
     )
     try convertRaw(
       fused.source,
@@ -682,7 +692,8 @@ public enum BorgVRVolumeConversionService {
         seriesDate: volume.seriesDate,
         isSigned: volume.isSigned,
         pixelPaddingValue: volume.pixelPaddingValue
-      )]
+      )],
+      sourceFiles: volume.sourceFiles
     )
   }
 
@@ -695,12 +706,20 @@ public enum BorgVRVolumeConversionService {
     signedComponents: [Bool] = []
   ) throws {
     try cancellationToken?.checkCancellation()
+    var spacing = source.voxelSpacing
+    if let extent = request.physicalSizeMeters {
+      spacing = Vec3(x: extent.x / Float(source.size.x), y: extent.y / Float(source.size.y),
+        z: extent.z / Float(source.size.z))
+      guard [spacing.x, spacing.y, spacing.z].allSatisfy({ $0.isFinite && $0 > 0 }) else {
+        throw BorgVRVolumeConversionError.invalidIntermediateVolumeSize
+      }
+    }
     var volume = try RawFileAccessor(
       filename: source.url.path,
       size: source.size,
       bytesPerComponent: source.bytesPerComponent,
       componentCount: source.componentCount,
-      voxelSpacing: source.voxelSpacing,
+      voxelSpacing: spacing,
       offset: source.offset,
       readOnly: true
     )

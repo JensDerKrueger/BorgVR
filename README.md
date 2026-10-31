@@ -14,7 +14,7 @@ The project is intended for interactive exploration of large volumetric datasets
 native Metal renderers, dataset conversion tools, local and remote dataset servers, SharePlay
 collaboration, and a WebGPU browser frontend served directly by the dataset server.
 
-The current development version is **3.4**. The SharePlay wire protocol is version **3.3**.
+The current development version is **3.5**. The SharePlay wire protocol is version **3.3**.
 
 ## What Is Included
 
@@ -287,7 +287,7 @@ shown, and the suite exits with a nonzero status if any test or build fails.
 
 ### Command-Line Volume Generator
 
-The `TerminalConverterApp` scheme converts DICOM, QVIS, NRRD, PVM, and IV3Dm input, exports any LoD of a
+The `TerminalConverterApp` scheme converts DICOM, QVIS, NRRD, PVM, IV3Dm, and Zarr input, exports any LoD of a
 BorgVR dataset as a flat volume, and can create reproducible synthetic volumes. Export uses one
 deliberately simple interchange representation: an uncompressed inline NRRD file.
 
@@ -349,6 +349,36 @@ one volume at a time. For example:
 TerminalConverterApp I c60.i3m.zip c60.data "C60 from ImageVis3D Mobile" 64 2
 ```
 
+Zarr import uses the same isolated `VolumeFileParser` interface as QVIS and NRRD. It reads
+local Zarr v3 arrays with named axes and OME-Zarr 0.5 images, either as `.zarr` directories
+or RFC-9 `.ozx` ZIP/ZIP64 files. It supports `uint8`, `uint16`, and `uint32`, up to four
+channels, raw/gzip/Zstandard chunks, indexed shards, CRC32C, and both byte orders. The
+Zstandard decoder is implemented in Swift without external dependencies. The highest-resolution
+level is assembled chunk by chunk into a memory-mapped temporary RAW volume, then passed through
+the normal BorgVR conversion pipeline. Cancellation is checked between shards and chunks.
+Physical spatial units are converted to meters; unitless data preserve proportions with a
+longest extent of one meter. Global origin translation is not retained by the current volume
+parser interface. Zarr v2, time series, signed/floating-point samples, external dictionaries,
+Blosc, transpose codecs, and unsupported metadata layouts are rejected explicitly, not guessed.
+
+```sh
+TerminalConverterApp Z blunt_fin.ozx blunt_fin.data "Blunt fin" 32 2
+```
+
+The same importer is available through GUI volume import and macOS GSC `importfile`.
+On iOS and visionOS, use **Select Zarr folder** for a directory store or the regular
+volume-file picker for `.ozx`. The macOS renderer and GUI server accept either through
+their shared volume import picker.
+
+Importer implementation is organized under `BORGVR-IO/Importers/`, with format directories
+`NRRD`, `QVIS`, `I3D` (IV3Dm), `DICOM`, `ZARR`, `PVM`, and `Mesh`. The parser interface,
+conversion service, quantizer, and bricking pipeline are shared directly in `Importers`;
+DICOM registration, JPEG decoding, and dictionary resources stay with the DICOM reader.
+
+`Scripts/test-zarr.sh` covers layouts, boundaries, shards, ZIP64, endian conversion, fill values,
+and cancellation. `Scripts/test-zstandard.sh` tests a fixed reference frame and, when the `zstd`
+command is installed, additional reference-compressor comparisons and malformed input.
+
 ### Swift Dataset Server
 
 The `TerminalServerApp` scheme builds the standalone Swift server. It serves datasets, transfer
@@ -364,6 +394,10 @@ certificate by default; use `--web-http` for localhost-only HTTP or `--web-certi
 PKCS#12 certificate. Password protection applies to both protocols. Run
 `TerminalServerApp --help` for certificate, scan-interval, brick-batch, and file-logging options.
 
+The server uses `BORGVR_SERVER_PASSWORD` when `--password` is omitted. An explicit
+`--password` overrides the environment variable, including an empty value to disable password
+protection. The password is never printed in the startup information.
+
 Remote BorgVR servers can be synchronized into the same directory. The option is repeatable, and
 the optional password is never printed by the server:
 
@@ -376,6 +410,63 @@ TerminalServerApp --directory /srv/borgvr \
 Synchronization includes datasets, transfer functions, object placement files, and mesh assets.
 When more than one configured server offers a dataset, another source is tried if the current
 transfer stalls.
+
+#### Automatic Import (Swift Servers)
+
+The GUI server and `TerminalServerApp` share an automatic importer. In the GUI, enable it in
+Settings > Auto-Import, select a dedicated input directory, and start the server. The importer
+uses the GUI's import settings; the command-line server uses the standard conversion defaults.
+
+```sh
+TerminalServerApp --directory /srv/borgvr --auto-import /srv/borgvr-inbox \
+  --auto-import-interval 10
+```
+
+The importer waits for two identical directory snapshots, including file sizes, modification
+times, and new or removed files. Directories are tried as Zarr, then DICOM. Files are probed with
+the existing QVIS, NRRD, PVM, IV3Dm, and Zarr readers, preferring their usual extension.
+Completed `.data` files appear in the server catalog immediately; existing outputs are never
+overwritten. The output directory must be outside the watched input directory.
+
+**Processed sources are deleted**, including unreadable inputs and known QVIS/NRRD payload files.
+Use an inbox, not your original data archive. Cancellation, changing inputs, and output I/O failures
+retain pending data. Symbolic links and payloads outside the inbox are rejected. Sources are rechecked after conversion, and cleanup
+never recursively deletes newly arrived files. Two stable checks are a completion heuristic:
+avoid pausing an unfinished copy for longer than the check interval.
+
+The input directory's reserved `log.txt` records successes and failures with timestamps and
+output paths or error details. It is appended to, never imported or deleted, and excluded from
+stability checks. The automatic importer stops with the server.
+
+**Guided Import** processes only the sources listed in `import.json`. Select this mode in the GUI
+or add `--auto-import-mode guided` to the command line. The info button beside the mode selector
+copies an example to the clipboard. Only `import.json` must be unchanged across two checks;
+unlisted arrivals do not delay the request. Write the data first and submit the manifest last.
+
+```json
+[
+  {
+    "source": "scan.nrrd",
+    "destination": "head.data",
+    "description": "Head scan",
+    "sizeMeters": [0.2, 0.15, 0.1]
+  },
+  { "source": "dicom-series" }
+]
+```
+
+Only `source` is required. It must exactly name a direct entry in the inbox, not a path, `.` or
+`..`. Optional `destination` is a simple `.data` filename (the extension can be omitted);
+collisions receive a numeric suffix, never overwrite existing files. `sizeMeters` specifies the
+complete volume's X/Y/Z dimensions in meters, from which voxel spacing is derived. Without it,
+the reader's physical dimensions are kept. Path separators, control characters, duplicate
+sources, links, and reserved filenames are rejected; manifests are limited to 1 MiB and 1024
+entries. Rejected instructions never delete files named by unsafe paths.
+
+The completed `import.json` is removed even if decoding or an import failed; the result stays in
+`log.txt`. A replacement manifest arriving during processing is not deleted. Unlisted files stay
+in place in guided mode. Interrupted or changing requests remain pending rather than deleting
+unfinished sources.
 
 ### C++ Dataset Server
 
@@ -402,8 +493,8 @@ options. While either server is running, enter `l` to list its current datasets,
 to select developer/debug, info, warning, or error output, `i` to repeat the startup information,
 `r` to refresh the catalog, `h` for console help, or `q` to stop it.
 
-The C++ server also accepts its password through `BORGVR_SERVER_PASSWORD` when `--password` is
-omitted. Its network layer bounds requests and response batches and applies connection timeouts.
+Like the Swift server, the C++ server accepts its password through `BORGVR_SERVER_PASSWORD` when
+`--password` is omitted. Its network layer bounds requests and response batches and applies connection timeouts.
 Rejected commands and invalid client-supplied dataset IDs are not echoed into logs.
 
 ### Apple Vision Pro Development

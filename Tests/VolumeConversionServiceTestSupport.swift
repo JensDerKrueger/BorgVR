@@ -8,6 +8,7 @@ enum DicomParser {
   }
 
   struct DicomVolume {
+    var sourceFiles: [URL] = []
     let voxelData: Data
     let width: Int
     let height: Int

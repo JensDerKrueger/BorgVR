@@ -31,6 +31,7 @@ struct ServerView: View {
   @State private var webServer: HTTPWebServer?
   @State private var syncManager: ServerSyncManager?
   @State private var startupTask: Task<Void, Never>?
+  @State private var autoImporter: BorgVRAutoImporter?
 
   /// Dataset scanner for the directory
   @State private var datasetScanner: DatasetScanner?
@@ -236,6 +237,7 @@ struct ServerView: View {
     .onReceive(ipUpdateTimer) { _ in
       fillIPAdressText()
     }
+    .onDisappear { stopServer() }
     .fileImporter(
       isPresented: $showDirectoryPicker,
       allowedContentTypes: [.folder],
@@ -374,6 +376,8 @@ struct ServerView: View {
   }
 
   private func stopServer() {
+    autoImporter?.stop()
+    autoImporter = nil
     startupTask?.cancel(); startupTask = nil
     syncManager?.stop()
     syncManager = nil
@@ -424,6 +428,7 @@ struct ServerView: View {
       guard !Task.isCancelled, server === pendingServer else { return }
       if ready {
         startSyncManager()
+        startAutoImporter()
         statusText = L("server_status_running", comment: "Server status when the server is running")
         statusColor = .green
       } else {
@@ -457,6 +462,36 @@ struct ServerView: View {
     )
     syncManager = manager
     manager.start()
+  }
+
+  private func startAutoImporter() {
+    autoImporter?.stop()
+    guard storedAppModel.autoImportEnabled else { return }
+    do {
+      guard !storedAppModel.autoImportDirectory.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+        throw BorgVRAutoImporter.ImportError.invalidDirectory
+      }
+      let border: ExtensionStrategy = switch storedAppModel.borderModeString {
+        case "border": .clamp
+        case "repeat": .repeatValue
+        default: .fillZeroes
+      }
+      let importer = try BorgVRAutoImporter(
+        input: URL(fileURLWithPath: storedAppModel.autoImportDirectory, isDirectory: true),
+        output: URL(fileURLWithPath: storedAppModel.dataDirectory, isDirectory: true),
+        interval: TimeInterval(storedAppModel.autoImportInterval),
+        mode: storedAppModel.autoImportMode,
+        settings: BorgVRVolumeConversionSettings(brickSize: storedAppModel.brickSize,
+          overlap: storedAppModel.brickOverlap, useCompression: storedAppModel.enableCompression,
+          extensionStrategy: border, quantizeTo8Bit: storedAppModel.quantizeImportsTo8Bit),
+        logger: logger, onImported: { _ in
+          Task { @MainActor in
+            if isRunningServer { rescanCatalogAfterSync() }
+          }
+        })
+      autoImporter = importer
+      importer.start()
+    } catch { logger.error("Auto-import: \(error.localizedDescription)") }
   }
 
   private func rescanCatalogAfterSync() {

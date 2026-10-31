@@ -1,7 +1,7 @@
 import Foundation
 
 enum ConverterInfo {
-  static let version = "3.4"
+  static let version = "3.5"
 
   static let banner = #"""
    ____                   __     ______
@@ -30,6 +30,7 @@ enum Mode: String {
   case NRRDConversion = "N"
   case PVMConversion = "P"
   case I3MConversion = "I"
+  case ZarrConversion = "Z"
   case FlatVolumeExport = "E"
   case DemoDataCreation = "C"
 }
@@ -205,6 +206,12 @@ Mode I — Read an ImageVis3D Mobile (IV3Dm) volume
         max_brick_size    : Positive integer specifying the maximum brick size
         overlap           : Positive integer specifying the overlap between bricks
 
+Mode Z — Read a local Zarr v3 / OME-Zarr 0.5 volume
+    \(executableName) Z <input_filename> <output_filename> <description> <max_brick_size> <overlap>
+        input_filename    : Path to an .ozx file, .zarr directory, or zarr.json
+        samples           : uint8, uint16, uint32; up to four channels; no time series
+        codecs            : raw bytes, Zstandard, gzip, CRC32C, indexed shards
+
 Mode E — Export one BorgVR LoD as an uncompressed NRRD volume
     \(executableName) E <input_filename> <output_filename> <lod>
         input_filename    : Path to the BorgVR .data file
@@ -290,9 +297,9 @@ func parseArguments(_ args: [String]) -> (Mode, Any) {
       )
       result.1 = params
 
-    case .QVISConversion, .NRRDConversion, .PVMConversion, .I3MConversion:
+    case .QVISConversion, .NRRDConversion, .PVMConversion, .I3MConversion, .ZarrConversion:
       guard args.count == 7 else {
-        logger.error("Error: Invalid number of arguments for mode Q, N, P, or I.\n\(usageErrorMessage)")
+        logger.error("Error: Invalid number of arguments for mode Q, N, P, I, or Z.\n\(usageErrorMessage)")
         exit(1)
       }
       guard let maxBrickSize = Int(args[5]), maxBrickSize > 0,
@@ -740,6 +747,9 @@ switch mode {
   case .I3MConversion:
     guard let params = params as? HeaderFileModeParameters else { exit(1) }
     convertFileVolume(params, formatName: "IV3Dm")
+  case .ZarrConversion:
+    guard let params = params as? HeaderFileModeParameters else { exit(1) }
+    convertFileVolume(params, formatName: "Zarr")
   case .FlatVolumeExport:
     guard let params = params as? ExportModeParameters else { exit(1) }
     exportFlatVolume(params)

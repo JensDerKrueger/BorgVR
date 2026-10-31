@@ -28,6 +28,7 @@ final class VolumeImportSourceAccess: @unchecked Sendable {
 struct FilePickerView: UIViewControllerRepresentable {
   enum Mode: String, Identifiable {
     case files
+    case zarrDirectory
     case dicomDirectory
     case dicomReference
     case dicomRegistered

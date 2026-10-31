@@ -38,7 +38,7 @@ struct ConverterView: View {
       ScrollView {
         VStack(spacing: 14) {
           VStack(alignment: .leading, spacing: 8) {
-            Text("Supported formats are QVIS `.dat` + `.raw`, NRRD/NHDR, PVM, IV3Dm (`.i3m` / `.i3m.zip`), and native BorgVR `.data` files.")
+            Text("Supported formats are QVIS `.dat` + `.raw`, NRRD/NHDR, PVM, IV3Dm (`.i3m` / `.i3m.zip`), Zarr/OZX, and native BorgVR `.data` files.")
               .foregroundStyle(.secondary)
             Text("For `.dat` and `.nhdr`, iOS also needs access to the referenced raw data file.")
               .font(.caption)
@@ -166,12 +166,14 @@ struct ConverterView: View {
                 inputAccess = access
                 inputFile = url.path
                 mode = .dicomFusion
-              case .dicomDirectory, .files:
+              case .dicomDirectory, .zarrDirectory, .files:
                 inputAccess = access
                 inputFile = url.path
                 registeredInputAccess = nil
                 if pickerMode == .dicomDirectory {
                   mode = .dicom
+                } else if pickerMode == .zarrDirectory {
+                  mode = .convert
                 } else {
                   switch url.pathExtension.lowercased() {
                     case "data":
@@ -205,6 +207,12 @@ struct ConverterView: View {
       filePickerMode = .files
     } label: {
       Label("Select input volume", systemImage: "doc.badge.plus")
+    }
+    .disabled(isWorking)
+    Button {
+      filePickerMode = .zarrDirectory
+    } label: {
+      Label("Select Zarr folder", systemImage: "folder")
     }
     .disabled(isWorking)
     Button {

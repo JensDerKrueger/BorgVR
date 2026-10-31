@@ -1,3 +1,14 @@
+"auto_import_title" = "Auto-Import";
+"auto_import_enabled" = "Automatically import while the server is running";
+"auto_import_directory" = "Auto-import input directory";
+"auto_import_interval_format" = "Check every %d seconds";
+"auto_import_description" = "Watches the input directory and imports new datasets.";
+"auto_import_guided_description" = "Imports the datasets listed in import.json.";
+"auto_import_mode" = "Import mode";
+"auto_import_automatic" = "Automatic Import";
+"auto_import_guided" = "Guided Import";
+"auto_import_copy_example" = "Copy an import.json example to the clipboard";
+"auto_import_deletion_warning" = "Source data is deleted after successful import. Choose a dedicated input directory, not your original data archive. The output directory must be outside it.";
 "converter_import_title" = "Import Dataset";
 "converter_step_of_total_format" = "Step %d of %d";
 

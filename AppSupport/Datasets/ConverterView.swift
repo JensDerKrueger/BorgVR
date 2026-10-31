@@ -1272,6 +1272,7 @@ struct ConverterView: View {
     panel.allowsMultipleSelection = false
     panel.allowsOtherFileTypes = true
     panel.allowedContentTypes = VolumeFileParserFactory.supportedExtensions.compactMap { UTType(filenameExtension: $0) }
+    panel.canChooseDirectories = true
     if panel.runModal() == .OK, let url = panel.url {
       if url.startAccessingSecurityScopedResource() {
         defer { url.stopAccessingSecurityScopedResource() }

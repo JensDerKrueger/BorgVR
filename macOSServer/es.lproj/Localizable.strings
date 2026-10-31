@@ -1,3 +1,14 @@
+"auto_import_title" = "Importación automática";
+"auto_import_enabled" = "Importar automáticamente mientras el servidor está activo";
+"auto_import_directory" = "Directorio de entrada para importación automática";
+"auto_import_interval_format" = "Comprobar cada %d segundos";
+"auto_import_description" = "Supervisa el directorio de entrada e importa nuevos conjuntos de datos.";
+"auto_import_guided_description" = "Importa los conjuntos de datos indicados en import.json.";
+"auto_import_mode" = "Modo de importación";
+"auto_import_automatic" = "Importación automática";
+"auto_import_guided" = "Importación guiada";
+"auto_import_copy_example" = "Copiar un ejemplo de import.json al portapapeles";
+"auto_import_deletion_warning" = "Los datos fuente se eliminan tras una importación correcta. Elija un directorio de entrada dedicado, no su archivo de originales. El directorio de salida debe estar fuera de él.";
 "converter_import_title" = "Importar conjunto de datos";
 "converter_step_of_total_format" = "Paso %d de %d";
 

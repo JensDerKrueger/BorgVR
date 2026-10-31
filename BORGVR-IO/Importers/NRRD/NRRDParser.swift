@@ -9,6 +9,7 @@ import Compression
  endian conversion when necessary).
  */
 public final class NRRDParser: VolumeFileParser {
+  public let sourceFiles: [URL]
 
   // MARK: - Error Enumeration
 
@@ -90,7 +91,7 @@ public final class NRRDParser: VolumeFileParser {
    required keys are missing or invalid, decompression fails, or
    an unsupported encoding is encountered.
    */
-  public init(filename: String) throws {
+  public init(filename: String, validateSource: ((URL) throws -> Void)? = nil) throws {
     let fileURL = URL(fileURLWithPath: filename)
     let fileData: Data
     do {
@@ -205,7 +206,8 @@ public final class NRRDParser: VolumeFileParser {
 
     // Determine encoding and compression
     let encoding = headerDict["encoding"]?.lowercased() ?? "raw"
-    let isCompressed = encoding != "raw"
+    guard ["raw", "ascii", "gzip", "gz"].contains(encoding) else { throw Error.notImplemented(encoding) }
+    let isCompressed = encoding == "gzip" || encoding == "gz"
     let needsEndianSwap = (declaredEndian == "big")
 
     // Determine data source (detached or inline)
@@ -223,9 +225,16 @@ public final class NRRDParser: VolumeFileParser {
       dataFilePath = filename
     }
 
+    sourceFiles = isDetached ? [URL(fileURLWithPath: dataFilePath)] : []
+    for source in sourceFiles { try validateSource?(source) }
+
     // Compute expected data size
-    let voxelCount = size.x * size.y * size.z * components
-    let expectedBytes = voxelCount * bytesPerComponent
+    var expectedBytes = 1
+    for factor in [size.x, size.y, size.z, components, bytesPerComponent] {
+      let product = expectedBytes.multipliedReportingOverflow(by: factor)
+      guard factor > 0, !product.overflow else { throw Error.invalidValue("sizes") }
+      expectedBytes = product.partialValue
+    }
     let dataNeedsConversion = isCompressed || encoding == "ascii" || needsEndianSwap
 
     if !dataNeedsConversion {
@@ -258,9 +267,14 @@ public final class NRRDParser: VolumeFileParser {
       // Handle ASCII encoding
       if encoding == "ascii" {
         let asciiString = String(data: fullData, encoding: .ascii) ?? ""
-        let values = asciiString
-          .split { $0.isWhitespace || $0 == "," }
-          .compactMap { UInt32(Double($0) ?? -1) }
+        let maximumValue = bytesPerComponent == 1 ? UInt32(UInt8.max)
+          : bytesPerComponent == 2 ? UInt32(UInt16.max) : UInt32.max
+        let values = try asciiString.split { $0.isWhitespace || $0 == "," }.map { token -> UInt32 in
+          guard let value = Double(token), value.isFinite,
+                value >= 0, value <= Double(maximumValue) else { throw Error.invalidValue("ASCII sample") }
+          return UInt32(value)
+        }
+        guard values.count == expectedBytes / bytesPerComponent else { throw Error.invalidValue("ASCII sample count") }
         var buffer = Data(capacity: expectedBytes)
         for value in values {
           switch bytesPerComponent {
@@ -280,6 +294,7 @@ public final class NRRDParser: VolumeFileParser {
         }
         fullData = buffer
       } else if needsEndianSwap {
+        guard fullData.count >= expectedBytes else { throw Error.invalidValue("data length") }
         // Swap endianness in-place
         var buffer = Data(capacity: expectedBytes)
         for i in stride(from: 0, to: expectedBytes, by: bytesPerComponent) {
