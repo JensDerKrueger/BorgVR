@@ -72,6 +72,7 @@ private enum VisionSettingsPage: String, CaseIterable, Identifiable {
 }
 
 struct SettingsView: View {
+  @EnvironmentObject private var session: VisionBorgVRSession
 
   @Environment(RuntimeAppModel.self) private var runtimeAppModel
   @EnvironmentObject var storedAppModel: StoredAppModel
@@ -392,9 +393,12 @@ struct SettingsView: View {
                 }
 
                 Toggle("settings_toggle_sample_jitter", isOn: $storedAppModel.sampleJitter)
-                Toggle("Subbrick skipping", isOn: $storedAppModel.subbrickSkipping)
-                Toggle("Opacity-adaptive sampling", isOn: $storedAppModel.opacityAdaptiveSampling)
-                Stepper(value: $storedAppModel.alphaEpsilon, in: 0...1, step: 0.001) {
+                Toggle("Subbrick skipping", isOn: Binding(get: { storedAppModel.subbrickSkipping },
+                  set: { try? session.perform(.setRenderOptimizations(subbrickSkipping: $0), source: .userInterface) }))
+                Toggle("Opacity-adaptive sampling", isOn: Binding(get: { storedAppModel.opacityAdaptiveSampling },
+                  set: { try? session.perform(.setRenderOptimizations(opacityAdaptiveSampling: $0), source: .userInterface) }))
+                Stepper(value: Binding(get: { storedAppModel.alphaEpsilon },
+                  set: { try? session.perform(.setRenderOptimizations(alphaEpsilon: Float($0)), source: .userInterface) }), in: 0...1, step: 0.001) {
                   HStack {
                     Text("Alpha epsilon")
                     Spacer()

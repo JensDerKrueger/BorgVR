@@ -82,6 +82,7 @@ struct RenderView: View {
   @State private var markerDragID: UUID?
   @State private var strokeDragID: UUID?
   @State private var brushPosition: SIMD3<Float>?
+  @State private var clippingInteraction = ClippingInteraction()
   @State private var sceneObjectDragID: UUID?
   @State private var measurementDragMeasurementID: UUID?
   @State private var measurementDragPointID: UUID?
@@ -429,7 +430,8 @@ struct RenderView: View {
           }
 
           if appSettings.showBrickVisualization {
-            Toggle(isOn: $renderingParameters.brickVis) {
+            Toggle(isOn: Binding(get: { renderingParameters.brickVis },
+              set: { try? session.perform(.setBrickVisualization(enabled: $0), source: .userInterface) })) {
               actionLabel(
                 "Bricks",
                 systemImage: "square.grid.3x3",
@@ -440,9 +442,6 @@ struct RenderView: View {
             .toggleStyle(.button)
             .buttonStyle(ScreenControlButtonStyle(isSelected: renderingParameters.brickVis))
             .accessibilityLabel("Bricks")
-            .onChange(of: renderingParameters.brickVis) {
-              synchronizeState()
-            }
           }
         }
 
@@ -947,6 +946,7 @@ struct RenderView: View {
       .onEnded { _ in
         appModel.volumeBrush.context.finish(source: "touch")
         previousDragTranslation = .zero
+        clippingInteraction = ClippingInteraction()
         arcballStartOrientation = nil
         markerDragID = nil
         strokeDragID = nil
@@ -1368,7 +1368,8 @@ struct RenderView: View {
   }
 
   private func updateClipping(axis: Int, delta: Float) {
-    renderingParameters.clippingTranslation[axis] = min(0.98, max(-0.98, renderingParameters.clippingTranslation[axis] + delta))
+    renderingParameters.clippingTranslation[axis] = clippingInteraction.move(
+      axis: axis, delta: delta, current: renderingParameters.clippingTranslation[axis])
     let translation = renderingParameters.clippingTranslation[axis]
 
     if translation >= 0 {
@@ -1405,6 +1406,7 @@ struct RenderView: View {
       }
       .onEnded { _ in
         previousMagnification = 1
+        clippingInteraction = ClippingInteraction()
         sharePlay.flushSynchronization()
       }
   }

@@ -73,6 +73,7 @@ struct BorgVRVisualizationSnapshot: Equatable, Sendable {
   var isoValue: Float
   var renderMode: RenderMode
   var brickVisualization: Bool
+  var brickVisualizationMask: UInt32 = 7
   var transferBiases: SIMD4<Float>
   var lighting: BorgVRLightingSnapshot
   var objectsVisible: Bool
@@ -205,6 +206,8 @@ private final class BorgVRExternalMutationMailbox: @unchecked Sendable {
 
 enum BorgVRCommand: Sendable {
   case setRenderMode(RenderMode)
+  case setBrickVisualization(enabled: Bool? = nil, resident: Bool? = nil, empty: Bool? = nil, missing: Bool? = nil)
+  case setRenderOptimizations(subbrickSkipping: Bool? = nil, opacityAdaptiveSampling: Bool? = nil, alphaEpsilon: Float? = nil)
   case setTransform(BorgVRTransformSnapshot)
   case rotate(axis: SIMD3<Float>, degrees: Float)
   case setNormalizedIsoValue(Float)
@@ -237,6 +240,17 @@ struct BorgVRCommandEvent: Sendable {
     switch command {
       case .setRenderMode(let mode):
         return "rendermode \(mode.gscName)"
+      case .setBrickVisualization(let enabled, let resident, let empty, let missing):
+        return [("showbricks", enabled), ("showresidentbricks", resident),
+                ("showemptybricks", empty), ("showmissingbricks", missing)]
+          .compactMap { name, value in value.map { "\(name) \($0 ? "true" : "false")" } }
+          .joined(separator: "\n")
+      case .setRenderOptimizations(let subbrick, let adaptive, let epsilon):
+        var statements: [String] = []
+        if let subbrick { statements.append("setsubbrickskipping \(subbrick ? "true" : "false")") }
+        if let adaptive { statements.append("setopacityadaptivesampling \(adaptive ? "true" : "false")") }
+        if let epsilon { statements.append("setalphaepsilon \(epsilon)") }
+        return statements.joined(separator: "\n")
       case .setTransform(let transform):
         let r = transform.rotation
         let t = transform.translation
@@ -319,6 +333,7 @@ enum BorgVRSessionCommandError: Error, LocalizedError {
   case invalidLightColor
   case invalidTransferFunction
   case emptyAnnotationVisibility
+  case invalidRenderingOptions
   case invalidAnnotation
   case annotationNotFound
   case meshAssetNotFound(UUID)
@@ -333,6 +348,7 @@ enum BorgVRSessionCommandError: Error, LocalizedError {
       case .invalidLightColor: "Light colors must be between zero and one."
       case .invalidTransferFunction: "The transfer function data is invalid."
       case .emptyAnnotationVisibility: "At least one annotation visibility value is required."
+      case .invalidRenderingOptions: "Provide at least one rendering option; alpha epsilon must be finite and between zero and one."
       case .invalidAnnotation: "The annotation data is invalid."
       case .annotationNotFound: "The requested annotation was not found."
       case .meshAssetNotFound(let id): "No mesh asset with ID \(id.uuidString) was found."
@@ -408,12 +424,13 @@ final class BorgVRSession<VisualizationState: AnyObject, RuntimeState: AnyObject
   ) rethrows -> Result {
     lock.lock()
     defer { lock.unlock() }
-    let before = renderSnapshot()
+    let before = frameSnapshot()
     let annotationsBefore = cachedAnnotationSnapshot
     let result = try mutation()
     let after = snapshotProvider()
     renderSnapshotStore.publish(after)
-    let commands = inferredCommands(from: before, to: after.visualization, fallback: domain)
+    let commands = inferredCommands(from: before.visualization, to: after.visualization, fallback: domain)
+      + inferredSettingsCommands(from: before.settings, to: after.settings)
     let annotationCommands = inferredAnnotationCommands(
       from: annotationsBefore,
       to: refreshAnnotationSnapshot(for: domain),
@@ -433,11 +450,12 @@ final class BorgVRSession<VisualizationState: AnyObject, RuntimeState: AnyObject
   ) {
     lock.lock()
     defer { lock.unlock() }
-    let before = renderSnapshot()
+    let before = frameSnapshot()
     let annotationsBefore = cachedAnnotationSnapshot
     let after = snapshotProvider()
     renderSnapshotStore.publish(after)
-    let commands = inferredCommands(from: before, to: after.visualization, fallback: domain)
+    let commands = inferredCommands(from: before.visualization, to: after.visualization, fallback: domain)
+      + inferredSettingsCommands(from: before.settings, to: after.settings)
     let annotationCommands = inferredAnnotationCommands(
       from: annotationsBefore,
       to: refreshAnnotationSnapshot(for: domain),
@@ -464,17 +482,17 @@ final class BorgVRSession<VisualizationState: AnyObject, RuntimeState: AnyObject
     guard let pending = externalMutationMailbox.takePending() else { return }
     lock.lock()
     defer { lock.unlock() }
-    let before = renderSnapshot()
+    let before = frameSnapshot()
     let annotationsBefore = cachedAnnotationSnapshot
     let after = snapshotProvider()
     renderSnapshotStore.publish(after)
 
     let fallback = pending.domains.sorted { $0.rawValue < $1.rawValue }.first ?? .interaction
     var commands = inferredCommands(
-      from: before,
+      from: before.visualization,
       to: after.visualization,
       fallback: fallback
-    )
+    ) + inferredSettingsCommands(from: before.settings, to: after.settings)
     let annotationAfter = annotationSnapshotProvider()
     if pending.domains.contains(.objects) {
       commands += inferredAnnotationCommands(
@@ -568,6 +586,14 @@ final class BorgVRSession<VisualizationState: AnyObject, RuntimeState: AnyObject
       recordedEvents.removeAll(keepingCapacity: true)
       recordsCommands = true
       isCommandRecording = true
+      publishRenderSnapshot()
+      let frame = frameSnapshot()
+      let mask = frame.visualization.brickVisualizationMask
+      emit(.setBrickVisualization(enabled: frame.visualization.brickVisualization,
+        resident: mask & 1 != 0, empty: mask & 2 != 0, missing: mask & 4 != 0), source: .userInterface)
+      emit(.setRenderOptimizations(subbrickSkipping: frame.settings.subbrickSkipping,
+        opacityAdaptiveSampling: frame.settings.opacityAdaptiveSampling,
+        alphaEpsilon: frame.settings.alphaEpsilon), source: .userInterface)
     }
   }
 
@@ -608,6 +634,12 @@ final class BorgVRSession<VisualizationState: AnyObject, RuntimeState: AnyObject
     }
     if before.renderMode != after.renderMode {
       commands.append(.setRenderMode(after.renderMode))
+    }
+    if before.brickVisualization != after.brickVisualization ||
+       before.brickVisualizationMask != after.brickVisualizationMask {
+      let mask = after.brickVisualizationMask
+      commands.append(.setBrickVisualization(enabled: after.brickVisualization,
+        resident: mask & 1 != 0, empty: mask & 2 != 0, missing: mask & 4 != 0))
     }
     if before.normalizedIsoValue != after.normalizedIsoValue {
       commands.append(.setNormalizedIsoValue(after.normalizedIsoValue))
@@ -654,6 +686,16 @@ final class BorgVRSession<VisualizationState: AnyObject, RuntimeState: AnyObject
       commands.append(.mutation(domain))
     }
     return commands
+  }
+
+  private func inferredSettingsCommands(
+    from before: BorgVRRenderSettingsSnapshot, to after: BorgVRRenderSettingsSnapshot
+  ) -> [BorgVRCommand] {
+    guard before.subbrickSkipping != after.subbrickSkipping ||
+          before.opacityAdaptiveSampling != after.opacityAdaptiveSampling ||
+          before.alphaEpsilon != after.alphaEpsilon else { return [] }
+    return [.setRenderOptimizations(subbrickSkipping: after.subbrickSkipping,
+      opacityAdaptiveSampling: after.opacityAdaptiveSampling, alphaEpsilon: after.alphaEpsilon)]
   }
 
   private func refreshAnnotationSnapshot(for command: BorgVRCommand) {
@@ -773,6 +815,23 @@ extension BorgVRSession where VisualizationState == RenderingParameters,
             renderingParameters.renderMode = mode
             renderModeDidChange(mode)
             synchronizeState()
+          case .setBrickVisualization(let enabled, let resident, let empty, let missing):
+            guard enabled != nil || resident != nil || empty != nil || missing != nil else {
+              throw BorgVRSessionCommandError.invalidRenderingOptions
+            }
+            if let enabled { renderingParameters.brickVis = enabled }
+            if let resident { renderingParameters.brickVisResident = resident }
+            if let empty { renderingParameters.brickVisEmpty = empty }
+            if let missing { renderingParameters.brickVisMissing = missing }
+            if enabled != nil { synchronizeState() }
+          case .setRenderOptimizations(let subbrick, let adaptive, let epsilon):
+            guard subbrick != nil || adaptive != nil || epsilon != nil,
+                  epsilon.map({ $0.isFinite && (0...1).contains($0) }) ?? true else {
+              throw BorgVRSessionCommandError.invalidRenderingOptions
+            }
+            if let subbrick { appSettings.subbrickSkipping = subbrick }
+            if let adaptive { appSettings.opacityAdaptiveSampling = adaptive }
+            if let epsilon { appSettings.alphaEpsilon = Double(epsilon) }
           case .setTransform(let transform):
             guard simd_length_squared(transform.rotation) > 0.000_001 else {
               throw BorgVRSessionCommandError.invalidRotation
@@ -972,6 +1031,7 @@ extension BorgVRSession where VisualizationState == RenderingParameters,
           isoValue: renderingParameters.isoValue,
           renderMode: renderingParameters.renderMode,
           brickVisualization: renderingParameters.brickVis,
+          brickVisualizationMask: renderingParameters.brickVisualizationMask,
           transferBiases: renderingParameters.transferBiases,
           lighting: BorgVRLightingSnapshot(
             direction: renderingParameters.lightDirection,

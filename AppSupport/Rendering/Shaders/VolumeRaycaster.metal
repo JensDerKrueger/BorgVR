@@ -975,12 +975,20 @@ fragment VolumeFragmentOutput VOLUME_FRAGMENT_SHADER_ISO_NAME(
 
 // MARK: - Brick Visualization Fragment Shader
 
+inline half4 brickVisualizationColor(bool empty, bool substitute, uint visibilityMask) {
+  uint type = empty ? 2u : (substitute ? 4u : 1u);
+  if ((visibilityMask & type) == 0u) return half4(0);
+  return empty ? half4(0, 0.1, 0, 0.1) :
+    (substitute ? half4(0, 0, 0.1, 0.1) : half4(0.1, 0, 0, 0.1));
+}
+
 /**
  Visualizes the hierarchical traversal, including empty-region leaps and resident fallback.
 
  - Empty regions are green, resident regions red, and missing/fallback regions blue.
  - Subblocks are shown only for partially visible resident pages.
- - Each traversed unit contributes once; the diagnostic view never requests data.
+ - Each enabled traversed unit contributes once; the diagnostic view never requests data.
+ - Hiding a type changes only its contribution, not traversal or residency.
  */
 fragment VolumeFragmentOutput VOLUME_FRAGMENT_SHADER_BRICK_VIS_NAME(
                                       VertexToFragment in [[stage_in]] VOLUME_SHADER_AMP_PARAMETER,
@@ -1041,19 +1049,16 @@ fragment VolumeFragmentOutput VOLUME_FRAGMENT_SHADER_BRICK_VIS_NAME(
         uint cell;
         float end = subbrickRayEnd(localStart, localDelta, cellT, cell);
         bool cellEmpty = !subbrickCellVisible(subbrickMasks, brickResult.pageIndex, cell);
-        accColor += cellEmpty ? half4(0, 0.1, 0, 0.1) :
-          (brickResult.substitute ? half4(0, 0, 0.1, 0.1) : half4(0.1, 0, 0, 0.1));
+        accColor += brickVisualizationColor(cellEmpty, brickResult.substitute,
+                                           uniforms.brickVisualizationMask);
         if (end <= cellT) break;
         cellT = end;
       }
     } else
     #endif
-    if (empty) {
-      accColor += half4(0, 0.1, 0, 0.1);
-    } else if (brickResult.substitute) {
-      accColor += half4(0, 0, 0.1, 0.1);
-    } else {
-      accColor += half4(0.1, 0, 0, 0.1);
+    {
+      accColor += brickVisualizationColor(empty, brickResult.substitute,
+                                         uniforms.brickVisualizationMask);
     }
 
     currentPos = brickResult.normExitCoords;

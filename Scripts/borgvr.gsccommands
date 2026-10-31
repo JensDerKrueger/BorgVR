@@ -70,6 +70,14 @@ waitidle(int)
 
 # Rendering state
 rendermode(string)
+showbricks(bool)
+showresidentbricks(bool)
+showemptybricks(bool)
+showmissingbricks(bool)
+setsubbrickskipping(bool)
+setopacityadaptivesampling(bool)
+# TF opacity threshold for skipping, 0...1; does not change the TF itself.
+setalphaepsilon(float)
 setmethod(int)
 background(string)
 background(string,double,double,double)

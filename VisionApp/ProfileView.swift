@@ -87,6 +87,7 @@ struct TrafoFilePickerDialog: View {
 }
 
 struct ProfileView: View {
+  @EnvironmentObject private var session: VisionBorgVRSession
   /// The shared application model containing performance data.
   @Environment(RuntimeAppModel.self) private var runtimeAppModel
   @Environment(SharedAppModel.self) private var sharedAppModel
@@ -142,18 +143,43 @@ struct ProfileView: View {
       .padding()
 
       GroupBox(label: Label("profile_group_rendermodes", systemImage: "eye")) {
-        HStack {
+        VStack(alignment: .leading, spacing: 16) {
           Toggle(
             "profile_toggle_show_bricks",
             isOn: Binding(
               get: { sharedAppModel.brickVis },
-              set: { sharedAppModel.brickVis = $0 }
+              set: { try? session.perform(.setBrickVisualization(enabled: $0), source: .userInterface) }
             )
           )
           .padding()
           .fixedSize()
 
-          Spacer()
+          VStack(spacing: 12) {
+            Toggle(isOn: Binding(
+              get: { sharedAppModel.brickVisResident },
+              set: { try? session.perform(.setBrickVisualization(resident: $0), source: .userInterface) }
+            )) {
+              Label("Resident Bricks (Red)", systemImage: "square.fill")
+                .foregroundStyle(.red)
+            }
+            Toggle(isOn: Binding(
+              get: { sharedAppModel.brickVisEmpty },
+              set: { try? session.perform(.setBrickVisualization(empty: $0), source: .userInterface) }
+            )) {
+              Label("Empty Bricks (Green)", systemImage: "square.fill")
+                .foregroundStyle(.green)
+            }
+            Toggle(isOn: Binding(
+              get: { sharedAppModel.brickVisMissing },
+              set: { try? session.perform(.setBrickVisualization(missing: $0), source: .userInterface) }
+            )) {
+              Label("Missing Bricks (Blue)", systemImage: "square.fill")
+                .foregroundStyle(.blue)
+            }
+          }
+          .disabled(!sharedAppModel.brickVis)
+          .padding(.horizontal)
+          .padding(.bottom)
         }
       }
       .padding()

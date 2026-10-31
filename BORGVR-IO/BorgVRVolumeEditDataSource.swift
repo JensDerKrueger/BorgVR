@@ -124,6 +124,10 @@ final class BorgVRVolumeEditDataSource: BORGVRDatasetProtocol, BorgVRVolumeGPUBr
   }
   func setSharedReady(_ ready: Bool) { lock.withLock { sharedReady = ready } }
   func setPreparationReady(_ ready: Bool) { lock.withLock { preparationReady = ready } }
+  func continuePreparationInBackground() {
+    // The atlas may show its existing overview while edited bricks arrive lazily.
+    lock.withLock { initialLowReady = true }
+  }
   func setEditsBlocked(_ blocked: Bool) { lock.withLock { editsBlocked = blocked } }
   var isContentReady: Bool {
     lock.withLock {

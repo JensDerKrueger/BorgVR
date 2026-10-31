@@ -31,6 +31,7 @@ struct RenderControlsPanel: View {
 
   @State private var selectedInteractionMode: AppModel.InteractionMode = .model
   @State private var copiedWebGPUShareLink = false
+  @State private var pendingModeReset: AppModel.InteractionMode?
 
   var body: some View {
     VStack(spacing: 8) {
@@ -261,15 +262,12 @@ struct RenderControlsPanel: View {
 
         HStack(spacing: 8) {
           if appSettings.showBrickVisualization {
-            Toggle("Bricks", isOn: $renderingParameters.brickVis)
+            Toggle("Bricks", isOn: Binding(get: { renderingParameters.brickVis },
+              set: { try? session.perform(.setBrickVisualization(enabled: $0), source: .userInterface) }))
               .toggleStyle(.button)
               .buttonStyle(ScreenControlButtonStyle(isSelected: renderingParameters.brickVis))
               .fixedSize()
               .help(MacRenderShortcut.help("Bricks", shortcut: .bricks))
-              .onChange(of: renderingParameters.brickVis) {
-                session.commitExternalMutation(source: .userInterface, domain: .visualization)
-                sharePlay.synchronize(kind: .stateOnly)
-              }
           }
 
           Button {
@@ -311,30 +309,117 @@ struct RenderControlsPanel: View {
         docking.showsLog = false
       }
     }
+    .alert(resetTitle(for: pendingModeReset), isPresented: Binding(
+      get: { pendingModeReset != nil },
+      set: { if !$0 { pendingModeReset = nil } }
+    ), presenting: pendingModeReset) { mode in
+      Button("Cancel", role: .cancel) {}
+      Button(resetConfirmationLabel(for: mode), role: .destructive) {
+        performModeReset(mode)
+      }
+    } message: { mode in
+      Text(resetMessage(for: mode))
+    }
   }
 
   private var interactionModePicker: some View {
-    HStack(spacing: 4) {
-      interactionModeSegment(.model, title: "Model", systemImage: "move.3d")
-      interactionModeSegment(.clipping, title: "Clipping", systemImage: "viewfinder")
-      interactionModeSegment(
-        .transferEditing,
-        title: "Transfer",
-        systemImage: "slider.horizontal.3"
-      )
-      interactionModeSegment(.drawing, title: "Draw", systemImage: "scribble")
-      interactionModeSegment(.objectPlacement, title: "Place", systemImage: "cube")
-      interactionModeSegment(
-        .measurement,
-        title: "private_interaction_option_measurement",
-        systemImage: "ruler"
-      )
-      interactionModeSegment(.volumeEditing, title: "Edit Volume", systemImage: "eraser")
+    VStack(spacing: 2) {
+      HStack(spacing: 4) {
+        modeResetButton(.model, title: "Reset Model")
+        modeResetButton(.clipping, title: "Reset Clipping")
+        modeResetButton(.transferEditing, title: renderingParameters.renderMode == .isoValue ? "Reset Isovalue" : "Reset Transfer Function")
+        modeResetButton(.drawing, title: "Delete All Objects")
+        modeResetButton(.objectPlacement, title: "Delete All Objects")
+        modeResetButton(.measurement, title: "measurement_delete_all_button")
+        VolumeEditResetButton(model: appModel.volumeBrush)
+          .frame(maxWidth: .infinity)
+      }
+      HStack(spacing: 4) {
+        interactionModeSegment(.model, title: "Model", systemImage: "move.3d")
+        interactionModeSegment(.clipping, title: "Clipping", systemImage: "viewfinder")
+        interactionModeSegment(
+          .transferEditing,
+          title: "Transfer",
+          systemImage: "slider.horizontal.3"
+        )
+        interactionModeSegment(.drawing, title: "Draw", systemImage: "scribble")
+        interactionModeSegment(.objectPlacement, title: "Place", systemImage: "cube")
+        interactionModeSegment(
+          .measurement,
+          title: "private_interaction_option_measurement",
+          systemImage: "ruler"
+        )
+        interactionModeSegment(.volumeEditing, title: "Edit Volume", systemImage: "eraser")
+      }
     }
     .padding(4)
     .background(.secondary.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
     .accessibilityElement(children: .contain)
     .accessibilityLabel("Interaktion")
+  }
+
+  private func modeResetButton(_ mode: AppModel.InteractionMode, title: LocalizedStringKey) -> some View {
+    Button { pendingModeReset = mode } label: {
+      Image(systemName: "arrow.counterclockwise")
+        .foregroundStyle(interactionModeColor(for: mode))
+        .frame(width: 24, height: 24)
+        .contentShape(Rectangle())
+    }
+    .buttonStyle(.plain)
+    .frame(maxWidth: .infinity)
+    .help(Text(title))
+    .accessibilityLabel(Text(title))
+  }
+
+  private func resetTitle(for mode: AppModel.InteractionMode?) -> LocalizedStringKey {
+    switch mode {
+      case .model: "Reset Model?"
+      case .clipping: "Reset Clipping?"
+      case .transferEditing:
+        renderingParameters.renderMode == .isoValue ? "Reset Isovalue?" : "Reset Transfer Function?"
+      case .drawing, .objectPlacement: "Delete All Objects?"
+      case .measurement: "measurement_delete_all_confirmation_title"
+      default: "Reset"
+    }
+  }
+
+  private func resetConfirmationLabel(for mode: AppModel.InteractionMode) -> LocalizedStringKey {
+    switch mode {
+      case .drawing, .objectPlacement: "Delete All Objects"
+      case .measurement: "measurement_delete_all_confirmation_delete"
+      default: "Reset"
+    }
+  }
+
+  private func resetMessage(for mode: AppModel.InteractionMode) -> LocalizedStringKey {
+    switch mode {
+      case .model: "Do you really want to reset the model transformation?"
+      case .clipping: "Do you really want to reset the clipping bounds?"
+      case .transferEditing:
+        renderingParameters.renderMode == .isoValue
+          ? "Do you really want to reset the isovalue?"
+          : "Do you really want to reset the current transfer function?"
+      case .drawing, .objectPlacement: "This removes every annotation object from the current session."
+      case .measurement: "measurement_delete_all_confirmation_message"
+      default: "Reset"
+    }
+  }
+
+  private func performModeReset(_ mode: AppModel.InteractionMode) {
+    let command: BorgVRCommand
+    switch mode {
+      case .model: command = .reset(.transform)
+      case .clipping: command = .reset(.clipping)
+      case .transferEditing:
+        command = renderingParameters.renderMode == .isoValue ? .setNormalizedIsoValue(0.1) : .reset(.transferFunction)
+      case .drawing, .objectPlacement: command = .clearObjects
+      case .measurement: command = .clearMeasurements
+      case .volumeEditing: return
+    }
+    do {
+      try session.perform(command, source: .userInterface)
+      sharePlay.flushSynchronization()
+    } catch { appModel.logger.error(error.localizedDescription) }
   }
 
   private func interactionModeSegment(

@@ -1049,7 +1049,8 @@ extension VisionVolumeRenderer {
           modelViewIT: simd_transpose(simd_inverse(viewMatrix * modelMatrix)),
           textureToClip: projection * viewMatrix * modelMatrix * Transform(
             translation: SIMD3<Float>(repeating: -0.5)
-          ).matrix
+          ).matrix,
+          brickVisualizationMask: frameState.brickVisualizationMask
         )
       )
     }

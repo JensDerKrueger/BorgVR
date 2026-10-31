@@ -988,6 +988,10 @@
 "Transfer" = "Transfert";
 "Editor" = "Éditeur";
 "Bricks" = "Briques";
+"Brick Types" = "Types de briques";
+"Resident Bricks (Red)" = "Briques disponibles (rouge)";
+"Empty Bricks (Green)" = "Briques vides (vert)";
+"Missing Bricks (Blue)" = "Briques manquantes (bleu)";
 "BorgVR Help" = "Aide de BorgVR";
 "Edit Volume" = "Modifier le volume";
 "Brush" = "Pinceau";
@@ -1023,6 +1027,7 @@
 "Synchronizing Edit State…" = "Synchronisation des modifications…";
 "All edits in the active state will be removed. During SharePlay this clears the shared state for everyone. Other states and the original dataset are preserved." = "Toutes les modifications de l’état actif seront supprimées. Pendant SharePlay, l’état partagé sera réinitialisé pour tout le monde. Les autres états et les données originales sont conservés.";
 "Preparing Edit State" = "Préparation de l’état";
+"Cancel opens the dataset immediately; pending edits continue in the background." = "Annuler ouvre immédiatement le jeu de données ; les modifications en attente se poursuivent en arrière-plan.";
 "Finishing pending volume updates before opening." = "Finalisation des mises à jour du volume avant l’ouverture.";
 "Isosurface Export" = "Export d’isosurfaces";
 "Normalize isosurface export" = "Normaliser l’export d’isosurfaces";
@@ -1060,3 +1065,17 @@
 "The requested export is not the current export job." = "L’export demandé n’est pas la tâche d’export actuelle.";
 "Volume edits did not finish before the timeout." = "Les modifications du volume ne se sont pas terminées dans le délai imparti.";
 "The selected edit state could not be opened: %@\nThe original dataset has been opened instead. Your saved edits have not been changed." = "Impossible d’ouvrir l’état de modification sélectionné : %@\nLe jeu de données original a été ouvert à la place. Vos modifications enregistrées n’ont pas été modifiées.";
+
+"Reset Model" = "Réinitialiser le modèle";
+"Reset Clipping" = "Réinitialiser la découpe";
+"Reset Model?" = "Réinitialiser le modèle ?";
+"Reset Clipping?" = "Réinitialiser la découpe ?";
+"Reset Transfer Function" = "Réinitialiser la fonction de transfert";
+"Do you really want to reset the model transformation?" = "Voulez-vous vraiment réinitialiser la transformation du modèle ?";
+"Do you really want to reset the clipping bounds?" = "Voulez-vous vraiment réinitialiser les limites de découpe ?";
+"This removes every annotation object from the current session." = "Cela supprime tous les objets d’annotation de la session actuelle.";
+"Reset Isovalue" = "Réinitialiser l’isovaleur";
+"Reset Isovalue?" = "Réinitialiser l’isovaleur ?";
+"Reset Transfer Function?" = "Réinitialiser la fonction de transfert ?";
+"Do you really want to reset the isovalue?" = "Voulez-vous vraiment réinitialiser l’isovaleur ?";
+"Do you really want to reset the current transfer function?" = "Voulez-vous vraiment réinitialiser la fonction de transfert actuelle ?";

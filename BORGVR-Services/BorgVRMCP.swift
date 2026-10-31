@@ -287,6 +287,16 @@ struct BorgVRMCPAnnotationVisibilityState: Codable, Sendable {
   var measurements: Bool
 }
 
+struct BorgVRMCPRenderingOptions: Codable, Sendable {
+  var brickVisualizationEnabled: Bool
+  var residentBricksVisible: Bool
+  var emptyBricksVisible: Bool
+  var missingBricksVisible: Bool
+  var subbrickSkipping: Bool
+  var opacityAdaptiveSampling: Bool
+  var alphaEpsilon: Float
+}
+
 struct BorgVRMCPApplicationState: Codable, Sendable {
   var applicationVersion: String
   var platform: String
@@ -302,6 +312,7 @@ struct BorgVRMCPApplicationState: Codable, Sendable {
   var annotationVisibility: BorgVRMCPAnnotationVisibilityState
   var objectCount: Int
   var measurementCount: Int
+  var renderingOptions: BorgVRMCPRenderingOptions
   var volumeEditing: BorgVRVolumeEditingState? = nil
 }
 
@@ -377,6 +388,8 @@ protocol BorgVRMCPCommandService: AnyObject {
   func closeDataset() async throws
   func applicationState() -> BorgVRMCPApplicationState
   func setRenderMode(_ mode: String) throws
+  func setBrickVisualization(enabled: Bool?, resident: Bool?, empty: Bool?, missing: Bool?) throws
+  func setRenderOptimizations(subbrickSkipping: Bool?, opacityAdaptiveSampling: Bool?, alphaEpsilon: Float?) throws
   func setTransform(
     rotation: SIMD4<Float>?,
     translation: SIMD3<Float>?,

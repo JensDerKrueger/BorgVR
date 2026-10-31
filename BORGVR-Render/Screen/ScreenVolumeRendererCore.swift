@@ -908,7 +908,8 @@ final class ScreenVolumeRendererCore {
       specularLightColor: SIMD4<Float>(state.lighting.specular, 0),
       modelView: viewMatrix * modelMatrix,
       modelViewIT: simd_transpose(simd_inverse(viewMatrix * modelMatrix)),
-      textureToClip: projection * viewMatrix * modelMatrix * matrixTranslation(SIMD3<Float>(repeating: -0.5))
+      textureToClip: projection * viewMatrix * modelMatrix * matrixTranslation(SIMD3<Float>(repeating: -0.5)),
+      brickVisualizationMask: state.brickVisualizationMask
     )
     fragmentUniforms.uniforms.1 = fragmentUniforms.uniforms.0
     currentTextureToClip = fragmentUniforms.uniforms.0.textureToClip

@@ -97,6 +97,7 @@ final class VisionBorgVRCommandService: BorgVRMCPCommandService {
   func applicationState() -> BorgVRMCPApplicationState {
     let runtime = session.runtimeState
     let state = session.currentSnapshot()
+    let settings = session.frameSnapshot().settings
     let info = runtime.activeDatasetInfo
     let dataset = runtime.activeDataset.map {
       BorgVRMCPDatasetState(
@@ -133,11 +134,29 @@ final class VisionBorgVRCommandService: BorgVRMCPCommandService {
       ),
       objectCount: state.objectCount,
       measurementCount: state.measurementCount,
+      renderingOptions: BorgVRMCPRenderingOptions(
+        brickVisualizationEnabled: state.brickVisualization,
+        residentBricksVisible: state.brickVisualizationMask & 1 != 0,
+        emptyBricksVisible: state.brickVisualizationMask & 2 != 0,
+        missingBricksVisible: state.brickVisualizationMask & 4 != 0,
+        subbrickSkipping: settings.subbrickSkipping,
+        opacityAdaptiveSampling: settings.opacityAdaptiveSampling,
+        alphaEpsilon: settings.alphaEpsilon
+      ),
       volumeEditing: volumeEditing.volumeEditingState()
     )
   }
 
   var volumeEditing: any BorgVRVolumeEditingCommands { session.runtimeState.volumeBrush }
+
+  func setBrickVisualization(enabled: Bool?, resident: Bool?, empty: Bool?, missing: Bool?) throws {
+    try session.perform(.setBrickVisualization(enabled: enabled, resident: resident, empty: empty, missing: missing), source: .mcp)
+  }
+
+  func setRenderOptimizations(subbrickSkipping: Bool?, opacityAdaptiveSampling: Bool?, alphaEpsilon: Float?) throws {
+    try session.perform(.setRenderOptimizations(subbrickSkipping: subbrickSkipping,
+      opacityAdaptiveSampling: opacityAdaptiveSampling, alphaEpsilon: alphaEpsilon), source: .mcp)
+  }
 
   func activateVolumeEditing() {
     session.runtimeState.interactionMode = .volumeEditing

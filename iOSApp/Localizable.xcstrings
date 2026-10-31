@@ -2717,6 +2717,35 @@
         }
       }
     },
+    "Cancel opens the dataset immediately; pending edits continue in the background.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancel opens the dataset immediately; pending edits continue in the background."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abbrechen öffnet den Datensatz sofort; ausstehende Bearbeitungen werden im Hintergrund fortgesetzt."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Annuler ouvre immédiatement le jeu de données ; les modifications en attente se poursuivent en arrière-plan."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancelar abre el conjunto de datos de inmediato; las ediciones pendientes continúan en segundo plano."
+          }
+        }
+      }
+    },
     "Cancel" : {
       "localizations" : {
         "de" : {
@@ -14697,6 +14726,15 @@
         }
       }
     },
+    "Select Zarr folder" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Zarr-Ordner wählen" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Select Zarr folder" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Seleccionar carpeta Zarr" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Choisir un dossier Zarr" } }
+      }
+    },
     "Select input volume" : {
       "localizations" : {
         "de" : {
@@ -15958,30 +15996,30 @@
         }
       }
     },
-    "Supported formats are QVIS `.dat` + `.raw`, NRRD/NHDR, PVM, IV3Dm (`.i3m` / `.i3m.zip`), and native BorgVR `.data` files." : {
+    "Supported formats are QVIS `.dat` + `.raw`, NRRD/NHDR, PVM, IV3Dm (`.i3m` / `.i3m.zip`), Zarr/OZX, and native BorgVR `.data` files." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Unterstützt werden QVIS `.dat` + `.raw`, NRRD/NHDR, PVM, IV3Dm (`.i3m` / `.i3m.zip`) und native BorgVR `.data`-Dateien."
+            "value" : "Unterstützt werden QVIS `.dat` + `.raw`, NRRD/NHDR, PVM, IV3Dm (`.i3m` / `.i3m.zip`), Zarr/OZX und native BorgVR `.data`-Dateien."
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Supported formats are QVIS `.dat` + `.raw`, NRRD/NHDR, PVM, IV3Dm (`.i3m` / `.i3m.zip`), and native BorgVR `.data` files."
+            "value" : "Supported formats are QVIS `.dat` + `.raw`, NRRD/NHDR, PVM, IV3Dm (`.i3m` / `.i3m.zip`), Zarr/OZX, and native BorgVR `.data` files."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Se admiten QVIS `.dat` + `.raw`, NRRD/NHDR, PVM, IV3Dm (`.i3m` / `.i3m.zip`) y archivos nativos BorgVR `.data`."
+            "value" : "Se admiten QVIS `.dat` + `.raw`, NRRD/NHDR, PVM, IV3Dm (`.i3m` / `.i3m.zip`), Zarr/OZX y archivos nativos BorgVR `.data`."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Les formats pris en charge sont QVIS `.dat` + `.raw`, NRRD/NHDR, PVM, IV3Dm (`.i3m` / `.i3m.zip`) et les fichiers BorgVR natifs `.data`."
+            "value" : "Les formats pris en charge sont QVIS `.dat` + `.raw`, NRRD/NHDR, PVM, IV3Dm (`.i3m` / `.i3m.zip`), Zarr/OZX et les fichiers BorgVR natifs `.data`."
           }
         }
       }

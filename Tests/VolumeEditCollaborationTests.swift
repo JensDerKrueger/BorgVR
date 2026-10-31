@@ -75,6 +75,7 @@ func runVolumeEditCollaborationTests() async throws {
   try await testOpeningStateDeletionDuringSharePlay(source: source, root: root)
   try await testUntouchedSharePlay(source: source, root: root)
   try await testInvalidOpeningStateRecovery(source: source, root: root)
+  try await testSkipPendingOpeningEdits(source: source, root: root)
   let host = VolumeBrushModel(), client = VolumeBrushModel(), late = VolumeBrushModel()
   let hostURL = root.appendingPathComponent("host.data"), clientURL = root.appendingPathComponent("client.data")
   _ = host.open(source, datasetURL: hostURL)
@@ -294,6 +295,65 @@ private func testUnannouncedDatasetDoesNotRequestEdits(source: BORGVRDatasetProt
   collaboration.configure(localID: localID, hostID: hostID, datasetID: source.getMetadata().uniqueID)
   try await eventually("Loaded dataset never requested its shared edit state") { attempts == 1 }
   try verify(warnings.isEmpty, "Normal transport cancellation was logged as a failure: \(warnings)")
+}
+
+private final class DelayedOpeningDataset: BORGVRDatasetProtocol, @unchecked Sendable {
+  let source: BORGVRDatasetProtocol
+  private let lock = NSLock()
+  private var available = false
+  init(_ source: BORGVRDatasetProtocol) { self.source = source }
+  func release() { lock.withLock { available = true } }
+  func getMetadata() -> BORGVRMetaData { source.getMetadata() }
+  func allocateBrickBuffer() -> UnsafeMutablePointer<UInt8> { source.allocateBrickBuffer() }
+  func newRequest() {}
+  func getFirstBrick(outputBuffer: UnsafeMutablePointer<UInt8>) throws {
+    try source.getFirstBrick(outputBuffer: outputBuffer)
+  }
+  func getBrick(index: Int, outputBuffer: UnsafeMutablePointer<UInt8>) throws {
+    guard lock.withLock({ available }) else { throw BORGVRDataError.brickNotYetAvailable(index: index) }
+    try source.getBrick(index: index, outputBuffer: outputBuffer)
+  }
+}
+
+@MainActor
+private func testSkipPendingOpeningEdits(source: BORGVRDatasetProtocol, root: URL) async throws {
+  let url = root.appendingPathComponent("skip-pending.data"), m = source.getMetadata()
+  let catalog = try VolumeBrushModel.catalog(datasetID: m.uniqueID, datasetURL: url)
+  let state = BorgVRVolumeEditState(id: UUID(), datasetID: m.uniqueID, name: "Pending",
+    kind: .local, createdAt: Date(), modifiedAt: Date())
+  try catalog.save(state)
+  var mask = try BorgVRVolumeEditMask(size: SIMD3(m.width, m.height, m.depth),
+    spacing: SIMD3(Double(m.voxelSpacingX), Double(m.voxelSpacingY), Double(m.voxelSpacingZ)), componentCount: m.componentCount)
+  try mask.apply(.init(center: SIMD3(0.5, 1, 1), radius: 0.7), mode: .erase)
+  let journal = try BorgVRVolumeEditJournal(directory: catalog.directory(for: state.id), datasetID: m.uniqueID,
+    size: mask.size, spacing: mask.spacing, componentCount: m.componentCount,
+    initialSnapshot: .init(datasetID: m.uniqueID, stateID: state.id, revision: 1, mask: mask))
+  try journal.closeStorage()
+  let preference = "volumeEditState.\(catalog.root.path)"
+  UserDefaults.standard.set(state.id.uuidString, forKey: preference)
+  defer { UserDefaults.standard.removeObject(forKey: preference) }
+  let remote = DelayedOpeningDataset(source), model = VolumeBrushModel()
+  defer { remote.release(); model.close() }
+  let edited = model.open(remote, datasetURL: url)
+  try await eventually("Opening did not show pending-edit preparation") { model.preparationID != nil }
+  model.cancelOpeningPreparation(id: UUID())
+  try verify(model.isOpeningState, "A stale dialog cancelled another preparation")
+  model.cancelOpeningPreparation(id: model.preparationID!)
+  try await model.waitForStateReady()
+  try verify(edited.isContentReady && model.activeState?.id == state.id && model.openingError == nil,
+    "Cancelling preparation did not open the selected edited state")
+  try verify(model.context.editingStatus()?.isUpdatingBricks == true,
+    "Cancelling preparation discarded the pending work")
+  try verify(equalMasks(try await model.stateSnapshot().mask, mask), "Cancelling preparation changed the edit mask")
+  remote.release()
+  try await model.waitForVolumeEdits(timeout: 10)
+  let overview = edited.allocateBrickBuffer()
+  defer { overview.deallocate() }
+  try edited.getFirstBrick(outputBuffer: overview)
+  let expected = try BorgVRCPUVolumeEditExecutor(source: source, border: .clamp).materialize(
+    index: m.brickMetadata.count - 1, mask: mask, revision: 1)
+  try verify(Array(UnsafeBufferPointer(start: overview, count: expected.bytes.count)) == expected.bytes,
+    "Background work did not finish the edits after skipping preparation")
 }
 
 @MainActor

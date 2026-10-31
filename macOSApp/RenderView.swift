@@ -20,6 +20,7 @@ struct RenderView: View {
   @State private var markerDragID: UUID?
   @State private var strokeDragID: UUID?
   @State private var brushPosition: SIMD3<Float>?
+  @State private var clippingInteraction = ClippingInteraction()
   @State private var sceneObjectDragID: UUID?
   @State private var measurementDragMeasurementID: UUID?
   @State private var measurementDragPointID: UUID?
@@ -415,9 +416,7 @@ struct RenderView: View {
         sharePlay.flushSynchronization()
       case .bricks:
         guard appSettings.showBrickVisualization else { return }
-        renderingParameters.brickVis.toggle()
-        session.commitExternalMutation(source: .userInterface, domain: .visualization)
-        sharePlay.synchronize(kind: .stateOnly)
+        try? session.perform(.setBrickVisualization(enabled: !renderingParameters.brickVis), source: .userInterface)
       case .synchronizeView:
         guard sharePlay.isInSession else { return }
         sharePlay.setScreenViewSynchronizationEnabled(!sharePlay.isScreenViewSynchronized)
@@ -834,6 +833,7 @@ struct RenderView: View {
   }
 
   private func finishInteractionGesture() {
+    clippingInteraction = ClippingInteraction()
     appModel.volumeBrush.context.finish(source: "pointer")
     arcballStartLocation = nil
     arcballStartOrientation = nil
@@ -1361,7 +1361,8 @@ struct RenderView: View {
   }
 
   private func updateClipping(axis: Int, delta: Float) {
-    renderingParameters.clippingTranslation[axis] = min(0.98, max(-0.98, renderingParameters.clippingTranslation[axis] + delta))
+    renderingParameters.clippingTranslation[axis] = clippingInteraction.move(
+      axis: axis, delta: delta, current: renderingParameters.clippingTranslation[axis])
     let translation = renderingParameters.clippingTranslation[axis]
 
     if translation >= 0 {

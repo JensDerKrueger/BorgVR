@@ -532,6 +532,31 @@ final class BorgVRScriptRunner: ObservableObject {
       self?.setRenderMode(args.string(0)) ?? .callbackError
     }
 
+    for name in ["showbricks", "showresidentbricks", "showemptybricks", "showmissingbricks",
+                 "setsubbrickskipping", "setopacityadaptivesampling"] {
+      register(name, [.bool]) { [weak self] args in
+        guard let session = self?.session else { return .callbackError }
+        let value = args.bool(0)
+        let command: BorgVRCommand = switch name {
+          case "showbricks": .setBrickVisualization(enabled: value)
+          case "showresidentbricks": .setBrickVisualization(resident: value)
+          case "showemptybricks": .setBrickVisualization(empty: value)
+          case "showmissingbricks": .setBrickVisualization(missing: value)
+          case "setsubbrickskipping": .setRenderOptimizations(subbrickSkipping: value)
+          default: .setRenderOptimizations(opacityAdaptiveSampling: value)
+        }
+        do { try session.perform(command, source: .gsc); return .success }
+        catch { return .invalidArguments }
+      }
+    }
+    register("setalphaepsilon", [.float]) { [weak self] args in
+      guard let session = self?.session else { return .callbackError }
+      do {
+        try session.perform(.setRenderOptimizations(alphaEpsilon: args.float(0)), source: .gsc)
+        return .success
+      } catch { return .invalidArguments }
+    }
+
     register("setmethod", [.int]) { [weak self] args in
       self?.setRenderMethod(args.int(0)) ?? .callbackError
     }
@@ -977,6 +1002,7 @@ final class BorgVRScriptRunner: ObservableObject {
           case "dat": formatName = "QVIS"
           case "pvm": formatName = "PVM"
           case "i3m", "zip": formatName = "IV3Dm"
+          case "ozx", "zarr": formatName = "Zarr"
           default: formatName = "NRRD"
         }
         sourceDescription = "Imported from \(formatName) volume \(sourceURL.deletingPathExtension().lastPathComponent)"

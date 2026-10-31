@@ -130,6 +130,8 @@ typedef struct {
   matrix_float4x4 modelView;
   matrix_float4x4 modelViewIT;
   matrix_float4x4 textureToClip;
+  // Local diagnostic visibility: bit 0 resident/red, bit 1 empty/green, bit 2 missing/blue.
+  uint brickVisualizationMask;
 } FragmentUniforms;
 
 /**

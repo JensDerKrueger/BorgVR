@@ -38,14 +38,42 @@ struct VolumeEditSynchronizationStatus: View {
   }
 }
 
+struct VolumeEditResetButton: View {
+  @ObservedObject var model: VolumeBrushModel
+  @State private var showsConfirmation = false
+
+  var body: some View {
+    Button { showsConfirmation = true } label: {
+      Image(systemName: "arrow.counterclockwise")
+        .foregroundStyle(.red)
+        .frame(width: 24, height: 24)
+        .contentShape(Rectangle())
+    }
+    .buttonStyle(.plain)
+    .help("Discard All Edits")
+    .accessibilityLabel("Discard All Edits")
+    .disabled(model.isExporting || model.isDiscardingEdits || model.isOpeningState ||
+      model.isRestoringPersonalState || model.isWaitingForSharedState)
+    .alert("Discard All Volume Edits?", isPresented: $showsConfirmation) {
+      Button("Cancel", role: .cancel) {}
+      Button("Discard All Edits", role: .destructive) { model.discardAllEdits() }
+    } message: {
+      Text("All edits in the active state will be removed. During SharePlay this clears the shared state for everyone. Other states and the original dataset are preserved.")
+    }
+  }
+}
+
 struct VolumeBrushControls: View {
   @ObservedObject var model: VolumeBrushModel
   @State private var showsExportDialog = false
-  @State private var showsDiscardConfirmation = false
   var body: some View {
     VStack(spacing: 8) {
       VolumeEditStateControls(model: model)
       VolumeEditSynchronizationStatus(model: model)
+      HStack {
+        Spacer()
+        VolumeEditResetButton(model: model)
+      }
       Picker("Brush", selection: $model.mode) {
         Label("Erase", systemImage: "eraser.fill").tag(BorgVRVolumeBrushMode.erase)
         Label("Restore", systemImage: "arrow.uturn.backward").tag(BorgVRVolumeBrushMode.restore)
@@ -93,12 +121,6 @@ struct VolumeBrushControls: View {
         Label("Export Edited Dataset", systemImage: "square.and.arrow.up")
       }
       .disabled(!model.canExport)
-      Button(role: .destructive) {
-        showsDiscardConfirmation = true
-      } label: {
-        Label("Discard All Edits", systemImage: "trash")
-      }
-      .disabled(model.isExporting)
       if let error = model.error {
         Text(error).foregroundStyle(.red).font(.caption).fixedSize(horizontal: false, vertical: true)
       }
@@ -107,12 +129,6 @@ struct VolumeBrushControls: View {
     .disabled(model.isDiscardingEdits || model.isOpeningState || model.isRestoringPersonalState)
     .onAppear { model.refreshStates() }
     .padding(.vertical, 6)
-    .alert("Discard All Volume Edits?", isPresented: $showsDiscardConfirmation) {
-      Button("Cancel", role: .cancel) {}
-      Button("Discard All Edits", role: .destructive) { model.discardAllEdits() }
-    } message: {
-      Text("All edits in the active state will be removed. During SharePlay this clears the shared state for everyone. Other states and the original dataset are preserved.")
-    }
     .sheet(isPresented: $showsExportDialog, onDismiss: model.dismissExportDialog) {
       VolumeBrushExportDialog(model: model)
     }
@@ -217,15 +233,22 @@ private struct VolumeEditSelectionModifier: ViewModifier {
         case .selection(let request):
           VolumeEditSelectionView(model: model, request: request)
             .onDisappear { model.cancelOpeningSelection(id: request.id) }
-        case .preparation:
+        case .preparation(let id):
           VStack(alignment: .leading, spacing: 16) {
             Text("Preparing Edit State").font(.headline)
             Text("Finishing pending volume updates before opening.").fixedSize(horizontal: false, vertical: true)
             ProgressView(value: model.preparationProgress)
             Text(model.preparationProgress, format: .percent.precision(.fractionLength(0))).monospacedDigit()
+            Text("Cancel opens the dataset immediately; pending edits continue in the background.")
+              .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            HStack {
+              Spacer()
+              Button("Cancel", role: .cancel) { model.cancelOpeningPreparation(id: id) }
+                .keyboardShortcut(.cancelAction)
+            }
           }
           .padding(24).frame(idealWidth: 420)
-          .presentationDetents([.height(240)])
+          .presentationDetents([.height(300)])
           .interactiveDismissDisabled()
       }
     }

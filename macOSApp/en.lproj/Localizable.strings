@@ -988,6 +988,10 @@
 "Transfer" = "Transfer";
 "Editor" = "Editor";
 "Bricks" = "Bricks";
+"Brick Types" = "Brick Types";
+"Resident Bricks (Red)" = "Resident Bricks (Red)";
+"Empty Bricks (Green)" = "Empty Bricks (Green)";
+"Missing Bricks (Blue)" = "Missing Bricks (Blue)";
 "BorgVR Help" = "BorgVR Help";
 "Edit Volume" = "Edit Volume";
 "Brush" = "Brush";
@@ -1023,6 +1027,7 @@
 "Synchronizing Edit State…" = "Synchronizing Edit State…";
 "All edits in the active state will be removed. During SharePlay this clears the shared state for everyone. Other states and the original dataset are preserved." = "All edits in the active state will be removed. During SharePlay this clears the shared state for everyone. Other states and the original dataset are preserved.";
 "Preparing Edit State" = "Preparing Edit State";
+"Cancel opens the dataset immediately; pending edits continue in the background." = "Cancel opens the dataset immediately; pending edits continue in the background.";
 "Finishing pending volume updates before opening." = "Finishing pending volume updates before opening.";
 "Isosurface Export" = "Isosurface Export";
 "Normalize isosurface export" = "Normalize isosurface export";
@@ -1060,3 +1065,17 @@
 "The requested export is not the current export job." = "The requested export is not the current export job.";
 "Volume edits did not finish before the timeout." = "Volume edits did not finish before the timeout.";
 "The selected edit state could not be opened: %@\nThe original dataset has been opened instead. Your saved edits have not been changed." = "The selected edit state could not be opened: %@\nThe original dataset has been opened instead. Your saved edits have not been changed.";
+
+"Reset Model" = "Reset Model";
+"Reset Clipping" = "Reset Clipping";
+"Reset Model?" = "Reset Model?";
+"Reset Clipping?" = "Reset Clipping?";
+"Reset Transfer Function" = "Reset Transfer Function";
+"Do you really want to reset the model transformation?" = "Do you really want to reset the model transformation?";
+"Do you really want to reset the clipping bounds?" = "Do you really want to reset the clipping bounds?";
+"This removes every annotation object from the current session." = "This removes every annotation object from the current session.";
+"Reset Isovalue" = "Reset Isovalue";
+"Reset Isovalue?" = "Reset Isovalue?";
+"Reset Transfer Function?" = "Reset Transfer Function?";
+"Do you really want to reset the isovalue?" = "Do you really want to reset the isovalue?";
+"Do you really want to reset the current transfer function?" = "Do you really want to reset the current transfer function?";

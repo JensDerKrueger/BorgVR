@@ -300,6 +300,7 @@ func runVolumeEditTests() throws {
   try testAdjacentEditStorage()
   try testDiscardAllEditsDuringBackgroundWork()
   try testNewlyVisibleBrickBypassesHiddenEditWork()
+  try testBackgroundEditsPrioritizeFinestLOD()
   try testPendingEraseVisibilityBounds()
   try testRestoreSkipsUneditedBricks()
   try testBrickUpdateActivity()
@@ -1339,6 +1340,45 @@ private func testNewlyVisibleBrickBypassesHiddenEditWork() throws {
   let next = DispatchSemaphore(value: 0)
   dataset.brush([.init(center: .zero, radius: 100)], mode: .restore) { _ in next.signal() }
   try check(next.wait(timeout: .now() + 2) == .success, "Demand/background work blocked new brush input")
+}
+
+private final class RetryingPriorityExecutor: BorgVRVolumeEditExecutor {
+  private let lock = NSLock()
+  private let cpu: BorgVRCPUVolumeEditExecutor
+  private var reads: [UInt64: [Int]] = [:]
+  init(source: BORGVRDatasetProtocol) throws { cpu = try .init(source: source, border: .clamp) }
+  func indices(revision: UInt64) -> [Int] { lock.withLock { reads[revision] ?? [] } }
+  func materialize(index: Int, mask: BorgVRVolumeEditMask, revision: UInt64,
+                   isCancelled: @escaping () -> Bool) throws -> BorgVRMaterializedEditBrick {
+    let retry = lock.withLock {
+      let retry = index == 0 && !(reads[revision]?.contains(0) ?? false)
+      reads[revision, default: []].append(index)
+      return retry
+    }
+    if retry { throw BORGVRDataError.brickNotYetAvailable(index: index) }
+    return try cpu.materialize(index: index, mask: mask, revision: revision, isCancelled: isCancelled)
+  }
+}
+
+private func testBackgroundEditsPrioritizeFinestLOD() throws {
+  let directory = FileManager.default.temporaryDirectory.appendingPathComponent("borgvr-edit-priority-\(UUID())")
+  defer { try? FileManager.default.removeItem(at: directory) }
+  let source = EditTestDataset(bytesPerComponent: 2)
+  let executor = try RetryingPriorityExecutor(source: source)
+  let dataset = try BorgVREditableVolumeData(source: source, directory: directory, logger: nil, executor: executor)
+  defer { dataset.stop() }
+  dataset.attachGPUBrushRenderer()
+  for (offset, mode) in [BorgVRVolumeBrushMode.erase, .restore].enumerated() {
+    try waitForEditOperation { dataset.brush([.init(center: .zero, radius: 100)], mode: mode, completion: $0) }
+    let deadline = Date().addingTimeInterval(10)
+    while dataset.hasPendingBrickUpdates, Date() < deadline { Thread.sleep(forTimeInterval: 0.01) }
+    try check(!dataset.hasPendingBrickUpdates, "Background \(mode) did not finish")
+    let ids = executor.indices(revision: UInt64(offset + 1))
+    let levels = ids.map { id in source.metadata.levelMetadata.lastIndex { $0.prevBricks <= id }! }
+    try check(levels == levels.sorted(), "Background \(mode) retried a fine brick after a coarser LOD: \(ids)")
+    try check(ids.filter { $0 == 0 }.count == 2 && levels.contains(0) && levels.contains(where: { $0 > 0 }),
+      "Priority fixture did not exercise a retry across multiple LODs")
+  }
 }
 
 private func testPendingEraseVisibilityBounds() throws {

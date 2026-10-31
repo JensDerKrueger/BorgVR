@@ -353,6 +353,9 @@
 "profile_button_performance_graph" = "Performance Graph";
 "profile_button_show_log" = "Show Log";
 "profile_toggle_show_bricks" = "Show Bricks";
+"Resident Bricks (Red)" = "Resident Bricks (Red)";
+"Empty Bricks (Green)" = "Empty Bricks (Green)";
+"Missing Bricks (Blue)" = "Missing Bricks (Blue)";
 "profile_label_startup" = "Startup:";
 "profile_label_measurement" = "Measurement:";
 "profile_toggle_log_performance" = "Log Performance";
@@ -1317,6 +1320,7 @@
 "Synchronizing Edit State…" = "Synchronizing Edit State…";
 "All edits in the active state will be removed. During SharePlay this clears the shared state for everyone. Other states and the original dataset are preserved." = "All edits in the active state will be removed. During SharePlay this clears the shared state for everyone. Other states and the original dataset are preserved.";
 "Preparing Edit State" = "Preparing Edit State";
+"Cancel opens the dataset immediately; pending edits continue in the background." = "Cancel opens the dataset immediately; pending edits continue in the background.";
 "Finishing pending volume updates before opening." = "Finishing pending volume updates before opening.";
 
 // Per-channel volume editing
@@ -1324,6 +1328,7 @@
 "All Channels" = "All Channels";
 "Channel %lld" = "Channel %lld";
 "Select DICOM folder" = "Select DICOM folder";
+"Select Zarr folder" = "Select Zarr folder";
 "DICOM Fusion" = "DICOM Fusion";
 "Reference series" = "Reference series";
 "Series to register" = "Series to register";

@@ -20,6 +20,23 @@ extension BorgVRSession where VisualizationState == SharedAppModel,
           case .setRenderMode(let mode):
             sharedAppModel.renderMode = mode
             sharedAppModel.synchronize(kind: .stateOnly)
+          case .setBrickVisualization(let enabled, let resident, let empty, let missing):
+            guard enabled != nil || resident != nil || empty != nil || missing != nil else {
+              throw BorgVRSessionCommandError.invalidRenderingOptions
+            }
+            if let enabled { sharedAppModel.brickVis = enabled }
+            if let resident { sharedAppModel.brickVisResident = resident }
+            if let empty { sharedAppModel.brickVisEmpty = empty }
+            if let missing { sharedAppModel.brickVisMissing = missing }
+            if enabled != nil { sharedAppModel.synchronize(kind: .stateOnly) }
+          case .setRenderOptimizations(let subbrick, let adaptive, let epsilon):
+            guard subbrick != nil || adaptive != nil || epsilon != nil,
+                  epsilon.map({ $0.isFinite && (0...1).contains($0) }) ?? true else {
+              throw BorgVRSessionCommandError.invalidRenderingOptions
+            }
+            if let subbrick { storedAppModel.subbrickSkipping = subbrick }
+            if let adaptive { storedAppModel.opacityAdaptiveSampling = adaptive }
+            if let epsilon { storedAppModel.alphaEpsilon = Double(epsilon) }
           case .setTransform(let snapshot):
             guard simd_length_squared(snapshot.rotation) > 0.000_001 else {
               throw BorgVRSessionCommandError.invalidRotation
@@ -216,6 +233,7 @@ extension BorgVRSession where VisualizationState == SharedAppModel,
           isoValue: sharedAppModel.isoValue,
           renderMode: sharedAppModel.renderMode,
           brickVisualization: sharedAppModel.brickVis,
+          brickVisualizationMask: sharedAppModel.brickVisualizationMask,
           transferBiases: sharedAppModel.transferBiases,
           lighting: BorgVRLightingSnapshot(
             direction: sharedAppModel.lightDirection,

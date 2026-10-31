@@ -376,13 +376,14 @@ enum VolumeSubbrickTests {
     let requests = device.makeBuffer(length: 64 * 4, options: .storageModeShared)!
     func render(_ pipeline: MTLRenderPipelineState, flag: UInt32 = 3, enabled: Bool = true,
                 iso: Float? = nil, adaptive: Bool = false,
-                states: [UInt32]? = nil) throws -> (color: [SIMD4<Float>], depth: [Float]) {
+                states: [UInt32]? = nil, visibilityMask: UInt32 = 7) throws -> (color: [SIMD4<Float>], depth: [Float]) {
       requests.contents().bindMemory(to: UInt32.self, capacity: 64).update(repeating: .max, count: 64)
       let command = queue.makeCommandBuffer()!
       try require(cache.prepare(command: command, primary: primary, secondary: secondary,
         pages: [0,1,2], transferFunctions: transferFunctions, isoValue: iso), "Cannot prepare render mask")
       uniforms.uniforms.0.isoValue = iso ?? 0.5
       uniforms.uniforms.0.opacityAdaptiveSampling = adaptive ? 1 : 0
+      uniforms.uniforms.0.brickVisualizationMask = visibilityMask
       let encoder = command.makeRenderCommandEncoder(descriptor: pass)!
       encoder.setRenderPipelineState(pipeline)
       encoder.setFragmentBytes(&uniforms, length: MemoryLayout<FragmentUniformsArray>.stride, index: 0)
@@ -432,6 +433,24 @@ enum VolumeSubbrickTests {
     let fallback = try render(pipeline, states: [0,3]).color
     try require(fallback.contains { $0.z > 0 } && fallback.contains { $0.y > 0 } &&
       fallback.allSatisfy { $0.x == 0 }, "Resident fallback must show blue/green subblocks without requests")
+    for mask in UInt32(0)...7 {
+      for (flag, states, reference) in [
+        (UInt32(3), nil as [UInt32]?, results[0]),
+        (1, nil, results[1]), (0, nil, results[2]),
+        (5, nil, full), (4, nil, emptyMask), (3, [0,3], fallback)
+      ] {
+        let filtered = try render(pipeline, flag: flag, states: states, visibilityMask: mask).color
+        for i in reference.indices {
+          let expected = SIMD3<Float>(mask & 1 != 0 ? reference[i].x : 0,
+                                      mask & 2 != 0 ? reference[i].y : 0,
+                                      mask & 4 != 0 ? reference[i].z : 0)
+          try require(SIMD3(filtered[i].x, filtered[i].y, filtered[i].z) == expected,
+            "Brick filter \(mask) changed another type or traversal (state \(flag))")
+          try require(abs(filtered[i].w - (expected.x + expected.y + expected.z)) < 0.01,
+            "Hidden brick types still contributed alpha")
+        }
+      }
+    }
     let originalLevels = levels
     levels[0].fractionalBrickLayout = SIMD3(1,1,2)
     levels[1].prevBricks = 2
@@ -450,6 +469,9 @@ enum VolumeSubbrickTests {
       try require(reference.color.contains { $0.w > 0 }, "\(name) test has no visible content")
       try require(reference.color == actual.color && reference.depth == actual.depth,
         "\(name) changed color or picking with subbrick skipping")
+      let hiddenBricks = try render(state, enabled: true, iso: iso, visibilityMask: 0)
+      try require(hiddenBricks.color == actual.color && hiddenBricks.depth == actual.depth,
+        "Diagnostic visibility mask changed normal rendering in \(name)")
       d.fragmentFunction = baselineLibrary.makeFunction(name: name)
       let baseline = try render(device.makeRenderPipelineState(descriptor: d), iso: iso)
       try require(baseline.color == actual.color && baseline.depth == actual.depth,

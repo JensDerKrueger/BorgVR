@@ -44,6 +44,7 @@ final class BorgVRScreenCommandService: BorgVRMCPCommandService {
   func applicationState() -> BorgVRMCPApplicationState {
     let appModel = session.runtimeState
     let state = session.currentSnapshot()
+    let settings = session.frameSnapshot().settings
     let dataset = appModel.activeDataset.map { entry in
       let metadata = appModel.activeDatasetMetadata
       return BorgVRMCPDatasetState(
@@ -80,6 +81,15 @@ final class BorgVRScreenCommandService: BorgVRMCPCommandService {
       ),
       objectCount: state.objectCount,
       measurementCount: state.measurementCount,
+      renderingOptions: BorgVRMCPRenderingOptions(
+        brickVisualizationEnabled: state.brickVisualization,
+        residentBricksVisible: state.brickVisualizationMask & 1 != 0,
+        emptyBricksVisible: state.brickVisualizationMask & 2 != 0,
+        missingBricksVisible: state.brickVisualizationMask & 4 != 0,
+        subbrickSkipping: settings.subbrickSkipping,
+        opacityAdaptiveSampling: settings.opacityAdaptiveSampling,
+        alphaEpsilon: settings.alphaEpsilon
+      ),
       volumeEditing: volumeEditing.volumeEditingState()
     )
   }
@@ -102,6 +112,15 @@ final class BorgVRScreenCommandService: BorgVRMCPCommandService {
         throw BorgVRMCPCommandError.invalidArgument("Unknown render mode.")
     }
     try session.perform(.setRenderMode(renderMode), source: .mcp)
+  }
+
+  func setBrickVisualization(enabled: Bool?, resident: Bool?, empty: Bool?, missing: Bool?) throws {
+    try session.perform(.setBrickVisualization(enabled: enabled, resident: resident, empty: empty, missing: missing), source: .mcp)
+  }
+
+  func setRenderOptimizations(subbrickSkipping: Bool?, opacityAdaptiveSampling: Bool?, alphaEpsilon: Float?) throws {
+    try session.perform(.setRenderOptimizations(subbrickSkipping: subbrickSkipping,
+      opacityAdaptiveSampling: opacityAdaptiveSampling, alphaEpsilon: alphaEpsilon), source: .mcp)
   }
 
   func setTransform(

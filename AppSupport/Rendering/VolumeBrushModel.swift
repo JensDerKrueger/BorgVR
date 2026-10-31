@@ -216,6 +216,7 @@ final class VolumeBrushModel: ObservableObject, BorgVRVolumeEditingCommands {
   @Published private(set) var preparationID: UUID?
   @Published private(set) var preparationProgress = 0.0
   private var preparationCancellation: BorgVRVolumeConversionCancellationToken?
+  private var skippedPreparationCancellation: BorgVRVolumeConversionCancellationToken?
   private var openingContinuation: CheckedContinuation<UUID?, Error>?
   private var preparedChoice: (datasetID: String, stateID: UUID?)?
   private var dataSource: BorgVRVolumeEditDataSource?
@@ -383,6 +384,7 @@ final class VolumeBrushModel: ObservableObject, BorgVRVolumeEditingCommands {
     exclusiveExport?.cancel()
     preparationCancellation?.cancel()
     preparationCancellation = nil
+    skippedPreparationCancellation = nil
     preparationID = nil
     openingTask?.cancel()
     openingTask = nil
@@ -476,6 +478,12 @@ final class VolumeBrushModel: ObservableObject, BorgVRVolumeEditingCommands {
     continuation?.resume(throwing: CancellationError())
   }
 
+  func cancelOpeningPreparation(id: UUID) {
+    guard preparationID == id, let token = preparationCancellation else { return }
+    skippedPreparationCancellation = token
+    token.cancel()
+  }
+
   func canDeleteOpeningState(_ id: UUID, requestID: UUID) -> Bool {
     (!isInSharePlay || isSharePlayHost) && !isExporting && !isRestoringPersonalState &&
       !isDiscardingEdits && openingRequest?.id == requestID && activeState?.id != id && workingState?.id != id
@@ -542,16 +550,23 @@ final class VolumeBrushModel: ObservableObject, BorgVRVolumeEditingCommands {
       if !isInSharePlay { preparationID = UUID() }
       defer {
         if preparationCancellation === token { preparationCancellation = nil; preparationID = nil }
+        if skippedPreparationCancellation === token { skippedPreparationCancellation = nil }
       }
-      try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-        source.preparePendingEdits(cancellationToken: token, progress: { [weak self] value in
-          Task { @MainActor in
-            guard let self, self.preparationCancellation === token else { return }
-            self.preparationProgress = max(self.preparationProgress, value)
+      do {
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+          source.preparePendingEdits(cancellationToken: token, progress: { [weak self] value in
+            Task { @MainActor in
+              guard let self, self.preparationCancellation === token else { return }
+              self.preparationProgress = max(self.preparationProgress, value)
+            }
+          }) { error in
+            if let error { continuation.resume(throwing: error) } else { continuation.resume() }
           }
-        }) { error in
-          if let error { continuation.resume(throwing: error) } else { continuation.resume() }
         }
+      } catch is CancellationError {
+        guard skippedPreparationCancellation === token, !Task.isCancelled,
+              generation == datasetGeneration, stateTransitionID == transition else { throw CancellationError() }
+        source.continuePreparationInBackground()
       }
     }
     source.setPreparationReady(true)

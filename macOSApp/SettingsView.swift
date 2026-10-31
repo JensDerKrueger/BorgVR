@@ -93,6 +93,7 @@ private enum SettingsPage: String, CaseIterable, Identifiable {
 }
 
 struct SettingsView: View {
+  @EnvironmentObject private var session: ScreenBorgVRSession
   @EnvironmentObject private var appModel: AppModel
   @EnvironmentObject private var appSettings: AppSettings
   @EnvironmentObject private var storedAppModel: StoredAppModel
@@ -281,9 +282,12 @@ struct SettingsView: View {
                        step: 0.1,
                        format: "%.1f")
       toggleRow("Randomized sample phase", isOn: $appSettings.sampleJitter)
-      toggleRow("Subbrick skipping", isOn: $appSettings.subbrickSkipping)
-      toggleRow("Opacity-adaptive sampling", isOn: $appSettings.opacityAdaptiveSampling)
-      doubleStepperRow("Alpha epsilon", value: $appSettings.alphaEpsilon,
+      toggleRow("Subbrick skipping", isOn: Binding(get: { appSettings.subbrickSkipping },
+        set: { try? session.perform(.setRenderOptimizations(subbrickSkipping: $0), source: .userInterface) }))
+      toggleRow("Opacity-adaptive sampling", isOn: Binding(get: { appSettings.opacityAdaptiveSampling },
+        set: { try? session.perform(.setRenderOptimizations(opacityAdaptiveSampling: $0), source: .userInterface) }))
+      doubleStepperRow("Alpha epsilon", value: Binding(get: { appSettings.alphaEpsilon },
+        set: { try? session.perform(.setRenderOptimizations(alphaEpsilon: Float($0)), source: .userInterface) }),
                        range: 0...1, step: 0.001, format: "%.3f")
         .help("Bricks with TF alpha below this threshold may be skipped. The transfer function stays unchanged. Zero disables the threshold.")
       if appSettings.oversamplingMode == OversamplingMode.dynamicMode.rawValue {
@@ -807,7 +811,9 @@ struct SettingsView: View {
       case .dataSource:
         storedAppModel.resetDataSourceDefaults()
       case .rendering:
-        appSettings.resetRenderingDefaults()
+        session.mutate(source: .userInterface, domain: .visualization) {
+          appSettings.resetRenderingDefaults()
+        }
       case .performance:
         appSettings.resetPerformanceDefaults()
       case .importSettings:

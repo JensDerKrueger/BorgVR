@@ -992,6 +992,10 @@
 "Transfer" = "Transfer";
 "Editor" = "Editor";
 "Bricks" = "Bricks";
+"Brick Types" = "Brick-Typen";
+"Resident Bricks (Red)" = "Verfügbare Bricks (Rot)";
+"Empty Bricks (Green)" = "Leere Bricks (Grün)";
+"Missing Bricks (Blue)" = "Fehlende Bricks (Blau)";
 "BorgVR Help" = "BorgVR-Hilfe";
 "Edit Volume" = "Volumen bearbeiten";
 "Brush" = "Pinsel";
@@ -1027,6 +1031,7 @@
 "Synchronizing Edit State…" = "Bearbeitungsstand wird synchronisiert …";
 "All edits in the active state will be removed. During SharePlay this clears the shared state for everyone. Other states and the original dataset are preserved." = "Alle Bearbeitungen im aktiven Stand werden entfernt. Während SharePlay wird damit der gemeinsame Stand für alle zurückgesetzt. Andere Stände und der Originaldatensatz bleiben erhalten.";
 "Preparing Edit State" = "Bearbeitungsstand vorbereiten";
+"Cancel opens the dataset immediately; pending edits continue in the background." = "Abbrechen öffnet den Datensatz sofort; ausstehende Bearbeitungen werden im Hintergrund fortgesetzt.";
 "Finishing pending volume updates before opening." = "Ausstehende Volumen-Aktualisierungen werden vor dem Öffnen abgeschlossen.";
 "Isosurface Export" = "Isoflächenexport";
 "Normalize isosurface export" = "Isoflächenexport normalisieren";
@@ -1064,3 +1069,17 @@
 "The requested export is not the current export job." = "Der angeforderte Export ist nicht der aktuelle Exportauftrag.";
 "Volume edits did not finish before the timeout." = "Die Volumenbearbeitung wurde nicht innerhalb des Zeitlimits abgeschlossen.";
 "The selected edit state could not be opened: %@\nThe original dataset has been opened instead. Your saved edits have not been changed." = "Der gewählte Bearbeitungsstand konnte nicht geöffnet werden: %@\nStattdessen wurde der Originaldatensatz geöffnet. Ihre gespeicherten Bearbeitungen wurden nicht verändert.";
+
+"Reset Model" = "Modell zurücksetzen";
+"Reset Clipping" = "Clipping zurücksetzen";
+"Reset Model?" = "Modell zurücksetzen?";
+"Reset Clipping?" = "Clipping zurücksetzen?";
+"Reset Transfer Function" = "Transferfunktion zurücksetzen";
+"Do you really want to reset the model transformation?" = "Möchten Sie die Modelltransformation wirklich zurücksetzen?";
+"Do you really want to reset the clipping bounds?" = "Möchten Sie die Clipping-Grenzen wirklich zurücksetzen?";
+"This removes every annotation object from the current session." = "Dadurch werden alle Annotationsobjekte aus der aktuellen Sitzung entfernt.";
+"Reset Isovalue" = "Isowert zurücksetzen";
+"Reset Isovalue?" = "Isowert zurücksetzen?";
+"Reset Transfer Function?" = "Transferfunktion zurücksetzen?";
+"Do you really want to reset the isovalue?" = "Möchten Sie den Isowert wirklich zurücksetzen?";
+"Do you really want to reset the current transfer function?" = "Möchten Sie die aktuelle Transferfunktion wirklich zurücksetzen?";

@@ -353,6 +353,9 @@
 "profile_button_performance_graph" = "Graphique des performances";
 "profile_button_show_log" = "Afficher le journal";
 "profile_toggle_show_bricks" = "Afficher les bricks";
+"Resident Bricks (Red)" = "Briques disponibles (rouge)";
+"Empty Bricks (Green)" = "Briques vides (vert)";
+"Missing Bricks (Blue)" = "Briques manquantes (bleu)";
 "profile_label_startup" = "Démarrage :";
 "profile_label_measurement" = "Mesure :";
 "profile_toggle_log_performance" = "Journaliser les performances";
@@ -1317,6 +1320,7 @@
 "Synchronizing Edit State…" = "Synchronisation des modifications…";
 "All edits in the active state will be removed. During SharePlay this clears the shared state for everyone. Other states and the original dataset are preserved." = "Toutes les modifications de l’état actif seront supprimées. Pendant SharePlay, l’état partagé sera réinitialisé pour tout le monde. Les autres états et les données originales sont conservés.";
 "Preparing Edit State" = "Préparation de l’état";
+"Cancel opens the dataset immediately; pending edits continue in the background." = "Annuler ouvre immédiatement le jeu de données ; les modifications en attente se poursuivent en arrière-plan.";
 "Finishing pending volume updates before opening." = "Finalisation des mises à jour du volume avant l’ouverture.";
 
 // Per-channel volume editing
@@ -1324,6 +1328,7 @@
 "All Channels" = "Tous les canaux";
 "Channel %lld" = "Canal %lld";
 "Select DICOM folder" = "Choisir un dossier DICOM";
+"Select Zarr folder" = "Choisir un dossier Zarr";
 "DICOM Fusion" = "Fusion DICOM";
 "Reference series" = "Série de référence";
 "Series to register" = "Série à recaler";

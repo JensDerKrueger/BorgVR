@@ -342,6 +342,7 @@ struct VisionApp: App {
     // Advanced Settings Window
     WindowGroup(id: "ProfileView") {
       ProfileView()
+        .environmentObject(session)
         .trackView(name: "ProfileView")
         .environment(runtimeAppModel)
         .environment(sharedAppModel)

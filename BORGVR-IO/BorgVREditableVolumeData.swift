@@ -711,7 +711,14 @@ final class BorgVREditableVolumeData: BORGVRDatasetProtocol, BorgVRVolumeGPUBrus
       defer {
         lock.withLock {
           queued.remove(index)
-          if needsRetry, !stopped, !resetting, !backgroundIDs.contains(index) { backgroundIDs.insert(index, at: 0) }
+          if needsRetry, !stopped, !resetting, !backgroundIDs.contains(index) {
+            // Retry after other bricks at the same LOD, but before coarser work.
+            let levels = getMetadata().levelMetadata
+            let level = levels.lastIndex { $0.prevBricks <= index }!
+            let end = level + 1 < levels.count ? levels[level + 1].prevBricks : getMetadata().brickMetadata.count
+            let position = backgroundIDs.firstIndex { $0 < end } ?? backgroundIDs.endIndex
+            backgroundIDs.insert(index, at: position)
+          }
           updateBackgroundWorkStatus()
         }
         completion?(needsRetry)

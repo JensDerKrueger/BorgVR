@@ -523,6 +523,21 @@ final class BorgVRMCPServer: @unchecked Sendable {
         let mode = try string("mode", in: arguments)
         try await service.setRenderMode(mode)
         return structuredToolResult(await service.applicationState())
+      case "set_brick_visualization":
+        try await service.setBrickVisualization(
+          enabled: optionalBool("enabled", in: arguments),
+          resident: optionalBool("resident", in: arguments),
+          empty: optionalBool("empty", in: arguments),
+          missing: optionalBool("missing", in: arguments)
+        )
+        return structuredToolResult(await service.applicationState())
+      case "set_render_optimizations":
+        try await service.setRenderOptimizations(
+          subbrickSkipping: optionalBool("subbrick_skipping", in: arguments),
+          opacityAdaptiveSampling: optionalBool("opacity_adaptive_sampling", in: arguments),
+          alphaEpsilon: optionalFloat("alpha_epsilon", in: arguments)
+        )
+        return structuredToolResult(await service.applicationState())
       case "set_transform":
         let rotation = try optionalVector4("rotation", in: arguments)
         let translation = try optionalVector3("translation", in: arguments)
@@ -764,6 +779,15 @@ final class BorgVRMCPServer: @unchecked Sendable {
       tool("set_render_mode", "Select transfer-function, lit transfer-function, or isovalue rendering.", properties: [
         "mode": ["type": "string", "enum": ["transfer_function", "transfer_function_lighting", "isovalue"]]
       ], required: ["mode"]),
+      tool("set_brick_visualization", "Enable brick diagnosis or set its local type filters without changing traversal or requesting bricks. Resident regions are red, empty/skipped regions green, missing/fallback regions blue. Any nonempty subset is accepted; omitted fields stay unchanged. Also applies to subblocks. Recorded as GSC when recording is active.", properties: [
+        "enabled": ["type": "boolean"], "resident": ["type": "boolean"],
+        "empty": ["type": "boolean"], "missing": ["type": "boolean"]
+      ]),
+      tool("set_render_optimizations", "Set local rendering optimizations. Accepts any nonempty subset; omitted fields stay unchanged. Alpha epsilon affects TF empty-space classification, not the TF itself or ISO. These settings persist and are recorded as GSC when recording is active.", properties: [
+        "subbrick_skipping": ["type": "boolean"],
+        "opacity_adaptive_sampling": ["type": "boolean"],
+        "alpha_epsilon": ["type": "number", "minimum": 0, "maximum": 1]
+      ]),
       tool("set_transform", "Set any subset of the current model/view transform.", properties: [
         "rotation": vector4, "translation": vector3, "scale": vector3
       ]),

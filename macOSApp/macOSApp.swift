@@ -671,14 +671,28 @@ private struct BorgVRMenuCommands: Commands {
       .macRenderShortcut(.bricks)
       .disabled(!hasActiveDataset || !appSettings.showBrickVisualization)
 
+      Menu {
+        Toggle("Resident Bricks (Red)", isOn: Binding(get: { renderingParameters.brickVisResident },
+          set: { try? session.perform(.setBrickVisualization(resident: $0), source: .userInterface) }))
+        Toggle("Empty Bricks (Green)", isOn: Binding(get: { renderingParameters.brickVisEmpty },
+          set: { try? session.perform(.setBrickVisualization(empty: $0), source: .userInterface) }))
+        Toggle("Missing Bricks (Blue)", isOn: Binding(get: { renderingParameters.brickVisMissing },
+          set: { try? session.perform(.setBrickVisualization(missing: $0), source: .userInterface) }))
+      } label: {
+        menuLabel("Brick Types", systemImage: "square.3.layers.3d")
+      }
+      .disabled(!hasActiveDataset || !renderingParameters.brickVis)
+
       Divider()
 
-      Toggle(isOn: $appSettings.subbrickSkipping) {
+      Toggle(isOn: Binding(get: { appSettings.subbrickSkipping },
+        set: { try? session.perform(.setRenderOptimizations(subbrickSkipping: $0), source: .userInterface) })) {
         menuLabel("Subbrick skipping", systemImage: "cube.transparent")
       }
       .disabled(!hasActiveDataset)
 
-      Toggle(isOn: $appSettings.opacityAdaptiveSampling) {
+      Toggle(isOn: Binding(get: { appSettings.opacityAdaptiveSampling },
+        set: { try? session.perform(.setRenderOptimizations(opacityAdaptiveSampling: $0), source: .userInterface) })) {
         menuLabel("Opacity-adaptive sampling", systemImage: "circle.lefthalf.filled")
       }
       .disabled(!hasActiveDataset || renderingParameters.renderMode == .isoValue)

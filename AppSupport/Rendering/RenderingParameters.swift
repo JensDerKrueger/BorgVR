@@ -42,6 +42,12 @@ final class RenderingParameters: ObservableObject {
   @Published var normIsoValue: Float = 0.1
   @Published var renderMode: RenderMode = .transferFunction1D
   @Published var brickVis = false
+  @Published var brickVisResident = true
+  @Published var brickVisEmpty = true
+  @Published var brickVisMissing = true
+  var brickVisualizationMask: UInt32 {
+    (brickVisResident ? 1 : 0) | (brickVisEmpty ? 2 : 0) | (brickVisMissing ? 4 : 0)
+  }
   @Published var lightDirection = BorgVRLightingState.default.direction
   @Published var ambientLightColor = BorgVRLightingState.default.ambientColor
   @Published var diffuseLightColor = BorgVRLightingState.default.diffuseColor

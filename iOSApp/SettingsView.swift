@@ -82,6 +82,7 @@ private enum SettingsPage: String, CaseIterable, Identifiable {
 }
 
 struct SettingsView: View {
+  @EnvironmentObject private var session: ScreenBorgVRSession
   @Environment(\.horizontalSizeClass) private var horizontalSizeClass
   @Environment(\.verticalSizeClass) private var verticalSizeClass
   @EnvironmentObject private var appModel: AppModel
@@ -406,9 +407,12 @@ struct SettingsView: View {
         }
       }
       Toggle("Randomized sample phase", isOn: $appSettings.sampleJitter)
-      Toggle("Subbrick skipping", isOn: $appSettings.subbrickSkipping)
-      Toggle("Opacity-adaptive sampling", isOn: $appSettings.opacityAdaptiveSampling)
-      Stepper(value: $appSettings.alphaEpsilon, in: 0...1, step: 0.001) {
+      Toggle("Subbrick skipping", isOn: Binding(get: { appSettings.subbrickSkipping },
+        set: { try? session.perform(.setRenderOptimizations(subbrickSkipping: $0), source: .userInterface) }))
+      Toggle("Opacity-adaptive sampling", isOn: Binding(get: { appSettings.opacityAdaptiveSampling },
+        set: { try? session.perform(.setRenderOptimizations(opacityAdaptiveSampling: $0), source: .userInterface) }))
+      Stepper(value: Binding(get: { appSettings.alphaEpsilon },
+        set: { try? session.perform(.setRenderOptimizations(alphaEpsilon: Float($0)), source: .userInterface) }), in: 0...1, step: 0.001) {
         HStack {
           Text("Alpha epsilon")
           Spacer()
@@ -909,7 +913,9 @@ struct SettingsView: View {
         appSettings.resetGeneralDefaults()
         updateChecker.checksEnabled = true
       case .rendering:
-        appSettings.resetRenderingDefaults()
+        session.mutate(source: .userInterface, domain: .visualization) {
+          appSettings.resetRenderingDefaults()
+        }
       case .performance:
         appSettings.resetPerformanceDefaults()
       case .importSettings:

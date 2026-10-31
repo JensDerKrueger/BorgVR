@@ -129,6 +129,12 @@ class SharedAppModel {
   var renderMode: RenderMode
   /// Flag to show or hide bricks.
   var brickVis: Bool
+  var brickVisResident = true
+  var brickVisEmpty = true
+  var brickVisMissing = true
+  var brickVisualizationMask: UInt32 {
+    (brickVisResident ? 1 : 0) | (brickVisEmpty ? 2 : 0) | (brickVisMissing ? 4 : 0)
+  }
   /// Directional light in view space.
   var lightDirection: SIMD3<Float>
   /// Ambient, diffuse, and specular light colors.

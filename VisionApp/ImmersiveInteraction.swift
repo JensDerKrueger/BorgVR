@@ -438,14 +438,8 @@ class ImmersiveInteraction {
             sharedAppModel.modelTransform.rotation
           ).inverse * translate
 
-          translationClipping = sharedAppModel.lastTranslationClipping + translate
-
-          if translationClipping.x > 0.99 {translationClipping.x = 0.99}
-          if translationClipping.y > 0.99 {translationClipping.y = 0.99}
-          if translationClipping.z > 0.99 {translationClipping.z = 0.99}
-          if translationClipping.x < -0.99 {translationClipping.x = -0.99}
-          if translationClipping.y < -0.99 {translationClipping.y = -0.99}
-          if translationClipping.z < -0.99 {translationClipping.z = -0.99}
+          translationClipping = ClippingInteraction.translation(
+            start: sharedAppModel.lastTranslationClipping, delta: translate)
 
           if translationClipping.x >= 0 {
             sharedAppModel.clipMax.x = 1
@@ -2216,11 +2210,7 @@ class ImmersiveInteraction {
       case .clipping:
         var localDelta = simd_float3x3(sharedAppModel.modelTransform.rotation).inverse *
           translationDelta
-        localDelta = simd_clamp(
-          action.startClippingTranslation + localDelta,
-          SIMD3<Float>(repeating: -0.99),
-          SIMD3<Float>(repeating: 0.99)
-        )
+        localDelta = ClippingInteraction.translation(start: action.startClippingTranslation, delta: localDelta)
         translationClipping = localDelta
         sharedAppModel.clipMin = SIMD3<Float>(
           localDelta.x >= 0 ? localDelta.x : 0,

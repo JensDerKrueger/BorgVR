@@ -43,6 +43,34 @@ require_pattern 'volumeBrush\.close\(\)' AppSupport/Application/AppModel.swift
 require_pattern 'BorgVRFrameSnapshot' VisionApp/VisionBorgVRSession.swift
 require_pattern 'revision: evaluationState\.revision &\+ 1' BORGVR-Render/VolumeAtlas/AsyncEmptinessUpdater.swift
 
+# New render controls must stay executable, queryable, and recordable, not raw UI mutations.
+for command in showbricks showresidentbricks showemptybricks showmissingbricks \
+  setsubbrickskipping setopacityadaptivesampling setalphaepsilon; do
+  require_pattern "\"$command[\" ]" AppSupport/Application/BorgVRSession.swift
+  require_pattern "\"$command\"" macOSApp/BorgVRScriptRunner.swift
+  require_pattern "^$command\\(" Scripts/borgvr.gsccommands
+  require_pattern "$command" html/gsc.html
+done
+for command in set_brick_visualization set_render_optimizations; do
+  require_pattern "case \"$command\"" BORGVR-Services/BorgVRMCPServer.swift
+  require_pattern "tool\\(\"$command\"" BORGVR-Services/BorgVRMCPServer.swift
+  require_pattern "$command" html/mcp.html
+done
+for file in AppSupport/Automation/BorgVRScreenCommandService.swift VisionApp/VisionBorgVRCommandService.swift; do
+  require_pattern 'renderingOptions: BorgVRMCPRenderingOptions' "$file"
+  require_pattern 'session.perform\(\.setBrickVisualization' "$file"
+  require_pattern 'session.perform\(\.setRenderOptimizations' "$file"
+done
+for file in macOSApp/SettingsView.swift iOSApp/SettingsView.swift VisionApp/SettingsView.swift; do
+  require_pattern 'session.perform\(\.setRenderOptimizations' "$file"
+  forbid_pattern 'isOn: \$(appSettings|storedAppModel)\.(subbrickSkipping|opacityAdaptiveSampling)' "$file"
+  forbid_pattern 'value: \$(appSettings|storedAppModel)\.alphaEpsilon' "$file"
+done
+require_pattern 'inferredSettingsCommands' AppSupport/Application/BorgVRSession.swift
+require_pattern 'session.perform\(\.setBrickVisualization' VisionApp/ProfileView.swift
+require_pattern 'session.perform\(\.setBrickVisualization' macOSApp/macOSApp.swift
+require_pattern 'session.perform\(\.setRenderOptimizations' macOSApp/macOSApp.swift
+
 # The visionOS orchestrator delegates resource ownership and non-volume drawing.
 require_file VisionApp/Rendering/VisionVolumeRenderer.swift
 require_file VisionApp/Rendering/VisionOpaqueGeometryRenderer.swift
@@ -88,6 +116,23 @@ require_pattern 'WindowGroup\(id: "VolumeBrushEditorView"\)' VisionApp/VisionApp
 require_pattern 'dismissWindow\(id: "VolumeBrushEditorView"\)' VisionApp/RenderView.swift
 
 # Shared converter UI and conversion implementation.
+require_file BORGVR-Services/BorgVRAutoImporter.swift
+require_file TerminalServerApp/BorgVRAutoImporter.swift
+require_pattern 'BorgVRAutoImporter\(' TerminalServerApp/main.swift
+require_pattern 'BorgVRAutoImporter\(' macOSServer/ServerView.swift
+require_pattern 'BorgVRAutomaticVolumeConversion.convert' BORGVR-Services/BorgVRAutoImporter.swift
+for format in NRRD QVIS I3D DICOM ZARR PVM Mesh; do
+  [ -d "BORGVR-IO/Importers/$format" ] || fail "missing importer directory $format"
+done
+require_file BORGVR-IO/Importers/VolumeFileParser.swift
+require_file BORGVR-IO/Importers/BorgVRVolumeConversionService.swift
+forbid_path BORGVR-IO/VolumeFileParser.swift
+forbid_path BORGVR-IO/DICOM.swift
+forbid_path BORGVR-IO/NRRDParser.swift
+forbid_path BORGVR-IO/ZarrParser.swift
+require_pattern 'case zarrDirectory' AppSupport/UI/FilePickerView.swift
+require_pattern 'filePickerMode = \.zarrDirectory' iOSApp/ConverterView.swift
+require_pattern 'filePickerMode = \.zarrDirectory' VisionApp/ConverterView.swift
 require_file AppSupport/Datasets/ConverterView.swift
 require_file AppSupport/Datasets/DicomSlicePreview.swift
 forbid_path macOSApp/ConverterView.swift
