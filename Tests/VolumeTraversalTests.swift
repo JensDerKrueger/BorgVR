@@ -62,7 +62,7 @@ private enum VolumeTraversalTests {
       uint4 counts = uint4(0);
       for (uint step = 0; step < MAX_ITERATIONS && t < 0.9999; ++step) {
         auto brick = getBrick(position, 0, direction, inverseDirection, bounds,
-          metadata + (index & 1) * brickCount, levels, requests, true, index >= 2);
+          metadata + min(index, 2u) * brickCount, levels, requests, true, index == 3);
         if (brick.substitute) ++counts.z;
         else if (brick.empty) ++counts.y;
         else ++counts.x;
@@ -161,7 +161,7 @@ private enum VolumeTraversalTests {
     device: MTLDevice, queue: MTLCommandQueue, library: MTLLibrary,
     levels: [TraversalLevel], counts: [SIMD3<Int>], brickCount: Int
   ) throws {
-    var metadata = [UInt32](repeating: 3, count: brickCount * 2)
+    var metadata = [UInt32](repeating: 3, count: brickCount * 3)
     func index(_ lod: Int, _ x: Int, _ y: Int, _ z: Int) -> Int {
       Int(levels[lod].prevBricks) + x + counts[lod].x * (y + counts[lod].y * z)
     }
@@ -187,6 +187,7 @@ private enum VolumeTraversalTests {
         } } }
       }
     }
+    metadata[2 * brickCount] = 0
     func buffer<T>(_ values: [T]) -> MTLBuffer {
       values.withUnsafeBytes {
         device.makeBuffer(bytes: $0.baseAddress!, length: $0.count, options: .storageModeShared)!
@@ -211,11 +212,17 @@ private enum VolumeTraversalTests {
     if let error = command.error { throw error }
     let results = output.contents().bindMemory(to: SIMD4<UInt32>.self, capacity: 4)
     let expected = SIMD4<UInt32>(UInt32(counts[0].x - 2), 2, 0, UInt32(counts[0].x))
-    try require(results[0] == expected && results[1] == expected,
-      "Brick visualization changed with off-ray emptiness: \(results[0]), \(results[1]); expected \(expected)")
+    try require(results[0] == expected,
+      "Unexpected fine traversal: \(results[0]); expected \(expected)")
+    try require(results[1].x == expected.x && results[1].z == 0 && results[1].y <= 2,
+      "Unexpected hierarchical empty traversal: \(results[1])")
+    try require(results[2] == SIMD4(UInt32(counts[0].x - 1), 0, 1, UInt32(counts[0].x)),
+      "Missing-brick traversal must remain blue: \(results[2])")
     if levels[0].fractionalBrickLayout.x == 2 * levels[1].fractionalBrickLayout.x {
-      try require(results[3].y < results[2].y,
-        "Expected hierarchical traversal to reproduce lost green contributions: \(results[2]), \(results[3])")
+      try require(results[1].y == 1 && results[1].w == expected.w - 1,
+        "A hierarchical empty leap must contribute once: \(results[1])")
+      try require(results[3] == SIMD4(UInt32(counts[0].x - 2), 0, 1, UInt32(counts[0].x - 1)),
+        "Resident fallback must traverse the resolved coarse brick: \(results[3])")
     }
     let requested = requests.contents().bindMemory(to: UInt32.self, capacity: 64)
     try require((0..<64).allSatisfy { requested[$0] == .max },
