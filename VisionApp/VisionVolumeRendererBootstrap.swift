@@ -115,7 +115,9 @@ enum VisionVolumeRendererBootstrap {
         editDatasetURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first?
           .appendingPathComponent("\(activeDataset.identifier).data")
     }
-    dataset = runtimeAppModel.volumeBrush.open(dataset, datasetURL: editDatasetURL, logger: runtimeAppModel.logger)
+    if dataset.getMetadata().channelInterpretation != .rgb {
+      dataset = runtimeAppModel.volumeBrush.open(dataset, datasetURL: editDatasetURL, logger: runtimeAppModel.logger)
+    }
     runtimeAppModel.activeDatasetInfo = RuntimeAppModel.DatasetInfo(meta: dataset.getMetadata())
 
     // Timer setup
@@ -137,7 +139,7 @@ enum VisionVolumeRendererBootstrap {
                                 componentCount: dataset.getMetadata().componentCount,
                                 componentRanges: dataset.getMetadata().componentRanges)
 
-    if storedAppModel.autoloadTF {
+    if storedAppModel.autoloadTF, dataset.getMetadata().channelInterpretation == .independentChannels {
       let fileURL = URL(
         fileURLWithPath: autoURL.deletingPathExtension().path() + ".tf1d"
       )

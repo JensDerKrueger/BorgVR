@@ -1,3 +1,11 @@
+"converter_supporting_file_access_required" = "Leserechte für die referenzierte Datei werden benötigt: %@";
+"image_sequence_title" = "Bildsequenz";
+"image_sequence_select" = "Bildordner auswählen";
+"image_sequence_size" = "Volumengröße in Metern (X / Y / Z)";
+"image_sequence_empty" = "Der Ordner enthält keine unterstützten Bilder.";
+"image_sequence_invalid" = "Aus %@ kann keine einzelne Bildschicht gelesen werden.";
+"image_sequence_dimensions" = "Die Bildgröße weicht von den anderen Schichten ab: %@.";
+
 /* Localizable.strings (de) */
 
 /* Title of dataset import view */

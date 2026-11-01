@@ -407,7 +407,7 @@ class VolumeAtlas {
         primaryUploadStorage[destination] = data[source]
         primaryUploadStorage[destination + 1] = data[source + 1]
         primaryUploadStorage[destination + 2] = data[source + 2]
-        primaryUploadStorage[destination + 3] = 0
+        primaryUploadStorage[destination + 3] = metadata.channelInterpretation == .rgb ? 255 : 0
       }
       replace(
         texture: atlasTexture,
@@ -517,10 +517,11 @@ class VolumeAtlas {
 
   func prepareSubbrickSkipping(commandBuffer: MTLCommandBuffer,
                               transferFunctions: [TransferFunction1D], enabled: Bool,
-                              isoValue: Float? = nil) throws {
+                              isoValue: Float? = nil, alphaEpsilon: Float = 0) throws {
     subbrickSkippingEnabled = false
     guard enabled else { subbrickSetupFailed = false; return }
     let metadata = borgData.getMetadata()
+    guard metadata.channelInterpretation != .rgb else { return }
     let count = VolumeAtlasSubbrickCache.divisions(brickSize: metadata.brickSize, overlap: metadata.overlap)
     guard count > 1, !subbrickSetupFailed else { return }
     if subbrickCache == nil {
@@ -535,7 +536,7 @@ class VolumeAtlas {
     }
     subbrickSkippingEnabled = subbrickCache?.prepare(command: commandBuffer, primary: atlasTexture,
       secondary: secondaryAtlasTexture, pages: Array(Set(brickToPage.values)),
-      transferFunctions: transferFunctions, isoValue: isoValue) == true
+      transferFunctions: transferFunctions, isoValue: isoValue, alphaEpsilon: alphaEpsilon) == true
   }
 
   /// Called before opening any render encoder. All brush work uses the frame's
@@ -722,6 +723,10 @@ class VolumeAtlas {
    */
   func updateEmptiness(transferFunctions: [TransferFunction1D]) {
     asyncEmptinessUpdater.updateTransferFunctions(transferFunctions)
+  }
+
+  func updateEmptiness(alphaEpsilon: Float) {
+    asyncEmptinessUpdater.updateAlphaEpsilon(alphaEpsilon)
   }
 
   /**

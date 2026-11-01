@@ -115,7 +115,8 @@ final class BorgVRVolumeEditMaterializer: BorgVRVolumeEditExecutor, @unchecked S
     }
     if coverage == .erased {
       return .init(index: index, revision: revision, bytes: .init(repeating: 0, count: byteCount),
-        componentRanges: .init(repeating: .init(minValue: 0, maxValue: 0), count: m.componentCount), matchesOriginal: false)
+        componentRanges: .init(repeating: .init(minValue: 0, maxValue: 0),
+          count: m.channelInterpretation.rangeCount(componentCount: m.componentCount)), matchesOriginal: false)
     }
     var input: BorgVRVolumeEditBrickInput
     if level == 0 {
@@ -196,7 +197,8 @@ final class BorgVRVolumeEditMaterializer: BorgVRVolumeEditExecutor, @unchecked S
       }
     }
     return .init(index: index, revision: revision, bytes: output,
-      componentRanges: minima.indices.map { .init(minValue: Int(minima[$0]), maxValue: Int(maxima[$0])) },
+      componentRanges: m.channelInterpretation.rangeChannels(componentCount: components).map {
+        .init(minValue: Int(minima[$0]), maxValue: Int(maxima[$0])) },
       matchesOriginal: input.level == 0 && output == input.bytes)
   }
 }

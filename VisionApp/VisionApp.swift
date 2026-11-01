@@ -596,7 +596,7 @@ struct VisionApp: App {
     let documentsDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
     if let dataset {
       let autoURL = documentsDirectory.appendingPathComponent(dataset.uniqueId)
-      if storedAppModel.autoloadTF {
+      if storedAppModel.autoloadTF, runtimeAppModel.activeDatasetInfo?.channelInterpretation == .independentChannels {
         let fileURL = URL(
           fileURLWithPath: autoURL.deletingPathExtension().path() + ".tf1d"
         )

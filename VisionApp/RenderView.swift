@@ -92,6 +92,10 @@ struct RenderView: View {
           .font(.headline)
           .bold()
 
+        if let interpretation = runtimeAppModel.activeDatasetInfo?.channelInterpretation,
+           interpretation != .independentChannels {
+          Label(interpretation == .rgb ? "RGB" : "RGBA", systemImage: "photo")
+        } else {
         Picker(
           "render_picker_title",
           selection: Binding(
@@ -110,6 +114,7 @@ struct RenderView: View {
             .tag(RenderMode.isoValue)
         }
         .pickerStyle(.segmented)
+        }
       }
       .padding(.horizontal)
 
@@ -373,7 +378,8 @@ struct RenderView: View {
       !$0.points.isEmpty
     }
     return DatasetStateSavePlan(
-      transferFunctionURLs: sharedAppModel.renderMode == .isoValue ? [] : transferFunctionURL.map {
+      transferFunctionURLs: sharedAppModel.renderMode == .isoValue ||
+        runtimeAppModel.activeDatasetInfo?.channelInterpretation != .independentChannels ? [] : transferFunctionURL.map {
         DatasetTransferFunctionStorage.fileURLs(baseURL: $0, componentCount: sharedAppModel.componentCount)
       } ?? [],
       viewStateURL: DatasetStateStorage.viewStateFileURL(
@@ -438,6 +444,7 @@ struct RenderView: View {
       guard try sharedAppModel.restoreSavedDatasetState(
         datasetID: dataset.uniqueId,
         physicalExtent: datasetInfo.physicalExtentMeters,
+        channelInterpretation: datasetInfo.channelInterpretation,
         logger: runtimeAppModel.logger
       ) else {
         showNoDatasetStateToRestore = true

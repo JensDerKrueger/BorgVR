@@ -66,6 +66,8 @@ public struct BorgVRRawVolumeSource: Sendable {
   public let bytesPerComponent: Int
   public let componentCount: Int
   public let voxelSpacing: Vec3<Float>
+  public let hasPhysicalVoxelSpacing: Bool
+  public let channelInterpretation: BORGVRChannelInterpretation
 
   public init(
     url: URL,
@@ -73,7 +75,9 @@ public struct BorgVRRawVolumeSource: Sendable {
     size: Vec3<Int>,
     bytesPerComponent: Int,
     componentCount: Int,
-    voxelSpacing: Vec3<Float>
+    voxelSpacing: Vec3<Float>,
+    hasPhysicalVoxelSpacing: Bool = true,
+    channelInterpretation: BORGVRChannelInterpretation = .independentChannels
   ) {
     self.url = url
     self.offset = offset
@@ -81,6 +85,8 @@ public struct BorgVRRawVolumeSource: Sendable {
     self.bytesPerComponent = bytesPerComponent
     self.componentCount = componentCount
     self.voxelSpacing = voxelSpacing
+    self.hasPhysicalVoxelSpacing = hasPhysicalVoxelSpacing
+    self.channelInterpretation = channelInterpretation
   }
 }
 
@@ -92,6 +98,7 @@ public enum BorgVRVolumeResamplingFilter: String, Sendable {
 public enum BorgVRVolumeConversionSource: Sendable {
   case file(URL)
   case dicomDirectory(URL)
+  case imageSequence(URL)
   case registeredDICOMPair(
     reference: URL,
     moving: URL,
@@ -252,7 +259,8 @@ enum BorgVRDICOMVolumeFusion {
         size: size,
         bytesPerComponent: bytesPerComponent,
         componentCount: 2,
-        voxelSpacing: reference.source.voxelSpacing
+        voxelSpacing: reference.source.voxelSpacing,
+        hasPhysicalVoxelSpacing: reference.source.hasPhysicalVoxelSpacing
       ),
       orientation: reference.orientation,
       origin: reference.origin,
@@ -389,6 +397,8 @@ public struct BorgVRVolumeConversionRequest: Sendable {
   public let metaDescription: String
   public let settings: BorgVRVolumeConversionSettings
   public let physicalSizeMeters: Vec3<Float>?
+  public let sizeXMeters: Float?
+  public let forceSizeX: Bool
   public let provenance: [BORGVRProvenanceEntry]
   public let meta: String
   public let toolIdentification: String
@@ -400,6 +410,8 @@ public struct BorgVRVolumeConversionRequest: Sendable {
     metaDescription: String,
     settings: BorgVRVolumeConversionSettings,
     physicalSizeMeters: Vec3<Float>? = nil,
+    sizeXMeters: Float? = nil,
+    forceSizeX: Bool = false,
     provenance: [BORGVRProvenanceEntry] = [],
     meta: String = "",
     toolIdentification: String = BorgVRVolumeConversionService.toolIdentification
@@ -410,6 +422,8 @@ public struct BorgVRVolumeConversionRequest: Sendable {
     self.metaDescription = metaDescription
     self.settings = settings
     self.physicalSizeMeters = physicalSizeMeters
+    self.sizeXMeters = sizeXMeters
+    self.forceSizeX = forceSizeX
     self.provenance = provenance
     self.meta = meta
     self.toolIdentification = toolIdentification
@@ -455,6 +469,11 @@ public enum BorgVRVolumeConversionService {
     cancellationToken: BorgVRVolumeConversionCancellationToken? = nil
   ) throws {
     try request.settings.validate()
+    if let sizeX = request.sizeXMeters {
+      guard sizeX.isFinite, sizeX > 0, request.physicalSizeMeters == nil else {
+        throw BorgVRVolumeConversionError.invalidIntermediateVolumeSize
+      }
+    }
     try cancellationToken?.checkCancellation()
 
     let fileManager = FileManager.default
@@ -470,7 +489,21 @@ public enum BorgVRVolumeConversionService {
     defer { try? fileManager.removeItem(at: stagedURL) }
 
     switch request.source {
+      case .imageSequence(let directory):
+        guard let extent = request.physicalSizeMeters else {
+          throw BorgVRVolumeConversionError.invalidIntermediateVolumeSize
+        }
+        let access = directory.startAccessingSecurityScopedResource()
+        defer { if access { directory.stopAccessingSecurityScopedResource() } }
+        let rawURL = fileManager.temporaryDirectory.appendingPathComponent("borgvr-images-\(UUID().uuidString).raw")
+        defer { try? fileManager.removeItem(at: rawURL) }
+        let source = try BorgVRImageSequenceImporter.decode(directory: directory,
+          physicalSizeMeters: extent, output: rawURL, logger: logger, cancellationToken: cancellationToken)
+        try convertRaw(source, request: request, stagedURL: stagedURL,
+          logger: logger, cancellationToken: cancellationToken)
       case .file(let sourceURL):
+        let sourceAccess = sourceURL.startAccessingSecurityScopedResource()
+        defer { if sourceAccess { sourceURL.stopAccessingSecurityScopedResource() } }
         try convertFile(
           sourceURL,
           request: request,
@@ -527,27 +560,24 @@ public enum BorgVRVolumeConversionService {
     }
 
     let rawURL = URL(fileURLWithPath: parser.absoluteFilename)
-    let rawAccess = !parser.dataIsTempCopy && rawURL.startAccessingSecurityScopedResource()
-    defer {
-      if rawAccess {
-        rawURL.stopAccessingSecurityScopedResource()
-      }
+    try BorgVRImportFileAccess.withReadAccess(primary: sourceURL, supporting: rawURL) { readableURL in
+      try convertRaw(
+        BorgVRRawVolumeSource(
+          url: readableURL,
+          offset: parser.offset,
+          size: parser.size,
+          bytesPerComponent: parser.bytesPerComponent,
+          componentCount: parser.components,
+          voxelSpacing: parser.voxelSpacing,
+          hasPhysicalVoxelSpacing: parser.hasPhysicalVoxelSpacing,
+          channelInterpretation: parser.channelInterpretation
+        ),
+        request: request,
+        stagedURL: stagedURL,
+        logger: logger,
+        cancellationToken: cancellationToken
+      )
     }
-
-    try convertRaw(
-      BorgVRRawVolumeSource(
-        url: rawURL,
-        offset: parser.offset,
-        size: parser.size,
-        bytesPerComponent: parser.bytesPerComponent,
-        componentCount: parser.components,
-        voxelSpacing: parser.voxelSpacing
-      ),
-      request: request,
-      stagedURL: stagedURL,
-      logger: logger,
-      cancellationToken: cancellationToken
-    )
   }
 
   @discardableResult
@@ -575,6 +605,8 @@ public enum BorgVRVolumeConversionService {
         : request.metaDescription,
       settings: request.settings,
       physicalSizeMeters: request.physicalSizeMeters,
+      sizeXMeters: request.sizeXMeters,
+      forceSizeX: request.forceSizeX,
       provenance: request.provenance + volume.provenance,
       meta: request.meta,
       toolIdentification: request.toolIdentification
@@ -640,6 +672,8 @@ public enum BorgVRVolumeConversionService {
         : request.metaDescription,
       settings: request.settings,
       physicalSizeMeters: request.physicalSizeMeters,
+      sizeXMeters: request.sizeXMeters,
+      forceSizeX: request.forceSizeX,
       provenance: request.provenance + fused.provenance,
       meta: request.meta,
       toolIdentification: request.toolIdentification
@@ -701,7 +735,7 @@ public enum BorgVRVolumeConversionService {
     let recordedAt = Date()
     let provenance = volume.provenance.map {
       BORGVRProvenanceEntry($0.text, date: $0.date ?? recordedAt)
-    } + [BORGVRProvenanceEntry("Import DICOM: \(directoryURL.absoluteString)", date: recordedAt)]
+    } + [BORGVRProvenanceEntry("Import DICOM: \(directoryURL.lastPathComponent)", date: recordedAt)]
     return BorgVRUnbrickedVolume(
       source: BorgVRRawVolumeSource(
         url: temporaryURL,
@@ -713,7 +747,8 @@ public enum BorgVRVolumeConversionService {
           x: volume.voxelSpacing.x,
           y: volume.voxelSpacing.y,
           z: volume.voxelSpacing.z
-        )
+        ),
+        hasPhysicalVoxelSpacing: volume.hasPhysicalVoxelSpacing
       ),
       orientation: volume.orientation,
       origin: volume.origin,
@@ -742,9 +777,11 @@ public enum BorgVRVolumeConversionService {
     try cancellationToken?.checkCancellation()
     var provenance = request.provenance
     switch request.source {
-      case .file(let url): provenance.append(BORGVRProvenanceEntry("Import file: \(url.absoluteString)"))
+      case .imageSequence(let url):
+        provenance.append(BORGVRProvenanceEntry("Import image sequence: \(url.lastPathComponent); filename order; physical size \(request.physicalSizeMeters!) m"))
+      case .file(let url): provenance.append(BORGVRProvenanceEntry("Import file: \(url.lastPathComponent)"))
       case .dicomDirectory, .registeredDICOMPair: break // History is supplied by the decoded/fused volume.
-      case .raw(let source): provenance.append(BORGVRProvenanceEntry("Import RAW: \(source.url.absoluteString)"))
+      case .raw(let source): provenance.append(BORGVRProvenanceEntry("Import RAW: \(source.url.lastPathComponent)"))
     }
     var spacing = source.voxelSpacing
     if let extent = request.physicalSizeMeters {
@@ -752,6 +789,22 @@ public enum BorgVRVolumeConversionService {
         z: extent.z / Float(source.size.z))
       guard [spacing.x, spacing.y, spacing.z].allSatisfy({ $0.isFinite && $0 > 0 }) else {
         throw BorgVRVolumeConversionError.invalidIntermediateVolumeSize
+      }
+    } else if let sizeX = request.sizeXMeters {
+      if request.forceSizeX || !source.hasPhysicalVoxelSpacing {
+        let oldExtentX = Double(spacing.x) * Double(source.size.x)
+        let factor = Double(sizeX) / oldExtentX
+        spacing = Vec3(x: Float(Double(spacing.x) * factor), y: Float(Double(spacing.y) * factor),
+          z: Float(Double(spacing.z) * factor))
+        guard [spacing.x, spacing.y, spacing.z].allSatisfy({ $0.isFinite && $0 > 0 }) else {
+          throw BorgVRVolumeConversionError.invalidIntermediateVolumeSize
+        }
+        let text = "Set physical X extent to \(sizeX) m; scaled all voxel axes by \(factor); "
+          + "\(request.forceSizeX ? "forced override" : "no physical size in source")"
+        provenance.append(BORGVRProvenanceEntry(text))
+        logger?.info(text)
+      } else {
+        logger?.info("Ignoring --size-x: the source supplies physical voxel spacing. Use --force-size-x to override it.")
       }
     }
     var volume = try RawFileAccessor(
@@ -788,6 +841,7 @@ public enum BorgVRVolumeConversionService {
       cancellationToken: cancellationToken,
       provenance: provenance,
       meta: request.meta,
+      channelInterpretation: source.channelInterpretation,
       toolIdentification: request.toolIdentification
     )
   }

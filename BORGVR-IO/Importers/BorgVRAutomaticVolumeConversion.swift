@@ -16,7 +16,7 @@ enum BorgVRAutomaticVolumeConversion {
       BorgVRVolumeConversionRequest(source: $0, destinationURL: destination,
         datasetDescription: description ?? source.deletingPathExtension().lastPathComponent,
         metaDescription: "", settings: settings, physicalSizeMeters: physicalSizeMeters,
-        provenance: provenance + [BORGVRProvenanceEntry("Auto-import source: \(source.absoluteString)")],
+        provenance: provenance + [BORGVRProvenanceEntry("Auto-import source: \(source.lastPathComponent)")],
         toolIdentification: toolIdentification)
     }
     var readers: [(String, () throws -> any VolumeFileParser)] = [
@@ -53,12 +53,22 @@ enum BorgVRAutomaticVolumeConversion {
       try BorgVRVolumeConversionService.convert(request(.raw(BorgVRRawVolumeSource(
         url: URL(fileURLWithPath: parser.absoluteFilename), offset: parser.offset,
         size: parser.size, bytesPerComponent: parser.bytesPerComponent,
-        componentCount: parser.components, voxelSpacing: parser.voxelSpacing
+        componentCount: parser.components, voxelSpacing: parser.voxelSpacing,
+        hasPhysicalVoxelSpacing: parser.hasPhysicalVoxelSpacing,
+        channelInterpretation: parser.channelInterpretation
       ))), logger: logger, cancellationToken: cancellationToken)
       return sources
     }
     if isDirectory {
       try validateSources([source])
+      let images = try BorgVRImageSequenceImporter.imageFiles(in: source)
+      if !images.isEmpty {
+        try validateSources(images)
+        logger?.info("Auto-import: reading \(source.lastPathComponent) as an image sequence (requires physical X/Y/Z size).")
+        try BorgVRVolumeConversionService.convert(request(.imageSequence(source)),
+          logger: logger, cancellationToken: cancellationToken)
+        return [source]
+      }
       logger?.info("Auto-import: trying \(source.lastPathComponent) as DICOM.")
       try FileManager.default.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
       let sources = try BorgVRVolumeConversionService.convertDICOMDirectory(source,

@@ -12,7 +12,7 @@ from pathlib import Path
 DDS_V3D = b"DDS v3d\n"
 DDS_V3E = b"DDS v3e\n"
 DDS_INTERLEAVE = 1 << 24
-MAX_TEXT_LENGTH = 256
+MAX_TEXT_LENGTH = 1 << 20
 
 
 class PVMError(ValueError):
@@ -196,8 +196,8 @@ def parse_pvm(data: bytes) -> PVMMetadata:
             end = data.find(b"\0", trailing_offset)
             if end < 0:
                 raise PVMError(f"PVM3 metadata field {index + 1} is not NUL-terminated")
-            if end - trailing_offset >= MAX_TEXT_LENGTH:
-                raise PVMError(f"PVM3 metadata field {index + 1} exceeds 255 bytes")
+            if end - trailing_offset > MAX_TEXT_LENGTH:
+                raise PVMError(f"PVM3 metadata field {index + 1} exceeds 1 MiB")
             texts[index] = decode_text(data[trailing_offset:end])
             trailing_offset = end + 1
 

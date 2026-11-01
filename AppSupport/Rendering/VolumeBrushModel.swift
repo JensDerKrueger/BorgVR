@@ -187,6 +187,7 @@ final class VolumeBrushModel: ObservableObject, BorgVRVolumeEditingCommands {
   @Published var projectsOntoVolume = true { didSet { synchronize() } }
   @Published private(set) var channels: BorgVRVolumeEditChannels = .all
   @Published private(set) var componentCount = 1
+  @Published private(set) var channelInterpretation = BORGVRChannelInterpretation.independentChannels
   @Published private(set) var error: String?
   @Published var openingError: String?
   @Published private(set) var physicalMaximum: Float = 1
@@ -307,7 +308,9 @@ final class VolumeBrushModel: ObservableObject, BorgVRVolumeEditingCommands {
     do {
       let metadata = source.getMetadata()
       componentCount = metadata.componentCount
-      channels = .all
+      channelInterpretation = metadata.channelInterpretation
+      // Keep straight RGB colors intact at the transparent brush boundary.
+      channels = metadata.channelInterpretation == .rgba ? .selected([3]) : .all
       synchronize()
       let catalog = try Self.catalog(datasetID: metadata.uniqueID, datasetURL: datasetURL)
       states = try catalog.states()

@@ -54,6 +54,16 @@ enum BORGVRComponentType: UInt8, Codable, Sendable {
   }
 }
 
+extension BORGVRChannelInterpretation {
+  func validate(componentCount: Int, type: BORGVRComponentType, width: Int) throws {
+    guard self == .independentChannels
+      || (type == .unsignedInteger && width == 1 && componentCount == (self == .rgb ? 3 : 4)) else {
+      throw BORGVRError.invalidValue(context: "channel interpretation",
+        reason: "RGB requires three unsigned 8-bit channels; RGBA requires four")
+    }
+  }
+}
+
 public struct BORGVRProvenanceEntry: Codable, Equatable, Sendable {
   /// Milliseconds since 1970-01-01T00:00:00Z, independent of local time zone.
   public let timestampMilliseconds: Int64
@@ -374,7 +384,7 @@ final class BrickMetadata: Codable, CustomStringConvertible {
   /// The maximum across all component ranges. TF visibility uses `componentRanges`.
   var maxValue: Int { valueRange.maxValue }
   let valueRange: BORGVRComponentRange
-  /// One value range per volume component.
+  /// Scalar component ranges, no ranges for RGB, or the alpha range for RGBA.
   let componentRanges: [BORGVRComponentRange]
 
   /**
@@ -410,6 +420,7 @@ final class BrickMetadata: Codable, CustomStringConvertible {
   }
 
   fileprivate init(from reader: inout BORGVRBinaryReader, componentCount: Int,
+                   interpretation: BORGVRChannelInterpretation,
                    type: BORGVRComponentType, width: Int) throws {
     func intValue(_ rawValue: Int64, context: String) throws -> Int {
       guard let value = Int(exactly: rawValue) else {
@@ -426,10 +437,12 @@ final class BrickMetadata: Codable, CustomStringConvertible {
       reader.readInteger(Int64.self, context: "brick size"),
       context: "brick size"
     )
-    self.valueRange = try reader.readRange(type: type, width: width)
-    self.componentRanges = try (0..<componentCount).map { _ in
+    let aggregate = interpretation == .independentChannels
+      ? try reader.readRange(type: type, width: width) : nil
+    self.componentRanges = try (0..<interpretation.rangeCount(componentCount: componentCount)).map { _ in
       try reader.readRange(type: type, width: width)
     }
+    self.valueRange = aggregate ?? .union(componentRanges)
   }
 
   /**
@@ -437,11 +450,14 @@ final class BrickMetadata: Codable, CustomStringConvertible {
 
    - Returns: A `Data` instance with native-width component bounds and Int64 addressing.
    */
-  func toData(type: BORGVRComponentType, width: Int) -> Data {
+  func toData(type: BORGVRComponentType, width: Int,
+              interpretation: BORGVRChannelInterpretation = .independentChannels) -> Data {
     var data = Data()
     data.append(Data(from: Int64(offset)))
     data.append(Data(from: Int64(size)))
-    data.appendRange(valueRange, type: type, width: width)
+    if interpretation == .independentChannels {
+      data.appendRange(valueRange, type: type, width: width)
+    }
     for range in componentRanges {
       data.appendRange(range, type: type, width: width)
     }
@@ -532,6 +548,7 @@ final class BORGVRMetaData: CustomStringConvertible, Codable {
   /// The number of bytes per component.
   private(set) var bytesPerComponent: Int = 0
   private(set) var componentType: BORGVRComponentType = .unsignedInteger
+  private(set) var channelInterpretation: BORGVRChannelInterpretation = .independentChannels
   var provenance: [BORGVRProvenanceEntry] = []
   var meta: String = ""
   var compressMetadataText = true
@@ -568,7 +585,7 @@ final class BORGVRMetaData: CustomStringConvertible, Codable {
   /// The maximum across all component ranges, used by scalar modes such as ISO.
   var maxValue: Int { valueRange.maxValue }
   private(set) var valueRange = BORGVRComponentRange(minValue: 0, maxValue: 0)
-  /// The actual value range of each component.
+  /// Scalar component ranges, none for RGB, or the single alpha range for RGBA.
   private(set) var componentRanges: [BORGVRComponentRange] = []
   /// A flag indicating whether compression is enabled.
   private(set) var compression: Bool = false
@@ -586,12 +603,14 @@ final class BORGVRMetaData: CustomStringConvertible, Codable {
 
   /// A textual description of the  metadata for debugging purposes.
   var description: String {
+    let bounds = channelInterpretation == .rgb ? "not stored (RGB)"
+      : "\(valueRange.minimum)/\(valueRange.maximum)\(channelInterpretation == .rgba ? " (alpha)" : "")"
     return """
     BORGVRMetaData: \(width)x\(height)x\(depth), \
     \(componentCount)×\(bytesPerComponent)-byte components, \
     brick size \(brickSize), overlap \(overlap), \
     compression: \(compression ? "yes" : "no"), \
-    type: \(componentType), min/max: \(valueRange.minimum)/\(valueRange.maximum), \
+    type: \(componentType), channels: \(channelInterpretation.name), min/max: \(bounds), \
     component ranges: \(componentRanges.map { "\($0.minimum)/\($0.maximum)" }.joined(separator: ", ")), \
     levels: \(levelMetadata.count), \
     bricks: \(brickMetadata.count), \
@@ -771,10 +790,30 @@ final class BORGVRMetaData: CustomStringConvertible, Codable {
 
   func setComponentType(_ type: BORGVRComponentType, ranges: [BORGVRComponentRange]) throws {
     try type.validate(width: bytesPerComponent)
-    guard ranges.count == componentCount else { throw BORGVRError.other("Incorrect component range count.") }
+    try channelInterpretation.validate(componentCount: componentCount, type: type, width: bytesPerComponent)
+    guard ranges.count == channelInterpretation.rangeCount(componentCount: componentCount) else {
+      throw BORGVRError.other("Incorrect component range count.")
+    }
     for range in ranges { try type.validate(range, width: bytesPerComponent) }
     componentType = type
     updateComponentRanges(ranges)
+  }
+
+  func setChannelInterpretation(_ interpretation: BORGVRChannelInterpretation) throws {
+    try interpretation.validate(componentCount: componentCount, type: componentType, width: bytesPerComponent)
+    channelInterpretation = interpretation
+    if interpretation == .rgb {
+      componentRanges = []
+    } else if interpretation == .rgba, componentRanges.count == componentCount {
+      componentRanges = [componentRanges[3]]
+    }
+    valueRange = .union(componentRanges)
+  }
+
+  func requireIndependentChannels() throws {
+    guard channelInterpretation == .independentChannels else {
+      throw BORGVRError.other("This operation requires independent scalar channels, not RGB/RGBA color data.")
+    }
   }
 
   func requireUnsignedProcessing() throws {
@@ -800,8 +839,9 @@ final class BORGVRMetaData: CustomStringConvertible, Codable {
       voxelSpacingX: voxelSpacingX, voxelSpacingY: voxelSpacingY, voxelSpacingZ: voxelSpacingZ,
       brickSize: brickSize, overlap: overlap, minValue: 0, maxValue: 0,
       compression: compression, datasetDescription: datasetDescription, metaDescription: metaDescription)
-    copy.updateComponentRanges(componentRanges)
     copy.componentType = componentType
+    copy.channelInterpretation = channelInterpretation
+    copy.updateComponentRanges(componentRanges)
     copy.provenance = provenance
     copy.meta = meta
     copy.compressMetadataText = compressMetadataText
@@ -822,6 +862,7 @@ final class BORGVRMetaData: CustomStringConvertible, Codable {
     guard uniqueID == other.uniqueID, width == other.width, height == other.height, depth == other.depth,
       voxelSpacingX == other.voxelSpacingX, voxelSpacingY == other.voxelSpacingY, voxelSpacingZ == other.voxelSpacingZ,
       componentType == other.componentType, bytesPerComponent == other.bytesPerComponent,
+      channelInterpretation == other.channelInterpretation,
       componentCount == other.componentCount, brickSize == other.brickSize, overlap == other.overlap,
       compression == other.compression, valueRange == other.valueRange, componentRanges == other.componentRanges,
       brickMetadata.count == other.brickMetadata.count else { return false }
@@ -831,7 +872,7 @@ final class BORGVRMetaData: CustomStringConvertible, Codable {
   }
 
   func updateComponentRanges(_ componentRanges: [BORGVRComponentRange]) {
-    precondition(componentRanges.count == componentCount)
+    precondition(componentRanges.count == channelInterpretation.rangeCount(componentCount: componentCount))
     self.componentRanges = componentRanges
     self.valueRange = .union(componentRanges)
   }
@@ -934,9 +975,9 @@ final class BORGVRMetaData: CustomStringConvertible, Codable {
               componentRanges: [BORGVRComponentRange]? = nil) {
     let ranges = componentRanges ?? Array(
       repeating: BORGVRComponentRange(minValue: minValue, maxValue: maxValue),
-      count: componentCount
+      count: channelInterpretation.rangeCount(componentCount: componentCount)
     )
-    precondition(ranges.count == componentCount)
+    precondition(ranges.count == channelInterpretation.rangeCount(componentCount: componentCount))
     let brick = BrickMetadata(
       offset: offset,
       size: size,
@@ -948,7 +989,7 @@ final class BORGVRMetaData: CustomStringConvertible, Codable {
   }
 
   func append(offset: Int, size: Int, componentRanges: [BORGVRComponentRange]) {
-    precondition(componentRanges.count == componentCount)
+    precondition(componentRanges.count == channelInterpretation.rangeCount(componentCount: componentCount))
     brickMetadata.append(BrickMetadata(offset: offset, size: size, componentRanges: componentRanges))
   }
 
@@ -967,13 +1008,16 @@ final class BORGVRMetaData: CustomStringConvertible, Codable {
     data.append(Data(from: componentCount))
     data.append(Data(from: bytesPerComponent))
     data.append(componentType.rawValue)
+    data.append(channelInterpretation.rawValue)
     data.append(Data(from: voxelSpacingX))
     data.append(Data(from: voxelSpacingY))
     data.append(Data(from: voxelSpacingZ))
     data.append(Data(from: brickSize))
     data.append(Data(from: overlap))
-    data.appendRange(valueRange, type: componentType, width: bytesPerComponent)
-    data.append(Data(from: Int64(componentRanges.count)))
+    if channelInterpretation == .independentChannels {
+      data.appendRange(valueRange, type: componentType, width: bytesPerComponent)
+      data.append(Data(from: Int64(componentRanges.count)))
+    }
     for range in componentRanges {
       data.appendRange(range, type: componentType, width: bytesPerComponent)
     }
@@ -993,7 +1037,8 @@ final class BORGVRMetaData: CustomStringConvertible, Codable {
     data.append(Data(from: dataOffset))
 
     for brick in brickMetadata {
-      data.append(brick.toData(type: componentType, width: bytesPerComponent))
+      data.append(brick.toData(type: componentType, width: bytesPerComponent,
+        interpretation: channelInterpretation))
     }
     return data
   }
@@ -1102,18 +1147,27 @@ final class BORGVRMetaData: CustomStringConvertible, Codable {
     }
     componentType = type
     try componentType.validate(width: bytesPerComponent)
+    let rawInterpretation = try reader.readInteger(UInt8.self, context: "channelInterpretation")
+    guard let interpretation = BORGVRChannelInterpretation(rawValue: rawInterpretation) else {
+      throw BORGVRError.invalidValue(context: "channelInterpretation", reason: "unknown channel interpretation")
+    }
+    channelInterpretation = interpretation
+    try channelInterpretation.validate(componentCount: componentCount, type: componentType, width: bytesPerComponent)
     self.voxelSpacingX = try reader.readFloat(context: "voxelSpacingX")
     self.voxelSpacingY = try reader.readFloat(context: "voxelSpacingY")
     self.voxelSpacingZ = try reader.readFloat(context: "voxelSpacingZ")
     self.brickSize = try readInt("brickSize")
     self.overlap = try readInt("overlap")
-    self.valueRange = try reader.readRange(type: componentType, width: bytesPerComponent)
-    let componentRangeCount = try readInt("componentRangeCount")
+    let aggregate = channelInterpretation == .independentChannels
+      ? try reader.readRange(type: componentType, width: bytesPerComponent) : nil
+    let expectedRanges = channelInterpretation.rangeCount(componentCount: componentCount)
+    let componentRangeCount = channelInterpretation == .independentChannels
+      ? try readInt("componentRangeCount") : expectedRanges
     guard componentCount > 0, componentCount <= Self.maximumComponentCount else {
       throw BORGVRError.invalidValue(context: "componentCount",
         reason: "must be in 1...\(Self.maximumComponentCount)")
     }
-    guard componentRangeCount == componentCount else {
+    guard componentRangeCount == expectedRanges else {
       throw BORGVRError.invalidValue(
         context: "componentRangeCount",
         reason: "expected \(componentCount), found \(componentRangeCount)"
@@ -1122,6 +1176,7 @@ final class BORGVRMetaData: CustomStringConvertible, Codable {
     self.componentRanges = try (0..<componentRangeCount).map { _ in
       try reader.readRange(type: componentType, width: bytesPerComponent)
     }
+    self.valueRange = aggregate ?? .union(componentRanges)
     self.compression = try reader.readBool(context: "compression")
 
     try validateHeaderValues()
@@ -1188,7 +1243,8 @@ final class BORGVRMetaData: CustomStringConvertible, Codable {
     }
     try reader.skip(dataOffset, context: "brickDataOffset")
 
-    let brickMetadataRecordSize = 16 + (2 + 2 * componentCount) * bytesPerComponent
+    let rangeCount = expectedRanges + (channelInterpretation == .independentChannels ? 1 : 0)
+    let brickMetadataRecordSize = 16 + 2 * rangeCount * bytesPerComponent
     let (metadataByteCount, metadataByteCountOverflow) = metadataCount.multipliedReportingOverflow(
       by: brickMetadataRecordSize
     )
@@ -1200,6 +1256,7 @@ final class BORGVRMetaData: CustomStringConvertible, Codable {
     self.brickMetadata.reserveCapacity(metadataCount)
     for _ in 0..<metadataCount {
       let brickMeta = try BrickMetadata(from: &reader, componentCount: componentCount,
+        interpretation: channelInterpretation,
         type: componentType, width: bytesPerComponent)
       try validate(brick: brickMeta, fullBrickByteCount: fullBrickByteCount, brickDataUpperBound: brickDataUpperBound)
       self.brickMetadata.append(brickMeta)
@@ -1215,6 +1272,7 @@ final class BORGVRMetaData: CustomStringConvertible, Codable {
       )
     }
     try componentType.validate(width: bytesPerComponent)
+    try channelInterpretation.validate(componentCount: componentCount, type: componentType, width: bytesPerComponent)
     guard voxelSpacingX.isFinite, voxelSpacingX > 0,
           voxelSpacingY.isFinite, voxelSpacingY > 0,
           voxelSpacingZ.isFinite, voxelSpacingZ > 0 else {
@@ -1224,7 +1282,7 @@ final class BORGVRMetaData: CustomStringConvertible, Codable {
       )
     }
     try componentType.validate(valueRange, width: bytesPerComponent)
-    guard componentRanges.count == componentCount else {
+    guard componentRanges.count == channelInterpretation.rangeCount(componentCount: componentCount) else {
       throw BORGVRError.invalidValue(
         context: "component ranges",
         reason: "must contain one range per component"
@@ -1270,7 +1328,7 @@ final class BORGVRMetaData: CustomStringConvertible, Codable {
       throw BORGVRError.invalidValue(context: "brick range", reason: "offset plus size overflows")
     }
     try componentType.validate(brick.valueRange, width: bytesPerComponent)
-    guard brick.componentRanges.count == componentCount else {
+    guard brick.componentRanges.count == channelInterpretation.rangeCount(componentCount: componentCount) else {
       throw BORGVRError.invalidValue(
         context: "brick component ranges",
         reason: "must contain one range per component"

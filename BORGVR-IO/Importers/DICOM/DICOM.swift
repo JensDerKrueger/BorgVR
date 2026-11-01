@@ -141,6 +141,7 @@ final class DicomParser {
     let patientName: String?
     let seriesDate: String?
     var provenance: [DicomProvenanceMetadata.Event] = []
+    var hasPhysicalVoxelSpacing = true
   }
 
   private static func normalize(_ v: Vec3<Float>) -> Vec3<Float>? {
@@ -358,9 +359,7 @@ final class DicomParser {
     }
 
     let metaSource = sorted.first!.1
-    var seenEvents = Set<DicomProvenanceMetadata.Event>()
-    let provenance = sorted.flatMap { $0.1.provenanceMetadata.events }
-      .filter { seenEvents.insert($0).inserted }
+    let provenance = DicomProvenanceMetadata.seriesEvents(from: sorted.map { $0.1.provenanceMetadata })
 
     return DicomVolume(
       sourceFiles: sorted.map { $0.2 },
@@ -378,7 +377,9 @@ final class DicomParser {
       modality: metaSource.modality,
       patientName: metaSource.patientName,
       seriesDate: metaSource.seriesDate,
-      provenance: provenance
+      provenance: provenance,
+      hasPhysicalVoxelSpacing: filtered.contains { $0.1.pixelSpacing != nil }
+        || sliceSpacingZ != nil || fallbackSpace != nil || fallbackThickness != nil
     )
   }
 

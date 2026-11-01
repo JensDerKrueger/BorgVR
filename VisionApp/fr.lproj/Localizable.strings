@@ -1,3 +1,11 @@
+"converter_supporting_file_access_required" = "L’accès en lecture au fichier référencé est nécessaire : %@";
+"image_sequence_title" = "Séquence d’images";
+"image_sequence_select" = "Choisir le dossier d’images";
+"image_sequence_size" = "Dimensions du volume en mètres (X / Y / Z)";
+"image_sequence_empty" = "Le dossier ne contient aucune image prise en charge.";
+"image_sequence_invalid" = "Impossible de lire une image de coupe unique dans %@.";
+"image_sequence_dimensions" = "Les dimensions de l’image diffèrent des autres coupes : %@.";
+
 /* Localizable.strings (en) */
 
 /* Title of dataset import view */

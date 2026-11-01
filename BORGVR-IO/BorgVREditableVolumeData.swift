@@ -153,8 +153,9 @@ private final class VolumeEditExportWriter {
     self.metadata = metadata
     fullBrickBytes = metadata.brickSize * metadata.brickSize * metadata.brickSize *
       metadata.componentCount * metadata.bytesPerComponent
-    minima = Array(repeating: Int.max, count: metadata.componentCount)
-    maxima = Array(repeating: 0, count: metadata.componentCount)
+    let rangeCount = metadata.channelInterpretation.rangeCount(componentCount: metadata.componentCount)
+    minima = Array(repeating: Int.max, count: rangeCount)
+    maxima = Array(repeating: 0, count: rangeCount)
     guard FileManager.default.createFile(atPath: url.path, contents: Data(repeating: 0, count: 8)) else {
       throw BorgVRVolumeEditError.invalidGeometry
     }
@@ -190,7 +191,7 @@ private final class VolumeEditExportWriter {
   func append(_ payload: VolumeEditExportPayload) throws {
     guard !payload.bytes.isEmpty, payload.bytes.count <= fullBrickBytes,
           metadata.compression || payload.bytes.count == fullBrickBytes,
-          payload.ranges.count == metadata.componentCount else {
+          payload.ranges.count == metadata.channelInterpretation.rangeCount(componentCount: metadata.componentCount) else {
       throw BorgVRVolumeEditError.invalidBufferSize
     }
     if chunk.count + payload.bytes.count > chunkLimit { try flush() }
@@ -316,7 +317,7 @@ final class BorgVREditableVolumeData: BORGVRDatasetProtocol, BorgVRVolumeGPUBrus
         guard m.brickMetadata.indices.contains(id) else { throw BorgVRVolumeEditError.corruptJournal }
         if let saved = cache.summary(index: id, revision: target), saved.matchesOriginal ||
           (saved.metadata.size == m.brickSize * m.brickSize * m.brickSize * m.componentCount * m.bytesPerComponent &&
-           saved.metadata.componentRanges.count == m.componentCount) {
+           saved.metadata.componentRanges.count == m.channelInterpretation.rangeCount(componentCount: m.componentCount)) {
           guard !saved.matchesOriginal else { continue }
           desired[id] = target
           ranges[id] = saved.metadata
@@ -324,7 +325,7 @@ final class BorgVREditableVolumeData: BORGVRDatasetProtocol, BorgVRVolumeGPUBrus
           let level = m.levelMetadata.lastIndex { $0.prevBricks <= id }!
           guard snapshot.mask.coverage(in: Self.brickFootprint(index: id, level: level, metadata: m)) != .original else { continue }
           desired[id] = target
-          pendingEraseRanges[id] = Self.eraseBounds(source.visibilityMetadata(index: id))
+          pendingEraseRanges[id] = eraseBounds(source.visibilityMetadata(index: id))
           dirtyIDs.insert(id)
           backgroundIDs.append(id)
         }
@@ -442,12 +443,14 @@ final class BorgVREditableVolumeData: BORGVRDatasetProtocol, BorgVRVolumeGPUBrus
     }
   }
 
-  private static func eraseBounds(_ previous: BrickMetadata?, channels: BorgVRVolumeEditChannels = .all) -> BrickMetadata? {
+  private func eraseBounds(_ previous: BrickMetadata?, channels: BorgVRVolumeEditChannels = .all) -> BrickMetadata? {
     guard let previous else { return nil }
     if previous.componentRanges.allSatisfy({ $0.minValue == 0 }) { return previous }
     // Erase can only lower values. Include zero and intermediate values from
     // filtering/LOD averaging, but never expand the previous upper bounds.
-    let ranges = previous.componentRanges.enumerated().map { channel, range in
+    let m = getMetadata()
+    let rangeChannels = m.channelInterpretation.rangeChannels(componentCount: m.componentCount)
+    let ranges = zip(rangeChannels, previous.componentRanges).map { channel, range in
       channels.contains(channel) ? BORGVRComponentRange(minValue: 0, maxValue: range.maxValue) : range
     }
     return BrickMetadata(offset: previous.offset, size: previous.size,
@@ -506,7 +509,7 @@ final class BorgVREditableVolumeData: BORGVRDatasetProtocol, BorgVRVolumeGPUBrus
     let m = getMetadata()
     guard let result = try? cache.brick(index: index, revision: revision),
       result.bytes.count == m.brickSize * m.brickSize * m.brickSize * m.componentCount * m.bytesPerComponent,
-      result.componentRanges.count == m.componentCount else { return nil }
+      result.componentRanges.count == m.channelInterpretation.rangeCount(componentCount: m.componentCount) else { return nil }
     return result
   }
 
@@ -612,7 +615,7 @@ final class BorgVREditableVolumeData: BORGVRDatasetProtocol, BorgVRVolumeGPUBrus
             for id in ids {
               let previous = desired[id] == nil ? source.visibilityMetadata(index: id)
                 : ranges[id] ?? pendingEraseRanges[id]
-              pendingEraseRanges[id] = mode == .erase ? Self.eraseBounds(previous, channels: channels) : nil
+              pendingEraseRanges[id] = mode == .erase ? eraseBounds(previous, channels: channels) : nil
               desired[id] = recorded.revision
               persistenceFailures[id] = nil
               ranges[id] = nil
@@ -974,7 +977,8 @@ final class BorgVREditableVolumeData: BORGVRDatasetProtocol, BorgVRVolumeGPUBrus
     let target = snapshot.brickRevisions?[index] ?? snapshot.revision
     if let saved = try? cache.storedBrick(index: index, revision: target) {
       if saved.original { return try originalPayload() }
-      if saved.rawByteCount == writer.fullBrickBytes, saved.componentRanges.count == metadata.componentCount {
+      if saved.rawByteCount == writer.fullBrickBytes,
+         saved.componentRanges.count == metadata.channelInterpretation.rangeCount(componentCount: metadata.componentCount) {
         // The destination uses the same raw-or-LZ4 per-brick convention as the cache.
         if metadata.compression || !saved.compressed {
           return VolumeEditExportPayload(bytes: saved.payload, ranges: saved.componentRanges)

@@ -1,3 +1,14 @@
+"converter_supporting_file_access_required" = "L’accès en lecture au fichier référencé est nécessaire : %@";
+"converter_supporting_file_access_message" = "L’en-tête sélectionné fait référence à « %@ ». Sélectionnez ce fichier pour autoriser BorgVR à lire ses données de volume.";
+"converter_supporting_file_access_allow" = "Autoriser l’accès";
+"converter_supporting_file_access_wrong_file" = "Veuillez sélectionner le fichier référencé « %@ ».";
+"image_sequence_title" = "Séquence d’images";
+"image_sequence_select" = "Choisir le dossier d’images";
+"image_sequence_size" = "Dimensions du volume en mètres (X / Y / Z)";
+"image_sequence_empty" = "Le dossier ne contient aucune image prise en charge.";
+"image_sequence_invalid" = "Impossible de lire une image de coupe unique dans %@.";
+"image_sequence_dimensions" = "Les dimensions de l’image diffèrent des autres coupes : %@.";
+
 "converter_import_title" = "Importer un jeu de données";
 "converter_step_of_total_format" = "Étape %d sur %d";
 

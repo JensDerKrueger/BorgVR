@@ -5,7 +5,11 @@
 //
 
 #define VOLUME_VERTEX_SHADER_NAME volumeVertexShader
+#if VOLUME_COLOR_MODE != 0
+#define VOLUME_FRAGMENT_SHADER_TF_NAME volumeFragmentShaderColor
+#else
 #define VOLUME_FRAGMENT_SHADER_TF_NAME volumeFragmentShaderTF
+#endif
 #define VOLUME_FRAGMENT_SHADER_TF_LIGHTING_NAME volumeFragmentShaderTFLighting
 #define VOLUME_FRAGMENT_SHADER_ISO_NAME volumeFragmentShaderIso
 #define VOLUME_FRAGMENT_SHADER_BRICK_VIS_NAME volumeFragmentShaderBrickVis

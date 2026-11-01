@@ -3,12 +3,29 @@ const fs = require("node:fs");
 const path = require("node:path");
 const http = require("node:http");
 const { chromium } = require(process.env.PLAYWRIGHT_MODULE || "playwright");
+const { PNG } = require("pngjs");
+
+function bluePixelCount(png) {
+  const { data } = PNG.sync.read(png);
+  let count = 0;
+  for (let i = 0; i < data.length; i += 4) {
+    if (data[i + 2] > data[i] + 30 && data[i + 2] > data[i + 1] + 35) ++count;
+  }
+  return count;
+}
 
 async function main() {
   const root = path.resolve(__dirname, "../web");
   const volume = Buffer.alloc(32 ** 3);
+  const colorVolumes = { rgb: Buffer.alloc(32 ** 3 * 3), rgba: Buffer.alloc(32 ** 3 * 4) };
   for (let z = 0; z < 32; z++) for (let y = 0; y < 32; y++) for (let x = 0; x < 32; x++) {
     if ((x - 9) ** 2 + (y - 9) ** 2 + (z - 9) ** 2 < 6 ** 2) volume[x + 32 * (y + 32 * z)] = 255;
+  }
+  for (let i = 0; i < volume.length; ++i) for (const [kind, channels] of [["rgb", 3], ["rgba", 4]]) {
+    colorVolumes[kind][i * channels] = 32;
+    colorVolumes[kind][i * channels + 1] = 96;
+    colorVolumes[kind][i * channels + 2] = 224;
+    if (channels === 4) colorVolumes[kind][i * channels + 3] = volume[i] ? 8 : 0;
   }
   const manifest = {
     id: "A726EA76-CE70-4BFC-9974-9CF3541080D0", name: "Subbrick test", description: "Synthetic sphere", variant: "raw",
@@ -26,6 +43,12 @@ async function main() {
     const name = new URL(request.url, "http://localhost").pathname;
     if (name === "/favicon.ico") { response.writeHead(204); response.end(); return; }
     if (name === "/brick.bin") { response.setHeader("Content-Type", "application/octet-stream"); response.end(volume); return; }
+    if (name === "/rgb.bin" || name === "/rgba.bin") {
+      response.end(colorVolumes[name.slice(1, -4)]); return;
+    }
+    for (const kind of ["rgb", "rgba"]) if (name.startsWith(`/${kind}/bricks/`)) {
+      response.end(colorVolumes[kind]); return;
+    }
     if (name === "/web-data/test.lz4") {
       const json = Buffer.from(JSON.stringify(manifest));
       const header = [0xf0];
@@ -150,6 +173,14 @@ async function main() {
         bricks: [{ index: 0, min: 0, max: 255, byteLength: 32768, componentRanges: [[0, 255]], url: location.origin + "/brick.bin" }]
       };
       renderer.setPersistentBrickCacheEnabled(false);
+      for (const interpretation of ["unknown"]) {
+        let rejected = false;
+        try {
+          renderer.setDataset({ ...manifest, volume: { ...manifest.volume,
+            componentCount: interpretation === "rgb" ? 3 : 4, channelInterpretation: interpretation } });
+        } catch (error) { rejected = error.message.includes("RGB/RGBA"); }
+        check(rejected, "Unknown color layout was accepted");
+      }
       renderer.setDataset(manifest);
       const deadline = performance.now() + 10000;
       while (renderer.brickAtlas.loadedBricks.size < 1 && performance.now() < deadline) await new Promise(resolve => setTimeout(resolve, 10));
@@ -185,6 +216,61 @@ async function main() {
       if (testErrors.length) throw new Error(testErrors.join("\n"));
     });
     await page.locator("canvas").screenshot({ path: path.join(screenshots, "adaptive.png") });
+    for (const interpretation of ["rgb", "rgba"]) {
+      await page.evaluate(async ({ manifest, interpretation }) => {
+        const renderer = window.testRenderer;
+        const channels = interpretation === "rgb" ? 3 : 4;
+        const ranges = channels === 3 ? [] : [[0, 8]];
+        renderer.setRenderOptimizations({ alphaEpsilon: 0, opacityAdaptiveSampling: false });
+        renderer.setDataset({ ...manifest, id: interpretation, baseURL: location.origin + `/${interpretation}/`, volume: { ...manifest.volume,
+          componentCount: channels, channelInterpretation: interpretation, componentRanges: ranges },
+          brickMetadata: { values: [0, channels === 3 ? 0 : 8, 32 ** 3 * channels, ...ranges.flat()] },
+          bricks: undefined });
+        const deadline = performance.now() + 10000;
+        while (renderer.brickAtlas.loadedBricks.size < 1 && performance.now() < deadline) await new Promise(resolve => setTimeout(resolve, 10));
+        if (renderer.brickAtlas.loadedBricks.size !== 1) throw new Error("Color brick failed to load");
+        renderer.draw(); await renderer.device.queue.onSubmittedWorkDone();
+      }, { manifest, interpretation });
+      const reference = await page.locator("canvas").screenshot({ path: path.join(screenshots, `${interpretation}.png`) });
+      assert.ok(bluePixelCount(reference) > 50, `${interpretation}: color canvas is blank`);
+      await page.evaluate(async () => {
+        const renderer = window.testRenderer;
+        for (const [channel, tf] of renderer.activeTransferFunctions().entries()) {
+          tf.data.fill(0); tf.updateVisibilityRange(); renderer.updateTransferFunctionTexture(channel);
+        }
+        renderer.reclassifyCurrentDataset();
+        renderer.setRenderMode("iso"); // Scalar render modes must not change direct-color data.
+        renderer.draw(); await renderer.device.queue.onSubmittedWorkDone();
+      });
+      assert.deepEqual(await page.locator("canvas").screenshot(), reference, `${interpretation}: TF/ISO altered direct color`);
+      await page.evaluate(async () => {
+        testRenderer.setRenderOptimizations({ subbrickSkipping: false });
+        testRenderer.draw(); await testRenderer.device.queue.onSubmittedWorkDone();
+      });
+      assert.deepEqual(await page.locator("canvas").screenshot(), reference, `${interpretation}: subblocks changed samples`);
+      if (interpretation === "rgba") {
+        const empty = await page.evaluate(async () => {
+          testRenderer.setRenderOptimizations({ subbrickSkipping: true, alphaEpsilon: 0.1 });
+          testRenderer.draw(); await testRenderer.device.queue.onSubmittedWorkDone();
+          return Array.from(testRenderer.brickAtlas.brickClassification.meta);
+        });
+        assert.ok(empty.every(flag => flag === 1 || flag === 2), "RGBA epsilon ignored alpha bounds");
+        const skipped = await page.locator("canvas").screenshot({ path: path.join(screenshots, "rgba-skipped.png") });
+        assert.equal(bluePixelCount(skipped), 0, "Empty RGBA bricks still rendered color");
+      }
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page.locator("canvas").evaluate(canvas => { canvas.style.width = "100vw"; canvas.style.height = "60vh"; });
+      await page.evaluate(async () => {
+        testRenderer.setRenderOptimizations({ alphaEpsilon: 0 }); testRenderer.resize();
+        testRenderer.draw(); await testRenderer.device.queue.onSubmittedWorkDone();
+      });
+      const mobile = await page.locator("canvas").screenshot({ path: path.join(screenshots, `${interpretation}-mobile.png`) });
+      assert.ok(bluePixelCount(mobile) > 50, `${interpretation}: mobile canvas is blank`);
+      await page.setViewportSize({ width: 1000, height: 800 });
+      await page.locator("canvas").evaluate(canvas => { canvas.style.width = "640px"; canvas.style.height = "480px"; });
+      await page.evaluate(() => testRenderer.resize());
+      assert.deepEqual(await page.evaluate(() => testErrors), []);
+    }
     await page.setViewportSize({ width: 1440, height: 1000 });
     await page.goto(`http://127.0.0.1:${server.address().port}/`);
     await page.locator(".dataset-button").click();
@@ -209,7 +295,7 @@ async function main() {
     await page.locator(".provenance-list").scrollIntoViewIfNeeded();
     assert.ok(await page.locator("#dataset-info").evaluate(element => element.scrollWidth <= element.clientWidth + 1), "Provenance overflows on mobile");
     await page.screenshot({ path: path.join(screenshots, "mobile-info.png") });
-    console.log("WebGPU pipeline, GPU subbrick occupancy and provenance tests passed:", result.reports.join(", "));
+    console.log("WebGPU RGB/RGBA pixel tests (desktop/mobile, no TF/ISO, alpha epsilon), scalar pipelines, subbrick occupancy and provenance passed:", result.reports.join(", "));
   } finally { await browser?.close(); await new Promise(resolve => server.close(resolve)); }
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });

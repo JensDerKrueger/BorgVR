@@ -7,6 +7,7 @@ ZSTD_EXECUTABLE=$(command -v zstd || true)
 export ZSTD_EXECUTABLE
 swiftc -O -parse-as-library -module-cache-path "$BUILD_DIR/module-cache" \
   "$ROOT/BORGVR-IO/Vector.swift" "$ROOT/BORGVR-IO/Importers/VolumeFileParser.swift" \
+  "$ROOT/BORGVR-IO/BORGVRChannelInterpretation.swift" \
   "$ROOT/BORGVR-IO/Importers/QVIS/QVISParser.swift" "$ROOT/BORGVR-IO/Importers/NRRD/NRRDParser.swift" \
   "$ROOT/BORGVR-IO/Importers/PVM/PVMParser.swift" "$ROOT/BORGVR-IO/Importers/I3D/I3MParser.swift" \
   "$ROOT/BORGVR-IO/MemoryMappedFile.swift" "$ROOT/BORGVR-IO/Importers/ZARR/ZstandardDecoder.swift" \

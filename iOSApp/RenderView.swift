@@ -399,6 +399,11 @@ struct RenderView: View {
         }
 
         HStack(spacing: 8) {
+          if let interpretation = appModel.activeDatasetMetadata?.channelInterpretation,
+             interpretation != .independentChannels {
+            Label(interpretation == .rgb ? "RGB" : "RGBA", systemImage: "photo")
+              .frame(maxWidth: .infinity)
+          } else {
           Picker("Render Mode", selection: $renderingParameters.renderMode) {
             ForEach(RenderMode.allCases) { mode in
               renderModeLabel(for: mode, compact: usesCompactRenderModeLabels)
@@ -413,6 +418,7 @@ struct RenderView: View {
               presentedSheet = nil
             }
             synchronizeState()
+          }
           }
 
           if sharePlay.isInSession {
@@ -518,6 +524,7 @@ struct RenderView: View {
           )
           .accessibilityAddTraits(isToolSheetPresented(.lighting) ? .isSelected : [])
           .accessibilityLabel("Lighting")
+          .disabled(appModel.activeDatasetMetadata?.channelInterpretation != .independentChannels)
           .frame(width: columnWidth)
         }
         .frame(width: doubleColumnWidth)
@@ -544,6 +551,7 @@ struct RenderView: View {
         )
         .accessibilityAddTraits(currentEditorIsPresented ? .isSelected : [])
         .accessibilityLabel("Editor")
+        .disabled(appModel.activeDatasetMetadata?.channelInterpretation != .independentChannels)
         .frame(width: columnWidth)
         .offset(x: columnStride * 2)
 

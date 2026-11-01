@@ -89,7 +89,8 @@ final class BorgVRMetalVolumeEditProcessor: @unchecked Sendable {
       processed += 1
       let result = Array(UnsafeBufferPointer(start: output.contents().assumingMemoryBound(to: UInt8.self), count: bytes))
       return .init(index: index, revision: revision, bytes: result,
-        componentRanges: (0..<m.componentCount).map { .init(minValue: Int(rangeWords[$0 * 2]), maxValue: Int(rangeWords[$0 * 2 + 1])) },
+        componentRanges: m.channelInterpretation.rangeChannels(componentCount: m.componentCount).map {
+          .init(minValue: Int(rangeWords[$0 * 2]), maxValue: Int(rangeWords[$0 * 2 + 1])) },
         matchesOriginal: input.level == 0 && result == input.bytes)
     }
   }

@@ -279,12 +279,14 @@ final actor VisionVolumeRenderer {
     let initialFrameSnapshot = session.frameSnapshot()
     let renderTransferFunctions = RenderTransferFunctionSet(device: layerRenderer.device)
     let metadata = dataset.getMetadata()
-    try renderTransferFunctions.synchronize(
-      with: initialFrameSnapshot.transferFunctions,
-      componentRanges: metadata.componentRanges,
-      rangeMax: metadata.rangeMax,
-      alphaEpsilon: initialFrameSnapshot.settings.alphaEpsilon
-    )
+    if metadata.channelInterpretation == .independentChannels {
+      try renderTransferFunctions.synchronize(
+        with: initialFrameSnapshot.transferFunctions,
+        componentRanges: metadata.componentRanges,
+        rangeMax: metadata.rangeMax,
+        alphaEpsilon: initialFrameSnapshot.settings.alphaEpsilon
+      )
+    }
 
     self.layerRenderer = layerRenderer
     self.session = session
@@ -552,7 +554,8 @@ extension VisionVolumeRenderer {
     let pipelineDescriptorTF = MTLRenderPipelineDescriptor()
     pipelineDescriptorTF.label = "Render Pipeline for 1D TF"
     pipelineDescriptorTF.vertexFunction = vertexFunction
-    pipelineDescriptorTF.fragmentFunction = library.makeFunction(name: "fragmentShaderTF")
+    pipelineDescriptorTF.fragmentFunction = library.makeFunction(name:
+      borgVRMetaData.channelInterpretation == .independentChannels ? "fragmentShaderTF" : "fragmentShaderColor")
     pipelineDescriptorTF.rasterSampleCount = rasterSampleCount
     pipelineDescriptorTF.colorAttachments[0].pixelFormat = layerRenderer.configuration.colorFormat
     pipelineDescriptorTF.colorAttachments[1].pixelFormat = .r32Float
@@ -1069,13 +1072,17 @@ extension VisionVolumeRenderer {
       return drawable.computeProjection(viewIndex: index) * viewMatrix
     }
 
-    switch frameState.renderMode {
-      case .transferFunction1D, .transferFunction1DLighting:
-        volumeAtlas.updateEmptiness(
-          transferFunctions: renderTransferFunctions.activeTransferFunctions
-        )
-      case .isoValue:
-        volumeAtlas.updateEmptiness(isoValue: frameState.isoValue)
+    if borgData.getMetadata().channelInterpretation != .independentChannels {
+      volumeAtlas.updateEmptiness(alphaEpsilon: frameSnapshot.settings.alphaEpsilon)
+    } else {
+      switch frameState.renderMode {
+        case .transferFunction1D, .transferFunction1DLighting:
+          volumeAtlas.updateEmptiness(
+            transferFunctions: renderTransferFunctions.activeTransferFunctions
+          )
+        case .isoValue:
+          volumeAtlas.updateEmptiness(isoValue: frameState.isoValue)
+      }
     }
   }
 
@@ -1184,6 +1191,7 @@ extension VisionVolumeRenderer {
 
   private func renderTransferfunction(_ renderEncoder: MTLRenderCommandEncoder,
                                       drawable: LayerRenderer.Drawable) {
+    guard borgData.getMetadata().channelInterpretation == .independentChannels else { return }
     renderEncoder.pushDebugGroup("Transfer Function Panel (3D)")
 
     renderEncoder.setRenderPipelineState(pipelineStateTFHUD)   // keep your name or rename
@@ -1930,12 +1938,14 @@ extension VisionVolumeRenderer {
     frameState = frameSnapshot.visualization
     do {
       let metadata = borgData.getMetadata()
-      try renderTransferFunctions.synchronize(
-        with: frameSnapshot.transferFunctions,
-        componentRanges: metadata.componentRanges,
-        rangeMax: metadata.rangeMax,
-        alphaEpsilon: frameSnapshot.settings.alphaEpsilon
-      )
+      if metadata.channelInterpretation == .independentChannels {
+        try renderTransferFunctions.synchronize(
+          with: frameSnapshot.transferFunctions,
+          componentRanges: metadata.componentRanges,
+          rangeMax: metadata.rangeMax,
+          alphaEpsilon: frameSnapshot.settings.alphaEpsilon
+        )
+      }
     } catch {
       logger?.error("Failed to update render transfer functions: \(error.localizedDescription)")
     }
@@ -1969,7 +1979,8 @@ extension VisionVolumeRenderer {
       try volumeAtlas.prepareSubbrickSkipping(commandBuffer: commandBuffer,
         transferFunctions: renderTransferFunctions.activeTransferFunctions,
         enabled: frameSnapshot.settings.subbrickSkipping,
-        isoValue: frameState.renderMode == .isoValue ? frameState.isoValue : nil)
+        isoValue: frameState.renderMode == .isoValue ? frameState.isoValue : nil,
+        alphaEpsilon: frameSnapshot.settings.alphaEpsilon)
     } catch {
       logger?.error("Subbrick skipping unavailable: \(error.localizedDescription)")
     }
@@ -2043,6 +2054,8 @@ extension VisionVolumeRenderer {
 
     if frameState.brickVisualization {
       renderEncoder.setRenderPipelineState(pipelineStateBrickVis)
+    } else if borgData.getMetadata().channelInterpretation != .independentChannels {
+      renderEncoder.setRenderPipelineState(pipelineStateTF)
     } else {
       switch frameState.renderMode {
         case .isoValue:

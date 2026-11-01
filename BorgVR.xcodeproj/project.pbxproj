@@ -356,6 +356,7 @@
 		564183972D649734003A1EC4 /* Exceptions for "BORGVR-IO" folder in "VisionApp" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
+				BORGVRChannelInterpretation.swift,
 				BorgVRCPUVolumeEditExecutor.swift,
 				BORGVRDataBase.swift,
 				BorgVREditableVolumeData.swift,
@@ -373,6 +374,8 @@
 				BorgVRVolumeOriginalBrick.swift,
 				HighResolutionTimer.swift,
 				Importers/BorgVRVolumeConversionService.swift,
+				Importers/BorgVRImportFileAccess.swift,
+				Importers/BorgVRImageSequenceImporter.swift,
 				Importers/BorgVRVolumeQuantizer.swift,
 				Importers/BrickedVolumeReorganizer.swift,
 				Importers/DICOM/BorgVRDICOMRigidRegistration.swift,

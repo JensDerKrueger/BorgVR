@@ -1,3 +1,14 @@
+"converter_supporting_file_access_required" = "Se necesita permiso de lectura para el archivo referenciado: %@";
+"converter_supporting_file_access_message" = "La cabecera seleccionada hace referencia a «%@». Seleccione este archivo para permitir que BorgVR lea sus datos de volumen.";
+"converter_supporting_file_access_allow" = "Permitir acceso";
+"converter_supporting_file_access_wrong_file" = "Seleccione el archivo referenciado «%@».";
+"image_sequence_title" = "Secuencia de imágenes";
+"image_sequence_select" = "Seleccionar carpeta de imágenes";
+"image_sequence_size" = "Tamaño del volumen en metros (X / Y / Z)";
+"image_sequence_empty" = "La carpeta no contiene imágenes compatibles.";
+"image_sequence_invalid" = "No se puede leer una única imagen de corte de %@.";
+"image_sequence_dimensions" = "Las dimensiones de la imagen difieren de los otros cortes: %@.";
+
 "auto_import_title" = "Importación automática";
 "auto_import_enabled" = "Importar automáticamente mientras el servidor está activo";
 "auto_import_directory" = "Directorio de entrada para importación automática";

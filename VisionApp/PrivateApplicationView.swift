@@ -286,10 +286,12 @@ struct HandInteractionControlsView: View {
 
       ZStack(alignment: .leading) {
         lightingButton(showTitles: showTitles)
+          .disabled(runtimeAppModel.activeDatasetInfo?.channelInterpretation != .independentChannels)
           .frame(width: columnWidth)
           .offset(x: columnStride)
 
         editorButton(showTitles: showTitles)
+          .disabled(runtimeAppModel.activeDatasetInfo?.channelInterpretation != .independentChannels)
           .frame(width: columnWidth)
           .offset(x: columnStride * 2)
 

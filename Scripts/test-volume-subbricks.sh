@@ -7,6 +7,7 @@ swiftc -parse-as-library -module-cache-path "$BUILD_DIR/swift-module-cache" \
   -import-objc-header "$ROOT/AppSupport/Rendering/Shaders/ShaderTypes.h" \
   "$ROOT/BORGVR-IO/Vector.swift" "$ROOT/BORGVR-IO/IOExtensions.swift" \
   "$ROOT/BORGVR-IO/BORGVRDataBase.swift" "$ROOT/BORGVR-IO/BORGVRMetaData.swift" \
+  "$ROOT/BORGVR-IO/BORGVRChannelInterpretation.swift" \
   "$ROOT/BORGVR-IO/BorgVRSharedConstants.swift" \
   "$ROOT/BORGVR-Render/Transfer Function 1D/TransferFunction1D.swift" \
   "$ROOT/BORGVR-Render/VolumeAtlas/VolumeAtlasSubbrickCache.swift" \

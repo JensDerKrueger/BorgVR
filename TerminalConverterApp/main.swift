@@ -27,6 +27,7 @@ let logger = PrintfLogger(useColors: false, etaFormat: .mmss)
  */
 enum Mode: String {
   case DicomConversion = "D"
+  case ImageSequenceConversion = "S"
   case QVISConversion = "Q"
   case NRRDConversion = "N"
   case PVMConversion = "P"
@@ -84,6 +85,23 @@ enum DatasetType: String {
       case .UInt32TestData: "UInt32 test pattern"
     }
   }
+
+  func generationParameters(bytesPerComponent: Int, brickStride: Int) -> String {
+    if let kind = analyticKind {
+      return kind.provenanceDescription(bytesPerVoxel: bytesPerComponent, brickStride: brickStride)
+    }
+    switch self {
+      case .FloatFractalData, .DoubleFractalData:
+        return MandelbulbParameters.provenanceDescription(
+          bytesPerVoxel: bytesPerComponent, doublePrecision: self == .DoubleFractalData)
+      case .LinearData:
+        return "Linear test pattern; scalar=(z*sizeY*sizeX+y*sizeX+x) modulo 2^\(bytesPerComponent * 8)."
+      case .UInt32TestData:
+        return "UInt32 full-range test; u=index/(size-1), or 0 for a singleton axis; scalar=round((u.x+2*u.y+4*u.z)/7*4294967295), saturated at 4294967295."
+      default:
+        preconditionFailure("Missing generator parameters")
+    }
+  }
 }
 
 func parseDatasetTypes(_ value: String) -> [DatasetType]? {
@@ -116,6 +134,7 @@ struct CommonParameters {
 struct DicomModeParameters {
   let inputDirectory: String
   let common: CommonParameters
+  var physicalSizeMeters: Vec3<Float>? = nil
 }
 
 /**
@@ -168,6 +187,10 @@ General
     \(executableName) --version | -v
     Optional for import/generation (repeatable): --source-info <ISO8601-date-time> <source-text>
         Example: --source-info 2026-11-01T10:30:00Z "Downloaded from https://example.org/scan"
+    Optional for import modes D/Q/N/P/I/Z:
+        --size-x <meters>       : Physical X extent if the source has no physical size
+        --force-size-x <meters> : Always set physical X extent, overriding source metadata
+        Both preserve proportions along Y/Z. Use only one size option, once.
 
 Mode D — Read DICOM files from a directory
     \(executableName) D <input_directory> <output_filename> <description> <max_brick_size> <overlap>
@@ -176,6 +199,10 @@ Mode D — Read DICOM files from a directory
         description       : Short description of the dataset
         max_brick_size    : Positive integer specifying the maximum brick size
         overlap           : Positive integer specifying the overlap between bricks
+
+Mode S — Read a filename-sorted RGB/RGBA image sequence
+    \(executableName) S <input_directory> <output_filename> <description> <max_brick_size> <overlap> <size_x_m> <size_y_m> <size_z_m>
+        All images must have identical dimensions. Physical dimensions are required in meters.
 
 Mode Q — Read a QVIS file
     \(executableName) Q <input_filename> <output_filename> <description> <max_brick_size> <overlap>
@@ -278,8 +305,8 @@ func parseArguments(_ args: [String]) -> (Mode, Any) {
   result.0 = mode
 
   switch mode {
-    case .DicomConversion:
-      guard args.count == 7 else {
+    case .DicomConversion, .ImageSequenceConversion:
+      guard args.count == (mode == .ImageSequenceConversion ? 10 : 7) else {
         logger.error("Error: Invalid number of arguments for mode D.\n\(usageErrorMessage)")
         exit(1)
       }
@@ -289,7 +316,7 @@ func parseArguments(_ args: [String]) -> (Mode, Any) {
         logger.error("Error: maxBrickSize and overlap must be positive, and twice the overlap must be smaller than the brick size.")
         exit(1)
       }
-      let params = DicomModeParameters(
+      var params = DicomModeParameters(
         inputDirectory: args[2],
         common: CommonParameters(
           outputFilename: args[3],
@@ -298,6 +325,14 @@ func parseArguments(_ args: [String]) -> (Mode, Any) {
           overlap: overlap
         )
       )
+      if mode == .ImageSequenceConversion {
+        guard let x = Float(args[7]), let y = Float(args[8]), let z = Float(args[9]),
+              [x, y, z].allSatisfy({ $0.isFinite && $0 > 0 }) else {
+          logger.error("Image sequences require finite positive X/Y/Z dimensions in meters.")
+          exit(1)
+        }
+        params.physicalSizeMeters = Vec3(x: x, y: y, z: z)
+      }
       result.1 = params
 
     case .QVISConversion, .NRRDConversion, .PVMConversion, .I3MConversion, .ZarrConversion:
@@ -393,7 +428,9 @@ func parseArguments(_ args: [String]) -> (Mode, Any) {
   return result
 }
 
-func parseSourceInfo(_ arguments: [String]) -> (arguments: [String], provenance: [BORGVRProvenanceEntry]) {
+func parseImportOptions(_ arguments: [String]) -> (
+  arguments: [String], provenance: [BORGVRProvenanceEntry], sizeXMeters: Float?, forceSizeX: Bool
+) {
   var args = arguments
   var provenance: [BORGVRProvenanceEntry] = []
   while let index = args.firstIndex(of: "--source-info") {
@@ -412,7 +449,23 @@ func parseSourceInfo(_ arguments: [String]) -> (arguments: [String], provenance:
     logger.error("--source-info is not applicable to export mode.")
     exit(1)
   }
-  return (args, provenance)
+  var sizeXMeters: Float?
+  var forceSizeX = false
+  while let index = args.firstIndex(where: { $0 == "--size-x" || $0 == "--force-size-x" }) {
+    guard sizeXMeters == nil, index + 1 < args.count,
+          let value = Float(args[index + 1]), value.isFinite, value > 0 else {
+      logger.error("Use either --size-x or --force-size-x once, followed by a finite positive length in meters.")
+      exit(1)
+    }
+    sizeXMeters = value
+    forceSizeX = args[index] == "--force-size-x"
+    args.removeSubrange(index...index + 1)
+  }
+  if sizeXMeters != nil, args.count > 1, ["E", "C", "S"].contains(args[1]) {
+    logger.error("--size-x and --force-size-x apply to import modes D/Q/N/P/I/Z only.")
+    exit(1)
+  }
+  return (args, provenance, sizeXMeters, forceSizeX)
 }
 
 func convertRawVolume(inputFilename: String,
@@ -425,7 +478,8 @@ func convertRawVolume(inputFilename: String,
                       overlap: Int,
                       outputFilename: String,
                       datasetDescription: String,
-                      metaDescription:String) throws {
+                      metaDescription: String,
+                      provenance: [BORGVRProvenanceEntry]) throws {
   try BorgVRVolumeConversionService.convert(
     BorgVRVolumeConversionRequest(
       source: .raw(
@@ -447,7 +501,7 @@ func convertRawVolume(inputFilename: String,
         useCompression: true,
         extensionStrategy: .fillZeroes
       ),
-      provenance: conversionProvenance,
+      provenance: provenance,
       toolIdentification: ConverterInfo.toolIdentification
     ),
     logger: logger
@@ -458,13 +512,16 @@ func convertDICOMStack(_ params: DicomModeParameters) {
   do {
     try BorgVRVolumeConversionService.convert(
       BorgVRVolumeConversionRequest(
-        source: .dicomDirectory(
-          URL(fileURLWithPath: params.inputDirectory, isDirectory: true)
-        ),
+        source: params.physicalSizeMeters == nil
+          ? .dicomDirectory(URL(fileURLWithPath: params.inputDirectory, isDirectory: true))
+          : .imageSequence(URL(fileURLWithPath: params.inputDirectory, isDirectory: true)),
         destinationURL: URL(fileURLWithPath: params.common.outputFilename),
         datasetDescription: params.common.datasetDescription,
         metaDescription: "",
         settings: conversionSettings(for: params.common),
+        physicalSizeMeters: params.physicalSizeMeters,
+        sizeXMeters: conversionSizeXMeters,
+        forceSizeX: forceConversionSizeX,
         provenance: conversionProvenance,
         toolIdentification: ConverterInfo.toolIdentification
       ),
@@ -514,6 +571,8 @@ private func convertFileVolume(_ params: HeaderFileModeParameters, formatName: S
         datasetDescription: params.common.datasetDescription,
         metaDescription: "Converted from \(formatName) Volume \(sourceURL.deletingPathExtension().lastPathComponent)",
         settings: conversionSettings(for: params.common),
+        sizeXMeters: conversionSizeXMeters,
+        forceSizeX: forceConversionSizeX,
         provenance: conversionProvenance,
         toolIdentification: ConverterInfo.toolIdentification
       ),
@@ -706,6 +765,7 @@ func generateVolume(_ params: CreateModeParameters) {
     }
 
     var channelDescriptions: [String] = []
+    var generationProvenance: [BORGVRProvenanceEntry] = []
     for (channel, datasetType) in params.datasetTypes.enumerated() {
       logger.info("Generating channel \(channel + 1)/\(params.componentCount): \(datasetType.displayName)")
       channelDescriptions.append(
@@ -715,6 +775,11 @@ func generateVolume(_ params: CreateModeParameters) {
           params: params
         )
       )
+      generationProvenance.append(BORGVRProvenanceEntry(
+        "Generated channel \(channel) using \(ConverterInfo.toolIdentification); algorithm=\(datasetType.rawValue); grid=\(params.sizeX)x\(params.sizeY)x\(params.sizeZ); output=UInt\(params.byteDepth * 8); backend=\(channelDescriptions[channel]); " +
+        datasetType.generationParameters(bytesPerComponent: params.byteDepth,
+                                         brickStride: params.common.maxBrickSize - 2 * params.common.overlap)
+      ))
     }
 
     try interleaveVolumeChannels(
@@ -743,7 +808,8 @@ func generateVolume(_ params: CreateModeParameters) {
                          overlap: params.common.overlap,
                          outputFilename: params.common.outputFilename,
                          datasetDescription: params.common.datasetDescription,
-                         metaDescription: metaDesc)
+                         metaDescription: metaDesc,
+                         provenance: conversionProvenance + generationProvenance)
 
   } catch {
     logger.error("Error: \(error.localizedDescription)")
@@ -758,11 +824,13 @@ logger.setMinimumLogLevel(.info)
 logger.warning("Running in debug mode. The program will perform significantly slower as in release mode.")
 #endif
 // Parse command-line arguments and execute the corresponding conversion or generation.
-let sourceOptions = parseSourceInfo(CommandLine.arguments)
-let conversionProvenance = sourceOptions.provenance
-let (mode, params) = parseArguments(sourceOptions.arguments)
+let importOptions = parseImportOptions(CommandLine.arguments)
+let conversionProvenance = importOptions.provenance
+let conversionSizeXMeters = importOptions.sizeXMeters
+let forceConversionSizeX = importOptions.forceSizeX
+let (mode, params) = parseArguments(importOptions.arguments)
 switch mode {
-  case .DicomConversion:
+  case .DicomConversion, .ImageSequenceConversion:
     guard let params = params as? DicomModeParameters else { exit(1) }
     convertDICOMStack(params)
   case .DemoDataCreation:

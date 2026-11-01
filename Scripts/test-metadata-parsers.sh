@@ -12,6 +12,7 @@ swiftc \
   "$ROOT/BORGVR-IO/Vector.swift" \
   "$ROOT/BORGVR-IO/IOExtensions.swift" \
   "$ROOT/BORGVR-IO/BORGVRMetaData.swift" \
+  "$ROOT/BORGVR-IO/BORGVRChannelInterpretation.swift" \
   "$ROOT/BORGVR-IO/BORGVRDataBase.swift" \
   "$ROOT/BORGVR-IO/MemoryMappedFile.swift" \
   "$ROOT/BORGVR-IO/BORGVRFileData.swift" \

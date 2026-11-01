@@ -5,6 +5,9 @@ struct DicomProvenanceMetadata: Sendable {
   struct Event: Hashable, Sendable {
     let date: Date?
     let text: String
+    let category: String
+    let details: String?
+    let dateOnly: Bool
   }
 
   struct Contribution: Sendable {
@@ -58,7 +61,8 @@ struct DicomProvenanceMetadata: Sendable {
       if let raw { text += "; source timestamp: \(raw)" }
       if let note = parsed?.note { text += "; \(note)" }
       if let details { text += "; \(details)" }
-      result.append(Event(date: parsed?.date, text: text))
+      result.append(Event(date: parsed?.date, text: text, category: label, details: details,
+        dateOnly: parsed?.note?.hasPrefix("date only:") == true))
     }
     append("study", date: studyDate, time: studyTime)
     append("series", date: seriesDate, time: seriesTime)
@@ -67,13 +71,55 @@ struct DicomProvenanceMetadata: Sendable {
       details: derivationDescription.map { "derivation: \($0)" })
     append("instance creation", date: instanceCreationDate, time: instanceCreationTime)
     append("instance coercion/correction/conversion", dateTime: instanceCoercionDateTime)
-    for contribution in contributions {
+    for (index, contribution) in contributions.enumerated() {
       let details = [contribution.description, contribution.softwareVersions.map { "software: \($0)" }]
         .compactMap { $0 }.joined(separator: "; ")
-      append("equipment contribution", dateTime: contribution.dateTime,
+      append("equipment contribution #\(index + 1)", dateTime: contribution.dateTime,
         details: details.isEmpty ? nil : details)
     }
     return result
+  }
+
+  /// Slice timestamps describe one series event, not one processing step per slice.
+  static func seriesEvents(from slices: [Self]) -> [Event] {
+    struct Key: Hashable {
+      let category: String
+      let details: String?
+    }
+    var groups: [Key: [Event]] = [:]
+    var order: [Key] = []
+    for slice in slices {
+      for event in slice.events {
+        let key = Key(category: event.category, details: event.details)
+        if groups[key] == nil { order.append(key) }
+        groups[key, default: []].append(event)
+      }
+    }
+    let formatter = ISO8601DateFormatter()
+    formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+    return order.map { key in
+      let events = groups[key]!
+      let dated = events.filter { $0.date != nil }
+      guard dated.count > 1 else { return dated.first ?? events[0] }
+      let origin = dated[0].date!
+      // Average relative offsets to retain sub-second precision for long series.
+      var mean = origin.addingTimeInterval(dated.reduce(0) { $0 + $1.date!.timeIntervalSince(origin) } / Double(dated.count))
+      let dateOnly = dated.allSatisfy(\.dateOnly)
+      let timestamp: String
+      if dateOnly {
+        mean = calendar.startOfDay(for: mean)
+        let parts = calendar.dateComponents([.year, .month, .day], from: mean)
+        timestamp = String(format: "date only: %04d-%02d-%02d", parts.year!, parts.month!, parts.day!)
+      } else {
+        timestamp = "mean source timestamp: \(formatter.string(from: mean))"
+      }
+      var text = "DICOM \(key.category); \(timestamp); averaged over \(dated.count) slices"
+      if dated.count != events.count { text += " (\(events.count) slices with this event in total)" }
+      if let details = key.details { text += "; \(details)" }
+      return Event(date: mean, text: text, category: key.category, details: key.details, dateOnly: dateOnly)
+    }
   }
 
   // PS3.5 section 6.2 (DA/TM/DT), PS3.3 C.12.1.1.8 (UTC offsets).

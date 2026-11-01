@@ -108,6 +108,7 @@ enum BORGVRVolumeExporter {
       componentCount: metadata.componentCount,
       bytesPerComponent: metadata.bytesPerComponent,
       level: level,
+      channelInterpretation: metadata.channelInterpretation,
       provenance: metadata.provenance + [BORGVRProvenanceEntry(
         "Exported to NRRD from LoD \(level); source dataset: \(metadata.uniqueID); tool: \(BORGVRToolIdentification.current)")]
     )
@@ -238,6 +239,7 @@ enum BORGVRVolumeExporter {
     componentCount: Int,
     bytesPerComponent: Int,
     level: Int,
+    channelInterpretation: BORGVRChannelInterpretation,
     provenance: [BORGVRProvenanceEntry]
   ) throws -> Data {
     let type: String
@@ -260,11 +262,12 @@ enum BORGVRVolumeExporter {
       kinds: domain domain domain
       """
     } else {
+      let kind = channelInterpretation == .rgb ? "RGB-color" : channelInterpretation == .rgba ? "RGBA-color" : "vector"
       dimensionalFields = """
       dimension: 4
       sizes: \(componentCount) \(size.x) \(size.y) \(size.z)
       spacings: nan \(xSpacing) \(ySpacing) \(zSpacing)
-      kinds: vector domain domain domain
+      kinds: \(kind) domain domain domain
       """
     }
 

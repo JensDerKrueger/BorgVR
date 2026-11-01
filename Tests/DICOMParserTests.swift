@@ -365,7 +365,7 @@ private func testReadingDICOMDirectoryContents() throws {
     appendExplicitElement(group: 0x0020, element: 0x0037, vr: "DS",
       value: Data("1\\0\\0\\0\\1\\0 ".utf8), to: &data)
     appendExplicitElement(group: 0x0008, element: 0x002A, vr: "DT",
-      value: Data("20261101120000+0200".utf8), to: &data)
+      value: Data("2026110112000\(index)+0200".utf8), to: &data)
     appendExplicitElement(group: 0x7FE0, element: 0x0010, vr: "US",
       value: Data(repeating: UInt8(index + 1), count: 4), to: &data)
     try data.write(to: directory.appendingPathComponent("slice-\(index)"))
@@ -379,7 +379,48 @@ private func testReadingDICOMDirectoryContents() throws {
   try expect(volume.voxelData == [1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3],
     "Coordinated DICOM reads changed slice ordering or pixel data")
   try expect(volume.provenance.count == 1 && volume.provenance[0].text.contains("acquisition"),
-    "Slice histories were lost or identical events were repeated")
+    "Slice histories were lost or differing slice timestamps created repeated events")
+  try expect(ISO8601DateFormatter().string(from: volume.provenance[0].date!) == "2026-11-01T10:00:01Z"
+    && volume.provenance[0].text.contains("averaged over 3 slices"), "Series acquisition time is not the mean slice time")
+}
+
+private func testSeriesProvenanceAveraging() throws {
+  let slices = (0..<3).map { index in
+    DicomProvenanceMetadata(readString: { tag in
+      switch tag {
+        case .studyDate: return "20261101"
+        case .acquisitionDateTime: return "2026110112000\(index).123+0200"
+        case .contentDate: return "20261101"
+        case .contentTime: return "12001\(index)"
+        case .instanceCreationDate: return "20261101"
+        case .instanceCreationTime: return "12002\(index)"
+        case .timezoneOffsetFromUTC: return "+0200"
+        default: return nil
+      }
+    }, contributions: [
+      .init(dateTime: "2026110113000\(index)+0200", description: "Filtered", softwareVersions: "1.0"),
+      .init(dateTime: "2026110114000\(index)+0200", description: "Registered", softwareVersions: "2.0")
+    ])
+  }
+  let history = DicomProvenanceMetadata.seriesEvents(from: slices)
+  try expect(history.count == 6, "Series history grew with the slice count or lost processing steps")
+  let acquisition = history.first { $0.category == "acquisition" }!
+  try expect(abs(acquisition.date!.timeIntervalSince(slices[1].events.first { $0.category == "acquisition" }!.date!)) < 0.000001,
+    "Fractional seconds were lost when averaging")
+  let day = history.first { $0.category == "study" }!
+  try expect(day.dateOnly && day.text.contains("date only: 2026-11-01")
+    && ISO8601DateFormatter().string(from: day.date!) == "2026-11-01T00:00:00Z", "Averaging shifted a date-only value")
+  try expect(history.filter { $0.category.hasPrefix("equipment contribution") }.count == 2,
+    "Distinct processing contributions were merged")
+  let missing = DicomProvenanceMetadata(readString: { $0 == .acquisitionDateTime ? "20261101120000" : nil })
+  let mixed = DicomProvenanceMetadata.seriesEvents(from: [missing, slices[0], slices[2]])
+    .first { $0.category == "acquisition" }!
+  try expect(mixed.date == acquisition.date && mixed.text.contains("averaged over 2 slices"),
+    "An unknown timezone contributed an invented timestamp")
+  let unknown = DicomProvenanceMetadata.seriesEvents(from: [missing, missing])
+  try expect(unknown.count == 1 && unknown[0].date == nil && unknown[0].text.contains("timezone unspecified"),
+    "Undated series history was repeated or assigned an invented time")
+  try expect(DicomProvenanceMetadata.seriesEvents(from: []).isEmpty, "Empty series produced a history entry")
 }
 
 private func testProvenanceDates() throws {
@@ -491,6 +532,7 @@ private enum DICOMParserTestRunner {
     try testReadingDICOMDirectoryContents()
     try testProvenanceDates()
     try testProvenanceSequences()
+    try testSeriesProvenanceAveraging()
     print("DICOM parser tests passed")
   }
 }

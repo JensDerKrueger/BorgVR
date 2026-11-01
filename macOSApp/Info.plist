@@ -10,6 +10,28 @@
 	<array>
 		<dict>
 			<key>CFBundleTypeName</key>
+			<string>Volume Import Header</string>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<key>LSHandlerRank</key>
+			<string>None</string>
+			<key>LSItemContentTypes</key>
+			<array><string>de.uni-due.borgvr.volume-import-header</string></array>
+		</dict>
+		<dict>
+			<key>CFBundleTypeName</key>
+			<string>Raw Volume Supporting File</string>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<key>LSHandlerRank</key>
+			<string>None</string>
+			<key>NSIsRelatedItemType</key>
+			<true/>
+			<key>LSItemContentTypes</key>
+			<array><string>de.uni-due.borgvr.raw-volume</string></array>
+		</dict>
+		<dict>
+			<key>CFBundleTypeName</key>
 			<string>BorgVR Settings</string>
 			<key>CFBundleTypeRole</key>
 			<string>Viewer</string>
@@ -31,6 +53,35 @@
 			<array>
 				<string>de.uni-due.borgvr.dataset</string>
 			</array>
+		</dict>
+	</array>
+	<key>UTImportedTypeDeclarations</key>
+	<array>
+		<dict>
+			<key>UTTypeIdentifier</key>
+			<string>de.uni-due.borgvr.volume-import-header</string>
+			<key>UTTypeDescription</key>
+			<string>Volume Import Header</string>
+			<key>UTTypeConformsTo</key>
+			<array><string>public.data</string></array>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array><string>dat</string><string>nhdr</string></array>
+			</dict>
+		</dict>
+		<dict>
+			<key>UTTypeIdentifier</key>
+			<string>de.uni-due.borgvr.raw-volume</string>
+			<key>UTTypeDescription</key>
+			<string>Raw Volume Supporting File</string>
+			<key>UTTypeConformsTo</key>
+			<array><string>public.data</string></array>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array><string>raw</string></array>
+			</dict>
 		</dict>
 	</array>
 	<key>UTExportedTypeDeclarations</key>

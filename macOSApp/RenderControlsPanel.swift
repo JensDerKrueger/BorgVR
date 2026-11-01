@@ -236,6 +236,10 @@ struct RenderControlsPanel: View {
           .help(MacKeyboardShortcut.help("Synchronize View", shortcut: .synchronizeView))
         }
 
+        if let interpretation = appModel.activeDatasetMetadata?.channelInterpretation,
+           interpretation != .independentChannels {
+          Label(interpretation == .rgb ? "RGB" : "RGBA", systemImage: "photo")
+        } else {
         Picker("Render Mode", selection: renderModeBinding) {
           ForEach(RenderMode.allCases) { mode in
             Text(mode.description).tag(mode)
@@ -247,8 +251,10 @@ struct RenderControlsPanel: View {
           MacRenderShortcut.help("Transfer function + lighting", shortcut: .lightingRendering),
           MacRenderShortcut.help("Isovalue", shortcut: .isoRendering)
         ].joined(separator: " · "))
+        }
 
-        if renderingParameters.renderMode == .isoValue {
+        if renderingParameters.renderMode == .isoValue,
+           appModel.activeDatasetMetadata?.channelInterpretation == .independentChannels {
           Button {
             docking.request(.render(.extractIsosurface))
           } label: {
@@ -475,10 +481,12 @@ struct RenderControlsPanel: View {
 
       ZStack(alignment: .leading) {
         lightingWindowButton
+          .disabled(appModel.activeDatasetMetadata?.channelInterpretation != .independentChannels)
           .frame(width: doubleColumnWidth - groupInset * 2)
           .offset(x: groupInset)
 
         editorWindowButton
+          .disabled(appModel.activeDatasetMetadata?.channelInterpretation != .independentChannels)
           .frame(width: columnWidth)
           .offset(x: columnStride * 2)
 

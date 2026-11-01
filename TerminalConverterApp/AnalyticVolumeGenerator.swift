@@ -16,6 +16,25 @@ enum AnalyticVolumeKind: String, CaseIterable {
       case .frequencyChirp: "Frequency chirp and brick-boundary test"
     }
   }
+
+  func provenanceDescription(bytesPerVoxel: Int, brickStride: Int) -> String {
+    let quantization = "arithmetic=Float32; normalized scalar clamped to [0,1] and rounded to UInt\(bytesPerVoxel * 8); normalized coordinates=2*index/(size-1)-1 (endpoints included)."
+    let parameters: String
+    switch self {
+      case .quaternionJulia:
+        let p = QuaternionJuliaParameters.self
+        parameters = "Quaternion sine Julia; q'=sin(q)+C*sin(q), left quaternion multiplication; storage=(i,j,k,real); C=(\(p.constant.x),\(p.constant.y),\(p.constant.z),\(p.constant.w)); p=normalized coordinates*\(p.coordinateScale); initial q=(p.y,p.z,\(p.sliceCoordinate),p.x); maximumIterations=\(p.maximumIterations); escape radius squared=\(p.escapeRadiusSquared); scalar=zero-based escape iteration/\(p.maximumIterations), or 1 if not escaped. Reference: Shawn Halayka, Some visually interesting non-standard quaternion fractal sets, Fig. 3, https://doi.org/10.1016/j.chaos.2008.10.035 ."
+      case .mandelbox:
+        parameters = "Mandelbox; domain=[-1.5,1.5]^3; initial orbit=point; box fold=2*clamp(q,-1,1)-q; sphere fold: radiusSquared<0.25 -> q*=4, otherwise radiusSquared<1 -> q/=radiusSquared; q=-1.75*q+point; maximumIterations=24; escape radius squared=256; scalar=zero-based escape iteration/24, or 1 if not escaped."
+      case .gyroid:
+        parameters = "Gyroid; p=normalized coordinates*3*pi; scalar=clamp(0.5+(sin(p.x)*cos(p.y)+sin(p.y)*cos(p.z)+sin(p.z)*cos(p.x))/3,0,1)."
+      case .sheppLogan:
+        parameters = "3D Shepp-Logan phantom; domain=[-1,1]^3; scalar=clamp(0.5*sum of ellipsoid densities,0,1); ellipsoids (center, radii, Z-angle radians, density): \(AnalyticVolumeCPU.phantomParametersDescription)."
+      case .frequencyChirp:
+        parameters = "Frequency chirp; u=index/(size-1); phase=2*pi*(2*u.x+18*u.x^2+3*u.y+5*u.z); chirp=0.5+0.5*sin(phase); at u.y>=0.75 scalar=max(chirp*0.65,grid); grid=1 at brick boundaries, 0.55 one voxel away, 0.08 elsewhere; brick core stride=\(max(1, brickStride))."
+    }
+    return parameters + " " + quantization
+  }
 }
 
 enum AnalyticVolumeBackend {
@@ -464,6 +483,10 @@ private enum AnalyticVolumeCPU {
     Ellipsoid(center: SIMD3( 0.00, -0.6060,  0.00), radii: SIMD3(0.0230, 0.023, 0.020), angle:  0.000000, density:  0.01),
     Ellipsoid(center: SIMD3( 0.06, -0.6050,  0.00), radii: SIMD3(0.0230, 0.046, 0.020), angle:  0.000000, density:  0.01)
   ]
+
+  static var phantomParametersDescription: String {
+    phantomEllipsoids.map { "(\($0.center), \($0.radii), \($0.angle), \($0.density))" }.joined(separator: "; ")
+  }
 
   static func evaluate(kind: AnalyticVolumeKind,
                        x: Int,

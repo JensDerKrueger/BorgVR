@@ -659,6 +659,10 @@ final class AppModel: ObservableObject {
 
   func transferFunctionFileURL(for dataset: DatasetEntry? = nil, componentCount: Int? = nil) -> URL? {
     guard let dataset = dataset ?? activeDataset else { return nil }
+    if dataset.uniqueId == activeDataset?.uniqueId,
+       let metadata = activeDatasetMetadata, metadata.channelInterpretation != .independentChannels {
+      return nil
+    }
 
     switch dataset.source {
       case .local:

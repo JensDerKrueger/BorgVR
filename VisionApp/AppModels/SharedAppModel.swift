@@ -647,6 +647,7 @@ class SharedAppModel {
   func restoreSavedDatasetState(
     datasetID: String,
     physicalExtent: SIMD3<Float>,
+    channelInterpretation: BORGVRChannelInterpretation,
     logger: LoggerBase
   ) throws -> Bool {
     var restored = false
@@ -655,7 +656,7 @@ class SharedAppModel {
       in: .userDomainMask
     ).first
 
-    if let url = documentsDirectory?
+    if channelInterpretation == .independentChannels, let url = documentsDirectory?
       .appendingPathComponent(datasetID)
       .appendingPathExtension("tf1d") {
       restored = try loadDatasetTransferFunctions(from: url)

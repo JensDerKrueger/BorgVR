@@ -1007,6 +1007,12 @@ bool HTTPWebServer::sendDatasetManifest(TcpSocket& socket, const std::string& da
     const BORGVRMetaData& md = dataset.metadata();
     const bool floating = md.componentType() == ComponentType::FloatingPoint;
     const bool signedType = md.componentType() == ComponentType::SignedInteger;
+    const char* channelInterpretation = "independentChannels";
+    switch (md.channelInterpretation()) {
+      case ChannelInterpretation::IndependentChannels: break;
+      case ChannelInterpretation::RGB: channelInterpretation = "rgb"; break;
+      case ChannelInterpretation::RGBA: channelInterpretation = "rgba"; break;
+    }
     const double dataRangeMax = floating
       ? (md.bytesPerComponent() == 4 ? double(std::numeric_limits<float>::max()) : std::numeric_limits<double>::max())
       : std::ldexp(1.0, md.bytesPerComponent() * 8 - (signedType ? 1 : 0)) - 1;
@@ -1033,6 +1039,7 @@ bool HTTPWebServer::sendDatasetManifest(TcpSocket& socket, const std::string& da
         << "    \"size\": [" << md.width() << ", " << md.height() << ", " << md.depth() << "],\n"
         << "    \"voxelSpacing\": [" << md.voxelSpacingX() << ", " << md.voxelSpacingY() << ", " << md.voxelSpacingZ() << "],\n"
         << "    \"componentCount\": " << md.componentCount() << ",\n"
+        << "    \"channelInterpretation\": \"" << channelInterpretation << "\",\n"
         << "    \"bytesPerComponent\": " << md.bytesPerComponent() << ",\n"
         << "    \"valueType\": \"" << (floating ? "float" : signedType ? "int" : "uint") << "\",\n"
         << "    \"endianness\": \"little\",\n"

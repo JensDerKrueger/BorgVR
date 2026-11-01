@@ -25,6 +25,7 @@ enum DicomParser {
     let patientName: String?
     let seriesDate: String?
     var provenance: [DicomProvenanceMetadata.Event] = []
+    var hasPhysicalVoxelSpacing = true
   }
 
   enum Error: Swift.Error {

@@ -8,7 +8,7 @@ import Foundation
  The header file is expected to be an ASCII text file containing key-value pairs,
  one per line, where keys and values are separated by a colon (`:`). The parser extracts
  fields such as `objectFileName`, `Resolution`, `SliceThickness`, `Format`, and optional
- `Components` and `Endianess`. The parsed values are used to initialize the
+ `Components`, `ObjectModel` and `Endianess`. The parsed values are used to initialize the
  metadata properties of this class.
  */
 public final class QVISParser: VolumeFileParser {
@@ -58,12 +58,14 @@ public final class QVISParser: VolumeFileParser {
 
   /// The physical voxel spacing along x, y, and z axes.
   public let voxelSpacing: Vec3<Float>
+  public let hasPhysicalVoxelSpacing: Bool
 
   /// Number of bytes per component (e.g., 1 for UCHAR/BYTE, 2 for USHORT, 4 for UINT).
   public let bytesPerComponent: Int
 
-  /// Number of components per voxel (defaults to 1 if not specified in header).
+  /// Component count from UCHAR3/UCHAR4 or Components; otherwise one.
   public let components: Int
+  public let channelInterpretation: BORGVRChannelInterpretation
 
   /// Indicates whether the data is stored in little-endian byte order.
   public let isLittleEndian: Bool
@@ -83,10 +85,11 @@ public final class QVISParser: VolumeFileParser {
    split into a key and value using the colon (`:`) delimiter. The following keys are required:
    - `objectFileName`
    - `Resolution`
-   - `SliceThickness`
    - `Format`
 
-   The optional key `Components` specifies the number of components per voxel (defaulting to 1).
+   Without `SliceThickness`, isotropic spacing is assumed with a longest extent of one meter.
+   UCHAR3/UCHAR4 specify three/four byte components; Components must agree if also supplied.
+   ObjectModel RGB/RGBA explicitly identifies color data; otherwise components remain scalars.
    The optional key `Endianess` determines byte order (defaulting to little-endian).
 
    - Parameter filename: The path to the QVIS header file.
@@ -122,20 +125,12 @@ public final class QVISParser: VolumeFileParser {
       throw Error.missingKey("Resolution")
     }
     // Extract slice thickness string
-    guard let sliceThicknessString = headerDict["slicethickness"], !sliceThicknessString.isEmpty else {
-      throw Error.missingKey("SliceThickness")
-    }
+    let sliceThicknessString = headerDict["slicethickness"]
+    hasPhysicalVoxelSpacing = sliceThicknessString != nil
     // Extract format string
     guard let formatString = headerDict["format"], !formatString.isEmpty else {
       throw Error.missingKey("Format")
     }
-    // Extract optional components, default to 1
-    if let componentsString = headerDict["components"], !componentsString.isEmpty {
-      self.components = Int(componentsString) ?? 1
-    } else {
-      self.components = 1
-    }
-
     // Parse resolution into Vec3<Int>
     let dimensions = resolutionString
       .split { !$0.isNumber }
@@ -146,9 +141,9 @@ public final class QVISParser: VolumeFileParser {
     let size = Vec3<Int>(x: dimensions[0], y: dimensions[1], z: dimensions[2])
 
     // Parse slice thickness into Vec3<Float>
-    let thicknessValues = sliceThicknessString.split(separator: " ")
-      .compactMap { Float($0) }
-    guard thicknessValues.count == 3 else {
+    let thicknessValues = sliceThicknessString?.split(whereSeparator: \.isWhitespace).compactMap { Float($0) }
+      ?? [Float](repeating: 1 / Float(max(size.x, size.y, size.z)), count: 3)
+    guard thicknessValues.count == 3, thicknessValues.allSatisfy({ $0.isFinite && $0 > 0 }) else {
       throw Error.invalidValue("SliceThickness")
     }
     let voxelSpacing = Vec3<Float>(
@@ -160,15 +155,48 @@ public final class QVISParser: VolumeFileParser {
     // Determine bytes per component based on format
     let formatUpper = formatString.uppercased()
     let bytesPerComponent: Int
+    let formatComponents: Int?
     switch formatUpper {
       case "UCHAR", "BYTE":
         bytesPerComponent = 1
+        formatComponents = nil
+      case "UCHAR3":
+        bytesPerComponent = 1
+        formatComponents = 3
+      case "UCHAR4":
+        bytesPerComponent = 1
+        formatComponents = 4
       case "USHORT":
         bytesPerComponent = 2
+        formatComponents = nil
       case "UINT":
         bytesPerComponent = 4
+        formatComponents = nil
       default:
         throw Error.invalidValue("Format")
+    }
+
+    let components: Int
+    if let explicit = headerDict["components"] {
+      guard let count = Int(explicit), count > 0,
+            formatComponents == nil || formatComponents == count else {
+        throw Error.invalidValue("Components")
+      }
+      components = count
+    } else {
+      components = formatComponents ?? 1
+    }
+    let interpretation: BORGVRChannelInterpretation
+    switch headerDict["objectmodel"]?.uppercased() {
+      case "RGB": interpretation = .rgb
+      case "RGBA": interpretation = .rgba
+      default: interpretation = .independentChannels
+    }
+    if interpretation != .independentChannels {
+      guard bytesPerComponent == 1,
+            components == (interpretation == .rgb ? 3 : 4) else {
+        throw Error.invalidValue("ObjectModel")
+      }
     }
 
     // Determine endianness (default little)
@@ -190,6 +218,8 @@ public final class QVISParser: VolumeFileParser {
     self.size               = size
     self.voxelSpacing       = voxelSpacing
     self.bytesPerComponent  = bytesPerComponent
+    self.components         = components
+    self.channelInterpretation = interpretation
     self.isLittleEndian     = isLittleEndian
   }
 }

@@ -1,5 +1,8 @@
 import Foundation
 import simd
+import ImageIO
+import CoreGraphics
+import Metal
 
 private enum TestFailure: Error, CustomStringConvertible {
   case failed(String)
@@ -206,6 +209,7 @@ private func testVolumeQuantization() throws {
         extensionStrategy: .clamp, quantizeTo8Bit: enabled)))
     let metadata = try BORGVRMetaData(filename: destination.path)
     try expect(metadata.bytesPerComponent == (enabled ? 1 : 2), "Import ignored quantization setting")
+    try expect(metadata.provenance.contains { $0.text == "Import RAW: input.raw" }, "RAW import retained a full path")
     let quantization = metadata.provenance.filter { $0.text.hasPrefix("Quantized to UInt8") }
     try expect(quantization.count == (enabled ? 1 : 0), "Quantization provenance is missing or duplicated")
     if enabled {
@@ -265,8 +269,36 @@ private func testDICOMImportHistory() throws {
       try expect(index < history.firstIndex { $0.text.hasPrefix("Quantized") }!, "Fusion/quantization history order is incorrect")
     }
     try expect(history.filter { $0.text.contains("Import DICOM:") }.count == (pair ? 2 : 1), "DICOM import entries duplicated")
+    try expect(!history.contains { $0.text.contains(root.path) || $0.text.contains("file://") },
+      "DICOM import/fusion retained a full source path")
     try expect(history.last!.text.contains("converted by History test tool 3.5"), "Conversion entry is not last")
   }
+}
+
+private func testPhysicalSizeOverrides() throws {
+  let root = FileManager.default.temporaryDirectory.appendingPathComponent("borgvr-size-override-\(UUID())")
+  try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+  defer { try? FileManager.default.removeItem(at: root) }
+  let input = root.appendingPathComponent("source.raw")
+  try Data(repeating: 1, count: 8).write(to: input)
+  for physical in [false, true] { for force in [false, true] {
+    let output = root.appendingPathComponent("\(physical)-\(force).data")
+    try BorgVRVolumeConversionService.convert(.init(
+      source: .raw(.init(url: input, offset: 0, size: .init(x: 2, y: 2, z: 2),
+        bytesPerComponent: 1, componentCount: 1, voxelSpacing: .init(x: 0.01, y: 0.02, z: 0.03),
+        hasPhysicalVoxelSpacing: physical)),
+      destinationURL: output, datasetDescription: "Size test", metaDescription: "",
+      settings: .init(brickSize: 4, overlap: 1, useCompression: false, extensionStrategy: .clamp),
+      sizeXMeters: 0.2, forceSizeX: force))
+    let metadata = try BORGVRMetaData(url: output)
+    let applied = force || !physical
+    try expect(abs(metadata.voxelSpacingX - (applied ? 0.1 : 0.01)) < 0.000_001
+      && abs(metadata.voxelSpacingY - metadata.voxelSpacingX * 2) < 0.000_001
+      && abs(metadata.voxelSpacingZ - metadata.voxelSpacingX * 3) < 0.000_001,
+      "Physical X size changed proportions or ignored fallback/override semantics")
+    try expect(metadata.provenance.filter { $0.text.hasPrefix("Set physical X extent") }.count == (applied ? 1 : 0),
+      "Physical size provenance was missing or recorded without scaling")
+  } }
 }
 
 private func testNRRDProvenanceExport() throws {
@@ -304,6 +336,266 @@ private func testNRRDProvenanceExport() throws {
   }
   let unchanged = try BORGVRMetaData(url: data)
   try expect(unchanged.provenance == originalHistory, "NRRD export mutated the input history")
+}
+
+private func testImageSequences() throws {
+  let root = FileManager.default.temporaryDirectory.appendingPathComponent("borgvr-image-tests-\(UUID())")
+  try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+  defer { try? FileManager.default.removeItem(at: root) }
+  func image(_ directory: URL, _ name: String, rgba: Bool, value: UInt8, width: Int = 2) throws {
+    let channels = rgba ? 4 : 3
+    let pixel: [UInt8] = rgba ? [value, value, value, 128] : [value, value, value]
+    let samples = (0..<(width * 2)).flatMap { _ in pixel }
+    let provider = CGDataProvider(data: Data(samples) as CFData)!
+    let cgImage = CGImage(width: width, height: 2, bitsPerComponent: 8, bitsPerPixel: channels * 8,
+      bytesPerRow: width * channels, space: CGColorSpace(name: CGColorSpace.sRGB)!,
+      bitmapInfo: CGBitmapInfo(rawValue: rgba ? CGImageAlphaInfo.last.rawValue : CGImageAlphaInfo.none.rawValue),
+      provider: provider, decode: nil, shouldInterpolate: false, intent: .defaultIntent)!
+    let destination = CGImageDestinationCreateWithURL(directory.appendingPathComponent(name) as CFURL,
+      "public.png" as CFString, 1, nil)!
+    CGImageDestinationAddImage(destination, cgImage, nil)
+    try expect(CGImageDestinationFinalize(destination), "Could not create image fixture")
+  }
+  let settings = BorgVRVolumeConversionSettings(brickSize: 4, overlap: 1,
+    useCompression: true, extensionStrategy: .clamp)
+  for rgba in [false, true] {
+    let directory = root.appendingPathComponent(rgba ? "rgba" : "rgb")
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    try image(directory, "10.png", rgba: rgba, value: 160)
+    try image(directory, "02.png", rgba: rgba, value: 40)
+    try Data("ignore sidecar".utf8).write(to: directory.appendingPathComponent("notes.txt"))
+    let output = root.appendingPathComponent("\(directory.lastPathComponent).data")
+    let request = BorgVRVolumeConversionRequest(source: .imageSequence(directory), destinationURL: output,
+      datasetDescription: "Image sequence", metaDescription: "", settings: settings,
+      physicalSizeMeters: Vec3(x: 0.2, y: 0.4, z: 0.6))
+    try BorgVRVolumeConversionService.convert(request)
+    let metadata = try BORGVRMetaData(url: output)
+    try expect(metadata.width == 2 && metadata.height == 2 && metadata.depth == 2,
+      "Image sequence dimensions changed")
+    try expect(abs(metadata.voxelSpacingX - 0.1) < 0.00001 && abs(metadata.voxelSpacingY - 0.2) < 0.00001
+      && abs(metadata.voxelSpacingZ - 0.3) < 0.00001, "Image physical extent was not retained")
+    try expect(metadata.channelInterpretation == (rgba ? .rgba : .rgb), "Incorrect image color interpretation")
+    let automatic = root.appendingPathComponent("automatic-\(directory.lastPathComponent).data")
+    let sources = try BorgVRAutomaticVolumeConversion.convert(source: directory, destination: automatic,
+      settings: settings, logger: nil, cancellationToken: BorgVRVolumeConversionCancellationToken(),
+      physicalSizeMeters: Vec3(x: 0.2, y: 0.4, z: 0.6), validateSources: { _ in })
+    let automaticMetadata = try BORGVRMetaData(url: automatic)
+    try expect(sources == [directory] && automaticMetadata.channelInterpretation == metadata.channelInterpretation,
+      "Guided image import did not preserve color or cleanup sources")
+    let ranges = rgba ? [BORGVRComponentRange(minValue: 128, maxValue: 128)] : []
+    try expect(metadata.componentRanges == ranges && metadata.brickMetadata.allSatisfy { $0.componentRanges == ranges },
+      "RGB must omit min/max; RGBA must record alpha only")
+    let flat = root.appendingPathComponent("\(directory.lastPathComponent).nrrd")
+    _ = try BORGVRVolumeExporter.export(inputURL: output, outputURL: flat, level: 0)
+    let parser = try NRRDParser(filename: flat.path)
+    defer { if parser.dataIsTempCopy { try? FileManager.default.removeItem(atPath: parser.absoluteFilename) } }
+    let bytes = try Data(contentsOf: URL(fileURLWithPath: parser.absoluteFilename))
+    let samples = Array(bytes.dropFirst(parser.offset))
+    let channels = rgba ? 4 : 3
+    try expect(abs(Int(samples[0]) - 40) <= 1 && abs(Int(samples[4 * channels]) - 160) <= 1,
+      "Slices are not sorted by filename or colors changed")
+    if rgba { try expect(samples[3] == 128, "Alpha was changed") }
+    let token = BorgVRVolumeConversionCancellationToken(); token.cancel()
+    try expectThrows("Cancelled image import succeeded") {
+      try BorgVRVolumeConversionService.convert(request, cancellationToken: token)
+    }
+    try image(directory, "11.png", rgba: rgba, value: 80, width: 3)
+    let previous = try Data(contentsOf: output)
+    try expectThrows("Mismatched slice dimensions were accepted") { try BorgVRVolumeConversionService.convert(request) }
+    let afterFailure = try Data(contentsOf: output)
+    try expect(afterFailure == previous, "Failed import replaced existing output")
+    try expectThrows("Missing physical image dimensions were accepted") {
+      try BorgVRVolumeConversionService.convert(.init(source: .imageSequence(directory), destinationURL: output,
+        datasetDescription: "", metaDescription: "", settings: settings))
+    }
+  }
+  print("Image sequence import, color ranges, order, extent, cancellation and atomic failure tests passed")
+}
+
+private func testSupportingFileAccess() throws {
+  let root = FileManager.default.temporaryDirectory.appendingPathComponent("borgvr-file-access-\(UUID())")
+  try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+  defer { try? FileManager.default.removeItem(at: root) }
+  let header = root.appendingPathComponent("scan.dat"), raw = root.appendingPathComponent("scan.dat.raw")
+  try Data("header".utf8).write(to: header)
+  let bytes = Data([1, 2, 3, 4])
+  try bytes.write(to: raw)
+  let access = VolumeImportSourceAccess(url: header, selectedURLs: [header, raw])
+  let result = try BorgVRImportFileAccess.withReadAccess(primary: access.url, supporting: raw) { try Data(contentsOf: $0) }
+  try expect(result == bytes && access.url == header, "Supporting file access changed the URL or data")
+  struct BodyError: Error {}
+  do {
+    try BorgVRImportFileAccess.withReadAccess(primary: header, supporting: raw) { _ in throw BodyError() }
+    throw TestFailure.failed("Supporting file access swallowed a conversion error")
+  } catch is BodyError {}
+  do {
+    try BorgVRImportFileAccess.withReadAccess(primary: header, supporting: root.appendingPathComponent("missing.raw")) { _ in
+      throw TestFailure.failed("Missing supporting file reached conversion")
+    }
+    throw TestFailure.failed("Missing file was accepted")
+  } catch is BorgVRImportFileAccess.Error {
+    throw TestFailure.failed("Missing file incorrectly requested sandbox permission")
+  } catch is TestFailure { throw TestFailure.failed("Missing file was accepted") }
+  catch {}
+  try FileManager.default.setAttributes([.posixPermissions: 0], ofItemAtPath: raw.path)
+  defer { try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: raw.path) }
+  do {
+    try BorgVRImportFileAccess.withReadAccess(primary: header, supporting: raw) { _ in
+      throw TestFailure.failed("Denied supporting file reached conversion")
+    }
+    throw TestFailure.failed("Unreadable supporting file was accepted")
+  } catch BorgVRImportFileAccess.Error.permissionRequired(let url) {
+    try expect(url == raw, "Permission request points to the wrong supporting file")
+  }
+  try expect(!NSFileCoordinator.filePresenters.contains { $0.presentedItemURL == raw },
+    "Related file presenter was not unregistered after failure")
+  print("Supporting file access passed: original URLs, unchanged bytes, conversion errors, missing/denied files and presenter cleanup")
+}
+
+private func testQVISColorImport() throws {
+  let root = FileManager.default.temporaryDirectory.appendingPathComponent("borgvr-qvis-color-\(UUID())")
+  try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+  defer { try? FileManager.default.removeItem(at: root) }
+  func header(_ name: String, format: String, model: String?, components: String? = nil,
+              resolution: String = "2 2 2") throws -> URL {
+    let url = root.appendingPathComponent("\(name).dat")
+    var lines = ["ObjectFileName: \(name).raw", "TaggedFileName: ---", "Resolution: \(resolution)",
+      "SliceThickness: 0.333333\t0.333333\t1", "Format: \(format)",
+      "ObjectType: TEXTURE_VOLUME_OBJECT", "GridType: EQUIDISTANT", "Endianess: LITTLE"]
+    if let model { lines.append("ObjectModel: \(model)") }
+    if let components { lines.append("Components: \(components)") }
+    try lines.joined(separator: "\n").write(to: url, atomically: true, encoding: .ascii)
+    return url
+  }
+  let visibleHuman = try header("VisibleHumanFullColor-SCANLINE-36-lz4.dat", format: "UCHAR4",
+    model: "RGBA", resolution: "1728 1008 1878")
+  let parsed = try QVISParser(filename: visibleHuman.path)
+  try expect(parsed.size == Vec3(x: 1728, y: 1008, z: 1878) && parsed.components == 4
+    && parsed.bytesPerComponent == 1 && parsed.channelInterpretation == .rgba
+    && parsed.isLittleEndian && abs(parsed.voxelSpacing.x - 0.333333) < 0.000001
+    && parsed.voxelSpacing.z == 1 && parsed.absoluteFilename.hasSuffix("-lz4.dat.raw"),
+    "Visible Human UCHAR4/RGBA header was parsed incorrectly")
+  let cases: [(String, String?, String?, Int, BORGVRChannelInterpretation)] = [
+    ("UCHAR3", "RGB", nil, 3, .rgb), ("UCHAR4", "rgba", nil, 4, .rgba),
+    ("UCHAR", "RGBA", "4", 4, .rgba), ("BYTE", "RGB", "3", 3, .rgb),
+    ("UCHAR3", nil, nil, 3, .independentChannels),
+    ("UCHAR4", "I", nil, 4, .independentChannels),
+    ("UCHAR4", "RGBA", "4", 4, .rgba)
+  ]
+  let settings = BorgVRVolumeConversionSettings(brickSize: 4, overlap: 1,
+    useCompression: true, extensionStrategy: .clamp)
+  for (index, entry) in cases.enumerated() {
+    let (format, model, count, channels, interpretation) = entry
+    let input = try header("case-\(index)", format: format, model: model, components: count)
+    let expected = Data((0..<(8 * channels)).map { UInt8($0 * 7) })
+    try expected.write(to: input.deletingPathExtension().appendingPathExtension("raw"))
+    let output = root.appendingPathComponent("case-\(index).data")
+    try BorgVRVolumeConversionService.convert(.init(source: .file(input), destinationURL: output,
+      datasetDescription: "QVIS color", metaDescription: "", settings: settings))
+    let metadata = try BORGVRMetaData(url: output)
+    try expect(metadata.channelInterpretation == interpretation && metadata.componentCount == channels,
+      "QVIS import lost the color interpretation or component count")
+    if interpretation == .rgb {
+      try expect(metadata.componentRanges.isEmpty && metadata.brickMetadata.allSatisfy { $0.componentRanges.isEmpty },
+        "QVIS RGB stored unnecessary value ranges")
+    } else if interpretation == .rgba {
+      try expect(metadata.componentRanges == [BORGVRComponentRange(minValue: 21, maxValue: 217)]
+        && metadata.brickMetadata.allSatisfy { $0.componentRanges.count == 1 }, "QVIS RGBA did not retain alpha-only bounds")
+    } else {
+      try expect(metadata.componentRanges.count == channels, "QVIS independent channels lost their bounds")
+    }
+    let flat = root.appendingPathComponent("case-\(index).nrrd")
+    _ = try BORGVRVolumeExporter.export(inputURL: output, outputURL: flat, level: 0)
+    let exported = try Data(contentsOf: flat)
+    guard let split = exported.range(of: Data("\n\n".utf8)) else { throw TestFailure.failed("Missing NRRD header") }
+    try expect(Data(exported[split.upperBound...]) == expected, "QVIS color import changed raw RGB/alpha samples")
+  }
+  for (format, model, components) in [
+    ("UCHAR3", "RGB", "4"), ("UCHAR4", "RGBA", "3"), ("UCHAR4", "RGB", "4"),
+    ("UCHAR3", "RGBA", "3"), ("USHORT", "RGBA", "4"), ("UINT", "RGB", "3"),
+    ("UCHAR", "RGBA", "1"), ("UCHAR", "I", "garbage"), ("UCHAR", "I", "0")
+  ] {
+    let input = try header("invalid", format: format, model: model, components: components)
+    try expectThrows("Invalid QVIS format/components/color model was accepted") { _ = try QVISParser(filename: input.path) }
+  }
+  print("QVIS UCHAR3/UCHAR4 RGB/RGBA import, alpha bounds, raw payload and header validation passed")
+}
+
+private func testNRRDChannelInterpretationRoundTrip() throws {
+  let root = FileManager.default.temporaryDirectory
+    .appendingPathComponent("borgvr-nrrd-color-tests-\(UUID().uuidString)")
+  try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+  defer { try? FileManager.default.removeItem(at: root) }
+  let settings = BorgVRVolumeConversionSettings(
+    brickSize: 4, overlap: 1, useCompression: false, extensionStrategy: .clamp)
+
+  func writeNRRD(name: String, kind: String, channels: Int, width: Int = 1) throws -> URL {
+    let url = root.appendingPathComponent("\(name).nrrd")
+    let header = [
+      "NRRD0005", "type: uint\(width * 8)", "dimension: 4",
+      "sizes: \(channels) 2 2 2", "spacings: nan 1 1 1",
+      "kinds: \(kind) domain domain domain", "endian: little", "encoding: raw"
+    ].joined(separator: "\n") + "\n\n"
+    let payload = Data((0..<(8 * channels * width)).map { UInt8(truncatingIfNeeded: $0 * 7) })
+    try (Data(header.utf8) + payload).write(to: url)
+    return url
+  }
+
+  func convert(_ input: URL, to output: URL) throws -> BORGVRMetaData {
+    try BorgVRVolumeConversionService.convert(.init(
+      source: .file(input), destinationURL: output,
+      datasetDescription: "NRRD channel interpretation test", metaDescription: "", settings: settings))
+    return try BORGVRMetaData(url: output)
+  }
+
+  let cases: [(kind: String, channels: Int, interpretation: BORGVRChannelInterpretation)] = [
+    ("RGB-color", 3, .rgb), ("RGBA-color", 4, .rgba),
+    ("vector", 3, .independentChannels), ("vector", 4, .independentChannels)
+  ]
+  for test in cases {
+    let name = "\(test.kind)-\(test.channels)"
+    let source = try writeNRRD(name: name, kind: test.kind, channels: test.channels)
+    let imported = root.appendingPathComponent("\(name).data")
+    let metadata = try convert(source, to: imported)
+    try expect(metadata.channelInterpretation == test.interpretation,
+      "\(name): import lost the explicit channel interpretation")
+
+    let exported = root.appendingPathComponent("\(name)-exported.nrrd")
+    _ = try BORGVRVolumeExporter.export(inputURL: imported, outputURL: exported, level: 0)
+    let bytes = try Data(contentsOf: exported)
+    guard let split = bytes.range(of: Data("\n\n".utf8)) else {
+      throw TestFailure.failed("\(name): exported NRRD has no header terminator")
+    }
+    let fields = String(decoding: bytes[..<split.lowerBound], as: UTF8.self)
+      .components(separatedBy: "\n")
+    try expect(fields.contains("kinds: \(test.kind) domain domain domain"),
+      "\(name): export changed the NRRD channel kind")
+    try expect(fields.contains("dimension: 4") && fields.contains("sizes: \(test.channels) 2 2 2"),
+      "\(name): export changed the component-first layout")
+    let expected = Data((0..<(8 * test.channels)).map { UInt8($0 * 7) })
+    try expect(Data(bytes[split.upperBound...]) == expected,
+      "\(name): color/vector export changed interleaved samples")
+
+    let reimported = try convert(exported, to: root.appendingPathComponent("\(name)-reimported.data"))
+    try expect(reimported.channelInterpretation == test.interpretation,
+      "\(name): reimport lost the channel interpretation")
+    for result in [metadata, reimported] {
+      try expect(result.width == 2 && result.height == 2 && result.depth == 2
+        && result.componentCount == test.channels && result.bytesPerComponent == 1,
+        "\(name): import/reimport changed dimensions or sample layout")
+    }
+  }
+
+  for (name, kind, channels, width) in [
+    ("rgb-four-channels", "RGB-color", 4, 1),
+    ("rgb-sixteen-bit", "RGB-color", 3, 2),
+    ("rgba-sixteen-bit", "RGBA-color", 4, 2)
+  ] {
+    let source = try writeNRRD(name: name, kind: kind, channels: channels, width: width)
+    try expectThrows("\(name): invalid NRRD color layout was accepted") {
+      _ = try convert(source, to: root.appendingPathComponent("\(name).data"))
+    }
+  }
 }
 
 private func testRawConversionAndAtomicReplacement() throws {
@@ -376,6 +668,106 @@ private func testRawConversionAndAtomicReplacement() throws {
   let temporaryFiles = try FileManager.default.contentsOfDirectory(atPath: directory.path)
     .filter { $0.hasSuffix(".tmp") }
   try expect(temporaryFiles.isEmpty, "Conversion left staged files behind")
+}
+
+@MainActor
+private func testRGBAEditing() async throws {
+  let root = FileManager.default.temporaryDirectory.appendingPathComponent("borgvr-rgba-edits-\(UUID())")
+  try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+  defer { try? FileManager.default.removeItem(at: root) }
+  let size = Vec3<Int>(x: 7, y: 5, z: 3)
+  let spacing = Vec3<Float>(x: 0.1, y: 0.2, z: 0.3)
+  let original = (0..<(size.x * size.y * size.z)).flatMap { voxel in
+    [UInt8(voxel % 101 + 20), UInt8(voxel % 71 + 90), UInt8(voxel % 31 + 180), UInt8(192)]
+  }
+  let settings = BorgVRVolumeConversionSettings(brickSize: 4, overlap: 1,
+    useCompression: true, extensionStrategy: .clamp)
+  func convert(_ bytes: [UInt8], name: String) throws -> BORGVRFileData {
+    let raw = root.appendingPathComponent(name + ".raw"), output = root.appendingPathComponent(name + ".data")
+    try Data(bytes).write(to: raw)
+    try BorgVRVolumeConversionService.convert(.init(source: .raw(.init(url: raw, offset: 0,
+      size: size, bytesPerComponent: 1, componentCount: 4, voxelSpacing: spacing, channelInterpretation: .rgba)),
+      destinationURL: output, datasetDescription: name, metaDescription: "", settings: settings))
+    return try BORGVRFileData(filename: output.path)
+  }
+  let source = try convert(original, name: "source"), m = source.getMetadata()
+  let sample = BorgVRVolumeBrushSample(center: SIMD3(0.35, 0.4, 0.45), radius: 0.29)
+  let physicalSpacing = SIMD3(Double(m.voxelSpacingX), Double(m.voxelSpacingY), Double(m.voxelSpacingZ))
+  var expected = original
+  for z in 0..<size.z { for y in 0..<size.y { for x in 0..<size.x {
+    let d = (SIMD3<Double>(SIMD3(x, y, z)) + SIMD3(repeating: 0.5)) * physicalSpacing - sample.center
+    if d.x * d.x + d.y * d.y + d.z * d.z <= sample.radius * sample.radius {
+      expected[((z * size.y + y) * size.x + x) * 4 + 3] = 0
+    }
+  } } }
+  try expect(expected != original, "RGBA edit fixture did not erase any voxels")
+  let oracle = try convert(expected, name: "oracle")
+  func bytes(_ dataset: BORGVRDatasetProtocol, _ index: Int) throws -> [UInt8] {
+    let buffer = dataset.allocateBrickBuffer()
+    defer { buffer.deallocate() }
+    try dataset.getBrick(index: index, outputBuffer: buffer)
+    return Array(UnsafeBufferPointer(start: buffer, count: 4 * 4 * 4 * 4))
+  }
+  func compare(_ dataset: BORGVRDatasetProtocol, to expected: BORGVRDatasetProtocol) throws {
+    for id in m.brickMetadata.indices {
+      let actual = try bytes(dataset, id), reference = try bytes(expected, id)
+      try expect(actual == reference, "RGBA edit differs from dense oracle at brick \(id)")
+      try expect(dataset.visibilityMetadata(index: id)?.componentRanges == expected.visibilityMetadata(index: id)?.componentRanges,
+        "RGBA visibility does not contain exactly the edited alpha range")
+    }
+  }
+  var mask = try BorgVRVolumeEditMask(size: SIMD3(size.x, size.y, size.z), spacing: physicalSpacing, componentCount: 4)
+  try mask.apply(sample, mode: .erase, channels: .selected([3]))
+  let cpu = try BorgVRCPUVolumeEditExecutor(source: source, border: .clamp)
+  for gpu in [false, true] {
+    let builder = try BorgVRVolumeEditMaterializer(source: source, usesMetal: gpu)
+    for id in m.brickMetadata.indices.reversed() {
+      let result = try builder.materialize(index: id, mask: mask, revision: 1, revisions: nil,
+        useGPU: gpu, cached: { _, _ in nil }, store: { _ in }, isCancelled: { false })
+      let reference = try cpu.materialize(index: id, mask: mask, revision: 1)
+      let expectedBytes = try bytes(oracle, id)
+      let difference = result.bytes.indices.first { result.bytes[$0] != expectedBytes[$0] }
+      try expect(result.bytes == expectedBytes,
+        "RGBA dense oracle differs: GPU \(gpu), brick \(id), byte \(difference ?? -1), got \(difference.map { result.bytes[$0] } ?? 0), expected \(difference.map { expectedBytes[$0] } ?? 0), CPU \(difference.map { reference.bytes[$0] } ?? 0)")
+      try expect(result.bytes == reference.bytes, "RGBA CPU/Metal bytes differ: GPU \(gpu), brick \(id)")
+      try expect(result.componentRanges == oracle.getMetadata().brickMetadata[id].componentRanges,
+        "RGBA alpha ranges differ: GPU \(gpu), brick \(id), got \(result.componentRanges), expected \(oracle.getMetadata().brickMetadata[id].componentRanges)")
+      try expect(result.componentRanges == reference.componentRanges, "RGBA CPU/Metal ranges differ: GPU \(gpu), brick \(id)")
+    }
+    if gpu, MTLCreateSystemDefaultDevice() != nil { try expect(builder.metalBrickCount > 0, "RGBA edits did not use Metal") }
+  }
+  var erasedMask = try BorgVRVolumeEditMask(size: mask.size, spacing: physicalSpacing, componentCount: 4)
+  try erasedMask.apply(.init(center: .zero, radius: 100), mode: .erase)
+  let builder = try BorgVRVolumeEditMaterializer(source: source)
+  let erased = try builder.materialize(index: 0, mask: erasedMask, revision: 1)
+  try expect(erased.componentRanges == [.init(minValue: 0, maxValue: 0)] && erased.bytes.allSatisfy { $0 == 0 },
+    "Fully erased RGBA brick has the wrong alpha range layout")
+
+  let model = VolumeBrushModel()
+  defer { model.close() }
+  let sourceURL = root.appendingPathComponent("source.data")
+  let edited = model.open(source, datasetURL: sourceURL)
+  try await model.waitForStateReady()
+  try expect(model.channels == .selected([3]) && model.channelInterpretation == .rgba,
+    "RGBA UI must erase alpha and preserve straight RGB colors")
+  try await model.editVolume(mode: .erase, samples: [sample])
+  try await model.prepareVolumeEdits()
+  try compare(edited, to: oracle)
+  let exported = root.appendingPathComponent("edited.data")
+  let job = try model.startVolumeExport(to: exported, name: nil, description: nil)
+  _ = try await model.waitForVolumeExport(id: job.id)
+  let baked = try BORGVRFileData(filename: exported.path)
+  try expect(baked.getMetadata().channelInterpretation == .rgba && baked.getMetadata().componentRanges.count == 1,
+    "RGBA edit export lost color interpretation or alpha-only ranges")
+  try compare(baked, to: oracle)
+  model.close()
+  let reopened = model.open(source, datasetURL: sourceURL)
+  try await model.waitForStateReady()
+  try compare(reopened, to: oracle)
+  try await model.editVolume(mode: .restore, samples: [sample])
+  try await model.prepareVolumeEdits()
+  try compare(reopened, to: source)
+  print("RGBA editing passed: alpha-only erase/restore, odd LODs, CPU/Metal, cache reopen and data export")
 }
 
 private func testDICOMFusionInterleavesChannels() throws {
@@ -1561,6 +1953,7 @@ private enum VolumeConversionServiceTestRunner {
       try profileExistingEditState(directory: URL(fileURLWithPath: directory), dataset: URL(fileURLWithPath: dataset))
       return
     }
+    try await testRGBAEditing()
     try runAutoImporterTests()
     try testSettingsAndCancellation()
     try testVolumeQuantization()
@@ -1571,7 +1964,12 @@ private enum VolumeConversionServiceTestRunner {
     try I3MParserTests.run()
     try testDICOMFusionInterleavesChannels()
     try testDICOMImportHistory()
+    try testPhysicalSizeOverrides()
     try testNRRDProvenanceExport()
+    try testNRRDChannelInterpretationRoundTrip()
+    try testQVISColorImport()
+    try testSupportingFileAccess()
+    try testImageSequences()
     try testEmptyDICOMDirectory()
     try testIntegerVolumeSamplerHandlesInterpolationAndPadding()
     try testDICOMFusionTreatsMovingPaddingAsMissing()

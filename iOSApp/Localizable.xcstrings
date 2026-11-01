@@ -1,938 +1,35 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
-    "dataset_info_provenance": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Provenance"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Herkunft und Verarbeitung"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Origen y procesamiento"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Origine et traitement"
-          }
+  "converter_supporting_file_access_required": {
+    "extractionState": "manual",
+    "localizations": {
+      "en": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "Read access to the referenced file is required: %@"
+        }
+      },
+      "de": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "Leserechte für die referenzierte Datei werden benötigt: %@"
+        }
+      },
+      "es": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "Se necesita permiso de lectura para el archivo referenciado: %@"
+        }
+      },
+      "fr": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "L’accès en lecture au fichier référencé est nécessaire : %@"
         }
       }
-    },
-    "dataset_info_no_provenance": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "No provenance recorded."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Keine Herkunftsdaten gespeichert."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "No se ha registrado la procedencia."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Aucune provenance enregistrée."
-          }
-        }
-      }
-    },
-    "converter_received_on": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Received on"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Erhalten am"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Fecha de recepción"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Reçu le"
-          }
-        }
-      }
-    },
-    "converter_source_note": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Source / origin (optional)"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Quelle / Herkunft (optional)"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Fuente / procedencia (opcional)"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Source / provenance (facultatif)"
-          }
-        }
-      }
-    },
-    "The volume brush parameters are invalid.": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "The volume brush parameters are invalid."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Die Parameter des Volumenpinsels sind ungültig."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Los parámetros del pincel de volumen no son válidos."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Les paramètres du pinceau de volume ne sont pas valides."
-          }
-        }
-      }
-    },
-    "The edit state contains invalid volume geometry.": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "The edit state contains invalid volume geometry."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Der Bearbeitungsstand enthält ungültige Volumengeometrie."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "El estado de edición contiene una geometría de volumen no válida."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "L’état de modification contient une géométrie de volume non valide."
-          }
-        }
-      }
-    },
-    "The edit state revision is invalid.": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "The edit state revision is invalid."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Die Revision des Bearbeitungsstands ist ungültig."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "La revisión del estado de edición no es válida."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "La révision de l’état de modification n’est pas valide."
-          }
-        }
-      }
-    },
-    "The edit state refers to an invalid volume brick.": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "The edit state refers to an invalid volume brick."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Der Bearbeitungsstand verweist auf einen ungültigen Volumenblock."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "El estado de edición hace referencia a un bloque de volumen no válido."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "L’état de modification fait référence à un bloc de volume non valide."
-          }
-        }
-      }
-    },
-    "The edit state contains an invalid data buffer.": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "The edit state contains an invalid data buffer."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Der Bearbeitungsstand enthält einen ungültigen Datenpuffer."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "El estado de edición contiene un búfer de datos no válido."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "L’état de modification contient un tampon de données non valide."
-          }
-        }
-      }
-    },
-    "The edit state is damaged or incomplete.": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "The edit state is damaged or incomplete."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Der Bearbeitungsstand ist beschädigt oder unvollständig."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "El estado de edición está dañado o incompleto."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "L’état de modification est endommagé ou incomplet."
-          }
-        }
-      }
-    },
-    "The edit state does not match this dataset.": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "The edit state does not match this dataset."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Der Bearbeitungsstand passt nicht zu diesem Datensatz."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "El estado de edición no corresponde a este conjunto de datos."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "L’état de modification ne correspond pas à ce jeu de données."
-          }
-        }
-      }
-    },
-    "Volume editing is temporarily unavailable.": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Volume editing is temporarily unavailable."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Die Volumenbearbeitung ist vorübergehend nicht verfügbar."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "La edición de volumen no está disponible temporalmente."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "La modification du volume est temporairement indisponible."
-          }
-        }
-      }
-    },
-    "Edit state format version %lld is not supported by this version of BorgVR.": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Edit state format version %lld is not supported by this version of BorgVR."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Bearbeitungsstände im Dateiformat %lld werden von dieser BorgVR-Version nicht unterstützt."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Esta versión de BorgVR no admite la versión %lld del formato de estados de edición."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cette version de BorgVR ne prend pas en charge la version %lld du format des états de modification."
-          }
-        }
-      }
-    },
-    "No editable dataset is open.": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "No editable dataset is open."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Es ist kein bearbeitbarer Datensatz geöffnet."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "No hay ningún conjunto de datos editable abierto."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Aucun jeu de données modifiable n’est ouvert."
-          }
-        }
-      }
-    },
-    "A conflicting volume-edit operation is already active.": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "A conflicting volume-edit operation is already active."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Es läuft bereits eine andere Volumenbearbeitung, die diesen Vorgang blockiert."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ya hay una operación de edición de volumen incompatible en curso."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Une autre opération de modification du volume bloque cette action."
-          }
-        }
-      }
-    },
-    "The requested export is not the current export job.": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "The requested export is not the current export job."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Der angeforderte Export ist nicht der aktuelle Exportauftrag."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "La exportación solicitada no es la tarea de exportación actual."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "L’export demandé n’est pas la tâche d’export actuelle."
-          }
-        }
-      }
-    },
-    "Volume edits did not finish before the timeout.": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Volume edits did not finish before the timeout."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Die Volumenbearbeitung wurde nicht innerhalb des Zeitlimits abgeschlossen."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Las modificaciones del volumen no finalizaron dentro del tiempo límite."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Les modifications du volume ne se sont pas terminées dans le délai imparti."
-          }
-        }
-      }
-    },
-    "The selected edit state could not be opened: %@\nThe original dataset has been opened instead. Your saved edits have not been changed.": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "The selected edit state could not be opened: %@\nThe original dataset has been opened instead. Your saved edits have not been changed."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Der gewählte Bearbeitungsstand konnte nicht geöffnet werden: %@\nStattdessen wurde der Originaldatensatz geöffnet. Ihre gespeicherten Bearbeitungen wurden nicht verändert."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "No se pudo abrir el estado de edición seleccionado: %@\nSe ha abierto el conjunto de datos original. Las modificaciones guardadas no han cambiado."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Impossible d’ouvrir l’état de modification sélectionné : %@\nLe jeu de données original a été ouvert à la place. Vos modifications enregistrées n’ont pas été modifiées."
-          }
-        }
-      }
-    },
-    "Import settings": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Import settings"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Einstellungen importieren"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Importar ajustes"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Importer les réglages"
-          }
-        }
-      }
-    },
-    "Export settings": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Export settings"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Einstellungen exportieren"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Exportar ajustes"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Exporter les réglages"
-          }
-        }
-      }
-    },
-    "Settings files": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Settings files"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Einstellungsdateien"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Archivos de ajustes"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Fichiers de réglages"
-          }
-        }
-      }
-    },
-    "Import settings?": {
-      "generatesSymbol": false,
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Import settings?"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Einstellungen importieren?"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "¿Importar ajustes?"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Importer les réglages ?"
-          }
-        }
-      }
-    },
-    "Include passwords, access tokens, and certificates": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Include passwords, access tokens, and certificates"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Passwörter, Zugriffstoken und Zertifikate einschließen"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Incluir contraseñas, tokens de acceso y certificados"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Inclure les mots de passe, jetons d’accès et certificats"
-          }
-        }
-      }
-    },
-    "Settings files are unencrypted JSON. Included credentials can be read by anyone with access to the file. Device-specific folder permissions and caches are not exported.": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Settings files are unencrypted JSON. Included credentials can be read by anyone with access to the file. Device-specific folder permissions and caches are not exported."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Einstellungsdateien enthalten unverschlüsseltes JSON. Enthaltene Zugangsdaten sind für jeden lesbar, der Zugriff auf die Datei hat. Gerätespezifische Ordnerfreigaben und Caches werden nicht exportiert."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Los archivos de ajustes son JSON sin cifrar. Cualquier persona con acceso al archivo puede leer las credenciales incluidas. No se exportan los permisos de carpetas ni las cachés específicos del dispositivo."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Les fichiers de réglages sont au format JSON non chiffré. Toute personne ayant accès au fichier peut lire les identifiants inclus. Les autorisations de dossiers et les caches propres à l’appareil ne sont pas exportés."
-          }
-        }
-      }
-    },
-    "Apply the settings in this file? Missing and unsupported settings stay unchanged. This can also change network services, remote-control access, and stored credentials.": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Apply the settings in this file? Missing and unsupported settings stay unchanged. This can also change network services, remote-control access, and stored credentials."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Einstellungen aus dieser Datei übernehmen? Fehlende und nicht unterstützte Einstellungen bleiben unverändert. Dabei können auch Netzwerkdienste, Fernsteuerungszugriff und gespeicherte Zugangsdaten geändert werden."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "¿Aplicar los ajustes de este archivo? Los ajustes ausentes o no compatibles no se modificarán. Esto también puede cambiar los servicios de red, el acceso de control remoto y las credenciales guardadas."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Appliquer les réglages de ce fichier ? Les réglages absents ou non pris en charge restent inchangés. Cela peut aussi modifier les services réseau, l’accès à distance et les identifiants enregistrés."
-          }
-        }
-      }
-    },
-    "Imported %lld settings; ignored %lld unsupported entries.": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Imported %lld settings; ignored %lld unsupported entries."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld Einstellungen importiert; %lld nicht unterstützte Einträge ignoriert."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Se han importado %lld ajustes; se han ignorado %lld entradas no compatibles."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld réglages importés ; %lld entrées non prises en charge ignorées."
-          }
-        }
-      }
-    },
-    "This is not a valid BorgVR settings file.": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "This is not a valid BorgVR settings file."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Dies ist keine gültige BorgVR-Einstellungsdatei."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Este archivo de ajustes de BorgVR no es válido."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ce fichier de réglages BorgVR n’est pas valide."
-          }
-        }
-      }
-    },
-    "Invalid setting: %@": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Invalid setting: %@"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ungültige Einstellung: %@"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ajuste no válido: %@"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Réglage non valide : %@"
-          }
-        }
-      }
-    },
-    "This setting is not supported on this device.": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "This setting is not supported on this device."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Diese Einstellung wird auf diesem Gerät nicht unterstützt."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Este ajuste no es compatible con este dispositivo."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ce réglage n’est pas pris en charge sur cet appareil."
-          }
-        }
-      }
-    },
-    "Quantize imports to 8 bits per channel": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": { "stringUnit": { "state": "translated", "value": "Quantize imports to 8 bits per channel" } },
-        "de": { "stringUnit": { "state": "translated", "value": "Importe auf 8 Bit pro Kanal quantisieren" } },
-        "es": { "stringUnit": { "state": "translated", "value": "Cuantizar importaciones a 8 bits por canal" } },
-        "fr": { "stringUnit": { "state": "translated", "value": "Quantifier les imports sur 8 bits par canal" } }
-      }
-    },
-    "Maps each channel's value range to 0...255, permanently reducing intensity precision. Existing 8-bit data is unchanged.": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": { "stringUnit": { "state": "translated", "value": "Maps each channel's value range to 0...255, permanently reducing intensity precision. Existing 8-bit data is unchanged." } },
-        "de": { "stringUnit": { "state": "translated", "value": "Bildet den Wertebereich jedes Kanals auf 0...255 ab und reduziert dauerhaft die Intensitätspräzision. Vorhandene 8-Bit-Daten bleiben unverändert." } },
-        "es": { "stringUnit": { "state": "translated", "value": "Ajusta el rango de valores de cada canal a 0...255, reduciendo permanentemente la precisión de intensidad. Los datos existentes de 8 bits no cambian." } },
-        "fr": { "stringUnit": { "state": "translated", "value": "Ramène la plage de valeurs de chaque canal à 0...255, en réduisant définitivement la précision des intensités. Les données existantes sur 8 bits restent inchangées." } }
-      }
-    },
-    "DICOM fusion interpolation": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": { "stringUnit": { "state": "translated", "value": "DICOM fusion interpolation" } },
-        "de": { "stringUnit": { "state": "translated", "value": "Interpolation bei DICOM-Fusion" } },
-        "es": { "stringUnit": { "state": "translated", "value": "Interpolación de la fusión DICOM" } },
-        "fr": { "stringUnit": { "state": "translated", "value": "Interpolation de la fusion DICOM" } }
-      }
-    },
-    "DICOM Fusion": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": { "stringUnit": { "state": "translated", "value": "DICOM Fusion" } },
-        "de": { "stringUnit": { "state": "translated", "value": "DICOM-Fusion" } },
-        "es": { "stringUnit": { "state": "translated", "value": "Fusión DICOM" } },
-        "fr": { "stringUnit": { "state": "translated", "value": "Fusion DICOM" } }
-      }
-    },
-    "Reference series": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": { "stringUnit": { "state": "translated", "value": "Reference series" } },
-        "de": { "stringUnit": { "state": "translated", "value": "Referenzserie" } },
-        "es": { "stringUnit": { "state": "translated", "value": "Serie de referencia" } },
-        "fr": { "stringUnit": { "state": "translated", "value": "Série de référence" } }
-      }
-    },
-    "Series to register": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": { "stringUnit": { "state": "translated", "value": "Series to register" } },
-        "de": { "stringUnit": { "state": "translated", "value": "Zu registrierende Serie" } },
-        "es": { "stringUnit": { "state": "translated", "value": "Serie por registrar" } },
-        "fr": { "stringUnit": { "state": "translated", "value": "Série à recaler" } }
-      }
-    },
-    "Resampling": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": { "stringUnit": { "state": "translated", "value": "Resampling" } },
-        "de": { "stringUnit": { "state": "translated", "value": "Abtastung" } },
-        "es": { "stringUnit": { "state": "translated", "value": "Remuestreo" } },
-        "fr": { "stringUnit": { "state": "translated", "value": "Rééchantillonnage" } }
-      }
-    },
-    "Trilinear": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": { "stringUnit": { "state": "translated", "value": "Trilinear" } },
-        "de": { "stringUnit": { "state": "translated", "value": "Trilinear" } },
-        "es": { "stringUnit": { "state": "translated", "value": "Trilineal" } },
-        "fr": { "stringUnit": { "state": "translated", "value": "Trilinéaire" } }
-      }
-    },
-    "Nearest Neighbor": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": { "stringUnit": { "state": "translated", "value": "Nearest Neighbor" } },
-        "de": { "stringUnit": { "state": "translated", "value": "Nearest Neighbor" } },
-        "es": { "stringUnit": { "state": "translated", "value": "Vecino más cercano" } },
-        "fr": { "stringUnit": { "state": "translated", "value": "Plus proche voisin" } }
-      }
-    },
-    "No directory selected": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": { "stringUnit": { "state": "translated", "value": "No directory selected" } },
-        "de": { "stringUnit": { "state": "translated", "value": "Kein Ordner ausgewählt" } },
-        "es": { "stringUnit": { "state": "translated", "value": "Ninguna carpeta seleccionada" } },
-        "fr": { "stringUnit": { "state": "translated", "value": "Aucun dossier sélectionné" } }
-      }
-    },
+    }
+  },
     "" : {
 
     },
@@ -1104,6 +201,35 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "1 LOD"
+          }
+        }
+      }
+    },
+    "A conflicting volume-edit operation is already active." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Es läuft bereits eine andere Volumenbearbeitung, die diesen Vorgang blockiert."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A conflicting volume-edit operation is already active."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ya hay una operación de edición de volumen incompatible en curso."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Une autre opération de modification du volume bloque cette action."
           }
         }
       }
@@ -1834,6 +960,35 @@
         }
       }
     },
+    "Alpha epsilon" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alpha-Epsilon"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Alpha epsilon"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Épsilon alfa"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Epsilon alpha"
+          }
+        }
+      }
+    },
     "Ambient light" : {
       "localizations" : {
         "de" : {
@@ -1914,6 +1069,35 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Apparence"
+          }
+        }
+      }
+    },
+    "Apply the settings in this file? Missing and unsupported settings stay unchanged. This can also change network services, remote-control access, and stored credentials." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Einstellungen aus dieser Datei übernehmen? Fehlende und nicht unterstützte Einstellungen bleiben unverändert. Dabei können auch Netzwerkdienste, Fernsteuerungszugriff und gespeicherte Zugangsdaten geändert werden."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apply the settings in this file? Missing and unsupported settings stay unchanged. This can also change network services, remote-control access, and stored credentials."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Aplicar los ajustes de este archivo? Los ajustes ausentes o no compatibles no se modificarán. Esto también puede cambiar los servicios de red, el acceso de control remoto y las credenciales guardadas."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Appliquer les réglages de ce fichier ? Les réglages absents ou non pris en charge restent inchangés. Cela peut aussi modifier les services réseau, l’accès à distance et les identifiants enregistrés."
           }
         }
       }
@@ -2748,6 +1932,35 @@
         }
       }
     },
+    "Bricks with TF alpha below this threshold may be skipped. The transfer function stays unchanged. Zero disables the threshold." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bricks mit TF-Alpha unterhalb dieses Schwellwerts können übersprungen werden. Die Transferfunktion bleibt unverändert. Bei 0 ist der Schwellwert deaktiviert."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bricks with TF alpha below this threshold may be skipped. The transfer function stays unchanged. Zero disables the threshold."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los bloques con alfa TF inferior a este umbral pueden omitirse. La función de transferencia no cambia. El valor 0 desactiva el umbral."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les briques dont l’alpha TF est inférieur à ce seuil peuvent être ignorées. La fonction de transfert reste inchangée. La valeur 0 désactive le seuil."
+          }
+        }
+      }
+    },
     "Brush" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2833,35 +2046,6 @@
         }
       }
     },
-    "Cancel opens the dataset immediately; pending edits continue in the background.": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cancel opens the dataset immediately; pending edits continue in the background."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Abbrechen öffnet den Datensatz sofort; ausstehende Bearbeitungen werden im Hintergrund fortgesetzt."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Annuler ouvre immédiatement le jeu de données ; les modifications en attente se poursuivent en arrière-plan."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cancelar abre el conjunto de datos de inmediato; las ediciones pendientes continúan en segundo plano."
-          }
-        }
-      }
-    },
     "Cancel" : {
       "localizations" : {
         "de" : {
@@ -2886,6 +2070,35 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Annuler"
+          }
+        }
+      }
+    },
+    "Cancel opens the dataset immediately; pending edits continue in the background." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abbrechen öffnet den Datensatz sofort; ausstehende Bearbeitungen werden im Hintergrund fortgesetzt."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cancel opens the dataset immediately; pending edits continue in the background."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cancelar abre el conjunto de datos de inmediato; las ediciones pendientes continúan en segundo plano."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Annuler ouvre immédiatement le jeu de données ; les modifications en attente se poursuivent en arrière-plan."
           }
         }
       }
@@ -3804,6 +3017,64 @@
         }
       }
     },
+    "converter_received_on" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Erhalten am"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Received on"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fecha de recepción"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reçu le"
+          }
+        }
+      }
+    },
+    "converter_source_note" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quelle / Herkunft (optional)"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Source / origin (optional)"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fuente / procedencia (opcional)"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Source / provenance (facultatif)"
+          }
+        }
+      }
+    },
     "Copy access token" : {
       "localizations" : {
         "de" : {
@@ -4496,6 +3767,35 @@
         }
       }
     },
+    "dataset_info_no_provenance" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keine Herkunftsdaten gespeichert."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No provenance recorded."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se ha registrado la procedencia."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aucune provenance enregistrée."
+          }
+        }
+      }
+    },
     "dataset_info_password_protected" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -4579,6 +3879,35 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Source privée, non partagée via SharePlay"
+          }
+        }
+      }
+    },
+    "dataset_info_provenance" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Herkunft und Verarbeitung"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Provenance"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Origen y procesamiento"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Origine et traitement"
           }
         }
       }
@@ -5619,6 +4948,64 @@
         }
       }
     },
+    "DICOM Fusion" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "DICOM-Fusion"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "DICOM Fusion"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fusión DICOM"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fusion DICOM"
+          }
+        }
+      }
+    },
+    "DICOM fusion interpolation" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Interpolation bei DICOM-Fusion"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "DICOM fusion interpolation"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Interpolación de la fusión DICOM"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Interpolation de la fusion DICOM"
+          }
+        }
+      }
+    },
     "Diffuse light" : {
       "localizations" : {
         "de" : {
@@ -6105,6 +5492,35 @@
         }
       }
     },
+    "Edit state format version %lld is not supported by this version of BorgVR." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bearbeitungsstände im Dateiformat %lld werden von dieser BorgVR-Version nicht unterstützt."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Edit state format version %lld is not supported by this version of BorgVR."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Esta versión de BorgVR no admite la versión %lld del formato de estados de edición."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cette version de BorgVR ne prend pas en charge la version %lld du format des états de modification."
+          }
+        }
+      }
+    },
     "Edit Volume" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -6447,6 +5863,35 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Exporter le volume modifié"
+          }
+        }
+      }
+    },
+    "Export settings" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Einstellungen exportieren"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Export settings"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exportar ajustes"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exporter les réglages"
           }
         }
       }
@@ -7105,6 +6550,180 @@
         }
       }
     },
+    "image_sequence_dimensions" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Bildgröße weicht von den anderen Schichten ab: %@."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Image dimensions differ from the other slices: %@."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Las dimensiones de la imagen difieren de los otros cortes: %@."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les dimensions de l’image diffèrent des autres coupes : %@."
+          }
+        }
+      }
+    },
+    "image_sequence_empty" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der Ordner enthält keine unterstützten Bilder."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The folder contains no supported images."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La carpeta no contiene imágenes compatibles."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le dossier ne contient aucune image prise en charge."
+          }
+        }
+      }
+    },
+    "image_sequence_invalid" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aus %@ kann keine einzelne Bildschicht gelesen werden."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cannot read a single image slice from %@."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se puede leer una única imagen de corte de %@."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossible de lire une image de coupe unique dans %@."
+          }
+        }
+      }
+    },
+    "image_sequence_select" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bildordner auswählen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Select image folder"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Seleccionar carpeta de imágenes"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choisir le dossier d’images"
+          }
+        }
+      }
+    },
+    "image_sequence_size" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Volumengröße in Metern (X / Y / Z)"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Volume size in meters (X / Y / Z)"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tamaño del volumen en metros (X / Y / Z)"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dimensions du volume en mètres (X / Y / Z)"
+          }
+        }
+      }
+    },
+    "image_sequence_title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bildsequenz"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Image sequence"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Secuencia de imágenes"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Séquence d’images"
+          }
+        }
+      }
+    },
     "Import" : {
       "localizations" : {
         "de" : {
@@ -7306,6 +6925,94 @@
         }
       }
     },
+    "Import settings" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Einstellungen importieren"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Import settings"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Importar ajustes"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Importer les réglages"
+          }
+        }
+      }
+    },
+    "Import settings?" : {
+      "extractionState" : "manual",
+      "generatesSymbol" : false,
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Einstellungen importieren?"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Import settings?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Importar ajustes?"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Importer les réglages ?"
+          }
+        }
+      }
+    },
+    "Imported %lld settings; ignored %lld unsupported entries." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld Einstellungen importiert; %lld nicht unterstützte Einträge ignoriert."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Imported %lld settings; ignored %lld unsupported entries."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se han importado %lld ajustes; se han ignorado %lld entradas no compatibles."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld réglages importés ; %lld entrées non prises en charge ignorées."
+          }
+        }
+      }
+    },
     "Imported with BorgVR Mobile" : {
       "localizations" : {
         "de" : {
@@ -7330,6 +7037,35 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Importé avec BorgVR Mobile"
+          }
+        }
+      }
+    },
+    "Include passwords, access tokens, and certificates" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Passwörter, Zugriffstoken und Zertifikate einschließen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Include passwords, access tokens, and certificates"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Incluir contraseñas, tokens de acceso y certificados"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inclure les mots de passe, jetons d’accès et certificats"
           }
         }
       }
@@ -7868,6 +7604,35 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Visualisation interactive de jeux de données volumétriques sur iPhone et iPad"
+          }
+        }
+      }
+    },
+    "Invalid setting: %@" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ungültige Einstellung: %@"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Invalid setting: %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajuste no válido: %@"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Réglage non valide : %@"
           }
         }
       }
@@ -8977,6 +8742,39 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Demander le LOD basse résolution"
+          }
+        }
+      }
+    },
+    "m" : {
+      "comment" : "Labels for the X, Y, and Z dimensions of an image sequence.",
+      "isCommentAutoGenerated" : true
+    },
+    "Maps each channel's value range to 0...255, permanently reducing intensity precision. Existing 8-bit data is unchanged." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bildet den Wertebereich jedes Kanals auf 0...255 ab und reduziert dauerhaft die Intensitätspräzision. Vorhandene 8-Bit-Daten bleiben unverändert."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Maps each channel's value range to 0...255, permanently reducing intensity precision. Existing 8-bit data is unchanged."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajusta el rango de valores de cada canal a 0...255, reduciendo permanentemente la precisión de intensidad. Los datos existentes de 8 bits no cambian."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ramène la plage de valeurs de chaque canal à 0...255, en réduisant définitivement la précision des intensités. Les données existantes sur 8 bits restent inchangées."
           }
         }
       }
@@ -10801,6 +10599,35 @@
         }
       }
     },
+    "Nearest Neighbor" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nearest Neighbor"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nearest Neighbor"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vecino más cercano"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Plus proche voisin"
+          }
+        }
+      }
+    },
     "network" : {
       "localizations" : {
         "de" : {
@@ -10939,6 +10766,64 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Aucun jeu de données trouvé"
+          }
+        }
+      }
+    },
+    "No directory selected" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kein Ordner ausgewählt"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No directory selected"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ninguna carpeta seleccionada"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aucun dossier sélectionné"
+          }
+        }
+      }
+    },
+    "No editable dataset is open." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Es ist kein bearbeitbarer Datensatz geöffnet."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No editable dataset is open."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No hay ningún conjunto de datos editable abierto."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aucun jeu de données modifiable n’est ouvert."
           }
         }
       }
@@ -11569,6 +11454,35 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Seul cet état sera supprimé. Le jeu de données original et les autres états sont conservés."
+          }
+        }
+      }
+    },
+    "Opacity-adaptive sampling" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opazitätsabhängiges Sampling"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opacity-adaptive sampling"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Muestreo adaptado a la opacidad"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Échantillonnage adapté à l’opacité"
           }
         }
       }
@@ -13175,6 +13089,35 @@
         }
       }
     },
+    "Quantize imports to 8 bits per channel" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Importe auf 8 Bit pro Kanal quantisieren"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quantize imports to 8 bits per channel"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cuantizar importaciones a 8 bits por canal"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quantifier les imports sur 8 bits par canal"
+          }
+        }
+      }
+    },
     "Radius" : {
       "localizations" : {
         "de" : {
@@ -13199,122 +13142,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Rayon"
-          }
-        }
-      }
-    },
-    "Opacity-adaptive sampling": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Opacity-adaptive sampling"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Opazitätsabhängiges Sampling"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Échantillonnage adapté à l’opacité"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Muestreo adaptado a la opacidad"
-          }
-        }
-      }
-    },
-    "Subbrick skipping": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Subbrick skipping"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Subblock-Skipping"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Saut des sous-blocs"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Omitir subbloques"
-          }
-        }
-      }
-    },
-    "Alpha epsilon": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Alpha epsilon"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Alpha-Epsilon"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Epsilon alpha"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Épsilon alfa"
-          }
-        }
-      }
-    },
-    "Bricks with TF alpha below this threshold may be skipped. The transfer function stays unchanged. Zero disables the threshold.": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Bricks with TF alpha below this threshold may be skipped. The transfer function stays unchanged. Zero disables the threshold."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Bricks mit TF-Alpha unterhalb dieses Schwellwerts können übersprungen werden. Die Transferfunktion bleibt unverändert. Bei 0 ist der Schwellwert deaktiviert."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Les briques dont l’alpha TF est inférieur à ce seuil peuvent être ignorées. La fonction de transfert reste inchangée. La valeur 0 désactive le seuil."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Los bloques con alfa TF inferior a este umbral pueden omitirse. La función de transferencia no cambia. El valor 0 desactiva el umbral."
           }
         }
       }
@@ -13428,6 +13255,35 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "FPS de récupération : %d fps"
+          }
+        }
+      }
+    },
+    "Reference series" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Referenzserie"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reference series"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Serie de referencia"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Série de référence"
           }
         }
       }
@@ -13945,6 +13801,35 @@
         }
       }
     },
+    "Resampling" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abtastung"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Resampling"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remuestreo"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rééchantillonnage"
+          }
+        }
+      }
+    },
     "Reset" : {
       "localizations" : {
         "de" : {
@@ -14146,6 +14031,12 @@
           }
         }
       }
+    },
+    "RGB" : {
+
+    },
+    "RGBA" : {
+
     },
     "Rotation" : {
       "extractionState" : "stale",
@@ -14842,15 +14733,6 @@
         }
       }
     },
-    "Select Zarr folder" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Zarr-Ordner wählen" } },
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Select Zarr folder" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Seleccionar carpeta Zarr" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Choisir un dossier Zarr" } }
-      }
-    },
     "Select input volume" : {
       "localizations" : {
         "de" : {
@@ -14875,6 +14757,35 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Sélectionner le volume d’entrée"
+          }
+        }
+      }
+    },
+    "Select Zarr folder" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zarr-Ordner wählen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Select Zarr folder"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Seleccionar carpeta Zarr"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choisir un dossier Zarr"
           }
         }
       }
@@ -15018,6 +14929,35 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Objets sélectionnés"
+          }
+        }
+      }
+    },
+    "Series to register" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zu registrierende Serie"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Series to register"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Serie por registrar"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Série à recaler"
           }
         }
       }
@@ -15340,6 +15280,64 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Réglages"
+          }
+        }
+      }
+    },
+    "Settings files" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Einstellungsdateien"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Settings files"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Archivos de ajustes"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fichiers de réglages"
+          }
+        }
+      }
+    },
+    "Settings files are unencrypted JSON. Included credentials can be read by anyone with access to the file. Device-specific folder permissions and caches are not exported." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Einstellungsdateien enthalten unverschlüsseltes JSON. Enthaltene Zugangsdaten sind für jeden lesbar, der Zugriff auf die Datei hat. Gerätespezifische Ordnerfreigaben und Caches werden nicht exportiert."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Settings files are unencrypted JSON. Included credentials can be read by anyone with access to the file. Device-specific folder permissions and caches are not exported."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los archivos de ajustes son JSON sin cifrar. Cualquier persona con acceso al archivo puede leer las credenciales incluidas. No se exportan los permisos de carpetas ni las cachés específicos del dispositivo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les fichiers de réglages sont au format JSON non chiffré. Toute personne ayant accès au fichier peut lire les identifiants inclus. Les autorisations de dossiers et les caches propres à l’appareil ne sont pas exportés."
           }
         }
       }
@@ -16108,6 +16106,35 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Tracé"
+          }
+        }
+      }
+    },
+    "Subbrick skipping" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Subblock-Skipping"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Subbrick skipping"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Omitir subbloques"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Saut des sous-blocs"
           }
         }
       }
@@ -17159,6 +17186,180 @@
         }
       }
     },
+    "The edit state contains an invalid data buffer." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der Bearbeitungsstand enthält einen ungültigen Datenpuffer."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The edit state contains an invalid data buffer."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El estado de edición contiene un búfer de datos no válido."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L’état de modification contient un tampon de données non valide."
+          }
+        }
+      }
+    },
+    "The edit state contains invalid volume geometry." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der Bearbeitungsstand enthält ungültige Volumengeometrie."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The edit state contains invalid volume geometry."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El estado de edición contiene una geometría de volumen no válida."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L’état de modification contient une géométrie de volume non valide."
+          }
+        }
+      }
+    },
+    "The edit state does not match this dataset." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der Bearbeitungsstand passt nicht zu diesem Datensatz."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The edit state does not match this dataset."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El estado de edición no corresponde a este conjunto de datos."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L’état de modification ne correspond pas à ce jeu de données."
+          }
+        }
+      }
+    },
+    "The edit state is damaged or incomplete." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der Bearbeitungsstand ist beschädigt oder unvollständig."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The edit state is damaged or incomplete."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El estado de edición está dañado o incompleto."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L’état de modification est endommagé ou incomplet."
+          }
+        }
+      }
+    },
+    "The edit state refers to an invalid volume brick." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der Bearbeitungsstand verweist auf einen ungültigen Volumenblock."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The edit state refers to an invalid volume brick."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El estado de edición hace referencia a un bloque de volumen no válido."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L’état de modification fait référence à un bloc de volume non valide."
+          }
+        }
+      }
+    },
+    "The edit state revision is invalid." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Revision des Bearbeitungsstands ist ungültig."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The edit state revision is invalid."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La revisión del estado de edición no es válida."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La révision de l’état de modification n’est pas valide."
+          }
+        }
+      }
+    },
     "The extracted surface is too large for this system." : {
       "comment" : "Error message indicating that the extracted surface is too large for the current system.",
       "isCommentAutoGenerated" : true
@@ -17489,6 +17690,35 @@
         }
       }
     },
+    "The requested export is not the current export job." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der angeforderte Export ist nicht der aktuelle Exportauftrag."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The requested export is not the current export job."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La exportación solicitada no es la tarea de exportación actual."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L’export demandé n’est pas la tâche d’export actuelle."
+          }
+        }
+      }
+    },
     "The saved data belongs to a different dataset." : {
       "localizations" : {
         "de" : {
@@ -17542,6 +17772,35 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "La section sera réinitialisée à ses valeurs par défaut."
+          }
+        }
+      }
+    },
+    "The selected edit state could not be opened: %@\nThe original dataset has been opened instead. Your saved edits have not been changed." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der gewählte Bearbeitungsstand konnte nicht geöffnet werden: %@\nStattdessen wurde der Originaldatensatz geöffnet. Ihre gespeicherten Bearbeitungen wurden nicht verändert."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The selected edit state could not be opened: %@\nThe original dataset has been opened instead. Your saved edits have not been changed."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo abrir el estado de edición seleccionado: %@\nSe ha abierto el conjunto de datos original. Las modificaciones guardadas no han cambiado."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossible d’ouvrir l’état de modification sélectionné : %@\nLe jeu de données original a été ouvert à la place. Vos modifications enregistrées n’ont pas été modifiées."
           }
         }
       }
@@ -17671,6 +17930,35 @@
         }
       }
     },
+    "The volume brush parameters are invalid." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Parameter des Volumenpinsels sind ungültig."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The volume brush parameters are invalid."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Los parámetros del pincel de volumen no son válidos."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les paramètres du pinceau de volume ne sont pas valides."
+          }
+        }
+      }
+    },
     "There is no active transfer function and there are no objects or measurements to save." : {
       "localizations" : {
         "de" : {
@@ -17724,6 +18012,35 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Cet éditeur n’est pas disponible dans le mode de rendu actuel."
+          }
+        }
+      }
+    },
+    "This is not a valid BorgVR settings file." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dies ist keine gültige BorgVR-Einstellungsdatei."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This is not a valid BorgVR settings file."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Este archivo de ajustes de BorgVR no es válido."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ce fichier de réglages BorgVR n’est pas valide."
           }
         }
       }
@@ -17952,6 +18269,35 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Cette action supprime tous les marqueurs de la session actuelle."
+          }
+        }
+      }
+    },
+    "This setting is not supported on this device." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diese Einstellung wird auf diesem Gerät nicht unterstützt."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This setting is not supported on this device."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Este ajuste no es compatible con este dispositivo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ce réglage n’est pas pris en charge sur cet appareil."
           }
         }
       }
@@ -18237,6 +18583,35 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Fonction de transfert enregistrée : \\(url.path)"
+          }
+        }
+      }
+    },
+    "Trilinear" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Trilinear"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Trilinear"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Trilineal"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Trilinéaire"
           }
         }
       }
@@ -18785,6 +19160,35 @@
         }
       }
     },
+    "Volume editing is temporarily unavailable." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Volumenbearbeitung ist vorübergehend nicht verfügbar."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Volume editing is temporarily unavailable."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La edición de volumen no está disponible temporalmente."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La modification du volume est temporairement indisponible."
+          }
+        }
+      }
+    },
     "Volume edits are local and are not synchronized through SharePlay." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -18810,6 +19214,35 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Les modifications du volume sont locales et ne sont pas synchronisées via SharePlay."
+          }
+        }
+      }
+    },
+    "Volume edits did not finish before the timeout." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Volumenbearbeitung wurde nicht innerhalb des Zeitlimits abgeschlossen."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Volume edits did not finish before the timeout."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Las modificaciones del volumen no finalizaron dentro del tiempo límite."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les modifications du volume ne se sont pas terminées dans le délai imparti."
           }
         }
       }
@@ -19342,6 +19775,14 @@
         }
       }
     },
+    "X" : {
+      "comment" : "The label for the X dimension of the image sequence.",
+      "isCommentAutoGenerated" : true
+    },
+    "Y" : {
+      "comment" : "The second letter of the Y axis.",
+      "isCommentAutoGenerated" : true
+    },
     "You can share your local datasets with other users directly from this device, without running a dedicated server. You can start a general dataset server from this app and share the device address with other users. During SharePlay collaboration, BorgVR can also create a session-specific server that shares data only with the SharePlay participants." : {
       "localizations" : {
         "de" : {
@@ -19372,6 +19813,10 @@
     },
     "Your installed BorgVR version is too old for this SharePlay session. Please update to version %@ or later." : {
       "comment" : "A localized message describing a compatibility issue where the local BorgVR version is too old for a SharePlay session. The argument is the required version of BorgVR.",
+      "isCommentAutoGenerated" : true
+    },
+    "Z" : {
+      "comment" : "The third dimension of a 3D image.",
       "isCommentAutoGenerated" : true
     },
     "Zeroes" : {

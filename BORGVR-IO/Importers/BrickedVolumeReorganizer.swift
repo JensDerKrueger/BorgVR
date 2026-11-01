@@ -21,6 +21,7 @@ public enum ExtensionStrategy: Equatable, Sendable {
  continues until the dataset fits into a single brick.
  */
 public class BrickedVolumeReorganizer {
+  private var channelInterpretation: BORGVRChannelInterpretation = .independentChannels
 
   private struct BrickCoordinate: Sendable {
     let x: Int
@@ -400,6 +401,7 @@ public class BrickedVolumeReorganizer {
                          cancellationToken: BorgVRVolumeConversionCancellationToken? = nil,
                          provenance: [BORGVRProvenanceEntry] = [],
                          meta: String = "",
+                         channelInterpretation: BORGVRChannelInterpretation = .independentChannels,
                          toolIdentification: String = BORGVRToolIdentification.current) throws {
 
     try cancellationToken?.checkCancellation()
@@ -410,6 +412,7 @@ public class BrickedVolumeReorganizer {
       cleanupList.removeAll()
     }
 
+    self.channelInterpretation = channelInterpretation
     let componentRanges = try computeComponentRanges(
       in: inputVolume,
       cancellationToken: cancellationToken
@@ -435,6 +438,7 @@ public class BrickedVolumeReorganizer {
       datasetDescription: datasetDescription,
       metaDescription: metaDescription
     )
+    try metaData.setChannelInterpretation(channelInterpretation)
     metaData.updateComponentRanges(componentRanges)
     metaData.provenance = provenance + [BORGVRProvenanceEntry(
       "converted by \(toolIdentification) (brick size \(brickSize), overlap \(overlap), LZ4 \(useCompressor ? "enabled" : "disabled"))")]
@@ -587,6 +591,7 @@ public class BrickedVolumeReorganizer {
     in volume: VolumeDataAccessor,
     cancellationToken: BorgVRVolumeConversionCancellationToken?
   ) throws -> [BORGVRComponentRange] {
+    if channelInterpretation == .rgb { return [] }
     let representableMaximum = (1 << (volume.bytesPerComponent * 8)) - 1
     var minimums = [Int](repeating: representableMaximum, count: volume.componentCount)
     var maximums = [Int](repeating: 0, count: volume.componentCount)
@@ -594,6 +599,7 @@ public class BrickedVolumeReorganizer {
     func accumulate<T: FixedWidthInteger>(_ values: UnsafeBufferPointer<T>) {
       for index in values.indices {
         let component = index % volume.componentCount
+        if channelInterpretation == .rgba && component != 3 { continue }
         let value = Int(values[index])
         minimums[component] = min(minimums[component], value)
         maximums[component] = max(maximums[component], value)
@@ -643,7 +649,8 @@ public class BrickedVolumeReorganizer {
       }
     }
 
-    return minimums.indices.map {
+    let components = channelInterpretation == .rgba ? [3] : Array(minimums.indices)
+    return components.map {
       BORGVRComponentRange(minValue: minimums[$0], maxValue: maximums[$0])
     }
   }
@@ -1144,6 +1151,7 @@ public class BrickedVolumeReorganizer {
    but it must never classify a visible brick as empty.
    */
   func computeComponentMinMax(data: [UInt8]) -> [BORGVRComponentRange] {
+    if channelInterpretation == .rgb { return [] }
     switch inputVolume.bytesPerComponent {
       case 1:
         return data.withUnsafeBytes { rawBuffer in
@@ -1176,10 +1184,12 @@ public class BrickedVolumeReorganizer {
     var maximums = [T](repeating: T.min, count: inputVolume.componentCount)
     for index in values.indices {
       let component = index % inputVolume.componentCount
+      if channelInterpretation == .rgba && component != 3 { continue }
       minimums[component] = min(minimums[component], values[index])
       maximums[component] = max(maximums[component], values[index])
     }
-    return minimums.indices.map {
+    let components = channelInterpretation == .rgba ? [3] : Array(minimums.indices)
+    return components.map {
       BORGVRComponentRange(minValue: Int(minimums[$0]), maxValue: Int(maximums[$0]))
     }
   }

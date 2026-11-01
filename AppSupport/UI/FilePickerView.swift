@@ -2,21 +2,6 @@ import SwiftUI
 import UniformTypeIdentifiers
 import UIKit
 
-/// Keeps the original picker URLs and their sandbox grants alive for an import.
-final class VolumeImportSourceAccess: @unchecked Sendable {
-  let url: URL
-  private let accessedURLs: [URL]
-
-  init(url: URL, selectedURLs: [URL]) {
-    self.url = url
-    accessedURLs = selectedURLs.filter { $0.startAccessingSecurityScopedResource() }
-  }
-
-  deinit {
-    for url in accessedURLs { url.stopAccessingSecurityScopedResource() }
-  }
-}
-
 // MARK: - FilePickerView
 
 /**
@@ -32,6 +17,7 @@ struct FilePickerView: UIViewControllerRepresentable {
     case dicomDirectory
     case dicomReference
     case dicomRegistered
+    case imageSequence
 
     var id: String { rawValue }
     var selectsDirectory: Bool { self != .files }

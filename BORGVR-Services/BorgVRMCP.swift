@@ -55,6 +55,7 @@ struct BorgVRMCPDatasetMetadata: Codable, Sendable {
   var valueRange: [Double]
   var componentRanges: [[Double]]
   var valueType: String
+  var channelInterpretation: String
   var provenance: [BORGVRProvenanceEntry]
   var meta: String
   var brickSize: Int
@@ -78,6 +79,7 @@ struct BorgVRMCPDatasetMetadata: Codable, Sendable {
     valueRange = [metadata.valueRange.minimum, metadata.valueRange.maximum]
     componentRanges = metadata.componentRanges.map { [$0.minimum, $0.maximum] }
     valueType = metadata.componentType.valueTypeName
+    channelInterpretation = metadata.channelInterpretation.name
     provenance = metadata.provenance
     meta = metadata.meta
     brickSize = metadata.brickSize

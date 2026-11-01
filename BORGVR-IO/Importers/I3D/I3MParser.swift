@@ -18,6 +18,7 @@ public final class I3MParser: VolumeFileParser {
   public let absoluteFilename: String
   public let size: Vec3<Int>
   public let voxelSpacing: Vec3<Float>
+  public let hasPhysicalVoxelSpacing = false
   public let bytesPerComponent = 1
   public let components = 1
   public let isLittleEndian = true

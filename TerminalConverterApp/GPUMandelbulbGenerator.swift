@@ -37,17 +37,13 @@ final class GPUMandelbulbGenerator {
 
   private static func shaderSource(sizeZ: Int, bytesPerVoxel: Int) -> String {
     let outputType: String
-    let maximumIterations: String
     switch bytesPerVoxel {
       case 1:
         outputType = "uchar"
-        maximumIterations = "255u"
       case 2:
         outputType = "ushort"
-        maximumIterations = "65535u"
       case 4:
         outputType = "uint"
-        maximumIterations = "0xffffffffu"
       default:
         preconditionFailure("Unsupported Mandelbulb output size")
     }
@@ -70,10 +66,10 @@ final class GPUMandelbulbGenerator {
           return;
         }
 
-        constexpr float bulbSize = 2.25f;
-        constexpr float bailout = 100.0f;
-        constexpr uint exponent = 8u;
-        constexpr uint maximumIterations = \(maximumIterations);
+        constexpr float bulbSize = \(MandelbulbParameters.coordinateExtent)f;
+        constexpr float bailout = \(MandelbulbParameters.bailout)f;
+        constexpr uint exponent = \(MandelbulbParameters.exponent)u;
+        constexpr uint maximumIterations = \(MandelbulbParameters.maximumIterations(bytesPerVoxel: bytesPerVoxel))u;
         constexpr uint volumeDepth = \(sizeZ)u;
 
         const float3 point = float3(

@@ -5,8 +5,13 @@ export function subbrickDivisions(brickSize, overlap) {
   return divisions;
 }
 
-export function subbrickVisibility(transferFunctions, biases, renderMode, isoValue) {
+export function subbrickVisibility(transferFunctions, biases, renderMode, isoValue, alphaEpsilon = 0, isRGBA = false) {
   const values = new Float32Array(12);
+  if (isRGBA) {
+    values[8] = Number.isFinite(alphaEpsilon) ? Math.min(1, Math.max(0, alphaEpsilon)) : 0;
+    values[11] = 2;
+    return values;
+  }
   values.fill(Infinity, 0, 4);
   values.fill(-Infinity, 4, 8);
   for (const [channel, tf] of transferFunctions.entries()) {
@@ -26,12 +31,14 @@ export function subbrickVisibility(transferFunctions, biases, renderMode, isoVal
 export class SubbrickCache {
   constructor(device, atlas) {
     this.device = device;
+    this.isRGBA = atlas.manifest.volume?.channelInterpretation === "rgba";
+    this.channels = this.isRGBA ? 1 : atlas.componentCount;
     this.divisions = subbrickDivisions(atlas.brickSize, atlas.manifest.bricking.overlap);
     this.cells = this.divisions ** 3;
     this.maskStride = 1 + Math.ceil(this.cells / 32);
     this.dirty = new Set();
     this.visibilityKey = null;
-    const rangeSize = atlas.slotCapacity * this.cells * atlas.componentCount * 8;
+    const rangeSize = atlas.slotCapacity * this.cells * this.channels * 8;
     const maskSize = atlas.slotCapacity * this.maskStride * 4;
     const limit = Math.min(device.limits.maxStorageBufferBindingSize, device.limits.maxBufferSize);
     if (rangeSize > limit || maskSize > limit) throw new Error("Subbrick buffers exceed WebGPU limits.");
@@ -43,21 +50,21 @@ export class SubbrickCache {
     this.reduceIDs = device.createBuffer({ size: atlas.slotCapacity * 4, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
     device.queue.writeBuffer(this.layout, 0, new Uint32Array([
       atlas.brickSize, atlas.manifest.bricking.overlap, atlas.brickSize - 2 * atlas.manifest.bricking.overlap,
-      atlas.componentCount, atlas.atlasBricksPerAxis, this.divisions, this.cells, this.maskStride
+      this.channels, atlas.atlasBricksPerAxis, this.divisions, this.cells, this.maskStride
     ]));
     const module = device.createShaderModule({ label: "Subbrick reduction/classification", code: subbrickShaderSource });
     this.reduction = device.createComputePipeline({ layout: "auto", compute: {
-      module, entryPoint: "reduceSubbricks", constants: { componentBytes: atlas.bytesPerComponent }
+      module, entryPoint: "reduceSubbricks", constants: { componentBytes: atlas.bytesPerComponent, colorAlpha: this.isRGBA }
     } });
     this.classification = device.createComputePipeline({ layout: "auto", compute: { module, entryPoint: "classifySubbricks" } });
   }
 
   invalidate(slot) { this.dirty.add(slot); }
 
-  prepare(encoder, atlas, transferFunctions, biases, renderMode, isoValue) {
+  prepare(encoder, atlas, transferFunctions, biases, renderMode, isoValue, alphaEpsilon = 0) {
     const pages = Array.from(atlas.loadedBricks.values());
     const rebuilt = pages.filter(slot => this.dirty.has(slot));
-    const visibility = subbrickVisibility(transferFunctions, biases, renderMode, isoValue);
+    const visibility = subbrickVisibility(transferFunctions, biases, renderMode, isoValue, alphaEpsilon, this.isRGBA);
     const key = Array.from(visibility).join(",");
     const classified = key === this.visibilityKey ? rebuilt : pages;
     if (!classified.length) return;
@@ -104,6 +111,7 @@ struct Visibility { low: vec4<f32>, high: vec4<f32>, iso: vec4<f32> };
 @group(0) @binding(5) var<uniform> visibility: Visibility;
 @group(0) @binding(6) var<storage, read_write> masks: array<u32>;
 override componentBytes: u32 = 1u;
+override colorAlpha: bool = false;
 var<workgroup> minima: array<vec4<f32>, 64>;
 var<workgroup> maxima: array<vec4<f32>, 64>;
 
@@ -126,7 +134,9 @@ fn reduceSubbricks(@builtin(workgroup_id) group: vec3<u32>,
   for (var i = lane; i < size.x * size.y * size.z; i += 64u) {
     let p = vec3<i32>(origin) + lo + vec3<i32>(vec3<u32>(i % size.x, (i / size.x) % size.y, i / (size.x * size.y)));
     var value = textureLoad(primary, p, 0);
-    if (componentBytes == 4u) {
+    if (colorAlpha) {
+      value = vec4<f32>(value.a, 0, 0, 0);
+    } else if (componentBytes == 4u) {
       value = vec4<f32>(dot(value, vec4<f32>(1, 256, 65536, 16777216)) / 16843009.0, 0, 0, 0);
     } else if (componentBytes == 2u) {
       let extra = textureLoad(secondary, p, 0);
@@ -163,6 +173,10 @@ fn classifySubbricks(@builtin(global_invocation_id) index: vec3<u32>) {
       let r = ranges[(page * config.grid.z + cell) * config.shape.w + c];
       if (iso) { visible = visible && r.y >= visibility.iso.x; }
       else { visible = visible || (r.y >= visibility.low[c] && r.x <= visibility.high[c]); }
+    }
+    if (visibility.iso.w == 2.0) {
+      let maximumAlpha = ranges[page * config.grid.z + cell].y;
+      visible = maximumAlpha > 0.0 && maximumAlpha >= visibility.iso.x;
     }
     if (visible) { mask |= 1u << (cell & 31u); count++; }
     if ((cell & 31u) == 31u || cell + 1u == config.grid.z) {

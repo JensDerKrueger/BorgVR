@@ -12,6 +12,7 @@ final class VolumeAtlasSubbrickCache {
   private let classification: MTLComputePipelineState
   private let device: MTLDevice
   private let channels: Int
+  private let isRGBA: Bool
   private struct Visibility: Equatable {
     var low: SIMD4<Float>
     var high: SIMD4<Float>
@@ -35,7 +36,8 @@ final class VolumeAtlasSubbrickCache {
     self.divisions = divisions
     cellCount = self.divisions * self.divisions * self.divisions
     maskStride = 1 + (cellCount + 31) / 32
-    channels = metadata.componentCount
+    isRGBA = metadata.channelInterpretation == .rgba
+    channels = isRGBA ? 1 : metadata.componentCount
     layout = SIMD4(UInt32(metadata.brickSize), UInt32(metadata.overlap),
                    UInt32(metadata.brickSize - 2 * metadata.overlap), UInt32(channels))
     dirty = Dictionary(uniqueKeysWithValues: (0..<capacity).map { ($0, 0) })
@@ -54,6 +56,7 @@ final class VolumeAtlasSubbrickCache {
       options.fastMathEnabled = false
     }
     options.preprocessorMacros = ["CHANNELS": NSNumber(value: channels),
+      "COLOR_ALPHA": NSNumber(value: isRGBA ? 1 : 0),
       "COMPONENT_BYTES": NSNumber(value: metadata.bytesPerComponent),
       "DIVISIONS": NSNumber(value: self.divisions), "CELL_COUNT": NSNumber(value: cellCount),
       "MASK_STRIDE": NSNumber(value: maskStride)]
@@ -68,7 +71,8 @@ final class VolumeAtlasSubbrickCache {
   }
 
   func prepare(command: MTLCommandBuffer, primary: MTLTexture, secondary: MTLTexture?,
-               pages: [Int], transferFunctions: [TransferFunction1D], isoValue: Float? = nil) -> Bool {
+               pages: [Int], transferFunctions: [TransferFunction1D], isoValue: Float? = nil,
+               alphaEpsilon: Float = 0) -> Bool {
     if let pending {
       if pending.command.status == .completed {
         for (page, revision) in pending.pages where dirty[page] == revision {
@@ -78,9 +82,9 @@ final class VolumeAtlasSubbrickCache {
       }
       self.pending = nil
     }
-    guard isoValue != nil || transferFunctions.count == channels else { return false }
+    guard isRGBA || isoValue != nil || transferFunctions.count == channels else { return false }
     var low = SIMD4<Float>(repeating: .infinity), high = SIMD4<Float>(repeating: -.infinity)
-    for (channel, tf) in transferFunctions.enumerated() where isoValue == nil && tf.minIndex >= 0 {
+    for (channel, tf) in transferFunctions.enumerated() where !isRGBA && isoValue == nil && tf.minIndex >= 0 {
       let scale = Float(tf.data.count) * tf.textureBias
       // Include the complete linear-filter footprint, with conservative roundoff.
       let margin = 8 * Float.ulpOfOne
@@ -89,6 +93,10 @@ final class VolumeAtlasSubbrickCache {
     }
     var visibility = Visibility(low: low, high: high,
       iso: SIMD4((isoValue ?? 0).nextDown - 8 * Float.ulpOfOne, 0, 0, isoValue == nil ? 0 : 1))
+    if isRGBA {
+      visibility = Visibility(low: .zero, high: .zero,
+        iso: SIMD4(alphaEpsilon.isFinite ? min(max(alphaEpsilon, 0), 1) : 0, 0, 0, 2))
+    }
     let rebuilt = pages.filter { dirty[$0] != nil }
     let classified = lastVisibility == visibility ? rebuilt : pages
     guard !classified.isEmpty else { return true }
@@ -147,7 +155,9 @@ final class VolumeAtlasSubbrickCache {
       for (uint i = lane; i < uint(size.x * size.y * size.z); i += width) {
         uint3 p = origin + uint3(lo + int3(i % size.x, (i / size.x) % size.y, i / (size.x * size.y)));
         float4 value = primary.read(p);
-    #if COMPONENT_BYTES == 4
+    #if COLOR_ALPHA
+        value = float4(value.a, 0, 0, 0);
+    #elif COMPONENT_BYTES == 4
         value = float4(dot(value, float4(1, 256, 65536, 16777216)) / 16843009.0, 0, 0, 0);
     #elif COMPONENT_BYTES == 2
         float4 extra = secondary.read(p);
@@ -172,12 +182,17 @@ final class VolumeAtlasSubbrickCache {
       for (uint cell = 0; cell < CELL_COUNT; ++cell) {
         bool iso = visibility.iso.w != 0;
         bool visible = iso;
+    #if COLOR_ALPHA
+        float maximumAlpha = ranges[page * CELL_COUNT + cell].y;
+        visible = maximumAlpha > 0 && maximumAlpha >= visibility.iso.x;
+    #else
         for (uint c = 0; c < CHANNELS; ++c) {
           float2 r = ranges[(page * CELL_COUNT + cell) * CHANNELS + c];
           // ISO uses the minimum over components: every channel must reach the threshold.
           if (iso) visible &= r.y >= visibility.iso.x;
           else visible |= r.y >= visibility.low[c] && r.x <= visibility.high[c];
         }
+    #endif
         if (visible) { mask |= 1u << (cell & 31); ++visibleCount; }
         if ((cell & 31) == 31 || cell + 1 == CELL_COUNT) {
           masks[page * MASK_STRIDE + 1 + cell / 32] = mask;

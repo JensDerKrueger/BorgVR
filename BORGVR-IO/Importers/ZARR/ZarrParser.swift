@@ -8,6 +8,7 @@ public final class ZarrParser: VolumeFileParser {
   public let absoluteFilename: String
   public let size: Vec3<Int>
   public let voxelSpacing: Vec3<Float>
+  public let hasPhysicalVoxelSpacing: Bool
   public let bytesPerComponent: Int
   public let components: Int
   public let isLittleEndian = true
@@ -45,6 +46,7 @@ public final class ZarrParser: VolumeFileParser {
     let layout = try Layout(array, axes: axes, transforms: transforms)
     size = layout.size
     voxelSpacing = layout.spacing
+    hasPhysicalVoxelSpacing = layout.hasPhysicalVoxelSpacing
     bytesPerComponent = layout.floating ? 2 : layout.bytes
     components = layout.components
     let temporary = FileManager.default.temporaryDirectory.appendingPathComponent("borgvr-zarr-\(UUID()).raw")
@@ -184,6 +186,7 @@ public final class ZarrParser: VolumeFileParser {
   private struct Layout {
     let size: Vec3<Int>
     let spacing: Vec3<Float>
+    let hasPhysicalVoxelSpacing: Bool
     let shape: [Int]
     let outerShape: [Int]
     let innerShape: [Int]
@@ -292,6 +295,7 @@ public final class ZarrParser: VolumeFileParser {
       // As for PVM/I3M, unitless data use a longest extent of one meter.
       let spatial = [x, y, z]
       let units = spatial.map { axes[$0].unit }
+      hasPhysicalVoxelSpacing = units.contains { $0 != nil }
       let values: [Double]
       if units.allSatisfy({ $0 == nil }) {
         let longest = spatial.map { scale[$0] * Double(shape[$0]) }.max()!

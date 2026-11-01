@@ -396,6 +396,7 @@ class RuntimeAppModel {
     let voxelSpacingZ: Float
     let componentCount: Int
     let bytesPerComponent: Int
+    let channelInterpretation: BORGVRChannelInterpretation
     let volumeScale: SIMD3<Float>
     let provenance: [BORGVRProvenanceEntry]
 
@@ -409,6 +410,7 @@ class RuntimeAppModel {
       self.voxelSpacingZ = meta.voxelSpacingZ
       self.componentCount = meta.componentCount
       self.bytesPerComponent = meta.bytesPerComponent
+      self.channelInterpretation = meta.channelInterpretation
       self.volumeScale = VolumeRenderResources.normalizedVolumeExtent(for: meta)
       self.provenance = meta.provenance
     }

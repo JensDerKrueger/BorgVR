@@ -148,7 +148,8 @@ enum VolumeRendererPipeline {
     }
 
     return (
-      try device.makeRenderPipelineState(descriptor: descriptor(label: "\(labelPrefix) TF", fragmentName: "volumeFragmentShaderTF")),
+      try device.makeRenderPipelineState(descriptor: descriptor(label: "\(labelPrefix) Color/TF",
+        fragmentName: metadata.channelInterpretation == .independentChannels ? "volumeFragmentShaderTF" : "volumeFragmentShaderColor")),
       try device.makeRenderPipelineState(descriptor: descriptor(label: "\(labelPrefix) TF Lighting", fragmentName: "volumeFragmentShaderTFLighting")),
       try device.makeRenderPipelineState(descriptor: descriptor(label: "\(labelPrefix) Iso", fragmentName: "volumeFragmentShaderIso")),
       try device.makeRenderPipelineState(descriptor: descriptor(label: "\(labelPrefix) Brick", fragmentName: "volumeFragmentShaderBrickVis")),

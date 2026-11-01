@@ -21,6 +21,10 @@ public protocol VolumeFileParser {
   /// The physical voxel spacing along each axis (x, y, z).
   var voxelSpacing: Vec3<Float> { get }
 
+  /// False when spacing is relative or was inferred because the file omitted it.
+  var hasPhysicalVoxelSpacing: Bool { get }
+  var channelInterpretation: BORGVRChannelInterpretation { get }
+
   /// The number of bytes used to represent a single data component (e.g., 1 for 8-bit, 2 for 16-bit).
   var bytesPerComponent: Int { get }
 
@@ -39,6 +43,8 @@ public protocol VolumeFileParser {
 
 extension VolumeFileParser {
   public var sourceFiles: [URL] { [] }
+  public var hasPhysicalVoxelSpacing: Bool { true }
+  public var channelInterpretation: BORGVRChannelInterpretation { .independentChannels }
 }
 
 /// Creates the appropriate parser for a supported volume-file extension.

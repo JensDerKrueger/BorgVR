@@ -98,14 +98,16 @@ private final class PackedBrushFixture: BORGVRDatasetProtocol, BorgVRVolumeGPUBr
   var blockCPUReads = false
   private(set) var cpuReads = 0
   private var originals: [Int: BorgVRVolumeOriginalBrick] = [:]
-  init(bytes: Int, channels: Int, scale: Float) {
+  init(bytes: Int, channels: Int, scale: Float, interpretation: BORGVRChannelInterpretation = .independentChannels) throws {
     metadata = BORGVRMetaData(width: 7, height: 5, depth: 3, componentCount: channels,
       bytePerComponent: bytes, voxelSpacingX: scale, voxelSpacingY: scale * 2,
       voxelSpacingZ: scale * 0.75, brickSize: 4, overlap: 1, minValue: 0,
       maxValue: 255, compression: false, datasetDescription: "Packed brush test", metaDescription: "")
+    try metadata.setChannelInterpretation(interpretation)
     for level in metadata.levelMetadata {
       for _ in 0..<(level.totalBricks.x * level.totalBricks.y * level.totalBricks.z) {
-        metadata.append(offset: 8, size: 64 * bytes * channels, minValue: 0, maxValue: 255)
+        metadata.append(offset: 8, size: 64 * bytes * channels, componentRanges:
+          Array(repeating: .init(minValue: 0, maxValue: 255), count: interpretation.rangeCount(componentCount: channels)))
       }
     }
   }
@@ -163,6 +165,7 @@ private enum VolumeAtlasEditTests {
       return
     }
     try rendererTransferFunctionRanges(device: device)
+    try runColorVolumeRenderingTests(device: device, queue: queue)
     try rendererAlphaEpsilon(device: device)
     try linearTransferFunctionBounds(device: device)
     let dataset = EditableAtlasFixture()
@@ -585,7 +588,7 @@ private enum VolumeAtlasEditTests {
 
   static func channelRestoreBeforeCPU(device: MTLDevice, queue: MTLCommandQueue,
                                      tf: TransferFunction1D, target: MTLTexture) throws {
-    let dataset = PackedBrushFixture(bytes: 2, channels: 2, scale: 1)
+    let dataset = try PackedBrushFixture(bytes: 2, channels: 2, scale: 1)
     let atlas = try VolumeAtlas(device: device, maxMemory: 65536, borgData: dataset,
       transferFunctions: [tf, tf], isoValue: 0.5)
     try atlas.pageIn(IDs: [0])
@@ -704,9 +707,11 @@ private enum VolumeAtlasEditTests {
   }
 
   static func packedBrushes(device: MTLDevice, queue: MTLCommandQueue) throws {
-    for (bytes, channels) in [(1, 1), (1, 2), (1, 3), (1, 4), (2, 1), (2, 2), (2, 3), (2, 4), (4, 1)] {
+    let formats = [(1, 1), (1, 2), (1, 3), (1, 4), (2, 1), (2, 2), (2, 3), (2, 4), (4, 1)]
+      .map { ($0.0, $0.1, BORGVRChannelInterpretation.independentChannels) } + [(1, 4, .rgba)]
+    for (bytes, channels, interpretation) in formats {
       for scale: Float in [1, 1e-12] {
-        let source = PackedBrushFixture(bytes: bytes, channels: channels, scale: scale)
+        let source = try PackedBrushFixture(bytes: bytes, channels: channels, scale: scale, interpretation: interpretation)
         let m = source.metadata
         let renderer = try VolumeAtlasBrushRenderer(device: device, metadata: m)
         let executor = try BorgVRCPUVolumeEditExecutor(source: source, border: .clamp)
@@ -754,7 +759,8 @@ private enum VolumeAtlasEditTests {
           (.restore, [.init(center: SIMD3(3, 2, 1) * spacing, radius: Double(scale) * 100)])
         ]
         for (step, operation) in operations.enumerated() {
-          let selection: BorgVRVolumeEditChannels = step == 4 || step == 6 ? .selected([channels - 1]) : .all
+          let selection: BorgVRVolumeEditChannels = interpretation == .rgba || step == 4 || step == 6
+            ? .selected([channels - 1]) : .all
           let batch = BorgVRVolumeBrushBatch(id: UUID(), revision: UInt64(step + 1),
             mode: operation.0, samples: operation.1, channels: selection)
           for sample in batch.samples { try mask.apply(sample, mode: batch.mode, channels: selection) }

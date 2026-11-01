@@ -62,6 +62,7 @@ class AsyncEmptinessUpdater {
     let mode: EvaluationMode
     let transferFunctions: [TransferFunction1D]
     let isoValue: Int
+    let alphaEpsilon: Float
     let revision: UInt64
   }
 
@@ -86,6 +87,7 @@ class AsyncEmptinessUpdater {
   private var hasChanged: Bool = false
   /// The BorgVR dataset protocol instance providing volume data.
   private var borgData: BORGVRDatasetProtocol
+  private let channelInterpretation: BORGVRChannelInterpretation
   /// An array storing metadata flags for each brick.
   private var metaStorage: [UInt32] = []
   /// A mapping from brick indices to page indices.
@@ -116,11 +118,13 @@ class AsyncEmptinessUpdater {
       (normalizedIsoValue * Double(borgData.getMetadata().rangeMax)).rounded()
     )
     self.borgData = borgData
+    self.channelInterpretation = borgData.getMetadata().channelInterpretation
     self.logger = logger
     self.evaluationState = EvaluationState(
       mode: .transferFunction,
       transferFunctions: transferFunctions.map { TransferFunction1D(copyFrom: $0) },
       isoValue: integerIsoValue,
+      alphaEpsilon: 0,
       revision: 0
     )
     computeChildTable()
@@ -209,6 +213,13 @@ class AsyncEmptinessUpdater {
     brickMetadata: BrickMetadata,
     evaluation: EvaluationState
   ) -> Bool {
+    switch channelInterpretation {
+      case .rgb: return false
+      case .rgba:
+        guard let maximum = brickMetadata.componentRanges.first?.maximum else { return false }
+        return maximum == 0 || Float(maximum / 255) < evaluation.alphaEpsilon
+      case .independentChannels: break
+    }
     switch evaluation.mode {
       case .transferFunction:
         return evaluation.transferFunctions.enumerated().allSatisfy { component, transferFunction in
@@ -232,7 +243,7 @@ class AsyncEmptinessUpdater {
     evaluationLock.withLock {
       evaluationState = EvaluationState(mode: evaluationState.mode,
         transferFunctions: evaluationState.transferFunctions, isoValue: evaluationState.isoValue,
-        revision: evaluationState.revision &+ 1)
+        alphaEpsilon: evaluationState.alphaEpsilon, revision: evaluationState.revision &+ 1)
     }
     waitSemaphore.signal()
   }
@@ -405,6 +416,7 @@ class AsyncEmptinessUpdater {
    - Parameter transferFunction: The new transfer function.
    */
   func updateTransferFunctions(_ transferFunctions: [TransferFunction1D]) {
+    guard channelInterpretation == .independentChannels else { return }
     let changed = evaluationLock.withLock { () -> Bool in
       let changed = transferFunctions.count != evaluationState.transferFunctions.count ||
         zip(transferFunctions, evaluationState.transferFunctions).contains {
@@ -415,6 +427,7 @@ class AsyncEmptinessUpdater {
         mode: .transferFunction,
         transferFunctions: transferFunctions.map { TransferFunction1D(copyFrom: $0) },
         isoValue: evaluationState.isoValue,
+        alphaEpsilon: evaluationState.alphaEpsilon,
         revision: evaluationState.revision &+ 1
       )
       return true
@@ -439,6 +452,7 @@ class AsyncEmptinessUpdater {
    - Parameter isoValue: The new normalized isovalue.
    */
   func updateIsoValue(isoValue: Float) {
+    guard channelInterpretation == .independentChannels else { return }
     let intIsoValue = intIsoValue(normIsoValue: isoValue)
     let changed = evaluationLock.withLock { () -> Bool in
       guard evaluationState.mode != .isoValue || evaluationState.isoValue != intIsoValue else {
@@ -448,6 +462,7 @@ class AsyncEmptinessUpdater {
         mode: .isoValue,
         transferFunctions: evaluationState.transferFunctions,
         isoValue: intIsoValue,
+        alphaEpsilon: evaluationState.alphaEpsilon,
         revision: evaluationState.revision &+ 1
       )
       return true
@@ -477,6 +492,7 @@ class AsyncEmptinessUpdater {
         mode: evaluationState.mode,
         transferFunctions: evaluationState.transferFunctions,
         isoValue: evaluationState.isoValue,
+        alphaEpsilon: evaluationState.alphaEpsilon,
         revision: evaluationState.revision &+ 1
       )
     }
@@ -496,6 +512,19 @@ class AsyncEmptinessUpdater {
         return metaStorage
       }
     }
+  }
+
+  func updateAlphaEpsilon(_ value: Float) {
+    guard channelInterpretation == .rgba else { return }
+    let epsilon = value.isFinite ? min(max(value, 0), 1) : 0
+    let changed = evaluationLock.withLock { () -> Bool in
+      guard evaluationState.alphaEpsilon != epsilon else { return false }
+      evaluationState = EvaluationState(mode: evaluationState.mode,
+        transferFunctions: evaluationState.transferFunctions, isoValue: evaluationState.isoValue,
+        alphaEpsilon: epsilon, revision: evaluationState.revision &+ 1)
+      return true
+    }
+    if changed { waitSemaphore.signal() }
   }
 }
 

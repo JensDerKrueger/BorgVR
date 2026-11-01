@@ -105,7 +105,7 @@ final class BorgVRCPUVolumeEditExecutor: BorgVRVolumeEditExecutor {
     let original = context.bricks[index]
     return BorgVRMaterializedEditBrick(
       index: index, revision: revision, bytes: bytes,
-      componentRanges: minima.indices.map {
+      componentRanges: metadata.channelInterpretation.rangeChannels(componentCount: metadata.componentCount).map {
         BORGVRComponentRange(minValue: Int(minima[$0]), maxValue: Int(maxima[$0]))
       }, matchesOriginal: original.map { bytes == $0 } ?? false
     )

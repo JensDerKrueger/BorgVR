@@ -28,6 +28,7 @@ swiftc \
   "$ROOT/BORGVR-IO/Importers/DICOM/BorgVRIntegerVolumeSampler.swift" \
   "$ROOT/BORGVR-IO/BORGVRDataBase.swift" \
   "$ROOT/BORGVR-IO/BORGVRMetaData.swift" \
+  "$ROOT/BORGVR-IO/BORGVRChannelInterpretation.swift" \
   "$ROOT/BORGVR-IO/BORGVRFileData.swift" \
   "$ROOT/BORGVR-IO/BORGVRVolumeExporter.swift" \
   "$ROOT/BORGVR-IO/BorgVRVolumeEditMask.swift" \
@@ -49,6 +50,8 @@ swiftc \
   "$ROOT/BORGVR-IO/Importers/DICOM/DICOMProvenance.swift" \
   "$ROOT/BORGVR-IO/Importers/DICOM/BorgVRDICOMRigidRegistration.swift" \
   "$ROOT/BORGVR-IO/Importers/BorgVRVolumeConversionService.swift" \
+  "$ROOT/BORGVR-IO/Importers/BorgVRImportFileAccess.swift" \
+  "$ROOT/BORGVR-IO/Importers/BorgVRImageSequenceImporter.swift" \
   "$ROOT/BORGVR-IO/Importers/BorgVRAutomaticVolumeConversion.swift" \
   "$ROOT/BORGVR-Services/BorgVRAutoImporter.swift" \
   "$ROOT/BORGVR-Services/BorgVRAutoImportManifest.swift" \

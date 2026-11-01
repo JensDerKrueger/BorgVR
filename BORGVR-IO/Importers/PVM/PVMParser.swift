@@ -52,6 +52,7 @@ public final class PVMParser: VolumeFileParser {
   public let absoluteFilename: String
   public let size: Vec3<Int>
   public let voxelSpacing: Vec3<Float>
+  public let hasPhysicalVoxelSpacing = false
   public let bytesPerComponent: Int
   public let components: Int
   public let isLittleEndian: Bool
@@ -327,8 +328,8 @@ public final class PVMParser: VolumeFileParser {
           let end = bytes[cursor...].firstIndex(of: 0) else {
       throw Error.invalidHeader("PVM3 metadata is not NUL-terminated")
     }
-    guard end - cursor <= 255 else {
-      throw Error.invalidHeader("a PVM3 metadata field exceeds 255 bytes")
+    guard end - cursor <= 1_048_576 else {
+      throw Error.invalidHeader("a PVM3 metadata field exceeds 1 MiB")
     }
     let value = String(decoding: bytes[cursor..<end], as: UTF8.self)
     cursor = end + 1

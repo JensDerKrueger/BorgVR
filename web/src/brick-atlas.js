@@ -1,5 +1,5 @@
 import { decodeAppleLZ4 } from "./lz4.js?v=20260911-worker";
-import { SubbrickCache, subbrickDivisions } from "./subbrick-cache.js?v=20261101";
+import { SubbrickCache, subbrickDivisions } from "./subbrick-cache.js?v=20261101-color";
 
 export const BI_MISSING = 0;
 const BI_CHILD_EMPTY = 1;
@@ -152,7 +152,7 @@ export class BrickAtlas {
         usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST
       });
     }
-    if (subbrickDivisions(this.brickSize, manifest.bricking.overlap) > 1) {
+    if (manifest.volume.channelInterpretation !== "rgb" && subbrickDivisions(this.brickSize, manifest.bricking.overlap) > 1) {
       this.subbrickCache = new SubbrickCache(this.device, this);
     }
     const maxStorageBufferBindingSize = this.device.limits.maxStorageBufferBindingSize ?? this.device.limits.maxBufferSize;
@@ -953,11 +953,14 @@ function classifyBricks(manifest, transferFunctions, options = {}) {
   const meta = new Uint32Array(bricks.length);
   meta.fill(BI_MISSING);
   const renderMode = options.renderMode ?? 0;
+  const interpretation = manifest.volume?.channelInterpretation ?? "independentChannels";
+  const color = interpretation === "rgb" || interpretation === "rgba";
+  const epsilon = Number.isFinite(options.alphaEpsilon) ? Math.min(1, Math.max(0, options.alphaEpsilon)) : 0;
 
   const activeTransferFunctions = Array.isArray(transferFunctions)
     ? transferFunctions.filter(Boolean)
     : (transferFunctions ? [transferFunctions] : []);
-  if (activeTransferFunctions.length === 0 && renderMode !== 2) {
+  if (!color && activeTransferFunctions.length === 0 && renderMode !== 2) {
     return { meta, emptyCount: 0, childEmptyCount: 0, fullyOpaqueCount: 0 };
   }
 
@@ -972,7 +975,12 @@ function classifyBricks(manifest, transferFunctions, options = {}) {
   for (const brick of bricks) {
     const minValue = brick.min ?? brick.minValue ?? 0;
     const maxValue = brick.max ?? brick.maxValue ?? minValue;
-    if (renderMode === 2) {
+    if (color) {
+      const maximum = brick.componentRanges?.[0]?.[1];
+      empty[brick.index] = interpretation === "rgba" && maximum !== undefined &&
+        (maximum === 0 || maximum / 255 < epsilon);
+      fullyOpaque[brick.index] = interpretation === "rgb" || (brick.componentRanges?.[0]?.[0] === 255);
+    } else if (renderMode === 2) {
       const isoRawValue = options.isoRawValue ?? clamp(options.isoValue ?? 0.5, 0, 1) * rangeMax;
       const scalarMaximum = Array.isArray(brick.componentRanges) && brick.componentRanges.length > 0
         ? Math.min(...brick.componentRanges.map((channelRange) => channelRange?.[1] ?? maxValue))

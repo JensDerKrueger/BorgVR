@@ -85,6 +85,21 @@ void validate_type(ComponentType type, int width) {
   throw std::runtime_error("Unsupported component type/byte-width combination.");
 }
 
+void validate_channel_interpretation(ChannelInterpretation interpretation, ComponentType type,
+                                     int width, int componentCount) {
+  switch (interpretation) {
+    case ChannelInterpretation::IndependentChannels:
+      return;
+    case ChannelInterpretation::RGB:
+    case ChannelInterpretation::RGBA:
+      if (type == ComponentType::UnsignedInteger && width == 1 &&
+          componentCount == (interpretation == ChannelInterpretation::RGB ? 3 : 4)) return;
+      throw std::runtime_error("RGB/RGBA requires unsigned 8-bit components and 3/4 channels respectively.");
+    default:
+      throw std::runtime_error("Unknown channel interpretation.");
+  }
+}
+
 void validate_range(ComponentRange range, ComponentType type, int width) {
   const double lo = range.minValue, hi = range.maxValue;
   if (type == ComponentType::FloatingPoint) {
@@ -257,7 +272,9 @@ void BORGVRMetaData::parseFromBytes(const uint8_t* data, size_t size) {
   componentCount_ = checked_int(br.read_i64("componentCount"), "componentCount");
   bytesPerComponent_ = checked_int(br.read_i64("bytesPerComponent"), "bytesPerComponent");
   componentType_ = static_cast<ComponentType>(br.read_u8("componentType"));
+  channelInterpretation_ = static_cast<ChannelInterpretation>(br.read_u8("channelInterpretation"));
   validate_type(componentType_, bytesPerComponent_);
+  validate_channel_interpretation(channelInterpretation_, componentType_, bytesPerComponent_, componentCount_);
 
   voxelSpacingX_ = br.read_f32("voxelSpacingX");
   voxelSpacingY_ = br.read_f32("voxelSpacingY");
@@ -265,12 +282,15 @@ void BORGVRMetaData::parseFromBytes(const uint8_t* data, size_t size) {
 
   brickSize_ = checked_int(br.read_i64("brickSize"), "brickSize");
   overlap_ = checked_int(br.read_i64("overlap"), "overlap");
-  const auto datasetRange = read_range(br, componentType_, bytesPerComponent_);
+  const bool scalar = channelInterpretation_ == ChannelInterpretation::IndependentChannels;
+  const int rangeCount = scalar ? componentCount_ : (channelInterpretation_ == ChannelInterpretation::RGBA ? 1 : 0);
+  ComponentRange datasetRange{0, 0};
+  if (scalar) datasetRange = read_range(br, componentType_, bytesPerComponent_);
   minValue_ = datasetRange.minValue;
   maxValue_ = datasetRange.maxValue;
 
-  const int64_t componentRangeCount = br.read_i64("componentRangeCount");
-  if (componentCount_ <= 0 || componentCount_ > kMaximumComponentCount || componentRangeCount != componentCount_) {
+  const int64_t componentRangeCount = scalar ? br.read_i64("componentRangeCount") : rangeCount;
+  if (componentCount_ <= 0 || componentCount_ > kMaximumComponentCount || componentRangeCount != rangeCount) {
     throw BorgVRException(BorgVRDataErrorCode::InvalidArgument,
                           "Component range count does not match component count.");
   }
@@ -279,6 +299,9 @@ void BORGVRMetaData::parseFromBytes(const uint8_t* data, size_t size) {
   for (int64_t component = 0; component < componentRangeCount; ++component) {
     componentRanges_.push_back(read_range(br, componentType_, bytesPerComponent_));
   }
+  if (!scalar && !componentRanges_.empty()) datasetRange = componentRanges_.front();
+  minValue_ = datasetRange.minValue;
+  maxValue_ = datasetRange.maxValue;
 
   compression_ = br.read_bool("compression");
 
@@ -307,7 +330,7 @@ void BORGVRMetaData::parseFromBytes(const uint8_t* data, size_t size) {
     }
     fullBrickByteCount *= factor;
   }
-  validate_union(datasetRange, componentRanges_);
+  if (rangeCount > 0) validate_union(datasetRange, componentRanges_);
 
   uniqueID_ = br.read_string("uniqueID", kMaximumStringLength);
   datasetDescription_ = br.read_string("datasetDescription", kMaximumStringLength);
@@ -369,7 +392,7 @@ void BORGVRMetaData::parseFromBytes(const uint8_t* data, size_t size) {
 
   const size_t metadataCount = static_cast<size_t>(metadataCount64);
   const size_t brickMetadataRecordSize = 16 +
-      static_cast<size_t>(2 + 2 * componentCount_) * bytesPerComponent_;
+      static_cast<size_t>(2 * (rangeCount + (scalar ? 1 : 0))) * bytesPerComponent_;
   if (metadataCount > br.remaining() / brickMetadataRecordSize) {
     throw BorgVRException(BorgVRDataErrorCode::InvalidArgument,
                           "Brick metadata records are truncated.");
@@ -381,13 +404,17 @@ void BORGVRMetaData::parseFromBytes(const uint8_t* data, size_t size) {
     BrickMetadata bm;
     bm.offset = br.read_i64("brick offset");
     bm.size = br.read_i64("brick size");
-    const auto brickRange = read_range(br, componentType_, bytesPerComponent_);
+    ComponentRange brickRange{0, 0};
+    if (scalar) brickRange = read_range(br, componentType_, bytesPerComponent_);
     bm.minValue = brickRange.minValue;
     bm.maxValue = brickRange.maxValue;
-    bm.componentRanges.reserve(static_cast<size_t>(componentCount_));
-    for (int component = 0; component < componentCount_; ++component) {
+    bm.componentRanges.reserve(static_cast<size_t>(rangeCount));
+    for (int component = 0; component < rangeCount; ++component) {
       bm.componentRanges.push_back(read_range(br, componentType_, bytesPerComponent_));
     }
+    if (!scalar && !bm.componentRanges.empty()) brickRange = bm.componentRanges.front();
+    bm.minValue = brickRange.minValue;
+    bm.maxValue = brickRange.maxValue;
     if (bm.offset < 8 || bm.size <= 0 ||
         bm.offset > std::numeric_limits<int64_t>::max() - bm.size) {
       throw BorgVRException(BorgVRDataErrorCode::InvalidArgument, "Invalid brick byte range.");
@@ -396,12 +423,13 @@ void BORGVRMetaData::parseFromBytes(const uint8_t* data, size_t size) {
       throw BorgVRException(BorgVRDataErrorCode::InvalidArgument,
                             "Stored brick size does not fit the declared brick layout.");
     }
-    validate_union(brickRange, bm.componentRanges);
+    if (rangeCount > 0) validate_union(brickRange, bm.componentRanges);
     brickMetadata_.push_back(bm);
   }
 }
 
 std::vector<uint8_t> BORGVRMetaData::toBytes() const {
+  validate_channel_interpretation(channelInterpretation_, componentType_, bytesPerComponent_, componentCount_);
   std::vector<uint8_t> out;
   out.reserve(1024 + brickMetadata_.size() * 32);
 
@@ -415,6 +443,7 @@ std::vector<uint8_t> BORGVRMetaData::toBytes() const {
   append_i64_le(out, static_cast<int64_t>(componentCount_));
   append_i64_le(out, static_cast<int64_t>(bytesPerComponent_));
   out.push_back(static_cast<uint8_t>(componentType_));
+  out.push_back(static_cast<uint8_t>(channelInterpretation_));
 
   append_f32_le(out, voxelSpacingX_);
   append_f32_le(out, voxelSpacingY_);
@@ -422,8 +451,10 @@ std::vector<uint8_t> BORGVRMetaData::toBytes() const {
 
   append_i64_le(out, static_cast<int64_t>(brickSize_));
   append_i64_le(out, static_cast<int64_t>(overlap_));
-  append_range(out, {minValue_, maxValue_}, componentType_, bytesPerComponent_);
-  append_i64_le(out, static_cast<int64_t>(componentRanges_.size()));
+  if (channelInterpretation_ == ChannelInterpretation::IndependentChannels) {
+    append_range(out, {minValue_, maxValue_}, componentType_, bytesPerComponent_);
+    append_i64_le(out, static_cast<int64_t>(componentRanges_.size()));
+  }
   for (const auto& range : componentRanges_) {
     append_range(out, range, componentType_, bytesPerComponent_);
   }
@@ -450,7 +481,9 @@ std::vector<uint8_t> BORGVRMetaData::toBytes() const {
   for (const auto& b : brickMetadata_) {
     append_i64_le(out, b.offset);
     append_i64_le(out, b.size);
-    append_range(out, {b.minValue, b.maxValue}, componentType_, bytesPerComponent_);
+    if (channelInterpretation_ == ChannelInterpretation::IndependentChannels) {
+      append_range(out, {b.minValue, b.maxValue}, componentType_, bytesPerComponent_);
+    }
     for (const auto& range : b.componentRanges) {
       append_range(out, range, componentType_, bytesPerComponent_);
     }

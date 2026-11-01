@@ -12,6 +12,7 @@ struct Vec3 {
 };
 
 enum class ComponentType : uint8_t { UnsignedInteger = 0, SignedInteger = 1, FloatingPoint = 2 };
+enum class ChannelInterpretation : uint8_t { IndependentChannels = 0, RGB = 1, RGBA = 2 };
 struct ProvenanceEntry {
   int64_t timestampMilliseconds = 0;
   std::string text;
@@ -65,6 +66,7 @@ public:
   int componentCount() const { return componentCount_; }
   int bytesPerComponent() const { return bytesPerComponent_; }
   ComponentType componentType() const { return componentType_; }
+  ChannelInterpretation channelInterpretation() const { return channelInterpretation_; }
   const std::vector<ProvenanceEntry>& provenance() const { return provenance_; }
   const std::string& meta() const { return meta_; }
   int brickSize() const { return brickSize_; }
@@ -102,6 +104,7 @@ private:
   int componentCount_ = 0;
   int bytesPerComponent_ = 0;
   ComponentType componentType_ = ComponentType::UnsignedInteger;
+  ChannelInterpretation channelInterpretation_ = ChannelInterpretation::IndependentChannels;
   std::vector<ProvenanceEntry> provenance_;
   std::string meta_;
 

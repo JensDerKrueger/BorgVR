@@ -13,6 +13,7 @@ swiftc \
   "$ROOT/BORGVR-IO/IOExtensions.swift" \
   "$ROOT/BORGVR-IO/BORGVRDataBase.swift" \
   "$ROOT/BORGVR-IO/BORGVRMetaData.swift" \
+  "$ROOT/BORGVR-IO/BORGVRChannelInterpretation.swift" \
   "$ROOT/BORGVR-IO/BorgVRSharedConstants.swift" \
   "$ROOT/BORGVR-Render/Transfer Function 1D/TransferFunction1D.swift" \
   "$ROOT/BORGVR-Render/Transfer Function 1D/TransferFunction1DUI.swift" \

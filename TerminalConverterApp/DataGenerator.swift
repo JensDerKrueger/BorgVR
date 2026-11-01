@@ -1,5 +1,21 @@
 import Foundation
 
+enum MandelbulbParameters {
+  static let exponent = 8
+  static let coordinateExtent = 2.25
+  static let bailout = 100.0
+
+  static func maximumIterations(bytesPerVoxel: Int) -> Int {
+    (1 << (8 * bytesPerVoxel)) - 1
+  }
+
+  static func provenanceDescription(bytesPerVoxel: Int, doublePrecision: Bool) -> String {
+    let limit = maximumIterations(bytesPerVoxel: bytesPerVoxel)
+    let indices = doublePrecision ? "0...\(limit) (inclusive)" : "0..<\(limit)"
+    return "Mandelbulb; exponent=\(exponent); domain=[-\(coordinateExtent / 2),\(coordinateExtent / 2)]^3, endpoints sampled with index/(size-1); initial orbit=(0,0,0); escape radius=\(bailout); maximumIterations=\(limit); iteration indices=\(indices); scalar=zero-based escape iteration, or \(limit) if not escaped; arithmetic=\(doublePrecision ? "Float64" : "Float32")."
+  }
+}
+
 // MARK: - Mandelbulb Utility Functions
 
 /**
@@ -146,7 +162,7 @@ func computeMandelbulb(_ sx: Double, _ sy: Double, _ sz: Double,
 func computeMandelbulb(_ sx: UInt64, _ sy: UInt64, _ sz: UInt64,
                        _ n: UInt32, _ iMaxIterations: Int,
                        _ fBailout: Double, _ vTotalSize: IVec3) -> Int {
-  let bulbSize: Double = 2.25
+  let bulbSize = MandelbulbParameters.coordinateExtent
 
   // Map grid coordinates to a point in 3D space.
   let x = bulbSize * Double(sx) / Double(vTotalSize.x - 1) - bulbSize / 2.0
@@ -187,8 +203,8 @@ func computeMandelbulbFloat(_ sx: Float, _ sy: Float, _ sz: Float,
 
 func computeMandelbulbFloat(_ x: Int, _ y: Int, _ z: Int,
                             sizeX: Int, sizeY: Int, sizeZ: Int,
-                            maximumIterations: Int, bailout: Float = 100.0) -> Int {
-  let bulbSize: Float = 2.25
+                            maximumIterations: Int, bailout: Float = Float(MandelbulbParameters.bailout)) -> Int {
+  let bulbSize = Float(MandelbulbParameters.coordinateExtent)
   let sampleX = bulbSize * Float(x) / Float(sizeX - 1) - bulbSize / 2
   let sampleY = bulbSize * Float(y) / Float(sizeY - 1) - bulbSize / 2
   let sampleZ = bulbSize * Float(z) / Float(sizeZ - 1) - bulbSize / 2
@@ -196,7 +212,7 @@ func computeMandelbulbFloat(_ x: Int, _ y: Int, _ z: Int,
     sampleX,
     sampleY,
     sampleZ,
-    8,
+    MandelbulbParameters.exponent,
     maximumIterations,
     bailout
   )
@@ -219,9 +235,9 @@ func computeMandelbulbFloat(_ x: Int, _ y: Int, _ z: Int,
  */
 func computeMandelbulb(filename: String, sizeX: Int, sizeY: Int, sizeZ: Int,
                        bytesPerVoxel: Int, logger: LoggerBase? = nil) throws {
-  let maxIterations: Int = (1 << (8*bytesPerVoxel) )-1    // Maximum iterations allowed.
-  let bailout: Double = 100.0       // Bailout threshold.
-  let n: Int = 8                  // Mandelbulb exponent.
+  let maxIterations = MandelbulbParameters.maximumIterations(bytesPerVoxel: bytesPerVoxel)
+  let bailout = MandelbulbParameters.bailout
+  let n = MandelbulbParameters.exponent
 
   // Define the total grid size as a 3D vector.
   let totalSize = IVec3(x: sizeX, y: sizeY, z: sizeZ)
@@ -382,7 +398,7 @@ private func computeMandelbulbFloatCPU(filename: String,
                                        sizeZ: Int,
                                        bytesPerVoxel: Int,
                                        logger: LoggerBase? = nil) throws {
-  let maximumIterations = (1 << (8 * bytesPerVoxel)) - 1
+  let maximumIterations = MandelbulbParameters.maximumIterations(bytesPerVoxel: bytesPerVoxel)
   let fileURL = URL(fileURLWithPath: filename)
   let memoryMappedFile = try MemoryMappedFile(
     filename: fileURL.path(),

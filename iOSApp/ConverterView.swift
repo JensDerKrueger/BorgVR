@@ -8,6 +8,9 @@ enum FileError: Error {
 struct ConverterView: View {
   @State private var receivedAt = Date()
   @State private var sourceNote = ""
+  @State private var imageSizeX = ""
+  @State private var imageSizeY = ""
+  @State private var imageSizeZ = ""
   @EnvironmentObject private var appModel: AppModel
   @EnvironmentObject var appSettings: AppSettings
 
@@ -33,6 +36,7 @@ struct ConverterView: View {
     case convert
     case dicom
     case dicomFusion
+    case imageSequence
   }
 
   var body: some View {
@@ -69,7 +73,9 @@ struct ConverterView: View {
               .foregroundStyle(.secondary)
           }
 
-          if mode == .convert || mode == .dicom || mode == .dicomFusion {
+          if mode == .imageSequence { imageSequenceSizeFields }
+
+          if mode == .convert || mode == .dicom || mode == .dicomFusion || mode == .imageSequence {
             TextField("Dataset description", text: $datasetDescription)
               .textFieldStyle(.roundedBorder)
               .disabled(isWorking)
@@ -174,11 +180,13 @@ struct ConverterView: View {
                 inputAccess = access
                 inputFile = url.path
                 mode = .dicomFusion
-              case .dicomDirectory, .zarrDirectory, .files:
+              case .dicomDirectory, .zarrDirectory, .files, .imageSequence:
                 inputAccess = access
                 inputFile = url.path
                 registeredInputAccess = nil
-                if pickerMode == .dicomDirectory {
+                if pickerMode == .imageSequence {
+                  mode = .imageSequence
+                } else if pickerMode == .dicomDirectory {
                   mode = .dicom
                 } else if pickerMode == .zarrDirectory {
                   mode = .convert
@@ -211,6 +219,10 @@ struct ConverterView: View {
 
   @ViewBuilder
   private var sourceButtons: some View {
+    Button { filePickerMode = .imageSequence } label: {
+      Label("image_sequence_select", systemImage: "photo.on.rectangle.angled")
+    }
+    .disabled(isWorking)
     Button {
       filePickerMode = .files
     } label: {
@@ -247,6 +259,28 @@ struct ConverterView: View {
 
   private var canStartImport: Bool {
     mode != .unknown && inputAccess != nil && (mode != .dicomFusion || registeredInputAccess != nil)
+      && (mode != .imageSequence || imageSequenceSize != nil)
+  }
+
+  private var imageSequenceSize: Vec3<Float>? {
+    guard let x = Float(imageSizeX.replacingOccurrences(of: ",", with: ".")),
+          let y = Float(imageSizeY.replacingOccurrences(of: ",", with: ".")),
+          let z = Float(imageSizeZ.replacingOccurrences(of: ",", with: ".")),
+          [x, y, z].allSatisfy({ $0.isFinite && $0 > 0 }) else { return nil }
+    return Vec3(x: x, y: y, z: z)
+  }
+
+  private var imageSequenceSizeFields: some View {
+    VStack(alignment: .leading) {
+      Text("image_sequence_size")
+      HStack {
+        Text("X"); TextField("m", text: $imageSizeX)
+        Text("Y"); TextField("m", text: $imageSizeY)
+        Text("Z"); TextField("m", text: $imageSizeZ)
+      }
+      .textFieldStyle(.roundedBorder)
+    }
+    .disabled(isWorking)
   }
 
   private func dicomDirectoryRow(_ title: LocalizedStringKey, access: VolumeImportSourceAccess?,
@@ -301,6 +335,7 @@ struct ConverterView: View {
 
     let documentsDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
     let inputURL = inputAccess.url
+    let imageExtent = mode == .imageSequence ? imageSequenceSize : nil
     let registeredInputAccess = mode == .dicomFusion ? self.registeredInputAccess : nil
     let source: BorgVRVolumeConversionSource
     let stem: String
@@ -309,8 +344,10 @@ struct ConverterView: View {
                                     filter: appSettings.dicomResamplingFilter)
       stem = inputURL.lastPathComponent + "-fused"
     } else {
-      source = mode == .dicom ? .dicomDirectory(inputURL) : .file(inputURL)
-      stem = mode == .dicom ? inputURL.lastPathComponent : inputURL.deletingPathExtension().lastPathComponent
+      source = mode == .imageSequence ? .imageSequence(inputURL)
+        : (mode == .dicom ? .dicomDirectory(inputURL) : .file(inputURL))
+      stem = mode == .dicom || mode == .imageSequence
+        ? inputURL.lastPathComponent : inputURL.deletingPathExtension().lastPathComponent
     }
     let outputFilename = stem + ".data"
     let outputFile = documentsDirectory.appendingPathComponent(outputFilename).path
@@ -365,6 +402,7 @@ struct ConverterView: View {
               extensionStrategy: borderMode,
               quantizeTo8Bit: appSettings.quantizeImportsTo8Bit
             ),
+            physicalSizeMeters: imageExtent,
             provenance: provenance
           ),
           logger: logger,

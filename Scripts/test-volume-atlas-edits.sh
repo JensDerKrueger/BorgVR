@@ -13,6 +13,7 @@ swiftc \
   "$ROOT/BORGVR-IO/Logger.swift" \
   "$ROOT/BORGVR-IO/BORGVRDataBase.swift" \
   "$ROOT/BORGVR-IO/BORGVRMetaData.swift" \
+  "$ROOT/BORGVR-IO/BORGVRChannelInterpretation.swift" \
   "$ROOT/BORGVR-IO/BorgVRSharedConstants.swift" \
   "$ROOT/BORGVR-IO/BorgVRVolumeEditMask.swift" \
   "$ROOT/BORGVR-IO/BorgVRVolumeOriginalBrick.swift" \
@@ -24,6 +25,7 @@ swiftc \
   "$ROOT/BORGVR-Render/VolumeAtlas/VolumeAtlasSubbrickCache.swift" \
   "$ROOT/BORGVR-Render/VolumeAtlas/VolumeAtlasBrushRenderer.swift" \
   "$ROOT/Tests/VolumeAtlasEditTests.swift" \
+  "$ROOT/Tests/ColorVolumeRenderingTests.swift" \
   -o "$BUILD_DIR/volume-atlas-edit-tests"
 
 "$BUILD_DIR/volume-atlas-edit-tests"

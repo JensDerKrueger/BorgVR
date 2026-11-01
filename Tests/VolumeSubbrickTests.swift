@@ -39,6 +39,7 @@ enum VolumeSubbrickTests {
     guard let device = MTLCreateSystemDefaultDevice(), let queue = device.makeCommandQueue() else {
       throw SubbrickFailure(message: "Metal is required")
     }
+    try verifyColorSubbricks(device: device, queue: queue)
     for (bytes, channels) in [(1,1), (1,2), (1,3), (1,4), (2,1), (2,2), (2,3), (2,4), (4,1)] {
       for brickSize in [16, 17] { for divisions in [2, 4, 8] {
         let overlap = 2, inner = brickSize - 4
@@ -180,6 +181,47 @@ enum VolumeSubbrickTests {
         print("Subbrick masks passed: \(channels)x\(bytes)-byte, brick \(brickSize), \(divisions)^3, sparse/empty/full, TF changes, abandoned frame, invalidation")
       } }
     }
+  }
+
+  static func verifyColorSubbricks(device: MTLDevice, queue: MTLCommandQueue) throws {
+    let metadata = BORGVRMetaData(width: 28, height: 28, depth: 28, componentCount: 4,
+      bytePerComponent: 1, voxelSpacingX: 1, voxelSpacingY: 1, voxelSpacingZ: 1,
+      brickSize: 32, overlap: 2, minValue: 0, maxValue: 255,
+      compression: false, datasetDescription: "RGBA masks", metaDescription: "")
+    try metadata.setChannelInterpretation(.rgba)
+    let descriptor = MTLTextureDescriptor()
+    descriptor.textureType = .type3D; descriptor.pixelFormat = .rgba8Unorm
+    descriptor.width = 32; descriptor.height = 32; descriptor.depth = 32
+    descriptor.storageMode = .shared; descriptor.usage = .shaderRead
+    let texture = device.makeTexture(descriptor: descriptor)!
+    var bytes = [UInt8](repeating: 255, count: 32 * 32 * 32 * 4)
+    for i in stride(from: 3, to: bytes.count, by: 4) { bytes[i] = 0 }
+    bytes[(5 + 32 * (5 + 32 * 5)) * 4 + 3] = 64
+    func upload() {
+      bytes.withUnsafeBytes { texture.replace(region: MTLRegionMake3D(0, 0, 0, 32, 32, 32),
+        mipmapLevel: 0, slice: 0, withBytes: $0.baseAddress!, bytesPerRow: 128, bytesPerImage: 4096) }
+    }
+    upload()
+    let cache = try VolumeAtlasSubbrickCache(device: device, metadata: metadata, capacity: 1, divisions: 2)
+    func classify(_ epsilon: Float, iso: Float? = nil) throws -> [UInt32] {
+      let command = queue.makeCommandBuffer()!
+      try require(cache.prepare(command: command, primary: texture, secondary: nil,
+        pages: [0], transferFunctions: [], isoValue: iso, alphaEpsilon: epsilon), "RGBA requires a TF")
+      let readback = device.makeBuffer(length: cache.masks.length, options: .storageModeShared)!
+      let blit = command.makeBlitCommandEncoder()!
+      blit.copy(from: cache.masks, sourceOffset: 0, to: readback, destinationOffset: 0, size: cache.masks.length)
+      blit.endEncoding(); command.commit(); command.waitUntilCompleted()
+      if let error = command.error { throw error }
+      return Array(UnsafeBufferPointer(start: readback.contents().assumingMemoryBound(to: UInt32.self), count: 2))
+    }
+    try require(try classify(0) == [1, 1], "RGB values made transparent RGBA subblocks visible")
+    try require(try classify(Float(64) / 255, iso: 1) == [1, 1], "RGBA epsilon equality/ISO handling is wrong")
+    try require(try classify((Float(64) / 255).nextUp) == [0, 0], "Alpha epsilon did not reclassify cached ranges")
+    try require(try classify(0) == [1, 1], "Resetting epsilon retained empty RGBA subblocks")
+    bytes[(16 + 32 * (16 + 32 * 16)) * 4 + 3] = 64
+    upload(); cache.invalidate(page: 0)
+    try require(try classify(0) == [2, 255], "RGBA interpolation halo lost a shared-corner alpha sample")
+    print("RGBA subblocks passed: alpha-only ranges, cached epsilon changes, equality, ISO/TF independence and interpolation halo")
   }
 
   static func compareRays(device: MTLDevice, queue: MTLCommandQueue, primary: MTLTexture,

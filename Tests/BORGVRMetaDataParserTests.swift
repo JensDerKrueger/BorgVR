@@ -24,7 +24,7 @@ private func readInt64(from data: Data, at offset: Int) -> Int64 {
 private func brickCountOffset(in data: Data) -> Int {
   let componentCount = Int(readInt64(from: data, at: 38))
   let width = Int(readInt64(from: data, at: 46))
-  var offset = 92 + (2 + 2 * componentCount) * width
+  var offset = 93 + (2 + 2 * componentCount) * width
   for _ in 0..<3 {
     let length = Int(readInt64(from: data, at: offset))
     offset += 8 + length
@@ -108,21 +108,21 @@ private enum BORGVRMetaDataParserTests {
     for count in [Int64(-1), 0, 1025, Int64.max] {
       var invalidComponentCount = valid
       writeInt64(count, to: &invalidComponentCount, at: 38)
-      writeInt64(count, to: &invalidComponentCount, at: 85)
+      writeInt64(count, to: &invalidComponentCount, at: 86)
       try expectRejection("invalid component count before range allocation", data: invalidComponentCount)
     }
 
     var invalidSpacing = valid
-    invalidSpacing.replaceSubrange(55..<59, with: [0x00, 0x00, 0xc0, 0x7f])
+    invalidSpacing.replaceSubrange(56..<60, with: [0x00, 0x00, 0xc0, 0x7f])
     try expectRejection("non-finite voxel spacing", data: invalidSpacing)
 
     var invalidOverlap = valid
-    writeInt64(2, to: &invalidOverlap, at: 75)
+    writeInt64(2, to: &invalidOverlap, at: 76)
     try expectRejection("invalid brick stride", data: invalidOverlap)
 
     var invalidBoolean = valid
     let componentCount = Int(readInt64(from: valid, at: 38))
-    let compressionOffset = 91 + (2 + 2 * componentCount)
+    let compressionOffset = 92 + (2 + 2 * componentCount)
     invalidBoolean[compressionOffset] = 2
     try expectRejection("invalid Boolean", data: invalidBoolean)
 
@@ -174,11 +174,12 @@ private enum BORGVRMetaDataParserTests {
     _ = try BORGVRMetaData(fromData: fullStoredBrick)
 
     var overflowingFullBrickSize = valid
-    writeInt64(Int64(Int32.max), to: &overflowingFullBrickSize, at: 67)
+    writeInt64(Int64(Int32.max), to: &overflowingFullBrickSize, at: 68)
     try expectRejection("overflowing full brick byte count", data: overflowingFullBrickSize)
 
     try testFileReaderBounds()
     try testVersion5(in: URL(fileURLWithPath: CommandLine.arguments.last!).deletingLastPathComponent())
+    try testChannelInterpretations(in: URL(fileURLWithPath: CommandLine.arguments.last!).deletingLastPathComponent())
 
     print("Swift BORGVR metadata parser tests passed.")
   }
@@ -223,7 +224,7 @@ private func testVersion5(in directory: URL) throws {
       var invalidType = bytes; invalidType[54] = 99
       try expectRejection("unknown component type", data: invalidType)
       try expectRejection("v5 truncated", data: bytes.dropLast())
-      let firstBlock = 83 + (2 + 2 * m.componentCount) * width + 8 + 1
+      let firstBlock = 84 + (2 + 2 * m.componentCount) * width + 8 + 1
         + [m.uniqueID, m.datasetDescription, m.metaDescription].reduce(0) { $0 + 8 + $1.utf8.count }
       var invalidCodec = bytes; invalidCodec[firstBlock] = 9
       try expectRejection("invalid text codec", data: invalidCodec)
@@ -277,12 +278,59 @@ private func testVersion5(in directory: URL) throws {
   print("Swift v5 typed ranges and compressed text tests passed.")
 }
 
+private func testChannelInterpretations(in directory: URL) throws {
+  for (interpretation, channels) in [(BORGVRChannelInterpretation.rgb, 3), (.rgba, 4)] {
+    let metadata = BORGVRMetaData(width: 2, height: 2, depth: 2, componentCount: channels,
+      bytePerComponent: 1, voxelSpacingX: 1, voxelSpacingY: 1, voxelSpacingZ: 1,
+      brickSize: 2, overlap: 0, minValue: 0, maxValue: 255, compression: false,
+      datasetDescription: "Color fixture", metaDescription: "")
+    try metadata.setChannelInterpretation(interpretation)
+    metadata.append(offset: 8, size: 8 * channels, componentRanges: metadata.componentRanges)
+    let bytes = metadata.toData()
+    try bytes.write(to: directory.appendingPathComponent("color-\(interpretation.name).bin"))
+    let parsed = try BORGVRMetaData(fromData: bytes)
+    guard bytes[55] == interpretation.rawValue, parsed.channelInterpretation == interpretation,
+          parsed.cacheExportMetadata(sourceDescription: "test").channelInterpretation == interpretation,
+          parsed.editExportMetadata().channelInterpretation == interpretation else {
+      throw TestFailure.expectedRejection("color interpretation round trip/copy")
+    }
+    let encoded = try JSONEncoder().encode(parsed)
+    guard try JSONDecoder().decode(BORGVRMetaData.self, from: encoded).channelInterpretation == interpretation else {
+      throw TestFailure.expectedRejection("color interpretation JSON round trip")
+    }
+    do { try parsed.requireIndependentChannels(); throw TestFailure.expectedRejection("renderer accepted color") }
+    catch is BORGVRError {}
+    try parsed.setChannelInterpretation(.independentChannels)
+    guard !parsed.hasSameStoredVolume(as: metadata) else {
+      throw TestFailure.expectedRejection("recovery ignored channel interpretation")
+    }
+    for raw: UInt8 in [99, interpretation == .rgb ? 2 : 1] {
+      var invalid = bytes; invalid[55] = raw
+      try expectRejection("invalid interpretation or channel count", data: invalid)
+    }
+    for type: UInt8 in [1, 2] {
+      var invalid = bytes; invalid[54] = type
+      try expectRejection("color component type must be uint8", data: invalid)
+    }
+    for width: Int64 in [2, 4, 8] {
+      var invalid = bytes; writeInt64(width, to: &invalid, at: 46)
+      try expectRejection("color component width must be one byte", data: invalid)
+    }
+    var independent = bytes; independent[55] = 0
+    try expectRejection("color payload cannot be reinterpreted as scalar range records", data: independent)
+    var unknown = bytes; unknown[55] = 255
+    try expectRejection("unknown channel interpretation", data: unknown)
+  }
+  print("Swift RGB/RGBA channel interpretation validation and copies passed.")
+}
+
 private func verifyCPPFixtures(in directory: URL) throws {
   for url in try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
-      where url.lastPathComponent.hasPrefix("v5-") && !url.lastPathComponent.hasSuffix(".cpp") {
+      where (url.lastPathComponent.hasPrefix("v5-") || url.lastPathComponent.hasPrefix("color-")) && !url.lastPathComponent.hasSuffix(".cpp") {
     let swift = try BORGVRMetaData(fromData: Data(contentsOf: url))
     let cpp = try BORGVRMetaData(fromData: Data(contentsOf: url.appendingPathExtension("cpp")))
-    guard cpp.componentType == swift.componentType, cpp.bytesPerComponent == swift.bytesPerComponent,
+    guard cpp.componentType == swift.componentType, cpp.channelInterpretation == swift.channelInterpretation,
+          cpp.bytesPerComponent == swift.bytesPerComponent,
           cpp.valueRange == swift.valueRange, cpp.componentRanges == swift.componentRanges,
           cpp.brickMetadata[0].valueRange == swift.brickMetadata[0].valueRange,
           cpp.provenance == swift.provenance, cpp.meta == swift.meta else {

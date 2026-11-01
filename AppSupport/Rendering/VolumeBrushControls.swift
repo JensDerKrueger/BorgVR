@@ -79,7 +79,7 @@ struct VolumeBrushControls: View {
         Label("Restore", systemImage: "arrow.uturn.backward").tag(BorgVRVolumeBrushMode.restore)
       }
       .pickerStyle(.segmented)
-      if model.componentCount > 1 {
+      if model.componentCount > 1 && model.channelInterpretation == .independentChannels {
         DisclosureGroup("Edit Channels") {
           Toggle("All Channels", isOn: Binding(get: { model.channels == .all }, set: { all in
             try? model.setVolumeBrushChannels(all ? .all : .selected([0]))

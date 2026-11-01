@@ -288,7 +288,7 @@ inline int opacitySamplingSpan(float accumulatedOpacity, int remaining) {
 }
 
 /**
- Performs volume raymarching with a 1D transfer function.
+ Performs unlit raymarching with either a 1D transfer function or stored RGB(A).
 
  - Parameters:
  - in: Interpolated vertex-to-fragment data (position + exit).
@@ -434,6 +434,11 @@ inline VolumeFragmentOutput raycastTransferFunction(
           float4 volumeValues = sampleVolumeComponents(
             volumeAtlas, secondaryVolumeAtlas, s, poolCoords
           );
+          #if VOLUME_COLOR_MODE != 0
+          // Color volumes contain straight RGB(A), with no transfer-function lookup.
+          float4 current = float4(volumeValues.rgb, VOLUME_COLOR_MODE == 1 ? 1.0 : volumeValues.a);
+          {
+          #else
           TransferFunctionSamples transferSamples = sampleTransferFunctions(
             volumeValues,
             uniforms.transferBias,
@@ -445,6 +450,7 @@ inline VolumeFragmentOutput raycastTransferFunction(
           );
           for (int channel = 0; channel < VOLUME_COMPONENT_COUNT; ++channel) {
             float4 current = transferSamples.values[channel];
+          #endif
             current.a = 1.0 - pow(1.0 - current.a, sampleOcFactor);
             float contribution = (1.0 - interactionOpacity) * current.a;
             if (contribution > strongestContribution) {

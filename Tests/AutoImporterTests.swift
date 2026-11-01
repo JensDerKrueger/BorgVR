@@ -172,6 +172,9 @@ private func runGuidedAutoImporterTests() throws {
     metadata.provenance.first?.timestampMilliseconds == 1_793_529_045_123 &&
     metadata.provenance.last?.text.hasPrefix("converted by ") == true,
     "Guided import lost source date/time or conversion provenance")
+  try check(metadata.provenance.contains { $0.text == "Auto-import source: scan.nrrd" }
+    && !metadata.provenance.contains { $0.text.contains("file://") || $0.text.contains(input.path) },
+    "Auto-import retained a full local source path")
   try check(simd_length(metadata.physicalExtentMeters - SIMD3<Float>(0.2, 0.3, 0.4)) < 0.000_001,
     "Guided size was not saved as total physical dimensions")
   try check(!fm.fileExists(atPath: source.path) && !fm.fileExists(atPath: manifest.path), "Successful guided request was not removed")

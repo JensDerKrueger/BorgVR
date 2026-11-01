@@ -1,4 +1,4 @@
-import { CoordinateCubeRenderer } from "./cube-renderer.js?v=20261101-render-optimizations";
+import { CoordinateCubeRenderer } from "./cube-renderer.js?v=20261101-color";
 import { renderDatasetProvenance } from "./dataset-provenance.js?v=20261101";
 import { decodeAppleLZ4, encodeLZ4Block } from "./lz4.js?v=20260911-urltf";
 import {
@@ -1039,9 +1039,13 @@ async function clearPersistentBrickCache() {
 }
 
 function updateVisibleEditor() {
+  const color = renderer?.colorMode !== undefined && renderer.colorMode !== 0;
+  renderModeButtons.forEach(button => { button.disabled = color; });
+  const lighting = document.querySelector('[data-ui-panel="lighting"]');
+  if (lighting) lighting.hidden = color;
   const activeEditor = currentRenderMode === "iso" ? "iso" : "transfer";
   editorPanels.forEach((panel) => {
-    panel.hidden = panel.dataset.editorMode !== activeEditor;
+    panel.hidden = color || panel.dataset.editorMode !== activeEditor;
   });
 }
 
@@ -1753,6 +1757,10 @@ function renderDatasetInfo(manifest) {
     formatPhysicalDimensions(manifest.volume.size, manifest.volume.voxelSpacing) || "Physical size unavailable";
   datasetInfo.querySelector(".voxel-size").textContent = `(${formatVoxelDimensions(manifest.volume.size)})`;
   datasetInfo.querySelector(".components").textContent = `${manifest.volume.componentCount} x ${manifest.volume.bytesPerComponent * 8}-bit`;
+  const interpretation = manifest.volume.channelInterpretation ?? "independentChannels";
+  if (interpretation !== "independentChannels") {
+    datasetInfo.querySelector(".components").textContent += ` (${interpretation.toUpperCase()})`;
+  }
   datasetInfo.querySelector(".brick-layout").textContent = `${manifest.bricking.brickSize}³, overlap ${manifest.bricking.overlap}`;
   datasetInfo.querySelector(".lod-levels").textContent = String(manifest.levels.length);
   datasetInfo.querySelector(".brick-count").textContent = String(brickCountForManifest(manifest));

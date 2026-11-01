@@ -64,6 +64,21 @@ share one type. Dataset, channel, and brick bounds use the same type and byte wi
 voxel components, in little-endian order. NaN propagates to both bounds of the affected range;
 infinities remain valid bounds. Rendering and processing currently still require unsigned data.
 
+The v5 header also contains a one-byte `channelInterpretation` after the component-type tag:
+`0` means independent scalar channels, `1` means RGB, and `2` means RGBA. RGB/RGBA currently
+require exactly three/four unsigned 8-bit channels and store colors without alpha
+premultiplication. Three/four components alone never imply color. NRRD `RGB-color` and
+`RGBA-color` kinds preserve this distinction on import/export. QVIS also accepts `UCHAR3` and
+`UCHAR4`, with explicit `ObjectModel: RGB` / `RGBA` selecting color rather than independent scalar
+channels. An explicit `Components` count must agree with the format. RGB omits dataset and brick
+value ranges entirely; RGBA stores only the alpha range, not RGB bounds. Native and WebGPU renderers
+use a direct-color raycaster without a transfer function or lighting for these volumes. RGB bricks
+are always nonempty; RGBA brick/subblock skipping uses only maximum alpha and the alpha-epsilon
+threshold. Epsilon never changes the color/alpha samples used for rendering. Scalar TF and ISO modes
+remain separate. Older v5 headers without this byte must be
+updated with the external `BorgVR-v4-to-v5/borgvr_v5_upgrade` tool; the numeric format version
+remains 5. The v4 converter now writes the extended v5 layout directly.
+
 An ordered provenance history stores UTC timestamps (Unix milliseconds) and text for sources,
 imports, fusion, completed remote downloads, and materialized edits. A separate free-form
 UTF-8 `meta` field can hold additional metadata. Provenance and `meta` each support optional
@@ -309,7 +324,7 @@ shown, and the suite exits with a nonzero status if any test or build fails.
 
 ### Command-Line Volume Generator
 
-The `TerminalConverterApp` scheme converts DICOM, QVIS, NRRD, PVM, IV3Dm, and Zarr input, exports any LoD of a
+The `TerminalConverterApp` scheme converts DICOM, image sequences, QVIS, NRRD, PVM, IV3Dm, and Zarr input, exports any LoD of a
 BorgVR dataset as a flat volume, and can create reproducible synthetic volumes. Export uses one
 deliberately simple interchange representation: an uncompressed inline NRRD file.
 
@@ -320,6 +335,21 @@ TerminalConverterApp E <input.data> <output.nrrd> <lod>
 LoD `0` reconstructs the full-resolution source volume. Higher LoDs export the stored downsampled
 levels while preserving their corresponding physical voxel spacing. Importing and exporting works
 for one- and multi-component data with 1-, 2-, or 4-byte components.
+
+Image sequence import selects a directory and interprets its images as Z slices in lexicographic
+filename order (use zero-padded numbers, e.g. `001.png`, `002.png`). PNG, JPEG, TIFF and other
+ImageIO-supported raster images are decoded to 8-bit sRGB. All slices must have identical
+dimensions after image orientation is applied; multi-frame files and unreadable images are
+rejected. Hidden files, non-image sidecars, symlinks and subdirectories are ignored. If any
+slice has alpha, the entire volume is RGBA; otherwise it is RGB. The import dialogs on macOS,
+iOS and visionOS ask for the **whole volume's X/Y/Z dimensions in meters**. The CLI equivalent is:
+
+```sh
+TerminalConverterApp S ./slices ./scan.data "Color scan" 32 2 0.2 0.2 0.35
+```
+
+Guided server import also accepts image directories when `sizeMeters` supplies all three physical
+dimensions. The provenance records the source folder, slice order and physical size.
 
 The creation mode has this general form:
 
@@ -344,8 +374,12 @@ The analytical generators run slice by slice on Metal and automatically fall bac
 multithreaded CPU implementation. For multi-channel output, provide one comma-separated algorithm
 identifier per channel in channel order; a single identifier is applied to every channel. Multi-channel datasets
 support 8 or 16 bits per channel, while scalar datasets additionally support 32 bits. The Julia
-preset suppresses its early, nearly spherical escape bands so that the later fractal structures
-occupy the useful value range. For example, this creates a two-channel 16-bit volume containing a
+preset uses the quaternion sine recurrence `q' = sin(q) + C*sin(q)`. Every generated channel
+records its algorithm, grid, output precision, actual CPU/Metal backend, defining parameters,
+sampling domain and scalar mapping in provenance before the automatic conversion event.
+Mandelbulb parameters are shared by the CPU/Metal implementations and their provenance;
+Julia records its quaternion component convention, constant, slice, iteration limit and
+escape radius. For example, this creates a two-channel 16-bit volume containing a
 Mandelbulb and a quaternion Julia set:
 
 ```sh
@@ -365,6 +399,18 @@ TerminalConverterApp N scan.nrrd scan.data "Scan" 32 2 \
 The timestamp must be ISO-8601 with a time zone; fractional seconds are supported. The source
 entries are optional. Repeat `--source-info` to supply a longer history; entries retain their
 command-line order. The automatic conversion/tool/version entry is always appended in English.
+
+Import modes `D/Q/N/P/I/Z` accept `--size-x <meters>` as a fallback for sources without a
+physical size. `--force-size-x <meters>` always sets the total X extent, overriding source
+metadata. Both scale all three voxel axes uniformly, preserving anisotropic proportions;
+Y/Z extents follow from the voxel dimensions and relative spacings. Use only one size option.
+PVM, IV3Dm, unitless Zarr, and QVIS/NRRD files without spacing use the fallback; existing
+DICOM or other physical spacing is retained unless forced. Applied scaling is recorded in provenance.
+
+```sh
+TerminalConverterApp Z scan.ozx scan.data "Scan" 32 2 --size-x 0.2
+TerminalConverterApp N scan.nrrd corrected.data "Corrected scale" 32 2 --force-size-x 0.2
+```
 
 PVM import accepts PVM, PVM2, and PVM3 streams, including the `DDS v3d` and block-interleaved
 `DDS v3e` wrappers. The decoder is implemented directly in BorgVR. Because PVM spacing is
@@ -421,6 +467,95 @@ nonempty `.data` files are not overwritten. The script keeps resumable downloads
 `.scivis-downloads` and conversion logs plus a per-run TSV report in `.scivis-logs` under
 the output directory. Failed conversions are retried on the next run using cached downloads.
 All entries are attempted, including the seven `float32` and two `int16` datasets.
+
+`Scripts/scivis-provenance.tsv` records dataset-specific creators, original repositories,
+and related publications with their evidence URLs (researched 2026-11-01). The script passes
+them through repeated `--source-info` arguments, then appends the OZX download URL and day;
+the converter adds the actual conversion event. Unknown acquisition dates are explicitly
+identified rather than invented. Unknown times use 00:00 UTC by convention.
+Use `--download-date 2026-10-31` when converting the previously downloaded collection.
+Without that option, the reported download day defaults to today in UTC. The source manifest
+is copied beside each run report for reproducibility. `tooth` has no reliably identified
+original creator and receives only the download record. Source attribution is not a blanket
+license grant: in particular, the synthetic truss retains its CC BY-NC-SA 4.0 attribution.
+
+`Scripts/scivis-sizes.tsv` contains user-approved X extents for all 51 entries. Seven are
+verified from acquisition spacing or reconstruction fields of view; the rest are heuristic
+estimates, uncertain literature-based sizes, or arbitrary display scales. All use
+`--force-size-x`; a future fallback-only `hint` uses `--size-x`. Estimates and uncertain
+literature values are explicitly qualified in provenance. Arbitrary display sizes are
+marked as not physically calibrated; verified values add no separate source-info size note.
+Existing output files are skipped by default. `--replace` regenerates them from cached OZX
+and atomically replaces each output only after successful conversion. The unresolved axis-ratio conflicts in Marmoset
+Neurons and Christmas Tree remain documented: an X override scales all axes uniformly and
+cannot fix incorrect anisotropy. Extents use `voxel count * voxel spacing`.
+
+For [The Volume Library](http://volume.open-terrain.org/), use the separate, resumable
+PVM batch importer (Python 3.9+ and `curl`):
+
+```bash
+python3 Scripts/download-volume-library.py \
+  --converter /path/to/TerminalConverterApp --output "$HOME/OZX-Data" --replace
+```
+
+`Scripts/volume-library-datasets.json` records all 85 catalog entries, credits, acquisition
+parameters, conditions of use, sizes, download SHA-256 checksums and decoded voxel SHA-512
+checksums. The importer downloads every entry but omits seven redundant quantization/LOD
+variants from the output list. It retains the existing 16-bit OME-Zarr Backpack rather than
+the quantized 8-bit PVM, and prefers the Volume Library for the other mapped overlaps.
+Eleven mappings were verified against the Open SciVis raw-source SHA-512 checksums.
+The numbered Bonsai acquisitions remain separate from the OME-Zarr Bonsai because their
+identity has not been established; names alone are not sufficient evidence of duplication.
+Estimated dimensions and arbitrary display scales are qualified in provenance. PVM aspect
+ratios alone do not establish physical units. The collection prohibits commercial use;
+its terms and additional per-dataset credits/comments are retained in provenance.
+
+Downloads remain in `.volume-library-downloads`; logs, manifest snapshots and reports in
+`.volume-library-logs`. `--replace` publishes only successful conversions and retains old
+outputs as hidden hard-link backups, without copying their brick data. Without it, existing
+outputs are skipped. `--download-only`, `--dry-run`, and `--only Foot` support staged runs.
+The supplied HTTP endpoint is used because the site's HTTPS certificate does not match
+its hostname; TLS verification is never disabled. Checksums pin the inspected snapshot,
+not the authenticity of the original HTTP transfer. `Tests/VolumeLibraryDownloadTests.py`
+tests selection and safe replacement; `Scripts/test-volume-library-metadata.sh DIR DATE`
+checks the actual output dimensions, scalar types, sizes and provenance.
+
+`Scripts/scivis-raw-datasets.json` is a snapshot of the 55-entry
+[Open SciVis RAW catalog](http://klacansky.com/open-scivis-datasets/), dated 2026-11-01.
+Its 51 overlapping entries keep the existing OZX/PVM collection choices. The four additional
+entries are 3DNeurons15Sept2016 (13.422 GiB), isotropic pressure (256 GiB), rotating stratified
+temperature (256 GiB), and turbulent channel flow/DNS (900 GiB). Sizes are RAW download
+sizes, not the storage needed for conversion and BorgVR output.
+
+```bash
+sh Scripts/build-scivis-raw-tools.sh /tmp/scivis-tools
+python3 Scripts/download-scivis-raw.py --converter /path/to/TerminalConverterApp \
+  --auditor /tmp/scivis-tools/scivis-raw-auditor \
+  --quantizer /tmp/scivis-tools/scivis-raw-quantizer --output "$HOME/OZX-Data"
+```
+
+The default run imports only the smaller, additional neuronal volume and defers the three
+huge simulations; `--include-large` explicitly enables them. `--only NAME` selects one of
+the four additions. Existing outputs are never replaced. Resumable RAW downloads are
+checked against exact byte counts and catalog SHA-512 sums. The standalone macOS streaming
+quantizer makes two bounded-memory passes over float32/float64 input and maps its finite
+range linearly to UInt16; nonfinite samples become zero. Source ranges, attribution and
+publication details are retained in logs/provenance. An output metadata audit must succeed
+before a converted volume is published. The neuronal spacing is assumed to be micrometers
+and explicitly qualified as estimated; simulation display sizes are not physical calibration.
+
+For downloading the huge files on a separate Linux/macOS server, no converter is required:
+
+```bash
+bash Scripts/download-large-scivis-datasets.sh --output "$HOME/OZX-Data/.scivis-raw-downloads"
+```
+
+This portable Bash script downloads only the three huge simulations, verifies each one,
+and writes accompanying NRRD headers and timestamped `.sources.tsv` attribution records.
+It does not quantize or brick files; retain the original RAWs for later conversion. Copy
+them into the RAW importer's `.scivis-raw-downloads` cache, select the corresponding
+`--only NAME --include-large`, and pass the recorded download day via `--download-date`.
+The `.nhdr` sidecars describe the original floating-point data, not renderer-ready UInt16.
 
 On iOS and visionOS, use **Select Zarr folder** for a directory store or the regular
 volume-file picker for `.ozx`. The macOS renderer and GUI server accept either through

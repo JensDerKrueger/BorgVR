@@ -24,7 +24,7 @@ async function main() {
       assert.equal(bytes.readBigInt64LE(base + 6), 5n);
       const channels = Number(bytes.readBigInt64LE(base + 38));
       const width = Number(bytes.readBigInt64LE(base + 46));
-      let offset = base + 92 + (2 + 2 * channels) * width;
+      let offset = base + 93 + (2 + 2 * channels) * width;
       function readString(buffer) {
         const count = Number(buffer.readBigInt64LE(offset)); offset += 8;
         const text = buffer.subarray(offset, offset + count).toString("utf8"); offset += count;
@@ -46,6 +46,7 @@ async function main() {
     const file = run(["--source-info", "2026-11-01T12:30:45.123+02:00", "Downloaded from https://example.org/scan"]);
     const history = readHistory(file);
     assert.deepEqual(history[0], { time: 1793529045123, text: "Downloaded from https://example.org/scan" });
+    assert.equal(history.find(entry => entry.text.startsWith("Import file:")).text, "Import file: tiny.nrrd");
     assert.match(history.at(-1).text, /^converted by BorgVR Converter 3\.5 /);
     assert.ok(history.at(-1).time >= started && history.at(-1).time <= Date.now());
     assert.ok(readHistory(run([], "no-source.data")).at(-1).text.startsWith("converted by "));
@@ -71,6 +72,61 @@ async function main() {
     const rejectedExport = spawnSync(converter, ["E", file, path.join(root, "export.nrrd"), "0", "--source-info", "2026-11-01T12:00:00Z", "source"], { encoding: "utf8" });
     assert.notEqual(rejectedExport.status, 0);
     assert.match(rejectedExport.stdout + rejectedExport.stderr, /not applicable to export/);
+    function generate(algorithm, bytes = 1, channels = 1) {
+      const output = path.join(root, `generated-${algorithm.replaceAll(",", "-")}-${bytes}-${channels}.data`);
+      const result = spawnSync(converter, ["C", algorithm, String(bytes), String(channels), "4", "5", "6", output, "Generator provenance", "8", "1",
+        "--source-info", "2026-11-01T00:00:00Z", "Synthetic reference dataset"], { encoding: "utf8", timeout: 60000 });
+      assert.equal(result.status, 0, result.stdout + result.stderr);
+      const entries = readHistory(output);
+      assert.equal(entries[0].text, "Synthetic reference dataset");
+      assert.match(entries.at(-1).text, /^converted by BorgVR Converter 3\.5 /);
+      const generated = entries.filter(entry => entry.text.startsWith("Generated channel "));
+      assert.equal(generated.length, channels);
+      generated.forEach((entry, channel) => {
+        assert.ok(entry.time >= started && entry.time <= Date.now());
+        assert.match(entry.text, new RegExp(`^Generated channel ${channel} using BorgVR Converter 3\\.5;`));
+        assert.ok(entry.text.includes(`grid=4x5x6; output=UInt${bytes * 8}; backend=`));
+      });
+      const reference = process.env.BORGVR_REFERENCE_CONVERTER;
+      if (reference) {
+        const oldOutput = output + ".reference.data";
+        const oldResult = spawnSync(reference, ["C", algorithm, String(bytes), String(channels), "4", "5", "6", oldOutput, "Generator reference", "8", "1"], { encoding: "utf8", timeout: 60000 });
+        assert.equal(oldResult.status, 0, oldResult.stdout + oldResult.stderr);
+        const payload = (executable, input) => {
+          const exported = input + ".nrrd";
+          const result = spawnSync(executable, ["E", input, exported, "0"], { encoding: "utf8" });
+          assert.equal(result.status, 0, result.stdout + result.stderr);
+          const nrrd = fs.readFileSync(exported);
+          return nrrd.subarray(nrrd.indexOf("\n\n") + 2);
+        };
+        assert.deepEqual(payload(converter, output), payload(reference, oldOutput), `Generator voxels changed: ${algorithm}`);
+      }
+      return generated.map(entry => entry.text);
+    }
+    const floatBulb = generate("F")[0];
+    assert.match(floatBulb, /exponent=8; domain=\[-1\.125,1\.125\]\^3/);
+    assert.match(floatBulb, /escape radius=100\.0; maximumIterations=255/);
+    assert.match(floatBulb, /iteration indices=0\.\.<255/);
+    assert.match(floatBulb, /arithmetic=Float32/);
+    const doubleBulb = generate("D")[0];
+    assert.match(doubleBulb, /iteration indices=0\.\.\.255 \(inclusive\)/);
+    assert.match(doubleBulb, /arithmetic=Float64/);
+    const julia = generate("J", 2)[0];
+    assert.match(julia, /q'=sin\(q\)\+C\*sin\(q\)/);
+    assert.match(julia, /C=\(0\.5,0\.4,0\.2,0\.3\)/);
+    assert.match(julia, /maximumIterations=8; escape radius squared=16\.0/);
+    assert.match(julia, /rounded to UInt16/);
+    assert.match(generate("L")[0], /scalar=.*modulo 2\^8/);
+    assert.match(generate("U", 4)[0], /4294967295/);
+    assert.match(generate("B")[0], /maximumIterations=24/);
+    assert.match(generate("G")[0], /Gyroid; p=normalized coordinates\*3\*pi/);
+    assert.match(generate("P")[0], /ellipsoids \(center, radii, Z-angle radians, density\):/);
+    assert.match(generate("T")[0], /brick core stride=6/);
+    const mixed = generate("F,J", 1, 2);
+    assert.match(mixed[0], /algorithm=F;/);
+    assert.match(mixed[1], /algorithm=J;/);
+    const repeated = generate("J", 1, 2);
+    assert.ok(repeated.every(text => text.includes("algorithm=J;")));
     const dicomDirectory = path.join(root, "dicom");
     fs.mkdirSync(dicomDirectory);
     function element(group, tag, vr, value) {
@@ -97,6 +153,7 @@ async function main() {
     assert.ok(dicomHistory.some(entry => entry.time === 1793529045123 && entry.text.includes("DICOM acquisition")));
     assert.ok(dicomHistory.some(entry => entry.time === Date.parse("2026-11-02T00:00:00Z") && entry.text.includes("date only: 2026-11-02") && entry.text.includes("Reconstructed from scan")));
     assert.equal(dicomHistory.filter(entry => entry.text.startsWith("Import DICOM:")).length, 1);
+    assert.equal(dicomHistory.find(entry => entry.text.startsWith("Import DICOM:")).text, "Import DICOM: dicom");
     const nrrdOutput = path.join(root, "export.nrrd");
     const exportResult = spawnSync(converter, ["E", dicomOutput, nrrdOutput, "0"], { encoding: "utf8" });
     assert.equal(exportResult.status, 0, exportResult.stdout + exportResult.stderr);
@@ -106,7 +163,7 @@ async function main() {
     const exportedHistory = header.split("\n").filter(line => line.startsWith(prefix)).map(line => JSON.parse(line.slice(prefix.length)));
     assert.deepEqual(exportedHistory.slice(0, -1).map(entry => ({ time: entry.timestampMilliseconds, text: entry.text })), dicomHistory);
     assert.ok(exportedHistory.at(-1).text.startsWith("Exported to NRRD"));
-    console.log("CLI provenance date/time, repeated sources in order, automatic tool/version history, and argument validation passed.");
+    console.log("CLI provenance, per-channel generator parameters/backends, automatic tool/version history, and argument validation passed.");
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });

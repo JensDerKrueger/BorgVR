@@ -64,6 +64,8 @@ public final class NRRDParser: VolumeFileParser {
   public let size: Vec3<Int>
   /// The physical voxel spacing along x, y, z.
   public let voxelSpacing: Vec3<Float>
+  public let hasPhysicalVoxelSpacing: Bool
+  public let channelInterpretation: BORGVRChannelInterpretation
   /// The number of bytes per data component (e.g., 1 for 8-bit, 2 for 16-bit).
   public let bytesPerComponent: Int
   /// The number of components per voxel.
@@ -81,10 +83,11 @@ public final class NRRDParser: VolumeFileParser {
    Initializes a new `NRRDParser` by reading and parsing the specified NRRD file header.
 
    This initializer loads the entire file into memory, parses header lines,
-   validates required keys (such as dimension, sizes, spacings, type, encoding,
+   validates required keys (such as dimension, sizes, type, encoding,
    and endianness), and prepares for data extraction. If the encoding is
    compressed, ASCII, or requires endian swapping, a temporary converted copy
-   is created.
+   is created. Without spacing metadata, isotropic spacing is assumed with a
+   longest extent of one meter.
 
    - Parameter filename: The path to the NRRD file.
    - Throws: `NRRDParser.Error` if file cannot be read, header is invalid,
@@ -162,16 +165,19 @@ public final class NRRDParser: VolumeFileParser {
         throw Error.invalidValue("component-first 4D layout")
       }
       self.components = sizes[0]
+      self.channelInterpretation = kinds?[0] == "rgb-color" ? .rgb : kinds?[0] == "rgba-color" ? .rgba : .independentChannels
       self.size = Vec3(x: sizes[1], y: sizes[2], z: sizes[3])
     } else {
       self.components = Int(headerDict["component"] ?? "1") ?? 1
+      self.channelInterpretation = .independentChannels
       self.size = Vec3(x: sizes[0], y: sizes[1], z: sizes[2])
     }
 
     // Parse spacings or space directions
-    guard let spacingsStr = headerDict["spacings"] ?? headerDict["space directions"] else {
-      throw Error.missingKey("spacings or space directions")
-    }
+    let sourceSpacing = headerDict["spacings"] ?? headerDict["space directions"]
+    hasPhysicalVoxelSpacing = sourceSpacing != nil
+    let fallback = String(1 / Float(max(size.x, size.y, size.z)))
+    let spacingsStr = sourceSpacing ?? "\(fallback) \(fallback) \(fallback)"
     var spacingValues: [Float]
     if spacingsStr.contains("(") {
       spacingValues = spacingsStr

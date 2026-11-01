@@ -1,3 +1,11 @@
+"converter_supporting_file_access_required" = "Se necesita permiso de lectura para el archivo referenciado: %@";
+"image_sequence_title" = "Secuencia de imágenes";
+"image_sequence_select" = "Seleccionar carpeta de imágenes";
+"image_sequence_size" = "Tamaño del volumen en metros (X / Y / Z)";
+"image_sequence_empty" = "La carpeta no contiene imágenes compatibles.";
+"image_sequence_invalid" = "No se puede leer una única imagen de corte de %@.";
+"image_sequence_dimensions" = "Las dimensiones de la imagen difieren de los otros cortes: %@.";
+
 /* Localizable.strings (en) */
 
 /* Title of dataset import view */

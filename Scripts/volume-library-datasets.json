@@ -1,0 +1,2221 @@
+{
+  "source": "http://volume.open-terrain.org/",
+  "retrieved": "2026-11-01",
+  "terms": "Commercial use is prohibited; no warranty. Additional dataset-specific conditions and credits are retained below.",
+  "datasets": [
+    {
+      "file": "Angio.pvm",
+      "name": "angio",
+      "action": "import",
+      "decision": "Distinct catalog entry; no established duplicate in the OME-Zarr collection.",
+      "description": "Angiography volume.",
+      "dimensions": [
+        384,
+        512,
+        80
+      ],
+      "bits": 8,
+      "aspect": [
+        0.974019,
+        0.974655,
+        1.48125
+      ],
+      "credits": "Stefan Roettger Georg-Simon-Ohm University of Applied Sciences, Nuremberg, Germany http://wiki.ohm-hochschule.de/roettger",
+      "parameters": "",
+      "comments": "",
+      "size_mode": "estimate",
+      "size_x": 0.37402329599999995,
+      "size_basis": "Catalog voxel aspect values interpreted as millimeters; physical units are not explicitly specified.",
+      "download_sha256": "5ec6cbfbfe17680ff73e6775d765c77af31879163222e0ce339079f523d964a6",
+      "voxel_sha512": "c96a3412f930347ae859c2390aeaadd9eb307778c24cd17ee119bca347436b9095ec34cacb94a4b659671472d1bf01a45f6307752032faa5bbda851214e0af3b"
+    },
+    {
+      "file": "Artischocke.pvm",
+      "name": "artischocke",
+      "action": "import",
+      "decision": "Distinct catalog entry; no established duplicate in the OME-Zarr collection.",
+      "description": "CT scan of an artichoke.",
+      "dimensions": [
+        256,
+        256,
+        104
+      ],
+      "bits": 8,
+      "aspect": [
+        0.583649,
+        0.583649,
+        1.00586
+      ],
+      "credits": "Stefan Roettger & Florian Steinmeyer Georg-Simon-Ohm University of Applied Sciences, Nuremberg, Germany http://wiki.ohm-hochschule.de/roettger",
+      "parameters": "",
+      "comments": "",
+      "size_mode": "estimate",
+      "size_x": 0.149414144,
+      "size_basis": "Catalog voxel aspect values interpreted as millimeters; physical units are not explicitly specified.",
+      "download_sha256": "20d0a8e6ed1afad847e42ad50967959b294edb984230cc4ade1d934793abb8b0",
+      "voxel_sha512": "dbfaaa5b9709a57d9a369bca5599af5725d9c288a2e13c127956938cb70bd31319aebfa30b30f7fcc1374d5a9f4802a3e9b588c29cbdd0b15e22364256bf1cd9"
+    },
+    {
+      "file": "Baby.pvm",
+      "name": "baby",
+      "action": "import",
+      "decision": "Distinct catalog entry; no established duplicate in the OME-Zarr collection.",
+      "description": "Baby Head",
+      "dimensions": [
+        256,
+        256,
+        98
+      ],
+      "bits": 8,
+      "aspect": [
+        1,
+        1,
+        1
+      ],
+      "credits": "Distributed with the VolSuite package",
+      "parameters": "CT Scan",
+      "comments": "Jason Bryan is the developer and maintainer of VolSuite. Feel free to email him with questions or comments about the software: jbryan at osc dot edu",
+      "size_mode": "estimate",
+      "size_x": 0.18,
+      "size_basis": "Approximate anatomical or object scale; no physical calibration established.",
+      "download_sha256": "4be771c4e27930ef29a1e6c240607acace16c4f311b0980c5abfec6680f769d5",
+      "voxel_sha512": "896ea97ca84c04d826d06bbc56177d70055e7e6bc0b8f8c802bc8a68e5f54725d6aa719199dacf55f529fc67241b24be6cb65bcbe1637cd87f56dbf45784f6fa"
+    },
+    {
+      "file": "Backpack.pvm",
+      "name": "backpack",
+      "action": "keep-existing",
+      "decision": "Keep the existing 16-bit OME-Zarr scan rather than the 8-bit quantized Volume Library distribution (same 512 x 512 x 373 grid).",
+      "description": "CT scan of a backpack filled with items.",
+      "dimensions": [
+        512,
+        512,
+        373
+      ],
+      "bits": 8,
+      "aspect": [
+        0.9766,
+        0.9766,
+        1.25
+      ],
+      "credits": "",
+      "parameters": "",
+      "comments": "",
+      "size_mode": "estimate",
+      "size_x": 0.5,
+      "size_basis": "Backpack with margin; catalog spacing assumed to be millimeters.",
+      "download_sha256": "705b1b7f91367f87bf277b4a96af87dc012f95c0d9b211be333ced6bfda5b8fc",
+      "voxel_sha512": "779e7e852cef12f05a2aed39e11f89b6869be471949b6d8901175a728c4e042c1311f3d6199608979c40c7e44a6d7118d314e44bf1d97531ee8a044f107223a5"
+    },
+    {
+      "file": "BluntFin.pvm",
+      "name": "blunt_fin",
+      "action": "import",
+      "decision": "Decoded voxel payload is SHA-512 identical to the Open SciVis raw source (blunt_fin); prefer the earlier Volume Library distribution.",
+      "description": "Blunt Fin",
+      "dimensions": [
+        256,
+        128,
+        64
+      ],
+      "bits": 8,
+      "aspect": [
+        1.0,
+        0.75,
+        1.0
+      ],
+      "credits": "NASA Advanced Supercomputing Division, USA http://www.nas.nasa.gov/Research/Datasets/datasets.html",
+      "parameters": "Resampled from original unstructured tetrehedral grid",
+      "comments": "",
+      "size_mode": "display",
+      "size_x": 1.0,
+      "size_basis": "Arbitrary display scale; no physical calibration in meters established.",
+      "download_sha256": "816ee006b1ef8cc9916770a0412e931ca65ea3061552d5264bfafd94e5a0db8a",
+      "voxel_sha512": "d5da3701268d92dd84e9a18db3ad126d01408983ce4efde38ffa0c096029d9b1c80c9094c5d1dc9baeff4e076c97c195137d200c99b3eee862dcf1d22dfe9df7"
+    },
+    {
+      "file": "Bonsai1-HI.pvm",
+      "name": "bonsai1",
+      "action": "variant",
+      "decision": "Quantized 8-bit derivative; retain the corresponding unquantized 16-bit Bonsai scan.",
+      "description": "Bonsai #1 non-linear quantized version",
+      "dimensions": [
+        512,
+        512,
+        182
+      ],
+      "bits": 8,
+      "aspect": [
+        0.585938,
+        0.585938,
+        1.0
+      ],
+      "credits": "Stefan Roettger Computer Graphics Group, University of Erlangen, Germany http://www9.cs.fau.de/Persons/Roettger",
+      "parameters": "CT Scan with Contrast Dye Siemens Somatom Plus 4 16.Oct.1999 Thanks to Bernd Tomandl",
+      "comments": "",
+      "size_mode": "estimate",
+      "size_x": 0.30000025599999997,
+      "size_basis": "Catalog voxel aspect values interpreted as millimeters; physical units are not explicitly specified.",
+      "download_sha256": "a2e5ba773bb4baf34935b7a04210e6b1692a5be6f3b8cec7fda23e0537bda0a6",
+      "voxel_sha512": "e0c4b288ff980ce7331a7dd19d9ba24117574809234c5d8234cf67298f2de740fea75494be2174bdfedcd8bb7addee1d5ab226f15e114876d5459b29da637d5c"
+    },
+    {
+      "file": "Bonsai1-LO.pvm",
+      "name": "bonsai1",
+      "action": "variant",
+      "decision": "Quantized 8-bit derivative; retain the corresponding unquantized 16-bit Bonsai scan.",
+      "description": "Bonsai #1 linear quantized version",
+      "dimensions": [
+        512,
+        512,
+        182
+      ],
+      "bits": 8,
+      "aspect": [
+        0.585938,
+        0.585938,
+        1.0
+      ],
+      "credits": "Stefan Roettger Computer Graphics Group, University of Erlangen, Germany http://www9.cs.fau.de/Persons/Roettger",
+      "parameters": "CT Scan with Contrast Dye Siemens Somatom Plus 4 16.Oct.1999 Thanks to Bernd Tomandl",
+      "comments": "",
+      "size_mode": "estimate",
+      "size_x": 0.30000025599999997,
+      "size_basis": "Catalog voxel aspect values interpreted as millimeters; physical units are not explicitly specified.",
+      "download_sha256": "598ef9f6dbb256b73fc57a66c0911c2835ac40c39a17e6fda16ec21271a5878a",
+      "voxel_sha512": "615c737aaf7422717f90a423c0b7746a7e2ad9e69e83145b1e2492921b828a1ade95e75f0cf1c3a0ed389ccee992968e31b7e5545db53ef34da2f09ef5d898f2"
+    },
+    {
+      "file": "Bonsai1.pvm",
+      "name": "bonsai1",
+      "action": "import",
+      "decision": "Separate numbered acquisition (1999); relationship to the 256-cubed OME-Zarr Bonsai is unproven, so do not merge by name alone.",
+      "description": "Bonsai #1",
+      "dimensions": [
+        512,
+        512,
+        182
+      ],
+      "bits": 16,
+      "aspect": [
+        0.585938,
+        0.585938,
+        1.0
+      ],
+      "credits": "Stefan Roettger Computer Graphics Group, University of Erlangen, Germany http://www9.cs.fau.de/Persons/Roettger",
+      "parameters": "CT Scan with Contrast Dye Siemens Somatom Plus 4 16.Oct.1999 Thanks to Bernd Tomandl",
+      "comments": "",
+      "size_mode": "estimate",
+      "size_x": 0.30000025599999997,
+      "size_basis": "Catalog voxel aspect values interpreted as millimeters; physical units are not explicitly specified.",
+      "download_sha256": "190a9eeeb2cb4c6ae3ff49d39aaacdfc53a6fd36b0a033193b87c571a1b67927",
+      "voxel_sha512": "a83d576df4db9448b2e89c4ca1a12f2ce1588027dbe5c0c53bb8fba31930713422ca8612e79b8788294895775854784af8b33400efdd2915881096250f67b3a9"
+    },
+    {
+      "file": "Bonsai2-HI.pvm",
+      "name": "bonsai2",
+      "action": "variant",
+      "decision": "Quantized 8-bit derivative; retain the corresponding unquantized 16-bit Bonsai scan.",
+      "description": "Bonsai #2 non-linear quantized version",
+      "dimensions": [
+        512,
+        512,
+        189
+      ],
+      "bits": 8,
+      "aspect": [
+        0.402344,
+        0.402344,
+        1.0
+      ],
+      "credits": "Stefan Roettger Computer Graphics Group, University of Erlangen, Germany http://www9.cs.fau.de/Persons/Roettger",
+      "parameters": "CT Scan with Contrast Dye Siemens Somatom Plus 4 16.Oct.1999 Thanks to Bernd Tomandl",
+      "comments": "",
+      "size_mode": "estimate",
+      "size_x": 0.206000128,
+      "size_basis": "Catalog voxel aspect values interpreted as millimeters; physical units are not explicitly specified.",
+      "download_sha256": "3c9d17444dbba6ddcb55cf71333b6a34e00e4c77b06cf158e366e9c4198fc668",
+      "voxel_sha512": "ac29956abb1932fbdf2327238e20c3c813e87d87d6ae8d15b50bed015e7993544bb05e95aa095d9740e97ff40e34e7c377417a4b4600167c39dc6e9f5967c2b1"
+    },
+    {
+      "file": "Bonsai2-LO.pvm",
+      "name": "bonsai2",
+      "action": "variant",
+      "decision": "Quantized 8-bit derivative; retain the corresponding unquantized 16-bit Bonsai scan.",
+      "description": "Bonsai #2 linear quantized version",
+      "dimensions": [
+        512,
+        512,
+        189
+      ],
+      "bits": 8,
+      "aspect": [
+        0.402344,
+        0.402344,
+        1.0
+      ],
+      "credits": "Stefan Roettger Computer Graphics Group, University of Erlangen, Germany http://www9.cs.fau.de/Persons/Roettger",
+      "parameters": "CT Scan with Contrast Dye Siemens Somatom Plus 4 16.Oct.1999 Thanks to Bernd Tomandl",
+      "comments": "",
+      "size_mode": "estimate",
+      "size_x": 0.206000128,
+      "size_basis": "Catalog voxel aspect values interpreted as millimeters; physical units are not explicitly specified.",
+      "download_sha256": "64ca19fb2f8eddfcb9916a6457089b4d1fbe6a2dceff004c63673fd37c30a327",
+      "voxel_sha512": "017d064d2a5fc389408ce86db819c752df69d96d3d89126013777dc8d6f70d0161bd61d02ab2c1611d640dbbf34665e4350eae901b40888d110c61a983f4f89c"
+    },
+    {
+      "file": "Bonsai2.pvm",
+      "name": "bonsai2",
+      "action": "import",
+      "decision": "Separate numbered acquisition (1999); relationship to the 256-cubed OME-Zarr Bonsai is unproven, so do not merge by name alone.",
+      "description": "Bonsai #2",
+      "dimensions": [
+        512,
+        512,
+        189
+      ],
+      "bits": 16,
+      "aspect": [
+        0.402344,
+        0.402344,
+        1.0
+      ],
+      "credits": "Stefan Roettger Computer Graphics Group, University of Erlangen, Germany http://www9.cs.fau.de/Persons/Roettger",
+      "parameters": "CT Scan with Contrast Dye Siemens Somatom Plus 4 16.Oct.1999 Thanks to Bernd Tomandl",
+      "comments": "",
+      "size_mode": "estimate",
+      "size_x": 0.206000128,
+      "size_basis": "Catalog voxel aspect values interpreted as millimeters; physical units are not explicitly specified.",
+      "download_sha256": "b6228de7cfa472079d5bf4bcfbf3c328c54aa109ded928c4659a9f1796ccdc88",
+      "voxel_sha512": "f647f3bafcd0b8f6bc40186f45210fe5d22e9f8512f76670d73c7b04afdf97d58e7ac8f1973e589625d5a977c3969baa8df6d0bff37f4e62468e37da61d89edb"
+    },
+    {
+      "file": "Bonsai3-HI.pvm",
+      "name": "bonsai3",
+      "action": "variant",
+      "decision": "Quantized 8-bit derivative; retain the corresponding unquantized 16-bit Bonsai scan.",
+      "description": "Bonsai #3 non-linear quantized version",
+      "dimensions": [
+        512,
+        512,
+        154
+      ],
+      "bits": 8,
+      "aspect": [
+        0.402344,
+        0.402344,
+        1.0
+      ],
+      "credits": "Stefan Roettger Computer Graphics Group, University of Erlangen, Germany http://www9.cs.fau.de/Persons/Roettger",
+      "parameters": "CT Scan with Contrast Dye Siemens Somatom Plus 4 16.Oct.1999 Thanks to Bernd Tomandl",
+      "comments": "Bonsai from IEEE Visualization '00 Conference",
+      "size_mode": "estimate",
+      "size_x": 0.206000128,
+      "size_basis": "Catalog voxel aspect values interpreted as millimeters; physical units are not explicitly specified.",
+      "download_sha256": "d764ca37acfaffa0e67da4deb734baa610b304ae219b26c2a372e0d8ce630322",
+      "voxel_sha512": "dc35e9431cb0dd54dc57c7b8c04e452147f3938b685054763db1d8a21a7f11a1560251b6ca6d813a9ba9ac135f89524af30cfbdcf5aecd1d134c91c3aeba9860"
+    },
+    {
+      "file": "Bonsai3-LO.pvm",
+      "name": "bonsai3",
+      "action": "variant",
+      "decision": "Quantized 8-bit derivative; retain the corresponding unquantized 16-bit Bonsai scan.",
+      "description": "Bonsai #3 linear quantized version",
+      "dimensions": [
+        512,
+        512,
+        154
+      ],
+      "bits": 8,
+      "aspect": [
+        0.402344,
+        0.402344,
+        1.0
+      ],
+      "credits": "Stefan Roettger Computer Graphics Group, University of Erlangen, Germany http://www9.cs.fau.de/Persons/Roettger",
+      "parameters": "CT Scan with Contrast Dye Siemens Somatom Plus 4 16.Oct.1999 Thanks to Bernd Tomandl",
+      "comments": "Bonsai from IEEE Visualization '00 Conference",
+      "size_mode": "estimate",
+      "size_x": 0.206000128,
+      "size_basis": "Catalog voxel aspect values interpreted as millimeters; physical units are not explicitly specified.",
+      "download_sha256": "e5de1d5e5f30ff85e60d4ceb9c4c077fa234fe4f5290d1cb2c14f3d1f534c423",
+      "voxel_sha512": "6877134ff0e2fd74398beef93db123dcf7dd2d91531f91ebc5ebccd52692b36cfe2bd4f6b1d8571f0dcdbbac8f39bc7aaebce55ff7964e84bad4e12e46ba8a51"
+    },
+    {
+      "file": "Bonsai3.pvm",
+      "name": "bonsai3",
+      "action": "import",
+      "decision": "Separate numbered acquisition (1999); relationship to the 256-cubed OME-Zarr Bonsai is unproven, so do not merge by name alone.",
+      "description": "Bonsai #3",
+      "dimensions": [
+        512,
+        512,
+        154
+      ],
+      "bits": 16,
+      "aspect": [
+        0.402344,
+        0.402344,
+        1.0
+      ],
+      "credits": "Stefan Roettger Computer Graphics Group, University of Erlangen, Germany http://www9.cs.fau.de/Persons/Roettger",
+      "parameters": "CT Scan with Contrast Dye Siemens Somatom Plus 4 16.Oct.1999 Thanks to Bernd Tomandl",
+      "comments": "Bonsai from IEEE Visualization '00 Conference",
+      "size_mode": "estimate",
+      "size_x": 0.206000128,
+      "size_basis": "Catalog voxel aspect values interpreted as millimeters; physical units are not explicitly specified.",
+      "download_sha256": "dbfc960012242d583e62fb0fcddd658d15d7a3ee70399dd87c8d4ab498ce8d3e",
+      "voxel_sha512": "21d6957401d03b7bc5a721f35e288dbc693e483bbaeb6b968b1936c5151f3bdc8e80dc12e3806973611203d653192c89a223ad21a8fbe750c828c3547fbd1dcf"
+    },
+    {
+      "file": "Box.pvm",
+      "name": "box",
+      "action": "import",
+      "decision": "Distinct catalog entry; no established duplicate in the OME-Zarr collection.",
+      "description": "Solid Box",
+      "dimensions": [
+        64,
+        64,
+        64
+      ],
+      "bits": 8,
+      "aspect": [
+        1,
+        1,
+        1
+      ],
+      "credits": "Stefan Roettger Computer Graphics Group, University of Erlangen, Germany http://www9.cs.fau.de/Persons/Roettger",
+      "parameters": "Artificial",
+      "comments": "Test dataset containing a solid box",
+      "size_mode": "display",
+      "size_x": 1.0,
+      "size_basis": "Arbitrary display scale; no physical calibration in meters established.",
+      "download_sha256": "4b59f8dd14afcf88c2738c3e26b3d9347d06f751dd5f1345f044110545c7c3dd",
+      "voxel_sha512": "ce6496efa612d9f50a08c2735f897e32b2ceba4b0b5cb95db122025de342c8f6ad5cff5332d51099bedbd5b76a4ecc5b26b20cb36163b0015473b597c5573b05"
+    },
+    {
+      "file": "Bruce.pvm",
+      "name": "bruce",
+      "action": "import",
+      "decision": "Distinct catalog entry; no established duplicate in the OME-Zarr collection.",
+      "description": "Bruce Gooch's Brain",
+      "dimensions": [
+        256,
+        256,
+        156
+      ],
+      "bits": 16,
+      "aspect": [
+        1,
+        1,
+        1
+      ],
+      "credits": "Bruce Gooch University of Utah, Salt Lake City http://www.cs.utah.edu/~bgooch/BruceBrain.html",
+      "parameters": "FMRI scans taken at an undisclosed location in the University of Utah research park July 13th, 2001",
+      "comments": "The scans were taken as part of an arcane research project by a buddy of mine named Jim Lee. Jim also provided the Matlab scripts you can use to view the MRI data. I am making the data freely available with the following caveats: 1: If you publish a scientific paper with an image created using my MRI data you will mention that the image was created using the \"Bruce Gooch's Brain\" data sets. 2: If you create a really cool image of my brain you will email me a copy of it. I will post all such images on this site. Thank You, and happy computing. Bruce Gooch June 12, 2001",
+      "size_mode": "estimate",
+      "size_x": 0.24,
+      "size_basis": "Approximate anatomical or object scale; no physical calibration established.",
+      "download_sha256": "d51692f26e4bba33c1dbcc447684ee6b2c8cd371f052d5fe889f6f78fd7839b8",
+      "voxel_sha512": "1db2cb22a787cafdc39c4c8892880920b6e5b6199cae14b6bf5b7a6a64987d6e1d8b5dcb1e5cf70caaaface16c46c14db5c886577fb532a2052889ae3f357033"
+    },
+    {
+      "file": "Bucky.pvm",
+      "name": "bucky_32",
+      "action": "import",
+      "decision": "Distinct catalog entry; no established duplicate in the OME-Zarr collection.",
+      "description": "C60 Buckminsterfullerene volume distributed by AVS (32^3).",
+      "source_notes": [
+        "Source: AVS International Center. Cignoni, Montani, Puppo and Scopigno, Optimal Isosurface Extraction from Irregular Volume Data (1996), acknowledge Bucky as a 32x32x32 subsampling of a regular rectilinear dataset supplied by AVS. Original resolution, original model author and calculation method are not specified. https://iris.cnr.it/retrieve/c45d5a5c-0f9d-41c0-b554-fa5949929432/prod_408374-doc_143296.pdf",
+        "Attribution correction: user comparison found this AVS 32^3 dataset different from Oliver Kreylos' 64^3 and 128^3 datasets. The earlier assignment to his Gaussian model is withdrawn; a shared origin or use of that construction method is not established. The Volume Library's word 'Simulation' does not by itself establish a physical electron-density computation."
+      ],
+      "dimensions": [
+        32,
+        32,
+        32
+      ],
+      "bits": 8,
+      "aspect": [
+        1,
+        1,
+        1
+      ],
+      "credits": "AVS, USA http://www.avs.com",
+      "parameters": "Simulation of the electron density of a Buckminster-Fullerene",
+      "comments": "",
+      "size_mode": "estimate",
+      "size_x": 0.000000001,
+      "size_basis": "Coarse full-grid size estimate based on the known C60 cage diameter (about 0.71 nm) and outer molecular diameter (about 1 nm). Exact atom positions, field boundary and padding are not calibrated; this is not an acquisition measurement. Diameter convention reference: https://doi.org/10.1021/nl503388f . Supersedes the arbitrary 1 m display scale.",
+      "download_sha256": "b8b9c22f5de5f768bf32d59958b24aa18bbdb871c0576c066dacf99d9f9d22c9",
+      "voxel_sha512": "84292a252c4ebe1835b74cd26e75deb10a369ddc64f7b42895f69e5cc2170cd1e2b29400336a78cb59534886ddedaf498116ce09641312fdcdcd963f89a8b5d2"
+    },
+    {
+      "file": "Bunny.pvm",
+      "name": "bunny",
+      "action": "import",
+      "decision": "Decoded voxel payload is SHA-512 identical to the Open SciVis raw source (bunny); prefer the earlier Volume Library distribution.",
+      "description": "Stanford Bunny",
+      "dimensions": [
+        512,
+        512,
+        361
+      ],
+      "bits": 16,
+      "aspect": [
+        0.337891,
+        0.337891,
+        0.5
+      ],
+      "credits": "Terry Yoo High Performance Computing and Communications, National Library of Medicine, USA mailto:yoo@nlm.nih.gov",
+      "parameters": "CT Scan 28.Jan.2000",
+      "comments": "This is a CT scan of the terracotta Stanford Bunny. Three hundred sixty-one files comprise the bunny. The scale of the voxel data is 0.337891 mm x 0.337891 mm x 0.5mm in the x-, y-, and z- dimensions respectively. The greyscale units are Hounsfield units, denoting electron-density of the subject. The data is raw 512x512 slices, unsigned, 12 bit data stored as 16bit (2-byte) pixels. The scan was completed 28 January 2000. Many many thanks to Geoff Rubin who helped me to scan the data, Sandy Napel who coordinated the scan and helped to process the data, and Marc Levoy who graciously provided the subject. Geoff and Sandy are with Stanford Radiology, and Marc is with Stanford Computer Science. Dataset contact info: Terry S. Yoo High Performance Computing and Communications yoo@nlm.nih.gov National Library of Medicine National Institutes of Health",
+      "size_mode": "force",
+      "size_x": 0.173000192,
+      "size_basis": "512 X voxels * 0.337891 mm = 0.173000192 m. Original CT README explicitly specifies mm; not the laser-scanned mesh. https://graphics.stanford.edu/data/voldata/bunny-README",
+      "download_sha256": "5d49664a4e8ac2724c794b5517f2a46a0c0d4405d74b60281d8739c0d61ff215",
+      "voxel_sha512": "58c8de50e5e9638278a36c9ddb10d0948721b5821e62dff3dada7b783341b6e5d346014b8545f504eb33952ea5c91e3ca93d10a5ce6a78b32ecabd10bb9438f3"
+    },
+    {
+      "file": "CT-Abdomen.pvm",
+      "name": "ct_abdomen",
+      "action": "import",
+      "decision": "Distinct catalog entry; no established duplicate in the OME-Zarr collection.",
+      "description": "CT scan of an abdomen.",
+      "dimensions": [
+        512,
+        512,
+        147
+      ],
+      "bits": 8,
+      "aspect": [
+        0.779724,
+        0.779724,
+        4.96599
+      ],
+      "credits": "Stefan Roettger & Florian Steinmeyer Georg-Simon-Ohm University of Applied Sciences, Nuremberg, Germany http://wiki.ohm-hochschule.de/roettger",
+      "parameters": "",
+      "comments": "",
+      "size_mode": "estimate",
+      "size_x": 0.399218688,
+      "size_basis": "Catalog voxel aspect values interpreted as millimeters; physical units are not explicitly specified.",
+      "download_sha256": "943f51f8e2ea709d0838b315ff2510ef307640b563f36125cc5ef451aa1d6b66",
+      "voxel_sha512": "cb6f22c67a9c309f1cefec68c7712cf111df279f32610155a7b8924cff72bb4e48f4a712c278d9147ce1b1d335d077f6c734c5f32a56032de42fdc55910f95c0"
+    },
+    {
+      "file": "CT-Chest.pvm",
+      "name": "ct_chest",
+      "action": "import",
+      "decision": "Distinct catalog entry; no established duplicate in the OME-Zarr collection.",
+      "description": "Female Chest",
+      "dimensions": [
+        384,
+        384,
+        240
+      ],
+      "bits": 8,
+      "aspect": [
+        1,
+        1,
+        1
+      ],
+      "credits": "Department of Radiology, University of Iowa http://radiology.uiowa.edu/downloads",
+      "parameters": "CT Scan",
+      "comments": "",
+      "size_mode": "estimate",
+      "size_x": 0.4,
+      "size_basis": "Approximate anatomical or object scale; no physical calibration established.",
+      "download_sha256": "79fd36dd5e9e268c5c314f3ef5cb1900caf6a5a829d8e296d0b46825d5086d8b",
+      "voxel_sha512": "0c2438f441438150ca8e3c667b36254bbf0b101349406f7c73d2d0f4a65abbe3bf53cb25a5b3292254408057ffba79476bf03236481aed7efb1bea4206ff39a2"
+    },
+    {
+      "file": "CT-Head.pvm",
+      "name": "ct_head",
+      "action": "import",
+      "decision": "Distinct catalog entry; no established duplicate in the OME-Zarr collection.",
+      "description": "Chapel Hill CT Head",
+      "dimensions": [
+        256,
+        256,
+        113
+      ],
+      "bits": 16,
+      "aspect": [
+        0.95,
+        1.0,
+        1.8878
+      ],
+      "credits": "Marc Levoy Computer Graphics Laboratory, Stanford University, USA http://graphics.stanford.edy/~levoy Provided courtesy of North Carolina Memorial Hospital",
+      "parameters": "CT Study of a Female Cadaver Head General Electric CT Scanner",
+      "comments": "",
+      "size_mode": "estimate",
+      "size_x": 0.2432,
+      "size_basis": "Catalog voxel aspect values interpreted as millimeters; physical units are not explicitly specified.",
+      "download_sha256": "d88a68010a4f419dd6d0adef274ac0f44f5a9712ce645a1f388506481dc7e98d",
+      "voxel_sha512": "ff5334fc3e1231e132345be10144fa09d7d4fbb296a81605a28b66c81d28f9e8eee641d9f393a9988ce058d32dfa4c02e4646602551d0fb7a7d321c4dbbf33e5"
+    },
+    {
+      "file": "CT-Knee.pvm",
+      "name": "ct_knee",
+      "action": "import",
+      "decision": "Distinct catalog entry; no established duplicate in the OME-Zarr collection.",
+      "description": "Knee with anterior tibial osteotomy",
+      "dimensions": [
+        379,
+        229,
+        305
+      ],
+      "bits": 8,
+      "aspect": [
+        1,
+        1,
+        1
+      ],
+      "credits": "Department of Radiology, University of Iowa http://radiology.uiowa.edu/downloads",
+      "parameters": "CT-Scan",
+      "comments": "",
+      "size_mode": "estimate",
+      "size_x": 0.2,
+      "size_basis": "Approximate anatomical or object scale; no physical calibration established.",
+      "download_sha256": "ffcee4792fcdac4cea69aeb73c1036f0a05995636e2ae32f91a4bc9f688879e6",
+      "voxel_sha512": "631bd50010e2776663c4025f2d609a2d0c04abf5ff5edcc23ff8e71f1eb2aa9a268f48bff48073277518ecb5383666d83ca94ae5417f8766f0bf09aed992fece"
+    },
+    {
+      "file": "CTA-Brain.pvm",
+      "name": "cta_brain",
+      "action": "import",
+      "decision": "Distinct catalog entry; no established duplicate in the OME-Zarr collection.",
+      "description": "CTA Head with Aneurysm",
+      "dimensions": [
+        512,
+        512,
+        120
+      ],
+      "bits": 8,
+      "aspect": [
+        0.214844,
+        0.214844,
+        0.5
+      ],
+      "credits": "Division of Neuroradiology, University of Erlangen, Germany http://www.neuroradiologie.med.uni-erlangen.de",
+      "parameters": "CTA Scan",
+      "comments": "EBE CTA 1 dataset",
+      "size_mode": "estimate",
+      "size_x": 0.110000128,
+      "size_basis": "Catalog voxel aspect values interpreted as millimeters; physical units are not explicitly specified.",
+      "download_sha256": "cbb4c2dd475717ad9b6ef5a69321b201430b5ffbd9eef969268c8553ed468dfe",
+      "voxel_sha512": "fa8d08b85cbf5534c64d35df547bafcb5c0b4299e6c7a27958f4ab7a8f1289b96109dff36432eaf35ffe0e4a44df72931979837f0db40fb99d0052a4492aed3c"
+    },
+    {
+      "file": "Cadaver.pvm",
+      "name": "cadaver",
+      "action": "import",
+      "decision": "Distinct catalog entry; no established duplicate in the OME-Zarr collection.",
+      "description": "Cadaver Head",
+      "dimensions": [
+        512,
+        512,
+        106
+      ],
+      "bits": 16,
+      "aspect": [
+        0.435547,
+        0.435547,
+        2.0
+      ],
+      "credits": "Computer Graphics Group, University of Erlangen, Germany http://www9.cs.fau.de",
+      "parameters": "CT Scan",
+      "comments": "The cadaver head is famous for the scanning artifacts originating at the teeth",
+      "size_mode": "estimate",
+      "size_x": 0.22300006400000003,
+      "size_basis": "Catalog voxel aspect values interpreted as millimeters; physical units are not explicitly specified.",
+      "download_sha256": "655464174d9cabc3b4a4d200a09a5efcb7470ae37187eb2f752c2b535094191f",
+      "voxel_sha512": "f430748ae47d53d8f9a484705325ac8a4dfaebb5e29636cce14d40de920c3896dc8ae548156e1db1c70b13909cf37c7af8b3dfd8d97c867418a29ef16bb15539"
+    },
+    {
+      "file": "Carp.pvm",
+      "name": "carp",
+      "action": "import",
+      "decision": "Decoded voxel payload is SHA-512 identical to the Open SciVis raw source (carp); prefer the earlier Volume Library distribution.",
+      "description": "The Carp",
+      "dimensions": [
+        256,
+        256,
+        512
+      ],
+      "bits": 16,
+      "aspect": [
+        0.78125,
+        0.390625,
+        1.0
+      ],
+      "credits": "Michael Scheuring Computer Graphics Group, University of Erlangen, Germany http://www9.cs.fau.de",
+      "parameters": "CT Scan",
+      "comments": "The Carp is a seasonal delicacy in Frankonia, Germany",
+      "size_mode": "estimate",
+      "size_x": 0.2,
+      "size_basis": "Catalog spacing assumed to be millimeters.",
+      "download_sha256": "4cce9a2a3e626b9b8dc9d48d6aa4a8e04ea1d45d2a963358f2b5995fc0b9a734",
+      "voxel_sha512": "0ec57ca05d700e25a87cc2ca976c066f52e254c0269aa5fb7decb08ba3607cbf996b5d72aac8671dfe6589a794935d3fd820aaa756e6f6d32b84def15455fea5"
+    },
+    {
+      "file": "Clouds.pvm",
+      "name": "clouds",
+      "action": "import",
+      "decision": "Distinct catalog entry; no established duplicate in the OME-Zarr collection.",
+      "description": "Artificial Clouds",
+      "dimensions": [
+        512,
+        512,
+        32
+      ],
+      "bits": 8,
+      "aspect": [
+        1,
+        1,
+        1
+      ],
+      "credits": "Stefan Roettger Computer Graphics Group, University of Erlangen, Germany http://www9.cs.fau.de/Persons/Roettger",
+      "parameters": "Artifical dataset generated with 3D Perlin Noise",
+      "comments": "",
+      "size_mode": "display",
+      "size_x": 1.0,
+      "size_basis": "Arbitrary display scale; no physical calibration in meters established.",
+      "download_sha256": "2a25cb1d4b34c54bbcb6ac7b0ce8b36263ffa924526200eb53d34ad8fa175275",
+      "voxel_sha512": "b11a2dc32c1f7a6999a8712697eec5b4bc5d829b537adb21349342a715efde4b61679071d0e2f962cb530fe4df4a3d906dbccfaf6589e33fff3d56aade4e7483"
+    },
+    {
+      "file": "Coronal-fem.pvm",
+      "name": "coronal_fem",
+      "action": "import",
+      "decision": "Distinct catalog entry; no established duplicate in the OME-Zarr collection.",
+      "description": "Coronal volume of a female patient.",
+      "dimensions": [
+        512,
+        512,
+        44
+      ],
+      "bits": 8,
+      "aspect": [
+        1.27992,
+        1.27992,
+        4.88636
+      ],
+      "credits": "Stefan Roettger & Florian Steinmeyer Georg-Simon-Ohm University of Applied Sciences, Nuremberg, Germany http://wiki.ohm-hochschule.de/roettger",
+      "parameters": "",
+      "comments": "",
+      "size_mode": "estimate",
+      "size_x": 0.65531904,
+      "size_basis": "Catalog voxel aspect values interpreted as millimeters; physical units are not explicitly specified.",
+      "download_sha256": "c5c1f5697a7cdfc64a9fef1373d94657b04cfbe4b80f9f323f5c641738db08d3",
+      "voxel_sha512": "7f341235c58a790071d8cdd2e988d1b34cee911e57688e2b738a7fe138af606ed0d16b52eff25663eaed6cd6a058a27afca015e53b9577b872c031fed045f802"
+    },
+    {
+      "file": "Coronal-mal.pvm",
+      "name": "coronal_mal",
+      "action": "import",
+      "decision": "Distinct catalog entry; no established duplicate in the OME-Zarr collection.",
+      "description": "Coronal volume of a male patient.",
+      "dimensions": [
+        512,
+        512,
+        59
+      ],
+      "bits": 8,
+      "aspect": [
+        1.35906,
+        1.35906,
+        2.94915
+      ],
+      "credits": "Stefan Roettger & Florian Steinmeyer Georg-Simon-Ohm University of Applied Sciences, Nuremberg, Germany http://wiki.ohm-hochschule.de/roettger",
+      "parameters": "",
+      "comments": "",
+      "size_mode": "estimate",
+      "size_x": 0.69583872,
+      "size_basis": "Catalog voxel aspect values interpreted as millimeters; physical units are not explicitly specified.",
+      "download_sha256": "c9ca107448b83084746723bad5e95191b671eec472e0522218aded0fc762bf76",
+      "voxel_sha512": "f355b8f8392475f1c86bd8296bea3b695795cb763f894c72498eaaea9b27493b8509babe58abc1ada1e325cba22ef4a3f9b5a8dedb6ad2e8f1c22b76cdc92286"
+    },
+    {
+      "file": "Cross.pvm",
+      "name": "cross",
+      "action": "import",
+      "decision": "Distinct catalog entry; no established duplicate in the OME-Zarr collection.",
+      "description": "Crossed Rods",
+      "dimensions": [
+        64,
+        64,
+        64
+      ],
+      "bits": 8,
+      "aspect": [
+        1,
+        1,
+        1
+      ],
+      "credits": "Ove Sommer Computer Graphics Group, University of Erlangen, Germany http://www9.cs.fau.de",
+      "parameters": "Artificial",
+      "comments": "Test dataset containing several crossed rods, balls and platters Rods are placed like coordinate axes to verify correct orientation",
+      "size_mode": "display",
+      "size_x": 1.0,
+      "size_basis": "Arbitrary display scale; no physical calibration in meters established.",
+      "download_sha256": "4bda83f7344272750dafd36a225822b8f1d9737f1ac1ba2d29c2c059b3136ae6",
+      "voxel_sha512": "added65365516a0a11dd836f1a58a7602029f2a3f110bd9f4d23bd1a081b2965adc6ccb45a6393945fd49ddd6cfa16a38b212be182c9f98bcaae20f26672764f"
+    },
+    {
+      "file": "DTI-B0.pvm",
+      "name": "dti_b0",
+      "action": "import",
+      "decision": "Distinct catalog entry; no established duplicate in the OME-Zarr collection.",
+      "description": "Diffusion tensor MRI, B0 volume.",
+      "dimensions": [
+        128,
+        128,
+        58
+      ],
+      "bits": 16,
+      "aspect": [
+        1,
+        1,
+        1
+      ],
+      "credits": "Pierre Fillard http://www.cs.unc.edu/~fillard",
+      "parameters": "Diffusion Tensor MRI Scan Series",
+      "comments": "B0 = lores MRI scan (no diffusion weighting) B1 = diffusion weighted volume #1 with dir=(1,0,1) B2 = diffusion weighted volume #2 with dir=(-1,0,1) B3 = diffusion weighted volume #3 with dir=(0,1,1) B4 = diffusion weighted volume #4 with dir=(0,1,-1) B5 = diffusion weighted volume #5 with dir=(1,1,0) B6 = diffusion weighted volume #6 with dir=(-1,1,0) MD = mean diffusion FA = fractional anisotropy",
+      "size_mode": "estimate",
+      "size_x": 0.24,
+      "size_basis": "Approximate anatomical or object scale; no physical calibration established.",
+      "download_sha256": "c7b8307be68b40eb73f2035e608aee0a41cc50f2cd2cb4dc110f13a1cb139ca0",
+      "voxel_sha512": "dd3b7078e22d9c5bdc3a9e846f26e2ec76c8ac67482d90be73b24ee123d9ee0214367ea49b90a0fe21582b51187701e02918c0d608dec6828d5dd6442b0b7bca"
+    },
+    {
+      "file": "DTI-B1.pvm",
+      "name": "dti_b1",
+      "action": "import",
+      "decision": "Distinct catalog entry; no established duplicate in the OME-Zarr collection.",
+      "description": "Diffusion tensor MRI, B1 volume.",
+      "dimensions": [
+        128,
+        128,
+        58
+      ],
+      "bits": 16,
+      "aspect": [
+        1,
+        1,
+        1
+      ],
+      "credits": "Pierre Fillard http://www.cs.unc.edu/~fillard",
+      "parameters": "Diffusion Tensor MRI Scan Series",
+      "comments": "B0 = lores MRI scan (no diffusion weighting) B1 = diffusion weighted volume #1 with dir=(1,0,1) B2 = diffusion weighted volume #2 with dir=(-1,0,1) B3 = diffusion weighted volume #3 with dir=(0,1,1) B4 = diffusion weighted volume #4 with dir=(0,1,-1) B5 = diffusion weighted volume #5 with dir=(1,1,0) B6 = diffusion weighted volume #6 with dir=(-1,1,0) MD = mean diffusion FA = fractional anisotropy",
+      "size_mode": "estimate",
+      "size_x": 0.24,
+      "size_basis": "Approximate anatomical or object scale; no physical calibration established.",
+      "download_sha256": "458b8927dee8a74c3494b249fdac9d34b68b1b04ed5b49a530ec190e5894576e",
+      "voxel_sha512": "f9bff815bfc15a222de54204def7f33f40570d17760f60dbd06ac8647d4b9f6c370d1a4ba5dd9d87057fc9d5e901eab232d3ec40c79c0fcee81d6df53f344952"
+    },
+    {
+      "file": "DTI-B2.pvm",
+      "name": "dti_b2",
+      "action": "import",
+      "decision": "Distinct catalog entry; no established duplicate in the OME-Zarr collection.",
+      "description": "Diffusion tensor MRI, B2 volume.",
+      "dimensions": [
+        128,
+        128,
+        58
+      ],
+      "bits": 16,
+      "aspect": [
+        1,
+        1,
+        1
+      ],
+      "credits": "Pierre Fillard http://www.cs.unc.edu/~fillard",
+      "parameters": "Diffusion Tensor MRI Scan Series",
+      "comments": "B0 = lores MRI scan (no diffusion weighting) B1 = diffusion weighted volume #1 with dir=(1,0,1) B2 = diffusion weighted volume #2 with dir=(-1,0,1) B3 = diffusion weighted volume #3 with dir=(0,1,1) B4 = diffusion weighted volume #4 with dir=(0,1,-1) B5 = diffusion weighted volume #5 with dir=(1,1,0) B6 = diffusion weighted volume #6 with dir=(-1,1,0) MD = mean diffusion FA = fractional anisotropy",
+      "size_mode": "estimate",
+      "size_x": 0.24,
+      "size_basis": "Approximate anatomical or object scale; no physical calibration established.",
+      "download_sha256": "4bbd40eead7a99b2f946147f138f4bc5d1207ab3d7673cdf0b2ebae0a9041716",
+      "voxel_sha512": "fb38118f8d21ac0df215b2b234cdf70dcfa2db6fba786a61e903862be817b50462a8644addee6debb6f6b08469057c835fc66a26262d69082ed07c42eb71c114"
+    },
+    {
+      "file": "DTI-B3.pvm",
+      "name": "dti_b3",
+      "action": "import",
+      "decision": "Distinct catalog entry; no established duplicate in the OME-Zarr collection.",
+      "description": "Diffusion tensor MRI, B3 volume.",
+      "dimensions": [
+        128,
+        128,
+        58
+      ],
+      "bits": 16,
+      "aspect": [
+        1,
+        1,
+        1
+      ],
+      "credits": "Pierre Fillard http://www.cs.unc.edu/~fillard",
+      "parameters": "Diffusion Tensor MRI Scan Series",
+      "comments": "B0 = lores MRI scan (no diffusion weighting) B1 = diffusion weighted volume #1 with dir=(1,0,1) B2 = diffusion weighted volume #2 with dir=(-1,0,1) B3 = diffusion weighted volume #3 with dir=(0,1,1) B4 = diffusion weighted volume #4 with dir=(0,1,-1) B5 = diffusion weighted volume #5 with dir=(1,1,0) B6 = diffusion weighted volume #6 with dir=(-1,1,0) MD = mean diffusion FA = fractional anisotropy",
+      "size_mode": "estimate",
+      "size_x": 0.24,
+      "size_basis": "Approximate anatomical or object scale; no physical calibration established.",
+      "download_sha256": "e4f056994eb6e6911109ed6ed7a066cff3e3ea3981ce4087e148e807f6c8b774",
+      "voxel_sha512": "1d849197dc10628e6e7c5e156017082f5bff5be7949cdbaf14e91e676956e18200f540382d545eecf9ea7bfe55edf1d38a8e1b8562e08c67415786f662221c06"
+    },
+    {
+      "file": "DTI-B4.pvm",
+      "name": "dti_b4",
+      "action": "import",
+      "decision": "Distinct catalog entry; no established duplicate in the OME-Zarr collection.",
+      "description": "Diffusion tensor MRI, B4 volume.",
+      "dimensions": [
+        128,
+        128,
+        58
+      ],
+      "bits": 16,
+      "aspect": [
+        1,
+        1,
+        1
+      ],
+      "credits": "Pierre Fillard http://www.cs.unc.edu/~fillard",
+      "parameters": "Diffusion Tensor MRI Scan Series",
+      "comments": "B0 = lores MRI scan (no diffusion weighting) B1 = diffusion weighted volume #1 with dir=(1,0,1) B2 = diffusion weighted volume #2 with dir=(-1,0,1) B3 = diffusion weighted volume #3 with dir=(0,1,1) B4 = diffusion weighted volume #4 with dir=(0,1,-1) B5 = diffusion weighted volume #5 with dir=(1,1,0) B6 = diffusion weighted volume #6 with dir=(-1,1,0) MD = mean diffusion FA = fractional anisotropy",
+      "size_mode": "estimate",
+      "size_x": 0.24,
+      "size_basis": "Approximate anatomical or object scale; no physical calibration established.",
+      "download_sha256": "bc6c83417e27ffd57d67cebd3c32d3aaaf5d694b749370c7d6a85fdbbd2afe99",
+      "voxel_sha512": "80cf1c76945496f1012b9e6a3d1e0180ba38d439458eab59f15fca4a70f89ee47899a3b7a1d774a99a69bd20097cd33083cf76ed88eb12882fc4167b2bde8f03"
+    },
+    {
+      "file": "DTI-B5.pvm",
+      "name": "dti_b5",
+      "action": "import",
+      "decision": "Distinct catalog entry; no established duplicate in the OME-Zarr collection.",
+      "description": "Diffusion tensor MRI, B5 volume.",
+      "dimensions": [
+        128,
+        128,
+        58
+      ],
+      "bits": 16,
+      "aspect": [
+        1,
+        1,
+        1
+      ],
+      "credits": "Pierre Fillard http://www.cs.unc.edu/~fillard",
+      "parameters": "Diffusion Tensor MRI Scan Series",
+      "comments": "B0 = lores MRI scan (no diffusion weighting) B1 = diffusion weighted volume #1 with dir=(1,0,1) B2 = diffusion weighted volume #2 with dir=(-1,0,1) B3 = diffusion weighted volume #3 with dir=(0,1,1) B4 = diffusion weighted volume #4 with dir=(0,1,-1) B5 = diffusion weighted volume #5 with dir=(1,1,0) B6 = diffusion weighted volume #6 with dir=(-1,1,0) MD = mean diffusion FA = fractional anisotropy",
+      "size_mode": "estimate",
+      "size_x": 0.24,
+      "size_basis": "Approximate anatomical or object scale; no physical calibration established.",
+      "download_sha256": "b39124c2c8e4ec7bf90116b2634885a0d2086f316a2dc98c0307ed52a2380a33",
+      "voxel_sha512": "5a166ae062eb4379e4f2e73ca98ff93db4c0c515e63c0924001932af65f3a6a7019b5a969c70103001cc53c9e26f642af453e065f0f35ebfc3270f5da2a0d60b"
+    },
+    {
+      "file": "DTI-B6.pvm",
+      "name": "dti_b6",
+      "action": "import",
+      "decision": "Distinct catalog entry; no established duplicate in the OME-Zarr collection.",
+      "description": "Diffusion tensor MRI, B6 volume.",
+      "dimensions": [
+        128,
+        128,
+        58
+      ],
+      "bits": 16,
+      "aspect": [
+        1,
+        1,
+        1
+      ],
+      "credits": "Pierre Fillard http://www.cs.unc.edu/~fillard",
+      "parameters": "Diffusion Tensor MRI Scan Series",
+      "comments": "B0 = lores MRI scan (no diffusion weighting) B1 = diffusion weighted volume #1 with dir=(1,0,1) B2 = diffusion weighted volume #2 with dir=(-1,0,1) B3 = diffusion weighted volume #3 with dir=(0,1,1) B4 = diffusion weighted volume #4 with dir=(0,1,-1) B5 = diffusion weighted volume #5 with dir=(1,1,0) B6 = diffusion weighted volume #6 with dir=(-1,1,0) MD = mean diffusion FA = fractional anisotropy",
+      "size_mode": "estimate",
+      "size_x": 0.24,
+      "size_basis": "Approximate anatomical or object scale; no physical calibration established.",
+      "download_sha256": "08a3735ad50331417ed95912cacc25ba121663eda5633b1317283612b904f4bc",
+      "voxel_sha512": "1ce57ea237da0166739e8f65b84648731c905b6702fe694cf98ba6f6522295fa4aec912f367f9880573290839bb7258802bac61880bc99cc3b89370320ca78d3"
+    },
+    {
+      "file": "DTI-FA.pvm",
+      "name": "dti_fa",
+      "action": "import",
+      "decision": "Distinct catalog entry; no established duplicate in the OME-Zarr collection.",
+      "description": "Diffusion tensor MRI, FA volume.",
+      "dimensions": [
+        128,
+        128,
+        58
+      ],
+      "bits": 8,
+      "aspect": [
+        1,
+        1,
+        1
+      ],
+      "credits": "Stefan Roettger Computer Graphics Group, University of Erlangen, Germany http://www9.cs.fau.de/Persons/Roettger",
+      "parameters": "Diffusion Tensor MRI Scan Series",
+      "comments": "B0 = lores MRI scan (no diffusion weighting) B1 = diffusion weighted volume #1 with dir=(1,0,1) B2 = diffusion weighted volume #2 with dir=(-1,0,1) B3 = diffusion weighted volume #3 with dir=(0,1,1) B4 = diffusion weighted volume #4 with dir=(0,1,-1) B5 = diffusion weighted volume #5 with dir=(1,1,0) B6 = diffusion weighted volume #6 with dir=(-1,1,0) MD = mean diffusion FA = fractional anisotropy",
+      "size_mode": "estimate",
+      "size_x": 0.24,
+      "size_basis": "Approximate anatomical or object scale; no physical calibration established.",
+      "download_sha256": "bf3534101fda82c95c2e72497f7d46ce94566b059eccfae5f97a2efeac4a208b",
+      "voxel_sha512": "ff644588202bee341cf54b4bf37a912734d8609127f4405183f48e30a06a36e469cb13d390c0102142c903aeec123f719f867f2164f3800bbea769dc1cbd611f"
+    },
+    {
+      "file": "DTI-MD.pvm",
+      "name": "dti_md",
+      "action": "import",
+      "decision": "Distinct catalog entry; no established duplicate in the OME-Zarr collection.",
+      "description": "Diffusion tensor MRI, MD volume.",
+      "dimensions": [
+        128,
+        128,
+        58
+      ],
+      "bits": 8,
+      "aspect": [
+        1,
+        1,
+        1
+      ],
+      "credits": "Stefan Roettger Computer Graphics Group, University of Erlangen, Germany http://www9.cs.fau.de/Persons/Roettger",
+      "parameters": "Diffusion Tensor MRI Scan Series",
+      "comments": "B0 = lores MRI scan (no diffusion weighting) B1 = diffusion weighted volume #1 with dir=(1,0,1) B2 = diffusion weighted volume #2 with dir=(-1,0,1) B3 = diffusion weighted volume #3 with dir=(0,1,1) B4 = diffusion weighted volume #4 with dir=(0,1,-1) B5 = diffusion weighted volume #5 with dir=(1,1,0) B6 = diffusion weighted volume #6 with dir=(-1,1,0) MD = mean diffusion FA = fractional anisotropy",
+      "size_mode": "estimate",
+      "size_x": 0.24,
+      "size_basis": "Approximate anatomical or object scale; no physical calibration established.",
+      "download_sha256": "817de5d11a43de649a2c1b66fefe715c2ac46655fb209471f635af2a859f0c19",
+      "voxel_sha512": "7b4119b6c11033c009b60adb72031db74bd0ecacfed2779c3710bf8787252bd0a688b046c810125746c990b385c040a968ef0f68a275e74333d6a58051a77dc8"
+    },
+    {
+      "file": "Daisy.pvm",
+      "name": "daisy",
+      "action": "import",
+      "decision": "Distinct catalog entry; no established duplicate in the OME-Zarr collection.",
+      "description": "Daisy Pollen Grain",
+      "dimensions": [
+        192,
+        180,
+        168
+      ],
+      "bits": 8,
+      "aspect": [
+        1,
+        1,
+        1
+      ],
+      "credits": "Olaf Ronneberger Computer Science Institute, University of Freiburg, Germany",
+      "parameters": "Daisy pollen grain recorded by confocal laser scanning microscopy",
+      "comments": "",
+      "size_mode": "estimate",
+      "size_x": 6e-05,
+      "size_basis": "Approximate anatomical or object scale; no physical calibration established.",
+      "download_sha256": "c47d578aeb27764958cbc6e24eef5edfb9567cfde9471ef6691658a02671344a",
+      "voxel_sha512": "0de833cc817bff876823ae3936b1a1173fc7b1480e66cfe7f0e06b7f5d91d49f12c098392e090687356ee325783ff27dec07ae97e9ec182c4ecda96ddce8810b"
+    },
+    {
+      "file": "Engine.pvm",
+      "name": "engine",
+      "action": "import",
+      "decision": "Same named scan; prefer the earlier Volume Library distribution when no better original representation is established.",
+      "description": "Engine Block",
+      "dimensions": [
+        256,
+        256,
+        256
+      ],
+      "bits": 8,
+      "aspect": [
+        1,
+        1,
+        1
+      ],
+      "credits": "General Electric, USA http://www.ge.com",
+      "parameters": "CT Scan GE Industrial Scanner",
+      "comments": "Two cylinders of an engine block",
+      "size_mode": "estimate",
+      "size_x": 0.4,
+      "size_basis": "Engine-block section containing two cylinders.",
+      "download_sha256": "14ee766778880547a26d7b1eb5c002d2b19f1123e43294e63046611400f66a5c",
+      "voxel_sha512": "9cd7583e6dcf305bda639614007a2e6a2cbdb4ffa68203578cd5d550a108ae7503d3363b3bcd5c5004a255bee70f35cedb4514510712f1f510ec2ee9c4911dee"
+    },
+    {
+      "file": "Foot.pvm",
+      "name": "foot",
+      "action": "import",
+      "decision": "Decoded voxel payload is SHA-512 identical to the Open SciVis raw source (foot); prefer the earlier Volume Library distribution.",
+      "description": "Foot",
+      "dimensions": [
+        256,
+        256,
+        256
+      ],
+      "bits": 8,
+      "aspect": [
+        1,
+        1,
+        1
+      ],
+      "credits": "Philips Research, Hamburg, Germany http://www.philips.de/forschung",
+      "parameters": "CT Scan Philips CT Scanner",
+      "comments": "",
+      "size_mode": "estimate",
+      "size_x": 0.2,
+      "size_basis": "Foot scan with margin; orientation and crop uncertain.",
+      "download_sha256": "bbc70f52f6bb633cca0a43e6be1d66bda7829e870541da0f41c5c349aa712525",
+      "voxel_sha512": "56a73bd1f694a09809688f5b0bbf0dfff0ef3e853a34c60c4d51bef02dd96fbfe5191f47c7762bdf7caab6f9a22f1d0e830652779f87c70cc519f345221edd0e"
+    },
+    {
+      "file": "Frog.pvm",
+      "name": "frog",
+      "action": "import",
+      "decision": "Decoded voxel payload is SHA-512 identical to the Open SciVis raw source (frog); prefer the earlier Volume Library distribution.",
+      "description": "Frog",
+      "dimensions": [
+        256,
+        256,
+        44
+      ],
+      "bits": 8,
+      "aspect": [
+        0.5,
+        0.5,
+        1.0
+      ],
+      "credits": "Information and Computing Sciences Division, Lawrence Berkeley Laboratory, USA http://www-itg.lbl.gov",
+      "parameters": "MRI Scan",
+      "comments": "This is the second frog used in the Whole Frog Project. Three sets of data were produced with the MRI scans. frog2ci.hips seemed to be the best, and only this set of data was processed using HIPS filters to balance the contrast on the images. This same frog was later sliced and a better data set is produced that showed more detail of the frog. frog2ci.hips -- is a spin echo data set with 50 slices, inplane resolution of 0.5mm, slice thickness and separation of 1.0mm, TE = 33ms. The individual slices 2-45 are in the tiff directory. For information about the HIPS file format see http://www-itg.lbl.gov/ITG.hm.pg.docs/image-proc/CCS-ECL/README.txt This data is copyrighted by Lawrence Berkeley National Laboratory.",
+      "size_mode": "estimate",
+      "size_x": 0.13,
+      "size_basis": "Small frog with scan margin.",
+      "download_sha256": "71ef5860fc953eea9fbafbdeb7d4dd02ca26c929369335274c9a44ebec4079db",
+      "voxel_sha512": "0421e05c1c3fdce41f96ac93d0ba59c0aed29bb9d53a5d395f859e737b67db19e6ab39806028bddc6e5b2acde1d97581f81745d380f141ae144cec923974b0d1"
+    },
+    {
+      "file": "Fuel.pvm",
+      "name": "fuel",
+      "action": "import",
+      "decision": "Decoded voxel payload is SHA-512 identical to the Open SciVis raw source (fuel); prefer the earlier Volume Library distribution.",
+      "description": "Fuel Injection",
+      "dimensions": [
+        64,
+        64,
+        64
+      ],
+      "bits": 8,
+      "aspect": [
+        1,
+        1,
+        1
+      ],
+      "credits": "SFB 382 of the German Research Council (DFG)",
+      "parameters": "Simulation of fuel injection into a combustion chamber The higher the density value, the lower the presence of air",
+      "comments": "",
+      "size_mode": "display",
+      "size_x": 1.0,
+      "size_basis": "Arbitrary display scale; no physical calibration in meters established.",
+      "download_sha256": "fb326d44cd9ddeb25bae99ea6876f0ce4069ef06aa5e4c1518a19f562510b9cc",
+      "voxel_sha512": "77fdd7c657da1946bafc84e88c6b8a03ae104a79a5bdec3c7db9257480ef4bf72551a08d22fd237c8e387dd2571b575f1a1a11f5f32b1fa4d4ef385d9fe1d613"
+    },
+    {
+      "file": "Hydrogen.pvm",
+      "name": "hydrogen_atom",
+      "action": "import",
+      "decision": "Decoded voxel payload is SHA-512 identical to the Open SciVis raw source (hydrogen_atom); prefer the earlier Volume Library distribution.",
+      "description": "Hydrogen Atom",
+      "dimensions": [
+        128,
+        128,
+        128
+      ],
+      "bits": 8,
+      "aspect": [
+        1,
+        1,
+        1
+      ],
+      "credits": "SFB 382 of the German Research Council (DFG)",
+      "parameters": "Simulation of the spatial probability distribution of the electron in a hydrogen atom, residing in a strong magnetic field.",
+      "comments": "",
+      "size_mode": "display",
+      "size_x": 1.0,
+      "size_basis": "Arbitrary display scale; no physical calibration in meters established.",
+      "download_sha256": "b9253561190f5b4de8cd8cc85051c06877ae3f92596b6038a36be7da1e14b98d",
+      "voxel_sha512": "bc80b55ffc983f41b3981433707b59f6c8b3f16cc9cd3ea18087cb9e734b702eb1ad0410f36f38881b2e2fa85617dc0858bb2d9fbd3188abb39af43ea84e3521"
+    },
+    {
+      "file": "Isabel-Cloud.pvm",
+      "name": "isabel_cloud",
+      "action": "import",
+      "decision": "Distinct catalog entry; no established duplicate in the OME-Zarr collection.",
+      "description": "Hurricane Isabel simulation, cloud field.",
+      "dimensions": [
+        500,
+        500,
+        100
+      ],
+      "bits": 16,
+      "aspect": [
+        4.0,
+        4.0,
+        3.0
+      ],
+      "credits": "Hurricane Isabel converted into PVM format by Stefan Roettger Georg-Simon-Ohm University of Applied Sciences, Nuremberg, Germany http://wiki.ohm-hochschule.de/roettger The Weather Research and Forecasting (WRF) Model simulation data of Hurricane Isabel was kindly provided by Bill Kuo, Wei Wang, Cindy Bruyere, Tim Scheitlin, and Don Middleton of the U.S. National Center for Atmospheric Research (NCAR) and the U.S. National Science Foundation (NSF) at this location: http://www.vets.ucar.edu/vg/isabeldata/",
+      "parameters": "",
+      "comments": "",
+      "size_mode": "display",
+      "size_x": 1.0,
+      "size_basis": "Arbitrary display scale; no physical calibration in meters established.",
+      "download_sha256": "6a824471e53f54ee8a4d844159908a6ffe1fb04a968a6d56c03b6b17a527212d",
+      "voxel_sha512": "2665babe1071d4be52b3cb5e7073325a8d70b7a2b7f662fe0acb3b19e060fa0171f68b0d5937585e6648e056ab14b19ab3d24d1042ef7d36145d9dff1a3e9d04"
+    },
+    {
+      "file": "Isabel-Precip.pvm",
+      "name": "isabel_precip",
+      "action": "import",
+      "decision": "Distinct catalog entry; no established duplicate in the OME-Zarr collection.",
+      "description": "Hurricane Isabel simulation, precipitation field.",
+      "dimensions": [
+        500,
+        500,
+        100
+      ],
+      "bits": 16,
+      "aspect": [
+        4.0,
+        4.0,
+        3.0
+      ],
+      "credits": "Hurricane Isabel converted into PVM format by Stefan Roettger Georg-Simon-Ohm University of Applied Sciences, Nuremberg, Germany http://wiki.ohm-hochschule.de/roettger The Weather Research and Forecasting (WRF) Model simulation data of Hurricane Isabel was kindly provided by Bill Kuo, Wei Wang, Cindy Bruyere, Tim Scheitlin, and Don Middleton of the U.S. National Center for Atmospheric Research (NCAR) and the U.S. National Science Foundation (NSF) at this location: http://www.vets.ucar.edu/vg/isabeldata/",
+      "parameters": "",
+      "comments": "",
+      "size_mode": "display",
+      "size_x": 1.0,
+      "size_basis": "Arbitrary display scale; no physical calibration in meters established.",
+      "download_sha256": "70b5e214ddf1801e1fe10522a31d1c5a962fafa671cc2fdd116fa5d4e04e4686",
+      "voxel_sha512": "76a24fce0fbcdb04d4d5fcd8e3f68c8d075cbbe4603207385265ce0eeb5dfc4500fac8aee98597683f53a62d1bf0029bc4923f6a91b93aea9d9497ad2bbc7f50"
+    },
+    {
+      "file": "Isabel-Upwind.pvm",
+      "name": "isabel_upwind",
+      "action": "import",
+      "decision": "Distinct catalog entry; no established duplicate in the OME-Zarr collection.",
+      "description": "Hurricane Isabel simulation, upwind field.",
+      "dimensions": [
+        500,
+        500,
+        100
+      ],
+      "bits": 16,
+      "aspect": [
+        4.0,
+        4.0,
+        3.0
+      ],
+      "credits": "Hurricane Isabel converted into PVM format by Stefan Roettger Georg-Simon-Ohm University of Applied Sciences, Nuremberg, Germany http://wiki.ohm-hochschule.de/roettger The Weather Research and Forecasting (WRF) Model simulation data of Hurricane Isabel was kindly provided by Bill Kuo, Wei Wang, Cindy Bruyere, Tim Scheitlin, and Don Middleton of the U.S. National Center for Atmospheric Research (NCAR) and the U.S. National Science Foundation (NSF) at this location: http://www.vets.ucar.edu/vg/isabeldata/",
+      "parameters": "",
+      "comments": "",
+      "size_mode": "display",
+      "size_x": 1.0,
+      "size_basis": "Arbitrary display scale; no physical calibration in meters established.",
+      "download_sha256": "92af3350bd6c5a3621fb42195f2eb78335f250bffd0d99e3626075faa5ce9a05",
+      "voxel_sha512": "e429f2e85bebf4f85b2111ff73bc41890d13882bc9aae13c6bb8d8b0dd0c95c283248a6b529fb43d1b4ea807996ca332cb3c50905342ad97272f162096e1d0c7"
+    },
+    {
+      "file": "Kidney.pvm",
+      "name": "kidney",
+      "action": "import",
+      "decision": "Distinct catalog entry; no established duplicate in the OME-Zarr collection.",
+      "description": "Scan of a kidney.",
+      "dimensions": [
+        384,
+        384,
+        96
+      ],
+      "bits": 8,
+      "aspect": [
+        1.0909,
+        1.0909,
+        0.989583
+      ],
+      "credits": "Stefan Roettger Georg-Simon-Ohm University of Applied Sciences, Nuremberg, Germany http://wiki.ohm-hochschule.de/roettger",
+      "parameters": "",
+      "comments": "",
+      "size_mode": "estimate",
+      "size_x": 0.4189056,
+      "size_basis": "Catalog voxel aspect values interpreted as millimeters; physical units are not explicitly specified.",
+      "download_sha256": "0ab2ea15b845e17de70e278ebebc034ca340cda7a70ccb9e222a13a2457c0f1f",
+      "voxel_sha512": "99ced5b057be255d42cb2b1f002e1b055969dc5cb5654d472953db4b403fe965215a6094ec764a15c3a14f1d1692e81faf8abcccb347f94e2b6178088554d903"
+    },
+    {
+      "file": "Kiwi.pvm",
+      "name": "kiwi",
+      "action": "import",
+      "decision": "Distinct catalog entry; no established duplicate in the OME-Zarr collection.",
+      "description": "CT scan of a kiwi fruit.",
+      "dimensions": [
+        256,
+        256,
+        104
+      ],
+      "bits": 8,
+      "aspect": [
+        0.466919,
+        0.466919,
+        0.61899
+      ],
+      "credits": "Stefan Roettger & Florian Steinmeyer Georg-Simon-Ohm University of Applied Sciences, Nuremberg, Germany http://wiki.ohm-hochschule.de/roettger",
+      "parameters": "",
+      "comments": "",
+      "size_mode": "estimate",
+      "size_x": 0.119531264,
+      "size_basis": "Catalog voxel aspect values interpreted as millimeters; physical units are not explicitly specified.",
+      "download_sha256": "be12aa7d597c591e59e03662750dddb597c5aa956c7dc29177942ec07e718779",
+      "voxel_sha512": "dd910b0ac56be76d00ae016aa8e3185482f6bd0c1f4cf1db29899d1e562aa35ed33e1a8567f84f28bfc6a45156f0180b5c99051c49719947ce0917089781f122"
+    },
+    {
+      "file": "Knee.pvm",
+      "name": "knee",
+      "action": "import",
+      "decision": "Distinct catalog entry; no established duplicate in the OME-Zarr collection.",
+      "description": "Knee",
+      "dimensions": [
+        512,
+        512,
+        87
+      ],
+      "bits": 16,
+      "aspect": [
+        0.25,
+        0.25,
+        1.5
+      ],
+      "credits": "Brigham and Women's Hospital Surgical Planning Laboratory http://splweb.bwh.harvard.edu",
+      "parameters": "MRI Scan",
+      "comments": "From the Transfer Function Bakeoff at IEEE Visualization '00 Conference Original source: http://visual.nlm.nih.gov",
+      "size_mode": "estimate",
+      "size_x": 0.128,
+      "size_basis": "Catalog voxel aspect values interpreted as millimeters; physical units are not explicitly specified.",
+      "download_sha256": "7ce187ddfc9a47ab5652a786e731c4dce298b9f49e0ad0fd126b5950a79a2d20",
+      "voxel_sha512": "bbd211e2fe8cda873e27528e8107447e92f24c93470b074e75d93bee1d1417d6be2b0b7a3ba847575c212d599ad1d5cb538279010e0e089947be49ce2c597170"
+    },
+    {
+      "file": "Lobster.pvm",
+      "name": "lobster",
+      "action": "import",
+      "decision": "Decoded voxel payload is SHA-512 identical to the Open SciVis raw source (lobster); prefer the earlier Volume Library distribution.",
+      "description": "Lobster",
+      "dimensions": [
+        301,
+        324,
+        56
+      ],
+      "bits": 8,
+      "aspect": [
+        1.0,
+        1.0,
+        1.4
+      ],
+      "credits": "VolVis distribution of SUNY Stony Brook, NY, USA. http://www.volvis.org",
+      "parameters": "CT Scan",
+      "comments": "The lobster is contained in a block of resin",
+      "size_mode": "estimate",
+      "size_x": 0.3,
+      "size_basis": "Lobster and surrounding resin block.",
+      "download_sha256": "fd2d28e647a0e01ee6b63146d9b994806c7923f1da3e66fb448099877f58d0fe",
+      "voxel_sha512": "efb1c15bfda13b6899b923d2c51caea00d2eaffb95d89343e64298266d231a12902e376353d5c258a6ccffd54c363bc186aea19de631982f85158a4b70e0e671"
+    },
+    {
+      "file": "MRI-Head.pvm",
+      "name": "mri_head",
+      "action": "import",
+      "decision": "Distinct catalog entry; no established duplicate in the OME-Zarr collection.",
+      "description": "MRI Head",
+      "dimensions": [
+        256,
+        256,
+        256
+      ],
+      "bits": 8,
+      "aspect": [
+        1.0,
+        1.0,
+        0.8
+      ],
+      "credits": "Computer Graphics Group, University of Erlangen, Germany http://www9.cs.fau.de",
+      "parameters": "MRI Scan",
+      "comments": "",
+      "size_mode": "estimate",
+      "size_x": 0.256,
+      "size_basis": "Catalog voxel aspect values interpreted as millimeters; physical units are not explicitly specified.",
+      "download_sha256": "6b1ab9085bb13eade1335e51144ecc3fb2a36fa0d7eb4ce068c424484162de37",
+      "voxel_sha512": "3eb79b98d6334b244d28e6a5651ccf457daf4164f119e76e66da02e032b58d90c9a7a8011fe81f6316f0faae20461c7385a7576080f4ff2307092019d306db9d"
+    },
+    {
+      "file": "MRI-Phantom-PD.pvm",
+      "name": "mri_phantom_pd",
+      "action": "import",
+      "decision": "Distinct catalog entry; no established duplicate in the OME-Zarr collection.",
+      "description": "MRI Phantom",
+      "dimensions": [
+        181,
+        217,
+        181
+      ],
+      "bits": 16,
+      "aspect": [
+        1,
+        1,
+        1
+      ],
+      "credits": "McConnell Brain Imaging Centre Montreal Neurological Institute, McGill University http://www.bic.mni.mcgill.ca/cgi/brainweb",
+      "parameters": "Simulated MRI Scan Series",
+      "comments": "BrainWeb: Simulated Brain Database As the interest in the computer-aided, quantitative analysis of medical image data is growing, the need for the validation of such techniques is also increasing. Unfortunately, there exists no `ground truth' or gold standard for the analysis of in vivo acquired data. The BrainWeb pages provide a solution to the validation problem, in the form of a Simulated Brain Database (SBD). The SBD contains a set of realistic MRI data volumes produced by an MRI simulator. These data can be used by the neuroimaging community to evaluate the performance of various image analysis methods in a setting where the truth is known. PD = MRI Proton Density T1 = MRI T1 measurement T2 = MRI T2 measurement",
+      "size_mode": "estimate",
+      "size_x": 0.181,
+      "size_basis": "Approximate anatomical or object scale; no physical calibration established.",
+      "download_sha256": "a88b62734e748ec1764cbcb2bb5edb811d91e000741421259235dc5a71a3201d",
+      "voxel_sha512": "2725579a275f3b5da1cbdde9b92522494885fed864c52a4403022cb186782593149defb0f4fb43dcd6d42101b00fb1caf72ca86b7f48383f55989687948e3109"
+    },
+    {
+      "file": "MRI-Phantom-T1.pvm",
+      "name": "mri_phantom_t1",
+      "action": "import",
+      "decision": "Distinct catalog entry; no established duplicate in the OME-Zarr collection.",
+      "description": "MRI Phantom",
+      "dimensions": [
+        181,
+        217,
+        181
+      ],
+      "bits": 16,
+      "aspect": [
+        1,
+        1,
+        1
+      ],
+      "credits": "McConnell Brain Imaging Centre Montreal Neurological Institute, McGill University http://www.bic.mni.mcgill.ca/cgi/brainweb",
+      "parameters": "Simulated MRI Scan Series",
+      "comments": "BrainWeb: Simulated Brain Database As the interest in the computer-aided, quantitative analysis of medical image data is growing, the need for the validation of such techniques is also increasing. Unfortunately, there exists no `ground truth' or gold standard for the analysis of in vivo acquired data. The BrainWeb pages provide a solution to the validation problem, in the form of a Simulated Brain Database (SBD). The SBD contains a set of realistic MRI data volumes produced by an MRI simulator. These data can be used by the neuroimaging community to evaluate the performance of various image analysis methods in a setting where the truth is known. PD = MRI Proton Density T1 = MRI T1 measurement T2 = MRI T2 measurement",
+      "size_mode": "estimate",
+      "size_x": 0.181,
+      "size_basis": "Approximate anatomical or object scale; no physical calibration established.",
+      "download_sha256": "bf1dcafe572669577be7a6b2e52cc04e0ebc1979e3d5648cadaa844a070fc85d",
+      "voxel_sha512": "390a8c060e09e53119c5c02341e4b1e4e460b639f74ee197023964d26eea185c944f28a3c9d3f7ecfd2f01375a36cbc3311c9a353a94bc46872c7c8800d23be0"
+    },
+    {
+      "file": "MRI-Phantom-T2.pvm",
+      "name": "mri_phantom_t2",
+      "action": "import",
+      "decision": "Distinct catalog entry; no established duplicate in the OME-Zarr collection.",
+      "description": "MRI Phantom",
+      "dimensions": [
+        181,
+        217,
+        181
+      ],
+      "bits": 16,
+      "aspect": [
+        1,
+        1,
+        1
+      ],
+      "credits": "McConnell Brain Imaging Centre Montreal Neurological Institute, McGill University http://www.bic.mni.mcgill.ca/cgi/brainweb",
+      "parameters": "Simulated MRI Scan Series",
+      "comments": "BrainWeb: Simulated Brain Database As the interest in the computer-aided, quantitative analysis of medical image data is growing, the need for the validation of such techniques is also increasing. Unfortunately, there exists no `ground truth' or gold standard for the analysis of in vivo acquired data. The BrainWeb pages provide a solution to the validation problem, in the form of a Simulated Brain Database (SBD). The SBD contains a set of realistic MRI data volumes produced by an MRI simulator. These data can be used by the neuroimaging community to evaluate the performance of various image analysis methods in a setting where the truth is known. PD = MRI Proton Density T1 = MRI T1 measurement T2 = MRI T2 measurement",
+      "size_mode": "estimate",
+      "size_x": 0.181,
+      "size_basis": "Approximate anatomical or object scale; no physical calibration established.",
+      "download_sha256": "ade49e359e53c68b50737de486970bb785ffeb4cb0f844f18f2a75aebcf853fa",
+      "voxel_sha512": "6549630c13ad17b970199869658ac7124495c96f78dc2b7f8e1c66fe8bc8567ebacb9e2aa71b0025dc4612e9b2d5d7bc77cb9466f4515bfae8ff40d6cb0a385f"
+    },
+    {
+      "file": "MRI-Woman.pvm",
+      "name": "mri_woman",
+      "action": "import",
+      "decision": "Decoded voxel payload is SHA-512 identical to the Open SciVis raw source (mri_woman); prefer the earlier Volume Library distribution.",
+      "description": "MRI Woman",
+      "dimensions": [
+        256,
+        256,
+        109
+      ],
+      "bits": 16,
+      "aspect": [
+        1.0,
+        1.0,
+        1.5
+      ],
+      "credits": "Siemens Medical Systems, Inc., Iselin, NJ., USA",
+      "parameters": "MRI Scan Siemens Magnetom",
+      "comments": "",
+      "size_mode": "estimate",
+      "size_x": 0.26,
+      "size_basis": "Typical head MRI field of view.",
+      "download_sha256": "b075d2bf46d4fae4713c0efc6eeae264bba0a244a613f95766b6fae941d8a6be",
+      "voxel_sha512": "f14941ef8e9cabd751fe2c433b4cfaef7ad846c05eeea8026d541e3e32dcc5b04cb04ea4f605188059d371d0967218bef9529429be53d9e88ff72f964f73938f"
+    },
+    {
+      "file": "Monkey-CT.pvm",
+      "name": "monkey_ct",
+      "action": "import",
+      "decision": "Distinct catalog entry; no established duplicate in the OME-Zarr collection.",
+      "description": "Registered Monkey Head (CT)",
+      "dimensions": [
+        256,
+        256,
+        62
+      ],
+      "bits": 8,
+      "aspect": [
+        1,
+        1,
+        1
+      ],
+      "credits": "Laboratory of Neuro Imaging, UCLA, USA http://www.loni.ucla.edu/Research/Atlases/",
+      "parameters": "CT Scan",
+      "comments": "",
+      "size_mode": "estimate",
+      "size_x": 0.1,
+      "size_basis": "Approximate anatomical or object scale; no physical calibration established.",
+      "download_sha256": "22544d35b8673d6ddfa71054ef725bd22c22d8d6ba63cfc6880e4ab51e5e3f48",
+      "voxel_sha512": "9e3e110b61517ccedc2551d8bcaac23e38429b46a9e30b12e1b3543d57b054797a7c94c81c9b18e40cb63155e5364976140552d357a3b51d8d9f18dce1494ddb"
+    },
+    {
+      "file": "Monkey-MRI-T1.pvm",
+      "name": "monkey_mri_t1",
+      "action": "import",
+      "decision": "Distinct catalog entry; no established duplicate in the OME-Zarr collection.",
+      "description": "Registered Monkey Head (MRI T1)",
+      "dimensions": [
+        256,
+        256,
+        62
+      ],
+      "bits": 8,
+      "aspect": [
+        1,
+        1,
+        1
+      ],
+      "credits": "Laboratory of Neuro Imaging, UCLA, USA http://www.loni.ucla.edu/Research/Atlases/",
+      "parameters": "MRI T1 Scan",
+      "comments": "",
+      "size_mode": "estimate",
+      "size_x": 0.1,
+      "size_basis": "Approximate anatomical or object scale; no physical calibration established.",
+      "download_sha256": "17534d36eeff194975fdf0480f8ccf1f0f006e36fc1bd157387dd89e605b013c",
+      "voxel_sha512": "4b91016c4e5ce4415a73db5fd43789427607c6aea96c3145b8c5f38866d5f38f33c1d8992a0f2ce3ed5a04be6610ec36abdb6647e12cf428bec19e2427574994"
+    },
+    {
+      "file": "Monkey-MRI-T2.pvm",
+      "name": "monkey_mri_t2",
+      "action": "import",
+      "decision": "Distinct catalog entry; no established duplicate in the OME-Zarr collection.",
+      "description": "Registered Monkey Head (MRI T2)",
+      "dimensions": [
+        256,
+        256,
+        62
+      ],
+      "bits": 8,
+      "aspect": [
+        1,
+        1,
+        1
+      ],
+      "credits": "Laboratory of Neuro Imaging, UCLA, USA http://www.loni.ucla.edu/Research/Atlases/",
+      "parameters": "MRI T2 Scan",
+      "comments": "",
+      "size_mode": "estimate",
+      "size_x": 0.1,
+      "size_basis": "Approximate anatomical or object scale; no physical calibration established.",
+      "download_sha256": "c0e4e645b6232c72558ae7deb8e9770cd9ea34f726c8688f647a2b24a7dad8bd",
+      "voxel_sha512": "c56b940906e290ee912bb494166848f72dc4ab810eb3013be8afd6940320b7fe9de1d51d612161bd8fb256b1c260c7d6ffb418eca6391eb2e6127947fe8da43d"
+    },
+    {
+      "file": "Monkey-PET.pvm",
+      "name": "monkey_pet",
+      "action": "import",
+      "decision": "Distinct catalog entry; no established duplicate in the OME-Zarr collection.",
+      "description": "Registered Monkey Head (PET)",
+      "dimensions": [
+        256,
+        256,
+        62
+      ],
+      "bits": 24,
+      "aspect": [
+        1,
+        1,
+        1
+      ],
+      "credits": "Laboratory of Neuro Imaging, UCLA, USA http://www.loni.ucla.edu/Research/Atlases/",
+      "parameters": "PET Scan",
+      "comments": "",
+      "size_mode": "estimate",
+      "size_x": 0.1,
+      "size_basis": "Approximate anatomical or object scale; no physical calibration established.",
+      "download_sha256": "9e299f9fb46c52de1daaeeeaad64bbe319ea9f2ab5e08ffb575d1867b9dee7d3",
+      "voxel_sha512": "fce09a26ff9b12988cfc9200997388e58cb309e90911d4ec263300cc61ad9a1ce9c8610917491dbb634c2d1369993f6c5def2e4b1757b1311ac011fe69e2b169"
+    },
+    {
+      "file": "Neghip.pvm",
+      "name": "neghip",
+      "action": "import",
+      "decision": "Decoded voxel payload is SHA-512 identical to the Open SciVis raw source (neghip); prefer the earlier Volume Library distribution.",
+      "description": "Neghip",
+      "dimensions": [
+        64,
+        64,
+        64
+      ],
+      "bits": 8,
+      "aspect": [
+        1,
+        1,
+        1
+      ],
+      "credits": "VolVis distribution of SUNY Stony Brook, NY, USA. http://www.volvis.org",
+      "parameters": "Simulation of the spatial probability distribution of the electrons in a high potential protein molecule.",
+      "comments": "Neghip = Negative high potential protein molecule",
+      "size_mode": "display",
+      "size_x": 1.0,
+      "size_basis": "Arbitrary display scale; no physical calibration in meters established.",
+      "download_sha256": "98b9a18b24891e3ca77953c81897e73e2487e3a1c100ff42243fcf94ab4bf067",
+      "voxel_sha512": "d00f95d1f4cb1da2f3260a722059527ace73514cd57e1c31b6724d18468fd81002f5da704a0c3c7ccf06a329a975dede38cfacf13387dea9ffd8d7542cae62d0"
+    },
+    {
+      "file": "Orange.pvm",
+      "name": "orange",
+      "action": "import",
+      "decision": "Distinct catalog entry; no established duplicate in the OME-Zarr collection.",
+      "description": "Orange",
+      "dimensions": [
+        256,
+        256,
+        64
+      ],
+      "bits": 8,
+      "aspect": [
+        0.390625,
+        0.390625,
+        1.0
+      ],
+      "credits": "Bill Johnston and Wing Nip Information and Computing Sciences Division, Lawrence Berkeley Laboratory, USA http://www-itg.lbl.gov",
+      "parameters": "MRI Scan",
+      "comments": "These images and data were produced at Lawrence Berkeley Laboratory by Bill Johnston and Wing Nip of the Information and Computing Sciences Division. This work is supported by the U. S. Department of Energy, Energy Research Division, Office of the Scientific Computing Staff under contract DE-AC03-76SF00098. This data is provided for the purpose of scientific research and collaboration with Lawrence Berkeley Laboratory. Any commercial use of these images and data require prior agreement with Lawrence Berkeley Laboratory. The images and data are Copyright Lawrence Berkeley Laboratory. For further information contact Bill Johnston (510-486-5014, wejohnston@lbl.gov).",
+      "size_mode": "estimate",
+      "size_x": 0.1,
+      "size_basis": "Catalog voxel aspect values interpreted as millimeters; physical units are not explicitly specified.",
+      "download_sha256": "d9e8c1ddb3cccb06c8114361593b7a74b74849f65c52222a595b577c33ec271a",
+      "voxel_sha512": "62907dd1955e9012e805b504b3c481bc080b3ded7a9544f9520cf5005172288931359a6dfe34d723e1a778564fbb4257a5c329b73f921a884f1b96c0b9208ab2"
+    },
+    {
+      "file": "Peripheral.pvm",
+      "name": "peripheral",
+      "action": "import",
+      "decision": "Distinct catalog entry; no established duplicate in the OME-Zarr collection.",
+      "description": "Peripheral angiography volume.",
+      "dimensions": [
+        480,
+        512,
+        64
+      ],
+      "bits": 8,
+      "aspect": [
+        0.70166,
+        0.701752,
+        0.885938
+      ],
+      "credits": "Stefan Roettger Georg-Simon-Ohm University of Applied Sciences, Nuremberg, Germany http://wiki.ohm-hochschule.de/roettger",
+      "parameters": "",
+      "comments": "",
+      "size_mode": "estimate",
+      "size_x": 0.33679679999999995,
+      "size_basis": "Catalog voxel aspect values interpreted as millimeters; physical units are not explicitly specified.",
+      "download_sha256": "b010d0a87e5657cdb167efc7df69233464440995d19d057167d2bf13376c0af1",
+      "voxel_sha512": "4d7d2013c737126871eba46e581b7c51212f100d8971f1182907c91bf9d95fa67c007ef2fa73c4297ed8fe73ee5301547e251198fb537958130bb98eb33a26e9"
+    },
+    {
+      "file": "Pig.pvm",
+      "name": "pig",
+      "action": "import",
+      "decision": "Distinct catalog entry; no established duplicate in the OME-Zarr collection.",
+      "description": "Piggy Bank",
+      "dimensions": [
+        512,
+        512,
+        134
+      ],
+      "bits": 16,
+      "aspect": [
+        0.371094,
+        0.371094,
+        1.0
+      ],
+      "credits": "Michael Bauer Computer Graphics Group, University of Erlangen, Germany http://www9.cs.fau.de",
+      "parameters": "CT Scan Siemens Volume Zoom Somatom Plus 4",
+      "comments": "To prevent scanning artifacts the piggy bank contains chocolate coins",
+      "size_mode": "estimate",
+      "size_x": 0.190000128,
+      "size_basis": "Catalog voxel aspect values interpreted as millimeters; physical units are not explicitly specified.",
+      "download_sha256": "1e772ccdc34deceab25360e79396cd898729ffa4610e6959175cad5f27d22e4a",
+      "voxel_sha512": "fc8703949bbaf7ef9c1ad475df1aae0e4d41fa3cbfe512958d11df9c22886f0a64e675a31fe053cd4dad5234e5a458bae730c92449d44b1a702545488cc56fea"
+    },
+    {
+      "file": "Porsche.pvm",
+      "name": "porsche",
+      "action": "import",
+      "decision": "Distinct catalog entry; no established duplicate in the OME-Zarr collection.",
+      "description": "Porsche Model Car",
+      "dimensions": [
+        559,
+        1023,
+        347
+      ],
+      "bits": 8,
+      "aspect": [
+        1,
+        1,
+        1
+      ],
+      "credits": "Michael Bauer, Stefan Roettger Computer Graphics Group, University of Erlangen, Germany http://www9.cs.fau.de",
+      "parameters": "",
+      "comments": "",
+      "size_mode": "estimate",
+      "size_x": 0.25,
+      "size_basis": "Approximate anatomical or object scale; no physical calibration established.",
+      "download_sha256": "8cda26a56695ba5668849d1c90334fe4f619721d06fa21282aa5e4e4e9ac752f",
+      "voxel_sha512": "25985fcbfcd2dc4be29e4cf3c574cd6cfba4385d1a0c68b3e9f5c00094f5e9044abe8ca5caf3154b0f85b08ce8371a37f3d02371488cf69e7096a6258785c2a0"
+    },
+    {
+      "file": "Retrograde-GF.pvm",
+      "name": "retrograde_gf",
+      "action": "import",
+      "decision": "Distinct catalog entry; no established duplicate in the OME-Zarr collection.",
+      "description": "Retrograde angiography, GF variant.",
+      "dimensions": [
+        320,
+        320,
+        72
+      ],
+      "bits": 16,
+      "aspect": [
+        1.25,
+        1.25,
+        1.85
+      ],
+      "credits": "",
+      "parameters": "",
+      "comments": "",
+      "size_mode": "estimate",
+      "size_x": 0.4,
+      "size_basis": "Catalog voxel aspect values interpreted as millimeters; physical units are not explicitly specified.",
+      "download_sha256": "300b0618ff0a73da26555c58ba797355fcec9640e478d54075b5e0dec17b8b16",
+      "voxel_sha512": "c261e61f91046583d63113b8f2a9c0606c690e74cb25c6d0de98649b27405fed6084faf6174a2370e790cf967e1a9f8e41f91a698cf863387447e58e6fd4df1a"
+    },
+    {
+      "file": "Retrograde.pvm",
+      "name": "retrograde",
+      "action": "import",
+      "decision": "Distinct catalog entry; no established duplicate in the OME-Zarr collection.",
+      "description": "Retrograde angiography volume.",
+      "dimensions": [
+        320,
+        320,
+        72
+      ],
+      "bits": 16,
+      "aspect": [
+        1.25,
+        1.25,
+        1.85
+      ],
+      "credits": "Stefan Roettger Georg-Simon-Ohm University of Applied Sciences, Nuremberg, Germany http://wiki.ohm-hochschule.de/roettger",
+      "parameters": "",
+      "comments": "",
+      "size_mode": "estimate",
+      "size_x": 0.4,
+      "size_basis": "Catalog voxel aspect values interpreted as millimeters; physical units are not explicitly specified.",
+      "download_sha256": "b32e5b129925b69455d2711b6a126f22b61969d4f693ba46e31ff827fc3fbde1",
+      "voxel_sha512": "798778c00b0f16bd10d4842252c7d0505e2a34a6643425a2b303a5e73e23e9f0a035faf289c51e6d3c272d09a7409dbf0ab51b54353dba1fab8419539ffb674f"
+    },
+    {
+      "file": "Sheep.pvm",
+      "name": "sheep",
+      "action": "import",
+      "decision": "Distinct catalog entry; no established duplicate in the OME-Zarr collection.",
+      "description": "Sheep Heart",
+      "dimensions": [
+        352,
+        352,
+        256
+      ],
+      "bits": 8,
+      "aspect": [
+        1,
+        1,
+        1
+      ],
+      "credits": "Center for In-Vivo Microscopy, Duke University, North Carolina, USA http://wwwcivm.mc.duke.edu",
+      "parameters": "MRI Scan",
+      "comments": "From the Transfer Function Bakeoff at IEEE Visualization '00 Conference Original source: http://visual.nlm.nih.gov",
+      "size_mode": "estimate",
+      "size_x": 0.08,
+      "size_basis": "Approximate anatomical or object scale; no physical calibration established.",
+      "download_sha256": "a492a023c5f417e4ca8b2c67583b392f5ec957042679c5787a89b0d55f27e76a",
+      "voxel_sha512": "ad43e6d0d66ac26ac888d2bc4f5fb90e7a53123b1d179655e438017edcd5029d66b7de42f57d377009368a658f511d549fd7e7c4b5b0f4bd15145387fe0bbe41"
+    },
+    {
+      "file": "Sphere.pvm",
+      "name": "sphere",
+      "action": "import",
+      "decision": "Distinct catalog entry; no established duplicate in the OME-Zarr collection.",
+      "description": "Spherical Distance Volume",
+      "dimensions": [
+        64,
+        64,
+        64
+      ],
+      "bits": 8,
+      "aspect": [
+        1,
+        1,
+        1
+      ],
+      "credits": "Stefan Roettger Computer Graphics Group, University of Erlangen, Germany http://www9.cs.fau.de/Persons/Roettger",
+      "parameters": "Artificial",
+      "comments": "Test dataset containing the euclidean distance to the origin",
+      "size_mode": "display",
+      "size_x": 1.0,
+      "size_basis": "Arbitrary display scale; no physical calibration in meters established.",
+      "download_sha256": "c94fc778a4c57e2645f13ad919ee5d7afe8d184408a5a44089e575b254484bc8",
+      "voxel_sha512": "31a746c9385298e61a1b4ac56a347179509a9509a224b3591ef645015d62af34aa90ce40901ce25d00f7d52ec93896abf18bf3b8dd6143599400985d5bdf0581"
+    },
+    {
+      "file": "Spheres.pvm",
+      "name": "spheres",
+      "action": "import",
+      "decision": "Distinct catalog entry; no established duplicate in the OME-Zarr collection.",
+      "description": "Test Spheres",
+      "dimensions": [
+        128,
+        128,
+        128
+      ],
+      "bits": 8,
+      "aspect": [
+        1,
+        1,
+        1
+      ],
+      "credits": "Stefan Roettger Computer Graphics Group, University of Erlangen, Germany http://www9.cs.fau.de/Persons/Roettger",
+      "parameters": "Artificial Test Dataset",
+      "comments": "",
+      "size_mode": "display",
+      "size_x": 1.0,
+      "size_basis": "Arbitrary display scale; no physical calibration in meters established.",
+      "download_sha256": "4e9fdf7130e1232abaea736b756d419c5e95edaad1e6b9b2be768ff85246439b",
+      "voxel_sha512": "d811ad9c849865016333d2b569e3e5da228b2b9485fc8794a28383da0ed08c61f770241749cf0eb15c59eeefdc2e79cbc7ad36d0e875c6dcbd102cd6e2151d60"
+    },
+    {
+      "file": "Subclavia.pvm",
+      "name": "subclavia",
+      "action": "import",
+      "decision": "Distinct catalog entry; no established duplicate in the OME-Zarr collection.",
+      "description": "Subclavian angiography volume.",
+      "dimensions": [
+        512,
+        512,
+        96
+      ],
+      "bits": 8,
+      "aspect": [
+        0.779724,
+        0.779724,
+        0.791667
+      ],
+      "credits": "Stefan Roettger Georg-Simon-Ohm University of Applied Sciences, Nuremberg, Germany http://wiki.ohm-hochschule.de/roettger",
+      "parameters": "",
+      "comments": "",
+      "size_mode": "estimate",
+      "size_x": 0.399218688,
+      "size_basis": "Catalog voxel aspect values interpreted as millimeters; physical units are not explicitly specified.",
+      "download_sha256": "396ef427f88d94e0fd8628249a9b34ee4aedbebb0dba1f2d5090067fa7239530",
+      "voxel_sha512": "ae1e117eb0b499e78dbe7983535dc9fd8c212c5e0ce2d2f3766c8de9f0d01876204de001bd3bb461f0f195eb04f3ce9a8e2ac05fa61c8211e1ec768246e2b639"
+    },
+    {
+      "file": "Teddy.pvm",
+      "name": "teddy",
+      "action": "import",
+      "decision": "Distinct catalog entry; no established duplicate in the OME-Zarr collection.",
+      "description": "Teddy Bear",
+      "dimensions": [
+        512,
+        512,
+        63
+      ],
+      "bits": 16,
+      "aspect": [
+        0.693359,
+        0.693359,
+        5.0
+      ],
+      "credits": "Bernd Tomandl Division of Neuroradiology, University of Erlangen, Germany http://www.neuroradiologie.med.uni-erlangen.de",
+      "parameters": "CT Scan",
+      "comments": "",
+      "size_mode": "estimate",
+      "size_x": 0.354999808,
+      "size_basis": "Catalog voxel aspect values interpreted as millimeters; physical units are not explicitly specified.",
+      "download_sha256": "55affc329e881f12e4e24bf6e720cfc2bb79d047327b68e7e984163f9e4f9d4a",
+      "voxel_sha512": "79ed3344f0b3f133d9b731ca7268e7d9728ea153349ed9109f0fe35110e74bf480f944b325b59143d3f4b0687520e07b7338d60920e207e164d1fdbe8d36bac6"
+    },
+    {
+      "file": "Tomato.pvm",
+      "name": "tomato",
+      "action": "import",
+      "decision": "Distinct catalog entry; no established duplicate in the OME-Zarr collection.",
+      "description": "Tomato",
+      "dimensions": [
+        256,
+        256,
+        64
+      ],
+      "bits": 8,
+      "aspect": [
+        0.390625,
+        0.390625,
+        1.0
+      ],
+      "credits": "Bill Johnston and Wing Nip Information and Computing Sciences Division, Lawrence Berkeley Laboratory, USA http://www-itg.lbl.gov",
+      "parameters": "MRI Scan",
+      "comments": "These images and data were produced at Lawrence Berkeley Laboratory by Bill Johnston and Wing Nip of the Information and Computing Sciences Division. This work is supported by the U. S. Department of Energy, Energy Research Division, Office of the Scientific Computing Staff under contract DE-AC03-76SF00098. This data is provided for the purpose of scientific research and collaboration with Lawrence Berkeley Laboratory. Any commercial use of these images and data require prior agreement with Lawrence Berkeley Laboratory. The images and data are Copyright Lawrence Berkeley Laboratory. For further information contact Bill Johnston (510-486-5014, wejohnston@lbl.gov).",
+      "size_mode": "estimate",
+      "size_x": 0.1,
+      "size_basis": "Catalog voxel aspect values interpreted as millimeters; physical units are not explicitly specified.",
+      "download_sha256": "0208d51b37935f871cba2381cc69e0cf70043da3c6e348fef287fc3a7bd9fc37",
+      "voxel_sha512": "79afeceac9ef818a7cdba2921286b10079bc41072dff2a1aa317a2154fd52a9b2bb7b83abadb6bd141e8c3730f08a985e68ce78a869c696872a6e4be15270de5"
+    },
+    {
+      "file": "Tooth.pvm",
+      "name": "tooth",
+      "action": "import",
+      "decision": "Same named scan; prefer the earlier Volume Library distribution when no better original representation is established.",
+      "description": "The Tooth",
+      "dimensions": [
+        256,
+        256,
+        161
+      ],
+      "bits": 16,
+      "aspect": [
+        1,
+        1,
+        1
+      ],
+      "credits": "GE Aircraft Engines, Evendale, Ohio, USA",
+      "parameters": "Micro CT Scan GE Industrial Micro CT Scanner",
+      "comments": "From the Transfer Function Bakeoff at IEEE Visualization '00 Conference Original source: http://visual.nlm.nih.gov",
+      "size_mode": "estimate",
+      "size_x": 0.05,
+      "size_basis": "Full 256-voxel field of view; estimated to preserve roughly 0.02 m for the 103-voxel cropped OME-Zarr tooth.",
+      "download_sha256": "cde45445fc56afd5512186975beb9ddaff000f740470568652d157d986d2def6",
+      "voxel_sha512": "8941df9ce77f3576a61f545f811cf48d21effb951d658e8d75a252df6d656e9728aa1b963dae4fc37ed5d8dc00746a577f902f8f8afc82d3725a5b8d8292c6a2"
+    },
+    {
+      "file": "Tumor-Breast.pvm",
+      "name": "tumor_breast",
+      "action": "import",
+      "decision": "Distinct catalog entry; no established duplicate in the OME-Zarr collection.",
+      "description": "Breast tumor volume.",
+      "dimensions": [
+        448,
+        448,
+        208
+      ],
+      "bits": 8,
+      "aspect": [
+        0.712691,
+        0.712691,
+        0.796154
+      ],
+      "credits": "Stefan Roettger Georg-Simon-Ohm University of Applied Sciences, Nuremberg, Germany http://wiki.ohm-hochschule.de/roettger",
+      "parameters": "",
+      "comments": "",
+      "size_mode": "estimate",
+      "size_x": 0.319285568,
+      "size_basis": "Catalog voxel aspect values interpreted as millimeters; physical units are not explicitly specified.",
+      "download_sha256": "079e57b724a936ab77e66ce7829fe02290900aa880e8b531bfbb15b16af2ee51",
+      "voxel_sha512": "87f2ee0e62bf2d5e31e860984df0b7abf9145cfa9a8ef4f63a19dc79753a448fdc8ffedf570eb1257e7e9aec5ca5476b35a4c07643176add7eb77d6c8f91ddd2"
+    },
+    {
+      "file": "Tumor-DCIS.pvm",
+      "name": "tumor_dcis",
+      "action": "import",
+      "decision": "Distinct catalog entry; no established duplicate in the OME-Zarr collection.",
+      "description": "Ductal carcinoma in situ volume.",
+      "dimensions": [
+        448,
+        448,
+        160
+      ],
+      "bits": 8,
+      "aspect": [
+        0.645876,
+        0.645876,
+        0.944063
+      ],
+      "credits": "Stefan Roettger Georg-Simon-Ohm University of Applied Sciences, Nuremberg, Germany http://wiki.ohm-hochschule.de/roettger",
+      "parameters": "",
+      "comments": "",
+      "size_mode": "estimate",
+      "size_x": 0.289352448,
+      "size_basis": "Catalog voxel aspect values interpreted as millimeters; physical units are not explicitly specified.",
+      "download_sha256": "8e84db0b62b27959f2e02e56e58b9c1d7250bd9d57c58d3b1cfc74557a527853",
+      "voxel_sha512": "c917aa80a055d82e4caa9520778a564e7c747a02ad83c5fd01c382bb0552f87fc910162e9130831e34fb3f19e6b79ca1d89016ccd7651ce47227debdd5ed04cf"
+    },
+    {
+      "file": "Tumor-WI.pvm",
+      "name": "tumor_wi",
+      "action": "import",
+      "decision": "Distinct catalog entry; no established duplicate in the OME-Zarr collection.",
+      "description": "Tumor volume, WI variant.",
+      "dimensions": [
+        448,
+        448,
+        160
+      ],
+      "bits": 16,
+      "aspect": [
+        1,
+        1,
+        1
+      ],
+      "credits": "Stefan Roettger Georg-Simon-Ohm University of Applied Sciences, Nuremberg, Germany http://wiki.ohm-hochschule.de/roettger",
+      "parameters": "",
+      "comments": "",
+      "size_mode": "estimate",
+      "size_x": 0.3,
+      "size_basis": "Approximate anatomical or object scale; no physical calibration established.",
+      "download_sha256": "ab85b23434a5071d9bd248a1e8fff8b4e9d763014bed8bc84fb1d9e217794d0d",
+      "voxel_sha512": "cebf51322e60a22f524c72f301d5fb65875d2a6219e4cc3544f80a267df0ed86988565587c1308fcb0566357beda00319c936cb3fda0d2d51d1e70ba68110b69"
+    },
+    {
+      "file": "Virgo.pvm",
+      "name": "virgo",
+      "action": "import",
+      "decision": "Distinct catalog entry; no established duplicate in the OME-Zarr collection.",
+      "description": "Virgo Cluster",
+      "dimensions": [
+        256,
+        256,
+        256
+      ],
+      "bits": 24,
+      "aspect": [
+        1,
+        1,
+        1
+      ],
+      "credits": "The Virgo Consortium http://www.virgo.dur.ac.uk",
+      "parameters": "N-Body Simulation of the Virgo Group",
+      "comments": "Original scattered data resampled by Matthias Hopf http://www.mshopf.de",
+      "size_mode": "display",
+      "size_x": 1.0,
+      "size_basis": "Arbitrary display scale; no physical calibration in meters established.",
+      "download_sha256": "8cc20ac0ebf70348acefb0ea90c44ccfd52b9652d54f839fba80e85b38b649ab",
+      "voxel_sha512": "487cb99608c80ff50d1f12120567ffeb3c0f047fdd35a9b6ee4e428c603aa88adec07a6892947ec56687954503bffc7c6506f922fd00941a1cb540778a49cd1c"
+    },
+    {
+      "file": "VisMale.pvm",
+      "name": "vis_male",
+      "action": "import",
+      "decision": "Decoded voxel payload is SHA-512 identical to the Open SciVis raw source (vis_male); prefer the earlier Volume Library distribution.",
+      "description": "Head (Visible Male)",
+      "dimensions": [
+        128,
+        256,
+        256
+      ],
+      "bits": 8,
+      "aspect": [
+        1.57774,
+        0.995861,
+        1.00797
+      ],
+      "credits": "National Library of Medicine, National Institutes of Health, USA http://www.nlm.nih.gov",
+      "parameters": "CT Scan",
+      "comments": "",
+      "size_mode": "estimate",
+      "size_x": 0.2,
+      "size_basis": "Head scan; original crop and resampling uncertain.",
+      "download_sha256": "8f4793210af1f56d0b2cf2bd7324028f51014e61ea3bf21a05afd6a9424868a1",
+      "voxel_sha512": "55a3ecfb1e40685b993d51e713c9752609d5eb09359e86365c53bfbd535e77eaebfddf0eeacc73f42650726c82ed4b9ce4d0929a265ed84e1c59f39c6dd66e78"
+    },
+    {
+      "file": "XMasTree-LO.pvm",
+      "name": "christmas_tree",
+      "action": "variant",
+      "decision": "Downsampled derivative; retain the full-resolution 512 x 499 x 512 scan.",
+      "description": "The XMasTree lores version",
+      "dimensions": [
+        256,
+        249,
+        256
+      ],
+      "bits": 16,
+      "aspect": [
+        1,
+        1,
+        1
+      ],
+      "credits": "The CT-dataset XMasTree was generated from a real world Christmas Tree by the Department of Radiology, University of Vienna and the Institute of Computer Graphics and Algorithms, Vienna University of Technology. http://ringlotte.cg.tuwien.ac.at/datasets/XMasTree/XMasTree.html",
+      "parameters": "CT Scan Real-world dimensions: X-Size: 476mm Y-Size: 476mm Z-Size: 499mm",
+      "comments": "",
+      "size_mode": "literature",
+      "size_x": 0.476,
+      "size_basis": "Published X extent 476 mm; axis mapping and anisotropy unresolved. https://volume.open-terrain.org/",
+      "download_sha256": "8c11bd7e364128e6db39134dd3eb9ec761984fa5a641be9b4b3e61a28ae2f45e",
+      "voxel_sha512": "1e7ba94ea5dee38b090dc72eff079b86fc5e178f484032a24274afefff25ec349624e8ee91bf5bd7139347cee364eff45fc94c9ab33b7a92c2b354f5a0518091"
+    },
+    {
+      "file": "XMasTree.pvm",
+      "name": "christmas_tree",
+      "action": "import",
+      "decision": "Same named scan; prefer the earlier Volume Library distribution when no better original representation is established.",
+      "description": "The XMasTree",
+      "dimensions": [
+        512,
+        499,
+        512
+      ],
+      "bits": 16,
+      "aspect": [
+        1,
+        1,
+        1
+      ],
+      "credits": "The CT-dataset XMasTree was generated from a real world Christmas Tree by the Department of Radiology, University of Vienna and the Institute of Computer Graphics and Algorithms, Vienna University of Technology. http://ringlotte.cg.tuwien.ac.at/datasets/XMasTree/XMasTree.html",
+      "parameters": "CT Scan Real-world dimensions: X-Size: 476mm Y-Size: 476mm Z-Size: 499mm",
+      "comments": "",
+      "size_mode": "literature",
+      "size_x": 0.476,
+      "size_basis": "Published X extent 476 mm; axis mapping and anisotropy unresolved. https://volume.open-terrain.org/",
+      "download_sha256": "c97b58ef8d403b50da9b42d345fbbfab50587774bfbe45820db5e3ca039a4001",
+      "voxel_sha512": "93fe3483bc113025832ccfc9f63ca6881af07b7d4533231f3eed1538cb5b186388d6754032864d6a2c03f4b407d702977c1e0fe957c3bcea795d973802fc5940"
+    },
+    {
+      "file": "Zukic_Dzenan_T1.pvm",
+      "name": "zukic_dzenan_t1",
+      "action": "import",
+      "decision": "Distinct catalog entry; no established duplicate in the OME-Zarr collection.",
+      "description": "MR T1 Scan",
+      "dimensions": [
+        256,
+        256,
+        24
+      ],
+      "bits": 8,
+      "aspect": [
+        0.661469,
+        0.661469,
+        5.21949
+      ],
+      "credits": "Zukic Dzenan",
+      "parameters": "",
+      "comments": "",
+      "size_mode": "estimate",
+      "size_x": 0.169336064,
+      "size_basis": "Catalog voxel aspect values interpreted as millimeters; physical units are not explicitly specified.",
+      "download_sha256": "31e5760c5d3db7acb2d6bbf2910818d7b995ca40f04b3a2f669484aa357682ba",
+      "voxel_sha512": "2caf10d6e6d6f6c1262c5644c2f71d90ad322ea04c67d670f47fc1dcc8b2b0fed9e069d359e360cfdb1e8fe2dfce09647e6e64798017f5f3db4c14cc8497f30f"
+    },
+    {
+      "file": "Zukic_Dzenan_T1SAG.pvm",
+      "name": "zukic_dzenan_t1sag",
+      "action": "import",
+      "decision": "Distinct catalog entry; no established duplicate in the OME-Zarr collection.",
+      "description": "MR T1 Sagittal Scan",
+      "dimensions": [
+        512,
+        512,
+        12
+      ],
+      "bits": 8,
+      "aspect": [
+        0.682259,
+        0.682259,
+        4.03333
+      ],
+      "credits": "Zukic Dzenan",
+      "parameters": "",
+      "comments": "",
+      "size_mode": "estimate",
+      "size_x": 0.349316608,
+      "size_basis": "Catalog voxel aspect values interpreted as millimeters; physical units are not explicitly specified.",
+      "download_sha256": "7e10f238e21c2c997543da71281fea2f9ca2683d96bb709e21b1fd68b07407df",
+      "voxel_sha512": "baaf275486de2ce4bf55ebc9dce19fc368f753b0dcd949178309da26fe8edef1efe2479a1eefbcbd2cc940a1a45594a30fd8222d4d95d07122b3fa408b6312b0"
+    },
+    {
+      "file": "Zukic_Dzenan_T2.pvm",
+      "name": "zukic_dzenan_t2",
+      "action": "import",
+      "decision": "Distinct catalog entry; no established duplicate in the OME-Zarr collection.",
+      "description": "MR T2 Scan",
+      "dimensions": [
+        432,
+        432,
+        24
+      ],
+      "bits": 8,
+      "aspect": [
+        0.392608,
+        0.392608,
+        5.21949
+      ],
+      "credits": "Zukic Dzenan",
+      "parameters": "",
+      "comments": "",
+      "size_mode": "estimate",
+      "size_x": 0.16960665600000002,
+      "size_basis": "Catalog voxel aspect values interpreted as millimeters; physical units are not explicitly specified.",
+      "download_sha256": "de2268a2bd36c0071302330619efc499e612f9d72e56bf2efe8178f83031ce11",
+      "voxel_sha512": "91902278b5567b718d7d4f645006ea93fadaf119c87116cee014d99b8789baf88dabb585a11468af812d88ddf1a5c008af456e9dd18ff2923603f8cb629f4eda"
+    },
+    {
+      "file": "Zukic_Dzenan_T2SAG.pvm",
+      "name": "zukic_dzenan_t2sag",
+      "action": "import",
+      "decision": "Distinct catalog entry; no established duplicate in the OME-Zarr collection.",
+      "description": "MR T2 Sagittal Scan",
+      "dimensions": [
+        640,
+        640,
+        12
+      ],
+      "bits": 8,
+      "aspect": [
+        0.546021,
+        0.546021,
+        4.03333
+      ],
+      "credits": "Zukic Dzenan",
+      "parameters": "",
+      "comments": "This table is generated automatically from my volume data repository Number of datasets: 85 Last modification: 04.June.2012",
+      "size_mode": "estimate",
+      "size_x": 0.34945344,
+      "size_basis": "Catalog voxel aspect values interpreted as millimeters; physical units are not explicitly specified.",
+      "download_sha256": "1e55eac4a0ee370c0d62713d5315462d00c5cae135303ecc5d81b4083e1214c4",
+      "voxel_sha512": "1656b785ec897ec2759ad24d2d04d711c5bd685fa87c8c73945ca0e4d18f0997ed9874430737dab8eeb6760b300f8084733f7e6e447558c17ab506c7caa59906"
+    }
+  ]
+}

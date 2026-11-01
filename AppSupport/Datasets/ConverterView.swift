@@ -20,6 +20,7 @@ struct ConverterView: View {
     case volumeFile
     case dicomDirectory
     case dicomPair
+    case imageSequence
 
     var id: Self { self }
   }
@@ -28,6 +29,7 @@ struct ConverterView: View {
     case single
     case reference
     case moving
+    case images
   }
 
   // UI state properties.
@@ -35,6 +37,15 @@ struct ConverterView: View {
   @State private var importSourceKind: ImportSourceKind = .volumeFile
   @State private var inputFile: String = ""
   @State private var inputDirectory: String = ""
+  @State private var imageDirectoryURL: URL?
+  @State private var inputFileAccess: VolumeImportSourceAccess?
+  @State private var inputDirectoryAccess: VolumeImportSourceAccess?
+  @State private var movingDirectoryAccess: VolumeImportSourceAccess?
+  @State private var imageDirectoryAccess: VolumeImportSourceAccess?
+  @State private var additionalInputAccesses: [VolumeImportSourceAccess] = []
+  @State private var imageSizeX = ""
+  @State private var imageSizeY = ""
+  @State private var imageSizeZ = ""
   @State private var movingInputDirectory: String = ""
   @State private var outputFile: String = ""
   @State private var datasetDescription: String = ""
@@ -155,6 +166,7 @@ struct ConverterView: View {
                   Text("converter_import_source_file").tag(ImportSourceKind.volumeFile)
                   Text("converter_import_source_dicom").tag(ImportSourceKind.dicomDirectory)
                   Text("converter_import_source_dicom_pair").tag(ImportSourceKind.dicomPair)
+                  Text("image_sequence_title").tag(ImportSourceKind.imageSequence)
                 }
                 .pickerStyle(.segmented)
                 .labelsHidden()
@@ -163,6 +175,10 @@ struct ConverterView: View {
                 }
 
                 switch importSourceKind {
+                  case .imageSequence:
+                    dicomDirectorySelector(role: .images,
+                      buttonKey: "image_sequence_select", path: imageDirectoryURL?.path ?? "")
+                    imageSequenceSizeFields
                   case .volumeFile:
                     HStack {
                       Button {
@@ -1238,9 +1254,30 @@ struct ConverterView: View {
     }
   }
 
-  /// Presents an NSOpenPanel to allow file selection (macOS only).
+  private var imageSequenceSize: Vec3<Float>? {
+    guard let x = Float(imageSizeX.replacingOccurrences(of: ",", with: ".")),
+          let y = Float(imageSizeY.replacingOccurrences(of: ",", with: ".")),
+          let z = Float(imageSizeZ.replacingOccurrences(of: ",", with: ".")),
+          [x, y, z].allSatisfy({ $0.isFinite && $0 > 0 }) else { return nil }
+    return Vec3(x: x, y: y, z: z)
+  }
+
+  private var imageSequenceSizeFields: some View {
+    VStack(alignment: .leading) {
+      Text("image_sequence_size")
+      HStack {
+        Text("X"); TextField("m", text: $imageSizeX)
+        Text("Y"); TextField("m", text: $imageSizeY)
+        Text("Z"); TextField("m", text: $imageSizeZ)
+      }
+      .textFieldStyle(.roundedBorder)
+    }
+  }
+
   private var hasValidImportInput: Bool {
     switch importSourceKind {
+      case .imageSequence:
+        return imageDirectoryURL != nil && imageSequenceSize != nil
       case .volumeFile:
         return !inputFile.isEmpty
       case .dicomDirectory:
@@ -1280,24 +1317,12 @@ struct ConverterView: View {
     panel.allowedContentTypes = VolumeFileParserFactory.supportedExtensions.compactMap { UTType(filenameExtension: $0) }
     panel.canChooseDirectories = true
     if panel.runModal() == .OK, let url = panel.url {
-      if url.startAccessingSecurityScopedResource() {
-        defer { url.stopAccessingSecurityScopedResource() }
-        inputFile = url.path
-        importSourceKind = .volumeFile
-        outputFile = URL(fileURLWithPath: inputFile)
-          .deletingPathExtension().lastPathComponent
-        datasetDescription = String(
-          format: NSLocalizedString("converter_desc_from_file", comment: ""),
-          outputFile
-        )
-      } else {
-        logger.error(
-          L(
-            "converter_log_error_access_file_sandbox",
-            comment: "Log: cannot access selected file due to sandbox"
-          )
-        )
-      }
+      inputFileAccess = VolumeImportSourceAccess(url: url, selectedURLs: [url])
+      additionalInputAccesses = []
+      inputFile = url.path
+      importSourceKind = .volumeFile
+      outputFile = url.deletingPathExtension().lastPathComponent
+      datasetDescription = String(format: NSLocalizedString("converter_desc_from_file", comment: ""), outputFile)
     }
   }
 
@@ -1316,35 +1341,32 @@ struct ConverterView: View {
     panel.canChooseDirectories = true
     panel.allowsMultipleSelection = false
     if panel.runModal() == .OK, let url = panel.url {
-      if url.startAccessingSecurityScopedResource() {
-        defer { url.stopAccessingSecurityScopedResource() }
-
-        switch role {
-          case .single:
-            importSourceKind = .dicomDirectory
-            dicomPreviewModel.setDirectory(url)
-            inputDirectory = url.path
-            (outputFile, datasetDescription) = generateDescriptionSuggestion(
-              from: inputDirectory
-            )
-          case .reference:
-            importSourceKind = .dicomPair
-            dicomPreviewModel.setDirectory(url)
-            inputDirectory = url.path
-            updateDICOMPairSuggestion()
-          case .moving:
-            importSourceKind = .dicomPair
-            movingDicomPreviewModel.setDirectory(url)
-            movingInputDirectory = url.path
-            updateDICOMPairSuggestion()
-        }
-      } else {
-        logger.error(
-          L(
-            "converter_log_error_access_directory_sandbox",
-            comment: "Log: cannot access selected directory due to sandbox"
+      let access = VolumeImportSourceAccess(url: url, selectedURLs: [url])
+      switch role {
+        case .images:
+          imageDirectoryAccess = access
+          imageDirectoryURL = url
+          refreshImportSuggestion()
+        case .single:
+          inputDirectoryAccess = access
+          importSourceKind = .dicomDirectory
+          dicomPreviewModel.setDirectory(url)
+          inputDirectory = url.path
+          (outputFile, datasetDescription) = generateDescriptionSuggestion(
+            from: inputDirectory
           )
-        )
+        case .reference:
+          inputDirectoryAccess = access
+          importSourceKind = .dicomPair
+          dicomPreviewModel.setDirectory(url)
+          inputDirectory = url.path
+          updateDICOMPairSuggestion()
+        case .moving:
+          movingDirectoryAccess = access
+          importSourceKind = .dicomPair
+          movingDicomPreviewModel.setDirectory(url)
+          movingInputDirectory = url.path
+          updateDICOMPairSuggestion()
       }
     }
 
@@ -1374,6 +1396,10 @@ struct ConverterView: View {
 
   private func refreshImportSuggestion() {
     switch importSourceKind {
+      case .imageSequence:
+        guard let imageDirectoryURL else { return }
+        outputFile = imageDirectoryURL.lastPathComponent
+        datasetDescription = outputFile
       case .volumeFile:
         guard !inputFile.isEmpty else { return }
         let url = URL(fileURLWithPath: inputFile)
@@ -1402,7 +1428,6 @@ struct ConverterView: View {
   }
 
   /// Starts the conversion process.
-  /// In this demo, the conversion process is simulated with a loop.
   func startConversion() {
     let provenance = sourceNote.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? [] :
       [BORGVRProvenanceEntry(sourceNote, date: receivedAt)]
@@ -1434,17 +1459,23 @@ struct ConverterView: View {
     conversionCancellationToken = cancellationToken
     conversionCancellationRequested = false
     isConverting = true
+    let sourceAccesses = [inputFileAccess, inputDirectoryAccess, movingDirectoryAccess, imageDirectoryAccess]
+      .compactMap { $0 } + additionalInputAccesses
+    let selectedInputURL = inputFileAccess?.url ?? URL(fileURLWithPath: inputFile)
+    let outputAccess = storedAppModel.withDataDirectoryAccess { url in
+      VolumeImportSourceAccess(url: url, selectedURLs: [url])
+    }
 
     // Run the conversion on a background thread.
     DispatchQueue.global(qos: .userInteractive).async {
+      defer { withExtendedLifetime((sourceAccesses, outputAccess)) {} }
       let timer = HighResolutionTimer()
       timer.start()
+      var requiredFileAccess: URL?
 
       do {
 
-        let outputFilePath = storedAppModel.withDataDirectoryAccess { directoryURL in
-          directoryURL.appendingPathComponent(outputFile).path
-        }
+        let outputFilePath = outputAccess.url.appendingPathComponent(outputFile).path
 
         let borderMode: ExtensionStrategy
         switch storedAppModel.borderModeString {
@@ -1470,8 +1501,12 @@ struct ConverterView: View {
         let source: BorgVRVolumeConversionSource
         let sourceDescription: String
         switch importSourceKind {
+          case .imageSequence:
+            guard let directory = imageDirectoryURL else { return }
+            source = .imageSequence(directory)
+            sourceDescription = directory.lastPathComponent
           case .volumeFile:
-            let sourceURL = URL(fileURLWithPath: inputFile)
+            let sourceURL = selectedInputURL
             let descriptionKey: String
             switch sourceURL.pathExtension.lowercased() {
               case "dat": descriptionKey = "converter_desc_from_qvis"
@@ -1526,11 +1561,14 @@ struct ConverterView: View {
               extensionStrategy: borderMode,
               quantizeTo8Bit: storedAppModel.quantizeImportsTo8Bit
             ),
+            physicalSizeMeters: importSourceKind == .imageSequence ? imageSequenceSize : nil,
             provenance: provenance
           ),
           logger: logger,
           cancellationToken: cancellationToken
         )
+      } catch BorgVRImportFileAccess.Error.permissionRequired(let url) {
+        requiredFileAccess = url
       } catch is CancellationError {
         logger.info(String(localized: "Conversion cancelled."))
       } catch let error as QVISParser.Error {
@@ -1586,10 +1624,12 @@ struct ConverterView: View {
           )
         )
       }
+      let fileRequiringAccess = requiredFileAccess
       DispatchQueue.main.async {
         conversionCancellationToken = nil
         conversionCancellationRequested = false
         isConverting = false
+        if let fileRequiringAccess { authorizeSupportingFile(fileRequiringAccess) }
       }
       let total = timer.stop()
       logger.info(
@@ -1602,6 +1642,35 @@ struct ConverterView: View {
         )
       )
     }
+  }
+
+  private func authorizeSupportingFile(_ requiredURL: URL) {
+    guard !additionalInputAccesses.contains(where: { $0.url.standardizedFileURL == requiredURL.standardizedFileURL }) else {
+      logger.error(BorgVRImportFileAccess.Error.permissionRequired(requiredURL).localizedDescription)
+      return
+    }
+    let panel = NSOpenPanel()
+    panel.canChooseFiles = true
+    panel.canChooseDirectories = false
+    panel.allowsMultipleSelection = false
+    panel.directoryURL = requiredURL.deletingLastPathComponent()
+    panel.nameFieldStringValue = requiredURL.lastPathComponent
+    panel.allowedContentTypes = [UTType(filenameExtension: requiredURL.pathExtension) ?? .data]
+    panel.message = String(format: NSLocalizedString("converter_supporting_file_access_message", comment: ""),
+      requiredURL.lastPathComponent)
+    panel.prompt = NSLocalizedString("converter_supporting_file_access_allow", comment: "")
+    guard panel.runModal() == .OK, let url = panel.url else {
+      logger.info(String(localized: "Conversion cancelled."))
+      return
+    }
+    let access = VolumeImportSourceAccess(url: url, selectedURLs: [url])
+    guard url.standardizedFileURL == requiredURL.standardizedFileURL else {
+      logger.error(String(format: NSLocalizedString("converter_supporting_file_access_wrong_file", comment: ""),
+        requiredURL.lastPathComponent))
+      return
+    }
+    additionalInputAccesses.append(access)
+    startConversion()
   }
 
   private func cancelConversion() {

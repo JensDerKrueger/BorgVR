@@ -631,6 +631,7 @@ final class HTTPWebServer {
         componentCount: metadata.componentCount,
         bytesPerComponent: metadata.bytesPerComponent,
         valueType: metadata.componentType.valueTypeName,
+        channelInterpretation: metadata.channelInterpretation.name,
         endianness: "little",
         valueRange: [metadata.valueRange.minimum, metadata.valueRange.maximum],
         componentRanges: metadata.componentRanges.map { [$0.minimum, $0.maximum] },
@@ -1162,6 +1163,7 @@ private struct WebDatasetVolume: Encodable {
   let componentCount: Int
   let bytesPerComponent: Int
   let valueType: String
+  let channelInterpretation: String
   let endianness: String
   let valueRange: [Double]
   let componentRanges: [[Double]]

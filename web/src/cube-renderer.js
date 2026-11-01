@@ -1,4 +1,4 @@
-import { BrickAtlas } from "./brick-atlas.js?v=20261101-subbricks";
+import { BrickAtlas } from "./brick-atlas.js?v=20261101-color";
 import { buildMarkerRenderGeometry } from "./marker-tube-mesh.js?v=20260922-marker-direction";
 import { createDefaultTransferFunction } from "./transfer-function.js?v=20261101-filter-footprint";
 
@@ -669,6 +669,15 @@ fn fragmentMain(input: VertexOut) -> @location(0) vec4<f32> {
           break;
         }
         let components = sampleAtlasComponents(brick.index, brick.coords, brick.lod, samplePoint);
+        let colorMode = u32(uniforms.dataInfo.x + 0.5);
+        if (colorMode != 0u) {
+          let sourceAlpha = select(components.a, 1.0, colorMode == 1u);
+          let alpha = 1.0 - pow(1.0 - sourceAlpha, ocFactor * f32(span));
+          accumulatedColor += (1.0 - accumulatedAlpha) * components.rgb * alpha;
+          accumulatedAlpha += (1.0 - accumulatedAlpha) * alpha;
+          if (accumulatedAlpha > 0.99) { break; }
+          continue;
+        }
         let componentCount = max(u32(uniforms.dataInfo.w + 0.5), 1u);
         var scalar = components.x;
         if (componentCount >= 2u) { scalar = min(scalar, components.y); }
@@ -869,6 +878,8 @@ export class CoordinateCubeRenderer {
     this.markerBindGroup = null;
     this.bindGroup = null;
     this.subbrickSkipping = true;
+    this.alphaEpsilon = 0;
+    this.colorMode = 0;
     this.opacityAdaptiveSampling = true;
     this.brickAtlas = null;
     this.transferFunctions = [];
@@ -984,8 +995,11 @@ export class CoordinateCubeRenderer {
     this.brickAtlas?.setPersistentCacheEnabled(enabled);
   }
 
-  setRenderOptimizations({ subbrickSkipping = this.subbrickSkipping, opacityAdaptiveSampling = this.opacityAdaptiveSampling }) {
+  setRenderOptimizations({ subbrickSkipping = this.subbrickSkipping, opacityAdaptiveSampling = this.opacityAdaptiveSampling,
+    alphaEpsilon = this.alphaEpsilon }) {
     this.subbrickSkipping = Boolean(subbrickSkipping);
+    this.alphaEpsilon = Number.isFinite(alphaEpsilon) ? Math.min(1, Math.max(0, alphaEpsilon)) : 0;
+    this.reclassifyCurrentDataset();
     this.opacityAdaptiveSampling = Boolean(opacityAdaptiveSampling);
     this.drawNow();
   }
@@ -1150,6 +1164,12 @@ export class CoordinateCubeRenderer {
     if ((manifest.volume?.valueType ?? "uint") !== "uint") {
       throw new Error("Signed and floating-point datasets are not yet supported by the renderer.");
     }
+    const interpretation = manifest.volume?.channelInterpretation ?? "independentChannels";
+    this.colorMode = { independentChannels: 0, rgb: 1, rgba: 2 }[interpretation];
+    if (this.colorMode === undefined || (this.colorMode !== 0 &&
+        (manifest.volume.bytesPerComponent !== 1 || manifest.volume.componentCount !== (this.colorMode === 1 ? 3 : 4)))) {
+      throw new Error("Invalid RGB/RGBA volume layout.");
+    }
     const byteRangeMax = (2 ** (8 * (manifest.volume?.bytesPerComponent ?? 1))) - 1;
     this.dataRange = manifest.volume?.dataRange ?? [0, byteRangeMax];
     this.valueRange = manifest.volume?.valueRange ?? this.dataRange;
@@ -1177,7 +1197,7 @@ export class CoordinateCubeRenderer {
     this.createBrickRequestBuffers(this.totalBrickCount);
     this.brickAtlas?.reset(manifest, this.activeTransferFunctions(), {
       renderMode: this.renderMode,
-      isoRawValue: this.isoRawValue
+      isoRawValue: this.isoRawValue, alphaEpsilon: this.alphaEpsilon
     });
     this.rebuildBindGroup();
     this.frameIndex = 0;
@@ -1363,7 +1383,7 @@ export class CoordinateCubeRenderer {
     }
     this.brickAtlas.reclassify(this.activeTransferFunctions(), {
       renderMode: this.renderMode,
-      isoRawValue: this.isoRawValue
+      isoRawValue: this.isoRawValue, alphaEpsilon: this.alphaEpsilon
     });
   }
 
@@ -2296,7 +2316,7 @@ export class CoordinateCubeRenderer {
     const encoder = this.device.createCommandEncoder();
     if (this.hasScene && this.subbrickSkipping) {
       this.brickAtlas?.subbrickCache?.prepare(encoder, this.brickAtlas, this.activeTransferFunctions(),
-        this.transferBiases, this.renderMode, this.isoValue);
+        this.transferBiases, this.renderMode, this.isoValue, this.alphaEpsilon);
     }
     const colorView = this.context.getCurrentTexture().createView();
     if (this.hasScene) {
@@ -2454,7 +2474,7 @@ export class CoordinateCubeRenderer {
       cubeMin[0], cubeMin[1], cubeMin[2], 0,
       cubeMax[0], cubeMax[1], cubeMax[2], 0,
       this.levelCount, lodFactor, this.levelZeroWorldSpaceError, this.bytesPerComponent,
-      0, this.renderMode, this.isoValue, this.componentCount,
+      this.colorMode, this.colorMode ? 0 : this.renderMode, this.isoValue, this.componentCount,
       ...this.transferBiases,
       this.volumeHalfExtent[0], this.volumeHalfExtent[1], this.volumeHalfExtent[2], 0,
       textureLightDirection[0], textureLightDirection[1], textureLightDirection[2], 0,
@@ -2809,10 +2829,11 @@ function normalizeManifestRanges(manifest) {
   const dataRange = Array.isArray(volume.dataRange) ? volume.dataRange : [0, byteRangeMax];
   const dataRangeMax = Math.max(byteRangeMax, dataRange[1] ?? 0, valueRange[1] ?? 0);
   const componentCount = Math.max(1, volume.componentCount ?? 1);
+  const rangeCount = volume.channelInterpretation === "rgb" ? 0 : volume.channelInterpretation === "rgba" ? 1 : componentCount;
   const componentRanges = Array.isArray(volume.componentRanges) &&
-    volume.componentRanges.length >= componentCount
-    ? volume.componentRanges.slice(0, componentCount)
-    : Array.from({ length: componentCount }, () => valueRange);
+    volume.componentRanges.length >= rangeCount
+    ? volume.componentRanges.slice(0, rangeCount)
+    : Array.from({ length: rangeCount }, () => valueRange);
 
   return {
     ...manifest,
@@ -2840,13 +2861,15 @@ function normalizeManifestBricks(manifest) {
   }
 
   const componentCount = Math.max(1, manifest.volume?.componentCount ?? 1);
-  const stride = 3 + 2 * componentCount;
+  const interpretation = manifest.volume?.channelInterpretation;
+  const rangeCount = interpretation === "rgb" ? 0 : interpretation === "rgba" ? 1 : componentCount;
+  const stride = 3 + 2 * rangeCount;
   const brickCount = Math.floor(values.length / stride);
   const bricks = new Array(brickCount);
   for (let index = 0; index < brickCount; index += 1) {
     const offset = index * stride;
-    const componentRanges = new Array(componentCount);
-    for (let component = 0; component < componentCount; component += 1) {
+    const componentRanges = new Array(rangeCount);
+    for (let component = 0; component < rangeCount; component += 1) {
       const rangeOffset = offset + 3 + 2 * component;
       componentRanges[component] = [
         values[rangeOffset] ?? values[offset] ?? 0,

@@ -453,6 +453,7 @@ enum BorgVRIsoSurfaceExtractor {
       throw Error.invalidMetadata(String(localized: "component count must be positive"))
     }
     try metadata.requireUnsignedProcessing()
+    try metadata.requireIndependentChannels()
     guard [1, 2, 4].contains(metadata.bytesPerComponent) else {
       throw Error.unsupportedComponentSize(metadata.bytesPerComponent)
     }

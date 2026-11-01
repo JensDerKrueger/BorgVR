@@ -1,3 +1,11 @@
+"converter_supporting_file_access_required" = "Read access to the referenced file is required: %@";
+"image_sequence_title" = "Image sequence";
+"image_sequence_select" = "Select image folder";
+"image_sequence_size" = "Volume size in meters (X / Y / Z)";
+"image_sequence_empty" = "The folder contains no supported images.";
+"image_sequence_invalid" = "Cannot read a single image slice from %@.";
+"image_sequence_dimensions" = "Image dimensions differ from the other slices: %@.";
+
 /* Localizable.strings (en) */
 
 /* Title of dataset import view */

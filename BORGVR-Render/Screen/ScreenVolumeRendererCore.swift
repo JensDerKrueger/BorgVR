@@ -228,7 +228,7 @@ final class ScreenVolumeRendererCore {
     let frame = session.frameSnapshot()
     let frameState = frame.visualization
     do {
-      if let metadata = dataset?.getMetadata() {
+      if let metadata = dataset?.getMetadata(), metadata.channelInterpretation == .independentChannels {
         try renderTransferFunctions?.synchronize(
           with: frame.transferFunctions,
           componentRanges: metadata.componentRanges,
@@ -240,13 +240,14 @@ final class ScreenVolumeRendererCore {
       appModel.logger.error("Failed to update render transfer functions: \(error.localizedDescription)")
     }
     updateUniforms(for: view, state: frameState, settings: frame.settings)
-    updateEmptiness(state: frameState)
+    updateEmptiness(state: frameState, alphaEpsilon: frame.settings.alphaEpsilon)
     volumeAtlas.prepareFrame(commandBuffer: commandBuffer)
     do {
       try volumeAtlas.prepareSubbrickSkipping(commandBuffer: commandBuffer,
         transferFunctions: renderTransferFunctions?.activeTransferFunctions ?? [],
         enabled: frame.settings.subbrickSkipping,
-        isoValue: frameState.renderMode == .isoValue ? frameState.isoValue : nil)
+        isoValue: frameState.renderMode == .isoValue ? frameState.isoValue : nil,
+        alphaEpsilon: frame.settings.alphaEpsilon)
     } catch {
       appModel.logger.error("Subbrick skipping unavailable: \(error.localizedDescription)")
     }
@@ -356,6 +357,7 @@ final class ScreenVolumeRendererCore {
     if state.brickVisualization {
       return pipelineStateBrickVis
     }
+    if dataset?.getMetadata().channelInterpretation != .independentChannels { return pipelineStateTF }
 
     switch state.renderMode {
       case .transferFunction1D:
@@ -440,7 +442,8 @@ final class ScreenVolumeRendererCore {
 
     try newDataset.getMetadata().requireUnsignedProcessing()
     appModel.trackDatasetStreaming(newDataset)
-    let editableDataset = appModel.volumeBrush.open(newDataset, datasetURL: datasetURL, logger: appModel.logger)
+    let editableDataset = newDataset.getMetadata().channelInterpretation != .rgb
+      ? appModel.volumeBrush.open(newDataset, datasetURL: datasetURL, logger: appModel.logger) : newDataset
     dataset = editableDataset
     timer.reset()
     renderingParameters.reset()
@@ -452,7 +455,7 @@ final class ScreenVolumeRendererCore {
       componentCount: metadata.componentCount,
       componentRanges: metadata.componentRanges
     )
-    if appSettings.autoloadTF,
+    if appSettings.autoloadTF, metadata.channelInterpretation == .independentChannels,
        let tfURL = appModel.transferFunctionFileURL(for: activeDataset, componentCount: renderingParameters.componentCount) {
       _ = try? renderingParameters.loadDatasetTransferFunctions(from: tfURL)
     }
@@ -1002,8 +1005,12 @@ final class ScreenVolumeRendererCore {
     }
   }
 
-  private func updateEmptiness(state: BorgVRVisualizationSnapshot) {
+  private func updateEmptiness(state: BorgVRVisualizationSnapshot, alphaEpsilon: Float) {
     guard let volumeAtlas, let renderTransferFunctions else { return }
+    if dataset?.getMetadata().channelInterpretation != .independentChannels {
+      volumeAtlas.updateEmptiness(alphaEpsilon: alphaEpsilon)
+      return
+    }
     switch state.renderMode {
       case .transferFunction1D, .transferFunction1DLighting:
         volumeAtlas.updateEmptiness(
