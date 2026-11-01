@@ -7,29 +7,34 @@ enum BorgVRVolumeQuantizer {
     signedComponents: [Bool] = [],
     to outputURL: URL,
     logger: LoggerBase? = nil,
-    cancellationToken: BorgVRVolumeConversionCancellationToken? = nil
+    cancellationToken: BorgVRVolumeConversionCancellationToken? = nil,
+    recordProvenance: ((String) -> Void)? = nil
   ) throws -> RawFileAccessor {
     try cancellationToken?.checkCancellation()
+    let originalRanges: String
     switch source.bytesPerComponent {
       case 1: return source
       case 2:
-        try write(UInt16.self, source: source, signedComponents: signedComponents,
+        originalRanges = try write(UInt16.self, source: source, signedComponents: signedComponents,
           to: outputURL, logger: logger, cancellationToken: cancellationToken)
       case 4:
-        try write(UInt32.self, source: source, signedComponents: signedComponents,
+        originalRanges = try write(UInt32.self, source: source, signedComponents: signedComponents,
           to: outputURL, logger: logger, cancellationToken: cancellationToken)
       default: throw RawFileAccessor.Error.incompatibleTypeSize
     }
-    return try RawFileAccessor(filename: outputURL.path, size: source.size,
+    let result = try RawFileAccessor(filename: outputURL.path, size: source.size,
       bytesPerComponent: 1, componentCount: source.componentCount,
       voxelSpacing: source.voxelSpacing)
+    recordProvenance?("Quantized to UInt8 per channel from \(source.bytesPerComponent * 8)-bit samples; "
+      + "independent linear min/max mapping with nearest rounding; original ranges: \(originalRanges)")
+    return result
   }
 
   private static func write<Value: FixedWidthInteger & UnsignedInteger>(
     _ type: Value.Type, source: RawFileAccessor, signedComponents: [Bool],
     to outputURL: URL, logger: LoggerBase?,
     cancellationToken: BorgVRVolumeConversionCancellationToken?
-  ) throws {
+  ) throws -> String {
     let channels = source.componentCount
     // Flipping the sign bit orders signed samples without changing the source data.
     let signMasks: [Value] = (0..<channels).map {
@@ -56,10 +61,11 @@ enum BorgVRVolumeQuantizer {
       }
       logger?.progress("Analyzing channel ranges", Double(end) / Double(voxelCount))
     }
-    for channel in 0..<channels {
+    let originalRanges = (0..<channels).map { channel in
       let minimum = Int64(minima[channel]) - Int64(signMasks[channel])
       let maximum = Int64(maxima[channel]) - Int64(signMasks[channel])
       logger?.info("Channel \(channel + 1): original value range \(minimum)...\(maximum); quantizing to 8 bits.")
+      return "channel \(channel + 1): \(minimum)...\(maximum)"
     }
 
     guard FileManager.default.createFile(atPath: outputURL.path, contents: nil) else {
@@ -92,5 +98,6 @@ enum BorgVRVolumeQuantizer {
     }
     try cancellationToken?.checkCancellation()
     completed = true
+    return originalRanges.joined(separator: "; ")
   }
 }

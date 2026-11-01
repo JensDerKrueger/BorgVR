@@ -29,6 +29,7 @@ swiftc \
   "$ROOT/BORGVR-IO/BORGVRDataBase.swift" \
   "$ROOT/BORGVR-IO/BORGVRMetaData.swift" \
   "$ROOT/BORGVR-IO/BORGVRFileData.swift" \
+  "$ROOT/BORGVR-IO/BORGVRVolumeExporter.swift" \
   "$ROOT/BORGVR-IO/BorgVRVolumeEditMask.swift" \
   "$ROOT/BORGVR-IO/BorgVRVolumeOriginalBrick.swift" \
   "$ROOT/BORGVR-IO/BorgVRVolumeEditStates.swift" \
@@ -44,6 +45,8 @@ swiftc \
   "$ROOT/BORGVR-IO/BorgVRIsoSurfaceExtractor.swift" \
   "$ROOT/BORGVR-IO/Importers/BrickedVolumeReorganizer.swift" \
   "$ROOT/Tests/VolumeConversionServiceTestSupport.swift" \
+  "$ROOT/BORGVR-IO/Importers/DICOM/DICOMVRMap.swift" \
+  "$ROOT/BORGVR-IO/Importers/DICOM/DICOMProvenance.swift" \
   "$ROOT/BORGVR-IO/Importers/DICOM/BorgVRDICOMRigidRegistration.swift" \
   "$ROOT/BORGVR-IO/Importers/BorgVRVolumeConversionService.swift" \
   "$ROOT/BORGVR-IO/Importers/BorgVRAutomaticVolumeConversion.swift" \

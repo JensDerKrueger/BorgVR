@@ -1,6 +1,7 @@
 import Foundation
 
 enum DicomParser {
+  static var decodedVolumes: [URL: DicomVolume] = [:]
   struct DicomOrientation: Equatable, Sendable {
     let xAxis: Vec3<Float>
     let yAxis: Vec3<Float>
@@ -23,6 +24,7 @@ enum DicomParser {
     let modality: String?
     let patientName: String?
     let seriesDate: String?
+    var provenance: [DicomProvenanceMetadata.Event] = []
   }
 
   enum Error: Swift.Error {
@@ -34,6 +36,7 @@ enum DicomParser {
     logger: LoggerBase?,
     cancellationToken: BorgVRVolumeConversionCancellationToken?
   ) throws -> DicomVolume {
+    if let volume = urls.compactMap({ decodedVolumes[$0.resolvingSymlinksInPath().standardizedFileURL] }).first { return volume }
     throw Error.unavailableInUnitTest
   }
 }

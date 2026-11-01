@@ -300,14 +300,17 @@ struct BorgVRVoxelTransform: Sendable, CustomStringConvertible {
       + translation
   }
 
-  var description: String {
-    let rows: [[Float]] = [
+  var matrixRows: [[Float]] {
+    [
       [xAxis.x, yAxis.x, zAxis.x, translation.x],
       [xAxis.y, yAxis.y, zAxis.y, translation.y],
       [xAxis.z, yAxis.z, zAxis.z, translation.z],
       [0, 0, 0, 1]
     ]
-    return rows.map { row in
+  }
+
+  var description: String {
+    matrixRows.map { row in
       "[" + row.map { String(format: "%8.2f", $0) }.joined(separator: " ") + " ]"
     }.joined(separator: "\n")
   }

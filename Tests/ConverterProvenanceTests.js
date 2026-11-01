@@ -71,6 +71,41 @@ async function main() {
     const rejectedExport = spawnSync(converter, ["E", file, path.join(root, "export.nrrd"), "0", "--source-info", "2026-11-01T12:00:00Z", "source"], { encoding: "utf8" });
     assert.notEqual(rejectedExport.status, 0);
     assert.match(rejectedExport.stdout + rejectedExport.stderr, /not applicable to export/);
+    const dicomDirectory = path.join(root, "dicom");
+    fs.mkdirSync(dicomDirectory);
+    function element(group, tag, vr, value) {
+      let payload = Buffer.isBuffer(value) ? value : Buffer.from(value);
+      if (payload.length % 2) payload = Buffer.concat([payload, Buffer.from([32])]);
+      const header = Buffer.alloc(8);
+      header.writeUInt16LE(group); header.writeUInt16LE(tag, 2);
+      header.write(vr, 4); header.writeUInt16LE(payload.length, 6);
+      return Buffer.concat([header, payload]);
+    }
+    function uint16(value) { const bytes = Buffer.alloc(2); bytes.writeUInt16LE(value); return bytes; }
+    fs.writeFileSync(path.join(dicomDirectory, "slice.dcm"), Buffer.concat([
+      Buffer.alloc(128), Buffer.from("DICM"), element(2, 0x10, "UI", "1.2.840.10008.1.2.1\0"),
+      element(8, 0x2a, "DT", "20261101123045.123+0200"),
+      element(8, 0x23, "DA", "20261102"), element(8, 0x2111, "ST", "Reconstructed from scan"),
+      ...[[0x10, 2], [0x11, 2], [2, 1], [0x100, 8], [0x101, 8], [0x103, 0]]
+        .map(([tag, value]) => element(0x28, tag, "US", uint16(value))),
+      element(0x7fe0, 0x10, "US", Buffer.from([0, 20, 40, 60]))
+    ]));
+    const dicomOutput = path.join(root, "dicom.data");
+    const dicomResult = spawnSync(converter, ["D", dicomDirectory, dicomOutput, "DICOM history test", "8", "1"], { encoding: "utf8" });
+    assert.equal(dicomResult.status, 0, dicomResult.stdout + dicomResult.stderr);
+    const dicomHistory = readHistory(dicomOutput);
+    assert.ok(dicomHistory.some(entry => entry.time === 1793529045123 && entry.text.includes("DICOM acquisition")));
+    assert.ok(dicomHistory.some(entry => entry.time === Date.parse("2026-11-02T00:00:00Z") && entry.text.includes("date only: 2026-11-02") && entry.text.includes("Reconstructed from scan")));
+    assert.equal(dicomHistory.filter(entry => entry.text.startsWith("Import DICOM:")).length, 1);
+    const nrrdOutput = path.join(root, "export.nrrd");
+    const exportResult = spawnSync(converter, ["E", dicomOutput, nrrdOutput, "0"], { encoding: "utf8" });
+    assert.equal(exportResult.status, 0, exportResult.stdout + exportResult.stderr);
+    const nrrd = fs.readFileSync(nrrdOutput);
+    const header = nrrd.subarray(0, nrrd.indexOf("\n\n")).toString("ascii");
+    const prefix = "# BorgVR provenance: ";
+    const exportedHistory = header.split("\n").filter(line => line.startsWith(prefix)).map(line => JSON.parse(line.slice(prefix.length)));
+    assert.deepEqual(exportedHistory.slice(0, -1).map(entry => ({ time: entry.timestampMilliseconds, text: entry.text })), dicomHistory);
+    assert.ok(exportedHistory.at(-1).text.startsWith("Exported to NRRD"));
     console.log("CLI provenance date/time, repeated sources in order, automatic tool/version history, and argument validation passed.");
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 }

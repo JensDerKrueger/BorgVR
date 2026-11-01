@@ -1623,6 +1623,9 @@ private func testEditableDataset() throws {
   let directory = FileManager.default.temporaryDirectory.appendingPathComponent("borgvr-edit-integration-\(UUID())")
   defer { try? FileManager.default.removeItem(at: directory) }
   let source = EditTestDataset(bytesPerComponent: 2)
+  source.metadata.provenance = [BORGVRProvenanceEntry(timestampMilliseconds: 1_793_491_200_000,
+    text: "Original DICOM acquisition and fusion")]
+  let originalHistory = source.metadata.provenance
   let dataset = try BorgVREditableVolumeData(source: source, directory: directory, logger: nil)
   defer { dataset.stop() }
   let sphere = BorgVRVolumeBrushSample(center: .zero, radius: 100)
@@ -1646,6 +1649,12 @@ private func testEditableDataset() throws {
   try check(exported.wait(timeout: .now() + 20) == .success, "Edited volume export did not finish")
   _ = try box.lock.withLock { try box.result!.get() }
   let baked = try BORGVRFileData(filename: output.path)
+  let history = baked.getMetadata().provenance
+  try check(Array(history.dropLast()) == originalHistory && source.metadata.provenance == originalHistory,
+    "Edited data export lost source provenance or mutated the original")
+  try check(history.last!.text.hasPrefix("Materialized volume edits")
+    && history.last!.text.contains(source.metadata.uniqueID) && history.last!.text.contains("revision: 1"),
+    "Edited data export lost its source dataset or stable edit revision")
   try check(baked.getMetadata().uniqueID != source.metadata.uniqueID, "Baked volume reused the source UUID")
   try check(baked.getMetadata().datasetDescription == "Edited test volume" &&
             baked.getMetadata().metaDescription == "Custom export description",

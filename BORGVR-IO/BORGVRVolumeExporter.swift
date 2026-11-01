@@ -107,7 +107,9 @@ enum BORGVRVolumeExporter {
       voxelSpacing: voxelSpacing,
       componentCount: metadata.componentCount,
       bytesPerComponent: metadata.bytesPerComponent,
-      level: level
+      level: level,
+      provenance: metadata.provenance + [BORGVRProvenanceEntry(
+        "Exported to NRRD from LoD \(level); source dataset: \(metadata.uniqueID); tool: \(BORGVRToolIdentification.current)")]
     )
     let voxelByteSize = try checkedProduct(
       [metadata.componentCount, metadata.bytesPerComponent]
@@ -235,7 +237,8 @@ enum BORGVRVolumeExporter {
     voxelSpacing: Vec3<Float>,
     componentCount: Int,
     bytesPerComponent: Int,
-    level: Int
+    level: Int,
+    provenance: [BORGVRProvenanceEntry]
   ) throws -> Data {
     let type: String
     switch bytesPerComponent {
@@ -265,9 +268,24 @@ enum BORGVRVolumeExporter {
       """
     }
 
+    let formatter = ISO8601DateFormatter()
+    formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    let comments = try provenance.map { entry in
+      let json = try JSONSerialization.data(withJSONObject: [
+        "timestampMilliseconds": entry.timestampMilliseconds,
+        "date": formatter.string(from: entry.date), "text": entry.text
+      ], options: [.sortedKeys])
+      // NRRD headers are ASCII. JSON escaping also prevents multi-line text from
+      // injecting header fields or an early blank line before the binary payload.
+      let ascii = String(decoding: json, as: UTF8.self).utf16.map { unit in
+        (32...126).contains(unit) ? String(UnicodeScalar(unit)!) : String(format: "\\u%04X", unit)
+      }.joined()
+      return "# BorgVR provenance: \(ascii)"
+    }.joined(separator: "\n")
     let header = """
     NRRD0005
     # Exported by BorgVR from LoD \(level)
+    \(comments)
     type: \(type)
     \(dimensionalFields)
     endian: little

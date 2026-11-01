@@ -364,6 +364,8 @@ private func testReadingDICOMDirectoryContents() throws {
       value: Data("0\\0\\\(index) ".utf8), to: &data)
     appendExplicitElement(group: 0x0020, element: 0x0037, vr: "DS",
       value: Data("1\\0\\0\\0\\1\\0 ".utf8), to: &data)
+    appendExplicitElement(group: 0x0008, element: 0x002A, vr: "DT",
+      value: Data("20261101120000+0200".utf8), to: &data)
     appendExplicitElement(group: 0x7FE0, element: 0x0010, vr: "US",
       value: Data(repeating: UInt8(index + 1), count: 4), to: &data)
     try data.write(to: directory.appendingPathComponent("slice-\(index)"))
@@ -376,6 +378,96 @@ private func testReadingDICOMDirectoryContents() throws {
     "DICOM directory contents were not read as one volume")
   try expect(volume.voxelData == [1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3],
     "Coordinated DICOM reads changed slice ordering or pixel data")
+  try expect(volume.provenance.count == 1 && volume.provenance[0].text.contains("acquisition"),
+    "Slice histories were lost or identical events were repeated")
+}
+
+private func testProvenanceDates() throws {
+  func event(_ fields: [DicomTag: String], containing name: String = "acquisition") -> DicomProvenanceMetadata.Event {
+    DicomProvenanceMetadata(readString: { fields[$0] }).events.first { $0.text.contains(name) }!
+  }
+  let utc = ISO8601DateFormatter()
+  let combined = event([.acquisitionDateTime: "20261101003045.123456+0200", .timezoneOffsetFromUTC: "-0500"])
+  try expect(abs(combined.date!.timeIntervalSince1970 - utc.date(from: "2026-10-31T22:30:45Z")!.timeIntervalSince1970 - 0.123456) < 0.000001,
+    "DT fractional seconds or explicit offset were ignored")
+  let separate = event([.acquisitionDate: "20261101", .acquisitionTime: "003045", .timezoneOffsetFromUTC: "+0200"])
+  try expect(utc.string(from: separate.date!) == "2026-10-31T22:30:45Z", "DA/TM timezone rollover failed")
+  for offset in ["-1200", "+1400", "invalid"] {
+    let day = event([.acquisitionDate: "20261101", .timezoneOffsetFromUTC: offset])
+    try expect(utc.string(from: day.date!) == "2026-11-01T00:00:00Z" && day.text.contains("date only: 2026-11-01"),
+      "Date-only source was shifted by a time zone")
+  }
+  let noZone = event([.acquisitionDateTime: "20261101123045"])
+  try expect(noZone.date == nil && noZone.text.contains("timezone unspecified") && noZone.text.contains("20261101123045"),
+    "Missing timezone was invented or original timestamp was lost")
+  for raw in ["20260230", "20260001", "20261101240000+0000", "20261101126000+0000", "20261101123000+1460", "20261101123000-0000", "20261101123000.", "202611", ""] {
+    try expect(event([.acquisitionDateTime: raw]).date == nil, "Invalid/incomplete DICOM timestamp was accepted: \(raw)")
+  }
+  let shortTime = event([.acquisitionDate: "20261101", .acquisitionTime: "12", .timezoneOffsetFromUTC: "+0000"])
+  try expect(utc.string(from: shortTime.date!) == "2026-11-01T12:00:00Z", "Reduced time precision was rejected")
+  let missingDate = event([.derivationDescription: "Filtered"], containing: "content creation")
+  try expect(missingDate.date == nil && missingDate.text.contains("Filtered"), "Undated derivation was lost")
+}
+
+private func testProvenanceSequences() throws {
+  for undefined in [false, true] {
+    var data = Data(repeating: 0, count: 128)
+    data.append(Data("DICM".utf8))
+    appendExplicitElement(group: 0x0028, element: 0x0010, vr: "US", value: uint16Data(1), to: &data)
+    appendExplicitElement(group: 0x0028, element: 0x0011, vr: "US", value: uint16Data(1), to: &data)
+    func text(_ tag: DicomTag, _ vr: String, _ value: String, to bytes: inout Data) {
+      var encoded = Data(value.utf8)
+      if encoded.count % 2 != 0 { encoded.append(32) }
+      appendExplicitElement(group: tag.group, element: tag.element, vr: vr, value: encoded, to: &bytes)
+    }
+    text(.specificCharacterSet, "CS", "ISO_IR 192", to: &data)
+    text(.studyDate, "DA", "20261001", to: &data)
+    text(.seriesDate, "DA", "20261101", to: &data)
+    text(.acquisitionDateTime, "DT", "20261101093000+0100", to: &data)
+    text(.contentDate, "DA", "20261101", to: &data)
+    text(.contentTime, "TM", "103000", to: &data)
+    text(.timezoneOffsetFromUTC, "SH", "+0100", to: &data)
+    text(.derivationDescription, "ST", "Gefilterte Gefäße", to: &data)
+    var items = Data()
+    for index in 1...2 {
+      var item = Data()
+      text(.contributionDateTime, "DT", "202611011\(index)0000+0100", to: &item)
+      text(.contributionDescription, "ST", "Processing step \(index)", to: &item)
+      text(.softwareVersions, "LO", "v\(index).0", to: &item)
+      // Nested values must not overwrite the dataset's own acquisition metadata.
+      text(.acquisitionDateTime, "DT", "20000101000000+0000", to: &item)
+      appendUInt16LE(0xFFFE, to: &items); appendUInt16LE(0xE000, to: &items)
+      appendUInt32LE(undefined ? UInt32.max : UInt32(item.count), to: &items)
+      items.append(item)
+      if undefined {
+        appendUInt16LE(0xFFFE, to: &items); appendUInt16LE(0xE00D, to: &items)
+        appendUInt32LE(0, to: &items)
+      }
+    }
+    appendUInt16LE(0x0018, to: &data); appendUInt16LE(0xA001, to: &data)
+    data.append(Data("SQ".utf8)); appendUInt16LE(0, to: &data)
+    appendUInt32LE(undefined ? UInt32.max : UInt32(items.count), to: &data)
+    data.append(items)
+    if undefined {
+      appendUInt16LE(0xFFFE, to: &data); appendUInt16LE(0xE0DD, to: &data)
+      appendUInt32LE(0, to: &data)
+    }
+    appendExplicitElement(group: 0x7FE0, element: 0x0010, vr: "US", value: uint16Data(42), to: &data)
+    let file = DicomParser.DicomFile(transferSyntax: .init(elementEncoding: .explicitVRLittleEndian,
+      pixelDataEncoding: .uncompressed), rawData: data)
+    let slice = try DicomParser.openSlice(from: file)
+    try expect(slice.seriesDate == "20261101" && slice.provenanceMetadata.studyDate == "20261001",
+      "Series date and study date were confused")
+    try expect(slice.provenanceMetadata.acquisitionDateTime == "20261101093000+0100",
+      "A nested date replaced the top-level acquisition timestamp")
+    try expect(slice.provenanceMetadata.derivationDescription == "Gefilterte Gefäße",
+      "UTF-8 derivation text was lost")
+    let contributions = slice.provenanceMetadata.events.filter { $0.text.contains("equipment contribution") }
+    try expect(contributions.count == 2 && contributions[0].text.contains("Processing step 1")
+      && contributions[1].text.contains("software: v2.0") && contributions.allSatisfy { $0.date != nil },
+      "Contribution items were mixed or lost")
+    try expect(slice.pixelData == uint16Data(42), "Sequence parsing changed pixel offsets")
+  }
 }
 
 @main
@@ -397,6 +489,8 @@ private enum DICOMParserTestRunner {
     try testSignedPixelPaddingValue()
     try testFrameOfReferenceUID()
     try testReadingDICOMDirectoryContents()
+    try testProvenanceDates()
+    try testProvenanceSequences()
     print("DICOM parser tests passed")
   }
 }

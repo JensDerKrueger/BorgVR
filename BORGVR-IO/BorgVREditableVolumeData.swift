@@ -900,7 +900,7 @@ final class BorgVREditableVolumeData: BORGVRDatasetProtocol, BorgVRVolumeGPUBrus
           }
           try checkCancellation()
           progress(0)
-          let metadata = getMetadata().editExportMetadata()
+          let metadata = getMetadata().editExportMetadata(editStateID: snapshot.editStateID, revision: snapshot.revision)
           if let name { metadata.datasetDescription = name }
           if let description { metadata.metaDescription = description }
           let temporary = url.deletingLastPathComponent().appendingPathComponent(".\(UUID()).data")

@@ -783,9 +783,13 @@ final class BORGVRMetaData: CustomStringConvertible, Codable {
     }
   }
 
-  func editExportMetadata() -> BORGVRMetaData {
+  func editExportMetadata(editStateID: UUID? = nil, revision: UInt64? = nil) -> BORGVRMetaData {
     let copy = copyProperties()
-    copy.provenance.append(BORGVRProvenanceEntry("Materialized volume edits"))
+    var operation = "Materialized volume edits into a new dataset; source dataset: \(uniqueID)"
+    if let editStateID { operation += "; edit state: \(editStateID.uuidString)" }
+    if let revision { operation += "; revision: \(revision)" }
+    operation += "; tool: \(BORGVRToolIdentification.current)"
+    copy.provenance.append(BORGVRProvenanceEntry(operation))
     return copy
   }
 

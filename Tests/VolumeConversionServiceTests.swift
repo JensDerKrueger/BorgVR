@@ -151,8 +151,9 @@ private func testVolumeQuantization() throws {
     let original = try source(values, channels: channels)
     let before = try Data(contentsOf: inputURL)
     let logger = CapturingLogger()
+    var provenance: [String] = []
     let result = try BorgVRVolumeQuantizer.quantize(original, signedComponents: signed, to: outputURL,
-      logger: logger)
+      logger: logger, recordProvenance: { provenance.append($0) })
     let actual: [UInt8] = try result.getData(x: 0, y: 0, z: 0, count: result.totalVoxels)
     try expect(actual == expected, "Incorrect quantized samples: \(actual), expected \(expected)")
     try expect(result.bytesPerComponent == 1 && result.componentCount == channels,
@@ -163,7 +164,10 @@ private func testVolumeQuantization() throws {
     try expect(after == before, "Quantization modified the original")
     if MemoryLayout<Value>.stride == 1 {
       try expect(result === original, "Existing 8-bit samples were requantized")
+      try expect(provenance.isEmpty, "Unchanged 8-bit samples received a quantization entry")
     } else {
+      try expect(provenance.count == 1 && provenance[0].contains("channel \(channels):")
+        && provenance[0].contains("nearest rounding"), "Quantization did not record original channel ranges")
       try expect(logger.infoMessages.filter { $0.contains("original value range") }.count == channels,
         "Quantization did not log the original range of every channel")
       if signed.first == true {
@@ -202,11 +206,104 @@ private func testVolumeQuantization() throws {
         extensionStrategy: .clamp, quantizeTo8Bit: enabled)))
     let metadata = try BORGVRMetaData(filename: destination.path)
     try expect(metadata.bytesPerComponent == (enabled ? 1 : 2), "Import ignored quantization setting")
+    let quantization = metadata.provenance.filter { $0.text.hasPrefix("Quantized to UInt8") }
+    try expect(quantization.count == (enabled ? 1 : 0), "Quantization provenance is missing or duplicated")
+    if enabled {
+      try expect(quantization[0].text.contains("channel 1: 100...200"), "Quantization provenance lost original values")
+    }
     try expect(metadata.minValue == (enabled ? 0 : 100) && metadata.maxValue == (enabled ? 255 : 200),
       "Imported value range is incorrect")
     try expect(metadata.voxelSpacingX == spacing.x && metadata.voxelSpacingY == spacing.y
       && metadata.voxelSpacingZ == spacing.z, "Import changed voxel spacing")
   }
+}
+
+private func testDICOMImportHistory() throws {
+  let root = FileManager.default.temporaryDirectory.appendingPathComponent("borgvr-dicom-history-\(UUID())")
+  defer { try? FileManager.default.removeItem(at: root); DicomParser.decodedVolumes = [:] }
+  let orientation = DicomParser.DicomOrientation(xAxis: .init(x: 1, y: 0, z: 0),
+    yAxis: .init(x: 0, y: 1, z: 0), zAxis: .init(x: 0, y: 0, z: 1))
+  func source(_ name: String, _ date: String) throws -> URL {
+    let directory = root.appendingPathComponent(name)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    let file = directory.appendingPathComponent("slice.dcm")
+    try Data().write(to: file)
+    let values: [UInt16] = [0, 100, 200, 300, 400, 500, 600, 700]
+    let bytes = values.withUnsafeBytes { Data($0) }
+    let history = DicomProvenanceMetadata(readString: { $0 == .acquisitionDate ? date : nil }).events
+    DicomParser.decodedVolumes[file.resolvingSymlinksInPath().standardizedFileURL] = .init(sourceFiles: [file], voxelData: bytes,
+      width: 2, height: 2, depth: 2, bytesPerVoxel: 2, voxelSpacing: .init(x: 0.001, y: 0.001, z: 0.001),
+      orientation: orientation, origin: .zero, frameOfReferenceUID: "same-frame", isSigned: false,
+      pixelPaddingValue: nil, modality: "CT", patientName: nil, seriesDate: nil, provenance: history)
+    return directory
+  }
+  let reference = try source("reference", "20260101"), moving = try source("registered", "20260102")
+  let supplied = BORGVRProvenanceEntry("External archive history")
+  for pair in [false, true] {
+    let destination = root.appendingPathComponent(pair ? "fused.data" : "single.data")
+    try BorgVRVolumeConversionService.convert(.init(
+      source: pair ? .registeredDICOMPair(reference: reference, moving: moving, filter: .trilinear) : .dicomDirectory(reference),
+      destinationURL: destination, datasetDescription: "History test", metaDescription: "",
+      settings: .init(brickSize: 4, overlap: 1, useCompression: false, extensionStrategy: .clamp, quantizeTo8Bit: true),
+      provenance: [supplied], toolIdentification: "History test tool 3.5"))
+    let metadata = try BORGVRMetaData(url: destination)
+    let history = metadata.provenance
+    try expect(history[0] == supplied, "User-supplied provenance was dropped")
+    let sources = history.filter { $0.text.contains("DICOM acquisition") }
+    try expect(sources.count == (pair ? 2 : 1) && sources[0].text.contains("date only: 2026-01-01"),
+      "DICOM history did not reach the output metadata")
+    if pair {
+      try expect(sources[0].text.hasPrefix("Reference (channel 1):")
+        && sources[1].text.hasPrefix("Registered (channel 2):") && sources[1].text.contains("2026-01-02"),
+        "Fusion lost source identity")
+      let index = history.firstIndex { $0.text.hasPrefix("Rigid DICOM registration and fusion") }!
+      let text = history[index].text
+      let matrix = String(text[text.range(of: "matrix: ")!.upperBound...])
+      let rows = try JSONDecoder().decode([[Float]].self, from: Data(matrix.utf8))
+      try expect(rows == BorgVRVoxelTransform.identity.matrixRows && text.contains("resampling: trilinear"),
+        "Fusion provenance did not store the applied voxel matrix/filter")
+      try expect(index < history.firstIndex { $0.text.hasPrefix("Quantized") }!, "Fusion/quantization history order is incorrect")
+    }
+    try expect(history.filter { $0.text.contains("Import DICOM:") }.count == (pair ? 2 : 1), "DICOM import entries duplicated")
+    try expect(history.last!.text.contains("converted by History test tool 3.5"), "Conversion entry is not last")
+  }
+}
+
+private func testNRRDProvenanceExport() throws {
+  let root = FileManager.default.temporaryDirectory.appendingPathComponent("borgvr-nrrd-history-\(UUID())")
+  try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+  defer { try? FileManager.default.removeItem(at: root) }
+  let raw = root.appendingPathComponent("input.raw"), data = root.appendingPathComponent("source.data")
+  try Data(0..<64).write(to: raw)
+  let history = [BORGVRProvenanceEntry(timestampMilliseconds: 1_793_491_200_000,
+    text: "Source: Gefäße 🧠\n\nencoding: ascii\r# not a real field\0"),
+    BORGVRProvenanceEntry("Processing\n[1, 0, 0, 0]")]
+  let volume = try RawFileAccessor(filename: raw.path, size: .init(x: 4, y: 4, z: 4),
+    bytesPerComponent: 1, componentCount: 1, voxelSpacing: .init(x: 0.001, y: 0.002, z: 0.003))
+  try BrickedVolumeReorganizer(inputVolume: volume, brickSize: 4, overlap: 1, extensionStrategy: .clamp)
+    .reorganize(to: data.path, datasetDescription: "Provenance test", metaDescription: "", provenance: history)
+  let originalHistory = try BORGVRMetaData(url: data).provenance
+  for level in [0, 1] {
+    let output = root.appendingPathComponent("level-\(level).nrrd")
+    _ = try BORGVRVolumeExporter.export(inputURL: data, outputURL: output, level: level)
+    let bytes = try Data(contentsOf: output)
+    let split = bytes.range(of: Data("\n\n".utf8))!
+    let header = bytes[..<split.lowerBound]
+    try expect(header.allSatisfy { $0 < 128 }, "NRRD header contains non-ASCII text")
+    let prefix = "# BorgVR provenance: "
+    let entries = try String(decoding: header, as: UTF8.self).components(separatedBy: "\n")
+      .filter { $0.hasPrefix(prefix) }.map {
+        try JSONDecoder().decode(BORGVRProvenanceEntry.self, from: Data($0.dropFirst(prefix.count).utf8))
+      }
+    try expect(Array(entries.dropLast()) == originalHistory, "NRRD export changed provenance timestamps/text/order")
+    try expect(entries.last!.text.contains("Exported to NRRD from LoD \(level)"), "NRRD export step is missing")
+    let parsed = try NRRDParser(filename: output.path)
+    try expect(parsed.size == (level == 0 ? .init(x: 4, y: 4, z: 4) : .init(x: 2, y: 2, z: 2)),
+      "NRRD provenance comments changed header parsing")
+    if level == 0 { try expect(bytes.suffix(64) == Data(0..<64), "Provenance changed exported voxel data") }
+  }
+  let unchanged = try BORGVRMetaData(url: data)
+  try expect(unchanged.provenance == originalHistory, "NRRD export mutated the input history")
 }
 
 private func testRawConversionAndAtomicReplacement() throws {
@@ -1473,6 +1570,8 @@ private enum VolumeConversionServiceTestRunner {
     try testRawConversionAndAtomicReplacement()
     try I3MParserTests.run()
     try testDICOMFusionInterleavesChannels()
+    try testDICOMImportHistory()
+    try testNRRDProvenanceExport()
     try testEmptyDICOMDirectory()
     try testIntegerVolumeSamplerHandlesInterpolationAndPadding()
     try testDICOMFusionTreatsMovingPaddingAsMissing()

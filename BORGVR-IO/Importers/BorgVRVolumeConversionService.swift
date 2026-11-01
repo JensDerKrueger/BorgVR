@@ -116,6 +116,7 @@ struct BorgVRUnbrickedVolume: Sendable {
   let frameOfReferenceUID: String?
   let channels: [BorgVRUnbrickedVolumeChannelMetadata]
   var sourceFiles: [URL] = []
+  var provenance: [BORGVRProvenanceEntry] = []
 }
 
 enum BorgVRDICOMVolumeFusion {
@@ -235,6 +236,15 @@ enum BorgVRDICOMVolumeFusion {
         throw BorgVRVolumeConversionError.incompatibleDICOMSampleFormats
     }
 
+    let matrix = String(decoding: try JSONEncoder().encode(referenceToMoving.matrixRows), as: UTF8.self)
+    let provenance = reference.provenance.map {
+      BORGVRProvenanceEntry(timestampMilliseconds: $0.timestampMilliseconds, text: "Reference (channel 1): \($0.text)")
+    } + moving.provenance.map {
+      BORGVRProvenanceEntry(timestampMilliseconds: $0.timestampMilliseconds, text: "Registered (channel 2): \($0.text)")
+    } + [BORGVRProvenanceEntry("Rigid DICOM registration and fusion; resampling: \(filter.rawValue); "
+      + "reference grid: \(reference.source.size), voxel spacing (m): \(reference.source.voxelSpacing); "
+      + "registered grid: \(moving.source.size), voxel spacing (m): \(moving.source.voxelSpacing); "
+      + "reference voxel indices -> registered voxel indices, column vectors, row-major 4x4 matrix: \(matrix)")]
     return BorgVRUnbrickedVolume(
       source: BorgVRRawVolumeSource(
         url: outputURL,
@@ -247,7 +257,8 @@ enum BorgVRDICOMVolumeFusion {
       orientation: reference.orientation,
       origin: reference.origin,
       frameOfReferenceUID: reference.frameOfReferenceUID,
-      channels: reference.channels + moving.channels
+      channels: reference.channels + moving.channels,
+      provenance: provenance
     )
   }
 
@@ -564,7 +575,7 @@ public enum BorgVRVolumeConversionService {
         : request.metaDescription,
       settings: request.settings,
       physicalSizeMeters: request.physicalSizeMeters,
-      provenance: request.provenance,
+      provenance: request.provenance + volume.provenance,
       meta: request.meta,
       toolIdentification: request.toolIdentification
     )
@@ -629,7 +640,7 @@ public enum BorgVRVolumeConversionService {
         : request.metaDescription,
       settings: request.settings,
       physicalSizeMeters: request.physicalSizeMeters,
-      provenance: request.provenance,
+      provenance: request.provenance + fused.provenance,
       meta: request.meta,
       toolIdentification: request.toolIdentification
     )
@@ -687,6 +698,10 @@ public enum BorgVRVolumeConversionService {
       try? FileManager.default.removeItem(at: temporaryURL)
       throw error
     }
+    let recordedAt = Date()
+    let provenance = volume.provenance.map {
+      BORGVRProvenanceEntry($0.text, date: $0.date ?? recordedAt)
+    } + [BORGVRProvenanceEntry("Import DICOM: \(directoryURL.absoluteString)", date: recordedAt)]
     return BorgVRUnbrickedVolume(
       source: BorgVRRawVolumeSource(
         url: temporaryURL,
@@ -711,7 +726,8 @@ public enum BorgVRVolumeConversionService {
         isSigned: volume.isSigned,
         pixelPaddingValue: volume.pixelPaddingValue
       )],
-      sourceFiles: volume.sourceFiles
+      sourceFiles: volume.sourceFiles,
+      provenance: provenance
     )
   }
 
@@ -727,11 +743,7 @@ public enum BorgVRVolumeConversionService {
     var provenance = request.provenance
     switch request.source {
       case .file(let url): provenance.append(BORGVRProvenanceEntry("Import file: \(url.absoluteString)"))
-      case .dicomDirectory(let url): provenance.append(BORGVRProvenanceEntry("Import DICOM: \(url.absoluteString)"))
-      case .registeredDICOMPair(let reference, let moving, let filter):
-        provenance.append(BORGVRProvenanceEntry("Import reference DICOM: \(reference.absoluteString)"))
-        provenance.append(BORGVRProvenanceEntry("Import registered DICOM: \(moving.absoluteString)"))
-        provenance.append(BORGVRProvenanceEntry("Rigid DICOM registration and fusion; resampling: \(filter.rawValue)"))
+      case .dicomDirectory, .registeredDICOMPair: break // History is supplied by the decoded/fused volume.
       case .raw(let source): provenance.append(BORGVRProvenanceEntry("Import RAW: \(source.url.absoluteString)"))
     }
     var spacing = source.voxelSpacing
@@ -757,9 +769,9 @@ public enum BorgVRVolumeConversionService {
     if request.settings.quantizeTo8Bit, source.bytesPerComponent > 1 {
       volume = try BorgVRVolumeQuantizer.quantize(
         volume, signedComponents: signedComponents, to: quantizedURL,
-        logger: logger, cancellationToken: cancellationToken
+        logger: logger, cancellationToken: cancellationToken,
+        recordProvenance: { provenance.append(BORGVRProvenanceEntry($0)) }
       )
-      provenance.append(BORGVRProvenanceEntry("Quantized to UInt8 per channel"))
     }
     let reorganizer = BrickedVolumeReorganizer(
       inputVolume: volume,
