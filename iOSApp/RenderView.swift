@@ -241,6 +241,11 @@ struct RenderView: View {
     } message: {
       Text(datasetStateRestoreError?.localizedDescription ?? "")
     }
+    .onChange(of: appModel.activeDatasetMetadata?.channelInterpretation, initial: true) { _, interpretation in
+      guard let interpretation, interpretation != .independentChannels,
+            let sheet = presentedSheet, [.transferEditor, .isoEditor, .lighting].contains(sheet) else { return }
+      presentedSheet = nil
+    }
     .onChange(of: appSettings.showBrickVisualization) { _, isVisible in
       guard !isVisible, renderingParameters.brickVis else { return }
       renderingParameters.brickVis = false
@@ -659,6 +664,10 @@ struct RenderView: View {
   }
 
   private func toggleToolSheet(_ sheet: RenderSheet) {
+    if presentedSheet != sheet, [.transferEditor, .isoEditor, .lighting].contains(sheet),
+       appModel.activeDatasetMetadata?.channelInterpretation != .independentChannels {
+      return
+    }
     presentedSheet = presentedSheet == sheet ? nil : sheet
   }
 

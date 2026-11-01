@@ -50,7 +50,7 @@ struct RenderView: View {
   private let dockedMarkerPanelWidth: CGFloat = 380
   private let markerDepthScrollSensitivity: Float = 0.003
 
-  var body: some View {
+  private var renderContent: some View {
     ZStack(alignment: .top) {
       renderBackground
         .ignoresSafeArea()
@@ -190,8 +190,15 @@ struct RenderView: View {
         .padding(.bottom)
       }
     }
+  }
+
+  private var presentedRenderContent: some View {
+    renderContent
     .onAppear {
       docking.restoreForDatasetOpen()
+      updateDetachedPanelWindows()
+    }
+    .onChange(of: appModel.activeDatasetMetadata?.channelInterpretation) {
       updateDetachedPanelWindows()
     }
     .onChange(of: renderingParameters.renderMode) {
@@ -255,6 +262,10 @@ struct RenderView: View {
     } message: {
       Text(isoSurfaceExtractionError ?? "")
     }
+  }
+
+  var body: some View {
+    presentedRenderContent
     .alert("Leave SharePlay?", isPresented: $showLeaveSharePlayConfirmation) {
       Button("Cancel", role: .cancel) {}
       Button("Leave SharePlay", role: .destructive) {
@@ -683,6 +694,10 @@ struct RenderView: View {
   }
 
   private func togglePanel(_ panel: DockablePanelID) {
+    if [.transferFunctionEditor, .isoEditor, .lightingEditor].contains(panel),
+       appModel.activeDatasetMetadata?.channelInterpretation != .independentChannels {
+      return
+    }
     if docking.isDetached(panel) {
       openWindow(id: panel.windowID)
     } else {
@@ -731,6 +746,19 @@ struct RenderView: View {
   }
 
   private func updateDetachedPanelWindows() {
+    guard let interpretation = appModel.activeDatasetMetadata?.channelInterpretation else { return }
+    if interpretation != .independentChannels {
+      for panel in [DockablePanelID.transferFunctionEditor, .isoEditor, .lightingEditor]
+        where docking.isVisible(panel) || docking.isDetached(panel) {
+        if docking.isDetached(panel) {
+          docking.close(panel)
+          dismissWindow(id: panel.windowID)
+        } else {
+          docking.hide(panel)
+        }
+        restoredDetachedPanelWindows.remove(panel)
+      }
+    }
     temporarilyCloseIncompatibleDetachedPanelWindows()
     restoreDetachedPanelWindows()
   }

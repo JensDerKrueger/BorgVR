@@ -219,6 +219,12 @@ struct RenderView: View {
       }
       .frame(width: 560, height: 480)
     }
+    .onChange(of: runtimeAppModel.activeDatasetInfo?.channelInterpretation, initial: true) { _, interpretation in
+      guard let interpretation, interpretation != .independentChannels else { return }
+      dismissWindow(id: "TransferFunctionEditorView")
+      dismissWindow(id: "IsovalueEditorView")
+      dismissWindow(id: "LightingEditorView")
+    }
     .onChange(of: scenePhase) { _, newPhase in
       Task { @MainActor in
         if newPhase == .background {
@@ -312,6 +318,10 @@ struct RenderView: View {
   ) {
     if runtimeAppModel.isViewOpen(request.windowID) {
       dismissWindow(id: request.windowID)
+      return
+    }
+    if ["TransferFunctionEditorView", "IsovalueEditorView", "LightingEditorView"].contains(request.windowID),
+       runtimeAppModel.activeDatasetInfo?.channelInterpretation != .independentChannels {
       return
     }
     if let otherWindowID = request.mutuallyExclusiveWindowID,

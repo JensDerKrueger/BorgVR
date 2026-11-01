@@ -700,7 +700,9 @@ private struct BorgVRMenuCommands: Commands {
 
     CommandMenu("Panels") {
       renderCommand("Editor", systemImage: "slider.horizontal.3", shortcut: .editor)
+        .disabled(appModel.activeDatasetMetadata?.channelInterpretation != .independentChannels)
       renderCommand("Lighting", systemImage: "lightbulb.max", shortcut: .lighting)
+        .disabled(appModel.activeDatasetMetadata?.channelInterpretation != .independentChannels)
       renderCommand("Objects", systemImage: "cube.transparent", shortcut: .objects)
       renderCommand(
         "measurement_window_title",
