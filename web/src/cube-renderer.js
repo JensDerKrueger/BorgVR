@@ -1,6 +1,6 @@
-import { BrickAtlas } from "./brick-atlas.js?v=20261022-iso-min";
+import { BrickAtlas } from "./brick-atlas.js?v=20261101-subbricks";
 import { buildMarkerRenderGeometry } from "./marker-tube-mesh.js?v=20260922-marker-direction";
-import { createDefaultTransferFunction } from "./transfer-function.js?v=20260907-range-fix";
+import { createDefaultTransferFunction } from "./transfer-function.js?v=20261101-filter-footprint";
 
 const VOLUME_DISPLAY_HALF_EXTENT = 0.68;
 
@@ -22,6 +22,7 @@ struct Uniforms {
   ambientLightColor: vec4<f32>,
   diffuseLightColor: vec4<f32>,
   specularLightColor: vec4<f32>,
+  optimizations: vec4<f32>,
 };
 
 @group(0) @binding(0) var<uniform> uniforms: Uniforms;
@@ -66,6 +67,7 @@ struct LevelTable {
 @group(0) @binding(11) var transferFunction3: texture_2d<f32>;
 @group(0) @binding(12) var transferFunction4: texture_2d<f32>;
 @group(0) @binding(13) var secondaryVolumeAtlas: texture_3d<f32>;
+@group(0) @binding(14) var<storage, read> subbrickMasks: BrickMeta;
 
 const BI_MISSING: u32 = 0u;
 const BI_CHILD_EMPTY: u32 = 1u;
@@ -344,7 +346,7 @@ fn sampleAtlasComponents(brickIndex: u32, brickCoords: vec3<u32>, lod: u32, poin
   let slot = brickInfo - BI_FLAG_COUNT;
   let atlasAxis = max(u32(uniforms.atlasInfo.x), 1u);
   let brickSize = max(uniforms.atlasInfo.y, 1.0);
-  let overlap = min(max(uniforms.atlasInfo.z, 0.0), brickSize * 0.25);
+  let overlap = min(max(uniforms.atlasInfo.z, 0.0), floor((brickSize - 1.0) * 0.5));
   let atlasSize = max(uniforms.atlasInfo.w, 1.0);
   let slotCoord = vec3<u32>(
     slot % atlasAxis,
@@ -553,6 +555,45 @@ fn markerOccludesPoint(point: vec3<f32>, markerDepth: f32) -> bool {
   return clipPoint.z / clipPoint.w >= markerDepth - 0.00001;
 }
 
+struct SubbrickTraversal {
+  cuts: array<vec3<i32>, 7>,
+  initial: vec3<i32>,
+  direction: vec3<i32>,
+};
+
+fn prepareSubbrickTraversal(startPoint: vec3<f32>, endPoint: vec3<f32>, brick: BrickLookup, steps: u32) -> SubbrickTraversal {
+  let divisions = u32(uniforms.optimizations.z);
+  let interior = u32(uniforms.atlasInfo.y - 2.0 * uniforms.atlasInfo.z);
+  let start = startPoint * levelVoxelSize(brick.lod) - vec3<f32>(brick.coords) * f32(interior);
+  let delta = (endPoint - startPoint) * levelVoxelSize(brick.lod);
+  let changing = abs(delta) > vec3<f32>(0.0000001);
+  let voxel = vec3<u32>(max(start, vec3<f32>(0)));
+  let parallel = vec3<i32>(min(((voxel + vec3<u32>(1)) * divisions - vec3<u32>(1)) / interior, vec3<u32>(divisions - 1u)));
+  var result: SubbrickTraversal;
+  result.initial = select(parallel, select(vec3<i32>(0), vec3<i32>(i32(divisions) - 1), delta < vec3<f32>(0)), changing);
+  result.direction = select(vec3<i32>(0), select(vec3<i32>(1), vec3<i32>(-1), delta < vec3<f32>(0)), changing);
+  for (var plane = 1u; plane < divisions; plane++) {
+    let boundary = f32(plane * interior / divisions);
+    let cut = ceil((vec3<f32>(boundary) - start) / select(vec3<f32>(1), delta, changing) * f32(steps) - vec3<f32>(0.5));
+    result.cuts[plane - 1u] = select(vec3<i32>(i32(steps)), vec3<i32>(clamp(cut, vec3<f32>(0), vec3<f32>(f32(steps)))), changing);
+  }
+  return result;
+}
+
+fn subbrickSampleEnd(traversal: SubbrickTraversal, index: u32, steps: u32) -> vec2<u32> {
+  let divisions = u32(uniforms.optimizations.z);
+  var coordinate = traversal.initial;
+  var ends = vec3<i32>(i32(steps));
+  for (var plane = 0u; plane + 1u < divisions; plane++) {
+    let crossed = vec3<i32>(i32(index)) >= traversal.cuts[plane];
+    coordinate += select(vec3<i32>(0), traversal.direction, crossed);
+    ends = min(ends, select(traversal.cuts[plane], vec3<i32>(i32(steps)), crossed));
+  }
+  coordinate = clamp(coordinate, vec3<i32>(0), vec3<i32>(i32(divisions) - 1));
+  let cell = u32(coordinate.x) + divisions * (u32(coordinate.y) + divisions * u32(coordinate.z));
+  return vec2<u32>(cell, max(index + 1u, u32(min(ends.x, min(ends.y, ends.z)))));
+}
+
 @fragment
 fn fragmentMain(input: VertexOut) -> @location(0) vec4<f32> {
   let exitPoint = input.coord;
@@ -597,11 +638,31 @@ fn fragmentMain(input: VertexOut) -> @location(0) vec4<f32> {
       let lodScale = f32(1u << brick.lod);
       let ocFactor = max(lodScale * 2.0 * sampleStepVoxelLength, 0.000001);
 
-      for (var sampleIndex = 0u; sampleIndex < MAX_RAY_SAMPLE_COUNT; sampleIndex = sampleIndex + 1u) {
-        if (sampleIndex >= segmentSampleCount) {
-          break;
+      let slot = brick.info - BI_FLAG_COUNT;
+      let maskBase = slot * u32(uniforms.optimizations.w);
+      var visibility = 2u;
+      if (uniforms.optimizations.x != 0.0) { visibility = subbrickMasks.values[maskBase]; }
+      var traversal: SubbrickTraversal;
+      if (visibility == 1u) {
+        traversal = prepareSubbrickTraversal(currentPos, entryPoint + ray * nextRayT, brick, segmentSampleCount);
+      }
+      var sampleIndex = 0u;
+      if (visibility == 0u) { sampleIndex = segmentSampleCount; }
+      for (var iteration = 0u; iteration < MAX_RAY_SAMPLE_COUNT; iteration++) {
+        if (sampleIndex >= segmentSampleCount) { break; }
+        var segmentEnd = segmentSampleCount;
+        if (visibility == 1u) {
+          let cellEnd = subbrickSampleEnd(traversal, sampleIndex, segmentSampleCount);
+          segmentEnd = min(segmentSampleCount, cellEnd.y);
+          let bits = subbrickMasks.values[maskBase + 1u + cellEnd.x / 32u];
+          if ((bits & (1u << (cellEnd.x & 31u))) == 0u) { sampleIndex = segmentEnd; continue; }
         }
-        let localT = (f32(sampleIndex) + 0.5) / f32(segmentSampleCount);
+        var span = 1u;
+        if (uniforms.optimizations.y != 0.0 && renderMode != RENDER_MODE_ISO) {
+          span = min(select(select(1u, 2u, accumulatedAlpha >= 0.5), 4u, accumulatedAlpha >= 0.85), segmentEnd - sampleIndex);
+        }
+        let localT = (f32(sampleIndex) + 0.5 * f32(span)) / f32(segmentSampleCount);
+        sampleIndex += span;
         let sampleRayT = mix(currentRayT, nextRayT, localT);
         let samplePoint = entryPoint + ray * sampleRayT;
         if (markerOccludesPoint(samplePoint, markerDepth)) {
@@ -630,7 +691,7 @@ fn fragmentMain(input: VertexOut) -> @location(0) vec4<f32> {
           if (channel >= componentCount) {
             break;
           }
-          let alpha = 1.0 - pow(1.0 - transferSamples.values[channel].a, ocFactor);
+          let alpha = 1.0 - pow(1.0 - transferSamples.values[channel].a, ocFactor * f32(span));
           correctedAlphas[channel] = alpha;
           needsLighting = needsLighting || alpha > 0.01;
         }
@@ -780,7 +841,7 @@ fn meshFragmentMain(input: MeshVertexOut) -> @location(0) vec4<f32> {
 
 const MAX_BRICK_REQUEST_LIST_IDS = 65536;
 const BRICK_REQUEST_READBACK_INTERVAL = 1;
-const UNIFORM_BUFFER_BYTE_LENGTH = 352;
+const UNIFORM_BUFFER_BYTE_LENGTH = 368;
 const MARKER_UNIFORM_BUFFER_BYTE_LENGTH = 128;
 const MARKER_INSTANCE_STRIDE = 32;
 const MESH_VERTEX_STRIDE = 44;
@@ -807,6 +868,8 @@ export class CoordinateCubeRenderer {
     this.markerUniformBuffer = null;
     this.markerBindGroup = null;
     this.bindGroup = null;
+    this.subbrickSkipping = true;
+    this.opacityAdaptiveSampling = true;
     this.brickAtlas = null;
     this.transferFunctions = [];
     this.transferFunctionTextures = [];
@@ -919,6 +982,12 @@ export class CoordinateCubeRenderer {
   setPersistentBrickCacheEnabled(enabled) {
     this.persistentBrickCacheEnabled = enabled;
     this.brickAtlas?.setPersistentCacheEnabled(enabled);
+  }
+
+  setRenderOptimizations({ subbrickSkipping = this.subbrickSkipping, opacityAdaptiveSampling = this.opacityAdaptiveSampling }) {
+    this.subbrickSkipping = Boolean(subbrickSkipping);
+    this.opacityAdaptiveSampling = Boolean(opacityAdaptiveSampling);
+    this.drawNow();
   }
 
   clearPersistentBrickCache() {
@@ -1078,6 +1147,9 @@ export class CoordinateCubeRenderer {
       Number.MIN_VALUE,
       maxSize
     );
+    if ((manifest.volume?.valueType ?? "uint") !== "uint") {
+      throw new Error("Signed and floating-point datasets are not yet supported by the renderer.");
+    }
     const byteRangeMax = (2 ** (8 * (manifest.volume?.bytesPerComponent ?? 1))) - 1;
     this.dataRange = manifest.volume?.dataRange ?? [0, byteRangeMax];
     this.valueRange = manifest.volume?.valueRange ?? this.dataRange;
@@ -1749,7 +1821,8 @@ export class CoordinateCubeRenderer {
         { binding: 10, resource: this.transferFunctionTextures[1].createView() },
         { binding: 11, resource: this.transferFunctionTextures[2].createView() },
         { binding: 12, resource: this.transferFunctionTextures[3].createView() },
-        { binding: 13, resource: secondaryVolumeTexture.createView() }
+        { binding: 13, resource: secondaryVolumeTexture.createView() },
+        { binding: 14, resource: { buffer: this.brickAtlas?.subbrickCache?.masks ?? this.fallbackBrickMetaBuffer } }
       ]
     });
   }
@@ -2221,6 +2294,10 @@ export class CoordinateCubeRenderer {
     this.device.queue.writeBuffer(this.brickRequestBitsetBuffer, 0, this.brickRequestBitsetClearData);
     this.device.queue.writeBuffer(this.brickRequestListBuffer, 0, this.brickRequestListClearData);
     const encoder = this.device.createCommandEncoder();
+    if (this.hasScene && this.subbrickSkipping) {
+      this.brickAtlas?.subbrickCache?.prepare(encoder, this.brickAtlas, this.activeTransferFunctions(),
+        this.transferBiases, this.renderMode, this.isoValue);
+    }
     const colorView = this.context.getCurrentTexture().createView();
     if (this.hasScene) {
       this.updateUniforms();
@@ -2383,7 +2460,11 @@ export class CoordinateCubeRenderer {
       textureLightDirection[0], textureLightDirection[1], textureLightDirection[2], 0,
       this.ambientLightColor[0], this.ambientLightColor[1], this.ambientLightColor[2], 0,
       this.diffuseLightColor[0], this.diffuseLightColor[1], this.diffuseLightColor[2], 0,
-      this.specularLightColor[0], this.specularLightColor[1], this.specularLightColor[2], 0
+      this.specularLightColor[0], this.specularLightColor[1], this.specularLightColor[2], 0,
+      this.subbrickSkipping && this.brickAtlas?.subbrickCache ? 1 : 0,
+      this.opacityAdaptiveSampling ? 1 : 0,
+      this.brickAtlas?.subbrickCache?.divisions ?? 1,
+      this.brickAtlas?.subbrickCache?.maskStride ?? 1
     ]));
     if (this.markerUniformBuffer) {
       this.device.queue.writeBuffer(

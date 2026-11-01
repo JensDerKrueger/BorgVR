@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>BorgVR WebGPU</title>
     <link rel="icon" href="./assets/borgvr.jpg">
-    <link rel="stylesheet" href="./styles/main.css?v=20261014-multichannel">
+    <link rel="stylesheet" href="./styles/main.css?v=20261101-render-optimizations">
   </head>
   <body>
     <main class="app-shell">
@@ -175,6 +175,12 @@
             </div>
           </details>
 
+          <details class="control-panel" data-ui-panel="render-performance" open>
+            <summary>Rendering</summary>
+            <label class="cache-toggle-row"><span>Subbrick skipping</span><input data-render-optimization="subbrickSkipping" type="checkbox" checked></label>
+            <label class="cache-toggle-row"><span>Opacity-adaptive sampling</span><input data-render-optimization="opacityAdaptiveSampling" type="checkbox" checked></label>
+          </details>
+
           <details class="control-panel" data-ui-panel="browser-cache">
             <summary>Browser Cache</summary>
             <label class="cache-toggle-row">
@@ -191,7 +197,7 @@
       </section>
     </main>
 
-    <script type="module" src="./src/app.js?v=20261014-multichannel"></script>
+    <script type="module" src="./src/app.js?v=20261101-render-optimizations"></script>
   </body>
 </html>
 

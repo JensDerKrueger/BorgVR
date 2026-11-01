@@ -97,8 +97,9 @@ export class TransferFunction1D {
     if (this.minVisibleIndex < 0 || this.maxVisibleIndex < 0) {
       return true;
     }
-    const maxVisibleValue = Math.ceil(this.maxVisibleIndex * rangeMax / Math.max(1, this.width - 1));
-    const minVisibleValue = Math.floor(this.minVisibleIndex * rangeMax / Math.max(1, this.width - 1));
+    const margin = 8 * 2 ** -23 * rangeMax;
+    const maxVisibleValue = (this.maxVisibleIndex + 1.5) * rangeMax / this.width + margin;
+    const minVisibleValue = (this.minVisibleIndex - 0.5) * rangeMax / this.width - margin;
     return minValue > maxVisibleValue || maxValue < minVisibleValue;
   }
 

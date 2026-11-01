@@ -1,4 +1,5 @@
 import { decodeAppleLZ4 } from "./lz4.js?v=20260911-worker";
+import { SubbrickCache, subbrickDivisions } from "./subbrick-cache.js?v=20261101";
 
 export const BI_MISSING = 0;
 const BI_CHILD_EMPTY = 1;
@@ -151,6 +152,9 @@ export class BrickAtlas {
         usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST
       });
     }
+    if (subbrickDivisions(this.brickSize, manifest.bricking.overlap) > 1) {
+      this.subbrickCache = new SubbrickCache(this.device, this);
+    }
     const maxStorageBufferBindingSize = this.device.limits.maxStorageBufferBindingSize ?? this.device.limits.maxBufferSize;
     if (this.brickMeta.byteLength > maxStorageBufferBindingSize) {
       throw new Error(`Brick metadata buffer needs ${formatMiB(this.brickMeta.byteLength)}, but WebGPU only allows ${formatMiB(maxStorageBufferBindingSize)} storage-buffer bindings.`);
@@ -216,6 +220,7 @@ export class BrickAtlas {
     this.texture?.destroy();
     this.secondaryTexture?.destroy();
     this.brickMetaBuffer?.destroy();
+    this.subbrickCache?.destroy();
   }
 
   createWorker() {
@@ -405,6 +410,7 @@ export class BrickAtlas {
     this.texture = null;
     this.secondaryTexture = null;
     this.brickMetaBuffer = null;
+    this.subbrickCache = null;
     this.brickMeta = new Uint32Array(0);
     this.freeSlots = [];
     this.loadedBricks = new Map();
@@ -857,6 +863,7 @@ export class BrickAtlas {
   }
 
   uploadPreparedBrick(slot, preparedBrick) {
+    this.subbrickCache?.invalidate(slot);
     const origin = this.slotOrigin(slot);
     const uploadStart = now();
     this.device.queue.writeTexture(

@@ -1,4 +1,5 @@
-import { CoordinateCubeRenderer } from "./cube-renderer.js?v=20261022-iso-min";
+import { CoordinateCubeRenderer } from "./cube-renderer.js?v=20261101-render-optimizations";
+import { renderDatasetProvenance } from "./dataset-provenance.js?v=20261101";
 import { decodeAppleLZ4, encodeLZ4Block } from "./lz4.js?v=20260911-urltf";
 import {
   MAX_MARKER_FILE_BYTES,
@@ -16,7 +17,7 @@ import {
   buildMeasurementGeometry,
   formatMeasurementValue
 } from "./measurement-geometry.js?v=20261005-annotations";
-import { transferFunctionRGBAData } from "./transfer-function.js?v=20260918-format-constants";
+import { transferFunctionRGBAData } from "./transfer-function.js?v=20261101-filter-footprint";
 import { installLightingEditor } from "./lighting-editor.js?v=20260928-lighting";
 
 const catalogStatus = document.querySelector("#catalog-status");
@@ -60,6 +61,7 @@ const measurementClear = document.querySelector("#measurement-clear");
 const measurementList = document.querySelector("#measurement-list");
 const measurementLabelOverlay = document.querySelector("#measurement-label-overlay");
 const persistentBrickCacheControls = Array.from(document.querySelectorAll("[data-persistent-brick-cache]"));
+const renderOptimizationControls = Array.from(document.querySelectorAll("[data-render-optimization]"));
 const persistentBrickCacheInfoButton = document.querySelector("#persistent-brick-cache-info-button");
 const persistentBrickCacheInfo = document.querySelector("#persistent-brick-cache-info");
 const clearBrickCache = document.querySelector("#clear-brick-cache");
@@ -119,6 +121,13 @@ async function main() {
   datasetPanelCollapsed = loadDatasetPanelCollapsedSetting();
   restoreOpenUIPanels();
   renderer = new CoordinateCubeRenderer(canvas);
+  const renderOptimizations = {};
+  for (const control of renderOptimizationControls) {
+    const name = control.dataset.renderOptimization;
+    control.checked = localStorage.getItem(`borgvr.${name}`) !== "0";
+    renderOptimizations[name] = control.checked;
+  }
+  renderer.setRenderOptimizations(renderOptimizations);
   renderer.setMeasurementLabelLayoutCallback(updateMeasurementLabels);
   installLightingEditor({
     canvas: lightingDirectionCanvas,
@@ -815,6 +824,13 @@ function installRenderControls() {
   persistentBrickCacheControls.forEach((control) => {
     control.addEventListener("change", async () => {
       await setPersistentBrickCacheEnabled(control.checked);
+    });
+  });
+  renderOptimizationControls.forEach((control) => {
+    control.addEventListener("change", () => {
+      const name = control.dataset.renderOptimization;
+      localStorage.setItem(`borgvr.${name}`, control.checked ? "1" : "0");
+      renderer?.setRenderOptimizations({ [name]: control.checked });
     });
   });
 
@@ -1726,6 +1742,7 @@ function renderDatasetInfo(manifest) {
       <div><dt>LOD levels</dt><dd class="lod-levels"></dd></div>
       <div><dt>Bricks</dt><dd class="brick-count"></dd></div>
     </dl>
+    <section class="dataset-provenance"><h3>Provenance</h3><div class="provenance-entries"></div></section>
   `;
 
   datasetInfo.querySelector("h2").textContent = displayDatasetName(manifest);
@@ -1739,6 +1756,7 @@ function renderDatasetInfo(manifest) {
   datasetInfo.querySelector(".brick-layout").textContent = `${manifest.bricking.brickSize}³, overlap ${manifest.bricking.overlap}`;
   datasetInfo.querySelector(".lod-levels").textContent = String(manifest.levels.length);
   datasetInfo.querySelector(".brick-count").textContent = String(brickCountForManifest(manifest));
+  renderDatasetProvenance(datasetInfo.querySelector(".provenance-entries"), manifest.provenance);
 }
 
 function brickCountForManifest(manifest) {
