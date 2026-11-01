@@ -69,8 +69,9 @@ The v5 header also contains a one-byte `channelInterpretation` after the compone
 require exactly three/four unsigned 8-bit channels and store colors without alpha
 premultiplication. Three/four components alone never imply color. NRRD `RGB-color` and
 `RGBA-color` kinds preserve this distinction on import/export. QVIS also accepts `UCHAR3` and
-`UCHAR4`, with explicit `ObjectModel: RGB` / `RGBA` selecting color rather than independent scalar
-channels. An explicit `Components` count must agree with the format. RGB omits dataset and brick
+`UCHAR4`. Only `UCHAR4` together with `ObjectModel: RGBA` selects color; `ObjectModel` is otherwise
+ignored and components remain independent scalars. An explicit `Components` count must agree with
+the format. RGB omits dataset and brick
 value ranges entirely; RGBA stores only the alpha range, not RGB bounds. Native and WebGPU renderers
 use a direct-color raycaster without a transfer function or lighting for these volumes. RGB bricks
 are always nonempty; RGBA brick/subblock skipping uses only maximum alpha and the alpha-epsilon

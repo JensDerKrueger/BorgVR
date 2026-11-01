@@ -476,11 +476,16 @@ private func testQVISColorImport() throws {
     && parsed.voxelSpacing.z == 1 && parsed.absoluteFilename.hasSuffix("-lz4.dat.raw"),
     "Visible Human UCHAR4/RGBA header was parsed incorrectly")
   let cases: [(String, String?, String?, Int, BORGVRChannelInterpretation)] = [
-    ("UCHAR3", "RGB", nil, 3, .rgb), ("UCHAR4", "rgba", nil, 4, .rgba),
-    ("UCHAR", "RGBA", "4", 4, .rgba), ("BYTE", "RGB", "3", 3, .rgb),
+    ("UCHAR3", "RGB", nil, 3, .independentChannels), ("UCHAR4", "rgba", nil, 4, .rgba),
+    ("UCHAR", "RGBA", "4", 4, .independentChannels), ("BYTE", "RGB", "3", 3, .independentChannels),
     ("UCHAR3", nil, nil, 3, .independentChannels),
+    ("UCHAR3", "RGBA", "3", 3, .independentChannels),
     ("UCHAR4", "I", nil, 4, .independentChannels),
-    ("UCHAR4", "RGBA", "4", 4, .rgba)
+    ("UCHAR4", "RGB", "4", 4, .independentChannels),
+    ("UCHAR4", nil, nil, 4, .independentChannels),
+    ("UCHAR4", "unknown", nil, 4, .independentChannels),
+    ("UCHAR4", "RGBA", "4", 4, .rgba),
+    ("UCHAR", "RGBA", "1", 1, .independentChannels)
   ]
   let settings = BorgVRVolumeConversionSettings(brickSize: 4, overlap: 1,
     useCompression: true, extensionStrategy: .clamp)
@@ -510,15 +515,23 @@ private func testQVISColorImport() throws {
     guard let split = exported.range(of: Data("\n\n".utf8)) else { throw TestFailure.failed("Missing NRRD header") }
     try expect(Data(exported[split.upperBound...]) == expected, "QVIS color import changed raw RGB/alpha samples")
   }
+  for (format, model, count) in [
+    ("USHORT", "RGBA", "4"), ("UINT", "RGB", "3"),
+    ("USHORT", "RGBA", "1"), ("UINT", "RGBA", "1")
+  ] {
+    let input = try header("scalar", format: format, model: model, components: count)
+    let scalar = try QVISParser(filename: input.path)
+    try expect(scalar.channelInterpretation == .independentChannels && scalar.components == Int(count),
+      "ObjectModel changed a non-UCHAR4 format")
+  }
   for (format, model, components) in [
-    ("UCHAR3", "RGB", "4"), ("UCHAR4", "RGBA", "3"), ("UCHAR4", "RGB", "4"),
-    ("UCHAR3", "RGBA", "3"), ("USHORT", "RGBA", "4"), ("UINT", "RGB", "3"),
-    ("UCHAR", "RGBA", "1"), ("UCHAR", "I", "garbage"), ("UCHAR", "I", "0")
+    ("UCHAR3", "RGB", "4"), ("UCHAR4", "RGBA", "3"),
+    ("UCHAR", "I", "garbage"), ("UCHAR", "I", "0")
   ] {
     let input = try header("invalid", format: format, model: model, components: components)
-    try expectThrows("Invalid QVIS format/components/color model was accepted") { _ = try QVISParser(filename: input.path) }
+    try expectThrows("Invalid QVIS format/components was accepted") { _ = try QVISParser(filename: input.path) }
   }
-  print("QVIS UCHAR3/UCHAR4 RGB/RGBA import, alpha bounds, raw payload and header validation passed")
+  print("QVIS UCHAR4/RGBA import, ignored ObjectModel for other formats, alpha bounds and raw payload passed")
 }
 
 private func testNRRDChannelInterpretationRoundTrip() throws {

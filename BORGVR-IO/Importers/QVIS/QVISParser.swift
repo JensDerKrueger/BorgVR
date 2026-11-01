@@ -89,7 +89,7 @@ public final class QVISParser: VolumeFileParser {
 
    Without `SliceThickness`, isotropic spacing is assumed with a longest extent of one meter.
    UCHAR3/UCHAR4 specify three/four byte components; Components must agree if also supplied.
-   ObjectModel RGB/RGBA explicitly identifies color data; otherwise components remain scalars.
+   Only UCHAR4 with ObjectModel RGBA identifies color data; all other ObjectModel values are ignored.
    The optional key `Endianess` determines byte order (defaulting to little-endian).
 
    - Parameter filename: The path to the QVIS header file.
@@ -186,18 +186,9 @@ public final class QVISParser: VolumeFileParser {
     } else {
       components = formatComponents ?? 1
     }
-    let interpretation: BORGVRChannelInterpretation
-    switch headerDict["objectmodel"]?.uppercased() {
-      case "RGB": interpretation = .rgb
-      case "RGBA": interpretation = .rgba
-      default: interpretation = .independentChannels
-    }
-    if interpretation != .independentChannels {
-      guard bytesPerComponent == 1,
-            components == (interpretation == .rgb ? 3 : 4) else {
-        throw Error.invalidValue("ObjectModel")
-      }
-    }
+    let interpretation: BORGVRChannelInterpretation =
+      formatUpper == "UCHAR4" && headerDict["objectmodel"]?.uppercased() == "RGBA"
+        ? .rgba : .independentChannels
 
     // Determine endianness (default little)
     let isLittleEndian: Bool
