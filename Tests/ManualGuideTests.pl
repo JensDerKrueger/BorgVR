@@ -36,6 +36,12 @@ for my $page (qw(interface.html index.html macos.html gsc.html mcp.html command-
     for my $image (@images) {
       ok($image->attr('alt') && $image->attr('data-de-attr'), 'Screenshot has English and German alternative text');
       ok($image->attr('width') && $image->attr('height'), 'Screenshot reserves a stable aspect ratio');
+      my %german = map { split /:/, $_, 2 } split /\|/, $image->attr('data-de-attr');
+      like($image->attr('src'), qr{^\./screenshots/en/}, 'English page uses an English app capture');
+      ok(defined $german{src} && -f "$root/$german{src}", 'German screenshot exists');
+      isnt($image->attr('src'), $german{src}, 'Languages use separate app captures');
+      is($image->parent->attr('href'), $image->attr('src'), 'Full-size link matches the English screenshot');
+      is($image->parent->attr('data-de-attr'), "href:$german{src}", 'Full-size link matches the German screenshot');
     }
   }
   $tree->delete;

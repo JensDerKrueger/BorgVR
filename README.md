@@ -56,6 +56,25 @@ The current development version is **3.5**. The SharePlay wire protocol is versi
 - macOS menus expose visualization commands and shortcuts, including arrow-key volume
   translation, with the bilingual HTML manual available as built-in Help.
 
+### Dataset File Format
+
+The `.data` format uses metadata version **5**. A one-byte component-type tag distinguishes
+unsigned integers, signed integers (8/16/32 bits), and IEEE-754 Float32/Float64. All channels
+share one type. Dataset, channel, and brick bounds use the same type and byte width as the
+voxel components, in little-endian order. NaN propagates to both bounds of the affected range;
+infinities remain valid bounds. Rendering and processing currently still require unsigned data.
+
+An ordered provenance history stores UTC timestamps (Unix milliseconds) and text for sources,
+imports, fusion, completed remote downloads, and materialized edits. A separate free-form
+UTF-8 `meta` field can hold additional metadata. Provenance and `meta` each support optional
+raw LZ4 block compression, independently of brick compression; readers limit each decoded
+text block to 64 MiB. The existing short and long dataset descriptions remain separate.
+
+Older `.data` versions must be converted externally; native clients and servers read version 5
+only. UUIDs and brick payload bytes can be retained when upgrading version 4 files.
+Import dialogs include an optional source note and acquisition date/time. Conversion adds a
+current, non-localized `converted by TOOL VERSION` provenance entry automatically.
+
 ### Collaboration
 
 - SharePlay collaboration with synchronized datasets, transforms, rendering parameters,
@@ -210,6 +229,9 @@ The current development version is **3.5**. The SharePlay wire protocol is versi
 - Responsive desktop and mobile UI with touch interaction and shareable renderer URLs.
 - Optional persistent brick cache backed by IndexedDB, including cache statistics and clearing.
 - Per-channel transfer-function editing, lighting, and physical dataset dimensions.
+- Dataset provenance with timestamps is available in the dataset information panel.
+- GPU-generated subbrick skipping and opacity-adaptive sampling are enabled by default.
+  Both can be toggled in the Rendering panel; adaptive sampling applies to TF modes only.
 - Server-provided transfer-function, object, mesh, and measurement catalogs, plus local
   annotation-file loading.
 - Spheres, strokes, textured mesh instances, and length/area/volume measurement visualization
@@ -332,6 +354,17 @@ TerminalConverterApp C F,J 2 2 512 512 512 MandelbulbJulia.data \
 ```
 
 Use `TerminalConverterApp --help` for the complete argument list.
+Imports and generation optionally accept an acquisition date/time and source note:
+
+```sh
+TerminalConverterApp N scan.nrrd scan.data "Scan" 32 2 \
+  --source-info 2026-10-01T08:00:00Z "Acquired at scanner" \
+  --source-info 2026-11-01T10:30:00Z "Downloaded from https://example.org/scan"
+```
+
+The timestamp must be ISO-8601 with a time zone; fractional seconds are supported. The source
+entries are optional. Repeat `--source-info` to supply a longer history; entries retain their
+command-line order. The automatic conversion/tool/version entry is always appended in English.
 
 PVM import accepts PVM, PVM2, and PVM3 streams, including the `DDS v3d` and block-interleaved
 `DDS v3e` wrappers. The decoder is implemented directly in BorgVR. Because PVM spacing is
@@ -351,14 +384,19 @@ TerminalConverterApp I c60.i3m.zip c60.data "C60 from ImageVis3D Mobile" 64 2
 
 Zarr import uses the same isolated `VolumeFileParser` interface as QVIS and NRRD. It reads
 local Zarr v3 arrays with named axes and OME-Zarr 0.5 images, either as `.zarr` directories
-or RFC-9 `.ozx` ZIP/ZIP64 files. It supports `uint8`, `uint16`, and `uint32`, up to four
+or RFC-9 `.ozx` ZIP/ZIP64 files. It supports `uint8/16/32`, `int8/16/32`, and `float32/64`, up to four
 channels, raw/gzip/Zstandard chunks, indexed shards, CRC32C, and both byte orders. The
 Zstandard decoder is implemented in Swift without external dependencies. The highest-resolution
 level is assembled chunk by chunk into a memory-mapped temporary RAW volume, then passed through
 the normal BorgVR conversion pipeline. Cancellation is checked between shards and chunks.
 Physical spatial units are converted to meters; unitless data preserve proportions with a
 longest extent of one meter. Global origin translation is not retained by the current volume
-parser interface. Zarr v2, time series, signed/floating-point samples, external dictionaries,
+parser interface. Signed integers are shifted losslessly into the corresponding unsigned range.
+Float channels are independently mapped from their global finite minimum/maximum to UInt16
+with nearest rounding; the original ranges are logged. Constant finite channels, NaN and
+negative infinity map to zero; positive infinity maps to 65535. Conversion shrinks the
+memory-mapped RAW file in place without a second volume copy.
+Zarr v2, time series, external dictionaries,
 Blosc, transpose codecs, and unsupported metadata layouts are rejected explicitly, not guessed.
 
 ```sh
@@ -366,6 +404,24 @@ TerminalConverterApp Z blunt_fin.ozx blunt_fin.data "Blunt fin" 32 2
 ```
 
 The same importer is available through GUI volume import and macOS GSC `importfile`.
+
+For the OME-Zarr Open SciVis collection, `Scripts/download-scivis-datasets.sh` sequentially
+downloads the 51 OZX files listed in `Scripts/scivis-datasets.tsv` and invokes converter mode
+`Z`. Descriptions follow the dataset captions and contain at most ten words. Use a Release
+build of the converter for large datasets:
+
+```sh
+./Scripts/download-scivis-datasets.sh --converter /path/to/TerminalConverterApp \
+  --output "$HOME/BorgVRData/SciVis"
+```
+
+Defaults are brick size 32 and overlap 2; override them with `--brick-size` and `--overlap`.
+Use `--dry-run` to inspect the plan or `--only blunt_fin` for a single dataset. Existing
+nonempty `.data` files are not overwritten. The script keeps resumable downloads in
+`.scivis-downloads` and conversion logs plus a per-run TSV report in `.scivis-logs` under
+the output directory. Failed conversions are retried on the next run using cached downloads.
+All entries are attempted, including the seven `float32` and two `int16` datasets.
+
 On iOS and visionOS, use **Select Zarr folder** for a directory store or the regular
 volume-file picker for `.ozx`. The macOS renderer and GUI server accept either through
 their shared volume import picker.
@@ -449,6 +505,8 @@ unlisted arrivals do not delay the request. Write the data first and submit the 
     "source": "scan.nrrd",
     "destination": "head.data",
     "description": "Head scan",
+    "sourceDate": "2026-11-01T10:30:00Z",
+    "sourceNote": "Downloaded from https://example.org/scan",
     "sizeMeters": [0.2, 0.15, 0.1]
   },
   { "source": "dicom-series" }
@@ -459,7 +517,8 @@ Only `source` is required. It must exactly name a direct entry in the inbox, not
 `..`. Optional `destination` is a simple `.data` filename (the extension can be omitted);
 collisions receive a numeric suffix, never overwrite existing files. `sizeMeters` specifies the
 complete volume's X/Y/Z dimensions in meters, from which voxel spacing is derived. Without it,
-the reader's physical dimensions are kept. Path separators, control characters, duplicate
+the reader's physical dimensions are kept. Optional `sourceDate` (ISO-8601 with time zone) and
+`sourceNote` are supplied together to record acquisition provenance. Path separators, control characters, duplicate
 sources, links, and reserved filenames are rejected; manifests are limited to 1 MiB and 1024
 entries. Rejected instructions never delete files named by unsafe paths.
 

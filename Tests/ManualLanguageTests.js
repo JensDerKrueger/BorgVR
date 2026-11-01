@@ -26,7 +26,8 @@ for (const base of ['file:///manual/interface.html', 'https://example.com/manual
     const local = element({ href: './macos.html#controls' });
     const hash = element({ href: '#start' });
     const external = element({ href: 'https://elsewhere.example/guide.html' });
-    const image = element({ href: './screenshots/macos-start.webp' });
+    const image = element({ href: './screenshots/en/macos-start.webp', 'data-de-attr': 'href:./screenshots/macos-start.webp' });
+    const screenshot = element({ src: './screenshots/en/macos-start.webp', alt: 'Start screen', 'data-de-attr': 'src:./screenshots/macos-start.webp|alt:Startbildschirm' });
     const inserted = element({ href: './ios.html' });
     const translated = element({ 'data-de': '<a href="./ios.html">iOS-Anleitung</a>' });
     let insertedLink = false;
@@ -38,6 +39,7 @@ for (const base of ['file:///manual/interface.html', 'https://example.com/manual
       querySelectorAll(selector) {
         if (selector === '[data-language]') return [english, german];
         if (selector === '[data-de]') return [translated];
+        if (selector === '[data-de-attr]') return [image, screenshot];
         if (selector === 'a[href]') return insertedLink ? [...links, inserted] : links;
         return [];
       }
@@ -50,7 +52,10 @@ for (const base of ['file:///manual/interface.html', 'https://example.com/manual
     assert.equal((expected === 'de' ? german : english).getAttribute('aria-current'), 'true');
     assert.equal(hash.getAttribute('href'), '#start');
     assert.equal(external.getAttribute('href'), 'https://elsewhere.example/guide.html');
-    assert.equal(image.getAttribute('href'), './screenshots/macos-start.webp');
+    const screenshotPath = expected === 'de' ? './screenshots/macos-start.webp' : './screenshots/en/macos-start.webp';
+    assert.equal(image.getAttribute('href'), screenshotPath);
+    assert.equal(screenshot.getAttribute('src'), screenshotPath);
+    assert.equal(screenshot.getAttribute('alt'), expected === 'de' ? 'Startbildschirm' : 'Start screen');
     assert.equal(english.getAttribute('href'), '?lang=en');
     if (query) {
       assert.equal(new URL(local.getAttribute('href')).searchParams.get('lang'), expected);
