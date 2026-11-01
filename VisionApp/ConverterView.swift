@@ -27,6 +27,8 @@ enum FileError: Error {
  either a conversion or a copy operation depending on the selected file type.
  */
 struct ConverterView: View {
+  @State private var receivedAt = Date()
+  @State private var sourceNote = ""
   /// The shared application model used to manage application state.
   @Environment(RuntimeAppModel.self) private var runtimeAppModel
   /// The application settings injected from the environment.
@@ -188,6 +190,15 @@ struct ConverterView: View {
       }
 
       // Conversion / Copy controls
+      if mode == .convert || mode == .dicom || mode == .dicomFusion {
+        HStack(spacing: 24) {
+          TextField("converter_source_note", text: $sourceNote)
+            .textFieldStyle(.roundedBorder)
+          DatePicker("converter_received_on", selection: $receivedAt, displayedComponents: [.date, .hourAndMinute])
+            .datePickerStyle(.compact)
+        }
+        .disabled(isWorking)
+      }
       if mode != .unknown {
         HStack {
           if mode == .convert || mode == .dicom || mode == .dicomFusion {
@@ -387,6 +398,8 @@ struct ConverterView: View {
    - Parameter description: A textual description for the dataset.
    */
   func startConversion(description: String) {
+    let provenance = sourceNote.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? [] :
+      [BORGVRProvenanceEntry(sourceNote, date: receivedAt)]
     guard canStartImport, let inputAccess else {
       logger.error(
         NSLocalizedString(
@@ -505,7 +518,8 @@ struct ConverterView: View {
               useCompression: storedAppModel.enableCompression,
               extensionStrategy: borderMode,
               quantizeTo8Bit: storedAppModel.quantizeImportsTo8Bit
-            )
+            ),
+            provenance: provenance
           ),
           logger: logger,
           cancellationToken: cancellationToken

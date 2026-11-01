@@ -438,6 +438,7 @@ final class ScreenVolumeRendererCore {
         )
     }
 
+    try newDataset.getMetadata().requireUnsignedProcessing()
     appModel.trackDatasetStreaming(newDataset)
     let editableDataset = appModel.volumeBrush.open(newDataset, datasetURL: datasetURL, logger: appModel.logger)
     dataset = editableDataset

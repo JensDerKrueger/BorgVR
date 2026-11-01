@@ -1079,3 +1079,7 @@
 "Reset Transfer Function?" = "¿Restablecer la función de transferencia?";
 "Do you really want to reset the isovalue?" = "¿Desea restablecer el isovalor?";
 "Do you really want to reset the current transfer function?" = "¿Desea restablecer la función de transferencia actual?";
+"converter_received_on" = "Fecha de recepción";
+"converter_source_note" = "Fuente / procedencia (opcional)";
+"dataset_info_provenance" = "Origen y procesamiento";
+"dataset_info_no_provenance" = "No se ha registrado la procedencia.";

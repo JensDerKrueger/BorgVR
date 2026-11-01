@@ -7,6 +7,7 @@ enum BorgVRAutomaticVolumeConversion {
     source: URL, destination: URL, settings: BorgVRVolumeConversionSettings,
     logger: LoggerBase?, cancellationToken: BorgVRVolumeConversionCancellationToken,
     description: String? = nil, physicalSizeMeters: Vec3<Float>? = nil,
+    provenance: [BORGVRProvenanceEntry] = [], toolIdentification: String = BORGVRToolIdentification.current,
     validateSources: @escaping ([URL]) throws -> Void
   ) throws -> [URL] {
     let isDirectory = try source.resourceValues(forKeys: [.isDirectoryKey]).isDirectory == true
@@ -14,7 +15,9 @@ enum BorgVRAutomaticVolumeConversion {
     let request: (BorgVRVolumeConversionSource) -> BorgVRVolumeConversionRequest = {
       BorgVRVolumeConversionRequest(source: $0, destinationURL: destination,
         datasetDescription: description ?? source.deletingPathExtension().lastPathComponent,
-        metaDescription: "", settings: settings, physicalSizeMeters: physicalSizeMeters)
+        metaDescription: "", settings: settings, physicalSizeMeters: physicalSizeMeters,
+        provenance: provenance + [BORGVRProvenanceEntry("Auto-import source: \(source.absoluteString)")],
+        toolIdentification: toolIdentification)
     }
     var readers: [(String, () throws -> any VolumeFileParser)] = [
       ("Zarr", { try ZarrParser(filename: source.path, cancellationCheck: cancellationCheck) })

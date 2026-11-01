@@ -26,6 +26,8 @@ swiftc \
   -Wpedantic \
   -I"$ROOT/BORGVRServerCPP/include" \
   "$ROOT/BORGVRServerCPP/src/BORGVRMetaData.cpp" \
+  "$ROOT/BORGVRServerCPP/src/LZ4.cpp" \
   "$ROOT/Tests/BORGVRMetaDataParserTests.cpp" \
   -o "$BUILD_DIR/cpp-metadata-parser-tests"
 "$BUILD_DIR/cpp-metadata-parser-tests" "$BUILD_DIR/valid-metadata.bin"
+"$BUILD_DIR/swift-metadata-parser-tests" --verify-cpp "$BUILD_DIR"

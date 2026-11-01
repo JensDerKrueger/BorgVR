@@ -15,6 +15,8 @@ enum BorgVRAutoImportManifest {
       "source": "scan.nrrd",
       "destination": "head.data",
       "description": "Head scan",
+      "sourceDate": "2026-11-01T10:30:00Z",
+      "sourceNote": "Downloaded from https://example.org/scan",
       "sizeMeters": [0.2, 0.15, 0.1]
     },
     {
@@ -28,16 +30,26 @@ enum BorgVRAutoImportManifest {
     let destination: String?
     let description: String?
     let sizeMeters: [Double]?
+    let sourceDate: String?
+    let sourceNote: String?
 
-    init(source: String, destination: String? = nil, description: String? = nil, sizeMeters: [Double]? = nil) {
+    init(source: String, destination: String? = nil, description: String? = nil, sizeMeters: [Double]? = nil,
+         sourceDate: String? = nil, sourceNote: String? = nil) {
       self.source = source
       self.destination = destination
       self.description = description
       self.sizeMeters = sizeMeters
+      self.sourceDate = sourceDate
+      self.sourceNote = sourceNote
     }
 
     var physicalSize: Vec3<Float>? {
       sizeMeters.map { Vec3(x: Float($0[0]), y: Float($0[1]), z: Float($0[2])) }
+    }
+
+    var provenance: [BORGVRProvenanceEntry] {
+      guard let sourceDate, let sourceNote, let date = BORGVRProvenanceEntry.parseDate(sourceDate) else { return [] }
+      return [BORGVRProvenanceEntry(sourceNote, date: date)]
     }
   }
 
@@ -84,6 +96,13 @@ enum BorgVRAutoImportManifest {
       if let size = entry.sizeMeters {
         guard size.count == 3, size.allSatisfy({ $0.isFinite && Float($0).isFinite && Float($0) > 0 }) else {
           throw ManifestError.invalid("sizeMeters must contain three positive finite lengths in meters.")
+        }
+      }
+      if entry.sourceDate != nil || entry.sourceNote != nil {
+        guard let date = entry.sourceDate, date.utf8.count <= 64, BORGVRProvenanceEntry.parseDate(date) != nil,
+          let note = entry.sourceNote, !note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+          note.utf8.count <= 16 * 1024, note.rangeOfCharacter(from: .controlCharacters) == nil else {
+          throw ManifestError.invalid("sourceDate and sourceNote must be supplied together, with an ISO-8601 date/time and a non-empty text.")
         }
       }
     }

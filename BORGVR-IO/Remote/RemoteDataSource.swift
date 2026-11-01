@@ -440,7 +440,7 @@ final class RemoteDataSource: DataSource {
         maximumPayloadSize: Self.maximumMetadataPayloadSize
       )
       let candidateMetadata = try BORGVRMetaData(fromData: metadataData)
-      guard candidateMetadata.toData() == metadata.toData() else {
+      guard candidateMetadata.hasSameStoredVolume(as: metadata) else {
         throw BORGVRRemoteDataManagerError.invalidResponse(
           reason: "Recovery source returned different metadata for dataset \(datasetID)."
         )
@@ -519,6 +519,12 @@ final class RemoteDataSource: DataSource {
    */
   func getMetadata() -> BORGVRMetaData {
     return metadata
+  }
+
+  var downloadSourceDescription: String {
+    requestLock.lock()
+    defer { requestLock.unlock() }
+    return "\(currentOrigin.address):\(currentOrigin.port)"
   }
 }
 

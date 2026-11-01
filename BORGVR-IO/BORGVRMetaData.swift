@@ -1,4 +1,155 @@
 import Foundation
+import Compression
+
+enum BORGVRComponentType: UInt8, Codable, Sendable {
+  case unsignedInteger = 0
+  case signedInteger = 1
+  case floatingPoint = 2
+
+  var valueTypeName: String {
+    switch self {
+      case .unsignedInteger: return "uint"
+      case .signedInteger: return "int"
+      case .floatingPoint: return "float"
+    }
+  }
+
+  func representableRange(width: Int) -> [Double] {
+    if self == .floatingPoint {
+      let bound = width == 4 ? Double(Float.greatestFiniteMagnitude) : Double.greatestFiniteMagnitude
+      return [-bound, bound]
+    }
+    return [self == .signedInteger ? -pow(2, Double(width * 8 - 1)) : 0,
+      pow(2, Double(width * 8 - (self == .signedInteger ? 1 : 0))) - 1]
+  }
+
+  func validate(width: Int) throws {
+    let widths = self == .floatingPoint ? [4, 8] : [1, 2, 4]
+    guard widths.contains(width) else {
+      throw BORGVRError.invalidValue(context: "component type", reason: "unsupported type/byte-width combination")
+    }
+  }
+
+  func validate(_ range: BORGVRComponentRange, width: Int) throws {
+    try validate(width: width)
+    let lo = range.minimum, hi = range.maximum
+    if self == .floatingPoint {
+      guard (lo.isNaN && hi.isNaN) || (!lo.isNaN && !hi.isNaN && lo <= hi) else {
+        throw BORGVRError.invalidValue(context: "value range", reason: "NaN must affect both bounds; otherwise bounds must be ordered")
+      }
+      if width == 4 {
+        guard [lo, hi].allSatisfy({ $0.isNaN || Double(Float($0)) == $0 }) else {
+          throw BORGVRError.invalidValue(context: "value range", reason: "bounds must be representable as Float32")
+        }
+      }
+    } else {
+      let bits = width * 8
+      let minimum = self == .signedInteger ? -pow(2, Double(bits - 1)) : 0
+      let maximum = pow(2, Double(self == .signedInteger ? bits - 1 : bits)) - 1
+      guard lo.isFinite, hi.isFinite, lo <= hi, lo >= minimum, hi <= maximum,
+            lo.rounded(.towardZero) == lo, hi.rounded(.towardZero) == hi else {
+        throw BORGVRError.invalidValue(context: "value range", reason: "bounds must fit the declared integer type")
+      }
+    }
+  }
+}
+
+public struct BORGVRProvenanceEntry: Codable, Equatable, Sendable {
+  /// Milliseconds since 1970-01-01T00:00:00Z, independent of local time zone.
+  public let timestampMilliseconds: Int64
+  public let text: String
+  public var date: Date { Date(timeIntervalSince1970: Double(timestampMilliseconds) / 1000) }
+
+  public init(timestampMilliseconds: Int64, text: String) {
+    self.timestampMilliseconds = timestampMilliseconds
+    self.text = text
+  }
+
+  public init(_ text: String, date: Date = Date()) {
+    timestampMilliseconds = Int64((date.timeIntervalSince1970 * 1000).rounded())
+    self.text = text
+  }
+
+  public static func parseDate(_ text: String) -> Date? {
+    let formatter = ISO8601DateFormatter()
+    formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    if let date = formatter.date(from: text) { return date }
+    formatter.formatOptions = [.withInternetDateTime]
+    return formatter.date(from: text)
+  }
+}
+
+public enum BORGVRToolIdentification {
+  public static var current: String {
+    let info = Bundle.main.infoDictionary
+    let name = info?["CFBundleName"] as? String ?? ProcessInfo.processInfo.processName
+    let version = info?["CFBundleShortVersionString"] as? String ?? "unknown"
+    return "\(name) \(version)"
+  }
+}
+
+// Both integer types through 32 bits and all Float32/Float64 values are lossless
+// in Double. On disk, bounds always use the component's declared native width.
+struct BORGVRComponentRange: Codable, Equatable, Sendable {
+  let minimum: Double
+  let maximum: Double
+
+  init(minValue: Int, maxValue: Int) {
+    minimum = Double(minValue)
+    maximum = Double(maxValue)
+  }
+
+  init(minimum: Double, maximum: Double) {
+    self.minimum = minimum
+    self.maximum = maximum
+  }
+
+  // Compatibility accessors for the existing unsigned-only processing pipeline.
+  var minValue: Int { Int(exactly: minimum)! }
+  var maxValue: Int { Int(exactly: maximum)! }
+
+  static func == (lhs: Self, rhs: Self) -> Bool {
+    (lhs.minimum == rhs.minimum || lhs.minimum.isNaN && rhs.minimum.isNaN) &&
+      (lhs.maximum == rhs.maximum || lhs.maximum.isNaN && rhs.maximum.isNaN)
+  }
+
+  static func union(_ ranges: [Self]) -> Self {
+    if ranges.contains(where: { $0.minimum.isNaN || $0.maximum.isNaN }) {
+      return Self(minimum: .nan, maximum: .nan)
+    }
+    return Self(minimum: ranges.map(\.minimum).min() ?? 0, maximum: ranges.map(\.maximum).max() ?? 0)
+  }
+
+  /// Include a sample, propagating NaN to both bounds and retaining infinities.
+  func including(_ value: Double) -> Self {
+    if value.isNaN || minimum.isNaN || maximum.isNaN { return Self(minimum: .nan, maximum: .nan) }
+    return Self(minimum: min(minimum, value), maximum: max(maximum, value))
+  }
+
+  // Retain the existing JSON keys used by unsigned-only collaboration messages.
+  private enum CodingKeys: String, CodingKey { case minValue, maxValue }
+  init(from decoder: Decoder) throws {
+    let c = try decoder.container(keyedBy: CodingKeys.self)
+    func read(_ key: CodingKeys) throws -> Double {
+      if let n = try? c.decode(Double.self, forKey: key) { return n }
+      switch try c.decode(String.self, forKey: key) {
+        case "NaN": return .nan
+        case "+Infinity": return .infinity
+        case "-Infinity": return -.infinity
+        default: throw BORGVRError.invalidValue(context: "value range", reason: "invalid numeric value")
+      }
+    }
+    minimum = try read(.minValue)
+    maximum = try read(.maxValue)
+  }
+  func encode(to encoder: Encoder) throws {
+    var c = encoder.container(keyedBy: CodingKeys.self)
+    for (key, value) in [(CodingKeys.minValue, minimum), (.maxValue, maximum)] {
+      if value.isFinite { try c.encode(value, forKey: key) }
+      else { try c.encode(value.isNaN ? "NaN" : value > 0 ? "+Infinity" : "-Infinity", forKey: key) }
+    }
+  }
+}
 
 // MARK: - BORGVRError
 
@@ -81,6 +232,50 @@ private struct BORGVRBinaryReader {
     return Float(bitPattern: bits)
   }
 
+  mutating func readScalar(type: BORGVRComponentType, width: Int) throws -> Double {
+    let bits: UInt64
+    switch width {
+      case 1: bits = UInt64(try readInteger(UInt8.self, context: "scalar bound"))
+      case 2: bits = UInt64(try readInteger(UInt16.self, context: "scalar bound"))
+      case 4: bits = UInt64(try readInteger(UInt32.self, context: "scalar bound"))
+      default: bits = try readInteger(UInt64.self, context: "scalar bound")
+    }
+    switch type {
+      case .unsignedInteger: return Double(bits)
+      case .signedInteger:
+        return Double(Int64(bitPattern: bits << (64 - width * 8)) >> (64 - width * 8))
+      case .floatingPoint:
+        return width == 4 ? Double(Float(bitPattern: UInt32(bits))) : Double(bitPattern: bits)
+    }
+  }
+
+  mutating func readRange(type: BORGVRComponentType, width: Int) throws -> BORGVRComponentRange {
+    return BORGVRComponentRange(minimum: try readScalar(type: type, width: width),
+      maximum: try readScalar(type: type, width: width))
+  }
+
+  mutating func readTextBlock() throws -> Data {
+    let codec = try readInteger(UInt8.self, context: "text codec")
+    let rawSize = try readInteger(UInt64.self, context: "text decoded size")
+    let storedSize = try readInteger(UInt64.self, context: "text stored size")
+    guard codec <= 1, rawSize <= BORGVRMetaData.maximumTextByteCount,
+          storedSize <= BORGVRMetaData.maximumTextByteCount,
+          codec != 0 || rawSize == storedSize, codec != 1 || rawSize > 0 && storedSize > 0 else {
+      throw BORGVRError.invalidValue(context: "text block", reason: "invalid codec or length")
+    }
+    let stored = try readData(length: Int(storedSize), context: "text block")
+    if codec == 0 { return stored }
+    var decoded = Data(count: Int(rawSize))
+    let count = decoded.withUnsafeMutableBytes { output in
+      stored.withUnsafeBytes { input in
+        compression_decode_buffer(output.bindMemory(to: UInt8.self).baseAddress!, Int(rawSize),
+          input.bindMemory(to: UInt8.self).baseAddress!, input.count, nil, COMPRESSION_LZ4_RAW)
+      }
+    }
+    guard count == Int(rawSize) else { throw BORGVRError.other("Invalid LZ4 metadata text block.") }
+    return decoded
+  }
+
   mutating func readBool(context: String) throws -> Bool {
     let raw: UInt8 = try readInteger(UInt8.self, context: context)
     guard raw <= 1 else {
@@ -128,6 +323,35 @@ private struct BORGVRBinaryReader {
   }
 }
 
+private extension Data {
+  mutating func appendRange(_ range: BORGVRComponentRange, type: BORGVRComponentType, width: Int) {
+    for value in [range.minimum, range.maximum] {
+      let bits: UInt64
+      switch type {
+        case .unsignedInteger: bits = UInt64(value)
+        case .signedInteger: bits = UInt64(bitPattern: Int64(value))
+        case .floatingPoint: bits = width == 4 ? UInt64(Float(value).bitPattern) : value.bitPattern
+      }
+      for byte in 0..<width { append(UInt8(truncatingIfNeeded: bits >> (byte * 8))) }
+    }
+  }
+
+  mutating func appendTextBlock(_ raw: Data, compress: Bool) {
+    var compressed = Data(count: raw.count)
+    let count = compress && !raw.isEmpty ? compressed.withUnsafeMutableBytes { output in
+      raw.withUnsafeBytes { input in
+        compression_encode_buffer(output.bindMemory(to: UInt8.self).baseAddress!, output.count,
+          input.bindMemory(to: UInt8.self).baseAddress!, input.count, nil, COMPRESSION_LZ4_RAW)
+      }
+    } : 0
+    let useCompressed = count > 0 && count < raw.count
+    append(useCompressed ? 1 : 0)
+    append(Data(from: UInt64(raw.count)))
+    append(Data(from: UInt64(useCompressed ? count : raw.count)))
+    append(useCompressed ? compressed.prefix(count) : raw)
+  }
+}
+
 // MARK: - BrickMetadata
 
 /**
@@ -146,9 +370,10 @@ final class BrickMetadata: Codable, CustomStringConvertible {
   /// The size in bytes of this brick’s data.
   let size: Int
   /// The minimum across all component ranges. TF visibility uses `componentRanges`.
-  let minValue: Int
+  var minValue: Int { valueRange.minValue }
   /// The maximum across all component ranges. TF visibility uses `componentRanges`.
-  let maxValue: Int
+  var maxValue: Int { valueRange.maxValue }
+  let valueRange: BORGVRComponentRange
   /// One value range per volume component.
   let componentRanges: [BORGVRComponentRange]
 
@@ -167,8 +392,7 @@ final class BrickMetadata: Codable, CustomStringConvertible {
        componentRanges: [BORGVRComponentRange]) {
     self.offset = offset
     self.size = size
-    self.minValue = minValue
-    self.maxValue = maxValue
+    self.valueRange = BORGVRComponentRange(minValue: minValue, maxValue: maxValue)
     self.componentRanges = componentRanges
   }
 
@@ -178,7 +402,15 @@ final class BrickMetadata: Codable, CustomStringConvertible {
    - Parameter reader: The reader whose position is advanced past the brick record.
    - Throws: An error if the data is invalid or out of bounds.
    */
-  fileprivate init(from reader: inout BORGVRBinaryReader, componentCount: Int) throws {
+  init(offset: Int, size: Int, componentRanges: [BORGVRComponentRange]) {
+    self.offset = offset
+    self.size = size
+    self.componentRanges = componentRanges
+    valueRange = .union(componentRanges)
+  }
+
+  fileprivate init(from reader: inout BORGVRBinaryReader, componentCount: Int,
+                   type: BORGVRComponentType, width: Int) throws {
     func intValue(_ rawValue: Int64, context: String) throws -> Int {
       guard let value = Int(exactly: rawValue) else {
         throw BORGVRError.invalidValue(context: context, reason: "not representable")
@@ -194,49 +426,31 @@ final class BrickMetadata: Codable, CustomStringConvertible {
       reader.readInteger(Int64.self, context: "brick size"),
       context: "brick size"
     )
-    self.minValue = try intValue(
-      reader.readInteger(Int64.self, context: "brick minValue"),
-      context: "brick minValue"
-    )
-    self.maxValue = try intValue(
-      reader.readInteger(Int64.self, context: "brick maxValue"),
-      context: "brick maxValue"
-    )
-    self.componentRanges = try (0..<componentCount).map { component in
-      BORGVRComponentRange(
-        minValue: try intValue(
-          reader.readInteger(Int64.self, context: "brick component \(component) minValue"),
-          context: "brick component \(component) minValue"
-        ),
-        maxValue: try intValue(
-          reader.readInteger(Int64.self, context: "brick component \(component) maxValue"),
-          context: "brick component \(component) maxValue"
-        )
-      )
+    self.valueRange = try reader.readRange(type: type, width: width)
+    self.componentRanges = try (0..<componentCount).map { _ in
+      try reader.readRange(type: type, width: width)
     }
   }
 
   /**
    Serializes the `BrickMetadata` into a `Data` object.
 
-   - Returns: A `Data` instance containing the serialized metadata as Int64 values.
+   - Returns: A `Data` instance with native-width component bounds and Int64 addressing.
    */
-  func toData() -> Data {
+  func toData(type: BORGVRComponentType, width: Int) -> Data {
     var data = Data()
     data.append(Data(from: Int64(offset)))
     data.append(Data(from: Int64(size)))
-    data.append(Data(from: Int64(minValue)))
-    data.append(Data(from: Int64(maxValue)))
+    data.appendRange(valueRange, type: type, width: width)
     for range in componentRanges {
-      data.append(Data(from: range.minValue))
-      data.append(Data(from: range.maxValue))
+      data.appendRange(range, type: type, width: width)
     }
     return data
   }
 
   /// A textual description of the brick metadata for debugging purposes.
   public var description: String {
-    return "(offset: \(offset), size: \(size), minValue: \(minValue), maxValue: \(maxValue), componentRanges: \(componentRanges))"
+    return "(offset: \(offset), size: \(size), range: \(valueRange), componentRanges: \(componentRanges))"
   }
 }
 
@@ -280,11 +494,6 @@ final class LevelMetadata: Codable, CustomStringConvertible {
 
 // MARK: - Component ranges
 
-struct BORGVRComponentRange: Codable, Equatable, Sendable {
-  let minValue: Int
-  let maxValue: Int
-}
-
 // MARK: - BORGVRMetaData
 
 /**
@@ -300,7 +509,8 @@ final class BORGVRMetaData: CustomStringConvertible, Codable {
   /// Magic bytes used for file identification.
   private static let magicBytes = "BORGVR".data(using: .utf8)!
   /// The version of the metadata format.
-  private static let version: Int = 4
+  private static let version: Int = 5
+  fileprivate static let maximumTextByteCount: UInt64 = 67_108_864
   private static let maximumStringByteCount = 1_048_576
   static let maximumComponentCount = 1024
   private static let maximumDimension = Int(Int32.max)
@@ -321,6 +531,10 @@ final class BORGVRMetaData: CustomStringConvertible, Codable {
   private(set) var componentCount: Int = 0
   /// The number of bytes per component.
   private(set) var bytesPerComponent: Int = 0
+  private(set) var componentType: BORGVRComponentType = .unsignedInteger
+  var provenance: [BORGVRProvenanceEntry] = []
+  var meta: String = ""
+  var compressMetadataText = true
 
   /// The physical extent of the complete volume in meters.
   var physicalExtentMeters: SIMD3<Float> {
@@ -350,9 +564,10 @@ final class BORGVRMetaData: CustomStringConvertible, Codable {
   /// The overlap (in voxels) between adjacent bricks.
   private(set) var overlap: Int = 0
   /// The minimum across all component ranges, used by scalar modes such as ISO.
-  private(set) var minValue: Int = 0
+  var minValue: Int { valueRange.minValue }
   /// The maximum across all component ranges, used by scalar modes such as ISO.
-  private(set) var maxValue: Int = 0
+  var maxValue: Int { valueRange.maxValue }
+  private(set) var valueRange = BORGVRComponentRange(minValue: 0, maxValue: 0)
   /// The actual value range of each component.
   private(set) var componentRanges: [BORGVRComponentRange] = []
   /// A flag indicating whether compression is enabled.
@@ -376,8 +591,8 @@ final class BORGVRMetaData: CustomStringConvertible, Codable {
     \(componentCount)×\(bytesPerComponent)-byte components, \
     brick size \(brickSize), overlap \(overlap), \
     compression: \(compression ? "yes" : "no"), \
-    min/max: \(minValue)/\(maxValue), \
-    component ranges: \(componentRanges.map { "\($0.minValue)/\($0.maxValue)" }.joined(separator: ", ")), \
+    type: \(componentType), min/max: \(valueRange.minimum)/\(valueRange.maximum), \
+    component ranges: \(componentRanges.map { "\($0.minimum)/\($0.maximum)" }.joined(separator: ", ")), \
     levels: \(levelMetadata.count), \
     bricks: \(brickMetadata.count), \
     label: “\(datasetDescription)”, \
@@ -501,8 +716,7 @@ final class BORGVRMetaData: CustomStringConvertible, Codable {
     self.voxelSpacingZ = voxelSpacingZ
     self.brickSize = brickSize
     self.overlap = overlap
-    self.minValue = minValue
-    self.maxValue = maxValue
+    self.valueRange = BORGVRComponentRange(minValue: minValue, maxValue: maxValue)
     self.componentRanges = Array(
       repeating: BORGVRComponentRange(minValue: minValue, maxValue: maxValue),
       count: componentCount
@@ -552,27 +766,70 @@ final class BORGVRMetaData: CustomStringConvertible, Codable {
    - Parameter maxValue: The new maximum intensity.
    */
   func updateMinMax(minValue: Int, maxValue: Int) {
-    self.minValue = minValue
-    self.maxValue = maxValue
+    valueRange = BORGVRComponentRange(minValue: minValue, maxValue: maxValue)
+  }
+
+  func setComponentType(_ type: BORGVRComponentType, ranges: [BORGVRComponentRange]) throws {
+    try type.validate(width: bytesPerComponent)
+    guard ranges.count == componentCount else { throw BORGVRError.other("Incorrect component range count.") }
+    for range in ranges { try type.validate(range, width: bytesPerComponent) }
+    componentType = type
+    updateComponentRanges(ranges)
+  }
+
+  func requireUnsignedProcessing() throws {
+    guard componentType == .unsignedInteger else {
+      throw BORGVRError.other("Signed and floating-point datasets can be stored, but are not yet supported by this operation.")
+    }
   }
 
   func editExportMetadata() -> BORGVRMetaData {
-    // The output builds its own brick table; do not serialize and decode the
-    // potentially enormous original table merely to copy the volume properties.
+    let copy = copyProperties()
+    copy.provenance.append(BORGVRProvenanceEntry("Materialized volume edits"))
+    return copy
+  }
+
+  // Share immutable properties without serializing or duplicating the brick payload.
+  private func copyProperties() -> BORGVRMetaData {
     let copy = BORGVRMetaData(width: width, height: height, depth: depth,
       componentCount: componentCount, bytePerComponent: bytesPerComponent,
       voxelSpacingX: voxelSpacingX, voxelSpacingY: voxelSpacingY, voxelSpacingZ: voxelSpacingZ,
-      brickSize: brickSize, overlap: overlap, minValue: minValue, maxValue: maxValue,
+      brickSize: brickSize, overlap: overlap, minValue: 0, maxValue: 0,
       compression: compression, datasetDescription: datasetDescription, metaDescription: metaDescription)
     copy.updateComponentRanges(componentRanges)
+    copy.componentType = componentType
+    copy.provenance = provenance
+    copy.meta = meta
+    copy.compressMetadataText = compressMetadataText
     return copy
+  }
+
+  func cacheExportMetadata(sourceDescription: String) -> BORGVRMetaData {
+    let copy = copyProperties()
+    copy.uniqueID = uniqueID
+    copy.brickMetadata = brickMetadata
+    copy.provenance.append(BORGVRProvenanceEntry("Completed local download from \(sourceDescription)"))
+    return copy
+  }
+
+  /// Provenance and descriptive text can differ between copies of the same data.
+  /// Recovery requires identical voxel interpretation and stored brick addressing.
+  func hasSameStoredVolume(as other: BORGVRMetaData) -> Bool {
+    guard uniqueID == other.uniqueID, width == other.width, height == other.height, depth == other.depth,
+      voxelSpacingX == other.voxelSpacingX, voxelSpacingY == other.voxelSpacingY, voxelSpacingZ == other.voxelSpacingZ,
+      componentType == other.componentType, bytesPerComponent == other.bytesPerComponent,
+      componentCount == other.componentCount, brickSize == other.brickSize, overlap == other.overlap,
+      compression == other.compression, valueRange == other.valueRange, componentRanges == other.componentRanges,
+      brickMetadata.count == other.brickMetadata.count else { return false }
+    return zip(brickMetadata, other.brickMetadata).allSatisfy { a, b in
+      a.offset == b.offset && a.size == b.size && a.valueRange == b.valueRange && a.componentRanges == b.componentRanges
+    }
   }
 
   func updateComponentRanges(_ componentRanges: [BORGVRComponentRange]) {
     precondition(componentRanges.count == componentCount)
     self.componentRanges = componentRanges
-    self.minValue = componentRanges.map(\.minValue).min() ?? 0
-    self.maxValue = componentRanges.map(\.maxValue).max() ?? 0
+    self.valueRange = .union(componentRanges)
   }
 
   // MARK: - Private Methods
@@ -686,6 +943,11 @@ final class BORGVRMetaData: CustomStringConvertible, Codable {
     self.brickMetadata.append(brick)
   }
 
+  func append(offset: Int, size: Int, componentRanges: [BORGVRComponentRange]) {
+    precondition(componentRanges.count == componentCount)
+    brickMetadata.append(BrickMetadata(offset: offset, size: size, componentRanges: componentRanges))
+  }
+
   /**
    Serializes the `BORGVRMetaData` into a `Data` object.
 
@@ -700,28 +962,34 @@ final class BORGVRMetaData: CustomStringConvertible, Codable {
     data.append(Data(from: depth))
     data.append(Data(from: componentCount))
     data.append(Data(from: bytesPerComponent))
+    data.append(componentType.rawValue)
     data.append(Data(from: voxelSpacingX))
     data.append(Data(from: voxelSpacingY))
     data.append(Data(from: voxelSpacingZ))
     data.append(Data(from: brickSize))
     data.append(Data(from: overlap))
-    data.append(Data(from: minValue))
-    data.append(Data(from: maxValue))
+    data.appendRange(valueRange, type: componentType, width: bytesPerComponent)
     data.append(Data(from: Int64(componentRanges.count)))
     for range in componentRanges {
-      data.append(Data(from: range.minValue))
-      data.append(Data(from: range.maxValue))
+      data.appendRange(range, type: componentType, width: bytesPerComponent)
     }
     data.append(Data(from: compression))
     data.appendString(uniqueID)
     data.appendString(datasetDescription)
     data.appendString(metaDescription)
+    var provenanceData = Data(from: UInt64(provenance.count))
+    for entry in provenance {
+      provenanceData.append(Data(from: entry.timestampMilliseconds))
+      provenanceData.appendString(entry.text)
+    }
+    data.appendTextBlock(provenanceData, compress: compressMetadataText)
+    data.appendTextBlock(Data(meta.utf8), compress: compressMetadataText)
     data.append(Data(from: Int64(brickMetadata.count)))
     let dataOffset: Int64 = 0
     data.append(Data(from: dataOffset))
 
     for brick in brickMetadata {
-      data.append(brick.toData())
+      data.append(brick.toData(type: componentType, width: bytesPerComponent))
     }
     return data
   }
@@ -736,6 +1004,12 @@ final class BORGVRMetaData: CustomStringConvertible, Codable {
    - Throws: An error if writing to the file fails.
    */
   func save(filename: String) throws {
+    try validateHeaderValues()
+    guard provenance.count <= 65536,
+      meta.utf8.count <= Int(Self.maximumTextByteCount),
+      provenance.reduce(8, { $0 + 16 + $1.text.utf8.count }) <= Int(Self.maximumTextByteCount) else {
+      throw BORGVRError.invalidValue(context: "metadata text", reason: "text block exceeds the size limit")
+    }
     let fileURL = URL(fileURLWithPath: filename)
     do {
       let fileHandle = try FileHandle(forWritingTo: fileURL)
@@ -818,13 +1092,18 @@ final class BORGVRMetaData: CustomStringConvertible, Codable {
     self.depth = try readInt("depth")
     self.componentCount = try readInt("componentCount")
     self.bytesPerComponent = try readInt("bytesPerComponent")
+    let rawType = try reader.readInteger(UInt8.self, context: "componentType")
+    guard let type = BORGVRComponentType(rawValue: rawType) else {
+      throw BORGVRError.invalidValue(context: "componentType", reason: "unknown component type")
+    }
+    componentType = type
+    try componentType.validate(width: bytesPerComponent)
     self.voxelSpacingX = try reader.readFloat(context: "voxelSpacingX")
     self.voxelSpacingY = try reader.readFloat(context: "voxelSpacingY")
     self.voxelSpacingZ = try reader.readFloat(context: "voxelSpacingZ")
     self.brickSize = try readInt("brickSize")
     self.overlap = try readInt("overlap")
-    self.minValue = try readInt("minValue")
-    self.maxValue = try readInt("maxValue")
+    self.valueRange = try reader.readRange(type: componentType, width: bytesPerComponent)
     let componentRangeCount = try readInt("componentRangeCount")
     guard componentCount > 0, componentCount <= Self.maximumComponentCount else {
       throw BORGVRError.invalidValue(context: "componentCount",
@@ -836,11 +1115,8 @@ final class BORGVRMetaData: CustomStringConvertible, Codable {
         reason: "expected \(componentCount), found \(componentRangeCount)"
       )
     }
-    self.componentRanges = try (0..<componentRangeCount).map { component in
-      BORGVRComponentRange(
-        minValue: try readInt("componentRanges[\(component)].minValue"),
-        maxValue: try readInt("componentRanges[\(component)].maxValue")
-      )
+    self.componentRanges = try (0..<componentRangeCount).map { _ in
+      try reader.readRange(type: componentType, width: bytesPerComponent)
     }
     self.compression = try reader.readBool(context: "compression")
 
@@ -872,6 +1148,25 @@ final class BORGVRMetaData: CustomStringConvertible, Codable {
       context: "metaDescription",
       maximumByteCount: BORGVRMetaData.maximumStringByteCount
     )
+    provenance = []
+    meta = ""
+    do {
+      var originReader = BORGVRBinaryReader(data: try reader.readTextBlock())
+      let count = try originReader.readInteger(UInt64.self, context: "provenance count")
+      guard count <= 65536, count <= UInt64(originReader.remainingCount / 16) else {
+        throw BORGVRError.invalidValue(context: "provenance", reason: "invalid entry count")
+      }
+      for _ in 0..<count {
+        let time = try originReader.readInteger(Int64.self, context: "provenance timestamp")
+        let text = try originReader.readString(context: "provenance entry", maximumByteCount: Int(Self.maximumTextByteCount))
+        provenance.append(BORGVRProvenanceEntry(timestampMilliseconds: time, text: text))
+      }
+      guard originReader.remainingCount == 0,
+            let text = String(data: try reader.readTextBlock(), encoding: .utf8) else {
+        throw BORGVRError.invalidValue(context: "metadata text", reason: "invalid UTF-8 or trailing provenance bytes")
+      }
+      meta = text
+    }
     let metadataCount = try readInt("brickMetadataCount")
     let dataOffset = try readInt("brickDataOffset")
 
@@ -889,7 +1184,7 @@ final class BORGVRMetaData: CustomStringConvertible, Codable {
     }
     try reader.skip(dataOffset, context: "brickDataOffset")
 
-    let brickMetadataRecordSize = (4 + 2 * componentCount) * MemoryLayout<Int64>.size
+    let brickMetadataRecordSize = 16 + (2 + 2 * componentCount) * bytesPerComponent
     let (metadataByteCount, metadataByteCountOverflow) = metadataCount.multipliedReportingOverflow(
       by: brickMetadataRecordSize
     )
@@ -900,7 +1195,8 @@ final class BORGVRMetaData: CustomStringConvertible, Codable {
     self.brickMetadata = []
     self.brickMetadata.reserveCapacity(metadataCount)
     for _ in 0..<metadataCount {
-      let brickMeta = try BrickMetadata(from: &reader, componentCount: componentCount)
+      let brickMeta = try BrickMetadata(from: &reader, componentCount: componentCount,
+        type: componentType, width: bytesPerComponent)
       try validate(brick: brickMeta, fullBrickByteCount: fullBrickByteCount, brickDataUpperBound: brickDataUpperBound)
       self.brickMetadata.append(brickMeta)
     }
@@ -914,12 +1210,7 @@ final class BORGVRMetaData: CustomStringConvertible, Codable {
         reason: "must be in 1...\(BORGVRMetaData.maximumComponentCount)"
       )
     }
-    guard bytesPerComponent == 1 || bytesPerComponent == 2 || bytesPerComponent == 4 else {
-      throw BORGVRError.invalidValue(
-        context: "bytesPerComponent",
-        reason: "supported values are 1, 2, and 4"
-      )
-    }
+    try componentType.validate(width: bytesPerComponent)
     guard voxelSpacingX.isFinite, voxelSpacingX > 0,
           voxelSpacingY.isFinite, voxelSpacingY > 0,
           voxelSpacingZ.isFinite, voxelSpacingZ > 0 else {
@@ -928,30 +1219,17 @@ final class BORGVRMetaData: CustomStringConvertible, Codable {
         reason: "all values must be finite and greater than zero"
       )
     }
-    guard minValue >= 0, minValue <= maxValue, maxValue <= rangeMax else {
-      throw BORGVRError.invalidValue(
-        context: "value range",
-        reason: "must be ordered and fit the declared component type"
-      )
-    }
+    try componentType.validate(valueRange, width: bytesPerComponent)
     guard componentRanges.count == componentCount else {
       throw BORGVRError.invalidValue(
         context: "component ranges",
         reason: "must contain one range per component"
       )
     }
-    for (component, range) in componentRanges.enumerated() {
-      guard range.minValue >= 0,
-            range.minValue <= range.maxValue,
-            range.maxValue <= rangeMax else {
-        throw BORGVRError.invalidValue(
-          context: "component range \(component)",
-          reason: "must be ordered and fit the declared component type"
-        )
-      }
+    for range in componentRanges {
+      try componentType.validate(range, width: bytesPerComponent)
     }
-    guard componentRanges.map(\.minValue).min() == minValue,
-          componentRanges.map(\.maxValue).max() == maxValue else {
+    guard BORGVRComponentRange.union(componentRanges) == valueRange else {
       throw BORGVRError.invalidValue(
         context: "value range",
         reason: "must equal the union of the component ranges"
@@ -987,32 +1265,17 @@ final class BORGVRMetaData: CustomStringConvertible, Codable {
     guard !overflow else {
       throw BORGVRError.invalidValue(context: "brick range", reason: "offset plus size overflows")
     }
-    guard brick.minValue >= 0,
-          brick.minValue <= brick.maxValue,
-          brick.maxValue <= rangeMax else {
-      throw BORGVRError.invalidValue(
-        context: "brick value range",
-        reason: "must be ordered and fit the declared component type"
-      )
-    }
+    try componentType.validate(brick.valueRange, width: bytesPerComponent)
     guard brick.componentRanges.count == componentCount else {
       throw BORGVRError.invalidValue(
         context: "brick component ranges",
         reason: "must contain one range per component"
       )
     }
-    for (component, range) in brick.componentRanges.enumerated() {
-      guard range.minValue >= 0,
-            range.minValue <= range.maxValue,
-            range.maxValue <= rangeMax else {
-        throw BORGVRError.invalidValue(
-          context: "brick component range \(component)",
-          reason: "must be ordered and fit the declared component type"
-        )
-      }
+    for range in brick.componentRanges {
+      try componentType.validate(range, width: bytesPerComponent)
     }
-    guard brick.componentRanges.map(\.minValue).min() == brick.minValue,
-          brick.componentRanges.map(\.maxValue).max() == brick.maxValue else {
+    guard BORGVRComponentRange.union(brick.componentRanges) == brick.valueRange else {
       throw BORGVRError.invalidValue(
         context: "brick value range",
         reason: "must equal the union of the brick component ranges"

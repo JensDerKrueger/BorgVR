@@ -262,7 +262,7 @@ final class DatasetCatalogService {
     return "\(metadata.width) x \(metadata.height) x \(metadata.depth) - " +
       "\(bitsPerComponent)-bit, \(channelText) - " +
       "\(String(localized: "Brick")) \(metadata.brickSize) - \(lodText) - " +
-      "\(compressionText) - \(String(localized: "Values")) \(metadata.minValue)...\(metadata.maxValue)"
+      "\(compressionText) - \(String(localized: "Values")) \(metadata.valueRange.minimum)...\(metadata.valueRange.maximum)"
   }
 }
 

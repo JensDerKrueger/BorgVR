@@ -52,8 +52,11 @@ struct BorgVRMCPDatasetMetadata: Codable, Sendable {
   var componentCount: Int
   var bytesPerComponent: Int
   var bitsPerComponent: Int
-  var valueRange: [Int]
-  var componentRanges: [[Int]]
+  var valueRange: [Double]
+  var componentRanges: [[Double]]
+  var valueType: String
+  var provenance: [BORGVRProvenanceEntry]
+  var meta: String
   var brickSize: Int
   var overlap: Int
   var levelCount: Int
@@ -72,8 +75,11 @@ struct BorgVRMCPDatasetMetadata: Codable, Sendable {
     componentCount = metadata.componentCount
     bytesPerComponent = metadata.bytesPerComponent
     bitsPerComponent = metadata.bytesPerComponent * 8
-    valueRange = [metadata.minValue, metadata.maxValue]
-    componentRanges = metadata.componentRanges.map { [$0.minValue, $0.maxValue] }
+    valueRange = [metadata.valueRange.minimum, metadata.valueRange.maximum]
+    componentRanges = metadata.componentRanges.map { [$0.minimum, $0.maximum] }
+    valueType = metadata.componentType.valueTypeName
+    provenance = metadata.provenance
+    meta = metadata.meta
     brickSize = metadata.brickSize
     overlap = metadata.overlap
     levelCount = metadata.levelMetadata.count

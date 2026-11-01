@@ -71,12 +71,21 @@ struct RenderView: View {
   @State private var datasetStateSaveError: Error?
   @State private var showNoDatasetStateToRestore = false
   @State private var datasetStateRestoreError: Error?
+  @State private var showDatasetInfo = false
 
   var body: some View {
     VStack(spacing: 20) {
       Text("render_title")
         .font(.title)
         .bold()
+        .frame(maxWidth: .infinity)
+        .overlay(alignment: .trailing) {
+          Button { showDatasetInfo = true } label: { Image(systemName: "info.circle") }
+            .disabled(runtimeAppModel.activeDatasetInfo == nil)
+            .accessibilityLabel("dataset_info_title")
+            .help("dataset_info_title")
+        }
+        .padding(.horizontal)
 
       VStack(spacing: 6) {
         Text("render_picker_title")
@@ -179,6 +188,31 @@ struct RenderView: View {
         .foregroundColor(.white)
         .padding()
       }
+    }
+    .sheet(isPresented: $showDatasetInfo) {
+      NavigationStack {
+        ScrollView {
+          VStack(alignment: .leading, spacing: 16) {
+            if let info = runtimeAppModel.activeDatasetInfo {
+              Text(info.description).font(.headline).textSelection(.enabled)
+              if let size = PhysicalSizeFormatter.dimensions(width: info.width, height: info.height, depth: info.depth,
+                voxelSpacingX: info.voxelSpacingX, voxelSpacingY: info.voxelSpacingY, voxelSpacingZ: info.voxelSpacingZ) {
+                Text(size).textSelection(.enabled)
+              }
+              DatasetProvenanceView(entries: info.provenance)
+            }
+          }
+          .frame(maxWidth: .infinity, alignment: .leading)
+          .padding()
+        }
+        .navigationTitle("dataset_info_title")
+        .toolbar {
+          ToolbarItem(placement: .confirmationAction) {
+            Button { showDatasetInfo = false } label: { Label("info_close_button", systemImage: "xmark") }
+          }
+        }
+      }
+      .frame(width: 560, height: 480)
     }
     .onChange(of: scenePhase) { _, newPhase in
       Task { @MainActor in

@@ -38,6 +38,8 @@ struct ConverterView: View {
   @State private var movingInputDirectory: String = ""
   @State private var outputFile: String = ""
   @State private var datasetDescription: String = ""
+  @State private var receivedAt = Date()
+  @State private var sourceNote = ""
   @State private var logText: String = ""
   @State private var progressText: String = ""
   @State private var progressValue: Double = 0.0
@@ -264,6 +266,10 @@ struct ConverterView: View {
                   TextField("converter_textfield_description_placeholder", text: $datasetDescription)
                     .textFieldStyle(RoundedBorderTextFieldStyle())
                 }
+                TextField("converter_source_note", text: $sourceNote)
+                  .textFieldStyle(.roundedBorder)
+                DatePicker("converter_received_on", selection: $receivedAt, displayedComponents: [.date, .hourAndMinute])
+                  .datePickerStyle(.compact)
               }
             case 5:
               // Step 5: Confirm and start
@@ -1398,6 +1404,8 @@ struct ConverterView: View {
   /// Starts the conversion process.
   /// In this demo, the conversion process is simulated with a loop.
   func startConversion() {
+    let provenance = sourceNote.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? [] :
+      [BORGVRProvenanceEntry(sourceNote, date: receivedAt)]
     guard hasValidImportInput, !outputFile.isEmpty else {
       logger.error(
         L(
@@ -1517,7 +1525,8 @@ struct ConverterView: View {
               useCompression: storedAppModel.enableCompression,
               extensionStrategy: borderMode,
               quantizeTo8Bit: storedAppModel.quantizeImportsTo8Bit
-            )
+            ),
+            provenance: provenance
           ),
           logger: logger,
           cancellationToken: cancellationToken

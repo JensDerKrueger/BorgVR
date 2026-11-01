@@ -1083,3 +1083,7 @@
 "Reset Transfer Function?" = "Transferfunktion zurücksetzen?";
 "Do you really want to reset the isovalue?" = "Möchten Sie den Isowert wirklich zurücksetzen?";
 "Do you really want to reset the current transfer function?" = "Möchten Sie die aktuelle Transferfunktion wirklich zurücksetzen?";
+"converter_received_on" = "Erhalten am";
+"converter_source_note" = "Quelle / Herkunft (optional)";
+"dataset_info_provenance" = "Herkunft und Verarbeitung";
+"dataset_info_no_provenance" = "Keine Herkunftsdaten gespeichert.";

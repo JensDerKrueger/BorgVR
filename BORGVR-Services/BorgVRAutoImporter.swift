@@ -34,6 +34,7 @@ final class BorgVRAutoImporter: @unchecked Sendable {
   private let interval: TimeInterval
   private let mode: BorgVRAutoImportMode
   private let settings: BorgVRVolumeConversionSettings
+  private let toolIdentification: String
   private let logger: LoggerBase?
   private let onImported: @Sendable (URL) -> Void
   private let queue = DispatchQueue(label: "BorgVR.AutoImporter", qos: .utility)
@@ -50,12 +51,14 @@ final class BorgVRAutoImporter: @unchecked Sendable {
   init(input: URL, output: URL, interval: TimeInterval = defaultInterval,
        mode: BorgVRAutoImportMode = .automatic,
        settings: BorgVRVolumeConversionSettings, logger: LoggerBase? = nil,
+       toolIdentification: String = BORGVRToolIdentification.current,
        onImported: @escaping @Sendable (URL) -> Void = { _ in }) throws {
     self.input = input.standardizedFileURL.resolvingSymlinksInPath()
     self.output = output.standardizedFileURL.resolvingSymlinksInPath()
     self.interval = interval
     self.mode = mode
     self.settings = settings
+    self.toolIdentification = toolIdentification
     self.logger = logger
     self.onImported = onImported
     guard interval.isFinite, Self.allowedIntervals.contains(interval),
@@ -204,6 +207,7 @@ final class BorgVRAutoImporter: @unchecked Sendable {
         sources = try BorgVRAutomaticVolumeConversion.convert(source: source,
           destination: stagedFile, settings: settings, logger: logger, cancellationToken: cancellation,
           description: entry.description, physicalSizeMeters: entry.physicalSize,
+          provenance: entry.provenance, toolIdentification: toolIdentification,
           validateSources: {
             try self.validateSources($0, snapshot: snapshot)
             sources = $0

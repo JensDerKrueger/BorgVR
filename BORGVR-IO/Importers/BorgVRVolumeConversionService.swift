@@ -378,6 +378,9 @@ public struct BorgVRVolumeConversionRequest: Sendable {
   public let metaDescription: String
   public let settings: BorgVRVolumeConversionSettings
   public let physicalSizeMeters: Vec3<Float>?
+  public let provenance: [BORGVRProvenanceEntry]
+  public let meta: String
+  public let toolIdentification: String
 
   public init(
     source: BorgVRVolumeConversionSource,
@@ -385,7 +388,10 @@ public struct BorgVRVolumeConversionRequest: Sendable {
     datasetDescription: String,
     metaDescription: String,
     settings: BorgVRVolumeConversionSettings,
-    physicalSizeMeters: Vec3<Float>? = nil
+    physicalSizeMeters: Vec3<Float>? = nil,
+    provenance: [BORGVRProvenanceEntry] = [],
+    meta: String = "",
+    toolIdentification: String = BorgVRVolumeConversionService.toolIdentification
   ) {
     self.source = source
     self.destinationURL = destinationURL
@@ -393,6 +399,9 @@ public struct BorgVRVolumeConversionRequest: Sendable {
     self.metaDescription = metaDescription
     self.settings = settings
     self.physicalSizeMeters = physicalSizeMeters
+    self.provenance = provenance
+    self.meta = meta
+    self.toolIdentification = toolIdentification
   }
 }
 
@@ -426,6 +435,9 @@ public enum BorgVRVolumeConversionError: LocalizedError {
 }
 
 public enum BorgVRVolumeConversionService {
+  public static var toolIdentification: String {
+    BORGVRToolIdentification.current
+  }
   public static func convert(
     _ request: BorgVRVolumeConversionRequest,
     logger: LoggerBase? = nil,
@@ -496,7 +508,7 @@ public enum BorgVRVolumeConversionService {
   ) throws {
     let parser = try VolumeFileParserFactory.parser(for: sourceURL.path,
       cancellationCheck: { try cancellationToken?.checkCancellation() },
-      progress: { logger?.progress("Reading Zarr volume", $0) })
+      progress: { logger?.progress("Reading Zarr volume", $0) }, log: { logger?.info($0) })
     defer {
       if parser.dataIsTempCopy {
         try? FileManager.default.removeItem(atPath: parser.absoluteFilename)
@@ -551,7 +563,10 @@ public enum BorgVRVolumeConversionService {
         ? volume.channels.map(\.description).joined(separator: " + ")
         : request.metaDescription,
       settings: request.settings,
-      physicalSizeMeters: request.physicalSizeMeters
+      physicalSizeMeters: request.physicalSizeMeters,
+      provenance: request.provenance,
+      meta: request.meta,
+      toolIdentification: request.toolIdentification
     )
     try convertRaw(
       volume.source,
@@ -613,7 +628,10 @@ public enum BorgVRVolumeConversionService {
         ? fused.channels.map(\.description).joined(separator: " + ")
         : request.metaDescription,
       settings: request.settings,
-      physicalSizeMeters: request.physicalSizeMeters
+      physicalSizeMeters: request.physicalSizeMeters,
+      provenance: request.provenance,
+      meta: request.meta,
+      toolIdentification: request.toolIdentification
     )
     try convertRaw(
       fused.source,
@@ -706,6 +724,16 @@ public enum BorgVRVolumeConversionService {
     signedComponents: [Bool] = []
   ) throws {
     try cancellationToken?.checkCancellation()
+    var provenance = request.provenance
+    switch request.source {
+      case .file(let url): provenance.append(BORGVRProvenanceEntry("Import file: \(url.absoluteString)"))
+      case .dicomDirectory(let url): provenance.append(BORGVRProvenanceEntry("Import DICOM: \(url.absoluteString)"))
+      case .registeredDICOMPair(let reference, let moving, let filter):
+        provenance.append(BORGVRProvenanceEntry("Import reference DICOM: \(reference.absoluteString)"))
+        provenance.append(BORGVRProvenanceEntry("Import registered DICOM: \(moving.absoluteString)"))
+        provenance.append(BORGVRProvenanceEntry("Rigid DICOM registration and fusion; resampling: \(filter.rawValue)"))
+      case .raw(let source): provenance.append(BORGVRProvenanceEntry("Import RAW: \(source.url.absoluteString)"))
+    }
     var spacing = source.voxelSpacing
     if let extent = request.physicalSizeMeters {
       spacing = Vec3(x: extent.x / Float(source.size.x), y: extent.y / Float(source.size.y),
@@ -731,6 +759,7 @@ public enum BorgVRVolumeConversionService {
         volume, signedComponents: signedComponents, to: quantizedURL,
         logger: logger, cancellationToken: cancellationToken
       )
+      provenance.append(BORGVRProvenanceEntry("Quantized to UInt8 per channel"))
     }
     let reorganizer = BrickedVolumeReorganizer(
       inputVolume: volume,
@@ -744,7 +773,10 @@ public enum BorgVRVolumeConversionService {
       metaDescription: request.metaDescription,
       useCompressor: request.settings.useCompression,
       logger: logger,
-      cancellationToken: cancellationToken
+      cancellationToken: cancellationToken,
+      provenance: provenance,
+      meta: request.meta,
+      toolIdentification: request.toolIdentification
     )
   }
 

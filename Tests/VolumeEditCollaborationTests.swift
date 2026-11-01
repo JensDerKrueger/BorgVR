@@ -574,8 +574,12 @@ private func testHeadEditInitialization(root: URL) async throws {
   let second = Task { await h.sendSnapshot(to: clientID) }
   await first.value; await second.value
   _ = client.open(source, datasetURL: root.appendingPathComponent("head-client.data"))
-  try await eventually("Head edit initialization remained stuck") {
-    !client.isOpeningState && !client.isWaitingForSharedState && client.activeState?.kind == .sharePlay
+  do {
+    try await eventually("Head edit initialization remained stuck") {
+      !client.isOpeningState && !client.isWaitingForSharedState && client.activeState?.kind == .sharePlay
+    }
+  } catch {
+    throw EditCollaborationFailure(message: "Head edit initialization failed: \(client.error ?? "no model error"); transport: \(transport.warnings)")
   }
   let received = try await client.stateSnapshot()
   // Tree encoding is deterministic and avoids scanning the entire Head voxel grid.

@@ -6,6 +6,8 @@ enum FileError: Error {
 }
 
 struct ConverterView: View {
+  @State private var receivedAt = Date()
+  @State private var sourceNote = ""
   @EnvironmentObject private var appModel: AppModel
   @EnvironmentObject var appSettings: AppSettings
 
@@ -70,6 +72,12 @@ struct ConverterView: View {
           if mode == .convert || mode == .dicom || mode == .dicomFusion {
             TextField("Dataset description", text: $datasetDescription)
               .textFieldStyle(.roundedBorder)
+              .disabled(isWorking)
+            TextField("converter_source_note", text: $sourceNote)
+              .textFieldStyle(.roundedBorder)
+              .disabled(isWorking)
+            DatePicker("converter_received_on", selection: $receivedAt, displayedComponents: [.date, .hourAndMinute])
+              .datePickerStyle(.compact)
               .disabled(isWorking)
           }
 
@@ -284,6 +292,8 @@ struct ConverterView: View {
   }
 
   private func startConversion(description: String) {
+    let provenance = sourceNote.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? [] :
+      [BORGVRProvenanceEntry(sourceNote, date: receivedAt)]
     guard canStartImport, let inputAccess else {
       logger.error(String(localized: "Input file not specified."))
       return
@@ -354,7 +364,8 @@ struct ConverterView: View {
               useCompression: appSettings.enableCompression,
               extensionStrategy: borderMode,
               quantizeTo8Bit: appSettings.quantizeImportsTo8Bit
-            )
+            ),
+            provenance: provenance
           ),
           logger: logger,
           cancellationToken: cancellationToken

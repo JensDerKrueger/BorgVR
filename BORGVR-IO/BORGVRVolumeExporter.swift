@@ -71,6 +71,7 @@ enum BORGVRVolumeExporter {
 
     let source = try BORGVRFileData(filename: inputURL.path)
     let metadata = source.getMetadata()
+    try metadata.requireUnsignedProcessing()
     guard level >= 0, level < metadata.levelMetadata.count else {
       throw Error.invalidLevel(requested: level, available: metadata.levelMetadata.count)
     }

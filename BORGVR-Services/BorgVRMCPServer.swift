@@ -926,7 +926,9 @@ final class BorgVRMCPServer: @unchecked Sendable {
   }
 
   private func structuredToolResult<T: Encodable>(_ value: T) -> [String: Any] {
-    let data = (try? JSONEncoder().encode(value)) ?? Data("{}".utf8)
+    let encoder = JSONEncoder()
+    encoder.nonConformingFloatEncodingStrategy = .convertToString(positiveInfinity: "+Infinity", negativeInfinity: "-Infinity", nan: "NaN")
+    let data = (try? encoder.encode(value)) ?? Data("{}".utf8)
     let object = (try? JSONSerialization.jsonObject(with: data)) ?? [:]
     let textData = (try? JSONSerialization.data(withJSONObject: object, options: [.sortedKeys])) ?? data
     return [

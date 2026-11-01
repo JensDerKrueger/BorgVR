@@ -159,7 +159,8 @@ private func runGuidedAutoImporterTests() throws {
   try worker.checkForImports(); try worker.checkForImports()
   try check(fm.fileExists(atPath: source.path), "Guided mode imported without import.json")
   try write([["source": "scan.nrrd", "destination": "custom.data", "description": "Guided scan",
-              "sizeMeters": [0.2, 0.3, 0.4]]])
+              "sizeMeters": [0.2, 0.3, 0.4], "sourceDate": "2026-11-01T10:30:45.123Z",
+              "sourceNote": "Downloaded from https://example.org/scan"]])
   try worker.checkForImports()
   try check(!fm.fileExists(atPath: output.appendingPathComponent("custom.data").path), "Manifest imported after one check")
   try Data([1]).write(to: input.appendingPathComponent("unrelated.txt"))
@@ -167,6 +168,10 @@ private func runGuidedAutoImporterTests() throws {
   let result = output.appendingPathComponent("custom.data")
   try check(fm.fileExists(atPath: result.path), "Unrelated arrival prevented guided import")
   let metadata = try BORGVRFileData(filename: result.path).getMetadata()
+  try check(metadata.provenance.first?.text == "Downloaded from https://example.org/scan" &&
+    metadata.provenance.first?.timestampMilliseconds == 1_793_529_045_123 &&
+    metadata.provenance.last?.text.hasPrefix("converted by ") == true,
+    "Guided import lost source date/time or conversion provenance")
   try check(simd_length(metadata.physicalExtentMeters - SIMD3<Float>(0.2, 0.3, 0.4)) < 0.000_001,
     "Guided size was not saved as total physical dimensions")
   try check(!fm.fileExists(atPath: source.path) && !fm.fileExists(atPath: manifest.path), "Successful guided request was not removed")

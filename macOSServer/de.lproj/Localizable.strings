@@ -632,3 +632,5 @@
 "The requested export is not the current export job." = "Der angeforderte Export ist nicht der aktuelle Exportauftrag.";
 "Volume edits did not finish before the timeout." = "Die Volumenbearbeitung wurde nicht innerhalb des Zeitlimits abgeschlossen.";
 "The selected edit state could not be opened: %@\nThe original dataset has been opened instead. Your saved edits have not been changed." = "Der gewählte Bearbeitungsstand konnte nicht geöffnet werden: %@\nStattdessen wurde der Originaldatensatz geöffnet. Ihre gespeicherten Bearbeitungen wurden nicht verändert.";
+"converter_received_on" = "Erhalten am";
+"converter_source_note" = "Quelle / Herkunft (optional)";

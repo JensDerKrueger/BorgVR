@@ -410,6 +410,7 @@ do {
       settings: BorgVRVolumeConversionSettings(brickSize: BorgVRSharedDefaults.brickSize,
         overlap: BorgVRSharedDefaults.brickOverlap, useCompression: BorgVRSharedDefaults.compressionEnabled,
         extensionStrategy: .fillZeroes), logger: logger,
+      toolIdentification: "BorgVR Terminal Server \(TerminalServerInfo.version)",
       onImported: { [host, serverConfiguration] _ in _ = host.refreshCatalog(configuration: serverConfiguration) })
   }
 } catch { fail(error.localizedDescription) }

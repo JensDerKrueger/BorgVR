@@ -23,11 +23,13 @@ private func readInt64(from data: Data, at offset: Int) -> Int64 {
 
 private func brickCountOffset(in data: Data) -> Int {
   let componentCount = Int(readInt64(from: data, at: 38))
-  var offset = 107 + componentCount * 16
+  let width = Int(readInt64(from: data, at: 46))
+  var offset = 92 + (2 + 2 * componentCount) * width
   for _ in 0..<3 {
     let length = Int(readInt64(from: data, at: offset))
     offset += 8 + length
   }
+  for _ in 0..<2 { offset += 17 + Int(readInt64(from: data, at: offset + 9)) }
   return offset
 }
 
@@ -73,11 +75,18 @@ private func expectRejection(_ name: String, data: Data) throws {
 @main
 private enum BORGVRMetaDataParserTests {
   static func main() throws {
+    if CommandLine.arguments.contains("--verify-cpp") {
+      try verifyCPPFixtures(in: URL(fileURLWithPath: CommandLine.arguments.last!))
+      return
+    }
     let valid = makeValidMetadata()
     if CommandLine.arguments.count > 1 {
       try valid.write(to: URL(fileURLWithPath: CommandLine.arguments[1]))
     }
     let parsed = try BORGVRMetaData(fromData: valid)
+    var obsolete = valid
+    writeInt64(4, to: &obsolete, at: 6)
+    try expectRejection("v4 must be converted externally", data: obsolete)
     guard parsed.componentRanges == [BORGVRComponentRange(minValue: 0, maxValue: 255)] else {
       throw TestFailure.expectedRejection("component range round trip")
     }
@@ -99,21 +108,21 @@ private enum BORGVRMetaDataParserTests {
     for count in [Int64(-1), 0, 1025, Int64.max] {
       var invalidComponentCount = valid
       writeInt64(count, to: &invalidComponentCount, at: 38)
-      writeInt64(count, to: &invalidComponentCount, at: 98)
+      writeInt64(count, to: &invalidComponentCount, at: 85)
       try expectRejection("invalid component count before range allocation", data: invalidComponentCount)
     }
 
     var invalidSpacing = valid
-    invalidSpacing.replaceSubrange(54..<58, with: [0x00, 0x00, 0xc0, 0x7f])
+    invalidSpacing.replaceSubrange(55..<59, with: [0x00, 0x00, 0xc0, 0x7f])
     try expectRejection("non-finite voxel spacing", data: invalidSpacing)
 
     var invalidOverlap = valid
-    writeInt64(2, to: &invalidOverlap, at: 74)
+    writeInt64(2, to: &invalidOverlap, at: 75)
     try expectRejection("invalid brick stride", data: invalidOverlap)
 
     var invalidBoolean = valid
     let componentCount = Int(readInt64(from: valid, at: 38))
-    let compressionOffset = 106 + componentCount * 16
+    let compressionOffset = 91 + (2 + 2 * componentCount)
     invalidBoolean[compressionOffset] = 2
     try expectRejection("invalid Boolean", data: invalidBoolean)
 
@@ -165,13 +174,122 @@ private enum BORGVRMetaDataParserTests {
     _ = try BORGVRMetaData(fromData: fullStoredBrick)
 
     var overflowingFullBrickSize = valid
-    writeInt64(Int64(Int32.max), to: &overflowingFullBrickSize, at: 66)
+    writeInt64(Int64(Int32.max), to: &overflowingFullBrickSize, at: 67)
     try expectRejection("overflowing full brick byte count", data: overflowingFullBrickSize)
 
     try testFileReaderBounds()
+    try testVersion5(in: URL(fileURLWithPath: CommandLine.arguments.last!).deletingLastPathComponent())
 
     print("Swift BORGVR metadata parser tests passed.")
   }
+}
+
+private func testVersion5(in directory: URL) throws {
+  let types: [(BORGVRComponentType, Int, BORGVRComponentRange)] = [
+    (.unsignedInteger, 1, .init(minimum: 0, maximum: 255)),
+    (.unsignedInteger, 2, .init(minimum: 0, maximum: 65535)),
+    (.unsignedInteger, 4, .init(minimum: 0, maximum: Double(UInt32.max))),
+    (.signedInteger, 1, .init(minimum: -128, maximum: 127)),
+    (.signedInteger, 2, .init(minimum: -32768, maximum: 32767)),
+    (.signedInteger, 4, .init(minimum: Double(Int32.min), maximum: Double(Int32.max))),
+    (.floatingPoint, 4, .init(minimum: -0.25, maximum: 1.5)),
+    (.floatingPoint, 8, .init(minimum: -Double.greatestFiniteMagnitude, maximum: Double.leastNonzeroMagnitude)),
+    (.floatingPoint, 4, .init(minimum: -.infinity, maximum: .infinity)),
+    (.floatingPoint, 8, .init(minimum: .nan, maximum: .nan))
+  ]
+  for (index, entry) in types.enumerated() {
+    let (type, width, range) = entry
+    for compress in [false, true] {
+      let m = BORGVRMetaData(width: 2, height: 2, depth: 2, componentCount: 2,
+        bytePerComponent: width, voxelSpacingX: 1, voxelSpacingY: 1, voxelSpacingZ: 1,
+        brickSize: 2, overlap: 0, minValue: 0, maxValue: 0, compression: false,
+        datasetDescription: "v5 test", metaDescription: "")
+      try m.setComponentType(type, ranges: [range, range])
+      m.append(offset: 8, size: 16 * width, componentRanges: [range, range])
+      m.provenance = ["https://example.org/scan", "Import: DICOM", "Fusion: reference + registered volume"].enumerated().map {
+        BORGVRProvenanceEntry(timestampMilliseconds: 1_793_491_234_567 + Int64($0.offset), text: $0.element)
+      }
+      m.meta = String(repeating: "DICOM metadata: äöü\n", count: 5000)
+      m.compressMetadataText = compress
+      let bytes = m.toData()
+      let parsed = try BORGVRMetaData(fromData: bytes)
+      guard parsed.componentType == type, parsed.valueRange == range,
+            parsed.brickMetadata[0].valueRange == range, parsed.componentRanges == [range, range],
+            parsed.provenance == m.provenance, parsed.meta == m.meta else {
+        throw TestFailure.expectedRejection("v5 round trip \(index)")
+      }
+      let name = "v5-\(index)-\(compress ? "lz4" : "raw").bin"
+      try bytes.write(to: directory.appendingPathComponent(name))
+      var invalidType = bytes; invalidType[54] = 99
+      try expectRejection("unknown component type", data: invalidType)
+      try expectRejection("v5 truncated", data: bytes.dropLast())
+      let firstBlock = 83 + (2 + 2 * m.componentCount) * width + 8 + 1
+        + [m.uniqueID, m.datasetDescription, m.metaDescription].reduce(0) { $0 + 8 + $1.utf8.count }
+      var invalidCodec = bytes; invalidCodec[firstBlock] = 9
+      try expectRejection("invalid text codec", data: invalidCodec)
+      var oversized = bytes
+      writeInt64(Int64.max, to: &oversized, at: firstBlock + 1)
+      try expectRejection("metadata decompression bomb", data: oversized)
+      if compress {
+        let stored = Int(readInt64(from: bytes, at: firstBlock + 9))
+        let secondBlock = firstBlock + 17 + stored
+        guard bytes[secondBlock] == 1 else { throw TestFailure.expectedRejection("meta should compress") }
+        var corrupt = bytes; corrupt[secondBlock + 17] = 0
+        try expectRejection("corrupt compressed meta", data: corrupt)
+      }
+      if type != .unsignedInteger {
+        do { try parsed.requireUnsignedProcessing(); throw TestFailure.expectedRejection("renderer accepted new type") }
+        catch is BORGVRError {}
+      }
+    }
+  }
+  let nan = BORGVRComponentRange(minimum: 1, maximum: 2).including(.nan)
+  guard nan.minimum.isNaN, nan.maximum.isNaN,
+        BORGVRComponentRange.union([nan, .init(minValue: 0, maxValue: 1)]) == nan,
+        BORGVRComponentRange(minimum: 0, maximum: 1).including(.infinity).maximum == .infinity else {
+    throw TestFailure.expectedRejection("NaN/Inf propagation")
+  }
+  for range in [BORGVRComponentRange(minimum: .nan, maximum: 1), .init(minimum: 1, maximum: .nan),
+                .init(minimum: .infinity, maximum: -.infinity)] {
+    do {
+      try BORGVRComponentType.floatingPoint.validate(range, width: 8)
+      throw TestFailure.expectedRejection("invalid floating-point range accepted")
+    } catch is BORGVRError {}
+  }
+  guard let date = BORGVRProvenanceEntry.parseDate("2026-11-01T12:30:45.123+02:00"),
+        BORGVRProvenanceEntry("source", date: date).timestampMilliseconds == 1_793_529_045_123,
+        BORGVRProvenanceEntry.parseDate("not a date") == nil else {
+    throw TestFailure.expectedRejection("UTC provenance timestamp conversion")
+  }
+  let m = try BORGVRMetaData(fromData: makeValidMetadata())
+  m.provenance = [BORGVRProvenanceEntry("original source")]
+  m.meta = "custom metadata"
+  let cached = m.cacheExportMetadata(sourceDescription: "example.org:12345")
+  guard m.provenance.count == 1, cached.provenance.count == 2,
+        cached.uniqueID == m.uniqueID, cached.meta == m.meta, cached.hasSameStoredVolume(as: m) else {
+    throw TestFailure.expectedRejection("cache provenance must not alter original metadata or recovery compatibility")
+  }
+  let edited = m.editExportMetadata()
+  guard edited.provenance.count == 2, edited.meta == m.meta, edited.uniqueID != m.uniqueID,
+        edited.brickMetadata.isEmpty else {
+    throw TestFailure.expectedRejection("edit export lost provenance or metadata")
+  }
+  print("Swift v5 typed ranges and compressed text tests passed.")
+}
+
+private func verifyCPPFixtures(in directory: URL) throws {
+  for url in try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
+      where url.lastPathComponent.hasPrefix("v5-") && !url.lastPathComponent.hasSuffix(".cpp") {
+    let swift = try BORGVRMetaData(fromData: Data(contentsOf: url))
+    let cpp = try BORGVRMetaData(fromData: Data(contentsOf: url.appendingPathExtension("cpp")))
+    guard cpp.componentType == swift.componentType, cpp.bytesPerComponent == swift.bytesPerComponent,
+          cpp.valueRange == swift.valueRange, cpp.componentRanges == swift.componentRanges,
+          cpp.brickMetadata[0].valueRange == swift.brickMetadata[0].valueRange,
+          cpp.provenance == swift.provenance, cpp.meta == swift.meta else {
+      throw TestFailure.expectedRejection("C++/Swift typed metadata interoperability")
+    }
+  }
+  print("C++ -> Swift typed metadata and raw LZ4 interoperability passed.")
 }
 
 private func testFileReaderBounds() throws {

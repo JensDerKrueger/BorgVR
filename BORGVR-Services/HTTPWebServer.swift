@@ -604,8 +604,8 @@ final class HTTPWebServer {
     }
 
     let brickValues = metadata.brickMetadata.flatMap { brick in
-      [brick.minValue, brick.maxValue, brick.size] + brick.componentRanges.flatMap {
-        [$0.minValue, $0.maxValue]
+      [brick.valueRange.minimum, brick.valueRange.maximum, Double(brick.size)] + brick.componentRanges.flatMap {
+        [$0.minimum, $0.maximum]
       }
     }
     let brickFields = ["min", "max", "byteLength"] +
@@ -618,6 +618,8 @@ final class HTTPWebServer {
       name: displayName(for: info),
       description: info.datasetDescription,
       metaDescription: metadata.metaDescription,
+      provenance: metadata.provenance,
+      meta: metadata.meta,
       variant: metadata.compression ? "lz4" : "uncompressed",
       volume: WebDatasetVolume(
         size: [metadata.width, metadata.height, metadata.depth],
@@ -628,11 +630,11 @@ final class HTTPWebServer {
         ],
         componentCount: metadata.componentCount,
         bytesPerComponent: metadata.bytesPerComponent,
-        valueType: "uint",
+        valueType: metadata.componentType.valueTypeName,
         endianness: "little",
-        valueRange: [metadata.minValue, metadata.maxValue],
-        componentRanges: metadata.componentRanges.map { [$0.minValue, $0.maxValue] },
-        dataRange: [0, metadata.rangeMax]
+        valueRange: [metadata.valueRange.minimum, metadata.valueRange.maximum],
+        componentRanges: metadata.componentRanges.map { [$0.minimum, $0.maximum] },
+        dataRange: metadata.componentType.representableRange(width: metadata.bytesPerComponent)
       ),
       bricking: WebDatasetBricking(
         brickSize: metadata.brickSize,
@@ -776,6 +778,7 @@ final class HTTPWebServer {
 
   private func compressedJSONResponse<T: Encodable>(_ value: T) -> HTTPResponse {
     let encoder = JSONEncoder()
+    encoder.nonConformingFloatEncodingStrategy = .convertToString(positiveInfinity: "+Infinity", negativeInfinity: "-Infinity", nan: "NaN")
     encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
     let json = (try? encoder.encode(value)) ?? Data("{}".utf8)
     guard let compressed = appleLZ4Stream(for: json) else {
@@ -1144,6 +1147,8 @@ private struct WebDatasetManifest: Encodable {
   let name: String
   let description: String
   let metaDescription: String
+  let provenance: [BORGVRProvenanceEntry]
+  let meta: String
   let variant: String
   let volume: WebDatasetVolume
   let bricking: WebDatasetBricking
@@ -1158,9 +1163,9 @@ private struct WebDatasetVolume: Encodable {
   let bytesPerComponent: Int
   let valueType: String
   let endianness: String
-  let valueRange: [Int]
-  let componentRanges: [[Int]]
-  let dataRange: [Int]
+  let valueRange: [Double]
+  let componentRanges: [[Double]]
+  let dataRange: [Double]
 }
 
 private struct WebDatasetBricking: Encodable {
@@ -1183,7 +1188,7 @@ private struct WebDatasetLevel: Encodable {
 private struct WebDatasetBrickMetadata: Encodable {
   let format: String
   let fields: [String]
-  let values: [Int]
+  let values: [Double]
 }
 
 private extension Data {

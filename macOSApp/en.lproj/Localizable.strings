@@ -1079,3 +1079,7 @@
 "Reset Transfer Function?" = "Reset Transfer Function?";
 "Do you really want to reset the isovalue?" = "Do you really want to reset the isovalue?";
 "Do you really want to reset the current transfer function?" = "Do you really want to reset the current transfer function?";
+"converter_received_on" = "Received on";
+"converter_source_note" = "Source / origin (optional)";
+"dataset_info_provenance" = "Provenance";
+"dataset_info_no_provenance" = "No provenance recorded.";

@@ -8,6 +8,8 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include <filesystem>
+#include <cmath>
 
 namespace {
 void write_i64(std::vector<uint8_t>& data, size_t offset, int64_t value) {
@@ -27,11 +29,12 @@ int64_t read_i64(const std::vector<uint8_t>& data, size_t offset) {
 
 size_t brick_count_offset(const std::vector<uint8_t>& data) {
   const auto componentCount = static_cast<size_t>(read_i64(data, 38));
-  size_t offset = 107 + componentCount * 16;
+  size_t offset = 92 + (2 + 2 * componentCount) * static_cast<size_t>(read_i64(data, 46));
   for (int index = 0; index < 3; ++index) {
     const auto length = static_cast<size_t>(read_i64(data, offset));
     offset += 8 + length;
   }
+  for (int index = 0; index < 2; ++index) offset += 17 + static_cast<size_t>(read_i64(data, offset + 9));
   return offset;
 }
 
@@ -81,19 +84,19 @@ int main(int argc, char** argv) {
   expect_rejection("unsupported component size", invalidComponentSize);
 
   auto invalidSpacing = valid;
-  invalidSpacing[54] = 0x00;
   invalidSpacing[55] = 0x00;
-  invalidSpacing[56] = 0xc0;
-  invalidSpacing[57] = 0x7f;
+  invalidSpacing[56] = 0x00;
+  invalidSpacing[57] = 0xc0;
+  invalidSpacing[58] = 0x7f;
   expect_rejection("non-finite voxel spacing", invalidSpacing);
 
   auto invalidOverlap = valid;
-  write_i64(invalidOverlap, 74, parsed.brickSize() / 2 + 1);
+  write_i64(invalidOverlap, 75, parsed.brickSize() / 2 + 1);
   expect_rejection("invalid brick stride", invalidOverlap);
 
   auto invalidBoolean = valid;
   const size_t componentCount = static_cast<size_t>(read_i64(valid, 38));
-  const size_t compressionOffset = 106 + componentCount * 16;
+  const size_t compressionOffset = 91 + (2 + 2 * componentCount);
   invalidBoolean[compressionOffset] = 2;
   expect_rejection("invalid Boolean", invalidBoolean);
 
@@ -143,8 +146,34 @@ int main(int argc, char** argv) {
   parsed.parseFromBytes(fullStoredBrick.data(), fullStoredBrick.size());
 
   auto overflowingFullBrickSize = valid;
-  write_i64(overflowingFullBrickSize, 66, INT32_MAX);
+  write_i64(overflowingFullBrickSize, 67, INT32_MAX);
   expect_rejection("overflowing full brick byte count", overflowingFullBrickSize);
+
+  size_t typedFixtures = 0;
+  for (const auto& entry : std::filesystem::directory_iterator(std::filesystem::path(argv[1]).parent_path())) {
+    const auto name = entry.path().filename().string();
+    if (name.rfind("v5-", 0) != 0 || entry.path().extension() != ".bin") continue;
+    std::ifstream source(entry.path(), std::ios::binary);
+    std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(source)), std::istreambuf_iterator<char>());
+    BORGVRMetaData typed;
+    typed.parseFromBytes(bytes.data(), bytes.size());
+    if (typed.provenance().size() != 3 || typed.meta().empty()) throw std::runtime_error("Lost metadata text.");
+    const auto output = typed.toBytes();
+    BORGVRMetaData roundTrip;
+    roundTrip.parseFromBytes(output.data(), output.size());
+    if (roundTrip.componentType() != typed.componentType() || roundTrip.meta() != typed.meta() ||
+        roundTrip.provenance() != typed.provenance() ||
+        !(roundTrip.minValue() == typed.minValue() || (std::isnan(roundTrip.minValue()) && std::isnan(typed.minValue()))))
+      throw std::runtime_error("Typed metadata round trip failed.");
+    std::ofstream destination(entry.path().string() + ".cpp", std::ios::binary);
+    destination.write(reinterpret_cast<const char*>(output.data()), static_cast<std::streamsize>(output.size()));
+    auto badType = bytes; badType[54] = 99;
+    expect_rejection("invalid v5 component type", badType);
+    auto truncated = bytes; truncated.pop_back();
+    expect_rejection("truncated v5", truncated);
+    ++typedFixtures;
+  }
+  if (typedFixtures != 20) throw std::runtime_error("Missing v5 interoperability fixtures.");
 
   std::cout << "C++ BORGVR metadata parser tests passed.\n";
   return 0;

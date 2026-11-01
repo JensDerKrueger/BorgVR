@@ -2,6 +2,7 @@ import Foundation
 
 enum ConverterInfo {
   static let version = "3.5"
+  static let toolIdentification = "BorgVR Converter \(version)"
 
   static let banner = #"""
    ____                   __     ______
@@ -165,6 +166,8 @@ Usage:
 General
     \(executableName) --help | -h
     \(executableName) --version | -v
+    Optional for import/generation (repeatable): --source-info <ISO8601-date-time> <source-text>
+        Example: --source-info 2026-11-01T10:30:00Z "Downloaded from https://example.org/scan"
 
 Mode D — Read DICOM files from a directory
     \(executableName) D <input_directory> <output_filename> <description> <max_brick_size> <overlap>
@@ -209,7 +212,7 @@ Mode I — Read an ImageVis3D Mobile (IV3Dm) volume
 Mode Z — Read a local Zarr v3 / OME-Zarr 0.5 volume
     \(executableName) Z <input_filename> <output_filename> <description> <max_brick_size> <overlap>
         input_filename    : Path to an .ozx file, .zarr directory, or zarr.json
-        samples           : uint8, uint16, uint32; up to four channels; no time series
+        samples           : uint8/16/32, int8/16/32, float32/64; up to four channels; no time series
         codecs            : raw bytes, Zstandard, gzip, CRC32C, indexed shards
 
 Mode E — Export one BorgVR LoD as an uncompressed NRRD volume
@@ -390,6 +393,28 @@ func parseArguments(_ args: [String]) -> (Mode, Any) {
   return result
 }
 
+func parseSourceInfo(_ arguments: [String]) -> (arguments: [String], provenance: [BORGVRProvenanceEntry]) {
+  var args = arguments
+  var provenance: [BORGVRProvenanceEntry] = []
+  while let index = args.firstIndex(of: "--source-info") {
+    guard index + 2 < args.count, !args[index + 2].trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+      logger.error("--source-info requires an ISO-8601 date/time and a non-empty source text.")
+      exit(1)
+    }
+    guard let date = BORGVRProvenanceEntry.parseDate(args[index + 1]) else {
+      logger.error("Invalid --source-info date/time; use ISO-8601 with a time zone, e.g. 2026-11-01T10:30:00Z.")
+      exit(1)
+    }
+    provenance.append(BORGVRProvenanceEntry(args[index + 2], date: date))
+    args.removeSubrange(index...index + 2)
+  }
+  guard provenance.isEmpty || args.count < 2 || args[1] != "E" else {
+    logger.error("--source-info is not applicable to export mode.")
+    exit(1)
+  }
+  return (args, provenance)
+}
+
 func convertRawVolume(inputFilename: String,
                       offset: Int,
                       size: Vec3<Int>,
@@ -421,7 +446,9 @@ func convertRawVolume(inputFilename: String,
         overlap: overlap,
         useCompression: true,
         extensionStrategy: .fillZeroes
-      )
+      ),
+      provenance: conversionProvenance,
+      toolIdentification: ConverterInfo.toolIdentification
     ),
     logger: logger
   )
@@ -437,7 +464,9 @@ func convertDICOMStack(_ params: DicomModeParameters) {
         destinationURL: URL(fileURLWithPath: params.common.outputFilename),
         datasetDescription: params.common.datasetDescription,
         metaDescription: "",
-        settings: conversionSettings(for: params.common)
+        settings: conversionSettings(for: params.common),
+        provenance: conversionProvenance,
+        toolIdentification: ConverterInfo.toolIdentification
       ),
       logger: logger
     )
@@ -484,7 +513,9 @@ private func convertFileVolume(_ params: HeaderFileModeParameters, formatName: S
         destinationURL: URL(fileURLWithPath: params.common.outputFilename),
         datasetDescription: params.common.datasetDescription,
         metaDescription: "Converted from \(formatName) Volume \(sourceURL.deletingPathExtension().lastPathComponent)",
-        settings: conversionSettings(for: params.common)
+        settings: conversionSettings(for: params.common),
+        provenance: conversionProvenance,
+        toolIdentification: ConverterInfo.toolIdentification
       ),
       logger: logger
     )
@@ -727,7 +758,9 @@ logger.setMinimumLogLevel(.info)
 logger.warning("Running in debug mode. The program will perform significantly slower as in release mode.")
 #endif
 // Parse command-line arguments and execute the corresponding conversion or generation.
-let (mode, params) = parseArguments(CommandLine.arguments)
+let sourceOptions = parseSourceInfo(CommandLine.arguments)
+let conversionProvenance = sourceOptions.provenance
+let (mode, params) = parseArguments(sourceOptions.arguments)
 switch mode {
   case .DicomConversion:
     guard let params = params as? DicomModeParameters else { exit(1) }

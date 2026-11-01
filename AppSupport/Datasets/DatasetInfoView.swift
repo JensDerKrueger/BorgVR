@@ -33,6 +33,7 @@ struct DatasetInfoView: View {
               title: "dataset_info_metadata",
               value: dataset.metadataSummary ?? String(localized: "dataset_info_no_metadata")
             )
+            DatasetProvenanceView(entries: metadata?.provenance ?? [])
           } else {
             ContentUnavailableView(
               "dataset_info_unavailable_title",

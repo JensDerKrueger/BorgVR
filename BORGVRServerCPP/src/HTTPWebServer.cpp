@@ -11,6 +11,7 @@
 #include <fstream>
 #include <iomanip>
 #include <limits>
+#include <cmath>
 #include <sstream>
 
 namespace {
@@ -346,15 +347,12 @@ std::string datasetCompressionName(const BORGVRMetaData& md) {
   return md.compression() ? "lz4" : "none";
 }
 
-uint64_t dataTypeMaxValue(const BORGVRMetaData& md) {
-  const int bits = md.bytesPerComponent() * 8;
-  if (bits <= 0) {
-    return 1;
-  }
-  if (bits >= 63) {
-    return std::numeric_limits<uint64_t>::max();
-  }
-  return (uint64_t{1} << bits) - 1;
+std::string jsonNumber(double value) {
+  if (std::isnan(value)) return "\"NaN\"";
+  if (std::isinf(value)) return value > 0 ? "\"+Infinity\"" : "\"-Infinity\"";
+  std::ostringstream output;
+  output << std::setprecision(std::numeric_limits<double>::max_digits10) << value;
+  return output.str();
 }
 
 void appendLE32(std::vector<uint8_t>& out, uint32_t value) {
@@ -1007,7 +1005,12 @@ bool HTTPWebServer::sendDatasetManifest(TcpSocket& socket, const std::string& da
   try {
     BORGVRFileData dataset(info.filename);
     const BORGVRMetaData& md = dataset.metadata();
-    const uint64_t dataRangeMax = dataTypeMaxValue(md);
+    const bool floating = md.componentType() == ComponentType::FloatingPoint;
+    const bool signedType = md.componentType() == ComponentType::SignedInteger;
+    const double dataRangeMax = floating
+      ? (md.bytesPerComponent() == 4 ? double(std::numeric_limits<float>::max()) : std::numeric_limits<double>::max())
+      : std::ldexp(1.0, md.bytesPerComponent() * 8 - (signedType ? 1 : 0)) - 1;
+    const double dataRangeMin = floating ? -dataRangeMax : signedType ? -dataRangeMax - 1 : 0;
 
     std::ostringstream oss;
     oss << "{\n"
@@ -1017,23 +1020,31 @@ bool HTTPWebServer::sendDatasetManifest(TcpSocket& socket, const std::string& da
         << "  \"name\": \"" << jsonEscape(displayNameFor(info)) << "\",\n"
         << "  \"description\": \"" << jsonEscape(info.datasetDescription) << "\",\n"
         << "  \"metaDescription\": \"" << jsonEscape(md.metaDescription()) << "\",\n"
+        << "  \"meta\": \"" << jsonEscape(md.meta()) << "\",\n"
+        << "  \"provenance\": [";
+    for (size_t i = 0; i < md.provenance().size(); ++i) {
+      if (i) oss << ", ";
+      const auto& entry = md.provenance()[i];
+      oss << "{\"timestampMilliseconds\": " << entry.timestampMilliseconds << ", \"text\": \"" << jsonEscape(entry.text) << "\"}";
+    }
+    oss << "],\n"
         << "  \"variant\": \"" << variantName(md) << "\",\n"
         << "  \"volume\": {\n"
         << "    \"size\": [" << md.width() << ", " << md.height() << ", " << md.depth() << "],\n"
         << "    \"voxelSpacing\": [" << md.voxelSpacingX() << ", " << md.voxelSpacingY() << ", " << md.voxelSpacingZ() << "],\n"
         << "    \"componentCount\": " << md.componentCount() << ",\n"
         << "    \"bytesPerComponent\": " << md.bytesPerComponent() << ",\n"
-        << "    \"valueType\": \"uint\",\n"
+        << "    \"valueType\": \"" << (floating ? "float" : signedType ? "int" : "uint") << "\",\n"
         << "    \"endianness\": \"little\",\n"
-        << "    \"valueRange\": [" << md.minValue() << ", " << md.maxValue() << "],\n"
+        << "    \"valueRange\": [" << jsonNumber(md.minValue()) << ", " << jsonNumber(md.maxValue()) << "],\n"
         << "    \"componentRanges\": [";
     for (size_t component = 0; component < md.componentRanges().size(); ++component) {
       if (component > 0) oss << ", ";
       const auto& range = md.componentRanges()[component];
-      oss << "[" << range.minValue << ", " << range.maxValue << "]";
+      oss << "[" << jsonNumber(range.minValue) << ", " << jsonNumber(range.maxValue) << "]";
     }
     oss << "],\n"
-        << "    \"dataRange\": [0, " << dataRangeMax << "]\n"
+        << "    \"dataRange\": [" << jsonNumber(dataRangeMin) << ", " << jsonNumber(dataRangeMax) << "]\n"
         << "  },\n"
         << "  \"bricking\": {\n"
         << "    \"brickSize\": " << md.brickSize() << ",\n"
@@ -1071,9 +1082,9 @@ bool HTTPWebServer::sendDatasetManifest(TcpSocket& socket, const std::string& da
     const auto& bricks = md.brickMetadata();
     for (size_t i = 0; i < bricks.size(); ++i) {
       const auto& bm = bricks[i];
-      oss << "      " << bm.minValue << ", " << bm.maxValue << ", " << bm.size;
+      oss << "      " << jsonNumber(bm.minValue) << ", " << jsonNumber(bm.maxValue) << ", " << bm.size;
       for (const auto& range : bm.componentRanges) {
-        oss << ", " << range.minValue << ", " << range.maxValue;
+        oss << ", " << jsonNumber(range.minValue) << ", " << jsonNumber(range.maxValue);
       }
       oss << (i + 1 < bricks.size() ? "," : "") << "\n";
     }

@@ -397,7 +397,10 @@ public class BrickedVolumeReorganizer {
                          metaDescription: String,
                          useCompressor: Bool = false,
                          logger: LoggerBase? = nil,
-                         cancellationToken: BorgVRVolumeConversionCancellationToken? = nil) throws {
+                         cancellationToken: BorgVRVolumeConversionCancellationToken? = nil,
+                         provenance: [BORGVRProvenanceEntry] = [],
+                         meta: String = "",
+                         toolIdentification: String = BORGVRToolIdentification.current) throws {
 
     try cancellationToken?.checkCancellation()
     defer {
@@ -433,6 +436,9 @@ public class BrickedVolumeReorganizer {
       metaDescription: metaDescription
     )
     metaData.updateComponentRanges(componentRanges)
+    metaData.provenance = provenance + [BORGVRProvenanceEntry(
+      "converted by \(toolIdentification) (brick size \(brickSize), overlap \(overlap), LZ4 \(useCompressor ? "enabled" : "disabled"))")]
+    metaData.meta = meta
 
     let levelCount = BORGVRMetaData.calculateLevelCount(
       size: inputVolume.size,

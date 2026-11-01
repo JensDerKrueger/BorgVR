@@ -397,6 +397,7 @@ class RuntimeAppModel {
     let componentCount: Int
     let bytesPerComponent: Int
     let volumeScale: SIMD3<Float>
+    let provenance: [BORGVRProvenanceEntry]
 
     init(meta: BORGVRMetaData) {
       self.description = meta.datasetDescription
@@ -409,6 +410,7 @@ class RuntimeAppModel {
       self.componentCount = meta.componentCount
       self.bytesPerComponent = meta.bytesPerComponent
       self.volumeScale = VolumeRenderResources.normalizedVolumeExtent(for: meta)
+      self.provenance = meta.provenance
     }
   }
 

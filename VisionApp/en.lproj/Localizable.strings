@@ -1365,3 +1365,8 @@
 "The requested export is not the current export job." = "The requested export is not the current export job.";
 "Volume edits did not finish before the timeout." = "Volume edits did not finish before the timeout.";
 "The selected edit state could not be opened: %@\nThe original dataset has been opened instead. Your saved edits have not been changed." = "The selected edit state could not be opened: %@\nThe original dataset has been opened instead. Your saved edits have not been changed.";
+"converter_received_on" = "Received on";
+"converter_source_note" = "Source / origin (optional)";
+"dataset_info_provenance" = "Provenance";
+"dataset_info_no_provenance" = "No provenance recorded.";
+"dataset_info_title" = "Dataset Info";

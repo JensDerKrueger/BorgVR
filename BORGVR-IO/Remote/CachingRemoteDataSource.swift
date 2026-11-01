@@ -504,7 +504,8 @@ final class CachingRemoteDataSource: DataSource {
       let fileHandle = try FileHandle(forWritingTo: incompleteURL)
       try fileHandle.truncate(atOffset: UInt64(cachedPayloadFileSize))
       try fileHandle.close()
-      try metadata.save(filename: incompleteFilename)
+      let cachedMetadata = metadata.cacheExportMetadata(sourceDescription: remoteDataSource.downloadSourceDescription)
+      try cachedMetadata.save(filename: incompleteFilename)
       if fileManager.fileExists(atPath: completeURL.path) {
         try fileManager.removeItem(at: completeURL)
       }

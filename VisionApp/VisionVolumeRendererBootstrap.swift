@@ -96,6 +96,7 @@ enum VisionVolumeRendererBootstrap {
             )
           }
       }
+      try dataset.getMetadata().requireUnsignedProcessing()
     } catch {
       runtimeAppModel.logger.error("Failed to load dataset: \(error.localizedDescription)")
       runtimeAppModel.requestDatasetClose(

@@ -11,16 +11,25 @@ struct Vec3 {
   T z{};
 };
 
+enum class ComponentType : uint8_t { UnsignedInteger = 0, SignedInteger = 1, FloatingPoint = 2 };
+struct ProvenanceEntry {
+  int64_t timestampMilliseconds = 0;
+  std::string text;
+  bool operator==(const ProvenanceEntry& other) const {
+    return timestampMilliseconds == other.timestampMilliseconds && text == other.text;
+  }
+};
+
 struct ComponentRange {
-  int64_t minValue = 0;
-  int64_t maxValue = 0;
+  double minValue = 0;
+  double maxValue = 0;
 };
 
 struct BrickMetadata {
   int64_t offset = 0;  // absolute byte offset in the dataset file
   int64_t size = 0;    // stored byte size (may be compressed)
-  int64_t minValue = 0;  // union of componentRanges; not used for TF visibility
-  int64_t maxValue = 0;  // union of componentRanges; not used for TF visibility
+  double minValue = 0;  // union of componentRanges; not used for TF visibility
+  double maxValue = 0;  // union of componentRanges; not used for TF visibility
   std::vector<ComponentRange> componentRanges;
 };
 
@@ -32,7 +41,7 @@ struct LevelMetadata {
 
 class BORGVRMetaData {
 public:
-  static constexpr int kVersion = 4;
+  static constexpr int kVersion = 5;
 
   BORGVRMetaData() = default;
   explicit BORGVRMetaData(const std::string& filename);
@@ -55,10 +64,13 @@ public:
   float voxelSpacingZ() const { return voxelSpacingZ_; }
   int componentCount() const { return componentCount_; }
   int bytesPerComponent() const { return bytesPerComponent_; }
+  ComponentType componentType() const { return componentType_; }
+  const std::vector<ProvenanceEntry>& provenance() const { return provenance_; }
+  const std::string& meta() const { return meta_; }
   int brickSize() const { return brickSize_; }
   int overlap() const { return overlap_; }
-  int64_t minValue() const { return minValue_; }
-  int64_t maxValue() const { return maxValue_; }
+  double minValue() const { return minValue_; }
+  double maxValue() const { return maxValue_; }
   const std::vector<ComponentRange>& componentRanges() const { return componentRanges_; }
   bool compression() const { return compression_; }
 
@@ -89,12 +101,15 @@ private:
 
   int componentCount_ = 0;
   int bytesPerComponent_ = 0;
+  ComponentType componentType_ = ComponentType::UnsignedInteger;
+  std::vector<ProvenanceEntry> provenance_;
+  std::string meta_;
 
   int brickSize_ = 0;
   int overlap_ = 0;
 
-  int64_t minValue_ = 0;
-  int64_t maxValue_ = 0;
+  double minValue_ = 0;
+  double maxValue_ = 0;
   std::vector<ComponentRange> componentRanges_;
 
   bool compression_ = false;

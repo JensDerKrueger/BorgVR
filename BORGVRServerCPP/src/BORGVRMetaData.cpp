@@ -1,6 +1,7 @@
 #include "BORGVRMetaData.h"
 #include "BinaryIO.h"
 #include "BORGVRDataBase.h"
+#include "LZ4.h"
 
 #include <algorithm>
 #include <cctype>
@@ -77,15 +78,110 @@ bool is_valid_utf8(const std::string& value) {
   return true;
 }
 
-int64_t component_range_max(int bytesPerComponent) {
-  switch (bytesPerComponent) {
-    case 1: return std::numeric_limits<uint8_t>::max();
-    case 2: return std::numeric_limits<uint16_t>::max();
-    case 4: return std::numeric_limits<uint32_t>::max();
-    default:
-      throw BorgVRException(BorgVRDataErrorCode::InvalidArgument,
-                            "Invalid bytesPerComponent: supported values are 1, 2, and 4.");
+void validate_type(ComponentType type, int width) {
+  if ((type == ComponentType::FloatingPoint && (width == 4 || width == 8)) ||
+      ((type == ComponentType::UnsignedInteger || type == ComponentType::SignedInteger) &&
+        (width == 1 || width == 2 || width == 4))) return;
+  throw std::runtime_error("Unsupported component type/byte-width combination.");
+}
+
+void validate_range(ComponentRange range, ComponentType type, int width) {
+  const double lo = range.minValue, hi = range.maxValue;
+  if (type == ComponentType::FloatingPoint) {
+    if (std::isnan(lo) && std::isnan(hi)) return;
+    if (!std::isnan(lo) && !std::isnan(hi) && lo <= hi &&
+        (width == 8 || (double(float(lo)) == lo && double(float(hi)) == hi))) return;
+  } else {
+    const bool signedType = type == ComponentType::SignedInteger;
+    const double minimum = signedType ? -std::ldexp(1.0, width * 8 - 1) : 0;
+    const double maximum = std::ldexp(1.0, width * 8 - (signedType ? 1 : 0)) - 1;
+    if (std::isfinite(lo) && std::isfinite(hi) && lo <= hi && lo >= minimum && hi <= maximum &&
+        std::trunc(lo) == lo && std::trunc(hi) == hi) return;
   }
+  throw std::runtime_error("Invalid typed component range.");
+}
+
+ComponentRange read_range(BinaryReader& br, ComponentType type, int width) {
+  auto read = [&]() -> double {
+    uint64_t bits = 0;
+    for (int i = 0; i < width; ++i) bits |= uint64_t(br.read_u8("bound")) << (i * 8);
+    if (type == ComponentType::UnsignedInteger) return static_cast<double>(bits);
+    if (type == ComponentType::SignedInteger) {
+      const int count = width * 8;
+      return (bits & (uint64_t(1) << (count - 1)))
+        ? static_cast<double>(int64_t(bits) - (int64_t(1) << count)) : static_cast<double>(bits);
+    }
+    if (width == 4) {
+      uint32_t small = static_cast<uint32_t>(bits);
+      float value;
+      std::memcpy(&value, &small, 4);
+      return value;
+    }
+    double value;
+    std::memcpy(&value, &bits, 8);
+    return value;
+  };
+  const double lo = read(), hi = read();
+  ComponentRange range{lo, hi};
+  validate_range(range, type, width);
+  return range;
+}
+
+void append_range(std::vector<uint8_t>& out, ComponentRange range, ComponentType type, int width) {
+  validate_range(range, type, width);
+  for (double value : {range.minValue, range.maxValue}) {
+    uint64_t bits;
+    if (type == ComponentType::UnsignedInteger) bits = static_cast<uint64_t>(value);
+    else if (type == ComponentType::SignedInteger) bits = static_cast<uint64_t>(static_cast<int64_t>(value));
+    else if (width == 4) {
+      const float small = static_cast<float>(value);
+      uint32_t raw;
+      std::memcpy(&raw, &small, 4);
+      bits = raw;
+    } else std::memcpy(&bits, &value, 8);
+    for (int i = 0; i < width; ++i) out.push_back(static_cast<uint8_t>(bits >> (i * 8)));
+  }
+}
+
+void validate_union(ComponentRange range, const std::vector<ComponentRange>& components) {
+  double lo = std::numeric_limits<double>::infinity(), hi = -lo;
+  for (const auto& c : components) {
+    if (std::isnan(c.minValue) || std::isnan(c.maxValue)) {
+      if (std::isnan(range.minValue) && std::isnan(range.maxValue)) return;
+      throw std::runtime_error("NaN must propagate to the union range.");
+    }
+    lo = std::min(lo, c.minValue); hi = std::max(hi, c.maxValue);
+  }
+  if (range.minValue != lo || range.maxValue != hi) throw std::runtime_error("Range is not the union of its component ranges.");
+}
+
+constexpr size_t kMaximumTextLength = 67'108'864;
+std::vector<uint8_t> read_text_block(BinaryReader& br) {
+  const auto codec = br.read_u8("text codec");
+  const auto raw = br.read_i64("text decoded size"), stored = br.read_i64("text stored size");
+  if (codec > 1 || raw < 0 || stored < 0 || uint64_t(raw) > kMaximumTextLength ||
+      uint64_t(stored) > kMaximumTextLength || uint64_t(stored) > br.remaining() ||
+      (codec == 0 && raw != stored) || (codec == 1 && (raw == 0 || stored == 0)))
+    throw std::runtime_error("Invalid metadata text block.");
+  std::vector<uint8_t> input(static_cast<size_t>(stored));
+  for (auto& b : input) b = br.read_u8("text payload");
+  if (!codec) return input;
+  std::vector<uint8_t> output(static_cast<size_t>(raw));
+  if (lz4::decompressBlock(input.data(), input.size(), output.data(), output.size()) != output.size())
+    throw std::runtime_error("Invalid LZ4 metadata text block.");
+  return output;
+}
+
+void append_text_block(std::vector<uint8_t>& out, const std::vector<uint8_t>& input) {
+  if (input.size() > kMaximumTextLength) throw std::runtime_error("Metadata text block exceeds size limit.");
+  std::vector<uint8_t> compressed(lz4::compressBlockBound(input.size()));
+  const size_t count = input.empty() ? 0 : lz4::compressBlock(input.data(), input.size(), compressed.data(), compressed.size());
+  const bool use = count > 0 && count < input.size();
+  out.push_back(use ? 1 : 0);
+  append_i64_le(out, static_cast<int64_t>(input.size()));
+  append_i64_le(out, static_cast<int64_t>(use ? count : input.size()));
+  const auto& payload = use ? compressed : input;
+  out.insert(out.end(), payload.begin(), payload.begin() + static_cast<ptrdiff_t>(use ? count : input.size()));
 }
 }  // namespace
 
@@ -160,6 +256,8 @@ void BORGVRMetaData::parseFromBytes(const uint8_t* data, size_t size) {
 
   componentCount_ = checked_int(br.read_i64("componentCount"), "componentCount");
   bytesPerComponent_ = checked_int(br.read_i64("bytesPerComponent"), "bytesPerComponent");
+  componentType_ = static_cast<ComponentType>(br.read_u8("componentType"));
+  validate_type(componentType_, bytesPerComponent_);
 
   voxelSpacingX_ = br.read_f32("voxelSpacingX");
   voxelSpacingY_ = br.read_f32("voxelSpacingY");
@@ -167,21 +265,19 @@ void BORGVRMetaData::parseFromBytes(const uint8_t* data, size_t size) {
 
   brickSize_ = checked_int(br.read_i64("brickSize"), "brickSize");
   overlap_ = checked_int(br.read_i64("overlap"), "overlap");
-  minValue_ = br.read_i64("minValue");
-  maxValue_ = br.read_i64("maxValue");
+  const auto datasetRange = read_range(br, componentType_, bytesPerComponent_);
+  minValue_ = datasetRange.minValue;
+  maxValue_ = datasetRange.maxValue;
 
   const int64_t componentRangeCount = br.read_i64("componentRangeCount");
-  if (componentRangeCount != componentCount_) {
+  if (componentCount_ <= 0 || componentCount_ > kMaximumComponentCount || componentRangeCount != componentCount_) {
     throw BorgVRException(BorgVRDataErrorCode::InvalidArgument,
                           "Component range count does not match component count.");
   }
   componentRanges_.clear();
   componentRanges_.reserve(static_cast<size_t>(componentRangeCount));
   for (int64_t component = 0; component < componentRangeCount; ++component) {
-    ComponentRange range;
-    range.minValue = br.read_i64("component minValue");
-    range.maxValue = br.read_i64("component maxValue");
-    componentRanges_.push_back(range);
+    componentRanges_.push_back(read_range(br, componentType_, bytesPerComponent_));
   }
 
   compression_ = br.read_bool("compression");
@@ -194,7 +290,6 @@ void BORGVRMetaData::parseFromBytes(const uint8_t* data, size_t size) {
     throw BorgVRException(BorgVRDataErrorCode::InvalidArgument,
                           "Component count is outside the supported range.");
   }
-  const int64_t rangeMax = component_range_max(bytesPerComponent_);
   if (!std::isfinite(voxelSpacingX_) || voxelSpacingX_ <= 0.0f ||
       !std::isfinite(voxelSpacingY_) || voxelSpacingY_ <= 0.0f ||
       !std::isfinite(voxelSpacingZ_) || voxelSpacingZ_ <= 0.0f) {
@@ -212,24 +307,7 @@ void BORGVRMetaData::parseFromBytes(const uint8_t* data, size_t size) {
     }
     fullBrickByteCount *= factor;
   }
-  if (minValue_ < 0 || minValue_ > maxValue_ || maxValue_ > rangeMax) {
-    throw BorgVRException(BorgVRDataErrorCode::InvalidArgument,
-                          "Dataset value range does not fit the declared component type.");
-  }
-  int64_t componentMinimum = rangeMax;
-  int64_t componentMaximum = 0;
-  for (const auto& range : componentRanges_) {
-    if (range.minValue < 0 || range.minValue > range.maxValue || range.maxValue > rangeMax) {
-      throw BorgVRException(BorgVRDataErrorCode::InvalidArgument,
-                            "Component value range does not fit the declared component type.");
-    }
-    componentMinimum = std::min(componentMinimum, range.minValue);
-    componentMaximum = std::max(componentMaximum, range.maxValue);
-  }
-  if (componentMinimum != minValue_ || componentMaximum != maxValue_) {
-    throw BorgVRException(BorgVRDataErrorCode::InvalidArgument,
-                          "Dataset value range is not the union of its component ranges.");
-  }
+  validate_union(datasetRange, componentRanges_);
 
   uniqueID_ = br.read_string("uniqueID", kMaximumStringLength);
   datasetDescription_ = br.read_string("datasetDescription", kMaximumStringLength);
@@ -242,6 +320,24 @@ void BORGVRMetaData::parseFromBytes(const uint8_t* data, size_t size) {
   }
   if (!is_valid_uuid(uniqueID_)) {
     throw BorgVRException(BorgVRDataErrorCode::InvalidArgument, "Invalid dataset UUID.");
+  }
+  provenance_.clear(); meta_.clear();
+  {
+    const auto block = read_text_block(br);
+    BinaryReader origin(block.data(), block.size());
+    const auto count = origin.read_i64("provenance count");
+    if (count < 0 || count > 65536 || uint64_t(count) > origin.remaining() / 16)
+      throw std::runtime_error("Invalid provenance count.");
+    for (int64_t i = 0; i < count; ++i) {
+      const auto time = origin.read_i64("provenance timestamp");
+      auto text = origin.read_string("provenance entry", kMaximumTextLength);
+      if (!is_valid_utf8(text)) throw std::runtime_error("Invalid provenance UTF-8.");
+      provenance_.push_back({time, std::move(text)});
+    }
+    if (origin.remaining()) throw std::runtime_error("Trailing provenance bytes.");
+    const auto metaBlock = read_text_block(br);
+    meta_.assign(metaBlock.begin(), metaBlock.end());
+    if (!is_valid_utf8(meta_)) throw std::runtime_error("Invalid meta UTF-8.");
   }
 
   const int64_t metadataCount64 = br.read_i64("brickMetadataCount");
@@ -272,8 +368,8 @@ void BORGVRMetaData::parseFromBytes(const uint8_t* data, size_t size) {
   }
 
   const size_t metadataCount = static_cast<size_t>(metadataCount64);
-  const size_t brickMetadataRecordSize =
-      static_cast<size_t>(4 + 2 * componentCount_) * sizeof(int64_t);
+  const size_t brickMetadataRecordSize = 16 +
+      static_cast<size_t>(2 + 2 * componentCount_) * bytesPerComponent_;
   if (metadataCount > br.remaining() / brickMetadataRecordSize) {
     throw BorgVRException(BorgVRDataErrorCode::InvalidArgument,
                           "Brick metadata records are truncated.");
@@ -285,14 +381,12 @@ void BORGVRMetaData::parseFromBytes(const uint8_t* data, size_t size) {
     BrickMetadata bm;
     bm.offset = br.read_i64("brick offset");
     bm.size = br.read_i64("brick size");
-    bm.minValue = br.read_i64("brick minValue");
-    bm.maxValue = br.read_i64("brick maxValue");
+    const auto brickRange = read_range(br, componentType_, bytesPerComponent_);
+    bm.minValue = brickRange.minValue;
+    bm.maxValue = brickRange.maxValue;
     bm.componentRanges.reserve(static_cast<size_t>(componentCount_));
     for (int component = 0; component < componentCount_; ++component) {
-      ComponentRange range;
-      range.minValue = br.read_i64("brick component minValue");
-      range.maxValue = br.read_i64("brick component maxValue");
-      bm.componentRanges.push_back(range);
+      bm.componentRanges.push_back(read_range(br, componentType_, bytesPerComponent_));
     }
     if (bm.offset < 8 || bm.size <= 0 ||
         bm.offset > std::numeric_limits<int64_t>::max() - bm.size) {
@@ -302,23 +396,7 @@ void BORGVRMetaData::parseFromBytes(const uint8_t* data, size_t size) {
       throw BorgVRException(BorgVRDataErrorCode::InvalidArgument,
                             "Stored brick size does not fit the declared brick layout.");
     }
-    if (bm.minValue < 0 || bm.minValue > bm.maxValue || bm.maxValue > rangeMax) {
-      throw BorgVRException(BorgVRDataErrorCode::InvalidArgument, "Invalid brick value range.");
-    }
-    int64_t brickMinimum = rangeMax;
-    int64_t brickMaximum = 0;
-    for (const auto& range : bm.componentRanges) {
-      if (range.minValue < 0 || range.minValue > range.maxValue || range.maxValue > rangeMax) {
-        throw BorgVRException(BorgVRDataErrorCode::InvalidArgument,
-                              "Invalid brick component value range.");
-      }
-      brickMinimum = std::min(brickMinimum, range.minValue);
-      brickMaximum = std::max(brickMaximum, range.maxValue);
-    }
-    if (brickMinimum != bm.minValue || brickMaximum != bm.maxValue) {
-      throw BorgVRException(BorgVRDataErrorCode::InvalidArgument,
-                            "Brick value range is not the union of its component ranges.");
-    }
+    validate_union(brickRange, bm.componentRanges);
     brickMetadata_.push_back(bm);
   }
 }
@@ -336,6 +414,7 @@ std::vector<uint8_t> BORGVRMetaData::toBytes() const {
 
   append_i64_le(out, static_cast<int64_t>(componentCount_));
   append_i64_le(out, static_cast<int64_t>(bytesPerComponent_));
+  out.push_back(static_cast<uint8_t>(componentType_));
 
   append_f32_le(out, voxelSpacingX_);
   append_f32_le(out, voxelSpacingY_);
@@ -343,12 +422,10 @@ std::vector<uint8_t> BORGVRMetaData::toBytes() const {
 
   append_i64_le(out, static_cast<int64_t>(brickSize_));
   append_i64_le(out, static_cast<int64_t>(overlap_));
-  append_i64_le(out, static_cast<int64_t>(minValue_));
-  append_i64_le(out, static_cast<int64_t>(maxValue_));
+  append_range(out, {minValue_, maxValue_}, componentType_, bytesPerComponent_);
   append_i64_le(out, static_cast<int64_t>(componentRanges_.size()));
   for (const auto& range : componentRanges_) {
-    append_i64_le(out, range.minValue);
-    append_i64_le(out, range.maxValue);
+    append_range(out, range, componentType_, bytesPerComponent_);
   }
 
   append_bool(out, compression_);
@@ -356,6 +433,14 @@ std::vector<uint8_t> BORGVRMetaData::toBytes() const {
   append_string(out, uniqueID_);
   append_string(out, datasetDescription_);
   append_string(out, metaDescription_);
+  std::vector<uint8_t> origins;
+  append_i64_le(origins, static_cast<int64_t>(provenance_.size()));
+  for (const auto& entry : provenance_) {
+    append_i64_le(origins, entry.timestampMilliseconds);
+    append_string(origins, entry.text);
+  }
+  append_text_block(out, origins);
+  append_text_block(out, std::vector<uint8_t>(meta_.begin(), meta_.end()));
 
   append_i64_le(out, static_cast<int64_t>(brickMetadata_.size()));
 
@@ -365,11 +450,9 @@ std::vector<uint8_t> BORGVRMetaData::toBytes() const {
   for (const auto& b : brickMetadata_) {
     append_i64_le(out, b.offset);
     append_i64_le(out, b.size);
-    append_i64_le(out, b.minValue);
-    append_i64_le(out, b.maxValue);
+    append_range(out, {b.minValue, b.maxValue}, componentType_, bytesPerComponent_);
     for (const auto& range : b.componentRanges) {
-      append_i64_le(out, range.minValue);
-      append_i64_le(out, range.maxValue);
+      append_range(out, range, componentType_, bytesPerComponent_);
     }
   }
 
