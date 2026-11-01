@@ -1,0 +1,55 @@
+# Source: https://github.com/InsightSoftwareConsortium/OMEZarrOpenSciVisDatasets
+# README snapshot: 2026-10-31. Names and HTTPS OZX links follow Dataset Name / Dataset OZX HTTPS URL.
+# Descriptions use the image captions, shortened to at most ten words. Missing captions use the name.
+# name	type	description	https_ozx_url
+aneurism	uint8	Contrast-enhanced head angiography showing an arterial aneurysm.	https://ome-zarr-scivis.s3.us-east-1.amazonaws.com/v0.5/96x2-ozx/aneurism.ozx
+backpack	uint16	CT scan of a backpack filled with items.	https://ome-zarr-scivis.s3.us-east-1.amazonaws.com/v0.5/96x2-ozx/backpack.ozx
+beechnut	uint16	A microCT scan of a dried beechnut.	https://ome-zarr-scivis.s3.us-east-1.amazonaws.com/v0.5/96x2-ozx/beechnut.ozx
+blunt_fin	uint8	Blunt fin	https://ome-zarr-scivis.s3.us-east-1.amazonaws.com/v0.5/96x2-ozx/blunt_fin.ozx
+bonsai	uint8	CT scan of a bonsai tree.	https://ome-zarr-scivis.s3.us-east-1.amazonaws.com/v0.5/96x2-ozx/bonsai.ozx
+boston_teapot	uint8	CT scan of the SIGGRAPH teapot containing a lobster.	https://ome-zarr-scivis.s3.us-east-1.amazonaws.com/v0.5/96x2-ozx/boston_teapot.ozx
+bunny	uint16	CT scan of the Stanford Bunny.	https://ome-zarr-scivis.s3.us-east-1.amazonaws.com/v0.5/96x2-ozx/bunny.ozx
+carp	uint16	CT scan of a carp fish	https://ome-zarr-scivis.s3.us-east-1.amazonaws.com/v0.5/96x2-ozx/carp.ozx
+chameleon	uint16	CT scan of a chameleon.	https://ome-zarr-scivis.s3.us-east-1.amazonaws.com/v0.5/96x2-ozx/chameleon.ozx
+christmas_tree	uint16	Multislice CT scan of a Christmas tree model.	https://ome-zarr-scivis.s3.us-east-1.amazonaws.com/v0.5/96x2-ozx/christmas_tree.ozx
+csafe_heptane	uint8	Simulation of a burning heptane gas jet.	https://ome-zarr-scivis.s3.us-east-1.amazonaws.com/v0.5/96x2-ozx/csafe_heptane.ozx
+duct	float32	A wall-bounded flow in a duct.	https://ome-zarr-scivis.s3.us-east-1.amazonaws.com/v0.5/96x2-ozx/duct.ozx
+engine	uint8	CT scan of two cylinders of an engine block.	https://ome-zarr-scivis.s3.us-east-1.amazonaws.com/v0.5/96x2-ozx/engine.ozx
+foot	uint8	Rotational X-ray scan of human foot tissue and bone.	https://ome-zarr-scivis.s3.us-east-1.amazonaws.com/v0.5/96x2-ozx/foot.ozx
+frog	uint8	MRI scan from the Whole Frog Project.	https://ome-zarr-scivis.s3.us-east-1.amazonaws.com/v0.5/96x2-ozx/frog.ozx
+fuel	uint8	Simulation of fuel injection into a combustion chamber.	https://ome-zarr-scivis.s3.us-east-1.amazonaws.com/v0.5/96x2-ozx/fuel.ozx
+hcci_oh	float32	Autoignition simulation in turbulent dimethyl-ether and air mixtures.	https://ome-zarr-scivis.s3.us-east-1.amazonaws.com/v0.5/96x2-ozx/hcci_oh.ozx
+hydrogen_atom	uint8	Hydrogen electron probability distribution in a strong magnetic field.	https://ome-zarr-scivis.s3.us-east-1.amazonaws.com/v0.5/96x2-ozx/hydrogen_atom.ozx
+jicf_q	float32	Q-criterion from a simulated jet in crossflow.	https://ome-zarr-scivis.s3.us-east-1.amazonaws.com/v0.5/96x2-ozx/jicf_q.ozx
+kingsnake	uint8	Scan of a developing kingsnake egg.	https://ome-zarr-scivis.s3.us-east-1.amazonaws.com/v0.5/96x2-ozx/kingsnake.ozx
+lobster	uint8	CT scan of a lobster embedded in resin.	https://ome-zarr-scivis.s3.us-east-1.amazonaws.com/v0.5/96x2-ozx/lobster.ozx
+magnetic_reconnection	float32	Simulation of magnetic reconnection.	https://ome-zarr-scivis.s3.us-east-1.amazonaws.com/v0.5/96x2-ozx/magnetic_reconnection.ozx
+marmoset_neurons	uint8	Two-photon microscopy of GFP-labeled marmoset visual cortex neurons.	https://ome-zarr-scivis.s3.us-east-1.amazonaws.com/v0.5/96x2-ozx/marmoset_neurons.ozx
+marschner_lobb	uint8	High-frequency sinusoidal test volume near the Nyquist limit.	https://ome-zarr-scivis.s3.us-east-1.amazonaws.com/v0.5/96x2-ozx/marschner_lobb.ozx
+miranda	float32	Density field from a Rayleigh-Taylor instability simulation.	https://ome-zarr-scivis.s3.us-east-1.amazonaws.com/v0.5/96x2-ozx/miranda.ozx
+mri_ventricles	uint8	Head MRI highlighting cerebrospinal-fluid-filled cavities.	https://ome-zarr-scivis.s3.us-east-1.amazonaws.com/v0.5/96x2-ozx/mri_ventricles.ozx
+mri_woman	uint16	MRI scan of a woman's head	https://ome-zarr-scivis.s3.us-east-1.amazonaws.com/v0.5/96x2-ozx/mri_woman.ozx
+mrt_angio	uint16	Time-of-flight MR angiography of a human head.	https://ome-zarr-scivis.s3.us-east-1.amazonaws.com/v0.5/96x2-ozx/mrt_angio.ozx
+neghip	uint8	Electron probability distribution in a high-potential protein molecule.	https://ome-zarr-scivis.s3.us-east-1.amazonaws.com/v0.5/96x2-ozx/neghip.ozx
+neocortical_layer_1_axons	uint8	In-vivo imaging of mouse barrel cortex layer-one axons.	https://ome-zarr-scivis.s3.us-east-1.amazonaws.com/v0.5/96x2-ozx/neocortical_layer_1_axons.ozx
+nucleon	uint8	Two-body nucleon probability distribution in an oxygen-16 nucleus.	https://ome-zarr-scivis.s3.us-east-1.amazonaws.com/v0.5/96x2-ozx/nucleon.ozx
+pancreas	int16	Contrast-enhanced abdominal CT from the NIH pancreas segmentation dataset.	https://ome-zarr-scivis.s3.us-east-1.amazonaws.com/v0.5/96x2-ozx/pancreas.ozx
+pawpawsaurus	uint16	Pawpawsaurus holotype scan from Texas.	https://ome-zarr-scivis.s3.us-east-1.amazonaws.com/v0.5/96x2-ozx/pawpawsaurus.ozx
+pig_heart	int16	CT of porcine hearts with contrasted coronary microvasculature.	https://ome-zarr-scivis.s3.us-east-1.amazonaws.com/v0.5/96x2-ozx/pig_heart.ozx
+present	uint16	An industrial CT scan of a christmas present.	https://ome-zarr-scivis.s3.us-east-1.amazonaws.com/v0.5/96x2-ozx/present.ozx
+prone	uint16	CT scan of the abdomen in prone orientation.	https://ome-zarr-scivis.s3.us-east-1.amazonaws.com/v0.5/96x2-ozx/prone.ozx
+richtmyer_meshkov	uint8	Entropy field (timestep 160) of Richtmyer-Meshkov instability simulation.	https://ome-zarr-scivis.s3.us-east-1.amazonaws.com/v0.5/96x2-ozx/richtmyer_meshkov.ozx
+shockwave	uint8	Planar shockwave interacting with a randomly perturbed contact discontinuity.	https://ome-zarr-scivis.s3.us-east-1.amazonaws.com/v0.5/96x2-ozx/shockwave.ozx
+silicium	uint8	Simulation of a silicium grid.	https://ome-zarr-scivis.s3.us-east-1.amazonaws.com/v0.5/96x2-ozx/silicium.ozx
+skull	uint8	Rotational C-arm x-ray scan of phantom of a human skull.	https://ome-zarr-scivis.s3.us-east-1.amazonaws.com/v0.5/96x2-ozx/skull.ozx
+spathorhynchus	uint16	Spathorhynchus holotype scan from Wyoming's Green River Formation.	https://ome-zarr-scivis.s3.us-east-1.amazonaws.com/v0.5/96x2-ozx/spathorhynchus.ozx
+stag_beetle	uint16	Industrial CT scan of a stag beetle.	https://ome-zarr-scivis.s3.us-east-1.amazonaws.com/v0.5/96x2-ozx/stag_beetle.ozx
+statue_leg	uint8	CT scan of a bronze statue's leg.	https://ome-zarr-scivis.s3.us-east-1.amazonaws.com/v0.5/96x2-ozx/statue_leg.ozx
+stent	uint16	Noncontrast abdominal CT showing an aortic stent.	https://ome-zarr-scivis.s3.us-east-1.amazonaws.com/v0.5/96x2-ozx/stent.ozx
+synthetic_truss_with_five_defects	float32	Simulated CT of an octet truss with five defects.	https://ome-zarr-scivis.s3.us-east-1.amazonaws.com/v0.5/96x2-ozx/synthetic_truss_with_five_defects.ozx
+tacc_turbulence	float32	Enstrophy field from an isotropic turbulence simulation.	https://ome-zarr-scivis.s3.us-east-1.amazonaws.com/v0.5/96x2-ozx/tacc_turbulence.ozx
+tooth	uint8	Tooth	https://ome-zarr-scivis.s3.us-east-1.amazonaws.com/v0.5/96x2-ozx/tooth.ozx
+vertebra	uint16	Head angiography showing contrasted blood vessels and an aneurysm.	https://ome-zarr-scivis.s3.us-east-1.amazonaws.com/v0.5/96x2-ozx/vertebra.ozx
+vis_male	uint8	Male head scan	https://ome-zarr-scivis.s3.us-east-1.amazonaws.com/v0.5/96x2-ozx/vis_male.ozx
+woodbranch	uint16	A microCT scan of dried wood branch (hazelnut).	https://ome-zarr-scivis.s3.us-east-1.amazonaws.com/v0.5/96x2-ozx/woodbranch.ozx
+zeiss	uint8	Car part reconstructed from projections.	https://ome-zarr-scivis.s3.us-east-1.amazonaws.com/v0.5/96x2-ozx/zeiss.ozx

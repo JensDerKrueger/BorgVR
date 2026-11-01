@@ -67,10 +67,7 @@ struct ZarrParserTests {
     let filled = try ZarrParser(filename: fillDirectory.path)
     defer { try? FileManager.default.removeItem(atPath: filled.absoluteFilename) }
     check(try Data(contentsOf: URL(fileURLWithPath: filled.absoluteFilename)) == Data(repeating: 7, count: 8), "missing chunk fill")
-    metadata["data_type"] = "float32"
-    try json(metadata, to: fillDirectory.appendingPathComponent("zarr.json"))
-    do { _ = try ZarrParser(filename: fillDirectory.path); preconditionFailure("silently interpreted floats as integers") }
-    catch { checks += 1 }
+    try numericTests(root)
     if CommandLine.arguments.count > 1 {
       let real = try ZarrParser(filename: CommandLine.arguments[1])
       defer { try? FileManager.default.removeItem(atPath: real.absoluteFilename) }
@@ -79,6 +76,92 @@ struct ZarrParserTests {
       check(raw.count == 256 * 128 * 64 && raw.min() == 0 && raw.max() == 253, "public OZX values")
     }
     print("Zarr/OZX import tests passed: \(checks)")
+  }
+
+  static func numericTests(_ root: URL) throws {
+    for endian in ["big", "little"] {
+      for bytes in [1, 2, 4] {
+        let sign = UInt64(1) << (bytes * 8 - 1)
+        let mask = sign * 2 - 1
+        let values = [sign, mask, 0, sign - 1]
+        var expected = Data()
+        for value in values { for b in 0..<bytes { expected.append(UInt8(truncatingIfNeeded: (value ^ sign) >> (b * 8))) } }
+        try numeric(root, type: "int\(bytes * 8)", bytes: bytes, endian: endian,
+                    channels: [values], expected: expected)
+        try numeric(root, type: "int\(bytes * 8)", bytes: bytes, endian: endian,
+                    channels: [values], expected: Data(repeating: 0, count: 8 * bytes),
+                    fill: -Double(sign), missing: true)
+      }
+      for bytes in [4, 8] {
+        func bits(_ value: Double) -> UInt64 { bytes == 4 ? UInt64(Float(value).bitPattern) : value.bitPattern }
+        let channels: [[Double]] = [[-2, -1, 0, 2], [100, 200, 300, 500]]
+        var expected = Data()
+        for value: UInt16 in [0, 0, 16384, 16384, 32768, 32768, 65535, 65535] { expected.appendLE(value) }
+        try numeric(root, type: "float\(bytes * 8)", bytes: bytes, endian: endian,
+                    channels: channels.map { $0.map(bits) }, expected: expected)
+        var special = Data()
+        for value: UInt16 in [0, 0, 65535, 0] { special.appendLE(value) }
+        try numeric(root, type: "float\(bytes * 8)", bytes: bytes, endian: endian,
+                    channels: [[Double.nan, -.infinity, .infinity, 42].map(bits)], expected: special)
+        try numeric(root, type: "float\(bytes * 8)", bytes: bytes, endian: endian,
+                    channels: [[Double](repeating: .nan, count: 4).map(bits)], expected: Data(repeating: 0, count: 8))
+        try numeric(root, type: "float\(bytes * 8)", bytes: bytes, endian: endian,
+                    channels: [[Double](repeating: 42, count: 4).map(bits)], expected: Data(repeating: 0, count: 16),
+                    fill: 42, missing: true)
+        try numeric(root, type: "float\(bytes * 8)", bytes: bytes, endian: endian,
+                    channels: [[Double](repeating: 0, count: 4).map(bits)], expected: Data(repeating: 0, count: 16),
+                    fill: "NaN", missing: true)
+      }
+    }
+    let extreme = Double.greatestFiniteMagnitude
+    var expected = Data()
+    for value: UInt16 in [0, 32768, 65535, 32768] { expected.appendLE(value) }
+    try numeric(root, type: "float64", bytes: 8, endian: "little",
+                channels: [[-extreme, 0, extreme, 0].map(\.bitPattern)], expected: expected)
+  }
+
+  static func numeric(_ root: URL, type: String, bytes: Int, endian: String,
+                      channels: [[UInt64]], expected: Data, fill: Any = 0, missing: Bool = false) throws {
+    let directory = root.appendingPathComponent("numeric-\(UUID()).zarr")
+    var metadata = array(shape: [channels.count, 1, 1, missing ? 8 : 4], chunk: [1,1,1,2],
+                         names: ["c","z","y","x"], bytes: bytes)
+    metadata["data_type"] = type
+    metadata["fill_value"] = fill
+    metadata["codecs"] = [["name": "bytes", "configuration": ["endian": endian]]]
+    try json(metadata, to: directory.appendingPathComponent("zarr.json"))
+    if !missing {
+      for c in channels.indices { for chunk in 0..<2 {
+        let path = directory.appendingPathComponent("c/\(c)/0/0/\(chunk)")
+        try FileManager.default.createDirectory(at: path.deletingLastPathComponent(), withIntermediateDirectories: true)
+        var data = Data()
+        for value in channels[c][chunk * 2..<chunk * 2 + 2] {
+          for b in 0..<bytes { data.append(UInt8(truncatingIfNeeded: value >> ((endian == "little" ? b : bytes - 1 - b) * 8))) }
+        }
+        try data.write(to: path)
+      } }
+    }
+    var logs: [String] = [], progress: [Double] = []
+    let parser = try VolumeFileParserFactory.parser(for: directory.path,
+      progress: { progress.append($0) }, log: { logs.append($0) })
+    defer { try? FileManager.default.removeItem(atPath: parser.absoluteFilename) }
+    check(parser.bytesPerComponent == (type.hasPrefix("float") ? 2 : bytes), "converted component width")
+    check(try Data(contentsOf: URL(fileURLWithPath: parser.absoluteFilename)) == expected,
+          "numeric mapping \(type)/\(endian), missing=\(missing)")
+    check(progress.last == 1 && Swift.zip(progress, progress.dropFirst()).allSatisfy { $0 <= $1 }, "numeric progress")
+    if type.hasPrefix("float") {
+      check(logs.count == channels.count && logs.allSatisfy { $0.contains("original finite range") }, "range log")
+      let before = try FileManager.default.contentsOfDirectory(atPath: FileManager.default.temporaryDirectory.path)
+        .filter { $0.hasPrefix("borgvr-zarr-") && $0.hasSuffix(".raw") }.sorted()
+      do {
+        _ = try ZarrParser(filename: directory.path, cancellationCheck: {
+          if progress.last == 0.9 { throw CancellationError() }
+        }, progress: { progress.append($0) })
+        preconditionFailure("ignored float conversion cancellation")
+      } catch is CancellationError { checks += 1 }
+      let after = try FileManager.default.contentsOfDirectory(atPath: FileManager.default.temporaryDirectory.path)
+        .filter { $0.hasPrefix("borgvr-zarr-") && $0.hasSuffix(".raw") }.sorted()
+      check(before == after, "cancelled conversion leaked temporary file")
+    }
   }
 
   static func verify(_ url: URL, expected: Data) throws {

@@ -15,7 +15,7 @@ public final class ZarrParser: VolumeFileParser {
   public let dataIsTempCopy = true
 
   public init(filename: String, cancellationCheck: (() throws -> Void)? = nil,
-              progress: ((Double) -> Void)? = nil) throws {
+              progress: ((Double) -> Void)? = nil, log: ((String) -> Void)? = nil) throws {
     var url = URL(fileURLWithPath: filename)
     if url.lastPathComponent == "zarr.json" { url.deleteLastPathComponent() }
     let store = try ZarrStore(url: url)
@@ -45,7 +45,7 @@ public final class ZarrParser: VolumeFileParser {
     let layout = try Layout(array, axes: axes, transforms: transforms)
     size = layout.size
     voxelSpacing = layout.spacing
-    bytesPerComponent = layout.bytes
+    bytesPerComponent = layout.floating ? 2 : layout.bytes
     components = layout.components
     let temporary = FileManager.default.temporaryDirectory.appendingPathComponent("borgvr-zarr-\(UUID()).raw")
     do {
@@ -100,9 +100,15 @@ public final class ZarrParser: VolumeFileParser {
           try layout.write(encoded, origin: outerOrigin, codecs: array.codecs!, to: output.mappedMemory)
         }
         completed += 1
-        progress?(Double(completed) / Double(total))
+        progress?(Double(completed) / Double(total) * (layout.floating ? 0.8 : layout.signed ? 0.9 : 1))
       }
+      try layout.convertSamples(output.mappedMemory, cancellationCheck: cancellationCheck, progress: progress, log: log)
       try output.close()
+      if layout.floating {
+        let handle = try FileHandle(forWritingTo: temporary)
+        defer { try? handle.close() }
+        try handle.truncate(atOffset: UInt64(layout.outputBytes / layout.bytes * 2))
+      }
       absoluteFilename = temporary.path
     } catch {
       try? FileManager.default.removeItem(at: temporary)
@@ -119,9 +125,22 @@ public final class ZarrParser: VolumeFileParser {
     let dimension_names: [String]?
     let chunk_grid: Grid?
     let chunk_key_encoding: KeyEncoding?
-    let fill_value: Double?
+    let fill_value: FillValue?
     let codecs: [Codec]?
     let storage_transformers: [String]?
+  }
+  private struct FillValue: Decodable {
+    let value: Double
+    init(from decoder: Decoder) throws {
+      let container = try decoder.singleValueContainer()
+      if let number = try? container.decode(Double.self) { value = number; return }
+      switch try container.decode(String.self) {
+        case "NaN": value = .nan
+        case "Infinity": value = .infinity
+        case "-Infinity": value = -.infinity
+        default: throw ZarrImportError.invalid("fill value")
+      }
+    }
   }
   private struct Attributes: Decodable { let ome: OME? }
   private struct OME: Decodable { let version: String; let multiscales: [Scale]? }
@@ -170,6 +189,8 @@ public final class ZarrParser: VolumeFileParser {
     let innerShape: [Int]
     let shard: Configuration?
     let bytes: Int
+    let signed: Bool
+    let floating: Bool
     let components: Int
     let outputBytes: Int
     let sampleBytes: Int
@@ -194,11 +215,14 @@ public final class ZarrParser: VolumeFileParser {
       c = axes.firstIndex(where: { $0.name == "c" })
       components = c.map { shape[$0] } ?? 1
       guard (1...4).contains(components) else { throw ZarrImportError.unsupported("more than four channels") }
+      signed = node.data_type?.hasPrefix("int") == true
+      floating = node.data_type?.hasPrefix("float") == true
       switch node.data_type {
-        case "uint8": bytes = 1
-        case "uint16": bytes = 2
-        case "uint32": bytes = 4
-        default: throw ZarrImportError.unsupported("sample type \(node.data_type ?? "missing"); expected uint8/uint16/uint32")
+        case "uint8", "int8": bytes = 1
+        case "uint16", "int16": bytes = 2
+        case "uint32", "int32", "float32": bytes = 4
+        case "float64": bytes = 8
+        default: throw ZarrImportError.unsupported("sample type \(node.data_type ?? "missing"); expected uint8/16/32, int8/16/32 or float32/64")
       }
       self.shape = shape
       size = Vec3(x: shape[x], y: shape[y], z: shape[z])
@@ -235,12 +259,21 @@ public final class ZarrParser: VolumeFileParser {
       }
       sampleBytes = try ZarrParser.product(innerShape + [bytes])
       guard sampleBytes <= ZarrStore.maximumChunkBytes else { throw ZarrImportError.invalid("chunk exceeds size limit") }
-      let fillValue = node.fill_value ?? 0
-      let maximum = Double(UInt64(1) << (bytes * 8)) - 1
-      guard fillValue.isFinite, fillValue >= 0, fillValue <= maximum, fillValue.rounded() == fillValue else {
-        throw ZarrImportError.invalid("fill value does not fit sample type")
+      let fillValue = node.fill_value?.value ?? 0
+      let value: UInt64
+      if floating {
+        guard bytes == 8 || !fillValue.isFinite || Float(fillValue).isFinite else {
+          throw ZarrImportError.invalid("fill value does not fit float32")
+        }
+        value = bytes == 4 ? UInt64(Float(fillValue).bitPattern) : fillValue.bitPattern
+      } else {
+        let limit = Double(UInt64(1) << (bytes * 8 - (signed ? 1 : 0)))
+        guard fillValue.isFinite, fillValue >= (signed ? -limit : 0),
+              fillValue < limit, fillValue.rounded() == fillValue else {
+          throw ZarrImportError.invalid("fill value does not fit sample type")
+        }
+        value = UInt64(bitPattern: Int64(fillValue))
       }
-      let value = UInt64(fillValue)
       fill = Data((0..<bytes).map { UInt8(truncatingIfNeeded: value >> ($0 * 8)) })
       var scale = [Double](repeating: 1, count: shape.count)
       for transform in transforms {
@@ -277,6 +310,63 @@ public final class ZarrParser: VolumeFileParser {
         throw ZarrImportError.invalid("voxel spacing")
       }
       spacing = Vec3(x: Float(values[0]), y: Float(values[1]), z: Float(values[2]))
+    }
+
+    func convertSamples(_ memory: UnsafeMutableRawPointer, cancellationCheck: (() throws -> Void)?,
+                        progress: ((Double) -> Void)?, log: ((String) -> Void)?) throws {
+      let count = outputBytes / bytes
+      if signed {
+        // Flipping the sign bit is exactly addition of -Int.min, without overflow.
+        for start in stride(from: 0, to: count, by: 1000000) {
+          try cancellationCheck?()
+          for i in start..<min(start + 1000000, count) {
+            let offset = i * bytes + bytes - 1
+            let value = memory.load(fromByteOffset: offset, as: UInt8.self)
+            memory.storeBytes(of: value ^ 0x80, toByteOffset: offset, as: UInt8.self)
+          }
+          progress?(0.9 + 0.1 * Double(min(start + 1000000, count)) / Double(count))
+        }
+      }
+      guard floating else { return }
+      func sample(_ i: Int) -> Double {
+        if bytes == 4 {
+          return Double(Float(bitPattern: UInt32(littleEndian: memory.loadUnaligned(fromByteOffset: i * bytes, as: UInt32.self))))
+        }
+        return Double(bitPattern: UInt64(littleEndian: memory.loadUnaligned(fromByteOffset: i * bytes, as: UInt64.self)))
+      }
+      var minimum = [Double](repeating: .infinity, count: components)
+      var maximum = [Double](repeating: -.infinity, count: components)
+      for start in stride(from: 0, to: count, by: 1000000) {
+        try cancellationCheck?()
+        for i in start..<min(start + 1000000, count) {
+          let value = sample(i), channel = i % components
+          if value.isFinite {
+            minimum[channel] = min(minimum[channel], value)
+            maximum[channel] = max(maximum[channel], value)
+          }
+        }
+        progress?(0.8 + 0.1 * Double(min(start + 1000000, count)) / Double(count))
+      }
+      for channel in 0..<components {
+        let range = minimum[channel].isFinite ? "\(minimum[channel]) ... \(maximum[channel])" : "none"
+        log?("Zarr channel \(channel + 1): original finite range \(range); quantizing to UInt16 (0 ... 65535). Constant/NaN/-Infinity -> 0; +Infinity -> 65535.")
+      }
+      // Shrink forwards in place: each destination lies before unread source samples.
+      for start in stride(from: 0, to: count, by: 1000000) {
+        try cancellationCheck?()
+        for i in start..<min(start + 1000000, count) {
+          let value = sample(i), channel = i % components
+          let low = minimum[channel], high = maximum[channel]
+          let normalized: Double
+          if value == .infinity { normalized = 1 }
+          else if !value.isFinite || !(high > low) { normalized = 0 }
+          else if (high - low).isFinite { normalized = (value - low) / (high - low) }
+          else { normalized = (value / 2 - low / 2) / (high / 2 - low / 2) }
+          let result = UInt16((min(1, max(0, normalized)) * 65535).rounded()).littleEndian
+          memory.storeBytes(of: result, toByteOffset: i * 2, as: UInt16.self)
+        }
+        progress?(0.9 + 0.1 * Double(min(start + 1000000, count)) / Double(count))
+      }
     }
 
     func write(_ encoded: Data?, origin: [Int], codecs: [Codec], to output: UnsafeMutableRawPointer) throws {

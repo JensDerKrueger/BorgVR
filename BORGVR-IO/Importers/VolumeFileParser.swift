@@ -57,9 +57,9 @@ public enum VolumeFileParserFactory {
   public static let supportedExtensions = ["dat", "nrrd", "nhdr", "pvm", "i3m", "zip", "ozx", "zarr"]
 
   public static func parser(for filename: String, cancellationCheck: (() throws -> Void)? = nil,
-                            progress: ((Double) -> Void)? = nil) throws -> VolumeFileParser {
+                            progress: ((Double) -> Void)? = nil, log: ((String) -> Void)? = nil) throws -> VolumeFileParser {
     if try URL(fileURLWithPath: filename).resourceValues(forKeys: [.isDirectoryKey]).isDirectory == true {
-      return try ZarrParser(filename: filename, cancellationCheck: cancellationCheck, progress: progress)
+      return try ZarrParser(filename: filename, cancellationCheck: cancellationCheck, progress: progress, log: log)
     }
     switch URL(fileURLWithPath: filename).pathExtension.lowercased() {
       case "dat":
@@ -71,9 +71,9 @@ public enum VolumeFileParserFactory {
       case "i3m", "zip":
         return try I3MParser(filename: filename)
       case "ozx", "zarr":
-        return try ZarrParser(filename: filename, cancellationCheck: cancellationCheck, progress: progress)
+        return try ZarrParser(filename: filename, cancellationCheck: cancellationCheck, progress: progress, log: log)
       case "json" where URL(fileURLWithPath: filename).lastPathComponent == "zarr.json":
-        return try ZarrParser(filename: filename, cancellationCheck: cancellationCheck, progress: progress)
+        return try ZarrParser(filename: filename, cancellationCheck: cancellationCheck, progress: progress, log: log)
       default:
         throw Error.unsupportedFileType(URL(fileURLWithPath: filename).pathExtension)
     }

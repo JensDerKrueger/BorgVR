@@ -1,0 +1,55 @@
+#!/bin/bash
+set -euo pipefail
+ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+work=$(mktemp -d "${TMPDIR:-/tmp}/borgvr-scivis-script-XXXXXXXX")
+work=$(CDPATH= cd -- "$work" && pwd)
+trap 'rm -rf -- "$work"' EXIT
+mkdir -p "$work/bin"
+cp "$ROOT/Tests/Fixtures/SciVisMockCurl.sh" "$work/bin/curl"
+cp "$ROOT/Tests/Fixtures/SciVisMockConverter.sh" "$work/test converter"
+chmod +x "$work/bin/curl" "$work/test converter"
+export PATH="$work/bin:$PATH"
+export SCIVIS_TEST_TRACE="$work/trace.tsv"
+script="$ROOT/Scripts/download-scivis-datasets.sh"
+output="$work/output with spaces"
+
+bash "$script" --dry-run --output "$output" > "$work/plan.log"
+[[ ! -e "$output" && ! -e "$SCIVIS_TEST_TRACE" ]]
+grep -q 'Selected: 51;' "$work/plan.log"
+if bash "$script" --dry-run --only unknown > /dev/null 2>&1; then exit 1; fi
+if bash "$script" --dry-run --brick-size 32 --overlap 16 > /dev/null 2>&1; then exit 1; fi
+for invalid in . "$work" "$work/missing-converter"; do
+  if bash "$script" --converter "$invalid" --output "$output" --only blunt_fin > "$work/invalid.log" 2>&1; then exit 1; fi
+  [[ ! -e "$output" && ! -e "$SCIVIS_TEST_TRACE" ]]
+done
+
+(
+  cd "$work"
+  bash "$script" --converter './test converter' --output "$work/relative" --only blunt_fin > "$work/relative.log" 2>&1
+)
+grep -q 'Selected: 1; converted: 1;' "$work/relative.log"
+grep -Fq "Converter: $work/test converter" "$work/relative.log"
+rm -- "$SCIVIS_TEST_TRACE"
+
+export SCIVIS_TEST_DOWNLOAD_FAILURE=engine
+export SCIVIS_TEST_CONVERSION_FAILURE=aneurism
+if bash "$script" --converter "$work/test converter" --output "$output" > "$work/first.log" 2>&1; then exit 1; fi
+grep -q 'converted: 49; skipped: 0; failed: 2' "$work/first.log"
+[[ ! -e "$output/engine.data" && ! -e "$output/aneurism.data" && -s "$output/zeiss.data" ]]
+[[ -s "$output/.scivis-downloads/engine.ozx.part" && -s "$output/.scivis-downloads/aneurism.ozx" ]]
+[[ $(find "$output" -maxdepth 1 -type d -name '.scivis-*.????????' | wc -l | tr -d ' ') == 0 ]]
+awk -F '\t' '$1 == "convert" && $2 == "boston_teapot" && $3 == "CT scan of the SIGGRAPH teapot containing a lobster." { found = 1 } END { exit !found }' "$SCIVIS_TEST_TRACE"
+
+unset SCIVIS_TEST_DOWNLOAD_FAILURE SCIVIS_TEST_CONVERSION_FAILURE
+bash "$script" --converter "$work/test converter" --output "$output" > "$work/retry.log" 2>&1
+grep -q 'converted: 2; skipped: 49; failed: 0' "$work/retry.log"
+[[ -s "$output/engine.data" && -s "$output/aneurism.data" ]]
+[[ $(awk -F '\t' '$1 == "download" { n++ } END { print n }' "$SCIVIS_TEST_TRACE") == 52 ]]
+[[ $(awk -F '\t' '$1 == "convert" { n++ } END { print n }' "$SCIVIS_TEST_TRACE") == 52 ]]
+before=$(wc -l < "$SCIVIS_TEST_TRACE")
+bash "$script" --converter "$work/test converter" --output "$output" > "$work/again.log" 2>&1
+grep -q 'converted: 0; skipped: 51; failed: 0' "$work/again.log"
+[[ $(wc -l < "$SCIVIS_TEST_TRACE") == "$before" ]]
+bash "$script" --converter "$work/test converter" --output "$work/single" --only blunt_fin > "$work/single.log" 2>&1
+grep -q 'Selected: 1; converted: 1;' "$work/single.log"
+printf 'SciVis batch script tests passed (51 entries, failures, resume, caching, spaces, dry run, selection).\n'
