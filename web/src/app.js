@@ -24,6 +24,8 @@ const catalogStatus = document.querySelector("#catalog-status");
 const datasetPanel = document.querySelector(".dataset-panel");
 const datasetPanelToggle = document.querySelector("#dataset-panel-toggle");
 const datasetList = document.querySelector("#dataset-list");
+const datasetSort = document.querySelector("#dataset-sort");
+const datasetSortDirection = document.querySelector("#dataset-sort-direction");
 const canvas = document.querySelector("#render-canvas");
 const viewerEmpty = document.querySelector("#viewer-empty");
 const infoButton = document.querySelector("#info-button");
@@ -84,6 +86,7 @@ const VALID_RENDER_MODES = new Set(["tf", "tf-lighting", "iso"]);
 const MAX_TRANSFER_FUNCTION_URL_BYTES = MAX_TRANSFER_FUNCTION_FILE_BYTES;
 
 let renderer = null;
+let datasetCatalog = [];
 let currentManifest = null;
 let transferFunctionCatalog = [];
 let transferFunctionCatalogBuffers = new Map();
@@ -169,6 +172,8 @@ async function main() {
 
   installRenderControls();
   installDatasetPanelControls();
+  datasetSort.addEventListener("change", sortDatasetList);
+  datasetSortDirection.addEventListener("change", sortDatasetList);
   setControlsCollapsed(controlsCollapsed, { persist: false });
   setDatasetPanelCollapsed(datasetPanelCollapsed, { persist: false });
   window.addEventListener("resize", drawTransferFunctionEditor);
@@ -187,7 +192,8 @@ async function main() {
   if (rendererStatus === "Initializing WebGPU...") {
     setStatus(`${catalog.datasets.length} datasets available`);
   }
-  datasetList.replaceChildren(...catalog.datasets.map((dataset) => datasetButton(dataset)));
+  datasetCatalog = catalog.datasets;
+  sortDatasetList();
   await openDatasetFromURL(catalog.datasets);
 }
 
@@ -380,6 +386,36 @@ function groupTransferFunctionCatalog(entries) {
     ...group,
     displayName: group.displayNames.join(" / "),
   }));
+}
+
+function sortDatasetList() {
+  const direction = datasetSortDirection.value === "descending" ? -1 : 1;
+  const sortBy = datasetSort.value;
+  const names = new Intl.Collator(undefined, { sensitivity: "base", numeric: true });
+  const sorted = [...datasetCatalog].sort((left, right) => {
+    if (sortBy !== "description") {
+      const a = datasetSortValue(left, sortBy);
+      const b = datasetSortValue(right, sortBy);
+      if (a === null && b !== null) return 1;
+      if (b === null && a !== null) return -1;
+      if (a !== null && b !== null && a !== b) return direction * (a - b);
+    }
+    const byName = names.compare(displayDatasetName(left), displayDatasetName(right));
+    return (sortBy === "description" ? direction : 1) * byName || names.compare(left.id, right.id);
+  });
+  // Move existing buttons so selection and click handlers survive reordering.
+  const buttons = new Map(Array.from(datasetList.children, button => [button.dataset.datasetId, button]));
+  datasetList.replaceChildren(...sorted.map(dataset => buttons.get(dataset.id) ?? datasetButton(dataset)));
+}
+
+function datasetSortValue(dataset, sortBy) {
+  if (!validDimensions(dataset.size)) return null;
+  let value = dataset.size.reduce((product, size) => product * size, 1);
+  if (sortBy === "volume") {
+    if (!validVoxelSpacing(dataset.voxelSpacing)) return null;
+    value *= dataset.voxelSpacing.reduce((product, spacing) => product * spacing, 1);
+  }
+  return Number.isFinite(value) && value > 0 ? value : null;
 }
 
 function datasetButton(dataset) {

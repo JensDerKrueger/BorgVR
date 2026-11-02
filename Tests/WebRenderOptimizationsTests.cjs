@@ -72,7 +72,12 @@ async function main() {
       response.end(JSON.stringify(name.endsWith("/datasets.json") ? { datasets: [{
         id: manifest.id, name: manifest.name, description: manifest.description, metadata: "test.lz4",
         size: manifest.volume.size, voxelSpacing: manifest.volume.voxelSpacing
-      }] } : {})); return;
+      },
+        { id: "small", name: "B small physical", size: [100, 100, 100], voxelSpacing: [0.0001, 0.0001, 0.0001] },
+        { id: "large", name: "A large physical", size: [10, 10, 10], voxelSpacing: [1, 1, 1] },
+        { id: "unknown", name: "Unknown size" },
+        { id: "no-spacing", name: "Known voxels", size: [2, 2, 2] }
+      ] } : {})); return;
     }
     if (name === "/gpu-tests") { response.setHeader("Content-Type", "text/html"); response.end('<!doctype html><canvas id="canvas" style="width:640px;height:480px"></canvas><div id="provenance"></div>'); return; }
     const file = path.resolve(root, name === "/" ? "index.html" : `.${decodeURIComponent(name)}`);
@@ -284,8 +289,32 @@ async function main() {
     }
     await page.setViewportSize({ width: 1440, height: 1000 });
     await page.goto(`http://127.0.0.1:${server.address().port}/`);
-    await page.locator(".dataset-button").click();
+    await page.locator(".dataset-button").last().waitFor();
+    const catalogOrder = () => page.locator(".dataset-button").evaluateAll(buttons => buttons.map(button => button.dataset.datasetId));
+    assert.deepEqual(await catalogOrder(), ["large", "small", "no-spacing", manifest.id, "unknown"], "Catalog must default to description order");
+    await page.selectOption("#dataset-sort-direction", "descending");
+    assert.deepEqual(await catalogOrder(), ["unknown", manifest.id, "no-spacing", "small", "large"]);
+    await page.selectOption("#dataset-sort", "volume");
+    assert.deepEqual(await catalogOrder(), ["large", manifest.id, "small", "no-spacing", "unknown"], "Volume order must include voxel spacing and put unknown sizes last");
+    await page.selectOption("#dataset-sort-direction", "ascending");
+    assert.deepEqual(await catalogOrder(), ["small", manifest.id, "large", "no-spacing", "unknown"]);
+    await page.selectOption("#dataset-sort", "voxels");
+    assert.deepEqual(await catalogOrder(), ["no-spacing", "large", manifest.id, "small", "unknown"], "Voxel count must not depend on physical spacing");
+    await page.selectOption("#dataset-sort-direction", "descending");
+    assert.deepEqual(await catalogOrder(), ["small", manifest.id, "large", "no-spacing", "unknown"]);
+    await page.locator(`[data-dataset-id="${manifest.id}"]`).click();
     await page.locator("#info-button:not([disabled])").waitFor();
+    let sortingRequests = 0;
+    const countSortingRequests = request => {
+      if (/\/(datasets\.json|test\.lz4)(\?|$)/.test(request.url())) sortingRequests++;
+    };
+    page.on("request", countSortingRequests);
+    await page.selectOption("#dataset-sort", "description");
+    await page.selectOption("#dataset-sort-direction", "ascending");
+    assert.equal(await page.locator(".dataset-button.active").getAttribute("data-dataset-id"), manifest.id, "Sorting must preserve the selected dataset");
+    assert.equal(sortingRequests, 0, "Sorting must not fetch the catalog or reopen the dataset");
+    page.off("request", countSortingRequests);
+    await page.screenshot({ path: path.join(screenshots, "desktop-catalog-sort.png") });
     await page.locator("#info-button").click();
     await page.locator(".provenance-list li").last().waitFor();
     assert.equal(await page.locator(".provenance-list li").count(), 2);
@@ -302,7 +331,10 @@ async function main() {
     await page.locator(".provenance-list").scrollIntoViewIfNeeded();
     await page.screenshot({ path: path.join(screenshots, "desktop-info.png") });
     await page.setViewportSize({ width: 393, height: 852 });
+    assert.ok(await page.locator(".dataset-sort-controls").evaluate(element => element.scrollWidth <= element.clientWidth), "Sort controls overflow on mobile");
+    await page.screenshot({ path: path.join(screenshots, "mobile-catalog-sort.png") });
     await page.locator("#dataset-panel-toggle").click();
+    assert.ok(await page.locator("#dataset-sort").isHidden(), "Collapsed dataset list must hide sort controls");
     await page.locator(".provenance-list").scrollIntoViewIfNeeded();
     assert.ok(await page.locator("#dataset-info").evaluate(element => element.scrollWidth <= element.clientWidth + 1), "Provenance overflows on mobile");
     await page.screenshot({ path: path.join(screenshots, "mobile-info.png") });

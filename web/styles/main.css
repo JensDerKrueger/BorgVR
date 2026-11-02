@@ -108,6 +108,33 @@ p {
   line-height: 1.4;
 }
 
+.dataset-sort-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 6px 10px;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--line);
+}
+
+.dataset-sort-controls label {
+  grid-column: 1 / -1;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.dataset-sort-controls select {
+  width: 100%;
+  min-width: 0;
+  min-height: 36px;
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--panel-strong);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+}
+
 .dataset-list {
   display: grid;
   gap: 1px;
@@ -1081,6 +1108,7 @@ p {
   .dataset-panel.collapsed .brand-row img,
   .dataset-panel.collapsed .brand-row > div,
   .dataset-panel.collapsed .app-store-link,
+  .dataset-panel.collapsed .dataset-sort-controls,
   .dataset-panel.collapsed .dataset-list {
     display: none;
   }

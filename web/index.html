@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>BorgVR WebGPU</title>
     <link rel="icon" href="./assets/borgvr.jpg">
-    <link rel="stylesheet" href="./styles/main.css?v=20261101-render-optimizations">
+    <link rel="stylesheet" href="./styles/main.css?v=20261102-catalog-sort">
   </head>
   <body>
     <main class="app-shell">
@@ -27,6 +27,18 @@
             </a>
           </div>
         </header>
+        <div class="dataset-sort-controls">
+          <label for="dataset-sort">Sort by</label>
+          <select id="dataset-sort" aria-controls="dataset-list">
+            <option value="description">Description</option>
+            <option value="volume">Physical volume</option>
+            <option value="voxels">Voxel count</option>
+          </select>
+          <select id="dataset-sort-direction" aria-label="Sort direction" aria-controls="dataset-list">
+            <option value="ascending">Ascending</option>
+            <option value="descending">Descending</option>
+          </select>
+        </div>
         <div id="dataset-list" class="dataset-list"></div>
       </aside>
 
@@ -197,7 +209,7 @@
       </section>
     </main>
 
-    <script type="module" src="./src/app.js?v=20261102-astc"></script>
+    <script type="module" src="./src/app.js?v=20261102-catalog-sort"></script>
   </body>
 </html>
 
