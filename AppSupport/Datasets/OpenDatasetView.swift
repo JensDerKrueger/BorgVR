@@ -11,6 +11,14 @@ struct OpenDatasetView: View {
   @StateObject private var workflow = DatasetOpenWorkflow()
   @State private var showDeleteConfirmation = false
   @State private var pendingDeleteKey: String?
+  @AppStorage("datasetListSort") private var listSort: DatasetListSort = .description
+  @AppStorage("datasetListAscending") private var listAscending = true
+  @AppStorage("datasetListGrouping") private var listGrouping: DatasetListGrouping = .none
+
+  private var datasetSections: [DatasetListSection<AppModel.DatasetEntry>] {
+    DatasetListPresentation.sections(workflow.datasets, sort: listSort,
+      ascending: listAscending, grouping: listGrouping)
+  }
 
   var body: some View {
     NavigationStack {
@@ -27,11 +35,19 @@ struct OpenDatasetView: View {
           .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
           ScrollView {
-            LazyVStack(spacing: 0) {
-              ForEach(workflow.datasets, id: \.selectionKey) { dataset in
-                datasetRow(dataset)
-                if dataset.selectionKey != workflow.datasets.last?.selectionKey {
-                  Divider().padding(.leading, 52)
+            LazyVStack(alignment: .leading, spacing: 0, pinnedViews: [.sectionHeaders]) {
+              ForEach(datasetSections) { section in
+                Section {
+                  ForEach(section.entries, id: \.selectionKey) { dataset in
+                    datasetRow(dataset)
+                    if dataset.selectionKey != section.entries.last?.selectionKey {
+                      Divider().padding(.leading, 52)
+                    }
+                  }
+                } header: {
+                  if let title = section.title {
+                    DatasetListSectionHeader(title: title)
+                  }
                 }
               }
             }
@@ -40,6 +56,11 @@ struct OpenDatasetView: View {
           }
           .background(datasetListBackground)
         }
+      }
+      .safeAreaInset(edge: .top, spacing: 0) {
+        DatasetListControls(sort: $listSort, ascending: $listAscending, grouping: $listGrouping)
+          .frame(maxWidth: .infinity, alignment: .leading)
+          .background(.bar)
       }
       .overlay {
         if workflow.isDeleting || workflow.isOpening || (workflow.isLoading && !workflow.datasets.isEmpty) {

@@ -310,7 +310,7 @@ class RuntimeAppModel {
     }
   }
 
-  struct DatasetEntry: Equatable {
+  struct DatasetEntry: Equatable, DatasetListEntry {
     /// The dataset's path or identifier.
     let identifier: String
     /// The dataset's description
@@ -319,6 +319,16 @@ class RuntimeAppModel {
     let source: RuntimeAppModel.DatasetSource
     /// The dataset's unique identifier.
     let uniqueId: String
+    var listMetadata: DatasetListMetadata? = nil
+
+    var listID: String { "\(listSource.identifier)|\(identifier)|\(uniqueId)" }
+    var listSource: DatasetListSource {
+      switch source {
+        case .local: return .local
+        case .builtIn: return .builtIn
+        case let .remote(address, port, _): return .remote(address: address, port: port)
+      }
+    }
 
     static func == (lhs: DatasetEntry, rhs: DatasetEntry) -> Bool {
       return lhs.uniqueId == rhs.uniqueId

@@ -73,12 +73,22 @@ final class AppModel: ObservableObject {
     case builtIn
   }
 
-  struct DatasetEntry: Equatable, Identifiable {
+  struct DatasetEntry: Equatable, Identifiable, DatasetListEntry {
     let identifier: String
     let description: String
     let source: DatasetSource
     let uniqueId: String
     let metadataSummary: String?
+    var listMetadata: DatasetListMetadata?
+
+    var listID: String { selectionKey }
+    var listSource: DatasetListSource {
+      switch source {
+        case .local: return .local
+        case .builtIn: return .builtIn
+        case let .remote(address, port, _): return .remote(address: address, port: port)
+      }
+    }
 
     var id: String { uniqueId }
 
@@ -87,13 +97,15 @@ final class AppModel: ObservableObject {
       description: String,
       source: DatasetSource,
       uniqueId: String,
-      metadataSummary: String? = nil
+      metadataSummary: String? = nil,
+      listMetadata: DatasetListMetadata? = nil
     ) {
       self.identifier = identifier
       self.description = description
       self.source = source
       self.uniqueId = uniqueId
       self.metadataSummary = metadataSummary
+      self.listMetadata = listMetadata
     }
   }
 

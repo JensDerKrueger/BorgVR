@@ -7,6 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		57AC20261102000000000001 /* DatasetListPresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57AC20261102000000000000 /* DatasetListPresentation.swift */; };
+		57AC20261102000000000002 /* DatasetListPresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57AC20261102000000000000 /* DatasetListPresentation.swift */; };
+		57AC20261102000000000003 /* DatasetListPresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57AC20261102000000000000 /* DatasetListPresentation.swift */; };
 		111111111111111111111701 /* c60_32.data in Resources */ = {isa = PBXBuildFile; fileRef = 56730FE22E6B78990091976B /* c60_32.data */; };
 		111111111111111111111702 /* head_32.data in Resources */ = {isa = PBXBuildFile; fileRef = 56730FE42E6B79000091976B /* head_32.data */; };
 		560A00012E00000000000031 /* web in CopyFiles */ = {isa = PBXBuildFile; fileRef = 560B90002E9150000042E45B /* web */; };
@@ -232,6 +235,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		57AC20261102000000000000 /* DatasetListPresentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DatasetListPresentation.swift; sourceTree = "<group>"; };
 		111111111111111111111101 /* BorgVR Mobile.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "BorgVR Mobile.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		560A00012E00000000000001 /* TerminalServerApp */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = TerminalServerApp; sourceTree = BUILT_PRODUCTS_DIR; };
 		560B8BE72E5C57580042E45B /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
@@ -645,6 +649,7 @@
 		57A010012EF0000100000001 /* Datasets */ = {
 			isa = PBXGroup;
 			children = (
+				57AC20261102000000000000 /* DatasetListPresentation.swift */,
 				57AC20261101000000000000 /* DatasetProvenanceView.swift */,
 				57A002602ED3000100000001 /* ConverterView.swift */,
 				57A001282E70000300000001 /* DatasetInfoView.swift */,
@@ -1100,6 +1105,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				57AC20261101000000000001 /* DatasetProvenanceView.swift in Sources */,
+				57AC20261102000000000001 /* DatasetListPresentation.swift in Sources */,
 				57A002B12ED5000100000001 /* GUILogger.swift in Sources */,
 				57A002112ED0000200000001 /* BorgVRAnnotationCommands.swift in Sources */,
 				57A002512ED2000300000001 /* BorgVRSharePlayAdHocServer.swift in Sources */,
@@ -1167,6 +1173,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				57AC20261101000000000002 /* DatasetProvenanceView.swift in Sources */,
+				57AC20261102000000000002 /* DatasetListPresentation.swift in Sources */,
 				57A002B22ED5000100000001 /* GUILogger.swift in Sources */,
 				57A002122ED0000200000001 /* BorgVRAnnotationCommands.swift in Sources */,
 				57A002522ED2000300000001 /* BorgVRSharePlayAdHocServer.swift in Sources */,
@@ -1228,6 +1235,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				57AC20261101000000000003 /* DatasetProvenanceView.swift in Sources */,
+				57AC20261102000000000003 /* DatasetListPresentation.swift in Sources */,
 				57A002B32ED5000100000001 /* GUILogger.swift in Sources */,
 				57A002132ED0000200000001 /* BorgVRAnnotationCommands.swift in Sources */,
 				57A002232ED1000100000001 /* BorgVRSharePlaySessionEngine.swift in Sources */,

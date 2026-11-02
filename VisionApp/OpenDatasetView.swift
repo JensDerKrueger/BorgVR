@@ -60,7 +60,10 @@ struct OpenDatasetView: View {
   }
 
   @State private var datasets: [RuntimeAppModel.DatasetEntry] = []
-  @State private var selectedIndex: Int?
+  @State private var selectedDatasetKey: String?
+  @AppStorage("datasetListSort") private var listSort: DatasetListSort = .description
+  @AppStorage("datasetListAscending") private var listAscending = true
+  @AppStorage("datasetListGrouping") private var listGrouping: DatasetListGrouping = .none
   @State private var showDeleteConfirmation = false
   @State private var datasetToDelete: RuntimeAppModel.DatasetEntry?
   @State private var isDeleting = false
@@ -84,6 +87,15 @@ struct OpenDatasetView: View {
   @Environment(\.openWindow) private var openWindow
   @Environment(\.dismissWindow) var dismissWindow
 
+  private var selectedDataset: RuntimeAppModel.DatasetEntry? {
+    datasets.first { $0.listID == selectedDatasetKey }
+  }
+
+  private var datasetSections: [DatasetListSection<RuntimeAppModel.DatasetEntry>] {
+    DatasetListPresentation.sections(datasets, sort: listSort,
+      ascending: listAscending, grouping: listGrouping)
+  }
+
   var body: some View {
     ZStack {
       VStack {
@@ -92,84 +104,24 @@ struct OpenDatasetView: View {
           .bold()
           .padding(.top)
 
+        DatasetListControls(sort: $listSort, ascending: $listAscending, grouping: $listGrouping)
+
         if datasets.isEmpty && !isLoading {
           Text("open_no_datasets_built_in_hidden_message")
             .padding()
         } else {
           List {
-            ForEach(datasets.indices, id: \.self) { index in
-              Button {
-                selectedIndex = index
-              } label: {
-                HStack {
-                  Image(
-                    systemName: selectedIndex == index
-                    ? "checkmark.circle.fill"
-                    : iconForDatasetType(type: datasets[index].source)
-                  )
-                  .foregroundColor(selectedIndex == index ? .blue : .primary)
-
-                  switch datasets[index].source {
-                    case .local:
-                      Text(
-                        String(
-                          format: NSLocalizedString(
-                            "open_dataset_description_local_suffix",
-                            comment: "Dataset description with local suffix"
-                          ),
-                          datasets[index].description
-                        )
-                      )
-                    case let .remote(adress, port, _):
-                      Text(
-                        String(
-                          format: NSLocalizedString(
-                            "open_dataset_description_remote_suffix",
-                            comment: "Dataset description with remote suffix"
-                          ),
-                          datasets[index].description,
-                          adress,
-                          port
-                        )
-                      )
-                    case .builtIn:
-                      Text(
-                        String(
-                          format: NSLocalizedString(
-                            "open_dataset_description_built_in_suffix",
-                            comment: "Dataset description with built-in suffix"
-                          ),
-                          datasets[index].description
-                        )
-                      )
-                  }
-
-                  Spacer()
-
-                  if datasets[index].source == .local {
-                    Button(action: {
-                      datasetToDelete = datasets[index]
-                      showDeleteConfirmation = true
-                    }) {
-                      Image(systemName: "trash")
-                        .foregroundColor(.red)
-                    }
-                    .buttonStyle(.borderless)
-                  }
+            ForEach(datasetSections) { section in
+              Section {
+                ForEach(section.entries, id: \.listID) { dataset in
+                  datasetRow(dataset)
                 }
-                .padding(.vertical, 6)
-                .contentShape(Rectangle())
-                .background(
-                  RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(Color.clear)
-                )
-                .overlay(
-                  RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .stroke(Color.clear, lineWidth: 1)
-                )
+              } header: {
+                if let title = section.title {
+                  DatasetListSectionHeader(title: title)
+                    .listRowInsets(EdgeInsets())
+                }
               }
-              .buttonStyle(.plain)
-              .animation(.easeInOut(duration: 0.15), value: selectedIndex)
             }
           }
           .confirmationDialog(
@@ -256,8 +208,7 @@ struct OpenDatasetView: View {
 
           Button {
             Task { @MainActor in
-              if let index = selectedIndex, datasets.indices.contains(index) {
-                let selected = datasets[index]
+              if let selected = selectedDataset {
                 let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
                 let editURL: URL?
                 switch selected.source {
@@ -325,7 +276,7 @@ struct OpenDatasetView: View {
             Text("open_button_open_dataset")
           }
           .disabled(
-            selectedIndex == nil
+            selectedDataset == nil
           )
           .animation(.none, value: 0)
           .fontWeight(.semibold)
@@ -423,6 +374,46 @@ struct OpenDatasetView: View {
     }
   }
 
+  private func datasetRow(_ dataset: RuntimeAppModel.DatasetEntry) -> some View {
+    let selected = selectedDatasetKey == dataset.listID
+    return HStack {
+      Button {
+        selectedDatasetKey = dataset.listID
+      } label: {
+        HStack {
+          Image(systemName: selected ? "checkmark.circle.fill" : iconForDatasetType(type: dataset.source))
+            .foregroundColor(selected ? .blue : .primary)
+          Text(datasetDescription(dataset))
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .contentShape(Rectangle())
+      }
+      .buttonStyle(.plain)
+      if dataset.source == .local {
+        Button {
+          datasetToDelete = dataset
+          showDeleteConfirmation = true
+        } label: {
+          Image(systemName: "trash").foregroundColor(.red)
+        }
+        .buttonStyle(.borderless)
+        .accessibilityLabel("Delete dataset")
+      }
+    }
+    .padding(.vertical, 6)
+  }
+
+  private func datasetDescription(_ dataset: RuntimeAppModel.DatasetEntry) -> String {
+    switch dataset.source {
+      case .local:
+        return String(format: NSLocalizedString("open_dataset_description_local_suffix", comment: ""), dataset.description)
+      case .builtIn:
+        return String(format: NSLocalizedString("open_dataset_description_built_in_suffix", comment: ""), dataset.description)
+      case let .remote(address, port, _):
+        return String(format: NSLocalizedString("open_dataset_description_remote_suffix", comment: ""), dataset.description, address, port)
+    }
+  }
+
   private func currentProgress() -> Double {
     if case .loadingLocalDataset(_, let index, _) = loadingStage {
       return Double(index)
@@ -449,7 +440,6 @@ struct OpenDatasetView: View {
     let fileURL = dataset.identifier.hasPrefix("/")
       ? URL(fileURLWithPath: dataset.identifier)
       : documentsDirectory.appendingPathComponent(dataset.identifier)
-    let selectedIdentifier = selectedIndex.flatMap { datasets.indices.contains($0) ? datasets[$0].identifier : nil }
 
     do {
       guard runtimeAppModel.activeDataset?.uniqueId != dataset.uniqueId else {
@@ -469,7 +459,7 @@ struct OpenDatasetView: View {
     }
     if !FileManager.default.fileExists(atPath: fileURL.path) {
       datasets.removeAll { $0.source == .local && $0.identifier == dataset.identifier }
-      selectedIndex = selectedIdentifier.flatMap { id in datasets.firstIndex { $0.identifier == id } }
+      if selectedDataset == nil { selectedDatasetKey = nil }
     }
   }
 
@@ -708,7 +698,8 @@ struct OpenDatasetView: View {
                 identifier: url.lastPathComponent,
                 description: data.datasetDescription,
                 source: .local,
-                uniqueId: data.uniqueID
+                uniqueId: data.uniqueID,
+                listMetadata: DatasetListMetadata(data)
               )
             )
           }
@@ -747,7 +738,8 @@ struct OpenDatasetView: View {
               identifier: url.path(),
               description: data.datasetDescription,
               source: .builtIn,
-              uniqueId: data.uniqueID
+              uniqueId: data.uniqueID,
+              listMetadata: DatasetListMetadata(data)
             )
           )
         }
@@ -762,13 +754,20 @@ struct OpenDatasetView: View {
     await MainActor.run {
       isLoading = true
       loadingStage = .scanningFiles
-      selectedIndex = nil
+      selectedDatasetKey = nil
       datasets.removeAll()
     }
     try? await Task.sleep(nanoseconds: 20_000_000)
 
     var loadedDatasets: [RuntimeAppModel.DatasetEntry] = await listLocalDataset()
-    loadedDatasets.append(contentsOf: await loadRemoteDatasets())
+    let knownMetadata = Dictionary(loadedDatasets.compactMap { dataset in
+      dataset.listMetadata.map { (dataset.uniqueId, $0) }
+    }, uniquingKeysWith: { first, _ in first })
+    loadedDatasets.append(contentsOf: await loadRemoteDatasets().map { dataset in
+      var dataset = dataset
+      dataset.listMetadata = knownMetadata[dataset.uniqueId]
+      return dataset
+    })
 
     await MainActor.run {
       datasets = loadedDatasets.sorted { $0.description < $1.description }

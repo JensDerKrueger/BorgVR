@@ -71,7 +71,14 @@ final class DatasetCatalogService {
     var loaded = loadLocalDatasets(includeBuiltIn: includeBuiltIn)
     if includeRemote {
       remoteLoadStarted?()
-      loaded.append(contentsOf: await loadRemoteDatasets())
+      let knownMetadata = Dictionary(loaded.compactMap { dataset in
+        dataset.listMetadata.map { (dataset.uniqueId, $0) }
+      }, uniquingKeysWith: { first, _ in first })
+      loaded.append(contentsOf: await loadRemoteDatasets().map { dataset in
+        var dataset = dataset
+        dataset.listMetadata = knownMetadata[dataset.uniqueId]
+        return dataset
+      })
     }
     return loaded.sorted { $0.description < $1.description }
   }
@@ -97,7 +104,8 @@ final class DatasetCatalogService {
       description: dataset.description,
       source: dataset.source,
       uniqueId: dataset.uniqueId,
-      metadataSummary: dataset.metadataSummary
+      metadataSummary: dataset.metadataSummary,
+      listMetadata: dataset.listMetadata
     )
   }
 
@@ -126,7 +134,8 @@ final class DatasetCatalogService {
                 description: metadata.datasetDescription,
                 source: .local,
                 uniqueId: metadata.uniqueID,
-                metadataSummary: Self.metadataSummary(for: metadata)
+                metadataSummary: Self.metadataSummary(for: metadata),
+                listMetadata: DatasetListMetadata(metadata)
               )
             )
           }
@@ -150,7 +159,8 @@ final class DatasetCatalogService {
               description: metadata.datasetDescription,
               source: .builtIn,
               uniqueId: metadata.uniqueID,
-              metadataSummary: Self.metadataSummary(for: metadata)
+              metadataSummary: Self.metadataSummary(for: metadata),
+              listMetadata: DatasetListMetadata(metadata)
             )
           )
         }
@@ -471,7 +481,8 @@ final class DatasetOpenWorkflow: ObservableObject {
         description: dataset.description,
         source: .remote(address: origin.address, port: origin.port, password: origin.password),
         uniqueId: dataset.uniqueId,
-        metadataSummary: dataset.metadataSummary
+        metadataSummary: dataset.metadataSummary,
+        listMetadata: dataset.listMetadata
       )
     }
     throw RemoteDatasetOpenError.noReachableOrigin
@@ -534,14 +545,15 @@ final class DatasetOpenWorkflow: ObservableObject {
       })
     let localPath = localURL.path
 
-    let metadataSummary = (try? BORGVRMetaData(url: URL(fileURLWithPath: localPath)))
-      .map { DatasetCatalogService.metadataSummary(for: $0) } ?? dataset.metadataSummary
+    let metadata = try? BORGVRMetaData(url: localURL)
+    let metadataSummary = metadata.map { DatasetCatalogService.metadataSummary(for: $0) } ?? dataset.metadataSummary
     return AppModel.DatasetEntry(
       identifier: localPath,
       description: dataset.description,
       source: .local,
       uniqueId: dataset.uniqueId,
-      metadataSummary: metadataSummary
+      metadataSummary: metadataSummary,
+      listMetadata: metadata.map(DatasetListMetadata.init) ?? dataset.listMetadata
     )
   }
 

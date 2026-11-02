@@ -1383,3 +1383,15 @@
 "Uses lossy compression when opening color volumes. Direct GPU Erase/Restore is disabled; edited bricks are rebuilt and uploaded." = "Uses lossy compression when opening color volumes. Direct GPU Erase/Restore is disabled; edited bricks are rebuilt and uploaded.";
 "Stored color compression (RGB/RGBA)" = "Color compression on import (RGB/RGBA)";
 "Server enabled" = "Enabled";
+"Description" = "Description";
+"Physical volume" = "Physical volume";
+"Voxel count" = "Voxel count";
+"No grouping" = "No grouping";
+"Data source" = "Data source";
+"Built-in" = "Built-in";
+"Sort by" = "Sort by";
+"Sort direction" = "Sort direction";
+"Ascending" = "Ascending";
+"Descending" = "Descending";
+"Group by" = "Group by";
+"Remote" = "Remote";
