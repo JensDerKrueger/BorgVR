@@ -65,18 +65,39 @@ voxel components, in little-endian order. NaN propagates to both bounds of the a
 infinities remain valid bounds. Rendering and processing currently still require unsigned data.
 
 The v5 header also contains a one-byte `channelInterpretation` after the component-type tag:
-`0` means independent scalar channels, `1` means RGB, and `2` means RGBA. RGB/RGBA currently
-require exactly three/four unsigned 8-bit channels and store colors without alpha
+`0` means independent scalar channels, `1` means RGB, and `2` means RGBA. Stored ASTC LDR
+bricks use `3` = RGB ASTC 4x4, `4` = RGBA ASTC 4x4,
+`5` = RGB ASTC 8x8, and `6` = RGBA ASTC 8x8. The logical component count stays three/four;
+ASTC RGB has opaque alpha. Each Z slice is tiled in row-major 16-byte ASTC blocks, with no
+ASTC file header. Brick dimensions must be multiples of the selected footprint. Optional
+LZ4 wraps this payload independently; the full brick byte count is the ASTC byte count,
+not the decoded voxel count. The numeric file-format version remains 5.
+RGB/RGBA datasets require exactly three/four unsigned 8-bit channels and store colors without alpha
 premultiplication. Three/four components alone never imply color. NRRD `RGB-color` and
 `RGBA-color` kinds preserve this distinction on import/export. QVIS also accepts `UCHAR3` and
 `UCHAR4`. Only `UCHAR4` together with `ObjectModel: RGBA` selects color; `ObjectModel` is otherwise
 ignored and components remain independent scalars. An explicit `Components` count must agree with
 the format. RGB omits dataset and brick
 value ranges entirely; RGBA stores only the alpha range, not RGB bounds. Native and WebGPU renderers
-use a direct-color raycaster without a transfer function or lighting for these volumes. RGB bricks
+use a direct-color raycaster without a transfer function or lighting for these volumes.
+RGB/RGBA volumes can optionally use a lossy ASTC atlas on Apple GPUs. The **JIT atlas compression**
+option in Rendering settings offers
+no compression, ASTC 4x4, or ASTC 8x8, taking effect when opening a dataset. iOS defaults to
+ASTC 8x8 with a 1024 MB atlas; visionOS defaults to ASTC 4x4 and macOS to no compression. The compressed
+atlases use one byte or one quarter byte per voxel instead of four in GPU memory;
+files and source voxels remain unchanged. Direct GPU Erase/Restore
+is disabled for compressed atlases; CPU-edited bricks are re-encoded and uploaded instead. RGB bricks
 are always nonempty; RGBA brick/subblock skipping uses only maximum alpha and the alpha-epsilon
-threshold. Epsilon never changes the color/alpha samples used for rendering. Scalar TF and ISO modes
-remain separate. Older v5 headers without this byte must be
+threshold. Epsilon never changes the color/alpha samples used for rendering.
+Import settings independently select **Color compression on import (RGB/RGBA)**
+(none/ASTC 4x4/ASTC 8x8, default none) and LZ4. Scalar imports ignore color compression.
+Unlike runtime-only atlas compression, import-time ASTC permanently reduces the stored precision.
+Stored ASTC selects its own atlas format regardless of the runtime preference; unchanged bricks
+upload directly without recompression. Editing and flat-volume export decode voxel data, while
+edited `.data` exports retain ASTC and optional LZ4. WebGPU decodes before uploading ordinary 3D
+textures, including its worker and cache recovery paths. The bounded software decoder supports
+the constant and one-partition LDR block modes emitted by BorgVR; other encodings report an error.
+Scalar TF and ISO modes remain separate. Older v5 headers without this byte must be
 updated with the external `BorgVR-v4-to-v5/borgvr_v5_upgrade` tool; the numeric format version
 remains 5. The v4 converter now writes the extended v5 layout directly.
 
@@ -389,6 +410,17 @@ TerminalConverterApp C F,J 2 2 512 512 512 MandelbulbJulia.data \
 ```
 
 Use `TerminalConverterApp --help` for the complete argument list.
+For RGB/RGBA imports, `--color-compression none|astc4x4|astc8x8` selects the stored
+brick representation (default `none`). `--no-lz4` disables the independent, otherwise enabled,
+outer LZ4 compression. For example:
+
+```sh
+TerminalConverterApp Q color.dat color.data "Color volume" 32 2 --color-compression astc8x8
+TerminalConverterApp N color.nrrd color.data "Color volume" 32 2 --color-compression astc4x4 --no-lz4
+```
+
+The Swift terminal server accepts the same two options for its automatic/guided importer.
+
 Imports and generation optionally accept an acquisition date/time and source note:
 
 ```sh

@@ -1,4 +1,4 @@
-import { CoordinateCubeRenderer } from "./cube-renderer.js?v=20261101-color";
+import { CoordinateCubeRenderer } from "./cube-renderer.js?v=20261102-astc";
 import { renderDatasetProvenance } from "./dataset-provenance.js?v=20261101";
 import { decodeAppleLZ4, encodeLZ4Block } from "./lz4.js?v=20260911-urltf";
 import {

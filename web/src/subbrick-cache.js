@@ -1,3 +1,5 @@
+import { colorInterpretation } from "./astc.js?v=20261102";
+
 export function subbrickDivisions(brickSize, overlap) {
   if (brickSize <= 16 || overlap <= 0) return 1;
   let divisions = brickSize <= 32 ? 2 : brickSize <= 64 ? 4 : 8;
@@ -31,7 +33,7 @@ export function subbrickVisibility(transferFunctions, biases, renderMode, isoVal
 export class SubbrickCache {
   constructor(device, atlas) {
     this.device = device;
-    this.isRGBA = atlas.manifest.volume?.channelInterpretation === "rgba";
+    this.isRGBA = colorInterpretation(atlas.manifest.volume?.channelInterpretation) === "rgba";
     this.channels = this.isRGBA ? 1 : atlas.componentCount;
     this.divisions = subbrickDivisions(atlas.brickSize, atlas.manifest.bricking.overlap);
     this.cells = this.divisions ** 3;

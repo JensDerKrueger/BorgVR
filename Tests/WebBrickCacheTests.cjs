@@ -29,7 +29,9 @@ async function main() {
     }
   });
   const source = fs.readFileSync(path.join(__dirname, "../web/src/brick-worker.js"), "utf8")
-    .replace(/^import .*;\n/, "");
+    .replace(/^import .*;\n/gm, "");
+  vm.runInContext(fs.readFileSync(path.join(__dirname, "../web/src/astc.js"), "utf8")
+    .replace(/export /g, ""), context);
   vm.runInContext(source, context);
   context.testDB = db;
   context.testRecords = records;

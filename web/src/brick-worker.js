@@ -1,4 +1,5 @@
 import { decodeAppleLZ4 } from "./lz4.js?v=20260911-worker";
+import { decodeASTCBrick } from "./astc.js?v=20261102";
 
 const BATCH_MAGIC = 0x31425642;
 const DEFAULT_CACHE_DATABASE = "borgvr-brick-cache-v1";
@@ -207,7 +208,7 @@ function decodeStoredBrick(cfg, brick, data, profile) {
     profile.lz4DecodeMs += now() - decodeStart;
     profile.decodedBytes += decoded.byteLength;
     profile.lz4Bricks += 1;
-    return decoded;
+    return decodeASTCBrick(decoded, cfg.brickSize, cfg.componentCount, cfg.astcBlockSize);
   }
 
   if (data.byteLength !== uncompressedByteLength) {
@@ -215,7 +216,7 @@ function decodeStoredBrick(cfg, brick, data, profile) {
   }
   profile.decodedBytes += data.byteLength;
   profile.rawBricks += 1;
-  return data;
+  return decodeASTCBrick(data, cfg.brickSize, cfg.componentCount, cfg.astcBlockSize);
 }
 
 function shouldDecompressBrick(cfg, brick, data) {

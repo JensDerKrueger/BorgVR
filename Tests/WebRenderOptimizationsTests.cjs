@@ -27,6 +27,15 @@ async function main() {
     colorVolumes[kind][i * channels + 2] = 224;
     if (channels === 4) colorVolumes[kind][i * channels + 3] = volume[i] ? 8 : 0;
   }
+  for (const color of ["rgb", "rgba"]) for (const block of [4, 8]) {
+    const bytes = Buffer.alloc((32 / block) ** 2 * 32 * 16);
+    for (let offset = 0; offset < bytes.length; offset += 16) {
+      bytes.writeUInt32LE(0xfffffdfc, offset); bytes.writeUInt32LE(0xffffffff, offset + 4);
+      bytes.writeUInt16LE(32 * 257, offset + 8); bytes.writeUInt16LE(96 * 257, offset + 10);
+      bytes.writeUInt16LE(224 * 257, offset + 12); bytes.writeUInt16LE((color === "rgb" ? 255 : 8) * 257, offset + 14);
+    }
+    colorVolumes[`${color}ASTC${block}x${block}`] = bytes;
+  }
   const manifest = {
     id: "A726EA76-CE70-4BFC-9974-9CF3541080D0", name: "Subbrick test", description: "Synthetic sphere", variant: "raw",
     volume: { size: [28, 28, 28], voxelSpacing: [1 / 28, 1 / 28, 1 / 28], componentCount: 1,
@@ -46,7 +55,7 @@ async function main() {
     if (name === "/rgb.bin" || name === "/rgba.bin") {
       response.end(colorVolumes[name.slice(1, -4)]); return;
     }
-    for (const kind of ["rgb", "rgba"]) if (name.startsWith(`/${kind}/bricks/`)) {
+    for (const kind of Object.keys(colorVolumes)) if (name.startsWith(`/${kind}/bricks/`)) {
       response.end(colorVolumes[kind]); return;
     }
     if (name === "/web-data/test.lz4") {
@@ -216,15 +225,17 @@ async function main() {
       if (testErrors.length) throw new Error(testErrors.join("\n"));
     });
     await page.locator("canvas").screenshot({ path: path.join(screenshots, "adaptive.png") });
-    for (const interpretation of ["rgb", "rgba"]) {
+    for (const interpretation of Object.keys(colorVolumes)) {
       await page.evaluate(async ({ manifest, interpretation }) => {
         const renderer = window.testRenderer;
-        const channels = interpretation === "rgb" ? 3 : 4;
+        const channels = interpretation.startsWith("rgba") ? 4 : 3;
+        const block = interpretation.endsWith("ASTC4x4") ? 4 : interpretation.endsWith("ASTC8x8") ? 8 : 0;
+        const byteLength = block ? (32 / block) ** 2 * 32 * 16 : 32 ** 3 * channels;
         const ranges = channels === 3 ? [] : [[0, 8]];
         renderer.setRenderOptimizations({ alphaEpsilon: 0, opacityAdaptiveSampling: false });
         renderer.setDataset({ ...manifest, id: interpretation, baseURL: location.origin + `/${interpretation}/`, volume: { ...manifest.volume,
           componentCount: channels, channelInterpretation: interpretation, componentRanges: ranges },
-          brickMetadata: { values: [0, channels === 3 ? 0 : 8, 32 ** 3 * channels, ...ranges.flat()] },
+          brickMetadata: { values: [0, channels === 3 ? 0 : 8, byteLength, ...ranges.flat()] },
           bricks: undefined });
         const deadline = performance.now() + 10000;
         while (renderer.brickAtlas.loadedBricks.size < 1 && performance.now() < deadline) await new Promise(resolve => setTimeout(resolve, 10));
@@ -248,7 +259,7 @@ async function main() {
         testRenderer.draw(); await testRenderer.device.queue.onSubmittedWorkDone();
       });
       assert.deepEqual(await page.locator("canvas").screenshot(), reference, `${interpretation}: subblocks changed samples`);
-      if (interpretation === "rgba") {
+      if (interpretation.startsWith("rgba")) {
         const empty = await page.evaluate(async () => {
           testRenderer.setRenderOptimizations({ subbrickSkipping: true, alphaEpsilon: 0.1 });
           testRenderer.draw(); await testRenderer.device.queue.onSubmittedWorkDone();

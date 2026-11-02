@@ -1,4 +1,5 @@
-import { BrickAtlas } from "./brick-atlas.js?v=20261101-color";
+import { BrickAtlas } from "./brick-atlas.js?v=20261102-astc";
+import { colorInterpretation } from "./astc.js?v=20261102";
 import { buildMarkerRenderGeometry } from "./marker-tube-mesh.js?v=20260922-marker-direction";
 import { createDefaultTransferFunction } from "./transfer-function.js?v=20261101-filter-footprint";
 
@@ -1164,7 +1165,7 @@ export class CoordinateCubeRenderer {
     if ((manifest.volume?.valueType ?? "uint") !== "uint") {
       throw new Error("Signed and floating-point datasets are not yet supported by the renderer.");
     }
-    const interpretation = manifest.volume?.channelInterpretation ?? "independentChannels";
+    const interpretation = colorInterpretation(manifest.volume?.channelInterpretation);
     this.colorMode = { independentChannels: 0, rgb: 1, rgba: 2 }[interpretation];
     if (this.colorMode === undefined || (this.colorMode !== 0 &&
         (manifest.volume.bytesPerComponent !== 1 || manifest.volume.componentCount !== (this.colorMode === 1 ? 3 : 4)))) {
@@ -2829,7 +2830,8 @@ function normalizeManifestRanges(manifest) {
   const dataRange = Array.isArray(volume.dataRange) ? volume.dataRange : [0, byteRangeMax];
   const dataRangeMax = Math.max(byteRangeMax, dataRange[1] ?? 0, valueRange[1] ?? 0);
   const componentCount = Math.max(1, volume.componentCount ?? 1);
-  const rangeCount = volume.channelInterpretation === "rgb" ? 0 : volume.channelInterpretation === "rgba" ? 1 : componentCount;
+  const interpretation = colorInterpretation(volume.channelInterpretation);
+  const rangeCount = interpretation === "rgb" ? 0 : interpretation === "rgba" ? 1 : componentCount;
   const componentRanges = Array.isArray(volume.componentRanges) &&
     volume.componentRanges.length >= rangeCount
     ? volume.componentRanges.slice(0, rangeCount)
@@ -2861,7 +2863,7 @@ function normalizeManifestBricks(manifest) {
   }
 
   const componentCount = Math.max(1, manifest.volume?.componentCount ?? 1);
-  const interpretation = manifest.volume?.channelInterpretation;
+  const interpretation = colorInterpretation(manifest.volume?.channelInterpretation);
   const rangeCount = interpretation === "rgb" ? 0 : interpretation === "rgba" ? 1 : componentCount;
   const stride = 3 + 2 * rangeCount;
   const brickCount = Math.floor(values.length / stride);

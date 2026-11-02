@@ -1,5 +1,6 @@
 import { decodeAppleLZ4 } from "./lz4.js?v=20260911-worker";
-import { SubbrickCache, subbrickDivisions } from "./subbrick-cache.js?v=20261101-color";
+import { astcBlockSize, colorInterpretation, decodeASTCBrick } from "./astc.js?v=20261102";
+import { SubbrickCache, subbrickDivisions } from "./subbrick-cache.js?v=20261102-astc";
 
 export const BI_MISSING = 0;
 const BI_CHILD_EMPTY = 1;
@@ -114,7 +115,10 @@ export class BrickAtlas {
     this.componentCount = manifest.volume.componentCount;
     this.bytesPerComponent = manifest.volume.bytesPerComponent;
     this.bytesPerVoxel = this.componentCount * this.bytesPerComponent;
-    this.uncompressedBrickByteLength = this.brickSize * this.brickSize * this.brickSize * this.bytesPerVoxel;
+    this.astcBlockSize = astcBlockSize(manifest.volume.channelInterpretation);
+    this.uncompressedBrickByteLength = this.astcBlockSize
+      ? (this.brickSize / this.astcBlockSize) ** 2 * this.brickSize * 16
+      : this.brickSize * this.brickSize * this.brickSize * this.bytesPerVoxel;
     this.datasetCompression = normalizeCompressionName(manifest.bricking?.compression) ?? "none";
     this.dataRangeMax = manifest.volume?.dataRange?.[1] ?? ((2 ** (8 * this.bytesPerComponent)) - 1);
     const textureLayout = volumeTextureLayout(this.componentCount, this.bytesPerComponent);
@@ -152,7 +156,7 @@ export class BrickAtlas {
         usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST
       });
     }
-    if (manifest.volume.channelInterpretation !== "rgb" && subbrickDivisions(this.brickSize, manifest.bricking.overlap) > 1) {
+    if (colorInterpretation(manifest.volume.channelInterpretation) !== "rgb" && subbrickDivisions(this.brickSize, manifest.bricking.overlap) > 1) {
       this.subbrickCache = new SubbrickCache(this.device, this);
     }
     const maxStorageBufferBindingSize = this.device.limits.maxStorageBufferBindingSize ?? this.device.limits.maxBufferSize;
@@ -229,7 +233,7 @@ export class BrickAtlas {
       return;
     }
     try {
-      this.worker = new Worker(new URL("./brick-worker.js?v=20261014-multichannel", import.meta.url), { type: "module" });
+      this.worker = new Worker(new URL("./brick-worker.js?v=20261102-astc", import.meta.url), { type: "module" });
       this.worker.onmessage = (event) => this.handleWorkerMessage(event.data);
       this.worker.onerror = (event) => {
         for (const request of this.workerRequests.values()) {
@@ -266,6 +270,7 @@ export class BrickAtlas {
         secondaryTextureBytesPerVoxel: this.secondaryTextureBytesPerVoxel,
         dataRangeMax: this.dataRangeMax,
         uncompressedBrickByteLength: this.uncompressedBrickByteLength,
+        astcBlockSize: this.astcBlockSize,
         datasetCompression: this.datasetCompression,
         persistentCacheEnabled: this.persistentCacheEnabled,
         persistentCacheDatabase: PERSISTENT_BRICK_CACHE_DATABASE,
@@ -714,14 +719,14 @@ export class BrickAtlas {
       this.recordProfile("lz4DecodeMs", now() - decodeStart);
       this.profile.decodedBytes += decoded.byteLength;
       this.profile.lz4Bricks += 1;
-      return decoded;
+      return decodeASTCBrick(decoded, this.brickSize, this.componentCount, this.astcBlockSize);
     }
     if (data.byteLength !== uncompressedByteLength) {
       throw new Error(`raw brick has ${data.byteLength} bytes, expected ${uncompressedByteLength}`);
     }
     this.profile.decodedBytes += data.byteLength;
     this.profile.rawBricks += 1;
-    return data;
+    return decodeASTCBrick(data, this.brickSize, this.componentCount, this.astcBlockSize);
   }
 
   async fetchBrickBatchData(brickIDs) {
@@ -777,14 +782,14 @@ export class BrickAtlas {
         this.recordProfile("lz4DecodeMs", now() - decodeStart);
         this.profile.decodedBytes += decoded.byteLength;
         this.profile.lz4Bricks += 1;
-        bricksByID.set(brickID, decoded);
+        bricksByID.set(brickID, decodeASTCBrick(decoded, this.brickSize, this.componentCount, this.astcBlockSize));
       } else {
         if (storedData.byteLength !== uncompressedByteLength) {
           throw new Error(`raw brick ${brickID} has ${storedData.byteLength} bytes, expected ${uncompressedByteLength}`);
         }
         this.profile.decodedBytes += storedData.byteLength;
         this.profile.rawBricks += 1;
-        bricksByID.set(brickID, storedData);
+        bricksByID.set(brickID, decodeASTCBrick(storedData, this.brickSize, this.componentCount, this.astcBlockSize));
       }
     }
     return bricksByID;
@@ -953,7 +958,7 @@ function classifyBricks(manifest, transferFunctions, options = {}) {
   const meta = new Uint32Array(bricks.length);
   meta.fill(BI_MISSING);
   const renderMode = options.renderMode ?? 0;
-  const interpretation = manifest.volume?.channelInterpretation ?? "independentChannels";
+  const interpretation = colorInterpretation(manifest.volume?.channelInterpretation);
   const color = interpretation === "rgb" || interpretation === "rgba";
   const epsilon = Number.isFinite(options.alphaEpsilon) ? Math.min(1, Math.max(0, options.alphaEpsilon)) : 0;
 
