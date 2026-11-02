@@ -485,7 +485,7 @@ final actor VisionVolumeRenderer {
       // The system can destroy the renderer directly when the user presses Home.
       // Route that through the dataset state machine so SharePlay participants are
       // notified before the dataset selection is shown.
-      model.immersiveSpaceWasClosedBySystem()
+      model.immersiveSpaceWasClosedBySystem(reason: "renderer released")
     }
   }
 
@@ -2240,7 +2240,7 @@ extension VisionVolumeRenderer {
         Task { @MainActor in
           switch state {
             case .invalidated:
-              runtimeAppModel.immersiveSpaceWasClosedBySystem()
+              runtimeAppModel.immersiveSpaceWasClosedBySystem(reason: "compositor layer invalidated")
             case .paused:
               if runtimeAppModel.immersiveSpaceState != .closed {
                 runtimeAppModel.immersiveSpaceState = .inTransition

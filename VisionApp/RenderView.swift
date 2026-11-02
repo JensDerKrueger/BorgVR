@@ -31,8 +31,7 @@ private struct DatasetStateActionButtonStyle: ButtonStyle {
  - Optionally open profiling tools.
  - Close the currently active dataset (immersive space).
 
- It also cleans up auxiliary windows plus voice input when the view
- disappears or the scene goes into the background.
+ It also cleans up auxiliary windows plus voice input when the view disappears.
  */
 struct RenderView: View {
   /// Global runtime application model (window state, immersion state, etc.).
@@ -45,7 +44,7 @@ struct RenderView: View {
   @EnvironmentObject var storedAppModel: StoredAppModel
   @EnvironmentObject private var serverController: BackgroundServerController
 
-  /// Scene phase, used to close the dataset when the app goes to background.
+  /// The controls window's phase is independent of the immersive space lifecycle.
   @Environment(\.scenePhase) private var scenePhase
 
   /// Dismisses the immersive space when requested.
@@ -225,15 +224,9 @@ struct RenderView: View {
       dismissWindow(id: "IsovalueEditorView")
       dismissWindow(id: "LightingEditorView")
     }
-    .onChange(of: scenePhase) { _, newPhase in
-      Task { @MainActor in
-        if newPhase == .background {
-          closeDataset(
-            leavingSharePlay: sharedAppModel.isInGroupSession
-              && !runtimeAppModel.groupSessionHost
-          )
-        }
-      }
+    .onChange(of: scenePhase) { oldPhase, newPhase in
+      // A backgrounded controls window does not mean the immersive space closed.
+      runtimeAppModel.logger.dev("Render controls window phase: \(oldPhase) -> \(newPhase); keeping dataset open.")
     }
     .onChange(of: runtimeAppModel.auxiliaryWindowToggleRequest) { _, request in
       guard let request else { return }

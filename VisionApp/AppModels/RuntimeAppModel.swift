@@ -100,6 +100,7 @@ class RuntimeAppModel {
   /// Transitions through the normal close path after an unrecoverable GPU failure.
   func renderLoopFailed() {
     guard renderTask != nil else { return }
+    logger.error("Closing dataset because the render loop failed.")
     renderTask = nil
     requestDatasetClose(
       destination: groupSessionHost
@@ -510,12 +511,13 @@ class RuntimeAppModel {
     }
   }
 
-  func immersiveSpaceWasClosedBySystem() {
+  func immersiveSpaceWasClosedBySystem(reason: String) {
     let wasManagedTransition = immersiveSpaceState == .inTransition
     immersiveSpaceState = .closed
     guard !wasManagedTransition else { return }
     switch datasetSessionState {
       case .opening, .rendering:
+        logger.info("Closing dataset because the immersive space ended: \(reason).")
         requestDatasetClose(destination: .datasetSelection)
       default:
         break
