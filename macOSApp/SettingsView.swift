@@ -9,8 +9,7 @@ private let portNumberFormatter: NumberFormatter = {
   return formatter
 }()
 
-private let macAppSettingsGroupWidth: CGFloat = 680
-private let macAppSettingsGroupContentWidth: CGFloat = 640
+private let macAppSettingsMaximumContentWidth: CGFloat = 960
 private let macAppSettingsSidebarWidth: CGFloat = 220
 
 private enum SettingsResetSection: String, Identifiable {
@@ -593,23 +592,31 @@ struct SettingsView: View {
   }
 
   private func resetButton(for section: SettingsResetSection) -> some View {
-    Button(role: .destructive) {
-      pendingResetSection = section
-    } label: {
-      Label(
-        String(format: String(localized: "Reset %@"), section.localizedTitle),
-        systemImage: "arrow.counterclockwise"
-      )
+    VStack(alignment: .leading, spacing: 16) {
+      Divider()
+      Button(role: .destructive) {
+        pendingResetSection = section
+      } label: {
+        Label(
+          String(format: String(localized: "Reset %@"), section.localizedTitle),
+          systemImage: "arrow.counterclockwise"
+        )
+      }
     }
+    .padding(.top, 16)
+    .padding(.bottom, 4)
   }
 
   private func settingsTabContent<Content: View>(@ViewBuilder content: () -> Content) -> some View {
-    VStack(alignment: .center, spacing: 12) {
+    VStack(alignment: .leading, spacing: 20) {
       content()
       Spacer(minLength: 0)
     }
-    .frame(maxWidth: .infinity, alignment: .center)
-    .padding(.vertical, 12)
+    .frame(maxWidth: macAppSettingsMaximumContentWidth, alignment: .leading)
+    .padding(.horizontal, 24)
+    .padding(.top, 16)
+    .padding(.bottom, 24)
+    .frame(maxWidth: .infinity, alignment: .top)
   }
 
   private func settingsGroup<Content: View>(
@@ -627,12 +634,13 @@ struct SettingsView: View {
           .font(.callout)
           .foregroundStyle(.secondary)
           .fixedSize(horizontal: false, vertical: true)
+          .padding(.bottom, 8)
         content()
       }
-      .frame(width: macAppSettingsGroupContentWidth, alignment: .leading)
-      .padding(.vertical, 4)
+      .frame(maxWidth: .infinity, alignment: .leading)
+      .padding(8)
     }
-    .frame(width: macAppSettingsGroupWidth, alignment: .leading)
+    .frame(maxWidth: .infinity, alignment: .leading)
   }
 
   private func addRemoteServer() {
@@ -657,22 +665,37 @@ struct SettingsView: View {
   }
 
   private func serverRow(for server: StoredServer) -> some View {
-    VStack(alignment: .leading, spacing: 6) {
-      HStack {
+    ViewThatFits(in: .horizontal) {
+      HStack(spacing: 20) {
         Text(serverLabel(for: server))
           .foregroundStyle(server.isEnabled ? .primary : .secondary)
+          .fixedSize()
         Spacer()
-        Toggle("Server enabled", isOn: serverEnabledBinding(server))
-          .toggleStyle(.switch)
-        Toggle("Share source via SharePlay", isOn: serverSharingBinding(server))
-          .toggleStyle(.switch)
-        Button(role: .destructive) {
-          removeRemoteServer(server)
-        } label: {
-          Image(systemName: "trash")
-        }
-        .help("Remove server")
+        serverControls(for: server)
+          .fixedSize()
       }
+      VStack(alignment: .leading, spacing: 10) {
+        Text(serverLabel(for: server))
+          .foregroundStyle(server.isEnabled ? .primary : .secondary)
+          .fixedSize(horizontal: false, vertical: true)
+        serverControls(for: server)
+      }
+    }
+    .padding(.vertical, 4)
+  }
+
+  private func serverControls(for server: StoredServer) -> some View {
+    HStack(spacing: 16) {
+      Toggle("Server enabled", isOn: serverEnabledBinding(server))
+        .toggleStyle(.switch)
+      Toggle("Share source via SharePlay", isOn: serverSharingBinding(server))
+        .toggleStyle(.switch)
+      Button(role: .destructive) {
+        removeRemoteServer(server)
+      } label: {
+        Image(systemName: "trash")
+      }
+      .help("Remove server")
     }
   }
 
@@ -742,7 +765,9 @@ struct SettingsView: View {
         content()
       }
       .labelsHidden()
-      .frame(width: 240)
+      .pickerStyle(.menu)
+      .fixedSize()
+      .frame(width: 240, alignment: .trailing)
     }
   }
 
@@ -793,11 +818,16 @@ struct SettingsView: View {
     _ title: LocalizedStringKey,
     @ViewBuilder control: () -> Control
   ) -> some View {
-    HStack(alignment: .firstTextBaseline, spacing: 16) {
-      Text(title)
-      Spacer(minLength: 24)
-      control()
-        .frame(minWidth: 220, alignment: .trailing)
+    VStack(spacing: 0) {
+      Divider()
+      HStack(alignment: .center, spacing: 16) {
+        Text(title)
+          .fixedSize(horizontal: false, vertical: true)
+        Spacer(minLength: 24)
+        control()
+          .frame(minWidth: 240, alignment: .trailing)
+      }
+      .padding(.vertical, 8)
     }
   }
 
