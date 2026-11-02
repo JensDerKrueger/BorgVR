@@ -481,7 +481,7 @@ struct OpenDatasetView: View {
   private func loadRemoteDatasets() async -> [RuntimeAppModel.DatasetEntry] {
     var datasets: [RuntimeAppModel.DatasetEntry] = []
 
-    for server in storedAppModel.servers {
+    for server in storedAppModel.servers where server.isEnabled {
 
       if !server.address.isEmpty {
         await MainActor.run { loadingStage = .connectingServer(server.address,server.port) }

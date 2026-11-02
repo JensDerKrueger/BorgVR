@@ -12,6 +12,7 @@ struct SettingsServerRecord: Codable {
   var password: String?
   var shareViaSharePlay: Bool?
   var intervalSeconds: Int?
+  var isEnabled: Bool?
 
   static func decode(_ value: Any) throws -> [Self] {
     let records = try JSONDecoder().decode([Self].self, from: JSONSerialization.data(withJSONObject: value))
@@ -39,14 +40,15 @@ struct SettingsServerRecord: Codable {
   static func servers(read: @escaping () -> [StoredServer], write: @escaping ([StoredServer]) -> Void) -> BorgVRSettingsStore.Entry {
     entry(key: "servers", read: {
       read().map { .init(id: $0.id, address: $0.address, port: $0.port,
-        password: $0.password, shareViaSharePlay: $0.shareViaSharePlay) }
+        password: $0.password, shareViaSharePlay: $0.shareViaSharePlay, isEnabled: $0.isEnabled) }
     }, write: { records in
       let existing = read()
       write(records.map { record in
         let previous = existing.first { $0.id == record.id || ($0.address == record.address && $0.port == record.port) }
         return StoredServer(id: record.id, address: record.address, port: record.port,
           password: record.password ?? previous?.password ?? "",
-          shareViaSharePlay: record.shareViaSharePlay ?? previous?.shareViaSharePlay ?? false)
+          shareViaSharePlay: record.shareViaSharePlay ?? previous?.shareViaSharePlay ?? false,
+          isEnabled: record.isEnabled ?? previous?.isEnabled ?? true)
       })
     })
   }

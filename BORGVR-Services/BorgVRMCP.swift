@@ -167,7 +167,7 @@ enum BorgVRMCPDatasetCatalog {
         addLocalDataset(at: url, location: .builtIn(url), to: &records)
       }
 
-      for server in servers where !server.address.isEmpty {
+      for server in servers where server.isEnabled && !server.address.isEmpty {
         let location = BorgVRMCPDatasetLocation.remote(
           address: server.address,
           port: server.port,

@@ -228,13 +228,20 @@ private func testCredentialReferences() throws {
   let encoder = JSONEncoder(), decoder = JSONDecoder()
   encoder.userInfo[.serverCredentialVault] = vault
   decoder.userInfo[.serverCredentialVault] = vault
-  let servers = [StoredServer(address: "private", port: 1234, password: "secret-credential"),
+  let servers = [StoredServer(address: "private", port: 1234, password: "secret-credential", isEnabled: false),
                  StoredServer(address: "public", port: 1234)]
   let data = try encoder.encode(servers)
   let serialized = String(decoding: data, as: UTF8.self)
   try expect(!serialized.contains("secret-credential") && !serialized.contains("password"), "Stored servers contain plaintext credentials")
   let restored = try decoder.decode([StoredServer].self, from: data)
   try expect(restored == servers, "Credential references did not round-trip")
+  try expect(!restored[0].isEnabled && restored[1].isEnabled, "Server enabled states did not round-trip")
+  var legacy = try JSONSerialization.jsonObject(with: data) as! [[String: Any]]
+  for index in legacy.indices { legacy[index].removeValue(forKey: "isEnabled") }
+  let legacyServers = try decoder.decode([StoredServer].self, from: JSONSerialization.data(withJSONObject: legacy))
+  try expect(legacyServers.allSatisfy(\.isEnabled), "Previously saved servers must remain enabled")
+  try expect(legacyServers.map(\.id) == servers.map(\.id) && legacyServers[0].password == servers[0].password,
+    "Server activation migration changed IDs or credentials")
   let origin = DatasetOrigin(address: "shared", port: 1234, password: "wire-secret")
   let wireOrigin = try JSONDecoder().decode(DatasetOrigin.self, from: JSONEncoder().encode(origin))
   try expect(wireOrigin == origin,

@@ -1,6 +1,35 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+  "Server enabled": {
+    "extractionState": "manual",
+    "localizations": {
+      "en": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "Enabled"
+        }
+      },
+      "de": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "Aktiv"
+        }
+      },
+      "es": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "Activo"
+        }
+      },
+      "fr": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "Actif"
+        }
+      }
+    }
+  },
   "Stored color compression (RGB/RGBA)": {
     "extractionState": "manual",
     "localizations": {

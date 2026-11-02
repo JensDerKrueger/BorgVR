@@ -160,7 +160,7 @@ final class DatasetCatalogService {
   }
 
   private func loadRemoteDatasets() async -> [AppModel.DatasetEntry] {
-    let servers = appSettings.servers.filter { !$0.address.isEmpty }
+    let servers = appSettings.servers.filter { $0.isEnabled && !$0.address.isEmpty }
     let timeout = appSettings.timeout
     let logger = logger
 

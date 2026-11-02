@@ -689,6 +689,7 @@ struct SettingsView: View {
     VStack(alignment: .leading, spacing: 6) {
       HStack {
         Text(serverLabel(for: server))
+          .foregroundStyle(server.isEnabled ? .primary : .secondary)
         Spacer()
         Button(role: .destructive) {
           pendingServerDeletion = server
@@ -697,8 +698,19 @@ struct SettingsView: View {
         }
         .buttonStyle(.borderless)
       }
+      Toggle("Server enabled", isOn: serverEnabledBinding(server))
       Toggle("Share source via SharePlay", isOn: serverSharingBinding(server))
     }
+  }
+
+  private func serverEnabledBinding(_ server: StoredServer) -> Binding<Bool> {
+    Binding(
+      get: { appSettings.servers.first(where: { $0.id == server.id })?.isEnabled ?? false },
+      set: { enabled in
+        guard let index = appSettings.servers.firstIndex(where: { $0.id == server.id }) else { return }
+        appSettings.servers[index].isEnabled = enabled
+      }
+    )
   }
 
   private func serverSharingBinding(_ server: StoredServer) -> Binding<Bool> {

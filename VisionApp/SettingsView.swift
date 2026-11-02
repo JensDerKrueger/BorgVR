@@ -21,11 +21,12 @@ private enum ServerValidationStatus: Equatable {
 }
 
 private struct ServerConfig: Identifiable, Equatable {
-  let id: UUID = UUID()
+  var id: UUID = UUID()
   var address: String
   var port: String
   var password: String = ""
   var shareViaSharePlay = false
+  var isEnabled = true
   var status: ServerValidationStatus = .unknown
 }
 
@@ -1042,10 +1043,12 @@ struct SettingsView: View {
     } else {
       servers = storedAppModel.servers.map {
         ServerConfig(
+          id: $0.id,
           address: $0.address,
           port: String($0.port),
           password: $0.password,
-          shareViaSharePlay: $0.shareViaSharePlay
+          shareViaSharePlay: $0.shareViaSharePlay,
+          isEnabled: $0.isEnabled
         )
       }
     }
@@ -1078,10 +1081,12 @@ struct SettingsView: View {
       guard !trimmedAddress.isEmpty else { return nil }
       guard let portInt = Int(cfg.port) else { return nil }
       return StoredServer(
+        id: cfg.id,
         address: trimmedAddress,
         port: portInt,
         password: cfg.password,
-        shareViaSharePlay: cfg.shareViaSharePlay
+        shareViaSharePlay: cfg.shareViaSharePlay,
+        isEnabled: cfg.isEnabled
       )
     }
     storedAppModel.servers = converted
@@ -1114,6 +1119,10 @@ struct SettingsView: View {
 
   private func validateServer(at index: Int) async {
     guard servers.indices.contains(index) else { return }
+    guard servers[index].isEnabled else {
+      servers[index].status = .unknown
+      return
+    }
 
     await MainActor.run {
       servers[index].status = .validating
@@ -1350,19 +1359,21 @@ private struct ServerRowView: View {
           .textFieldStyle(RoundedBorderTextFieldStyle())
           .frame(width: 180)
 
-        statusIndicator
+        if server.isEnabled { statusIndicator }
 
         Button(role: .destructive, action: onDelete) {
           Image(systemName: "trash")
         }
       }
 
-      if case let .invalid(error) = server.status {
+      if server.isEnabled, case let .invalid(error) = server.status {
         Text(error)
           .foregroundColor(.red)
           .font(.caption)
       }
 
+      Toggle("Server enabled", isOn: $server.isEnabled)
+        .onChange(of: server.isEnabled) { server.status = .unknown }
       Toggle("Share source via SharePlay", isOn: $server.shareViaSharePlay)
       Text("When enabled, the server address, port, and password may be sent to SharePlay participants so they can load shared datasets directly.")
         .font(.caption)

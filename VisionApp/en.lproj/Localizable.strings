@@ -1382,3 +1382,4 @@
 "No compression" = "No compression";
 "Uses lossy compression when opening color volumes. Direct GPU Erase/Restore is disabled; edited bricks are rebuilt and uploaded." = "Uses lossy compression when opening color volumes. Direct GPU Erase/Restore is disabled; edited bricks are rebuilt and uploaded.";
 "Stored color compression (RGB/RGBA)" = "Color compression on import (RGB/RGBA)";
+"Server enabled" = "Enabled";

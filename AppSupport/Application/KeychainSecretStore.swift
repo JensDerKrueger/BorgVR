@@ -79,12 +79,28 @@ struct StoredServer: Identifiable, Codable, Equatable, Sendable {
     set { credential.value = newValue }
   }
   var shareViaSharePlay: Bool
+  var isEnabled: Bool
   init(
     id: UUID = UUID(), address: String, port: Int, password: String = "",
-    shareViaSharePlay: Bool = false
+    shareViaSharePlay: Bool = false, isEnabled: Bool = true
   ) {
     self.id = id; self.address = address; self.port = port
     credential = .init(password); self.shareViaSharePlay = shareViaSharePlay
+    self.isEnabled = isEnabled
+  }
+
+  private enum CodingKeys: String, CodingKey {
+    case id, address, port, credential, shareViaSharePlay, isEnabled
+  }
+
+  init(from decoder: Decoder) throws {
+    let values = try decoder.container(keyedBy: CodingKeys.self)
+    id = try values.decode(UUID.self, forKey: .id)
+    address = try values.decode(String.self, forKey: .address)
+    port = try values.decode(Int.self, forKey: .port)
+    credential = try values.decode(StoredServerCredential.self, forKey: .credential)
+    shareViaSharePlay = try values.decodeIfPresent(Bool.self, forKey: .shareViaSharePlay) ?? false
+    isEnabled = try values.decodeIfPresent(Bool.self, forKey: .isEnabled) ?? true
   }
 }
 
