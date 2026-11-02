@@ -26,19 +26,9 @@ struct MacMeasurementView: View {
 
       Toggle("Hide Measurements", isOn: $appModel.measurementsHidden)
 
-      HStack {
-        Button {
-          _ = appModel.createVolumeMeasurement()
-          appModel.interactionMode = .measurement
-          synchronize()
-        } label: {
-          Label("measurement_new_button", systemImage: "plus")
-        }
-        Spacer()
-        if let selectedMeasurement {
-          Text(selectedMeasurement.formattedValue() ?? String(localized: "measurement_value_incomplete"))
-            .font(.headline.monospacedDigit())
-        }
+      if let selectedMeasurement {
+        Text(selectedMeasurement.formattedValue() ?? String(localized: "measurement_value_incomplete"))
+          .font(.headline.monospacedDigit())
       }
 
       List(selection: selectionBinding) {
@@ -81,37 +71,10 @@ struct MacMeasurementView: View {
           }
         }
 
-        HStack {
-          Button(role: .destructive) {
-            if appModel.removeSelectedVolumeMeasurementPoint() { synchronize() }
-          } label: {
-            Label("measurement_delete_point_button", systemImage: "minus.circle")
-          }
-          .disabled(appModel.selectedVolumeMeasurementPointID == nil)
-
-          Button(role: .destructive) {
-            if appModel.removeSelectedVolumeMeasurement() { synchronize() }
-          } label: {
-            Label("measurement_delete_button", systemImage: "trash")
-          }
-        }
       }
 
-      HStack {
-        Button { importsMeasurements = true } label: {
-          Label("measurement_load_button", systemImage: "folder")
-        }
-        Button { exportsMeasurements = true } label: {
-          Label("measurement_save_button", systemImage: "square.and.arrow.down")
-        }
-        .disabled(appModel.volumeMeasurements.isEmpty || datasetID == nil)
-        Spacer()
-        Button(role: .destructive) { deleteAllConfirmation = true } label: {
-          Label("measurement_delete_all_button", systemImage: "trash.slash")
-        }
-        .disabled(appModel.volumeMeasurements.isEmpty)
-      }
     }
+    .panelActions(panelConfiguration)
     .screenControlButtons()
     .fileImporter(
       isPresented: $importsMeasurements,
@@ -170,6 +133,30 @@ struct MacMeasurementView: View {
     } message: {
       Text(fileError?.localizedDescription ?? "")
     }
+  }
+
+  private var panelConfiguration: PanelWindowConfiguration {
+    .standard(
+      reset: .button("reset", icon: "arrow.counterclockwise", text: String(localized: "measurement_delete_all_button"),
+        enabled: !appModel.volumeMeasurements.isEmpty) { deleteAllConfirmation = true },
+      load: .button("load", icon: "folder", text: String(localized: "measurement_load_button")) { importsMeasurements = true },
+      save: .button("save", icon: "square.and.arrow.down", text: String(localized: "measurement_save_button"),
+        enabled: !appModel.volumeMeasurements.isEmpty && datasetID != nil) { exportsMeasurements = true },
+      additional: [
+        .button("new", icon: "plus", text: String(localized: "measurement_new_button")) {
+          _ = appModel.createVolumeMeasurement()
+          appModel.interactionMode = .measurement
+          synchronize()
+        },
+        .button("delete-point", icon: "minus.circle", text: String(localized: "measurement_delete_point_button"),
+          enabled: appModel.selectedVolumeMeasurementPointID != nil) {
+            if appModel.removeSelectedVolumeMeasurementPoint() { synchronize() }
+          },
+        .button("delete-measurement", icon: "trash", text: String(localized: "measurement_delete_button"),
+          enabled: selectedMeasurement != nil) {
+            if appModel.removeSelectedVolumeMeasurement() { synchronize() }
+          }
+      ])
   }
 
   private var datasetID: String? { appModel.activeDataset?.uniqueId }

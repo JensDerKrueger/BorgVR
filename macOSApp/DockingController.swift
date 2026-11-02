@@ -12,7 +12,7 @@ enum DockablePanelID: String, CaseIterable, Identifiable {
 
   var id: String { rawValue }
   var windowID: String { "dockable.\(rawValue)" }
-  var windowFrameAutosaveName: String { "BorgVR.\(windowID).frame" }
+  var windowFrameAutosaveName: String { "BorgVR.\(windowID).utility.frame" }
 
   var title: LocalizedStringKey {
     switch self {
@@ -33,6 +33,18 @@ enum DockablePanelID: String, CaseIterable, Identifiable {
     }
   }
 
+  var displayTitle: String {
+    switch self {
+      case .renderControls: String(localized: "Render UI")
+      case .transferFunctionEditor: String(localized: "Transfer Function")
+      case .isoEditor: String(localized: "Isovalue")
+      case .markerEditor: String(localized: "Objects")
+      case .measurementEditor: String(localized: "measurement_window_title")
+      case .lightingEditor: String(localized: "Lighting")
+      case .volumeBrushEditor: String(localized: "Brush")
+    }
+  }
+
   var dockedIcon: String {
     "rectangle.on.rectangle"
   }
@@ -40,31 +52,128 @@ enum DockablePanelID: String, CaseIterable, Identifiable {
   var detachedIcon: String {
     "rectangle.compress.vertical"
   }
+
+  var tint: Color {
+    switch self {
+      case .renderControls, .lightingEditor: .primary
+      case .transferFunctionEditor, .isoEditor: .purple
+      case .markerEditor: .orange
+      case .measurementEditor: .green
+      case .volumeBrushEditor: .red
+    }
+  }
+
+  var inlineWidth: CGFloat {
+    switch self {
+      case .renderControls: 1100
+      case .transferFunctionEditor: 720
+      case .isoEditor: 520
+      case .markerEditor, .measurementEditor: 380
+      case .lightingEditor, .volumeBrushEditor: 340
+    }
+  }
+
+  func inlineHeight(in container: CGSize) -> CGFloat? {
+    switch self {
+      case .markerEditor, .measurementEditor: min(560, max(240, container.height - 280))
+      default: nil
+    }
+  }
+
+  func initialOrigin(in container: CGSize, panelSize: CGSize) -> CGPoint {
+    let bottom = container.height - panelSize.height - 16
+    switch self {
+      case .renderControls:
+        return CGPoint(x: (container.width - panelSize.width) / 2, y: 16)
+      case .transferFunctionEditor, .isoEditor:
+        return CGPoint(x: (container.width - panelSize.width) / 2, y: bottom)
+      case .lightingEditor:
+        return CGPoint(x: 16, y: bottom)
+      case .volumeBrushEditor:
+        return CGPoint(x: 372, y: bottom)
+      case .markerEditor:
+        return CGPoint(x: container.width - panelSize.width * 2 - 32, y: bottom)
+      case .measurementEditor:
+        return CGPoint(x: container.width - panelSize.width - 16, y: bottom)
+    }
+  }
+}
+
+enum PanelDockAnchor: String, CaseIterable {
+  case topLeading, top, topTrailing
+  case leading, trailing
+  case bottomLeading, bottom, bottomTrailing
+
+  func origin(panelSize: CGSize, containerSize: CGSize) -> CGPoint {
+    let horizontal: CGFloat
+    let vertical: CGFloat
+    switch self {
+      case .topLeading: (horizontal, vertical) = (0, 0)
+      case .top: (horizontal, vertical) = (0.5, 0)
+      case .topTrailing: (horizontal, vertical) = (1, 0)
+      case .leading: (horizontal, vertical) = (0, 0.5)
+      case .trailing: (horizontal, vertical) = (1, 0.5)
+      case .bottomLeading: (horizontal, vertical) = (0, 1)
+      case .bottom: (horizontal, vertical) = (0.5, 1)
+      case .bottomTrailing: (horizontal, vertical) = (1, 1)
+    }
+    return CGPoint(x: 8 + max(0, containerSize.width - panelSize.width - 16) * horizontal,
+      y: 8 + max(0, containerSize.height - panelSize.height - 16) * vertical)
+  }
 }
 
 @MainActor
 final class DockingController: ObservableObject {
+  struct RevealControl: Identifiable {
+    let id: DockablePanelID
+    let icon: String
+    let text: String
+  }
   private static let visiblePanelsKey = "dockable.visiblePanels"
   private static let detachedPanelsKey = "dockable.detachedPanels"
+  private static let panelOriginsKey = "dockable.panelOrigins"
+  private static let panelAnchorsKey = "dockable.panelAnchors"
+  private let defaults: UserDefaults
 
   @Published private var visiblePanels: Set<DockablePanelID>
   @Published private var detachedPanels: Set<DockablePanelID>
+  @Published private var panelOrigins: [DockablePanelID: CGPoint] = [:]
+  @Published private var panelAnchors: [DockablePanelID: PanelDockAnchor] = [:]
+  @Published private var panelOrder = DockablePanelID.allCases
+  @Published private(set) var revealControls: [RevealControl] = []
   @Published var showsLog = false
   @Published var showsDatasetInfo = false
   @Published private(set) var commandRequest: MacCommandRequest? = nil
   private var datasetLifecycleClosingPanels: Set<DockablePanelID> = []
   private var transientClosingPanels: Set<DockablePanelID> = []
 
-  init() {
+  init(defaults: UserDefaults = .standard) {
+    self.defaults = defaults
     visiblePanels = Self.loadPanels(
+      defaults: defaults,
       forKey: Self.visiblePanelsKey,
       defaultValue: [.renderControls]
     )
     detachedPanels = Self.loadPanels(
+      defaults: defaults,
       forKey: Self.detachedPanelsKey,
       defaultValue: []
     )
     visiblePanels.formUnion(detachedPanels)
+    if let origins = defaults.dictionary(forKey: Self.panelOriginsKey) as? [String: [Double]] {
+      for (key, values) in origins where values.count == 2 && values.allSatisfy(\.isFinite) {
+        if let panel = DockablePanelID(rawValue: key) {
+          panelOrigins[panel] = CGPoint(x: values[0], y: values[1])
+        }
+      }
+    }
+    if let anchors = defaults.dictionary(forKey: Self.panelAnchorsKey) as? [String: String] {
+      for (key, value) in anchors {
+        if let panel = DockablePanelID(rawValue: key), let anchor = PanelDockAnchor(rawValue: value) {
+          panelAnchors[panel] = anchor
+        }
+      }
+    }
   }
 
   func isVisible(_ panel: DockablePanelID) -> Bool {
@@ -81,6 +190,7 @@ final class DockingController: ObservableObject {
 
   func show(_ panel: DockablePanelID) {
     visiblePanels.insert(panel)
+    bringToFront(panel)
     persistLayout()
   }
 
@@ -101,6 +211,11 @@ final class DockingController: ObservableObject {
     commandRequest = MacCommandRequest(command: command)
   }
 
+  func registerRevealControl(for panel: DockablePanelID, icon: String, text: String) {
+    revealControls.removeAll { $0.id == panel }
+    revealControls.append(RevealControl(id: panel, icon: icon, text: text))
+  }
+
   func detach(_ panel: DockablePanelID) {
     visiblePanels.insert(panel)
     detachedPanels.insert(panel)
@@ -110,11 +225,12 @@ final class DockingController: ObservableObject {
   func dock(_ panel: DockablePanelID) {
     detachedPanels.remove(panel)
     visiblePanels.insert(panel)
+    bringToFront(panel)
     persistLayout()
   }
 
   func close(_ panel: DockablePanelID) {
-    transientClosingPanels.insert(panel)
+    if isDetached(panel) { transientClosingPanels.insert(panel) }
     hide(panel)
     detachedPanels.remove(panel)
     persistLayout()
@@ -130,10 +246,12 @@ final class DockingController: ObservableObject {
 
   func restoreForDatasetOpen() {
     visiblePanels = Self.loadPanels(
+      defaults: defaults,
       forKey: Self.visiblePanelsKey,
       defaultValue: [.renderControls]
     )
     detachedPanels = Self.loadPanels(
+      defaults: defaults,
       forKey: Self.detachedPanelsKey,
       defaultValue: []
     )
@@ -147,7 +265,75 @@ final class DockingController: ObservableObject {
     if transientClosingPanels.remove(panel) != nil {
       return
     }
-    dock(panel)
+    guard isDetached(panel) else { return }
+    visiblePanels.remove(panel)
+    detachedPanels.remove(panel)
+    persistLayout()
+  }
+
+  func bringToFront(_ panel: DockablePanelID) {
+    guard panelOrder.last != panel else { return }
+    panelOrder.removeAll { $0 == panel }
+    panelOrder.append(panel)
+  }
+
+  func zIndex(for panel: DockablePanelID) -> Double {
+    Double(panelOrder.firstIndex(of: panel) ?? 0)
+  }
+
+  func origin(for panel: DockablePanelID, panelSize: CGSize, containerSize: CGSize) -> CGPoint {
+    if let anchor = panelAnchors[panel] {
+      return anchor.origin(panelSize: panelSize, containerSize: containerSize)
+    }
+    return Self.clampedOrigin(panelOrigins[panel] ?? panel.initialOrigin(in: containerSize, panelSize: panelSize),
+      panelSize: panelSize, containerSize: containerSize)
+  }
+
+  func move(_ panel: DockablePanelID, to origin: CGPoint, panelSize: CGSize, containerSize: CGSize) {
+    guard origin.x.isFinite, origin.y.isFinite else { return }
+    panelAnchors[panel] = nil
+    panelOrigins[panel] = Self.clampedOrigin(origin, panelSize: panelSize, containerSize: containerSize)
+  }
+
+  func dockAnchor(for panel: DockablePanelID) -> PanelDockAnchor? { panelAnchors[panel] }
+
+  func snapCandidate(for panel: DockablePanelID, panelSize: CGSize, containerSize: CGSize) -> PanelDockAnchor? {
+    guard panelSize.width > 0, panelSize.height > 0 else { return nil }
+    let current = origin(for: panel, panelSize: panelSize, containerSize: containerSize)
+    var nearest: PanelDockAnchor?
+    var distanceSquared: CGFloat = 28 * 28
+    for anchor in PanelDockAnchor.allCases {
+      let target = anchor.origin(panelSize: panelSize, containerSize: containerSize)
+      let dx = current.x - target.x
+      let dy = current.y - target.y
+      let distance = dx * dx + dy * dy
+      if distance < distanceSquared {
+        nearest = anchor
+        distanceSquared = distance
+      }
+    }
+    return nearest
+  }
+
+  func finishMoving(_ panel: DockablePanelID, panelSize: CGSize, containerSize: CGSize) {
+    if let anchor = snapCandidate(for: panel, panelSize: panelSize, containerSize: containerSize) {
+      panelAnchors[panel] = anchor
+    }
+    savePanelPositions()
+  }
+
+  func savePanelPositions() {
+    defaults.set(Dictionary(uniqueKeysWithValues: panelOrigins.map {
+      ($0.key.rawValue, [Double($0.value.x), Double($0.value.y)])
+    }), forKey: Self.panelOriginsKey)
+    defaults.set(Dictionary(uniqueKeysWithValues: panelAnchors.map {
+      ($0.key.rawValue, $0.value.rawValue)
+    }), forKey: Self.panelAnchorsKey)
+  }
+
+  private static func clampedOrigin(_ origin: CGPoint, panelSize: CGSize, containerSize: CGSize) -> CGPoint {
+    CGPoint(x: min(max(8, origin.x), max(8, containerSize.width - panelSize.width - 8)),
+      y: min(max(8, origin.y), max(8, containerSize.height - panelSize.height - 8)))
   }
 
   func detachedPanelsToRestore(compatibleWith renderMode: RenderMode) -> [DockablePanelID] {
@@ -199,275 +385,24 @@ final class DockingController: ObservableObject {
   }
 
   private func persistLayout() {
-    UserDefaults.standard.set(
+    defaults.set(
       visiblePanels.map(\.rawValue).sorted(),
       forKey: Self.visiblePanelsKey
     )
-    UserDefaults.standard.set(
+    defaults.set(
       detachedPanels.map(\.rawValue).sorted(),
       forKey: Self.detachedPanelsKey
     )
   }
 
   private static func loadPanels(
+    defaults: UserDefaults,
     forKey key: String,
     defaultValue: Set<DockablePanelID>
   ) -> Set<DockablePanelID> {
-    guard let rawValues = UserDefaults.standard.stringArray(forKey: key) else {
+    guard let rawValues = defaults.stringArray(forKey: key) else {
       return defaultValue
     }
     return Set(rawValues.compactMap(DockablePanelID.init(rawValue:)))
-  }
-}
-
-private struct WindowFrameAutosaveAccessor: NSViewRepresentable {
-  let name: String
-
-  func makeNSView(context: Context) -> NSView {
-    let view = NSView(frame: .zero)
-    DispatchQueue.main.async {
-      configure(window: view.window)
-    }
-    return view
-  }
-
-  func updateNSView(_ nsView: NSView, context: Context) {
-    DispatchQueue.main.async {
-      configure(window: nsView.window)
-    }
-  }
-
-  private func configure(window: NSWindow?) {
-    guard let window else { return }
-    window.tabbingMode = .disallowed
-    _ = window.setFrameUsingName(name)
-    _ = window.setFrameAutosaveName(name)
-  }
-}
-
-private extension View {
-  func windowFrameAutosaveName(_ name: String) -> some View {
-    background(WindowFrameAutosaveAccessor(name: name).frame(width: 0, height: 0))
-  }
-}
-
-struct DockToggleButton: View {
-  @EnvironmentObject private var docking: DockingController
-  @Environment(\.openWindow) private var openWindow
-  @Environment(\.dismissWindow) private var dismissWindow
-
-  let panel: DockablePanelID
-
-  var body: some View {
-    Button {
-      if docking.isDetached(panel) {
-        docking.dock(panel)
-        dismissWindow(id: panel.windowID)
-      } else {
-        docking.detach(panel)
-        openWindow(id: panel.windowID)
-      }
-    } label: {
-      Image(systemName: docking.isDetached(panel) ? panel.detachedIcon : panel.dockedIcon)
-    }
-    .help(
-      docking.isDetached(panel)
-        ? String(localized: "Dock panel")
-        : String(localized: "Detach panel")
-    )
-    .accessibilityLabel(
-      docking.isDetached(panel)
-        ? String(localized: "Dock panel")
-        : String(localized: "Detach panel")
-    )
-    .buttonStyle(.bordered)
-  }
-}
-
-struct DetachedDockablePanel<Content: View>: View {
-  @EnvironmentObject private var docking: DockingController
-  @Environment(\.dismissWindow) private var dismissWindow
-
-  let panel: DockablePanelID
-  let minWidth: CGFloat
-  let minHeight: CGFloat
-  @ViewBuilder var content: () -> Content
-
-  init(
-    panel: DockablePanelID,
-    minWidth: CGFloat = 360,
-    minHeight: CGFloat = 180,
-    @ViewBuilder content: @escaping () -> Content
-  ) {
-    self.panel = panel
-    self.minWidth = minWidth
-    self.minHeight = minHeight
-    self.content = content
-  }
-
-  var body: some View {
-    Group {
-      if docking.isDetached(panel) && docking.isVisible(panel) {
-        content()
-          .padding()
-          .frame(minWidth: minWidth, minHeight: minHeight)
-      } else {
-        Color.clear
-          .frame(width: 1, height: 1)
-          .onAppear {
-            dismissWindow(id: panel.windowID)
-          }
-      }
-    }
-    .onDisappear {
-      docking.detachedWindowDidDisappear(panel)
-    }
-    .windowFrameAutosaveName(panel.windowFrameAutosaveName)
-  }
-}
-
-struct DockableEditorPanel<Content: View>: View {
-  let panel: DockablePanelID
-  let maxWidth: CGFloat?
-  let showsTitle: Bool
-  @ViewBuilder var content: () -> Content
-
-  init(
-    panel: DockablePanelID,
-    maxWidth: CGFloat? = nil,
-    showsTitle: Bool = true,
-    @ViewBuilder content: @escaping () -> Content
-  ) {
-    self.panel = panel
-    self.maxWidth = maxWidth
-    self.showsTitle = showsTitle
-    self.content = content
-  }
-
-  var body: some View {
-    VStack(spacing: 8) {
-      HStack {
-        if showsTitle {
-          Text(panel.title)
-            .font(.headline)
-        }
-        Spacer()
-        DockToggleButton(panel: panel)
-      }
-      content()
-    }
-    .padding(12)
-    .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 8))
-    .frame(maxWidth: maxWidth)
-  }
-}
-
-struct DetachedPanelContent: View {
-  @EnvironmentObject private var appModel: AppModel
-  @EnvironmentObject private var renderingParameters: RenderingParameters
-  @EnvironmentObject private var storedAppModel: StoredAppModel
-  @EnvironmentObject private var docking: DockingController
-  @EnvironmentObject private var sharePlay: SharePlayCoordinator
-  @EnvironmentObject private var session: ScreenBorgVRSession
-
-  let panel: DockablePanelID
-
-  var body: some View {
-    switch panel {
-      case .renderControls:
-        DetachedDockablePanel(panel: panel, minWidth: 620, minHeight: 220) {
-          RenderControlsPanel(isDetachedWindow: true)
-        }
-
-      case .transferFunctionEditor:
-        DetachedDockablePanel(panel: panel, minWidth: 760, minHeight: 260) {
-          if renderingParameters.renderMode == .isoValue {
-            unavailableEditorMessage
-          } else {
-            DockableEditorPanel(panel: panel, showsTitle: false) {
-              TransferFunctionEditorView(
-                usesPanelBackground: false,
-                usesFlexibleCanvasHeight: true,
-                catalogDirectoryURLs: transferFunctionCatalogDirectoryURLs,
-                onMutation: {
-                  session.commitExternalMutation(
-                    source: .userInterface,
-                    domain: .transferFunction
-                  )
-                }
-              ) {
-                docking.close(panel)
-              }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-          }
-        }
-
-      case .isoEditor:
-        DetachedDockablePanel(panel: panel, minWidth: 520, minHeight: 150) {
-          if renderingParameters.renderMode == .isoValue {
-            DockableEditorPanel(panel: panel, maxWidth: 520, showsTitle: false) {
-              IsovalueEditorView(usesPanelBackground: false) {
-                docking.close(panel)
-              }
-            }
-          } else {
-            unavailableEditorMessage
-          }
-        }
-
-      case .markerEditor:
-        DetachedDockablePanel(panel: panel, minWidth: 480, minHeight: 520) {
-          DockableEditorPanel(panel: panel) {
-            MacMarkerView()
-          }
-          .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
-
-      case .measurementEditor:
-        DetachedDockablePanel(panel: panel, minWidth: 480, minHeight: 520) {
-          DockableEditorPanel(panel: panel) {
-            MacMeasurementView()
-          }
-          .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
-
-      case .lightingEditor:
-        DetachedDockablePanel(panel: panel, minWidth: 380, minHeight: 430) {
-          DockableEditorPanel(panel: panel, showsTitle: false) {
-            LightingEditorView(
-              renderMode: renderingParameters.renderMode,
-              lightDirection: $renderingParameters.lightDirection,
-              ambientLightColor: $renderingParameters.ambientLightColor,
-              diffuseLightColor: $renderingParameters.diffuseLightColor,
-              specularLightColor: $renderingParameters.specularLightColor,
-              usesPanelBackground: false,
-              onChange: { sharePlay.synchronize(kind: .stateOnly) },
-              onCommit: sharePlay.flushSynchronization,
-              onClose: { docking.close(panel) }
-            )
-            .equatable()
-          }
-        }
-      case .volumeBrushEditor:
-        DetachedDockablePanel(panel: panel, minWidth: 360, minHeight: 380) {
-          DockableEditorPanel(panel: panel) {
-            VolumeBrushControls(model: appModel.volumeBrush)
-          }
-        }
-    }
-  }
-
-  private var unavailableEditorMessage: some View {
-    VStack(spacing: 12) {
-      Text("This editor is not available in the current render mode.")
-        .foregroundStyle(.secondary)
-      DockToggleButton(panel: panel)
-    }
-    .padding()
-  }
-
-  private var transferFunctionCatalogDirectoryURLs: [URL] {
-    [storedAppModel.resolvedDataDirectoryURL()]
   }
 }

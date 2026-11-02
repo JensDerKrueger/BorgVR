@@ -66,6 +66,7 @@ struct macOSApp: App {
       )
     )
     let docking = DockingController()
+    docking.registerRevealControl(for: .renderControls, icon: "eye", text: String(localized: "Show UI"))
     let scriptRunner = BorgVRScriptRunner()
     let updateChecker = AppStoreUpdateChecker()
     let mcpController = BorgVRMCPServerController()
@@ -228,8 +229,20 @@ struct macOSApp: App {
     }
     .handlesExternalEvents(matching: [BorgVRSharePlayActivity.activityIdentifier])
     .defaultSize(width: 1200, height: 820)
+    .commands {
+      BorgVRMenuCommands(
+        appModel: appModel,
+        renderingParameters: renderingParameters,
+        appSettings: appSettings,
+        serverController: serverController,
+        sharePlay: sharePlay,
+        docking: docking,
+        scriptRunner: scriptRunner,
+        session: session
+      )
+    }
 
-    WindowGroup("Render UI", id: DockablePanelID.renderControls.windowID) {
+    DockableUtilityWindow(panel: .renderControls, width: 720, height: 260) {
       DetachedPanelContent(panel: .renderControls)
         .environmentObject(appModel)
         .environmentObject(renderingParameters)
@@ -241,9 +254,8 @@ struct macOSApp: App {
         .environmentObject(scriptRunner)
         .environmentObject(session)
     }
-    .defaultSize(width: 720, height: 260)
 
-    WindowGroup("Transfer Function", id: DockablePanelID.transferFunctionEditor.windowID) {
+    DockableUtilityWindow(panel: .transferFunctionEditor, width: 820, height: 320) {
       DetachedPanelContent(panel: .transferFunctionEditor)
         .environmentObject(appModel)
         .environmentObject(renderingParameters)
@@ -255,9 +267,8 @@ struct macOSApp: App {
         .environmentObject(scriptRunner)
         .environmentObject(session)
     }
-    .defaultSize(width: 820, height: 320)
 
-    WindowGroup("Isovalue", id: DockablePanelID.isoEditor.windowID) {
+    DockableUtilityWindow(panel: .isoEditor, width: 560, height: 180) {
       DetachedPanelContent(panel: .isoEditor)
         .environmentObject(appModel)
         .environmentObject(renderingParameters)
@@ -269,7 +280,6 @@ struct macOSApp: App {
         .environmentObject(scriptRunner)
         .environmentObject(session)
     }
-    .defaultSize(width: 560, height: 180)
 
     WindowGroup("Performance", id: "PerformanceGraphView") {
       PerformanceGraphView()
@@ -284,7 +294,7 @@ struct macOSApp: App {
     .defaultSize(width: 760, height: 480)
     .restorationBehavior(.disabled)
 
-    WindowGroup("Objects", id: DockablePanelID.markerEditor.windowID) {
+    DockableUtilityWindow(panel: .markerEditor, width: 520, height: 560) {
       DetachedPanelContent(panel: .markerEditor)
         .environmentObject(appModel)
         .environmentObject(renderingParameters)
@@ -296,9 +306,8 @@ struct macOSApp: App {
         .environmentObject(scriptRunner)
         .environmentObject(session)
     }
-    .defaultSize(width: 520, height: 560)
 
-    WindowGroup("measurement_window_title", id: DockablePanelID.measurementEditor.windowID) {
+    DockableUtilityWindow(panel: .measurementEditor, width: 520, height: 600) {
       DetachedPanelContent(panel: .measurementEditor)
         .environmentObject(appModel)
         .environmentObject(renderingParameters)
@@ -310,9 +319,8 @@ struct macOSApp: App {
         .environmentObject(scriptRunner)
         .environmentObject(session)
     }
-    .defaultSize(width: 520, height: 600)
 
-    WindowGroup("Brush", id: DockablePanelID.volumeBrushEditor.windowID) {
+    DockableUtilityWindow(panel: .volumeBrushEditor, width: 400, height: 430) {
       DetachedPanelContent(panel: .volumeBrushEditor)
         .environmentObject(appModel)
         .environmentObject(renderingParameters)
@@ -324,9 +332,8 @@ struct macOSApp: App {
         .environmentObject(scriptRunner)
         .environmentObject(session)
     }
-    .defaultSize(width: 400, height: 430)
 
-    WindowGroup("Lighting", id: DockablePanelID.lightingEditor.windowID) {
+    DockableUtilityWindow(panel: .lightingEditor, width: 430, height: 500) {
       DetachedPanelContent(panel: .lightingEditor)
         .environmentObject(appModel)
         .environmentObject(renderingParameters)
@@ -337,19 +344,6 @@ struct macOSApp: App {
         .environmentObject(docking)
         .environmentObject(scriptRunner)
         .environmentObject(session)
-    }
-    .defaultSize(width: 430, height: 500)
-    .commands {
-      BorgVRMenuCommands(
-        appModel: appModel,
-        renderingParameters: renderingParameters,
-        appSettings: appSettings,
-        serverController: serverController,
-        sharePlay: sharePlay,
-        docking: docking,
-        scriptRunner: scriptRunner,
-        session: session
-      )
     }
   }
 

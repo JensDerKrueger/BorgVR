@@ -1505,10 +1505,12 @@ struct RenderView: View {
         try renderingParameters.saveDatasetTransferFunctions(to: plan.transferFunctionURLs, description: dataset.description)
       }
       if let url = plan.viewStateURL {
+        let state = renderingParameters.makeDatasetViewState(datasetID: dataset.uniqueId)
         try DatasetStateStorage.saveViewState(
-          renderingParameters.makeDatasetViewState(datasetID: dataset.uniqueId),
+          state,
           to: url
         )
+        try PanelParameterStorage.saveDataset(common: state.common, brush: appModel.volumeBrush, beside: url)
       }
       if let url = plan.objectURL {
         try DatasetStateStorage.saveObjects(

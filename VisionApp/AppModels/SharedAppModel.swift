@@ -448,19 +448,23 @@ class SharedAppModel {
     return loaded
   }
 
+  @MainActor
   func loadAutomaticallyManagedDatasetState(
     datasetID: String,
     physicalExtent: SIMD3<Float>,
     storedAppModel: StoredAppModel,
+    brush: VolumeBrushModel,
     logger: LoggerBase
   ) {
     if storedAppModel.autoloadRenderState,
-       let url = DatasetStateStorage.viewStateFileURL(datasetID: datasetID, logger: logger),
-       FileManager.default.fileExists(atPath: url.path) {
+       let url = DatasetStateStorage.viewStateFileURL(datasetID: datasetID, logger: logger) {
       do {
-        applyDatasetViewState(
-          try DatasetStateStorage.loadViewState(datasetID: datasetID, from: url)
-        )
+        if FileManager.default.fileExists(atPath: url.path) {
+          applyDatasetViewState(
+            try DatasetStateStorage.loadViewState(datasetID: datasetID, from: url)
+          )
+        }
+        try loadPanelParameters(beside: url, brush: brush)
       } catch {
         logger.warning("Automatically loading dataset state failed: \(error.localizedDescription)")
       }
@@ -493,18 +497,22 @@ class SharedAppModel {
     }
   }
 
+  @MainActor
   func saveAutomaticallyManagedDatasetState(
     datasetID: String,
     storedAppModel: StoredAppModel,
+    brush: VolumeBrushModel,
     logger: LoggerBase
   ) {
     if storedAppModel.autoloadRenderState,
        let url = DatasetStateStorage.viewStateFileURL(datasetID: datasetID, logger: logger) {
       do {
+        let state = try makeDatasetViewState(datasetID: datasetID)
         try DatasetStateStorage.saveViewState(
-          try makeDatasetViewState(datasetID: datasetID),
+          state,
           to: url
         )
+        try PanelParameterStorage.saveDataset(common: state.common, brush: brush, beside: url)
       } catch {
         logger.warning("Automatically saving dataset state failed: \(error.localizedDescription)")
       }
@@ -644,10 +652,22 @@ class SharedAppModel {
   }
 
   @discardableResult
+  @MainActor
+  private func loadPanelParameters(beside url: URL, brush: VolumeBrushModel) throws -> Bool {
+    let parameters = try PanelParameterStorage.loadDataset(beside: url)
+    try parameters.brush?.apply(to: brush)
+    if let lighting = parameters.lighting { applyLightingState(lighting.state) }
+    if let iso = parameters.iso { normIsoValue = iso.value }
+    return !parameters.isEmpty
+  }
+
+  @discardableResult
+  @MainActor
   func restoreSavedDatasetState(
     datasetID: String,
     physicalExtent: SIMD3<Float>,
     channelInterpretation: BORGVRChannelInterpretation,
+    brush: VolumeBrushModel,
     logger: LoggerBase
   ) throws -> Bool {
     var restored = false
@@ -661,10 +681,12 @@ class SharedAppModel {
       .appendingPathExtension("tf1d") {
       restored = try loadDatasetTransferFunctions(from: url)
     }
-    if let url = DatasetStateStorage.viewStateFileURL(datasetID: datasetID, logger: logger),
-       FileManager.default.fileExists(atPath: url.path) {
-      applyDatasetViewState(try DatasetStateStorage.loadViewState(datasetID: datasetID, from: url))
-      restored = true
+    if let url = DatasetStateStorage.viewStateFileURL(datasetID: datasetID, logger: logger) {
+      if FileManager.default.fileExists(atPath: url.path) {
+        applyDatasetViewState(try DatasetStateStorage.loadViewState(datasetID: datasetID, from: url))
+        restored = true
+      }
+      if try loadPanelParameters(beside: url, brush: brush) { restored = true }
     }
     if let url = DatasetStateStorage.objectFileURL(datasetID: datasetID, logger: logger),
        FileManager.default.fileExists(atPath: url.path) {

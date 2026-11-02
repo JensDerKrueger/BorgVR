@@ -741,12 +741,14 @@ final class AppModel: ObservableObject {
     guard let dataset = activeDataset else { return }
 
     if appSettings.autoloadRenderState,
-       let url = viewStateFileURL(for: dataset),
-       FileManager.default.fileExists(atPath: url.path) {
+       let url = viewStateFileURL(for: dataset) {
       do {
-        renderingParameters.applyDatasetViewState(
-          try DatasetStateStorage.loadViewState(datasetID: dataset.uniqueId, from: url)
-        )
+        if FileManager.default.fileExists(atPath: url.path) {
+          renderingParameters.applyDatasetViewState(
+            try DatasetStateStorage.loadViewState(datasetID: dataset.uniqueId, from: url)
+          )
+        }
+        try renderingParameters.loadPanelParameters(beside: url, brush: volumeBrush)
       } catch {
         logger.warning("Automatically loading dataset state failed: \(error.localizedDescription)")
       }
@@ -790,10 +792,12 @@ final class AppModel: ObservableObject {
 
     if appSettings.autoloadRenderState, let url = viewStateFileURL(for: dataset) {
       do {
+        let state = renderingParameters.makeDatasetViewState(datasetID: dataset.uniqueId)
         try DatasetStateStorage.saveViewState(
-          renderingParameters.makeDatasetViewState(datasetID: dataset.uniqueId),
+          state,
           to: url
         )
+        try PanelParameterStorage.saveDataset(common: state.common, brush: volumeBrush, beside: url)
       } catch {
         logger.warning("Automatically saving dataset state failed: \(error.localizedDescription)")
       }
@@ -842,12 +846,14 @@ final class AppModel: ObservableObject {
     if let url = transferFunctionFileURL(for: dataset, componentCount: renderingParameters.componentCount) {
       restored = try renderingParameters.loadDatasetTransferFunctions(from: url)
     }
-    if let url = viewStateFileURL(for: dataset),
-       FileManager.default.fileExists(atPath: url.path) {
-      renderingParameters.applyDatasetViewState(
-        try DatasetStateStorage.loadViewState(datasetID: dataset.uniqueId, from: url)
-      )
-      restored = true
+    if let url = viewStateFileURL(for: dataset) {
+      if FileManager.default.fileExists(atPath: url.path) {
+        renderingParameters.applyDatasetViewState(
+          try DatasetStateStorage.loadViewState(datasetID: dataset.uniqueId, from: url)
+        )
+        restored = true
+      }
+      if try renderingParameters.loadPanelParameters(beside: url, brush: volumeBrush) { restored = true }
     }
     if let url = objectFileURL(for: dataset),
        FileManager.default.fileExists(atPath: url.path) {

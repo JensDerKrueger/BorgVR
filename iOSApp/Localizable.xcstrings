@@ -1,528 +1,6 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
-  "Remote": {
-    "extractionState": "manual",
-    "localizations": {
-      "en": {
-        "stringUnit": {
-          "state": "translated",
-          "value": "Remote"
-        }
-      },
-      "de": {
-        "stringUnit": {
-          "state": "translated",
-          "value": "Remote"
-        }
-      },
-      "es": {
-        "stringUnit": {
-          "state": "translated",
-          "value": "Remoto"
-        }
-      },
-      "fr": {
-        "stringUnit": {
-          "state": "translated",
-          "value": "Distant"
-        }
-      }
-    }
-  },
-  "Description": {
-    "extractionState": "manual",
-    "localizations": {
-      "en": {
-        "stringUnit": {
-          "state": "translated",
-          "value": "Description"
-        }
-      },
-      "de": {
-        "stringUnit": {
-          "state": "translated",
-          "value": "Beschreibung"
-        }
-      },
-      "es": {
-        "stringUnit": {
-          "state": "translated",
-          "value": "Descripción"
-        }
-      },
-      "fr": {
-        "stringUnit": {
-          "state": "translated",
-          "value": "Description"
-        }
-      }
-    }
-  },
-  "Physical volume": {
-    "extractionState": "manual",
-    "localizations": {
-      "en": {
-        "stringUnit": {
-          "state": "translated",
-          "value": "Physical volume"
-        }
-      },
-      "de": {
-        "stringUnit": {
-          "state": "translated",
-          "value": "Physisches Volumen"
-        }
-      },
-      "es": {
-        "stringUnit": {
-          "state": "translated",
-          "value": "Volumen físico"
-        }
-      },
-      "fr": {
-        "stringUnit": {
-          "state": "translated",
-          "value": "Volume physique"
-        }
-      }
-    }
-  },
-  "Voxel count": {
-    "extractionState": "manual",
-    "localizations": {
-      "en": {
-        "stringUnit": {
-          "state": "translated",
-          "value": "Voxel count"
-        }
-      },
-      "de": {
-        "stringUnit": {
-          "state": "translated",
-          "value": "Voxelanzahl"
-        }
-      },
-      "es": {
-        "stringUnit": {
-          "state": "translated",
-          "value": "Número de vóxeles"
-        }
-      },
-      "fr": {
-        "stringUnit": {
-          "state": "translated",
-          "value": "Nombre de voxels"
-        }
-      }
-    }
-  },
-  "No grouping": {
-    "extractionState": "manual",
-    "localizations": {
-      "en": {
-        "stringUnit": {
-          "state": "translated",
-          "value": "No grouping"
-        }
-      },
-      "de": {
-        "stringUnit": {
-          "state": "translated",
-          "value": "Keine Gruppierung"
-        }
-      },
-      "es": {
-        "stringUnit": {
-          "state": "translated",
-          "value": "Sin agrupación"
-        }
-      },
-      "fr": {
-        "stringUnit": {
-          "state": "translated",
-          "value": "Aucun regroupement"
-        }
-      }
-    }
-  },
-  "Data source": {
-    "extractionState": "manual",
-    "localizations": {
-      "en": {
-        "stringUnit": {
-          "state": "translated",
-          "value": "Data source"
-        }
-      },
-      "de": {
-        "stringUnit": {
-          "state": "translated",
-          "value": "Datenquelle"
-        }
-      },
-      "es": {
-        "stringUnit": {
-          "state": "translated",
-          "value": "Fuente de datos"
-        }
-      },
-      "fr": {
-        "stringUnit": {
-          "state": "translated",
-          "value": "Source de données"
-        }
-      }
-    }
-  },
-  "Built-in": {
-    "extractionState": "manual",
-    "localizations": {
-      "en": {
-        "stringUnit": {
-          "state": "translated",
-          "value": "Built-in"
-        }
-      },
-      "de": {
-        "stringUnit": {
-          "state": "translated",
-          "value": "Eingebaut"
-        }
-      },
-      "es": {
-        "stringUnit": {
-          "state": "translated",
-          "value": "Integrados"
-        }
-      },
-      "fr": {
-        "stringUnit": {
-          "state": "translated",
-          "value": "Intégrés"
-        }
-      }
-    }
-  },
-  "Sort by": {
-    "extractionState": "manual",
-    "localizations": {
-      "en": {
-        "stringUnit": {
-          "state": "translated",
-          "value": "Sort by"
-        }
-      },
-      "de": {
-        "stringUnit": {
-          "state": "translated",
-          "value": "Sortieren nach"
-        }
-      },
-      "es": {
-        "stringUnit": {
-          "state": "translated",
-          "value": "Ordenar por"
-        }
-      },
-      "fr": {
-        "stringUnit": {
-          "state": "translated",
-          "value": "Trier par"
-        }
-      }
-    }
-  },
-  "Sort direction": {
-    "extractionState": "manual",
-    "localizations": {
-      "en": {
-        "stringUnit": {
-          "state": "translated",
-          "value": "Sort direction"
-        }
-      },
-      "de": {
-        "stringUnit": {
-          "state": "translated",
-          "value": "Sortierreihenfolge"
-        }
-      },
-      "es": {
-        "stringUnit": {
-          "state": "translated",
-          "value": "Sentido de ordenación"
-        }
-      },
-      "fr": {
-        "stringUnit": {
-          "state": "translated",
-          "value": "Ordre de tri"
-        }
-      }
-    }
-  },
-  "Ascending": {
-    "extractionState": "manual",
-    "localizations": {
-      "en": {
-        "stringUnit": {
-          "state": "translated",
-          "value": "Ascending"
-        }
-      },
-      "de": {
-        "stringUnit": {
-          "state": "translated",
-          "value": "Aufsteigend"
-        }
-      },
-      "es": {
-        "stringUnit": {
-          "state": "translated",
-          "value": "Ascendente"
-        }
-      },
-      "fr": {
-        "stringUnit": {
-          "state": "translated",
-          "value": "Croissant"
-        }
-      }
-    }
-  },
-  "Descending": {
-    "extractionState": "manual",
-    "localizations": {
-      "en": {
-        "stringUnit": {
-          "state": "translated",
-          "value": "Descending"
-        }
-      },
-      "de": {
-        "stringUnit": {
-          "state": "translated",
-          "value": "Absteigend"
-        }
-      },
-      "es": {
-        "stringUnit": {
-          "state": "translated",
-          "value": "Descendente"
-        }
-      },
-      "fr": {
-        "stringUnit": {
-          "state": "translated",
-          "value": "Décroissant"
-        }
-      }
-    }
-  },
-  "Group by": {
-    "extractionState": "manual",
-    "localizations": {
-      "en": {
-        "stringUnit": {
-          "state": "translated",
-          "value": "Group by"
-        }
-      },
-      "de": {
-        "stringUnit": {
-          "state": "translated",
-          "value": "Gruppieren nach"
-        }
-      },
-      "es": {
-        "stringUnit": {
-          "state": "translated",
-          "value": "Agrupar por"
-        }
-      },
-      "fr": {
-        "stringUnit": {
-          "state": "translated",
-          "value": "Regrouper par"
-        }
-      }
-    }
-  },
-  "Server enabled": {
-    "extractionState": "manual",
-    "localizations": {
-      "en": {
-        "stringUnit": {
-          "state": "translated",
-          "value": "Enabled"
-        }
-      },
-      "de": {
-        "stringUnit": {
-          "state": "translated",
-          "value": "Aktiv"
-        }
-      },
-      "es": {
-        "stringUnit": {
-          "state": "translated",
-          "value": "Activo"
-        }
-      },
-      "fr": {
-        "stringUnit": {
-          "state": "translated",
-          "value": "Actif"
-        }
-      }
-    }
-  },
-  "Stored color compression (RGB/RGBA)": {
-    "extractionState": "manual",
-    "localizations": {
-      "en": {
-        "stringUnit": {
-          "state": "translated",
-          "value": "Color compression on import (RGB/RGBA)"
-        }
-      },
-      "de": {
-        "stringUnit": {
-          "state": "translated",
-          "value": "Farbkompression beim Import (RGB/RGBA)"
-        }
-      },
-      "es": {
-        "stringUnit": {
-          "state": "translated",
-          "value": "Compresión de color al importar (RGB/RGBA)"
-        }
-      },
-      "fr": {
-        "stringUnit": {
-          "state": "translated",
-          "value": "Compression des couleurs à l’importation (RGB/RGBA)"
-        }
-      }
-    }
-  },
-  "No compression": {
-    "extractionState": "manual",
-    "localizations": {
-      "en": {
-        "stringUnit": {
-          "state": "translated",
-          "value": "No compression"
-        }
-      },
-      "de": {
-        "stringUnit": {
-          "state": "translated",
-          "value": "Keine Kompression"
-        }
-      },
-      "es": {
-        "stringUnit": {
-          "state": "translated",
-          "value": "Sin compresión"
-        }
-      },
-      "fr": {
-        "stringUnit": {
-          "state": "translated",
-          "value": "Sans compression"
-        }
-      }
-    }
-  },
-  "JIT atlas compression (RGB/RGBA)": {
-    "extractionState": "manual",
-    "localizations": {
-      "en": {
-        "stringUnit": {
-          "state": "translated",
-          "value": "JIT atlas compression (RGB/RGBA)"
-        }
-      },
-      "de": {
-        "stringUnit": {
-          "state": "translated",
-          "value": "JIT-Atlas-Kompression (RGB/RGBA)"
-        }
-      },
-      "es": {
-        "stringUnit": {
-          "state": "translated",
-          "value": "Compresión JIT del atlas (RGB/RGBA)"
-        }
-      },
-      "fr": {
-        "stringUnit": {
-          "state": "translated",
-          "value": "Compression JIT de l’atlas (RGB/RGBA)"
-        }
-      }
-    }
-  },
-  "Uses lossy compression when opening color volumes. Direct GPU Erase/Restore is disabled; edited bricks are rebuilt and uploaded.": {
-    "extractionState": "manual",
-    "localizations": {
-      "en": {
-        "stringUnit": {
-          "state": "translated",
-          "value": "Uses lossy compression when opening color volumes. Direct GPU Erase/Restore is disabled; edited bricks are rebuilt and uploaded."
-        }
-      },
-      "de": {
-        "stringUnit": {
-          "state": "translated",
-          "value": "Verlustbehaftete Kompression beim Öffnen von Farbvolumen. Direktes GPU-Löschen/Wiederherstellen ist deaktiviert; bearbeitete Bricks werden neu kodiert und hochgeladen."
-        }
-      },
-      "es": {
-        "stringUnit": {
-          "state": "translated",
-          "value": "Compresión con pérdida al abrir volúmenes en color. El borrado y la restauración directos en la GPU se desactivan; los bloques editados se vuelven a codificar y cargar."
-        }
-      },
-      "fr": {
-        "stringUnit": {
-          "state": "translated",
-          "value": "Compression avec perte à l’ouverture des volumes en couleur. L’effacement et la restauration directs sur le GPU sont désactivés ; les blocs modifiés sont réencodés et transférés."
-        }
-      }
-    }
-  },
-  "converter_supporting_file_access_required": {
-    "extractionState": "manual",
-    "localizations": {
-      "en": {
-        "stringUnit": {
-          "state": "translated",
-          "value": "Read access to the referenced file is required: %@"
-        }
-      },
-      "de": {
-        "stringUnit": {
-          "state": "translated",
-          "value": "Leserechte für die referenzierte Datei werden benötigt: %@"
-        }
-      },
-      "es": {
-        "stringUnit": {
-          "state": "translated",
-          "value": "Se necesita permiso de lectura para el archivo referenciado: %@"
-        }
-      },
-      "fr": {
-        "stringUnit": {
-          "state": "translated",
-          "value": "L’accès en lecture au fichier référencé est nécessaire : %@"
-        }
-      }
-    }
-  },
     "" : {
 
     },
@@ -1595,6 +1073,35 @@
         }
       }
     },
+    "Ascending" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aufsteigend"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ascending"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ascendente"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Croissant"
+          }
+        }
+      }
+    },
     "Atlas size: \\(appSettings.atlasSizeMB) MB" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -2507,6 +2014,35 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "intégré"
+          }
+        }
+      }
+    },
+    "Built-in" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eingebaut"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Built-in"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Integrados"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Intégrés"
           }
         }
       }
@@ -3568,6 +3104,35 @@
         }
       }
     },
+    "converter_supporting_file_access_required" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Leserechte für die referenzierte Datei werden benötigt: %@"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Read access to the referenced file is required: %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se necesita permiso de lectura para el archivo referenciado: %@"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L’accès en lecture au fichier référencé est nécessaire : %@"
+          }
+        }
+      }
+    },
     "Copy access token" : {
       "localizations" : {
         "de" : {
@@ -3767,6 +3332,35 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Copier les données"
+          }
+        }
+      }
+    },
+    "Data source" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Datenquelle"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Data source"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fuente de datos"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Source de données"
           }
         }
       }
@@ -5384,6 +4978,64 @@
         }
       }
     },
+    "Descending" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Absteigend"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Descending"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Descendente"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Décroissant"
+          }
+        }
+      }
+    },
+    "Description" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Beschreibung"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Description"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Descripción"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Description"
+          }
+        }
+      }
+    },
     "Detach panel" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -6763,6 +6415,35 @@
         }
       }
     },
+    "Group by" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gruppieren nach"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Group by"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Agrupar por"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Regrouper par"
+          }
+        }
+      }
+    },
     "Hide access token" : {
       "localizations" : {
         "de" : {
@@ -8101,6 +7782,10 @@
         }
       }
     },
+    "Invalid panel settings." : {
+      "comment" : "Error message displayed when the panel settings are invalid.",
+      "isCommentAutoGenerated" : true
+    },
     "Invalid setting: %@" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -8182,6 +7867,35 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Isovaleur"
+          }
+        }
+      }
+    },
+    "JIT atlas compression (RGB/RGBA)" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "JIT-Atlas-Kompression (RGB/RGBA)"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "JIT atlas compression (RGB/RGBA)"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Compresión JIT del atlas (RGB/RGBA)"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Compression JIT de l’atlas (RGB/RGBA)"
           }
         }
       }
@@ -11206,6 +10920,35 @@
         }
       }
     },
+    "No compression" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keine Kompression"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No compression"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sin compresión"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sans compression"
+          }
+        }
+      }
+    },
     "No custom certificate: BorgVR creates a temporary self-signed certificate." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -11345,6 +11088,35 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Aucun fichier sélectionné"
+          }
+        }
+      }
+    },
+    "No grouping" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keine Gruppierung"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No grouping"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sin agrupación"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aucun regroupement"
           }
         }
       }
@@ -13297,6 +13069,35 @@
         }
       }
     },
+    "Physical volume" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Physisches Volumen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Physical volume"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Volumen físico"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Volume physique"
+          }
+        }
+      }
+    },
     "PKCS#12 password" : {
       "comment" : "A label for the password field in the web server certificate controls.",
       "isCommentAutoGenerated" : true,
@@ -13833,6 +13634,35 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Me le rappeler plus tard"
+          }
+        }
+      }
+    },
+    "Remote" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remote"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remote"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remoto"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Distant"
           }
         }
       }
@@ -15572,6 +15402,35 @@
         }
       }
     },
+    "Server enabled" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aktiv"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enabled"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Activo"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Actif"
+          }
+        }
+      }
+    },
     "Server is not started." : {
       "localizations" : {
         "de" : {
@@ -16231,6 +16090,64 @@
         }
       }
     },
+    "Sort by" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sortieren nach"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sort by"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ordenar por"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Trier par"
+          }
+        }
+      }
+    },
+    "Sort direction" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sortierreihenfolge"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sort direction"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sentido de ordenación"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ordre de tri"
+          }
+        }
+      }
+    },
     "Specular light" : {
       "localizations" : {
         "de" : {
@@ -16571,6 +16488,35 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Arrêter le script"
+          }
+        }
+      }
+    },
+    "Stored color compression (RGB/RGBA)" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Farbkompression beim Import (RGB/RGBA)"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Color compression on import (RGB/RGBA)"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Compresión de color al importar (RGB/RGBA)"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Compression des couleurs à l’importation (RGB/RGBA)"
           }
         }
       }
@@ -19511,6 +19457,35 @@
         }
       }
     },
+    "Uses lossy compression when opening color volumes. Direct GPU Erase/Restore is disabled; edited bricks are rebuilt and uploaded." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verlustbehaftete Kompression beim Öffnen von Farbvolumen. Direktes GPU-Löschen/Wiederherstellen ist deaktiviert; bearbeitete Bricks werden neu kodiert und hochgeladen."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uses lossy compression when opening color volumes. Direct GPU Erase/Restore is disabled; edited bricks are rebuilt and uploaded."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Compresión con pérdida al abrir volúmenes en color. El borrado y la restauración directos en la GPU se desactivan; los bloques editados se vuelven a codificar y cargar."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Compression avec perte à l’ouverture des volumes en couleur. L’effacement et la restauration directs sur le GPU sont désactivés ; les blocs modifiés sont réencodés et transférés."
+          }
+        }
+      }
+    },
     "Values" : {
       "localizations" : {
         "de" : {
@@ -19794,6 +19769,35 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Supprimer cet état ?"
+          }
+        }
+      }
+    },
+    "Voxel count" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Voxelanzahl"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Voxel count"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Número de vóxeles"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nombre de voxels"
           }
         }
       }

@@ -1,6 +1,9 @@
 import SwiftUI
 
 struct TransferFunctionEditorView: View {
+#if os(macOS)
+  @Environment(\.panelWindow) private var panelWindow
+#endif
   @Environment(\.horizontalSizeClass) private var horizontalSizeClass
   @EnvironmentObject private var appModel: AppModel
   @EnvironmentObject private var renderingParameters: RenderingParameters
@@ -52,6 +55,17 @@ struct TransferFunctionEditorView: View {
     )) { _ in
       refreshTransferFunctionCatalog()
     }
+#if os(macOS)
+    .panelActions(.standard(
+      reset: .button("reset", icon: "arrow.counterclockwise", text: String(localized: "Reset"), action: resetTransferFunction),
+      load: .button("load", icon: "folder", text: String(localized: "tf_editor_load"),
+        enabled: transferFunctionFileURL != nil, action: loadTransferFunction),
+      save: .button("save", icon: "square.and.arrow.down", text: String(localized: "tf_editor_save"),
+        enabled: transferFunctionFileURL != nil) {
+          saveDescription = currentTransferFunctionDescription
+          showingSaveDescriptionPrompt = true
+        }))
+#endif
     .alert("tf_save_dialog_title", isPresented: $showingSaveDescriptionPrompt) {
       TextField("tf_save_dialog_description_placeholder", text: $saveDescription)
       Button("tf_save_dialog_save_button") {
@@ -203,48 +217,63 @@ struct TransferFunctionEditorView: View {
     }
   }
 
+  private var showsLocalActions: Bool {
+#if os(macOS)
+    panelWindow == nil
+#else
+    true
+#endif
+  }
+
+  private func resetTransferFunction() {
+    renderingParameters.objectWillChange.send()
+    renderingParameters.transferFunction.reset()
+    onMutation?()
+    sharePlay.synchronize(kind: .full)
+    sharePlay.flushSynchronization()
+  }
+
   private func commandControls(menuMaxWidth: CGFloat?) -> some View {
     HStack(spacing: 12) {
-      Button {
-        saveDescription = currentTransferFunctionDescription
-        showingSaveDescriptionPrompt = true
-      } label: {
-        Image(systemName: "square.and.arrow.down")
-      }
-      .disabled(transferFunctionFileURL == nil)
-      .help("tf_editor_save_help")
-      .accessibilityLabel("tf_editor_save")
+      if showsLocalActions {
+        Button {
+          saveDescription = currentTransferFunctionDescription
+          showingSaveDescriptionPrompt = true
+        } label: {
+          Image(systemName: "square.and.arrow.down")
+        }
+        .disabled(transferFunctionFileURL == nil)
+        .help("tf_editor_save_help")
+        .accessibilityLabel("tf_editor_save")
 
-      Button {
-        loadTransferFunction()
-      } label: {
-        Image(systemName: "square.and.arrow.up")
+        Button {
+          loadTransferFunction()
+        } label: {
+          Image(systemName: "square.and.arrow.up")
+        }
+        .disabled(transferFunctionFileURL == nil)
+        .help("tf_editor_load_help")
+        .accessibilityLabel("tf_editor_load")
       }
-      .disabled(transferFunctionFileURL == nil)
-      .help("tf_editor_load_help")
-      .accessibilityLabel("tf_editor_load")
 
       transferFunctionMenu(menuMaxWidth: menuMaxWidth)
         .frame(maxWidth: menuMaxWidth == nil ? .infinity : menuMaxWidth, alignment: .leading)
 
-      Button {
-        renderingParameters.objectWillChange.send()
-        renderingParameters.transferFunction.reset()
-        onMutation?()
-        sharePlay.synchronize(kind: .full)
-      } label: {
-        Image(systemName: "arrow.counterclockwise")
+      if showsLocalActions {
+        Button(action: resetTransferFunction) {
+          Image(systemName: "arrow.counterclockwise")
+        }
+        .help("Reset")
+        .accessibilityLabel("Reset")
       }
-      .help("Reset")
-      .accessibilityLabel("Reset")
 
-      Button {
-        onClose?()
-      } label: {
-        Image(systemName: "checkmark")
+      if let onClose {
+        Button(action: onClose) {
+          Image(systemName: "checkmark")
+        }
+        .help("Done")
+        .accessibilityLabel("Done")
       }
-      .help("Done")
-      .accessibilityLabel("Done")
     }
     .screenControlButtons()
   }

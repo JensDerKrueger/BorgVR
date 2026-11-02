@@ -1110,3 +1110,7 @@
 "Descending" = "Descending";
 "Group by" = "Group by";
 "Remote" = "Remote";
+"Close panel" = "Close panel";
+"Render UI" = "Render UI";
+"Panel File Error" = "Panel File Error";
+"Invalid panel settings." = "Invalid panel settings.";

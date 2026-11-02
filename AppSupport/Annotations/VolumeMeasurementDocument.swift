@@ -336,7 +336,8 @@ struct DatasetStateSavePlan {
   let measurementURL: URL?
 
   var fileURLs: [URL] {
-    transferFunctionURLs + [viewStateURL, objectURL, measurementURL].compactMap { $0 }
+    transferFunctionURLs + [viewStateURL, objectURL, measurementURL].compactMap { $0 } +
+      (viewStateURL.map { PanelParameterStorage.datasetFileURLs(beside: $0) } ?? [])
   }
 
   var isEmpty: Bool { fileURLs.isEmpty }

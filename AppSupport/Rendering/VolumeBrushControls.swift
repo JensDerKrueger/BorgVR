@@ -54,7 +54,15 @@ struct VolumeEditResetButton: View {
     .accessibilityLabel("Discard All Edits")
     .disabled(model.isExporting || model.isDiscardingEdits || model.isOpeningState ||
       model.isRestoringPersonalState || model.isWaitingForSharedState)
-    .alert("Discard All Volume Edits?", isPresented: $showsConfirmation) {
+    .modifier(VolumeEditResetConfirmation(model: model, showsConfirmation: $showsConfirmation))
+  }
+}
+
+private struct VolumeEditResetConfirmation: ViewModifier {
+  @ObservedObject var model: VolumeBrushModel
+  @Binding var showsConfirmation: Bool
+  func body(content: Content) -> some View {
+    content.alert("Discard All Volume Edits?", isPresented: $showsConfirmation) {
       Button("Cancel", role: .cancel) {}
       Button("Discard All Edits", role: .destructive) { model.discardAllEdits() }
     } message: {
@@ -64,16 +72,26 @@ struct VolumeEditResetButton: View {
 }
 
 struct VolumeBrushControls: View {
+#if os(macOS)
+  @Environment(\.panelWindow) private var panelWindow
+  @State private var showsDiscardConfirmation = false
+#endif
   @ObservedObject var model: VolumeBrushModel
   @State private var showsExportDialog = false
   var body: some View {
     VStack(spacing: 8) {
       VolumeEditStateControls(model: model)
       VolumeEditSynchronizationStatus(model: model)
+#if os(macOS)
+      if panelWindow == nil {
+        HStack { Spacer(); VolumeEditResetButton(model: model) }
+      }
+#else
       HStack {
         Spacer()
         VolumeEditResetButton(model: model)
       }
+#endif
       Picker("Brush", selection: $model.mode) {
         Label("Erase", systemImage: "eraser.fill").tag(BorgVRVolumeBrushMode.erase)
         Label("Restore", systemImage: "arrow.uturn.backward").tag(BorgVRVolumeBrushMode.restore)
@@ -129,6 +147,15 @@ struct VolumeBrushControls: View {
     .disabled(model.isDiscardingEdits || model.isOpeningState || model.isRestoringPersonalState)
     .onAppear { model.refreshStates() }
     .padding(.vertical, 6)
+#if os(macOS)
+    .panelParameters(kind: "brush",
+      reset: .button("reset", icon: "arrow.counterclockwise", text: String(localized: "Discard All Edits"),
+        enabled: !model.isExporting && !model.isDiscardingEdits && !model.isOpeningState &&
+          !model.isRestoringPersonalState && !model.isWaitingForSharedState) { showsDiscardConfirmation = true },
+      snapshot: { BrushPanelPreset(model: model) },
+      apply: { try $0.apply(to: model) })
+    .modifier(VolumeEditResetConfirmation(model: model, showsConfirmation: $showsDiscardConfirmation))
+#endif
     .sheet(isPresented: $showsExportDialog, onDismiss: model.dismissExportDialog) {
       VolumeBrushExportDialog(model: model)
     }

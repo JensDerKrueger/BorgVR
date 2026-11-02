@@ -1110,3 +1110,7 @@
 "Descending" = "Descendente";
 "Group by" = "Agrupar por";
 "Remote" = "Remoto";
+"Close panel" = "Cerrar panel";
+"Render UI" = "Controles de renderizado";
+"Panel File Error" = "Error de archivo del panel";
+"Invalid panel settings." = "Ajustes de panel no válidos.";

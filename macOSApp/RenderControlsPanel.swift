@@ -1,22 +1,8 @@
 import AppKit
 import SwiftUI
 
-private struct HeaderIconButtonStyle: ButtonStyle {
-  func makeBody(configuration: Configuration) -> some View {
-    configuration.label
-      .foregroundStyle(.primary)
-      .frame(width: 26, height: 24)
-      .contentShape(Rectangle())
-      .background(
-        configuration.isPressed ? Color.primary.opacity(0.12) : .clear,
-        in: RoundedRectangle(cornerRadius: 5)
-      )
-      .opacity(configuration.isPressed ? 0.65 : 1)
-  }
-}
 
 struct RenderControlsPanel: View {
-  @Environment(\.colorScheme) private var colorScheme
   @EnvironmentObject private var appModel: AppModel
   @EnvironmentObject private var renderingParameters: RenderingParameters
   @EnvironmentObject private var appSettings: AppSettings
@@ -25,9 +11,6 @@ struct RenderControlsPanel: View {
   @EnvironmentObject private var session: ScreenBorgVRSession
   @EnvironmentObject private var docking: DockingController
   @Environment(\.openWindow) private var openWindow
-  @Environment(\.dismissWindow) private var dismissWindow
-
-  let isDetachedWindow: Bool
 
   @State private var selectedInteractionMode: AppModel.InteractionMode = .model
   @State private var copiedWebGPUShareLink = false
@@ -36,180 +19,6 @@ struct RenderControlsPanel: View {
   var body: some View {
     VStack(spacing: 8) {
       VolumeEditSynchronizationStatus(model: appModel.volumeBrush)
-      HStack {
-        Button {
-          docking.request(.closeDataset)
-        } label: {
-          Image(systemName: "xmark")
-        }
-        .accessibilityLabel("Close")
-        .help(MacKeyboardShortcut.help("Close", shortcut: .closeDataset))
-        .buttonStyle(.borderedProminent)
-
-        Spacer()
-
-        Text(appModel.activeDataset?.description ?? "BorgVR")
-          .font(.headline)
-          .italic(appModel.isDatasetStreaming)
-          .foregroundStyle(ScreenControlAppearance.datasetTitleColor(
-            isStreaming: appModel.isDatasetStreaming, colorScheme: colorScheme
-          ))
-          .lineLimit(1)
-
-        Spacer()
-
-        headerActionGroup(tint: .green) {
-          Button {
-            sharePlay.startSharePlay()
-          } label: {
-            Image(systemName: "shareplay")
-          }
-          .accessibilityLabel(
-            sharePlay.isInSession
-              ? String(localized: "SharePlay active")
-              : String(localized: "Start SharePlay")
-          )
-          .help(
-            MacKeyboardShortcut.help(
-              sharePlay.isInSession ? "SharePlay active" : "Start SharePlay",
-              shortcut: .startSharePlay
-            )
-          )
-          .buttonStyle(HeaderIconButtonStyle())
-
-          if sharePlay.isInSession, !sharePlay.participants.isEmpty {
-            Menu {
-              ForEach(sharePlay.participants) { participant in
-                Label(participant.displayName, systemImage: participant.platform.systemImage)
-              }
-            } label: {
-              Image(systemName: "person.2")
-            }
-            .accessibilityLabel("Participants")
-            .help("Participants")
-            .buttonStyle(HeaderIconButtonStyle())
-          }
-
-          if canCopyWebGPUShareLink {
-            Button {
-              copyWebGPUShareLink()
-            } label: {
-              Image(systemName: copiedWebGPUShareLink ? "checkmark" : "link")
-            }
-            .accessibilityLabel("Copy WebGPU link")
-            .help(MacKeyboardShortcut.help("Copy WebGPU link", shortcut: .copyWebGPULink))
-            .buttonStyle(HeaderIconButtonStyle())
-          }
-        }
-
-        headerActionGroup(tint: .teal) {
-          Button {
-            docking.request(.saveDatasetState)
-          } label: {
-            Image(systemName: "tray.and.arrow.down")
-          }
-          .accessibilityLabel("Save Dataset State")
-          .help(MacKeyboardShortcut.help("Save Dataset State", shortcut: .saveDatasetState))
-          .buttonStyle(HeaderIconButtonStyle())
-
-          Button {
-            docking.request(.restoreDatasetState)
-          } label: {
-            Image(systemName: "tray.and.arrow.up")
-          }
-          .accessibilityLabel("Restore Dataset State")
-          .help(MacKeyboardShortcut.help("Restore Dataset State", shortcut: .restoreDatasetState))
-          .buttonStyle(HeaderIconButtonStyle())
-        }
-
-        headerActionGroup(tint: .red) {
-          Button {
-            docking.request(.startRecording)
-          } label: {
-            Image(systemName: session.isCommandRecording ? "record.circle.fill" : "record.circle")
-          }
-          .disabled(session.isCommandRecording)
-          .accessibilityLabel("Start Recording")
-          .help(MacKeyboardShortcut.help("Start Recording", shortcut: .startRecording))
-          .buttonStyle(HeaderIconButtonStyle())
-
-          Button {
-            docking.request(.stopRecording)
-          } label: {
-            Image(systemName: session.isCommandRecording ? "stop.circle.fill" : "stop.circle")
-          }
-          .disabled(!session.isCommandRecording)
-          .accessibilityLabel("Stop and Save")
-          .help(MacKeyboardShortcut.help("Stop and Save", shortcut: .stopRecording))
-          .buttonStyle(HeaderIconButtonStyle())
-        }
-
-        headerActionGroup(tint: .blue) {
-          Button {
-            docking.showsDatasetInfo.toggle()
-          } label: {
-            Image(systemName: "info.circle")
-          }
-          .accessibilityLabel("dataset_info_button")
-          .help(MacKeyboardShortcut.help("dataset_info_button_help", shortcut: .datasetInfo))
-          .buttonStyle(HeaderIconButtonStyle())
-
-          if appSettings.showLogButton {
-            Button {
-              docking.showsLog.toggle()
-            } label: {
-              Image(systemName: "text.alignleft")
-            }
-            .accessibilityLabel("Log")
-            .help(MacRenderShortcut.help("Log", shortcut: .log))
-            .buttonStyle(HeaderIconButtonStyle())
-          }
-
-          Button {
-            openWindow(id: "PerformanceGraphView")
-          } label: {
-            Image(systemName: "chart.xyaxis.line")
-          }
-          .accessibilityLabel("performance_title")
-          .help(MacRenderShortcut.help("performance_title", shortcut: .performance))
-          .buttonStyle(HeaderIconButtonStyle())
-        }
-
-        headerActionGroup(tint: .gray) {
-          Button {
-            toggleRenderControlsDocking()
-          } label: {
-            Image(
-              systemName: docking.isDetached(.renderControls)
-                ? DockablePanelID.renderControls.detachedIcon
-                : DockablePanelID.renderControls.dockedIcon
-            )
-          }
-          .accessibilityLabel(
-            docking.isDetached(.renderControls)
-              ? String(localized: "Dock panel")
-              : String(localized: "Detach panel")
-          )
-          .help(
-            MacRenderShortcut.help(
-              docking.isDetached(.renderControls) ? "Dock panel" : "Detach panel",
-              shortcut: .docking
-            )
-          )
-          .buttonStyle(HeaderIconButtonStyle())
-
-          if !isDetachedWindow {
-            Button {
-              docking.hide(.renderControls)
-            } label: {
-              Image(systemName: "eye.slash")
-            }
-            .accessibilityLabel("Hide UI")
-            .help(MacRenderShortcut.help("Hide UI", shortcut: .toggleControls))
-            .buttonStyle(HeaderIconButtonStyle())
-          }
-        }
-      }
 
       if sharePlay.showsSystemSharePlayJoinInstructions {
         Label(
@@ -276,17 +85,6 @@ struct RenderControlsPanel: View {
               .help(MacRenderShortcut.help("Bricks", shortcut: .bricks))
           }
 
-          Button {
-            renderingParameters.reset()
-            session.commitExternalMutation(source: .userInterface, domain: .visualization)
-            sharePlay.synchronize(kind: .full)
-            sharePlay.synchronize(kind: .transformOnly)
-            sharePlay.flushSynchronization()
-          } label: {
-            Label("Reset", systemImage: "arrow.counterclockwise")
-          }
-          .fixedSize()
-          .help(MacRenderShortcut.help("Reset", shortcut: .reset))
         }
         .padding(.leading, 12)
       }
@@ -308,8 +106,7 @@ struct RenderControlsPanel: View {
 
       modeWindowButtons
     }
-    .padding(12)
-    .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 8))
+    .panelActions(mainPanelConfiguration)
     .onChange(of: appSettings.showLogButton) { _, isVisible in
       if !isVisible {
         docking.showsLog = false
@@ -614,27 +411,58 @@ struct RenderControlsPanel: View {
     }
   }
 
-  private func toggleRenderControlsDocking() {
-    if docking.isDetached(.renderControls) {
-      docking.dock(.renderControls)
-      dismissWindow(id: DockablePanelID.renderControls.windowID)
-    } else {
-      docking.detach(.renderControls)
-      openWindow(id: DockablePanelID.renderControls.windowID)
+  private var mainPanelConfiguration: PanelWindowConfiguration {
+    var additional: [PanelAction] = [
+      .button("shareplay", icon: "shareplay", text: String(localized: "Start SharePlay"),
+        selected: sharePlay.isInSession, tint: .green) { sharePlay.startSharePlay() }
+    ]
+    if sharePlay.isInSession, !sharePlay.participants.isEmpty {
+      additional.append(.menu("participants", icon: "person.2", text: String(localized: "Participants"),
+        items: sharePlay.participants.map { participant in
+          .button(participant.id.uuidString, icon: participant.platform.systemImage,
+            text: participant.displayName, enabled: false, action: {})
+        }))
     }
-  }
-
-  private func headerActionGroup<Content: View>(
-    tint: Color,
-    @ViewBuilder content: () -> Content
-  ) -> some View {
-    HStack(spacing: 0) {
-      content()
+    if canCopyWebGPUShareLink {
+      additional.append(.button("web-link", icon: copiedWebGPUShareLink ? "checkmark" : "link",
+        text: String(localized: "Copy WebGPU link"), action: copyWebGPUShareLink))
     }
-    .padding(2)
-    .foregroundStyle(.primary)
-    .background(ScreenControlAppearance.surface, in: Capsule())
-    .overlay(Capsule().strokeBorder(tint.opacity(0.65), lineWidth: 1.5))
+    additional += [.spacer("recording"),
+      .button("record", icon: session.isCommandRecording ? "record.circle.fill" : "record.circle",
+        text: String(localized: "Start Recording"), enabled: !session.isCommandRecording, tint: .red) {
+          docking.request(.startRecording)
+        },
+      .button("stop", icon: session.isCommandRecording ? "stop.circle.fill" : "stop.circle",
+        text: String(localized: "Stop and Save"), enabled: session.isCommandRecording, tint: .red) {
+          docking.request(.stopRecording)
+        },
+      .spacer("information"),
+      .button("info", icon: "info.circle", text: String(localized: "dataset_info_button")) {
+        docking.showsDatasetInfo.toggle()
+      }]
+    if appSettings.showLogButton {
+      additional.append(.button("log", icon: "text.alignleft", text: String(localized: "Log")) {
+        docking.showsLog.toggle()
+      })
+    }
+    additional.append(.button("performance", icon: "chart.xyaxis.line", text: String(localized: "performance_title")) {
+      openWindow(id: "PerformanceGraphView")
+    })
+    return .standard(title: appModel.activeDataset?.description ?? "BorgVR",
+      reset: .button("reset", icon: "arrow.counterclockwise", text: String(localized: "Reset")) {
+        try? session.perform(.reset(.all), source: .userInterface)
+        sharePlay.flushSynchronization()
+      },
+      load: .button("load", icon: "tray.and.arrow.up", text: String(localized: "Restore Dataset State")) {
+        docking.request(.restoreDatasetState)
+      },
+      save: .button("save", icon: "tray.and.arrow.down", text: String(localized: "Save Dataset State")) {
+        docking.request(.saveDatasetState)
+      },
+      additional: additional,
+      leading: [.button("close-dataset", icon: "xmark", text: String(localized: "Close Dataset"), tint: .red) {
+        docking.request(.closeDataset)
+      }])
   }
 
   private func interactionModeColor(for mode: AppModel.InteractionMode) -> Color {

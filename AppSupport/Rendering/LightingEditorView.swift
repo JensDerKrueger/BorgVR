@@ -8,6 +8,9 @@ import UIKit
 #endif
 
 struct LightingEditorView: View, Equatable {
+#if os(macOS)
+  @Environment(\.panelWindow) private var panelWindow
+#endif
   let renderMode: RenderMode
   @Binding var lightDirection: SIMD3<Float>
   @Binding var ambientLightColor: SIMD3<Float>
@@ -35,39 +38,66 @@ struct LightingEditorView: View, Equatable {
 
   @ViewBuilder
   var body: some View {
-    if usesPanelBackground {
-      editorContent
-        .padding(16)
-        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 8))
-    } else {
-      editorContent
+    Group {
+      if usesPanelBackground {
+        editorContent
+          .padding(16)
+          .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 8))
+      } else {
+        editorContent
+      }
     }
+#if os(macOS)
+    .panelParameters(kind: "lighting",
+      reset: .button("reset", icon: "arrow.counterclockwise", text: String(localized: "Reset"), action: resetLighting),
+      snapshot: { LightingPanelPreset(direction: lightDirection, ambient: ambientLightColor,
+        diffuse: diffuseLightColor, specular: specularLightColor) },
+      apply: { preset in
+        let state = preset.state
+        lightDirection = state.direction
+        ambientLightColor = state.ambientColor
+        diffuseLightColor = state.diffuseColor
+        specularLightColor = state.specularColor
+        onChange()
+        onCommit()
+      })
+#endif
+  }
+
+  private var showsLocalActions: Bool {
+#if os(macOS)
+    panelWindow == nil
+#else
+    true
+#endif
   }
 
   private var editorContent: some View {
     VStack(spacing: 18) {
-      HStack {
-        if showsTitle {
-          Text("Lighting")
-            .font(.headline)
-        }
-        Spacer()
-        Button {
-          resetLighting()
-        } label: {
-          Label("Reset", systemImage: "arrow.counterclockwise")
-        }
-        if let onClose {
-          Button {
-            onClose()
-          } label: {
-            Image(systemName: "xmark")
+      if showsLocalActions {
+        HStack {
+          if showsTitle {
+            Text("Lighting")
+              .font(.headline)
           }
-          .accessibilityLabel("Close lighting editor")
-          .help("Close lighting editor")
+          Spacer()
+          Button {
+            resetLighting()
+          } label: {
+            Label("Reset", systemImage: "arrow.counterclockwise")
+          }
+          if let onClose {
+            Button {
+              onClose()
+            } label: {
+              Image(systemName: "xmark")
+            }
+            .accessibilityLabel("Close lighting editor")
+            .help("Close lighting editor")
+          }
         }
+        .screenControlButtons()
       }
-      .screenControlButtons()
 
       if renderMode == .transferFunction1D {
         HStack(alignment: .top, spacing: 8) {

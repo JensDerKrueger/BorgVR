@@ -113,65 +113,8 @@ struct MacMarkerView: View {
         }
       }
 
-      HStack {
-        Menu {
-          if markerCatalog.isEmpty {
-            Text("No Object Files Available")
-          } else {
-            ForEach(markerCatalog) { entry in
-              Button {
-                loadMarkers(at: entry.url)
-              } label: {
-                Label(
-                  entry.displayName,
-                  systemImage: entry.matches(datasetID: currentDatasetID)
-                    ? "checkmark.circle.fill" : "doc"
-                )
-              }
-            }
-          }
-        } label: {
-          Label("Files", systemImage: "shippingbox")
-        }
-        .screenControlMenu()
-
-        Button {
-          showLoadFilePicker = true
-        } label: {
-          Label("Load...", systemImage: "folder")
-        }
-
-        Button {
-          showSaveFilePicker = true
-        } label: {
-          Label("Save...", systemImage: "square.and.arrow.down")
-        }
-        .disabled(appModel.volumeMarkers.isEmpty && appModel.sceneMeshInstances.isEmpty)
-
-        Spacer()
-      }
-      .screenControlButtons()
-
-      HStack {
-        Button(role: .destructive) {
-          deleteSelectedMarker()
-        } label: {
-          Label("Delete Selection", systemImage: "trash")
-        }
-        .disabled(selectedMarkerIndices.isEmpty && appModel.selectedSceneMeshInstanceID == nil)
-
-        Spacer()
-
-        Button(role: .destructive) {
-          confirmDeleteAll = true
-        } label: {
-          Label("Delete All", systemImage: "trash.slash")
-        }
-        .disabled(appModel.volumeMarkers.isEmpty && appModel.sceneMeshInstances.isEmpty)
-      }
-      .screenControlButtons()
     }
-    .padding(20)
+    .panelActions(panelConfiguration)
     .confirmationDialog(
       "Delete All Objects?",
       isPresented: $confirmDeleteAll,
@@ -412,6 +355,24 @@ struct MacMarkerView: View {
     if removedMarkers || removedObject {
       synchronizeMarkers()
     }
+  }
+
+  private var panelConfiguration: PanelWindowConfiguration {
+    let hasObjects = !appModel.volumeMarkers.isEmpty || !appModel.sceneMeshInstances.isEmpty
+    return .standard(
+      reset: .button("reset", icon: "arrow.counterclockwise", text: String(localized: "Delete All Objects"),
+        enabled: hasObjects) { confirmDeleteAll = true },
+      load: .button("load", icon: "folder", text: String(localized: "Load...")) { showLoadFilePicker = true },
+      save: .button("save", icon: "square.and.arrow.down", text: String(localized: "Save..."),
+        enabled: hasObjects) { showSaveFilePicker = true },
+      additional: [
+        .menu("files", icon: "shippingbox", text: String(localized: "Files"), items: markerCatalog.map { entry in
+          .button(entry.url.path, icon: "doc", text: entry.displayName) { loadMarkers(at: entry.url) }
+        }),
+        .button("delete-selection", icon: "trash", text: String(localized: "Delete Selection"),
+          enabled: !selectedMarkerIndices.isEmpty || appModel.selectedSceneMeshInstanceID != nil,
+          action: deleteSelectedMarker)
+      ])
   }
 
   private func loadMarkers(from result: Result<[URL], Error>) {

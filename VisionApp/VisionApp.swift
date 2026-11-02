@@ -605,6 +605,7 @@ struct VisionApp: App {
       sharedAppModel.saveAutomaticallyManagedDatasetState(
         datasetID: dataset.uniqueId,
         storedAppModel: storedAppModel,
+        brush: runtimeAppModel.volumeBrush,
         logger: runtimeAppModel.logger
       )
     }

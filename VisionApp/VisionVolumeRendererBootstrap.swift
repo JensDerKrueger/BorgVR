@@ -151,6 +151,7 @@ enum VisionVolumeRendererBootstrap {
         datasetID: activeDataset.uniqueId,
         physicalExtent: datasetInfo.physicalExtentMeters,
         storedAppModel: storedAppModel,
+        brush: runtimeAppModel.volumeBrush,
         logger: runtimeAppModel.logger
       )
     }

@@ -46,8 +46,6 @@ struct RenderView: View {
   private let clippingPinchSensitivity: Float = 0.45
   private let transferSmoothCenterSensitivity: Float = 0.003
   private let transferSmoothSlopeSensitivity: Float = 0.003
-  private let dockedLightingPanelWidth: CGFloat = 340
-  private let dockedMarkerPanelWidth: CGFloat = 380
   private let markerDepthScrollSensitivity: Float = 0.003
 
   private var renderContent: some View {
@@ -69,126 +67,76 @@ struct RenderView: View {
       )
         .ignoresSafeArea()
 
-      if docking.isDockedVisible(.renderControls) {
-        RenderControlsPanel(isDetachedWindow: false)
-          .padding()
-      } else if !docking.isDetached(.renderControls) {
-        HStack {
-          Spacer()
-          visibilityButton
-        }
-        .padding()
-      }
-
-      if docking.isDockedVisible(.isoEditor) && renderingParameters.renderMode == .isoValue {
-        VStack {
-          Spacer()
-
-          DockableEditorPanel(panel: .isoEditor, maxWidth: 520) {
-            IsovalueEditorView(usesPanelBackground: false) {
-              docking.hide(.isoEditor)
-            }
-            .environmentObject(renderingParameters)
-          }
-          .padding(.leading, dockedEditorLeadingPadding)
-          .padding(.trailing, dockedEditorTrailingPadding)
-          .padding(.bottom)
-        }
-        .transition(.move(edge: .bottom).combined(with: .opacity))
-      }
-
-      if docking.isDockedVisible(.transferFunctionEditor) && renderingParameters.renderMode != .isoValue {
-        VStack {
-          Spacer()
-
-          DockableEditorPanel(panel: .transferFunctionEditor, maxWidth: 720) {
-            TransferFunctionEditorView(
-              usesPanelBackground: false,
-              catalogDirectoryURLs: transferFunctionCatalogDirectoryURLs,
-              onMutation: {
-                session.commitExternalMutation(
-                  source: .userInterface,
-                  domain: .transferFunction
-                )
-              }
-            ) {
-              docking.hide(.transferFunctionEditor)
-            }
-            .environmentObject(renderingParameters)
-          }
-          .padding(.leading, dockedEditorLeadingPadding)
-          .padding(.trailing, dockedEditorTrailingPadding)
-          .padding(.bottom)
-        }
-        .transition(.move(edge: .bottom).combined(with: .opacity))
-      }
-
       measurementLabels
 
-      if docking.isDockedVisible(.markerEditor) ||
-         docking.isDockedVisible(.measurementEditor) ||
-         docking.isDockedVisible(.lightingEditor) ||
-         docking.isDockedVisible(.volumeBrushEditor) {
-        HStack(alignment: .top, spacing: 16) {
-          if docking.isDockedVisible(.lightingEditor) || docking.isDockedVisible(.volumeBrushEditor) {
-            VStack(spacing: 16) {
-              Spacer(minLength: 0)
-
-              if docking.isDockedVisible(.lightingEditor) {
-                DockableEditorPanel(panel: .lightingEditor) {
-                  LightingEditorView(
-                    renderMode: renderingParameters.renderMode,
-                    lightDirection: $renderingParameters.lightDirection,
-                    ambientLightColor: $renderingParameters.ambientLightColor,
-                    diffuseLightColor: $renderingParameters.diffuseLightColor,
-                    specularLightColor: $renderingParameters.specularLightColor,
-                    usesPanelBackground: false,
-                    showsTitle: false,
-                    onChange: synchronizeState,
-                    onCommit: sharePlay.flushSynchronization,
-                    onClose: { docking.hide(.lightingEditor) }
-                  )
-                  .equatable()
-                }
-              }
-              if docking.isDockedVisible(.volumeBrushEditor) {
-                DockableEditorPanel(panel: .volumeBrushEditor) {
-                  VolumeBrushControls(model: appModel.volumeBrush)
-                }
-              }
-            }
-            .frame(width: dockedLightingPanelWidth)
-            .frame(maxHeight: .infinity)
-            .transition(.move(edge: .leading).combined(with: .opacity))
-          }
-
-          Spacer(minLength: 0)
-
-          HStack(spacing: 16) {
-            if docking.isDockedVisible(.markerEditor) {
-              DockableEditorPanel(panel: .markerEditor) {
-                MacMarkerView()
-              }
-              .frame(width: dockedMarkerPanelWidth)
-              .frame(maxHeight: .infinity)
-              .transition(.move(edge: .trailing).combined(with: .opacity))
-            }
-
-            if docking.isDockedVisible(.measurementEditor) {
-              DockableEditorPanel(panel: .measurementEditor) {
-                MacMeasurementView()
-              }
-              .frame(width: dockedMarkerPanelWidth)
-              .frame(maxHeight: .infinity)
-              .transition(.move(edge: .trailing).combined(with: .opacity))
+      GeometryReader { geometry in
+        ZStack(alignment: .topLeading) {
+          ForEach(inlinePanels) { panel in
+            PositionedDockablePanel(panel: panel, containerSize: geometry.size) {
+              panelContent(panel)
             }
           }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .padding(.top, docking.isDockedVisible(.renderControls) ? 230 : 16)
-        .padding(.horizontal)
-        .padding(.bottom)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .coordinateSpace(name: "dockablePanelCanvas")
       }
+
+      HStack {
+        Spacer()
+        ForEach(docking.revealControls.filter { !docking.isVisible($0.id) }) { control in
+          Button { docking.show(control.id) } label: { Image(systemName: control.icon) }
+            .help(control.text)
+            .accessibilityLabel(control.text)
+            .buttonStyle(.bordered)
+        }
+      }
+      .padding()
+    }
+  }
+
+  private var inlinePanels: [DockablePanelID] {
+    DockablePanelID.allCases.filter {
+      docking.isDockedVisible($0) &&
+        ($0 != .isoEditor || renderingParameters.renderMode == .isoValue) &&
+        ($0 != .transferFunctionEditor || renderingParameters.renderMode != .isoValue)
+    }
+  }
+
+  @ViewBuilder
+  private func panelContent(_ panel: DockablePanelID) -> some View {
+    switch panel {
+      case .renderControls:
+        RenderControlsPanel()
+      case .isoEditor:
+        IsovalueEditorView(usesPanelBackground: false, showsTitle: false)
+      case .transferFunctionEditor:
+        TransferFunctionEditorView(
+          usesPanelBackground: false,
+          catalogDirectoryURLs: transferFunctionCatalogDirectoryURLs,
+          onMutation: {
+            session.commitExternalMutation(source: .userInterface, domain: .transferFunction)
+          }
+        )
+      case .markerEditor:
+        MacMarkerView()
+      case .measurementEditor:
+        MacMeasurementView()
+      case .lightingEditor:
+        LightingEditorView(
+          renderMode: renderingParameters.renderMode,
+          lightDirection: $renderingParameters.lightDirection,
+          ambientLightColor: $renderingParameters.ambientLightColor,
+          diffuseLightColor: $renderingParameters.diffuseLightColor,
+          specularLightColor: $renderingParameters.specularLightColor,
+          usesPanelBackground: false,
+          showsTitle: false,
+          onChange: synchronizeState,
+          onCommit: sharePlay.flushSynchronization,
+          onClose: nil
+        )
+        .equatable()
+      case .volumeBrushEditor:
+        VolumeBrushControls(model: appModel.volumeBrush)
     }
   }
 
@@ -347,17 +295,6 @@ struct RenderView: View {
           endPoint: .bottom
         )
     }
-  }
-
-  private var visibilityButton: some View {
-    Button {
-      docking.show(.renderControls)
-    } label: {
-      Image(systemName: "eye")
-    }
-    .accessibilityLabel("Show UI")
-    .help(MacRenderShortcut.help("Show UI", shortcut: .toggleControls))
-    .screenControlButtons()
   }
 
   private func handleCommand(_ command: MacCommand) {
@@ -602,10 +539,12 @@ struct RenderView: View {
         try renderingParameters.saveDatasetTransferFunctions(to: plan.transferFunctionURLs, description: dataset.description)
       }
       if let url = plan.viewStateURL {
+        let state = renderingParameters.makeDatasetViewState(datasetID: dataset.uniqueId)
         try DatasetStateStorage.saveViewState(
-          renderingParameters.makeDatasetViewState(datasetID: dataset.uniqueId),
+          state,
           to: url
         )
+        try PanelParameterStorage.saveDataset(common: state.common, brush: appModel.volumeBrush, beside: url)
       }
       if let url = plan.objectURL {
         try DatasetStateStorage.saveObjects(
@@ -730,19 +669,6 @@ struct RenderView: View {
 
   private var transferFunctionCatalogDirectoryURLs: [URL] {
     [storedAppModel.resolvedDataDirectoryURL()]
-  }
-
-  private var dockedEditorLeadingPadding: CGFloat {
-    docking.isDockedVisible(.lightingEditor) || docking.isDockedVisible(.volumeBrushEditor)
-      ? dockedLightingPanelWidth + 32
-      : 16
-  }
-
-  private var dockedEditorTrailingPadding: CGFloat {
-    CGFloat(
-      [DockablePanelID.markerEditor, .measurementEditor]
-        .filter { docking.isDockedVisible($0) }.count
-    ) * (dockedMarkerPanelWidth + 16) + 16
   }
 
   private func updateDetachedPanelWindows() {
