@@ -164,6 +164,7 @@ private enum VolumeAtlasEditTests {
       print("SKIP: Metal device unavailable for atlas edit regression")
       return
     }
+    try allocatedAtlasShaderCoordinates(device: device, queue: queue)
     try rendererTransferFunctionRanges(device: device)
     try runColorVolumeRenderingTests(device: device, queue: queue)
     try rendererAlphaEpsilon(device: device)
@@ -432,6 +433,80 @@ private enum VolumeAtlasEditTests {
         "Reactivating a channel changed its rendered TF")
     }
     print("Alpha epsilon passed: classification only, unchanged TF samples/revisions, boundary, copies, channels and reset")
+  }
+
+  static func allocatedAtlasShaderCoordinates(device: MTLDevice, queue: MTLCommandQueue) throws {
+    func source(_ url: URL) throws -> String {
+      var result = ""
+      for line in try String(contentsOf: url, encoding: .utf8).components(separatedBy: .newlines) {
+        if (line.hasPrefix("#include") || line.hasPrefix("#import")),
+           let first = line.firstIndex(of: "\""), let last = line.lastIndex(of: "\""), first < last {
+          result += try source(url.deletingLastPathComponent().appendingPathComponent(String(line[line.index(after: first)..<last])))
+        } else { result += line + "\n" }
+      }
+      return result
+    }
+    let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+    let shader = try source(root.appendingPathComponent("AppSupport/Rendering/Shaders/RuntimeVolumeShaders.metal")) + """
+      kernel void sampleAllocatedAtlas(texture3d<float, access::sample> atlas [[texture(0)]],
+                                       device float4* output [[buffer(0)]], uint page [[thread_position_in_grid]]) {
+        BrickCorners corners; corners.values[0] = float3(0); corners.values[1] = float3(1);
+        PoolBrickInformation pool = normCoordsToPoolCoords(float3(0.5), float3(0.5), corners,
+          float3(1), page + BI_FLAG_COUNT);
+        constexpr sampler s(coord::normalized, address::clamp_to_edge, filter::linear);
+        output[page] = atlas.sample(s, pool.poolEntryCoords);
+      }
+      """
+    let fixture = try PackedBrushFixture(bytes: 1, channels: 4, scale: 1, interpretation: .rgba)
+    let m = fixture.metadata
+    for pages in [1, 4, 8] {
+      // A small successfully allocated atlas stands in for a reduced allocation.
+      let atlas = try VolumeAtlas(device: device, maxMemory: pages * 4 * 4 * 4 * 4,
+        borgData: fixture, transferFunctions: [], isoValue: 0.5)
+      let texture = atlas.atlasTexture!
+      let size = SIMD3(texture.width, texture.height, texture.depth)
+      let capacity = size / m.brickSize
+      let options = VolumeShaderCompiler.compileOptions(metadata: m, atlasTexture: texture,
+        hashTableSize: 64, configuration: .init(screenSpaceError: 1, maximumProbingAttempts: 64,
+          requestsLowResolutionLOD: true, stopsOnMissingBrick: false, fieldOfViewRadians: 0.75, drawableWidth: 512))
+      let macros = options.preprocessorMacros!
+      try expect(String(describing: macros["POOL_SIZE"]!) == "float3(\(size.x),\(size.y),\(size.z))",
+        "Shader pool dimensions do not match the allocated atlas")
+      try expect(String(describing: macros["POOL_CAPACITY"]!) == "uint3(\(capacity.x),\(capacity.y),\(capacity.z))",
+        "Shader page layout does not match the allocated atlas")
+      let overlap = SIMD3(repeating: Float(m.overlap)) / SIMD3<Float>(size)
+      try expect(String(describing: macros["OVERLAP_STEP"]!) == "float3(\(overlap.x),\(overlap.y),\(overlap.z))",
+        "Shader overlap does not match the allocated atlas")
+      var expected: [SIMD4<Float>] = []
+      for page in 0..<pages {
+        let color = SIMD4<UInt8>(UInt8(17 + page * 21), UInt8(241 - page * 19), UInt8(51 + page * 11), 255)
+        expected.append(SIMD4<Float>(color) / 255)
+        let data = Array(repeating: color, count: 64)
+        let origin = SIMD3(page % capacity.x, (page / capacity.x) % capacity.y,
+          page / (capacity.x * capacity.y)) &* m.brickSize
+        data.withUnsafeBytes {
+          texture.replace(region: MTLRegionMake3D(origin.x, origin.y, origin.z, 4, 4, 4), mipmapLevel: 0, slice: 0,
+            withBytes: $0.baseAddress!, bytesPerRow: 16, bytesPerImage: 64)
+        }
+      }
+      let library = try device.makeLibrary(source: shader, options: options)
+      let pipeline = try device.makeComputePipelineState(function: library.makeFunction(name: "sampleAllocatedAtlas")!)
+      let output = device.makeBuffer(length: pages * MemoryLayout<SIMD4<Float>>.stride, options: .storageModeShared)!
+      let command = queue.makeCommandBuffer()!, encoder = command.makeComputeCommandEncoder()!
+      encoder.setComputePipelineState(pipeline)
+      encoder.setTexture(texture, index: 0)
+      encoder.setBuffer(output, offset: 0, index: 0)
+      encoder.dispatchThreads(MTLSize(width: pages, height: 1, depth: 1),
+        threadsPerThreadgroup: MTLSize(width: pages, height: 1, depth: 1))
+      encoder.endEncoding(); command.commit(); command.waitUntilCompleted()
+      if let error = command.error { throw error }
+      let values = output.contents().assumingMemoryBound(to: SIMD4<Float>.self)
+      for page in 0..<pages {
+        try expect(simd_length(values[page] - expected[page]) < 0.002,
+          "Reduced RGBA atlas sampled the wrong brick: \(pages) pages, page \(page)")
+      }
+    }
+    print("Allocated atlas dimensions drive shader page/overlap coordinates: RGBA GPU sampling passed for 1/4/8 pages")
   }
 
   static func linearTransferFunctionBounds(device: MTLDevice) throws {

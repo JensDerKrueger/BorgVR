@@ -412,6 +412,7 @@ final actor VisionVolumeRenderer {
         layerRenderer: layerRenderer,
         rasterSampleCount: rasterSampleCount,
         borgVRMetaData: borgData.getMetadata(),
+        atlasTexture: volumeAtlas.atlasTexture,
         hasTable: hashTable
       )
     } catch {
@@ -520,6 +521,7 @@ extension VisionVolumeRenderer {
                                              layerRenderer: LayerRenderer,
                                              rasterSampleCount: Int,
                                              borgVRMetaData: BORGVRMetaData,
+                                             atlasTexture: MTLTexture,
                                              hasTable: GPUHashtable) throws ->
   (MTLRenderPipelineState, MTLRenderPipelineState, MTLRenderPipelineState,
    MTLRenderPipelineState, MTLRenderPipelineState, MTLRenderPipelineState,
@@ -531,10 +533,10 @@ extension VisionVolumeRenderer {
 
     let compileOptions = VolumeShaderCompiler.compileOptions(
       metadata: borgVRMetaData,
+      atlasTexture: atlasTexture,
       hashTableSize: hasTable.size,
       configuration: VolumeShaderConfiguration(
         screenSpaceError: StoredAppModel.float("screenSpaceError"),
-        atlasSizeMB: StoredAppModel.int("atlasSizeMB"),
         maximumProbingAttempts: StoredAppModel.int("maxProbingAttempts"),
         requestsLowResolutionLOD: StoredAppModel.bool("requestLowResLOD"),
         stopsOnMissingBrick: StoredAppModel.bool("stopOnMiss"),

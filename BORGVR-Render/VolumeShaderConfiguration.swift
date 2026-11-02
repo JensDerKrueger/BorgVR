@@ -2,7 +2,6 @@ import Metal
 
 struct VolumeShaderConfiguration {
   let screenSpaceError: Float
-  let atlasSizeMB: Int
   let maximumProbingAttempts: Int
   let requestsLowResolutionLOD: Bool
   let stopsOnMissingBrick: Bool
@@ -13,6 +12,7 @@ struct VolumeShaderConfiguration {
 enum VolumeShaderCompiler {
   static func compileOptions(
     metadata: BORGVRMetaData,
+    atlasTexture: MTLTexture,
     hashTableSize: Int,
     configuration: VolumeShaderConfiguration
   ) -> MTLCompileOptions {
@@ -20,13 +20,10 @@ enum VolumeShaderCompiler {
       configuration.screenSpaceError / max(configuration.drawableWidth, 1)
     let levelZeroWorldSpaceError = VolumeRenderResources.levelZeroWorldSpaceError(for: metadata)
     let volumeExtent = VolumeRenderResources.normalizedVolumeExtent(for: metadata)
-    let (atlasWidth, atlasHeight, atlasDepth, _) = VolumeAtlas.computeAtlasSize(
-      maxMemory: configuration.atlasSizeMB * 1024 * 1024,
-      maxBrickCount: metadata.brickMetadata.count,
-      brickSize: metadata.brickSize,
-      bytesPerComponent: metadata.bytesPerComponent,
-      componentCount: metadata.componentCount
-    )
+    // Allocation can fall back to a smaller atlas; shader addressing must match it.
+    let atlasWidth = atlasTexture.width
+    let atlasHeight = atlasTexture.height
+    let atlasDepth = atlasTexture.depth
     let maximumIterations = metadata.levelMetadata[0].totalBricks.x - 1 +
       metadata.levelMetadata[0].totalBricks.y - 1 +
       metadata.levelMetadata[0].totalBricks.z - 1 + 1

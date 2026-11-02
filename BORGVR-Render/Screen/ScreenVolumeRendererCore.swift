@@ -534,13 +534,14 @@ final class ScreenVolumeRendererCore {
   }
 
   private func buildPipelines(for view: MTKView, metadata: BORGVRMetaData, drawableWidth: Float) throws {
-    guard let device = view.device, let hashTable else { return }
+    guard let device = view.device, let hashTable, let volumeAtlas else { return }
     let states = try VolumeRendererPipeline.buildRenderPipelines(
       device: device,
       colorFormat: view.colorPixelFormat,
       depthFormat: view.depthStencilPixelFormat,
       drawableWidth: drawableWidth,
       metadata: metadata,
+      atlasTexture: volumeAtlas.atlasTexture,
       hashTable: hashTable,
       appSettings: appSettings,
       labelPrefix: pipelineLabelPrefix

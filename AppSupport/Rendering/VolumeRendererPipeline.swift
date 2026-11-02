@@ -19,6 +19,7 @@ enum VolumeRendererPipeline {
     depthFormat: MTLPixelFormat,
     drawableWidth: Float,
     metadata: BORGVRMetaData,
+    atlasTexture: MTLTexture,
     hashTable: GPUHashtable,
     appSettings: AppSettings,
     labelPrefix: String
@@ -36,10 +37,10 @@ enum VolumeRendererPipeline {
 
     let compileOptions = VolumeShaderCompiler.compileOptions(
       metadata: metadata,
+      atlasTexture: atlasTexture,
       hashTableSize: hashTable.size,
       configuration: VolumeShaderConfiguration(
         screenSpaceError: Float(appSettings.screenSpaceError),
-        atlasSizeMB: appSettings.atlasSizeMB,
         maximumProbingAttempts: appSettings.maxProbingAttempts,
         requestsLowResolutionLOD: appSettings.requestLowResLOD,
         stopsOnMissingBrick: appSettings.stopOnMiss,

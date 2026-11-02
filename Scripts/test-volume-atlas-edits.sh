@@ -24,6 +24,8 @@ swiftc \
   "$ROOT/BORGVR-Render/VolumeAtlas/VolumeAtlas.swift" \
   "$ROOT/BORGVR-Render/VolumeAtlas/VolumeAtlasSubbrickCache.swift" \
   "$ROOT/BORGVR-Render/VolumeAtlas/VolumeAtlasBrushRenderer.swift" \
+  "$ROOT/BORGVR-Render/VolumeRenderResources.swift" \
+  "$ROOT/BORGVR-Render/VolumeShaderConfiguration.swift" \
   "$ROOT/Tests/VolumeAtlasEditTests.swift" \
   "$ROOT/Tests/ColorVolumeRenderingTests.swift" \
   -o "$BUILD_DIR/volume-atlas-edit-tests"
