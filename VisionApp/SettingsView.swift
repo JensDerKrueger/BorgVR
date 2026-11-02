@@ -929,30 +929,35 @@ struct SettingsView: View {
   }
 
   private var settingsSidebar: some View {
-    VStack(alignment: .leading, spacing: 6) {
-      ForEach(VisionSettingsPage.allCases) { page in
-        Button {
-          selectedSettingsPage = page
-        } label: {
-          Label(page.title, systemImage: page.systemImage)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 9)
-            .background {
-              if selectedSettingsPage == page {
-                RoundedRectangle(cornerRadius: 8)
-                  .fill(Color.accentColor.opacity(0.2))
+    ScrollView {
+      VStack(alignment: .leading, spacing: 12) {
+        ForEach(VisionSettingsPage.allCases) { page in
+          Button {
+            selectedSettingsPage = page
+          } label: {
+            Label(page.title, systemImage: page.systemImage)
+              .fixedSize(horizontal: false, vertical: true)
+              .frame(maxWidth: .infinity, alignment: .leading)
+              .padding(.horizontal, 12)
+              .padding(.vertical, 12)
+              .frame(minHeight: 52)
+              .background {
+                if selectedSettingsPage == page {
+                  RoundedRectangle(cornerRadius: 8)
+                    .fill(Color.accentColor.opacity(0.2))
+                }
               }
-            }
-            .contentShape(Rectangle())
+              .contentShape(Rectangle())
+          }
+          .buttonStyle(.plain)
+          .foregroundStyle(selectedSettingsPage == page ? .primary : .secondary)
         }
-        .buttonStyle(.plain)
-        .foregroundStyle(selectedSettingsPage == page ? .primary : .secondary)
       }
-      Spacer()
+      .padding(12)
     }
-    .padding(12)
+    .scrollBounceBehavior(.basedOnSize)
     .frame(width: 250)
+    .frame(maxHeight: .infinity, alignment: .top)
   }
 
   private func controllerShortcutPicker(
