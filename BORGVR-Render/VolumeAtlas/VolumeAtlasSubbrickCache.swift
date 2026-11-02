@@ -100,7 +100,8 @@ final class VolumeAtlasSubbrickCache {
     let rebuilt = pages.filter { dirty[$0] != nil }
     let classified = lastVisibility == visibility ? rebuilt : pages
     guard !classified.isEmpty else { return true }
-    guard let encoder = command.makeComputeCommandEncoder() else { return false }
+    // Serial dispatch makes classification wait for reduction without simulator-unsupported barriers.
+    guard let encoder = command.makeComputeCommandEncoder(dispatchType: .serial) else { return false }
     encoder.label = "Build/classify subbrick occupancy"
     var layout = layout
     encoder.setBytes(&layout, length: MemoryLayout<SIMD4<UInt32>>.stride, index: 0)
@@ -121,13 +122,15 @@ final class VolumeAtlasSubbrickCache {
       encoder.setComputePipelineState(reduction)
       encoder.dispatchThreadgroups(MTLSize(width: rebuilt.count * cellCount, height: 1, depth: 1),
         threadsPerThreadgroup: MTLSize(width: reduction.threadExecutionWidth, height: 1, depth: 1))
-      encoder.memoryBarrier(scope: .buffers)
     }
     guard let ids = pageBuffer(classified) else { encoder.endEncoding(); return false }
     encoder.setBuffer(ids, offset: 0, index: 1)
+    var pageCount = UInt32(classified.count)
+    encoder.setBytes(&pageCount, length: MemoryLayout<UInt32>.stride, index: 5)
     encoder.setComputePipelineState(classification)
-    encoder.dispatchThreads(MTLSize(width: classified.count, height: 1, depth: 1),
-      threadsPerThreadgroup: MTLSize(width: classification.threadExecutionWidth, height: 1, depth: 1))
+    let width = classification.threadExecutionWidth
+    encoder.dispatchThreadgroups(MTLSize(width: (classified.count + width - 1) / width, height: 1, depth: 1),
+      threadsPerThreadgroup: MTLSize(width: width, height: 1, depth: 1))
     encoder.endEncoding()
     pending = (command, Dictionary(uniqueKeysWithValues: rebuilt.map { ($0, dirty[$0]!) }), visibility)
     return true
@@ -185,7 +188,9 @@ final class VolumeAtlasSubbrickCache {
     kernel void classifySubbricks(constant uint4 &layout [[buffer(0)]],
       device const uint *pages [[buffer(1)]], device const float2 *ranges [[buffer(2)]],
       device uint *masks [[buffer(3)]], constant Visibility &visibility [[buffer(4)]],
+      constant uint &pageCount [[buffer(5)]],
       uint index [[thread_position_in_grid]]) {
+      if (index >= pageCount) return;
       uint page = pages[index], mask = 0, visibleCount = 0;
       for (uint cell = 0; cell < CELL_COUNT; ++cell) {
         bool iso = visibility.iso.w != 0;
