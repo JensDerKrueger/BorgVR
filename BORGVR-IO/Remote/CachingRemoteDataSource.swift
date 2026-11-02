@@ -184,13 +184,7 @@ final class CachingRemoteDataSource: DataSource {
     }
 
     // Decompression setup.
-    self.fullBrickSize = try Self.checkedProduct(
-      metadata.brickSize,
-      metadata.brickSize,
-      metadata.brickSize,
-      metadata.componentCount,
-      metadata.bytesPerComponent
-    )
+    self.fullBrickSize = try metadata.fullBrickByteCount()
     self.backgroundBufferSize = try Self.checkedProduct(
       fullBrickSize,
       self.maxBricksPerGetRequest

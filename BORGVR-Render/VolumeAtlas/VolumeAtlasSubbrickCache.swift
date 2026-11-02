@@ -36,7 +36,7 @@ final class VolumeAtlasSubbrickCache {
     self.divisions = divisions
     cellCount = self.divisions * self.divisions * self.divisions
     maskStride = 1 + (cellCount + 31) / 32
-    isRGBA = metadata.channelInterpretation == .rgba
+    isRGBA = metadata.channelInterpretation.colorInterpretation == .rgba
     channels = isRGBA ? 1 : metadata.componentCount
     layout = SIMD4(UInt32(metadata.brickSize), UInt32(metadata.overlap),
                    UInt32(metadata.brickSize - 2 * metadata.overlap), UInt32(channels))
@@ -139,7 +139,11 @@ final class VolumeAtlasSubbrickCache {
     struct Visibility { float4 low, high, iso; };
     kernel void reduceSubbricks(constant uint4 &layout [[buffer(0)]],
       device const uint *pages [[buffer(1)]], device float2 *ranges [[buffer(2)]],
+    #if COLOR_ALPHA
+      texture3d<float, access::sample> primary [[texture(0)]],
+    #else
       texture3d<float, access::read> primary [[texture(0)]],
+    #endif
       texture3d<float, access::read> secondary [[texture(1)]],
       uint group [[threadgroup_position_in_grid]], uint lane [[thread_index_in_simdgroup]],
       uint width [[threads_per_simdgroup]]) {
@@ -154,10 +158,13 @@ final class VolumeAtlasSubbrickCache {
       float4 minimum = float4(INFINITY), maximum = float4(-INFINITY);
       for (uint i = lane; i < uint(size.x * size.y * size.z); i += width) {
         uint3 p = origin + uint3(lo + int3(i % size.x, (i / size.x) % size.y, i / (size.x * size.y)));
-        float4 value = primary.read(p);
     #if COLOR_ALPHA
+        constexpr sampler nearest(coord::pixel, filter::nearest);
+        float4 value = primary.sample(nearest, float3(p) + 0.5, level(0));
         value = float4(value.a, 0, 0, 0);
-    #elif COMPONENT_BYTES == 4
+    #else
+        float4 value = primary.read(p);
+    #if COMPONENT_BYTES == 4
         value = float4(dot(value, float4(1, 256, 65536, 16777216)) / 16843009.0, 0, 0, 0);
     #elif COMPONENT_BYTES == 2
         float4 extra = secondary.read(p);
@@ -165,6 +172,7 @@ final class VolumeAtlasSubbrickCache {
                        dot(value.zw, float2(1, 256)) / 257.0,
                        dot(extra.xy, float2(1, 256)) / 257.0,
                        dot(extra.zw, float2(1, 256)) / 257.0);
+    #endif
     #endif
         minimum = min(minimum, value);
         maximum = max(maximum, value);

@@ -406,7 +406,7 @@ struct RenderView: View {
         HStack(spacing: 8) {
           if let interpretation = appModel.activeDatasetMetadata?.channelInterpretation,
              interpretation != .independentChannels {
-            Label(interpretation == .rgb ? "RGB" : "RGBA", systemImage: "photo")
+            Label(interpretation.colorInterpretation == .rgb ? "RGB" : "RGBA", systemImage: "photo")
               .frame(maxWidth: .infinity)
           } else {
           Picker("Render Mode", selection: $renderingParameters.renderMode) {

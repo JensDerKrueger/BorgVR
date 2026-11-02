@@ -228,6 +228,14 @@ class BORGVRRemoteData: BORGVRDatasetProtocol {
    */
   func getBrick(index: Int, outputBuffer: UnsafeMutablePointer<UInt8>) throws {
     try self.brickDataSource.getBrick(index: index, outputBuffer: outputBuffer)
+    try BorgVRASTCCodec.decodeInPlace(outputBuffer, metadata: getMetadata())
+  }
+
+  func getASTCBrick(index: Int, outputBuffer: UnsafeMutablePointer<UInt8>, synchronous: Bool) throws -> Bool {
+    guard getMetadata().channelInterpretation.astcBlockSize != 0 else { return false }
+    if synchronous { try brickDataSource.getFirstBrick(outputBuffer: outputBuffer) }
+    else { try brickDataSource.getBrick(index: index, outputBuffer: outputBuffer) }
+    return true
   }
 
   func getRawBrick(index: Int, outputBuffer: UnsafeMutablePointer<UInt8>) throws -> Int? {
@@ -243,6 +251,7 @@ class BORGVRRemoteData: BORGVRDatasetProtocol {
    */
   public func getFirstBrick(outputBuffer: UnsafeMutablePointer<UInt8>) throws {
     try self.brickDataSource.getFirstBrick(outputBuffer: outputBuffer)
+    try BorgVRASTCCodec.decodeInPlace(outputBuffer, metadata: getMetadata())
   }
 
   /**

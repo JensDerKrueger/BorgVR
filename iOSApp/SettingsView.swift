@@ -407,6 +407,12 @@ struct SettingsView: View {
         }
       }
       Toggle("Randomized sample phase", isOn: $appSettings.sampleJitter)
+      Picker("JIT atlas compression (RGB/RGBA)", selection: $appSettings.atlasCompression) {
+        Text("No compression").tag(0)
+        Text(verbatim: "ASTC 4x4").tag(4)
+        Text(verbatim: "ASTC 8x8").tag(8)
+      }
+      .help("Uses lossy compression when opening color volumes. Direct GPU Erase/Restore is disabled; edited bricks are rebuilt and uploaded.")
       Toggle("Subbrick skipping", isOn: Binding(get: { appSettings.subbrickSkipping },
         set: { try? session.perform(.setRenderOptimizations(subbrickSkipping: $0), source: .userInterface) }))
       Toggle("Opacity-adaptive sampling", isOn: Binding(get: { appSettings.opacityAdaptiveSampling },
@@ -430,6 +436,11 @@ struct SettingsView: View {
       textFieldRow("Brick size (voxels)", text: $tempBrickSize, keyboardType: .numberPad)
       textFieldRow("Overlap (voxels)", text: $tempBrickOverlap, keyboardType: .numberPad)
       Toggle("Compression", isOn: $appSettings.enableCompression)
+      Picker("Stored color compression (RGB/RGBA)", selection: $appSettings.importColorCompression) {
+        Text("No compression").tag(0)
+        Text(verbatim: "ASTC 4x4").tag(4)
+        Text(verbatim: "ASTC 8x8").tag(8)
+      }
       Toggle("Quantize imports to 8 bits per channel", isOn: $appSettings.quantizeImportsTo8Bit)
       Text("Maps each channel's value range to 0...255, permanently reducing intensity precision. Existing 8-bit data is unchanged.")
         .font(.caption)

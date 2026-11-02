@@ -22,6 +22,7 @@ public enum ExtensionStrategy: Equatable, Sendable {
  */
 public class BrickedVolumeReorganizer {
   private var channelInterpretation: BORGVRChannelInterpretation = .independentChannels
+  private var astcBlockSize = 0
 
   private struct BrickCoordinate: Sendable {
     let x: Int
@@ -402,6 +403,7 @@ public class BrickedVolumeReorganizer {
                          provenance: [BORGVRProvenanceEntry] = [],
                          meta: String = "",
                          channelInterpretation: BORGVRChannelInterpretation = .independentChannels,
+                         astcBlockSize: Int = 0,
                          toolIdentification: String = BORGVRToolIdentification.current) throws {
 
     try cancellationToken?.checkCancellation()
@@ -413,6 +415,10 @@ public class BrickedVolumeReorganizer {
     }
 
     self.channelInterpretation = channelInterpretation
+    self.astcBlockSize = channelInterpretation == .independentChannels ? 0 : astcBlockSize
+    guard [0, 4, 8].contains(self.astcBlockSize), self.astcBlockSize == 0 || brickSize % self.astcBlockSize == 0 else {
+      throw BORGVRError.other("Invalid ASTC brick layout.")
+    }
     let componentRanges = try computeComponentRanges(
       in: inputVolume,
       cancellationToken: cancellationToken
@@ -438,11 +444,14 @@ public class BrickedVolumeReorganizer {
       datasetDescription: datasetDescription,
       metaDescription: metaDescription
     )
-    try metaData.setChannelInterpretation(channelInterpretation)
+    try metaData.setChannelInterpretation(channelInterpretation.withASTC(blockSize: self.astcBlockSize))
     metaData.updateComponentRanges(componentRanges)
     metaData.provenance = provenance + [BORGVRProvenanceEntry(
       "converted by \(toolIdentification) (brick size \(brickSize), overlap \(overlap), LZ4 \(useCompressor ? "enabled" : "disabled"))")]
     metaData.meta = meta
+    if self.astcBlockSize != 0 {
+      metaData.provenance.append(BORGVRProvenanceEntry("ASTC LDR \(self.astcBlockSize)x\(self.astcBlockSize) sliced-3D brick encoding"))
+    }
 
     let levelCount = BORGVRMetaData.calculateLevelCount(
       size: inputVolume.size,
@@ -489,6 +498,11 @@ public class BrickedVolumeReorganizer {
           cancellationToken: cancellationToken
         )
       }
+    }
+
+    if self.astcBlockSize != 0 {
+      let ranges = metaData.brickMetadata.flatMap(\.componentRanges)
+      metaData.updateComponentRanges(ranges.isEmpty ? [] : [.union(ranges)])
     }
 
     // Store offset to metadata at the beginning of the file.
@@ -591,7 +605,7 @@ public class BrickedVolumeReorganizer {
     in volume: VolumeDataAccessor,
     cancellationToken: BorgVRVolumeConversionCancellationToken?
   ) throws -> [BORGVRComponentRange] {
-    if channelInterpretation == .rgb { return [] }
+    if channelInterpretation.colorInterpretation == .rgb { return [] }
     let representableMaximum = (1 << (volume.bytesPerComponent * 8)) - 1
     var minimums = [Int](repeating: representableMaximum, count: volume.componentCount)
     var maximums = [Int](repeating: 0, count: volume.componentCount)
@@ -599,7 +613,7 @@ public class BrickedVolumeReorganizer {
     func accumulate<T: FixedWidthInteger>(_ values: UnsafeBufferPointer<T>) {
       for index in values.indices {
         let component = index % volume.componentCount
-        if channelInterpretation == .rgba && component != 3 { continue }
+        if channelInterpretation.colorInterpretation == .rgba && component != 3 { continue }
         let value = Int(values[index])
         minimums[component] = min(minimums[component], value)
         maximums[component] = max(maximums[component], value)
@@ -649,7 +663,7 @@ public class BrickedVolumeReorganizer {
       }
     }
 
-    let components = channelInterpretation == .rgba ? [3] : Array(minimums.indices)
+    let components = channelInterpretation.colorInterpretation == .rgba ? [3] : Array(minimums.indices)
     return components.map {
       BORGVRComponentRange(minValue: minimums[$0], maxValue: maximums[$0])
     }
@@ -1151,7 +1165,7 @@ public class BrickedVolumeReorganizer {
    but it must never classify a visible brick as empty.
    */
   func computeComponentMinMax(data: [UInt8]) -> [BORGVRComponentRange] {
-    if channelInterpretation == .rgb { return [] }
+    if channelInterpretation.colorInterpretation == .rgb { return [] }
     switch inputVolume.bytesPerComponent {
       case 1:
         return data.withUnsafeBytes { rawBuffer in
@@ -1184,11 +1198,11 @@ public class BrickedVolumeReorganizer {
     var maximums = [T](repeating: T.min, count: inputVolume.componentCount)
     for index in values.indices {
       let component = index % inputVolume.componentCount
-      if channelInterpretation == .rgba && component != 3 { continue }
+      if channelInterpretation.colorInterpretation == .rgba && component != 3 { continue }
       minimums[component] = min(minimums[component], values[index])
       maximums[component] = max(maximums[component], values[index])
     }
-    let components = channelInterpretation == .rgba ? [3] : Array(minimums.indices)
+    let components = channelInterpretation.colorInterpretation == .rgba ? [3] : Array(minimums.indices)
     return components.map {
       BORGVRComponentRange(minValue: Int(minimums[$0]), maxValue: Int(maximums[$0]))
     }
@@ -1262,12 +1276,17 @@ public class BrickedVolumeReorganizer {
             brickData: &brickData
           )
 
-          let componentRanges = self.computeComponentMinMax(data: brickData)
+          let payload = self.astcBlockSize == 0 ? brickData : brickData.withUnsafeBufferPointer {
+            BorgVRASTCCodec.encode($0.baseAddress!, brickSize: self.brickSize,
+              components: sourceReference.source.componentCount, blockSize: self.astcBlockSize)
+          }
+          let componentRanges = self.astcBlockSize == 0 ? self.computeComponentMinMax(data: brickData)
+            : BorgVRASTCCodec.conservativeRanges(payload, components: sourceReference.source.componentCount)
           let minValue = componentRanges.map(\.minValue).min() ?? 0
           let maxValue = componentRanges.map(\.maxValue).max() ?? 0
           if useCompressor,
              let compressedSize = self.compress(
-               data: brickData,
+               data: payload,
                into: &compressionBuffer,
                algorithm: COMPRESSION_LZ4
              ) {
@@ -1284,7 +1303,7 @@ public class BrickedVolumeReorganizer {
           } else {
             store.set(
               PreparedBrick(
-                data: brickData,
+                data: payload,
                 minValue: minValue,
                 maxValue: maxValue,
                 componentRanges: componentRanges,
@@ -1445,13 +1464,18 @@ public class BrickedVolumeReorganizer {
             .assumingMemoryBound(to: UInt8.self)
 
           var brickSizeInBytes = 0
-          let componentRanges = computeComponentMinMax(data: brickData)
+          let payload = astcBlockSize == 0 ? brickData : brickData.withUnsafeBufferPointer {
+            BorgVRASTCCodec.encode($0.baseAddress!, brickSize: brickSize,
+              components: source.componentCount, blockSize: astcBlockSize)
+          }
+          let componentRanges = astcBlockSize == 0 ? computeComponentMinMax(data: brickData)
+            : BorgVRASTCCodec.conservativeRanges(payload, components: source.componentCount)
           let minValue = componentRanges.map(\.minValue).min() ?? 0
           let maxValue = componentRanges.map(\.maxValue).max() ?? 0
 
           if useCompressor {
             if let compressedSize = compress(
-              data: brickData,
+              data: payload,
               into: &compressionBuffer,
               algorithm: COMPRESSION_LZ4
             ) {
@@ -1461,13 +1485,13 @@ public class BrickedVolumeReorganizer {
               }
               compressedBrickCounter += 1
             } else {
-              brickSizeInBytes = brickData.count
-              memcpy(pointer, brickData, brickSizeInBytes)
+              brickSizeInBytes = payload.count
+              memcpy(pointer, payload, brickSizeInBytes)
               uncompressedBrickCounter += 1
             }
           } else {
-            brickSizeInBytes = brickData.count
-            memcpy(pointer, brickData, brickSizeInBytes)
+            brickSizeInBytes = payload.count
+            memcpy(pointer, payload, brickSizeInBytes)
           }
 
           metaData.append(

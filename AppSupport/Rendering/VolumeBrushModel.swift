@@ -310,7 +310,7 @@ final class VolumeBrushModel: ObservableObject, BorgVRVolumeEditingCommands {
       componentCount = metadata.componentCount
       channelInterpretation = metadata.channelInterpretation
       // Keep straight RGB colors intact at the transparent brush boundary.
-      channels = metadata.channelInterpretation == .rgba ? .selected([3]) : .all
+      channels = metadata.channelInterpretation.colorInterpretation == .rgba ? .selected([3]) : .all
       synchronize()
       let catalog = try Self.catalog(datasetID: metadata.uniqueID, datasetURL: datasetURL)
       states = try catalog.states()

@@ -27,7 +27,7 @@ swiftc \
   "$ROOT/BORGVR-IO/RawFileAccessor.swift" \
   "$ROOT/BORGVR-IO/Importers/DICOM/BorgVRIntegerVolumeSampler.swift" \
   "$ROOT/BORGVR-IO/BORGVRDataBase.swift" \
-  "$ROOT/BORGVR-IO/BORGVRMetaData.swift" \
+  "$ROOT/BORGVR-IO/BorgVRASTCCodec.swift" "$ROOT/BORGVR-IO/BORGVRMetaData.swift" \
   "$ROOT/BORGVR-IO/BORGVRChannelInterpretation.swift" \
   "$ROOT/BORGVR-IO/BORGVRFileData.swift" \
   "$ROOT/BORGVR-IO/BORGVRVolumeExporter.swift" \

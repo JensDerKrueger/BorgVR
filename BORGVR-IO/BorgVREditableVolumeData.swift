@@ -168,12 +168,17 @@ private final class VolumeEditExportWriter {
 
   func encode(_ brick: BorgVRMaterializedEditBrick) throws -> VolumeEditExportPayload {
     guard brick.bytes.count == fullBrickBytes else { throw BorgVRVolumeEditError.invalidBufferSize }
+    let block = metadata.channelInterpretation.astcBlockSize
+    let payload = block == 0 ? brick.bytes : brick.bytes.withUnsafeBufferPointer {
+      BorgVRASTCCodec.encode($0.baseAddress!, brickSize: metadata.brickSize, components: metadata.componentCount, blockSize: block)
+    }
+    let ranges = block == 0 ? brick.componentRanges : BorgVRASTCCodec.conservativeRanges(payload, components: metadata.componentCount)
     if metadata.compression {
       if compressed.isEmpty {
         compressed = Array(repeating: 0, count: fullBrickBytes)
         scratch = Array(repeating: 0, count: compression_encode_scratch_buffer_size(COMPRESSION_LZ4))
       }
-      let count = brick.bytes.withUnsafeBufferPointer { input in
+      let count = payload.withUnsafeBufferPointer { input in
         compressed.withUnsafeMutableBufferPointer { output in
           scratch.withUnsafeMutableBytes { work in
             compression_encode_buffer(output.baseAddress!, output.count, input.baseAddress!, input.count,
@@ -181,16 +186,17 @@ private final class VolumeEditExportWriter {
           }
         }
       }
-      if count > 0, count < brick.bytes.count {
-        return VolumeEditExportPayload(bytes: Data(compressed.prefix(count)), ranges: brick.componentRanges)
+      if count > 0, count < payload.count {
+        return VolumeEditExportPayload(bytes: Data(compressed.prefix(count)), ranges: ranges)
       }
     }
-    return VolumeEditExportPayload(bytes: Data(brick.bytes), ranges: brick.componentRanges)
+    return VolumeEditExportPayload(bytes: Data(payload), ranges: ranges)
   }
 
   func append(_ payload: VolumeEditExportPayload) throws {
-    guard !payload.bytes.isEmpty, payload.bytes.count <= fullBrickBytes,
-          metadata.compression || payload.bytes.count == fullBrickBytes,
+    let storedBytes = try metadata.fullBrickByteCount()
+    guard !payload.bytes.isEmpty, payload.bytes.count <= storedBytes,
+          metadata.compression || payload.bytes.count == storedBytes,
           payload.ranges.count == metadata.channelInterpretation.rangeCount(componentCount: metadata.componentCount) else {
       throw BorgVRVolumeEditError.invalidBufferSize
     }
@@ -977,7 +983,7 @@ final class BorgVREditableVolumeData: BORGVRDatasetProtocol, BorgVRVolumeGPUBrus
     let target = snapshot.brickRevisions?[index] ?? snapshot.revision
     if let saved = try? cache.storedBrick(index: index, revision: target) {
       if saved.original { return try originalPayload() }
-      if saved.rawByteCount == writer.fullBrickBytes,
+      if metadata.channelInterpretation.astcBlockSize == 0, saved.rawByteCount == writer.fullBrickBytes,
          saved.componentRanges.count == metadata.channelInterpretation.rangeCount(componentCount: metadata.componentCount) {
         // The destination uses the same raw-or-LZ4 per-brick convention as the cache.
         if metadata.compression || !saved.compressed {

@@ -12,7 +12,7 @@ swiftc \
   "$ROOT/BORGVR-IO/Logger.swift" \
   "$ROOT/BORGVR-IO/BorgVRSharedConstants.swift" \
   "$ROOT/BORGVR-IO/BORGVRDataBase.swift" \
-  "$ROOT/BORGVR-IO/BORGVRMetaData.swift" \
+  "$ROOT/BORGVR-IO/BorgVRASTCCodec.swift" "$ROOT/BORGVR-IO/BORGVRMetaData.swift" \
   "$ROOT/BORGVR-IO/BORGVRChannelInterpretation.swift" \
   "$ROOT/BORGVR-IO/MemoryMappedFile.swift" \
   "$ROOT/BORGVR-IO/BORGVRFileData.swift" \

@@ -214,8 +214,8 @@ class AsyncEmptinessUpdater {
     evaluation: EvaluationState
   ) -> Bool {
     switch channelInterpretation {
-      case .rgb: return false
-      case .rgba:
+      case .rgb, .rgbASTC4x4, .rgbASTC8x8: return false
+      case .rgba, .rgbaASTC4x4, .rgbaASTC8x8:
         guard let maximum = brickMetadata.componentRanges.first?.maximum else { return false }
         return maximum == 0 || Float(maximum / 255) < evaluation.alphaEpsilon
       case .independentChannels: break
@@ -515,7 +515,7 @@ class AsyncEmptinessUpdater {
   }
 
   func updateAlphaEpsilon(_ value: Float) {
-    guard channelInterpretation == .rgba else { return }
+    guard channelInterpretation.colorInterpretation == .rgba else { return }
     let epsilon = value.isFinite ? min(max(value, 0), 1) : 0
     let changed = evaluationLock.withLock { () -> Bool in
       guard evaluationState.alphaEpsilon != epsilon else { return false }

@@ -167,6 +167,7 @@ private enum VolumeAtlasEditTests {
     try allocatedAtlasShaderCoordinates(device: device, queue: queue)
     try rendererTransferFunctionRanges(device: device)
     try runColorVolumeRenderingTests(device: device, queue: queue)
+    try runASTCEncodingTests(device: device, queue: queue)
     try rendererAlphaEpsilon(device: device)
     try linearTransferFunctionBounds(device: device)
     let dataset = EditableAtlasFixture()
@@ -175,7 +176,9 @@ private enum VolumeAtlasEditTests {
     tf.updateRanges(minValue: 0, maxValue: 255, rangeMax: 255)
     try tf.updateData(with: [SIMD4<UInt8>](repeating: SIMD4(255, 255, 255, 255), count: 256))
     let atlas = try VolumeAtlas(device: device, maxMemory: 1024, borgData: dataset,
-      transferFunctions: [tf], isoValue: 0.5)
+      transferFunctions: [tf], isoValue: 0.5, astcBlockSize: 8)
+    try expect(!atlas.usesASTC && atlas.atlasTexture.pixelFormat == .r8Unorm,
+      "The ASTC option must not compress independent scalar channels")
     try atlas.pageIn(IDs: [0])
     try expect(dataset.residentIDs.contains(0) && dataset.residentIDs.contains(2),
                "Atlas did not advertise resident fine/fallback bricks")

@@ -85,7 +85,19 @@ final class AppSettings: ObservableObject {
   }
 
   static var defaultAtlasSizeMB: Int {
+#if os(iOS)
+    max(128, min(1024, maximumAtlasSizeMB))
+#else
     max(128, min(physicalMemoryMB / 2, maximumAtlasSizeMB))
+#endif
+  }
+
+  private static var defaultAtlasCompression: Int {
+#if os(iOS)
+    8
+#else
+    0
+#endif
   }
 
   private static var defaultOversampling: Double {
@@ -120,6 +132,7 @@ final class AppSettings: ObservableObject {
     "brickOverlap": BorgVRSharedDefaults.brickOverlap,
     "enableCompression": BorgVRSharedDefaults.compressionEnabled,
     "quantizeImportsTo8Bit": false,
+    "importColorCompression": 0,
     "dicomResamplingFilter": BorgVRVolumeResamplingFilter.trilinear.rawValue,
     "borderMode": BorgVRSharedDefaults.borderMode,
     "normalizeIsoSurfaceExport": false,
@@ -133,6 +146,7 @@ final class AppSettings: ObservableObject {
     "sampleJitter": false,
     "alphaEpsilon": 0.0,
     "subbrickSkipping": true,
+    "atlasCompression": defaultAtlasCompression,
     "opacityAdaptiveSampling": true,
     "showBrickVisualization": false,
     "showLogButton": false,
@@ -191,6 +205,7 @@ final class AppSettings: ObservableObject {
   @AppStorage("brickOverlap") var brickOverlap: Int = AppSettings.int("brickOverlap")
   @AppStorage("enableCompression") var enableCompression: Bool = AppSettings.bool("enableCompression")
   @AppStorage("quantizeImportsTo8Bit") var quantizeImportsTo8Bit = false
+  @AppStorage("importColorCompression") var importColorCompression = 0
   @AppStorage("dicomResamplingFilter") var dicomResamplingFilter = BorgVRVolumeResamplingFilter.trilinear
   @AppStorage("borderMode") var borderMode: String = AppSettings.string("borderMode")
   @AppStorage("normalizeIsoSurfaceExport")
@@ -203,6 +218,7 @@ final class AppSettings: ObservableObject {
   @AppStorage("atlasSizeMB") var atlasSizeMB: Int = AppSettings.int("atlasSizeMB")
   @AppStorage("oversampling") var oversampling: Double = AppSettings.double("oversampling")
   @AppStorage("sampleJitter") var sampleJitter: Bool = AppSettings.bool("sampleJitter")
+  @AppStorage("atlasCompression") var atlasCompression: Int = AppSettings.int("atlasCompression")
   @AppStorage("alphaEpsilon") var alphaEpsilon: Double = AppSettings.double("alphaEpsilon")
   @AppStorage("subbrickSkipping") var subbrickSkipping: Bool = AppSettings.bool("subbrickSkipping") {
     didSet { objectWillChange.send() }
@@ -386,6 +402,7 @@ final class AppSettings: ObservableObject {
   func resetRenderingDefaults() {
     oversampling = Self.doubleDefault("oversampling")
     sampleJitter = Self.boolDefault("sampleJitter")
+    atlasCompression = Self.intDefault("atlasCompression")
     alphaEpsilon = Self.doubleDefault("alphaEpsilon")
     subbrickSkipping = Self.boolDefault("subbrickSkipping")
     opacityAdaptiveSampling = Self.boolDefault("opacityAdaptiveSampling")
@@ -412,6 +429,7 @@ final class AppSettings: ObservableObject {
   }
 
   func resetImportDefaults() {
+    importColorCompression = 0
     quantizeImportsTo8Bit = false
     dicomResamplingFilter = .trilinear
     brickSize = Self.intDefault("brickSize")

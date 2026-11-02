@@ -1,7 +1,8 @@
 /**
  A protocol representing a data source for volumetric brick data.
 
- This protocol defines the interface for retrieving brick data and dataset metadata.
+ This transport-level interface removes outer LZ4 compression but leaves ASTC encoded.
+ BORGVRRemoteData exposes decoded voxels through BORGVRDatasetProtocol.
  */
 protocol DataSource {
   /**

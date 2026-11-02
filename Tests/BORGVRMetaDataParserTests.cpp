@@ -93,7 +93,7 @@ int main(int argc, char** argv) {
   write_i64(invalidComponentSize, 46, 3);
   expect_rejection("unsupported component size", invalidComponentSize);
 
-  for (const uint8_t mode : {3, 127, 255}) {
+  for (const uint8_t mode : {7, 127, 255}) {
     auto invalidInterpretation = valid;
     invalidInterpretation.at(55) = mode;
     expect_rejection("unknown channel interpretation", invalidInterpretation, "Unknown channel interpretation");
@@ -173,8 +173,25 @@ int main(int argc, char** argv) {
 
   size_t typedFixtures = 0;
   size_t colorFixtures = 0;
+  size_t astcFixtures = 0;
   for (const auto& entry : std::filesystem::directory_iterator(std::filesystem::path(argv[1]).parent_path())) {
     const auto name = entry.path().filename().string();
+    if (name.rfind("astc-", 0) == 0 && entry.path().extension() == ".bin") {
+      std::ifstream source(entry.path(), std::ios::binary);
+      std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(source)), std::istreambuf_iterator<char>());
+      BORGVRMetaData astc;
+      astc.parseFromBytes(bytes.data(), bytes.size());
+      const int block = astcBlockSize(astc.channelInterpretation());
+      const auto encoded = astc.toBytes();
+      BORGVRMetaData roundTrip; roundTrip.parseFromBytes(encoded.data(), encoded.size());
+      if ((block != 4 && block != 8) || astc.fullBrickByteCount() != (8 / block) * (8 / block) * 8 * 16 ||
+          roundTrip.channelInterpretation() != astc.channelInterpretation() || roundTrip.compression() != astc.compression() ||
+          roundTrip.fullBrickByteCount() != astc.fullBrickByteCount()) throw std::runtime_error("ASTC metadata interoperability failed: " + name);
+      auto invalid = bytes; write_i64(invalid, 68, 3);
+      expect_rejection("ASTC footprint alignment", invalid, "ASTC brick size");
+      ++astcFixtures;
+      continue;
+    }
     const bool color = name == "color-rgb.bin" || name == "color-rgba.bin";
     if ((!color && name.rfind("v5-", 0) != 0) || entry.path().extension() != ".bin") continue;
     std::ifstream source(entry.path(), std::ios::binary);
@@ -234,6 +251,7 @@ int main(int argc, char** argv) {
   }
   if (typedFixtures != 20) throw std::runtime_error("Missing v5 interoperability fixtures.");
   if (colorFixtures != 2) throw std::runtime_error("Missing RGB/RGBA interoperability fixtures.");
+  if (astcFixtures != 8) throw std::runtime_error("Missing ASTC/LZ4 interoperability fixtures.");
 
   std::cout << "C++ BORGVR metadata parser tests passed.\n";
   return 0;

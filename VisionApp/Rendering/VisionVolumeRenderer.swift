@@ -329,6 +329,7 @@ final actor VisionVolumeRenderer {
         borgData: borgData,
         transferFunctions: renderTransferFunctions.activeTransferFunctions,
         isoValue: initialFrameSnapshot.visualization.isoValue,
+        astcBlockSize: StoredAppModel.int("atlasCompression"),
         logger: logger
       )
       logger?.dev("VolumeAtlas created successfully.")

@@ -58,7 +58,7 @@ enum VolumeShaderCompiler {
       "MAX_PROBING_ATTEMPTS": NSNumber(value: configuration.maximumProbingAttempts),
       "MAX_ITERATIONS": NSNumber(value: maximumIterations),
       "VOLUME_COMPONENT_COUNT": NSNumber(value: metadata.componentCount),
-      "VOLUME_COLOR_MODE": NSNumber(value: metadata.channelInterpretation.rawValue),
+      "VOLUME_COLOR_MODE": NSNumber(value: metadata.channelInterpretation.colorInterpretation.rawValue),
       "VOLUME_BYTES_PER_COMPONENT": NSNumber(value: metadata.bytesPerComponent),
       "VOLUME_SCALAR_UINT32_PACKED": NSNumber(
         value: metadata.bytesPerComponent == 4 && metadata.componentCount == 1 ? 1 : 0

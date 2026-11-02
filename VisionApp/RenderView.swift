@@ -94,7 +94,7 @@ struct RenderView: View {
 
         if let interpretation = runtimeAppModel.activeDatasetInfo?.channelInterpretation,
            interpretation != .independentChannels {
-          Label(interpretation == .rgb ? "RGB" : "RGBA", systemImage: "photo")
+          Label(interpretation.colorInterpretation == .rgb ? "RGB" : "RGBA", systemImage: "photo")
         } else {
         Picker(
           "render_picker_title",

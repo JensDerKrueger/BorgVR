@@ -1559,7 +1559,7 @@ struct ConverterView: View {
               overlap: storedAppModel.brickOverlap,
               useCompression: storedAppModel.enableCompression,
               extensionStrategy: borderMode,
-              quantizeTo8Bit: storedAppModel.quantizeImportsTo8Bit
+              quantizeTo8Bit: storedAppModel.quantizeImportsTo8Bit, colorCompression: storedAppModel.importColorCompression
             ),
             physicalSizeMeters: importSourceKind == .imageSequence ? imageSequenceSize : nil,
             provenance: provenance

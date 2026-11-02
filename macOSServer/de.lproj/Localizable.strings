@@ -645,3 +645,5 @@
 "The selected edit state could not be opened: %@\nThe original dataset has been opened instead. Your saved edits have not been changed." = "Der gewählte Bearbeitungsstand konnte nicht geöffnet werden: %@\nStattdessen wurde der Originaldatensatz geöffnet. Ihre gespeicherten Bearbeitungen wurden nicht verändert.";
 "converter_received_on" = "Erhalten am";
 "converter_source_note" = "Quelle / Herkunft (optional)";
+"Stored color compression (RGB/RGBA)" = "Farbkompression beim Import (RGB/RGBA)";
+"No compression" = "Keine Kompression";

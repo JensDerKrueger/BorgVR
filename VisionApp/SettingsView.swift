@@ -393,6 +393,12 @@ struct SettingsView: View {
                 }
 
                 Toggle("settings_toggle_sample_jitter", isOn: $storedAppModel.sampleJitter)
+                Picker("JIT atlas compression (RGB/RGBA)", selection: $storedAppModel.atlasCompression) {
+                  Text("No compression").tag(0)
+                  Text(verbatim: "ASTC 4x4").tag(4)
+                  Text(verbatim: "ASTC 8x8").tag(8)
+                }
+                .help("Uses lossy compression when opening color volumes. Direct GPU Erase/Restore is disabled; edited bricks are rebuilt and uploaded.")
                 Toggle("Subbrick skipping", isOn: Binding(get: { storedAppModel.subbrickSkipping },
                   set: { try? session.perform(.setRenderOptimizations(subbrickSkipping: $0), source: .userInterface) }))
                 Toggle("Opacity-adaptive sampling", isOn: Binding(get: { storedAppModel.opacityAdaptiveSampling },
@@ -675,6 +681,11 @@ struct SettingsView: View {
               isOn: $storedAppModel.enableCompression
             )
             Toggle("Quantize imports to 8 bits per channel", isOn: $storedAppModel.quantizeImportsTo8Bit)
+            Picker("Stored color compression (RGB/RGBA)", selection: $storedAppModel.importColorCompression) {
+              Text("No compression").tag(0)
+              Text(verbatim: "ASTC 4x4").tag(4)
+              Text(verbatim: "ASTC 8x8").tag(8)
+            }
             Text("Maps each channel's value range to 0...255, permanently reducing intensity precision. Existing 8-bit data is unchanged.")
               .font(.caption)
               .foregroundStyle(.secondary)

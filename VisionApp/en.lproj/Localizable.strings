@@ -1378,3 +1378,7 @@
 "dataset_info_provenance" = "Provenance";
 "dataset_info_no_provenance" = "No provenance recorded.";
 "dataset_info_title" = "Dataset Info";
+"JIT atlas compression (RGB/RGBA)" = "JIT atlas compression (RGB/RGBA)";
+"No compression" = "No compression";
+"Uses lossy compression when opening color volumes. Direct GPU Erase/Restore is disabled; edited bricks are rebuilt and uploaded." = "Uses lossy compression when opening color volumes. Direct GPU Erase/Restore is disabled; edited bricks are rebuilt and uploaded.";
+"Stored color compression (RGB/RGBA)" = "Color compression on import (RGB/RGBA)";

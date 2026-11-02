@@ -1012,6 +1012,10 @@ bool HTTPWebServer::sendDatasetManifest(TcpSocket& socket, const std::string& da
       case ChannelInterpretation::IndependentChannels: break;
       case ChannelInterpretation::RGB: channelInterpretation = "rgb"; break;
       case ChannelInterpretation::RGBA: channelInterpretation = "rgba"; break;
+      case ChannelInterpretation::RGB_ASTC4x4: channelInterpretation = "rgbASTC4x4"; break;
+      case ChannelInterpretation::RGBA_ASTC4x4: channelInterpretation = "rgbaASTC4x4"; break;
+      case ChannelInterpretation::RGB_ASTC8x8: channelInterpretation = "rgbASTC8x8"; break;
+      case ChannelInterpretation::RGBA_ASTC8x8: channelInterpretation = "rgbaASTC8x8"; break;
     }
     const double dataRangeMax = floating
       ? (md.bytesPerComponent() == 4 ? double(std::numeric_limits<float>::max()) : std::numeric_limits<double>::max())
@@ -1080,7 +1084,7 @@ bool HTTPWebServer::sendDatasetManifest(TcpSocket& socket, const std::string& da
         << "  \"brickMetadata\": {\n"
         << "    \"format\": \"component-min-max-byteLength-v2\",\n"
         << "    \"fields\": [\"min\", \"max\", \"byteLength\"";
-    for (int component = 0; component < md.componentCount(); ++component) {
+    for (size_t component = 0; component < md.componentRanges().size(); ++component) {
       oss << ", \"component" << component << "Min\", \"component" << component << "Max\"";
     }
     oss << "],\n"

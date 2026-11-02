@@ -641,3 +641,5 @@
 "The selected edit state could not be opened: %@\nThe original dataset has been opened instead. Your saved edits have not been changed." = "Impossible d’ouvrir l’état de modification sélectionné : %@\nLe jeu de données original a été ouvert à la place. Vos modifications enregistrées n’ont pas été modifiées.";
 "converter_received_on" = "Reçu le";
 "converter_source_note" = "Source / provenance (facultatif)";
+"Stored color compression (RGB/RGBA)" = "Compression des couleurs à l’importation (RGB/RGBA)";
+"No compression" = "Sans compression";

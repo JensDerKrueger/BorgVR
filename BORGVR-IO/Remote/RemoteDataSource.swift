@@ -118,16 +118,7 @@ final class RemoteDataSource: DataSource {
     self.isOpen = true
 
     // Compute the full brick size based on metadata.
-    self.fullBrickSize = try Self.checkedByteCount(
-      [
-        metadata.brickSize,
-        metadata.brickSize,
-        metadata.brickSize,
-        metadata.componentCount,
-        metadata.bytesPerComponent
-      ],
-      context: "full brick"
-    )
+    self.fullBrickSize = try metadata.fullBrickByteCount()
 
     // Allocate compression buffers if compression is enabled.
     if metadata.compression {

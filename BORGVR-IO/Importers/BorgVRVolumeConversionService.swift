@@ -31,22 +31,28 @@ public struct BorgVRVolumeConversionSettings: Sendable {
   public let useCompression: Bool
   public let extensionStrategy: ExtensionStrategy
   public let quantizeTo8Bit: Bool
+  public let colorCompression: Int
 
   public init(
     brickSize: Int,
     overlap: Int,
     useCompression: Bool,
     extensionStrategy: ExtensionStrategy,
-    quantizeTo8Bit: Bool = false
+    quantizeTo8Bit: Bool = false,
+    colorCompression: Int = 0
   ) {
     self.brickSize = brickSize
     self.overlap = overlap
     self.useCompression = useCompression
     self.extensionStrategy = extensionStrategy
     self.quantizeTo8Bit = quantizeTo8Bit
+    self.colorCompression = colorCompression
   }
 
   public func validate() throws {
+    guard [0, 4, 8].contains(colorCompression) else {
+      throw BORGVRError.other("Color compression must be 0, 4, or 8, and the brick size must be a multiple of its footprint.")
+    }
     guard brickSize > 0 else {
       throw BorgVRVolumeConversionError.invalidBrickSize(brickSize)
     }
@@ -842,6 +848,7 @@ public enum BorgVRVolumeConversionService {
       provenance: provenance,
       meta: request.meta,
       channelInterpretation: source.channelInterpretation,
+      astcBlockSize: request.settings.colorCompression,
       toolIdentification: request.toolIdentification
     )
   }

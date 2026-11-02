@@ -442,7 +442,7 @@ final class ScreenVolumeRendererCore {
 
     try newDataset.getMetadata().requireUnsignedProcessing()
     appModel.trackDatasetStreaming(newDataset)
-    let editableDataset = newDataset.getMetadata().channelInterpretation != .rgb
+    let editableDataset = newDataset.getMetadata().channelInterpretation.colorInterpretation != .rgb
       ? appModel.volumeBrush.open(newDataset, datasetURL: datasetURL, logger: appModel.logger) : newDataset
     dataset = editableDataset
     timer.reset()
@@ -469,6 +469,7 @@ final class ScreenVolumeRendererCore {
       borgData: editableDataset,
       transferFunctions: Array(renderingParameters.activeTransferFunctions),
       isoValue: renderingParameters.isoValue,
+      astcBlockSize: appSettings.atlasCompression,
       logger: appModel.logger
     )
     if let volumeAtlas {

@@ -56,6 +56,7 @@ final class StoredAppModel: ObservableObject {
     "brickOverlap": BorgVRSharedDefaults.brickOverlap,
     "enableCompression": BorgVRSharedDefaults.compressionEnabled,
     "quantizeImportsTo8Bit": false,
+    "importColorCompression": 0,
     "dicomResamplingFilter": BorgVRVolumeResamplingFilter.trilinear.rawValue,
     "borderMode": BorgVRSharedDefaults.borderMode,
     "screenSpaceError": 1.0,
@@ -67,6 +68,7 @@ final class StoredAppModel: ObservableObject {
     "sampleJitter": false,
     "alphaEpsilon": 0.0,
     "subbrickSkipping": true,
+    "atlasCompression": 4,
     "opacityAdaptiveSampling": true,
     "oversamplingMode": OversamplingMode.dynamicMode.rawValue,
     "dropFPS": 20,
@@ -185,6 +187,7 @@ final class StoredAppModel: ObservableObject {
   /// Whether to compress bricks when sending over network.
   @AppStorage("enableCompression") var enableCompression: Bool = StoredAppModel.bool("enableCompression")
   @AppStorage("quantizeImportsTo8Bit") var quantizeImportsTo8Bit = false
+  @AppStorage("importColorCompression") var importColorCompression = 0
   @AppStorage("dicomResamplingFilter") var dicomResamplingFilter = BorgVRVolumeResamplingFilter.trilinear
   /// The border mode used for brick edges (e.g., "zeroes" or "clamp").
   @AppStorage("borderMode") var borderMode: String = StoredAppModel.string("borderMode")
@@ -209,6 +212,7 @@ final class StoredAppModel: ObservableObject {
   @AppStorage("subbrickSkipping") var subbrickSkipping: Bool = StoredAppModel.bool("subbrickSkipping") {
     didSet { objectWillChange.send() }
   }
+  @AppStorage("atlasCompression") var atlasCompression: Int = StoredAppModel.int("atlasCompression")
   @AppStorage("opacityAdaptiveSampling") var opacityAdaptiveSampling: Bool = StoredAppModel.bool("opacityAdaptiveSampling") {
     didSet { objectWillChange.send() }
   }

@@ -115,7 +115,7 @@ enum VisionVolumeRendererBootstrap {
         editDatasetURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first?
           .appendingPathComponent("\(activeDataset.identifier).data")
     }
-    if dataset.getMetadata().channelInterpretation != .rgb {
+    if dataset.getMetadata().channelInterpretation.colorInterpretation != .rgb {
       dataset = runtimeAppModel.volumeBrush.open(dataset, datasetURL: editDatasetURL, logger: runtimeAppModel.logger)
     }
     runtimeAppModel.activeDatasetInfo = RuntimeAppModel.DatasetInfo(meta: dataset.getMetadata())

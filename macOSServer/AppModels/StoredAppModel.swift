@@ -31,6 +31,7 @@ final class StoredAppModel : ObservableObject {
   static let defaultEnableCompression = BorgVRSharedDefaults.compressionEnabled
   @AppStorage("enableCompression") var enableCompression: Bool = defaultEnableCompression
   @AppStorage("quantizeImportsTo8Bit") var quantizeImportsTo8Bit = false
+  @AppStorage("importColorCompression") var importColorCompression = 0
   @AppStorage("dicomResamplingFilter") var dicomResamplingFilter = BorgVRVolumeResamplingFilter.trilinear
 
   static let defaultLastMinute: Bool = false
@@ -77,7 +78,7 @@ final class StoredAppModel : ObservableObject {
   func settingsStore() -> BorgVRSettingsStore {
     let values: [String: Any] = [
       "brickSize": Self.defaultBrickSize, "brickOverlap": Self.defaultBrickOverlap,
-      "enableCompression": Self.defaultEnableCompression, "quantizeImportsTo8Bit": false,
+      "enableCompression": Self.defaultEnableCompression, "quantizeImportsTo8Bit": false, "importColorCompression": 0,
       "dicomResamplingFilter": "trilinear", "lastMinute": Self.defaultLastMinute,
       "autoStartServer": Self.defaultAutoStartServer, "borderMode": Self.defaultBorderModeString,
       "autoImportEnabled": false, "autoImportDirectory": "", "autoImportInterval": 10,
@@ -138,6 +139,7 @@ final class StoredAppModel : ObservableObject {
 
   func resetToDefaults() {
     quantizeImportsTo8Bit = false
+    importColorCompression = 0
     dicomResamplingFilter = .trilinear
     brickSize = StoredAppModel.defaultBrickSize
     brickOverlap = StoredAppModel.defaultBrickOverlap

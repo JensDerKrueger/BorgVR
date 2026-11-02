@@ -1,6 +1,122 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+  "Stored color compression (RGB/RGBA)": {
+    "extractionState": "manual",
+    "localizations": {
+      "en": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "Color compression on import (RGB/RGBA)"
+        }
+      },
+      "de": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "Farbkompression beim Import (RGB/RGBA)"
+        }
+      },
+      "es": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "Compresión de color al importar (RGB/RGBA)"
+        }
+      },
+      "fr": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "Compression des couleurs à l’importation (RGB/RGBA)"
+        }
+      }
+    }
+  },
+  "No compression": {
+    "extractionState": "manual",
+    "localizations": {
+      "en": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "No compression"
+        }
+      },
+      "de": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "Keine Kompression"
+        }
+      },
+      "es": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "Sin compresión"
+        }
+      },
+      "fr": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "Sans compression"
+        }
+      }
+    }
+  },
+  "JIT atlas compression (RGB/RGBA)": {
+    "extractionState": "manual",
+    "localizations": {
+      "en": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "JIT atlas compression (RGB/RGBA)"
+        }
+      },
+      "de": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "JIT-Atlas-Kompression (RGB/RGBA)"
+        }
+      },
+      "es": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "Compresión JIT del atlas (RGB/RGBA)"
+        }
+      },
+      "fr": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "Compression JIT de l’atlas (RGB/RGBA)"
+        }
+      }
+    }
+  },
+  "Uses lossy compression when opening color volumes. Direct GPU Erase/Restore is disabled; edited bricks are rebuilt and uploaded.": {
+    "extractionState": "manual",
+    "localizations": {
+      "en": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "Uses lossy compression when opening color volumes. Direct GPU Erase/Restore is disabled; edited bricks are rebuilt and uploaded."
+        }
+      },
+      "de": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "Verlustbehaftete Kompression beim Öffnen von Farbvolumen. Direktes GPU-Löschen/Wiederherstellen ist deaktiviert; bearbeitete Bricks werden neu kodiert und hochgeladen."
+        }
+      },
+      "es": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "Compresión con pérdida al abrir volúmenes en color. El borrado y la restauración directos en la GPU se desactivan; los bloques editados se vuelven a codificar y cargar."
+        }
+      },
+      "fr": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "Compression avec perte à l’ouverture des volumes en couleur. L’effacement et la restauration directs sur le GPU sont désactivés ; les blocs modifiés sont réencodés et transférés."
+        }
+      }
+    }
+  },
   "converter_supporting_file_access_required": {
     "extractionState": "manual",
     "localizations": {

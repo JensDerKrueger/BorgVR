@@ -1,5 +1,6 @@
 import Foundation
 import Network
+import Compression
 
 private struct TestFailure: Error { let message: String }
 
@@ -66,6 +67,7 @@ private enum RemoteDatasetDownloadTests {
       "borgvr-download-\(UUID())")
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: directory) }
+    try await testASTCRemoteDownloads(directory: directory)
     let metadata = BORGVRMetaData(
       width: 1, height: 1, depth: 1, componentCount: 1,
       bytePerComponent: 1, voxelSpacingX: 1, voxelSpacingY: 1, voxelSpacingZ: 1,
@@ -165,4 +167,74 @@ private enum RemoteDatasetDownloadTests {
       "Resolver cancellation waited for timeout")
     print("Remote download finalization and active-network cancellation tests passed")
   }
+}
+
+@MainActor
+private func testASTCRemoteDownloads(directory: URL) async throws {
+  var entries: [DatasetInfo] = []
+  var expected: [(metadata: BORGVRMetaData, encoded: [UInt8])] = []
+  for block in [4, 8] { for lz4 in [false, true] {
+    let m = BORGVRMetaData(width: 1, height: 1, depth: 1, componentCount: 4, bytePerComponent: 1,
+      voxelSpacingX: 1, voxelSpacingY: 1, voxelSpacingZ: 1, brickSize: 32, overlap: 0,
+      minValue: 192, maxValue: 192, compression: lz4, datasetDescription: "ASTC remote", metaDescription: "")
+    try m.setChannelInterpretation(BORGVRChannelInterpretation.rgba.withASTC(blockSize: block))
+    let pixel: [UInt8] = [32, 96, 224, 192]
+    let voxels = (0..<(32 * 32 * 32)).flatMap { _ in pixel }
+    let encoded = voxels.withUnsafeBufferPointer { BorgVRASTCCodec.encode($0.baseAddress!, brickSize: 32, components: 4, blockSize: block) }
+    var stored = encoded
+    if lz4 {
+      var compressed = [UInt8](repeating: 0, count: encoded.count)
+      let count = encoded.withUnsafeBufferPointer { input in
+        compressed.withUnsafeMutableBufferPointer { output in
+          compression_encode_buffer(output.baseAddress!, output.count, input.baseAddress!, input.count, nil, COMPRESSION_LZ4)
+        }
+      }
+      try expect(count > 0 && count < encoded.count, "ASTC fixture must exercise outer LZ4 compression")
+      stored = Array(compressed.prefix(count))
+    }
+    m.append(offset: 8, size: stored.count, componentRanges: m.componentRanges)
+    var file = Data(from: UInt64(8 + stored.count)); file.append(contentsOf: stored); file.append(m.toData())
+    let url = directory.appendingPathComponent("astc-\(block)-\(lz4).data")
+    try file.write(to: url)
+    entries.append(.init(id: m.uniqueID, filename: url.path, datasetDescription: "ASTC"))
+    expected.append((m, encoded))
+  } }
+  let server = TCPServer(port: UInt16.random(in: 49152...65535), maxBricksPerGetRequest: 64, datasets: entries)
+  server.start(); defer { server.stop() }
+  let ready = await server.waitUntilReady()
+  try expect(ready, "ASTC remote server failed to start")
+  let origin = DatasetOrigin(address: "127.0.0.1", port: Int(server.port.rawValue), password: "")
+  for test in expected {
+    let remote = try await Task.detached {
+      let manager = BORGVRRemoteDataManager(host: origin.address, port: UInt16(origin.port), logger: nil)
+      try manager.connect(timeout: 5)
+      return try manager.openDataset(datasetID: test.metadata.uniqueID, timeout: 5)
+    }.value
+    let buffer = remote.allocateBrickBuffer(); defer { buffer.deallocate() }
+    let direct = try remote.getASTCBrick(index: 0, outputBuffer: buffer, synchronous: true)
+    try expect(direct && Array(UnsafeBufferPointer(start: buffer, count: test.encoded.count)) == test.encoded,
+      "Remote ASTC must remove only LZ4 before direct upload")
+    try remote.getFirstBrick(outputBuffer: buffer)
+    try expect(buffer[0] == 32 && buffer[3] == 192, "Remote voxel reads must decode ASTC")
+    remote.stop()
+    let target = directory.appendingPathComponent("cached-\(test.metadata.uniqueID).data")
+    _ = try await RemoteDatasetDownloader.download(datasetID: test.metadata.uniqueID, origin: origin, to: target,
+      timeout: 5, cancellation: .init(), originProvider: { [origin] }, progress: { _ in })
+    let local = try BORGVRFileData(filename: target.path)
+    try local.getFirstBrick(outputBuffer: buffer)
+    try expect(buffer[0] == 32 && buffer[3] == 192 && local.getMetadata().channelInterpretation == test.metadata.channelInterpretation,
+      "Completed cache must preserve ASTC layout and decoded colors")
+    let cached = try await Task.detached {
+      let manager = BORGVRRemoteDataManager(host: origin.address, port: UInt16(origin.port), logger: nil)
+      try manager.connect(timeout: 5)
+      return try manager.openDataset(datasetID: test.metadata.uniqueID, timeout: 5, localCacheFilename: target.path)
+    }.value
+    try cached.getFirstBrick(outputBuffer: buffer)
+    try expect(buffer[0] == 32 && buffer[3] == 192, "Already-cached ASTC was decoded twice or not decoded")
+    let cachedPayload = try cached.getASTCBrick(index: 0, outputBuffer: buffer, synchronous: true)
+    try expect(cachedPayload && Array(UnsafeBufferPointer(start: buffer, count: test.encoded.count)) == test.encoded,
+      "Already-cached ASTC cannot upload its stored payload directly")
+    cached.stop()
+  }
+  print("Remote ASTC 4x4/8x8, outer LZ4, direct payloads, decoded voxel reads and finalized caches passed")
 }

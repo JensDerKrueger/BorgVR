@@ -37,6 +37,8 @@ struct ServerConfiguration {
   var autoImportDirectory: String?
   var autoImportInterval = BorgVRAutoImporter.defaultInterval
   var autoImportMode = BorgVRAutoImportMode.automatic
+  var autoImportColorCompression = 0
+  var autoImportLZ4 = BorgVRSharedDefaults.compressionEnabled
   var syncServers: [ServerSyncEndpoint] = []
 
   func serverConfiguration(certificateData: Data) -> BorgVRServerConfiguration {
@@ -82,6 +84,8 @@ Options:
                                   Successfully imported sources are deleted.
   --auto-import-interval <sec>    Time between stability checks (default: 10).
   --auto-import-mode <mode>       automatic (default) or guided (reads import.json).
+  --color-compression <mode>      Auto-import RGB/RGBA: none, astc4x4, or astc8x8.
+  --no-lz4                       Disable outer LZ4 for auto-imported datasets.
   --sync-server <host> <port> <interval> [password]
                                   Synchronize server content at intervals of at least
                                   10 seconds. Repeat for fallback sources.
@@ -154,6 +158,15 @@ func parseArguments(_ args: [String]) -> ServerConfiguration {
           fail("Auto-import mode must be automatic or guided.")
         }
         config.autoImportMode = mode
+
+      case "--color-compression":
+        guard let mode = ["none": 0, "astc4x4": 4, "astc8x8": 8][requireValue(after: argument)] else {
+          fail("Color compression must be none, astc4x4, or astc8x8.")
+        }
+        config.autoImportColorCompression = mode
+
+      case "--no-lz4":
+        config.autoImportLZ4 = false
 
       case "--scan-interval":
         let value = requireValue(after: argument)
@@ -408,8 +421,8 @@ do {
       interval: config.autoImportInterval,
       mode: config.autoImportMode,
       settings: BorgVRVolumeConversionSettings(brickSize: BorgVRSharedDefaults.brickSize,
-        overlap: BorgVRSharedDefaults.brickOverlap, useCompression: BorgVRSharedDefaults.compressionEnabled,
-        extensionStrategy: .fillZeroes), logger: logger,
+        overlap: BorgVRSharedDefaults.brickOverlap, useCompression: config.autoImportLZ4,
+        extensionStrategy: .fillZeroes, colorCompression: config.autoImportColorCompression), logger: logger,
       toolIdentification: "BorgVR Terminal Server \(TerminalServerInfo.version)",
       onImported: { [host, serverConfiguration] _ in _ = host.refreshCatalog(configuration: serverConfiguration) })
   }

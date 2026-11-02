@@ -147,6 +147,8 @@ class VolumeAtlas {
   private var pendingEditedBrickIDs: Set<Int> = []
   private var brushRenderer: VolumeAtlasBrushRenderer?
   private var gpuBrushAttached = false
+  let astcBlockSize: Int
+  var usesASTC: Bool { astcBlockSize != 0 }
   private var pageEditRevisions: [Int: UInt64] = [:]
   private var pendingGPUFrame: (command: MTLCommandBuffer, revisions: [Int: (brick: Int, revision: UInt64)])?
   private var gpuBrushSource: BorgVRVolumeGPUBrushSource? { borgData as? BorgVRVolumeGPUBrushSource }
@@ -188,6 +190,7 @@ class VolumeAtlas {
    */
   init(device: MTLDevice, maxMemory: Int, borgData: BORGVRDatasetProtocol,
        transferFunctions: [TransferFunction1D], isoValue: Float,
+       astcBlockSize: Int = 0,
        logger: LoggerBase? = nil) throws {
 
     let metadata = borgData.getMetadata()
@@ -195,6 +198,13 @@ class VolumeAtlas {
       bytesPerComponent: metadata.bytesPerComponent,
       componentCount: metadata.componentCount
     )
+    let requestedBlockSize = metadata.channelInterpretation.astcBlockSize == 0 ? astcBlockSize : metadata.channelInterpretation.astcBlockSize
+    self.astcBlockSize = (requestedBlockSize == 4 || requestedBlockSize == 8) && metadata.channelInterpretation != .independentChannels &&
+      metadata.bytesPerComponent == 1 && metadata.brickSize % requestedBlockSize == 0 && device.supportsFamily(.apple3) ? requestedBlockSize : 0
+    let usesASTC = self.astcBlockSize != 0
+    if requestedBlockSize != 0, metadata.channelInterpretation != .independentChannels, !usesASTC {
+      logger?.warning("ASTC atlas unavailable for this GPU or brick layout; using an uncompressed atlas.")
+    }
 
     self.device = device
     self.borgData = borgData
@@ -212,7 +222,8 @@ class VolumeAtlas {
       bytesPerComponent: metadata.bytesPerComponent,
       componentCount: metadata.componentCount
     )
-    let minimumAtlasMemory = max(1, brickSize * brickSize * brickSize * bytesPerVoxel)
+    let minimumAtlasMemory = usesASTC ? (brickSize / self.astcBlockSize) * (brickSize / self.astcBlockSize) * brickSize * 16
+      : max(1, brickSize * brickSize * brickSize * bytesPerVoxel)
     var atlasBudget = max(maxMemory, minimumAtlasMemory)
     var atlasLayout: (width: Int, height: Int, depth: Int, inCoreBrickCount: Int)?
     var createdAtlasTexture: MTLTexture?
@@ -223,16 +234,17 @@ class VolumeAtlas {
         maxBrickCount: metadata.brickMetadata.count,
         brickSize: metadata.brickSize,
         bytesPerComponent: metadata.bytesPerComponent,
-        componentCount: metadata.componentCount
+        componentCount: metadata.componentCount,
+        astcBlockSize: self.astcBlockSize
       )
 
       let atlasDescriptor = MTLTextureDescriptor()
       atlasDescriptor.textureType = .type3D
-      atlasDescriptor.pixelFormat = pixelFormats.primary
+      atlasDescriptor.pixelFormat = usesASTC ? (self.astcBlockSize == 8 ? .astc_8x8_ldr : .astc_4x4_ldr) : pixelFormats.primary
       atlasDescriptor.width = layout.width
       atlasDescriptor.height = layout.height
       atlasDescriptor.depth = layout.depth
-      atlasDescriptor.usage = [.shaderRead, .shaderWrite]
+      atlasDescriptor.usage = usesASTC ? [.shaderRead] : [.shaderRead, .shaderWrite]
       atlasDescriptor.storageMode = .shared
 
       let primaryTexture = device.makeTexture(descriptor: atlasDescriptor)
@@ -272,13 +284,15 @@ class VolumeAtlas {
     let inCoreBrickCount = atlasLayout.inCoreBrickCount
     self.brickStorage = (width / brickSize, height / brickSize, depth / brickSize)
     self.atlasTexture = createdAtlasTexture
-    if gpuBrushSource != nil {
+    if gpuBrushSource != nil && !usesASTC {
       do {
         brushRenderer = try VolumeAtlasBrushRenderer(device: device, metadata: metadata)
       } catch {
         logger?.warning("GPU volume brushes unavailable; using CPU editing: \(error.localizedDescription)")
       }
     }
+
+    if usesASTC { logger?.info("ASTC \(self.astcBlockSize)x\(self.astcBlockSize) atlas enabled; GPU brush previews are disabled.") }
 
     // Create metadata buffer.
     let brickCount = metadata.brickMetadata.count
@@ -341,8 +355,9 @@ class VolumeAtlas {
 
     // Ensure the lowest-res single brick is paged in at position 0, so it always is guaranteed to be resident
     let initialRevision = gpuBrushSource?.gpuReadableRevision(index: brickCount - 1) ?? 0
-    try borgData.getFirstBrick(outputBuffer: borgBuffer)
-    replaceAtlasBrick(x: 0, y: 0, z: 0, data: borgBuffer)
+    let initialEncoded = try usesASTC && borgData.getASTCBrick(index: brickCount - 1, outputBuffer: borgBuffer, synchronous: true)
+    if !initialEncoded { try borgData.getFirstBrick(outputBuffer: borgBuffer) }
+    replaceAtlasBrick(x: 0, y: 0, z: 0, data: borgBuffer, encodedASTC: initialEncoded)
     let lastBrickIndex = brickCount - 1
     metaStorage[lastBrickIndex] = UInt32(0 + BrickIDFlags.BI_FLAG_COUNT.rawValue)
     brickToPage[lastBrickIndex] = 0
@@ -387,7 +402,7 @@ class VolumeAtlas {
    - data: A pointer to the brick data.
    */
   private func replaceAtlasBrick(x: Int, y: Int, z: Int,
-                                 data: UnsafeMutablePointer<UInt8>) {
+                                 data: UnsafeMutablePointer<UInt8>, encodedASTC: Bool = false) {
     subbrickCache?.invalidate(page: x + brickStorage.0 * (y + brickStorage.1 * z))
     let metadata = borgData.getMetadata()
     let brickSize = metadata.brickSize
@@ -395,6 +410,21 @@ class VolumeAtlas {
       origin: MTLOrigin(x: x * brickSize, y: y * brickSize, z: z * brickSize),
       size: MTLSize(width: brickSize, height: brickSize, depth: brickSize)
     )
+    if usesASTC {
+      let blocks = brickSize / astcBlockSize
+      if encodedASTC {
+        atlasTexture.replace(region: region, mipmapLevel: 0, slice: 0, withBytes: data,
+          bytesPerRow: blocks * 16, bytesPerImage: blocks * blocks * 16)
+        return
+      }
+      let compressed = BorgVRASTCCodec.encode(data, brickSize: brickSize,
+        components: metadata.componentCount, blockSize: astcBlockSize)
+      compressed.withUnsafeBytes {
+        atlasTexture.replace(region: region, mipmapLevel: 0, slice: 0, withBytes: $0.baseAddress!,
+          bytesPerRow: blocks * 16, bytesPerImage: blocks * blocks * 16)
+      }
+      return
+    }
     let voxelCount = brickSize * brickSize * brickSize
     if metadata.bytesPerComponent == 1 && metadata.componentCount == 3 {
       let outputCount = voxelCount * 4
@@ -407,7 +437,7 @@ class VolumeAtlas {
         primaryUploadStorage[destination] = data[source]
         primaryUploadStorage[destination + 1] = data[source + 1]
         primaryUploadStorage[destination + 2] = data[source + 2]
-        primaryUploadStorage[destination + 3] = metadata.channelInterpretation == .rgb ? 255 : 0
+        primaryUploadStorage[destination + 3] = metadata.channelInterpretation.colorInterpretation == .rgb ? 255 : 0
       }
       replace(
         texture: atlasTexture,
@@ -521,7 +551,7 @@ class VolumeAtlas {
     subbrickSkippingEnabled = false
     guard enabled else { subbrickSetupFailed = false; return }
     let metadata = borgData.getMetadata()
-    guard metadata.channelInterpretation != .rgb else { return }
+    guard metadata.channelInterpretation.colorInterpretation != .rgb else { return }
     let count = VolumeAtlasSubbrickCache.divisions(brickSize: metadata.brickSize, overlap: metadata.overlap)
     guard count > 1, !subbrickSetupFailed else { return }
     if subbrickCache == nil {
@@ -637,9 +667,10 @@ class VolumeAtlas {
           pendingEditedBrickIDs.remove(id)
           continue
         }
-        try borgData.getBrick(index: id, outputBuffer: borgBuffer)
+        let encoded = try usesASTC && borgData.getASTCBrick(index: id, outputBuffer: borgBuffer, synchronous: false)
+        if !encoded { try borgData.getBrick(index: id, outputBuffer: borgBuffer) }
         let (x, y, z) = IDToCoords(pageIndex: page)
-        replaceAtlasBrick(x: x, y: y, z: z, data: borgBuffer)
+        replaceAtlasBrick(x: x, y: y, z: z, data: borgBuffer, encodedASTC: encoded)
         pageEditRevisions[page] = readableRevision ?? 0
         let empty = borgData.visibilityMetadata(index: id).map {
           asyncEmptinessUpdater.brickIsEmpty(brickMetadata: $0)
@@ -826,8 +857,10 @@ class VolumeAtlas {
       }
 
       let readableRevision = gpuBrushSource?.gpuReadableRevision(index: newBrickID) ?? 0
+      let encoded: Bool
       do {
-        try borgData.getBrick(index: newBrickID, outputBuffer: borgBuffer)
+        encoded = try usesASTC && borgData.getASTCBrick(index: newBrickID, outputBuffer: borgBuffer, synchronous: false)
+        if !encoded { try borgData.getBrick(index: newBrickID, outputBuffer: borgBuffer) }
       } catch BORGVRDataError.brickNotYetAvailable {
         // the brick source is in async mode and the brick is not ready yet
         continue
@@ -859,7 +892,7 @@ class VolumeAtlas {
       metaStorage[newBrickID] = UInt32(pageIndex) + BI_FLAG_COUNT
 
       let (x, y, z) = IDToCoords(pageIndex: pageIndex)
-      replaceAtlasBrick(x: x, y: y, z: z, data: borgBuffer)
+      replaceAtlasBrick(x: x, y: y, z: z, data: borgBuffer, encodedASTC: encoded)
       pageEditRevisions[pageIndex] = readableRevision
     }
 
@@ -889,7 +922,7 @@ class VolumeAtlas {
    */
   static func computeAtlasSize(maxMemory: Int, maxBrickCount: Int,
                                brickSize: Int, bytesPerComponent: Int,
-                               componentCount: Int) -> (width: Int,
+                               componentCount: Int, astcBlockSize: Int = 0) -> (width: Int,
                                                         height: Int,
                                                         depth: Int,
                                                         inCoreBrickCount: Int) {
@@ -898,7 +931,8 @@ class VolumeAtlas {
       componentCount: componentCount
     )
     let brickVolume = brickSize * brickSize * brickSize
-    let brickMemory = brickVolume * bytesPerVoxel
+    let brickMemory = (astcBlockSize == 4 || astcBlockSize == 8) ? ((brickSize + astcBlockSize - 1) / astcBlockSize) * ((brickSize + astcBlockSize - 1) / astcBlockSize) * brickSize * 16
+      : brickVolume * bytesPerVoxel
 
     let maxBricks = min(maxBrickCount, maxMemory / brickMemory)
 

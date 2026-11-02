@@ -483,7 +483,7 @@ struct ServerView: View {
         mode: storedAppModel.autoImportMode,
         settings: BorgVRVolumeConversionSettings(brickSize: storedAppModel.brickSize,
           overlap: storedAppModel.brickOverlap, useCompression: storedAppModel.enableCompression,
-          extensionStrategy: border, quantizeTo8Bit: storedAppModel.quantizeImportsTo8Bit),
+          extensionStrategy: border, quantizeTo8Bit: storedAppModel.quantizeImportsTo8Bit, colorCompression: storedAppModel.importColorCompression),
         logger: logger, onImported: { _ in
           Task { @MainActor in
             if isRunningServer { rescanCatalogAfterSync() }

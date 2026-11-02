@@ -12,7 +12,20 @@ struct Vec3 {
 };
 
 enum class ComponentType : uint8_t { UnsignedInteger = 0, SignedInteger = 1, FloatingPoint = 2 };
-enum class ChannelInterpretation : uint8_t { IndependentChannels = 0, RGB = 1, RGBA = 2 };
+enum class ChannelInterpretation : uint8_t {
+  IndependentChannels = 0, RGB = 1, RGBA = 2,
+  RGB_ASTC4x4 = 3, RGBA_ASTC4x4 = 4, RGB_ASTC8x8 = 5, RGBA_ASTC8x8 = 6
+};
+inline ChannelInterpretation colorInterpretation(ChannelInterpretation value) {
+  if (value == ChannelInterpretation::RGB_ASTC4x4 || value == ChannelInterpretation::RGB_ASTC8x8) return ChannelInterpretation::RGB;
+  if (value == ChannelInterpretation::RGBA_ASTC4x4 || value == ChannelInterpretation::RGBA_ASTC8x8) return ChannelInterpretation::RGBA;
+  return value;
+}
+inline int astcBlockSize(ChannelInterpretation value) {
+  if (value == ChannelInterpretation::RGB_ASTC4x4 || value == ChannelInterpretation::RGBA_ASTC4x4) return 4;
+  if (value == ChannelInterpretation::RGB_ASTC8x8 || value == ChannelInterpretation::RGBA_ASTC8x8) return 8;
+  return 0;
+}
 struct ProvenanceEntry {
   int64_t timestampMilliseconds = 0;
   std::string text;
@@ -67,6 +80,7 @@ public:
   int bytesPerComponent() const { return bytesPerComponent_; }
   ComponentType componentType() const { return componentType_; }
   ChannelInterpretation channelInterpretation() const { return channelInterpretation_; }
+  int64_t fullBrickByteCount() const;
   const std::vector<ProvenanceEntry>& provenance() const { return provenance_; }
   const std::string& meta() const { return meta_; }
   int brickSize() const { return brickSize_; }

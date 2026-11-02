@@ -349,6 +349,16 @@ struct SettingsView: View {
                   .labelsHidden()
               }
               GridRow {
+                Text("Stored color compression (RGB/RGBA)")
+                  .gridColumnAlignment(.trailing)
+                Picker("Stored color compression (RGB/RGBA)", selection: $storedAppModel.importColorCompression) {
+                  Text("No compression").tag(0)
+                  Text(verbatim: "ASTC 4x4").tag(4)
+                  Text(verbatim: "ASTC 8x8").tag(8)
+                }
+                  .labelsHidden()
+              }
+              GridRow {
                 EmptyView()
                 Text("Maps each channel's value range to 0...255, permanently reducing intensity precision. Existing 8-bit data is unchanged.")
                   .font(.caption)

@@ -186,6 +186,8 @@ General
     \(executableName) --help | -h
     \(executableName) --version | -v
     Optional for import/generation (repeatable): --source-info <ISO8601-date-time> <source-text>
+    Optional for color imports: --color-compression none|astc4x4|astc8x8 (default: none)
+    Optional for import/generation: --no-lz4 (independent of ASTC color compression)
         Example: --source-info 2026-11-01T10:30:00Z "Downloaded from https://example.org/scan"
     Optional for import modes D/Q/N/P/I/Z:
         --size-x <meters>       : Physical X extent if the source has no physical size
@@ -429,9 +431,19 @@ func parseArguments(_ args: [String]) -> (Mode, Any) {
 }
 
 func parseImportOptions(_ arguments: [String]) -> (
-  arguments: [String], provenance: [BORGVRProvenanceEntry], sizeXMeters: Float?, forceSizeX: Bool
+  arguments: [String], provenance: [BORGVRProvenanceEntry], sizeXMeters: Float?, forceSizeX: Bool, colorCompression: Int, useLZ4: Bool
 ) {
   var args = arguments
+  var colorCompression = 0
+  if let index = args.firstIndex(of: "--color-compression") {
+    guard index + 1 < args.count, let value = ["none": 0, "astc4x4": 4, "astc8x8": 8][args[index + 1]] else {
+      logger.error("--color-compression requires none, astc4x4, or astc8x8."); exit(1)
+    }
+    colorCompression = value
+    args.removeSubrange(index...index + 1)
+  }
+  let useLZ4 = !args.contains("--no-lz4")
+  args.removeAll { $0 == "--no-lz4" }
   var provenance: [BORGVRProvenanceEntry] = []
   while let index = args.firstIndex(of: "--source-info") {
     guard index + 2 < args.count, !args[index + 2].trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
@@ -465,7 +477,7 @@ func parseImportOptions(_ arguments: [String]) -> (
     logger.error("--size-x and --force-size-x apply to import modes D/Q/N/P/I/Z only.")
     exit(1)
   }
-  return (args, provenance, sizeXMeters, forceSizeX)
+  return (args, provenance, sizeXMeters, forceSizeX, colorCompression, useLZ4)
 }
 
 func convertRawVolume(inputFilename: String,
@@ -498,8 +510,9 @@ func convertRawVolume(inputFilename: String,
       settings: BorgVRVolumeConversionSettings(
         brickSize: maxBrickSize,
         overlap: overlap,
-        useCompression: true,
-        extensionStrategy: .fillZeroes
+        useCompression: conversionUseLZ4,
+        extensionStrategy: .fillZeroes,
+        colorCompression: conversionColorCompression
       ),
       provenance: provenance,
       toolIdentification: ConverterInfo.toolIdentification
@@ -590,8 +603,9 @@ private func conversionSettings(
   BorgVRVolumeConversionSettings(
     brickSize: parameters.maxBrickSize,
     overlap: parameters.overlap,
-    useCompression: true,
-    extensionStrategy: .fillZeroes
+    useCompression: conversionUseLZ4,
+    extensionStrategy: .fillZeroes,
+    colorCompression: conversionColorCompression
   )
 }
 
@@ -828,6 +842,8 @@ let importOptions = parseImportOptions(CommandLine.arguments)
 let conversionProvenance = importOptions.provenance
 let conversionSizeXMeters = importOptions.sizeXMeters
 let forceConversionSizeX = importOptions.forceSizeX
+let conversionColorCompression = importOptions.colorCompression
+let conversionUseLZ4 = importOptions.useLZ4
 let (mode, params) = parseArguments(importOptions.arguments)
 switch mode {
   case .DicomConversion, .ImageSequenceConversion:

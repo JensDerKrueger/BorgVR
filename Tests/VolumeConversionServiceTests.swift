@@ -1958,6 +1958,71 @@ private func testRegistrationRecoversRotationAroundVolumeCenter() throws {
   )
 }
 
+@MainActor
+private func testStoredASTCVolumes() async throws {
+  let root = FileManager.default.temporaryDirectory.appendingPathComponent("borgvr-stored-astc-\(UUID())")
+  try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+  defer { try? FileManager.default.removeItem(at: root) }
+  let size = Vec3<Int>(x: 13, y: 11, z: 9), spacing = Vec3<Float>(x: 0.1, y: 0.2, z: 0.3)
+  for interpretation in [BORGVRChannelInterpretation.rgb, .rgba] { for block in [4, 8] { for lz4 in [false, true] {
+    let components = interpretation == .rgb ? 3 : 4
+    let name = "\(interpretation.name)-\(block)-\(lz4)"
+    let raw = root.appendingPathComponent(name + ".raw"), url = root.appendingPathComponent(name + ".data")
+    let pixel: [UInt8] = components == 3 ? [32, 96, 224] : [32, 96, 224, 192]
+    try Data((0..<(size.x * size.y * size.z)).flatMap { _ in pixel }).write(to: raw)
+    try BorgVRVolumeConversionService.convert(.init(source: .raw(.init(url: raw, offset: 0,
+      size: size, bytesPerComponent: 1, componentCount: components, voxelSpacing: spacing,
+      channelInterpretation: interpretation)), destinationURL: url, datasetDescription: name,
+      metaDescription: "", settings: .init(brickSize: 8, overlap: 1, useCompression: lz4,
+        extensionStrategy: .clamp, colorCompression: block)))
+    let source = try BORGVRFileData(filename: url.path), m = source.getMetadata()
+    try expect(m.channelInterpretation == interpretation.withASTC(blockSize: block) && m.compression == lz4,
+      "Stored ASTC mode must be independent of LZ4")
+    let storedBytes = (8 / block) * (8 / block) * 8 * 16
+    let encodedCount = try m.fullBrickByteCount(), voxelCount = try m.voxelBrickByteCount()
+    try expect(encodedCount == storedBytes && voxelCount == 512 * components,
+      "Stored and voxel byte counts must be separate")
+    let buffer = source.allocateBrickBuffer()
+    defer { buffer.deallocate() }
+    for id in m.brickMetadata.indices {
+      let encoded = try source.getASTCBrick(index: id, outputBuffer: buffer, synchronous: false)
+      try expect(encoded, "Missing direct ASTC access")
+      try source.getBrick(index: id, outputBuffer: buffer)
+      for i in 0..<(512 * components) { try expect(buffer[i] == pixel[i % components], "Software ASTC decoding changed constant color") }
+    }
+    let exported = root.appendingPathComponent(name + ".nrrd")
+    _ = try BORGVRVolumeExporter.export(inputURL: url, outputURL: exported, level: 0)
+    let flat = try Data(contentsOf: exported)
+    let split = flat.range(of: Data("\n\n".utf8))!
+    let original = try Data(contentsOf: raw)
+    try expect(Data(flat[split.upperBound...]) == original, "ASTC NRRD export wrote compressed bytes instead of voxels")
+    if interpretation == .rgba {
+      let model = VolumeBrushModel()
+      defer { model.close() }
+      let edited = model.open(source, datasetURL: url)
+      try await model.waitForStateReady()
+      try expect(model.channels == .selected([3]), "Stored RGBA edits must affect alpha only")
+      let sample = BorgVRVolumeBrushSample(center: SIMD3(0.65, 1.1, 1.35), radius: 10)
+      try await model.editVolume(mode: .erase, samples: [sample])
+      try await model.prepareVolumeEdits()
+      try edited.getFirstBrick(outputBuffer: buffer)
+      for i in stride(from: 3, to: 512 * 4, by: 4) { try expect(buffer[i] == 0, "Stored ASTC erase failed") }
+      let baked = root.appendingPathComponent(name + "-edited.data")
+      let job = try model.startVolumeExport(to: baked, name: nil, description: nil)
+      _ = try await model.waitForVolumeExport(id: job.id)
+      let saved = try BORGVRFileData(filename: baked.path)
+      try expect(saved.getMetadata().channelInterpretation == m.channelInterpretation, "Edit export lost ASTC encoding")
+      try saved.getFirstBrick(outputBuffer: buffer)
+      for i in stride(from: 3, to: 512 * 4, by: 4) { try expect(buffer[i] == 0, "Saved ASTC edit was not encoded correctly") }
+      try await model.editVolume(mode: .restore, samples: [sample])
+      try await model.prepareVolumeEdits()
+      try edited.getFirstBrick(outputBuffer: buffer)
+      for i in 0..<(512 * 4) { try expect(buffer[i] == pixel[i % 4], "Stored ASTC restore failed") }
+    }
+  } } }
+  print("Stored RGB/RGBA ASTC 4x4/8x8 passed: LZ4 independence, all LODs, voxel reads, direct payloads, NRRD, erase/restore and edited data export")
+}
+
 @main
 private enum VolumeConversionServiceTestRunner {
   static func main() async throws {
@@ -1966,6 +2031,7 @@ private enum VolumeConversionServiceTestRunner {
       try profileExistingEditState(directory: URL(fileURLWithPath: directory), dataset: URL(fileURLWithPath: dataset))
       return
     }
+    try await testStoredASTCVolumes()
     try await testRGBAEditing()
     try runAutoImporterTests()
     try testSettingsAndCancellation()

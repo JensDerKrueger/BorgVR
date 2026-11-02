@@ -1098,3 +1098,7 @@
 "converter_source_note" = "Quelle / Herkunft (optional)";
 "dataset_info_provenance" = "Herkunft und Verarbeitung";
 "dataset_info_no_provenance" = "Keine Herkunftsdaten gespeichert.";
+"JIT atlas compression (RGB/RGBA)" = "JIT-Atlas-Kompression (RGB/RGBA)";
+"No compression" = "Keine Kompression";
+"Uses lossy compression when opening color volumes. Direct GPU Erase/Restore is disabled; edited bricks are rebuilt and uploaded." = "Verlustbehaftete Kompression beim Öffnen von Farbvolumen. Direktes GPU-Löschen/Wiederherstellen ist deaktiviert; bearbeitete Bricks werden neu kodiert und hochgeladen.";
+"Stored color compression (RGB/RGBA)" = "Farbkompression beim Import (RGB/RGBA)";

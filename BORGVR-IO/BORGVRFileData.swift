@@ -30,6 +30,7 @@ final class BORGVRFileData: BORGVRDatasetProtocol {
 
   /// The expected full brick size in bytes.
   private let fullBrickSize: Int
+  private let voxelBrickSize: Int
   /// Protects the shared decompression buffers during concurrent read-only operations.
   private let brickReadLock = NSLock()
 
@@ -49,6 +50,7 @@ final class BORGVRFileData: BORGVRDatasetProtocol {
     memoryMappedFile = try MemoryMappedFile(filename: filename)
     // Compute the expected size of a full brick.
     fullBrickSize = try metadata.fullBrickByteCount()
+    voxelBrickSize = try metadata.voxelBrickByteCount()
     // If compression is enabled, allocate buffers for scratch space and temporary compressed data.
     if metadata.compression {
       let scratchBufferSize = compression_decode_scratch_buffer_size(COMPRESSION_LZ4)
@@ -90,7 +92,7 @@ final class BORGVRFileData: BORGVRDatasetProtocol {
 
    - Parameters:
    - index: The 1D index of the brick.
-   - outputBuffer: A pointer to a memory area with capacity at least `fullBrickSize` bytes.
+   - outputBuffer: A pointer with capacity for a decoded voxel brick (`voxelBrickSize` bytes).
    - Throws: A BORGVRDataError if the memory mapping is missing, compression buffers are unavailable,
    decompression fails, or the decompressed size does not match the expected full brick size.
    */
@@ -99,13 +101,20 @@ final class BORGVRFileData: BORGVRDatasetProtocol {
     defer { brickReadLock.unlock() }
     // Retrieve the metadata for the requested brick and load the brick.
     try getBrick(brickMeta: brickMetadata(at: index), outputBuffer: outputBuffer)
+    try BorgVRASTCCodec.decodeInPlace(outputBuffer, metadata: metadata)
+  }
+
+  func getASTCBrick(index: Int, outputBuffer: UnsafeMutablePointer<UInt8>, synchronous: Bool) throws -> Bool {
+    guard metadata.channelInterpretation.astcBlockSize != 0 else { return false }
+    try brickReadLock.withLock { try getBrick(brickMeta: brickMetadata(at: index), outputBuffer: outputBuffer) }
+    return true
   }
 
   /**
    Loads the last brick from the dataset and copies its data into the provided output buffer.
    In contrast to getBrick, this call is always synchronous.
 
-   - Parameter outputBuffer: A pointer to a memory area with capacity at least `fullBrickSize` bytes.
+   - Parameter outputBuffer: A pointer with capacity for a decoded voxel brick (`voxelBrickSize` bytes).
    - Throws: A BORGVRDataError if the brick cannot be loaded.
    */
   public func getFirstBrick(outputBuffer: UnsafeMutablePointer<UInt8>) throws {
@@ -122,7 +131,7 @@ final class BORGVRFileData: BORGVRDatasetProtocol {
    - x: The x-coordinate index of the brick.
    - y: The y-coordinate index of the brick.
    - z: The z-coordinate index of the brick.
-   - outputBuffer: A pointer to a memory area with capacity at least `fullBrickSize` bytes.
+   - outputBuffer: A pointer with capacity for a decoded voxel brick (`voxelBrickSize` bytes).
    - Throws: A BORGVRDataError if the memory mapping is missing, compression buffers are unavailable,
    decompression fails, or the decompressed size does not match the expected full brick size.
    */
@@ -133,6 +142,7 @@ final class BORGVRFileData: BORGVRDatasetProtocol {
     // Retrieve the metadata for the requested brick and load the brick.
     try getBrick(brickMeta: metadata.getBrickMetadata(level: level, x: x, y: y, z: z),
                  outputBuffer: outputBuffer)
+    try BorgVRASTCCodec.decodeInPlace(outputBuffer, metadata: metadata)
   }
 
   /**
@@ -222,11 +232,11 @@ final class BORGVRFileData: BORGVRDatasetProtocol {
   /**
    Allocates and returns a new memory buffer suitable for storing a full brick.
 
-   - Returns: A pointer to a newly allocated memory buffer with capacity `fullBrickSize` bytes.
+   - Returns: A pointer with capacity for a decoded voxel brick (`voxelBrickSize` bytes).
    - Note: The caller is responsible for deallocating the returned buffer.
    */
   func allocateBrickBuffer() -> UnsafeMutablePointer<UInt8> {
-    return UnsafeMutablePointer<UInt8>.allocate(capacity: fullBrickSize)
+    return UnsafeMutablePointer<UInt8>.allocate(capacity: voxelBrickSize)
   }
 
   func newRequest() {

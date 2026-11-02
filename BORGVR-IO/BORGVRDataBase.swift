@@ -78,6 +78,10 @@ protocol BORGVRDatasetProtocol {
    */
   func getBrick(index: Int, outputBuffer: UnsafeMutablePointer<UInt8>) throws
 
+  /// ASTC payload after optional LZ4 decompression, without decoding texels. False means
+  /// the caller must use getBrick and encode it. Synchronous access is used for the overview.
+  func getASTCBrick(index: Int, outputBuffer: UnsafeMutablePointer<UInt8>, synchronous: Bool) throws -> Bool
+
   /// Copies the stored payload (possibly compressed), returning its byte count.
   /// The buffer must hold a full decoded brick. Nil means raw access is unsupported.
   func getRawBrick(index: Int, outputBuffer: UnsafeMutablePointer<UInt8>) throws -> Int?
@@ -101,6 +105,7 @@ protocol BORGVRDatasetProtocol {
 }
 
 extension BORGVRDatasetProtocol {
+  func getASTCBrick(index: Int, outputBuffer: UnsafeMutablePointer<UInt8>, synchronous: Bool) throws -> Bool { false }
   var isContentReady: Bool { true }
   func getRawBrick(index: Int, outputBuffer: UnsafeMutablePointer<UInt8>) throws -> Int? { nil }
   var contentRevision: UInt64 { 0 }

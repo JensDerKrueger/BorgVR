@@ -14,6 +14,23 @@
 static constexpr const char* kMagic = "BORGVR";
 static constexpr size_t kMagicLen = 6;
 
+int64_t BORGVRMetaData::fullBrickByteCount() const {
+  const int block = astcBlockSize(channelInterpretation_);
+  if (block && (brickSize_ <= 0 || brickSize_ % block != 0)) {
+    throw BorgVRException(BorgVRDataErrorCode::InvalidArgument, "ASTC brick size must be a multiple of its footprint.");
+  }
+  const std::vector<int> factors = block ? std::vector<int>{brickSize_ / block, brickSize_ / block, brickSize_, 16}
+    : std::vector<int>{brickSize_, brickSize_, brickSize_, componentCount_, bytesPerComponent_};
+  int64_t bytes = 1;
+  for (const int factor : factors) {
+    if (factor <= 0 || bytes > std::numeric_limits<int64_t>::max() / factor) {
+      throw BorgVRException(BorgVRDataErrorCode::InvalidArgument, "Full brick byte count overflows.");
+    }
+    bytes *= factor;
+  }
+  return bytes;
+}
+
 namespace {
 constexpr size_t kMaximumStringLength = 1'048'576;
 constexpr int kMaximumComponentCount = 1024;
@@ -87,13 +104,13 @@ void validate_type(ComponentType type, int width) {
 
 void validate_channel_interpretation(ChannelInterpretation interpretation, ComponentType type,
                                      int width, int componentCount) {
-  switch (interpretation) {
+  switch (colorInterpretation(interpretation)) {
     case ChannelInterpretation::IndependentChannels:
       return;
     case ChannelInterpretation::RGB:
     case ChannelInterpretation::RGBA:
       if (type == ComponentType::UnsignedInteger && width == 1 &&
-          componentCount == (interpretation == ChannelInterpretation::RGB ? 3 : 4)) return;
+          componentCount == (colorInterpretation(interpretation) == ChannelInterpretation::RGB ? 3 : 4)) return;
       throw std::runtime_error("RGB/RGBA requires unsigned 8-bit components and 3/4 channels respectively.");
     default:
       throw std::runtime_error("Unknown channel interpretation.");
@@ -283,7 +300,7 @@ void BORGVRMetaData::parseFromBytes(const uint8_t* data, size_t size) {
   brickSize_ = checked_int(br.read_i64("brickSize"), "brickSize");
   overlap_ = checked_int(br.read_i64("overlap"), "overlap");
   const bool scalar = channelInterpretation_ == ChannelInterpretation::IndependentChannels;
-  const int rangeCount = scalar ? componentCount_ : (channelInterpretation_ == ChannelInterpretation::RGBA ? 1 : 0);
+  const int rangeCount = scalar ? componentCount_ : (colorInterpretation(channelInterpretation_) == ChannelInterpretation::RGBA ? 1 : 0);
   ComponentRange datasetRange{0, 0};
   if (scalar) datasetRange = read_range(br, componentType_, bytesPerComponent_);
   minValue_ = datasetRange.minValue;
@@ -323,13 +340,7 @@ void BORGVRMetaData::parseFromBytes(const uint8_t* data, size_t size) {
     throw BorgVRException(BorgVRDataErrorCode::InvalidArgument,
                           "Brick size must be greater than twice the overlap.");
   }
-  int64_t fullBrickByteCount = 1;
-  for (const int factor : {brickSize_, brickSize_, brickSize_, componentCount_, bytesPerComponent_}) {
-    if (fullBrickByteCount > std::numeric_limits<int64_t>::max() / factor) {
-      throw BorgVRException(BorgVRDataErrorCode::InvalidArgument, "Full brick byte count overflows.");
-    }
-    fullBrickByteCount *= factor;
-  }
+  const int64_t fullBrickByteCount = this->fullBrickByteCount();
   if (rangeCount > 0) validate_union(datasetRange, componentRanges_);
 
   uniqueID_ = br.read_string("uniqueID", kMaximumStringLength);

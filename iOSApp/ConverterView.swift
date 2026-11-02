@@ -400,7 +400,7 @@ struct ConverterView: View {
               overlap: appSettings.brickOverlap,
               useCompression: appSettings.enableCompression,
               extensionStrategy: borderMode,
-              quantizeTo8Bit: appSettings.quantizeImportsTo8Bit
+              quantizeTo8Bit: appSettings.quantizeImportsTo8Bit, colorCompression: appSettings.importColorCompression
             ),
             physicalSizeMeters: imageExtent,
             provenance: provenance

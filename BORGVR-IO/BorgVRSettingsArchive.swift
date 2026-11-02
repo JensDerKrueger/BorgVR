@@ -151,6 +151,9 @@ struct BorgVRSettingsStore {
           guard numeric.rounded() == numeric, numeric >= Double(Int.min), numeric < Double(Int.max) else { throw invalid() }
         }
         guard Self.range(for: entry.key).contains(numeric) else { throw invalid() }
+        if ["atlasCompression", "importColorCompression"].contains(entry.key), ![0.0, 4.0, 8.0].contains(numeric) {
+          throw BorgVRSettingsArchiveError.unsupportedValue
+        }
         let adjusted = entry.key == "atlasSizeMB" ? min(numeric, Double(maximumAtlasSizeMB ?? Int.max)) : numeric
         result = integer ? Int(adjusted) as Any : adjusted as Any
       }

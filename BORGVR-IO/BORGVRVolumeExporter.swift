@@ -262,7 +262,7 @@ enum BORGVRVolumeExporter {
       kinds: domain domain domain
       """
     } else {
-      let kind = channelInterpretation == .rgb ? "RGB-color" : channelInterpretation == .rgba ? "RGBA-color" : "vector"
+      let kind = channelInterpretation.colorInterpretation == .rgb ? "RGB-color" : channelInterpretation.colorInterpretation == .rgba ? "RGBA-color" : "vector"
       dimensionalFields = """
       dimension: 4
       sizes: \(componentCount) \(size.x) \(size.y) \(size.z)

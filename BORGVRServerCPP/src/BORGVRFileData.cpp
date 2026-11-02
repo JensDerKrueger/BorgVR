@@ -8,11 +8,7 @@ BORGVRFileData::BORGVRFileData(const std::string& filename)
   : metadata_(filename),
     mmf_(filename) {
 
-  const size_t bs = static_cast<size_t>(metadata_.brickSize());
-  const size_t cc = static_cast<size_t>(metadata_.componentCount());
-  const size_t bpc = static_cast<size_t>(metadata_.bytesPerComponent());
-
-  fullBrickSize_ = bs * bs * bs * cc * bpc;
+  fullBrickSize_ = static_cast<size_t>(metadata_.fullBrickByteCount());
   if (fullBrickSize_ == 0) {
     throw BorgVRException(BorgVRDataErrorCode::InvalidArgument, "Computed fullBrickSize is 0.");
   }

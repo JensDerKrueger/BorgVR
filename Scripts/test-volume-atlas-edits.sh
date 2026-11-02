@@ -22,6 +22,7 @@ swiftc \
   "$ROOT/BORGVR-Render/Transfer Function 1D/TransferFunction1D.swift" \
   "$ROOT/BORGVR-Render/VolumeAtlas/AsyncEmptinessUpdater.swift" \
   "$ROOT/BORGVR-Render/VolumeAtlas/VolumeAtlas.swift" \
+  "$ROOT/BORGVR-IO/BorgVRASTCCodec.swift" \
   "$ROOT/BORGVR-Render/VolumeAtlas/VolumeAtlasSubbrickCache.swift" \
   "$ROOT/BORGVR-Render/VolumeAtlas/VolumeAtlasBrushRenderer.swift" \
   "$ROOT/BORGVR-Render/VolumeRenderResources.swift" \

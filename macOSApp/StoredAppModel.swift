@@ -14,6 +14,7 @@ final class StoredAppModel : ObservableObject {
   static let defaultEnableCompression = BorgVRSharedDefaults.compressionEnabled
   @AppStorage("enableCompression") var enableCompression: Bool = defaultEnableCompression
   @AppStorage("quantizeImportsTo8Bit") var quantizeImportsTo8Bit = false
+  @AppStorage("importColorCompression") var importColorCompression = 0
   @AppStorage("dicomResamplingFilter") var dicomResamplingFilter = BorgVRVolumeResamplingFilter.trilinear
 
   static let defaultLastMinute: Bool = false
@@ -97,6 +98,7 @@ final class StoredAppModel : ObservableObject {
   }
 
   func resetImportDefaults() {
+    importColorCompression = 0
     quantizeImportsTo8Bit = false
     dicomResamplingFilter = .trilinear
     brickSize = StoredAppModel.defaultBrickSize

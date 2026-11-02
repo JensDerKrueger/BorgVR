@@ -33,7 +33,9 @@ final class LocalDataSource: DataSource {
    - Throws: An error if the brick cannot be loaded.
    */
   func getBrick(index: Int, outputBuffer: UnsafeMutablePointer<UInt8>) throws {
-    try localFile.getBrick(index: index, outputBuffer: outputBuffer)
+    if try !localFile.getASTCBrick(index: index, outputBuffer: outputBuffer, synchronous: false) {
+      try localFile.getBrick(index: index, outputBuffer: outputBuffer)
+    }
   }
 
   func getRawBrick(index: Int, outputBuffer: UnsafeMutablePointer<UInt8>) throws -> Int? {
@@ -47,7 +49,9 @@ final class LocalDataSource: DataSource {
    - Throws: An error if the first brick cannot be loaded.
    */
   func getFirstBrick(outputBuffer: UnsafeMutablePointer<UInt8>) throws {
-    try localFile.getFirstBrick(outputBuffer: outputBuffer)
+    if try !localFile.getASTCBrick(index: getMetadata().brickMetadata.count - 1, outputBuffer: outputBuffer, synchronous: true) {
+      try localFile.getFirstBrick(outputBuffer: outputBuffer)
+    }
   }
 
   /**

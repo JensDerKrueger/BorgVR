@@ -238,7 +238,7 @@ struct RenderControlsPanel: View {
 
         if let interpretation = appModel.activeDatasetMetadata?.channelInterpretation,
            interpretation != .independentChannels {
-          Label(interpretation == .rgb ? "RGB" : "RGBA", systemImage: "photo")
+          Label(interpretation.colorInterpretation == .rgb ? "RGB" : "RGBA", systemImage: "photo")
         } else {
         Picker("Render Mode", selection: renderModeBinding) {
           ForEach(RenderMode.allCases) { mode in

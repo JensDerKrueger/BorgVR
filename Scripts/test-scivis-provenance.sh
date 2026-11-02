@@ -6,7 +6,7 @@ mkdir -p "$BUILD_DIR"
 swiftc -O -module-cache-path "$BUILD_DIR/module-cache" \
   "$ROOT/BORGVR-IO/Vector.swift" \
   "$ROOT/BORGVR-IO/IOExtensions.swift" \
-  "$ROOT/BORGVR-IO/BORGVRMetaData.swift" \
+  "$ROOT/BORGVR-IO/BorgVRASTCCodec.swift" "$ROOT/BORGVR-IO/BORGVRMetaData.swift" \
   "$ROOT/BORGVR-IO/BORGVRChannelInterpretation.swift" \
   "$ROOT/BORGVR-IO/BORGVRDataBase.swift" \
   "$ROOT/BORGVR-IO/MemoryMappedFile.swift" \

@@ -157,6 +157,12 @@ final class BorgVRVolumeEditDataSource: BORGVRDatasetProtocol, BorgVRVolumeGPUBr
     lock.withLock { residents = ids; current?.updateResidentBrickIDs(ids) }
   }
   func newRequest() { lock.withLock { transitioning ? nil : current }?.newRequest() }
+  func getASTCBrick(index: Int, outputBuffer: UnsafeMutablePointer<UInt8>, synchronous: Bool) throws -> Bool {
+    let epoch = lock.withLock { !transitioning && current?.editingStatus()?.hasEdits == false ? generation : nil }
+    guard let epoch else { return false }
+    let encoded = try original.getASTCBrick(index: index, outputBuffer: outputBuffer, synchronous: synchronous)
+    return encoded && lock.withLock { epoch == generation && !transitioning && current?.editingStatus()?.hasEdits == false }
+  }
   func getBrick(index: Int, outputBuffer: UnsafeMutablePointer<UInt8>) throws {
     let (source, epoch) = lock.withLock { (transitioning ? nil : current, generation) }
     guard let source else { throw BORGVRDataError.brickNotYetAvailable(index: index) }

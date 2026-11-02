@@ -11,7 +11,7 @@ swiftc \
   -module-cache-path "$SWIFT_MODULE_CACHE" \
   "$ROOT/BORGVR-IO/Vector.swift" \
   "$ROOT/BORGVR-IO/IOExtensions.swift" \
-  "$ROOT/BORGVR-IO/BORGVRMetaData.swift" \
+  "$ROOT/BORGVR-IO/BorgVRASTCCodec.swift" "$ROOT/BORGVR-IO/BORGVRMetaData.swift" \
   "$ROOT/BORGVR-IO/BORGVRChannelInterpretation.swift" \
   "$ROOT/BORGVR-IO/BORGVRDataBase.swift" \
   "$ROOT/BORGVR-IO/MemoryMappedFile.swift" \

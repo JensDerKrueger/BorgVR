@@ -279,6 +279,22 @@ private func testVersion5(in directory: URL) throws {
 }
 
 private func testChannelInterpretations(in directory: URL) throws {
+  for color in [BORGVRChannelInterpretation.rgb, .rgba] { for block in [4, 8] { for lz4 in [false, true] {
+    let channels = color == .rgb ? 3 : 4
+    let m = BORGVRMetaData(width: 2, height: 2, depth: 2, componentCount: channels, bytePerComponent: 1,
+      voxelSpacingX: 1, voxelSpacingY: 1, voxelSpacingZ: 1, brickSize: 8, overlap: 0,
+      minValue: 0, maxValue: 255, compression: lz4, datasetDescription: "ASTC fixture", metaDescription: "")
+    try m.setChannelInterpretation(color.withASTC(blockSize: block))
+    let count = try m.fullBrickByteCount()
+    m.append(offset: 8, size: count, componentRanges: m.componentRanges)
+    let bytes = m.toData(), parsed = try BORGVRMetaData(fromData: bytes)
+    guard parsed.channelInterpretation == m.channelInterpretation, try parsed.fullBrickByteCount() == count,
+          parsed.compression == lz4 else { throw TestFailure.expectedRejection("ASTC metadata round trip") }
+    try bytes.write(to: directory.appendingPathComponent("astc-\(color.name)-\(block)-\(lz4).bin"))
+    var invalid = bytes
+    writeInt64(3, to: &invalid, at: 68)
+    try expectRejection("ASTC footprint alignment", data: invalid)
+  } } }
   for (interpretation, channels) in [(BORGVRChannelInterpretation.rgb, 3), (.rgba, 4)] {
     let metadata = BORGVRMetaData(width: 2, height: 2, depth: 2, componentCount: channels,
       bytePerComponent: 1, voxelSpacingX: 1, voxelSpacingY: 1, voxelSpacingZ: 1,

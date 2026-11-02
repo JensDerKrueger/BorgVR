@@ -57,7 +57,7 @@ enum BORGVRComponentType: UInt8, Codable, Sendable {
 extension BORGVRChannelInterpretation {
   func validate(componentCount: Int, type: BORGVRComponentType, width: Int) throws {
     guard self == .independentChannels
-      || (type == .unsignedInteger && width == 1 && componentCount == (self == .rgb ? 3 : 4)) else {
+      || (type == .unsignedInteger && width == 1 && componentCount == (colorInterpretation == .rgb ? 3 : 4)) else {
       throw BORGVRError.invalidValue(context: "channel interpretation",
         reason: "RGB requires three unsigned 8-bit channels; RGBA requires four")
     }
@@ -603,8 +603,8 @@ final class BORGVRMetaData: CustomStringConvertible, Codable {
 
   /// A textual description of the  metadata for debugging purposes.
   var description: String {
-    let bounds = channelInterpretation == .rgb ? "not stored (RGB)"
-      : "\(valueRange.minimum)/\(valueRange.maximum)\(channelInterpretation == .rgba ? " (alpha)" : "")"
+    let bounds = channelInterpretation.colorInterpretation == .rgb ? "not stored (RGB)"
+      : "\(valueRange.minimum)/\(valueRange.maximum)\(channelInterpretation.colorInterpretation == .rgba ? " (alpha)" : "")"
     return """
     BORGVRMetaData: \(width)x\(height)x\(depth), \
     \(componentCount)×\(bytesPerComponent)-byte components, \
@@ -802,9 +802,9 @@ final class BORGVRMetaData: CustomStringConvertible, Codable {
   func setChannelInterpretation(_ interpretation: BORGVRChannelInterpretation) throws {
     try interpretation.validate(componentCount: componentCount, type: componentType, width: bytesPerComponent)
     channelInterpretation = interpretation
-    if interpretation == .rgb {
+    if interpretation.colorInterpretation == .rgb {
       componentRanges = []
-    } else if interpretation == .rgba, componentRanges.count == componentCount {
+    } else if interpretation.colorInterpretation == .rgba, componentRanges.count == componentCount {
       componentRanges = [componentRanges[3]]
     }
     valueRange = .union(componentRanges)
@@ -1300,8 +1300,24 @@ final class BORGVRMetaData: CustomStringConvertible, Codable {
   }
 
   func fullBrickByteCount() throws -> Int {
+    let block = channelInterpretation.astcBlockSize
+    if block != 0 {
+      _ = try voxelBrickByteCount()
+      guard brickSize > 0, brickSize % block == 0 else {
+        throw BORGVRError.invalidValue(context: "ASTC brick size", reason: "must be a multiple of the ASTC footprint")
+      }
+      return try checkedBrickByteCount([brickSize / block, brickSize / block, brickSize, 16])
+    }
+    return try voxelBrickByteCount()
+  }
+
+  func voxelBrickByteCount() throws -> Int {
+    try checkedBrickByteCount([brickSize, brickSize, brickSize, componentCount, bytesPerComponent])
+  }
+
+  private func checkedBrickByteCount(_ factors: [Int]) throws -> Int {
     var count = 1
-    for factor in [brickSize, brickSize, brickSize, componentCount, bytesPerComponent] {
+    for factor in factors {
       let (product, overflow) = count.multipliedReportingOverflow(by: factor)
       guard factor > 0, !overflow, product > 0 else {
         throw BORGVRError.invalidValue(context: "full brick size", reason: "byte count exceeds the supported integer range")
