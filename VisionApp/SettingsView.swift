@@ -352,6 +352,8 @@ struct SettingsView: View {
               settingsIntroSection("settings_description_rendering")
               Section(header: Text("settings_section_rendering_interface").bold()) {
                 Toggle("settings_toggle_disable_foveation", isOn: $storedAppModel.disableFoveation)
+                Toggle("Show dataset bounding box", isOn: Binding(get: { storedAppModel.showDatasetBoundingBox },
+                  set: { try? session.perform(.setBoundingBox($0), source: .userInterface) }))
               }
 
               Section(header: Text("settings_section_sampling").bold()) {

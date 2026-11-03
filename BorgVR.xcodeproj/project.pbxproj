@@ -7,6 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		57BB20261103000000000001 /* VolumeBoundingBoxRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57BB20261103000000000000 /* VolumeBoundingBoxRenderer.swift */; };
+		57BB20261103000000000002 /* VolumeBoundingBoxRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57BB20261103000000000000 /* VolumeBoundingBoxRenderer.swift */; };
+		57BB20261103000000000003 /* VolumeBoundingBoxRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57BB20261103000000000000 /* VolumeBoundingBoxRenderer.swift */; };
 		111111111111111111111701 /* c60_32.data in Resources */ = {isa = PBXBuildFile; fileRef = 56730FE22E6B78990091976B /* c60_32.data */; };
 		111111111111111111111702 /* head_32.data in Resources */ = {isa = PBXBuildFile; fileRef = 56730FE42E6B79000091976B /* head_32.data */; };
 		560A00012E00000000000031 /* web in CopyFiles */ = {isa = PBXBuildFile; fileRef = 560B90002E9150000042E45B /* web */; };
@@ -238,6 +241,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		57BB20261103000000000000 /* VolumeBoundingBoxRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VolumeBoundingBoxRenderer.swift; sourceTree = "<group>"; };
 		111111111111111111111101 /* BorgVR Mobile.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "BorgVR Mobile.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		560A00012E00000000000001 /* TerminalServerApp */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = TerminalServerApp; sourceTree = BUILT_PRODUCTS_DIR; };
 		560B8BE72E5C57580042E45B /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
@@ -703,6 +707,7 @@
 				57A001542E70000300000001 /* TransferFunctionCatalog.swift */,
 				57A001252E70000300000001 /* TransferFunctionEditorView.swift */,
 				57A001272E70000300000001 /* VolumeRendererPipeline.swift */,
+				57BB20261103000000000000 /* VolumeBoundingBoxRenderer.swift */,
 			);
 			path = Rendering;
 			sourceTree = "<group>";
@@ -1157,6 +1162,7 @@
 				57A001692E99000300000001 /* VolumeMarker.swift in Sources */,
 				57A009012F00000100000001 /* CoordinatedFileExportRecovery.swift in Sources */,
 				57A0016D2E99000400000001 /* VolumeMarkerTubeMesh.swift in Sources */,
+				57BB20261103000000000001 /* VolumeBoundingBoxRenderer.swift in Sources */,
 				57A001912EA1000100000001 /* VolumeMeasurement.swift in Sources */,
 				57A001952EA1000200000001 /* VolumeMeasurementDocument.swift in Sources */,
 				57A001992EA1000300000001 /* MeasurementSurfaceMeshCache.swift in Sources */,
@@ -1227,6 +1233,7 @@
 				57A0016A2E99000300000001 /* VolumeMarker.swift in Sources */,
 				57A009022F00000100000001 /* CoordinatedFileExportRecovery.swift in Sources */,
 				57A0016E2E99000400000001 /* VolumeMarkerTubeMesh.swift in Sources */,
+				57BB20261103000000000002 /* VolumeBoundingBoxRenderer.swift in Sources */,
 				57A001922EA1000100000001 /* VolumeMeasurement.swift in Sources */,
 				57A001962EA1000200000001 /* VolumeMeasurementDocument.swift in Sources */,
 				57A0019A2EA1000300000001 /* MeasurementSurfaceMeshCache.swift in Sources */,
@@ -1272,6 +1279,7 @@
 				57A0016B2E99000300000001 /* VolumeMarker.swift in Sources */,
 				57A009032F00000100000001 /* CoordinatedFileExportRecovery.swift in Sources */,
 				57A0016F2E99000400000001 /* VolumeMarkerTubeMesh.swift in Sources */,
+				57BB20261103000000000003 /* VolumeBoundingBoxRenderer.swift in Sources */,
 				57A001932EA1000100000001 /* VolumeMeasurement.swift in Sources */,
 				57A001972EA1000200000001 /* VolumeMeasurementDocument.swift in Sources */,
 				57A0019B2EA1000300000001 /* MeasurementSurfaceMeshCache.swift in Sources */,

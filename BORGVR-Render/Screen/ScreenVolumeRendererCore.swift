@@ -58,7 +58,9 @@ final class ScreenVolumeRendererCore {
   private var configuredOversamplingMode = ""
   let timer = GPUFrameTimer()
   private let cameraDistance = BorgVRScreenViewState.cameraDistance
-  private let fieldOfViewY = BorgVRScreenViewState.defaultVerticalFieldOfView
+  private var screenProjection: ScreenProjection {
+    ScreenProjection(fieldOfView: Float(appSettings.screenFieldOfView), parallel: appSettings.parallelProjection)
+  }
   private let minimumPipelineDrawableWidth: Float = 64
   private let pipelineWidthChangeThreshold: Float = 32
   private let opaqueGeometryRenderer = ScreenOpaqueGeometryRenderer()
@@ -202,7 +204,8 @@ final class ScreenVolumeRendererCore {
   }
 
   func encodeFrame(in view: MTKView) -> ScreenVolumeEncodedFrame? {
-    guard let commandQueue,
+    guard let activeDataset = dataset,
+          let commandQueue,
           let cubeBuffer,
           let volumeAtlas,
           let hashTable,
@@ -274,6 +277,8 @@ final class ScreenVolumeRendererCore {
       depthFormat: view.depthStencilPixelFormat,
       showsObjects: frameState.objectsVisible || !brushMarkers.isEmpty,
       showsMeasurements: frameState.measurementsVisible,
+      showsBoundingBox: frame.settings.showDatasetBoundingBox,
+      boundingBoxExtent: VolumeRenderResources.unclippedRenderingExtent(for: activeDataset.getMetadata()),
       markers: (frameState.objectsVisible ? frame.annotations.markers : []) + brushMarkers,
       sceneMeshAssets: frame.annotations.meshAssets,
       sceneMeshInstances: frameState.objectsVisible ? frame.annotations.meshInstances : [],
@@ -568,7 +573,7 @@ final class ScreenVolumeRendererCore {
     model: simd_float4x4
   ) {
     let aspect = Float(max(view.drawableSize.width, 1) / max(view.drawableSize.height, 1))
-    let projection = matrixPerspective(fovyRadians: fieldOfViewY, aspect: aspect, nearZ: 0.05, farZ: 100)
+    let projection = screenProjection.matrix(aspect: aspect)
     let viewMatrix = matrixTranslation(SIMD3<Float>(0, 0, -cameraDistance))
     let modelMatrix =
       matrixTranslation(SIMD3<Float>(renderingParameters.pan.x, renderingParameters.pan.y, 0)) *
@@ -618,9 +623,12 @@ final class ScreenVolumeRendererCore {
   ) -> SIMD3<Float>? {
     guard let view else { return nil }
     let matrices = markerFrameMatrices(for: view)
-    let cameraPosition = simd_make_float3(
+    var cameraPosition = simd_make_float3(
       simd_inverse(matrices.view) * SIMD4<Float>(0, 0, 0, 1)
     )
+    if screenProjection.parallel, let ray = markerRay(at: normalizedScreenPosition) {
+      cameraPosition = ray.origin
+    }
     let fullModel = matrices.model * volumeScale
     let local = simd_make_float3(
       simd_inverse(fullModel) * SIMD4<Float>(cameraPosition, 1)
@@ -819,7 +827,7 @@ final class ScreenVolumeRendererCore {
   func panModel(by delta: CGPoint, in view: MTKView) {
     let viewWidth = max(1, Float(view.bounds.width))
     let viewHeight = max(1, Float(view.bounds.height))
-    let visibleHeight = 2 * tan(fieldOfViewY * 0.5) * cameraDistance
+    let visibleHeight = screenProjection.visibleHeight
     let visibleWidth = visibleHeight * viewWidth / viewHeight
 
     renderingParameters.pan.x += Float(delta.x) * visibleWidth / viewWidth
@@ -836,6 +844,11 @@ final class ScreenVolumeRendererCore {
     let worldPosition = simd_make_float3(
       fullModel * SIMD4<Float>(position - SIMD3<Float>(repeating: 0.5), 1)
     )
+    if screenProjection.parallel {
+      let newDepth = min(99, max(0.06, cameraDistance - worldPosition.z + worldDistance))
+      let newWorldPosition = SIMD3<Float>(worldPosition.x, worldPosition.y, cameraDistance - newDepth)
+      return simd_make_float3(simd_inverse(fullModel) * SIMD4<Float>(newWorldPosition, 1)) + 0.5
+    }
     let cameraPosition = simd_make_float3(
       simd_inverse(matrices.view) * SIMD4<Float>(0, 0, 0, 1)
     )
@@ -866,7 +879,9 @@ final class ScreenVolumeRendererCore {
 
     let metadata = dataset.getMetadata()
     let aspect = Float(max(view.drawableSize.width, 1) / max(view.drawableSize.height, 1))
-    let projection = matrixPerspective(fovyRadians: fieldOfViewY, aspect: aspect, nearZ: 0.05, farZ: 100)
+    let projectionConfiguration = ScreenProjection(
+      fieldOfView: settings.screenFieldOfView, parallel: settings.parallelProjection)
+    let projection = projectionConfiguration.matrix(aspect: aspect)
     let viewMatrix = matrixTranslation(SIMD3<Float>(0, 0, -cameraDistance))
     let transform = state.transform
     let unscaledModelMatrix =
@@ -878,11 +893,7 @@ final class ScreenVolumeRendererCore {
     let textureOffset = matrixTranslation(SIMD3<Float>(0.5, 0.5, 0.5))
     let viewToTexture = textureOffset * simd_inverse(viewMatrix * modelMatrix)
     let viewToNormalizedVolume = textureOffset * simd_inverse(viewMatrix * unscaledModelMatrix)
-    let borderSize = Float(metadata.overlap + 1) / SIMD3<Float>(
-      Float(metadata.width),
-      Float(metadata.height),
-      Float(metadata.depth)
-    )
+    let borderSize = VolumeRenderResources.renderingBorder(for: metadata)
     let clipMin = state.clipMinimum + borderSize
     let clipMax = state.clipMaximum - borderSize
     let clipScale = clipMax - clipMin
@@ -915,7 +926,13 @@ final class ScreenVolumeRendererCore {
       modelView: viewMatrix * modelMatrix,
       modelViewIT: simd_transpose(simd_inverse(viewMatrix * modelMatrix)),
       textureToClip: projection * viewMatrix * modelMatrix * matrixTranslation(SIMD3<Float>(repeating: -0.5)),
-      brickVisualizationMask: state.brickVisualizationMask
+      brickVisualizationMask: state.brickVisualizationMask,
+      parallelRayDirection: projectionConfiguration.parallel
+        ? SIMD4<Float>(simd_make_float3(viewToTexture * SIMD4<Float>(0, 0, -1, 0)),
+          cameraDistance / max(transform.scale.x, 0.0001))
+        : .zero,
+      projectionLODScale: tan(projectionConfiguration.radians * 0.5) /
+        tan(BorgVRScreenViewState.defaultVerticalFieldOfView * 0.5) * aspect
     )
     fragmentUniforms.uniforms.1 = fragmentUniforms.uniforms.0
     currentTextureToClip = fragmentUniforms.uniforms.0.textureToClip

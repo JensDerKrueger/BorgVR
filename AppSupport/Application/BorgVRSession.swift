@@ -133,6 +133,9 @@ struct BorgVRRenderSettingsSnapshot: Sendable {
   let transferFunctionDisplayMode: Int
   let purgeAtlas: Bool
   let rotationCaptureRequestID: UInt64
+  var screenFieldOfView: Float = 45
+  var parallelProjection: Bool = false
+  var showDatasetBoundingBox: Bool = false
 
   static let `default` = BorgVRRenderSettingsSnapshot(
     sampleJitter: false,
@@ -208,6 +211,8 @@ enum BorgVRCommand: Sendable {
   case setRenderMode(RenderMode)
   case setBrickVisualization(enabled: Bool? = nil, resident: Bool? = nil, empty: Bool? = nil, missing: Bool? = nil)
   case setRenderOptimizations(subbrickSkipping: Bool? = nil, opacityAdaptiveSampling: Bool? = nil, alphaEpsilon: Float? = nil)
+  case setScreenProjection(fieldOfView: Float? = nil, parallel: Bool? = nil)
+  case setBoundingBox(Bool)
   case setTransform(BorgVRTransformSnapshot)
   case rotate(axis: SIMD3<Float>, degrees: Float)
   case setNormalizedIsoValue(Float)
@@ -250,6 +255,13 @@ struct BorgVRCommandEvent: Sendable {
         if let subbrick { statements.append("setsubbrickskipping \(subbrick ? "true" : "false")") }
         if let adaptive { statements.append("setopacityadaptivesampling \(adaptive ? "true" : "false")") }
         if let epsilon { statements.append("setalphaepsilon \(epsilon)") }
+        return statements.joined(separator: "\n")
+      case .setBoundingBox(let visible):
+        return "showboundingbox \(visible ? "true" : "false")"
+      case .setScreenProjection(let fieldOfView, let parallel):
+        var statements: [String] = []
+        if let fieldOfView { statements.append("setfieldofview \(fieldOfView)") }
+        if let parallel { statements.append("setparallelprojection \(parallel ? "true" : "false")") }
         return statements.joined(separator: "\n")
       case .setTransform(let transform):
         let r = transform.rotation
@@ -594,6 +606,11 @@ final class BorgVRSession<VisualizationState: AnyObject, RuntimeState: AnyObject
       emit(.setRenderOptimizations(subbrickSkipping: frame.settings.subbrickSkipping,
         opacityAdaptiveSampling: frame.settings.opacityAdaptiveSampling,
         alphaEpsilon: frame.settings.alphaEpsilon), source: .userInterface)
+      emit(.setBoundingBox(frame.settings.showDatasetBoundingBox), source: .userInterface)
+#if os(iOS) || os(macOS)
+      emit(.setScreenProjection(fieldOfView: frame.settings.screenFieldOfView,
+        parallel: frame.settings.parallelProjection), source: .userInterface)
+#endif
     }
   }
 
@@ -691,11 +708,22 @@ final class BorgVRSession<VisualizationState: AnyObject, RuntimeState: AnyObject
   private func inferredSettingsCommands(
     from before: BorgVRRenderSettingsSnapshot, to after: BorgVRRenderSettingsSnapshot
   ) -> [BorgVRCommand] {
-    guard before.subbrickSkipping != after.subbrickSkipping ||
+    var commands: [BorgVRCommand] = []
+    if before.showDatasetBoundingBox != after.showDatasetBoundingBox {
+      commands.append(.setBoundingBox(after.showDatasetBoundingBox))
+    }
+    if before.screenFieldOfView != after.screenFieldOfView ||
+       before.parallelProjection != after.parallelProjection {
+      commands.append(.setScreenProjection(fieldOfView: after.screenFieldOfView,
+        parallel: after.parallelProjection))
+    }
+    if before.subbrickSkipping != after.subbrickSkipping ||
           before.opacityAdaptiveSampling != after.opacityAdaptiveSampling ||
-          before.alphaEpsilon != after.alphaEpsilon else { return [] }
-    return [.setRenderOptimizations(subbrickSkipping: after.subbrickSkipping,
-      opacityAdaptiveSampling: after.opacityAdaptiveSampling, alphaEpsilon: after.alphaEpsilon)]
+          before.alphaEpsilon != after.alphaEpsilon {
+      commands.append(.setRenderOptimizations(subbrickSkipping: after.subbrickSkipping,
+        opacityAdaptiveSampling: after.opacityAdaptiveSampling, alphaEpsilon: after.alphaEpsilon))
+    }
+    return commands
   }
 
   private func refreshAnnotationSnapshot(for command: BorgVRCommand) {
@@ -832,6 +860,15 @@ extension BorgVRSession where VisualizationState == RenderingParameters,
             if let subbrick { appSettings.subbrickSkipping = subbrick }
             if let adaptive { appSettings.opacityAdaptiveSampling = adaptive }
             if let epsilon { appSettings.alphaEpsilon = Double(epsilon) }
+          case .setScreenProjection(let fieldOfView, let parallel):
+            guard fieldOfView != nil || parallel != nil,
+                  fieldOfView.map({ $0.isFinite && ScreenProjection.fieldOfViewRange.contains($0) }) ?? true else {
+              throw BorgVRSessionCommandError.invalidRenderingOptions
+            }
+            if let fieldOfView { appSettings.screenFieldOfView = Double(fieldOfView) }
+            if let parallel { appSettings.parallelProjection = parallel }
+          case .setBoundingBox(let visible):
+            appSettings.showDatasetBoundingBox = visible
           case .setTransform(let transform):
             guard simd_length_squared(transform.rotation) > 0.000_001 else {
               throw BorgVRSessionCommandError.invalidRotation
@@ -1075,7 +1112,10 @@ extension BorgVRSession where VisualizationState == RenderingParameters,
             opacityAdaptiveSampling: appSettings.opacityAdaptiveSampling,
             transferFunctionDisplayMode: 0,
             purgeAtlas: false,
-            rotationCaptureRequestID: 0
+            rotationCaptureRequestID: 0,
+            screenFieldOfView: Float(appSettings.screenFieldOfView),
+            parallelProjection: appSettings.parallelProjection,
+            showDatasetBoundingBox: appSettings.showDatasetBoundingBox
           )
         )
       },

@@ -143,6 +143,9 @@ final class AppSettings: ObservableObject {
     "maxBricksPerGetRequest": BorgVRSharedDefaults.maximumBricksPerRequest,
     "atlasSizeMB": defaultAtlasSizeMB,
     "oversampling": defaultOversampling,
+    "screenFieldOfView": 45.0,
+    "parallelProjection": false,
+    "showDatasetBoundingBox": false,
     "sampleJitter": false,
     "alphaEpsilon": 0.0,
     "subbrickSkipping": true,
@@ -217,6 +220,10 @@ final class AppSettings: ObservableObject {
   @AppStorage("maxBricksPerGetRequest") var maxBricksPerGetRequest: Int = AppSettings.int("maxBricksPerGetRequest")
   @AppStorage("atlasSizeMB") var atlasSizeMB: Int = AppSettings.int("atlasSizeMB")
   @AppStorage("oversampling") var oversampling: Double = AppSettings.double("oversampling")
+  @AppStorage("screenFieldOfView") var screenFieldOfView: Double = AppSettings.double("screenFieldOfView")
+  @AppStorage("parallelProjection") var parallelProjection: Bool = AppSettings.bool("parallelProjection")
+  @AppStorage("showDatasetBoundingBox")
+  var showDatasetBoundingBox: Bool = AppSettings.bool("showDatasetBoundingBox")
   @AppStorage("sampleJitter") var sampleJitter: Bool = AppSettings.bool("sampleJitter")
   @AppStorage("atlasCompression") var atlasCompression: Int = AppSettings.int("atlasCompression")
   @AppStorage("alphaEpsilon") var alphaEpsilon: Double = AppSettings.double("alphaEpsilon")
@@ -400,6 +407,9 @@ final class AppSettings: ObservableObject {
   }
 
   func resetRenderingDefaults() {
+    showDatasetBoundingBox = Self.boolDefault("showDatasetBoundingBox")
+    screenFieldOfView = Self.doubleDefault("screenFieldOfView")
+    parallelProjection = Self.boolDefault("parallelProjection")
     oversampling = Self.doubleDefault("oversampling")
     sampleJitter = Self.boolDefault("sampleJitter")
     atlasCompression = Self.intDefault("atlasCompression")

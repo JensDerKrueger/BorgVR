@@ -366,7 +366,24 @@ struct SettingsView: View {
 
   @ViewBuilder
   private var renderingSection: some View {
+    Section("Projection") {
+      Stepper(value: Binding(get: { appSettings.screenFieldOfView },
+        set: { try? session.perform(.setScreenProjection(fieldOfView: Float($0)), source: .userInterface) }),
+              in: 10...120, step: 1) {
+        HStack {
+          Text("Field of view")
+          Spacer()
+          Text(verbatim: String(format: "%.0f\u{00B0}", appSettings.screenFieldOfView))
+            .monospacedDigit()
+        }
+      }
+      Toggle("Parallel projection", isOn: Binding(get: { appSettings.parallelProjection },
+        set: { try? session.perform(.setScreenProjection(parallel: $0), source: .userInterface) }))
+    }
+
     Section("Appearance") {
+      Toggle("Show dataset bounding box", isOn: Binding(get: { appSettings.showDatasetBoundingBox },
+        set: { try? session.perform(.setBoundingBox($0), source: .userInterface) }))
       Picker("Background", selection: $appSettings.renderBackgroundMode) {
         ForEach(RenderBackgroundMode.allCases) { mode in
           Text(mode.label).tag(mode.rawValue)

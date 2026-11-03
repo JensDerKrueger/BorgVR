@@ -15,6 +15,7 @@
 #define VOLUME_FRAGMENT_SHADER_BRICK_VIS_NAME volumeFragmentShaderBrickVis
 #define VOLUME_SHADER_USES_AMPLIFICATION 0
 #define VOLUME_SHADER_USES_MARKER_TEXTURES 1
+#define VOLUME_SHADER_USES_SCREEN_PROJECTION 1
 
 #include "VolumeRaycaster.metal"
 #include "ScreenOpaqueGeometryShaders.metal"

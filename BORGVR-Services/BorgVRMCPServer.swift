@@ -538,6 +538,25 @@ final class BorgVRMCPServer: @unchecked Sendable {
           alphaEpsilon: optionalFloat("alpha_epsilon", in: arguments)
         )
         return structuredToolResult(await service.applicationState())
+      case "set_bounding_box":
+        guard let visible = try BorgVRVolumeEditingArguments.boolean(arguments["visible"]) else {
+          throw BorgVRMCPCommandError.invalidArgument("Provide a visible boolean.")
+        }
+        try await service.setBoundingBox(visible: visible)
+        return structuredToolResult(await service.applicationState())
+      case "set_screen_projection":
+        let fieldOfView = try arguments["field_of_view_degrees"].map {
+          try BorgVRVolumeEditingArguments.number($0)
+        }
+        let parallel = try BorgVRVolumeEditingArguments.boolean(arguments["parallel"])
+        guard fieldOfView != nil || parallel != nil,
+              fieldOfView.map({ (10...120).contains($0) }) ?? true else {
+          throw BorgVRMCPCommandError.invalidArgument(
+            "Provide field_of_view_degrees from 10 through 120 and/or a parallel boolean."
+          )
+        }
+        try await service.setScreenProjection(fieldOfView: fieldOfView.map { Float($0) }, parallel: parallel)
+        return structuredToolResult(await service.applicationState())
       case "set_transform":
         let rotation = try optionalVector4("rotation", in: arguments)
         let translation = try optionalVector3("translation", in: arguments)
@@ -787,6 +806,13 @@ final class BorgVRMCPServer: @unchecked Sendable {
         "subbrick_skipping": ["type": "boolean"],
         "opacity_adaptive_sampling": ["type": "boolean"],
         "alpha_epsilon": ["type": "number", "minimum": 0, "maximum": 1]
+      ]),
+      tool("set_bounding_box", "Show or hide the complete dataset bounding box. Local, persistent, and recorded as GSC; independent of clipping and annotation visibility.", properties: [
+        "visible": ["type": "boolean"]
+      ], required: ["visible"]),
+      tool("set_screen_projection", "Set the local macOS/iOS camera projection. Supply field_of_view_degrees and/or parallel; omitted fields stay unchanged. The field of view also controls equivalent framing in parallel projection. Persists per device, is not synchronized through SharePlay, and is recorded as GSC when recording is active. Unsupported on visionOS.", properties: [
+        "field_of_view_degrees": ["type": "number", "minimum": 10, "maximum": 120],
+        "parallel": ["type": "boolean"]
       ]),
       tool("set_transform", "Set any subset of the current model/view transform.", properties: [
         "rotation": vector4, "translation": vector3, "scale": vector3

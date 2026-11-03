@@ -1114,3 +1114,10 @@
 "Render UI" = "Controles de renderizado";
 "Panel File Error" = "Error de archivo del panel";
 "Invalid panel settings." = "Ajustes de panel no válidos.";
+"Projection" = "Proyección";
+"Field of view" = "Campo de visión";
+"Parallel projection" = "Proyección paralela";
+"Narrower field of view" = "Reducir el campo de visión";
+"Wider field of view" = "Ampliar el campo de visión";
+"Show dataset bounding box" = "Mostrar el cuadro delimitador del conjunto de datos";
+"Dataset bounding box" = "Cuadro delimitador del conjunto de datos";

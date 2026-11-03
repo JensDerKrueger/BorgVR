@@ -37,6 +37,10 @@ extension BorgVRSession where VisualizationState == SharedAppModel,
             if let subbrick { storedAppModel.subbrickSkipping = subbrick }
             if let adaptive { storedAppModel.opacityAdaptiveSampling = adaptive }
             if let epsilon { storedAppModel.alphaEpsilon = Double(epsilon) }
+          case .setScreenProjection:
+            throw BorgVRSessionCommandError.invalidRenderingOptions
+          case .setBoundingBox(let visible):
+            storedAppModel.showDatasetBoundingBox = visible
           case .setTransform(let snapshot):
             guard simd_length_squared(snapshot.rotation) > 0.000_001 else {
               throw BorgVRSessionCommandError.invalidRotation
@@ -283,7 +287,8 @@ extension BorgVRSession where VisualizationState == SharedAppModel,
             opacityAdaptiveSampling: storedAppModel.opacityAdaptiveSampling,
             transferFunctionDisplayMode: storedAppModel.tfMode,
             purgeAtlas: sharedAppModel.purgeAtlas,
-            rotationCaptureRequestID: runtimeAppModel.rotationCaptureRequestID
+            rotationCaptureRequestID: runtimeAppModel.rotationCaptureRequestID,
+            showDatasetBoundingBox: storedAppModel.showDatasetBoundingBox
           )
         )
       },

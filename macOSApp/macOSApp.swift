@@ -659,6 +659,53 @@ private struct BorgVRMenuCommands: Commands {
       renderCommand("Screenshot", systemImage: "camera", shortcut: .screenshot)
       renderCommand("Reset", systemImage: "arrow.counterclockwise", shortcut: .reset)
 
+      Toggle(isOn: Binding(get: { appSettings.showDatasetBoundingBox },
+        set: { try? session.perform(.setBoundingBox($0), source: .userInterface) })) {
+        menuLabel("Dataset bounding box", systemImage: "cube")
+      }
+      .disabled(!hasActiveDataset)
+
+      Menu {
+        Toggle(isOn: Binding(get: { appSettings.parallelProjection },
+          set: { try? session.perform(.setScreenProjection(parallel: $0), source: .userInterface) })) {
+          menuLabel("Parallel projection", systemImage: "rectangle")
+        }
+        Divider()
+        Button {
+          try? session.perform(.setScreenProjection(fieldOfView: Float(max(10, appSettings.screenFieldOfView - 5))),
+                               source: .userInterface)
+        } label: {
+          menuLabel("Narrower field of view", systemImage: "minus.magnifyingglass")
+        }
+        .disabled(appSettings.screenFieldOfView <= 10)
+        Button {
+          try? session.perform(.setScreenProjection(fieldOfView: Float(min(120, appSettings.screenFieldOfView + 5))),
+                               source: .userInterface)
+        } label: {
+          menuLabel("Wider field of view", systemImage: "plus.magnifyingglass")
+        }
+        .disabled(appSettings.screenFieldOfView >= 120)
+        Divider()
+        ForEach([30, 45, 60, 90], id: \.self) { angle in
+          Button {
+            try? session.perform(.setScreenProjection(fieldOfView: Float(angle)), source: .userInterface)
+          } label: {
+            if appSettings.screenFieldOfView == Double(angle) {
+              Label {
+                Text(verbatim: "\(angle)\u{00B0}")
+              } icon: {
+                Image(systemName: "checkmark")
+              }
+            } else {
+              Text(verbatim: "\(angle)\u{00B0}")
+            }
+          }
+        }
+      } label: {
+        menuLabel("Projection", systemImage: "viewfinder")
+      }
+      .disabled(!hasActiveDataset)
+
       Button {
         docking.request(.render(.bricks))
       } label: {

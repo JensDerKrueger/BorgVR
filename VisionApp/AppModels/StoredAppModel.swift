@@ -66,6 +66,7 @@ final class StoredAppModel: ObservableObject {
     "atlasSizeMB": 1500,
     "oversampling": 1.0,
     "sampleJitter": false,
+    "showDatasetBoundingBox": false,
     "alphaEpsilon": 0.0,
     "subbrickSkipping": true,
     "atlasCompression": 4,
@@ -208,6 +209,8 @@ final class StoredAppModel: ObservableObject {
   @AppStorage("oversampling") var oversampling: Double = StoredAppModel.double("oversampling")
   /// Whether to randomize the per-ray sampling phase.
   @AppStorage("sampleJitter") var sampleJitter: Bool = StoredAppModel.bool("sampleJitter")
+  @AppStorage("showDatasetBoundingBox")
+  var showDatasetBoundingBox: Bool = StoredAppModel.bool("showDatasetBoundingBox")
   @AppStorage("alphaEpsilon") var alphaEpsilon: Double = StoredAppModel.double("alphaEpsilon")
   @AppStorage("subbrickSkipping") var subbrickSkipping: Bool = StoredAppModel.bool("subbrickSkipping") {
     didSet { objectWillChange.send() }
@@ -496,6 +499,20 @@ final class StoredAppModel: ObservableObject {
     markerDefaultGreen = Double.random(in: 0.2...1.0)
     markerDefaultBlue = Double.random(in: 0.2...1.0)
     markerDefaultColorInitialized = true
+  }
+
+  func resetRenderingDefaults() {
+    showDatasetBoundingBox = Self.values["showDatasetBoundingBox"] as? Bool ?? false
+    disableFoveation = Self.values["disableFoveation"] as? Bool ?? false
+    oversampling = Self.values["oversampling"] as? Double ?? 1.0
+    oversamplingMode = Self.values["oversamplingMode"] as? String ?? OversamplingMode.dynamicMode.rawValue
+    sampleJitter = Self.values["sampleJitter"] as? Bool ?? false
+    atlasCompression = Self.values["atlasCompression"] as? Int ?? 4
+    alphaEpsilon = Self.values["alphaEpsilon"] as? Double ?? 0.0
+    subbrickSkipping = Self.values["subbrickSkipping"] as? Bool ?? true
+    opacityAdaptiveSampling = Self.values["opacityAdaptiveSampling"] as? Bool ?? true
+    dropFPS = Self.values["dropFPS"] as? Int ?? 20
+    recoveryFPS = Self.values["recoveryFPS"] as? Int ?? 100
   }
 
   func resetBackgroundServerDefaults() {

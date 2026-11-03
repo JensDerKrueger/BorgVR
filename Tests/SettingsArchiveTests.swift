@@ -18,6 +18,8 @@ private enum SettingsArchiveTests {
     var callbacks = 0
     let store = BorgVRSettingsStore(defaultValues: [
       "brickSize": 64, "brickOverlap": 2, "oversampling": 2.0, "importColorCompression": 0,
+      "screenFieldOfView": 45.0, "parallelProjection": false,
+      "showDatasetBoundingBox": false,
       "sampleJitter": false, "atlasCompression": 0, "alphaEpsilon": 0.0, "subbrickSkipping": true, "opacityAdaptiveSampling": true, "atlasSizeMB": 512, "mcpAccessToken": "token",
       "webServerCertificateData": Data([1, 2, 3]), "oversamplingMode": "dynamic"
     ], defaults: defaults, overrides: [
@@ -50,6 +52,9 @@ private enum SettingsArchiveTests {
     try expect(clean["subbrickSkipping"] as? Bool == true, "Subbrick skipping must default to enabled")
     try expect(clean["opacityAdaptiveSampling"] as? Bool == true, "Opacity-adaptive sampling must default to enabled")
     try expect(clean["atlasCompression"] as? Int == 0, "ASTC must default to disabled")
+    try expect(clean["screenFieldOfView"] as? Double == 45, "FOV must default to 45 degrees")
+    try expect(clean["parallelProjection"] as? Bool == false, "Perspective must be the default")
+    try expect(clean["showDatasetBoundingBox"] as? Bool == false, "Bounding box must default to hidden")
     try expect(clean["serverPassword"] == nil && clean["mcpAccessToken"] == nil
       && clean["webServerCertificateData"] == nil, "Export leaked credentials")
     let full = try exported(true)
@@ -78,6 +83,20 @@ private enum SettingsArchiveTests {
     try expect(defaults.object(forKey: "futureSetting") == nil, "Unknown key was persisted")
     try expect(callbacks == 1, "Models were not notified after import")
 
+    try store.apply(store.prepareImport(data(["screenFieldOfView": 67.5, "parallelProjection": true,
+      "showDatasetBoundingBox": true])))
+    try expect(defaults.double(forKey: "screenFieldOfView") == 67.5 && defaults.bool(forKey: "parallelProjection"),
+      "Projection settings did not import")
+    let projection = try exported(false)
+    try expect(projection["screenFieldOfView"] as? Double == 67.5 && projection["parallelProjection"] as? Bool == true,
+      "Projection settings did not export")
+    try expect(defaults.bool(forKey: "showDatasetBoundingBox") && projection["showDatasetBoundingBox"] as? Bool == true,
+      "Bounding box did not round-trip")
+    try reject(["screenFieldOfView": 9])
+    try reject(["screenFieldOfView": 121])
+    try reject(["parallelProjection": 1])
+    try reject(["showDatasetBoundingBox": 1])
+
     try reject(["brickSize": -1, "sampleJitter": false])
     try reject(["brickSize": 8, "brickOverlap": 4])
     try reject(["brickSize": 8.5])
@@ -98,6 +117,9 @@ private enum SettingsArchiveTests {
 
     try store.apply(store.prepareImport(data(["atlasSizeMB": 8192])))
     try expect(defaults.integer(forKey: "atlasSizeMB") == 2048, "Device memory limit was not respected")
+    try expect(defaults.double(forKey: "screenFieldOfView") == 67.5 && defaults.bool(forKey: "parallelProjection"),
+      "Partial import changed missing projection settings")
+    try expect(defaults.bool(forKey: "showDatasetBoundingBox"), "Partial import changed bounding box visibility")
     try expect(abs(defaults.double(forKey: "alphaEpsilon") - 0.007) < 1e-12, "A missing epsilon entry changed the current value")
     try expect(!defaults.bool(forKey: "subbrickSkipping"), "Partial import changed a missing subbrick switch")
     try expect(!defaults.bool(forKey: "opacityAdaptiveSampling"), "Partial import changed a missing adaptive switch")

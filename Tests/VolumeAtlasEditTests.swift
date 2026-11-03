@@ -159,6 +159,16 @@ private final class PackedBrushFixture: BORGVRDatasetProtocol, BorgVRVolumeGPUBr
 @main
 private enum VolumeAtlasEditTests {
   static func main() throws {
+    let boundsMetadata = BORGVRMetaData(width: 64, height: 128, depth: 256, componentCount: 1,
+      bytePerComponent: 1, voxelSpacingX: 1, voxelSpacingY: 1, voxelSpacingZ: 1,
+      brickSize: 32, overlap: 2, minValue: 0, maxValue: 255, compression: false,
+      datasetDescription: "Bounding box bounds", metaDescription: "")
+    let border = VolumeRenderResources.renderingBorder(for: boundsMetadata)
+    try expect(border == SIMD3<Float>(3 / 64, 3 / 128, 3 / 256),
+      "Bounding box and raycaster must use the same overlap border")
+    let extent = VolumeRenderResources.unclippedRenderingExtent(for: boundsMetadata)
+    try expect(simd_length(extent - SIMD3<Float>(58, 122, 250) / 256) < 0.00001,
+      "Bounding box must match anisotropic render bounds, excluding the border")
     try datasetTransferFunctionFiles()
     guard let device = MTLCreateSystemDefaultDevice(), let queue = device.makeCommandQueue() else {
       print("SKIP: Metal device unavailable for atlas edit regression")

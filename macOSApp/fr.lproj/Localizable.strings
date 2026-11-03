@@ -1114,3 +1114,10 @@
 "Render UI" = "Commandes de rendu";
 "Panel File Error" = "Erreur de fichier du panneau";
 "Invalid panel settings." = "Réglages de panneau non valides.";
+"Projection" = "Projection";
+"Field of view" = "Champ de vision";
+"Parallel projection" = "Projection parallèle";
+"Narrower field of view" = "Réduire le champ de vision";
+"Wider field of view" = "Élargir le champ de vision";
+"Show dataset bounding box" = "Afficher la boîte englobante du jeu de données";
+"Dataset bounding box" = "Boîte englobante du jeu de données";

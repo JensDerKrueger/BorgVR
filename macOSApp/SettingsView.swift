@@ -271,6 +271,13 @@ struct SettingsView: View {
       "Rendering",
       description: "Configure visual appearance and sampling quality. These controls affect how the rendered image looks and how sampling adapts to the current frame rate."
     ) {
+      doubleStepperRow("Field of view", value: Binding(get: { appSettings.screenFieldOfView },
+        set: { try? session.perform(.setScreenProjection(fieldOfView: Float($0)), source: .userInterface) }),
+                       range: 10...120, step: 1, format: "%.0f\u{00B0}")
+      toggleRow("Parallel projection", isOn: Binding(get: { appSettings.parallelProjection },
+        set: { try? session.perform(.setScreenProjection(parallel: $0), source: .userInterface) }))
+      toggleRow("Show dataset bounding box", isOn: Binding(get: { appSettings.showDatasetBoundingBox },
+        set: { try? session.perform(.setBoundingBox($0), source: .userInterface) }))
       pickerRow("Oversampling mode", selection: $appSettings.oversamplingMode) {
         Text("Static").tag(OversamplingMode.staticMode.rawValue)
         Text("Dynamic").tag(OversamplingMode.dynamicMode.rawValue)

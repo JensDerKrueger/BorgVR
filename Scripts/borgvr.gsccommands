@@ -70,6 +70,10 @@ waitidle(int)
 
 # Rendering state
 rendermode(string)
+# Vertical field of view in degrees (10...120), local to this device.
+setfieldofview(float)
+setparallelprojection(bool)
+showboundingbox(bool)
 showbricks(bool)
 showresidentbricks(bool)
 showemptybricks(bool)

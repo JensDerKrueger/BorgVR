@@ -1020,7 +1020,7 @@ extension VisionVolumeRenderer {
       let viewToTextureVoxelScaled = Transform(translation: SIMD3<Float>(0.5, 0.5, 0.5)).matrix * simd_inverse(viewMatrix * originFromWorldAnchor * frameModelTransform.matrix)
 
       let metadata = borgData.getMetadata()
-      let borderSize = Float(metadata.overlap + 1) / SIMD3<Float>(Float(metadata.width), Float(metadata.height), Float(metadata.depth))
+      let borderSize = VolumeRenderResources.renderingBorder(for: metadata)
       let clipMin = frameState.clipMinimum + borderSize
       let clipMax = frameState.clipMaximum - borderSize
 
@@ -1056,7 +1056,9 @@ extension VisionVolumeRenderer {
           textureToClip: projection * viewMatrix * modelMatrix * Transform(
             translation: SIMD3<Float>(repeating: -0.5)
           ).matrix,
-          brickVisualizationMask: frameState.brickVisualizationMask
+          brickVisualizationMask: frameState.brickVisualizationMask,
+          parallelRayDirection: .zero,
+          projectionLODScale: 0
         )
       )
     }
@@ -1992,6 +1994,7 @@ extension VisionVolumeRenderer {
     let opaqueGeometryTargets = opaqueGeometryRenderer.render(
       frame: .init(
         snapshot: frameSnapshot, volumeScale: volumeScale,
+        boundingBoxExtent: VolumeRenderResources.unclippedRenderingExtent(for: borgData.getMetadata()),
         modelMatrix: lastUnscaledModelMatrix, originFromDevice: lastOriginFromDevice,
         headPosition: lastHeadPosition, physicalExtentMeters: borgData.getMetadata().physicalExtentMeters,
         pendingProjectionCaptureMarkerIDs: immersiveInteraction.pendingStrokeProjectionCaptureMarkerIDs(),

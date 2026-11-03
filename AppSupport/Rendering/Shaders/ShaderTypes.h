@@ -132,6 +132,10 @@ typedef struct {
   matrix_float4x4 textureToClip;
   // Local diagnostic visibility: bit 0 resident/red, bit 1 empty/green, bit 2 missing/blue.
   uint brickVisualizationMask;
+  // xyz: parallel ray direction in texture space; w: constant LOD distance (0 for perspective).
+  vector_float4 parallelRayDirection;
+  // Runtime change of the screen-space LOD footprint; 0 preserves the headset projection.
+  float projectionLODScale;
 } FragmentUniforms;
 
 /**

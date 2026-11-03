@@ -6,9 +6,11 @@ import simd
 /// Owns non-volume geometry resources. Only color/depth targets cross into the volume pass.
 /// All access is serialized by the owning VisionVolumeRenderer actor.
 final class VisionOpaqueGeometryRenderer {
+  private let boundingBoxRenderer = VolumeBoundingBoxRenderer()
   struct Frame {
     let snapshot: BorgVRFrameSnapshot
     let volumeScale: simd_float4x4
+    let boundingBoxExtent: SIMD3<Float>
     let modelMatrix: simd_float4x4
     let originFromDevice: simd_float4x4
     let headPosition: SIMD3<Float>
@@ -506,6 +508,7 @@ final class VisionOpaqueGeometryRenderer {
       (frame.snapshot.visualization.objectsVisible
         && (!persistentMarkers.isEmpty || !persistentMeshInstances.isEmpty))
         || (frame.snapshot.visualization.measurementsVisible && !measurementSnapshot.isEmpty)
+        || frame.snapshot.settings.showDatasetBoundingBox
         || !screenViewMarkers.isEmpty || !screenViews.labels.isEmpty
         || !previewMeshInstances.isEmpty
         || (!suppressLocalToolWidgets && frame.stylusPreviewPoint != nil)
@@ -772,6 +775,10 @@ final class VisionOpaqueGeometryRenderer {
       renderEncoder.popDebugGroup()
     }
 
+    if frame.snapshot.settings.showDatasetBoundingBox {
+      boundingBoxRenderer.render(device: device, encoder: renderEncoder,
+        extent: frame.boundingBoxExtent, modelMatrix: frame.modelMatrix)
+    }
     drawObjects()
     drawMarkerGeometry(screenViewMarkers, groupName: "Screen View Avatars")
     drawToolWidgets()

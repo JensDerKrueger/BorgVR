@@ -1114,3 +1114,10 @@
 "Render UI" = "Render UI";
 "Panel File Error" = "Panel File Error";
 "Invalid panel settings." = "Invalid panel settings.";
+"Projection" = "Projection";
+"Field of view" = "Field of view";
+"Parallel projection" = "Parallel projection";
+"Narrower field of view" = "Narrower field of view";
+"Wider field of view" = "Wider field of view";
+"Show dataset bounding box" = "Show dataset bounding box";
+"Dataset bounding box" = "Dataset bounding box";

@@ -88,7 +88,10 @@ final class BorgVRScreenCommandService: BorgVRMCPCommandService {
         missingBricksVisible: state.brickVisualizationMask & 4 != 0,
         subbrickSkipping: settings.subbrickSkipping,
         opacityAdaptiveSampling: settings.opacityAdaptiveSampling,
-        alphaEpsilon: settings.alphaEpsilon
+        alphaEpsilon: settings.alphaEpsilon,
+        screenFieldOfViewDegrees: settings.screenFieldOfView,
+        parallelProjection: settings.parallelProjection,
+        datasetBoundingBoxVisible: settings.showDatasetBoundingBox
       ),
       volumeEditing: volumeEditing.volumeEditingState()
     )
@@ -121,6 +124,14 @@ final class BorgVRScreenCommandService: BorgVRMCPCommandService {
   func setRenderOptimizations(subbrickSkipping: Bool?, opacityAdaptiveSampling: Bool?, alphaEpsilon: Float?) throws {
     try session.perform(.setRenderOptimizations(subbrickSkipping: subbrickSkipping,
       opacityAdaptiveSampling: opacityAdaptiveSampling, alphaEpsilon: alphaEpsilon), source: .mcp)
+  }
+
+  func setScreenProjection(fieldOfView: Float?, parallel: Bool?) throws {
+    try session.perform(.setScreenProjection(fieldOfView: fieldOfView, parallel: parallel), source: .mcp)
+  }
+
+  func setBoundingBox(visible: Bool) throws {
+    try session.perform(.setBoundingBox(visible), source: .mcp)
   }
 
   func setTransform(

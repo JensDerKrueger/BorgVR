@@ -141,7 +141,8 @@ final class VisionBorgVRCommandService: BorgVRMCPCommandService {
         missingBricksVisible: state.brickVisualizationMask & 4 != 0,
         subbrickSkipping: settings.subbrickSkipping,
         opacityAdaptiveSampling: settings.opacityAdaptiveSampling,
-        alphaEpsilon: settings.alphaEpsilon
+        alphaEpsilon: settings.alphaEpsilon,
+        datasetBoundingBoxVisible: settings.showDatasetBoundingBox
       ),
       volumeEditing: volumeEditing.volumeEditingState()
     )
@@ -160,6 +161,14 @@ final class VisionBorgVRCommandService: BorgVRMCPCommandService {
 
   func activateVolumeEditing() {
     session.runtimeState.interactionMode = .volumeEditing
+  }
+
+  func setScreenProjection(fieldOfView: Float?, parallel: Bool?) throws {
+    throw BorgVRMCPCommandError.unsupported("Screen projection is only available on macOS and iOS.")
+  }
+
+  func setBoundingBox(visible: Bool) throws {
+    try session.perform(.setBoundingBox(visible), source: .mcp)
   }
 
   func setRenderMode(_ mode: String) throws {

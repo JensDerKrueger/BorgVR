@@ -25,6 +25,15 @@ enum VolumeRenderResources {
     return error.isFinite && error > 0 ? error : 1
   }
 
+  static func renderingBorder(for metadata: BORGVRMetaData) -> SIMD3<Float> {
+    Float(metadata.overlap + 1) / SIMD3<Float>(
+      Float(metadata.width), Float(metadata.height), Float(metadata.depth))
+  }
+
+  static func unclippedRenderingExtent(for metadata: BORGVRMetaData) -> SIMD3<Float> {
+    normalizedVolumeExtent(for: metadata) * (1 - 2 * renderingBorder(for: metadata))
+  }
+
   static func volumeScale(for metadata: BORGVRMetaData) -> simd_float4x4 {
     let scale = normalizedVolumeExtent(for: metadata)
     return simd_float4x4(

@@ -1118,3 +1118,10 @@
 "Render UI" = "Render-Steuerung";
 "Panel File Error" = "Fehler bei der Panel-Datei";
 "Invalid panel settings." = "Ungültige Panel-Einstellungen.";
+"Projection" = "Projektion";
+"Field of view" = "Sichtfeld";
+"Parallel projection" = "Parallelprojektion";
+"Narrower field of view" = "Sichtfeld verkleinern";
+"Wider field of view" = "Sichtfeld vergrößern";
+"Show dataset bounding box" = "Datensatzrahmen anzeigen";
+"Dataset bounding box" = "Datensatzrahmen";

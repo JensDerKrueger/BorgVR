@@ -31,6 +31,10 @@ using namespace metal;
 #define VOLUME_SHADER_WRITES_REPROJECTION_DEPTH 0
 #endif
 
+#ifndef VOLUME_SHADER_USES_SCREEN_PROJECTION
+#define VOLUME_SHADER_USES_SCREEN_PROJECTION 0
+#endif
+
 #if VOLUME_SHADER_USES_AMPLIFICATION
 #define VOLUME_SHADER_AMP_PARAMETER , ushort amp_id [[amplification_id]]
 #define VOLUME_SHADER_UNIFORM_INDEX amp_id
@@ -188,11 +192,34 @@ inline float samplingPhase(FragmentUniforms uniforms,
   return uniforms.sampleJitter > 0.5 ? raySamplePhase(entryPoint, direction, layerIndex) : defaultPhase;
 }
 
+inline bool usesParallelProjection(FragmentUniforms uniforms) {
+#if VOLUME_SHADER_USES_SCREEN_PROJECTION
+  return uniforms.parallelRayDirection.w > 0;
+#else
+  return false;
+#endif
+}
+
 inline float distanceFromCameraInNormalizedVolumeSpace(FragmentUniforms uniforms,
                                                        float3 texturePoint) {
+  float lodScale = 1;
+#if VOLUME_SHADER_USES_SCREEN_PROJECTION
+  lodScale = uniforms.projectionLODScale > 0 ? uniforms.projectionLODScale : 1;
+  if (usesParallelProjection(uniforms)) {
+    return uniforms.parallelRayDirection.w * lodScale;
+  }
+#endif
   float3 cameraPoint = uniforms.cameraPosInTextureSpaceVoxelScaled - 0.5;
   float3 volumePoint = (texturePoint - 0.5) * VOLUME_SCALE;
-  return length(cameraPoint - volumePoint);
+  return length(cameraPoint - volumePoint) * lodScale;
+}
+
+inline float3 volumeRayEntryPoint(FragmentUniforms uniforms, float3 exitPoint) {
+  // Two texture-space units place the parallel origin outside the unit-volume bounds.
+  float3 origin = usesParallelProjection(uniforms)
+    ? exitPoint - normalize(uniforms.parallelRayDirection.xyz) * 2
+    : uniforms.cameraPosInTextureSpace;
+  return computeEntryPoint(origin, exitPoint, uniforms);
 }
 
 #if VOLUME_SHADER_USES_MARKER_TEXTURES
@@ -326,7 +353,7 @@ inline VolumeFragmentOutput raycastTransferFunction(
 
   // Compute ray entry and exit in texture space
   float3 exitPoint  = in.exitPoint;
-  float3 entryPoint = computeEntryPoint(uniforms.cameraPosInTextureSpace, exitPoint, uniforms);
+  float3 entryPoint = volumeRayEntryPoint(uniforms, exitPoint);
 
   float3 direction = exitPoint - entryPoint;
   float rayLength = length(direction);
@@ -579,7 +606,7 @@ inline VolumeFragmentOutput raycastTransferFunctionLighting(
 
   // Compute ray entry and exit in texture space
   float3 exitPoint  = in.exitPoint;
-  float3 entryPoint = computeEntryPoint(uniforms.cameraPosInTextureSpace, exitPoint, uniforms);
+  float3 entryPoint = volumeRayEntryPoint(uniforms, exitPoint);
 
   float3 direction = exitPoint - entryPoint;
   float rayLength = length(direction);
@@ -737,7 +764,7 @@ inline VolumeFragmentOutput raycastTransferFunctionLighting(
                 (uniforms.modelViewIT * float4(normal, 0)).xyz
               ));
               current.rgb = float3(lighting(
-                                              posInView,
+                                              usesParallelProjection(uniforms) ? half3(0, 0, -1) : posInView,
                                               normalInView,
                                               half3(current.rgb),
                                               half3(uniforms.lightDirection.xyz),
@@ -847,7 +874,7 @@ fragment VolumeFragmentOutput VOLUME_FRAGMENT_SHADER_ISO_NAME(
   constexpr sampler s(address::clamp_to_border, filter::linear);
 
   float3 exitPoint  = in.exitPoint;
-  float3 entryPoint = computeEntryPoint(uniforms.cameraPosInTextureSpace, exitPoint, uniforms);
+  float3 entryPoint = volumeRayEntryPoint(uniforms, exitPoint);
 
   float3 direction = exitPoint - entryPoint;
   float rayLength = length(direction);
@@ -949,7 +976,7 @@ fragment VolumeFragmentOutput VOLUME_FRAGMENT_SHADER_ISO_NAME(
             half3 posInView    = half3((uniforms.modelView * float4((sampleNormCoords - 0.5),1)).xyz);
             half3 normalInView = half3(normalize((uniforms.modelViewIT * float4(normal,0)).xyz));
             half3 color = lighting(
-                                   posInView,
+                                   usesParallelProjection(uniforms) ? half3(0, 0, -1) : posInView,
                                    normalInView,
                                    half3(0.5,0.5,0.5),
                                    half3(uniforms.lightDirection.xyz),
@@ -1007,7 +1034,7 @@ fragment VolumeFragmentOutput VOLUME_FRAGMENT_SHADER_BRICK_VIS_NAME(
   FragmentUniforms uniforms = uniformsArray.uniforms[VOLUME_SHADER_UNIFORM_INDEX];
 
   float3 exitPoint  = in.exitPoint;
-  float3 entryPoint = computeEntryPoint(uniforms.cameraPosInTextureSpace, exitPoint, uniforms);
+  float3 entryPoint = volumeRayEntryPoint(uniforms, exitPoint);
 
   float3 direction = exitPoint - entryPoint;
   float rayLength = length(direction);

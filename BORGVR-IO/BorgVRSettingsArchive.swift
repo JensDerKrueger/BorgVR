@@ -187,6 +187,7 @@ struct BorgVRSettingsStore {
       case "maxBricksPerGetRequest": return 1...1_000_000
       case "atlasSizeMB": return 128...1_000_000
       case "oversampling": return 0.01...100
+      case "screenFieldOfView": return 10...120
       case "alphaEpsilon": return 0...1
       case "dropFPS", "recoveryFPS": return 1...1000
       case "tfMode": return 0...2

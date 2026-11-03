@@ -303,6 +303,9 @@ struct BorgVRMCPRenderingOptions: Codable, Sendable {
   var subbrickSkipping: Bool
   var opacityAdaptiveSampling: Bool
   var alphaEpsilon: Float
+  var screenFieldOfViewDegrees: Float? = nil
+  var parallelProjection: Bool? = nil
+  var datasetBoundingBoxVisible: Bool = false
 }
 
 struct BorgVRMCPApplicationState: Codable, Sendable {
@@ -398,6 +401,8 @@ protocol BorgVRMCPCommandService: AnyObject {
   func setRenderMode(_ mode: String) throws
   func setBrickVisualization(enabled: Bool?, resident: Bool?, empty: Bool?, missing: Bool?) throws
   func setRenderOptimizations(subbrickSkipping: Bool?, opacityAdaptiveSampling: Bool?, alphaEpsilon: Float?) throws
+  func setScreenProjection(fieldOfView: Float?, parallel: Bool?) throws
+  func setBoundingBox(visible: Bool) throws
   func setTransform(
     rotation: SIMD4<Float>?,
     translation: SIMD3<Float>?,

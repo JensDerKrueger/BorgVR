@@ -44,7 +44,7 @@ enum VolumeRendererPipeline {
         maximumProbingAttempts: appSettings.maxProbingAttempts,
         requestsLowResolutionLOD: appSettings.requestLowResLOD,
         stopsOnMissingBrick: appSettings.stopOnMiss,
-        fieldOfViewRadians: 0.75,
+        fieldOfViewRadians: BorgVRScreenViewState.defaultVerticalFieldOfView,
         drawableWidth: drawableWidth
       )
     )
@@ -164,6 +164,7 @@ enum VolumeRendererPipeline {
 
 @MainActor
 final class ScreenOpaqueGeometryRenderer {
+  private let boundingBoxRenderer = VolumeBoundingBoxRenderer()
   private var markerPipeline: MTLRenderPipelineState?
   private var measurementPointPipeline: MTLRenderPipelineState?
   private var sceneMeshPipeline: MTLRenderPipelineState?
@@ -261,6 +262,8 @@ final class ScreenOpaqueGeometryRenderer {
     depthFormat: MTLPixelFormat,
     showsObjects: Bool,
     showsMeasurements: Bool,
+    showsBoundingBox: Bool,
+    boundingBoxExtent: SIMD3<Float>,
     markers: [VolumeMarker],
     sceneMeshAssets: [UUID: SceneMeshAsset],
     sceneMeshInstances: [SceneMeshInstance],
@@ -623,6 +626,10 @@ final class ScreenOpaqueGeometryRenderer {
     renderObjects()
     renderMeasurements()
     renderToolWidgets()
+    if showsBoundingBox {
+      boundingBoxRenderer.render(device: device, encoder: encoder,
+        extent: boundingBoxExtent, modelMatrix: modelMatrix)
+    }
     tubeMeshCache.retainOnly(markerIDs: activeTubeIDs)
     encoder.endEncoding()
     return targets

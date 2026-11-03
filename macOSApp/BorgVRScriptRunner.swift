@@ -533,7 +533,7 @@ final class BorgVRScriptRunner: ObservableObject {
     }
 
     for name in ["showbricks", "showresidentbricks", "showemptybricks", "showmissingbricks",
-                 "setsubbrickskipping", "setopacityadaptivesampling"] {
+                 "setsubbrickskipping", "setopacityadaptivesampling", "setparallelprojection", "showboundingbox"] {
       register(name, [.bool]) { [weak self] args in
         guard let session = self?.session else { return .callbackError }
         let value = args.bool(0)
@@ -543,6 +543,8 @@ final class BorgVRScriptRunner: ObservableObject {
           case "showemptybricks": .setBrickVisualization(empty: value)
           case "showmissingbricks": .setBrickVisualization(missing: value)
           case "setsubbrickskipping": .setRenderOptimizations(subbrickSkipping: value)
+          case "setparallelprojection": .setScreenProjection(parallel: value)
+          case "showboundingbox": .setBoundingBox(value)
           default: .setRenderOptimizations(opacityAdaptiveSampling: value)
         }
         do { try session.perform(command, source: .gsc); return .success }
@@ -553,6 +555,14 @@ final class BorgVRScriptRunner: ObservableObject {
       guard let session = self?.session else { return .callbackError }
       do {
         try session.perform(.setRenderOptimizations(alphaEpsilon: args.float(0)), source: .gsc)
+        return .success
+      } catch { return .invalidArguments }
+    }
+
+    register("setfieldofview", [.float]) { [weak self] args in
+      guard let session = self?.session else { return .callbackError }
+      do {
+        try session.perform(.setScreenProjection(fieldOfView: args.float(0)), source: .gsc)
         return .success
       } catch { return .invalidArguments }
     }
