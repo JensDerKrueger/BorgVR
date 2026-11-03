@@ -110,6 +110,9 @@ struct macOSApp: App {
   var body: some Scene {
     WindowGroup("BorgVR") {
       ContentView()
+#if DEBUG
+        .background(AppStoreScreenshotWindowFrame().frame(width: 0, height: 0))
+#endif
         .volumeEditSelectionDialog(model: appModel.volumeBrush)
         .appStoreUpdateAlert(using: updateChecker)
         .alert(
