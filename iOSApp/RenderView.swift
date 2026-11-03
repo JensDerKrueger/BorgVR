@@ -154,6 +154,9 @@ struct RenderView: View {
             usesPanelBackground: false,
             usesFlexibleCanvasHeight: true,
             catalogDirectoryURLs: transferFunctionCatalogDirectoryURLs,
+            onMutation: {
+              session.commitExternalMutation(source: .userInterface, domain: .transferFunction)
+            },
             onClose: { dismissToolSheet(.transferEditor) }
           )
           .environmentObject(renderingParameters)
