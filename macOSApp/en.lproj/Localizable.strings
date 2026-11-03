@@ -1121,3 +1121,14 @@
 "Wider field of view" = "Wider field of view";
 "Show dataset bounding box" = "Show dataset bounding box";
 "Dataset bounding box" = "Dataset bounding box";
+"Buffering..." = "Buffering...";
+"Performance view" = "Performance view";
+"FPS / ms" = "FPS / ms";
+"Paging / Atlas" = "Paging / Atlas";
+"Paging" = "Paging";
+"Atlas occupancy" = "Atlas occupancy";
+"Last 30 seconds" = "Last 30 seconds";
+"Clear Atlas" = "Clear Atlas";
+"Remove cached bricks from the atlas, keeping the lowest-resolution brick." = "Remove cached bricks from the atlas, keeping the lowest-resolution brick.";
+"%.0f bricks/s" = "%.0f bricks/s";
+"%lld / %lld bricks" = "%lld / %lld bricks";

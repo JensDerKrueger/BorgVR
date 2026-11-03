@@ -64,8 +64,13 @@ struct MobileMetalView: UIViewRepresentable {
 
   func updateUIView(_ view: MTKView, context: Context) {
     let coordinator = context.coordinator
-    DispatchQueue.main.async {
-      coordinator.updateIfNeeded(for: view)
+    Task { @MainActor in
+      await coordinator.updateIfNeeded(for: view)
     }
+  }
+
+  static func dismantleUIView(_ view: MTKView, coordinator: MobileVolumeRenderer) {
+    view.delegate = nil
+    coordinator.detach()
   }
 }

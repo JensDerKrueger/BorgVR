@@ -7,9 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		57BB20261103000000000001 /* VolumeBoundingBoxRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57BB20261103000000000000 /* VolumeBoundingBoxRenderer.swift */; };
-		57BB20261103000000000002 /* VolumeBoundingBoxRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57BB20261103000000000000 /* VolumeBoundingBoxRenderer.swift */; };
-		57BB20261103000000000003 /* VolumeBoundingBoxRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57BB20261103000000000000 /* VolumeBoundingBoxRenderer.swift */; };
 		111111111111111111111701 /* c60_32.data in Resources */ = {isa = PBXBuildFile; fileRef = 56730FE22E6B78990091976B /* c60_32.data */; };
 		111111111111111111111702 /* head_32.data in Resources */ = {isa = PBXBuildFile; fileRef = 56730FE42E6B79000091976B /* head_32.data */; };
 		560A00012E00000000000031 /* web in CopyFiles */ = {isa = PBXBuildFile; fileRef = 560B90002E9150000042E45B /* web */; };
@@ -191,6 +188,12 @@
 		57AF10000000000000000002 /* SettingsFileControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57AF10000000000000000000 /* SettingsFileControls.swift */; };
 		57AF10000000000000000003 /* SettingsFileControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57AF10000000000000000000 /* SettingsFileControls.swift */; };
 		57AF10000000000000000004 /* SettingsFileControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57AF10000000000000000000 /* SettingsFileControls.swift */; };
+		57BB20261103000000000001 /* VolumeBoundingBoxRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57BB20261103000000000000 /* VolumeBoundingBoxRenderer.swift */; };
+		57BB20261103000000000002 /* VolumeBoundingBoxRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57BB20261103000000000000 /* VolumeBoundingBoxRenderer.swift */; };
+		57BB20261103000000000003 /* VolumeBoundingBoxRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57BB20261103000000000000 /* VolumeBoundingBoxRenderer.swift */; };
+		57BF20261103000000000001 /* DatasetBufferingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57BF20261103000000000000 /* DatasetBufferingView.swift */; };
+		57BF20261103000000000002 /* DatasetBufferingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57BF20261103000000000000 /* DatasetBufferingView.swift */; };
+		57BF20261103000000000003 /* DatasetBufferingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57BF20261103000000000000 /* DatasetBufferingView.swift */; };
 		57CC00000000000000000001 /* ScreenControlStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57CC00000000000000000000 /* ScreenControlStyle.swift */; };
 		57CC00000000000000000002 /* ScreenControlStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57CC00000000000000000000 /* ScreenControlStyle.swift */; };
 		57CC00000000000000000003 /* ScreenControlStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57CC00000000000000000000 /* ScreenControlStyle.swift */; };
@@ -241,7 +244,6 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		57BB20261103000000000000 /* VolumeBoundingBoxRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VolumeBoundingBoxRenderer.swift; sourceTree = "<group>"; };
 		111111111111111111111101 /* BorgVR Mobile.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "BorgVR Mobile.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		560A00012E00000000000001 /* TerminalServerApp */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = TerminalServerApp; sourceTree = BUILT_PRODUCTS_DIR; };
 		560B8BE72E5C57580042E45B /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
@@ -315,6 +317,8 @@
 		57AC20261101000000000000 /* DatasetProvenanceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DatasetProvenanceView.swift; sourceTree = "<group>"; };
 		57AC20261102000000000000 /* DatasetListPresentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DatasetListPresentation.swift; sourceTree = "<group>"; };
 		57AF10000000000000000000 /* SettingsFileControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsFileControls.swift; sourceTree = "<group>"; };
+		57BB20261103000000000000 /* VolumeBoundingBoxRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VolumeBoundingBoxRenderer.swift; sourceTree = "<group>"; };
+		57BF20261103000000000000 /* DatasetBufferingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DatasetBufferingView.swift; sourceTree = "<group>"; };
 		57CC00000000000000000000 /* ScreenControlStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenControlStyle.swift; sourceTree = "<group>"; };
 		57ED00000000000000000000 /* VolumeBrushControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VolumeBrushControls.swift; sourceTree = "<group>"; };
 		57ED00000000000000000010 /* VolumeBrushModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VolumeBrushModel.swift; sourceTree = "<group>"; };
@@ -763,6 +767,7 @@
 		57A010082EF0000100000001 /* UI */ = {
 			isa = PBXGroup;
 			children = (
+				57BF20261103000000000000 /* DatasetBufferingView.swift */,
 				57A000202E70000200000001 /* FilePickerView.swift */,
 				57A002B02ED5000100000001 /* GUILogger.swift */,
 				57A001232E70000300000001 /* LoggerView.swift */,
@@ -1163,6 +1168,7 @@
 				57A009012F00000100000001 /* CoordinatedFileExportRecovery.swift in Sources */,
 				57A0016D2E99000400000001 /* VolumeMarkerTubeMesh.swift in Sources */,
 				57BB20261103000000000001 /* VolumeBoundingBoxRenderer.swift in Sources */,
+				57BF20261103000000000001 /* DatasetBufferingView.swift in Sources */,
 				57A001912EA1000100000001 /* VolumeMeasurement.swift in Sources */,
 				57A001952EA1000200000001 /* VolumeMeasurementDocument.swift in Sources */,
 				57A001992EA1000300000001 /* MeasurementSurfaceMeshCache.swift in Sources */,
@@ -1234,6 +1240,7 @@
 				57A009022F00000100000001 /* CoordinatedFileExportRecovery.swift in Sources */,
 				57A0016E2E99000400000001 /* VolumeMarkerTubeMesh.swift in Sources */,
 				57BB20261103000000000002 /* VolumeBoundingBoxRenderer.swift in Sources */,
+				57BF20261103000000000002 /* DatasetBufferingView.swift in Sources */,
 				57A001922EA1000100000001 /* VolumeMeasurement.swift in Sources */,
 				57A001962EA1000200000001 /* VolumeMeasurementDocument.swift in Sources */,
 				57A0019A2EA1000300000001 /* MeasurementSurfaceMeshCache.swift in Sources */,
@@ -1280,6 +1287,7 @@
 				57A009032F00000100000001 /* CoordinatedFileExportRecovery.swift in Sources */,
 				57A0016F2E99000400000001 /* VolumeMarkerTubeMesh.swift in Sources */,
 				57BB20261103000000000003 /* VolumeBoundingBoxRenderer.swift in Sources */,
+				57BF20261103000000000003 /* DatasetBufferingView.swift in Sources */,
 				57A001932EA1000100000001 /* VolumeMeasurement.swift in Sources */,
 				57A001972EA1000200000001 /* VolumeMeasurementDocument.swift in Sources */,
 				57A0019B2EA1000300000001 /* MeasurementSurfaceMeshCache.swift in Sources */,

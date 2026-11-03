@@ -93,6 +93,15 @@ struct RenderView: View {
       }
       .padding()
     }
+    .overlay {
+      if case .opening(let dataset, _) = appModel.datasetSessionState,
+         !appModel.rendererFailedActiveDataset {
+        DatasetBufferingView(datasetDescription: dataset.description)
+          .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+          .padding()
+          .allowsHitTesting(false)
+      }
+    }
   }
 
   private var inlinePanels: [DockablePanelID] {

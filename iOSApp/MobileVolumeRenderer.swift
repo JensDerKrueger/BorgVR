@@ -77,8 +77,12 @@ final class MobileVolumeRenderer: NSObject, MTKViewDelegate, UIGestureRecognizer
     }
   }
 
-  func updateIfNeeded(for view: MTKView) {
-    switch core.updateIfNeeded(for: view) {
+  func detach() {
+    core.detach()
+  }
+
+  func updateIfNeeded(for view: MTKView) async {
+    switch await core.updateIfNeeded(for: view) {
       case .unchanged:
         break
       case .cleared:
@@ -119,7 +123,7 @@ final class MobileVolumeRenderer: NSObject, MTKViewDelegate, UIGestureRecognizer
     )
     frame.commandBuffer.addCompletedHandler { [weak self] commandBuffer in
       Task { @MainActor in
-        guard let self else { return }
+        guard let self, self.core.isAttached else { return }
         let missingBrickCount = self.core.completeFrame(frame)
         self.appModel.recordCompletedRenderFrame(
           datasetKey: self.core.loadedDatasetKey,

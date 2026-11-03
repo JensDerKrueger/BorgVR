@@ -62,6 +62,28 @@ private class EditableAtlasFixture: BORGVRDatasetProtocol {
   }
 }
 
+private final class StartupAtlasFixture: EditableAtlasFixture {
+  private let readsLock = NSLock()
+  private var reads: [Int] = []
+  private var mainThreadRead = false
+  var readIDs: [Int] { readsLock.withLock { reads } }
+  var readOnMainThread: Bool { readsLock.withLock { mainThreadRead } }
+  var failFirstBrick = false
+
+  override func getFirstBrick(outputBuffer: UnsafeMutablePointer<UInt8>) throws {
+    if failFirstBrick { throw AtlasTestFailure(message: "First brick unavailable") }
+    try super.getFirstBrick(outputBuffer: outputBuffer)
+  }
+
+  override func getBrick(index: Int, outputBuffer: UnsafeMutablePointer<UInt8>) throws {
+    readsLock.withLock {
+      reads.append(index)
+      mainThreadRead = mainThreadRead || Thread.isMainThread
+    }
+    try super.getBrick(index: index, outputBuffer: outputBuffer)
+  }
+}
+
 private final class GPUAtlasFixture: EditableAtlasFixture, BorgVRVolumeGPUBrushSource {
   var gpuBrushGeneration: UInt64 = 0
   var history: [BorgVRVolumeBrushBatch] = []
@@ -158,7 +180,7 @@ private final class PackedBrushFixture: BORGVRDatasetProtocol, BorgVRVolumeGPUBr
 
 @main
 private enum VolumeAtlasEditTests {
-  static func main() throws {
+  static func main() async throws {
     let boundsMetadata = BORGVRMetaData(width: 64, height: 128, depth: 256, componentCount: 1,
       bytePerComponent: 1, voxelSpacingX: 1, voxelSpacingY: 1, voxelSpacingZ: 1,
       brickSize: 32, overlap: 2, minValue: 0, maxValue: 255, compression: false,
@@ -174,6 +196,7 @@ private enum VolumeAtlasEditTests {
       print("SKIP: Metal device unavailable for atlas edit regression")
       return
     }
+    try await startupPreparation(device: device)
     try allocatedAtlasShaderCoordinates(device: device, queue: queue)
     try rendererTransferFunctionRanges(device: device)
     try runColorVolumeRenderingTests(device: device, queue: queue)
@@ -194,7 +217,7 @@ private enum VolumeAtlasEditTests {
                "Atlas did not advertise resident fine/fallback bricks")
 
     let flagCount = UInt32(BrickIDFlags.BI_FLAG_COUNT.rawValue)
-    let library = try device.makeLibrary(source: """
+    let library = try await device.makeLibrary(source: """
       #include <metal_stdlib>
       using namespace metal;
       vertex float4 v(uint id [[vertex_id]]) {
@@ -216,7 +239,7 @@ private enum VolumeAtlasEditTests {
     descriptor.vertexFunction = library.makeFunction(name: "v")
     descriptor.fragmentFunction = library.makeFunction(name: "f")
     descriptor.colorAttachments[0].pixelFormat = .rgba32Uint
-    let pipeline = try device.makeRenderPipelineState(descriptor: descriptor)
+    let pipeline = try await device.makeRenderPipelineState(descriptor: descriptor)
     let targetDescriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .rgba32Uint,
       width: 1, height: 1, mipmapped: false)
     targetDescriptor.storageMode = .shared
@@ -332,6 +355,54 @@ private enum VolumeAtlasEditTests {
     try channelRestoreBeforeCPU(device: device, queue: queue, tf: tf, target: target)
     try packedBrushes(device: device, queue: queue)
     print("Volume atlas edit regression tests passed")
+  }
+
+  static func startupPreparation(device: MTLDevice) async throws {
+    let tf = TransferFunction1D(count: 256)
+    tf.initMetal(device: device)
+    tf.updateRanges(minValue: 0, maxValue: 255, rangeMax: 255)
+    try tf.updateData(with: [SIMD4<UInt8>](repeating: SIMD4(255, 255, 255, 255), count: 256))
+    for (count, expected) in [(0, [2]), (1, [2, 1]), (10, [2, 1, 0])] {
+      let dataset = StartupAtlasFixture()
+      let resources = try await ScreenDatasetPreparation(dataset: dataset, device: device,
+        transferFunctions: [TransferFunction1D(copyFrom: tf)], isoValue: 0.5,
+        atlasSizeMB: 1, astcBlockSize: 0, initialBricks: count,
+        minimumHashTableSizeMB: 0, logger: nil).prepare()
+      try expect(dataset.readIDs == expected,
+        "Startup must complete the first brick and the configured prefetch before returning")
+      try expect(!dataset.readOnMainThread, "Startup brick reads must not block the UI thread")
+      try expect(resources.hashTable.size >= 64, "Startup must initialize the request table")
+    }
+    let pagingSource = StartupAtlasFixture()
+    let atlas = try VolumeAtlas(device: device, maxMemory: 1024 * 1024, borgData: pagingSource,
+      transferFunctions: [tf], isoValue: 0.5)
+    try expect(atlas.pagingStatistics.residentBricks == 1 &&
+      atlas.pagingStatistics.totalUploadedBricks == 1, "The pinned overview must count toward atlas occupancy")
+    try atlas.pageIn(IDs: [0])
+    try atlas.pageIn(IDs: [0])
+    try expect(atlas.pagingStatistics.residentBricks == 2 &&
+      atlas.pagingStatistics.totalUploadedBricks == 2, "Resident brick requests must not count as uploads")
+    atlas.purge()
+    try expect(atlas.pagingStatistics.residentBricks == 1 && pagingSource.residentIDs == [2],
+      "Purging must retain only the pinned lowest-resolution brick")
+    try expect(atlas.pagingStatistics.totalUploadedBricks == 2, "Purging must preserve the cumulative upload counter")
+    try expect(atlas.pagingStatistics.residentBytes == 8,
+      "Atlas occupancy must count the pinned brick's texture bytes after purge")
+    try atlas.pageIn(IDs: [0])
+    try expect(atlas.pagingStatistics.residentBricks == 2 &&
+      atlas.pagingStatistics.totalUploadedBricks == 3, "Purged bricks must be loadable again")
+    let unavailable = StartupAtlasFixture()
+    unavailable.failFirstBrick = true
+    do {
+      _ = try await ScreenDatasetPreparation(dataset: unavailable, device: device,
+        transferFunctions: [TransferFunction1D(copyFrom: tf)], isoValue: 0.5,
+        atlasSizeMB: 1, astcBlockSize: 0, initialBricks: 1,
+        minimumHashTableSizeMB: 0, logger: nil).prepare()
+      throw AtlasTestFailure(message: "Startup must fail if the first brick is unavailable")
+    } catch let error as AtlasTestFailure {
+      try expect(error.message == "First brick unavailable", "Startup must propagate first-brick errors")
+    }
+    print("Startup preparation and atlas paging/purge statistics passed")
   }
 
   static func rendererTransferFunctionRanges(device: MTLDevice) throws {

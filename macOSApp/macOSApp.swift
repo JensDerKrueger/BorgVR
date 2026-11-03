@@ -284,7 +284,7 @@ struct macOSApp: App {
         .environmentObject(session)
     }
 
-    BorgVRUtilityWindow(title: "performance_title", id: "PerformanceGraphView", width: 820, height: 360) {
+    BorgVRUtilityWindow(title: "performance_title", id: "PerformanceGraphView", width: 820, height: 400) {
       PerformanceGraphView()
         .environmentObject(appModel)
     }

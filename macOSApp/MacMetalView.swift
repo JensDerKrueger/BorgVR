@@ -55,9 +55,14 @@ struct MacMetalView: NSViewRepresentable {
   func updateNSView(_ view: InteractiveMTKView, context: Context) {
     configureInteractionCallbacks(for: view)
     let coordinator = context.coordinator
-    DispatchQueue.main.async {
-      coordinator.updateIfNeeded(for: view)
+    Task { @MainActor in
+      await coordinator.updateIfNeeded(for: view)
     }
+  }
+
+  static func dismantleNSView(_ view: InteractiveMTKView, coordinator: MacVolumeRenderer) {
+    view.delegate = nil
+    coordinator.detach()
   }
 
   private func configureInteractionCallbacks(for view: InteractiveMTKView) {

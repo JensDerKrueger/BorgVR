@@ -107,6 +107,9 @@ final class MacVolumeRenderer: NSObject, MTKViewDelegate {
     appModel.renderDisplaySyncHandler = { [weak self] enabled in
       self?.setDisplaySyncEnabled(enabled)
     }
+    appModel.renderAtlasPurgeHandler = { [weak self] in
+      self?.core.requestAtlasPurge()
+    }
     appModel.isoSurfaceExtractionHandler = { [weak self] outputURL, normalizedIsoValue,
       cancellationToken, progress, completion in
       guard let self,
@@ -149,8 +152,13 @@ final class MacVolumeRenderer: NSObject, MTKViewDelegate {
     setDisplaySyncEnabled(appModel.renderDisplaySyncEnabled)
   }
 
-  func updateIfNeeded(for view: MTKView) {
-    switch core.updateIfNeeded(for: view) {
+  func detach() {
+    core.detach()
+    view = nil
+  }
+
+  func updateIfNeeded(for view: MTKView) async {
+    switch await core.updateIfNeeded(for: view) {
       case .unchanged:
         break
       case .cleared:
@@ -198,7 +206,7 @@ final class MacVolumeRenderer: NSObject, MTKViewDelegate {
     )
     frame.commandBuffer.addCompletedHandler { [weak self] commandBuffer in
       Task { @MainActor in
-        guard let self else { return }
+        guard let self, self.core.isAttached else { return }
         let missingBrickCount = self.core.completeFrame(frame)
         self.appModel.recordCompletedRenderFrame(
           datasetKey: self.core.loadedDatasetKey,
@@ -278,6 +286,8 @@ final class MacVolumeRenderer: NSObject, MTKViewDelegate {
   private func resetRenderTracking() {
     appModel.resetBrickReadbackState()
     appModel.performanceModel.history = PerformanceHistory()
+    appModel.atlasPagingModel.reset()
+    recordAtlasPaging()
   }
 
   private func setDisplaySyncEnabled(_ enabled: Bool) {
@@ -297,6 +307,7 @@ final class MacVolumeRenderer: NSObject, MTKViewDelegate {
   }
 
   private func updatePerformanceGraph() {
+    recordAtlasPaging()
     appModel.performanceModel.history.recoveryThreshold = Double(appSettings.recoveryFPS)
     appModel.performanceModel.history.dropThreshold = Double(appSettings.dropFPS)
     appModel.performanceModel.history.add(
@@ -306,6 +317,11 @@ final class MacVolumeRenderer: NSObject, MTKViewDelegate {
       samplingRate: Double(core.activeOversampling),
       baseSamplingRate: Double(appSettings.oversampling)
     )
+  }
+
+  private func recordAtlasPaging() {
+    guard let statistics = core.atlasPagingStatistics else { return }
+    appModel.atlasPagingModel.record(timestamp: CACurrentMediaTime(), statistics: statistics)
   }
 
   private struct ScreenshotCapture {

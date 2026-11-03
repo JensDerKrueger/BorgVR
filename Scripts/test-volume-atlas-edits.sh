@@ -26,6 +26,10 @@ swiftc \
   "$ROOT/BORGVR-Render/VolumeAtlas/VolumeAtlasSubbrickCache.swift" \
   "$ROOT/BORGVR-Render/VolumeAtlas/VolumeAtlasBrushRenderer.swift" \
   "$ROOT/BORGVR-Render/VolumeRenderResources.swift" \
+  "$ROOT/BORGVR-Render/Screen/ScreenDatasetPreparation.swift" \
+  "$ROOT/BORGVR-Render/Performance Tracking/AtlasPagingHistory.swift" \
+  "$ROOT/BORGVR-Render/Helpers/RingBuffer.swift" \
+  "$ROOT/AppSupport/Rendering/GPUHashtable.swift" \
   "$ROOT/BORGVR-Render/VolumeShaderConfiguration.swift" \
   "$ROOT/Tests/VolumeAtlasEditTests.swift" \
   "$ROOT/Tests/ColorVolumeRenderingTests.swift" \

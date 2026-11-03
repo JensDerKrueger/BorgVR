@@ -1121,3 +1121,14 @@
 "Wider field of view" = "Ampliar el campo de visión";
 "Show dataset bounding box" = "Mostrar el cuadro delimitador del conjunto de datos";
 "Dataset bounding box" = "Cuadro delimitador del conjunto de datos";
+"Buffering..." = "Almacenando en búfer...";
+"Performance view" = "Vista de rendimiento";
+"FPS / ms" = "FPS / ms";
+"Paging / Atlas" = "Carga / Atlas";
+"Paging" = "Carga";
+"Atlas occupancy" = "Ocupación del atlas";
+"Last 30 seconds" = "Últimos 30 segundos";
+"Clear Atlas" = "Vaciar atlas";
+"Remove cached bricks from the atlas, keeping the lowest-resolution brick." = "Eliminar los bloques en caché del atlas conservando el bloque de menor resolución.";
+"%.0f bricks/s" = "%.0f bloques/s";
+"%lld / %lld bricks" = "%lld / %lld bloques";

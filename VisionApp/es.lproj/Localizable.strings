@@ -1397,3 +1397,4 @@
 "Remote" = "Remoto";
 "Invalid panel settings." = "Ajustes de panel no válidos.";
 "Show dataset bounding box" = "Mostrar el cuadro delimitador del conjunto de datos";
+"Buffering..." = "Almacenando en búfer...";

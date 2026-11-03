@@ -14,7 +14,10 @@ struct ContentView: View {
     switch runtimeAppModel.datasetSessionState {
       case .waitingForSharePlay, .resolving:
         WaitingView()
-      case .opening, .rendering:
+      case .opening(let dataset, _):
+        DatasetBufferingView(datasetDescription: dataset.description)
+          .frame(maxWidth: .infinity, maxHeight: .infinity)
+      case .rendering:
         RenderView()
       case .closing(_, _, let destination):
         switch destination {

@@ -137,6 +137,14 @@ class VolumeAtlas {
   private var brickToPage: [Int: Int] = [:]
   private var purgeDataOnNextPage = false
   private var elementsInBuffer = 0
+  private var residentBrickCount = 1
+  private var totalUploadedBricks: UInt64 = 1
+  private let atlasBytesPerBrick: Int
+
+  var pagingStatistics: AtlasPagingStatistics {
+    AtlasPagingStatistics(residentBricks: residentBrickCount, capacity: pageMetadata.count,
+                          totalUploadedBricks: totalUploadedBricks, bytesPerBrick: atlasBytesPerBrick)
+  }
 
   /// An optional logger for debug and error messages.
   private let logger: LoggerBase?
@@ -224,6 +232,7 @@ class VolumeAtlas {
     )
     let minimumAtlasMemory = usesASTC ? (brickSize / self.astcBlockSize) * (brickSize / self.astcBlockSize) * brickSize * 16
       : max(1, brickSize * brickSize * brickSize * bytesPerVoxel)
+    self.atlasBytesPerBrick = minimumAtlasMemory
     var atlasBudget = max(maxMemory, minimumAtlasMemory)
     var atlasLayout: (width: Int, height: Int, depth: Int, inCoreBrickCount: Int)?
     var createdAtlasTexture: MTLTexture?
@@ -807,6 +816,7 @@ class VolumeAtlas {
       }
       purgeDataOnNextPage = false
       elementsInBuffer = 0
+      residentBrickCount = 1
       let lastBrickIndex = metadata.brickMetadata.count - 1
       brickToPage.removeAll()
       brickToPage[lastBrickIndex] = 0
@@ -886,6 +896,7 @@ class VolumeAtlas {
       }
       let pageIndex = pageMetadata[insertionPos].pageID
       let previousBrickID = pageMetadata[insertionPos].brickID
+      if previousBrickID < 0 { residentBrickCount += 1 }
       if brickToPage[previousBrickID] == pageIndex { brickToPage[previousBrickID] = nil }
       pageMetadata[insertionPos].set(brickID: newBrickID, arrivalIndex: pageFrame)
       brickToPage[newBrickID] = pageIndex
@@ -893,6 +904,7 @@ class VolumeAtlas {
 
       let (x, y, z) = IDToCoords(pageIndex: pageIndex)
       replaceAtlasBrick(x: x, y: y, z: z, data: borgBuffer, encodedASTC: encoded)
+      totalUploadedBricks &+= 1
       pageEditRevisions[pageIndex] = readableRevision
     }
 

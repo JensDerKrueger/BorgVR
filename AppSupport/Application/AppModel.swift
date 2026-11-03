@@ -214,10 +214,12 @@ final class AppModel: ObservableObject {
   var defaultVolumeMarkerShowsDirection = false
   @Published var timer: GPUFrameTimer?
   @Published var performanceModel = PerformanceGraphModel()
+  let atlasPagingModel = AtlasPagingGraphModel()
   let logger = GUILogger()
   var renderScreenshotHandler: RenderScreenshotHandler?
   var renderScreenshotCancelHandler: RenderScreenshotCancelHandler?
   var renderDisplaySyncHandler: RenderDisplaySyncHandler?
+  var renderAtlasPurgeHandler: (() -> Void)?
   var isoSurfaceExtractionHandler: IsoSurfaceExtractionHandler?
   var markerPositionHandler: MarkerPositionHandler?
   var projectedVolumePositionHandler: MarkerPositionHandler?

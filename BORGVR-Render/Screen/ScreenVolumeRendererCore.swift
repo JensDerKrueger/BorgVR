@@ -53,6 +53,17 @@ final class ScreenVolumeRendererCore {
   private var hashTable: GPUHashtable?
   private var volumeScale = matrix_identity_float4x4
   private(set) var loadedDatasetKey = ""
+  private var updatingDataset = false
+  private var detached = false
+  var isAttached: Bool { !detached }
+  private var atlasPurgeRequested = false
+
+  var atlasPagingStatistics: AtlasPagingStatistics? { volumeAtlas?.pagingStatistics }
+
+  func requestAtlasPurge() {
+    guard !detached, volumeAtlas != nil else { return }
+    atlasPurgeRequested = true
+  }
   private var pipelineDrawableWidth: Float = 0
   private(set) var activeOversampling: Float = 1
   private var configuredOversamplingMode = ""
@@ -166,25 +177,54 @@ final class ScreenVolumeRendererCore {
     appModel.volumeBrush.context.showPreview(at: shifted, source: "touch")
   }
 
-  func updateIfNeeded(for view: MTKView) -> ScreenDatasetUpdate {
-    let key = appModel.activeDatasetRenderKey
-    guard key != loadedDatasetKey else { return .unchanged }
-
-    guard !key.isEmpty else {
+  func updateIfNeeded(for view: MTKView) async -> ScreenDatasetUpdate {
+    guard !detached else { return .unchanged }
+    guard !updatingDataset else { return .unchanged }
+    updatingDataset = true
+    defer { updatingDataset = false }
+    while true {
+      guard !detached else {
+        clearDatasetResources(resetSharedState: false)
+        return .unchanged
+      }
+      let requestID: UUID
+      switch appModel.datasetSessionState {
+        case .opening(_, let id), .rendering(_, let id): requestID = id
+        default:
+          clearDatasetResources()
+          return .cleared
+      }
+      let key = appModel.activeDatasetRenderKey
+      guard key != loadedDatasetKey else { return .unchanged }
       clearDatasetResources()
-      return .cleared
+      do {
+        let metadata = try await loadDataset(for: view, requestID: requestID)
+        guard isCurrentDatasetRequest(requestID) else { continue }
+        loadedDatasetKey = key
+        return .loaded(key, metadata)
+      } catch {
+        // A close or replacement while buffering must not publish the obsolete result.
+        let current = isCurrentDatasetRequest(requestID)
+        clearDatasetResources(resetSharedState: current)
+        guard current else { continue }
+        appModel.logger.error("Renderer setup failed: \(error.localizedDescription)")
+        return .failed(key, error)
+      }
     }
+  }
 
-    clearPipelineStates()
-    do {
-      let metadata = try loadDataset(for: view)
-      loadedDatasetKey = key
-      return .loaded(key, metadata)
-    } catch {
-      clearDatasetResources()
-      appModel.logger.error("Renderer setup failed: \(error.localizedDescription)")
-      return .failed(key, error)
+  private func isCurrentDatasetRequest(_ requestID: UUID) -> Bool {
+    guard !detached else { return false }
+    switch appModel.datasetSessionState {
+      case .opening(_, let id), .rendering(_, let id): return id == requestID
+      default: return false
     }
+  }
+
+  func detach() {
+    detached = true
+    // An in-progress worker retains its source and sandbox access until it returns.
+    if !updatingDataset { clearDatasetResources(resetSharedState: false) }
   }
 
   @discardableResult
@@ -204,7 +244,7 @@ final class ScreenVolumeRendererCore {
   }
 
   func encodeFrame(in view: MTKView) -> ScreenVolumeEncodedFrame? {
-    guard let activeDataset = dataset,
+    guard !detached, let activeDataset = dataset,
           let commandQueue,
           let cubeBuffer,
           let volumeAtlas,
@@ -347,6 +387,7 @@ final class ScreenVolumeRendererCore {
   }
 
   func completeFrame(_ frame: ScreenVolumeEncodedFrame) -> Int {
+    guard !detached else { return 0 }
     interactionDepthSnapshot = VolumeInteractionDepthSnapshot(
       texture: frame.interactionDepthTexture,
       textureToClip: [frame.textureToClip]
@@ -385,14 +426,17 @@ final class ScreenVolumeRendererCore {
     opaqueGeometryRenderer.resetTargets()
   }
 
-  private func clearDatasetResources() {
-    appModel.volumeBrush.close()
-    appModel.trackDatasetStreaming(nil)
+  private func clearDatasetResources(resetSharedState: Bool = true) {
+    if resetSharedState {
+      appModel.volumeBrush.close()
+      appModel.trackDatasetStreaming(nil)
+    }
     releaseDatasetAccess()
     dataset = nil
     volumeAtlas = nil
     hashTable = nil
     loadedDatasetKey = ""
+    atlasPurgeRequested = false
     interactionDepthSnapshot = nil
     frozenStrokeInteractionDepthSnapshot = nil
     interactionDepthTextures = Array(repeating: nil, count: interactionDepthTextures.count)
@@ -401,7 +445,7 @@ final class ScreenVolumeRendererCore {
     clearPipelineStates()
   }
 
-  private func loadDataset(for view: MTKView) throws -> BORGVRMetaData {
+  private func loadDataset(for view: MTKView, requestID: UUID) async throws -> BORGVRMetaData {
     guard let device = view.device else {
       throw BORGVRError.other("Metal device unavailable while loading the dataset.")
     }
@@ -420,29 +464,19 @@ final class ScreenVolumeRendererCore {
       case let .remote(address, port, password):
         let primaryOrigin = DatasetOrigin(address: address, port: port, password: password)
         let datasetID = activeDataset.identifier
-        let manager = BORGVRRemoteDataManager(
-          host: address,
-          port: UInt16(port),
-          authSecret: password,
-          logger: appModel.logger
-        )
-        try manager.connect(timeout: appSettings.timeout)
         let localFilename = remoteCacheFilename(activeDataset.identifier)
         datasetURL = localFilename.map { URL(fileURLWithPath: $0) }
         let cacheFilename = appSettings.makeLocalCopy ? localFilename : nil
         if let cacheFilename {
           appModel.logger.dev("Remote dataset will be cached at \(cacheFilename)")
         }
-        newDataset = try manager.openDataset(
-          datasetID: datasetID,
-          timeout: appSettings.timeout,
-          localCacheFilename: cacheFilename,
-          originProvider: {
-            DatasetOriginCatalog.deduplicated(
-              [primaryOrigin] + DatasetOriginCatalog.shared.origins(for: datasetID)
-            )
-          }
-        )
+        let remoteDataset = try await ScreenRemoteDatasetOpen(origin: primaryOrigin, datasetID: datasetID,
+          timeout: appSettings.timeout, cacheFilename: cacheFilename, logger: appModel.logger).open()
+        guard isCurrentDatasetRequest(requestID) else {
+          remoteDataset.stop()
+          throw CancellationError()
+        }
+        newDataset = remoteDataset
     }
 
     try newDataset.getMetadata().requireUnsignedProcessing()
@@ -467,30 +501,14 @@ final class ScreenVolumeRendererCore {
 
     activeOversampling = Float(appSettings.oversampling)
     configurePerformanceTracking()
-    let atlasSizeMB = appSettings.atlasSizeMB
-    volumeAtlas = try VolumeAtlas(
-      device: device,
-      maxMemory: atlasSizeMB * 1024 * 1024,
-      borgData: editableDataset,
-      transferFunctions: Array(renderingParameters.activeTransferFunctions),
-      isoValue: renderingParameters.isoValue,
-      astcBlockSize: appSettings.atlasCompression,
-      logger: appModel.logger
-    )
-    if let volumeAtlas {
-      try? VolumeRenderResources.pageInInitialBricks(
-        atlas: volumeAtlas,
-        dataset: editableDataset,
-        maximumCount: appSettings.initialBricks
-      )
-    }
-
-    let minTableElementCount = VolumeRenderResources.minimumHashTableElementCount(
-      metadata: metadata,
-      representedMemoryMB: appSettings.minHashTableSize,
-      minimumElementCount: 64
-    )
-    hashTable = GPUHashtable(minTableElementCount: minTableElementCount, device: device, logger: appModel.logger)
+    let resources = try await ScreenDatasetPreparation(dataset: editableDataset, device: device,
+      transferFunctions: renderingParameters.activeTransferFunctions.map { TransferFunction1D(copyFrom: $0) },
+      isoValue: renderingParameters.isoValue, atlasSizeMB: appSettings.atlasSizeMB,
+      astcBlockSize: appSettings.atlasCompression, initialBricks: appSettings.initialBricks,
+      minimumHashTableSizeMB: appSettings.minHashTableSize, logger: appModel.logger).prepare()
+    guard isCurrentDatasetRequest(requestID) else { throw CancellationError() }
+    volumeAtlas = resources.atlas
+    hashTable = resources.hashTable
     volumeScale = VolumeRenderResources.volumeScale(for: metadata)
     return metadata
   }
@@ -1043,9 +1061,42 @@ final class ScreenVolumeRendererCore {
   private func readBackHashTable(commandBuffer: MTLCommandBuffer) -> Int {
     guard let hashTable, let volumeAtlas else { return 0 }
     let missingBricks = hashTable.getValues(from: commandBuffer)
+    // Modify atlas residency only after the frame using its page table has completed.
+    if atlasPurgeRequested {
+      atlasPurgeRequested = false
+      volumeAtlas.purge()
+      return 0
+    }
     guard !missingBricks.isEmpty else { return 0 }
     try? volumeAtlas.pageIn(IDs: missingBricks.map(Int.init).sorted(by: >))
     return missingBricks.count
+  }
+}
+
+private struct ScreenRemoteDatasetOpen: @unchecked Sendable {
+  struct Result: @unchecked Sendable { let dataset: BORGVRRemoteData }
+  let origin: DatasetOrigin
+  let datasetID: String
+  let timeout: TimeInterval
+  let cacheFilename: String?
+  let logger: LoggerBase?
+
+  func open() async throws -> BORGVRRemoteData {
+    let worker = Task.detached(priority: .userInitiated) {
+      let manager = BORGVRRemoteDataManager(host: origin.address, port: UInt16(origin.port),
+        authSecret: origin.password, logger: logger)
+      try Task.checkCancellation()
+      try manager.connect(timeout: timeout)
+      try Task.checkCancellation()
+      let dataset = try manager.openDataset(datasetID: datasetID, timeout: timeout,
+        localCacheFilename: cacheFilename, originProvider: {
+          DatasetOriginCatalog.deduplicated([origin] + DatasetOriginCatalog.shared.origins(for: datasetID))
+        })
+      return Result(dataset: dataset)
+    }
+    return try await withTaskCancellationHandler {
+      try await worker.value.dataset
+    } onCancel: { worker.cancel() }
   }
 }
 

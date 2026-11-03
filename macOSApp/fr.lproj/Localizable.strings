@@ -1121,3 +1121,14 @@
 "Wider field of view" = "Élargir le champ de vision";
 "Show dataset bounding box" = "Afficher la boîte englobante du jeu de données";
 "Dataset bounding box" = "Boîte englobante du jeu de données";
+"Buffering..." = "Mise en mémoire tampon...";
+"Performance view" = "Vue des performances";
+"FPS / ms" = "FPS / ms";
+"Paging / Atlas" = "Chargement / Atlas";
+"Paging" = "Chargement";
+"Atlas occupancy" = "Occupation de l’atlas";
+"Last 30 seconds" = "30 dernières secondes";
+"Clear Atlas" = "Vider l’atlas";
+"Remove cached bricks from the atlas, keeping the lowest-resolution brick." = "Supprimer les blocs en cache de l’atlas en conservant celui de plus basse résolution.";
+"%.0f bricks/s" = "%.0f blocs/s";
+"%lld / %lld bricks" = "%lld / %lld blocs";

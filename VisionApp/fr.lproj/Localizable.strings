@@ -1397,3 +1397,4 @@
 "Remote" = "Distant";
 "Invalid panel settings." = "Réglages de panneau non valides.";
 "Show dataset bounding box" = "Afficher la boîte englobante du jeu de données";
+"Buffering..." = "Mise en mémoire tampon...";
