@@ -1,7 +1,7 @@
 import Foundation
 
 enum ConverterInfo {
-  static let version = "3.5"
+  static let version = "3.6"
   static let toolIdentification = "BorgVR Converter \(version)"
 
   static let banner = #"""
@@ -34,6 +34,7 @@ enum Mode: String {
   case I3MConversion = "I"
   case ZarrConversion = "Z"
   case FlatVolumeExport = "E"
+  case BorgVRRepacking = "R"
   case DemoDataCreation = "C"
 }
 
@@ -155,6 +156,11 @@ struct ExportModeParameters {
   let level: Int
 }
 
+struct RepackModeParameters {
+  let inputFilename: String
+  let common: CommonParameters
+}
+
 /**
  Parameters specific to demo data creation mode.
 
@@ -176,104 +182,90 @@ struct CreateModeParameters {
   let common: CommonParameters
 }
 
-/// A usage error message displayed when invalid parameters are provided.
 let executableName = URL(fileURLWithPath: CommandLine.arguments[0]).lastPathComponent
-let usageErrorMessage = """
-Invalid parameters.
-Usage:
+let usageText = """
+USAGE
+  \(executableName) <mode> <arguments> [options]
+  \(executableName) --help | -h
+  \(executableName) --version | -v
 
-General
-    \(executableName) --help | -h
-    \(executableName) --version | -v
-    Optional for import/generation (repeatable): --source-info <ISO8601-date-time> <source-text>
-    Optional for color imports: --color-compression none|astc4x4|astc8x8 (default: none)
-    Optional for import/generation: --no-lz4 (independent of ASTC color compression)
-        Example: --source-info 2026-11-01T10:30:00Z "Downloaded from https://example.org/scan"
-    Optional for import modes D/Q/N/P/I/Z:
-        --size-x <meters>       : Physical X extent if the source has no physical size
-        --force-size-x <meters> : Always set physical X extent, overriding source metadata
-        Both preserve proportions along Y/Z. Use only one size option, once.
+MODES
+  Import a volume
+    D  DICOM directory           Q  QVIS (.dat + RAW)
+    N  NRRD / NHDR               P  PVM / PVM2 / PVM3 (including DDS)
+    I  IV3Dm (.i3m or ZIP)       Z  Zarr v3 / OME-Zarr 0.5 (.ozx / .zarr)
 
-Mode D — Read DICOM files from a directory
-    \(executableName) D <input_directory> <output_filename> <description> <max_brick_size> <overlap>
-        input_directory   : Path to the directory containing DICOM files
-        output_filename   : Name of the output file to create
-        description       : Short description of the dataset
-        max_brick_size    : Positive integer specifying the maximum brick size
-        overlap           : Positive integer specifying the overlap between bricks
+    \(executableName) <mode> <input> <output.data> <description> <brick> <overlap>
 
-Mode S — Read a filename-sorted RGB/RGBA image sequence
-    \(executableName) S <input_directory> <output_filename> <description> <max_brick_size> <overlap> <size_x_m> <size_y_m> <size_z_m>
-        All images must have identical dimensions. Physical dimensions are required in meters.
+  S  Import filename-sorted RGB/RGBA image slices
+    \(executableName) S <folder> <output.data> <description> \\
+      <brick> <overlap> <size-x-m> <size-y-m> <size-z-m>
+    Images must have identical dimensions; physical sizes describe the whole volume.
 
-Mode Q — Read a QVIS file
-    \(executableName) Q <input_filename> <output_filename> <description> <max_brick_size> <overlap>
-        input_filename    : Path to the QVIS file
-        output_filename   : Name of the output file to create
-        description       : Short description of the dataset
-        max_brick_size    : Positive integer specifying the maximum brick size
-        overlap           : Positive integer specifying the overlap between bricks
+  E  Export a BorgVR LoD as uncompressed inline NRRD
+    \(executableName) E <input.data> <output.nrrd> <lod>
+    LoD 0 is the full-resolution original; higher values select stored coarse levels.
 
-Mode N — Read a NRRD or NHDR file
-    \(executableName) N <input_filename> <output_filename> <description> <max_brick_size> <overlap>
-        input_filename    : Path to the NRRD or NHDR file
-        output_filename   : Name of the output file to create
-        description       : Short description of the dataset
-        max_brick_size    : Positive integer specifying the maximum brick size
-        overlap           : Positive integer specifying the overlap between bricks
+  R  Repack a BorgVR file with new brick, quantization or compression settings
+    \(executableName) R <input.data> <output.data> <brick> <overlap>
+    Rebuilds all LoDs from full resolution; retains metadata and source provenance.
+    Creates a new UUID and appends conversion history. Source and output must differ.
+    Requires temporary disk space for the decoded RAW volume (and quantized copy).
 
-Mode P — Read a PVM, PVM2, or PVM3 file
-    \(executableName) P <input_filename> <output_filename> <description> <max_brick_size> <overlap>
-        input_filename    : Path to the PVM file (plain, DDS v3d, or DDS v3e)
-        output_filename   : Name of the output file to create
-        description       : Short description of the dataset
-        max_brick_size    : Positive integer specifying the maximum brick size
-        overlap           : Positive integer specifying the overlap between bricks
+  C  Generate a synthetic volume
+    \(executableName) C <algorithm> <bytes> <channels> <x> <y> <z> \\
+      <output.data> <description> <brick> <overlap>
 
-Mode I — Read an ImageVis3D Mobile (IV3Dm) volume
-    \(executableName) I <input_filename> <output_filename> <description> <max_brick_size> <overlap>
-        input_filename    : Path to an .i3m file or a ZIP containing one .i3m volume
-        output_filename   : Name of the output file to create
-        description       : Short description of the dataset
-        max_brick_size    : Positive integer specifying the maximum brick size
-        overlap           : Positive integer specifying the overlap between bricks
+    L  Linear test data          F  Float Mandelbulb (Metal / CPU fallback)
+    D  Double CPU Mandelbulb     J  Quaternion sine Julia set
+    B  Mandelbox                G  Gyroid
+    P  3D Shepp-Logan phantom    T  Frequency chirp / brick-boundary test
+    U  Scalar UInt32 full-range test (requires bytes=4, channels=1)
 
-Mode Z — Read a local Zarr v3 / OME-Zarr 0.5 volume
-    \(executableName) Z <input_filename> <output_filename> <description> <max_brick_size> <overlap>
-        input_filename    : Path to an .ozx file, .zarr directory, or zarr.json
-        samples           : uint8/16/32, int8/16/32, float32/64; up to four channels; no time series
-        codecs            : raw bytes, Zstandard, gzip, CRC32C, indexed shards
+    Use one algorithm for all channels, or a list in channel order, e.g. F,J.
+    Bytes per component: 1, 2 or 4. Multi-channel generation supports 8/16 bits.
 
-Mode E — Export one BorgVR LoD as an uncompressed NRRD volume
-    \(executableName) E <input_filename> <output_filename> <lod>
-        input_filename    : Path to the BorgVR .data file
-        output_filename   : Name of the uncompressed inline .nrrd file to create
-        lod               : LoD to export; 0 is the full-resolution original
+PARAMETERS
+  <input>        Source file or directory, depending on the selected mode.
+  <description>  Short dataset description; quote text containing spaces.
+  <brick>        Positive brick size in voxels, e.g. 32 or 64.
+  <overlap>      Positive overlap in voxels; mode R also accepts 0.
+                 Twice the overlap must be smaller than the brick size.
+  <x> <y> <z>    Positive voxel counts; <channels> is 1 through 4.
 
-Mode C — Create a volume file using a specified algorithm
-    \(executableName) C <algorithm> <byte_depth> <component_count> <size_x> <size_y> <size_z> <output_filename> <description> <max_brick_size> <overlap>
-        algorithm         : One algorithm for every channel, or a comma-separated list
-                            with one algorithm per channel (for example F,J)
-                            The list order defines channel 0, channel 1, and so on
-                            L = linear
-                            F = Float Mandelbulb with automatic Metal acceleration
-                            D = Double CPU Mandelbulb
-                            J = Quaternion sine Julia set
-                            B = Mandelbox
-                            G = Gyroid
-                            P = 3D Shepp-Logan phantom
-                            T = Frequency chirp and brick-boundary test
-                            U = Scalar UInt32 full-range test volume
-        byte_depth        : Bytes per component (1, 2, or 4)
-        component_count   : Number of volume channels (1 through 4)
-        size_x            : Volume size along X (positive integer)
-        size_y            : Volume size along Y (positive integer)
-        size_z            : Volume size along Z (positive integer)
-        output_filename   : Name of the output volume file
-        description       : Short description of the dataset
-        max_brick_size    : Positive integer specifying the maximum brick size
-        overlap           : Positive integer specifying the overlap between bricks
+OPTIONS  (import, generation and repacking; not export mode E)
+  --quantize-8bit
+      Map each channel's observed value range to 0...255.
+      Without this option, repacking retains the source sample precision.
+  --no-lz4
+      Disable outer LZ4 compression (enabled by default).
+  --color-compression none|astc4x4|astc8x8
+      RGB/RGBA brick encoding (default: none). Independent of LZ4.
+      ASTC is lossy; the brick size must be a multiple of its footprint.
+  --source-info <ISO8601-date-time> <source-text>
+      Add provenance, e.g. 2026-11-01T10:30:00Z "Downloaded from archive".
+      Repeat to supply multiple entries. Include a time zone in each timestamp.
+
+  Size overrides for D/Q/N/P/I/Z/R only:
+    --size-x <meters>        Set total X extent if physical size is missing.
+    --force-size-x <meters>  Always override total X extent.
+    Use only one size option, once. Y/Z proportions are preserved.
+
+  Zarr: uint8/16/32, int8/16/32, float32/64; up to four channels, no time series.
+  Codecs: raw bytes, Zstandard, gzip, CRC32C and indexed shards.
+
+EXAMPLES
+  \(executableName) N scan.nrrd scan.data "CT scan" 32 2
+  \(executableName) R scan.data small.data 32 2 --quantize-8bit
+  \(executableName) E scan.data scan.nrrd 0
+  \(executableName) C F,J 2 2 512 512 512 fused.data "Fractals" 64 2
 """
+
+func failUsage(_ message: String) -> Never {
+  // Trusted help contains intentional line breaks, unlike sanitized log messages.
+  FileHandle.standardError.write(Data("Error: \(message)\n\n\(usageText)\n".utf8))
+  exit(1)
+}
 
 print(ConverterInfo.banner)
 
@@ -282,7 +274,7 @@ if CommandLine.arguments.count == 2 {
     case "--version", "-v":
       exit(0)
     case "--help", "-h":
-      print(usageErrorMessage.replacingOccurrences(of: "Invalid parameters.\n", with: ""))
+      print(usageText)
       exit(0)
     default:
       break
@@ -300,8 +292,7 @@ func parseArguments(_ args: [String]) -> (Mode, Any) {
   var result: (Mode, Any)
 
   guard args.count >= 2, let mode = Mode(rawValue: args[1]) else {
-    logger.error(usageErrorMessage)
-    exit(1)
+    failUsage("Missing or unknown conversion mode.")
   }
 
   result.0 = mode
@@ -309,8 +300,7 @@ func parseArguments(_ args: [String]) -> (Mode, Any) {
   switch mode {
     case .DicomConversion, .ImageSequenceConversion:
       guard args.count == (mode == .ImageSequenceConversion ? 10 : 7) else {
-        logger.error("Error: Invalid number of arguments for mode D.\n\(usageErrorMessage)")
-        exit(1)
+        failUsage("Invalid number of arguments for mode \(mode.rawValue).")
       }
       guard let maxBrickSize = Int(args[5]), maxBrickSize > 0,
             let overlap = Int(args[6]), overlap > 0,
@@ -339,8 +329,7 @@ func parseArguments(_ args: [String]) -> (Mode, Any) {
 
     case .QVISConversion, .NRRDConversion, .PVMConversion, .I3MConversion, .ZarrConversion:
       guard args.count == 7 else {
-        logger.error("Error: Invalid number of arguments for mode Q, N, P, I, or Z.\n\(usageErrorMessage)")
-        exit(1)
+        failUsage("Invalid number of arguments for mode \(mode.rawValue).")
       }
       guard let maxBrickSize = Int(args[5]), maxBrickSize > 0,
             let overlap = Int(args[6]), overlap > 0,
@@ -362,14 +351,23 @@ func parseArguments(_ args: [String]) -> (Mode, Any) {
     case .FlatVolumeExport:
       guard args.count == 5,
             let level = Int(args[4]), level >= 0 else {
-        logger.error("Error: Invalid arguments for mode E.\n\(usageErrorMessage)")
-        exit(1)
+        failUsage("Invalid arguments for mode E.")
       }
       result.1 = ExportModeParameters(
         inputFilename: args[2],
         outputFilename: args[3],
         level: level
       )
+
+    case .BorgVRRepacking:
+      guard args.count == 6,
+            let brickSize = Int(args[4]), brickSize > 0,
+            let overlap = Int(args[5]), overlap >= 0, overlap <= (brickSize - 1) / 2 else {
+        failUsage("Invalid arguments for mode R.")
+      }
+      result.1 = RepackModeParameters(inputFilename: args[2],
+        common: CommonParameters(outputFilename: args[3], datasetDescription: "",
+          maxBrickSize: brickSize, overlap: overlap))
 
     case .DemoDataCreation:
       guard args.count == 12,
@@ -384,8 +382,7 @@ func parseArguments(_ args: [String]) -> (Mode, Any) {
             let overlap = Int(args[11]), overlap > 0,
             overlap * 2 < maxBrickSize
       else {
-        logger.error("Error: Invalid arguments for mode C.\n\(usageErrorMessage)")
-        exit(1)
+        failUsage("Invalid arguments for mode C.")
       }
       guard datasetTypes.count == componentCount || datasetTypes.count == 1 else {
         logger.error("Error: Specify either one algorithm or exactly one algorithm per channel.")
@@ -431,7 +428,7 @@ func parseArguments(_ args: [String]) -> (Mode, Any) {
 }
 
 func parseImportOptions(_ arguments: [String]) -> (
-  arguments: [String], provenance: [BORGVRProvenanceEntry], sizeXMeters: Float?, forceSizeX: Bool, colorCompression: Int, useLZ4: Bool
+  arguments: [String], provenance: [BORGVRProvenanceEntry], sizeXMeters: Float?, forceSizeX: Bool, colorCompression: Int, useLZ4: Bool, quantizeTo8Bit: Bool
 ) {
   var args = arguments
   var colorCompression = 0
@@ -444,6 +441,12 @@ func parseImportOptions(_ arguments: [String]) -> (
   }
   let useLZ4 = !args.contains("--no-lz4")
   args.removeAll { $0 == "--no-lz4" }
+  let quantizeTo8Bit = args.contains("--quantize-8bit")
+  args.removeAll { $0 == "--quantize-8bit" }
+  if quantizeTo8Bit, args.count > 1, args[1] == "E" {
+    logger.error("--quantize-8bit is not applicable to export mode.")
+    exit(1)
+  }
   var provenance: [BORGVRProvenanceEntry] = []
   while let index = args.firstIndex(of: "--source-info") {
     guard index + 2 < args.count, !args[index + 2].trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
@@ -474,10 +477,10 @@ func parseImportOptions(_ arguments: [String]) -> (
     args.removeSubrange(index...index + 1)
   }
   if sizeXMeters != nil, args.count > 1, ["E", "C", "S"].contains(args[1]) {
-    logger.error("--size-x and --force-size-x apply to import modes D/Q/N/P/I/Z only.")
+    logger.error("--size-x and --force-size-x apply to import modes D/Q/N/P/I/Z/R only.")
     exit(1)
   }
-  return (args, provenance, sizeXMeters, forceSizeX, colorCompression, useLZ4)
+  return (args, provenance, sizeXMeters, forceSizeX, colorCompression, useLZ4, quantizeTo8Bit)
 }
 
 func convertRawVolume(inputFilename: String,
@@ -512,6 +515,7 @@ func convertRawVolume(inputFilename: String,
         overlap: overlap,
         useCompression: conversionUseLZ4,
         extensionStrategy: .fillZeroes,
+        quantizeTo8Bit: conversionQuantizeTo8Bit,
         colorCompression: conversionColorCompression
       ),
       provenance: provenance,
@@ -574,6 +578,21 @@ func convertQVISVolume(_ params: HeaderFileModeParameters) {
   convertFileVolume(params, formatName: "QVIS")
 }
 
+func repackBorgVRVolume(_ params: RepackModeParameters) {
+  do {
+    try BorgVRVolumeConversionService.convert(BorgVRVolumeConversionRequest(
+      source: .borgVR(URL(fileURLWithPath: params.inputFilename)),
+      destinationURL: URL(fileURLWithPath: params.common.outputFilename),
+      datasetDescription: "", metaDescription: "", settings: conversionSettings(for: params.common),
+      sizeXMeters: conversionSizeXMeters, forceSizeX: forceConversionSizeX,
+      provenance: conversionProvenance, toolIdentification: ConverterInfo.toolIdentification),
+      logger: logger)
+  } catch {
+    logger.error("Error: \(error.localizedDescription)")
+    exit(1)
+  }
+}
+
 private func convertFileVolume(_ params: HeaderFileModeParameters, formatName: String) {
   do {
     let sourceURL = URL(fileURLWithPath: params.inputFilename)
@@ -605,6 +624,7 @@ private func conversionSettings(
     overlap: parameters.overlap,
     useCompression: conversionUseLZ4,
     extensionStrategy: .fillZeroes,
+    quantizeTo8Bit: conversionQuantizeTo8Bit,
     colorCompression: conversionColorCompression
   )
 }
@@ -844,6 +864,7 @@ let conversionSizeXMeters = importOptions.sizeXMeters
 let forceConversionSizeX = importOptions.forceSizeX
 let conversionColorCompression = importOptions.colorCompression
 let conversionUseLZ4 = importOptions.useLZ4
+let conversionQuantizeTo8Bit = importOptions.quantizeTo8Bit
 let (mode, params) = parseArguments(importOptions.arguments)
 switch mode {
   case .DicomConversion, .ImageSequenceConversion:
@@ -870,6 +891,9 @@ switch mode {
   case .FlatVolumeExport:
     guard let params = params as? ExportModeParameters else { exit(1) }
     exportFlatVolume(params)
+  case .BorgVRRepacking:
+    guard let params = params as? RepackModeParameters else { exit(1) }
+    repackBorgVRVolume(params)
 }
 
 let total = timer.stop()

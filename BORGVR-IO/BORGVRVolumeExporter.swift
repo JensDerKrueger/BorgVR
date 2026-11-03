@@ -21,7 +21,7 @@
  */
 import Foundation
 
-/// Reconstructs one BorgVR LoD as a flat, uncompressed, inline NRRD volume.
+/// Reconstructs one BorgVR LoD as a flat, uncompressed NRRD or RAW volume.
 enum BORGVRVolumeExporter {
   struct Result {
     let outputURL: URL
@@ -64,7 +64,31 @@ enum BORGVRVolumeExporter {
     level: Int,
     logger: LoggerBase? = nil
   ) throws -> Result {
-    let outputURL = try normalizedOutputURL(requestedOutputURL)
+    try export(inputURL: inputURL, outputURL: requestedOutputURL, level: level,
+      raw: false, logger: logger, cancellationCheck: nil)
+  }
+
+  static func exportRaw(
+    inputURL: URL,
+    outputURL: URL,
+    level: Int = 0,
+    logger: LoggerBase? = nil,
+    cancellationCheck: (() throws -> Void)? = nil
+  ) throws -> Result {
+    try export(inputURL: inputURL, outputURL: outputURL, level: level,
+      raw: true, logger: logger, cancellationCheck: cancellationCheck)
+  }
+
+  private static func export(
+    inputURL: URL,
+    outputURL requestedOutputURL: URL,
+    level: Int,
+    raw: Bool,
+    logger: LoggerBase?,
+    cancellationCheck: (() throws -> Void)?
+  ) throws -> Result {
+    try cancellationCheck?()
+    let outputURL = raw ? requestedOutputURL : try normalizedOutputURL(requestedOutputURL)
     guard inputURL.standardizedFileURL != outputURL.standardizedFileURL else {
       throw Error.inputEqualsOutput
     }
@@ -102,7 +126,7 @@ enum BORGVRVolumeExporter {
           voxelSpacing.z.isFinite, voxelSpacing.z > 0 else {
       throw Error.invalidMetadata("voxel spacing must be finite and positive")
     }
-    let header = try nrrdHeader(
+    let header = raw ? Data() : try nrrdHeader(
       size: size,
       voxelSpacing: voxelSpacing,
       componentCount: metadata.componentCount,
@@ -131,7 +155,7 @@ enum BORGVRVolumeExporter {
     try? fileManager.removeItem(at: temporaryURL)
 
     logger?.info(
-      "Exporting LoD \(level) as \(size.x) x \(size.y) x \(size.z) uncompressed NRRD volume."
+      "Exporting LoD \(level) as \(size.x) x \(size.y) x \(size.z) uncompressed \(raw ? "RAW" : "NRRD") volume."
     )
 
     do {
@@ -160,6 +184,7 @@ enum BORGVRVolumeExporter {
             let destinationY = brickY * brickStride
             let copyHeight = min(brickStride, size.y - destinationY)
             for brickX in 0..<brickCount.x {
+              try cancellationCheck?()
               let destinationX = brickX * brickStride
               let copyWidth = min(brickStride, size.x - destinationX)
               try source.getBrick(
@@ -202,6 +227,7 @@ enum BORGVRVolumeExporter {
         throw error
       }
 
+      try cancellationCheck?()
       if fileManager.fileExists(atPath: outputURL.path) {
         try fileManager.removeItem(at: outputURL)
       }

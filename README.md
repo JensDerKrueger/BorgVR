@@ -14,7 +14,7 @@ The project is intended for interactive exploration of large volumetric datasets
 native Metal renderers, dataset conversion tools, local and remote dataset servers, SharePlay
 collaboration, and a WebGPU browser frontend served directly by the dataset server.
 
-The current development version is **3.5**. The SharePlay wire protocol is version **3.3**.
+The current development version is **3.6**. The SharePlay wire protocol is version **3.3**.
 
 ## What Is Included
 
@@ -347,7 +347,7 @@ shown, and the suite exits with a nonzero status if any test or build fails.
 ### Command-Line Volume Generator
 
 The `TerminalConverterApp` scheme converts DICOM, image sequences, QVIS, NRRD, PVM, IV3Dm, and Zarr input, exports any LoD of a
-BorgVR dataset as a flat volume, and can create reproducible synthetic volumes. Export uses one
+BorgVR dataset as a flat volume, repacks existing `.data` files, and can create reproducible synthetic volumes. Export uses one
 deliberately simple interchange representation: an uncompressed inline NRRD file.
 
 ```sh
@@ -357,6 +357,25 @@ TerminalConverterApp E <input.data> <output.nrrd> <lod>
 LoD `0` reconstructs the full-resolution source volume. Higher LoDs export the stored downsampled
 levels while preserving their corresponding physical voxel spacing. Importing and exporting works
 for one- and multi-component data with 1-, 2-, or 4-byte components.
+
+Mode `R` rebuilds an existing BorgVR file with a different brick size, overlap, quantization,
+or compression:
+
+```sh
+TerminalConverterApp R input.data repacked.data 32 2
+TerminalConverterApp R input.data small.data 32 2 --quantize-8bit
+TerminalConverterApp R color.data color-astc.data 64 2 --color-compression astc8x8 --no-lz4
+```
+
+Repacking reconstructs LoD `0` into a temporary RAW file and uses the existing conversion pipeline
+to rebuild all LoDs. Allow temporary disk space for the complete decoded volume and, when
+quantizing, its 8-bit intermediate. Descriptions, physical voxel spacing, channel semantics, meta
+text and existing provenance are retained. The result gets a new UUID and additional repacking
+and conversion history; derived brick ranges are recalculated. The source file is never replaced.
+Without options, sample precision is retained, LZ4 is enabled and ASTC is disabled. ASTC input is
+decoded first; encoding ASTC again is lossy. Overlap `0` is allowed in this mode.
+`--quantize-8bit` is also available for the other import/generation modes and uses each channel's
+observed range independently.
 
 Image sequence import selects a directory and interprets its images as Z slices in lexicographic
 filename order (use zero-padded numbers, e.g. `001.png`, `002.png`). PNG, JPEG, TIFF and other
@@ -433,7 +452,7 @@ The timestamp must be ISO-8601 with a time zone; fractional seconds are supporte
 entries are optional. Repeat `--source-info` to supply a longer history; entries retain their
 command-line order. The automatic conversion/tool/version entry is always appended in English.
 
-Import modes `D/Q/N/P/I/Z` accept `--size-x <meters>` as a fallback for sources without a
+Import/repacking modes `D/Q/N/P/I/Z/R` accept `--size-x <meters>` as a fallback for sources without a
 physical size. `--force-size-x <meters>` always sets the total X extent, overriding source
 metadata. Both scale all three voxel axes uniformly, preserving anisotropic proportions;
 Y/Z extents follow from the voxel dimensions and relative spacings. Use only one size option.

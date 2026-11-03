@@ -47,7 +47,7 @@ async function main() {
     const history = readHistory(file);
     assert.deepEqual(history[0], { time: 1793529045123, text: "Downloaded from https://example.org/scan" });
     assert.equal(history.find(entry => entry.text.startsWith("Import file:")).text, "Import file: tiny.nrrd");
-    assert.match(history.at(-1).text, /^converted by BorgVR Converter 3\.5 /);
+    assert.match(history.at(-1).text, /^converted by BorgVR Converter 3\.6 /);
     assert.ok(history.at(-1).time >= started && history.at(-1).time <= Date.now());
     assert.ok(readHistory(run([], "no-source.data")).at(-1).text.startsWith("converted by "));
     const multiple = readHistory(run([
@@ -60,7 +60,7 @@ async function main() {
       { time: Date.parse("2026-10-02T11:00:00+02:00"), text: "Anonymized" },
       { time: Date.parse("2026-10-03T12:30:45.123Z"), text: "Downloaded from archive" }
     ]);
-    assert.match(multiple.at(-1).text, /^converted by BorgVR Converter 3\.5 /);
+    assert.match(multiple.at(-1).text, /^converted by BorgVR Converter 3\.6 /);
     run(["--source-info", "invalid", "source"], "bad-date.data", false);
     run(["--source-info", "2026-11-01T12:00:00Z", ""], "empty-text.data", false);
     run(["--source-info"], "missing.data", false);
@@ -79,12 +79,12 @@ async function main() {
       assert.equal(result.status, 0, result.stdout + result.stderr);
       const entries = readHistory(output);
       assert.equal(entries[0].text, "Synthetic reference dataset");
-      assert.match(entries.at(-1).text, /^converted by BorgVR Converter 3\.5 /);
+      assert.match(entries.at(-1).text, /^converted by BorgVR Converter 3\.6 /);
       const generated = entries.filter(entry => entry.text.startsWith("Generated channel "));
       assert.equal(generated.length, channels);
       generated.forEach((entry, channel) => {
         assert.ok(entry.time >= started && entry.time <= Date.now());
-        assert.match(entry.text, new RegExp(`^Generated channel ${channel} using BorgVR Converter 3\\.5;`));
+        assert.match(entry.text, new RegExp(`^Generated channel ${channel} using BorgVR Converter 3\\.6;`));
         assert.ok(entry.text.includes(`grid=4x5x6; output=UInt${bytes * 8}; backend=`));
       });
       const reference = process.env.BORGVR_REFERENCE_CONVERTER;

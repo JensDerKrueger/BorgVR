@@ -103,6 +103,7 @@ public enum BorgVRVolumeResamplingFilter: String, Sendable {
 
 public enum BorgVRVolumeConversionSource: Sendable {
   case file(URL)
+  case borgVR(URL)
   case dicomDirectory(URL)
   case imageSequence(URL)
   case registeredDICOMPair(
@@ -482,6 +483,12 @@ public enum BorgVRVolumeConversionService {
     }
     try cancellationToken?.checkCancellation()
 
+    if case .borgVR(let sourceURL) = request.source,
+       sourceURL.standardizedFileURL.resolvingSymlinksInPath() ==
+         request.destinationURL.standardizedFileURL.resolvingSymlinksInPath() {
+      throw BORGVRError.other("The repacked file must not replace its source dataset. Choose a different output path.")
+    }
+
     let fileManager = FileManager.default
     let outputDirectory = request.destinationURL.deletingLastPathComponent()
     try fileManager.createDirectory(
@@ -495,6 +502,9 @@ public enum BorgVRVolumeConversionService {
     defer { try? fileManager.removeItem(at: stagedURL) }
 
     switch request.source {
+      case .borgVR(let sourceURL):
+        try convertBorgVR(sourceURL, request: request, stagedURL: stagedURL,
+          logger: logger, cancellationToken: cancellationToken)
       case .imageSequence(let directory):
         guard let extent = request.physicalSizeMeters else {
           throw BorgVRVolumeConversionError.invalidIntermediateVolumeSize
@@ -547,6 +557,43 @@ public enum BorgVRVolumeConversionService {
 
     try cancellationToken?.checkCancellation()
     try installStagedOutput(stagedURL, at: request.destinationURL)
+  }
+
+  private static func convertBorgVR(
+    _ sourceURL: URL,
+    request: BorgVRVolumeConversionRequest,
+    stagedURL: URL,
+    logger: LoggerBase?,
+    cancellationToken: BorgVRVolumeConversionCancellationToken?
+  ) throws {
+    let access = sourceURL.startAccessingSecurityScopedResource()
+    defer { if access { sourceURL.stopAccessingSecurityScopedResource() } }
+    let metadata = try BORGVRMetaData(url: sourceURL)
+    let rawURL = FileManager.default.temporaryDirectory
+      .appendingPathComponent("borgvr-repack-\(UUID().uuidString).raw")
+    defer { try? FileManager.default.removeItem(at: rawURL) }
+    let raw = try BORGVRVolumeExporter.exportRaw(inputURL: sourceURL, outputURL: rawURL,
+      logger: logger, cancellationCheck: { try cancellationToken?.checkCancellation() })
+    let effectiveRequest = BorgVRVolumeConversionRequest(
+      source: request.source,
+      destinationURL: request.destinationURL,
+      datasetDescription: metadata.datasetDescription,
+      metaDescription: metadata.metaDescription,
+      settings: request.settings,
+      physicalSizeMeters: request.physicalSizeMeters,
+      sizeXMeters: request.sizeXMeters,
+      forceSizeX: request.forceSizeX,
+      provenance: metadata.provenance + request.provenance + [BORGVRProvenanceEntry(
+        "Repacked BorgVR dataset: \(sourceURL.lastPathComponent); source dataset: \(metadata.uniqueID)")],
+      meta: metadata.meta,
+      toolIdentification: request.toolIdentification
+    )
+    try convertRaw(BorgVRRawVolumeSource(url: rawURL, offset: 0, size: raw.size,
+      bytesPerComponent: raw.bytesPerComponent, componentCount: raw.componentCount,
+      voxelSpacing: raw.voxelSpacing,
+      channelInterpretation: metadata.channelInterpretation.colorInterpretation),
+      request: effectiveRequest, stagedURL: stagedURL, logger: logger,
+      cancellationToken: cancellationToken)
   }
 
   private static func convertFile(
@@ -786,7 +833,7 @@ public enum BorgVRVolumeConversionService {
       case .imageSequence(let url):
         provenance.append(BORGVRProvenanceEntry("Import image sequence: \(url.lastPathComponent); filename order; physical size \(request.physicalSizeMeters!) m"))
       case .file(let url): provenance.append(BORGVRProvenanceEntry("Import file: \(url.lastPathComponent)"))
-      case .dicomDirectory, .registeredDICOMPair: break // History is supplied by the decoded/fused volume.
+      case .dicomDirectory, .registeredDICOMPair, .borgVR: break // History is supplied by the decoded/fused volume.
       case .raw(let source): provenance.append(BORGVRProvenanceEntry("Import RAW: \(source.url.lastPathComponent)"))
     }
     var spacing = source.voxelSpacing
