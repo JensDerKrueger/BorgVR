@@ -15,7 +15,8 @@ struct ContentView: View {
       case .waitingForSharePlay, .resolving:
         WaitingView()
       case .opening(let dataset, _):
-        DatasetBufferingView(datasetDescription: dataset.description)
+        DatasetBufferingView(datasetDescription: dataset.description,
+          phase: runtimeAppModel.datasetBufferingPhase)
           .frame(maxWidth: .infinity, maxHeight: .infinity)
       case .rendering:
         RenderView()

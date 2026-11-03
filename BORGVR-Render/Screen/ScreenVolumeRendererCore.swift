@@ -9,11 +9,14 @@ import simd
 enum ScreenDatasetUpdate {
   case unchanged
   case cleared
-  case loaded(String, BORGVRMetaData)
+  case loaded(String, BORGVRMetaData, UUID)
   case failed(String, Error)
 }
 
 struct ScreenVolumeEncodedFrame {
+  let datasetKey: String
+  let requestID: UUID
+  let renderedVolume: Bool
   let commandBuffer: MTLCommandBuffer
   let drawable: CAMetalDrawable
   let interactionDepthTexture: MTLTexture
@@ -53,6 +56,7 @@ final class ScreenVolumeRendererCore {
   private var hashTable: GPUHashtable?
   private var volumeScale = matrix_identity_float4x4
   private(set) var loadedDatasetKey = ""
+  private var loadedDatasetRequestID: UUID?
   private var updatingDataset = false
   private var detached = false
   var isAttached: Bool { !detached }
@@ -195,13 +199,14 @@ final class ScreenVolumeRendererCore {
           return .cleared
       }
       let key = appModel.activeDatasetRenderKey
-      guard key != loadedDatasetKey else { return .unchanged }
+      guard key != loadedDatasetKey || requestID != loadedDatasetRequestID else { return .unchanged }
       clearDatasetResources()
       do {
         let metadata = try await loadDataset(for: view, requestID: requestID)
         guard isCurrentDatasetRequest(requestID) else { continue }
         loadedDatasetKey = key
-        return .loaded(key, metadata)
+        loadedDatasetRequestID = requestID
+        return .loaded(key, metadata, requestID)
       } catch {
         // A close or replacement while buffering must not publish the obsolete result.
         let current = isCurrentDatasetRequest(requestID)
@@ -244,7 +249,8 @@ final class ScreenVolumeRendererCore {
   }
 
   func encodeFrame(in view: MTKView) -> ScreenVolumeEncodedFrame? {
-    guard !detached, let activeDataset = dataset,
+    guard let requestID = loadedDatasetRequestID, isCurrentDatasetRequest(requestID),
+          let activeDataset = dataset,
           let commandQueue,
           let cubeBuffer,
           let volumeAtlas,
@@ -262,6 +268,7 @@ final class ScreenVolumeRendererCore {
           let device = view.device else {
       return nil
     }
+    appModel.setDatasetBufferingPhase(.renderingFirstFrame, requestID: requestID)
 
     if view.drawableSize.height > 0 {
       renderingParameters.updateViewportAspectRatio(
@@ -364,7 +371,8 @@ final class ScreenVolumeRendererCore {
     hashTable.bind(to: renderEncoder, index: FragmentBufferIndex.hashTable.rawValue)
     opaqueGeometryRenderer.bindDepth(markerTargets.depth, to: renderEncoder)
 
-    if volumeAtlas.isContentReady {
+    let renderedVolume = volumeAtlas.isContentReady
+    if renderedVolume {
       renderEncoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: vertexCount)
     }
     opaqueGeometryRenderer.composite(
@@ -379,6 +387,9 @@ final class ScreenVolumeRendererCore {
       measurementsVisible: frameState.measurementsVisible
     )
     return ScreenVolumeEncodedFrame(
+      datasetKey: loadedDatasetKey,
+      requestID: requestID,
+      renderedVolume: renderedVolume,
       commandBuffer: commandBuffer,
       drawable: drawable,
       interactionDepthTexture: interactionDepthTexture,
@@ -387,7 +398,8 @@ final class ScreenVolumeRendererCore {
   }
 
   func completeFrame(_ frame: ScreenVolumeEncodedFrame) -> Int {
-    guard !detached else { return 0 }
+    guard isCurrentDatasetRequest(frame.requestID),
+          loadedDatasetRequestID == frame.requestID else { return 0 }
     interactionDepthSnapshot = VolumeInteractionDepthSnapshot(
       texture: frame.interactionDepthTexture,
       textureToClip: [frame.textureToClip]
@@ -436,6 +448,7 @@ final class ScreenVolumeRendererCore {
     volumeAtlas = nil
     hashTable = nil
     loadedDatasetKey = ""
+    loadedDatasetRequestID = nil
     atlasPurgeRequested = false
     interactionDepthSnapshot = nil
     frozenStrokeInteractionDepthSnapshot = nil

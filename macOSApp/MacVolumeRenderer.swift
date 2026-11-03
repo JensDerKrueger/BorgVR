@@ -165,16 +165,15 @@ final class MacVolumeRenderer: NSObject, MTKViewDelegate {
         cancelAllScreenshots(error: AppModelError.rendererUnavailable)
         appModel.markRenderedDataset(key: "")
         resetRenderTracking()
-      case .loaded(let key, let metadata):
+      case .loaded(let key, let metadata, let requestID):
         cancelAllScreenshots(error: BorgVRMCPCommandError.screenshotUnavailable)
         resetRenderTracking()
-        appModel.markRenderedDataset(key: key, metadata: metadata)
+        appModel.prepareDatasetRenderer(key: key, metadata: metadata, requestID: requestID)
         appModel.loadAutomaticallyManagedDatasetState(
           appSettings: appSettings,
           metadata: metadata,
           renderingParameters: renderingParameters
         )
-        sharePlay.datasetRendererDidLoad()
       case .failed(let key, _):
         cancelAllScreenshots(error: AppModelError.rendererUnavailable)
         appModel.markRenderedDatasetFailed(key: key)
@@ -207,9 +206,13 @@ final class MacVolumeRenderer: NSObject, MTKViewDelegate {
     frame.commandBuffer.addCompletedHandler { [weak self] commandBuffer in
       Task { @MainActor in
         guard let self, self.core.isAttached else { return }
+        if commandBuffer.status == .completed, frame.renderedVolume,
+           self.appModel.markRenderedDataset(key: frame.datasetKey, requestID: frame.requestID) {
+          self.sharePlay.datasetRendererDidLoad()
+        }
         let missingBrickCount = self.core.completeFrame(frame)
         self.appModel.recordCompletedRenderFrame(
-          datasetKey: self.core.loadedDatasetKey,
+          datasetKey: frame.datasetKey,
           missingBrickCount: missingBrickCount
         )
         self.finishScreenshotCapture(screenshotCapture)

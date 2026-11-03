@@ -1122,6 +1122,11 @@
 "Show dataset bounding box" = "Show dataset bounding box";
 "Dataset bounding box" = "Dataset bounding box";
 "Buffering..." = "Buffering...";
+"Preparing renderer..." = "Preparing renderer...";
+"Rendering first frame..." = "Rendering first frame...";
+"Loading the initial volume data and preparing the atlas." = "Loading the initial volume data and preparing the atlas.";
+"Preparing rendering resources and shaders." = "Preparing rendering resources and shaders.";
+"The view will open as soon as the first volume frame is ready." = "The view will open as soon as the first volume frame is ready.";
 "Performance view" = "Performance view";
 "FPS / ms" = "FPS / ms";
 "Paging / Atlas" = "Paging / Atlas";

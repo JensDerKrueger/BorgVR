@@ -1122,6 +1122,11 @@
 "Show dataset bounding box" = "Mostrar el cuadro delimitador del conjunto de datos";
 "Dataset bounding box" = "Cuadro delimitador del conjunto de datos";
 "Buffering..." = "Almacenando en búfer...";
+"Preparing renderer..." = "Preparando el renderizador...";
+"Rendering first frame..." = "Renderizando la primera imagen...";
+"Loading the initial volume data and preparing the atlas." = "Cargando los datos iniciales del volumen y preparando el atlas.";
+"Preparing rendering resources and shaders." = "Preparando los recursos de renderizado y los shaders.";
+"The view will open as soon as the first volume frame is ready." = "La vista aparecerá en cuanto esté lista la primera imagen del volumen.";
 "Performance view" = "Vista de rendimiento";
 "FPS / ms" = "FPS / ms";
 "Paging / Atlas" = "Carga / Atlas";

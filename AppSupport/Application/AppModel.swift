@@ -160,6 +160,7 @@ final class AppModel: ObservableObject {
     }
   }
   @Published private(set) var activeDatasetMetadata: BORGVRMetaData?
+  @Published private(set) var datasetBufferingPhase = DatasetBufferingPhase.loadingData
   @Published private(set) var isDatasetStreaming = false
   private weak var streamingDataSource: BORGVRRemoteData?
   @Published var sharePlayDatasetSource: DatasetOrigin?
@@ -301,6 +302,7 @@ final class AppModel: ObservableObject {
     objectsHidden = false
     measurementsHidden = false
     resetRenderedDatasetState()
+    datasetBufferingPhase = .loadingData
     datasetSessionState = .opening(dataset: dataset, requestID: UUID())
   }
 
@@ -905,17 +907,33 @@ final class AppModel: ObservableObject {
     !activeDatasetRenderKey.isEmpty && failedRenderedDatasetKey == activeDatasetRenderKey
   }
 
-  func markRenderedDataset(key: String, metadata: BORGVRMetaData? = nil) {
+  func prepareDatasetRenderer(key: String, metadata: BORGVRMetaData, requestID: UUID) {
+    guard case .opening(let dataset, let currentRequestID) = datasetSessionState,
+          currentRequestID == requestID, datasetRenderKey(for: dataset) == key else { return }
+    activeDatasetMetadata = metadata
+    datasetBufferingPhase = .preparingRenderer
+  }
+
+  func setDatasetBufferingPhase(_ phase: DatasetBufferingPhase, requestID: UUID) {
+    guard case .opening(_, let currentRequestID) = datasetSessionState,
+          currentRequestID == requestID, datasetBufferingPhase != phase else { return }
+    datasetBufferingPhase = phase
+  }
+
+  @discardableResult
+  func markRenderedDataset(key: String, requestID: UUID? = nil) -> Bool {
+    guard !key.isEmpty else {
+      renderedDatasetKey = ""
+      failedRenderedDatasetKey = ""
+      activeDatasetMetadata = nil
+      return false
+    }
+    guard case .opening(let dataset, let currentRequestID) = datasetSessionState,
+          currentRequestID == requestID, datasetRenderKey(for: dataset) == key else { return false }
     renderedDatasetKey = key
     failedRenderedDatasetKey = ""
-    guard !key.isEmpty else {
-      activeDatasetMetadata = nil
-      return
-    }
-    guard case .opening(let dataset, let requestID) = datasetSessionState,
-          datasetRenderKey(for: dataset) == key else { return }
-    activeDatasetMetadata = metadata
-    datasetSessionState = .rendering(dataset: dataset, requestID: requestID)
+    datasetSessionState = .rendering(dataset: dataset, requestID: currentRequestID)
+    return true
   }
 
   func markRenderedDatasetFailed(key: String) {

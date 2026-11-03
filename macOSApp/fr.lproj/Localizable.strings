@@ -1122,6 +1122,11 @@
 "Show dataset bounding box" = "Afficher la boîte englobante du jeu de données";
 "Dataset bounding box" = "Boîte englobante du jeu de données";
 "Buffering..." = "Mise en mémoire tampon...";
+"Preparing renderer..." = "Préparation du rendu...";
+"Rendering first frame..." = "Rendu de la première image...";
+"Loading the initial volume data and preparing the atlas." = "Chargement des premières données du volume et préparation de l’atlas.";
+"Preparing rendering resources and shaders." = "Préparation des ressources de rendu et des shaders.";
+"The view will open as soon as the first volume frame is ready." = "La vue apparaîtra dès que la première image du volume sera prête.";
 "Performance view" = "Vue des performances";
 "FPS / ms" = "FPS / ms";
 "Paging / Atlas" = "Chargement / Atlas";

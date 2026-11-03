@@ -374,6 +374,7 @@ class RuntimeAppModel {
       )
     }
   }
+  private(set) var datasetBufferingPhase: DatasetBufferingPhase = .loadingData
 
   var activeDataset: DatasetEntry? {
     switch datasetSessionState {
@@ -466,6 +467,7 @@ class RuntimeAppModel {
     }
     groupSessionHost = asGroupSessionHost
     sharePlayDatasetSource = nil
+    datasetBufferingPhase = .loadingData
     datasetSessionState = .opening(dataset: dataset, requestID: UUID())
   }
 
@@ -483,9 +485,15 @@ class RuntimeAppModel {
     datasetSessionState = .resolving(uniqueID: uniqueID, description: description)
   }
 
-  func markDatasetRendererReady(uniqueID: String) {
-    guard case .opening(let dataset, let requestID) = datasetSessionState,
-          dataset.uniqueId == uniqueID else { return }
+  func setDatasetBufferingPhase(_ phase: DatasetBufferingPhase, requestID: UUID) {
+    guard case .opening(_, let currentRequestID) = datasetSessionState,
+          currentRequestID == requestID else { return }
+    datasetBufferingPhase = phase
+  }
+
+  func markDatasetRendererReady(uniqueID: String, requestID: UUID) {
+    guard case .opening(let dataset, let currentRequestID) = datasetSessionState,
+          currentRequestID == requestID, dataset.uniqueId == uniqueID else { return }
     datasetSessionState = .rendering(dataset: dataset, requestID: requestID)
   }
 

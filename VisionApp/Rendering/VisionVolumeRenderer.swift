@@ -132,6 +132,9 @@ final actor VisionVolumeRenderer {
 
   /// The BorgVR dataset.
   var borgData: BORGVRDatasetProtocol
+  private let datasetID: String
+  private let datasetRequestID: UUID
+  private var reportedFirstVolumeFrame = false
   /// The volume atlas used for managing brick data.
   var volumeAtlas: VolumeAtlas
   /// A matrix representing the scale applied to the volume.
@@ -250,6 +253,8 @@ final actor VisionVolumeRenderer {
        session: VisionBorgVRSession,
        timer: GPUFrameTimer,
        dataset: BORGVRDatasetProtocol,
+       datasetID: String,
+       requestID: UUID,
        transferFunctionPanelInteractionState: TransferFunctionPanelInteractionState,
        immersiveInteraction: ImmersiveInteraction,
        logger: LoggerBase? = nil) throws {
@@ -319,6 +324,8 @@ final actor VisionVolumeRenderer {
     )
 
     self.borgData = dataset
+    self.datasetID = datasetID
+    self.datasetRequestID = requestID
 
     let atlasSizeMB = StoredAppModel.int("atlasSizeMB")
 
@@ -2109,7 +2116,8 @@ extension VisionVolumeRenderer {
       index: TextureIndex.markerDepth.rawValue
     )
 
-    if volumeAtlas.isContentReady {
+    let volumeWasDrawn = volumeAtlas.isContentReady && vertexCount > 0
+    if volumeWasDrawn {
       renderEncoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: self.vertexCount)
     }
 
@@ -2194,6 +2202,17 @@ extension VisionVolumeRenderer {
         logger?.error("Encoder info: \(String(describing: info))")
       }
       return false
+    }
+
+    if commandBuffer.status == .completed, volumeWasDrawn, !reportedFirstVolumeFrame,
+       !Task.isCancelled, layerRenderer.state == .running {
+      reportedFirstVolumeFrame = true
+      let runtimeAppModel = self.runtimeAppModel
+      let datasetID = self.datasetID
+      let requestID = datasetRequestID
+      Task { @MainActor in
+        runtimeAppModel.markDatasetRendererReady(uniqueID: datasetID, requestID: requestID)
+      }
     }
 
     timer.recordCompletedFrame(commandBuffer)
@@ -2355,22 +2374,29 @@ extension VisionVolumeRenderer {
                               immersiveInteraction: ImmersiveInteraction,
                               logger: LoggerBase? = nil) {
     let runtimeAppModel = session.runtimeState
+    guard case .opening(let activeDataset, let requestID) = runtimeAppModel.datasetSessionState,
+          activeDataset.uniqueId == datasetID else { return }
     runtimeAppModel.renderTask?.cancel()
     runtimeAppModel.renderTask = Task(executorPreference: VisionVolumeRendererTaskExecutor.shared) {
       do {
+        guard !Task.isCancelled else { return }
         let renderer = try VisionVolumeRenderer(
           layerRenderer,
           session: session,
           timer: timer,
           dataset: dataset,
+          datasetID: datasetID,
+          requestID: requestID,
           transferFunctionPanelInteractionState: transferFunctionPanelInteractionState,
           immersiveInteraction: immersiveInteraction,
           logger: logger
         )
 
+        guard !Task.isCancelled else { return }
+        await runtimeAppModel.setDatasetBufferingPhase(.preparingRenderer, requestID: requestID)
         await renderer.initRenderLoop()
         guard !Task.isCancelled else { return }
-        await runtimeAppModel.markDatasetRendererReady(uniqueID: datasetID)
+        await runtimeAppModel.setDatasetBufferingPhase(.renderingFirstFrame, requestID: requestID)
         await renderer.renderLoop()
       } catch {
         logger?.error("Failed to start render loop: \(error)")

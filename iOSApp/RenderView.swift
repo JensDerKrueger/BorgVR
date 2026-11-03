@@ -289,7 +289,7 @@ struct RenderView: View {
     .overlay {
       if case .opening(let dataset, _) = appModel.datasetSessionState,
          !appModel.rendererFailedActiveDataset {
-        DatasetBufferingView(datasetDescription: dataset.description)
+        DatasetBufferingView(datasetDescription: dataset.description, phase: appModel.datasetBufferingPhase)
           .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
           .padding()
           .allowsHitTesting(false)
