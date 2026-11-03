@@ -36,6 +36,21 @@ struct DockingControllerTests {
       save: .button("save", icon: "square.and.arrow.down", text: "Save", action: {}),
       additional: [.button("extra", icon: "info.circle", text: "Info", action: {})]), owner: owner)
     precondition(panel.title == "Test dataset")
+    precondition(panel.configuration.titleFormat == PanelTitleFormat())
+    precondition(panel.titleColor == DockablePanelID.lightingEditor.tint,
+      "Panel color must remain the default when there is no format override")
+    let readyConfiguration = panel.configuration
+    var streamingConfiguration = readyConfiguration
+    streamingConfiguration.titleFormat = PanelTitleFormat(color: .red, isItalic: true, isBold: false)
+    precondition(streamingConfiguration != readyConfiguration,
+      "Streaming changes must refresh the title even when its text stays unchanged")
+    panel.register(streamingConfiguration, owner: owner)
+    precondition(panel.configuration.titleFormat.isItalic && !panel.configuration.titleFormat.isBold &&
+      panel.titleColor == .red && panel.title == "Test dataset")
+    panel.register(readyConfiguration, owner: owner)
+    precondition(panel.configuration.titleFormat == PanelTitleFormat() &&
+      panel.titleColor == DockablePanelID.lightingEditor.tint,
+      "Completion must restore the normal title appearance")
     precondition(PanelAction.groups(panel.configuration.actions).map(\.count) == [1, 2, 1])
     panel.configuration.actions.first?.perform()
     precondition(clicked == 1)

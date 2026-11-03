@@ -21,6 +21,11 @@ struct NativePanelToolbar: NSViewRepresentable {
     private var title = ""
     private let titleIdentifier = NSToolbarItem.Identifier("window.title")
     private var titleColor = NSColor.labelColor
+    private var titleFormat = PanelTitleFormat()
+    private var titleFont: NSFont {
+      let font = NSFont.systemFont(ofSize: 12, weight: titleFormat.isBold ? .semibold : .regular)
+      return titleFormat.isItalic ? NSFontManager.shared.convert(font, toHaveTrait: .italicFontMask) : font
+    }
     private var updateScheduled = false
 
     init(panel: DockablePanelID) {
@@ -41,13 +46,8 @@ struct NativePanelToolbar: NSViewRepresentable {
 
     func update(_ model: PanelWindow, dock: @escaping () -> Void) {
       title = model.title
-      switch model.panel {
-        case .renderControls, .lightingEditor: titleColor = .labelColor
-        case .transferFunctionEditor, .isoEditor: titleColor = .systemPurple
-        case .markerEditor: titleColor = .systemOrange
-        case .measurementEditor: titleColor = .systemGreen
-        case .volumeBrushEditor: titleColor = .systemRed
-      }
+      titleFormat = model.configuration.titleFormat
+      titleColor = NSColor(model.titleColor)
       actions.removeAll(keepingCapacity: true)
       identifiers.removeAll(keepingCapacity: true)
       func append(_ items: [PanelAction], prefix: String) {
@@ -93,7 +93,7 @@ struct NativePanelToolbar: NSViewRepresentable {
       let item = NSToolbarItem(itemIdentifier: identifier)
       if identifier == titleIdentifier {
         let label = NSTextField(labelWithString: title)
-        label.font = .systemFont(ofSize: 12, weight: .semibold)
+        label.font = titleFont
         label.textColor = titleColor
         label.lineBreakMode = .byTruncatingTail
         label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
@@ -135,6 +135,7 @@ struct NativePanelToolbar: NSViewRepresentable {
       if item.itemIdentifier == titleIdentifier {
         (item.view as? NSTextField)?.stringValue = title
         (item.view as? NSTextField)?.textColor = titleColor
+        (item.view as? NSTextField)?.font = titleFont
         item.toolTip = title
         return
       }

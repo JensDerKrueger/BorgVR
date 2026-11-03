@@ -3,6 +3,7 @@ import SwiftUI
 
 
 struct RenderControlsPanel: View {
+  @Environment(\.colorScheme) private var colorScheme
   @EnvironmentObject private var appModel: AppModel
   @EnvironmentObject private var renderingParameters: RenderingParameters
   @EnvironmentObject private var appSettings: AppSettings
@@ -456,6 +457,10 @@ struct RenderControlsPanel: View {
       openWindow(id: "PerformanceGraphView")
     })
     return .standard(title: appModel.activeDataset?.description ?? "BorgVR",
+      titleFormat: .init(
+        color: appModel.isDatasetStreaming
+          ? ScreenControlAppearance.datasetTitleColor(isStreaming: true, colorScheme: colorScheme) : nil,
+        isItalic: appModel.isDatasetStreaming),
       reset: .button("reset", icon: "arrow.counterclockwise", text: String(localized: "Reset"),
         shortcutHint: MacRenderShortcut.reset.displayName) {
         try? session.perform(.reset(.all), source: .userInterface)

@@ -238,8 +238,9 @@ private struct DockablePanelTitleBar: View {
   private var title: some View {
     HStack {
       Text(window.title)
-        .font(.headline)
-        .foregroundStyle(panel.tint)
+        .font(.headline.weight(window.configuration.titleFormat.isBold ? .semibold : .regular))
+        .italic(window.configuration.titleFormat.isItalic)
+        .foregroundStyle(window.titleColor)
         .lineLimit(1)
         .help(window.title)
       Spacer(minLength: 12)

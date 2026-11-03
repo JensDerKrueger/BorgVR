@@ -42,6 +42,40 @@ require_pattern 'BorgVRRenderSnapshotStore' AppSupport/Application/BorgVRSession
 require_pattern 'volumeBrush\.close\(\)' AppSupport/Application/AppModel.swift
 require_pattern 'BorgVRFrameSnapshot' VisionApp/VisionBorgVRSession.swift
 require_pattern 'revision: evaluationState\.revision &\+ 1' BORGVR-Render/VolumeAtlas/AsyncEmptinessUpdater.swift
+require_pattern 'isItalic: appModel.isDatasetStreaming' macOSApp/RenderControlsPanel.swift
+require_pattern 'window.configuration.titleFormat.isItalic' macOSApp/DockablePanelViews.swift
+require_pattern 'titleFormat = model.configuration.titleFormat' macOSApp/NativePanelToolbar.swift
+forbid_pattern 'isDatasetStreaming|titleIsLoading' macOSApp/PanelWindow.swift
+forbid_pattern 'isDatasetStreaming|titleIsLoading' macOSApp/NativePanelToolbar.swift
+
+# In-place TF painting must publish a snapshot without a channel-selection change.
+for file in iOSApp/RenderView.swift macOSApp/RenderView.swift; do
+  require_pattern 'session.commitExternalMutation\(source: \.userInterface, domain: \.transferFunction\)' "$file"
+done
+
+# Screen projection is local, persistent, recordable and available through automation.
+require_file AppSupport/Rendering/VolumeBoundingBoxRenderer.swift
+for file in AppSupport/Rendering/VolumeRendererPipeline.swift VisionApp/Rendering/VisionOpaqueGeometryRenderer.swift; do
+  require_pattern 'boundingBoxRenderer.render' "$file"
+done
+for file in macOSApp/SettingsView.swift iOSApp/SettingsView.swift VisionApp/SettingsView.swift macOSApp/macOSApp.swift; do
+  require_pattern 'session.perform\(\.setBoundingBox' "$file"
+done
+require_pattern 'case "set_bounding_box"' BORGVR-Services/BorgVRMCPServer.swift
+require_pattern '^showboundingbox\(' Scripts/borgvr.gsccommands
+require_pattern 'case setScreenProjection' AppSupport/Application/BorgVRSession.swift
+for file in macOSApp/SettingsView.swift iOSApp/SettingsView.swift macOSApp/macOSApp.swift; do
+  require_pattern 'session.perform\(\.setScreenProjection' "$file"
+done
+for command in setfieldofview setparallelprojection; do
+  require_pattern "$command" AppSupport/Application/BorgVRSession.swift
+  require_pattern "$command" macOSApp/BorgVRScriptRunner.swift
+  require_pattern "^$command\\(" Scripts/borgvr.gsccommands
+  require_pattern "$command" html/gsc.html
+done
+require_pattern 'case "set_screen_projection"' BORGVR-Services/BorgVRMCPServer.swift
+require_pattern 'tool\("set_screen_projection"' BORGVR-Services/BorgVRMCPServer.swift
+require_pattern 'session.perform\(\.setScreenProjection' AppSupport/Automation/BorgVRScreenCommandService.swift
 
 # New render controls must stay executable, queryable, and recordable, not raw UI mutations.
 for command in showbricks showresidentbricks showemptybricks showmissingbricks \

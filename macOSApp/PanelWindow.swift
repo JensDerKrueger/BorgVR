@@ -50,14 +50,21 @@ struct PanelAction: Identifiable, Equatable {
   }
 }
 
+struct PanelTitleFormat: Equatable {
+  var color: Color?
+  var isItalic = false
+  var isBold = true
+}
+
 struct PanelWindowConfiguration: Equatable {
   var title: String?
+  var titleFormat = PanelTitleFormat()
   var leading: [PanelAction] = []
   var actions: [PanelAction] = []
 
-  static func standard(title: String? = nil, reset: PanelAction, load: PanelAction,
+  static func standard(title: String? = nil, titleFormat: PanelTitleFormat = .init(), reset: PanelAction, load: PanelAction,
                        save: PanelAction, additional: [PanelAction] = [], leading: [PanelAction] = []) -> Self {
-    Self(title: title, leading: leading,
+    Self(title: title, titleFormat: titleFormat, leading: leading,
       actions: [reset, .spacer("files"), load, save] + (additional.isEmpty ? [] : [.spacer("additional")] + additional))
   }
 }
@@ -71,6 +78,7 @@ final class PanelWindow: ObservableObject {
   init(panel: DockablePanelID) { self.panel = panel }
 
   var title: String { configuration.title ?? panel.displayTitle }
+  var titleColor: Color { configuration.titleFormat.color ?? panel.tint }
 
   func register(_ configuration: PanelWindowConfiguration, owner: UUID) {
     self.owner = owner
