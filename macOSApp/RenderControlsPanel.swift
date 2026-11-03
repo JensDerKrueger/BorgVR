@@ -379,7 +379,7 @@ struct RenderControlsPanel: View {
     }
     .modifier(WindowPresentationButtonStyle(isPresented: isPresented, tint: .red))
     .accessibilityAddTraits(isPresented ? .isSelected : [])
-    .help("Brush")
+    .help(MacRenderShortcut.help("Brush", shortcut: .brush))
   }
 
   private func windowButtonLabel(
@@ -414,7 +414,8 @@ struct RenderControlsPanel: View {
   private var mainPanelConfiguration: PanelWindowConfiguration {
     var additional: [PanelAction] = [
       .button("shareplay", icon: "shareplay", text: String(localized: "Start SharePlay"),
-        selected: sharePlay.isInSession, tint: .green) { sharePlay.startSharePlay() }
+        selected: sharePlay.isInSession, tint: .green,
+        shortcutHint: MacKeyboardShortcut.startSharePlay.displayName) { sharePlay.startSharePlay() }
     ]
     if sharePlay.isInSession, !sharePlay.participants.isEmpty {
       additional.append(.menu("participants", icon: "person.2", text: String(localized: "Participants"),
@@ -425,42 +426,52 @@ struct RenderControlsPanel: View {
     }
     if canCopyWebGPUShareLink {
       additional.append(.button("web-link", icon: copiedWebGPUShareLink ? "checkmark" : "link",
-        text: String(localized: "Copy WebGPU link"), action: copyWebGPUShareLink))
+        text: String(localized: "Copy WebGPU link"),
+        shortcutHint: MacKeyboardShortcut.copyWebGPULink.displayName, action: copyWebGPUShareLink))
     }
     additional += [.spacer("recording"),
       .button("record", icon: session.isCommandRecording ? "record.circle.fill" : "record.circle",
-        text: String(localized: "Start Recording"), enabled: !session.isCommandRecording, tint: .red) {
+        text: String(localized: "Start Recording"), enabled: !session.isCommandRecording, tint: .red,
+        shortcutHint: MacKeyboardShortcut.startRecording.displayName) {
           docking.request(.startRecording)
         },
       .button("stop", icon: session.isCommandRecording ? "stop.circle.fill" : "stop.circle",
-        text: String(localized: "Stop and Save"), enabled: session.isCommandRecording, tint: .red) {
+        text: String(localized: "Stop and Save"), enabled: session.isCommandRecording, tint: .red,
+        shortcutHint: MacKeyboardShortcut.stopRecording.displayName) {
           docking.request(.stopRecording)
         },
       .spacer("information"),
-      .button("info", icon: "info.circle", text: String(localized: "dataset_info_button")) {
+      .button("info", icon: "info.circle", text: String(localized: "dataset_info_button"),
+        shortcutHint: MacKeyboardShortcut.datasetInfo.displayName) {
         docking.showsDatasetInfo.toggle()
       }]
     if appSettings.showLogButton {
-      additional.append(.button("log", icon: "text.alignleft", text: String(localized: "Log")) {
+      additional.append(.button("log", icon: "text.alignleft", text: String(localized: "Log"),
+        shortcutHint: MacRenderShortcut.log.displayName) {
         docking.showsLog.toggle()
       })
     }
-    additional.append(.button("performance", icon: "chart.xyaxis.line", text: String(localized: "performance_title")) {
+    additional.append(.button("performance", icon: "chart.xyaxis.line", text: String(localized: "performance_title"),
+      shortcutHint: MacRenderShortcut.performance.displayName) {
       openWindow(id: "PerformanceGraphView")
     })
     return .standard(title: appModel.activeDataset?.description ?? "BorgVR",
-      reset: .button("reset", icon: "arrow.counterclockwise", text: String(localized: "Reset")) {
+      reset: .button("reset", icon: "arrow.counterclockwise", text: String(localized: "Reset"),
+        shortcutHint: MacRenderShortcut.reset.displayName) {
         try? session.perform(.reset(.all), source: .userInterface)
         sharePlay.flushSynchronization()
       },
-      load: .button("load", icon: "tray.and.arrow.up", text: String(localized: "Restore Dataset State")) {
+      load: .button("load", icon: "tray.and.arrow.up", text: String(localized: "Restore Dataset State"),
+        shortcutHint: MacKeyboardShortcut.restoreDatasetState.displayName) {
         docking.request(.restoreDatasetState)
       },
-      save: .button("save", icon: "tray.and.arrow.down", text: String(localized: "Save Dataset State")) {
+      save: .button("save", icon: "tray.and.arrow.down", text: String(localized: "Save Dataset State"),
+        shortcutHint: MacKeyboardShortcut.saveDatasetState.displayName) {
         docking.request(.saveDatasetState)
       },
       additional: additional,
-      leading: [.button("close-dataset", icon: "xmark", text: String(localized: "Close Dataset"), tint: .red) {
+      leading: [.button("close-dataset", icon: "xmark", text: String(localized: "Close Dataset"), tint: .red,
+        shortcutHint: MacKeyboardShortcut.closeDataset.displayName) {
         docking.request(.closeDataset)
       }])
   }

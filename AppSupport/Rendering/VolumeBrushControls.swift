@@ -97,6 +97,12 @@ struct VolumeBrushControls: View {
         Label("Restore", systemImage: "arrow.uturn.backward").tag(BorgVRVolumeBrushMode.restore)
       }
       .pickerStyle(.segmented)
+#if os(macOS)
+      .help([
+        MacRenderShortcut.help("Erase", shortcut: .erase),
+        MacRenderShortcut.help("Restore", shortcut: .restore)
+      ].joined(separator: " · "))
+#endif
       if model.componentCount > 1 && model.channelInterpretation == .independentChannels {
         DisclosureGroup("Edit Channels") {
           Toggle("All Channels", isOn: Binding(get: { model.channels == .all }, set: { all in
@@ -123,6 +129,12 @@ struct VolumeBrushControls: View {
       HStack {
         Text("Radius")
         Slider(value: $model.radius, in: BorgVRVolumeBrushLimits.radiusFraction)
+#if os(macOS)
+          .help([
+            MacRenderShortcut.help("Smaller Brush", shortcut: .smallerBrush),
+            MacRenderShortcut.help("Larger Brush", shortcut: .largerBrush)
+          ].joined(separator: " · "))
+#endif
         Text(PhysicalSizeFormatter.length(meters: Double(model.physicalMaximum) * model.radius) ?? "")
           .monospacedDigit()
           .frame(minWidth: 64, alignment: .trailing)

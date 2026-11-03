@@ -62,7 +62,9 @@ struct NativePanelToolbar: NSViewRepresentable {
       identifiers.append(.flexibleSpace)
       append(model.configuration.actions, prefix: "action")
       append([.button("dock", icon: model.panel.detachedIcon,
-        text: String(localized: "Dock panel"), action: dock)], prefix: "window")
+        text: String(localized: "Dock panel"),
+        shortcutHint: model.panel == .renderControls ? MacRenderShortcut.docking.displayName : nil,
+        action: dock)], prefix: "window")
       scheduleUpdate()
     }
 
@@ -139,7 +141,7 @@ struct NativePanelToolbar: NSViewRepresentable {
       guard let action = actions[item.itemIdentifier] else { return }
       item.label = action.text
       item.paletteLabel = action.text
-      item.toolTip = action.text
+      item.toolTip = action.helpText
       item.isEnabled = action.isEnabled
       item.menuFormRepresentation = menuItem(for: action)
       if let button = item.view as? NSButton {
@@ -147,7 +149,7 @@ struct NativePanelToolbar: NSViewRepresentable {
           .withSymbolConfiguration(.init(pointSize: 12, weight: .medium))
         button.image?.isTemplate = true
         button.contentTintColor = action.tint.map(NSColor.init) ?? (action.isSelected ? .controlAccentColor : nil)
-        button.toolTip = action.text
+        button.toolTip = action.helpText
         button.setAccessibilityLabel(action.text)
       }
     }
@@ -160,6 +162,7 @@ struct NativePanelToolbar: NSViewRepresentable {
       item.isEnabled = action.isEnabled
       item.state = action.isSelected ? .on : .off
       item.image = NSImage(systemSymbolName: icon, accessibilityDescription: nil)
+      item.toolTip = action.helpText
       if let children = action.children { item.submenu = menu(for: children) }
       return item
     }

@@ -45,7 +45,7 @@ struct MacCommandRequest: Equatable {
   let command: MacCommand
 }
 
-enum MacRenderShortcut: String {
+enum MacRenderShortcut: String, CaseIterable {
   case model = "1"
   case clipping = "2"
   case transferInteraction = "3"
@@ -69,6 +69,7 @@ enum MacRenderShortcut: String {
   case lighting = "l"
   case objects = "o"
   case measurements = "m"
+  case brush = "t"
   case performance = "p"
   case log = "g"
   case datasetInfo = "i"

@@ -44,6 +44,19 @@ private enum MacKeyboardShortcutTests {
     try check(shortcut("k", code: 40) == .erase && shortcut("u", code: 32) == .restore,
               "Erase/Restore shortcuts changed")
     try check(shortcut("\t", code: 48) == .toggleControls, "Tab shortcut changed")
+    let panels: [(String, UInt16, MacRenderShortcut)] = [
+      ("e", 14, .editor), ("l", 37, .lighting), ("o", 31, .objects),
+      ("m", 46, .measurements), ("t", 17, .brush), ("p", 35, .performance), ("g", 5, .log)
+    ]
+    for (key, code, expected) in panels {
+      try check(shortcut(key, code: code) == expected, "Missing panel shortcut for \(key)")
+      try check(expected.keyEquivalent == KeyEquivalent(Character(key)) && expected.modifiers.isEmpty,
+        "Panel menu and key handling disagree for \(key)")
+      try check(MacRenderShortcut.help("Panel", shortcut: expected).hasSuffix("(\(key.uppercased()))"),
+        "Panel tooltip is missing its shortcut")
+    }
+    let equivalents = MacRenderShortcut.allCases.map { "\($0.keyEquivalent.character):\($0.modifiers.rawValue)" }
+    try check(Set(equivalents).count == equivalents.count, "Render shortcuts must not conflict")
     let arrows: [(UInt16, Int, MacRenderShortcut, KeyEquivalent)] = [
       (123, NSLeftArrowFunctionKey, .translateLeft, .leftArrow),
       (124, NSRightArrowFunctionKey, .translateRight, .rightArrow),

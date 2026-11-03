@@ -2,8 +2,6 @@ import AppKit
 import SwiftUI
 
 enum RenderMode { case transferFunction1D, transferFunction1DWithLighting, isoValue }
-enum MacCommand { case test }
-struct MacCommandRequest { let command: MacCommand }
 
 @main
 struct PanelWindowHarness: App {
@@ -24,12 +22,18 @@ struct PanelWindowHarness: App {
       }
       .environmentObject(docking)
     }
+
+    BorgVRUtilityWindow(title: "Performance Test", id: "PerformanceGraphView", width: 500, height: 300) {
+      Text("Performance utility window").frame(minWidth: 400, minHeight: 200)
+    }
   }
 }
 
 private struct HarnessCanvas: View {
   @EnvironmentObject private var docking: DockingController
+  @Environment(\.openWindow) private var openWindow
   @Environment(\.dismissWindow) private var dismissWindow
+  @State private var performanceReport = ""
 
   var body: some View {
     VStack {
@@ -49,6 +53,18 @@ private struct HarnessCanvas: View {
         Text("Detached: \(docking.isDetached(.lightingEditor) ? "yes" : "no")")
       }
       .padding()
+      HStack {
+        Button("Open performance") { openWindow(id: "PerformanceGraphView") }
+        Button("Inspect performance windows") {
+          let windows = NSApp.windows.filter { $0.title == "Performance Test" }
+          let floating = windows.allSatisfy { ($0 as? NSPanel)?.isFloatingPanel == true }
+          let fullscreen = windows.contains { $0.styleMask.contains(.fullScreen) }
+          let mainFullscreen = NSApp.windows.first { $0.title == "Panel Window Test" }?.styleMask.contains(.fullScreen) ?? false
+          performanceReport = "Performance windows: \(windows.count), floating: \(floating), fullscreen: \(fullscreen), main fullscreen: \(mainFullscreen)"
+        }
+        Button("Close performance") { dismissWindow(id: "PerformanceGraphView") }
+      }
+      Text(performanceReport).font(.caption)
       GeometryReader { geometry in
         ZStack(alignment: .topLeading) {
           Color.gray.opacity(0.15)
@@ -94,7 +110,8 @@ private struct HarnessControls: View {
     .panelActions(.standard(
       reset: .button("reset", icon: "arrow.counterclockwise", text: "Reset") { lastAction = "Reset" },
       load: .button("load", icon: "folder", text: "Load") { lastAction = "Load" },
-      save: .button("save", icon: "square.and.arrow.down", text: "Save") { lastAction = "Save" },
+      save: .button("save", icon: "square.and.arrow.down", text: "Save",
+        shortcutHint: MacKeyboardShortcut.saveDatasetState.displayName) { lastAction = "Save" },
       additional: [
         .button("new", icon: "plus", text: "New") { lastAction = "New" },
         .button("remove-point", icon: "minus.circle", text: "Remove point") { lastAction = "Remove point" },

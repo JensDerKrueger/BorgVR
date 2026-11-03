@@ -4,6 +4,7 @@ struct PanelAction: Identifiable, Equatable {
   let id: String
   let icon: String?
   let text: String
+  var shortcutHint: String?
   var isEnabled = true
   var isSelected = false
   var tint: Color?
@@ -11,9 +12,13 @@ struct PanelAction: Identifiable, Equatable {
   let perform: () -> Void
 
   static func button(_ id: String, icon: String, text: String, enabled: Bool = true,
-                     selected: Bool = false, tint: Color? = nil, action: @escaping () -> Void) -> Self {
-    Self(id: id, icon: icon, text: text, isEnabled: enabled, isSelected: selected, tint: tint, perform: action)
+                     selected: Bool = false, tint: Color? = nil, shortcutHint: String? = nil,
+                     action: @escaping () -> Void) -> Self {
+    Self(id: id, icon: icon, text: text, shortcutHint: shortcutHint,
+      isEnabled: enabled, isSelected: selected, tint: tint, perform: action)
   }
+
+  var helpText: String { shortcutHint.map { "\(text) (\($0))" } ?? text }
 
   static func menu(_ id: String, icon: String, text: String, items: [PanelAction]) -> Self {
     Self(id: id, icon: icon, text: text, children: items, perform: {})
@@ -25,6 +30,7 @@ struct PanelAction: Identifiable, Equatable {
 
   static func == (lhs: Self, rhs: Self) -> Bool {
     lhs.id == rhs.id && lhs.icon == rhs.icon && lhs.text == rhs.text &&
+      lhs.shortcutHint == rhs.shortcutHint &&
       lhs.isEnabled == rhs.isEnabled && lhs.isSelected == rhs.isSelected &&
       lhs.tint == rhs.tint && lhs.children == rhs.children
   }
@@ -167,7 +173,7 @@ struct PanelActionButton: View {
       }
     }
     .foregroundStyle(item.tint ?? .primary)
-    .help(item.text)
+    .help(item.helpText)
     .accessibilityLabel(item.text)
   }
 }

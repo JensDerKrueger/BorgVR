@@ -85,7 +85,8 @@ struct RenderView: View {
         Spacer()
         ForEach(docking.revealControls.filter { !docking.isVisible($0.id) }) { control in
           Button { docking.show(control.id) } label: { Image(systemName: control.icon) }
-            .help(control.text)
+            .help(control.id == .renderControls
+              ? MacRenderShortcut.help(control.text, shortcut: .toggleControls) : control.text)
             .accessibilityLabel(control.text)
             .buttonStyle(.bordered)
         }
@@ -376,6 +377,8 @@ struct RenderView: View {
         togglePanel(.markerEditor)
       case .measurements:
         togglePanel(.measurementEditor)
+      case .brush:
+        togglePanel(.volumeBrushEditor)
       case .performance:
         openWindow(id: "PerformanceGraphView")
       case .log:

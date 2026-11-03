@@ -23,6 +23,14 @@ struct DockingControllerTests {
     let panel = PanelWindow(panel: .lightingEditor)
     var clicked = 0
     let action = PanelAction.button("reset", icon: "arrow.counterclockwise", text: "Reset") { clicked += 1 }
+    precondition(action.helpText == "Reset")
+    let hinted = PanelAction.button("save", icon: "tray.and.arrow.down", text: "Save",
+      shortcutHint: "Command+S", action: {})
+    precondition(hinted.text == "Save" && hinted.helpText == "Save (Command+S)",
+      "Shortcut hints belong in tooltips, not button/menu titles")
+    var changedHint = hinted
+    changedHint.shortcutHint = "S"
+    precondition(changedHint != hinted, "Updating a shortcut hint must refresh the panel configuration")
     panel.register(.standard(title: "Test dataset", reset: action,
       load: .button("load", icon: "folder", text: "Load", action: {}),
       save: .button("save", icon: "square.and.arrow.down", text: "Save", action: {}),

@@ -281,11 +281,10 @@ struct macOSApp: App {
         .environmentObject(session)
     }
 
-    WindowGroup("Performance", id: "PerformanceGraphView") {
+    BorgVRUtilityWindow(title: "performance_title", id: "PerformanceGraphView", width: 820, height: 360) {
       PerformanceGraphView()
         .environmentObject(appModel)
     }
-    .defaultSize(width: 820, height: 360)
 
     Window("Script Log", id: "ScriptLogView") {
       ScriptLogView()
@@ -703,6 +702,7 @@ private struct BorgVRMenuCommands: Commands {
         systemImage: "ruler",
         shortcut: .measurements
       )
+      renderCommand("Brush", systemImage: "eraser", shortcut: .brush)
 
       Divider()
 

@@ -8,7 +8,19 @@ struct DockableUtilityWindow<Content: View>: Scene {
   @ViewBuilder var content: () -> Content
 
   var body: some Scene {
-    UtilityWindow(panel.title, id: panel.windowID) {
+    BorgVRUtilityWindow(title: panel.title, id: panel.windowID, width: width, height: height, content: content)
+  }
+}
+
+struct BorgVRUtilityWindow<Content: View>: Scene {
+  let title: LocalizedStringKey
+  let id: String
+  let width: CGFloat
+  let height: CGFloat
+  @ViewBuilder var content: () -> Content
+
+  var body: some Scene {
+    UtilityWindow(title, id: id) {
       content()
         .windowFullScreenBehavior(.disabled)
     }
@@ -103,9 +115,9 @@ struct DockToggleButton: View {
       Image(systemName: docking.isDetached(panel) ? panel.detachedIcon : panel.dockedIcon)
     }
     .help(
-      docking.isDetached(panel)
-        ? String(localized: "Dock panel")
-        : String(localized: "Detach panel")
+      panel == .renderControls
+        ? MacRenderShortcut.help(docking.isDetached(panel) ? "Dock panel" : "Detach panel", shortcut: .docking)
+        : String(localized: docking.isDetached(panel) ? "Dock panel" : "Detach panel")
     )
     .accessibilityLabel(
       docking.isDetached(panel)
@@ -256,7 +268,8 @@ private struct DockablePanelTitleBar: View {
         Image(systemName: "xmark")
       }
       .buttonStyle(PanelTitleButtonStyle())
-      .help("Close panel")
+      .help(panel == .renderControls
+        ? MacRenderShortcut.help("Close panel", shortcut: .toggleControls) : String(localized: "Close panel"))
       .accessibilityLabel("Close panel")
     }
     .padding(.trailing, 8)

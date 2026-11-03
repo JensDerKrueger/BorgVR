@@ -31,7 +31,7 @@ struct ScriptLogView: View {
           Label("Stop Script", systemImage: "stop.fill")
         }
         .labelStyle(.iconOnly)
-        .help("Stop Script")
+        .help(MacKeyboardShortcut.help("Stop Script", shortcut: .stopScript))
         .disabled(!scriptRunner.isRunning)
       }
       .padding(12)
