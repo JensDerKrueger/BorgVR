@@ -211,7 +211,7 @@ current, non-localized `converted by TOOL VERSION` provenance entry automaticall
 
 ### Data And Servers
 
-- Dataset import and conversion from BorgVR, QVIS, NRRD/NHDR, PVM/PVM2/PVM3, IV3Dm, and DICOM workflows,
+- Dataset import and conversion from BorgVR, QVIS, NRRD/NHDR, PVM/PVM2/PVM3, IV3Dm, UVF, VFF, and DICOM workflows,
   including physical DICOM spacing.
 - BorgVR datasets can be exported at any stored LoD as a flat, uncompressed NRRD volume while
   retaining the corresponding voxel spacing.
@@ -232,7 +232,7 @@ current, non-localized `converted by TOOL VERSION` provenance entry automaticall
   provides a graphical environment for conveniently creating and editing `.gsc` scripts for the
   macOS renderer.
 - Synchronous text, file, and directory input functions for interactive scripts.
-- Scriptable QVIS, NRRD, PVM, IV3Dm, and DICOM import, BorgVR LoD export, and configurable import
+- Scriptable QVIS, NRRD, PVM, IV3Dm, UVF, VFF, and DICOM import, BorgVR LoD export, and configurable import
   brick size, overlap, and border handling.
 - Local erase/restore brushes, sample batches in physical meters, background-job status and
   waiting, discarding edits, and cancellable edited-dataset export with progress.
@@ -246,6 +246,10 @@ current, non-localized `converted by TOOL VERSION` provenance entry automaticall
   retrieve the current rendered view as a PNG image.
 - The MCP adapter and the macOS `.gsc` interpreter use the same application command layer for
   shared visualization operations.
+- Opening a dataset through MCP or GSC bypasses automatic loading of transfer functions, view/panel
+  state, objects, measurements and the last selected edit state. Automation starts from the original
+  volume and default visualization parameters; explicit load commands remain available. Interactive
+  opening continues to follow the user's auto-load settings, without changing those preferences.
 - Both also use one local volume-editing implementation for erase/restore, brush configuration,
   edit status, discarding edits, and edited-dataset export. MCP export jobs expose progress and
   cancellation; GSC waits for completion. SharePlay uses a separate shared edit state and synchronizes erase/restore cursors.
@@ -346,7 +350,7 @@ shown, and the suite exits with a nonzero status if any test or build fails.
 
 ### Command-Line Volume Generator
 
-The `TerminalConverterApp` scheme converts DICOM, image sequences, QVIS, NRRD, PVM, IV3Dm, and Zarr input, exports any LoD of a
+The `TerminalConverterApp` scheme converts DICOM, image sequences, QVIS, NRRD, PVM, IV3Dm, UVF, VFF, and Zarr input, exports any LoD of a
 BorgVR dataset as a flat volume, repacks existing `.data` files, and can create reproducible synthetic volumes. Export uses one
 deliberately simple interchange representation: an uncompressed inline NRRD file.
 
@@ -452,11 +456,11 @@ The timestamp must be ISO-8601 with a time zone; fractional seconds are supporte
 entries are optional. Repeat `--source-info` to supply a longer history; entries retain their
 command-line order. The automatic conversion/tool/version entry is always appended in English.
 
-Import/repacking modes `D/Q/N/P/I/Z/R` accept `--size-x <meters>` as a fallback for sources without a
+Import/repacking modes `D/Q/N/P/I/Z/V/F/R` accept `--size-x <meters>` as a fallback for sources without a
 physical size. `--force-size-x <meters>` always sets the total X extent, overriding source
 metadata. Both scale all three voxel axes uniformly, preserving anisotropic proportions;
 Y/Z extents follow from the voxel dimensions and relative spacings. Use only one size option.
-PVM, IV3Dm, unitless Zarr, and QVIS/NRRD files without spacing use the fallback; existing
+PVM, IV3Dm, UVF, unitless Zarr, and QVIS/NRRD files without spacing use the fallback; existing
 DICOM or other physical spacing is retained unless forced. Applied scaling is recorded in provenance.
 
 ```sh
@@ -479,6 +483,41 @@ one volume at a time. For example:
 ```sh
 TerminalConverterApp I c60.i3m.zip c60.data "C60 from ImageVis3D Mobile" 64 2
 ```
+
+UVF import reconstructs only the full-resolution volume (LoD 0) into a temporary RAW file,
+then uses the normal conversion pipeline. Stored coarser LoDs, histograms, transfer functions,
+and geometry are not imported. Relative voxel spacing preserves proportions with a longest
+extent of one meter unless `--size-x` or `--force-size-x` specifies another size.
+Legacy 3-D raster blocks and TOC v1/v2 support uncompressed, zlib, LZMA, LZ4, and BZIP2
+bricks. Stored normals are discarded; RGB/RGBA color is retained. As for Zarr, signed integers
+are shifted to unsigned and floating-point channels are mapped individually to UInt16, with
+their original ranges logged. TOC v0, 64-bit integers, and tensor layouts are rejected. Only
+the first volume block is imported. Structural bounds and codec checksums are checked;
+the optional whole-file UVF checksum is not verified.
+
+```sh
+TerminalConverterApp V scan.uvf scan.data "Scan from ImageVis3D" 32 2
+```
+
+`Scripts/test-uvf.sh` tests reconstruction, overlap removal, byte order, color, sample
+conversion, malformed input, and cancellation. Optional arguments are pairs of UVF files
+and reference NRRD exports from the original ImageVis3D converter for byte-exact comparisons.
+
+VFF import reads self-contained Sun/GE raster volumes (`ncaa` ASCII header, slice layout,
+rank 2 or 3, one signed 8/16/32-bit integer channel in Big Endian order). It converts samples
+losslessly into an unsigned, little-endian temporary RAW file for the shared pipeline.
+GE `elementsize` is interpreted in millimeters and combined with axis `spacing`; explicit
+`spacingunit` values are converted to meters. Without physical units, relative spacing uses
+a longest extent of one meter, overridable with the usual size options. Compressed payloads,
+float samples and multiband layouts are rejected rather than guessed.
+
+```sh
+TerminalConverterApp F Olive.vff Olive.data "Olive" 32 2
+```
+
+VFF is available in all GUI importers, scripts and the servers' automatic/guided importer.
+`Scripts/test-vff.sh` covers malformed headers, exact sample conversion, units and cancellation;
+optional VFF file arguments verify every decoded sample against the original bytes.
 
 Zarr import uses the same isolated `VolumeFileParser` interface as QVIS and NRRD. It reads
 local Zarr v3 arrays with named axes and OME-Zarr 0.5 images, either as `.zarr` directories
@@ -503,118 +542,12 @@ TerminalConverterApp Z blunt_fin.ozx blunt_fin.data "Blunt fin" 32 2
 
 The same importer is available through GUI volume import and macOS GSC `importfile`.
 
-For the OME-Zarr Open SciVis collection, `Scripts/download-scivis-datasets.sh` sequentially
-downloads the 51 OZX files listed in `Scripts/scivis-datasets.tsv` and invokes converter mode
-`Z`. Descriptions follow the dataset captions and contain at most ten words. Use a Release
-build of the converter for large datasets:
-
-```sh
-./Scripts/download-scivis-datasets.sh --converter /path/to/TerminalConverterApp \
-  --output "$HOME/BorgVRData/SciVis"
-```
-
-Defaults are brick size 32 and overlap 2; override them with `--brick-size` and `--overlap`.
-Use `--dry-run` to inspect the plan or `--only blunt_fin` for a single dataset. Existing
-nonempty `.data` files are not overwritten. The script keeps resumable downloads in
-`.scivis-downloads` and conversion logs plus a per-run TSV report in `.scivis-logs` under
-the output directory. Failed conversions are retried on the next run using cached downloads.
-All entries are attempted, including the seven `float32` and two `int16` datasets.
-
-`Scripts/scivis-provenance.tsv` records dataset-specific creators, original repositories,
-and related publications with their evidence URLs (researched 2026-11-01). The script passes
-them through repeated `--source-info` arguments, then appends the OZX download URL and day;
-the converter adds the actual conversion event. Unknown acquisition dates are explicitly
-identified rather than invented. Unknown times use 00:00 UTC by convention.
-Use `--download-date 2026-10-31` when converting the previously downloaded collection.
-Without that option, the reported download day defaults to today in UTC. The source manifest
-is copied beside each run report for reproducibility. `tooth` has no reliably identified
-original creator and receives only the download record. Source attribution is not a blanket
-license grant: in particular, the synthetic truss retains its CC BY-NC-SA 4.0 attribution.
-
-`Scripts/scivis-sizes.tsv` contains user-approved X extents for all 51 entries. Seven are
-verified from acquisition spacing or reconstruction fields of view; the rest are heuristic
-estimates, uncertain literature-based sizes, or arbitrary display scales. All use
-`--force-size-x`; a future fallback-only `hint` uses `--size-x`. Estimates and uncertain
-literature values are explicitly qualified in provenance. Arbitrary display sizes are
-marked as not physically calibrated; verified values add no separate source-info size note.
-Existing output files are skipped by default. `--replace` regenerates them from cached OZX
-and atomically replaces each output only after successful conversion. The unresolved axis-ratio conflicts in Marmoset
-Neurons and Christmas Tree remain documented: an X override scales all axes uniformly and
-cannot fix incorrect anisotropy. Extents use `voxel count * voxel spacing`.
-
-For [The Volume Library](http://volume.open-terrain.org/), use the separate, resumable
-PVM batch importer (Python 3.9+ and `curl`):
-
-```bash
-python3 Scripts/download-volume-library.py \
-  --converter /path/to/TerminalConverterApp --output "$HOME/OZX-Data" --replace
-```
-
-`Scripts/volume-library-datasets.json` records all 85 catalog entries, credits, acquisition
-parameters, conditions of use, sizes, download SHA-256 checksums and decoded voxel SHA-512
-checksums. The importer downloads every entry but omits seven redundant quantization/LOD
-variants from the output list. It retains the existing 16-bit OME-Zarr Backpack rather than
-the quantized 8-bit PVM, and prefers the Volume Library for the other mapped overlaps.
-Eleven mappings were verified against the Open SciVis raw-source SHA-512 checksums.
-The numbered Bonsai acquisitions remain separate from the OME-Zarr Bonsai because their
-identity has not been established; names alone are not sufficient evidence of duplication.
-Estimated dimensions and arbitrary display scales are qualified in provenance. PVM aspect
-ratios alone do not establish physical units. The collection prohibits commercial use;
-its terms and additional per-dataset credits/comments are retained in provenance.
-
-Downloads remain in `.volume-library-downloads`; logs, manifest snapshots and reports in
-`.volume-library-logs`. `--replace` publishes only successful conversions and retains old
-outputs as hidden hard-link backups, without copying their brick data. Without it, existing
-outputs are skipped. `--download-only`, `--dry-run`, and `--only Foot` support staged runs.
-The supplied HTTP endpoint is used because the site's HTTPS certificate does not match
-its hostname; TLS verification is never disabled. Checksums pin the inspected snapshot,
-not the authenticity of the original HTTP transfer. `Tests/VolumeLibraryDownloadTests.py`
-tests selection and safe replacement; `Scripts/test-volume-library-metadata.sh DIR DATE`
-checks the actual output dimensions, scalar types, sizes and provenance.
-
-`Scripts/scivis-raw-datasets.json` is a snapshot of the 55-entry
-[Open SciVis RAW catalog](http://klacansky.com/open-scivis-datasets/), dated 2026-11-01.
-Its 51 overlapping entries keep the existing OZX/PVM collection choices. The four additional
-entries are 3DNeurons15Sept2016 (13.422 GiB), isotropic pressure (256 GiB), rotating stratified
-temperature (256 GiB), and turbulent channel flow/DNS (900 GiB). Sizes are RAW download
-sizes, not the storage needed for conversion and BorgVR output.
-
-```bash
-sh Scripts/build-scivis-raw-tools.sh /tmp/scivis-tools
-python3 Scripts/download-scivis-raw.py --converter /path/to/TerminalConverterApp \
-  --auditor /tmp/scivis-tools/scivis-raw-auditor \
-  --quantizer /tmp/scivis-tools/scivis-raw-quantizer --output "$HOME/OZX-Data"
-```
-
-The default run imports only the smaller, additional neuronal volume and defers the three
-huge simulations; `--include-large` explicitly enables them. `--only NAME` selects one of
-the four additions. Existing outputs are never replaced. Resumable RAW downloads are
-checked against exact byte counts and catalog SHA-512 sums. The standalone macOS streaming
-quantizer makes two bounded-memory passes over float32/float64 input and maps its finite
-range linearly to UInt16; nonfinite samples become zero. Source ranges, attribution and
-publication details are retained in logs/provenance. An output metadata audit must succeed
-before a converted volume is published. The neuronal spacing is assumed to be micrometers
-and explicitly qualified as estimated; simulation display sizes are not physical calibration.
-
-For downloading the huge files on a separate Linux/macOS server, no converter is required:
-
-```bash
-bash Scripts/download-large-scivis-datasets.sh --output "$HOME/OZX-Data/.scivis-raw-downloads"
-```
-
-This portable Bash script downloads only the three huge simulations, verifies each one,
-and writes accompanying NRRD headers and timestamped `.sources.tsv` attribution records.
-It does not quantize or brick files; retain the original RAWs for later conversion. Copy
-them into the RAW importer's `.scivis-raw-downloads` cache, select the corresponding
-`--only NAME --include-large`, and pass the recorded download day via `--download-date`.
-The `.nhdr` sidecars describe the original floating-point data, not renderer-ready UInt16.
-
 On iOS and visionOS, use **Select Zarr folder** for a directory store or the regular
 volume-file picker for `.ozx`. The macOS renderer and GUI server accept either through
 their shared volume import picker.
 
 Importer implementation is organized under `BORGVR-IO/Importers/`, with format directories
-`NRRD`, `QVIS`, `I3D` (IV3Dm), `DICOM`, `ZARR`, `PVM`, and `Mesh`. The parser interface,
+`NRRD`, `QVIS`, `I3D` (IV3Dm), `UVF`, `VFF`, `DICOM`, `ZARR`, `PVM`, and `Mesh`. The parser interface,
 conversion service, quantizer, and bricking pipeline are shared directly in `Importers`;
 DICOM registration, JPEG decoding, and dictionary resources stay with the DICOM reader.
 
@@ -667,7 +600,7 @@ TerminalServerApp --directory /srv/borgvr --auto-import /srv/borgvr-inbox \
 
 The importer waits for two identical directory snapshots, including file sizes, modification
 times, and new or removed files. Directories are tried as Zarr, then DICOM. Files are probed with
-the existing QVIS, NRRD, PVM, IV3Dm, and Zarr readers, preferring their usual extension.
+the existing QVIS, NRRD, PVM, IV3Dm, UVF, VFF, and Zarr readers, preferring their usual extension.
 Completed `.data` files appear in the server catalog immediately; existing outputs are never
 overwritten. The output directory must be outside the watched input directory.
 
