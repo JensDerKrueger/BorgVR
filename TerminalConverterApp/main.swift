@@ -33,6 +33,8 @@ enum Mode: String {
   case PVMConversion = "P"
   case I3MConversion = "I"
   case ZarrConversion = "Z"
+  case UVFConversion = "V"
+  case VFFConversion = "F"
   case FlatVolumeExport = "E"
   case BorgVRRepacking = "R"
   case DemoDataCreation = "C"
@@ -194,6 +196,8 @@ MODES
     D  DICOM directory           Q  QVIS (.dat + RAW)
     N  NRRD / NHDR               P  PVM / PVM2 / PVM3 (including DDS)
     I  IV3Dm (.i3m or ZIP)       Z  Zarr v3 / OME-Zarr 0.5 (.ozx / .zarr)
+    V  UVF (.uvf, full-resolution volume only)
+    F  VFF (.vff, scalar raster volume)
 
     \(executableName) <mode> <input> <output.data> <description> <brick> <overlap>
 
@@ -246,7 +250,7 @@ OPTIONS  (import, generation and repacking; not export mode E)
       Add provenance, e.g. 2026-11-01T10:30:00Z "Downloaded from archive".
       Repeat to supply multiple entries. Include a time zone in each timestamp.
 
-  Size overrides for D/Q/N/P/I/Z/R only:
+  Size overrides for D/Q/N/P/I/Z/V/R only:
     --size-x <meters>        Set total X extent if physical size is missing.
     --force-size-x <meters>  Always override total X extent.
     Use only one size option, once. Y/Z proportions are preserved.
@@ -327,7 +331,7 @@ func parseArguments(_ args: [String]) -> (Mode, Any) {
       }
       result.1 = params
 
-    case .QVISConversion, .NRRDConversion, .PVMConversion, .I3MConversion, .ZarrConversion:
+    case .QVISConversion, .NRRDConversion, .PVMConversion, .I3MConversion, .ZarrConversion, .UVFConversion, .VFFConversion:
       guard args.count == 7 else {
         failUsage("Invalid number of arguments for mode \(mode.rawValue).")
       }
@@ -477,7 +481,7 @@ func parseImportOptions(_ arguments: [String]) -> (
     args.removeSubrange(index...index + 1)
   }
   if sizeXMeters != nil, args.count > 1, ["E", "C", "S"].contains(args[1]) {
-    logger.error("--size-x and --force-size-x apply to import modes D/Q/N/P/I/Z/R only.")
+    logger.error("--size-x and --force-size-x apply to import modes D/Q/N/P/I/Z/V/R only.")
     exit(1)
   }
   return (args, provenance, sizeXMeters, forceSizeX, colorCompression, useLZ4, quantizeTo8Bit)
@@ -888,6 +892,12 @@ switch mode {
   case .ZarrConversion:
     guard let params = params as? HeaderFileModeParameters else { exit(1) }
     convertFileVolume(params, formatName: "Zarr")
+  case .UVFConversion:
+    guard let params = params as? HeaderFileModeParameters else { exit(1) }
+    convertFileVolume(params, formatName: "UVF")
+  case .VFFConversion:
+    guard let params = params as? HeaderFileModeParameters else { exit(1) }
+    convertFileVolume(params, formatName: "VFF")
   case .FlatVolumeExport:
     guard let params = params as? ExportModeParameters else { exit(1) }
     exportFlatVolume(params)

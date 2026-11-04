@@ -461,6 +461,9 @@ struct RenderControlsPanel: View {
         color: appModel.isDatasetStreaming
           ? ScreenControlAppearance.datasetTitleColor(isStreaming: true, colorScheme: colorScheme) : nil,
         isItalic: appModel.isDatasetStreaming),
+      titleProgress: appModel.isDatasetStreaming
+        ? PanelTitleProgress(fraction: appModel.datasetStreaming.fractionRemaining,
+          statusText: appModel.datasetStreaming.statusText) : nil,
       reset: .button("reset", icon: "arrow.counterclockwise", text: String(localized: "Reset"),
         shortcutHint: MacRenderShortcut.reset.displayName) {
         try? session.perform(.reset(.all), source: .userInterface)

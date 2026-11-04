@@ -445,9 +445,15 @@ final class VolumeBrushModel: ObservableObject, BorgVRVolumeEditingCommands {
     try BorgVRVolumeEditStorage.removeDataset(at: url)
   }
 
-  func prepareOpening(datasetID: String, datasetURL: URL?, interactive: Bool = true) async throws {
+  func prepareOpening(datasetID: String, datasetURL: URL?, interactive: Bool = true,
+                      restoreLastSelection: Bool = true) async throws {
     await closingTask?.value
     guard !isInSharePlay || isSharePlayHost else { return }
+    if !restoreLastSelection {
+      try Task.checkCancellation()
+      preparedChoice = (datasetID, nil)
+      return
+    }
     let catalog = try Self.catalog(datasetID: datasetID, datasetURL: datasetURL)
     let states = try catalog.states()
     var choice = lastSelectedID(catalog: catalog)

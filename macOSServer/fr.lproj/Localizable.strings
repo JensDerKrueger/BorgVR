@@ -3,6 +3,13 @@
 "converter_supporting_file_access_allow" = "Autoriser l’accès";
 "converter_supporting_file_access_wrong_file" = "Veuillez sélectionner le fichier référencé « %@ ».";
 "image_sequence_title" = "Séquence d’images";
+"What would you like to do?" = "Que souhaitez-vous faire ?";
+"Import / Export" = "Import / Export";
+"What would you like to import?" = "Que souhaitez-vous importer ?";
+"Volume File" = "Fichier de volume";
+"DICOM Series" = "Série DICOM";
+"DICOM Fusion" = "Fusion DICOM";
+"Image Sequence" = "Séquence d’images";
 "image_sequence_select" = "Choisir le dossier d’images";
 "image_sequence_size" = "Dimensions du volume en mètres (X / Y / Z)";
 "image_sequence_empty" = "Le dossier ne contient aucune image prise en charge.";
@@ -643,3 +650,5 @@
 "converter_source_note" = "Source / provenance (facultatif)";
 "Stored color compression (RGB/RGBA)" = "Compression des couleurs à l’importation (RGB/RGBA)";
 "No compression" = "Sans compression";
+"Supported volume formats" = "Formats de volume pris en charge";
+"converter_import_completed_title" = "Importation terminée";

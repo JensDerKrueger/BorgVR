@@ -75,7 +75,9 @@ struct VisionApp: App {
   var body: some Scene {
     WindowGroup(id: "main") {
       ContentView()
-        .onChange(of: scenePhase, initial: true) { _, phase in BorgVRVolumeEditGPUAvailability.setApplicationActive(phase == .active) }
+        .onAppear {
+          appDelegate.saveOpenDatasetState = { saveOpenDatasetState() }
+        }
         .volumeEditSelectionDialog(model: runtimeAppModel.volumeBrush)
         .appStoreUpdateAlert(using: updateChecker)
         .alert(
@@ -213,6 +215,10 @@ struct VisionApp: App {
     .environmentObject(session)
     .windowResizability(.contentSize)
     .defaultSize(width:runtimeAppModel.windowSize.width,height:runtimeAppModel.windowSize.height)
+    .onChange(of: scenePhase, initial: true) { _, phase in
+      BorgVRVolumeEditGPUAvailability.setApplicationActive(phase == .active)
+      if phase == .background { saveOpenDatasetState() }
+    }
     .onChange(of: runtimeAppModel.datasetSessionState) { _, newValue in
       if case .opening = newValue {
         sharedAppModel.objectsHidden = false
@@ -447,10 +453,11 @@ struct VisionApp: App {
       case .remote: editURL = documents?.appendingPathComponent("\(entry.uniqueId).data")
     }
     try await runtimeAppModel.volumeBrush.prepareOpening(datasetID: entry.uniqueId,
-      datasetURL: editURL, interactive: false)
+      datasetURL: editURL, interactive: false, restoreLastSelection: false)
     runtimeAppModel.startImmersiveSpace(
       dataset: entry,
-      asGroupSessionHost: !sharedAppModel.isInGroupSession || runtimeAppModel.groupSessionHost
+      asGroupSessionHost: !sharedAppModel.isInGroupSession || runtimeAppModel.groupSessionHost,
+      automaticallyLoadState: false
     )
   }
 
@@ -593,25 +600,38 @@ struct VisionApp: App {
     await renderTask?.value
     runtimeAppModel.immersiveSpaceState = .closed
 
-    let documentsDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
     if let dataset {
-      let autoURL = documentsDirectory.appendingPathComponent(dataset.uniqueId)
-      if storedAppModel.autoloadTF, runtimeAppModel.activeDatasetInfo?.channelInterpretation == .independentChannels {
-        let fileURL = URL(
-          fileURLWithPath: autoURL.deletingPathExtension().path() + ".tf1d"
-        )
-        try? sharedAppModel.saveDatasetTransferFunctions(to: fileURL)
-      }
-      sharedAppModel.saveAutomaticallyManagedDatasetState(
-        datasetID: dataset.uniqueId,
-        storedAppModel: storedAppModel,
-        brush: runtimeAppModel.volumeBrush,
-        logger: runtimeAppModel.logger
-      )
+      saveDatasetState(for: dataset)
     }
     runtimeAppModel.completeDatasetClose(
       requestID: requestID,
       destination: destination
+    )
+  }
+
+  @MainActor
+  private func saveOpenDatasetState() {
+    guard case .rendering(let dataset, _) = runtimeAppModel.datasetSessionState else { return }
+    saveDatasetState(for: dataset)
+  }
+
+  @MainActor
+  private func saveDatasetState(for dataset: RuntimeAppModel.DatasetEntry) {
+    if storedAppModel.autoloadTF,
+       runtimeAppModel.activeDatasetInfo?.channelInterpretation == .independentChannels,
+       let directory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
+      let url = directory.appendingPathComponent(dataset.uniqueId).appendingPathExtension("tf1d")
+      do {
+        try sharedAppModel.saveDatasetTransferFunctions(to: url)
+      } catch {
+        runtimeAppModel.logger.warning("Automatically saving transfer functions failed: \(error.localizedDescription)")
+      }
+    }
+    sharedAppModel.saveAutomaticallyManagedDatasetState(
+      datasetID: dataset.uniqueId,
+      storedAppModel: storedAppModel,
+      brush: runtimeAppModel.volumeBrush,
+      logger: runtimeAppModel.logger
     )
   }
 

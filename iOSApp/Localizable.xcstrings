@@ -1,350 +1,300 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
-    "Preparing renderer...": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Preparing renderer..."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Renderer wird vorbereitet..."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Préparation du rendu..."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Preparando el renderizador..."
-          }
-        }
-      }
-    },
-    "Rendering first frame...": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Rendering first frame..."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Erstes Bild wird gerendert..."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Rendu de la première image..."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Renderizando la primera imagen..."
-          }
-        }
-      }
-    },
-    "Loading the initial volume data and preparing the atlas.": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Loading the initial volume data and preparing the atlas."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Die ersten Volumendaten werden geladen und der Atlas wird vorbereitet."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Chargement des premières données du volume et préparation de l’atlas."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cargando los datos iniciales del volumen y preparando el atlas."
-          }
-        }
-      }
-    },
-    "Preparing rendering resources and shaders.": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Preparing rendering resources and shaders."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Rendering-Ressourcen und Shader werden vorbereitet."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Préparation des ressources de rendu et des shaders."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Preparando los recursos de renderizado y los shaders."
-          }
-        }
-      }
-    },
-    "The view will open as soon as the first volume frame is ready.": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "The view will open as soon as the first volume frame is ready."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Die Ansicht erscheint, sobald das erste Volumenbild fertig ist."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "La vue apparaîtra dès que la première image du volume sera prête."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "La vista aparecerá en cuanto esté lista la primera imagen del volumen."
-          }
-        }
-      }
-    },
-    "Buffering..." : {
-      "extractionState" : "manual",
+    "Open Dataset Now" : {
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Buffering..."
-          }
-        },
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Daten werden gepuffert..."
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Mise en mémoire tampon..."
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Almacenando en búfer..."
-          }
-        }
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Datensatz jetzt öffnen" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Open Dataset Now" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Abrir conjunto de datos ahora" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Ouvrir le jeu de données maintenant" } }
       }
     },
-    "Show dataset bounding box" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Show dataset bounding box"
-          }
-        },
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Datensatzrahmen anzeigen"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Afficher la boîte englobante du jeu de données"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Mostrar el cuadro delimitador del conjunto de datos"
-          }
-        }
-      }
-    },
-    "Projection": {
+    "converter_step_of_total_format": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Projection"
+            "value": "Step %d of %d"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Projektion"
+            "value": "Schritt %d von %d"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Projection"
+            "value": "Étape %d sur %d"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Proyección"
+            "value": "Paso %d de %d"
           }
         }
       }
     },
-    "Field of view": {
+    "converter_button_back": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Field of view"
+            "value": "Back"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sichtfeld"
+            "value": "Zurück"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Champ de vision"
+            "value": "Retour"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Campo de visión"
+            "value": "Atrás"
           }
         }
       }
     },
-    "Parallel projection": {
+    "converter_nav_next": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Parallel projection"
+            "value": "Next"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Parallelprojektion"
+            "value": "Weiter"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Projection parallèle"
+            "value": "Suivant"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Proyección paralela"
+            "value": "Siguiente"
           }
         }
       }
     },
-    "Narrower field of view": {
+    "converter_back_to_main_menu": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Narrower field of view"
+            "value": "Back to Main Menu"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sichtfeld verkleinern"
+            "value": "Zurück zum Hauptmenü"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Réduire le champ de vision"
+            "value": "Retour au menu principal"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Reducir el campo de visión"
+            "value": "Volver al menú principal"
           }
         }
       }
     },
-    "Wider field of view": {
+    "What would you like to do?": {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Wider field of view"
+            "value": "What would you like to do?"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sichtfeld vergrößern"
+            "value": "Was möchten Sie tun?"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Élargir le champ de vision"
+            "value": "Que souhaitez-vous faire ?"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ampliar el campo de visión"
+            "value": "¿Qué desea hacer?"
+          }
+        }
+      }
+    },
+    "What would you like to import?": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "What would you like to import?"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Was möchten Sie importieren?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Que souhaitez-vous importer ?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Qué desea importar?"
+          }
+        }
+      }
+    },
+    "Volume File": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Volume File"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Volumendatei"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fichier de volume"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Archivo de volumen"
+          }
+        }
+      }
+    },
+    "DICOM Series": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "DICOM Series"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "DICOM-Serie"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Série DICOM"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Serie DICOM"
+          }
+        }
+      }
+    },
+    "Image Sequence": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Image Sequence"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bildsequenz"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Séquence d’images"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Secuencia de imágenes"
+          }
+        }
+      }
+    },
+    "Streaming... %@ available locally": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Streaming... %@ available locally"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wird gestreamt... %@ lokal verfügbar"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diffusion en cours... %@ disponible localement"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Transmitiendo... %@ disponible localmente"
           }
         }
       }
@@ -438,6 +388,22 @@
         }
       }
     },
+    "%.0f" : {
+      "comment" : "A label at the bottom of the paging graph, showing the rate in bricks per second. The argument is the rate in bricks per second.",
+      "isCommentAutoGenerated" : true
+    },
+    "%.0f %%" : {
+      "comment" : "A label at the bottom of the paging graph indicating the percentage of the atlas that is filled. The argument is the percentage of the atlas that is filled.",
+      "isCommentAutoGenerated" : true
+    },
+    "%.0f bricks/s" : {
+      "comment" : "A label at the top of the Atlas paging graph view showing the current paging rate in bricks per second. The argument is the paging rate in bricks per second.",
+      "isCommentAutoGenerated" : true
+    },
+    "%.1f %%" : {
+      "comment" : "A subheading displaying the Atlas's occupancy as a percentage.",
+      "isCommentAutoGenerated" : true
+    },
     "%.3f" : {
       "comment" : "A label displaying the current isovalue.",
       "isCommentAutoGenerated" : true,
@@ -467,6 +433,22 @@
           }
         }
       }
+    },
+    "%lld / %lld bricks" : {
+      "comment" : "A label displaying the number of resident bricks and the total capacity of the Atlas. The first argument is the number of resident bricks. The second argument is the total capacity of the Atlas.",
+      "isCommentAutoGenerated" : true,
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld / %2$lld bricks"
+          }
+        }
+      }
+    },
+    "%lld s" : {
+      "comment" : "A label showing the number of seconds past 30, with a trailing space. The argument is the number of seconds past 30.",
+      "isCommentAutoGenerated" : true
     },
     "1 channel" : {
       "localizations" : {
@@ -1450,6 +1432,10 @@
         }
       }
     },
+    "Atlas occupancy" : {
+      "comment" : "A label that describes the percentage of the Atlas that is occupied.",
+      "isCommentAutoGenerated" : true
+    },
     "Atlas size: \\(appSettings.atlasSizeMB) MB" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -2334,6 +2320,35 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Pinceau"
+          }
+        }
+      }
+    },
+    "Buffering..." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Daten werden gepuffert..."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Buffering..."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Almacenando en búfer..."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mise en mémoire tampon..."
           }
         }
       }
@@ -6563,6 +6578,35 @@
         }
       }
     },
+    "Field of view" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sichtfeld"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Field of view"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Campo de visión"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Champ de vision"
+          }
+        }
+      }
+    },
     "Finishing pending volume updates before opening." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -8362,6 +8406,10 @@
         }
       }
     },
+    "Last 30 seconds" : {
+      "comment" : "A label displayed under the graph that indicates the time period being displayed.",
+      "isCommentAutoGenerated" : true
+    },
     "Leave Session" : {
       "localizations" : {
         "de" : {
@@ -8731,6 +8779,35 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Chargement"
+          }
+        }
+      }
+    },
+    "Loading the initial volume data and preparing the atlas." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die ersten Volumendaten werden geladen und der Atlas wird vorbereitet."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Loading the initial volume data and preparing the atlas."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cargando los datos iniciales del volumen y preparando el atlas."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chargement des premières données du volume et préparation de l’atlas."
           }
         }
       }
@@ -11154,6 +11231,35 @@
         }
       }
     },
+    "Narrower field of view" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sichtfeld verkleinern"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Narrower field of view"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reducir el campo de visión"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Réduire le champ de vision"
+          }
+        }
+      }
+    },
     "Nearest Neighbor" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -12469,6 +12575,39 @@
         }
       }
     },
+    "Paging" : {
+      "comment" : "A label for the paging metrics.",
+      "isCommentAutoGenerated" : true
+    },
+    "Parallel projection" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Parallelprojektion"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Parallel projection"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Proyección paralela"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Projection parallèle"
+          }
+        }
+      }
+    },
     "Participants" : {
       "localizations" : {
         "de" : {
@@ -13618,6 +13757,64 @@
         }
       }
     },
+    "Preparing renderer..." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Renderer wird vorbereitet..."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Preparing renderer..."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Preparando el renderizador..."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Préparation du rendu..."
+          }
+        }
+      }
+    },
+    "Preparing rendering resources and shaders." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rendering-Ressourcen und Shader werden vorbereitet."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Preparing rendering resources and shaders."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Preparando los recursos de renderizado y los shaders."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Préparation des ressources de rendu et des shaders."
+          }
+        }
+      }
+    },
     "private_interaction_option_measurement" : {
       "localizations" : {
         "de" : {
@@ -13727,6 +13924,35 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Projeter sur le volume"
+          }
+        }
+      }
+    },
+    "Projection" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Projektion"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Projection"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Proyección"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Projection"
           }
         }
       }
@@ -14355,6 +14581,35 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Rendu"
+          }
+        }
+      }
+    },
+    "Rendering first frame..." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Erstes Bild wird gerendert..."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rendering first frame..."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Renderizando la primera imagen..."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rendu de la première image..."
           }
         }
       }
@@ -16325,6 +16580,35 @@
         }
       }
     },
+    "Show dataset bounding box" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Datensatzrahmen anzeigen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show dataset bounding box"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mostrar el cuadro delimitador del conjunto de datos"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Afficher la boîte englobante du jeu de données"
+          }
+        }
+      }
+    },
     "Show Direction" : {
       "localizations" : {
         "de" : {
@@ -16926,32 +17210,40 @@
         }
       }
     },
-    "Supported formats are QVIS `.dat` + `.raw`, NRRD/NHDR, PVM, IV3Dm (`.i3m` / `.i3m.zip`), Zarr/OZX, and native BorgVR `.data` files." : {
+    "Supported formats are QVIS `.dat` + `.raw`, NRRD/NHDR, PVM, IV3Dm (`.i3m` / `.i3m.zip`), UVF, Zarr/OZX, and native BorgVR `.data` files." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Unterstützt werden QVIS `.dat` + `.raw`, NRRD/NHDR, PVM, IV3Dm (`.i3m` / `.i3m.zip`), Zarr/OZX und native BorgVR `.data`-Dateien."
+            "value" : "Unterstützt werden QVIS `.dat` + `.raw`, NRRD/NHDR, PVM, IV3Dm (`.i3m` / `.i3m.zip`), UVF, Zarr/OZX und native BorgVR `.data`-Dateien."
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Supported formats are QVIS `.dat` + `.raw`, NRRD/NHDR, PVM, IV3Dm (`.i3m` / `.i3m.zip`), Zarr/OZX, and native BorgVR `.data` files."
+            "value" : "Supported formats are QVIS `.dat` + `.raw`, NRRD/NHDR, PVM, IV3Dm (`.i3m` / `.i3m.zip`), UVF, Zarr/OZX, and native BorgVR `.data` files."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Se admiten QVIS `.dat` + `.raw`, NRRD/NHDR, PVM, IV3Dm (`.i3m` / `.i3m.zip`), Zarr/OZX y archivos nativos BorgVR `.data`."
+            "value" : "Se admiten QVIS `.dat` + `.raw`, NRRD/NHDR, PVM, IV3Dm (`.i3m` / `.i3m.zip`), UVF, Zarr/OZX y archivos nativos BorgVR `.data`."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Les formats pris en charge sont QVIS `.dat` + `.raw`, NRRD/NHDR, PVM, IV3Dm (`.i3m` / `.i3m.zip`), Zarr/OZX et les fichiers BorgVR natifs `.data`."
+            "value" : "Les formats pris en charge sont QVIS `.dat` + `.raw`, NRRD/NHDR, PVM, IV3Dm (`.i3m` / `.i3m.zip`), UVF, Zarr/OZX et les fichiers BorgVR natifs `.data`."
           }
         }
+      }
+    },
+    "Supported volume formats" : {
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Unterstützte Volumenformate" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Supported volume formats" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Formatos de volumen compatibles" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Formats de volume pris en charge" } }
       }
     },
     "Synchronize View" : {
@@ -18713,6 +19005,35 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "La vue spatiale n’est pas encore disponible."
+          }
+        }
+      }
+    },
+    "The view will open as soon as the first volume frame is ready." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Ansicht erscheint, sobald das erste Volumenbild fertig ist."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The view will open as soon as the first volume frame is ready."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La vista aparecerá en cuanto esté lista la primera imagen del volumen."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La vue apparaîtra dès que la première image du volume sera prête."
           }
         }
       }
@@ -20586,6 +20907,35 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Quel état de modifications souhaitez-vous ouvrir ?"
+          }
+        }
+      }
+    },
+    "Wider field of view" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sichtfeld vergrößern"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wider field of view"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ampliar el campo de visión"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Élargir le champ de vision"
           }
         }
       }

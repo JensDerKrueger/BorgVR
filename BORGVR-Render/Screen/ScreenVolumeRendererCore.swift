@@ -507,10 +507,9 @@ final class ScreenVolumeRendererCore {
       componentCount: metadata.componentCount,
       componentRanges: metadata.componentRanges
     )
-    if appSettings.autoloadTF, metadata.channelInterpretation == .independentChannels,
-       let tfURL = appModel.transferFunctionFileURL(for: activeDataset, componentCount: renderingParameters.componentCount) {
-      _ = try? renderingParameters.loadDatasetTransferFunctions(from: tfURL)
-    }
+    appModel.loadAutomaticallyManagedTransferFunctions(
+      appSettings: appSettings, metadata: metadata, renderingParameters: renderingParameters
+    )
 
     activeOversampling = Float(appSettings.oversampling)
     configurePerformanceTracking()

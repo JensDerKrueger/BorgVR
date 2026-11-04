@@ -495,10 +495,6 @@ struct RenderView: View {
   }
 
   private func closeDataset(leavingSharePlay: Bool) {
-    if appSettings.autoloadTF,
-       let fileURL = appModel.transferFunctionFileURL() {
-      try? renderingParameters.saveDatasetTransferFunctions(to: fileURL)
-    }
     appModel.saveAutomaticallyManagedDatasetState(
       appSettings: appSettings,
       renderingParameters: renderingParameters

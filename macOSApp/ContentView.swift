@@ -4,6 +4,10 @@ struct ContentView: View {
   @EnvironmentObject private var appModel: AppModel
   @EnvironmentObject private var docking: DockingController
   @EnvironmentObject private var scriptRunner: BorgVRScriptRunner
+  @EnvironmentObject private var appSettings: AppSettings
+  @EnvironmentObject private var storedAppModel: StoredAppModel
+  @EnvironmentObject private var sharePlay: SharePlayCoordinator
+  @StateObject private var importOpenWorkflow = DatasetOpenWorkflow()
   @Environment(\.openWindow) private var openWindow
   @Environment(\.dismissWindow) private var dismissWindow
 
@@ -11,6 +15,15 @@ struct ContentView: View {
     routedView
       .frame(maxWidth: .infinity, maxHeight: .infinity)
       .background(Color(nsColor: .windowBackgroundColor))
+      .disabled(importOpenWorkflow.isOpening)
+      .alert("Dataset could not be opened", isPresented: Binding(
+        get: { importOpenWorkflow.openErrorMessage != nil },
+        set: { if !$0 { importOpenWorkflow.openErrorMessage = nil } }
+      )) {
+        Button("OK", role: .cancel) {}
+      } message: {
+        Text(importOpenWorkflow.openErrorMessage ?? "")
+      }
       .onChange(of: scriptRunner.scriptLogWindowRequest) { _, _ in
         openWindow(id: "ScriptLogView")
       }
@@ -50,6 +63,16 @@ struct ContentView: View {
                 NotificationCenter.default.post(
                   name: SceneMeshAssetCatalog.didChangeNotification,
                   object: outputURL
+                )
+              },
+              onOpenDataset: { url in
+                importOpenWorkflow.startOpeningImportedDataset(
+                  at: url, appModel: appModel, appSettings: appSettings, sharePlay: sharePlay,
+                  storage: DatasetStorageAccess(
+                    directoryURL: storedAppModel.resolvedDataDirectoryURL(),
+                    beginAccess: { storedAppModel.startAccessingDataDirectory() },
+                    endAccess: { storedAppModel.stopAccessingDataDirectory($0) }
+                  )
                 )
               }
             )

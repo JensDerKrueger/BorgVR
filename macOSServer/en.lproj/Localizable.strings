@@ -3,6 +3,13 @@
 "converter_supporting_file_access_allow" = "Allow Access";
 "converter_supporting_file_access_wrong_file" = "Please select the referenced file \"%@\".";
 "image_sequence_title" = "Image sequence";
+"What would you like to do?" = "What would you like to do?";
+"Import / Export" = "Import / Export";
+"What would you like to import?" = "What would you like to import?";
+"Volume File" = "Volume File";
+"DICOM Series" = "DICOM Series";
+"DICOM Fusion" = "DICOM Fusion";
+"Image Sequence" = "Image Sequence";
 "image_sequence_select" = "Select image folder";
 "image_sequence_size" = "Volume size in meters (X / Y / Z)";
 "image_sequence_empty" = "The folder contains no supported images.";
@@ -643,3 +650,5 @@
 "converter_source_note" = "Source / origin (optional)";
 "Stored color compression (RGB/RGBA)" = "Color compression on import (RGB/RGBA)";
 "No compression" = "No compression";
+"Supported volume formats" = "Supported volume formats";
+"converter_import_completed_title" = "Import completed";

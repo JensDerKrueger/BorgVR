@@ -352,6 +352,28 @@ final class DatasetOpenWorkflow: ObservableObject {
     openingTask?.cancel()
   }
 
+  func startOpeningImportedDataset(
+    at url: URL,
+    appModel: AppModel,
+    appSettings: AppSettings,
+    sharePlay: SharePlayCoordinator,
+    storage: DatasetStorageAccess
+  ) {
+    guard !isLoading && !isOpening && !isDeleting else { return }
+    let access = storage.beginAccess()
+    defer { storage.endAccess(access) }
+    do {
+      let metadata = try BORGVRMetaData(url: url)
+      startOpening(
+        .init(identifier: url.path, description: metadata.datasetDescription,
+              source: .local, uniqueId: metadata.uniqueID),
+        appModel: appModel, appSettings: appSettings, sharePlay: sharePlay, storage: storage
+      )
+    } catch {
+      openErrorMessage = error.localizedDescription
+    }
+  }
+
   func deleteDataset(withKey key: String, storage: DatasetStorageAccess, appModel: AppModel) async {
     guard !isLoading, !isOpening, !isDeleting,
           let dataset = datasets.first(where: { $0.selectionKey == key }),

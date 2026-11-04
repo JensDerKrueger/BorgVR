@@ -414,6 +414,11 @@ struct RenderView: View {
             visibilityButton(grouped: true)
           }
         }
+        .overlay(alignment: .bottom) {
+          DatasetStreamingProgressLine(progress: appModel.datasetStreaming)
+            .padding(.horizontal, -12)
+            .offset(y: 4)
+        }
 
         HStack(spacing: 8) {
           if let interpretation = appModel.activeDatasetMetadata?.channelInterpretation,
@@ -1462,10 +1467,6 @@ struct RenderView: View {
   }
 
   private func closeDataset(leavingSharePlay: Bool) {
-    if appSettings.autoloadTF,
-       let fileURL = appModel.transferFunctionFileURL() {
-      try? renderingParameters.saveDatasetTransferFunctions(to: fileURL)
-    }
     appModel.saveAutomaticallyManagedDatasetState(
       appSettings: appSettings,
       renderingParameters: renderingParameters

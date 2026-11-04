@@ -60,7 +60,7 @@ public enum VolumeFileParserFactory {
     }
   }
 
-  public static let supportedExtensions = ["dat", "nrrd", "nhdr", "pvm", "i3m", "zip", "ozx", "zarr"]
+  public static let supportedExtensions = ["dat", "nrrd", "nhdr", "pvm", "i3m", "zip", "ozx", "zarr", "uvf", "vff"]
 
   public static func parser(for filename: String, cancellationCheck: (() throws -> Void)? = nil,
                             progress: ((Double) -> Void)? = nil, log: ((String) -> Void)? = nil) throws -> VolumeFileParser {
@@ -76,6 +76,10 @@ public enum VolumeFileParserFactory {
         return try PVMParser(filename: filename)
       case "i3m", "zip":
         return try I3MParser(filename: filename)
+      case "uvf":
+        return try UVFParser(filename: filename, cancellationCheck: cancellationCheck, progress: progress, log: log)
+      case "vff":
+        return try VFFParser(filename: filename, cancellationCheck: cancellationCheck, progress: progress, log: log)
       case "ozx", "zarr":
         return try ZarrParser(filename: filename, cancellationCheck: cancellationCheck, progress: progress, log: log)
       case "json" where URL(fileURLWithPath: filename).lastPathComponent == "zarr.json":

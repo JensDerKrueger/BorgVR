@@ -61,7 +61,9 @@ struct BorgVRMobileApp: App {
   var body: some Scene {
     WindowGroup {
       ContentView()
-        .onChange(of: scenePhase, initial: true) { _, phase in BorgVRVolumeEditGPUAvailability.setApplicationActive(phase == .active) }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.willTerminateNotification)) { _ in
+          saveOpenDatasetState()
+        }
         .volumeEditSelectionDialog(model: appModel.volumeBrush)
         .appStoreUpdateAlert(using: updateChecker)
         .sheet(isPresented: $showsSharePlayDisplayNameOnboarding) {
@@ -177,6 +179,10 @@ struct BorgVRMobileApp: App {
         .settingsImportDialogs(settingsFiles)
     }
     .handlesExternalEvents(matching: [BorgVRSharePlayActivity.activityIdentifier])
+    .onChange(of: scenePhase, initial: true) { _, phase in
+      BorgVRVolumeEditGPUAvailability.setApplicationActive(phase == .active)
+      if phase == .background { saveOpenDatasetState() }
+    }
   }
 
   @MainActor
@@ -241,18 +247,25 @@ struct BorgVRMobileApp: App {
         )
     }
     try await appModel.volumeBrush.prepareOpening(datasetID: entry.uniqueId,
-      datasetURL: entry.editStorageURL(directoryURL: FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first), interactive: false)
-    appModel.openDataset(entry, asGroupSessionHost: sharePlay.isInSession ? nil : true)
+      datasetURL: entry.editStorageURL(directoryURL: FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first),
+      interactive: false, restoreLastSelection: false)
+    appModel.openDataset(entry, asGroupSessionHost: sharePlay.isInSession ? nil : true,
+                         automaticallyLoadState: false)
     sharePlay.datasetOpened()
+  }
+
+  @MainActor
+  private func saveOpenDatasetState() {
+    guard case .rendering = appModel.datasetSessionState else { return }
+    appModel.saveAutomaticallyManagedDatasetState(
+      appSettings: appSettings,
+      renderingParameters: renderingParameters
+    )
   }
 
   @MainActor
   private func closeMCPDataset() {
     guard appModel.activeDataset != nil else { return }
-    if appSettings.autoloadTF,
-       let fileURL = appModel.transferFunctionFileURL() {
-      try? renderingParameters.saveDatasetTransferFunctions(to: fileURL)
-    }
     appModel.saveAutomaticallyManagedDatasetState(
       appSettings: appSettings,
       renderingParameters: renderingParameters

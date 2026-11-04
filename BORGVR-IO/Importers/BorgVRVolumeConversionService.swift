@@ -605,7 +605,7 @@ public enum BorgVRVolumeConversionService {
   ) throws {
     let parser = try VolumeFileParserFactory.parser(for: sourceURL.path,
       cancellationCheck: { try cancellationToken?.checkCancellation() },
-      progress: { logger?.progress("Reading Zarr volume", $0) }, log: { logger?.info($0) })
+      progress: { logger?.progress("Reading volume", $0) }, log: { logger?.info($0) })
     defer {
       if parser.dataIsTempCopy {
         try? FileManager.default.removeItem(atPath: parser.absoluteFilename)

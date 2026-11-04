@@ -91,6 +91,21 @@ func runAutoImporterTests() throws {
   try worker.checkForImports(); try worker.checkForImports()
   try check(!fm.fileExists(atPath: qvis.path) && !fm.fileExists(atPath: raw.path), "QVIS cleanup")
 
+  // VFF probing must also work without its normal extension and clean up the source.
+  let vff = input.appendingPathComponent("volume-vff.input")
+  var vffBytes = Data("ncaa\ntype=raster;rank=3;bands=1;format=slice;bits=16;size=2 2 2;elementsize=0.1;\n\u{0c}\n".utf8)
+  for value in Int16(-4)...Int16(3) {
+    var encoded = value.bigEndian
+    withUnsafeBytes(of: &encoded) { vffBytes.append(contentsOf: $0) }
+  }
+  try vffBytes.write(to: vff)
+  try worker.checkForImports(); try worker.checkForImports()
+  let vffMetadata = try BORGVRMetaData(url: output.appendingPathComponent("volume-vff.data"))
+  try check(!fm.fileExists(atPath: vff.path), "VFF source cleanup")
+  try check(vffMetadata.valueRange.minimum == 32764 && vffMetadata.valueRange.maximum == 32771,
+            "Auto-import VFF signed conversion")
+  try check(abs(vffMetadata.voxelSpacingX - 0.0001) < 0.00000001, "Auto-import VFF physical units")
+
   // Neither collisions nor an input arriving during conversion may destroy existing data.
   let existing = output.appendingPathComponent("scan.data")
   let previousBytes = try Data(contentsOf: existing)

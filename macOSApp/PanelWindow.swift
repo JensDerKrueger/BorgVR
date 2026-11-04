@@ -56,15 +56,23 @@ struct PanelTitleFormat: Equatable {
   var isBold = true
 }
 
+struct PanelTitleProgress: Equatable {
+  var fraction: Double
+  var color: Color = .red
+  var statusText: String
+}
+
 struct PanelWindowConfiguration: Equatable {
   var title: String?
   var titleFormat = PanelTitleFormat()
+  var titleProgress: PanelTitleProgress?
   var leading: [PanelAction] = []
   var actions: [PanelAction] = []
 
-  static func standard(title: String? = nil, titleFormat: PanelTitleFormat = .init(), reset: PanelAction, load: PanelAction,
+  static func standard(title: String? = nil, titleFormat: PanelTitleFormat = .init(),
+                       titleProgress: PanelTitleProgress? = nil, reset: PanelAction, load: PanelAction,
                        save: PanelAction, additional: [PanelAction] = [], leading: [PanelAction] = []) -> Self {
-    Self(title: title, titleFormat: titleFormat, leading: leading,
+    Self(title: title, titleFormat: titleFormat, titleProgress: titleProgress, leading: leading,
       actions: [reset, .spacer("files"), load, save] + (additional.isEmpty ? [] : [.spacer("additional")] + additional))
   }
 }

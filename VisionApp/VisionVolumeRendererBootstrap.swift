@@ -98,6 +98,7 @@ enum VisionVolumeRendererBootstrap {
       }
       try dataset.getMetadata().requireUnsignedProcessing()
     } catch {
+      runtimeAppModel.datasetStreaming.track(nil)
       runtimeAppModel.logger.error("Failed to load dataset: \(error.localizedDescription)")
       runtimeAppModel.requestDatasetClose(
         destination: runtimeAppModel.groupSessionHost
@@ -106,6 +107,8 @@ enum VisionVolumeRendererBootstrap {
       )
       return
     }
+
+    runtimeAppModel.datasetStreaming.track(dataset)
 
     let editDatasetURL: URL?
     switch activeDataset.source {
@@ -139,14 +142,15 @@ enum VisionVolumeRendererBootstrap {
                                 componentCount: dataset.getMetadata().componentCount,
                                 componentRanges: dataset.getMetadata().componentRanges)
 
-    if storedAppModel.autoloadTF, dataset.getMetadata().channelInterpretation == .independentChannels {
+    if runtimeAppModel.automaticallyLoadsDatasetState, storedAppModel.autoloadTF,
+       dataset.getMetadata().channelInterpretation == .independentChannels {
       let fileURL = URL(
         fileURLWithPath: autoURL.deletingPathExtension().path() + ".tf1d"
       )
       _ = try? sharedAppModel.loadDatasetTransferFunctions(from: fileURL)
       sharedAppModel.synchronize(kind: .full)
     }
-    if let datasetInfo = runtimeAppModel.activeDatasetInfo {
+    if runtimeAppModel.automaticallyLoadsDatasetState, let datasetInfo = runtimeAppModel.activeDatasetInfo {
       sharedAppModel.loadAutomaticallyManagedDatasetState(
         datasetID: activeDataset.uniqueId,
         physicalExtent: datasetInfo.physicalExtentMeters,

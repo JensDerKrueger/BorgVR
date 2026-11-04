@@ -1500,14 +1500,16 @@ final class BorgVRScriptRunner: ObservableObject {
       defer { storedAppModel.stopAccessingDataDirectory(accessURL) }
       do {
         try await appModel.volumeBrush.prepareOpening(datasetID: openable.uniqueId,
-          datasetURL: openable.editStorageURL(directoryURL: storedAppModel.resolvedDataDirectoryURL()), interactive: false)
+          datasetURL: openable.editStorageURL(directoryURL: storedAppModel.resolvedDataDirectoryURL()),
+          interactive: false, restoreLastSelection: false)
       } catch {
         await self?.completeDatasetOpen(result: .callbackError, message: error.localizedDescription)
         return
       }
       appModel.openDataset(
         openable,
-        asGroupSessionHost: self?.sharePlay?.isInSession == true ? nil : true
+        asGroupSessionHost: self?.sharePlay?.isInSession == true ? nil : true,
+        automaticallyLoadState: false
       )
       self?.docking?.resetForDatasetClose()
       self?.sharePlay?.datasetOpened()

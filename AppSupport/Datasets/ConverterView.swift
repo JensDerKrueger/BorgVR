@@ -16,14 +16,7 @@ struct ConverterView: View {
     var id: Self { self }
   }
 
-  private enum ImportSourceKind: String, CaseIterable, Identifiable {
-    case volumeFile
-    case dicomDirectory
-    case dicomPair
-    case imageSequence
-
-    var id: Self { self }
-  }
+  private typealias ImportSourceKind = VolumeImportKind
 
   private enum DICOMDirectoryRole {
     case single
@@ -32,9 +25,17 @@ struct ConverterView: View {
     case images
   }
 
+  private enum SelectionStage {
+    case operation
+    case importSource
+    case workflow
+  }
+
   // UI state properties.
   @State private var operation: Operation = .importDataset
+  @State private var selectionStage = SelectionStage.operation
   @State private var importSourceKind: ImportSourceKind = .volumeFile
+  @State private var preparedImportSourceKind: ImportSourceKind?
   @State private var inputFile: String = ""
   @State private var inputDirectory: String = ""
   @State private var imageDirectoryURL: URL?
@@ -56,6 +57,7 @@ struct ConverterView: View {
   @State private var progressValue: Double = 0.0
 
   @State private var isConverting: Bool = false
+  @State private var importedDatasetURL: URL?
   @State private var conversionCancellationToken: BorgVRVolumeConversionCancellationToken?
   @State private var conversionCancellationRequested = false
   @State private var showDirectoryPicker = false
@@ -95,6 +97,7 @@ struct ConverterView: View {
   @StateObject private var movingDicomPreviewModel = DicomSlicePreviewModel()
   private let onClose: () -> Void
   private let onMeshImport: (URL) -> Void
+  private let onOpenDataset: ((URL) -> Void)?
 
   // Create an instance of our GUI logger.
   // (It starts with no bindings until we set them in onAppear.)
@@ -102,47 +105,23 @@ struct ConverterView: View {
 
   init(
     onClose: @escaping () -> Void,
-    onMeshImport: @escaping (URL) -> Void = { _ in }
+    onMeshImport: @escaping (URL) -> Void = { _ in },
+    onOpenDataset: ((URL) -> Void)? = nil
   ) {
     self.onClose = onClose
     self.onMeshImport = onMeshImport
+    self.onOpenDataset = onOpenDataset
   }
 
   var body: some View {
     VStack(spacing: 16) {
-      Picker("converter_mode", selection: $operation) {
-        Text("converter_mode_import").tag(Operation.importDataset)
-        Text("converter_mode_export").tag(Operation.exportDataset)
-        Text("converter_mode_mesh_import").tag(Operation.importMesh)
-        Text("converter_mode_mesh_export").tag(Operation.exportMesh)
-      }
-      .pickerStyle(.segmented)
-      .labelsHidden()
-      .frame(maxWidth: 720)
-      .disabled(isConverting)
-
-      if operation == .importDataset {
+      if selectionStage == .operation {
+        operationSelection
+      } else if selectionStage == .importSource {
+        importSourceSelection
+      } else if operation == .importDataset {
       VStack(spacing: 16) {
-      VStack {
-        HStack {
-          Text("converter_import_title")
-            .font(.title)
-            .bold()
-            .padding()
-
-          Text(
-            String(
-              format: NSLocalizedString("converter_step_of_total_format", comment: ""),
-              step,
-              6
-            )
-          )
-          .font(.subheadline)
-          .foregroundStyle(.secondary)
-          .frame(maxWidth: .infinity, alignment: .leading)
-          .padding()
-        }
-      }
+      ConverterWizardHeader(title: "converter_import_title", step: step + 2, total: 8)
       Spacer()
 
       HStack(alignment: .top) {
@@ -156,23 +135,8 @@ struct ConverterView: View {
             case 1:
               // Step 1: Input source
               VStack(alignment: .leading, spacing: 12) {
-                Text("converter_step1_title")
+                Text(importSourceKind.title)
                   .font(.headline)
-                Text("converter_step1_subtitle")
-                  .font(.subheadline)
-                  .foregroundStyle(.secondary)
-
-                Picker("converter_import_source_kind", selection: $importSourceKind) {
-                  Text("converter_import_source_file").tag(ImportSourceKind.volumeFile)
-                  Text("converter_import_source_dicom").tag(ImportSourceKind.dicomDirectory)
-                  Text("converter_import_source_dicom_pair").tag(ImportSourceKind.dicomPair)
-                  Text("image_sequence_title").tag(ImportSourceKind.imageSequence)
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .onChange(of: importSourceKind) { _, _ in
-                  refreshImportSuggestion()
-                }
 
                 switch importSourceKind {
                   case .imageSequence:
@@ -193,6 +157,8 @@ struct ConverterView: View {
                         .truncationMode(.middle)
                         .foregroundStyle(inputFile.isEmpty ? .secondary : .primary)
                     }
+                    ConverterVolumeFormatList()
+                      .padding(.top, 8)
                   case .dicomDirectory:
                     if inputDirectory.isEmpty == false {
                       DicomSlicePreview(model: dicomPreviewModel)
@@ -204,7 +170,7 @@ struct ConverterView: View {
                       buttonKey: "converter_button_select_input_dir",
                       path: inputDirectory
                     )
-                  case .dicomPair:
+                  case .dicomFusion:
                     HStack(alignment: .top, spacing: 16) {
                       VStack(alignment: .leading, spacing: 8) {
                         Text("converter_dicom_reference_series").font(.headline)
@@ -316,19 +282,21 @@ struct ConverterView: View {
             default:
               // Conversion running: show progress and log only
               VStack(alignment: .leading, spacing: 8) {
-                Text("converter_converting_title")
+                Text(importedDatasetURL == nil ? "converter_converting_title" : "converter_import_completed_title")
                   .font(.headline)
-                HStack {
-                  Text(progressText)
-                  ProgressView(value: progressValue)
-                    .padding(.leading)
-                  if conversionCancellationToken != nil {
-                    Button(role: .cancel) {
-                      cancelConversion()
-                    } label: {
-                      Label("Cancel", systemImage: "xmark.circle")
+                if isConverting {
+                  HStack {
+                    Text(progressText)
+                    ProgressView(value: progressValue)
+                      .padding(.leading)
+                    if conversionCancellationToken != nil {
+                      Button(role: .cancel) {
+                        cancelConversion()
+                      } label: {
+                        Label("Cancel", systemImage: "xmark.circle")
+                      }
+                      .disabled(conversionCancellationRequested)
                     }
-                    .disabled(conversionCancellationRequested)
                   }
                 }
                 TextEditor(text: $logText)
@@ -348,21 +316,23 @@ struct ConverterView: View {
 
         HStack {
 
-          Button {
-            closeConverter()
-          } label: {
-            Label("converter_back_to_main_menu", systemImage: "chevron.backward.circle")
-          }
-          .disabled(isConverting)
-
           Spacer()
+
+          if step == 6, let importedDatasetURL, let onOpenDataset {
+            Button {
+              onOpenDataset(importedDatasetURL)
+            } label: {
+              Label("Open Dataset Now", systemImage: "play.fill")
+            }
+            .buttonStyle(.borderedProminent)
+          }
 
           Button {
             if step > 1 { step -= 1 }
+            else { selectionStage = .importSource }
           } label: {
             Label("converter_button_back", systemImage: "chevron.backward")
           }
-          .disabled(step == 1)
 
           Button {
             // Validate minimal inputs for each step before advancing
@@ -408,6 +378,14 @@ struct ConverterView: View {
       }
     }
     .padding()
+    .navigationTitle("Import / Export")
+    .toolbar {
+      ToolbarItem(placement: .cancellationAction) {
+        Button("Back", action: closeConverter)
+          .help("converter_back_to_main_menu")
+          .disabled(isConverting)
+      }
+    }
     .onAppear {
       // Once the view appears, set the logger’s bindings.
       logger.setLogBinding($logText)
@@ -438,23 +416,55 @@ struct ConverterView: View {
     }
   }
 
+  private var operationSelection: some View {
+    ConverterWizardSelectionStep(title: "Import / Export", question: "What would you like to do?",
+      systemImage: "arrow.left.arrow.right", step: 1, total: totalWizardSteps, choices: [
+        operationChoice(.importDataset, title: "converter_mode_import", icon: "square.and.arrow.down"),
+        operationChoice(.exportDataset, title: "converter_mode_export", icon: "square.and.arrow.up"),
+        operationChoice(.importMesh, title: "converter_mode_mesh_import", icon: "cube.box"),
+        operationChoice(.exportMesh, title: "converter_mode_mesh_export", icon: "cube.box.fill")
+      ], selectedID: operation.rawValue, canGoBack: false, onBack: {}, onNext: {
+        selectionStage = operation == .importDataset ? .importSource : .workflow
+      })
+  }
+
+  private var totalWizardSteps: Int {
+    switch operation {
+      case .importDataset: 8
+      case .exportDataset: 5
+      case .importMesh, .exportMesh: 4
+    }
+  }
+
+  private func operationChoice(_ value: Operation, title: LocalizedStringKey, icon: String) -> ConverterChoiceItem {
+    ConverterChoiceItem(id: value.rawValue, title: title, systemImage: icon) {
+      operation = value
+    }
+  }
+
+  private var importSourceSelection: some View {
+    ConverterWizardSelectionStep(title: "converter_import_title", question: "What would you like to import?",
+      systemImage: "tray.and.arrow.down", step: 2, total: 8,
+      choices: ImportSourceKind.allCases.map(importChoice), selectedID: importSourceKind.rawValue,
+      onBack: { selectionStage = .operation }, onNext: {
+        if preparedImportSourceKind != importSourceKind {
+          refreshImportSuggestion()
+          preparedImportSourceKind = importSourceKind
+        }
+        step = 1
+        selectionStage = .workflow
+      })
+  }
+
+  private func importChoice(_ value: ImportSourceKind) -> ConverterChoiceItem {
+    ConverterChoiceItem(id: value.rawValue, title: value.title, systemImage: value.systemImage) {
+      importSourceKind = value
+    }
+  }
+
   private var meshImportContent: some View {
     VStack(spacing: 16) {
-      HStack {
-        Text("converter_mesh_import_title")
-          .font(.title)
-          .bold()
-          .padding()
-        Text(String(
-          format: NSLocalizedString("converter_step_of_total_format", comment: ""),
-          meshStep,
-          3
-        ))
-        .font(.subheadline)
-        .foregroundStyle(.secondary)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding()
-      }
+      ConverterWizardHeader(title: "converter_mesh_import_title", step: meshStep + 1, total: 4)
 
       Spacer()
 
@@ -545,15 +555,11 @@ struct ConverterView: View {
 
       if !isConverting {
         HStack {
-          Button {
-            closeConverter()
-          } label: {
-            Label("converter_back_to_main_menu", systemImage: "chevron.backward.circle")
-          }
           Spacer()
-          if meshStep > 1 && !meshImportDidSucceed {
+          if !meshImportDidSucceed {
             Button {
-              meshStep -= 1
+              if meshStep > 1 { meshStep -= 1 }
+              else { selectionStage = .operation }
               meshImportDidFinish = false
             } label: {
               Label("converter_button_back", systemImage: "chevron.backward")
@@ -592,21 +598,7 @@ struct ConverterView: View {
 
   private var meshExportContent: some View {
     VStack(spacing: 16) {
-      HStack {
-        Text("converter_mesh_export_title")
-          .font(.title)
-          .bold()
-          .padding()
-        Text(String(
-          format: NSLocalizedString("converter_step_of_total_format", comment: ""),
-          meshExportStep,
-          3
-        ))
-        .font(.subheadline)
-        .foregroundStyle(.secondary)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding()
-      }
+      ConverterWizardHeader(title: "converter_mesh_export_title", step: meshExportStep + 1, total: 4)
 
       Spacer()
 
@@ -691,15 +683,11 @@ struct ConverterView: View {
 
       if !isConverting {
         HStack {
-          Button {
-            closeConverter()
-          } label: {
-            Label("converter_back_to_main_menu", systemImage: "chevron.backward.circle")
-          }
           Spacer()
-          if meshExportStep > 1 && !meshExportDidSucceed {
+          if !meshExportDidSucceed {
             Button {
-              meshExportStep -= 1
+              if meshExportStep > 1 { meshExportStep -= 1 }
+              else { selectionStage = .operation }
               meshExportDidFinish = false
             } label: {
               Label("converter_button_back", systemImage: "chevron.backward")
@@ -937,24 +925,7 @@ struct ConverterView: View {
 
   private var exportContent: some View {
     VStack(spacing: 16) {
-      HStack {
-        Text("converter_export_title")
-          .font(.title)
-          .bold()
-          .padding()
-
-        Text(
-          String(
-            format: NSLocalizedString("converter_step_of_total_format", comment: ""),
-            exportStep,
-            4
-          )
-        )
-        .font(.subheadline)
-        .foregroundStyle(.secondary)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding()
-      }
+      ConverterWizardHeader(title: "converter_export_title", step: exportStep + 1, total: 5)
 
       Spacer()
 
@@ -1071,17 +1042,12 @@ struct ConverterView: View {
 
       if !isConverting {
         HStack {
-          Button {
-            closeConverter()
-          } label: {
-            Label("converter_back_to_main_menu", systemImage: "chevron.backward.circle")
-          }
-
           Spacer()
 
-          if exportStep > 1 && !exportDidSucceed {
+          if !exportDidSucceed {
             Button {
-              exportStep -= 1
+              if exportStep > 1 { exportStep -= 1 }
+              else { selectionStage = .operation }
               exportDidFinish = false
             } label: {
               Label("converter_button_back", systemImage: "chevron.backward")
@@ -1153,13 +1119,7 @@ struct ConverterView: View {
   }
 
   private func wizardStepIcon(_ systemName: String) -> some View {
-    Image(systemName: systemName)
-      .font(.system(size: 42, weight: .medium))
-      .foregroundStyle(.tint)
-      .frame(width: 100, height: 100)
-      .background(.quaternary, in: RoundedRectangle(cornerRadius: 20))
-      .padding()
-      .accessibilityHidden(true)
+    ConverterWizardStepIcon(systemImage: systemName)
   }
 
   private func selectExportInputFile() {
@@ -1282,7 +1242,7 @@ struct ConverterView: View {
         return !inputFile.isEmpty
       case .dicomDirectory:
         return !inputDirectory.isEmpty
-      case .dicomPair:
+      case .dicomFusion:
         return !inputDirectory.isEmpty && !movingInputDirectory.isEmpty
     }
   }
@@ -1357,13 +1317,13 @@ struct ConverterView: View {
           )
         case .reference:
           inputDirectoryAccess = access
-          importSourceKind = .dicomPair
+          importSourceKind = .dicomFusion
           dicomPreviewModel.setDirectory(url)
           inputDirectory = url.path
           updateDICOMPairSuggestion()
         case .moving:
           movingDirectoryAccess = access
-          importSourceKind = .dicomPair
+          importSourceKind = .dicomFusion
           movingDicomPreviewModel.setDirectory(url)
           movingInputDirectory = url.path
           updateDICOMPairSuggestion()
@@ -1413,7 +1373,7 @@ struct ConverterView: View {
         (outputFile, datasetDescription) = generateDescriptionSuggestion(
           from: inputDirectory
         )
-      case .dicomPair:
+      case .dicomFusion:
         updateDICOMPairSuggestion()
     }
   }
@@ -1429,6 +1389,7 @@ struct ConverterView: View {
 
   /// Starts the conversion process.
   func startConversion() {
+    importedDatasetURL = nil
     let provenance = sourceNote.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? [] :
       [BORGVRProvenanceEntry(sourceNote, date: receivedAt)]
     guard hasValidImportInput, !outputFile.isEmpty else {
@@ -1472,10 +1433,12 @@ struct ConverterView: View {
       let timer = HighResolutionTimer()
       timer.start()
       var requiredFileAccess: URL?
+      var completedOutputURL: URL?
 
       do {
 
         let outputFilePath = outputAccess.url.appendingPathComponent(outputFile).path
+        let outputURL = URL(fileURLWithPath: appendExtensionIfNeeded(to: outputFilePath, ext: "data"))
 
         let borderMode: ExtensionStrategy
         switch storedAppModel.borderModeString {
@@ -1511,7 +1474,7 @@ struct ConverterView: View {
             switch sourceURL.pathExtension.lowercased() {
               case "dat": descriptionKey = "converter_desc_from_qvis"
               case "pvm": descriptionKey = "converter_desc_from_pvm"
-              case "i3m", "zip": descriptionKey = "converter_desc_from_file"
+              case "i3m", "zip", "uvf", "vff": descriptionKey = "converter_desc_from_file"
               default: descriptionKey = "converter_desc_from_nrrd"
             }
             sourceDescription = String(
@@ -1526,7 +1489,7 @@ struct ConverterView: View {
               directory.lastPathComponent
             )
             source = .dicomDirectory(directory)
-          case .dicomPair:
+          case .dicomFusion:
             let reference = URL(fileURLWithPath: inputDirectory, isDirectory: true)
             let moving = URL(fileURLWithPath: movingInputDirectory, isDirectory: true)
             sourceDescription = String(
@@ -1547,9 +1510,7 @@ struct ConverterView: View {
         try BorgVRVolumeConversionService.convert(
           BorgVRVolumeConversionRequest(
             source: source,
-            destinationURL: URL(
-              fileURLWithPath: appendExtensionIfNeeded(to: outputFilePath, ext: "data")
-            ),
+            destinationURL: outputURL,
             datasetDescription: datasetDescription.isEmpty
               ? sourceDescription
               : datasetDescription,
@@ -1567,6 +1528,7 @@ struct ConverterView: View {
           logger: logger,
           cancellationToken: cancellationToken
         )
+        completedOutputURL = outputURL
       } catch BorgVRImportFileAccess.Error.permissionRequired(let url) {
         requiredFileAccess = url
       } catch is CancellationError {
@@ -1625,7 +1587,9 @@ struct ConverterView: View {
         )
       }
       let fileRequiringAccess = requiredFileAccess
+      let importedURL = completedOutputURL
       DispatchQueue.main.async {
+        importedDatasetURL = importedURL
         conversionCancellationToken = nil
         conversionCancellationRequested = false
         isConverting = false

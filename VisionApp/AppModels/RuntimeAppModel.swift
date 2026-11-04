@@ -375,6 +375,7 @@ class RuntimeAppModel {
     }
   }
   private(set) var datasetBufferingPhase: DatasetBufferingPhase = .loadingData
+  let datasetStreaming = DatasetStreamingProgress()
 
   var activeDataset: DatasetEntry? {
     switch datasetSessionState {
@@ -460,13 +461,17 @@ class RuntimeAppModel {
     }
   }
 
+  private(set) var automaticallyLoadsDatasetState = true
+
   func startImmersiveSpace(dataset: DatasetEntry,
-                           asGroupSessionHost:Bool) {    
+                           asGroupSessionHost: Bool, automaticallyLoadState: Bool = true) {
     guard !isOpeningOrDisplayingDataset(withUniqueID: dataset.uniqueId) else {
       return
     }
     groupSessionHost = asGroupSessionHost
+    automaticallyLoadsDatasetState = automaticallyLoadState
     sharePlayDatasetSource = nil
+    datasetStreaming.track(nil)
     datasetBufferingPhase = .loadingData
     datasetSessionState = .opening(dataset: dataset, requestID: UUID())
   }
@@ -498,6 +503,7 @@ class RuntimeAppModel {
   }
 
   func requestDatasetClose(destination: DatasetCloseDestination = .datasetSelection) {
+    datasetStreaming.track(nil)
     volumeBrush.close()
     if case .closing = datasetSessionState { return }
     guard activeDataset != nil || immersiveSpaceState != .closed || renderTask != nil else {
@@ -518,6 +524,7 @@ class RuntimeAppModel {
        currentRequestID != requestID {
       return
     }
+    datasetStreaming.track(nil)
     activeDatasetInfo = nil
     sharePlayDatasetSource = nil
     switch destination {

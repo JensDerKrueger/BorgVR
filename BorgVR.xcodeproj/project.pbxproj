@@ -194,6 +194,16 @@
 		57BF20261103000000000001 /* DatasetBufferingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57BF20261103000000000000 /* DatasetBufferingView.swift */; };
 		57BF20261103000000000002 /* DatasetBufferingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57BF20261103000000000000 /* DatasetBufferingView.swift */; };
 		57BF20261103000000000003 /* DatasetBufferingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57BF20261103000000000000 /* DatasetBufferingView.swift */; };
+		57BF20261104000100000001 /* DatasetStreamingProgress.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57BF20261104000100000000 /* DatasetStreamingProgress.swift */; };
+		57BF20261104000100000002 /* DatasetStreamingProgress.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57BF20261104000100000000 /* DatasetStreamingProgress.swift */; };
+		57BF20261104000100000003 /* DatasetStreamingProgress.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57BF20261104000100000000 /* DatasetStreamingProgress.swift */; };
+		57BF20261104000200000001 /* FractionProgressLine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57BF20261104000200000000 /* FractionProgressLine.swift */; };
+		57BF20261104000200000002 /* FractionProgressLine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57BF20261104000200000000 /* FractionProgressLine.swift */; };
+		57BF20261104000200000003 /* FractionProgressLine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57BF20261104000200000000 /* FractionProgressLine.swift */; };
+		57BF20261104000300000001 /* ConverterChoiceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57BF20261104000300000000 /* ConverterChoiceView.swift */; };
+		57BF20261104000300000002 /* ConverterChoiceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57BF20261104000300000000 /* ConverterChoiceView.swift */; };
+		57BF20261104000300000003 /* ConverterChoiceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57BF20261104000300000000 /* ConverterChoiceView.swift */; };
+		57BF20261104000300000004 /* ConverterChoiceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57BF20261104000300000000 /* ConverterChoiceView.swift */; };
 		57CC00000000000000000001 /* ScreenControlStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57CC00000000000000000000 /* ScreenControlStyle.swift */; };
 		57CC00000000000000000002 /* ScreenControlStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57CC00000000000000000000 /* ScreenControlStyle.swift */; };
 		57CC00000000000000000003 /* ScreenControlStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57CC00000000000000000000 /* ScreenControlStyle.swift */; };
@@ -319,6 +329,9 @@
 		57AF10000000000000000000 /* SettingsFileControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsFileControls.swift; sourceTree = "<group>"; };
 		57BB20261103000000000000 /* VolumeBoundingBoxRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VolumeBoundingBoxRenderer.swift; sourceTree = "<group>"; };
 		57BF20261103000000000000 /* DatasetBufferingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DatasetBufferingView.swift; sourceTree = "<group>"; };
+		57BF20261104000100000000 /* DatasetStreamingProgress.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DatasetStreamingProgress.swift; sourceTree = "<group>"; };
+		57BF20261104000200000000 /* FractionProgressLine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FractionProgressLine.swift; sourceTree = "<group>"; };
+		57BF20261104000300000000 /* ConverterChoiceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConverterChoiceView.swift; sourceTree = "<group>"; };
 		57CC00000000000000000000 /* ScreenControlStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenControlStyle.swift; sourceTree = "<group>"; };
 		57ED00000000000000000000 /* VolumeBrushControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VolumeBrushControls.swift; sourceTree = "<group>"; };
 		57ED00000000000000000010 /* VolumeBrushModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VolumeBrushModel.swift; sourceTree = "<group>"; };
@@ -379,7 +392,6 @@
 				BorgVREditableVolumeData.swift,
 				BORGVRFileData.swift,
 				BORGVRMetaData.swift,
-				BORGVRVolumeExporter.swift,
 				BorgVRMetalVolumeEditProcessor.swift,
 				BorgVRSettingsArchive.swift,
 				BorgVRSharedConstants.swift,
@@ -389,6 +401,7 @@
 				BorgVRVolumeEditMask.swift,
 				BorgVRVolumeEditMaterializer.swift,
 				BorgVRVolumeEditStates.swift,
+				BORGVRVolumeExporter.swift,
 				BorgVRVolumeOriginalBrick.swift,
 				HighResolutionTimer.swift,
 				Importers/BorgVRImageSequenceImporter.swift,
@@ -408,6 +421,12 @@
 				Importers/NRRD/NRRDParser.swift,
 				Importers/PVM/PVMParser.swift,
 				Importers/QVIS/QVISParser.swift,
+				Importers/UVF/UVFBinaryReader.swift,
+				Importers/UVF/UVFCompression.swift,
+				Importers/UVF/UVFLZMADecoder.swift,
+				Importers/UVF/UVFParser.swift,
+				Importers/UVF/UVFVolumeLayout.swift,
+				Importers/VFF/VFFParser.swift,
 				Importers/VolumeFileParser.swift,
 				Importers/ZARR/ZarrParser.swift,
 				Importers/ZARR/ZarrStore.swift,
@@ -769,6 +788,9 @@
 			isa = PBXGroup;
 			children = (
 				57BF20261103000000000000 /* DatasetBufferingView.swift */,
+				57BF20261104000100000000 /* DatasetStreamingProgress.swift */,
+				57BF20261104000200000000 /* FractionProgressLine.swift */,
+				57BF20261104000300000000 /* ConverterChoiceView.swift */,
 				57A000202E70000200000001 /* FilePickerView.swift */,
 				57A002B02ED5000100000001 /* GUILogger.swift */,
 				57A001232E70000300000001 /* LoggerView.swift */,
@@ -1170,6 +1192,9 @@
 				57A0016D2E99000400000001 /* VolumeMarkerTubeMesh.swift in Sources */,
 				57BB20261103000000000001 /* VolumeBoundingBoxRenderer.swift in Sources */,
 				57BF20261103000000000001 /* DatasetBufferingView.swift in Sources */,
+				57BF20261104000100000001 /* DatasetStreamingProgress.swift in Sources */,
+				57BF20261104000200000001 /* FractionProgressLine.swift in Sources */,
+				57BF20261104000300000001 /* ConverterChoiceView.swift in Sources */,
 				57A001912EA1000100000001 /* VolumeMeasurement.swift in Sources */,
 				57A001952EA1000200000001 /* VolumeMeasurementDocument.swift in Sources */,
 				57A001992EA1000300000001 /* MeasurementSurfaceMeshCache.swift in Sources */,
@@ -1242,6 +1267,9 @@
 				57A0016E2E99000400000001 /* VolumeMarkerTubeMesh.swift in Sources */,
 				57BB20261103000000000002 /* VolumeBoundingBoxRenderer.swift in Sources */,
 				57BF20261103000000000002 /* DatasetBufferingView.swift in Sources */,
+				57BF20261104000100000002 /* DatasetStreamingProgress.swift in Sources */,
+				57BF20261104000200000002 /* FractionProgressLine.swift in Sources */,
+				57BF20261104000300000002 /* ConverterChoiceView.swift in Sources */,
 				57A001922EA1000100000001 /* VolumeMeasurement.swift in Sources */,
 				57A001962EA1000200000001 /* VolumeMeasurementDocument.swift in Sources */,
 				57A0019A2EA1000300000001 /* MeasurementSurfaceMeshCache.swift in Sources */,
@@ -1289,6 +1317,9 @@
 				57A0016F2E99000400000001 /* VolumeMarkerTubeMesh.swift in Sources */,
 				57BB20261103000000000003 /* VolumeBoundingBoxRenderer.swift in Sources */,
 				57BF20261103000000000003 /* DatasetBufferingView.swift in Sources */,
+				57BF20261104000100000003 /* DatasetStreamingProgress.swift in Sources */,
+				57BF20261104000200000003 /* FractionProgressLine.swift in Sources */,
+				57BF20261104000300000003 /* ConverterChoiceView.swift in Sources */,
 				57A001932EA1000100000001 /* VolumeMeasurement.swift in Sources */,
 				57A001972EA1000200000001 /* VolumeMeasurementDocument.swift in Sources */,
 				57A0019B2EA1000300000001 /* MeasurementSurfaceMeshCache.swift in Sources */,
@@ -1306,6 +1337,7 @@
 				57AF10000000000000000004 /* SettingsFileControls.swift in Sources */,
 				57A002B42ED5000100000001 /* GUILogger.swift in Sources */,
 				57A002622ED3000100000001 /* ConverterView.swift in Sources */,
+				57BF20261104000300000004 /* ConverterChoiceView.swift in Sources */,
 				57A002722ED3000200000001 /* DicomSlicePreview.swift in Sources */,
 				57A0014F2E70000300000001 /* KeychainSecretStore.swift in Sources */,
 				57A001472E70000300000001 /* WebAssetProvider.swift in Sources */,

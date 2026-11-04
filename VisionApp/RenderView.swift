@@ -74,17 +74,21 @@ struct RenderView: View {
 
   var body: some View {
     VStack(spacing: 20) {
-      Text("render_title")
-        .font(.title)
-        .bold()
-        .frame(maxWidth: .infinity)
-        .overlay(alignment: .trailing) {
-          Button { showDatasetInfo = true } label: { Image(systemName: "info.circle") }
-            .disabled(runtimeAppModel.activeDatasetInfo == nil)
-            .accessibilityLabel("dataset_info_title")
-            .help("dataset_info_title")
-        }
-        .padding(.horizontal)
+      VStack(spacing: 4) {
+        Text("render_title")
+          .font(.title)
+          .bold()
+          .frame(maxWidth: .infinity)
+          .overlay(alignment: .trailing) {
+            Button { showDatasetInfo = true } label: { Image(systemName: "info.circle") }
+              .disabled(runtimeAppModel.activeDatasetInfo == nil)
+              .accessibilityLabel("dataset_info_title")
+              .help("dataset_info_title")
+          }
+
+        DatasetStreamingStatusView(progress: runtimeAppModel.datasetStreaming)
+      }
+      .padding(.horizontal)
 
       VStack(spacing: 6) {
         Text("render_picker_title")

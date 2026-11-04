@@ -1,7 +1,14 @@
 import AppKit
 import SwiftUI
 
+@MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
+  var saveOpenDatasetState: (() -> Void)?
+
+  func applicationWillTerminate(_ notification: Notification) {
+    saveOpenDatasetState?()
+  }
+
   func applicationDidFinishLaunching(_ notification: Notification) {
     NSWindow.allowsAutomaticWindowTabbing = false
     disableWindowTabs()
@@ -167,6 +174,7 @@ struct macOSApp: App {
         .environmentObject(mcpController)
         .frame(minWidth: 980, minHeight: 680)
         .onAppear {
+          appDelegate.saveOpenDatasetState = { saveOpenDatasetState() }
           presentSharePlayDisplayNameOnboardingIfNeeded()
           sharePlay.startObservingSessions(
             appModel: appModel,
@@ -187,6 +195,9 @@ struct macOSApp: App {
           )
           mcpController.configure(commandService: commandService, logger: appModel.logger)
           applyMCPConfiguration()
+        }
+        .onDisappear {
+          saveOpenDatasetState()
         }
         .onChange(of: appSettings.logLevel) { _, newValue in
           appModel.setLogLevel(newValue)
@@ -409,19 +420,26 @@ struct macOSApp: App {
     let accessURL = storedAppModel.startAccessingDataDirectory()
     defer { storedAppModel.stopAccessingDataDirectory(accessURL) }
     try await appModel.volumeBrush.prepareOpening(datasetID: entry.uniqueId,
-      datasetURL: entry.editStorageURL(directoryURL: storedAppModel.resolvedDataDirectoryURL()), interactive: false)
-    appModel.openDataset(entry, asGroupSessionHost: sharePlay.isInSession ? nil : true)
+      datasetURL: entry.editStorageURL(directoryURL: storedAppModel.resolvedDataDirectoryURL()),
+      interactive: false, restoreLastSelection: false)
+    appModel.openDataset(entry, asGroupSessionHost: sharePlay.isInSession ? nil : true,
+                         automaticallyLoadState: false)
     docking.resetForDatasetClose()
     sharePlay.datasetOpened()
   }
 
   @MainActor
+  private func saveOpenDatasetState() {
+    guard case .rendering = appModel.datasetSessionState else { return }
+    appModel.saveAutomaticallyManagedDatasetState(
+      appSettings: appSettings,
+      renderingParameters: renderingParameters
+    )
+  }
+
+  @MainActor
   private func closeMCPDataset() {
     guard appModel.activeDataset != nil else { return }
-    if appSettings.autoloadTF,
-       let fileURL = appModel.transferFunctionFileURL() {
-      try? renderingParameters.saveDatasetTransferFunctions(to: fileURL)
-    }
     appModel.saveAutomaticallyManagedDatasetState(
       appSettings: appSettings,
       renderingParameters: renderingParameters

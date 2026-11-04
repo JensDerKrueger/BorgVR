@@ -131,17 +131,17 @@ struct SettingsView: View {
       }
     }
     .toolbar {
+      ToolbarItem(placement: .cancellationAction) {
+        Button("Back") {
+          appModel.navigationState = .start
+        }
+      }
       ToolbarItem(placement: .primaryAction) {
         SettingsFileControls {
           appSettings.settingsStore(overrides: storedAppModel.settingsArchiveEntries,
             didImport: { storedAppModel.objectWillChange.send() })
         }
         .labelStyle(.iconOnly)
-      }
-      ToolbarItem(placement: .primaryAction) {
-        Button("Back") {
-          appModel.navigationState = .start
-        }
       }
     }
     .confirmationDialog(

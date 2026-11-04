@@ -3,6 +3,13 @@
 "converter_supporting_file_access_allow" = "Autoriser l’accès";
 "converter_supporting_file_access_wrong_file" = "Veuillez sélectionner le fichier référencé « %@ ».";
 "image_sequence_title" = "Séquence d’images";
+"What would you like to do?" = "Que souhaitez-vous faire ?";
+"Import / Export" = "Import / Export";
+"What would you like to import?" = "Que souhaitez-vous importer ?";
+"Volume File" = "Fichier de volume";
+"DICOM Series" = "Série DICOM";
+"DICOM Fusion" = "Fusion DICOM";
+"Image Sequence" = "Séquence d’images";
 "image_sequence_select" = "Choisir le dossier d’images";
 "image_sequence_size" = "Dimensions du volume en mètres (X / Y / Z)";
 "image_sequence_empty" = "Le dossier ne contient aucune image prise en charge.";
@@ -1122,6 +1129,7 @@
 "Show dataset bounding box" = "Afficher la boîte englobante du jeu de données";
 "Dataset bounding box" = "Boîte englobante du jeu de données";
 "Buffering..." = "Mise en mémoire tampon...";
+"Streaming... %@ available locally" = "Diffusion en cours... %@ disponible localement";
 "Preparing renderer..." = "Préparation du rendu...";
 "Rendering first frame..." = "Rendu de la première image...";
 "Loading the initial volume data and preparing the atlas." = "Chargement des premières données du volume et préparation de l’atlas.";
@@ -1137,3 +1145,6 @@
 "Remove cached bricks from the atlas, keeping the lowest-resolution brick." = "Supprimer les blocs en cache de l’atlas en conservant celui de plus basse résolution.";
 "%.0f bricks/s" = "%.0f blocs/s";
 "%lld / %lld bricks" = "%lld / %lld blocs";
+"Supported volume formats" = "Formats de volume pris en charge";
+"Open Dataset Now" = "Ouvrir le jeu de données maintenant";
+"converter_import_completed_title" = "Importation terminée";

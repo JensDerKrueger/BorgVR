@@ -32,6 +32,9 @@ struct ConverterView: View {
   @State private var imageSizeX = ""
   @State private var imageSizeY = ""
   @State private var imageSizeZ = ""
+  @State private var selectedImportKind: VolumeImportKind?
+  @State private var pendingImportKind: VolumeImportKind? = .volumeFile
+  @State private var choosingImportKind = true
   /// The shared application model used to manage application state.
   @Environment(RuntimeAppModel.self) private var runtimeAppModel
   /// The application settings injected from the environment.
@@ -54,6 +57,9 @@ struct ConverterView: View {
   @State private var datasetDescription: String = ""
   /// A flag indicating whether a file operation is currently in progress.
   @State private var isWorking: Bool = false
+  @State private var importedDatasetURL: URL?
+  @State private var isOpening = false
+  @State private var openErrorMessage: String?
   @State private var conversionCancellationToken: BorgVRVolumeConversionCancellationToken?
   @State private var conversionCancellationRequested = false
 
@@ -85,73 +91,60 @@ struct ConverterView: View {
 
   // MARK: - View Body
 
+  @ViewBuilder
   var body: some View {
-    VStack(spacing: 16) {
-      // Title
-      Text("converter_title")
-        .font(.largeTitle)
-        .bold()
+    if choosingImportKind {
+      ConverterWizardSelectionStep(
+        title: "Import",
+        question: "What would you like to import?",
+        systemImage: pendingImportKind?.systemImage ?? "square.and.arrow.down",
+        step: 1,
+        total: 2,
+        choices: importChoices,
+        selectedID: pendingImportKind?.rawValue,
+        canGoBack: !isWorking,
+        onBack: goBack,
+        onNext: commitImportKind
+      )
+      .padding()
+    } else {
+      importWorkflow
+    }
+  }
 
-      // Subtitle
-      Text("converter_subtitle")
-        .font(.title2)
-        .bold()
+  private var importWorkflow: some View {
+    VStack(spacing: 16) {
+      ConverterWizardHeader(title: "Import", step: 2, total: 2)
+      if let selectedImportKind {
+        HStack {
+          ConverterWizardStepIcon(systemImage: selectedImportKind.systemImage)
+          Text(selectedImportKind.title).font(.headline)
+          Spacer(minLength: 0)
+        }
+      }
 
       // Instructions
-      Text("Select a volume file or a DICOM folder. For QVIS and NHDR, select both the metadata and referenced raw data files.")
-        .font(.body)
-        .multilineTextAlignment(.leading)
+      if selectedImportKind == .volumeFile {
+        VStack(alignment: .leading, spacing: 8) {
+          ConverterVolumeFormatList(includesNativeBorgVR: true)
+          Text("For QVIS and NHDR, select both the metadata and referenced raw data files.")
+            .font(.caption)
+        }
+        .foregroundStyle(.secondary)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding()
+      } else if selectedImportKind == .dicomDirectory || selectedImportKind == .dicomFusion {
+        Text("For a DICOM series, select the folder containing its slice files.")
+          .foregroundStyle(.secondary)
+      }
 
       // File selection row
       VStack(alignment: .leading, spacing: 12) {
-        HStack {
-          Button {
-            filePickerMode = .files
-          } label: {
-            Label("converter_select_input_volume", systemImage: "cube")
-          }
+        sourceButtons
           .disabled(isWorking)
 
-          Button {
-            filePickerMode = .zarrDirectory
-          } label: {
-            Label("Select Zarr folder", systemImage: "folder")
-          }
-          .disabled(isWorking)
-        }
-
-        HStack {
-          Button {
-            filePickerMode = .dicomDirectory
-          } label: {
-            Label("Select DICOM folder", systemImage: "folder")
-          }
-          .disabled(isWorking)
-
-          Button { filePickerMode = .imageSequence } label: {
-            Label("image_sequence_select", systemImage: "photo.on.rectangle.angled")
-          }
-          .disabled(isWorking)
-
-          Button {
-            if mode != .dicomFusion {
-              if mode != .dicom {
-                inputAccess = nil
-                inputFile = ""
-              }
-              registeredInputAccess = nil
-              mode = .dicomFusion
-            }
-            filePickerMode = inputAccess == nil ? .dicomReference : .dicomRegistered
-          } label: {
-            Label("DICOM Fusion", systemImage: "square.3.layers.3d")
-          }
-          .disabled(isWorking)
-        }
-
-        if mode != .dicomFusion {
-          Text(inputFile)
+        if selectedImportKind != .dicomFusion {
+          Text(inputFile.isEmpty ? String(localized: "No file selected") : inputFile)
             .lineLimit(1)
             .truncationMode(.middle)
         }
@@ -190,14 +183,6 @@ struct ConverterView: View {
           }
           filePickerMode = nil
         }
-      }
-
-      if mode == .dicomFusion {
-        HStack(alignment: .top, spacing: 24) {
-          dicomDirectoryRow("Reference series", access: inputAccess, pickerMode: .dicomReference)
-          dicomDirectoryRow("Series to register", access: registeredInputAccess, pickerMode: .dicomRegistered)
-        }
-        .disabled(isWorking)
       }
 
       // Conversion / Copy controls
@@ -239,6 +224,16 @@ struct ConverterView: View {
           }
         }
         .disabled(isWorking)
+      }
+
+      if !isWorking, let importedDatasetURL {
+        Button {
+          openImportedDataset(at: importedDatasetURL)
+        } label: {
+          Label("Open Dataset Now", systemImage: "play.fill")
+        }
+        .buttonStyle(.borderedProminent)
+        .disabled(isOpening)
       }
 
       // Progress indicators
@@ -293,9 +288,9 @@ struct ConverterView: View {
 
         // Back button
         Button {
-          runtimeAppModel.navigationState = .start
+          goBack()
         } label: {
-          Label("converter_back_to_main_menu", systemImage: "chevron.backward")
+          Label("Back", systemImage: "chevron.backward")
         }
         .font(.headline)
         .padding()
@@ -303,6 +298,15 @@ struct ConverterView: View {
       }
     }
     .padding()
+    .disabled(isOpening)
+    .alert("Dataset could not be opened", isPresented: Binding(
+      get: { openErrorMessage != nil },
+      set: { if !$0 { openErrorMessage = nil } }
+    )) {
+      Button("OK", role: .cancel) {}
+    } message: {
+      Text(openErrorMessage ?? "")
+    }
     .onAppear {
       // Set logger bindings when view appears
       logger.setLogBinding($logText)
@@ -340,6 +344,80 @@ struct ConverterView: View {
             )
           )
       }
+    }
+  }
+
+  @ViewBuilder
+  private var sourceButtons: some View {
+    switch selectedImportKind {
+      case .volumeFile:
+        HStack {
+          Button { filePickerMode = .files } label: {
+            Label("converter_select_input_volume", systemImage: "cube")
+          }
+          Button { filePickerMode = .zarrDirectory } label: {
+            Label("Select Zarr folder", systemImage: "folder")
+          }
+        }
+      case .dicomDirectory:
+        Button { filePickerMode = .dicomDirectory } label: {
+          Label("Select DICOM folder", systemImage: "folder")
+        }
+      case .dicomFusion:
+        HStack(alignment: .top, spacing: 24) {
+          dicomDirectoryRow("Reference series", access: inputAccess, pickerMode: .dicomReference)
+          dicomDirectoryRow("Series to register", access: registeredInputAccess, pickerMode: .dicomRegistered)
+        }
+      case .imageSequence:
+        Button { filePickerMode = .imageSequence } label: {
+          Label("image_sequence_select", systemImage: "photo.on.rectangle.angled")
+        }
+      case .none:
+        EmptyView()
+    }
+  }
+
+  private var importChoices: [ConverterChoiceItem] {
+    VolumeImportKind.allCases.map { kind in
+      ConverterChoiceItem(id: kind.rawValue, title: kind.title, systemImage: kind.systemImage) {
+        if !isWorking { pendingImportKind = kind }
+      }
+    }
+  }
+
+  private func commitImportKind() {
+    guard !isWorking, let kind = pendingImportKind else { return }
+    if selectedImportKind != kind {
+      inputFile = ""
+      inputAccess = nil
+      registeredInputAccess = nil
+      filePickerMode = nil
+      datasetDescription = ""
+      sourceNote = ""
+      receivedAt = Date()
+      imageSizeX = ""
+      imageSizeY = ""
+      imageSizeZ = ""
+      logText = ""
+      progressText = ""
+      progressValue = 0
+      switch kind {
+        case .volumeFile: mode = .unknown
+        case .dicomDirectory: mode = .dicom
+        case .dicomFusion: mode = .dicomFusion
+        case .imageSequence: mode = .imageSequence
+      }
+    }
+    selectedImportKind = kind
+    choosingImportKind = false
+  }
+
+  private func goBack() {
+    guard !isWorking else { return }
+    if choosingImportKind {
+      runtimeAppModel.navigationState = .start
+    } else {
+      choosingImportKind = true
     }
   }
 
@@ -389,8 +467,32 @@ struct ConverterView: View {
 
    Uses a helper function `copyFile` and logs progress and errors via `GUILogger`.
    */
+  @MainActor
+  private func openImportedDataset(at url: URL) {
+    guard !isOpening else { return }
+    isOpening = true
+    Task { @MainActor in
+      defer { isOpening = false }
+      do {
+        let metadata = try BORGVRMetaData(url: url)
+        try await runtimeAppModel.volumeBrush.prepareOpening(
+          datasetID: metadata.uniqueID, datasetURL: url
+        )
+        runtimeAppModel.startImmersiveSpace(
+          identifier: url.path, description: metadata.datasetDescription,
+          source: .local, uniqueId: metadata.uniqueID, asGroupSessionHost: true
+        )
+      } catch is CancellationError {
+        // The edit-selection dialog was cancelled; keep the import result available.
+      } catch {
+        openErrorMessage = error.localizedDescription
+      }
+    }
+  }
+
   func copyData() {
     guard let inputAccess else { return }
+    importedDatasetURL = nil
     isWorking = true
 
     // Perform copy on background thread
@@ -418,7 +520,9 @@ struct ConverterView: View {
           comment: "Copying native BorgVR file"
         )
       )
-      _ = copyFile(from: fileURL, toDir: documentsDirectory, logger: logger)
+      if let url = copyFile(from: fileURL, toDir: documentsDirectory, logger: logger) {
+        DispatchQueue.main.async { importedDatasetURL = url }
+      }
     }
   }
 
@@ -433,6 +537,7 @@ struct ConverterView: View {
    - Parameter description: A textual description for the dataset.
    */
   func startConversion(description: String) {
+    importedDatasetURL = nil
     let provenance = sourceNote.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? [] :
       [BORGVRProvenanceEntry(sourceNote, date: receivedAt)]
     guard canStartImport, let inputAccess else {
@@ -563,6 +668,7 @@ struct ConverterView: View {
           logger: logger,
           cancellationToken: cancellationToken
         )
+        DispatchQueue.main.async { importedDatasetURL = URL(fileURLWithPath: outputFile) }
       }
       catch is CancellationError {
         logger.info(String(localized: "Conversion cancelled."))

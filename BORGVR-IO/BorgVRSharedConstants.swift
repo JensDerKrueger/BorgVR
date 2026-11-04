@@ -582,7 +582,7 @@ enum BorgVRServerProtocol {
 }
 
 enum BorgVRSharedDefaults {
-  static let brickSize = 64
+  static let brickSize = 32
   static let brickOverlap = 2
   static let compressionEnabled = true
   static let borderMode = "zeroes"

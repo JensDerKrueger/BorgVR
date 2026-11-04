@@ -27,13 +27,19 @@ enum BorgVRAutomaticVolumeConversion {
         ("QVIS", { try QVISParser(filename: source.path) }),
         ("NRRD", { try NRRDParser(filename: source.path, validateSource: { try validateSources([source, $0]) }) }),
         ("PVM", { try PVMParser(filename: source.path) }),
-        ("IV3Dm", { try I3MParser(filename: source.path) })
+        ("IV3Dm", { try I3MParser(filename: source.path) }),
+        ("UVF", { try UVFParser(filename: source.path, cancellationCheck: cancellationCheck,
+          log: { logger?.info($0) }) }),
+        ("VFF", { try VFFParser(filename: source.path, cancellationCheck: cancellationCheck,
+          log: { logger?.info($0) }) })
       ]
       let preferred: String = switch source.pathExtension.lowercased() {
         case "dat": "QVIS"
         case "nrrd", "nhdr": "NRRD"
         case "pvm": "PVM"
         case "i3m", "zip": "IV3Dm"
+        case "uvf": "UVF"
+        case "vff": "VFF"
         default: "Zarr"
       }
       readers.sort { $0.0 == preferred && $1.0 != preferred }

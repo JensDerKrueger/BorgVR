@@ -16,6 +16,8 @@ swiftc \
   "$ROOT/BORGVR-IO/Importers/NRRD/NRRDParser.swift" \
   "$ROOT/BORGVR-IO/Importers/PVM/PVMParser.swift" \
   "$ROOT/BORGVR-IO/Importers/I3D/I3MParser.swift" \
+  "$ROOT"/BORGVR-IO/Importers/UVF/*.swift \
+  "$ROOT/BORGVR-IO/Importers/VFF/VFFParser.swift" \
   "$ROOT/BORGVR-IO/Importers/ZARR/ZarrParser.swift" \
   "$ROOT/BORGVR-IO/Importers/ZARR/ZarrStore.swift" \
   "$ROOT/BORGVR-IO/Importers/ZARR/ZstandardDecoder.swift" \

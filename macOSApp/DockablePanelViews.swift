@@ -192,9 +192,11 @@ struct DockableEditorPanel<Content: View>: View {
   @ViewBuilder
   var body: some View {
     if detached {
-      content()
-        .padding(12)
-        .environment(\.panelWindow, window)
+      VStack(spacing: 0) {
+        titleProgress
+        content().padding(12)
+          .environment(\.panelWindow, window)
+      }
         .background(NativePanelToolbar(model: window) {
           docking.dock(panel)
           dismissWindow(id: panel.windowID)
@@ -202,7 +204,8 @@ struct DockableEditorPanel<Content: View>: View {
     } else {
       VStack(spacing: 0) {
         DockablePanelTitleBar(window: window, onDragChanged: onDragChanged, onDragEnded: onDragEnded)
-        Divider()
+        if window.configuration.titleProgress != nil { titleProgress }
+        else { Divider() }
         content()
           .padding(12)
           .environment(\.panelWindow, window)
@@ -211,6 +214,16 @@ struct DockableEditorPanel<Content: View>: View {
       .clipShape(RoundedRectangle(cornerRadius: 8))
       .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(.primary.opacity(0.12)))
       .shadow(color: .black.opacity(0.16), radius: 8, y: 3)
+    }
+  }
+
+  @ViewBuilder
+  private var titleProgress: some View {
+    if let progress = window.configuration.titleProgress {
+      FractionProgressLine(fraction: progress.fraction, color: progress.color)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(progress.statusText)
+        .help(progress.statusText)
     }
   }
 }

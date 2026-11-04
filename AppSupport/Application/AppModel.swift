@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import Combine
 
 @MainActor
 final class AppModel: ObservableObject {
@@ -160,9 +161,11 @@ final class AppModel: ObservableObject {
     }
   }
   @Published private(set) var activeDatasetMetadata: BORGVRMetaData?
+  private(set) var automaticallyLoadsDatasetState = true
   @Published private(set) var datasetBufferingPhase = DatasetBufferingPhase.loadingData
-  @Published private(set) var isDatasetStreaming = false
-  private weak var streamingDataSource: BORGVRRemoteData?
+  let datasetStreaming = DatasetStreamingProgress()
+  var isDatasetStreaming: Bool { datasetStreaming.isStreaming }
+  private var streamingObservation: AnyCancellable?
   @Published var sharePlayDatasetSource: DatasetOrigin?
   @Published var groupSessionHost = true
   @Published var interactionMode: InteractionMode = .model
@@ -248,17 +251,18 @@ final class AppModel: ObservableObject {
 
   init() {
     logger.setMinimumLogLevel(.warning)
+    streamingObservation = datasetStreaming.objectWillChange.sink { [weak self] in
+      self?.objectWillChange.send()
+    }
     refreshSceneMeshCatalog()
   }
 
   func trackDatasetStreaming(_ source: BORGVRDatasetProtocol?) {
-    streamingDataSource = source as? BORGVRRemoteData
-    refreshDatasetStreamingStatus()
+    datasetStreaming.track(source)
   }
 
   func refreshDatasetStreamingStatus() {
-    let streaming = (streamingDataSource?.localRatio ?? 1) < 1
-    if isDatasetStreaming != streaming { isDatasetStreaming = streaming }
+    datasetStreaming.refresh()
   }
 
   var activeDataset: DatasetEntry? {
@@ -294,13 +298,20 @@ final class AppModel: ObservableObject {
     }
   }
 
-  func openDataset(_ dataset: DatasetEntry, asGroupSessionHost: Bool? = nil) {
+  func openDataset(_ dataset: DatasetEntry, asGroupSessionHost: Bool? = nil,
+                   automaticallyLoadState: Bool = true) {
     if let asGroupSessionHost {
       groupSessionHost = asGroupSessionHost
     }
     sharePlayDatasetSource = nil
     objectsHidden = false
     measurementsHidden = false
+    automaticallyLoadsDatasetState = automaticallyLoadState
+    if !automaticallyLoadState {
+      replaceVolumeMarkers([])
+      replaceSceneMeshInstances([])
+      replaceVolumeMeasurements([])
+    }
     resetRenderedDatasetState()
     datasetBufferingPhase = .loadingData
     datasetSessionState = .opening(dataset: dataset, requestID: UUID())
@@ -737,12 +748,23 @@ final class AppModel: ObservableObject {
     return DatasetStateStorage.viewStateFileURL(datasetID: dataset.uniqueId, logger: logger)
   }
 
+  func loadAutomaticallyManagedTransferFunctions(
+    appSettings: AppSettings,
+    metadata: BORGVRMetaData,
+    renderingParameters: RenderingParameters
+  ) {
+    guard automaticallyLoadsDatasetState, appSettings.autoloadTF,
+          metadata.channelInterpretation == .independentChannels,
+          let url = transferFunctionFileURL(componentCount: renderingParameters.componentCount) else { return }
+    _ = try? renderingParameters.loadDatasetTransferFunctions(from: url)
+  }
+
   func loadAutomaticallyManagedDatasetState(
     appSettings: AppSettings,
     metadata: BORGVRMetaData,
     renderingParameters: RenderingParameters
   ) {
-    guard let dataset = activeDataset else { return }
+    guard automaticallyLoadsDatasetState, let dataset = activeDataset else { return }
 
     if appSettings.autoloadRenderState,
        let url = viewStateFileURL(for: dataset) {
@@ -793,6 +815,14 @@ final class AppModel: ObservableObject {
     renderingParameters: RenderingParameters
   ) {
     guard let dataset = activeDataset else { return }
+
+    if appSettings.autoloadTF, let url = transferFunctionFileURL(for: dataset) {
+      do {
+        try renderingParameters.saveDatasetTransferFunctions(to: url)
+      } catch {
+        logger.warning("Automatically saving transfer functions failed: \(error.localizedDescription)")
+      }
+    }
 
     if appSettings.autoloadRenderState, let url = viewStateFileURL(for: dataset) {
       do {
@@ -943,6 +973,7 @@ final class AppModel: ObservableObject {
   }
 
   private func resetRenderedDatasetState() {
+    datasetStreaming.track(nil)
     renderedDatasetKey = ""
     failedRenderedDatasetKey = ""
     activeDatasetMetadata = nil
