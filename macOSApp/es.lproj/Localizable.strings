@@ -110,8 +110,9 @@
 "modeselection_drop_script" = "Suelta un script GSC para ejecutarlo";
 "modeselection_start_background_server" = "Iniciar servidor en segundo plano";
 "modeselection_stop_background_server" = "Detener servidor en segundo plano";
-"modeselection_server_running" = "Servidor en ejecución";
-"modeselection_server_stopped" = "Servidor detenido";
+"modeselection_server_running" = "Servidor de conjuntos de datos en ejecución";
+"modeselection_server_stopped" = "Servidor de conjuntos de datos detenido";
+"MCP server running" = "Servidor MCP en ejecución";
 
 "modeselection_footer_years" = "© 2024–2026";
 "modeselection_footer_cgvis" = "CGVIS Duisburg, Germany";

@@ -246,6 +246,30 @@ current, non-localized `converted by TOOL VERSION` provenance entry automaticall
   retrieve the current rendered view as a PNG image.
 - The MCP adapter and the macOS `.gsc` interpreter use the same application command layer for
   shared visualization operations.
+- On macOS, `get_window_state`, `resize_window`, and `set_fullscreen` control the main window,
+  not detached panels. Resize supports logical points or backing pixels and content or full-frame
+  dimensions (including decoration). GSC provides `getwindowstate`, `resize width height`
+  (points/content), `resize width height pixels frame`, and `fullscreen true|false`.
+  Fullscreen transitions finish before the next command continues.
+- `get_transfer_function` / `set_transfer_function` expose each zero-based channel as straight
+  RGBA bytes (0...255). Compact ramps are linearly resampled to the current table size.
+  `load_transfer_function` / `save_transfer_function` use native `.tf1d` files.
+- `get_background` / `set_background` expose system, solid, and vertical-gradient screen
+  backgrounds with primary/secondary RGBA colors (0...1). visionOS retains passthrough.
+  `capture_screenshot` supports `include_alpha` (default true) and an optional `output_path`.
+  Without alpha, the configured screen background is composited into the PNG; on visionOS
+  passthrough is replaced by black. With alpha, only the transparent render image is captured.
+- `save_visualization_state` / `load_visualization_state` save and restore a named JSON picture
+  configuration: all channel TFs, transform, render mode/isovalue, clipping, lighting, background,
+  and screen projection. The same dataset must be open; visionOS uses the UI's head-relative pose.
+  GSC equivalents are `savestate` / `loadstate`; `gettransferfunction`, `settransferfunctionjson`,
+  channel-aware `loadtf` / `savetf`, `getbackground`, and `screenshot filename false` are also available.
+- `save_settings`, `reset_settings` (requires `confirm: true`), and `load_settings` provide a
+  backup/reset/restore workflow using UI-compatible `.borgvrsettings` files. Credentials are
+  exported only with `include_credentials: true`. Load/reset preserve the running MCP connection's
+  enable, port, authentication and TLS settings. GSC exposes `savesettings filename includeCredentials`,
+  `resetsettings`, and `loadsettings`. MCP save tools refuse existing files unless `overwrite: true`;
+  paths refer to the app device and must be sandbox-accessible.
 - Opening a dataset through MCP or GSC bypasses automatic loading of transfer functions, view/panel
   state, objects, measurements and the last selected edit state. Automation starts from the original
   volume and default visualization parameters; explicit load commands remain available. Interactive

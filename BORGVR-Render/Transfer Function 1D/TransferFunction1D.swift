@@ -10,6 +10,7 @@ import Metal
 enum TransferFunction1DError: Error, LocalizedError {
   case mismatchedDataCount(expected: Int, found: Int)
   case noDeviceSet
+  case invalidEntryCount
 
   var errorDescription: String? {
     switch self {
@@ -17,6 +18,8 @@ enum TransferFunction1DError: Error, LocalizedError {
         return "Mismatched data count: expected \(expected), found \(found)"
       case .noDeviceSet:
         return "No Metal device set for transfer function."
+      case .invalidEntryCount:
+        return "Transfer functions require 1...65536 entries."
     }
   }
 }
@@ -108,6 +111,15 @@ class TransferFunction1D: Equatable {
     self.device = nil
     self.bias = other.bias
     self.textureBias = other.textureBias
+  }
+
+  /// Construct file/preset data without creating or uploading a Metal texture.
+  init(samples: [SIMD4<UInt8>]) throws {
+    guard (1...Self.maximumEntryCount).contains(samples.count) else {
+      throw TransferFunction1DError.invalidEntryCount
+    }
+    self.data = samples
+    updateDataDependencies()
   }
 
   /**
@@ -496,7 +508,7 @@ class TransferFunction1D: Equatable {
   }
 
   /**
-   Updates the transfer function data with new data and updates associated texture data.
+   Updates CPU samples and marks any existing texture for upload on the next bind.
 
    - Parameter newData: An array of SIMD4<UInt8> to replace the current data.
    - Throws: TransferFunction1DError.mismatchedDataCount if the new data count does not match the current data count.
@@ -507,7 +519,6 @@ class TransferFunction1D: Equatable {
     }
     self.data = newData
     updateDataDependencies()
-    try transferDataToTexture()
   }
 
   /// Updates internal dependencies after data changes, including min/max indices and invalidates texture

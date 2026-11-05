@@ -52,6 +52,10 @@ struct ModeSelectionView: View {
             .padding()
             .frame(maxWidth: .infinity, alignment: .leading)
 
+          MCPServerStatusLabel()
+            .padding(.horizontal)
+            .frame(maxWidth: .infinity, alignment: .leading)
+
           if storedAppModel.enableDatasetServer {
             serverStatus
               .padding(.horizontal)

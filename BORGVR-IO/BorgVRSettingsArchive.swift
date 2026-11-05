@@ -77,6 +77,30 @@ struct BorgVRSettingsStore {
     ], options: [.prettyPrinted, .sortedKeys])
   }
 
+  /// Automation must not disable or reconfigure its own control connection.
+  private static func isMCPConnectionKey(_ key: String) -> Bool {
+    key == "enableMCPServer" || key.hasPrefix("mcp")
+  }
+
+  func importForAutomation(_ data: Data) throws {
+    let plan = try prepareImport(data)
+    var root = try JSONSerialization.jsonObject(with: data) as! [String: Any]
+    root["settings"] = plan.values.filter { !Self.isMCPConnectionKey($0.key) }.mapValues { value in
+      (value as? Data)?.base64EncodedString() ?? value
+    }
+    try apply(prepareImport(JSONSerialization.data(withJSONObject: root)))
+  }
+
+  func resetForAutomation() throws {
+    let values = entries.filter { !Self.isMCPConnectionKey($0.key) }.mapValues { entry in
+      (entry.defaultValue as? Data)?.base64EncodedString() ?? entry.defaultValue
+    }
+    let data = try JSONSerialization.data(withJSONObject: [
+      "format": "BorgVR Settings", "formatVersion": 1, "settings": values
+    ])
+    try apply(prepareImport(data))
+  }
+
   func prepareImport(_ data: Data) throws -> ImportPlan {
     guard data.count <= Self.maximumFileSize,
       let root = try JSONSerialization.jsonObject(with: data) as? [String: Any],

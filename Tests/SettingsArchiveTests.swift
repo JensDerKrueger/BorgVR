@@ -128,6 +128,19 @@ private enum SettingsArchiveTests {
     try expect(password == "imported" && defaults.data(forKey: "webServerCertificateData") == Data([4, 5, 6]),
       "Credentials did not round-trip")
 
+    let automationBackup = try store.export(includeCredentials: true)
+    defaults.set("keep-this-token", forKey: "mcpAccessToken")
+    try store.resetForAutomation()
+    try expect(defaults.integer(forKey: "brickSize") == 64 && password.isEmpty,
+      "Automation reset did not restore registered defaults/credentials")
+    try expect(defaults.string(forKey: "mcpAccessToken") == "keep-this-token",
+      "Automation reset disconnected its own control connection")
+    try store.importForAutomation(automationBackup)
+    try expect(defaults.integer(forKey: "brickSize") == 32 && password == "imported",
+      "Automation backup did not restore settings/credentials")
+    try expect(defaults.string(forKey: "mcpAccessToken") == "keep-this-token",
+      "Automation restore changed MCP authentication")
+
     failWrite = true
     do {
       try store.apply(store.prepareImport(data(["brickSize": 16, "zzFailure": true])))

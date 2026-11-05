@@ -136,6 +136,7 @@ struct BorgVRRenderSettingsSnapshot: Sendable {
   var screenFieldOfView: Float = 45
   var parallelProjection: Bool = false
   var showDatasetBoundingBox: Bool = false
+  var background: BorgVRMCPBackgroundState? = nil
 
   static let `default` = BorgVRRenderSettingsSnapshot(
     sampleJitter: false,
@@ -218,6 +219,8 @@ enum BorgVRCommand: Sendable {
   case setNormalizedIsoValue(Float)
   case setClipping(minimum: SIMD3<Float>, maximum: SIMD3<Float>)
   case setTransferFunction(BorgVRTransferFunctionSnapshot)
+  case setBackground(BorgVRMCPBackgroundState)
+  case restoreDatasetViewState(Data)
   case setLighting(
     direction: SIMD3<Float>?,
     ambient: SIMD3<Float>?,
@@ -283,6 +286,11 @@ struct BorgVRCommandEvent: Sendable {
         return "clip \(minimum.x) \(maximum.x) \(minimum.y) \(maximum.y) \(minimum.z) \(maximum.z)"
       case .setTransferFunction(let transferFunction):
         return "settransferfunction \(transferFunction.channel) \(gscQuote(transferFunction.base64EncodedSamples))"
+      case .setBackground(let value):
+        guard let data = try? JSONEncoder().encode(value), let json = String(data: data, encoding: .utf8) else { return nil }
+        return "setbackgroundstate \(gscQuote(json))"
+      case .restoreDatasetViewState(let data):
+        return "setviewstate \(gscQuote(data.base64EncodedString()))"
       case .setLighting(let direction, let ambient, let diffuse, let specular):
         var statements: [String] = []
         if let direction {
@@ -610,6 +618,7 @@ final class BorgVRSession<VisualizationState: AnyObject, RuntimeState: AnyObject
 #if os(iOS) || os(macOS)
       emit(.setScreenProjection(fieldOfView: frame.settings.screenFieldOfView,
         parallel: frame.settings.parallelProjection), source: .userInterface)
+      if let background = frame.settings.background { emit(.setBackground(background), source: .userInterface) }
 #endif
     }
   }
@@ -709,6 +718,9 @@ final class BorgVRSession<VisualizationState: AnyObject, RuntimeState: AnyObject
     from before: BorgVRRenderSettingsSnapshot, to after: BorgVRRenderSettingsSnapshot
   ) -> [BorgVRCommand] {
     var commands: [BorgVRCommand] = []
+    if before.background != after.background, let background = after.background {
+      commands.append(.setBackground(background))
+    }
     if before.showDatasetBoundingBox != after.showDatasetBoundingBox {
       commands.append(.setBoundingBox(after.showDatasetBoundingBox))
     }
@@ -926,6 +938,16 @@ extension BorgVRSession where VisualizationState == RenderingParameters,
               with: snapshot.samples
             )
             synchronizeFullState()
+          case .setBackground(let background):
+            try appSettings.applyAutomationBackground(background)
+          case .restoreDatasetViewState(let data):
+            let state = try DatasetViewStateDocument.decode(from: data)
+            guard state.datasetID == appModel.activeDataset?.uniqueId else {
+              throw DatasetViewStateDocumentError.invalidState
+            }
+            renderingParameters.applyDatasetViewState(state)
+            renderModeDidChange(state.common.renderMode)
+            synchronizeFullState()
           case .setLighting(let direction, let ambient, let diffuse, let specular):
             if let direction {
               guard simd_length_squared(direction) > 0.000_001 else {
@@ -1115,7 +1137,8 @@ extension BorgVRSession where VisualizationState == RenderingParameters,
             rotationCaptureRequestID: 0,
             screenFieldOfView: Float(appSettings.screenFieldOfView),
             parallelProjection: appSettings.parallelProjection,
-            showDatasetBoundingBox: appSettings.showDatasetBoundingBox
+            showDatasetBoundingBox: appSettings.showDatasetBoundingBox,
+            background: appSettings.automationBackground
           )
         )
       },

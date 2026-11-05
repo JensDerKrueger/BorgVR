@@ -96,6 +96,8 @@ struct ModeSelectionView: View {
     VStack(spacing: 14) {
       actionGrid(columnCount: actionColumnCount(for: layout))
 
+      MCPServerStatusLabel()
+
       if appSettings.enableDatasetServer {
         Divider()
 
@@ -201,7 +203,7 @@ struct ModeSelectionView: View {
   private var serverStatus: some View {
     VStack(spacing: 6) {
       Label(
-        serverController.isRunning ? "Background server running" : "Background server stopped",
+        serverController.isRunning ? "Dataset server running" : "Dataset server stopped",
         systemImage: serverController.isRunning ? "checkmark.circle.fill" : "circle"
       )
       .foregroundStyle(serverController.isRunning ? .green : .secondary)

@@ -87,6 +87,32 @@
           </div>
         </section>
 
+        <section id="picture-configurations">
+          <h2 data-de="Bildkonfigurationen und Einstellungen">Picture configurations and settings</h2>
+          <p data-de="<code>savestate</code> und <code>loadstate</code> sichern eine frei benannte JSON-Bildkonfiguration mit allen Kanal-TFs, Transformation, Clipping, Beleuchtung, Hintergrund, Rendermodus/Isowert und Projektion für den aktuell geöffneten Datensatz. <code>loadtf</code> und <code>savetf</code> akzeptieren optional zuerst einen nullbasierten Kanalindex. <code>gettransferfunction</code> liefert die RGBA-Bytes eines Kanals als Base64-String für <code>settransferfunction</code>. <code>settransferfunctionjson</code> setzt stattdessen ein JSON-Array aus RGBA-Bytes (0 bis 255); kurze Rampen werden linear interpoliert."><code>savestate</code> and <code>loadstate</code> save a freely named JSON picture configuration containing all channel TFs, transform, clipping, lighting, background, render mode/isovalue, and projection for the currently open dataset. <code>loadtf</code> and <code>savetf</code> optionally accept a zero-based channel index first. <code>gettransferfunction</code> returns a channel's RGBA bytes as a Base64 string for <code>settransferfunction</code>. <code>settransferfunctionjson</code> instead sets a JSON array of RGBA bytes (0 through 255); compact ramps are linearly interpolated.</p>
+          <p data-de="<code>getbackground</code> liefert den vollständigen Hintergrund als JSON für <code>setbackgroundstate</code>. <code>screenshot filename false</code> speichert ein PNG ohne Alpha mit dem eingestellten Hintergrund; true (Standard) bewahrt den transparenten Renderinhalt. <code>savesettings filename true</code> exportiert alle registrierten Einstellungen einschließlich Zugangsdaten; false lässt Zugangsdaten weg. <code>resetsettings</code> setzt Standardwerte und <code>loadsettings</code> stellt das Archiv wieder her. Die laufende MCP-Verbindung bleibt bei Import und Reset erhalten."><code>getbackground</code> returns the complete background as JSON for <code>setbackgroundstate</code>. <code>screenshot filename false</code> saves an opaque PNG with the configured background; true (default) preserves the transparent render image. <code>savesettings filename true</code> exports all registered settings including credentials; false omits credentials. <code>resetsettings</code> restores defaults and <code>loadsettings</code> restores the archive. Import and reset preserve the running MCP connection.</p>
+          <pre><code>settransferfunctionjson 0 '[[0,0,0,0],[255,80,0,100],[255,255,255,255]]'
+set savedTF gettransferfunction 0
+background solid 0 0 0
+savestate "picture.json"
+screenshot "picture.png" false
+
+loadstate "picture.json"
+settransferfunction 0 $savedTF</code></pre>
+        </section>
+
+        <section id="window-control">
+          <h2 data-de="macOS-Fenster steuern">Control the macOS window</h2>
+          <p data-de="<code>resize width height</code> ändert die Inhaltsgröße des Hauptfensters in logischen Punkten, nicht in Retina-Pixeln. Die erweiterte Form akzeptiert zusätzlich points oder pixels und content oder frame; frame schließt die Fensterdekoration ein. Mindest- und Maximalgrößen des Fensters gelten weiterhin. Abgedockte Panels und das Skript-Log bleiben unverändert."><code>resize width height</code> changes the main window's content size in logical points, not Retina pixels. The extended form also accepts points or pixels and content or frame; frame includes window decoration. The window's minimum and maximum sizes still apply. Detached panels and the script log remain unchanged.</p>
+          <p data-de="<code>fullscreen true</code> aktiviert den nativen Vollbildmodus, false verlässt ihn. Ein bereits passender Zustand bleibt unverändert. Resize verlässt nötigenfalls zuerst Vollbild. Das Skript wartet auf AppKits Abschlussmeldung, bevor es weiterläuft; laufende Übergänge und offene Vollbild-Dialoge werden als Fehler gemeldet. <code>getwindowstate</code> liefert Größen in Punkten und Pixeln, die Displayskalierung sowie Vollbild- und Übergangsstatus als JSON. Diese Befehle ändern nicht die Kameraprojektion."><code>fullscreen true</code> enters native fullscreen; false leaves it. An already matching state is unchanged. Resize exits fullscreen first when necessary. The script waits for AppKit's completion notification before continuing; conflicting transitions and sheets blocking fullscreen are reported as errors. <code>getwindowstate</code> returns point/pixel dimensions, display scale, and fullscreen/transition status as JSON. These commands do not change camera projection.</p>
+          <pre><code>fullscreen false
+resize 1440 900
+resize 2880 1800 pixels frame
+set window getwindowstate
+log $window
+fullscreen true</code></pre>
+        </section>
+
         <section id="language">
           <h2 data-de="Sprachgrundlagen">Language basics</h2>
           <div class="type-strip" aria-label="GSC value types">
@@ -242,7 +268,7 @@ setmeasurement "B2222222-2222-4222-8222-222222222222" length "Reference length" 
             <tr><td><code>logGPUInfo [bool]</code></td><td data-de="Schreibt Metal-Geräteinformationen; der optionale Bool-Wert steuert die Ausgabe der GPU-Familien.">Logs Metal device information; the optional Boolean controls GPU-family output.</td></tr>
             <tr><td><code>setdir &lt;directory&gt;</code></td><td data-de="Setzt bzw. erzeugt das Ausgabeverzeichnis für relative Pfade.">Selects and creates the output directory used for relative paths.</td></tr>
             <tr><td><code>screenshot [file]</code></td><td data-de="Speichert den nächsten vollständig gerenderten Frame als PNG.">Saves the next completed rendered frame as a PNG.</td></tr>
-            <tr><td><code>resize &lt;width&gt; &lt;height&gt;</code></td><td data-de="Ändert die Inhaltsgröße des BorgVR-Fensters in Pixeln.">Changes the BorgVR window content size in pixels.</td></tr>
+            <tr><td><code>resize &lt;width&gt; &lt;height&gt; [points|pixels content|frame]</code><br><code>fullscreen &lt;bool&gt;</code><br><code>getwindowstate</code></td><td data-de="Steuert nur das Hauptfenster. Resize verwendet standardmäßig logische Punkte und Inhaltsgröße. frame schließt die Dekoration ein. Vollbildwechsel werden abgewartet; getwindowstate liefert JSON mit den tatsächlichen Größen.">Controls only the main window. Resize defaults to logical points and content size. frame includes decoration. Fullscreen transitions are awaited; getwindowstate returns JSON with actual dimensions.</td></tr>
             <tr><td><code>quit</code></td><td data-de="Beendet BorgVR.">Terminates BorgVR.</td></tr>
           </tbody></table></div>
 

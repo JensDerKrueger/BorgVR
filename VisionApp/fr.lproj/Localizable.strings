@@ -198,8 +198,9 @@
 "mode_button_settings" = "Réglages";
 "mode_button_start_background_server" = "Démarrer le serveur en arrière-plan";
 "mode_button_stop_background_server" = "Arrêter le serveur en arrière-plan";
-"mode_server_running" = "Le serveur en arrière-plan fonctionne";
-"mode_server_stopped" = "Le serveur en arrière-plan est arrêté";
+"mode_server_running" = "Serveur de jeux de données en cours d’exécution";
+"mode_server_stopped" = "Serveur de jeux de données arrêté";
+"MCP server running" = "Serveur MCP en cours d’exécution";
 
 /* Mode selection: share preview title */
 "mode_share_preview_title" = "Collaboration BorgVR en direct";

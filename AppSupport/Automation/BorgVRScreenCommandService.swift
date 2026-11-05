@@ -1,6 +1,7 @@
 import Foundation
 import ImageIO
 import simd
+import SwiftUI
 
 @MainActor
 final class BorgVRScreenCommandService: BorgVRMCPCommandService {
@@ -12,6 +13,8 @@ final class BorgVRScreenCommandService: BorgVRMCPCommandService {
   private let datasetListProvider: DatasetListProvider
   private let datasetOpener: DatasetOpener
   private let datasetCloser: DatasetCloser
+  private let settingsStoreProvider: () -> BorgVRSettingsStore
+  let windowAutomation: (any BorgVRWindowAutomation)?
 
   init(
     session: ScreenBorgVRSession,
@@ -19,6 +22,8 @@ final class BorgVRScreenCommandService: BorgVRMCPCommandService {
     datasetOpener: @escaping DatasetOpener = { _ in
       throw BorgVRMCPCommandError.unsupported("Opening datasets is not available.")
     },
+    settingsStoreProvider: (() -> BorgVRSettingsStore)? = nil,
+    windowAutomation: (any BorgVRWindowAutomation)? = nil,
     datasetCloser: @escaping DatasetCloser = {
       throw BorgVRMCPCommandError.unsupported("Closing datasets is not available.")
     }
@@ -27,6 +32,8 @@ final class BorgVRScreenCommandService: BorgVRMCPCommandService {
     self.datasetListProvider = datasetListProvider
     self.datasetOpener = datasetOpener
     self.datasetCloser = datasetCloser
+    self.settingsStoreProvider = settingsStoreProvider ?? { session.settingsState.settingsStore() }
+    self.windowAutomation = windowAutomation
   }
 
   func listDatasets() async throws -> [BorgVRMCPDatasetCatalogEntry] {
@@ -39,6 +46,42 @@ final class BorgVRScreenCommandService: BorgVRMCPCommandService {
 
   func closeDataset() async throws {
     try await datasetCloser()
+  }
+
+  func settingsStore() -> BorgVRSettingsStore { settingsStoreProvider() }
+
+  var transferFunctionCount: Int {
+    session.runtimeState.activeDatasetMetadata?.channelInterpretation == .independentChannels
+      ? session.visualizationState.componentCount : 0
+  }
+
+  func transferFunction(channel: Int) throws -> BorgVRMCPTransferFunction {
+    guard session.runtimeState.rendererHasActiveDataset else { throw BorgVRMCPCommandError.noDataset }
+    guard (0..<transferFunctionCount).contains(channel) else {
+      throw BorgVRMCPCommandError.invalidArgument("Invalid channel, or this is an RGB/RGBA volume without TFs.")
+    }
+    return .init(channel: channel, samples: session.visualizationState.transferFunctions[channel].data)
+  }
+
+  func setTransferFunction(_ value: BorgVRMCPTransferFunction) throws {
+    let current = try transferFunction(channel: value.channel)
+    try session.perform(.setTransferFunction(.init(channel: value.channel,
+      samples: value.validatedSamples(count: current.samples.count))), source: .mcp)
+  }
+
+  func background() -> BorgVRMCPBackgroundState { session.settingsState.automationBackground }
+
+  func setBackground(_ value: BorgVRMCPBackgroundState) throws {
+    try session.perform(.setBackground(value), source: .mcp)
+  }
+
+  func datasetViewStateData() throws -> Data {
+    guard let dataset = session.runtimeState.activeDataset else { throw BorgVRMCPCommandError.noDataset }
+    return try DatasetViewStateDocument.encode(session.visualizationState.makeDatasetViewState(datasetID: dataset.uniqueId))
+  }
+
+  func restoreDatasetViewState(_ data: Data) throws {
+    try session.perform(.restoreDatasetViewState(data), source: .mcp)
   }
 
   func applicationState() -> BorgVRMCPApplicationState {
@@ -93,7 +136,9 @@ final class BorgVRScreenCommandService: BorgVRMCPCommandService {
         parallelProjection: settings.parallelProjection,
         datasetBoundingBoxVisible: settings.showDatasetBoundingBox
       ),
-      volumeEditing: volumeEditing.volumeEditingState()
+      volumeEditing: volumeEditing.volumeEditingState(),
+      transferFunctionCount: transferFunctionCount,
+      background: background()
     )
   }
 
@@ -301,7 +346,7 @@ final class BorgVRScreenCommandService: BorgVRMCPCommandService {
     }
   }
 
-  func captureScreenshot() async throws -> BorgVRMCPImage {
+  func captureScreenshot(includeAlpha: Bool) async throws -> BorgVRMCPImage {
     let appModel = session.runtimeState
     guard appModel.activeDataset != nil else { throw BorgVRMCPCommandError.noDataset }
 
@@ -341,12 +386,13 @@ final class BorgVRScreenCommandService: BorgVRMCPCommandService {
           let height = properties[kCGImagePropertyPixelHeight] as? Int else {
       throw BorgVRMCPCommandError.screenshotUnavailable
     }
-    return BorgVRMCPImage(
+    let image = BorgVRMCPImage(
       pngData: data,
       width: width,
       height: height,
       renderedFrame: appModel.completedRenderFrameCount
     )
+    return includeAlpha ? image : try image.composited(over: session.settingsState.resolvedAutomationBackground)
   }
 
   private var platformName: String {
@@ -365,4 +411,49 @@ final class BorgVRScreenCommandService: BorgVRMCPCommandService {
     }
   }
 
+}
+
+extension AppSettings {
+  var automationBackground: BorgVRMCPBackgroundState {
+    func rgba(_ color: Color) -> [Float] {
+#if os(macOS)
+      let value = NSColor(color).usingColorSpace(.sRGB) ?? .black
+      return [Float(value.redComponent), Float(value.greenComponent), Float(value.blueComponent), Float(value.alphaComponent)]
+#else
+      var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 1
+      UIColor(color).getRed(&r, green: &g, blue: &b, alpha: &a)
+      return [Float(r), Float(g), Float(b), Float(a)]
+#endif
+    }
+    return .init(mode: renderBackgroundMode, primary: rgba(renderBackgroundPrimaryColor),
+      secondary: rgba(renderBackgroundSecondaryColor))
+  }
+
+  var resolvedAutomationBackground: BorgVRMCPBackgroundState {
+    var value = automationBackground
+    if value.mode == "system" {
+#if os(macOS)
+      let color = NSColor.windowBackgroundColor.usingColorSpace(.sRGB) ?? .black
+      value.primary = [Float(color.redComponent), Float(color.greenComponent), Float(color.blueComponent), 1]
+#else
+      let color = UIColor.systemBackground.resolvedColor(with: UIScreen.main.traitCollection)
+      var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 1
+      color.getRed(&r, green: &g, blue: &b, alpha: &a)
+      value.primary = [Float(r), Float(g), Float(b), Float(a)]
+#endif
+    }
+    return value
+  }
+
+  func applyAutomationBackground(_ value: BorgVRMCPBackgroundState) throws {
+    try value.validate()
+    guard RenderBackgroundMode(rawValue: value.mode) != nil else {
+      throw BorgVRMCPCommandError.invalidArgument("Screen backgrounds support system, solid and gradient.")
+    }
+    renderBackgroundMode = value.mode
+    renderBackgroundPrimaryColor = Color(red: Double(value.primary[0]), green: Double(value.primary[1]),
+      blue: Double(value.primary[2]), opacity: Double(value.primary[3]))
+    renderBackgroundSecondaryColor = Color(red: Double(value.secondary[0]), green: Double(value.secondary[1]),
+      blue: Double(value.secondary[2]), opacity: Double(value.secondary[3]))
+  }
 }

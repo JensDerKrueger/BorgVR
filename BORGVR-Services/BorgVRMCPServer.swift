@@ -2,6 +2,20 @@ import Combine
 import Foundation
 import Network
 import Security
+import SwiftUI
+
+struct MCPServerStatusLabel: View {
+  @EnvironmentObject private var controller: BorgVRMCPServerController
+
+  var body: some View {
+    if controller.isRunning {
+      Label("MCP server running", systemImage: "checkmark.circle.fill")
+        .foregroundStyle(.green)
+        .help(controller.statusText)
+        .accessibilityValue(Text(controller.statusText))
+    }
+  }
+}
 
 @MainActor
 final class BorgVRMCPServerController: ObservableObject {
@@ -457,6 +471,82 @@ final class BorgVRMCPServer: @unchecked Sendable {
       case "get_application_state":
         let state = await service.applicationState()
         return structuredToolResult(state)
+      case "get_window_state":
+        return structuredToolResult(try await service.windowState())
+      case "resize_window":
+        return structuredToolResult(try await service.resizeWindow(
+          width: windowDimension("width", in: arguments), height: windowDimension("height", in: arguments),
+          units: arguments["units"] == nil ? "points" : string("units", in: arguments),
+          area: arguments["area"] == nil ? "content" : string("area", in: arguments)))
+      case "set_fullscreen":
+        guard let enabled = try optionalBool("enabled", in: arguments) else {
+          throw BorgVRMCPCommandError.invalidArgument("Provide boolean enabled.")
+        }
+        return structuredToolResult(try await service.setFullscreen(enabled))
+      case "get_transfer_function":
+        return structuredToolResult(try await service.transferFunction(channel: channel(in: arguments)))
+      case "set_transfer_function":
+        let channel = try channel(in: arguments)
+        guard let rows = arguments["samples"] as? [[NSNumber]], !rows.isEmpty,
+              rows.count <= TransferFunction1D.maximumEntryCount,
+              rows.allSatisfy({ $0.count == 4 && $0.allSatisfy {
+                CFGetTypeID($0) != CFBooleanGetTypeID() && $0.doubleValue.isFinite &&
+                  $0.doubleValue.rounded() == $0.doubleValue && (0...255).contains($0.doubleValue)
+              } }) else {
+          throw BorgVRMCPCommandError.invalidArgument("samples must contain 1...65536 RGBA rows of four integer bytes (0...255).")
+        }
+        try await service.setTransferFunction(.init(channel: channel, samples: rows.map { $0.map(\.uint8Value) }))
+        return structuredToolResult(try await service.transferFunction(channel: channel))
+      case "load_transfer_function":
+        let channel = try channel(in: arguments)
+        try await service.loadTransferFunction(channel: channel, from: fileURL("input_path", in: arguments))
+        return structuredToolResult(try await service.transferFunction(channel: channel))
+      case "save_transfer_function":
+        let url = try fileURL("output_path", in: arguments)
+        try await service.saveTransferFunction(channel: channel(in: arguments), to: url,
+          overwrite: optionalBool("overwrite", in: arguments) ?? false)
+        return structuredToolResult(["outputPath": url.path])
+      case "get_background":
+        return structuredToolResult(await service.background())
+      case "set_background":
+        var value = await service.background()
+        value.mode = try string("mode", in: arguments)
+        if arguments["primary"] != nil {
+          guard let color = try optionalVector4("primary", in: arguments) else {
+            throw BorgVRMCPCommandError.invalidArgument("primary must be an RGBA array.")
+          }
+          value.primary = color.mcpArray
+        }
+        if arguments["secondary"] != nil {
+          guard let color = try optionalVector4("secondary", in: arguments) else {
+            throw BorgVRMCPCommandError.invalidArgument("secondary must be an RGBA array.")
+          }
+          value.secondary = color.mcpArray
+        }
+        try await service.setBackground(value)
+        return structuredToolResult(await service.background())
+      case "save_visualization_state":
+        let url = try fileURL("output_path", in: arguments)
+        try await service.saveVisualizationState(to: url, overwrite: optionalBool("overwrite", in: arguments) ?? false)
+        return structuredToolResult(["outputPath": url.path])
+      case "load_visualization_state":
+        try await service.loadVisualizationState(from: fileURL("input_path", in: arguments))
+        return structuredToolResult(await service.applicationState())
+      case "save_settings":
+        let url = try fileURL("output_path", in: arguments)
+        try await service.saveSettings(to: url,
+          includeCredentials: optionalBool("include_credentials", in: arguments) ?? false,
+          overwrite: optionalBool("overwrite", in: arguments) ?? false)
+        return structuredToolResult(["outputPath": url.path])
+      case "load_settings":
+        try await service.loadSettings(from: fileURL("input_path", in: arguments))
+        return structuredToolResult(["status": "Settings restored; MCP connection settings preserved."])
+      case "reset_settings":
+        guard try optionalBool("confirm", in: arguments) == true else {
+          throw BorgVRMCPCommandError.invalidArgument("Resetting settings requires confirm: true. Save a backup first.")
+        }
+        try await service.resetSettings()
+        return structuredToolResult(["status": "Defaults restored; MCP connection settings preserved."])
       case "get_volume_edit_state":
         return structuredToolResult(await service.volumeEditing.volumeEditingState())
       case "select_edit_state":
@@ -700,11 +790,19 @@ final class BorgVRMCPServer: @unchecked Sendable {
           )
         )
       case "capture_screenshot":
-        let image = try await service.captureScreenshot()
+        let includeAlpha = try optionalBool("include_alpha", in: arguments) ?? true
+        let image = try await service.captureScreenshot(includeAlpha: includeAlpha)
+        let outputURL = try arguments["output_path"].map { _ in try fileURL("output_path", in: arguments) }
+        if let outputURL {
+          try BorgVRAutomationFile.write(image.pngData, to: outputURL,
+            overwrite: optionalBool("overwrite", in: arguments) ?? false)
+        }
         let metadata: [String: Any] = [
           "width": image.width,
           "height": image.height,
-          "renderedFrame": image.renderedFrame
+          "renderedFrame": image.renderedFrame,
+          "includesAlpha": includeAlpha,
+          "outputPath": outputURL?.path ?? ""
         ]
         return [
           "content": [
@@ -932,7 +1030,44 @@ final class BorgVRMCPServer: @unchecked Sendable {
         ],
         required: ["output_path"]
       ),
-      tool("capture_screenshot", "Capture the current rendered view as a PNG image.")
+      tool("get_window_state", "macOS only: inspect the BorgVR main window (not a detached panel), including content/frame sizes, backing pixels, display scale and fullscreen/transition state."),
+      tool("resize_window", "macOS only: resize the main window and return actual dimensions. Units default to logical points; pixels uses the current display scale. Area defaults to content; frame includes window decoration. Exits fullscreen first and waits for AppKit's completion. Window minimum/maximum sizes apply; backing dimensions are capped at 16384 pixels per axis.", properties: [
+        "width": ["type": "integer", "minimum": 1, "maximum": 16384],
+        "height": ["type": "integer", "minimum": 1, "maximum": 16384],
+        "units": ["type": "string", "enum": ["points", "pixels"], "default": "points"],
+        "area": ["type": "string", "enum": ["content", "frame"], "default": "content"]
+      ], required: ["width", "height"]),
+      tool("set_fullscreen", "macOS only: explicitly enter (enabled:true) or leave (enabled:false) native fullscreen for the main window. Idempotent; waits for AppKit's completion, not a fixed delay. A concurrent transition or open sheet is reported as an error.",
+        properties: ["enabled": ["type": "boolean"]], required: ["enabled"]),
+      tool("get_transfer_function", "Read a zero-based channel's TF as an ordered array of straight RGBA bytes (0...255). RGB/RGBA volumes have no TFs.", properties: ["channel": channelSchema]),
+      tool("set_transfer_function", "Set a zero-based channel's TF. Each sample is four integer bytes [R,G,B,A] in 0...255. A compact ramp is linearly resampled to the current TF resolution. Other channels remain unchanged; updates render immediately and synchronize through SharePlay.", properties: [
+        "channel": channelSchema, "samples": ["type": "array", "minItems": 1, "maxItems": 65536,
+          "items": ["type": "array", "minItems": 4, "maxItems": 4,
+            "items": ["type": "integer", "minimum": 0, "maximum": 255]]]
+      ], required: ["samples"]),
+      tool("load_transfer_function", "Load one channel from a native .tf1d file; paths are absolute on the app device and must be sandbox-accessible.",
+        properties: ["channel": channelSchema, "input_path": ["type": "string"]], required: ["input_path"]),
+      tool("save_transfer_function", "Save one channel to a native .tf1d file. Existing files are refused unless overwrite is true.",
+        properties: ["channel": channelSchema, "output_path": ["type": "string"], "overwrite": ["type": "boolean"]], required: ["output_path"]),
+      tool("get_background", "Read mode and primary/secondary RGBA colors (0...1). visionOS uses passthrough."),
+      tool("set_background", "Set system, solid or vertical gradient background on macOS/iOS. Primary is the solid/top RGBA color, secondary the bottom RGBA color (0...1); omitted colors are unchanged. visionOS supports only passthrough.", properties: [
+        "mode": ["type": "string", "enum": ["system", "solid", "gradient", "passthrough"]],
+        "primary": ["type": "array", "minItems": 4, "maxItems": 4, "items": ["type": "number", "minimum": 0, "maximum": 1]],
+        "secondary": ["type": "array", "minItems": 4, "maxItems": 4, "items": ["type": "number", "minimum": 0, "maximum": 1]]
+      ], required: ["mode"]),
+      tool("save_visualization_state", "Save one JSON picture configuration: all channel TFs, transformation, render mode/isovalue, clipping, lighting, background and screen projection. visionOS stores head-relative positioning, like the UI. No objects or measurements. Absolute sandbox-accessible output path; existing files require overwrite: true.",
+        properties: ["output_path": ["type": "string"], "overwrite": ["type": "boolean"]], required: ["output_path"]),
+      tool("load_visualization_state", "Restore a saved JSON picture configuration for the currently open dataset. Validates before applying; does not open another dataset.",
+        properties: ["input_path": ["type": "string"]], required: ["input_path"]),
+      tool("save_settings", "Export all registered settings to the UI-compatible .borgvrsettings JSON format. Set include_credentials:true explicitly for passwords, access tokens and certificates (needed for a complete backup). Files with credentials are owner-readable only. Absolute sandbox-accessible path; existing files require overwrite:true.",
+        properties: ["output_path": ["type": "string"], "include_credentials": ["type": "boolean"], "overwrite": ["type": "boolean"]], required: ["output_path"]),
+      tool("load_settings", "Import a UI-compatible .borgvrsettings file. Missing keys remain unchanged, unknown keys are ignored. The running MCP connection's enable/port/auth/TLS settings are preserved so the client stays connected.",
+        properties: ["input_path": ["type": "string"]], required: ["input_path"]),
+      tool("reset_settings", "Reset all registered settings to defaults EXCEPT the running MCP connection's settings. Save settings with include_credentials:true before resetting if you want to restore everything afterward. Does not reset the current visualization; use reset_state for that. Requires confirm:true.",
+        properties: ["confirm": ["type": "boolean", "enum": [true]]], required: ["confirm"]),
+      tool("capture_screenshot", "Capture a PNG. include_alpha defaults to true (transparent render image, background omitted). False composites the configured screen background; visionOS uses black instead of passthrough. Optionally save to absolute sandbox-accessible output_path; existing files require overwrite:true.", properties: [
+        "include_alpha": ["type": "boolean"], "output_path": ["type": "string"], "overwrite": ["type": "boolean"]
+      ])
     ]
   }
 
@@ -968,6 +1103,34 @@ final class BorgVRMCPServer: @unchecked Sendable {
       throw BorgVRMCPCommandError.invalidArgument("Missing string argument '\(key)'.")
     }
     return value
+  }
+
+  private var channelSchema: [String: Any] { ["type": "integer", "minimum": 0, "maximum": 3, "default": 0] }
+
+  private func windowDimension(_ key: String, in arguments: [String: Any]) throws -> Int {
+    let value = try BorgVRVolumeEditingArguments.number(arguments[key])
+    guard value.rounded() == value, (1...16384).contains(value) else {
+      throw BorgVRMCPCommandError.invalidArgument("\(key) must be an integer in 1...16384.")
+    }
+    return Int(value)
+  }
+
+  private func channel(in arguments: [String: Any]) throws -> Int {
+    guard let raw = arguments["channel"] else { return 0 }
+    guard let value = raw as? NSNumber, CFGetTypeID(value) != CFBooleanGetTypeID(),
+          value.doubleValue.isFinite, value.doubleValue.rounded() == value.doubleValue,
+          (0...3).contains(value.intValue) else {
+      throw BorgVRMCPCommandError.invalidArgument("channel must be a zero-based integer in 0...3.")
+    }
+    return value.intValue
+  }
+
+  private func fileURL(_ key: String, in arguments: [String: Any]) throws -> URL {
+    let path = try string(key, in: arguments)
+    guard NSString(string: path).isAbsolutePath, !path.contains("\0") else {
+      throw BorgVRMCPCommandError.invalidArgument("\(key) must be an absolute path on the BorgVR host.")
+    }
+    return URL(fileURLWithPath: path)
   }
 
   private func optionalString(_ key: String, in arguments: [String: Any]) throws -> String? {

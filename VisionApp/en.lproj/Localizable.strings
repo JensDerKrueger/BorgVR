@@ -198,8 +198,9 @@
 "mode_button_settings" = "Settings";
 "mode_button_start_background_server" = "Start Background Server";
 "mode_button_stop_background_server" = "Stop Background Server";
-"mode_server_running" = "Background server is running";
-"mode_server_stopped" = "Background server is stopped";
+"mode_server_running" = "Dataset server running";
+"mode_server_stopped" = "Dataset server stopped";
+"MCP server running" = "MCP server running";
 
 /* Mode selection: share preview title */
 "mode_share_preview_title" = "BorgVR Live Collaboration";

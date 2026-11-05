@@ -198,8 +198,9 @@
 "mode_button_settings" = "Ajustes";
 "mode_button_start_background_server" = "Iniciar servidor en segundo plano";
 "mode_button_stop_background_server" = "Detener servidor en segundo plano";
-"mode_server_running" = "Servidor en segundo plano en ejecución";
-"mode_server_stopped" = "Servidor en segundo plano detenido";
+"mode_server_running" = "Servidor de conjuntos de datos en ejecución";
+"mode_server_stopped" = "Servidor de conjuntos de datos detenido";
+"MCP server running" = "Servidor MCP en ejecución";
 
 /* Mode selection: share preview title */
 "mode_share_preview_title" = "Colaboración en vivo de BorgVR";

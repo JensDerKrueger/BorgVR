@@ -157,6 +157,7 @@ struct ModeSelectionView: View {
       Spacer(minLength: 32)
 
       VStack(alignment: .leading, spacing: 22) {
+        MCPServerStatusLabel()
         if storedAppModel.enableDatasetServer {
           serverStatus
         }

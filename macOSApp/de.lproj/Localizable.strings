@@ -113,8 +113,9 @@
 "modeselection_drop_script" = "GSC-Skript zum Ausführen ablegen";
 "modeselection_start_background_server" = "Hintergrundserver starten";
 "modeselection_stop_background_server" = "Hintergrundserver stoppen";
-"modeselection_server_running" = "Server läuft";
-"modeselection_server_stopped" = "Server gestoppt";
+"modeselection_server_running" = "Datensatzserver läuft";
+"modeselection_server_stopped" = "Datensatzserver gestoppt";
+"MCP server running" = "MCP-Server läuft";
 
 "modeselection_footer_years" = "© 2024–2026";
 "modeselection_footer_cgvis" = "CGVIS Duisburg";

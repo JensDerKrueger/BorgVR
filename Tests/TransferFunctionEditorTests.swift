@@ -3,6 +3,11 @@ import Combine
 import SwiftUI
 
 // Isolate the real editor and TF drawing code from datasets, persistence and SharePlay.
+enum DockablePanelID {
+  case transfer
+  var displayTitle: String { "Transfer function" }
+  var tint: Color { .orange }
+}
 struct BorgVRTransferFunctionSnapshot {
   let channel: Int
   let samples: [SIMD4<UInt8>]

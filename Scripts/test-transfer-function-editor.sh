@@ -18,6 +18,7 @@ swiftc \
   "$ROOT/BORGVR-Render/Transfer Function 1D/TransferFunction1D.swift" \
   "$ROOT/BORGVR-Render/Transfer Function 1D/TransferFunction1DUI.swift" \
   "$ROOT/AppSupport/Rendering/TransferFunctionEditorView.swift" \
+  "$ROOT/macOSApp/PanelWindow.swift" \
   "$ROOT/Tests/TransferFunctionEditorTests.swift" \
   -o "$BUILD_DIR/transfer-function-editor-tests"
 

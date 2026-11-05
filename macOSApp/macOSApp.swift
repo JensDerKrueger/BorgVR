@@ -59,6 +59,7 @@ struct macOSApp: App {
   @State private var showsSharePlayDisplayNameOnboarding = false
   @State private var sharePlayDisplayNameDraft = ""
   @StateObject private var settingsFiles = SettingsFileController()
+  @StateObject private var windowAutomation = MacWindowAutomation()
 
   init() {
     let appModel = AppModel()
@@ -117,6 +118,7 @@ struct macOSApp: App {
   var body: some Scene {
     WindowGroup("BorgVR") {
       ContentView()
+        .background(MacAutomationWindowReader(automation: windowAutomation).frame(width: 0, height: 0))
 #if DEBUG
         .background(AppStoreScreenshotWindowFrame().frame(width: 0, height: 0))
 #endif
@@ -370,6 +372,10 @@ struct macOSApp: App {
       datasetOpener: { id in
         try await openMCPDataset(id: id)
       },
+      settingsStoreProvider: {
+        appSettings.settingsStore(overrides: storedAppModel.settingsArchiveEntries)
+      },
+      windowAutomation: windowAutomation,
       datasetCloser: {
         closeMCPDataset()
       }

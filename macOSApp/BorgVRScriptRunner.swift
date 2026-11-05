@@ -101,6 +101,9 @@ final class BorgVRScriptRunner: ObservableObject {
   private var pendingDatasetResult: CommandResultCode?
   private var pendingScreenshotKey: String?
   private var pendingScreenshotResult: CommandResultCode?
+  private var windowCommandTask: Task<Void, Never>?
+  private var pendingWindowCommandKey: String?
+  private var pendingWindowCommandResult: CommandResultCode?
   private var pendingWaitFrameTarget: UInt64?
   private var pendingWaitLoadedStartReadback: UInt64?
   private var pendingWaitLoadedRequiredEmptyReadbacks: UInt64 = 3
@@ -127,6 +130,7 @@ final class BorgVRScriptRunner: ObservableObject {
 
   deinit {
     executionTask?.cancel()
+    windowCommandTask?.cancel()
     isoSurfaceExportTask?.cancel()
     volumeEditTask?.cancel()
     storedAppModel?.stopAccessingDataDirectory(logFileAccessURL)
@@ -210,6 +214,10 @@ final class BorgVRScriptRunner: ObservableObject {
   }
 
   func stopScript() {
+    windowCommandTask?.cancel()
+    windowCommandTask = nil
+    pendingWindowCommandKey = nil
+    pendingWindowCommandResult = nil
     volumeEditTask?.cancel()
     volumeEditTask = nil
     pendingVolumeEdit = nil
@@ -449,9 +457,64 @@ final class BorgVRScriptRunner: ObservableObject {
     register("screenshot", [.string]) { [weak self] args in
       self?.takeScreenshot(filename: args.string(0)) ?? .callbackError
     }
+    register("screenshot", [.string, .bool]) { [weak self] args in
+      self?.takeScreenshot(filename: args.string(0), includeAlpha: args.bool(1)) ?? .callbackError
+    }
+    register("screenshot", [.bool]) { [weak self] args in
+      self?.takeScreenshot(filename: nil, includeAlpha: args.bool(0)) ?? .callbackError
+    }
+
+    for name in ["savestate", "savevisualizationstate"] {
+      register(name, [.string]) { [weak self] args in
+        guard let self else { return .callbackError }
+        return self.performAutomation { try $0.saveVisualizationState(
+          to: self.scriptFileURL(filename: args.string(0), defaultExtension: "json"), overwrite: true) }
+      }
+    }
+    for name in ["loadstate", "loadvisualizationstate"] {
+      register(name, [.string]) { [weak self] args in
+        guard let self else { return .callbackError }
+        return self.performAutomation { try $0.loadVisualizationState(
+          from: self.scriptFileURL(filename: args.string(0), defaultExtension: "json")) }
+      }
+    }
+    register("setviewstate", [.string]) { [weak self] args in
+      guard let self, let data = Data(base64Encoded: args.string(0)) else { return .invalidArguments }
+      return self.performAutomation { try $0.restoreDatasetViewState(data) }
+    }
+    register("savesettings", [.string, .bool]) { [weak self] args in
+      guard let self else { return .callbackError }
+      return self.performAutomation { try $0.saveSettings(
+        to: self.scriptFileURL(filename: args.string(0), defaultExtension: "borgvrsettings"),
+        includeCredentials: args.bool(1), overwrite: true) }
+    }
+    register("loadsettings", [.string]) { [weak self] args in
+      guard let self else { return .callbackError }
+      return self.performAutomation { try $0.loadSettings(
+        from: self.scriptFileURL(filename: args.string(0), defaultExtension: "borgvrsettings")) }
+    }
+    register("resetsettings", []) { [weak self] _ in
+      self?.performAutomation { try $0.resetSettings() } ?? .callbackError
+    }
 
     register("resize", [.int, .int]) { [weak self] args in
       self?.resize(width: args.int(0), height: args.int(1)) ?? .callbackError
+    }
+    register("resize", [.int, .int, .string, .string]) { [weak self] args in
+      self?.resize(width: args.int(0), height: args.int(1), units: args.string(2), area: args.string(3)) ?? .callbackError
+    }
+    register("fullscreen", [.bool]) { [weak self] args in
+      self?.performWindowCommand(key: "fullscreen-\(args.bool(0))") {
+        _ = try await $0.setFullscreen(args.bool(0))
+      } ?? .callbackError
+    }
+    registerValue("getwindowstate", []) { [weak self] _ in
+      guard let service = self?.commandService else { return .status(.callbackError) }
+      do { return .value(String(decoding: try JSONEncoder().encode(service.windowState()), as: UTF8.self)) }
+      catch {
+        self?.logError("Window state failed: \(error.localizedDescription)")
+        return .status(.callbackError)
+      }
     }
 
     register("quit", []) { _ in
@@ -613,6 +676,35 @@ final class BorgVRScriptRunner: ObservableObject {
       self?.setTransferFunction(channel: args.int(0), encodedSamples: args.string(1))
         ?? .callbackError
     }
+    registerValue("gettransferfunction", [.int]) { [weak self] args in
+      guard let self, let service = self.commandService else { return .status(.callbackError) }
+      do {
+        let value = try service.transferFunction(channel: args.int(0))
+        return .value(BorgVRTransferFunctionSnapshot(channel: value.channel,
+          samples: try value.validatedSamples()).base64EncodedSamples)
+      } catch { self.logError(error.localizedDescription); return .status(.callbackError) }
+    }
+    register("settransferfunctionjson", [.int, .string]) { [weak self] args in
+      guard let self else { return .callbackError }
+      return self.performAutomation { service in
+        let samples = try JSONDecoder().decode([[UInt8]].self, from: Data(args.string(1).utf8))
+        try service.setTransferFunction(.init(channel: args.int(0), samples: samples))
+      }
+    }
+    for name in ["loadtf", "settffile"] {
+      register(name, [.int, .string]) { [weak self] args in
+        guard let self else { return .callbackError }
+        return self.performAutomation { try $0.loadTransferFunction(channel: args.int(0),
+          from: self.scriptFileURL(filename: args.string(1), defaultExtension: "tf1d")) }
+      }
+    }
+    for name in ["savetf", "savetffile"] {
+      register(name, [.int, .string]) { [weak self] args in
+        guard let self else { return .callbackError }
+        return self.performAutomation { try $0.saveTransferFunction(channel: args.int(0),
+          to: self.scriptFileURL(filename: args.string(1), defaultExtension: "tf1d"), overwrite: true) }
+      }
+    }
 
     register("resettf", []) { [weak self] _ in
       guard let session = self?.session else { return .callbackError }
@@ -744,6 +836,15 @@ final class BorgVRScriptRunner: ObservableObject {
 
     register("setbackground", [.double, .double, .double, .double]) { [weak self] args in
       self?.setSolidBackground(red: args.double(0), green: args.double(1), blue: args.double(2), alpha: args.double(3)) ?? .callbackError
+    }
+    registerValue("getbackground", []) { [weak self] _ in
+      guard let self, let service = self.commandService else { return .status(.callbackError) }
+      do { return .value(String(decoding: try JSONEncoder().encode(service.background()), as: UTF8.self)) }
+      catch { return .status(.callbackError) }
+    }
+    register("setbackgroundstate", [.string]) { [weak self] args in
+      self?.performAutomation { try $0.setBackground(JSONDecoder().decode(
+        BorgVRMCPBackgroundState.self, from: Data(args.string(0).utf8))) } ?? .callbackError
     }
 
     register("background", [.string]) { [weak self] args in
@@ -1413,8 +1514,8 @@ final class BorgVRScriptRunner: ObservableObject {
     }
   }
 
-  private func takeScreenshot(filename: String?) -> CommandResultCode {
-    let key = filename ?? "<default>"
+  private func takeScreenshot(filename: String?, includeAlpha: Bool = true) -> CommandResultCode {
+    let key = "\(filename ?? "<default>"):\(includeAlpha)"
     if pendingScreenshotKey == key {
       if let result = pendingScreenshotResult {
         pendingScreenshotKey = nil
@@ -1428,27 +1529,58 @@ final class BorgVRScriptRunner: ObservableObject {
     let accessURL = storedAppModel?.startAccessingDataDirectory()
     pendingScreenshotKey = key
     pendingScreenshotResult = nil
-    appModel?.requestRenderScreenshot(to: url, accessURL: accessURL) { [weak self] result in
-      Task { @MainActor in
-        switch result {
-          case let .success(url):
-            self?.logInfo("Screenshot gespeichert: \(url.path)")
-            self?.pendingScreenshotResult = .success
-          case let .failure(error):
-            self?.logError("Screenshot failed: \(error.localizedDescription)")
-            self?.pendingScreenshotResult = .callbackError
-        }
+    guard let service = commandService else {
+      storedAppModel?.stopAccessingDataDirectory(accessURL)
+      pendingScreenshotKey = nil
+      return .callbackError
+    }
+    Task { @MainActor [weak self] in
+      defer { self?.storedAppModel?.stopAccessingDataDirectory(accessURL) }
+      do {
+        let image = try await service.captureScreenshot(includeAlpha: includeAlpha)
+        try BorgVRAutomationFile.write(image.pngData, to: url, overwrite: true)
+        self?.logInfo("Screenshot saved: \(url.path)")
+        self?.pendingScreenshotResult = .success
+      } catch {
+        self?.logError("Screenshot failed: \(error.localizedDescription)")
+        self?.pendingScreenshotResult = .callbackError
       }
     }
     return .waitingNoop
   }
 
-  private func resize(width: Int, height: Int) -> CommandResultCode {
-    guard width > 0, height > 0 else { return .invalidArguments }
-    let size = NSSize(width: width, height: height)
-    let window = NSApp.keyWindow ?? NSApp.windows.first { $0.title.contains("BorgVR") }
-    window?.setContentSize(size)
-    return .success
+  private func resize(width: Int, height: Int, units: String = "points", area: String = "content") -> CommandResultCode {
+    performWindowCommand(key: "resize-\(width)-\(height)-\(units)-\(area)") {
+      _ = try await $0.resizeWindow(width: width, height: height, units: units, area: area)
+    }
+  }
+
+  private func performWindowCommand(
+    key: String, action: @escaping (BorgVRScreenCommandService) async throws -> Void
+  ) -> CommandResultCode {
+    if pendingWindowCommandKey == key {
+      guard let result = pendingWindowCommandResult else { return .waitingNoop }
+      pendingWindowCommandKey = nil
+      pendingWindowCommandResult = nil
+      windowCommandTask = nil
+      return result
+    }
+    guard pendingWindowCommandKey == nil, let service = commandService else { return .callbackError }
+    pendingWindowCommandKey = key
+    windowCommandTask = Task { @MainActor [weak self] in
+      let result: CommandResultCode
+      do {
+        try await action(service)
+        result = .success
+      } catch {
+        guard !Task.isCancelled else { return }
+        self?.logError("Window command failed: \(error.localizedDescription)")
+        result = .callbackError
+      }
+      guard !Task.isCancelled, self?.pendingWindowCommandKey == key else { return }
+      self?.pendingWindowCommandResult = result
+    }
+    return .waitingNoop
   }
 
   private func openDataset(id: String) -> CommandResultCode {
@@ -1654,9 +1786,8 @@ final class BorgVRScriptRunner: ObservableObject {
     guard let parameters = renderingParameters else { return .callbackError }
     let url = scriptFileURL(filename: filename, defaultExtension: "tf1d")
     do {
-      parameters.objectWillChange.send()
-      try parameters.loadTransferFunction(from: url)
-      sharePlay?.synchronize(kind: .full)
+      guard let commandService else { return .callbackError }
+      try commandService.loadTransferFunction(channel: parameters.selectedTransferFunctionChannel, from: url)
       return logInfo("Transfer function loaded: \(url.path)")
     } catch {
       logError("Transfer function could not be loaded: \(error.localizedDescription)")
@@ -1671,7 +1802,9 @@ final class BorgVRScriptRunner: ObservableObject {
       let accessURL = storedAppModel?.startAccessingDataDirectory()
       defer { storedAppModel?.stopAccessingDataDirectory(accessURL) }
       try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-      try parameters.transferFunction.save(to: url)
+      guard let commandService else { return .callbackError }
+      try commandService.saveTransferFunction(channel: parameters.selectedTransferFunctionChannel,
+        to: url, overwrite: true)
       return logInfo("Transfer function saved: \(url.path)")
     } catch {
       logError("Transfer function could not be saved: \(error.localizedDescription)")
@@ -2144,40 +2277,35 @@ final class BorgVRScriptRunner: ObservableObject {
   }
 
   private func setSolidBackground(red: Double, green: Double, blue: Double, alpha: Double) -> CommandResultCode {
-    guard let appSettings else { return .callbackError }
-    appSettings.renderBackgroundMode = RenderBackgroundMode.solid.rawValue
-    appSettings.renderBackgroundPrimaryColor = Color(
-      red: clamp(red),
-      green: clamp(green),
-      blue: clamp(blue),
-      opacity: clamp(alpha)
-    )
-    return .success
+    guard let commandService else { return .callbackError }
+    var value = commandService.background()
+    value.mode = "solid"
+    value.primary = [Float(red), Float(green), Float(blue), Float(alpha)]
+    return performAutomation { try $0.setBackground(value) }
   }
 
   private func setBackgroundMode(_ mode: String) -> CommandResultCode {
-    guard let appSettings else { return .callbackError }
-    guard let backgroundMode = RenderBackgroundMode(rawValue: mode.lowercased()) else {
+    guard let commandService, let backgroundMode = RenderBackgroundMode(rawValue: mode.lowercased()) else {
       return .invalidArguments
     }
-    appSettings.renderBackgroundMode = backgroundMode.rawValue
-    return .success
+    var value = commandService.background()
+    value.mode = backgroundMode.rawValue
+    return performAutomation { try $0.setBackground(value) }
   }
 
   private func setGradientBackground(_ args: [CommandArg]) -> CommandResultCode {
-    guard let appSettings else { return .callbackError }
-    appSettings.renderBackgroundMode = RenderBackgroundMode.gradient.rawValue
-    appSettings.renderBackgroundPrimaryColor = Color(
-      red: clamp(args.double(1)),
-      green: clamp(args.double(2)),
-      blue: clamp(args.double(3))
-    )
-    appSettings.renderBackgroundSecondaryColor = Color(
-      red: clamp(args.double(4)),
-      green: clamp(args.double(5)),
-      blue: clamp(args.double(6))
-    )
-    return .success
+    let value = BorgVRMCPBackgroundState(mode: "gradient",
+      primary: [Float(args.double(1)), Float(args.double(2)), Float(args.double(3)), 1],
+      secondary: [Float(args.double(4)), Float(args.double(5)), Float(args.double(6)), 1])
+    return performAutomation { try $0.setBackground(value) }
+  }
+
+  private func performAutomation(_ action: (BorgVRScreenCommandService) throws -> Void) -> CommandResultCode {
+    guard let commandService else { return .callbackError }
+    let access = storedAppModel?.startAccessingDataDirectory()
+    defer { storedAppModel?.stopAccessingDataDirectory(access) }
+    do { try action(commandService); return .success }
+    catch { logError(error.localizedDescription); return .callbackError }
   }
 
   private func logFPS() -> CommandResultCode {
@@ -2372,7 +2500,8 @@ final class BorgVRScriptRunner: ObservableObject {
   }
 
   private func scriptFileURL(filename: String, defaultExtension: String) -> URL {
-    var url = outputDirectoryURL().appendingPathComponent(filename)
+    var url = NSString(string: filename).isAbsolutePath
+      ? URL(fileURLWithPath: filename) : outputDirectoryURL().appendingPathComponent(filename)
     if url.pathExtension.isEmpty {
       url.appendPathExtension(defaultExtension)
     }

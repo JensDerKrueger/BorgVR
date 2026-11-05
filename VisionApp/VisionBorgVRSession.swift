@@ -95,6 +95,18 @@ extension BorgVRSession where VisualizationState == SharedAppModel,
               with: snapshot.samples
             )
             sharedAppModel.synchronize(kind: .full)
+          case .setBackground(let value):
+            try value.validate()
+            guard value.mode == "passthrough" else {
+              throw BorgVRMCPCommandError.unsupported("visionOS uses passthrough, not a screen background.")
+            }
+          case .restoreDatasetViewState(let data):
+            let state = try DatasetViewStateDocument.decode(from: data)
+            guard state.datasetID == runtimeAppModel.activeDataset?.uniqueId else {
+              throw DatasetViewStateDocumentError.invalidState
+            }
+            sharedAppModel.applyDatasetViewState(state)
+            sharedAppModel.synchronize(kind: .full)
           case .setLighting(let direction, let ambient, let diffuse, let specular):
             if let direction {
               guard simd_length_squared(direction) > 0.000_001 else {

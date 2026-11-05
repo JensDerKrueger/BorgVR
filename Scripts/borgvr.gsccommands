@@ -62,6 +62,17 @@ exportediteddataset(string,string,string)
 opendataset(string)
 
 # Capture and synchronization
+# macOS main window, not detached panels. Defaults: logical points, content area.
+resize(int,int)
+# Units: points|pixels. Area: content|frame (includes decoration).
+resize(int,int,string,string)
+# Explicit native fullscreen state; waits for the transition to finish.
+fullscreen(bool)
+# JSON with content/frame sizes in points/pixels, display scale and fullscreen state.
+getwindowstate() -> string
+screenshot(string,bool)
+screenshot(bool)
+# The bool preserves alpha when true; false composites the configured background.
 waitframes(int)
 waitloaded()
 waitloaded(int)
@@ -86,6 +97,9 @@ setmethod(int)
 background(string)
 background(string,double,double,double)
 background(string,double,double,double,double,double,double)
+# JSON {"mode":"solid|gradient|system","primary":[r,g,b,a],"secondary":[r,g,b,a]}, colors 0...1.
+getbackground() -> string
+setbackgroundstate(string)
 
 # Transform
 resetrotation()
@@ -110,6 +124,24 @@ savetffile(string)
 savetf(string)
 # Replaces one complete RGBA transfer-function channel from base64-encoded sample bytes.
 settransferfunction(int,string)
+# Zero-based channel; RGBA bytes in Base64, compatible with settransferfunction.
+gettransferfunction(int) -> string
+# JSON array of RGBA byte entries (0...255); compact ramps are linearly resampled.
+settransferfunctionjson(int,string)
+loadtf(int,string)
+savetf(int,string)
+# One named JSON picture configuration: all TFs, view, clipping, light, background, projection.
+savestate(string)
+loadstate(string)
+savevisualizationstate(string)
+loadvisualizationstate(string)
+# Internal lossless view-state representation used by command recording.
+setviewstate(string)
+# UI-compatible settings archive. Bool explicitly opts into including credentials.
+# Load/reset preserve the current MCP connection settings.
+savesettings(string,bool)
+loadsettings(string)
+resetsettings()
 resettf()
 
 # Lighting (RGB components use the 0...1 range)

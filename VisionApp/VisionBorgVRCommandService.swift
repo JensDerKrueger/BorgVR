@@ -94,6 +94,42 @@ final class VisionBorgVRCommandService: BorgVRMCPCommandService {
     try await datasetCloser()
   }
 
+  func settingsStore() -> BorgVRSettingsStore { session.settingsState.settingsStore() }
+
+  var transferFunctionCount: Int {
+    session.runtimeState.activeDatasetInfo?.channelInterpretation == .independentChannels
+      ? session.visualizationState.componentCount : 0
+  }
+
+  func transferFunction(channel: Int) throws -> BorgVRMCPTransferFunction {
+    guard applicationState().rendererReady else { throw BorgVRMCPCommandError.noDataset }
+    guard (0..<transferFunctionCount).contains(channel) else {
+      throw BorgVRMCPCommandError.invalidArgument("Invalid channel, or this is an RGB/RGBA volume without TFs.")
+    }
+    return .init(channel: channel, samples: session.visualizationState.transferFunctions[channel].data)
+  }
+
+  func setTransferFunction(_ value: BorgVRMCPTransferFunction) throws {
+    let current = try transferFunction(channel: value.channel)
+    try session.perform(.setTransferFunction(.init(channel: value.channel,
+      samples: value.validatedSamples(count: current.samples.count))), source: .mcp)
+  }
+
+  func background() -> BorgVRMCPBackgroundState { .passthrough }
+
+  func setBackground(_ value: BorgVRMCPBackgroundState) throws {
+    try session.perform(.setBackground(value), source: .mcp)
+  }
+
+  func datasetViewStateData() throws -> Data {
+    guard let dataset = session.runtimeState.activeDataset else { throw BorgVRMCPCommandError.noDataset }
+    return try DatasetViewStateDocument.encode(session.visualizationState.makeDatasetViewState(datasetID: dataset.uniqueId))
+  }
+
+  func restoreDatasetViewState(_ data: Data) throws {
+    try session.perform(.restoreDatasetViewState(data), source: .mcp)
+  }
+
   func applicationState() -> BorgVRMCPApplicationState {
     let runtime = session.runtimeState
     let state = session.currentSnapshot()
@@ -144,7 +180,9 @@ final class VisionBorgVRCommandService: BorgVRMCPCommandService {
         alphaEpsilon: settings.alphaEpsilon,
         datasetBoundingBoxVisible: settings.showDatasetBoundingBox
       ),
-      volumeEditing: volumeEditing.volumeEditingState()
+      volumeEditing: volumeEditing.volumeEditingState(),
+      transferFunctionCount: transferFunctionCount,
+      background: background()
     )
   }
 
@@ -308,11 +346,11 @@ final class VisionBorgVRCommandService: BorgVRMCPCommandService {
     throw BorgVRMCPCommandError.isoSurfaceUnavailable
   }
 
-  func captureScreenshot() async throws -> BorgVRMCPImage {
+  func captureScreenshot(includeAlpha: Bool) async throws -> BorgVRMCPImage {
     let runtime = session.runtimeState
     guard runtime.activeDataset != nil else { throw BorgVRMCPCommandError.noDataset }
     let requestID = UUID()
-    return try await withCheckedThrowingContinuation {
+    let image = try await withCheckedThrowingContinuation {
       (continuation: CheckedContinuation<BorgVRMCPImage, Error>) in
       let gate = BorgVRMCPContinuationGate(continuation)
       runtime.mcpRenderBridge.requestScreenshot(id: requestID) { result in
@@ -324,6 +362,7 @@ final class VisionBorgVRCommandService: BorgVRMCPCommandService {
         gate.resume(with: .failure(BorgVRMCPCommandError.timeout))
       }
     }
+    return includeAlpha ? image : try image.composited(over: .passthrough)
   }
 
   private func mcpName(for mode: RenderMode) -> String {
