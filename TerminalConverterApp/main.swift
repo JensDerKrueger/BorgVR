@@ -1,7 +1,7 @@
 import Foundation
 
 enum ConverterInfo {
-  static let version = "3.6"
+  static let version = "3.7"
   static let toolIdentification = "BorgVR Converter \(version)"
 
   static let banner = #"""
