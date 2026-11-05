@@ -64,6 +64,10 @@ struct DatasetStreamingProgressTests {
       precondition(image.width == 200 && image.height == 2)
       let filledWidth = (0..<200).filter { (bitmap.colorAt(x: $0, y: 0)?.alphaComponent ?? 0) > 0.5 }.count
       precondition(filledWidth == expectedWidth, "Progress line must shrink with the remaining fraction")
+      for x in 0..<200 {
+        let filled = (bitmap.colorAt(x: x, y: 0)?.alphaComponent ?? 0) > 0.5
+        precondition(filled == (x >= 200 - expectedWidth), "Progress line must disappear from left to right")
+      }
     }
     withExtendedLifetime(observation) {}
     print("Dataset streaming progress, polling, replacement and completion tests passed")
