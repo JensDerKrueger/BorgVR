@@ -5,7 +5,7 @@ enum ConverterInfo {
   static let toolIdentification = "BorgVR Converter \(version)"
 
   static let banner = #"""
-   ____                   __     ______
+   ____                  __     ______
   | __ )  ___  _ __ __ _ \ \   / /  _ \
   |  _ \ / _ \| '__/ _` | \ \ / /| |_) |
   | |_) | (_) | | | (_| |  \ V / |  _ <

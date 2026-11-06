@@ -129,7 +129,7 @@ static void printStartupBanner(const ServerConfiguration& configuration, LogLeve
   constexpr const char* reset = "\033[0m";
   std::cout
     << cyan << "\n"
-    << "  ____                   __     ______\n"
+    << "  ____                  __     ______\n"
     << " | __ )  ___  _ __ __ _ \\ \\   / /  _ \\\n"
     << " |  _ \\ / _ \\| '__/ _` | \\ \\ / /| |_) |\n"
     << " | |_) | (_) | | | (_| |  \\ V / |  _ <\n"
