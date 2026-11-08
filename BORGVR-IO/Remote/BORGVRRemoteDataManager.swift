@@ -186,7 +186,7 @@ class BORGVRRemoteDataManager {
       timeout: timeout,
       logger: logger
     )
-    try getInfo()
+    try getInfo(timeout: timeout)
   }
 
   /**
@@ -280,9 +280,9 @@ class BORGVRRemoteDataManager {
     }
   }
   
-  private func getInfo() throws {
-    try sendCommand("INFO")
-    let response = try receiveTextResponse()
+  private func getInfo(timeout: TimeInterval) throws {
+    try sendCommand("INFO", timeout: timeout)
+    let response = try receiveTextResponse(timeout: timeout, maximumBytes: 16 * 1024)
 
     let data = KeyValuePairHandler(text:response)
 
@@ -297,7 +297,7 @@ class BORGVRRemoteDataManager {
     }
     serverProtocolVersion = parsedServerVersion
 
-    if let maxBricksPerGetRequest = data.int(for: "MAX_BRICKS_PER_GET_REQUEST") {
+    if let maxBricksPerGetRequest = data.int(for: "MAX_BRICKS_PER_GET_REQUEST"), maxBricksPerGetRequest > 0 {
       self.maxBricksPerGetRequest = maxBricksPerGetRequest
     } else {
       throw BORGVRRemoteDataManagerError.invalidResponse(reason: "Could not parse brick request limit from server response.")
@@ -309,11 +309,12 @@ class BORGVRRemoteDataManager {
    - Returns: An array of tuples containing dataset id and description.
    - Throws: An error if sending or receiving the command fails.
    */
-  func requestDatasetList() throws -> [(id: String, description: String)] {
-    try sendCommand("LIST")
-    let response = try receiveTextResponse()
+  func requestDatasetList(maximumEntries: Int = BorgVRTextResponse.maximumCatalogEntries,
+                          timeout: TimeInterval = 5) throws -> [(id: String, description: String)] {
+    try sendCommand("LIST", timeout: timeout)
+    let response = try receiveTextResponse(timeout: timeout)
 
-    let lines = response.split(separator: "\n")
+    let lines = try BorgVRTextResponse.catalogLines(response, maximumEntries: maximumEntries)
     self.datasets = try lines.compactMap { line in
       let parts = line.split(separator: " ", maxSplits: 1)
       guard parts.count > 1 else {
@@ -335,7 +336,7 @@ class BORGVRRemoteDataManager {
   func requestTransferFunctionList() throws -> [RemoteTransferFunctionInfo] {
     try sendCommand("LISTTF")
     let response = try receiveTextResponse()
-    let lines = response.split(separator: "\n", omittingEmptySubsequences: true)
+    let lines = try BorgVRTextResponse.catalogLines(response)
 
     self.transferFunctions = try lines.compactMap { line in
       let parts = line.split(separator: " ", maxSplits: 2, omittingEmptySubsequences: false)
@@ -380,7 +381,7 @@ class BORGVRRemoteDataManager {
     guard supportsMarkerFiles else { return [] }
     try sendCommand("LISTMARKERS")
     let response = try receiveTextResponse()
-    markerFiles = try response.split(separator: "\n", omittingEmptySubsequences: true).map { line in
+    markerFiles = try BorgVRTextResponse.catalogLines(response).map { line in
       let parts = line.split(separator: " ", maxSplits: 3, omittingEmptySubsequences: false)
       guard parts.count >= 3 else {
         throw BORGVRRemoteDataManagerError.invalidResponse(reason: "Marker list response too short.")
@@ -426,7 +427,7 @@ class BORGVRRemoteDataManager {
     guard supportsMeshes else { return [] }
     try sendCommand("LISTMESHES")
     let response = try receiveTextResponse()
-    meshes = try response.split(separator: "\n", omittingEmptySubsequences: true).map { line in
+    meshes = try BorgVRTextResponse.catalogLines(response).map { line in
       let parts = line.split(separator: " ", maxSplits: 2, omittingEmptySubsequences: false)
       guard parts.count >= 2, let id = UUID(uuidString: String(parts[0])) else {
         throw BORGVRRemoteDataManagerError.invalidResponse(
@@ -463,6 +464,21 @@ class BORGVRRemoteDataManager {
       throw BORGVRRemoteDataManagerError.invalidResponse(reason: "Mesh byte count mismatch.")
     }
     return data
+  }
+
+  /// Catalog inspection needs metadata only, not a live data source or its brick buffers.
+  func requestDatasetMetadata(datasetID: String, timeout: TimeInterval,
+                              maximumBytes: Int) throws -> BORGVRMetaData {
+    guard UUID(uuidString: datasetID) != nil else {
+      throw BORGVRRemoteDataManagerError.invalidResponse(reason: "Invalid dataset ID.")
+    }
+    try sendCommand("OPEN \(datasetID)", timeout: timeout)
+    let data = try receiveBinaryData(timeout: timeout, maximumPayloadSize: maximumBytes)
+    let metadata = try BORGVRMetaData(fromData: data)
+    guard metadata.uniqueID.caseInsensitiveCompare(datasetID) == .orderedSame else {
+      throw BORGVRRemoteDataManagerError.invalidResponse(reason: "Dataset metadata ID does not match the requested dataset.")
+    }
+    return metadata
   }
 
   /**
@@ -512,13 +528,13 @@ class BORGVRRemoteDataManager {
    - Parameter command: The command to send.
    - Throws: A BORGVRRemoteDataManagerError if sending fails or times out.
    */
-  private func sendCommand(_ command: String) throws {
+  private func sendCommand(_ command: String, timeout: TimeInterval = 5) throws {
     guard !connectionOwnershipTransferred else {
       throw BORGVRRemoteDataManagerError.connectionFailed(
         reason: "The manager connection is already owned by an open dataset."
       )
     }
-    try BorgVRServerAuthentication.sendCommand(command, connection: connection)
+    try BorgVRServerAuthentication.sendCommand(command, connection: connection, timeout: timeout)
   }
 
   /**
@@ -530,8 +546,9 @@ class BORGVRRemoteDataManager {
    - Returns: A string containing the response.
    - Throws: A BORGVRRemoteDataManagerError if reception times out or fails.
    */
-  private func receiveTextResponse(timeout: TimeInterval = 5.0) throws -> String {
-    try BorgVRServerAuthentication.receiveTextResponse(connection: connection, timeout: timeout)
+  private func receiveTextResponse(timeout: TimeInterval = 5.0,
+                                   maximumBytes: Int = BorgVRTextResponse.maximumBytes) throws -> String {
+    try BorgVRServerAuthentication.receiveTextResponse(connection: connection, timeout: timeout, maximumBytes: maximumBytes)
   }
 
   private func receiveBinaryData(

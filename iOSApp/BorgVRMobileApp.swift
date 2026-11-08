@@ -190,7 +190,7 @@ struct BorgVRMobileApp: App {
     let service = BorgVRScreenCommandService(
       session: session,
       datasetListProvider: {
-        await loadMCPDatasetRecords().map(\.catalogEntry)
+        try await loadMCPDatasetRecords().map(\.catalogEntry)
       },
       datasetOpener: { id in
         try await openMCPDataset(id: id)
@@ -204,12 +204,12 @@ struct BorgVRMobileApp: App {
   }
 
   @MainActor
-  private func loadMCPDatasetRecords() async -> [BorgVRMCPDatasetRecord] {
+  private func loadMCPDatasetRecords() async throws -> [BorgVRMCPDatasetRecord] {
     let documentsDirectory = FileManager.default.urls(
       for: .documentDirectory,
       in: .userDomainMask
     ).first
-    return await BorgVRMCPDatasetCatalog.load(
+    return try await BorgVRMCPDatasetCatalog.load(
       localDirectory: documentsDirectory,
       servers: appSettings.servers,
       timeout: appSettings.timeout
@@ -218,7 +218,7 @@ struct BorgVRMobileApp: App {
 
   @MainActor
   private func openMCPDataset(id: String) async throws {
-    let records = await loadMCPDatasetRecords()
+    let records = try await loadMCPDatasetRecords()
     guard let record = records.first(where: { $0.catalogEntry.id == id }) else {
       throw BorgVRMCPCommandError.datasetNotFound(id)
     }

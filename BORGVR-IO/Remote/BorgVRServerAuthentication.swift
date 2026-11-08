@@ -45,7 +45,7 @@ enum BorgVRServerAuthentication {
     logger: LoggerBase? = nil
   ) throws {
     try sendCommand("HELLO", connection: connection, timeout: timeout)
-    let helloText = try receiveTextResponse(connection: connection, timeout: timeout)
+    let helloText = try receiveTextResponse(connection: connection, timeout: timeout, maximumBytes: 16 * 1024)
     let hello = KeyValuePairHandler(text: helloText)
 
     guard let version = hello.string(for: "VERSION") else {
@@ -88,7 +88,7 @@ enum BorgVRServerAuthentication {
     )
 
     try sendCommand("AUTH \(clientNonceText) \(responseText)", connection: connection, timeout: timeout)
-    let authText = try receiveTextResponse(connection: connection, timeout: timeout)
+    let authText = try receiveTextResponse(connection: connection, timeout: timeout, maximumBytes: 16 * 1024)
     let auth = KeyValuePairHandler(text: authText)
     guard auth.string(for: "AUTH")?.uppercased() == "OK" else {
       logger?.warning("Server authentication failed.")
@@ -131,42 +131,21 @@ enum BorgVRServerAuthentication {
 
   static func receiveTextResponse(
     connection: NWConnection,
-    timeout: TimeInterval = 5
+    timeout: TimeInterval = 5,
+    maximumBytes: Int = BorgVRTextResponse.maximumBytes
   ) throws -> String {
-    let deadline = Date().addingTimeInterval(timeout)
-    var buffer = Data()
-
-    while Date() < deadline {
-      let semaphore = DispatchSemaphore(value: 0)
-      var chunk: Data?
-      var receiveError: Error?
-
-      connection.receive(minimumIncompleteLength: 1, maximumLength: 4096) { data, _, _, error in
-        chunk = data
-        receiveError = error
-        semaphore.signal()
-      }
-
-      let result = semaphore.wait(timeout: .now() + timeout)
-      if result == .timedOut {
-        throw BORGVRRemoteDataManagerError.timeout(seconds: timeout)
-      }
-
-      if let error = receiveError {
-        throw BORGVRRemoteDataManagerError.receiveFailed(reason: error.localizedDescription)
-      }
-
-      if let data = chunk {
-        buffer.append(data)
-        if let str = String(data: buffer, encoding: .utf8),
-           let range = str.range(of: "\n\n") {
-          let endIndex = str.index(before: range.upperBound)
-          return String(str[..<endIndex])
+    do {
+      return try BorgVRTextResponse.receive(timeout: timeout, maximumBytes: maximumBytes) { maximumLength, remaining in
+        let operation = BorgVRTextReceiveOperation()
+        connection.receive(minimumIncompleteLength: 1, maximumLength: maximumLength) { data, _, _, error in
+          operation.finish(data: data, error: error)
         }
+        return try operation.wait(timeout: remaining)
       }
+    } catch {
+      connection.cancel()
+      throw error
     }
-
-    throw BORGVRRemoteDataManagerError.timeout(seconds: timeout)
   }
 
   private static func randomData(byteCount: Int) -> Data {
@@ -180,5 +159,91 @@ enum BorgVRServerAuthentication {
 
   private static func serverProtocolVersion(_ version: String) -> Int {
     Int(version) ?? 0
+  }
+}
+
+enum BorgVRTextResponseError: Error, LocalizedError, Equatable {
+  case invalidLimit, tooLarge, tooManyEntries, invalidEncoding, incomplete
+
+  var errorDescription: String? {
+    switch self {
+      case .invalidLimit: "Invalid text response limit."
+      case .tooLarge: "Server text response exceeds the byte limit."
+      case .tooManyEntries: "Server catalog exceeds the entry limit."
+      case .invalidEncoding: "Server text response is not valid UTF-8."
+      case .incomplete: "Server closed the connection before completing its text response."
+    }
+  }
+}
+
+enum BorgVRTextResponse {
+  static let maximumBytes = 4 * 1024 * 1024
+  static let maximumCatalogEntries = 10000
+
+  static func catalogLines(_ response: String, maximumEntries: Int = maximumCatalogEntries) throws -> [Substring] {
+    guard maximumEntries > 0, maximumEntries <= maximumCatalogEntries else { throw BorgVRTextResponseError.invalidLimit }
+    guard response.utf8.count <= maximumBytes else { throw BorgVRTextResponseError.tooLarge }
+    let lines = response.split(separator: "\n", maxSplits: maximumEntries, omittingEmptySubsequences: true)
+    guard lines.count <= maximumEntries else { throw BorgVRTextResponseError.tooManyEntries }
+    return lines
+  }
+
+  static func receive(timeout: TimeInterval, maximumBytes: Int,
+                      now: () -> TimeInterval = { Double(DispatchTime.now().uptimeNanoseconds) / 1_000_000_000 },
+                      read: (Int, TimeInterval) throws -> Data) throws -> String {
+    guard timeout.isFinite, timeout > 0, maximumBytes > 0,
+          maximumBytes <= Self.maximumBytes else { throw BorgVRTextResponseError.invalidLimit }
+    let deadline = now() + timeout
+    let delimiter = Data([10, 10])
+    var buffer = Data()
+    while true {
+      let remaining = deadline - now()
+      guard remaining > 0 else { throw BORGVRRemoteDataManagerError.timeout(seconds: timeout) }
+      guard buffer.count < maximumBytes else { throw BorgVRTextResponseError.tooLarge }
+      let allowance = min(4096, maximumBytes - buffer.count)
+      let chunk = try read(allowance, remaining)
+      guard now() < deadline else { throw BORGVRRemoteDataManagerError.timeout(seconds: timeout) }
+      guard !chunk.isEmpty else { throw BorgVRTextResponseError.incomplete }
+      guard chunk.count <= allowance else { throw BorgVRTextResponseError.tooLarge }
+      let searchStart = max(0, buffer.count - 1)
+      buffer.append(chunk)
+      // Search bytes incrementally; decode only once, after finding the terminator.
+      if let range = buffer.range(of: delimiter, in: searchStart..<buffer.count) {
+        guard let text = String(data: buffer[..<(range.upperBound - 1)], encoding: .utf8) else {
+          throw BorgVRTextResponseError.invalidEncoding
+        }
+        return text
+      }
+    }
+  }
+}
+
+private final class BorgVRTextReceiveOperation: @unchecked Sendable {
+  private let lock = NSLock()
+  private let semaphore = DispatchSemaphore(value: 0)
+  private var completed = false
+  private var data: Data?
+  private var error: Error?
+
+  func finish(data: Data?, error: Error?) {
+    let signal = lock.withLock {
+      guard !completed else { return false }
+      completed = true
+      self.data = data
+      self.error = error
+      return true
+    }
+    if signal { semaphore.signal() }
+  }
+
+  func wait(timeout: TimeInterval) throws -> Data {
+    guard semaphore.wait(timeout: .now() + timeout) != .timedOut else {
+      lock.withLock { completed = true }
+      throw BORGVRRemoteDataManagerError.timeout(seconds: timeout)
+    }
+    return try lock.withLock {
+      if let error { throw BORGVRRemoteDataManagerError.receiveFailed(reason: error.localizedDescription) }
+      return data ?? Data()
+    }
   }
 }

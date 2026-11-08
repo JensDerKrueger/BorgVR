@@ -140,7 +140,8 @@ final class BorgVRMCPServer: @unchecked Sendable {
   private let queue = DispatchQueue(label: "BorgVRMCPServer")
   private let connectionLock = NSLock()
   private let authenticationLock = NSLock()
-  private var connections: [NWConnection] = []
+  private var connections: [ObjectIdentifier: MCPConnectionContext] = [:]
+  private var acceptingConnections = false
   private var listener: NWListener?
   private var tlsIdentity: sec_identity_t?
   private var accessToken: String
@@ -199,6 +200,7 @@ final class BorgVRMCPServer: @unchecked Sendable {
         }
       }
       self.listener = listener
+      withConnectionLock { acceptingConnections = true }
       listener.start(queue: queue)
       logger?.info(
         "MCP \(configuration.scheme.uppercased()) server started on port \(configuration.normalizedPort)."
@@ -214,11 +216,12 @@ final class BorgVRMCPServer: @unchecked Sendable {
   func stop() {
     listener?.cancel()
     listener = nil
-    let active = withConnectionLock { () -> [NWConnection] in
+    let active = withConnectionLock { () -> [MCPConnectionContext] in
+      acceptingConnections = false
       defer { connections.removeAll() }
-      return connections
+      return Array(connections.values)
     }
-    active.forEach { $0.cancel() }
+    active.forEach { $0.close() }
     tlsIdentity = nil
     if isRunning {
       logger?.info("MCP server stopped.")
@@ -252,36 +255,39 @@ final class BorgVRMCPServer: @unchecked Sendable {
   }
 
   private func accept(_ connection: NWConnection) {
+    let context = MCPConnectionContext(connection: connection, queue: queue) { [weak self] connection in
+      self?.remove(connection)
+    }
     let accepted = withConnectionLock { () -> Bool in
-      guard connections.count < Self.maximumConnections else { return false }
-      connections.append(connection)
+      guard acceptingConnections, connections.count < Self.maximumConnections else { return false }
+      connections[ObjectIdentifier(connection)] = context
       return true
     }
     guard accepted else {
-      connection.cancel()
+      context.close()
       return
     }
 
-    connection.stateUpdateHandler = { [weak self, weak connection] state in
-      guard let self, let connection else { return }
+    connection.stateUpdateHandler = { [weak context] state in
       switch state {
         case .failed, .cancelled:
-          self.remove(connection)
+          context?.close()
         default:
           break
       }
     }
     connection.start(queue: queue)
-    receive(on: connection, accumulated: Data())
+    receive(on: context, accumulated: Data(), head: nil)
   }
 
-  private func receive(on connection: NWConnection, accumulated: Data) {
-    connection.receive(minimumIncompleteLength: 1, maximumLength: 64 * 1024) {
+  private func receive(on context: MCPConnectionContext, accumulated: Data, head: MCPHTTPRequest.Head?) {
+    let connection = context.connection
+    let chunkLimit = head == nil ? MCPHTTPRequest.maximumHeaderBytes : 64 * 1024
+    connection.receive(minimumIncompleteLength: 1, maximumLength: chunkLimit) {
       [weak self] data, _, complete, error in
-      guard let self else { return }
-      if error != nil {
-        connection.cancel()
-        self.remove(connection)
+      guard let self else { context.close(); return }
+      guard error == nil, context.receivedBytes(data?.count ?? 0) else {
+        context.close()
         return
       }
 
@@ -292,40 +298,62 @@ final class BorgVRMCPServer: @unchecked Sendable {
         return
       }
 
-      if let request = MCPHTTPRequest.parse(requestData) {
-        guard requestData.count >= request.totalByteCount else {
-          self.receive(on: connection, accumulated: requestData)
-          return
+      var head = head
+      do {
+        if head == nil {
+          head = try MCPHTTPRequest.parseHead(requestData, maximumRequestBytes: Self.maximumRequestBytes)
+          if let head {
+            guard context.receivedHeader() else { context.close(); return }
+            guard self.validateRequestHeaders(method: head.method, path: head.path,
+              headers: head.headers, connection: connection) else { return }
+          }
         }
+      } catch MCPHTTPRequest.ParseError.tooLarge {
+        self.sendHTTP(status: 413, body: Data(), connection: connection)
+        return
+      } catch {
+        self.sendHTTP(status: 400, body: Data(), connection: connection)
+        return
+      }
+      if let request = head?.request(from: requestData) {
+        guard context.finishedReceiving() else { context.close(); return }
         Task { [weak self] in
           await self?.handle(request, connection: connection)
         }
       } else if complete {
         self.sendHTTP(status: 400, body: Data(), connection: connection)
       } else {
-        self.receive(on: connection, accumulated: requestData)
+        self.receive(on: context, accumulated: requestData, head: head)
       }
     }
   }
 
-  private func handle(_ request: MCPHTTPRequest, connection: NWConnection) async {
-    guard request.method == "POST", request.path == "/mcp" else {
-      sendHTTP(status: request.method == "POST" ? 404 : 405, body: Data(), connection: connection)
-      return
+  private func validateRequestHeaders(method: String, path: String, headers: [String: String],
+                                      connection: NWConnection) -> Bool {
+    guard method == "POST", path == "/mcp" else {
+      sendHTTP(status: method == "POST" ? 404 : 405, body: Data(), connection: connection)
+      return false
     }
-    guard originIsAllowed(request.headers["origin"]) else {
+    guard originIsAllowed(headers["origin"]) else {
       sendHTTP(status: 403, body: Data(), connection: connection)
-      return
+      return false
     }
-    guard isAuthorized(request.headers["authorization"]) else {
+    guard isAuthorized(headers["authorization"]) else {
       sendHTTP(
         status: 401,
         body: Data(),
         extraHeaders: ["WWW-Authenticate": "Bearer"],
         connection: connection
       )
-      return
+      return false
     }
+    return true
+  }
+
+  private func handle(_ request: MCPHTTPRequest, connection: NWConnection) async {
+    // Recheck after receiving the body in case the token was changed meanwhile.
+    guard validateRequestHeaders(method: request.method, path: request.path,
+      headers: request.headers, connection: connection) else { return }
     guard let object = try? JSONSerialization.jsonObject(with: request.body),
           let json = object as? [String: Any],
           json["jsonrpc"] as? String == "2.0",
@@ -1344,6 +1372,8 @@ final class BorgVRMCPServer: @unchecked Sendable {
     extraHeaders: [String: String] = [:],
     connection: NWConnection
   ) {
+    guard let context = withConnectionLock({ connections[ObjectIdentifier(connection)] }) else { return }
+    guard context.beginSending() else { context.close(); return }
     let reason: String = switch status {
       case 200: "OK"
       case 202: "Accepted"
@@ -1368,15 +1398,14 @@ final class BorgVRMCPServer: @unchecked Sendable {
     text += "\r\n"
     var response = Data(text.utf8)
     response.append(body)
-    connection.send(content: response, completion: .contentProcessed { [weak self] _ in
-      connection.cancel()
-      self?.remove(connection)
+    connection.send(content: response, completion: .contentProcessed { [weak context] _ in
+      context?.close()
     })
   }
 
   private func remove(_ connection: NWConnection) {
     withConnectionLock {
-      connections.removeAll { $0 === connection }
+      _ = connections.removeValue(forKey: ObjectIdentifier(connection))
     }
   }
 
@@ -1388,50 +1417,198 @@ final class BorgVRMCPServer: @unchecked Sendable {
   }
 }
 
-private struct MCPHTTPRequest {
+struct MCPConnectionDeadlines {
+  enum Phase { case headers, body, processing, sending, closed }
+  private(set) var phase: Phase = .headers
+  private let headerDeadline: TimeInterval
+  private let requestDeadline: TimeInterval
+  private var idleDeadline: TimeInterval
+  private var sendDeadline: TimeInterval?
+
+  init(now: TimeInterval) {
+    headerDeadline = now + 10
+    requestDeadline = now + 60
+    idleDeadline = now + 10
+  }
+
+  var nextDeadline: TimeInterval? {
+    switch phase {
+      case .headers: min(headerDeadline, min(requestDeadline, idleDeadline))
+      case .body: min(requestDeadline, idleDeadline)
+      case .sending: sendDeadline
+      case .processing, .closed: nil
+    }
+  }
+
+  func expired(at now: TimeInterval) -> Bool { nextDeadline.map { now >= $0 } ?? false }
+
+  mutating func receivedBytes(_ count: Int, at now: TimeInterval) -> Bool {
+    guard phase == .headers || phase == .body, !expired(at: now) else { return false }
+    if count > 0 { idleDeadline = now + 10 }
+    return true
+  }
+
+  mutating func receivedHeader(at now: TimeInterval) -> Bool {
+    guard phase == .headers, !expired(at: now) else { return false }
+    phase = .body
+    return true
+  }
+
+  mutating func finishedReceiving(at now: TimeInterval) -> Bool {
+    guard phase == .body, !expired(at: now) else { return false }
+    phase = .processing
+    return true
+  }
+
+  mutating func beginSending(at now: TimeInterval) -> Bool {
+    guard phase != .closed, phase != .sending, !expired(at: now) else { return false }
+    phase = .sending
+    sendDeadline = now + 30
+    return true
+  }
+
+  mutating func close() { phase = .closed }
+}
+
+private final class MCPConnectionContext: @unchecked Sendable {
+  let connection: NWConnection
+  private let lock = NSLock()
+  private let timer: DispatchSourceTimer
+  private let onClose: @Sendable (NWConnection) -> Void
+  private var deadlines: MCPConnectionDeadlines
+
+  private static var now: TimeInterval { Double(DispatchTime.now().uptimeNanoseconds) / 1_000_000_000 }
+
+  init(connection: NWConnection, queue: DispatchQueue, onClose: @escaping @Sendable (NWConnection) -> Void) {
+    self.connection = connection
+    self.onClose = onClose
+    deadlines = MCPConnectionDeadlines(now: Self.now)
+    timer = DispatchSource.makeTimerSource(queue: queue)
+    timer.setEventHandler { [weak self] in self?.expire() }
+    armTimer()
+    timer.resume()
+  }
+
+  deinit { timer.cancel() }
+
+  func receivedBytes(_ count: Int) -> Bool { update { $0.receivedBytes(count, at: $1) } }
+  func receivedHeader() -> Bool { update { $0.receivedHeader(at: $1) } }
+  func finishedReceiving() -> Bool { update { $0.finishedReceiving(at: $1) } }
+  func beginSending() -> Bool { update { $0.beginSending(at: $1) } }
+
+  func close() {
+    let shouldClose = lock.withLock {
+      guard deadlines.phase != .closed else { return false }
+      deadlines.close()
+      timer.cancel()
+      return true
+    }
+    if shouldClose { finishClosing() }
+  }
+
+  private func update(_ action: (inout MCPConnectionDeadlines, TimeInterval) -> Bool) -> Bool {
+    lock.withLock {
+      guard action(&deadlines, Self.now) else { return false }
+      armTimer()
+      return true
+    }
+  }
+
+  // Called under the lock, except while constructing this unpublished context.
+  private func armTimer() {
+    if let deadline = deadlines.nextDeadline {
+      timer.schedule(deadline: .now() + max(0, deadline - Self.now))
+    } else {
+      timer.schedule(deadline: .distantFuture)
+    }
+  }
+
+  private func expire() {
+    let shouldClose = lock.withLock {
+      guard deadlines.phase != .closed else { return false }
+      // A previous phase's timer may already be queued. Check the current deadline.
+      guard deadlines.expired(at: Self.now) else { armTimer(); return false }
+      deadlines.close()
+      timer.cancel()
+      return true
+    }
+    if shouldClose { finishClosing() }
+  }
+
+  private func finishClosing() {
+    connection.cancel()
+    onClose(connection)
+  }
+}
+
+struct MCPHTTPRequest {
+  enum ParseError: Error { case malformed, tooLarge }
+  static let maximumHeaderBytes = 16 * 1024
+
+  struct Head {
+    let method: String
+    let path: String
+    let headers: [String: String]
+    let byteCount: Int
+    let contentLength: Int
+
+    func request(from data: Data) -> MCPHTTPRequest? {
+      guard data.count >= byteCount + contentLength else { return nil }
+      let bodyStart = data.index(data.startIndex, offsetBy: byteCount)
+      let bodyEnd = data.index(bodyStart, offsetBy: contentLength)
+      return MCPHTTPRequest(method: method, path: path, headers: headers,
+        body: data.subdata(in: bodyStart..<bodyEnd))
+    }
+  }
+
   let method: String
   let path: String
   let headers: [String: String]
   let body: Data
-  let totalByteCount: Int
 
-  static func parse(_ data: Data) -> MCPHTTPRequest? {
+  static func parse(_ data: Data, maximumRequestBytes: Int) throws -> MCPHTTPRequest? {
+    try parseHead(data, maximumRequestBytes: maximumRequestBytes)?.request(from: data)
+  }
+
+  static func parseHead(_ data: Data, maximumRequestBytes: Int) throws -> Head? {
+    guard data.count <= maximumRequestBytes else { throw ParseError.tooLarge }
     let delimiter = Data("\r\n\r\n".utf8)
-    guard let range = data.range(of: delimiter),
-          let headerText = String(data: data[..<range.lowerBound], encoding: .utf8) else {
+    guard let range = data.range(of: delimiter) else {
+      guard data.count <= min(Self.maximumHeaderBytes, maximumRequestBytes) else { throw ParseError.tooLarge }
       return nil
     }
+    let headerBytes = data.distance(from: data.startIndex, to: range.upperBound)
+    guard headerBytes <= Self.maximumHeaderBytes else { throw ParseError.tooLarge }
+    guard let headerText = String(data: data[..<range.lowerBound], encoding: .utf8) else {
+      throw ParseError.malformed
+    }
     let lines = headerText.components(separatedBy: "\r\n")
-    guard let requestLine = lines.first else { return nil }
+    guard let requestLine = lines.first else { throw ParseError.malformed }
     let requestParts = requestLine.split(separator: " ")
-    guard requestParts.count >= 2 else { return nil }
+    guard requestParts.count == 3, ["HTTP/1.0", "HTTP/1.1"].contains(String(requestParts[2])) else {
+      throw ParseError.malformed
+    }
 
     var headers: [String: String] = [:]
     for line in lines.dropFirst() {
-      guard let colon = line.firstIndex(of: ":") else { continue }
+      guard let colon = line.firstIndex(of: ":") else { throw ParseError.malformed }
       let key = line[..<colon].trimmingCharacters(in: .whitespaces).lowercased()
       let value = line[line.index(after: colon)...].trimmingCharacters(in: .whitespaces)
+      let singleValueHeaders = ["content-length", "authorization", "origin", "host"]
+      guard !key.isEmpty, !singleValueHeaders.contains(key) || headers[key] == nil else { throw ParseError.malformed }
       headers[key] = value
     }
-    let contentLength = Int(headers["content-length"] ?? "0") ?? 0
-    let bodyStart = range.upperBound
-    let total = bodyStart + contentLength
-    guard data.count >= total else {
-      return MCPHTTPRequest(
-        method: String(requestParts[0]),
-        path: String(requestParts[1]),
-        headers: headers,
-        body: Data(),
-        totalByteCount: total
-      )
+    // MCP accepts a nonempty, fixed-length JSON body, never ambiguous/chunked framing.
+    guard headers["transfer-encoding"] == nil, let length = headers["content-length"],
+          !length.isEmpty, length.utf8.allSatisfy({ (48...57).contains($0) }) else {
+      throw ParseError.malformed
     }
-    return MCPHTTPRequest(
-      method: String(requestParts[0]),
-      path: String(requestParts[1]),
-      headers: headers,
-      body: data.subdata(in: bodyStart..<total),
-      totalByteCount: total
-    )
+    guard let contentLength = Int(length) else { throw ParseError.tooLarge }
+    guard contentLength > 0 else { throw ParseError.malformed }
+    // Subtract before adding so even a representable Int.max cannot overflow.
+    guard contentLength <= maximumRequestBytes - headerBytes else { throw ParseError.tooLarge }
+    return Head(method: String(requestParts[0]), path: String(requestParts[1]),
+      headers: headers, byteCount: headerBytes, contentLength: contentLength)
   }
 }
 

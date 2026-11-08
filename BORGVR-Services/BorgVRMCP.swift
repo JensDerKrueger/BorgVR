@@ -147,108 +147,223 @@ struct BorgVRMCPDatasetRecord: Sendable {
   var preferredLocation: BorgVRMCPDatasetLocation
 }
 
+enum BorgVRMCPCatalogError: Error, LocalizedError {
+  case timeout, tooManyEntries, tooLarge
+  var errorDescription: String? {
+    switch self {
+      case .timeout: "The dataset catalog query exceeded its 60-second deadline."
+      case .tooManyEntries: "The MCP dataset catalog exceeds the 2000-entry limit."
+      case .tooLarge: "The MCP dataset catalog exceeds the 16 MiB data limit."
+    }
+  }
+}
+
+final class BorgVRMCPCatalogBudget: @unchecked Sendable {
+  static let maximumEntries = 2000
+  static let maximumMetadataBytes = 32 * 1024 * 1024
+  private let maximumResponseBytes = 16 * 1024 * 1024
+  private let cancellation = RemoteRequestCancellation()
+  private let deadline = DispatchTime.now() + 60
+  private let timer = DispatchSource.makeTimerSource(queue: .global(qos: .utility))
+  // Only the detached catalog worker accesses the response accounting.
+  private var encodedSizes: [String: Int] = [:]
+  private var encodedBytes = 2
+
+  init() {
+    timer.schedule(deadline: deadline)
+    timer.setEventHandler { [cancellation] in cancellation.cancel() }
+    timer.resume()
+  }
+
+  deinit { timer.cancel() }
+  func cancel() { cancellation.cancel() }
+  func finish() { timer.cancel(); cancellation.cancel() }
+
+  func onCancellation(_ handler: @escaping @Sendable (Error) -> Void) -> UUID {
+    cancellation.register { [weak self] in
+      if let self, DispatchTime.now() >= self.deadline { handler(BorgVRMCPCatalogError.timeout) }
+      else { handler(CancellationError()) }
+    }
+  }
+
+  func removeCancellation(_ id: UUID) { cancellation.remove(id) }
+
+  func check() throws {
+    guard DispatchTime.now() < deadline else { throw BorgVRMCPCatalogError.timeout }
+    try cancellation.check()
+  }
+
+  func operationTimeout(_ requested: TimeInterval) throws -> TimeInterval {
+    try check()
+    let now = DispatchTime.now()
+    guard now < deadline else { throw BorgVRMCPCatalogError.timeout }
+    let remaining = Double(deadline.uptimeNanoseconds - now.uptimeNanoseconds) / 1_000_000_000
+    return min(max(requested.isFinite ? requested : 5, 0.1), remaining)
+  }
+
+  func withConnection<T>(to server: StoredServer, timeout: TimeInterval,
+                         _ operation: (BORGVRRemoteDataManager) throws -> T) throws -> T {
+    try check()
+    guard (1...65535).contains(server.port) else {
+      throw BorgVRMCPCommandError.invalidArgument("Invalid dataset server port.")
+    }
+    let manager = BORGVRRemoteDataManager(host: server.address, port: UInt16(server.port),
+      authSecret: server.password, logger: nil)
+    let registration = cancellation.register { [weak manager] in manager?.cancel() }
+    defer { cancellation.remove(registration); manager.cancel() }
+    do {
+      try check()
+      try manager.connect(timeout: operationTimeout(timeout))
+      try check()
+      let value = try operation(manager)
+      try check()
+      return value
+    } catch {
+      // Preserve cancellation/deadline errors instead of treating them as unreachable servers.
+      try check()
+      throw error
+    }
+  }
+
+  func store(_ record: BorgVRMCPDatasetRecord, in records: inout [String: BorgVRMCPDatasetRecord]) throws {
+    try check()
+    let id = record.catalogEntry.id
+    guard records[id] != nil || records.count < Self.maximumEntries else { throw BorgVRMCPCatalogError.tooManyEntries }
+    let size = try JSONEncoder().encode(record.catalogEntry).count + 1
+    let previous = encodedSizes[id] ?? 0
+    guard size <= maximumResponseBytes - (encodedBytes - previous) else { throw BorgVRMCPCatalogError.tooLarge }
+    encodedBytes += size - previous
+    encodedSizes[id] = size
+    records[id] = record
+  }
+}
+
 enum BorgVRMCPDatasetCatalog {
   static func load(
     localDirectory: URL?,
     servers: [StoredServer],
     timeout: TimeInterval
-  ) async -> [BorgVRMCPDatasetRecord] {
-    await Task.detached(priority: .userInitiated) {
-      var records: [String: BorgVRMCPDatasetRecord] = [:]
-
-      if let localDirectory {
-        let urls = (try? FileManager.default.contentsOfDirectory(
-          at: localDirectory,
-          includingPropertiesForKeys: nil
-        )) ?? []
-        for url in urls where url.pathExtension.lowercased() == "data" {
-          addLocalDataset(at: url, location: .local(url), to: &records)
+  ) async throws -> [BorgVRMCPDatasetRecord] {
+    let budget = BorgVRMCPCatalogBudget()
+    defer { budget.finish() }
+    return try await withTaskCancellationHandler {
+      try await withCheckedThrowingContinuation { continuation in
+        let gate = BorgVRMCPContinuationGate<[BorgVRMCPDatasetRecord]>(continuation)
+        let registration = budget.onCancellation { gate.resume(with: .failure($0)) }
+        Task.detached(priority: .userInitiated) {
+          defer { budget.removeCancellation(registration) }
+          do {
+            let records = try build(localDirectory: localDirectory, servers: servers, timeout: timeout, budget: budget)
+            gate.resume(with: .success(records))
+          } catch { gate.resume(with: .failure(error)) }
         }
       }
+    } onCancel: { budget.cancel() }
+  }
 
-      for url in Bundle.main.urls(forResourcesWithExtension: "data", subdirectory: nil) ?? [] {
-        addLocalDataset(at: url, location: .builtIn(url), to: &records)
+  private static func build(localDirectory: URL?, servers: [StoredServer], timeout: TimeInterval,
+                            budget: BorgVRMCPCatalogBudget) throws -> [BorgVRMCPDatasetRecord] {
+    try budget.check()
+    var records: [String: BorgVRMCPDatasetRecord] = [:]
+
+    if let localDirectory {
+      let urls = FileManager.default.enumerator(at: localDirectory,
+        includingPropertiesForKeys: nil, options: [.skipsSubdirectoryDescendants])
+      while let url = urls?.nextObject() as? URL {
+        try budget.check()
+        if url.pathExtension.lowercased() == "data" {
+          try addLocalDataset(at: url, location: .local(url), to: &records, budget: budget)
+        }
       }
+    }
 
-      for server in servers where server.isEnabled && !server.address.isEmpty {
-        let location = BorgVRMCPDatasetLocation.remote(
-          address: server.address,
-          port: server.port,
-          password: server.password
-        )
-        do {
-          let manager = BORGVRRemoteDataManager(
-            host: server.address,
-            port: UInt16(clamping: server.port),
-            authSecret: server.password,
-            logger: nil
-          )
-          try manager.connect(timeout: timeout)
-          let datasets = try manager.requestDatasetList()
-          for dataset in datasets {
-            if var record = records[dataset.id] {
-              appendSource(location.source, to: &record.catalogEntry.sources)
-              if location.priority < record.preferredLocation.priority {
-                record.preferredLocation = location
-              }
-              records[dataset.id] = record
-              continue
-            }
+    for url in Bundle.main.urls(forResourcesWithExtension: "data", subdirectory: nil) ?? [] {
+      try addLocalDataset(at: url, location: .builtIn(url), to: &records, budget: budget)
+    }
 
-            do {
-              let metadataManager = BORGVRRemoteDataManager(
-                host: server.address,
-                port: UInt16(clamping: server.port),
-                authSecret: server.password,
-                logger: nil
-              )
-              try metadataManager.connect(timeout: timeout)
-              let remoteData = try metadataManager.openDataset(
-                datasetID: dataset.id,
-                timeout: timeout
-              )
-              let metadata = remoteData.getMetadata()
-              records[dataset.id] = BorgVRMCPDatasetRecord(
-                catalogEntry: BorgVRMCPDatasetCatalogEntry(
-                  id: dataset.id,
-                  description: dataset.description,
-                  metadata: BorgVRMCPDatasetMetadata(metadata),
-                  metadataError: nil,
-                  sources: [location.source]
-                ),
-                preferredLocation: location
-              )
-            } catch {
-              records[dataset.id] = BorgVRMCPDatasetRecord(
-                catalogEntry: BorgVRMCPDatasetCatalogEntry(
-                  id: dataset.id,
-                  description: dataset.description,
-                  metadata: nil,
-                  metadataError: error.localizedDescription,
-                  sources: [location.source]
-                ),
-                preferredLocation: location
-              )
+    for server in servers where server.isEnabled && !server.address.isEmpty {
+      try budget.check()
+      let location = BorgVRMCPDatasetLocation.remote(
+        address: server.address,
+        port: server.port,
+        password: server.password
+      )
+      do {
+        let datasets = try budget.withConnection(to: server, timeout: timeout) { manager in
+          try manager.requestDatasetList(maximumEntries: BorgVRMCPCatalogBudget.maximumEntries,
+            timeout: budget.operationTimeout(timeout))
+        }
+        for dataset in datasets {
+          try budget.check()
+          if var record = records[dataset.id] {
+            appendSource(location.source, to: &record.catalogEntry.sources)
+            if location.priority < record.preferredLocation.priority {
+              record.preferredLocation = location
             }
+            try budget.store(record, in: &records)
+            continue
           }
-        } catch {
-          continue
-        }
-      }
 
-      return records.values.sorted {
-        $0.catalogEntry.description.localizedCaseInsensitiveCompare(
-          $1.catalogEntry.description
-        ) == .orderedAscending
+          do {
+            let metadata = try budget.withConnection(to: server, timeout: timeout) { manager in
+              try manager.requestDatasetMetadata(datasetID: dataset.id,
+                timeout: budget.operationTimeout(timeout), maximumBytes: BorgVRMCPCatalogBudget.maximumMetadataBytes)
+            }
+            try budget.store(BorgVRMCPDatasetRecord(
+              catalogEntry: BorgVRMCPDatasetCatalogEntry(
+                id: dataset.id,
+                description: dataset.description,
+                metadata: BorgVRMCPDatasetMetadata(metadata),
+                metadataError: nil,
+                sources: [location.source]
+              ),
+              preferredLocation: location
+            ), in: &records)
+          } catch {
+            try budget.check()
+            if error is BorgVRMCPCatalogError { throw error }
+            try budget.store(BorgVRMCPDatasetRecord(
+              catalogEntry: BorgVRMCPDatasetCatalogEntry(
+                id: dataset.id,
+                description: dataset.description,
+                metadata: nil,
+                metadataError: error.localizedDescription,
+                sources: [location.source]
+              ),
+              preferredLocation: location
+            ), in: &records)
+          }
+        }
+      } catch {
+        try budget.check()
+        if error is BorgVRMCPCatalogError { throw error }
+        if let textError = error as? BorgVRTextResponseError {
+          switch textError {
+            case .tooLarge, .tooManyEntries: throw textError
+            default: break
+          }
+        }
+        continue
       }
-    }.value
+    }
+
+    try budget.check()
+    let sorted = records.values.sorted {
+      $0.catalogEntry.description.localizedCaseInsensitiveCompare(
+        $1.catalogEntry.description
+      ) == .orderedAscending
+    }
+    try budget.check()
+    return sorted
   }
 
   private static func addLocalDataset(
     at url: URL,
     location: BorgVRMCPDatasetLocation,
-    to records: inout [String: BorgVRMCPDatasetRecord]
-  ) {
+    to records: inout [String: BorgVRMCPDatasetRecord],
+    budget: BorgVRMCPCatalogBudget
+  ) throws {
+    try budget.check()
     guard let metadata = try? BORGVRMetaData(url: url) else { return }
     let source = location.source
     if var record = records[metadata.uniqueID] {
@@ -256,10 +371,10 @@ enum BorgVRMCPDatasetCatalog {
       if location.priority < record.preferredLocation.priority {
         record.preferredLocation = location
       }
-      records[metadata.uniqueID] = record
+      try budget.store(record, in: &records)
       return
     }
-    records[metadata.uniqueID] = BorgVRMCPDatasetRecord(
+    try budget.store(BorgVRMCPDatasetRecord(
       catalogEntry: BorgVRMCPDatasetCatalogEntry(
         id: metadata.uniqueID,
         description: metadata.datasetDescription,
@@ -268,7 +383,7 @@ enum BorgVRMCPDatasetCatalog {
         sources: [source]
       ),
       preferredLocation: location
-    )
+    ), in: &records)
   }
 
   private static func appendSource(

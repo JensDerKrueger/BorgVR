@@ -241,6 +241,15 @@ current, non-localized `converted by TOOL VERSION` provenance entry automaticall
 
 - The visionOS, iOS/iPadOS, and macOS renderers contain an optional Model Context Protocol
   server at `/mcp`, independent of the dataset and WebGPU servers.
+- HTTP requests are limited to 4 MiB including at most 16 KiB of headers. Headers must arrive
+  within 10 seconds, the full request within 60 seconds, with no receive pause longer than
+  10 seconds. Response transmission has a separate 30-second limit; command execution is not
+  counted as receive time. Remote authentication is checked as soon as the headers arrive.
+- Dataset-server text replies are bounded to 4 MiB and catalog lists to 10000 entries
+  (handshake/info replies: 16 KiB). A complete MCP catalog query has a 60-second deadline,
+  a 2000-dataset limit and a 16 MiB serialized catalog-data budget. Metadata-only queries
+  accept up to 32 MiB per remote dataset and do not allocate brick buffers. Task cancellation
+  and deadline expiry close active catalog connections; budget violations report explicit errors.
 - MCP clients can inspect the active dataset and visualization state, change the render mode,
   model/view transform, isovalue, clipping, and lighting, wait for completed render frames, and
   retrieve the current rendered view as a PNG image.
