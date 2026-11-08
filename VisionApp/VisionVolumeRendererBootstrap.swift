@@ -160,6 +160,13 @@ enum VisionVolumeRendererBootstrap {
       )
     }
 
+    if runtimeAppModel.automaticallyLoadsDatasetState, runtimeAppModel.groupSessionHost,
+       dataset.getMetadata().channelInterpretation == .independentChannels,
+       !storedAppModel.interfaceVisibility.renderModeIDs.contains(sharedAppModel.renderMode.rawValue),
+       let first = storedAppModel.interfaceVisibility.renderModeIDs.first, let mode = RenderMode(rawValue: first) {
+      sharedAppModel.renderMode = mode
+    }
+
     sharedAppModel.datasetRendererDidLoad()
 
     let transferFunctionPanelInteractionState = TransferFunctionPanelInteractionState()

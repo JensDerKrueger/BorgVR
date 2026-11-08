@@ -7,6 +7,12 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		57CD00000000000000000001 /* InterfaceVisibility.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57CD00000000000000000000; };
+		57CD00000000000000000002 /* InterfaceVisibility.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57CD00000000000000000000; };
+		57CD00000000000000000003 /* InterfaceVisibility.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57CD00000000000000000000; };
+		57CD00000000000000000011 /* InterfaceVisibilitySettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57CD00000000000000000010; };
+		57CD00000000000000000012 /* InterfaceVisibilitySettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57CD00000000000000000010; };
+		57CD00000000000000000013 /* InterfaceVisibilitySettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57CD00000000000000000010; };
 		111111111111111111111701 /* c60_32.data in Resources */ = {isa = PBXBuildFile; fileRef = 56730FE22E6B78990091976B /* c60_32.data */; };
 		111111111111111111111702 /* head_32.data in Resources */ = {isa = PBXBuildFile; fileRef = 56730FE42E6B79000091976B /* head_32.data */; };
 		560A00012E00000000000031 /* web in CopyFiles */ = {isa = PBXBuildFile; fileRef = 560B90002E9150000042E45B /* web */; };
@@ -254,6 +260,8 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		57CD00000000000000000000 /* InterfaceVisibility.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InterfaceVisibility.swift; sourceTree = "<group>"; };
+		57CD00000000000000000010 /* InterfaceVisibilitySettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InterfaceVisibilitySettingsView.swift; sourceTree = "<group>"; };
 		111111111111111111111101 /* BorgVR Mobile.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "BorgVR Mobile.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		560A00012E00000000000001 /* TerminalServerApp */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = TerminalServerApp; sourceTree = BUILT_PRODUCTS_DIR; };
 		560B8BE72E5C57580042E45B /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
@@ -787,6 +795,8 @@
 		57A010082EF0000100000001 /* UI */ = {
 			isa = PBXGroup;
 			children = (
+				57CD00000000000000000000 /* InterfaceVisibility.swift */,
+				57CD00000000000000000010 /* InterfaceVisibilitySettingsView.swift */,
 				57BF20261103000000000000 /* DatasetBufferingView.swift */,
 				57BF20261104000100000000 /* DatasetStreamingProgress.swift */,
 				57BF20261104000200000000 /* FractionProgressLine.swift */,
@@ -1169,6 +1179,8 @@
 				57A0014C2E70000300000001 /* KeychainSecretStore.swift in Sources */,
 				57A001812EA0000100000001 /* LightingEditorView.swift in Sources */,
 				57CC00000000000000000001 /* ScreenControlStyle.swift in Sources */,
+				57CD00000000000000000001 /* InterfaceVisibility.swift in Sources */,
+				57CD00000000000000000011 /* InterfaceVisibilitySettingsView.swift in Sources */,
 				57ED00000000000000000001 /* VolumeBrushControls.swift in Sources */,
 				57ED00000000000000000021 /* VolumeEditingCommands.swift in Sources */,
 				57ED00000000000000000011 /* VolumeBrushModel.swift in Sources */,
@@ -1244,6 +1256,8 @@
 				57A0014D2E70000300000001 /* KeychainSecretStore.swift in Sources */,
 				57A001822EA0000100000001 /* LightingEditorView.swift in Sources */,
 				57CC00000000000000000002 /* ScreenControlStyle.swift in Sources */,
+				57CD00000000000000000002 /* InterfaceVisibility.swift in Sources */,
+				57CD00000000000000000012 /* InterfaceVisibilitySettingsView.swift in Sources */,
 				57ED00000000000000000002 /* VolumeBrushControls.swift in Sources */,
 				57ED00000000000000000022 /* VolumeEditingCommands.swift in Sources */,
 				57ED00000000000000000012 /* VolumeBrushModel.swift in Sources */,
@@ -1300,6 +1314,8 @@
 				57A0014E2E70000300000001 /* KeychainSecretStore.swift in Sources */,
 				57A001832EA0000100000001 /* LightingEditorView.swift in Sources */,
 				57CC00000000000000000003 /* ScreenControlStyle.swift in Sources */,
+				57CD00000000000000000003 /* InterfaceVisibility.swift in Sources */,
+				57CD00000000000000000013 /* InterfaceVisibilitySettingsView.swift in Sources */,
 				57ED00000000000000000003 /* VolumeBrushControls.swift in Sources */,
 				57ED00000000000000000023 /* VolumeEditingCommands.swift in Sources */,
 				57ED00000000000000000013 /* VolumeBrushModel.swift in Sources */,

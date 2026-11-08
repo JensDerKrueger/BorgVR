@@ -137,6 +137,7 @@ struct BorgVRRenderSettingsSnapshot: Sendable {
   var parallelProjection: Bool = false
   var showDatasetBoundingBox: Bool = false
   var background: BorgVRMCPBackgroundState? = nil
+  var foveationSamplingStrength: Float = 1
 
   static let `default` = BorgVRRenderSettingsSnapshot(
     sampleJitter: false,

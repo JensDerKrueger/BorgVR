@@ -1,3 +1,16 @@
+"User Interface" = "Interfaz de usuario";
+"Visible rendering modes" = "Modos de renderizado visibles";
+"Interaction controls" = "Controles de interacción";
+"Show reset buttons" = "Mostrar botones de restablecimiento";
+"Panel buttons" = "Botones de paneles";
+"Show panel button row" = "Mostrar la fila de botones de paneles";
+"Transfer / Isovalue Editor" = "Editor de función de transferencia / isovalor";
+"Diagnostics" = "Diagnóstico";
+"Show Performance Button" = "Mostrar el botón de rendimiento";
+"Choose which controls are visible. At least one rendering mode and one interaction mode must remain enabled. RGB/RGBA rendering is unaffected." = "Elija los controles visibles. Deben permanecer activos al menos un modo de renderizado y uno de interacción. El renderizado RGB/RGBA no se ve afectado.";
+"Transfer Function" = "Función de transferencia";
+"Clipping" = "Recorte";
+"Objects" = "Objetos";
 "converter_supporting_file_access_required" = "Se necesita permiso de lectura para el archivo referenciado: %@";
 "image_sequence_title" = "Secuencia de imágenes";
 "Supported formats are QVIS `.dat` + `.raw`, NRRD/NHDR, PVM, IV3Dm (`.i3m` / `.i3m.zip`), UVF, Zarr/OZX, and native BorgVR `.data` files." = "Los formatos compatibles son QVIS `.dat` + `.raw`, NRRD/NHDR, PVM, IV3Dm (`.i3m` / `.i3m.zip`), UVF, Zarr/OZX y archivos BorgVR `.data` nativos.";
@@ -420,6 +433,8 @@
 "settings_toggle_autoload_tf" = "Cargar y guardar automáticamente las funciones de transferencia";
 "settings_toggle_autoload_transform" = "Cargar y guardar automáticamente la transformación";
 "settings_toggle_disable_foveation" = "Desactivar foveación";
+"settings_label_foveation_sampling_strength" = "Intensidad del muestreo foveado";
+"settings_description_foveation_sampling_strength" = "0: sin ajuste de la distancia de muestreo. 1: comportamiento anterior. Los valores mayores aumentan el paso en la periferia para mejorar el rendimiento a costa de la calidad. El centro no cambia.";
 "settings_toggle_sample_jitter" = "Fase de muestreo aleatoria";
 "Alpha epsilon" = "Épsilon alfa";
 "Subbrick skipping" = "Omitir subbloques";

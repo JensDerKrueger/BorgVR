@@ -32,6 +32,7 @@ private struct ServerConfig: Identifiable, Equatable {
 
 private enum VisionSettingsPage: String, CaseIterable, Identifiable {
   case general
+  case interface
   case rendering
   case performance
   case interaction
@@ -46,6 +47,7 @@ private enum VisionSettingsPage: String, CaseIterable, Identifiable {
   var title: LocalizedStringKey {
     switch self {
       case .general: "settings_tab_general"
+      case .interface: "User Interface"
       case .rendering: "settings_tab_rendering"
       case .performance: "settings_tab_performance"
       case .interaction: "settings_tab_interaction"
@@ -60,6 +62,7 @@ private enum VisionSettingsPage: String, CaseIterable, Identifiable {
   var systemImage: String {
     switch self {
       case .general: "gearshape"
+      case .interface: "slider.horizontal.3"
       case .rendering: "paintpalette"
       case .performance: "gauge.with.dots.needle.50percent"
       case .interaction: "hand.draw"
@@ -357,6 +360,24 @@ struct SettingsView: View {
               }
 
               Section(header: Text("settings_section_sampling").bold()) {
+                VStack(alignment: .leading, spacing: 8) {
+                  HStack {
+                    Text("settings_label_foveation_sampling_strength")
+                    Spacer()
+                    Text(storedAppModel.foveationSamplingStrength,
+                         format: .number.precision(.fractionLength(1)))
+                      .monospacedDigit()
+                  }
+                  Slider(value: $storedAppModel.foveationSamplingStrength, in: 0...4, step: 0.1) {
+                    Text("settings_label_foveation_sampling_strength")
+                  }
+                  Text("settings_description_foveation_sampling_strength")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                }
+                .disabled(storedAppModel.disableFoveation)
+
                 Picker(
                   "settings_picker_oversampling_mode",
                   selection: $storedAppModel.oversamplingMode
@@ -748,6 +769,21 @@ struct SettingsView: View {
         }
           }
 
+          if selectedSettingsPage == .interface {
+            Form {
+              settingsIntroSection("Choose which controls are visible. At least one rendering mode and one interaction mode must remain enabled. RGB/RGBA rendering is unaffected.")
+              InterfaceVisibilitySettingsView(visibility: Binding(
+                get: { storedAppModel.interfaceVisibility }, set: { storedAppModel.interfaceVisibility = $0 }))
+              Section("Diagnostics") {
+                Toggle("settings_toggle_show_profiling", isOn: $storedAppModel.showProfiling)
+              }
+              Button("Reset") {
+                storedAppModel.interfaceVisibility = InterfaceVisibility()
+                storedAppModel.showProfiling = false
+              }
+            }
+          }
+
           if selectedSettingsPage == .performance {
         Form {
           settingsIntroSection("settings_description_performance")
@@ -868,10 +904,6 @@ struct SettingsView: View {
             Toggle(
               "settings_toggle_stop_on_miss",
               isOn: $storedAppModel.stopOnMiss
-            )
-            Toggle(
-              "settings_toggle_show_profiling",
-              isOn: $storedAppModel.showProfiling
             )
 
           }

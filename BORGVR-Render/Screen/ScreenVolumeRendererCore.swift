@@ -962,7 +962,8 @@ final class ScreenVolumeRendererCore {
           cameraDistance / max(transform.scale.x, 0.0001))
         : .zero,
       projectionLODScale: tan(projectionConfiguration.radians * 0.5) /
-        tan(BorgVRScreenViewState.defaultVerticalFieldOfView * 0.5) * aspect
+        tan(BorgVRScreenViewState.defaultVerticalFieldOfView * 0.5) * aspect,
+      foveationSamplingStrength: 0
     )
     fragmentUniforms.uniforms.1 = fragmentUniforms.uniforms.0
     currentTextureToClip = fragmentUniforms.uniforms.0.textureToClip

@@ -883,11 +883,13 @@ private struct BorgVRMenuCommands: Commands {
     appModel.activeDataset != nil
   }
 
+  @ViewBuilder
   private func renderCommand(
     _ title: String,
     systemImage: String,
     shortcut: MacRenderShortcut
   ) -> some View {
+    if shortcut != .performance || appSettings.showPerformanceButton {
     Button {
       docking.request(.render(shortcut))
     } label: {
@@ -895,14 +897,17 @@ private struct BorgVRMenuCommands: Commands {
     }
     .macRenderShortcut(shortcut)
     .disabled(!hasActiveDataset)
+    }
   }
 
+  @ViewBuilder
   private func selectionCommand(
     _ title: String,
     systemImage: String,
     shortcut: MacRenderShortcut,
     isSelected: Bool
   ) -> some View {
+    if selectionCommandIsVisible(shortcut) {
     Toggle(
       isOn: Binding(
         get: { isSelected },
@@ -916,6 +921,24 @@ private struct BorgVRMenuCommands: Commands {
     }
     .macRenderShortcut(shortcut)
     .disabled(!hasActiveDataset)
+    }
+  }
+
+  private func selectionCommandIsVisible(_ shortcut: MacRenderShortcut) -> Bool {
+    let visibility = appSettings.interfaceVisibility
+    switch shortcut {
+      case .transferFunctionRendering: return visibility.renderModeIDs.contains(0)
+      case .lightingRendering: return visibility.renderModeIDs.contains(1)
+      case .isoRendering: return visibility.renderModeIDs.contains(2)
+      case .model: return visibility.allowsInteraction("model")
+      case .clipping: return visibility.allowsInteraction("clipping")
+      case .transferInteraction: return visibility.allowsInteraction("transferEditing")
+      case .drawing: return visibility.allowsInteraction("drawing")
+      case .placement: return visibility.allowsInteraction("objectPlacement")
+      case .measurement: return visibility.allowsInteraction("measurement")
+      case .volumeEditing: return visibility.allowsInteraction("volumeEditing")
+      default: return true
+    }
   }
 
   private func menuLabel(

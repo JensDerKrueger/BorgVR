@@ -1,3 +1,14 @@
+"Configure automatic loading, logging, and update checks." = "Configure automatic loading, logging, and update checks.";
+"User Interface" = "User Interface";
+"Visible rendering modes" = "Visible rendering modes";
+"Interaction controls" = "Interaction controls";
+"Show reset buttons" = "Show reset buttons";
+"Panel buttons" = "Panel buttons";
+"Show panel button row" = "Show panel button row";
+"Transfer / Isovalue Editor" = "Transfer / Isovalue Editor";
+"Diagnostics" = "Diagnostics";
+"Show Performance Button" = "Show Performance Button";
+"Choose which controls are visible. At least one rendering mode and one interaction mode must remain enabled. RGB/RGBA rendering is unaffected." = "Choose which controls are visible. At least one rendering mode and one interaction mode must remain enabled. RGB/RGBA rendering is unaffected.";
 "converter_supporting_file_access_required" = "Read access to the referenced file is required: %@";
 "converter_supporting_file_access_message" = "The selected header refers to \"%@\". Select this file to allow BorgVR to read its volume data.";
 "converter_supporting_file_access_allow" = "Allow Access";

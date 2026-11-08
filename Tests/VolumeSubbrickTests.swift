@@ -224,11 +224,57 @@ enum VolumeSubbrickTests {
     print("RGBA subblocks passed: alpha-only ranges, cached epsilon changes, equality, ISO/TF independence and interpolation halo")
   }
 
+  static func verifyFoveationSampling(device: MTLDevice, queue: MTLCommandQueue, library: MTLLibrary) throws {
+    var inputs: [SIMD4<Float>] = []
+    for base: Float in [0.01, 0.25, 0.5, 1, 2, 100] {
+      for rate in stride(from: Float(0.25), through: 1.25, by: 0.05) {
+        for strength in 0...16 { inputs.append(SIMD4(base, rate, Float(strength) * 0.25, 0)) }
+      }
+    }
+    let input = inputs.withUnsafeBytes { device.makeBuffer(bytes: $0.baseAddress!, length: $0.count)! }
+    let result = device.makeBuffer(length: inputs.count * MemoryLayout<Float>.stride)!
+    let pipeline = try device.makeComputePipelineState(function: library.makeFunction(name: "checkFoveationSampling")!)
+    let command = queue.makeCommandBuffer()!
+    let encoder = command.makeComputeCommandEncoder()!
+    encoder.setComputePipelineState(pipeline)
+    encoder.setBuffer(input, offset: 0, index: 0)
+    encoder.setBuffer(result, offset: 0, index: 1)
+    encoder.dispatchThreads(MTLSize(width: inputs.count, height: 1, depth: 1),
+      threadsPerThreadgroup: MTLSize(width: pipeline.threadExecutionWidth, height: 1, depth: 1))
+    encoder.endEncoding()
+    command.commit()
+    command.waitUntilCompleted()
+    if let error = command.error { throw error }
+    let values = result.contents().assumingMemoryBound(to: Float.self)
+    for (index, input) in inputs.enumerated() {
+      let reference = min(input.x, max(input.x * min(1, max(0.5, input.y)), 0.25))
+      let expected = input.x * pow(reference / input.x, input.z)
+      let actual = values[index]
+      try require(actual.isFinite && actual > 0 && actual <= input.x * 1.00001,
+        "Foveation increased sample density or returned an invalid value: \(input), \(actual)")
+      try require(abs(actual - expected) < max(1e-6, expected * 1e-5),
+        "Wrong foveation sampling scale: \(input), \(actual), expected \(expected)")
+      if input.z == 0 || input.y >= 1 {
+        try require(abs(actual - input.x) < input.x * 1e-5, "Disabled/central sampling changed")
+      }
+      if input.z > 0 {
+        try require(actual <= values[index - 1] * 1.00001, "Sampling reduction is not monotonic")
+      }
+    }
+    print("Foveation sampling passed: disabled, default, stronger peripheral reduction, unchanged center and monotonicity")
+  }
+
   static func compareRays(device: MTLDevice, queue: MTLCommandQueue, primary: MTLTexture,
                           secondary: MTLTexture, cache: VolumeAtlasSubbrickCache, brickSize: Int,
                           transferFunctions: [TransferFunction1D]) throws {
     let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
     let shader = try source(root.appendingPathComponent("AppSupport/Rendering/Shaders/VolumeRaycaster.metal")) + """
+      kernel void checkFoveationSampling(device const float4 *inputs [[buffer(0)]],
+                                        device float *results [[buffer(1)]],
+                                        uint index [[thread_position_in_grid]]) {
+        float4 input = inputs[index];
+        results[index] = foveatedOversampling(input.x, input.y, input.z);
+      }
       kernel void checkOpacitySampling(device float4 *results [[buffer(0)]],
                                        uint index [[thread_position_in_grid]]) {
         int channels = 1 + index % 4, total = 257 + index % 7;
@@ -336,6 +382,7 @@ enum VolumeSubbrickTests {
       "MAX_PROBING_ATTEMPTS":"64", "MAX_ITERATIONS":"8", "REQUEST_LOWRES_LOD":"1", "STOP_ON_MISS":"0",
       "VOLUME_COMPONENT_COUNT":"2", "VOLUME_BYTES_PER_COMPONENT":"2"].mapValues { $0 as NSString }
     let library = try device.makeLibrary(source: shader, options: options)
+    try verifyFoveationSampling(device: device, queue: queue, library: library)
     options.preprocessorMacros?["VOLUME_OPACITY_ADAPTIVE_SAMPLING"] = NSNumber(value: 0)
     let baselineLibrary = try device.makeLibrary(source: shader, options: options)
     try verifyOpacitySampling(device: device, queue: queue, library: library)

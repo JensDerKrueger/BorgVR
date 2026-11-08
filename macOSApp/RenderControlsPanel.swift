@@ -17,6 +17,11 @@ struct RenderControlsPanel: View {
   @State private var copiedWebGPUShareLink = false
   @State private var pendingModeReset: AppModel.InteractionMode?
 
+  private var displayedRenderModeIDs: [UInt8] {
+    appSettings.interfaceVisibility.displayedRenderModeIDs(
+      active: renderingParameters.renderMode.rawValue, inSharePlay: sharePlay.isInSession)
+  }
+
   var body: some View {
     VStack(spacing: 8) {
       VolumeEditSynchronizationStatus(model: appModel.volumeBrush)
@@ -49,10 +54,12 @@ struct RenderControlsPanel: View {
         if let interpretation = appModel.activeDatasetMetadata?.channelInterpretation,
            interpretation != .independentChannels {
           Label(interpretation.colorInterpretation == .rgb ? "RGB" : "RGBA", systemImage: "photo")
-        } else {
+        } else if displayedRenderModeIDs.count > 1 {
         Picker("Render Mode", selection: renderModeBinding) {
-          ForEach(RenderMode.allCases) { mode in
-            Text(mode.description).tag(mode)
+          ForEach(RenderMode.allCases.filter { displayedRenderModeIDs.contains($0.rawValue) }) { mode in
+            Text(mode.description)
+              .tag(mode)
+              .disabled(!appSettings.interfaceVisibility.renderModeIDs.contains(mode.rawValue))
           }
         }
         .pickerStyle(.segmented)
@@ -126,44 +133,48 @@ struct RenderControlsPanel: View {
     }
   }
 
+  @ViewBuilder
   private var interactionModePicker: some View {
-    VStack(spacing: 2) {
-      HStack(spacing: 4) {
-        modeResetButton(.model, title: "Reset Model")
-        modeResetButton(.clipping, title: "Reset Clipping")
-        modeResetButton(.transferEditing, title: renderingParameters.renderMode == .isoValue ? "Reset Isovalue" : "Reset Transfer Function")
-        modeResetButton(.drawing, title: "Delete All Objects")
-        modeResetButton(.objectPlacement, title: "Delete All Objects")
-        modeResetButton(.measurement, title: "measurement_delete_all_button")
-        VolumeEditResetButton(model: appModel.volumeBrush)
-          .frame(maxWidth: .infinity)
+    if appSettings.interfaceVisibility.interactionModes.count > 1
+      || appSettings.showModeResetButtons
+    {
+      VStack(spacing: 2) {
+        if appSettings.showModeResetButtons {
+          HStack(spacing: 4) {
+            ForEach(appSettings.interfaceVisibility.interactionModes) { option in
+              if let mode = AppModel.InteractionMode(rawValue: option.rawValue) {
+                if mode == .volumeEditing {
+                  VolumeEditResetButton(model: appModel.volumeBrush).frame(maxWidth: .infinity)
+                } else {
+                  modeResetButton(mode, title: resetTitle(for: mode))
+                }
+              }
+            }
+          }
+        }
+        if appSettings.interfaceVisibility.interactionModes.count > 1 {
+          HStack(spacing: 4) {
+            ForEach(appSettings.interfaceVisibility.interactionModes) { option in
+              if let mode = AppModel.InteractionMode(rawValue: option.rawValue) {
+                interactionModeSegment(mode, title: option.title, systemImage: option.icon)
+              }
+            }
+          }
+        }
       }
-      HStack(spacing: 4) {
-        interactionModeSegment(.model, title: "Model", systemImage: "move.3d")
-        interactionModeSegment(.clipping, title: "Clipping", systemImage: "viewfinder")
-        interactionModeSegment(
-          .transferEditing,
-          title: "Transfer",
-          systemImage: "slider.horizontal.3"
-        )
-        interactionModeSegment(.drawing, title: "Draw", systemImage: "scribble")
-        interactionModeSegment(.objectPlacement, title: "Place", systemImage: "cube")
-        interactionModeSegment(
-          .measurement,
-          title: "private_interaction_option_measurement",
-          systemImage: "ruler"
-        )
-        interactionModeSegment(.volumeEditing, title: "Edit Volume", systemImage: "eraser")
-      }
+      .padding(4)
+      .background(.secondary.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
+      .accessibilityElement(children: .contain)
+      .accessibilityLabel("Interaktion")
     }
-    .padding(4)
-    .background(.secondary.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
-    .accessibilityElement(children: .contain)
-    .accessibilityLabel("Interaktion")
   }
 
-  private func modeResetButton(_ mode: AppModel.InteractionMode, title: LocalizedStringKey) -> some View {
-    Button { pendingModeReset = mode } label: {
+  private func modeResetButton(_ mode: AppModel.InteractionMode, title: LocalizedStringKey)
+    -> some View
+  {
+    Button {
+      pendingModeReset = mode
+    } label: {
       Image(systemName: "arrow.counterclockwise")
         .foregroundStyle(interactionModeColor(for: mode))
         .frame(width: 24, height: 24)
@@ -269,39 +280,57 @@ struct RenderControlsPanel: View {
     }
   }
 
+  @ViewBuilder
   private var modeWindowButtons: some View {
-    GeometryReader { geometry in
-      let spacing: CGFloat = 4
-      let columnWidth = max(0, (geometry.size.width - spacing * 6) / 7)
-      let columnStride = columnWidth + spacing
-      let doubleColumnWidth = columnWidth * 2 + spacing
-      let groupInset: CGFloat = 8
+    if appSettings.interfaceVisibility.hasScreenPanels {
+      if appSettings.interfaceVisibility.isCustomized {
+        HStack(spacing: 4) {
+          if appSettings.interfaceVisibility.showsScreenPanel(.lighting) { lightingWindowButton }
+          if appSettings.interfaceVisibility.showsScreenPanel(.transfer) { editorWindowButton }
+          if appSettings.interfaceVisibility.showsScreenPanel(.objects) { objectWindowButton }
+          if appSettings.interfaceVisibility.showsScreenPanel(.measurements) { measurementWindowButton }
+          if appSettings.interfaceVisibility.showsScreenPanel(.brush) { brushWindowButton }
+        }
+        .frame(height: 34)
+      } else {
+        GeometryReader { geometry in
+          let spacing: CGFloat = 4
+          let columnWidth = max(0, (geometry.size.width - spacing * 6) / 7)
+          let columnStride = columnWidth + spacing
+          let doubleColumnWidth = columnWidth * 2 + spacing
+          let groupInset: CGFloat = 8
 
-      ZStack(alignment: .leading) {
-        lightingWindowButton
-          .disabled(appModel.activeDatasetMetadata?.channelInterpretation != .independentChannels)
-          .frame(width: doubleColumnWidth - groupInset * 2)
-          .offset(x: groupInset)
+          ZStack(alignment: .leading) {
+            lightingWindowButton
+              .disabled(
+                appModel.activeDatasetMetadata?.channelInterpretation != .independentChannels
+              )
+              .frame(width: doubleColumnWidth - groupInset * 2)
+              .offset(x: groupInset)
 
-        editorWindowButton
-          .disabled(appModel.activeDatasetMetadata?.channelInterpretation != .independentChannels)
-          .frame(width: columnWidth)
-          .offset(x: columnStride * 2)
+            editorWindowButton
+              .disabled(
+                appModel.activeDatasetMetadata?.channelInterpretation != .independentChannels
+              )
+              .frame(width: columnWidth)
+              .offset(x: columnStride * 2)
 
-        objectWindowButton
-          .frame(width: doubleColumnWidth)
-          .offset(x: columnStride * 3)
+            objectWindowButton
+              .frame(width: doubleColumnWidth)
+              .offset(x: columnStride * 3)
 
-        measurementWindowButton
-          .frame(width: columnWidth)
-          .offset(x: columnStride * 5)
+            measurementWindowButton
+              .frame(width: columnWidth)
+              .offset(x: columnStride * 5)
 
-        brushWindowButton
-          .frame(width: columnWidth)
-          .offset(x: columnStride * 6)
+            brushWindowButton
+              .frame(width: columnWidth)
+              .offset(x: columnStride * 6)
+          }
+        }
+        .frame(height: 34)
       }
     }
-    .frame(height: 34)
   }
 
   private var lightingWindowButton: some View {
@@ -318,6 +347,7 @@ struct RenderControlsPanel: View {
     .modifier(WindowPresentationButtonStyle(isPresented: isPresented, tint: .secondary))
     .accessibilityAddTraits(isPresented ? .isSelected : [])
     .help(MacRenderShortcut.help("Lighting", shortcut: .lighting))
+    .disabled(appModel.activeDatasetMetadata?.channelInterpretation != .independentChannels)
   }
 
   private var editorWindowButton: some View {
@@ -337,6 +367,7 @@ struct RenderControlsPanel: View {
     .modifier(WindowPresentationButtonStyle(isPresented: isPresented, tint: .purple))
     .accessibilityAddTraits(isPresented ? .isSelected : [])
     .help(MacRenderShortcut.help("Editor", shortcut: .editor))
+    .disabled(appModel.activeDatasetMetadata?.channelInterpretation != .independentChannels)
   }
 
   private var objectWindowButton: some View {
@@ -452,10 +483,12 @@ struct RenderControlsPanel: View {
         docking.showsLog.toggle()
       })
     }
-    additional.append(.button("performance", icon: "chart.xyaxis.line", text: String(localized: "performance_title"),
+    if appSettings.showPerformanceButton {
+      additional.append(.button("performance", icon: "chart.xyaxis.line", text: String(localized: "performance_title"),
       shortcutHint: MacRenderShortcut.performance.displayName) {
       openWindow(id: "PerformanceGraphView")
     })
+    }
     return .standard(title: appModel.activeDataset?.description ?? "BorgVR",
       titleFormat: .init(
         color: appModel.isDatasetStreaming
@@ -533,9 +566,11 @@ struct RenderControlsPanel: View {
     Binding(
       get: { renderingParameters.renderMode },
       set: { newMode in
-        guard newMode != renderingParameters.renderMode else { return }
+        guard appSettings.interfaceVisibility.renderModeIDs.contains(newMode.rawValue),
+              newMode != renderingParameters.renderMode else { return }
         Task { @MainActor in
           await Task.yield()
+          guard appSettings.interfaceVisibility.renderModeIDs.contains(newMode.rawValue) else { return }
           try? session.perform(.setRenderMode(newMode), source: .userInterface)
         }
       }

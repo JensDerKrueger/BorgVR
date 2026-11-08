@@ -14,6 +14,7 @@ private let macAppSettingsSidebarWidth: CGFloat = 220
 
 private enum SettingsResetSection: String, Identifiable {
   case general
+  case interface
   case dataSource
   case rendering
   case performance
@@ -29,6 +30,7 @@ private enum SettingsResetSection: String, Identifiable {
   var title: String {
     switch self {
       case .general: return "General"
+      case .interface: return "User Interface"
       case .dataSource: return "Data source"
       case .rendering: return "Rendering"
       case .performance: return "Performance"
@@ -48,6 +50,7 @@ private enum SettingsResetSection: String, Identifiable {
 
 private enum SettingsPage: String, CaseIterable, Identifiable {
   case general
+  case interface
   case rendering
   case performance
   case dataSource
@@ -63,6 +66,7 @@ private enum SettingsPage: String, CaseIterable, Identifiable {
   var title: LocalizedStringKey {
     switch self {
       case .general: return "General"
+      case .interface: return "User Interface"
       case .dataSource: return "Data source"
       case .rendering: return "Rendering"
       case .performance: return "Performance"
@@ -78,6 +82,7 @@ private enum SettingsPage: String, CaseIterable, Identifiable {
   var systemImage: String {
     switch self {
       case .general: return "gearshape"
+      case .interface: return "slider.horizontal.3"
       case .dataSource: return "externaldrive"
       case .rendering: return "paintpalette"
       case .performance: return "gauge.with.dots.needle.50percent"
@@ -206,6 +211,8 @@ struct SettingsView: View {
     switch page {
       case .general:
         generalSettings
+      case .interface:
+        interfaceSettings
       case .dataSource:
         dataSourceSettings
       case .rendering:
@@ -342,7 +349,7 @@ struct SettingsView: View {
   private var generalSettings: some View {
     settingsGroup(
       "General",
-      description: "Configure automatic loading, optional interface diagnostics, logging, and update checks."
+      description: "Configure automatic loading, logging, and update checks."
     ) {
       toggleRow("Automatically load/save transfer functions", isOn: $appSettings.autoloadTF)
       toggleRow("Automatically load/save objects", isOn: $appSettings.autoloadObjects)
@@ -351,8 +358,6 @@ struct SettingsView: View {
         "Automatically load/save view and rendering state",
         isOn: $appSettings.autoloadRenderState
       )
-      toggleRow("Show Brick Visualization", isOn: $appSettings.showBrickVisualization)
-      toggleRow("Show Log Button", isOn: $appSettings.showLogButton)
       toggleRow("Hide built-in datasets", isOn: $appSettings.hideBuiltInDatasets)
       pickerRow("Log level", selection: $appSettings.logLevel) {
         ForEach(AppLogLevel.allCases) { level in
@@ -368,6 +373,19 @@ struct SettingsView: View {
         .foregroundStyle(.secondary)
         .fixedSize(horizontal: false, vertical: true)
       resetButton(for: .general)
+    }
+  }
+
+  private var interfaceSettings: some View {
+    settingsGroup("User Interface", description: "Choose which controls are visible. At least one rendering mode and one interaction mode must remain enabled. RGB/RGBA rendering is unaffected.") {
+      InterfaceVisibilitySettingsView(visibility: Binding(
+        get: { appSettings.interfaceVisibility }, set: { appSettings.interfaceVisibility = $0 }))
+      Divider().padding(.vertical, 8)
+      Text("Diagnostics").font(.headline)
+      toggleRow("Show Brick Visualization", isOn: $appSettings.showBrickVisualization)
+      toggleRow("Show Log Button", isOn: $appSettings.showLogButton)
+      toggleRow("Show Performance Button", isOn: $appSettings.showPerformanceButton)
+      resetButton(for: .interface)
     }
   }
 
@@ -866,6 +884,8 @@ struct SettingsView: View {
 
   private func resetToDefaults(_ section: SettingsResetSection) {
     switch section {
+      case .interface:
+        appSettings.resetInterfaceDefaults()
       case .general:
         appSettings.resetGeneralDefaults()
         updateChecker.checksEnabled = true

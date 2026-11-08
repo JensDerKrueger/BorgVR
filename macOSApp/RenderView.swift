@@ -175,6 +175,14 @@ struct RenderView: View {
         docking.showsLog = false
       }
     }
+    .onChange(of: appSettings.showPerformanceButton) { _, visible in
+      if !visible { dismissWindow(id: "PerformanceGraphView") }
+    }
+    .onChange(of: appSettings.interfaceVisibility, initial: true) { applyInterfaceVisibility() }
+    .onChange(of: sharePlay.isInSession) { _, active in
+      if !active { applyInterfaceVisibility() }
+    }
+    .onChange(of: appModel.activeDatasetMetadata?.uniqueID) { applyInterfaceVisibility() }
     .onChange(of: docking.commandRequest) { _, request in
       guard let request else { return }
       handleCommand(request.command)
@@ -325,6 +333,23 @@ struct RenderView: View {
     }
   }
 
+  private func applyInterfaceVisibility() {
+    updateDetachedPanelWindows()
+    guard appModel.automaticallyLoadsDatasetState else { return }
+    let visibility = appSettings.interfaceVisibility
+    if !visibility.allowsInteraction(appModel.interactionMode.rawValue),
+       let first = visibility.interactionModes.first,
+       let mode = AppModel.InteractionMode(rawValue: first.rawValue) {
+      applyInteractionModeSelection(mode)
+    }
+    if !sharePlay.isInSession,
+       appModel.activeDatasetMetadata?.channelInterpretation == .independentChannels,
+       !visibility.renderModeIDs.contains(renderingParameters.renderMode.rawValue),
+       let first = visibility.renderModeIDs.first, let mode = RenderMode(rawValue: first) {
+      try? session.perform(.setRenderMode(mode), source: .userInterface)
+    }
+  }
+
   private func handleKeyboardShortcut(_ shortcut: MacRenderShortcut) {
     switch shortcut {
       case .translateLeft:
@@ -389,6 +414,7 @@ struct RenderView: View {
       case .brush:
         togglePanel(.volumeBrushEditor)
       case .performance:
+        guard appSettings.showPerformanceButton else { return }
         openWindow(id: "PerformanceGraphView")
       case .log:
         guard appSettings.showLogButton else { return }
@@ -636,6 +662,7 @@ struct RenderView: View {
   }
 
   private func setRenderMode(_ mode: RenderMode) {
+    guard appSettings.interfaceVisibility.renderModeIDs.contains(mode.rawValue) else { return }
     guard renderingParameters.renderMode != mode else { return }
     try? session.perform(.setRenderMode(mode), source: .userInterface)
   }
@@ -681,6 +708,17 @@ struct RenderView: View {
 
   private func updateDetachedPanelWindows() {
     guard let interpretation = appModel.activeDatasetMetadata?.channelInterpretation else { return }
+    for (option, panels) in [
+      (InterfaceVisibility.Panel.lighting, [DockablePanelID.lightingEditor]),
+      (.transfer, [.transferFunctionEditor, .isoEditor]),
+      (.objects, [.markerEditor]), (.measurements, [.measurementEditor]), (.brush, [.volumeBrushEditor])
+    ] where !appSettings.interfaceVisibility.showsScreenPanel(option) {
+      for panel in panels where docking.isVisible(panel) || docking.isDetached(panel) {
+        docking.close(panel)
+        dismissWindow(id: panel.windowID)
+        restoredDetachedPanelWindows.remove(panel)
+      }
+    }
     if interpretation != .independentChannels {
       for panel in [DockablePanelID.transferFunctionEditor, .isoEditor, .lightingEditor]
         where docking.isVisible(panel) || docking.isDetached(panel) {
@@ -722,6 +760,7 @@ struct RenderView: View {
   }
 
   private func applyInteractionModeSelection(_ mode: AppModel.InteractionMode) {
+    guard appSettings.interfaceVisibility.allowsInteraction(mode.rawValue) else { return }
     DispatchQueue.main.async {
       guard appModel.interactionMode != mode else { return }
       if mode != .measurement {

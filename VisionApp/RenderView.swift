@@ -42,6 +42,7 @@ struct RenderView: View {
 
   /// Persistent user settings and profiling options.
   @EnvironmentObject var storedAppModel: StoredAppModel
+  @EnvironmentObject private var session: VisionBorgVRSession
   @EnvironmentObject private var serverController: BackgroundServerController
 
   /// The controls window's phase is independent of the immersive space lifecycle.
@@ -73,6 +74,132 @@ struct RenderView: View {
   @State private var showDatasetInfo = false
 
   var body: some View {
+    configuredRenderControls
+    .alert("Leave SharePlay?", isPresented: $showLeaveSharePlayConfirmation) {
+      Button("Cancel", role: .cancel) {}
+      Button("Leave SharePlay", role: .destructive) {
+        closeDataset(leavingSharePlay: true)
+      }
+    } message: {
+      Text("Closing this dataset will leave the current SharePlay session.")
+    }
+    .alert(
+      "Overwrite Existing Files?",
+      isPresented: $showDatasetStateOverwriteConfirmation
+    ) {
+      Button("Cancel", role: .cancel) { pendingDatasetStateSave = nil }
+      Button("Overwrite") {
+        if let plan = pendingDatasetStateSave { saveDatasetState(using: plan) }
+      }
+    } message: {
+      Text("One or more files for this dataset already exist. Do you want to replace them?")
+    }
+    .alert("Nothing to Save", isPresented: $showNoDatasetStateToSave) {
+      Button("OK", role: .cancel) {}
+    } message: {
+      Text("There is no active transfer function and there are no objects or measurements to save.")
+    }
+    .alert(
+      "Unable to Save Dataset State",
+      isPresented: Binding(
+        get: { datasetStateSaveError != nil },
+        set: { if !$0 { datasetStateSaveError = nil } }
+      )
+    ) {
+      Button("OK", role: .cancel) { datasetStateSaveError = nil }
+    } message: {
+      Text(datasetStateSaveError?.localizedDescription ?? "")
+    }
+    .alert("Nothing to Restore", isPresented: $showNoDatasetStateToRestore) {
+      Button("OK", role: .cancel) {}
+    } message: {
+      Text("No saved state is available for this dataset.")
+    }
+    .alert(
+      "Unable to Restore Dataset State",
+      isPresented: Binding(
+        get: { datasetStateRestoreError != nil },
+        set: { if !$0 { datasetStateRestoreError = nil } }
+      )
+    ) {
+      Button("OK", role: .cancel) { datasetStateRestoreError = nil }
+    } message: {
+      Text(datasetStateRestoreError?.localizedDescription ?? "")
+    }
+    .padding()
+  }
+
+  private var configuredRenderControls: some View {
+    renderControlsContent
+    .sheet(isPresented: $showDatasetInfo) {
+      NavigationStack {
+        ScrollView {
+          VStack(alignment: .leading, spacing: 16) {
+            if let info = runtimeAppModel.activeDatasetInfo {
+              Text(info.description).font(.headline).textSelection(.enabled)
+              if let size = PhysicalSizeFormatter.dimensions(width: info.width, height: info.height, depth: info.depth,
+                voxelSpacingX: info.voxelSpacingX, voxelSpacingY: info.voxelSpacingY, voxelSpacingZ: info.voxelSpacingZ) {
+                Text(size).textSelection(.enabled)
+              }
+              DatasetProvenanceView(entries: info.provenance)
+            }
+          }
+          .frame(maxWidth: .infinity, alignment: .leading)
+          .padding()
+        }
+        .navigationTitle("dataset_info_title")
+        .toolbar {
+          ToolbarItem(placement: .confirmationAction) {
+            Button { showDatasetInfo = false } label: { Label("info_close_button", systemImage: "xmark") }
+          }
+        }
+      }
+      .frame(width: 560, height: 480)
+    }
+    .onChange(of: runtimeAppModel.activeDatasetInfo?.channelInterpretation, initial: true) { _, interpretation in
+      guard let interpretation, interpretation != .independentChannels else { return }
+      dismissWindow(id: "TransferFunctionEditorView")
+      dismissWindow(id: "IsovalueEditorView")
+      dismissWindow(id: "LightingEditorView")
+    }
+    .onChange(of: storedAppModel.interfaceVisibility, initial: true) { _, visibility in
+      applyInterfaceVisibility(visibility)
+    }
+    .onChange(of: storedAppModel.showProfiling) { _, visible in
+      if !visible {
+        dismissWindow(id: "ProfileView")
+        dismissWindow(id: "PerformanceGraphView")
+        dismissWindow(id: "LoggerView")
+      }
+    }
+    .onChange(of: runtimeAppModel.activeDatasetInfo?.channelInterpretation) { applyVisibleRenderMode() }
+    .onChange(of: sharedAppModel.isInGroupSession) { _, active in
+      if !active { applyVisibleRenderMode() }
+    }
+    .onChange(of: scenePhase) { oldPhase, newPhase in
+      // A backgrounded controls window does not mean the immersive space closed.
+      runtimeAppModel.logger.dev("Render controls window phase: \(oldPhase) -> \(newPhase); keeping dataset open.")
+    }
+    .onChange(of: runtimeAppModel.auxiliaryWindowToggleRequest) { _, request in
+      guard let request else { return }
+      toggleAuxiliaryWindow(request)
+    }
+    .onDisappear {
+      dismissWindow(id: "TransferFunctionEditorView")
+      dismissWindow(id: "IsovalueEditorView")
+      dismissWindow(id: "PerformanceGraphView")
+      dismissWindow(id: "LoggerView")
+      dismissWindow(id: "ProfileView")
+      dismissWindow(id: "MarkerView")
+      dismissWindow(id: "MeasurementView")
+      dismissWindow(id: "LightingEditorView")
+      dismissWindow(id: "VolumeBrushEditorView")
+      dismissWindow(id: "VoiceCommandsView")
+      voice.stopListening()
+    }
+  }
+
+  private var renderControlsContent: some View {
     VStack(spacing: 20) {
       VStack(spacing: 4) {
         Text("render_title")
@@ -80,47 +207,66 @@ struct RenderView: View {
           .bold()
           .frame(maxWidth: .infinity)
           .overlay(alignment: .trailing) {
-            Button { showDatasetInfo = true } label: { Image(systemName: "info.circle") }
-              .disabled(runtimeAppModel.activeDatasetInfo == nil)
-              .accessibilityLabel("dataset_info_title")
-              .help("dataset_info_title")
+            Button {
+              showDatasetInfo = true
+            } label: {
+              Image(systemName: "info.circle")
+            }
+            .disabled(runtimeAppModel.activeDatasetInfo == nil)
+            .accessibilityLabel("dataset_info_title")
+            .help("dataset_info_title")
           }
 
         DatasetStreamingStatusView(progress: runtimeAppModel.datasetStreaming)
       }
       .padding(.horizontal)
 
-      VStack(spacing: 6) {
-        Text("render_picker_title")
-          .font(.headline)
-          .bold()
+      if runtimeAppModel.activeDatasetInfo?.channelInterpretation != .independentChannels
+        || displayedRenderModeIDs.count > 1
+      {
+        VStack(spacing: 6) {
+          Text("render_picker_title")
+            .font(.headline)
+            .bold()
 
-        if let interpretation = runtimeAppModel.activeDatasetInfo?.channelInterpretation,
-           interpretation != .independentChannels {
-          Label(interpretation.colorInterpretation == .rgb ? "RGB" : "RGBA", systemImage: "photo")
-        } else {
-        Picker(
-          "render_picker_title",
-          selection: Binding(
-            get: { sharedAppModel.renderMode },
-            set: { newValue in
-              sharedAppModel.renderMode = newValue
-              sharedAppModel.synchronize(kind: .stateOnly)
+          if let interpretation = runtimeAppModel.activeDatasetInfo?.channelInterpretation,
+            interpretation != .independentChannels
+          {
+            Label(interpretation.colorInterpretation == .rgb ? "RGB" : "RGBA", systemImage: "photo")
+          } else {
+            Picker(
+              "render_picker_title",
+              selection: Binding(
+                get: { sharedAppModel.renderMode },
+                set: { newValue in
+                  guard storedAppModel.interfaceVisibility.renderModeIDs.contains(newValue.rawValue) else { return }
+                  sharedAppModel.renderMode = newValue
+                  sharedAppModel.synchronize(kind: .stateOnly)
+                }
+              )
+            ) {
+              if displayedRenderModeIDs.contains(0) {
+                Text("renderMode_transferFunction1D")
+                  .tag(RenderMode.transferFunction1D)
+                  .disabled(!storedAppModel.interfaceVisibility.renderModeIDs.contains(0))
+              }
+              if displayedRenderModeIDs.contains(1) {
+                Text("renderMode_transferFunction1DLighting")
+                  .tag(RenderMode.transferFunction1DLighting)
+                  .disabled(!storedAppModel.interfaceVisibility.renderModeIDs.contains(1))
+              }
+              if displayedRenderModeIDs.contains(2) {
+                Text("renderMode_isoValue")
+                  .tag(RenderMode.isoValue)
+                  .disabled(!storedAppModel.interfaceVisibility.renderModeIDs.contains(2))
+              }
             }
-          )
-        ) {
-          Text("renderMode_transferFunction1D")
-            .tag(RenderMode.transferFunction1D)
-          Text("renderMode_transferFunction1DLighting")
-            .tag(RenderMode.transferFunction1DLighting)
-          Text("renderMode_isoValue")
-            .tag(RenderMode.isoValue)
+            .pickerStyle(.segmented)
+          }
         }
-        .pickerStyle(.segmented)
-        }
-      }
-      .padding(.horizontal)
+        .padding(.horizontal)
 
+      }
       HandInteractionControlsView()
 
       Spacer()
@@ -197,110 +343,33 @@ struct RenderView: View {
         .padding()
       }
     }
-    .sheet(isPresented: $showDatasetInfo) {
-      NavigationStack {
-        ScrollView {
-          VStack(alignment: .leading, spacing: 16) {
-            if let info = runtimeAppModel.activeDatasetInfo {
-              Text(info.description).font(.headline).textSelection(.enabled)
-              if let size = PhysicalSizeFormatter.dimensions(width: info.width, height: info.height, depth: info.depth,
-                voxelSpacingX: info.voxelSpacingX, voxelSpacingY: info.voxelSpacingY, voxelSpacingZ: info.voxelSpacingZ) {
-                Text(size).textSelection(.enabled)
-              }
-              DatasetProvenanceView(entries: info.provenance)
-            }
-          }
-          .frame(maxWidth: .infinity, alignment: .leading)
-          .padding()
-        }
-        .navigationTitle("dataset_info_title")
-        .toolbar {
-          ToolbarItem(placement: .confirmationAction) {
-            Button { showDatasetInfo = false } label: { Label("info_close_button", systemImage: "xmark") }
-          }
-        }
-      }
-      .frame(width: 560, height: 480)
+  }
+
+  private var displayedRenderModeIDs: [UInt8] {
+    storedAppModel.interfaceVisibility.displayedRenderModeIDs(
+      active: sharedAppModel.renderMode.rawValue, inSharePlay: sharedAppModel.isInGroupSession)
+  }
+
+  private func applyInterfaceVisibility(_ visibility: InterfaceVisibility) {
+    let panels: [(InterfaceVisibility.Panel, [String])] = [
+      (.lighting, ["LightingEditorView"]),
+      (.transfer, ["TransferFunctionEditorView", "IsovalueEditorView"]),
+      (.objects, ["MarkerView"]), (.measurements, ["MeasurementView"]),
+      (.brush, ["VolumeBrushEditorView"]),
+    ]
+    for (option, windows) in panels where !visibility.showsPanel(option) {
+      for window in windows { dismissWindow(id: window) }
     }
-    .onChange(of: runtimeAppModel.activeDatasetInfo?.channelInterpretation, initial: true) { _, interpretation in
-      guard let interpretation, interpretation != .independentChannels else { return }
-      dismissWindow(id: "TransferFunctionEditorView")
-      dismissWindow(id: "IsovalueEditorView")
-      dismissWindow(id: "LightingEditorView")
-    }
-    .onChange(of: scenePhase) { oldPhase, newPhase in
-      // A backgrounded controls window does not mean the immersive space closed.
-      runtimeAppModel.logger.dev("Render controls window phase: \(oldPhase) -> \(newPhase); keeping dataset open.")
-    }
-    .onChange(of: runtimeAppModel.auxiliaryWindowToggleRequest) { _, request in
-      guard let request else { return }
-      toggleAuxiliaryWindow(request)
-    }
-    .onDisappear {
-      dismissWindow(id: "TransferFunctionEditorView")
-      dismissWindow(id: "IsovalueEditorView")
-      dismissWindow(id: "PerformanceGraphView")
-      dismissWindow(id: "LoggerView")
-      dismissWindow(id: "ProfileView")
-      dismissWindow(id: "MarkerView")
-      dismissWindow(id: "MeasurementView")
-      dismissWindow(id: "LightingEditorView")
-      dismissWindow(id: "VolumeBrushEditorView")
-      dismissWindow(id: "VoiceCommandsView")
-      voice.stopListening()
-    }
-    .alert("Leave SharePlay?", isPresented: $showLeaveSharePlayConfirmation) {
-      Button("Cancel", role: .cancel) {}
-      Button("Leave SharePlay", role: .destructive) {
-        closeDataset(leavingSharePlay: true)
-      }
-    } message: {
-      Text("Closing this dataset will leave the current SharePlay session.")
-    }
-    .alert(
-      "Overwrite Existing Files?",
-      isPresented: $showDatasetStateOverwriteConfirmation
-    ) {
-      Button("Cancel", role: .cancel) { pendingDatasetStateSave = nil }
-      Button("Overwrite") {
-        if let plan = pendingDatasetStateSave { saveDatasetState(using: plan) }
-      }
-    } message: {
-      Text("One or more files for this dataset already exist. Do you want to replace them?")
-    }
-    .alert("Nothing to Save", isPresented: $showNoDatasetStateToSave) {
-      Button("OK", role: .cancel) {}
-    } message: {
-      Text("There is no active transfer function and there are no objects or measurements to save.")
-    }
-    .alert(
-      "Unable to Save Dataset State",
-      isPresented: Binding(
-        get: { datasetStateSaveError != nil },
-        set: { if !$0 { datasetStateSaveError = nil } }
-      )
-    ) {
-      Button("OK", role: .cancel) { datasetStateSaveError = nil }
-    } message: {
-      Text(datasetStateSaveError?.localizedDescription ?? "")
-    }
-    .alert("Nothing to Restore", isPresented: $showNoDatasetStateToRestore) {
-      Button("OK", role: .cancel) {}
-    } message: {
-      Text("No saved state is available for this dataset.")
-    }
-    .alert(
-      "Unable to Restore Dataset State",
-      isPresented: Binding(
-        get: { datasetStateRestoreError != nil },
-        set: { if !$0 { datasetStateRestoreError = nil } }
-      )
-    ) {
-      Button("OK", role: .cancel) { datasetStateRestoreError = nil }
-    } message: {
-      Text(datasetStateRestoreError?.localizedDescription ?? "")
-    }
-    .padding()
+    applyVisibleRenderMode()
+  }
+
+  private func applyVisibleRenderMode() {
+    let visibility = storedAppModel.interfaceVisibility
+    guard runtimeAppModel.automaticallyLoadsDatasetState, !sharedAppModel.isInGroupSession,
+          runtimeAppModel.activeDatasetInfo?.channelInterpretation == .independentChannels,
+          !visibility.renderModeIDs.contains(sharedAppModel.renderMode.rawValue),
+          let first = visibility.renderModeIDs.first, let mode = RenderMode(rawValue: first) else { return }
+    try? session.perform(.setRenderMode(mode), source: .userInterface)
   }
 
   /// Opens the profiling options window if it is not already visible.

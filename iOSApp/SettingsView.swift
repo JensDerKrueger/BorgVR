@@ -11,6 +11,7 @@ private let portNumberFormatter: NumberFormatter = {
 
 private enum SettingsResetSection: String, Identifiable {
   case general
+  case interface
   case rendering
   case performance
   case importSettings
@@ -25,6 +26,7 @@ private enum SettingsResetSection: String, Identifiable {
   var title: String {
     switch self {
       case .general: return String(localized: "General")
+      case .interface: return String(localized: "User Interface")
       case .rendering: return String(localized: "Rendering")
       case .performance: return String(localized: "Performance")
       case .importSettings: return String(localized: "Import")
@@ -44,6 +46,7 @@ private enum ServerConnectionTestResult {
 
 private enum SettingsPage: String, CaseIterable, Identifiable {
   case general
+  case interface
   case rendering
   case performance
   case importSettings
@@ -57,6 +60,7 @@ private enum SettingsPage: String, CaseIterable, Identifiable {
   var title: LocalizedStringKey {
     switch self {
       case .general: "General"
+      case .interface: "User Interface"
       case .rendering: "Rendering"
       case .performance: "Performance"
       case .importSettings: "Import"
@@ -70,6 +74,7 @@ private enum SettingsPage: String, CaseIterable, Identifiable {
   var systemImage: String {
     switch self {
       case .general: "gearshape"
+      case .interface: "slider.horizontal.3"
       case .rendering: "paintpalette"
       case .performance: "gauge.with.dots.needle.50percent"
       case .importSettings: "square.and.arrow.down"
@@ -231,7 +236,7 @@ struct SettingsView: View {
       case .general:
         settingsPage(
           title: page.title,
-          description: "Configure general application behavior, automatic loading, interface diagnostics, and update checks."
+          description: "Configure automatic loading, logging, and update checks."
         ) {
           generalSection
           Section("Updates") {
@@ -251,6 +256,17 @@ struct SettingsView: View {
           description: "Configure visual appearance and sampling quality. These controls affect how the rendered image looks and how sampling adapts to the current frame rate."
         ) {
           renderingSection
+        }
+      case .interface:
+        settingsPage(title: page.title,
+          description: "Choose which controls are visible. At least one rendering mode and one interaction mode must remain enabled. RGB/RGBA rendering is unaffected.") {
+          InterfaceVisibilitySettingsView(visibility: Binding(
+            get: { appSettings.interfaceVisibility }, set: { appSettings.interfaceVisibility = $0 }))
+          Section("Diagnostics") {
+            Toggle("Show Brick Visualization", isOn: $appSettings.showBrickVisualization)
+            Toggle("Show Log Button", isOn: $appSettings.showLogButton)
+          }
+          resetButton(for: .interface)
         }
       case .performance:
         settingsPage(
@@ -350,8 +366,6 @@ struct SettingsView: View {
         "Automatically load/save view and rendering state",
         isOn: $appSettings.autoloadRenderState
       )
-      Toggle("Show Brick Visualization", isOn: $appSettings.showBrickVisualization)
-      Toggle("Show Log Button", isOn: $appSettings.showLogButton)
       Toggle("Hide built-in datasets", isOn: $appSettings.hideBuiltInDatasets)
     }
 
@@ -949,6 +963,8 @@ struct SettingsView: View {
 
   private func resetToDefaults(_ section: SettingsResetSection) {
     switch section {
+      case .interface:
+        appSettings.resetInterfaceDefaults()
       case .general:
         appSettings.resetGeneralDefaults()
         updateChecker.checksEnabled = true

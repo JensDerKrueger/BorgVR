@@ -212,6 +212,10 @@ struct BorgVRSettingsStore {
       case "atlasSizeMB": return 128...1_000_000
       case "oversampling": return 0.01...100
       case "screenFieldOfView": return 10...120
+      case "foveationSamplingStrength": return 0...4
+      case "uiRenderModes": return 1...7
+      case "uiInteractionModes": return 1...127
+      case "uiPanelButtons": return 0...31
       case "alphaEpsilon": return 0...1
       case "dropFPS", "recoveryFPS": return 1...1000
       case "tfMode": return 0...2

@@ -780,6 +780,12 @@ final class AppModel: ObservableObject {
       }
     }
 
+    if groupSessionHost, metadata.channelInterpretation == .independentChannels,
+       !appSettings.interfaceVisibility.renderModeIDs.contains(renderingParameters.renderMode.rawValue),
+       let first = appSettings.interfaceVisibility.renderModeIDs.first, let mode = RenderMode(rawValue: first) {
+      renderingParameters.renderMode = mode
+    }
+
     if appSettings.autoloadObjects,
        let url = objectFileURL(for: dataset),
        FileManager.default.fileExists(atPath: url.path) {

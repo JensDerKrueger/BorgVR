@@ -1,3 +1,16 @@
+"User Interface" = "Interface utilisateur";
+"Visible rendering modes" = "Modes de rendu visibles";
+"Interaction controls" = "Commandes d’interaction";
+"Show reset buttons" = "Afficher les boutons de réinitialisation";
+"Panel buttons" = "Boutons des panneaux";
+"Show panel button row" = "Afficher la rangée de boutons des panneaux";
+"Transfer / Isovalue Editor" = "Éditeur de fonction de transfert / isovaleur";
+"Diagnostics" = "Diagnostic";
+"Show Performance Button" = "Afficher le bouton de performances";
+"Choose which controls are visible. At least one rendering mode and one interaction mode must remain enabled. RGB/RGBA rendering is unaffected." = "Choisissez les commandes visibles. Au moins un mode de rendu et un mode d’interaction doivent rester activés. Le rendu RGB/RGBA n’est pas affecté.";
+"Transfer Function" = "Fonction de transfert";
+"Clipping" = "Découpage";
+"Objects" = "Objets";
 "converter_supporting_file_access_required" = "L’accès en lecture au fichier référencé est nécessaire : %@";
 "image_sequence_title" = "Séquence d’images";
 "Supported formats are QVIS `.dat` + `.raw`, NRRD/NHDR, PVM, IV3Dm (`.i3m` / `.i3m.zip`), UVF, Zarr/OZX, and native BorgVR `.data` files." = "Les formats pris en charge sont QVIS `.dat` + `.raw`, NRRD/NHDR, PVM, IV3Dm (`.i3m` / `.i3m.zip`), UVF, Zarr/OZX et les fichiers BorgVR `.data` natifs.";
@@ -420,6 +433,8 @@
 "settings_toggle_autoload_tf" = "Charger et enregistrer automatiquement les fonctions de transfert";
 "settings_toggle_autoload_transform" = "Charger et enregistrer automatiquement la transformation";
 "settings_toggle_disable_foveation" = "Désactiver la fovéation";
+"settings_label_foveation_sampling_strength" = "Intensité de l’échantillonnage fovéal";
+"settings_description_foveation_sampling_strength" = "0 : aucun ajustement du pas d’échantillonnage. 1 : comportement précédent. Les valeurs plus élevées augmentent le pas en périphérie pour améliorer les performances au détriment de la qualité. Le centre reste inchangé.";
 "settings_toggle_sample_jitter" = "Phase d’échantillonnage aléatoire";
 "Alpha epsilon" = "Epsilon alpha";
 "Subbrick skipping" = "Saut des sous-blocs";

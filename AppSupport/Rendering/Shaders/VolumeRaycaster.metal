@@ -150,7 +150,16 @@ inline VolumeFragmentOutput visibleVolumeOutput(bool stoppedAtOpaqueGeometry,
   return out;
 }
 
+inline float foveatedOversampling(float baseOversampling, float rateScale, float strength) {
+  if (strength <= 0.0) return baseOversampling;
+  // Preserve the old floor at strength 1; amplify only the relative peripheral reduction.
+  float reference = min(baseOversampling, max(baseOversampling * clamp(rateScale, 0.5, 1.0), 0.25));
+  if (strength == 1.0) return reference;
+  return baseOversampling * pow(reference / baseOversampling, clamp(strength, 0.0, 4.0));
+}
+
 inline float effectiveOversampling(float baseOversampling,
+                                   float foveationSamplingStrength,
                                    float4 fragmentPosition,
                                    uint layerIndex
 #if VOLUME_SHADER_USES_RATE_MAP
@@ -158,6 +167,7 @@ inline float effectiveOversampling(float baseOversampling,
 #endif
                                    ) {
 #if VOLUME_SHADER_USES_RATE_MAP
+  if (foveationSamplingStrength <= 0.0) return baseOversampling;
   rasterization_rate_map_decoder rateMap(rateMapData);
   float2 physicalPosition = fragmentPosition.xy;
   float2 screenPosition = rateMap.map_physical_to_screen_coordinates(physicalPosition, layerIndex);
@@ -166,7 +176,7 @@ inline float effectiveOversampling(float baseOversampling,
   float screenPixelsPerPhysicalPixel = max(length(screenPositionX - screenPosition),
                                            length(screenPositionY - screenPosition));
   float rateScale = sqrt(1.0 / max(screenPixelsPerPhysicalPixel, 1.0));
-  return max(baseOversampling * clamp(rateScale, 0.5, 1.0), 0.25);
+  return foveatedOversampling(baseOversampling, rateScale, foveationSamplingStrength);
 #else
   return baseOversampling;
 #endif
@@ -538,6 +548,7 @@ fragment VolumeFragmentOutput VOLUME_FRAGMENT_SHADER_TF_NAME(
                                             uint(VOLUME_SHADER_UNIFORM_INDEX)
                                             VOLUME_SHADER_MARKER_ARGUMENT);
   float oversampling = effectiveOversampling(uniformsArray.uniforms[VOLUME_SHADER_UNIFORM_INDEX].oversampling,
+                                            uniformsArray.uniforms[VOLUME_SHADER_UNIFORM_INDEX].foveationSamplingStrength,
                                              in.position,
                                              uint(VOLUME_SHADER_UNIFORM_INDEX)
                                              VOLUME_SHADER_RATE_MAP_ARGUMENT);
@@ -827,6 +838,7 @@ fragment VolumeFragmentOutput VOLUME_FRAGMENT_SHADER_TF_LIGHTING_NAME(
   float markerDepth = markerDepthAtFragment(in.position, uint(VOLUME_SHADER_UNIFORM_INDEX)
                                             VOLUME_SHADER_MARKER_ARGUMENT);
   float oversampling = effectiveOversampling(uniformsArray.uniforms[VOLUME_SHADER_UNIFORM_INDEX].oversampling,
+                                            uniformsArray.uniforms[VOLUME_SHADER_UNIFORM_INDEX].foveationSamplingStrength,
                                              in.position, uint(VOLUME_SHADER_UNIFORM_INDEX)
                                              VOLUME_SHADER_RATE_MAP_ARGUMENT);
   #if VOLUME_OPACITY_ADAPTIVE_SAMPLING
@@ -868,6 +880,7 @@ fragment VolumeFragmentOutput VOLUME_FRAGMENT_SHADER_ISO_NAME(
                                             uint(VOLUME_SHADER_UNIFORM_INDEX)
                                             VOLUME_SHADER_MARKER_ARGUMENT);
   float oversampling = effectiveOversampling(uniforms.oversampling,
+                                            uniforms.foveationSamplingStrength,
                                              in.position,
                                              uint(VOLUME_SHADER_UNIFORM_INDEX)
                                              VOLUME_SHADER_RATE_MAP_ARGUMENT);

@@ -1065,7 +1065,8 @@ extension VisionVolumeRenderer {
           ).matrix,
           brickVisualizationMask: frameState.brickVisualizationMask,
           parallelRayDirection: .zero,
-          projectionLODScale: 0
+          projectionLODScale: 0,
+          foveationSamplingStrength: frameSnapshot.settings.foveationSamplingStrength
         )
       )
     }

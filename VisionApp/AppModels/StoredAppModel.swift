@@ -45,7 +45,7 @@ enum TransferFunctionDisplayMode: Int {
  This includes settings, preferences, and session data.
  The model provides functionality for reading and writing to the system’s storage API.
 */
-final class StoredAppModel: ObservableObject {
+final class StoredAppModel: ObservableObject, InterfaceVisibilitySettings {
 
   /// Default values for all supported settings keys.
   static let values: [String: Any] = [
@@ -95,9 +95,15 @@ final class StoredAppModel: ObservableObject {
     "autoloadMeasurements": false,
     "autoloadRenderState": false,
     "disableFoveation": false,
+    "foveationSamplingStrength": 1.0,
     "requestLowResLOD": true,
     "stopOnMiss": false,
     "showProfiling": false,
+    "uiRenderModes": InterfaceVisibility.allRenderModes,
+    "uiInteractionModes": InterfaceVisibility.allInteractions,
+    "uiPanelButtons": InterfaceVisibility.allPanels,
+    "showModeResetButtons": true,
+    "showPanelButtons": true,
     "showNotifications": false,
     "hideBuiltInDatasets": false,
     "enableVoiceInput": false,
@@ -270,12 +276,20 @@ final class StoredAppModel: ObservableObject {
   var autoloadRenderState: Bool = StoredAppModel.bool("autoloadRenderState")
   /// Whether to disable the built-in foveation feature
   @AppStorage("disableFoveation") var disableFoveation: Bool = StoredAppModel.bool("disableFoveation")
+  /// Strength of the rate map's sampling-distance adjustment, independent of system foveation.
+  @AppStorage("foveationSamplingStrength")
+  var foveationSamplingStrength: Double = StoredAppModel.double("foveationSamplingStrength")
   /// Whether to request a low resolution LOD along with the high res
   @AppStorage("requestLowResLOD") var requestLowResLOD: Bool = StoredAppModel.bool("requestLowResLOD")
   /// Whether the raycaster should terminate if a brick is missing
   @AppStorage("stopOnMiss") var stopOnMiss: Bool = StoredAppModel.bool("stopOnMiss")
   /// Whether the Profiling Button should be displayed
   @AppStorage("showProfiling") var showProfiling: Bool = StoredAppModel.bool("showProfiling")
+  @AppStorage("uiRenderModes") var uiRenderModes: Int = InterfaceVisibility.allRenderModes
+  @AppStorage("uiInteractionModes") var uiInteractionModes: Int = InterfaceVisibility.allInteractions
+  @AppStorage("uiPanelButtons") var uiPanelButtons: Int = InterfaceVisibility.allPanels
+  @AppStorage("showModeResetButtons") var showModeResetButtons: Bool = true
+  @AppStorage("showPanelButtons") var showPanelButtons: Bool = true
   /// Whether the app displays notifictaions of background events
   @AppStorage("showNotifications") var showNotifications: Bool = StoredAppModel.bool("showNotifications")
   /// Whether bundled example datasets are omitted from the dataset picker.
@@ -504,6 +518,7 @@ final class StoredAppModel: ObservableObject {
   func resetRenderingDefaults() {
     showDatasetBoundingBox = Self.values["showDatasetBoundingBox"] as? Bool ?? false
     disableFoveation = Self.values["disableFoveation"] as? Bool ?? false
+    foveationSamplingStrength = Self.values["foveationSamplingStrength"] as? Double ?? 1.0
     oversampling = Self.values["oversampling"] as? Double ?? 1.0
     oversamplingMode = Self.values["oversamplingMode"] as? String ?? OversamplingMode.dynamicMode.rawValue
     sampleJitter = Self.values["sampleJitter"] as? Bool ?? false

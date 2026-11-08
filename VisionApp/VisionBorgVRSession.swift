@@ -300,7 +300,9 @@ extension BorgVRSession where VisualizationState == SharedAppModel,
             transferFunctionDisplayMode: storedAppModel.tfMode,
             purgeAtlas: sharedAppModel.purgeAtlas,
             rotationCaptureRequestID: runtimeAppModel.rotationCaptureRequestID,
-            showDatasetBoundingBox: storedAppModel.showDatasetBoundingBox
+            showDatasetBoundingBox: storedAppModel.showDatasetBoundingBox,
+            foveationSamplingStrength: storedAppModel.foveationSamplingStrength.isFinite
+              ? Float(min(4, max(0, storedAppModel.foveationSamplingStrength))) : 1
           )
         )
       },

@@ -136,6 +136,8 @@ typedef struct {
   vector_float4 parallelRayDirection;
   // Runtime change of the screen-space LOD footprint; 0 preserves the headset projection.
   float projectionLODScale;
+  // Local rate-map sampling strength: 0 disables it, 1 preserves the original adjustment.
+  float foveationSamplingStrength;
 } FragmentUniforms;
 
 /**

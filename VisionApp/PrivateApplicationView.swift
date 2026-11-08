@@ -23,9 +23,11 @@ struct HandInteractionControlsView: View {
 
   var body: some View {
     VStack(spacing: 10) {
-      Text("private_interaction_title")
-        .font(.headline)
-        .bold()
+      if storedAppModel.interfaceVisibility.interactionModes.count > 1 {
+        Text("private_interaction_title")
+          .font(.headline)
+          .bold()
+      }
 
       interactionControls(showTitles: false)
       VolumeEditSynchronizationStatus(model: runtimeAppModel.volumeBrush)
@@ -184,6 +186,14 @@ struct HandInteractionControlsView: View {
       Text(error.localizedDescription)
     }
     .onAppear(perform: refreshTransferFunctionCatalog)
+    .onChange(of: storedAppModel.interfaceVisibility, initial: true) { _, visibility in
+      guard runtimeAppModel.automaticallyLoadsDatasetState else { return }
+      if runtimeAppModel.interactionMode == .screenView, hasSharedScreenView,
+         visibility.interactionModes.count > 1 { return }
+      guard !visibility.allowsInteraction(runtimeAppModel.interactionMode.rawValue),
+            let first = visibility.interactionModes.first else { return }
+      interactionModeBinding.wrappedValue = first.rawValue
+    }
     .onChange(of: runtimeAppModel.selectedTransferFunctionChannel) {
       refreshTransferFunctionCatalog()
     }
@@ -249,67 +259,103 @@ struct HandInteractionControlsView: View {
 
   private func interactionControls(showTitles: Bool) -> some View {
     VStack(spacing: 8) {
-      InteractionModePicker(
-        selection: interactionModeBinding,
-        showsScreenView: hasSharedScreenView,
-        volumeBrush: runtimeAppModel.volumeBrush,
-        resetModel: { showResetModelConfirmation = true },
-        resetClipping: { showResetClippingConfirmation = true },
-        transferFunctionCatalog: transferFunctionCatalog,
-        resetTransfer: resetTransferFunction,
-        loadTransferFunction: loadTransferFunction,
-        resetDrawing: { showDeleteAllObjectsConfirmation = true },
-        resetPlacement: { showDeleteAllObjectsConfirmation = true },
-        resetMeasurement: { showDeleteAllMeasurementsConfirmation = true },
-        resetEdits: { showDiscardAllEditsConfirmation = true }
-      )
-      Text("private_windows_title")
-        .font(.headline)
-        .bold()
-      modeWindowButtons(showTitles: showTitles)
+      if storedAppModel.interfaceVisibility.interactionModes.count > 1
+        || storedAppModel.showModeResetButtons
+      {
+        InteractionModePicker(
+          selection: interactionModeBinding,
+          showsScreenView: hasSharedScreenView,
+          volumeBrush: runtimeAppModel.volumeBrush,
+          resetModel: { showResetModelConfirmation = true },
+          resetClipping: { showResetClippingConfirmation = true },
+          transferFunctionCatalog: transferFunctionCatalog,
+          resetTransfer: resetTransferFunction,
+          loadTransferFunction: loadTransferFunction,
+          resetDrawing: { showDeleteAllObjectsConfirmation = true },
+          resetPlacement: { showDeleteAllObjectsConfirmation = true },
+          resetMeasurement: { showDeleteAllMeasurementsConfirmation = true },
+          resetEdits: { showDiscardAllEditsConfirmation = true },
+          visibility: storedAppModel.interfaceVisibility
+        )
+      }
+      if storedAppModel.interfaceVisibility.hasPanels {
+        Text("private_windows_title")
+          .font(.headline)
+          .bold()
+        modeWindowButtons(showTitles: showTitles)
+      }
     }
     .frame(minWidth: showTitles ? 640 : 480)
     .frame(maxWidth: .infinity, alignment: .center)
   }
 
+  @ViewBuilder
   private func modeWindowButtons(showTitles: Bool) -> some View {
-    GeometryReader { geometry in
-      let columnCount = hasSharedScreenView ? 8 : 7
-      let spacing: CGFloat = 4
-      let columnWidth = max(
-        0,
-        (geometry.size.width - spacing * CGFloat(columnCount - 1)) /
-          CGFloat(columnCount)
-      )
-      let columnStride = columnWidth + spacing
-      let doubleColumnWidth = columnWidth * 2 + spacing
-
-      ZStack(alignment: .leading) {
-        lightingButton(showTitles: showTitles)
-          .disabled(runtimeAppModel.activeDatasetInfo?.channelInterpretation != .independentChannels)
-          .frame(width: columnWidth)
-          .offset(x: columnStride)
-
-        editorButton(showTitles: showTitles)
-          .disabled(runtimeAppModel.activeDatasetInfo?.channelInterpretation != .independentChannels)
-          .frame(width: columnWidth)
-          .offset(x: columnStride * 2)
-
-        markerWindowButton(showTitles: showTitles)
-          .frame(width: doubleColumnWidth)
-          .offset(x: columnStride * 3)
-
-        measurementWindowButton(showTitles: showTitles)
-          .frame(width: columnWidth)
-          .offset(x: columnStride * 5)
-
-        brushWindowButton(showTitles: showTitles)
-          .frame(width: columnWidth)
-          .offset(x: columnStride * 6)
+    if storedAppModel.interfaceVisibility.isCustomized {
+      HStack(spacing: 8) {
+        if storedAppModel.interfaceVisibility.showsPanel(.lighting) {
+          lightingButton(showTitles: showTitles)
+            .disabled(
+              runtimeAppModel.activeDatasetInfo?.channelInterpretation != .independentChannels)
+        }
+        if storedAppModel.interfaceVisibility.showsPanel(.transfer) {
+          editorButton(showTitles: showTitles)
+            .disabled(
+              runtimeAppModel.activeDatasetInfo?.channelInterpretation != .independentChannels)
+        }
+        if storedAppModel.interfaceVisibility.showsPanel(.objects) {
+          markerWindowButton(showTitles: showTitles)
+        }
+        if storedAppModel.interfaceVisibility.showsPanel(.measurements) {
+          measurementWindowButton(showTitles: showTitles)
+        }
+        if storedAppModel.interfaceVisibility.showsPanel(.brush) {
+          brushWindowButton(showTitles: showTitles)
+        }
       }
       .buttonStyle(.bordered)
+    } else {
+      GeometryReader { geometry in
+        let columnCount = hasSharedScreenView ? 8 : 7
+        let spacing: CGFloat = 4
+        let columnWidth = max(
+          0,
+          (geometry.size.width - spacing * CGFloat(columnCount - 1)) / CGFloat(columnCount)
+        )
+        let columnStride = columnWidth + spacing
+        let doubleColumnWidth = columnWidth * 2 + spacing
+
+        ZStack(alignment: .leading) {
+          lightingButton(showTitles: showTitles)
+            .disabled(
+              runtimeAppModel.activeDatasetInfo?.channelInterpretation != .independentChannels
+            )
+            .frame(width: columnWidth)
+            .offset(x: columnStride)
+
+          editorButton(showTitles: showTitles)
+            .disabled(
+              runtimeAppModel.activeDatasetInfo?.channelInterpretation != .independentChannels
+            )
+            .frame(width: columnWidth)
+            .offset(x: columnStride * 2)
+
+          markerWindowButton(showTitles: showTitles)
+            .frame(width: doubleColumnWidth)
+            .offset(x: columnStride * 3)
+
+          measurementWindowButton(showTitles: showTitles)
+            .frame(width: columnWidth)
+            .offset(x: columnStride * 5)
+
+          brushWindowButton(showTitles: showTitles)
+            .frame(width: columnWidth)
+            .offset(x: columnStride * 6)
+        }
+        .buttonStyle(.bordered)
+      }
+      .frame(height: showTitles ? 46 : 40)
     }
-    .frame(height: showTitles ? 46 : 40)
   }
 
   private func markerWindowButton(showTitles: Bool) -> some View {
@@ -681,6 +727,7 @@ struct InteractionModePicker: View {
   var resetPlacement: (() -> Void)? = nil
   var resetMeasurement: (() -> Void)? = nil
   var resetEdits: (() -> Void)? = nil
+  var visibility = InterfaceVisibility()
 
   var body: some View {
     HStack(spacing: 4) {
@@ -729,7 +776,7 @@ struct InteractionModePicker: View {
       )
       segment("Edit", icon: "eraser", value: "volumeEditing",
         resetAction: resetEdits, resetTitle: "Discard All Edits")
-      if showsScreenView {
+      if showsScreenView && visibility.interactionModes.count > 1 {
         segment("Screen View", icon: "display", value: "screenView")
       }
     }
@@ -749,96 +796,104 @@ struct InteractionModePicker: View {
   ) -> some View {
     let isSelected = selection == value
     let color = InteractionModeColor.color(for: value)
-    return VStack(spacing: 2) {
-      if showsTransferFunctionMenu, let resetAction, let resetTitle {
-        Menu {
-          Button(action: resetAction) {
-            Label("tf_reset_default", systemImage: "arrow.counterclockwise")
+    return Group {
+      if value == "screenView" || visibility.allowsInteraction(value) {
+        VStack(spacing: 2) {
+          if visibility.showsResets {
+            if showsTransferFunctionMenu, let resetAction, let resetTitle {
+              Menu {
+                Button(action: resetAction) {
+                  Label("tf_reset_default", systemImage: "arrow.counterclockwise")
+                }
+
+                let presets = transferFunctionCatalog.filter { $0.source == .builtIn }
+                if !presets.isEmpty {
+                  Section("tf_reset_presets") {
+                    ForEach(presets) { entry in
+                      Button {
+                        loadTransferFunction?(entry)
+                      } label: {
+                        Label(entry.displayName, systemImage: "waveform")
+                      }
+                    }
+                  }
+                }
+
+                let files = transferFunctionCatalog.filter { $0.source != .builtIn }
+                if !files.isEmpty {
+                  Section("tf_reset_files") {
+                    ForEach(files) { entry in
+                      Button {
+                        loadTransferFunction?(entry)
+                      } label: {
+                        Label(entry.displayName, systemImage: "doc")
+                      }
+                    }
+                  }
+                }
+              } label: {
+                resetIcon(color: color)
+              }
+              .buttonStyle(.plain)
+              .accessibilityLabel(Text(resetTitle))
+              .help(Text(resetTitle))
+            } else if let resetAction, let resetTitle {
+              Button(action: resetAction) {
+                resetIcon(color: color)
+              }
+              .buttonStyle(.plain)
+              .accessibilityLabel(Text(resetTitle))
+              .help(Text(resetTitle))
+            } else {
+              Color.clear
+                .frame(width: 24, height: 24)
+                .accessibilityHidden(true)
+            }
           }
 
-          let presets = transferFunctionCatalog.filter { $0.source == .builtIn }
-          if !presets.isEmpty {
-            Section("tf_reset_presets") {
-              ForEach(presets) { entry in
-                Button {
-                  loadTransferFunction?(entry)
-                } label: {
-                  Label(entry.displayName, systemImage: "waveform")
+          if visibility.interactionModes.count > 1 {
+            Button {
+              selection = value
+            } label: {
+              ViewThatFits(in: .horizontal) {
+                Label(title, systemImage: icon).fixedSize(horizontal: true, vertical: false)
+                if value == "volumeEditing" || value == "screenView" {
+                  VStack(spacing: 0) {
+                    Image(systemName: icon)
+                    Text(title)
+                      .font(.caption)
+                      .lineLimit(value == "screenView" ? 2 : 1)
+                      .multilineTextAlignment(.center)
+                      .minimumScaleFactor(0.75)
+                  }
+                } else {
+                  Image(systemName: icon)
                 }
               }
+              .font(.callout)
+              .fontWeight(isSelected ? .semibold : .regular)
+              .foregroundStyle(color)
+              .lineLimit(1)
+              .frame(maxWidth: .infinity, minHeight: 34)
+              .padding(.horizontal, 7)
+              .background(
+                color.opacity(isSelected ? 0.24 : 0),
+                in: RoundedRectangle(cornerRadius: 6)
+              )
+              .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityAddTraits(isSelected ? .isSelected : [])
+            .accessibilityLabel(Text(title))
+            .help(Text(title))
+            .overlay(alignment: .topTrailing) {
+              if value == "volumeEditing" { VolumeBrushActivityIndicator(model: volumeBrush) }
             }
           }
-
-          let files = transferFunctionCatalog.filter { $0.source != .builtIn }
-          if !files.isEmpty {
-            Section("tf_reset_files") {
-              ForEach(files) { entry in
-                Button {
-                  loadTransferFunction?(entry)
-                } label: {
-                  Label(entry.displayName, systemImage: "doc")
-                }
-              }
-            }
-          }
-        } label: {
-          resetIcon(color: color)
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel(Text(resetTitle))
-        .help(Text(resetTitle))
-      } else if let resetAction, let resetTitle {
-        Button(action: resetAction) {
-          resetIcon(color: color)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(Text(resetTitle))
-        .help(Text(resetTitle))
-      } else {
-        Color.clear
-          .frame(width: 24, height: 24)
-          .accessibilityHidden(true)
-      }
-
-      Button {
-        selection = value
-      } label: {
-        ViewThatFits(in: .horizontal) {
-          Label(title, systemImage: icon).fixedSize(horizontal: true, vertical: false)
-          if value == "volumeEditing" || value == "screenView" {
-            VStack(spacing: 0) {
-              Image(systemName: icon)
-              Text(title)
-                .font(.caption)
-                .lineLimit(value == "screenView" ? 2 : 1)
-                .multilineTextAlignment(.center)
-                .minimumScaleFactor(0.75)
-            }
-          } else {
-            Image(systemName: icon)
-          }
-        }
-          .font(.callout)
-          .fontWeight(isSelected ? .semibold : .regular)
-          .foregroundStyle(color)
-          .lineLimit(1)
-          .frame(maxWidth: .infinity, minHeight: 34)
-          .padding(.horizontal, 7)
-          .background(
-            color.opacity(isSelected ? 0.24 : 0),
-            in: RoundedRectangle(cornerRadius: 6)
-          )
-          .contentShape(Rectangle())
-      }
-      .buttonStyle(.plain)
-      .accessibilityAddTraits(isSelected ? .isSelected : [])
-      .accessibilityLabel(Text(title))
-      .help(Text(title))
-      .overlay(alignment: .topTrailing) {
-        if value == "volumeEditing" { VolumeBrushActivityIndicator(model: volumeBrush) }
+        .frame(maxWidth: .infinity)
       }
     }
-    .frame(maxWidth: .infinity)
   }
 
   private func resetIcon(color: Color) -> some View {

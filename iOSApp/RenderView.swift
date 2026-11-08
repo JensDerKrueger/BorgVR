@@ -254,11 +254,52 @@ struct RenderView: View {
       renderingParameters.brickVis = false
       synchronizeState()
     }
+    .onChange(of: appSettings.interfaceVisibility, initial: true) { _, visibility in
+      for (option, sheets) in [
+        (InterfaceVisibility.Panel.lighting, [RenderSheet.lighting]),
+        (.transfer, [.transferEditor, .isoEditor]), (.objects, [.objects]),
+        (.measurements, [.measurements]), (.brush, [.volumeBrush])
+      ] where !visibility.showsScreenPanel(option) {
+        if let sheet = presentedSheet, sheets.contains(sheet) { presentedSheet = nil }
+      }
+      if appModel.automaticallyLoadsDatasetState, !visibility.allowsInteraction(appModel.interactionMode.rawValue),
+         let first = visibility.interactionModes.first,
+         let mode = AppModel.InteractionMode(rawValue: first.rawValue) {
+        appModel.interactionMode = mode
+        session.commitExternalMutation(source: .userInterface, domain: .interaction)
+      }
+      applyVisibleRenderMode()
+    }
+    .onChange(of: appModel.activeDatasetMetadata?.uniqueID) { applyVisibleRenderMode() }
+    .onChange(of: sharePlay.isInSession) { _, active in
+      if !active { applyVisibleRenderMode() }
+    }
     .onChange(of: appSettings.showLogButton) { _, isVisible in
       if !isVisible, presentedSheet == .log {
         presentedSheet = nil
       }
     }
+  }
+
+  private var displayedRenderModeIDs: [UInt8] {
+    appSettings.interfaceVisibility.displayedRenderModeIDs(
+      active: renderingParameters.renderMode.rawValue, inSharePlay: sharePlay.isInSession)
+  }
+
+  private var renderModeBinding: Binding<RenderMode> {
+    Binding(get: { renderingParameters.renderMode }, set: { mode in
+      guard appSettings.interfaceVisibility.renderModeIDs.contains(mode.rawValue) else { return }
+      renderingParameters.renderMode = mode
+    })
+  }
+
+  private func applyVisibleRenderMode() {
+    let visibility = appSettings.interfaceVisibility
+    guard appModel.automaticallyLoadsDatasetState, !sharePlay.isInSession,
+          appModel.activeDatasetMetadata?.channelInterpretation == .independentChannels,
+          !visibility.renderModeIDs.contains(renderingParameters.renderMode.rawValue),
+          let first = visibility.renderModeIDs.first, let mode = RenderMode(rawValue: first) else { return }
+    try? session.perform(.setRenderMode(mode), source: .userInterface)
   }
 
   @ViewBuilder
@@ -425,11 +466,12 @@ struct RenderView: View {
              interpretation != .independentChannels {
             Label(interpretation.colorInterpretation == .rgb ? "RGB" : "RGBA", systemImage: "photo")
               .frame(maxWidth: .infinity)
-          } else {
-          Picker("Render Mode", selection: $renderingParameters.renderMode) {
-            ForEach(RenderMode.allCases) { mode in
+          } else if displayedRenderModeIDs.count > 1 {
+          Picker("Render Mode", selection: renderModeBinding) {
+            ForEach(RenderMode.allCases.filter { displayedRenderModeIDs.contains($0.rawValue) }) { mode in
               renderModeLabel(for: mode, compact: usesCompactRenderModeLabels)
                 .tag(mode)
+                .disabled(!appSettings.interfaceVisibility.renderModeIDs.contains(mode.rawValue))
             }
           }
           .pickerStyle(.segmented)
@@ -498,157 +540,78 @@ struct RenderView: View {
     }
   }
 
+  @ViewBuilder
   private func modeActionButtons(compact: Bool) -> some View {
-    GeometryReader { geometry in
-      let spacing: CGFloat = 4
-      let columnWidth = max(0, (geometry.size.width - spacing * 6) / 7)
-      let columnStride = columnWidth + spacing
-      let doubleColumnWidth = columnWidth * 2 + spacing
-      let buttonInset: CGFloat = compact ? 4 : 6
-
-      ZStack(alignment: .leading) {
+    let visibility = appSettings.interfaceVisibility
+    let panels = InterfaceVisibility.Panel.allCases.filter { visibility.showsScreenPanel($0) }
+    if !panels.isEmpty || visibility.showsResets {
+      GeometryReader { geometry in
+        let spacing: CGFloat = 4
+        let count = panels.count + (visibility.showsResets ? 1 : 0)
+        let columns = visibility.isCustomized ? count : 7
+        let width = max(0, (geometry.size.width - spacing * CGFloat(columns - 1)) / CGFloat(columns))
         HStack(spacing: spacing) {
-          Button {
-            renderingParameters.reset()
-            synchronizeFullState()
-            synchronizeTransform()
-            sharePlay.flushSynchronization()
-          } label: {
-            modeActionLabel(
-              "Reset",
-              systemImage: "arrow.counterclockwise",
-              compact: compact,
-              color: .primary
-            )
-            .frame(maxWidth: .infinity)
+          if visibility.showsResets {
+            Button {
+              renderingParameters.reset()
+              synchronizeFullState()
+              synchronizeTransform()
+              sharePlay.flushSynchronization()
+            } label: {
+              modeActionLabel("Reset", systemImage: "arrow.counterclockwise", compact: compact, color: .primary)
+                .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(ModeActionButtonStyle(horizontalInset: compact ? 4 : 6))
+            .accessibilityLabel("Reset")
+            .frame(width: width)
           }
-          .buttonStyle(ModeActionButtonStyle(horizontalInset: buttonInset))
-          .accessibilityLabel("Reset")
-          .frame(width: columnWidth)
-
-          Button {
-            toggleToolSheet(.lighting)
-          } label: {
-            modeActionLabel(
-              "Lighting",
-              systemImage: "lightbulb.max",
-              compact: compact,
-              color: .primary
-            )
-            .frame(maxWidth: .infinity)
+          ForEach(panels) { panel in
+            let span: CGFloat = !visibility.isCustomized && panel == .objects ? 2 : 1
+            panelActionButton(panel, compact: compact)
+              .frame(width: width * span + spacing * (span - 1))
           }
-          .buttonStyle(
-            ModeActionButtonStyle(
-              isPresented: isToolSheetPresented(.lighting),
-              tint: .secondary,
-              horizontalInset: buttonInset
-            )
-          )
-          .accessibilityAddTraits(isToolSheetPresented(.lighting) ? .isSelected : [])
-          .accessibilityLabel("Lighting")
-          .disabled(appModel.activeDatasetMetadata?.channelInterpretation != .independentChannels)
-          .frame(width: columnWidth)
         }
-        .frame(width: doubleColumnWidth)
-
-        Button {
-          toggleToolSheet(
-            renderingParameters.renderMode == .isoValue ? .isoEditor : .transferEditor
-          )
-        } label: {
-          modeActionLabel(
-            "Editor",
-            systemImage: "slider.horizontal.3",
-            compact: compact,
-            color: .primary
-          )
-          .frame(maxWidth: .infinity)
-        }
-        .buttonStyle(
-          ModeActionButtonStyle(
-            isPresented: currentEditorIsPresented,
-            tint: .purple,
-            horizontalInset: buttonInset
-          )
-        )
-        .accessibilityAddTraits(currentEditorIsPresented ? .isSelected : [])
-        .accessibilityLabel("Editor")
-        .disabled(appModel.activeDatasetMetadata?.channelInterpretation != .independentChannels)
-        .frame(width: columnWidth)
-        .offset(x: columnStride * 2)
-
-        Button {
-          toggleToolSheet(.objects)
-        } label: {
-          modeActionLabel(
-            "Objects",
-            systemImage: "cube.transparent",
-            compact: compact,
-            color: .primary
-          )
-          .frame(maxWidth: .infinity)
-        }
-        .buttonStyle(
-          ModeActionButtonStyle(
-            isPresented: isToolSheetPresented(.objects),
-            tint: .orange,
-            horizontalInset: buttonInset
-          )
-        )
-        .accessibilityAddTraits(isToolSheetPresented(.objects) ? .isSelected : [])
-        .accessibilityLabel("Objects")
-        .frame(width: doubleColumnWidth)
-        .offset(x: columnStride * 3)
-
-        Button {
-          toggleToolSheet(.measurements)
-        } label: {
-          modeActionLabel(
-            "measurement_window_title",
-            systemImage: "ruler",
-            compact: compact,
-            color: .primary
-          )
-          .frame(maxWidth: .infinity)
-        }
-        .buttonStyle(
-          ModeActionButtonStyle(
-            isPresented: isToolSheetPresented(.measurements),
-            tint: .green,
-            horizontalInset: buttonInset
-          )
-        )
-        .accessibilityAddTraits(isToolSheetPresented(.measurements) ? .isSelected : [])
-        .accessibilityLabel(Text("measurement_window_title"))
-        .frame(width: columnWidth)
-        .offset(x: columnStride * 5)
-
-        Button {
-          toggleToolSheet(.volumeBrush)
-        } label: {
-          modeActionLabel(
-            "Brush",
-            systemImage: "eraser",
-            compact: compact,
-            color: .primary
-          )
-          .frame(maxWidth: .infinity)
-        }
-        .buttonStyle(
-          ModeActionButtonStyle(
-            isPresented: isToolSheetPresented(.volumeBrush),
-            tint: .red,
-            horizontalInset: buttonInset
-          )
-        )
-        .accessibilityAddTraits(isToolSheetPresented(.volumeBrush) ? .isSelected : [])
-        .accessibilityLabel("Brush")
-        .frame(width: columnWidth)
-        .offset(x: columnStride * 6)
       }
+      .frame(height: 38)
+      .padding(.horizontal, 4)
     }
-    .frame(height: 38)
-    .padding(.horizontal, 4)
+  }
+
+  private func panelActionButton(_ panel: InterfaceVisibility.Panel, compact: Bool) -> some View {
+    let sheet: RenderSheet = switch panel {
+      case .lighting: .lighting
+      case .transfer: renderingParameters.renderMode == .isoValue ? .isoEditor : .transferEditor
+      case .objects: .objects
+      case .measurements: .measurements
+      case .brush: .volumeBrush
+    }
+    let icon = switch panel {
+      case .lighting: "lightbulb.max"
+      case .transfer: "slider.horizontal.3"
+      case .objects: "cube.transparent"
+      case .measurements: "ruler"
+      case .brush: "eraser"
+    }
+    let tint: Color = switch panel {
+      case .lighting: .secondary
+      case .transfer: .purple
+      case .objects: .orange
+      case .measurements: .green
+      case .brush: .red
+    }
+    let title = LocalizedStringKey(panel == .transfer ? "Editor" : panel.title)
+    let selected = isToolSheetPresented(sheet)
+    return Button {
+      toggleToolSheet(sheet)
+    } label: {
+      modeActionLabel(title, systemImage: icon, compact: compact, color: .primary)
+        .frame(maxWidth: .infinity)
+    }
+    .buttonStyle(ModeActionButtonStyle(isPresented: selected, tint: tint, horizontalInset: compact ? 4 : 6))
+    .accessibilityAddTraits(selected ? .isSelected : [])
+    .accessibilityLabel(title)
+    .disabled((panel == .lighting || panel == .transfer) &&
+      appModel.activeDatasetMetadata?.channelInterpretation != .independentChannels)
   }
 
   private func modeActionLabel(
@@ -717,40 +680,21 @@ struct RenderView: View {
     }
   }
 
+  @ViewBuilder
   private func interactionModePicker(compact: Bool) -> some View {
+    if appSettings.interfaceVisibility.interactionModes.count > 1 {
     HStack(spacing: 4) {
-      interactionModeSegment(.model, title: "Model", systemImage: "move.3d", compact: compact)
-      interactionModeSegment(
-        .clipping,
-        title: "Clipping",
-        systemImage: "viewfinder",
-        compact: compact
-      )
-      interactionModeSegment(
-        .transferEditing,
-        title: "Transfer",
-        systemImage: "slider.horizontal.3",
-        compact: compact
-      )
-      interactionModeSegment(.drawing, title: "Draw", systemImage: "scribble", compact: compact)
-      interactionModeSegment(
-        .objectPlacement,
-        title: "Place",
-        systemImage: "cube",
-        compact: compact
-      )
-      interactionModeSegment(
-        .measurement,
-        title: "private_interaction_option_measurement",
-        systemImage: "ruler",
-        compact: compact
-      )
-      interactionModeSegment(.volumeEditing, title: "Edit Volume", systemImage: "eraser", compact: compact)
+      ForEach(appSettings.interfaceVisibility.interactionModes) { option in
+        if let mode = AppModel.InteractionMode(rawValue: option.rawValue) {
+          interactionModeSegment(mode, title: LocalizedStringKey(option.title), systemImage: option.icon, compact: compact)
+        }
+      }
     }
     .padding(4)
     .background(.secondary.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
     .accessibilityElement(children: .contain)
     .accessibilityLabel("Interaction")
+    }
   }
 
   private func interactionModeSegment(

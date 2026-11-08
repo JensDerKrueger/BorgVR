@@ -42,6 +42,9 @@ The current development version is **3.7**. The SharePlay wire protocol is versi
 - Native Metal raycasters on visionOS, iOS/iPadOS, and macOS, plus a WebGPU browser renderer.
 - Transfer-function, illuminated transfer-function, isosurface, clipping, LOD, and adaptive
   sampling controls.
+- visionOS offers a local foveation sampling-strength slider (0...4, default 1): disable
+  rate-map-based sample reduction or amplify it for a performance/quality trade-off without
+  changing sampling in the full-rate center. The setting is included in settings backups.
 - Configurable ambient, diffuse, and specular lighting with an interactive light-direction
   arcball, shared across native clients and WebGPU.
 - GPU-guided brick requests with progressive paging into a brick atlas.
@@ -55,6 +58,15 @@ The current development version is **3.7**. The SharePlay wire protocol is versi
   optional snapping follows the eye-to-tool ray; projected strokes use depth smoothing.
 - macOS menus expose visualization commands and shortcuts, including arrow-key volume
   translation, with the bilingual HTML manual available as built-in Help.
+- A local **User Interface** settings category on all native platforms can hide individual
+  rendering/interaction modes, the reset row, and individual or all panel buttons. At least
+  one rendering and interaction mode remains available; single-mode selectors disappear.
+  RGB/RGBA rendering is unaffected. Diagnostics visibility is configured in the same category,
+  and all preferences are included in settings import/export.
+  A locally hidden mode activated through SharePlay temporarily appears as a disabled selected
+  option, even in a normally single-mode selector, without changing local preferences. Screen
+  panel buttons also follow their associated interaction modes; visionOS keeps them independent
+  so Muse and PSVR tools retain access to their panels.
 
 ### Dataset File Format
 

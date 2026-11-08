@@ -10,6 +10,7 @@ private enum SettingsArchiveTests {
   }
 
   static func main() throws {
+    try verifyInterfaceVisibility()
     let suite = "BorgVRSettingsTests-\(UUID().uuidString)"
     let defaults = UserDefaults(suiteName: suite)!
     defer { defaults.removePersistentDomain(forName: suite) }
@@ -20,6 +21,9 @@ private enum SettingsArchiveTests {
       "brickSize": 64, "brickOverlap": 2, "oversampling": 2.0, "importColorCompression": 0,
       "screenFieldOfView": 45.0, "parallelProjection": false,
       "showDatasetBoundingBox": false,
+      "foveationSamplingStrength": 1.0,
+      "uiRenderModes": 7, "uiInteractionModes": 127, "uiPanelButtons": 31,
+      "showModeResetButtons": true, "showPanelButtons": true, "showPerformanceButton": true,
       "sampleJitter": false, "atlasCompression": 0, "alphaEpsilon": 0.0, "subbrickSkipping": true, "opacityAdaptiveSampling": true, "atlasSizeMB": 512, "mcpAccessToken": "token",
       "webServerCertificateData": Data([1, 2, 3]), "oversamplingMode": "dynamic"
     ], defaults: defaults, overrides: [
@@ -55,6 +59,7 @@ private enum SettingsArchiveTests {
     try expect(clean["screenFieldOfView"] as? Double == 45, "FOV must default to 45 degrees")
     try expect(clean["parallelProjection"] as? Bool == false, "Perspective must be the default")
     try expect(clean["showDatasetBoundingBox"] as? Bool == false, "Bounding box must default to hidden")
+    try expect(clean["foveationSamplingStrength"] as? Double == 1, "Foveation must preserve the previous sampling strength")
     try expect(clean["serverPassword"] == nil && clean["mcpAccessToken"] == nil
       && clean["webServerCertificateData"] == nil, "Export leaked credentials")
     let full = try exported(true)
@@ -96,6 +101,29 @@ private enum SettingsArchiveTests {
     try reject(["screenFieldOfView": 121])
     try reject(["parallelProjection": 1])
     try reject(["showDatasetBoundingBox": 1])
+    try store.apply(store.prepareImport(data(["foveationSamplingStrength": 3.5])))
+    let foveation = try exported(false)
+    try expect(foveation["foveationSamplingStrength"] as? Double == 3.5,
+      "Foveation strength did not round-trip")
+    try reject(["foveationSamplingStrength": -0.1])
+    try reject(["foveationSamplingStrength": 4.1])
+    try reject(["foveationSamplingStrength": true])
+    try store.apply(store.prepareImport(data(["uiRenderModes": 4, "uiInteractionModes": 32,
+      "uiPanelButtons": 0, "showModeResetButtons": false, "showPanelButtons": false,
+      "showPerformanceButton": false])))
+    let interface = try exported(false)
+    try expect(interface["uiRenderModes"] as? Int == 4 && interface["uiInteractionModes"] as? Int == 32 &&
+      interface["uiPanelButtons"] as? Int == 0 && interface["showPanelButtons"] as? Bool == false &&
+      interface["showModeResetButtons"] as? Bool == false && interface["showPerformanceButton"] as? Bool == false,
+      "Interface visibility did not round-trip")
+    for (key, maximum) in [("uiRenderModes", 7), ("uiInteractionModes", 127), ("uiPanelButtons", 31)] {
+      try reject([key: -1])
+      try reject([key: maximum + 1])
+      try reject([key: true])
+      try reject([key: 1.5])
+    }
+    try reject(["uiRenderModes": 0])
+    try reject(["uiInteractionModes": 0])
 
     try reject(["brickSize": -1, "sampleJitter": false])
     try reject(["brickSize": 8, "brickOverlap": 4])
@@ -120,6 +148,8 @@ private enum SettingsArchiveTests {
     try expect(defaults.double(forKey: "screenFieldOfView") == 67.5 && defaults.bool(forKey: "parallelProjection"),
       "Partial import changed missing projection settings")
     try expect(defaults.bool(forKey: "showDatasetBoundingBox"), "Partial import changed bounding box visibility")
+    try expect(defaults.double(forKey: "foveationSamplingStrength") == 3.5,
+      "Partial import changed a missing foveation strength")
     try expect(abs(defaults.double(forKey: "alphaEpsilon") - 0.007) < 1e-12, "A missing epsilon entry changed the current value")
     try expect(!defaults.bool(forKey: "subbrickSkipping"), "Partial import changed a missing subbrick switch")
     try expect(!defaults.bool(forKey: "opacityAdaptiveSampling"), "Partial import changed a missing adaptive switch")
@@ -131,11 +161,21 @@ private enum SettingsArchiveTests {
     let automationBackup = try store.export(includeCredentials: true)
     defaults.set("keep-this-token", forKey: "mcpAccessToken")
     try store.resetForAutomation()
+    try expect(defaults.integer(forKey: "uiRenderModes") == 7 && defaults.integer(forKey: "uiInteractionModes") == 127 &&
+      defaults.integer(forKey: "uiPanelButtons") == 31 && defaults.bool(forKey: "showPanelButtons"),
+      "Settings reset did not restore interface visibility")
+    try expect(defaults.double(forKey: "foveationSamplingStrength") == 1,
+      "Settings reset did not restore foveation strength")
     try expect(defaults.integer(forKey: "brickSize") == 64 && password.isEmpty,
       "Automation reset did not restore registered defaults/credentials")
     try expect(defaults.string(forKey: "mcpAccessToken") == "keep-this-token",
       "Automation reset disconnected its own control connection")
     try store.importForAutomation(automationBackup)
+    try expect(defaults.integer(forKey: "uiRenderModes") == 4 && defaults.integer(forKey: "uiInteractionModes") == 32 &&
+      defaults.integer(forKey: "uiPanelButtons") == 0 && !defaults.bool(forKey: "showPanelButtons"),
+      "Settings backup did not restore interface visibility")
+    try expect(defaults.double(forKey: "foveationSamplingStrength") == 3.5,
+      "Settings backup did not restore foveation strength")
     try expect(defaults.integer(forKey: "brickSize") == 32 && password == "imported",
       "Automation backup did not restore settings/credentials")
     try expect(defaults.string(forKey: "mcpAccessToken") == "keep-this-token",
@@ -152,5 +192,82 @@ private enum SettingsArchiveTests {
       throw Failure.failed("Unrelated JSON was accepted")
     } catch is BorgVRSettingsArchiveError {}
     print("Settings archive tests passed: partial/forward imports, validation, secrets, limits, rollback")
+  }
+
+  static func verifyInterfaceVisibility() throws {
+    let all = InterfaceVisibility()
+    try expect(all.renderModeIDs == [0, 1, 2] && all.interactionModes.count == 7 &&
+      all.hasPanels && all.showsResets, "Default interface unexpectedly hides controls")
+    for mask in 1...7 {
+      let original = InterfaceVisibility(renderModes: mask)
+      for active in all.renderModeIDs {
+        let displayed = original.displayedRenderModeIDs(active: active, inSharePlay: true)
+        let expected = Array(Set(original.renderModeIDs + [active])).sorted()
+        try expect(displayed == expected, "Shared active mode was omitted or duplicated")
+        try expect(original.displayedRenderModeIDs(active: active, inSharePlay: false) == original.renderModeIDs,
+          "A temporary shared mode remained visible outside SharePlay")
+        if !original.renderModeIDs.contains(active) {
+          try expect(displayed.count > 1, "Single-mode UI did not reveal the shared mode")
+          try expect(original.renderModes == mask && !original.renderModeIDs.contains(active),
+            "Displaying the shared mode changed local permissions")
+        }
+        for allowed in original.renderModeIDs {
+          try expect(original.displayedRenderModeIDs(active: allowed, inSharePlay: true) == original.renderModeIDs,
+            "Temporary mode remained after selecting a local mode")
+        }
+      }
+      try expect(original.displayedRenderModeIDs(active: 255, inSharePlay: true) == original.renderModeIDs,
+        "Invalid remote mode was displayed")
+      var visibility = InterfaceVisibility(renderModes: mask)
+      for id in all.renderModeIDs {
+        visibility.setRenderMode(id, enabled: false)
+        try expect(!visibility.renderModeIDs.isEmpty, "The last rendering mode could be disabled")
+      }
+    }
+    for mask in 1...127 {
+      let original = InterfaceVisibility(interactions: mask)
+      let enabled = original.interactionModes
+      try expect(original.showsScreenPanel(.lighting), "Lighting gained an unrelated interaction dependency")
+      try expect(original.showsScreenPanel(.transfer) == enabled.contains(.transferEditing),
+        "Transfer panel does not follow transfer interaction visibility")
+      try expect(original.showsScreenPanel(.objects) == (enabled.contains(.drawing) || enabled.contains(.objectPlacement)),
+        "Object panel must remain available for either drawing or placement")
+      try expect(original.showsScreenPanel(.measurements) == enabled.contains(.measurement),
+        "Measurement panel does not follow measurement interaction visibility")
+      try expect(original.showsScreenPanel(.brush) == enabled.contains(.volumeEditing),
+        "Brush panel does not follow volume-editing interaction visibility")
+      try expect(InterfaceVisibility.Panel.allCases.allSatisfy { original.showsPanel($0) },
+        "Interaction filtering hid visionOS panels needed by independent tools")
+      var visibility = InterfaceVisibility(interactions: mask)
+      for mode in InterfaceVisibility.Interaction.allCases {
+        visibility.setInteraction(mode, enabled: false)
+        try expect(!visibility.interactionModes.isEmpty, "The last interaction mode could be disabled")
+      }
+    }
+    var visibility = InterfaceVisibility(renderModes: 0, interactions: 0)
+    try expect(visibility.renderModeIDs == [0] && visibility.interactionModes == [.model],
+      "Invalid persisted masks must provide a usable fallback")
+    visibility.setRenderMode(2, enabled: true)
+    visibility.setRenderMode(0, enabled: false)
+    visibility.setInteraction(.measurement, enabled: true)
+    visibility.setInteraction(.model, enabled: false)
+    try expect(visibility.renderModeIDs == [2] && visibility.interactionModes == [.measurement],
+      "Single-mode configuration does not preserve the chosen mode")
+    for panel in InterfaceVisibility.Panel.allCases { visibility.setPanel(panel, enabled: false) }
+    try expect(!visibility.hasPanels && visibility.panels == 0, "All panel buttons must be optional")
+    visibility.panels = InterfaceVisibility.allPanels
+    visibility.showsPanels = false
+    try expect(!visibility.hasPanels && !visibility.showsPanel(.objects), "The panel-row switch was ignored")
+    visibility.showsPanels = true
+    try expect(visibility.showsPanel(.objects), "Hiding the row discarded its individual selections")
+    visibility.interactions = InterfaceVisibility.Interaction.model.bit
+    visibility.panels = InterfaceVisibility.Panel.objects.bit
+    try expect(visibility.hasPanels && !visibility.hasScreenPanels,
+      "Unavailable screen panels must not leave an empty button row; visionOS must retain them")
+    visibility.setInteraction(.objectPlacement, enabled: true)
+    try expect(visibility.hasScreenPanels, "Re-enabling placement did not restore its panel button")
+    visibility.showsPanels = false
+    try expect(!visibility.hasScreenPanels, "Screen panel visibility ignored the whole-row switch")
+    print("Interface visibility tests passed: all masks, last-mode guards, temporary SharePlay modes and screen/spatial panels")
   }
 }

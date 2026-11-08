@@ -58,7 +58,7 @@ enum AppLogLevel: String, CaseIterable, Identifiable {
 }
 
 
-final class AppSettings: ObservableObject {
+final class AppSettings: ObservableObject, InterfaceVisibilitySettings {
   private static let maximum3DTextureDimension = 2048
 #if os(iOS)
   // iOS can fail to map very large shared 3D texture allocations even on
@@ -153,6 +153,12 @@ final class AppSettings: ObservableObject {
     "opacityAdaptiveSampling": true,
     "showBrickVisualization": false,
     "showLogButton": false,
+    "showPerformanceButton": true,
+    "uiRenderModes": InterfaceVisibility.allRenderModes,
+    "uiInteractionModes": InterfaceVisibility.allInteractions,
+    "uiPanelButtons": InterfaceVisibility.allPanels,
+    "showModeResetButtons": true,
+    "showPanelButtons": true,
     "hideBuiltInDatasets": false,
     "oversamplingMode": OversamplingMode.dynamicMode.rawValue,
     "dropFPS": defaultDropFPS,
@@ -236,6 +242,12 @@ final class AppSettings: ObservableObject {
   @AppStorage("showBrickVisualization")
   var showBrickVisualization: Bool = AppSettings.bool("showBrickVisualization")
   @AppStorage("showLogButton") var showLogButton: Bool = AppSettings.bool("showLogButton")
+  @AppStorage("showPerformanceButton") var showPerformanceButton: Bool = true
+  @AppStorage("uiRenderModes") var uiRenderModes: Int = InterfaceVisibility.allRenderModes
+  @AppStorage("uiInteractionModes") var uiInteractionModes: Int = InterfaceVisibility.allInteractions
+  @AppStorage("uiPanelButtons") var uiPanelButtons: Int = InterfaceVisibility.allPanels
+  @AppStorage("showModeResetButtons") var showModeResetButtons: Bool = true
+  @AppStorage("showPanelButtons") var showPanelButtons: Bool = true
   @AppStorage("hideBuiltInDatasets")
   var hideBuiltInDatasets: Bool = AppSettings.bool("hideBuiltInDatasets")
   @AppStorage("oversamplingMode") var oversamplingMode: String = AppSettings.string("oversamplingMode")
@@ -400,10 +412,15 @@ final class AppSettings: ObservableObject {
     autoloadObjects = Self.boolDefault("autoloadObjects")
     autoloadMeasurements = Self.boolDefault("autoloadMeasurements")
     autoloadRenderState = Self.boolDefault("autoloadRenderState")
-    showBrickVisualization = Self.boolDefault("showBrickVisualization")
-    showLogButton = Self.boolDefault("showLogButton")
     hideBuiltInDatasets = Self.boolDefault("hideBuiltInDatasets")
     logLevel = Self.stringDefault("logLevel")
+  }
+
+  func resetInterfaceDefaults() {
+    interfaceVisibility = InterfaceVisibility()
+    showBrickVisualization = Self.boolDefault("showBrickVisualization")
+    showLogButton = Self.boolDefault("showLogButton")
+    showPerformanceButton = Self.boolDefault("showPerformanceButton")
   }
 
   func resetRenderingDefaults() {
@@ -519,6 +536,7 @@ final class AppSettings: ObservableObject {
 
   func resetToDefaults() {
     resetGeneralDefaults()
+    resetInterfaceDefaults()
     resetRenderingDefaults()
     resetPerformanceDefaults()
     resetImportDefaults()

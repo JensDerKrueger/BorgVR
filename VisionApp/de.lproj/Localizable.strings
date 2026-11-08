@@ -1,3 +1,16 @@
+"User Interface" = "Benutzeroberfläche";
+"Visible rendering modes" = "Sichtbare Rendermodi";
+"Interaction controls" = "Interaktionssteuerung";
+"Show reset buttons" = "Reset-Buttons anzeigen";
+"Panel buttons" = "Panel-Buttons";
+"Show panel button row" = "Panel-Button-Reihe anzeigen";
+"Transfer / Isovalue Editor" = "Transferfunktions- / Isowert-Editor";
+"Diagnostics" = "Diagnose";
+"Show Performance Button" = "Performance-Button anzeigen";
+"Choose which controls are visible. At least one rendering mode and one interaction mode must remain enabled. RGB/RGBA rendering is unaffected." = "Wählen Sie die sichtbaren Bedienelemente. Mindestens ein Render- und ein Interaktionsmodus müssen aktiviert bleiben. RGB/RGBA-Rendering ist davon unabhängig.";
+"Transfer Function" = "Transferfunktion";
+"Clipping" = "Clipping";
+"Objects" = "Objekte";
 "converter_supporting_file_access_required" = "Leserechte für die referenzierte Datei werden benötigt: %@";
 "image_sequence_title" = "Bildsequenz";
 "Supported formats are QVIS `.dat` + `.raw`, NRRD/NHDR, PVM, IV3Dm (`.i3m` / `.i3m.zip`), UVF, Zarr/OZX, and native BorgVR `.data` files." = "Unterstützt werden QVIS `.dat` + `.raw`, NRRD/NHDR, PVM, IV3Dm (`.i3m` / `.i3m.zip`), UVF, Zarr/OZX und native BorgVR `.data`-Dateien.";
@@ -423,6 +436,8 @@
 "settings_toggle_autoload_tf" = "Transferfunktionen automatisch laden und speichern";
 "settings_toggle_autoload_transform" = "Transformation automatisch laden und speichern";
 "settings_toggle_disable_foveation" = "Foveation deaktivieren";
+"settings_label_foveation_sampling_strength" = "Foveationsabhängiges Sampling";
+"settings_description_foveation_sampling_strength" = "0: kein Einfluss auf die Sampling-Distanz. 1: bisheriges Verhalten. Höhere Werte erhöhen die Schrittweite am Rand für mehr Leistung bei geringerer Qualität. Das Zentrum bleibt unverändert.";
 "settings_toggle_sample_jitter" = "Zufällige Sampling-Phase";
 "Alpha epsilon" = "Alpha-Epsilon";
 "Subbrick skipping" = "Subblock-Skipping";
