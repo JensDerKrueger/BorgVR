@@ -1434,3 +1434,13 @@
 "The view will open as soon as the first volume frame is ready." = "La vista aparecerá en cuanto esté lista la primera imagen del volumen.";
 "Supported volume formats" = "Formatos de volumen compatibles";
 "Open Dataset Now" = "Abrir conjunto de datos ahora";
+"Volume Fusion" = "Fusión de volúmenes";
+"Reference Volume" = "Volumen de referencia";
+"Volume to Register" = "Volumen que registrar";
+"Source type" = "Tipo de fuente";
+"Select Source" = "Seleccionar fuente";
+"No source selected" = "Ninguna fuente seleccionada";
+"Zarr Folder" = "Carpeta Zarr";
+"Fusion interpolation" = "Interpolación de fusión";
+"converter_desc_from_registered_volume_pair" = "Fusión registrada de los volúmenes %@ y %@";
+"Fusion requires two single-channel integer volumes with matching 8-, 16- or 32-bit precision." = "La fusión requiere dos volúmenes enteros de un canal con la misma precisión de 8, 16 o 32 bits.";

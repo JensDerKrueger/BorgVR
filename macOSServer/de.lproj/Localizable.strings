@@ -656,3 +656,13 @@
 "No compression" = "Keine Kompression";
 "Supported volume formats" = "Unterstützte Volumenformate";
 "converter_import_completed_title" = "Import abgeschlossen";
+"Volume Fusion" = "Volumenfusion";
+"Reference Volume" = "Referenzvolumen";
+"Volume to Register" = "Zu registrierendes Volumen";
+"Source type" = "Quellentyp";
+"Select Source" = "Quelle auswählen";
+"No source selected" = "Keine Quelle ausgewählt";
+"Zarr Folder" = "Zarr-Ordner";
+"Fusion interpolation" = "Interpolation bei der Fusion";
+"converter_desc_from_registered_volume_pair" = "Registrierte Fusion der Volumen %@ und %@";
+"Fusion requires two single-channel integer volumes with matching 8-, 16- or 32-bit precision." = "Die Fusion benötigt zwei einkanalige Integer-Volumen mit gleicher 8-, 16- oder 32-Bit-Präzision.";

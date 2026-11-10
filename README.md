@@ -187,13 +187,20 @@ current, non-localized `converted by TOOL VERSION` provenance entry automaticall
   visualization state. Saved visualization state includes render mode, isovalue, clipping,
   lighting, and transforms; visionOS stores its spatial transform relative to the viewer's head.
 
-### DICOM Fusion And Conversion
+### Volume Registration, Fusion And Conversion
 
 - DICOM directory selection on macOS, iOS/iPadOS, and visionOS, including sandbox-safe folder
   access without selecting every slice individually.
-- Two-directory DICOM fusion into a two-channel volume. A coarse-to-fine rigid registration
-  uses normalized mutual information (NMI), physical voxel spacing, DICOM orientation, and
-  frame-of-reference information to align the second volume to the reference grid.
+- Format-independent fusion into a two-channel volume on all three native platforms. Each
+  input can independently be a DICOM series, a native BorgVR `.data` volume, or another
+  supported volume file such as NRRD/NHDR. Mixed-format pairs are supported. Both inputs are
+  decoded to temporary RAW volumes before the shared coarse-to-fine NMI rigid registration.
+  Registration uses physical voxel spacing and available orientation information; DICOM
+  frame-of-reference information supplies the initial pose when the frames match. Otherwise,
+  the physical centers are aligned before optimization. Different grid sizes and crops are allowed.
+  Inputs must currently be single-channel integer volumes with matching 8-, 16-, or 32-bit precision.
+  NRRD direction vectors and declared metric units are interpreted according to the
+  [NRRD specification](https://teem.sourceforge.net/nrrd/format.html).
 - The reference channel is retained; the registered channel is resampled using configurable
   trilinear or nearest-neighbor interpolation, with zero outside its bounds. DICOM pixel padding
   is excluded from registration sampling.
@@ -477,6 +484,33 @@ TerminalConverterApp C F,J 2 2 512 512 512 MandelbulbJulia.data \
   "Mandelbulb and quaternion Julia set" 64 2
 ```
 
+### Known-Transform Registration Pairs
+
+Mode `T` resamples a `.data` file with an affine 4x4 matrix and optional cropping:
+
+```sh
+TerminalConverterApp T original.data transformed.data 32 2 \
+  --matrix "1 0 0 12 0 1 0 -8 0 0 1 4 0 0 0 1" \
+  --crop "8 8 4 200 200 100" --filter linear
+```
+
+The 16 matrix values are row-major. The matrix maps **source voxel centers to target
+voxel centers**, using column vectors; translations are in voxels, not meters.
+Rotation is about voxel `(0,0,0)` unless pivot translations are included in the matrix.
+The target grid initially has the original dimensions and voxel spacing. Samples outside
+the source become zero; the grid does not automatically expand to fit transformed data.
+`--crop` selects `x y z width height depth` in that transformed grid, and must fit inside it.
+Omit it to retain the original dimensions. The example crop requires a sufficiently large source.
+
+For registration from the original to the cropped dataset, the ground-truth voxel matrix
+is `translation(-cropOrigin) * matrix`; the inverse maps back to the original.
+Both matrices and the crop are recorded in English provenance, along with the interpolation
+filter. `linear` (trilinear, default) and `nearest` are available. Channels are interpolated
+independently, including RGB/RGBA. Unsigned 8/16/32-bit samples are supported by the existing
+export/import pipeline. Descriptions, meta text and existing provenance are retained;
+the output gets a new UUID and rebuilt LoDs. Usual quantization/compression options apply.
+Two temporary RAW files require disk space; resampling keeps only one output row in RAM.
+
 Use `TerminalConverterApp --help` for the complete argument list.
 For RGB/RGBA imports, `--color-compression none|astc4x4|astc8x8` selects the stored
 brick representation (default `none`). `--no-lz4` disables the independent, otherwise enabled,
@@ -594,7 +628,8 @@ their shared volume import picker.
 Importer implementation is organized under `BORGVR-IO/Importers/`, with format directories
 `NRRD`, `QVIS`, `I3D` (IV3Dm), `UVF`, `VFF`, `DICOM`, `ZARR`, `PVM`, and `Mesh`. The parser interface,
 conversion service, quantizer, and bricking pipeline are shared directly in `Importers`;
-DICOM registration, JPEG decoding, and dictionary resources stay with the DICOM reader.
+The format-independent rigid registration lives in `Importers/Registration`; DICOM JPEG
+decoding and dictionary resources stay with the DICOM reader.
 
 `Scripts/test-zarr.sh` covers layouts, boundaries, shards, ZIP64, endian conversion, fill values,
 and cancellation. `Scripts/test-zstandard.sh` tests a fixed reference frame and, when the `zstd`

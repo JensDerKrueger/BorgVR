@@ -1160,3 +1160,13 @@
 "Supported volume formats" = "Supported volume formats";
 "Open Dataset Now" = "Open Dataset Now";
 "converter_import_completed_title" = "Import completed";
+"Volume Fusion" = "Volume Fusion";
+"Reference Volume" = "Reference Volume";
+"Volume to Register" = "Volume to Register";
+"Source type" = "Source type";
+"Select Source" = "Select Source";
+"No source selected" = "No source selected";
+"Zarr Folder" = "Zarr Folder";
+"Fusion interpolation" = "Fusion interpolation";
+"converter_desc_from_registered_volume_pair" = "Registered fusion of volumes %@ and %@";
+"Fusion requires two single-channel integer volumes with matching 8-, 16- or 32-bit precision." = "Fusion requires two single-channel integer volumes with matching 8-, 16- or 32-bit precision.";

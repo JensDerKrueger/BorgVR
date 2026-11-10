@@ -1160,3 +1160,13 @@
 "Supported volume formats" = "Formats de volume pris en charge";
 "Open Dataset Now" = "Ouvrir le jeu de données maintenant";
 "converter_import_completed_title" = "Importation terminée";
+"Volume Fusion" = "Fusion de volumes";
+"Reference Volume" = "Volume de référence";
+"Volume to Register" = "Volume à recaler";
+"Source type" = "Type de source";
+"Select Source" = "Choisir la source";
+"No source selected" = "Aucune source sélectionnée";
+"Zarr Folder" = "Dossier Zarr";
+"Fusion interpolation" = "Interpolation de fusion";
+"converter_desc_from_registered_volume_pair" = "Fusion recalée des volumes %@ et %@";
+"Fusion requires two single-channel integer volumes with matching 8-, 16- or 32-bit precision." = "La fusion nécessite deux volumes entiers à un canal de même précision : 8, 16 ou 32 bits.";
