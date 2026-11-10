@@ -442,6 +442,32 @@ private struct BorgVRRegistrationMetricEvaluator {
   let evaluate: (BorgVRRigidTransform) throws -> BorgVRRegistrationMetricEvaluation
 }
 
+enum BorgVRRegistrationSampling {
+  /// Fixed spatial jitter: identical for every evaluation and every registration run.
+  static func position(x: Int, y: Int, z: Int, size: Vec3<Int>) -> Vec3<Float> {
+    var state = UInt64(x) &* 0xD6E8FEB86659FD93
+      ^ UInt64(y) &* 0xA5A3564E27F8862F
+      ^ UInt64(z) &* 0x9E3779B97F4A7C15
+    func coordinate(_ index: Int, count: Int) -> Float {
+      guard count > 1 else { return 0 }
+      state &+= 0x9E3779B97F4A7C15
+      var bits = state
+      bits = (bits ^ (bits >> 30)) &* 0xBF58476D1CE4E5B9
+      bits = (bits ^ (bits >> 27)) &* 0x94D049BB133111EB
+      bits ^= bits >> 31
+      let offset = (Float(bits >> 41) + 0.5) / 8_388_608 - 0.5
+      let point = Float(index) + offset
+      let maximum = Float(count - 1)
+      // Reflect boundary samples rather than dropping or clamping them to voxel centers.
+      if point < 0 { return -point }
+      if point > maximum { return 2 * maximum - point }
+      return point
+    }
+    return Vec3(x: coordinate(x, count: size.x), y: coordinate(y, count: size.y),
+      z: coordinate(z, count: size.z))
+  }
+}
+
 private struct BorgVRRegistrationMetricEvaluation {
   let nmi: Double
   let overlap: Double
@@ -520,10 +546,15 @@ private final class BorgVRNormalizedMutualInformation<
       size: moving.size,
       paddingValue: movingPadding
     )
+    let referenceSampler = BorgVRIntegerVolumeSampler(
+      values: referenceValues, size: reference.size, paddingValue: referencePadding
+    )
 
     let referenceStride = Self.samplingStride(for: reference.size)
     var rawSamples: [(position: Vec3<Float>, value: Double)] = []
     rawSamples.reserveCapacity(Self.maximumSampleCount)
+    var referenceRangeValues: [Double] = []
+    referenceRangeValues.reserveCapacity(Self.maximumSampleCount)
     var sampleIndex = 0
     for z in Self.sampleIndices(count: reference.size.z, stride: referenceStride) {
       try cancellationToken?.checkCancellation()
@@ -531,13 +562,14 @@ private final class BorgVRNormalizedMutualInformation<
         for x in Self.sampleIndices(count: reference.size.x, stride: referenceStride) {
           let value = referenceValues[(z * reference.size.y + y) * reference.size.x + x]
           if value == referencePadding { continue }
-          let numericValue = Double(value)
+          // Keep the original intensity bounds; only the spatial sampling changes.
+          referenceRangeValues.append(Double(value))
+          let jittered = BorgVRRegistrationSampling.position(x: x, y: y, z: z, size: reference.size)
+          let position = Vec3<Float>(x: Self.snapToVoxel(jittered.x),
+            y: Self.snapToVoxel(jittered.y), z: Self.snapToVoxel(jittered.z))
+          guard let numericValue = referenceSampler.trilinear(at: position) else { continue }
           rawSamples.append((
-            position: Vec3<Float>(
-              x: Float(x),
-              y: Float(y),
-              z: Float(z)
-            ),
+            position: position,
             value: numericValue
           ))
           sampleIndex += 1
@@ -550,7 +582,7 @@ private final class BorgVRNormalizedMutualInformation<
 
     let selectedBinCount = Self.histogramBinCount(for: rawSamples.count)
     binCount = selectedBinCount
-    let referenceBounds = Self.robustIntensityBounds(rawSamples.map(\.value))
+    let referenceBounds = Self.robustIntensityBounds(referenceRangeValues)
     let referenceMinimum = referenceBounds.minimum
     let referenceRange = referenceBounds.maximum - referenceBounds.minimum
     let referenceScale = referenceRange > 0

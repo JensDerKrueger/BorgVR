@@ -2009,6 +2009,37 @@ private func testRegistrationWithDifferentCropsAndUnmatchedStructures() throws {
   }
 }
 
+private func testRegistrationSubvoxelSamplingIsDeterministic() throws {
+  let size = Vec3<Int>(x: 5, y: 7, z: 3)
+  var fractionalSamples = 0
+  var offsets = Set<Vec3<Float>>()
+  for z in 0..<size.z {
+    for y in 0..<size.y {
+      for x in 0..<size.x {
+        let point = BorgVRRegistrationSampling.position(x: x, y: y, z: z, size: size)
+        try expect(point == BorgVRRegistrationSampling.position(x: x, y: y, z: z, size: size),
+          "Registration sampling changed between identical calls")
+        let origin = Vec3<Float>(x: Float(x), y: Float(y), z: Float(z))
+        let offset = point - origin
+        try expect(abs(offset.x) <= 0.5 && abs(offset.y) <= 0.5 && abs(offset.z) <= 0.5,
+          "Registration sample left its voxel neighborhood")
+        try expect(point.x >= 0 && point.x <= Float(size.x - 1)
+          && point.y >= 0 && point.y <= Float(size.y - 1)
+          && point.z >= 0 && point.z <= Float(size.z - 1),
+          "Registration sample left the volume at a boundary")
+        if point != origin { fractionalSamples += 1 }
+        offsets.insert(offset)
+      }
+    }
+  }
+  try expect(fractionalSamples == size.x * size.y * size.z && offsets.count == fractionalSamples,
+    "Registration samples retained a common integer-grid phase")
+  let flat = BorgVRRegistrationSampling.position(x: 0, y: 2, z: 0,
+    size: Vec3<Int>(x: 1, y: 5, z: 1))
+  try expect(flat.x == 0 && flat.z == 0 && flat.y >= 0 && flat.y <= 4,
+    "Subvoxel sampling mishandled singleton axes")
+}
+
 private func testSelfRegistrationHasPerfectMetricAndOverlap() throws {
   let directory = FileManager.default.temporaryDirectory
     .appendingPathComponent("borgvr-self-registration-tests-\(UUID().uuidString)")
@@ -2054,7 +2085,7 @@ private func testSelfRegistrationHasPerfectMetricAndOverlap() throws {
     )]
   )
   let logger = CapturingLogger()
-  _ = try BorgVRVolumeRigidRegistration.register(
+  let firstTransform = try BorgVRVolumeRigidRegistration.register(
     reference: volume,
     moving: volume,
     logger: logger
@@ -2071,6 +2102,14 @@ private func testSelfRegistrationHasPerfectMetricAndOverlap() throws {
     },
     "Self-registration did not produce perfect NMI and overlap at every level"
   )
+  let repeatedLogger = CapturingLogger()
+  let repeatedTransform = try BorgVRVolumeRigidRegistration.register(
+    reference: volume, moving: volume, logger: repeatedLogger
+  )
+  try expect(firstTransform.matrixRows == BorgVRVoxelTransform.identity.matrixRows
+    && repeatedTransform.matrixRows == firstTransform.matrixRows
+    && repeatedLogger.infoMessages == logger.infoMessages,
+    "Subvoxel registration was not deterministic or changed the identity transform")
 }
 
 private func testRegistrationRecoversRotationAroundVolumeCenter() throws {
@@ -2387,6 +2426,7 @@ private enum VolumeConversionServiceTestRunner {
     try testRecursiveRegistrationPreservesDICOMInitialTransform()
     try testVoxelTransformCombinesSpacingRotationAndTranslation()
     try testRegistrationCentersVolumesFromDifferentDICOMFrames()
+    try testRegistrationSubvoxelSamplingIsDeterministic()
     try testSelfRegistrationHasPerfectMetricAndOverlap()
     try testRegistrationRecoversTranslation()
     try testRegistrationRecoversRotationAroundVolumeCenter()
