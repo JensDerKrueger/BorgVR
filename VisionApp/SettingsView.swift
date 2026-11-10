@@ -714,7 +714,7 @@ struct SettingsView: View {
               .font(.caption)
               .foregroundStyle(.secondary)
               .fixedSize(horizontal: false, vertical: true)
-            Picker("DICOM fusion interpolation", selection: $storedAppModel.dicomResamplingFilter) {
+            Picker("Fusion interpolation", selection: $storedAppModel.dicomResamplingFilter) {
               Text("Trilinear").tag(BorgVRVolumeResamplingFilter.trilinear)
               Text("Nearest Neighbor").tag(BorgVRVolumeResamplingFilter.nearestNeighbor)
             }

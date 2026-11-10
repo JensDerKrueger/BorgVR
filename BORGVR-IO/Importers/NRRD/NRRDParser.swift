@@ -66,6 +66,10 @@ public final class NRRDParser: VolumeFileParser {
   public let voxelSpacing: Vec3<Float>
   public let hasPhysicalVoxelSpacing: Bool
   public let channelInterpretation: BORGVRChannelInterpretation
+  public let orientation: BorgVRVolumeOrientation?
+  public let origin: Vec3<Float>?
+  public let isSigned: Bool
+  public let metadataText: String
   /// The number of bytes per data component (e.g., 1 for 8-bit, 2 for 16-bit).
   public let bytesPerComponent: Int
   /// The number of components per voxel.
@@ -76,6 +80,73 @@ public final class NRRDParser: VolumeFileParser {
   public let offset: Int
   /// `true` if `absoluteFilename` points to a temporary copy created during parsing.
   public let dataIsTempCopy: Bool
+
+  private static func geometry(
+    _ header: [String: String], dimension: Int, size: Vec3<Int>
+  ) throws -> (spacing: Vec3<Float>, orientation: BorgVRVolumeOrientation?, origin: Vec3<Float>?) {
+    func vector(_ text: String) throws -> Vec3<Float> {
+      let values = text.trimmingCharacters(in: CharacterSet(charactersIn: "() "))
+        .split(separator: ",").compactMap { Float($0.trimmingCharacters(in: .whitespaces)) }
+      guard values.count == 3, values.allSatisfy(\.isFinite) else {
+        throw Error.invalidValue("space geometry")
+      }
+      return Vec3(x: values[0], y: values[1], z: values[2])
+    }
+    var unitScales = [Float](repeating: 1, count: 3)
+    if let units = header["space units"] ?? header["units"] {
+      let pattern = try NSRegularExpression(pattern: "\"([^\"]*)\"")
+      var names = pattern.matches(in: units, range: NSRange(units.startIndex..., in: units))
+        .compactMap { Range($0.range(at: 1), in: units).map { String(units[$0]) } }
+      if names.count == 4, dimension == 4 { names.removeFirst() }
+      guard names.count == 3 else { throw Error.invalidValue("space units") }
+      let scales: [String: Float] = ["m": 1, "meter": 1, "meters": 1,
+        "mm": 0.001, "millimeter": 0.001, "millimeters": 0.001,
+        "cm": 0.01, "centimeter": 0.01, "centimeters": 0.01,
+        "um": 1e-6, "micrometer": 1e-6, "nm": 1e-9]
+      unitScales = try names.map {
+        guard let scale = scales[$0.lowercased()] else { throw Error.invalidValue("space units") }
+        return scale
+      }
+    }
+    let space = header["space"]?.lowercased() ?? ""
+    // DICOM uses LPS. Convert explicitly named NRRD anatomical frames to that basis.
+    let signs: Vec3<Float> = ["ras", "right-anterior-superior"].contains(space)
+      ? Vec3(x: -1, y: -1, z: 1)
+      : (["las", "left-anterior-superior"].contains(space) ? Vec3(x: 1, y: -1, z: 1) : Vec3(repeating: 1))
+    func physical(_ v: Vec3<Float>) -> Vec3<Float> {
+      Vec3(x: v.x * unitScales[0] * signs.x,
+        y: v.y * unitScales[1] * signs.y, z: v.z * unitScales[2] * signs.z)
+    }
+    let origin = try header["space origin"].map { physical(try vector($0)) }
+    if let directions = header["space directions"] {
+      let pattern = try NSRegularExpression(pattern: "none|\\([^)]*\\)", options: .caseInsensitive)
+      var tokens = pattern.matches(in: directions, range: NSRange(directions.startIndex..., in: directions))
+        .compactMap { Range($0.range, in: directions).map { String(directions[$0]) } }
+      if tokens.count == 4, dimension == 4 { tokens.removeFirst() }
+      guard tokens.count == 3 else { throw Error.invalidValue("space directions") }
+      let axes = try tokens.map { physical(try vector($0)) }
+      let lengths = axes.map(\.magnitude)
+      guard lengths.allSatisfy({ $0.isFinite && $0 > 0 }) else {
+        throw Error.invalidValue("space directions")
+      }
+      let unit = zip(axes, lengths).map { $0 / $1 }
+      guard abs(unit[0].dot(unit[1])) < 0.001, abs(unit[0].dot(unit[2])) < 0.001,
+            abs(unit[1].dot(unit[2])) < 0.001 else {
+        throw Error.notImplemented("sheared volume geometry")
+      }
+      return (Vec3(x: lengths[0], y: lengths[1], z: lengths[2]),
+        BorgVRVolumeOrientation(xAxis: unit[0], yAxis: unit[1], zAxis: unit[2]), origin)
+    }
+    let fallback = 1 / Float(max(size.x, size.y, size.z))
+    var spacing = header["spacings"]?.split(whereSeparator: \.isWhitespace).compactMap { Float($0) }
+      ?? [fallback, fallback, fallback]
+    if spacing.count == 4, dimension == 4 { spacing.removeFirst() }
+    guard spacing.count == 3, spacing.allSatisfy({ $0.isFinite && $0 > 0 }) else {
+      throw Error.invalidValue("spacings")
+    }
+    return (Vec3(x: spacing[0] * unitScales[0], y: spacing[1] * unitScales[1],
+      z: spacing[2] * unitScales[2]), nil, origin)
+  }
 
   // MARK: - Initialization
 
@@ -120,6 +191,7 @@ public final class NRRDParser: VolumeFileParser {
 
     // Split header into lines
     let lines = contentString.split(omittingEmptySubsequences: false) { $0.isNewline }
+    metadataText = contentString
 
     var headerDict = [String: String]()
     let encounteredEmptyLine = headerTerminator != nil
@@ -174,30 +246,11 @@ public final class NRRDParser: VolumeFileParser {
     }
 
     // Parse spacings or space directions
-    let sourceSpacing = headerDict["spacings"] ?? headerDict["space directions"]
-    hasPhysicalVoxelSpacing = sourceSpacing != nil
-    let fallback = String(1 / Float(max(size.x, size.y, size.z)))
-    let spacingsStr = sourceSpacing ?? "\(fallback) \(fallback) \(fallback)"
-    var spacingValues: [Float]
-    if spacingsStr.contains("(") {
-      spacingValues = spacingsStr
-        .split(separator: ")")
-        .compactMap { part in
-          part.split(separator: "(").last?
-            .split(separator: ",")
-            .map { Float($0.trimmingCharacters(in: .whitespaces)) ?? 0.0 }
-            .max()
-        }
-    } else {
-      spacingValues = spacingsStr.split(separator: " ").compactMap { Float($0) }
-    }
-    if dimension == 4, spacingValues.count == 4 {
-      spacingValues.removeFirst()
-    }
-    guard spacingValues.count == 3 else {
-      throw Error.invalidValue("spacings/space directions")
-    }
-    self.voxelSpacing = Vec3(x: spacingValues[0], y: spacingValues[1], z: spacingValues[2])
+    let geometry = try Self.geometry(headerDict, dimension: dimension, size: size)
+    voxelSpacing = geometry.spacing
+    orientation = geometry.orientation
+    origin = geometry.origin
+    hasPhysicalVoxelSpacing = headerDict["spacings"] != nil || headerDict["space directions"] != nil
 
     // Parse data type. Components were derived from the optional component field
     // for 3D files or from the first axis for component-first 4D files above.
@@ -205,6 +258,10 @@ public final class NRRDParser: VolumeFileParser {
       throw Error.missingKey("type")
     }
     self.bytesPerComponent = try Self.bytesPerComponent(for: typeStr)
+    isSigned = ["signed char", "int8", "int8_t", "short", "short int", "signed short",
+      "signed short int", "int16", "int16_t", "int", "signed int", "int32", "int32_t",
+      "long long", "long long int", "signed long long", "signed long long int", "int64", "int64_t"]
+      .contains(typeStr.lowercased())
 
     // Determine endianness
     let declaredEndian = headerDict["endian"]?.lowercased() ?? "little"

@@ -18,10 +18,8 @@ struct ConverterView: View {
 
   private typealias ImportSourceKind = VolumeImportKind
 
-  private enum DICOMDirectoryRole {
+  private enum ImportDirectoryRole {
     case single
-    case reference
-    case moving
     case images
   }
 
@@ -41,13 +39,13 @@ struct ConverterView: View {
   @State private var imageDirectoryURL: URL?
   @State private var inputFileAccess: VolumeImportSourceAccess?
   @State private var inputDirectoryAccess: VolumeImportSourceAccess?
-  @State private var movingDirectoryAccess: VolumeImportSourceAccess?
+  @State private var fusionReference = VolumeFusionSelection()
+  @State private var fusionRegistered = VolumeFusionSelection()
   @State private var imageDirectoryAccess: VolumeImportSourceAccess?
   @State private var additionalInputAccesses: [VolumeImportSourceAccess] = []
   @State private var imageSizeX = ""
   @State private var imageSizeY = ""
   @State private var imageSizeZ = ""
-  @State private var movingInputDirectory: String = ""
   @State private var outputFile: String = ""
   @State private var datasetDescription: String = ""
   @State private var receivedAt = Date()
@@ -94,7 +92,6 @@ struct ConverterView: View {
   @EnvironmentObject var storedAppModel: StoredAppModel
 
   @StateObject private var dicomPreviewModel = DicomSlicePreviewModel()
-  @StateObject private var movingDicomPreviewModel = DicomSlicePreviewModel()
   private let onClose: () -> Void
   private let onMeshImport: (URL) -> Void
   private let onOpenDataset: ((URL) -> Void)?
@@ -170,32 +167,20 @@ struct ConverterView: View {
                       buttonKey: "converter_button_select_input_dir",
                       path: inputDirectory
                     )
-                  case .dicomFusion:
+                  case .volumeFusion:
                     HStack(alignment: .top, spacing: 16) {
-                      VStack(alignment: .leading, spacing: 8) {
-                        Text("converter_dicom_reference_series").font(.headline)
-                        if inputDirectory.isEmpty == false {
-                          DicomSlicePreview(model: dicomPreviewModel)
-                            .frame(height: 300)
-                        }
-                        dicomDirectorySelector(
-                          role: .reference,
-                          buttonKey: "converter_button_select_reference_dir",
-                          path: inputDirectory
-                        )
-                      }
-                      VStack(alignment: .leading, spacing: 8) {
-                        Text("converter_dicom_moving_series").font(.headline)
-                        if movingInputDirectory.isEmpty == false {
-                          DicomSlicePreview(model: movingDicomPreviewModel)
-                            .frame(height: 300)
-                        }
-                        dicomDirectorySelector(
-                          role: .moving,
-                          buttonKey: "converter_button_select_moving_dir",
-                          path: movingInputDirectory
-                        )
-                      }
+                      VolumeFusionSourcePicker(title: "Reference Volume", selection: $fusionReference)
+                      VolumeFusionSourcePicker(title: "Volume to Register", selection: $fusionRegistered)
+                    }
+                    .onChange(of: fusionReference.access?.url) { _, _ in updateFusionSuggestion() }
+                    .onChange(of: fusionRegistered.access?.url) { _, _ in updateFusionSuggestion() }
+                    Divider()
+                      .padding(.vertical, 4)
+                    HStack {
+                      Spacer(minLength: 0)
+                      ConverterVolumeFormatList(includesNativeBorgVR: true)
+                        .fixedSize(horizontal: true, vertical: false)
+                      Spacer(minLength: 0)
                     }
                 }
               }
@@ -1242,14 +1227,14 @@ struct ConverterView: View {
         return !inputFile.isEmpty
       case .dicomDirectory:
         return !inputDirectory.isEmpty
-      case .dicomFusion:
-        return !inputDirectory.isEmpty && !movingInputDirectory.isEmpty
+      case .volumeFusion:
+        return fusionReference.input != nil && fusionRegistered.input != nil
     }
   }
 
   @ViewBuilder
   private func dicomDirectorySelector(
-    role: DICOMDirectoryRole,
+    role: ImportDirectoryRole,
     buttonKey: LocalizedStringKey,
     path: String
   ) -> some View {
@@ -1295,7 +1280,7 @@ struct ConverterView: View {
     }
   }
 
-  private func selectInputDirectory(role: DICOMDirectoryRole = .single) {
+  private func selectInputDirectory(role: ImportDirectoryRole = .single) {
     let panel = NSOpenPanel()
     panel.canChooseFiles = false
     panel.canChooseDirectories = true
@@ -1315,40 +1300,19 @@ struct ConverterView: View {
           (outputFile, datasetDescription) = generateDescriptionSuggestion(
             from: inputDirectory
           )
-        case .reference:
-          inputDirectoryAccess = access
-          importSourceKind = .dicomFusion
-          dicomPreviewModel.setDirectory(url)
-          inputDirectory = url.path
-          updateDICOMPairSuggestion()
-        case .moving:
-          movingDirectoryAccess = access
-          importSourceKind = .dicomFusion
-          movingDicomPreviewModel.setDirectory(url)
-          movingInputDirectory = url.path
-          updateDICOMPairSuggestion()
       }
     }
 
   }
 
-  private func updateDICOMPairSuggestion() {
-    guard !inputDirectory.isEmpty else { return }
-    let referenceName = URL(
-      fileURLWithPath: inputDirectory,
-      isDirectory: true
-    ).lastPathComponent
+  private func updateFusionSuggestion() {
+    guard let reference = fusionReference.access?.url else { return }
+    let referenceName = reference.deletingPathExtension().lastPathComponent
     outputFile = referenceName + "_fusion"
-    guard !movingInputDirectory.isEmpty else {
-      datasetDescription = generateDescriptionSuggestion(from: inputDirectory).1
-      return
-    }
-    let movingName = URL(
-      fileURLWithPath: movingInputDirectory,
-      isDirectory: true
-    ).lastPathComponent
+    guard let moving = fusionRegistered.access?.url else { return }
+    let movingName = moving.deletingPathExtension().lastPathComponent
     datasetDescription = String(
-      format: NSLocalizedString("converter_desc_from_registered_dicom_pair", comment: ""),
+      format: NSLocalizedString("converter_desc_from_registered_volume_pair", comment: ""),
       referenceName,
       movingName
     )
@@ -1373,8 +1337,8 @@ struct ConverterView: View {
         (outputFile, datasetDescription) = generateDescriptionSuggestion(
           from: inputDirectory
         )
-      case .dicomFusion:
-        updateDICOMPairSuggestion()
+      case .volumeFusion:
+        updateFusionSuggestion()
     }
   }
 
@@ -1420,7 +1384,10 @@ struct ConverterView: View {
     conversionCancellationToken = cancellationToken
     conversionCancellationRequested = false
     isConverting = true
-    let sourceAccesses = [inputFileAccess, inputDirectoryAccess, movingDirectoryAccess, imageDirectoryAccess]
+    let referenceSelection = fusionReference
+    let registeredSelection = fusionRegistered
+    let sourceAccesses = [inputFileAccess, inputDirectoryAccess, imageDirectoryAccess,
+      referenceSelection.access, registeredSelection.access]
       .compactMap { $0 } + additionalInputAccesses
     let selectedInputURL = inputFileAccess?.url ?? URL(fileURLWithPath: inputFile)
     let outputAccess = storedAppModel.withDataDirectoryAccess { url in
@@ -1489,18 +1456,17 @@ struct ConverterView: View {
               directory.lastPathComponent
             )
             source = .dicomDirectory(directory)
-          case .dicomFusion:
-            let reference = URL(fileURLWithPath: inputDirectory, isDirectory: true)
-            let moving = URL(fileURLWithPath: movingInputDirectory, isDirectory: true)
+          case .volumeFusion:
+            guard let reference = referenceSelection.input, let moving = registeredSelection.input else { return }
             sourceDescription = String(
               format: NSLocalizedString(
-                "converter_desc_from_registered_dicom_pair",
+                "converter_desc_from_registered_volume_pair",
                 comment: ""
               ),
-              reference.lastPathComponent,
-              moving.lastPathComponent
+              referenceSelection.access!.url.lastPathComponent,
+              registeredSelection.access!.url.lastPathComponent
             )
-            source = .registeredDICOMPair(
+            source = .registeredPair(
               reference: reference,
               moving: moving,
               filter: storedAppModel.dicomResamplingFilter

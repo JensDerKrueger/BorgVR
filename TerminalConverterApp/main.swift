@@ -37,6 +37,7 @@ enum Mode: String {
   case VFFConversion = "F"
   case FlatVolumeExport = "E"
   case BorgVRRepacking = "R"
+  case BorgVRResampling = "T"
   case DemoDataCreation = "C"
 }
 
@@ -216,6 +217,19 @@ MODES
     Creates a new UUID and appends conversion history. Source and output must differ.
     Requires temporary disk space for the decoded RAW volume (and quantized copy).
 
+  T  Transform/resample a BorgVR file, optionally cropping the result
+    \(executableName) T <input.data> <output.data> <brick> <overlap> \\
+      --matrix "m00 m01 m02 m03 m10 m11 m12 m13 m20 m21 m22 m23 0 0 0 1" \\
+      [--crop "x y z width height depth"] [--filter linear|nearest]
+    Matrix: forward source-to-target voxel coordinates, row-major, column vectors.
+    Integer coordinates are voxel centers; translations are in voxels, not meters.
+    Rotation is about (0,0,0); encode pivot translations in the matrix if needed.
+    The target grid has source dimensions and spacing; outside samples become zero.
+    Cropping selects an in-bounds region AFTER transformation; no automatic fit.
+    Expected source-to-cropped transform: translate(-cropOrigin) * matrix.
+    Default filter: linear. Metadata is retained, UUID renewed; history records both matrices.
+    Requires temporary space for decoded input and resampled output RAW volumes.
+
   C  Generate a synthetic volume
     \(executableName) C <algorithm> <bytes> <channels> <x> <y> <z> \\
       <output.data> <description> <brick> <overlap>
@@ -363,11 +377,11 @@ func parseArguments(_ args: [String]) -> (Mode, Any) {
         level: level
       )
 
-    case .BorgVRRepacking:
+    case .BorgVRRepacking, .BorgVRResampling:
       guard args.count == 6,
             let brickSize = Int(args[4]), brickSize > 0,
             let overlap = Int(args[5]), overlap >= 0, overlap <= (brickSize - 1) / 2 else {
-        failUsage("Invalid arguments for mode R.")
+        failUsage("Invalid arguments for mode \(mode.rawValue).")
       }
       result.1 = RepackModeParameters(inputFilename: args[2],
         common: CommonParameters(outputFilename: args[3], datasetDescription: "",
@@ -487,6 +501,50 @@ func parseImportOptions(_ arguments: [String]) -> (
   return (args, provenance, sizeXMeters, forceSizeX, colorCompression, useLZ4, quantizeTo8Bit)
 }
 
+func parseResamplingOptions(_ arguments: [String]) -> (arguments: [String], resampling: BorgVRVolumeResampling?) {
+  var args = arguments
+  func option(_ name: String) -> String? {
+    guard let index = args.firstIndex(of: name) else { return nil }
+    guard index + 1 < args.count else { failUsage("Missing value for \(name).") }
+    let value = args[index + 1]
+    args.removeSubrange(index...index + 1)
+    guard !args.contains(name) else { failUsage("Use \(name) only once.") }
+    return value
+  }
+  let matrixText = option("--matrix")
+  let cropText = option("--crop")
+  let filterText = option("--filter")
+  guard args.count > 1, args[1] == "T" else {
+    guard matrixText == nil, cropText == nil, filterText == nil else {
+      failUsage("--matrix, --crop and --filter apply only to mode T.")
+    }
+    return (args, nil)
+  }
+  func tokens(_ value: String) -> [Substring] {
+    value.split { $0.isWhitespace || $0 == "," }
+  }
+  guard let matrixText else { failUsage("Mode T requires --matrix with 16 quoted row-major values.") }
+  let matrixTokens = tokens(matrixText)
+  let matrix = matrixTokens.compactMap { Double($0) }
+  guard matrix.count == 16, matrixTokens.count == 16 else { failUsage("--matrix requires 16 numbers.") }
+  var origin = Vec3<Int>(x: 0, y: 0, z: 0)
+  var size: Vec3<Int>?
+  if let cropText {
+    let cropTokens = tokens(cropText)
+    let crop = cropTokens.compactMap { Int($0) }
+    guard crop.count == 6, cropTokens.count == 6 else { failUsage("--crop requires six integers: x y z width height depth.") }
+    origin = Vec3(x: crop[0], y: crop[1], z: crop[2])
+    size = Vec3(x: crop[3], y: crop[4], z: crop[5])
+  }
+  guard filterText == nil || ["linear", "nearest"].contains(filterText!) else {
+    failUsage("--filter requires linear or nearest.")
+  }
+  do {
+    return (args, try BorgVRVolumeResampling(matrix: matrix, cropOrigin: origin, cropSize: size,
+      filter: filterText == "nearest" ? .nearestNeighbor : .trilinear))
+  } catch { failUsage(error.localizedDescription) }
+}
+
 func convertRawVolume(inputFilename: String,
                       offset: Int,
                       size: Vec3<Int>,
@@ -589,7 +647,8 @@ func repackBorgVRVolume(_ params: RepackModeParameters) {
       destinationURL: URL(fileURLWithPath: params.common.outputFilename),
       datasetDescription: "", metaDescription: "", settings: conversionSettings(for: params.common),
       sizeXMeters: conversionSizeXMeters, forceSizeX: forceConversionSizeX,
-      provenance: conversionProvenance, toolIdentification: ConverterInfo.toolIdentification),
+      provenance: conversionProvenance, toolIdentification: ConverterInfo.toolIdentification,
+      resampling: conversionResampling),
       logger: logger)
   } catch {
     logger.error("Error: \(error.localizedDescription)")
@@ -862,7 +921,9 @@ logger.setMinimumLogLevel(.info)
 logger.warning("Running in debug mode. The program will perform significantly slower as in release mode.")
 #endif
 // Parse command-line arguments and execute the corresponding conversion or generation.
-let importOptions = parseImportOptions(CommandLine.arguments)
+let resamplingOptions = parseResamplingOptions(CommandLine.arguments)
+let conversionResampling = resamplingOptions.resampling
+let importOptions = parseImportOptions(resamplingOptions.arguments)
 let conversionProvenance = importOptions.provenance
 let conversionSizeXMeters = importOptions.sizeXMeters
 let forceConversionSizeX = importOptions.forceSizeX
@@ -901,7 +962,7 @@ switch mode {
   case .FlatVolumeExport:
     guard let params = params as? ExportModeParameters else { exit(1) }
     exportFlatVolume(params)
-  case .BorgVRRepacking:
+  case .BorgVRRepacking, .BorgVRResampling:
     guard let params = params as? RepackModeParameters else { exit(1) }
     repackBorgVRVolume(params)
 }

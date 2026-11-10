@@ -15,8 +15,6 @@ struct FilePickerView: UIViewControllerRepresentable {
     case files
     case zarrDirectory
     case dicomDirectory
-    case dicomReference
-    case dicomRegistered
     case imageSequence
 
     var id: String { rawValue }

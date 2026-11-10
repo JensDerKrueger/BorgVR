@@ -423,7 +423,7 @@ struct SettingsView: View {
         .font(.callout)
         .foregroundStyle(.secondary)
         .fixedSize(horizontal: false, vertical: true)
-      pickerRow("DICOM fusion interpolation", selection: $storedAppModel.dicomResamplingFilter) {
+      pickerRow("Fusion interpolation", selection: $storedAppModel.dicomResamplingFilter) {
         Text("converter_dicom_filter_trilinear").tag(BorgVRVolumeResamplingFilter.trilinear)
         Text("converter_dicom_filter_nearest").tag(BorgVRVolumeResamplingFilter.nearestNeighbor)
       }

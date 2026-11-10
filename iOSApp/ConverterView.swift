@@ -22,7 +22,8 @@ struct ConverterView: View {
 
   @State private var inputFile = ""
   @State private var inputAccess: VolumeImportSourceAccess?
-  @State private var registeredInputAccess: VolumeImportSourceAccess?
+  @State private var fusionReference = VolumeFusionSelection()
+  @State private var fusionRegistered = VolumeFusionSelection()
   @State private var filePickerMode: FilePickerView.Mode?
   @State private var datasetDescription = ""
   @State private var logText = ""
@@ -41,7 +42,7 @@ struct ConverterView: View {
     case copy
     case convert
     case dicom
-    case dicomFusion
+    case volumeFusion
     case imageSequence
   }
 
@@ -84,17 +85,9 @@ struct ConverterView: View {
           if let access {
             let url = access.url
             switch pickerMode {
-              case .dicomRegistered:
-                registeredInputAccess = access
-                mode = .dicomFusion
-              case .dicomReference:
-                inputAccess = access
-                inputFile = url.path
-                mode = .dicomFusion
               case .dicomDirectory, .zarrDirectory, .files, .imageSequence:
                 inputAccess = access
                 inputFile = url.path
-                registeredInputAccess = nil
                 if pickerMode == .imageSequence {
                   mode = .imageSequence
                 } else if pickerMode == .dicomDirectory {
@@ -146,7 +139,7 @@ struct ConverterView: View {
             Text("For `.dat` and `.nhdr`, iOS also needs access to the referenced raw data file.")
               .font(.caption)
               .foregroundStyle(.secondary)
-          } else if selectedImportKind == .dicomDirectory || selectedImportKind == .dicomFusion {
+          } else if selectedImportKind == .dicomDirectory {
             Text("For a DICOM series, select the folder containing its slice files.")
               .font(.caption)
               .foregroundStyle(.secondary)
@@ -154,19 +147,23 @@ struct ConverterView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
 
-        if selectedImportKind != .dicomFusion {
+        if selectedImportKind != .volumeFusion {
           ViewThatFits(in: .horizontal) {
             HStack { sourceButtons }
             VStack(alignment: .leading) { sourceButtons }
           }
         }
 
-        if selectedImportKind == .dicomFusion {
+        if selectedImportKind == .volumeFusion {
           VStack(alignment: .leading, spacing: 10) {
-            dicomDirectoryRow("Reference series", access: inputAccess, pickerMode: .dicomReference)
-            dicomDirectoryRow("Series to register", access: registeredInputAccess, pickerMode: .dicomRegistered)
+            VolumeFusionSourcePicker(title: "Reference Volume", selection: $fusionReference)
+            Divider()
+            VolumeFusionSourcePicker(title: "Volume to Register", selection: $fusionRegistered)
+            ConverterVolumeFormatList(includesNativeBorgVR: true)
           }
           .disabled(isWorking)
+          .onChange(of: fusionReference.access?.url) { _, url in if url != nil { mode = .volumeFusion } }
+          .onChange(of: fusionRegistered.access?.url) { _, url in if url != nil { mode = .volumeFusion } }
         } else {
           Text(inputFile.isEmpty ? String(localized: "No file selected") : inputFile)
             .lineLimit(1)
@@ -176,7 +173,7 @@ struct ConverterView: View {
 
         if mode == .imageSequence { imageSequenceSizeFields }
 
-        if mode == .convert || mode == .dicom || mode == .dicomFusion || mode == .imageSequence {
+        if mode == .convert || mode == .dicom || mode == .volumeFusion || mode == .imageSequence {
           TextField("Dataset description", text: $datasetDescription)
             .textFieldStyle(.roundedBorder)
             .disabled(isWorking)
@@ -302,7 +299,7 @@ struct ConverterView: View {
           Label("image_sequence_select", systemImage: "photo.on.rectangle.angled")
         }
         .disabled(isWorking)
-      case .dicomFusion, .none:
+      case .volumeFusion, .none:
         EmptyView()
     }
   }
@@ -320,7 +317,8 @@ struct ConverterView: View {
     if selectedImportKind != kind {
       inputFile = ""
       inputAccess = nil
-      registeredInputAccess = nil
+      fusionReference = VolumeFusionSelection()
+      fusionRegistered = VolumeFusionSelection()
       filePickerMode = nil
       datasetDescription = ""
       sourceNote = ""
@@ -334,7 +332,7 @@ struct ConverterView: View {
       switch kind {
         case .volumeFile: mode = .unknown
         case .dicomDirectory: mode = .dicom
-        case .dicomFusion: mode = .dicomFusion
+        case .volumeFusion: mode = .volumeFusion
         case .imageSequence: mode = .imageSequence
       }
     }
@@ -352,7 +350,8 @@ struct ConverterView: View {
   }
 
   private var canStartImport: Bool {
-    mode != .unknown && inputAccess != nil && (mode != .dicomFusion || registeredInputAccess != nil)
+    mode != .unknown && (mode == .volumeFusion
+      ? fusionReference.input != nil && fusionRegistered.input != nil : inputAccess != nil)
       && (mode != .imageSequence || imageSequenceSize != nil)
   }
 
@@ -375,18 +374,6 @@ struct ConverterView: View {
       .textFieldStyle(.roundedBorder)
     }
     .disabled(isWorking)
-  }
-
-  private func dicomDirectoryRow(_ title: LocalizedStringKey, access: VolumeImportSourceAccess?,
-                                 pickerMode: FilePickerView.Mode) -> some View {
-    VStack(alignment: .leading, spacing: 4) {
-      Button { filePickerMode = pickerMode } label: { Label(title, systemImage: "folder") }
-      Text(access?.url.lastPathComponent ?? String(localized: "No directory selected"))
-        .font(.caption)
-        .lineLimit(1)
-        .truncationMode(.middle)
-        .foregroundStyle(.secondary)
-    }
   }
 
   private func copyData() {
@@ -425,7 +412,8 @@ struct ConverterView: View {
     importedDatasetURL = nil
     let provenance = sourceNote.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? [] :
       [BORGVRProvenanceEntry(sourceNote, date: receivedAt)]
-    guard canStartImport, let inputAccess else {
+    guard canStartImport,
+          let inputAccess = mode == .volumeFusion ? fusionReference.access : self.inputAccess else {
       logger.error(String(localized: "Input file not specified."))
       return
     }
@@ -433,11 +421,11 @@ struct ConverterView: View {
     let documentsDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
     let inputURL = inputAccess.url
     let imageExtent = mode == .imageSequence ? imageSequenceSize : nil
-    let registeredInputAccess = mode == .dicomFusion ? self.registeredInputAccess : nil
+    let registeredInputAccess = mode == .volumeFusion ? fusionRegistered.access : nil
     let source: BorgVRVolumeConversionSource
     let stem: String
-    if let registeredInputAccess {
-      source = .registeredDICOMPair(reference: inputURL, moving: registeredInputAccess.url,
+    if registeredInputAccess != nil {
+      source = .registeredPair(reference: fusionReference.input!, moving: fusionRegistered.input!,
                                     filter: appSettings.dicomResamplingFilter)
       stem = inputURL.lastPathComponent + "-fused"
     } else {
@@ -466,7 +454,8 @@ struct ConverterView: View {
           isWorking = false
           inputFile = ""
           self.inputAccess = nil
-          self.registeredInputAccess = nil
+          fusionReference = VolumeFusionSelection()
+          fusionRegistered = VolumeFusionSelection()
           mode = .unknown
         }
       }

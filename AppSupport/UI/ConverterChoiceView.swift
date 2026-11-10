@@ -1,9 +1,13 @@
 import SwiftUI
+#if os(macOS)
+import AppKit
+import UniformTypeIdentifiers
+#endif
 
 enum VolumeImportKind: String, CaseIterable, Identifiable {
   case volumeFile
   case dicomDirectory
-  case dicomFusion
+  case volumeFusion
   case imageSequence
 
   var id: Self { self }
@@ -12,7 +16,7 @@ enum VolumeImportKind: String, CaseIterable, Identifiable {
     switch self {
       case .volumeFile: "Volume File"
       case .dicomDirectory: "DICOM Series"
-      case .dicomFusion: "DICOM Fusion"
+      case .volumeFusion: "Volume Fusion"
       case .imageSequence: "Image Sequence"
     }
   }
@@ -21,9 +25,97 @@ enum VolumeImportKind: String, CaseIterable, Identifiable {
     switch self {
       case .volumeFile: "doc"
       case .dicomDirectory: "cross.case"
-      case .dicomFusion: "square.3.layers.3d"
+      case .volumeFusion: "square.3.layers.3d"
       case .imageSequence: "photo.on.rectangle.angled"
     }
+  }
+}
+
+struct VolumeFusionSelection {
+  enum Kind: String, CaseIterable, Identifiable {
+    case file, dicom, zarr
+    var id: Self { self }
+    var title: LocalizedStringKey {
+      switch self {
+        case .file: "Volume File"
+        case .dicom: "DICOM Series"
+        case .zarr: "Zarr Folder"
+      }
+    }
+  }
+  var kind: Kind = .file
+  var access: VolumeImportSourceAccess?
+  var input: BorgVRVolumeInput? {
+    guard let access else { return nil }
+    return kind == .dicom ? .dicomDirectory(access.url) : .file(access.url)
+  }
+}
+
+struct VolumeFusionSourcePicker: View {
+  let title: LocalizedStringKey
+  @Binding var selection: VolumeFusionSelection
+#if os(macOS)
+  @StateObject private var preview = DicomSlicePreviewModel()
+#else
+  @State private var pickerMode: FilePickerView.Mode?
+#endif
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 12) {
+      Text(title).font(.headline)
+      Picker("Source type", selection: $selection.kind) {
+        ForEach(VolumeFusionSelection.Kind.allCases) { kind in
+          Text(kind.title).tag(kind)
+        }
+      }
+      .pickerStyle(.menu)
+      Button(action: selectSource) {
+        Label("Select Source", systemImage: selection.kind == .file ? "doc" : "folder")
+      }
+      Text(selection.access?.url.lastPathComponent ?? String(localized: "No source selected"))
+        .font(.caption)
+        .foregroundStyle(.secondary)
+        .lineLimit(2)
+        .truncationMode(.middle)
+#if os(macOS)
+      if selection.kind == .dicom, selection.access != nil {
+        DicomSlicePreview(model: preview).frame(height: 240)
+      }
+#endif
+    }
+    .frame(maxWidth: .infinity, alignment: .topLeading)
+    .onChange(of: selection.kind) { _, _ in selection.access = nil }
+#if !os(macOS)
+    .sheet(item: $pickerMode) { mode in
+      FilePickerView(mode: mode) { access in
+        if let access { selection.access = access }
+        pickerMode = nil
+      }
+    }
+#endif
+  }
+
+  private func selectSource() {
+#if os(macOS)
+    let panel = NSOpenPanel()
+    panel.canChooseFiles = selection.kind == .file
+    panel.canChooseDirectories = selection.kind != .file
+    panel.allowsMultipleSelection = false
+    if selection.kind == .file {
+      panel.allowedContentTypes = (VolumeFileParserFactory.supportedExtensions + ["data"])
+        .compactMap { UTType(filenameExtension: $0) }
+    }
+    if panel.runModal() == .OK, let url = panel.url {
+      selection.access = VolumeImportSourceAccess(url: url, selectedURLs: [url])
+      if selection.kind == .dicom { preview.setDirectory(url) }
+    }
+#else
+    switch selection.kind {
+      case .file: pickerMode = .files
+      case .dicom: pickerMode = .dicomDirectory
+      case .zarr: pickerMode = .zarrDirectory
+    }
+#endif
   }
 }
 

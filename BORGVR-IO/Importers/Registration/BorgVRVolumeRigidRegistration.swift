@@ -35,7 +35,7 @@ enum BorgVRRegistrationDownsampler {
   ) throws -> BorgVRRegistrationLevel {
     guard level.source.componentCount == 1,
           [1, 2, 4].contains(level.source.bytesPerComponent) else {
-      throw BorgVRVolumeConversionError.incompatibleDICOMSampleFormats
+      throw BorgVRVolumeConversionError.incompatibleFusionSampleFormats
     }
 
     let source = try RawFileAccessor(
@@ -121,7 +121,7 @@ enum BorgVRRegistrationDownsampler {
             cancellationToken: cancellationToken
           )
         default:
-          throw BorgVRVolumeConversionError.incompatibleDICOMSampleFormats
+          throw BorgVRVolumeConversionError.incompatibleFusionSampleFormats
       }
       try target.sync()
     } catch {
@@ -497,7 +497,7 @@ private final class BorgVRNormalizedMutualInformation<
     )
     guard referenceAccessor.supportsAlignedTypedAccess,
           movingAccessor.supportsAlignedTypedAccess else {
-      throw BorgVRVolumeConversionError.incompatibleDICOMSampleFormats
+      throw BorgVRVolumeConversionError.incompatibleFusionSampleFormats
     }
 
     let referenceValues = UnsafePointer(
@@ -783,8 +783,10 @@ private enum BorgVRRigidRegistrationOptimizer {
     let minimumRotationStep = rotationStep / 64
 
     let initialEvaluation = try evaluator.evaluate(initialTransform)
+    // Different crops can lose substantial grid overlap at the correct pose. Keep a
+    // lower bound against tiny-overlap matches, not a constraint to the initial crop.
     let minimumOverlap = initialEvaluation.nmi.isFinite
-      ? max(0.05, initialEvaluation.overlap * 0.90)
+      ? max(0.05, initialEvaluation.overlap * 0.50)
       : 0.05
     var currentTransform = initialTransform
     var currentEvaluation = initialEvaluation
@@ -869,7 +871,8 @@ private enum BorgVRRigidRegistrationOptimizer {
     }
     let overlapLoss = max(0, initialOverlap - evaluation.overlap)
       / max(initialOverlap, 0.05)
-    return evaluation.nmi - 0.20 * overlapLoss
+    // Overlap is a weak regularizer; it must not outweigh anatomical agreement.
+    return evaluation.nmi - 0.02 * overlapLoss
   }
 
   private static func candidateTransform(
@@ -929,7 +932,7 @@ private enum BorgVRRigidRegistrationOptimizer {
   }
 }
 
-enum BorgVRDICOMRigidRegistration {
+enum BorgVRVolumeRigidRegistration {
   private static let minimumAxisLength = 16
 
   private struct Level: Sendable {
@@ -946,17 +949,17 @@ enum BorgVRDICOMRigidRegistration {
     guard reference.source.componentCount == 1,
           moving.source.componentCount == 1,
           reference.source.bytesPerComponent == moving.source.bytesPerComponent else {
-      throw BorgVRVolumeConversionError.incompatibleDICOMSampleFormats
+      throw BorgVRVolumeConversionError.incompatibleFusionSampleFormats
     }
 
     let sharedFrameTransform = reference.dicomTransform(to: moving)
     let initialTransform = sharedFrameTransform
       ?? centeredInitialTransform(reference: reference, moving: moving)
     if sharedFrameTransform != nil {
-      logger?.info("Initializing DICOM registration from the shared Frame of Reference.")
+      logger?.info("Initializing Volume registration from the shared Frame of Reference.")
     } else {
       logger?.info(
-        "DICOM series do not share a usable Frame of Reference; aligning their physical centers."
+        "Volumes do not share a usable coordinate frame; aligning their physical centers."
       )
     }
     let initialVoxelTransform = BorgVRVoxelTransform(
@@ -964,8 +967,8 @@ enum BorgVRDICOMRigidRegistration {
       referenceSpacing: reference.source.voxelSpacing,
       movingSpacing: moving.source.voxelSpacing
     )
-    logger?.info("Initial DICOM voxel transform:\n\(initialVoxelTransform)")
-    logger?.info("Starting recursive rigid DICOM registration.")
+    logger?.info("Initial volume voxel transform:\n\(initialVoxelTransform)")
+    logger?.info("Starting recursive rigid Volume registration.")
     let result = try register(
       level: Level(
         reference: registrationLevel(from: reference),
@@ -980,7 +983,7 @@ enum BorgVRDICOMRigidRegistration {
       referenceSpacing: reference.source.voxelSpacing,
       movingSpacing: moving.source.voxelSpacing
     )
-    logger?.info("Final DICOM voxel transform:\n\(voxelTransform)")
+    logger?.info("Final volume voxel transform:\n\(voxelTransform)")
     return voxelTransform
   }
 
@@ -1019,7 +1022,7 @@ enum BorgVRDICOMRigidRegistration {
     }
 
     logger?.info(
-      "Optimizing DICOM registration level "
+      "Optimizing Volume registration level "
         + "\(level.reference.size.x) x \(level.reference.size.y) x "
         + "\(level.reference.size.z) / "
         + "\(level.moving.size.x) x \(level.moving.size.y) x "
@@ -1052,7 +1055,7 @@ enum BorgVRDICOMRigidRegistration {
     )
     if result.finalEvaluation.nmi.isFinite {
       logger?.info(
-        "DICOM registration level optimized using \(evaluator.sampleCount) samples, "
+        "Volume registration level optimized using \(evaluator.sampleCount) samples, "
           + "\(evaluator.binCount) x \(evaluator.binCount) histogram bins and "
           + "\(result.triedTransformationCount) tried transformations (NMI "
           + String(format: "%.6f", result.initialEvaluation.nmi)
@@ -1063,7 +1066,7 @@ enum BorgVRDICOMRigidRegistration {
       )
     } else {
       logger?.warning(
-        "DICOM registration level contains insufficient intensity information or overlap; "
+        "Volume registration level contains insufficient intensity information or overlap; "
           + "keeping its initial transform."
       )
     }
@@ -1164,7 +1167,7 @@ enum BorgVRDICOMRigidRegistration {
           cancellationToken: cancellationToken
         )
       default:
-        throw BorgVRVolumeConversionError.incompatibleDICOMSampleFormats
+        throw BorgVRVolumeConversionError.incompatibleFusionSampleFormats
     }
   }
 

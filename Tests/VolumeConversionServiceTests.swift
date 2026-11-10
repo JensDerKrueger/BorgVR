@@ -246,7 +246,8 @@ private func testDICOMImportHistory() throws {
   for pair in [false, true] {
     let destination = root.appendingPathComponent(pair ? "fused.data" : "single.data")
     try BorgVRVolumeConversionService.convert(.init(
-      source: pair ? .registeredDICOMPair(reference: reference, moving: moving, filter: .trilinear) : .dicomDirectory(reference),
+      source: pair ? .registeredPair(reference: .dicomDirectory(reference), moving: .dicomDirectory(moving),
+        filter: .trilinear) : .dicomDirectory(reference),
       destinationURL: destination, datasetDescription: "History test", metaDescription: "",
       settings: .init(brickSize: 4, overlap: 1, useCompression: false, extensionStrategy: .clamp, quantizeTo8Bit: true),
       provenance: [supplied], toolIdentification: "History test tool 3.5"))
@@ -260,7 +261,7 @@ private func testDICOMImportHistory() throws {
       try expect(sources[0].text.hasPrefix("Reference (channel 1):")
         && sources[1].text.hasPrefix("Registered (channel 2):") && sources[1].text.contains("2026-01-02"),
         "Fusion lost source identity")
-      let index = history.firstIndex { $0.text.hasPrefix("Rigid DICOM registration and fusion") }!
+      let index = history.firstIndex { $0.text.hasPrefix("Rigid volume registration and fusion") }!
       let text = history[index].text
       let matrix = String(text[text.range(of: "matrix: ")!.upperBound...])
       let rows = try JSONDecoder().decode([[Float]].self, from: Data(matrix.utf8))
@@ -783,6 +784,99 @@ private func testRGBAEditing() async throws {
   print("RGBA editing passed: alpha-only erase/restore, odd LODs, CPU/Metal, cache reopen and data export")
 }
 
+private func testFusionAcceptsVolumeFilesAndNativeData() throws {
+  let directory = FileManager.default.temporaryDirectory
+    .appendingPathComponent("borgvr-format-fusion-tests-\(UUID().uuidString)")
+  try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+  defer { try? FileManager.default.removeItem(at: directory) }
+  let rawURL = directory.appendingPathComponent("source.raw")
+  let nativeURL = directory.appendingPathComponent("source.data")
+  let nrrdURL = directory.appendingPathComponent("source.nrrd")
+  let size = Vec3<Int>(repeating: 17)
+  let spacing = Vec3<Float>(x: 0.001, y: 0.0015, z: 0.002)
+  let values: [UInt8] = (0..<4913).map { (index: Int) -> UInt8 in
+    let value = index * 37 + (index / 17) * 19
+    return UInt8(value % 251)
+  }
+  try Data(values).write(to: rawURL)
+  let settings = BorgVRVolumeConversionSettings(brickSize: 8, overlap: 1,
+    useCompression: true, extensionStrategy: .clamp)
+  try BorgVRVolumeConversionService.convert(BorgVRVolumeConversionRequest(
+    source: .raw(BorgVRRawVolumeSource(url: rawURL, offset: 0, size: size,
+      bytesPerComponent: 1, componentCount: 1, voxelSpacing: spacing)),
+    destinationURL: nativeURL, datasetDescription: "Reference", metaDescription: "Known samples",
+    settings: settings, provenance: [BORGVRProvenanceEntry("Synthetic source")], meta: "Preserved metadata"))
+  _ = try BORGVRVolumeExporter.export(inputURL: nativeURL, outputURL: nrrdURL, level: 0)
+  let dicomURL = directory.appendingPathComponent("dicom")
+  try FileManager.default.createDirectory(at: dicomURL, withIntermediateDirectories: true)
+  let dicomSlice = dicomURL.appendingPathComponent("slice.dcm")
+  try Data([0]).write(to: dicomSlice)
+  let dicomKey = dicomSlice.resolvingSymlinksInPath().standardizedFileURL
+  DicomParser.decodedVolumes[dicomKey] = DicomParser.DicomVolume(
+    voxelData: Data(values), width: 17, height: 17, depth: 17, bytesPerVoxel: 1,
+    voxelSpacing: spacing, orientation: nil, origin: nil, frameOfReferenceUID: nil,
+    isSigned: false, pixelPaddingValue: nil, modality: "CT", patientName: nil, seriesDate: nil)
+  defer { DicomParser.decodedVolumes[dicomKey] = nil }
+  let pairs: [(BorgVRVolumeInput, BorgVRVolumeInput)] = [
+    (.file(nativeURL), .file(nativeURL)), (.file(nrrdURL), .file(nrrdURL)),
+    (.file(nativeURL), .file(nrrdURL)), (.dicomDirectory(dicomURL), .file(nativeURL))
+  ]
+  for (index, pair) in pairs.enumerated() {
+    let output = directory.appendingPathComponent("fusion-\(index).data")
+    try BorgVRVolumeConversionService.convert(BorgVRVolumeConversionRequest(
+      source: .registeredPair(reference: pair.0, moving: pair.1, filter: .trilinear),
+      destinationURL: output, datasetDescription: "Fusion", metaDescription: "", settings: settings))
+    let metadata = try BORGVRMetaData(url: output)
+    try expect(metadata.componentCount == 2 && metadata.levelMetadata[0].size == size,
+      "Format-independent fusion lost its reference grid or channels")
+    try expect(abs(metadata.voxelSpacingY - spacing.y) < 1e-7, "Fusion lost physical voxel spacing")
+    let exported = directory.appendingPathComponent("fusion-\(index).raw")
+    _ = try BORGVRVolumeExporter.exportRaw(inputURL: output, outputURL: exported)
+    let bytes = try Data(contentsOf: exported)
+    for (voxel, value) in values.enumerated() {
+      try expect(bytes[voxel * 2] == value && bytes[voxel * 2 + 1] == value,
+        "File fusion changed reference or identity-registered samples")
+    }
+    try expect(metadata.provenance.contains { $0.text.contains("Rigid volume registration and fusion") },
+      "File fusion omitted its transform history")
+    if index == 0 {
+      try expect(metadata.provenance.contains { $0.text.contains("Synthetic source") }
+        && metadata.meta.contains("Preserved metadata"), "Native fusion discarded source metadata")
+    }
+  }
+  let originalBytes = try Data(contentsOf: rawURL)
+  try expect(originalBytes == Data(values), "Fusion modified its original RAW source")
+}
+
+private func testNRRDRegistrationGeometry() throws {
+  let url = FileManager.default.temporaryDirectory.appendingPathComponent("geometry-\(UUID().uuidString).nrrd")
+  defer { try? FileManager.default.removeItem(at: url) }
+  var data = Data("""
+    NRRD0005
+    type: ushort
+    dimension: 3
+    sizes: 2 2 2
+    space: right-anterior-superior
+    space directions: (-0.6,0.8,0) (-1.6,-1.2,0) (0,0,3)
+    space origin: (10,20,30)
+    space units: "mm" "mm" "mm"
+    encoding: raw
+    endian: little
+
+
+    """.utf8)
+  data.append(Data(repeating: 0, count: 16))
+  try data.write(to: url)
+  let parser = try NRRDParser(filename: url.path)
+  try expect((parser.voxelSpacing - Vec3<Float>(x: 0.001, y: 0.002, z: 0.003)).magnitude < 1e-7,
+    "NRRD directions did not produce physical vector lengths")
+  try expect(parser.orientation != nil && parser.origin != nil, "NRRD lost spatial geometry")
+  try expect((parser.orientation!.xAxis - Vec3<Float>(x: 0.6, y: -0.8, z: 0)).magnitude < 1e-6,
+    "NRRD anatomical axes were not converted to LPS")
+  try expect((parser.origin! - Vec3<Float>(x: -0.01, y: -0.02, z: 0.03)).magnitude < 1e-7,
+    "NRRD origin was not converted to meters and LPS")
+}
+
 private func testDICOMFusionInterleavesChannels() throws {
   let directory = FileManager.default.temporaryDirectory
     .appendingPathComponent("borgvr-dicom-fusion-tests-\(UUID().uuidString)")
@@ -821,7 +915,7 @@ private func testDICOMFusionInterleavesChannels() throws {
     )
   }
 
-  let fused = try BorgVRDICOMVolumeFusion.fuse(
+  let fused = try BorgVRVolumeFusion.fuse(
     reference: volume(url: referenceURL, description: "Reference"),
     moving: volume(url: movingURL, description: "Moving"),
     referenceToMoving: .identity,
@@ -952,7 +1046,7 @@ private func testDICOMFusionTreatsMovingPaddingAsMissing() throws {
     )
   }
 
-  _ = try BorgVRDICOMVolumeFusion.fuse(
+  _ = try BorgVRVolumeFusion.fuse(
     reference: volume(url: referenceURL, description: "Reference", paddingValue: nil),
     moving: volume(url: movingURL, description: "Moving", paddingValue: 255),
     referenceToMoving: .identity,
@@ -1310,12 +1404,12 @@ private func testDICOMFusionUsesPatientGeometry() throws {
     size: Vec3<Int>(x: 2, y: 1, z: 1),
     origin: Vec3<Float>(x: 0.1, y: 0, z: 0)
   )
-  let transform = try BorgVRDICOMRigidRegistration.register(
+  let transform = try BorgVRVolumeRigidRegistration.register(
     reference: reference,
     moving: moving,
     logger: nil
   )
-  _ = try BorgVRDICOMVolumeFusion.fuse(
+  _ = try BorgVRVolumeFusion.fuse(
     reference: reference,
     moving: moving,
     referenceToMoving: transform,
@@ -1379,7 +1473,7 @@ private func testDICOMFusionTrilinearFiltering() throws {
     size: Vec3<Int>(x: 2, y: 1, z: 1),
     spacing: Vec3<Float>(x: 1, y: 1, z: 1)
   )
-  _ = try BorgVRDICOMVolumeFusion.fuse(
+  _ = try BorgVRVolumeFusion.fuse(
     reference: reference,
     moving: moving,
     referenceToMoving: BorgVRVoxelTransform(
@@ -1612,7 +1706,7 @@ private func testRecursiveRegistrationPreservesDICOMInitialTransform() throws {
     )
   }
 
-  let transform = try BorgVRDICOMRigidRegistration.register(
+  let transform = try BorgVRVolumeRigidRegistration.register(
     reference: volume(url: referenceURL, origin: Vec3<Float>(x: 0.1, y: 0.2, z: 0.3)),
     moving: volume(url: movingURL, origin: Vec3<Float>(x: 0.04, y: 0.1, z: 0.25)),
     logger: nil
@@ -1690,7 +1784,7 @@ private func testRegistrationCentersVolumesFromDifferentDICOMFrames() throws {
     )
   }
 
-  let transform = try BorgVRDICOMRigidRegistration.register(
+  let transform = try BorgVRVolumeRigidRegistration.register(
     reference: volume(
       url: referenceURL,
       size: referenceSize,
@@ -1767,7 +1861,7 @@ private func testRegistrationRecoversTranslation() throws {
     )
   }
 
-  let transform = try BorgVRDICOMRigidRegistration.register(
+  let transform = try BorgVRVolumeRigidRegistration.register(
     reference: volume(url: referenceURL),
     moving: volume(url: movingURL),
     logger: nil
@@ -1781,6 +1875,138 @@ private func testRegistrationRecoversTranslation() throws {
     abs(transformedOrigin.y) < 0.3 && abs(transformedOrigin.z) < 0.3,
     "NMI registration introduced an unexpected transverse translation"
   )
+}
+
+private func testRegistrationWithDifferentCropsAndUnmatchedStructures() throws {
+  let directory = FileManager.default.temporaryDirectory
+    .appendingPathComponent("borgvr-registration-cropping-tests-\(UUID().uuidString)")
+  try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+  defer { try? FileManager.default.removeItem(at: directory) }
+
+  let referenceSize = Vec3<Int>(x: 40, y: 40, z: 27)
+  let movingSize = Vec3<Int>(x: 40, y: 40, z: 49)
+  let referenceSpacing = Vec3<Float>(x: 0.001, y: 0.001, z: 0.0015)
+  let movingSpacing = Vec3<Float>(repeating: 0.001)
+  let referenceCenter = Vec3<Float>(repeating: 0.0195)
+  let movingCenter = Vec3<Float>(x: 0.0195, y: 0.0195, z: 0.024)
+  let expected = BorgVRRigidTransform.identity
+    .rotated(
+      around: Vec3<Float>(x: 1, y: 0, z: 0),
+      angle: 22 * .pi / 180,
+      pivot: referenceCenter
+    )
+    .rotated(
+      around: Vec3<Float>(x: 0, y: 0, z: 1),
+      angle: 8 * .pi / 180,
+      pivot: referenceCenter
+    )
+    .translated(by: movingCenter - referenceCenter
+      + Vec3<Float>(x: 0.001, y: -0.002, z: -0.003))
+
+  func intensity(at point: Vec3<Float>) -> UInt16 {
+    let delta = point - referenceCenter
+    let ellipsoid = Vec3<Float>(
+      x: delta.x / 0.014, y: delta.y / 0.017, z: delta.z / 0.022
+    ).magnitudeSquared
+    guard ellipsoid < 1 else { return 10 }
+    if ellipsoid > 0.83 { return 2000 }
+    let a = (point - Vec3<Float>(x: 0.014, y: 0.02, z: 0.022)) / 0.004
+    let b = (point - Vec3<Float>(x: 0.024, y: 0.025, z: 0.012)) / 0.006
+    return UInt16(
+      1000 + 200 * exp(-a.magnitudeSquared) - 150 * exp(-b.magnitudeSquared)
+        + 40 * sin(point.x * 600) * cos(point.y * 300) * sin(point.z * 400)
+    )
+  }
+
+  func volume(
+    size: Vec3<Int>, spacing: Vec3<Float>, moving: Bool
+  ) throws -> BorgVRUnbrickedVolume {
+    var values = [UInt16]()
+    values.reserveCapacity(size.x * size.y * size.z)
+    for z in 0..<size.z {
+      for y in 0..<size.y {
+        for x in 0..<size.x {
+          var point = Vec3<Float>(
+            x: Float(x) * spacing.x, y: Float(y) * spacing.y, z: Float(z) * spacing.z
+          )
+          if moving {
+            let delta = point - expected.translation
+            point = Vec3<Float>(
+              x: delta.dot(expected.xAxis),
+              y: delta.dot(expected.yAxis),
+              z: delta.dot(expected.zAxis)
+            )
+          }
+          var value = intensity(at: point)
+          // A frame in only one scan and an implant in only the other must not
+          // force the optimizer to preserve the initial grid overlap.
+          if !moving, (x == 2 || x == 37), y > 4, y < 35 { value = 3500 }
+          if moving, x == 22, y == 20, z > 25 { value = 4000 }
+          values.append(value)
+        }
+      }
+    }
+    let url = directory.appendingPathComponent(moving ? "moving.raw" : "reference.raw")
+    try values.withUnsafeBytes { try Data($0).write(to: url) }
+    return BorgVRUnbrickedVolume(
+      source: BorgVRRawVolumeSource(
+        url: url, offset: 0, size: size, bytesPerComponent: 2,
+        componentCount: 1, voxelSpacing: spacing
+      ),
+      orientation: nil, origin: nil, frameOfReferenceUID: nil,
+      channels: [BorgVRUnbrickedVolumeChannelMetadata(
+        description: "Cropped registration phantom", modality: nil, patientName: nil,
+        seriesDate: nil, isSigned: false, pixelPaddingValue: nil
+      )]
+    )
+  }
+
+  let reference = try volume(size: referenceSize, spacing: referenceSpacing, moving: false)
+  let moving = try volume(size: movingSize, spacing: movingSpacing, moving: true)
+  let transform = try BorgVRVolumeRigidRegistration.register(
+    reference: reference,
+    moving: moving,
+    logger: nil
+  )
+  let expectedVoxelTransform = BorgVRVoxelTransform(
+    metricTransform: expected,
+    referenceSpacing: referenceSpacing,
+    movingSpacing: movingSpacing
+  )
+  let settings = BorgVRVolumeConversionSettings(brickSize: 8, overlap: 1,
+    useCompression: true, extensionStrategy: .clamp)
+  let referenceURL = directory.appendingPathComponent("reference.data")
+  let movingURL = directory.appendingPathComponent("moving.data")
+  for (volume, url) in [(reference, referenceURL), (moving, movingURL)] {
+    try BorgVRVolumeConversionService.convert(BorgVRVolumeConversionRequest(
+      source: .raw(volume.source), destinationURL: url, datasetDescription: "Known transformed phantom",
+      metaDescription: "", settings: settings))
+  }
+  let movingNRRD = directory.appendingPathComponent("moving.nrrd")
+  _ = try BORGVRVolumeExporter.export(inputURL: movingURL, outputURL: movingNRRD, level: 0)
+  let fusedURL = directory.appendingPathComponent("fusion.data")
+  try BorgVRVolumeConversionService.convert(BorgVRVolumeConversionRequest(
+    source: .registeredPair(reference: .file(referenceURL), moving: .file(movingNRRD), filter: .trilinear),
+    destinationURL: fusedURL, datasetDescription: "Registered phantom", metaDescription: "", settings: settings))
+  let metadata = try BORGVRMetaData(url: fusedURL)
+  let history = metadata.provenance.first { $0.text.hasPrefix("Rigid volume registration and fusion") }!.text
+  let encodedMatrix = String(history[history.range(of: "matrix: ")!.upperBound...])
+  let fileTransform = try JSONDecoder().decode([[Float]].self, from: Data(encodedMatrix.utf8))
+  for matrix in [transform.matrixRows, fileTransform] {
+    for z: Float in [6, 13, 20] {
+      for y: Float in [10, 20, 30] {
+        for x: Float in [10, 20, 30] {
+          let point = Vec3<Float>(x: x, y: y, z: z)
+          let mapped = Vec3<Float>(
+            x: matrix[0][0] * x + matrix[0][1] * y + matrix[0][2] * z + matrix[0][3],
+            y: matrix[1][0] * x + matrix[1][1] * y + matrix[1][2] * z + matrix[1][3],
+            z: matrix[2][0] * x + matrix[2][1] * y + matrix[2][2] * z + matrix[2][3])
+          let error = (mapped - expectedVoxelTransform.applying(to: point)).magnitude
+          try expect(error < 1, "Registration failed with different crops and unmatched structures")
+        }
+      }
+    }
+  }
 }
 
 private func testSelfRegistrationHasPerfectMetricAndOverlap() throws {
@@ -1828,14 +2054,14 @@ private func testSelfRegistrationHasPerfectMetricAndOverlap() throws {
     )]
   )
   let logger = CapturingLogger()
-  _ = try BorgVRDICOMRigidRegistration.register(
+  _ = try BorgVRVolumeRigidRegistration.register(
     reference: volume,
     moving: volume,
     logger: logger
   )
 
   let optimizationMessages = logger.infoMessages.filter {
-    $0.contains("DICOM registration level optimized")
+    $0.contains("Volume registration level optimized")
   }
   try expect(!optimizationMessages.isEmpty, "Self-registration produced no metric output")
   try expect(
@@ -1941,7 +2167,7 @@ private func testRegistrationRecoversRotationAroundVolumeCenter() throws {
     )
   }
 
-  let transform = try BorgVRDICOMRigidRegistration.register(
+  let transform = try BorgVRVolumeRigidRegistration.register(
     reference: volume(url: referenceURL),
     moving: volume(url: movingURL),
     logger: nil
@@ -2023,6 +2249,100 @@ private func testStoredASTCVolumes() async throws {
   print("Stored RGB/RGBA ASTC 4x4/8x8 passed: LZ4 independence, all LODs, voxel reads, direct payloads, NRRD, erase/restore and edited data export")
 }
 
+private func testAffineVolumeResampling() throws {
+  let root = FileManager.default.temporaryDirectory.appendingPathComponent("resample-\(UUID().uuidString)")
+  try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+  defer { try? FileManager.default.removeItem(at: root) }
+  let identity: [Double] = [1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]
+  let size = Vec3<Int>(x: 4, y: 3, z: 2)
+  let spacing = Vec3<Float>(x: 0.001, y: 0.002, z: 0.003)
+  for width in [1, 2, 4] {
+    var bytes = Data()
+    for index in 0..<24 {
+      for channel in 0..<2 {
+        let sample = UInt32(index * 4 + channel * 100 + 1)
+        for byte in 0..<width { bytes.append(UInt8(truncatingIfNeeded: sample >> (byte * 8))) }
+      }
+    }
+    let raw = root.appendingPathComponent("input-\(width).raw")
+    try bytes.write(to: raw)
+    let source = BorgVRRawVolumeSource(url: raw, offset: 0, size: size,
+      bytesPerComponent: width, componentCount: 2, voxelSpacing: spacing)
+    func resample(_ matrix: [Double], origin: Vec3<Int> = .init(x: 0, y: 0, z: 0),
+                  crop: Vec3<Int>? = nil, filter: BorgVRVolumeResamplingFilter = .trilinear) throws -> Data {
+      let settings = try BorgVRVolumeResampling(matrix: matrix, cropOrigin: origin, cropSize: crop, filter: filter)
+      let output = root.appendingPathComponent("output-\(UUID().uuidString).raw")
+      _ = try settings.writeRaw(source, to: output, logger: nil, cancellationToken: nil)
+      return try Data(contentsOf: output)
+    }
+    for filter in [BorgVRVolumeResamplingFilter.trilinear, .nearestNeighbor] {
+      let result = try resample(identity, filter: filter)
+      try expect(result == bytes, "Identity resampling changed samples")
+    }
+    var translation = identity
+    translation[3] = 1
+    let translated = try resample(translation)
+    let stride = 2 * width
+    for z in 0..<2 { for y in 0..<3 { for x in 0..<4 {
+      let offset = ((z * 3 + y) * 4 + x) * stride
+      let expected = x == 0 ? Data(repeating: 0, count: stride) : bytes.subdata(in: (offset - stride)..<offset)
+      try expect(translated.subdata(in: offset..<(offset + stride)) == expected, "Forward translation used the wrong direction")
+    } } }
+    let cropped = try resample(translation, origin: .init(x: 1, y: 1, z: 0), crop: .init(x: 2, y: 2, z: 2))
+    var expectedCrop = Data()
+    for z in 0..<2 { for y in 1..<3 {
+      let start = (z * 12 + y * 4) * stride
+      expectedCrop.append(bytes.subdata(in: start..<(start + 2 * stride)))
+    } }
+    try expect(cropped == expectedCrop, "Crop was applied before transformation or lost its offset")
+    translation[3] = 0.5
+    let linear = try resample(translation)
+    let nearest = try resample(translation, filter: .nearestNeighbor)
+    try expect(linear[stride] == 3 && nearest[stride] == 5, "Fractional interpolation is incorrect")
+    let rotation: [Double] = [-1,0,0,3, 0,-1,0,2, 0,0,1,0, 0,0,0,1]
+    let rotated = try resample(rotation)
+    try expect(rotated.prefix(stride) == bytes.subdata(in: (11 * stride)..<(12 * stride)), "Pivot rotation is incorrect")
+  }
+  var singular = identity; singular[0] = 0
+  var perspective = identity; perspective[12] = 1
+  var nonfinite = identity; nonfinite[3] = .infinity
+  for matrix in [singular, perspective, nonfinite, [1, 2]] {
+    try expectThrows("Invalid matrix accepted") { _ = try BorgVRVolumeResampling(matrix: matrix) }
+  }
+  try expectThrows("Out-of-bounds crop accepted") {
+    _ = try BorgVRVolumeResampling(matrix: identity, cropOrigin: .init(x: 3, y: 0, z: 0),
+      cropSize: .init(x: 2, y: 2, z: 2)).outputSize(source: size)
+  }
+  let input = root.appendingPathComponent("source.data")
+  let output = root.appendingPathComponent("transformed.data")
+  let raw = root.appendingPathComponent("input-2.raw")
+  let settings = BorgVRVolumeConversionSettings(brickSize: 8, overlap: 1,
+    useCompression: true, extensionStrategy: .fillZeroes)
+  try BorgVRVolumeConversionService.convert(.init(source: .raw(.init(url: raw, offset: 0, size: size,
+    bytesPerComponent: 2, componentCount: 2, voxelSpacing: spacing)), destinationURL: input,
+    datasetDescription: "Known geometry", metaDescription: "Channel metadata", settings: settings,
+    provenance: [.init("Synthetic test source")], meta: "test metadata"))
+  let before = try BORGVRMetaData(url: input)
+  let resampling = try BorgVRVolumeResampling(matrix: identity, cropOrigin: .init(x: 1, y: 0, z: 0),
+    cropSize: .init(x: 3, y: 3, z: 2))
+  try BorgVRVolumeConversionService.convert(.init(source: .borgVR(input), destinationURL: output,
+    datasetDescription: "", metaDescription: "", settings: settings, resampling: resampling))
+  let after = try BORGVRMetaData(url: output)
+  try expect(before.uniqueID != after.uniqueID && after.width == 3 && after.height == 3 && after.depth == 2,
+    "Resampled dataset retained its UUID or lost crop dimensions")
+  try expect(after.datasetDescription == before.datasetDescription && after.metaDescription == before.metaDescription
+    && after.meta == before.meta && after.voxelSpacingX == before.voxelSpacingX
+    && after.voxelSpacingY == before.voxelSpacingY && after.voxelSpacingZ == before.voxelSpacingZ,
+    "Resampling lost source metadata or spacing")
+  try expect(after.provenance.count > before.provenance.count
+    && after.provenance.contains { $0.text.contains("effective source-to-cropped voxel matrix") },
+    "Resampling history lacks ground truth")
+  try expectThrows("Resampling overwrote its source") {
+    try BorgVRVolumeConversionService.convert(.init(source: .borgVR(input), destinationURL: input,
+      datasetDescription: "", metaDescription: "", settings: settings, resampling: resampling))
+  }
+}
+
 @main
 private enum VolumeConversionServiceTestRunner {
   static func main() async throws {
@@ -2035,6 +2355,7 @@ private enum VolumeConversionServiceTestRunner {
     try await testRGBAEditing()
     try runAutoImporterTests()
     try testSettingsAndCancellation()
+    try testAffineVolumeResampling()
     try testVolumeQuantization()
     try runVolumeEditTests()
     try await runVolumeEditingAutomationTests()
@@ -2042,6 +2363,8 @@ private enum VolumeConversionServiceTestRunner {
     try testRawConversionAndAtomicReplacement()
     try I3MParserTests.run()
     try testDICOMFusionInterleavesChannels()
+    try testFusionAcceptsVolumeFilesAndNativeData()
+    try testNRRDRegistrationGeometry()
     try testDICOMImportHistory()
     try testPhysicalSizeOverrides()
     try testNRRDProvenanceExport()
@@ -2067,6 +2390,7 @@ private enum VolumeConversionServiceTestRunner {
     try testSelfRegistrationHasPerfectMetricAndOverlap()
     try testRegistrationRecoversTranslation()
     try testRegistrationRecoversRotationAroundVolumeCenter()
+    try testRegistrationWithDifferentCropsAndUnmatchedStructures()
     print("Volume conversion service tests passed")
   }
 }

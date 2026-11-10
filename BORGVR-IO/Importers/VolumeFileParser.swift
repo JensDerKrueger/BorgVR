@@ -24,6 +24,10 @@ public protocol VolumeFileParser {
   /// False when spacing is relative or was inferred because the file omitted it.
   var hasPhysicalVoxelSpacing: Bool { get }
   var channelInterpretation: BORGVRChannelInterpretation { get }
+  var orientation: BorgVRVolumeOrientation? { get }
+  var origin: Vec3<Float>? { get }
+  var isSigned: Bool { get }
+  var metadataText: String { get }
 
   /// The number of bytes used to represent a single data component (e.g., 1 for 8-bit, 2 for 16-bit).
   var bytesPerComponent: Int { get }
@@ -45,6 +49,10 @@ extension VolumeFileParser {
   public var sourceFiles: [URL] { [] }
   public var hasPhysicalVoxelSpacing: Bool { true }
   public var channelInterpretation: BORGVRChannelInterpretation { .independentChannels }
+  public var orientation: BorgVRVolumeOrientation? { nil }
+  public var origin: Vec3<Float>? { nil }
+  public var isSigned: Bool { false }
+  public var metadataText: String { "" }
 }
 
 /// Creates the appropriate parser for a supported volume-file extension.

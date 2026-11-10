@@ -11,6 +11,7 @@ swiftc \
   "${BORGVR_EDIT_TEST_OPTIMIZATION:--Onone}" \
   -module-cache-path "$SWIFT_MODULE_CACHE" \
   "$ROOT/BORGVR-IO/Vector.swift" \
+  "$ROOT/BORGVR-IO/Importers/BorgVRVolumeGeometry.swift" \
   "$ROOT/BORGVR-IO/Importers/VolumeFileParser.swift" \
   "$ROOT/BORGVR-IO/Importers/QVIS/QVISParser.swift" \
   "$ROOT/BORGVR-IO/Importers/NRRD/NRRDParser.swift" \
@@ -50,7 +51,7 @@ swiftc \
   "$ROOT/Tests/VolumeConversionServiceTestSupport.swift" \
   "$ROOT/BORGVR-IO/Importers/DICOM/DICOMVRMap.swift" \
   "$ROOT/BORGVR-IO/Importers/DICOM/DICOMProvenance.swift" \
-  "$ROOT/BORGVR-IO/Importers/DICOM/BorgVRDICOMRigidRegistration.swift" \
+  "$ROOT/BORGVR-IO/Importers/Registration/BorgVRVolumeRigidRegistration.swift" \
   "$ROOT/BORGVR-IO/Importers/BorgVRVolumeConversionService.swift" \
   "$ROOT/BORGVR-IO/Importers/BorgVRImportFileAccess.swift" \
   "$ROOT/BORGVR-IO/Importers/BorgVRImageSequenceImporter.swift" \

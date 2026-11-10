@@ -2,11 +2,7 @@ import Foundation
 
 enum DicomParser {
   static var decodedVolumes: [URL: DicomVolume] = [:]
-  struct DicomOrientation: Equatable, Sendable {
-    let xAxis: Vec3<Float>
-    let yAxis: Vec3<Float>
-    let zAxis: Vec3<Float>
-  }
+  typealias DicomOrientation = BorgVRVolumeOrientation
 
   struct DicomVolume {
     var sourceFiles: [URL] = []

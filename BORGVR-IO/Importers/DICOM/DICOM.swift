@@ -90,11 +90,7 @@ final class DicomParser {
    `xAxis` follows increasing voxel-column indices, `yAxis` follows increasing
    voxel-row indices, and `zAxis` is the right-handed slice normal.
    */
-  struct DicomOrientation: Equatable, Sendable {
-    let xAxis: Vec3<Float>
-    let yAxis: Vec3<Float>
-    let zAxis: Vec3<Float>
-  }
+  typealias DicomOrientation = BorgVRVolumeOrientation
 
   /**
    A representation of a decoded 3D volume from a series of DICOM slices.

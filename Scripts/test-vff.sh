@@ -5,6 +5,7 @@ BUILD_DIR="${TMPDIR:-/tmp}/borgvr-vff-tests"
 mkdir -p "$BUILD_DIR"
 swiftc -O -parse-as-library -module-cache-path "$BUILD_DIR/module-cache" \
   "$ROOT/BORGVR-IO/Vector.swift" "$ROOT/BORGVR-IO/Importers/VolumeFileParser.swift" \
+  "$ROOT/BORGVR-IO/Importers/BorgVRVolumeGeometry.swift" \
   "$ROOT/BORGVR-IO/BORGVRChannelInterpretation.swift" \
   "$ROOT/BORGVR-IO/Importers/QVIS/QVISParser.swift" "$ROOT/BORGVR-IO/Importers/NRRD/NRRDParser.swift" \
   "$ROOT/BORGVR-IO/Importers/PVM/PVMParser.swift" "$ROOT/BORGVR-IO/Importers/I3D/I3MParser.swift" \
