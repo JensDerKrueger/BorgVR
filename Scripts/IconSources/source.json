@@ -1,0 +1,23 @@
+{
+  "sourceArtwork": "macOSApp/mandelbulb-background.jpg",
+  "crop": {
+    "x": 320,
+    "y": 20,
+    "width": 960,
+    "height": 960
+  },
+  "flatIcons": "Cropped and resized original artwork; no generative changes.",
+  "visionOS": {
+    "canvasSize": 1024,
+    "foregroundSize": 860,
+    "tool": "Built-in image_gen, edit mode",
+    "sources": [
+      "mandelbulb-foreground.png",
+      "mandelbulb-background.png"
+    ],
+    "prompts": [
+      "Edit the provided image ONLY by removing its background. This is an exact foreground extraction for a layered visionOS application icon, not a redesign. Keep the entire central green and silver Mandelbulb fractal object in exactly the same position, proportions, framing, lighting, intricate details and colors as the source. Retain its softly defocused rear portions on the left as part of the SAME object. Remove all background, the floating detached bokeh circles, particles, and the teal scene surrounding the object to true transparent alpha. Preserve the original square canvas and alignment. Do not add text, shadows, borders, an icon frame, or new geometry. The result must be just the original Mandelbulb foreground on transparency, with clean natural edges and no background remaining.",
+      "Edit this square image into a background-only back layer for a layered visionOS application icon. Remove ONLY the entire central green-and-silver Mandelbulb fractal object, including all its blurry rear lobes. Reconstruct the background that would be behind it: continue the exact existing dark teal-black softly textured background and existing peripheral soft green light, matching original lighting. Do not add any new discrete light orbs, objects or geometric structure in the reconstructed region. Preserve the original square canvas, original outer background colors and existing peripheral details. There must be NO Mandelbulb or central subject remaining, no text, no icon frame. This opaque image is the empty scene behind the extracted Mandelbulb layer."
+    ]
+  }
+}

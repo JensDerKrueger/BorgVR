@@ -73,41 +73,27 @@ struct ModeSelectionView: View {
 
   private var controlPanel: some View {
     VStack(alignment: .leading, spacing: 0) {
-      HStack(alignment: .top, spacing: 16) {
-        Image("borgvr")
-          .resizable()
-          .scaledToFill()
-          .frame(width: 72, height: 72)
-          .clipShape(RoundedRectangle(cornerRadius: 12))
-          .overlay {
-            RoundedRectangle(cornerRadius: 12)
-              .stroke(Color.primary.opacity(0.14), lineWidth: 1)
-          }
-          .shadow(color: .black.opacity(0.18), radius: 7, y: 3)
-          .accessibilityHidden(true)
+      VStack(alignment: .leading, spacing: 7) {
+        Text("BorgVR")
+          .font(.system(size: 44, weight: .bold))
 
-        VStack(alignment: .leading, spacing: 7) {
-          Text("BorgVR")
-            .font(.system(size: 44, weight: .bold))
+        Text("modeselection_tagline")
+          .font(.title3)
+          .foregroundStyle(.secondary)
+          .fixedSize(horizontal: false, vertical: true)
 
-          Text("modeselection_tagline")
-            .font(.title3)
-            .foregroundStyle(.secondary)
-            .fixedSize(horizontal: false, vertical: true)
-
-          Text(
-            String(
-              format: NSLocalizedString(
-                "modeselection_version_format",
-                comment: "Version label with app version and build number"
-              ),
-              Bundle.main.appVersion,
-              Bundle.main.appBuild
-            )
+        Text(
+          String(
+            format: NSLocalizedString(
+              "modeselection_version_format",
+              comment: "Version label with app version and build number"
+            ),
+            Bundle.main.appVersion,
+            Bundle.main.appBuild
           )
-          .font(.callout.weight(.medium))
-          .foregroundStyle(.tertiary)
-        }
+        )
+        .font(.callout.weight(.medium))
+        .foregroundStyle(.tertiary)
       }
 
       Spacer(minLength: 32)
