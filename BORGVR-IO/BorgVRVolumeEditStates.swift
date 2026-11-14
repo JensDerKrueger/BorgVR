@@ -24,7 +24,8 @@ final class BorgVRVolumeEditCatalog: @unchecked Sendable {
   let datasetID: String
   private let lock = NSRecursiveLock()
   private static let metadataFilename = "edit-state.plist"
-  private static let stateFiles = [metadataFilename, "mask.checkpoint", "brush.journal", "bricks.cache"]
+  private static let stateFiles = [metadataFilename, "mask.checkpoint", "brush.journal", "bricks.cache",
+    "bricks-astc4.cache", "bricks-astc8.cache"]
 
   static func removeStateStorage(at directory: URL) throws {
     for file in stateFiles {

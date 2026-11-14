@@ -35,13 +35,101 @@ private func expectThrows(
 
 private final class CapturingLogger: LoggerBase {
   private(set) var infoMessages: [String] = []
+  private(set) var progressMessages: [String] = []
 
   func dev(_ message: String) {}
   func info(_ message: String) { infoMessages.append(message) }
   func warning(_ message: String) {}
   func error(_ message: String) {}
-  func progress(_ message: String, _ progress: Double) {}
+  func progress(_ message: String, _ progress: Double) { progressMessages.append(message) }
   func setMinimumLogLevel(_ level: LogLevel) {}
+}
+
+private final class ForwardingVolumeAccessor: VolumeDataAccessor {
+  let source: RawFileAccessor
+
+  init(_ source: RawFileAccessor) {
+    self.source = source
+    super.init(size: source.size, bytesPerComponent: source.bytesPerComponent,
+      componentCount: source.componentCount, voxelSpacing: source.voxelSpacing, readOnly: true)
+  }
+
+  override func getData<T: FixedWidthInteger>(x: Int, y: Int, z: Int, count: Int = 1) throws -> [T] {
+    try source.getData(x: x, y: y, z: z, count: count)
+  }
+}
+
+private func testGlobalRangesAreCollectedDuringBricking() throws {
+  let directory = FileManager.default.temporaryDirectory
+    .appendingPathComponent("borgvr-brick-range-tests-\(UUID().uuidString)")
+  try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+  defer { try? FileManager.default.removeItem(at: directory) }
+
+  func check<T: FixedWidthInteger & UnsignedInteger>(_ type: T.Type,
+    components: Int, interpretation: BORGVRChannelInterpretation = .independentChannels) throws {
+    let size = Vec3<Int>(x: 13, y: 15, z: 17)
+    let count = size.x * size.y * size.z
+    let base = T.max / 2
+    var values: [T] = []
+    for voxel in 0..<count {
+      for channel in 0..<components {
+        values.append(base + T(channel * 20 + (voxel % 17)))
+      }
+    }
+    // Place extrema on opposite volume boundaries, not only in interior bricks.
+    values[0] = 1
+    values[values.count - 1] = T.max
+    if components > 1 { values[1] = 0 }
+    let includedChannels = interpretation == .rgb ? []
+      : (interpretation == .rgba ? [3] : Array(0..<components))
+    let expected = includedChannels.map { channel in
+      let samples = stride(from: channel, to: values.count, by: components).map { values[$0] }
+      return BORGVRComponentRange(minValue: Int(samples.min()!), maxValue: Int(samples.max()!))
+    }
+    let rawURL = directory.appendingPathComponent("source.raw")
+    try values.withUnsafeBytes { try Data($0).write(to: rawURL) }
+    let raw = try RawFileAccessor(filename: rawURL.path, size: size,
+      bytesPerComponent: MemoryLayout<T>.size, componentCount: components,
+      voxelSpacing: Vec3<Float>(repeating: 1))
+
+    for strategy in [ExtensionStrategy.fillZeroes, .clamp, .repeatValue] {
+      for useRawPath in [true, false] {
+        let accessor: VolumeDataAccessor = useRawPath ? raw : ForwardingVolumeAccessor(raw)
+        let outputURL = directory.appendingPathComponent("volume.data")
+        let logger = CapturingLogger()
+        try BrickedVolumeReorganizer(inputVolume: accessor, brickSize: 8, overlap: 2,
+          extensionStrategy: strategy).reorganize(to: outputURL.path,
+            datasetDescription: "Brick ranges", metaDescription: "", useCompressor: useRawPath,
+            logger: logger, channelInterpretation: interpretation)
+        let dataset = try BORGVRFileData(filename: outputURL.path)
+        let metadata = dataset.getMetadata()
+        try expect(metadata.componentRanges == expected,
+          "Global ranges include padding/LODs or lost source samples: \(type), \(components), \(strategy), raw \(useRawPath)")
+        try expect(logger.progressMessages.first == "Bricking",
+          "Bricking still performs a separate value-range scan")
+        let buffer = dataset.allocateBrickBuffer()
+        defer { buffer.deallocate() }
+        for index in metadata.brickMetadata.indices {
+          try dataset.getBrick(index: index, outputBuffer: buffer)
+          let decoded = UnsafeRawPointer(buffer).assumingMemoryBound(to: T.self)
+          let expectedBrick = includedChannels.map { channel in
+            let samples = stride(from: channel, to: 8 * 8 * 8 * components, by: components).map { decoded[$0] }
+            return BORGVRComponentRange(minValue: Int(samples.min()!), maxValue: Int(samples.max()!))
+          }
+          try expect(metadata.brickMetadata[index].componentRanges == expectedBrick,
+            "Brick ranges no longer match stored samples including padding")
+        }
+      }
+    }
+  }
+
+  for components in [1, 2, 4] {
+    try check(UInt8.self, components: components)
+    try check(UInt16.self, components: components)
+    try check(UInt32.self, components: components)
+  }
+  try check(UInt8.self, components: 3, interpretation: .rgb)
+  try check(UInt8.self, components: 4, interpretation: .rgba)
 }
 
 private final class OneShotDelayedDataset: BORGVRDatasetProtocol {
@@ -2262,6 +2350,7 @@ private func testStoredASTCVolumes() async throws {
     let original = try Data(contentsOf: raw)
     try expect(Data(flat[split.upperBound...]) == original, "ASTC NRRD export wrote compressed bytes instead of voxels")
     if interpretation == .rgba {
+      try runASTCEditCacheTests(source: source, directory: root.appendingPathComponent(name + "-cache-tests"))
       let model = VolumeBrushModel()
       defer { model.close() }
       let edited = model.open(source, datasetURL: url)
@@ -2394,6 +2483,7 @@ private enum VolumeConversionServiceTestRunner {
     try await testRGBAEditing()
     try runAutoImporterTests()
     try testSettingsAndCancellation()
+    try testGlobalRangesAreCollectedDuringBricking()
     try testAffineVolumeResampling()
     try testVolumeQuantization()
     try runVolumeEditTests()
@@ -2431,6 +2521,7 @@ private enum VolumeConversionServiceTestRunner {
     try testRegistrationRecoversTranslation()
     try testRegistrationRecoversRotationAroundVolumeCenter()
     try testRegistrationWithDifferentCropsAndUnmatchedStructures()
+    try MandelbulbEasterEggTests.run()
     print("Volume conversion service tests passed")
   }
 }

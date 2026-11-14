@@ -178,7 +178,7 @@ struct RenderView: View {
     .onChange(of: appSettings.showPerformanceButton) { _, visible in
       if !visible { dismissWindow(id: "PerformanceGraphView") }
     }
-    .onChange(of: appSettings.interfaceVisibility, initial: true) { applyInterfaceVisibility() }
+    .onChange(of: interfaceVisibility, initial: true) { applyInterfaceVisibility() }
     .onChange(of: sharePlay.isInSession) { _, active in
       if !active { applyInterfaceVisibility() }
     }
@@ -333,10 +333,15 @@ struct RenderView: View {
     }
   }
 
+  private var interfaceVisibility: InterfaceVisibility {
+    appSettings.interfaceVisibility.forDataset(supportsTransferFunctions:
+      appModel.activeDatasetMetadata.map { $0.channelInterpretation == .independentChannels } ?? true)
+  }
+
   private func applyInterfaceVisibility() {
     updateDetachedPanelWindows()
     guard appModel.automaticallyLoadsDatasetState else { return }
-    let visibility = appSettings.interfaceVisibility
+    let visibility = interfaceVisibility
     if !visibility.allowsInteraction(appModel.interactionMode.rawValue),
        let first = visibility.interactionModes.first,
        let mode = AppModel.InteractionMode(rawValue: first.rawValue) {
@@ -662,7 +667,7 @@ struct RenderView: View {
   }
 
   private func setRenderMode(_ mode: RenderMode) {
-    guard appSettings.interfaceVisibility.renderModeIDs.contains(mode.rawValue) else { return }
+    guard interfaceVisibility.renderModeIDs.contains(mode.rawValue) else { return }
     guard renderingParameters.renderMode != mode else { return }
     try? session.perform(.setRenderMode(mode), source: .userInterface)
   }
@@ -712,7 +717,7 @@ struct RenderView: View {
       (InterfaceVisibility.Panel.lighting, [DockablePanelID.lightingEditor]),
       (.transfer, [.transferFunctionEditor, .isoEditor]),
       (.objects, [.markerEditor]), (.measurements, [.measurementEditor]), (.brush, [.volumeBrushEditor])
-    ] where !appSettings.interfaceVisibility.showsScreenPanel(option) {
+    ] where !interfaceVisibility.showsScreenPanel(option) {
       for panel in panels where docking.isVisible(panel) || docking.isDetached(panel) {
         docking.close(panel)
         dismissWindow(id: panel.windowID)
@@ -760,7 +765,7 @@ struct RenderView: View {
   }
 
   private func applyInteractionModeSelection(_ mode: AppModel.InteractionMode) {
-    guard appSettings.interfaceVisibility.allowsInteraction(mode.rawValue) else { return }
+    guard interfaceVisibility.allowsInteraction(mode.rawValue) else { return }
     DispatchQueue.main.async {
       guard appModel.interactionMode != mode else { return }
       if mode != .measurement {

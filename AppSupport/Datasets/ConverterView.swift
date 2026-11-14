@@ -133,7 +133,7 @@ struct ConverterView: View {
               // Step 1: Input source
               VStack(alignment: .leading, spacing: 12) {
                 Text(importSourceKind.title)
-                  .font(.headline)
+                  .font(importSourceKind == .volumeFusion ? .title2.weight(.semibold) : .headline)
 
                 switch importSourceKind {
                   case .imageSequence:
@@ -174,14 +174,6 @@ struct ConverterView: View {
                     }
                     .onChange(of: fusionReference.access?.url) { _, _ in updateFusionSuggestion() }
                     .onChange(of: fusionRegistered.access?.url) { _, _ in updateFusionSuggestion() }
-                    Divider()
-                      .padding(.vertical, 4)
-                    HStack {
-                      Spacer(minLength: 0)
-                      ConverterVolumeFormatList(includesNativeBorgVR: true)
-                        .fixedSize(horizontal: true, vertical: false)
-                      Spacer(minLength: 0)
-                    }
                 }
               }
             case 2:
@@ -442,7 +434,8 @@ struct ConverterView: View {
   }
 
   private func importChoice(_ value: ImportSourceKind) -> ConverterChoiceItem {
-    ConverterChoiceItem(id: value.rawValue, title: value.title, systemImage: value.systemImage) {
+    ConverterChoiceItem(id: value.rawValue, title: value.title, systemImage: value.systemImage,
+      startsSection: value == .volumeFusion) {
       importSourceKind = value
     }
   }

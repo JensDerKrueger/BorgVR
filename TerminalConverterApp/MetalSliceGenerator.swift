@@ -119,7 +119,11 @@ final class MetalSliceGenerator {
     }
 
     let compileOptions = MTLCompileOptions()
-    compileOptions.mathMode = .safe
+    if #available(macOS 15, iOS 18, visionOS 2, *) {
+      compileOptions.mathMode = .safe
+    } else {
+      compileOptions.fastMathEnabled = false
+    }
     let library = try device.makeLibrary(source: shaderSource, options: compileOptions)
     guard let function = library.makeFunction(name: functionName) else {
       throw MetalSliceGeneratorError.functionNotFound(functionName)

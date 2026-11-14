@@ -77,6 +77,9 @@ final class VolumeEditSourceCache: BORGVRDatasetProtocol {
   }
 
   func newRequest() { source.newRequest() }
+  func getASTCBrick(index: Int, outputBuffer: UnsafeMutablePointer<UInt8>, synchronous: Bool) throws -> Bool {
+    try source.getASTCBrick(index: index, outputBuffer: outputBuffer, synchronous: synchronous)
+  }
   func getMetadata() -> BORGVRMetaData { source.getMetadata() }
   func allocateBrickBuffer() -> UnsafeMutablePointer<UInt8> { source.allocateBrickBuffer() }
   func updateResidentBrickIDs(_ ids: Set<Int>) {
@@ -239,12 +242,18 @@ final class BorgVREditableVolumeData: BORGVRDatasetProtocol, BorgVRVolumeGPUBrus
   private let materializer: BorgVRVolumeEditMaterializer?
   let journal: BorgVRVolumeEditJournal
   private let cache: BorgVRVolumeEditBrickCache
+  private let astcCache: BorgVRVolumeEditBrickCache?
   private let directory: URL
   private let worker = DispatchQueue(label: "BorgVR.VolumeEditing", qos: .userInitiated)
   private let backgroundWorker = DispatchQueue(label: "BorgVR.VolumeEditHierarchy", qos: .utility)
   private let demandWorker = DispatchQueue(label: "BorgVR.VolumeEditDemand", qos: .userInitiated)
   private let coarseDemandWorker = DispatchQueue(label: "BorgVR.VolumeEditCoarseDemand", qos: .userInitiated)
   private let persistenceWorker = DispatchQueue(label: "BorgVR.VolumeEditPersistence", qos: .utility)
+  private let astcWorker = DispatchQueue(label: "BorgVR.VolumeEditASTC", qos: .userInitiated)
+  private var astcRequests: Set<Int> = []
+  private var astcRunning = false
+  private var astcActive: (index: Int, revision: UInt64, generation: UInt64)?
+  private var astcFailures: [Int: UInt64] = [:]
   private let originalWorker = DispatchQueue(label: "BorgVR.VolumeEditOriginals", qos: .userInitiated)
   private let lock = NSLock()
   private var desired: [Int: UInt64] = [:]
@@ -299,6 +308,13 @@ final class BorgVREditableVolumeData: BORGVRDatasetProtocol, BorgVRVolumeGPUBrus
       initialSnapshot: initialSnapshot, persistOriginalSnapshot: persistOriginalSnapshot)
     cache = try BorgVRVolumeEditBrickCache(url: directory.appendingPathComponent("bricks.cache"),
                                           editStateID: journal.snapshot().editStateID)
+    let astcBlockSize = m.channelInterpretation.astcBlockSize
+    astcCache = astcBlockSize == 0 ? nil : try? BorgVRVolumeEditBrickCache(
+      url: directory.appendingPathComponent("bricks-astc\(astcBlockSize).cache"),
+      editStateID: journal.snapshot().editStateID)
+    if astcBlockSize != 0, astcCache == nil {
+      logger?.warning("ASTC edit cache unavailable; using voxel uploads for edited bricks.")
+    }
     // The dataset format does not record its padding mode. Preserve original padding
     // where possible; new boundaries use clamping consistently on every platform.
     let materializer = executor == nil ? try BorgVRVolumeEditMaterializer(source: cachedSource) : nil
@@ -352,13 +368,16 @@ final class BorgVREditableVolumeData: BORGVRDatasetProtocol, BorgVRVolumeGPUBrus
     lock.withLock {
       guard !stopped else { return nil }
       return BorgVRVolumeEditStatus(datasetID: getMetadata().uniqueID, hasEdits: maskHasEdits,
-        isUpdatingBricks: pendingBrickUpdates, pendingBrickCount: dirtyIDs.union(persistenceFailures.keys).count)
+        isUpdatingBricks: pendingBrickUpdates,
+        pendingBrickCount: dirtyIDs.union(persistenceFailures.keys).union(astcRequests)
+          .union(astcActive.map { [$0.index] } ?? []).count)
     }
   }
 
   private var pendingBrickUpdates: Bool {
     !stopped && (resetting || !dirtyIDs.isEmpty || !queued.isEmpty ||
-      !persistencePending.isEmpty || persistenceActive != nil || !persistenceFailures.isEmpty)
+      !persistencePending.isEmpty || persistenceActive != nil || !persistenceFailures.isEmpty ||
+      !astcRequests.isEmpty || astcActive != nil)
   }
 
   /// Call with the dataset lock held (or before publishing the initialized object).
@@ -413,10 +432,11 @@ final class BorgVREditableVolumeData: BORGVRDatasetProtocol, BorgVRVolumeGPUBrus
   deinit { try? journal.checkpoint() }
 
   func stop() {
-    lock.withLock { stopped = true; backgroundIDs.removeAll(); updateBackgroundWorkStatus() }
+    lock.withLock { stopped = true; backgroundIDs.removeAll(); astcRequests.removeAll(); updateBackgroundWorkStatus() }
     worker.async { [self] in
       try? journal.checkpoint()
       persistenceWorker.async { [self] in try? cache.compactIfNeeded() }
+      astcWorker.async { [self] in try? astcCache?.compactIfNeeded() }
     }
   }
 
@@ -424,6 +444,7 @@ final class BorgVREditableVolumeData: BORGVRDatasetProtocol, BorgVRVolumeGPUBrus
   func shutdown(completion: @escaping @Sendable (Error?) -> Void) {
     lock.withLock {
       stopped = true; editGeneration &+= 1; backgroundIDs.removeAll(); persistencePending.removeAll()
+      astcRequests.removeAll()
     }
     worker.async { [self] in
       backgroundWorker.sync {}
@@ -432,6 +453,9 @@ final class BorgVREditableVolumeData: BORGVRDatasetProtocol, BorgVRVolumeGPUBrus
       originalWorker.sync {}
       materializations.wait()
       do {
+        // Persistence can enqueue encodings; drain it before closing the derived cache.
+        persistenceWorker.sync {}
+        try astcWorker.sync { try astcCache?.closeStorage() }
         try persistenceWorker.sync { try cache.closeStorage() }
         try journal.closeStorage()
         completion(nil)
@@ -517,6 +541,135 @@ final class BorgVREditableVolumeData: BORGVRDatasetProtocol, BorgVRVolumeGPUBrus
       result.bytes.count == m.brickSize * m.brickSize * m.brickSize * m.componentCount * m.bytesPerComponent,
       result.componentRanges.count == m.channelInterpretation.rangeCount(componentCount: m.componentCount) else { return nil }
     return result
+  }
+
+  func getASTCBrick(index: Int, outputBuffer: UnsafeMutablePointer<UInt8>, synchronous: Bool) throws -> Bool {
+    guard getMetadata().channelInterpretation.astcBlockSize != 0 else { return false }
+    let (target, generation, recorded) = try lock.withLock {
+      guard !stopped, !resetting else { throw BORGVRDataError.brickNotYetAvailable(index: index) }
+      return (desired[index], editGeneration, recordedRevision)
+    }
+    func validate() throws {
+      guard lock.withLock({ !stopped && !resetting && editGeneration == generation &&
+        recordedRevision == recorded && desired[index] == target }) else {
+        throw BORGVRDataError.brickNotYetAvailable(index: index)
+      }
+    }
+    guard let target else {
+      let encoded = try source.getASTCBrick(index: index, outputBuffer: outputBuffer, synchronous: synchronous)
+      try validate()
+      return encoded
+    }
+    guard let astcCache else { return false }
+    if lock.withLock({ astcFailures[index] == target }) {
+      try validate()
+      return false // An optional cache write failure must not prevent rendering.
+    }
+    let byteCount = try getMetadata().fullBrickByteCount()
+    let cached: Bool
+    do { cached = try astcCache.readBrick(index: index, revision: target, into: outputBuffer, byteCount: byteCount) != nil }
+    catch {
+      astcCache.invalidate(index: index, revision: target)
+      cached = false
+    }
+    if cached {
+      try validate()
+      return true
+    }
+    if synchronous {
+      // Only the initial overview is synchronous; normal paging never encodes on the render thread.
+      do { try astcWorker.sync { try encodeASTCBrick(index: index, revision: target, generation: generation) } }
+      catch is CancellationError { throw BORGVRDataError.brickNotYetAvailable(index: index) }
+      catch BORGVRDataError.brickNotYetAvailable { throw BORGVRDataError.brickNotYetAvailable(index: index) }
+      catch {
+        failASTCBrick(index, revision: target, error: error)
+        try validate()
+        return false
+      }
+      if let _ = try astcCache.readBrick(index: index, revision: target, into: outputBuffer, byteCount: byteCount) {
+        try validate()
+        return true
+      }
+    } else {
+      enqueueASTCBrick(index)
+    }
+    throw BORGVRDataError.brickNotYetAvailable(index: index)
+  }
+
+  private func enqueueASTCBrick(_ index: Int) {
+    guard astcCache != nil else { return }
+    let start = lock.withLock { () -> Bool in
+      guard !stopped, !resetting, !dirtyIDs.contains(index), let target = desired[index] else { return false }
+      if let active = astcActive, active.index == index, active.revision == target,
+         active.generation == editGeneration { return false }
+      astcRequests.insert(index)
+      updateBackgroundWorkStatus()
+      guard !astcRunning else { return false }
+      astcRunning = true
+      return true
+    }
+    if start { astcWorker.async { [self] in encodeNextASTCBrick() } }
+  }
+
+  private func encodeNextASTCBrick() {
+    let request = lock.withLock { () -> (index: Int, revision: UInt64, generation: UInt64)? in
+      // Select at execution time: prioritize atlas residents and the finest LOD,
+      // and always encode the latest ready edit rather than a queued old revision.
+      while !stopped, !resetting, let index = astcRequests.min(by: {
+        if residentIDs.contains($0) != residentIDs.contains($1) { return residentIDs.contains($0) }
+        return $0 < $1
+      }) {
+        astcRequests.remove(index)
+        guard !dirtyIDs.contains(index), let target = desired[index] else { continue }
+        astcActive = (index, target, editGeneration)
+        return astcActive
+      }
+      astcRunning = false
+      updateBackgroundWorkStatus()
+      return nil
+    }
+    guard let request else { return }
+    do { try encodeASTCBrick(index: request.index, revision: request.revision, generation: request.generation) }
+    catch is CancellationError {}
+    catch BORGVRDataError.brickNotYetAvailable {}
+    catch { failASTCBrick(request.index, revision: request.revision, error: error) }
+    lock.withLock { astcActive = nil; updateBackgroundWorkStatus() }
+    astcWorker.async { [self] in encodeNextASTCBrick() }
+  }
+
+  private func failASTCBrick(_ index: Int, revision: UInt64, error: Error) {
+    lock.withLock { astcFailures[index] = revision }
+    logger?.warning("Could not cache an ASTC edited brick: \(error.localizedDescription)")
+  }
+
+  private func encodeASTCBrick(index: Int, revision: UInt64, generation: UInt64) throws {
+    guard let astcCache else { return }
+    func validate() throws {
+      guard lock.withLock({ !stopped && !resetting && editGeneration == generation && desired[index] == revision }) else {
+        throw CancellationError()
+      }
+    }
+    try validate()
+    let m = getMetadata()
+    if astcCache.summary(index: index, revision: revision)?.metadata.size == (try m.fullBrickByteCount()) { return }
+    let buffer = allocateBrickBuffer()
+    defer { buffer.deallocate() }
+    // Unlike startup's getFirstBrick, this must never return an original fallback.
+    try getBrick(index: index, outputBuffer: buffer)
+    try validate()
+    guard lock.withLock({ !dirtyIDs.contains(index) }) else {
+      throw BORGVRDataError.brickNotYetAvailable(index: index)
+    }
+    let bytes = BorgVRASTCCodec.encode(buffer, brickSize: m.brickSize,
+      components: m.componentCount, blockSize: m.channelInterpretation.astcBlockSize)
+    try validate()
+    let ranges = visibilityMetadata(index: index)?.componentRanges ?? []
+    try astcCache.store(.init(index: index, revision: revision, bytes: bytes,
+      componentRanges: ranges, matchesOriginal: false))
+    lock.withLock {
+      guard !stopped, !resetting, editGeneration == generation, desired[index] == revision else { return }
+      publish([index])
+    }
   }
 
   func getBrick(index: Int, outputBuffer: UnsafeMutablePointer<UInt8>) throws {
@@ -665,6 +818,7 @@ final class BorgVREditableVolumeData: BORGVRDatasetProtocol, BorgVRVolumeGPUBrus
       resetting = true
       editGeneration &+= 1
       backgroundIDs.removeAll()
+      astcRequests.removeAll()
       backgroundRunning = false
       persistencePending.removeAll()
       updateBackgroundWorkStatus()
@@ -686,6 +840,7 @@ final class BorgVREditableVolumeData: BORGVRDatasetProtocol, BorgVRVolumeGPUBrus
         let revision = journal.snapshot().revision
         lock.withLock {
           desired.removeAll(); ranges.removeAll(); pendingEraseRanges.removeAll(); dirtyIDs.removeAll()
+          astcFailures.removeAll()
           maskHasEdits = false
           readyBricks.removeAll(); readyOrder.removeAll(); readyBytes = 0
           backgroundIDs.removeAll(); persistencePending.removeAll()
@@ -696,6 +851,7 @@ final class BorgVREditableVolumeData: BORGVRDatasetProtocol, BorgVRVolumeGPUBrus
         // Drain old IO before unlinking files. Closed stores stay in memory until
         // another brush operation recreates them; idle checkpoints are no-ops.
         try persistenceWorker.sync { try cache.closeForRemoval() }
+        try astcWorker.sync { try astcCache?.closeForRemoval() }
         try journal.closeForRemoval()
         try BorgVRVolumeEditCatalog.removeStateStorage(at: directory)
       } catch { failure = error }
@@ -1075,6 +1231,7 @@ final class BorgVREditableVolumeData: BORGVRDatasetProtocol, BorgVRVolumeGPUBrus
     guard let next else { return }
     do {
       try cache.store(next, synchronize: lock.withLock { foregroundJobs == 0 })
+      enqueueASTCBrick(next.index)
       lock.withLock {
         if let failure = persistenceFailures[next.index], failure.revision <= next.revision {
           persistenceFailures[next.index] = nil

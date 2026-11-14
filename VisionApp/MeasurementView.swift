@@ -114,8 +114,8 @@ struct MeasurementView: View {
                     ? "smallcircle.filled.circle.fill" : "smallcircle.filled.circle"
                 )
               }
-              .buttonStyle(.bordered)
-              .tint(sharedAppModel.selectedVolumeMeasurementPointID == point.id ? .accentColor : nil)
+              .buttonStyle(VisionSelectionButtonStyle(
+                isSelected: sharedAppModel.selectedVolumeMeasurementPointID == point.id))
             }
           }
         }

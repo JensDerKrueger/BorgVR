@@ -87,6 +87,16 @@ struct InterfaceVisibility: Equatable {
   var hasScreenPanels: Bool { Panel.allCases.contains(where: showsScreenPanel) }
   var isCustomized: Bool { self != Self() }
 
+  /// Dataset-specific controls are hidden without changing the saved UI preferences.
+  func forDataset(supportsTransferFunctions: Bool) -> Self {
+    guard !supportsTransferFunctions else { return self }
+    var result = self
+    result.interactions = interactionModes.reduce(0) { $0 | $1.bit } & ~Interaction.transferEditing.bit
+    if result.interactions == 0 { result.interactions = Interaction.model.bit }
+    result.panels &= ~(Panel.lighting.bit | Panel.transfer.bit)
+    return result
+  }
+
   mutating func setRenderMode(_ id: UInt8, enabled: Bool) {
     guard id < 3 else { return }
     let bit = 1 << Int(id)

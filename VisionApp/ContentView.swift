@@ -5,6 +5,7 @@ import SwiftUI
  and uses `navigationState` only while no dataset session is active.
  */
 struct ContentView: View {
+  var isDatasetWindow = false
   /// The shared application model injected into the environment, holding app state.
   @Environment(RuntimeAppModel.self) private var runtimeAppModel
 
@@ -19,11 +20,19 @@ struct ContentView: View {
           phase: runtimeAppModel.datasetBufferingPhase)
           .frame(maxWidth: .infinity, maxHeight: .infinity)
       case .rendering:
-        RenderView()
+        if isDatasetWindow {
+          RenderView()
+        } else {
+          Color.clear
+        }
       case .closing(_, _, let destination):
         switch destination {
           case .datasetSelection:
-            RenderView()
+            if isDatasetWindow {
+              RenderView()
+            } else {
+              Color.clear
+            }
           case .sharePlayWaiting:
             WaitingView()
         }
@@ -39,10 +48,55 @@ struct ContentView: View {
         ModeSelectionView()
       case .settings:
         SettingsView()
-      case .importData:
-        ConverterView()
       case .selectData:
         OpenDatasetView()
+    }
+  }
+}
+
+/// Keep the browser as the parent of the controls, following visionOS's paired
+/// window/immersive-space lifecycle instead of treating backgrounding as a close.
+struct DatasetControlsPresentation: ViewModifier {
+  @Environment(RuntimeAppModel.self) private var runtimeAppModel
+  @Environment(\.pushWindow) private var pushWindow
+  @State private var controlsWerePushed = false
+
+  func body(content: Content) -> some View {
+    content
+      .onChange(of: runtimeAppModel.immersiveSpaceState, initial: true) { _, state in
+        guard state == .open, !controlsWerePushed else { return }
+        switch runtimeAppModel.datasetSessionState {
+          case .opening, .rendering: break
+          default: return
+        }
+        controlsWerePushed = true
+        if !runtimeAppModel.isViewOpen("DatasetControls") {
+          pushWindow(id: "DatasetControls")
+        }
+      }
+      .onChange(of: runtimeAppModel.datasetSessionState) { _, state in
+        switch state {
+          case .inactive, .waitingForSharePlay, .resolving:
+            controlsWerePushed = false
+          default:
+            break
+        }
+      }
+  }
+}
+
+struct DatasetControlsDismissal: ViewModifier {
+  @Environment(RuntimeAppModel.self) private var runtimeAppModel
+  @Environment(\.dismiss) private var dismiss
+
+  func body(content: Content) -> some View {
+    content.onChange(of: runtimeAppModel.datasetSessionState, initial: true) { _, state in
+      switch state {
+        case .inactive, .waitingForSharePlay, .resolving:
+          dismiss()
+        default:
+          break
+      }
     }
   }
 }

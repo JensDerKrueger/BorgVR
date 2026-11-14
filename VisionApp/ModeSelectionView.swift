@@ -71,6 +71,7 @@ struct ModeSelectionView: View {
             .frame(width: 300, height: 300)
             .clipShape(RoundedRectangle(cornerRadius: 20))
             .shadow(radius: 10)
+            .modifier(MandelbulbEasterEgg())
             .padding()
           Spacer()
         }
@@ -89,10 +90,12 @@ struct ModeSelectionView: View {
         .buttonStyle(.borderedProminent)
 
         Button {
-          runtimeAppModel.navigationState = .importData
+          guard runtimeAppModel.canImportDataset else { return }
+          openWindow(id: "ImportDataset")
         } label: {
           Label("mode_button_import_dataset", systemImage: "tray.and.arrow.down")
         }
+        .disabled(!runtimeAppModel.canImportDataset)
         .padding()
         .buttonStyle(.borderedProminent)
 

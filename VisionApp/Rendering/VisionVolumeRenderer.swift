@@ -255,6 +255,7 @@ final actor VisionVolumeRenderer {
        dataset: BORGVRDatasetProtocol,
        datasetID: String,
        requestID: UUID,
+       initialFrameSnapshot: BorgVRFrameSnapshot,
        transferFunctionPanelInteractionState: TransferFunctionPanelInteractionState,
        immersiveInteraction: ImmersiveInteraction,
        logger: LoggerBase? = nil) throws {
@@ -281,7 +282,6 @@ final actor VisionVolumeRenderer {
     OversamplingMode.dynamicMode.rawValue
     self.logger = logger
 
-    let initialFrameSnapshot = session.frameSnapshot()
     let renderTransferFunctions = RenderTransferFunctionSet(device: layerRenderer.device)
     let metadata = dataset.getMetadata()
     if metadata.channelInterpretation == .independentChannels {
@@ -1169,7 +1169,10 @@ extension VisionVolumeRenderer {
     let dropThreshold = Double(dropFPS)
     let samplingRate = Double(activeOversampling)
     let baseSamplingRate = Double(initialOversampling)
+    let atlasStatistics = volumeAtlas.pagingStatistics
+    let timestamp = CACurrentMediaTime()
     DispatchQueue.main.async {
+      runtimeAppModel.atlasPagingModel.record(timestamp: timestamp, statistics: atlasStatistics)
       runtimeAppModel.performanceModel.history.recoveryThreshold = recoveryThreshold
       runtimeAppModel.performanceModel.history.dropThreshold = dropThreshold
       runtimeAppModel.performanceModel.history.add(last: last,
@@ -2377,6 +2380,7 @@ extension VisionVolumeRenderer {
     let runtimeAppModel = session.runtimeState
     guard case .opening(let activeDataset, let requestID) = runtimeAppModel.datasetSessionState,
           activeDataset.uniqueId == datasetID else { return }
+    let initialFrameSnapshot = session.currentFrameSnapshot()
     runtimeAppModel.renderTask?.cancel()
     runtimeAppModel.renderTask = Task(executorPreference: VisionVolumeRendererTaskExecutor.shared) {
       do {
@@ -2388,6 +2392,7 @@ extension VisionVolumeRenderer {
           dataset: dataset,
           datasetID: datasetID,
           requestID: requestID,
+          initialFrameSnapshot: initialFrameSnapshot,
           transferFunctionPanelInteractionState: transferFunctionPanelInteractionState,
           immersiveInteraction: immersiveInteraction,
           logger: logger
@@ -2400,7 +2405,9 @@ extension VisionVolumeRenderer {
         await runtimeAppModel.setDatasetBufferingPhase(.renderingFirstFrame, requestID: requestID)
         await renderer.renderLoop()
       } catch {
+        guard !Task.isCancelled else { return }
         logger?.error("Failed to start render loop: \(error)")
+        await runtimeAppModel.renderLoopFailed(requestID: requestID)
       }
     }
   }

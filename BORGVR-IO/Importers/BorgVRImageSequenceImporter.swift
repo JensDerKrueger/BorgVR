@@ -103,9 +103,11 @@ enum BorgVRImageSequenceImporter {
         }
         try handle.write(contentsOf: slice)
       }
-      logger?.progress("Reading image sequence", Double(z + 1) / Double(files.count))
+      logger?.progress(String(localized: "Reading image sequence", table: "ImportMessages"), Double(z + 1) / Double(files.count))
     }
-    logger?.info("Image sequence: \(width) x \(height) x \(files.count), \(hasAlpha ? "RGBA" : "RGB"), sorted by filename.")
+    logger?.info(String(format: String(localized:
+      "Image sequence: %ld x %ld x %ld, %@, sorted by filename.", table: "ImportMessages"),
+      width, height, files.count, hasAlpha ? "RGBA" : "RGB"))
     return BorgVRRawVolumeSource(url: output, offset: 0,
       size: Vec3(x: width, y: height, z: files.count), bytesPerComponent: 1,
       componentCount: components,

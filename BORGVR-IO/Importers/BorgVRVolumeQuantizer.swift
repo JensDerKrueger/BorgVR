@@ -46,7 +46,7 @@ enum BorgVRVolumeQuantizer {
     let chunkVoxels = max(1, 1_000_000 / channels)
     let voxelCount = source.totalVoxels
 
-    logger?.info("Quantizing volume to 8 bits per channel.")
+    logger?.info(String(localized: "Quantizing volume to 8 bits per channel.", table: "ImportMessages"))
     for start in stride(from: 0, to: voxelCount, by: chunkVoxels) {
       try cancellationToken?.checkCancellation()
       let end = min(start + chunkVoxels, voxelCount)
@@ -59,12 +59,14 @@ enum BorgVRVolumeQuantizer {
           maxima[channel] = max(maxima[channel], value)
         }
       }
-      logger?.progress("Analyzing channel ranges", Double(end) / Double(voxelCount))
+      logger?.progress(String(localized: "Analyzing channel ranges", table: "ImportMessages"), Double(end) / Double(voxelCount))
     }
     let originalRanges = (0..<channels).map { channel in
       let minimum = Int64(minima[channel]) - Int64(signMasks[channel])
       let maximum = Int64(maxima[channel]) - Int64(signMasks[channel])
-      logger?.info("Channel \(channel + 1): original value range \(minimum)...\(maximum); quantizing to 8 bits.")
+      logger?.info(String(format: String(localized:
+        "Channel %ld: original value range %lld...%lld; quantizing to 8 bits.", table: "ImportMessages"),
+        channel + 1, minimum, maximum))
       return "channel \(channel + 1): \(minimum)...\(maximum)"
     }
 
@@ -94,7 +96,7 @@ enum BorgVRVolumeQuantizer {
         }
       }
       try output.write(contentsOf: Data(bytes))
-      logger?.progress("Quantizing volume", Double(end) / Double(voxelCount))
+      logger?.progress(String(localized: "Quantizing volume", table: "ImportMessages"), Double(end) / Double(voxelCount))
     }
     try cancellationToken?.checkCancellation()
     completed = true

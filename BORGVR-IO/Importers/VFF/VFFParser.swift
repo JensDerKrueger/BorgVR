@@ -116,7 +116,9 @@ public final class VFFParser: VolumeFileParser {
     defer { if !succeeded { try? FileManager.default.removeItem(at: temporary) } }
     let output = try MemoryMappedFile(filename: temporary.path, size: Int64(byteCount))
     defer { try? output.close() }
-    log?("VFF: reading \(axes.map(String.init).joined(separator: " x ")), signed \(bits)-bit Big Endian samples; shifting into the unsigned range.")
+    log?(String(format: String(localized:
+      "VFF: reading %@, signed %ld-bit Big Endian samples; shifting into the unsigned range.", table: "ImportMessages"),
+      axes.map(String.init).joined(separator: " x "), bits))
     progress?(0)
     try data.withUnsafeBytes { source in
       let samples = UnsafeRawBufferPointer(rebasing: source[payload..<(payload + byteCount)])

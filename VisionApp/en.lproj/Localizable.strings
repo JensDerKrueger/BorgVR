@@ -385,6 +385,12 @@
 
 /* Profile view: buttons and toggles */
 "profile_button_performance_graph" = "Performance Graph";
+"profile_button_memory_usage" = "Memory / Atlas";
+"profile_memory_usage_title" = "Memory Usage / Atlas";
+"Paging" = "Paging";
+"Atlas occupancy" = "Atlas occupancy";
+"Last 30 seconds" = "Last 30 seconds";
+"Remove cached bricks from the atlas, keeping the lowest-resolution brick." = "Remove cached bricks from the atlas, keeping the lowest-resolution brick.";
 "profile_button_show_log" = "Show Log";
 "profile_toggle_show_bricks" = "Show Bricks";
 "Resident Bricks (Red)" = "Resident Bricks (Red)";
@@ -866,6 +872,7 @@
 
 /* Log: writing metadata */
 "bricked_log_writing_metadata" = "Writing metadata";
+"bricked_log_ranges_progress_title" = "Determining value ranges";
 
 /* Log: reorganization complete */
 "bricked_log_reorganization_complete" = "Reorganization complete";
@@ -1444,3 +1451,20 @@
 "Fusion interpolation" = "Fusion interpolation";
 "converter_desc_from_registered_volume_pair" = "Registered fusion of volumes %@ and %@";
 "Fusion requires two single-channel integer volumes with matching 8-, 16- or 32-bit precision." = "Fusion requires two single-channel integer volumes with matching 8-, 16- or 32-bit precision.";
+"mandelbulb_artwork_description" = "A Mandelbulb is a three-dimensional fractal, a relative of the Mandelbrot set. Repeating a mathematical rule produces intricate, self-similar structures at ever smaller scales. This fractal uses the eighth power.";
+"mandelbulb_invitation" = "I see you can't keep your hands off this Mandelbulb. Four clicks! That's not curiosity anymore, that's a relationship. Would you like a Mandelbulb of your own? I'll gladly calculate one, fresh from infinity and just for you. It costs nothing but a little computing time. Well, and some disk space.";
+"mandelbulb_choose_size" = "How large should your Mandelbulb be?";
+"mandelbulb_size_small" = "Small";
+"mandelbulb_size_medium" = "Medium";
+"mandelbulb_size_large" = "Large";
+"mandelbulb_yes" = "Yes";
+"mandelbulb_no" = "No";
+"mandelbulb_cancel" = "Cancel";
+"mandelbulb_create" = "Create";
+"mandelbulb_close" = "Close";
+"mandelbulb_generating" = "Calculating fractal...";
+"mandelbulb_converting" = "Preparing dataset...";
+"mandelbulb_size_huge" = "Huge";
+"mandelbulb_space_required_format" = "Free space needed during calculation (including reserve): %@\nFinished dataset (compressed, approx.): %@";
+"mandelbulb_insufficient_space_format" = "Not enough free space at %@.\nRequired: %@. Available: %@.";
+"mandelbulb_space_unavailable_format" = "The available space at %@ could not be determined.";

@@ -18,8 +18,13 @@ struct RenderControlsPanel: View {
   @State private var pendingModeReset: AppModel.InteractionMode?
 
   private var displayedRenderModeIDs: [UInt8] {
-    appSettings.interfaceVisibility.displayedRenderModeIDs(
+    interfaceVisibility.displayedRenderModeIDs(
       active: renderingParameters.renderMode.rawValue, inSharePlay: sharePlay.isInSession)
+  }
+
+  private var interfaceVisibility: InterfaceVisibility {
+    appSettings.interfaceVisibility.forDataset(supportsTransferFunctions:
+      appModel.activeDatasetMetadata.map { $0.channelInterpretation == .independentChannels } ?? true)
   }
 
   var body: some View {
@@ -59,7 +64,7 @@ struct RenderControlsPanel: View {
           ForEach(RenderMode.allCases.filter { displayedRenderModeIDs.contains($0.rawValue) }) { mode in
             Text(mode.description)
               .tag(mode)
-              .disabled(!appSettings.interfaceVisibility.renderModeIDs.contains(mode.rawValue))
+              .disabled(!interfaceVisibility.renderModeIDs.contains(mode.rawValue))
           }
         }
         .pickerStyle(.segmented)
@@ -135,13 +140,13 @@ struct RenderControlsPanel: View {
 
   @ViewBuilder
   private var interactionModePicker: some View {
-    if appSettings.interfaceVisibility.interactionModes.count > 1
+    if interfaceVisibility.interactionModes.count > 1
       || appSettings.showModeResetButtons
     {
       VStack(spacing: 2) {
         if appSettings.showModeResetButtons {
           HStack(spacing: 4) {
-            ForEach(appSettings.interfaceVisibility.interactionModes) { option in
+            ForEach(interfaceVisibility.interactionModes) { option in
               if let mode = AppModel.InteractionMode(rawValue: option.rawValue) {
                 if mode == .volumeEditing {
                   VolumeEditResetButton(model: appModel.volumeBrush).frame(maxWidth: .infinity)
@@ -152,9 +157,9 @@ struct RenderControlsPanel: View {
             }
           }
         }
-        if appSettings.interfaceVisibility.interactionModes.count > 1 {
+        if interfaceVisibility.interactionModes.count > 1 {
           HStack(spacing: 4) {
-            ForEach(appSettings.interfaceVisibility.interactionModes) { option in
+            ForEach(interfaceVisibility.interactionModes) { option in
               if let mode = AppModel.InteractionMode(rawValue: option.rawValue) {
                 interactionModeSegment(mode, title: option.title, systemImage: option.icon)
               }
@@ -282,14 +287,14 @@ struct RenderControlsPanel: View {
 
   @ViewBuilder
   private var modeWindowButtons: some View {
-    if appSettings.interfaceVisibility.hasScreenPanels {
-      if appSettings.interfaceVisibility.isCustomized {
+    if interfaceVisibility.hasScreenPanels {
+      if interfaceVisibility.isCustomized {
         HStack(spacing: 4) {
-          if appSettings.interfaceVisibility.showsScreenPanel(.lighting) { lightingWindowButton }
-          if appSettings.interfaceVisibility.showsScreenPanel(.transfer) { editorWindowButton }
-          if appSettings.interfaceVisibility.showsScreenPanel(.objects) { objectWindowButton }
-          if appSettings.interfaceVisibility.showsScreenPanel(.measurements) { measurementWindowButton }
-          if appSettings.interfaceVisibility.showsScreenPanel(.brush) { brushWindowButton }
+          if interfaceVisibility.showsScreenPanel(.lighting) { lightingWindowButton }
+          if interfaceVisibility.showsScreenPanel(.transfer) { editorWindowButton }
+          if interfaceVisibility.showsScreenPanel(.objects) { objectWindowButton }
+          if interfaceVisibility.showsScreenPanel(.measurements) { measurementWindowButton }
+          if interfaceVisibility.showsScreenPanel(.brush) { brushWindowButton }
         }
         .frame(height: 34)
       } else {
@@ -566,11 +571,11 @@ struct RenderControlsPanel: View {
     Binding(
       get: { renderingParameters.renderMode },
       set: { newMode in
-        guard appSettings.interfaceVisibility.renderModeIDs.contains(newMode.rawValue),
+        guard interfaceVisibility.renderModeIDs.contains(newMode.rawValue),
               newMode != renderingParameters.renderMode else { return }
         Task { @MainActor in
           await Task.yield()
-          guard appSettings.interfaceVisibility.renderModeIDs.contains(newMode.rawValue) else { return }
+          guard interfaceVisibility.renderModeIDs.contains(newMode.rawValue) else { return }
           try? session.perform(.setRenderMode(newMode), source: .userInterface)
         }
       }

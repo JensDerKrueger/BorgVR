@@ -126,6 +126,7 @@ enum VisionVolumeRendererBootstrap {
     // Timer setup
     let timer = GPUFrameTimer()
     runtimeAppModel.timer = timer
+    runtimeAppModel.atlasPagingModel.reset()
 
     // Reset rendering parameters and optionally autoload TF/Transform
     sharedAppModel.reset()

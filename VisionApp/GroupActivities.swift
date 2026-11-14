@@ -939,30 +939,19 @@ class GroupActivityHelper {
       return
     }
 
-    if let localDataset = findLocalDataset(id: initMessage.uniqueID) {
-      let localFile = localDataset.url
-      runtimeAppModel.logger.info("Found SharePlay dataset \(initMessage.uniqueID) locally at \(localFile.path()).")
-      pendingDatasetLoadTask?.cancel()
-      pendingDatasetLoadTask = nil
-      pendingDatasetLoad = nil
+    pendingDatasetLoadTask?.cancel()
+    pendingDatasetLoadTask = nil
+    pendingDatasetLoad = PendingDatasetLoad(
+      uniqueID: initMessage.uniqueID,
+      description: initMessage.description,
+      generation: generation
+    )
+    retryPendingDatasetLoad()
+  }
 
-      runtimeAppModel.startImmersiveSpace(identifier: localFile.path(),
-                                   description: initMessage.description,
-                                   source: localDataset.source,
-                                   uniqueId: initMessage.uniqueID,
-                                   asGroupSessionHost: false)
-      Task { await advertiseCurrentLocalDataset() }
-    } else {
-      runtimeAppModel.logger.info("SharePlay dataset \(initMessage.uniqueID) is not available locally; searching known network sources.")
-      pendingDatasetLoadTask?.cancel()
-      pendingDatasetLoadTask = nil
-      pendingDatasetLoad = PendingDatasetLoad(
-        uniqueID: initMessage.uniqueID,
-        description: initMessage.description,
-        generation: generation
-      )
-      retryPendingDatasetLoad()
-    }
+  @MainActor
+  func resumePendingDatasetLoad() {
+    retryPendingDatasetLoad()
   }
 
   @MainActor
@@ -970,23 +959,34 @@ class GroupActivityHelper {
     guard let pending = pendingDatasetLoad,
           pending.generation == sessionGeneration,
           groupSession != nil,
-          runtimeAppModel?.groupSessionHost != true else { return }
+          let runtimeAppModel,
+          !runtimeAppModel.groupSessionHost,
+          runtimeAppModel.canOpenDataset else { return }
     guard pendingDatasetLoadTask == nil else { return }
+    if let localDataset = findLocalDataset(id: pending.uniqueID) {
+      guard runtimeAppModel.startImmersiveSpace(identifier: localDataset.url.path(),
+        description: pending.description, source: localDataset.source,
+        uniqueId: pending.uniqueID, asGroupSessionHost: false) else { return }
+      runtimeAppModel.logger.info("Found SharePlay dataset \(pending.uniqueID) locally at \(localDataset.url.path()).")
+      pendingDatasetLoad = nil
+      Task { await advertiseCurrentLocalDataset() }
+      return
+    }
     let origins = knownOrigins(for: pending.uniqueID)
-    runtimeAppModel?.beginResolvingSharePlayDataset(
+    runtimeAppModel.beginResolvingSharePlayDataset(
       uniqueID: pending.uniqueID,
       description: pending.description
     )
     guard !origins.isEmpty else {
-      runtimeAppModel?.sharePlayDatasetSource = nil
-      runtimeAppModel?.logger.warning("No known source currently provides SharePlay dataset \(pending.uniqueID); waiting for participant sources.")
+      runtimeAppModel.sharePlayDatasetSource = nil
+      runtimeAppModel.logger.warning("No known source currently provides SharePlay dataset \(pending.uniqueID); waiting for participant sources.")
       schedulePendingDatasetLoadRetry(
         uniqueID: pending.uniqueID,
         generation: pending.generation
       )
       return
     }
-    runtimeAppModel?.logger.info("Trying \(origins.count) known source(s) for SharePlay dataset \(pending.uniqueID).")
+    runtimeAppModel.logger.info("Trying \(origins.count) known source(s) for SharePlay dataset \(pending.uniqueID).")
     pendingDatasetLoadTask = Task { [weak self] in
       guard let self else { return }
       await self.openFirstReachableRemoteDataset(
@@ -1030,9 +1030,9 @@ class GroupActivityHelper {
       uniqueId: uniqueID
     )
     runtimeAppModel.logger.info("Loading SharePlay dataset \(uniqueID) from \(remoteSource.address):\(remoteSource.port).")
-    pendingDatasetLoad = nil
     pendingDatasetLoadTask = nil
-    runtimeAppModel.startImmersiveSpace(dataset: dataset, asGroupSessionHost:false)
+    guard runtimeAppModel.startImmersiveSpace(dataset: dataset, asGroupSessionHost:false) else { return }
+    pendingDatasetLoad = nil
   }
 
   @MainActor

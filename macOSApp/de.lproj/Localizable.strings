@@ -349,6 +349,7 @@
 
 /* Log: writing metadata */
 "bricked_log_writing_metadata" = "Metadaten werden geschrieben";
+"bricked_log_ranges_progress_title" = "Wertebereiche werden bestimmt";
 
 /* Log: reorganization complete */
 "bricked_log_reorganization_complete" = "Reorganisation abgeschlossen";
@@ -1174,3 +1175,20 @@
 "Fusion interpolation" = "Interpolation bei der Fusion";
 "converter_desc_from_registered_volume_pair" = "Registrierte Fusion der Volumen %@ und %@";
 "Fusion requires two single-channel integer volumes with matching 8-, 16- or 32-bit precision." = "Die Fusion benötigt zwei einkanalige Integer-Volumen mit gleicher 8-, 16- oder 32-Bit-Präzision.";
+"mandelbulb_artwork_description" = "Ein Mandelbulb ist ein dreidimensionales Fraktal, ein Verwandter der Mandelbrot-Menge. Durch wiederholtes Anwenden einer mathematischen Regel entstehen komplexe, selbstähnliche Strukturen auf immer kleineren Skalen. Dieses Fraktal verwendet die achte Potenz.";
+"mandelbulb_invitation" = "Ich merke schon: Sie können die Finger nicht von diesem Mandelbulb lassen. Viermal geklickt! Das ist keine Neugier mehr, das ist eine Beziehung. Möchten Sie einen eigenen Mandelbulb haben? Ich rechne Ihnen gerne einen aus, frisch aus der Unendlichkeit und nur für Sie. Kostet nichts außer ein bisschen Rechenzeit. Na gut, und etwas Speicherplatz.";
+"mandelbulb_choose_size" = "Wie groß soll Ihr Mandelbulb werden?";
+"mandelbulb_size_small" = "Klein";
+"mandelbulb_size_medium" = "Mittel";
+"mandelbulb_size_large" = "Groß";
+"mandelbulb_yes" = "Ja";
+"mandelbulb_no" = "Nein";
+"mandelbulb_cancel" = "Abbrechen";
+"mandelbulb_create" = "Erstellen";
+"mandelbulb_close" = "Schließen";
+"mandelbulb_generating" = "Fraktal wird berechnet...";
+"mandelbulb_converting" = "Datensatz wird vorbereitet...";
+"mandelbulb_size_huge" = "Riesig";
+"mandelbulb_space_required_format" = "Während der Berechnung frei benötigt (inkl. Reserve): %@\nFertiger Datensatz (komprimiert, ca.): %@";
+"mandelbulb_insufficient_space_format" = "Nicht genügend freier Speicherplatz unter %@.\nBenötigt: %@. Verfügbar: %@.";
+"mandelbulb_space_unavailable_format" = "Der freie Speicherplatz unter %@ konnte nicht ermittelt werden.";

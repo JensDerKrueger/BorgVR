@@ -227,6 +227,18 @@ private enum SettingsArchiveTests {
     for mask in 1...127 {
       let original = InterfaceVisibility(interactions: mask)
       let enabled = original.interactionModes
+      try expect(original.forDataset(supportsTransferFunctions: true) == original,
+        "Scalar dataset filtering changed the saved interface")
+      let color = original.forDataset(supportsTransferFunctions: false)
+      try expect(!color.interactionModes.contains(.transferEditing) && !color.interactionModes.isEmpty,
+        "Color volumes must hide transfer interaction and retain a usable mode")
+      try expect(!color.showsPanel(.transfer) && !color.showsPanel(.lighting) &&
+        !color.showsScreenPanel(.transfer) && !color.showsScreenPanel(.lighting),
+        "Color volumes retained unsupported panels")
+      try expect(original.interactions == mask && original.panels == InterfaceVisibility.allPanels,
+        "Color volume filtering modified saved preferences")
+      try expect(color.showsPanel(.objects) && color.showsPanel(.measurements) && color.showsPanel(.brush),
+        "Color volumes lost supported spatial panels")
       try expect(original.showsScreenPanel(.lighting), "Lighting gained an unrelated interaction dependency")
       try expect(original.showsScreenPanel(.transfer) == enabled.contains(.transferEditing),
         "Transfer panel does not follow transfer interaction visibility")

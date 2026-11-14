@@ -52,7 +52,7 @@ struct ModeSelectionView: View {
               scriptDropIsTargeted = isTargeted
             }
           }
-          .accessibilityHidden(true)
+          .modifier(MandelbulbEasterEgg())
 
         controlPanel
           .frame(width: panelWidth)

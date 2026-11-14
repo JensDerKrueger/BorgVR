@@ -345,6 +345,7 @@
 
 /* Log: writing metadata */
 "bricked_log_writing_metadata" = "Escribiendo metadatos";
+"bricked_log_ranges_progress_title" = "Determinando los rangos de valores";
 
 /* Log: reorganization complete */
 "bricked_log_reorganization_complete" = "Reorganización completada";
@@ -1170,3 +1171,20 @@
 "Fusion interpolation" = "Interpolación de fusión";
 "converter_desc_from_registered_volume_pair" = "Fusión registrada de los volúmenes %@ y %@";
 "Fusion requires two single-channel integer volumes with matching 8-, 16- or 32-bit precision." = "La fusión requiere dos volúmenes enteros de un canal con la misma precisión de 8, 16 o 32 bits.";
+"mandelbulb_artwork_description" = "Un Mandelbulb es un fractal tridimensional, emparentado con el conjunto de Mandelbrot. La repetición de una regla matemática produce estructuras complejas y autosimilares a escalas cada vez menores. Este fractal utiliza la octava potencia.";
+"mandelbulb_invitation" = "Veo que no puede apartarse de este Mandelbulb. ¡Cuatro clics! Eso ya no es curiosidad, es una relación. ¿Le gustaría tener su propio Mandelbulb? Con gusto le calcularé uno, recién salido del infinito y solo para usted. No cuesta nada más que un poco de tiempo de cálculo. Bueno, y algo de espacio en disco.";
+"mandelbulb_choose_size" = "¿Qué tamaño desea para su Mandelbulb?";
+"mandelbulb_size_small" = "Pequeño";
+"mandelbulb_size_medium" = "Mediano";
+"mandelbulb_size_large" = "Grande";
+"mandelbulb_yes" = "Sí";
+"mandelbulb_no" = "No";
+"mandelbulb_cancel" = "Cancelar";
+"mandelbulb_create" = "Crear";
+"mandelbulb_close" = "Cerrar";
+"mandelbulb_generating" = "Calculando el fractal...";
+"mandelbulb_converting" = "Preparando el conjunto de datos...";
+"mandelbulb_size_huge" = "Gigante";
+"mandelbulb_space_required_format" = "Espacio libre necesario durante el cálculo (incluida la reserva): %@\nVolumen final (comprimido, aprox.): %@";
+"mandelbulb_insufficient_space_format" = "No hay suficiente espacio libre en %@.\nNecesario: %@. Disponible: %@";
+"mandelbulb_space_unavailable_format" = "No se pudo determinar el espacio libre en %@.";

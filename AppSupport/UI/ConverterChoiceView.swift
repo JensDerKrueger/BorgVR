@@ -7,8 +7,8 @@ import UniformTypeIdentifiers
 enum VolumeImportKind: String, CaseIterable, Identifiable {
   case volumeFile
   case dicomDirectory
-  case volumeFusion
   case imageSequence
+  case volumeFusion
 
   var id: Self { self }
 
@@ -43,7 +43,7 @@ struct VolumeFusionSelection {
       }
     }
   }
-  var kind: Kind = .file
+  var kind: Kind = .dicom
   var access: VolumeImportSourceAccess?
   var input: BorgVRVolumeInput? {
     guard let access else { return nil }
@@ -82,6 +82,15 @@ struct VolumeFusionSourcePicker: View {
         DicomSlicePreview(model: preview).frame(height: 240)
       }
 #endif
+      if selection.kind == .file {
+#if os(visionOS)
+        ConverterVolumeFormatButton(includesNativeBorgVR: true)
+          .padding(.top, 8)
+#else
+        ConverterVolumeFormatList(includesNativeBorgVR: true)
+          .padding(.top, 8)
+#endif
+      }
     }
     .frame(maxWidth: .infinity, alignment: .topLeading)
     .onChange(of: selection.kind) { _, _ in selection.access = nil }
@@ -123,11 +132,13 @@ struct ConverterChoiceItem: Identifiable {
   let id: String
   let title: LocalizedStringKey
   let systemImage: String
+  var startsSection = false
   let action: () -> Void
 }
 
 struct ConverterVolumeFormatList: View {
   var includesNativeBorgVR = false
+  var showsTitle = true
 
   private let formats = [
     ("QVIS", ".dat + .raw"),
@@ -141,8 +152,10 @@ struct ConverterVolumeFormatList: View {
 
   var body: some View {
     VStack(alignment: .leading, spacing: 10) {
-      Text("Supported volume formats")
-        .font(.subheadline.weight(.semibold))
+      if showsTitle {
+        Text("Supported volume formats")
+          .font(.subheadline.weight(.semibold))
+      }
       Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 6) {
         ForEach(formats, id: \.0) { format in
           formatRow(format.0, extensions: format.1)
@@ -167,6 +180,60 @@ struct ConverterVolumeFormatList: View {
     }
   }
 }
+
+#if os(visionOS)
+struct ConverterWizardFooter<Leading: View, Actions: View>: View {
+  @ViewBuilder let leading: Leading
+  @ViewBuilder let actions: Actions
+
+  var body: some View {
+    HStack(spacing: 12) {
+      leading
+      Spacer(minLength: 24)
+      actions
+    }
+    .font(.headline)
+    .buttonStyle(.bordered)
+    .buttonBorderShape(.capsule)
+    .padding(.horizontal, 16)
+    .padding(.vertical, 12)
+    .frame(minHeight: 80)
+  }
+}
+
+struct ConverterVolumeFormatButton: View {
+  var includesNativeBorgVR = false
+  @State private var showsFormats = false
+
+  var body: some View {
+    Button { showsFormats = true } label: {
+      Label("Supported volume formats", systemImage: "info.circle")
+    }
+    .sheet(isPresented: $showsFormats) {
+      VStack(alignment: .leading, spacing: 20) {
+        Text("Supported volume formats")
+          .font(.title2.bold())
+        ScrollView {
+          VStack(alignment: .leading, spacing: 20) {
+            ConverterVolumeFormatList(includesNativeBorgVR: includesNativeBorgVR, showsTitle: false)
+            Text("For QVIS and NHDR, select both the metadata and referenced raw data files.")
+              .font(.callout)
+              .foregroundStyle(.secondary)
+              .fixedSize(horizontal: false, vertical: true)
+          }
+        }
+        HStack {
+          Spacer()
+          Button("Done") { showsFormats = false }
+            .keyboardShortcut(.defaultAction)
+        }
+      }
+      .padding(24)
+      .frame(width: 640, height: 540)
+    }
+  }
+}
+#endif
 
 struct ConverterWizardHeader: View {
   let title: LocalizedStringKey
@@ -243,6 +310,22 @@ struct ConverterWizardSelectionStep: View {
         }
       }
       Spacer()
+#if os(visionOS)
+      ConverterWizardFooter {
+        EmptyView()
+      } actions: {
+        Button(action: onBack) {
+          Label("converter_button_back", systemImage: "chevron.backward")
+            .frame(minWidth: 120)
+        }
+        .disabled(!canGoBack)
+        Button(action: onNext) {
+          Label("converter_nav_next", systemImage: "chevron.forward")
+            .frame(minWidth: 240)
+        }
+        .disabled(selectedID == nil)
+      }
+#else
       HStack {
         Spacer()
         Button(action: onBack) { Label("converter_button_back", systemImage: "chevron.backward") }
@@ -250,6 +333,7 @@ struct ConverterWizardSelectionStep: View {
         Button(action: onNext) { Label("converter_nav_next", systemImage: "chevron.forward") }
           .disabled(selectedID == nil)
       }
+#endif
     }
   }
 
@@ -263,12 +347,20 @@ struct ConverterWizardSelectionStep: View {
     VStack(spacing: 4) {
       ForEach(choices) { choice in
         let selected = choice.id == selectedID
+        if choice.startsSection {
+          Divider()
+            .padding(.vertical, 8)
+        }
         Button(action: choice.action) {
           HStack(spacing: 12) {
             Image(systemName: selected ? "largecircle.fill.circle" : "circle")
+#if !os(visionOS)
               .foregroundStyle(selected ? Color.accentColor : .secondary)
+#endif
             Image(systemName: choice.systemImage)
+#if !os(visionOS)
               .foregroundStyle(.tint)
+#endif
               .frame(width: 24)
             Text(choice.title)
               .fixedSize(horizontal: false, vertical: true)
@@ -276,11 +368,17 @@ struct ConverterWizardSelectionStep: View {
           }
           .padding(12)
           .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+#if !os(visionOS)
           .background(selected ? Color.accentColor.opacity(0.12) : .clear,
             in: RoundedRectangle(cornerRadius: 6))
           .contentShape(Rectangle())
+#endif
         }
+#if os(visionOS)
+        .buttonStyle(VisionSelectionButtonStyle(isSelected: selected))
+#else
         .buttonStyle(.plain)
+#endif
         .accessibilityAddTraits(selected ? .isSelected : [])
       }
     }

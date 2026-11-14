@@ -208,7 +208,7 @@ final class DicomParser {
         // A DICOM directory can contain unrelated files. Keep scanning.
       }
       logger?.progress(
-        "Reading DICOM files",
+        String(localized: "Reading DICOM files", table: "ImportMessages"),
         Double(index + 1) / Double(dicomFiles.count)
       )
     }
@@ -310,7 +310,7 @@ final class DicomParser {
     } else {
       pixelPaddingValue = nil
       logger?.warning(
-        "Ignoring inconsistent Pixel Padding Value metadata in the DICOM series."
+        String(localized: "Ignoring inconsistent Pixel Padding Value metadata in the DICOM series.", table: "ImportMessages")
       )
     }
     let pixelRepresentations = Set(sorted.compactMap { $0.1.pixelRepresentation })
@@ -325,7 +325,7 @@ final class DicomParser {
     } else {
       frameOfReferenceUID = nil
       logger?.warning(
-        "Ignoring inconsistent Frame of Reference UID metadata in the DICOM series."
+        String(localized: "Ignoring inconsistent Frame of Reference UID metadata in the DICOM series.", table: "ImportMessages")
       )
     }
 
@@ -349,7 +349,7 @@ final class DicomParser {
       }
       buffer.replaceSubrange(offset..<offset + pixels.count, with: pixels)
       logger?.progress(
-        "Decoding DICOM volume",
+        String(localized: "Decoding DICOM volume", table: "ImportMessages"),
         Double(i + 1) / Double(sorted.count)
       )
     }

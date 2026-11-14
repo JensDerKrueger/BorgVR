@@ -203,7 +203,8 @@ struct MarkerView: View {
               }
             }
           }
-          .buttonStyle(.plain)
+          .buttonStyle(VisionSelectionButtonStyle(
+            isSelected: sharedAppModel.selectedVolumeMarkerIDs.contains(marker.id)))
         }
         ForEach(sharedAppModel.sceneMeshInstances) { instance in
           Button {
@@ -228,7 +229,8 @@ struct MarkerView: View {
               }
             }
           }
-          .buttonStyle(.plain)
+          .buttonStyle(VisionSelectionButtonStyle(
+            isSelected: sharedAppModel.selectedSceneMeshInstanceID == instance.id))
         }
       }
       .frame(minHeight: 210)

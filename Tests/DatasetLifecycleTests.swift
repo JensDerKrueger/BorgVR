@@ -18,6 +18,7 @@ struct DatasetLifecycleTests {
     let settings = AppSettings()
     let parameters = RenderingParameters()
     guard let device = MTLCreateSystemDefaultDevice() else { fatalError("Metal device required for TF tests") }
+    try rendererStartupSnapshots(device: device)
     for tf in parameters.transferFunctions { tf.initMetal(device: device) }
     let keys = ["autoloadTF", "autoloadObjects", "autoloadMeasurements", "autoloadRenderState"]
     let previous = keys.map { UserDefaults.standard.object(forKey: $0) }
@@ -161,5 +162,38 @@ struct DatasetLifecycleTests {
     precondition(openModel.activeDataset?.uniqueId == metadata.uniqueID)
     precondition(showedEditSelection, "Interactive opening must retain the edit-selection dialog")
     print("Termination auto-save, direct import opening and deterministic automation (TF/state/objects/measurements/edits) passed")
+  }
+
+  @MainActor
+  private static func rendererStartupSnapshots(device: MTLDevice) throws {
+    let parameters = RenderingParameters()
+    parameters.updateRanges(minValue: 0, maxValue: 255, rangeMax: 255, componentCount: 4)
+    let session = ScreenBorgVRSession.screen(appModel: AppModel(),
+      renderingParameters: parameters, appSettings: AppSettings())
+    precondition(session.frameSnapshot().transferFunctions.count == 4)
+
+    // Dataset loading updates the model in one MainActor turn; observation has not
+    // published those changes yet when the render worker is submitted.
+    parameters.updateRanges(minValue: 0, maxValue: 4095, rangeMax: 65535, componentCount: 1)
+    let old = session.frameSnapshot()
+    precondition(old.transferFunctions.count == 4, "Fixture must reproduce the deferred snapshot")
+    let renderer = RenderTransferFunctionSet(device: device)
+    do {
+      try renderer.synchronize(with: old.transferFunctions,
+        componentRanges: parameters.componentRanges, rangeMax: parameters.rangeMax)
+      fatalError("The old four-channel snapshot must not fit a single-channel dataset")
+    } catch is TransferFunction1DError { }
+
+    for channels in [1, 2, 4, 1] {
+      parameters.updateRanges(minValue: 0, maxValue: 4095, rangeMax: 65535, componentCount: channels)
+      let startup = session.currentFrameSnapshot()
+      precondition(startup.transferFunctions.count == channels)
+      precondition(session.frameSnapshot().transferFunctions.count == channels)
+      try renderer.synchronize(with: startup.transferFunctions,
+        componentRanges: parameters.componentRanges, rangeMax: parameters.rangeMax)
+      precondition(renderer.activeTransferFunctions.count == channels)
+      precondition(abs(renderer.activeTransferFunctions[0].textureBias - Float(65535) / 4095) < 0.0001)
+    }
+    print("Renderer startup snapshots passed: four-channel color to scalar and repeated channel changes")
   }
 }

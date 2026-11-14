@@ -591,6 +591,150 @@ private func prepareEdits(_ dataset: BorgVREditableVolumeData) throws {
   try waitForEditOperation { dataset.preparePendingEdits(cancellationToken: .init(), progress: { _ in }, completion: $0) }
 }
 
+private final class ASTCEditReadProbe: BORGVRDatasetProtocol {
+  let source: BORGVRDatasetProtocol
+  private let lock = NSLock()
+  private var forbidden = false
+  private var decoded = 0
+  var forbidsDecodedReads: Bool {
+    get { lock.withLock { forbidden } }
+    set { lock.withLock { forbidden = newValue } }
+  }
+  var decodedReads: Int { lock.withLock { decoded } }
+  init(_ source: BORGVRDatasetProtocol) { self.source = source }
+  func getMetadata() -> BORGVRMetaData { source.getMetadata() }
+  func allocateBrickBuffer() -> UnsafeMutablePointer<UInt8> { source.allocateBrickBuffer() }
+  func newRequest() { source.newRequest() }
+  func getASTCBrick(index: Int, outputBuffer: UnsafeMutablePointer<UInt8>, synchronous: Bool) throws -> Bool {
+    try source.getASTCBrick(index: index, outputBuffer: outputBuffer, synchronous: synchronous)
+  }
+  func getBrick(index: Int, outputBuffer: UnsafeMutablePointer<UInt8>) throws {
+    try lock.withLock {
+      try check(!forbidden, "ASTC paging requested decoded original voxels")
+      decoded += 1
+    }
+    try source.getBrick(index: index, outputBuffer: outputBuffer)
+  }
+  func getFirstBrick(outputBuffer: UnsafeMutablePointer<UInt8>) throws {
+    try getBrick(index: getMetadata().brickMetadata.count - 1, outputBuffer: outputBuffer)
+  }
+}
+
+func runASTCEditCacheTests(source: BORGVRDatasetProtocol, directory: URL) throws {
+  let probe = ASTCEditReadProbe(source), m = source.getMetadata()
+  let catalog = try BorgVRVolumeEditCatalog(root: directory, datasetID: m.uniqueID)
+  let state = BorgVRVolumeEditState(id: UUID(), datasetID: m.uniqueID, name: "ASTC test", kind: .local,
+    createdAt: Date(), modifiedAt: Date())
+  let cacheURL = try catalog.directory(for: state.id)
+    .appendingPathComponent("bricks-astc\(m.channelInterpretation.astcBlockSize).cache")
+  let buffer = source.allocateBrickBuffer()
+  defer { buffer.deallocate() }
+  let encodedCount = try m.fullBrickByteCount()
+  var original: [Int: Data] = [:]
+  for id in m.brickMetadata.indices {
+    try check(try source.getASTCBrick(index: id, outputBuffer: buffer, synchronous: false), "Missing original ASTC")
+    original[id] = Data(bytes: buffer, count: encodedCount)
+  }
+  let starting = BorgVRVolumeEditDataSource(original: probe, catalog: catalog, logger: nil, backgroundWorkChanged: { _ in })
+  let overview = m.brickMetadata.count - 1
+  try check(try starting.getASTCBrick(index: overview, outputBuffer: buffer, synchronous: true),
+    "Atlas startup failed while the edit layer was not yet active")
+  try check(Data(bytes: buffer, count: encodedCount) == original[overview], "Initial overview ASTC changed")
+  do {
+    _ = try starting.getASTCBrick(index: 0, outputBuffer: buffer, synchronous: false)
+    throw EditTestError(message: "Normal paging bypassed a pending edit-state transition")
+  } catch BORGVRDataError.brickNotYetAvailable {}
+  try waitForEditOperation { starting.shutdown(completion: $0) }
+  func open() throws -> BorgVRVolumeEditDataSource {
+    let result = BorgVRVolumeEditDataSource(original: probe, catalog: catalog, logger: nil, backgroundWorkChanged: { _ in })
+    try waitForEditOperation { result.activate(state, completion: $0) }
+    return result
+  }
+  func prepare(_ data: BorgVRVolumeEditDataSource) throws {
+    try waitForEditOperation { data.preparePendingEdits(cancellationToken: .init(), progress: { _ in }, completion: $0) }
+  }
+  var data = try open()
+  defer { try? waitForEditOperation { data.shutdown(completion: $0) } }
+  for id in m.brickMetadata.indices {
+    try check(try data.getASTCBrick(index: id, outputBuffer: buffer, synchronous: false), "Original ASTC passthrough failed")
+  }
+  try check(probe.decodedReads == 0, "Unedited ASTC source decoded voxels")
+  let small = BorgVRVolumeBrushSample(center: SIMD3(Double(m.voxelSpacingX), Double(m.voxelSpacingY),
+    Double(m.voxelSpacingZ)) * 0.5, radius: Double(m.voxelSpacingX) * 0.6)
+  try waitForEditOperation { data.brush([small], mode: .erase, channels: .selected([3]), completion: $0) }
+  try prepare(data)
+  let affected = Set(data.gpuBrushHistory().last?.affectedBrickIDs ?? [])
+  try check(!affected.isEmpty && affected.count < m.brickMetadata.count, "Small edit did not leave untouched bricks")
+  let reads = probe.decodedReads
+  for id in m.brickMetadata.indices where !affected.contains(id) {
+    try check(try data.getASTCBrick(index: id, outputBuffer: buffer, synchronous: false), "An unrelated edit disabled ASTC passthrough")
+    try check(Data(bytes: buffer, count: encodedCount) == original[id], "Untouched ASTC changed")
+  }
+  try check(probe.decodedReads == reads, "Untouched bricks were decoded")
+  var expected: [Int: Data] = [:]
+  for id in affected {
+    try data.getBrick(index: id, outputBuffer: buffer)
+    let bytes = BorgVRASTCCodec.encode(buffer, brickSize: m.brickSize,
+      components: m.componentCount, blockSize: m.channelInterpretation.astcBlockSize)
+    expected[id] = Data(bytes)
+    try check(try data.getASTCBrick(index: id, outputBuffer: buffer, synchronous: true), "Edited ASTC cache was not created")
+    try check(Data(bytes: buffer, count: encodedCount) == expected[id], "Edited ASTC differs from canonical voxels")
+  }
+  try waitForEditOperation { data.shutdown(completion: $0) }
+  probe.forbidsDecodedReads = true
+  data = try open()
+  let stored = try Data(contentsOf: cacheURL)
+  for _ in 0..<3 { for id in m.brickMetadata.indices {
+    try check(try data.getASTCBrick(index: id, outputBuffer: buffer, synchronous: false), "Persisted edit lost direct ASTC access")
+    try check(Data(bytes: buffer, count: encodedCount) == (expected[id] ?? original[id]), "Reopened ASTC payload changed")
+  } }
+  try check(try Data(contentsOf: cacheURL) == stored, "Paging rewrote an already encoded ASTC cache")
+  try waitForEditOperation { data.shutdown(completion: $0) }
+  for corrupt in [false, true] {
+    if corrupt { try Data("corrupt".utf8).write(to: cacheURL) }
+    else { try FileManager.default.removeItem(at: cacheURL) }
+    data = try open()
+    let id = affected.sorted().first!
+    do {
+      try check(try data.getASTCBrick(index: id, outputBuffer: buffer, synchronous: false), "Missing cache returned raw data")
+    } catch BORGVRDataError.brickNotYetAvailable {}
+    try check(try data.getASTCBrick(index: id, outputBuffer: buffer, synchronous: true), "ASTC cache reconstruction failed")
+    try check(Data(bytes: buffer, count: encodedCount) == expected[id], "Reconstructed ASTC changed canonical data")
+    try waitForEditOperation { data.shutdown(completion: $0) }
+  }
+  probe.forbidsDecodedReads = false
+  data = try open()
+  let full = BorgVRVolumeBrushSample(center: .zero, radius: 100)
+  try waitForEditOperation { data.brush([full], mode: .erase, channels: .selected([3]), completion: $0) }
+  try prepare(data)
+  for id in m.brickMetadata.indices {
+    try check(try data.getASTCBrick(index: id, outputBuffer: buffer, synchronous: true), "New edit did not provide ASTC")
+    try BorgVRASTCCodec.decodeInPlace(buffer, metadata: m)
+    for i in stride(from: 3, to: try m.voxelBrickByteCount(), by: 4) {
+      try check(buffer[i] == 0, "Old ASTC revision survived a new edit")
+    }
+  }
+  try waitForEditOperation { data.brush([full], mode: .restore, channels: .selected([3]), completion: $0) }
+  try prepare(data)
+  for id in m.brickMetadata.indices {
+    try check(try data.getASTCBrick(index: id, outputBuffer: buffer, synchronous: false), "Restore lost original ASTC passthrough")
+    try check(Data(bytes: buffer, count: encodedCount) == original[id], "Restore reused lossy edited ASTC")
+  }
+  try waitForEditOperation { data.discardAllEdits(completion: $0) }
+  try check(!FileManager.default.fileExists(atPath: cacheURL.path), "Discard left a derived ASTC cache")
+  for id in m.brickMetadata.indices {
+    try check(try data.getASTCBrick(index: id, outputBuffer: buffer, synchronous: false), "Discard broke original ASTC access")
+  }
+  try FileManager.default.createDirectory(at: cacheURL, withIntermediateDirectories: true)
+  try waitForEditOperation { data.brush([full], mode: .erase, channels: .selected([3]), completion: $0) }
+  try prepare(data)
+  try check(try !data.getASTCBrick(index: 0, outputBuffer: buffer, synchronous: true),
+    "An unwritable optional ASTC cache must fall back to voxel uploads")
+  try data.getBrick(index: 0, outputBuffer: buffer)
+  try check(buffer[3] == 0, "ASTC cache failure lost the canonical edit")
+  print("ASTC edit cache \(m.channelInterpretation.astcBlockSize)x\(m.channelInterpretation.astcBlockSize): passthrough, persisted uploads, lazy recovery, revisions, restore and discard passed")
+}
+
 private func testMaterializerCacheCompletion() throws {
   let source = EditTestDataset(bytesPerComponent: 1), m = source.metadata
   let builder = try BorgVRVolumeEditMaterializer(source: source, usesMetal: false)

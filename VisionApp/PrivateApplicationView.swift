@@ -21,9 +21,14 @@ struct HandInteractionControlsView: View {
   @State private var transferFunctionLoadError: Error?
   @State private var showTransferFunctionLoadError = false
 
+  private var interfaceVisibility: InterfaceVisibility {
+    storedAppModel.interfaceVisibility.forDataset(supportsTransferFunctions:
+      runtimeAppModel.activeDatasetInfo.map { $0.channelInterpretation == .independentChannels } ?? true)
+  }
+
   var body: some View {
     VStack(spacing: 10) {
-      if storedAppModel.interfaceVisibility.interactionModes.count > 1 {
+      if interfaceVisibility.interactionModes.count > 1 {
         Text("private_interaction_title")
           .font(.headline)
           .bold()
@@ -81,28 +86,11 @@ struct HandInteractionControlsView: View {
               .font(.headline)
               .contentTransition(.opacity)
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
             .frame(minHeight: 44)
-            .contentShape(
-              RoundedRectangle(cornerRadius: 24, style: .continuous)
-            )
           }
-          .buttonStyle(.plain)
-          .glassBackgroundEffect(in: .rect(cornerRadius: 24))
-          .overlay(
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-              .strokeBorder(
-                voice.isEnabled ? (
-                  voice.isPassive
-                  ? Color.yellow.opacity(0.45)
-                  : Color.red.opacity(0.45)
-                )
-                : Color.white.opacity(0.12),
-                lineWidth: 2
-              )
-          )
-          .shadow(radius: voice.isEnabled ? 14 : 6)
+          .buttonStyle(.bordered)
+          .buttonBorderShape(.capsule)
+          .tint(voice.isEnabled ? (voice.isPassive ? Color.yellow : .red) : nil)
           .animation(
             .spring(response: 0.28, dampingFraction: 0.85),
             value: voice.isEnabled
@@ -186,7 +174,7 @@ struct HandInteractionControlsView: View {
       Text(error.localizedDescription)
     }
     .onAppear(perform: refreshTransferFunctionCatalog)
-    .onChange(of: storedAppModel.interfaceVisibility, initial: true) { _, visibility in
+    .onChange(of: interfaceVisibility, initial: true) { _, visibility in
       guard runtimeAppModel.automaticallyLoadsDatasetState else { return }
       if runtimeAppModel.interactionMode == .screenView, hasSharedScreenView,
          visibility.interactionModes.count > 1 { return }
@@ -259,7 +247,7 @@ struct HandInteractionControlsView: View {
 
   private func interactionControls(showTitles: Bool) -> some View {
     VStack(spacing: 8) {
-      if storedAppModel.interfaceVisibility.interactionModes.count > 1
+      if interfaceVisibility.interactionModes.count > 1
         || storedAppModel.showModeResetButtons
       {
         InteractionModePicker(
@@ -275,10 +263,10 @@ struct HandInteractionControlsView: View {
           resetPlacement: { showDeleteAllObjectsConfirmation = true },
           resetMeasurement: { showDeleteAllMeasurementsConfirmation = true },
           resetEdits: { showDiscardAllEditsConfirmation = true },
-          visibility: storedAppModel.interfaceVisibility
+          visibility: interfaceVisibility
         )
       }
-      if storedAppModel.interfaceVisibility.hasPanels {
+      if interfaceVisibility.hasPanels {
         Text("private_windows_title")
           .font(.headline)
           .bold()
@@ -291,25 +279,25 @@ struct HandInteractionControlsView: View {
 
   @ViewBuilder
   private func modeWindowButtons(showTitles: Bool) -> some View {
-    if storedAppModel.interfaceVisibility.isCustomized {
+    if interfaceVisibility.isCustomized {
       HStack(spacing: 8) {
-        if storedAppModel.interfaceVisibility.showsPanel(.lighting) {
+        if interfaceVisibility.showsPanel(.lighting) {
           lightingButton(showTitles: showTitles)
             .disabled(
               runtimeAppModel.activeDatasetInfo?.channelInterpretation != .independentChannels)
         }
-        if storedAppModel.interfaceVisibility.showsPanel(.transfer) {
+        if interfaceVisibility.showsPanel(.transfer) {
           editorButton(showTitles: showTitles)
             .disabled(
               runtimeAppModel.activeDatasetInfo?.channelInterpretation != .independentChannels)
         }
-        if storedAppModel.interfaceVisibility.showsPanel(.objects) {
+        if interfaceVisibility.showsPanel(.objects) {
           markerWindowButton(showTitles: showTitles)
         }
-        if storedAppModel.interfaceVisibility.showsPanel(.measurements) {
+        if interfaceVisibility.showsPanel(.measurements) {
           measurementWindowButton(showTitles: showTitles)
         }
-        if storedAppModel.interfaceVisibility.showsPanel(.brush) {
+        if interfaceVisibility.showsPanel(.brush) {
           brushWindowButton(showTitles: showTitles)
         }
       }
@@ -834,19 +822,23 @@ struct InteractionModePicker: View {
               } label: {
                 resetIcon(color: color)
               }
-              .buttonStyle(.plain)
+              .buttonStyle(.bordered)
+              .buttonBorderShape(.circle)
+              .controlSize(.mini)
               .accessibilityLabel(Text(resetTitle))
               .help(Text(resetTitle))
             } else if let resetAction, let resetTitle {
               Button(action: resetAction) {
                 resetIcon(color: color)
               }
-              .buttonStyle(.plain)
+              .buttonStyle(.bordered)
+              .buttonBorderShape(.circle)
+              .controlSize(.mini)
               .accessibilityLabel(Text(resetTitle))
               .help(Text(resetTitle))
             } else {
               Color.clear
-                .frame(width: 24, height: 24)
+                .frame(width: 28, height: 28)
                 .accessibilityHidden(true)
             }
           }
@@ -872,17 +864,10 @@ struct InteractionModePicker: View {
               }
               .font(.callout)
               .fontWeight(isSelected ? .semibold : .regular)
-              .foregroundStyle(color)
               .lineLimit(1)
               .frame(maxWidth: .infinity, minHeight: 34)
-              .padding(.horizontal, 7)
-              .background(
-                color.opacity(isSelected ? 0.24 : 0),
-                in: RoundedRectangle(cornerRadius: 6)
-              )
-              .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(VisionSelectionButtonStyle(isSelected: isSelected, tint: color))
             .accessibilityAddTraits(isSelected ? .isSelected : [])
             .accessibilityLabel(Text(title))
             .help(Text(title))
@@ -900,8 +885,6 @@ struct InteractionModePicker: View {
     Image(systemName: "arrow.counterclockwise")
       .font(.caption)
       .foregroundStyle(color)
-      .frame(width: 24, height: 24)
-      .background(color.opacity(0.12), in: Circle())
-      .contentShape(Circle())
+      .frame(width: 16, height: 16)
   }
 }

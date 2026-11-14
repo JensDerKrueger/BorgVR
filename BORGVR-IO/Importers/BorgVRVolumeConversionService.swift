@@ -126,7 +126,7 @@ public struct BorgVRVolumeResampling: Sendable {
         }
         try row.withUnsafeBytes { try output.write(contentsOf: $0) }
       }
-      logger?.progress("Resampling volume", Double(z + 1) / Double(size.z))
+      logger?.progress(String(localized: "Resampling volume", table: "ImportMessages"), Double(z + 1) / Double(size.z))
     }
   }
 }
@@ -345,7 +345,7 @@ enum BorgVRVolumeFusion {
     let referenceSliceStride = try checkedProduct(size.x, size.y, bytesPerComponent)
     let referenceRowStride = try checkedProduct(size.x, bytesPerComponent)
 
-    logger?.info("Fusing volumes into a two-channel intermediate volume.")
+    logger?.info(String(localized: "Fusing volumes into a two-channel intermediate volume.", table: "ImportMessages"))
     let context = WriteContext(
       referenceAccessor: referenceAccessor,
       movingAccessor: movingAccessor,
@@ -465,7 +465,7 @@ enum BorgVRVolumeFusion {
       }
       try context.output.write(contentsOf: Data(outputSlice))
       context.logger?.progress(
-        "Fusing DICOM volumes",
+        String(localized: "Fusing volumes", table: "ImportMessages"),
         Double(z + 1) / Double(context.size.z)
       )
     }
@@ -585,17 +585,17 @@ public enum BorgVRVolumeConversionError: LocalizedError {
   public var errorDescription: String? {
     switch self {
       case .invalidBrickSize(let brickSize):
-        return "Invalid brick size: \(brickSize)."
+        return String(format: String(localized: "Invalid brick size: %ld.", table: "ImportMessages"), brickSize)
       case .invalidOverlap(let overlap, let brickSize):
-        return "Invalid overlap \(overlap) for brick size \(brickSize)."
+        return String(format: String(localized: "Invalid overlap %ld for brick size %ld.", table: "ImportMessages"), overlap, brickSize)
       case .noDICOMFiles(let url):
-        return "The directory does not contain any DICOM files: \(url.path)"
+        return String(format: String(localized: "The directory does not contain any DICOM files: %@", table: "ImportMessages"), url.path)
       case .incompatibleFusionSampleFormats:
         return String(localized: "Fusion requires two single-channel integer volumes with matching 8-, 16- or 32-bit precision.")
       case .cannotCreateTemporaryVolume(let url):
-        return "The temporary intermediate volume could not be created: \(url.path)"
+        return String(format: String(localized: "The temporary intermediate volume could not be created: %@", table: "ImportMessages"), url.path)
       case .invalidIntermediateVolumeSize:
-        return "The intermediate volume is too large to represent safely."
+        return String(localized: "The intermediate volume is too large to represent safely.", table: "ImportMessages")
     }
   }
 }
@@ -734,7 +734,8 @@ public enum BorgVRVolumeConversionService {
       history = "Resampled BorgVR dataset: \(sourceURL.lastPathComponent); source dataset: \(metadata.uniqueID); "
         + "forward source-to-target voxel matrix (row-major)=\(resampling.matrix); crop origin=\(crop); "
         + "effective source-to-cropped voxel matrix=\(effective); filter=\(resampling.filter.rawValue); outside=0"
-      logger?.info(history)
+      logger?.info(String(format: String(localized: "Resampled dataset: %@; voxel transform: %@; crop: %@; filter: %@.",
+        table: "ImportMessages"), sourceURL.lastPathComponent, String(describing: effective), crop, resampling.filter.rawValue))
     }
     let effectiveRequest = BorgVRVolumeConversionRequest(
       source: request.source,
@@ -763,7 +764,7 @@ public enum BorgVRVolumeConversionService {
   ) throws {
     let parser = try VolumeFileParserFactory.parser(for: sourceURL.path,
       cancellationCheck: { try cancellationToken?.checkCancellation() },
-      progress: { logger?.progress("Reading volume", $0) }, log: { logger?.info($0) })
+      progress: { logger?.progress(String(localized: "Reading volume", table: "ImportMessages"), $0) }, log: { logger?.info($0) })
     defer {
       if parser.dataIsTempCopy {
         try? FileManager.default.removeItem(atPath: parser.absoluteFilename)
@@ -938,7 +939,7 @@ public enum BorgVRVolumeConversionService {
       }
       let parser = try VolumeFileParserFactory.parser(for: url.path,
         cancellationCheck: { try cancellationToken?.checkCancellation() },
-        progress: { logger?.progress("Reading volume", $0) }, log: { logger?.info($0) })
+        progress: { logger?.progress(String(localized: "Reading volume", table: "ImportMessages"), $0) }, log: { logger?.info($0) })
       defer {
         if parser.dataIsTempCopy { try? FileManager.default.removeItem(atPath: parser.absoluteFilename) }
       }
@@ -1004,10 +1005,7 @@ public enum BorgVRVolumeConversionService {
       throw BorgVRVolumeConversionError.noDICOMFiles(directoryURL)
     }
 
-    logger?.info(localized(
-      "converter_log_info_scanning_dicom_dir",
-      fallback: "Scanning DICOM directory"
-    ))
+    logger?.info(String(localized: "Scanning DICOM directory", table: "ImportMessages"))
     let volume = try DicomParser.decodeVolume(
       from: files,
       logger: logger,
@@ -1093,9 +1091,11 @@ public enum BorgVRVolumeConversionService {
         let text = "Set physical X extent to \(sizeX) m; scaled all voxel axes by \(factor); "
           + "\(request.forceSizeX ? "forced override" : "no physical size in source")"
         provenance.append(BORGVRProvenanceEntry(text))
-        logger?.info(text)
+        logger?.info(String(format: String(localized: "Physical X extent set to %@ m; all voxel axes scaled by %@.",
+          table: "ImportMessages"), String(sizeX), String(factor)))
       } else {
-        logger?.info("Ignoring --size-x: the source supplies physical voxel spacing. Use --force-size-x to override it.")
+        logger?.info(String(localized:
+          "Ignoring --size-x: the source supplies physical voxel spacing. Use --force-size-x to override it.", table: "ImportMessages"))
       }
     }
     var volume = try RawFileAccessor(
@@ -1163,7 +1163,4 @@ public enum BorgVRVolumeConversionService {
     return parts.joined(separator: " ").replacingOccurrences(of: "^", with: ", ")
   }
 
-  private static func localized(_ key: String, fallback: String) -> String {
-    Bundle.main.localizedString(forKey: key, value: fallback, table: nil)
-  }
 }

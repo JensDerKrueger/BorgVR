@@ -988,10 +988,10 @@ enum BorgVRVolumeRigidRegistration {
     let initialTransform = sharedFrameTransform
       ?? centeredInitialTransform(reference: reference, moving: moving)
     if sharedFrameTransform != nil {
-      logger?.info("Initializing Volume registration from the shared Frame of Reference.")
+      logger?.info(String(localized: "Initializing volume registration from the shared frame of reference.", table: "ImportMessages"))
     } else {
       logger?.info(
-        "Volumes do not share a usable coordinate frame; aligning their physical centers."
+        String(localized: "Volumes do not share a usable coordinate frame; aligning their physical centers.", table: "ImportMessages")
       )
     }
     let initialVoxelTransform = BorgVRVoxelTransform(
@@ -999,8 +999,9 @@ enum BorgVRVolumeRigidRegistration {
       referenceSpacing: reference.source.voxelSpacing,
       movingSpacing: moving.source.voxelSpacing
     )
-    logger?.info("Initial volume voxel transform:\n\(initialVoxelTransform)")
-    logger?.info("Starting recursive rigid Volume registration.")
+    logger?.info(String(format: String(localized: "Initial volume voxel transform:\n%@", table: "ImportMessages"),
+      initialVoxelTransform.description))
+    logger?.info(String(localized: "Starting recursive rigid volume registration.", table: "ImportMessages"))
     let result = try register(
       level: Level(
         reference: registrationLevel(from: reference),
@@ -1015,7 +1016,8 @@ enum BorgVRVolumeRigidRegistration {
       referenceSpacing: reference.source.voxelSpacing,
       movingSpacing: moving.source.voxelSpacing
     )
-    logger?.info("Final volume voxel transform:\n\(voxelTransform)")
+    logger?.info(String(format: String(localized: "Final volume voxel transform:\n%@", table: "ImportMessages"),
+      voxelTransform.description))
     return voxelTransform
   }
 
@@ -1053,13 +1055,10 @@ enum BorgVRVolumeRigidRegistration {
       initialTransform = dicomInitialTransform
     }
 
-    logger?.info(
-      "Optimizing Volume registration level "
-        + "\(level.reference.size.x) x \(level.reference.size.y) x "
-        + "\(level.reference.size.z) / "
-        + "\(level.moving.size.x) x \(level.moving.size.y) x "
-        + "\(level.moving.size.z)."
-    )
+    logger?.info(String(format: String(localized:
+      "Optimizing volume registration level %ld x %ld x %ld / %ld x %ld x %ld.", table: "ImportMessages"),
+      level.reference.size.x, level.reference.size.y, level.reference.size.z,
+      level.moving.size.x, level.moving.size.y, level.moving.size.z))
     return try optimize(
       level: level,
       initialTransform: initialTransform,
@@ -1086,20 +1085,15 @@ enum BorgVRVolumeRigidRegistration {
       evaluator: evaluator
     )
     if result.finalEvaluation.nmi.isFinite {
-      logger?.info(
-        "Volume registration level optimized using \(evaluator.sampleCount) samples, "
-          + "\(evaluator.binCount) x \(evaluator.binCount) histogram bins and "
-          + "\(result.triedTransformationCount) tried transformations (NMI "
-          + String(format: "%.6f", result.initialEvaluation.nmi)
-          + " -> " + String(format: "%.6f", result.finalEvaluation.nmi)
-          + ", overlap " + String(format: "%.1f%%", result.initialEvaluation.overlap * 100)
-          + " -> " + String(format: "%.1f%%", result.finalEvaluation.overlap * 100)
-          + ")."
-      )
+      logger?.info(String(format: String(localized:
+        "Volume registration level optimized using %ld samples, %ld x %ld histogram bins and %ld tried transformations (NMI %.6f -> %.6f, overlap %.1f%% -> %.1f%%).",
+        table: "ImportMessages"), evaluator.sampleCount, evaluator.binCount, evaluator.binCount,
+        result.triedTransformationCount, result.initialEvaluation.nmi, result.finalEvaluation.nmi,
+        result.initialEvaluation.overlap * 100, result.finalEvaluation.overlap * 100))
     } else {
       logger?.warning(
-        "Volume registration level contains insufficient intensity information or overlap; "
-          + "keeping its initial transform."
+        String(localized: "Volume registration level contains insufficient intensity information or overlap; keeping its initial transform.",
+          table: "ImportMessages")
       )
     }
     return result.transform

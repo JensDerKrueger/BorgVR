@@ -345,6 +345,7 @@
 
 /* Log: writing metadata */
 "bricked_log_writing_metadata" = "Écriture des métadonnées";
+"bricked_log_ranges_progress_title" = "Détermination des plages de valeurs";
 
 /* Log: reorganization complete */
 "bricked_log_reorganization_complete" = "Réorganisation terminée";
@@ -1170,3 +1171,20 @@
 "Fusion interpolation" = "Interpolation de fusion";
 "converter_desc_from_registered_volume_pair" = "Fusion recalée des volumes %@ et %@";
 "Fusion requires two single-channel integer volumes with matching 8-, 16- or 32-bit precision." = "La fusion nécessite deux volumes entiers à un canal de même précision : 8, 16 ou 32 bits.";
+"mandelbulb_artwork_description" = "Un Mandelbulb est une fractale tridimensionnelle, apparentée à l'ensemble de Mandelbrot. La répétition d'une règle mathématique produit des structures complexes et autosimilaires à des échelles toujours plus petites. Cette fractale utilise la puissance huit.";
+"mandelbulb_invitation" = "Je vois que vous ne pouvez plus vous passer de ce Mandelbulb. Quatre clics ! Ce n'est plus de la curiosité, c'est une relation. Aimeriez-vous avoir votre propre Mandelbulb ? Je vous en calcule un avec plaisir, tout droit sorti de l'infini et rien que pour vous. Cela ne coûte qu'un peu de temps de calcul. Bon, et un peu d'espace disque.";
+"mandelbulb_choose_size" = "Quelle taille souhaitez-vous pour votre Mandelbulb ?";
+"mandelbulb_size_small" = "Petit";
+"mandelbulb_size_medium" = "Moyen";
+"mandelbulb_size_large" = "Grand";
+"mandelbulb_yes" = "Oui";
+"mandelbulb_no" = "Non";
+"mandelbulb_cancel" = "Annuler";
+"mandelbulb_create" = "Créer";
+"mandelbulb_close" = "Fermer";
+"mandelbulb_generating" = "Calcul de la fractale...";
+"mandelbulb_converting" = "Préparation du jeu de données...";
+"mandelbulb_size_huge" = "Géant";
+"mandelbulb_space_required_format" = "Espace libre nécessaire pendant le calcul (réserve comprise) : %@\nVolume final (compressé, environ) : %@";
+"mandelbulb_insufficient_space_format" = "Espace libre insuffisant dans %@.\nNécessaire : %@. Disponible : %@.";
+"mandelbulb_space_unavailable_format" = "Impossible de déterminer l'espace libre dans %@.";

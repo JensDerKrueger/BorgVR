@@ -972,19 +972,9 @@ struct SettingsView: View {
             Label(page.title, systemImage: page.systemImage)
               .fixedSize(horizontal: false, vertical: true)
               .frame(maxWidth: .infinity, alignment: .leading)
-              .padding(.horizontal, 12)
-              .padding(.vertical, 12)
-              .frame(minHeight: 52)
-              .background {
-                if selectedSettingsPage == page {
-                  RoundedRectangle(cornerRadius: 8)
-                    .fill(Color.accentColor.opacity(0.2))
-                }
-              }
-              .contentShape(Rectangle())
+              .frame(minHeight: 40)
           }
-          .buttonStyle(.plain)
-          .foregroundStyle(selectedSettingsPage == page ? .primary : .secondary)
+          .buttonStyle(VisionSelectionButtonStyle(isSelected: selectedSettingsPage == page))
         }
       }
       .padding(12)

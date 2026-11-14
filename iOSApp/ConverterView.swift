@@ -128,7 +128,8 @@ struct ConverterView: View {
         if let selectedImportKind {
           HStack {
             ConverterWizardStepIcon(systemImage: selectedImportKind.systemImage, compact: true)
-            Text(selectedImportKind.title).font(.headline)
+            Text(selectedImportKind.title)
+              .font(selectedImportKind == .volumeFusion ? .title2.weight(.semibold) : .headline)
             Spacer(minLength: 0)
           }
         }
@@ -159,7 +160,6 @@ struct ConverterView: View {
             VolumeFusionSourcePicker(title: "Reference Volume", selection: $fusionReference)
             Divider()
             VolumeFusionSourcePicker(title: "Volume to Register", selection: $fusionRegistered)
-            ConverterVolumeFormatList(includesNativeBorgVR: true)
           }
           .disabled(isWorking)
           .onChange(of: fusionReference.access?.url) { _, url in if url != nil { mode = .volumeFusion } }
@@ -306,7 +306,8 @@ struct ConverterView: View {
 
   private var importChoices: [ConverterChoiceItem] {
     VolumeImportKind.allCases.map { kind in
-      ConverterChoiceItem(id: kind.rawValue, title: kind.title, systemImage: kind.systemImage) {
+      ConverterChoiceItem(id: kind.rawValue, title: kind.title, systemImage: kind.systemImage,
+        startsSection: kind == .volumeFusion) {
         if !isWorking { pendingImportKind = kind }
       }
     }

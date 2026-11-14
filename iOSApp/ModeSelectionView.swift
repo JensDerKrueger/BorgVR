@@ -73,6 +73,7 @@ struct ModeSelectionView: View {
       .frame(width: proxy.size.width, height: proxy.size.height)
     }
     .accessibilityElement(children: .contain)
+    .modifier(MandelbulbEasterEgg())
   }
 
   private func titleBlock(

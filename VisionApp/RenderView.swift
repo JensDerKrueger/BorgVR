@@ -1,25 +1,5 @@
 import SwiftUI
 
-private struct DatasetStateActionButtonStyle: ButtonStyle {
-  func makeBody(configuration: Configuration) -> some View {
-    configuration.label
-      .font(.headline)
-      .foregroundStyle(.teal)
-      .padding(.horizontal, 14)
-      .frame(minWidth: 106, minHeight: 46)
-      .contentShape(Rectangle())
-      .background(
-        Color.teal.opacity(configuration.isPressed ? 0.22 : 0.13),
-        in: RoundedRectangle(cornerRadius: 10)
-      )
-      .overlay(
-        RoundedRectangle(cornerRadius: 10)
-          .stroke(Color.teal.opacity(0.25), lineWidth: 1)
-      )
-      .opacity(configuration.isPressed ? 0.7 : 1)
-  }
-}
-
 /**
  A SwiftUI view exposing high-level render options for BorgVR.
 
@@ -169,6 +149,7 @@ struct RenderView: View {
       if !visible {
         dismissWindow(id: "ProfileView")
         dismissWindow(id: "PerformanceGraphView")
+        dismissWindow(id: "MemoryUsageView")
         dismissWindow(id: "LoggerView")
       }
     }
@@ -188,6 +169,7 @@ struct RenderView: View {
       dismissWindow(id: "TransferFunctionEditorView")
       dismissWindow(id: "IsovalueEditorView")
       dismissWindow(id: "PerformanceGraphView")
+      dismissWindow(id: "MemoryUsageView")
       dismissWindow(id: "LoggerView")
       dismissWindow(id: "ProfileView")
       dismissWindow(id: "MarkerView")
@@ -271,78 +253,96 @@ struct RenderView: View {
 
       Spacer()
 
-      HStack {
-        HStack(spacing: 8) {
-          Button(action: requestDatasetStateSave) {
-            Label("dataset_state_save_short", systemImage: "tray.and.arrow.down")
-          }
-          .accessibilityLabel("Save Dataset State")
-          .help("Save Dataset State")
-          .buttonStyle(DatasetStateActionButtonStyle())
-
-          Button(action: restoreDatasetState) {
-            Label("dataset_state_load_short", systemImage: "tray.and.arrow.up")
-          }
-          .accessibilityLabel("Restore Dataset State")
-          .help("Restore Dataset State")
-          .buttonStyle(DatasetStateActionButtonStyle())
+      ViewThatFits(in: .horizontal) {
+        HStack(spacing: 16) {
+          datasetStateButtons
+          Spacer(minLength: 16)
+          sessionActionButtons
         }
-        .padding()
-
-        if storedAppModel.showProfiling {
-          Button(action: openProfileView) {
-            Text("render_button_profiling")
-              .font(.headline)
-              .padding(.horizontal, 20)
-              .padding(.vertical, 10)
-          }
-          .padding()
+        VStack(alignment: .leading, spacing: 12) {
+          datasetStateButtons
+          sessionActionButtons
         }
-
-        ShareLink(
-          item: BorgVRActivity(),
-          preview: SharePreview(
-            NSLocalizedString(
-              "render_share_preview_title",
-              comment: "Title for live collaboration share preview"
-            )
-          )
-        ) {
-          Label("render_button_share", systemImage: "shareplay")
-        }
-        .simultaneousGesture(
-          TapGesture().onEnded {
-            sharedAppModel.markLocalActivityStarter()
-          }
-        )
-        .padding()
-
-        if canCopyWebGPUShareLink {
-          Button(action: copyWebGPUShareLink) {
-            Image(systemName: copiedWebGPUShareLink ? "checkmark" : "link")
-              .font(.headline)
-              .padding(.horizontal, 20)
-              .padding(.vertical, 10)
-          }
-          .accessibilityLabel("Copy WebGPU link")
-          .help("Copy WebGPU link")
-          .padding()
-        }
-
-        Button(action: requestDatasetClose) {
-          Text("render_button_close_dataset")
-            .font(.headline)
-            .padding(.horizontal, 20)
-            .padding(.vertical, 10)
-        }
-        .background(
-          RoundedRectangle(cornerRadius: 30)
-            .fill(Color.red)
-        )
-        .foregroundColor(.white)
-        .padding()
       }
+      .padding(.horizontal, 16)
+      .padding(.bottom, 12)
     }
+  }
+
+  private var datasetStateButtons: some View {
+    HStack(spacing: 8) {
+      Button(action: requestDatasetStateSave) {
+        Label("dataset_state_save_short", systemImage: "tray.and.arrow.down")
+          .foregroundStyle(.teal)
+          .frame(minWidth: 120, minHeight: 30)
+          .fixedSize(horizontal: true, vertical: false)
+      }
+      .accessibilityLabel("Save Dataset State")
+      .help("Save Dataset State")
+
+      Button(action: restoreDatasetState) {
+        Label("dataset_state_load_short", systemImage: "tray.and.arrow.up")
+          .foregroundStyle(.teal)
+          .frame(minWidth: 120, minHeight: 30)
+          .fixedSize(horizontal: true, vertical: false)
+      }
+      .accessibilityLabel("Restore Dataset State")
+      .help("Restore Dataset State")
+    }
+    .font(.headline)
+    .lineLimit(1)
+    .buttonStyle(.bordered)
+    .buttonBorderShape(.capsule)
+  }
+
+  private var sessionActionButtons: some View {
+    HStack(spacing: 12) {
+      if storedAppModel.showProfiling {
+        Button(action: openProfileView) {
+          Label("render_button_profiling", systemImage: "gauge.with.dots.needle.50percent")
+        }
+      }
+
+      ShareLink(
+        item: BorgVRActivity(),
+        preview: SharePreview(
+          NSLocalizedString(
+            "render_share_preview_title",
+            comment: "Title for live collaboration share preview"
+          )
+        )
+      ) {
+        Label("render_button_share", systemImage: "shareplay")
+      }
+      .simultaneousGesture(
+        TapGesture().onEnded {
+          sharedAppModel.markLocalActivityStarter()
+        }
+      )
+
+      if canCopyWebGPUShareLink {
+        Button(action: copyWebGPUShareLink) {
+          Image(systemName: copiedWebGPUShareLink ? "checkmark" : "link")
+            .font(.headline)
+        }
+        .accessibilityLabel("Copy WebGPU link")
+        .help("Copy WebGPU link")
+      }
+
+      Button(role: .destructive, action: requestDatasetClose) {
+        Text("render_button_close_dataset")
+          .font(.headline.weight(.semibold))
+          .foregroundStyle(.white)
+          .fixedSize(horizontal: true, vertical: false)
+      }
+      .buttonStyle(.borderedProminent)
+      .tint(.red)
+    }
+    .font(.headline)
+    .lineLimit(1)
+    .fixedSize(horizontal: true, vertical: false)
+    .buttonStyle(.bordered)
+    .buttonBorderShape(.capsule)
   }
 
   private var displayedRenderModeIDs: [UInt8] {

@@ -1,0 +1,1601 @@
+{
+  "sourceLanguage": "en",
+  "strings": {
+    "Close the current dataset before importing another dataset.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Close the current dataset before importing another dataset."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Schließen Sie den aktuellen Datensatz, bevor Sie einen weiteren importieren."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fermez le jeu de données actuel avant d’en importer un autre."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cierre el conjunto de datos actual antes de importar otro."
+          }
+        }
+      }
+    },
+    "An import is still running. Wait until it finishes or cancellation completes.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "An import is still running. Wait until it finishes or cancellation completes."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein Import läuft noch. Warten Sie, bis er beendet oder vollständig abgebrochen wurde."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Une importation est encore en cours. Attendez sa fin ou la fin de son annulation."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hay una importación en curso. Espere a que termine o se complete su cancelación."
+          }
+        }
+      }
+    },
+    "A dataset is already being opened. Wait until it finishes.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A dataset is already being opened. Wait until it finishes."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein Datensatz wird bereits geöffnet. Warten Sie, bis der Vorgang abgeschlossen ist."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un jeu de données est déjà en cours d’ouverture. Attendez la fin de cette opération."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ya se está abriendo un conjunto de datos. Espere a que termine."
+          }
+        }
+      }
+    },
+    "Live Details": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Live Details"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Live-Details"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Detalles en directo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Détails en direct"
+          }
+        }
+      }
+    },
+    "Import Failed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Import Failed"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Import fehlgeschlagen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Error de importación"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Échec de l’importation"
+          }
+        }
+      }
+    },
+    "The selected file could not be copied.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The selected file could not be copied."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die ausgewählte Datei konnte nicht kopiert werden."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudo copiar el archivo seleccionado."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impossible de copier le fichier sélectionné."
+          }
+        }
+      }
+    },
+    "File copied successfully": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "File copied successfully"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Datei erfolgreich kopiert"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Archivo copiado correctamente"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fichier copié avec succès"
+          }
+        }
+      }
+    },
+    "Error copying file: %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Error copying file: %@"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fehler beim Kopieren der Datei: %@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Error al copiar el archivo: %@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erreur lors de la copie du fichier : %@"
+          }
+        }
+      }
+    },
+    "Scanning DICOM directory": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scanning DICOM directory"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "DICOM-Verzeichnis wird durchsucht"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Buscando en el directorio DICOM"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Analyse du dossier DICOM"
+          }
+        }
+      }
+    },
+    "Reading DICOM files": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reading DICOM files"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "DICOM-Dateien werden gelesen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Leyendo archivos DICOM"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lecture des fichiers DICOM"
+          }
+        }
+      }
+    },
+    "Decoding DICOM volume": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Decoding DICOM volume"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "DICOM-Volumen wird dekodiert"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Decodificando el volumen DICOM"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Décodage du volume DICOM"
+          }
+        }
+      }
+    },
+    "Ignoring inconsistent Pixel Padding Value metadata in the DICOM series.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ignoring inconsistent Pixel Padding Value metadata in the DICOM series."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Widersprüchliche Angaben zu Pixel Padding Value in der DICOM-Serie werden ignoriert."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se ignoran los metadatos incoherentes de Pixel Padding Value de la serie DICOM."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Les métadonnées Pixel Padding Value incohérentes de la série DICOM sont ignorées."
+          }
+        }
+      }
+    },
+    "Ignoring inconsistent Frame of Reference UID metadata in the DICOM series.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ignoring inconsistent Frame of Reference UID metadata in the DICOM series."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Widersprüchliche Angaben zur Frame of Reference UID in der DICOM-Serie werden ignoriert."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se ignoran los metadatos incoherentes de Frame of Reference UID de la serie DICOM."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Les métadonnées Frame of Reference UID incohérentes de la série DICOM sont ignorées."
+          }
+        }
+      }
+    },
+    "Quantizing volume to 8 bits per channel.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quantizing volume to 8 bits per channel."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das Volumen wird auf 8 Bit pro Kanal quantisiert."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cuantizando el volumen a 8 bits por canal."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quantification du volume sur 8 bits par canal."
+          }
+        }
+      }
+    },
+    "Analyzing channel ranges": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Analyzing channel ranges"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wertebereiche der Kanäle werden bestimmt"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Analizando los rangos de los canales"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Analyse des plages de valeurs des canaux"
+          }
+        }
+      }
+    },
+    "Channel %ld: original value range %lld...%lld; quantizing to 8 bits.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Channel %ld: original value range %lld...%lld; quantizing to 8 bits."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kanal %ld: ursprünglicher Wertebereich %lld...%lld; Quantisierung auf 8 Bit."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Canal %ld: rango original %lld...%lld; cuantificación a 8 bits."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Canal %ld : plage de valeurs initiale %lld...%lld ; quantification sur 8 bits."
+          }
+        }
+      }
+    },
+    "Quantizing volume": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quantizing volume"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Volumen wird quantisiert"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cuantizando el volumen"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quantification du volume"
+          }
+        }
+      }
+    },
+    "Reading image sequence": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reading image sequence"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bildsequenz wird gelesen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Leyendo la secuencia de imágenes"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lecture de la séquence d’images"
+          }
+        }
+      }
+    },
+    "Image sequence: %ld x %ld x %ld, %@, sorted by filename.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Image sequence: %ld x %ld x %ld, %@, sorted by filename."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bildsequenz: %ld x %ld x %ld, %@, nach Dateinamen sortiert."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Secuencia de imágenes: %ld x %ld x %ld, %@, ordenada por nombre de archivo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Séquence d’images : %ld x %ld x %ld, %@, triée par nom de fichier."
+          }
+        }
+      }
+    },
+    "Resampling volume": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Resampling volume"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Volumen wird neu abgetastet"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remuestreando el volumen"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rééchantillonnage du volume"
+          }
+        }
+      }
+    },
+    "Fusing volumes into a two-channel intermediate volume.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fusing volumes into a two-channel intermediate volume."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Volumen werden zu einem zweikanaligen Zwischenvolumen fusioniert."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fusionando los volúmenes en un volumen intermedio de dos canales."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fusion des volumes dans un volume intermédiaire à deux canaux."
+          }
+        }
+      }
+    },
+    "Fusing volumes": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fusing volumes"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Volumen werden fusioniert"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fusionando volúmenes"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fusion des volumes"
+          }
+        }
+      }
+    },
+    "Reading volume": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reading volume"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Volumen wird gelesen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Leyendo el volumen"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lecture du volume"
+          }
+        }
+      }
+    },
+    "Resampled dataset: %@; voxel transform: %@; crop: %@; filter: %@.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Resampled dataset: %@; voxel transform: %@; crop: %@; filter: %@."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Neu abgetasteter Datensatz: %@; Voxeltransformation: %@; Ausschnitt: %@; Filter: %@."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conjunto de datos remuestreado: %@; transformación de vóxeles: %@; recorte: %@; filtro: %@."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jeu de données rééchantillonné : %@ ; transformation des voxels : %@ ; recadrage : %@ ; filtre : %@."
+          }
+        }
+      }
+    },
+    "Physical X extent set to %@ m; all voxel axes scaled by %@.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Physical X extent set to %@ m; all voxel axes scaled by %@."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Physische Ausdehnung in X auf %@ m gesetzt; alle Voxelachsen mit %@ skaliert."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Extensión física en X establecida en %@ m; todos los ejes de los vóxeles escalados por %@."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Étendue physique en X définie à %@ m ; tous les axes des voxels sont mis à l’échelle par %@."
+          }
+        }
+      }
+    },
+    "Ignoring --size-x: the source supplies physical voxel spacing. Use --force-size-x to override it.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ignoring --size-x: the source supplies physical voxel spacing. Use --force-size-x to override it."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "--size-x wird ignoriert: Die Quelle enthält physische Voxelabstände. Mit --force-size-x können diese überschrieben werden."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se ignora --size-x: la fuente incluye el espaciado físico de los vóxeles. Use --force-size-x para sustituirlo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "--size-x est ignoré : la source fournit l’espacement physique des voxels. Utilisez --force-size-x pour le remplacer."
+          }
+        }
+      }
+    },
+    "Initializing volume registration from the shared frame of reference.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Initializing volume registration from the shared frame of reference."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Volumenregistrierung wird mit dem gemeinsamen Koordinatenrahmen initialisiert."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inicializando el registro de volúmenes a partir del marco de referencia compartido."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Initialisation du recalage des volumes à partir du repère commun."
+          }
+        }
+      }
+    },
+    "Volumes do not share a usable coordinate frame; aligning their physical centers.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Volumes do not share a usable coordinate frame; aligning their physical centers."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Volumen haben keinen nutzbaren gemeinsamen Koordinatenrahmen; ihre physischen Mittelpunkte werden ausgerichtet."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Los volúmenes no comparten un marco de coordenadas utilizable; se alinean sus centros físicos."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Les volumes ne partagent pas de repère exploitable ; leurs centres physiques sont alignés."
+          }
+        }
+      }
+    },
+    "Initial volume voxel transform:\n%@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Initial volume voxel transform:\n%@"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Anfängliche Voxeltransformation:\n%@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Transformación inicial de vóxeles del volumen:\n%@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Transformation initiale des voxels du volume :\n%@"
+          }
+        }
+      }
+    },
+    "Starting recursive rigid volume registration.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Starting recursive rigid volume registration."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die rekursive rigide Volumenregistrierung wird gestartet."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Iniciando el registro rígido recursivo de volúmenes."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Démarrage du recalage rigide récursif des volumes."
+          }
+        }
+      }
+    },
+    "Final volume voxel transform:\n%@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Final volume voxel transform:\n%@"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Endgültige Voxeltransformation:\n%@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Transformación final de vóxeles del volumen:\n%@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Transformation finale des voxels du volume :\n%@"
+          }
+        }
+      }
+    },
+    "Optimizing volume registration level %ld x %ld x %ld / %ld x %ld x %ld.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Optimizing volume registration level %ld x %ld x %ld / %ld x %ld x %ld."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Registrierungsstufe %ld x %ld x %ld / %ld x %ld x %ld wird optimiert."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Optimizando el nivel de registro %ld x %ld x %ld / %ld x %ld x %ld."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Optimisation du niveau de recalage %ld x %ld x %ld / %ld x %ld x %ld."
+          }
+        }
+      }
+    },
+    "Volume registration level optimized using %ld samples, %ld x %ld histogram bins and %ld tried transformations (NMI %.6f -> %.6f, overlap %.1f%% -> %.1f%%).": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Volume registration level optimized using %ld samples, %ld x %ld histogram bins and %ld tried transformations (NMI %.6f -> %.6f, overlap %.1f%% -> %.1f%%)."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Registrierungsstufe mit %ld Abtastpunkten, %ld x %ld Histogrammklassen und %ld getesteten Transformationen optimiert (NMI %.6f -> %.6f, Überlappung %.1f%% -> %.1f%%)."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nivel de registro optimizado con %ld muestras, %ld x %ld intervalos de histograma y %ld transformaciones probadas (NMI %.6f -> %.6f, solapamiento %.1f%% -> %.1f%%)."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Niveau de recalage optimisé avec %ld échantillons, %ld x %ld classes d’histogramme et %ld transformations testées (NMI %.6f -> %.6f, recouvrement %.1f%% -> %.1f%%)."
+          }
+        }
+      }
+    },
+    "Volume registration level contains insufficient intensity information or overlap; keeping its initial transform.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Volume registration level contains insufficient intensity information or overlap; keeping its initial transform."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Registrierungsstufe enthält zu wenig Intensitätsinformation oder Überlappung; die anfängliche Transformation wird beibehalten."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El nivel de registro contiene información de intensidad o solapamiento insuficientes; se conserva la transformación inicial."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le niveau de recalage contient trop peu d’informations d’intensité ou de recouvrement ; la transformation initiale est conservée."
+          }
+        }
+      }
+    },
+    "UVF: extracting LoD 0 (%@, %ld channel(s)).": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "UVF: extracting LoD 0 (%@, %ld channel(s))."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "UVF: LOD 0 wird extrahiert (%@, Kanäle: %ld)."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "UVF: extrayendo LOD 0 (%@, canales: %ld)."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "UVF : extraction du LOD 0 (%@, canaux : %ld)."
+          }
+        }
+      }
+    },
+    "UVF: discarding precomputed normals; preserving the first (scalar) component.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "UVF: discarding precomputed normals; preserving the first (scalar) component."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "UVF: Vorberechnete Normalen werden verworfen; die erste (skalare) Komponente bleibt erhalten."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "UVF: se descartan las normales precalculadas; se conserva el primer componente escalar."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "UVF : les normales précalculées sont ignorées ; la première composante scalaire est conservée."
+          }
+        }
+      }
+    },
+    "UVF: shifting signed %ld-bit samples into the unsigned range by flipping the sign bit.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "UVF: shifting signed %ld-bit samples into the unsigned range by flipping the sign bit."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "UVF: Vorzeichenbehaftete %ld-Bit-Werte werden durch Umkehren des Vorzeichenbits in den vorzeichenlosen Bereich verschoben."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "UVF: desplazando valores de %ld bits con signo al rango sin signo invirtiendo el bit de signo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "UVF : décalage des valeurs signées sur %ld bits dans la plage non signée en inversant le bit de signe."
+          }
+        }
+      }
+    },
+    "%@ channel %ld: original finite range %@; quantizing to UInt16 (0 ... 65535). Constant/NaN/-Infinity -> 0; +Infinity -> 65535.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ channel %ld: original finite range %@; quantizing to UInt16 (0 ... 65535). Constant/NaN/-Infinity -> 0; +Infinity -> 65535."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@, Kanal %ld: ursprünglicher endlicher Wertebereich %@; Quantisierung auf UInt16 (0 ... 65535). Konstant/NaN/-Unendlich -> 0; +Unendlich -> 65535."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@, canal %ld: rango finito original %@; cuantificación a UInt16 (0 ... 65535). Constante/NaN/-Infinito -> 0; +Infinito -> 65535."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@, canal %ld : plage finie initiale %@ ; quantification sur UInt16 (0 ... 65535). Constante/NaN/-Infini -> 0 ; +Infini -> 65535."
+          }
+        }
+      }
+    },
+    "none": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "none"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "keiner"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ninguno"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "aucune"
+          }
+        }
+      }
+    },
+    "VFF: reading %@, signed %ld-bit Big Endian samples; shifting into the unsigned range.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "VFF: reading %@, signed %ld-bit Big Endian samples; shifting into the unsigned range."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "VFF: %@ wird gelesen, vorzeichenbehaftete %ld-Bit-Big-Endian-Werte werden in den vorzeichenlosen Bereich verschoben."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "VFF: leyendo %@, valores Big Endian de %ld bits con signo; desplazando al rango sin signo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "VFF : lecture de %@, valeurs Big Endian signées sur %ld bits ; décalage dans la plage non signée."
+          }
+        }
+      }
+    },
+    "Exporting LoD %ld as %ld x %ld x %ld uncompressed %@ volume.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Exporting LoD %ld as %ld x %ld x %ld uncompressed %@ volume."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "LOD %ld wird als %ld x %ld x %ld großes, unkomprimiertes %@-Volumen exportiert."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Exportando LOD %ld como volumen de %ld x %ld x %ld sin compresión en formato %@."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Export du LOD %ld sous forme de volume de %ld x %ld x %ld non compressé au format %@."
+          }
+        }
+      }
+    },
+    "Exporting LoD %ld": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Exporting LoD %ld"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "LOD %ld wird exportiert"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Exportando LOD %ld"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Export du LOD %ld"
+          }
+        }
+      }
+    },
+    "Export completed: %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Export completed: %@"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Export abgeschlossen: %@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Exportación completada: %@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Export terminé : %@"
+          }
+        }
+      }
+    },
+    "Invalid brick size: %ld.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Invalid brick size: %ld."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ungültige Brickgröße: %ld."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tamaño de brick no válido: %ld."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Taille de brique non valide : %ld."
+          }
+        }
+      }
+    },
+    "Invalid overlap %ld for brick size %ld.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Invalid overlap %ld for brick size %ld."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ungültiger Überlapp %ld für Brickgröße %ld."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Solapamiento %ld no válido para el tamaño de brick %ld."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chevauchement %ld non valide pour la taille de brique %ld."
+          }
+        }
+      }
+    },
+    "The directory does not contain any DICOM files: %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The directory does not contain any DICOM files: %@"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das Verzeichnis enthält keine DICOM-Dateien: %@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El directorio no contiene archivos DICOM: %@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le dossier ne contient aucun fichier DICOM : %@"
+          }
+        }
+      }
+    },
+    "The temporary intermediate volume could not be created: %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The temporary intermediate volume could not be created: %@"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das temporäre Zwischenvolumen konnte nicht angelegt werden: %@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudo crear el volumen intermedio temporal: %@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impossible de créer le volume intermédiaire temporaire : %@"
+          }
+        }
+      }
+    },
+    "The intermediate volume is too large to represent safely.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The intermediate volume is too large to represent safely."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das Zwischenvolumen ist zu groß für eine sichere Verarbeitung."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El volumen intermedio es demasiado grande para procesarlo con seguridad."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le volume intermédiaire est trop volumineux pour être traité en toute sécurité."
+          }
+        }
+      }
+    },
+    "Generating Mandelbulb": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Generating Mandelbulb"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mandelbulb wird berechnet"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Generando Mandelbulb"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Calcul du Mandelbulb"
+          }
+        }
+      }
+    },
+    "Finished writing Mandelbulb data to %@.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Finished writing Mandelbulb data to %@."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mandelbulb-Daten wurden nach %@ geschrieben."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Datos del Mandelbulb guardados en %@."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Données du Mandelbulb enregistrées dans %@."
+          }
+        }
+      }
+    },
+    "Writing metadata file...": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Writing metadata file..."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Metadatendatei wird geschrieben..."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escribiendo el archivo de metadatos..."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Écriture du fichier de métadonnées..."
+          }
+        }
+      }
+    },
+    "Metal initialization failed (%@). Falling back to single-precision CPU generation.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Metal initialization failed (%@). Falling back to single-precision CPU generation."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Metal-Initialisierung fehlgeschlagen (%@). Die Berechnung erfolgt stattdessen auf der CPU mit einfacher Genauigkeit."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Falló la inicialización de Metal (%@). Se usa la CPU con precisión simple."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Échec de l’initialisation de Metal (%@). Le calcul utilise la CPU en simple précision."
+          }
+        }
+      }
+    },
+    "Using Metal for single-precision Mandelbulb generation": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Using Metal for single-precision Mandelbulb generation"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mandelbulb-Berechnung mit Metal und einfacher Genauigkeit"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Usando Metal para generar el Mandelbulb con precisión simple"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Calcul du Mandelbulb avec Metal en simple précision"
+          }
+        }
+      }
+    },
+    "Generating Mandelbulb on GPU": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Generating Mandelbulb on GPU"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mandelbulb wird auf der GPU berechnet"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Generando Mandelbulb en la GPU"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Calcul du Mandelbulb sur le GPU"
+          }
+        }
+      }
+    },
+    "Generating single-precision Mandelbulb": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Generating single-precision Mandelbulb"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mandelbulb wird mit einfacher Genauigkeit berechnet"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Generando Mandelbulb con precisión simple"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Calcul du Mandelbulb en simple précision"
+          }
+        }
+      }
+    }
+  },
+  "version": "1.0"
+}

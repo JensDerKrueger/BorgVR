@@ -44,8 +44,11 @@ public final class UVFParser: VolumeFileParser {
     defer { if !success { try? FileManager.default.removeItem(at: temporary) } }
     let output = try MemoryMappedFile(filename: temporary.path, size: Int64(volumeBytes))
     defer { try? output.close() }
-    log?("UVF: extracting LoD 0 (\(layout.dimensions.map(String.init).joined(separator: " x ")), \(layout.outputChannels) channel(s)).")
-    if layout.normals { log?("UVF: discarding precomputed normals; preserving the first (scalar) component.") }
+    log?(String(format: String(localized: "UVF: extracting LoD 0 (%@, %ld channel(s)).", table: "ImportMessages"),
+      layout.dimensions.map(String.init).joined(separator: " x "), layout.outputChannels))
+    if layout.normals {
+      log?(String(localized: "UVF: discarding precomputed normals; preserving the first (scalar) component.", table: "ImportMessages"))
+    }
     let extractionWeight = layout.floating ? 0.8 : (layout.signed ? 0.9 : 1)
     progress?(0)
     try layout.extract(data, into: output.mappedMemory, cancellationCheck: cancellationCheck,
@@ -116,7 +119,8 @@ public final class UVFParser: VolumeFileParser {
                                      log: ((String) -> Void)?) throws {
     let count = byteCount / layout.bytes
     if layout.signed {
-      log?("UVF: shifting signed \(layout.bytes * 8)-bit samples into the unsigned range by flipping the sign bit.")
+      log?(String(format: String(localized:
+        "UVF: shifting signed %ld-bit samples into the unsigned range by flipping the sign bit.", table: "ImportMessages"), layout.bytes * 8))
       for start in stride(from: 0, to: count, by: 1000000) {
         try cancellationCheck?()
         let end = start + min(1000000, count - start)
@@ -147,8 +151,11 @@ public final class UVFParser: VolumeFileParser {
       progress?(0.8 + 0.1 * Double(end) / Double(count))
     }
     for channel in 0..<channels {
-      let range = minimum[channel].isFinite ? "\(minimum[channel]) ... \(maximum[channel])" : "none"
-      log?("UVF channel \(channel + 1): original finite range \(range); quantizing to UInt16 (0 ... 65535). Constant/NaN/-Infinity -> 0; +Infinity -> 65535.")
+      let range = minimum[channel].isFinite ? "\(minimum[channel]) ... \(maximum[channel])"
+        : String(localized: "none", table: "ImportMessages")
+      log?(String(format: String(localized:
+        "%@ channel %ld: original finite range %@; quantizing to UInt16 (0 ... 65535). Constant/NaN/-Infinity -> 0; +Infinity -> 65535.",
+        table: "ImportMessages"), "UVF", channel + 1, range))
     }
     // Shrink forwards in place, without allocating another full volume.
     for start in stride(from: 0, to: count, by: 1000000) {

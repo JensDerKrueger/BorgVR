@@ -110,11 +110,12 @@ struct OpenDatasetView: View {
           Text("open_no_datasets_built_in_hidden_message")
             .padding()
         } else {
-          List {
+          List(selection: $selectedDatasetKey) {
             ForEach(datasetSections) { section in
               Section {
                 ForEach(section.entries, id: \.listID) { dataset in
                   datasetRow(dataset)
+                    .tag(dataset.listID)
                 }
               } header: {
                 if let title = section.title {
@@ -208,6 +209,10 @@ struct OpenDatasetView: View {
 
           Button {
             Task { @MainActor in
+              let preparation: UUID
+              do { preparation = try runtimeAppModel.beginDatasetOpeningPreparation() }
+              catch { downloadError = error.localizedDescription; return }
+              defer { runtimeAppModel.finishDatasetOpeningPreparation(preparation) }
               if let selected = selectedDataset {
                 let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
                 let editURL: URL?
@@ -261,7 +266,7 @@ struct OpenDatasetView: View {
                       guard case let .remote(resolvedAddress, resolvedPort, resolvedPassword) = resolvedDataset.source else {
                         return
                       }
-                      downloadAndOpenSpace(
+                      await downloadAndOpenSpace(
                         datasetID: resolvedDataset.identifier,
                         serverAddress: resolvedAddress,
                         serverPort: resolvedPort,
@@ -276,7 +281,7 @@ struct OpenDatasetView: View {
             Text("open_button_open_dataset")
           }
           .disabled(
-            selectedDataset == nil
+            selectedDataset == nil || !runtimeAppModel.canOpenDataset
           )
           .animation(.none, value: 0)
           .fontWeight(.semibold)
@@ -284,10 +289,12 @@ struct OpenDatasetView: View {
           .padding()
 
           Button(action: {
-            runtimeAppModel.navigationState = .importData
+            guard runtimeAppModel.canImportDataset else { return }
+            openWindow(id: "ImportDataset")
           }) {
             Text("open_button_import_data")
           }
+          .disabled(!runtimeAppModel.canImportDataset)
 
           Button(
             NSLocalizedString(
@@ -312,6 +319,11 @@ struct OpenDatasetView: View {
         .onDisappear { prefetchCancellation?.cancel() }
         .onChange(of: storedAppModel.hideBuiltInDatasets) { _, _ in
           Task { await loadDatasetFilesAsync() }
+        }
+        .onChange(of: runtimeAppModel.isViewOpen("ImportDataset")) { _, isOpen in
+          if !isOpen, runtimeAppModel.activeDataset == nil {
+            Task { await loadDatasetFilesAsync() }
+          }
         }
       }
       .disabled(isDeleting)
@@ -375,20 +387,10 @@ struct OpenDatasetView: View {
   }
 
   private func datasetRow(_ dataset: RuntimeAppModel.DatasetEntry) -> some View {
-    let selected = selectedDatasetKey == dataset.listID
-    return HStack {
-      Button {
-        selectedDatasetKey = dataset.listID
-      } label: {
-        HStack {
-          Image(systemName: selected ? "checkmark.circle.fill" : iconForDatasetType(type: dataset.source))
-            .foregroundColor(selected ? .blue : .primary)
-          Text(datasetDescription(dataset))
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .contentShape(Rectangle())
-      }
-      .buttonStyle(.plain)
+    HStack(spacing: 12) {
+      Image(systemName: iconForDatasetType(type: dataset.source))
+      Text(datasetDescription(dataset))
+        .frame(maxWidth: .infinity, alignment: .leading)
       if dataset.source == .local {
         Button {
           datasetToDelete = dataset
@@ -400,7 +402,6 @@ struct OpenDatasetView: View {
         .accessibilityLabel("Delete dataset")
       }
     }
-    .padding(.vertical, 6)
   }
 
   private func datasetDescription(_ dataset: RuntimeAppModel.DatasetEntry) -> String {
@@ -610,13 +611,14 @@ struct OpenDatasetView: View {
     }
   }
 
+  @MainActor
   private func downloadAndOpenSpace(
     datasetID: String,
     serverAddress: String,
     serverPort: Int,
     authSecret: String,
     asGroupSessionHost: Bool
-  ) {
+  ) async {
     prefetchProgress = 0.0
     prefetchStatusText = NSLocalizedString(
       "open_prefetch_initializing",
@@ -630,40 +632,38 @@ struct OpenDatasetView: View {
     prefetchCancellation?.cancel()
     let cancellation = RemoteRequestCancellation()
     prefetchCancellation = cancellation
-    Task { @MainActor in
-      defer {
-        if prefetchCancellation === cancellation {
-          showPrefetchDialog = false
-          prefetchCancellation = nil
-        }
+    defer {
+      if prefetchCancellation === cancellation {
+        showPrefetchDialog = false
+        prefetchCancellation = nil
       }
-      do {
-        guard let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
-          throw RemoteDatasetOpenError.documentsDirectoryUnavailable
-        }
-        let origin = DatasetOrigin(address: serverAddress, port: serverPort, password: authSecret)
-        let url = try await RemoteDatasetDownloader.download(datasetID: datasetID, origin: origin,
-          to: documents.appendingPathComponent("\(datasetID).data"), timeout: storedAppModel.timeout,
-          cancellation: cancellation,
-          originProvider: { DatasetOriginCatalog.deduplicated([origin] + DatasetOriginCatalog.shared.origins(for: datasetID)) },
-          progress: { value in
-            Task { @MainActor in
-              guard prefetchCancellation === cancellation, !cancellation.isCancelled else { return }
-              prefetchProgress = value
-              prefetchStatusText = value.formatted(.percent.precision(.fractionLength(1)))
-            }
-          })
-        guard prefetchCancellation === cancellation, !cancellation.isCancelled, prefetchContinue else { return }
-        let metadata = try BORGVRMetaData(url: url)
-        runtimeAppModel.startImmersiveSpace(dataset: .init(identifier: url.path,
-          description: metadata.datasetDescription, source: .local, uniqueId: metadata.uniqueID),
-          asGroupSessionHost: asGroupSessionHost)
-      } catch is CancellationError {
-      } catch {
-        guard prefetchCancellation === cancellation, !cancellation.isCancelled else { return }
-        runtimeAppModel.logger.error("Could not download dataset: \(error.localizedDescription)")
-        downloadError = error.localizedDescription
+    }
+    do {
+      guard let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
+        throw RemoteDatasetOpenError.documentsDirectoryUnavailable
       }
+      let origin = DatasetOrigin(address: serverAddress, port: serverPort, password: authSecret)
+      let url = try await RemoteDatasetDownloader.download(datasetID: datasetID, origin: origin,
+        to: documents.appendingPathComponent("\(datasetID).data"), timeout: storedAppModel.timeout,
+        cancellation: cancellation,
+        originProvider: { DatasetOriginCatalog.deduplicated([origin] + DatasetOriginCatalog.shared.origins(for: datasetID)) },
+        progress: { value in
+          Task { @MainActor in
+            guard prefetchCancellation === cancellation, !cancellation.isCancelled else { return }
+            prefetchProgress = value
+            prefetchStatusText = value.formatted(.percent.precision(.fractionLength(1)))
+          }
+        })
+      guard prefetchCancellation === cancellation, !cancellation.isCancelled, prefetchContinue else { return }
+      let metadata = try BORGVRMetaData(url: url)
+      runtimeAppModel.startImmersiveSpace(dataset: .init(identifier: url.path,
+        description: metadata.datasetDescription, source: .local, uniqueId: metadata.uniqueID),
+        asGroupSessionHost: asGroupSessionHost)
+    } catch is CancellationError {
+    } catch {
+      guard prefetchCancellation === cancellation, !cancellation.isCancelled else { return }
+      runtimeAppModel.logger.error("Could not download dataset: \(error.localizedDescription)")
+      downloadError = error.localizedDescription
     }
   }
 

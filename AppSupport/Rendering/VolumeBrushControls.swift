@@ -47,9 +47,17 @@ struct VolumeEditResetButton: View {
       Image(systemName: "arrow.counterclockwise")
         .foregroundStyle(.red)
         .frame(width: 24, height: 24)
+#if !os(visionOS)
         .contentShape(Rectangle())
+#endif
     }
+#if os(visionOS)
+    .buttonStyle(.bordered)
+    .buttonBorderShape(.circle)
+    .controlSize(.mini)
+#else
     .buttonStyle(.plain)
+#endif
     .help("Discard All Edits")
     .accessibilityLabel("Discard All Edits")
     .disabled(model.isExporting || model.isDiscardingEdits || model.isOpeningState ||
@@ -261,12 +269,16 @@ private enum VolumeEditDialog: Identifiable {
 
 private struct VolumeEditSelectionModifier: ViewModifier {
   @ObservedObject var model: VolumeBrushModel
+  var isPresentationEnabled = true
   func body(content: Content) -> some View {
     content.sheet(item: Binding<VolumeEditDialog?>(get: {
+      guard isPresentationEnabled else { return nil }
       if let request = model.openingRequest { return .selection(request) }
       return model.preparationID.map { .preparation($0) }
     }, set: { value in
-      if value == nil, let request = model.openingRequest { model.cancelOpeningSelection(id: request.id) }
+      if isPresentationEnabled, value == nil, let request = model.openingRequest {
+        model.cancelOpeningSelection(id: request.id)
+      }
     })) { dialog in
       switch dialog {
         case .selection(let request):
@@ -292,20 +304,36 @@ private struct VolumeEditSelectionModifier: ViewModifier {
       }
     }
     .alert("Edit State Error", isPresented: Binding(
-      get: { model.openingError != nil },
-      set: { if !$0 { model.openingError = nil } }
+      get: { isPresentationEnabled && model.openingError != nil },
+      set: { if isPresentationEnabled && !$0 { model.openingError = nil } }
     )) { Button("OK", role: .cancel) { model.openingError = nil } }
     message: { Text(model.openingError ?? "") }
   }
 }
 
 extension View {
-  func volumeEditSelectionDialog(model: VolumeBrushModel) -> some View {
-    modifier(VolumeEditSelectionModifier(model: model))
+  func volumeEditSelectionDialog(model: VolumeBrushModel, isPresentationEnabled: Bool = true) -> some View {
+    modifier(VolumeEditSelectionModifier(model: model, isPresentationEnabled: isPresentationEnabled))
   }
 }
 
 private struct VolumeEditSelectionView: View {
+#if os(visionOS)
+  private enum RowSelection: Hashable {
+    case original
+    case edit(UUID)
+  }
+
+  private var rowSelection: Binding<RowSelection?> {
+    Binding(get: { selection.map(RowSelection.edit) ?? .original }, set: { row in
+      switch row {
+        case .original: selection = nil
+        case .edit(let id): selection = id
+        case nil: break
+      }
+    })
+  }
+#endif
   @ObservedObject var model: VolumeBrushModel
   let request: VolumeEditOpeningRequest
   @State private var selection: UUID?
@@ -323,19 +351,7 @@ private struct VolumeEditSelectionView: View {
     VStack(alignment: .leading, spacing: 16) {
       Text("Choose Edit State").font(.headline)
       Text("Which edit state would you like to open?").fixedSize(horizontal: false, vertical: true)
-      List {
-        choice(nil, title: String(localized: "Original – No Edits"))
-        ForEach(items) { state in
-          HStack {
-            choice(state.id, title: state.displayName, date: state.modifiedAt)
-            Button(role: .destructive) { pendingDelete = state } label: { Image(systemName: "trash") }
-              .buttonStyle(.borderless)
-              .accessibilityLabel("Delete Edit State")
-              .help("Delete Edit State")
-              .disabled(!model.canDeleteOpeningState(state.id, requestID: request.id))
-          }
-        }
-      }
+      stateList
       .frame(minHeight: 180, idealHeight: 260, maxHeight: 400)
       HStack {
         Button("Cancel", role: .cancel) { model.cancelOpeningSelection(id: request.id) }
@@ -364,19 +380,57 @@ private struct VolumeEditSelectionView: View {
     } message: { Text(error ?? "") }
   }
 
-  private func choice(_ id: UUID?, title: String, date: Date? = nil) -> some View {
-    Button { selection = id } label: {
-      HStack(spacing: 12) {
-        Image(systemName: selection == id ? "checkmark.circle.fill" : "circle").foregroundStyle(.tint)
-        VStack(alignment: .leading, spacing: 4) {
-          Text(title).foregroundStyle(.primary)
-          if let date { Text(date, format: .dateTime).font(.caption).foregroundStyle(.secondary) }
-        }
-        Spacer()
+  private var stateList: some View {
+#if os(visionOS)
+    List(selection: rowSelection) { stateRows }
+#else
+    List { stateRows }
+#endif
+  }
+
+  @ViewBuilder
+  private var stateRows: some View {
+    choice(nil, title: String(localized: "Original – No Edits"))
+#if os(visionOS)
+      .tag(RowSelection.original)
+#endif
+    ForEach(items) { state in
+      HStack {
+        choice(state.id, title: state.displayName, date: state.modifiedAt)
+        Button(role: .destructive) { pendingDelete = state } label: { Image(systemName: "trash") }
+          .buttonStyle(.borderless)
+          .accessibilityLabel("Delete Edit State")
+          .help("Delete Edit State")
+          .disabled(!model.canDeleteOpeningState(state.id, requestID: request.id))
       }
-      .contentShape(Rectangle())
+#if os(visionOS)
+      .tag(RowSelection.edit(state.id))
+#endif
+    }
+  }
+
+  @ViewBuilder
+  private func choice(_ id: UUID?, title: String, date: Date? = nil) -> some View {
+#if os(visionOS)
+    choiceLabel(id, title: title, date: date)
+#else
+    Button { selection = id } label: {
+      choiceLabel(id, title: title, date: date)
+        .contentShape(Rectangle())
     }
     .buttonStyle(.plain)
+#endif
+  }
+
+  private func choiceLabel(_ id: UUID?, title: String, date: Date?) -> some View {
+    HStack(spacing: 12) {
+      Image(systemName: selection == id ? "checkmark.circle.fill" : "circle").foregroundStyle(.tint)
+      VStack(alignment: .leading, spacing: 4) {
+        Text(title).foregroundStyle(.primary)
+        if let date { Text(date, format: .dateTime).font(.caption).foregroundStyle(.secondary) }
+      }
+      Spacer()
+    }
   }
 }
 

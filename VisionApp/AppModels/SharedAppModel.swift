@@ -296,6 +296,11 @@ class SharedAppModel {
     groupActivityHelper?.synchronize(kind: kind)
   }
 
+  @MainActor
+  func resumePendingDatasetLoad() {
+    groupActivityHelper?.resumePendingDatasetLoad()
+  }
+
   func flushSynchronization() {
     groupActivityHelper?.flushSynchronization()
   }

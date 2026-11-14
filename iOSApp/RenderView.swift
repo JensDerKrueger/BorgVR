@@ -88,6 +88,7 @@ struct RenderView: View {
   @State private var measurementDragPointID: UUID?
   @State private var arcballStartOrientation: simd_quatf?
   @State private var showLeaveSharePlayConfirmation = false
+  @State private var pendingModeReset: AppModel.InteractionMode?
   @State private var pendingDatasetStateSave: DatasetStateSavePlan?
   @State private var showDatasetStateOverwriteConfirmation = false
   @State private var showNoDatasetStateToSave = false
@@ -100,6 +101,11 @@ struct RenderView: View {
   private let clippingPinchSensitivity: Float = 0.45
   private let transferSmoothCenterSensitivity: Float = 0.003
   private let transferSmoothSlopeSensitivity: Float = 0.003
+
+  private var interfaceVisibility: InterfaceVisibility {
+    appSettings.interfaceVisibility.forDataset(supportsTransferFunctions:
+      appModel.activeDatasetMetadata.map { $0.channelInterpretation == .independentChannels } ?? true)
+  }
 
   var body: some View {
     GeometryReader { proxy in
@@ -201,6 +207,17 @@ struct RenderView: View {
     } message: {
       Text("Closing this dataset will leave the current SharePlay session.")
     }
+    .alert(resetTitle(for: pendingModeReset), isPresented: Binding(
+      get: { pendingModeReset != nil },
+      set: { if !$0 { pendingModeReset = nil } }
+    ), presenting: pendingModeReset) { mode in
+      Button("Cancel", role: .cancel) {}
+      Button(resetConfirmationLabel(for: mode), role: .destructive) {
+        performModeReset(mode)
+      }
+    } message: { mode in
+      Text(resetMessage(for: mode))
+    }
     .alert(
       "Overwrite Existing Files?",
       isPresented: $showDatasetStateOverwriteConfirmation
@@ -254,7 +271,7 @@ struct RenderView: View {
       renderingParameters.brickVis = false
       synchronizeState()
     }
-    .onChange(of: appSettings.interfaceVisibility, initial: true) { _, visibility in
+    .onChange(of: interfaceVisibility, initial: true) { _, visibility in
       for (option, sheets) in [
         (InterfaceVisibility.Panel.lighting, [RenderSheet.lighting]),
         (.transfer, [.transferEditor, .isoEditor]), (.objects, [.objects]),
@@ -282,19 +299,19 @@ struct RenderView: View {
   }
 
   private var displayedRenderModeIDs: [UInt8] {
-    appSettings.interfaceVisibility.displayedRenderModeIDs(
+    interfaceVisibility.displayedRenderModeIDs(
       active: renderingParameters.renderMode.rawValue, inSharePlay: sharePlay.isInSession)
   }
 
   private var renderModeBinding: Binding<RenderMode> {
     Binding(get: { renderingParameters.renderMode }, set: { mode in
-      guard appSettings.interfaceVisibility.renderModeIDs.contains(mode.rawValue) else { return }
+      guard interfaceVisibility.renderModeIDs.contains(mode.rawValue) else { return }
       renderingParameters.renderMode = mode
     })
   }
 
   private func applyVisibleRenderMode() {
-    let visibility = appSettings.interfaceVisibility
+    let visibility = interfaceVisibility
     guard appModel.automaticallyLoadsDatasetState, !sharePlay.isInSession,
           appModel.activeDatasetMetadata?.channelInterpretation == .independentChannels,
           !visibility.renderModeIDs.contains(renderingParameters.renderMode.rawValue),
@@ -471,7 +488,7 @@ struct RenderView: View {
             ForEach(RenderMode.allCases.filter { displayedRenderModeIDs.contains($0.rawValue) }) { mode in
               renderModeLabel(for: mode, compact: usesCompactRenderModeLabels)
                 .tag(mode)
-                .disabled(!appSettings.interfaceVisibility.renderModeIDs.contains(mode.rawValue))
+                .disabled(!interfaceVisibility.renderModeIDs.contains(mode.rawValue))
             }
           }
           .pickerStyle(.segmented)
@@ -542,7 +559,7 @@ struct RenderView: View {
 
   @ViewBuilder
   private func modeActionButtons(compact: Bool) -> some View {
-    let visibility = appSettings.interfaceVisibility
+    let visibility = interfaceVisibility
     let panels = InterfaceVisibility.Panel.allCases.filter { visibility.showsScreenPanel($0) }
     if !panels.isEmpty || visibility.showsResets {
       GeometryReader { geometry in
@@ -682,19 +699,105 @@ struct RenderView: View {
 
   @ViewBuilder
   private func interactionModePicker(compact: Bool) -> some View {
-    if appSettings.interfaceVisibility.interactionModes.count > 1 {
-    HStack(spacing: 4) {
-      ForEach(appSettings.interfaceVisibility.interactionModes) { option in
-        if let mode = AppModel.InteractionMode(rawValue: option.rawValue) {
-          interactionModeSegment(mode, title: LocalizedStringKey(option.title), systemImage: option.icon, compact: compact)
+    let visibility = interfaceVisibility
+    if visibility.interactionModes.count > 1 || visibility.showsResets {
+      VStack(spacing: 2) {
+        if visibility.showsResets {
+          HStack(spacing: 4) {
+            ForEach(visibility.interactionModes) { option in
+              if let mode = AppModel.InteractionMode(rawValue: option.rawValue) {
+                if mode == .volumeEditing {
+                  VolumeEditResetButton(model: appModel.volumeBrush)
+                    .frame(maxWidth: .infinity, minHeight: 32)
+                } else {
+                  modeResetButton(mode)
+                }
+              }
+            }
+          }
+        }
+        if visibility.interactionModes.count > 1 {
+          HStack(spacing: 4) {
+            ForEach(visibility.interactionModes) { option in
+              if let mode = AppModel.InteractionMode(rawValue: option.rawValue) {
+                interactionModeSegment(mode, title: LocalizedStringKey(option.title), systemImage: option.icon, compact: compact)
+              }
+            }
+          }
         }
       }
+      .padding(4)
+      .background(.secondary.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
+      .accessibilityElement(children: .contain)
+      .accessibilityLabel("Interaction")
     }
-    .padding(4)
-    .background(.secondary.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
-    .accessibilityElement(children: .contain)
-    .accessibilityLabel("Interaction")
+  }
+
+  private func modeResetButton(_ mode: AppModel.InteractionMode) -> some View {
+    Button {
+      pendingModeReset = mode
+    } label: {
+      Image(systemName: "arrow.counterclockwise")
+        .foregroundStyle(interactionModeColor(for: mode))
+        .frame(maxWidth: .infinity, minHeight: 32)
+        .contentShape(Rectangle())
     }
+    .buttonStyle(.plain)
+    .accessibilityLabel(Text(resetTitle(for: mode)))
+    .help(Text(resetTitle(for: mode)))
+    .disabled(mode == .transferEditing &&
+      appModel.activeDatasetMetadata?.channelInterpretation != .independentChannels)
+  }
+
+  private func resetTitle(for mode: AppModel.InteractionMode?) -> LocalizedStringKey {
+    switch mode {
+      case .model: "Reset Model?"
+      case .clipping: "Reset Clipping?"
+      case .transferEditing:
+        renderingParameters.renderMode == .isoValue ? "Reset Isovalue?" : "Reset Transfer Function?"
+      case .drawing, .objectPlacement: "Delete All Objects?"
+      case .measurement: "measurement_delete_all_confirmation_title"
+      default: "Reset"
+    }
+  }
+
+  private func resetConfirmationLabel(for mode: AppModel.InteractionMode) -> LocalizedStringKey {
+    switch mode {
+      case .drawing, .objectPlacement: "Delete All Objects"
+      case .measurement: "measurement_delete_all_confirmation_delete"
+      default: "Reset"
+    }
+  }
+
+  private func resetMessage(for mode: AppModel.InteractionMode) -> LocalizedStringKey {
+    switch mode {
+      case .model: "Do you really want to reset the model transformation?"
+      case .clipping: "Do you really want to reset the clipping bounds?"
+      case .transferEditing:
+        renderingParameters.renderMode == .isoValue
+          ? "Do you really want to reset the isovalue?"
+          : "Do you really want to reset the current transfer function?"
+      case .drawing, .objectPlacement: "This removes every annotation object from the current session."
+      case .measurement: "measurement_delete_all_confirmation_message"
+      default: "Reset"
+    }
+  }
+
+  private func performModeReset(_ mode: AppModel.InteractionMode) {
+    let command: BorgVRCommand
+    switch mode {
+      case .model: command = .reset(.transform)
+      case .clipping: command = .reset(.clipping)
+      case .transferEditing:
+        command = renderingParameters.renderMode == .isoValue ? .setNormalizedIsoValue(0.1) : .reset(.transferFunction)
+      case .drawing, .objectPlacement: command = .clearObjects
+      case .measurement: command = .clearMeasurements
+      case .volumeEditing: return
+    }
+    do {
+      try session.perform(command, source: .userInterface)
+      sharePlay.flushSynchronization()
+    } catch { appModel.logger.error(error.localizedDescription) }
   }
 
   private func interactionModeSegment(

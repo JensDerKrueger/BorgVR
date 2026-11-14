@@ -154,9 +154,9 @@ enum BORGVRVolumeExporter {
       .appendingPathComponent(".\(outputURL.lastPathComponent).\(UUID().uuidString).tmp")
     try? fileManager.removeItem(at: temporaryURL)
 
-    logger?.info(
-      "Exporting LoD \(level) as \(size.x) x \(size.y) x \(size.z) uncompressed \(raw ? "RAW" : "NRRD") volume."
-    )
+    logger?.info(String(format: String(localized:
+      "Exporting LoD %ld as %ld x %ld x %ld uncompressed %@ volume.", table: "ImportMessages"),
+      level, size.x, size.y, size.z, raw ? "RAW" : "NRRD"))
 
     do {
       let target = try MemoryMappedFile(filename: temporaryURL.path, size: Int64(fileByteCount))
@@ -215,7 +215,7 @@ enum BORGVRVolumeExporter {
 
               completedBricks += 1
               logger?.progress(
-                "Exporting LoD \(level)",
+                String(format: String(localized: "Exporting LoD %ld", table: "ImportMessages"), level),
                 Double(completedBricks) / Double(totalBricks)
               )
             }
@@ -237,8 +237,8 @@ enum BORGVRVolumeExporter {
       throw error
     }
 
-    logger?.progress("Exporting LoD \(level)", 1)
-    logger?.info("Export completed: \(outputURL.path)")
+    logger?.progress(String(format: String(localized: "Exporting LoD %ld", table: "ImportMessages"), level), 1)
+    logger?.info(String(format: String(localized: "Export completed: %@", table: "ImportMessages"), outputURL.path))
     return Result(
       outputURL: outputURL,
       level: level,

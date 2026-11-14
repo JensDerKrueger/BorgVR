@@ -18,6 +18,12 @@ swiftc \
   "$ROOT/BORGVR-IO/BorgVRVolumeEditMask.swift" \
   "$ROOT/BORGVR-IO/BorgVRVolumeOriginalBrick.swift" \
   "$ROOT/BORGVR-IO/BorgVRCPUVolumeEditExecutor.swift" \
+  "$ROOT/BORGVR-IO/BorgVRVolumeEditMaterializer.swift" \
+  "$ROOT/BORGVR-IO/BorgVRMetalVolumeEditProcessor.swift" \
+  "$ROOT/BORGVR-IO/BorgVRVolumeEditJournal.swift" \
+  "$ROOT/BORGVR-IO/BorgVRVolumeEditBrickCache.swift" \
+  "$ROOT/BORGVR-IO/BorgVRVolumeEditStates.swift" \
+  "$ROOT/BORGVR-IO/BorgVREditableVolumeData.swift" \
   "$ROOT/BORGVR-Render/Helpers/AlignedBuffer.swift" \
   "$ROOT/BORGVR-Render/Transfer Function 1D/TransferFunction1D.swift" \
   "$ROOT/BORGVR-Render/VolumeAtlas/AsyncEmptinessUpdater.swift" \
@@ -33,6 +39,7 @@ swiftc \
   "$ROOT/BORGVR-Render/VolumeShaderConfiguration.swift" \
   "$ROOT/Tests/VolumeAtlasEditTests.swift" \
   "$ROOT/Tests/ColorVolumeRenderingTests.swift" \
+  "$ROOT/Tests/ASTCEditAtlasTests.swift" \
   -o "$BUILD_DIR/volume-atlas-edit-tests"
 
 "$BUILD_DIR/volume-atlas-edit-tests"

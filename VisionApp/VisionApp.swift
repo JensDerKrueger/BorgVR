@@ -46,6 +46,10 @@ struct VisionApp: App {
   @Environment(\.scenePhase) private var scenePhase
   @Environment(\.dismissImmersiveSpace) private var dismissImmersiveSpace
 
+  private var importWindowHeight: CGFloat {
+    (runtimeAppModel.windowSize.height * 1.47).rounded(.up)
+  }
+
   init() {
     let runtimeAppModel = RuntimeAppModel()
     let sharedAppModel = SharedAppModel()
@@ -74,55 +78,12 @@ struct VisionApp: App {
 
   var body: some Scene {
     WindowGroup(id: "main") {
-      ContentView()
+      applicationContent(isDatasetWindow: false)
+        .appStoreUpdateAlert(using: updateChecker)
         .onAppear {
           appDelegate.saveOpenDatasetState = { saveOpenDatasetState() }
         }
-        .volumeEditSelectionDialog(model: runtimeAppModel.volumeBrush)
-        .appStoreUpdateAlert(using: updateChecker)
-        .alert(
-          "Choose your SharePlay name",
-          isPresented: $showsSharePlayDisplayNameOnboarding
-        ) {
-          TextField("Display name", text: $sharePlayDisplayNameDraft)
-          Button("Continue") {
-            storedAppModel.sharePlayDisplayName = sharePlayDisplayNameDraft
-              .trimmingCharacters(in: .whitespacesAndNewlines)
-            sharePlayDisplayNameOnboardingCompleted = true
-          }
-          .disabled(sharePlayDisplayNameDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-        } message: {
-          Text("What name should other people see for you in shared SharePlay sessions? You can change it later in Settings.")
-        }
-        .alert(
-          "SharePlay Host Left",
-          isPresented: $runtimeAppModel.showsHostDeparturePrompt
-        ) {
-          Button("Take Over Host Role") {
-            sharedAppModel.takeOverSharePlayHostRole()
-          }
-          Button("Leave Session", role: .destructive) {
-            sharedAppModel.leaveGroupActivity()
-          }
-          Button("Ignore", role: .cancel) {
-            sharedAppModel.ignoreSharePlayHostDeparture()
-          }
-        } message: {
-          Text("The SharePlay host left the session. You can take over the host role, leave the session, or continue without a host.")
-        }
-        .alert(item: $runtimeAppModel.protocolCompatibilityIssue) { issue in
-          Alert(
-            title: Text("Incompatible SharePlay Version"),
-            message: Text(issue.localizedMessage),
-            dismissButton: .default(Text("OK")) {
-              runtimeAppModel.protocolCompatibilityIssue = nil
-            }
-          )
-        }
-        .frame(
-          minWidth: runtimeAppModel.windowSize.width,
-          minHeight: runtimeAppModel.windowSize.height
-        )
+        .modifier(DatasetControlsPresentation())
         .trackView(name: "MainView")
         .environment(runtimeAppModel)
         .environmentObject(serverController)
@@ -219,6 +180,9 @@ struct VisionApp: App {
       BorgVRVolumeEditGPUAvailability.setApplicationActive(phase == .active)
       if phase == .background { saveOpenDatasetState() }
     }
+    .onChange(of: runtimeAppModel.canOpenDataset) { _, available in
+      if available { sharedAppModel.resumePendingDatasetLoad() }
+    }
     .onChange(of: runtimeAppModel.datasetSessionState) { _, newValue in
       if case .opening = newValue {
         sharedAppModel.objectsHidden = false
@@ -226,6 +190,45 @@ struct VisionApp: App {
       }
       queueDatasetSessionTransition(for: newValue)
     }
+
+    // A pushed window has a real disappearance callback, even when it is the
+    // last visible window. Its parent remains available for returning to the browser.
+    WindowGroup(id: "DatasetControls") {
+      applicationContent(isDatasetWindow: true)
+        .trackView(name: "DatasetControls", onLastDisappear: closeDatasetWindow)
+        .modifier(DatasetControlsDismissal())
+    }
+    .environment(runtimeAppModel)
+    .environment(sharedAppModel)
+    .environmentObject(storedAppModel)
+    .environmentObject(serverController)
+    .environmentObject(voice)
+    .environmentObject(speech)
+    .environmentObject(mcpController)
+    .environmentObject(session)
+    .windowResizability(.contentSize)
+    .defaultSize(width: runtimeAppModel.windowSize.width, height: runtimeAppModel.windowSize.height)
+    .defaultLaunchBehavior(.suppressed)
+
+    Window("Import", id: "ImportDataset") {
+      ConverterView()
+        .volumeEditSelectionDialog(model: runtimeAppModel.volumeBrush)
+        .frame(minWidth: 1000, maxWidth: .infinity, minHeight: importWindowHeight, maxHeight: .infinity)
+        .trackView(name: "ImportDataset")
+    }
+    .environment(runtimeAppModel)
+    .environmentObject(storedAppModel)
+    .windowResizability(.contentMinSize)
+    .defaultSize(width: 1280, height: importWindowHeight)
+    .defaultLaunchBehavior(.suppressed)
+
+    Window(String(localized: "Live Details", table: "ImportMessages"), id: "ImportDetails") {
+      ImportDetailsView()
+        .environment(runtimeAppModel)
+    }
+    .windowResizability(.contentMinSize)
+    .defaultSize(width: 900, height: 650)
+    .defaultLaunchBehavior(.suppressed)
 
     // Transfer Function Editor Window
     WindowGroup(id: "TransferFunctionEditorView") {
@@ -345,6 +348,15 @@ struct VisionApp: App {
     }
     .windowResizability(.contentSize)
 
+    Window("profile_memory_usage_title", id: "MemoryUsageView") {
+      MemoryUsageView()
+        .trackView(name: "MemoryUsageView")
+        .environment(runtimeAppModel)
+        .environment(sharedAppModel)
+    }
+    .windowResizability(.contentMinSize)
+    .defaultSize(width: 820, height: 360)
+
     // Advanced Settings Window
     WindowGroup(id: "ProfileView") {
       ProfileView()
@@ -384,6 +396,47 @@ struct VisionApp: App {
     .handlesExternalEvents(matching: [groupActivityIdentifier])
   }
 
+  private func applicationContent(isDatasetWindow: Bool) -> some View {
+    // Only the foreground window owns session dialogs; the pushed window and
+    // its backgrounded parent share the same model, not two presentations.
+    let presentsDialogs = isDatasetWindow || !runtimeAppModel.isViewOpen("DatasetControls")
+    return ContentView(isDatasetWindow: isDatasetWindow)
+      .volumeEditSelectionDialog(model: runtimeAppModel.volumeBrush,
+        isPresentationEnabled: presentsDialogs && !runtimeAppModel.isViewOpen("ImportDataset"))
+      .alert("Choose your SharePlay name", isPresented: Binding(
+        get: { presentsDialogs && showsSharePlayDisplayNameOnboarding },
+        set: { if presentsDialogs { showsSharePlayDisplayNameOnboarding = $0 } }
+      )) {
+        TextField("Display name", text: $sharePlayDisplayNameDraft)
+        Button("Continue") {
+          storedAppModel.sharePlayDisplayName = sharePlayDisplayNameDraft
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+          sharePlayDisplayNameOnboardingCompleted = true
+        }
+        .disabled(sharePlayDisplayNameDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+      } message: {
+        Text("What name should other people see for you in shared SharePlay sessions? You can change it later in Settings.")
+      }
+      .alert("SharePlay Host Left", isPresented: Binding(
+        get: { presentsDialogs && runtimeAppModel.showsHostDeparturePrompt },
+        set: { if presentsDialogs { runtimeAppModel.showsHostDeparturePrompt = $0 } }
+      )) {
+        Button("Take Over Host Role") { sharedAppModel.takeOverSharePlayHostRole() }
+        Button("Leave Session", role: .destructive) { sharedAppModel.leaveGroupActivity() }
+        Button("Ignore", role: .cancel) { sharedAppModel.ignoreSharePlayHostDeparture() }
+      } message: {
+        Text("The SharePlay host left the session. You can take over the host role, leave the session, or continue without a host.")
+      }
+      .alert(item: Binding(
+        get: { presentsDialogs ? runtimeAppModel.protocolCompatibilityIssue : nil },
+        set: { if presentsDialogs { runtimeAppModel.protocolCompatibilityIssue = $0 } }
+      )) { issue in
+        Alert(title: Text("Incompatible SharePlay Version"), message: Text(issue.localizedMessage),
+          dismissButton: .default(Text("OK")) { runtimeAppModel.protocolCompatibilityIssue = nil })
+      }
+      .frame(minWidth: runtimeAppModel.windowSize.width, minHeight: runtimeAppModel.windowSize.height)
+  }
+
   @MainActor
   private func configureMCP() {
     let service = VisionBorgVRCommandService(
@@ -417,6 +470,8 @@ struct VisionApp: App {
 
   @MainActor
   private func openMCPDataset(id: String) async throws {
+    let preparation = try runtimeAppModel.beginDatasetOpeningPreparation()
+    defer { runtimeAppModel.finishDatasetOpeningPreparation(preparation) }
     let records = try await loadMCPDatasetRecords()
     guard let record = records.first(where: { $0.catalogEntry.id == id }) else {
       throw BorgVRMCPCommandError.datasetNotFound(id)
@@ -459,6 +514,21 @@ struct VisionApp: App {
       asGroupSessionHost: !sharedAppModel.isInGroupSession || runtimeAppModel.groupSessionHost,
       automaticallyLoadState: false
     )
+  }
+
+  @MainActor
+  private func closeDatasetWindow() {
+    switch runtimeAppModel.datasetSessionState {
+      case .opening, .rendering: break
+      default: return
+    }
+    runtimeAppModel.logger.info("Closing dataset because the render controls window was closed.")
+    if sharedAppModel.isInGroupSession, !runtimeAppModel.groupSessionHost {
+      sharedAppModel.leaveGroupActivity()
+    }
+    runtimeAppModel.requestDatasetClose(destination: .datasetSelection)
+    // Do not depend on a window-scoped observer surviving the window's dismissal.
+    queueDatasetSessionTransition(for: runtimeAppModel.datasetSessionState)
   }
 
   @MainActor
@@ -638,6 +708,8 @@ struct VisionApp: App {
   @MainActor
   private func handleOpenRequest(url:URL) async {
     do {
+      let preparation = try runtimeAppModel.beginDatasetOpeningPreparation()
+      defer { runtimeAppModel.finishDatasetOpeningPreparation(preparation) }
       guard url.startAccessingSecurityScopedResource() else {
         throw FileError.noPermission("No Permission to access file \(url)")
       }
@@ -654,6 +726,9 @@ struct VisionApp: App {
         localURL = existing.url
         source = existing.source
       } else {
+        guard runtimeAppModel.rendererIsIdle else {
+          throw VisionDatasetActivityGate.BusyError.renderer
+        }
         guard let copyURL = copyFile(from: url, toDir: documentsDirectory, logger: nil) else {
           throw FileError
             .noPermission(

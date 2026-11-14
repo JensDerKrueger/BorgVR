@@ -162,6 +162,14 @@ final class BorgVRVolumeEditBrickCache {
     }
   }
 
+  func invalidate(index: Int, revision: UInt64) {
+    lock.withLock {
+      guard entries[index]?.revision == revision else { return }
+      entries[index] = nil
+      tableDirty = true
+    }
+  }
+
   func storedBrick(index: Int, revision: UInt64) throws -> Record? {
     try lock.withLock {
       guard !needsRecovery else { throw BorgVRVolumeEditError.corruptJournal }

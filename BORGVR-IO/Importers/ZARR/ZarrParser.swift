@@ -352,8 +352,11 @@ public final class ZarrParser: VolumeFileParser {
         progress?(0.8 + 0.1 * Double(min(start + 1000000, count)) / Double(count))
       }
       for channel in 0..<components {
-        let range = minimum[channel].isFinite ? "\(minimum[channel]) ... \(maximum[channel])" : "none"
-        log?("Zarr channel \(channel + 1): original finite range \(range); quantizing to UInt16 (0 ... 65535). Constant/NaN/-Infinity -> 0; +Infinity -> 65535.")
+        let range = minimum[channel].isFinite ? "\(minimum[channel]) ... \(maximum[channel])"
+          : String(localized: "none", table: "ImportMessages")
+        log?(String(format: String(localized:
+          "%@ channel %ld: original finite range %@; quantizing to UInt16 (0 ... 65535). Constant/NaN/-Infinity -> 0; +Infinity -> 65535.",
+          table: "ImportMessages"), "Zarr", channel + 1, range))
       }
       // Shrink forwards in place: each destination lies before unread source samples.
       for start in stride(from: 0, to: count, by: 1000000) {

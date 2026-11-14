@@ -4,6 +4,7 @@ struct TrackedView<Content: View>: View {
   @Environment(RuntimeAppModel.self) private var runtimeAppModel
 
   let name: String
+  var onLastDisappear: (() -> Void)? = nil
   let content: () -> Content
 
   var body: some View {
@@ -13,12 +14,15 @@ struct TrackedView<Content: View>: View {
       }
       .onDisappear {
         runtimeAppModel.unregisterView(name: name)
+        if !runtimeAppModel.isViewOpen(name) {
+          onLastDisappear?()
+        }
       }
   }
 }
 
 extension View {
-  func trackView(name: String) -> some View {
-    TrackedView(name: name) { self }
+  func trackView(name: String, onLastDisappear: (() -> Void)? = nil) -> some View {
+    TrackedView(name: name, onLastDisappear: onLastDisappear) { self }
   }
 }

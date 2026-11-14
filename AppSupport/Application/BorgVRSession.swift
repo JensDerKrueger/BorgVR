@@ -546,8 +546,14 @@ final class BorgVRSession<VisualizationState: AnyObject, RuntimeState: AnyObject
   }
 
   func currentSnapshot() -> BorgVRVisualizationSnapshot {
-    publishRenderSnapshot()
-    return renderSnapshot()
+    currentFrameSnapshot().visualization
+  }
+
+  /// Startup must not wait for the coalesced UI observation to publish a new dataset.
+  func currentFrameSnapshot() -> BorgVRFrameSnapshot {
+    let snapshot = snapshotProvider()
+    renderSnapshotStore.publish(snapshot)
+    return snapshot
   }
 
   func publishRenderSnapshot() {

@@ -125,19 +125,23 @@ struct ProfileView: View {
       GroupBox(label: Label("profile_group_additional_windows", systemImage: "macwindow")) {
         HStack {
           Button(action: openPerformanceGraphView) {
-            Text("profile_button_performance_graph")
-              .font(.headline)
-              .padding(.horizontal, 20)
-              .padding(.vertical, 10)
+            Label("profile_button_performance_graph", systemImage: "waveform.path.ecg")
+          }
+
+          Button {
+            if !runtimeAppModel.isViewOpen("MemoryUsageView") {
+              openWindow(id: "MemoryUsageView")
+            }
+          } label: {
+            Label("profile_button_memory_usage", systemImage: "memorychip")
           }
 
           Button(action: openLoggerView) {
-            Text("profile_button_show_log")
-              .font(.headline)
-              .padding(.horizontal, 20)
-              .padding(.vertical, 10)
+            Label("profile_button_show_log", systemImage: "text.alignleft")
           }
         }
+        .font(.headline)
+        .lineLimit(1)
         .padding()
       }
       .padding()

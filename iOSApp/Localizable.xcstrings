@@ -1,292 +1,234 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
-    "Volume Fusion": {
+    "Do you really want to reset the clipping bounds?" : {
       "extractionState": "manual",
       "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Volume Fusion"
-          }
-        },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Volumenfusion"
+            "value": "Möchten Sie die Clipping-Grenzen wirklich zurücksetzen?"
           }
         },
-        "fr": {
+        "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Fusion de volumes"
+            "value": "Do you really want to reset the clipping bounds?"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Fusión de volúmenes"
+            "value": "¿Realmente quieres restablecer los límites de recorte?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Voulez-vous vraiment réinitialiser les limites de découpe ?"
           }
         }
       }
     },
-    "Reference Volume": {
+    "Do you really want to reset the current transfer function?" : {
       "extractionState": "manual",
       "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Reference Volume"
-          }
-        },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Referenzvolumen"
+            "value": "Möchten Sie die aktuelle Transferfunktion wirklich zurücksetzen?"
           }
         },
-        "fr": {
+        "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Volume de référence"
+            "value": "Do you really want to reset the current transfer function?"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Volumen de referencia"
+            "value": "¿Desea restablecer la función de transferencia actual?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Voulez-vous vraiment réinitialiser la fonction de transfert actuelle ?"
           }
         }
       }
     },
-    "Volume to Register": {
+    "Do you really want to reset the isovalue?" : {
       "extractionState": "manual",
       "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Volume to Register"
-          }
-        },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Zu registrierendes Volumen"
+            "value": "Möchten Sie den Isowert wirklich zurücksetzen?"
           }
         },
-        "fr": {
+        "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Volume à recaler"
+            "value": "Do you really want to reset the isovalue?"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Volumen que registrar"
+            "value": "¿Desea restablecer el isovalor?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Voulez-vous vraiment réinitialiser l’isovaleur ?"
           }
         }
       }
     },
-    "Source type": {
+    "Do you really want to reset the model transformation?" : {
       "extractionState": "manual",
       "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Source type"
-          }
-        },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Quellentyp"
+            "value": "Möchten Sie die Modelltransformation wirklich zurücksetzen?"
           }
         },
-        "fr": {
+        "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Type de source"
+            "value": "Do you really want to reset the model transformation?"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tipo de fuente"
+            "value": "¿Realmente quieres restablecer la transformación del modelo?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Voulez-vous vraiment réinitialiser la transformation du modèle ?"
           }
         }
       }
     },
-    "Select Source": {
+    "Reset Clipping?" : {
       "extractionState": "manual",
       "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Select Source"
-          }
-        },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Quelle auswählen"
+            "value": "Clipping zurücksetzen?"
           }
         },
-        "fr": {
+        "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Choisir la source"
+            "value": "Reset Clipping?"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Seleccionar fuente"
+            "value": "¿Restablecer el recorte?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Réinitialiser la découpe ?"
           }
         }
       }
     },
-    "No source selected": {
+    "Reset Isovalue?" : {
       "extractionState": "manual",
       "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "No source selected"
-          }
-        },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Keine Quelle ausgewählt"
+            "value": "Isowert zurücksetzen?"
           }
         },
-        "fr": {
+        "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Aucune source sélectionnée"
+            "value": "Reset Isovalue?"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ninguna fuente seleccionada"
+            "value": "¿Restablecer el isovalor?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Réinitialiser l’isovaleur ?"
           }
         }
       }
     },
-    "Zarr Folder": {
+    "Reset Model?" : {
       "extractionState": "manual",
       "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Zarr Folder"
-          }
-        },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Zarr-Ordner"
+            "value": "Modell zurücksetzen?"
           }
         },
-        "fr": {
+        "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Dossier Zarr"
+            "value": "Reset Model?"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Carpeta Zarr"
+            "value": "¿Restablecer el modelo?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Réinitialiser le modèle ?"
           }
         }
       }
     },
-    "Fusion interpolation": {
+    "Reset Transfer Function?" : {
       "extractionState": "manual",
       "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Fusion interpolation"
-          }
-        },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Interpolation bei der Fusion"
+            "value": "Transferfunktion zurücksetzen?"
           }
         },
-        "fr": {
+        "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Interpolation de fusion"
+            "value": "Reset Transfer Function?"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Interpolación de fusión"
-          }
-        }
-      }
-    },
-    "converter_desc_from_registered_volume_pair": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Registered fusion of volumes %@ and %@"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Registrierte Fusion der Volumen %@ und %@"
+            "value": "¿Restablecer la función de transferencia?"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Fusion recalée des volumes %@ et %@"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Fusión registrada de los volúmenes %@ y %@"
-          }
-        }
-      }
-    },
-    "Fusion requires two single-channel integer volumes with matching 8-, 16- or 32-bit precision.": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Fusion requires two single-channel integer volumes with matching 8-, 16- or 32-bit precision."
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Die Fusion benötigt zwei einkanalige Integer-Volumen mit gleicher 8-, 16- oder 32-Bit-Präzision."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "La fusion nécessite deux volumes entiers à un canal de même précision : 8, 16 ou 32 bits."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "La fusión requiere dos volúmenes enteros de un canal con la misma precisión de 8, 16 o 32 bits."
+            "value": "Réinitialiser la fonction de transfert ?"
           }
         }
       }
@@ -2170,6 +2112,35 @@
         }
       }
     },
+    "bricked_log_ranges_progress_title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wertebereiche werden bestimmt"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Determining value ranges"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Determinando los rangos de valores"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Détermination des plages de valeurs"
+          }
+        }
+      }
+    },
     "Bricks" : {
       "localizations" : {
         "de" : {
@@ -3455,6 +3426,35 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Retour"
+          }
+        }
+      }
+    },
+    "converter_desc_from_registered_volume_pair" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Registrierte Fusion der Volumen %@ und %@"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Registered fusion of volumes %@ and %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fusión registrada de los volúmenes %@ y %@"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fusion recalée des volumes %@ et %@"
           }
         }
       }
@@ -6921,6 +6921,64 @@
         }
       }
     },
+    "Fusion interpolation" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Interpolation bei der Fusion"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fusion interpolation"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Interpolación de fusión"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Interpolation de fusion"
+          }
+        }
+      }
+    },
+    "Fusion requires two single-channel integer volumes with matching 8-, 16- or 32-bit precision." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Fusion benötigt zwei einkanalige Integer-Volumen mit gleicher 8-, 16- oder 32-Bit-Präzision."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fusion requires two single-channel integer volumes with matching 8-, 16- or 32-bit precision."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La fusión requiere dos volúmenes enteros de un canal con la misma precisión de 8, 16 o 32 bits."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La fusion nécessite deux volumes entiers à un canal de même précision : 8, 16 ou 32 bits."
+          }
+        }
+      }
+    },
     "General" : {
       "localizations" : {
         "de" : {
@@ -9639,6 +9697,503 @@
       "comment" : "Labels for the X, Y, and Z dimensions of an image sequence.",
       "isCommentAutoGenerated" : true
     },
+    "Mandelbulb" : {
+      "comment" : "The name of the Mandelbulb Easter Egg.",
+      "isCommentAutoGenerated" : true
+    },
+    "mandelbulb_artwork_description" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ein Mandelbulb ist ein dreidimensionales Fraktal, ein Verwandter der Mandelbrot-Menge. Durch wiederholtes Anwenden einer mathematischen Regel entstehen komplexe, selbstähnliche Strukturen auf immer kleineren Skalen. Dieses Fraktal verwendet die achte Potenz."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A Mandelbulb is a three-dimensional fractal, a relative of the Mandelbrot set. Repeating a mathematical rule produces intricate, self-similar structures at ever smaller scales. This fractal uses the eighth power."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Un Mandelbulb es un fractal tridimensional, emparentado con el conjunto de Mandelbrot. La repetición de una regla matemática produce estructuras complejas y autosimilares a escalas cada vez menores. Este fractal utiliza la octava potencia."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Un Mandelbulb est une fractale tridimensionnelle, apparentée à l'ensemble de Mandelbrot. La répétition d'une règle mathématique produit des structures complexes et autosimilaires à des échelles toujours plus petites. Cette fractale utilise la puissance huit."
+          }
+        }
+      }
+    },
+    "mandelbulb_cancel" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abbrechen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cancel"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cancelar"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Annuler"
+          }
+        }
+      }
+    },
+    "mandelbulb_choose_size" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wie groß soll Ihr Mandelbulb werden?"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "How large should your Mandelbulb be?"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "¿Qué tamaño desea para su Mandelbulb?"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quelle taille souhaitez-vous pour votre Mandelbulb ?"
+          }
+        }
+      }
+    },
+    "mandelbulb_close" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Schließen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Close"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cerrar"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fermer"
+          }
+        }
+      }
+    },
+    "mandelbulb_converting" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Datensatz wird vorbereitet..."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Preparing dataset..."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Preparando el conjunto de datos..."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Préparation du jeu de données..."
+          }
+        }
+      }
+    },
+    "mandelbulb_create" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Erstellen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Create"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Crear"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Créer"
+          }
+        }
+      }
+    },
+    "mandelbulb_generating" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fraktal wird berechnet..."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Calculating fractal..."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Calculando el fractal..."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Calcul de la fractale..."
+          }
+        }
+      }
+    },
+    "mandelbulb_insufficient_space_format" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nicht genügend freier Speicherplatz unter %@.\nBenötigt: %@. Verfügbar: %@."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not enough free space at %@.\nRequired: %@. Available: %@."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No hay suficiente espacio libre en %@.\nNecesario: %@. Disponible: %@"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Espace libre insuffisant dans %@.\nNécessaire : %@. Disponible : %@."
+          }
+        }
+      }
+    },
+    "mandelbulb_invitation" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ich merke schon: Sie können die Finger nicht von diesem Mandelbulb lassen. Viermal geklickt! Das ist keine Neugier mehr, das ist eine Beziehung. Möchten Sie einen eigenen Mandelbulb haben? Ich rechne Ihnen gerne einen aus, frisch aus der Unendlichkeit und nur für Sie. Kostet nichts außer ein bisschen Rechenzeit. Na gut, und etwas Speicherplatz."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "I see you can't keep your hands off this Mandelbulb. Four clicks! That's not curiosity anymore, that's a relationship. Would you like a Mandelbulb of your own? I'll gladly calculate one, fresh from infinity and just for you. It costs nothing but a little computing time. Well, and some disk space."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Veo que no puede apartarse de este Mandelbulb. ¡Cuatro clics! Eso ya no es curiosidad, es una relación. ¿Le gustaría tener su propio Mandelbulb? Con gusto le calcularé uno, recién salido del infinito y solo para usted. No cuesta nada más que un poco de tiempo de cálculo. Bueno, y algo de espacio en disco."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Je vois que vous ne pouvez plus vous passer de ce Mandelbulb. Quatre clics ! Ce n'est plus de la curiosité, c'est une relation. Aimeriez-vous avoir votre propre Mandelbulb ? Je vous en calcule un avec plaisir, tout droit sorti de l'infini et rien que pour vous. Cela ne coûte qu'un peu de temps de calcul. Bon, et un peu d'espace disque."
+          }
+        }
+      }
+    },
+    "mandelbulb_no" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nein"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Non"
+          }
+        }
+      }
+    },
+    "mandelbulb_size_huge" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Riesig"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Huge"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gigante"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Géant"
+          }
+        }
+      }
+    },
+    "mandelbulb_size_large" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Groß"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Large"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Grande"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Grand"
+          }
+        }
+      }
+    },
+    "mandelbulb_size_medium" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mittel"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Medium"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mediano"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Moyen"
+          }
+        }
+      }
+    },
+    "mandelbulb_size_small" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Klein"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Small"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pequeño"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Petit"
+          }
+        }
+      }
+    },
+    "mandelbulb_space_required_format" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Während der Berechnung frei benötigt (inkl. Reserve): %@\nFertiger Datensatz (komprimiert, ca.): %@"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Free space needed during calculation (including reserve): %@\nFinished dataset (compressed, approx.): %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Espacio libre necesario durante el cálculo (incluida la reserva): %@\nVolumen final (comprimido, aprox.): %@"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Espace libre nécessaire pendant le calcul (réserve comprise) : %@\nVolume final (compressé, environ) : %@"
+          }
+        }
+      }
+    },
+    "mandelbulb_space_unavailable_format" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Der freie Speicherplatz unter %@ konnte nicht ermittelt werden."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The available space at %@ could not be determined."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo determinar el espacio libre en %@."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossible de déterminer l'espace libre dans %@."
+          }
+        }
+      }
+    },
+    "mandelbulb_yes" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ja"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Yes"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sí"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Oui"
+          }
+        }
+      }
+    },
     "Maps each channel's value range to 0...255, permanently reducing intensity precision. Existing 8-bit data is unchanged." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -12120,6 +12675,35 @@
         }
       }
     },
+    "No source selected" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keine Quelle ausgewählt"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No source selected"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ninguna fuente seleccionada"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aucune source sélectionnée"
+          }
+        }
+      }
+    },
     "notfication_dataset_downloaded_text" : {
       "comment" : "Text displayed in a notification when the remote dataset has been downloaded.",
       "extractionState" : "stale",
@@ -14501,6 +15085,35 @@
         }
       }
     },
+    "Reference Volume" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Referenzvolumen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reference Volume"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Volumen de referencia"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Volume de référence"
+          }
+        }
+      }
+    },
     "Refresh" : {
       "localizations" : {
         "de" : {
@@ -16032,6 +16645,35 @@
         }
       }
     },
+    "Select Source" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quelle auswählen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Select Source"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Seleccionar fuente"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choisir la source"
+          }
+        }
+      }
+    },
     "Select Zarr folder" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -17208,6 +17850,35 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ordre de tri"
+          }
+        }
+      }
+    },
+    "Source type" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quellentyp"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Source type"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tipo de fuente"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Type de source"
           }
         }
       }
@@ -20983,6 +21654,64 @@
         }
       }
     },
+    "Volume Fusion" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Volumenfusion"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Volume Fusion"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fusión de volúmenes"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fusion de volumes"
+          }
+        }
+      }
+    },
+    "Volume to Register" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zu registrierendes Volumen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Volume to Register"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Volumen que registrar"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Volume à recaler"
+          }
+        }
+      }
+    },
     "volume_edit_export_cancelling" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -21670,6 +22399,35 @@
     "Z" : {
       "comment" : "The third dimension of a 3D image.",
       "isCommentAutoGenerated" : true
+    },
+    "Zarr Folder" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zarr-Ordner"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zarr Folder"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Carpeta Zarr"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dossier Zarr"
+          }
+        }
+      }
     },
     "Zeroes" : {
       "localizations" : {

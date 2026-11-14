@@ -251,7 +251,7 @@ func computeMandelbulb(filename: String, sizeX: Int, sizeY: Int, sizeZ: Int,
 
   // Loop over the 3D grid.
   for z in 0..<sizeZ {
-    logger?.progress("Generating Mandelbulb", Double(z) / Double(sizeZ - 1))
+    logger?.progress(String(localized: "Generating Mandelbulb", table: "ImportMessages"), Double(z) / Double(sizeZ - 1))
     // Use concurrent processing on the y-dimension.
     DispatchQueue.concurrentPerform(iterations: sizeY) { y in
       for x in 0..<sizeX {
@@ -278,8 +278,8 @@ func computeMandelbulb(filename: String, sizeX: Int, sizeY: Int, sizeZ: Int,
       }
     }
   }
-  logger?.info("Finished writing Mandelbulb data to \(filename)")
-  logger?.info("Writing metadata file...")
+  logger?.info(String(format: String(localized: "Finished writing Mandelbulb data to %@.", table: "ImportMessages"), filename))
+  logger?.info(String(localized: "Writing metadata file...", table: "ImportMessages"))
   writeMetadataFile(
     filename: filename,
     sizeX: sizeX,
@@ -310,7 +310,9 @@ func computeMandelbulbFloat(filename: String,
                             sizeY: Int,
                             sizeZ: Int,
                             bytesPerVoxel: Int,
-                            logger: LoggerBase? = nil) throws -> MandelbulbFloatBackend {
+                            logger: LoggerBase? = nil,
+                            checkCancellation: () throws -> Void = {}) throws -> MandelbulbFloatBackend {
+  try checkCancellation()
   let generator: GPUMandelbulbGenerator
   do {
     generator = try GPUMandelbulbGenerator(
@@ -321,8 +323,8 @@ func computeMandelbulbFloat(filename: String,
     )
   } catch {
     logger?.warning(
-      "Metal initialization failed (\(error.localizedDescription)). " +
-      "Falling back to single-precision CPU generation."
+      String(format: String(localized: "Metal initialization failed (%@). Falling back to single-precision CPU generation.",
+        table: "ImportMessages"), error.localizedDescription)
     )
     try computeMandelbulbFloatCPU(
       filename: filename,
@@ -330,12 +332,13 @@ func computeMandelbulbFloat(filename: String,
       sizeY: sizeY,
       sizeZ: sizeZ,
       bytesPerVoxel: bytesPerVoxel,
-      logger: logger
+      logger: logger,
+      checkCancellation: checkCancellation
     )
     return .cpu
   }
 
-  logger?.info("Using Metal for single-precision Mandelbulb generation")
+  logger?.info(String(localized: "Using Metal for single-precision Mandelbulb generation", table: "ImportMessages"))
   try computeMandelbulbGPU(
     filename: filename,
     sizeX: sizeX,
@@ -343,7 +346,8 @@ func computeMandelbulbFloat(filename: String,
     sizeZ: sizeZ,
     bytesPerVoxel: bytesPerVoxel,
     generator: generator,
-    logger: logger
+    logger: logger,
+    checkCancellation: checkCancellation
   )
   return .metal
 }
@@ -355,7 +359,8 @@ private func computeMandelbulbGPU(filename: String,
                                   sizeZ: Int,
                                   bytesPerVoxel: Int,
                                   generator: GPUMandelbulbGenerator,
-                                  logger: LoggerBase? = nil) throws {
+                                  logger: LoggerBase? = nil,
+                                  checkCancellation: () throws -> Void) throws {
   let sliceByteCount = sizeX * sizeY * bytesPerVoxel
   let fileURL = URL(fileURLWithPath: filename)
   let memoryMappedFile = try MemoryMappedFile(
@@ -365,8 +370,9 @@ private func computeMandelbulbGPU(filename: String,
   defer { try? memoryMappedFile.close() }
 
   for z in 0..<sizeZ {
+    try checkCancellation()
     if sizeZ > 1 {
-      logger?.progress("Generating Mandelbulb on GPU", Double(z) / Double(sizeZ - 1))
+      logger?.progress(String(localized: "Generating Mandelbulb on GPU", table: "ImportMessages"), Double(z) / Double(sizeZ - 1))
     }
     let slice = try generator.generateSlice(zCoordinate: z)
     slice.withUnsafeBytes { source in
@@ -379,8 +385,8 @@ private func computeMandelbulbGPU(filename: String,
     }
   }
 
-  logger?.info("Finished writing GPU Mandelbulb data to \(filename)")
-  logger?.info("Writing metadata file...")
+  logger?.info(String(format: String(localized: "Finished writing Mandelbulb data to %@.", table: "ImportMessages"), filename))
+  logger?.info(String(localized: "Writing metadata file...", table: "ImportMessages"))
   writeMetadataFile(
     filename: filename,
     sizeX: sizeX,
@@ -397,7 +403,8 @@ private func computeMandelbulbFloatCPU(filename: String,
                                        sizeY: Int,
                                        sizeZ: Int,
                                        bytesPerVoxel: Int,
-                                       logger: LoggerBase? = nil) throws {
+                                       logger: LoggerBase? = nil,
+                                       checkCancellation: () throws -> Void) throws {
   let maximumIterations = MandelbulbParameters.maximumIterations(bytesPerVoxel: bytesPerVoxel)
   let fileURL = URL(fileURLWithPath: filename)
   let memoryMappedFile = try MemoryMappedFile(
@@ -407,8 +414,9 @@ private func computeMandelbulbFloatCPU(filename: String,
   defer { try? memoryMappedFile.close() }
 
   for z in 0..<sizeZ {
+    try checkCancellation()
     if sizeZ > 1 {
-      logger?.progress("Generating Float Mandelbulb", Double(z) / Double(sizeZ - 1))
+      logger?.progress(String(localized: "Generating single-precision Mandelbulb", table: "ImportMessages"), Double(z) / Double(sizeZ - 1))
     }
     DispatchQueue.concurrentPerform(iterations: sizeY) { y in
       for x in 0..<sizeX {
@@ -445,8 +453,8 @@ private func computeMandelbulbFloatCPU(filename: String,
     }
   }
 
-  logger?.info("Finished writing Float Mandelbulb data to \(filename)")
-  logger?.info("Writing metadata file...")
+  logger?.info(String(format: String(localized: "Finished writing Mandelbulb data to %@.", table: "ImportMessages"), filename))
+  logger?.info(String(localized: "Writing metadata file...", table: "ImportMessages"))
   writeMetadataFile(
     filename: filename,
     sizeX: sizeX,

@@ -1,3 +1,5 @@
+import Foundation
+
 func copyFile(from sourceURL: URL, toDir destinationDirURL: URL, logger: GUILogger?) -> URL? {
   let destinationURL = destinationDirURL.appendingPathComponent(sourceURL.lastPathComponent)
   let fileManager = FileManager.default
@@ -10,10 +12,10 @@ func copyFile(from sourceURL: URL, toDir destinationDirURL: URL, logger: GUILogg
       try fileManager.removeItem(at: destinationURL)
     }
     try fileManager.copyItem(at: sourceURL, to: destinationURL)
-    logger?.info("File copied successfully")
+    logger?.info(String(localized: "File copied successfully", table: "ImportMessages"))
     return destinationURL
   } catch {
-    logger?.error("Error copying file: \(error.localizedDescription)")
+    logger?.error(String(format: String(localized: "Error copying file: %@", table: "ImportMessages"), error.localizedDescription))
     return nil
   }
 }

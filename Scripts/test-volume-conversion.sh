@@ -68,6 +68,11 @@ swiftc \
   "$ROOT/Tests/VolumeEditCollaborationTests.swift" \
   "$ROOT/Tests/IsoSurfaceEditTests.swift" \
   "$ROOT/Tests/VolumeConversionServiceTests.swift" \
+  "$ROOT/TerminalConverterApp/DataGenerator.swift" \
+  "$ROOT/TerminalConverterApp/GPUMandelbulbGenerator.swift" \
+  "$ROOT/TerminalConverterApp/MetalSliceGenerator.swift" \
+  "$ROOT/AppSupport/Datasets/MandelbulbEasterEggGenerator.swift" \
+  "$ROOT/Tests/MandelbulbEasterEggTests.swift" \
   "$ROOT/Tests/I3MParserTests.swift" \
   "$ROOT/Tests/VolumeEditTests.swift" \
   -o "$BUILD_DIR/volume-conversion-tests"

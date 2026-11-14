@@ -98,7 +98,14 @@ class RuntimeAppModel {
   }
 
   /// Transitions through the normal close path after an unrecoverable GPU failure.
-  func renderLoopFailed() {
+  func renderLoopFailed(requestID: UUID? = nil) {
+    if let requestID {
+      switch datasetSessionState {
+        case .opening(_, let currentID), .rendering(_, let currentID):
+          guard currentID == requestID else { return }
+        default: return
+      }
+    }
     guard renderTask != nil else { return }
     logger.error("Closing dataset because the render loop failed.")
     renderTask = nil
@@ -114,6 +121,7 @@ class RuntimeAppModel {
 
   /// Model for performance graphing.
   var performanceModel: PerformanceGraphModel = PerformanceGraphModel()
+  let atlasPagingModel = AtlasPagingGraphModel()
 
   let spatialAnchorSessionState = SpatialAnchorSessionState()
   var sharePlaySessionIsActive = false {
@@ -136,7 +144,6 @@ class RuntimeAppModel {
   enum NavigationState {
     case start
     case settings
-    case importData
     case selectData
   }
 
@@ -148,6 +155,7 @@ class RuntimeAppModel {
   let useMultisamplingIfAvailable = false
 
   let logger = GUILogger()
+  let importLogger = GUILogger()
 
   /// Periodically write performance to log
   var logPerformance: Bool = false
@@ -377,6 +385,31 @@ class RuntimeAppModel {
   private(set) var datasetBufferingPhase: DatasetBufferingPhase = .loadingData
   let datasetStreaming = DatasetStreamingProgress()
 
+  private let datasetActivity = VisionDatasetActivityGate()
+  var canOpenDataset: Bool { datasetActivity.canPrepareDataset }
+  var rendererIsIdle: Bool {
+    guard immersiveSpaceState == .closed, renderTask == nil else { return false }
+    switch datasetSessionState {
+      case .inactive, .waitingForSharePlay: return true
+      default: return false
+    }
+  }
+  var canImportDataset: Bool { rendererIsIdle && canOpenDataset }
+
+  func beginImportWork() throws -> UUID {
+    try datasetActivity.beginImport(rendererIsIdle: rendererIsIdle)
+  }
+
+  func finishImportWork(_ id: UUID) { datasetActivity.finishImport(id) }
+
+  func beginDatasetOpeningPreparation() throws -> UUID {
+    try datasetActivity.beginDatasetPreparation()
+  }
+
+  func finishDatasetOpeningPreparation(_ id: UUID) {
+    datasetActivity.finishDatasetPreparation(id)
+  }
+
   var activeDataset: DatasetEntry? {
     switch datasetSessionState {
       case .opening(let dataset, _), .rendering(let dataset, _), .closing(let dataset?, _, _):
@@ -463,10 +496,16 @@ class RuntimeAppModel {
 
   private(set) var automaticallyLoadsDatasetState = true
 
+  @discardableResult
   func startImmersiveSpace(dataset: DatasetEntry,
-                           asGroupSessionHost: Bool, automaticallyLoadState: Bool = true) {
+                           asGroupSessionHost: Bool, automaticallyLoadState: Bool = true) -> Bool {
+    do { try datasetActivity.checkRendererStart() }
+    catch {
+      logger.warning(error.localizedDescription)
+      return false
+    }
     guard !isOpeningOrDisplayingDataset(withUniqueID: dataset.uniqueId) else {
-      return
+      return true
     }
     groupSessionHost = asGroupSessionHost
     automaticallyLoadsDatasetState = automaticallyLoadState
@@ -474,6 +513,7 @@ class RuntimeAppModel {
     datasetStreaming.track(nil)
     datasetBufferingPhase = .loadingData
     datasetSessionState = .opening(dataset: dataset, requestID: UUID())
+    return true
   }
 
   func waitForSharePlayDataset(reason: SharePlayWaitingReason) {
@@ -483,6 +523,7 @@ class RuntimeAppModel {
   }
 
   func beginResolvingSharePlayDataset(uniqueID: String, description: String) {
+    guard canOpenDataset else { return }
     if case .resolving(let currentID, _) = datasetSessionState,
        currentID == uniqueID {
       return
@@ -549,17 +590,18 @@ class RuntimeAppModel {
     }
   }
 
+  @discardableResult
   func startImmersiveSpace(identifier: String,
                           description: String,
                           source: DatasetSource,
                           uniqueId: String,
-                          asGroupSessionHost:Bool) {
+                          asGroupSessionHost:Bool) -> Bool {
     let dataset = DatasetEntry(identifier: identifier,
                                description: description,
                                source: source,
                                uniqueId: uniqueId)
 
-    startImmersiveSpace(dataset:dataset, asGroupSessionHost:asGroupSessionHost)
+    return startImmersiveSpace(dataset:dataset, asGroupSessionHost:asGroupSessionHost)
   }
 
 }

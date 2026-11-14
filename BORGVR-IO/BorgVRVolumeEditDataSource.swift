@@ -158,10 +158,26 @@ final class BorgVRVolumeEditDataSource: BORGVRDatasetProtocol, BorgVRVolumeGPUBr
   }
   func newRequest() { lock.withLock { transitioning ? nil : current }?.newRequest() }
   func getASTCBrick(index: Int, outputBuffer: UnsafeMutablePointer<UInt8>, synchronous: Bool) throws -> Bool {
-    let epoch = lock.withLock { !transitioning && current?.editingStatus()?.hasEdits == false ? generation : nil }
-    guard let epoch else { return false }
-    let encoded = try original.getASTCBrick(index: index, outputBuffer: outputBuffer, synchronous: synchronous)
-    return encoded && lock.withLock { epoch == generation && !transitioning && current?.editingStatus()?.hasEdits == false }
+    let (source, epoch) = lock.withLock { (transitioning ? nil : current, generation) }
+    guard let source else {
+      // Atlas creation needs its overview before asynchronous edit activation finishes.
+      // As with getFirstBrick, keep the original overview until edited data is ready.
+      if synchronous {
+        return try original.getASTCBrick(index: index, outputBuffer: outputBuffer, synchronous: true)
+      }
+      throw BORGVRDataError.brickNotYetAvailable(index: index)
+    }
+    let encoded: Bool
+    do {
+      encoded = try source.getASTCBrick(index: index, outputBuffer: outputBuffer, synchronous: synchronous)
+    } catch BORGVRDataError.brickNotYetAvailable where synchronous {
+      return false // Let the overview's getFirstBrick path prepare or provide its fallback.
+    }
+    guard lock.withLock({ epoch == generation && !transitioning }) else {
+      if synchronous { return false }
+      throw BORGVRDataError.brickNotYetAvailable(index: index)
+    }
+    return encoded
   }
   func getBrick(index: Int, outputBuffer: UnsafeMutablePointer<UInt8>) throws {
     let (source, epoch) = lock.withLock { (transitioning ? nil : current, generation) }

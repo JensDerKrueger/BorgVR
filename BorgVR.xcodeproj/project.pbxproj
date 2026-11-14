@@ -7,12 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		57CD00000000000000000001 /* InterfaceVisibility.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57CD00000000000000000000; };
-		57CD00000000000000000002 /* InterfaceVisibility.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57CD00000000000000000000; };
-		57CD00000000000000000003 /* InterfaceVisibility.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57CD00000000000000000000; };
-		57CD00000000000000000011 /* InterfaceVisibilitySettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57CD00000000000000000010; };
-		57CD00000000000000000012 /* InterfaceVisibilitySettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57CD00000000000000000010; };
-		57CD00000000000000000013 /* InterfaceVisibilitySettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57CD00000000000000000010; };
 		111111111111111111111701 /* c60_32.data in Resources */ = {isa = PBXBuildFile; fileRef = 56730FE22E6B78990091976B /* c60_32.data */; };
 		111111111111111111111702 /* head_32.data in Resources */ = {isa = PBXBuildFile; fileRef = 56730FE42E6B79000091976B /* head_32.data */; };
 		560A00012E00000000000031 /* web in CopyFiles */ = {isa = PBXBuildFile; fileRef = 560B90002E9150000042E45B /* web */; };
@@ -213,6 +207,12 @@
 		57CC00000000000000000001 /* ScreenControlStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57CC00000000000000000000 /* ScreenControlStyle.swift */; };
 		57CC00000000000000000002 /* ScreenControlStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57CC00000000000000000000 /* ScreenControlStyle.swift */; };
 		57CC00000000000000000003 /* ScreenControlStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57CC00000000000000000000 /* ScreenControlStyle.swift */; };
+		57CD00000000000000000001 /* InterfaceVisibility.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57CD00000000000000000000 /* InterfaceVisibility.swift */; };
+		57CD00000000000000000002 /* InterfaceVisibility.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57CD00000000000000000000 /* InterfaceVisibility.swift */; };
+		57CD00000000000000000003 /* InterfaceVisibility.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57CD00000000000000000000 /* InterfaceVisibility.swift */; };
+		57CD00000000000000000011 /* InterfaceVisibilitySettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57CD00000000000000000010 /* InterfaceVisibilitySettingsView.swift */; };
+		57CD00000000000000000012 /* InterfaceVisibilitySettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57CD00000000000000000010 /* InterfaceVisibilitySettingsView.swift */; };
+		57CD00000000000000000013 /* InterfaceVisibilitySettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57CD00000000000000000010 /* InterfaceVisibilitySettingsView.swift */; };
 		57ED00000000000000000001 /* VolumeBrushControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57ED00000000000000000000 /* VolumeBrushControls.swift */; };
 		57ED00000000000000000002 /* VolumeBrushControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57ED00000000000000000000 /* VolumeBrushControls.swift */; };
 		57ED00000000000000000003 /* VolumeBrushControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57ED00000000000000000000 /* VolumeBrushControls.swift */; };
@@ -225,6 +225,25 @@
 		57ED00000000000000000031 /* BorgVRVolumeEditCollaboration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57ED00000000000000000030 /* BorgVRVolumeEditCollaboration.swift */; };
 		57ED00000000000000000032 /* BorgVRVolumeEditCollaboration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57ED00000000000000000030 /* BorgVRVolumeEditCollaboration.swift */; };
 		57ED00000000000000000033 /* BorgVRVolumeEditCollaboration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57ED00000000000000000030 /* BorgVRVolumeEditCollaboration.swift */; };
+		57EE20261111000100000001 /* AppSupport/UI/MandelbulbEasterEgg.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57EE20261111000100000000 /* AppSupport/UI/MandelbulbEasterEgg.swift */; };
+		57EE20261111000100000002 /* AppSupport/UI/MandelbulbEasterEgg.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57EE20261111000100000000 /* AppSupport/UI/MandelbulbEasterEgg.swift */; };
+		57EE20261111000100000003 /* AppSupport/UI/MandelbulbEasterEgg.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57EE20261111000100000000 /* AppSupport/UI/MandelbulbEasterEgg.swift */; };
+		57EE20261111000200000001 /* AppSupport/Datasets/MandelbulbEasterEggGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57EE20261111000200000000 /* AppSupport/Datasets/MandelbulbEasterEggGenerator.swift */; };
+		57EE20261111000200000002 /* AppSupport/Datasets/MandelbulbEasterEggGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57EE20261111000200000000 /* AppSupport/Datasets/MandelbulbEasterEggGenerator.swift */; };
+		57EE20261111000200000003 /* AppSupport/Datasets/MandelbulbEasterEggGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57EE20261111000200000000 /* AppSupport/Datasets/MandelbulbEasterEggGenerator.swift */; };
+		57EE20261111000300000001 /* TerminalConverterApp/DataGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57EE20261111000300000000 /* TerminalConverterApp/DataGenerator.swift */; };
+		57EE20261111000300000002 /* TerminalConverterApp/DataGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57EE20261111000300000000 /* TerminalConverterApp/DataGenerator.swift */; };
+		57EE20261111000300000003 /* TerminalConverterApp/DataGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57EE20261111000300000000 /* TerminalConverterApp/DataGenerator.swift */; };
+		57EE20261111000400000001 /* TerminalConverterApp/GPUMandelbulbGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57EE20261111000400000000 /* TerminalConverterApp/GPUMandelbulbGenerator.swift */; };
+		57EE20261111000400000002 /* TerminalConverterApp/GPUMandelbulbGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57EE20261111000400000000 /* TerminalConverterApp/GPUMandelbulbGenerator.swift */; };
+		57EE20261111000400000003 /* TerminalConverterApp/GPUMandelbulbGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57EE20261111000400000000 /* TerminalConverterApp/GPUMandelbulbGenerator.swift */; };
+		57EE20261111000500000001 /* TerminalConverterApp/MetalSliceGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57EE20261111000500000000 /* TerminalConverterApp/MetalSliceGenerator.swift */; };
+		57EE20261111000500000002 /* TerminalConverterApp/MetalSliceGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57EE20261111000500000000 /* TerminalConverterApp/MetalSliceGenerator.swift */; };
+		57EE20261111000500000003 /* TerminalConverterApp/MetalSliceGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57EE20261111000500000000 /* TerminalConverterApp/MetalSliceGenerator.swift */; };
+		57EE20261114000100000001 /* AppSupport/UI/ImportMessages.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 57EE20261114000100000000 /* AppSupport/UI/ImportMessages.xcstrings */; };
+		57EE20261114000100000002 /* AppSupport/UI/ImportMessages.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 57EE20261114000100000000 /* AppSupport/UI/ImportMessages.xcstrings */; };
+		57EE20261114000100000003 /* AppSupport/UI/ImportMessages.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 57EE20261114000100000000 /* AppSupport/UI/ImportMessages.xcstrings */; };
+		57EE20261114000100000004 /* AppSupport/UI/ImportMessages.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 57EE20261114000100000000 /* AppSupport/UI/ImportMessages.xcstrings */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -260,8 +279,6 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		57CD00000000000000000000 /* InterfaceVisibility.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InterfaceVisibility.swift; sourceTree = "<group>"; };
-		57CD00000000000000000010 /* InterfaceVisibilitySettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InterfaceVisibilitySettingsView.swift; sourceTree = "<group>"; };
 		111111111111111111111101 /* BorgVR Mobile.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "BorgVR Mobile.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		560A00012E00000000000001 /* TerminalServerApp */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = TerminalServerApp; sourceTree = BUILT_PRODUCTS_DIR; };
 		560B8BE72E5C57580042E45B /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
@@ -341,10 +358,18 @@
 		57BF20261104000200000000 /* FractionProgressLine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FractionProgressLine.swift; sourceTree = "<group>"; };
 		57BF20261104000300000000 /* ConverterChoiceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConverterChoiceView.swift; sourceTree = "<group>"; };
 		57CC00000000000000000000 /* ScreenControlStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenControlStyle.swift; sourceTree = "<group>"; };
+		57CD00000000000000000000 /* InterfaceVisibility.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InterfaceVisibility.swift; sourceTree = "<group>"; };
+		57CD00000000000000000010 /* InterfaceVisibilitySettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InterfaceVisibilitySettingsView.swift; sourceTree = "<group>"; };
 		57ED00000000000000000000 /* VolumeBrushControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VolumeBrushControls.swift; sourceTree = "<group>"; };
 		57ED00000000000000000010 /* VolumeBrushModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VolumeBrushModel.swift; sourceTree = "<group>"; };
 		57ED00000000000000000020 /* VolumeEditingCommands.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VolumeEditingCommands.swift; sourceTree = "<group>"; };
 		57ED00000000000000000030 /* BorgVRVolumeEditCollaboration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BorgVRVolumeEditCollaboration.swift; sourceTree = "<group>"; };
+		57EE20261111000100000000 /* AppSupport/UI/MandelbulbEasterEgg.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSupport/UI/MandelbulbEasterEgg.swift; sourceTree = SOURCE_ROOT; };
+		57EE20261111000200000000 /* AppSupport/Datasets/MandelbulbEasterEggGenerator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSupport/Datasets/MandelbulbEasterEggGenerator.swift; sourceTree = SOURCE_ROOT; };
+		57EE20261111000300000000 /* TerminalConverterApp/DataGenerator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalConverterApp/DataGenerator.swift; sourceTree = SOURCE_ROOT; };
+		57EE20261111000400000000 /* TerminalConverterApp/GPUMandelbulbGenerator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalConverterApp/GPUMandelbulbGenerator.swift; sourceTree = SOURCE_ROOT; };
+		57EE20261111000500000000 /* TerminalConverterApp/MetalSliceGenerator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalConverterApp/MetalSliceGenerator.swift; sourceTree = SOURCE_ROOT; };
+		57EE20261114000100000000 /* AppSupport/UI/ImportMessages.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = AppSupport/UI/ImportMessages.xcstrings; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -418,7 +443,6 @@
 				Importers/BorgVRVolumeGeometry.swift,
 				Importers/BorgVRVolumeQuantizer.swift,
 				Importers/BrickedVolumeReorganizer.swift,
-				Importers/Registration/BorgVRVolumeRigidRegistration.swift,
 				Importers/DICOM/BorgVRIntegerVolumeSampler.swift,
 				Importers/DICOM/DICOM.swift,
 				Importers/DICOM/DICOMProvenance.swift,
@@ -430,6 +454,7 @@
 				Importers/NRRD/NRRDParser.swift,
 				Importers/PVM/PVMParser.swift,
 				Importers/QVIS/QVISParser.swift,
+				Importers/Registration/BorgVRVolumeRigidRegistration.swift,
 				Importers/UVF/UVFBinaryReader.swift,
 				Importers/UVF/UVFCompression.swift,
 				Importers/UVF/UVFLZMADecoder.swift,
@@ -691,6 +716,10 @@
 			isa = PBXGroup;
 			children = (
 				57AC20261102000000000000 /* DatasetListPresentation.swift */,
+				57EE20261111000200000000 /* AppSupport/Datasets/MandelbulbEasterEggGenerator.swift */,
+				57EE20261111000300000000 /* TerminalConverterApp/DataGenerator.swift */,
+				57EE20261111000400000000 /* TerminalConverterApp/GPUMandelbulbGenerator.swift */,
+				57EE20261111000500000000 /* TerminalConverterApp/MetalSliceGenerator.swift */,
 				57AC20261101000000000000 /* DatasetProvenanceView.swift */,
 				57A002602ED3000100000001 /* ConverterView.swift */,
 				57A001282E70000300000001 /* DatasetInfoView.swift */,
@@ -796,12 +825,14 @@
 		57A010082EF0000100000001 /* UI */ = {
 			isa = PBXGroup;
 			children = (
+				57EE20261114000100000000 /* AppSupport/UI/ImportMessages.xcstrings */,
 				57CD00000000000000000000 /* InterfaceVisibility.swift */,
 				57CD00000000000000000010 /* InterfaceVisibilitySettingsView.swift */,
 				57BF20261103000000000000 /* DatasetBufferingView.swift */,
 				57BF20261104000100000000 /* DatasetStreamingProgress.swift */,
 				57BF20261104000200000000 /* FractionProgressLine.swift */,
 				57BF20261104000300000000 /* ConverterChoiceView.swift */,
+				57EE20261111000100000000 /* AppSupport/UI/MandelbulbEasterEgg.swift */,
 				57A000202E70000200000001 /* FilePickerView.swift */,
 				57A002B02ED5000100000001 /* GUILogger.swift */,
 				57A001232E70000300000001 /* LoggerView.swift */,
@@ -1024,6 +1055,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				57EE20261114000100000001 /* AppSupport/UI/ImportMessages.xcstrings in Resources */,
 				111111111111111111111701 /* c60_32.data in Resources */,
 				111111111111111111111702 /* head_32.data in Resources */,
 				560B8BE92E5C575A0042E45B /* PrivacyInfo.xcprivacy in Resources */,
@@ -1043,6 +1075,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				57EE20261114000100000002 /* AppSupport/UI/ImportMessages.xcstrings in Resources */,
 				560B8BEA2E5C575A0042E45B /* PrivacyInfo.xcprivacy in Resources */,
 				560B90022E9150000042E45B /* web in Resources */,
 				560C70012F20000100000001 /* html in Resources */,
@@ -1063,6 +1096,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				57EE20261114000100000003 /* AppSupport/UI/ImportMessages.xcstrings in Resources */,
 				560B8BE82E5C575A0042E45B /* PrivacyInfo.xcprivacy in Resources */,
 				560B90032E9150000042E45B /* web in Resources */,
 				57A001572E70000300000001 /* TransferFunctions in Resources */,
@@ -1082,6 +1116,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				57EE20261114000100000004 /* AppSupport/UI/ImportMessages.xcstrings in Resources */,
 				560B90042E9150000042E45B /* web in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -1208,6 +1243,11 @@
 				57BF20261104000100000001 /* DatasetStreamingProgress.swift in Sources */,
 				57BF20261104000200000001 /* FractionProgressLine.swift in Sources */,
 				57BF20261104000300000001 /* ConverterChoiceView.swift in Sources */,
+				57EE20261111000100000001 /* AppSupport/UI/MandelbulbEasterEgg.swift in Sources */,
+				57EE20261111000200000001 /* AppSupport/Datasets/MandelbulbEasterEggGenerator.swift in Sources */,
+				57EE20261111000300000001 /* TerminalConverterApp/DataGenerator.swift in Sources */,
+				57EE20261111000400000001 /* TerminalConverterApp/GPUMandelbulbGenerator.swift in Sources */,
+				57EE20261111000500000001 /* TerminalConverterApp/MetalSliceGenerator.swift in Sources */,
 				57A001912EA1000100000001 /* VolumeMeasurement.swift in Sources */,
 				57A001952EA1000200000001 /* VolumeMeasurementDocument.swift in Sources */,
 				57A001992EA1000300000001 /* MeasurementSurfaceMeshCache.swift in Sources */,
@@ -1285,6 +1325,11 @@
 				57BF20261104000100000002 /* DatasetStreamingProgress.swift in Sources */,
 				57BF20261104000200000002 /* FractionProgressLine.swift in Sources */,
 				57BF20261104000300000002 /* ConverterChoiceView.swift in Sources */,
+				57EE20261111000100000002 /* AppSupport/UI/MandelbulbEasterEgg.swift in Sources */,
+				57EE20261111000200000002 /* AppSupport/Datasets/MandelbulbEasterEggGenerator.swift in Sources */,
+				57EE20261111000300000002 /* TerminalConverterApp/DataGenerator.swift in Sources */,
+				57EE20261111000400000002 /* TerminalConverterApp/GPUMandelbulbGenerator.swift in Sources */,
+				57EE20261111000500000002 /* TerminalConverterApp/MetalSliceGenerator.swift in Sources */,
 				57A001922EA1000100000001 /* VolumeMeasurement.swift in Sources */,
 				57A001962EA1000200000001 /* VolumeMeasurementDocument.swift in Sources */,
 				57A0019A2EA1000300000001 /* MeasurementSurfaceMeshCache.swift in Sources */,
@@ -1337,6 +1382,11 @@
 				57BF20261104000100000003 /* DatasetStreamingProgress.swift in Sources */,
 				57BF20261104000200000003 /* FractionProgressLine.swift in Sources */,
 				57BF20261104000300000003 /* ConverterChoiceView.swift in Sources */,
+				57EE20261111000100000003 /* AppSupport/UI/MandelbulbEasterEgg.swift in Sources */,
+				57EE20261111000200000003 /* AppSupport/Datasets/MandelbulbEasterEggGenerator.swift in Sources */,
+				57EE20261111000300000003 /* TerminalConverterApp/DataGenerator.swift in Sources */,
+				57EE20261111000400000003 /* TerminalConverterApp/GPUMandelbulbGenerator.swift in Sources */,
+				57EE20261111000500000003 /* TerminalConverterApp/MetalSliceGenerator.swift in Sources */,
 				57A001932EA1000100000001 /* VolumeMeasurement.swift in Sources */,
 				57A001972EA1000200000001 /* VolumeMeasurementDocument.swift in Sources */,
 				57A0019B2EA1000300000001 /* MeasurementSurfaceMeshCache.swift in Sources */,
@@ -1379,7 +1429,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = iOSApp/BorgVRMobile.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 16;
+				CURRENT_PROJECT_VERSION = 17;
 				DEVELOPMENT_ASSET_PATHS = "";
 				DEVELOPMENT_TEAM = L8Q6MVX7ZF;
 				ENABLE_PREVIEWS = YES;
@@ -1397,7 +1447,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 3.7;
+				MARKETING_VERSION = 3.8;
 				PRODUCT_BUNDLE_IDENTIFIER = "de.uni-due.BorgVRVisionApp";
 				PRODUCT_NAME = "BorgVR Mobile";
 				SDKROOT = iphoneos;
@@ -1416,7 +1466,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = iOSApp/BorgVRMobile.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 16;
+				CURRENT_PROJECT_VERSION = 17;
 				DEVELOPMENT_ASSET_PATHS = "";
 				DEVELOPMENT_TEAM = L8Q6MVX7ZF;
 				ENABLE_PREVIEWS = YES;
@@ -1434,7 +1484,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 3.7;
+				MARKETING_VERSION = 3.8;
 				PRODUCT_BUNDLE_IDENTIFIER = "de.uni-due.BorgVRVisionApp";
 				PRODUCT_NAME = "BorgVR Mobile";
 				SDKROOT = iphoneos;
@@ -1451,11 +1501,11 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 5;
+				CURRENT_PROJECT_VERSION = 6;
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				MACOSX_DEPLOYMENT_TARGET = 15.2;
-				MARKETING_VERSION = 3.7;
+				MARKETING_VERSION = 3.8;
 				PRODUCT_BUNDLE_IDENTIFIER = "de.uni-due.TerminalServerApp";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
@@ -1467,11 +1517,11 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 5;
+				CURRENT_PROJECT_VERSION = 6;
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				MACOSX_DEPLOYMENT_TARGET = 15.2;
-				MARKETING_VERSION = 3.7;
+				MARKETING_VERSION = 3.8;
 				PRODUCT_BUNDLE_IDENTIFIER = "de.uni-due.TerminalServerApp";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
@@ -1489,7 +1539,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 28;
+				CURRENT_PROJECT_VERSION = 29;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -1505,7 +1555,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.2;
-				MARKETING_VERSION = 3.7;
+				MARKETING_VERSION = 3.8;
 				PRODUCT_BUNDLE_IDENTIFIER = "de.uni-due.BorgVRVisionApp";
 				PRODUCT_NAME = BorgVR;
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -1525,7 +1575,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 28;
+				CURRENT_PROJECT_VERSION = 29;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "";
 				DEVELOPMENT_TEAM = L8Q6MVX7ZF;
@@ -1542,7 +1592,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.2;
-				MARKETING_VERSION = 3.7;
+				MARKETING_VERSION = 3.8;
 				PRODUCT_BUNDLE_IDENTIFIER = "de.uni-due.BorgVRVisionApp";
 				PRODUCT_NAME = BorgVR;
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -1561,7 +1611,7 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = VisionApp/VisionApp.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 8;
+				CURRENT_PROJECT_VERSION = 9;
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -1578,7 +1628,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 3.7;
+				MARKETING_VERSION = 3.8;
 				PRODUCT_BUNDLE_IDENTIFIER = "de.uni-due.BorgVRVisionApp";
 				PRODUCT_NAME = BorgVR;
 				SDKROOT = xros;
@@ -1599,7 +1649,7 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = VisionApp/VisionApp.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 8;
+				CURRENT_PROJECT_VERSION = 9;
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -1616,7 +1666,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 3.7;
+				MARKETING_VERSION = 3.8;
 				PRODUCT_BUNDLE_IDENTIFIER = "de.uni-due.BorgVRVisionApp";
 				PRODUCT_NAME = BorgVR;
 				SDKROOT = xros;
@@ -1640,7 +1690,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 5;
+				CURRENT_PROJECT_VERSION = 6;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "\"macOSServer/Preview Content\"";
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -1654,7 +1704,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.2;
-				MARKETING_VERSION = 3.7;
+				MARKETING_VERSION = 3.8;
 				PRODUCT_BUNDLE_IDENTIFIER = "de.uni-due.macOSServer";
 				PRODUCT_NAME = "BorgVR Server";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -1673,7 +1723,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 5;
+				CURRENT_PROJECT_VERSION = 6;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "\"macOSServer/Preview Content\"";
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -1687,7 +1737,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.2;
-				MARKETING_VERSION = 3.7;
+				MARKETING_VERSION = 3.8;
 				PRODUCT_BUNDLE_IDENTIFIER = "de.uni-due.macOSServer";
 				PRODUCT_NAME = "BorgVR Server";
 				PROVISIONING_PROFILE_SPECIFIER = "";

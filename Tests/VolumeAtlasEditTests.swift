@@ -201,6 +201,7 @@ private enum VolumeAtlasEditTests {
     try rendererTransferFunctionRanges(device: device)
     try runColorVolumeRenderingTests(device: device, queue: queue)
     try runASTCEncodingTests(device: device, queue: queue)
+    try runASTCEditAtlasTests(device: device, queue: queue)
     try rendererAlphaEpsilon(device: device)
     try linearTransferFunctionBounds(device: device)
     let dataset = EditableAtlasFixture()
@@ -362,7 +363,7 @@ private enum VolumeAtlasEditTests {
     tf.initMetal(device: device)
     tf.updateRanges(minValue: 0, maxValue: 255, rangeMax: 255)
     try tf.updateData(with: [SIMD4<UInt8>](repeating: SIMD4(255, 255, 255, 255), count: 256))
-    for (count, expected) in [(0, [2]), (1, [2, 1]), (10, [2, 1, 0])] {
+    for (count, expected) in [(0, [2]), (1, [2, 1]), (10, [2, 1, 0]), (4000, [2, 1, 0])] {
       let dataset = StartupAtlasFixture()
       let resources = try await ScreenDatasetPreparation(dataset: dataset, device: device,
         transferFunctions: [TransferFunction1D(copyFrom: tf)], isoValue: 0.5,
