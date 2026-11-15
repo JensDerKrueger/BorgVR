@@ -4,6 +4,30 @@ import AppKit
 import UniformTypeIdentifiers
 #endif
 
+enum SupportingFileAccessExplanation {
+  static func shouldShow(defaults: UserDefaults = .standard) -> Bool {
+    ExplanationDialogPreference.supportingFileAccess.shouldShow(defaults: defaults)
+  }
+
+  static func disable(defaults: UserDefaults = .standard) {
+    ExplanationDialogPreference.supportingFileAccess.disable(defaults: defaults)
+  }
+
+  static var title: String {
+    String(localized: "Access to the volume data", table: "ImportMessages")
+  }
+
+  static var dismissPermanentlyTitle: String {
+    String(localized: "Don't explain again", table: "ImportMessages")
+  }
+
+  static func message(for url: URL) -> String {
+    String(format: String(localized:
+      "The selected header describes the volume and references \"%@\". For security reasons, selecting the header does not automatically grant access to that file. Please select the referenced file to continue importing.",
+      table: "ImportMessages"), url.lastPathComponent)
+  }
+}
+
 enum VolumeImportKind: String, CaseIterable, Identifiable {
   case volumeFile
   case dicomDirectory
@@ -11,6 +35,21 @@ enum VolumeImportKind: String, CaseIterable, Identifiable {
   case volumeFusion
 
   var id: Self { self }
+
+  var compactWizardStepCount: Int {
+    switch self {
+      case .volumeFusion: 5
+      case .dicomDirectory, .volumeFile, .imageSequence: 4
+    }
+  }
+
+  func macWizardStepCount(referenceIsDICOM: Bool = false, registeredIsDICOM: Bool = false) -> Int {
+    switch self {
+      case .volumeFile: 7
+      case .dicomDirectory, .imageSequence: 8
+      case .volumeFusion: 8 + (referenceIsDICOM ? 1 : 0) + (registeredIsDICOM ? 1 : 0)
+    }
+  }
 
   var title: LocalizedStringKey {
     switch self {
@@ -28,6 +67,68 @@ enum VolumeImportKind: String, CaseIterable, Identifiable {
       case .volumeFusion: "square.3.layers.3d"
       case .imageSequence: "photo.on.rectangle.angled"
     }
+  }
+}
+
+enum VolumeImportWizardStep: Int, CaseIterable {
+  case source, options, conversion
+
+  var number: Int { rawValue + 2 }
+  var next: Self? { Self(rawValue: rawValue + 1) }
+  var previous: Self? { Self(rawValue: rawValue - 1) }
+
+  func canContinue(sourceSelected: Bool, sizeIsValid: Bool = true) -> Bool {
+    self != .conversion && sourceSelected && (self == .source || sizeIsValid)
+  }
+
+  func canStart(sourceSelected: Bool, sizeIsValid: Bool = true) -> Bool {
+    self == .conversion && sourceSelected && sizeIsValid
+  }
+}
+
+enum DirectoryImportWizardStep: Int, CaseIterable {
+  case directory, options
+
+  var number: Int { rawValue + 2 }
+  var next: Self? { Self(rawValue: rawValue + 1) }
+  var previous: Self? { Self(rawValue: rawValue - 1) }
+
+  func canContinue(directorySelected: Bool, sizeIsValid: Bool = true) -> Bool {
+    directorySelected && (self == .directory || sizeIsValid)
+  }
+}
+
+enum DICOMSourceWizardStep: Int, CaseIterable {
+  case directory, preview
+
+  var next: Self? { Self(rawValue: rawValue + 1) }
+  var previous: Self? { Self(rawValue: rawValue - 1) }
+}
+
+enum VolumeFusionWizardStep: Int, CaseIterable {
+  case reference, registered, options, conversion
+
+  var number: Int { rawValue + 2 }
+  var next: Self? { Self(rawValue: rawValue + 1) }
+  var previous: Self? { Self(rawValue: rawValue - 1) }
+  var sourceTitle: LocalizedStringKey? {
+    switch self {
+      case .reference: "Reference Volume"
+      case .registered: "Volume to Register"
+      case .options, .conversion: nil
+    }
+  }
+
+  func canContinue(referenceSelected: Bool, registeredSelected: Bool) -> Bool {
+    switch self {
+      case .reference: referenceSelected
+      case .registered, .options: referenceSelected && registeredSelected
+      case .conversion: false
+    }
+  }
+
+  func canStart(referenceSelected: Bool, registeredSelected: Bool) -> Bool {
+    self == .conversion && referenceSelected && registeredSelected
   }
 }
 
@@ -54,9 +155,8 @@ struct VolumeFusionSelection {
 struct VolumeFusionSourcePicker: View {
   let title: LocalizedStringKey
   @Binding var selection: VolumeFusionSelection
-#if os(macOS)
-  @StateObject private var preview = DicomSlicePreviewModel()
-#else
+  var onSourceSelected: (() -> Void)? = nil
+#if !os(macOS)
   @State private var pickerMode: FilePickerView.Mode?
 #endif
 
@@ -77,13 +177,8 @@ struct VolumeFusionSourcePicker: View {
         .foregroundStyle(.secondary)
         .lineLimit(2)
         .truncationMode(.middle)
-#if os(macOS)
-      if selection.kind == .dicom, selection.access != nil {
-        DicomSlicePreview(model: preview).frame(height: 240)
-      }
-#endif
       if selection.kind == .file {
-#if os(visionOS)
+#if os(visionOS) || os(iOS)
         ConverterVolumeFormatButton(includesNativeBorgVR: true)
           .padding(.top, 8)
 #else
@@ -97,8 +192,11 @@ struct VolumeFusionSourcePicker: View {
 #if !os(macOS)
     .sheet(item: $pickerMode) { mode in
       FilePickerView(mode: mode) { access in
-        if let access { selection.access = access }
         pickerMode = nil
+        if let access {
+          selection.access = access
+          onSourceSelected?()
+        }
       }
     }
 #endif
@@ -116,7 +214,7 @@ struct VolumeFusionSourcePicker: View {
     }
     if panel.runModal() == .OK, let url = panel.url {
       selection.access = VolumeImportSourceAccess(url: url, selectedURLs: [url])
-      if selection.kind == .dicom { preview.setDirectory(url) }
+      onSourceSelected?()
     }
 #else
     switch selection.kind {
@@ -200,7 +298,9 @@ struct ConverterWizardFooter<Leading: View, Actions: View>: View {
     .frame(minHeight: 80)
   }
 }
+#endif
 
+#if os(visionOS) || os(iOS)
 struct ConverterVolumeFormatButton: View {
   var includesNativeBorgVR = false
   @State private var showsFormats = false
@@ -210,6 +310,28 @@ struct ConverterVolumeFormatButton: View {
       Label("Supported volume formats", systemImage: "info.circle")
     }
     .sheet(isPresented: $showsFormats) {
+#if os(iOS)
+      NavigationStack {
+        ScrollView {
+          VStack(alignment: .leading, spacing: 20) {
+            ConverterVolumeFormatList(includesNativeBorgVR: includesNativeBorgVR, showsTitle: false)
+            Text("For `.dat` and `.nhdr`, iOS also needs access to the referenced raw data file.")
+              .font(.callout)
+              .foregroundStyle(.secondary)
+              .fixedSize(horizontal: false, vertical: true)
+          }
+          .padding(24)
+        }
+        .navigationTitle("Supported volume formats")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+          ToolbarItem(placement: .confirmationAction) {
+            Button("Done") { showsFormats = false }
+          }
+        }
+      }
+      .presentationDetents([.medium, .large])
+#else
       VStack(alignment: .leading, spacing: 20) {
         Text("Supported volume formats")
           .font(.title2.bold())
@@ -230,6 +352,7 @@ struct ConverterVolumeFormatButton: View {
       }
       .padding(24)
       .frame(width: 640, height: 540)
+#endif
     }
   }
 }
@@ -238,7 +361,14 @@ struct ConverterVolumeFormatButton: View {
 struct ConverterWizardHeader: View {
   let title: LocalizedStringKey
   let step: Int
-  let total: Int
+  let total: Int?
+
+  private var stepDescription: String {
+    if let total {
+      return String(format: NSLocalizedString("converter_step_of_total_format", comment: ""), step, total)
+    }
+    return String(format: String(localized: "Step %ld", table: "ImportMessages"), step)
+  }
 
   var body: some View {
     HStack(alignment: .firstTextBaseline) {
@@ -246,7 +376,7 @@ struct ConverterWizardHeader: View {
         .font(.title.bold())
         .fixedSize(horizontal: false, vertical: true)
         .padding()
-      Text(String(format: NSLocalizedString("converter_step_of_total_format", comment: ""), step, total))
+      Text(stepDescription)
         .font(.subheadline)
         .foregroundStyle(.secondary)
         .fixedSize()
@@ -276,10 +406,12 @@ struct ConverterWizardSelectionStep: View {
   let question: LocalizedStringKey
   let systemImage: String
   let step: Int
-  let total: Int
+  let total: Int?
   let choices: [ConverterChoiceItem]
   let selectedID: String?
   var canGoBack = true
+  var showsNavigation = true
+  var onCancel: (() -> Void)? = nil
   let onBack: () -> Void
   let onNext: () -> Void
 
@@ -310,30 +442,40 @@ struct ConverterWizardSelectionStep: View {
         }
       }
       Spacer()
+      if showsNavigation {
 #if os(visionOS)
-      ConverterWizardFooter {
-        EmptyView()
-      } actions: {
-        Button(action: onBack) {
-          Label("converter_button_back", systemImage: "chevron.backward")
-            .frame(minWidth: 120)
-        }
-        .disabled(!canGoBack)
-        Button(action: onNext) {
-          Label("converter_nav_next", systemImage: "chevron.forward")
-            .frame(minWidth: 240)
-        }
-        .disabled(selectedID == nil)
-      }
-#else
-      HStack {
-        Spacer()
-        Button(action: onBack) { Label("converter_button_back", systemImage: "chevron.backward") }
+        ConverterWizardFooter {
+          EmptyView()
+        } actions: {
+          if let onCancel {
+            Button(action: onCancel) { Label("Cancel", systemImage: "xmark") }
+          }
+          Button(action: onBack) {
+            Label("converter_button_back", systemImage: "chevron.backward")
+              .frame(minWidth: 120)
+          }
           .disabled(!canGoBack)
-        Button(action: onNext) { Label("converter_nav_next", systemImage: "chevron.forward") }
+          Button(action: onNext) {
+            Label("converter_nav_next", systemImage: "chevron.forward")
+              .frame(minWidth: 240)
+          }
+          .buttonStyle(.borderedProminent)
           .disabled(selectedID == nil)
-      }
+        }
+#else
+        HStack(spacing: 16) {
+          Spacer()
+          if let onCancel {
+            Button(action: onCancel) { Label("Cancel", systemImage: "xmark") }
+          }
+          Button(action: onBack) { Label("converter_button_back", systemImage: "chevron.backward") }
+            .disabled(!canGoBack)
+          Button(action: onNext) { Label("converter_nav_next", systemImage: "chevron.forward") }
+            .buttonStyle(.borderedProminent)
+            .disabled(selectedID == nil)
+        }
 #endif
+      }
     }
   }
 
@@ -368,7 +510,11 @@ struct ConverterWizardSelectionStep: View {
           }
           .padding(12)
           .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-#if !os(visionOS)
+#if os(iOS)
+          .background(selected ? Color.accentColor.opacity(0.12) : Color(uiColor: .tertiarySystemFill),
+            in: RoundedRectangle(cornerRadius: 6))
+          .contentShape(Rectangle())
+#elseif !os(visionOS)
           .background(selected ? Color.accentColor.opacity(0.12) : .clear,
             in: RoundedRectangle(cornerRadius: 6))
           .contentShape(Rectangle())

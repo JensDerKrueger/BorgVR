@@ -69,6 +69,7 @@ enum MetalSliceGeneratorError: LocalizedError {
 /// - buffer(0): one tightly packed output element per X/Y coordinate
 /// - buffer(1): `uint width`, `uint height`, `uint zCoordinate`
 /// - `thread_position_in_grid`: the X/Y output coordinate
+/// Kernels must ignore coordinates outside width/height for uniform dispatches.
 final class MetalSliceGenerator {
   private struct SliceParameters {
     let width: UInt32
@@ -83,6 +84,7 @@ final class MetalSliceGenerator {
   private let commandQueue: MTLCommandQueue
   private let pipeline: MTLComputePipelineState
   private let outputBuffer: MTLBuffer
+  private let supportsNonuniformDispatch: Bool
   private let threadsPerThreadgroup: MTLSize
   private let outputByteCount: Int
 
@@ -146,6 +148,8 @@ final class MetalSliceGenerator {
     self.commandQueue = commandQueue
     self.pipeline = pipeline
     self.outputBuffer = outputBuffer
+    // Metal feature tables require Apple4 or Mac2 for nonuniform threadgroups.
+    self.supportsNonuniformDispatch = device.supportsFamily(.apple4) || device.supportsFamily(.mac2)
     self.threadsPerThreadgroup = MTLSize(
       width: threadgroupWidth,
       height: threadgroupHeight,
@@ -173,10 +177,19 @@ final class MetalSliceGenerator {
     encoder.setComputePipelineState(pipeline)
     encoder.setBuffer(outputBuffer, offset: 0, index: 0)
     encoder.setBytes(&parameters, length: MemoryLayout<SliceParameters>.stride, index: 1)
-    encoder.dispatchThreads(
-      MTLSize(width: width, height: height, depth: 1),
-      threadsPerThreadgroup: threadsPerThreadgroup
-    )
+    if supportsNonuniformDispatch {
+      encoder.dispatchThreads(
+        MTLSize(width: width, height: height, depth: 1),
+        threadsPerThreadgroup: threadsPerThreadgroup
+      )
+    } else {
+      encoder.dispatchThreadgroups(
+        MTLSize(width: (width + threadsPerThreadgroup.width - 1) / threadsPerThreadgroup.width,
+                height: (height + threadsPerThreadgroup.height - 1) / threadsPerThreadgroup.height,
+                depth: 1),
+        threadsPerThreadgroup: threadsPerThreadgroup
+      )
+    }
     encoder.endEncoding()
 
     commandBuffer.commit()

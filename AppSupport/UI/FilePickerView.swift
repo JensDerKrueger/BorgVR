@@ -22,6 +22,7 @@ struct FilePickerView: UIViewControllerRepresentable {
   }
 
   let mode: Mode
+  var supportingFileURL: URL? = nil
   var onSourcePicked: (VolumeImportSourceAccess?) -> Void
 
   /**
@@ -42,7 +43,8 @@ struct FilePickerView: UIViewControllerRepresentable {
       forOpeningContentTypes: mode.selectsDirectory ? [.folder] : [.item], asCopy: false
     )
     picker.delegate = context.coordinator
-    picker.allowsMultipleSelection = mode == .files
+    picker.allowsMultipleSelection = mode == .files && supportingFileURL == nil
+    if let supportingFileURL { picker.directoryURL = supportingFileURL.deletingLastPathComponent() }
     return picker
   }
 
@@ -63,6 +65,7 @@ struct FilePickerView: UIViewControllerRepresentable {
   class Coordinator: NSObject, UIDocumentPickerDelegate {
     /// Reference to the parent `FilePickerView`.
     private let parent: FilePickerView
+    private var completed = false
 
     /**
      Initializes the coordinator with the parent view.
@@ -86,19 +89,81 @@ struct FilePickerView: UIViewControllerRepresentable {
     func documentPicker(_ controller: UIDocumentPickerViewController,
                         didPickDocumentsAt urls: [URL]) {
       if let url = urls.first(where: {
+        if parent.supportingFileURL != nil { return true }
         if parent.mode.selectsDirectory { return true }
         let ext = $0.pathExtension.lowercased()
         return VolumeFileParserFactory.supportedExtensions.contains(ext) || ext == "data"
       }) {
-        parent.onSourcePicked(VolumeImportSourceAccess(url: url, selectedURLs: urls))
+        finish(controller, access: VolumeImportSourceAccess(url: url, selectedURLs: urls))
       } else {
-        parent.onSourcePicked(nil)
+        finish(controller, access: nil)
       }
     }
 
     func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
-      parent.onSourcePicked(nil)
+      finish(controller, access: nil)
     }
+
+    private func finish(_ controller: UIDocumentPickerViewController,
+                        access: VolumeImportSourceAccess?) {
+      guard !completed else { return }
+      completed = true
+      // UIKit can dismiss the document picker without SwiftUI's sheet onDismiss firing.
+      // Deliver the result after dismissal so consumers can safely replace the source page.
+      controller.dismiss(animated: true) {
+        self.parent.onSourcePicked(access)
+      }
+    }
+  }
+}
+
+struct SupportingFileAccessRequest: Identifiable {
+  let id = UUID()
+  let url: URL
+}
+
+struct SupportingFileAccessPicker: View {
+  let request: SupportingFileAccessRequest
+  let onSourcePicked: (VolumeImportSourceAccess?) -> Void
+  @State private var showsExplanation = SupportingFileAccessExplanation.shouldShow()
+
+  var body: some View {
+    if showsExplanation {
+      VStack(alignment: .leading, spacing: 24) {
+        Text(SupportingFileAccessExplanation.title)
+          .font(.title2.bold())
+        Text(SupportingFileAccessExplanation.message(for: request.url))
+          .fixedSize(horizontal: false, vertical: true)
+        ViewThatFits(in: .horizontal) {
+          HStack(spacing: 16) { explanationButtons }
+          VStack(alignment: .leading, spacing: 16) { explanationButtons }
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.large)
+      }
+      .padding(24)
+      .frame(maxWidth: 640, alignment: .leading)
+    } else {
+      VStack(spacing: 12) {
+        Text(String(format: String(localized: "Select the referenced file \"%@\" to continue importing.",
+          table: "ImportMessages"), request.url.lastPathComponent))
+          .fixedSize(horizontal: false, vertical: true)
+          .frame(maxWidth: .infinity, alignment: .leading)
+          .padding()
+        FilePickerView(mode: .files, supportingFileURL: request.url, onSourcePicked: onSourcePicked)
+      }
+    }
+  }
+
+  @ViewBuilder
+  private var explanationButtons: some View {
+    Button("Cancel", role: .cancel) { onSourcePicked(nil) }
+    Button(SupportingFileAccessExplanation.dismissPermanentlyTitle) {
+      SupportingFileAccessExplanation.disable()
+      showsExplanation = false
+    }
+    Button("OK") { showsExplanation = false }
+      .buttonStyle(.borderedProminent)
   }
 }
 

@@ -401,6 +401,8 @@ struct SettingsView: View {
       }
       .frame(minWidth: 720, minHeight: 380)
 
+      ShowAllExplanationDialogsButton()
+
       HStack {
         Button {
           showResetConfirmation = true

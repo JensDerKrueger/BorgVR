@@ -1,6 +1,422 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "Preview: Is this the correct DICOM series?": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Preview: Is this the correct DICOM series?" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Vorschau: Ist dies die richtige DICOM-Serie?" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Vista previa: ¿Es esta la serie DICOM correcta?" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Aperçu : est-ce la bonne série DICOM ?" } }
+      }
+    },
+    "Show all explanation dialogs again": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Show all explanation dialogs again" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Alle Erklärungsdialoge wieder anzeigen" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Volver a mostrar todas las explicaciones" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Afficher à nouveau toutes les explications" } }
+      }
+    },
+    "Explanations": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Explanations" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Erklärungen" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Explicaciones" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Explications" } }
+      }
+    },
+    "Access to the volume data": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Access to the volume data" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Zugriff auf die Volumendaten" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Acceso a los datos del volumen" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Accès aux données du volume" } }
+      }
+    },
+    "Don't explain again": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Don't explain again" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Nicht mehr erklären" } },
+        "es": { "stringUnit": { "state": "translated", "value": "No volver a explicar" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Ne plus expliquer" } }
+      }
+    },
+    "The selected header describes the volume and references \"%@\". For security reasons, selecting the header does not automatically grant access to that file. Please select the referenced file to continue importing.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "The selected header describes the volume and references \"%@\". For security reasons, selecting the header does not automatically grant access to that file. Please select the referenced file to continue importing." } },
+        "de": { "stringUnit": { "state": "translated", "value": "Die gewählte Headerdatei beschreibt das Volumen und verweist auf \"%@\". Aus Sicherheitsgründen erteilt die Auswahl des Headers nicht automatisch Zugriff auf diese Datei. Bitte wählen Sie die referenzierte Datei aus, um den Import fortzusetzen." } },
+        "es": { "stringUnit": { "state": "translated", "value": "La cabecera seleccionada describe el volumen y hace referencia a \"%@\". Por seguridad, seleccionar la cabecera no concede automáticamente acceso a ese archivo. Seleccione el archivo referenciado para continuar la importación." } },
+        "fr": { "stringUnit": { "state": "translated", "value": "L’en-tête sélectionné décrit le volume et fait référence à \"%@\". Pour des raisons de sécurité, sélectionner l’en-tête n’autorise pas automatiquement l’accès à ce fichier. Sélectionnez le fichier référencé pour poursuivre l’importation." } }
+      }
+    },
+    "Select the referenced file \"%@\" to continue importing.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Select the referenced file \"%@\" to continue importing." } },
+        "de": { "stringUnit": { "state": "translated", "value": "Wählen Sie die referenzierte Datei \"%@\" aus, um den Import fortzusetzen." } },
+        "es": { "stringUnit": { "state": "translated", "value": "Seleccione el archivo referenciado \"%@\" para continuar la importación." } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Sélectionnez le fichier référencé \"%@\" pour poursuivre l’importation." } }
+      }
+    },
+    "Please select the referenced file \"%@\".": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Please select the referenced file \"%@\"." } },
+        "de": { "stringUnit": { "state": "translated", "value": "Bitte wählen Sie die referenzierte Datei \"%@\" aus." } },
+        "es": { "stringUnit": { "state": "translated", "value": "Seleccione el archivo referenciado \"%@\"." } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Veuillez sélectionner le fichier référencé \"%@\"." } }
+      }
+    },
+    "Copying dataset": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Copying dataset" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Datensatz wird kopiert" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Copiando el conjunto de datos" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Copie du jeu de données" } }
+      }
+    },
+    "Existing metadata will be preserved.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Existing metadata will be preserved." } },
+        "de": { "stringUnit": { "state": "translated", "value": "Vorhandene Metadaten bleiben erhalten." } },
+        "es": { "stringUnit": { "state": "translated", "value": "Se conservarán los metadatos existentes." } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Les métadonnées existantes seront conservées." } }
+      }
+    },
+    "Step %ld": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Step %ld" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Schritt %ld" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Paso %ld" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Étape %ld" } }
+      }
+    },
+    "Writing metadata": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Writing metadata"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Metadaten werden geschrieben"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escribiendo metadatos"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Écriture des métadonnées"
+          }
+        }
+      }
+    },
+    "Reorganization complete": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reorganization complete"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reorganisation abgeschlossen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reorganización completada"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Réorganisation terminée"
+          }
+        }
+      }
+    },
+    "File size: %lld bytes": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "File size: %lld bytes"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dateigröße: %lld Byte"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tamaño de archivo: %lld bytes"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Taille du fichier : %lld octets"
+          }
+        }
+      }
+    },
+    "Could not determine file size for file: %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not determine file size for file: %@"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dateigröße für Datei %@ konnte nicht ermittelt werden."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudo determinar el tamaño del archivo: %@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impossible de déterminer la taille du fichier : %@"
+          }
+        }
+      }
+    },
+    "Failed to get file size for file: %@: %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Failed to get file size for file: %@: %@"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dateigröße für Datei %@ konnte nicht gelesen werden: %@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudo obtener el tamaño del archivo %@: %@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impossible d’obtenir la taille du fichier %@ : %@"
+          }
+        }
+      }
+    },
+    "Subsampling": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Subsampling"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reduzierung"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Submuestreo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sous-échantillonnage"
+          }
+        }
+      }
+    },
+    "Bricking": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bricking"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Blockzerlegung"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "División en bricks"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Découpage en bricks"
+          }
+        }
+      }
+    },
+    "Compressed %d brick(s), uncompressed %d brick(s)": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Compressed %d brick(s), uncompressed %d brick(s)"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Komprimiert: %d Blöcke, unkomprimiert: %d Blöcke"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%d brick(s) comprimidos, %d brick(s) sin comprimir"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%d brick(s) compressés, %d brick(s) non compressés"
+          }
+        }
+      }
+    },
+    "Bricking level into %d x %d x %d bricks. Total: %d": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bricking level into %d x %d x %d bricks. Total: %d"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Level wird in %d × %d × %d Blöcke unterteilt. Gesamt: %d"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nivel dividido en %d x %d x %d bricks. Total: %d"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Niveau découpé en %d x %d x %d bricks. Total : %d"
+          }
+        }
+      }
+    },
+    "Details": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Details" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Details" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Detalles" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Détails" } }
+      }
+    },
+    "Ready to import": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Ready to import" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Bereit zum Importieren" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Listo para importar" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Prêt à importer" } }
+      }
+    },
+    "Import complete": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Import complete" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Import abgeschlossen" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Importación completada" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Importation terminée" } }
+      }
+    },
+    "Import options": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Import options"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Importoptionen"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Options d’importation"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opciones de importación"
+          }
+        }
+      }
+    },
     "Close the current dataset before importing another dataset.": {
       "extractionState": "manual",
       "localizations": {

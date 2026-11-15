@@ -16,9 +16,22 @@ private func require(_ condition: Bool, _ message: String) throws {
   if !condition { throw NSError(domain: message, code: 1) }
 }
 
+private let catalogURL = URL(fileURLWithPath: CommandLine.arguments[1])
 private let catalog = try JSONDecoder().decode(Catalog.self,
-  from: Data(contentsOf: URL(fileURLWithPath: CommandLine.arguments[1])))
+  from: Data(contentsOf: catalogURL))
 let resources = URL(fileURLWithPath: CommandLine.arguments[2])
+let root = catalogURL.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+let brickingSource = try String(contentsOf: root.appendingPathComponent(
+  "BORGVR-IO/Importers/BrickedVolumeReorganizer.swift"), encoding: .utf8)
+let brickingCalls = try NSRegularExpression(pattern: #"L\(\s*"[^"]+"\s*,\s*value:\s*"([^"]+)""#)
+let brickingMessages = Set(brickingCalls.matches(in: brickingSource,
+  range: NSRange(brickingSource.startIndex..., in: brickingSource)).map {
+    String(brickingSource[Range($0.range(at: 1), in: brickingSource)!])
+  })
+try require(!brickingMessages.isEmpty, "Bricking localization coverage did not find any messages")
+for message in brickingMessages {
+  try require(catalog.strings[message] != nil, "Missing shared bricking translation: \(message)")
+}
 let formats = try NSRegularExpression(pattern: #"%(?:\.\d+)?(?:ll|l)?[@df%]"#)
 func placeholders(_ text: String) -> [String] {
   formats.matches(in: text, range: NSRange(text.startIndex..., in: text)).compactMap {
@@ -45,6 +58,7 @@ for language in ["de", "en", "es", "fr"] {
         case "%@": "sample" as NSString
         case "%ld": 37
         case "%lld": Int64(37)
+        case "%d": Int32(37)
         default: 0.75
       }
     }

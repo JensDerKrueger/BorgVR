@@ -145,6 +145,7 @@ final class StoredAppModel: ObservableObject, InterfaceVisibilitySettings {
   func settingsStore() -> BorgVRSettingsStore {
     var values = Self.values
     values["appStoreUpdateChecksEnabled"] = true
+    values.merge(ExplanationDialogPreference.defaultValues) { _, value in value }
     let extra = BorgVRSettingsStore.Entry.credentials(serverPassword: Binding(
       get: { self.serverPassword }, set: { self.serverPassword = $0 }
     )) + [SettingsServerRecord.servers(read: { self.servers }, write: { self.servers = $0 })]

@@ -16,6 +16,12 @@ final class VolumeImportSourceAccess: @unchecked Sendable {
 }
 
 enum BorgVRImportFileAccess {
+  static func matchesSupportingFile(_ selected: URL, required: URL) -> Bool {
+    guard selected.isFileURL, required.isFileURL else { return false }
+    return selected.resolvingSymlinksInPath().standardizedFileURL ==
+      required.resolvingSymlinksInPath().standardizedFileURL
+  }
+
   enum Error: Swift.Error, LocalizedError {
     case permissionRequired(URL)
 

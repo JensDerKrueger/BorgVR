@@ -19,6 +19,9 @@ struct DatasetLifecycleTests {
     let parameters = RenderingParameters()
     guard let device = MTLCreateSystemDefaultDevice() else { fatalError("Metal device required for TF tests") }
     try rendererStartupSnapshots(device: device)
+    fusionWizardNavigation()
+    directoryImportWizardNavigation()
+    try await supportingFileExplanationPreference()
     for tf in parameters.transferFunctions { tf.initMetal(device: device) }
     let keys = ["autoloadTF", "autoloadObjects", "autoloadMeasurements", "autoloadRenderState"]
     let previous = keys.map { UserDefaults.standard.object(forKey: $0) }
@@ -195,5 +198,151 @@ struct DatasetLifecycleTests {
       precondition(abs(renderer.activeTransferFunctions[0].textureBias - Float(65535) / 4095) < 0.0001)
     }
     print("Renderer startup snapshots passed: four-channel color to scalar and repeated channel changes")
+  }
+
+  @MainActor
+  private static func supportingFileExplanationPreference() async throws {
+    let suite = "BorgVR-supporting-file-explanation-\(UUID())"
+    let defaults = UserDefaults(suiteName: suite)!
+    defer { defaults.removePersistentDomain(forName: suite) }
+    precondition(!ExplanationDialogPreference.hasSuppressedDialogs(defaults: defaults))
+    precondition(SupportingFileAccessExplanation.shouldShow(defaults: defaults))
+    SupportingFileAccessExplanation.disable(defaults: defaults)
+    precondition(ExplanationDialogPreference.hasSuppressedDialogs(defaults: defaults))
+    precondition(!SupportingFileAccessExplanation.shouldShow(defaults: defaults))
+    let reloaded = UserDefaults(suiteName: suite)!
+    precondition(ExplanationDialogPreference.hasSuppressedDialogs(defaults: reloaded))
+    precondition(!SupportingFileAccessExplanation.shouldShow(defaults: reloaded))
+    defaults.set(false, forKey: "appStoreUpdateChecksEnabled")
+    defaults.set("3.8", forKey: "appStoreIgnoredUpdateVersion")
+    defaults.set(true, forKey: "sharePlayDisplayNameOnboardingCompleted")
+    defaults.set(64, forKey: "brickSize")
+    let store = BorgVRSettingsStore(defaultValues: ExplanationDialogPreference.defaultValues, defaults: defaults)
+    let archive = try store.export(includeCredentials: false)
+    let presentation = ExplanationDialogSettingsState(defaults: defaults)
+    precondition(presentation.hasSuppressedDialogs)
+    presentation.restoreAll()
+    precondition(!presentation.hasSuppressedDialogs)
+    SupportingFileAccessExplanation.disable(defaults: defaults)
+    NotificationCenter.default.post(name: UserDefaults.didChangeNotification, object: defaults)
+    for _ in 0..<100 {
+      if presentation.hasSuppressedDialogs { break }
+      try await Task.sleep(for: .milliseconds(10))
+    }
+    precondition(presentation.hasSuppressedDialogs)
+    presentation.restoreAll()
+    precondition(!presentation.hasSuppressedDialogs)
+    for dialog in ExplanationDialogPreference.allCases { dialog.disable(defaults: defaults) }
+    ExplanationDialogPreference.restoreAll(defaults: defaults)
+    precondition(!ExplanationDialogPreference.hasSuppressedDialogs(defaults: defaults))
+    for dialog in ExplanationDialogPreference.allCases { precondition(dialog.shouldShow(defaults: defaults)) }
+    precondition(SupportingFileAccessExplanation.shouldShow(defaults: defaults))
+    precondition(!defaults.bool(forKey: "appStoreUpdateChecksEnabled"))
+    precondition(defaults.string(forKey: "appStoreIgnoredUpdateVersion") == "3.8")
+    precondition(defaults.bool(forKey: "sharePlayDisplayNameOnboardingCompleted"))
+    precondition(defaults.integer(forKey: "brickSize") == 64)
+    ExplanationDialogPreference.restoreAll(defaults: defaults)
+    precondition(!ExplanationDialogPreference.hasSuppressedDialogs(defaults: defaults))
+    try store.apply(store.prepareImport(archive))
+    precondition(ExplanationDialogPreference.hasSuppressedDialogs(defaults: defaults))
+    precondition(!SupportingFileAccessExplanation.shouldShow(defaults: defaults))
+    try store.resetForAutomation()
+    precondition(!ExplanationDialogPreference.hasSuppressedDialogs(defaults: defaults))
+    precondition(SupportingFileAccessExplanation.shouldShow(defaults: defaults))
+    print("Explanation preferences passed: conditional visibility, immediate hiding, external changes, persistent opt-out, targeted reset and archive round-trip")
+  }
+
+  private static func fusionWizardNavigation() {
+    let steps = VolumeFusionWizardStep.allCases
+    precondition(steps.map(\.number) == [2, 3, 4, 5])
+    precondition(VolumeFusionWizardStep.reference.previous == nil)
+    precondition(VolumeFusionWizardStep.conversion.next == nil)
+    precondition(VolumeFusionWizardStep.reference.next == .registered)
+    precondition(VolumeFusionWizardStep.registered.next == .options)
+    precondition(VolumeFusionWizardStep.options.next == .conversion)
+    precondition(VolumeFusionWizardStep.conversion.previous == .options)
+    precondition(VolumeFusionWizardStep.options.previous == .registered)
+    precondition(VolumeFusionWizardStep.registered.previous == .reference)
+    precondition(VolumeFusionWizardStep.reference.sourceTitle != nil)
+    precondition(VolumeFusionWizardStep.registered.sourceTitle != nil)
+    precondition(VolumeFusionWizardStep.options.sourceTitle == nil)
+    precondition(VolumeFusionWizardStep.conversion.sourceTitle == nil)
+    for reference in [false, true] {
+      for registered in [false, true] {
+        precondition(VolumeFusionWizardStep.reference.canContinue(
+          referenceSelected: reference, registeredSelected: registered) == reference)
+        precondition(VolumeFusionWizardStep.registered.canContinue(
+          referenceSelected: reference, registeredSelected: registered) == (reference && registered))
+        precondition(VolumeFusionWizardStep.options.canContinue(
+          referenceSelected: reference, registeredSelected: registered) == (reference && registered))
+        precondition(!VolumeFusionWizardStep.conversion.canContinue(
+          referenceSelected: reference, registeredSelected: registered))
+        for step in steps {
+          precondition(step.canStart(referenceSelected: reference, registeredSelected: registered) ==
+            (step == .conversion && reference && registered))
+        }
+      }
+    }
+    print("Fusion wizard passed: reference, registered volume, options, separate conversion, reverse navigation and start validation")
+  }
+
+  private static func directoryImportWizardNavigation() {
+    precondition(DICOMSourceWizardStep.directory.previous == nil)
+    precondition(DICOMSourceWizardStep.directory.next == .preview)
+    precondition(DICOMSourceWizardStep.preview.previous == .directory)
+    precondition(DICOMSourceWizardStep.preview.next == nil)
+    precondition(VolumeImportKind.volumeFile.macWizardStepCount() == 7)
+    precondition(VolumeImportKind.dicomDirectory.macWizardStepCount() == 8)
+    precondition(VolumeImportKind.imageSequence.macWizardStepCount() == 8)
+    for reference in [false, true] {
+      for registered in [false, true] {
+        precondition(VolumeImportKind.volumeFusion.macWizardStepCount(
+          referenceIsDICOM: reference, registeredIsDICOM: registered) ==
+          8 + (reference ? 1 : 0) + (registered ? 1 : 0))
+      }
+    }
+    precondition(VolumeImportKind.imageSequence.compactWizardStepCount == 4)
+    precondition(VolumeImportKind.volumeFusion.compactWizardStepCount == 5)
+    precondition(VolumeImportKind.volumeFile.compactWizardStepCount == 4)
+    precondition(VolumeImportKind.dicomDirectory.compactWizardStepCount == 4)
+    precondition(VolumeImportWizardStep.allCases.map(\.number) == [2, 3, 4])
+    precondition(VolumeImportWizardStep.source.previous == nil)
+    precondition(VolumeImportWizardStep.source.next == .options)
+    precondition(VolumeImportWizardStep.options.next == .conversion)
+    precondition(VolumeImportWizardStep.conversion.previous == .options)
+    precondition(VolumeImportWizardStep.options.previous == .source)
+    precondition(VolumeImportWizardStep.conversion.next == nil)
+    precondition(DirectoryImportWizardStep.allCases.map(\.number) == [2, 3])
+    precondition(DirectoryImportWizardStep.directory.previous == nil)
+    precondition(DirectoryImportWizardStep.options.next == nil)
+    precondition(DirectoryImportWizardStep.directory.next == .options)
+    precondition(DirectoryImportWizardStep.options.previous == .directory)
+    for directory in [false, true] {
+      precondition(VolumeImportWizardStep.source.canContinue(sourceSelected: directory) == directory)
+      precondition(VolumeImportWizardStep.options.canContinue(sourceSelected: directory) == directory)
+      precondition(!VolumeImportWizardStep.conversion.canContinue(sourceSelected: directory))
+      precondition(!VolumeImportWizardStep.source.canStart(sourceSelected: directory))
+      precondition(!VolumeImportWizardStep.options.canStart(sourceSelected: directory))
+      precondition(VolumeImportWizardStep.conversion.canStart(sourceSelected: directory) == directory)
+      precondition(DirectoryImportWizardStep.directory.canContinue(directorySelected: directory) == directory)
+      precondition(DirectoryImportWizardStep.options.canContinue(directorySelected: directory) == directory)
+      for size in [false, true] {
+        precondition(VolumeImportWizardStep.source.canContinue(
+          sourceSelected: directory, sizeIsValid: size) == directory)
+        precondition(VolumeImportWizardStep.options.canContinue(
+          sourceSelected: directory, sizeIsValid: size) == (directory && size))
+        precondition(!VolumeImportWizardStep.conversion.canContinue(
+          sourceSelected: directory, sizeIsValid: size))
+        precondition(!VolumeImportWizardStep.source.canStart(sourceSelected: directory, sizeIsValid: size))
+        precondition(!VolumeImportWizardStep.options.canStart(sourceSelected: directory, sizeIsValid: size))
+        precondition(VolumeImportWizardStep.conversion.canStart(
+          sourceSelected: directory, sizeIsValid: size) == (directory && size))
+        precondition(DirectoryImportWizardStep.directory.canContinue(
+          directorySelected: directory, sizeIsValid: size) == directory)
+        precondition(DirectoryImportWizardStep.options.canContinue(
+          directorySelected: directory, sizeIsValid: size) == (directory && size))
+      }
+    }
+    print("Import wizards passed: files, DICOM and images; separate sources, metadata and conversion; reverse navigation and start validation")
   }
 }

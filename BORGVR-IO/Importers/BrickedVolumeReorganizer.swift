@@ -1514,7 +1514,8 @@ public class BrickedVolumeReorganizer {
 private func L(_ key: String,
                value: String,
                comment: String = "") -> String {
-  NSLocalizedString(key, tableName: nil, value: value, comment: comment)
+  let fallback = NSLocalizedString(key, tableName: nil, value: value, comment: comment)
+  return NSLocalizedString(value, tableName: "ImportMessages", value: fallback, comment: comment)
 }
 
 /*

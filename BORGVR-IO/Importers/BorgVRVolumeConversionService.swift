@@ -764,7 +764,12 @@ public enum BorgVRVolumeConversionService {
   ) throws {
     let parser = try VolumeFileParserFactory.parser(for: sourceURL.path,
       cancellationCheck: { try cancellationToken?.checkCancellation() },
-      progress: { logger?.progress(String(localized: "Reading volume", table: "ImportMessages"), $0) }, log: { logger?.info($0) })
+      progress: { logger?.progress(String(localized: "Reading volume", table: "ImportMessages"), $0) }, log: { logger?.info($0) },
+      readSupportingFile: { supporting in
+        try BorgVRImportFileAccess.withReadAccess(primary: sourceURL, supporting: supporting) {
+          try Data(contentsOf: $0)
+        }
+      })
     defer {
       if parser.dataIsTempCopy {
         try? FileManager.default.removeItem(atPath: parser.absoluteFilename)
@@ -939,7 +944,12 @@ public enum BorgVRVolumeConversionService {
       }
       let parser = try VolumeFileParserFactory.parser(for: url.path,
         cancellationCheck: { try cancellationToken?.checkCancellation() },
-        progress: { logger?.progress(String(localized: "Reading volume", table: "ImportMessages"), $0) }, log: { logger?.info($0) })
+        progress: { logger?.progress(String(localized: "Reading volume", table: "ImportMessages"), $0) }, log: { logger?.info($0) },
+        readSupportingFile: { supporting in
+          try BorgVRImportFileAccess.withReadAccess(primary: url, supporting: supporting) {
+            try Data(contentsOf: $0)
+          }
+        })
       defer {
         if parser.dataIsTempCopy { try? FileManager.default.removeItem(atPath: parser.absoluteFilename) }
       }

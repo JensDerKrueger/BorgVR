@@ -31,7 +31,7 @@ struct LoggerView: View {
 
       HStack(spacing: 16) {
         Button("logger_clear_log_button") {
-          logText = ""
+          logger.clear()
         }
 
         Button("logger_export_log_button") {

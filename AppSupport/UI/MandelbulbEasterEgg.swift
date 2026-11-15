@@ -121,11 +121,14 @@ struct MandelbulbEasterEgg: ViewModifier {
       switch model.dialog {
         case .invitation:
           Text("mandelbulb_invitation").fixedSize(horizontal: false, vertical: true)
-          HStack {
+          HStack(spacing: 16) {
             Spacer()
             Button("mandelbulb_no", role: .cancel) { model.isPresented = false }
             Button("mandelbulb_yes") { model.dialog = .size }
               .keyboardShortcut(.defaultAction)
+#if os(iOS)
+              .buttonStyle(.borderedProminent)
+#endif
           }
         case .size:
           Text("mandelbulb_choose_size")
@@ -144,10 +147,13 @@ struct MandelbulbEasterEgg: ViewModifier {
             MandelbulbStorageRequirement.formatted(model.size.storage.compressedBytes)))
             .font(.caption).foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
-          HStack {
+          HStack(spacing: 16) {
             Spacer()
             Button("mandelbulb_cancel", role: .cancel) { model.isPresented = false }
             Button("mandelbulb_create", action: generate).keyboardShortcut(.defaultAction)
+#if os(iOS)
+              .buttonStyle(.borderedProminent)
+#endif
 #if os(visionOS)
               .disabled(!appModel.canImportDataset)
 #endif
@@ -175,6 +181,11 @@ struct MandelbulbEasterEgg: ViewModifier {
     }
     .padding(28)
     .frame(idealWidth: 420)
+#if os(iOS)
+    .buttonStyle(.bordered)
+    .controlSize(.large)
+    .buttonBorderShape(.roundedRectangle(radius: 8))
+#endif
   }
 
   private var closeButton: some View {

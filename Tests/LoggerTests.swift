@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 
 private enum TestFailure: Error, CustomStringConvertible {
   case failed(String)
@@ -139,12 +140,59 @@ private func testFileFilteringConcurrencyAndRotation() throws {
 
 @main
 private enum LoggerTestRunner {
-  static func main() throws {
+  static func main() async throws {
     try testFilterAndSanitizer()
     try testMultiplexFilteringAndConcurrency()
     try testFileFilteringConcurrencyAndRotation()
     try testBoundedGUIBuffer()
+    try await testGUILoggerClearAndPublication()
     print("Logger tests passed")
+  }
+}
+
+@MainActor
+private func testGUILoggerClearAndPublication() async throws {
+  let logger = GUILogger()
+  var text = ""
+  var phase = ""
+  var progress = 0.0
+  logger.setLogBinding(Binding(get: { text }, set: { text = $0 }))
+  logger.setProgressBinding(Binding(get: { phase }, set: { phase = $0 }),
+    Binding(get: { progress }, set: { progress = $0 }))
+  logger.info("old import message")
+  logger.progress("Importing", 0.5)
+  await drainGUIPublications()
+  try expect(text == "old import message\n", "GUI logger did not publish its initial buffer")
+
+  logger.clear()
+  await drainGUIPublications()
+  try expect(text.isEmpty, "GUI logger clear did not empty its visible binding")
+  try expect(phase == "Importing" && progress == 0.5, "Clearing the log changed import progress")
+
+  logger.info("new import message")
+  await drainGUIPublications()
+  try expect(text == "new import message\n", "Cleared messages reappeared on the next publication")
+
+  logger.info("queued before clear")
+  logger.clear()
+  logger.info("queued after clear")
+  await drainGUIPublications()
+  try expect(text == "queued after clear\n", "Pending publication restored cleared messages or lost new ones")
+
+  var reopenedText = ""
+  logger.clear()
+  logger.setLogBinding(Binding(get: { reopenedText }, set: { reopenedText = $0 }))
+  await drainGUIPublications()
+  try expect(reopenedText.isEmpty, "Reopening the details view restored cleared messages")
+  logger.info("after reopening")
+  await drainGUIPublications()
+  try expect(reopenedText == "after reopening\n", "New messages failed after clearing and rebinding")
+}
+
+@MainActor
+private func drainGUIPublications() async {
+  await withCheckedContinuation { continuation in
+    DispatchQueue.main.async { continuation.resume() }
   }
 }
 

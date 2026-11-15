@@ -41,6 +41,9 @@ struct ConverterView: View {
   @State private var inputDirectoryAccess: VolumeImportSourceAccess?
   @State private var fusionReference = VolumeFusionSelection()
   @State private var fusionRegistered = VolumeFusionSelection()
+  @State private var fusionStep = VolumeFusionWizardStep.reference
+  @State private var imageSequenceStep = DirectoryImportWizardStep.directory
+  @State private var dicomSourceStep = DICOMSourceWizardStep.directory
   @State private var imageDirectoryAccess: VolumeImportSourceAccess?
   @State private var additionalInputAccesses: [VolumeImportSourceAccess] = []
   @State private var imageSizeX = ""
@@ -58,6 +61,7 @@ struct ConverterView: View {
   @State private var importedDatasetURL: URL?
   @State private var conversionCancellationToken: BorgVRVolumeConversionCancellationToken?
   @State private var conversionCancellationRequested = false
+  @State private var returnToMainMenuAfterCancellation = false
   @State private var showDirectoryPicker = false
 
   @State private var tempBrickSize: String = ""
@@ -118,7 +122,7 @@ struct ConverterView: View {
         importSourceSelection
       } else if operation == .importDataset {
       VStack(spacing: 16) {
-      ConverterWizardHeader(title: "converter_import_title", step: step + 2, total: 8)
+      ConverterWizardHeader(title: "converter_import_title", step: displayedImportStep, total: totalWizardSteps)
       Spacer()
 
       HStack(alignment: .top) {
@@ -132,48 +136,55 @@ struct ConverterView: View {
             case 1:
               // Step 1: Input source
               VStack(alignment: .leading, spacing: 12) {
-                Text(importSourceKind.title)
-                  .font(importSourceKind == .volumeFusion ? .title2.weight(.semibold) : .headline)
+                if dicomSourceStep == .preview {
+                  dicomSourcePreview
+                } else {
+                  Text(importSourceKind.title)
+                    .font(importSourceKind == .volumeFusion ? .title2.weight(.semibold) : .headline)
 
-                switch importSourceKind {
-                  case .imageSequence:
-                    dicomDirectorySelector(role: .images,
-                      buttonKey: "image_sequence_select", path: imageDirectoryURL?.path ?? "")
-                    imageSequenceSizeFields
-                  case .volumeFile:
-                    HStack {
-                      Button {
-                        selectInputFile()
-                      } label: {
-                        Label("converter_button_select_input_file", systemImage: "doc")
+                  switch importSourceKind {
+                    case .imageSequence:
+                      if imageSequenceStep == .directory {
+                        dicomDirectorySelector(role: .images,
+                          buttonKey: "image_sequence_select", path: imageDirectoryURL?.path ?? "")
+                      } else {
+                        imageSequenceSizeFields
                       }
-                      Text(inputFile.isEmpty
-                           ? NSLocalizedString("converter_status_no_file", comment: "")
-                           : inputFile)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                        .foregroundStyle(inputFile.isEmpty ? .secondary : .primary)
-                    }
-                    ConverterVolumeFormatList()
-                      .padding(.top, 8)
-                  case .dicomDirectory:
-                    if inputDirectory.isEmpty == false {
-                      DicomSlicePreview(model: dicomPreviewModel)
-                        .frame(height: 420)
-                        .padding()
-                    }
-                    dicomDirectorySelector(
-                      role: .single,
-                      buttonKey: "converter_button_select_input_dir",
-                      path: inputDirectory
-                    )
-                  case .volumeFusion:
-                    HStack(alignment: .top, spacing: 16) {
-                      VolumeFusionSourcePicker(title: "Reference Volume", selection: $fusionReference)
-                      VolumeFusionSourcePicker(title: "Volume to Register", selection: $fusionRegistered)
-                    }
-                    .onChange(of: fusionReference.access?.url) { _, _ in updateFusionSuggestion() }
-                    .onChange(of: fusionRegistered.access?.url) { _, _ in updateFusionSuggestion() }
+                    case .volumeFile:
+                      HStack {
+                        Button {
+                          selectInputFile()
+                        } label: {
+                          Label("converter_button_select_input_file", systemImage: "doc")
+                        }
+                        Text(inputFile.isEmpty
+                             ? NSLocalizedString("converter_status_no_file", comment: "")
+                             : inputFile)
+                          .lineLimit(1)
+                          .truncationMode(.middle)
+                          .foregroundStyle(inputFile.isEmpty ? .secondary : .primary)
+                      }
+                      ConverterVolumeFormatList()
+                        .padding(.top, 8)
+                    case .dicomDirectory:
+                      dicomDirectorySelector(
+                        role: .single,
+                        buttonKey: "converter_button_select_input_dir",
+                        path: inputDirectory
+                      )
+                    case .volumeFusion:
+                      if let title = fusionStep.sourceTitle {
+                        VolumeFusionSourcePicker(title: title,
+                          selection: fusionStep == .reference ? $fusionReference : $fusionRegistered,
+                          onSourceSelected: {
+                            updateFusionSuggestion()
+                            advanceFromImportSource()
+                          })
+                        .id(fusionStep)
+                        .onChange(of: fusionReference.access?.url) { _, _ in updateFusionSuggestion() }
+                        .onChange(of: fusionRegistered.access?.url) { _, _ in updateFusionSuggestion() }
+                      }
+                  }
                 }
               }
             case 2:
@@ -229,14 +240,8 @@ struct ConverterView: View {
                   .textFieldStyle(.roundedBorder)
                 DatePicker("converter_received_on", selection: $receivedAt, displayedComponents: [.date, .hourAndMinute])
                   .datePickerStyle(.compact)
-              }
-            case 5:
-              // Step 5: Confirm and start
-              VStack(alignment: .leading, spacing: 12) {
-                Text("converter_step5_title")
-                  .font(.headline)
-
                 if storedAppModel.lastMinute {
+                  Divider().padding(.vertical, 4)
                   Text("converter_step5_subtitle")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
@@ -250,6 +255,7 @@ struct ConverterView: View {
                     .textFieldStyle(RoundedBorderTextFieldStyle())
                     .frame(maxWidth: 120)
                     .onAppear { tempBrickSize = String(storedAppModel.brickSize) }
+                    .onChange(of: tempBrickSize) { _, _ in validateBrickSize() }
                     if let error = brickSizeErrorMsg {
                       Text(error).foregroundColor(.red).font(.caption)
                     }
@@ -295,7 +301,7 @@ struct ConverterView: View {
 
           Spacer()
 
-          if step == 6, let importedDatasetURL, let onOpenDataset {
+          if step == 5, let importedDatasetURL, let onOpenDataset {
             Button {
               onOpenDataset(importedDatasetURL)
             } label: {
@@ -305,8 +311,7 @@ struct ConverterView: View {
           }
 
           Button {
-            if step > 1 { step -= 1 }
-            else { selectionStage = .importSource }
+            goBackFromImportStep()
           } label: {
             Label("converter_button_back", systemImage: "chevron.backward")
           }
@@ -315,14 +320,16 @@ struct ConverterView: View {
             // Validate minimal inputs for each step before advancing
             switch step {
               case 1:
-                if hasValidImportInput { step += 1 }
+                advanceFromImportSource()
               case 2:
                 if !storedAppModel.dataDirectory.isEmpty { step += 1 }
               case 3:
                 if !outputFile.isEmpty { step += 1 }
               case 4:
-                step += 1
-              case 5:
+                if storedAppModel.lastMinute {
+                  validateBrickSize()
+                  guard brickSizeErrorMsg == nil else { return }
+                }
                 step += 1
                 startConversion()
               default:
@@ -330,18 +337,19 @@ struct ConverterView: View {
             }
           } label: {
             Label(
-              step < 5
+              step < 4
               ? "converter_nav_next"
-              : (step == 5 ? "converter_nav_start" : "converter_nav_close"),
-              systemImage: step < 5 ? "chevron.forward" : "checkmark.circle"
+              : (step == 4 ? "converter_nav_start" : "converter_nav_close"),
+              systemImage: step < 4 ? "chevron.forward" : "checkmark.circle"
             )
           }
+          .buttonStyle(.borderedProminent)
           .disabled(
-            (step == 1 && !hasValidImportInput) ||
+            (step == 1 && !canContinueImportSource) ||
             (step == 2 && storedAppModel.dataDirectory.isEmpty) ||
             (step == 3 && outputFile.isEmpty) ||
-            (step == 5 && brickSizeErrorMsg != nil) ||
-            (step == 6 && isConverting)
+            (step == 4 && storedAppModel.lastMinute && brickSizeErrorMsg != nil) ||
+            (step == 5 && isConverting)
           )
         }
       }
@@ -358,9 +366,11 @@ struct ConverterView: View {
     .navigationTitle("Import / Export")
     .toolbar {
       ToolbarItem(placement: .cancellationAction) {
-        Button("Back", action: closeConverter)
+        Button(action: cancelWizard) {
+          Label("Cancel", systemImage: "xmark")
+        }
           .help("converter_back_to_main_menu")
-          .disabled(isConverting)
+          .disabled(isConverting && conversionCancellationToken == nil)
       }
     }
     .onAppear {
@@ -368,6 +378,9 @@ struct ConverterView: View {
       logger.setLogBinding($logText)
       logger.setProgressBinding($progressText, $progressValue)
       logger.setMinimumLogLevel(.dev)
+    }
+    .onChange(of: isConverting) { _, converting in
+      if !converting && returnToMainMenuAfterCancellation { closeConverter() }
     }
     .fileImporter(
       isPresented: $showDirectoryPicker,
@@ -395,19 +408,21 @@ struct ConverterView: View {
 
   private var operationSelection: some View {
     ConverterWizardSelectionStep(title: "Import / Export", question: "What would you like to do?",
-      systemImage: "arrow.left.arrow.right", step: 1, total: totalWizardSteps, choices: [
+      systemImage: "arrow.left.arrow.right", step: 1, total: nil, choices: [
         operationChoice(.importDataset, title: "converter_mode_import", icon: "square.and.arrow.down"),
         operationChoice(.exportDataset, title: "converter_mode_export", icon: "square.and.arrow.up"),
         operationChoice(.importMesh, title: "converter_mode_mesh_import", icon: "cube.box"),
         operationChoice(.exportMesh, title: "converter_mode_mesh_export", icon: "cube.box.fill")
       ], selectedID: operation.rawValue, canGoBack: false, onBack: {}, onNext: {
-        selectionStage = operation == .importDataset ? .importSource : .workflow
+        beginOperation(operation)
       })
   }
 
   private var totalWizardSteps: Int {
     switch operation {
-      case .importDataset: 8
+      case .importDataset: importSourceKind.macWizardStepCount(
+        referenceIsDICOM: fusionReference.kind == .dicom,
+        registeredIsDICOM: fusionRegistered.kind == .dicom)
       case .exportDataset: 5
       case .importMesh, .exportMesh: 4
     }
@@ -415,28 +430,43 @@ struct ConverterView: View {
 
   private func operationChoice(_ value: Operation, title: LocalizedStringKey, icon: String) -> ConverterChoiceItem {
     ConverterChoiceItem(id: value.rawValue, title: title, systemImage: icon) {
-      operation = value
+      beginOperation(value)
     }
+  }
+
+  private func beginOperation(_ value: Operation) {
+    guard !isConverting else { return }
+    operation = value
+    selectionStage = value == .importDataset ? .importSource : .workflow
   }
 
   private var importSourceSelection: some View {
     ConverterWizardSelectionStep(title: "converter_import_title", question: "What would you like to import?",
-      systemImage: "tray.and.arrow.down", step: 2, total: 8,
+      systemImage: "tray.and.arrow.down", step: 2, total: nil,
       choices: ImportSourceKind.allCases.map(importChoice), selectedID: importSourceKind.rawValue,
       onBack: { selectionStage = .operation }, onNext: {
-        if preparedImportSourceKind != importSourceKind {
-          refreshImportSuggestion()
-          preparedImportSourceKind = importSourceKind
-        }
-        step = 1
-        selectionStage = .workflow
+        beginImportWorkflow(importSourceKind)
       })
+  }
+
+  private func beginImportWorkflow(_ kind: ImportSourceKind) {
+    guard !isConverting else { return }
+    importSourceKind = kind
+    if preparedImportSourceKind != kind {
+      refreshImportSuggestion()
+      preparedImportSourceKind = kind
+    }
+    step = 1
+    fusionStep = .reference
+    imageSequenceStep = .directory
+    dicomSourceStep = .directory
+    selectionStage = .workflow
   }
 
   private func importChoice(_ value: ImportSourceKind) -> ConverterChoiceItem {
     ConverterChoiceItem(id: value.rawValue, title: value.title, systemImage: value.systemImage,
       startsSection: value == .volumeFusion) {
-      importSourceKind = value
+      beginImportWorkflow(value)
     }
   }
 
@@ -549,6 +579,7 @@ struct ConverterView: View {
             } label: {
               Label("converter_nav_next", systemImage: "chevron.forward")
             }
+            .buttonStyle(.borderedProminent)
             .disabled(meshInputURL == nil)
           } else if meshStep == 2 {
             Button {
@@ -557,6 +588,7 @@ struct ConverterView: View {
             } label: {
               Label("converter_mesh_start", systemImage: "cube.fill")
             }
+            .buttonStyle(.borderedProminent)
             .disabled(
               meshOutputURL == nil ||
               meshName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
@@ -677,6 +709,7 @@ struct ConverterView: View {
             } label: {
               Label("converter_nav_next", systemImage: "chevron.forward")
             }
+            .buttonStyle(.borderedProminent)
             .disabled(meshExportInputURL == nil)
           } else if meshExportStep == 2 {
             Button {
@@ -685,6 +718,7 @@ struct ConverterView: View {
             } label: {
               Label("converter_mesh_export_start", systemImage: "square.and.arrow.up")
             }
+            .buttonStyle(.borderedProminent)
             .disabled(meshExportOutputURL == nil)
           } else if meshExportDidSucceed {
             Button {
@@ -765,7 +799,7 @@ struct ConverterView: View {
     isConverting = true
     meshExportDidFinish = false
     meshExportDidSucceed = false
-    logText = ""
+    logger.clear()
     let inputAccess = inputURL.startAccessingSecurityScopedResource()
     let outputDirectory = outputURL.deletingLastPathComponent()
     let outputAccess = outputDirectory.startAccessingSecurityScopedResource()
@@ -858,7 +892,7 @@ struct ConverterView: View {
     isConverting = true
     meshImportDidFinish = false
     meshImportDidSucceed = false
-    logText = ""
+    logger.clear()
     let name = meshName
     let description = meshDescription
     let inputAccess = inputURL.startAccessingSecurityScopedResource()
@@ -899,6 +933,16 @@ struct ConverterView: View {
 
   private func closeConverter() {
     onClose()
+  }
+
+  private func cancelWizard() {
+    guard !isConverting || conversionCancellationToken != nil else { return }
+    if isConverting {
+      returnToMainMenuAfterCancellation = true
+      cancelConversion()
+    } else {
+      closeConverter()
+    }
   }
 
   private var exportContent: some View {
@@ -1038,6 +1082,7 @@ struct ConverterView: View {
             } label: {
               Label("converter_nav_next", systemImage: "chevron.forward")
             }
+            .buttonStyle(.borderedProminent)
             .disabled(
               (exportStep == 1 && exportLevelDescriptions.isEmpty) ||
               (exportStep == 2 && !exportLevelDescriptions.indices.contains(exportLevel))
@@ -1049,6 +1094,7 @@ struct ConverterView: View {
             } label: {
               Label("converter_export_start", systemImage: "square.and.arrow.up")
             }
+            .buttonStyle(.borderedProminent)
             .disabled(exportOutputFile.isEmpty)
           } else if exportDidSucceed {
             Button {
@@ -1086,12 +1132,12 @@ struct ConverterView: View {
   }
 
   private var importStepSystemImage: String {
+    if step == 1, dicomSourceStep == .preview { return "photo" }
     switch step {
-      case 1: return "tray.and.arrow.down"
+      case 1: return importSourceKind == .imageSequence && imageSequenceStep == .options ? "ruler" : "tray.and.arrow.down"
       case 2: return "folder"
       case 3: return "doc.text"
       case 4: return "text.quote"
-      case 5: return "checkmark.circle"
       default: return "gearshape.2"
     }
   }
@@ -1160,7 +1206,7 @@ struct ConverterView: View {
     isConverting = true
     exportDidFinish = false
     exportDidSucceed = false
-    logText = ""
+    logger.clear()
     let inputURL = exportInputURL ?? URL(fileURLWithPath: exportInputFile)
     let outputURL = exportOutputURL ?? URL(fileURLWithPath: exportOutputFile)
     let level = exportLevel
@@ -1212,6 +1258,98 @@ struct ConverterView: View {
     }
   }
 
+  private var displayedImportStep: Int {
+    let additionalSourceStep = (importSourceKind == .volumeFusion && (step > 1 || fusionStep == .registered)) ||
+      (importSourceKind == .imageSequence && (step > 1 || imageSequenceStep == .options))
+    var previewSteps = 0
+    if importSourceKind == .dicomDirectory {
+      previewSteps = step > 1 || dicomSourceStep == .preview ? 1 : 0
+    } else if importSourceKind == .volumeFusion {
+      if fusionReference.kind == .dicom,
+         step > 1 || fusionStep == .registered || dicomSourceStep == .preview {
+        previewSteps += 1
+      }
+      if fusionRegistered.kind == .dicom,
+         step > 1 || (fusionStep == .registered && dicomSourceStep == .preview) {
+        previewSteps += 1
+      }
+    }
+    return step + 2 + (additionalSourceStep ? 1 : 0) + previewSteps
+  }
+
+  private var currentDICOMSourceURL: URL? {
+    if importSourceKind == .dicomDirectory {
+      return inputDirectory.isEmpty ? nil : URL(fileURLWithPath: inputDirectory)
+    }
+    guard importSourceKind == .volumeFusion else { return nil }
+    let selection = fusionStep == .reference ? fusionReference : fusionRegistered
+    return selection.kind == .dicom ? selection.access?.url : nil
+  }
+
+  private var dicomSourcePreview: some View {
+    VStack(alignment: .leading, spacing: 12) {
+      Text(String(localized: "Preview: Is this the correct DICOM series?", table: "ImportMessages"))
+        .font(.title2.weight(.semibold))
+        .fixedSize(horizontal: false, vertical: true)
+      if importSourceKind == .volumeFusion, let title = fusionStep.sourceTitle {
+        Text(title).font(.headline)
+      }
+      Text(currentDICOMSourceURL?.path ?? "")
+        .foregroundStyle(.secondary)
+        .lineLimit(2)
+        .truncationMode(.middle)
+      DicomSlicePreview(model: dicomPreviewModel)
+        .frame(height: 420)
+    }
+  }
+
+  private func showDICOMPreviewIfAvailable() {
+    guard let url = currentDICOMSourceURL else { return }
+    dicomPreviewModel.setDirectory(url)
+    dicomSourceStep = .preview
+  }
+
+  private func goBackFromImportStep() {
+    if step > 1 {
+      step -= 1
+      if step == 1 { showDICOMPreviewIfAvailable() }
+    } else if let previous = dicomSourceStep.previous {
+      dicomSourceStep = previous
+    } else if importSourceKind == .volumeFusion, fusionStep == .registered {
+      fusionStep = .reference
+      showDICOMPreviewIfAvailable()
+    } else if importSourceKind == .imageSequence, imageSequenceStep == .options {
+      imageSequenceStep = .directory
+    } else {
+      selectionStage = .importSource
+    }
+  }
+
+  private var canContinueImportSource: Bool {
+    if importSourceKind == .imageSequence {
+      return imageSequenceStep.canContinue(directorySelected: imageDirectoryURL != nil,
+        sizeIsValid: imageSequenceSize != nil)
+    }
+    if importSourceKind == .volumeFusion {
+      return fusionStep.canContinue(referenceSelected: fusionReference.input != nil,
+        registeredSelected: fusionRegistered.input != nil)
+    }
+    return hasValidImportInput
+  }
+
+  private func advanceFromImportSource() {
+    guard selectionStage == .workflow, operation == .importDataset, step == 1,
+          !isConverting, canContinueImportSource else { return }
+    if dicomSourceStep == .directory, currentDICOMSourceURL != nil {
+      showDICOMPreviewIfAvailable()
+      return
+    }
+    dicomSourceStep = .directory
+    if importSourceKind == .volumeFusion, fusionStep == .reference { fusionStep = .registered }
+    else if importSourceKind == .imageSequence, imageSequenceStep == .directory { imageSequenceStep = .options }
+    else { step += 1 }
+  }
+
   private var hasValidImportInput: Bool {
     switch importSourceKind {
       case .imageSequence:
@@ -1237,6 +1375,7 @@ struct ConverterView: View {
       } label: {
         Label(buttonKey, systemImage: "folder")
       }
+      .frame(maxWidth: .infinity, alignment: .leading)
       Text(path.isEmpty
            ? NSLocalizedString("converter_status_no_directory", comment: "")
            : path)
@@ -1261,6 +1400,7 @@ struct ConverterView: View {
       importSourceKind = .volumeFile
       outputFile = url.deletingPathExtension().lastPathComponent
       datasetDescription = String(format: NSLocalizedString("converter_desc_from_file", comment: ""), outputFile)
+      advanceFromImportSource()
     }
   }
 
@@ -1288,12 +1428,12 @@ struct ConverterView: View {
         case .single:
           inputDirectoryAccess = access
           importSourceKind = .dicomDirectory
-          dicomPreviewModel.setDirectory(url)
           inputDirectory = url.path
           (outputFile, datasetDescription) = generateDescriptionSuggestion(
             from: inputDirectory
           )
       }
+      advanceFromImportSource()
     }
 
   }
@@ -1571,6 +1711,21 @@ struct ConverterView: View {
     guard !additionalInputAccesses.contains(where: { $0.url.standardizedFileURL == requiredURL.standardizedFileURL }) else {
       logger.error(BorgVRImportFileAccess.Error.permissionRequired(requiredURL).localizedDescription)
       return
+    }
+    if SupportingFileAccessExplanation.shouldShow() {
+      let alert = NSAlert()
+      alert.messageText = SupportingFileAccessExplanation.title
+      alert.informativeText = SupportingFileAccessExplanation.message(for: requiredURL)
+      alert.addButton(withTitle: String(localized: "OK"))
+      alert.addButton(withTitle: String(localized: "Cancel"))
+      alert.addButton(withTitle: SupportingFileAccessExplanation.dismissPermanentlyTitle)
+      switch alert.runModal() {
+        case .alertFirstButtonReturn: break
+        case .alertThirdButtonReturn: SupportingFileAccessExplanation.disable()
+        default:
+          logger.info(String(localized: "Conversion cancelled."))
+          return
+      }
     }
     let panel = NSOpenPanel()
     panel.canChooseFiles = true

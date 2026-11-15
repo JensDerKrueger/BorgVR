@@ -1,5 +1,85 @@
 import SwiftUI
 import UniformTypeIdentifiers
+import Combine
+
+enum ExplanationDialogPreference: String, CaseIterable {
+  case supportingFileAccess = "explainSupportingFileAccess"
+
+  func shouldShow(defaults: UserDefaults = .standard) -> Bool {
+    defaults.object(forKey: rawValue) as? Bool ?? true
+  }
+
+  func disable(defaults: UserDefaults = .standard) {
+    defaults.set(false, forKey: rawValue)
+  }
+
+  static var defaultValues: [String: Any] {
+    Dictionary(uniqueKeysWithValues: allCases.map { ($0.rawValue, true as Any) })
+  }
+
+  static func hasSuppressedDialogs(defaults: UserDefaults = .standard) -> Bool {
+    allCases.contains { !$0.shouldShow(defaults: defaults) }
+  }
+
+  static func restoreAll(defaults: UserDefaults = .standard) {
+    for dialog in allCases { defaults.removeObject(forKey: dialog.rawValue) }
+  }
+}
+
+@MainActor
+final class ExplanationDialogSettingsState: ObservableObject {
+  @Published private(set) var hasSuppressedDialogs: Bool
+  private let defaults: UserDefaults
+  private var changes: AnyCancellable?
+
+  init(defaults: UserDefaults = .standard) {
+    self.defaults = defaults
+    hasSuppressedDialogs = ExplanationDialogPreference.hasSuppressedDialogs(defaults: defaults)
+    changes = NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)
+      .sink { [weak self] _ in
+        Task { @MainActor [weak self] in self?.refresh() }
+      }
+  }
+
+  func restoreAll() {
+    ExplanationDialogPreference.restoreAll(defaults: defaults)
+    refresh()
+  }
+
+  private func refresh() {
+    let suppressed = ExplanationDialogPreference.hasSuppressedDialogs(defaults: defaults)
+    if hasSuppressedDialogs != suppressed { hasSuppressedDialogs = suppressed }
+  }
+}
+
+struct ShowAllExplanationDialogsButton: View {
+  var includesSectionHeader = false
+  @StateObject private var state = ExplanationDialogSettingsState()
+
+  var body: some View {
+    Group {
+      if state.hasSuppressedDialogs {
+        if includesSectionHeader {
+          Section(header: Text(String(localized: "Explanations", table: "ImportMessages")).bold()) {
+            resetButton
+          }
+        } else {
+          resetButton
+        }
+      }
+    }
+  }
+
+  private var resetButton: some View {
+    Button(action: state.restoreAll) {
+      Label(String(localized: "Show all explanation dialogs again", table: "ImportMessages"),
+        systemImage: "arrow.counterclockwise")
+        .fixedSize(horizontal: false, vertical: true)
+    }
+    .buttonStyle(.bordered)
+  }
+
+}
 
 extension UTType {
   static let borgVRSettings = UTType(exportedAs: BorgVRSettingsStore.typeIdentifier, conformingTo: .json)

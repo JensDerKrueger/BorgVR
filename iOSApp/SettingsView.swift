@@ -369,6 +369,8 @@ struct SettingsView: View {
       Toggle("Hide built-in datasets", isOn: $appSettings.hideBuiltInDatasets)
     }
 
+    ShowAllExplanationDialogsButton(includesSectionHeader: true)
+
     Section("Diagnostics") {
       Picker("Log-Level", selection: $appSettings.logLevel) {
         ForEach(AppLogLevel.allCases) { level in

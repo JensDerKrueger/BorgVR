@@ -512,6 +512,15 @@ private func testSupportingFileAccess() throws {
   let access = VolumeImportSourceAccess(url: header, selectedURLs: [header, raw])
   let result = try BorgVRImportFileAccess.withReadAccess(primary: access.url, supporting: raw) { try Data(contentsOf: $0) }
   try expect(result == bytes && access.url == header, "Supporting file access changed the URL or data")
+  try expect(BorgVRImportFileAccess.matchesSupportingFile(raw, required: raw), "Required file was rejected")
+  try expect(!BorgVRImportFileAccess.matchesSupportingFile(header, required: raw), "Wrong supporting file was accepted")
+  try expect(!BorgVRImportFileAccess.matchesSupportingFile(
+    root.appendingPathComponent("other/scan.dat.raw"), required: raw), "Same basename in another directory was accepted")
+  try expect(!BorgVRImportFileAccess.matchesSupportingFile(
+    URL(string: "https://example.com/scan.dat.raw")!, required: raw), "Non-file URL was accepted")
+  let alias = root.appendingPathComponent("alias.raw")
+  try FileManager.default.createSymbolicLink(at: alias, withDestinationURL: raw)
+  try expect(BorgVRImportFileAccess.matchesSupportingFile(alias, required: raw), "Equivalent file URL was rejected")
   struct BodyError: Error {}
   do {
     try BorgVRImportFileAccess.withReadAccess(primary: header, supporting: raw) { _ in throw BodyError() }
@@ -538,7 +547,67 @@ private func testSupportingFileAccess() throws {
   }
   try expect(!NSFileCoordinator.filePresenters.contains { $0.presentedItemURL == raw },
     "Related file presenter was not unregistered after failure")
+
+  let settings = BorgVRVolumeConversionSettings(brickSize: 4, overlap: 1,
+    useCompression: false, extensionStrategy: .fillZeroes)
+  let cases: [(name: String, encoding: String, type: String, endian: String, payload: Data, decoded: Data)] = [
+    ("raw", "raw", "uchar", "little", bytes, bytes),
+    ("ascii", "ascii", "uchar", "little", Data("1 2 3 4".utf8), bytes),
+    ("big-endian", "raw", "ushort", "big", Data([0, 1, 0, 2, 0, 3, 0, 4]), Data([1, 0, 2, 0, 3, 0, 4, 0])),
+    ("gzip", "gzip", "uchar", "little", Data(base64Encoded: "H4sIAAAAAAAAE2NkYmYBAM37PLYEAAAA")!, bytes)
+  ]
+  for fixture in cases {
+    let headerURL = root.appendingPathComponent("\(fixture.name).nhdr")
+    let payloadURL = root.appendingPathComponent("\(fixture.name).raw")
+    let outputURL = root.appendingPathComponent("\(fixture.name).data")
+    try fixture.payload.write(to: payloadURL)
+    try """
+    NRRD0005
+    type: \(fixture.type)
+    dimension: 3
+    sizes: 2 2 1
+    endian: \(fixture.endian)
+    encoding: \(fixture.encoding)
+    data file: \(payloadURL.lastPathComponent)
+
+
+    """.write(to: headerURL, atomically: true, encoding: .utf8)
+    let request = BorgVRVolumeConversionRequest(source: .file(headerURL), destinationURL: outputURL,
+      datasetDescription: "Detached NRRD", metaDescription: "Supporting file access", settings: settings)
+    try FileManager.default.setAttributes([.posixPermissions: 0], ofItemAtPath: payloadURL.path)
+    do {
+      defer { try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: payloadURL.path) }
+      do {
+        try BorgVRVolumeConversionService.convert(request)
+        throw TestFailure.failed("Denied \(fixture.name) NRRD was accepted")
+      } catch BorgVRImportFileAccess.Error.permissionRequired(let url) {
+        try expect(url == payloadURL, "Wrong \(fixture.name) NRRD access request")
+      }
+      try expect(!FileManager.default.fileExists(atPath: outputURL.path), "Denied import left output behind")
+    }
+    try BorgVRVolumeConversionService.convert(request)
+    let flattened = root.appendingPathComponent("\(fixture.name)-decoded.raw")
+    _ = try BORGVRVolumeExporter.exportRaw(inputURL: outputURL, outputURL: flattened)
+    let decoded = try Data(contentsOf: flattened)
+    try expect(decoded == fixture.decoded, "Retry changed \(fixture.name) NRRD values")
+  }
+  let gzip = cases.last!.payload
+  try expectThrows("Oversized gzip output was accepted") {
+    _ = try NRRDParser.decompressGzip(data: gzip, expectedBytes: 3)
+  }
+  try expectThrows("Undersized gzip output was accepted") {
+    _ = try NRRDParser.decompressGzip(data: gzip, expectedBytes: 5)
+  }
+  try expectThrows("Truncated gzip was accepted") {
+    _ = try NRRDParser.decompressGzip(data: Data(gzip.dropLast(4)), expectedBytes: 4)
+  }
+  var corruptGzip = gzip
+  corruptGzip[corruptGzip.count - 8] ^= 1
+  try expectThrows("Invalid gzip checksum was accepted") {
+    _ = try NRRDParser.decompressGzip(data: corruptGzip, expectedBytes: 4)
+  }
   print("Supporting file access passed: original URLs, unchanged bytes, conversion errors, missing/denied files and presenter cleanup")
+  print("Detached NRRD passed: raw, ASCII, big-endian and gzip access requests, retry and unchanged samples")
 }
 
 private func testQVISColorImport() throws {
@@ -2474,6 +2543,10 @@ private func testAffineVolumeResampling() throws {
 @main
 private enum VolumeConversionServiceTestRunner {
   static func main() async throws {
+    if CommandLine.arguments.contains("--supporting-file-access-only") {
+      try testSupportingFileAccess()
+      return
+    }
     if let directory = ProcessInfo.processInfo.environment["BORGVR_PROFILE_EDIT_STATE"],
        let dataset = ProcessInfo.processInfo.environment["BORGVR_PROFILE_DATASET"] {
       try profileExistingEditState(directory: URL(fileURLWithPath: directory), dataset: URL(fileURLWithPath: dataset))

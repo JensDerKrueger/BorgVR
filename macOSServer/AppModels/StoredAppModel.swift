@@ -76,7 +76,7 @@ final class StoredAppModel : ObservableObject {
 
   @MainActor
   func settingsStore() -> BorgVRSettingsStore {
-    let values: [String: Any] = [
+    var values: [String: Any] = [
       "brickSize": Self.defaultBrickSize, "brickOverlap": Self.defaultBrickOverlap,
       "enableCompression": Self.defaultEnableCompression, "quantizeImportsTo8Bit": false, "importColorCompression": 0,
       "dicomResamplingFilter": "trilinear", "lastMinute": Self.defaultLastMinute,
@@ -88,6 +88,7 @@ final class StoredAppModel : ObservableObject {
       "webServerCertificateData": Self.defaultWebServerCertificateData,
       "maxBricksPerGetRequest": Self.defaultMaxBricksPerGetRequest
     ]
+    values.merge(ExplanationDialogPreference.defaultValues) { _, value in value }
     let extra = BorgVRSettingsStore.Entry.credentials(serverPassword: Binding(
       get: { self.serverPassword }, set: { self.serverPassword = $0 }
     ), includeMCP: false) + [SettingsServerRecord.entry(key: "syncServers", read: {

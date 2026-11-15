@@ -372,6 +372,7 @@ struct SettingsView: View {
         .font(.callout)
         .foregroundStyle(.secondary)
         .fixedSize(horizontal: false, vertical: true)
+      ShowAllExplanationDialogsButton()
       resetButton(for: .general)
     }
   }

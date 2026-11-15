@@ -48,8 +48,16 @@ struct ConverterView: View {
   /// The path to the input file selected by the user.
   @State private var inputFile: String = ""
   @State private var inputAccess: VolumeImportSourceAccess?
+  @State private var additionalInputAccesses: [VolumeImportSourceAccess] = []
+  @State private var supportingFileRequest: SupportingFileAccessRequest?
+  @State private var retryAfterSupportingFileSelection = false
   @State private var fusionReference = VolumeFusionSelection()
   @State private var fusionRegistered = VolumeFusionSelection()
+  @State private var fusionStep = VolumeFusionWizardStep.reference
+  @State private var volumeStep = VolumeImportWizardStep.source
+  @State private var logText = ""
+  @State private var showsImportLog = false
+  @State private var isExportingLog = false
   @State private var filePickerMode: FilePickerView.Mode?
   /// The progress description text shown during file operations.
   @State private var progressText: String = ""
@@ -65,6 +73,7 @@ struct ConverterView: View {
   @State private var conversionErrorMessage: String?
   @State private var conversionCancellationToken: BorgVRVolumeConversionCancellationToken?
   @State private var conversionCancellationRequested = false
+  @State private var returnToMainMenuAfterCancellation = false
 
   // MARK: - Operation Mode
 
@@ -99,10 +108,11 @@ struct ConverterView: View {
           question: "What would you like to import?",
           systemImage: pendingImportKind?.systemImage ?? "square.and.arrow.down",
           step: 1,
-          total: 2,
+          total: nil,
           choices: importChoices,
           selectedID: pendingImportKind?.rawValue,
           canGoBack: !isWorking,
+          onCancel: cancelImport,
           onBack: goBack,
           onNext: commitImportKind
         )
@@ -122,11 +132,24 @@ struct ConverterView: View {
     .onChange(of: runtimeAppModel.rendererIsIdle, initial: true) { _, idle in
       if !idle { dismiss() }
     }
+    .onChange(of: isWorking) { _, working in
+      if !working && returnToMainMenuAfterCancellation { cancelImport() }
+    }
+    .fileExporter(isPresented: $isExportingLog,
+      document: TextFileDocument(text: logText), contentType: .plainText,
+      defaultFilename: String(localized: "converter_default_export_filename")) { _ in }
+    .sheet(item: $supportingFileRequest) { request in
+      SupportingFileAccessPicker(request: request) { access in
+        finishSupportingFileSelection(access, required: request.url)
+        resumeImportAfterSupportingFileSelection()
+      }
+    }
   }
 
   private var importWorkflow: some View {
     VStack(spacing: 16) {
-      ConverterWizardHeader(title: "Import", step: 2, total: 2)
+      ConverterWizardHeader(title: "Import", step: currentImportStep,
+        total: selectedImportKind?.compactWizardStepCount ?? 2)
       ScrollView {
         VStack(spacing: 16) {
           if let selectedImportKind {
@@ -139,11 +162,11 @@ struct ConverterView: View {
           }
 
           // Instructions
-          if selectedImportKind == .volumeFile {
+          if isChoosingFile {
             ConverterVolumeFormatButton(includesNativeBorgVR: true)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal)
-          } else if selectedImportKind == .dicomDirectory {
+          } else if isChoosingDICOMDirectory {
             Text("For a DICOM series, select the folder containing its slice files.")
               .foregroundStyle(.secondary)
           }
@@ -153,16 +176,22 @@ struct ConverterView: View {
             sourceButtons
               .disabled(isWorking)
 
-            if selectedImportKind != .volumeFusion {
+            if selectedImportKind != .volumeFusion, !isVolumeConversionPage {
               Text(inputFile.isEmpty ? String(localized: "No file selected") : inputFile)
                 .lineLimit(1)
                 .truncationMode(.middle)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
           }
           .sheet(item: $filePickerMode) { pickerMode in
             FilePickerView(mode: pickerMode) { access in
+              filePickerMode = nil
               if let access {
+                additionalInputAccesses = []
                 importedDatasetURL = nil
+                progressValue = 0
+                progressText = ""
+                logger.clear()
                 let url = access.url
                 switch pickerMode {
                 case .dicomDirectory, .zarrDirectory, .files, .imageSequence:
@@ -185,15 +214,25 @@ struct ConverterView: View {
                     }
                   }
                 }
+                continueSourceSelection()
               }
-              filePickerMode = nil
             }
           }
 
           // Conversion / Copy controls
-          if mode == .imageSequence { imageSequenceSizeFields }
+          if mode == .imageSequence, showsImportOptions { imageSequenceSizeFields }
 
-          if mode == .convert || mode == .dicom || mode == .volumeFusion || mode == .imageSequence {
+          if (mode == .convert || mode == .copy || mode == .volumeFusion || mode == .imageSequence || mode == .dicom), showsImportOptions {
+            Text(String(localized: "Import options", table: "ImportMessages"))
+              .font(.headline)
+              .frame(maxWidth: .infinity, alignment: .leading)
+          }
+          if showsImportOptions && mode == .copy {
+            Text(String(localized: "Existing metadata will be preserved.", table: "ImportMessages"))
+              .foregroundStyle(.secondary)
+              .frame(maxWidth: .infinity, alignment: .leading)
+          }
+          if showsImportOptions && (mode == .convert || mode == .dicom || mode == .volumeFusion || mode == .imageSequence) {
             HStack(spacing: 24) {
               TextField("converter_source_note", text: $sourceNote)
                 .textFieldStyle(.roundedBorder)
@@ -202,7 +241,7 @@ struct ConverterView: View {
             }
             .disabled(isWorking)
           }
-          if mode == .convert || mode == .dicom || mode == .volumeFusion || mode == .imageSequence {
+          if showsImportOptions && (mode == .convert || mode == .dicom || mode == .volumeFusion || mode == .imageSequence) {
             HStack {
               Text("converter_description_label")
               TextField("converter_dataset_description_placeholder", text: $datasetDescription)
@@ -213,27 +252,10 @@ struct ConverterView: View {
           }
 
           // Progress indicators
-          if isWorking {
-            VStack(alignment: .leading, spacing: 8) {
-              HStack {
-                Text(progressText)
-                  .fixedSize(horizontal: false, vertical: true)
-                  .frame(maxWidth: .infinity, alignment: .leading)
-                ProgressView()
-                  .progressViewStyle(CircularProgressViewStyle())
-                if conversionCancellationToken != nil {
-                  Button(role: .cancel) {
-                    cancelConversion()
-                  } label: {
-                    Label("Cancel", systemImage: "xmark.circle")
-                  }
-                  .disabled(conversionCancellationRequested)
-                }
-              }
-              ProgressView(value: progressValue)
-                .progressViewStyle(LinearProgressViewStyle())
-            }
-            .padding(.horizontal)
+          if isVolumeConversionPage {
+            conversionStatus
+          } else if isWorking {
+            conversionProgress.padding(.horizontal)
           }
 
         }
@@ -241,7 +263,7 @@ struct ConverterView: View {
       }
 
       ConverterWizardFooter {
-        if isWorking {
+        if isWorking && !isVolumeConversionPage {
           Button {
             openWindow(id: "ImportDetails")
           } label: {
@@ -249,6 +271,10 @@ struct ConverterView: View {
           }
         }
       } actions: {
+        Button(action: cancelImport) {
+          Label("Cancel", systemImage: "xmark")
+        }
+        .disabled(isWorking && conversionCancellationToken == nil)
         Button {
           goBack()
         } label: {
@@ -256,7 +282,23 @@ struct ConverterView: View {
             .frame(minWidth: 120)
         }
         .disabled(isWorking)
-        if !isWorking, let importedDatasetURL {
+        if isChoosingSource {
+          Button(action: continueSourceSelection) {
+            Label("converter_nav_next", systemImage: "chevron.forward")
+              .frame(minWidth: 240)
+          }
+          .buttonStyle(.borderedProminent)
+          .tint(Color.accentColor)
+          .disabled(!canContinueSourceSelection || isWorking)
+        } else if isChoosingVolumeOptions {
+          Button(action: continueVolumeOptions) {
+            Label("converter_nav_next", systemImage: "chevron.forward")
+              .frame(minWidth: 240)
+          }
+          .buttonStyle(.borderedProminent)
+          .tint(Color.accentColor)
+          .disabled(!canContinueImportOptions || isWorking)
+        } else if !isWorking, let importedDatasetURL {
           Button {
             openImportedDataset(at: importedDatasetURL)
           } label: {
@@ -277,6 +319,8 @@ struct ConverterView: View {
               : String(localized: "converter_start_conversion"), systemImage: "tray.and.arrow.down")
               .frame(minWidth: 240)
           }
+          .buttonStyle(.borderedProminent)
+          .tint(Color.accentColor)
           .disabled(!canStartImport || !runtimeAppModel.canImportDataset || isOpening)
         }
       }
@@ -299,36 +343,98 @@ struct ConverterView: View {
     } message: { Text(conversionErrorMessage ?? "") }
   }
 
+  private var conversionProgress: some View {
+    VStack(alignment: .leading, spacing: 12) {
+      Text(importedDatasetURL != nil
+        ? String(localized: "Import complete", table: "ImportMessages")
+        : (progressText.isEmpty ? String(localized: "Ready to import", table: "ImportMessages") : progressText))
+        .foregroundStyle(.secondary)
+        .fixedSize(horizontal: false, vertical: true)
+        .frame(maxWidth: .infinity, alignment: .leading)
+      ProgressView(value: progressValue)
+        .progressViewStyle(.linear)
+      if isWorking {
+        HStack(spacing: 12) {
+          ProgressView()
+            .progressViewStyle(.circular)
+          if conversionCancellationToken != nil {
+            Button(role: .cancel) { cancelConversion() } label: {
+              Label("Cancel", systemImage: "xmark.circle")
+            }
+            .disabled(conversionCancellationRequested)
+          }
+        }
+      }
+    }
+  }
+
+  private var conversionStatus: some View {
+    VStack(alignment: .leading, spacing: 16) {
+      conversionProgress
+      DisclosureGroup(isExpanded: $showsImportLog) {
+        VStack(alignment: .leading, spacing: 12) {
+          HStack {
+            Button { logger.clear() } label: {
+              Label("converter_clear_output", systemImage: "eraser")
+            }
+            Button { isExportingLog = true } label: {
+              Label("converter_export_output", systemImage: "square.and.arrow.up")
+            }
+          }
+          .disabled(logText.isEmpty)
+          Text(logText)
+            .font(.system(.body, design: .monospaced))
+            .textSelection(.enabled)
+            .frame(maxWidth: .infinity, minHeight: 220, alignment: .topLeading)
+        }
+        .padding(.top, 12)
+      } label: {
+        Text(String(localized: "Details", table: "ImportMessages")).font(.headline)
+      }
+    }
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .padding(.horizontal)
+  }
+
   @ViewBuilder
   private var sourceButtons: some View {
     switch selectedImportKind {
       case .volumeFile:
-        HStack {
-          Button { filePickerMode = .files } label: {
-            Label("converter_select_input_volume", systemImage: "cube")
-          }
-          Button { filePickerMode = .zarrDirectory } label: {
-            Label("Select Zarr folder", systemImage: "folder")
+        if isChoosingFile {
+          HStack {
+            Button { filePickerMode = .files } label: {
+              Label("converter_select_input_volume", systemImage: "cube")
+            }
+            Button { filePickerMode = .zarrDirectory } label: {
+              Label("Select Zarr folder", systemImage: "folder")
+            }
           }
         }
       case .dicomDirectory:
-        Button { filePickerMode = .dicomDirectory } label: {
-          Label("Select DICOM folder", systemImage: "folder")
+        if isChoosingDICOMDirectory {
+          Button { filePickerMode = .dicomDirectory } label: {
+            Label("Select DICOM folder", systemImage: "folder")
+          }
+          .frame(maxWidth: .infinity, alignment: .leading)
         }
       case .volumeFusion:
-        HStack(alignment: .top, spacing: 24) {
-          VolumeFusionSourcePicker(title: "Reference Volume", selection: $fusionReference)
-          VolumeFusionSourcePicker(title: "Volume to Register", selection: $fusionRegistered)
-        }
-        .onChange(of: fusionReference.access?.url) { _, url in
-          if url != nil { mode = .volumeFusion; importedDatasetURL = nil }
-        }
-        .onChange(of: fusionRegistered.access?.url) { _, url in
-          if url != nil { mode = .volumeFusion; importedDatasetURL = nil }
+        if let title = fusionStep.sourceTitle {
+          VolumeFusionSourcePicker(title: title,
+            selection: fusionStep == .reference ? $fusionReference : $fusionRegistered,
+            onSourceSelected: continueSourceSelection)
+          .id(fusionStep)
+          .onChange(of: fusionReference.access?.url) { _, url in
+            if url != nil { mode = .volumeFusion; importedDatasetURL = nil }
+          }
+          .onChange(of: fusionRegistered.access?.url) { _, url in
+            if url != nil { mode = .volumeFusion; importedDatasetURL = nil }
+          }
         }
       case .imageSequence:
-        Button { filePickerMode = .imageSequence } label: {
-          Label("image_sequence_select", systemImage: "photo.on.rectangle.angled")
+        if isChoosingImageDirectory {
+          Button { filePickerMode = .imageSequence } label: {
+            Label("image_sequence_select", systemImage: "photo.on.rectangle.angled")
+          }
         }
       case .none:
         EmptyView()
@@ -339,17 +445,25 @@ struct ConverterView: View {
     VolumeImportKind.allCases.map { kind in
       ConverterChoiceItem(id: kind.rawValue, title: kind.title, systemImage: kind.systemImage,
         startsSection: kind == .volumeFusion) {
-        if !isWorking { pendingImportKind = kind }
+        commitImportKind(kind)
       }
     }
   }
 
   private func commitImportKind() {
-    guard !isWorking, let kind = pendingImportKind else { return }
+    guard let kind = pendingImportKind else { return }
+    commitImportKind(kind)
+  }
+
+  private func commitImportKind(_ kind: VolumeImportKind) {
+    guard !isWorking else { return }
+    pendingImportKind = kind
     importedDatasetURL = nil
     if selectedImportKind != kind {
       inputFile = ""
       inputAccess = nil
+      additionalInputAccesses = []
+      retryAfterSupportingFileSelection = false
       fusionReference = VolumeFusionSelection()
       fusionRegistered = VolumeFusionSelection()
       filePickerMode = nil
@@ -370,6 +484,8 @@ struct ConverterView: View {
       }
     }
     selectedImportKind = kind
+    fusionStep = .reference
+    volumeStep = .source
     choosingImportKind = false
   }
 
@@ -377,15 +493,115 @@ struct ConverterView: View {
     guard !isWorking else { return }
     if choosingImportKind {
       dismiss()
+    } else if usesVolumeWizard, let previous = volumeStep.previous {
+      volumeStep = previous
+    } else if selectedImportKind == .volumeFusion, let previous = fusionStep.previous {
+      fusionStep = previous
     } else {
       choosingImportKind = true
     }
   }
 
+  private func cancelImport() {
+    guard !isOpening, !isWorking || conversionCancellationToken != nil else { return }
+    if isWorking {
+      returnToMainMenuAfterCancellation = true
+      cancelConversion()
+    } else {
+      runtimeAppModel.navigationState = .start
+      dismiss()
+    }
+  }
+
   private var canStartImport: Bool {
-    mode != .unknown && (mode == .volumeFusion
-      ? fusionReference.input != nil && fusionRegistered.input != nil : inputAccess != nil)
-      && (mode != .imageSequence || imageSequenceSize != nil)
+    !isChoosingSource && (!usesVolumeWizard || volumeStep.canStart(
+      sourceSelected: inputAccess != nil, sizeIsValid: hasValidImageSize))
+      && mode != .unknown && (mode == .volumeFusion
+      ? fusionStep.canStart(referenceSelected: fusionReference.input != nil,
+          registeredSelected: fusionRegistered.input != nil) : inputAccess != nil)
+  }
+
+  private var isChoosingFusionSource: Bool {
+    selectedImportKind == .volumeFusion && fusionStep.sourceTitle != nil
+  }
+
+  private var isChoosingImageDirectory: Bool {
+    selectedImportKind == .imageSequence && volumeStep == .source
+  }
+
+  private var isChoosingDICOMDirectory: Bool {
+    selectedImportKind == .dicomDirectory && volumeStep == .source
+  }
+
+  private var usesVolumeWizard: Bool {
+    selectedImportKind == .dicomDirectory || selectedImportKind == .volumeFile || selectedImportKind == .imageSequence
+  }
+
+  private var isChoosingFile: Bool {
+    selectedImportKind == .volumeFile && volumeStep == .source
+  }
+
+  private var isChoosingVolumeOptions: Bool {
+    (usesVolumeWizard && volumeStep == .options) ||
+      (selectedImportKind == .volumeFusion && fusionStep == .options)
+  }
+
+  private var isVolumeConversionPage: Bool {
+    (usesVolumeWizard && volumeStep == .conversion) ||
+      (selectedImportKind == .volumeFusion && fusionStep == .conversion)
+  }
+
+  private var showsImportOptions: Bool { !isChoosingSource && !isVolumeConversionPage }
+
+  private var hasValidImageSize: Bool {
+    selectedImportKind != .imageSequence || imageSequenceSize != nil
+  }
+
+  private var canContinueImportOptions: Bool {
+    guard isChoosingVolumeOptions else { return false }
+    if selectedImportKind == .volumeFusion {
+      return fusionStep.canContinue(referenceSelected: fusionReference.input != nil,
+        registeredSelected: fusionRegistered.input != nil)
+    }
+    return volumeStep.canContinue(
+      sourceSelected: inputAccess != nil, sizeIsValid: hasValidImageSize)
+  }
+
+  private func continueVolumeOptions() {
+    guard !isWorking, canContinueImportOptions else { return }
+    dismissWindow(id: "ImportDetails")
+    logger.setLogBinding($logText)
+    showsImportLog = false
+    if selectedImportKind == .volumeFusion { fusionStep = .conversion }
+    else { volumeStep = .conversion }
+  }
+
+  private var isChoosingDirectory: Bool { isChoosingImageDirectory || isChoosingDICOMDirectory }
+  private var isChoosingSource: Bool { isChoosingFusionSource || isChoosingDirectory || isChoosingFile }
+
+  private var currentImportStep: Int {
+    switch selectedImportKind {
+      case .volumeFusion: fusionStep.number
+      case .dicomDirectory, .volumeFile, .imageSequence: volumeStep.number
+      default: 2
+    }
+  }
+
+  private var canContinueSourceSelection: Bool {
+    if isChoosingDICOMDirectory || isChoosingFile || isChoosingImageDirectory {
+      return volumeStep.canContinue(sourceSelected: inputAccess != nil && mode != .unknown)
+    }
+    if isChoosingFusionSource {
+      return fusionStep.canContinue(referenceSelected: fusionReference.input != nil,
+        registeredSelected: fusionRegistered.input != nil)
+    }
+    return false
+  }
+
+  private func continueSourceSelection() {
+    guard !isWorking, canContinueSourceSelection else { return }
+    if usesVolumeWizard, let next = volumeStep.next { volumeStep = next }
+    else if isChoosingFusionSource, let next = fusionStep.next { fusionStep = next }
   }
 
   private var imageSequenceSize: Vec3<Float>? {
@@ -445,7 +661,7 @@ struct ConverterView: View {
   }
 
   func copyData() {
-    guard !isWorking, !isOpening, let inputAccess else { return }
+    guard !isWorking, !isOpening, canStartImport, mode == .copy, let inputAccess else { return }
     let runtime = runtimeAppModel
     let workID: UUID
     do { workID = try runtime.beginImportWork() }
@@ -453,6 +669,8 @@ struct ConverterView: View {
     let logger = runtimeAppModel.importLogger
     logger.clear()
     importedDatasetURL = nil
+    progressValue = 0
+    progressText = String(localized: "Copying dataset", table: "ImportMessages")
     isWorking = true
 
     // Perform copy on background thread
@@ -482,9 +700,13 @@ struct ConverterView: View {
         )
       )
       if let url = copyFile(from: fileURL, toDir: documentsDirectory, logger: logger) {
-        DispatchQueue.main.async { importedDatasetURL = url }
+        DispatchQueue.main.async {
+          progressValue = 1
+          importedDatasetURL = url
+        }
       } else {
         DispatchQueue.main.async {
+          progressText = String(localized: "Import Failed", table: "ImportMessages")
           conversionErrorMessage = String(localized: "The selected file could not be copied.", table: "ImportMessages")
         }
       }
@@ -563,26 +785,36 @@ struct ConverterView: View {
 #endif
 
     let cancellationToken = BorgVRVolumeConversionCancellationToken()
+    let supportingAccesses = additionalInputAccesses
     conversionCancellationToken = cancellationToken
     conversionCancellationRequested = false
     isWorking = true
+    progressValue = 0
+    progressText = String(localized: "Reading volume", table: "ImportMessages")
 
     // Perform conversion on background thread
     DispatchQueue.global(qos: .userInteractive).async {
-      defer { withExtendedLifetime((inputAccess, registeredInputAccess)) {} }
+      defer { withExtendedLifetime((inputAccess, registeredInputAccess, supportingAccesses)) {} }
       let timer = HighResolutionTimer()
       timer.start()
+      var requiredFileAccess: URL?
       defer {
+        let fileRequiringAccess = requiredFileAccess
         DispatchQueue.main.async {
           runtime.finishImportWork(workID)
           conversionCancellationToken = nil
           conversionCancellationRequested = false
           isWorking = false
-          inputFile = ""
-          self.inputAccess = nil
-          fusionReference = VolumeFusionSelection()
-          fusionRegistered = VolumeFusionSelection()
-          mode = .unknown
+          if let fileRequiringAccess, !cancellationToken.isCancelled, !returnToMainMenuAfterCancellation {
+            authorizeSupportingFile(fileRequiringAccess)
+          } else {
+            inputFile = ""
+            self.inputAccess = nil
+            additionalInputAccesses = []
+            fusionReference = VolumeFusionSelection()
+            fusionRegistered = VolumeFusionSelection()
+            mode = .unknown
+          }
         }
       }
 
@@ -645,10 +877,17 @@ struct ConverterView: View {
           logger: logger,
           cancellationToken: cancellationToken
         )
-        DispatchQueue.main.async { importedDatasetURL = URL(fileURLWithPath: outputFile) }
+        DispatchQueue.main.async {
+          progressValue = 1
+          importedDatasetURL = URL(fileURLWithPath: outputFile)
+        }
+      }
+      catch BorgVRImportFileAccess.Error.permissionRequired(let url) {
+        requiredFileAccess = url
       }
       catch is CancellationError {
         logger.info(String(localized: "Conversion cancelled."))
+        DispatchQueue.main.async { progressText = String(localized: "Conversion cancelled.") }
       }
       catch {
         let key: String
@@ -662,7 +901,10 @@ struct ConverterView: View {
         }
         let message = String(format: NSLocalizedString(key, comment: "Import error"), error.localizedDescription)
         logger.error(message)
-        DispatchQueue.main.async { conversionErrorMessage = message }
+        DispatchQueue.main.async {
+          progressText = String(localized: "Import Failed", table: "ImportMessages")
+          conversionErrorMessage = message
+        }
       }
       let total = timer.stop()
       logger.info(
@@ -675,6 +917,43 @@ struct ConverterView: View {
         )
       )
     }
+  }
+
+  private func authorizeSupportingFile(_ requiredURL: URL) {
+    let message = BorgVRImportFileAccess.Error.permissionRequired(requiredURL).localizedDescription
+    progressText = message
+    guard !additionalInputAccesses.contains(where: {
+      BorgVRImportFileAccess.matchesSupportingFile($0.url, required: requiredURL)
+    }) else {
+      logger.error(message)
+      conversionErrorMessage = message
+      return
+    }
+    supportingFileRequest = SupportingFileAccessRequest(url: requiredURL)
+  }
+
+  private func finishSupportingFileSelection(_ access: VolumeImportSourceAccess?, required: URL) {
+    supportingFileRequest = nil
+    retryAfterSupportingFileSelection = false
+    guard let access else {
+      progressText = String(localized: "Conversion cancelled.")
+      logger.info(progressText)
+      return
+    }
+    guard BorgVRImportFileAccess.matchesSupportingFile(access.url, required: required) else {
+      progressText = String(format: String(localized: "Please select the referenced file \"%@\".",
+        table: "ImportMessages"), required.lastPathComponent)
+      logger.error(progressText)
+      return
+    }
+    additionalInputAccesses.append(access)
+    retryAfterSupportingFileSelection = true
+  }
+
+  private func resumeImportAfterSupportingFileSelection() {
+    guard retryAfterSupportingFileSelection, !isWorking, !returnToMainMenuAfterCancellation else { return }
+    retryAfterSupportingFileSelection = false
+    startConversion(description: datasetDescription)
   }
 
   private func cancelConversion() {

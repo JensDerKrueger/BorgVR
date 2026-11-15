@@ -164,6 +164,8 @@ struct SettingsView: View {
                 Toggle("settings_toggle_hide_built_in_datasets", isOn: $storedAppModel.hideBuiltInDatasets)
               }
 
+              ShowAllExplanationDialogsButton(includesSectionHeader: true)
+
               Section(header: Text("Updates").bold()) {
                 Toggle("Automatically check for updates", isOn: $updateChecker.checksEnabled)
                 Text("BorgVR periodically checks the App Store for new versions and displays a notification when an update is available.")

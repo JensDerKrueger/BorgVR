@@ -1,5 +1,5 @@
 import Foundation
-import Compression
+import zlib
 
 /**
  A parser for NRRD (Nearly Raw Raster Data) volume files that conforms to the `VolumeFileParser` protocol.
@@ -165,7 +165,8 @@ public final class NRRDParser: VolumeFileParser {
    required keys are missing or invalid, decompression fails, or
    an unsupported encoding is encountered.
    */
-  public init(filename: String, validateSource: ((URL) throws -> Void)? = nil) throws {
+  public init(filename: String, validateSource: ((URL) throws -> Void)? = nil,
+              readSupportingFile: ((URL) throws -> Data)? = nil) throws {
     let fileURL = URL(fileURLWithPath: filename)
     let fileData: Data
     do {
@@ -311,7 +312,8 @@ public final class NRRDParser: VolumeFileParser {
         .appendingPathComponent(UUID().uuidString)
       var fullData: Data
       if isDetached {
-        fullData = try Data(contentsOf: URL(fileURLWithPath: dataFilePath))
+        let url = URL(fileURLWithPath: dataFilePath)
+        fullData = try readSupportingFile?(url) ?? Data(contentsOf: url)
       } else {
         fullData = fileData.subdata(in: nrrdOffset..<fileData.count)
       }
@@ -321,7 +323,7 @@ public final class NRRDParser: VolumeFileParser {
         guard encoding == "gzip" || encoding == "gz" else {
           throw Error.notImplemented(encoding)
         }
-        fullData = try NRRDParser.decompressGzip(data: fullData)
+        fullData = try NRRDParser.decompressGzip(data: fullData, expectedBytes: expectedBytes)
         guard fullData.count == expectedBytes else {
           throw Error.otherError("Data length \(fullData.count) does not match expected \(expectedBytes) bytes")
         }
@@ -400,54 +402,55 @@ public final class NRRDParser: VolumeFileParser {
   }
 
   /**
-   Decompresses GZIP-compressed data using the Compression framework.
+   Decompresses GZIP-compressed data, bounded by the dimensions in the header.
 
    - Parameter data: The compressed input data.
    - Returns: The decompressed output data.
    - Throws: `Error.decompressionError` if decompression fails.
    */
-  static func decompressGzip(data: Data) throws -> Data {
+  static func decompressGzip(data: Data, expectedBytes: Int) throws -> Data {
     let bufferSize = 64 * 1024
-
+    guard expectedBytes > 0, !data.isEmpty else { throw Error.decompressionError("empty volume") }
+    var stream = z_stream()
+    guard inflateInit2_(&stream, MAX_WBITS + 16, ZLIB_VERSION,
+      Int32(MemoryLayout<z_stream>.size)) == Z_OK else {
+      throw Error.decompressionError("could not initialize gzip decompression")
+    }
+    defer { inflateEnd(&stream) }
+    let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: bufferSize)
+    defer { buffer.deallocate() }
     return try data.withUnsafeBytes { (sourcePointer: UnsafeRawBufferPointer) throws -> Data in
       guard let src = sourcePointer.baseAddress else {
         throw Error.decompressionError("source pointer is nil")
       }
-
-      var stream = UnsafeMutablePointer<compression_stream>.allocate(capacity: 1).pointee
-      var status = compression_stream_init(
-        &stream,
-        COMPRESSION_STREAM_DECODE,
-        COMPRESSION_ZLIB
-      )
-      guard status != COMPRESSION_STATUS_ERROR else {
-        throw Error.decompressionError("compression_stream_init failed")
-      }
-      defer { compression_stream_destroy(&stream) }
-
-      let dstBuffer = UnsafeMutablePointer<UInt8>.allocate(capacity: bufferSize)
-      defer { dstBuffer.deallocate() }
-
-      stream.src_ptr  = src.assumingMemoryBound(to: UInt8.self)
-      stream.src_size = data.count
-      stream.dst_ptr  = dstBuffer
-      stream.dst_size = bufferSize
-
+      var inputOffset = 0
+      var status = Z_OK
       var output = Data()
-
-      while status == COMPRESSION_STATUS_OK {
-        status = compression_stream_process(&stream, 0)
-        switch status {
-          case COMPRESSION_STATUS_OK, COMPRESSION_STATUS_END:
-            let count = bufferSize - stream.dst_size
-            output.append(dstBuffer, count: count)
-            stream.dst_ptr  = dstBuffer
-            stream.dst_size = bufferSize
-          default:
-            throw Error.decompressionError("unexpected compression status \(status)")
+      while status == Z_OK {
+        if stream.avail_in == 0 && inputOffset < data.count {
+          let count = min(data.count - inputOffset, Int(uInt.max))
+          stream.next_in = UnsafeMutablePointer(mutating: src.assumingMemoryBound(to: UInt8.self).advanced(by: inputOffset))
+          stream.avail_in = uInt(count)
+          inputOffset += count
+        }
+        stream.next_out = buffer
+        stream.avail_out = uInt(bufferSize)
+        status = zlib.inflate(&stream, Z_NO_FLUSH)
+        guard status == Z_OK || status == Z_STREAM_END else {
+          throw Error.decompressionError("invalid or truncated gzip data")
+        }
+        let count = bufferSize - Int(stream.avail_out)
+        guard count <= expectedBytes - output.count else {
+          throw Error.decompressionError("decoded data exceeds the volume dimensions")
+        }
+        output.append(buffer, count: count)
+        guard status == Z_STREAM_END || count > 0 || stream.avail_in > 0 || inputOffset < data.count else {
+          throw Error.decompressionError("truncated gzip data")
         }
       }
-
+      guard output.count == expectedBytes, stream.avail_in == 0, inputOffset == data.count else {
+        throw Error.decompressionError("gzip data length does not match the volume dimensions")
+      }
       return output
     }
   }
