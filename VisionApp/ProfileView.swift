@@ -20,6 +20,7 @@ extension NumberFormatter {
  Presents a list of filenames; tapping one attempts to load it into the rendering parameters.
  */
 struct TrafoFilePickerDialog: View {
+  @EnvironmentObject private var session: VisionBorgVRSession
   /// The rendering parameters containing the transformation
   var sharedAppModel: SharedAppModel
   /// Binding controlling presentation.
@@ -36,7 +37,9 @@ struct TrafoFilePickerDialog: View {
       List(availableFiles, id: \.self) { fileURL in
         Button(action: {
           do {
-            try sharedAppModel.loadTransform(from: fileURL)
+            try session.mutate(source: .userInterface, domain: .visualization) {
+              try sharedAppModel.loadTransform(from: fileURL)
+            }
             isPresented = false
           } catch {
             loadError     = error
@@ -248,7 +251,7 @@ struct ProfileView: View {
 
         HStack {
           Button("profile_button_clear_atlas") {
-            sharedAppModel.purgeAtlas = true
+            try? session.perform(.action(.purgeAtlas), source: .userInterface)
           }
           .buttonStyle(.borderedProminent)
           .padding()
@@ -291,7 +294,9 @@ struct ProfileView: View {
               .appendingPathComponent(name)
               .appendingPathExtension("trafo")
             do {
-              try sharedAppModel.modelTransform.save(to: url)
+              try session.performFileAction(outputs: [url]) {
+                try sharedAppModel.modelTransform.save(to: url)
+              }
             } catch {
               saveError       = error
               showSaveError   = true
@@ -350,7 +355,7 @@ struct ProfileView: View {
         AudioServicesPlaySystemSound(1322)
         workingSetCountdown = nil
         workingSetTimer?.invalidate()
-        sharedAppModel.purgeAtlas = true
+        try? session.perform(.action(.purgeAtlas), source: .userInterface)
         measureWorkingSetSize()
       }
     }
@@ -368,7 +373,7 @@ struct ProfileView: View {
         AudioServicesPlaySystemSound(1322)
         workingSetCountdown = nil
         workingSetTimer?.invalidate()
-        sharedAppModel.purgeAtlas = true
+        try? session.perform(.action(.purgeAtlas), source: .userInterface)
       }
     }
   }
@@ -386,7 +391,7 @@ struct ProfileView: View {
         preRotationCountdown = nil
         preRotationTimer?.invalidate()
         DispatchQueue.main.async {
-          runtimeAppModel.rotationCaptureRequestID &+= 1
+          try? session.perform(.action(.captureRotation), source: .userInterface)
         }
       }
     }

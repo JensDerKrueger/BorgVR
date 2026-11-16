@@ -1,6 +1,60 @@
 import Foundation
 import CoreFoundation
 
+enum BorgVRCommandSource: Equatable, Sendable {
+  case userInterface, hand, muse, mouse, touch, gsc, mcp, sharePlay, stateRestore
+  case controller(String)
+}
+
+enum BorgVRCommandExecutionContext {
+  @TaskLocal static var executingAction = false
+  @TaskLocal static var source = BorgVRCommandSource.userInterface
+}
+
+struct BorgVRRecordedFile: Codable, Sendable {
+  let path: String
+  let data: Data
+}
+
+/// Payloads describe committed operations, never UI gestures, file dialogs or credentials.
+enum BorgVRRecordedAction: Codable, Sendable {
+  case configureBrush(mode: BorgVRVolumeBrushMode, radius: Double, projectsOntoVolume: Bool,
+                      channels: BorgVRVolumeEditChannels)
+  case editVolume(mode: BorgVRVolumeBrushMode, samples: [BorgVRVolumeBrushSample],
+                  channels: BorgVRVolumeEditChannels)
+  case discardVolumeEdits
+  case restoreEditState(snapshot: BorgVRVolumeEditSnapshot, state: BorgVRVolumeEditState?, workingStateID: UUID? = nil)
+  case installSavedEditState(snapshot: BorgVRVolumeEditSnapshot, state: BorgVRVolumeEditState)
+  case selectEditState(UUID?)
+  case duplicateEditState(name: String, empty: Bool)
+  case renameEditState(id: UUID, name: String)
+  case deleteEditState(UUID)
+  case openDataset(String)
+  case closeDataset
+  case captureScreenshot(path: String?, includeAlpha: Bool)
+  case resizeWindow(width: Int, height: Int, units: String, area: String)
+  case setFullscreen(Bool)
+  case saveTransferFunction(channel: Int, path: String)
+  case saveVisualizationState(path: String)
+  case saveSettings(path: String, includeCredentials: Bool = false)
+  case writeFiles([BorgVRRecordedFile])
+  case exportVolume(path: String, name: String?, description: String?)
+  case exportIsoSurface(path: String, normalizedIsoValue: Float?)
+  case purgeAtlas
+  case captureRotation
+}
+
+@MainActor
+protocol BorgVRActionExecuting: AnyObject {
+  func trackActionCompletion(_ operation: @escaping @MainActor () async throws -> Void)
+  func performAction<Result>(_ action: BorgVRRecordedAction, source: BorgVRCommandSource,
+                            operation: () throws -> Result) rethrows -> Result
+  func performAction<Result>(_ action: BorgVRRecordedAction, source: BorgVRCommandSource,
+                            operation: () async throws -> Result) async rethrows -> Result
+  func performResolvedAction(_ action: BorgVRRecordedAction, source: BorgVRCommandSource,
+                             operation: () async throws -> BorgVRRecordedAction) async throws
+}
+
 enum BorgVRVolumeEditingArguments {
   static func channels(_ value: Any) throws -> BorgVRVolumeEditChannels {
     if let text = value as? String {

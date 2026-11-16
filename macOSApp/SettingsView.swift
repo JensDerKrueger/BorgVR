@@ -142,10 +142,15 @@ struct SettingsView: View {
         }
       }
       ToolbarItem(placement: .primaryAction) {
-        SettingsFileControls {
+        SettingsFileControls(store: {
           appSettings.settingsStore(overrides: storedAppModel.settingsArchiveEntries,
             didImport: { storedAppModel.objectWillChange.send() })
-        }
+        }, applySettings: { operation in try session.mutateSettings { try operation() } },
+          exportSettings: { url, credentials, operation in
+            try session.performAction(.saveSettings(path: url.path, includeCredentials: credentials), source: .userInterface) {
+              try operation()
+            }
+          })
         .labelStyle(.iconOnly)
       }
     }
@@ -240,11 +245,11 @@ struct SettingsView: View {
       description: "Allow trusted AI agents and MCP clients to inspect and control the current BorgVR visualization. The MCP server is independent of the dataset and WebGPU servers."
     ) {
       MCPSettingsControls(
-        enabled: $storedAppModel.enableMCPServer,
-        port: $storedAppModel.mcpServerPort,
-        allowRemoteConnections: $storedAppModel.mcpAllowRemoteConnections,
-        accessToken: $storedAppModel.mcpAccessToken,
-        certificateData: $storedAppModel.mcpServerCertificateData,
+        enabled: session.settingsBinding($storedAppModel.enableMCPServer),
+        port: session.settingsBinding($storedAppModel.mcpServerPort),
+        allowRemoteConnections: session.settingsBinding($storedAppModel.mcpAllowRemoteConnections),
+        accessToken: session.settingsBinding($storedAppModel.mcpAccessToken),
+        certificateData: session.settingsBinding($storedAppModel.mcpServerCertificateData),
         statusText: mcpController.statusText
       )
       resetButton(for: .mcp)
@@ -285,17 +290,17 @@ struct SettingsView: View {
         set: { try? session.perform(.setScreenProjection(parallel: $0), source: .userInterface) }))
       toggleRow("Show dataset bounding box", isOn: Binding(get: { appSettings.showDatasetBoundingBox },
         set: { try? session.perform(.setBoundingBox($0), source: .userInterface) }))
-      pickerRow("Oversampling mode", selection: $appSettings.oversamplingMode) {
+      pickerRow("Oversampling mode", selection: session.settingsBinding($appSettings.oversamplingMode)) {
         Text("Static").tag(OversamplingMode.staticMode.rawValue)
         Text("Dynamic").tag(OversamplingMode.dynamicMode.rawValue)
       }
       doubleStepperRow("Oversampling factor",
-                       value: $appSettings.oversampling,
+                       value: session.settingsBinding($appSettings.oversampling),
                        range: 0.1...8.0,
                        step: 0.1,
                        format: "%.1f")
-      toggleRow("Randomized sample phase", isOn: $appSettings.sampleJitter)
-      pickerRow("JIT atlas compression (RGB/RGBA)", selection: $appSettings.atlasCompression) {
+      toggleRow("Randomized sample phase", isOn: session.settingsBinding($appSettings.sampleJitter))
+      pickerRow("JIT atlas compression (RGB/RGBA)", selection: session.settingsBinding($appSettings.atlasCompression)) {
         Text("No compression").tag(0)
         Text(verbatim: "ASTC 4x4").tag(4)
         Text(verbatim: "ASTC 8x8").tag(8)
@@ -311,17 +316,17 @@ struct SettingsView: View {
         .help("Bricks with TF alpha below this threshold may be skipped. The transfer function stays unchanged. Zero disables the threshold.")
       if appSettings.oversamplingMode == OversamplingMode.dynamicMode.rawValue {
         intStepperRow("Drop FPS",
-                      value: $appSettings.dropFPS,
+                      value: session.settingsBinding($appSettings.dropFPS),
                       range: 1...240,
                       step: 1,
                       suffix: "fps")
         intStepperRow("Recovery FPS",
-                      value: $appSettings.recoveryFPS,
+                      value: session.settingsBinding($appSettings.recoveryFPS),
                       range: 1...240,
                       step: 1,
                       suffix: "fps")
       }
-      pickerRow("Background", selection: $appSettings.renderBackgroundMode) {
+      pickerRow("Background", selection: session.settingsBinding($appSettings.renderBackgroundMode)) {
         ForEach(RenderBackgroundMode.allCases) { mode in
           Text(mode.label).tag(mode.rawValue)
         }
@@ -351,15 +356,15 @@ struct SettingsView: View {
       "General",
       description: "Configure automatic loading, logging, and update checks."
     ) {
-      toggleRow("Automatically load/save transfer functions", isOn: $appSettings.autoloadTF)
-      toggleRow("Automatically load/save objects", isOn: $appSettings.autoloadObjects)
-      toggleRow("Automatically load/save measurements", isOn: $appSettings.autoloadMeasurements)
+      toggleRow("Automatically load/save transfer functions", isOn: session.settingsBinding($appSettings.autoloadTF))
+      toggleRow("Automatically load/save objects", isOn: session.settingsBinding($appSettings.autoloadObjects))
+      toggleRow("Automatically load/save measurements", isOn: session.settingsBinding($appSettings.autoloadMeasurements))
       toggleRow(
         "Automatically load/save view and rendering state",
-        isOn: $appSettings.autoloadRenderState
+        isOn: session.settingsBinding($appSettings.autoloadRenderState)
       )
-      toggleRow("Hide built-in datasets", isOn: $appSettings.hideBuiltInDatasets)
-      pickerRow("Log level", selection: $appSettings.logLevel) {
+      toggleRow("Hide built-in datasets", isOn: session.settingsBinding($appSettings.hideBuiltInDatasets))
+      pickerRow("Log level", selection: session.settingsBinding($appSettings.logLevel)) {
         ForEach(AppLogLevel.allCases) { level in
           Text(level.label).tag(level.rawValue)
         }
@@ -383,9 +388,9 @@ struct SettingsView: View {
         get: { appSettings.interfaceVisibility }, set: { appSettings.interfaceVisibility = $0 }))
       Divider().padding(.vertical, 8)
       Text("Diagnostics").font(.headline)
-      toggleRow("Show Brick Visualization", isOn: $appSettings.showBrickVisualization)
-      toggleRow("Show Log Button", isOn: $appSettings.showLogButton)
-      toggleRow("Show Performance Button", isOn: $appSettings.showPerformanceButton)
+      toggleRow("Show Brick Visualization", isOn: session.settingsBinding($appSettings.showBrickVisualization))
+      toggleRow("Show Log Button", isOn: session.settingsBinding($appSettings.showLogButton))
+      toggleRow("Show Performance Button", isOn: session.settingsBinding($appSettings.showPerformanceButton))
       resetButton(for: .interface)
     }
   }
@@ -395,7 +400,7 @@ struct SettingsView: View {
       "Isosurface Export",
       description: "Normalize the longest dataset axis to -1 ... 1 while preserving proportions. When disabled, exported coordinates use meters."
     ) {
-      toggleRow("Normalize isosurface export", isOn: $appSettings.normalizeIsoSurfaceExport)
+      toggleRow("Normalize isosurface export", isOn: session.settingsBinding($appSettings.normalizeIsoSurfaceExport))
       resetButton(for: .exportSettings)
     }
   }
@@ -406,29 +411,29 @@ struct SettingsView: View {
       description: "Choose how newly imported volumes are converted into BorgVR datasets. Brick size, overlap, compression, and border handling influence dataset size, loading performance, and sampling quality."
     ) {
       intStepperRow("Brick size",
-                    value: $storedAppModel.brickSize,
+                    value: session.settingsBinding($storedAppModel.brickSize),
                     range: 8...512,
                     step: 8)
       intStepperRow("Overlap",
-                    value: $storedAppModel.brickOverlap,
+                    value: session.settingsBinding($storedAppModel.brickOverlap),
                     range: 1...16,
                     step: 1)
-      toggleRow("Compression", isOn: $storedAppModel.enableCompression)
-      pickerRow("Stored color compression (RGB/RGBA)", selection: $storedAppModel.importColorCompression) {
+      toggleRow("Compression", isOn: session.settingsBinding($storedAppModel.enableCompression))
+      pickerRow("Stored color compression (RGB/RGBA)", selection: session.settingsBinding($storedAppModel.importColorCompression)) {
         Text("No compression").tag(0)
         Text(verbatim: "ASTC 4x4").tag(4)
         Text(verbatim: "ASTC 8x8").tag(8)
       }
-      toggleRow("Quantize imports to 8 bits per channel", isOn: $storedAppModel.quantizeImportsTo8Bit)
+      toggleRow("Quantize imports to 8 bits per channel", isOn: session.settingsBinding($storedAppModel.quantizeImportsTo8Bit))
       Text("Maps each channel's value range to 0...255, permanently reducing intensity precision. Existing 8-bit data is unchanged.")
         .font(.callout)
         .foregroundStyle(.secondary)
         .fixedSize(horizontal: false, vertical: true)
-      pickerRow("Fusion interpolation", selection: $storedAppModel.dicomResamplingFilter) {
+      pickerRow("Fusion interpolation", selection: session.settingsBinding($storedAppModel.dicomResamplingFilter)) {
         Text("converter_dicom_filter_trilinear").tag(BorgVRVolumeResamplingFilter.trilinear)
         Text("converter_dicom_filter_nearest").tag(BorgVRVolumeResamplingFilter.nearestNeighbor)
       }
-      pickerRow("Borders", selection: $storedAppModel.borderModeString) {
+      pickerRow("Borders", selection: session.settingsBinding($storedAppModel.borderModeString)) {
         Text("Zeroes").tag("zeroes")
         Text("Border").tag("border")
         Text("Repeat").tag("repeat")
@@ -443,27 +448,27 @@ struct SettingsView: View {
       description: "Control level-of-detail selection, brick requests, GPU memory, and hash table sizing. Most users can leave these advanced settings unchanged."
     ) {
       doubleStepperRow("Screen-space pixel error",
-                       value: $appSettings.screenSpaceError,
+                       value: session.settingsBinding($appSettings.screenSpaceError),
                        range: 0.05...10,
                        step: 0.05,
                        format: "%.2f")
       intStepperRow("Initial bricks",
-                    value: $appSettings.initialBricks,
+                    value: session.settingsBinding($appSettings.initialBricks),
                     range: 0...20000,
                     step: 100)
       intStepperRow("Max. probing attempts",
-                    value: $appSettings.maxProbingAttempts,
+                    value: session.settingsBinding($appSettings.maxProbingAttempts),
                     range: 1...512,
                     step: 1)
-      toggleRow("Request low-res LOD", isOn: $appSettings.requestLowResLOD)
-      toggleRow("Stop on missing brick", isOn: $appSettings.stopOnMiss)
+      toggleRow("Request low-res LOD", isOn: session.settingsBinding($appSettings.requestLowResLOD))
+      toggleRow("Stop on missing brick", isOn: session.settingsBinding($appSettings.stopOnMiss))
       intStepperRow("Atlas size",
-                    value: $appSettings.atlasSizeMB,
+                    value: session.settingsBinding($appSettings.atlasSizeMB),
                     range: 128...AppSettings.maximumAtlasSizeMB,
                     step: 128,
                     suffix: "MB")
       intStepperRow("Min. hash table size",
-                    value: $appSettings.minHashTableSize,
+                    value: session.settingsBinding($appSettings.minHashTableSize),
                     range: 1...1024,
                     step: 1,
                     suffix: "MB")
@@ -477,14 +482,14 @@ struct SettingsView: View {
         "Background server",
         description: "Enable the local dataset server used by other BorgVR clients and the WebGPU preview. Here you configure ports, password, HTTPS certificate, and transfer batch size for the shared local data source."
       ) {
-        toggleRow("Enable dataset server", isOn: $storedAppModel.enableDatasetServer)
+        toggleRow("Enable dataset server", isOn: session.settingsBinding($storedAppModel.enableDatasetServer))
         if storedAppModel.enableDatasetServer {
-          toggleRow("Start server automatically", isOn: $storedAppModel.autoStartServer)
-          portField("Port", value: $storedAppModel.port)
-          secureFieldRow("Server password (optional)", text: $storedAppModel.serverPassword)
+          toggleRow("Start server automatically", isOn: session.settingsBinding($storedAppModel.autoStartServer))
+          portField("Port", value: session.settingsBinding($storedAppModel.port))
+          secureFieldRow("Server password (optional)", text: session.settingsBinding($storedAppModel.serverPassword))
           if let error = storedAppModel.credentialStorageError { Text(error).foregroundStyle(.red) }
-          toggleRow("Start WebGPU web server", isOn: $storedAppModel.enableWebServer)
-          toggleRow("Use HTTPS", isOn: $storedAppModel.webServerUsesTLS)
+          toggleRow("Start WebGPU web server", isOn: session.settingsBinding($storedAppModel.enableWebServer))
+          toggleRow("Use HTTPS", isOn: session.settingsBinding($storedAppModel.webServerUsesTLS))
           if !storedAppModel.webServerUsesTLS {
             Text("Without HTTPS, only localhost connections are possible.")
               .font(.caption)
@@ -492,12 +497,12 @@ struct SettingsView: View {
           }
           if storedAppModel.webServerUsesTLS {
             WebServerCertificateControls(
-              certificateData: $storedAppModel.webServerCertificateData
+              certificateData: session.settingsBinding($storedAppModel.webServerCertificateData)
             )
           }
-          portField("WebGPU web server port", value: $storedAppModel.webServerPort)
+          portField("WebGPU web server port", value: session.settingsBinding($storedAppModel.webServerPort))
           intStepperRow("Max. bricks per request",
-                        value: $storedAppModel.maxBricksPerGetRequest,
+                        value: session.settingsBinding($storedAppModel.maxBricksPerGetRequest),
                         range: 1...1000,
                         step: 1)
         }
@@ -508,8 +513,8 @@ struct SettingsView: View {
         "Ad-hoc server",
         description: "Configure the temporary server ports used for ad-hoc sharing sessions such as SharePlay. These settings are separate from the persistent background dataset server."
       ) {
-        portField("Ad-hoc dataset server port", value: $storedAppModel.sharePlayServerPort)
-        portField("Ad-hoc WebGPU web server port", value: $storedAppModel.sharePlayWebServerPort)
+        portField("Ad-hoc dataset server port", value: session.settingsBinding($storedAppModel.sharePlayServerPort))
+        portField("Ad-hoc WebGPU web server port", value: session.settingsBinding($storedAppModel.sharePlayWebServerPort))
         resetButton(for: .adHocServer)
       }
     }
@@ -551,17 +556,17 @@ struct SettingsView: View {
         .font(.headline)
       doubleStepperRow(
         "Timeout (seconds)",
-        value: $appSettings.timeout,
+        value: session.settingsBinding($appSettings.timeout),
         range: 0.1...120,
         step: 0.5,
         format: "%.1f"
       )
-      toggleRow("Progressive loading", isOn: $appSettings.progressiveLoading)
+      toggleRow("Progressive loading", isOn: session.settingsBinding($appSettings.progressiveLoading))
       Text("Datasets provided through SharePlay ad-hoc connections are always loaded progressively, regardless of this setting.")
         .font(.callout)
         .foregroundStyle(.secondary)
         .fixedSize(horizontal: false, vertical: true)
-      toggleRow("Keep local copy", isOn: $appSettings.makeLocalCopy)
+      toggleRow("Keep local copy", isOn: session.settingsBinding($appSettings.makeLocalCopy))
       Button(role: .destructive) {
         showClearOriginCacheConfirmation = true
       } label: {
@@ -579,7 +584,7 @@ struct SettingsView: View {
       HStack {
         Text("SharePlay display name")
         Spacer()
-        TextField("SharePlay display name", text: $storedAppModel.sharePlayDisplayName)
+        TextField("SharePlay display name", text: session.settingsBinding($storedAppModel.sharePlayDisplayName))
           .textFieldStyle(.roundedBorder)
           .frame(width: 260)
       }
@@ -884,6 +889,7 @@ struct SettingsView: View {
   }
 
   private func resetToDefaults(_ section: SettingsResetSection) {
+    session.mutateSettings {
     switch section {
       case .interface:
         appSettings.resetInterfaceDefaults()
@@ -916,6 +922,7 @@ struct SettingsView: View {
         serverPassword = ""
       case .mcp:
         storedAppModel.resetMCPDefaults()
+    }
     }
   }
 }

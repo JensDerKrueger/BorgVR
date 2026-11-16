@@ -4,6 +4,7 @@ import SwiftUI
 /// Attached to the root content, never inferred from keyWindow (which may be a panel).
 @MainActor
 final class MacWindowAutomation: ObservableObject, BorgVRWindowAutomation {
+  weak var commandExecutor: (any BorgVRActionExecuting)?
   private weak var window: NSWindow?
   private var observations: [NSObjectProtocol] = []
   private var transitioning = false
@@ -25,6 +26,7 @@ final class MacWindowAutomation: ObservableObject, BorgVRWindowAutomation {
     self.window = window
     for name in [NSWindow.willEnterFullScreenNotification, NSWindow.willExitFullScreenNotification,
                  NSWindow.didEnterFullScreenNotification, NSWindow.didExitFullScreenNotification,
+                 NSWindow.didResizeNotification, NSWindow.didEndLiveResizeNotification,
                  NSWindow.willCloseNotification] {
       observations.append(NotificationCenter.default.addObserver(forName: name, object: window, queue: .main) {
         [weak self, weak window] notification in
@@ -50,7 +52,20 @@ final class MacWindowAutomation: ObservableObject, BorgVRWindowAutomation {
       fullscreen: window.styleMask.contains(.fullScreen), transitioning: transitioning)
   }
 
+  func recordingContextActions() -> [BorgVRRecordedAction] {
+    guard let state = try? windowState() else { return [] }
+    return [.resizeWindow(width: Int(state.contentSizePoints[0].rounded()),
+      height: Int(state.contentSizePoints[1].rounded()), units: "points", area: "content"),
+      .setFullscreen(state.fullscreen)]
+  }
+
   func resize(width: Int, height: Int, units: String, area: String) async throws -> BorgVRMCPWindowState {
+    if let commandExecutor, !BorgVRCommandExecutionContext.executingAction {
+      return try await commandExecutor.performAction(.resizeWindow(width: width, height: height, units: units, area: area),
+        source: BorgVRCommandExecutionContext.source) {
+        try await self.resize(width: width, height: height, units: units, area: area)
+      }
+    }
     guard (1...16384).contains(width), (1...16384).contains(height),
           ["points", "pixels"].contains(units), ["content", "frame"].contains(area) else {
       throw BorgVRMCPCommandError.invalidArgument("Resize requires integer dimensions in 1...16384, units points|pixels, area content|frame.")
@@ -82,6 +97,11 @@ final class MacWindowAutomation: ObservableObject, BorgVRWindowAutomation {
   }
 
   func setFullscreen(_ enabled: Bool) async throws -> BorgVRMCPWindowState {
+    if let commandExecutor, !BorgVRCommandExecutionContext.executingAction {
+      return try await commandExecutor.performAction(.setFullscreen(enabled), source: BorgVRCommandExecutionContext.source) {
+        try await self.setFullscreen(enabled)
+      }
+    }
     let window = try requireWindow()
     guard !transitioning, pending == nil else { throw busyError }
     guard window.styleMask.contains(.fullScreen) != enabled else { return try windowState() }
@@ -116,6 +136,15 @@ final class MacWindowAutomation: ObservableObject, BorgVRWindowAutomation {
   }
 
   private func handle(_ name: Notification.Name) {
+    if name == NSWindow.didResizeNotification || name == NSWindow.didEndLiveResizeNotification {
+      if !transitioning, window?.inLiveResize != true, let commandExecutor,
+         let state = try? windowState() {
+        commandExecutor.performAction(.resizeWindow(width: Int(state.contentSizePoints[0].rounded()),
+          height: Int(state.contentSizePoints[1].rounded()), units: "points", area: "content"),
+          source: BorgVRCommandExecutionContext.source) {}
+      }
+      return
+    }
     if name == NSWindow.willCloseNotification {
       window = nil
       transitioning = false
@@ -127,6 +156,9 @@ final class MacWindowAutomation: ObservableObject, BorgVRWindowAutomation {
       if let pending {
         let actual = window?.styleMask.contains(.fullScreen) == true
         finish(actual == pending.target ? .success(()) : .failure(busyError))
+      } else if let commandExecutor {
+        commandExecutor.performAction(.setFullscreen(window?.styleMask.contains(.fullScreen) == true),
+          source: BorgVRCommandExecutionContext.source) {}
       }
     }
   }

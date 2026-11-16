@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct TransferFunctionEditorView: View {
+  @EnvironmentObject private var session: ScreenBorgVRSession
 #if os(macOS)
   @Environment(\.panelWindow) private var panelWindow
 #endif
@@ -109,7 +110,7 @@ struct TransferFunctionEditorView: View {
       }
     )
     #else
-    $renderingParameters.selectedTransferFunctionChannel
+    session.binding($renderingParameters.selectedTransferFunctionChannel)
     #endif
   }
 
@@ -443,7 +444,9 @@ struct TransferFunctionEditorView: View {
   private func saveTransferFunction(description: String) {
     guard let fileURL = transferFunctionFileURL else { return }
     do {
-      try renderingParameters.transferFunction.save(to: fileURL, description: description)
+      try session.performFileAction(outputs: [fileURL]) {
+        try renderingParameters.transferFunction.save(to: fileURL, description: description)
+      }
       let catalogURL = try TransferFunctionCatalog.store(
         transferFunction: renderingParameters.transferFunction,
         description: description,

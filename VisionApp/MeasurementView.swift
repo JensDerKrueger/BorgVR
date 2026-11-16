@@ -2,6 +2,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 struct MeasurementView: View {
+  @EnvironmentObject private var session: VisionBorgVRSession
   @Environment(RuntimeAppModel.self) private var runtimeAppModel
   @Environment(SharedAppModel.self) private var sharedAppModel
   @EnvironmentObject private var storedAppModel: StoredAppModel
@@ -202,7 +203,11 @@ struct MeasurementView: View {
         defaultDirectoryURL: DatasetStateStorage.measurementDirectoryURL(
           logger: runtimeAppModel.logger
         )
-      ) { _ in
+      ) { exportedURL in
+        if let exportedURL {
+          do { try session.captureFileExport(.success(exportedURL)) }
+          catch { runtimeAppModel.logger.warning(error.localizedDescription) }
+        }
         export.removeTemporaryFiles()
         pendingMeasurementExport = nil
       }

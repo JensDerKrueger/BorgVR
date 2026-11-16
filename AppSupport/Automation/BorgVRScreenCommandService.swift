@@ -10,6 +10,7 @@ final class BorgVRScreenCommandService: BorgVRMCPCommandService {
   typealias DatasetCloser = () async throws -> Void
 
   private let session: ScreenBorgVRSession
+  var commandExecutor: (any BorgVRCommandExecuting)? { session }
   private let datasetListProvider: DatasetListProvider
   private let datasetOpener: DatasetOpener
   private let datasetCloser: DatasetCloser
@@ -41,11 +42,15 @@ final class BorgVRScreenCommandService: BorgVRMCPCommandService {
   }
 
   func openDataset(id: String) async throws {
-    try await datasetOpener(id)
+    if session.runtimeState.activeDataset?.uniqueId == id, session.runtimeState.rendererHasActiveDataset {
+      session.runtimeState.useDeterministicAutomationState()
+      return
+    }
+    try await session.performAction(.openDataset(id), source: .mcp) { try await datasetOpener(id) }
   }
 
   func closeDataset() async throws {
-    try await datasetCloser()
+    try await session.performAction(.closeDataset, source: .mcp) { try await datasetCloser() }
   }
 
   func settingsStore() -> BorgVRSettingsStore { settingsStoreProvider() }
@@ -306,6 +311,11 @@ final class BorgVRScreenCommandService: BorgVRMCPCommandService {
     to outputURL: URL,
     normalizedIsoValue: Float?
   ) async throws -> BorgVRMCPIsoSurfaceExport {
+    if !BorgVRCommandExecutionContext.executingAction {
+      return try await session.performAction(.exportIsoSurface(path: outputURL.path, normalizedIsoValue: normalizedIsoValue), source: .mcp) {
+        try await self.exportIsoSurface(to: outputURL, normalizedIsoValue: normalizedIsoValue)
+      }
+    }
     let appModel = session.runtimeState
     guard appModel.activeDataset != nil else {
       throw BorgVRMCPCommandError.noDataset
@@ -347,6 +357,11 @@ final class BorgVRScreenCommandService: BorgVRMCPCommandService {
   }
 
   func captureScreenshot(includeAlpha: Bool) async throws -> BorgVRMCPImage {
+    if !BorgVRCommandExecutionContext.executingAction {
+      return try await session.performAction(.captureScreenshot(path: nil, includeAlpha: includeAlpha), source: .mcp) {
+        try await self.captureScreenshot(includeAlpha: includeAlpha)
+      }
+    }
     let appModel = session.runtimeState
     guard appModel.activeDataset != nil else { throw BorgVRMCPCommandError.noDataset }
 

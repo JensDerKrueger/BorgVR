@@ -14,7 +14,7 @@ The project is intended for interactive exploration of large volumetric datasets
 native Metal renderers, dataset conversion tools, local and remote dataset servers, SharePlay
 collaboration, and a WebGPU browser frontend served directly by the dataset server.
 
-The current development version is **3.8**. The SharePlay wire protocol is version **3.3**.
+The current development version is **3.9**. The SharePlay wire protocol is version **3.3**.
 
 ## What Is Included
 
@@ -255,6 +255,25 @@ current, non-localized `converted by TOOL VERSION` provenance entry automaticall
   brick size, overlap, and border handling.
 - Local erase/restore brushes, sample batches in physical meters, background-job status and
   waiting, discarding edits, and cancellable edited-dataset export with progress.
+- The shared command recorder captures the initial dataset, visualization, safe settings,
+  annotations and edit mask, followed by committed UI/MCP operations. Typed, versioned
+  `sessioncommand` payloads preserve every command without translating through a second model.
+  Recording waits for accepted work; failed or unsupported operations prevent export.
+  Start/stop from the macOS menu or `start_command_recording` / `stop_command_recording`
+  over MCP on any native platform. Use `replay_command_recording` with `confirm:true` for
+  native playback, or the macOS GSC interpreter for recordings and general scripts.
+  Native recordings are limited to 64 MiB, 100000 commands and 32 MiB per command;
+  oversized recordings fail export rather than being truncated.
+- Dialog presentation, transient panel layout, gaze/cursors, account/service configuration,
+  credentials and automatic startup-loading policy are intentionally not replayed.
+  Dataset IDs and referenced mesh assets must be available on the replay device; file
+  destinations must be accessible there. Explicit credential-backup commands refer to the
+  replay device's credentials, never embed them in GSC.
+- New settings must be classified in `BorgVRSettingsStore.recordingKeys` or
+  `localOnlyRecordingKeys`. Use session bindings/commands for new controls and add a
+  roundtrip scenario. Run `Scripts/test-mcp-visualization.sh <macOS Debug products>` for
+  the binding/policy checks and actual UI-command recording -> GSC -> state/file tests,
+  plus `Scripts/test-settings-archive.sh` for the archive/privacy contract.
 
 ### MCP Automation
 

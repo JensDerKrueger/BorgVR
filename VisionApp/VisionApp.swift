@@ -81,6 +81,7 @@ struct VisionApp: App {
       applicationContent(isDatasetWindow: false)
         .appStoreUpdateAlert(using: updateChecker)
         .onAppear {
+          settingsFiles.applySettings = { operation in try session.mutateSettings { try operation() } }
           appDelegate.saveOpenDatasetState = { saveOpenDatasetState() }
         }
         .modifier(DatasetControlsPresentation())

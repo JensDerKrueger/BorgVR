@@ -162,7 +162,7 @@ struct BorgVRMeshInstanceCommandState: Codable, Equatable, Sendable, Identifiabl
   }
 }
 
-enum BorgVRObjectCommandState: Encodable, Equatable, Sendable, Identifiable {
+enum BorgVRObjectCommandState: Codable, Equatable, Sendable, Identifiable {
   case marker(BorgVRMarkerCommandState)
   case mesh(BorgVRMeshInstanceCommandState)
 
@@ -172,7 +172,7 @@ enum BorgVRObjectCommandState: Encodable, Equatable, Sendable, Identifiable {
     case mesh
   }
 
-  private enum ObjectType: String, Encodable {
+  private enum ObjectType: String, Codable {
     case marker
     case mesh
   }
@@ -193,6 +193,14 @@ enum BorgVRObjectCommandState: Encodable, Equatable, Sendable, Identifiable {
       case .mesh(let mesh):
         try container.encode(ObjectType.mesh, forKey: .type)
         try container.encode(mesh, forKey: .mesh)
+    }
+  }
+
+  init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    switch try container.decode(ObjectType.self, forKey: .type) {
+      case .marker: self = .marker(try container.decode(BorgVRMarkerCommandState.self, forKey: .marker))
+      case .mesh: self = .mesh(try container.decode(BorgVRMeshInstanceCommandState.self, forKey: .mesh))
     }
   }
 }

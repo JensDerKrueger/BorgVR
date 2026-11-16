@@ -202,7 +202,13 @@ struct SettingsView: View {
   }
 
   private var settingsFileControls: some View {
-    SettingsFileControls { appSettings.settingsStore() }
+    SettingsFileControls(store: { appSettings.settingsStore() },
+      applySettings: { operation in try session.mutateSettings { try operation() } },
+      exportSettings: { url, credentials, operation in
+        try session.performAction(.saveSettings(path: url.path, includeCredentials: credentials), source: .userInterface) {
+          try operation()
+        }
+      })
       .labelStyle(.iconOnly)
   }
 
@@ -263,8 +269,8 @@ struct SettingsView: View {
           InterfaceVisibilitySettingsView(visibility: Binding(
             get: { appSettings.interfaceVisibility }, set: { appSettings.interfaceVisibility = $0 }))
           Section("Diagnostics") {
-            Toggle("Show Brick Visualization", isOn: $appSettings.showBrickVisualization)
-            Toggle("Show Log Button", isOn: $appSettings.showLogButton)
+            Toggle("Show Brick Visualization", isOn: session.settingsBinding($appSettings.showBrickVisualization))
+            Toggle("Show Log Button", isOn: session.settingsBinding($appSettings.showLogButton))
           }
           resetButton(for: .interface)
         }
@@ -306,7 +312,7 @@ struct SettingsView: View {
           description: "Choose how you appear to other people during SharePlay collaboration. Your display name is shared only with participants in the current session."
         ) {
           Section("Identity") {
-            TextField("SharePlay display name", text: $appSettings.sharePlayDisplayName)
+            TextField("SharePlay display name", text: session.settingsBinding($appSettings.sharePlayDisplayName))
               .textInputAutocapitalization(.words)
           }
         }
@@ -317,11 +323,11 @@ struct SettingsView: View {
         ) {
           Section("Model Context Protocol") {
             MCPSettingsControls(
-              enabled: $appSettings.enableMCPServer,
-              port: $appSettings.mcpServerPort,
-              allowRemoteConnections: $appSettings.mcpAllowRemoteConnections,
-              accessToken: $appSettings.mcpAccessToken,
-              certificateData: $appSettings.mcpServerCertificateData,
+              enabled: session.settingsBinding($appSettings.enableMCPServer),
+              port: session.settingsBinding($appSettings.mcpServerPort),
+              allowRemoteConnections: session.settingsBinding($appSettings.mcpAllowRemoteConnections),
+              accessToken: session.settingsBinding($appSettings.mcpAccessToken),
+              certificateData: session.settingsBinding($appSettings.mcpServerCertificateData),
               statusText: mcpController.statusText
             )
           }
@@ -359,20 +365,20 @@ struct SettingsView: View {
   @ViewBuilder
   private var generalSection: some View {
     Section("Behavior") {
-      Toggle("Automatically load/save transfer functions", isOn: $appSettings.autoloadTF)
-      Toggle("Automatically load/save objects", isOn: $appSettings.autoloadObjects)
-      Toggle("Automatically load/save measurements", isOn: $appSettings.autoloadMeasurements)
+      Toggle("Automatically load/save transfer functions", isOn: session.settingsBinding($appSettings.autoloadTF))
+      Toggle("Automatically load/save objects", isOn: session.settingsBinding($appSettings.autoloadObjects))
+      Toggle("Automatically load/save measurements", isOn: session.settingsBinding($appSettings.autoloadMeasurements))
       Toggle(
         "Automatically load/save view and rendering state",
-        isOn: $appSettings.autoloadRenderState
+        isOn: session.settingsBinding($appSettings.autoloadRenderState)
       )
-      Toggle("Hide built-in datasets", isOn: $appSettings.hideBuiltInDatasets)
+      Toggle("Hide built-in datasets", isOn: session.settingsBinding($appSettings.hideBuiltInDatasets))
     }
 
     ShowAllExplanationDialogsButton(includesSectionHeader: true)
 
     Section("Diagnostics") {
-      Picker("Log-Level", selection: $appSettings.logLevel) {
+      Picker("Log-Level", selection: session.settingsBinding($appSettings.logLevel)) {
         ForEach(AppLogLevel.allCases) { level in
           Text(level.label).tag(level.rawValue)
         }
@@ -400,7 +406,7 @@ struct SettingsView: View {
     Section("Appearance") {
       Toggle("Show dataset bounding box", isOn: Binding(get: { appSettings.showDatasetBoundingBox },
         set: { try? session.perform(.setBoundingBox($0), source: .userInterface) }))
-      Picker("Background", selection: $appSettings.renderBackgroundMode) {
+      Picker("Background", selection: session.settingsBinding($appSettings.renderBackgroundMode)) {
         ForEach(RenderBackgroundMode.allCases) { mode in
           Text(mode.label).tag(mode.rawValue)
         }
@@ -424,23 +430,23 @@ struct SettingsView: View {
     }
 
     Section("Sampling") {
-      Picker("Oversampling mode", selection: $appSettings.oversamplingMode) {
+      Picker("Oversampling mode", selection: session.settingsBinding($appSettings.oversamplingMode)) {
         Text("Static").tag(OversamplingMode.staticMode.rawValue)
         Text("Dynamic").tag(OversamplingMode.dynamicMode.rawValue)
       }
-      Stepper(value: $appSettings.oversampling, in: 0.1...8.0, step: 0.1) {
+      Stepper(value: session.settingsBinding($appSettings.oversampling), in: 0.1...8.0, step: 0.1) {
         Text(String(format: String(localized: "Oversampling factor: %.1f"), appSettings.oversampling))
       }
       if appSettings.oversamplingMode == OversamplingMode.dynamicMode.rawValue {
-        Stepper(value: $appSettings.dropFPS, in: 1...240) {
+        Stepper(value: session.settingsBinding($appSettings.dropFPS), in: 1...240) {
           Text(String(format: String(localized: "Drop FPS: %d fps"), appSettings.dropFPS))
         }
-        Stepper(value: $appSettings.recoveryFPS, in: 1...240) {
+        Stepper(value: session.settingsBinding($appSettings.recoveryFPS), in: 1...240) {
           Text(String(format: String(localized: "Recovery FPS: %d fps"), appSettings.recoveryFPS))
         }
       }
-      Toggle("Randomized sample phase", isOn: $appSettings.sampleJitter)
-      Picker("JIT atlas compression (RGB/RGBA)", selection: $appSettings.atlasCompression) {
+      Toggle("Randomized sample phase", isOn: session.settingsBinding($appSettings.sampleJitter))
+      Picker("JIT atlas compression (RGB/RGBA)", selection: session.settingsBinding($appSettings.atlasCompression)) {
         Text("No compression").tag(0)
         Text(verbatim: "ASTC 4x4").tag(4)
         Text(verbatim: "ASTC 8x8").tag(8)
@@ -468,22 +474,22 @@ struct SettingsView: View {
     Section {
       textFieldRow("Brick size (voxels)", text: $tempBrickSize, keyboardType: .numberPad)
       textFieldRow("Overlap (voxels)", text: $tempBrickOverlap, keyboardType: .numberPad)
-      Toggle("Compression", isOn: $appSettings.enableCompression)
-      Picker("Stored color compression (RGB/RGBA)", selection: $appSettings.importColorCompression) {
+      Toggle("Compression", isOn: session.settingsBinding($appSettings.enableCompression))
+      Picker("Stored color compression (RGB/RGBA)", selection: session.settingsBinding($appSettings.importColorCompression)) {
         Text("No compression").tag(0)
         Text(verbatim: "ASTC 4x4").tag(4)
         Text(verbatim: "ASTC 8x8").tag(8)
       }
-      Toggle("Quantize imports to 8 bits per channel", isOn: $appSettings.quantizeImportsTo8Bit)
+      Toggle("Quantize imports to 8 bits per channel", isOn: session.settingsBinding($appSettings.quantizeImportsTo8Bit))
       Text("Maps each channel's value range to 0...255, permanently reducing intensity precision. Existing 8-bit data is unchanged.")
         .font(.caption)
         .foregroundStyle(.secondary)
         .fixedSize(horizontal: false, vertical: true)
-      Picker("Fusion interpolation", selection: $appSettings.dicomResamplingFilter) {
+      Picker("Fusion interpolation", selection: session.settingsBinding($appSettings.dicomResamplingFilter)) {
         Text("Trilinear").tag(BorgVRVolumeResamplingFilter.trilinear)
         Text("Nearest Neighbor").tag(BorgVRVolumeResamplingFilter.nearestNeighbor)
       }
-      Picker("Borders", selection: $appSettings.borderMode) {
+      Picker("Borders", selection: session.settingsBinding($appSettings.borderMode)) {
         Text("Zeroes").tag("zeroes")
         Text("Border").tag("border")
         Text("Repeat").tag("repeat")
@@ -521,11 +527,11 @@ struct SettingsView: View {
 
     Section("Loading") {
       textFieldRow("Timeout (seconds)", text: $tempTimeout, keyboardType: .decimalPad)
-      Toggle("Progressive loading", isOn: $appSettings.progressiveLoading)
+      Toggle("Progressive loading", isOn: session.settingsBinding($appSettings.progressiveLoading))
       Text("Datasets provided through SharePlay ad-hoc connections are always loaded progressively, regardless of this setting.")
         .font(.footnote)
         .foregroundStyle(.secondary)
-      Toggle("Keep local copy", isOn: $appSettings.makeLocalCopy)
+      Toggle("Keep local copy", isOn: session.settingsBinding($appSettings.makeLocalCopy))
     }
 
     Section {
@@ -604,13 +610,13 @@ struct SettingsView: View {
 
   private var backgroundServerSection: some View {
     Section("Background server") {
-      Toggle("Enable dataset server", isOn: $appSettings.enableDatasetServer)
+      Toggle("Enable dataset server", isOn: session.settingsBinding($appSettings.enableDatasetServer))
       if appSettings.enableDatasetServer {
-        Toggle("Start server automatically", isOn: $appSettings.autoStartServer)
-        portField("Port", value: $appSettings.serverPort)
-        secureFieldRow("Server password (optional)", text: $appSettings.serverPassword)
+        Toggle("Start server automatically", isOn: session.settingsBinding($appSettings.autoStartServer))
+        portField("Port", value: session.settingsBinding($appSettings.serverPort))
+        secureFieldRow("Server password (optional)", text: session.settingsBinding($appSettings.serverPassword))
         if let error = appSettings.credentialStorageError { Text(error).foregroundStyle(.red) }
-        Stepper(value: $appSettings.maxBricksPerGetRequest, in: 1...1000) {
+        Stepper(value: session.settingsBinding($appSettings.maxBricksPerGetRequest), in: 1...1000) {
           Text(String(format: String(localized: "Max. bricks per request: %d"), appSettings.maxBricksPerGetRequest))
         }
       }
@@ -620,8 +626,8 @@ struct SettingsView: View {
 
   private var webServerSection: some View {
     Section("WebGPU web server") {
-      Toggle("Enable WebGPU web server", isOn: $appSettings.enableWebServer)
-      Toggle("Use HTTPS", isOn: $appSettings.webServerUsesTLS)
+      Toggle("Enable WebGPU web server", isOn: session.settingsBinding($appSettings.enableWebServer))
+      Toggle("Use HTTPS", isOn: session.settingsBinding($appSettings.webServerUsesTLS))
       if !appSettings.webServerUsesTLS {
         Text("Without HTTPS, only localhost connections are possible.")
           .font(.caption)
@@ -629,18 +635,18 @@ struct SettingsView: View {
       }
       if appSettings.webServerUsesTLS {
         WebServerCertificateControls(
-          certificateData: $appSettings.webServerCertificateData
+          certificateData: session.settingsBinding($appSettings.webServerCertificateData)
         )
       }
-      portField("WebGPU web server port", value: $appSettings.webServerPort)
+      portField("WebGPU web server port", value: session.settingsBinding($appSettings.webServerPort))
       resetButton(for: .webServer)
     }
   }
 
   private var adHocServerSection: some View {
     Section("Ad-hoc server") {
-      portField("Ad-hoc dataset server port", value: $appSettings.sharePlayServerPort)
-      portField("Ad-hoc WebGPU web server port", value: $appSettings.sharePlayWebServerPort)
+      portField("Ad-hoc dataset server port", value: session.settingsBinding($appSettings.sharePlayServerPort))
+      portField("Ad-hoc WebGPU web server port", value: session.settingsBinding($appSettings.sharePlayWebServerPort))
       resetButton(for: .adHocServer)
     }
   }
@@ -648,15 +654,15 @@ struct SettingsView: View {
   private var performanceSection: some View {
     Section {
       textFieldRow("Screen-space pixel error (pixels)", text: $tempPixelError, keyboardType: .decimalPad)
-      Stepper(value: $appSettings.initialBricks, in: 0...20000, step: 100) {
+      Stepper(value: session.settingsBinding($appSettings.initialBricks), in: 0...20000, step: 100) {
         Text(String(format: String(localized: "Initial bricks: %d"), appSettings.initialBricks))
       }
-      Stepper(value: $appSettings.maxProbingAttempts, in: 1...512) {
+      Stepper(value: session.settingsBinding($appSettings.maxProbingAttempts), in: 1...512) {
         Text(String(format: String(localized: "Max. probing attempts: %d"), appSettings.maxProbingAttempts))
       }
-      Toggle("Request low-res LOD", isOn: $appSettings.requestLowResLOD)
-      Toggle("Stop on missing brick", isOn: $appSettings.stopOnMiss)
-      Stepper(value: $appSettings.atlasSizeMB, in: 128...AppSettings.maximumAtlasSizeMB, step: 128) {
+      Toggle("Request low-res LOD", isOn: session.settingsBinding($appSettings.requestLowResLOD))
+      Toggle("Stop on missing brick", isOn: session.settingsBinding($appSettings.stopOnMiss))
+      Stepper(value: session.settingsBinding($appSettings.atlasSizeMB), in: 128...AppSettings.maximumAtlasSizeMB, step: 128) {
         Text(String(format: String(localized: "Atlas size: %d MB"), appSettings.atlasSizeMB))
       }
       textFieldRow("Min. hash table size (MB)", text: $tempHashSize, keyboardType: .numberPad)
@@ -964,6 +970,7 @@ struct SettingsView: View {
   }
 
   private func resetToDefaults(_ section: SettingsResetSection) {
+    session.mutateSettings {
     switch section {
       case .interface:
         appSettings.resetInterfaceDefaults()
@@ -991,6 +998,7 @@ struct SettingsView: View {
         appSettings.resetAdHocServerDefaults()
       case .mcp:
         appSettings.resetMCPDefaults()
+    }
     }
     validationMessage = nil
     loadTemporaryValues()

@@ -282,6 +282,15 @@ final class BorgVRScriptRunner: ObservableObject {
   }
 
   private func registerCommands() {
+    register("sessioncommand", [.string]) { [weak self] args in
+      guard let self, let service = self.commandService else { return .callbackError }
+      let command: BorgVRCommand
+      do { command = try BorgVRCommand.decodeGSCCommand(args.string(0)) }
+      catch { self.logError(error.localizedDescription); return .invalidArguments }
+      return self.performAsynchronousCommand(key: "sessioncommand") { _ in
+        try await service.executeRecordedCommand(command)
+      }
+    }
     register("log", [.restString]) { [weak self] args in
       self?.logInfo(args.restString) ?? .callbackError
     }
@@ -504,7 +513,7 @@ final class BorgVRScriptRunner: ObservableObject {
       self?.resize(width: args.int(0), height: args.int(1), units: args.string(2), area: args.string(3)) ?? .callbackError
     }
     register("fullscreen", [.bool]) { [weak self] args in
-      self?.performWindowCommand(key: "fullscreen-\(args.bool(0))") {
+      self?.performAsynchronousCommand(key: "fullscreen-\(args.bool(0))") {
         _ = try await $0.setFullscreen(args.bool(0))
       } ?? .callbackError
     }
@@ -1537,8 +1546,9 @@ final class BorgVRScriptRunner: ObservableObject {
     Task { @MainActor [weak self] in
       defer { self?.storedAppModel?.stopAccessingDataDirectory(accessURL) }
       do {
-        let image = try await service.captureScreenshot(includeAlpha: includeAlpha)
-        try BorgVRAutomationFile.write(image.pngData, to: url, overwrite: true)
+        _ = try await BorgVRCommandExecutionContext.$source.withValue(.gsc) {
+          try await service.captureScreenshot(to: url, includeAlpha: includeAlpha, overwrite: true)
+        }
         self?.logInfo("Screenshot saved: \(url.path)")
         self?.pendingScreenshotResult = .success
       } catch {
@@ -1550,12 +1560,12 @@ final class BorgVRScriptRunner: ObservableObject {
   }
 
   private func resize(width: Int, height: Int, units: String = "points", area: String = "content") -> CommandResultCode {
-    performWindowCommand(key: "resize-\(width)-\(height)-\(units)-\(area)") {
+    performAsynchronousCommand(key: "resize-\(width)-\(height)-\(units)-\(area)") {
       _ = try await $0.resizeWindow(width: width, height: height, units: units, area: area)
     }
   }
 
-  private func performWindowCommand(
+  private func performAsynchronousCommand(
     key: String, action: @escaping (BorgVRScreenCommandService) async throws -> Void
   ) -> CommandResultCode {
     if pendingWindowCommandKey == key {
@@ -1574,7 +1584,7 @@ final class BorgVRScriptRunner: ObservableObject {
         result = .success
       } catch {
         guard !Task.isCancelled else { return }
-        self?.logError("Window command failed: \(error.localizedDescription)")
+        self?.logError("Command failed: \(error.localizedDescription)")
         result = .callbackError
       }
       guard !Task.isCancelled, self?.pendingWindowCommandKey == key else { return }

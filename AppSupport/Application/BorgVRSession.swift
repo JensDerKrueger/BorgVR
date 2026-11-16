@@ -2,21 +2,20 @@ import Foundation
 import Combine
 import Observation
 import simd
+import SwiftUI
 
-enum BorgVRCommandSource: Equatable, Sendable {
-  case userInterface
-  case hand
-  case muse
-  case controller(String)
-  case mouse
-  case touch
-  case gsc
-  case mcp
-  case sharePlay
-  case stateRestore
+@MainActor
+protocol BorgVRCommandExecuting: BorgVRActionExecuting {
+  func perform(_ command: BorgVRCommand, source: BorgVRCommandSource) throws
+  var isCommandRecording: Bool { get }
+  func startCommandRecording()
+  func waitForRecordingPreparation() async throws
+  func finishCommandRecording() async throws
+  func recordedGSCScript() throws -> String
+  func mutateSettings<Result>(source: BorgVRCommandSource, _ mutation: () throws -> Result) rethrows -> Result
 }
 
-enum BorgVRStateResetScope: String, Sendable {
+enum BorgVRStateResetScope: String, Codable, Sendable {
   case all
   case transform
   case clipping
@@ -24,7 +23,7 @@ enum BorgVRStateResetScope: String, Sendable {
   case lighting
 }
 
-enum BorgVRMutationDomain: String, Hashable, Sendable {
+enum BorgVRMutationDomain: String, Codable, Hashable, Sendable {
   case visualization
   case transferFunction
   case objects
@@ -32,20 +31,20 @@ enum BorgVRMutationDomain: String, Hashable, Sendable {
   case interaction
 }
 
-struct BorgVRTransformSnapshot: Equatable, Sendable {
+struct BorgVRTransformSnapshot: Codable, Equatable, Sendable {
   var rotation: SIMD4<Float>
   var translation: SIMD3<Float>
   var scale: SIMD3<Float>
 }
 
-struct BorgVRLightingSnapshot: Equatable, Sendable {
+struct BorgVRLightingSnapshot: Codable, Equatable, Sendable {
   var direction: SIMD3<Float>
   var ambient: SIMD3<Float>
   var diffuse: SIMD3<Float>
   var specular: SIMD3<Float>
 }
 
-struct BorgVRTransferFunctionSnapshot: Equatable, Sendable {
+struct BorgVRTransferFunctionSnapshot: Codable, Equatable, Sendable {
   let channel: Int
   let samples: [SIMD4<UInt8>]
   let revision: UInt64
@@ -209,7 +208,7 @@ private final class BorgVRExternalMutationMailbox: @unchecked Sendable {
   }
 }
 
-enum BorgVRCommand: Sendable {
+enum BorgVRCommand: Codable, Sendable {
   case setRenderMode(RenderMode)
   case setBrickVisualization(enabled: Bool? = nil, resident: Bool? = nil, empty: Bool? = nil, missing: Bool? = nil)
   case setRenderOptimizations(subbrickSkipping: Bool? = nil, opacityAdaptiveSampling: Bool? = nil, alphaEpsilon: Float? = nil)
@@ -236,108 +235,83 @@ enum BorgVRCommand: Sendable {
   case removeMeasurement(UUID)
   case clearMeasurements
   case reset(BorgVRStateResetScope)
+  case setSettings(Data)
+  case setInteractionMode(String)
+  case selectTransferFunctionChannel(Int)
+  case setTransferEditing(red: Bool, green: Bool, blue: Bool, opacity: Bool)
+  case action(BorgVRRecordedAction)
   /// A semantic boundary for state that does not yet have a lossless GSC representation.
   case mutation(BorgVRMutationDomain)
 }
 
+enum BorgVRRecordingError: LocalizedError {
+  case unrepresentedMutation(BorgVRMutationDomain)
+  case invalidCommand
+  case recordingLimitExceeded
+
+  var errorDescription: String? {
+    switch self {
+      case .unrepresentedMutation(let domain):
+        "The recording contains an unsupported change in \(domain.rawValue). It cannot be exported losslessly."
+      case .invalidCommand: "Invalid recorded command."
+      case .recordingLimitExceeded: "Recording exceeds supported limits (64 MiB, 100000 commands, 32 MiB per command)."
+    }
+  }
+}
+
+extension BorgVRCommand {
+  private struct Document: Codable {
+    var version = 1
+    let command: BorgVRCommand
+  }
+
+  func encodedGSCStatement() throws -> String {
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.sortedKeys]
+    let payload = try encoder.encode(Document(command: self)).base64EncodedString()
+    guard payload.utf8.count <= 32 * 1024 * 1024 else { throw BorgVRRecordingError.recordingLimitExceeded }
+    return "sessioncommand \(gscQuote(payload))"
+  }
+
+  static func decodeGSCCommand(_ payload: String) throws -> Self {
+    guard payload.utf8.count <= 32 * 1024 * 1024,
+          let data = Data(base64Encoded: payload) else { throw BorgVRRecordingError.invalidCommand }
+    let document = try JSONDecoder().decode(Document.self, from: data)
+    guard document.version == 1 else { throw BorgVRRecordingError.invalidCommand }
+    return document.command
+  }
+}
+
+/// The recorder's linear GSC subset is intentionally separate from the full macOS DSL.
+/// Parse the complete document before executing any operation.
+enum BorgVRRecordedGSC {
+  static let maximumFileBytes = 64 * 1024 * 1024
+  static let maximumCommands = 100_000
+
+  static func commands(in data: Data) throws -> [BorgVRCommand] {
+    guard data.count <= maximumFileBytes, let script = String(data: data, encoding: .utf8) else {
+      throw BorgVRRecordingError.invalidCommand
+    }
+    var commands: [BorgVRCommand] = []
+    for line in script.split(whereSeparator: \.isNewline) {
+      let line = line.trimmingCharacters(in: .whitespaces)
+      if line.isEmpty || line.hasPrefix("#") { continue }
+      let prefix = "sessioncommand \""
+      guard commands.count < maximumCommands, line.hasPrefix(prefix), line.hasSuffix("\"") else {
+        throw BorgVRMCPCommandError.unsupported("Native replay accepts BorgVR 3.9 command recordings only. Use the macOS interpreter for general GSC scripts.")
+      }
+      commands.append(try BorgVRCommand.decodeGSCCommand(String(line.dropFirst(prefix.count).dropLast())))
+    }
+    guard !commands.isEmpty else { throw BorgVRRecordingError.invalidCommand }
+    return commands
+  }
+}
+
 struct BorgVRCommandEvent: Sendable {
+  let id = UUID()
   let command: BorgVRCommand
   let source: BorgVRCommandSource
   let timestamp: Date
-
-  var gscStatement: String? {
-    switch command {
-      case .setRenderMode(let mode):
-        return "rendermode \(mode.gscName)"
-      case .setBrickVisualization(let enabled, let resident, let empty, let missing):
-        return [("showbricks", enabled), ("showresidentbricks", resident),
-                ("showemptybricks", empty), ("showmissingbricks", missing)]
-          .compactMap { name, value in value.map { "\(name) \($0 ? "true" : "false")" } }
-          .joined(separator: "\n")
-      case .setRenderOptimizations(let subbrick, let adaptive, let epsilon):
-        var statements: [String] = []
-        if let subbrick { statements.append("setsubbrickskipping \(subbrick ? "true" : "false")") }
-        if let adaptive { statements.append("setopacityadaptivesampling \(adaptive ? "true" : "false")") }
-        if let epsilon { statements.append("setalphaepsilon \(epsilon)") }
-        return statements.joined(separator: "\n")
-      case .setBoundingBox(let visible):
-        return "showboundingbox \(visible ? "true" : "false")"
-      case .setScreenProjection(let fieldOfView, let parallel):
-        var statements: [String] = []
-        if let fieldOfView { statements.append("setfieldofview \(fieldOfView)") }
-        if let parallel { statements.append("setparallelprojection \(parallel ? "true" : "false")") }
-        return statements.joined(separator: "\n")
-      case .setTransform(let transform):
-        let r = transform.rotation
-        let t = transform.translation
-        let s = transform.scale
-        return [
-          "setrotationquaternion \(r.x) \(r.y) \(r.z) \(r.w)",
-          "settranslation \(t.x) \(t.y)",
-          "setscale \((s.x + s.y + s.z) / 3)"
-        ].joined(separator: "\n")
-      case .rotate(let axis, let degrees):
-        if axis == SIMD3<Float>(1, 0, 0) { return "addrotationx \(degrees)" }
-        if axis == SIMD3<Float>(0, 1, 0) { return "addrotationy \(degrees)" }
-        if axis == SIMD3<Float>(0, 0, 1) { return "addrotationz \(degrees)" }
-        return nil
-      case .setNormalizedIsoValue(let value):
-        return "isovalueNormalized \(value)"
-      case .setClipping(let minimum, let maximum):
-        return "clip \(minimum.x) \(maximum.x) \(minimum.y) \(maximum.y) \(minimum.z) \(maximum.z)"
-      case .setTransferFunction(let transferFunction):
-        return "settransferfunction \(transferFunction.channel) \(gscQuote(transferFunction.base64EncodedSamples))"
-      case .setBackground(let value):
-        guard let data = try? JSONEncoder().encode(value), let json = String(data: data, encoding: .utf8) else { return nil }
-        return "setbackgroundstate \(gscQuote(json))"
-      case .restoreDatasetViewState(let data):
-        return "setviewstate \(gscQuote(data.base64EncodedString()))"
-      case .setLighting(let direction, let ambient, let diffuse, let specular):
-        var statements: [String] = []
-        if let direction {
-          statements.append("setlightdirection \(direction.x) \(direction.y) \(direction.z)")
-        }
-        if let ambient {
-          statements.append("setambientlight \(ambient.x) \(ambient.y) \(ambient.z)")
-        }
-        if let diffuse {
-          statements.append("setdiffuselight \(diffuse.x) \(diffuse.y) \(diffuse.z)")
-        }
-        if let specular {
-          statements.append("setspecularlight \(specular.x) \(specular.y) \(specular.z)")
-        }
-        return statements.isEmpty ? nil : statements.joined(separator: "\n")
-      case .setAnnotationVisibility(let objects, let measurements):
-        var statements: [String] = []
-        if let objects { statements.append("hideobjects \(objects ? "false" : "true")") }
-        if let measurements {
-          statements.append("hidemeasurements \(measurements ? "false" : "true")")
-        }
-        return statements.isEmpty ? nil : statements.joined(separator: "\n")
-      case .upsertObject(let object):
-        return object.gscStatement
-      case .removeObject(let id):
-        return "removeobject \(gscQuote(id.uuidString))"
-      case .clearObjects:
-        return "clearobjects"
-      case .upsertMeasurement(let measurement):
-        return measurement.gscStatement
-      case .removeMeasurement(let id):
-        return "removemeasurement \(gscQuote(id.uuidString))"
-      case .clearMeasurements:
-        return "clearmeasurements"
-      case .reset(let scope):
-        return switch scope {
-          case .all: "reset"
-          case .transform: "resetrotation"
-          case .clipping: "resetclip"
-          case .transferFunction: "resettf"
-          case .lighting: "resetlighting"
-        }
-      case .mutation:
-        return nil
-    }
-  }
 }
 
 enum BorgVRSessionError: Error {
@@ -381,7 +355,7 @@ enum BorgVRSessionCommandError: Error, LocalizedError {
 /// Every external controller can use the same semantic command path, while renderers consume one
 /// coherent value snapshot at the beginning of a frame.
 @MainActor
-final class BorgVRSession<VisualizationState: AnyObject, RuntimeState: AnyObject, SettingsState: AnyObject>: ObservableObject, @unchecked Sendable {
+final class BorgVRSession<VisualizationState: AnyObject, RuntimeState: AnyObject, SettingsState: AnyObject>: ObservableObject, BorgVRCommandExecuting, @unchecked Sendable {
   typealias CommandHandler = (BorgVRCommand, BorgVRCommandSource) throws -> Void
   typealias SnapshotProvider = () -> BorgVRFrameSnapshot
   typealias AnnotationSnapshotProvider = () -> BorgVRAnnotationSnapshot
@@ -405,6 +379,21 @@ final class BorgVRSession<VisualizationState: AnyObject, RuntimeState: AnyObject
   private var recordedEvents: [BorgVRCommandEvent] = []
   private var recordsCommands = false
   @Published private(set) var isCommandRecording = false
+  @Published private(set) var commandRecordingError: String?
+  private var commandDepth = 0
+  private var settingsSnapshotProvider: (() throws -> Data)?
+  private var lastRecordedSettings: Data?
+  private var interfaceSnapshotProvider: (() -> [BorgVRCommand])?
+  private var lastRecordedInterface: Data?
+  private var recordingID = UUID()
+  private var pendingRecordedActions = 0
+  private var lastRecordedFrame: BorgVRFrameSnapshot?
+  private var lastRecordedAnnotations: BorgVRAnnotationSnapshot = .empty
+  private var recordingPreparation: (() -> Void)?
+  private var recordingBaselineProvider: (() async throws -> [BorgVRRecordedAction])?
+  private var recordingPreparationFinished: (() -> Void)?
+  private var recordingBaselineTask: Task<Void, Never>?
+  private var recordingContextProvider: (() -> [BorgVRRecordedAction])?
 
   init(
     visualizationState: VisualizationState,
@@ -429,10 +418,186 @@ final class BorgVRSession<VisualizationState: AnyObject, RuntimeState: AnyObject
   func perform(_ command: BorgVRCommand, source: BorgVRCommandSource) throws {
     lock.lock()
     defer { lock.unlock() }
-    try commandHandler(command, source)
+    captureUncommittedChanges()
+    commandDepth += 1
+    defer { commandDepth -= 1 }
+    try BorgVRCommandExecutionContext.$executingAction.withValue(true) {
+      try BorgVRCommandExecutionContext.$source.withValue(source) { try commandHandler(command, source) }
+    }
     publishRenderSnapshot()
     refreshAnnotationSnapshot(for: command)
-    emit(command, source: source)
+    if case .reset(.transferFunction) = command {
+      for snapshot in transferFunctionSnapshotProvider() { emit(.setTransferFunction(snapshot), source: source) }
+    } else {
+      emit(command, source: source)
+    }
+    captureSettingsChanges(source: source)
+    updateRecordingBaseline()
+  }
+
+  func performAction<Result>(_ action: BorgVRRecordedAction, source: BorgVRCommandSource,
+                            operation: () throws -> Result) rethrows -> Result {
+    if BorgVRCommandExecutionContext.executingAction { return try operation() }
+    captureUncommittedChanges()
+    let value = try BorgVRCommandExecutionContext.$executingAction.withValue(true) {
+      try BorgVRCommandExecutionContext.$source.withValue(source, operation: operation)
+    }
+    emit(.action(action), source: source)
+    updateRecordingBaseline()
+    return value
+  }
+
+  func trackActionCompletion(_ operation: @escaping @MainActor () async throws -> Void) {
+    guard recordsCommands else { return }
+    let id = recordingID
+    pendingRecordedActions += 1
+    Task { @MainActor in
+      defer { if self.recordingID == id { self.pendingRecordedActions -= 1 } }
+      do { try await operation() }
+      catch { if self.recordingID == id { self.commandRecordingError = error.localizedDescription } }
+    }
+  }
+
+  func performAction<Result>(_ action: BorgVRRecordedAction, source: BorgVRCommandSource,
+                            operation: () async throws -> Result) async rethrows -> Result {
+    if BorgVRCommandExecutionContext.executingAction { return try await operation() }
+    captureUncommittedChanges()
+    let id = recordingID
+    let isRecorded = recordsCommands && source != .sharePlay
+    if isRecorded { pendingRecordedActions += 1; emit(.action(action), source: source) }
+    defer { if isRecorded, id == recordingID { pendingRecordedActions -= 1 } }
+    do {
+      return try await BorgVRCommandExecutionContext.$executingAction.withValue(true) {
+        try await BorgVRCommandExecutionContext.$source.withValue(source, operation: operation)
+      }
+    } catch {
+      if isRecorded, id == recordingID { commandRecordingError = "A recorded action failed: \(error.localizedDescription)" }
+      throw error
+    }
+  }
+
+  func configureSettingsRecording(_ provider: @escaping () throws -> Data) {
+    settingsSnapshotProvider = provider
+  }
+
+  func configureInterfaceRecording(_ provider: @escaping () -> [BorgVRCommand]) {
+    interfaceSnapshotProvider = provider
+  }
+
+  func configureRecordingContext(_ provider: @escaping () -> [BorgVRRecordedAction]) {
+    recordingContextProvider = provider
+  }
+
+  private func captureInterfaceChanges(source: BorgVRCommandSource = .userInterface) {
+    guard recordsCommands, let interfaceSnapshotProvider else { return }
+    do {
+      let commands = interfaceSnapshotProvider()
+      let encoder = JSONEncoder()
+      encoder.outputFormatting = [.sortedKeys]
+      let data = try encoder.encode(commands)
+      guard data != lastRecordedInterface else { return }
+      lastRecordedInterface = data
+      for command in commands { emit(command, source: source) }
+    } catch { commandRecordingError = error.localizedDescription }
+  }
+
+  func configureActionRecording(prepare: @escaping () -> Void,
+    baseline: @escaping () async throws -> [BorgVRRecordedAction], finish: @escaping () -> Void) {
+    recordingPreparation = prepare
+    recordingBaselineProvider = baseline
+    recordingPreparationFinished = finish
+  }
+
+  func performResolvedAction(_ action: BorgVRRecordedAction, source: BorgVRCommandSource,
+                            operation: () async throws -> BorgVRRecordedAction) async throws {
+    if BorgVRCommandExecutionContext.executingAction { _ = try await operation(); return }
+    captureUncommittedChanges()
+    let id = recordingID
+    let eventID = emit(.action(action), source: source)
+    if eventID != nil { pendingRecordedActions += 1 }
+    defer { if eventID != nil, id == recordingID { pendingRecordedActions -= 1 } }
+    do {
+      let result = try await BorgVRCommandExecutionContext.$executingAction.withValue(true) {
+        try await BorgVRCommandExecutionContext.$source.withValue(source, operation: operation)
+      }
+      if id == recordingID, let eventID,
+        let index = recordedEvents.firstIndex(where: { $0.id == eventID }) {
+        recordedEvents[index] = .init(command: .action(result), source: source, timestamp: recordedEvents[index].timestamp)
+      }
+    } catch {
+      if eventID != nil, id == recordingID { commandRecordingError = error.localizedDescription }
+      throw error
+    }
+  }
+
+  func finishCommandRecording() async throws {
+    let deadline = ContinuousClock.now + .seconds(300)
+    while pendingRecordedActions > 0 {
+      guard ContinuousClock.now < deadline else { throw BorgVRMCPCommandError.timeout }
+      try await Task.sleep(for: .milliseconds(20))
+    }
+    _ = stopCommandRecording()
+  }
+
+  func waitForRecordingPreparation() async throws {
+    await recordingBaselineTask?.value
+    if let commandRecordingError { throw BorgVRMCPCommandError.unsupported(commandRecordingError) }
+  }
+
+  @discardableResult
+  func mutateSettings<Result>(source: BorgVRCommandSource = .userInterface,
+                              _ mutation: () throws -> Result) rethrows -> Result {
+    let value = try mutation()
+    publishRenderSnapshot()
+    captureSettingsChanges(source: source)
+    return value
+  }
+
+  func settingsBinding<Value>(_ binding: Binding<Value>) -> Binding<Value> {
+    Binding(get: { binding.wrappedValue }, set: { value in
+      self.mutateSettings { binding.wrappedValue = value }
+    })
+  }
+
+  func binding<Value>(_ binding: Binding<Value>, domain: BorgVRMutationDomain = .visualization) -> Binding<Value> {
+    Binding(get: { binding.wrappedValue }, set: { value in
+      self.mutate(source: .userInterface, domain: domain) { binding.wrappedValue = value }
+    })
+  }
+
+  /// File dialogs are presentation; only the committed files belong to a recording.
+  func performFileAction(outputs: [URL], operation: () throws -> Void) throws {
+    if !recordsCommands || BorgVRCommandExecutionContext.executingAction { try operation(); return }
+    captureUncommittedChanges()
+    do {
+      let files = try BorgVRCommandExecutionContext.$executingAction.withValue(true) {
+        try operation()
+        return try outputs.map { url in
+          BorgVRRecordedFile(path: url.path, data: try Data(contentsOf: url))
+        }
+      }
+      emit(.action(.writeFiles(files)), source: .userInterface)
+      updateRecordingBaseline()
+    } catch {
+      if recordsCommands { commandRecordingError = error.localizedDescription }
+      throw error
+    }
+  }
+
+  func captureFileExport(_ result: Result<URL, Error>) throws {
+    guard recordsCommands else { return }
+    do { try performFileAction(outputs: [result.get()]) {} }
+    catch { commandRecordingError = error.localizedDescription; throw error }
+  }
+
+  private func captureSettingsChanges(source: BorgVRCommandSource = .userInterface) {
+    guard recordsCommands, source != .sharePlay, let settingsSnapshotProvider else { return }
+    do {
+      let data = try settingsSnapshotProvider()
+      guard data != lastRecordedSettings else { return }
+      lastRecordedSettings = data
+      emit(.setSettings(data), source: source)
+    } catch { commandRecordingError = error.localizedDescription }
   }
 
   /// Commits a mutation made by a latency-sensitive input handler and derives the semantic
@@ -445,6 +610,7 @@ final class BorgVRSession<VisualizationState: AnyObject, RuntimeState: AnyObject
   ) rethrows -> Result {
     lock.lock()
     defer { lock.unlock() }
+    captureUncommittedChanges()
     let before = frameSnapshot()
     let annotationsBefore = cachedAnnotationSnapshot
     let result = try mutation()
@@ -460,6 +626,7 @@ final class BorgVRSession<VisualizationState: AnyObject, RuntimeState: AnyObject
     for command in commands + annotationCommands {
       emit(command, source: source)
     }
+    updateRecordingBaseline()
     return result
   }
 
@@ -471,6 +638,7 @@ final class BorgVRSession<VisualizationState: AnyObject, RuntimeState: AnyObject
   ) {
     lock.lock()
     defer { lock.unlock() }
+    captureUncommittedChanges(source: source)
     let before = frameSnapshot()
     let annotationsBefore = cachedAnnotationSnapshot
     let after = snapshotProvider()
@@ -485,6 +653,7 @@ final class BorgVRSession<VisualizationState: AnyObject, RuntimeState: AnyObject
     for command in commands + annotationCommands {
       emit(command, source: source)
     }
+    updateRecordingBaseline()
   }
 
   /// Bridges render-actor and device callbacks to the MainActor-owned session without blocking
@@ -503,6 +672,7 @@ final class BorgVRSession<VisualizationState: AnyObject, RuntimeState: AnyObject
     guard let pending = externalMutationMailbox.takePending() else { return }
     lock.lock()
     defer { lock.unlock() }
+    captureUncommittedChanges(source: pending.source)
     let before = frameSnapshot()
     let annotationsBefore = cachedAnnotationSnapshot
     let after = snapshotProvider()
@@ -535,6 +705,7 @@ final class BorgVRSession<VisualizationState: AnyObject, RuntimeState: AnyObject
     for command in commands {
       emit(command, source: pending.source)
     }
+    updateRecordingBaseline()
   }
 
   nonisolated func renderSnapshot() -> BorgVRVisualizationSnapshot {
@@ -558,6 +729,32 @@ final class BorgVRSession<VisualizationState: AnyObject, RuntimeState: AnyObject
 
   func publishRenderSnapshot() {
     renderSnapshotStore.publish(snapshotProvider())
+    if commandDepth == 0 { captureUncommittedChanges() }
+  }
+
+  private func updateRecordingBaseline() {
+    guard recordsCommands else { return }
+    captureInterfaceChanges()
+    lastRecordedFrame = snapshotProvider()
+    lastRecordedAnnotations = annotationSnapshotProvider()
+  }
+
+  /// Safety net for legacy input and platform observation. Renderer snapshot refreshes
+  /// must not consume a change before the recorder has derived its semantic commands.
+  private func captureUncommittedChanges(source: BorgVRCommandSource = .userInterface) {
+    guard recordsCommands, commandDepth == 0, let before = lastRecordedFrame else { return }
+    let after = snapshotProvider()
+    let annotations = annotationSnapshotProvider()
+    let changes = inferredCommands(from: before.visualization, to: after.visualization, fallback: .visualization)
+      + inferredSettingsCommands(from: before.settings, to: after.settings)
+      + inferredAnnotationCommands(from: lastRecordedAnnotations, to: annotations, domain: .objects)
+      + inferredAnnotationCommands(from: lastRecordedAnnotations, to: annotations, domain: .measurements)
+    for command in changes { emit(command, source: source) }
+    lastRecordedFrame = after
+    lastRecordedAnnotations = annotations
+    cachedAnnotationSnapshot = annotations
+    captureSettingsChanges(source: source)
+    captureInterfaceChanges(source: source)
   }
 
   /// Tracks ObservableObject changes without rebuilding state in every screen-rendering frame.
@@ -588,6 +785,7 @@ final class BorgVRSession<VisualizationState: AnyObject, RuntimeState: AnyObject
     Task { @MainActor [weak self] in
       await Task.yield()
       guard let self else { return }
+      self.captureSettingsChanges()
       self.snapshotRefreshScheduled = false
       if self.tracksObservationSnapshotChanges {
         self.publishObservedRenderSnapshot()
@@ -606,15 +804,41 @@ final class BorgVRSession<VisualizationState: AnyObject, RuntimeState: AnyObject
       }
     }
     renderSnapshotStore.publish(snapshot)
+    captureUncommittedChanges()
   }
 
   func startCommandRecording() {
     lock.withLock {
+      guard !isCommandRecording, pendingRecordedActions == 0 else { return }
       recordedEvents.removeAll(keepingCapacity: true)
+      recordingID = UUID()
+      pendingRecordedActions = 0
       recordsCommands = true
       isCommandRecording = true
+      commandRecordingError = nil
+      lastRecordedSettings = nil
+      lastRecordedInterface = nil
+      lastRecordedFrame = nil
       publishRenderSnapshot()
       let frame = frameSnapshot()
+      emit(.setRenderMode(frame.visualization.renderMode), source: .userInterface)
+      emit(.setTransform(frame.visualization.transform), source: .userInterface)
+      emit(.setClipping(minimum: frame.visualization.clipMinimum,
+        maximum: frame.visualization.clipMaximum), source: .userInterface)
+      emit(.setNormalizedIsoValue(frame.visualization.normalizedIsoValue), source: .userInterface)
+      for transferFunction in transferFunctionSnapshotProvider() {
+        emit(.setTransferFunction(transferFunction), source: .userInterface)
+      }
+      let light = frame.visualization.lighting
+      emit(.setLighting(direction: light.direction, ambient: light.ambient,
+        diffuse: light.diffuse, specular: light.specular), source: .userInterface)
+      emit(.clearObjects, source: .userInterface)
+      emit(.clearMeasurements, source: .userInterface)
+      let annotations = annotationSnapshotProvider()
+      for object in annotations.objects { emit(.upsertObject(object), source: .userInterface) }
+      for measurement in annotations.measurements { emit(.upsertMeasurement(measurement), source: .userInterface) }
+      emit(.setAnnotationVisibility(objects: frame.visualization.objectsVisible,
+        measurements: frame.visualization.measurementsVisible), source: .userInterface)
       let mask = frame.visualization.brickVisualizationMask
       emit(.setBrickVisualization(enabled: frame.visualization.brickVisualization,
         resident: mask & 1 != 0, empty: mask & 2 != 0, missing: mask & 4 != 0), source: .userInterface)
@@ -627,24 +851,67 @@ final class BorgVRSession<VisualizationState: AnyObject, RuntimeState: AnyObject
         parallel: frame.settings.parallelProjection), source: .userInterface)
       if let background = frame.settings.background { emit(.setBackground(background), source: .userInterface) }
 #endif
+      captureSettingsChanges()
+      updateRecordingBaseline()
+      for action in recordingContextProvider?() ?? [] { emit(.action(action), source: .userInterface) }
+      if let recordingBaselineProvider {
+        recordingPreparation?()
+        pendingRecordedActions += 1
+        let id = recordingID
+        recordingBaselineTask = Task { @MainActor [weak self] in
+          guard let self else { return }
+          defer {
+            if self.recordingID == id {
+              self.recordingPreparationFinished?()
+              self.pendingRecordedActions -= 1
+            }
+          }
+          do {
+            let actions = try await recordingBaselineProvider()
+            guard self.recordingID == id else { return }
+            self.recordedEvents.insert(contentsOf: actions.map {
+              BorgVRCommandEvent(command: .action($0), source: .userInterface, timestamp: Date())
+            }, at: 0)
+          } catch {
+            if self.recordingID == id { self.commandRecordingError = error.localizedDescription }
+          }
+        }
+      }
     }
   }
 
   func stopCommandRecording() -> [BorgVRCommandEvent] {
     lock.withLock {
+      commitPendingExternalMutations()
+      captureUncommittedChanges()
+      captureSettingsChanges()
       recordsCommands = false
       isCommandRecording = false
       return recordedEvents
     }
   }
 
-  func recordedGSCScript() -> String {
-    lock.withLock {
-      recordedEvents.compactMap(\.gscStatement).joined(separator: "\n")
+  func recordedGSCScript() throws -> String {
+    try lock.withLock {
+      if let commandRecordingError { throw BorgVRMCPCommandError.unsupported(commandRecordingError) }
+      guard pendingRecordedActions == 0 else {
+        throw BorgVRMCPCommandError.unsupported("Recorded actions are still running. Wait before saving the recording.")
+      }
+      guard recordedEvents.count <= BorgVRRecordedGSC.maximumCommands else { throw BorgVRRecordingError.recordingLimitExceeded }
+      var bytes = 0
+      return try recordedEvents.map { event in
+        if case .mutation(let domain) = event.command { throw BorgVRRecordingError.unrepresentedMutation(domain) }
+        let line = try event.command.encodedGSCStatement()
+        bytes += line.utf8.count + 1
+        guard bytes <= BorgVRRecordedGSC.maximumFileBytes else { throw BorgVRRecordingError.recordingLimitExceeded }
+        return line
+      }.joined(separator: "\n")
     }
   }
 
-  private func emit(_ command: BorgVRCommand, source: BorgVRCommandSource) {
+  @discardableResult
+  private func emit(_ command: BorgVRCommand, source: BorgVRCommandSource) -> UUID? {
+    guard !BorgVRCommandExecutionContext.executingAction else { return nil }
     let event = BorgVRCommandEvent(command: command, source: source, timestamp: Date())
     if recordsCommands, source != .sharePlay {
       if let lastIndex = recordedEvents.indices.last,
@@ -653,7 +920,9 @@ final class BorgVRSession<VisualizationState: AnyObject, RuntimeState: AnyObject
       } else {
         recordedEvents.append(event)
       }
+      return event.id
     }
+    return nil
   }
 
   private func inferredCommands(
@@ -714,9 +983,6 @@ final class BorgVRSession<VisualizationState: AnyObject, RuntimeState: AnyObject
       }) {
         commands.append(.mutation(.transferFunction))
       }
-    }
-    if commands.isEmpty, domain != .objects, domain != .measurements {
-      commands.append(.mutation(domain))
     }
     return commands
   }
@@ -889,13 +1155,22 @@ extension BorgVRSession where VisualizationState == RenderingParameters,
           case .setBoundingBox(let visible):
             appSettings.showDatasetBoundingBox = visible
           case .setTransform(let transform):
-            guard simd_length_squared(transform.rotation) > 0.000_001 else {
+            guard transform.rotation.x.isFinite, transform.rotation.y.isFinite,
+                  transform.rotation.z.isFinite, transform.rotation.w.isFinite,
+                  simd_length_squared(transform.rotation).isFinite,
+                  simd_length_squared(transform.rotation) > 0.000_001 else {
               throw BorgVRSessionCommandError.invalidRotation
             }
-            guard transform.scale.x > 0,
+            guard transform.scale.x.isFinite, transform.scale.y.isFinite, transform.scale.z.isFinite,
+                  transform.translation.x.isFinite, transform.translation.y.isFinite, transform.translation.z.isFinite,
+                  transform.scale.x > 0,
                   transform.scale.y > 0,
                   transform.scale.z > 0 else {
               throw BorgVRSessionCommandError.invalidScale
+            }
+            guard transform.translation.z == 0, transform.scale.x == transform.scale.y,
+                  transform.scale.y == transform.scale.z else {
+              throw BorgVRMCPCommandError.unsupported("The screen renderer supports XY translation and uniform scaling only.")
             }
             renderingParameters.orientation = simd_normalize(
               simd_quatf(vector: transform.rotation)
@@ -904,9 +1179,7 @@ extension BorgVRSession where VisualizationState == RenderingParameters,
               transform.translation.x,
               transform.translation.y
             )
-            renderingParameters.scale = (
-              transform.scale.x + transform.scale.y + transform.scale.z
-            ) / 3
+            renderingParameters.scale = transform.scale.x
             synchronizeTransform()
           case .rotate(let axis, let degrees):
             guard simd_length_squared(axis) > 0.000_001 else {
@@ -1069,6 +1342,28 @@ extension BorgVRSession where VisualizationState == RenderingParameters,
             }
           case .mutation:
             break
+          case .setSettings(let data):
+            try appSettings.settingsStore().importRecording(data)
+          case .setInteractionMode(let value):
+            guard let mode = AppModel.InteractionMode(rawValue: value) else {
+              throw BorgVRSessionCommandError.invalidRenderingOptions
+            }
+            appModel.interactionMode = mode
+          case .selectTransferFunctionChannel(let channel):
+            guard (0..<renderingParameters.componentCount).contains(channel) else {
+              throw BorgVRSessionCommandError.invalidTransferFunction
+            }
+            renderingParameters.selectedTransferFunctionChannel = channel
+          case .setTransferEditing(let red, let green, let blue, let opacity):
+            renderingParameters.transferEditing = TransferEditing(red: red, green: green, blue: blue, opacity: opacity)
+          case .action(let action):
+            switch action {
+              case .purgeAtlas:
+                guard let purge = appModel.renderAtlasPurgeHandler else { throw BorgVRMCPCommandError.noDataset }
+                purge()
+              default:
+                throw BorgVRMCPCommandError.unsupported("This action requires the asynchronous command executor.")
+            }
         }
       },
       snapshotProvider: {
@@ -1166,6 +1461,21 @@ extension BorgVRSession where VisualizationState == RenderingParameters,
         }
       }
     )
+    appModel.commandExecutor = session
+    appModel.volumeBrush.installCommandExecutor(session)
+    session.configureActionRecording(prepare: { appModel.volumeBrush.beginRecordingPreparation() },
+      baseline: {
+        let dataset = appModel.activeDataset.map { BorgVRRecordedAction.openDataset($0.uniqueId) }
+        return try await (dataset.map { [$0] } ?? []) + appModel.volumeBrush.recordingBaseline()
+      },
+      finish: { appModel.volumeBrush.finishRecordingPreparation() })
+    session.configureSettingsRecording { try appSettings.settingsStore().exportForRecording() }
+    session.configureInterfaceRecording {
+      let editing = renderingParameters.transferEditing
+      return [.setInteractionMode(appModel.interactionMode.rawValue),
+        .selectTransferFunctionChannel(renderingParameters.selectedTransferFunctionChannel),
+        .setTransferEditing(red: editing.red, green: editing.green, blue: editing.blue, opacity: editing.opacity)]
+    }
     session.trackRenderSnapshotChanges(from: [
       renderingParameters.objectWillChange,
       appModel.objectWillChange,

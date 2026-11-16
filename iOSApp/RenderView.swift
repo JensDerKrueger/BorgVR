@@ -175,10 +175,10 @@ struct RenderView: View {
         case .lighting:
           LightingEditorView(
             renderMode: renderingParameters.renderMode,
-            lightDirection: $renderingParameters.lightDirection,
-            ambientLightColor: $renderingParameters.ambientLightColor,
-            diffuseLightColor: $renderingParameters.diffuseLightColor,
-            specularLightColor: $renderingParameters.specularLightColor,
+            lightDirection: session.binding($renderingParameters.lightDirection),
+            ambientLightColor: session.binding($renderingParameters.ambientLightColor),
+            diffuseLightColor: session.binding($renderingParameters.diffuseLightColor),
+            specularLightColor: session.binding($renderingParameters.specularLightColor),
             usesPanelBackground: false,
             usesHorizontalLayout: true,
             onChange: synchronizeState,
@@ -1561,31 +1561,33 @@ struct RenderView: View {
     defer { pendingDatasetStateSave = nil }
     guard let dataset = appModel.activeDataset else { return }
     do {
-      if !plan.transferFunctionURLs.isEmpty {
-        try renderingParameters.saveDatasetTransferFunctions(to: plan.transferFunctionURLs, description: dataset.description)
-      }
-      if let url = plan.viewStateURL {
-        let state = renderingParameters.makeDatasetViewState(datasetID: dataset.uniqueId)
-        try DatasetStateStorage.saveViewState(
-          state,
-          to: url
-        )
-        try PanelParameterStorage.saveDataset(common: state.common, brush: appModel.volumeBrush, beside: url)
-      }
-      if let url = plan.objectURL {
-        try DatasetStateStorage.saveObjects(
-          datasetID: dataset.uniqueId,
-          markers: appModel.volumeMarkers,
-          meshInstances: appModel.sceneMeshInstances,
-          to: url
-        )
-      }
-      if let url = plan.measurementURL {
-        try DatasetStateStorage.saveMeasurements(
-          datasetID: dataset.uniqueId,
-          measurements: appModel.volumeMeasurements,
-          to: url
-        )
+      try session.performFileAction(outputs: plan.fileURLs) {
+        if !plan.transferFunctionURLs.isEmpty {
+          try renderingParameters.saveDatasetTransferFunctions(to: plan.transferFunctionURLs, description: dataset.description)
+        }
+        if let url = plan.viewStateURL {
+          let state = renderingParameters.makeDatasetViewState(datasetID: dataset.uniqueId)
+          try DatasetStateStorage.saveViewState(
+            state,
+            to: url
+          )
+          try PanelParameterStorage.saveDataset(common: state.common, brush: appModel.volumeBrush, beside: url)
+        }
+        if let url = plan.objectURL {
+          try DatasetStateStorage.saveObjects(
+            datasetID: dataset.uniqueId,
+            markers: appModel.volumeMarkers,
+            meshInstances: appModel.sceneMeshInstances,
+            to: url
+          )
+        }
+        if let url = plan.measurementURL {
+          try DatasetStateStorage.saveMeasurements(
+            datasetID: dataset.uniqueId,
+            measurements: appModel.volumeMeasurements,
+            to: url
+          )
+        }
       }
     } catch {
       datasetStateSaveError = error

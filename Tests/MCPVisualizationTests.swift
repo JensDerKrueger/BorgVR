@@ -57,7 +57,7 @@ struct MCPVisualizationTests {
     }
     let entry = AppModel.DatasetEntry(identifier: CommandLine.arguments[1], description: "Automation test",
       source: .local, uniqueId: metadata.uniqueID)
-    model.openDataset(entry, automaticallyLoadState: false)
+    model.openDataset(entry, automaticallyLoadState: true)
     guard case .opening(_, let requestID) = model.datasetSessionState else { fatalError() }
     model.prepareDatasetRenderer(key: model.activeDatasetRenderKey, metadata: metadata, requestID: requestID)
     _ = model.markRenderedDataset(key: model.activeDatasetRenderKey, requestID: requestID)
@@ -80,9 +80,13 @@ struct MCPVisualizationTests {
     defer { window.close(); panel.close() }
     let panelSize = panel.frame.size
     let windowAutomation = MacWindowAutomation()
+    windowAutomation.commandExecutor = session
+    session.configureRecordingContext { windowAutomation.recordingContextActions() }
     windowAutomation.attach(to: window)
     let service = BorgVRScreenCommandService(session: session, settingsStoreProvider: { store },
       windowAutomation: windowAutomation)
+    try await service.openDataset(id: metadata.uniqueID)
+    try expect(!model.automaticallyLoadsDatasetState, "Automation reused a dataset with automatic state loading enabled")
     do {
       _ = try BorgVRScreenCommandService(session: session).windowState()
       throw Failure.failed("Unavailable window was silently accepted")
@@ -163,7 +167,7 @@ struct MCPVisualizationTests {
     try expect(Set(["get_transfer_function", "set_transfer_function", "save_transfer_function", "load_transfer_function",
       "get_background", "set_background", "save_visualization_state", "load_visualization_state",
       "save_settings", "load_settings", "reset_settings", "get_window_state", "resize_window",
-      "set_fullscreen"]).isSubset(of: names), "MCP tools are missing")
+      "set_fullscreen", "start_command_recording", "stop_command_recording", "replay_command_recording"]).isSubset(of: names), "MCP tools are missing")
     try expect(try await tool("get_window_state")["isError"] as? Bool != true, "MCP window getter failed")
     let resized = try await tool("resize_window", ["width": 900, "height": 640])
     try expect(resized["isError"] as? Bool != true, "MCP resize failed: \(resized)")
@@ -196,6 +200,19 @@ struct MCPVisualizationTests {
     try expect(rejected["isError"] as? Bool == true, "Boolean RGBA entry accepted")
     _ = try await tool("set_transfer_function", ["channel": 1, "samples": [[255, 0, 32, 100]]])
     try expect(try service.transferFunction(channel: 1).samples.first == [255, 0, 32, 100], "MCP TF setter failed")
+    let recording = try await tool("start_command_recording")
+    try expect(recording["isError"] as? Bool != true && session.isCommandRecording,
+      "MCP could not start recording: \(recording)")
+    let recordingURL = root.appendingPathComponent("mcp-recording.gsc")
+    _ = try await tool("resize_window", ["width": 870, "height": 660])
+    _ = try await tool("set_background", ["mode": "solid", "primary": [0.2, 0.3, 0.4, 1]])
+    let stopped = try await tool("stop_command_recording", ["output_path": recordingURL.path])
+    try expect(stopped["isError"] as? Bool != true && !session.isCommandRecording &&
+      FileManager.default.fileExists(atPath: recordingURL.path), "MCP could not save recording: \(stopped)")
+    try expect(try await tool("replay_command_recording", ["input_path": recordingURL.path])["isError"] as? Bool == true,
+      "Replay accepted a recording without confirmation")
+    try expect(try await tool("replay_command_recording", ["input_path": recordingURL.path, "confirm": true])["isError"] as? Bool != true,
+      "MCP native recording replay failed")
     _ = try await tool("set_background", ["mode": "solid", "primary": [0, 0, 0, 1]])
     try expect(service.background().primary == [0, 0, 0, 1], "MCP background setter failed")
     isolated.set(3.5, forKey: "oversampling")
@@ -228,6 +245,7 @@ struct MCPVisualizationTests {
       do { try (imageData as Data).write(to: url!); completion(.success(url!)) }
       catch { completion(.failure(error)) }
     }
+    _ = try await tool("start_command_recording")
     for alpha in [true, false] {
       let capture = try await tool("capture_screenshot", ["include_alpha": alpha,
         "output_path": root.appendingPathComponent("capture-\(alpha).png").path])
@@ -237,10 +255,16 @@ struct MCPVisualizationTests {
       let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as! [CFString: Any]
       try expect((properties[kCGImagePropertyHasAlpha] as? Bool ?? false) == alpha, "Screenshot alpha option ignored")
     }
+    let screenshotRecordingURL = root.appendingPathComponent("screenshot-recording.gsc")
+    let screenshotRecording = try await tool("stop_command_recording", ["output_path": screenshotRecordingURL.path])
+    try expect(screenshotRecording["isError"] as? Bool != true, "Screenshot recording failed: \(screenshotRecording)")
+    for alpha in [true, false] { try FileManager.default.removeItem(at: root.appendingPathComponent("capture-\(alpha).png")) }
     session.startCommandRecording()
     try service.setBackground(background)
-    _ = session.stopCommandRecording()
-    try expect(session.recordedGSCScript().contains("setbackgroundstate"), "Background changes are not recordable")
+    try await session.finishCommandRecording()
+    let recordedCommands = try BorgVRRecordedGSC.commands(in: Data(session.recordedGSCScript().utf8))
+    try expect(recordedCommands.contains { if case .setBackground = $0 { return true }; return false },
+      "Background changes are not recordable")
 
     let runner = BorgVRScriptRunner()
     let stored = StoredAppModel()
@@ -249,6 +273,26 @@ struct MCPVisualizationTests {
     runner.configure(appModel: model, renderingParameters: parameters, session: session,
       appSettings: settings, storedAppModel: stored, sharePlay: sharePlay,
       docking: DockingController(defaults: isolated), commandService: service)
+    _ = try await service.resizeWindow(width: 800, height: 600, units: "points", area: "content")
+    runner.runScript(at: recordingURL)
+    let recordingDeadline = ContinuousClock.now + .seconds(15)
+    while runner.isRunning {
+      if ContinuousClock.now >= recordingDeadline { runner.stopScript(); throw Failure.failed("Recording replay timed out") }
+      try await Task.sleep(for: .milliseconds(10))
+    }
+    try expect(runner.scriptLogText.contains("Script finished") &&
+      (try service.windowState().contentSizePoints == [870, 660]),
+      "MCP window recording did not round-trip: \(runner.scriptLogText)")
+    runner.runScript(at: screenshotRecordingURL)
+    let screenshotDeadline = ContinuousClock.now + .seconds(15)
+    while runner.isRunning {
+      if ContinuousClock.now >= screenshotDeadline { runner.stopScript(); throw Failure.failed("Screenshot replay timed out") }
+      try await Task.sleep(for: .milliseconds(10))
+    }
+    try expect(runner.scriptLogText.contains("Script finished") &&
+      FileManager.default.fileExists(atPath: root.appendingPathComponent("capture-true.png").path) &&
+      FileManager.default.fileExists(atPath: root.appendingPathComponent("capture-false.png").path),
+      "Screenshot destinations did not round-trip: \(runner.scriptLogText)")
     let scriptURL = root.appendingPathComponent("roundtrip.gsc")
     let script = """
     fullscreen false
@@ -286,6 +330,7 @@ struct MCPVisualizationTests {
     try expect(try service.transferFunction(channel: 0).samples.last == [12, 34, 56, 255], "GSC TF restore failed")
     try expect(FileManager.default.fileExists(atPath: root.appendingPathComponent("script.png").path), "GSC screenshot was not saved")
     if let device = MTLCreateSystemDefaultDevice() { try testDeferredTFUpload(device: device) }
+    try await testCommandRecordingRoundtrip(fixture: URL(fileURLWithPath: CommandLine.arguments[1]), directory: root)
     print("MCP/GSC visualization tests passed: live HTTP tools, main-window point/pixel resize, fullscreen notification/cancellation lifecycle, TF channels/files, picture roundtrip, validation/no-clobber, settings backup/reset/restore, screenshots, recording and real interpreter execution")
   }
 

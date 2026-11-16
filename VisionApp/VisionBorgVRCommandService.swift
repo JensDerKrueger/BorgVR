@@ -66,6 +66,7 @@ final class VisionBorgVRCommandService: BorgVRMCPCommandService {
   typealias DatasetCloser = () async throws -> Void
 
   private let session: VisionBorgVRSession
+  var commandExecutor: (any BorgVRCommandExecuting)? { session }
   private let datasetListProvider: DatasetListProvider
   private let datasetOpener: DatasetOpener
   private let datasetCloser: DatasetCloser
@@ -87,11 +88,15 @@ final class VisionBorgVRCommandService: BorgVRMCPCommandService {
   }
 
   func openDataset(id: String) async throws {
-    try await datasetOpener(id)
+    if session.runtimeState.activeDataset?.uniqueId == id, applicationState().rendererReady {
+      session.runtimeState.useDeterministicAutomationState()
+      return
+    }
+    try await session.performAction(.openDataset(id), source: .mcp) { try await datasetOpener(id) }
   }
 
   func closeDataset() async throws {
-    try await datasetCloser()
+    try await session.performAction(.closeDataset, source: .mcp) { try await datasetCloser() }
   }
 
   func settingsStore() -> BorgVRSettingsStore { session.settingsState.settingsStore() }
@@ -347,6 +352,11 @@ final class VisionBorgVRCommandService: BorgVRMCPCommandService {
   }
 
   func captureScreenshot(includeAlpha: Bool) async throws -> BorgVRMCPImage {
+    if !BorgVRCommandExecutionContext.executingAction {
+      return try await session.performAction(.captureScreenshot(path: nil, includeAlpha: includeAlpha), source: .mcp) {
+        try await self.captureScreenshot(includeAlpha: includeAlpha)
+      }
+    }
     let runtime = session.runtimeState
     guard runtime.activeDataset != nil else { throw BorgVRMCPCommandError.noDataset }
     let requestID = UUID()

@@ -42,10 +42,15 @@ extension BorgVRSession where VisualizationState == SharedAppModel,
           case .setBoundingBox(let visible):
             storedAppModel.showDatasetBoundingBox = visible
           case .setTransform(let snapshot):
-            guard simd_length_squared(snapshot.rotation) > 0.000_001 else {
+            guard snapshot.rotation.x.isFinite, snapshot.rotation.y.isFinite,
+                  snapshot.rotation.z.isFinite, snapshot.rotation.w.isFinite,
+                  simd_length_squared(snapshot.rotation).isFinite,
+                  simd_length_squared(snapshot.rotation) > 0.000_001 else {
               throw BorgVRSessionCommandError.invalidRotation
             }
-            guard snapshot.scale.x > 0,
+            guard snapshot.scale.x.isFinite, snapshot.scale.y.isFinite, snapshot.scale.z.isFinite,
+                  snapshot.translation.x.isFinite, snapshot.translation.y.isFinite, snapshot.translation.z.isFinite,
+                  snapshot.scale.x > 0,
                   snapshot.scale.y > 0,
                   snapshot.scale.z > 0 else {
               throw BorgVRSessionCommandError.invalidScale
@@ -224,6 +229,30 @@ extension BorgVRSession where VisualizationState == SharedAppModel,
             }
           case .mutation:
             break
+          case .setSettings(let data):
+            try storedAppModel.settingsStore().importRecording(data)
+          case .setInteractionMode(let value):
+            guard let mode = RuntimeAppModel.InteractionMode(rawValue: value) else {
+              throw BorgVRSessionCommandError.invalidRenderingOptions
+            }
+            runtimeAppModel.interactionMode = mode
+          case .selectTransferFunctionChannel(let channel):
+            guard (0..<sharedAppModel.componentCount).contains(channel) else {
+              throw BorgVRSessionCommandError.invalidTransferFunction
+            }
+            runtimeAppModel.selectedTransferFunctionChannel = channel
+          case .setTransferEditing(let red, let green, let blue, let opacity):
+            runtimeAppModel.transferEditState.red = red
+            runtimeAppModel.transferEditState.green = green
+            runtimeAppModel.transferEditState.blue = blue
+            runtimeAppModel.transferEditState.opacity = opacity
+          case .action(let action):
+            switch action {
+              case .purgeAtlas: sharedAppModel.purgeAtlas = true
+              case .captureRotation: runtimeAppModel.rotationCaptureRequestID &+= 1
+              default:
+                throw BorgVRMCPCommandError.unsupported("This action requires the asynchronous command executor.")
+            }
         }
       },
       snapshotProvider: {
@@ -323,6 +352,21 @@ extension BorgVRSession where VisualizationState == SharedAppModel,
         }
       }
     )
+    runtimeAppModel.commandExecutor = session
+    runtimeAppModel.volumeBrush.installCommandExecutor(session)
+    session.configureActionRecording(prepare: { runtimeAppModel.volumeBrush.beginRecordingPreparation() },
+      baseline: {
+        let dataset = runtimeAppModel.activeDataset.map { BorgVRRecordedAction.openDataset($0.uniqueId) }
+        return try await (dataset.map { [$0] } ?? []) + runtimeAppModel.volumeBrush.recordingBaseline()
+      },
+      finish: { runtimeAppModel.volumeBrush.finishRecordingPreparation() })
+    session.configureSettingsRecording { try storedAppModel.settingsStore().exportForRecording() }
+    session.configureInterfaceRecording {
+      let editing = runtimeAppModel.transferEditState
+      return [.setInteractionMode(runtimeAppModel.interactionMode.rawValue),
+        .selectTransferFunctionChannel(runtimeAppModel.selectedTransferFunctionChannel),
+        .setTransferEditing(red: editing.red, green: editing.green, blue: editing.blue, opacity: editing.opacity)]
+    }
     session.trackRenderSnapshotChanges(from: [storedAppModel.objectWillChange])
     session.trackObservedRenderSnapshotChanges()
     return session

@@ -25,12 +25,17 @@ final class VolumeBrushContext: @unchecked Sendable {
   private var previews: [String: Preview] = [:]
   private var remotePreviews: [UUID: (cursors: [BorgVRVolumeBrushCursor], received: TimeInterval)] = [:]
   typealias EditHandler = @Sendable (BorgVRVolumeBrushMode, [BorgVRVolumeBrushSample], BorgVRVolumeEditChannels, BorgVRVolumeConversionCancellationToken, @escaping @Sendable (Error?) -> Void) -> Void
+  typealias EditOperation = @Sendable (@escaping @Sendable (Error?) -> Void) -> Void
+  typealias CommandRunner = @Sendable (BorgVRRecordedAction, @escaping EditOperation,
+    @escaping @Sendable (Error?) -> Void) -> Void
   private var editHandler: EditHandler?
+  private var commandRunner: CommandRunner?
   private var editingEnabled = true
   var radiusChanged: (@Sendable (Double) -> Void)?
   var didFail: (@Sendable (String) -> Void)?
 
   func setEditHandler(_ handler: EditHandler?) { lock.withLock { editHandler = handler } }
+  func setCommandRunner(_ runner: CommandRunner?) { lock.withLock { commandRunner = runner } }
   func setEditingEnabled(_ enabled: Bool) {
     lock.withLock {
       editingEnabled = enabled
@@ -57,13 +62,17 @@ final class VolumeBrushContext: @unchecked Sendable {
                     channels: BorgVRVolumeEditChannels? = nil,
                     cancellationToken: BorgVRVolumeConversionCancellationToken,
                     completion: @escaping @Sendable (Error?) -> Void) {
-    let (enabled, handler, current, channels) = lock.withLock { (editingEnabled, editHandler, dataset, channels ?? state.channels) }
-    guard enabled else { completion(BorgVRVolumeEditingCommandError.busy); return }
-    if let handler { handler(mode, samples, channels, cancellationToken, completion); return }
-    guard let current else {
-      completion(BorgVRVolumeEditingCommandError.unavailable); return
+    let (enabled, handler, current, channels, runner) = lock.withLock {
+      (editingEnabled, editHandler, dataset, channels ?? state.channels, commandRunner)
     }
-    current.brush(samples, mode: mode, channels: channels, cancellationToken: cancellationToken, completion: completion)
+    guard enabled else { completion(BorgVRVolumeEditingCommandError.busy); return }
+    let operation: EditOperation = { completion in
+      if let handler { handler(mode, samples, channels, cancellationToken, completion); return }
+      guard let current else { completion(BorgVRVolumeEditingCommandError.unavailable); return }
+      current.brush(samples, mode: mode, channels: channels, cancellationToken: cancellationToken, completion: completion)
+    }
+    if let runner { runner(.editVolume(mode: mode, samples: samples, channels: channels), operation, completion) }
+    else { operation(completion) }
   }
   func update(_ state: State) {
     lock.withLock {
@@ -182,6 +191,65 @@ final class VolumeBrushModel: ObservableObject, BorgVRVolumeEditingCommands {
   enum ExportPhase: Equatable { case options, exporting, cancelling, ready, cancelled }
 
   let context = VolumeBrushContext()
+  private weak var commandExecutor: (any BorgVRActionExecuting)?
+  private var isPreparingRecording = false
+  private var recordingStateAliases: [UUID: UUID] = [:]
+
+  func installCommandExecutor(_ executor: any BorgVRActionExecuting) {
+    commandExecutor = executor
+    context.setCommandRunner { [weak executor] action, operation, completion in
+      let nested = BorgVRCommandExecutionContext.executingAction
+      let source = BorgVRCommandExecutionContext.source
+      Task { @MainActor in
+        do {
+          let perform = {
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+              operation { error in
+                if let error { continuation.resume(throwing: error) }
+                else { continuation.resume() }
+              }
+            }
+          }
+          if let executor {
+            try await BorgVRCommandExecutionContext.$executingAction.withValue(nested) {
+              try await executor.performAction(action, source: source, operation: perform)
+            }
+          } else { try await perform() }
+          completion(nil)
+        } catch { completion(error) }
+      }
+    }
+  }
+
+  func beginRecordingPreparation() {
+    isPreparingRecording = true
+    context.setEditingEnabled(false)
+  }
+
+  func finishRecordingPreparation() {
+    isPreparingRecording = false
+    updateEditingAvailability()
+  }
+
+  func recordingBaseline() async throws -> [BorgVRRecordedAction] {
+    guard context.editingStatus() != nil else { return [] }
+    let snapshot = try await stateSnapshot()
+    guard let source = dataSource else { throw BorgVRVolumeEditingCommandError.unavailable }
+    let active = activeState ?? (snapshot.mask.isOriginal ? nil : workingState)
+    let saved = states.filter { $0.id != active?.id }
+    let inactive: [BorgVRRecordedAction] = try await Task.detached(priority: .userInitiated) {
+      let metadata = source.getMetadata()
+      return try saved.map { state in
+        let journal = try BorgVRVolumeEditJournal(directory: source.catalog.directory(for: state.id),
+          datasetID: metadata.uniqueID, size: SIMD3(metadata.width, metadata.height, metadata.depth),
+          spacing: SIMD3(Double(metadata.voxelSpacingX), Double(metadata.voxelSpacingY), Double(metadata.voxelSpacingZ)),
+          componentCount: metadata.componentCount)
+        return .installSavedEditState(snapshot: journal.transferableSnapshot(datasetID: metadata.uniqueID), state: state)
+      }
+    }.value
+    return inactive + [.restoreEditState(snapshot: snapshot, state: active, workingStateID: workingState?.id),
+      .configureBrush(mode: mode, radius: radius, projectsOntoVolume: projectsOntoVolume, channels: channels)]
+  }
   @Published var mode: BorgVRVolumeBrushMode = .erase { didSet { synchronize() } }
   @Published var radius: Double = 0.03 { didSet { synchronize() } }
   @Published var projectsOntoVolume = true { didSet { synchronize() } }
@@ -237,7 +305,7 @@ final class VolumeBrushModel: ObservableObject, BorgVRVolumeEditingCommands {
   private var restorePersonalStateTask: Task<Void, Never>?
 
   var canExport: Bool {
-    !isInSharePlay && !isExporting && !isOpeningState && !isDiscardingEdits && !isRestoringPersonalState &&
+    !isPreparingRecording && !isInSharePlay && !isExporting && !isOpeningState && !isDiscardingEdits && !isRestoringPersonalState &&
       dataSource?.editingStatus() != nil
   }
 
@@ -249,7 +317,14 @@ final class VolumeBrushModel: ObservableObject, BorgVRVolumeEditingCommands {
   }
 
   private func synchronize() {
-    context.update(.init(mode: mode, radius: Float(radius), projectsOntoVolume: projectsOntoVolume, channels: channels))
+    let state = VolumeBrushContext.State(mode: mode, radius: Float(radius),
+      projectsOntoVolume: projectsOntoVolume, channels: channels)
+    if let commandExecutor {
+      commandExecutor.performAction(.configureBrush(mode: mode, radius: radius,
+        projectsOntoVolume: projectsOntoVolume, channels: channels), source: BorgVRCommandExecutionContext.source) {
+        context.update(state)
+      }
+    } else { context.update(state) }
   }
 
   func setVolumeBrushChannels(_ channels: BorgVRVolumeEditChannels) throws {
@@ -258,7 +333,7 @@ final class VolumeBrushModel: ObservableObject, BorgVRVolumeEditingCommands {
   }
 
   private func updateEditingAvailability() {
-    let enabled = !isExporting && !isOpeningState && !isWaitingForSharedState && !isDiscardingEdits && !isRestoringPersonalState
+    let enabled = !isPreparingRecording && !isExporting && !isOpeningState && !isWaitingForSharedState && !isDiscardingEdits && !isRestoringPersonalState
     context.setEditingEnabled(enabled)
     dataSource?.setEditsBlocked(!enabled)
   }
@@ -381,6 +456,7 @@ final class VolumeBrushModel: ObservableObject, BorgVRVolumeEditingCommands {
   }
 
   func close() {
+    recordingStateAliases.removeAll()
     restorePersonalStateTask?.cancel()
     restorePersonalStateTask = nil
     isRestoringPersonalState = false
@@ -590,10 +666,18 @@ final class VolumeBrushModel: ObservableObject, BorgVRVolumeEditingCommands {
   }
 
   func selectState(_ id: UUID?) async throws {
+    guard !isPreparingRecording else { throw BorgVRVolumeEditingCommandError.busy }
+    if let commandExecutor, !BorgVRCommandExecutionContext.executingAction {
+      try await commandExecutor.performResolvedAction(.selectEditState(id), source: BorgVRCommandExecutionContext.source) {
+        try await self.selectState(id)
+        return .restoreEditState(snapshot: try await self.stateSnapshot(), state: self.activeState, workingStateID: self.workingState?.id)
+      }
+      return
+    }
     guard !isInSharePlay, !isExporting, !isRestoringPersonalState else { throw BorgVRVolumeEditingCommandError.busy }
     try await waitForStateTransition()
     guard !isInSharePlay, !isExporting, !isRestoringPersonalState else { throw BorgVRVolumeEditingCommandError.busy }
-    try await activatePersonalState(id)
+    try await activatePersonalState(id.map { recordingStateAliases[$0] ?? $0 })
     error = nil
   }
 
@@ -610,6 +694,15 @@ final class VolumeBrushModel: ObservableObject, BorgVRVolumeEditingCommands {
   }
 
   func duplicateState(name: String = "", empty: Bool = false) async throws {
+    guard !isPreparingRecording else { throw BorgVRVolumeEditingCommandError.busy }
+    if let commandExecutor, !BorgVRCommandExecutionContext.executingAction {
+      try await commandExecutor.performResolvedAction(.duplicateEditState(name: name, empty: empty),
+        source: BorgVRCommandExecutionContext.source) {
+        try await self.duplicateState(name: name, empty: empty)
+        return .restoreEditState(snapshot: try await self.stateSnapshot(), state: self.activeState, workingStateID: self.workingState?.id)
+      }
+      return
+    }
     guard !isInSharePlay, !isExporting, !isRestoringPersonalState, let source = dataSource else { throw BorgVRVolumeEditingCommandError.busy }
     let previous = try await stateSnapshot()
     guard !isInSharePlay, !isExporting, !isRestoringPersonalState, dataSource === source else { throw BorgVRVolumeEditingCommandError.busy }
@@ -620,6 +713,14 @@ final class VolumeBrushModel: ObservableObject, BorgVRVolumeEditingCommands {
   }
 
   func renameState(_ id: UUID, name: String) throws {
+    guard !isPreparingRecording else { throw BorgVRVolumeEditingCommandError.busy }
+    if let commandExecutor, !BorgVRCommandExecutionContext.executingAction {
+      try commandExecutor.performAction(.renameEditState(id: id, name: name), source: BorgVRCommandExecutionContext.source) {
+        try self.renameState(id, name: name)
+      }
+      return
+    }
+    let id = recordingStateAliases[id] ?? id
     guard !isInSharePlay, !isExporting, !isRestoringPersonalState, let source = dataSource else { throw BorgVRVolumeEditingCommandError.busy }
     try source.catalog.rename(id, to: name)
     refreshStates()
@@ -627,6 +728,14 @@ final class VolumeBrushModel: ObservableObject, BorgVRVolumeEditingCommands {
   }
 
   func deleteState(_ id: UUID) throws {
+    guard !isPreparingRecording else { throw BorgVRVolumeEditingCommandError.busy }
+    if let commandExecutor, !BorgVRCommandExecutionContext.executingAction {
+      try commandExecutor.performAction(.deleteEditState(id), source: BorgVRCommandExecutionContext.source) {
+        try self.deleteState(id)
+      }
+      return
+    }
+    let id = recordingStateAliases[id] ?? id
     guard !isInSharePlay, !isOpeningState, !isExporting, !isRestoringPersonalState, activeState?.id != id,
       let source = dataSource else { throw BorgVRVolumeEditingCommandError.busy }
     try source.catalog.delete(id)
@@ -637,6 +746,53 @@ final class VolumeBrushModel: ObservableObject, BorgVRVolumeEditingCommands {
     try await waitForStateReady()
     guard let source = dataSource else { throw BorgVRVolumeEditingCommandError.unavailable }
     return try await withCheckedThrowingContinuation { continuation in source.snapshot { continuation.resume(with: $0) } }
+  }
+
+  func restoreRecordingSnapshot(_ snapshot: BorgVRVolumeEditSnapshot, state recordedState: BorgVRVolumeEditState? = nil,
+                                workingStateID: UUID? = nil) async throws {
+    try await waitForStateReady()
+    guard !isInSharePlay, let source = dataSource,
+          snapshot.datasetID == source.catalog.datasetID else { throw BorgVRVolumeEditError.incompatibleDataset }
+    let metadata = source.getMetadata()
+    guard snapshot.mask.size == SIMD3(metadata.width, metadata.height, metadata.depth),
+      snapshot.mask.spacing == SIMD3(Double(metadata.voxelSpacingX), Double(metadata.voxelSpacingY), Double(metadata.voxelSpacingZ)),
+      snapshot.mask.componentCount == metadata.componentCount else { throw BorgVRVolumeEditError.incompatibleDataset }
+    if recordedState == nil, snapshot.mask.isOriginal {
+      try await selectState(nil)
+      if let id = self.workingState?.id {
+        recordingStateAliases[snapshot.stateID] = id
+        if let workingStateID { recordingStateAliases[workingStateID] = id }
+      }
+      return
+    }
+    let state = makeState(datasetID: snapshot.datasetID, kind: .copy, name: recordedState?.name ?? "")
+    try await activate(state, snapshot: .init(datasetID: snapshot.datasetID, stateID: state.id,
+      revision: snapshot.revision, mask: snapshot.mask, operationIDs: snapshot.operationIDs),
+      displayAsOriginal: false)
+    recordingStateAliases[snapshot.stateID] = state.id
+    if let recordedState { recordingStateAliases[recordedState.id] = state.id }
+    if let workingStateID { recordingStateAliases[workingStateID] = state.id }
+  }
+
+  func installRecordedSavedState(_ snapshot: BorgVRVolumeEditSnapshot, state recorded: BorgVRVolumeEditState) async throws {
+    try await waitForStateReady()
+    guard !isInSharePlay, let source = dataSource, snapshot.datasetID == source.catalog.datasetID else {
+      throw BorgVRVolumeEditError.incompatibleDataset
+    }
+    let metadata = source.getMetadata()
+    guard snapshot.mask.size == SIMD3(metadata.width, metadata.height, metadata.depth),
+      snapshot.mask.spacing == SIMD3(Double(metadata.voxelSpacingX), Double(metadata.voxelSpacingY), Double(metadata.voxelSpacingZ)),
+      snapshot.mask.componentCount == metadata.componentCount else { throw BorgVRVolumeEditError.incompatibleDataset }
+    let state = makeState(datasetID: snapshot.datasetID, kind: .copy, name: recorded.name)
+    let copy = BorgVRVolumeEditSnapshot(datasetID: snapshot.datasetID, stateID: state.id,
+      revision: snapshot.revision, mask: snapshot.mask, operationIDs: snapshot.operationIDs)
+    try await Task.detached(priority: .userInitiated) {
+      try BorgVRVolumeEditJournal.install(copy, in: source.catalog.directory(for: state.id))
+      try source.catalog.save(state)
+    }.value
+    recordingStateAliases[snapshot.stateID] = state.id
+    recordingStateAliases[recorded.id] = state.id
+    refreshStates()
   }
 
   func installSessionSnapshot(_ snapshot: BorgVRVolumeEditSnapshot, preserveAppearance: Bool = false) async throws {
@@ -848,6 +1004,13 @@ final class VolumeBrushModel: ObservableObject, BorgVRVolumeEditingCommands {
   }
 
   func discardVolumeEdits() async throws {
+    guard !isPreparingRecording else { throw BorgVRVolumeEditingCommandError.busy }
+    if let commandExecutor, !BorgVRCommandExecutionContext.executingAction {
+      try await commandExecutor.performAction(.discardVolumeEdits, source: BorgVRCommandExecutionContext.source) {
+        try await self.discardVolumeEdits()
+      }
+      return
+    }
     guard !isExporting, !isRestoringPersonalState else { throw BorgVRVolumeEditingCommandError.busy }
     if isInSharePlay, let sharedDiscard { try await sharedDiscard(); return }
     guard context.editingStatus() != nil else { throw BorgVRVolumeEditingCommandError.unavailable }
@@ -955,6 +1118,14 @@ final class VolumeBrushModel: ObservableObject, BorgVRVolumeEditingCommands {
 
   private func beginExport(to url: URL, name: String, description: String,
                            ownedDirectory: URL?) throws -> BorgVRVolumeExportJob {
+    if let commandExecutor, !BorgVRCommandExecutionContext.executingAction {
+      let job = try commandExecutor.performAction(.exportVolume(path: url.path, name: name, description: description),
+        source: BorgVRCommandExecutionContext.source) {
+        try self.beginExport(to: url, name: name, description: description, ownedDirectory: ownedDirectory)
+      }
+      commandExecutor.trackActionCompletion { _ = try await self.waitForVolumeExport(id: job.id) }
+      return job
+    }
     guard context.editingStatus() != nil else { throw BorgVRVolumeEditingCommandError.unavailable }
     guard !isInSharePlay else { throw BorgVRVolumeEditingCommandError.exportUnavailableDuringSharePlay }
     guard canExport else { throw BorgVRVolumeEditingCommandError.busy }

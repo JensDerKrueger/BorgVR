@@ -109,6 +109,7 @@ struct BorgVRMobileApp: App {
         .environmentObject(mcpController)
         .environmentObject(session)
         .onAppear {
+          settingsFiles.applySettings = { operation in try session.mutateSettings { try operation() } }
           presentSharePlayDisplayNameOnboardingIfNeeded()
           sharePlay.startObservingSessions(
             appModel: appModel,

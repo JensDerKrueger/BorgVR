@@ -4,6 +4,7 @@ import Combine
 
 @MainActor
 final class AppModel: ObservableObject {
+  weak var commandExecutor: (any BorgVRActionExecuting)?
   typealias RenderScreenshotHandler = (
     _ id: UUID,
     _ url: URL?,
@@ -300,6 +301,12 @@ final class AppModel: ObservableObject {
 
   func openDataset(_ dataset: DatasetEntry, asGroupSessionHost: Bool? = nil,
                    automaticallyLoadState: Bool = true) {
+    if let commandExecutor, !BorgVRCommandExecutionContext.executingAction {
+      commandExecutor.performAction(.openDataset(dataset.uniqueId), source: BorgVRCommandExecutionContext.source) {
+        self.openDataset(dataset, asGroupSessionHost: asGroupSessionHost, automaticallyLoadState: automaticallyLoadState)
+      }
+      return
+    }
     if let asGroupSessionHost {
       groupSessionHost = asGroupSessionHost
     }
@@ -315,6 +322,10 @@ final class AppModel: ObservableObject {
     resetRenderedDatasetState()
     datasetBufferingPhase = .loadingData
     datasetSessionState = .opening(dataset: dataset, requestID: UUID())
+  }
+
+  func useDeterministicAutomationState() {
+    automaticallyLoadsDatasetState = false
   }
 
   func waitForSharePlayDataset(reason: SharePlayWaitingReason) {
@@ -333,6 +344,12 @@ final class AppModel: ObservableObject {
   }
 
   func closeDataset(destination: DatasetCloseDestination = .datasetSelection) {
+    if let commandExecutor, !BorgVRCommandExecutionContext.executingAction {
+      commandExecutor.performAction(.closeDataset, source: BorgVRCommandExecutionContext.source) {
+        self.closeDataset(destination: destination)
+      }
+      return
+    }
     let requestID = UUID()
     datasetSessionState = .closing(
       dataset: activeDataset,
@@ -667,6 +684,25 @@ final class AppModel: ObservableObject {
     accessURL: URL?,
     completion: @escaping (Result<URL, Error>) -> Void
   ) -> UUID {
+    if let commandExecutor, !BorgVRCommandExecutionContext.executingAction {
+      Task { @MainActor in
+        do {
+          var output: URL?
+          try await commandExecutor.performResolvedAction(.captureScreenshot(path: url?.path, includeAlpha: true),
+            source: BorgVRCommandExecutionContext.source) {
+            let saved = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<URL, Error>) in
+              self.requestRenderScreenshot(id: id, to: url, accessURL: accessURL) {
+                continuation.resume(with: $0)
+              }
+            }
+            output = saved
+            return .captureScreenshot(path: saved.path, includeAlpha: true)
+          }
+          if let output { completion(.success(output)) }
+        } catch { completion(.failure(error)) }
+      }
+      return id
+    }
     guard let renderScreenshotHandler else {
       completion(.failure(AppModelError.rendererUnavailable))
       return id

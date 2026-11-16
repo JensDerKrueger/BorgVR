@@ -14,6 +14,9 @@ input(string) -> string
 fileinput(string) -> string
 dirinput(string) -> string
 
+# Versioned, lossless command payload emitted by the shared recorder (Base64 JSON).
+sessioncommand(string)
+
 # Dataset import
 # Relative paths are resolved below the current script output directory.
 importfile(string,string,string)

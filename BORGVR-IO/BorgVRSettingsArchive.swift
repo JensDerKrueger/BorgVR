@@ -77,6 +77,59 @@ struct BorgVRSettingsStore {
     ], options: [.prettyPrinted, .sortedKeys])
   }
 
+  /// Reproducible rendering/import preferences only. Service activation, credentials,
+  /// certificates, server addresses and device/account preferences never enter recordings.
+  static let recordingKeys: Set<String> = [
+    "timeout", "makeLocalCopy", "progressiveLoading",
+    "brickSize", "brickOverlap", "enableCompression", "quantizeImportsTo8Bit", "importColorCompression",
+    "dicomResamplingFilter", "borderMode", "normalizeIsoSurfaceExport", "screenSpaceError", "initialBricks",
+    "minHashTableSize", "maxProbingAttempts", "maxBricksPerGetRequest", "atlasSizeMB", "oversampling",
+    "oversamplingMode", "dropFPS", "recoveryFPS", "screenFieldOfView", "parallelProjection",
+    "showDatasetBoundingBox", "sampleJitter", "alphaEpsilon", "subbrickSkipping", "opacityAdaptiveSampling",
+    "atlasCompression", "requestLowResLOD", "stopOnMiss", "disableFoveation", "foveationSamplingStrength",
+    "tfMode", "uiRenderModes", "uiInteractionModes", "uiPanelButtons", "showModeResetButtons", "showPanelButtons",
+    "showBrickVisualization", "showLogButton", "showPerformanceButton", "showProfiling", "quickMarker",
+    "quickMarkerDoublePinchInterval", "markerSpawnAtGaze", "projectObjectsOntoVolume", "projectMeasurementsOntoVolume",
+    "markerDefaultRed", "markerDefaultGreen", "markerDefaultBlue", "markerDefaultColorInitialized",
+    "renderBackgroundMode", "renderBackgroundPrimaryRed", "renderBackgroundPrimaryGreen", "renderBackgroundPrimaryBlue",
+    "renderBackgroundPrimaryAlpha", "renderBackgroundSecondaryRed", "renderBackgroundSecondaryGreen",
+    "renderBackgroundSecondaryBlue", "renderBackgroundSecondaryAlpha", "showHandsAndAccessories",
+    "stylusStartFunction", "stylusToolMode", "leftControllerToolMode", "rightControllerToolMode",
+    "controllerButtonAAction", "controllerButtonBAction", "controllerButtonXAction", "controllerButtonYAction",
+    "leftControllerThumbstickXAction", "leftControllerThumbstickYAction",
+    "rightControllerThumbstickXAction", "rightControllerThumbstickYAction"
+  ]
+
+  /// Local service/account, privacy and startup policy, not visualization state.
+  /// New settings require an explicit choice here or in recordingKeys.
+  static let localOnlyRecordingKeys: Set<String> = [
+    "enableDatasetServer", "autoStartServer", "serverPort", "serverPassword", "sharePlayServerPort",
+    "enableWebServer", "webServerPort", "webServerUsesTLS", "webServerCertificateData",
+    "webServerCertificatePassword", "sharePlayWebServerPort", "enableMCPServer", "mcpServerPort",
+    "mcpAllowRemoteConnections", "mcpAccessToken", "mcpServerCertificateData", "mcpServerCertificatePassword",
+    "autoloadTF", "autoloadObjects", "autoloadMeasurements", "autoloadRenderState", "sharePlayDisplayName",
+    "logLevel", "showNotifications", "hideBuiltInDatasets", "enableVoiceInput", "autostartVoiceInput",
+    "enableVoiceOutput", "shareSpatialStylusPosition", "lastMinute", "dataDirectory", "serversData"
+  ]
+
+  func exportForRecording() throws -> Data {
+    var values: [String: Any] = [:]
+    for (key, entry) in entries where Self.recordingKeys.contains(key) && !entry.sensitive {
+      let value = try normalized(entry.read(false), for: entry, importing: false)
+      values[key] = (value as? Data)?.base64EncodedString() ?? value
+    }
+    return try JSONSerialization.data(withJSONObject: ["format": "BorgVR Settings", "formatVersion": 1,
+      "includesCredentials": false, "settings": values], options: [.sortedKeys])
+  }
+
+  func importRecording(_ data: Data) throws {
+    guard data.count <= Self.maximumFileSize,
+      let root = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+      let settings = root["settings"] as? [String: Any],
+      Set(settings.keys).isSubset(of: Self.recordingKeys) else { throw BorgVRSettingsArchiveError.invalidFile }
+    try apply(prepareImport(data))
+  }
+
   /// Automation must not disable or reconfigure its own control connection.
   private static func isMCPConnectionKey(_ key: String) -> Bool {
     key == "enableMCPServer" || key.hasPrefix("mcp")

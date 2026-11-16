@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct MemoryUsageView: View {
+  @EnvironmentObject private var session: VisionBorgVRSession
   @Environment(RuntimeAppModel.self) private var runtimeAppModel
   @Environment(SharedAppModel.self) private var sharedAppModel
 
@@ -14,7 +15,7 @@ struct MemoryUsageView: View {
       HStack {
         Spacer()
         Button {
-          sharedAppModel.purgeAtlas = true
+          try? session.perform(.action(.purgeAtlas), source: .userInterface)
         } label: {
           Label("profile_button_clear_atlas", systemImage: "arrow.counterclockwise")
         }

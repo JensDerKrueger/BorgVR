@@ -481,31 +481,33 @@ struct RenderView: View {
     defer { pendingDatasetStateSave = nil }
     guard let dataset = runtimeAppModel.activeDataset else { return }
     do {
-      if !plan.transferFunctionURLs.isEmpty {
-        try sharedAppModel.saveDatasetTransferFunctions(to: plan.transferFunctionURLs, description: dataset.description)
-      }
-      if let url = plan.viewStateURL {
-        let state = try sharedAppModel.makeDatasetViewState(datasetID: dataset.uniqueId)
-        try DatasetStateStorage.saveViewState(
-          state,
-          to: url
-        )
-        try PanelParameterStorage.saveDataset(common: state.common, brush: runtimeAppModel.volumeBrush, beside: url)
-      }
-      if let url = plan.objectURL {
-        try DatasetStateStorage.saveObjects(
-          datasetID: dataset.uniqueId,
-          markers: sharedAppModel.volumeMarkers,
-          meshInstances: sharedAppModel.sceneMeshInstances,
-          to: url
-        )
-      }
-      if let url = plan.measurementURL {
-        try DatasetStateStorage.saveMeasurements(
-          datasetID: dataset.uniqueId,
-          measurements: sharedAppModel.volumeMeasurementsSnapshot(),
-          to: url
-        )
+      try session.performFileAction(outputs: plan.fileURLs) {
+        if !plan.transferFunctionURLs.isEmpty {
+          try sharedAppModel.saveDatasetTransferFunctions(to: plan.transferFunctionURLs, description: dataset.description)
+        }
+        if let url = plan.viewStateURL {
+          let state = try sharedAppModel.makeDatasetViewState(datasetID: dataset.uniqueId)
+          try DatasetStateStorage.saveViewState(
+            state,
+            to: url
+          )
+          try PanelParameterStorage.saveDataset(common: state.common, brush: runtimeAppModel.volumeBrush, beside: url)
+        }
+        if let url = plan.objectURL {
+          try DatasetStateStorage.saveObjects(
+            datasetID: dataset.uniqueId,
+            markers: sharedAppModel.volumeMarkers,
+            meshInstances: sharedAppModel.sceneMeshInstances,
+            to: url
+          )
+        }
+        if let url = plan.measurementURL {
+          try DatasetStateStorage.saveMeasurements(
+            datasetID: dataset.uniqueId,
+            measurements: sharedAppModel.volumeMeasurementsSnapshot(),
+            to: url
+          )
+        }
       }
     } catch {
       datasetStateSaveError = error

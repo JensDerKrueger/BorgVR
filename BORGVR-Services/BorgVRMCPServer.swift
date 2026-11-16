@@ -4,6 +4,11 @@ import Network
 import Security
 import SwiftUI
 
+private struct MCPCommandRecordingResult: Encodable {
+  let recording: Bool
+  let gsc: String
+}
+
 struct MCPServerStatusLabel: View {
   @EnvironmentObject private var controller: BorgVRMCPServerController
 
@@ -566,6 +571,37 @@ final class BorgVRMCPServer: @unchecked Sendable {
           includeCredentials: optionalBool("include_credentials", in: arguments) ?? false,
           overwrite: optionalBool("overwrite", in: arguments) ?? false)
         return structuredToolResult(["outputPath": url.path])
+      case "start_command_recording":
+        guard let executor = await service.commandExecutor else {
+          throw BorgVRMCPCommandError.unsupported("Command recording is unavailable.")
+        }
+        guard await !executor.isCommandRecording else {
+          throw BorgVRMCPCommandError.invalidArgument("A command recording is already active.")
+        }
+        await executor.startCommandRecording()
+        guard await executor.isCommandRecording else { throw BorgVRVolumeEditingCommandError.busy }
+        try await executor.waitForRecordingPreparation()
+        return structuredToolResult(["recording": true])
+      case "stop_command_recording":
+        guard let executor = await service.commandExecutor else {
+          throw BorgVRMCPCommandError.unsupported("Command recording is unavailable.")
+        }
+        try await executor.finishCommandRecording()
+        let script = try await executor.recordedGSCScript()
+        if arguments["output_path"] != nil {
+          let url = try fileURL("output_path", in: arguments)
+          try BorgVRAutomationFile.write(Data((script + "\n").utf8), to: url,
+            overwrite: optionalBool("overwrite", in: arguments) ?? false)
+        }
+        return structuredToolResult(MCPCommandRecordingResult(recording: false, gsc: script))
+      case "replay_command_recording":
+        guard try optionalBool("confirm", in: arguments) == true else {
+          throw BorgVRMCPCommandError.invalidArgument("Replaying a recording requires confirm:true. Only replay trusted recordings; they can change datasets and write files.")
+        }
+        let data = try BorgVRAutomationFile.read(fileURL("input_path", in: arguments),
+          maximumBytes: BorgVRRecordedGSC.maximumFileBytes)
+        try await service.replayCommandRecording(data)
+        return structuredToolResult(await service.applicationState())
       case "load_settings":
         try await service.loadSettings(from: fileURL("input_path", in: arguments))
         return structuredToolResult(["status": "Settings restored; MCP connection settings preserved."])
@@ -819,12 +855,9 @@ final class BorgVRMCPServer: @unchecked Sendable {
         )
       case "capture_screenshot":
         let includeAlpha = try optionalBool("include_alpha", in: arguments) ?? true
-        let image = try await service.captureScreenshot(includeAlpha: includeAlpha)
         let outputURL = try arguments["output_path"].map { _ in try fileURL("output_path", in: arguments) }
-        if let outputURL {
-          try BorgVRAutomationFile.write(image.pngData, to: outputURL,
-            overwrite: optionalBool("overwrite", in: arguments) ?? false)
-        }
+        let image = try await service.captureScreenshot(to: outputURL, includeAlpha: includeAlpha,
+          overwrite: optionalBool("overwrite", in: arguments) ?? false)
         let metadata: [String: Any] = [
           "width": image.width,
           "height": image.height,
@@ -1089,6 +1122,12 @@ final class BorgVRMCPServer: @unchecked Sendable {
         properties: ["input_path": ["type": "string"]], required: ["input_path"]),
       tool("save_settings", "Export all registered settings to the UI-compatible .borgvrsettings JSON format. Set include_credentials:true explicitly for passwords, access tokens and certificates (needed for a complete backup). Files with credentials are owner-readable only. Absolute sandbox-accessible path; existing files require overwrite:true.",
         properties: ["output_path": ["type": "string"], "include_credentials": ["type": "boolean"], "overwrite": ["type": "boolean"]], required: ["output_path"]),
+      tool("start_command_recording", "Start recording committed UI/MCP actions as GSC, including the initial dataset, visualization, safe settings and edit mask. Available on all native platforms. Credentials and local service/account policy are excluded."),
+      tool("stop_command_recording", "Wait for accepted actions, stop recording and return the complete GSC script. Optionally save to an absolute sandbox-accessible output_path. Existing files require overwrite:true. Failed or unsupported actions prevent export instead of silently disappearing.",
+        properties: ["output_path": ["type": "string"], "overwrite": ["type": "boolean"]]),
+      tool("replay_command_recording", "Replay a trusted BorgVR 3.9 command recording on the current native platform. Requires confirm:true: actions can open/close datasets and write files. Validates the full recording before execution; maximum 64 MiB and 100000 commands. Platform-specific actions still require that platform, accessible datasets/assets and writable destinations. Use macOS for general hand-written GSC scripts.",
+        properties: ["input_path": ["type": "string"], "confirm": ["type": "boolean", "enum": [true]]],
+        required: ["input_path", "confirm"]),
       tool("load_settings", "Import a UI-compatible .borgvrsettings file. Missing keys remain unchanged, unknown keys are ignored. The running MCP connection's enable/port/auth/TLS settings are preserved so the client stays connected.",
         properties: ["input_path": ["type": "string"]], required: ["input_path"]),
       tool("reset_settings", "Reset all registered settings to defaults EXCEPT the running MCP connection's settings. Save settings with include_credentials:true before resetting if you want to restore everything afterward. Does not reset the current visualization; use reset_state for that. Requires confirm:true.",

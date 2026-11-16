@@ -3,6 +3,7 @@ import UIKit
 import UniformTypeIdentifiers
 
 struct MobileMarkerView: View {
+  @EnvironmentObject private var session: ScreenBorgVRSession
   @Environment(\.dismiss) private var dismiss
   @EnvironmentObject private var appModel: AppModel
   @EnvironmentObject private var sharePlay: SharePlayCoordinator
@@ -271,6 +272,7 @@ struct MobileMarkerView: View {
             markers: appModel.volumeMarkers,
             meshInstances: appModel.sceneMeshInstances
           )
+          try session.captureFileExport(result)
           refreshMarkerCatalog()
         } catch {
           markerFileError = error

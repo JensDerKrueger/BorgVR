@@ -3,6 +3,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 struct MacMarkerView: View {
+  @EnvironmentObject private var session: ScreenBorgVRSession
   @EnvironmentObject private var appModel: AppModel
   @EnvironmentObject private var sharePlay: SharePlayCoordinator
   @EnvironmentObject private var storedAppModel: StoredAppModel
@@ -188,6 +189,7 @@ struct MacMarkerView: View {
           markers: appModel.volumeMarkers,
           meshInstances: appModel.sceneMeshInstances
         )
+        try session.captureFileExport(result)
         refreshMarkerCatalog()
       } catch {
         markerFileError = error

@@ -2,6 +2,7 @@ import SwiftUI
 
 struct PerformanceGraphView: View {
   @EnvironmentObject private var appModel: AppModel
+  @EnvironmentObject private var session: ScreenBorgVRSession
   @State private var selectedTab = Tab.frameTiming
 
   private enum Tab { case frameTiming, paging }
@@ -24,7 +25,7 @@ struct PerformanceGraphView: View {
           HStack {
             Spacer()
             Button {
-              appModel.renderAtlasPurgeHandler?()
+              try? session.perform(.action(.purgeAtlas), source: .userInterface)
             } label: {
               Label("Clear Atlas", systemImage: "arrow.counterclockwise")
             }

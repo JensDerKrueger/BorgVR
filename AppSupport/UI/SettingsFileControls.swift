@@ -160,6 +160,7 @@ extension BorgVRSettingsStore.Entry {
 
 @MainActor
 final class SettingsFileController: ObservableObject {
+  var applySettings: (_ operation: () throws -> Void) throws -> Void = { try $0() }
   struct PendingImport: Identifiable {
     let id = UUID()
     let store: BorgVRSettingsStore
@@ -193,7 +194,7 @@ final class SettingsFileController: ObservableObject {
   func apply(_ request: PendingImport) {
     pendingImport = nil
     do {
-      try request.store.apply(request.plan)
+      try applySettings { try request.store.apply(request.plan) }
       message = String(format: String(localized: "Imported %lld settings; ignored %lld unsupported entries."),
         Int64(request.plan.count), Int64(request.plan.ignoredCount))
     } catch { message = error.localizedDescription }
@@ -228,6 +229,8 @@ extension View {
 
 struct SettingsFileControls: View {
   var store: () -> BorgVRSettingsStore
+  var applySettings: (_ operation: () throws -> Void) throws -> Void = { try $0() }
+  var exportSettings: (_ url: URL, _ credentials: Bool, _ operation: () throws -> Void) throws -> Void = { _, _, operation in try operation() }
   @StateObject private var controller = SettingsFileController()
   @State private var showsImporter = false
   @State private var showsExportOptions = false
@@ -251,6 +254,7 @@ struct SettingsFileControls: View {
       }
       .help("Export settings")
     }
+    .onAppear { controller.applySettings = applySettings }
     .fileImporter(isPresented: $showsImporter, allowedContentTypes: [.borgVRSettings]) { result in
       switch result {
         case .success(let url): controller.open(url, store: store())
@@ -281,7 +285,11 @@ struct SettingsFileControls: View {
     }
     #if !os(macOS)
     .sheet(item: $pendingExport) { request in
-      SystemFileExportPicker(sourceURL: request.sourceURL, defaultDirectoryURL: nil) { _ in
+      SystemFileExportPicker(sourceURL: request.sourceURL, defaultDirectoryURL: nil) { url in
+        if let url {
+          do { try exportSettings(url, includeCredentials) {} }
+          catch { controller.message = error.localizedDescription }
+        }
         request.removeTemporaryFiles()
         pendingExport = nil
       }
@@ -300,7 +308,10 @@ struct SettingsFileControls: View {
       panel.nameFieldStringValue = "BorgVR.\(BorgVRSettingsStore.fileExtension)"
       panel.canCreateDirectories = true
       guard panel.runModal() == .OK, let url = panel.url else { return }
-      try data.write(to: url, options: .atomic)
+      try exportSettings(url, includeCredentials) {
+        try data.write(to: url, options: .atomic)
+        if includeCredentials { try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path) }
+      }
       #else
       pendingExport = try PendingSystemFileExport(data: data,
         defaultFilename: "BorgVR.\(BorgVRSettingsStore.fileExtension)",

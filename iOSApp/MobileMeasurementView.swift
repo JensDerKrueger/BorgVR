@@ -2,6 +2,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 struct MobileMeasurementView: View {
+  @EnvironmentObject private var session: ScreenBorgVRSession
   @EnvironmentObject private var appModel: AppModel
   @EnvironmentObject private var sharePlay: SharePlayCoordinator
   @Environment(\.dismiss) private var dismiss
@@ -154,6 +155,7 @@ struct MobileMeasurementView: View {
           datasetID: datasetID,
           measurements: appModel.volumeMeasurements
         )
+        try session.captureFileExport(result)
       } catch {
         fileError = error
       }

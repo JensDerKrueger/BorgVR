@@ -63,6 +63,15 @@ private enum SettingsArchiveTests {
     try expect(clean["serverPassword"] == nil && clean["mcpAccessToken"] == nil
       && clean["webServerCertificateData"] == nil, "Export leaked credentials")
     let full = try exported(true)
+    let recording = try store.exportForRecording()
+    let recordingValues = (try JSONSerialization.jsonObject(with: recording) as! [String: Any])["settings"] as! [String: Any]
+    try expect(recordingValues["oversampling"] != nil && recordingValues["serverPassword"] == nil &&
+      recordingValues["mcpAccessToken"] == nil && recordingValues["webServerCertificateData"] == nil &&
+      recordingValues["zzFailure"] == nil, "Recording leaked private or unclassified settings")
+    do {
+      try store.importRecording(data(["mcpAccessToken": "injected"]))
+      throw Failure.failed("A recording was allowed to reconfigure authentication")
+    } catch is BorgVRSettingsArchiveError {}
     try expect(full["serverPassword"] as? String == password && full["mcpAccessToken"] as? String == "token",
       "Requested credentials were omitted")
     try expect(full["webServerCertificateData"] as? String == "AQID", "Certificate JSON encoding is not portable")

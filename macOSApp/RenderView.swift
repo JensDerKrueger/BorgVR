@@ -39,7 +39,6 @@ struct RenderView: View {
   @State private var showNoDatasetStateToRestore = false
   @State private var datasetStateRestoreError: Error?
   @State private var recordingSaveError: Error?
-  @State private var recordingDatasetID: String?
 
   private let modelRotationSensitivity: Float = 0.006
   private let clippingSensitivity: Float = 0.0012
@@ -134,10 +133,10 @@ struct RenderView: View {
       case .lightingEditor:
         LightingEditorView(
           renderMode: renderingParameters.renderMode,
-          lightDirection: $renderingParameters.lightDirection,
-          ambientLightColor: $renderingParameters.ambientLightColor,
-          diffuseLightColor: $renderingParameters.diffuseLightColor,
-          specularLightColor: $renderingParameters.specularLightColor,
+          lightDirection: session.binding($renderingParameters.lightDirection),
+          ambientLightColor: session.binding($renderingParameters.ambientLightColor),
+          diffuseLightColor: session.binding($renderingParameters.diffuseLightColor),
+          specularLightColor: session.binding($renderingParameters.specularLightColor),
           usesPanelBackground: false,
           showsTitle: false,
           onChange: synchronizeState,
@@ -326,10 +325,9 @@ struct RenderView: View {
       case .restoreDatasetState:
         restoreDatasetState()
       case .startRecording:
-        recordingDatasetID = appModel.activeDataset?.uniqueId
         session.startCommandRecording()
       case .stopRecording:
-        stopRecordingAndSave()
+        MacCommandRecordingSaver.save(session: session, suggestedName: recordingFilename) { recordingSaveError = $0 }
     }
   }
 
@@ -475,37 +473,46 @@ struct RenderView: View {
     isoSurfaceExtractionCancellationRequested = false
     isExtractingIsoSurface = true
 
-    handler(outputURL, normalizedIsoValue, token, { progress in
-      DispatchQueue.main.async {
-        isoSurfaceExtractionProgress = min(max(progress, 0), 1)
-      }
-    }, { result in
-      DispatchQueue.main.async {
-        if hasSecurityAccess {
-          outputURL.stopAccessingSecurityScopedResource()
+    let (completionStream, completion) = AsyncThrowingStream<Void, Error>.makeStream()
+    session.performAction(.exportIsoSurface(path: outputURL.path, normalizedIsoValue: Float(normalizedIsoValue)),
+      source: .userInterface) {
+      session.trackActionCompletion { for try await _ in completionStream {} }
+      handler(outputURL, normalizedIsoValue, token, { progress in
+        DispatchQueue.main.async {
+          isoSurfaceExtractionProgress = min(max(progress, 0), 1)
         }
-        isExtractingIsoSurface = false
-        isoSurfaceExtractionToken = nil
-        isoSurfaceExtractionCancellationRequested = false
+      }, { result in
         switch result {
-          case .success(let extraction):
-            appModel.logger.info(
-              String(
-                format: String(localized: "Isosurface saved with %lld triangles: %@"),
-                Int64(extraction.triangleCount),
-                extraction.outputURL.path
-              )
-            )
-          case .failure(let error):
-            if error is CancellationError {
-              appModel.logger.info(String(localized: "Isosurface extraction cancelled."))
-            } else {
-              isoSurfaceExtractionError = error.localizedDescription
-              appModel.logger.error(error.localizedDescription)
-            }
+          case .success: completion.finish()
+          case .failure(let error): completion.finish(throwing: error)
         }
-      }
-    })
+        DispatchQueue.main.async {
+          if hasSecurityAccess {
+            outputURL.stopAccessingSecurityScopedResource()
+          }
+          isExtractingIsoSurface = false
+          isoSurfaceExtractionToken = nil
+          isoSurfaceExtractionCancellationRequested = false
+          switch result {
+            case .success(let extraction):
+              appModel.logger.info(
+                String(
+                  format: String(localized: "Isosurface saved with %lld triangles: %@"),
+                  Int64(extraction.triangleCount),
+                  extraction.outputURL.path
+                )
+              )
+            case .failure(let error):
+              if error is CancellationError {
+                appModel.logger.info(String(localized: "Isosurface extraction cancelled."))
+              } else {
+                isoSurfaceExtractionError = error.localizedDescription
+                appModel.logger.error(error.localizedDescription)
+              }
+          }
+        }
+      })
+    }
   }
 
   private func suggestedIsoSurfaceFilename() -> String {
@@ -574,31 +581,33 @@ struct RenderView: View {
     defer { pendingDatasetStateSave = nil }
     guard let dataset = appModel.activeDataset else { return }
     do {
-      if !plan.transferFunctionURLs.isEmpty {
-        try renderingParameters.saveDatasetTransferFunctions(to: plan.transferFunctionURLs, description: dataset.description)
-      }
-      if let url = plan.viewStateURL {
-        let state = renderingParameters.makeDatasetViewState(datasetID: dataset.uniqueId)
-        try DatasetStateStorage.saveViewState(
-          state,
-          to: url
-        )
-        try PanelParameterStorage.saveDataset(common: state.common, brush: appModel.volumeBrush, beside: url)
-      }
-      if let url = plan.objectURL {
-        try DatasetStateStorage.saveObjects(
-          datasetID: dataset.uniqueId,
-          markers: appModel.volumeMarkers,
-          meshInstances: appModel.sceneMeshInstances,
-          to: url
-        )
-      }
-      if let url = plan.measurementURL {
-        try DatasetStateStorage.saveMeasurements(
-          datasetID: dataset.uniqueId,
-          measurements: appModel.volumeMeasurements,
-          to: url
-        )
+      try session.performFileAction(outputs: plan.fileURLs) {
+        if !plan.transferFunctionURLs.isEmpty {
+          try renderingParameters.saveDatasetTransferFunctions(to: plan.transferFunctionURLs, description: dataset.description)
+        }
+        if let url = plan.viewStateURL {
+          let state = renderingParameters.makeDatasetViewState(datasetID: dataset.uniqueId)
+          try DatasetStateStorage.saveViewState(
+            state,
+            to: url
+          )
+          try PanelParameterStorage.saveDataset(common: state.common, brush: appModel.volumeBrush, beside: url)
+        }
+        if let url = plan.objectURL {
+          try DatasetStateStorage.saveObjects(
+            datasetID: dataset.uniqueId,
+            markers: appModel.volumeMarkers,
+            meshInstances: appModel.sceneMeshInstances,
+            to: url
+          )
+        }
+        if let url = plan.measurementURL {
+          try DatasetStateStorage.saveMeasurements(
+            datasetID: dataset.uniqueId,
+            measurements: appModel.volumeMeasurements,
+            to: url
+          )
+        }
       }
     } catch {
       datasetStateSaveError = error
@@ -621,37 +630,6 @@ struct RenderView: View {
       sharePlay.synchronizeMeasurements()
     } catch {
       datasetStateRestoreError = error
-    }
-  }
-
-  private func stopRecordingAndSave() {
-    _ = session.stopCommandRecording()
-    let recordedInteractions = session.recordedGSCScript()
-    var scriptSections: [String] = []
-    if let recordingDatasetID {
-      scriptSections.append("# Dataset\nopendataset \(gscQuote(recordingDatasetID))")
-    }
-    if !recordedInteractions.isEmpty {
-      scriptSections.append("# Recorded interactions\n\(recordedInteractions)")
-    }
-    let script = scriptSections.joined(separator: "\n\n")
-    recordingDatasetID = nil
-    let panel = NSSavePanel()
-    panel.title = String(localized: "Save Recording")
-    panel.message = String(localized: "Save the recorded interactions as a GSC script.")
-    panel.canCreateDirectories = true
-    panel.allowedContentTypes = [UTType(filenameExtension: "gsc") ?? .plainText]
-    panel.nameFieldStringValue = recordingFilename
-    panel.begin { response in
-      guard response == .OK, let url = panel.url else { return }
-      Task { @MainActor in
-        do {
-          let output = script.isEmpty || script.hasSuffix("\n") ? script : script + "\n"
-          try output.write(to: url, atomically: true, encoding: .utf8)
-        } catch {
-          recordingSaveError = error
-        }
-      }
     }
   }
 

@@ -64,6 +64,7 @@ final class SpatialAnchorSessionState: @unchecked Sendable {
 @MainActor
 @Observable
 class RuntimeAppModel {
+  weak var commandExecutor: (any BorgVRActionExecuting)?
   /// The identifier used for the immersive space.
   let immersiveSpaceID = "ImmersiveSpace"
 
@@ -496,9 +497,19 @@ class RuntimeAppModel {
 
   private(set) var automaticallyLoadsDatasetState = true
 
+  func useDeterministicAutomationState() {
+    automaticallyLoadsDatasetState = false
+  }
+
   @discardableResult
   func startImmersiveSpace(dataset: DatasetEntry,
                            asGroupSessionHost: Bool, automaticallyLoadState: Bool = true) -> Bool {
+    if let commandExecutor, !BorgVRCommandExecutionContext.executingAction {
+      return commandExecutor.performAction(.openDataset(dataset.uniqueId), source: BorgVRCommandExecutionContext.source) {
+        self.startImmersiveSpace(dataset: dataset, asGroupSessionHost: asGroupSessionHost,
+          automaticallyLoadState: automaticallyLoadState)
+      }
+    }
     do { try datasetActivity.checkRendererStart() }
     catch {
       logger.warning(error.localizedDescription)
@@ -544,6 +555,12 @@ class RuntimeAppModel {
   }
 
   func requestDatasetClose(destination: DatasetCloseDestination = .datasetSelection) {
+    if let commandExecutor, !BorgVRCommandExecutionContext.executingAction {
+      commandExecutor.performAction(.closeDataset, source: BorgVRCommandExecutionContext.source) {
+        self.requestDatasetClose(destination: destination)
+      }
+      return
+    }
     datasetStreaming.track(nil)
     volumeBrush.close()
     if case .closing = datasetSessionState { return }

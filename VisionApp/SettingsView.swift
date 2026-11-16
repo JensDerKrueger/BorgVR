@@ -127,7 +127,13 @@ struct SettingsView: View {
           .font(.largeTitle)
           .bold()
         Spacer()
-        SettingsFileControls { storedAppModel.settingsStore() }
+        SettingsFileControls(store: { storedAppModel.settingsStore() },
+          applySettings: { operation in try session.mutateSettings { try operation() } },
+          exportSettings: { url, credentials, operation in
+            try session.performAction(.saveSettings(path: url.path, includeCredentials: credentials), source: .userInterface) {
+              try operation()
+            }
+          })
           .labelStyle(.iconOnly)
           .controlSize(.large)
       }
@@ -141,17 +147,17 @@ struct SettingsView: View {
             Form {
               settingsIntroSection("settings_description_general")
               Section(header: Text("settings_section_general_behavior").bold()) {
-                Toggle("settings_toggle_autoload_tf", isOn: $storedAppModel.autoloadTF)
-                Toggle("settings_toggle_autoload_objects", isOn: $storedAppModel.autoloadObjects)
+                Toggle("settings_toggle_autoload_tf", isOn: session.settingsBinding($storedAppModel.autoloadTF))
+                Toggle("settings_toggle_autoload_objects", isOn: session.settingsBinding($storedAppModel.autoloadObjects))
                 Toggle(
                   "settings_toggle_autoload_measurements",
-                  isOn: $storedAppModel.autoloadMeasurements
+                  isOn: session.settingsBinding($storedAppModel.autoloadMeasurements)
                 )
                 Toggle(
                   "settings_toggle_autoload_render_state",
-                  isOn: $storedAppModel.autoloadRenderState
+                  isOn: session.settingsBinding($storedAppModel.autoloadRenderState)
                 )
-                Toggle("settings_toggle_show_notifications", isOn: $storedAppModel.showNotifications)
+                Toggle("settings_toggle_show_notifications", isOn: session.settingsBinding($storedAppModel.showNotifications))
                   .onChange(of: storedAppModel.showNotifications) { _, newValue in
                     if newValue {
                       Task {
@@ -161,7 +167,7 @@ struct SettingsView: View {
                       }
                     }
                   }
-                Toggle("settings_toggle_hide_built_in_datasets", isOn: $storedAppModel.hideBuiltInDatasets)
+                Toggle("settings_toggle_hide_built_in_datasets", isOn: session.settingsBinding($storedAppModel.hideBuiltInDatasets))
               }
 
               ShowAllExplanationDialogsButton(includesSectionHeader: true)
@@ -181,7 +187,7 @@ struct SettingsView: View {
           Section(header: Text("settings_section_voice").bold()) {
             Toggle(
               "settings_toggle_enable_voice_input",
-              isOn: $storedAppModel.enableVoiceInput
+              isOn: session.settingsBinding($storedAppModel.enableVoiceInput)
             )
             .onChange(of: storedAppModel.enableVoiceInput) { _, newValue in
               if newValue {
@@ -193,16 +199,16 @@ struct SettingsView: View {
             }
             Toggle(
               "settings_toggle_autostart_voice",
-              isOn: $storedAppModel.autostartVoiceInput
+              isOn: session.settingsBinding($storedAppModel.autostartVoiceInput)
             )
             Toggle(
               "settings_toggle_enable_voice_feedback",
-              isOn: $storedAppModel.enableVoiceOutput
+              isOn: session.settingsBinding($storedAppModel.enableVoiceOutput)
             )
           }
 
           Section(header: Text("settings_section_markers").bold()) {
-            Toggle(isOn: $storedAppModel.quickMarker) {
+            Toggle(isOn: session.settingsBinding($storedAppModel.quickMarker)) {
               HStack(spacing: 8) {
                 Text("settings_toggle_quick_marker")
                 Button {
@@ -239,7 +245,7 @@ struct SettingsView: View {
                 .foregroundStyle(.secondary)
               }
               Slider(
-                value: $storedAppModel.quickMarkerDoublePinchInterval,
+                value: session.settingsBinding($storedAppModel.quickMarkerDoublePinchInterval),
                 in: 0.15...0.6,
                 step: 0.05
               )
@@ -248,7 +254,7 @@ struct SettingsView: View {
 
             Toggle(
               "settings_toggle_show_hands_accessories",
-              isOn: $storedAppModel.showHandsAndAccessories
+              isOn: session.settingsBinding($storedAppModel.showHandsAndAccessories)
             )
             Text("settings_show_hands_accessories_description")
               .font(.footnote)
@@ -303,19 +309,19 @@ struct SettingsView: View {
 
             controllerThumbstickPicker(
               "settings_left_controller_thumbstick_x",
-              selection: $storedAppModel.leftControllerThumbstickXAction
+              selection: session.settingsBinding($storedAppModel.leftControllerThumbstickXAction)
             )
             controllerThumbstickPicker(
               "settings_left_controller_thumbstick_y",
-              selection: $storedAppModel.leftControllerThumbstickYAction
+              selection: session.settingsBinding($storedAppModel.leftControllerThumbstickYAction)
             )
             controllerThumbstickPicker(
               "settings_right_controller_thumbstick_x",
-              selection: $storedAppModel.rightControllerThumbstickXAction
+              selection: session.settingsBinding($storedAppModel.rightControllerThumbstickXAction)
             )
             controllerThumbstickPicker(
               "settings_right_controller_thumbstick_y",
-              selection: $storedAppModel.rightControllerThumbstickYAction
+              selection: session.settingsBinding($storedAppModel.rightControllerThumbstickYAction)
             )
 
             Divider()
@@ -326,19 +332,19 @@ struct SettingsView: View {
 
             controllerShortcutPicker(
               button: .a,
-              selection: $storedAppModel.controllerButtonAAction
+              selection: session.settingsBinding($storedAppModel.controllerButtonAAction)
             )
             controllerShortcutPicker(
               button: .b,
-              selection: $storedAppModel.controllerButtonBAction
+              selection: session.settingsBinding($storedAppModel.controllerButtonBAction)
             )
             controllerShortcutPicker(
               button: .x,
-              selection: $storedAppModel.controllerButtonXAction
+              selection: session.settingsBinding($storedAppModel.controllerButtonXAction)
             )
             controllerShortcutPicker(
               button: .y,
-              selection: $storedAppModel.controllerButtonYAction
+              selection: session.settingsBinding($storedAppModel.controllerButtonYAction)
             )
           }
           .id(spatialControllerRevision)
@@ -356,7 +362,7 @@ struct SettingsView: View {
             Form {
               settingsIntroSection("settings_description_rendering")
               Section(header: Text("settings_section_rendering_interface").bold()) {
-                Toggle("settings_toggle_disable_foveation", isOn: $storedAppModel.disableFoveation)
+                Toggle("settings_toggle_disable_foveation", isOn: session.settingsBinding($storedAppModel.disableFoveation))
                 Toggle("Show dataset bounding box", isOn: Binding(get: { storedAppModel.showDatasetBoundingBox },
                   set: { try? session.perform(.setBoundingBox($0), source: .userInterface) }))
               }
@@ -370,7 +376,7 @@ struct SettingsView: View {
                          format: .number.precision(.fractionLength(1)))
                       .monospacedDigit()
                   }
-                  Slider(value: $storedAppModel.foveationSamplingStrength, in: 0...4, step: 0.1) {
+                  Slider(value: session.settingsBinding($storedAppModel.foveationSamplingStrength), in: 0...4, step: 0.1) {
                     Text("settings_label_foveation_sampling_strength")
                   }
                   Text("settings_description_foveation_sampling_strength")
@@ -382,7 +388,7 @@ struct SettingsView: View {
 
                 Picker(
                   "settings_picker_oversampling_mode",
-                  selection: $storedAppModel.oversamplingMode
+                  selection: session.settingsBinding($storedAppModel.oversamplingMode)
                 ) {
                   Text("settings_oversampling_mode_static")
                     .tag(OversamplingMode.staticMode.rawValue)
@@ -418,8 +424,8 @@ struct SettingsView: View {
                     .font(.caption)
                 }
 
-                Toggle("settings_toggle_sample_jitter", isOn: $storedAppModel.sampleJitter)
-                Picker("JIT atlas compression (RGB/RGBA)", selection: $storedAppModel.atlasCompression) {
+                Toggle("settings_toggle_sample_jitter", isOn: session.settingsBinding($storedAppModel.sampleJitter))
+                Picker("JIT atlas compression (RGB/RGBA)", selection: session.settingsBinding($storedAppModel.atlasCompression)) {
                   Text("No compression").tag(0)
                   Text(verbatim: "ASTC 4x4").tag(4)
                   Text(verbatim: "ASTC 8x8").tag(8)
@@ -446,7 +452,7 @@ struct SettingsView: View {
                     Spacer()
                     TextField(
                       "settings_label_drop_fps",
-                      value: $storedAppModel.dropFPS,
+                      value: session.settingsBinding($storedAppModel.dropFPS),
                       formatter: NumberFormatter()
                     )
                     .textFieldStyle(RoundedBorderTextFieldStyle())
@@ -459,7 +465,7 @@ struct SettingsView: View {
                     Spacer()
                     TextField(
                       "settings_label_recovery_fps",
-                      value: $storedAppModel.recoveryFPS,
+                      value: session.settingsBinding($storedAppModel.recoveryFPS),
                       formatter: NumberFormatter()
                     )
                     .textFieldStyle(RoundedBorderTextFieldStyle())
@@ -548,7 +554,7 @@ struct SettingsView: View {
             }
             Toggle(
               "settings_toggle_progressive_loading",
-              isOn: $storedAppModel.progressiveLoading
+              isOn: session.settingsBinding($storedAppModel.progressiveLoading)
             )
             Text("Datasets provided through SharePlay ad-hoc connections are always loaded progressively, regardless of this setting.")
               .font(.caption)
@@ -556,7 +562,7 @@ struct SettingsView: View {
               .fixedSize(horizontal: false, vertical: true)
             Toggle(
               "settings_toggle_store_local_copy",
-              isOn: $storedAppModel.makeLocalCopy
+              isOn: session.settingsBinding($storedAppModel.makeLocalCopy)
             )
           }
 
@@ -574,28 +580,28 @@ struct SettingsView: View {
         Form {
           settingsIntroSection("settings_description_local_server")
           Section(header: Text("settings_section_background_server").bold()) {
-            Toggle("settings_toggle_enable_dataset_server", isOn: $storedAppModel.enableDatasetServer)
+            Toggle("settings_toggle_enable_dataset_server", isOn: session.settingsBinding($storedAppModel.enableDatasetServer))
             if storedAppModel.enableDatasetServer {
-              Toggle("settings_toggle_autostart_dataset_server", isOn: $storedAppModel.autoStartServer)
+              Toggle("settings_toggle_autostart_dataset_server", isOn: session.settingsBinding($storedAppModel.autoStartServer))
               HStack {
                 Text("settings_label_dataset_server_port")
                 Spacer()
                 TextField(
                   String(BorgVRSharedDefaults.datasetServerPort),
-                  value: $storedAppModel.serverPort,
+                  value: session.settingsBinding($storedAppModel.serverPort),
                   formatter: portNumberFormatter
                 )
                 .textFieldStyle(RoundedBorderTextFieldStyle())
                 .keyboardType(.numberPad)
                 .frame(width: 100)
               }
-              SecureField("settings_label_dataset_server_password", text: $storedAppModel.serverPassword)
+              SecureField("settings_label_dataset_server_password", text: session.settingsBinding($storedAppModel.serverPassword))
               if let error = storedAppModel.credentialStorageError { Text(error).foregroundStyle(.red) }
-              Stepper(value: $storedAppModel.maxBricksPerGetRequest, in: 1...1000) {
+              Stepper(value: session.settingsBinding($storedAppModel.maxBricksPerGetRequest), in: 1...1000) {
                 Text(String(format: NSLocalizedString("settings_label_max_bricks_per_request_format", comment: "Maximum bricks per request"), storedAppModel.maxBricksPerGetRequest))
               }
-              Toggle("settings_toggle_enable_webgpu_server", isOn: $storedAppModel.enableWebServer)
-              Toggle("settings_toggle_use_https", isOn: $storedAppModel.webServerUsesTLS)
+              Toggle("settings_toggle_enable_webgpu_server", isOn: session.settingsBinding($storedAppModel.enableWebServer))
+              Toggle("settings_toggle_use_https", isOn: session.settingsBinding($storedAppModel.webServerUsesTLS))
               if !storedAppModel.webServerUsesTLS {
                 Text("settings_note_http_localhost_only")
                   .font(.caption)
@@ -603,7 +609,7 @@ struct SettingsView: View {
               }
               if storedAppModel.webServerUsesTLS {
                 WebServerCertificateControls(
-                  certificateData: $storedAppModel.webServerCertificateData
+                  certificateData: session.settingsBinding($storedAppModel.webServerCertificateData)
                 )
               }
               HStack {
@@ -611,7 +617,7 @@ struct SettingsView: View {
                 Spacer()
                 TextField(
                   String(BorgVRSharedDefaults.webServerPort),
-                  value: $storedAppModel.webServerPort,
+                  value: session.settingsBinding($storedAppModel.webServerPort),
                   formatter: portNumberFormatter
                 )
                 .textFieldStyle(RoundedBorderTextFieldStyle())
@@ -630,7 +636,7 @@ struct SettingsView: View {
               Spacer()
               TextField(
                 "settings_placeholder_shareplay_server_port",
-                value: $storedAppModel.sharePlayServerPort,
+                value: session.settingsBinding($storedAppModel.sharePlayServerPort),
                 formatter: portNumberFormatter
               )
               .textFieldStyle(RoundedBorderTextFieldStyle())
@@ -642,7 +648,7 @@ struct SettingsView: View {
               Spacer()
               TextField(
                 String(BorgVRSharedDefaults.sharePlayWebServerPort),
-                value: $storedAppModel.sharePlayWebServerPort,
+                value: session.settingsBinding($storedAppModel.sharePlayWebServerPort),
                 formatter: portNumberFormatter
               )
               .textFieldStyle(RoundedBorderTextFieldStyle())
@@ -704,10 +710,10 @@ struct SettingsView: View {
 
             Toggle(
               "settings_toggle_compression",
-              isOn: $storedAppModel.enableCompression
+              isOn: session.settingsBinding($storedAppModel.enableCompression)
             )
-            Toggle("Quantize imports to 8 bits per channel", isOn: $storedAppModel.quantizeImportsTo8Bit)
-            Picker("Stored color compression (RGB/RGBA)", selection: $storedAppModel.importColorCompression) {
+            Toggle("Quantize imports to 8 bits per channel", isOn: session.settingsBinding($storedAppModel.quantizeImportsTo8Bit))
+            Picker("Stored color compression (RGB/RGBA)", selection: session.settingsBinding($storedAppModel.importColorCompression)) {
               Text("No compression").tag(0)
               Text(verbatim: "ASTC 4x4").tag(4)
               Text(verbatim: "ASTC 8x8").tag(8)
@@ -716,12 +722,12 @@ struct SettingsView: View {
               .font(.caption)
               .foregroundStyle(.secondary)
               .fixedSize(horizontal: false, vertical: true)
-            Picker("Fusion interpolation", selection: $storedAppModel.dicomResamplingFilter) {
+            Picker("Fusion interpolation", selection: session.settingsBinding($storedAppModel.dicomResamplingFilter)) {
               Text("Trilinear").tag(BorgVRVolumeResamplingFilter.trilinear)
               Text("Nearest Neighbor").tag(BorgVRVolumeResamplingFilter.nearestNeighbor)
             }
 
-            Picker("settings_picker_borders", selection: $storedAppModel.borderMode) {
+            Picker("settings_picker_borders", selection: session.settingsBinding($storedAppModel.borderMode)) {
               Text("settings_border_zeroes").tag("zeroes")
               Text("settings_border_border").tag("border")
               Text("settings_border_repeat").tag("repeat")
@@ -739,11 +745,11 @@ struct SettingsView: View {
           )
           Section(header: Text("Model Context Protocol").bold()) {
             MCPSettingsControls(
-              enabled: $storedAppModel.enableMCPServer,
-              port: $storedAppModel.mcpServerPort,
-              allowRemoteConnections: $storedAppModel.mcpAllowRemoteConnections,
-              accessToken: $storedAppModel.mcpAccessToken,
-              certificateData: $storedAppModel.mcpServerCertificateData,
+              enabled: session.settingsBinding($storedAppModel.enableMCPServer),
+              port: session.settingsBinding($storedAppModel.mcpServerPort),
+              allowRemoteConnections: session.settingsBinding($storedAppModel.mcpAllowRemoteConnections),
+              accessToken: session.settingsBinding($storedAppModel.mcpAccessToken),
+              certificateData: session.settingsBinding($storedAppModel.mcpServerCertificateData),
               statusText: mcpController.statusText
             )
             Button("Reset") {
@@ -757,12 +763,12 @@ struct SettingsView: View {
         Form {
           settingsIntroSection("Choose how you appear to other people during SharePlay collaboration. Your display name is shared only with participants in the current session.")
           Section(header: Text("Identity").bold()) {
-            TextField("SharePlay display name", text: $storedAppModel.sharePlayDisplayName)
+            TextField("SharePlay display name", text: session.settingsBinding($storedAppModel.sharePlayDisplayName))
           }
           Section(header: Text("settings_section_markers").bold()) {
             Toggle(
               "settings_toggle_share_stylus_position",
-              isOn: $storedAppModel.shareSpatialStylusPosition
+              isOn: session.settingsBinding($storedAppModel.shareSpatialStylusPosition)
             )
             Text("settings_share_stylus_position_description")
               .font(.footnote)
@@ -777,7 +783,7 @@ struct SettingsView: View {
               InterfaceVisibilitySettingsView(visibility: Binding(
                 get: { storedAppModel.interfaceVisibility }, set: { storedAppModel.interfaceVisibility = $0 }))
               Section("Diagnostics") {
-                Toggle("settings_toggle_show_profiling", isOn: $storedAppModel.showProfiling)
+                Toggle("settings_toggle_show_profiling", isOn: session.settingsBinding($storedAppModel.showProfiling))
               }
               Button("Reset") {
                 storedAppModel.interfaceVisibility = InterfaceVisibility()
@@ -901,11 +907,11 @@ struct SettingsView: View {
 
             Toggle(
               "settings_toggle_request_low_res_lod",
-              isOn: $storedAppModel.requestLowResLOD
+              isOn: session.settingsBinding($storedAppModel.requestLowResLOD)
             )
             Toggle(
               "settings_toggle_stop_on_miss",
-              isOn: $storedAppModel.stopOnMiss
+              isOn: session.settingsBinding($storedAppModel.stopOnMiss)
             )
 
           }

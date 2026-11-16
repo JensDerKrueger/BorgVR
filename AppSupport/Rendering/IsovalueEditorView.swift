@@ -3,9 +3,7 @@ import SwiftUI
 struct IsovalueEditorView: View {
   @EnvironmentObject private var renderingParameters: RenderingParameters
   @EnvironmentObject private var sharePlay: SharePlayCoordinator
-#if os(macOS)
   @EnvironmentObject private var session: ScreenBorgVRSession
-#endif
   var usesPanelBackground = true
   var showsTitle = true
   var onClose: (() -> Void)?
@@ -43,7 +41,7 @@ struct IsovalueEditorView: View {
           .font(.headline)
       }
 
-      Slider(value: $renderingParameters.normIsoValue, in: 0...1)
+      Slider(value: session.binding($renderingParameters.normIsoValue), in: 0...1)
         .onChange(of: renderingParameters.normIsoValue) {
           sharePlay.synchronize(kind: .stateOnly)
         }

@@ -3,6 +3,7 @@ import UIKit
 import UniformTypeIdentifiers
 
 struct MarkerView: View {
+  @EnvironmentObject private var session: VisionBorgVRSession
   @Environment(RuntimeAppModel.self) private var runtimeAppModel
   @Environment(SharedAppModel.self) private var sharedAppModel
   @EnvironmentObject var storedAppModel: StoredAppModel
@@ -95,6 +96,10 @@ struct MarkerView: View {
         sourceURL: export.sourceURL,
         defaultDirectoryURL: markerStorageDirectoryURL
       ) { exportedURL in
+        if let exportedURL {
+          do { try session.captureFileExport(.success(exportedURL)) }
+          catch { runtimeAppModel.logger.warning(error.localizedDescription) }
+        }
         export.removeTemporaryFiles()
         pendingObjectExport = nil
         if exportedURL != nil {

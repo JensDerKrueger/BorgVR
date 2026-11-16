@@ -7,6 +7,7 @@ import UniformTypeIdentifiers
  A SwiftUI view for editing a 1D transfer function used in volume rendering.
  */
 struct TransferFunctionEditorView: View {
+  @EnvironmentObject private var session: VisionBorgVRSession
   /// The shared application model, which holds the current interaction mode.
   @Environment(RuntimeAppModel.self) private var runtimeAppModel
   /// The shared rendering parameters, including the transfer function to edit.
@@ -77,6 +78,7 @@ struct TransferFunctionEditorView: View {
       ))
     }
     transferFunction.scheduleSmoothSteps(operations) {
+      self.session.commitExternalMutation(source: .userInterface, domain: .transferFunction)
       self.sharedAppModel.synchronize(kind: .full)
     }
   }
@@ -157,7 +159,7 @@ struct TransferFunctionEditorView: View {
         selection: Binding(
           get: { storedAppModel.tfMode },
           set: { newValue in
-            storedAppModel.tfMode = newValue
+            session.mutateSettings { storedAppModel.tfMode = newValue }
           }
         )
       ) {
@@ -294,7 +296,9 @@ struct TransferFunctionEditorView: View {
                   .appendingPathComponent(name)
                   .appendingPathExtension("tf1d")
                 do {
-                  try transferFunction.save(to: url, description: saveDescription)
+                  try session.performFileAction(outputs: [url]) {
+                    try transferFunction.save(to: url, description: saveDescription)
+                  }
                   try TransferFunctionCatalog.store(
                     transferFunction: transferFunction,
                     description: saveDescription
@@ -320,7 +324,7 @@ struct TransferFunctionEditorView: View {
 
             // Auto-load/save toggle
             Text("tf_editor_autoload_label")
-            Toggle("", isOn: $storedAppModel.autoloadTF)
+            Toggle("", isOn: session.settingsBinding($storedAppModel.autoloadTF))
               .labelsHidden()
           }
           HStack {
@@ -401,7 +405,10 @@ struct TransferFunctionEditorView: View {
               contentType: .data,
               defaultFilename: "TransferFunction.tf1d"
             ) { result in
-              if case .failure(let error) = result {
+              do {
+                _ = try result.get()
+                try session.captureFileExport(result)
+              } catch {
                 saveError = error
                 showSaveError = true
               }

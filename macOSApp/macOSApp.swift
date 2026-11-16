@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -39,6 +40,38 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   }
 }
 
+@MainActor
+enum MacCommandRecordingSaver {
+  private static var isSaving = false
+
+  static func save(session: ScreenBorgVRSession, suggestedName: String, onError: @escaping (Error) -> Void) {
+    guard !isSaving else { return }
+    isSaving = true
+    Task { @MainActor in
+      defer { isSaving = false }
+      do {
+        try await session.finishCommandRecording()
+        let script = try session.recordedGSCScript() + "\n"
+        let panel = NSSavePanel()
+        panel.title = String(localized: "Save Recording")
+        panel.message = String(localized: "Save the recorded interactions as a GSC script.")
+        panel.canCreateDirectories = true
+        panel.allowedContentTypes = [UTType(filenameExtension: "gsc") ?? .plainText]
+        let forbidden = CharacterSet(charactersIn: "/:").union(.controlCharacters)
+        let sanitized = suggestedName.components(separatedBy: forbidden).joined(separator: "-")
+          .trimmingCharacters(in: .whitespacesAndNewlines)
+        let filename = sanitized.isEmpty ? "BorgVR Recording" : sanitized
+        panel.nameFieldStringValue = filename.hasSuffix(".gsc") ? filename : filename + ".gsc"
+        panel.begin { response in
+          guard response == .OK, let url = panel.url else { return }
+          do { try script.write(to: url, atomically: true, encoding: .utf8) }
+          catch { onError(error) }
+        }
+      } catch { onError(error) }
+    }
+  }
+}
+
 @main
 struct macOSApp: App {
   @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
@@ -58,6 +91,7 @@ struct macOSApp: App {
   private var sharePlayDisplayNameOnboardingCompleted = false
   @State private var showsSharePlayDisplayNameOnboarding = false
   @State private var sharePlayDisplayNameDraft = ""
+  @State private var recordingSaveError: Error?
   @StateObject private var settingsFiles = SettingsFileController()
   @StateObject private var windowAutomation = MacWindowAutomation()
 
@@ -102,6 +136,12 @@ struct macOSApp: App {
       }
     )
 
+    let windowAutomation = MacWindowAutomation()
+    windowAutomation.commandExecutor = session
+    session.configureRecordingContext { [weak windowAutomation] in
+      windowAutomation?.recordingContextActions() ?? []
+    }
+    _windowAutomation = StateObject(wrappedValue: windowAutomation)
     _appModel = StateObject(wrappedValue: appModel)
     _renderingParameters = StateObject(wrappedValue: renderingParameters)
     _appSettings = StateObject(wrappedValue: appSettings)
@@ -118,6 +158,11 @@ struct macOSApp: App {
   var body: some Scene {
     WindowGroup("BorgVR") {
       ContentView()
+        .alert("Unable to Save Recording", isPresented: Binding(
+          get: { recordingSaveError != nil }, set: { if !$0 { recordingSaveError = nil } }
+        )) {
+          Button("OK", role: .cancel) { recordingSaveError = nil }
+        } message: { Text(recordingSaveError?.localizedDescription ?? "") }
         .background(MacAutomationWindowReader(automation: windowAutomation).frame(width: 0, height: 0))
 #if DEBUG
         .background(AppStoreScreenshotWindowFrame().frame(width: 0, height: 0))
@@ -176,6 +221,7 @@ struct macOSApp: App {
         .environmentObject(mcpController)
         .frame(minWidth: 980, minHeight: 680)
         .onAppear {
+          settingsFiles.applySettings = { operation in try session.mutateSettings { try operation() } }
           appDelegate.saveOpenDatasetState = { saveOpenDatasetState() }
           presentSharePlayDisplayNameOnboardingIfNeeded()
           sharePlay.startObservingSessions(
@@ -247,6 +293,7 @@ struct macOSApp: App {
     .defaultSize(width: 1200, height: 820)
     .commands {
       BorgVRMenuCommands(
+        recordingSaveDidFail: { recordingSaveError = $0 },
         appModel: appModel,
         renderingParameters: renderingParameters,
         appSettings: appSettings,
@@ -521,6 +568,7 @@ struct macOSApp: App {
 }
 
 private struct BorgVRMenuCommands: Commands {
+  var recordingSaveDidFail: (Error) -> Void
   @ObservedObject var appModel: AppModel
   @ObservedObject var renderingParameters: RenderingParameters
   @ObservedObject var appSettings: AppSettings
@@ -861,7 +909,8 @@ private struct BorgVRMenuCommands: Commands {
       .disabled(!hasActiveDataset || session.isCommandRecording)
 
       Button {
-        docking.request(.stopRecording)
+        MacCommandRecordingSaver.save(session: session,
+          suggestedName: appModel.activeDataset?.description ?? "BorgVR Recording", onError: recordingSaveDidFail)
       } label: {
         menuLabel("Stop and Save", systemImage: "stop.circle.fill")
       }

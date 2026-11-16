@@ -512,6 +512,7 @@ final class BorgVRMCPContinuationGate<Value>: @unchecked Sendable {
 
 @MainActor
 protocol BorgVRMCPCommandService: AnyObject {
+  var commandExecutor: (any BorgVRCommandExecuting)? { get }
   var windowAutomation: (any BorgVRWindowAutomation)? { get }
   var volumeEditing: any BorgVRVolumeEditingCommands { get }
   func activateVolumeEditing()
@@ -563,6 +564,95 @@ protocol BorgVRMCPCommandService: AnyObject {
     normalizedIsoValue: Float?
   ) async throws -> BorgVRMCPIsoSurfaceExport
   func captureScreenshot(includeAlpha: Bool) async throws -> BorgVRMCPImage
+}
+
+extension BorgVRMCPCommandService {
+  var commandExecutor: (any BorgVRCommandExecuting)? { nil }
+
+  func replayCommandRecording(_ data: Data) async throws {
+    let commands = try BorgVRRecordedGSC.commands(in: data)
+    for command in commands {
+      try Task.checkCancellation()
+      try await executeRecordedCommand(command)
+    }
+  }
+
+  func captureScreenshot(to outputURL: URL?, includeAlpha: Bool, overwrite: Bool) async throws -> BorgVRMCPImage {
+    if let commandExecutor, !BorgVRCommandExecutionContext.executingAction {
+      return try await commandExecutor.performAction(.captureScreenshot(path: outputURL?.path, includeAlpha: includeAlpha),
+        source: BorgVRCommandExecutionContext.source) {
+        try await self.captureScreenshot(to: outputURL, includeAlpha: includeAlpha, overwrite: overwrite)
+      }
+    }
+    let image = try await captureScreenshot(includeAlpha: includeAlpha)
+    if let outputURL { try BorgVRAutomationFile.write(image.pngData, to: outputURL, overwrite: overwrite) }
+    return image
+  }
+
+  func executeRecordedCommand(_ command: BorgVRCommand) async throws {
+    guard let commandExecutor else { throw BorgVRMCPCommandError.unsupported("No command executor is available.") }
+    switch command {
+      case .action(.purgeAtlas), .action(.captureRotation):
+        try commandExecutor.perform(command, source: .gsc)
+        return
+      default: break
+    }
+    guard case .action(let action) = command else {
+      try commandExecutor.perform(command, source: .gsc)
+      return
+    }
+    try await commandExecutor.performAction(action, source: .gsc) {
+      switch action {
+        case .configureBrush(let mode, let radius, let projection, let channels):
+          try volumeEditing.configureVolumeBrush(mode: mode, radiusFraction: radius, projectsOntoVolume: projection)
+          try volumeEditing.setVolumeBrushChannels(channels)
+        case .editVolume(let mode, let samples, let channels):
+          activateVolumeEditing()
+          try volumeEditing.setVolumeBrushChannels(channels)
+          try await volumeEditing.editVolume(mode: mode, samples: samples)
+          try await volumeEditing.waitForVolumeEdits(timeout: 300)
+        case .discardVolumeEdits:
+          try await volumeEditing.discardVolumeEdits()
+        case .restoreEditState(let snapshot, let state, let workingStateID):
+          guard let brush = volumeEditing as? VolumeBrushModel else { throw BorgVRVolumeEditingCommandError.unavailable }
+          try await brush.restoreRecordingSnapshot(snapshot, state: state, workingStateID: workingStateID)
+        case .installSavedEditState(let snapshot, let state):
+          guard let brush = volumeEditing as? VolumeBrushModel else { throw BorgVRVolumeEditingCommandError.unavailable }
+          try await brush.installRecordedSavedState(snapshot, state: state)
+        case .selectEditState(let id): try await volumeEditing.selectState(id)
+        case .duplicateEditState(let name, let empty): try await volumeEditing.duplicateState(name: name, empty: empty)
+        case .renameEditState(let id, let name): try volumeEditing.renameState(id, name: name)
+        case .deleteEditState(let id): try volumeEditing.deleteState(id)
+        case .openDataset(let id): try await openDataset(id: id)
+        case .closeDataset: try await closeDataset()
+        case .captureScreenshot(let path, let alpha):
+          _ = try await captureScreenshot(to: path.map { URL(fileURLWithPath: $0) }, includeAlpha: alpha, overwrite: true)
+        case .resizeWindow(let width, let height, let units, let area):
+          _ = try await resizeWindow(width: width, height: height, units: units, area: area)
+        case .setFullscreen(let enabled): _ = try await setFullscreen(enabled)
+        case .saveTransferFunction(let channel, let path):
+          try saveTransferFunction(channel: channel, to: URL(fileURLWithPath: path), overwrite: true)
+        case .saveVisualizationState(let path):
+          try saveVisualizationState(to: URL(fileURLWithPath: path), overwrite: true)
+        case .saveSettings(let path, let credentials):
+          try saveSettings(to: URL(fileURLWithPath: path), includeCredentials: credentials, overwrite: true)
+        case .writeFiles(let files):
+          for file in files {
+            let url = URL(fileURLWithPath: file.path)
+            try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try BorgVRAutomationFile.write(file.data, to: url, overwrite: true)
+          }
+        case .exportVolume(let path, let name, let description):
+          let job = try volumeEditing.startVolumeExport(to: URL(fileURLWithPath: path), name: name, description: description)
+          let result = try await volumeEditing.waitForVolumeExport(id: job.id)
+          guard result.status == .completed else { throw BorgVRVolumeEditingCommandError.exportFailed(result.error ?? "Export failed.") }
+        case .exportIsoSurface(let path, let iso):
+          _ = try await exportIsoSurface(to: URL(fileURLWithPath: path), normalizedIsoValue: iso)
+        case .purgeAtlas, .captureRotation:
+          throw BorgVRMCPCommandError.unsupported("This profiling action is not available on this platform.")
+      }
+    }
+  }
 }
 
 struct BorgVRMCPWindowState: Codable, Sendable {
@@ -658,6 +748,10 @@ extension BorgVRMCPCommandService {
     guard let windowAutomation else {
       throw BorgVRMCPCommandError.unsupported("Window automation is available only on macOS.")
     }
+    if let commandExecutor {
+      return try await commandExecutor.performAction(.resizeWindow(width: width, height: height, units: units, area: area),
+        source: .mcp) { try await windowAutomation.resize(width: width, height: height, units: units, area: area) }
+    }
     return try await windowAutomation.resize(width: width, height: height, units: units, area: area)
   }
 
@@ -665,10 +759,20 @@ extension BorgVRMCPCommandService {
     guard let windowAutomation else {
       throw BorgVRMCPCommandError.unsupported("Window automation is available only on macOS.")
     }
+    if let commandExecutor {
+      return try await commandExecutor.performAction(.setFullscreen(enabled), source: .mcp) {
+        try await windowAutomation.setFullscreen(enabled)
+      }
+    }
     return try await windowAutomation.setFullscreen(enabled)
   }
 
   func saveSettings(to url: URL, includeCredentials: Bool, overwrite: Bool = false) throws {
+    if let commandExecutor, !BorgVRCommandExecutionContext.executingAction {
+      return try commandExecutor.performAction(.saveSettings(path: url.path, includeCredentials: includeCredentials), source: .mcp) {
+        try self.saveSettings(to: url, includeCredentials: includeCredentials, overwrite: overwrite)
+      }
+    }
     try BorgVRAutomationFile.write(settingsStore().export(includeCredentials: includeCredentials),
       to: url, overwrite: overwrite)
     if includeCredentials { try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path) }
@@ -676,10 +780,16 @@ extension BorgVRMCPCommandService {
 
   func loadSettings(from url: URL) throws {
     let data = try BorgVRAutomationFile.read(url, maximumBytes: BorgVRSettingsStore.maximumFileSize)
-    try settingsStore().importForAutomation(data)
+    if let commandExecutor {
+      try commandExecutor.mutateSettings(source: .mcp) { try settingsStore().importForAutomation(data) }
+    } else { try settingsStore().importForAutomation(data) }
   }
 
-  func resetSettings() throws { try settingsStore().resetForAutomation() }
+  func resetSettings() throws {
+    if let commandExecutor {
+      try commandExecutor.mutateSettings(source: .mcp) { try settingsStore().resetForAutomation() }
+    } else { try settingsStore().resetForAutomation() }
+  }
 
   func loadTransferFunction(channel: Int, from url: URL) throws {
     let data = try BorgVRAutomationFile.read(url, maximumBytes: TransferFunction1D.maximumFileByteCount)
@@ -688,12 +798,22 @@ extension BorgVRMCPCommandService {
   }
 
   func saveTransferFunction(channel: Int, to url: URL, overwrite: Bool = false) throws {
+    if let commandExecutor, !BorgVRCommandExecutionContext.executingAction {
+      return try commandExecutor.performAction(.saveTransferFunction(channel: channel, path: url.path), source: .mcp) {
+        try self.saveTransferFunction(channel: channel, to: url, overwrite: overwrite)
+      }
+    }
     let value = try transferFunction(channel: channel)
     let tf = try TransferFunction1D(samples: value.validatedSamples())
     try BorgVRAutomationFile.write(tf.serialize(), to: url, overwrite: overwrite)
   }
 
   func saveVisualizationState(to url: URL, overwrite: Bool = false) throws {
+    if let commandExecutor, !BorgVRCommandExecutionContext.executingAction {
+      return try commandExecutor.performAction(.saveVisualizationState(path: url.path), source: .mcp) {
+        try self.saveVisualizationState(to: url, overwrite: overwrite)
+      }
+    }
     let state = applicationState()
     guard state.dataset != nil, state.rendererReady else { throw BorgVRMCPCommandError.noDataset }
     var functions: [BorgVRMCPTransferFunction] = []

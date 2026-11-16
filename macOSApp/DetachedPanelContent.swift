@@ -71,10 +71,10 @@ struct DetachedPanelContent: View {
           DockableEditorPanel(panel: panel, detached: true) {
             LightingEditorView(
               renderMode: renderingParameters.renderMode,
-              lightDirection: $renderingParameters.lightDirection,
-              ambientLightColor: $renderingParameters.ambientLightColor,
-              diffuseLightColor: $renderingParameters.diffuseLightColor,
-              specularLightColor: $renderingParameters.specularLightColor,
+              lightDirection: session.binding($renderingParameters.lightDirection),
+              ambientLightColor: session.binding($renderingParameters.ambientLightColor),
+              diffuseLightColor: session.binding($renderingParameters.diffuseLightColor),
+              specularLightColor: session.binding($renderingParameters.specularLightColor),
               usesPanelBackground: false,
               showsTitle: false,
               onChange: {

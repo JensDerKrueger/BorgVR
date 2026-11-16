@@ -15,6 +15,7 @@ private struct PanelPresetDocument: FileDocument {
 }
 
 private struct PanelParameterControls<Value: Codable>: ViewModifier {
+  @EnvironmentObject private var session: ScreenBorgVRSession
   let kind: String
   let reset: PanelAction
   let snapshot: () -> Value
@@ -39,7 +40,10 @@ private struct PanelParameterControls<Value: Codable>: ViewModifier {
       }
       .fileExporter(isPresented: $exports, document: document, contentType: .json,
         defaultFilename: "\(kind).json") { result in
-          if case .failure(let error) = result { self.error = error }
+          do {
+            let url = try result.get()
+            try session.performFileAction(outputs: [url]) {}
+          } catch { self.error = error }
         }
       .alert("Panel File Error", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
         Button("OK", role: .cancel) {}
