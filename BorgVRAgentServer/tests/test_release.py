@@ -82,6 +82,7 @@ def test_loaded_image_must_match_tested_image(tmp_path, monkeypatch):
 
 
 def publish_env(monkeypatch):
+    monkeypatch.delenv("GITHUB_STEP_SUMMARY", raising=False)
     for key, value in {"GITHUB_REPOSITORY": REPOSITORY, "GITHUB_SHA": COMMIT,
                        "GITHUB_REF": "refs/heads/main", "AGENT_VERSION": "3.9.0", "AGENT_PUBLISH": "true"}.items():
         monkeypatch.setenv(key, value)

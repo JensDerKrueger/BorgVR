@@ -2,6 +2,7 @@
 
 import argparse
 import ipaddress
+import json
 import os
 from pathlib import Path
 import re
@@ -111,6 +112,13 @@ def device_group(name):
         return str(grp.getgrnam(name).gr_gid)
     except KeyError:
         return "0"
+
+
+def gpu_groups(root):
+    groups = [read_value(name, root) for name in ("BORGVR_GID", "BORGVR_RENDER_GID", "BORGVR_VIDEO_GID")]
+    if any(not value.isdecimal() or int(value) > 2**32 - 2 for value in groups):
+        raise ValueError("GPU groups must be numeric group IDs")
+    return {"services": {"vllm": {"group_add": list(dict.fromkeys(str(int(value)) for value in groups))}}}
 
 
 def inference_values(args, existing=None):
@@ -271,6 +279,7 @@ def main():
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("prepare-secrets")
     sub.add_parser("validate-model")
+    sub.add_parser("gpu-groups")
     sub.add_parser("profiles")
     change = sub.add_parser("configure")
     change.add_argument("--agent-image", type=image_reference)
@@ -292,6 +301,9 @@ def main():
     args = parser.parse_args()
     if args.command == "validate-model":
         ModelConfig.from_env(read_configuration(ROOT))
+        gpu_groups(ROOT)
+    elif args.command == "gpu-groups":
+        print(json.dumps(gpu_groups(ROOT)))
     elif args.command == "profiles":
         for name, values in PROFILES.items():
             print(f"{name}: {values['MODEL'] or 'explicit model/revision/parser required'}; context {values['CONTEXT_LENGTH']}; disk reserve {values['MIN_FREE_GIB']} GiB")

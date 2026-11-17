@@ -84,7 +84,13 @@ choose_docker() {
   "${DOCKER[@]}" compose version >/dev/null || die 'Docker Compose v2 plugin is required.'
 }
 compose() {
-  "${DOCKER[@]}" compose --project-directory "$DIR" --env-file "$DIR/.env" -f "$DIR/compose.yaml" -f "$DIR/compose.$BACKEND.yaml" "$@"
+  if [[ "$BACKEND" == rocm ]]; then
+    "${DOCKER[@]}" compose --project-directory "$DIR" --env-file "$DIR/.env" \
+      -f "$DIR/compose.yaml" -f "$DIR/compose.rocm.yaml" -f <(python3 "$DIR/configure.py" gpu-groups) "$@"
+  else
+    "${DOCKER[@]}" compose --project-directory "$DIR" --env-file "$DIR/.env" \
+      -f "$DIR/compose.yaml" -f "$DIR/compose.cuda.yaml" "$@"
+  fi
 }
 check_gpu() {
   [[ "$(uname -s)" == Linux && "$(uname -m)" == x86_64 ]] || die 'The inference deployment targets Linux x86_64 with an NVIDIA or AMD GPU.'

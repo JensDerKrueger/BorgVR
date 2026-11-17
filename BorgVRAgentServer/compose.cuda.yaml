@@ -1,6 +1,7 @@
 # NVIDIA runtime selection; common service configuration stays in compose.yaml.
 services:
   vllm:
+    group_add: ["${BORGVR_GID}"]
     deploy:
       resources:
         reservations:

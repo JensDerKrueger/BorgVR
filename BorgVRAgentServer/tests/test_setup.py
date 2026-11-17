@@ -127,7 +127,8 @@ def test_deployment_has_no_public_inference_port_or_privileged_mode():
     assert "build:" in (root / "compose.build.yaml").read_text()
     assert (root / "Dockerfile").read_text().splitlines()[0] == "FROM " + PYTHON_IMAGE
     vllm = yaml.safe_load(text)["services"]["vllm"]
-    assert vllm["group_add"] == ["${BORGVR_GID}"]
+    cuda = yaml.safe_load((root / "compose.cuda.yaml").read_text())["services"]["vllm"]
+    assert cuda["group_add"] == ["${BORGVR_GID}"]
     assert vllm["cap_drop"] == ["ALL"] and "cap_add" not in vllm
 
 
@@ -256,6 +257,10 @@ def operations(tmp_path):
     executable(binary / "docker", '''#!/usr/bin/env python3
 import json,os,sys
 args=sys.argv[1:]
+for value in args:
+    if value.startswith("/dev/fd/"):
+        with open(value) as overlay:
+            assert isinstance(json.load(overlay)["services"]["vllm"]["group_add"],list)
 with open(os.environ["TRACE"], "a") as handle:
     handle.write(json.dumps({"args":args,"image":os.environ.get("BORGVR_AGENT_IMAGE")})+"\\n")
 sys.exit(42 if os.environ.get("FAIL_COMMAND") in args else 0)

@@ -19,7 +19,6 @@ services:
   vllm:
     image: ${BORGVR_VLLM_IMAGE:?Run setup.sh first}
     restart: unless-stopped
-    group_add: ["${BORGVR_GID}"]
     entrypoint: ["python3", "/opt/borgvr/vllm_start.py"]
     environment:
       <<: *model-environment

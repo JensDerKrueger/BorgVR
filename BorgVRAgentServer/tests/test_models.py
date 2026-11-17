@@ -108,3 +108,11 @@ def test_legacy_configuration_keeps_model_and_cuda_defaults(tmp_path):
 def test_recursive_python_caches_are_excluded_from_image_context():
     text = (Path(__file__).resolve().parents[1] / ".dockerignore").read_text()
     assert "**/__pycache__" in text and "**/*.pyc" in text
+
+
+@pytest.mark.parametrize("groups,expected", [(("1000", "1000", "0"), ["1000", "0"]),
+    (("10001", "107", "44"), ["10001", "107", "44"]), (("0", "0", "0"), ["0"])])
+def test_rocm_group_overlay_deduplicates_host_groups(tmp_path, groups, expected):
+    keys = ("BORGVR_GID", "BORGVR_RENDER_GID", "BORGVR_VIDEO_GID")
+    (tmp_path / ".env").write_text("".join(f"{key}={value}\n" for key, value in zip(keys, groups)))
+    assert configure.gpu_groups(tmp_path)["services"]["vllm"]["group_add"] == expected

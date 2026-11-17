@@ -64,6 +64,7 @@ def main():
     assert info["Architecture"] == "amd64" and info["Os"] == "linux"
     assert info["Config"]["User"] == "10001:10001"
     compose = yaml.safe_load((Path(__file__).resolve().parents[1] / "compose.yaml").read_text())
+    cuda = yaml.safe_load((Path(__file__).resolve().parents[1] / "compose.cuda.yaml").read_text())
     tmpfs_args = [arg for mount in compose["services"]["agent"]["tmpfs"] for arg in ("--tmpfs", mount)]
     container = None
     protected_container = None
@@ -84,7 +85,7 @@ def main():
             # Reproduce vLLM's root-without-capabilities context, not just the agent's UID.
             denied = subprocess.run(["docker", *probe, args.image, "-c", read], capture_output=True, text=True)
             assert denied.returncode != 0 and "PermissionError" in denied.stderr
-            groups = [arg for value in compose["services"]["vllm"]["group_add"]
+            groups = [arg for value in cuda["services"]["vllm"]["group_add"]
                       for arg in ("--group-add", value.replace("${BORGVR_GID}", str(group)))]
             docker(*probe, *groups, args.image, "-c", read)
             assert not docker("ps", "-aq", "--filter", f"label={LABEL}={PROJECT}"), "A BorgVR deployment already exists; refusing the test"
