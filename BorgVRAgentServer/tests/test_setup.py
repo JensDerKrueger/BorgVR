@@ -7,6 +7,7 @@ import shutil
 import subprocess
 
 import pytest
+import yaml
 
 import configure
 from configure import AGENT_UID, AGENT_GID, DEFAULT_AGENT_IMAGE, PYTHON_IMAGE, create_configuration, hostname
@@ -85,6 +86,12 @@ def test_deployment_has_no_public_inference_port_or_privileged_mode():
     assert "build:" not in text
     assert "build:" in (root / "compose.build.yaml").read_text()
     assert (root / "Dockerfile").read_text().splitlines()[0] == "FROM " + PYTHON_IMAGE
+
+
+def test_agent_tmpfs_is_one_mount_with_security_options():
+    path = Path(__file__).resolve().parents[1] / "compose.yaml"
+    agent = yaml.safe_load(path.read_text())["services"]["agent"]
+    assert agent["tmpfs"] == ["/tmp:size=64m,noexec,nosuid"]
 
 
 def host_function(code, *args):

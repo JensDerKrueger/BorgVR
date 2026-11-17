@@ -12,6 +12,7 @@ import tempfile
 import time
 
 import httpx
+import yaml
 from websockets.exceptions import InvalidStatus
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -62,6 +63,8 @@ def main():
     info = json.loads(docker("image", "inspect", args.image))[0]
     assert info["Architecture"] == "amd64" and info["Os"] == "linux"
     assert info["Config"]["User"] == "10001:10001"
+    compose = yaml.safe_load((Path(__file__).resolve().parents[1] / "compose.yaml").read_text())
+    tmpfs_args = [arg for mount in compose["services"]["agent"]["tmpfs"] for arg in ("--tmpfs", mount)]
     container = None
     protected_container = None
     probe_created = False
@@ -82,7 +85,7 @@ def main():
             network_created = True
             container = docker(
                 "run", "-d", "--read-only", "--cap-drop", "ALL", "--security-opt", "no-new-privileges:true",
-                "--tmpfs", "/tmp:size=64m,noexec,nosuid", "--memory", "512m", "--pids-limit", "128",
+                *tmpfs_args, "--memory", "512m", "--pids-limit", "128",
                 "--user", f"{AGENT_UID}:{AGENT_GID}" if os.getuid() == 0 else f"{os.getuid()}:{os.getgid()}",
                 "-p", "127.0.0.1::8766",
                 "--label", f"{LABEL}={PROJECT}", "--label", f"com.docker.compose.project.working_dir={root}",
