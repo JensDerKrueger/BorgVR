@@ -44,8 +44,9 @@ def test_http_client_rejects_redirects_and_large_responses(monkeypatch, status, 
     assert len(requests) == 1
 
 
-@pytest.mark.parametrize("color,omit_tool,success", [("red", False, True), ("blue", False, False), ("red", True, False)])
-def test_real_capability_check_requires_tools_png_and_correct_color(monkeypatch, color, omit_tool, success):
+@pytest.mark.parametrize("color,omit_tool,alpha,success", [("red", False, False, True),
+    ("red", False, True, True), ("blue", False, False, False), ("red", True, False, False)])
+def test_real_capability_check_requires_tools_png_and_correct_color(monkeypatch, color, omit_tool, alpha, success):
     class Socket:
         async def send(self, raw):
             data = json.loads(raw)
@@ -60,7 +61,7 @@ def test_real_capability_check_requires_tools_png_and_correct_color(monkeypatch,
                 case "tool_result":
                     if "image_png_base64" in data:
                         image = Image.open(io.BytesIO(base64.b64decode(data["image_png_base64"])))
-                        assert image.getpixel((0, 0)) == (255, 0, 0)
+                        assert image.getpixel((0, 0)) == ((255, 0, 0, 255) if alpha else (255, 0, 0))
                         self.queue = self.final()
                     else:
                         self.queue = [self.tool("capture_screenshot")]
@@ -71,7 +72,8 @@ def test_real_capability_check_requires_tools_png_and_correct_color(monkeypatch,
 
         def tool(self, name):
             return {"type": "tool_call", "request_id": self.request, "call_id": name, "name": name,
-                    "arguments": {}, "context_id": self.context, "dataset_id": "server-check"}
+                    "arguments": {"include_alpha": True} if name == "capture_screenshot" and alpha else {},
+                    "context_id": self.context, "dataset_id": "server-check"}
 
         async def recv(self):
             return json.dumps(self.queue.pop(0))

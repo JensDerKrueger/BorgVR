@@ -48,6 +48,8 @@ async def talk(url, token, context, text, capabilities=False):
                       "inputSchema": {"type": "object", "properties": {}, "required": [], "additionalProperties": False}}
                      for name, description in (("get_application_state", "Read synthetic test state."),
                                                ("capture_screenshot", "Read a synthetic test image, not a real dataset."))] if capabilities else []
+            if capabilities:
+                tools[1]["inputSchema"]["properties"] = {"include_alpha": {"type": "boolean"}}
             await socket.send(json.dumps({"type": "hello", "protocol": 1,
                                           "dataset_id": "server-check", "context_id": context_id, "tools": tools}))
             response = json.loads(await socket.recv())
@@ -82,8 +84,11 @@ async def talk(url, token, context, text, capabilities=False):
                     case "tool_call" if capabilities:
                         call_count += 1
                         name = response.get("name")
+                        arguments = response.get("arguments")
+                        valid_arguments = arguments == {} or (name == "capture_screenshot" and isinstance(arguments, dict)
+                            and set(arguments) == {"include_alpha"} and type(arguments["include_alpha"]) is bool)
                         if (call_count > 4 or name not in ("get_application_state", "capture_screenshot")
-                            or response.get("arguments") != {} or response.get("context_id") != context_id
+                            or not valid_arguments or response.get("context_id") != context_id
                             or response.get("dataset_id") != "server-check"):
                             raise ValueError("Unexpected tool in model compatibility check")
                         called.add(name)
@@ -92,7 +97,8 @@ async def talk(url, token, context, text, capabilities=False):
                                   "result": {"synthetic_compatibility_check": True}}
                         if name == "capture_screenshot":
                             png = io.BytesIO()
-                            Image.new("RGB", (64, 64), (255, 0, 0)).save(png, format="PNG")
+                            mode, color = ("RGBA", (255, 0, 0, 255)) if arguments.get("include_alpha") else ("RGB", (255, 0, 0))
+                            Image.new(mode, (64, 64), color).save(png, format="PNG")
                             result["image_png_base64"] = base64.b64encode(png.getvalue()).decode()
                         await socket.send(json.dumps(result))
                     case "error" | "tool_call":
