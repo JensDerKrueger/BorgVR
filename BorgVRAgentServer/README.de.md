@@ -94,13 +94,14 @@ Im Verzeichnis des normalen Wartungskontos, ohne Docker-Zugriff erforderlich:
 
 ```
 ./setup.sh init --host ai.example.org --bind 192.168.1.20 \
-  --agent-image registry.example.org/borgvr-agent:3.9
+  --agent-image ghcr.io/jensderkrueger/borgvr-agent:3.9.0
 ```
 
-**Die Registry-Adresse ist nur ein Beispiel, kein bereits veröffentlichtes Image.**
-Für veröffentlichte GitHub-Images den festen Digest aus dem Deployment-Artefakt verwenden,
-siehe Abschnitt 9. Alternativ kann der Image-Ersteller eine eigene Registry oder ein
-Archiv verwenden. Für einen Quellcode-Build `--agent-image` weglassen.
+Das [Agenten-Image 3.9.0](https://github.com/JensDerKrueger/BorgVR/pkgs/container/borgvr-agent)
+ist öffentlich und benötigt keine Registry-Anmeldung. Für eine unveränderlich festgelegte
+Installation statt des Versions-Tags den geprüften Digest aus Abschnitt 9 verwenden.
+Alternativ kann der Image-Ersteller eine eigene Registry oder ein Archiv verwenden.
+Für einen Quellcode-Build `--agent-image` weglassen.
 
 Hostname und IP ersetzen. `--host` bestimmt den Zertifikatsnamen, `--bind` die
 Abhöradresse. Ohne Angabe bleibt es bei localhost/`127.0.0.1`. `0.0.0.0` gibt alle
@@ -112,7 +113,7 @@ den späteren nativen Betrieb ein vertrauenswürdiges CA-Zertifikat verwenden, s
 
 ### C. Administrator: Fertige Images Laden Und Starten
 
-Sobald unser vertrauenswürdiges Agenten-Image veröffentlicht und in `.env` eingetragen ist:
+Nachdem das Agenten-Image in `.env` eingetragen ist:
 
 ```
 docker compose pull
@@ -140,7 +141,7 @@ Danach als `borgvr` vollständig ab- und wieder anmelden. Der Operator kann ohne
 
 ```
 ./setup.sh install --prebuilt-agent --host ai.example.org --bind 192.168.1.20 \
-  --agent-image registry.example.org/borgvr-agent:3.9
+  --agent-image ghcr.io/jensderkrueger/borgvr-agent:3.9.0
 ./setup.sh test
 ```
 
@@ -282,6 +283,15 @@ danach wie oben starten. Image-Archive sind von Git und Build-Kontext ausgeschlo
 
 ## 9. Wiederholbare Builds Und Veröffentlichung Über GitHub
 
+**Veröffentlicht: 3.9.0 für linux/amd64**, aus Commit
+`54ad28148c9b1a95fb0f627f48b707a947919e15`.
+[Build, Tests und Veröffentlichung](https://github.com/JensDerKrueger/BorgVR/actions/runs/44091127267)
+sind erfolgreich; der anonyme Registry-Zugriff wurde geprüft. Unveränderliche Image-Adresse:
+
+```text
+ghcr.io/jensderkrueger/borgvr-agent@sha256:729d464bf75d8b2fbf67c0733875d08db5cd121d6a15db01ef3d6679b4c1e053
+```
+
 Der Workflow [BorgVR Agent Container](https://github.com/JensDerKrueger/BorgVR/actions/workflows/borgvr-agent.yml)
 baut und testet nach relevanten Änderungen auf `main` sowie bei Pull Requests automatisch
 ein Image für **linux/amd64**. Zusätzlich zu den Tests startet er den echten Container mit
@@ -302,12 +312,12 @@ aus dem vertrauenswürdigen Workflow laden und Prüfsummen vergleichen. Build-Ar
 Release-Archiv.
 
 Für eine neue Registry-Version unter **Actions > BorgVR Agent Container > Run workflow**
-den Branch **main** wählen, **publish** aktivieren und eine neue Version wie **3.9.0**
+den Branch **main** wählen, **publish** aktivieren und eine neue Version wie **3.9.1**
 eintragen. Nach erneut erfolgreichen Tests wird exakt das geprüfte Image ohne weiteren
 Build veröffentlicht:
 
 ```text
-ghcr.io/jensderkrueger/borgvr-agent:3.9.0
+ghcr.io/jensderkrueger/borgvr-agent:3.9.1
 ghcr.io/jensderkrueger/borgvr-agent:sha-VOLLSTÄNDIGER_QUELLCODE_COMMIT
 ```
 

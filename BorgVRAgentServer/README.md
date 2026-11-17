@@ -97,13 +97,14 @@ Keep the deployment directory owned by the normal maintenance account and run:
 
 ```
 ./setup.sh init --host ai.example.org --bind 192.168.1.20 \
-  --agent-image registry.example.org/borgvr-agent:3.9
+  --agent-image ghcr.io/jensderkrueger/borgvr-agent:3.9.0
 ```
 
-**The registry name above is an example, not an already published image.** The agent
-Dockerfile and GitHub workflow are provided; use the published deployment artifact's digest
-(section 10), or an image producer's registry/archive (section 9). Do not point at an untrusted
-image. For source builds, omit `--agent-image`.
+The [3.9.0 agent image](https://github.com/JensDerKrueger/BorgVR/pkgs/container/borgvr-agent)
+is public and does not require a registry login. For an immutable installation, use the
+verified digest in section 10 instead of the version tag. An image producer's registry/archive
+is another option (section 9). Do not point at an untrusted image.
+For source builds, omit `--agent-image`.
 
 Replace hostname/IP with the actual values. Without them the default is localhost/loopback.
 `--bind 0.0.0.0` exposes all IPv4 interfaces and needs deliberate network restrictions.
@@ -113,7 +114,7 @@ native-device deployment, use a trusted CA certificate as described in section 5
 
 ### C. Administrator: Pull And Start Both Images
 
-After a trusted agent image has been published and selected in `.env`:
+After selecting the agent image in `.env`:
 
 ```
 docker compose pull
@@ -138,7 +139,7 @@ sudo ./setup-host.sh --docker-user borgvr --allow-docker-restart
 
 ```
 ./setup.sh install --prebuilt-agent --host ai.example.org --bind 192.168.1.20 \
-  --agent-image registry.example.org/borgvr-agent:3.9
+  --agent-image ghcr.io/jensderkrueger/borgvr-agent:3.9.0
 ./setup.sh test
 ```
 
@@ -344,6 +345,15 @@ run `setup.sh install --prebuilt-agent`. Archives are excluded from Git and the 
 
 ## 10. Repeatable GitHub Builds And GHCR Publication
 
+**Published: 3.9.0 for linux/amd64**, from commit
+`54ad28148c9b1a95fb0f627f48b707a947919e15`.
+[Build, tests and publication](https://github.com/JensDerKrueger/BorgVR/actions/runs/44091127267)
+succeeded; anonymous registry access was verified. Immutable image reference:
+
+```text
+ghcr.io/jensderkrueger/borgvr-agent@sha256:729d464bf75d8b2fbf67c0733875d08db5cd121d6a15db01ef3d6679b4c1e053
+```
+
 The [BorgVR Agent Container workflow](https://github.com/JensDerKrueger/BorgVR/actions/workflows/borgvr-agent.yml)
 runs on relevant main-branch pushes and pull requests. It installs the pinned dependencies,
 runs the tests, validates Compose, builds **linux/amd64**, and starts the actual production
@@ -364,12 +374,12 @@ alone do not authenticate an archive from an unrelated source. Build artifacts a
 for 14 days, published deployment artifacts for 90 days; they are not a permanent release archive.
 
 To publish a new image version, open **Actions > BorgVR Agent Container > Run workflow**,
-select **main**, enable **publish**, and enter a new version such as **3.9.0**. Tests/build
+select **main**, enable **publish**, and enter a new version such as **3.9.1**. Tests/build
 run again, then a separate publication job loads the verified artifact and pushes that
 exact image, without rebuilding, to:
 
 ```text
-ghcr.io/jensderkrueger/borgvr-agent:3.9.0
+ghcr.io/jensderkrueger/borgvr-agent:3.9.1
 ghcr.io/jensderkrueger/borgvr-agent:sha-FULL_SOURCE_COMMIT
 ```
 
