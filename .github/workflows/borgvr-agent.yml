@@ -1,0 +1,154 @@
+name: BorgVR Agent Container
+
+on:
+  push:
+    branches: [main]
+    paths: ['BorgVRAgentServer/**', '.github/workflows/borgvr-agent.yml']
+  pull_request:
+    paths: ['BorgVRAgentServer/**', '.github/workflows/borgvr-agent.yml']
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish the tested image to GHCR (does not change package visibility)
+        type: boolean
+        default: false
+      version:
+        description: New image version, for example 3.9.0 (required when publishing)
+        type: string
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: borgvr-agent-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: BorgVRAgentServer
+        shell: bash
+    outputs:
+      artifact_id: ${{ steps.upload.outputs.artifact-id }}
+      image: ${{ steps.metadata.outputs.image }}
+      version: ${{ steps.metadata.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: 'BorgVRAgentServer/requirements*.txt'
+      - name: Validate release metadata
+        id: metadata
+        env:
+          AGENT_VERSION: ${{ inputs.version }}
+          AGENT_PUBLISH: ${{ inputs.publish || false }}
+        run: python release.py metadata
+      - name: Install test dependencies
+        run: python -m pip install -r requirements-test.txt
+      - name: Unit, protocol, installer and TLS tests
+        run: python -m pytest -q
+      - name: Validate deployment configuration
+        run: |
+          bash setup.sh init
+          docker compose config --quiet
+          docker compose -f compose.yaml -f compose.build.yaml config --quiet
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - name: Build Linux image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: BorgVRAgentServer
+          platforms: linux/amd64
+          load: true
+          push: false
+          provenance: false
+          tags: borgvr-agent:ci
+          labels: |
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ steps.metadata.outputs.version }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Test the built container with TLS
+        run: python tests/container_smoke.py --image borgvr-agent:ci
+      - name: Prepare image and deployment archives
+        env:
+          AGENT_VERSION: ${{ inputs.version }}
+          AGENT_PUBLISH: ${{ inputs.publish || false }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/borgvr-agent-release"
+          docker save borgvr-agent:ci | gzip -n > "$RUNNER_TEMP/borgvr-agent-release/borgvr-agent-linux-amd64.tar.gz"
+          python release.py bundle --output "$RUNNER_TEMP/borgvr-agent-release" \
+            --image-id "$(docker image inspect --format '{{.Id}}' borgvr-agent:ci)"
+      - name: Upload tested image and deployment files
+        id: upload
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: borgvr-agent-linux-amd64-${{ github.sha }}
+          path: ${{ runner.temp }}/borgvr-agent-release/
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+      - name: Build summary
+        env:
+          IMAGE: ${{ steps.metadata.outputs.image }}
+        run: |
+          {
+            printf '## Tested BorgVR Agent image\n\n'
+            printf 'Platform: `linux/amd64`. Image and deployment archives are attached as workflow artifacts.\n\n'
+            printf 'GHCR target: `%s`. Publishing requires a manual run with **publish** enabled.\n\n' "$IMAGE"
+            printf 'No H200 or full-model inference test is performed on this CPU runner.\n'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  publish:
+    if: github.event_name == 'workflow_dispatch' && inputs.publish && github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+    defaults:
+      run:
+        working-directory: BorgVRAgentServer
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          artifact-ids: ${{ needs.build.outputs.artifact_id }}
+          path: ${{ runner.temp }}/borgvr-agent-release
+          merge-multiple: true
+      - name: Verify and load the tested image
+        run: python3 release.py verify --output "$RUNNER_TEMP/borgvr-agent-release" --load
+      - name: Authenticate to GHCR
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: printf '%s' "$GHCR_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+      - name: Publish exact tested image
+        env:
+          AGENT_VERSION: ${{ needs.build.outputs.version }}
+          AGENT_PUBLISH: 'true'
+        run: python3 release.py publish --output "$RUNNER_TEMP/borgvr-agent-release"
+      - name: Upload digest-pinned deployment bundle
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: borgvr-agent-published-${{ needs.build.outputs.version }}
+          path: |
+            ${{ runner.temp }}/borgvr-agent-release/borgvr-agent-deployment.tar.gz
+            ${{ runner.temp }}/borgvr-agent-release/release.json
+            ${{ runner.temp }}/borgvr-agent-release/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 90
+      - name: Log out
+        if: always()
+        run: docker logout ghcr.io

@@ -30,6 +30,11 @@ The current development version is **3.9**. The SharePlay wire protocol is versi
 - **BORGVRServerCPP**: cross-platform C++17 implementation of the dataset server protocol,
   including synchronization and the embedded WebGPU frontend.
 - **web**: responsive WebGPU renderer served directly by a BorgVR server.
+- **BorgVRAgentServer**: initial self-hosted AI agent and pinned vLLM deployment for a Linux
+  NVIDIA GPU server. Includes separate root-only host and non-root deployment scripts,
+  support for prebuilt agent images, TLS, a server smoke test, and
+  [English](BorgVRAgentServer/README.md) / [German](BorgVRAgentServer/README.de.md) setup guides.
+  Native speech/client integration is a subsequent step, not yet enabled in the apps.
 - **html**: bilingual user guide, embedded macOS Help, support, and privacy pages.
   Start with the [manual](html/index.html) or the guide to
   [datasets, edit states, and SharePlay](html/datasets.html).
