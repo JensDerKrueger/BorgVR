@@ -413,20 +413,20 @@ nicht ins Image. Das Setup veröffentlicht niemals selbst Images oder ändert Pa
 
 ## 9. Wiederholbare Builds Und Veröffentlichung Über GitHub
 
-**Veröffentlicht: 3.9.0 für linux/amd64**, aus Commit
-`54ad28148c9b1a95fb0f627f48b707a947919e15`.
-[Build, Tests und Veröffentlichung](https://github.com/JensDerKrueger/BorgVR/actions/runs/44091127267)
+**Veröffentlicht: 3.9.1 für linux/amd64**, aus Commit
+`e764cebc3d565247c232c2bda9bc11f3a7097af8`.
+[Build, Tests und Veröffentlichung](https://github.com/JensDerKrueger/BorgVR/actions/runs/44180364432)
 sind erfolgreich; der anonyme Registry-Zugriff wurde geprüft. Unveränderliche Image-Adresse:
 
 ```text
-ghcr.io/jensderkrueger/borgvr-agent@sha256:729d464bf75d8b2fbf67c0733875d08db5cd121d6a15db01ef3d6679b4c1e053
+ghcr.io/jensderkrueger/borgvr-agent@sha256:d033276eacdce742d8a86fd1af26dbf697369c0c53098ce7190b2218cde2c02d
 ```
 
 Der Workflow [BorgVR Agent Container](https://github.com/JensDerKrueger/BorgVR/actions/workflows/borgvr-agent.yml)
 baut und testet nach relevanten Änderungen auf `main` sowie bei Pull Requests automatisch
 ein Image für **linux/amd64**. Zusätzlich zu den Tests startet er den echten Container mit
 TLS, Authentifizierung und schreibgeschütztem Dateisystem. Der CPU-Runner testet dabei
-bewusst keine GPU-Inferenz; diese Prüfung bleibt auf dem H200-Rechner erforderlich.
+bewusst keine GPU-Inferenz; diese Prüfung bleibt auf dem jeweiligen GPU-Rechner erforderlich.
 
 ### Was Der Workflow Genau Macht
 
@@ -438,8 +438,8 @@ bewusst keine GPU-Inferenz; diese Prüfung bleibt auf dem H200-Rechner erforderl
 3. **Metadaten und Tests:** Repository, Commit, Plattform und optionale Versionsnummer
    werden validiert. Die festgelegten Test-Abhängigkeiten werden installiert und die
    Unit-, Protokoll-, Installer-, Rechte-, TLS- und Deinstallationstests ausgeführt.
-4. **Compose prüfen:** Eine temporäre Testkonfiguration wird erzeugt und sowohl die normale
-   Compose-Datei als auch das Entwickler-Build-Overlay auf gültige Konfiguration geprüft.
+4. **Compose prüfen:** Eine temporäre Testkonfiguration wird erzeugt. Die CUDA- und
+   ROCm-Konfiguration sowie das Entwickler-Build-Overlay werden auf Gültigkeit geprüft.
 5. **Image bauen:** Docker Buildx baut nur unseren Agenten für `linux/amd64`, zunächst lokal
    als `borgvr-agent:ci`. Basis-Image und Python-Pakete sind festgelegt. Build-Caches beschleunigen
    Wiederholungen. OCI-Labels enthalten unter anderem Quellcode-Commit und Version.
@@ -485,12 +485,12 @@ aus dem vertrauenswürdigen Workflow laden und Prüfsummen vergleichen. Build-Ar
 Release-Archiv.
 
 Für eine neue Registry-Version unter **Actions > BorgVR Agent Container > Run workflow**
-den Branch **main** wählen, **publish** aktivieren und eine neue Version wie **3.9.1**
+den Branch **main** wählen, **publish** aktivieren und eine neue Version wie **3.9.2**
 eintragen. Nach erneut erfolgreichen Tests wird exakt das geprüfte Image ohne weiteren
 Build veröffentlicht:
 
 ```text
-ghcr.io/jensderkrueger/borgvr-agent:3.9.1
+ghcr.io/jensderkrueger/borgvr-agent:3.9.2
 ghcr.io/jensderkrueger/borgvr-agent:sha-VOLLSTÄNDIGER_QUELLCODE_COMMIT
 ```
 

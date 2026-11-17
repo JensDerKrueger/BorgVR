@@ -16,7 +16,7 @@ from model_config import CUDA_IMAGE, ROCM_IMAGE, PROFILES, ModelConfig, profile_
 ROOT = Path(__file__).resolve().parent
 PYTHON_IMAGE = "python:3.12.15-slim-bookworm@sha256:6a0e06f5ba0b373d051aabd3fffb9b873f27f9a2a3a14bcbe37dee6f0e3bbc70"
 VLLM_IMAGE = CUDA_IMAGE
-DEFAULT_AGENT_IMAGE = "ghcr.io/jensderkrueger/borgvr-agent:3.9.1"
+DEFAULT_AGENT_IMAGE = "ghcr.io/jensderkrueger/borgvr-agent@sha256:d033276eacdce742d8a86fd1af26dbf697369c0c53098ce7190b2218cde2c02d"
 AGENT_UID = AGENT_GID = 10001
 
 

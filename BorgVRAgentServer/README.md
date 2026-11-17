@@ -449,20 +449,20 @@ setup never publishes an image or changes registry visibility.
 
 ## 10. Repeatable GitHub Builds And GHCR Publication
 
-**Published: 3.9.0 for linux/amd64**, from commit
-`54ad28148c9b1a95fb0f627f48b707a947919e15`.
-[Build, tests and publication](https://github.com/JensDerKrueger/BorgVR/actions/runs/44091127267)
+**Published: 3.9.1 for linux/amd64**, from commit
+`e764cebc3d565247c232c2bda9bc11f3a7097af8`.
+[Build, tests and publication](https://github.com/JensDerKrueger/BorgVR/actions/runs/44180364432)
 succeeded; anonymous registry access was verified. Immutable image reference:
 
 ```text
-ghcr.io/jensderkrueger/borgvr-agent@sha256:729d464bf75d8b2fbf67c0733875d08db5cd121d6a15db01ef3d6679b4c1e053
+ghcr.io/jensderkrueger/borgvr-agent@sha256:d033276eacdce742d8a86fd1af26dbf697369c0c53098ce7190b2218cde2c02d
 ```
 
 The [BorgVR Agent Container workflow](https://github.com/JensDerKrueger/BorgVR/actions/workflows/borgvr-agent.yml)
 runs on relevant main-branch pushes and pull requests. It installs the pinned dependencies,
 runs the tests, validates Compose, builds **linux/amd64**, and starts the actual production
 container to check TLS, authentication and read-only startup. The CPU runner deliberately
-reports the model unavailable: GPU inference must still be checked on the H200 host.
+reports the model unavailable: GPU inference must still be checked on the target GPU host.
 
 The stages run in order: validate source/version metadata; install pinned test dependencies;
 run unit/protocol/TLS/installer tests; validate both Compose configurations; build the agent;
@@ -489,12 +489,12 @@ alone do not authenticate an archive from an unrelated source. Build artifacts a
 for 14 days, published deployment artifacts for 90 days; they are not a permanent release archive.
 
 To publish a new image version, open **Actions > BorgVR Agent Container > Run workflow**,
-select **main**, enable **publish**, and enter a new version such as **3.9.1**. Tests/build
+select **main**, enable **publish**, and enter a new version such as **3.9.2**. Tests/build
 run again, then a separate publication job loads the verified artifact and pushes that
 exact image, without rebuilding, to:
 
 ```text
-ghcr.io/jensderkrueger/borgvr-agent:3.9.1
+ghcr.io/jensderkrueger/borgvr-agent:3.9.2
 ghcr.io/jensderkrueger/borgvr-agent:sha-FULL_SOURCE_COMMIT
 ```
 
