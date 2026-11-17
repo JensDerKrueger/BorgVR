@@ -3,7 +3,7 @@
 [English / vollständige Betriebsreferenz](README.md) | [Verbindungsprotokoll](PROTOCOL.md)
 
 Dieses Verzeichnis enthält die erste Serverimplementierung für die geplante KI-Steuerung:
-**vLLM mit Qwen3.6-35B-A3B** und unseren **BorgVR-Agenten auf Basis von Pydantic AI**.
+**vLLM mit einem wählbaren Vision-Language-Modell** und unseren **BorgVR-Agenten auf Basis von Pydantic AI**.
 Die Dienste laufen in Containern. Nur der mit TLS und Zugangsschlüssel abgesicherte
 Agent ist von außen erreichbar; vLLM bleibt im privaten Container-Netz.
 
@@ -14,22 +14,25 @@ folgen separat. Die bisherige Vision-Sprachsteuerung wird hiermit noch nicht ers
 ## 1. Was Auf Dem Rechner Installiert Sein Muss
 
 - Linux x86_64, Zielsystem **Ubuntu 26.04.1 LTS (resolute)**.
-- Ein funktionierender NVIDIA-Treiber für die H200. Die komplette GPU mit 141 GB sollte
-  verfügbar sein, keine zu kleine MIG-Partition. 256 GB Arbeitsspeicher sind passend.
-- Mindestens **200 GiB freier Platz im Docker-Speicherverzeichnis**, besser 250 GiB oder
-  mehr. Das ist eine konservative Installationsreserve für Modell, Container, Downloads
-  und Build-Caches, keine gemessene endgültige Modellgröße.
-- Docker Engine, Compose-v2-Plugin und NVIDIA Container Toolkit.
+- Eine von vLLM und dem gewählten Modell unterstützte **NVIDIA/CUDA- oder AMD/ROCm-GPU**
+  mit passendem, bereits installiertem Treiber. Die H200 ist keine Voraussetzung.
+- Genügend GPU- und Hauptspeicher für Gewichte, Bildencoder, Kontext/KV-Cache und Laufzeit.
+  Kleinere Modelle oder passende quantisierte Checkpoints können deutlich weniger benötigen.
+  Auch bei MoE-Modellen müssen normalerweise sämtliche Gewichte gespeichert werden.
+- Freier Platz im Docker-Speicherverzeichnis: Profilreserve **200 GiB** für Qwen3.6-35B,
+  **160 GiB** für Qwen3.8-27B und **80 GiB** für Qwen3.5-4B. Das sind konservative,
+  konfigurierbare Startwerte (`--min-free-gib`), keine gemessenen Größen oder Garantien.
+- Docker Engine und Compose v2; bei NVIDIA zusätzlich NVIDIA Container Toolkit.
 - Python 3 und OpenSSL für die Konfiguration, optional Git zum Klonen.
 - Internetzugriff auf Paketquellen, Docker Hub, PyPI und Hugging Face samt Download-CDNs.
 - Ein Benutzer mit sudo-Rechten für Einrichtung und Containerbetrieb. Normale BorgVR-Nutzer
   brauchen weder Docker-Zugriff noch Root-Rechte oder ein Shell-Konto auf dem Server.
 
 **CUDA Toolkit, PyTorch, vLLM und die Python-Agentenpakete musst du nicht auf dem Host
-installieren.** Diese Komponenten kommen in die Container. Der NVIDIA-Treiber bleibt
-dagegen eine Voraussetzung des Hosts.
+installieren.** Diese Komponenten kommen in die Container. Ein passender GPU-Treiber
+bleibt dagegen eine Voraussetzung des Hosts.
 
-Zuerst prüfen:
+Bei NVIDIA zuerst prüfen:
 
 ```
 nvidia-smi
@@ -38,8 +41,13 @@ nvidia-smi
 Falls das nicht funktioniert, zuerst den von Distribution/Hersteller unterstützten Treiber
 installieren und gegebenenfalls neu starten. Das Skript verändert absichtlich keine
 Treiber, Secure-Boot-Einstellungen oder GPU-Partitionen und startet den Rechner nicht neu.
-Der Treiber muss die CUDA-Laufzeit des festgelegten Images unterstützen; das Skript prüft
-das durch eine echte CUDA-Speicherallokation im Container.
+Bei AMD müssen `/dev/kfd` und `/dev/dri` durch einen passenden Treiber verfügbar sein.
+Der Treiber muss zur CUDA-/ROCm-Laufzeit des gewählten Images passen; `doctor` prüft
+das durch eine echte GPU-Speicherallokation im Container, einschließlich gewähltem Datentyp.
+
+**Teststand:** Qwen3.6-35B-A3B wurde auf der H200 tatsächlich ausgeführt. Weitere Profile
+und beide Backend-Konfigurationen sind automatisiert geprüft, aber nicht auf allen GPUs
+praktisch vermessen. Insbesondere ROCm braucht noch einen Test auf echter AMD-Hardware.
 
 ## 2. Dateien Auf Den Server Bringen
 
@@ -66,6 +74,8 @@ ist kein Hugging-Face-Account erforderlich.
 Der Server besteht aus **zwei laufenden Containern**: vLLM und unserem Agenten.
 `compose.yaml` lädt nur fertige Images und enthält keinen Build-Schritt. Nur der
 Image-Ersteller beziehungsweise Entwickler verwendet zusätzlich `compose.build.yaml`.
+`setup.sh` ergänzt automatisch `compose.cuda.yaml` oder `compose.rocm.yaml`.
+Für Start/Update die Skriptbefehle verwenden, nicht `docker compose up` ohne Backend-Overlay.
 Ein privilegierter Installationscontainer mit Zugriff auf den Docker-Socket ist nicht nötig.
 
 Alle folgenden Schritte führt dasselbe Konto mit sudo-Rechten aus. Wer bereits als root
@@ -92,6 +102,10 @@ Nur bei fehlenden Voraussetzungen eine geprüfte Kopie des Host-Skripts ausführ
 sudo ./setup-host.sh
 ```
 
+Für AMD stattdessen `sudo ./setup-host.sh --backend rocm`. Dieser Weg installiert keine
+NVIDIA-Pakete, verändert keine NVIDIA-Laufzeit und startet Docker nicht neu. GPU-Treiber
+werden bei beiden Backends nicht installiert oder ersetzt.
+
 Auf Ubuntu 26.04.1 werden fehlende
 Docker-/Compose-/NVIDIA-Container-Pakete eingerichtet; vorhandene GPU-Treiber bleiben
 unverändert. Auch Ubuntu 22.04 und 24.04 werden akzeptiert. Bei bereits fertigem Host
@@ -114,13 +128,14 @@ Im Verzeichnis `BorgVRAgentServer` für den ersten lokalen Test:
 sudo ./setup.sh install
 ```
 
-Dieser eine Befehl erzeugt `.env`, Zugangsschlüssel und Testzertifikat, prüft mindestens
-200 GiB freien Platz und CUDA, lädt fehlende Images und startet beide Dienste. Das fertige
-[Agenten-Image 3.9.0](https://github.com/JensDerKrueger/BorgVR/pkgs/container/borgvr-agent)
-ist standardmäßig per geprüftem Digest festgelegt und ohne Anmeldung herunterladbar.
+Dieser eine Befehl erzeugt `.env`, Zugangsschlüssel und Testzertifikat, prüft die profilabhängige
+Platzreserve und die GPU, lädt fehlende Images und startet beide Dienste. Das fertige
+[Agenten-Image ab 3.9.1](https://github.com/JensDerKrueger/BorgVR/pkgs/container/borgvr-agent)
+unterstützt Modellprofile und ist ohne Anmeldung herunterladbar.
 Es wird nichts lokal gebaut. vLLM lädt das Modell in seinen persistenten Cache;
 der Agent startet erst, wenn vLLM bereit ist. Der erste Download und die
 Kernel-Kompilierung können dauern; maximal eine Stunde wird abgewartet.
+Danach werden Textantwort, Werkzeugaufrufe und Bildverarbeitung tatsächlich getestet.
 
 Für Zugriff von anderen Geräten Hostname oder IP und lokale Abhöradresse angeben:
 
@@ -132,6 +147,63 @@ Hostname und IP ersetzen. `--host` bestimmt den Zertifikatsnamen, `--bind` die
 Abhöradresse. Ohne Angabe bleibt es bei localhost/`127.0.0.1`. `0.0.0.0` gibt alle
 IPv4-Schnittstellen frei und braucht bewusste Netzabsicherung. Port ist **8766** (`--port`),
 GPU **0** (`--gpu INDEX` oder NVIDIA-GPU-UUID).
+
+### Modelle Und Grafikkarten Wählen
+
+Das **vLLM-Image** enthält die Inferenzsoftware und CUDA/ROCm, nicht automatisch das Modell.
+**Modell und Revision** wählen separat den Checkpoint. Ein Modellwechsel braucht nur dann
+ein anderes vLLM-Image, wenn Modellarchitektur, Parser oder Hardware ein anderes benötigen.
+Unser Agenten-Image und das Client-Protokoll bleiben ansonsten gleich.
+
+```
+./setup.sh profiles
+sudo ./setup.sh install --backend cuda --profile qwen35-4b
+```
+
+Die drei Modellprofile `qwen36-35b`, `qwen35-4b` und `qwen38-27b` enthalten feste,
+jeweils eigene Modellrevisionen sowie passende Ausgangswerte für Parser und Ressourcen.
+Für eine neue AMD-Installation etwa `sudo ./setup.sh install --backend rocm --profile qwen35-4b`.
+CUDA- und ROCm-Images sind unabhängig per Digest festgelegt. Keiner dieser Befehle garantiert,
+dass jedes Modell auf jeder Karte passt; Kernel-, Quantisierungs- und Speicheranforderungen gelten weiter.
+
+Bestehende Installation umstellen, ohne Schlüssel oder Modell-Cache zu löschen:
+
+```
+sudo ./setup.sh update --agent-image ghcr.io/jensderkrueger/borgvr-agent:3.9.1
+sudo ./setup.sh configure --profile qwen38-27b
+sudo ./setup.sh doctor
+sudo ./setup.sh update
+```
+
+`configure` sichert die alte `.env`, prüft und schreibt die neuen Einstellungen, startet aber
+keine Container. `--backend rocm` wählt auch das ROCm-Image und die ermittelten Geräte-Gruppen.
+`--vllm-image REF` erlaubt ausdrücklich ein anderes kompatibles vLLM-Image.
+Die bisherige laufende Instanz ändert sich erst mit `update` oder `start`.
+
+Ein eigenes **bildfähiges Modell mit Tool Calling** konfigurieren:
+
+```
+sudo ./setup.sh configure --profile custom \
+  --model ORGANISATION/MODELL --model-revision COMMIT \
+  --tool-parser PARSER --reasoning-parser none --thinking default
+```
+
+Platzhalter aus Modellkarte und vLLM-Dokumentation ersetzen. Bei einem anderen Checkpoint
+wird niemals stillschweigend die Commit-ID des vorherigen Modells übernommen.
+`--thinking default` lässt modellspezifische Request-Parameter ganz weg; die Qwen-Profile
+schalten Thinking gezielt ab. Reine Textmodelle werden nicht unterstützt.
+
+Weitere Stellschrauben: `--dtype auto|float16|bfloat16|float32`, `--quantization NAME`,
+`--context-length N`, `--max-seqs N`, `--max-output-tokens N`, `--gpu-memory-fraction F`,
+`--enforce-eager true|false` und `--cpu-offload-gb N`. Bei älteren Karten kann `float16`
+statt `bfloat16` nötig sein. Eine Quantisierungsoption macht nicht jeden beliebigen
+Checkpoint automatisch kleiner; Format, Kernel und Backend müssen zusammenpassen.
+Kürzerer Kontext und weniger parallele Sequenzen sparen Speicher, können aber Aufgaben begrenzen.
+
+Quellen: [Qwen3.5-4B](https://huggingface.co/Qwen/Qwen3.5-4B),
+[Qwen3.8-27B](https://huggingface.co/Qwen/Qwen3.8-27B),
+[vLLM-Modell-/Tool-Parser](https://docs.vllm.ai/en/latest/features/tool_calling/),
+[vLLM-GPU-Anforderungen](https://docs.vllm.ai/en/latest/getting_started/installation/gpu/).
 
 Dabei entstehen zwei private zufällige Zugangsschlüssel und ein Testzertifikat. Für
 den späteren nativen Betrieb ein vertrauenswürdiges CA-Zertifikat verwenden, siehe unten.
@@ -152,7 +224,7 @@ das Zertifikat erneuern. Ein nach einem Fehler vorhandenes `runtime` ohne `.env`
 manuell geprüft werden, damit keine Schlüssel versehentlich verloren gehen.
 Wenn eine alte `.env` noch `BORGVR_AGENT_IMAGE=borgvr-agent:3.9` enthält und dieses lokale
 Image nicht existiert, mit `sudoedit .env` nur die Image-Adresse auf
-`ghcr.io/jensderkrueger/borgvr-agent:3.9.0` beziehungsweise den Digest aus Abschnitt 9 ändern.
+`ghcr.io/jensderkrueger/borgvr-agent:3.9.1` beziehungsweise den veröffentlichten Digest ändern.
 Schlüssel und Zertifikate müssen dafür nicht neu erzeugt werden.
 
 Nur Konfiguration erzeugen, ohne Dienste zu starten:
@@ -170,9 +242,11 @@ sudo ./setup.sh status
 sudo ./setup.sh test
 ```
 
-Der Test prüft Modellbereitschaft, Authentifizierung und die verschlüsselte Verbindung und
-fordert eine kurze Antwort vom **echten Modell** an. Er simuliert keinen erfolgreichen
-Renderbefehl: Die native App ist in diesem Schritt noch nicht angeschlossen.
+Der Test prüft Modellbereitschaft, Authentifizierung und TLS und fordert eine kurze Antwort
+vom **echten Modell** an. Danach muss es zwei harmlose Test-Werkzeuge aufrufen und die Farbe
+eines synthetischen roten Bildes erkennen. Es wird kein echter Datensatz geöffnet oder verändert.
+Ein Fehlschlag bedeutet fehlende Kompatibilität oder eine nicht zuverlässig erfüllte Testaufgabe,
+nicht automatisch einen Hardwaredefekt. Die native App ist noch nicht angeschlossen.
 
 Ein Test von einem anderen Rechner ist ebenfalls möglich; siehe den englischen Leitfaden.
 Der Testclient prüft Zertifikat und Hostname, es gibt keinen unsicheren TLS-Schalter.
@@ -252,7 +326,7 @@ werden nicht gestoppt. Für alle Befehle im Deployment-Verzeichnis bleiben.
 Stoppen, Neustarten und das Ersetzen eines Containers können aktive Sitzungen unterbrechen;
 Gespräche werden nur im RAM gehalten, nicht nach einem Neustart wiederhergestellt.
 
-Mit `sudo ./setup.sh doctor` lässt sich der CUDA-Zugriff erneut prüfen.
+Mit `sudo ./setup.sh doctor` lässt sich der CUDA-/ROCm-Zugriff erneut prüfen.
 
 ### Nach Einem Rechner-Neustart
 
@@ -305,7 +379,7 @@ keinen automatischen Rollback aus. Die ausgegebene Sicherung kann nach Prüfung 
 `sudo cp /PFAD/ZUR/SICHERUNG .env` zurückgespielt werden, danach `sudo ./setup.sh start`.
 
 Bei einem Quellcode-Build statt Pull den Build-Overlay verwenden:
-`sudo docker compose -f compose.yaml -f compose.build.yaml build --pull agent`.
+`sudo ./setup.sh install --build-agent` mit vorher bewusst gewähltem lokalen Agenten-Image-Tag.
 Eine bestehende `.env` behält bewusst ihre alte
 vLLM-/Modellrevision; diese bei einem Inferenz-Update ausdrücklich anpassen. Keine
 stillschweigende Umstellung auf `latest`. Details zur Rückkehr auf alte Versionen,
@@ -324,25 +398,18 @@ lokale Sprachausgabe. Das Protokoll dafür ist in [PROTOCOL.md](PROTOCOL.md) bes
 
 ## 8. Agenten-Image Einmal Bauen Und Verteilen
 
-Nur der Image-Ersteller braucht den Quellcode/Build-Schritt, nicht jeder Serverbetreiber:
+Der normale Veröffentlichungsweg ist der folgende GitHub-Workflow; er erzeugt bereits
+geprüfte Image- und Deployment-Archive. Nutzer brauchen keinen lokalen Build und keine
+manuellen Registry-Tags. Für lokale Entwicklung auf einer eingerichteten Maschine:
 
 ```
-docker buildx build --platform linux/amd64 --load -t borgvr-agent:3.9 .
-docker tag borgvr-agent:3.9 registry.example.org/borgvr-agent:3.9
-docker push registry.example.org/borgvr-agent:3.9
+sudo ./setup.sh configure --agent-image borgvr-agent:dev
+sudo ./setup.sh install --build-agent
 ```
 
-Die Registry muss gewählt und der Upload autorisiert sein. Ein Build allein veröffentlicht
-noch kein Image. Für reproduzierbare Installationen den entstandenen Image-Digest statt
-nur eines veränderbaren Tags verwenden. Modellgewichte, Token und Zertifikate gehören
-nicht ins Image. Weitere Details stehen im englischen Leitfaden.
-
-Ohne Registry kann der Ersteller `docker save --output borgvr-agent-3.9.tar borgvr-agent:3.9`
-verwenden. Der Administrator lädt das vertrauenswürdig übertragene Archiv mit
-`sudo docker load --input borgvr-agent-3.9.tar`. In `.env` dann
-`BORGVR_AGENT_IMAGE=borgvr-agent:3.9` setzen und `sudo ./setup.sh install` ausführen.
-Das bereits geladene Image wird wiederverwendet. Image-Archive sind von Git und
-Build-Kontext ausgeschlossen.
+`compose.build.yaml` ist nur das Entwickler-Build-Overlay. Im normalen Betrieb wird das
+getestete GHCR-Image verwendet. Gewichte, Schlüssel, Zertifikate und Python-Caches gehören
+nicht ins Image. Das Setup veröffentlicht niemals selbst Images oder ändert Paketsichtbarkeit.
 
 ## 9. Wiederholbare Builds Und Veröffentlichung Über GitHub
 

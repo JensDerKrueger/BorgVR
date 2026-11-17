@@ -1,0 +1,10 @@
+# NVIDIA runtime selection; common service configuration stays in compose.yaml.
+services:
+  vllm:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["${BORGVR_GPU}"]
+              capabilities: [gpu]

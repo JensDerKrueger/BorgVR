@@ -9,19 +9,27 @@ HAS_INIT_OPTIONS=0
 IMAGE_MODE=""
 INIT_ARGS=()
 UNINSTALL_ARGS=()
+MODEL_ARGS=()
 DOCKER=(docker --host unix:///var/run/docker.sock)
 
 usage() {
   printf '%s\n' \
-    'Usage: sudo ./setup.sh [install|init|doctor|start|stop|restart|update|status|logs|test|uninstall] [options]' \
-    'Run setup-host.sh separately if Docker/NVIDIA prerequisites are missing.' \
+    'Usage: sudo ./setup.sh [install|init|configure|profiles|doctor|start|stop|restart|update|status|logs|test|uninstall] [options]' \
+    'Run setup-host.sh separately if Docker/GPU prerequisites are missing.' \
     '  --prebuilt-agent    Use a local/published agent image (default; never build).' \
     '  --build-agent       Developer mode: build the agent from source instead.' \
     '  --agent-image REF   Agent image reference (initial setup or explicit update).' \
     '  --host HOST         Certificate DNS name/IP (initial setup only; default localhost).' \
     '  --bind IPV4         Listen address (initial setup only; default 127.0.0.1).' \
     '  --port PORT         HTTPS/WSS port (default 8766).' \
-    '  --gpu INDEX_OR_UUID  Select ONE NVIDIA GPU (default 0).' \
+    '  --gpu INDEX_OR_UUID  Select one GPU (default 0; AMD also accepts an index).' \
+    '  --backend cuda|rocm  Select NVIDIA CUDA or AMD ROCm (install/init/configure).' \
+    '  --profile NAME      Model preset; list with: ./setup.sh profiles.' \
+    '  --model REPO --model-revision REV --tool-parser NAME  Custom image-capable model.' \
+    '  --vllm-image REF --dtype auto|float16|bfloat16|float32 --quantization NAME' \
+    '  --context-length N --max-seqs N --max-output-tokens N --gpu-memory-fraction F' \
+    '  --reasoning-parser NAME|none --thinking default|off|on --min-free-gib N' \
+    '  --enforce-eager true|false --cpu-offload-gb N  Optional memory/performance controls.' \
     'Update pulls configured images, checks access, starts services and tests the model.' \
     'An explicit update image is checked before changing .env; the old .env is backed up.' \
     'Uninstall previews by default; supports --yes, --remove-images, --remove-checkout, --files-only.' \
@@ -30,7 +38,10 @@ usage() {
 die() { printf 'Error: %s\n' "$*" >&2; exit 1; }
 while (($#)); do
   case "$1" in
-    install|init|doctor|start|stop|restart|update|status|logs|test|uninstall) COMMAND="$1"; shift ;;
+    install|init|configure|profiles|doctor|start|stop|restart|update|status|logs|test|uninstall) COMMAND="$1"; shift ;;
+    --gpu|--backend|--profile|--model|--model-revision|--tool-parser|--reasoning-parser|--thinking|--dtype|--quantization|--context-length|--max-seqs|--max-output-tokens|--gpu-memory-fraction|--min-free-gib|--enforce-eager|--cpu-offload-gb|--vllm-image)
+      (($# >= 2)) || die "Missing value for $1"
+      MODEL_ARGS+=("$1" "$2"); shift 2 ;;
     --yes|--remove-images|--remove-checkout|--files-only) UNINSTALL_ARGS+=("$1"); shift ;;
     --install-host-deps) die 'Run sudo ./setup-host.sh separately; setup.sh never elevates privileges.' ;;
     --prebuilt-agent|--build-agent)
@@ -38,7 +49,7 @@ while (($#)); do
       IMAGE_MODE="$1"
       if [[ "$1" == --build-agent ]]; then PREBUILT_AGENT=0; else PREBUILT_AGENT=1; fi
       shift ;;
-    --host|--bind|--port|--gpu|--agent-image)
+    --host|--bind|--port|--agent-image)
       (($# >= 2)) || die "Missing value for $1"
       if [[ "$1" == --agent-image ]]; then
         AGENT_IMAGE_SET=1; AGENT_IMAGE="$2"
@@ -55,7 +66,12 @@ if ((!PREBUILT_AGENT && !AGENT_IMAGE_SET)); then INIT_ARGS+=(--agent-image borgv
 if ((${#UNINSTALL_ARGS[@]})) && [[ "$COMMAND" != uninstall ]]; then
   die 'Deletion options apply only to uninstall.'
 fi
-if [[ "$COMMAND" == update ]]; then
+if ((${#MODEL_ARGS[@]})) && [[ "$COMMAND" != install && "$COMMAND" != init && "$COMMAND" != configure ]]; then
+  die 'Model options apply to install/init/configure. Configure the model, then run update.'
+fi
+if [[ "$COMMAND" == configure ]]; then
+  ((HAS_INIT_OPTIONS == 0)) || die 'Host/bind/port settings are initial options; change them deliberately in .env.'
+elif [[ "$COMMAND" == update ]]; then
   ((HAS_INIT_OPTIONS == 0)) || die 'Only --agent-image can be changed by update; edit other settings in .env.'
 elif [[ "$COMMAND" != install && "$COMMAND" != init ]] && ((${#INIT_ARGS[@]})); then
   die 'Host/bind/port/GPU options apply only to install/init. Edit existing .env deliberately.'
@@ -68,19 +84,29 @@ choose_docker() {
   "${DOCKER[@]}" compose version >/dev/null || die 'Docker Compose v2 plugin is required.'
 }
 compose() {
-  "${DOCKER[@]}" compose --project-directory "$DIR" --env-file "$DIR/.env" -f "$DIR/compose.yaml" "$@"
+  "${DOCKER[@]}" compose --project-directory "$DIR" --env-file "$DIR/.env" -f "$DIR/compose.yaml" -f "$DIR/compose.$BACKEND.yaml" "$@"
 }
 check_gpu() {
-  [[ "$(uname -s)" == Linux && "$(uname -m)" == x86_64 ]] || die 'The inference deployment targets Linux x86_64 with an NVIDIA GPU.'
-  command -v nvidia-smi >/dev/null && nvidia-smi || die 'A working NVIDIA driver is required.'
-  local gpu image
+  [[ "$(uname -s)" == Linux && "$(uname -m)" == x86_64 ]] || die 'The inference deployment targets Linux x86_64 with an NVIDIA or AMD GPU.'
+  local gpu image dtype render_gid video_gid
   gpu="$(python3 "$DIR/configure.py" get BORGVR_GPU)"
   image="$(python3 "$DIR/configure.py" get BORGVR_VLLM_IMAGE)"
-  printf '%s\n' 'Checking CUDA in the pinned vLLM image. Its first download can be large.'
-  "${DOCKER[@]}" run --rm --gpus "device=$gpu" --cap-drop ALL --security-opt no-new-privileges:true \
-    --entrypoint python3 "$image" -c \
-    'import torch; assert torch.cuda.is_available(), "CUDA unavailable"; x=torch.ones(1, device="cuda"); torch.cuda.synchronize(); print(torch.cuda.get_device_name(0), "CUDA", torch.version.cuda, "OK")' \
-    || die 'GPU container check failed. Check driver compatibility with this image, Container Toolkit and GPU selection. No driver was changed.'
+  dtype="$(python3 "$DIR/configure.py" get BORGVR_DTYPE)"
+  GPU_ARGS=()
+  if [[ "$BACKEND" == cuda ]]; then
+    command -v nvidia-smi >/dev/null && nvidia-smi || die 'A working NVIDIA driver is required.'
+    GPU_ARGS=(--gpus "device=$gpu")
+  else
+    [[ -c /dev/kfd && -d /dev/dri ]] || die 'ROCm requires a working AMD driver exposing /dev/kfd and /dev/dri.'
+    render_gid="$(python3 "$DIR/configure.py" get BORGVR_RENDER_GID)"
+    video_gid="$(python3 "$DIR/configure.py" get BORGVR_VIDEO_GID)"
+    GPU_ARGS=(--device /dev/kfd --device /dev/dri --group-add "$render_gid" --group-add "$video_gid" -e "ROCR_VISIBLE_DEVICES=$gpu")
+  fi
+  printf 'Checking %s in the configured vLLM image. Its first download can be large.\n' "$BACKEND"
+  "${DOCKER[@]}" run --rm "${GPU_ARGS[@]}" --cap-drop ALL --security-opt no-new-privileges:true \
+    -e "BORGVR_PROBE_DTYPE=$dtype" --entrypoint python3 "$image" -c \
+    'import os,torch; assert torch.cuda.is_available(), "GPU runtime unavailable"; dtype=os.environ["BORGVR_PROBE_DTYPE"]; x=torch.ones(1,device="cuda",dtype=getattr(torch,dtype) if dtype!="auto" else torch.float32); torch.cuda.synchronize(); free,total=torch.cuda.mem_get_info(); print(torch.cuda.get_device_name(0),"ROCm" if torch.version.hip else "CUDA",torch.version.hip or torch.version.cuda,"free/total GiB",round(free/2**30,1),round(total/2**30,1),"OK")' \
+    || die 'GPU/dtype probe failed. Check driver, backend/image compatibility and selected GPU. Try float16 if bfloat16 is unsupported. No driver was changed.'
   compose config --quiet
 }
 
@@ -98,18 +124,30 @@ start_services() { compose up -d --no-build --pull never --wait --wait-timeout 3
 test_server() {
   compose exec -T agent python client.py --url https://127.0.0.1:8766 \
     --ca /run/tls/server.crt --token-file /run/secrets/agent_token --smoke
+  compose exec -T agent python client.py --url https://127.0.0.1:8766 \
+    --ca /run/tls/server.crt --token-file /run/secrets/agent_token --capabilities
 }
 
 command -v python3 >/dev/null || die 'Python 3 is missing. Run sudo ./setup-host.sh.'
+if [[ "$COMMAND" == profiles ]]; then exec python3 "$DIR/configure.py" profiles; fi
+if [[ "$COMMAND" == configure ]]; then
+  if ((AGENT_IMAGE_SET)); then MODEL_ARGS+=(--agent-image "$AGENT_IMAGE"); fi
+  exec python3 "$DIR/configure.py" configure ${MODEL_ARGS[@]+"${MODEL_ARGS[@]}"}
+fi
 if [[ "$COMMAND" == uninstall ]]; then
   exec python3 "$DIR/uninstall.py" ${UNINSTALL_ARGS[@]+"${UNINSTALL_ARGS[@]}"}
 fi
 command -v openssl >/dev/null || die 'OpenSSL is missing. Run sudo ./setup-host.sh.'
 case "$COMMAND" in
-  init) python3 "$DIR/configure.py" init ${INIT_ARGS[@]+"${INIT_ARGS[@]}"}; exit 0 ;;
-  install) python3 "$DIR/configure.py" init ${INIT_ARGS[@]+"${INIT_ARGS[@]}"} ;;
+  init) python3 "$DIR/configure.py" init ${INIT_ARGS[@]+"${INIT_ARGS[@]}"} ${MODEL_ARGS[@]+"${MODEL_ARGS[@]}"}; exit 0 ;;
+  install) python3 "$DIR/configure.py" init ${INIT_ARGS[@]+"${INIT_ARGS[@]}"} ${MODEL_ARGS[@]+"${MODEL_ARGS[@]}"} ;;
 esac
 [[ -f "$DIR/.env" ]] || die 'Run sudo ./setup.sh install first.'
+if [[ "$COMMAND" == install || "$COMMAND" == start || "$COMMAND" == restart || "$COMMAND" == update || "$COMMAND" == doctor ]]; then
+  python3 "$DIR/configure.py" validate-model
+fi
+BACKEND="$(python3 "$DIR/configure.py" get BORGVR_BACKEND)"
+[[ "$BACKEND" == cuda || "$BACKEND" == rocm ]] || die 'Backend must be cuda or rocm.'
 choose_docker
 if [[ "$COMMAND" == start || "$COMMAND" == restart || "$COMMAND" == update ]]; then
   python3 "$DIR/configure.py" prepare-secrets
@@ -122,7 +160,8 @@ case "$COMMAND" in
       --security-opt no-new-privileges:true --entrypoint python "$python_image" \
       -c 'import shutil; print(shutil.disk_usage("/").free // 1024)')"
     [[ "$available_kib" =~ ^[0-9]+$ ]] || die 'Could not determine free space in Docker storage.'
-    ((available_kib >= 200 * 1024 * 1024)) || die 'Keep at least 200 GiB free in Docker storage for images, weights and build caches.'
+    min_free_gib="$(python3 "$DIR/configure.py" get BORGVR_MIN_FREE_GIB)"
+    ((available_kib >= min_free_gib * 1024 * 1024)) || die "Keep at least $min_free_gib GiB free in Docker storage for this model profile (configurable)."
     check_gpu
     if ((PREBUILT_AGENT)); then
       agent_image="$(python3 "$DIR/configure.py" get BORGVR_AGENT_IMAGE)"
@@ -135,10 +174,11 @@ case "$COMMAND" in
       agent_image="$(python3 "$DIR/configure.py" get BORGVR_AGENT_IMAGE)"
       [[ "$agent_image" != *@* ]] || die 'Source builds need a writable image tag in .env, not a registry digest.'
       "${DOCKER[@]}" compose --project-directory "$DIR" --env-file "$DIR/.env" \
-        -f "$DIR/compose.yaml" -f "$DIR/compose.build.yaml" build --pull agent
+        -f "$DIR/compose.yaml" -f "$DIR/compose.$BACKEND.yaml" -f "$DIR/compose.build.yaml" build --pull agent
     fi
     check_service_secrets
     start_services
+    test_server
     printf '%s\n' 'Server is running. Run: sudo ./setup.sh test' \
       'The native BorgVR voice client is not connected yet; see README.md for the server test and protocol.' ;;
   doctor) check_gpu ;;

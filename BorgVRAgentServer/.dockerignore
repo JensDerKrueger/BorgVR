@@ -3,6 +3,10 @@
 runtime
 .venv
 __pycache__
+**/__pycache__
+**/*.pyc
 .pytest_cache
 tests
 *.tar
+*.tar.gz
+.env-update-*

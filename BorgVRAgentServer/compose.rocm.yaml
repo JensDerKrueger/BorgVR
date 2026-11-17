@@ -1,0 +1,9 @@
+# ROCm requires device mappings, not an NVIDIA runtime or privileged mode.
+services:
+  vllm:
+    devices:
+      - /dev/kfd:/dev/kfd
+      - /dev/dri:/dev/dri
+    group_add: ["${BORGVR_GID}", "${BORGVR_RENDER_GID:-0}", "${BORGVR_VIDEO_GID:-0}"]
+    environment:
+      ROCR_VISIBLE_DEVICES: ${BORGVR_GPU:-0}

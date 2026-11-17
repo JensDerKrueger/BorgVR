@@ -18,6 +18,7 @@ from pydantic_ai.capabilities.process_history import ProcessHistory
 from pydantic_ai.messages import ModelMessagesTypeAdapter, UserPromptPart
 from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
+from model_config import ModelConfig
 
 from .protocol import (
     Cancel, ContextChanged, Hello, MAX_HISTORY_BYTES, MAX_RESULT_BYTES,
@@ -53,6 +54,10 @@ class Settings:
     idle_timeout: float = 300
     hello_timeout: float = 10
     send_timeout: float = 10
+    inference: ModelConfig = ModelConfig.from_env({})
+
+    def capabilities(self):
+        return {"vision": self.inference.vision, "tool_calling": True}
 
     @classmethod
     def from_env(cls):
@@ -62,10 +67,11 @@ class Settings:
                 raise ValueError(f"Invalid secret in {name}")
             return value
 
+        inference = ModelConfig.from_env(os.environ)
         return cls(
             token=secret("BORGVR_TOKEN_FILE", "/run/secrets/agent_token"),
             vllm_token=secret("BORGVR_VLLM_TOKEN_FILE", "/run/secrets/vllm_token"),
-            model=os.environ.get("BORGVR_MODEL", cls.model),
+            model=inference.model, inference=inference,
             vllm_url=os.environ.get("BORGVR_VLLM_URL", cls.vllm_url),
         )
 
@@ -198,9 +204,7 @@ class Session:
                 async with self.run_slots:
                     result = await self.agent.run(
                         message.text, message_history=self.history,
-                        model_settings={"max_tokens": 2048, "temperature": 0.5,
-                                        "parallel_tool_calls": False,
-                                        "extra_body": {"chat_template_kwargs": {"enable_thinking": False}}},
+                        model_settings=self.settings.inference.request_settings(),
                         usage_limits=UsageLimits(request_limit=16, tool_calls_limit=24),
                     )
             self.history = await bounded_history(result.all_messages())
@@ -236,6 +240,7 @@ class Session:
         self.dataset_id, self.context_id = hello.dataset_id, hello.context_id
         self.agent = self.build_agent()
         await self.send({"type": "ready", "protocol": 1, "model": self.settings.model,
+                         "capabilities": self.settings.capabilities(),
                          "tools": [tool.name for tool in self.tools]})
         while True:
             value = await self.receive(self.settings.idle_timeout)
@@ -301,7 +306,7 @@ def create_app(settings=None, model=None):
 
     app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
     app.state.sessions = 0
-    run_slots = asyncio.Semaphore(2)
+    run_slots = asyncio.Semaphore(settings.inference.sequences)
 
     @app.get("/healthz")
     async def health():
@@ -325,7 +330,8 @@ def create_app(settings=None, model=None):
                         data = decode_message(body.decode())
                         if settings.model not in [item.get("id") for item in data.get("data", [])]:
                             raise ProtocolError("Configured model is not loaded")
-            return {"status": "ready", "model": settings.model, "protocol": 1}
+            return {"status": "ready", "model": settings.model, "protocol": 1,
+                    "capabilities": settings.capabilities()}
         except Exception:
             return JSONResponse({"status": "model_unavailable"}, status_code=503)
 

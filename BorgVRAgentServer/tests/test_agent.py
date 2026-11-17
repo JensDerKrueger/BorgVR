@@ -12,6 +12,7 @@ from pydantic_ai.messages import ModelResponse, TextPart, ToolCallPart, UserProm
 from pydantic_ai.models.function import FunctionModel
 import pytest
 from starlette.websockets import WebSocketDisconnect
+from model_config import ModelConfig, profile_values
 
 from borgvr_agent.app import Settings, bounded_history, create_app
 from borgvr_agent.protocol import (
@@ -141,19 +142,28 @@ def test_model_readiness_is_bounded_and_checks_model(monkeypatch, response, expe
         assert client.get("/readyz", headers=AUTH).status_code == expected
 
 
-def test_openai_compatible_http_adapter_and_png_payload(monkeypatch):
+@pytest.mark.parametrize("custom", [False, True])
+def test_openai_compatible_http_adapter_and_png_payload(monkeypatch, custom):
     import borgvr_agent.app as module
     import httpx2
 
     requests = []
+    inference = SETTINGS.inference
+    if custom:
+        inference = ModelConfig.from_env({**profile_values("custom"), "BORGVR_MODEL": "Other/Vision-Instruct",
+                                          "BORGVR_MODEL_REVISION": "main", "BORGVR_TOOL_PARSER": "hermes"})
+    settings = replace(SETTINGS, model=inference.model, inference=inference)
 
     def handler(request):
         assert request.url.path == "/v1/chat/completions"
         assert request.headers["Authorization"] == f"Bearer {SETTINGS.vllm_token}"
         body = json.loads(request.content)
-        assert body["chat_template_kwargs"] == {"enable_thinking": False}
+        if custom:
+            assert "chat_template_kwargs" not in body
+        else:
+            assert body["chat_template_kwargs"] == {"enable_thinking": False}
         assert body["parallel_tool_calls"] is False
-        assert body["model"] == SETTINGS.model
+        assert body["model"] == settings.model
         requests.append(body)
         name = ("get_application_state", "capture_screenshot", None)[len(requests) - 1]
         message = {"role": "assistant", "content": None}
@@ -166,15 +176,16 @@ def test_openai_compatible_http_adapter_and_png_payload(monkeypatch):
                        for item in msg["content"])
             message["content"] = "HTTP adapter ready"
         return httpx2.Response(200, json={"id": "test", "object": "chat.completion", "created": 1,
-            "model": SETTINGS.model, "choices": [{"index": 0, "message": message,
+            "model": settings.model, "choices": [{"index": 0, "message": message,
                                                   "finish_reason": "tool_calls" if name else "stop"}],
             "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15}})
 
     monkeypatch.setattr(module, "DefaultAsyncHttpxClient", lambda **kwargs: httpx2.AsyncClient(
         **kwargs, transport=httpx2.MockTransport(handler)))
-    with TestClient(create_app(SETTINGS)) as client, open_session(client) as ws:
+    with TestClient(create_app(settings)) as client, open_session(client) as ws:
         ws.send_json(hello([STATE, SCREENSHOT]))
-        ws.receive_json()
+        ready = ws.receive_json()
+        assert ready["capabilities"] == {"vision": True, "tool_calling": True}
         ws.send_json(user())
         ws.receive_json()
         ws.send_json(reply(ws.receive_json()))

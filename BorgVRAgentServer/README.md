@@ -3,7 +3,7 @@
 [Deutsch](README.de.md)
 
 Self-hosted server foundation for BorgVR's planned conversational assistant. The stack runs
-one multimodal model in vLLM and a small Pydantic AI agent, connected by a private Docker
+one selectable vision-language model in vLLM and a small Pydantic AI agent, connected by a private Docker
 network. Only the authenticated HTTPS/WSS agent endpoint is published.
 
 **Current scope:** server installation, text interaction, external-tool orchestration,
@@ -16,14 +16,14 @@ model but does not claim to exercise native rendering or anatomical recognition.
 
 - Linux x86_64. The target host is **Ubuntu 26.04.1 LTS (resolute)**. The root-only host
   package installer also accepts Ubuntu 22.04 and 24.04. Other distributions need Docker,
-  Compose and NVIDIA Container Toolkit installed by their administrator.
-- One available **H200 with its full 141 GB memory**, a working NVIDIA driver, and the stated
-  256 GB host RAM. The conservative default uses one GPU, BF16, 16,384 context tokens,
-  two concurrent inference sequences and an 85% GPU-memory budget. MIG partitions or other
-  GPU workloads may not have sufficient space.
-- At least **200 GiB free in Docker's storage filesystem**, preferably 250 GiB or more.
-  This is an installation safety budget, not a measured final dataset/model size.
-  Model weights, large container images, compilation/build caches and download staging use it.
+  Compose and the matching GPU runtime installed by their administrator.
+- A supported **NVIDIA/CUDA or AMD/ROCm GPU** with a matching working host driver. An H200
+  is not required. Weights, image encoder, KV/context cache and runtime overhead must fit
+  the available GPU/host memory. Smaller or suitably quantized models can need much less.
+- Free Docker storage: profile reserves are **200 GiB** for Qwen3.6-35B, **160 GiB** for
+  Qwen3.8-27B and **80 GiB** for Qwen3.5-4B. These are adjustable conservative starting
+  budgets (`--min-free-gib`), not measured model sizes or guarantees.
+- Docker Engine and Compose v2; NVIDIA also requires NVIDIA Container Toolkit.
 - Internet access for signed OS repositories, Docker Hub, PyPI and Hugging Face's model/CDN
   endpoints. The initial weights download is large; first startup and kernel compilation
   can take considerably longer than subsequent starts.
@@ -34,16 +34,19 @@ model but does not claim to exercise native rendering or anatomical recognition.
   users need **no Docker account, shell access or root privileges**: they connect to the
   shared agent endpoint. No separate maintenance account or Docker group is required.
 
-First verify the existing driver:
+For NVIDIA, first verify the existing driver:
 
 ```
 nvidia-smi
 ```
 
-If this fails, install the distribution/vendor-supported H200 driver and reboot if required.
+AMD needs a working ROCm-compatible driver exposing `/dev/kfd` and `/dev/dri`.
+If the driver does not work, install the distribution/vendor-supported driver and reboot if required.
 The installer deliberately does not select/replace drivers, change Secure Boot, or reboot.
-The exact driver must support the CUDA runtime of the pinned vLLM image; `doctor` allocates
-a CUDA tensor inside that image rather than relying only on a version-number guess.
+The driver must support the CUDA/ROCm runtime of the chosen image; `doctor` allocates
+a GPU tensor inside it using the selected dtype rather than guessing from version numbers.
+Qwen3.6-35B has been run on the H200. Other profiles and both backend configurations have
+automated tests, not exhaustive GPU validation; real AMD/ROCm hardware testing is still needed.
 
 ## 2. Copy The Deployment
 
@@ -68,6 +71,8 @@ generate its own credentials. No Hugging Face login is required for the default 
 There are **two runtime containers**: the upstream vLLM image and our agent image.
 `compose.yaml` is pull-only: it contains no image build. Only image producers/developers
 use `compose.build.yaml`. No privileged installer container or mounted Docker socket is needed.
+The script selects `compose.cuda.yaml` or `compose.rocm.yaml` automatically. Use the script
+for startup/update, not a bare `docker compose up` without the backend overlay.
 
 Use the same sudo-capable account throughout. When already logged in as root, omit `sudo`.
 
@@ -92,6 +97,9 @@ Only if prerequisites are missing, run a reviewed copy of the host script:
 sudo ./setup-host.sh
 ```
 
+For AMD, use `sudo ./setup-host.sh --backend rocm` instead. It does not install NVIDIA
+packages, configure its runtime or restart Docker. Neither path installs/replaces GPU drivers.
+
 This installs missing Docker,
 Compose and NVIDIA Container Toolkit prerequisites from the official signed repositories.
 It preserves installed drivers and refuses conflicting Docker packages instead of removing
@@ -115,13 +123,14 @@ For an initial local-only test, run in `BorgVRAgentServer`:
 sudo ./setup.sh install
 ```
 
-This creates `.env`, tokens and a test certificate, checks at least 200 GiB of free Docker
-storage and CUDA access, pulls missing images, and starts both services. The public
-[3.9.0 agent image](https://github.com/JensDerKrueger/BorgVR/pkgs/container/borgvr-agent)
-is pinned by its verified digest by default. No registry login or local build is needed.
+This creates `.env`, tokens and a test certificate, checks the profile's storage reserve
+and GPU, pulls missing images, and starts both services. The public
+[agent image from 3.9.1](https://github.com/JensDerKrueger/BorgVR/pkgs/container/borgvr-agent)
+supports model profiles. No registry login or local build is needed.
 vLLM downloads the pinned model into its persistent cache; the agent starts only when
 vLLM is healthy. First download/compilation can take up to the one-hour readiness limit.
 Logs/caches are retained on failure.
+Startup then tests an actual model response, tool calling and image input.
 
 For access from other devices, specify a hostname or IP and the local listen address:
 
@@ -134,6 +143,59 @@ Replace hostname/IP with the actual values. Without them the default is localhos
 Port defaults to **8766** (`--port`); GPU defaults to **0** (`--gpu INDEX` or `GPU-...` UUID).
 Configuration creates two private random tokens and a development TLS certificate. For
 native-device deployment, use a trusted CA certificate as described in section 5.
+
+### Select Models And GPUs
+
+The **vLLM image** provides inference software and CUDA/ROCm. The **model and revision**
+select a separate checkpoint. Changing a model does not necessarily require a different
+image; architecture, parser and hardware support determine that. The BorgVR client protocol
+stays unchanged. Vision and tool calling are mandatory, not optional text-only fallbacks.
+
+```
+./setup.sh profiles
+sudo ./setup.sh install --backend cuda --profile qwen35-4b
+```
+
+Profiles `qwen36-35b`, `qwen35-4b` and `qwen38-27b` use separate fixed checkpoint revisions
+and initial parser/resource settings. For a new AMD installation use, for example,
+`sudo ./setup.sh install --backend rocm --profile qwen35-4b`. CUDA and ROCm images are pinned
+independently. These presets do not guarantee every model fits or has kernels for every GPU.
+
+Switch an existing deployment while keeping credentials and caches:
+
+```
+sudo ./setup.sh update --agent-image ghcr.io/jensderkrueger/borgvr-agent:3.9.1
+sudo ./setup.sh configure --profile qwen38-27b
+sudo ./setup.sh doctor
+sudo ./setup.sh update
+```
+
+`configure` validates and backs up `.env`, but does not restart containers. `--backend rocm`
+also selects the ROCm image and detected device groups. Override a compatible runtime with
+`--vllm-image REF`. Changes take effect at the next `update` or `start`.
+
+For another **vision-language model with tool calling**, replace the placeholders below
+using its model card and vLLM documentation:
+
+```
+sudo ./setup.sh configure --profile custom \
+  --model ORGANIZATION/MODEL --model-revision COMMIT \
+  --tool-parser PARSER --reasoning-parser none --thinking default
+```
+
+A different checkpoint never silently reuses the old model's commit. `--thinking default`
+omits model-specific request options; Qwen presets explicitly disable thinking.
+Other controls: `--dtype auto|float16|bfloat16|float32`, `--quantization NAME`,
+`--context-length N`, `--max-seqs N`, `--max-output-tokens N`, `--gpu-memory-fraction F`,
+`--enforce-eager true|false` and `--cpu-offload-gb N`. Older GPUs may need float16 rather
+than bfloat16. Quantization requires a matching checkpoint/method and hardware kernels;
+an arbitrary flag does not make every model smaller. Context/concurrency reductions save
+memory but can limit tasks. MoE active parameter counts are not total weight-storage sizes.
+
+Sources: [Qwen3.5-4B](https://huggingface.co/Qwen/Qwen3.5-4B),
+[Qwen3.8-27B](https://huggingface.co/Qwen/Qwen3.8-27B),
+[vLLM tool parsers](https://docs.vllm.ai/en/latest/features/tool_calling/),
+[vLLM GPU requirements](https://docs.vllm.ai/en/latest/getting_started/installation/gpu/).
 
 Ordinary BorgVR users only connect to the running endpoint and need no server account
 or Docker privileges. These scripts target the local rootful
@@ -149,7 +211,7 @@ hostnames. An interrupted configuration with `runtime` but no `.env` requires ma
 inspection; setup refuses to discard potentially existing credentials.
 If an old `.env` still selects `BORGVR_AGENT_IMAGE=borgvr-agent:3.9` and that local image
 does not exist, use `sudoedit .env` to change only the image reference to
-`ghcr.io/jensderkrueger/borgvr-agent:3.9.0` or the digest in section 10.
+`ghcr.io/jensderkrueger/borgvr-agent:3.9.1` or its published digest.
 Do not regenerate credentials or certificates just to change images.
 
 To generate configuration without starting or installing anything:
@@ -167,10 +229,10 @@ sudo ./setup.sh status
 sudo ./setup.sh test
 ```
 
-The smoke test checks the agent's authenticated `/readyz` endpoint, opens an authenticated TLS
-WebSocket, and asks the **real model** for a short answer. A successful check reports the
-model, a short response and exit status zero. It advertises no native tools: it does not
-simulate a successful BorgVR operation.
+The test checks authenticated readiness/TLS and asks the **real model** for a short answer.
+It then advertises two harmless synthetic tools and requires both calls plus recognition
+of a red test image. No actual dataset is opened or modified. A failure can mean missing
+compatibility or unreliable task completion, not necessarily broken hardware.
 
 To ask your own question:
 
@@ -185,7 +247,7 @@ a secure channel, install the pinned client dependency, and run:
 
 ```
 python3 -m venv .venv
-.venv/bin/pip install websockets==17.4 httpx==0.28.1
+.venv/bin/pip install websockets==17.4 httpx==0.28.1 pillow==13.0.0
 .venv/bin/python client.py --url https://ai.example.org:8766 \
   --ca /secure/path/server.crt --token-file /secure/path/agent_token --smoke
 ```
@@ -195,6 +257,7 @@ TLS switch. HTTP and WebSocket redirects and environment-configured proxies are 
 Never copy `server.key` or the internal `vllm_token` to clients. Treat the
 agent token as a password. It is currently **one installation-wide token**, not a per-device
 identity/user-management system. Devices sharing it have equal access to the allowed tools.
+Use `--capabilities` instead of `--smoke` for the tool/image check when calling the client directly.
 
 ## 5. Configuration, TLS And Network Security
 
@@ -268,7 +331,7 @@ are not stopped. Run these commands from the deployment directory.
 Stopping, restarting or replacing containers can interrupt active sessions. Conversations
 are in RAM only and are not restored after a restart.
 
-Use `sudo ./setup.sh doctor` to repeat the CUDA probe.
+Use `sudo ./setup.sh doctor` to repeat the CUDA/ROCm probe.
 
 ### Host Reboots
 
@@ -320,7 +383,7 @@ A subsequent startup/model-test failure is reported, not automatically rolled ba
 review, restore the printed backup with `sudo cp /PATH/TO/BACKUP .env`, then run
 `sudo ./setup.sh start` and `sudo ./setup.sh test`.
 
-For source builds use `sudo docker compose -f compose.yaml -f compose.build.yaml build --pull agent`
+For source builds use `sudo ./setup.sh install --build-agent` with a deliberately selected local image tag
 instead of pulling the unpublished local agent image. Existing `.env` intentionally retains its
 original vLLM image/model revision: migrate those entries explicitly when upgrading the
 inference stack. Never update to `latest` silently. Stop the stack before restoring a
@@ -334,12 +397,12 @@ delete the model cache as well: `sudo docker compose down --volumes`. This does 
 
 ## 7. Troubleshooting
 
-- **CUDA probe fails:** check the driver, container runtime, selected GPU/MIG partition,
-  and the pinned image's CUDA requirements. Installing a host CUDA Toolkit is not a substitute
+- **GPU probe fails:** check the driver, container runtime, selected GPU/MIG partition,
+  and the selected image's CUDA/ROCm requirements. Installing a host toolkit is not a substitute
   for a compatible driver. Inspect errors before selecting another image/driver.
-- **GPU out of memory:** verify no other workload occupies the H200, then deliberately lower
-  `BORGVR_CONTEXT_LENGTH` or `BORGVR_GPU_MEMORY_FRACTION` in `.env`; `sudo docker compose up -d`
-  recreates changed services. A different GPU may require a smaller or quantized model.
+- **GPU out of memory:** check competing workloads; reduce context/concurrency, use an
+  appropriate smaller/quantized model or test eager mode/offload. Apply deliberate changes
+  with `configure`, then `update`. Lowering the memory fraction alone cannot make oversized weights fit.
 - **First startup takes too long:** follow `logs`; weight download/compilation can be slow.
   The setup exits after one hour rather than reporting a running model prematurely. Check
   disk/network conditions and restart; completed downloads remain cached.
@@ -371,33 +434,18 @@ clients. No new native application targets or old speech handlers were changed i
 
 ## 9. Producing The Agent Image
 
-Only the image producer needs the sources/build toolchain. Build for the Linux H200 host:
+The normal release path is the GitHub workflow below; it already produces tested image
+and deployment archives. No local build or manual registry tagging is required for users.
+For local development on an existing configured machine, explicitly select a writable tag:
 
 ```
-docker buildx build --platform linux/amd64 --load -t borgvr-agent:3.9 .
+sudo ./setup.sh configure --agent-image borgvr-agent:dev
+sudo ./setup.sh install --build-agent
 ```
 
-Publish to your chosen, authorized registry, for example:
-
-```
-docker tag borgvr-agent:3.9 registry.example.org/borgvr-agent:3.9
-docker push registry.example.org/borgvr-agent:3.9
-```
-
-No image is automatically published by setup or by this repository change. Choose visibility
-and registry access explicitly. For reproducible deployments select the resulting image
-digest in `--agent-image`/`.env`, not only a mutable tag. Do not bundle model weights, tokens
-or certificates into the image; `.dockerignore` excludes deployment secrets.
-
-Without a registry, distribute the image archive through a trusted channel:
-
-```
-docker save --output borgvr-agent-3.9.tar borgvr-agent:3.9
-```
-
-Load it with `sudo docker load --input borgvr-agent-3.9.tar`. Set
-`BORGVR_AGENT_IMAGE=borgvr-agent:3.9` in `.env` and run `sudo ./setup.sh install`.
-The already loaded image is reused. Archives are excluded from Git and the build context.
+`compose.build.yaml` is only the developer build overlay. Production uses the tested GHCR
+image. Model weights, secrets, certificates and Python caches are excluded from the image;
+setup never publishes an image or changes registry visibility.
 
 ## 10. Repeatable GitHub Builds And GHCR Publication
 

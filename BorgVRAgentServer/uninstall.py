@@ -9,7 +9,7 @@ import re
 import shutil
 import subprocess
 
-from configure import DEFAULT_AGENT_IMAGE, PYTHON_IMAGE, VLLM_IMAGE
+from configure import DEFAULT_AGENT_IMAGE, PYTHON_IMAGE
 
 ROOT = Path(__file__).resolve().parent
 PROJECT = "borgvr-ai"
@@ -32,7 +32,7 @@ class Docker:
 
 
 def image_references(root):
-    references = {DEFAULT_AGENT_IMAGE, "borgvr-agent:ci", PYTHON_IMAGE, VLLM_IMAGE}
+    references = {DEFAULT_AGENT_IMAGE, "borgvr-agent:ci", PYTHON_IMAGE}
     env = root / ".env"
     if env.is_symlink():
         raise ValueError("Refusing to read a symlinked .env")

@@ -8,6 +8,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY borgvr_agent ./borgvr_agent
 COPY client.py .
+COPY model_config.py .
 COPY LICENSE .
 USER 10001:10001
 CMD ["python", "-m", "uvicorn", "borgvr_agent.app:create_app", "--factory", "--host", "0.0.0.0", "--port", "8766", "--ssl-certfile", "/run/tls/server.crt", "--ssl-keyfile", "/run/tls/server.key", "--ws", "websockets-sansio", "--ws-max-size", "4194304", "--ws-ping-interval", "20", "--ws-ping-timeout", "20", "--timeout-keep-alive", "5", "--no-access-log", "--no-proxy-headers"]

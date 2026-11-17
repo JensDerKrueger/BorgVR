@@ -10,11 +10,12 @@ import stat
 import subprocess
 import tempfile
 
+from model_config import CUDA_IMAGE, ROCM_IMAGE, PROFILES, ModelConfig, profile_values
+
 ROOT = Path(__file__).resolve().parent
 PYTHON_IMAGE = "python:3.12.15-slim-bookworm@sha256:6a0e06f5ba0b373d051aabd3fffb9b873f27f9a2a3a14bcbe37dee6f0e3bbc70"
-VLLM_IMAGE = "vllm/vllm-openai:v0.34.0@sha256:20fdb089454afbb324efa4110a2c025ff7b27cc1a086e07aa580b18df8ad1ce1"
-MODEL_REVISION = "345d467b117d1fd5eda9b879a5988de9ae5f47a7"
-DEFAULT_AGENT_IMAGE = "ghcr.io/jensderkrueger/borgvr-agent@sha256:729d464bf75d8b2fbf67c0733875d08db5cd121d6a15db01ef3d6679b4c1e053"
+VLLM_IMAGE = CUDA_IMAGE
+DEFAULT_AGENT_IMAGE = "ghcr.io/jensderkrueger/borgvr-agent:3.9.1"
 AGENT_UID = AGENT_GID = 10001
 
 
@@ -24,18 +25,25 @@ def image_reference(value):
     return value
 
 
-def set_agent_image(root, image):
-    image_reference(image)
+def write_configuration_changes(root, changes):
     env = root / ".env"
     if env.is_symlink() or not env.is_file() or env.stat().st_nlink != 1:
         raise ValueError("Expected a regular, private .env file")
     info, original = env.stat(), env.read_text()
     lines = original.splitlines(keepends=True)
-    matches = [i for i, line in enumerate(lines) if line.partition("=")[0] == "BORGVR_AGENT_IMAGE"]
-    if len(matches) != 1:
-        raise ValueError("Expected exactly one BORGVR_AGENT_IMAGE entry in .env")
-    if lines[matches[0]].partition("=")[2].strip() == image:
-        print("Agent image reference unchanged.")
+    for key, value in changes.items():
+        matches = [i for i, line in enumerate(lines) if line.partition("=")[0] == key]
+        if len(matches) > 1:
+            raise ValueError("Duplicate configuration entry: " + key)
+        if matches:
+            lines[matches[0]] = key + "=" + value + "\n"
+        else:
+            if lines and not lines[-1].endswith("\n"):
+                lines[-1] += "\n"
+            lines.append(key + "=" + value + "\n")
+    updated = "".join(lines)
+    if updated == original:
+        print("Configuration values unchanged.")
         return
     runtime = root / "runtime"
     if runtime.is_symlink() or not runtime.is_dir():
@@ -46,12 +54,11 @@ def set_agent_image(root, image):
         with tempfile.NamedTemporaryFile(mode="w", dir=runtime, prefix="env-before-update-", delete=False) as handle:
             backup = Path(handle.name)
             handle.write(original)
-        lines[matches[0]] = "BORGVR_AGENT_IMAGE=" + image + "\n"
         with tempfile.NamedTemporaryFile(mode="w", dir=root, prefix=".env-update-", delete=False) as handle:
             temporary = Path(handle.name)
             if os.getuid() == 0:
                 os.fchown(handle.fileno(), info.st_uid, info.st_gid)
-            handle.write("".join(lines))
+            handle.write(updated)
             handle.flush()
             os.fsync(handle.fileno())
         os.replace(temporary, env)
@@ -59,6 +66,83 @@ def set_agent_image(root, image):
         if temporary is not None:
             temporary.unlink(missing_ok=True)
     print(f"Previous configuration saved privately: {backup}")
+
+
+def set_agent_image(root, image):
+    write_configuration_changes(root, {"BORGVR_AGENT_IMAGE": image_reference(image)})
+
+
+def read_configuration(root):
+    env = root / ".env"
+    if env.is_symlink() or not env.is_file():
+        raise ValueError("Expected a regular .env file")
+    result = {}
+    for line in env.read_text().splitlines():
+        key, separator, value = line.partition("=")
+        if separator and key.startswith("BORGVR_"):
+            if key in result:
+                raise ValueError("Duplicate configuration entry: " + key)
+            result[key] = value
+    return result
+
+
+MODEL_OPTIONS = {
+    "model": "MODEL", "model-revision": "MODEL_REVISION", "tool-parser": "TOOL_PARSER",
+    "reasoning-parser": "REASONING_PARSER", "thinking": "THINKING_MODE",
+    "dtype": "DTYPE", "quantization": "QUANTIZATION", "context-length": "CONTEXT_LENGTH",
+    "max-seqs": "MAX_SEQS", "max-output-tokens": "MAX_OUTPUT_TOKENS",
+    "gpu-memory-fraction": "GPU_MEMORY_FRACTION", "min-free-gib": "MIN_FREE_GIB",
+    "enforce-eager": "ENFORCE_EAGER", "cpu-offload-gb": "CPU_OFFLOAD_GB",
+}
+
+
+def add_model_options(parser):
+    parser.add_argument("--profile", choices=PROFILES)
+    parser.add_argument("--backend", choices=("cuda", "rocm"))
+    parser.add_argument("--vllm-image", type=image_reference)
+    parser.add_argument("--gpu")
+    for name in MODEL_OPTIONS:
+        parser.add_argument("--" + name)
+
+
+def device_group(name):
+    import grp
+    try:
+        return str(grp.getgrnam(name).gr_gid)
+    except KeyError:
+        return "0"
+
+
+def inference_values(args, existing=None):
+    existing = existing or {}
+    profile = args.profile
+    if args.model and args.model != existing.get("BORGVR_MODEL", PROFILES["qwen36-35b"]["MODEL"]):
+        if not profile:
+            profile = next((name for name, item in PROFILES.items() if item["MODEL"] == args.model), "custom")
+        if profile == "custom" and not args.model_revision:
+            raise ValueError("A different custom model needs --model-revision; the previous model's commit is not reusable")
+    values = {**profile_values("qwen36-35b"), **existing}
+    if profile:
+        values.update(profile_values(profile))
+    for name, key in MODEL_OPTIONS.items():
+        value = getattr(args, name.replace("-", "_"))
+        if value is not None:
+            values["BORGVR_" + key] = value
+    ModelConfig.from_env(values)
+    backend = args.backend or existing.get("BORGVR_BACKEND", "cuda")
+    if backend not in ("cuda", "rocm"):
+        raise ValueError("Backend must be cuda or rocm")
+    gpu = args.gpu or existing.get("BORGVR_GPU", "0")
+    if not re.fullmatch(r"[0-9]+|GPU-[A-Fa-f0-9-]+", gpu):
+        raise ValueError("GPU must be an index or GPU UUID")
+    image = args.vllm_image or existing.get("BORGVR_VLLM_IMAGE", CUDA_IMAGE if backend == "cuda" else ROCM_IMAGE)
+    if args.backend and backend != existing.get("BORGVR_BACKEND", "cuda") and not args.vllm_image:
+        image = CUDA_IMAGE if backend == "cuda" else ROCM_IMAGE
+    values.update(BORGVR_BACKEND=backend, BORGVR_VLLM_IMAGE=image_reference(image), BORGVR_GPU=gpu,
+                  BORGVR_RENDER_GID=device_group("render"), BORGVR_VIDEO_GID=device_group("video"))
+    if args.agent_image:
+        values["BORGVR_AGENT_IMAGE"] = image_reference(args.agent_image)
+    return {key: value for key, value in values.items() if key not in existing or existing[key] != value}
 
 
 def prepare_shared_token(root):
@@ -98,7 +182,7 @@ def bind_address(value):
     return value
 
 
-def create_configuration(root, host, bind, port, gpu, agent_image=DEFAULT_AGENT_IMAGE):
+def create_configuration(root, host, bind, port, gpu, agent_image=DEFAULT_AGENT_IMAGE, inference=None):
     env = root / ".env"
     if env.exists():
         prepare_shared_token(root)
@@ -143,13 +227,15 @@ def create_configuration(root, host, bind, port, gpu, agent_image=DEFAULT_AGENT_
     values = {
         "BORGVR_VLLM_IMAGE": VLLM_IMAGE,
         "BORGVR_AGENT_IMAGE": agent_image,
-        "BORGVR_MODEL": "Qwen/Qwen3.6-35B-A3B",
-        "BORGVR_MODEL_REVISION": MODEL_REVISION,
+        **profile_values("qwen36-35b"),
+        "BORGVR_BACKEND": "cuda", "BORGVR_RENDER_GID": device_group("render"),
+        "BORGVR_VIDEO_GID": device_group("video"),
         "BORGVR_GPU": gpu,
         "BORGVR_CONTEXT_LENGTH": "16384",
         "BORGVR_GPU_MEMORY_FRACTION": "0.85",
         "BORGVR_UID": str(uid), "BORGVR_GID": str(gid),
         "BORGVR_BIND_ADDRESS": bind, "BORGVR_PORT": str(port),
+        **(inference or {}),
     }
     with open(env, "x", opener=lambda p, flags: os.open(p, flags, 0o600)) as handle:
         handle.write("# Generated by configure.py. Never commit .env or runtime/.\n")
@@ -163,14 +249,20 @@ def create_configuration(root, host, bind, port, gpu, agent_image=DEFAULT_AGENT_
 def read_value(name, root=ROOT):
     if not re.fullmatch(r"BORGVR_[A-Z_]+", name):
         raise ValueError("Invalid configuration key")
-    for line in (root / ".env").read_text().splitlines():
-        key, separator, value = line.partition("=")
-        if separator and key == name:
+    configuration = read_configuration(root)
+    for key, value in configuration.items():
+        if key == name:
             if not re.fullmatch(r"[A-Za-z0-9_./:@+-]+", value):
                 raise ValueError("Configuration contains unsupported characters")
             return value
     if name == "BORGVR_AGENT_IMAGE":
         return DEFAULT_AGENT_IMAGE
+    defaults = {**profile_values(next((key for key, item in PROFILES.items()
+                                       if item["MODEL"] == configuration.get("BORGVR_MODEL")), "qwen36-35b")),
+                "BORGVR_BACKEND": "cuda", "BORGVR_RENDER_GID": device_group("render"),
+                "BORGVR_VIDEO_GID": device_group("video")}
+    if name in defaults:
+        return defaults[name]
     raise ValueError("Missing configuration value")
 
 
@@ -178,6 +270,11 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("prepare-secrets")
+    sub.add_parser("validate-model")
+    sub.add_parser("profiles")
+    change = sub.add_parser("configure")
+    change.add_argument("--agent-image", type=image_reference)
+    add_model_options(change)
     validate = sub.add_parser("validate-image")
     validate.add_argument("image", type=image_reference)
     update = sub.add_parser("set-agent-image")
@@ -186,14 +283,21 @@ def main():
     init.add_argument("--host", type=hostname, default="localhost")
     init.add_argument("--bind", type=bind_address, default="127.0.0.1")
     init.add_argument("--port", type=int, choices=range(1024, 65536), metavar="1024..65535", default=8766)
-    init.add_argument("--gpu", default="0")
+    add_model_options(init)
     init.add_argument("--agent-image", type=image_reference, default=DEFAULT_AGENT_IMAGE)
     get = sub.add_parser("get")
     get.add_argument("name")
     image = sub.add_parser("image")
     image.add_argument("name", choices=["python"])
     args = parser.parse_args()
-    if args.command == "validate-image":
+    if args.command == "validate-model":
+        ModelConfig.from_env(read_configuration(ROOT))
+    elif args.command == "profiles":
+        for name, values in PROFILES.items():
+            print(f"{name}: {values['MODEL'] or 'explicit model/revision/parser required'}; context {values['CONTEXT_LENGTH']}; disk reserve {values['MIN_FREE_GIB']} GiB")
+    elif args.command == "configure":
+        write_configuration_changes(ROOT, inference_values(args, read_configuration(ROOT)))
+    elif args.command == "validate-image":
         return
     elif args.command == "set-agent-image":
         set_agent_image(ROOT, args.image)
@@ -204,9 +308,8 @@ def main():
     elif args.command == "image":
         print(PYTHON_IMAGE)
     else:
-        if not re.fullmatch(r"[0-9]+|GPU-[A-Fa-f0-9-]+", args.gpu):
-            parser.error("GPU must be an index or NVIDIA GPU UUID")
-        create_configuration(ROOT, args.host, args.bind, args.port, args.gpu, args.agent_image)
+        inference = inference_values(args)
+        create_configuration(ROOT, args.host, args.bind, args.port, args.gpu or "0", args.agent_image, inference)
 
 
 if __name__ == "__main__":

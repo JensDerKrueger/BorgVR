@@ -104,6 +104,13 @@ def test_images_used_by_foreign_containers_are_kept(tmp_path):
     assert plan["images"] == [] and plan["shared_images_retained"] == [IMAGE]
 
 
+def test_rocm_deployment_does_not_select_unrelated_cuda_image_for_removal(tmp_path):
+    (tmp_path / ".env").write_text("BORGVR_VLLM_IMAGE=example.org/rocm:test\n")
+    references = uninstall.image_references(tmp_path)
+    assert "example.org/rocm:test" in references
+    assert not any(reference.startswith("vllm/vllm-openai:") for reference in references)
+
+
 def test_image_aliases_do_not_leave_version_or_digest_tags_behind(tmp_path):
     local_files(tmp_path)
     docker = FakeDocker(tmp_path)

@@ -111,7 +111,7 @@ def test_shell_syntax_and_help():
         subprocess.run(["bash", "-n", str(root / name)], check=True)
         result = subprocess.run(["bash", str(root / name), "--help"], capture_output=True, text=True, check=True)
         assert "--install-host-deps" not in result.stdout
-    assert "--docker-user" in result.stdout
+    assert "--backend" in result.stdout and "--docker-user" not in result.stdout
 
 
 def test_deployment_has_no_public_inference_port_or_privileged_mode():
@@ -159,24 +159,6 @@ def test_root_runtime_restart_requires_explicit_permission(registered, allowed):
         assert "CTK " not in result.stdout and "SYSTEMCTL " not in result.stdout
 
 
-@pytest.mark.parametrize("username,uid,valid", [("borgvr", "1000", True), ("root", "0", False),
-    ("--root", "1000", False), ("bad name", "1000", False), ("x;touch", "1000", False)])
-def test_root_setup_validates_delegated_account(username, uid, valid):
-    result = host_function('DOCKER_USER="$1"; FAKE_UID="$2"; '
-                           'id() { printf "%s\\n" "$FAKE_UID"; }; validate_docker_user', username, uid)
-    assert (result.returncode == 0) == valid
-
-
-@pytest.mark.parametrize("username,groups,changes", [("", "staff", False),
-    ("borgvr", "staff docker", False), ("borgvr", "staff", True)])
-def test_root_setup_only_delegates_when_explicit(username, groups, changes):
-    result = host_function('DOCKER_USER="$1"; groups="$2"; '
-                           'getent() { return 0; }; id() { printf "%s\\n" "$groups"; }; '
-                           'usermod() { printf "USERMOD %s\\n" "$*"; }; grant_docker_access', username, groups)
-    assert result.returncode == 0
-    assert ("USERMOD -aG docker borgvr" in result.stdout) == changes
-
-
 def test_host_setup_rejects_nonroot_before_any_system_work():
     if os.getuid() == 0:
         pytest.skip("This test checks the non-root rejection")
@@ -199,7 +181,7 @@ def executable(path, text):
 @pytest.mark.parametrize("prebuilt", [None, True, False])
 def test_install_docker_sequence_without_changing_host(tmp_path, prebuilt):
     source = Path(__file__).resolve().parents[1]
-    for name in ("setup.sh", "configure.py"):
+    for name in ("setup.sh", "configure.py", "model_config.py"):
         shutil.copyfile(source / name, tmp_path / name)
     binary = tmp_path / "bin"
     binary.mkdir()
@@ -241,7 +223,8 @@ sys.exit(1 if "inspect" in args else 0)
 
 def test_user_setup_docker_access_failure_never_falls_back_to_sudo(tmp_path):
     source = Path(__file__).resolve().parents[1]
-    shutil.copyfile(source / "setup.sh", tmp_path / "setup.sh")
+    for name in ("setup.sh", "configure.py", "model_config.py"):
+        shutil.copyfile(source / name, tmp_path / name)
     (tmp_path / ".env").write_text("# test fixture\n")
     binary = tmp_path / "bin"
     binary.mkdir()
@@ -264,7 +247,7 @@ def test_image_modes_cannot_be_mixed():
 @pytest.fixture
 def operations(tmp_path):
     source = Path(__file__).resolve().parents[1]
-    for name in ("setup.sh", "configure.py", "uninstall.py"):
+    for name in ("setup.sh", "configure.py", "model_config.py", "uninstall.py"):
         shutil.copyfile(source / name, tmp_path / name)
     create_configuration(tmp_path, "localhost", "127.0.0.1", 8766, "0")
     binary = tmp_path / "bin"
@@ -292,7 +275,7 @@ def test_update_downloads_and_probes_before_persisting_then_tests_model(operatio
     root, run = operations
     original = (root / ".env").read_bytes()
     token = (root / "runtime/secrets/vllm_token").read_bytes()
-    image = "ghcr.io/jensderkrueger/borgvr-agent:3.9.1"
+    image = "ghcr.io/jensderkrueger/borgvr-agent:3.9.99"
     result, calls = run("update", "--agent-image", image)
     assert result.returncode == 0, result.stderr
     args = [call["args"] for call in calls]
@@ -311,7 +294,7 @@ def test_update_downloads_and_probes_before_persisting_then_tests_model(operatio
 def test_failed_update_preparation_preserves_running_configuration(operations, failure):
     root, run = operations
     original = (root / ".env").read_bytes()
-    result, calls = run("update", "--agent-image", "ghcr.io/jensderkrueger/borgvr-agent:3.9.1", failure=failure)
+    result, calls = run("update", "--agent-image", "ghcr.io/jensderkrueger/borgvr-agent:3.9.99", failure=failure)
     assert result.returncode != 0
     assert (root / ".env").read_bytes() == original
     assert not list((root / "runtime").glob("env-before-update-*"))
@@ -321,7 +304,7 @@ def test_failed_update_preparation_preserves_running_configuration(operations, f
 def test_failed_update_start_keeps_backup_and_reports_failure(operations):
     root, run = operations
     original = (root / ".env").read_bytes()
-    result, calls = run("update", "--agent-image", "ghcr.io/jensderkrueger/borgvr-agent:3.9.1", failure="up")
+    result, calls = run("update", "--agent-image", "ghcr.io/jensderkrueger/borgvr-agent:3.9.99", failure="up")
     assert result.returncode != 0 and "Update did not become healthy" in result.stderr
     assert next((root / "runtime").glob("env-before-update-*")).read_bytes() == original
     assert not any("exec" in call["args"] for call in calls)
@@ -392,3 +375,15 @@ def test_image_update_failure_keeps_original_and_private_backup(operations, monk
     assert (root / ".env").read_bytes() == original
     assert next((root / "runtime").glob("env-before-update-*")).read_bytes() == original
     assert not list(root.glob(".env-update-*"))
+
+
+def test_configure_profile_and_backend_changes_no_containers(operations):
+    root, run = operations
+    result, calls = run("configure", "--profile", "qwen35-4b", "--backend", "rocm", "--gpu", "1")
+    assert result.returncode == 0, result.stderr
+    assert not calls
+    assert configure.read_value("BORGVR_BACKEND", root) == "rocm"
+    assert configure.read_value("BORGVR_GPU", root) == "1"
+    result, calls = run("update")
+    assert result.returncode == 0, result.stderr
+    assert all(str(root / "compose.rocm.yaml") in call["args"] for call in calls if "--project-directory" in call["args"])

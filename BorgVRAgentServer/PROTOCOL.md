@@ -54,9 +54,17 @@ these definitions with its own explicit visualization/read allowlist and replies
   "session_id": "SERVER-GENERATED-ID",
   "protocol": 1,
   "model": "Qwen/Qwen3.6-35B-A3B",
+  "capabilities": {"vision": true, "tool_calling": true},
   "tools": ["get_application_state"]
 }
 ```
+
+The same optional `capabilities` object is returned by authenticated `/readyz`. Model names
+are informational, not client-side selectors. CUDA/ROCm, checkpoint revisions, quantization,
+parsers and thinking settings stay on the server; clients keep using protocol 1 and the same
+tool/image messages. Vision-language input and tool calling are minimum requirements, not
+features the server silently drops for text-only models. Installation/update tests verify
+the tool/image path with a synthetic image; this is not a guarantee of anatomical accuracy.
 
 Every server event contains `session_id`. Tool names can include the current application
 state, TF/background inspection and adjustment, transforms, clipping, lighting, rendering
@@ -160,18 +168,19 @@ are rejected, not delivered to the model. On dataset close, disconnect the agent
 
 ## Bounds And Errors
 
-- Maximum 4 authenticated sessions, 2 agent runs/model inference sequences concurrently.
+- Maximum 4 authenticated sessions; concurrent agent runs follow the configured model's
+  `BORGVR_MAX_SEQS` (default 2, small-model profile 1).
 - JSON frame: 4 MiB; catalog: 32 tools/128 KiB; schema: depth 16/4096 nodes.
 - Closed object schemas required. No schema references or regex patterns; no remote schema
   resolution. Unknown message fields, duplicate JSON keys and NaN/infinite values are rejected.
 - User text: 8192 characters; result/arguments: 256 KiB; PNG: 2 MiB, one frame, at most
   2048 pixels per axis. No externally fetched image URLs.
 - History: 8 MiB serialized; only the newest two images remain in context. The model's
-  16K-token context may require a new conversation earlier for text-heavy results.
+  configured token context (default 16K, small profile 8K) may require a new conversation earlier.
 - Initial hello: 10 s; application inactivity: 300 s; send: 10 s; tool completion: 45 s;
   one model HTTP call: 60 s without SDK retries; complete user request including queue: 180 s.
-- One user request: at most 16 model requests/24 tool calls and 2048 output tokens per
-  model response. Invalid arguments may be corrected once; dispatched actions have no
+- One user request: at most 16 model requests/24 tool calls; output tokens are configured
+  with `BORGVR_MAX_OUTPUT_TOKENS` (default 2048). Invalid arguments may be corrected once; dispatched actions have no
   transport-level automatic retries.
 
 Errors contain stable codes (`busy`, `run_failed`, `invalid_message`) and generic text,

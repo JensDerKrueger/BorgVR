@@ -1,39 +1,20 @@
 #!/usr/bin/env bash
 set -euo pipefail
-DOCKER_USER=""
+BACKEND=cuda
 ALLOW_DOCKER_RESTART=0
 WORK=""
 
 usage() {
   printf '%s\n' \
-    'Usage (root): ./setup-host.sh [--docker-user USER] [--allow-docker-restart]' \
-    '  --docker-user USER       Explicitly grant an existing non-root user Docker access.' \
-    '                           WARNING: membership in the docker group is root-equivalent.' \
+    'Usage (root): ./setup-host.sh [--backend cuda|rocm] [--allow-docker-restart]' \
+    '  --backend cuda|rocm     NVIDIA Container Toolkit or existing AMD ROCm driver.' \
     '  --allow-docker-restart   Permit NVIDIA runtime registration and a Docker restart.' \
     '                           Existing containers may be interrupted.' \
-    'Ubuntu 22.04/24.04/26.04, Linux x86_64; a working NVIDIA driver is required.' \
+    'Ubuntu 22.04/24.04/26.04, Linux x86_64; a working matching GPU driver is required.' \
     'No app checkout, model, credentials, certificates or user configuration is created.'
 }
 die() { printf 'Error: %s\n' "$*" >&2; exit 1; }
 docker_local() { docker --host unix:///var/run/docker.sock "$@"; }
-
-validate_docker_user() {
-  [[ "$DOCKER_USER" =~ ^[a-z_][a-z0-9_.-]*\$?$ && ${#DOCKER_USER} -le 64 ]] \
-    || die 'Expected an existing Linux login name for --docker-user.'
-  local uid
-  uid="$(id -u -- "$DOCKER_USER")" || die "User does not exist: $DOCKER_USER"
-  [[ "$uid" =~ ^[0-9]+$ && "$uid" != 0 ]] || die '--docker-user must name a non-root account.'
-}
-
-grant_docker_access() {
-  [[ -n "$DOCKER_USER" ]] || return 0
-  getent group docker >/dev/null || groupadd docker
-  if ! id -nG -- "$DOCKER_USER" | tr ' ' '\n' | grep -Fxq docker; then
-    printf 'Granting root-equivalent Docker access to %s.\n' "$DOCKER_USER"
-    usermod -aG docker "$DOCKER_USER"
-  fi
-  printf 'Log out and back in as %s before running setup.sh.\n' "$DOCKER_USER"
-}
 
 configure_runtime() {
   local registered
@@ -54,13 +35,16 @@ configure_runtime() {
 
 install_host() {
   [[ "$(uname -s)" == Linux && "$(uname -m)" == x86_64 ]] || die 'Host setup requires Linux x86_64.'
-  command -v nvidia-smi >/dev/null && nvidia-smi >/dev/null \
-    || die 'A working NVIDIA driver is required. No driver will be installed or replaced.'
+  if [[ "$BACKEND" == cuda ]]; then
+    command -v nvidia-smi >/dev/null && nvidia-smi >/dev/null \
+      || die 'A working NVIDIA driver is required. No driver will be installed or replaced.'
+  else
+    [[ -c /dev/kfd && -d /dev/dri ]] || die 'A working AMD ROCm driver exposing /dev/kfd and /dev/dri is required; no driver will be installed.'
+  fi
   # Never read .env or source configuration from the application/user directory as root.
   source /etc/os-release
   [[ "$ID" == ubuntu && "$VERSION_ID" =~ ^(22\.04|24\.04|26\.04)$ ]] \
     || die 'Automatic host setup supports Ubuntu 22.04, 24.04 and 26.04 only.'
-  [[ -z "$DOCKER_USER" ]] || validate_docker_user
   printf 'Preparing Ubuntu %s (%s); existing GPU drivers are preserved.\n' "$VERSION_ID" "$VERSION_CODENAME"
   apt-get update
   apt-get install -y ca-certificates curl gnupg python3 openssl
@@ -86,7 +70,7 @@ install_host() {
     || die 'The local Docker daemon is unavailable. Start it before rerunning host setup.'
   docker_local compose version >/dev/null \
     || die 'Install the Compose v2 plugin from the existing Docker package source, then rerun.'
-  if ! command -v nvidia-ctk >/dev/null; then
+  if [[ "$BACKEND" == cuda ]] && ! command -v nvidia-ctk >/dev/null; then
     curl --fail --silent --show-error --location --connect-timeout 10 --max-time 120 \
       https://nvidia.github.io/libnvidia-container/gpgkey -o "$WORK/nvidia-key"
     gpg --batch --yes --dearmor -o "$WORK/nvidia-key.gpg" "$WORK/nvidia-key"
@@ -98,17 +82,17 @@ install_host() {
     apt-get update
     apt-get install -y nvidia-container-toolkit
   fi
-  configure_runtime
-  grant_docker_access
+  if [[ "$BACKEND" == cuda ]]; then configure_runtime; fi
   printf '%s\n' 'Host preparation complete. Continue with sudo ./setup.sh install.'
 }
 
 main() {
   while (($#)); do
     case "$1" in
-      --docker-user)
-        (($# >= 2)) || die 'Missing login name for --docker-user.'
-        DOCKER_USER="$2"; shift 2 ;;
+      --backend)
+        (($# >= 2)) || die 'Missing backend for --backend.'
+        [[ "$2" == cuda || "$2" == rocm ]] || die 'Backend must be cuda or rocm.'
+        BACKEND="$2"; shift 2 ;;
       --allow-docker-restart) ALLOW_DOCKER_RESTART=1; shift ;;
       -h|--help) usage; return 0 ;;
       *) die "Unknown argument: $1" ;;

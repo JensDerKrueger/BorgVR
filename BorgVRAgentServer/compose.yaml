@@ -1,4 +1,20 @@
 name: borgvr-ai
+x-model-environment: &model-environment
+  BORGVR_MODEL: ${BORGVR_MODEL}
+  BORGVR_MODEL_REVISION: ${BORGVR_MODEL_REVISION}
+  BORGVR_TOOL_PARSER: ${BORGVR_TOOL_PARSER:-qwen3_coder}
+  BORGVR_REASONING_PARSER: ${BORGVR_REASONING_PARSER:-qwen3}
+  BORGVR_THINKING_MODE: ${BORGVR_THINKING_MODE:-off}
+  BORGVR_VISION_ENABLED: ${BORGVR_VISION_ENABLED:-true}
+  BORGVR_CONTEXT_LENGTH: ${BORGVR_CONTEXT_LENGTH}
+  BORGVR_GPU_MEMORY_FRACTION: ${BORGVR_GPU_MEMORY_FRACTION}
+  BORGVR_DTYPE: ${BORGVR_DTYPE:-auto}
+  BORGVR_QUANTIZATION: ${BORGVR_QUANTIZATION:-auto}
+  BORGVR_MAX_SEQS: ${BORGVR_MAX_SEQS:-2}
+  BORGVR_MAX_OUTPUT_TOKENS: ${BORGVR_MAX_OUTPUT_TOKENS:-2048}
+  BORGVR_MIN_FREE_GIB: ${BORGVR_MIN_FREE_GIB:-200}
+  BORGVR_ENFORCE_EAGER: ${BORGVR_ENFORCE_EAGER:-false}
+  BORGVR_CPU_OFFLOAD_GB: ${BORGVR_CPU_OFFLOAD_GB:-0}
 services:
   vllm:
     image: ${BORGVR_VLLM_IMAGE:?Run setup.sh first}
@@ -6,28 +22,19 @@ services:
     group_add: ["${BORGVR_GID}"]
     entrypoint: ["python3", "/opt/borgvr/vllm_start.py"]
     environment:
+      <<: *model-environment
       HF_HOME: /cache/huggingface
       HF_HUB_DISABLE_TELEMETRY: "1"
       DO_NOT_TRACK: "1"
       VLLM_NO_USAGE_STATS: "1"
-      BORGVR_MODEL: ${BORGVR_MODEL}
-      BORGVR_MODEL_REVISION: ${BORGVR_MODEL_REVISION}
-      BORGVR_CONTEXT_LENGTH: ${BORGVR_CONTEXT_LENGTH}
-      BORGVR_GPU_MEMORY_FRACTION: ${BORGVR_GPU_MEMORY_FRACTION}
     volumes:
       - model-cache:/cache
       - ./vllm_start.py:/opt/borgvr/vllm_start.py:ro
+      - ./model_config.py:/opt/borgvr/model_config.py:ro
     secrets: [vllm_token]
     shm_size: 16gb
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              device_ids: ["${BORGVR_GPU}"]
-              capabilities: [gpu]
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5)"]
       interval: 20s
@@ -46,7 +53,7 @@ services:
     ports:
       - "${BORGVR_BIND_ADDRESS}:${BORGVR_PORT}:8766"
     environment:
-      BORGVR_MODEL: ${BORGVR_MODEL}
+      <<: *model-environment
       BORGVR_VLLM_URL: http://vllm:8000/v1
       BORGVR_TOKEN_FILE: /run/secrets/agent_token
       BORGVR_VLLM_TOKEN_FILE: /run/secrets/vllm_token

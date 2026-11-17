@@ -1,8 +1,12 @@
 import asyncio
+import base64
+import io
+import json
 import ssl
 
 import httpx
 import pytest
+from PIL import Image
 
 import client as client_module
 
@@ -38,3 +42,50 @@ def test_http_client_rejects_redirects_and_large_responses(monkeypatch, status, 
     with pytest.raises(error):
         asyncio.run(client_module.ready("https://localhost:8766", "secret", ssl.create_default_context()))
     assert len(requests) == 1
+
+
+@pytest.mark.parametrize("color,omit_tool,success", [("red", False, True), ("blue", False, False), ("red", True, False)])
+def test_real_capability_check_requires_tools_png_and_correct_color(monkeypatch, color, omit_tool, success):
+    class Socket:
+        async def send(self, raw):
+            data = json.loads(raw)
+            match data["type"]:
+                case "hello":
+                    self.context = data["context_id"]
+                    assert {tool["name"] for tool in data["tools"]} == {"get_application_state", "capture_screenshot"}
+                    self.queue = [{"type": "ready", "capabilities": {"vision": True}}]
+                case "user_message":
+                    self.request = data["request_id"]
+                    self.queue = self.final() if omit_tool else [self.tool("get_application_state")]
+                case "tool_result":
+                    if "image_png_base64" in data:
+                        image = Image.open(io.BytesIO(base64.b64decode(data["image_png_base64"])))
+                        assert image.getpixel((0, 0)) == (255, 0, 0)
+                        self.queue = self.final()
+                    else:
+                        self.queue = [self.tool("capture_screenshot")]
+
+        def final(self):
+            return [{"type": "assistant_message", "request_id": self.request, "final": True, "text": color},
+                    {"type": "completed", "request_id": self.request}]
+
+        def tool(self, name):
+            return {"type": "tool_call", "request_id": self.request, "call_id": name, "name": name,
+                    "arguments": {}, "context_id": self.context, "dataset_id": "server-check"}
+
+        async def recv(self):
+            return json.dumps(self.queue.pop(0))
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            pass
+
+    monkeypatch.setattr(client_module, "DirectConnect", lambda *args, **kwargs: Socket())
+    coroutine = client_module.talk("https://localhost:8766", "secret", ssl.create_default_context(), "test", True)
+    if success:
+        asyncio.run(coroutine)
+    else:
+        with pytest.raises(ValueError, match="compatibility"):
+            asyncio.run(coroutine)
