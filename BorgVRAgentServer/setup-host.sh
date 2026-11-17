@@ -6,7 +6,7 @@ WORK=""
 
 usage() {
   printf '%s\n' \
-    'Usage (root): bash setup-host.sh [--docker-user USER] [--allow-docker-restart]' \
+    'Usage (root): ./setup-host.sh [--docker-user USER] [--allow-docker-restart]' \
     '  --docker-user USER       Explicitly grant an existing non-root user Docker access.' \
     '                           WARNING: membership in the docker group is root-equivalent.' \
     '  --allow-docker-restart   Permit NVIDIA runtime registration and a Docker restart.' \
@@ -100,7 +100,7 @@ install_host() {
   fi
   configure_runtime
   grant_docker_access
-  printf '%s\n' 'Host preparation complete. Continue as the normal user with bash setup.sh install.'
+  printf '%s\n' 'Host preparation complete. Continue as the normal user with ./setup.sh install.'
 }
 
 main() {

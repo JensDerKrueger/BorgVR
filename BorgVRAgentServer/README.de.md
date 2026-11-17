@@ -31,7 +31,7 @@ dagegen eine Voraussetzung des Hosts.
 
 Zuerst prüfen:
 
-```bash
+```
 nvidia-smi
 ```
 
@@ -43,11 +43,17 @@ das durch eine echte CUDA-Speicherallokation im Container.
 
 ## 2. Dateien Auf Den Server Bringen
 
-Entweder das komplette Verzeichnis `BorgVRAgentServer` kopieren oder das Repository klonen,
-falls der Server bereits SSH-Zugriff darauf hat:
+Entweder das komplette Verzeichnis `BorgVRAgentServer` kopieren oder das öffentliche
+Repository über HTTPS klonen. Dafür ist kein SSH-Schlüssel erforderlich.
+Die folgenden Befehle einzeln ausführen:
 
-```bash
-git clone git@github.com:JensDerKrueger/BorgVR.git
+```
+git clone https://github.com/JensDerKrueger/BorgVR.git
+```
+
+Danach in das Deployment-Verzeichnis wechseln:
+
+```
 cd BorgVR/BorgVRAgentServer
 ```
 
@@ -66,8 +72,8 @@ Ein privilegierter Installationscontainer mit Zugriff auf den Docker-Socket ist 
 
 Eine geprüfte Kopie des Skripts mit Root-Rechten ausführen:
 
-```bash
-sudo bash setup-host.sh --allow-docker-restart
+```
+sudo ./setup-host.sh --allow-docker-restart
 ```
 
 Wer schon als root angemeldet ist, lässt `sudo` weg. Auf Ubuntu 26.04.1 werden fehlende
@@ -86,8 +92,8 @@ Es vergibt standardmäßig auch keine Docker-Rechte an Benutzer.
 
 Im Verzeichnis des normalen Wartungskontos, ohne Docker-Zugriff erforderlich:
 
-```bash
-bash setup.sh init --host ai.example.org --bind 192.168.1.20 \
+```
+./setup.sh init --host ai.example.org --bind 192.168.1.20 \
   --agent-image registry.example.org/borgvr-agent:3.9
 ```
 
@@ -108,7 +114,7 @@ den späteren nativen Betrieb ein vertrauenswürdiges CA-Zertifikat verwenden, s
 
 Sobald unser vertrauenswürdiges Agenten-Image veröffentlicht und in `.env` eingetragen ist:
 
-```bash
+```
 docker compose pull
 docker compose up -d --no-build --pull never --wait --wait-timeout 3600
 ```
@@ -126,16 +132,16 @@ müssen nichts auf dem Linux-Server installieren und brauchen dort keine Docker-
 Nur falls der Administrator einem bestehenden Wartungskonto bewusst Docker-Zugriff geben
 will, kann er stattdessen ausführen:
 
-```bash
-sudo bash setup-host.sh --docker-user borgvr --allow-docker-restart
+```
+sudo ./setup-host.sh --docker-user borgvr --allow-docker-restart
 ```
 
 Danach als `borgvr` vollständig ab- und wieder anmelden. Der Operator kann ohne sudo starten:
 
-```bash
-bash setup.sh install --prebuilt-agent --host ai.example.org --bind 192.168.1.20 \
+```
+./setup.sh install --prebuilt-agent --host ai.example.org --bind 192.168.1.20 \
   --agent-image registry.example.org/borgvr-agent:3.9
-bash setup.sh test
+./setup.sh test
 ```
 
 Das Benutzerskript installiert keine Systempakete und fragt nie nach Root-Rechten. Es
@@ -157,15 +163,15 @@ manuell geprüft werden, damit keine Schlüssel versehentlich verloren gehen.
 
 Nur Konfiguration erzeugen, ohne Dienste zu starten:
 
-```bash
-bash setup.sh init --host ai.example.org --bind 192.168.1.20
+```
+./setup.sh init --host ai.example.org --bind 192.168.1.20
 ```
 
 ## 4. Funktion prüfen
 
 Als Administrator beziehungsweise autorisierter Docker-Operator:
 
-```bash
+```
 docker compose ps
 docker compose exec -T agent python client.py --url https://127.0.0.1:8766 \
   --ca /run/tls/server.crt --token-file /run/secrets/agent_token --smoke
@@ -210,7 +216,7 @@ nicht für die eigentliche Inferenz.
 
 Der Administrator betreibt den Dienst; normale App-Nutzer brauchen keine Docker-Rechte:
 
-```bash
+```
 docker compose logs --tail 100 -f
 docker compose stop
 docker compose up -d --no-build --pull never --wait --wait-timeout 3600
@@ -230,7 +236,7 @@ Sicherheitsupdates erhalten. Die verwendete BorgVR-Commit-ID für die Installati
 
 Vor Updates `.env` und `runtime` sicher sichern. Nach geprüfter Aktualisierung der Quellen:
 
-```bash
+```
 docker compose pull
 docker compose up -d --no-build --pull never --wait --wait-timeout 3600
 ```
@@ -257,7 +263,7 @@ lokale Sprachausgabe. Das Protokoll dafür ist in [PROTOCOL.md](PROTOCOL.md) bes
 
 Nur der Image-Ersteller braucht den Quellcode/Build-Schritt, nicht jeder Serverbetreiber:
 
-```bash
+```
 docker buildx build --platform linux/amd64 --load -t borgvr-agent:3.9 .
 docker tag borgvr-agent:3.9 registry.example.org/borgvr-agent:3.9
 docker push registry.example.org/borgvr-agent:3.9
@@ -322,3 +328,121 @@ Registry-Digest. Für Updates die privaten Konfigurationsdateien sichern und in 
 `.env` nur `BORGVR_AGENT_IMAGE` auf den neuen Digest setzen. Danach lädt und startet der
 Administrator mit `docker compose pull` und dem üblichen `up --no-build --pull never` neu.
 Zugangsschlüssel und Zertifikate bleiben erhalten; eine Neuinitialisierung ist nicht nötig.
+
+## 10. Deinstallation und erneuter Test
+
+### BorgVR samt Modell und Git-Download entfernen
+
+Im bisherigen Deployment-Verzeichnis zunächst als Administrator die **Vorschau** aufrufen:
+
+```
+sudo ./uninstall.py --remove-images --remove-checkout
+```
+
+Bereits als root angemeldet: `sudo` weglassen. Das Skript zeigt konkrete Ressourcen und
+Verzeichnisse an und löscht ohne `--yes` nichts. Die vollständige Entfernung bestätigen:
+
+```
+sudo ./uninstall.py --remove-images --remove-checkout --yes
+```
+
+Dabei werden die Container des Projekts `borgvr-ai`, dessen Netzwerk und Modell-Volume
+`borgvr-ai_model-cache` entfernt. Im Volume liegen die heruntergeladenen Modellgewichte
+und deren Caches. Außerdem werden die zugehörigen konfigurierten Images und das kleine
+Python-Prüfimage entfernt, sofern keine fremden Container sie verwenden.
+
+`--remove-checkout` löscht anschließend den **gesamten geklonten BorgVR-Ordner**, inklusive
+`.git`, lokaler Konfiguration, Token, Zertifikaten und ignorierter Dateien. Bei einem
+entpackten Deployment-Paket wird nur dessen Ordner gelöscht. Das Skript verweigert die
+automatische Löschung eines Git-Clones mit lokalen Änderungen oder nicht ignorierten,
+unversionierten Dateien sowie von anderen Repositories, Home- und Systemverzeichnissen.
+Eigene Daten vorab sichern; gemeinsam genutzte Images werden ausdrücklich als behalten gemeldet.
+
+Soll der Quellcode für den nächsten Test bleiben, `--remove-checkout` weglassen.
+Für einen frischen Test entstehen neue Zugangsschlüssel und Zertifikate; Modellgewichte
+werden erneut geladen. Andere Docker-Projekte und globale Build-Caches werden nicht
+pauschal bereinigt. Download-Archive, die außerhalb des Projektordners liegen, separat
+an ihrem tatsächlichen Speicherort löschen.
+Vor dem nächsten Klonen zuerst in ein noch vorhandenes Verzeichnis wechseln, zum Beispiel
+mit `cd /home/borgvr`; die Shell kann noch im gerade gelöschten Projektordner stehen.
+
+Falls bisher nur geklont wurde und Docker noch nicht installiert ist:
+
+```
+./uninstall.py --files-only --remove-checkout --yes
+```
+
+`--files-only` prüft oder entfernt bewusst keine Docker-Ressourcen. Nicht verwenden,
+wenn noch laufende BorgVR-Container oder Modell-Volumes übrig sein könnten.
+
+### Auch Docker entfernen, aber nur auf einem ausschließlich für BorgVR eingerichteten Host
+
+**Diesen Abschnitt nur verwenden, wenn Docker, containerd und NVIDIA Container Toolkit
+für BorgVR neu installiert wurden und nicht von anderen Anwendungen genutzt werden.**
+Vorher die obige BorgVR-Deinstallation abschließen. Als Administrator prüfen, dass keine
+fremden Container, Images, Volumes oder eigenen Netzwerke übrig sind:
+
+```
+unset DOCKER_CONTEXT
+export DOCKER_HOST=unix:///var/run/docker.sock
+docker ps -a
+docker image ls
+docker volume ls
+docker network ls
+```
+
+Die Standardnetzwerke `bridge`, `host` und `none` sind normal. Bei fremden Ressourcen
+hier abbrechen und Docker installiert lassen. War Docker schon vor BorgVR vorhanden,
+diesen Abschnitt ebenfalls überspringen.
+
+Den eventuell bereits gelöschten Projektordner verlassen und eine Registry-Anmeldung lösen:
+
+```
+cd /
+docker logout ghcr.io
+```
+
+Dann die Dienste stoppen und die ausschließlich für diesen Zweck installierten Pakete
+entfernen. Die Paketverwaltung fragt nach Bestätigung; falls sie weitere, fremde Anwendungen
+entfernen möchte, abbrechen. Kein pauschales `autoremove` ausführen.
+
+```
+sudo systemctl stop docker.service docker.socket containerd.service
+sudo apt-get purge docker-ce docker-ce-cli docker-ce-rootless-extras containerd.io docker-buildx-plugin docker-compose-plugin nvidia-container-toolkit nvidia-container-toolkit-base libnvidia-container-tools libnvidia-container1
+```
+
+**Nur unter der obigen Exklusivitätsbedingung** auch die Docker-Daten einschließlich aller
+Image-Layer und Build-Caches sowie die Docker-/Container-Runtime-Konfiguration entfernen:
+
+```
+sudo rm -rf -- /var/lib/docker /var/lib/containerd /etc/docker /etc/nvidia-container-runtime
+```
+
+Die von unserem Host-Skript hinzugefügten Paketquellen und Schlüssel entfernen:
+
+```
+sudo rm -f -- /etc/apt/sources.list.d/docker.list /etc/apt/keyrings/docker.asc /etc/apt/sources.list.d/nvidia-container-toolkit.list /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
+sudo apt-get update
+```
+
+Falls das Wartungskonto durch `--docker-user borgvr` neu zur Docker-Gruppe hinzugefügt
+wurde, auch diese Berechtigung zurücknehmen:
+
+```
+sudo gpasswd -d borgvr docker
+```
+
+Den Namen bei einem anderen Konto ersetzen. Eine vorher bestehende Gruppenmitgliedschaft
+nicht entfernen. Eine nur hierfür neu erzeugte, anschließend leere Docker-Gruppe kann der
+Administrator nach Prüfung mit `getent group docker` auch mit `sudo groupdel docker` löschen.
+Falls die Docker-Client-Konfiguration des aktuellen Kontos ausschließlich für diesen Test
+neu angelegt wurde, kann sie ebenfalls entfernt werden:
+
+```
+rm -rf -- "$HOME/.docker"
+```
+
+Das nicht bei vorher bestehenden Docker-Kontexten oder anderen Registry-Anmeldungen tun.
+Das Benutzerkonto selbst wird nicht gelöscht. NVIDIA-GPU-Treiber und
+allgemeine Werkzeuge wie Python, OpenSSL und Git bleiben erhalten. Systemupdates sowie
+globale Paketmanager-/Systemprotokolle werden nicht zurückgesetzt.

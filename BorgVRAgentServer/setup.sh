@@ -8,7 +8,7 @@ DOCKER=(docker --host unix:///var/run/docker.sock)
 
 usage() {
   printf '%s\n' \
-    'Usage: bash setup.sh [install|init|doctor|start|stop|status|logs|test] [options]' \
+    'Usage: ./setup.sh [install|init|doctor|start|stop|status|logs|test] [options]' \
     'User phase only: never requests root privileges. Run setup-host.sh as root first.' \
     '  --prebuilt-agent    Use a local/published agent image; pull if needed, never build.' \
     '  --agent-image REF   Agent image reference (initial setup; default borgvr-agent:3.9).' \
@@ -92,7 +92,7 @@ case "$COMMAND" in
         -f "$DIR/compose.yaml" -f "$DIR/compose.build.yaml" build --pull agent
     fi
     compose up -d --no-build --pull never --wait --wait-timeout 3600
-    printf '%s\n' 'Server is running. Run: bash setup.sh test' \
+    printf '%s\n' 'Server is running. Run: ./setup.sh test' \
       'The native BorgVR voice client is not connected yet; see README.md for the server test and protocol.' ;;
   doctor) check_gpu ;;
   start) compose up -d --no-build --pull never --wait --wait-timeout 3600 ;;

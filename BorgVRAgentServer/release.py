@@ -15,7 +15,7 @@ ARCHIVE = "borgvr-agent-linux-amd64.tar.gz"
 BUNDLE = "borgvr-agent-deployment.tar.gz"
 LOCAL_IMAGE = "borgvr-agent:ci"
 DEPLOYMENT_FILES = (
-    "compose.yaml", "configure.py", "setup.sh", "setup-host.sh", "vllm_start.py",
+    "compose.yaml", "configure.py", "setup.sh", "setup-host.sh", "uninstall.py", "vllm_start.py",
     "README.md", "README.de.md", "PROTOCOL.md", "LICENSE",
 )
 VERSION = r"[0-9]+\.[0-9]+(?:\.[0-9]+)?(?:-[A-Za-z0-9][A-Za-z0-9.-]*)?"
@@ -68,10 +68,10 @@ def write_bundle(output, info):
         f"Source commit: `{info['commit']}`. Platform: `{info['platform']}`.\n\n"
         "Prepare Docker/NVIDIA Container Toolkit once using the reviewed setup-host.sh as administrator.\n"
         "As the normal maintenance account, choose the host/IP and create configuration:\n\n"
-        f"```bash\nbash setup.sh init --host YOUR-SERVER-NAME --bind YOUR-SERVER-IP --agent-image {image}\n```\n\n"
+        f"```\n./setup.sh init --host YOUR-SERVER-NAME --bind YOUR-SERVER-IP --agent-image {image}\n```\n\n"
         "Replace the example host/IP. Configure a trusted TLS certificate for production.\n"
         "Then the administrator starts the two containers (registry login is needed for private images):\n\n"
-        f"```bash\n{start}docker compose up -d --no-build --pull never --wait --wait-timeout 3600\n```\n\n"
+        f"```\n{start}docker compose up -d --no-build --pull never --wait --wait-timeout 3600\n```\n\n"
         "Ordinary BorgVR users need no Docker or root access. No native voice client or H200 inference\n"
         "test is included in this CPU-only build. See README.md and README.de.md for details.\n"
     )
@@ -85,7 +85,8 @@ def write_bundle(output, info):
         for name, data in (*files, ("release.json", (output / "release.json").read_bytes()),
                            ("INSTALL.md", install.encode())):
             entry = tarfile.TarInfo("borgvr-agent/" + name)
-            entry.mode, entry.size = 0o644, len(data)
+            entry.mode = 0o755 if name.endswith(".sh") or name == "uninstall.py" else 0o644
+            entry.size = len(data)
             archive.addfile(entry, io.BytesIO(data))
     checksums(output, include_image=not info["published"])
 

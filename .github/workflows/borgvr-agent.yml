@@ -76,7 +76,7 @@ jobs:
             org.opencontainers.image.version=${{ steps.metadata.outputs.version }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-      - name: Test the built container with TLS
+      - name: Test container TLS and scoped uninstall
         run: python tests/container_smoke.py --image borgvr-agent:ci
       - name: Prepare image and deployment archives
         env:
