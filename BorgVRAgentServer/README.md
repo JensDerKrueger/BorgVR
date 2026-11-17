@@ -204,15 +204,44 @@ Docker socket at `/var/run/docker.sock`, not a remote Docker context.
 Source builds require an explicit `--build-agent` and a local image tag. The free-space
 probe uses a small pinned container. Check custom model volume/storage quotas separately.
 
-Existing `.env`, credentials and certificates are never silently overwritten. Re-running
-`install` reuses them; new `--host`, `--bind`, `--port` and `--gpu` arguments do not change an
-existing configuration. Edit `.env` deliberately and renew the certificate when changing
-hostnames. An interrupted configuration with `runtime` but no `.env` requires manual
+Re-running `install` first removes existing BorgVR containers and the project network with
+`down`, **without deleting volumes or images**. This also releases the old model's GPU memory.
+Access tokens and the model cache are retained. Explicit options update existing settings;
+omitted options keep their current values, including host/IP, listen address and port:
+
+```
+sudo ./setup.sh install --host ai1 --bind 0.0.0.0 --port 8766
+```
+
+A fixed IP can replace `ai1`. If the existing certificate does not match the supplied host,
+it is renewed and privately backed up under `runtime/tls-before-install-*`. Clients must
+trust the replacement certificate; their tokens remain unchanged. A matching certificate
+is retained. Changes to `.env` create private `runtime/env-before-update-*` backups.
+Invalid options are rejected before `down`. The separate `init` command still never
+overwrites existing configuration. An interrupted configuration with `runtime` but no `.env` requires manual
 inspection; setup refuses to discard potentially existing credentials.
 If an old `.env` still selects `BORGVR_AGENT_IMAGE=borgvr-agent:3.9` and that local image
 does not exist, use `sudoedit .env` to change only the image reference to
 `ghcr.io/jensderkrueger/borgvr-agent:3.9.1` or its published digest.
 Do not regenerate credentials or certificates just to change images.
+
+### Switch Models With One Command
+
+```
+sudo ./setup.sh model
+sudo ./setup.sh model qwen35-4b
+sudo ./setup.sh model qwen36-35b
+sudo ./setup.sh model qwen38-27b
+```
+
+Without a profile, `model` lists the configured model and available profiles without changing
+services. With a profile, it backs up and updates the model configuration, pulls missing
+images, starts services with the selected model, and tests image understanding and tool calls.
+Downloaded model revisions remain cached, so switching back does not download them again.
+Loading GPU memory still takes time, and hardware/model compatibility requirements still apply.
+Network settings, credentials and certificates remain unchanged. Extra model options are
+accepted, for example `sudo ./setup.sh model qwen35-4b --context-length 4096`.
+If startup fails, the configuration and backup remain available for troubleshooting.
 
 To generate configuration without starting or installing anything:
 

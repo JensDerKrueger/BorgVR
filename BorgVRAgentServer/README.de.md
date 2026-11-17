@@ -217,15 +217,47 @@ Docker-Socket `/var/run/docker.sock`, keinen entfernten Docker-Kontext.
 sudo auf. Für einen Entwickler-Build ausdrücklich `--build-agent` mit einem lokalen
 Image-Tag verwenden. Besondere Volume-Quotas separat prüfen.
 
-Vorhandene Konfiguration, Schlüssel, Zertifikate und Modell-Caches bleiben erhalten.
-Wiederholte Aufrufe ersetzen diese nicht; neue Host-/Port-/GPU-Argumente ändern eine
-bestehende `.env` nicht. Änderungen bewusst in `.env` vornehmen, bei Namensänderung auch
-das Zertifikat erneuern. Ein nach einem Fehler vorhandenes `runtime` ohne `.env` muss
+Bei erneutem `install` werden vorhandene BorgVR-Container und das Projekt-Netzwerk zunächst
+mit `down` entfernt, aber **keine Volumes oder Images gelöscht**. Das gibt auch den vom
+alten Modell belegten GPU-Speicher frei. Zugangsschlüssel und Modell-Cache bleiben erhalten.
+Ausdrücklich angegebene Optionen ändern die bestehende Konfiguration; nicht angegebene
+Werte bleiben erhalten. Das gilt auch für Hostname/IP, Abhöradresse und Port:
+
+```
+sudo ./setup.sh install --host ai1 --bind 0.0.0.0 --port 8766
+```
+
+Statt `ai1` ist auch eine feste IP möglich. Passt das vorhandene Zertifikat nicht zum
+angegebenen Host, wird es erneuert und privat unter `runtime/tls-before-install-*` gesichert.
+Clients müssen danach dem neuen Zertifikat vertrauen; ihre Zugangsschlüssel bleiben gleich.
+Ein passendes Zertifikat wird nicht ersetzt. Änderungen an `.env` erhalten eine private
+Sicherung unter `runtime/env-before-update-*`. Ungültige Optionen werden vor `down` abgelehnt.
+`init` allein bleibt unverändert: Es überschreibt keine vorhandene Konfiguration.
+Ein nach einem Fehler vorhandenes `runtime` ohne `.env` muss
 manuell geprüft werden, damit keine Schlüssel versehentlich verloren gehen.
 Wenn eine alte `.env` noch `BORGVR_AGENT_IMAGE=borgvr-agent:3.9` enthält und dieses lokale
 Image nicht existiert, mit `sudoedit .env` nur die Image-Adresse auf
 `ghcr.io/jensderkrueger/borgvr-agent:3.9.1` beziehungsweise den veröffentlichten Digest ändern.
 Schlüssel und Zertifikate müssen dafür nicht neu erzeugt werden.
+
+### Modell Mit Einem Befehl Wechseln
+
+```
+sudo ./setup.sh model
+sudo ./setup.sh model qwen35-4b
+sudo ./setup.sh model qwen36-35b
+sudo ./setup.sh model qwen38-27b
+```
+
+Ohne Profil zeigt `model` das konfigurierte Modell und alle verfügbaren Profile an, ohne
+Dienste zu ändern. Mit Profil sichert und ändert es die Modellkonfiguration, lädt fehlende
+Images, startet die Dienste mit dem gewählten Modell und prüft Bildverarbeitung und
+Werkzeugaufrufe. Bereits heruntergeladene Modelle bleiben im Cache; beim Zurückwechseln
+ist kein erneuter Download derselben Revision nötig. Das Laden in den GPU-Speicher braucht
+weiterhin Zeit, und nicht jedes Modell passt auf jede Karte. Netzwerkadresse, Zugangsschlüssel
+und Zertifikat bleiben unverändert. Weitere Modelloptionen können angehängt werden,
+etwa `sudo ./setup.sh model qwen35-4b --context-length 4096`.
+Bei einem fehlgeschlagenen Start bleiben Konfiguration und Sicherung zur Fehleranalyse erhalten.
 
 Nur Konfiguration erzeugen, ohne Dienste zu starten:
 

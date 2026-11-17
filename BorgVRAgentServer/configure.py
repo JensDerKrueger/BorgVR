@@ -7,6 +7,8 @@ import os
 from pathlib import Path
 import re
 import secrets
+import shutil
+import ssl
 import stat
 import subprocess
 import tempfile
@@ -190,6 +192,110 @@ def bind_address(value):
     return value
 
 
+def certificate_matches(tls, host):
+    # Use normal TLS hostname verification, but exchange bytes in memory, without sockets.
+    server = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    server.load_cert_chain(tls / "server.crt", tls / "server.key")
+    client = ssl.create_default_context(cafile=str(tls / "server.crt"))
+    client.verify_flags |= getattr(ssl, "VERIFY_X509_PARTIAL_CHAIN", 0)
+    client_in, client_out, server_in, server_out = (ssl.MemoryBIO() for _ in range(4))
+    peer = server.wrap_bio(server_in, server_out, server_side=True)
+    connection = client.wrap_bio(client_in, client_out, server_hostname=host)
+    for _ in range(8):
+        try:
+            connection.do_handshake()
+            return True
+        except ssl.SSLCertVerificationError:
+            return False
+        except ssl.SSLWantReadError:
+            pass
+        server_in.write(client_out.read())
+        try:
+            peer.do_handshake()
+        except ssl.SSLWantReadError:
+            pass
+        client_in.write(server_out.read())
+    raise ValueError("Could not verify the existing TLS certificate")
+
+
+def install_changes(root, args):
+    if not (root / ".env").exists():
+        if (root / "runtime").exists():
+            raise ValueError("runtime exists without .env; inspect the existing configuration first")
+        return inference_values(args), False
+    existing = read_configuration(root)
+    changes = inference_values(args, existing)
+    for name, key in (("bind", "BORGVR_BIND_ADDRESS"), ("port", "BORGVR_PORT")):
+        value = getattr(args, name)
+        if value is not None:
+            changes[key] = str(value)
+    for path in (root / ".env", root / "runtime", root / "runtime/tls",
+                 root / "runtime/tls/server.crt", root / "runtime/tls/server.key"):
+        if path.is_symlink() or not path.exists() or (path.is_file() and path.stat().st_nlink != 1):
+            raise ValueError("Expected regular private configuration/TLS paths")
+    renew = False
+    if args.host is not None:
+        renew = not certificate_matches(root / "runtime/tls", args.host)
+    return changes, renew
+
+
+def install_configuration(root, args):
+    changes, renew = install_changes(root, args)
+    if args.check:
+        return
+    if not (root / ".env").exists():
+        create_configuration(root, args.host or "localhost", args.bind or "127.0.0.1", args.port or 8766,
+                             args.gpu or "0", args.agent_image or DEFAULT_AGENT_IMAGE, changes)
+        return
+    prepare_shared_token(root)
+    if not renew:
+        write_configuration_changes(root, changes)
+        return
+    tls = root / "runtime/tls"
+    backup = Path(tempfile.mkdtemp(prefix="tls-before-install-", dir=root / "runtime"))
+    names = ("server.key", "server.crt")
+    owners = {name: (tls / name).stat() for name in names}
+    for name in names:
+        shutil.copy2(tls / name, backup / name)
+    # Generate the complete replacement before touching either live TLS file.
+    with tempfile.TemporaryDirectory(prefix="tls-install-", dir=root / "runtime") as stage:
+        stage = Path(stage)
+        generate_certificate(stage, args.host)
+        for name in names:
+            (stage / name).chmod(stat.S_IMODE(owners[name].st_mode))
+            if os.getuid() == 0:
+                os.chown(stage / name, owners[name].st_uid, owners[name].st_gid)
+        try:
+            for name in names:
+                os.replace(stage / name, tls / name)
+            write_configuration_changes(root, changes)
+        except Exception:
+            for name in names:
+                shutil.copy2(backup / name, tls / name)
+                if os.getuid() == 0:
+                    os.chown(tls / name, owners[name].st_uid, owners[name].st_gid)
+            raise
+    print(f"TLS certificate updated for {args.host}; clients must trust the new certificate. Backup: {backup}")
+
+
+def generate_certificate(tls_dir, host):
+    try:
+        address = ipaddress.ip_address(host)
+        san = f"IP:{address}"
+    except ValueError:
+        san = f"DNS:{host}"
+    san = ",".join(dict.fromkeys([san, "DNS:localhost", "IP:127.0.0.1"]))
+    subprocess.run([
+        "openssl", "req", "-x509", "-newkey", "rsa:3072", "-sha256", "-nodes",
+        "-days", "365", "-subj", "/CN=BorgVR Agent",
+        "-addext", f"subjectAltName={san}",
+        "-addext", "basicConstraints=critical,CA:FALSE",
+        "-addext", "extendedKeyUsage=serverAuth",
+        "-keyout", str(tls_dir / "server.key"), "-out", str(tls_dir / "server.crt"),
+    ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=60)
+    (tls_dir / "server.key").chmod(0o600)
+
+
 def create_configuration(root, host, bind, port, gpu, agent_image=DEFAULT_AGENT_IMAGE, inference=None):
     env = root / ".env"
     if env.exists():
@@ -212,21 +318,7 @@ def create_configuration(root, host, bind, port, gpu, agent_image=DEFAULT_AGENT_
         path = secret_dir / name
         with open(path, "x", opener=lambda p, flags: os.open(p, flags, 0o600)) as handle:
             handle.write((vllm_token if name == "vllm_token" else secrets.token_urlsafe(48)) + "\n")
-    try:
-        address = ipaddress.ip_address(host)
-        san = f"IP:{address}"
-    except ValueError:
-        san = f"DNS:{host}"
-    san = ",".join(dict.fromkeys([san, "DNS:localhost", "IP:127.0.0.1"]))
-    subprocess.run([
-        "openssl", "req", "-x509", "-newkey", "rsa:3072", "-sha256", "-nodes",
-        "-days", "365", "-subj", "/CN=BorgVR Agent",
-        "-addext", f"subjectAltName={san}",
-        "-addext", "basicConstraints=critical,CA:FALSE",
-        "-addext", "extendedKeyUsage=serverAuth",
-        "-keyout", str(tls_dir / "server.key"), "-out", str(tls_dir / "server.crt"),
-    ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    (tls_dir / "server.key").chmod(0o600)
+    generate_certificate(tls_dir, host)
     if privileged:
         # Keep the container unprivileged while allowing access to its private mounts.
         for path in (secret_dir, tls_dir, secret_dir / "agent_token", secret_dir / "vllm_token",
@@ -294,12 +386,21 @@ def main():
     init.add_argument("--port", type=int, choices=range(1024, 65536), metavar="1024..65535", default=8766)
     add_model_options(init)
     init.add_argument("--agent-image", type=image_reference, default=DEFAULT_AGENT_IMAGE)
+    install = sub.add_parser("install")
+    install.add_argument("--host", type=hostname)
+    install.add_argument("--bind", type=bind_address)
+    install.add_argument("--port", type=int, choices=range(1024, 65536), metavar="1024..65535")
+    install.add_argument("--agent-image", type=image_reference)
+    install.add_argument("--check", action="store_true")
+    add_model_options(install)
     get = sub.add_parser("get")
     get.add_argument("name")
     image = sub.add_parser("image")
     image.add_argument("name", choices=["python"])
     args = parser.parse_args()
-    if args.command == "validate-model":
+    if args.command == "install":
+        install_configuration(ROOT, args)
+    elif args.command == "validate-model":
         ModelConfig.from_env(read_configuration(ROOT))
         gpu_groups(ROOT)
     elif args.command == "gpu-groups":
@@ -327,5 +428,5 @@ def main():
 if __name__ == "__main__":
     try:
         main()
-    except (ValueError, OSError, subprocess.CalledProcessError) as error:
+    except (ValueError, OSError, subprocess.SubprocessError) as error:
         raise SystemExit(str(error)) from error

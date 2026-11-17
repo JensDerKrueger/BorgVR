@@ -14,13 +14,13 @@ DOCKER=(docker --host unix:///var/run/docker.sock)
 
 usage() {
   printf '%s\n' \
-    'Usage: sudo ./setup.sh [install|init|configure|profiles|doctor|start|stop|restart|update|status|logs|test|uninstall] [options]' \
+    'Usage: sudo ./setup.sh [install|init|configure|model|profiles|doctor|start|stop|restart|update|status|logs|test|uninstall] [options]' \
     'Run setup-host.sh separately if Docker/GPU prerequisites are missing.' \
     '  --prebuilt-agent    Use a local/published agent image (default; never build).' \
     '  --build-agent       Developer mode: build the agent from source instead.' \
-    '  --agent-image REF   Agent image reference (initial setup or explicit update).' \
-    '  --host HOST         Certificate DNS name/IP (initial setup only; default localhost).' \
-    '  --bind IPV4         Listen address (initial setup only; default 127.0.0.1).' \
+    '  --agent-image REF   Agent image reference (install/init or explicit update).' \
+    '  --host HOST         Certificate DNS name/IP (install/init; initially localhost).' \
+    '  --bind IPV4         Listen address (install/init; initially 127.0.0.1).' \
     '  --port PORT         HTTPS/WSS port (default 8766).' \
     '  --gpu INDEX_OR_UUID  Select one GPU (default 0; AMD also accepts an index).' \
     '  --backend cuda|rocm  Select NVIDIA CUDA or AMD ROCm (install/init/configure).' \
@@ -31,14 +31,17 @@ usage() {
     '  --reasoning-parser NAME|none --thinking default|off|on --min-free-gib N' \
     '  --enforce-eager true|false --cpu-offload-gb N  Optional memory/performance controls.' \
     'Update pulls configured images, checks access, starts services and tests the model.' \
+    'Install recreates existing BorgVR containers without deleting images or model volumes.' \
+    'Explicit install options update existing settings; omitted options and tokens are kept.' \
+    'Model switch: sudo ./setup.sh model qwen35-4b (without a profile: list choices).' \
     'An explicit update image is checked before changing .env; the old .env is backed up.' \
     'Uninstall previews by default; supports --yes, --remove-images, --remove-checkout, --files-only.' \
-    'Existing configuration, secrets and cached models are preserved.'
+    'Changing --host may replace the TLS certificate; the old certificate is backed up.'
 }
 die() { printf 'Error: %s\n' "$*" >&2; exit 1; }
 while (($#)); do
   case "$1" in
-    install|init|configure|profiles|doctor|start|stop|restart|update|status|logs|test|uninstall) COMMAND="$1"; shift ;;
+    install|init|configure|model|profiles|doctor|start|stop|restart|update|status|logs|test|uninstall) COMMAND="$1"; shift ;;
     --gpu|--backend|--profile|--model|--model-revision|--tool-parser|--reasoning-parser|--thinking|--dtype|--quantization|--context-length|--max-seqs|--max-output-tokens|--gpu-memory-fraction|--min-free-gib|--enforce-eager|--cpu-offload-gb|--vllm-image)
       (($# >= 2)) || die "Missing value for $1"
       MODEL_ARGS+=("$1" "$2"); shift 2 ;;
@@ -56,7 +59,10 @@ while (($#)); do
       else HAS_INIT_OPTIONS=1; fi
       INIT_ARGS+=("$1" "$2"); shift 2 ;;
     -h|--help) usage; exit 0 ;;
-    *) die "Unknown argument: $1" ;;
+    *)
+      if [[ "$COMMAND" == model && "$1" != -* && ${#MODEL_ARGS[@]} == 0 ]]; then
+        MODEL_ARGS+=(--profile "$1"); shift
+      else die "Unknown argument: $1"; fi ;;
   esac
 done
 if [[ -n "$IMAGE_MODE" && "$COMMAND" != install ]]; then
@@ -66,11 +72,11 @@ if ((!PREBUILT_AGENT && !AGENT_IMAGE_SET)); then INIT_ARGS+=(--agent-image borgv
 if ((${#UNINSTALL_ARGS[@]})) && [[ "$COMMAND" != uninstall ]]; then
   die 'Deletion options apply only to uninstall.'
 fi
-if ((${#MODEL_ARGS[@]})) && [[ "$COMMAND" != install && "$COMMAND" != init && "$COMMAND" != configure ]]; then
-  die 'Model options apply to install/init/configure. Configure the model, then run update.'
+if ((${#MODEL_ARGS[@]})) && [[ "$COMMAND" != install && "$COMMAND" != init && "$COMMAND" != configure && "$COMMAND" != model ]]; then
+  die 'Model options apply to install/init/configure/model.'
 fi
 if [[ "$COMMAND" == configure ]]; then
-  ((HAS_INIT_OPTIONS == 0)) || die 'Host/bind/port settings are initial options; change them deliberately in .env.'
+  ((HAS_INIT_OPTIONS == 0)) || die 'Change host/bind/port with install, not configure.'
 elif [[ "$COMMAND" == update ]]; then
   ((HAS_INIT_OPTIONS == 0)) || die 'Only --agent-image can be changed by update; edit other settings in .env.'
 elif [[ "$COMMAND" != install && "$COMMAND" != init ]] && ((${#INIT_ARGS[@]})); then
@@ -136,6 +142,19 @@ test_server() {
 
 command -v python3 >/dev/null || die 'Python 3 is missing. Run sudo ./setup-host.sh.'
 if [[ "$COMMAND" == profiles ]]; then exec python3 "$DIR/configure.py" profiles; fi
+if [[ "$COMMAND" == model ]]; then
+  if ((${#MODEL_ARGS[@]} == 0)); then
+    if [[ -r "$DIR/.env" ]]; then
+      printf 'Configured model: '; python3 "$DIR/configure.py" get BORGVR_MODEL
+    elif [[ -f "$DIR/.env" ]]; then
+      printf '%s\n' 'Run sudo ./setup.sh model to also inspect the private configuration.'
+    fi
+    exec python3 "$DIR/configure.py" profiles
+  fi
+  choose_docker
+  python3 "$DIR/configure.py" configure "${MODEL_ARGS[@]}"
+  COMMAND=update
+fi
 if [[ "$COMMAND" == configure ]]; then
   if ((AGENT_IMAGE_SET)); then MODEL_ARGS+=(--agent-image "$AGENT_IMAGE"); fi
   exec python3 "$DIR/configure.py" configure ${MODEL_ARGS[@]+"${MODEL_ARGS[@]}"}
@@ -146,7 +165,17 @@ fi
 command -v openssl >/dev/null || die 'OpenSSL is missing. Run sudo ./setup-host.sh.'
 case "$COMMAND" in
   init) python3 "$DIR/configure.py" init ${INIT_ARGS[@]+"${INIT_ARGS[@]}"} ${MODEL_ARGS[@]+"${MODEL_ARGS[@]}"}; exit 0 ;;
-  install) python3 "$DIR/configure.py" init ${INIT_ARGS[@]+"${INIT_ARGS[@]}"} ${MODEL_ARGS[@]+"${MODEL_ARGS[@]}"} ;;
+  install)
+    python3 "$DIR/configure.py" install --check ${INIT_ARGS[@]+"${INIT_ARGS[@]}"} ${MODEL_ARGS[@]+"${MODEL_ARGS[@]}"}
+    if [[ -f "$DIR/.env" ]]; then
+      BACKEND="$(python3 "$DIR/configure.py" get BORGVR_BACKEND)"
+      [[ "$BACKEND" == cuda || "$BACKEND" == rocm ]] || die 'Backend must be cuda or rocm.'
+      choose_docker
+      compose config --quiet
+      printf '%s\n' 'Recreating BorgVR containers; model cache, images and access tokens are retained.'
+      compose down || die 'Could not remove existing BorgVR containers; configuration was not changed.'
+    fi
+    python3 "$DIR/configure.py" install ${INIT_ARGS[@]+"${INIT_ARGS[@]}"} ${MODEL_ARGS[@]+"${MODEL_ARGS[@]}"} ;;
 esac
 [[ -f "$DIR/.env" ]] || die 'Run sudo ./setup.sh install first.'
 if [[ "$COMMAND" == install || "$COMMAND" == start || "$COMMAND" == restart || "$COMMAND" == update || "$COMMAND" == doctor ]]; then

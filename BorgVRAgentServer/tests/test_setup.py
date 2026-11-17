@@ -214,6 +214,7 @@ sys.exit(1 if "inspect" in args else 0)
     assert any("build" in call for call in calls) is (prebuilt is False)
     assert any(call[-2:] == ["pull", "agent"] for call in calls) is (prebuilt is not False)
     assert any("up" in call and "--no-build" in call and "never" in call for call in calls)
+    assert not any("down" in call for call in calls)
     probes = [i for i, call in enumerate(calls) if "run" in call and "--no-deps" in call]
     assert len(probes) == 2 and max(probes) < next(i for i, call in enumerate(calls) if "up" in call)
     if prebuilt is False:
@@ -263,8 +264,12 @@ for value in args:
             assert isinstance(json.load(overlay)["services"]["vllm"]["group_add"],list)
 with open(os.environ["TRACE"], "a") as handle:
     handle.write(json.dumps({"args":args,"image":os.environ.get("BORGVR_AGENT_IMAGE")})+"\\n")
+if "run" in args and any("disk_usage" in a for a in args):
+    print(300*1024*1024)
 sys.exit(42 if os.environ.get("FAIL_COMMAND") in args else 0)
 ''')
+    executable(binary / "uname", '#!/bin/sh\ncase "$1" in -s) echo Linux;; -m) echo x86_64;; esac\n')
+    executable(binary / "nvidia-smi", '#!/bin/sh\necho "NVIDIA test fixture"\n')
     env = {**os.environ, "PATH": str(binary) + os.pathsep + os.environ["PATH"], "TRACE": str(trace)}
 
     def run(*args, failure=""):
@@ -392,3 +397,119 @@ def test_configure_profile_and_backend_changes_no_containers(operations):
     result, calls = run("update")
     assert result.returncode == 0, result.stderr
     assert all(str(root / "compose.rocm.yaml") in call["args"] for call in calls if "--project-directory" in call["args"])
+
+
+@pytest.mark.parametrize("backend", ["cuda", "rocm"])
+def test_reinstall_removes_old_containers_before_gpu_probe_without_deleting_data(operations, backend):
+    root, run = operations
+    configure.write_configuration_changes(root, {"BORGVR_BACKEND": backend})
+    original = (root / ".env").read_bytes()
+    cert = (root / "runtime/tls/server.crt").read_bytes()
+    tokens = [(root / "runtime/secrets" / name).read_bytes() for name in ("agent_token", "vllm_token")]
+    # Switch to CUDA after shutting down the previously configured backend.
+    result, calls = run("install", "--backend", "cuda")
+    assert result.returncode == 0, result.stderr
+    args = [call["args"] for call in calls]
+    down = next(i for i, call in enumerate(args) if "down" in call)
+    assert str(root / f"compose.{backend}.yaml") in args[down]
+    assert args[down][-1] == "down" and "-v" not in args[down] and "--volumes" not in args[down]
+    assert down < next(i for i, call in enumerate(args) if "run" in call)
+    assert down < next(i for i, call in enumerate(args) if "up" in call)
+    assert not any("rmi" in call or "prune" in call or "volume" in call for call in args)
+    assert (root / "runtime/tls/server.crt").read_bytes() == cert
+    assert [(root / "runtime/secrets" / name).read_bytes() for name in ("agent_token", "vllm_token")] == tokens
+    if backend == "cuda":
+        assert (root / ".env").read_bytes() == original
+
+
+@pytest.mark.parametrize("host", ["ai1", "192.168.1.50"])
+def test_reinstall_changes_network_and_certificate_but_preserves_tokens(operations, host):
+    root, run = operations
+    original = (root / ".env").read_bytes()
+    cert = (root / "runtime/tls/server.crt").read_bytes()
+    key = (root / "runtime/tls/server.key").read_bytes()
+    token = (root / "runtime/secrets/agent_token").read_bytes()
+    result, calls = run("install", "--host", host, "--bind", "0.0.0.0", "--port", "9876")
+    assert result.returncode == 0, result.stderr
+    assert configure.read_value("BORGVR_BIND_ADDRESS", root) == "0.0.0.0"
+    assert configure.read_value("BORGVR_PORT", root) == "9876"
+    assert configure.certificate_matches(root / "runtime/tls", host)
+    assert configure.certificate_matches(root / "runtime/tls", "127.0.0.1")
+    assert (root / "runtime/secrets/agent_token").read_bytes() == token
+    backup = next((root / "runtime").glob("tls-before-install-*"))
+    assert (backup / "server.crt").read_bytes() == cert and (backup / "server.key").read_bytes() == key
+    assert backup.stat().st_mode & 0o777 == 0o700
+    assert next((root / "runtime").glob("env-before-update-*")).read_bytes() == original
+    assert "clients must trust the new certificate" in result.stdout
+    # Repeating the same host must not replace the certificate again.
+    current = (root / "runtime/tls/server.crt").read_bytes()
+    result, _ = run("install", "--host", host)
+    assert result.returncode == 0, result.stderr
+    assert (root / "runtime/tls/server.crt").read_bytes() == current
+    assert configure.read_value("BORGVR_BIND_ADDRESS", root) == "0.0.0.0"
+    assert configure.read_value("BORGVR_PORT", root) == "9876"
+
+
+def test_failed_reinstall_down_does_not_change_configuration(operations):
+    root, run = operations
+    original = (root / ".env").read_bytes()
+    cert = (root / "runtime/tls/server.crt").read_bytes()
+    result, calls = run("install", "--host", "ai1", "--bind", "0.0.0.0", failure="down")
+    assert result.returncode != 0
+    assert (root / ".env").read_bytes() == original
+    assert (root / "runtime/tls/server.crt").read_bytes() == cert
+    assert not any("up" in call["args"] or "run" in call["args"] for call in calls)
+
+
+def test_invalid_reinstall_options_do_not_stop_server(operations):
+    root, run = operations
+    original = (root / ".env").read_bytes()
+    result, calls = run("install", "--host", "https://bad.example")
+    assert result.returncode != 0 and not calls
+    assert (root / ".env").read_bytes() == original
+
+
+def test_failed_reinstall_config_write_restores_certificate(operations, monkeypatch):
+    root, _ = operations
+    parser = argparse.ArgumentParser()
+    configure.add_model_options(parser)
+    args = parser.parse_args([])
+    args.host, args.bind, args.port, args.agent_image, args.check = "ai1", "0.0.0.0", None, None, False
+    original = (root / ".env").read_bytes()
+    files = {name: (root / "runtime/tls" / name).read_bytes() for name in ("server.crt", "server.key")}
+
+    def fail(*args):
+        raise OSError("Simulated config write failure")
+
+    monkeypatch.setattr(configure, "write_configuration_changes", fail)
+    with pytest.raises(OSError, match="Simulated"):
+        configure.install_configuration(root, args)
+    assert (root / ".env").read_bytes() == original
+    assert all((root / "runtime/tls" / name).read_bytes() == data for name, data in files.items())
+    assert configure.certificate_matches(root / "runtime/tls", "localhost")
+
+
+def test_model_switch_is_one_command_and_preserves_credentials(operations):
+    root, run = operations
+    token = (root / "runtime/secrets/agent_token").read_bytes()
+    cert = (root / "runtime/tls/server.crt").read_bytes()
+    for profile, model in (("qwen35-4b", "Qwen/Qwen3.5-4B"), ("qwen36-35b", "Qwen/Qwen3.6-35B-A3B")):
+        result, calls = run("model", profile)
+        assert result.returncode == 0, result.stderr
+        assert configure.read_value("BORGVR_MODEL", root) == model
+        assert (root / "runtime/secrets/agent_token").read_bytes() == token
+        assert (root / "runtime/tls/server.crt").read_bytes() == cert
+        assert any("up" in call["args"] for call in calls)
+        assert any("--capabilities" in call["args"] for call in calls)
+        assert not any("down" in call["args"] or "volume" in call["args"] for call in calls)
+
+
+def test_model_list_and_invalid_selection_do_not_change_configuration(operations):
+    root, run = operations
+    original = (root / ".env").read_bytes()
+    result, calls = run("model")
+    assert result.returncode == 0 and not calls
+    assert "Configured model:" in result.stdout and "qwen35-4b" in result.stdout
+    result, calls = run("model", "missing-profile")
+    assert result.returncode != 0 and (root / ".env").read_bytes() == original
+    assert not any("pull" in call["args"] or "up" in call["args"] for call in calls)
