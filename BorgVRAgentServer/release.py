@@ -60,18 +60,19 @@ def write_bundle(output, info):
     (output / "release.json").write_text(json.dumps(info, indent=2) + "\n")
     image = info["image_reference"]
     if info["published"]:
-        start = "docker compose pull\n"
+        start = "sudo docker compose pull\n"
     else:
-        start = f"docker load --input {ARCHIVE}\ndocker compose pull vllm\n"
+        start = f"sudo docker load --input {ARCHIVE}\nsudo docker compose pull vllm\n"
     install = (
         "# BorgVR Agent Deployment\n\n"
         f"Source commit: `{info['commit']}`. Platform: `{info['platform']}`.\n\n"
         "Prepare Docker/NVIDIA Container Toolkit once using the reviewed setup-host.sh as administrator.\n"
-        "As the normal maintenance account, choose the host/IP and create configuration:\n\n"
-        f"```\n./setup.sh init --host YOUR-SERVER-NAME --bind YOUR-SERVER-IP --agent-image {image}\n```\n\n"
+        "Use one administrator account with sudo for all setup and operations:\n\n"
+        f"```\nsudo ./setup.sh init --host YOUR-SERVER-NAME --bind YOUR-SERVER-IP --agent-image {image}\n```\n\n"
         "Replace the example host/IP. Configure a trusted TLS certificate for production.\n"
         "Then the administrator starts the two containers (registry login is needed for private images):\n\n"
-        f"```\n{start}docker compose up -d --no-build --pull never --wait --wait-timeout 3600\n```\n\n"
+        f"```\n{start}sudo docker compose up -d --no-build --pull never --wait --wait-timeout 3600\nsudo ./setup.sh test\n```\n\n"
+        "When already root, omit sudo. The agent container remains unprivileged.\n"
         "Ordinary BorgVR users need no Docker or root access. No native voice client or H200 inference\n"
         "test is included in this CPU-only build. See README.md and README.de.md for details.\n"
     )

@@ -1,4 +1,4 @@
-"""Unprivileged, non-destructive configuration and secret generation."""
+"""Non-destructive configuration and secret generation, including sudo installation."""
 
 import argparse
 import ipaddress
@@ -12,7 +12,8 @@ ROOT = Path(__file__).resolve().parent
 PYTHON_IMAGE = "python:3.12.15-slim-bookworm@sha256:6a0e06f5ba0b373d051aabd3fffb9b873f27f9a2a3a14bcbe37dee6f0e3bbc70"
 VLLM_IMAGE = "vllm/vllm-openai:v0.34.0@sha256:20fdb089454afbb324efa4110a2c025ff7b27cc1a086e07aa580b18df8ad1ce1"
 MODEL_REVISION = "345d467b117d1fd5eda9b879a5988de9ae5f47a7"
-DEFAULT_AGENT_IMAGE = "borgvr-agent:3.9"
+DEFAULT_AGENT_IMAGE = "ghcr.io/jensderkrueger/borgvr-agent@sha256:729d464bf75d8b2fbf67c0733875d08db5cd121d6a15db01ef3d6679b4c1e053"
+AGENT_UID = AGENT_GID = 10001
 
 
 def hostname(value):
@@ -41,8 +42,8 @@ def create_configuration(root, host, bind, port, gpu, agent_image=DEFAULT_AGENT_
     if env.exists():
         print("Existing .env retained; credentials and certificates were not changed.")
         return
-    if os.getuid() == 0:
-        raise ValueError("Run setup.sh as your normal user. System preparation belongs in setup-host.sh.")
+    privileged = os.getuid() == 0
+    uid, gid = (AGENT_UID, AGENT_GID) if privileged else (os.getuid(), os.getgid())
     runtime = root / "runtime"
     if runtime.exists():
         raise ValueError("runtime exists without .env. Inspect it manually; refusing to replace existing secrets.")
@@ -69,6 +70,11 @@ def create_configuration(root, host, bind, port, gpu, agent_image=DEFAULT_AGENT_
         "-keyout", str(tls_dir / "server.key"), "-out", str(tls_dir / "server.crt"),
     ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     (tls_dir / "server.key").chmod(0o600)
+    if privileged:
+        # Keep the container unprivileged while allowing access to its private mounts.
+        for path in (secret_dir, tls_dir, secret_dir / "agent_token", secret_dir / "vllm_token",
+                     tls_dir / "server.key", tls_dir / "server.crt"):
+            os.chown(path, uid, gid)
     values = {
         "BORGVR_VLLM_IMAGE": VLLM_IMAGE,
         "BORGVR_AGENT_IMAGE": agent_image,
@@ -77,7 +83,7 @@ def create_configuration(root, host, bind, port, gpu, agent_image=DEFAULT_AGENT_
         "BORGVR_GPU": gpu,
         "BORGVR_CONTEXT_LENGTH": "16384",
         "BORGVR_GPU_MEMORY_FRACTION": "0.85",
-        "BORGVR_UID": str(os.getuid()), "BORGVR_GID": str(os.getgid()),
+        "BORGVR_UID": str(uid), "BORGVR_GID": str(gid),
         "BORGVR_BIND_ADDRESS": bind, "BORGVR_PORT": str(port),
     }
     with open(env, "x", opener=lambda p, flags: os.open(p, flags, 0o600)) as handle:

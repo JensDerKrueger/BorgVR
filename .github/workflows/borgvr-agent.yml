@@ -77,7 +77,9 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
       - name: Test container TLS and scoped uninstall
-        run: python tests/container_smoke.py --image borgvr-agent:ci
+        run: |
+          python tests/container_smoke.py --image borgvr-agent:ci
+          sudo -n "$(command -v python)" tests/container_smoke.py --image borgvr-agent:ci
       - name: Prepare image and deployment archives
         env:
           AGENT_VERSION: ${{ inputs.version }}

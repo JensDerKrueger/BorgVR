@@ -1,7 +1,6 @@
 """Real local TLS/WSS transport with a deterministic model, not a GPU benchmark."""
 
 import asyncio
-import os
 import socket
 import ssl
 import threading
@@ -19,8 +18,6 @@ from configure import create_configuration
 
 
 def test_real_tls_websocket_and_hostname_verification(tmp_path, capsys):
-    if os.getuid() == 0:
-        pytest.skip("Setup intentionally requires an unprivileged user")
     create_configuration(tmp_path, "localhost", "127.0.0.1", 8766, "0")
     cert, key = tmp_path / "runtime/tls/server.crt", tmp_path / "runtime/tls/server.key"
     token = (tmp_path / "runtime/secrets/agent_token").read_text().strip()

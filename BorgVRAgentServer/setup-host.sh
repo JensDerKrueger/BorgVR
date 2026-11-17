@@ -100,7 +100,7 @@ install_host() {
   fi
   configure_runtime
   grant_docker_access
-  printf '%s\n' 'Host preparation complete. Continue as the normal user with ./setup.sh install.'
+  printf '%s\n' 'Host preparation complete. Continue with sudo ./setup.sh install.'
 }
 
 main() {

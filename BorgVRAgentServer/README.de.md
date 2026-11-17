@@ -22,7 +22,7 @@ folgen separat. Die bisherige Vision-Sprachsteuerung wird hiermit noch nicht ers
 - Docker Engine, Compose-v2-Plugin und NVIDIA Container Toolkit.
 - Python 3 und OpenSSL für die Konfiguration, optional Git zum Klonen.
 - Internetzugriff auf Paketquellen, Docker Hub, PyPI und Hugging Face samt Download-CDNs.
-- Ein Administrator für Host-Vorbereitung und Containerbetrieb. Normale BorgVR-Nutzer
+- Ein Benutzer mit sudo-Rechten für Einrichtung und Containerbetrieb. Normale BorgVR-Nutzer
   brauchen weder Docker-Zugriff noch Root-Rechte oder ein Shell-Konto auf dem Server.
 
 **CUDA Toolkit, PyTorch, vLLM und die Python-Agentenpakete musst du nicht auf dem Host
@@ -68,40 +68,65 @@ Der Server besteht aus **zwei laufenden Containern**: vLLM und unserem Agenten.
 Image-Ersteller beziehungsweise Entwickler verwendet zusätzlich `compose.build.yaml`.
 Ein privilegierter Installationscontainer mit Zugriff auf den Docker-Socket ist nicht nötig.
 
-### A. Administrator: Einmalig Den Host Vorbereiten
+Alle folgenden Schritte führt dasselbe Konto mit sudo-Rechten aus. Wer bereits als root
+angemeldet ist, lässt `sudo` weg. Eine Docker-Gruppenmitgliedschaft ist nicht nötig.
 
-Eine geprüfte Kopie des Skripts mit Root-Rechten ausführen:
+### A. Voraussetzungen Prüfen
+
+Bei bereits installiertem Docker zunächst prüfen:
 
 ```
-sudo ./setup-host.sh --allow-docker-restart
+nvidia-smi
+sudo docker compose version
+sudo docker ps
+sudo docker info --format '{{json .Runtimes}}'
 ```
 
-Wer schon als root angemeldet ist, lässt `sudo` weg. Auf Ubuntu 26.04.1 werden fehlende
+Wenn Compose funktioniert und `nvidia` in den Runtimes steht, direkt mit B weitermachen.
+Andere Container bleiben bestehen. vLLM reserviert standardmäßig 85 % des Speichers der
+ausgewählten GPU; konkurrierende GPU-Anwendungen können dadurch beeinträchtigt werden.
+
+Nur bei fehlenden Voraussetzungen eine geprüfte Kopie des Host-Skripts ausführen:
+
+```
+sudo ./setup-host.sh
+```
+
+Auf Ubuntu 26.04.1 werden fehlende
 Docker-/Compose-/NVIDIA-Container-Pakete eingerichtet; vorhandene GPU-Treiber bleiben
 unverändert. Auch Ubuntu 22.04 und 24.04 werden akzeptiert. Bei bereits fertigem Host
 entfällt dieser Schritt. Konfligierende vorhandene Docker-Pakete werden nicht entfernt.
 
-`--allow-docker-restart` erlaubt ausdrücklich einen bei der NVIDIA-Einrichtung notwendigen
+Falls das Skript einen notwendigen Docker-Neustart meldet, erst ein Wartungsfenster
+für die anderen Container vereinbaren. Dann `sudo ./setup-host.sh --allow-docker-restart`
+ausführen. `--allow-docker-restart` erlaubt ausdrücklich einen bei der NVIDIA-Einrichtung notwendigen
 Docker-Neustart. Andere Container können dabei unterbrochen werden. Ohne diese Erlaubnis
 wird eine notwendige Laufzeitänderung abgelehnt; eine bereits registrierte Laufzeit bleibt
 unverändert. Das Root-Skript erzeugt keine App-Konfiguration, Zugangsschlüssel,
 Zertifikate oder Modelldownloads und liest keine `.env` aus dem Benutzerverzeichnis.
 Es vergibt standardmäßig auch keine Docker-Rechte an Benutzer.
 
-### B. Konfiguration Ohne Root Vorbereiten
+### B. Installieren Und Starten
 
-Im Verzeichnis des normalen Wartungskontos, ohne Docker-Zugriff erforderlich:
+Im Verzeichnis `BorgVRAgentServer` für den ersten lokalen Test:
 
 ```
-./setup.sh init --host ai.example.org --bind 192.168.1.20 \
-  --agent-image ghcr.io/jensderkrueger/borgvr-agent:3.9.0
+sudo ./setup.sh install
 ```
 
-Das [Agenten-Image 3.9.0](https://github.com/JensDerKrueger/BorgVR/pkgs/container/borgvr-agent)
-ist öffentlich und benötigt keine Registry-Anmeldung. Für eine unveränderlich festgelegte
-Installation statt des Versions-Tags den geprüften Digest aus Abschnitt 9 verwenden.
-Alternativ kann der Image-Ersteller eine eigene Registry oder ein Archiv verwenden.
-Für einen Quellcode-Build `--agent-image` weglassen.
+Dieser eine Befehl erzeugt `.env`, Zugangsschlüssel und Testzertifikat, prüft mindestens
+200 GiB freien Platz und CUDA, lädt fehlende Images und startet beide Dienste. Das fertige
+[Agenten-Image 3.9.0](https://github.com/JensDerKrueger/BorgVR/pkgs/container/borgvr-agent)
+ist standardmäßig per geprüftem Digest festgelegt und ohne Anmeldung herunterladbar.
+Es wird nichts lokal gebaut. vLLM lädt das Modell in seinen persistenten Cache;
+der Agent startet erst, wenn vLLM bereit ist. Der erste Download und die
+Kernel-Kompilierung können dauern; maximal eine Stunde wird abgewartet.
+
+Für Zugriff von anderen Geräten Hostname oder IP und lokale Abhöradresse angeben:
+
+```
+sudo ./setup.sh install --host 192.168.1.20 --bind 192.168.1.20
+```
 
 Hostname und IP ersetzen. `--host` bestimmt den Zertifikatsnamen, `--bind` die
 Abhöradresse. Ohne Angabe bleibt es bei localhost/`127.0.0.1`. `0.0.0.0` gibt alle
@@ -111,71 +136,38 @@ GPU **0** (`--gpu INDEX` oder NVIDIA-GPU-UUID).
 Dabei entstehen zwei private zufällige Zugangsschlüssel und ein Testzertifikat. Für
 den späteren nativen Betrieb ein vertrauenswürdiges CA-Zertifikat verwenden, siehe unten.
 
-### C. Administrator: Fertige Images Laden Und Starten
-
-Nachdem das Agenten-Image in `.env` eingetragen ist:
-
-```
-docker compose pull
-docker compose up -d --no-build --pull never --wait --wait-timeout 3600
-```
-
-Diese Befehle führt der Administrator im Deployment-Verzeichnis aus. Für private
-Registries meldet er sich vorher dort an. vLLM lädt das festgelegte Modell in seinen
-persistent gespeicherten Cache; der Agent startet erst, wenn vLLM bereit ist. Der erste
-Download und die Kernel-Kompilierung können dauern; maximal eine Stunde wird abgewartet.
-
 **Die eigentlichen Nutzer verbinden sich danach nur aus BorgVR mit dem Server.** Sie
 müssen nichts auf dem Linux-Server installieren und brauchen dort keine Docker-Rechte.
 
-### Optional: Betrieb an einen vertrauenswürdigen Operator delegieren
-
-Nur falls der Administrator einem bestehenden Wartungskonto bewusst Docker-Zugriff geben
-will, kann er stattdessen ausführen:
-
-```
-sudo ./setup-host.sh --docker-user borgvr --allow-docker-restart
-```
-
-Danach als `borgvr` vollständig ab- und wieder anmelden. Der Operator kann ohne sudo starten:
-
-```
-./setup.sh install --prebuilt-agent --host ai.example.org --bind 192.168.1.20 \
-  --agent-image ghcr.io/jensderkrueger/borgvr-agent:3.9.0
-./setup.sh test
-```
-
-Das Benutzerskript installiert keine Systempakete und fragt nie nach Root-Rechten. Es
-prüft Speicherplatz/GPU und verwendet ein vorhandenes Image beziehungsweise lädt das
-angegebene Image, ohne es zu bauen. Für einen Entwickler-Build `--prebuilt-agent` und
-die Beispiel-Image-Adresse weglassen. Die Speicherplatzprüfung verwendet einen kleinen
-Container, keine geschützten Hostverzeichnisse; besondere Volume-Quotas separat prüfen.
-
-**Die Docker-Gruppe ist praktisch gleichbedeutend mit Root-Rechten.** Sie ist nur für
-vertrauenswürdige Operatoren gedacht, nicht für die normalen BorgVR-Nutzer. Rootless
-Docker wird hier nicht eingerichtet. Die Skripte verwenden den lokalen rootful
+Die Skripte verwenden den lokalen rootful
 Docker-Socket `/var/run/docker.sock`, keinen entfernten Docker-Kontext.
+`setup.sh` installiert keine Systempakete, startet Docker nicht neu und ruft nicht selbst
+sudo auf. Für einen Entwickler-Build ausdrücklich `--build-agent` mit einem lokalen
+Image-Tag verwenden. Besondere Volume-Quotas separat prüfen.
 
 Vorhandene Konfiguration, Schlüssel, Zertifikate und Modell-Caches bleiben erhalten.
 Wiederholte Aufrufe ersetzen diese nicht; neue Host-/Port-/GPU-Argumente ändern eine
 bestehende `.env` nicht. Änderungen bewusst in `.env` vornehmen, bei Namensänderung auch
 das Zertifikat erneuern. Ein nach einem Fehler vorhandenes `runtime` ohne `.env` muss
 manuell geprüft werden, damit keine Schlüssel versehentlich verloren gehen.
+Wenn eine alte `.env` noch `BORGVR_AGENT_IMAGE=borgvr-agent:3.9` enthält und dieses lokale
+Image nicht existiert, mit `sudoedit .env` nur die Image-Adresse auf
+`ghcr.io/jensderkrueger/borgvr-agent:3.9.0` beziehungsweise den Digest aus Abschnitt 9 ändern.
+Schlüssel und Zertifikate müssen dafür nicht neu erzeugt werden.
 
 Nur Konfiguration erzeugen, ohne Dienste zu starten:
 
 ```
-./setup.sh init --host ai.example.org --bind 192.168.1.20
+sudo ./setup.sh init --host ai.example.org --bind 192.168.1.20
 ```
 
 ## 4. Funktion prüfen
 
-Als Administrator beziehungsweise autorisierter Docker-Operator:
+Im gleichen Verzeichnis:
 
 ```
-docker compose ps
-docker compose exec -T agent python client.py --url https://127.0.0.1:8766 \
-  --ca /run/tls/server.crt --token-file /run/secrets/agent_token --smoke
+sudo ./setup.sh status
+sudo ./setup.sh test
 ```
 
 Der Test prüft Modellbereitschaft, Authentifizierung und die verschlüsselte Verbindung und
@@ -184,6 +176,14 @@ Renderbefehl: Die native App ist in diesem Schritt noch nicht angeschlossen.
 
 Ein Test von einem anderen Rechner ist ebenfalls möglich; siehe den englischen Leitfaden.
 Der Testclient prüft Zertifikat und Hostname, es gibt keinen unsicheren TLS-Schalter.
+
+Eine eigene Frage stellen:
+
+```
+sudo docker compose exec -T agent python client.py --url https://127.0.0.1:8766 \
+  --ca /run/tls/server.crt --token-file /run/secrets/agent_token \
+  --text "Was ist ein Mandelbulb? Antworte kurz auf Deutsch."
+```
 
 ## 5. Sicherheit Und Zertifikate
 
@@ -195,6 +195,11 @@ Der Testclient prüft Zertifikat und Hostname, es gibt keinen unsicheren TLS-Sch
 - `runtime/tls/server.key` ist der private Schlüssel und gehört niemals auf einen Client.
 - Verzeichnisse sind nur für den Besitzer zugänglich, Schlüsseldateien haben Modus 0600.
   Diese Rechte nicht durch weltweite Lesbarkeit umgehen.
+
+Bei neuer Einrichtung mit sudo bleiben `.env` und das übergeordnete `runtime`-Verzeichnis
+root-eigen. Nur die privaten Container-Mounts erhalten UID/GID 10001; damit läuft der
+Agent trotz administrativer Einrichtung nicht als root. Bestehende Installationen behalten
+ihre bisherigen Benutzer-IDs und Dateirechte.
 
 Das automatisch erzeugte, selbstsignierte Zertifikat gilt 365 Tage und dient dem ersten
 Test mit ausdrücklich vertrautem Zertifikat. Für den späteren nativen Betrieb ein
@@ -218,13 +223,12 @@ nicht für die eigentliche Inferenz.
 Der Administrator betreibt den Dienst; normale App-Nutzer brauchen keine Docker-Rechte:
 
 ```
-docker compose logs --tail 100 -f
-docker compose stop
-docker compose up -d --no-build --pull never --wait --wait-timeout 3600
+sudo ./setup.sh logs
+sudo ./setup.sh stop
+sudo ./setup.sh start
 ```
 
-Autorisierte nicht-root Operatoren können alternativ `setup.sh logs|stop|start|doctor|test`
-verwenden.
+Mit `sudo ./setup.sh doctor` lässt sich der CUDA-Zugriff erneut prüfen.
 
 Container starten mit Docker automatisch wieder, sofern sie nicht bewusst gestoppt wurden.
 Bei bereits installiertem Docker gegebenenfalls dessen Autostart aktivieren; neu installiertes
@@ -238,12 +242,12 @@ Sicherheitsupdates erhalten. Die verwendete BorgVR-Commit-ID für die Installati
 Vor Updates `.env` und `runtime` sicher sichern. Nach geprüfter Aktualisierung der Quellen:
 
 ```
-docker compose pull
-docker compose up -d --no-build --pull never --wait --wait-timeout 3600
+sudo docker compose pull
+sudo ./setup.sh start
 ```
 
 Bei einem Quellcode-Build statt Pull den Build-Overlay verwenden:
-`docker compose -f compose.yaml -f compose.build.yaml build --pull agent`.
+`sudo docker compose -f compose.yaml -f compose.build.yaml build --pull agent`.
 Eine bestehende `.env` behält bewusst ihre alte
 vLLM-/Modellrevision; diese bei einem Inferenz-Update ausdrücklich anpassen. Keine
 stillschweigende Umstellung auf `latest`. Details zur Rückkehr auf alte Versionen,
@@ -277,9 +281,10 @@ nicht ins Image. Weitere Details stehen im englischen Leitfaden.
 
 Ohne Registry kann der Ersteller `docker save --output borgvr-agent-3.9.tar borgvr-agent:3.9`
 verwenden. Der Administrator lädt das vertrauenswürdig übertragene Archiv mit
-`docker load --input borgvr-agent-3.9.tar`. In `.env` bleibt dann
-`BORGVR_AGENT_IMAGE=borgvr-agent:3.9`; nur vLLM mit `docker compose pull vllm` laden und
-danach wie oben starten. Image-Archive sind von Git und Build-Kontext ausgeschlossen.
+`sudo docker load --input borgvr-agent-3.9.tar`. In `.env` dann
+`BORGVR_AGENT_IMAGE=borgvr-agent:3.9` setzen und `sudo ./setup.sh install` ausführen.
+Das bereits geladene Image wird wiederverwendet. Image-Archive sind von Git und
+Build-Kontext ausgeschlossen.
 
 ## 9. Wiederholbare Builds Und Veröffentlichung Über GitHub
 
@@ -336,7 +341,7 @@ bewusst auf öffentlich ändern. Das macht der Workflow nicht automatisch.
 Nach einer Veröffentlichung gibt es ein weiteres Deployment-Artefakt mit festem
 Registry-Digest. Für Updates die privaten Konfigurationsdateien sichern und in der bestehenden
 `.env` nur `BORGVR_AGENT_IMAGE` auf den neuen Digest setzen. Danach lädt und startet der
-Administrator mit `docker compose pull` und dem üblichen `up --no-build --pull never` neu.
+Administrator mit `sudo docker compose pull` und `sudo ./setup.sh start` neu.
 Zugangsschlüssel und Zertifikate bleiben erhalten; eine Neuinitialisierung ist nicht nötig.
 
 ## 10. Deinstallation und erneuter Test

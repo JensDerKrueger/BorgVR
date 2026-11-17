@@ -16,7 +16,7 @@ from websockets.exceptions import InvalidStatus
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from client import DirectConnect
-from configure import create_configuration
+from configure import AGENT_UID, AGENT_GID, create_configuration
 from uninstall import Docker, PROJECT, LABEL, docker_plan, apply_plan
 
 
@@ -83,7 +83,8 @@ def main():
             container = docker(
                 "run", "-d", "--read-only", "--cap-drop", "ALL", "--security-opt", "no-new-privileges:true",
                 "--tmpfs", "/tmp:size=64m,noexec,nosuid", "--memory", "512m", "--pids-limit", "128",
-                "--user", f"{os.getuid()}:{os.getgid()}", "-p", "127.0.0.1::8766",
+                "--user", f"{AGENT_UID}:{AGENT_GID}" if os.getuid() == 0 else f"{os.getuid()}:{os.getgid()}",
+                "-p", "127.0.0.1::8766",
                 "--label", f"{LABEL}={PROJECT}", "--label", f"com.docker.compose.project.working_dir={root}",
                 "--network", "borgvr-ai_default", "-v", "borgvr-ai_model-cache:/test-model-cache:ro",
                 "-e", "BORGVR_VLLM_URL=http://127.0.0.1:9/v1",

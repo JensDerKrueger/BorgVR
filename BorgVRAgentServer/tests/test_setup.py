@@ -8,7 +8,8 @@ import subprocess
 
 import pytest
 
-from configure import PYTHON_IMAGE, create_configuration, hostname
+import configure
+from configure import AGENT_UID, AGENT_GID, DEFAULT_AGENT_IMAGE, PYTHON_IMAGE, create_configuration, hostname
 
 
 @pytest.mark.parametrize("value", ["ai.example.org", "localhost", "192.168.1.2", "::1"])
@@ -24,8 +25,6 @@ def test_bad_hostnames(value):
 
 
 def test_configuration_is_non_destructive_and_private(tmp_path):
-    if os.getuid() == 0:
-        pytest.skip("Configuration intentionally rejects root setup")
     create_configuration(tmp_path, "ai.example.org", "127.0.0.1", 8766, "0")
     env = (tmp_path / ".env").read_bytes()
     token = (tmp_path / "runtime/secrets/agent_token").read_bytes()
@@ -40,6 +39,23 @@ def test_configuration_is_non_destructive_and_private(tmp_path):
     create_configuration(tmp_path, "different.example.org", "0.0.0.0", 9876, "1")
     assert (tmp_path / ".env").read_bytes() == env
     assert (tmp_path / "runtime/secrets/agent_token").read_bytes() == token
+
+
+def test_sudo_configuration_keeps_agent_unprivileged(tmp_path, monkeypatch):
+    changed = []
+    monkeypatch.setattr(configure.os, "getuid", lambda: 0)
+    monkeypatch.setattr(configure.os, "chown", lambda path, uid, gid: changed.append((path, uid, gid)))
+    create_configuration(tmp_path, "192.168.1.2", "127.0.0.1", 8766, "0")
+    env = (tmp_path / ".env").read_text()
+    assert f"BORGVR_UID={AGENT_UID}\n" in env and f"BORGVR_GID={AGENT_GID}\n" in env
+    assert f"BORGVR_AGENT_IMAGE={DEFAULT_AGENT_IMAGE}\n" in env
+    assert AGENT_UID != 0 and AGENT_GID != 0
+    mounts = tmp_path / "runtime"
+    assert set(changed) == {(mounts / name, AGENT_UID, AGENT_GID) for name in (
+        "secrets", "tls", "secrets/agent_token", "secrets/vllm_token", "tls/server.key", "tls/server.crt")}
+    changed.clear()
+    create_configuration(tmp_path, "localhost", "0.0.0.0", 9876, "1")
+    assert not changed and (tmp_path / ".env").read_text() == env
 
 
 def test_partial_setup_never_replaces_secrets(tmp_path):
@@ -130,10 +146,8 @@ def executable(path, text):
     path.chmod(0o755)
 
 
-@pytest.mark.parametrize("prebuilt", [True, False])
-def test_nonroot_install_docker_sequence_without_host_privileges(tmp_path, prebuilt):
-    if os.getuid() == 0:
-        pytest.skip("The user installer intentionally rejects root")
+@pytest.mark.parametrize("prebuilt", [None, True, False])
+def test_install_docker_sequence_without_changing_host(tmp_path, prebuilt):
     source = Path(__file__).resolve().parents[1]
     for name in ("setup.sh", "configure.py"):
         shutil.copyfile(source / name, tmp_path / name)
@@ -156,25 +170,24 @@ sys.exit(1 if "inspect" in args else 0)
         executable(binary / name, '#!/bin/sh\ntouch "$FORBIDDEN"\nexit 99\n')
     env = {**os.environ, "PATH": str(binary) + os.pathsep + os.environ["PATH"],
            "TRACE": str(trace), "FORBIDDEN": str(forbidden)}
-    args = ["bash", str(tmp_path / "setup.sh"), "install", "--host", "ai.example.org",
-            "--agent-image", "registry.example.org/borgvr-agent:3.9"]
-    if prebuilt:
-        args.append("--prebuilt-agent")
+    args = ["bash", str(tmp_path / "setup.sh"), "install", "--host", "ai.example.org"]
+    if prebuilt is not None:
+        args.append("--prebuilt-agent" if prebuilt else "--build-agent")
     result = subprocess.run(args, env=env, capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
     assert not forbidden.exists()
     calls = [json.loads(line) for line in trace.read_text().splitlines()]
     assert all(call[:2] == ["--host", "unix:///var/run/docker.sock"] for call in calls)
-    assert any("build" in call for call in calls) is (not prebuilt)
-    assert any(call[-2:] == ["pull", "agent"] for call in calls) is prebuilt
+    assert any("build" in call for call in calls) is (prebuilt is False)
+    assert any(call[-2:] == ["pull", "agent"] for call in calls) is (prebuilt is not False)
     assert any("up" in call and "--no-build" in call and "never" in call for call in calls)
-    if not prebuilt:
+    if prebuilt is False:
         assert any(str(tmp_path / "compose.build.yaml") in call for call in calls)
+    else:
+        assert DEFAULT_AGENT_IMAGE in (tmp_path / ".env").read_text()
 
 
 def test_user_setup_docker_access_failure_never_falls_back_to_sudo(tmp_path):
-    if os.getuid() == 0:
-        pytest.skip("The user installer intentionally rejects root")
     source = Path(__file__).resolve().parents[1]
     shutil.copyfile(source / "setup.sh", tmp_path / "setup.sh")
     (tmp_path / ".env").write_text("# test fixture\n")
@@ -185,5 +198,12 @@ def test_user_setup_docker_access_failure_never_falls_back_to_sudo(tmp_path):
     executable(binary / "sudo", '#!/bin/sh\ntouch "$FORBIDDEN"\nexit 99\n')
     env = {**os.environ, "PATH": str(binary) + os.pathsep + os.environ["PATH"], "FORBIDDEN": str(marker)}
     result = subprocess.run(["bash", str(tmp_path / "setup.sh"), "status"], env=env, capture_output=True, text=True)
-    assert result.returncode == 1 and "Docker access" in result.stderr
+    assert result.returncode == 1 and "sudo ./setup.sh" in result.stderr
     assert not marker.exists()
+
+
+def test_image_modes_cannot_be_mixed():
+    script = Path(__file__).resolve().parents[1] / "setup.sh"
+    for args in (("install", "--build-agent", "--prebuilt-agent"), ("init", "--build-agent")):
+        result = subprocess.run(["bash", str(script), *args], capture_output=True, text=True)
+        assert result.returncode == 1

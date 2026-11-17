@@ -43,7 +43,9 @@ def test_deployment_allowlist_and_checksums(tmp_path):
         names = archive.getnames()
         assert set(names) == {"borgvr-agent/" + name for name in (*release.DEPLOYMENT_FILES, "release.json", "INSTALL.md")}
         assert not any(".env" in name or "secrets/" in name or "runtime/" in name for name in names)
-        assert b"--agent-image borgvr-agent:ci" in archive.extractfile("borgvr-agent/INSTALL.md").read()
+        install = archive.extractfile("borgvr-agent/INSTALL.md").read()
+        assert b"--agent-image borgvr-agent:ci" in install
+        assert b"sudo ./setup.sh init" in install and b"sudo ./setup.sh test" in install
         for name in ("setup.sh", "setup-host.sh", "uninstall.py"):
             assert archive.getmember("borgvr-agent/" + name).mode == 0o755
         assert b"bash setup" not in archive.extractfile("borgvr-agent/INSTALL.md").read()
