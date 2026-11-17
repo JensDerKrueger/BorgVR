@@ -8,6 +8,7 @@ import re
 import secrets
 import stat
 import subprocess
+import tempfile
 
 ROOT = Path(__file__).resolve().parent
 PYTHON_IMAGE = "python:3.12.15-slim-bookworm@sha256:6a0e06f5ba0b373d051aabd3fffb9b873f27f9a2a3a14bcbe37dee6f0e3bbc70"
@@ -15,6 +16,49 @@ VLLM_IMAGE = "vllm/vllm-openai:v0.34.0@sha256:20fdb089454afbb324efa4110a2c025ff7
 MODEL_REVISION = "345d467b117d1fd5eda9b879a5988de9ae5f47a7"
 DEFAULT_AGENT_IMAGE = "ghcr.io/jensderkrueger/borgvr-agent@sha256:729d464bf75d8b2fbf67c0733875d08db5cd121d6a15db01ef3d6679b4c1e053"
 AGENT_UID = AGENT_GID = 10001
+
+
+def image_reference(value):
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_./:@+-]{0,511}", value):
+        raise argparse.ArgumentTypeError("Expected a container image reference")
+    return value
+
+
+def set_agent_image(root, image):
+    image_reference(image)
+    env = root / ".env"
+    if env.is_symlink() or not env.is_file() or env.stat().st_nlink != 1:
+        raise ValueError("Expected a regular, private .env file")
+    info, original = env.stat(), env.read_text()
+    lines = original.splitlines(keepends=True)
+    matches = [i for i, line in enumerate(lines) if line.partition("=")[0] == "BORGVR_AGENT_IMAGE"]
+    if len(matches) != 1:
+        raise ValueError("Expected exactly one BORGVR_AGENT_IMAGE entry in .env")
+    if lines[matches[0]].partition("=")[2].strip() == image:
+        print("Agent image reference unchanged.")
+        return
+    runtime = root / "runtime"
+    if runtime.is_symlink() or not runtime.is_dir():
+        raise ValueError("Expected a private runtime directory for the configuration backup")
+    backup = None
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(mode="w", dir=runtime, prefix="env-before-update-", delete=False) as handle:
+            backup = Path(handle.name)
+            handle.write(original)
+        lines[matches[0]] = "BORGVR_AGENT_IMAGE=" + image + "\n"
+        with tempfile.NamedTemporaryFile(mode="w", dir=root, prefix=".env-update-", delete=False) as handle:
+            temporary = Path(handle.name)
+            if os.getuid() == 0:
+                os.fchown(handle.fileno(), info.st_uid, info.st_gid)
+            handle.write("".join(lines))
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, env)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+    print(f"Previous configuration saved privately: {backup}")
 
 
 def prepare_shared_token(root):
@@ -134,18 +178,26 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("prepare-secrets")
+    validate = sub.add_parser("validate-image")
+    validate.add_argument("image", type=image_reference)
+    update = sub.add_parser("set-agent-image")
+    update.add_argument("image", type=image_reference)
     init = sub.add_parser("init")
     init.add_argument("--host", type=hostname, default="localhost")
     init.add_argument("--bind", type=bind_address, default="127.0.0.1")
     init.add_argument("--port", type=int, choices=range(1024, 65536), metavar="1024..65535", default=8766)
     init.add_argument("--gpu", default="0")
-    init.add_argument("--agent-image", default=DEFAULT_AGENT_IMAGE)
+    init.add_argument("--agent-image", type=image_reference, default=DEFAULT_AGENT_IMAGE)
     get = sub.add_parser("get")
     get.add_argument("name")
     image = sub.add_parser("image")
     image.add_argument("name", choices=["python"])
     args = parser.parse_args()
-    if args.command == "prepare-secrets":
+    if args.command == "validate-image":
+        return
+    elif args.command == "set-agent-image":
+        set_agent_image(ROOT, args.image)
+    elif args.command == "prepare-secrets":
         prepare_shared_token(ROOT)
     elif args.command == "get":
         print(read_value(args.name))
@@ -154,8 +206,6 @@ def main():
     else:
         if not re.fullmatch(r"[0-9]+|GPU-[A-Fa-f0-9-]+", args.gpu):
             parser.error("GPU must be an index or NVIDIA GPU UUID")
-        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_./:@+-]{0,511}", args.agent_image):
-            parser.error("Expected a container image reference")
         create_configuration(ROOT, args.host, args.bind, args.port, args.gpu, args.agent_image)
 
 

@@ -252,15 +252,42 @@ fallback. Authenticated clients explicitly decide which screenshots/metadata to 
 The administrator controls the service; no Docker access is needed by application users:
 
 ```
+sudo ./setup.sh status
 sudo ./setup.sh logs
 sudo ./setup.sh stop
 sudo ./setup.sh start
+sudo ./setup.sh restart
+sudo ./setup.sh test
 ```
+
+`start` starts missing/stopped services, applies changed Compose configuration and waits for
+readiness. `stop` keeps containers, cached weights, keys and configuration. `restart` checks
+the private mounts first, stops just the BorgVR services and starts them again; vLLM must
+reload the model onto the GPU. Ctrl+C ends `logs`, not the services. Other Docker projects
+are not stopped. Run these commands from the deployment directory.
+Stopping, restarting or replacing containers can interrupt active sessions. Conversations
+are in RAM only and are not restored after a restart.
 
 Use `sudo ./setup.sh doctor` to repeat the CUDA probe.
 
-Containers use `restart: unless-stopped`; enable the existing Docker daemon at boot if it
-is not already enabled. Host setup enables newly installed Docker automatically. A single
+### Host Reboots
+
+Containers use `restart: unless-stopped`. If Docker starts at boot, previously running
+services return automatically. Manually stopped services stay stopped, including after a
+host reboot; use `sudo ./setup.sh start` to resume them. Check with `status` and `test`.
+The model weights remain in the volume but must be reloaded into GPU/RAM; readiness takes
+time. The checkout, `.env`, launcher and TLS files must remain available at the same path.
+Budget GPU memory for any other services that also start automatically.
+
+Check Docker's boot setting and enable it if needed (without restarting the daemon):
+
+```
+sudo systemctl is-enabled docker
+sudo systemctl enable docker
+```
+
+See [Docker restart policies](https://docs.docker.com/engine/containers/start-containers-automatically/).
+Host setup enables newly installed Docker automatically. A single
 Compose worker is used: do not add Uvicorn workers without redesigning session limits.
 
 The initial snapshot pins vLLM **0.34.0** and the Python base by registry digest, model
@@ -269,13 +296,29 @@ Host OS/Docker/NVIDIA packages follow their signed repositories and should recei
 security updates; the entire host is not a frozen OS image. Keep the checked-out BorgVR
 commit ID with an installation record (`git rev-parse HEAD`).
 
-For an intentional update, back up `.env` and `runtime` securely, review the new pinned
-versions and model license, update the checkout, then:
+### Updates
+
+Back up `.env` and `runtime` securely and review new versions/licenses. Update the scripts
+and Compose file with Git as the checkout owner, then update the containers with sudo:
 
 ```
-sudo docker compose pull
-sudo ./setup.sh start
+git pull
+sudo ./setup.sh update
 ```
+
+`update` pulls the images **selected in `.env`**, checks private mounts, applies changed
+images/configuration with `up`, waits for readiness and runs the actual-model smoke test.
+It does not build, run Git, upgrade host packages or automatically replace pinned digests
+with newer versions. An unchanged digest still selects the same image after pulling.
+
+To explicitly select another published agent image, use `sudo ./setup.sh update --agent-image REF`,
+replacing `REF` with its tag or preferably registry digest. The override is first used only
+for pulling and mount checks. Once those succeed, `.env` is replaced atomically and its old
+contents are backed up privately in `runtime/env-before-update-*`. Keys and cached weights
+are preserved. Failed pulling/probing leaves the previous running deployment unchanged.
+A subsequent startup/model-test failure is reported, not automatically rolled back. After
+review, restore the printed backup with `sudo cp /PATH/TO/BACKUP .env`, then run
+`sudo ./setup.sh start` and `sudo ./setup.sh test`.
 
 For source builds use `sudo docker compose -f compose.yaml -f compose.build.yaml build --pull agent`
 instead of pulling the unpublished local agent image. Existing `.env` intentionally retains its
@@ -373,6 +416,17 @@ runs the tests, validates Compose, builds **linux/amd64**, and starts the actual
 container to check TLS, authentication and read-only startup. The CPU runner deliberately
 reports the model unavailable: GPU inference must still be checked on the H200 host.
 
+The stages run in order: validate source/version metadata; install pinned test dependencies;
+run unit/protocol/TLS/installer tests; validate both Compose configurations; build the agent;
+start the real container with normal and root-generated private files; test authentication,
+shared-token group access and scoped removal; archive the tested image and deployment files.
+Ordinary pushes/PRs stop at artifact upload. A manual main-branch publication downloads the
+same artifact, verifies checksums and image identity, and pushes it without rebuilding.
+Only that job has package-write permission via GitHub's temporary token. It logs out afterwards.
+There is no connection to a deployed server, automatic deployment, bundled model weights or
+GPU/model inference on the CPU runner. Git updates scripts; GHCR distributes published images;
+the server's explicit `update` command selects and runs them. These are separate operations.
+
 Every successful build attaches an artifact containing:
 
 - `borgvr-agent-linux-amd64.tar.gz`: the tested Docker image, tagged `borgvr-agent:ci`.
@@ -412,22 +466,27 @@ repository does not automatically make the container package public.
 
 For updates, publish a new version, back up private deployment state, and change only the
 `BORGVR_AGENT_IMAGE` reference in the existing `.env` to the new published digest. Then the
-administrator runs `sudo docker compose pull` and `sudo ./setup.sh start`.
+administrator runs `sudo ./setup.sh update`. Alternatively pass `update --agent-image REF`
+to change just the agent image with an automatic backup of the previous `.env`.
 Do not replace existing credentials or initialize a fresh deployment just to update the image.
 
 ## 11. Uninstall And Repeat Installation Tests
 
+`sudo ./setup.sh uninstall` alone previews removal of the deployment. The options below
+also plan removal of unused images and the clean checkout. Calling `./uninstall.py`
+directly remains supported.
+
 In the original deployment directory, first preview as the administrator:
 
 ```
-sudo ./uninstall.py --remove-images --remove-checkout
+sudo ./setup.sh uninstall --remove-images --remove-checkout
 ```
 
 Omit `sudo` when already root. Nothing is deleted without `--yes`. After reviewing the
 concrete resource names and paths, confirm:
 
 ```
-sudo ./uninstall.py --remove-images --remove-checkout --yes
+sudo ./setup.sh uninstall --remove-images --remove-checkout --yes
 ```
 
 This removes the `borgvr-ai` containers, project network and `borgvr-ai_model-cache`

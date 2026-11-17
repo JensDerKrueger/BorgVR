@@ -4,27 +4,34 @@ DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 COMMAND=install
 PREBUILT_AGENT=1
 AGENT_IMAGE_SET=0
+AGENT_IMAGE=""
+HAS_INIT_OPTIONS=0
 IMAGE_MODE=""
 INIT_ARGS=()
+UNINSTALL_ARGS=()
 DOCKER=(docker --host unix:///var/run/docker.sock)
 
 usage() {
   printf '%s\n' \
-    'Usage: sudo ./setup.sh [install|init|doctor|start|stop|status|logs|test] [options]' \
+    'Usage: sudo ./setup.sh [install|init|doctor|start|stop|restart|update|status|logs|test|uninstall] [options]' \
     'Run setup-host.sh separately if Docker/NVIDIA prerequisites are missing.' \
     '  --prebuilt-agent    Use a local/published agent image (default; never build).' \
     '  --build-agent       Developer mode: build the agent from source instead.' \
-    '  --agent-image REF   Agent image reference (initial setup; default published digest).' \
+    '  --agent-image REF   Agent image reference (initial setup or explicit update).' \
     '  --host HOST         Certificate DNS name/IP (initial setup only; default localhost).' \
     '  --bind IPV4         Listen address (initial setup only; default 127.0.0.1).' \
     '  --port PORT         HTTPS/WSS port (default 8766).' \
     '  --gpu INDEX_OR_UUID  Select ONE NVIDIA GPU (default 0).' \
+    'Update pulls configured images, checks access, starts services and tests the model.' \
+    'An explicit update image is checked before changing .env; the old .env is backed up.' \
+    'Uninstall previews by default; supports --yes, --remove-images, --remove-checkout, --files-only.' \
     'Existing configuration, secrets and cached models are preserved.'
 }
 die() { printf 'Error: %s\n' "$*" >&2; exit 1; }
 while (($#)); do
   case "$1" in
-    install|init|doctor|start|stop|status|logs|test) COMMAND="$1"; shift ;;
+    install|init|doctor|start|stop|restart|update|status|logs|test|uninstall) COMMAND="$1"; shift ;;
+    --yes|--remove-images|--remove-checkout|--files-only) UNINSTALL_ARGS+=("$1"); shift ;;
     --install-host-deps) die 'Run sudo ./setup-host.sh separately; setup.sh never elevates privileges.' ;;
     --prebuilt-agent|--build-agent)
       [[ -z "$IMAGE_MODE" || "$IMAGE_MODE" == "$1" ]] || die 'Choose only one agent image mode.'
@@ -33,7 +40,9 @@ while (($#)); do
       shift ;;
     --host|--bind|--port|--gpu|--agent-image)
       (($# >= 2)) || die "Missing value for $1"
-      if [[ "$1" == --agent-image ]]; then AGENT_IMAGE_SET=1; fi
+      if [[ "$1" == --agent-image ]]; then
+        AGENT_IMAGE_SET=1; AGENT_IMAGE="$2"
+      else HAS_INIT_OPTIONS=1; fi
       INIT_ARGS+=("$1" "$2"); shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *) die "Unknown argument: $1" ;;
@@ -43,7 +52,12 @@ if [[ -n "$IMAGE_MODE" && "$COMMAND" != install ]]; then
   die 'Agent image modes apply only to install.'
 fi
 if ((!PREBUILT_AGENT && !AGENT_IMAGE_SET)); then INIT_ARGS+=(--agent-image borgvr-agent:3.9); fi
-if [[ "$COMMAND" != install && "$COMMAND" != init ]] && ((${#INIT_ARGS[@]})); then
+if ((${#UNINSTALL_ARGS[@]})) && [[ "$COMMAND" != uninstall ]]; then
+  die 'Deletion options apply only to uninstall.'
+fi
+if [[ "$COMMAND" == update ]]; then
+  ((HAS_INIT_OPTIONS == 0)) || die 'Only --agent-image can be changed by update; edit other settings in .env.'
+elif [[ "$COMMAND" != install && "$COMMAND" != init ]] && ((${#INIT_ARGS[@]})); then
   die 'Host/bind/port/GPU options apply only to install/init. Edit existing .env deliberately.'
 fi
 
@@ -80,7 +94,16 @@ check_service_secrets() {
     || die 'The agent cannot read its private tokens or TLS files. Check their ownership and permissions.'
 }
 
+start_services() { compose up -d --no-build --pull never --wait --wait-timeout 3600; }
+test_server() {
+  compose exec -T agent python client.py --url https://127.0.0.1:8766 \
+    --ca /run/tls/server.crt --token-file /run/secrets/agent_token --smoke
+}
+
 command -v python3 >/dev/null || die 'Python 3 is missing. Run sudo ./setup-host.sh.'
+if [[ "$COMMAND" == uninstall ]]; then
+  exec python3 "$DIR/uninstall.py" ${UNINSTALL_ARGS[@]+"${UNINSTALL_ARGS[@]}"}
+fi
 command -v openssl >/dev/null || die 'OpenSSL is missing. Run sudo ./setup-host.sh.'
 case "$COMMAND" in
   init) python3 "$DIR/configure.py" init ${INIT_ARGS[@]+"${INIT_ARGS[@]}"}; exit 0 ;;
@@ -88,7 +111,9 @@ case "$COMMAND" in
 esac
 [[ -f "$DIR/.env" ]] || die 'Run sudo ./setup.sh install first.'
 choose_docker
-if [[ "$COMMAND" == start ]]; then python3 "$DIR/configure.py" prepare-secrets; fi
+if [[ "$COMMAND" == start || "$COMMAND" == restart || "$COMMAND" == update ]]; then
+  python3 "$DIR/configure.py" prepare-secrets
+fi
 case "$COMMAND" in
   install)
     # Probe the daemon's backing filesystem without reading privileged host directories.
@@ -113,15 +138,26 @@ case "$COMMAND" in
         -f "$DIR/compose.yaml" -f "$DIR/compose.build.yaml" build --pull agent
     fi
     check_service_secrets
-    compose up -d --no-build --pull never --wait --wait-timeout 3600
+    start_services
     printf '%s\n' 'Server is running. Run: sudo ./setup.sh test' \
       'The native BorgVR voice client is not connected yet; see README.md for the server test and protocol.' ;;
   doctor) check_gpu ;;
-  start) check_service_secrets; compose up -d --no-build --pull never --wait --wait-timeout 3600 ;;
+  start) check_service_secrets; start_services ;;
+  restart) check_service_secrets; compose stop; start_services ;;
+  update)
+    if ((AGENT_IMAGE_SET)); then
+      python3 "$DIR/configure.py" validate-image "$AGENT_IMAGE"
+      export BORGVR_AGENT_IMAGE="$AGENT_IMAGE"
+    fi
+    compose config --quiet
+    compose pull
+    check_service_secrets
+    if ((AGENT_IMAGE_SET)); then python3 "$DIR/configure.py" set-agent-image "$AGENT_IMAGE"; fi
+    start_services || die 'Update did not become healthy. Inspect setup.sh logs; configuration backups are in runtime/env-before-update-*.'
+    test_server
+    printf '%s\n' 'Update completed; the actual model answered successfully.' ;;
   stop) compose stop ;;
   status) compose ps ;;
   logs) compose logs --tail 100 -f ;;
-  test)
-    compose exec -T agent python client.py --url https://127.0.0.1:8766 \
-      --ca /run/tls/server.crt --token-file /run/secrets/agent_token --smoke ;;
+  test) test_server ;;
 esac

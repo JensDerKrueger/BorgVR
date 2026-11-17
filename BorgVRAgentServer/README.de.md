@@ -235,28 +235,74 @@ nicht für die eigentliche Inferenz.
 Der Administrator betreibt den Dienst; normale App-Nutzer brauchen keine Docker-Rechte:
 
 ```
+sudo ./setup.sh status
 sudo ./setup.sh logs
 sudo ./setup.sh stop
 sudo ./setup.sh start
+sudo ./setup.sh restart
+sudo ./setup.sh test
 ```
+
+`start` startet fehlende/gestoppte Dienste, übernimmt geänderte Compose-Einstellungen und
+wartet auf deren Bereitschaft. `stop` stoppt nur BorgVR, behält aber Container, Modell-Cache,
+Konfiguration und Schlüssel. `restart` prüft erst die privaten Mounts, stoppt dann beide
+BorgVR-Dienste und startet sie wieder; dabei muss vLLM das Modell erneut in die GPU laden.
+`logs` zeigt laufende Meldungen; Ctrl+C beendet nur die Anzeige. Andere Docker-Projekte
+werden nicht gestoppt. Für alle Befehle im Deployment-Verzeichnis bleiben.
+Stoppen, Neustarten und das Ersetzen eines Containers können aktive Sitzungen unterbrechen;
+Gespräche werden nur im RAM gehalten, nicht nach einem Neustart wiederhergestellt.
 
 Mit `sudo ./setup.sh doctor` lässt sich der CUDA-Zugriff erneut prüfen.
 
-Container starten mit Docker automatisch wieder, sofern sie nicht bewusst gestoppt wurden.
-Bei bereits installiertem Docker gegebenenfalls dessen Autostart aktivieren; neu installiertes
-Docker wird automatisch aktiviert. Der Modell-Cache liegt im Docker-Volume
-`borgvr-ai_model-cache`.
+### Nach Einem Rechner-Neustart
+
+Beide Container verwenden `restart: unless-stopped`. Wenn Docker beim Booten startet,
+kommen vorher laufende Dienste automatisch wieder. Die Modellgewichte bleiben im Volume
+`borgvr-ai_model-cache`, müssen aber erneut in GPU/RAM geladen werden. Währenddessen kann
+der Agent noch nicht bereit sein. Der Deployment-Ordner muss mit `.env`, Starter und
+Zertifikaten unverändert an seinem bisherigen Ort verfügbar sein.
+
+Docker-Autostart prüfen und bei Bedarf ohne Neustart aktivieren:
+
+```
+sudo systemctl is-enabled docker
+sudo systemctl enable docker
+```
+
+Nach `sudo ./setup.sh stop` bleiben die Dienste auch nach einem Rechner-Neustart aus.
+Zum Wiederanlaufen `sudo ./setup.sh start`, danach `sudo ./setup.sh test` verwenden.
+Eine erneute Installation oder ein erneuter Modelldownload ist normalerweise nicht nötig.
+Wenn andere GPU-Dienste ebenfalls automatisch starten, deren Speicherbedarf mit einplanen.
+Siehe [Docker-Neustartrichtlinien](https://docs.docker.com/engine/containers/start-containers-automatically/).
 
 vLLM **0.34.0**, Container-Digests, Modellrevision und alle Python-Abhängigkeiten sind
 festgelegt. Hostpakete stammen dagegen aus den signierten Paketquellen und sollen regulär
 Sicherheitsupdates erhalten. Die verwendete BorgVR-Commit-ID für die Installation notieren.
 
-Vor Updates `.env` und `runtime` sicher sichern. Nach geprüfter Aktualisierung der Quellen:
+### Updates
+
+Vor Updates `.env` und `runtime` sicher sichern. Skripte und Compose-Datei als normaler
+Benutzer aktualisieren, danach Container als Administrator:
 
 ```
-sudo docker compose pull
-sudo ./setup.sh start
+git pull
+sudo ./setup.sh update
 ```
+
+`update` lädt die **in `.env` konfigurierten** Images, prüft die privaten Mounts, übernimmt
+Änderungen durch erneutes `up` und führt anschließend den echten Modelltest aus. Es baut
+keine Images und führt kein Git-Update oder Systemupdate aus. Bei unveränderten Digests
+bleiben die Image-Versionen unverändert; ein Pull bedeutet nicht automatisch eine neue Version.
+
+Für eine ausdrücklich gewählte neue Agenten-Version `sudo ./setup.sh update --agent-image REF`
+verwenden; `REF` durch die veröffentlichte Image-Adresse mit Tag oder besser Digest ersetzen.
+Zuerst wird die neue Adresse nur vorübergehend für Download und Leseprüfungen verwendet.
+Erst wenn beides gelingt, wird `.env` atomar umgestellt und die alte Datei privat unter
+`runtime/env-before-update-*` gesichert. Die Schlüssel und der Modell-Cache bleiben erhalten.
+Schlägt bereits Download/Prüfung fehl, laufen die bisherigen Container unverändert weiter.
+Scheitert der anschließende Start oder Modelltest, meldet das Skript einen Fehler; es führt
+keinen automatischen Rollback aus. Die ausgegebene Sicherung kann nach Prüfung mit
+`sudo cp /PFAD/ZUR/SICHERUNG .env` zurückgespielt werden, danach `sudo ./setup.sh start`.
 
 Bei einem Quellcode-Build statt Pull den Build-Overlay verwenden:
 `sudo docker compose -f compose.yaml -f compose.build.yaml build --pull agent`.
@@ -315,6 +361,49 @@ ein Image für **linux/amd64**. Zusätzlich zu den Tests startet er den echten C
 TLS, Authentifizierung und schreibgeschütztem Dateisystem. Der CPU-Runner testet dabei
 bewusst keine GPU-Inferenz; diese Prüfung bleibt auf dem H200-Rechner erforderlich.
 
+### Was Der Workflow Genau Macht
+
+1. **Auslösen:** Änderungen unter `BorgVRAgentServer` oder am Workflow starten den Lauf
+   bei einem Push auf `main` oder einem Pull Request. Ein manueller Start ist ebenfalls möglich.
+2. **Isolierter Build-Rechner:** GitHub stellt einen temporären Ubuntu-24.04-Rechner mit
+   Python 3.12 bereit und lädt genau den auslösenden Quellcode-Commit. Dein Linux-Server
+   wird dabei nicht kontaktiert. Mehrere Läufe desselben Branches werden nacheinander ausgeführt.
+3. **Metadaten und Tests:** Repository, Commit, Plattform und optionale Versionsnummer
+   werden validiert. Die festgelegten Test-Abhängigkeiten werden installiert und die
+   Unit-, Protokoll-, Installer-, Rechte-, TLS- und Deinstallationstests ausgeführt.
+4. **Compose prüfen:** Eine temporäre Testkonfiguration wird erzeugt und sowohl die normale
+   Compose-Datei als auch das Entwickler-Build-Overlay auf gültige Konfiguration geprüft.
+5. **Image bauen:** Docker Buildx baut nur unseren Agenten für `linux/amd64`, zunächst lokal
+   als `borgvr-agent:ci`. Basis-Image und Python-Pakete sind festgelegt. Build-Caches beschleunigen
+   Wiederholungen. OCI-Labels enthalten unter anderem Quellcode-Commit und Version.
+6. **Echten Container prüfen:** Das gebaute Image wird wirklich gestartet, mit TLS,
+   schreibgeschütztem Dateisystem und reduzierten Rechten. Die Tests laufen nach normaler
+   und nach Root-Einrichtung. Sie prüfen auch den gemeinsamen Token ohne zusätzliche
+   Root-Capabilities sowie die gezielte Deinstallation unter Schutz fremder Container.
+   Der Container hat absichtlich kein Modell und meldet es als nicht bereit. Nur die
+   Unit-Tests verwenden deterministische Testmodelle; echte Inferenz wird nicht vorgetäuscht.
+7. **Artefakte sichern:** Das getestete Image wird mit `docker save` archiviert. Ein separates
+   Deployment-Paket enthält Skripte, Compose-Datei, Anleitungen und Lizenz. `release.json`
+   und SHA-256-Prüfsummen verbinden die Archive mit Quellcode und Image-ID. Installationspakete
+   enthalten keine produktiven Schlüssel, Zertifikate oder Modellgewichte.
+8. **Normaler Lauf endet hier:** Pushes und Pull Requests veröffentlichen kein Registry-Image.
+   Der Image-Upload erfolgt nur nach manuellem Start mit `publish=true`, expliziter neuer
+   Version und Branch `main`, und nur nach erfolgreichem Build samt Tests.
+9. **Veröffentlichen ohne Neubau:** Der zweite Job lädt exakt das zuvor getestete Artefakt,
+   prüft Commit/Repository/Prüfsummen und die Docker-Image-ID und lädt es in Docker.
+   GitHubs temporärer Token erhält nur hier Schreibrechte auf Packages. Das gleiche Image
+   wird mit Versions- und Commit-Tag nach GHCR geschoben. Eine vorhandene Versionsnummer
+   darf nicht auf ein anderes Image umgebogen werden.
+10. **Ergebnis:** Ein weiteres Deployment-Paket enthält den festen Registry-Digest für die
+    Installation. Danach meldet sich der Job von der Registry ab. Er ändert weder
+    Paketsichtbarkeit noch `latest`, erzeugt kein GitHub-Release und aktualisiert keinen Server.
+
+**Wichtige Trennung:** `git pull` aktualisiert Skripte und Compose-Dateien. Ein neuer
+Workflow-Build erzeugt ein neues Image, installiert es aber nirgends. Erst eine bewusste
+Veröffentlichung macht es in GHCR verfügbar; erst `setup.sh update` auf deinem Server
+mit passender Image-Auswahl setzt es dort ein. vLLM und Modellgewichte werden nicht von
+unserem Workflow gebaut oder mitgeliefert, sondern vom Server aus ihren jeweiligen Quellen geladen.
+
 Ein erfolgreicher Build stellt als Workflow-Artefakt bereit:
 
 - `borgvr-agent-linux-amd64.tar.gz`: das getestete Docker-Image mit Tag `borgvr-agent:ci`.
@@ -353,24 +442,29 @@ bewusst auf öffentlich ändern. Das macht der Workflow nicht automatisch.
 Nach einer Veröffentlichung gibt es ein weiteres Deployment-Artefakt mit festem
 Registry-Digest. Für Updates die privaten Konfigurationsdateien sichern und in der bestehenden
 `.env` nur `BORGVR_AGENT_IMAGE` auf den neuen Digest setzen. Danach lädt und startet der
-Administrator mit `sudo docker compose pull` und `sudo ./setup.sh start` neu.
+Administrator mit `sudo ./setup.sh update` neu. Alternativ `update --agent-image REF`
+verwenden, um die Agenten-Adresse mit Sicherung der bisherigen `.env` umzustellen.
 Zugangsschlüssel und Zertifikate bleiben erhalten; eine Neuinitialisierung ist nicht nötig.
 
 ## 10. Deinstallation und erneuter Test
 
 ### BorgVR samt Modell und Git-Download entfernen
 
+Auch `sudo ./setup.sh uninstall` ohne weitere Optionen zeigt nur eine Vorschau. Die
+folgenden zusätzlichen Optionen planen außerdem das Entfernen ungenutzter Images und des
+gesamten sauberen Git-Clones. Der direkte Aufruf von `./uninstall.py` bleibt unterstützt.
+
 Im bisherigen Deployment-Verzeichnis zunächst als Administrator die **Vorschau** aufrufen:
 
 ```
-sudo ./uninstall.py --remove-images --remove-checkout
+sudo ./setup.sh uninstall --remove-images --remove-checkout
 ```
 
 Bereits als root angemeldet: `sudo` weglassen. Das Skript zeigt konkrete Ressourcen und
 Verzeichnisse an und löscht ohne `--yes` nichts. Die vollständige Entfernung bestätigen:
 
 ```
-sudo ./uninstall.py --remove-images --remove-checkout --yes
+sudo ./setup.sh uninstall --remove-images --remove-checkout --yes
 ```
 
 Dabei werden die Container des Projekts `borgvr-ai`, dessen Netzwerk und Modell-Volume

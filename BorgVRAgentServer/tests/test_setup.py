@@ -259,3 +259,136 @@ def test_image_modes_cannot_be_mixed():
     for args in (("install", "--build-agent", "--prebuilt-agent"), ("init", "--build-agent")):
         result = subprocess.run(["bash", str(script), *args], capture_output=True, text=True)
         assert result.returncode == 1
+
+
+@pytest.fixture
+def operations(tmp_path):
+    source = Path(__file__).resolve().parents[1]
+    for name in ("setup.sh", "configure.py", "uninstall.py"):
+        shutil.copyfile(source / name, tmp_path / name)
+    create_configuration(tmp_path, "localhost", "127.0.0.1", 8766, "0")
+    binary = tmp_path / "bin"
+    binary.mkdir()
+    trace = tmp_path / "operations.jsonl"
+    executable(binary / "docker", '''#!/usr/bin/env python3
+import json,os,sys
+args=sys.argv[1:]
+with open(os.environ["TRACE"], "a") as handle:
+    handle.write(json.dumps({"args":args,"image":os.environ.get("BORGVR_AGENT_IMAGE")})+"\\n")
+sys.exit(42 if os.environ.get("FAIL_COMMAND") in args else 0)
+''')
+    env = {**os.environ, "PATH": str(binary) + os.pathsep + os.environ["PATH"], "TRACE": str(trace)}
+
+    def run(*args, failure=""):
+        result = subprocess.run(["bash", str(tmp_path / "setup.sh"), *args],
+                                env={**env, "FAIL_COMMAND": failure}, capture_output=True, text=True)
+        calls = [json.loads(line) for line in trace.read_text().splitlines()] if trace.exists() else []
+        return result, calls
+
+    return tmp_path, run
+
+
+def test_update_downloads_and_probes_before_persisting_then_tests_model(operations):
+    root, run = operations
+    original = (root / ".env").read_bytes()
+    token = (root / "runtime/secrets/vllm_token").read_bytes()
+    image = "ghcr.io/jensderkrueger/borgvr-agent:3.9.1"
+    result, calls = run("update", "--agent-image", image)
+    assert result.returncode == 0, result.stderr
+    args = [call["args"] for call in calls]
+    assert next(i for i, call in enumerate(args) if "pull" in call) < next(i for i, call in enumerate(args) if "run" in call)
+    assert next(i for i, call in enumerate(args) if "up" in call) < next(i for i, call in enumerate(args) if "exec" in call)
+    assert all(call["image"] == image for call in calls if "--project-directory" in call["args"])
+    backups = list((root / "runtime").glob("env-before-update-*"))
+    assert len(backups) == 1 and backups[0].read_bytes() == original
+    assert backups[0].stat().st_mode & 0o777 == 0o600
+    assert (root / ".env").read_text() == original.decode().replace(DEFAULT_AGENT_IMAGE, image)
+    assert (root / ".env").stat().st_mode & 0o777 == 0o600
+    assert (root / "runtime/secrets/vllm_token").read_bytes() == token
+
+
+@pytest.mark.parametrize("failure", ["pull", "run"])
+def test_failed_update_preparation_preserves_running_configuration(operations, failure):
+    root, run = operations
+    original = (root / ".env").read_bytes()
+    result, calls = run("update", "--agent-image", "ghcr.io/jensderkrueger/borgvr-agent:3.9.1", failure=failure)
+    assert result.returncode != 0
+    assert (root / ".env").read_bytes() == original
+    assert not list((root / "runtime").glob("env-before-update-*"))
+    assert not any("up" in call["args"] or "stop" in call["args"] for call in calls)
+
+
+def test_failed_update_start_keeps_backup_and_reports_failure(operations):
+    root, run = operations
+    original = (root / ".env").read_bytes()
+    result, calls = run("update", "--agent-image", "ghcr.io/jensderkrueger/borgvr-agent:3.9.1", failure="up")
+    assert result.returncode != 0 and "Update did not become healthy" in result.stderr
+    assert next((root / "runtime").glob("env-before-update-*")).read_bytes() == original
+    assert not any("exec" in call["args"] for call in calls)
+
+
+def test_update_without_new_image_keeps_pins(operations):
+    root, run = operations
+    original = (root / ".env").read_bytes()
+    result, calls = run("update")
+    assert result.returncode == 0, result.stderr
+    assert (root / ".env").read_bytes() == original
+    assert not list((root / "runtime").glob("env-before-update-*"))
+    assert any("pull" in call["args"] for call in calls)
+    assert any("exec" in call["args"] and "--smoke" in call["args"] for call in calls)
+
+
+@pytest.mark.parametrize("command", ["start", "stop", "restart", "status", "logs", "test"])
+def test_operation_commands_only_address_this_deployment(operations, command):
+    root, run = operations
+    result, calls = run(command)
+    assert result.returncode == 0, result.stderr
+    compose_calls = [call["args"] for call in calls if "--project-directory" in call["args"]]
+    assert compose_calls and all(str(root / "compose.yaml") in call and str(root / ".env") in call for call in compose_calls)
+    assert not any("pull" in call for call in compose_calls)
+    if command == "restart":
+        assert next(i for i, call in enumerate(compose_calls) if "stop" in call) < next(i for i, call in enumerate(compose_calls) if "up" in call)
+
+
+def test_setup_uninstall_is_preview_unless_confirmed(operations):
+    root, run = operations
+    result, calls = run("uninstall", "--files-only")
+    assert result.returncode == 0 and "Preview only" in result.stdout
+    assert (root / ".env").exists() and not calls
+    result, calls = run("uninstall", "--files-only", "--yes")
+    assert result.returncode == 0 and not (root / ".env").exists() and not (root / "runtime").exists()
+    assert not calls
+
+
+def test_operation_flags_do_not_change_unrelated_settings(operations):
+    root, run = operations
+    original = (root / ".env").read_bytes()
+    for args in (("update", "--host", "other.example.org"), ("update", "--yes"),
+                 ("stop", "--remove-images"), ("uninstall", "--agent-image", "test:1"),
+                 ("update", "--agent-image", "bad image")):
+        result, calls = run(*args)
+        assert result.returncode != 0 and (root / ".env").read_bytes() == original
+
+
+def test_image_update_refuses_symlinked_env(tmp_path):
+    outside = tmp_path / "outside"
+    outside.write_text("BORGVR_AGENT_IMAGE=original:1\n")
+    (tmp_path / ".env").symlink_to(outside)
+    with pytest.raises(ValueError):
+        configure.set_agent_image(tmp_path, "replacement:1")
+    assert outside.read_text() == "BORGVR_AGENT_IMAGE=original:1\n"
+
+
+def test_image_update_failure_keeps_original_and_private_backup(operations, monkeypatch):
+    root, _ = operations
+    original = (root / ".env").read_bytes()
+
+    def failed_replace(*args):
+        raise OSError("Simulated atomic replacement failure")
+
+    monkeypatch.setattr(configure.os, "replace", failed_replace)
+    with pytest.raises(OSError):
+        configure.set_agent_image(root, "replacement:1")
+    assert (root / ".env").read_bytes() == original
+    assert next((root / "runtime").glob("env-before-update-*")).read_bytes() == original
+    assert not list(root.glob(".env-update-*"))
