@@ -75,6 +75,18 @@ def main():
         create_configuration(root, "localhost", "127.0.0.1", 8766, "0")
         runtime = root / "runtime"
         try:
+            group = AGENT_GID if os.getuid() == 0 else os.getgid()
+            secret_mount = f"{runtime / 'secrets/vllm_token'}:/run/secrets/vllm_token:ro"
+            probe = ["run", "--rm", "--network", "none", "--read-only", "--user", "0:0",
+                     "--cap-drop", "ALL", "--security-opt", "no-new-privileges:true",
+                     "-v", secret_mount, "--entrypoint", "python"]
+            read = "from pathlib import Path; assert len(Path('/run/secrets/vllm_token').read_text().strip()) >= 32"
+            # Reproduce vLLM's root-without-capabilities context, not just the agent's UID.
+            denied = subprocess.run(["docker", *probe, args.image, "-c", read], capture_output=True, text=True)
+            assert denied.returncode != 0 and "PermissionError" in denied.stderr
+            groups = [arg for value in compose["services"]["vllm"]["group_add"]
+                      for arg in ("--group-add", value.replace("${BORGVR_GID}", str(group)))]
+            docker(*probe, *groups, args.image, "-c", read)
             assert not docker("ps", "-aq", "--filter", f"label={LABEL}={PROJECT}"), "A BorgVR deployment already exists; refusing the test"
             assert not docker("volume", "ls", "-q", "--filter", "name=borgvr-ai_model-cache"), "Model volume already exists"
             assert not docker("network", "ls", "-q", "--filter", "name=borgvr-ai_default"), "Network already exists"

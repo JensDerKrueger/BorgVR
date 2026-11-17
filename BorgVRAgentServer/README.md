@@ -202,7 +202,7 @@ identity/user-management system. Devices sharing it have equal access to the all
 | --- | --- |
 | `.env` | Pinned images/model revision, listen address, port, GPU, UID/GID, context/memory budget |
 | `runtime/secrets/agent_token` | Agent authentication; generated randomly, mode 0600 |
-| `runtime/secrets/vllm_token` | Separate internal inference credential; never returned to clients |
+| `runtime/secrets/vllm_token` | Separate internal inference credential, mode 0640; never returned to clients |
 | `runtime/tls/server.crt` | Public server certificate, including chosen host, localhost and loopback SANs |
 | `runtime/tls/server.key` | Private TLS key, mode 0600 |
 | Docker volume `borgvr-ai_model-cache` | Downloaded weights and persistent Hugging Face cache |
@@ -212,10 +212,22 @@ and the parent `runtime` directory root-owned; only the private container mounts
 by UID/GID 10001. The agent therefore remains unprivileged even with administrative setup.
 Existing configurations retain their original UID/GID and file ownership. Non-root setup
 with pre-existing Docker access remains supported using that account's UID/GID.
+vLLM joins the supplementary `BORGVR_GID` group so it can read the shared inference token
+without a capability that bypasses file permissions. `install`, `init` and `start` repair
+that token's mode to 0640 in existing installations without replacing its contents.
+Other private keys remain 0600.
 The agent has a read-only root filesystem,
 bounded temporary storage and dropped capabilities. The inference container uses the
 upstream image's default user but has no privileged mode, host IPC, Docker socket, dataset
 mounts or published ports. Only one selected GPU and its model cache are exposed to it.
+
+The inference key is random by default. A host `VLLM_API_KEY` is never imported.
+Optionally provide `VLLM_BORGVR_API_KEY` during **initial** configuration (32..512 ASCII
+letters, digits, dots, underscores or hyphens); sudo requires explicitly preserving it
+with `--preserve-env=VLLM_BORGVR_API_KEY`. Do not put the secret in command arguments or
+`.env`. Existing configuration retains its key. Only inside the BorgVR vLLM container
+does the launcher set vLLM's required `VLLM_API_KEY` from its private secret file.
+Other containers have independent environments.
 
 The generated self-signed certificate expires after 365 days and is for initial testing
 with an explicitly trusted certificate. Before native-device deployment, use a certificate

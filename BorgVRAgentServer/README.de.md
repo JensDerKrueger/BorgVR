@@ -190,16 +190,28 @@ sudo docker compose exec -T agent python client.py --url https://127.0.0.1:8766 
 - `.env` enthält Image-/Modellrevision, GPU, Speicherbudget, Adresse, Port und Benutzer-IDs.
 - `runtime/secrets/agent_token` ist der Zugangsschlüssel für Clients, wie ein Passwort
   behandeln. Er gilt aktuell für **die gesamte Installation**, noch nicht separat pro Gerät.
-- `runtime/secrets/vllm_token` ist nur für die interne Modellkommunikation.
+- `runtime/secrets/vllm_token` ist nur für die interne Modellkommunikation, Modus 0640.
 - `runtime/tls/server.crt` ist das öffentliche Zertifikat.
 - `runtime/tls/server.key` ist der private Schlüssel und gehört niemals auf einen Client.
-- Verzeichnisse sind nur für den Besitzer zugänglich, Schlüsseldateien haben Modus 0600.
+- Verzeichnisse sind nur für den Besitzer zugänglich, sonstige private Schlüssel haben Modus 0600.
   Diese Rechte nicht durch weltweite Lesbarkeit umgehen.
 
 Bei neuer Einrichtung mit sudo bleiben `.env` und das übergeordnete `runtime`-Verzeichnis
 root-eigen. Nur die privaten Container-Mounts erhalten UID/GID 10001; damit läuft der
-Agent trotz administrativer Einrichtung nicht als root. Bestehende Installationen behalten
-ihre bisherigen Benutzer-IDs und Dateirechte.
+Agent trotz administrativer Einrichtung nicht als root. vLLM erhält die zusätzliche
+Gruppe `BORGVR_GID`, um ausschließlich den gemeinsamen internen Token lesen zu können,
+auch ohne Rechte zum Umgehen von Dateiberechtigungen. `install`, `init` und `start`
+korrigieren dessen Modus bei bestehenden Installationen auf 0640, ohne den Schlüssel
+zu ändern. Die übrigen Benutzer-IDs und privaten Dateirechte bleiben erhalten.
+
+Standardmäßig wird ein eigener interner Schlüssel zufällig erzeugt. Ein auf dem Host
+gesetztes `VLLM_API_KEY` wird niemals übernommen. Optional kann bei der **ersten**
+Einrichtung `VLLM_BORGVR_API_KEY` vorgegeben werden (32 bis 512 ASCII-Buchstaben, Ziffern,
+Punkte, Unter- oder Bindestriche); bei sudo muss diese Variable gezielt mit
+`--preserve-env=VLLM_BORGVR_API_KEY` weitergereicht werden. Nicht in die Befehlszeile
+schreiben oder in `.env` ablegen. Bei vorhandener Konfiguration bleibt der alte Schlüssel.
+Nur innerhalb des BorgVR-vLLM-Containers setzt der Starter aus der privaten Schlüsseldatei
+den von vLLM vorgeschriebenen Namen `VLLM_API_KEY`. Andere Container bleiben unabhängig.
 
 Das automatisch erzeugte, selbstsignierte Zertifikat gilt 365 Tage und dient dem ersten
 Test mit ausdrücklich vertrautem Zertifikat. Für den späteren nativen Betrieb ein

@@ -70,6 +70,16 @@ check_gpu() {
   compose config --quiet
 }
 
+check_service_secrets() {
+  printf '%s\n' 'Checking private credentials with each service user and mount configuration.'
+  compose run --rm --no-deps --entrypoint python3 vllm -c \
+    'from pathlib import Path; assert len(Path("/run/secrets/vllm_token").read_text().strip()) >= 32' \
+    || die 'vLLM cannot read its internal token. Check the secret file group and permissions.'
+  compose run --rm --no-deps --entrypoint python agent -c \
+    'from pathlib import Path; [p.read_bytes() for p in map(Path, ("/run/secrets/agent_token", "/run/secrets/vllm_token", "/run/tls/server.crt", "/run/tls/server.key"))]' \
+    || die 'The agent cannot read its private tokens or TLS files. Check their ownership and permissions.'
+}
+
 command -v python3 >/dev/null || die 'Python 3 is missing. Run sudo ./setup-host.sh.'
 command -v openssl >/dev/null || die 'OpenSSL is missing. Run sudo ./setup-host.sh.'
 case "$COMMAND" in
@@ -78,6 +88,7 @@ case "$COMMAND" in
 esac
 [[ -f "$DIR/.env" ]] || die 'Run sudo ./setup.sh install first.'
 choose_docker
+if [[ "$COMMAND" == start ]]; then python3 "$DIR/configure.py" prepare-secrets; fi
 case "$COMMAND" in
   install)
     # Probe the daemon's backing filesystem without reading privileged host directories.
@@ -101,11 +112,12 @@ case "$COMMAND" in
       "${DOCKER[@]}" compose --project-directory "$DIR" --env-file "$DIR/.env" \
         -f "$DIR/compose.yaml" -f "$DIR/compose.build.yaml" build --pull agent
     fi
+    check_service_secrets
     compose up -d --no-build --pull never --wait --wait-timeout 3600
     printf '%s\n' 'Server is running. Run: sudo ./setup.sh test' \
       'The native BorgVR voice client is not connected yet; see README.md for the server test and protocol.' ;;
   doctor) check_gpu ;;
-  start) compose up -d --no-build --pull never --wait --wait-timeout 3600 ;;
+  start) check_service_secrets; compose up -d --no-build --pull never --wait --wait-timeout 3600 ;;
   stop) compose stop ;;
   status) compose ps ;;
   logs) compose logs --tail 100 -f ;;
