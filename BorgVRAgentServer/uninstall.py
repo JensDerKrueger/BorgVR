@@ -10,6 +10,7 @@ import shutil
 import subprocess
 
 from configure import DEFAULT_AGENT_IMAGE, PYTHON_IMAGE
+from firewall import load_rules, remove_rules
 
 ROOT = Path(__file__).resolve().parent
 PROJECT = "borgvr-ai"
@@ -159,6 +160,7 @@ def apply_plan(root, docker, plan, checkout=None):
         docker.run("network", "rm", identifier)
     for reference in plan["images"]:
         docker.run("image", "rm", reference, missing=True)  # Another removed tag may already have released this digest.
+    remove_rules(root)
     if checkout is not None:
         remove_local(checkout)
     else:
@@ -183,7 +185,7 @@ def main():
             parser.error("Docker is unavailable; use --files-only explicitly if only files should be removed")
         plan = docker_plan(ROOT, docker, args.remove_images)
     print(json.dumps({**plan, "local_paths": [str(target)] if target else [str(ROOT / name) for name in LOCAL_FILES],
-                      "docker_skipped": args.files_only}, indent=2))
+                      "firewall_rules": load_rules(ROOT), "docker_skipped": args.files_only}, indent=2))
     if not args.yes:
         print("Preview only. Add --yes to delete the listed resources. Keys/certificates will be lost; Docker/model data is skipped with --files-only.")
         return

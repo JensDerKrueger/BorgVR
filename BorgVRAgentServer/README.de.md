@@ -330,14 +330,7 @@ Andere Benutzer bekommen keinen Zugriff; Sicherungsverzeichnisse bleiben 0700,
 Sicherungsdateien 0600. Die neu erzeugte `.env` bleibt root-eigen und 0600.
 
 `install`, `init`, `start`, `restart` und `update` richten diese Runtime-Rechte automatisch
-ein, ohne Schlüssel, Container-IDs oder Modelle auszutauschen. Für eine bereits laufende
-Installation genügt, als gewünschter Benutzer aus dem Agenten-Verzeichnis:
-
-```
-sudo ./setup.sh permissions
-```
-
-Dies benötigt weder Docker noch einen Neustart der Container. Ein bereits eingerichteter
+ein, ohne Schlüssel, Container-IDs oder Modelle auszutauschen. Ein bereits eingerichteter
 Runtime-Besitzer bleibt auch bei späteren Aufrufen durch root oder andere Administratoren
 erhalten. Bei einer direkten root-Ersteinrichtung ohne sudo-Benutzer bleiben die Dateien
 wie bisher nur für root beziehungsweise den Container-Benutzer zugänglich.
@@ -358,7 +351,57 @@ einer auf den Geräten vertrauten internen oder öffentlichen CA verwenden.
 Die Zertifikatsausstellung, Erneuerung und Einrichtung des CA-Vertrauens auf den Geräten
 sind noch nicht automatisiert. TLS-Prüfungen niemals abschalten.
 
-Der Dienst sollte im privaten Netz oder VPN bleiben. Das Skript ändert keine Firewall.
+Der Dienst sollte im privaten Netz oder VPN bleiben. Ohne ausdrücklichen Schalter ändert
+das Skript keine Firewall-Regeln.
+
+### Optionale Firewall-Freigabe
+
+`install`, `start`, `restart`, `update`, `status` und `doctor` prüfen, ob UFW oder
+firewalld aktiv ist. Die Prüfung beweist nicht, dass der Server von einem anderen
+Gerät erreichbar ist. Für eine bereits eingerichtete Installation kann die Freigabe
+ausdrücklich angefordert werden, ohne das laufende Modell neu zu laden:
+
+```
+sudo ./setup.sh start --open-firewall
+```
+
+Oder direkt bei der Installation, zum Beispiel für einen Rechner mit dieser eigenen IP:
+
+```
+sudo ./setup.sh install --host 134.91.11.251 --bind 134.91.11.251 --open-firewall
+```
+
+Der Schalter erlaubt IPv4-TCP zum **konfigurierten Port** (standardmäßig 8766) an
+der eingestellten Abhöradresse, aus beliebigen IPv4-Quellen. Er installiert oder aktiviert
+keine Firewall, ändert keine Standardrichtlinien, SSH-Regeln oder Docker-Ketten und führt
+keinen globalen Reload aus. Bei firewalld werden gezielt Laufzeit- und permanente Regeln
+in dessen Standardzone angelegt. Bei Bedarf die passende Zone ausdrücklich wählen:
+
+```
+sudo ./setup.sh start --open-firewall --firewall-zone internal
+```
+
+Die Zone muss zum Interface beziehungsweise Quellnetz der Clients passen. Bei mehreren
+aktiven oder nicht zuverlässig lesbaren Firewall-Managern wird keine automatische Änderung
+versucht. Eigene nftables-/iptables-Konfigurationen werden nicht verändert. Ist keine
+unterstützte Firewall aktiv, wird nur ein Hinweis ausgegeben. Ein nur an localhost
+gebundener Server wird dadurch nicht netzwerkfähig; zuerst dessen `--bind` ändern.
+
+**Docker-Besonderheit:** Veröffentlichte Container-Ports können UFW und firewalld-Regeln
+für Host-Eingangsverkehr umgehen. Die Freigabe ist daher **keine Einschränkung auf
+vertrauenswürdige Clients**. Eine solche Absicherung gehört in eine Docker-taugliche
+Forwarding-Policy oder vorgeschaltete Firewall/VPN. Bei firewalld mit `StrictForwardPorts`
+oder eigenen Forwarding-Regeln kann eine zusätzliche administrative Freigabe nötig sein.
+Router-, Provider- und Hochschul-Firewalls können weiterhin blockieren; das Setup kann
+diese weder prüfen noch freischalten. Siehe die
+[Docker-Hinweise zu Firewalls](https://docs.docker.com/engine/network/packet-filtering-firewalls/).
+
+Nur neu angelegte BorgVR-Regeln werden in `runtime/firewall-rules.json` vermerkt und bei
+der bestätigten Deinstallation entfernt. Vorhandene Regeln werden weder übernommen noch
+gelöscht. Die Freigabe bleibt nach einem Neustart bestehen; der Schalter muss nicht bei
+jedem Start erneut angegeben werden. Bei einem Portwechsel bleiben vorherige Freigaben
+bis zur Deinstallation erhalten. Ein späteres Weglassen von `--open-firewall` schließt
+keine bereits freigegebenen Ports.
 **Docker-Portfreigaben können UFW-Regeln umgehen**; Netzfreigaben daher zusätzlich am
 Netzrand beziehungsweise mit Docker-tauglichen Regeln absichern. vLLM-Port 8000 bleibt
 ungeöffnet. Zugangsschlüssel werden im Authorization-Header übertragen, nicht in URLs.
@@ -604,6 +647,9 @@ Dabei werden die Container des Projekts `borgvr-ai`, dessen Netzwerk und Modell-
 `borgvr-ai_model-cache` entfernt. Im Volume liegen die heruntergeladenen Modellgewichte
 und deren Caches. Außerdem werden die zugehörigen konfigurierten Images und das kleine
 Python-Prüfimage entfernt, sofern keine fremden Container sie verwenden.
+Außerdem entfernt das Skript die von ihm protokollierten Firewall-Freigaben, auch bei
+`--files-only`. Scheitert deren Entfernung, bleibt die lokale Konfiguration für einen
+erneuten Versuch erhalten; vorbestehende Freigaben bleiben unberührt.
 
 `--remove-checkout` löscht anschließend den **gesamten geklonten BorgVR-Ordner**, inklusive
 `.git`, lokaler Konfiguration, Token, Zertifikaten und ignorierter Dateien. Bei einem

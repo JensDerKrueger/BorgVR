@@ -319,14 +319,7 @@ group only for its internal token. Other users gain no access; backup directorie
 Non-root setup with pre-existing Docker access still uses that account's UID/GID.
 
 `install`, `init`, `start`, `restart` and `update` automatically prepare these runtime
-permissions without changing keys, container IDs or models. For an existing running
-installation, run as the intended user from the deployment directory:
-
-```
-sudo ./setup.sh permissions
-```
-
-This needs neither Docker access nor a container restart. An existing non-root runtime
+permissions without changing keys, container IDs or models. An existing non-root runtime
 owner is retained on later invocations, even by root or a different administrator.
 A first installation directly as root without a sudo caller remains restricted to root
 and the container user as before. Symlinks, multiply linked files and nonregular runtime
@@ -351,7 +344,51 @@ install your organization's CA on devices where necessary. Replace `server.crt`/
 retain the same ownership and key mode, and restart the agent. Certificate issuance/renewal
 and device trust provisioning are not automated by this script. Never disable TLS validation.
 
-Keep 8766 on a private network/VPN. No firewall rules are changed automatically.
+Keep 8766 on a private network/VPN. No firewall rules are changed without explicit opt-in.
+
+### Optional Host Firewall Exception
+
+`install`, `start`, `restart`, `update`, `status` and `doctor` inspect active UFW/firewalld
+managers. Inspection does not prove remote reachability. To explicitly allow the configured
+agent port for an existing deployment without reloading a healthy running model:
+
+```
+sudo ./setup.sh start --open-firewall
+```
+
+Or include the flag when installing on a host that owns the specified address:
+
+```
+sudo ./setup.sh install --host 134.91.11.251 --bind 134.91.11.251 --open-firewall
+```
+
+Only IPv4 TCP to the configured port (8766 by default) and bind address is allowed,
+from any IPv4 source. No firewall is installed/enabled, no default policy, SSH rule or
+Docker chain is changed, and no global reload is performed. firewalld receives targeted
+runtime and permanent rich rules in its default zone. Select another client-facing zone
+explicitly if needed:
+
+```
+sudo ./setup.sh start --open-firewall --firewall-zone internal
+```
+
+The zone must match the clients' interface/source network. Multiple active or uncertain
+managers cause a refusal to modify rules. Custom nftables/iptables policies are left alone.
+If no supported firewall is active, only a notice is printed. A loopback-only bind must
+be changed before requesting a firewall exception.
+
+**Docker caveat:** published container ports can bypass UFW/firewalld host-input rules.
+This exception is **not a restriction to trusted source addresses**. Use a Docker-aware
+forwarding policy or an upstream firewall/VPN for that. firewalld `StrictForwardPorts`
+or custom forwarding rules can require additional administrative configuration. Router,
+provider and institutional firewalls can still block access and cannot be inspected or
+opened by this setup. See [Docker firewall documentation](https://docs.docker.com/engine/network/packet-filtering-firewalls/).
+
+Only newly added BorgVR rules are tracked in `runtime/firewall-rules.json` and removed
+by confirmed uninstall. Pre-existing exceptions are never claimed or deleted. Rules
+persist across host reboots; the flag need not be repeated on each start. Old port
+exceptions remain until uninstall when changing the configured port. Omitting
+`--open-firewall` later does not close previously opened ports.
 **Docker-published ports can bypass UFW rules**; use upstream network rules and Docker-aware
 filtering, not UFW alone. vLLM's port 8000 must never be published or forwarded. Browser
 origins and URL query parameters are rejected; bearer tokens belong in the authorization header.
@@ -373,7 +410,6 @@ sudo ./setup.sh stop
 sudo ./setup.sh start
 sudo ./setup.sh restart
 sudo ./setup.sh test
-sudo ./setup.sh permissions
 ```
 
 `start` starts missing/stopped services, applies changed Compose configuration and waits for
@@ -463,7 +499,8 @@ delete the model cache as well: `sudo docker compose down --volumes`. This does 
   mode as a workaround. Check the pinned model/image combination and report the error.
 - **Certificate error:** connect using the chosen SAN hostname/IP, trust the correct CA or
   explicitly configured test certificate, check expiry/chain, and verify device clocks.
-- **Permission error:** run `sudo ./setup.sh permissions` as the installer. The agent must
+- **Permission error:** run `sudo ./setup.sh init` as the installer to prepare runtime access
+  without restarting containers or replacing existing configuration. The agent must
   retain read access as owner or through `BORGVR_GID`. Never make tokens/keys world-readable.
 - **Tool result missing or timed out:** the server sends cancellation and refuses subsequent
   work in an uncertain session. Reconcile pending app commands/current state before reconnecting;
@@ -595,6 +632,9 @@ This removes the `borgvr-ai` containers, project network and `borgvr-ai_model-ca
 volume containing the downloaded model and caches. Configured agent/vLLM image references
 and the small Python probe image are removed when not used by foreign containers. Other
 deployments are refused; a shared model volume/network blocks automatic deletion.
+Recorded, newly created firewall exceptions are also removed, including with `--files-only`.
+If their removal fails, local configuration is retained for a retry. Pre-existing rules
+are not removed.
 
 `--remove-checkout` also deletes the **entire BorgVR Git clone**, including `.git`, runtime
 tokens/certificates, configuration and ignored files. For an extracted deployment bundle,

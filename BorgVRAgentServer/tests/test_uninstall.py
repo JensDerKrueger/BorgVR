@@ -137,6 +137,32 @@ def test_failure_keeps_configuration_for_retry(tmp_path):
     assert (tmp_path / "runtime/key").exists() and (tmp_path / ".env").exists()
 
 
+def test_firewall_cleanup_precedes_removing_local_files(tmp_path, monkeypatch):
+    local_files(tmp_path)
+    docker = FakeDocker(tmp_path)
+    plan = uninstall.docker_plan(tmp_path, docker, False)
+    cleaned = []
+    def cleanup(root):
+        assert (root / ".env").exists() and (root / "runtime").is_dir()
+        assert ("container", "rm", "--force", "--volumes", OWN) in docker.calls
+        cleaned.append(root)
+    monkeypatch.setattr(uninstall, "remove_rules", cleanup)
+    uninstall.apply_plan(tmp_path, docker, plan)
+    assert cleaned == [tmp_path] and not (tmp_path / "runtime").exists()
+
+
+def test_firewall_cleanup_failure_keeps_configuration_for_retry(tmp_path, monkeypatch):
+    local_files(tmp_path)
+    docker = FakeDocker(tmp_path)
+    plan = uninstall.docker_plan(tmp_path, docker, False)
+    def fail(root):
+        raise ValueError("Firewall service unavailable")
+    monkeypatch.setattr(uninstall, "remove_rules", fail)
+    with pytest.raises(ValueError, match="Firewall service unavailable"):
+        uninstall.apply_plan(tmp_path, docker, plan)
+    assert (tmp_path / "runtime/key").exists() and (tmp_path / ".env").exists()
+
+
 def test_runtime_symlink_does_not_delete_external_files(tmp_path):
     outside, root = tmp_path / "outside", tmp_path / "deployment"
     outside.mkdir()

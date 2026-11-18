@@ -10,11 +10,13 @@ IMAGE_MODE=""
 INIT_ARGS=()
 UNINSTALL_ARGS=()
 MODEL_ARGS=()
+OPEN_FIREWALL=0
+FIREWALL_ZONE=""
 DOCKER=(docker --host unix:///var/run/docker.sock)
 
 usage() {
   printf '%s\n' \
-    'Usage: sudo ./setup.sh [install|init|configure|model|profiles|permissions|doctor|start|stop|restart|update|status|logs|test|uninstall] [options]' \
+    'Usage: sudo ./setup.sh [install|init|configure|model|profiles|doctor|start|stop|restart|update|status|logs|test|uninstall] [options]' \
     'Run setup-host.sh separately if Docker/GPU prerequisites are missing.' \
     '  --prebuilt-agent    Use a local/published agent image (default; never build).' \
     '  --build-agent       Developer mode: build the agent from source instead.' \
@@ -22,6 +24,9 @@ usage() {
     '  --host HOST         Certificate DNS name/IP (install/init; initially localhost).' \
     '  --bind IPV4         Listen address (install/init; initially 127.0.0.1).' \
     '  --port PORT         HTTPS/WSS port (default 8766).' \
+    '  --open-firewall     Explicitly add the agent TCP-port exception in active UFW/firewalld.' \
+    '                      Applies to install/start/restart/update; never enables a firewall.' \
+    '  --firewall-zone Z   firewalld zone (default: its default zone); needs --open-firewall.' \
     '  --gpu INDEX_OR_UUID  Select one GPU (default 0; AMD also accepts an index).' \
     '  --backend cuda|rocm  Select NVIDIA CUDA or AMD ROCm (install/init/configure).' \
     '  --profile NAME      Model preset; list with: ./setup.sh profiles.' \
@@ -33,7 +38,6 @@ usage() {
     'Update pulls configured images, checks access, starts services and tests the model.' \
     'Install recreates existing BorgVR containers without deleting images or model volumes.' \
     'Explicit install options update existing settings; omitted options and tokens are kept.' \
-    'Permissions grants the sudo installer private runtime access without restarting containers.' \
     'Model switch: sudo ./setup.sh model qwen35-4b (without a profile: list choices).' \
     'An explicit update image is checked before changing .env; the old .env is backed up.' \
     'Uninstall previews by default; supports --yes, --remove-images, --remove-checkout, --files-only.' \
@@ -42,11 +46,16 @@ usage() {
 die() { printf 'Error: %s\n' "$*" >&2; exit 1; }
 while (($#)); do
   case "$1" in
-    install|init|configure|model|profiles|permissions|doctor|start|stop|restart|update|status|logs|test|uninstall) COMMAND="$1"; shift ;;
+    install|init|configure|model|profiles|doctor|start|stop|restart|update|status|logs|test|uninstall) COMMAND="$1"; shift ;;
     --gpu|--backend|--profile|--model|--model-revision|--tool-parser|--reasoning-parser|--thinking|--dtype|--quantization|--context-length|--max-seqs|--max-output-tokens|--gpu-memory-fraction|--min-free-gib|--enforce-eager|--cpu-offload-gb|--vllm-image)
       (($# >= 2)) || die "Missing value for $1"
       MODEL_ARGS+=("$1" "$2"); shift 2 ;;
     --yes|--remove-images|--remove-checkout|--files-only) UNINSTALL_ARGS+=("$1"); shift ;;
+    --open-firewall) OPEN_FIREWALL=1; shift ;;
+    --firewall-zone)
+      (($# >= 2)) || die 'Missing zone for --firewall-zone.'
+      [[ "$2" =~ ^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$ ]] || die 'Invalid firewalld zone.'
+      FIREWALL_ZONE="$2"; shift 2 ;;
     --install-host-deps) die 'Run sudo ./setup-host.sh separately; setup.sh never elevates privileges.' ;;
     --prebuilt-agent|--build-agent)
       [[ -z "$IMAGE_MODE" || "$IMAGE_MODE" == "$1" ]] || die 'Choose only one agent image mode.'
@@ -66,6 +75,14 @@ while (($#)); do
       else die "Unknown argument: $1"; fi ;;
   esac
 done
+if [[ -n "$FIREWALL_ZONE" ]] && ((!OPEN_FIREWALL)); then
+  die '--firewall-zone requires --open-firewall.'
+fi
+if ((OPEN_FIREWALL)); then
+  [[ "$COMMAND" == install || "$COMMAND" == start || "$COMMAND" == restart || "$COMMAND" == update ]] \
+    || die '--open-firewall applies only to install/start/restart/update.'
+  ((EUID == 0)) || die 'Run setup with sudo to use --open-firewall.'
+fi
 if [[ -n "$IMAGE_MODE" && "$COMMAND" != install ]]; then
   die 'Agent image modes apply only to install.'
 fi
@@ -133,7 +150,16 @@ check_service_secrets() {
     || die 'The agent cannot read its private tokens or TLS files. Check their ownership and permissions.'
 }
 
-start_services() { compose up -d --no-build --pull never --wait --wait-timeout 3600; }
+check_firewall() {
+  local args=()
+  if ((OPEN_FIREWALL)); then args+=(--open); fi
+  if [[ -n "$FIREWALL_ZONE" ]]; then args+=(--zone "$FIREWALL_ZONE"); fi
+  python3 "$DIR/firewall.py" ${args[@]+"${args[@]}"}
+}
+start_services() {
+  compose up -d --no-build --pull never --wait --wait-timeout 3600 || return $?
+  check_firewall
+}
 test_server() {
   compose exec -T agent python client.py --url https://127.0.0.1:8766 \
     --ca /run/tls/server.crt --token-file /run/secrets/agent_token --smoke
@@ -143,7 +169,6 @@ test_server() {
 
 command -v python3 >/dev/null || die 'Python 3 is missing. Run sudo ./setup-host.sh.'
 if [[ "$COMMAND" == profiles ]]; then exec python3 "$DIR/configure.py" profiles; fi
-if [[ "$COMMAND" == permissions ]]; then exec python3 "$DIR/configure.py" permissions; fi
 if [[ "$COMMAND" == model ]]; then
   if ((${#MODEL_ARGS[@]} == 0)); then
     if [[ -r "$DIR/.env" ]]; then
@@ -218,7 +243,7 @@ case "$COMMAND" in
     test_server
     printf '%s\n' 'Server is running. Run: sudo ./setup.sh test' \
       'Configure Settings > AI Assistant in the native BorgVR app; see README.md for client setup.' ;;
-  doctor) check_gpu ;;
+  doctor) check_gpu; check_firewall ;;
   start) check_service_secrets; start_services ;;
   restart) check_service_secrets; compose stop; start_services ;;
   update)
@@ -234,7 +259,7 @@ case "$COMMAND" in
     test_server
     printf '%s\n' 'Update completed; the actual model answered successfully.' ;;
   stop) compose stop ;;
-  status) compose ps ;;
+  status) compose ps; check_firewall ;;
   logs) compose logs --tail 100 -f ;;
   test) test_server ;;
 esac

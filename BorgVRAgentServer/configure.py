@@ -437,7 +437,6 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("prepare-secrets")
-    sub.add_parser("permissions")
     sub.add_parser("validate-model")
     sub.add_parser("gpu-groups")
     sub.add_parser("profiles")
@@ -485,10 +484,6 @@ def main():
     elif args.command == "prepare-secrets":
         prepare_shared_token(ROOT)
         prepare_runtime_access(ROOT)
-    elif args.command == "permissions":
-        prepare_shared_token(ROOT)
-        prepare_runtime_access(ROOT)
-        print("Runtime permissions prepared; credentials and container IDs were not changed.")
     elif args.command == "get":
         print(read_value(args.name))
     elif args.command == "image":

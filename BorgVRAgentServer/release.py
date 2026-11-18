@@ -16,7 +16,7 @@ BUNDLE = "borgvr-agent-deployment.tar.gz"
 LOCAL_IMAGE = "borgvr-agent:ci"
 DEPLOYMENT_FILES = (
     "compose.yaml", "compose.cuda.yaml", "compose.rocm.yaml", "configure.py", "model_config.py",
-    "setup.sh", "setup-host.sh", "uninstall.py", "vllm_start.py",
+    "setup.sh", "setup-host.sh", "uninstall.py", "firewall.py", "vllm_start.py",
     "README.md", "README.de.md", "PROTOCOL.md", "LICENSE",
 )
 VERSION = r"[0-9]+\.[0-9]+(?:\.[0-9]+)?(?:-[A-Za-z0-9][A-Za-z0-9.-]*)?"

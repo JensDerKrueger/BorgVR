@@ -153,22 +153,16 @@ def test_runtime_access_refuses_links_before_changing_permissions(tmp_path, monk
     assert outside.stat().st_mode == before.st_mode
 
 
-def test_permissions_command_does_not_need_docker_or_restart_services(tmp_path):
-    source = Path(__file__).resolve().parents[1]
-    for name in ("setup.sh", "configure.py", "model_config.py"):
-        shutil.copyfile(source / name, tmp_path / name)
+def test_existing_init_prepares_runtime_access_without_replacing_configuration(tmp_path, monkeypatch):
     create_configuration(tmp_path, "localhost", "127.0.0.1", 8766, "0")
     env = (tmp_path / ".env").read_bytes()
-    binary = tmp_path / "bin"
-    binary.mkdir()
-    forbidden = tmp_path / "unexpected-docker"
-    executable(binary / "docker", '#!/bin/sh\ntouch "$FORBIDDEN"\nexit 99\n')
-    result = subprocess.run(["bash", str(tmp_path / "setup.sh"), "permissions"],
-        env={**os.environ, "PATH": str(binary) + os.pathsep + os.environ["PATH"], "FORBIDDEN": str(forbidden)},
-        capture_output=True, text=True)
-    assert result.returncode == 0, result.stderr
-    assert "permissions prepared" in result.stdout and not forbidden.exists()
+    token = (tmp_path / "runtime/secrets/agent_token").read_bytes()
+    prepared = []
+    monkeypatch.setattr(configure, "prepare_runtime_access", lambda root: prepared.append(root))
+    create_configuration(tmp_path, "localhost", "127.0.0.1", 8766, "0")
+    assert prepared == [tmp_path]
     assert (tmp_path / ".env").read_bytes() == env
+    assert (tmp_path / "runtime/secrets/agent_token").read_bytes() == token
 
 
 def test_partial_setup_never_replaces_secrets(tmp_path):
@@ -289,7 +283,7 @@ def executable(path, text):
 @pytest.mark.parametrize("prebuilt", [None, True, False])
 def test_install_docker_sequence_without_changing_host(tmp_path, prebuilt):
     source = Path(__file__).resolve().parents[1]
-    for name in ("setup.sh", "configure.py", "model_config.py"):
+    for name in ("setup.sh", "configure.py", "model_config.py", "firewall.py"):
         shutil.copyfile(source / name, tmp_path / name)
     binary = tmp_path / "bin"
     binary.mkdir()
@@ -332,7 +326,7 @@ sys.exit(1 if "inspect" in args else 0)
 
 def test_user_setup_docker_access_failure_never_falls_back_to_sudo(tmp_path):
     source = Path(__file__).resolve().parents[1]
-    for name in ("setup.sh", "configure.py", "model_config.py"):
+    for name in ("setup.sh", "configure.py", "model_config.py", "firewall.py"):
         shutil.copyfile(source / name, tmp_path / name)
     (tmp_path / ".env").write_text("# test fixture\n")
     binary = tmp_path / "bin"
@@ -356,7 +350,7 @@ def test_image_modes_cannot_be_mixed():
 @pytest.fixture
 def operations(tmp_path):
     source = Path(__file__).resolve().parents[1]
-    for name in ("setup.sh", "configure.py", "model_config.py", "uninstall.py"):
+    for name in ("setup.sh", "configure.py", "model_config.py", "uninstall.py", "firewall.py"):
         shutil.copyfile(source / name, tmp_path / name)
     create_configuration(tmp_path, "localhost", "127.0.0.1", 8766, "0")
     binary = tmp_path / "bin"
