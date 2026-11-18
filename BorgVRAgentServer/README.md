@@ -2,24 +2,48 @@
 
 [Deutsch](README.de.md)
 
-Self-hosted server for BorgVR's conversational assistant. The stack runs
-one selectable vision-language model in vLLM and a small Pydantic AI agent, connected by a private Docker
-network. Only the authenticated HTTPS/WSS agent endpoint is published.
+Self-hosted server for BorgVR's conversational assistant on macOS, iOS and visionOS.
+The assistant accepts voice and text requests, controls the visualization of an open
+dataset, interprets render images and provides text updates while working.
 
-The assistant supports voice and text interaction on macOS, iOS and visionOS, tool-based
-control of BorgVR, render-image input, progress messages and cancellation. Anatomical
-identifications must be checked by the user; the assistant is not a medical diagnosis
-feature. See the [native setup guide](../html/mcp.html#voice-agent).
+## Architecture And Responsibilities
 
-In **Settings > AI Assistant**, enable the assistant, enter `https://ai.example.org:8766` (or the IP
-matching the certificate), import the public `runtime/tls/server.crt`, and import the
-`runtime/secrets/agent_token` file or enter its value. Never copy `server.key` or the internal
-`vllm_token` to clients. Tokens are stored in the device Keychain. The server test works
-without a dataset. Open a dataset and use **AI Assistant** in the render controls to speak
-or type. Responses appear as text and can be spoken locally. Cancel closes the session;
-it does not undo committed changes. Screenshot sharing can be disabled separately.
-Keep the token file private during transfer to each trusted device; remove transfer copies
-after import. The assistant configuration is device-local and excluded from SharePlay/GSC.
+The server is needed **only for the AI assistant**. Normal BorgVR controls and rendering
+work without it. The model runs on the Linux machine so its GPU and memory can handle
+inference without installing the model on every iPhone, Mac or Vision Pro device.
+
+Responsibilities are split between the app and two containers:
+
+| Component | Responsibility |
+| --- | --- |
+| BorgVR app | Accepts voice or text, displays responses and executes permitted visualization commands. Datasets and rendering stay in the app. |
+| BorgVR agent | Manages conversations, queries the model and relays validated tool calls between the model and the app. Provides the TLS- and token-protected client endpoint. |
+| vLLM | Loads the selected vision-language model and uses the GPU to generate responses and proposed tool calls. |
+
+**Why two containers?** vLLM needs the GPU runtime and model weights; the Pydantic AI agent
+contains BorgVR-specific conversation and tool orchestration. Keeping these dependencies
+separate allows independent updates or model changes without changing BorgVR's connection
+protocol. Only the agent is reachable from the client network; vLLM stays on the private
+container network.
+
+A request follows this path:
+
+1. BorgVR converts speech to text or accepts a typed request, then sends it to the agent
+   over an encrypted WebSocket connection.
+2. The agent queries the model through vLLM. The model can respond with text or request
+   a tool, such as reading the current visualization state or rotating the volume.
+3. The agent validates the call and forwards it to BorgVR. The app validates it again,
+   executes it through its shared command layer and returns the result.
+4. The agent can perform further steps or send the final response. BorgVR can read the
+   response aloud locally.
+
+With separate permission, the app can provide render images to the model. The agent does
+not receive complete volume files or camera/passthrough access. It is distinct from the
+BorgVR dataset server and does not provide dataset catalogs. Anatomical identifications
+must be checked by the user; the assistant is not a medical diagnosis feature.
+
+The steps below install and test the server first, then connect the app using the
+certificate and access token created during installation.
 
 ## 1. Requirements
 
@@ -152,7 +176,7 @@ Replace hostname/IP with the actual values. Without them the default is localhos
 `--bind 0.0.0.0` exposes all IPv4 interfaces and needs deliberate network restrictions.
 Port defaults to **8766** (`--port`); GPU defaults to **0** (`--gpu INDEX` or `GPU-...` UUID).
 Configuration creates two private random tokens and a development TLS certificate. For
-native-device deployment, explicitly import its public certificate or use trusted CA certificates as described in section 5.
+native-device deployment, explicitly import its public certificate or use trusted CA certificates as described in section 6.
 
 ### Select Models And GPUs
 
@@ -268,6 +292,7 @@ The test checks authenticated readiness/TLS and asks the **real model** for a sh
 It then advertises two harmless synthetic tools and requires both calls plus recognition
 of a red test image. No actual dataset is opened or modified. A failure can mean missing
 compatibility or unreliable task completion, not necessarily broken hardware.
+No open dataset or connected native app is required for this test.
 
 To ask your own question:
 
@@ -294,7 +319,34 @@ agent token as a password. It is currently **one installation-wide token**, not 
 identity/user-management system. Devices sharing it have equal access to the allowed tools.
 Use `--capabilities` instead of `--smoke` for the tool/image check when calling the client directly.
 
-## 5. Configuration, TLS And Network Security
+## 5. Connect The Native App
+
+First complete the server test and ensure the server is reachable from the device.
+Installation creates the public certificate `runtime/tls/server.crt` and the client token
+`runtime/secrets/agent_token`. If using your own CA, configure its trust chain instead,
+as described in the next section.
+
+1. In BorgVR, enable the assistant under **Settings > AI Assistant**.
+2. Enter the server's HTTPS address, for example `https://ai.example.org:8766`, or the IP
+   matching the certificate. `localhost` refers to the app device itself, not another computer.
+3. Import the public certificate, then import `runtime/secrets/agent_token` or enter its
+   contents as the access token.
+4. Run the server test in Settings. No dataset needs to be open.
+5. Open a dataset and choose **AI Assistant** in the render controls. Type a request or
+   speak using the microphone.
+
+**Never copy `server.key` or the internal `vllm_token` to devices.** The client token is
+stored in the device Keychain. Transfer it only to trusted devices and remove transfer
+copies after import.
+
+Responses and progress updates appear in the conversation and can be spoken locally.
+Render-image sharing requires separate permission; camera and passthrough are never sent.
+Speech recognition is on-device by default; optional Apple processing requires separate
+permission. Cancel closes the connection but does not undo committed changes. Assistant
+configuration and keys remain device-local and are excluded from SharePlay/GSC.
+See the [native user guide](../html/mcp.html#voice-agent) for more information.
+
+## 6. Configuration, TLS And Network Security
 
 | File/setting | Purpose |
 | --- | --- |
@@ -395,7 +447,7 @@ exist in RAM while connected and are discarded at disconnect. Downloads/builds c
 external package/model hosts; inference uses the local model. There is no configured cloud
 fallback. Authenticated clients explicitly decide which screenshots/metadata to transmit.
 
-## 6. Operations And Updates
+## 7. Operations And Updates
 
 The administrator controls the service; no Docker access is needed by application users:
 
@@ -480,7 +532,7 @@ To remove containers while retaining weights: `sudo docker compose down`. To int
 delete the model cache as well: `sudo docker compose down --volumes`. This does **not** remove
 `runtime`, Docker, drivers or any other host workloads. Remove secrets only deliberately.
 
-## 7. Troubleshooting
+## 8. Troubleshooting
 
 - **GPU probe fails:** check the driver, container runtime, selected GPU/MIG partition,
   and the selected image's CUDA/ROCm requirements. Installing a host toolkit is not a substitute
@@ -502,7 +554,7 @@ delete the model cache as well: `sudo docker compose down --volumes`. This does 
   work in an uncertain session. Reconcile pending app commands/current state before reconnecting;
   it deliberately does not repeat mutations after a timeout.
 
-## 8. Development And Protocol
+## 9. Development And Protocol
 
 ### Diagnose Tool Calls Without Native Data
 
@@ -546,7 +598,7 @@ The shared native client is tested with `Scripts/test-voice-agent.sh` against th
 TLS/WSS agent and deterministic model, including PNG delivery, Command/GSC roundtrip and
 context cancellation. See [PROTOCOL.md](PROTOCOL.md) for protocol version 1 and native limits.
 
-## 9. Producing The Agent Image
+## 10. Producing The Agent Image
 
 The normal release path is the GitHub workflow below; it already produces tested image
 and deployment archives. No local build or manual registry tagging is required for users.
@@ -561,7 +613,7 @@ sudo ./setup.sh install --build-agent
 image. Model weights, secrets, certificates and Python caches are excluded from the image;
 setup never publishes an image or changes registry visibility.
 
-## 10. Repeatable GitHub Builds And GHCR Publication
+## 11. Repeatable GitHub Builds And GHCR Publication
 
 **Published: 3.9.2 for linux/amd64**, from commit
 `715aabfd7fd041d32504e1da77db6abfc43cb30c`.
@@ -632,7 +684,7 @@ administrator runs `sudo ./setup.sh update`. Alternatively pass `update --agent-
 to change just the agent image with an automatic backup of the previous `.env`.
 Do not replace existing credentials or initialize a fresh deployment just to update the image.
 
-## 11. Uninstall And Repeat Installation Tests
+## 12. Uninstall And Repeat Installation Tests
 
 `sudo ./setup.sh uninstall` alone previews removal of the deployment. The options below
 also plan removal of unused images and the clean checkout. Calling `./uninstall.py`

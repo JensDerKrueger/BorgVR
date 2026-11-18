@@ -2,32 +2,51 @@
 
 [English / vollständige Betriebsreferenz](README.md) | [Verbindungsprotokoll](PROTOCOL.md)
 
-Dieses Verzeichnis enthält den Server für die KI-Steuerung:
-**vLLM mit einem wählbaren Vision-Language-Modell** und unseren **BorgVR-Agenten auf Basis von Pydantic AI**.
-Die Dienste laufen in Containern. Nur der mit TLS und Zugangsschlüssel abgesicherte
-Agent ist von außen erreichbar; vLLM bleibt im privaten Container-Netz.
+Dieses Verzeichnis enthält den selbst betriebenen Server für den KI-Assistenten von BorgVR
+auf macOS, iOS und visionOS. Der Assistent versteht Sprach- und Textanfragen und kann die
+Darstellung eines geöffneten Datensatzes steuern, Renderbilder auswerten und seine Schritte
+mit Textantworten begleiten.
 
-Der Assistent unterstützt Sprach- und Textanfragen auf macOS, iOS und visionOS. Er kann
-BorgVR über Werkzeuge steuern, Renderbilder auswerten und Zwischenmeldungen ausgeben.
+## Aufbau und Aufgaben
+
+Der Server wird **nur für den KI-Assistenten** benötigt. Die normale Bedienung und das
+Rendering von BorgVR funktionieren ohne ihn. Das KI-Modell läuft auf dem Linux-Rechner,
+damit dessen GPU und Speicher für die rechenintensive Verarbeitung genutzt werden können,
+ohne das Modell auf jedem iPhone, Mac oder Vision-Pro-Gerät installieren zu müssen.
+
+Die Aufgaben sind auf die App und zwei Container verteilt:
+
+| Komponente | Aufgabe |
+| --- | --- |
+| BorgVR-App | Erfasst Sprache oder Text, zeigt Antworten an und führt erlaubte Visualisierungsbefehle aus. Datensätze und Rendering bleiben in der App. |
+| BorgVR-Agent | Verwaltet Gespräche, fragt das Modell ab und vermittelt geprüfte Werkzeugaufrufe zwischen Modell und App. Er stellt den mit TLS und Zugangsschlüssel abgesicherten Zugang bereit. |
+| vLLM | Lädt das gewählte bildfähige Sprachmodell und berechnet dessen Antworten und Werkzeugvorschläge auf der GPU. |
+
+**Warum zwei Container?** vLLM benötigt die GPU-Laufzeit und die Modellgewichte; der Agent
+enthält die BorgVR-spezifische Gesprächs- und Werkzeugsteuerung auf Basis von Pydantic AI.
+Die Trennung hält diese Abhängigkeiten auseinander und erlaubt getrennte Updates oder
+einen Modellwechsel ohne Änderung des BorgVR-Verbindungsprotokolls. Nur der Agent ist vom
+Client-Netz erreichbar; vLLM bleibt im privaten Container-Netz.
+
+Bei einer Anfrage läuft die Kommunikation so ab:
+
+1. BorgVR wandelt Sprache in Text um oder übernimmt eine getippte Anfrage und sendet sie
+   über eine verschlüsselte WebSocket-Verbindung an den Agenten.
+2. Der Agent fragt das Modell über vLLM ab. Das Modell kann eine Antwort formulieren oder
+   ein Werkzeug anfordern, etwa den aktuellen Darstellungszustand oder eine Rotation.
+3. Der Agent prüft den Aufruf und leitet ihn an BorgVR weiter. Die App prüft ihn ebenfalls,
+   führt ihn über ihre gemeinsame Befehlsschicht aus und sendet das Ergebnis zurück.
+4. Der Agent kann weitere Schritte ausführen oder die abschließende Antwort senden.
+   Auf Wunsch liest BorgVR die Antwort lokal vor.
+
+Mit gesonderter Erlaubnis kann die App dem Modell Renderbilder zur Verfügung stellen.
+Der Agent erhält keine vollständigen Volumendateien und keinen Zugriff auf Kamera oder
+Passthrough. Er ist nicht der BorgVR-Datensatzserver und stellt keine Datensatzkataloge bereit.
 Anatomische Zuordnungen müssen vom Benutzer geprüft werden; die Sprachsteuerung ist
 keine medizinische Diagnosefunktion.
 
-### Native App verbinden
-
-Unter **Einstellungen > KI-Assistent** den Assistenten aktivieren, `https://ai.example.org:8766`
-eintragen (oder die zum Zertifikat passende IP), das öffentliche `runtime/tls/server.crt`
-importieren und die Datei `runtime/secrets/agent_token` importieren oder deren Inhalt eingeben.
-**Niemals `server.key` oder `vllm_token` auf die Geräte kopieren.** Der Zugangsschlüssel landet
-im Geräte-Schlüsselbund. Übertragen Sie ihn nur auf vertrauenswürdige Geräte und entfernen Sie
-Transferkopien nach dem Import. Der Servertest funktioniert ohne geöffneten Datensatz.
-
-Dann einen Datensatz öffnen und **KI-Assistent** in den Render-Bedienelementen wählen.
-Sprechen über das Mikrofon oder Text eingeben; Antworten und Zwischenmeldungen erscheinen
-im Gespräch und werden auf Wunsch lokal vorgelesen. Renderbilder können separat erlaubt
-werden. Kamera und Passthrough werden nicht übertragen. Spracherkennung erfolgt standardmäßig
-auf dem Gerät; eine mögliche Verarbeitung durch Apple muss separat erlaubt werden.
-Abbrechen beendet die Verbindung, macht bereits ausgeführte Änderungen aber nicht rückgängig.
-Agenteneinstellungen und Schlüssel bleiben gerätelokal, außerhalb von SharePlay und GSC.
+Die folgenden Schritte richten zuerst den Server ein und prüfen ihn. Erst danach wird
+die App mit dem erzeugten Zertifikat und Zugangsschlüssel verbunden.
 
 ## 1. Voraussetzungen
 
@@ -295,7 +314,8 @@ Der Test prüft Modellbereitschaft, Authentifizierung und TLS und fordert eine k
 vom **echten Modell** an. Danach muss es zwei harmlose Test-Werkzeuge aufrufen und die Farbe
 eines synthetischen roten Bildes erkennen. Es wird kein echter Datensatz geöffnet oder verändert.
 Ein Fehlschlag bedeutet fehlende Kompatibilität oder eine nicht zuverlässig erfüllte Testaufgabe,
-nicht automatisch einen Hardwaredefekt. Die native App wird separat wie oben beschrieben eingerichtet.
+nicht automatisch einen Hardwaredefekt. Ein geöffneter Datensatz oder eine verbundene
+native App ist für diesen Test nicht erforderlich.
 
 Ein Test von einem anderen Rechner ist ebenfalls möglich; siehe den englischen Leitfaden.
 Der Testclient prüft Zertifikat und Hostname, es gibt keinen unsicheren TLS-Schalter.
@@ -308,7 +328,35 @@ sudo docker compose exec -T agent python client.py --url https://127.0.0.1:8766 
   --text "Was ist ein Mandelbulb? Antworte kurz auf Deutsch."
 ```
 
-## 5. Sicherheit und Zertifikate
+## 5. Native App verbinden
+
+Voraussetzung ist ein erfolgreich geprüfter Server, der vom Gerät aus erreichbar ist.
+Die Installation hat das öffentliche Zertifikat `runtime/tls/server.crt` und den
+Zugangsschlüssel `runtime/secrets/agent_token` erzeugt. Bei Verwendung einer eigenen CA
+stattdessen deren Vertrauenskette wie im folgenden Abschnitt beschrieben einrichten.
+
+1. In BorgVR unter **Einstellungen > KI-Assistent** den Assistenten aktivieren.
+2. Die HTTPS-Adresse des Servers eintragen, zum Beispiel `https://ai.example.org:8766`,
+   oder die zum Zertifikat passende IP-Adresse. `localhost` verweist auf das jeweilige
+   App-Gerät und ist für den Zugriff auf einen anderen Rechner nicht geeignet.
+3. Das öffentliche Zertifikat importieren und die Datei `runtime/secrets/agent_token`
+   importieren oder deren Inhalt als Zugangsschlüssel eingeben.
+4. Den Servertest in den Einstellungen ausführen. Dafür muss kein Datensatz geöffnet sein.
+5. Einen Datensatz öffnen und **KI-Assistent** in den Render-Bedienelementen wählen.
+   Eine Textanfrage eingeben oder über das Mikrofon sprechen.
+
+**Niemals `server.key` oder `vllm_token` auf die Geräte kopieren.** Der Zugangsschlüssel
+landet im Geräte-Schlüsselbund. Nur auf vertrauenswürdige Geräte übertragen und
+Transferkopien nach dem Import entfernen.
+
+Antworten und Zwischenmeldungen erscheinen im Gespräch und werden auf Wunsch lokal
+vorgelesen. Renderbilder können separat erlaubt werden. Kamera und Passthrough werden
+nicht übertragen. Spracherkennung erfolgt standardmäßig auf dem Gerät; eine mögliche
+Verarbeitung durch Apple muss separat erlaubt werden. Abbrechen beendet die Verbindung,
+macht bereits ausgeführte Änderungen aber nicht rückgängig. Agenteneinstellungen und
+Schlüssel bleiben gerätelokal, außerhalb von SharePlay und GSC.
+
+## 6. Sicherheit und Zertifikate
 
 - `.env` enthält Image-/Modellrevision, GPU, Speicherbudget, Adresse, Port und Benutzer-IDs.
 - `runtime/secrets/agent_token` ist der Zugangsschlüssel für Clients, wie ein Passwort
@@ -410,7 +458,7 @@ Gespräche liegen während der Verbindung im RAM; nach Trennung werden sie verwo
 Es gibt keinen Cloud-Fallback. Externe Verbindungen entstehen für Paket-/Modelldownloads,
 nicht für die eigentliche Inferenz.
 
-## 6. Betrieb und Updates
+## 7. Betrieb und Updates
 
 Der Administrator betreibt den Dienst; normale App-Nutzer brauchen keine Docker-Rechte:
 
@@ -491,7 +539,7 @@ vLLM-/Modellrevision; diese bei einem Inferenz-Update ausdrücklich anpassen. Ke
 stillschweigende Umstellung auf `latest`. Details zur Rückkehr auf alte Versionen,
 Zertifikatswechsel, Fehlerbehebung und Deinstallation stehen im englischen Leitfaden.
 
-## 7. Tests
+## 8. Tests
 
 Die Entwicklertests laufen ohne GPU mit einem deterministischen Testmodell durch die echte
 Pydantic-AI-Schleife. Getestet werden unter anderem Anmeldung, Eingabevalidierung,
@@ -522,7 +570,7 @@ Eigene vLLM-Images und Tool-Parser müssen strikte Aufrufe für parameterlose We
 unterstützen. Server und native App prüfen Argumente zusätzlich gegen das jeweilige Schema;
 ungültige Aufrufe werden nicht ausgeführt.
 
-## 8. Agenten-Image für die Entwicklung bauen
+## 9. Agenten-Image für die Entwicklung bauen
 
 Der normale Veröffentlichungsweg ist der folgende GitHub-Workflow; er erzeugt bereits
 geprüfte Image- und Deployment-Archive. Nutzer brauchen keinen lokalen Build und keine
@@ -537,7 +585,7 @@ sudo ./setup.sh install --build-agent
 getestete GHCR-Image verwendet. Gewichte, Schlüssel, Zertifikate und Python-Caches gehören
 nicht ins Image. Das Setup veröffentlicht niemals selbst Images oder ändert Paketsichtbarkeit.
 
-## 9. Builds und Veröffentlichung über GitHub
+## 10. Builds und Veröffentlichung über GitHub
 
 **Veröffentlicht: 3.9.2 für linux/amd64**, aus Commit
 `715aabfd7fd041d32504e1da77db6abfc43cb30c`.
@@ -608,7 +656,7 @@ Administrator mit `sudo ./setup.sh update` neu. Alternativ `update --agent-image
 verwenden, um die Agenten-Adresse mit Sicherung der bisherigen `.env` umzustellen.
 Zugangsschlüssel und Zertifikate bleiben erhalten; eine Neuinitialisierung ist nicht nötig.
 
-## 10. Deinstallation und erneuter Test
+## 11. Deinstallation und erneuter Test
 
 ### BorgVR samt Modell und Git-Download entfernen
 
