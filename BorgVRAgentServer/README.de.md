@@ -213,7 +213,7 @@ das in `.env` gespeicherte Backend.
 
 Dieser eine Befehl erzeugt `.env`, Zugangsschlüssel und Testzertifikat, prüft die profilabhängige
 Platzreserve und die GPU, lädt fehlende Images und startet beide Dienste. Das fertige
-[Agenten-Image 3.9.3](https://github.com/JensDerKrueger/BorgVR/pkgs/container/borgvr-agent)
+[Agenten-Image 3.9.4](https://github.com/JensDerKrueger/BorgVR/pkgs/container/borgvr-agent)
 unterstützt Modellprofile und ist ohne Anmeldung herunterladbar.
 Es wird nichts lokal gebaut. vLLM lädt das Modell in seinen persistenten Cache;
 der Agent startet erst, wenn vLLM bereit ist. Der erste Download und die
@@ -254,7 +254,7 @@ dass jedes Modell auf jeder Karte passt; Kernel-, Quantisierungs- und Speicheran
 Bestehende Installation umstellen, ohne Schlüssel oder Modell-Cache zu löschen:
 
 ```
-sudo ./setup.sh update --agent-image ghcr.io/jensderkrueger/borgvr-agent:3.9.3
+sudo ./setup.sh update --agent-image ghcr.io/jensderkrueger/borgvr-agent:3.9.4
 sudo ./setup.sh configure --profile qwen38-27b
 sudo ./setup.sh doctor
 sudo ./setup.sh update
@@ -612,12 +612,14 @@ mit einer frischen Zustandsabfrage.
 
 Die Entwicklertests laufen ohne GPU mit einem deterministischen Testmodell durch die echte
 Pydantic-AI-Schleife. Getestet werden unter anderem Anmeldung, Eingabevalidierung,
-Werkzeugbeschränkungen, Bilder, Abbruch, Zeitlimits und veraltete Antworten. Den Test auf
+Werkzeugbeschränkungen, Bilder, Abbruch, Zeitlimits, veraltete Antworten, Kontextpflege ohne
+doppelte Werkzeugausführung und Fehler nach bestätigten Änderungen. Den Test auf
 dem jeweiligen GPU-Rechner und den Test mit dem Mikrofon auf dem jeweiligen Gerät ersetzen sie nicht.
 
 `Scripts/test-voice-agent.sh` prüft zusätzlich den nativen macOS-Client über echtes lokales
 TLS/WSS mit deterministischem Modell: Zustandsabfrage, Rotation, Transferfunktion, Renderbild,
-Fortschrittsantwort, GSC-Roundtrip und Abbruch bei Kontextwechsel. Das Protokoll ist in
+Fortschrittsantwort, GSC-Roundtrip, Abbruch bei Kontextwechsel und Fehler nach bereits
+ausgeführten Änderungen. Das Protokoll ist in
 [PROTOCOL.md](PROTOCOL.md) beschrieben.
 
 ### Fehlersuche bei Werkzeugaufrufen
@@ -676,17 +678,17 @@ nicht ins Image. Das Setup veröffentlicht niemals selbst Images oder ändert Pa
 
 ## 10. Builds und Veröffentlichung über GitHub
 
-**Veröffentlicht: 3.9.3 für linux/amd64**, aus Commit
-`624ddf5a7132bdc15fe6e3310b6ff876feeb4dcc`.
-[Build, Tests und Veröffentlichung](https://github.com/JensDerKrueger/BorgVR/actions/runs/44318608288)
+**Veröffentlicht: 3.9.4 für linux/amd64**, aus Commit
+`7c41e45f020e1662c540b53337b5df5e522ec1bc`.
+[Build, Tests und Veröffentlichung](https://github.com/JensDerKrueger/BorgVR/actions/runs/44325296665)
 sind erfolgreich; der anonyme Registry-Zugriff wurde geprüft. Unveränderliche Image-Adresse:
 
 ```text
-ghcr.io/jensderkrueger/borgvr-agent@sha256:e4b15337ef7221ddc42a2218aea94307328ed7964817d2a912858c8928c0aecf
+ghcr.io/jensderkrueger/borgvr-agent@sha256:9f94e52954aae5f0d3d4bd9645790f2c40b9be0d2e75643e8a0736559e82682f
 ```
 
 Bestehende Installationen mit `git pull` und anschließend
-`sudo ./setup.sh update --agent-image ghcr.io/jensderkrueger/borgvr-agent:3.9.3` aktualisieren.
+`sudo ./setup.sh update --agent-image ghcr.io/jensderkrueger/borgvr-agent:3.9.4` aktualisieren.
 `git pull` allein ersetzt den laufenden Container nicht; `update` ohne `--agent-image`
 behält das bisher konfigurierte Image bei. Modell, Zugangsschlüssel und Zertifikate bleiben
 erhalten.
