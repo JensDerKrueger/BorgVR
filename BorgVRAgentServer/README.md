@@ -135,7 +135,7 @@ sudo ./setup.sh install
 
 This creates `.env`, tokens and a test certificate, checks the profile's storage reserve
 and GPU, pulls missing images, and starts both services. The public
-[agent image from 3.9.1](https://github.com/JensDerKrueger/BorgVR/pkgs/container/borgvr-agent)
+[agent image 3.9.2](https://github.com/JensDerKrueger/BorgVR/pkgs/container/borgvr-agent)
 supports model profiles. No registry login or local build is needed.
 vLLM downloads the pinned model into its persistent cache; the agent starts only when
 vLLM is healthy. First download/compilation can take up to the one-hour readiness limit.
@@ -174,7 +174,7 @@ independently. These presets do not guarantee every model fits or has kernels fo
 Switch an existing deployment while keeping credentials and caches:
 
 ```
-sudo ./setup.sh update --agent-image ghcr.io/jensderkrueger/borgvr-agent:3.9.1
+sudo ./setup.sh update --agent-image ghcr.io/jensderkrueger/borgvr-agent:3.9.2
 sudo ./setup.sh configure --profile qwen38-27b
 sudo ./setup.sh doctor
 sudo ./setup.sh update
@@ -232,7 +232,7 @@ overwrites existing configuration. An interrupted configuration with `runtime` b
 inspection; setup refuses to discard potentially existing credentials.
 If an old `.env` still selects `BORGVR_AGENT_IMAGE=borgvr-agent:3.9` and that local image
 does not exist, use `sudoedit .env` to change only the image reference to
-`ghcr.io/jensderkrueger/borgvr-agent:3.9.1` or its published digest.
+`ghcr.io/jensderkrueger/borgvr-agent:3.9.2` or its published digest.
 Do not regenerate credentials or certificates just to change images.
 
 ### Switch Models With One Command
@@ -567,14 +567,22 @@ setup never publishes an image or changes registry visibility.
 
 ## 10. Repeatable GitHub Builds And GHCR Publication
 
-**Published: 3.9.1 for linux/amd64**, from commit
-`e764cebc3d565247c232c2bda9bc11f3a7097af8`.
-[Build, tests and publication](https://github.com/JensDerKrueger/BorgVR/actions/runs/44180364432)
+**Published: 3.9.2 for linux/amd64**, from commit
+`715aabfd7fd041d32504e1da77db6abfc43cb30c`.
+[Build, tests and publication](https://github.com/JensDerKrueger/BorgVR/actions/runs/44290118756)
 succeeded; anonymous registry access was verified. Immutable image reference:
 
 ```text
-ghcr.io/jensderkrueger/borgvr-agent@sha256:d033276eacdce742d8a86fd1af26dbf697369c0c53098ce7190b2218cde2c02d
+ghcr.io/jensderkrueger/borgvr-agent@sha256:3bd3833ef37e2e013ac7d18502a0901d7c0c854faa95fb367242b29a43162b63
 ```
+
+Version 3.9.2 requests strict decoding for tools without arguments, preventing invented
+`reason` or `action` properties, while retaining local schema validation. To upgrade an
+existing installation, run `git pull`, then
+`sudo ./setup.sh update --agent-image ghcr.io/jensderkrueger/borgvr-agent:3.9.2`.
+`git pull` alone does not replace the running container, and `update` without
+`--agent-image` retains the previously configured image. Model, tokens and certificates
+are preserved; no native app rebuild is needed for this server-side fix.
 
 The [BorgVR Agent Container workflow](https://github.com/JensDerKrueger/BorgVR/actions/workflows/borgvr-agent.yml)
 runs on relevant main-branch pushes and pull requests. It installs the pinned dependencies,
