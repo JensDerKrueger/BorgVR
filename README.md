@@ -16,7 +16,7 @@ collaboration, and a WebGPU browser frontend served directly by the dataset serv
 
 The current development version is **3.9**. The SharePlay wire protocol is version **3.3**.
 
-## What Is Included
+## What is included
 
 - **VisionApp**: native visionOS volume renderer with spatial interaction, SharePlay, annotations,
   measurements, Logitech Muse, and PlayStation VR2 Sense controller support.
@@ -73,7 +73,7 @@ The current development version is **3.9**. The SharePlay wire protocol is versi
   panel buttons also follow their associated interaction modes; visionOS keeps them independent
   so Muse and PSVR tools retain access to their panels.
 
-### AI Voice And Text Assistant
+### AI voice and text assistant
 
 - Opt-in **Settings > AI Assistant** on macOS, iOS and visionOS: HTTPS server origin,
   Keychain token, explicit certificate import, render-image sharing and local speech output.
@@ -90,7 +90,7 @@ The current development version is **3.9**. The SharePlay wire protocol is versi
   real microphone and deployed-model validation still need the target devices/server.
   See the [bilingual user guide](html/mcp.html#voice-agent).
 
-### Dataset File Format
+### Dataset file format
 
 The `.data` format uses metadata version **5**. A one-byte component-type tag distinguishes
 unsigned integers, signed integers (8/16/32 bits), and IEEE-754 Float32/Float64. All channels
@@ -163,7 +163,7 @@ current, non-localized `converted by TOOL VERSION` provenance entry automaticall
 - Password-protected sources have an explicit sharing permission. Sources not allowed to be
   shared remain private; dataset payloads are fetched from servers, not tunneled through SharePlay.
 
-### Objects And Spatial Input
+### Objects and spatial input
 
 - Named and colored spheres, optional direction rays, freehand strokes, and instanced opaque
   meshes on all native clients and in WebGPU.
@@ -193,7 +193,7 @@ current, non-localized `converted by TOOL VERSION` provenance entry automaticall
 - Direct hand, Logitech Muse, and PlayStation VR2 Sense controller measurement interaction on
   Apple Vision Pro.
 
-### Volume Editing And Saved State
+### Volume editing and saved state
 
 - Non-destructive spherical erase and restore brushes on all three native rendering platforms,
   with per-channel selection for multi-channel volumes. Restoring recovers original voxel values,
@@ -209,7 +209,7 @@ current, non-localized `converted by TOOL VERSION` provenance entry automaticall
   visualization state. Saved visualization state includes render mode, isovalue, clipping,
   lighting, and transforms; visionOS stores its spatial transform relative to the viewer's head.
 
-### Volume Registration, Fusion And Conversion
+### Volume registration, fusion and conversion
 
 - DICOM directory selection on macOS, iOS/iPadOS, and visionOS, including sandbox-safe folder
   access without selecting every slice individually.
@@ -230,7 +230,7 @@ current, non-localized `converted by TOOL VERSION` provenance entry automaticall
   to 0...255 before bricking and LoD generation. The original ranges are written to the log.
   This is lossy and trades intensity precision for smaller storage and texture payloads.
 
-### Isosurface Export
+### Isosurface export
 
 - Full-resolution OBJ isosurface extraction in the macOS renderer using Marching Cubes 33,
   with Metal-accelerated classification when available and a CPU fallback.
@@ -241,7 +241,7 @@ current, non-localized `converted by TOOL VERSION` provenance entry automaticall
   dataset axis to `[-1, 1]` instead.
 - Available from the macOS UI and menu, the `X` shortcut in Iso mode, `.gsc` commands, and MCP.
 
-### Portable Settings
+### Portable settings
 
 - Export and import application settings as registered JSON-based `.borgvrsettings` files.
   Open a settings file on another native app to apply the supported entries after confirmation.
@@ -250,7 +250,7 @@ current, non-localized `converted by TOOL VERSION` provenance entry automaticall
 - Export asks whether to include passwords, access tokens, and certificates. Files containing
   credentials are sensitive, unencrypted JSON and should only be shared through trusted channels.
 
-### Data And Servers
+### Data and servers
 
 - Dataset import and conversion from BorgVR, QVIS, NRRD/NHDR, PVM/PVM2/PVM3, IV3Dm, UVF, VFF, and DICOM workflows,
   including physical DICOM spacing.
@@ -265,7 +265,7 @@ current, non-localized `converted by TOOL VERSION` provenance entry automaticall
 - Resilient remote paging reconnects interrupted streams, repeats complete brick transactions,
   validates replacement-source metadata, and resumes incomplete local caches.
 
-### macOS Automation
+### macOS automation
 
 - Drag-and-drop `.gsc` scripts with a live execution log and repeatable interaction, rendering,
   and screenshot commands.
@@ -297,7 +297,7 @@ current, non-localized `converted by TOOL VERSION` provenance entry automaticall
   the binding/policy checks and actual UI-command recording -> GSC -> state/file tests,
   plus `Scripts/test-settings-archive.sh` for the archive/privacy contract.
 
-### MCP Automation
+### MCP automation
 
 - The visionOS, iOS/iPadOS, and macOS renderers contain an optional Model Context Protocol
   server at `/mcp`, independent of the dataset and WebGPU servers.
@@ -372,7 +372,7 @@ current, non-localized `converted by TOOL VERSION` provenance entry automaticall
   with value labels. Opaque objects are rendered separately and composited with the volume.
 - The displayed application version is supplied by the serving BorgVR server.
 
-## Repository Layout
+## Repository layout
 
 ```text
 AppSupport/             Shared Swift UI, renderer support, shaders, settings, and WebGPU assets
@@ -404,7 +404,7 @@ TransferFunctions/      Bundled transfer-function presets
 - A browser with WebGPU support for the browser renderer. WebGPU on iPhone and iPad requires
   iOS/iPadOS 26 or newer.
 
-### Apple Applications
+### Apple applications
 
 Open `BorgVR.xcodeproj` in Xcode and select the scheme for the platform you want to build.
 
@@ -441,7 +441,7 @@ Scripts/run-test-suite.sh --full
 Set `VERBOSE=1` to include the successful test logs in the report. Failed test logs are always
 shown, and the suite exits with a nonzero status if any test or build fails.
 
-### Command-Line Volume Generator
+### Command-line volume generator
 
 The `TerminalConverterApp` scheme converts DICOM, image sequences, QVIS, NRRD, PVM, IV3Dm, UVF, VFF, and Zarr input, exports any LoD of a
 BorgVR dataset as a flat volume, repacks existing `.data` files, and can create reproducible synthetic volumes. Export uses one
@@ -525,7 +525,7 @@ TerminalConverterApp C F,J 2 2 512 512 512 MandelbulbJulia.data \
   "Mandelbulb and quaternion Julia set" 64 2
 ```
 
-### Known-Transform Registration Pairs
+### Known-transform registration pairs
 
 Mode `T` resamples a `.data` file with an affine 4x4 matrix and optional cropping:
 
@@ -676,7 +676,7 @@ decoding and dictionary resources stay with the DICOM reader.
 and cancellation. `Scripts/test-zstandard.sh` tests a fixed reference frame and, when the `zstd`
 command is installed, additional reference-compressor comparisons and malformed input.
 
-### Swift Dataset Server
+### Swift dataset server
 
 The `TerminalServerApp` scheme builds the standalone Swift server. It serves datasets, transfer
 functions, object placements, meshes, and measurements from one directory and refreshes that
@@ -708,7 +708,7 @@ Synchronization includes datasets, transfer functions, object placement files, a
 When more than one configured server offers a dataset, another source is tried if the current
 transfer stalls.
 
-#### Automatic Import (Swift Servers)
+#### Automatic import (Swift servers)
 
 The GUI server and `TerminalServerApp` share an automatic importer. In the GUI, enable it in
 Settings > Auto-Import, select a dedicated input directory, and start the server. The importer
@@ -768,7 +768,7 @@ The completed `import.json` is removed even if decoding or an import failed; the
 in place in guided mode. Interrupted or changing requests remain pending rather than deleting
 unfinished sources.
 
-### C++ Dataset Server
+### C++ dataset server
 
 Build the standalone server on macOS or Linux with:
 
@@ -797,12 +797,12 @@ Like the Swift server, the C++ server accepts its password through `BORGVR_SERVE
 `--password` is omitted. Its network layer bounds requests and response batches and applies connection timeouts.
 Rejected commands and invalid client-supplied dataset IDs are not echoed into logs.
 
-### Apple Vision Pro Development
+### Apple Vision Pro development
 
 Short setup notes for pairing and enabling development on Apple Vision Pro are kept in
 [`readme.txt`](readme.txt).
 
-## Dataset Server And WebGPU Frontend
+## Dataset server and WebGPU frontend
 
 BorgVR can expose datasets through its native server protocol. The Swift server can also start a
 small HTTP/HTTPS server that serves the WebGPU frontend and dataset resources to a browser. Both
@@ -824,7 +824,7 @@ IndexedDB. Referenced mesh assets are resolved through the server mesh catalog. 
 scoped to the server origin and can be disabled or cleared from the renderer settings. The native
 apps remain the primary high-performance and spatial rendering applications.
 
-## Data Files
+## Data files
 
 BorgVR uses the following application-specific files:
 
@@ -846,7 +846,7 @@ Loading markers or measurements created for another dataset requires explicit co
 repository includes small sample datasets for testing. Larger datasets should be kept outside the
 repository and served or opened from a local data directory.
 
-## Research Background
+## Research background
 
 BorgVR builds on several years of work on GPU volume rendering, ray-guided rendering, mobile
 visualization, and virtual-reality visualization systems. Related publications include:

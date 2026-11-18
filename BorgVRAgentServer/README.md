@@ -1,4 +1,4 @@
-# BorgVR Agent Server
+# BorgVR agent server
 
 [Deutsch](README.de.md)
 
@@ -6,7 +6,7 @@ Self-hosted server for BorgVR's conversational assistant on macOS, iOS and visio
 The assistant accepts voice and text requests, controls the visualization of an open
 dataset, interprets render images and provides text updates while working.
 
-## Architecture And Responsibilities
+## Architecture and responsibilities
 
 The server is needed **only for the AI assistant**. Normal BorgVR controls and rendering
 work without it. The model runs on the Linux machine so its GPU and memory can handle
@@ -82,7 +82,7 @@ Automated configuration and protocol tests do not guarantee that every model wor
 every GPU. Run `doctor` and `test` on the target GPU host. AMD/ROCm has not been validated
 on real hardware.
 
-## 2. Copy The Deployment
+## 2. Copy the deployment
 
 Clone the public repository over HTTPS, or copy the complete `BorgVRAgentServer` directory
 to the server. HTTPS cloning requires no SSH key. Run each command separately:
@@ -100,7 +100,7 @@ cd BorgVR/BorgVRAgentServer
 Do not copy another installation's `.env` or `runtime` directory. Each installation should
 generate its own credentials. No Hugging Face login is required for the default public model.
 
-## 3. Host Setup And Two-Container Deployment
+## 3. Host setup and two-container deployment
 
 There are **two runtime containers**: the upstream vLLM image and our agent image.
 `compose.yaml` is pull-only: it contains no image build. Only image producers/developers
@@ -110,34 +110,61 @@ for startup/update, not a bare `docker compose up` without the backend overlay.
 
 Use the same sudo-capable account throughout. When already logged in as root, omit `sudo`.
 
-### A. Check Prerequisites
+### A. Check prerequisites
 
 If Docker is already installed, check it first:
 
 ```
-nvidia-smi
 sudo docker compose version
 sudo docker ps
+sudo docker info
+```
+
+These checks apply to both backends: Compose v2 must be available and the local Docker
+daemon must be running. Then check the GPU access for the backend you intend to use.
+
+**NVIDIA / CUDA:** Check the driver and Docker's registered GPU runtime:
+
+```
+nvidia-smi
 sudo docker info --format '{{json .Runtimes}}'
 ```
 
-If Compose works and the runtimes include `nvidia`, proceed to B. Other containers are
-retained. vLLM reserves 85% of the selected GPU's memory by default, which can affect
-competing GPU workloads.
+`nvidia-smi` must list the GPU, and Docker's runtimes must include `nvidia`.
 
-Only if prerequisites are missing, run a reviewed copy of the host script:
+**AMD / ROCm:** Check that the driver exposes the required device nodes:
 
 ```
-sudo ./setup-host.sh
+ls -l /dev/kfd
+ls -l /dev/dri
 ```
 
-For AMD, use `sudo ./setup-host.sh --backend rocm` instead. It does not install NVIDIA
-packages, configure its runtime or restart Docker. Neither path installs/replaces GPU drivers.
+`/dev/kfd` must be a character device and `/dev/dri` must contain the GPU device nodes.
+No NVIDIA runtime or NVIDIA Container Toolkit is required for this backend. Device nodes
+alone do not prove model compatibility; installation tests GPU allocation in the selected image.
 
-This installs missing Docker,
-Compose and NVIDIA Container Toolkit prerequisites from the official signed repositories.
-It preserves installed drivers and refuses conflicting Docker packages instead of removing
-them. Existing Docker is retained; install a missing Compose plugin from its existing source.
+If Docker and the selected backend's prerequisites are ready, proceed to B. Existing
+containers are retained. vLLM reserves 85% of the selected GPU's memory by default, which
+can affect competing GPU workloads.
+
+Only if prerequisites are missing, run a reviewed copy of the host script for your backend.
+For NVIDIA:
+
+```
+sudo ./setup-host.sh --backend cuda
+```
+
+For AMD:
+
+```
+sudo ./setup-host.sh --backend rocm
+```
+
+Both paths prepare Docker and Compose using official signed repositories. Only the CUDA
+path additionally installs NVIDIA Container Toolkit and configures its runtime. The ROCm
+path uses the existing AMD driver and does not restart Docker. Neither path installs or
+replaces GPU drivers. Conflicting Docker packages are refused rather than removed; for
+existing Docker installations, install a missing Compose plugin from its existing source.
 
 If the script reports that a Docker restart is required, arrange a maintenance window
 for the existing containers before running `sudo ./setup-host.sh --allow-docker-restart`.
@@ -149,13 +176,23 @@ the app's `.env`. No user is added to the Docker group by default.
 
 If all host prerequisites already work, skip this step.
 
-### B. Install And Start
+### B. Install and start
 
-For an initial local-only test, run in `BorgVRAgentServer`:
+For an initial local-only installation, run in `BorgVRAgentServer` and select your backend.
+For NVIDIA:
 
 ```
-sudo ./setup.sh install
+sudo ./setup.sh install --backend cuda
 ```
+
+For AMD:
+
+```
+sudo ./setup.sh install --backend rocm
+```
+
+`setup-host.sh` does not save the backend selection for `setup.sh`; select it explicitly
+when creating the deployment. Subsequent commands retain the backend stored in `.env`.
 
 This creates `.env`, tokens and a test certificate, checks the profile's storage reserve
 and GPU, pulls missing images, and starts both services. The public
@@ -173,12 +210,13 @@ sudo ./setup.sh install --host 192.168.1.20 --bind 192.168.1.20
 ```
 
 Replace hostname/IP with the actual values. Without them the default is localhost/loopback.
+For a first installation on AMD, also add `--backend rocm` to this command.
 `--bind 0.0.0.0` exposes all IPv4 interfaces and needs deliberate network restrictions.
 Port defaults to **8766** (`--port`); GPU defaults to **0** (`--gpu INDEX` or `GPU-...` UUID).
 Configuration creates two private random tokens and a development TLS certificate. For
 native-device deployment, explicitly import its public certificate or use trusted CA certificates as described in section 6.
 
-### Select Models And GPUs
+### Select models and GPUs
 
 The **vLLM image** provides inference software and CUDA/ROCm. The **model and revision**
 select a separate checkpoint. Changing a model does not necessarily require a different
@@ -255,7 +293,7 @@ Invalid options are rejected before `down`. The separate `init` command never
 overwrites existing configuration. An interrupted configuration with `runtime` but no `.env` requires manual
 inspection; setup refuses to discard potentially existing credentials.
 
-### Switch Models With One Command
+### Switch models with one command
 
 ```
 sudo ./setup.sh model
@@ -279,7 +317,7 @@ To generate configuration without starting or installing anything:
 sudo ./setup.sh init --host ai.example.org --bind 192.168.1.20
 ```
 
-## 4. Check The Server
+## 4. Check the server
 
 In the same directory:
 
@@ -319,7 +357,7 @@ agent token as a password. It is currently **one installation-wide token**, not 
 identity/user-management system. Devices sharing it have equal access to the allowed tools.
 Use `--capabilities` instead of `--smoke` for the tool/image check when calling the client directly.
 
-## 5. Connect The Native App
+## 5. Connect the native app
 
 First complete the server test and ensure the server is reachable from the device.
 Installation creates the public certificate `runtime/tls/server.crt` and the client token
@@ -346,7 +384,7 @@ permission. Cancel closes the connection but does not undo committed changes. As
 configuration and keys remain device-local and are excluded from SharePlay/GSC.
 See the [native user guide](../html/mcp.html#voice-agent) for more information.
 
-## 6. Configuration, TLS And Network Security
+## 6. Configuration, TLS and network security
 
 | File/setting | Purpose |
 | --- | --- |
@@ -394,7 +432,7 @@ and device trust provisioning are not automated by this script. Never disable TL
 
 Keep 8766 on a private network/VPN. No firewall rules are changed without explicit opt-in.
 
-### Optional Host Firewall Exception
+### Optional host firewall exception
 
 `install`, `start`, `restart`, `update`, `status` and `doctor` inspect active UFW/firewalld
 managers. Inspection does not prove remote reachability. To explicitly allow the configured
@@ -447,7 +485,7 @@ exist in RAM while connected and are discarded at disconnect. Downloads/builds c
 external package/model hosts; inference uses the local model. There is no configured cloud
 fallback. Authenticated clients explicitly decide which screenshots/metadata to transmit.
 
-## 7. Operations And Updates
+## 7. Operations and updates
 
 The administrator controls the service; no Docker access is needed by application users:
 
@@ -470,7 +508,7 @@ are in RAM only and are not restored after a restart.
 
 Use `sudo ./setup.sh doctor` to repeat the CUDA/ROCm probe.
 
-### Host Reboots
+### Host reboots
 
 Containers use `restart: unless-stopped`. If Docker starts at boot, previously running
 services return automatically. Manually stopped services stay stopped, including after a
@@ -554,9 +592,9 @@ delete the model cache as well: `sudo docker compose down --volumes`. This does 
   work in an uncertain session. Reconcile pending app commands/current state before reconnecting;
   it deliberately does not repeat mutations after a timeout.
 
-## 9. Development And Protocol
+## 9. Development and protocol
 
-### Diagnose Tool Calls Without Native Data
+### Diagnose tool calls without native data
 
 The agent requests `strict: true` for no-argument tools such as `get_application_state`.
 The pinned vLLM 0.34 can constrain these calls during generation, preventing invented
@@ -598,7 +636,7 @@ The shared native client is tested with `Scripts/test-voice-agent.sh` against th
 TLS/WSS agent and deterministic model, including PNG delivery, Command/GSC roundtrip and
 context cancellation. See [PROTOCOL.md](PROTOCOL.md) for protocol version 1 and native limits.
 
-## 10. Producing The Agent Image
+## 10. Producing the agent image
 
 The normal release path is the GitHub workflow below; it already produces tested image
 and deployment archives. No local build or manual registry tagging is required for users.
@@ -613,7 +651,7 @@ sudo ./setup.sh install --build-agent
 image. Model weights, secrets, certificates and Python caches are excluded from the image;
 setup never publishes an image or changes registry visibility.
 
-## 11. Repeatable GitHub Builds And GHCR Publication
+## 11. Repeatable GitHub builds and GHCR publication
 
 **Published: 3.9.2 for linux/amd64**, from commit
 `715aabfd7fd041d32504e1da77db6abfc43cb30c`.
@@ -684,7 +722,7 @@ administrator runs `sudo ./setup.sh update`. Alternatively pass `update --agent-
 to change just the agent image with an automatic backup of the previous `.env`.
 Do not replace existing credentials or initialize a fresh deployment just to update the image.
 
-## 12. Uninstall And Repeat Installation Tests
+## 12. Uninstall and repeat installation tests
 
 `sudo ./setup.sh uninstall` alone previews removal of the deployment. The options below
 also plan removal of unused images and the clean checkout. Calling `./uninstall.py`
@@ -732,7 +770,7 @@ To undo only cloning before Docker was installed:
 This explicitly skips Docker checks/removal. Do not use it to claim a running deployment
 has been removed. The uninstaller never purges system packages automatically.
 
-### Optional: Remove Docker On A Host Used Exclusively For BorgVR
+### Optional: Remove Docker on a host used exclusively for BorgVR
 
 **Only do this when Docker, containerd and NVIDIA Container Toolkit were newly installed
 for BorgVR and are not used by anything else.** First finish the BorgVR cleanup above.
@@ -779,7 +817,7 @@ If this account's Docker client configuration was also newly created solely for 
 remove it with `rm -rf -- "$HOME/.docker"`. Never do that with preexisting contexts or other
 registry credentials.
 
-## Upstream References
+## Upstream references
 
 - [vLLM Docker deployment](https://docs.vllm.ai/en/stable/deployment/docker/)
 - [Qwen3.6-35B-A3B serving recipe](https://recipes.vllm.ai/Qwen/Qwen3.6-35B-A3B)

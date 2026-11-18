@@ -125,30 +125,58 @@ angemeldet ist, lässt `sudo` weg. Eine Docker-Gruppenmitgliedschaft ist nicht n
 Bei bereits installiertem Docker zunächst prüfen:
 
 ```
-nvidia-smi
 sudo docker compose version
 sudo docker ps
+sudo docker info
+```
+
+Diese Prüfungen gelten für beide Backends: Compose v2 muss verfügbar sein und der lokale
+Docker-Dienst muss laufen. Danach den GPU-Zugriff für das gewünschte Backend prüfen.
+
+**NVIDIA / CUDA:** Treiber und registrierte GPU-Laufzeit von Docker prüfen:
+
+```
+nvidia-smi
 sudo docker info --format '{{json .Runtimes}}'
 ```
 
-Wenn Compose funktioniert und `nvidia` in den Runtimes steht, direkt mit B weitermachen.
+`nvidia-smi` muss die GPU anzeigen; die Docker-Laufzeiten müssen `nvidia` enthalten.
+
+**AMD / ROCm:** Prüfen, ob der Treiber die benötigten Gerätedateien bereitstellt:
+
+```
+ls -l /dev/kfd
+ls -l /dev/dri
+```
+
+`/dev/kfd` muss ein Zeichengerät sein; `/dev/dri` muss die GPU-Gerätedateien enthalten.
+Für dieses Backend sind weder NVIDIA-Laufzeit noch NVIDIA Container Toolkit erforderlich.
+Die Gerätedateien allein belegen noch keine Modellkompatibilität; die Installation prüft
+die GPU-Speicherallokation im gewählten Image.
+
+Wenn Docker und die Voraussetzungen des gewählten Backends bereit sind, mit B fortfahren.
 Andere Container bleiben bestehen. vLLM reserviert standardmäßig 85 % des Speichers der
 ausgewählten GPU; konkurrierende GPU-Anwendungen können dadurch beeinträchtigt werden.
 
-Nur bei fehlenden Voraussetzungen eine geprüfte Kopie des Host-Skripts ausführen:
+Nur bei fehlenden Voraussetzungen eine geprüfte Kopie des Host-Skripts für das jeweilige
+Backend ausführen. Für NVIDIA:
 
 ```
-sudo ./setup-host.sh
+sudo ./setup-host.sh --backend cuda
 ```
 
-Für AMD stattdessen `sudo ./setup-host.sh --backend rocm`. Dieser Weg installiert keine
-NVIDIA-Pakete, verändert keine NVIDIA-Laufzeit und startet Docker nicht neu. GPU-Treiber
-werden bei beiden Backends nicht installiert oder ersetzt.
+Für AMD:
 
-Auf Ubuntu 26.04.1 werden fehlende
-Docker-/Compose-/NVIDIA-Container-Pakete eingerichtet; vorhandene GPU-Treiber bleiben
-unverändert. Auch Ubuntu 22.04 und 24.04 werden akzeptiert. Bei bereits fertigem Host
-entfällt dieser Schritt. Konfligierende vorhandene Docker-Pakete werden nicht entfernt.
+```
+sudo ./setup-host.sh --backend rocm
+```
+
+Beide Varianten richten Docker und Compose aus offiziellen signierten Paketquellen ein.
+Nur die CUDA-Variante installiert zusätzlich NVIDIA Container Toolkit und konfiguriert
+dessen Laufzeit. Die ROCm-Variante verwendet den vorhandenen AMD-Treiber und startet Docker
+nicht neu. GPU-Treiber werden nicht installiert oder ersetzt. Konfligierende Docker-Pakete
+werden nicht entfernt; bei vorhandenem Docker ein fehlendes Compose-Plugin aus dessen
+bisheriger Paketquelle installieren.
 
 Falls das Skript einen notwendigen Docker-Neustart meldet, erst ein Wartungsfenster
 für die anderen Container vereinbaren. Dann `sudo ./setup-host.sh --allow-docker-restart`
@@ -161,11 +189,22 @@ Es vergibt standardmäßig auch keine Docker-Rechte an Benutzer.
 
 ### B. Installieren und starten
 
-Im Verzeichnis `BorgVRAgentServer` für den ersten lokalen Test:
+Im Verzeichnis `BorgVRAgentServer` bei der ersten lokalen Installation das Backend wählen.
+Für NVIDIA:
 
 ```
-sudo ./setup.sh install
+sudo ./setup.sh install --backend cuda
 ```
+
+Für AMD:
+
+```
+sudo ./setup.sh install --backend rocm
+```
+
+`setup-host.sh` speichert die Backend-Auswahl nicht für `setup.sh`; sie muss bei der
+Erstellung des Deployments ausdrücklich angegeben werden. Weitere Befehle übernehmen
+das in `.env` gespeicherte Backend.
 
 Dieser eine Befehl erzeugt `.env`, Zugangsschlüssel und Testzertifikat, prüft die profilabhängige
 Platzreserve und die GPU, lädt fehlende Images und startet beide Dienste. Das fertige
@@ -183,7 +222,8 @@ sudo ./setup.sh install --host 192.168.1.20 --bind 192.168.1.20
 ```
 
 Hostname und IP ersetzen. `--host` bestimmt den Zertifikatsnamen, `--bind` die
-Abhöradresse. Ohne Angabe bleibt es bei localhost/`127.0.0.1`. `0.0.0.0` gibt alle
+Abhöradresse. Bei einer ersten Installation auf AMD zusätzlich `--backend rocm` angeben.
+Ohne Angabe von Host und Abhöradresse bleibt es bei localhost/`127.0.0.1`. `0.0.0.0` gibt alle
 IPv4-Schnittstellen frei und braucht bewusste Netzabsicherung. Port ist **8766** (`--port`),
 GPU **0** (`--gpu INDEX` oder NVIDIA-GPU-UUID).
 
