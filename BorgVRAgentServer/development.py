@@ -467,7 +467,8 @@ def enable(root, key_file):
     write_json(DEV_ROOT / "installation.json", record, 0o644)
     # Stage with the same unprivileged identity used for later SSH uploads.
     subprocess.run(["/usr/bin/python3", "-I", str(HELPER), "stage"], input=bundle, check=True, timeout=30,
-                   user=account.pw_uid, group=account.pw_gid, extra_groups=[])
+                   user=account.pw_uid, group=account.pw_gid, extra_groups=[], cwd=DEV_ROOT / "home",
+                   env={"PATH": "/usr/bin:/bin", "HOME": str(DEV_ROOT / "home"), "LANG": "C.UTF-8"})
     write_json(marker(root), {"root": str(DEV_ROOT)}, 0o600)
     try:
         run_compose(root)

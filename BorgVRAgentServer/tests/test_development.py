@@ -250,6 +250,8 @@ def test_enable_installs_only_forced_key_and_unprivileged_staging(tmp_path, monk
     assert ' ssh" ssh-ed25519 ' in authorized and "sudo" not in authorized and "docker" not in authorized
     stage = next(kw for args, kw in calls if args[-1] == "stage")
     assert stage["user"] == 1234 and stage["group"] == 5678 and stage["extra_groups"] == []
+    assert stage["cwd"] == dev_root / "home" and stage["env"]["HOME"] == str(dev_root / "home")
+    assert "SSH_AUTH_SOCK" not in stage["env"] and "PYTHONPATH" not in stage["env"]
     assert (dev_root / "home").stat().st_mode & 0o777 == 0o750
     assert dev.marker(source).exists() and json.loads((dev_root / "installation.json").read_text())["enabled"]
 

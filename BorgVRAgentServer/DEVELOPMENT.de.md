@@ -90,6 +90,8 @@ richtet das dedizierte Konto ein und startet **nur den Agenten-Container** neu. 
 bereits vorhandenes Konto oder eine gleichnamige Gruppe wird nicht übernommen. Erst nach
 erfolgreichem Start wird der eingeschränkte SSH-Schlüssel freigeschaltet. vLLM wird weder
 gestoppt noch neu erzeugt; ein neues Image wird nicht gebaut oder heruntergeladen.
+Die zusätzlich ins Administrator-Home kopierte Datei `~/borgvr-ai1-dev.pub` kann danach
+entfernt werden; die eingerichtete öffentliche Schlüsseldatei wird vom Setup verwaltet.
 
 Dateien liegen unter `/var/lib/borgvr-agent-dev`; der root-geschützte Helfer liegt unter
 `/usr/local/libexec/borgvr-agent-development.py`. Der Container liest vollständige Code-Snapshots

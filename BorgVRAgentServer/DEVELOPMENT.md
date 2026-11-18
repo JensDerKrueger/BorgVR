@@ -83,6 +83,8 @@ Setup validates the public key and installed image dependency snapshot, creates 
 and recreates **only the agent container**. It never adopts an unrelated existing account or
 group with the same name. SSH access is enabled only after successful startup. vLLM is not
 stopped or recreated, and no image is built or pulled.
+The bootstrap copy `~/borgvr-ai1-dev.pub` in the administrator's home can then be removed;
+setup manages the installed public authorized-key file separately.
 
 Development files reside in `/var/lib/borgvr-agent-dev`; the administrator-owned helper is
 `/usr/local/libexec/borgvr-agent-development.py`. The container reads complete immutable
