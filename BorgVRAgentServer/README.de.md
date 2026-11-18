@@ -616,6 +616,20 @@ Eigene vLLM-Images und Tool-Parser müssen strikte Aufrufe für parameterlose We
 unterstützen. Server und native App prüfen Argumente zusätzlich gegen das jeweilige Schema;
 ungültige Aufrufe werden nicht ausgeführt.
 
+Für Probleme speziell beim Erzeugen einer Transferfunktion gibt es einen weiteren,
+ebenfalls vollständig synthetischen Test:
+
+```
+sudo docker compose exec -T agent python - --scenario transfer-function --catalog-json "$(cat diagnostic_catalog.json)" < diagnose_tools.py
+```
+
+Er vergleicht die normale TF-Schnittstelle mit einer auf höchstens 16 gleichmäßig verteilte
+RGBA-Einträge begrenzten Rampe. Ausgegeben werden außerdem Laufzeiten, Anzahl übernommener
+TF-Einträge und die Fehlerkette. Nur der Test speichert diese TF im Arbeitsspeicher; kein
+App-Client wird verbunden und kein echter Datensatz verändert. Jeder Durchlauf hat eine
+Frist von 90 Sekunden. Das Skript wird vom Checkout eingelesen; dafür ist kein neues
+Agenten-Image nötig.
+
 ## 9. Agenten-Image für die Entwicklung bauen
 
 Der normale Veröffentlichungsweg ist der folgende GitHub-Workflow; er erzeugt bereits

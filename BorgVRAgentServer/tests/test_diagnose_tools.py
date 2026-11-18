@@ -55,3 +55,48 @@ def test_diagnostic_error_output_omits_provider_bodies_and_generic_exception_tex
     output = json.dumps(error_details(error))
     assert "Tool retry limit reached" in output and "ValueError" in output
     assert "private" not in output
+
+
+def tf_model(samples):
+    async def model(messages, info):
+        returned = {part.tool_name for message in messages for part in message.parts
+                    if isinstance(part, ToolReturnPart) and part.outcome != "retried"}
+        if "get_application_state" not in returned:
+            return ModelResponse(parts=[ToolCallPart("get_application_state", {}, tool_call_id="state")])
+        if "set_transfer_function" not in returned:
+            return ModelResponse(parts=[ToolCallPart("set_transfer_function", {"channel": 0, "samples": samples},
+                                                    tool_call_id="tf")])
+        return ModelResponse(parts=[TextPart("Synthetic TF applied")])
+    return FunctionModel(model)
+
+
+def test_tf_diagnostic_applies_only_synthetic_ramps_in_both_cases(capsys):
+    samples = [[0, 0, 0, 0], [255, 255, 255, 255]]
+    assert asyncio.run(diagnose(SETTINGS, tf_model(samples), CATALOG, "transfer-function"))
+    output = [json.loads(line) for line in capsys.readouterr().out.splitlines()]
+    results = [entry for entry in output if "passed" in entry]
+    assert [entry["test"] for entry in results] == ["transfer_function", "compact_transfer_function"]
+    assert all(entry["passed"] and entry["tf_sample_counts"] == [2] and
+               entry["successful_state_reads"] == 1 and entry["elapsed_seconds"] >= 0 for entry in results)
+    assert next(value for value in CATALOG if value["name"] == "set_transfer_function")[
+        "inputSchema"]["properties"]["samples"]["maxItems"] == 65536
+
+
+def test_tf_diagnostic_compares_full_table_with_enforced_compact_limit(capsys):
+    assert not asyncio.run(diagnose(SETTINGS, tf_model([[255, 255, 255, 255]] * 64),
+                                  CATALOG, "transfer-function"))
+    output = [json.loads(line) for line in capsys.readouterr().out.splitlines()]
+    full, compact = [entry for entry in output if "passed" in entry]
+    assert full["passed"] and full["tf_sample_counts"] == [64]
+    assert not compact["passed"] and compact["tf_sample_counts"] == []
+    assert compact["errors"][0]["type"] == "UnexpectedModelBehavior"
+
+
+def test_tf_diagnostic_requires_an_actual_synthetic_setter_not_just_state_or_text(capsys):
+    async def model(messages, info):
+        if any(isinstance(part, ToolReturnPart) for message in messages for part in message.parts):
+            return ModelResponse(parts=[TextPart("I will set a bone TF")])
+        return ModelResponse(parts=[ToolCallPart("get_application_state", {}, tool_call_id="state")])
+    assert not asyncio.run(diagnose(SETTINGS, FunctionModel(model), CATALOG, "transfer-function"))
+    output = [json.loads(line) for line in capsys.readouterr().out.splitlines()]
+    assert all(not entry["passed"] and entry["tf_sample_counts"] == [] for entry in output if "passed" in entry)

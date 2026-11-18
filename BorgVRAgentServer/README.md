@@ -628,6 +628,18 @@ messages, not credentials or provider response bodies. A nonzero exit means at l
 test failed. The catalog snapshot is checked against the native catalog by the native
 voice-agent integration test.
 
+For failures specifically while generating a transfer function, run the synthetic TF test:
+
+```
+sudo docker compose exec -T agent python - --scenario transfer-function --catalog-json "$(cat diagnostic_catalog.json)" < diagnose_tools.py
+```
+
+It compares the normal TF interface with a ramp limited to 16 uniformly spaced RGBA
+entries, reporting elapsed time, accepted sample counts and error chains. TF changes
+exist only in the test's memory: no native client is connected and no real dataset is
+modified. Each case has a 90-second deadline. The script is read from the checkout;
+this diagnostic does not require a new agent image.
+
 ```
 python3.12 -m venv .venv
 .venv/bin/pip install -r requirements-test.txt
