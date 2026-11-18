@@ -6,13 +6,12 @@ Self-hosted server for BorgVR's conversational assistant. The stack runs
 one selectable vision-language model in vLLM and a small Pydantic AI agent, connected by a private Docker
 network. Only the authenticated HTTPS/WSS agent endpoint is published.
 
-**Current scope:** server installation, text interaction, external-tool orchestration,
-PNG input, progress messages, cancellation and protocol tests. The macOS/iOS/visionOS
-voice and outbound WebSocket clients share one implementation in the native apps. The old
-visionOS fixed-phrase commands have been replaced. The server smoke test talks to the actual
-model but does not claim to verify anatomical recognition. See the [native setup guide](../html/mcp.html#voice-agent).
+The assistant supports voice and text interaction on macOS, iOS and visionOS, tool-based
+control of BorgVR, render-image input, progress messages and cancellation. Anatomical
+identifications must be checked by the user; the assistant is not a medical diagnosis
+feature. See the [native setup guide](../html/mcp.html#voice-agent).
 
-In **Settings > AI Assistant**, enable the assistant, enter `https://ai1:8766` (or the IP
+In **Settings > AI Assistant**, enable the assistant, enter `https://ai.example.org:8766` (or the IP
 matching the certificate), import the public `runtime/tls/server.crt`, and import the
 `runtime/secrets/agent_token` file or enter its value. Never copy `server.key` or the internal
 `vllm_token` to clients. Tokens are stored in the device Keychain. The server test works
@@ -24,11 +23,11 @@ after import. The assistant configuration is device-local and excluded from Shar
 
 ## 1. Requirements
 
-- Linux x86_64. The target host is **Ubuntu 26.04.1 LTS (resolute)**. The root-only host
-  package installer also accepts Ubuntu 22.04 and 24.04. Other distributions need Docker,
+- Linux x86_64. The host package installer supports **Ubuntu 22.04, 24.04 and 26.04 LTS**.
+  Other distributions need Docker,
   Compose and the matching GPU runtime installed by their administrator.
-- A supported **NVIDIA/CUDA or AMD/ROCm GPU** with a matching working host driver. An H200
-  is not required. Weights, image encoder, KV/context cache and runtime overhead must fit
+- A supported **NVIDIA/CUDA or AMD/ROCm GPU** with a matching working host driver.
+  Weights, image encoder, KV/context cache and runtime overhead must fit
   the available GPU/host memory. Smaller or suitably quantized models can need much less.
 - Free Docker storage: profile reserves are **200 GiB** for Qwen3.6-35B, **160 GiB** for
   Qwen3.8-27B and **80 GiB** for Qwen3.5-4B. These are adjustable conservative starting
@@ -55,8 +54,9 @@ If the driver does not work, install the distribution/vendor-supported driver an
 The installer deliberately does not select/replace drivers, change Secure Boot, or reboot.
 The driver must support the CUDA/ROCm runtime of the chosen image; `doctor` allocates
 a GPU tensor inside it using the selected dtype rather than guessing from version numbers.
-Qwen3.6-35B has been run on the H200. Other profiles and both backend configurations have
-automated tests, not exhaustive GPU validation; real AMD/ROCm hardware testing is still needed.
+Automated configuration and protocol tests do not guarantee that every model works on
+every GPU. Run `doctor` and `test` on the target GPU host. AMD/ROCm has not been validated
+on real hardware.
 
 ## 2. Copy The Deployment
 
@@ -220,20 +220,16 @@ Access tokens and the model cache are retained. Explicit options update existing
 omitted options keep their current values, including host/IP, listen address and port:
 
 ```
-sudo ./setup.sh install --host ai1 --bind 0.0.0.0 --port 8766
+sudo ./setup.sh install --host ai.example.org --bind 0.0.0.0 --port 8766
 ```
 
-A fixed IP can replace `ai1`. If the existing certificate does not match the supplied host,
+A fixed IP can replace `ai.example.org`. If the existing certificate does not match the supplied host,
 it is renewed and privately backed up under `runtime/tls-before-install-*`. Clients must
 trust the replacement certificate; their tokens remain unchanged. A matching certificate
 is retained. Changes to `.env` create private `runtime/env-before-update-*` backups.
-Invalid options are rejected before `down`. The separate `init` command still never
+Invalid options are rejected before `down`. The separate `init` command never
 overwrites existing configuration. An interrupted configuration with `runtime` but no `.env` requires manual
 inspection; setup refuses to discard potentially existing credentials.
-If an old `.env` still selects `BORGVR_AGENT_IMAGE=borgvr-agent:3.9` and that local image
-does not exist, use `sudoedit .env` to change only the image reference to
-`ghcr.io/jensderkrueger/borgvr-agent:3.9.2` or its published digest.
-Do not regenerate credentials or certificates just to change images.
 
 ### Switch Models With One Command
 
@@ -309,7 +305,7 @@ Use `--capabilities` instead of `--smoke` for the tool/image check when calling 
 | `runtime/tls/server.key` | Private TLS key; 0640 with sudo-installer access, otherwise 0600 |
 | Docker volume `borgvr-ai_model-cache` | Downloaded weights and persistent Hugging Face cache |
 
-With sudo setup, `runtime` belongs to the invoking account (for example `krueger`), mode
+With sudo setup, `runtime` belongs to the invoking account, mode
 0700. That user can read and manage its contents without sudo. The `secrets` and `tls`
 directories use 0750 and their mounted files 0640, with group `BORGVR_GID`, preserving
 the agent's read access through its group. Container UID/GID settings are unchanged
@@ -322,7 +318,7 @@ Non-root setup with pre-existing Docker access still uses that account's UID/GID
 permissions without changing keys, container IDs or models. An existing non-root runtime
 owner is retained on later invocations, even by root or a different administrator.
 A first installation directly as root without a sudo caller remains restricted to root
-and the container user as before. Symlinks, multiply linked files and nonregular runtime
+and the container user. Symlinks, multiply linked files and nonregular runtime
 entries are rejected before the ownership changes are applied.
 The agent has a read-only root filesystem,
 bounded temporary storage and dropped capabilities. The inference container uses the
@@ -359,7 +355,7 @@ sudo ./setup.sh start --open-firewall
 Or include the flag when installing on a host that owns the specified address:
 
 ```
-sudo ./setup.sh install --host 134.91.11.251 --bind 134.91.11.251 --open-firewall
+sudo ./setup.sh install --host 192.168.1.20 --bind 192.168.1.20 --open-firewall
 ```
 
 Only IPv4 TCP to the configured port (8766 by default) and bind address is allowed,
@@ -442,8 +438,8 @@ See [Docker restart policies](https://docs.docker.com/engine/containers/start-co
 Host setup enables newly installed Docker automatically. A single
 Compose worker is used: do not add Uvicorn workers without redesigning session limits.
 
-The initial snapshot pins vLLM **0.34.0** and the Python base by registry digest, model
-revision **345d467b117d1fd5eda9b879a5988de9ae5f47a7**, and all Python dependency versions.
+The configuration pins vLLM **0.34.0** and the Python base by registry digest, each model
+profile's checkpoint revision, and all Python dependency versions.
 Host OS/Docker/NVIDIA packages follow their signed repositories and should receive regular
 security updates; the entire host is not a frozen OS image. Keep the checked-out BorgVR
 commit ID with an installation record (`git rev-parse HEAD`).
@@ -576,13 +572,11 @@ succeeded; anonymous registry access was verified. Immutable image reference:
 ghcr.io/jensderkrueger/borgvr-agent@sha256:3bd3833ef37e2e013ac7d18502a0901d7c0c854faa95fb367242b29a43162b63
 ```
 
-Version 3.9.2 requests strict decoding for tools without arguments, preventing invented
-`reason` or `action` properties, while retaining local schema validation. To upgrade an
-existing installation, run `git pull`, then
+To upgrade an existing installation, run `git pull`, then
 `sudo ./setup.sh update --agent-image ghcr.io/jensderkrueger/borgvr-agent:3.9.2`.
 `git pull` alone does not replace the running container, and `update` without
 `--agent-image` retains the previously configured image. Model, tokens and certificates
-are preserved; no native app rebuild is needed for this server-side fix.
+are preserved.
 
 The [BorgVR Agent Container workflow](https://github.com/JensDerKrueger/BorgVR/actions/workflows/borgvr-agent.yml)
 runs on relevant main-branch pushes and pull requests. It installs the pinned dependencies,
@@ -590,16 +584,8 @@ runs the tests, validates Compose, builds **linux/amd64**, and starts the actual
 container to check TLS, authentication and read-only startup. The CPU runner deliberately
 reports the model unavailable: GPU inference must still be checked on the target GPU host.
 
-The stages run in order: validate source/version metadata; install pinned test dependencies;
-run unit/protocol/TLS/installer tests; validate both Compose configurations; build the agent;
-start the real container with normal and root-generated private files; test authentication,
-shared-token group access and scoped removal; archive the tested image and deployment files.
-Ordinary pushes/PRs stop at artifact upload. A manual main-branch publication downloads the
-same artifact, verifies checksums and image identity, and pushes it without rebuilding.
-Only that job has package-write permission via GitHub's temporary token. It logs out afterwards.
-There is no connection to a deployed server, automatic deployment, bundled model weights or
-GPU/model inference on the CPU runner. Git updates scripts; GHCR distributes published images;
-the server's explicit `update` command selects and runs them. These are separate operations.
+Pushes and pull requests produce build artifacts, not registry images. Publication requires
+a manual run and successful tests. Published images are not automatically deployed to servers.
 
 Every successful build attaches an artifact containing:
 
@@ -615,14 +601,16 @@ alone do not authenticate an archive from an unrelated source. Build artifacts a
 for 14 days, published deployment artifacts for 90 days; they are not a permanent release archive.
 
 To publish a new image version, open **Actions > BorgVR Agent Container > Run workflow**,
-select **main**, enable **publish**, and enter a new version such as **3.9.2**. Tests/build
+select **main**, enable **publish**, and enter a previously unused version number. Tests/build
 run again, then a separate publication job loads the verified artifact and pushes that
 exact image, without rebuilding, to:
 
 ```text
-ghcr.io/jensderkrueger/borgvr-agent:3.9.2
+ghcr.io/jensderkrueger/borgvr-agent:VERSION
 ghcr.io/jensderkrueger/borgvr-agent:sha-FULL_SOURCE_COMMIT
 ```
+
+Replace `VERSION` with the version number entered in the workflow.
 
 The workflow uses the repository's temporary `GITHUB_TOKEN` with package-write permission
 only in the manual main-branch publication job. No personal publishing token is required.

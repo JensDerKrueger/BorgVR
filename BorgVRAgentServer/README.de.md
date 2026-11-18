@@ -1,4 +1,4 @@
-# BorgVR-Agent: Installation Unter Linux
+# BorgVR-Agent: Installation unter Linux
 
 [English / vollständige Betriebsreferenz](README.md) | [Verbindungsprotokoll](PROTOCOL.md)
 
@@ -7,14 +7,14 @@ Dieses Verzeichnis enthält den Server für die KI-Steuerung:
 Die Dienste laufen in Containern. Nur der mit TLS und Zugangsschlüssel abgesicherte
 Agent ist von außen erreichbar; vLLM bleibt im privaten Container-Netz.
 
-**Stand:** Server, Textanfragen, externe Werkzeugaufrufe, Bilder, Zwischenmeldungen und
-Abbruch sowie der gemeinsame Sprach-/Textclient für macOS, iOS und visionOS sind implementiert.
-Die bisherigen fest vorgegebenen Vision-Sprachbefehle sind ersetzt. Anatomische Zuordnungen
-müssen vom Benutzer geprüft werden; die Sprachsteuerung ist keine medizinische Diagnosefunktion.
+Der Assistent unterstützt Sprach- und Textanfragen auf macOS, iOS und visionOS. Er kann
+BorgVR über Werkzeuge steuern, Renderbilder auswerten und Zwischenmeldungen ausgeben.
+Anatomische Zuordnungen müssen vom Benutzer geprüft werden; die Sprachsteuerung ist
+keine medizinische Diagnosefunktion.
 
-### Native App Verbinden
+### Native App verbinden
 
-Unter **Einstellungen > KI-Assistent** den Assistenten aktivieren, `https://ai1:8766`
+Unter **Einstellungen > KI-Assistent** den Assistenten aktivieren, `https://ai.example.org:8766`
 eintragen (oder die zum Zertifikat passende IP), das öffentliche `runtime/tls/server.crt`
 importieren und die Datei `runtime/secrets/agent_token` importieren oder deren Inhalt eingeben.
 **Niemals `server.key` oder `vllm_token` auf die Geräte kopieren.** Der Zugangsschlüssel landet
@@ -29,41 +29,13 @@ auf dem Gerät; eine mögliche Verarbeitung durch Apple muss separat erlaubt wer
 Abbrechen beendet die Verbindung, macht bereits ausgeführte Änderungen aber nicht rückgängig.
 Agenteneinstellungen und Schlüssel bleiben gerätelokal, außerhalb von SharePlay und GSC.
 
-### Text Funktioniert, Werkzeugaufrufe Scheitern
+## 1. Voraussetzungen
 
-Der Agent fordert für parameterlose Werkzeuge wie `get_application_state` strikte
-Schema-Einhaltung beim Modellserver an (`strict: true`). Das mitgelieferte vLLM 0.34
-kann damit erfundene Felder wie `reason` oder `action` schon bei der Erzeugung verhindern.
-Die serverseitige und die native Argumentprüfung bleiben zusätzlich aktiv. Eine
-ungültige Antwort wird nicht durch Entfernen unbekannter Felder passend gemacht;
-das Modell erhält stattdessen die konkrete Rückmeldung, mit exakt `{}` zu wiederholen.
-Werkzeuge mit optionalen Parametern bleiben unverändert, damit ausgelassene Werte
-nicht versehentlich gesetzt werden. Eigene vLLM-Images/Tool-Parser müssen strikte
-Tool-Aufrufe unterstützen; der mitgelieferte Kompatibilitätstest prüft den gesamten Pfad.
-
-`UnexpectedModelBehavior` im Agenten-Log ist nur der Fehlertyp, noch nicht die Ursache.
-Mit diesem Diagnosetest lässt sich der Modell-/Werkzeugpfad ohne echte Datensätze und
-ohne Neustart oder Neubau des Containers prüfen. Nach `git pull` im Agenten-Verzeichnis:
-
-```
-sudo docker compose exec -T agent python - --catalog-json "$(cat diagnostic_catalog.json)" < diagnose_tools.py
-```
-
-Der Test verwendet zuerst nur `get_application_state`, danach den Werkzeugkatalog der
-nativen App. Ein erfolgreicher Aufruf liefert ausschließlich einen synthetischen
-Datensatzzustand; alle anderen Werkzeuge werden abgewiesen. Kein Fenster, Rendering oder
-Datensatz wird geändert. Ausgegeben werden Testergebnisse, die Argumente dieser ausschließlich
-synthetischen Werkzeugaufrufe (maximal 4096 Zeichen pro Aufruf) und konkrete Fehlerkategorien,
-keine Zugangsschlüssel oder Provider-Antwortkörper. Ein Exitcode ungleich null bedeutet,
-dass mindestens einer der beiden Tests fehlgeschlagen ist. Die JSON-Ausgabe kann zur
-Fehlersuche weitergegeben werden; Modellantworten beziehen sich ausschließlich auf den
-synthetischen Test, nicht auf eine vorherige Unterhaltung in BorgVR.
-
-## 1. Was Auf Dem Rechner Installiert Sein Muss
-
-- Linux x86_64, Zielsystem **Ubuntu 26.04.1 LTS (resolute)**.
+- Linux x86_64. Das Host-Skript unterstützt **Ubuntu 22.04, 24.04 und 26.04 LTS**.
+  Auf anderen Distributionen muss der Administrator Docker, Compose und die passende
+  GPU-Laufzeit bereitstellen.
 - Eine von vLLM und dem gewählten Modell unterstützte **NVIDIA/CUDA- oder AMD/ROCm-GPU**
-  mit passendem, bereits installiertem Treiber. Die H200 ist keine Voraussetzung.
+  mit passendem, bereits installiertem Treiber.
 - Genügend GPU- und Hauptspeicher für Gewichte, Bildencoder, Kontext/KV-Cache und Laufzeit.
   Kleinere Modelle oder passende quantisierte Checkpoints können deutlich weniger benötigen.
   Auch bei MoE-Modellen müssen normalerweise sämtliche Gewichte gespeichert werden.
@@ -93,11 +65,11 @@ Bei AMD müssen `/dev/kfd` und `/dev/dri` durch einen passenden Treiber verfügb
 Der Treiber muss zur CUDA-/ROCm-Laufzeit des gewählten Images passen; `doctor` prüft
 das durch eine echte GPU-Speicherallokation im Container, einschließlich gewähltem Datentyp.
 
-**Teststand:** Qwen3.6-35B-A3B wurde auf der H200 tatsächlich ausgeführt. Weitere Profile
-und beide Backend-Konfigurationen sind automatisiert geprüft, aber nicht auf allen GPUs
-praktisch vermessen. Insbesondere ROCm braucht noch einen Test auf echter AMD-Hardware.
+**Kompatibilität prüfen:** Automatisierte Konfigurations- und Protokolltests garantieren
+nicht, dass jedes Modell auf jeder GPU funktioniert. `doctor` und `test` auf dem jeweiligen
+GPU-Rechner ausführen. AMD/ROCm ist noch nicht auf echter Hardware validiert.
 
-## 2. Dateien Auf Den Server Bringen
+## 2. Dateien auf den Server bringen
 
 Entweder das komplette Verzeichnis `BorgVRAgentServer` kopieren oder das öffentliche
 Repository über HTTPS klonen. Dafür ist kein SSH-Schlüssel erforderlich.
@@ -117,7 +89,7 @@ Keine `.env` oder `runtime`-Verzeichnisse einer anderen Installation mitkopieren
 Installation erzeugt eigene Zugangsschlüssel. Für das voreingestellte öffentliche Modell
 ist kein Hugging-Face-Account erforderlich.
 
-## 3. Host Einrichten, Dann Zwei Container Starten
+## 3. Host einrichten und Container starten
 
 Der Server besteht aus **zwei laufenden Containern**: vLLM und unserem Agenten.
 `compose.yaml` lädt nur fertige Images und enthält keinen Build-Schritt. Nur der
@@ -129,7 +101,7 @@ Ein privilegierter Installationscontainer mit Zugriff auf den Docker-Socket ist 
 Alle folgenden Schritte führt dasselbe Konto mit sudo-Rechten aus. Wer bereits als root
 angemeldet ist, lässt `sudo` weg. Eine Docker-Gruppenmitgliedschaft ist nicht nötig.
 
-### A. Voraussetzungen Prüfen
+### A. Voraussetzungen prüfen
 
 Bei bereits installiertem Docker zunächst prüfen:
 
@@ -168,7 +140,7 @@ unverändert. Das Root-Skript erzeugt keine App-Konfiguration, Zugangsschlüssel
 Zertifikate oder Modelldownloads und liest keine `.env` aus dem Benutzerverzeichnis.
 Es vergibt standardmäßig auch keine Docker-Rechte an Benutzer.
 
-### B. Installieren Und Starten
+### B. Installieren und starten
 
 Im Verzeichnis `BorgVRAgentServer` für den ersten lokalen Test:
 
@@ -196,7 +168,7 @@ Abhöradresse. Ohne Angabe bleibt es bei localhost/`127.0.0.1`. `0.0.0.0` gibt a
 IPv4-Schnittstellen frei und braucht bewusste Netzabsicherung. Port ist **8766** (`--port`),
 GPU **0** (`--gpu INDEX` oder NVIDIA-GPU-UUID).
 
-### Modelle Und Grafikkarten Wählen
+### Modelle und Grafikkarten wählen
 
 Das **vLLM-Image** enthält die Inferenzsoftware und CUDA/ROCm, nicht automatisch das Modell.
 **Modell und Revision** wählen separat den Checkpoint. Ein Modellwechsel braucht nur dann
@@ -273,23 +245,19 @@ Ausdrücklich angegebene Optionen ändern die bestehende Konfiguration; nicht an
 Werte bleiben erhalten. Das gilt auch für Hostname/IP, Abhöradresse und Port:
 
 ```
-sudo ./setup.sh install --host ai1 --bind 0.0.0.0 --port 8766
+sudo ./setup.sh install --host ai.example.org --bind 0.0.0.0 --port 8766
 ```
 
-Statt `ai1` ist auch eine feste IP möglich. Passt das vorhandene Zertifikat nicht zum
+Statt `ai.example.org` ist auch eine feste IP möglich. Passt das vorhandene Zertifikat nicht zum
 angegebenen Host, wird es erneuert und privat unter `runtime/tls-before-install-*` gesichert.
 Clients müssen danach dem neuen Zertifikat vertrauen; ihre Zugangsschlüssel bleiben gleich.
 Ein passendes Zertifikat wird nicht ersetzt. Änderungen an `.env` erhalten eine private
 Sicherung unter `runtime/env-before-update-*`. Ungültige Optionen werden vor `down` abgelehnt.
-`init` allein bleibt unverändert: Es überschreibt keine vorhandene Konfiguration.
+`init` überschreibt keine vorhandene Konfiguration.
 Ein nach einem Fehler vorhandenes `runtime` ohne `.env` muss
 manuell geprüft werden, damit keine Schlüssel versehentlich verloren gehen.
-Wenn eine alte `.env` noch `BORGVR_AGENT_IMAGE=borgvr-agent:3.9` enthält und dieses lokale
-Image nicht existiert, mit `sudoedit .env` nur die Image-Adresse auf
-`ghcr.io/jensderkrueger/borgvr-agent:3.9.2` beziehungsweise den veröffentlichten Digest ändern.
-Schlüssel und Zertifikate müssen dafür nicht neu erzeugt werden.
 
-### Modell Mit Einem Befehl Wechseln
+### Modell mit einem Befehl wechseln
 
 ```
 sudo ./setup.sh model
@@ -340,22 +308,22 @@ sudo docker compose exec -T agent python client.py --url https://127.0.0.1:8766 
   --text "Was ist ein Mandelbulb? Antworte kurz auf Deutsch."
 ```
 
-## 5. Sicherheit Und Zertifikate
+## 5. Sicherheit und Zertifikate
 
 - `.env` enthält Image-/Modellrevision, GPU, Speicherbudget, Adresse, Port und Benutzer-IDs.
 - `runtime/secrets/agent_token` ist der Zugangsschlüssel für Clients, wie ein Passwort
-  behandeln. Er gilt aktuell für **die gesamte Installation**, noch nicht separat pro Gerät.
+  behandeln. Er gilt für **die gesamte Installation**, nicht separat pro Gerät.
 - `runtime/secrets/vllm_token` ist nur für die interne Modellkommunikation, Modus 0640.
 - `runtime/tls/server.crt` ist das öffentliche Zertifikat.
 - `runtime/tls/server.key` ist der private Schlüssel und gehört niemals auf einen Client.
 - Diese Rechte nicht durch weltweite Lesbarkeit umgehen.
 
-Bei Einrichtung mit `sudo` gehört `runtime` dem aufrufenden Benutzer (zum Beispiel
-`krueger`), mit Modus 0700. Er kann die Dateien darin ohne sudo lesen und verwalten.
+Bei Einrichtung mit `sudo` gehört `runtime` dem aufrufenden Benutzer, mit Modus 0700.
+Er kann die Dateien darin ohne sudo lesen und verwalten.
 Die Unterverzeichnisse `secrets` und `tls` haben Modus 0750, ihre Container-Dateien
 0640 und die Gruppe `BORGVR_GID`. Damit bleibt der Agent über seine Gruppe leseberechtigt
-und läuft weiterhin mit seiner bisherigen unprivilegierten UID/GID (bei neuer Einrichtung
-10001). vLLM erhält diese zusätzliche Gruppe ausschließlich für den internen Token.
+und läuft mit der konfigurierten unprivilegierten UID/GID (Standard bei Einrichtung mit
+sudo: 10001). vLLM erhält diese zusätzliche Gruppe ausschließlich für den internen Token.
 Andere Benutzer bekommen keinen Zugriff; Sicherungsverzeichnisse bleiben 0700,
 Sicherungsdateien 0600. Die neu erzeugte `.env` bleibt root-eigen und 0600.
 
@@ -363,7 +331,7 @@ Sicherungsdateien 0600. Die neu erzeugte `.env` bleibt root-eigen und 0600.
 ein, ohne Schlüssel, Container-IDs oder Modelle auszutauschen. Ein bereits eingerichteter
 Runtime-Besitzer bleibt auch bei späteren Aufrufen durch root oder andere Administratoren
 erhalten. Bei einer direkten root-Ersteinrichtung ohne sudo-Benutzer bleiben die Dateien
-wie bisher nur für root beziehungsweise den Container-Benutzer zugänglich.
+nur für root beziehungsweise den Container-Benutzer zugänglich.
 
 Standardmäßig wird ein eigener interner Schlüssel zufällig erzeugt. Ein auf dem Host
 gesetztes `VLLM_API_KEY` wird niemals übernommen. Optional kann bei der **ersten**
@@ -379,7 +347,7 @@ ihm durch den ausdrücklichen Import des öffentlichen Zertifikats vertrauen; Ho
 beziehungsweise IP und Gültigkeit werden weiterhin geprüft. Alternativ ein Zertifikat
 einer auf den Geräten vertrauten internen oder öffentlichen CA verwenden.
 Die Zertifikatsausstellung, Erneuerung und Einrichtung des CA-Vertrauens auf den Geräten
-sind noch nicht automatisiert. TLS-Prüfungen niemals abschalten.
+sind nicht automatisiert. TLS-Prüfungen niemals abschalten.
 
 Der Dienst sollte im privaten Netz oder VPN bleiben. Ohne ausdrücklichen Schalter ändert
 das Skript keine Firewall-Regeln.
@@ -398,7 +366,7 @@ sudo ./setup.sh start --open-firewall
 Oder direkt bei der Installation, zum Beispiel für einen Rechner mit dieser eigenen IP:
 
 ```
-sudo ./setup.sh install --host 134.91.11.251 --bind 134.91.11.251 --open-firewall
+sudo ./setup.sh install --host 192.168.1.20 --bind 192.168.1.20 --open-firewall
 ```
 
 Der Schalter erlaubt IPv4-TCP zum **konfigurierten Port** (standardmäßig 8766) an
@@ -422,7 +390,7 @@ für Host-Eingangsverkehr umgehen. Die Freigabe ist daher **keine Einschränkung
 vertrauenswürdige Clients**. Eine solche Absicherung gehört in eine Docker-taugliche
 Forwarding-Policy oder vorgeschaltete Firewall/VPN. Bei firewalld mit `StrictForwardPorts`
 oder eigenen Forwarding-Regeln kann eine zusätzliche administrative Freigabe nötig sein.
-Router-, Provider- und Hochschul-Firewalls können weiterhin blockieren; das Setup kann
+Router-, Provider- und Organisations-Firewalls können weiterhin blockieren; das Setup kann
 diese weder prüfen noch freischalten. Siehe die
 [Docker-Hinweise zu Firewalls](https://docs.docker.com/engine/network/packet-filtering-firewalls/).
 
@@ -442,7 +410,7 @@ Gespräche liegen während der Verbindung im RAM; nach Trennung werden sie verwo
 Es gibt keinen Cloud-Fallback. Externe Verbindungen entstehen für Paket-/Modelldownloads,
 nicht für die eigentliche Inferenz.
 
-## 6. Betrieb Und Updates
+## 6. Betrieb und Updates
 
 Der Administrator betreibt den Dienst; normale App-Nutzer brauchen keine Docker-Rechte:
 
@@ -466,7 +434,7 @@ Gespräche werden nur im RAM gehalten, nicht nach einem Neustart wiederhergestel
 
 Mit `sudo ./setup.sh doctor` lässt sich der CUDA-/ROCm-Zugriff erneut prüfen.
 
-### Nach Einem Rechner-Neustart
+### Nach einem Rechner-Neustart
 
 Beide Container verwenden `restart: unless-stopped`. Wenn Docker beim Booten startet,
 kommen vorher laufende Dienste automatisch wieder. Die Modellgewichte bleiben im Volume
@@ -528,14 +496,33 @@ Zertifikatswechsel, Fehlerbehebung und Deinstallation stehen im englischen Leitf
 Die Entwicklertests laufen ohne GPU mit einem deterministischen Testmodell durch die echte
 Pydantic-AI-Schleife. Getestet werden unter anderem Anmeldung, Eingabevalidierung,
 Werkzeugbeschränkungen, Bilder, Abbruch, Zeitlimits und veraltete Antworten. Den Test auf
-der echten H200 und den Test mit dem Mikrofon auf dem jeweiligen Gerät ersetzen sie nicht.
+dem jeweiligen GPU-Rechner und den Test mit dem Mikrofon auf dem jeweiligen Gerät ersetzen sie nicht.
 
 `Scripts/test-voice-agent.sh` prüft zusätzlich den nativen macOS-Client über echtes lokales
 TLS/WSS mit deterministischem Modell: Zustandsabfrage, Rotation, Transferfunktion, Renderbild,
 Fortschrittsantwort, GSC-Roundtrip und Abbruch bei Kontextwechsel. Das Protokoll ist in
 [PROTOCOL.md](PROTOCOL.md) beschrieben.
 
-## 8. Agenten-Image Einmal Bauen Und Verteilen
+### Fehlersuche bei Werkzeugaufrufen
+
+Bei fehlgeschlagenen Werkzeugaufrufen lässt sich der Modellpfad im laufenden Container
+ohne echte Datensätze prüfen. Im Deployment-Verzeichnis ausführen:
+
+```
+sudo docker compose exec -T agent python - --catalog-json "$(cat diagnostic_catalog.json)" < diagnose_tools.py
+```
+
+Der Test vergleicht einen minimalen Zustandsaufruf mit dem Werkzeugkatalog der nativen App.
+Nur `get_application_state` liefert einen synthetischen Zustand; andere Werkzeuge werden
+abgewiesen. Die Ausgabe enthält Testargumente (höchstens 4096 Zeichen pro Aufruf) und
+Fehlerkategorien, keine Zugangsschlüssel oder echten Datensatzinhalte. Ein Exitcode ungleich
+null bedeutet, dass mindestens ein Test fehlgeschlagen ist.
+
+Eigene vLLM-Images und Tool-Parser müssen strikte Aufrufe für parameterlose Werkzeuge
+unterstützen. Server und native App prüfen Argumente zusätzlich gegen das jeweilige Schema;
+ungültige Aufrufe werden nicht ausgeführt.
+
+## 8. Agenten-Image für die Entwicklung bauen
 
 Der normale Veröffentlichungsweg ist der folgende GitHub-Workflow; er erzeugt bereits
 geprüfte Image- und Deployment-Archive. Nutzer brauchen keinen lokalen Build und keine
@@ -550,7 +537,7 @@ sudo ./setup.sh install --build-agent
 getestete GHCR-Image verwendet. Gewichte, Schlüssel, Zertifikate und Python-Caches gehören
 nicht ins Image. Das Setup veröffentlicht niemals selbst Images oder ändert Paketsichtbarkeit.
 
-## 9. Wiederholbare Builds Und Veröffentlichung Über GitHub
+## 9. Builds und Veröffentlichung über GitHub
 
 **Veröffentlicht: 3.9.2 für linux/amd64**, aus Commit
 `715aabfd7fd041d32504e1da77db6abfc43cb30c`.
@@ -561,13 +548,11 @@ sind erfolgreich; der anonyme Registry-Zugriff wurde geprüft. Unveränderliche 
 ghcr.io/jensderkrueger/borgvr-agent@sha256:3bd3833ef37e2e013ac7d18502a0901d7c0c854faa95fb367242b29a43162b63
 ```
 
-Version 3.9.2 fordert für Werkzeuge ohne Argumente eine strikt eingeschränkte Ausgabe an,
-damit keine erfundenen Felder wie `reason` oder `action` entstehen. Die lokale
-Schema-Prüfung bleibt erhalten. Bestehende Installationen mit `git pull` und anschließend
+Bestehende Installationen mit `git pull` und anschließend
 `sudo ./setup.sh update --agent-image ghcr.io/jensderkrueger/borgvr-agent:3.9.2` aktualisieren.
 `git pull` allein ersetzt den laufenden Container nicht; `update` ohne `--agent-image`
 behält das bisher konfigurierte Image bei. Modell, Zugangsschlüssel und Zertifikate bleiben
-erhalten. Für diesen serverseitigen Fix muss die native App nicht neu gebaut werden.
+erhalten.
 
 Der Workflow [BorgVR Agent Container](https://github.com/JensDerKrueger/BorgVR/actions/workflows/borgvr-agent.yml)
 baut und testet nach relevanten Änderungen auf `main` sowie bei Pull Requests automatisch
@@ -575,48 +560,9 @@ ein Image für **linux/amd64**. Zusätzlich zu den Tests startet er den echten C
 TLS, Authentifizierung und schreibgeschütztem Dateisystem. Der CPU-Runner testet dabei
 bewusst keine GPU-Inferenz; diese Prüfung bleibt auf dem jeweiligen GPU-Rechner erforderlich.
 
-### Was Der Workflow Genau Macht
-
-1. **Auslösen:** Änderungen unter `BorgVRAgentServer` oder am Workflow starten den Lauf
-   bei einem Push auf `main` oder einem Pull Request. Ein manueller Start ist ebenfalls möglich.
-2. **Isolierter Build-Rechner:** GitHub stellt einen temporären Ubuntu-24.04-Rechner mit
-   Python 3.12 bereit und lädt genau den auslösenden Quellcode-Commit. Dein Linux-Server
-   wird dabei nicht kontaktiert. Mehrere Läufe desselben Branches werden nacheinander ausgeführt.
-3. **Metadaten und Tests:** Repository, Commit, Plattform und optionale Versionsnummer
-   werden validiert. Die festgelegten Test-Abhängigkeiten werden installiert und die
-   Unit-, Protokoll-, Installer-, Rechte-, TLS- und Deinstallationstests ausgeführt.
-4. **Compose prüfen:** Eine temporäre Testkonfiguration wird erzeugt. Die CUDA- und
-   ROCm-Konfiguration sowie das Entwickler-Build-Overlay werden auf Gültigkeit geprüft.
-5. **Image bauen:** Docker Buildx baut nur unseren Agenten für `linux/amd64`, zunächst lokal
-   als `borgvr-agent:ci`. Basis-Image und Python-Pakete sind festgelegt. Build-Caches beschleunigen
-   Wiederholungen. OCI-Labels enthalten unter anderem Quellcode-Commit und Version.
-6. **Echten Container prüfen:** Das gebaute Image wird wirklich gestartet, mit TLS,
-   schreibgeschütztem Dateisystem und reduzierten Rechten. Die Tests laufen nach normaler
-   und nach Root-Einrichtung. Sie prüfen auch den gemeinsamen Token ohne zusätzliche
-   Root-Capabilities sowie die gezielte Deinstallation unter Schutz fremder Container.
-   Der Container hat absichtlich kein Modell und meldet es als nicht bereit. Nur die
-   Unit-Tests verwenden deterministische Testmodelle; echte Inferenz wird nicht vorgetäuscht.
-7. **Artefakte sichern:** Das getestete Image wird mit `docker save` archiviert. Ein separates
-   Deployment-Paket enthält Skripte, Compose-Datei, Anleitungen und Lizenz. `release.json`
-   und SHA-256-Prüfsummen verbinden die Archive mit Quellcode und Image-ID. Installationspakete
-   enthalten keine produktiven Schlüssel, Zertifikate oder Modellgewichte.
-8. **Normaler Lauf endet hier:** Pushes und Pull Requests veröffentlichen kein Registry-Image.
-   Der Image-Upload erfolgt nur nach manuellem Start mit `publish=true`, expliziter neuer
-   Version und Branch `main`, und nur nach erfolgreichem Build samt Tests.
-9. **Veröffentlichen ohne Neubau:** Der zweite Job lädt exakt das zuvor getestete Artefakt,
-   prüft Commit/Repository/Prüfsummen und die Docker-Image-ID und lädt es in Docker.
-   GitHubs temporärer Token erhält nur hier Schreibrechte auf Packages. Das gleiche Image
-   wird mit Versions- und Commit-Tag nach GHCR geschoben. Eine vorhandene Versionsnummer
-   darf nicht auf ein anderes Image umgebogen werden.
-10. **Ergebnis:** Ein weiteres Deployment-Paket enthält den festen Registry-Digest für die
-    Installation. Danach meldet sich der Job von der Registry ab. Er ändert weder
-    Paketsichtbarkeit noch `latest`, erzeugt kein GitHub-Release und aktualisiert keinen Server.
-
-**Wichtige Trennung:** `git pull` aktualisiert Skripte und Compose-Dateien. Ein neuer
-Workflow-Build erzeugt ein neues Image, installiert es aber nirgends. Erst eine bewusste
-Veröffentlichung macht es in GHCR verfügbar; erst `setup.sh update` auf deinem Server
-mit passender Image-Auswahl setzt es dort ein. vLLM und Modellgewichte werden nicht von
-unserem Workflow gebaut oder mitgeliefert, sondern vom Server aus ihren jeweiligen Quellen geladen.
+Pushes und Pull Requests erzeugen nur Build-Artefakte, kein Registry-Image. Die
+Veröffentlichung erfolgt ausschließlich nach manuellem Start und erfolgreichen Tests.
+Ein veröffentlichtes Image wird nicht automatisch auf Servern installiert.
 
 Ein erfolgreicher Build stellt als Workflow-Artefakt bereit:
 
@@ -632,14 +578,16 @@ aus dem vertrauenswürdigen Workflow laden und Prüfsummen vergleichen. Build-Ar
 Release-Archiv.
 
 Für eine neue Registry-Version unter **Actions > BorgVR Agent Container > Run workflow**
-den Branch **main** wählen, **publish** aktivieren und eine neue Version wie **3.9.2**
+den Branch **main** wählen, **publish** aktivieren und eine bisher unbenutzte Versionsnummer
 eintragen. Nach erneut erfolgreichen Tests wird exakt das geprüfte Image ohne weiteren
 Build veröffentlicht:
 
 ```text
-ghcr.io/jensderkrueger/borgvr-agent:3.9.2
+ghcr.io/jensderkrueger/borgvr-agent:VERSION
 ghcr.io/jensderkrueger/borgvr-agent:sha-VOLLSTÄNDIGER_QUELLCODE_COMMIT
 ```
+
+`VERSION` durch die im Workflow angegebene Versionsnummer ersetzen.
 
 Der Workflow verwendet GitHubs temporären Repository-Token. Schreibrechte auf Packages
 erhält nur der manuell gestartete Veröffentlichungsjob auf `main`. Automatische Builds und
