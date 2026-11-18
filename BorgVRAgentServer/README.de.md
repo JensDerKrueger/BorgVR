@@ -31,6 +31,16 @@ Agenteneinstellungen und Schlüssel bleiben gerätelokal, außerhalb von SharePl
 
 ### Text Funktioniert, Werkzeugaufrufe Scheitern
 
+Der Agent fordert für parameterlose Werkzeuge wie `get_application_state` strikte
+Schema-Einhaltung beim Modellserver an (`strict: true`). Das mitgelieferte vLLM 0.34
+kann damit erfundene Felder wie `reason` oder `action` schon bei der Erzeugung verhindern.
+Die serverseitige und die native Argumentprüfung bleiben zusätzlich aktiv. Eine
+ungültige Antwort wird nicht durch Entfernen unbekannter Felder passend gemacht;
+das Modell erhält stattdessen die konkrete Rückmeldung, mit exakt `{}` zu wiederholen.
+Werkzeuge mit optionalen Parametern bleiben unverändert, damit ausgelassene Werte
+nicht versehentlich gesetzt werden. Eigene vLLM-Images/Tool-Parser müssen strikte
+Tool-Aufrufe unterstützen; der mitgelieferte Kompatibilitätstest prüft den gesamten Pfad.
+
 `UnexpectedModelBehavior` im Agenten-Log ist nur der Fehlertyp, noch nicht die Ursache.
 Mit diesem Diagnosetest lässt sich der Modell-/Werkzeugpfad ohne echte Datensätze und
 ohne Neustart oder Neubau des Containers prüfen. Nach `git pull` im Agenten-Verzeichnis:

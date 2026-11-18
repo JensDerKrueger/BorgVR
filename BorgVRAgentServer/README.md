@@ -510,6 +510,14 @@ delete the model cache as well: `sudo docker compose down --volumes`. This does 
 
 ### Diagnose Tool Calls Without Native Data
 
+The agent requests `strict: true` for no-argument tools such as `get_application_state`.
+The pinned vLLM 0.34 can constrain these calls during generation, preventing invented
+fields such as `reason` or `action`. Both server and native argument validation remain
+enabled. Invalid arguments are not silently dropped; the model receives precise feedback
+to retry with exactly `{}`. Tools with optional properties are not marked strict, preserving
+the meaning of omitted parameters. Custom vLLM images/tool parsers must support strict
+tool calls; the bundled model compatibility check exercises the full path.
+
 If plain text works but tool requests fail with `UnexpectedModelBehavior`, the log's
 exception class alone is insufficient to identify the cause. After `git pull`, run from
 the deployment directory, using the already running container (no rebuild/restart):

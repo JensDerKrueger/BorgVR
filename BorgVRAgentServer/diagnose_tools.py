@@ -53,7 +53,7 @@ class SyntheticSession(Session):
         try:
             validate_arguments(definition, arguments)
         except (ValueError, TypeError) as error:
-            raise ModelRetry("Arguments do not match the advertised schema") from error
+            raise ModelRetry(str(error)) from error
         if definition.name != "get_application_state":
             raise ModelRetry("This synthetic diagnostic only permits get_application_state")
         self.called.append(definition.name)

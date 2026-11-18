@@ -156,7 +156,11 @@ def validate_arguments(definition: ToolDefinition, arguments: dict) -> None:
     if len(json_bytes(arguments)) > MAX_RESULT_BYTES:
         raise ProtocolError("Tool arguments too large")
     if not Draft202012Validator(definition.inputSchema).is_valid(arguments):
-        raise ProtocolError("Arguments do not match the advertised tool schema")
+        if definition.inputSchema.get("properties") == {}:
+            raise ProtocolError(f"Tool {definition.name} takes no arguments. Retry with exactly {{}}. "
+                                "Do not include reason, action, or any other fields.")
+        raise ProtocolError("Arguments do not match the advertised tool schema. "
+                            "Use only its declared properties, include required fields, and respect their types and bounds.")
     if definition.name == "capture_screenshot" and set(arguments) - {"include_alpha"}:
         raise ProtocolError("Saving screenshot files is not allowed")
 

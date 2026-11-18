@@ -29,6 +29,9 @@ from .protocol import (
 logger = logging.getLogger("borgvr_agent")
 SYSTEM_PROMPT = """You are BorgVR's visualization assistant. Reply in the user's language.
 Use only the provided tools, with their documented coordinates, units and platform limitations.
+Tool arguments must match the advertised schema exactly. A tool with no properties takes
+exactly {}: never add reason, action, or other invented fields. Use report_progress for
+explanations, not extra tool arguments. Correct invalid arguments using the tool feedback.
 Before changing a visualization, read get_application_state if available. Never invent a
 tool result, anatomical orientation, or successful action. RGB/RGBA data has no transfer
 function or lit/ISO rendering. Ask for clarification if anatomy or left/right is uncertain.
@@ -178,11 +181,20 @@ class Session:
                     return await self.call_tool(item, arguments)
                 return callback
 
-            tools.append(Tool.from_schema(
+            no_arguments = definition.inputSchema.get("properties") == {}
+            description = definition.description
+            if no_arguments:
+                description += " This tool takes no arguments. Call with exactly {}. Never add reason, action or any other fields."
+            tool = Tool.from_schema(
                 make_callback(definition), name=definition.name,
-                description=definition.description, json_schema=definition.inputSchema,
+                description=description, json_schema=definition.inputSchema,
                 sequential=True,
-            ))
+            )
+            # Empty, closed object schemas already satisfy OpenAI strict-schema requirements.
+            # Do not mark schemas with optional properties strict: their omission is meaningful.
+            if no_arguments:
+                tool.strict = True
+            tools.append(tool)
 
         async def report_progress(text: str) -> str:
             """Speak a short progress update to the user without claiming unverified success."""

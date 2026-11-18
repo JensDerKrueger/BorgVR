@@ -8,7 +8,7 @@ import httpx
 from fastapi.testclient import TestClient
 from PIL import Image
 from pydantic_ai import BinaryContent
-from pydantic_ai.messages import ModelResponse, TextPart, ToolCallPart, UserPromptPart
+from pydantic_ai.messages import ModelResponse, TextPart, ToolCallPart, ToolReturnPart, UserPromptPart
 from pydantic_ai.models.function import FunctionModel
 import pytest
 from starlette.websockets import WebSocketDisconnect
@@ -164,6 +164,13 @@ def test_openai_compatible_http_adapter_and_png_payload(monkeypatch, custom):
             assert body["chat_template_kwargs"] == {"enable_thinking": False}
         assert body["parallel_tool_calls"] is False
         assert body["model"] == settings.model
+        state_tool = next(tool["function"] for tool in body["tools"] if tool["function"]["name"] == "get_application_state")
+        assert state_tool["strict"] is True
+        assert state_tool["parameters"]["properties"] == {}
+        assert state_tool["parameters"]["additionalProperties"] is False
+        assert "exactly {}" in state_tool["description"]
+        screenshot_tool = next(tool["function"] for tool in body["tools"] if tool["function"]["name"] == "capture_screenshot")
+        assert screenshot_tool.get("strict") is not True
         requests.append(body)
         name = ("get_application_state", "capture_screenshot", None)[len(requests) - 1]
         message = {"role": "assistant", "content": None}
@@ -211,6 +218,39 @@ def test_tool_arguments_are_actually_validated_not_just_advertised():
         ws.send_json(reply(call))
         assert ws.receive_json()["type"] == "assistant_message"
         assert ws.receive_json()["type"] == "completed"
+
+
+@pytest.mark.parametrize("bad_arguments", [{"reason": "Read the active dataset"}, {"action": "get_application_state"}])
+def test_no_argument_tools_reject_invented_fields_and_retry_with_empty_object(bad_arguments):
+    requests, feedback = [], []
+    async def function(messages, info):
+        requests.append(messages)
+        if len(requests) == 1:
+            return ModelResponse(parts=[ToolCallPart("get_application_state", bad_arguments, tool_call_id="invalid")])
+        if len(requests) == 2:
+            feedback.extend(part.content for message in messages for part in message.parts
+                            if isinstance(part, ToolReturnPart) and part.outcome == "retried")
+            return ModelResponse(parts=[ToolCallPart("get_application_state", {}, tool_call_id="corrected")])
+        return ModelResponse(parts=[TextPart("State read")])
+    with connection(FunctionModel(function)) as client, open_session(client) as ws:
+        ws.send_json(hello([STATE]))
+        ws.receive_json()
+        ws.send_json(user())
+        assert ws.receive_json()["type"] == "started"
+        call = ws.receive_json()
+        assert call["type"] == "tool_call" and call["arguments"] == {}
+        ws.send_json(reply(call))
+        assert ws.receive_json()["text"] == "State read"
+        assert ws.receive_json()["type"] == "completed"
+    assert len(requests) == 3
+    assert any(isinstance(text, str) and "exactly {}" in text and "reason, action" in text for text in feedback), feedback
+
+
+def test_no_argument_feedback_does_not_disclose_argument_values():
+    for arguments in ({"reason": "private text"}, {"action": "close_dataset"}):
+        with pytest.raises(ProtocolError, match=r"exactly \{\}") as error:
+            validate_arguments(ToolDefinition.model_validate(STATE), arguments)
+        assert "private text" not in str(error.value) and "close_dataset" not in str(error.value)
 
 
 def test_mutation_requires_current_state_read():
