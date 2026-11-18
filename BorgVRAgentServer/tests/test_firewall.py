@@ -23,8 +23,8 @@ class Host:
             return subprocess.CompletedProcess(args, 0, self.ufw, "")
         if args == ("ufw", "show", "added"):
             return subprocess.CompletedProcess(args, 0, "\n".join("ufw " + shlex.join(tokens) for tokens in self.ufw_entries), "")
-        if args[:2] == ("ufw", "--force"):
-            tokens = list(args[2:])
+        if args[0] == "ufw" and len(args) > 1 and args[1] in ("allow", "delete"):
+            tokens = list(args[1:])
             if tokens[0] == "delete":
                 self.ufw_entries.remove(tokens[1:])
             elif self.fail_add:
@@ -58,7 +58,7 @@ class Host:
 
     @property
     def changes(self):
-        return [args for args in self.calls if args[:2] == ("ufw", "--force") or
+        return [args for args in self.calls if args[0] == "ufw" and len(args) > 1 and args[1] in ("allow", "delete") or
                 any(value.startswith(("--add-", "--remove-")) for value in args)]
 
 
@@ -87,7 +87,7 @@ def test_ufw_opt_in_uses_configured_endpoint_and_tracks_only_new_rule(tmp_path, 
     original = host.ufw_entries.copy()
     firewall.check(tmp_path, opening=True)
     assert len(host.changes) == 1
-    assert host.changes[0][:4] == ("ufw", "--force", "allow", "proto")
+    assert host.changes[0][:4] == ("ufw", "allow", "proto", "tcp")
     assert "9876" in host.changes[0] and "134.91.11.251" in host.changes[0]
     assert "0.0.0.0/0" in host.changes[0]  # IPv4 only, including wildcard binds.
     entries = firewall.load_rules(tmp_path)
@@ -97,6 +97,18 @@ def test_ufw_opt_in_uses_configured_endpoint_and_tracks_only_new_rule(tmp_path, 
     assert len(host.changes) == 1
     firewall.remove_rules(tmp_path)
     assert host.ufw_entries == original and firewall.load_rules(tmp_path) == []
+
+
+@pytest.mark.parametrize("remove", [False, True])
+@pytest.mark.parametrize("bind,target", [("134.91.11.251", "134.91.11.251"), ("0.0.0.0", "any")])
+def test_ufw_full_rule_syntax_does_not_use_force(monkeypatch, remove, bind, target):
+    calls = []
+    monkeypatch.setattr(firewall, "run", lambda *args: calls.append(args))
+    entry = {"manager": "ufw", "bind": bind, "port": 8766, "zone": None, "permanent": True}
+    firewall.change_rule(entry, remove=remove)
+    # --force is not accepted with allow or deletion by full rule (only numbered deletion).
+    assert calls == [("ufw", *(["delete"] if remove else []), "allow", "proto", "tcp",
+        "from", "0.0.0.0/0", "to", target, "port", "8766", "comment", firewall.ufw_marker(entry))]
 
 
 @pytest.mark.parametrize("rule", [

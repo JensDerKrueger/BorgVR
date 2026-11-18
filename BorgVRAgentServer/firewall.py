@@ -184,7 +184,7 @@ def rule_present(entry, owned=False):
 def change_rule(entry, remove=False):
     if entry["manager"] == "ufw":
         target = "any" if entry["bind"] == "0.0.0.0" else entry["bind"]
-        run("ufw", "--force", *(["delete"] if remove else []), "allow", "proto", "tcp", "from", "0.0.0.0/0", "to", target,
+        run("ufw", *(["delete"] if remove else []), "allow", "proto", "tcp", "from", "0.0.0.0/0", "to", target,
             "port", str(entry["port"]), "comment", ufw_marker(entry))
     else:
         run(*firewalld_rule(entry, "remove" if remove else "add"))
