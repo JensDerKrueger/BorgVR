@@ -137,6 +137,14 @@ the installed image are rejected. Historical snapshots and logs are bounded.
 On failure inspect status/logs first. Failed snapshots are retained for diagnosis; no app
 commands are rolled back or repeated automatically. Push a corrected or known-good local
 version again. Local code remains available for tests, commits and a normal final release.
+If `dev enable` itself fails, the normal agent is restored and the SSH key is not enabled.
+Before restoration, supervisor state and Docker healthcheck output are saved to
+`/var/lib/borgvr-agent-dev/startup-failure.json` (root-readable only). Read it with
+`sudo cat /var/lib/borgvr-agent-dev/startup-failure.json`; worker output remains in
+`/var/lib/borgvr-agent-dev/control/agent.log`. A running agent process is not sufficient:
+Docker also checks `/readyz`, which verifies access to the configured model through vLLM.
+HTTP 503 there concerns model readiness, not SSH authentication. Fix that underlying problem
+before removing the incomplete development setup with `dev disable --remove` and enabling it again.
 Changing `requirements.txt` requires a matching new image. Setup, SSH-helper or supervisor
 changes need a new development installation, not just a source push.
 

@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+import ssl
 import struct
 import subprocess
 import sys
@@ -207,7 +208,8 @@ def test_setup_dev_is_available_on_client_without_docker():
     assert result.returncode == 0 and "--host" in result.stdout and "--ssh-key-file" in result.stdout
 
 
-def test_enable_installs_only_forced_key_and_unprivileged_staging(tmp_path, monkeypatch):
+@pytest.mark.parametrize("startup_fails,restore_fails", [(False, False), (True, False), (True, True)])
+def test_enable_installs_only_forced_key_and_unprivileged_staging(tmp_path, monkeypatch, capsys, startup_fails, restore_fails):
     source = tmp_path / "checkout"
     source.mkdir()
     for name in dev.TOP_FILES:
@@ -237,12 +239,38 @@ def test_enable_installs_only_forced_key_and_unprivileged_staging(tmp_path, monk
         nonlocal created
         calls.append((args, kwargs))
         if args[0] == "useradd": created = True
+        if args[-1] == "_dev-agent-health":
+            assert restarted == [source]
+            assert json.loads((dev_root / "installation.json").read_text())["enabled"]
+            return SimpleNamespace(stdout='{"Status":"unhealthy","Log":[{"ExitCode":1,"Output":"503 Service Unavailable"}]}')
         return SimpleNamespace(stdout=hashlib.sha256((ROOT / "requirements.txt").read_bytes()).hexdigest())
     monkeypatch.setattr(dev.pwd, "getpwnam", get_account)
     monkeypatch.setattr(dev.grp, "getgrnam", group)
     monkeypatch.setattr(dev.subprocess, "run", run)
-    monkeypatch.setattr(dev, "run_compose", lambda root: restarted.append(root))
+    def up(root):
+        restarted.append(root)
+        if startup_fails and len(restarted) == 1:
+            (dev_root / "control/status.json").write_text('{"phase":"ready"}')
+            raise subprocess.CalledProcessError(1, ["bash", "setup.sh", "_dev-agent-up"])
+        if restore_fails:
+            raise subprocess.CalledProcessError(1, ["bash", "setup.sh", "_dev-agent-up"])
+    monkeypatch.setattr(dev, "run_compose", up)
     original = (source / ".env").read_bytes()
+    if startup_fails:
+        with pytest.raises(subprocess.CalledProcessError):
+            dev.enable(source, key)
+        assert restarted == [source, source]
+        assert not (dev_root / "home/.ssh/authorized_keys").exists()
+        assert not dev.marker(source).exists()
+        assert not json.loads((dev_root / "installation.json").read_text())["enabled"]
+        failure = dev.read_json(dev_root / "startup-failure.json")
+        assert failure["supervisor"]["phase"] == "ready"
+        assert failure["docker_health"]["Status"] == "unhealthy"
+        assert "503" in failure["docker_health"]["Log"][0]["Output"]
+        assert (dev_root / "startup-failure.json").stat().st_mode & 0o777 == 0o600
+        assert (source / ".env").read_bytes() == original
+        assert ("Normal agent restoration also failed" in capsys.readouterr().err) == restore_fails
+        return
     dev.enable(source, key)
     assert restarted == [source] and (source / ".env").read_bytes() == original
     authorized = (dev_root / "home/.ssh/authorized_keys").read_text()
@@ -254,6 +282,44 @@ def test_enable_installs_only_forced_key_and_unprivileged_staging(tmp_path, monk
     assert "SSH_AUTH_SOCK" not in stage["env"] and "PYTHONPATH" not in stage["env"]
     assert (dev_root / "home").stat().st_mode & 0o777 == 0o750
     assert dev.marker(source).exists() and json.loads((dev_root / "installation.json").read_text())["enabled"]
+
+
+def test_startup_diagnostics_failure_does_not_invent_a_health_result(deployment, monkeypatch):
+    def failure(*args, **kwargs):
+        raise subprocess.TimeoutExpired("health diagnostics", 15)
+    monkeypatch.setattr(dev.subprocess, "run", failure)
+    dev.save_startup_failure(ROOT, ValueError("startup timeout"))
+    report = dev.read_json(deployment / "startup-failure.json")
+    assert report["docker_health_error"] == "TimeoutExpired" and "docker_health" not in report
+    assert report["supervisor_error"] == "FileNotFoundError"
+
+
+def test_health_probe_keeps_tls_verification_and_reports_errors(monkeypatch):
+    context = ssl.create_default_context()
+    contexts = []
+    monkeypatch.setattr(dev.ssl, "create_default_context", lambda **kwargs: context)
+    monkeypatch.setattr(dev.urllib.request, "HTTPSHandler", lambda **kwargs: contexts.append(kwargs["context"]))
+    def failed_open(url, **kwargs):
+        assert url == "https://127.0.0.1:8766/healthz" and kwargs["timeout"] == 1
+        raise OSError("probe failure")
+    monkeypatch.setattr(dev.urllib.request, "build_opener", lambda *args: SimpleNamespace(open=failed_open))
+    assert dev.health_status() == (False, "OSError: probe failure")
+    assert contexts == [context]
+    assert context.check_hostname and context.verify_mode == ssl.CERT_REQUIRED
+    assert context.verify_flags & ssl.VERIFY_X509_PARTIAL_CHAIN
+
+
+def test_setup_health_diagnostics_inspects_only_agent_health(operations):
+    root, run = operations
+    docker = root / "bin/docker"
+    text = docker.read_text()
+    text = text.replace('if "run" in args', 'if "ps" in args and "--quiet" in args:\n    print("a" * 64)\nif "run" in args', 1)
+    docker.write_text(text)
+    result, calls = run("_dev-agent-health")
+    assert result.returncode == 0, result.stderr
+    inspected = next(c["args"] for c in calls if "inspect" in c["args"])
+    assert inspected[-3:] == ["--format", "{{json .State.Health}}", "a" * 64]
+    assert not any("up" in c["args"] or "exec" in c["args"] or "pull" in c["args"] for c in calls)
 
 
 def test_disable_revokes_key_before_returning_to_image(deployment, monkeypatch):
@@ -324,6 +390,37 @@ d.supervise(root/'releases',root/'control',command=[sys.executable,'-c','raise S
     try:
         with pytest.raises(ValueError, match="failed to start"):
             dev.wait_ready(deployment / "control", initial["request"], timeout=5)
+        assert dev.read_json(deployment / "control/status.json")["exit_code"] == 42
+    finally:
+        process.terminate()
+        _, errors = process.communicate(timeout=15)
+        assert process.returncode == 0, errors.decode()
+
+
+def test_supervisor_exposes_health_error_for_a_running_worker(deployment):
+    dev.stage_source(archive(), {"requirements_sha256": HASH}, wait=False)
+    script = '''import sys
+from pathlib import Path
+import development as d
+root=Path(sys.argv[1])
+d.health_status=lambda:(False,'TLS probe failed')
+d.supervise(root/'releases',root/'control',command=[sys.executable,'-c','import time;time.sleep(120)'])
+'''
+    process = subprocess.Popen([sys.executable, "-c", script, str(deployment)], cwd=ROOT,
+                               stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+    try:
+        deadline = time.monotonic() + 5
+        state = {}
+        while time.monotonic() < deadline:
+            try:
+                state = dev.read_json(deployment / "control/status.json")
+            except FileNotFoundError:
+                pass
+            if state.get("health_error"):
+                break
+            time.sleep(0.05)
+        assert state["phase"] == "starting" and state["health_error"] == "TLS probe failed"
+        assert process.poll() is None
     finally:
         process.terminate()
         _, errors = process.communicate(timeout=15)

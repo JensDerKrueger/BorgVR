@@ -56,7 +56,7 @@ usage() {
 die() { printf 'Error: %s\n' "$*" >&2; exit 1; }
 while (($#)); do
   case "$1" in
-    install|init|configure|model|profiles|doctor|start|stop|restart|update|status|logs|test|uninstall|_dev-agent-up) COMMAND="$1"; shift ;;
+    install|init|configure|model|profiles|doctor|start|stop|restart|update|status|logs|test|uninstall|_dev-agent-up|_dev-agent-health) COMMAND="$1"; shift ;;
     --gpu|--backend|--profile|--model|--model-revision|--tool-parser|--reasoning-parser|--thinking|--dtype|--quantization|--context-length|--max-seqs|--max-output-tokens|--gpu-memory-fraction|--min-free-gib|--enforce-eager|--cpu-offload-gb|--vllm-image)
       (($# >= 2)) || die "Missing value for $1"
       MODEL_ARGS+=("$1" "$2"); shift 2 ;;
@@ -242,6 +242,10 @@ if [[ "$COMMAND" == start || "$COMMAND" == restart || "$COMMAND" == update || "$
   python3 "$DIR/configure.py" prepare-secrets
 fi
 case "$COMMAND" in
+  _dev-agent-health)
+    container="$(compose ps --all --quiet agent)"
+    [[ "$container" =~ ^[a-f0-9]{12,64}$ ]] || die 'Expected exactly one BorgVR agent container.'
+    "${DOCKER[@]}" inspect --format '{{json .State.Health}}' "$container" ;;
   _dev-agent-up)
     compose up -d --no-deps --no-build --pull never --force-recreate --wait --wait-timeout 90 agent ;;
   install)

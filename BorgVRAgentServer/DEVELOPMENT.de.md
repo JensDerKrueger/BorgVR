@@ -146,6 +146,15 @@ verfügbar und können nach Abschluss normal getestet, committed und veröffentl
 Bei einem Fehler zuerst Status und Logs prüfen. Ein fehlgeschlagener Snapshot bleibt zur
 Analyse erhalten; es gibt kein automatisches Zurückrollen oder Wiederholen von App-Befehlen.
 Eine korrigierte oder bekannte gute lokale Version erneut mit `dev push` übertragen.
+Scheitert bereits `dev enable`, wird der normale Agent wiederhergestellt und der SSH-Schlüssel
+nicht freigeschaltet. Vorher werden der interne Status und die Docker-Healthcheck-Ausgabe
+unter `/var/lib/borgvr-agent-dev/startup-failure.json` gesichert (nur für root lesbar).
+Anzeigen mit `sudo cat /var/lib/borgvr-agent-dev/startup-failure.json`; die Worker-Ausgabe
+steht unter `/var/lib/borgvr-agent-dev/control/agent.log`. Ein laufender Agent-Prozess allein
+genügt nicht: Der Docker-Healthcheck prüft zusätzlich über `/readyz`, ob der Agent das
+konfigurierte Modell bei vLLM erreichen kann. HTTP 503 dort betrifft diese Modellprüfung,
+nicht die SSH-Anmeldung. Erst das zugrunde liegende Problem beheben, dann die unvollständige
+Entwicklungseinrichtung mit `dev disable --remove` entfernen und neu aktivieren.
 Die Bibliotheken kommen weiterhin aus dem installierten Image: Bei geänderten
 `requirements.txt` ist ein neues passendes Image erforderlich. Änderungen am Setup,
 SSH-Helfer oder Wächter benötigen eine neue Einrichtung, nicht nur einen Code-Push.

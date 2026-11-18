@@ -260,18 +260,19 @@ def ssh_command(command, stdin=None):
             print(json.dumps(wait_ready(control, request_reload(control, current["release"]))))
 
 
-def healthy():
+def health_status():
     try:
         context = ssl.create_default_context(cafile="/run/tls/server.crt")
+        context.verify_flags |= ssl.VERIFY_X509_PARTIAL_CHAIN
         opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), urllib.request.HTTPSHandler(context=context))
         with opener.open("https://127.0.0.1:8766/healthz", timeout=1) as response:
-            return response.status == 200
-    except (OSError, ValueError):
-        return False
+            return response.status == 200, None if response.status == 200 else "Unexpected health response"
+    except (OSError, ValueError) as error:
+        return False, (type(error).__name__ + ": " + str(error))[:1024]
 
 
 def supervise(releases=Path("/opt/borgvr-dev/releases"), control=Path("/run/borgvr-dev"), *,
-              command=None, health=healthy):
+              command=None, health=None):
     os.umask(0o007)
     command = command or [sys.executable, *UVICORN]
     running, child, current, selector = True, None, None, selectors.DefaultSelector()
@@ -338,9 +339,18 @@ def supervise(releases=Path("/opt/borgvr-dev/releases"), control=Path("/run/borg
                     selector.unregister(key.fileobj)
                     key.fileobj.close()
                     child.stdout = None
-            phase = "failed" if child.poll() is not None else "ready" if health() else "starting"
-            if phase != state["phase"]:
-                state["phase"] = phase
+            exit_code = child.poll()
+            ready, health_error = health_status() if health is None and exit_code is None else (False, None)
+            if health is not None and exit_code is None:
+                ready = health()
+            next_state = {**request, "sha256": source["sha256"],
+                          "phase": "failed" if exit_code is not None else "ready" if ready else "starting"}
+            if health_error:
+                next_state["health_error"] = health_error
+            if exit_code is not None:
+                next_state["exit_code"] = exit_code
+            if next_state != state:
+                state = next_state
                 write_json(control / "status.json", state)
     finally:
         stop_child()
@@ -373,6 +383,23 @@ def overlay_file(root=ROOT):
 def run_compose(root):
     # Keep backend selection in setup.sh; this private operation only recreates agent.
     subprocess.run(["bash", str(root / "setup.sh"), "_dev-agent-up"], check=True, timeout=120)
+
+
+def save_startup_failure(root, error):
+    report = {"error_type": type(error).__name__, "error": str(error)[:2048]}
+    try:
+        report["supervisor"] = read_json(DEV_ROOT / "control/status.json")
+    except (OSError, ValueError) as status_error:
+        report["supervisor_error"] = type(status_error).__name__
+    try:
+        result = subprocess.run(["bash", str(root / "setup.sh"), "_dev-agent-health"],
+                                capture_output=True, text=True, timeout=15, check=True)
+        report["docker_health"] = json.loads(result.stdout[:65536])
+    except (OSError, ValueError, subprocess.SubprocessError) as health_error:
+        report["docker_health_error"] = type(health_error).__name__
+    path = DEV_ROOT / "startup-failure.json"
+    write_json(path, report, 0o600)
+    print("Development startup failed; diagnostics saved before restoring the normal agent: " + str(path), file=sys.stderr)
 
 
 def overlay(gid):
@@ -472,13 +499,21 @@ def enable(root, key_file):
     write_json(marker(root), {"root": str(DEV_ROOT)}, 0o600)
     try:
         run_compose(root)
-    except Exception:
+    except Exception as error:
+        # Capture the failed container before recreation replaces its healthcheck history.
+        try:
+            save_startup_failure(root, error)
+        except (OSError, ValueError) as diagnostic_error:
+            print("Could not save development diagnostics: " + type(diagnostic_error).__name__, file=sys.stderr)
         record["enabled"] = False
         write_json(DEV_ROOT / "installation.json", record, 0o644)
         marker(root).unlink(missing_ok=True)
         # Restore only the agent; never stop a healthy model as part of error recovery.
-        with suppress(Exception):
+        try:
             run_compose(root)
+        except Exception as restore_error:
+            print("Normal agent restoration also failed its startup/readiness check: " +
+                  type(restore_error).__name__ + ". Check agent and vLLM health before retrying.", file=sys.stderr)
         raise
     forced = '/usr/bin/python3 -I ' + str(HELPER) + ' ssh'
     authorized = DEV_ROOT / "home/.ssh/authorized_keys"
