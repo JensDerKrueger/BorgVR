@@ -33,7 +33,10 @@ def test_diagnostic_reports_real_tool_retry_failure_without_response_body(capsys
     async def model(messages, info):
         return ModelResponse(parts=[ToolCallPart("get_application_state", {"unexpected": "synthetic"}, tool_call_id="bad")])
     assert not asyncio.run(diagnose(SETTINGS, FunctionModel(model), CATALOG))
-    results = [json.loads(line) for line in capsys.readouterr().out.splitlines() if '"passed"' in line]
+    output = [json.loads(line) for line in capsys.readouterr().out.splitlines()]
+    arguments = [entry for entry in output if entry.get("phase") == "tool_arguments"]
+    assert arguments and all(json.loads(entry["arguments_json"]) == {"unexpected": "synthetic"} for entry in arguments)
+    results = [entry for entry in output if "passed" in entry]
     assert len(results) == 2 and all(not entry["passed"] for entry in results)
     assert all(entry["errors"][0]["type"] == "UnexpectedModelBehavior" for entry in results)
     assert all(entry["successful_state_reads"] == 0 for entry in results)

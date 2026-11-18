@@ -42,7 +42,8 @@ sudo docker compose exec -T agent python - --catalog-json "$(cat diagnostic_cata
 Der Test verwendet zuerst nur `get_application_state`, danach den Werkzeugkatalog der
 nativen App. Ein erfolgreicher Aufruf liefert ausschließlich einen synthetischen
 Datensatzzustand; alle anderen Werkzeuge werden abgewiesen. Kein Fenster, Rendering oder
-Datensatz wird geändert. Ausgegeben werden Testergebnisse und konkrete Fehlerkategorien,
+Datensatz wird geändert. Ausgegeben werden Testergebnisse, die Argumente dieser ausschließlich
+synthetischen Werkzeugaufrufe (maximal 4096 Zeichen pro Aufruf) und konkrete Fehlerkategorien,
 keine Zugangsschlüssel oder Provider-Antwortkörper. Ein Exitcode ungleich null bedeutet,
 dass mindestens einer der beiden Tests fehlgeschlagen ist. Die JSON-Ausgabe kann zur
 Fehlersuche weitergegeben werden; Modellantworten beziehen sich ausschließlich auf den

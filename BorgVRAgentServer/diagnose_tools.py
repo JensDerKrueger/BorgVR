@@ -37,14 +37,19 @@ def error_details(error):
 
 
 class SyntheticSession(Session):
-    def __init__(self, settings, model):
+    def __init__(self, settings, model, label):
         super().__init__(None, settings, model, asyncio.Semaphore(1))
         self.called = []
+        self.label = label
 
     async def send(self, value):
         pass  # Progress is deliberately not sent to any native client.
 
     async def call_tool(self, definition, arguments):
+        # Only this isolated synthetic run may display arguments; production never logs them.
+        encoded = json.dumps(arguments, ensure_ascii=True, separators=(",", ":"))
+        emit(test=self.label, phase="tool_arguments", tool=definition.name,
+             arguments_json=encoded[:4096], truncated=len(encoded) > 4096)
         try:
             validate_arguments(definition, arguments)
         except (ValueError, TypeError) as error:
@@ -63,7 +68,7 @@ async def diagnose(settings, model, catalog):
         raise ValueError("The diagnostic catalog must contain get_application_state")
     passed = True
     for label, definitions in (("minimal_catalog", minimal), ("native_catalog", tools)):
-        session = SyntheticSession(settings, model)
+        session = SyntheticSession(settings, model, label)
         session.tools = definitions
         session.agent = session.build_agent()
         emit(test=label, phase="start", model=settings.model, tools=len(definitions))

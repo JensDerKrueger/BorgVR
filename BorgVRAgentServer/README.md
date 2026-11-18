@@ -521,7 +521,8 @@ sudo docker compose exec -T agent python - --catalog-json "$(cat diagnostic_cata
 This compares a minimal state-reading catalog with the native app's tool catalog.
 Only a synthetic `get_application_state` result is returned; other tools are refused.
 No native client, real dataset, screenshot or previous conversation is accessed or modified.
-JSON output contains test results, retry/validation error categories and diagnostic exception
+JSON output contains test results, the arguments of these exclusively synthetic tool calls
+(at most 4096 characters per call), retry/validation error categories and diagnostic exception
 messages, not credentials or provider response bodies. A nonzero exit means at least one
 test failed. The catalog snapshot is checked against the native catalog by the native
 voice-agent integration test.
