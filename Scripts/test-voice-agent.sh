@@ -9,7 +9,8 @@ cleanup() {
 }
 trap cleanup EXIT HUP INT TERM
 xcrun swiftc -parse-as-library -module-cache-path "$TEMP/policy-modules" \
-  "$ROOT/AppSupport/Voice/VoiceAgentProtocol.swift" "$ROOT/Tests/VoiceAgentPolicyTests.swift" -o "$TEMP/policy-tests"
+  "$ROOT/AppSupport/Voice/VoiceAgentProtocol.swift" "$ROOT/AppSupport/Voice/VoiceAgentMarkdown.swift" \
+  "$ROOT/Tests/VoiceAgentPolicyTests.swift" -o "$TEMP/policy-tests"
 "$TEMP/policy-tests"
 if [ "$#" -eq 0 ]; then
   printf 'For the native TLS/WSS/GSC integration test, pass <macOS Debug products directory> <agent-venv-python>.\n'

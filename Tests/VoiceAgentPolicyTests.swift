@@ -58,6 +58,29 @@ struct VoiceAgentPolicyTests {
               "Confirmed changes were confused with uncertain completion")
     try check(VoiceAgentPolicy.failure(code: "context_limit", changesApplied: true, completionUncertain: true) == .completionUncertain,
               "An uncertain final mutation must take precedence over earlier confirmed changes")
+    for value in [Double.nan, Double.infinity, -Double.infinity] {
+      try check(VoiceAgentSpeechRate.normalized(value) == 1, "Invalid speech rate changed the default")
+    }
+    try check(VoiceAgentSpeechRate.normalized(3) == 2 && VoiceAgentSpeechRate.normalized(0) == 0.5,
+              "Speech rate bounds not enforced")
+    let markdown = VoiceAgentMarkdown("# Bones\n\nShow **only** the `head`.\n\n- first\n- second\n  - nested\n\n1. one\n2. two\n\n> quote\n\n```gsc\nrotate 20\nclip true\n```\n\n| A | B |\n| --- | --- |\n| 1 | 2 |")
+    try check(markdown.blocks.first?.style == .heading(1), "Markdown heading lost")
+    try check(markdown.blocks.filter { $0.marker != nil }.map(\.marker) == ["\u{2022}", "\u{2022}", "\u{2022}", "1.", "2."],
+              "Markdown list markers lost")
+    try check(markdown.blocks.contains { $0.indentation == 2 }, "Nested list indentation lost")
+    try check(markdown.blocks.contains { $0.style == .quote }, "Markdown quote lost")
+    try check(markdown.blocks.contains { $0.style == .code && String($0.cells[0].characters).contains("\nclip true") },
+              "Code block line breaks lost")
+    try check(markdown.blocks.contains { $0.style == .tableHeader && $0.cells.count == 2 } &&
+              markdown.blocks.contains { $0.style == .tableRow && $0.cells.count == 2 }, "Table cells not grouped")
+    try check(markdown.blocks[1].cells[0].runs.contains { $0.inlinePresentationIntent?.contains(.stronglyEmphasized) == true },
+              "Inline bold formatting lost")
+    try check(markdown.plainText.contains("Show only the head.") && !markdown.plainText.contains("**"),
+              "Speech still contains Markdown formatting")
+    let links = VoiceAgentMarkdown("[web](https://example.com) [local](file:///tmp/private) [app](borgvr://command) [credentials](https://user:secret@example.com)")
+    let urls = links.blocks.flatMap(\.cells).flatMap { $0.runs.compactMap(\.link) }
+    try check(urls.count == 1 && urls.first?.absoluteString == "https://example.com", "Unsafe Markdown link enabled")
+    try check(VoiceAgentMarkdown("").blocks.isEmpty, "Empty message acquired visible content")
     print("Voice agent policy tests passed: endpoints, credentials, schemas, limits and call replay protection")
   }
 }

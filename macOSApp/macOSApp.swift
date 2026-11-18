@@ -364,6 +364,11 @@ struct macOSApp: App {
         .environmentObject(appModel)
     }
 
+    BorgVRUtilityWindow(title: LocalizedStringKey(voiceAgentText("AI Assistant")), id: VoiceAgentView.windowID,
+                        width: 580, height: 580) {
+      VoiceAgentView(agent: voiceAgent)
+    }
+
     Window("Script Log", id: "ScriptLogView") {
       ScriptLogView()
         .environmentObject(scriptRunner)

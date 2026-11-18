@@ -1,6 +1,15 @@
 import Foundation
 import CoreFoundation
 
+enum VoiceAgentSpeechRate {
+  static let range = 0.5...2.0
+  static let defaultMultiplier = 1.0
+
+  static func normalized(_ value: Double) -> Double {
+    value.isFinite ? min(range.upperBound, max(range.lowerBound, value)) : defaultMultiplier
+  }
+}
+
 enum VoiceAgentError: LocalizedError, Equatable {
   case configuration, protocolViolation, contextChanged, timedOut, imageTooLarge
   case permissions, speechUnavailable, connection, commandFailed

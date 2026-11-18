@@ -21,6 +21,13 @@ final class VoiceAgentSettings: ObservableObject {
   @Published var enabled: Bool { didSet { defaults.set(enabled, forKey: "voiceAgent.enabled") } }
   @Published var address: String { didSet { defaults.set(address, forKey: "voiceAgent.address") } }
   @Published var speaks: Bool { didSet { defaults.set(speaks, forKey: "voiceAgent.speaks") } }
+  @Published var speechRateMultiplier: Double {
+    didSet {
+      let value = VoiceAgentSpeechRate.normalized(speechRateMultiplier)
+      if speechRateMultiplier != value { speechRateMultiplier = value }
+      defaults.set(value, forKey: "voiceAgent.speechRateMultiplier")
+    }
+  }
   @Published var sharesImages: Bool { didSet { defaults.set(sharesImages, forKey: "voiceAgent.images") } }
   @Published var onDeviceOnly: Bool { didSet { defaults.set(onDeviceOnly, forKey: "voiceAgent.onDeviceOnly") } }
   @Published private(set) var certificate: Data
@@ -37,6 +44,8 @@ final class VoiceAgentSettings: ObservableObject {
     enabled = defaults.bool(forKey: "voiceAgent.enabled")
     address = defaults.string(forKey: "voiceAgent.address") ?? "https://ai1:8766"
     speaks = defaults.object(forKey: "voiceAgent.speaks") as? Bool ?? true
+    speechRateMultiplier = VoiceAgentSpeechRate.normalized(
+      defaults.object(forKey: "voiceAgent.speechRateMultiplier") as? Double ?? VoiceAgentSpeechRate.defaultMultiplier)
     sharesImages = defaults.object(forKey: "voiceAgent.images") as? Bool ?? true
     onDeviceOnly = defaults.object(forKey: "voiceAgent.onDeviceOnly") as? Bool ?? true
     certificate = defaults.data(forKey: "voiceAgent.certificate") ?? Data()

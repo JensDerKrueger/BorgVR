@@ -23,6 +23,7 @@ final class VoiceAgentController: ObservableObject {
   @Published private(set) var connectionState: ConnectionState = .disconnected
   @Published private(set) var busy = false
   @Published private(set) var model = ""
+  @Published private(set) var datasetOpeningID: UUID?
   @Published private(set) var messages: [VoiceAgentMessage] = []
   @Published private(set) var status = voiceAgentText("Disconnected")
   @Published var errorText: String?
@@ -84,12 +85,16 @@ final class VoiceAgentController: ObservableObject {
     self.service = service
     router = BorgVRMCPToolRouter(commandService: service)
     contextProvider = context
+    invalidateContext()
   }
 
   var hasDataset: Bool { contextProvider?() != nil && service?.applicationState().rendererReady == true }
 
   func invalidateContext() {
-    if context != nil, context != contextProvider?() { disconnect(reason: VoiceAgentError.contextChanged) }
+    let current = contextProvider?()
+    // Window ownership follows the dataset, independently of an agent connection.
+    datasetOpeningID = service?.applicationState().rendererReady == true ? current?.openingID : nil
+    if context != nil, context != current { disconnect(reason: VoiceAgentError.contextChanged) }
   }
 
   func disconnect(reason: Error? = nil) {
@@ -352,7 +357,7 @@ final class VoiceAgentController: ObservableObject {
         guard let text = event["text"] as? String, text.count <= 8192, event["final"] is Bool
         else { throw VoiceAgentError.protocolViolation }
         append(user: false, text: text)
-        if settings.speaks { speech.speak(text) }
+        if settings.speaks { speech.speak(text, rateMultiplier: settings.speechRateMultiplier) }
       case "tool_call": try startTool(event)
       case "tool_cancel":
         guard event["call_id"] as? String == pendingCallID else { throw VoiceAgentError.protocolViolation }

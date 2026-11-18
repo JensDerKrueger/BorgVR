@@ -205,6 +205,13 @@ struct VisionApp: App {
     .defaultSize(width: runtimeAppModel.windowSize.width, height: runtimeAppModel.windowSize.height)
     .defaultLaunchBehavior(.suppressed)
 
+    Window(voiceAgentText("AI Assistant"), id: VoiceAgentView.windowID) {
+      VoiceAgentView(agent: voiceAgent)
+    }
+    .windowResizability(.contentSize)
+    .defaultSize(width: 600, height: 580)
+    .defaultLaunchBehavior(.suppressed)
+
     Window("Import", id: "ImportDataset") {
       ConverterView()
         .volumeEditSelectionDialog(model: runtimeAppModel.volumeBrush)

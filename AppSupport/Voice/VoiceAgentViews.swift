@@ -4,26 +4,39 @@ import UniformTypeIdentifiers
 struct VoiceAgentButton: View {
   @EnvironmentObject private var agent: VoiceAgentController
   @ObservedObject private var settings: VoiceAgentSettings
+  #if os(iOS)
   @State private var presented = false
+  #else
+  @Environment(\.openWindow) private var openWindow
+  #endif
 
   init(agent: VoiceAgentController) { _settings = ObservedObject(wrappedValue: agent.settings) }
 
   var body: some View {
     if settings.enabled {
-      Button { presented = true } label: {
+      Button {
+        #if os(iOS)
+        presented = true
+        #else
+        openWindow(id: VoiceAgentView.windowID)
+        #endif
+      } label: {
         Label(voiceAgentText("AI Assistant"), systemImage: "mic")
       }
       .buttonStyle(.bordered)
       .help(voiceAgentText("AI Assistant"))
+      #if os(iOS)
       .sheet(isPresented: $presented) {
         VoiceAgentView(agent: agent)
           .environmentObject(agent)
       }
+      #endif
     }
   }
 }
 
 struct VoiceAgentView: View {
+  static let windowID = "VoiceAgent"
   @ObservedObject var agent: VoiceAgentController
   @ObservedObject private var speech: VoiceAgentSpeech
   @ObservedObject private var settings: VoiceAgentSettings
@@ -55,7 +68,11 @@ struct VoiceAgentView: View {
                 VStack(alignment: .leading, spacing: 4) {
                   Text(voiceAgentText(message.user ? "You" : "BorgVR"))
                     .font(.caption.weight(.semibold)).foregroundStyle(message.user ? Color.accentColor : .secondary)
-                  Text(message.text).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
+                  if message.user {
+                    Text(message.text).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
+                  } else {
+                    VoiceAgentMarkdownText(message.text)
+                  }
                 }
                 .id(message.id)
               }
@@ -115,6 +132,61 @@ struct VoiceAgentView: View {
     .frame(width: 600, height: 580)
     #endif
     .onDisappear { speech.cancel() }
+    .onChange(of: agent.datasetOpeningID, initial: true) { previous, current in
+      if current == nil || (previous != nil && previous != current) {
+        agent.cancel()
+        dismiss()
+      }
+    }
+    .onChange(of: settings.enabled) { _, enabled in if !enabled { dismiss() } }
+  }
+}
+
+struct VoiceAgentMarkdownText: View {
+  private let markdown: VoiceAgentMarkdown
+
+  init(_ text: String) { markdown = VoiceAgentMarkdown(text) }
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 8) {
+      ForEach(markdown.blocks) { block in
+        HStack(alignment: .top, spacing: 8) {
+          if block.indentation > 0 {
+            Text(block.marker ?? "").monospacedDigit().frame(minWidth: 16, alignment: .trailing)
+          }
+          if block.style == .quote { Rectangle().fill(.secondary).frame(width: 2) }
+          ForEach(block.cells.indices, id: \.self) { index in
+            Text(styled(block.cells[index]))
+              .font(font(for: block.style))
+              .frame(maxWidth: .infinity, alignment: .leading)
+              .fixedSize(horizontal: false, vertical: true)
+          }
+        }
+        .padding(.leading, CGFloat(max(0, block.indentation - 1)) * 16)
+        .padding(block.style == .code ? 8 : 0)
+        .background(block.style == .code ? Color.primary.opacity(0.06) : .clear,
+                    in: RoundedRectangle(cornerRadius: 6))
+      }
+    }
+    .textSelection(.enabled)
+    .frame(maxWidth: .infinity, alignment: .leading)
+  }
+
+  private func font(for style: VoiceAgentMarkdown.Style) -> Font {
+    switch style {
+      case .heading(let level): level == 1 ? .title3.bold() : .headline
+      case .code: .body.monospaced()
+      case .tableHeader: .body.bold()
+      default: .body
+    }
+  }
+
+  private func styled(_ value: AttributedString) -> AttributedString {
+    var value = value
+    for run in value.runs where run.inlinePresentationIntent?.contains(.code) == true {
+      value[run.range].font = .body.monospaced()
+    }
+    return value
   }
 }
 
@@ -182,6 +254,26 @@ struct VoiceAgentSettingsView: View {
       }
       Toggle(voiceAgentText("Share render images"), isOn: $settings.sharesImages)
       Toggle(voiceAgentText("Speak responses"), isOn: $settings.speaks)
+      VStack(alignment: .leading, spacing: 8) {
+        HStack {
+          Text(voiceAgentText("Speech rate"))
+          Spacer()
+          HStack(spacing: 4) {
+            Text(settings.speechRateMultiplier, format: .number.precision(.fractionLength(2))).monospacedDigit()
+            Text(verbatim: "\u{00D7}")
+          }
+          .fixedSize()
+          Button { settings.speechRateMultiplier = VoiceAgentSpeechRate.defaultMultiplier } label: {
+            Image(systemName: "arrow.counterclockwise")
+          }
+          .buttonStyle(.bordered)
+          .help(voiceAgentText("Default speech rate"))
+          .accessibilityLabel(voiceAgentText("Default speech rate"))
+        }
+        Slider(value: $settings.speechRateMultiplier, in: VoiceAgentSpeechRate.range, step: 0.05)
+          .accessibilityLabel(voiceAgentText("Speech rate"))
+      }
+      .disabled(!settings.speaks)
       Toggle(voiceAgentText("On-device speech recognition only"), isOn: $settings.onDeviceOnly)
       Text(voiceAgentText("If on-device-only recognition is disabled, Apple may process microphone audio. Audio is never sent to the BorgVR agent server."))
         .font(.caption).foregroundStyle(.secondary)

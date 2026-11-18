@@ -137,14 +137,20 @@ final class VoiceAgentSpeech: ObservableObject {
     synthesizer.stopSpeaking(at: .immediate)
   }
 
-  func speak(_ text: String) {
+  static func utterance(_ text: String, rateMultiplier: Double) -> AVSpeechUtterance {
+    let utterance = AVSpeechUtterance(string: VoiceAgentMarkdown(String(text.prefix(8192))).plainText)
+    utterance.voice = AVSpeechSynthesisVoice(language: Bundle.main.preferredLocalizations.first ?? "en")
+    utterance.rate = min(AVSpeechUtteranceMaximumSpeechRate, max(AVSpeechUtteranceMinimumSpeechRate,
+      AVSpeechUtteranceDefaultSpeechRate * Float(VoiceAgentSpeechRate.normalized(rateMultiplier))))
+    return utterance
+  }
+
+  func speak(_ text: String, rateMultiplier: Double = VoiceAgentSpeechRate.defaultMultiplier) {
     guard !isRecording, !text.isEmpty else { return }
     #if !os(macOS)
     try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .spokenAudio, options: [.duckOthers])
     #endif
-    let utterance = AVSpeechUtterance(string: String(text.prefix(8192)))
-    utterance.voice = AVSpeechSynthesisVoice(language: Bundle.main.preferredLocalizations.first ?? "en")
-    synthesizer.speak(utterance)
+    synthesizer.speak(Self.utterance(text, rateMultiplier: rateMultiplier))
   }
 
   func stopSpeaking() { synthesizer.stopSpeaking(at: .immediate) }

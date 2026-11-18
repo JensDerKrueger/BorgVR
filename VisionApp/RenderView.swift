@@ -172,6 +172,7 @@ struct RenderView: View {
       dismissWindow(id: "MeasurementView")
       dismissWindow(id: "LightingEditorView")
       dismissWindow(id: "VolumeBrushEditorView")
+      dismissWindow(id: VoiceAgentView.windowID)
       voiceAgent.disconnect()
     }
   }

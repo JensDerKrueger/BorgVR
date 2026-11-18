@@ -39,6 +39,7 @@ struct ContentView: View {
     }
     dismissWindow(id: "PerformanceGraphView")
     dismissWindow(id: "ScriptLogView")
+    dismissWindow(id: VoiceAgentView.windowID)
   }
 
   @ViewBuilder

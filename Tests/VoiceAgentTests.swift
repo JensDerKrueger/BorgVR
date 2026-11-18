@@ -3,6 +3,7 @@ import AppKit
 import ImageIO
 import UniformTypeIdentifiers
 import Security
+import AVFoundation
 @testable import BorgVR
 
 private enum Failure: Error { case failed(String) }
@@ -120,6 +121,19 @@ struct VoiceAgentTests {
     let account = "voice-agent-test-\(UUID())"
     defer { defaults.removePersistentDomain(forName: suite); try? KeychainSecretStore.delete(account: account) }
     let settings = VoiceAgentSettings(defaults: defaults, tokenAccount: account)
+    try expect(settings.speechRateMultiplier == 1, "Default speech rate changed")
+    let initialIdentity = settings.identity
+    settings.speechRateMultiplier = 1.6
+    try expect(VoiceAgentSettings(defaults: defaults, tokenAccount: account).speechRateMultiplier == 1.6,
+               "Speech rate was not persisted")
+    try expect(settings.identity == initialIdentity, "Changing speech rate reconnects the agent")
+    let spoken = VoiceAgentSpeech.utterance("**Bones** and `head`", rateMultiplier: settings.speechRateMultiplier)
+    try expect(spoken.speechString == "Bones and head", "Speech reads Markdown markers")
+    try expect(abs(spoken.rate - AVSpeechUtteranceDefaultSpeechRate * 1.6) < 0.001, "Speech rate not applied")
+    settings.speechRateMultiplier = .nan
+    try expect(settings.speechRateMultiplier == 1, "Invalid persisted speech rate")
+    try expect(VoiceAgentSpeech.utterance("text", rateMultiplier: 1).rate == AVSpeechUtteranceDefaultSpeechRate,
+               "Existing utterance rate changed")
     settings.enabled = true
     settings.speaks = false
     settings.address = "https://127.0.0.1:\(ready["port"]!)"
@@ -129,6 +143,9 @@ struct VoiceAgentTests {
     let agent = VoiceAgentController(settings: settings)
     var context: VoiceAgentContext? = .init(datasetID: entry.uniqueId, openingID: openingID, editStateID: nil)
     agent.configure(service: service) { context }
+    try expect(agent.datasetOpeningID == openingID, "Unconnected assistant lost its dataset owner")
+    agent.newConversation()
+    try expect(agent.datasetOpeningID == openingID, "Disconnecting the agent changed dataset ownership")
     try await agent.testServer()
     try expect(agent.errorText == nil && agent.model == "Qwen/Qwen3.6-35B-A3B", "Readiness failed: \(agent.errorText ?? "")")
     session.startCommandRecording()
@@ -171,6 +188,11 @@ struct VoiceAgentTests {
     try expect(!agent.busy && agent.connectionState == .disconnected, "Reopening the same UUID did not cancel the agent")
     try await Task.sleep(for: .milliseconds(100))
     try expect(agent.connectionState == .disconnected, "Agent unexpectedly reconnected")
+    try expect(agent.datasetOpeningID == context?.openingID, "Reopened dataset retained the old window owner")
+    context = nil
+    app.closeDataset(destination: .datasetSelection)
+    agent.invalidateContext()
+    try expect(agent.datasetOpeningID == nil, "Dataset closure did not notify an unconnected assistant window")
     print("Voice agent tests passed: strict policy, TLS trust, real WSS agent loop, PNG, command/GSC roundtrip and context cancellation")
   }
 

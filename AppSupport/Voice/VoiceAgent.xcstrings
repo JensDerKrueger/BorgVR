@@ -1,6 +1,20 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "Speech rate": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Speech rate" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Sprechgeschwindigkeit" } }
+      }
+    },
+    "Default speech rate": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Default speech rate" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Standard-Sprechgeschwindigkeit" } }
+      }
+    },
     "AI Assistant": {
       "extractionState": "manual",
       "localizations": {

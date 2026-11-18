@@ -182,6 +182,7 @@ struct RenderView: View {
       if !active { applyInterfaceVisibility() }
     }
     .onChange(of: appModel.activeDatasetMetadata?.uniqueID) { applyInterfaceVisibility() }
+    .onDisappear { dismissWindow(id: VoiceAgentView.windowID) }
     .onChange(of: docking.commandRequest) { _, request in
       guard let request else { return }
       handleCommand(request.command)
