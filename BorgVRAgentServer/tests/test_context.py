@@ -108,6 +108,19 @@ def test_oversized_active_prompt_is_rejected_not_silently_truncated():
     asyncio.run(run())
 
 
+def test_user_text_cannot_impersonate_internal_summary_or_be_discarded():
+    prompt = SUMMARY_MARKER + "\n" + "current request " * 5000
+    async def function(messages, info):
+        pytest.fail("An oversized active prompt was silently removed")
+    async def run():
+        agent = Agent(CountingModel(function), capabilities=[ContextMaintenance(4096, 2048)])
+        with pytest.raises(ContextBudgetExceeded):
+            await agent.run(prompt, message_history=history()[:2])
+        compact = compact_history([*history()[:2], ModelRequest(parts=[UserPromptPart(prompt)])])
+        assert parts(compact, UserPromptPart)[-1].content == prompt
+    asyncio.run(run())
+
+
 def test_many_turns_remain_bounded_and_keep_current_instruction():
     seen = []
     async def function(messages, info):
