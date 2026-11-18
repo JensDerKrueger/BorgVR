@@ -2,6 +2,10 @@
 set -euo pipefail
 DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 source "$DIR/gpu-host.sh"
+if [[ "${1:-}" == dev ]]; then
+  shift
+  exec python3 "$DIR/development.py" "$@"
+fi
 COMMAND=install
 PREBUILT_AGENT=1
 AGENT_IMAGE_SET=0
@@ -44,11 +48,15 @@ usage() {
     'An explicit update image is checked before changing .env; the old .env is backed up.' \
     'Uninstall previews by default; supports --yes, --remove-images, --remove-checkout, --files-only.' \
     'Changing --host may replace the TLS certificate; the old certificate is backed up.'
+  printf '%s\n' \
+    'Development: sudo ./setup.sh dev enable --ssh-key-file /path/to/dedicated-key.pub' \
+    '  ./setup.sh dev push|status|logs|restart --host HOST --key /path/to/private-key' \
+    '  sudo ./setup.sh dev disable --remove   Restore image, revoke SSH and remove development files/account.'
 }
 die() { printf 'Error: %s\n' "$*" >&2; exit 1; }
 while (($#)); do
   case "$1" in
-    install|init|configure|model|profiles|doctor|start|stop|restart|update|status|logs|test|uninstall) COMMAND="$1"; shift ;;
+    install|init|configure|model|profiles|doctor|start|stop|restart|update|status|logs|test|uninstall|_dev-agent-up) COMMAND="$1"; shift ;;
     --gpu|--backend|--profile|--model|--model-revision|--tool-parser|--reasoning-parser|--thinking|--dtype|--quantization|--context-length|--max-seqs|--max-output-tokens|--gpu-memory-fraction|--min-free-gib|--enforce-eager|--cpu-offload-gb|--vllm-image)
       (($# >= 2)) || die "Missing value for $1"
       MODEL_ARGS+=("$1" "$2"); shift 2 ;;
@@ -77,6 +85,12 @@ while (($#)); do
       else die "Unknown argument: $1"; fi ;;
   esac
 done
+if [[ -e "$DIR/runtime/agent-development.json" || -L "$DIR/runtime/agent-development.json" ]]; then
+  case "$COMMAND" in
+    install|configure|model|update)
+      die 'Disable development mode before changing the deployment/model/image: sudo ./setup.sh dev disable' ;;
+  esac
+fi
 if [[ -n "$FIREWALL_ZONE" ]] && ((!OPEN_FIREWALL)); then
   die '--firewall-zone requires --open-firewall.'
 fi
@@ -110,15 +124,19 @@ choose_docker() {
   "${DOCKER[@]}" compose version >/dev/null || die 'Docker Compose v2 plugin is required.'
 }
 compose() {
+  local extra=()
+  if [[ -e "$DIR/runtime/agent-development.json" || -L "$DIR/runtime/agent-development.json" ]]; then
+    extra=(-f "$(python3 "$DIR/development.py" compose-file)")
+  fi
   if [[ "$BACKEND" == rocm ]]; then
     "${DOCKER[@]}" compose --project-directory "$DIR" --env-file "$DIR/.env" \
-      -f "$DIR/compose.yaml" -f "$DIR/compose.rocm.yaml" -f <(python3 "$DIR/configure.py" gpu-groups) "$@"
+      -f "$DIR/compose.yaml" -f "$DIR/compose.rocm.yaml" -f <(python3 "$DIR/configure.py" gpu-groups) ${extra[@]+"${extra[@]}"} "$@"
   elif [[ "$(python3 "$DIR/configure.py" get BORGVR_GPU)" == all ]]; then
     "${DOCKER[@]}" compose --project-directory "$DIR" --env-file "$DIR/.env" \
-      -f "$DIR/compose.yaml" -f "$DIR/compose.cuda-all.yaml" "$@"
+      -f "$DIR/compose.yaml" -f "$DIR/compose.cuda-all.yaml" ${extra[@]+"${extra[@]}"} "$@"
   else
     "${DOCKER[@]}" compose --project-directory "$DIR" --env-file "$DIR/.env" \
-      -f "$DIR/compose.yaml" -f "$DIR/compose.cuda.yaml" "$@"
+      -f "$DIR/compose.yaml" -f "$DIR/compose.cuda.yaml" ${extra[@]+"${extra[@]}"} "$@"
   fi
 }
 check_gpu() {
@@ -220,10 +238,12 @@ fi
 BACKEND="$(python3 "$DIR/configure.py" get BORGVR_BACKEND)"
 [[ "$BACKEND" == cuda || "$BACKEND" == rocm ]] || die 'Backend must be cuda or rocm.'
 choose_docker
-if [[ "$COMMAND" == start || "$COMMAND" == restart || "$COMMAND" == update ]]; then
+if [[ "$COMMAND" == start || "$COMMAND" == restart || "$COMMAND" == update || "$COMMAND" == _dev-agent-up ]]; then
   python3 "$DIR/configure.py" prepare-secrets
 fi
 case "$COMMAND" in
+  _dev-agent-up)
+    compose up -d --no-deps --no-build --pull never --force-recreate --wait --wait-timeout 90 agent ;;
   install)
     # Probe the daemon's backing filesystem without reading privileged host directories.
     python_image="$(python3 "$DIR/configure.py" image python)"

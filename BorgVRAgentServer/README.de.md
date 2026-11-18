@@ -585,7 +585,16 @@ vLLM-/Modellrevision; diese bei einem Inferenz-Update ausdrücklich anpassen. Ke
 stillschweigende Umstellung auf `latest`. Details zur Rückkehr auf alte Versionen,
 Zertifikatswechsel, Fehlerbehebung und Deinstallation stehen im englischen Leitfaden.
 
-## 8. Tests
+## 8. Entwicklung und Tests
+
+### Schnelle Entwicklung per SSH
+
+Der optionale Entwicklungsmodus aktualisiert nur den Agenten-Prozess, ohne Image-Build,
+Veröffentlichung oder Neustart von vLLM. Ein eigenes eingeschränktes SSH-Konto ohne
+Docker-/sudo-Rechte erlaubt begrenzte Code-Uploads, Logs und kontrollierte Neustarts.
+Die [Einrichtung, Hostschlüsselprüfung und vollständige Entfernung](DEVELOPMENT.de.md)
+sind separat beschrieben. Der normale Betrieb verwendet weiterhin ein festes Image;
+geänderte Bibliotheksabhängigkeiten benötigen ein neues passendes Image.
 
 ### Automatische Kontextpflege
 

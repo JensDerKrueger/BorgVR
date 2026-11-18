@@ -18,6 +18,14 @@ LABEL = "com.docker.compose.project"
 LOCAL_FILES = ("runtime", ".env", ".venv", "__pycache__", ".pytest_cache")
 
 
+def development_plan(root):
+    if ((root / "runtime/agent-development.json").exists() or
+        Path("/var/lib/borgvr-agent-dev/installation.json").exists()):
+        from development import removal_plan
+        return removal_plan(root)
+    return None
+
+
 class Docker:
     def run(self, *args, missing=False):
         result = subprocess.run(["docker", "--host", "unix:///var/run/docker.sock", *args],
@@ -160,6 +168,9 @@ def apply_plan(root, docker, plan, checkout=None):
         docker.run("network", "rm", identifier)
     for reference in plan["images"]:
         docker.run("image", "rm", reference, missing=True)  # Another removed tag may already have released this digest.
+    if development_plan(root) is not None:
+        from development import cleanup
+        cleanup(root)
     remove_rules(root)
     if checkout is not None:
         remove_local(checkout)
@@ -175,6 +186,9 @@ def main():
     parser.add_argument("--remove-checkout", action="store_true", help="Also delete the clean BorgVR Git clone or extracted deployment bundle")
     parser.add_argument("--files-only", action="store_true", help="Skip Docker checks/removal, e.g. to undo cloning before installing Docker")
     args = parser.parse_args()
+    development = development_plan(ROOT)
+    if development is not None and args.files_only:
+        parser.error("Remove development mode with dev disable --remove first, or use normal uninstall with Docker cleanup")
     if args.files_only and args.remove_images:
         parser.error("--files-only cannot remove Docker images")
     target = checkout_target(ROOT) if args.remove_checkout else None
@@ -185,7 +199,8 @@ def main():
             parser.error("Docker is unavailable; use --files-only explicitly if only files should be removed")
         plan = docker_plan(ROOT, docker, args.remove_images)
     print(json.dumps({**plan, "local_paths": [str(target)] if target else [str(ROOT / name) for name in LOCAL_FILES],
-                      "firewall_rules": load_rules(ROOT), "docker_skipped": args.files_only}, indent=2))
+                      "firewall_rules": load_rules(ROOT), "development": development,
+                      "docker_skipped": args.files_only}, indent=2))
     if not args.yes:
         print("Preview only. Add --yes to delete the listed resources. Keys/certificates will be lost; Docker/model data is skipped with --files-only.")
         return

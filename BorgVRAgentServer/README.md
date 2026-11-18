@@ -601,6 +601,14 @@ delete the model cache as well: `sudo docker compose down --volumes`. This does 
 
 ## 9. Development and protocol
 
+### Fast development over SSH
+
+For trusted development, the optional source mode updates only the agent worker without
+building/publishing an image or restarting vLLM. It provides a dedicated restricted SSH
+account without Docker/sudo access, bounded source uploads, logs and controlled reloads.
+See [the setup, host-key verification and removal instructions](DEVELOPMENT.md).
+Production remains image-based; dependency changes still require an updated image.
+
 ### Automatic context maintenance
 
 Before every model request, the agent counts the actual chat input through vLLM's
