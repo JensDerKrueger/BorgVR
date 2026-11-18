@@ -77,6 +77,12 @@ struct VoiceAgentTests {
     } catch is VoiceAgentError {}
     try expect(session.currentSnapshot().transform == before, "Context check happened after mutation")
     let catalog = VoiceAgentPolicy.catalog(router.toolDefinitions, vision: false, transferFunctions: true, images: true)
+    let catalogURL = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+      .appendingPathComponent("BorgVRAgentServer/diagnostic_catalog.json")
+    let diagnosticCatalog = try JSONSerialization.jsonObject(with: Data(contentsOf: catalogURL))
+    try expect(try JSONSerialization.data(withJSONObject: catalog, options: [.sortedKeys]) ==
+      JSONSerialization.data(withJSONObject: diagnosticCatalog, options: [.sortedKeys]),
+      "Server diagnostic catalog differs from the native tools")
     let names = Set(catalog.compactMap { $0["name"] as? String })
     try expect(names == VoiceAgentPolicy.allowed, "Safe tools differ from the actual MCP catalog")
     let screenshot = catalog.first { $0["name"] as? String == "capture_screenshot" }!["inputSchema"] as! [String: Any]

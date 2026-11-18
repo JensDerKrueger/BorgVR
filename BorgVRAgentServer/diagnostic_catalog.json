@@ -1,0 +1,352 @@
+[
+  {
+    "description" : "Return the active dataset and visualization state.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+
+      },
+      "type" : "object"
+    },
+    "name" : "get_application_state"
+  },
+  {
+    "description" : "Select transfer-function, lit transfer-function, or isovalue rendering.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "mode" : {
+          "enum" : [
+            "transfer_function",
+            "transfer_function_lighting",
+            "isovalue"
+          ],
+          "type" : "string"
+        }
+      },
+      "required" : [
+        "mode"
+      ],
+      "type" : "object"
+    },
+    "name" : "set_render_mode"
+  },
+  {
+    "description" : "Show or hide the complete dataset bounding box. Local, persistent, and recorded as GSC; independent of clipping and annotation visibility.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "visible" : {
+          "type" : "boolean"
+        }
+      },
+      "required" : [
+        "visible"
+      ],
+      "type" : "object"
+    },
+    "name" : "set_bounding_box"
+  },
+  {
+    "description" : "Set the local macOS\/iOS camera projection. Supply field_of_view_degrees and\/or parallel; omitted fields stay unchanged. The field of view also controls equivalent framing in parallel projection. Persists per device, is not synchronized through SharePlay, and is recorded as GSC when recording is active. Unsupported on visionOS.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "field_of_view_degrees" : {
+          "maximum" : 120,
+          "minimum" : 10,
+          "type" : "number"
+        },
+        "parallel" : {
+          "type" : "boolean"
+        }
+      },
+      "type" : "object"
+    },
+    "name" : "set_screen_projection"
+  },
+  {
+    "description" : "Set any subset of the current model\/view transform.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "rotation" : {
+          "items" : {
+            "type" : "number"
+          },
+          "maxItems" : 4,
+          "minItems" : 4,
+          "type" : "array"
+        },
+        "scale" : {
+          "items" : {
+            "type" : "number"
+          },
+          "maxItems" : 3,
+          "minItems" : 3,
+          "type" : "array"
+        },
+        "translation" : {
+          "items" : {
+            "type" : "number"
+          },
+          "maxItems" : 3,
+          "minItems" : 3,
+          "type" : "array"
+        }
+      },
+      "type" : "object"
+    },
+    "name" : "set_transform"
+  },
+  {
+    "description" : "Rotate the current model\/view by an axis-angle delta.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "axis" : {
+          "items" : {
+            "type" : "number"
+          },
+          "maxItems" : 3,
+          "minItems" : 3,
+          "type" : "array"
+        },
+        "degrees" : {
+          "type" : "number"
+        }
+      },
+      "required" : [
+        "axis",
+        "degrees"
+      ],
+      "type" : "object"
+    },
+    "name" : "rotate_view"
+  },
+  {
+    "description" : "Set the normalized isovalue in the range zero to one.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "value" : {
+          "maximum" : 1,
+          "minimum" : 0,
+          "type" : "number"
+        }
+      },
+      "required" : [
+        "value"
+      ],
+      "type" : "object"
+    },
+    "name" : "set_iso_value"
+  },
+  {
+    "description" : "Set normalized minimum and maximum clipping bounds.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "maximum" : {
+          "items" : {
+            "type" : "number"
+          },
+          "maxItems" : 3,
+          "minItems" : 3,
+          "type" : "array"
+        },
+        "minimum" : {
+          "items" : {
+            "type" : "number"
+          },
+          "maxItems" : 3,
+          "minItems" : 3,
+          "type" : "array"
+        }
+      },
+      "required" : [
+        "minimum",
+        "maximum"
+      ],
+      "type" : "object"
+    },
+    "name" : "set_clipping"
+  },
+  {
+    "description" : "Set any subset of light direction and RGB light colors.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "ambient" : {
+          "items" : {
+            "type" : "number"
+          },
+          "maxItems" : 3,
+          "minItems" : 3,
+          "type" : "array"
+        },
+        "diffuse" : {
+          "items" : {
+            "type" : "number"
+          },
+          "maxItems" : 3,
+          "minItems" : 3,
+          "type" : "array"
+        },
+        "direction" : {
+          "items" : {
+            "type" : "number"
+          },
+          "maxItems" : 3,
+          "minItems" : 3,
+          "type" : "array"
+        },
+        "specular" : {
+          "items" : {
+            "type" : "number"
+          },
+          "maxItems" : 3,
+          "minItems" : 3,
+          "type" : "array"
+        }
+      },
+      "type" : "object"
+    },
+    "name" : "set_lighting"
+  },
+  {
+    "description" : "Wait for a frame newer than the supplied frame number.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "after_frame" : {
+          "minimum" : 0,
+          "type" : "integer"
+        },
+        "timeout_seconds" : {
+          "maximum" : 30,
+          "minimum" : 0.10000000000000001,
+          "type" : "number"
+        }
+      },
+      "type" : "object"
+    },
+    "name" : "wait_until_rendered"
+  },
+  {
+    "description" : "Read a zero-based channel's TF as an ordered array of straight RGBA bytes (0...255). RGB\/RGBA volumes have no TFs. Returned samples are a uniformly spaced preview across [0,1], at most 256 entries. originalSampleCount is the full table size; samplesArePreview marks approximate previews. This does not reduce the actual TF resolution.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "channel" : {
+          "default" : 0,
+          "maximum" : 3,
+          "minimum" : 0,
+          "type" : "integer"
+        }
+      },
+      "type" : "object"
+    },
+    "name" : "get_transfer_function"
+  },
+  {
+    "description" : "Set a zero-based channel's TF. Each sample is four integer bytes [R,G,B,A] in 0...255. A compact ramp is linearly resampled to the current TF resolution. Other channels remain unchanged; updates render immediately and synchronize through SharePlay. Returned samples are a uniformly spaced preview across [0,1], at most 256 entries. originalSampleCount is the full table size; samplesArePreview marks approximate previews. This does not reduce the actual TF resolution.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "channel" : {
+          "default" : 0,
+          "maximum" : 3,
+          "minimum" : 0,
+          "type" : "integer"
+        },
+        "samples" : {
+          "items" : {
+            "items" : {
+              "maximum" : 255,
+              "minimum" : 0,
+              "type" : "integer"
+            },
+            "maxItems" : 4,
+            "minItems" : 4,
+            "type" : "array"
+          },
+          "maxItems" : 65536,
+          "minItems" : 1,
+          "type" : "array"
+        }
+      },
+      "required" : [
+        "samples"
+      ],
+      "type" : "object"
+    },
+    "name" : "set_transfer_function"
+  },
+  {
+    "description" : "Read mode and primary\/secondary RGBA colors (0...1). visionOS uses passthrough.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+
+      },
+      "type" : "object"
+    },
+    "name" : "get_background"
+  },
+  {
+    "description" : "Set system, solid or vertical gradient background on macOS\/iOS. Primary is the solid\/top RGBA color, secondary the bottom RGBA color (0...1); omitted colors are unchanged. visionOS supports only passthrough.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "mode" : {
+          "enum" : [
+            "system",
+            "solid",
+            "gradient",
+            "passthrough"
+          ],
+          "type" : "string"
+        },
+        "primary" : {
+          "items" : {
+            "maximum" : 1,
+            "minimum" : 0,
+            "type" : "number"
+          },
+          "maxItems" : 4,
+          "minItems" : 4,
+          "type" : "array"
+        },
+        "secondary" : {
+          "items" : {
+            "maximum" : 1,
+            "minimum" : 0,
+            "type" : "number"
+          },
+          "maxItems" : 4,
+          "minItems" : 4,
+          "type" : "array"
+        }
+      },
+      "required" : [
+        "mode"
+      ],
+      "type" : "object"
+    },
+    "name" : "set_background"
+  },
+  {
+    "description" : "Capture a PNG. include_alpha defaults to true (transparent render image, background omitted). False composites the configured screen background; visionOS uses black instead of passthrough. Optionally save to absolute sandbox-accessible output_path; existing files require overwrite:true.",
+    "inputSchema" : {
+      "additionalProperties" : false,
+      "properties" : {
+        "include_alpha" : {
+          "type" : "boolean"
+        }
+      },
+      "type" : "object"
+    },
+    "name" : "capture_screenshot"
+  }
+]

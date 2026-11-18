@@ -17,6 +17,7 @@ LOCAL_IMAGE = "borgvr-agent:ci"
 DEPLOYMENT_FILES = (
     "compose.yaml", "compose.cuda.yaml", "compose.rocm.yaml", "configure.py", "model_config.py",
     "setup.sh", "setup-host.sh", "uninstall.py", "firewall.py", "vllm_start.py",
+    "diagnose_tools.py", "diagnostic_catalog.json",
     "README.md", "README.de.md", "PROTOCOL.md", "LICENSE",
 )
 VERSION = r"[0-9]+\.[0-9]+(?:\.[0-9]+)?(?:-[A-Za-z0-9][A-Za-z0-9.-]*)?"

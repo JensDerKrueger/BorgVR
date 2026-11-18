@@ -29,6 +29,25 @@ auf dem Gerät; eine mögliche Verarbeitung durch Apple muss separat erlaubt wer
 Abbrechen beendet die Verbindung, macht bereits ausgeführte Änderungen aber nicht rückgängig.
 Agenteneinstellungen und Schlüssel bleiben gerätelokal, außerhalb von SharePlay und GSC.
 
+### Text Funktioniert, Werkzeugaufrufe Scheitern
+
+`UnexpectedModelBehavior` im Agenten-Log ist nur der Fehlertyp, noch nicht die Ursache.
+Mit diesem Diagnosetest lässt sich der Modell-/Werkzeugpfad ohne echte Datensätze und
+ohne Neustart oder Neubau des Containers prüfen. Nach `git pull` im Agenten-Verzeichnis:
+
+```
+sudo docker compose exec -T agent python - --catalog-json "$(cat diagnostic_catalog.json)" < diagnose_tools.py
+```
+
+Der Test verwendet zuerst nur `get_application_state`, danach den Werkzeugkatalog der
+nativen App. Ein erfolgreicher Aufruf liefert ausschließlich einen synthetischen
+Datensatzzustand; alle anderen Werkzeuge werden abgewiesen. Kein Fenster, Rendering oder
+Datensatz wird geändert. Ausgegeben werden Testergebnisse und konkrete Fehlerkategorien,
+keine Zugangsschlüssel oder Provider-Antwortkörper. Ein Exitcode ungleich null bedeutet,
+dass mindestens einer der beiden Tests fehlgeschlagen ist. Die JSON-Ausgabe kann zur
+Fehlersuche weitergegeben werden; Modellantworten beziehen sich ausschließlich auf den
+synthetischen Test, nicht auf eine vorherige Unterhaltung in BorgVR.
+
 ## 1. Was Auf Dem Rechner Installiert Sein Muss
 
 - Linux x86_64, Zielsystem **Ubuntu 26.04.1 LTS (resolute)**.

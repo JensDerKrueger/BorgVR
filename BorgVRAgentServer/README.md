@@ -508,6 +508,24 @@ delete the model cache as well: `sudo docker compose down --volumes`. This does 
 
 ## 8. Development And Protocol
 
+### Diagnose Tool Calls Without Native Data
+
+If plain text works but tool requests fail with `UnexpectedModelBehavior`, the log's
+exception class alone is insufficient to identify the cause. After `git pull`, run from
+the deployment directory, using the already running container (no rebuild/restart):
+
+```
+sudo docker compose exec -T agent python - --catalog-json "$(cat diagnostic_catalog.json)" < diagnose_tools.py
+```
+
+This compares a minimal state-reading catalog with the native app's tool catalog.
+Only a synthetic `get_application_state` result is returned; other tools are refused.
+No native client, real dataset, screenshot or previous conversation is accessed or modified.
+JSON output contains test results, retry/validation error categories and diagnostic exception
+messages, not credentials or provider response bodies. A nonzero exit means at least one
+test failed. The catalog snapshot is checked against the native catalog by the native
+voice-agent integration test.
+
 ```
 python3.12 -m venv .venv
 .venv/bin/pip install -r requirements-test.txt
