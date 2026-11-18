@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+source "$DIR/gpu-host.sh"
 COMMAND=install
 PREBUILT_AGENT=1
 AGENT_IMAGE_SET=0
@@ -28,6 +29,7 @@ usage() {
     '                      Applies to install/start/restart/update; never enables a firewall.' \
     '  --firewall-zone Z   firewalld zone (default: its default zone); needs --open-firewall.' \
     '  --gpu INDEX_OR_UUID  Select one GPU (default 0; AMD also accepts an index).' \
+    '                      CUDA also accepts all; WSL requires this explicit all-GPU access.' \
     '  --backend cuda|rocm  Select NVIDIA CUDA or AMD ROCm (install/init/configure).' \
     '  --profile NAME      Model preset; list with: ./setup.sh profiles.' \
     '  --model REPO --model-revision REV --tool-parser NAME  Custom image-capable model.' \
@@ -111,6 +113,9 @@ compose() {
   if [[ "$BACKEND" == rocm ]]; then
     "${DOCKER[@]}" compose --project-directory "$DIR" --env-file "$DIR/.env" \
       -f "$DIR/compose.yaml" -f "$DIR/compose.rocm.yaml" -f <(python3 "$DIR/configure.py" gpu-groups) "$@"
+  elif [[ "$(python3 "$DIR/configure.py" get BORGVR_GPU)" == all ]]; then
+    "${DOCKER[@]}" compose --project-directory "$DIR" --env-file "$DIR/.env" \
+      -f "$DIR/compose.yaml" -f "$DIR/compose.cuda-all.yaml" "$@"
   else
     "${DOCKER[@]}" compose --project-directory "$DIR" --env-file "$DIR/.env" \
       -f "$DIR/compose.yaml" -f "$DIR/compose.cuda.yaml" "$@"
@@ -124,9 +129,13 @@ check_gpu() {
   dtype="$(python3 "$DIR/configure.py" get BORGVR_DTYPE)"
   GPU_ARGS=()
   if [[ "$BACKEND" == cuda ]]; then
-    command -v nvidia-smi >/dev/null && nvidia-smi || die 'A working NVIDIA driver is required.'
-    GPU_ARGS=(--gpus "device=$gpu")
+    check_nvidia_driver || die 'A working NVIDIA driver is required (install the Windows driver when using WSL).'
+    if is_wsl && [[ "$gpu" != all ]]; then
+      die 'WSL cannot isolate a GPU by index. Explicitly select --gpu all with install/configure; all GPUs will be exposed.'
+    fi
+    if [[ "$gpu" == all ]]; then GPU_ARGS=(--gpus all); else GPU_ARGS=(--gpus "device=$gpu"); fi
   else
+    if is_wsl; then die 'AMD/ROCm on WSL needs different device mappings and is not supported by this deployment.'; fi
     [[ -c /dev/kfd && -d /dev/dri ]] || die 'ROCm requires a working AMD driver exposing /dev/kfd and /dev/dri.'
     render_gid="$(python3 "$DIR/configure.py" get BORGVR_RENDER_GID)"
     video_gid="$(python3 "$DIR/configure.py" get BORGVR_VIDEO_GID)"

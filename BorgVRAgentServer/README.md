@@ -2,6 +2,10 @@
 
 [Deutsch](README.de.md)
 
+For **Windows 11 with an NVIDIA GPU**, start with the [WSL 2 guide](WINDOWS.md).
+It covers Docker Desktop, Docker Engine inside Ubuntu and Windows network access.
+The host preparation steps below apply to **native Linux**.
+
 Self-hosted server for BorgVR's conversational assistant on macOS, iOS and visionOS.
 The assistant accepts voice and text requests, controls the visualization of an open
 dataset, interprets render images and provides text updates while working.
@@ -47,7 +51,8 @@ certificate and access token created during installation.
 
 ## 1. Requirements
 
-- Linux x86_64. The host package installer supports **Ubuntu 22.04, 24.04 and 26.04 LTS**.
+- Linux x86_64, or Windows 11 x86_64 with WSL 2 as described in the separate guide.
+  On native Linux, the host package installer supports **Ubuntu 22.04, 24.04 and 26.04 LTS**.
   Other distributions need Docker,
   Compose and the matching GPU runtime installed by their administrator.
 - A supported **NVIDIA/CUDA or AMD/ROCm GPU** with a matching working host driver.
@@ -213,6 +218,7 @@ Replace hostname/IP with the actual values. Without them the default is localhos
 For a first installation on AMD, also add `--backend rocm` to this command.
 `--bind 0.0.0.0` exposes all IPv4 interfaces and needs deliberate network restrictions.
 Port defaults to **8766** (`--port`); GPU defaults to **0** (`--gpu INDEX` or `GPU-...` UUID).
+CUDA also accepts `--gpu all`, explicitly exposing every NVIDIA GPU, as required by WSL.
 Configuration creates two private random tokens and a development TLS certificate. For
 native-device deployment, explicitly import its public certificate or use trusted CA certificates as described in section 6.
 
@@ -413,7 +419,8 @@ entries are rejected before the ownership changes are applied.
 The agent has a read-only root filesystem,
 bounded temporary storage and dropped capabilities. The inference container uses the
 upstream image's default user but has no privileged mode, host IPC, Docker socket, dataset
-mounts or published ports. Only one selected GPU and its model cache are exposed to it.
+mounts or published ports. It receives the selected GPU (or every GPU when explicitly
+using `--gpu all`) and its model cache.
 
 The inference key is random by default. A host `VLLM_API_KEY` is never imported.
 Optionally provide `VLLM_BORGVR_API_KEY` during **initial** configuration (32..512 ASCII

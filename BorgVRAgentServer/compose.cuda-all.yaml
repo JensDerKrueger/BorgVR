@@ -1,0 +1,12 @@
+# Explicit all-GPU access, required by NVIDIA's WSL container interface.
+# Use instead of compose.cuda.yaml, never on top of it.
+services:
+  vllm:
+    group_add: ["${BORGVR_GID}"]
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]

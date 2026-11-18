@@ -69,6 +69,7 @@ def test_backend_overlays_do_not_mix_devices_or_weaken_security():
     root = Path(__file__).resolve().parents[1]
     common = yaml.safe_load((root / "compose.yaml").read_text())["services"]["vllm"]
     cuda = yaml.safe_load((root / "compose.cuda.yaml").read_text())["services"]["vllm"]
+    cuda_all = yaml.safe_load((root / "compose.cuda-all.yaml").read_text())["services"]["vllm"]
     rocm = yaml.safe_load((root / "compose.rocm.yaml").read_text())["services"]["vllm"]
     assert "deploy" not in common and "devices" not in common
     assert cuda["deploy"]["resources"]["reservations"]["devices"][0]["driver"] == "nvidia"
@@ -76,6 +77,25 @@ def test_backend_overlays_do_not_mix_devices_or_weaken_security():
     assert "deploy" not in rocm and "devices" not in cuda
     assert common["cap_drop"] == ["ALL"] and "cap_add" not in rocm
     assert "privileged" not in rocm and "ipc" not in rocm
+    device = cuda_all["deploy"]["resources"]["reservations"]["devices"][0]
+    assert device == {"driver": "nvidia", "count": "all", "capabilities": ["gpu"]}
+    assert cuda_all["group_add"] == cuda["group_add"]
+    assert not {"devices", "privileged", "ipc", "cap_add", "ports"} & cuda_all.keys()
+
+
+@pytest.mark.parametrize("backend", ["cuda", "rocm"])
+def test_all_gpus_is_explicit_and_cuda_only(backend):
+    parser = argparse.ArgumentParser()
+    configure.add_model_options(parser)
+    parser.add_argument("--agent-image")
+    args = parser.parse_args(["--backend", backend, "--gpu", "all"])
+    if backend == "rocm":
+        with pytest.raises(ValueError, match="only CUDA"):
+            configure.inference_values(args)
+    else:
+        values = configure.inference_values(args)
+        assert values["BORGVR_GPU"] == "all"
+        assert configure.inference_values(parser.parse_args([]))["BORGVR_GPU"] == "0"
 
 
 def test_model_switch_does_not_reuse_old_revision_or_private_keys(tmp_path):

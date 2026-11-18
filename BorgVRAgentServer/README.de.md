@@ -1,6 +1,10 @@
-# BorgVR-Agent: Installation unter Linux
+# BorgVR-Agent: Installation unter Linux und Windows/WSL 2
 
 [English / vollständige Betriebsreferenz](README.md) | [Verbindungsprotokoll](PROTOCOL.md)
+
+Für **Windows 11 mit NVIDIA-GPU** zuerst die [WSL-2-Anleitung](WINDOWS.de.md) verwenden.
+Sie beschreibt Docker Desktop und Docker Engine in Ubuntu sowie die Windows-Netzfreigabe.
+Die folgenden Host-Schritte beziehen sich auf **natives Linux**.
 
 Dieses Verzeichnis enthält den selbst betriebenen Server für den KI-Assistenten von BorgVR
 auf macOS, iOS und visionOS. Der Assistent versteht Sprach- und Textanfragen und kann die
@@ -50,7 +54,8 @@ die App mit dem erzeugten Zertifikat und Zugangsschlüssel verbunden.
 
 ## 1. Voraussetzungen
 
-- Linux x86_64. Das Host-Skript unterstützt **Ubuntu 22.04, 24.04 und 26.04 LTS**.
+- Linux x86_64 oder Windows 11 x86_64 mit WSL 2 gemäß der separaten Anleitung.
+  Unter nativem Linux unterstützt das Host-Skript **Ubuntu 22.04, 24.04 und 26.04 LTS**.
   Auf anderen Distributionen muss der Administrator Docker, Compose und die passende
   GPU-Laufzeit bereitstellen.
 - Eine von vLLM und dem gewählten Modell unterstützte **NVIDIA/CUDA- oder AMD/ROCm-GPU**
@@ -225,7 +230,8 @@ Hostname und IP ersetzen. `--host` bestimmt den Zertifikatsnamen, `--bind` die
 Abhöradresse. Bei einer ersten Installation auf AMD zusätzlich `--backend rocm` angeben.
 Ohne Angabe von Host und Abhöradresse bleibt es bei localhost/`127.0.0.1`. `0.0.0.0` gibt alle
 IPv4-Schnittstellen frei und braucht bewusste Netzabsicherung. Port ist **8766** (`--port`),
-GPU **0** (`--gpu INDEX` oder NVIDIA-GPU-UUID).
+GPU **0** (`--gpu INDEX` oder NVIDIA-GPU-UUID). CUDA erlaubt zusätzlich `--gpu all`;
+damit werden ausdrücklich alle NVIDIA-GPUs zugänglich, wie für WSL erforderlich.
 
 ### Modelle und Grafikkarten wählen
 

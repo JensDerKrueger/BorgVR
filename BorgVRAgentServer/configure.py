@@ -147,8 +147,8 @@ def inference_values(args, existing=None):
     if backend not in ("cuda", "rocm"):
         raise ValueError("Backend must be cuda or rocm")
     gpu = args.gpu or existing.get("BORGVR_GPU", "0")
-    if not re.fullmatch(r"[0-9]+|GPU-[A-Fa-f0-9-]+", gpu):
-        raise ValueError("GPU must be an index or GPU UUID")
+    if not re.fullmatch(r"[0-9]+|GPU-[A-Fa-f0-9-]+", gpu) and not (gpu == "all" and backend == "cuda"):
+        raise ValueError("GPU must be an index or GPU UUID; only CUDA also accepts all")
     image = args.vllm_image or existing.get("BORGVR_VLLM_IMAGE", CUDA_IMAGE if backend == "cuda" else ROCM_IMAGE)
     if args.backend and backend != existing.get("BORGVR_BACKEND", "cuda") and not args.vllm_image:
         image = CUDA_IMAGE if backend == "cuda" else ROCM_IMAGE

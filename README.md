@@ -34,6 +34,7 @@ The current development version is **3.9**. The SharePlay wire protocol is versi
   NVIDIA/CUDA or AMD/ROCm GPU server. Includes sudo setup and model-switch commands,
   prebuilt agent images, TLS, model/image/tool tests, and
   [English](BorgVRAgentServer/README.md) / [German](BorgVRAgentServer/README.de.md) setup guides.
+  Windows 11 with NVIDIA GPUs can use the [WSL 2 deployment guide](BorgVRAgentServer/WINDOWS.md).
   Shared native speech/text integration is available on macOS, iOS and visionOS.
 - **html**: bilingual user guide, embedded macOS Help, support, and privacy pages.
   Start with the [manual](html/index.html) or the guide to

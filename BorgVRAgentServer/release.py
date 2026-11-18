@@ -15,10 +15,10 @@ ARCHIVE = "borgvr-agent-linux-amd64.tar.gz"
 BUNDLE = "borgvr-agent-deployment.tar.gz"
 LOCAL_IMAGE = "borgvr-agent:ci"
 DEPLOYMENT_FILES = (
-    "compose.yaml", "compose.cuda.yaml", "compose.rocm.yaml", "configure.py", "model_config.py",
-    "setup.sh", "setup-host.sh", "uninstall.py", "firewall.py", "vllm_start.py",
+    "compose.yaml", "compose.cuda.yaml", "compose.cuda-all.yaml", "compose.rocm.yaml", "configure.py", "model_config.py",
+    "setup.sh", "setup-host.sh", "gpu-host.sh", "uninstall.py", "firewall.py", "vllm_start.py",
     "diagnose_tools.py", "diagnostic_catalog.json",
-    "README.md", "README.de.md", "PROTOCOL.md", "LICENSE",
+    "README.md", "README.de.md", "WINDOWS.md", "WINDOWS.de.md", "PROTOCOL.md", "LICENSE",
 )
 VERSION = r"[0-9]+\.[0-9]+(?:\.[0-9]+)?(?:-[A-Za-z0-9][A-Za-z0-9.-]*)?"
 DIGEST = r"sha256:[0-9a-f]{64}"
@@ -73,8 +73,8 @@ def write_bundle(output, info):
         "Install downloads missing images and starts/tests both containers; private images require registry login.\n"
         "Re-running install recreates BorgVR containers without deleting model volumes or images.\n"
         "When already root, omit sudo. The agent container remains unprivileged.\n"
-        "Ordinary BorgVR users need no Docker or root access. No native voice client or H200 inference\n"
-        "test is included in this CPU-only build. See README.md and README.de.md for details.\n"
+        "Ordinary BorgVR users need no Docker or root access. GPU inference must be tested on the target host.\n"
+        "For Windows/WSL 2 installation and networking, see README.md and README.de.md.\n"
     )
     with tarfile.open(output / BUNDLE, "w:gz") as archive:
         files = []

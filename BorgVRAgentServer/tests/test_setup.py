@@ -208,6 +208,7 @@ def test_invalid_namespaced_key_rejected_before_creating_files(tmp_path, monkeyp
 
 def test_shell_syntax_and_help():
     root = Path(__file__).resolve().parents[1]
+    subprocess.run(["bash", "-n", str(root / "gpu-host.sh")], check=True)
     for name in ("setup.sh", "setup-host.sh"):
         subprocess.run(["bash", "-n", str(root / name)], check=True)
         result = subprocess.run(["bash", str(root / name), "--help"], capture_output=True, text=True, check=True)
@@ -283,7 +284,7 @@ def executable(path, text):
 @pytest.mark.parametrize("prebuilt", [None, True, False])
 def test_install_docker_sequence_without_changing_host(tmp_path, prebuilt):
     source = Path(__file__).resolve().parents[1]
-    for name in ("setup.sh", "configure.py", "model_config.py", "firewall.py"):
+    for name in ("setup.sh", "gpu-host.sh", "configure.py", "model_config.py", "firewall.py"):
         shutil.copyfile(source / name, tmp_path / name)
     binary = tmp_path / "bin"
     binary.mkdir()
@@ -326,7 +327,7 @@ sys.exit(1 if "inspect" in args else 0)
 
 def test_user_setup_docker_access_failure_never_falls_back_to_sudo(tmp_path):
     source = Path(__file__).resolve().parents[1]
-    for name in ("setup.sh", "configure.py", "model_config.py", "firewall.py"):
+    for name in ("setup.sh", "gpu-host.sh", "configure.py", "model_config.py", "firewall.py"):
         shutil.copyfile(source / name, tmp_path / name)
     (tmp_path / ".env").write_text("# test fixture\n")
     binary = tmp_path / "bin"
@@ -350,7 +351,7 @@ def test_image_modes_cannot_be_mixed():
 @pytest.fixture
 def operations(tmp_path):
     source = Path(__file__).resolve().parents[1]
-    for name in ("setup.sh", "configure.py", "model_config.py", "uninstall.py", "firewall.py"):
+    for name in ("setup.sh", "gpu-host.sh", "configure.py", "model_config.py", "uninstall.py", "firewall.py"):
         shutil.copyfile(source / name, tmp_path / name)
     create_configuration(tmp_path, "localhost", "127.0.0.1", 8766, "0")
     binary = tmp_path / "bin"
@@ -380,6 +381,58 @@ sys.exit(42 if os.environ.get("FAIL_COMMAND") in args else 0)
         return result, calls
 
     return tmp_path, run
+
+
+@pytest.mark.parametrize("all_gpus", [False, True])
+def test_gpu_access_matches_explicit_configuration(operations, all_gpus):
+    root, run = operations
+    if all_gpus:
+        result, _ = run("configure", "--gpu", "all")
+        assert result.returncode == 0, result.stderr
+        executable(root / "bin/uname", '#!/bin/sh\ncase "$1" in -s) echo Linux;; -m) echo x86_64;; -r) echo 6.6.0-microsoft-standard-WSL2;; esac\n')
+    result, calls = run("doctor")
+    assert result.returncode == 0, result.stderr
+    probe = next(call["args"] for call in calls if "--gpus" in call["args"])
+    assert probe[probe.index("--gpus") + 1] == ("all" if all_gpus else "device=0")
+    selected = str(root / ("compose.cuda-all.yaml" if all_gpus else "compose.cuda.yaml"))
+    other = str(root / ("compose.cuda.yaml" if all_gpus else "compose.cuda-all.yaml"))
+    compose_calls = [call["args"] for call in calls if "--project-directory" in call["args"]]
+    assert compose_calls and all(selected in call and other not in call for call in compose_calls)
+
+
+@pytest.mark.parametrize("backend", ["cuda", "rocm"])
+def test_wsl_never_silently_broadens_gpu_access(operations, backend):
+    root, run = operations
+    if backend == "rocm":
+        result, _ = run("configure", "--backend", "rocm")
+        assert result.returncode == 0, result.stderr
+    before = (root / ".env").read_bytes()
+    executable(root / "bin/uname", '#!/bin/sh\ncase "$1" in -s) echo Linux;; -m) echo x86_64;; -r) echo 6.6.0-microsoft-standard-WSL2;; esac\n')
+    result, calls = run("doctor")
+    assert result.returncode != 0
+    assert ("--gpu all" if backend == "cuda" else "not supported") in result.stderr
+    assert not any("--gpus" in call["args"] or "up" in call["args"] for call in calls)
+    assert (root / ".env").read_bytes() == before
+
+
+def test_nvidia_driver_uses_wsl_fallback_only_when_not_on_path(tmp_path):
+    helper = Path(__file__).resolve().parents[1] / "gpu-host.sh"
+    fallback = tmp_path / "wsl-nvidia-smi"
+    executable(fallback, '#!/bin/sh\necho WSL-driver\n')
+    local_helper = tmp_path / "gpu-host.sh"
+    local_helper.write_text(helper.read_text().replace("/usr/lib/wsl/lib/nvidia-smi", str(fallback)))
+    binary = tmp_path / "bin"
+    binary.mkdir()
+    bash = shutil.which("bash")
+    env = {**os.environ, "PATH": str(binary)}
+    def check():
+        return subprocess.run([bash, "-c", 'source "$1"; check_nvidia_driver', "test", str(local_helper)],
+                              env=env, capture_output=True, text=True)
+    assert check().stdout.strip() == "WSL-driver"
+    executable(binary / "nvidia-smi", '#!/bin/sh\necho PATH-driver\n')
+    assert check().stdout.strip() == "PATH-driver"
+    executable(binary / "nvidia-smi", '#!/bin/sh\nexit 13\n')
+    assert check().returncode == 13  # A broken driver must not be hidden by the fallback.
 
 
 def test_update_downloads_and_probes_before_persisting_then_tests_model(operations):

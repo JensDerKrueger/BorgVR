@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/gpu-host.sh"
 BACKEND=cuda
 ALLOW_DOCKER_RESTART=0
 WORK=""
@@ -36,9 +37,10 @@ configure_runtime() {
 install_host() {
   [[ "$(uname -s)" == Linux && "$(uname -m)" == x86_64 ]] || die 'Host setup requires Linux x86_64.'
   if [[ "$BACKEND" == cuda ]]; then
-    command -v nvidia-smi >/dev/null && nvidia-smi >/dev/null \
+    check_nvidia_driver >/dev/null \
       || die 'A working NVIDIA driver is required. No driver will be installed or replaced.'
   else
+    if is_wsl; then die 'AMD/ROCm on WSL is not supported by this deployment; use native Linux for ROCm.'; fi
     [[ -c /dev/kfd && -d /dev/dri ]] || die 'A working AMD ROCm driver exposing /dev/kfd and /dev/dri is required; no driver will be installed.'
   fi
   # Never read .env or source configuration from the application/user directory as root.
