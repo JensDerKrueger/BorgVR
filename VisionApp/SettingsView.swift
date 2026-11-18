@@ -41,11 +41,13 @@ private enum VisionSettingsPage: String, CaseIterable, Identifiable {
   case importSettings
   case sharePlay
   case mcp
+  case voiceAgent
 
   var id: String { rawValue }
 
   var title: LocalizedStringKey {
     switch self {
+      case .voiceAgent: LocalizedStringKey(voiceAgentText("AI Assistant"))
       case .general: "settings_tab_general"
       case .interface: "User Interface"
       case .rendering: "settings_tab_rendering"
@@ -61,6 +63,7 @@ private enum VisionSettingsPage: String, CaseIterable, Identifiable {
 
   var systemImage: String {
     switch self {
+      case .voiceAgent: "mic"
       case .general: "gearshape"
       case .interface: "slider.horizontal.3"
       case .rendering: "paintpalette"
@@ -82,6 +85,7 @@ struct SettingsView: View {
   @EnvironmentObject var storedAppModel: StoredAppModel
   @EnvironmentObject private var updateChecker: AppStoreUpdateChecker
   @EnvironmentObject private var mcpController: BorgVRMCPServerController
+  @EnvironmentObject private var voiceAgent: VoiceAgentController
 
   // Temporary state for input validation
   @State private var tempPixelError: String = ""
@@ -184,29 +188,6 @@ struct SettingsView: View {
           if selectedSettingsPage == .interaction {
         Form {
           settingsIntroSection("settings_description_interaction")
-          Section(header: Text("settings_section_voice").bold()) {
-            Toggle(
-              "settings_toggle_enable_voice_input",
-              isOn: session.settingsBinding($storedAppModel.enableVoiceInput)
-            )
-            .onChange(of: storedAppModel.enableVoiceInput) { _, newValue in
-              if newValue {
-                let voice = VoiceCommandService()
-                voice.requestAuthorization()
-                voice.startListening()
-                voice.stopListening()
-              }
-            }
-            Toggle(
-              "settings_toggle_autostart_voice",
-              isOn: session.settingsBinding($storedAppModel.autostartVoiceInput)
-            )
-            Toggle(
-              "settings_toggle_enable_voice_feedback",
-              isOn: session.settingsBinding($storedAppModel.enableVoiceOutput)
-            )
-          }
-
           Section(header: Text("settings_section_markers").bold()) {
             Toggle(isOn: session.settingsBinding($storedAppModel.quickMarker)) {
               HStack(spacing: 8) {
@@ -736,6 +717,10 @@ struct SettingsView: View {
           }
 
         }
+          }
+
+          if selectedSettingsPage == .voiceAgent {
+            Form { Section(voiceAgentText("AI Assistant")) { VoiceAgentSettingsView(agent: voiceAgent) } }
           }
 
           if selectedSettingsPage == .mcp {

@@ -2,14 +2,32 @@
 
 [English / vollständige Betriebsreferenz](README.md) | [Verbindungsprotokoll](PROTOCOL.md)
 
-Dieses Verzeichnis enthält die erste Serverimplementierung für die geplante KI-Steuerung:
+Dieses Verzeichnis enthält den Server für die KI-Steuerung:
 **vLLM mit einem wählbaren Vision-Language-Modell** und unseren **BorgVR-Agenten auf Basis von Pydantic AI**.
 Die Dienste laufen in Containern. Nur der mit TLS und Zugangsschlüssel abgesicherte
 Agent ist von außen erreichbar; vLLM bleibt im privaten Container-Netz.
 
 **Stand:** Server, Textanfragen, externe Werkzeugaufrufe, Bilder, Zwischenmeldungen und
-Abbruch sind implementiert. Die Anbindung der nativen Apps und deren neues Sprachinterface
-folgen separat. Die bisherige Vision-Sprachsteuerung wird hiermit noch nicht ersetzt.
+Abbruch sowie der gemeinsame Sprach-/Textclient für macOS, iOS und visionOS sind implementiert.
+Die bisherigen fest vorgegebenen Vision-Sprachbefehle sind ersetzt. Anatomische Zuordnungen
+müssen vom Benutzer geprüft werden; die Sprachsteuerung ist keine medizinische Diagnosefunktion.
+
+### Native App Verbinden
+
+Unter **Einstellungen > KI-Assistent** den Assistenten aktivieren, `https://ai1:8766`
+eintragen (oder die zum Zertifikat passende IP), das öffentliche `runtime/tls/server.crt`
+importieren und die Datei `runtime/secrets/agent_token` importieren oder deren Inhalt eingeben.
+**Niemals `server.key` oder `vllm_token` auf die Geräte kopieren.** Der Zugangsschlüssel landet
+im Geräte-Schlüsselbund. Übertragen Sie ihn nur auf vertrauenswürdige Geräte und entfernen Sie
+Transferkopien nach dem Import. Der Servertest funktioniert ohne geöffneten Datensatz.
+
+Dann einen Datensatz öffnen und **KI-Assistent** in den Render-Bedienelementen wählen.
+Sprechen über das Mikrofon oder Text eingeben; Antworten und Zwischenmeldungen erscheinen
+im Gespräch und werden auf Wunsch lokal vorgelesen. Renderbilder können separat erlaubt
+werden. Kamera und Passthrough werden nicht übertragen. Spracherkennung erfolgt standardmäßig
+auf dem Gerät; eine mögliche Verarbeitung durch Apple muss separat erlaubt werden.
+Abbrechen beendet die Verbindung, macht bereits ausgeführte Änderungen aber nicht rückgängig.
+Agenteneinstellungen und Schlüssel bleiben gerätelokal, außerhalb von SharePlay und GSC.
 
 ## 1. Was Auf Dem Rechner Installiert Sein Muss
 
@@ -205,8 +223,9 @@ Quellen: [Qwen3.5-4B](https://huggingface.co/Qwen/Qwen3.5-4B),
 [vLLM-Modell-/Tool-Parser](https://docs.vllm.ai/en/latest/features/tool_calling/),
 [vLLM-GPU-Anforderungen](https://docs.vllm.ai/en/latest/getting_started/installation/gpu/).
 
-Dabei entstehen zwei private zufällige Zugangsschlüssel und ein Testzertifikat. Für
-den späteren nativen Betrieb ein vertrauenswürdiges CA-Zertifikat verwenden, siehe unten.
+Dabei entstehen zwei private zufällige Zugangsschlüssel und ein selbstsigniertes Zertifikat.
+Für die native App dessen öffentliches Zertifikat ausdrücklich importieren oder ein
+vertrauenswürdiges CA-Zertifikat verwenden, siehe unten.
 
 **Die eigentlichen Nutzer verbinden sich danach nur aus BorgVR mit dem Server.** Sie
 müssen nichts auf dem Linux-Server installieren und brauchen dort keine Docker-Rechte.
@@ -278,7 +297,7 @@ Der Test prüft Modellbereitschaft, Authentifizierung und TLS und fordert eine k
 vom **echten Modell** an. Danach muss es zwei harmlose Test-Werkzeuge aufrufen und die Farbe
 eines synthetischen roten Bildes erkennen. Es wird kein echter Datensatz geöffnet oder verändert.
 Ein Fehlschlag bedeutet fehlende Kompatibilität oder eine nicht zuverlässig erfüllte Testaufgabe,
-nicht automatisch einen Hardwaredefekt. Die native App ist noch nicht angeschlossen.
+nicht automatisch einen Hardwaredefekt. Die native App wird separat wie oben beschrieben eingerichtet.
 
 Ein Test von einem anderen Rechner ist ebenfalls möglich; siehe den englischen Leitfaden.
 Der Testclient prüft Zertifikat und Hostname, es gibt keinen unsicheren TLS-Schalter.
@@ -299,16 +318,29 @@ sudo docker compose exec -T agent python client.py --url https://127.0.0.1:8766 
 - `runtime/secrets/vllm_token` ist nur für die interne Modellkommunikation, Modus 0640.
 - `runtime/tls/server.crt` ist das öffentliche Zertifikat.
 - `runtime/tls/server.key` ist der private Schlüssel und gehört niemals auf einen Client.
-- Verzeichnisse sind nur für den Besitzer zugänglich, sonstige private Schlüssel haben Modus 0600.
-  Diese Rechte nicht durch weltweite Lesbarkeit umgehen.
+- Diese Rechte nicht durch weltweite Lesbarkeit umgehen.
 
-Bei neuer Einrichtung mit sudo bleiben `.env` und das übergeordnete `runtime`-Verzeichnis
-root-eigen. Nur die privaten Container-Mounts erhalten UID/GID 10001; damit läuft der
-Agent trotz administrativer Einrichtung nicht als root. vLLM erhält die zusätzliche
-Gruppe `BORGVR_GID`, um ausschließlich den gemeinsamen internen Token lesen zu können,
-auch ohne Rechte zum Umgehen von Dateiberechtigungen. `install`, `init` und `start`
-korrigieren dessen Modus bei bestehenden Installationen auf 0640, ohne den Schlüssel
-zu ändern. Die übrigen Benutzer-IDs und privaten Dateirechte bleiben erhalten.
+Bei Einrichtung mit `sudo` gehört `runtime` dem aufrufenden Benutzer (zum Beispiel
+`krueger`), mit Modus 0700. Er kann die Dateien darin ohne sudo lesen und verwalten.
+Die Unterverzeichnisse `secrets` und `tls` haben Modus 0750, ihre Container-Dateien
+0640 und die Gruppe `BORGVR_GID`. Damit bleibt der Agent über seine Gruppe leseberechtigt
+und läuft weiterhin mit seiner bisherigen unprivilegierten UID/GID (bei neuer Einrichtung
+10001). vLLM erhält diese zusätzliche Gruppe ausschließlich für den internen Token.
+Andere Benutzer bekommen keinen Zugriff; Sicherungsverzeichnisse bleiben 0700,
+Sicherungsdateien 0600. Die neu erzeugte `.env` bleibt root-eigen und 0600.
+
+`install`, `init`, `start`, `restart` und `update` richten diese Runtime-Rechte automatisch
+ein, ohne Schlüssel, Container-IDs oder Modelle auszutauschen. Für eine bereits laufende
+Installation genügt, als gewünschter Benutzer aus dem Agenten-Verzeichnis:
+
+```
+sudo ./setup.sh permissions
+```
+
+Dies benötigt weder Docker noch einen Neustart der Container. Ein bereits eingerichteter
+Runtime-Besitzer bleibt auch bei späteren Aufrufen durch root oder andere Administratoren
+erhalten. Bei einer direkten root-Ersteinrichtung ohne sudo-Benutzer bleiben die Dateien
+wie bisher nur für root beziehungsweise den Container-Benutzer zugänglich.
 
 Standardmäßig wird ein eigener interner Schlüssel zufällig erzeugt. Ein auf dem Host
 gesetztes `VLLM_API_KEY` wird niemals übernommen. Optional kann bei der **ersten**
@@ -319,9 +351,10 @@ schreiben oder in `.env` ablegen. Bei vorhandener Konfiguration bleibt der alte 
 Nur innerhalb des BorgVR-vLLM-Containers setzt der Starter aus der privaten Schlüsseldatei
 den von vLLM vorgeschriebenen Namen `VLLM_API_KEY`. Andere Container bleiben unabhängig.
 
-Das automatisch erzeugte, selbstsignierte Zertifikat gilt 365 Tage und dient dem ersten
-Test mit ausdrücklich vertrautem Zertifikat. Für den späteren nativen Betrieb ein
-Zertifikat einer auf den Geräten vertrauten internen oder öffentlichen CA verwenden.
+Das automatisch erzeugte, selbstsignierte Zertifikat gilt 365 Tage. Die native App kann
+ihm durch den ausdrücklichen Import des öffentlichen Zertifikats vertrauen; Hostname
+beziehungsweise IP und Gültigkeit werden weiterhin geprüft. Alternativ ein Zertifikat
+einer auf den Geräten vertrauten internen oder öffentlichen CA verwenden.
 Die Zertifikatsausstellung, Erneuerung und Einrichtung des CA-Vertrauens auf den Geräten
 sind noch nicht automatisiert. TLS-Prüfungen niemals abschalten.
 
@@ -417,16 +450,17 @@ vLLM-/Modellrevision; diese bei einem Inferenz-Update ausdrücklich anpassen. Ke
 stillschweigende Umstellung auf `latest`. Details zur Rückkehr auf alte Versionen,
 Zertifikatswechsel, Fehlerbehebung und Deinstallation stehen im englischen Leitfaden.
 
-## 7. Tests und nächster Schritt
+## 7. Tests
 
 Die Entwicklertests laufen ohne GPU mit einem deterministischen Testmodell durch die echte
 Pydantic-AI-Schleife. Getestet werden unter anderem Anmeldung, Eingabevalidierung,
 Werkzeugbeschränkungen, Bilder, Abbruch, Zeitlimits und veraltete Antworten. Den Test auf
-der echten H200 und die spätere native Ende-zu-Ende-Prüfung ersetzen sie nicht.
+der echten H200 und den Test mit dem Mikrofon auf dem jeweiligen Gerät ersetzen sie nicht.
 
-Der nächste Schritt ist der gemeinsame native Client: Text und später Sprache zum Server,
-Werkzeugaufrufe durch unser vorhandenes Command-Modul, Screenshots als Rückmeldung und
-lokale Sprachausgabe. Das Protokoll dafür ist in [PROTOCOL.md](PROTOCOL.md) beschrieben.
+`Scripts/test-voice-agent.sh` prüft zusätzlich den nativen macOS-Client über echtes lokales
+TLS/WSS mit deterministischem Modell: Zustandsabfrage, Rotation, Transferfunktion, Renderbild,
+Fortschrittsantwort, GSC-Roundtrip und Abbruch bei Kontextwechsel. Das Protokoll ist in
+[PROTOCOL.md](PROTOCOL.md) beschrieben.
 
 ## 8. Agenten-Image Einmal Bauen Und Verteilen
 

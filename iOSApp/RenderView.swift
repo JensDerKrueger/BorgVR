@@ -71,6 +71,7 @@ struct RenderView: View {
   @EnvironmentObject private var serverController: BackgroundServerController
   @EnvironmentObject private var sharePlay: SharePlayCoordinator
   @EnvironmentObject private var session: ScreenBorgVRSession
+  @EnvironmentObject private var voiceAgent: VoiceAgentController
 
   @State private var presentedSheet: RenderSheet?
   @State private var showRenderControls = true
@@ -533,6 +534,7 @@ struct RenderView: View {
         }
 
         VolumeEditSynchronizationStatus(model: appModel.volumeBrush)
+        VoiceAgentButton(agent: voiceAgent)
         interactionModePicker(compact: usesCompactInteractionModeLabels)
         .onChange(of: appModel.interactionMode) { _, mode in
           appModel.volumeBrush.context.finish(source: "touch")

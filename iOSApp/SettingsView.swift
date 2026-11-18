@@ -54,11 +54,13 @@ private enum SettingsPage: String, CaseIterable, Identifiable {
   case localServer
   case sharePlay
   case mcp
+  case voiceAgent
 
   var id: String { rawValue }
 
   var title: LocalizedStringKey {
     switch self {
+      case .voiceAgent: LocalizedStringKey(voiceAgentText("AI Assistant"))
       case .general: "General"
       case .interface: "User Interface"
       case .rendering: "Rendering"
@@ -73,6 +75,7 @@ private enum SettingsPage: String, CaseIterable, Identifiable {
 
   var systemImage: String {
     switch self {
+      case .voiceAgent: "mic"
       case .general: "gearshape"
       case .interface: "slider.horizontal.3"
       case .rendering: "paintpalette"
@@ -94,6 +97,7 @@ struct SettingsView: View {
   @EnvironmentObject var appSettings: AppSettings
   @EnvironmentObject private var updateChecker: AppStoreUpdateChecker
   @EnvironmentObject private var mcpController: BorgVRMCPServerController
+  @EnvironmentObject private var voiceAgent: VoiceAgentController
 
   @State private var tempPort = ""
   @State private var tempServerAddress = ""
@@ -333,6 +337,8 @@ struct SettingsView: View {
           }
           resetButton(for: .mcp)
         }
+      case .voiceAgent:
+        Form { Section(voiceAgentText("AI Assistant")) { VoiceAgentSettingsView(agent: voiceAgent) } }
     }
   }
 

@@ -1,0 +1,79 @@
+"""Loopback-only native-client test: real agent/TLS, deterministic model, no microphone/GPU."""
+import json
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+import socket
+import sys
+import threading
+import time
+
+from pydantic_ai import BinaryContent
+from pydantic_ai.messages import ModelResponse, TextPart, ToolCallPart, ToolReturnPart, UserPromptPart
+from pydantic_ai.models.function import FunctionModel
+import uvicorn
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "BorgVRAgentServer"))
+from configure import create_configuration
+from borgvr_agent.app import Settings, create_app
+
+root = Path(sys.argv[1])
+create_configuration(root, "localhost", "127.0.0.1", 8766, "0")
+token = (root / "runtime/secrets/agent_token").read_text().strip()
+
+
+class ModelCatalog(BaseHTTPRequestHandler):
+    def do_GET(self):
+        if self.path != "/v1/models" or self.headers.get("Authorization") != "Bearer " + "test-token-" * 8:
+            self.send_error(403)
+            return
+        body = json.dumps({"data": [{"id": "Qwen/Qwen3.6-35B-A3B"}]}).encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def log_message(self, *args):
+        pass
+
+
+catalog = ThreadingHTTPServer(("127.0.0.1", 0), ModelCatalog)
+threading.Thread(target=catalog.serve_forever, daemon=True).start()
+
+
+async def model(messages, info):
+    returned = [part for message in messages for part in message.parts if isinstance(part, ToolReturnPart)]
+    user = next((part.content for message in messages for part in message.parts
+                 if isinstance(part, UserPromptPart) and isinstance(part.content, str)), "")
+    if user == "wait":
+        steps = [("get_application_state", {}), ("wait_until_rendered", {"after_frame": 999999, "timeout_seconds": 30})]
+    else:
+        steps = [("get_application_state", {}), ("report_progress", {"text": "Inspecting the synthetic volume."}),
+                 ("rotate_view", {"axis": [0, 1, 0], "degrees": 30}),
+                 ("set_transfer_function", {"channel": 0, "samples": [[0, 0, 0, 0], [255, 64, 32, 255]]}),
+                 ("wait_until_rendered", {"after_frame": 0, "timeout_seconds": 1}),
+                 ("capture_screenshot", {"include_alpha": False})]
+    if len(returned) < len(steps):
+        name, args = steps[len(returned)]
+        return ModelResponse(parts=[ToolCallPart(name, args, tool_call_id=f"fixture-{len(returned)}")])
+    assert any(isinstance(content, BinaryContent) for message in messages for part in message.parts
+               if isinstance(part, UserPromptPart) and not isinstance(part.content, str) for content in part.content)
+    return ModelResponse(parts=[TextPart("Native voice agent roundtrip passed.")])
+
+
+listener = socket.socket()
+listener.bind(("127.0.0.1", 0))
+port = listener.getsockname()[1]
+server = uvicorn.Server(uvicorn.Config(create_app(Settings(token=token, vllm_token="test-token-" * 8,
+    vllm_url=f"http://127.0.0.1:{catalog.server_port}/v1"), FunctionModel(model)),
+    ssl_certfile=str(root / "runtime/tls/server.crt"), ssl_keyfile=str(root / "runtime/tls/server.key"),
+    ws="websockets-sansio", ws_max_size=4194304, access_log=False, log_level="error"))
+thread = threading.Thread(target=lambda: server.run(sockets=[listener]), daemon=True)
+thread.start()
+deadline = time.monotonic() + 10
+while not server.started and thread.is_alive() and time.monotonic() < deadline:
+    time.sleep(0.01)
+if not server.started:
+    raise RuntimeError("Fixture did not start")
+(root / "ready.json").write_text(json.dumps({"port": port}))
+thread.join()

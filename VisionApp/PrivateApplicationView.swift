@@ -8,10 +8,7 @@ struct HandInteractionControlsView: View {
   @Environment(\.dismissWindow) private var dismissWindow
 
   @EnvironmentObject var storedAppModel: StoredAppModel
-  @EnvironmentObject var voice: VoiceCommandService
-  @EnvironmentObject var speech: SpeechHelper
-
-  @State private var voiceHandler: VoiceCommandHandler?
+  @EnvironmentObject private var voiceAgent: VoiceAgentController
   @State private var showResetModelConfirmation = false
   @State private var showResetClippingConfirmation = false
   @State private var showDeleteAllObjectsConfirmation = false
@@ -69,52 +66,7 @@ struct HandInteractionControlsView: View {
         .frame(maxWidth: .infinity, alignment: .center)
       }
 
-      if storedAppModel.enableVoiceInput {
-        HStack() {
-          Button(action: toggleVoice) {
-            HStack(spacing: 10) {
-              Image(
-                systemName: voice.isEnabled ? "stop.circle.fill" : "mic.fill"
-              )
-              .font(.system(size: 18, weight: .semibold))
-
-              Text(
-                voice.isEnabled
-                ? "private_voice_stop_button"
-                : "private_voice_start_button"
-              )
-              .font(.headline)
-              .contentTransition(.opacity)
-            }
-            .frame(minHeight: 44)
-          }
-          .buttonStyle(.bordered)
-          .buttonBorderShape(.capsule)
-          .tint(voice.isEnabled ? (voice.isPassive ? Color.yellow : .red) : nil)
-          .animation(
-            .spring(response: 0.28, dampingFraction: 0.85),
-            value: voice.isEnabled
-          )
-          .accessibilityLabel(
-            voice.isEnabled
-            ? NSLocalizedString(
-              "private_voice_stop_label",
-              comment: "Accessibility label: stop listening"
-            )
-            : NSLocalizedString(
-              "private_voice_start_label",
-              comment: "Accessibility label: start voice input"
-            )
-          )
-          .onAppear {
-            startupVoice()
-          }
-
-          Button(action: showVoiceHelp) {
-            Image(systemName: "info.circle")
-          }
-        }
-      }
+      VoiceAgentButton(agent: voiceAgent)
     }
     .alert("Reset Model?", isPresented: $showResetModelConfirmation) {
       Button("Cancel", role: .cancel) {}
@@ -480,10 +432,6 @@ struct HandInteractionControlsView: View {
     }
   }
 
-  private func showVoiceHelp() {
-    openWindow(id: "VoiceCommandsView")
-  }
-
   private func deleteAllObjects() {
     let removedMarkers = sharedAppModel.removeAllVolumeMarkers()
     let removedMeshes = !sharedAppModel.sceneMeshInstances.isEmpty
@@ -550,134 +498,6 @@ struct HandInteractionControlsView: View {
     return urls[channel]
   }
 
-  private func toggleVoice() {
-    if voice.isEnabled {
-      voice.stopListening()
-      speak(
-        NSLocalizedString(
-          "private_voice_off",
-          comment: "Spoken feedback when voice is turned off"
-        )
-      )
-    } else {
-      voice.startListening()
-      speak(
-        NSLocalizedString(
-          "private_voice_on",
-          comment: "Spoken feedback when voice is turned on"
-        )
-      )
-    }
-  }
-
-  private func startupVoice() {
-    voice.onMessage = { msg in
-      switch msg {
-        case .transcript(let text, let isFinal):
-          handleVoiceCommand(text.lowercased(), isFinal: isFinal)
-        case .stateChanged(let state):
-          handleVoiceStateChange(state: state)
-      }
-    }
-
-    switch voice.state {
-      case .idle:
-        voice.requestAuthorization(
-          autostart: storedAppModel.enableVoiceInput
-          && storedAppModel.autostartVoiceInput
-        )
-      case .failed(let error):
-        runtimeAppModel.logger.warning(
-          String(
-            format: NSLocalizedString(
-              "private_voice_usage_failed",
-              comment: "Log: voice usage failed"
-            ),
-            String(describing: error)
-          )
-        )
-        return
-      case .denied(let error):
-        runtimeAppModel.logger.warning(
-          String(
-            format: NSLocalizedString(
-              "private_voice_usage_denied",
-              comment: "Log: voice usage denied"
-            ),
-            String(describing: error)
-          )
-        )
-        storedAppModel.enableVoiceInput = false
-        return
-      default:
-        break
-    }
-  }
-
-  private func handleVoiceCommand(_ text: String, isFinal: Bool) {
-    let handler = ensureVoiceHandler()
-    handler.handle(rawText: text, isFinal: isFinal)
-  }
-
-  private func handleVoiceStateChange(state: VoiceCommandService.State) {
-    switch state {
-      case .idle:
-        break
-      case .requestingAuth:
-        break
-      case .ready:
-        break
-      case .listening(_):
-        break
-      case .denied(let info):
-        let messageDenied = String(
-          format: NSLocalizedString(
-            "private_voice_access_denied",
-            comment: "Voice access denied (spoken/logged message)"
-          ),
-          info
-        )
-        speak(messageDenied)
-        runtimeAppModel.logger.warning(messageDenied)
-      case .failed(let info):
-        let messageFailed = String(
-          format: NSLocalizedString(
-            "private_voice_failed",
-            comment: "Voice failed (spoken/logged message)"
-          ),
-          info
-        )
-        speak(messageFailed)
-        runtimeAppModel.logger.warning(messageFailed)
-    }
-  }
-
-  func speak(_ text: String) {
-    if storedAppModel.enableVoiceOutput {
-      speech.speak(text)
-    }
-  }
-
-  private func ensureVoiceHandler() -> VoiceCommandHandler {
-    if let handler = voiceHandler {
-      return handler
-    }
-
-    let handler = VoiceCommandHandler(
-      runtimeAppModel: runtimeAppModel,
-      sharedAppModel: sharedAppModel,
-      storedAppModel: storedAppModel,
-      voice: voice,
-      speak: { message in
-        speech.speak(message)
-      },
-      openSelectedEditor: {
-        openSelectedEditor()
-      }
-    )
-    voiceHandler = handler
-    return handler
-  }
 }
 
 enum InteractionModeColor {

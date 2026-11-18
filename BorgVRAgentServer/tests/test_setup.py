@@ -5,6 +5,7 @@ from pathlib import Path
 import shlex
 import shutil
 import subprocess
+from types import SimpleNamespace
 
 import pytest
 import yaml
@@ -51,6 +52,7 @@ def test_sudo_configuration_keeps_agent_unprivileged(tmp_path, monkeypatch):
     monkeypatch.setattr(configure.os, "getuid", lambda: 0)
     monkeypatch.setattr(configure.os, "chown", lambda path, uid, gid: changed.append((path, uid, gid)))
     monkeypatch.setattr(configure, "prepare_shared_token", lambda root: None)
+    monkeypatch.setattr(configure, "prepare_runtime_access", lambda root: None)
     create_configuration(tmp_path, "192.168.1.2", "127.0.0.1", 8766, "0")
     env = (tmp_path / ".env").read_text()
     assert f"BORGVR_UID={AGENT_UID}\n" in env and f"BORGVR_GID={AGENT_GID}\n" in env
@@ -62,6 +64,111 @@ def test_sudo_configuration_keeps_agent_unprivileged(tmp_path, monkeypatch):
     changed.clear()
     create_configuration(tmp_path, "localhost", "0.0.0.0", 9876, "1")
     assert not changed and (tmp_path / ".env").read_text() == env
+
+
+def test_runtime_owner_uses_sudo_caller_and_retains_existing_installer(monkeypatch):
+    monkeypatch.setenv("SUDO_UID", "1234")
+    monkeypatch.setenv("SUDO_USER", "installer")
+    monkeypatch.setattr(configure.pwd, "getpwuid", lambda uid: SimpleNamespace(
+        pw_uid=uid, pw_gid=5678, pw_name="installer"))
+    assert configure.runtime_owner(SimpleNamespace(st_uid=0, st_gid=0)) == (1234, 5678)
+    assert configure.runtime_owner(SimpleNamespace(st_uid=4321, st_gid=8765)) == (4321, 8765)
+    monkeypatch.delenv("SUDO_UID")
+    assert configure.runtime_owner(SimpleNamespace(st_uid=0, st_gid=0)) is None
+    assert configure.runtime_owner(SimpleNamespace(st_uid=1234, st_gid=5678)) == (1234, 5678)
+    monkeypatch.setenv("SUDO_UID", "0")
+    assert configure.runtime_owner(SimpleNamespace(st_uid=0, st_gid=0)) is None
+
+
+@pytest.mark.parametrize("value", ["-1", "4294967295", "1234\n", "١٢٣٤", "unknown"])
+def test_runtime_owner_rejects_invalid_sudo_uid(monkeypatch, value):
+    monkeypatch.setenv("SUDO_UID", value)
+    with pytest.raises(ValueError, match="SUDO_UID"):
+        configure.runtime_owner(SimpleNamespace(st_uid=0, st_gid=0))
+
+
+def test_runtime_owner_rejects_missing_or_mismatched_account(monkeypatch):
+    monkeypatch.setenv("SUDO_UID", "1234")
+    monkeypatch.setenv("SUDO_USER", "another-user")
+    monkeypatch.setattr(configure.pwd, "getpwuid", lambda uid: SimpleNamespace(
+        pw_uid=uid, pw_gid=5678, pw_name="installer"))
+    with pytest.raises(ValueError, match="SUDO_USER"):
+        configure.runtime_owner(SimpleNamespace(st_uid=0, st_gid=0))
+    def missing(uid):
+        raise KeyError(uid)
+    monkeypatch.setattr(configure.pwd, "getpwuid", missing)
+    with pytest.raises(ValueError, match="existing installer"):
+        configure.runtime_owner(SimpleNamespace(st_uid=0, st_gid=0))
+
+
+def test_runtime_access_keeps_container_group_and_private_backups(tmp_path, monkeypatch):
+    create_configuration(tmp_path, "localhost", "127.0.0.1", 8766, "0")
+    runtime = tmp_path / "runtime"
+    backup = runtime / "tls-before-install-test"
+    backup.mkdir()
+    (backup / "server.key").write_text("old private key")
+    (runtime / "env-before-update-test").write_text("old configuration")
+    paths = [runtime, *runtime.rglob("*")]
+    contents = {path: path.read_bytes() for path in paths if path.is_file()}
+    env = (tmp_path / ".env").read_bytes()
+    groups = {}
+    monkeypatch.setattr(configure.os, "getuid", lambda: 0)
+    monkeypatch.setattr(configure, "runtime_owner", lambda info: (1234, 5678))
+    monkeypatch.setattr(configure.os, "fchown", lambda fd, uid, gid: groups.update({
+        os.fstat(fd).st_ino: (uid, gid)}))
+    for _ in range(2):
+        configure.prepare_runtime_access(tmp_path)
+        for path in paths:
+            relative = path.relative_to(runtime).parts
+            shared = relative[:1] in (("secrets",), ("tls",))
+            expected_gid = int(configure.read_value("BORGVR_GID", tmp_path)) if shared else 5678
+            assert groups[path.stat().st_ino] == (1234, expected_gid)
+            expected_mode = (0o750 if path.is_dir() else 0o640) if shared else (0o700 if path.is_dir() else 0o600)
+            assert path.stat().st_mode & 0o777 == expected_mode
+    assert (tmp_path / ".env").read_bytes() == env
+    assert all(path.read_bytes() == data for path, data in contents.items())
+
+
+@pytest.mark.parametrize("link", ["symlink", "hardlink", "directory-symlink"])
+def test_runtime_access_refuses_links_before_changing_permissions(tmp_path, monkeypatch, link):
+    create_configuration(tmp_path, "localhost", "127.0.0.1", 8766, "0")
+    outside = tmp_path / "outside"
+    outside.write_text("must not change")
+    before = outside.stat()
+    entry = tmp_path / "runtime" / "unexpected"
+    if link == "hardlink":
+        os.link(outside, entry)
+    elif link == "directory-symlink":
+        entry.symlink_to(tmp_path, target_is_directory=True)
+    else:
+        entry.symlink_to(outside)
+    changed = []
+    monkeypatch.setattr(configure.os, "getuid", lambda: 0)
+    monkeypatch.setattr(configure, "runtime_owner", lambda info: (1234, 5678))
+    monkeypatch.setattr(configure.os, "fchown", lambda *args: changed.append(args))
+    with pytest.raises((ValueError, OSError)):
+        configure.prepare_runtime_access(tmp_path)
+    assert not changed
+    assert outside.read_text() == "must not change"
+    assert outside.stat().st_mode == before.st_mode
+
+
+def test_permissions_command_does_not_need_docker_or_restart_services(tmp_path):
+    source = Path(__file__).resolve().parents[1]
+    for name in ("setup.sh", "configure.py", "model_config.py"):
+        shutil.copyfile(source / name, tmp_path / name)
+    create_configuration(tmp_path, "localhost", "127.0.0.1", 8766, "0")
+    env = (tmp_path / ".env").read_bytes()
+    binary = tmp_path / "bin"
+    binary.mkdir()
+    forbidden = tmp_path / "unexpected-docker"
+    executable(binary / "docker", '#!/bin/sh\ntouch "$FORBIDDEN"\nexit 99\n')
+    result = subprocess.run(["bash", str(tmp_path / "setup.sh"), "permissions"],
+        env={**os.environ, "PATH": str(binary) + os.pathsep + os.environ["PATH"], "FORBIDDEN": str(forbidden)},
+        capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+    assert "permissions prepared" in result.stdout and not forbidden.exists()
+    assert (tmp_path / ".env").read_bytes() == env
 
 
 def test_partial_setup_never_replaces_secrets(tmp_path):

@@ -37,11 +37,7 @@ struct RenderView: View {
   /// Dismisses auxiliary windows by identifier.
   @Environment(\.dismissWindow) private var dismissWindow
 
-  /// Voice recognition service shared across views.
-  @EnvironmentObject var voice: VoiceCommandService
-
-  /// Text-to-speech helper used for voice feedback.
-  @EnvironmentObject var speech: SpeechHelper
+  @EnvironmentObject private var voiceAgent: VoiceAgentController
 
   @State private var copiedWebGPUShareLink = false
   @State private var showLeaveSharePlayConfirmation = false
@@ -176,8 +172,7 @@ struct RenderView: View {
       dismissWindow(id: "MeasurementView")
       dismissWindow(id: "LightingEditorView")
       dismissWindow(id: "VolumeBrushEditorView")
-      dismissWindow(id: "VoiceCommandsView")
-      voice.stopListening()
+      voiceAgent.disconnect()
     }
   }
 

@@ -60,11 +60,13 @@ private enum SettingsPage: String, CaseIterable, Identifiable {
   case servers
   case sharePlay
   case mcp
+  case voiceAgent
 
   var id: String { rawValue }
 
   var title: LocalizedStringKey {
     switch self {
+      case .voiceAgent: return LocalizedStringKey(voiceAgentText("AI Assistant"))
       case .general: return "General"
       case .interface: return "User Interface"
       case .dataSource: return "Data source"
@@ -81,6 +83,7 @@ private enum SettingsPage: String, CaseIterable, Identifiable {
 
   var systemImage: String {
     switch self {
+      case .voiceAgent: return "mic"
       case .general: return "gearshape"
       case .interface: return "slider.horizontal.3"
       case .dataSource: return "externaldrive"
@@ -103,6 +106,7 @@ struct SettingsView: View {
   @EnvironmentObject private var storedAppModel: StoredAppModel
   @EnvironmentObject private var updateChecker: AppStoreUpdateChecker
   @EnvironmentObject private var mcpController: BorgVRMCPServerController
+  @EnvironmentObject private var voiceAgent: VoiceAgentController
 
   @State private var serverAddress = ""
   @State private var serverPort = String(BorgVRSharedDefaults.datasetServerPort)
@@ -214,6 +218,12 @@ struct SettingsView: View {
   @ViewBuilder
   private func settingsPageContent(_ page: SettingsPage) -> some View {
     switch page {
+      case .voiceAgent:
+        VStack(alignment: .leading, spacing: 20) {
+          Text(voiceAgentText("AI Assistant")).font(.title2.bold())
+          VoiceAgentSettingsView(agent: voiceAgent)
+        }
+        .padding()
       case .general:
         generalSettings
       case .interface:

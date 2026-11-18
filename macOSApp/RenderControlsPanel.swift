@@ -10,6 +10,7 @@ struct RenderControlsPanel: View {
   @EnvironmentObject private var serverController: BackgroundServerController
   @EnvironmentObject private var sharePlay: SharePlayCoordinator
   @EnvironmentObject private var session: ScreenBorgVRSession
+  @EnvironmentObject private var voiceAgent: VoiceAgentController
   @EnvironmentObject private var docking: DockingController
   @Environment(\.openWindow) private var openWindow
 
@@ -118,6 +119,7 @@ struct RenderControlsPanel: View {
       }
 
       modeWindowButtons
+      VoiceAgentButton(agent: voiceAgent)
     }
     .panelActions(mainPanelConfiguration)
     .onChange(of: appSettings.showLogButton) { _, isVisible in

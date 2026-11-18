@@ -14,7 +14,7 @@ DOCKER=(docker --host unix:///var/run/docker.sock)
 
 usage() {
   printf '%s\n' \
-    'Usage: sudo ./setup.sh [install|init|configure|model|profiles|doctor|start|stop|restart|update|status|logs|test|uninstall] [options]' \
+    'Usage: sudo ./setup.sh [install|init|configure|model|profiles|permissions|doctor|start|stop|restart|update|status|logs|test|uninstall] [options]' \
     'Run setup-host.sh separately if Docker/GPU prerequisites are missing.' \
     '  --prebuilt-agent    Use a local/published agent image (default; never build).' \
     '  --build-agent       Developer mode: build the agent from source instead.' \
@@ -33,6 +33,7 @@ usage() {
     'Update pulls configured images, checks access, starts services and tests the model.' \
     'Install recreates existing BorgVR containers without deleting images or model volumes.' \
     'Explicit install options update existing settings; omitted options and tokens are kept.' \
+    'Permissions grants the sudo installer private runtime access without restarting containers.' \
     'Model switch: sudo ./setup.sh model qwen35-4b (without a profile: list choices).' \
     'An explicit update image is checked before changing .env; the old .env is backed up.' \
     'Uninstall previews by default; supports --yes, --remove-images, --remove-checkout, --files-only.' \
@@ -41,7 +42,7 @@ usage() {
 die() { printf 'Error: %s\n' "$*" >&2; exit 1; }
 while (($#)); do
   case "$1" in
-    install|init|configure|model|profiles|doctor|start|stop|restart|update|status|logs|test|uninstall) COMMAND="$1"; shift ;;
+    install|init|configure|model|profiles|permissions|doctor|start|stop|restart|update|status|logs|test|uninstall) COMMAND="$1"; shift ;;
     --gpu|--backend|--profile|--model|--model-revision|--tool-parser|--reasoning-parser|--thinking|--dtype|--quantization|--context-length|--max-seqs|--max-output-tokens|--gpu-memory-fraction|--min-free-gib|--enforce-eager|--cpu-offload-gb|--vllm-image)
       (($# >= 2)) || die "Missing value for $1"
       MODEL_ARGS+=("$1" "$2"); shift 2 ;;
@@ -142,6 +143,7 @@ test_server() {
 
 command -v python3 >/dev/null || die 'Python 3 is missing. Run sudo ./setup-host.sh.'
 if [[ "$COMMAND" == profiles ]]; then exec python3 "$DIR/configure.py" profiles; fi
+if [[ "$COMMAND" == permissions ]]; then exec python3 "$DIR/configure.py" permissions; fi
 if [[ "$COMMAND" == model ]]; then
   if ((${#MODEL_ARGS[@]} == 0)); then
     if [[ -r "$DIR/.env" ]]; then
@@ -215,7 +217,7 @@ case "$COMMAND" in
     start_services
     test_server
     printf '%s\n' 'Server is running. Run: sudo ./setup.sh test' \
-      'The native BorgVR voice client is not connected yet; see README.md for the server test and protocol.' ;;
+      'Configure Settings > AI Assistant in the native BorgVR app; see README.md for client setup.' ;;
   doctor) check_gpu ;;
   start) check_service_secrets; start_services ;;
   restart) check_service_secrets; compose stop; start_services ;;

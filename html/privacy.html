@@ -37,7 +37,7 @@
     <section class="section">
       <div class="section__head">
         <h1 class="section__title" data-i18n="pageTitle">Privacy information for BorgVR</h1>
-        <p class="section__desc" data-i18n="lastUpdated">Last updated: August 4, 2026</p>
+        <p class="section__desc" data-i18n="lastUpdated">Last updated: November 17, 2026</p>
       </div>
 
       <div class="panel">
@@ -96,6 +96,10 @@
         </div>
 
         <div class="panel__row">
+          <div class="panel__label" data-i18n="aiLabel">Optional AI assistant</div>
+          <div class="panel__value" data-i18n="aiValue">The explicitly enabled assistant sends text, visualization state and optional render images to your own server. Audio is never sent to the agent. Recognition is on-device by default; Apple may process audio if that restriction is disabled. Tokens stay in the device Keychain.</div>
+        </div>
+        <div class="panel__row">
           <div class="panel__label" data-i18n="visionLabel">Vision Pro permissions</div>
           <div class="panel__value" data-i18n="visionValue">
             On Apple Vision Pro, optional system permissions such as microphone, speech recognition, and world sensing may be used for voice interaction and spatial collaboration features.
@@ -128,7 +132,7 @@
         <div class="panel__row">
           <div class="panel__label" data-i18n="noDeveloperUploadLabel">No automatic developer upload</div>
           <div class="panel__value" data-i18n="noDeveloperUploadValue">
-            BorgVR does not automatically upload your datasets to the developer. Network transfer happens only when you choose remote data or collaboration features.
+            BorgVR does not automatically upload your datasets to the developer. Network transfer happens only when you explicitly use remote data, collaboration, MCP or your configured AI assistant server.
           </div>
         </div>
       </div>
@@ -185,17 +189,19 @@
         navSupport: "Support",
         navPrivacy: "Privacy",
         pageTitle: "Privacy information for BorgVR",
-        lastUpdated: "Last updated: August 4, 2026",
+        lastUpdated: "Last updated: November 17, 2026",
         controllerLabel: "Controller",
         controllerValue: "Jens Krueger<br />Am Duisburger Richtweg 60<br />47249 Duisburg<br />Germany<br /><br />Email: <a class=\"inline\" href=\"mailto:webmaster@jens-krueger.com\">webmaster@jens-krueger.com</a>",
         summaryLabel: "Summary",
-        summaryValue: "BorgVR has no ads, no user accounts, and no third-party tracking. The app stores datasets and settings locally unless you explicitly open remote data or start collaboration features.",
+        summaryValue: "BorgVR has no ads, no user accounts, and no third-party tracking. Datasets and settings stay local unless you explicitly use remote data, collaboration, MCP or the optional AI assistant connected to your own server.",
         processedDataTitle: "What data the app processes",
         datasetsLabel: "Datasets",
         datasetsValue: "BorgVR can open, import, cache, and store volume datasets on your device. Dataset files may contain scientific, medical, engineering, or other content chosen by you.",
         settingsLabel: "Visualization settings",
         settingsValue: "The app stores settings such as render mode, transfer functions, isovalues, clipping state, background colors, server entries, and performance preferences locally.",
         networkLabel: "Network access",
+        aiLabel: "Optional AI assistant",
+        aiValue: "On macOS, iOS and visionOS, the explicitly enabled assistant sends transcribed requests, visualization state and, if allowed, render images to your configured server. Camera and passthrough are never captured. Recognition is on-device by default; if that restriction is disabled, Apple may process audio. The agent server never receives audio. Tokens stay in the device Keychain. Conversations are held in memory and cleared on a new session; your own server's model provider and logging policy remain your responsibility.",
         networkValue: "If you open remote datasets or use collaboration, BorgVR uses network connections to load data, synchronize state, or make the currently open dataset available to participants.",
         shareplayLabel: "SharePlay",
         shareplayValue: "SharePlay sessions can synchronize dataset identity, visualization settings, clipping state, and interaction state between participants. Dataset transfer may use local ad-hoc server connections.",
@@ -209,7 +215,7 @@
         noAccountLabel: "No account required",
         noAccountValue: "You do not need to create an account to use the app.",
         noDeveloperUploadLabel: "No automatic developer upload",
-        noDeveloperUploadValue: "BorgVR does not automatically upload your datasets to the developer. Network transfer happens only when you choose remote data or collaboration features.",
+        noDeveloperUploadValue: "BorgVR does not automatically upload your datasets to the developer. Network transfer happens only when you explicitly use remote data, collaboration, MCP or your configured AI assistant server.",
         controlTitle: "Your control",
         deletionLabel: "Deletion",
         deletionValue: "You can remove imported or cached datasets and settings from inside the app or by deleting the app, subject to normal system backup behavior.",
@@ -226,17 +232,19 @@
         navSupport: "Support",
         navPrivacy: "Datenschutz",
         pageTitle: "Datenschutzinformationen für BorgVR",
-        lastUpdated: "Stand: 4. August 2026",
+        lastUpdated: "Stand: 17. November 2026",
         controllerLabel: "Verantwortlicher",
         controllerValue: "Jens Krueger<br />Am Duisburger Richtweg 60<br />47249 Duisburg<br />Deutschland<br /><br />E-Mail: <a class=\"inline\" href=\"mailto:webmaster@jens-krueger.com\">webmaster@jens-krueger.com</a>",
         summaryLabel: "Zusammenfassung",
-        summaryValue: "BorgVR enthält keine Werbung, keine Benutzerkonten und kein Drittanbieter-Tracking. Die App speichert Datensätze und Einstellungen lokal, sofern Sie nicht ausdrücklich entfernte Daten öffnen oder Kollaborationsfunktionen starten.",
+        summaryValue: "BorgVR enthält keine Werbung, keine Benutzerkonten und kein Drittanbieter-Tracking. Datensätze und Einstellungen bleiben lokal, sofern Sie nicht ausdrücklich entfernte Daten, Zusammenarbeit, MCP oder den optionalen KI-Assistenten mit Ihrem eigenen Server verwenden.",
         processedDataTitle: "Welche Daten die App verarbeitet",
         datasetsLabel: "Datensätze",
         datasetsValue: "BorgVR kann Volumendatensätze auf Ihrem Gerät öffnen, importieren, zwischenspeichern und speichern. Datensatzdateien können wissenschaftliche, medizinische, technische oder andere von Ihnen gewählte Inhalte enthalten.",
         settingsLabel: "Visualisierungseinstellungen",
         settingsValue: "Die App speichert Einstellungen wie Render-Modus, Transferfunktionen, Isowerte, Clipping-Zustand, Hintergrundfarben, Servereinträge und Performance-Optionen lokal.",
         networkLabel: "Netzwerkzugriff",
+        aiLabel: "Optionaler KI-Assistent",
+        aiValue: "Auf macOS, iOS und visionOS sendet der ausdrücklich aktivierte Assistent erkannte Texte, den Darstellungszustand und, sofern erlaubt, Renderbilder an Ihren eingestellten Server. Kamera und Passthrough werden nie aufgenommen. Spracherkennung erfolgt standardmäßig auf dem Gerät; bei deaktivierter Beschränkung kann Apple Audio verarbeiten. Der Agentenserver bekommt nie Audio. Schlüssel liegen im Geräte-Schlüsselbund. Gespräche bleiben im Arbeitsspeicher und werden bei einer neuen Sitzung geleert; für Modellanbieter und Protokollierung Ihres eigenen Servers sind Sie verantwortlich.",
         networkValue: "Wenn Sie entfernte Datensätze öffnen oder Zusammenarbeit nutzen, verwendet BorgVR Netzwerkverbindungen, um Daten zu laden, den Zustand zu synchronisieren oder den aktuell geöffneten Datensatz für Teilnehmende bereitzustellen.",
         shareplayLabel: "SharePlay",
         shareplayValue: "SharePlay-Sitzungen können Datensatzidentität, Visualisierungseinstellungen, Clipping-Zustand und Interaktion zwischen Teilnehmenden synchronisieren. Datensatzübertragung kann lokale Ad-hoc-Serververbindungen nutzen.",
@@ -250,7 +258,7 @@
         noAccountLabel: "Kein Konto erforderlich",
         noAccountValue: "Sie müssen kein Konto erstellen, um die App zu verwenden.",
         noDeveloperUploadLabel: "Kein automatischer Entwickler-Upload",
-        noDeveloperUploadValue: "BorgVR lädt Ihre Datensätze nicht automatisch zum Entwickler hoch. Netzwerkübertragung findet nur statt, wenn Sie entfernte Daten oder Kollaborationsfunktionen nutzen.",
+        noDeveloperUploadValue: "BorgVR lädt Ihre Datensätze nicht automatisch zum Entwickler hoch. Netzwerkübertragung findet nur statt, wenn Sie ausdrücklich entfernte Daten, Zusammenarbeit, MCP oder Ihren eingestellten KI-Assistentenserver verwenden.",
         controlTitle: "Ihre Kontrolle",
         deletionLabel: "Löschen",
         deletionValue: "Sie können importierte oder zwischengespeicherte Datensätze und Einstellungen in der App entfernen oder die App löschen, vorbehaltlich des normalen System-Backup-Verhaltens.",

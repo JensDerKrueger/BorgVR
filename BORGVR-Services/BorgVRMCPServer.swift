@@ -150,6 +150,7 @@ final class BorgVRMCPServer: @unchecked Sendable {
   private var listener: NWListener?
   private var tlsIdentity: sec_identity_t?
   private var accessToken: String
+  private let toolRouter: BorgVRMCPToolRouter
 
   private(set) var isRunning = false
   private(set) var lastError: String?
@@ -165,6 +166,7 @@ final class BorgVRMCPServer: @unchecked Sendable {
     self.logger = logger
     self.stateDidChange = stateDidChange
     accessToken = configuration.accessToken
+    toolRouter = BorgVRMCPToolRouter(commandService: commandService)
   }
 
   func updateAccessToken(_ accessToken: String) {
@@ -463,7 +465,7 @@ final class BorgVRMCPServer: @unchecked Sendable {
       case "ping":
         return [:]
       case "tools/list":
-        var result: [String: Any] = ["tools": toolDefinitions]
+        var result: [String: Any] = ["tools": toolRouter.toolDefinitions]
         if modern {
           result["ttlMs"] = 0
           result["cacheScope"] = "private"
@@ -475,7 +477,7 @@ final class BorgVRMCPServer: @unchecked Sendable {
         }
         let arguments = parameters?["arguments"] as? [String: Any] ?? [:]
         do {
-          return try await callTool(name: name, arguments: arguments)
+          return try await toolRouter.callTool(name: name, arguments: arguments)
         } catch {
           return [
             "content": [["type": "text", "text": error.localizedDescription]],
@@ -487,7 +489,17 @@ final class BorgVRMCPServer: @unchecked Sendable {
     }
   }
 
-  private func callTool(name: String, arguments: [String: Any]) async throws -> [String: Any] {
+}
+
+/// Transport-independent command catalog and dispatch, shared by MCP and the voice agent.
+final class BorgVRMCPToolRouter {
+  private weak var commandService: (any BorgVRMCPCommandService)?
+
+  init(commandService: any BorgVRMCPCommandService) { self.commandService = commandService }
+
+  @MainActor
+  func callTool(name: String, arguments: [String: Any], validateContext: (() throws -> Void)? = nil) async throws -> [String: Any] {
+    try validateContext?()
     guard let service = commandService else {
       throw BorgVRMCPCommandError.rendererUnavailable
     }
@@ -497,15 +509,15 @@ final class BorgVRMCPServer: @unchecked Sendable {
         return structuredToolResult(try await service.listDatasets())
       case "open_dataset":
         try await service.openDataset(id: try string("id", in: arguments))
-        return structuredToolResult(await service.applicationState())
+        return structuredToolResult(service.applicationState())
       case "close_dataset":
         try await service.closeDataset()
-        return structuredToolResult(await service.applicationState())
+        return structuredToolResult(service.applicationState())
       case "get_application_state":
-        let state = await service.applicationState()
+        let state = service.applicationState()
         return structuredToolResult(state)
       case "get_window_state":
-        return structuredToolResult(try await service.windowState())
+        return structuredToolResult(try service.windowState())
       case "resize_window":
         return structuredToolResult(try await service.resizeWindow(
           width: windowDimension("width", in: arguments), height: windowDimension("height", in: arguments),
@@ -517,7 +529,7 @@ final class BorgVRMCPServer: @unchecked Sendable {
         }
         return structuredToolResult(try await service.setFullscreen(enabled))
       case "get_transfer_function":
-        return structuredToolResult(try await service.transferFunction(channel: channel(in: arguments)))
+        return structuredToolResult(try service.transferFunction(channel: channel(in: arguments)))
       case "set_transfer_function":
         let channel = try channel(in: arguments)
         guard let rows = arguments["samples"] as? [[NSNumber]], !rows.isEmpty,
@@ -528,21 +540,21 @@ final class BorgVRMCPServer: @unchecked Sendable {
               } }) else {
           throw BorgVRMCPCommandError.invalidArgument("samples must contain 1...65536 RGBA rows of four integer bytes (0...255).")
         }
-        try await service.setTransferFunction(.init(channel: channel, samples: rows.map { $0.map(\.uint8Value) }))
-        return structuredToolResult(try await service.transferFunction(channel: channel))
+        try service.setTransferFunction(.init(channel: channel, samples: rows.map { $0.map(\.uint8Value) }))
+        return structuredToolResult(try service.transferFunction(channel: channel))
       case "load_transfer_function":
         let channel = try channel(in: arguments)
-        try await service.loadTransferFunction(channel: channel, from: fileURL("input_path", in: arguments))
-        return structuredToolResult(try await service.transferFunction(channel: channel))
+        try service.loadTransferFunction(channel: channel, from: fileURL("input_path", in: arguments))
+        return structuredToolResult(try service.transferFunction(channel: channel))
       case "save_transfer_function":
         let url = try fileURL("output_path", in: arguments)
-        try await service.saveTransferFunction(channel: channel(in: arguments), to: url,
+        try service.saveTransferFunction(channel: channel(in: arguments), to: url,
           overwrite: optionalBool("overwrite", in: arguments) ?? false)
         return structuredToolResult(["outputPath": url.path])
       case "get_background":
-        return structuredToolResult(await service.background())
+        return structuredToolResult(service.background())
       case "set_background":
-        var value = await service.background()
+        var value = service.background()
         value.mode = try string("mode", in: arguments)
         if arguments["primary"] != nil {
           guard let color = try optionalVector4("primary", in: arguments) else {
@@ -556,38 +568,38 @@ final class BorgVRMCPServer: @unchecked Sendable {
           }
           value.secondary = color.mcpArray
         }
-        try await service.setBackground(value)
-        return structuredToolResult(await service.background())
+        try service.setBackground(value)
+        return structuredToolResult(service.background())
       case "save_visualization_state":
         let url = try fileURL("output_path", in: arguments)
-        try await service.saveVisualizationState(to: url, overwrite: optionalBool("overwrite", in: arguments) ?? false)
+        try service.saveVisualizationState(to: url, overwrite: optionalBool("overwrite", in: arguments) ?? false)
         return structuredToolResult(["outputPath": url.path])
       case "load_visualization_state":
-        try await service.loadVisualizationState(from: fileURL("input_path", in: arguments))
-        return structuredToolResult(await service.applicationState())
+        try service.loadVisualizationState(from: fileURL("input_path", in: arguments))
+        return structuredToolResult(service.applicationState())
       case "save_settings":
         let url = try fileURL("output_path", in: arguments)
-        try await service.saveSettings(to: url,
+        try service.saveSettings(to: url,
           includeCredentials: optionalBool("include_credentials", in: arguments) ?? false,
           overwrite: optionalBool("overwrite", in: arguments) ?? false)
         return structuredToolResult(["outputPath": url.path])
       case "start_command_recording":
-        guard let executor = await service.commandExecutor else {
+        guard let executor = service.commandExecutor else {
           throw BorgVRMCPCommandError.unsupported("Command recording is unavailable.")
         }
-        guard await !executor.isCommandRecording else {
+        guard !executor.isCommandRecording else {
           throw BorgVRMCPCommandError.invalidArgument("A command recording is already active.")
         }
-        await executor.startCommandRecording()
-        guard await executor.isCommandRecording else { throw BorgVRVolumeEditingCommandError.busy }
+        executor.startCommandRecording()
+        guard executor.isCommandRecording else { throw BorgVRVolumeEditingCommandError.busy }
         try await executor.waitForRecordingPreparation()
         return structuredToolResult(["recording": true])
       case "stop_command_recording":
-        guard let executor = await service.commandExecutor else {
+        guard let executor = service.commandExecutor else {
           throw BorgVRMCPCommandError.unsupported("Command recording is unavailable.")
         }
         try await executor.finishCommandRecording()
-        let script = try await executor.recordedGSCScript()
+        let script = try executor.recordedGSCScript()
         if arguments["output_path"] != nil {
           let url = try fileURL("output_path", in: arguments)
           try BorgVRAutomationFile.write(Data((script + "\n").utf8), to: url,
@@ -601,103 +613,103 @@ final class BorgVRMCPServer: @unchecked Sendable {
         let data = try BorgVRAutomationFile.read(fileURL("input_path", in: arguments),
           maximumBytes: BorgVRRecordedGSC.maximumFileBytes)
         try await service.replayCommandRecording(data)
-        return structuredToolResult(await service.applicationState())
+        return structuredToolResult(service.applicationState())
       case "load_settings":
-        try await service.loadSettings(from: fileURL("input_path", in: arguments))
+        try service.loadSettings(from: fileURL("input_path", in: arguments))
         return structuredToolResult(["status": "Settings restored; MCP connection settings preserved."])
       case "reset_settings":
         guard try optionalBool("confirm", in: arguments) == true else {
           throw BorgVRMCPCommandError.invalidArgument("Resetting settings requires confirm: true. Save a backup first.")
         }
-        try await service.resetSettings()
+        try service.resetSettings()
         return structuredToolResult(["status": "Defaults restored; MCP connection settings preserved."])
       case "get_volume_edit_state":
-        return structuredToolResult(await service.volumeEditing.volumeEditingState())
+        return structuredToolResult(service.volumeEditing.volumeEditingState())
       case "select_edit_state":
         let value = try string("id", in: arguments)
         let id = value == "original" ? nil : UUID(uuidString: value)
         guard value == "original" || id != nil else { throw BorgVRMCPCommandError.invalidArgument("id must be a UUID or original.") }
         try await service.volumeEditing.selectState(id)
-        return structuredToolResult(await service.volumeEditing.volumeEditingState())
+        return structuredToolResult(service.volumeEditing.volumeEditingState())
       case "create_edit_state":
         let name = try optionalString("name", in: arguments) ?? ""
         let duplicate = try BorgVRVolumeEditingArguments.boolean(arguments["duplicate"]) ?? false
         try await service.volumeEditing.duplicateState(name: name, empty: !duplicate)
-        return structuredToolResult(await service.volumeEditing.volumeEditingState())
+        return structuredToolResult(service.volumeEditing.volumeEditingState())
       case "rename_edit_state":
-        try await service.volumeEditing.renameState(uuid("id", in: arguments), name: string("name", in: arguments))
-        return structuredToolResult(await service.volumeEditing.volumeEditingState())
+        try service.volumeEditing.renameState(uuid("id", in: arguments), name: string("name", in: arguments))
+        return structuredToolResult(service.volumeEditing.volumeEditingState())
       case "delete_edit_state":
         guard try BorgVRVolumeEditingArguments.boolean(arguments["confirm"]) == true else {
           throw BorgVRMCPCommandError.invalidArgument("Deleting an edit state requires confirm: true.")
         }
-        try await service.volumeEditing.deleteState(uuid("id", in: arguments))
-        return structuredToolResult(await service.volumeEditing.volumeEditingState())
+        try service.volumeEditing.deleteState(uuid("id", in: arguments))
+        return structuredToolResult(service.volumeEditing.volumeEditingState())
       case "configure_volume_brush":
         let mode = try optionalString("mode", in: arguments).map(BorgVRVolumeEditingArguments.mode)
         let radius = try arguments["radius_fraction"].map { try BorgVRVolumeEditingArguments.number($0) }
         let projection = try BorgVRVolumeEditingArguments.boolean(arguments["project_onto_volume"])
         let activate = try BorgVRVolumeEditingArguments.boolean(arguments["activate"]) ?? false
         if let channels = arguments["channels"] {
-          try await service.volumeEditing.setVolumeBrushChannels(BorgVRVolumeEditingArguments.channels(channels))
+          try service.volumeEditing.setVolumeBrushChannels(BorgVRVolumeEditingArguments.channels(channels))
         }
-        try await service.volumeEditing.configureVolumeBrush(mode: mode, radiusFraction: radius, projectsOntoVolume: projection)
-        if activate { await service.activateVolumeEditing() }
-        return structuredToolResult(await service.volumeEditing.volumeEditingState())
+        try service.volumeEditing.configureVolumeBrush(mode: mode, radiusFraction: radius, projectsOntoVolume: projection)
+        if activate { service.activateVolumeEditing() }
+        return structuredToolResult(service.volumeEditing.volumeEditingState())
       case "edit_volume":
         let mode = try BorgVRVolumeEditingArguments.mode(string("mode", in: arguments))
         let samples = try BorgVRVolumeEditingArguments.samples(arguments["samples"])
         try await service.volumeEditing.editVolume(mode: mode, samples: samples)
-        return structuredToolResult(await service.volumeEditing.volumeEditingState())
+        return structuredToolResult(service.volumeEditing.volumeEditingState())
       case "discard_volume_edits":
         guard try BorgVRVolumeEditingArguments.boolean(arguments["confirm"]) == true else {
           throw BorgVRMCPCommandError.invalidArgument("Discarding all edits requires confirm: true.")
         }
         try await service.volumeEditing.discardVolumeEdits()
-        return structuredToolResult(await service.volumeEditing.volumeEditingState())
+        return structuredToolResult(service.volumeEditing.volumeEditingState())
       case "wait_volume_edits":
         let timeout = try arguments["timeout_seconds"].map { try BorgVRVolumeEditingArguments.number($0) } ?? 30
         try await service.volumeEditing.waitForVolumeEdits(timeout: timeout)
-        return structuredToolResult(await service.volumeEditing.volumeEditingState())
+        return structuredToolResult(service.volumeEditing.volumeEditingState())
       case "prepare_volume_edits":
         try await service.volumeEditing.prepareVolumeEdits()
-        return structuredToolResult(await service.volumeEditing.volumeEditingState())
+        return structuredToolResult(service.volumeEditing.volumeEditingState())
       case "export_edited_dataset":
         let path = try string("output_path", in: arguments)
         guard NSString(string: path).isAbsolutePath else {
           throw BorgVRMCPCommandError.invalidArgument("output_path must be an absolute .data file path on this device.")
         }
-        let job = try await service.volumeEditing.startVolumeExport(to: URL(fileURLWithPath: path),
+        let job = try service.volumeEditing.startVolumeExport(to: URL(fileURLWithPath: path),
           name: optionalString("name", in: arguments), description: optionalString("description", in: arguments))
         return structuredToolResult(job)
       case "cancel_volume_export":
-        try await service.volumeEditing.cancelVolumeExport(id: uuid("id", in: arguments))
-        return structuredToolResult(await service.volumeEditing.volumeEditingState())
+        try service.volumeEditing.cancelVolumeExport(id: uuid("id", in: arguments))
+        return structuredToolResult(service.volumeEditing.volumeEditingState())
       case "set_render_mode":
         let mode = try string("mode", in: arguments)
-        try await service.setRenderMode(mode)
-        return structuredToolResult(await service.applicationState())
+        try service.setRenderMode(mode)
+        return structuredToolResult(service.applicationState())
       case "set_brick_visualization":
-        try await service.setBrickVisualization(
+        try service.setBrickVisualization(
           enabled: optionalBool("enabled", in: arguments),
           resident: optionalBool("resident", in: arguments),
           empty: optionalBool("empty", in: arguments),
           missing: optionalBool("missing", in: arguments)
         )
-        return structuredToolResult(await service.applicationState())
+        return structuredToolResult(service.applicationState())
       case "set_render_optimizations":
-        try await service.setRenderOptimizations(
+        try service.setRenderOptimizations(
           subbrickSkipping: optionalBool("subbrick_skipping", in: arguments),
           opacityAdaptiveSampling: optionalBool("opacity_adaptive_sampling", in: arguments),
           alphaEpsilon: optionalFloat("alpha_epsilon", in: arguments)
         )
-        return structuredToolResult(await service.applicationState())
+        return structuredToolResult(service.applicationState())
       case "set_bounding_box":
         guard let visible = try BorgVRVolumeEditingArguments.boolean(arguments["visible"]) else {
           throw BorgVRMCPCommandError.invalidArgument("Provide a visible boolean.")
         }
-        try await service.setBoundingBox(visible: visible)
-        return structuredToolResult(await service.applicationState())
+        try service.setBoundingBox(visible: visible)
+        return structuredToolResult(service.applicationState())
       case "set_screen_projection":
         let fieldOfView = try arguments["field_of_view_degrees"].map {
           try BorgVRVolumeEditingArguments.number($0)
@@ -709,45 +721,45 @@ final class BorgVRMCPServer: @unchecked Sendable {
             "Provide field_of_view_degrees from 10 through 120 and/or a parallel boolean."
           )
         }
-        try await service.setScreenProjection(fieldOfView: fieldOfView.map { Float($0) }, parallel: parallel)
-        return structuredToolResult(await service.applicationState())
+        try service.setScreenProjection(fieldOfView: fieldOfView.map { Float($0) }, parallel: parallel)
+        return structuredToolResult(service.applicationState())
       case "set_transform":
         let rotation = try optionalVector4("rotation", in: arguments)
         let translation = try optionalVector3("translation", in: arguments)
         let scale = try optionalVector3("scale", in: arguments)
-        try await service.setTransform(rotation: rotation, translation: translation, scale: scale)
-        return structuredToolResult(await service.applicationState())
+        try service.setTransform(rotation: rotation, translation: translation, scale: scale)
+        return structuredToolResult(service.applicationState())
       case "rotate_view":
         let axis = try vector3("axis", in: arguments)
         let degrees = try float("degrees", in: arguments)
-        try await service.rotate(axis: axis, degrees: degrees)
-        return structuredToolResult(await service.applicationState())
+        try service.rotate(axis: axis, degrees: degrees)
+        return structuredToolResult(service.applicationState())
       case "set_iso_value":
-        try await service.setNormalizedIsoValue(try float("value", in: arguments))
-        return structuredToolResult(await service.applicationState())
+        try service.setNormalizedIsoValue(try float("value", in: arguments))
+        return structuredToolResult(service.applicationState())
       case "set_clipping":
         let minimum = try vector3("minimum", in: arguments)
         let maximum = try vector3("maximum", in: arguments)
-        try await service.setClipping(minimum: minimum, maximum: maximum)
-        return structuredToolResult(await service.applicationState())
+        try service.setClipping(minimum: minimum, maximum: maximum)
+        return structuredToolResult(service.applicationState())
       case "set_lighting":
-        try await service.setLighting(
+        try service.setLighting(
           direction: try optionalVector3("direction", in: arguments),
           ambient: try optionalVector3("ambient", in: arguments),
           diffuse: try optionalVector3("diffuse", in: arguments),
           specular: try optionalVector3("specular", in: arguments)
         )
-        return structuredToolResult(await service.applicationState())
+        return structuredToolResult(service.applicationState())
       case "set_annotation_visibility":
-        try await service.setAnnotationVisibility(
+        try service.setAnnotationVisibility(
           objects: try optionalBool("objects", in: arguments),
           measurements: try optionalBool("measurements", in: arguments)
         )
-        return structuredToolResult(await service.applicationState())
+        return structuredToolResult(service.applicationState())
       case "list_mesh_assets":
-        return structuredToolResult(await service.listMeshAssets())
+        return structuredToolResult(service.listMeshAssets())
       case "list_objects":
-        return structuredToolResult(await service.listObjects())
+        return structuredToolResult(service.listObjects())
       case "upsert_sphere_marker":
         let id = try optionalUUID("id", in: arguments) ?? UUID()
         let showsDirection = try optionalBool("shows_direction", in: arguments) ?? false
@@ -770,7 +782,7 @@ final class BorgVRMCPServer: @unchecked Sendable {
           showsDirection: showsDirection
         )
         let object = BorgVRObjectCommandState.marker(state)
-        try await service.upsertObject(object)
+        try service.upsertObject(object)
         return structuredToolResult(object)
       case "upsert_stroke_marker":
         let points = try markerPoints("points", in: arguments)
@@ -784,7 +796,7 @@ final class BorgVRMCPServer: @unchecked Sendable {
           showsDirection: false
         )
         let object = BorgVRObjectCommandState.marker(state)
-        try await service.upsertObject(object)
+        try service.upsertObject(object)
         return structuredToolResult(object)
       case "upsert_mesh_instance":
         let state = BorgVRMeshInstanceCommandState(
@@ -797,16 +809,16 @@ final class BorgVRMCPServer: @unchecked Sendable {
           isVisible: try optionalBool("visible", in: arguments) ?? true
         )
         let object = BorgVRObjectCommandState.mesh(state)
-        try await service.upsertObject(object)
+        try service.upsertObject(object)
         return structuredToolResult(object)
       case "remove_object":
-        try await service.removeObject(id: try uuid("id", in: arguments))
-        return structuredToolResult(await service.listObjects())
+        try service.removeObject(id: try uuid("id", in: arguments))
+        return structuredToolResult(service.listObjects())
       case "clear_objects":
-        try await service.clearObjects()
-        return structuredToolResult(await service.listObjects())
+        try service.clearObjects()
+        return structuredToolResult(service.listObjects())
       case "list_measurements":
-        return structuredToolResult(await service.listMeasurements())
+        return structuredToolResult(service.listMeasurements())
       case "upsert_measurement":
         let rawKind = try string("kind", in: arguments)
         guard let kind = VolumeMeasurementKind(rawValue: rawKind) else {
@@ -818,27 +830,27 @@ final class BorgVRMCPServer: @unchecked Sendable {
           kind: kind,
           points: try measurementPoints("points", in: arguments)
         )
-        try await service.upsertMeasurement(state)
+        try service.upsertMeasurement(state)
         return structuredToolResult(state)
       case "remove_measurement":
-        try await service.removeMeasurement(id: try uuid("id", in: arguments))
-        return structuredToolResult(await service.listMeasurements())
+        try service.removeMeasurement(id: try uuid("id", in: arguments))
+        return structuredToolResult(service.listMeasurements())
       case "clear_measurements":
-        try await service.clearMeasurements()
-        return structuredToolResult(await service.listMeasurements())
+        try service.clearMeasurements()
+        return structuredToolResult(service.listMeasurements())
       case "reset_state":
         let rawScope = arguments["scope"] as? String ?? BorgVRMCPResetScope.all.rawValue
         guard let scope = BorgVRMCPResetScope(rawValue: rawScope) else {
           throw BorgVRMCPCommandError.invalidArgument("Unknown reset scope.")
         }
-        try await service.reset(scope)
-        return structuredToolResult(await service.applicationState())
+        try service.reset(scope)
+        return structuredToolResult(service.applicationState())
       case "wait_until_rendered":
-        let state = await service.applicationState()
+        let state = service.applicationState()
         let frame = (arguments["after_frame"] as? NSNumber)?.uint64Value ?? state.completedFrame
         let timeout = min(max((arguments["timeout_seconds"] as? NSNumber)?.doubleValue ?? 10, 0.1), 120)
         try await service.waitUntilRendered(after: frame, timeout: timeout)
-        return structuredToolResult(await service.applicationState())
+        return structuredToolResult(service.applicationState())
       case "export_isosurface":
         let path = try string("output_path", in: arguments)
         guard NSString(string: path).isAbsolutePath else {
@@ -880,7 +892,7 @@ final class BorgVRMCPServer: @unchecked Sendable {
     }
   }
 
-  private var toolDefinitions: [[String: Any]] {
+  var toolDefinitions: [[String: Any]] {
     let vector3: [String: Any] = [
       "type": "array", "items": ["type": "number"], "minItems": 3, "maxItems": 3
     ]
@@ -1313,6 +1325,9 @@ final class BorgVRMCPServer: @unchecked Sendable {
     }
   }
 
+}
+
+extension BorgVRMCPServer {
   private func originIsAllowed(_ origin: String?) -> Bool {
     guard let origin, !origin.isEmpty else { return true }
     guard let url = URL(string: origin), let host = url.host?.lowercased() else { return false }

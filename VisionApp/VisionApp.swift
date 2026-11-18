@@ -39,8 +39,7 @@ struct VisionApp: App {
   @StateObject private var settingsFiles = SettingsFileController()
   @State private var immersiveSpaceTransitionTask: Task<Void, Never>?
 
-  @StateObject private var voice: VoiceCommandService
-  @StateObject private var speech: SpeechHelper
+  @StateObject private var voiceAgent = VoiceAgentController()
 
   @Environment(\.openImmersiveSpace) private var openImmersiveSpace
   @Environment(\.scenePhase) private var scenePhase
@@ -57,8 +56,6 @@ struct VisionApp: App {
     let serverController = BackgroundServerController()
     let updateChecker = AppStoreUpdateChecker()
     let mcpController = BorgVRMCPServerController()
-    let voice = VoiceCommandService()
-    let speech = SpeechHelper()
     let session = VisionBorgVRSession.vision(
       sharedAppModel: sharedAppModel,
       runtimeAppModel: runtimeAppModel,
@@ -72,8 +69,6 @@ struct VisionApp: App {
     _updateChecker = StateObject(wrappedValue: updateChecker)
     _mcpController = StateObject(wrappedValue: mcpController)
     _session = StateObject(wrappedValue: session)
-    _voice = StateObject(wrappedValue: voice)
-    _speech = StateObject(wrappedValue: speech)
   }
 
   var body: some Scene {
@@ -171,20 +166,20 @@ struct VisionApp: App {
     .environment(sharedAppModel)
     .environmentObject(storedAppModel)
     .environmentObject(serverController)
-    .environmentObject(voice)
-    .environmentObject(speech)
+    .environmentObject(voiceAgent)
     .environmentObject(mcpController)
     .environmentObject(session)
     .windowResizability(.contentSize)
     .defaultSize(width:runtimeAppModel.windowSize.width,height:runtimeAppModel.windowSize.height)
     .onChange(of: scenePhase, initial: true) { _, phase in
       BorgVRVolumeEditGPUAvailability.setApplicationActive(phase == .active)
-      if phase == .background { saveOpenDatasetState() }
+      if phase == .background { voiceAgent.disconnect(); saveOpenDatasetState() }
     }
     .onChange(of: runtimeAppModel.canOpenDataset) { _, available in
       if available { sharedAppModel.resumePendingDatasetLoad() }
     }
     .onChange(of: runtimeAppModel.datasetSessionState) { _, newValue in
+      voiceAgent.invalidateContext()
       if case .opening = newValue {
         sharedAppModel.objectsHidden = false
         sharedAppModel.measurementsHidden = false
@@ -203,8 +198,7 @@ struct VisionApp: App {
     .environment(sharedAppModel)
     .environmentObject(storedAppModel)
     .environmentObject(serverController)
-    .environmentObject(voice)
-    .environmentObject(speech)
+    .environmentObject(voiceAgent)
     .environmentObject(mcpController)
     .environmentObject(session)
     .windowResizability(.contentSize)
@@ -326,17 +320,6 @@ struct VisionApp: App {
     .windowResizability(.contentMinSize)
     .defaultSize(width: 460, height: 500)
 
-    Window("Voice Commands", id: "VoiceCommandsView") {
-      VoiceHelpView()
-        .environment(runtimeAppModel)
-        .environment(sharedAppModel)
-        .environmentObject(storedAppModel)
-        .environmentObject(voice)
-        .environmentObject(speech)
-    }
-    .windowResizability(.contentSize)
-    .defaultSize(width:500,height:400)
-
     // Performance Window
     WindowGroup(id: "PerformanceGraphView") {
       PerformanceGraphView()
@@ -453,6 +436,13 @@ struct VisionApp: App {
       }
     )
     mcpController.configure(commandService: service, logger: runtimeAppModel.logger)
+    voiceAgent.configure(service: service) {
+      guard case .rendering(let dataset, let requestID) = runtimeAppModel.datasetSessionState,
+            !runtimeAppModel.volumeBrush.isOpeningState, !runtimeAppModel.volumeBrush.isRestoringPersonalState,
+            !runtimeAppModel.volumeBrush.isWaitingForSharedState else { return nil }
+      return VoiceAgentContext(datasetID: dataset.uniqueId, openingID: requestID,
+                               editStateID: runtimeAppModel.volumeBrush.activeState?.id)
+    }
     applyMCPConfiguration()
   }
 

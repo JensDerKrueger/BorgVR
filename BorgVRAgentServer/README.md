@@ -2,15 +2,25 @@
 
 [Deutsch](README.de.md)
 
-Self-hosted server foundation for BorgVR's planned conversational assistant. The stack runs
+Self-hosted server for BorgVR's conversational assistant. The stack runs
 one selectable vision-language model in vLLM and a small Pydantic AI agent, connected by a private Docker
 network. Only the authenticated HTTPS/WSS agent endpoint is published.
 
 **Current scope:** server installation, text interaction, external-tool orchestration,
 PNG input, progress messages, cancellation and protocol tests. The macOS/iOS/visionOS
-voice and outbound WebSocket clients are **not implemented yet**. Installing this stack
-does not replace the existing visionOS speech commands. The smoke test talks to the actual
-model but does not claim to exercise native rendering or anatomical recognition.
+voice and outbound WebSocket clients share one implementation in the native apps. The old
+visionOS fixed-phrase commands have been replaced. The server smoke test talks to the actual
+model but does not claim to verify anatomical recognition. See the [native setup guide](../html/mcp.html#voice-agent).
+
+In **Settings > AI Assistant**, enable the assistant, enter `https://ai1:8766` (or the IP
+matching the certificate), import the public `runtime/tls/server.crt`, and import the
+`runtime/secrets/agent_token` file or enter its value. Never copy `server.key` or the internal
+`vllm_token` to clients. Tokens are stored in the device Keychain. The server test works
+without a dataset. Open a dataset and use **AI Assistant** in the render controls to speak
+or type. Responses appear as text and can be spoken locally. Cancel closes the session;
+it does not undo committed changes. Screenshot sharing can be disabled separately.
+Keep the token file private during transfer to each trusted device; remove transfer copies
+after import. The assistant configuration is device-local and excluded from SharePlay/GSC.
 
 ## 1. Requirements
 
@@ -142,7 +152,7 @@ Replace hostname/IP with the actual values. Without them the default is localhos
 `--bind 0.0.0.0` exposes all IPv4 interfaces and needs deliberate network restrictions.
 Port defaults to **8766** (`--port`); GPU defaults to **0** (`--gpu INDEX` or `GPU-...` UUID).
 Configuration creates two private random tokens and a development TLS certificate. For
-native-device deployment, use a trusted CA certificate as described in section 5.
+native-device deployment, explicitly import its public certificate or use trusted CA certificates as described in section 5.
 
 ### Select Models And GPUs
 
@@ -293,21 +303,34 @@ Use `--capabilities` instead of `--smoke` for the tool/image check when calling 
 | File/setting | Purpose |
 | --- | --- |
 | `.env` | Pinned images/model revision, listen address, port, GPU, UID/GID, context/memory budget |
-| `runtime/secrets/agent_token` | Agent authentication; generated randomly, mode 0600 |
+| `runtime/secrets/agent_token` | Agent authentication; generated randomly; 0640 with sudo-installer access, otherwise 0600 |
 | `runtime/secrets/vllm_token` | Separate internal inference credential, mode 0640; never returned to clients |
 | `runtime/tls/server.crt` | Public server certificate, including chosen host, localhost and loopback SANs |
-| `runtime/tls/server.key` | Private TLS key, mode 0600 |
+| `runtime/tls/server.key` | Private TLS key; 0640 with sudo-installer access, otherwise 0600 |
 | Docker volume `borgvr-ai_model-cache` | Downloaded weights and persistent Hugging Face cache |
 
-`runtime` and its subdirectories are owner-only. New sudo/root installations keep `.env`
-and the parent `runtime` directory root-owned; only the private container mounts are owned
-by UID/GID 10001. The agent therefore remains unprivileged even with administrative setup.
-Existing configurations retain their original UID/GID and file ownership. Non-root setup
-with pre-existing Docker access remains supported using that account's UID/GID.
-vLLM joins the supplementary `BORGVR_GID` group so it can read the shared inference token
-without a capability that bypasses file permissions. `install`, `init` and `start` repair
-that token's mode to 0640 in existing installations without replacing its contents.
-Other private keys remain 0600.
+With sudo setup, `runtime` belongs to the invoking account (for example `krueger`), mode
+0700. That user can read and manage its contents without sudo. The `secrets` and `tls`
+directories use 0750 and their mounted files 0640, with group `BORGVR_GID`, preserving
+the agent's read access through its group. Container UID/GID settings are unchanged
+(10001 for a new administrative setup); the agent remains unprivileged. vLLM joins that
+group only for its internal token. Other users gain no access; backup directories stay
+0700 and backup files 0600. A newly generated `.env` remains root-owned and 0600.
+Non-root setup with pre-existing Docker access still uses that account's UID/GID.
+
+`install`, `init`, `start`, `restart` and `update` automatically prepare these runtime
+permissions without changing keys, container IDs or models. For an existing running
+installation, run as the intended user from the deployment directory:
+
+```
+sudo ./setup.sh permissions
+```
+
+This needs neither Docker access nor a container restart. An existing non-root runtime
+owner is retained on later invocations, even by root or a different administrator.
+A first installation directly as root without a sudo caller remains restricted to root
+and the container user as before. Symlinks, multiply linked files and nonregular runtime
+entries are rejected before the ownership changes are applied.
 The agent has a read-only root filesystem,
 bounded temporary storage and dropped capabilities. The inference container uses the
 upstream image's default user but has no privileged mode, host IPC, Docker socket, dataset
@@ -321,10 +344,10 @@ with `--preserve-env=VLLM_BORGVR_API_KEY`. Do not put the secret in command argu
 does the launcher set vLLM's required `VLLM_API_KEY` from its private secret file.
 Other containers have independent environments.
 
-The generated self-signed certificate expires after 365 days and is for initial testing
-with an explicitly trusted certificate. Before native-device deployment, use a certificate
-from your organization's trusted CA or a public CA; install your organization's CA on the
-devices where necessary. Replace `server.crt`/`server.key` with a matching PEM full chain/key,
+The generated self-signed certificate expires after 365 days. The native assistant can
+explicitly trust the imported public certificate while still verifying hostname/IP and validity.
+For managed deployments, use a certificate from your organization's trusted CA or a public CA;
+install your organization's CA on devices where necessary. Replace `server.crt`/`server.key` with a matching PEM full chain/key,
 retain the same ownership and key mode, and restart the agent. Certificate issuance/renewal
 and device trust provisioning are not automated by this script. Never disable TLS validation.
 
@@ -350,6 +373,7 @@ sudo ./setup.sh stop
 sudo ./setup.sh start
 sudo ./setup.sh restart
 sudo ./setup.sh test
+sudo ./setup.sh permissions
 ```
 
 `start` starts missing/stopped services, applies changed Compose configuration and waits for
@@ -439,8 +463,8 @@ delete the model cache as well: `sudo docker compose down --volumes`. This does 
   mode as a workaround. Check the pinned model/image combination and report the error.
 - **Certificate error:** connect using the chosen SAN hostname/IP, trust the correct CA or
   explicitly configured test certificate, check expiry/chain, and verify device clocks.
-- **Permission error:** `.env` UID/GID must match private-file ownership. Never solve this by
-  making tokens/keys world-readable.
+- **Permission error:** run `sudo ./setup.sh permissions` as the installer. The agent must
+  retain read access as owner or through `BORGVR_GID`. Never make tokens/keys world-readable.
 - **Tool result missing or timed out:** the server sends cancellation and refuses subsequent
   work in an uncertain session. Reconcile pending app commands/current state before reconnecting;
   it deliberately does not repeat mutations after a timeout.
@@ -456,10 +480,11 @@ python3.12 -m venv .venv
 Tests use the real Pydantic AI tool loop with a deterministic **test model**, no GPU or cloud
 access. They cover auth, schema validation, tool policy, image decoding, deadlines, cancellation,
 stale contexts, request deduplication, progress, session limits and configuration preservation.
-They do not substitute for the H200/model smoke test or eventual native end-to-end testing.
+They do not substitute for the deployed model smoke test or microphone testing on target devices.
 
-See [PROTOCOL.md](PROTOCOL.md) for protocol version 1 and the requirements on future native
-clients. No new native application targets or old speech handlers were changed in this step.
+The shared native client is tested with `Scripts/test-voice-agent.sh` against the actual local
+TLS/WSS agent and deterministic model, including PNG delivery, Command/GSC roundtrip and
+context cancellation. See [PROTOCOL.md](PROTOCOL.md) for protocol version 1 and native limits.
 
 ## 9. Producing The Agent Image
 

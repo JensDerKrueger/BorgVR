@@ -1,10 +1,12 @@
 """Non-destructive configuration and secret generation, including sudo installation."""
 
 import argparse
+from contextlib import ExitStack
 import ipaddress
 import json
 import os
 from pathlib import Path
+import pwd
 import re
 import secrets
 import shutil
@@ -46,6 +48,7 @@ def write_configuration_changes(root, changes):
             lines.append(key + "=" + value + "\n")
     updated = "".join(lines)
     if updated == original:
+        prepare_runtime_access(root)
         print("Configuration values unchanged.")
         return
     runtime = root / "runtime"
@@ -68,6 +71,7 @@ def write_configuration_changes(root, changes):
     finally:
         if temporary is not None:
             temporary.unlink(missing_ok=True)
+    prepare_runtime_access(root)
     print(f"Previous configuration saved privately: {backup}")
 
 
@@ -171,6 +175,65 @@ def prepare_shared_token(root):
         os.close(descriptor)
 
 
+def runtime_owner(info):
+    # Retain the installer on later invocations, including a direct root login.
+    if info.st_uid != 0:
+        return info.st_uid, info.st_gid
+    value = os.environ.get("SUDO_UID")
+    if value is None or value == "0":
+        return None
+    if not value.isascii() or not value.isdecimal() or not 0 < int(value) < 2**32 - 1:
+        raise ValueError("SUDO_UID must identify a non-root installer account")
+    try:
+        account = pwd.getpwuid(int(value))
+    except KeyError as error:
+        raise ValueError("SUDO_UID must identify an existing installer account") from error
+    if os.environ.get("SUDO_USER", account.pw_name) != account.pw_name:
+        raise ValueError("SUDO_USER does not match SUDO_UID")
+    return account.pw_uid, account.pw_gid
+
+
+def prepare_runtime_access(root):
+    if os.getuid() != 0:
+        return
+    with ExitStack() as handles:
+        def opened(path, flags, parent=None):
+            descriptor = os.open(path, flags | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=parent)
+            handles.callback(os.close, descriptor)
+            return descriptor
+
+        runtime = opened(root / "runtime", os.O_RDONLY | os.O_DIRECTORY)
+        owner = runtime_owner(os.fstat(runtime))
+        if owner is None:
+            return  # A direct root installation without a sudo caller remains root-only.
+        uid, gid = owner
+        agent_gid = int(read_value("BORGVR_GID", root))
+        if not 0 < agent_gid < 2**32 - 1:
+            raise ValueError("BORGVR_GID must identify an unprivileged container group")
+        records = []
+
+        def inspect(descriptor, relative):
+            info = os.fstat(descriptor)
+            directory = stat.S_ISDIR(info.st_mode)
+            if not directory and (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1):
+                raise ValueError("Runtime entries must be directories or regular, single-link files")
+            if len(records) >= 1024 or len(relative) > 16:
+                raise ValueError("Unexpectedly large runtime directory; inspect it before changing permissions")
+            shared = relative in (("secrets",), ("tls",), ("secrets", "agent_token"),
+                                  ("secrets", "vllm_token"), ("tls", "server.key"), ("tls", "server.crt"))
+            mode = (0o750 if directory else 0o640) if shared else (0o700 if directory else 0o600)
+            records.append((descriptor, agent_gid if shared else gid, mode))
+            if directory:
+                for name in os.listdir(descriptor):
+                    inspect(opened(name, os.O_RDONLY, descriptor), (*relative, name))
+
+        # Validate the whole tree first; descriptor-based changes never follow symlinks.
+        inspect(runtime, ())
+        for descriptor, group, mode in records:
+            os.fchown(descriptor, uid, group)
+            os.fchmod(descriptor, mode)
+
+
 def hostname(value):
     try:
         address = ipaddress.ip_address(value)
@@ -248,6 +311,7 @@ def install_configuration(root, args):
                              args.gpu or "0", args.agent_image or DEFAULT_AGENT_IMAGE, changes)
         return
     prepare_shared_token(root)
+    prepare_runtime_access(root)
     if not renew:
         write_configuration_changes(root, changes)
         return
@@ -276,6 +340,7 @@ def install_configuration(root, args):
                     os.chown(tls / name, owners[name].st_uid, owners[name].st_gid)
             raise
     print(f"TLS certificate updated for {args.host}; clients must trust the new certificate. Backup: {backup}")
+    prepare_runtime_access(root)
 
 
 def generate_certificate(tls_dir, host):
@@ -300,6 +365,7 @@ def create_configuration(root, host, bind, port, gpu, agent_image=DEFAULT_AGENT_
     env = root / ".env"
     if env.exists():
         prepare_shared_token(root)
+        prepare_runtime_access(root)
         print("Existing .env retained; credentials and certificates were not changed.")
         return
     privileged = os.getuid() == 0
@@ -342,6 +408,7 @@ def create_configuration(root, host, bind, port, gpu, agent_image=DEFAULT_AGENT_
         for key, value in values.items():
             handle.write(f"{key}={value}\n")
     prepare_shared_token(root)
+    prepare_runtime_access(root)
     print(f"Configuration created for https://{host}:{port}; listen address {bind}.")
     print("Agent token: runtime/secrets/agent_token (not printed). Certificate: runtime/tls/server.crt")
 
@@ -370,6 +437,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("prepare-secrets")
+    sub.add_parser("permissions")
     sub.add_parser("validate-model")
     sub.add_parser("gpu-groups")
     sub.add_parser("profiles")
@@ -416,6 +484,11 @@ def main():
         set_agent_image(ROOT, args.image)
     elif args.command == "prepare-secrets":
         prepare_shared_token(ROOT)
+        prepare_runtime_access(ROOT)
+    elif args.command == "permissions":
+        prepare_shared_token(ROOT)
+        prepare_runtime_access(ROOT)
+        print("Runtime permissions prepared; credentials and container IDs were not changed.")
     elif args.command == "get":
         print(read_value(args.name))
     elif args.command == "image":

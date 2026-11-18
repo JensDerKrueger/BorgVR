@@ -1,7 +1,7 @@
 # BorgVR Agent Protocol 1
 
-This is a BorgVR application protocol, **not an MCP transport**. The server foundation is
-implemented; native clients still need implementing. Tool names and schemas come from
+This is a BorgVR application protocol, **not an MCP transport**. A shared native client is
+implemented for macOS, iOS and visionOS. Tool names and schemas come from
 the app's existing MCP/Command definitions rather than a second handwritten tool catalog.
 
 ## Transport And Authentication
@@ -187,3 +187,33 @@ Errors contain stable codes (`busy`, `run_failed`, `invalid_message`) and generi
 not internal exceptions or confidential payloads. Protocol violations close with code 1008.
 Disconnect cancels the active run and drops conversation data. The framework tests exercise
 this protocol with a deterministic test model; the installation smoke test uses actual vLLM.
+
+## Native Client
+
+Configure **Settings > AI Assistant** with an HTTPS origin, installation token and, for a
+self-signed server, the imported public `runtime/tls/server.crt`. The token is held in the
+device Keychain; server trust and credentials are not shared through SharePlay or GSC.
+Enabling the assistant is explicit. The render controls open a shared conversation view
+with microphone, text input, progress replies, optional local speech output and cancellation.
+There is no passive listening or wake-word command table. Microphone audio stays on the
+device by default; the user can separately allow system recognition that may use Apple's servers. The agent
+receives transcribed text, never audio.
+
+Native tools reuse `BorgVRMCPToolRouter`, without starting an MCP listener. The client
+further narrows the catalog by platform, RGB/RGBA support and screenshot consent. Local
+schema checks, context fences, a connection-scoped bounded call ledger and state-read gating
+run before dispatch. Accepted commands enter the existing session/Command/GSC path.
+Render-only PNGs are reduced to at most 1024 pixels per axis and 2 MiB. No window, camera
+or passthrough capture is used. TF tool results include at most 256 uniformly spaced preview
+samples, `originalSampleCount`, and `samplesArePreview`; the advertised description explicitly
+marks this approximation. Actual TF resolution and recorded commands remain unchanged.
+Current native bounds also include 128 events per turn,
+512 unique call IDs per connection, 8 MiB call signatures and 16 MiB cached replies.
+
+Native cancellation conservatively disconnects the session and cancels the pending command;
+it never retries an uncertain mutation. Dataset opening IDs and edit-state IDs are checked
+before dispatch and again after async commands, including reopening the same dataset UUID.
+Changing connection settings also disconnects. Native idle sessions close after 240 seconds;
+connection/send/tool/turn deadlines are 15/10/40/185 seconds. There is no automatic reconnect
+or request replay. `Scripts/test-voice-agent.sh` exercises actual local TLS/WSS against the
+agent with a deterministic model, including render-image delivery and GSC roundtrip.

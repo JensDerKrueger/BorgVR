@@ -30,11 +30,11 @@ The current development version is **3.9**. The SharePlay wire protocol is versi
 - **BORGVRServerCPP**: cross-platform C++17 implementation of the dataset server protocol,
   including synchronization and the embedded WebGPU frontend.
 - **web**: responsive WebGPU renderer served directly by a BorgVR server.
-- **BorgVRAgentServer**: initial self-hosted AI agent and pinned vLLM deployment for a Linux
-  NVIDIA GPU server. Includes separate root-only host and non-root deployment scripts,
-  support for prebuilt agent images, TLS, a server smoke test, and
+- **BorgVRAgentServer**: self-hosted AI agent and pinned vLLM deployment for a Linux
+  NVIDIA/CUDA or AMD/ROCm GPU server. Includes sudo setup and model-switch commands,
+  prebuilt agent images, TLS, model/image/tool tests, and
   [English](BorgVRAgentServer/README.md) / [German](BorgVRAgentServer/README.de.md) setup guides.
-  Native speech/client integration is a subsequent step, not yet enabled in the apps.
+  Shared native speech/text integration is available on macOS, iOS and visionOS.
 - **html**: bilingual user guide, embedded macOS Help, support, and privacy pages.
   Start with the [manual](html/index.html) or the guide to
   [datasets, edit states, and SharePlay](html/datasets.html).
@@ -72,6 +72,23 @@ The current development version is **3.9**. The SharePlay wire protocol is versi
   option, even in a normally single-mode selector, without changing local preferences. Screen
   panel buttons also follow their associated interaction modes; visionOS keeps them independent
   so Muse and PSVR tools retain access to their panels.
+
+### AI Voice And Text Assistant
+
+- Opt-in **Settings > AI Assistant** on macOS, iOS and visionOS: HTTPS server origin,
+  Keychain token, explicit certificate import, render-image sharing and local speech output.
+- A shared conversation view accepts text or one spoken request at a time. Recognition is
+  on-device by default, with optional Apple fallback; microphone audio never reaches the agent.
+- The outbound WSS client reuses the MCP tool catalog/router, without enabling a local MCP
+  listener. Only visualization/read tools are exposed, narrowed by platform and RGB/RGBA mode.
+  Screenshots contain only the render image, never camera/passthrough, and are capped at 1024px/2MiB.
+- Commands follow the existing session/Command/GSC recording path. Cancellation, dataset or
+  edit-state changes terminate the connection; stale/duplicate calls cannot repeat mutations.
+  No automatic reconnect or replay, file access, volume edits or arbitrary GSC execution.
+- Native test: build `macOSApp`, then run `sh Scripts/test-voice-agent.sh <Debug-products> <agent-test-venv-python>`.
+  This tests actual local TLS/WSS with a deterministic model, PNG delivery and GSC roundtrip;
+  real microphone and deployed-model validation still need the target devices/server.
+  See the [bilingual user guide](html/mcp.html#voice-agent).
 
 ### Dataset File Format
 

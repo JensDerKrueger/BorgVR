@@ -86,6 +86,7 @@ struct macOSApp: App {
   @StateObject private var scriptRunner: BorgVRScriptRunner
   @StateObject private var updateChecker: AppStoreUpdateChecker
   @StateObject private var mcpController: BorgVRMCPServerController
+  @StateObject private var voiceAgent = VoiceAgentController()
   @StateObject private var session: ScreenBorgVRSession
   @AppStorage("sharePlayDisplayNameOnboardingCompleted")
   private var sharePlayDisplayNameOnboardingCompleted = false
@@ -219,6 +220,7 @@ struct macOSApp: App {
         .environmentObject(session)
         .environmentObject(updateChecker)
         .environmentObject(mcpController)
+        .environmentObject(voiceAgent)
         .frame(minWidth: 980, minHeight: 680)
         .onAppear {
           settingsFiles.applySettings = { operation in try session.mutateSettings { try operation() } }
@@ -242,10 +244,22 @@ struct macOSApp: App {
             commandService: commandService
           )
           mcpController.configure(commandService: commandService, logger: appModel.logger)
+          voiceAgent.configure(service: commandService) {
+            guard case .rendering(let dataset, let requestID) = appModel.datasetSessionState,
+                  !appModel.volumeBrush.isOpeningState, !appModel.volumeBrush.isRestoringPersonalState,
+                  !appModel.volumeBrush.isWaitingForSharedState else { return nil }
+            return VoiceAgentContext(datasetID: dataset.uniqueId, openingID: requestID,
+                                     editStateID: appModel.volumeBrush.activeState?.id)
+          }
           applyMCPConfiguration()
         }
         .onDisappear {
+          voiceAgent.disconnect()
           saveOpenDatasetState()
+        }
+        .onChange(of: appModel.datasetSessionState) { _, _ in voiceAgent.invalidateContext() }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didResignActiveNotification)) { _ in
+          voiceAgent.speech.cancel()
         }
         .onChange(of: appSettings.logLevel) { _, newValue in
           appModel.setLogLevel(newValue)
@@ -307,6 +321,7 @@ struct macOSApp: App {
 
     DockableUtilityWindow(panel: .renderControls, width: 720, height: 260) {
       DetachedPanelContent(panel: .renderControls)
+        .environmentObject(voiceAgent)
         .environmentObject(appModel)
         .environmentObject(renderingParameters)
         .environmentObject(appSettings)

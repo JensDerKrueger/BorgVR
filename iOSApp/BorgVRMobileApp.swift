@@ -10,6 +10,7 @@ struct BorgVRMobileApp: App {
   @StateObject private var serverController: BackgroundServerController
   @StateObject private var updateChecker: AppStoreUpdateChecker
   @StateObject private var mcpController: BorgVRMCPServerController
+  @StateObject private var voiceAgent = VoiceAgentController()
   @StateObject private var session: ScreenBorgVRSession
   @AppStorage("sharePlayDisplayNameOnboardingCompleted")
   private var sharePlayDisplayNameOnboardingCompleted = false
@@ -107,6 +108,7 @@ struct BorgVRMobileApp: App {
         .environmentObject(serverController)
         .environmentObject(updateChecker)
         .environmentObject(mcpController)
+        .environmentObject(voiceAgent)
         .environmentObject(session)
         .onAppear {
           settingsFiles.applySettings = { operation in try session.mutateSettings { try operation() } }
@@ -161,6 +163,7 @@ struct BorgVRMobileApp: App {
           serverController.restartIfRunning(using: appSettings)
         }
         .onChange(of: appSettings.enableMCPServer) { _, _ in applyMCPConfiguration() }
+        .onChange(of: appModel.datasetSessionState) { _, _ in voiceAgent.invalidateContext() }
         .onChange(of: appSettings.mcpServerPort) { _, _ in applyMCPConfiguration() }
         .onChange(of: appSettings.mcpAllowRemoteConnections) { _, _ in applyMCPConfiguration() }
         .onChange(of: appSettings.mcpAccessToken) { _, _ in applyMCPConfiguration() }
@@ -182,7 +185,7 @@ struct BorgVRMobileApp: App {
     .handlesExternalEvents(matching: [BorgVRSharePlayActivity.activityIdentifier])
     .onChange(of: scenePhase, initial: true) { _, phase in
       BorgVRVolumeEditGPUAvailability.setApplicationActive(phase == .active)
-      if phase == .background { saveOpenDatasetState() }
+      if phase == .background { voiceAgent.disconnect(); saveOpenDatasetState() }
     }
   }
 
@@ -201,6 +204,13 @@ struct BorgVRMobileApp: App {
       }
     )
     mcpController.configure(commandService: service, logger: appModel.logger)
+    voiceAgent.configure(service: service) {
+      guard case .rendering(let dataset, let requestID) = appModel.datasetSessionState,
+            !appModel.volumeBrush.isOpeningState, !appModel.volumeBrush.isRestoringPersonalState,
+            !appModel.volumeBrush.isWaitingForSharedState else { return nil }
+      return VoiceAgentContext(datasetID: dataset.uniqueId, openingID: requestID,
+                               editStateID: appModel.volumeBrush.activeState?.id)
+    }
     applyMCPConfiguration()
   }
 
