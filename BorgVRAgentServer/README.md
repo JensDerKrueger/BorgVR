@@ -201,7 +201,7 @@ when creating the deployment. Subsequent commands retain the backend stored in `
 
 This creates `.env`, tokens and a test certificate, checks the profile's storage reserve
 and GPU, pulls missing images, and starts both services. The public
-[agent image 3.9.2](https://github.com/JensDerKrueger/BorgVR/pkgs/container/borgvr-agent)
+[agent image 3.9.3](https://github.com/JensDerKrueger/BorgVR/pkgs/container/borgvr-agent)
 supports model profiles. No registry login or local build is needed.
 vLLM downloads the pinned model into its persistent cache; the agent starts only when
 vLLM is healthy. First download/compilation can take up to the one-hour readiness limit.
@@ -242,7 +242,7 @@ independently. These presets do not guarantee every model fits or has kernels fo
 Switch an existing deployment while keeping credentials and caches:
 
 ```
-sudo ./setup.sh update --agent-image ghcr.io/jensderkrueger/borgvr-agent:3.9.2
+sudo ./setup.sh update --agent-image ghcr.io/jensderkrueger/borgvr-agent:3.9.3
 sudo ./setup.sh configure --profile qwen38-27b
 sudo ./setup.sh doctor
 sudo ./setup.sh update
@@ -678,17 +678,17 @@ setup never publishes an image or changes registry visibility.
 
 ## 11. Repeatable GitHub builds and GHCR publication
 
-**Published: 3.9.2 for linux/amd64**, from commit
-`715aabfd7fd041d32504e1da77db6abfc43cb30c`.
-[Build, tests and publication](https://github.com/JensDerKrueger/BorgVR/actions/runs/44290118756)
+**Published: 3.9.3 for linux/amd64**, from commit
+`624ddf5a7132bdc15fe6e3310b6ff876feeb4dcc`.
+[Build, tests and publication](https://github.com/JensDerKrueger/BorgVR/actions/runs/44318608288)
 succeeded; anonymous registry access was verified. Immutable image reference:
 
 ```text
-ghcr.io/jensderkrueger/borgvr-agent@sha256:3bd3833ef37e2e013ac7d18502a0901d7c0c854faa95fb367242b29a43162b63
+ghcr.io/jensderkrueger/borgvr-agent@sha256:e4b15337ef7221ddc42a2218aea94307328ed7964817d2a912858c8928c0aecf
 ```
 
 To upgrade an existing installation, run `git pull`, then
-`sudo ./setup.sh update --agent-image ghcr.io/jensderkrueger/borgvr-agent:3.9.2`.
+`sudo ./setup.sh update --agent-image ghcr.io/jensderkrueger/borgvr-agent:3.9.3`.
 `git pull` alone does not replace the running container, and `update` without
 `--agent-image` retains the previously configured image. Model, tokens and certificates
 are preserved.
