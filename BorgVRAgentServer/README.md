@@ -603,12 +603,18 @@ delete the model cache as well: `sudo docker compose down --volumes`. This does 
 
 ### Diagnose tool calls without native data
 
-The agent requests `strict: true` for no-argument tools such as `get_application_state`.
+The agent requests `strict: true` for no-argument tools such as `get_application_state`
+and for `set_transfer_function`.
 The pinned vLLM 0.34 can constrain these calls during generation, preventing invented
 fields such as `reason` or `action`. Both server and native argument validation remain
 enabled. Invalid arguments are not silently dropped; the model receives precise feedback
-to retry with exactly `{}`. Tools with optional properties are not marked strict, preserving
-the meaning of omitted parameters. Custom vLLM images/tool parsers must support strict
+to retry with exactly `{}`. The model-facing TF setter requires an explicit channel and
+exactly four integer bytes `[R,G,B,A]` per sample, never a prefixed position. Sample positions
+are uniformly spaced; short ramps are interpolated to the native table resolution. Invalid
+TF arguments receive specific correction feedback, not an automatic reinterpretation.
+The native/MCP setter retains its optional channel default. Other tools with optional
+properties are not marked strict, preserving the meaning of omitted parameters.
+Custom vLLM images/tool parsers must support strict
 tool calls; the bundled model compatibility check exercises the full path.
 
 If plain text works but tool requests fail with `UnexpectedModelBehavior`, the log's

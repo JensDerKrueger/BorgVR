@@ -159,6 +159,14 @@ def validate_arguments(definition: ToolDefinition, arguments: dict) -> None:
         if definition.inputSchema.get("properties") == {}:
             raise ProtocolError(f"Tool {definition.name} takes no arguments. Retry with exactly {{}}. "
                                 "Do not include reason, action, or any other fields.")
+        if definition.name == "set_transfer_function":
+            raise ProtocolError(
+                "Invalid TF arguments. Each samples entry must contain EXACTLY four integer bytes "
+                "[R,G,B,A] in 0...255, NOT [position,R,G,B,A] and not normalized floats. "
+                "Positions are implicit and uniformly spaced across [0,1]; do not add a position. "
+                "Use a valid zero-based channel and respect the advertised sample-count limits. "
+                'Retry with a short ramp, for example {"channel":0,"samples":[[0,0,0,0],[255,255,255,255]]}.'
+            )
         raise ProtocolError("Arguments do not match the advertised tool schema. "
                             "Use only its declared properties, include required fields, and respect their types and bounds.")
     if definition.name == "capture_screenshot" and set(arguments) - {"include_alpha"}:

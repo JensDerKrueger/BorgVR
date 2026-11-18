@@ -2,6 +2,7 @@ import asyncio
 import base64
 import io
 import json
+from pathlib import Path
 from dataclasses import replace
 
 import httpx
@@ -36,6 +37,9 @@ ROTATE = definition("rotate_view", {"axis": {"type": "array", "minItems": 3, "ma
                                     "degrees": {"type": "number"}}, ["axis", "degrees"])
 SCREENSHOT = definition("capture_screenshot", {"output_path": {"type": "string"},
                                                "include_alpha": {"type": "boolean"}})
+TF = next(entry for entry in json.loads((Path(__file__).resolve().parents[1] /
+                                        "diagnostic_catalog.json").read_text())
+          if entry["name"] == "set_transfer_function")
 
 
 def hello(tools=None):
@@ -171,6 +175,13 @@ def test_openai_compatible_http_adapter_and_png_payload(monkeypatch, custom):
         assert "exactly {}" in state_tool["description"]
         screenshot_tool = next(tool["function"] for tool in body["tools"] if tool["function"]["name"] == "capture_screenshot")
         assert screenshot_tool.get("strict") is not True
+        tf_tool = next(tool["function"] for tool in body["tools"] if tool["function"]["name"] == "set_transfer_function")
+        assert tf_tool["strict"] is True
+        assert set(tf_tool["parameters"]["required"]) == {"channel", "samples"}
+        row_schema = tf_tool["parameters"]["properties"]["samples"]["items"]
+        assert row_schema["minItems"] == row_schema["maxItems"] == 4
+        assert row_schema["items"]["type"] == "integer"
+        assert "NOT [position,R,G,B,A]" in tf_tool["description"]
         requests.append(body)
         name = ("get_application_state", "capture_screenshot", None)[len(requests) - 1]
         message = {"role": "assistant", "content": None}
@@ -190,7 +201,7 @@ def test_openai_compatible_http_adapter_and_png_payload(monkeypatch, custom):
     monkeypatch.setattr(module, "DefaultAsyncHttpxClient", lambda **kwargs: httpx2.AsyncClient(
         **kwargs, transport=httpx2.MockTransport(handler)))
     with TestClient(create_app(settings)) as client, open_session(client) as ws:
-        ws.send_json(hello([STATE, SCREENSHOT]))
+        ws.send_json(hello([STATE, SCREENSHOT, TF]))
         ready = ws.receive_json()
         assert ready["capabilities"] == {"vision": True, "tool_calling": True}
         ws.send_json(user())
@@ -200,6 +211,7 @@ def test_openai_compatible_http_adapter_and_png_payload(monkeypatch, custom):
         assert ws.receive_json()["text"] == "HTTP adapter ready"
         assert ws.receive_json()["type"] == "completed"
     assert len(requests) == 3
+    assert TF["inputSchema"]["required"] == ["samples"]  # Model strictness must not rewrite the native catalog.
 
 
 def test_tool_arguments_are_actually_validated_not_just_advertised():
@@ -251,6 +263,51 @@ def test_no_argument_feedback_does_not_disclose_argument_values():
         with pytest.raises(ProtocolError, match=r"exactly \{\}") as error:
             validate_arguments(ToolDefinition.model_validate(STATE), arguments)
         assert "private text" not in str(error.value) and "close_dataset" not in str(error.value)
+
+
+@pytest.mark.parametrize("invalid", [
+    [[0, 0, 0, 0], [0.7, 0, 0, 0, 0], [0.75, 255, 255, 255, 255]],
+    [[0, 0, 0, 0], [179, 0, 0, 0, 0], [191, 255, 255, 255, 255]],
+    [[0.5, 0.5, 0.5, 1.0]],
+])
+def test_tf_rejects_position_prefixed_or_float_rows_and_only_forwards_corrected_ramp(invalid):
+    step, feedback = 0, []
+    valid = [[0, 0, 0, 0], [255, 255, 255, 255]]
+
+    async def model(messages, info):
+        nonlocal step
+        step += 1
+        if step == 1:
+            return ModelResponse(parts=[ToolCallPart("get_application_state", {}, tool_call_id="state")])
+        if step == 2:
+            return ModelResponse(parts=[ToolCallPart("set_transfer_function", {"channel": 0, "samples": invalid},
+                                                    tool_call_id="bad-tf")])
+        if step == 3:
+            feedback.extend(part.content for message in messages for part in message.parts
+                            if isinstance(part, ToolReturnPart) and part.outcome == "retried")
+            return ModelResponse(parts=[ToolCallPart("set_transfer_function", {"channel": 0, "samples": valid},
+                                                    tool_call_id="corrected-tf")])
+        return ModelResponse(parts=[TextPart("TF applied")])
+
+    with connection(FunctionModel(model)) as client, open_session(client) as ws:
+        ws.send_json(hello([STATE, TF]))
+        ws.receive_json()
+        ws.send_json(user())
+        ws.receive_json()
+        ws.send_json(reply(ws.receive_json()))
+        call = ws.receive_json()
+        assert call["name"] == "set_transfer_function" and call["arguments"]["samples"] == valid
+        ws.send_json(reply(call))
+        assert ws.receive_json()["text"] == "TF applied"
+        assert ws.receive_json()["type"] == "completed"
+    assert step == 4
+    assert any("EXACTLY four integer bytes" in item and "NOT [position,R,G,B,A]" in item for item in feedback)
+
+
+def test_tf_feedback_never_echoes_invalid_values_or_drops_position_fields():
+    with pytest.raises(ProtocolError, match="EXACTLY four") as error:
+        validate_arguments(ToolDefinition.model_validate(TF), {"samples": [["private-value", 1, 2, 3, 4]]})
+    assert "private-value" not in str(error.value)
 
 
 def test_mutation_requires_current_state_read():

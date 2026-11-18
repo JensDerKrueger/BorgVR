@@ -613,7 +613,13 @@ Fehlerkategorien, keine Zugangsschlüssel oder echten Datensatzinhalte. Ein Exit
 null bedeutet, dass mindestens ein Test fehlgeschlagen ist.
 
 Eigene vLLM-Images und Tool-Parser müssen strikte Aufrufe für parameterlose Werkzeuge
-unterstützen. Server und native App prüfen Argumente zusätzlich gegen das jeweilige Schema;
+und `set_transfer_function` unterstützen. Beim TF-Setter muss das Modell den Kanal
+ausdrücklich angeben und pro Eintrag genau vier ganzzahlige Bytes `[R,G,B,A]` liefern,
+keine vorangestellte Position. Die Positionen sind gleichmäßig verteilt; kurze Rampen
+werden auf die native Tabellenauflösung interpoliert. Ungültige TF-Argumente erhalten
+eine konkrete Korrekturanweisung, werden aber nicht automatisch umgedeutet. Die native
+und die MCP-Schnittstelle behalten ihren optionalen Kanal-Standardwert.
+Server und native App prüfen Argumente zusätzlich gegen das jeweilige Schema;
 ungültige Aufrufe werden nicht ausgeführt.
 
 Für Probleme speziell beim Erzeugen einer Transferfunktion gibt es einen weiteren,
