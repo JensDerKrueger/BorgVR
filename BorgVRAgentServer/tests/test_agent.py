@@ -157,6 +157,22 @@ def test_openai_compatible_http_adapter_and_png_payload(monkeypatch, custom):
         inference = ModelConfig.from_env({**profile_values("custom"), "BORGVR_MODEL": "Other/Vision-Instruct",
                                           "BORGVR_MODEL_REVISION": "main", "BORGVR_TOOL_PARSER": "hermes"})
     settings = replace(SETTINGS, model=inference.model, inference=inference)
+    token_requests = []
+    original_client = httpx.AsyncClient
+
+    def tokenize(request):
+        assert request.url.path == "/tokenize"
+        assert request.headers["Authorization"] == f"Bearer {SETTINGS.vllm_token}"
+        body = json.loads(request.content)
+        assert body["add_generation_prompt"] is True
+        token_requests.append(body)
+        return httpx.Response(200, json={"count": 1024, "max_model_len": inference.context})
+
+    class TokenClient(original_client):
+        def __init__(self, **kwargs):
+            super().__init__(**kwargs, transport=httpx.MockTransport(tokenize))
+
+    monkeypatch.setattr(module.httpx, "AsyncClient", TokenClient)
 
     def handler(request):
         assert request.url.path == "/v1/chat/completions"
@@ -183,6 +199,8 @@ def test_openai_compatible_http_adapter_and_png_payload(monkeypatch, custom):
         assert row_schema["items"]["type"] == "integer"
         assert "NOT [position,R,G,B,A]" in tf_tool["description"]
         requests.append(body)
+        assert body["messages"] == token_requests[-1]["messages"]
+        assert body["tools"] == token_requests[-1]["tools"]
         name = ("get_application_state", "capture_screenshot", None)[len(requests) - 1]
         message = {"role": "assistant", "content": None}
         if name:
@@ -211,6 +229,7 @@ def test_openai_compatible_http_adapter_and_png_payload(monkeypatch, custom):
         assert ws.receive_json()["text"] == "HTTP adapter ready"
         assert ws.receive_json()["type"] == "completed"
     assert len(requests) == 3
+    assert len(token_requests) == 3
     assert TF["inputSchema"]["required"] == ["samples"]  # Model strictness must not rewrite the native catalog.
 
 

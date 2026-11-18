@@ -37,6 +37,8 @@ final class VoiceAgentController: ObservableObject {
   private var catalog: [[String: Any]] = []
   private var ledger = VoiceAgentCallLedger()
   private var readState = false
+  private var changesApplied = false
+  private var pendingMutation = false
   private var turns = 0
   private var calls = 0
   private var events = 0
@@ -91,6 +93,12 @@ final class VoiceAgentController: ObservableObject {
   }
 
   func disconnect(reason: Error? = nil) {
+    var reportedReason = reason
+    if busy, let error = reason as? VoiceAgentError,
+       [.connection, .timedOut, .commandFailed].contains(error), changesApplied || pendingMutation {
+      reportedReason = VoiceAgentPolicy.failure(code: nil, changesApplied: changesApplied,
+                                                completionUncertain: pendingMutation)
+    }
     generation = UUID()
     receiver?.cancel()
     heartbeat?.cancel()
@@ -111,13 +119,15 @@ final class VoiceAgentController: ObservableObject {
     sessionID = nil
     requestID = nil
     pendingCallID = nil
+    changesApplied = false
+    pendingMutation = false
     catalog = []
     ledger = VoiceAgentCallLedger()
     busy = false
     connectionState = .disconnected
     status = voiceAgentText("Disconnected")
     speech.cancel()
-    if let reason { errorText = reason.localizedDescription }
+    if let reportedReason { errorText = reportedReason.localizedDescription }
   }
 
   func newConversation() {
@@ -287,6 +297,8 @@ final class VoiceAgentController: ObservableObject {
       calls = 0
       events = 0
       readState = false
+      changesApplied = false
+      pendingMutation = false
       let id = UUID().uuidString
       requestID = id
       busy = true
@@ -344,7 +356,8 @@ final class VoiceAgentController: ObservableObject {
       case "tool_call": try startTool(event)
       case "tool_cancel":
         guard event["call_id"] as? String == pendingCallID else { throw VoiceAgentError.protocolViolation }
-        disconnect()
+        throw VoiceAgentPolicy.failure(code: nil, changesApplied: changesApplied,
+                                       completionUncertain: pendingMutation)
       case "completed":
         guard pendingCallID == nil else { throw VoiceAgentError.protocolViolation }
         self.requestID = nil
@@ -352,7 +365,10 @@ final class VoiceAgentController: ObservableObject {
         deadline?.cancel()
         status = voiceAgentText("Ready")
       case "cancelled": disconnect()
-      case "error": throw VoiceAgentError.commandFailed
+      case "error":
+        // Use local execution receipts, never a remote claim that a change succeeded.
+        throw VoiceAgentPolicy.failure(code: event["code"] as? String, changesApplied: changesApplied,
+                                       completionUncertain: pendingMutation)
       default: throw VoiceAgentError.protocolViolation
     }
   }
@@ -383,6 +399,7 @@ final class VoiceAgentController: ObservableObject {
           VoiceAgentPolicy.reads.contains(name) || readState else { throw VoiceAgentError.protocolViolation }
     calls += 1
     pendingCallID = callID
+    pendingMutation = !VoiceAgentPolicy.reads.contains(name)
     let id = generation
     let request = requestID!
     toolDeadline = Task { @MainActor [weak self] in
@@ -398,6 +415,11 @@ final class VoiceAgentController: ObservableObject {
           guard self.generation == id, self.requestID == request else { throw CancellationError() }
           try self.requireContext()
         })
+        guard result["isError"] as? Bool != true else { throw VoiceAgentError.commandFailed }
+        if self.generation == id, self.requestID == request {
+          if self.pendingMutation { self.changesApplied = true }
+          self.pendingMutation = false
+        }
         try Task.checkCancellation()
         guard self.generation == id, self.requestID == request else { return }
         try self.requireContext()

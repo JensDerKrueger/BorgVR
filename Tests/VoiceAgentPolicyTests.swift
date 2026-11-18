@@ -50,6 +50,14 @@ struct VoiceAgentPolicyTests {
     try rejects { _ = try ledger.begin(id: "", signature: "invalid") }
     try check(!VoiceAgentPolicy.allowed.contains("open_dataset") && !VoiceAgentPolicy.allowed.contains("edit_volume") &&
               !VoiceAgentPolicy.allowed.contains("load_settings"), "Agent gained unsafe capabilities")
+    try check(VoiceAgentPolicy.failure(code: "context_limit", changesApplied: false, completionUncertain: false) == .contextLimit,
+              "Context overflow without a mutation was misreported")
+    try check(VoiceAgentPolicy.failure(code: "context_limit", changesApplied: true, completionUncertain: false) == .changesAppliedContextLimit,
+              "Confirmed changes were not acknowledged after context overflow")
+    try check(VoiceAgentPolicy.failure(code: "run_failed", changesApplied: true, completionUncertain: false) == .changesAppliedVerificationFailed,
+              "Confirmed changes were confused with uncertain completion")
+    try check(VoiceAgentPolicy.failure(code: "context_limit", changesApplied: true, completionUncertain: true) == .completionUncertain,
+              "An uncertain final mutation must take precedence over earlier confirmed changes")
     print("Voice agent policy tests passed: endpoints, credentials, schemas, limits and call replay protection")
   }
 }

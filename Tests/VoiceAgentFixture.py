@@ -8,6 +8,7 @@ import threading
 import time
 
 from pydantic_ai import BinaryContent
+from pydantic_ai.exceptions import ModelContextWindowExceededError
 from pydantic_ai.messages import ModelResponse, TextPart, ToolCallPart, ToolReturnPart, UserPromptPart
 from pydantic_ai.models.function import FunctionModel
 import uvicorn
@@ -47,6 +48,14 @@ async def model(messages, info):
                  if isinstance(part, UserPromptPart) and isinstance(part.content, str)), "")
     if user == "wait":
         steps = [("get_application_state", {}), ("wait_until_rendered", {"after_frame": 999999, "timeout_seconds": 30})]
+    elif user in {"context-before-change", "context-after-change", "verification-failed"}:
+        steps = [("get_application_state", {})]
+        if user != "context-before-change":
+            steps.append(("rotate_view", {"axis": [0, 1, 0], "degrees": 10}))
+        if len(returned) >= len(steps):
+            if user == "verification-failed":
+                raise RuntimeError("Synthetic verification failure")
+            raise ModelContextWindowExceededError("test", "Synthetic context limit")
     else:
         steps = [("get_application_state", {}), ("report_progress", {"text": "Inspecting the synthetic volume."}),
                  ("rotate_view", {"axis": [0, 1, 0], "degrees": 30}),

@@ -6,7 +6,7 @@ import os
 import uuid
 from contextlib import asynccontextmanager
 from copy import deepcopy
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from pathlib import Path
 
 import httpx
@@ -15,14 +15,13 @@ from fastapi.responses import JSONResponse
 from openai import AsyncOpenAI, DefaultAsyncHttpxClient
 from pydantic import ValidationError
 from pydantic_ai import Agent, BinaryContent, ModelRetry, Tool, ToolReturn, UsageLimits
-from pydantic_ai.capabilities.process_history import ProcessHistory
-from pydantic_ai.messages import ModelMessagesTypeAdapter, UserPromptPart
-from pydantic_ai.models.openai import OpenAIChatModel
+from pydantic_ai.exceptions import ModelContextWindowExceededError
 from pydantic_ai.providers.openai import OpenAIProvider
 from model_config import ModelConfig
 
+from .context import ContextBudgetExceeded, ContextMaintenance, VLLMChatModel, bounded_history
 from .protocol import (
-    Cancel, ContextChanged, Hello, MAX_HISTORY_BYTES, MAX_RESULT_BYTES,
+    Cancel, ContextChanged, Hello, MAX_RESULT_BYTES,
     ProtocolError, ToolResult, UserMessage, decode_image, decode_message,
     json_bytes, select_tools, validate_arguments,
 )
@@ -86,31 +85,6 @@ def authorized(header: str | None, token: str) -> bool:
     return hmac.compare_digest((header or "").encode(), f"Bearer {token}".encode())
 
 
-async def bounded_history(messages):
-    # Keep only the newest two images, including between steps of one agent run.
-    remaining = 2
-    result = []
-    for message in reversed(messages):
-        parts = []
-        for part in reversed(message.parts):
-            if isinstance(part, UserPromptPart) and not isinstance(part.content, str):
-                content = []
-                for item in reversed(part.content):
-                    if isinstance(item, BinaryContent):
-                        if remaining:
-                            remaining -= 1
-                        else:
-                            item = "[An older screenshot was removed; request a current image if needed.]"
-                    content.append(item)
-                part = replace(part, content=list(reversed(content)))
-            parts.append(part)
-        result.append(replace(message, parts=list(reversed(parts))))
-    result.reverse()
-    if len(ModelMessagesTypeAdapter.dump_json(result)) > MAX_HISTORY_BYTES:
-        raise ProtocolError("Conversation limit reached; reconnect to start a new conversation")
-    return result
-
-
 class Session:
     def __init__(self, ws, settings, model, run_slots):
         self.ws, self.settings, self.model, self.run_slots = ws, settings, model, run_slots
@@ -125,6 +99,7 @@ class Session:
         self.tools = []
         self.state_seen = False
         self.uncertain = False
+        self.changes_applied = False
         self.agent = None
 
     async def send(self, value):
@@ -158,6 +133,8 @@ class Session:
             if response.error is not None:
                 # A client-reported error must mean the command did NOT commit.
                 return {"ok": False, "error": response.error}
+            if definition.name.startswith("set_") or definition.name == "rotate_view":
+                self.changes_applied = True
             if definition.name == "get_application_state":
                 self.state_seen = True
             if response.image_png_base64 is not None:
@@ -221,10 +198,12 @@ class Session:
 
         tools.append(Tool(report_progress, sequential=True))
         return Agent(self.model, system_prompt=SYSTEM_PROMPT, tools=tools, retries=1,
-                     capabilities=[ProcessHistory(bounded_history)], name="BorgVR-Agent")
+                     capabilities=[ContextMaintenance(self.settings.inference.context,
+                                                     self.settings.inference.output_tokens)], name="BorgVR-Agent")
 
     async def run(self, message):
         self.state_seen = False
+        self.changes_applied = False
         try:
             await self.send({"type": "started", "request_id": message.request_id})
             async with asyncio.timeout(self.settings.run_timeout):
@@ -248,10 +227,21 @@ class Session:
             self.history = []
             # Do not log exception bodies: providers can include private prompts/tool data.
             logger.warning("Agent run failed: %s", type(error).__name__)
+            context_limit = isinstance(error, (ContextBudgetExceeded, ModelContextWindowExceededError))
+            code = "context_limit" if context_limit else "run_failed"
+            if self.uncertain:
+                text = "Command completion is uncertain. Inspect the visualization before starting a new conversation."
+            elif self.changes_applied:
+                text = "Changes were applied, but the request or its visual verification could not be completed."
+            elif context_limit:
+                text = "The request exceeds the model context. Start a new conversation or use a shorter request."
+            else:
+                text = "The request failed or exceeded its limits."
             with contextlib.suppress(Exception):
                 await self.send({"type": "error", "request_id": message.request_id,
-                                 "code": "run_failed", "requires_reconnect": self.uncertain,
-                                 "message": "The request failed or exceeded its limits. Inspect the current view before retrying."})
+                                 "code": code, "requires_reconnect": self.uncertain,
+                                 "changes_applied": self.changes_applied,
+                                 "message": text})
 
     async def stop(self):
         if self.task is not None:
@@ -323,7 +313,9 @@ def create_app(settings=None, model=None):
                                       timeout=60, max_retries=0,
                                       http_client=DefaultAsyncHttpxClient(
                                           timeout=60, follow_redirects=False, trust_env=False))
-        model = OpenAIChatModel(settings.model, provider=OpenAIProvider(openai_client=provider_client))
+        model = VLLMChatModel(settings.model, provider=OpenAIProvider(openai_client=provider_client),
+                              token_url=settings.vllm_url.removesuffix("/").removesuffix("/v1") + "/tokenize",
+                              token=settings.vllm_token)
 
     @asynccontextmanager
     async def lifespan(_):

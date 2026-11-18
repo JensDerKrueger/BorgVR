@@ -153,6 +153,16 @@ struct VoiceAgentTests {
     try await service.replayCommandRecording(Data(gsc.utf8))
     try expect(session.currentSnapshot().transform == expected, "Agent transform GSC roundtrip changed state")
     try expect(try service.transferFunction(channel: 0).samples == expectedTF.samples, "Agent TF GSC roundtrip changed state")
+    for (prompt, expectedError) in [("context-before-change", VoiceAgentError.contextLimit),
+                                     ("context-after-change", .changesAppliedContextLimit),
+                                     ("verification-failed", .changesAppliedVerificationFailed)] {
+      agent.newConversation()
+      await agent.submit(prompt)
+      try await wait { !agent.busy }
+      try expect(agent.errorText == expectedError.localizedDescription,
+                 "Wrong partial-success/context error for \(prompt): \(agent.errorText ?? "")")
+      try expect(agent.connectionState == .disconnected, "Failed request must not be replayed")
+    }
     agent.newConversation()
     await agent.submit("wait")
     try await Task.sleep(for: .milliseconds(400))

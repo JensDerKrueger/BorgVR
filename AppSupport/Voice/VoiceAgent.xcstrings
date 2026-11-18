@@ -664,6 +664,34 @@
         }
       }
     },
+    "The request exceeds the AI model's context. Start a new conversation or shorten the request.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "The request exceeds the AI model's context. Start a new conversation or shorten the request." } },
+        "de": { "stringUnit": { "state": "translated", "value": "Die Anfrage überschreitet das Kontextlimit des KI-Modells. Beginnen Sie ein neues Gespräch oder kürzen Sie die Anfrage." } }
+      }
+    },
+    "Changes were applied, but the AI model's context was exhausted before the final check. Inspect the visualization and start a new conversation.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Changes were applied, but the AI model's context was exhausted before the final check. Inspect the visualization and start a new conversation." } },
+        "de": { "stringUnit": { "state": "translated", "value": "Änderungen wurden ausgeführt, aber vor der abschließenden Prüfung war der Kontext des KI-Modells ausgeschöpft. Prüfen Sie die Darstellung und beginnen Sie ein neues Gespräch." } }
+      }
+    },
+    "Changes were applied, but the final check could not be completed. Inspect the visualization before continuing.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Changes were applied, but the final check could not be completed. Inspect the visualization before continuing." } },
+        "de": { "stringUnit": { "state": "translated", "value": "Änderungen wurden ausgeführt, aber die abschließende Prüfung konnte nicht beendet werden. Prüfen Sie die Darstellung, bevor Sie fortfahren." } }
+      }
+    },
+    "It is unclear whether the last change was fully applied. Inspect the visualization before starting a new conversation; the command will not be repeated automatically.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "It is unclear whether the last change was fully applied. Inspect the visualization before starting a new conversation; the command will not be repeated automatically." } },
+        "de": { "stringUnit": { "state": "translated", "value": "Es ist unklar, ob die letzte Änderung vollständig ausgeführt wurde. Prüfen Sie die Darstellung, bevor Sie ein neues Gespräch beginnen. Der Befehl wird nicht automatisch wiederholt." } }
+      }
+    },
     "The command could not be completed. Inspect the visualization before continuing.": {
       "extractionState": "manual",
       "localizations": {

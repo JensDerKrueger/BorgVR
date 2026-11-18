@@ -601,6 +601,27 @@ delete the model cache as well: `sudo docker compose down --volumes`. This does 
 
 ## 9. Development and protocol
 
+### Automatic context maintenance
+
+Before every model request, the agent counts the actual chat input through vLLM's
+authenticated `/tokenize` endpoint, including tool schemas and images. It uses the smaller
+of the installed model's reported context and `--context-length`, reserves the configured
+answer budget and a safety margin, and starts compacting at 85% of the remaining input budget.
+Older completed turns become bounded excerpts, stale images are removed, and large or
+superseded tool results can be reduced to marked previews or receipts. No second model is
+used for summarization. The current instruction, tool arguments and call/result pairs are
+preserved; app state and actual TF resolution are unchanged. Old details may be forgotten;
+the agent must read current state again rather than treat excerpts as authoritative.
+
+If even the active request cannot fit, it stops safely. A rejected context-overflow model
+request may be retried once after further compaction; already executed tools are never
+replayed. Context exhaustion and a failed final verification after confirmed changes have
+distinct localized messages in the updated native app. Uncertain command completion remains
+a separate warning. Updating the container enables context maintenance; rebuild/update the
+native app as well for the new error messages. A larger context can still help with a complex
+single request but is not a substitute for maintenance. The existing 64-turn session limit
+remains; a new conversation starts with fresh state.
+
 ### Diagnose tool calls without native data
 
 The agent requests `strict: true` for no-argument tools such as `get_application_state`

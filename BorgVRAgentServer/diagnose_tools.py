@@ -9,7 +9,7 @@ from openai import AsyncOpenAI, DefaultAsyncHttpxClient
 from pydantic import ValidationError
 from pydantic_ai import ModelRetry, UsageLimits
 from pydantic_ai.exceptions import UnexpectedModelBehavior
-from pydantic_ai.models.openai import OpenAIChatModel
+from borgvr_agent.context import VLLMChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
 
 from borgvr_agent.app import Session, Settings
@@ -145,7 +145,9 @@ async def main():
     async with AsyncOpenAI(base_url=settings.vllm_url, api_key=settings.vllm_token,
         timeout=60, max_retries=0, http_client=DefaultAsyncHttpxClient(
             timeout=60, follow_redirects=False, trust_env=False)) as client:
-        model = OpenAIChatModel(settings.model, provider=OpenAIProvider(openai_client=client))
+        model = VLLMChatModel(settings.model, provider=OpenAIProvider(openai_client=client),
+                              token_url=settings.vllm_url.removesuffix("/").removesuffix("/v1") + "/tokenize",
+                              token=settings.vllm_token)
         return await diagnose(settings, model, catalog, args.scenario)
 
 

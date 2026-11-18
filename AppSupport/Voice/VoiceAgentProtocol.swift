@@ -1,9 +1,10 @@
 import Foundation
 import CoreFoundation
 
-enum VoiceAgentError: LocalizedError {
+enum VoiceAgentError: LocalizedError, Equatable {
   case configuration, protocolViolation, contextChanged, timedOut, imageTooLarge
   case permissions, speechUnavailable, connection, commandFailed
+  case contextLimit, changesAppliedContextLimit, changesAppliedVerificationFailed, completionUncertain
 
   var errorDescription: String? {
     let key: String
@@ -17,6 +18,10 @@ enum VoiceAgentError: LocalizedError {
       case .speechUnavailable: key = "Speech recognition is unavailable. Try text input or change the on-device recognition setting."
       case .connection: key = "The agent connection failed. Check the server, token, certificate and network access."
       case .commandFailed: key = "The command could not be completed. Inspect the visualization before continuing."
+      case .contextLimit: key = "The request exceeds the AI model's context. Start a new conversation or shorten the request."
+      case .changesAppliedContextLimit: key = "Changes were applied, but the AI model's context was exhausted before the final check. Inspect the visualization and start a new conversation."
+      case .changesAppliedVerificationFailed: key = "Changes were applied, but the final check could not be completed. Inspect the visualization before continuing."
+      case .completionUncertain: key = "It is unclear whether the last change was fully applied. Inspect the visualization before starting a new conversation; the command will not be repeated automatically."
     }
     return NSLocalizedString(key, tableName: "VoiceAgent", comment: "")
   }
@@ -57,6 +62,12 @@ struct VoiceAgentEndpoint: Equatable {
 }
 
 enum VoiceAgentPolicy {
+  static func failure(code: String?, changesApplied: Bool, completionUncertain: Bool) -> VoiceAgentError {
+    if completionUncertain { return .completionUncertain }
+    if code == "context_limit" { return changesApplied ? .changesAppliedContextLimit : .contextLimit }
+    return changesApplied ? .changesAppliedVerificationFailed : .commandFailed
+  }
+
   static let maximumFrameBytes = 4 * 1024 * 1024
   static let maximumResultBytes = 256 * 1024
   static let allowed: Set<String> = [

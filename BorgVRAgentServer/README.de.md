@@ -587,6 +587,29 @@ Zertifikatswechsel, Fehlerbehebung und Deinstallation stehen im englischen Leitf
 
 ## 8. Tests
 
+### Automatische Kontextpflege
+
+Vor jeder Modellanfrage zählt der Agent die tatsächlichen Eingabetokens über vLLMs
+authentifizierten Endpunkt `/tokenize`, einschließlich Werkzeugbeschreibungen und Bildern.
+Es gilt das kleinere Limit aus dem vom Modell gemeldeten Kontext und `--context-length`.
+Antwortlänge und Sicherheitsreserve werden vorher abgezogen. Ab 85 % dieses Eingabebudgets
+werden ältere abgeschlossene Gesprächsteile zu begrenzten Auszügen verdichtet, veraltete
+Bilder entfernt und große oder überholte Werkzeugergebnisse bei Bedarf durch gekennzeichnete
+Vorschauen oder Ausführungsbelege ersetzt. Dafür läuft kein zweites Modell. Der aktuelle
+Auftrag, Werkzeugargumente und zusammengehörige Aufrufe und Antworten bleiben erhalten;
+Anwendungszustand und tatsächliche TF-Auflösung ändern sich nicht. Ältere Details können
+verloren gehen; der Agent muss den aktuellen Zustand erneut abfragen.
+
+Passt selbst der aktive Auftrag nicht mehr, wird sicher angehalten. Eine wegen Kontextüberlauf
+abgelehnte Modellanfrage darf nach weiterer Verdichtung einmal wiederholt werden, bereits
+ausgeführte Werkzeuge dagegen nicht. Die aktualisierte native App unterscheidet zwischen
+Kontextüberlauf ohne Änderung, bestätigten Änderungen mit fehlgeschlagener Abschlussprüfung
+und unklarem Befehlsabschluss. Das Container-Update aktiviert die Kontextpflege; für die neuen
+Fehlermeldungen muss auch die native App aktualisiert bzw. neu gebaut werden. Ein größerer
+Kontext hilft weiterhin bei umfangreichen Einzelaufträgen, ersetzt diese Pflege aber nicht.
+Die bestehende Grenze von 64 Anfragen pro Sitzung bleibt bestehen; ein neues Gespräch beginnt
+mit einer frischen Zustandsabfrage.
+
 Die Entwicklertests laufen ohne GPU mit einem deterministischen Testmodell durch die echte
 Pydantic-AI-Schleife. Getestet werden unter anderem Anmeldung, Eingabevalidierung,
 Werkzeugbeschränkungen, Bilder, Abbruch, Zeitlimits und veraltete Antworten. Den Test auf

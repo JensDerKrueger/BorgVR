@@ -175,16 +175,33 @@ are rejected, not delivered to the model. On dataset close, disconnect the agent
   resolution. Unknown message fields, duplicate JSON keys and NaN/infinite values are rejected.
 - User text: 8192 characters; result/arguments: 256 KiB; PNG: 2 MiB, one frame, at most
   2048 pixels per axis. No externally fetched image URLs.
-- History: 8 MiB serialized; only the newest two images remain in context. The model's
-  configured token context (default 16K, small profile 8K) may require a new conversation earlier.
+- History: 8 MiB serialized; at most the newest two images remain. Before each model request,
+  the agent uses vLLM's authenticated `/tokenize` endpoint with the same chat messages, tools,
+  image inputs and template options as generation. The smaller of the configured and reported
+  context limits applies, with room reserved for the configured answer length and a safety margin.
+  Above 85% of that input budget, completed older turns become bounded, explicitly untrusted
+  excerpts. Older screenshots and superseded tool-result details can be omitted; large TF
+  results become marked previews. Active user text, tool-call arguments, call/result IDs and
+  failures remain intact. This changes conversation memory, not the actual TF or app state.
+  If necessary the older-turn summary is discarded. An oversized active request fails safely.
+  Token counting has a 15-second absolute timeout and a 4 MiB response limit; counting failures
+  do not silently disable the budget check. A rejected context-overflow model request can be
+  retried once with a smaller history, without rerunning completed tools.
 - Initial hello: 10 s; application inactivity: 300 s; send: 10 s; tool completion: 45 s;
   one model HTTP call: 60 s without SDK retries; complete user request including queue: 180 s.
 - One user request: at most 16 model requests/24 tool calls; output tokens are configured
   with `BORGVR_MAX_OUTPUT_TOKENS` (default 2048). Invalid arguments may be corrected once; dispatched actions have no
   transport-level automatic retries.
 
-Errors contain stable codes (`busy`, `run_failed`, `invalid_message`) and generic text,
-not internal exceptions or confidential payloads. Protocol violations close with code 1008.
+Errors contain stable codes (`busy`, `run_failed`, `context_limit`, `invalid_message`) and generic text,
+not internal exceptions or confidential payloads. Run errors include `changes_applied`, true
+only after at least one successful mutation result in that turn. It does not mean the visual
+goal was verified, or that a later pending command completed. `requires_reconnect` still takes
+precedence when a tool's completion is uncertain. Native clients use their own local mutation
+receipts to distinguish context exhaustion before changes, confirmed changes with a failed
+final check, and uncertain completion. They must not trust remote success claims or repeat
+mutations to recover from these errors. Older clients may show their generic error text.
+Protocol violations close with code 1008.
 Disconnect cancels the active run and drops conversation data. The framework tests exercise
 this protocol with a deterministic test model; the installation smoke test uses actual vLLM.
 
