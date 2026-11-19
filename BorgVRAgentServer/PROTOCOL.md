@@ -221,8 +221,18 @@ meant, or request specific help when an investigation is inconclusive:
 ```
 
 Questions are at most 500 characters, answers 2000. A correlated reply continues the same
-task, unlike an ordinary new prompt. At most one question is asked per intervention per
-task. The overall deadline and explicit cancellation remain active while waiting.
+task, unlike an ordinary new prompt. The internal tool accepts only `purpose`
+(`intervention_intent`, `view_change`, `help`) and `language` (`de`, `en`). The server supplies
+a single-purpose question from localized templates; the model cannot bundle several decisions
+into a generated yes/no question. Explanations belong in a separate progress message.
+Each purpose is available once per intervention per task, so help intent and permission
+can be answered separately. Replies retain the exact question and purpose in model context.
+A yes to help intent never grants additional permissions or saves a rule. A no or conditional
+answer to `view_change` makes the task read-only; only an unconditional `Ja` or `Yes` to that
+permission question allows further mutations. Reads, render waits and screenshots remain
+available. Tool filtering and the execution guard both enforce this restriction; no native
+command is sent for a denied mutation. The overall deadline and explicit cancellation
+remain active while waiting. This extension requires only a server update, not an app update.
 
 Only after explicit feedback may `propose_visualization_rule` emit `rule_proposal` with
 `request_id`, `proposal_id`, and `text` (1 to 500 characters, at most eight pending proposals).

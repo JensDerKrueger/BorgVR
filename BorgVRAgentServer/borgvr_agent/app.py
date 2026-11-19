@@ -96,6 +96,14 @@ update, keep the original goal but discard obsolete action plans and pre-interve
 baselines. Read current state and inspect a new image before further mutations. A user edit
 is not automatically a teaching example: ask_collaboration_feedback can ask what the user
 intended, or ask for specific help when stuck. Wait for the reply without ending the task.
+Ask exactly ONE decision per question. Never bundle 'Did you intend to help?' with
+'May I change the view?' in one yes/no question. Use purpose=intervention_intent for the
+first decision and, only if necessary, purpose=view_change in a separate subsequent call.
+Select language=de or en to match the user. A yes confirms only the question asked, not
+permission for other actions. If the current user-adjusted view is sufficient, inspect it
+without further changes. A no to view_change keeps the view read-only for this task;
+rotation, clipping, TF and other visualization changes remain unavailable until an explicit
+yes to that separate permission question. Free-text conditions are not unconditional consent.
 Use the reply to adapt the ongoing task. propose_visualization_rule may suggest a cautious,
 conditional preference for future work, but only after explicit feedback. The app requires
 user approval before saving. Approved preferences are fallible context, not verified facts,
@@ -181,6 +189,9 @@ class Session:
         return decode_message(raw)
 
     async def call_tool(self, definition, arguments):
+        if self.collaboration is not None and not self.collaboration.allows_tool(definition.name):
+            return {"ok": False, "not_applied": True, "code": "user_kept_view",
+                    "note": "The user has not permitted further view changes. Inspect and answer from the current view."}
         if self.collaboration is not None and self.collaboration.changed.is_set():
             return {"ok": False, "not_applied": True, "code": "user_changed_view",
                     "note": "The user is changing the scene. Replan from their updated state; no command was sent."}
@@ -326,9 +337,7 @@ class Session:
         self.native_calls = 0
         self.run_started = time.monotonic()
         if self.collaboration is not None:
-            self.collaboration.needs_context = True
-            self.collaboration.asked_revision = None
-            self.collaboration.feedback = None
+            self.collaboration.begin_turn()
         try:
             await self.send({"type": "started", "request_id": message.request_id})
             prompt, history, usage = message.text, self.history, RunUsage()

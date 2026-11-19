@@ -11,7 +11,7 @@ import pytest
 
 from borgvr_agent.app import Session
 from borgvr_agent.budget import ControlBudget
-from borgvr_agent.collaboration import Collaboration
+from borgvr_agent.collaboration import Collaboration, QUESTIONS
 from borgvr_agent.protocol import CollaborationFeedback, Hello, ProtocolError, RuleDecision, ToolDefinition, ToolResult, UserChange
 from test_agent import STATE, ROTATE, SETTINGS, connection, hello, open_session, reply, user
 
@@ -142,7 +142,7 @@ def test_feedback_then_explicit_rule_approval_and_next_turn_knowledge():
         names = {tool.name for tool in info.function_tools}
         assert {"ask_collaboration_feedback", "propose_visualization_rule"} <= names
         if count == 1:
-            return ModelResponse(parts=[ToolCallPart("ask_collaboration_feedback", {"question": "Was your rotation intended to help?"}, tool_call_id="q")])
+            return ModelResponse(parts=[ToolCallPart("ask_collaboration_feedback", {"purpose": "intervention_intent", "language": "en"}, tool_call_id="q")])
         if count == 2:
             assert any(isinstance(part, ToolReturnPart) and part.content.get("user_feedback") == "Yes, inspect perpendicular sections."
                        for message in messages for part in message.parts if isinstance(part, ToolReturnPart))
@@ -191,6 +191,97 @@ def test_unconfirmed_rule_is_never_persisted_and_feedback_is_required():
         with pytest.raises(ProtocolError):
             collaboration.accept_feedback(CollaborationFeedback(type="collaboration_feedback", request_id="other", question_id="stale", text="yes"))
     asyncio.run(check())
+
+
+def test_intent_and_view_permission_are_two_independent_questions_in_one_intervention():
+    count = 0
+    async def model(messages, info):
+        nonlocal count
+        count += 1
+        if count <= 2:
+            purpose = "intervention_intent" if count == 1 else "view_change"
+            return ModelResponse(parts=[ToolCallPart("ask_collaboration_feedback",
+                {"purpose": purpose, "language": "de"}, tool_call_id=f"q{count}")])
+        answers = [part.content for message in messages for part in message.parts
+                   if isinstance(part, ToolReturnPart) and part.tool_name == "ask_collaboration_feedback"]
+        assert answers[0]["purpose"] == "intervention_intent" and answers[0]["user_feedback"] == "Ja"
+        assert answers[1]["purpose"] == "view_change" and answers[1]["user_feedback"] == "Nein"
+        assert answers[1]["view_changes_allowed"] is False
+        assert "rotate_view" not in {tool.name for tool in info.function_tools}
+        assert "get_application_state" in {tool.name for tool in info.function_tools}
+        return ModelResponse(parts=[TextPart("Ich untersuche deine aktuelle Ansicht ohne sie zu verändern.")])
+    with connection(FunctionModel(model)) as client, open_session(client) as ws:
+        ws.send_json({**hello([STATE, ROTATE]), "collaboration": True})
+        ws.receive_json()
+        ws.send_json(user())
+        ws.receive_json()
+        for purpose, answer in [("intervention_intent", "Ja"), ("view_change", "Nein")]:
+            question = ws.receive_json()
+            assert question["type"] == "collaboration_question"
+            assert question["text"] == QUESTIONS[purpose]["de"]
+            ws.send_json({"type": "collaboration_feedback", "request_id": "turn-1",
+                          "question_id": question["question_id"], "text": answer})
+        assert ws.receive_json()["text"].startswith("Ich untersuche")
+        assert ws.receive_json()["type"] == "completed"
+    assert count == 3
+
+
+@pytest.mark.parametrize("answer,allowed", [("Nein", False), ("No", False), ("Ja", True), ("yes", True),
+    ("Ja, aber die TF nicht verändern.", False), ("Yes, but do not rotate.", False)])
+def test_permission_is_scoped_and_conditional_answers_do_not_grant_unrestricted_changes(answer, allowed):
+    async def check():
+        sent = []
+        async def send(event):
+            sent.append(event)
+        session = SimpleNamespace(send=send, request_id="request", tools=[])
+        collaboration = Collaboration(session, [])
+        ask = collaboration.tools()[0].function
+        async def respond(purpose, text):
+            task = asyncio.create_task(ask(purpose, "de"))
+            await asyncio.sleep(0)
+            event = sent[-1]
+            collaboration.accept_feedback(CollaborationFeedback(type="collaboration_feedback",
+                request_id="request", question_id=event["question_id"], text=text))
+            return await task
+        permission = await respond("view_change", answer)
+        assert permission["view_changes_allowed"] is allowed
+        assert collaboration.feedback is None, "Permission is not teaching feedback"
+        intent = await respond("intervention_intent", "Ja")
+        assert intent["user_feedback"] == "Ja" and collaboration.view_changes_allowed is allowed
+        assert "view_changes_allowed" not in intent, "Intent feedback must not imply a permission grant"
+        assert len(sent) == 2
+        repeated = await ask("view_change", "de")
+        assert repeated["already_asked"] and repeated["user_feedback"] == answer and len(sent) == 2
+        tools = [SimpleNamespace(name=name) for name in ["rotate_view", "set_transfer_function", "capture_screenshot", "get_application_state"]]
+        prepared = {tool.name for tool in await collaboration.prepare_tools(None, tools)}
+        assert {"capture_screenshot", "get_application_state"} <= prepared
+        assert ("rotate_view" in prepared) is allowed and ("set_transfer_function" in prepared) is allowed
+        collaboration.begin_turn()
+        assert collaboration.answers == {} and collaboration.feedback is None and collaboration.view_changes_allowed
+    asyncio.run(check())
+
+
+def test_declined_view_changes_cannot_bypass_tool_preparation_or_reach_borgvr():
+    async def check():
+        session = Session(None, SETTINGS, None, asyncio.Semaphore(1))
+        session.collaboration = Collaboration(session, [])
+        session.collaboration.view_changes_allowed = False
+        result = await session.call_tool(ToolDefinition.model_validate(ROTATE), {"axis": [0, 1, 0], "degrees": 20})
+        assert result["not_applied"] and result["code"] == "user_kept_view"
+        assert session.native_calls == 0 and session.pending is None and not session.changes_applied
+    asyncio.run(check())
+
+
+def test_question_schema_cannot_contain_model_generated_compound_questions():
+    collaboration = Collaboration(SimpleNamespace(), [])
+    schema = collaboration.tools()[0].function_schema.json_schema
+    assert set(schema["properties"]) == {"purpose", "language"}
+    assert set(schema["required"]) == {"purpose", "language"}
+    assert schema["additionalProperties"] is False
+    assert set(schema["properties"]["purpose"]["enum"]) == set(QUESTIONS)
+    for translations in QUESTIONS.values():
+        assert set(translations) == {"de", "en"}
+        assert all(text.count("?") == 1 for text in translations.values())
 
 
 def test_cancel_during_human_pause_does_not_resume():

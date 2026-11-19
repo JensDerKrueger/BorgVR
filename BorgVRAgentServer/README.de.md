@@ -453,6 +453,13 @@ Sprache oder Gesprächsbuttons setzen denselben Auftrag fort; gewöhnliche neue 
 unterbrechen ihn weiterhin. Bei unklaren Ergebnissen kann er um konkrete Hilfe bitten.
 Zeit-, Aufruf- und Kontextgrenzen gelten weiterhin, auch während einer Rückfrage.
 
+Eine Ja/Nein-Frage enthält immer nur eine Entscheidung. Die Frage, ob eine Änderung als
+Hilfe gedacht war, ist von der Erlaubnis für eine weitere Ansicht getrennt. Ein Nein zu
+einer anderen Ansicht sperrt weitere Darstellungsänderungen im laufenden Auftrag; Lesen
+und Screenshots bleiben möglich. Bedingte Antworten gelten nicht als uneingeschränkte
+Erlaubnis. Ein Ja zur Hilfe-Frage erlaubt weder automatisch weitere Änderungen noch das
+Speichern einer Regel. Die Fragen werden serverseitig auf Deutsch oder Englisch formuliert.
+
 Wiederverwendbare Präferenzen bleiben Vorschläge, bis Sie **Regel merken** bestätigen.
 Höchstens 16 Regeln mit je 500 Zeichen werden auf diesem Gerät gespeichert und künftigen
 Gesprächen mitgegeben, außerhalb von SharePlay und GSC. Löschen ist unter **Einstellungen >

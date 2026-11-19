@@ -60,7 +60,7 @@ async def model(messages, info):
             assert feedback["user_feedback"] == "Yes, I wanted to show a better section."
             name, args = "propose_visualization_rule", {"rule": "When asked to inspect contents, consider a section perpendicular to the viewing direction."}
         elif resumed:
-            name, args = "ask_collaboration_feedback", {"question": "Was your rotation intended to help?"}
+            name, args = "ask_collaboration_feedback", {"purpose": "intervention_intent", "language": "en"}
         elif "report_progress" in names:
             await asyncio.sleep(30)
             raise RuntimeError("Manual change did not cancel old planning")

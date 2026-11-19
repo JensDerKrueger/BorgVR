@@ -435,6 +435,12 @@ buttons; this reply continues the same task. Ordinary new prompts still interrup
 When investigation is inconclusive, it can ask for concrete help instead of claiming success.
 Native/time/context limits still apply, including while waiting for an answer.
 
+Each yes/no question covers a single decision. Whether a change was intended as help is
+separate from permission to choose another view. Declining a new view makes the active task
+read-only; reads and screenshots remain available. Conditional replies do not grant
+unrestricted permission. Saying yes to help intent neither grants further permissions nor
+saves a rule. The server supplies single-purpose questions in German or English.
+
 Reusable preferences are only proposals until you explicitly choose **Remember rule**.
 Up to 16 approved rules (500 characters each) stay on the current device, outside SharePlay
 and GSC, and are sent to future conversations. Remove them under **Settings > AI Assistant >

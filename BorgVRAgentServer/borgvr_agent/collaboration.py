@@ -4,6 +4,7 @@ import asyncio
 from contextlib import suppress
 from copy import deepcopy
 from dataclasses import replace
+from typing import Literal
 import uuid
 
 from pydantic_ai import ModelRetry, Tool
@@ -16,6 +17,24 @@ from .protocol import MAX_RESULT_BYTES, ProtocolError, json_bytes
 
 class ReplanForUser(Exception):
     pass
+
+
+QuestionPurpose = Literal["intervention_intent", "view_change", "help"]
+QuestionLanguage = Literal["de", "en"]
+QUESTIONS = {
+    "intervention_intent": {
+        "de": "War deine Änderung als Hilfe für mich gedacht?",
+        "en": "Was your change intended to help me?",
+    },
+    "view_change": {
+        "de": "Darf ich für die weitere Untersuchung eine andere Ansicht einstellen?",
+        "en": "May I change the current view for further investigation?",
+    },
+    "help": {
+        "de": "Kannst du mir eine Darstellung zeigen, in der die gesuchten Details besser erkennbar sind?",
+        "en": "Can you show me a view in which the details we are looking for are easier to see?",
+    },
+}
 
 
 class Collaboration(AbstractCapability):
@@ -32,8 +51,23 @@ class Collaboration(AbstractCapability):
         self.feedback = None
         self.question = None
         self.asked_revision = None
+        self.answers = {}
+        self.view_changes_allowed = True
         self.proposals = {}
         self.needs_context = True
+
+    def begin_turn(self):
+        self.needs_context = True
+        self.asked_revision = None
+        self.answers.clear()
+        self.feedback = None
+        self.view_changes_allowed = True
+
+    def allows_tool(self, name):
+        return self.view_changes_allowed or not (name.startswith("set_") or name == "rotate_view")
+
+    async def prepare_tools(self, ctx, tool_defs):
+        return [tool for tool in tool_defs if self.allows_tool(tool.name)]
 
     def update(self, event):
         if len(json_bytes(event.state)) > MAX_RESULT_BYTES or (not event.active and event.state is None):
@@ -109,15 +143,21 @@ class Collaboration(AbstractCapability):
                 await operation
 
     def tools(self):
-        async def ask_collaboration_feedback(question: str) -> dict:
-            """Ask the user about their intervention or request specific visual help, then wait for their reply.
+        async def ask_collaboration_feedback(purpose: QuestionPurpose, language: QuestionLanguage) -> dict:
+            """Ask exactly one localized yes/no question and wait for its scoped reply.
 
-            Ask once per intervention. Do not assume a manual action was a teaching example.
+            intervention_intent asks ONLY whether the user's change was intended as help.
+            view_change asks ONLY permission to change the current view for investigation.
+            help asks ONLY whether the user can show a more informative view; explain the
+            missing evidence separately using report_progress. Select de or en to match the user.
+            Never combine these decisions. Each purpose is available once per intervention.
+            A yes to intervention_intent is NOT permission to change the view or save a rule.
             """
-            if not question.strip() or len(question) > 500:
-                raise ModelRetry("Ask a short, concrete question (1 to 500 characters).")
-            if self.asked_revision == self.revision:
-                return {"already_asked": True, "feedback": self.feedback}
+            key = (self.revision, purpose)
+            if key in self.answers:
+                return {"already_asked": True, **self.answers[key]}
+            question = QUESTIONS[purpose][language]
+            revision = self.revision
             self.asked_revision = self.revision
             identifier = uuid.uuid4().hex
             future = asyncio.get_running_loop().create_future()
@@ -125,9 +165,21 @@ class Collaboration(AbstractCapability):
             try:
                 await self.session.send({"type": "collaboration_question", "request_id": self.session.request_id,
                                          "question_id": identifier, "text": question})
-                self.feedback = await future
-                return {"user_feedback": self.feedback, "revision": self.revision,
-                        "note": "Feedback is task context, not permission to persist a rule."}
+                answer = await future
+                if purpose == "view_change":
+                    # Only an unconditional yes grants this permission. Free-text conditions
+                    # remain task context, not permission to discard the user's view.
+                    self.view_changes_allowed = (revision == self.revision and
+                                                 answer.strip().casefold() in {"yes", "ja"})
+                else:
+                    self.feedback = answer
+                result = {"question": question, "purpose": purpose, "user_feedback": answer,
+                          "revision": revision,
+                          "note": "The reply applies ONLY to this question. Help intent is not permission to change the view or persist a rule."}
+                if purpose == "view_change":
+                    result["view_changes_allowed"] = self.view_changes_allowed
+                self.answers[key] = result
+                return result
             finally:
                 self.question = None
 
