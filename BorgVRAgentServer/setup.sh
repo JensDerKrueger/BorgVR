@@ -34,6 +34,8 @@ usage() {
     '  --firewall-zone Z   firewalld zone (default: its default zone); needs --open-firewall.' \
     '  --gpu INDEX_OR_UUID  Select one GPU (default 0; AMD also accepts an index).' \
     '                      CUDA also accepts all; WSL requires this explicit all-GPU access.' \
+    '  --tensor-parallel-size N  Shard one model across N GPUs (1..8; default 1).' \
+    '                      Multiple GPUs currently require --backend cuda --gpu all.' \
     '  --backend cuda|rocm  Select NVIDIA CUDA or AMD ROCm (install/init/configure).' \
     '  --profile NAME      Model preset; list with: ./setup.sh profiles.' \
     '  --model REPO --model-revision REV --tool-parser NAME  Custom image-capable model.' \
@@ -57,7 +59,7 @@ die() { printf 'Error: %s\n' "$*" >&2; exit 1; }
 while (($#)); do
   case "$1" in
     install|init|configure|model|profiles|doctor|start|stop|restart|update|status|logs|test|uninstall|_dev-agent-up|_dev-agent-health) COMMAND="$1"; shift ;;
-    --gpu|--backend|--profile|--model|--model-revision|--tool-parser|--reasoning-parser|--thinking|--dtype|--quantization|--context-length|--max-seqs|--max-output-tokens|--gpu-memory-fraction|--min-free-gib|--enforce-eager|--cpu-offload-gb|--vllm-image)
+    --gpu|--tensor-parallel-size|--backend|--profile|--model|--model-revision|--tool-parser|--reasoning-parser|--thinking|--dtype|--quantization|--context-length|--max-seqs|--max-output-tokens|--gpu-memory-fraction|--min-free-gib|--enforce-eager|--cpu-offload-gb|--vllm-image)
       (($# >= 2)) || die "Missing value for $1"
       MODEL_ARGS+=("$1" "$2"); shift 2 ;;
     --yes|--remove-images|--remove-checkout|--files-only) UNINSTALL_ARGS+=("$1"); shift ;;
@@ -141,10 +143,11 @@ compose() {
 }
 check_gpu() {
   [[ "$(uname -s)" == Linux && "$(uname -m)" == x86_64 ]] || die 'The inference deployment targets Linux x86_64 with an NVIDIA or AMD GPU.'
-  local gpu image dtype render_gid video_gid
+  local gpu image dtype parallel render_gid video_gid
   gpu="$(python3 "$DIR/configure.py" get BORGVR_GPU)"
   image="$(python3 "$DIR/configure.py" get BORGVR_VLLM_IMAGE)"
   dtype="$(python3 "$DIR/configure.py" get BORGVR_DTYPE)"
+  parallel="$(python3 "$DIR/configure.py" get BORGVR_TENSOR_PARALLEL_SIZE)"
   GPU_ARGS=()
   if [[ "$BACKEND" == cuda ]]; then
     check_nvidia_driver || die 'A working NVIDIA driver is required (install the Windows driver when using WSL).'
@@ -161,8 +164,19 @@ check_gpu() {
   fi
   printf 'Checking %s in the configured vLLM image. Its first download can be large.\n' "$BACKEND"
   "${DOCKER[@]}" run --rm "${GPU_ARGS[@]}" --cap-drop ALL --security-opt no-new-privileges:true \
-    -e "BORGVR_PROBE_DTYPE=$dtype" --entrypoint python3 "$image" -c \
-    'import os,torch; assert torch.cuda.is_available(), "GPU runtime unavailable"; dtype=os.environ["BORGVR_PROBE_DTYPE"]; x=torch.ones(1,device="cuda",dtype=getattr(torch,dtype) if dtype!="auto" else torch.float32); torch.cuda.synchronize(); free,total=torch.cuda.mem_get_info(); print(torch.cuda.get_device_name(0),"ROCm" if torch.version.hip else "CUDA",torch.version.hip or torch.version.cuda,"free/total GiB",round(free/2**30,1),round(total/2**30,1),"OK")' \
+    -e "BORGVR_PROBE_DTYPE=$dtype" -e "BORGVR_PROBE_TENSOR_PARALLEL_SIZE=$parallel" --entrypoint python3 "$image" -c \
+    'import os,torch
+assert torch.cuda.is_available(), "GPU runtime unavailable"
+parallel=int(os.environ["BORGVR_PROBE_TENSOR_PARALLEL_SIZE"])
+available=torch.cuda.device_count()
+assert available >= parallel, f"Tensor parallelism requires {parallel} GPUs, but only {available} are visible"
+dtype=os.environ["BORGVR_PROBE_DTYPE"]
+for index in range(parallel):
+    x=torch.ones(1,device=f"cuda:{index}",dtype=getattr(torch,dtype) if dtype!="auto" else torch.float32)
+    torch.cuda.synchronize(index)
+    free,total=torch.cuda.mem_get_info(index)
+    print("GPU",index,torch.cuda.get_device_name(index),"ROCm" if torch.version.hip else "CUDA",torch.version.hip or torch.version.cuda,"free/total GiB",round(free/2**30,1),round(total/2**30,1),"OK")
+print("Tensor parallel size:",parallel,"visible GPUs:",available)' \
     || die 'GPU/dtype probe failed. Check driver, backend/image compatibility and selected GPU. Try float16 if bfloat16 is unsupported. No driver was changed.'
   compose config --quiet
 }
@@ -286,6 +300,7 @@ case "$COMMAND" in
     fi
     compose config --quiet
     compose pull
+    if [[ "$(python3 "$DIR/configure.py" get BORGVR_TENSOR_PARALLEL_SIZE)" != 1 ]]; then check_gpu; fi
     check_service_secrets
     if ((AGENT_IMAGE_SET)); then python3 "$DIR/configure.py" set-agent-image "$AGENT_IMAGE"; fi
     start_services || die 'Update did not become healthy. Inspect setup.sh logs; configuration backups are in runtime/env-before-update-*.'

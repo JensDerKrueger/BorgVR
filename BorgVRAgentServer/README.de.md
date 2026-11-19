@@ -240,6 +240,52 @@ IPv4-Schnittstellen frei und braucht bewusste Netzabsicherung. Port ist **8766**
 GPU **0** (`--gpu INDEX` oder NVIDIA-GPU-UUID). CUDA erlaubt zusätzlich `--gpu all`;
 damit werden ausdrücklich alle NVIDIA-GPUs zugänglich, wie für WSL erforderlich.
 
+### Ein Modell auf mehrere NVIDIA-GPUs verteilen
+
+`--gpu all` gibt die Karten nur für Docker frei. Erst `--tensor-parallel-size 2` verteilt
+ein Modell tatsächlich auf zwei GPUs desselben Rechners. Zum Umschalten einer vorhandenen
+Installation, beispielsweise auf zwei RTX PRO 5000 Blackwell:
+
+```
+git pull --ff-only
+sudo ./setup.sh model qwen38-27b --gpu all --tensor-parallel-size 2
+```
+
+Eine gerade laufende Installation zuerst fertig werden lassen. Deinstallation, erneute
+Host-/Port-Angabe oder neue Zertifikate sind nicht nötig. Falls der Entwicklungsmodus
+aktiviert ist, vor dem Modellwechsel `sudo ./setup.sh dev disable` ausführen und ihn danach
+wieder aktivieren. Modellwechsel unterbrechen laufende KI-Aufträge.
+
+Bei einer neuen Installation beide Optionen direkt an `install` anhängen:
+
+```
+sudo ./setup.sh install --backend cuda --profile qwen38-27b \
+  --gpu all --tensor-parallel-size 2 \
+  --host 134.91.11.251 --bind 134.91.11.251 --port 8766 --open-firewall
+```
+
+Tensor-Parallelität ist auf 1 bis 8 GPUs begrenzt; Standard ist weiterhin 1. Die GPU-Auswahl
+und Parallelität bleiben bei späteren Modellwechseln erhalten. Zurück zu einer Karte geht
+mit `sudo ./setup.sh model qwen35-4b --gpu 0 --tensor-parallel-size 1`.
+Mehrere GPUs werden derzeit nur für NVIDIA/CUDA unterstützt; ROCm bleibt bei einer Karte.
+
+`doctor`, die Installation und Multi-GPU-Updates prüfen Sichtbarkeit und eine kleine
+Speicherallokation auf jeder benötigten Karte. Zusätzlich prüft der vLLM-Starter die Anzahl
+sichtbarer GPUs, bevor Worker gestartet werden. vLLM verwendet lokale Prozesse (`mp`),
+keinen zusätzlichen Ray-Dienst. Das bestehende private Shared Memory von 16 GiB bleibt
+erhalten; Host-IPC oder zusätzliche Netzwerkfreigaben sind nicht nötig.
+
+```
+sudo ./setup.sh doctor
+sudo ./setup.sh test
+nvidia-smi
+```
+
+Der Start muss ausreichend GPUs und freien Speicher vorfinden; Modellarchitektur, Kontext
+und GPU-Verbindung beeinflussen die Kompatibilität und Geschwindigkeit. Die 2-Karten-
+Konfiguration ist durch Konfigurationstests abgesichert, aber noch nicht auf diesem Rechner
+gemessen. Der BorgVR-Client muss für den GPU-Wechsel nicht angepasst werden.
+
 ### Modelle und Grafikkarten wählen
 
 Das **vLLM-Image** enthält die Inferenzsoftware und CUDA/ROCm, nicht automatisch das Modell.

@@ -108,6 +108,7 @@ def add_model_options(parser):
     parser.add_argument("--backend", choices=("cuda", "rocm"))
     parser.add_argument("--vllm-image", type=image_reference)
     parser.add_argument("--gpu")
+    parser.add_argument("--tensor-parallel-size")
     for name in MODEL_OPTIONS:
         parser.add_argument("--" + name)
 
@@ -127,6 +128,13 @@ def gpu_groups(root):
     return {"services": {"vllm": {"group_add": list(dict.fromkeys(str(int(value)) for value in groups))}}}
 
 
+def validate_model_gpu(values):
+    config = ModelConfig.from_env(values)
+    if config.tensor_parallel_size > 1 and (values.get("BORGVR_BACKEND", "cuda") != "cuda" or values.get("BORGVR_GPU", "0") != "all"):
+        raise ValueError("Multi-GPU inference currently requires --backend cuda --gpu all. Select --tensor-parallel-size 1 for a single GPU or ROCm.")
+    return config
+
+
 def inference_values(args, existing=None):
     existing = existing or {}
     profile = args.profile
@@ -142,7 +150,10 @@ def inference_values(args, existing=None):
         value = getattr(args, name.replace("-", "_"))
         if value is not None:
             values["BORGVR_" + key] = value
-    ModelConfig.from_env(values)
+    parallel = getattr(args, "tensor_parallel_size", None)
+    if parallel is not None:
+        values["BORGVR_TENSOR_PARALLEL_SIZE"] = parallel
+    values.setdefault("BORGVR_TENSOR_PARALLEL_SIZE", "1")
     backend = args.backend or existing.get("BORGVR_BACKEND", "cuda")
     if backend not in ("cuda", "rocm"):
         raise ValueError("Backend must be cuda or rocm")
@@ -154,6 +165,7 @@ def inference_values(args, existing=None):
         image = CUDA_IMAGE if backend == "cuda" else ROCM_IMAGE
     values.update(BORGVR_BACKEND=backend, BORGVR_VLLM_IMAGE=image_reference(image), BORGVR_GPU=gpu,
                   BORGVR_RENDER_GID=device_group("render"), BORGVR_VIDEO_GID=device_group("video"))
+    values["BORGVR_TENSOR_PARALLEL_SIZE"] = str(validate_model_gpu(values).tensor_parallel_size)
     if args.agent_image:
         values["BORGVR_AGENT_IMAGE"] = image_reference(args.agent_image)
     return {key: value for key, value in values.items() if key not in existing or existing[key] != value}
@@ -397,6 +409,7 @@ def create_configuration(root, host, bind, port, gpu, agent_image=DEFAULT_AGENT_
         "BORGVR_BACKEND": "cuda", "BORGVR_RENDER_GID": device_group("render"),
         "BORGVR_VIDEO_GID": device_group("video"),
         "BORGVR_GPU": gpu,
+        "BORGVR_TENSOR_PARALLEL_SIZE": "1",
         "BORGVR_CONTEXT_LENGTH": "16384",
         "BORGVR_GPU_MEMORY_FRACTION": "0.85",
         "BORGVR_UID": str(uid), "BORGVR_GID": str(gid),
@@ -427,7 +440,7 @@ def read_value(name, root=ROOT):
     defaults = {**profile_values(next((key for key, item in PROFILES.items()
                                        if item["MODEL"] == configuration.get("BORGVR_MODEL")), "qwen36-35b")),
                 "BORGVR_BACKEND": "cuda", "BORGVR_RENDER_GID": device_group("render"),
-                "BORGVR_VIDEO_GID": device_group("video")}
+                "BORGVR_VIDEO_GID": device_group("video"), "BORGVR_TENSOR_PARALLEL_SIZE": "1"}
     if name in defaults:
         return defaults[name]
     raise ValueError("Missing configuration value")
@@ -468,7 +481,7 @@ def main():
     if args.command == "install":
         install_configuration(ROOT, args)
     elif args.command == "validate-model":
-        ModelConfig.from_env(read_configuration(ROOT))
+        validate_model_gpu(read_configuration(ROOT))
         gpu_groups(ROOT)
     elif args.command == "gpu-groups":
         print(json.dumps(gpu_groups(ROOT)))

@@ -229,6 +229,47 @@ CUDA also accepts `--gpu all`, explicitly exposing every NVIDIA GPU, as required
 Configuration creates two private random tokens and a development TLS certificate. For
 native-device deployment, explicitly import its public certificate or use trusted CA certificates as described in section 6.
 
+### Shard a model across multiple NVIDIA GPUs
+
+Docker access and model sharding are separate: use **both** `--gpu all` and
+`--tensor-parallel-size 2` to run one model across two GPUs on the same host.
+For an existing installation:
+
+```
+git pull --ff-only
+sudo ./setup.sh model qwen38-27b --gpu all --tensor-parallel-size 2
+```
+
+Let an ongoing installation finish first. No uninstall, repeated host/port parameters,
+token replacement or certificate import is needed. If development mode is active, disable
+it with `sudo ./setup.sh dev disable` before changing the model, then enable it again.
+The switch interrupts active assistant requests. For a fresh installation:
+
+```
+sudo ./setup.sh install --backend cuda --profile qwen38-27b \
+  --gpu all --tensor-parallel-size 2 \
+  --host 134.91.11.251 --bind 134.91.11.251 --port 8766 --open-firewall
+```
+
+The range is 1...8 GPUs; the default remains 1 for compatibility. GPU selection and tensor
+parallel size persist across subsequent model changes. Return to one card with
+`sudo ./setup.sh model qwen35-4b --gpu 0 --tensor-parallel-size 1`.
+Multi-GPU currently requires CUDA; ROCm remains single-GPU. Installation, `doctor` and
+multi-GPU updates probe every required GPU, including a small allocation. The vLLM bootstrap
+also rejects insufficient visible devices before launching workers. Workers use local
+multiprocessing (`mp`), not Ray; the existing private 16 GiB shared memory is retained,
+without host IPC or additional published ports. No BorgVR client change is required.
+
+```
+sudo ./setup.sh doctor
+sudo ./setup.sh test
+nvidia-smi
+```
+
+Actual compatibility/performance still depends on the model architecture, available memory,
+context and interconnect. Configuration tests cover the two-GPU path; hardware inference
+must still be tested on the target machine.
+
 ### Select models and GPUs
 
 The **vLLM image** provides inference software and CUDA/ROCm. The **model and revision**

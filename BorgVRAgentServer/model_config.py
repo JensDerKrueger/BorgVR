@@ -86,6 +86,7 @@ class ModelConfig:
     min_free_gib: int
     eager: bool
     cpu_offload_gb: float
+    tensor_parallel_size: int = 1
 
     @classmethod
     def from_env(cls, env):
@@ -108,16 +109,19 @@ class ModelConfig:
                    identifier(get("QUANTIZATION")), context,
                    number(get("MAX_SEQS"), 1, 16, True), number(get("MAX_OUTPUT_TOKENS"), 128, context - 1024, True),
                    number(get("GPU_MEMORY_FRACTION"), 0.05, 0.98), number(get("MIN_FREE_GIB"), 1, 1048576, True),
-                   boolean(get("ENFORCE_EAGER")), number(get("CPU_OFFLOAD_GB"), 0, 4096))
+                   boolean(get("ENFORCE_EAGER")), number(get("CPU_OFFLOAD_GB"), 0, 4096),
+                   number(values.get("BORGVR_TENSOR_PARALLEL_SIZE", "1"), 1, 8, True))
 
     def arguments(self):
         result = ["vllm", "serve", self.model, "--revision", self.revision,
-                  "--host", "0.0.0.0", "--port", "8000", "--tensor-parallel-size", "1",
+                  "--host", "0.0.0.0", "--port", "8000", "--tensor-parallel-size", str(self.tensor_parallel_size),
                   "--dtype", self.dtype, "--max-model-len", str(self.context),
                   "--gpu-memory-utilization", str(self.memory_fraction), "--max-num-seqs", str(self.sequences),
                   "--enable-auto-tool-choice", "--tool-call-parser", self.tool_parser, "--no-enable-log-requests"]
         if self.reasoning_parser != "none":
             result += ["--reasoning-parser", self.reasoning_parser]
+        if self.tensor_parallel_size > 1:
+            result += ["--distributed-executor-backend", "mp"]
         if self.vision:
             result += ["--limit-mm-per-prompt", '{"image":2,"video":0}']
         if self.quantization != "auto":

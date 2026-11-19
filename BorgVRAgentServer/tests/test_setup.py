@@ -5,6 +5,7 @@ from pathlib import Path
 import shlex
 import shutil
 import subprocess
+import sys
 from types import SimpleNamespace
 
 import pytest
@@ -398,6 +399,50 @@ def test_gpu_access_matches_explicit_configuration(operations, all_gpus):
     other = str(root / ("compose.cuda.yaml" if all_gpus else "compose.cuda-all.yaml"))
     compose_calls = [call["args"] for call in calls if "--project-directory" in call["args"]]
     assert compose_calls and all(selected in call and other not in call for call in compose_calls)
+
+
+def test_dual_gpu_probe_checks_both_devices_and_rejects_missing_device(operations, monkeypatch):
+    root, run = operations
+    result, _ = run("configure", "--gpu", "all", "--tensor-parallel-size", "2")
+    assert result.returncode == 0, result.stderr
+    result, calls = run("doctor")
+    assert result.returncode == 0, result.stderr
+    probe = next(call["args"] for call in calls if "--gpus" in call["args"])
+    assert "BORGVR_PROBE_TENSOR_PARALLEL_SIZE=2" in probe
+    code = probe[probe.index("-c") + 1]
+    allocations, synchronized = [], []
+    cuda = SimpleNamespace(is_available=lambda: True, device_count=lambda: 2,
+        synchronize=lambda index: synchronized.append(index), mem_get_info=lambda index: (30 * 2**30, 48 * 2**30),
+        get_device_name=lambda index: f"Test GPU {index}")
+    fake = SimpleNamespace(cuda=cuda, float32="float32", version=SimpleNamespace(hip=None, cuda="13.0"),
+                           ones=lambda count, device, dtype: allocations.append((device, dtype)))
+    monkeypatch.setitem(sys.modules, "torch", fake)
+    monkeypatch.setenv("BORGVR_PROBE_DTYPE", "auto")
+    monkeypatch.setenv("BORGVR_PROBE_TENSOR_PARALLEL_SIZE", "2")
+    exec(compile(code, "<gpu-probe>", "exec"), {})
+    assert allocations == [("cuda:0", "float32"), ("cuda:1", "float32")]
+    assert synchronized == [0, 1]
+    allocations.clear()
+    cuda.device_count = lambda: 1
+    with pytest.raises(AssertionError, match="requires 2 GPUs"):
+        exec(compile(code, "<gpu-probe>", "exec"), {})
+    assert not allocations
+
+
+def test_model_switch_uses_all_gpu_overlay_and_retains_parallelism(operations):
+    root, run = operations
+    before = configure.read_configuration(root)
+    result, calls = run("model", "qwen38-27b", "--gpu", "all", "--tensor-parallel-size", "2")
+    assert result.returncode == 0, result.stderr
+    assert configure.read_value("BORGVR_TENSOR_PARALLEL_SIZE", root) == "2"
+    args = [call["args"] for call in calls]
+    assert any("--gpus" in call and call[call.index("--gpus") + 1] == "all" for call in args)
+    assert any("up" in call and str(root / "compose.cuda-all.yaml") in call for call in args)
+    assert configure.read_value("BORGVR_BIND_ADDRESS", root) == before["BORGVR_BIND_ADDRESS"]
+    result, _ = run("model", "qwen35-4b")
+    assert result.returncode == 0, result.stderr
+    assert configure.read_value("BORGVR_GPU", root) == "all"
+    assert configure.read_value("BORGVR_TENSOR_PARALLEL_SIZE", root) == "2"
 
 
 @pytest.mark.parametrize("backend", ["cuda", "rocm"])

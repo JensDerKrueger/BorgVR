@@ -1,4 +1,5 @@
-# Explicit all-GPU access, required by NVIDIA's WSL container interface.
+# Explicit all-GPU access for multi-GPU inference or NVIDIA's WSL container interface.
+# Model sharding is controlled separately by BORGVR_TENSOR_PARALLEL_SIZE.
 # Use instead of compose.cuda.yaml, never on top of it.
 services:
   vllm:

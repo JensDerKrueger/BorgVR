@@ -3,6 +3,9 @@ from dataclasses import replace
 import os
 from pathlib import Path
 import subprocess
+import runpy
+import sys
+from types import SimpleNamespace
 
 import pytest
 import yaml
@@ -46,6 +49,80 @@ def test_memory_and_quantization_controls_reach_vllm():
     assert "--enforce-eager" in args and args[args.index("--quantization") + 1] == "awq"
     assert args[args.index("--max-num-seqs") + 1] == "1"
     assert args[args.index("--dtype") + 1] == "float16"
+
+
+@pytest.mark.parametrize("size", [1, 2, 4, 8])
+def test_tensor_parallel_size_reaches_vllm_and_uses_local_processes(size):
+    config = ModelConfig.from_env({**profile_values("qwen38-27b"), "BORGVR_TENSOR_PARALLEL_SIZE": str(size)})
+    args = config.arguments()
+    assert args[args.index("--tensor-parallel-size") + 1] == str(size)
+    if size > 1:
+        assert args[args.index("--distributed-executor-backend") + 1] == "mp"
+    else:
+        assert "--distributed-executor-backend" not in args
+    assert ModelConfig.from_env({}).tensor_parallel_size == 1
+
+
+@pytest.mark.parametrize("value", ["0", "-1", "9", "2.5", "two", "$(id)"])
+def test_invalid_tensor_parallel_size_is_rejected(value):
+    with pytest.raises(ValueError):
+        ModelConfig.from_env({"BORGVR_TENSOR_PARALLEL_SIZE": value})
+
+
+def test_parallel_hardware_selection_survives_model_switch_and_preserves_connection(tmp_path):
+    parser = argparse.ArgumentParser()
+    configure.add_model_options(parser)
+    parser.add_argument("--agent-image")
+    configure.create_configuration(tmp_path, "134.91.11.251", "134.91.11.251", 8766, "0")
+    original = configure.read_configuration(tmp_path)
+    tokens = {name: (tmp_path / "runtime/secrets" / name).read_bytes() for name in ("agent_token", "vllm_token")}
+    certificate = (tmp_path / "runtime/tls/server.crt").read_bytes()
+    options = parser.parse_args(["--profile", "qwen38-27b", "--gpu", "all", "--tensor-parallel-size", "2"])
+    configure.write_configuration_changes(tmp_path, configure.inference_values(options, original))
+    dual = configure.read_configuration(tmp_path)
+    options = parser.parse_args(["--profile", "qwen35-4b"])
+    configure.write_configuration_changes(tmp_path, configure.inference_values(options, dual))
+    updated = configure.read_configuration(tmp_path)
+    assert updated["BORGVR_GPU"] == "all" and updated["BORGVR_TENSOR_PARALLEL_SIZE"] == "2"
+    for key in ("BORGVR_BIND_ADDRESS", "BORGVR_PORT", "BORGVR_UID", "BORGVR_GID"):
+        assert updated[key] == original[key]
+    assert (tmp_path / "runtime/tls/server.crt").read_bytes() == certificate
+    assert all((tmp_path / "runtime/secrets" / name).read_bytes() == value for name, value in tokens.items())
+
+
+@pytest.mark.parametrize("backend,gpu", [("cuda", "0"), ("cuda", "GPU-1234"), ("rocm", "0")])
+def test_parallelism_does_not_silently_expand_gpu_access(backend, gpu):
+    parser = argparse.ArgumentParser()
+    configure.add_model_options(parser)
+    parser.add_argument("--agent-image")
+    options = parser.parse_args(["--backend", backend, "--gpu", gpu, "--tensor-parallel-size", "2"])
+    with pytest.raises(ValueError, match="--gpu all"):
+        configure.inference_values(options)
+
+
+@pytest.mark.parametrize("visible", [1, 2])
+def test_vllm_bootstrap_checks_gpu_count_before_starting_workers(monkeypatch, visible):
+    root = Path(__file__).resolve().parents[1]
+    monkeypatch.setenv("BORGVR_TENSOR_PARALLEL_SIZE", "2")
+    monkeypatch.setitem(sys.modules, "torch", SimpleNamespace(cuda=SimpleNamespace(device_count=lambda: visible)))
+    original_read = Path.read_text
+    monkeypatch.setattr(Path, "read_text", lambda self, *args, **kwargs:
+        "test-token" if str(self) == "/run/secrets/vllm_token" else original_read(self, *args, **kwargs))
+    calls = []
+    class Executed(Exception):
+        pass
+    def execute(binary, args):
+        calls.append((binary, args))
+        raise Executed()
+    monkeypatch.setattr(os, "execvp", execute)
+    if visible == 1:
+        with pytest.raises(SystemExit, match="only 1 are visible"):
+            runpy.run_path(str(root / "vllm_start.py"), run_name="__main__")
+        assert not calls
+    else:
+        with pytest.raises(Executed):
+            runpy.run_path(str(root / "vllm_start.py"), run_name="__main__")
+        assert calls[0][1][calls[0][1].index("--tensor-parallel-size") + 1] == "2"
 
 
 @pytest.mark.parametrize("backend,image", [("cuda", CUDA_IMAGE), ("rocm", ROCM_IMAGE)])

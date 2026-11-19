@@ -22,6 +22,7 @@ services:
     entrypoint: ["python3", "/opt/borgvr/vllm_start.py"]
     environment:
       <<: *model-environment
+      BORGVR_TENSOR_PARALLEL_SIZE: ${BORGVR_TENSOR_PARALLEL_SIZE:-1}
       HF_HOME: /cache/huggingface
       HF_HUB_DISABLE_TELEMETRY: "1"
       DO_NOT_TRACK: "1"
