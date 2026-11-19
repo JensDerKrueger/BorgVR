@@ -401,11 +401,26 @@ Objects must be matched across views, not counted again by adding per-image tota
 occlusion calls for a supported lower bound or explicitly approximate estimate, not an invented
 exact total. Inspection-only questions should restore the original transform and clipping
 bounds using exact saved values. Visual counting requires image-sharing permission and does
-not replace segmentation or voxel analysis. Limits remain 180 seconds and 24 BorgVR calls per
-request. Internal evidence notes and progress updates have separate capacity, with a maximum
-of 48 total tool calls and 48 model requests. Live budget instructions initiate wrap-up before
-these hard limits; tools are removed for the final answering phase so a bounded investigation
-can end with an explicitly incomplete answer rather than a call-limit error.
+not replace segmentation or voxel analysis.
+
+### Longer tasks and interruption
+
+New apps default to **30 minutes and 256 BorgVR calls per request**. Under
+**Settings > AI Assistant**, adjust work time (1 to 120 minutes) and call budget (24 to 1024).
+These are execution safeguards, not model billing limits. The app requests limits during
+the handshake; the current agent confirms at most 120 minutes and 1024 BorgVR calls.
+Internal evidence notes/progress have extra capacity. Wrap-up starts only near the
+negotiated limit. Legacy clients without negotiation retain three minutes and 24 calls.
+New apps require an updated agent supporting the optional Hello `execution_limits` field.
+
+Text input and microphone remain available while a request runs. **Sending a new message
+interrupts the current task**: any already dispatched BorgVR command is allowed to finish,
+then the old connection is closed and the new request starts with fresh state. Commands
+are never replayed. The visible transcript and confirmed visualization changes remain,
+but the old model context is not carried into the new request. Failed or uncertain command
+completion blocks automatic replacement. Cancel immediately stops the connection and any
+queued replacement; it does not undo committed changes. Network, individual-command and
+context limits remain independent of the longer task budget.
 
 ## 6. Configuration, TLS and network security
 

@@ -415,11 +415,29 @@ oder ausdrücklich ungefähre Schätzung vorgesehen, keine erfundene exakte Gesa
 Eine reine Bildfrage soll die ursprüngliche Transformation und Clipping-Grenzen nach der
 Untersuchung wiederherstellen, sofern deren exakte Werte verfügbar sind. Ohne Bildfreigabe
 kann der Agent nicht visuell zählen. Dies ersetzt keine Segmentierung oder Volumenauswertung.
-Die Grenzen bleiben bei 180 Sekunden und 24 BorgVR-Aufrufen pro Anfrage. Interne Bildbefunde
-und Zwischenmeldungen haben ein getrenntes Budget; insgesamt gelten höchstens 48 Werkzeug-
-und 48 Modellaufrufe. Eine laufende Budgetanzeige im Modellkontext leitet rechtzeitig die
-Abschlussphase ein. Vor dem harten Limit werden weitere Werkzeuge ausgeblendet, damit eine
-abschließende, gegebenenfalls unvollständige Antwort statt eines Limitfehlers möglich ist.
+
+### Längere Aufträge und Unterbrechen
+
+Neue Apps erlauben standardmäßig **30 Minuten und 256 BorgVR-Aufrufe pro Auftrag**.
+Unter **Einstellungen > KI-Assistent** lassen sich Arbeitsdauer (1 bis 120 Minuten) und
+Aufrufbudget (24 bis 1024) ändern. Es sind technische Arbeitsgrenzen, keine Kosten- oder
+Abrechnungslimits des Modells. Die App meldet ihre Grenzen beim Verbindungsaufbau; der
+aktuelle Agentenserver bestätigt höchstens 120 Minuten und 1024 BorgVR-Aufrufe.
+Interne Bildbefunde und Zwischenmeldungen haben zusätzliche Kapazität. Eine Abschlussphase
+beginnt erst nahe der ausgehandelten Grenze. Alte Clients ohne diese Aushandlung bleiben
+aus Sicherheitsgründen bei drei Minuten und 24 BorgVR-Aufrufen. Neue Apps benötigen einen
+aktuellen Agentenserver, der das optionale `execution_limits`-Feld im Hello unterstützt.
+
+Während eines Auftrags bleiben Texteingabe und Mikrofon nutzbar. Eine **neue Nachricht
+unterbricht den bisherigen Auftrag**: Die App wartet noch auf einen bereits ausgeführten
+BorgVR-Befehl, beendet dann die alte Verbindung und startet die neue Anfrage mit einer
+frischen Zustandsabfrage. Angefangene Befehle werden nicht wiederholt. Sichtbarer
+Gesprächsverlauf und bestätigte Darstellungsänderungen bleiben erhalten; der alte
+Modellkontext wird nicht in den neuen Auftrag übernommen. Scheitert der laufende Befehl
+oder bleibt sein Abschluss unklar, wird der Folgeauftrag nicht automatisch gestartet.
+Der Abbrechen-Button beendet sofort auch einen vorgemerkten Folgeauftrag; bereits
+ausgeführte Änderungen werden nicht zurückgesetzt. Netzwerk-, Einzelbefehls- und
+Kontextgrenzen bleiben unabhängig vom längeren Arbeitsbudget aktiv.
 
 ## 6. Sicherheit und Zertifikate
 

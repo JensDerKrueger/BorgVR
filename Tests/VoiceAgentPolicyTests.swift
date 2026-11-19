@@ -48,6 +48,17 @@ struct VoiceAgentPolicyTests {
     try check(try ledger.begin(id: "one", signature: "actual")?.reply == "committed", "Cached reply lost")
     try rejects { _ = try ledger.begin(id: "one", signature: "changed") }
     try rejects { _ = try ledger.begin(id: "", signature: "invalid") }
+    for index in 0..<3 {
+      _ = try ledger.begin(id: "large-\(index)", signature: "screenshot-\(index)")
+      try ledger.finish(id: "large-\(index)", reply: String(repeating: "x", count: 3 * 1024 * 1024))
+    }
+    try rejects { _ = try ledger.begin(id: "large-0", signature: "screenshot-0") }
+    try check(try ledger.begin(id: "large-2", signature: "screenshot-2")?.reply != nil, "Recent reply evicted")
+    try rejects { _ = try ledger.begin(id: "large-0", signature: "changed") }
+    for index in 0..<1024 {
+      _ = try ledger.begin(id: "long-\(index)", signature: "state")
+      try ledger.finish(id: "long-\(index)", reply: "ok")
+    }
     try check(!VoiceAgentPolicy.allowed.contains("open_dataset") && !VoiceAgentPolicy.allowed.contains("edit_volume") &&
               !VoiceAgentPolicy.allowed.contains("load_settings"), "Agent gained unsafe capabilities")
     try check(VoiceAgentPolicy.failure(code: "context_limit", changesApplied: false, completionUncertain: false) == .contextLimit,

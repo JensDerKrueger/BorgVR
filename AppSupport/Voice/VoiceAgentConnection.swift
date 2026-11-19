@@ -12,6 +12,8 @@ struct VoiceAgentConnectionIdentity: Equatable {
   let revision: UUID
   let enabled: Bool
   let images: Bool
+  let workMinutes: Int
+  let maximumCalls: Int
 }
 
 @MainActor
@@ -30,12 +32,27 @@ final class VoiceAgentSettings: ObservableObject {
   }
   @Published var sharesImages: Bool { didSet { defaults.set(sharesImages, forKey: "voiceAgent.images") } }
   @Published var onDeviceOnly: Bool { didSet { defaults.set(onDeviceOnly, forKey: "voiceAgent.onDeviceOnly") } }
+  @Published var workMinutes: Int {
+    didSet {
+      let value = min(max(workMinutes, 1), 120)
+      if workMinutes != value { workMinutes = value }
+      defaults.set(value, forKey: "voiceAgent.workMinutes")
+    }
+  }
+  @Published var maximumCalls: Int {
+    didSet {
+      let value = min(max(maximumCalls, 24), 1024)
+      if maximumCalls != value { maximumCalls = value }
+      defaults.set(value, forKey: "voiceAgent.maximumCalls")
+    }
+  }
   @Published private(set) var certificate: Data
   @Published private(set) var hasToken: Bool
   @Published private(set) var revision = UUID()
 
   var identity: VoiceAgentConnectionIdentity {
-    .init(address: address, revision: revision, enabled: enabled, images: sharesImages)
+    .init(address: address, revision: revision, enabled: enabled, images: sharesImages,
+          workMinutes: workMinutes, maximumCalls: maximumCalls)
   }
 
   init(defaults: UserDefaults = .standard, tokenAccount: String = "voice-agent-token") {
@@ -48,6 +65,8 @@ final class VoiceAgentSettings: ObservableObject {
       defaults.object(forKey: "voiceAgent.speechRateMultiplier") as? Double ?? VoiceAgentSpeechRate.defaultMultiplier)
     sharesImages = defaults.object(forKey: "voiceAgent.images") as? Bool ?? true
     onDeviceOnly = defaults.object(forKey: "voiceAgent.onDeviceOnly") as? Bool ?? true
+    workMinutes = min(max(defaults.object(forKey: "voiceAgent.workMinutes") as? Int ?? 30, 1), 120)
+    maximumCalls = min(max(defaults.object(forKey: "voiceAgent.maximumCalls") as? Int ?? 256, 24), 1024)
     certificate = defaults.data(forKey: "voiceAgent.certificate") ?? Data()
     hasToken = ((try? KeychainSecretStore.string(account: tokenAccount)) ?? "").isEmpty == false
   }
@@ -151,14 +170,14 @@ final class VoiceAgentTLS: NSObject, URLSessionTaskDelegate, @unchecked Sendable
     completionHandler(nil)
   }
 
-  func session() -> URLSession {
+  func session(resourceTimeout: TimeInterval = 300) -> URLSession {
     let configuration = URLSessionConfiguration.ephemeral
     configuration.httpShouldSetCookies = false
     configuration.httpCookieStorage = nil
     configuration.urlCredentialStorage = nil
     configuration.urlCache = nil
     configuration.timeoutIntervalForRequest = 15
-    configuration.timeoutIntervalForResource = 300
+    configuration.timeoutIntervalForResource = resourceTimeout
     return URLSession(configuration: configuration, delegate: self, delegateQueue: nil)
   }
 }

@@ -99,19 +99,19 @@ struct VoiceAgentView: View {
           .tint(speech.isRecording ? .red : .accentColor)
           .help(voiceAgentText(speech.isRecording ? "Finish speaking" : "Speak"))
           .accessibilityLabel(voiceAgentText(speech.isRecording ? "Finish speaking" : "Speak"))
-          .disabled(agent.busy || agent.connectionState == .connecting || !agent.hasDataset)
+          .disabled(agent.interrupting || agent.connectionState == .connecting || !agent.hasDataset)
           TextField(voiceAgentText("Message"), text: $text, axis: .vertical)
             .lineLimit(1...4).textFieldStyle(.roundedBorder)
-            .disabled(agent.busy || speech.isRecording)
+            .disabled(agent.interrupting || speech.isRecording)
           Button {
             let message = text
             text = ""
             Task { await agent.submit(message) }
           } label: { Image(systemName: "arrow.up").frame(width: 28, height: 28) }
           .buttonStyle(.borderedProminent)
-          .help(voiceAgentText("Send"))
-          .accessibilityLabel(voiceAgentText("Send"))
-          .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || text.count > 8192 || agent.busy ||
+          .help(voiceAgentText(agent.busy ? "Send and interrupt current request" : "Send"))
+          .accessibilityLabel(voiceAgentText(agent.busy ? "Send and interrupt current request" : "Send"))
+          .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || text.count > 8192 || agent.interrupting ||
                     speech.isRecording || agent.connectionState == .connecting || !agent.hasDataset)
           Button { agent.cancel() } label: { Image(systemName: "xmark.circle").frame(width: 28, height: 28) }
             .buttonStyle(.bordered).help(voiceAgentText("Cancel"))
@@ -254,6 +254,20 @@ struct VoiceAgentSettingsView: View {
       }
       Toggle(voiceAgentText("Share render images"), isOn: $settings.sharesImages)
       Toggle(voiceAgentText("Speak responses"), isOn: $settings.speaks)
+      Stepper(value: $settings.workMinutes, in: 1...120) {
+        HStack {
+          Text(voiceAgentText("Maximum work time (minutes)"))
+          Spacer()
+          Text(settings.workMinutes, format: .number).monospacedDigit()
+        }
+      }
+      Stepper(value: $settings.maximumCalls, in: 24...1024, step: 16) {
+        HStack {
+          Text(voiceAgentText("Maximum BorgVR calls"))
+          Spacer()
+          Text(settings.maximumCalls, format: .number).monospacedDigit()
+        }
+      }
       VStack(alignment: .leading, spacing: 8) {
         HStack {
           Text(voiceAgentText("Speech rate"))

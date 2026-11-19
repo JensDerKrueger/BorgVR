@@ -74,7 +74,7 @@ using their exact state values after inspection, unless the user requests a new 
 Do not approximate a saved TF from a preview to restore it. Reserve calls for restoration
 and verification; disclose changes that could not safely be restored. Never restore or
 repeat a command whose completion is uncertain. Respect the live server control budget:
-at most 24 BorgVR calls, with separate bounded capacity for progress and evidence notes.
+the negotiated number of BorgVR calls, with separate bounded capacity for progress and evidence notes.
 When asked to wrap up, stop exploring and answer; prefer a few useful views over exhaustive searching.
 The server provides a live control phase. In phase=investigate reserve time/calls for
 restoration and a final answer. In phase=wrap_up STOP exploring new views or clipping
@@ -99,6 +99,8 @@ class Settings:
     idle_timeout: float = 300
     hello_timeout: float = 10
     send_timeout: float = 10
+    max_native_calls: int = 1024
+    max_run_timeout: float = 7200
     inference: ModelConfig = ModelConfig.from_env({})
 
     def capabilities(self):
@@ -144,6 +146,10 @@ class Session:
         self.screenshot_count = 0
         self.visual_observations = []
         self.native_calls = 0
+        self.native_call_limit = MAX_NATIVE_CALLS
+        self.request_timeout = settings.run_timeout
+        self.tool_call_limit = MAX_TOOL_CALLS
+        self.model_request_limit = MAX_MODEL_REQUESTS
         self.run_started = None
         self.budget = None
 
@@ -164,7 +170,7 @@ class Session:
             raise ModelRetry(str(error)) from error
         if (definition.name.startswith("set_") or definition.name == "rotate_view") and not self.state_seen:
             raise ModelRetry("Read get_application_state before changing the view")
-        if self.native_calls >= MAX_NATIVE_CALLS:
+        if self.native_calls >= self.native_call_limit:
             raise ModelRetry("BorgVR call budget exhausted. Finish with the received evidence; do not request another action.")
         self.native_calls += 1
         call_id = uuid.uuid4().hex
@@ -284,12 +290,12 @@ class Session:
         self.run_started = time.monotonic()
         try:
             await self.send({"type": "started", "request_id": message.request_id})
-            async with asyncio.timeout(self.settings.run_timeout):
+            async with asyncio.timeout(self.request_timeout):
                 async with self.run_slots:
                     result = await self.agent.run(
                         message.text, message_history=self.history,
                         model_settings=self.settings.inference.request_settings(),
-                        usage_limits=UsageLimits(request_limit=MAX_MODEL_REQUESTS, tool_calls_limit=MAX_TOOL_CALLS),
+                        usage_limits=UsageLimits(request_limit=self.model_request_limit, tool_calls_limit=self.tool_call_limit),
                     )
             self.history = await bounded_history(result.all_messages())
             await self.send({"type": "assistant_message", "request_id": message.request_id,
@@ -333,14 +339,22 @@ class Session:
 
     async def serve(self):
         hello = Hello.model_validate(await self.receive(self.settings.hello_timeout))
+        if hello.execution_limits is not None:
+            self.native_call_limit = min(hello.execution_limits.max_calls, self.settings.max_native_calls)
+            self.request_timeout = min(hello.execution_limits.timeout_seconds, self.settings.max_run_timeout)
+            self.tool_call_limit = max(MAX_TOOL_CALLS, self.native_call_limit * 2)
+            self.model_request_limit = self.tool_call_limit + 8
         self.tools = select_tools(hello.tools)
         self.dataset_id, self.context_id = hello.dataset_id, hello.context_id
         self.agent = self.build_agent()
         await self.send({"type": "ready", "protocol": 1, "model": self.settings.model,
                          "capabilities": self.settings.capabilities(),
+                         "execution_limits": {"max_calls": self.native_call_limit, "timeout_seconds": self.request_timeout},
                          "tools": [tool.name for tool in self.tools]})
         while True:
-            value = await self.receive(self.settings.idle_timeout)
+            receiving_timeout = (max(self.settings.idle_timeout, self.request_timeout + self.settings.tool_timeout)
+                                 if self.task is not None and not self.task.done() else self.settings.idle_timeout)
+            value = await self.receive(receiving_timeout)
             match value.get("type"):
                 case "user_message":
                     message = UserMessage.model_validate(value)

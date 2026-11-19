@@ -22,6 +22,7 @@ final class VoiceAgentController: ObservableObject {
   let speech = VoiceAgentSpeech()
   @Published private(set) var connectionState: ConnectionState = .disconnected
   @Published private(set) var busy = false
+  @Published private(set) var interrupting = false
   @Published private(set) var model = ""
   @Published private(set) var datasetOpeningID: UUID?
   @Published private(set) var messages: [VoiceAgentMessage] = []
@@ -43,6 +44,9 @@ final class VoiceAgentController: ObservableObject {
   private var turns = 0
   private var calls = 0
   private var events = 0
+  private var maximumCalls = 24
+  private var workTimeout: Double = 180
+  private var queuedPrompt: String?
   private var pendingCallID: String?
   private var generation = UUID()
   private var socket: URLSessionWebSocketTask?
@@ -123,6 +127,8 @@ final class VoiceAgentController: ObservableObject {
     connectionIdentity = nil
     sessionID = nil
     requestID = nil
+    queuedPrompt = nil
+    interrupting = false
     pendingCallID = nil
     changesApplied = false
     pendingMutation = false
@@ -184,7 +190,7 @@ final class VoiceAgentController: ObservableObject {
     }
   }
 
-  private func establishConnection() async throws {
+  private func establishConnection(replacing: Bool = false) async throws {
     guard settings.enabled, let service, let router, let captured = contextProvider?(),
           service.applicationState().rendererReady else { throw VoiceAgentError.configuration }
     if connectionState == .ready {
@@ -195,6 +201,7 @@ final class VoiceAgentController: ObservableObject {
     let endpoint = try VoiceAgentEndpoint(settings.address)
     let token = try settings.token()
     disconnect()
+    interrupting = replacing
     errorText = nil
     messages = []
     context = captured
@@ -211,7 +218,7 @@ final class VoiceAgentController: ObservableObject {
     catalog = VoiceAgentPolicy.catalog(router.toolDefinitions, vision: vision,
       transferFunctions: service.transferFunctionCount > 0, images: settings.sharesImages)
     let transport = VoiceAgentTLS(endpoint: endpoint, anchor: settings.certificate)
-    let session = transport.session()
+    let session = transport.session(resourceTimeout: Double(settings.workMinutes * 60 + 120))
     self.session = session
     var request = URLRequest(url: endpoint.socket)
     request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
@@ -227,7 +234,8 @@ final class VoiceAgentController: ObservableObject {
     armDeadline(seconds: 15, generation: id)
     do {
     try await send(["type": "hello", "protocol": 1, "dataset_id": captured.datasetID,
-                    "context_id": contextID, "tools": catalog])
+                    "context_id": contextID, "tools": catalog,
+                    "execution_limits": ["max_calls": settings.maximumCalls, "timeout_seconds": settings.workMinutes * 60]])
     let ready = try decode(await socket.receive())
     guard generation == id, contextProvider?() == captured else { throw CancellationError() }
     guard ready["type"] as? String == "ready", let version = ready["protocol"] as? Int, version == 1,
@@ -239,6 +247,17 @@ final class VoiceAgentController: ObservableObject {
           Set(accepted).isSubset(of: Set(catalog.compactMap { $0["name"] as? String }))
     else { throw VoiceAgentError.protocolViolation }
     self.sessionID = sessionID
+    if let limits = ready["execution_limits"] as? [String: Any] {
+      guard let calls = limits["max_calls"] as? Int, (24...settings.maximumCalls).contains(calls),
+            let seconds = limits["timeout_seconds"] as? Double, seconds.isFinite,
+            (1...Double(settings.workMinutes * 60)).contains(seconds)
+      else { throw VoiceAgentError.protocolViolation }
+      maximumCalls = calls
+      workTimeout = seconds
+    } else {
+      maximumCalls = 24
+      workTimeout = 180
+    }
     catalog = catalog.filter { accepted.contains($0["name"] as? String ?? "") }
     model = String((ready["model"] as? String ?? "").prefix(256))
     deadline?.cancel()
@@ -289,14 +308,27 @@ final class VoiceAgentController: ObservableObject {
   }
 
   func submit(_ text: String) async {
-    guard !busy, !speech.isRecording else { return }
+    guard !speech.isRecording, !interrupting else { return }
     let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !trimmed.isEmpty, trimmed.count <= 8192 else { return }
+    if busy {
+      queuedPrompt = trimmed
+      interrupting = true
+      status = voiceAgentText("Interrupting…")
+      speech.stopSpeaking()
+      resumeQueuedPromptIfSafe()
+      return
+    }
+    await sendPrompt(trimmed)
+  }
+
+  private func sendPrompt(_ trimmed: String, preserving transcript: [VoiceAgentMessage]? = nil) async {
     var operationGeneration: UUID?
     do {
-      try await establishConnection()
+      try await establishConnection(replacing: transcript != nil)
       operationGeneration = generation
       try requireContext()
+      if let transcript { messages = transcript }
       guard turns < 64 else { throw VoiceAgentError.protocolViolation }
       turns += 1
       calls = 0
@@ -307,10 +339,11 @@ final class VoiceAgentController: ObservableObject {
       let id = UUID().uuidString
       requestID = id
       busy = true
+      interrupting = false
       status = voiceAgentText("Working…")
       append(user: true, text: trimmed)
       lastActivity = Date()
-      armDeadline(seconds: 185, generation: generation)
+      armDeadline(seconds: workTimeout + 5, generation: generation)
       try await send(["type": "user_message", "request_id": id, "text": trimmed])
     } catch is CancellationError { }
     catch {
@@ -320,9 +353,29 @@ final class VoiceAgentController: ObservableObject {
     }
   }
 
+  private func resumeQueuedPromptIfSafe() {
+    guard let prompt = queuedPrompt, pendingCallID == nil else { return }
+    let expectedContext = context
+    let transcript = messages + [VoiceAgentMessage(user: false, text: voiceAgentText("Previous request interrupted."))]
+    // Retire the old connection only after any dispatched command has finished.
+    // A fresh connection must read current state and never replays the old request.
+    disconnect()
+    interrupting = true
+    status = voiceAgentText("Interrupting…")
+    let id = generation
+    Task { @MainActor [weak self] in
+      guard let self, self.generation == id else { return }
+      guard self.contextProvider?() == expectedContext else {
+        self.disconnect(reason: VoiceAgentError.contextChanged)
+        return
+      }
+      await self.sendPrompt(prompt, preserving: transcript)
+    }
+  }
+
   func toggleMicrophone() async {
     if speech.isRecording { speech.finish(); return }
-    guard !busy else { return }
+    guard !interrupting else { return }
     do {
       try await establishConnection()
       try await speech.start(onDeviceOnly: settings.onDeviceOnly)
@@ -344,7 +397,11 @@ final class VoiceAgentController: ObservableObject {
     guard event["session_id"] as? String == sessionID, let type = event["type"] as? String
     else { throw VoiceAgentError.protocolViolation }
     events += 1
-    guard events <= 128 else { throw VoiceAgentError.protocolViolation }
+    guard events <= maximumCalls * 4 + 128 else { throw VoiceAgentError.protocolViolation }
+    if type == "tool_call", interrupting, pendingCallID == nil {
+      resumeQueuedPromptIfSafe()
+      return
+    }
     if type == "tool_call", let callID = event["call_id"] as? String, ledger.entries[callID] != nil {
       try startTool(event)
       return
@@ -357,7 +414,9 @@ final class VoiceAgentController: ObservableObject {
         guard let text = event["text"] as? String, text.count <= 8192, event["final"] is Bool
         else { throw VoiceAgentError.protocolViolation }
         append(user: false, text: text)
-        if settings.speaks { speech.speak(text, rateMultiplier: settings.speechRateMultiplier) }
+        if settings.speaks, !speech.isRecording, !interrupting {
+          speech.speak(text, rateMultiplier: settings.speechRateMultiplier)
+        }
       case "tool_call": try startTool(event)
       case "tool_cancel":
         guard event["call_id"] as? String == pendingCallID else { throw VoiceAgentError.protocolViolation }
@@ -369,6 +428,7 @@ final class VoiceAgentController: ObservableObject {
         busy = false
         deadline?.cancel()
         status = voiceAgentText("Ready")
+        resumeQueuedPromptIfSafe()
       case "cancelled": disconnect()
       case "error":
         // Use local execution receipts, never a remote claim that a change succeeded.
@@ -400,7 +460,7 @@ final class VoiceAgentController: ObservableObject {
       }
       return
     }
-    guard pendingCallID == nil, calls < 24,
+    guard pendingCallID == nil, calls < maximumCalls,
           VoiceAgentPolicy.reads.contains(name) || readState else { throw VoiceAgentError.protocolViolation }
     calls += 1
     pendingCallID = callID
@@ -451,6 +511,7 @@ final class VoiceAgentController: ObservableObject {
         self.toolDeadline?.cancel()
         self.toolDeadline = nil
         try await self.sendRaw(reply)
+        self.resumeQueuedPromptIfSafe()
       } catch {
         guard self.generation == id else { return }
         // A thrown mutation may already have committed. Terminate rather than invite a retry.

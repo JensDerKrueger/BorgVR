@@ -121,6 +121,16 @@ struct VoiceAgentTests {
     let account = "voice-agent-test-\(UUID())"
     defer { defaults.removePersistentDomain(forName: suite); try? KeychainSecretStore.delete(account: account) }
     let settings = VoiceAgentSettings(defaults: defaults, tokenAccount: account)
+    try expect(settings.workMinutes == 30 && settings.maximumCalls == 256, "Long-run defaults missing")
+    settings.workMinutes = 60
+    settings.maximumCalls = 512
+    let persisted = VoiceAgentSettings(defaults: defaults, tokenAccount: account)
+    try expect(persisted.workMinutes == 60 && persisted.maximumCalls == 512, "Execution settings not persisted")
+    settings.workMinutes = 999
+    settings.maximumCalls = -1
+    try expect(settings.workMinutes == 120 && settings.maximumCalls == 24, "Execution settings not bounded")
+    settings.workMinutes = 30
+    settings.maximumCalls = 256
     try expect(settings.speechRateMultiplier == 1, "Default speech rate changed")
     let initialIdentity = settings.identity
     settings.speechRateMultiplier = 1.6
@@ -170,6 +180,42 @@ struct VoiceAgentTests {
     try await service.replayCommandRecording(Data(gsc.utf8))
     try expect(session.currentSnapshot().transform == expected, "Agent transform GSC roundtrip changed state")
     try expect(try service.transferFunction(channel: 0).samples == expectedTF.samples, "Agent TF GSC roundtrip changed state")
+    agent.newConversation()
+    await agent.submit("long-run")
+    try await wait { !agent.busy }
+    try expect(agent.errorText == nil && agent.messages.last?.text == "Long native run passed.",
+               "More than 24 BorgVR calls failed: \(agent.errorText ?? "")")
+
+    agent.newConversation()
+    await agent.submit("replace-source")
+    try await wait { agent.messages.contains { $0.text == "Old request waiting." } }
+    await agent.submit("replacement-target")
+    try await wait { !agent.busy && !agent.interrupting }
+    try expect(agent.errorText == nil && agent.messages.last?.text == "Native voice agent roundtrip passed.",
+               "New prompt did not interrupt model generation: \(agent.errorText ?? "")")
+    try expect(agent.messages.filter { $0.user }.map(\.text) == ["replace-source", "replacement-target"],
+               "Interrupted conversation transcript was lost or duplicated")
+
+    agent.newConversation()
+    await agent.submit("replace-at-tool")
+    try await Task.sleep(for: .milliseconds(400))
+    await agent.submit("replacement-target")
+    try expect(agent.interrupting, "Replacement did not wait for active renderer command")
+    app.recordCompletedRenderFrame(datasetKey: app.activeDatasetRenderKey, missingBrickCount: 0)
+    try await wait { !agent.busy && !agent.interrupting }
+    try expect(agent.errorText == nil && agent.messages.last?.text == "Native voice agent roundtrip passed.",
+               "Replacement after completed renderer command failed: \(agent.errorText ?? "")")
+
+    agent.newConversation()
+    await agent.submit("replace-at-tool")
+    try await Task.sleep(for: .milliseconds(400))
+    await agent.submit("must-not-run")
+    agent.cancel()
+    app.recordCompletedRenderFrame(datasetKey: app.activeDatasetRenderKey, missingBrickCount: 0)
+    try await Task.sleep(for: .milliseconds(200))
+    try expect(agent.connectionState == .disconnected && !agent.busy && !agent.interrupting &&
+               !agent.messages.contains { $0.user && $0.text == "must-not-run" },
+               "Explicit cancellation allowed a queued replacement to start")
     for (prompt, expectedError) in [("context-before-change", VoiceAgentError.contextLimit),
                                      ("context-after-change", .changesAppliedContextLimit),
                                      ("verification-failed", .changesAppliedVerificationFailed)] {
@@ -193,7 +239,7 @@ struct VoiceAgentTests {
     app.closeDataset(destination: .datasetSelection)
     agent.invalidateContext()
     try expect(agent.datasetOpeningID == nil, "Dataset closure did not notify an unconnected assistant window")
-    print("Voice agent tests passed: strict policy, TLS trust, real WSS agent loop, PNG, command/GSC roundtrip and context cancellation")
+    print("Voice agent tests passed: policy, TLS/WSS, PNG, GSC roundtrip, long runs, safe prompt replacement, queued cancellation and context ownership")
   }
 
   private static func wait(_ condition: () -> Bool) async throws {

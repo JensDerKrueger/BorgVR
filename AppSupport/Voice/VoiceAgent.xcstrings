@@ -1,6 +1,41 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "Maximum work time (minutes)": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Maximum work time (minutes)" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Maximale Arbeitsdauer (Minuten)" } }
+      }
+    },
+    "Maximum BorgVR calls": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Maximum BorgVR calls" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Maximale BorgVR-Aufrufe" } }
+      }
+    },
+    "Interrupting…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Interrupting…" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Wird unterbrochen …" } }
+      }
+    },
+    "Previous request interrupted.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Previous request interrupted." } },
+        "de": { "stringUnit": { "state": "translated", "value": "Vorheriger Auftrag unterbrochen." } }
+      }
+    },
+    "Send and interrupt current request": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Send and interrupt current request" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Senden und aktuellen Auftrag unterbrechen" } }
+      }
+    },
     "Speech rate": {
       "extractionState": "manual",
       "localizations": {

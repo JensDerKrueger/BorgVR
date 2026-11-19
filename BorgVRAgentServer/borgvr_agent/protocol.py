@@ -41,12 +41,18 @@ class ToolDefinition(Message):
     inputSchema: dict[str, Any]
 
 
+class ExecutionLimits(Message):
+    max_calls: int = Field(ge=24, le=1024)
+    timeout_seconds: int = Field(ge=60, le=7200)
+
+
 class Hello(Message):
     type: Literal["hello"]
     protocol: Literal[1]
     dataset_id: str = Field(min_length=1, max_length=128)
     context_id: str = Field(min_length=1, max_length=128)
     tools: list[ToolDefinition] = Field(max_length=32)
+    execution_limits: ExecutionLimits | None = None
 
 
 class UserMessage(Message):

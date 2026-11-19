@@ -1,4 +1,6 @@
 """Loopback-only native-client test: real agent/TLS, deterministic model, no microphone/GPU."""
+import asyncio
+from dataclasses import replace
 import json
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -16,6 +18,7 @@ import uvicorn
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "BorgVRAgentServer"))
 from configure import create_configuration
 from borgvr_agent.app import Settings, create_app
+from model_config import ModelConfig
 
 root = Path(sys.argv[1])
 create_configuration(root, "localhost", "127.0.0.1", 8766, "0")
@@ -46,7 +49,22 @@ async def model(messages, info):
     returned = [part for message in messages for part in message.parts if isinstance(part, ToolReturnPart)]
     user = next((part.content for message in messages for part in message.parts
                  if isinstance(part, UserPromptPart) and isinstance(part.content, str)), "")
-    if user == "wait":
+    if user == "long-run":
+        if len(returned) >= 32:
+            return ModelResponse(parts=[TextPart("Long native run passed.")])
+        steps = [("get_application_state", {})] * 32
+    elif user == "replace-source":
+        if len(returned) >= 2:
+            await asyncio.sleep(30)
+            raise RuntimeError("Interrupted request was not cancelled")
+        steps = [("get_application_state", {}), ("report_progress", {"text": "Old request waiting."})]
+    elif user == "replace-at-tool":
+        if len(returned) >= 2:
+            return ModelResponse(parts=[TextPart("Old render wait completed.")])
+        frame = returned[0].content["completedFrame"] if returned else 0
+        steps = [("get_application_state", {}),
+                 ("wait_until_rendered", {"after_frame": frame, "timeout_seconds": 5})]
+    elif user == "wait":
         steps = [("get_application_state", {}), ("wait_until_rendered", {"after_frame": 999999, "timeout_seconds": 30})]
     elif user in {"context-before-change", "context-after-change", "verification-failed"}:
         steps = [("get_application_state", {})]
@@ -74,6 +92,9 @@ listener = socket.socket()
 listener.bind(("127.0.0.1", 0))
 port = listener.getsockname()[1]
 server = uvicorn.Server(uvicorn.Config(create_app(Settings(token=token, vllm_token="test-token-" * 8,
+    # FunctionModel estimates serialized SDK history, not real vLLM tokens. Keep
+    # this execution-budget fixture separate from the dedicated context tests.
+    inference=replace(ModelConfig.from_env({}), context=65536),
     vllm_url=f"http://127.0.0.1:{catalog.server_port}/v1"), FunctionModel(model)),
     ssl_certfile=str(root / "runtime/tls/server.crt"), ssl_keyfile=str(root / "runtime/tls/server.key"),
     ws="websockets-sansio", ws_max_size=4194304, access_log=False, log_level="error"))

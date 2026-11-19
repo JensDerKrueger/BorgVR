@@ -131,3 +131,50 @@ def test_native_call_guard_never_sends_an_excess_call_even_if_model_bypasses_fil
             await session.call_tool(ToolDefinition.model_validate(STATE), {})
         assert session.native_calls == MAX_NATIVE_CALLS and session.pending is None
     asyncio.run(check())
+
+
+def test_negotiated_long_run_can_make_more_than_24_borgvr_calls():
+    requests = 0
+    async def model(messages, info):
+        nonlocal requests
+        requests += 1
+        if requests <= 32:
+            assert "rotate_view" in {tool.name for tool in info.function_tools}
+            return ModelResponse(parts=[ToolCallPart("get_application_state", {}, tool_call_id=str(requests))])
+        return ModelResponse(parts=[TextPart("The longer investigation completed.")])
+    settings = replace(SETTINGS, inference=replace(SETTINGS.inference, context=32768))
+    with connection(FunctionModel(model), settings) as client, open_session(client) as ws:
+        ws.send_json({**hello([STATE, ROTATE]), "execution_limits": {"max_calls": 256, "timeout_seconds": 1800}})
+        ready = ws.receive_json()
+        assert ready["execution_limits"] == {"max_calls": 256, "timeout_seconds": 1800}
+        ws.send_json(user())
+        ws.receive_json()
+        for _ in range(32):
+            call = ws.receive_json()
+            assert call["type"] == "tool_call"
+            ws.send_json(reply(call))
+        assert ws.receive_json()["text"] == "The longer investigation completed."
+        assert ws.receive_json()["type"] == "completed"
+
+
+def test_server_caps_negotiated_execution_limits_and_preserves_legacy_defaults():
+    settings = replace(SETTINGS, max_native_calls=64, max_run_timeout=900)
+    with connection(settings=settings) as client:
+        with open_session(client) as ws:
+            ws.send_json({**hello([STATE]), "execution_limits": {"max_calls": 256, "timeout_seconds": 1800}})
+            assert ws.receive_json()["execution_limits"] == {"max_calls": 64, "timeout_seconds": 900}
+        with open_session(client) as ws:
+            ws.send_json(hello([STATE]))
+            assert ws.receive_json()["execution_limits"] == {"max_calls": 24, "timeout_seconds": 180}
+
+
+@pytest.mark.parametrize("limits", [
+    {"max_calls": 23, "timeout_seconds": 1800}, {"max_calls": 1025, "timeout_seconds": 1800},
+    {"max_calls": True, "timeout_seconds": 1800}, {"max_calls": 256, "timeout_seconds": 7201},
+    {"max_calls": 256, "timeout_seconds": 0}, {"max_calls": 256, "timeout_seconds": 1800, "extra": True},
+])
+def test_invalid_execution_limits_are_rejected(limits):
+    from pydantic import ValidationError
+    from borgvr_agent.protocol import Hello
+    with pytest.raises(ValidationError):
+        Hello.model_validate({**hello([STATE]), "execution_limits": limits})

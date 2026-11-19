@@ -1,4 +1,5 @@
 import Foundation
+import CryptoKit
 import CoreFoundation
 
 enum VoiceAgentSpeechRate {
@@ -187,28 +188,43 @@ struct VoiceAgentCallLedger {
   struct Entry {
     let signature: String
     var reply: String?
+    var completed = false
   }
   private(set) var entries: [String: Entry] = [:]
   private var bytes = 0
+  private var completedOrder: [String] = []
 
   mutating func begin(id: String, signature: String) throws -> Entry? {
-    guard !id.isEmpty, id.utf8.count <= 128 else { throw VoiceAgentError.protocolViolation }
+    guard !id.isEmpty, id.utf8.count <= 128, signature.utf8.count <= VoiceAgentPolicy.maximumFrameBytes
+    else { throw VoiceAgentError.protocolViolation }
+    let digest = SHA256.hash(data: Data(signature.utf8)).map { String(format: "%02x", $0) }.joined()
     if let previous = entries[id] {
-      guard previous.signature == signature else { throw VoiceAgentError.protocolViolation }
+      guard previous.signature == digest, !previous.completed || previous.reply != nil
+      else { throw VoiceAgentError.protocolViolation }
       return previous
     }
-    guard entries.count < 512, bytes + signature.utf8.count <= 8 * 1024 * 1024
+    guard entries.count < 8192
     else { throw VoiceAgentError.protocolViolation }
-    bytes += signature.utf8.count
-    entries[id] = Entry(signature: signature)
+    entries[id] = Entry(signature: digest)
     return nil
   }
 
   mutating func finish(id: String, reply: String) throws {
-    guard var entry = entries[id], entry.reply == nil, bytes + reply.utf8.count <= 16 * 1024 * 1024
+    guard var entry = entries[id], !entry.completed, reply.utf8.count <= VoiceAgentPolicy.maximumFrameBytes
     else { throw VoiceAgentError.protocolViolation }
+    // Evict reply bytes, but retain call-signature hashes so an old mutation can
+    // never execute again just because its screenshot has left the replay cache.
+    while bytes + reply.utf8.count > 8 * 1024 * 1024, !completedOrder.isEmpty {
+      let oldID = completedOrder.removeFirst()
+      if let oldReply = entries[oldID]?.reply {
+        bytes -= oldReply.utf8.count
+        entries[oldID]?.reply = nil
+      }
+    }
     bytes += reply.utf8.count
     entry.reply = reply
+    entry.completed = true
     entries[id] = entry
+    completedOrder.append(id)
   }
 }
