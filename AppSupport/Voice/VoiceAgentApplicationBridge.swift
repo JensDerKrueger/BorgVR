@@ -5,6 +5,10 @@ struct VoiceAgentContext: Equatable {
   let datasetID: String
   let openingID: UUID
   let editStateID: UUID?
+
+  func hasSameOpening(as other: VoiceAgentContext) -> Bool {
+    datasetID == other.datasetID && openingID == other.openingID
+  }
 }
 
 struct VoiceAgentApplicationChange {

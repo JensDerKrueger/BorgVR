@@ -33,6 +33,7 @@ final class VoiceAgentController: ObservableObject {
   @Published var isPresented = false
   private var bridge: (any VoiceAgentApplicationBridge)?
   private var context: VoiceAgentContext?
+  private var scopeOpening: VoiceAgentContext?
   private var connectionIdentity: VoiceAgentConnectionIdentity?
   private var contextID = ""
   private var sessionID: String?
@@ -114,6 +115,14 @@ final class VoiceAgentController: ObservableObject {
   var hasDataset: Bool { bridge?.context != nil && bridge?.rendererReady == true }
   var isAvailable: Bool { bridge != nil && settings.enabled }
 
+  private var applicationOpeningMatches: Bool {
+    switch (scopeOpening, bridge?.applicationDatasetContext) {
+      case (nil, nil): return true
+      case (let previous?, let current?): return previous.hasSameOpening(as: current)
+      default: return false
+    }
+  }
+
   func invalidateContext() {
     let current = bridge?.context
     let editing = userIsInteracting && changedDomains.contains("volume") &&
@@ -121,14 +130,14 @@ final class VoiceAgentController: ObservableObject {
       bridge?.datasetID == context?.datasetID
     datasetOpeningID = bridge?.rendererReady == true ? (current?.openingID ?? (editing ? context?.openingID : nil)) : nil
     if let openingContext {
-      if bridge?.applicationDatasetContext != openingContext { disconnect(reason: VoiceAgentError.contextChanged) }
+      if bridge?.applicationDatasetContext?.hasSameOpening(as: openingContext) != true { disconnect(reason: VoiceAgentError.contextChanged) }
       return
     }
     if openingTarget != nil, bridge?.applicationDatasetContext != openingPreviousContext {
       disconnect(reason: VoiceAgentError.contextChanged)
       return
     }
-    guard connectionIdentity != nil, context != current, !editing else { return }
+    guard connectionIdentity != nil, context != current || !applicationOpeningMatches, !editing else { return }
     // Never carry an in-flight command or goal into another dataset opening.
     guard connectionState == .ready, !busy, pendingCallID == nil, !userIsInteracting else {
       disconnect(reason: VoiceAgentError.contextChanged)
@@ -144,14 +153,17 @@ final class VoiceAgentController: ObservableObject {
     #else
     let vision = false
     #endif
-    return VoiceAgentPolicy.catalog(bridge.toolDefinitions, vision: vision,
+    let tools = VoiceAgentPolicy.catalog(bridge.toolDefinitions, vision: vision,
       transferFunctions: bridge.hasTransferFunctions, images: settings.sharesImages, datasetReady: hasDataset)
+    return !hasDataset && bridge.applicationDatasetContext != nil
+      ? tools.filter { $0["name"] as? String != "open_dataset" } : tools
   }
 
   private var wireDatasetID: Any { context?.datasetID as Any? ?? NSNull() }
 
   private func updateContext(_ current: VoiceAgentContext?) {
     context = current
+    scopeOpening = bridge?.applicationDatasetContext
     contextID = UUID().uuidString
     catalog = availableTools()
     readState = false
@@ -200,6 +212,7 @@ final class VoiceAgentController: ObservableObject {
     socket = nil
     session = nil
     context = nil
+    scopeOpening = nil
     connectionIdentity = nil
     sessionID = nil
     requestID = nil
@@ -299,6 +312,7 @@ final class VoiceAgentController: ObservableObject {
     interrupting = replacing
     errorText = nil
     context = captured
+    scopeOpening = bridge.applicationDatasetContext
     connectionIdentity = settings.identity
     contextID = UUID().uuidString
     readState = false
@@ -375,6 +389,7 @@ final class VoiceAgentController: ObservableObject {
         while !Task.isCancelled {
           try await Task.sleep(for: .seconds(1))
           guard let self, self.generation == id else { return }
+          self.invalidateContext()
           try self.requireContext()
           if self.requestID == nil, Date().timeIntervalSince(self.lastActivity) > 240 { self.disconnect(); return }
           tick += 1
@@ -485,7 +500,7 @@ final class VoiceAgentController: ObservableObject {
 
   private func requireContext() throws {
     if let openingContext {
-      guard bridge?.applicationDatasetContext == openingContext, settings.enabled,
+      guard bridge?.applicationDatasetContext?.hasSameOpening(as: openingContext) == true, settings.enabled,
             connectionIdentity == settings.identity else { throw VoiceAgentError.contextChanged }
       return
     }
@@ -495,7 +510,7 @@ final class VoiceAgentController: ObservableObject {
     let current = bridge?.context
     let editing = userIsInteracting && changedDomains.contains("volume") &&
       datasetOpeningID == context?.openingID && bridge?.datasetID == context?.datasetID
-    guard bridge != nil, current == context || editing, connectionIdentity == settings.identity,
+    guard bridge != nil, applicationOpeningMatches, current == context || editing, connectionIdentity == settings.identity,
           settings.enabled, context == nil || bridge?.rendererReady == true
     else { throw VoiceAgentError.contextChanged }
   }
@@ -651,7 +666,7 @@ final class VoiceAgentController: ObservableObject {
         if name == "open_dataset", let target = self.openingTarget {
           result = try await bridge.openDataset(id: target, validateContext: validate, didBegin: { opened in
             guard self.generation == id, self.requestID == request, self.openingTarget == opened.datasetID,
-                  self.openingContext == nil || self.openingContext == opened else { throw VoiceAgentError.contextChanged }
+                  self.openingContext == nil || self.openingContext?.hasSameOpening(as: opened) == true else { throw VoiceAgentError.contextChanged }
             self.openingContext = opened
           })
         } else {
@@ -671,6 +686,8 @@ final class VoiceAgentController: ObservableObject {
         if name == "open_dataset", !notApplied {
           guard let opened = self.openingContext, bridge.context == opened else { throw VoiceAgentError.contextChanged }
           self.context = opened
+          self.scopeOpening = opened
+          self.datasetOpeningID = opened.openingID
           self.contextID = UUID().uuidString
           self.catalog = self.availableTools()
           self.readState = false

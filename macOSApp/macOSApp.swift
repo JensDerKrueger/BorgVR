@@ -244,11 +244,12 @@ struct macOSApp: App {
             commandService: commandService
           )
           mcpController.configure(commandService: commandService, logger: appModel.logger)
-          voiceAgent.configure(service: commandService) {
+          voiceAgent.configure(service: commandService, isReady: {
+            !appModel.volumeBrush.isOpeningState && !appModel.volumeBrush.isRestoringPersonalState &&
+              !appModel.volumeBrush.isWaitingForSharedState
+          }) {
             switch appModel.datasetSessionState {
               case .opening(let dataset, let requestID), .rendering(let dataset, let requestID):
-                guard !appModel.volumeBrush.isOpeningState, !appModel.volumeBrush.isRestoringPersonalState,
-                      !appModel.volumeBrush.isWaitingForSharedState else { return nil }
                 return VoiceAgentContext(datasetID: dataset.uniqueId, openingID: requestID,
                                          editStateID: appModel.volumeBrush.activeState?.id)
               default: return nil

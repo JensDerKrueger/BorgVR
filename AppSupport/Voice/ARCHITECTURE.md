@@ -84,6 +84,10 @@ einen solchen Treffer, eine frische Zustandsabfrage und eine ausdrückliche Nutz
 Pro Auftrag ist höchstens ein Öffnen möglich. Der gemeinsame Service prüft den Kontext nach
 asynchronen Vorbereitungen und meldet den Öffnungsbeginn synchron mit seiner neuen Identität.
 Die Bridge wartet bis zu fünf Minuten auf den Renderer und kontrolliert dabei die Öffnungs-ID.
+Die stabile Öffnungsidentität bleibt dabei auch während der internen Bearbeitungsvorbereitung
+vorhanden. Bereitschaft wird separat abgefragt; erst nach ihrem Abschluss wird der endgültige
+Editierstand in den neuen Kontext übernommen. Gleiche Datensatz-ID mit anderer Öffnungs-ID
+bleibt ein fremder Wechsel. Die laufende Prüfung erkennt auch verzögert eintretende Bereitschaft.
 Fremde Auswahl oder Abbruch stoppen die Fortsetzung, ohne bereits begonnene Änderungen
 automatisch zurückzunehmen. Der normale Command-/GSC-Pfad bleibt erhalten.
 

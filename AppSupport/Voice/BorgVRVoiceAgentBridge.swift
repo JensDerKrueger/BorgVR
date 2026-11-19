@@ -7,18 +7,21 @@ final class BorgVRVoiceAgentBridge: VoiceAgentApplicationBridge {
   private let service: any BorgVRMCPCommandService
   private let router: BorgVRMCPToolRouter
   private let contextProvider: () -> VoiceAgentContext?
+  private let readinessProvider: () -> Bool
   private let origin = BorgVRCommandSource.controller(UUID().uuidString)
   private var searchResults: [String: Date] = [:]
 
-  init(service: any BorgVRMCPCommandService, context: @escaping () -> VoiceAgentContext?) {
+  init(service: any BorgVRMCPCommandService, isReady: @escaping () -> Bool = { true },
+       context: @escaping () -> VoiceAgentContext?) {
     self.service = service
     self.router = BorgVRMCPToolRouter(commandService: service)
     self.contextProvider = context
+    self.readinessProvider = isReady
   }
 
   var applicationDatasetContext: VoiceAgentContext? { contextProvider() }
   var context: VoiceAgentContext? { rendererReady ? contextProvider() : nil }
-  var rendererReady: Bool { service.applicationState().rendererReady }
+  var rendererReady: Bool { service.applicationState().rendererReady && readinessProvider() }
   var datasetID: String? { service.applicationState().dataset?.id }
   var hasTransferFunctions: Bool { service.transferFunctionCount > 0 }
   var toolDefinitions: [[String: Any]] { router.toolDefinitions }
@@ -81,8 +84,11 @@ final class BorgVRVoiceAgentBridge: VoiceAgentApplicationBridge {
     while true {
       try Task.checkCancellation()
       try validateContext()
-      guard applicationDatasetContext == expected else { throw VoiceAgentError.contextChanged }
-      if context == expected { return ["structuredContent": try stateSnapshot()] }
+      guard let current = applicationDatasetContext, current.hasSameOpening(as: expected) else { throw VoiceAgentError.contextChanged }
+      if let ready = context, ready.hasSameOpening(as: expected) {
+        try didBegin(ready)
+        return ["structuredContent": try stateSnapshot()]
+      }
       guard ContinuousClock.now < deadline else { throw VoiceAgentError.timedOut }
       try await Task.sleep(for: .milliseconds(100))
     }
@@ -124,7 +130,8 @@ final class BorgVRVoiceAgentBridge: VoiceAgentApplicationBridge {
 }
 
 extension VoiceAgentController {
-  func configure(service: any BorgVRMCPCommandService, context: @escaping () -> VoiceAgentContext?) {
-    configure(bridge: BorgVRVoiceAgentBridge(service: service, context: context))
+  func configure(service: any BorgVRMCPCommandService, isReady: @escaping () -> Bool = { true },
+                 context: @escaping () -> VoiceAgentContext?) {
+    configure(bridge: BorgVRVoiceAgentBridge(service: service, isReady: isReady, context: context))
   }
 }

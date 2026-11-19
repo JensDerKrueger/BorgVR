@@ -207,11 +207,12 @@ struct BorgVRMobileApp: App {
       }
     )
     mcpController.configure(commandService: service, logger: appModel.logger)
-    voiceAgent.configure(service: service) {
+    voiceAgent.configure(service: service, isReady: {
+      !appModel.volumeBrush.isOpeningState && !appModel.volumeBrush.isRestoringPersonalState &&
+        !appModel.volumeBrush.isWaitingForSharedState
+    }) {
       switch appModel.datasetSessionState {
         case .opening(let dataset, let requestID), .rendering(let dataset, let requestID):
-          guard !appModel.volumeBrush.isOpeningState, !appModel.volumeBrush.isRestoringPersonalState,
-                !appModel.volumeBrush.isWaitingForSharedState else { return nil }
           return VoiceAgentContext(datasetID: dataset.uniqueId, openingID: requestID,
                                    editStateID: appModel.volumeBrush.activeState?.id)
         default: return nil

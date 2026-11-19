@@ -231,6 +231,8 @@ struct VoiceAgentTests {
     startAgent.cancel()
     var openCount = 0
     var simulateReady = true
+    var toolsReady = true
+    var openingEditStateID: UUID?
     var waitBeforeOpen = false
     var preflightStarted = false
     let catalogService = BorgVRScreenCommandService(session: emptySession, datasetListProvider: { [bone] },
@@ -242,12 +244,20 @@ struct VoiceAgentTests {
           try validate()
         }
         openCount += 1
+        toolsReady = false
+        openingEditStateID = nil
         emptyApp.openDataset(entry, automaticallyLoadState: false)
         try didBegin()
         guard case .opening(_, let request) = emptyApp.datasetSessionState else { fatalError() }
         if simulateReady {
           emptyApp.prepareDatasetRenderer(key: emptyApp.activeDatasetRenderKey, metadata: metadata, requestID: request)
           _ = emptyApp.markRenderedDataset(key: emptyApp.activeDatasetRenderKey, requestID: request)
+          Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(200))
+            openingEditStateID = UUID()
+            try? await Task.sleep(for: .milliseconds(200))
+            toolsReady = true
+          }
         }
       })
     let searchToolResult = try await BorgVRMCPToolRouter(commandService: catalogService)
@@ -257,10 +267,10 @@ struct VoiceAgentTests {
     try expect(searchTextObject["totalMatches"] as? Int == 1,
                "MCP clients without structuredContent did not receive the search results")
     let catalogAgent = VoiceAgentController(settings: settings)
-    catalogAgent.configure(service: catalogService) {
+    catalogAgent.configure(service: catalogService, isReady: { toolsReady }) {
       switch emptyApp.datasetSessionState {
         case .opening(let dataset, let request), .rendering(let dataset, let request):
-          return .init(datasetID: dataset.uniqueId, openingID: request, editStateID: nil)
+          return .init(datasetID: dataset.uniqueId, openingID: request, editStateID: openingEditStateID)
         default: return nil
       }
     }
@@ -275,6 +285,7 @@ struct VoiceAgentTests {
     await catalogAgent.submit("catalog-open")
     try await wait { !catalogAgent.busy }
     try expect(catalogAgent.errorText == nil && openCount == 1 && emptyApp.rendererHasActiveDataset &&
+               toolsReady && openingEditStateID != nil &&
                catalogAgent.messages.last?.text == "Catalog dataset opened and fresh state verified.",
                "Planned opening failed or was repeated: \(catalogAgent.errorText ?? "")")
     catalogAgent.newConversation()

@@ -443,11 +443,12 @@ struct VisionApp: App {
       }
     )
     mcpController.configure(commandService: service, logger: runtimeAppModel.logger)
-    voiceAgent.configure(service: service) {
+    voiceAgent.configure(service: service, isReady: {
+      !runtimeAppModel.volumeBrush.isOpeningState && !runtimeAppModel.volumeBrush.isRestoringPersonalState &&
+        !runtimeAppModel.volumeBrush.isWaitingForSharedState
+    }) {
       switch runtimeAppModel.datasetSessionState {
         case .opening(let dataset, let requestID), .rendering(let dataset, let requestID):
-          guard !runtimeAppModel.volumeBrush.isOpeningState, !runtimeAppModel.volumeBrush.isRestoringPersonalState,
-                !runtimeAppModel.volumeBrush.isWaitingForSharedState else { return nil }
           return VoiceAgentContext(datasetID: dataset.uniqueId, openingID: requestID,
                                    editStateID: runtimeAppModel.volumeBrush.activeState?.id)
         default: return nil

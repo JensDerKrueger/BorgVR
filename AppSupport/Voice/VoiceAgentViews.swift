@@ -1,5 +1,10 @@
 import SwiftUI
 import UniformTypeIdentifiers
+#if os(macOS)
+import AppKit
+#else
+import UIKit
+#endif
 
 struct VoiceAgentButton: View {
   @EnvironmentObject private var agent: VoiceAgentController
@@ -65,8 +70,12 @@ struct VoiceAgentView: View {
             LazyVStack(alignment: .leading, spacing: 16) {
               ForEach(agent.messages) { message in
                 VStack(alignment: .leading, spacing: 4) {
-                  Text(voiceAgentText(message.user ? "You" : "BorgVR"))
-                    .font(.caption.weight(.semibold)).foregroundStyle(message.user ? Color.accentColor : .secondary)
+                  HStack {
+                    Text(voiceAgentText(message.user ? "You" : "BorgVR"))
+                      .font(.caption.weight(.semibold)).foregroundStyle(message.user ? Color.accentColor : .secondary)
+                    Spacer()
+                    if !message.user { VoiceAgentCopyButton(text: message.text) }
+                  }
                   if message.user {
                     Text(message.text).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
                   } else {
@@ -102,7 +111,11 @@ struct VoiceAgentView: View {
           }
         }
         if let error = agent.errorText {
-          Text(error).foregroundStyle(.red).font(.callout).frame(maxWidth: .infinity, alignment: .leading)
+          HStack(alignment: .top) {
+            Text(error).foregroundStyle(.red).font(.callout).textSelection(.enabled)
+              .frame(maxWidth: .infinity, alignment: .leading)
+            VoiceAgentCopyButton(text: error)
+          }
         }
         if !speech.transcript.isEmpty, speech.isRecording {
           Text(speech.transcript).foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading)
@@ -120,16 +133,18 @@ struct VoiceAgentView: View {
           TextField(voiceAgentText(agent.collaborationQuestion == nil ? "Message" : "Reply"), text: $text, axis: .vertical)
             .lineLimit(1...4).textFieldStyle(.roundedBorder)
             .disabled(agent.interrupting || speech.isRecording)
-          Button {
-            let message = text
-            text = ""
-            Task { await agent.submit(message) }
-          } label: { Image(systemName: "arrow.up").frame(width: 28, height: 28) }
+            .submitLabel(.send)
+            .onSubmit { sendMessage() }
+            .onKeyPress(.return, phases: .down) { key in
+              guard key.modifiers.intersection([.shift, .control, .option, .command]).isEmpty else { return .ignored }
+              sendMessage()
+              return .handled
+            }
+          Button { sendMessage() } label: { Image(systemName: "arrow.up").frame(width: 28, height: 28) }
           .buttonStyle(.borderedProminent)
           .help(voiceAgentText(agent.collaborationQuestion != nil ? "Reply" : agent.busy ? "Send and interrupt current request" : "Send"))
           .accessibilityLabel(voiceAgentText(agent.collaborationQuestion != nil ? "Reply" : agent.busy ? "Send and interrupt current request" : "Send"))
-          .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || text.count > 8192 || agent.interrupting ||
-                    speech.isRecording || agent.connectionState == .connecting || !agent.isAvailable)
+          .disabled(!canSendMessage)
           Button { agent.cancel() } label: { Image(systemName: "xmark.circle").frame(width: 28, height: 28) }
             .buttonStyle(.bordered).help(voiceAgentText("Cancel"))
             .accessibilityLabel(voiceAgentText("Cancel"))
@@ -153,6 +168,18 @@ struct VoiceAgentView: View {
     .onChange(of: settings.enabled) { _, enabled in if !enabled { dismiss() } }
   }
 
+  private var canSendMessage: Bool {
+    !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && text.count <= 8192 &&
+      !agent.interrupting && !speech.isRecording && agent.connectionState != .connecting && agent.isAvailable
+  }
+
+  private func sendMessage() {
+    guard canSendMessage else { return }
+    let message = text
+    text = ""
+    Task { await agent.submit(message) }
+  }
+
   @ViewBuilder private var collaborationActions: some View {
     Button(voiceAgentText("Yes"), systemImage: "checkmark") {
       Task { await agent.answerCollaboration(voiceAgentText("Yes")) }
@@ -172,6 +199,36 @@ struct VoiceAgentView: View {
     Button(voiceAgentText("Discard"), systemImage: "xmark") {
       Task { await agent.decideRule(proposal, remember: false) }
     }.buttonStyle(.bordered)
+  }
+}
+
+private struct VoiceAgentCopyButton: View {
+  let text: String
+  @State private var copied = false
+
+  var body: some View {
+    Button {
+      #if os(macOS)
+      NSPasteboard.general.clearContents()
+      copied = NSPasteboard.general.setString(text, forType: .string)
+      #else
+      UIPasteboard.general.string = text
+      copied = true
+      #endif
+    } label: {
+      Image(systemName: copied ? "checkmark" : "doc.on.doc")
+        .frame(width: 24, height: 24)
+    }
+    .buttonStyle(.bordered)
+    .controlSize(.small)
+    .help(voiceAgentText(copied ? "Copied" : "Copy response"))
+    .accessibilityLabel(voiceAgentText(copied ? "Copied" : "Copy response"))
+    .disabled(text.isEmpty)
+    .task(id: copied) {
+      guard copied else { return }
+      do { try await Task.sleep(for: .seconds(2)) } catch { return }
+      copied = false
+    }
   }
 }
 
