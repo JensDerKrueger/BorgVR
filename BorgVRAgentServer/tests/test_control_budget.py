@@ -5,11 +5,11 @@ from types import SimpleNamespace
 
 import pytest
 from pydantic_ai import ModelRetry
-from pydantic_ai.messages import ModelResponse, TextPart, ToolCallPart
+from pydantic_ai.messages import ModelRequest, ModelResponse, SystemPromptPart, TextPart, ToolCallPart
 from pydantic_ai.models.function import FunctionModel
 
 from borgvr_agent.app import Session
-from borgvr_agent.budget import ControlBudget, MAX_NATIVE_CALLS
+from borgvr_agent.budget import BUDGET_MARKER, ControlBudget, MAX_NATIVE_CALLS
 from borgvr_agent.protocol import ToolDefinition
 from test_agent import STATE, ROTATE, SCREENSHOT, SETTINGS, connection, hello, open_session, png, reply, user
 
@@ -41,9 +41,30 @@ def test_budget_stops_advertising_tools_and_restricts_final_output_tokens():
         assert {tool.name for tool in allowed} == {"set_transform", "set_clipping", "wait_until_rendered", "capture_screenshot"}
         session.native_calls = MAX_NATIVE_CALLS
         assert await budget.prepare_tools(ctx, tools) == []
-        request = SimpleNamespace(model_settings={"max_tokens": 2048, "temperature": 0.2})
+        request = SimpleNamespace(model_settings={"max_tokens": 2048, "temperature": 0.2},
+                                  messages=[ModelRequest(parts=[SystemPromptPart("Trusted policy")])])
+        ctx.messages = list(request.messages)
         await budget.before_model_request(ctx, request)
         assert request.model_settings == {"max_tokens": 512, "temperature": 0.2}
+        assert request.messages == ctx.messages
+    asyncio.run(check())
+
+
+def test_budget_updates_one_system_message_without_accumulating_instructions():
+    session = SimpleNamespace(native_calls=0, settings=SETTINGS, run_started=None)
+    ctx = SimpleNamespace(usage=SimpleNamespace(tool_calls=0, requests=0), messages=[])
+    budget = ControlBudget(session)
+    request = SimpleNamespace(messages=[ModelRequest(parts=[SystemPromptPart("Trusted static rules")])], model_settings={})
+
+    async def check():
+        for count in range(25):
+            session.native_calls = count
+            await budget.before_model_request(ctx, request)
+            parts = [part for message in request.messages for part in message.parts if isinstance(part, SystemPromptPart)]
+            assert len(parts) == 1 and parts[0].content.count(BUDGET_MARKER) == 1
+            assert parts[0].content.startswith("Trusted static rules" + BUDGET_MARKER)
+            assert f"BorgVR calls remaining={24-count}" in parts[0].content
+            assert len(parts[0].content) < 250
     asyncio.run(check())
 
 

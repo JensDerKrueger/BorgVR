@@ -165,6 +165,8 @@ def test_openai_compatible_http_adapter_and_png_payload(monkeypatch, custom):
         assert request.headers["Authorization"] == f"Bearer {SETTINGS.vllm_token}"
         body = json.loads(request.content)
         assert body["add_generation_prompt"] is True
+        assert body["messages"][0]["role"] == "system"
+        assert sum(message["role"] in {"system", "developer"} for message in body["messages"]) == 1
         token_requests.append(body)
         return httpx.Response(200, json={"count": 1024, "max_model_len": inference.context})
 
@@ -178,6 +180,8 @@ def test_openai_compatible_http_adapter_and_png_payload(monkeypatch, custom):
         assert request.url.path == "/v1/chat/completions"
         assert request.headers["Authorization"] == f"Bearer {SETTINGS.vllm_token}"
         body = json.loads(request.content)
+        system_messages = [message for message in body["messages"] if message["role"] in {"system", "developer"}]
+        assert len(system_messages) == 1 and body["messages"][0]["role"] == "system"
         if custom:
             assert "chat_template_kwargs" not in body
         else:
