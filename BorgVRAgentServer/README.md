@@ -2,6 +2,13 @@
 
 [Deutsch](README.de.md)
 
+Development reference: [capability inventory and gaps](CAPABILITIES.md) and
+[application-wide assistant plan](CAPABILITY_PLAN.md), currently in German. The inventory
+distinguishes app Commands, MCP tools and tools actually allowed for the agent. Start-menu
+assistance, topic search, import and fusion are planned, not enabled by these documents.
+The static audit requires a complete repository checkout and Python 3.10 or newer; it
+does not contact the GPU server or need a running app.
+
 For **Windows 11 with an NVIDIA GPU**, start with the [WSL 2 guide](WINDOWS.md).
 It covers Docker Desktop, Docker Engine inside Ubuntu and Windows network access.
 The host preparation steps below apply to **native Linux**.

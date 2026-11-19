@@ -76,6 +76,12 @@ The current development version is **3.9**. The SharePlay wire protocol is versi
 
 ### AI voice and text assistant
 
+The [capability inventory](BorgVRAgentServer/CAPABILITIES.md) maps native user workflows to
+Commands, MCP, GSC, agent tools and remaining gaps. The [implementation plan](BorgVRAgentServer/CAPABILITY_PLAN.md)
+describes the future app-wide assistant, including catalog search, import and fusion before
+opening a dataset; these features are not yet enabled. Run the source audit with Python
+3.10+: `cd BorgVRAgentServer` followed by `python3 audit_capabilities.py`.
+
 - Opt-in **Settings > AI Assistant** on macOS, iOS and visionOS: HTTPS server origin,
   Keychain token, explicit certificate import, render-image sharing and local speech output.
 - A shared conversation view accepts text or one spoken request at a time. Recognition is

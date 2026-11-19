@@ -2,6 +2,13 @@
 
 [English / vollständige Betriebsreferenz](README.md) | [Verbindungsprotokoll](PROTOCOL.md)
 
+Für die Weiterentwicklung: [Funktionskatalog und Lücken](CAPABILITIES.md) sowie
+[Plan für den appweiten Assistenten](CAPABILITY_PLAN.md). Der Katalog unterscheidet
+App-Commands, MCP-Werkzeuge und tatsächlich erlaubte Agentenwerkzeuge. Die geplante
+Nutzung im Startmenü, Themenabfragen, Import und Fusion sind noch nicht freigeschaltet.
+Der statische Abgleich benötigt einen vollständigen Repository-Checkout und Python
+3.10 oder neuer, weder GPU noch ai1.
+
 Für **Windows 11 mit NVIDIA-GPU** zuerst die [WSL-2-Anleitung](WINDOWS.de.md) verwenden.
 Sie beschreibt Docker Desktop und Docker Engine in Ubuntu sowie die Windows-Netzfreigabe.
 Die folgenden Host-Schritte beziehen sich auf **natives Linux**.

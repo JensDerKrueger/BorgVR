@@ -3,6 +3,11 @@
 Der Assistent ist ein optionales Subsystem. Renderer, Datensätze, Command-Ausführung und
 GSC-Aufzeichnung dürfen weder den Agenten noch ein bestimmtes Modell voraussetzen.
 
+Der [Funktionskatalog](../../BorgVRAgentServer/CAPABILITIES.md) und der
+[Plan für den appweiten Assistenten](../../BorgVRAgentServer/CAPABILITY_PLAN.md) beschreiben
+Iststand und nächste Ausbauschritte. Sie sind keine Laufzeitfreigabe. Insbesondere werden
+Import/Fusion nicht direkt aus dem Agenten an UI-Views oder Konvertierungsobjekte gekoppelt.
+
 ## Schnittstellen
 
 ```text
