@@ -207,14 +207,24 @@ final class DockingController: ObservableObject {
     }
   }
 
-  /// Returns true when the detached native window must be opened or brought forward.
-  func togglePresentation(_ panel: DockablePanelID) -> Bool {
-    if isDetached(panel) {
-      show(panel)
-      return true
+  func togglePresentation(
+    _ panel: DockablePanelID,
+    openWindow: (String) -> Void,
+    dismissWindow: (String) -> Void
+  ) {
+    guard isDetached(panel) else {
+      toggleVisibility(panel)
+      return
     }
-    toggleVisibility(panel)
-    return false
+    if isVisible(panel) {
+      // A button toggle hides the window without losing its detached placement.
+      markDetachedWindowTemporarilyClosed(panel)
+      hide(panel)
+      dismissWindow(panel.windowID)
+    } else {
+      show(panel)
+      openWindow(panel.windowID)
+    }
   }
 
   func request(_ command: MacCommand) {
@@ -249,9 +259,18 @@ final class DockingController: ObservableObject {
   func resetForDatasetClose() {
     showsLog = false
     showsDatasetInfo = false
-    datasetLifecycleClosingPanels.formUnion(detachedPanels)
+    datasetLifecycleClosingPanels.formUnion(detachedPanels.intersection(visiblePanels))
     detachedPanels.removeAll()
     visiblePanels.removeAll()
+  }
+
+  func closeDatasetPanels(dismissWindow: (String) -> Void) {
+    resetForDatasetClose()
+    for panel in DockablePanelID.allCases {
+      dismissWindow(panel.windowID)
+    }
+    dismissWindow("PerformanceGraphView")
+    dismissWindow("ScriptLogView")
   }
 
   func restoreForDatasetOpen() {
@@ -368,10 +387,6 @@ final class DockingController: ObservableObject {
     } else {
       show(.transferFunctionEditor)
     }
-  }
-
-  func toggleEditor(for renderMode: RenderMode) -> Bool {
-    togglePresentation(renderMode == .isoValue ? .isoEditor : .transferFunctionEditor)
   }
 
   func hideIncompatibleEditor(for _: RenderMode) {

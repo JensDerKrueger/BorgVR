@@ -13,6 +13,7 @@ struct RenderControlsPanel: View {
   @EnvironmentObject private var voiceAgent: VoiceAgentController
   @EnvironmentObject private var docking: DockingController
   @Environment(\.openWindow) private var openWindow
+  @Environment(\.dismissWindow) private var dismissWindow
 
   @State private var selectedInteractionMode: AppModel.InteractionMode = .model
   @State private var copiedWebGPUShareLink = false
@@ -363,9 +364,7 @@ struct RenderControlsPanel: View {
       : .transferFunctionEditor
     let isPresented = docking.isVisible(panel)
     return Button {
-      if docking.toggleEditor(for: renderingParameters.renderMode) {
-        openWindow(id: panel.windowID)
-      }
+      toggleWindow(panel)
     } label: {
       windowButtonLabel(
         "Editor",
@@ -445,9 +444,9 @@ struct RenderControlsPanel: View {
   }
 
   private func toggleWindow(_ panel: DockablePanelID) {
-    if docking.togglePresentation(panel) {
-      openWindow(id: panel.windowID)
-    }
+    docking.togglePresentation(panel,
+      openWindow: { openWindow(id: $0) },
+      dismissWindow: { dismissWindow(id: $0) })
   }
 
   private var mainPanelConfiguration: PanelWindowConfiguration {

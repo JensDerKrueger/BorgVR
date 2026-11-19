@@ -60,29 +60,48 @@ struct DockingControllerTests {
     precondition(panel.configuration.actions.isEmpty)
     precondition(docking.isDockedVisible(.renderControls))
 
+    var openedWindows: [String] = []
+    var dismissedWindows: [String] = []
+    func toggle(_ panel: DockablePanelID) {
+      docking.togglePresentation(panel,
+        openWindow: {
+          precondition(docking.isDetached(panel) && docking.isVisible(panel),
+            "Window content must be ready before opening its window")
+          openedWindows.append($0)
+        },
+        dismissWindow: {
+          precondition(!docking.isVisible(panel), "Hide panel content before dismissing its window")
+          dismissedWindows.append($0)
+          docking.detachedWindowDidDisappear(panel)
+        })
+    }
     for mode in [RenderMode.transferFunction1D, .transferFunction1DWithLighting, .isoValue] {
       let editor: DockablePanelID = mode == .isoValue ? .isoEditor : .transferFunctionEditor
       docking.close(editor)
-      precondition(!docking.toggleEditor(for: mode) && docking.isDockedVisible(editor),
-        "A docked editor must become visible without opening a native window")
-      precondition(!docking.toggleEditor(for: mode) && !docking.isVisible(editor),
-        "A second click must hide an inline editor")
-      docking.detach(editor)
-      precondition(docking.toggleEditor(for: mode) && docking.isVisible(editor),
-        "An already detached editor must be raised, not hidden")
-      docking.hide(editor)
-      precondition(docking.toggleEditor(for: mode) && docking.isDetached(editor) && docking.isVisible(editor),
-        "Reopening a hidden detached editor must restore its content and open its window")
-      docking.close(editor)
-      docking.detachedWindowDidDisappear(editor)
+      toggle(editor)
+      precondition(docking.isDockedVisible(editor))
+      toggle(editor)
+      precondition(!docking.isVisible(editor), "A second click must hide an inline editor")
     }
+    precondition(openedWindows.isEmpty && dismissedWindows.isEmpty,
+      "Inline toggles must not open or dismiss native windows")
     for panel in DockablePanelID.allCases {
       docking.detach(panel)
-      docking.hide(panel)
-      precondition(docking.togglePresentation(panel) && docking.isVisible(panel),
-        "Every detached panel must restore its content before showing its window")
-      docking.close(panel)
+      openedWindows.removeAll()
+      dismissedWindows.removeAll()
+      for _ in 0..<3 {
+        toggle(panel)
+        precondition(!docking.isVisible(panel) && docking.isDetached(panel),
+          "Every detached panel must close on a second click and retain its placement")
+        toggle(panel)
+        precondition(docking.isVisible(panel) && docking.isDetached(panel))
+      }
+      precondition(openedWindows == Array(repeating: panel.windowID, count: 3))
+      precondition(dismissedWindows == Array(repeating: panel.windowID, count: 3),
+        "Each hide must dismiss the actual native window, not merely clear its content")
       docking.detachedWindowDidDisappear(panel)
+      precondition(!docking.isVisible(panel) && !docking.isDetached(panel),
+        "Button toggles must not suppress a subsequent close with the native close button")
     }
 
     docking.detach(.measurementEditor)
@@ -130,6 +149,32 @@ struct DockingControllerTests {
     docking.restoreForDatasetOpen()
     precondition(docking.isVisible(.transferFunctionEditor) && docking.isDetached(.transferFunctionEditor),
       "Closing a dataset must preserve the user's saved panel layout")
+
+    for panel in DockablePanelID.allCases { docking.detach(panel) }
+    docking.showsLog = true
+    docking.showsDatasetInfo = true
+    dismissedWindows.removeAll()
+    docking.closeDatasetPanels {
+      precondition(DockablePanelID.allCases.allSatisfy { !docking.isVisible($0) && !docking.isDetached($0) })
+      dismissedWindows.append($0)
+    }
+    precondition(dismissedWindows == DockablePanelID.allCases.map(\.windowID) + ["PerformanceGraphView", "ScriptLogView"],
+      "Dataset cleanup must dismiss every renderer window and leave app-wide windows alone")
+    precondition(!docking.showsLog && !docking.showsDatasetInfo)
+    for panel in DockablePanelID.allCases { docking.detachedWindowDidDisappear(panel) }
+    docking.restoreForDatasetOpen()
+    precondition(DockablePanelID.allCases.allSatisfy { docking.isVisible($0) && docking.isDetached($0) },
+      "Native window-close callbacks during dataset cleanup must not erase the saved layout")
+
+    toggle(.transferFunctionEditor)
+    docking.closeDatasetPanels { _ in }
+    for panel in DockablePanelID.allCases where panel != .transferFunctionEditor {
+      docking.detachedWindowDidDisappear(panel)
+    }
+    docking.restoreForDatasetOpen()
+    docking.detachedWindowDidDisappear(.transferFunctionEditor)
+    precondition(!docking.isVisible(.transferFunctionEditor),
+      "A window hidden before dataset close must not leave a stale close callback for the next dataset")
 
     let container = CGSize(width: 1200, height: 800)
     let size = CGSize(width: 380, height: 400)

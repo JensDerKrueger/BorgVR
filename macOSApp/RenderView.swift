@@ -83,7 +83,7 @@ struct RenderView: View {
       HStack {
         Spacer()
         ForEach(docking.revealControls.filter { !docking.isVisible($0.id) }) { control in
-          Button { docking.show(control.id) } label: { Image(systemName: control.icon) }
+          Button { togglePanel(control.id) } label: { Image(systemName: control.icon) }
             .help(control.id == .renderControls
               ? MacRenderShortcut.help(control.text, shortcut: .toggleControls) : control.text)
             .accessibilityLabel(control.text)
@@ -655,9 +655,9 @@ struct RenderView: View {
        appModel.activeDatasetMetadata?.channelInterpretation != .independentChannels {
       return
     }
-    if docking.togglePresentation(panel) {
-      openWindow(id: panel.windowID)
-    }
+    docking.togglePresentation(panel,
+      openWindow: { openWindow(id: $0) },
+      dismissWindow: { dismissWindow(id: $0) })
   }
 
   private func toggleRenderControlsDocking() {
@@ -671,16 +671,7 @@ struct RenderView: View {
   }
 
   private func toggleRenderControlsVisibility() {
-    if docking.isDetached(.renderControls) {
-      if docking.isVisible(.renderControls) {
-        docking.close(.renderControls)
-        dismissWindow(id: DockablePanelID.renderControls.windowID)
-      } else {
-        docking.show(.renderControls)
-      }
-    } else {
-      docking.toggleVisibility(.renderControls)
-    }
+    togglePanel(.renderControls)
   }
 
   private var transferFunctionCatalogDirectoryURLs: [URL] {

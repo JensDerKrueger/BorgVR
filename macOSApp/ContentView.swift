@@ -33,12 +33,7 @@ struct ContentView: View {
   }
 
   private func closeAuxiliaryWindows() {
-    docking.resetForDatasetClose()
-    for panel in DockablePanelID.allCases {
-      dismissWindow(id: panel.windowID)
-    }
-    dismissWindow(id: "PerformanceGraphView")
-    dismissWindow(id: "ScriptLogView")
+    docking.closeDatasetPanels { dismissWindow(id: $0) }
     dismissWindow(id: VoiceAgentView.windowID)
   }
 
@@ -47,6 +42,9 @@ struct ContentView: View {
     switch appModel.datasetSessionState {
       case .opening, .rendering, .closing:
         RenderView()
+          .onDisappear {
+            docking.closeDatasetPanels { dismissWindow(id: $0) }
+          }
       case .waitingForSharePlay, .resolving:
         WaitingView()
       case .inactive:
