@@ -402,6 +402,25 @@ Verarbeitung durch Apple muss separat erlaubt werden. Abbrechen beendet die Verb
 macht bereits ausgeführte Änderungen aber nicht rückgängig. Agenteneinstellungen und
 Schlüssel bleiben gerätelokal, außerhalb von SharePlay und GSC.
 
+### Bildfragen und Zählversuche
+
+Bei Fragen wie „Wie viele Münzen sind in der Spardose?“ soll der Agent selbst aktiv
+untersuchen: Zustand und Renderbild abfragen, bei Verdeckung einige gezielte andere
+Ansichten oder Clipping-Bereiche prüfen und nach Änderungen jeweils auf das Rendern warten.
+Kurze Bildbefunde bleiben als begrenzte Gesprächsnotizen erhalten, wenn ältere Bilder zur
+Kontextentlastung entfernt werden. Es sind Modellbeobachtungen, keine geprüften Messwerte.
+Objekte müssen über die Ansichten hinweg zugeordnet werden; Einzelbild-Zählungen dürfen
+nicht einfach addiert werden. Bei verbleibender Verdeckung ist eine belegbare Untergrenze
+oder ausdrücklich ungefähre Schätzung vorgesehen, keine erfundene exakte Gesamtzahl.
+Eine reine Bildfrage soll die ursprüngliche Transformation und Clipping-Grenzen nach der
+Untersuchung wiederherstellen, sofern deren exakte Werte verfügbar sind. Ohne Bildfreigabe
+kann der Agent nicht visuell zählen. Dies ersetzt keine Segmentierung oder Volumenauswertung.
+Die Grenzen bleiben bei 180 Sekunden und 24 BorgVR-Aufrufen pro Anfrage. Interne Bildbefunde
+und Zwischenmeldungen haben ein getrenntes Budget; insgesamt gelten höchstens 48 Werkzeug-
+und 48 Modellaufrufe. Eine laufende Budgetanzeige im Modellkontext leitet rechtzeitig die
+Abschlussphase ein. Vor dem harten Limit werden weitere Werkzeuge ausgeblendet, damit eine
+abschließende, gegebenenfalls unvollständige Antwort statt eines Limitfehlers möglich ist.
+
 ## 6. Sicherheit und Zertifikate
 
 - `.env` enthält Image-/Modellrevision, GPU, Speicherbudget, Adresse, Port und Benutzer-IDs.

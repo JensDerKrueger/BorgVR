@@ -390,6 +390,23 @@ permission. Cancel closes the connection but does not undo committed changes. As
 configuration and keys remain device-local and are excluded from SharePlay/GSC.
 See the [native user guide](../html/mcp.html#voice-agent) for more information.
 
+### Visual questions and counting attempts
+
+For questions such as "How many coins are inside the piggy bank?", the agent is instructed
+to investigate actively: read state, inspect rendered images, and try a few informative
+view angles or clipping regions when objects are occluded. Changes are followed by a render
+wait and another screenshot. Bounded evidence notes preserve visible findings when older
+images are removed from context; they are model observations, not verified measurements.
+Objects must be matched across views, not counted again by adding per-image totals. Remaining
+occlusion calls for a supported lower bound or explicitly approximate estimate, not an invented
+exact total. Inspection-only questions should restore the original transform and clipping
+bounds using exact saved values. Visual counting requires image-sharing permission and does
+not replace segmentation or voxel analysis. Limits remain 180 seconds and 24 BorgVR calls per
+request. Internal evidence notes and progress updates have separate capacity, with a maximum
+of 48 total tool calls and 48 model requests. Live budget instructions initiate wrap-up before
+these hard limits; tools are removed for the final answering phase so a bounded investigation
+can end with an explicitly incomplete answer rather than a call-limit error.
+
 ## 6. Configuration, TLS and network security
 
 | File/setting | Purpose |

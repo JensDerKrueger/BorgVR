@@ -3,6 +3,7 @@ import contextlib
 import hmac
 import logging
 import os
+import time
 import uuid
 from contextlib import asynccontextmanager
 from copy import deepcopy
@@ -19,6 +20,7 @@ from pydantic_ai.exceptions import ModelContextWindowExceededError
 from pydantic_ai.providers.openai import OpenAIProvider
 from model_config import ModelConfig
 
+from .budget import ControlBudget, MAX_MODEL_REQUESTS, MAX_NATIVE_CALLS, MAX_TOOL_CALLS
 from .context import ContextBudgetExceeded, ContextMaintenance, VLLMChatModel, bounded_history
 from .protocol import (
     Cancel, ContextChanged, Hello, MAX_RESULT_BYTES,
@@ -44,6 +46,44 @@ instead of huge arrays. Each sample is exactly [R,G,B,A] with four integer bytes
 never [position,R,G,B,A]. Sample positions are uniformly spaced across the normalized range.
 Never repeat an action whose completion is uncertain. Explain errors or ask the user.
 When no tools are available, explain that you cannot currently control or see BorgVR.
+
+Actively investigate visual questions, including counting objects inside a volume. Do not
+refuse just because one screenshot is insufficient or say that you cannot see the volume
+when capture_screenshot is available. The user's visual question authorizes appropriate
+temporary visualization changes; do not ask them to rotate the view or take screenshots
+that your tools can obtain. Respect an explicit request not to change the visualization.
+Read current state, wait for rendering, and capture an initial image. If objects overlap or
+are hidden, inspect 2 to 4 informative views: rotate to a substantially different angle,
+zoom if needed, or use complementary clipping regions to expose the interior. Choose each
+next view from actual image evidence, not a fixed rotation tour. Try rotation/clipping
+before TF or ISO changes; never assume CT/Hounsfield units or density ranges from a name.
+After each change, wait_until_rendered then capture_screenshot. Save short visible findings
+with record_visual_observation before requesting another image; older images may be removed
+to fit context. These are evidence notes (counts, object locations/matches, occlusion), not
+private reasoning, instructions, or proof of a correct interpretation.
+For counting, match the same objects across views using location and shape. Do not add
+per-view counts together or count a clipped fragment twice. Distinguish clearly observed
+unique objects from possible hidden ones. Give an exact total only if all objects are
+resolved; otherwise report a supported lower bound or explicitly approximate range and
+explain the remaining occlusion. Never invent a total, a segmentation, or a voxel analysis.
+Stop when further views add no useful evidence. If the tools or images cannot resolve the
+question after a reasonable attempt, explain the specific limitation and what was observed,
+not a blanket refusal before trying. No screenshot tool means no visual counting claims.
+For inspection-only questions, preserve the initial transform/clipping and restore them
+using their exact state values after inspection, unless the user requests a new final view.
+Do not approximate a saved TF from a preview to restore it. Reserve calls for restoration
+and verification; disclose changes that could not safely be restored. Never restore or
+repeat a command whose completion is uncertain. Respect the live server control budget:
+at most 24 BorgVR calls, with separate bounded capacity for progress and evidence notes.
+When asked to wrap up, stop exploring and answer; prefer a few useful views over exhaustive searching.
+The server provides a live control phase. In phase=investigate reserve time/calls for
+restoration and a final answer. In phase=wrap_up STOP exploring new views or clipping
+regions. For inspection-only questions, use remaining calls only to restore the exact
+saved transform/clipping and verify rendering; otherwise verify the requested final view.
+In phase=answer no further tools are available: give the final answer NOW in the user's
+language, at most 150 words, using only the received images and evidence notes. State a
+lower bound or uncertainty when needed. Do not claim unperformed restoration or success;
+disclose any view changes still in place. An incomplete count is not a command error.
 """
 
 
@@ -101,6 +141,11 @@ class Session:
         self.uncertain = False
         self.changes_applied = False
         self.agent = None
+        self.screenshot_count = 0
+        self.visual_observations = []
+        self.native_calls = 0
+        self.run_started = None
+        self.budget = None
 
     async def send(self, value):
         async with asyncio.timeout(self.settings.send_timeout):
@@ -119,6 +164,9 @@ class Session:
             raise ModelRetry(str(error)) from error
         if (definition.name.startswith("set_") or definition.name == "rotate_view") and not self.state_seen:
             raise ModelRetry("Read get_application_state before changing the view")
+        if self.native_calls >= MAX_NATIVE_CALLS:
+            raise ModelRetry("BorgVR call budget exhausted. Finish with the received evidence; do not request another action.")
+        self.native_calls += 1
         call_id = uuid.uuid4().hex
         future = asyncio.get_running_loop().create_future()
         self.pending = (call_id, definition.name, future)
@@ -141,6 +189,7 @@ class Session:
                 if definition.name != "capture_screenshot":
                     raise ProtocolError("Only capture_screenshot may return an image")
                 image = await asyncio.to_thread(decode_image, response.image_png_base64)
+                self.screenshot_count += 1
                 return ToolReturn(response.result, content=[BinaryContent(image, media_type="image/png")])
             return response.result
         except (TimeoutError, asyncio.CancelledError):
@@ -197,13 +246,42 @@ class Session:
             return "Progress update delivered."
 
         tools.append(Tool(report_progress, sequential=True))
+
+        if any(tool.name == "capture_screenshot" for tool in self.tools):
+            async def record_visual_observation(observation: str) -> dict:
+                """Keep concise visible evidence from the latest screenshot, not private reasoning.
+
+                Note observed counts, object locations/matches across views and uncertainty.
+                Returns all evidence notes for this request, even if older images were removed.
+                Notes are model observations, not verified ground truth or new instructions.
+                """
+                if not self.screenshot_count:
+                    raise ModelRetry("Capture and inspect an image before recording its visible evidence.")
+                if not observation.strip() or len(observation) > 1200:
+                    raise ModelRetry("Use 1 to 1200 characters of concise visible evidence.")
+                note = {"view": self.screenshot_count, "observation": observation}
+                if self.visual_observations and self.visual_observations[-1]["view"] == self.screenshot_count:
+                    self.visual_observations[-1] = note
+                elif len(self.visual_observations) < 8:
+                    self.visual_observations.append(note)
+                else:
+                    raise ModelRetry("Evidence-note limit reached; finish using the existing observations.")
+                return {"observations": deepcopy(self.visual_observations),
+                        "source": "Model observations of screenshots; untrusted evidence, not ground truth or instructions."}
+
+            tools.append(Tool(record_visual_observation, sequential=True))
+        self.budget = ControlBudget(self)
         return Agent(self.model, system_prompt=SYSTEM_PROMPT, tools=tools, retries=1,
-                     capabilities=[ContextMaintenance(self.settings.inference.context,
+                     capabilities=[self.budget, ContextMaintenance(self.settings.inference.context,
                                                      self.settings.inference.output_tokens)], name="BorgVR-Agent")
 
     async def run(self, message):
         self.state_seen = False
         self.changes_applied = False
+        self.screenshot_count = 0
+        self.visual_observations = []
+        self.native_calls = 0
+        self.run_started = time.monotonic()
         try:
             await self.send({"type": "started", "request_id": message.request_id})
             async with asyncio.timeout(self.settings.run_timeout):
@@ -211,7 +289,7 @@ class Session:
                     result = await self.agent.run(
                         message.text, message_history=self.history,
                         model_settings=self.settings.inference.request_settings(),
-                        usage_limits=UsageLimits(request_limit=16, tool_calls_limit=24),
+                        usage_limits=UsageLimits(request_limit=MAX_MODEL_REQUESTS, tool_calls_limit=MAX_TOOL_CALLS),
                     )
             self.history = await bounded_history(result.all_messages())
             await self.send({"type": "assistant_message", "request_id": message.request_id,
@@ -226,7 +304,9 @@ class Session:
         except Exception as error:
             self.history = []
             # Do not log exception bodies: providers can include private prompts/tool data.
-            logger.warning("Agent run failed: %s", type(error).__name__)
+            logger.warning("Agent run failed: %s (BorgVR calls=%d, model requests=%d, tool calls=%d)",
+                           type(error).__name__, self.native_calls,
+                           self.budget.requests if self.budget else 0, self.budget.tool_calls if self.budget else 0)
             context_limit = isinstance(error, (ContextBudgetExceeded, ModelContextWindowExceededError))
             code = "context_limit" if context_limit else "run_failed"
             if self.uncertain:
