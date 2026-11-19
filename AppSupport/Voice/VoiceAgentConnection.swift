@@ -16,6 +16,11 @@ struct VoiceAgentConnectionIdentity: Equatable {
   let maximumCalls: Int
 }
 
+struct VoiceAgentRule: Codable, Identifiable, Equatable {
+  let id: UUID
+  let text: String
+}
+
 @MainActor
 final class VoiceAgentSettings: ObservableObject {
   private let defaults: UserDefaults
@@ -47,6 +52,7 @@ final class VoiceAgentSettings: ObservableObject {
     }
   }
   @Published private(set) var certificate: Data
+  @Published private(set) var knowledgeRules: [VoiceAgentRule]
   @Published private(set) var hasToken: Bool
   @Published private(set) var revision = UUID()
 
@@ -67,6 +73,10 @@ final class VoiceAgentSettings: ObservableObject {
     onDeviceOnly = defaults.object(forKey: "voiceAgent.onDeviceOnly") as? Bool ?? true
     workMinutes = min(max(defaults.object(forKey: "voiceAgent.workMinutes") as? Int ?? 30, 1), 120)
     maximumCalls = min(max(defaults.object(forKey: "voiceAgent.maximumCalls") as? Int ?? 256, 24), 1024)
+    if let data = defaults.data(forKey: "voiceAgent.knowledge"), data.count <= 64 * 1024,
+       let rules = try? JSONDecoder().decode([VoiceAgentRule].self, from: data) {
+      knowledgeRules = Array(rules.filter { !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && $0.text.count <= 500 }.prefix(16))
+    } else { knowledgeRules = [] }
     certificate = defaults.data(forKey: "voiceAgent.certificate") ?? Data()
     hasToken = ((try? KeychainSecretStore.string(account: tokenAccount)) ?? "").isEmpty == false
   }
@@ -89,6 +99,20 @@ final class VoiceAgentSettings: ObservableObject {
     }
     hasToken = !token.isEmpty
     revision = UUID()
+  }
+
+  func rememberRule(_ text: String) throws {
+    let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmed.isEmpty, trimmed.count <= 500 else { throw VoiceAgentError.protocolViolation }
+    guard !knowledgeRules.contains(where: { $0.text == trimmed }) else { return }
+    guard knowledgeRules.count < 16 else { throw VoiceAgentError.configuration }
+    knowledgeRules.append(.init(id: UUID(), text: trimmed))
+    defaults.set(try JSONEncoder().encode(knowledgeRules), forKey: "voiceAgent.knowledge")
+  }
+
+  func forgetRule(id: UUID) {
+    knowledgeRules.removeAll { $0.id == id }
+    defaults.set(try? JSONEncoder().encode(knowledgeRules), forKey: "voiceAgent.knowledge")
   }
 
   func importCertificate(_ data: Data) throws {

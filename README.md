@@ -84,8 +84,12 @@ The current development version is **3.9**. The SharePlay wire protocol is versi
   listener. Only visualization/read tools are exposed, narrowed by platform and RGB/RGBA mode.
   Screenshots contain only the render image, never camera/passthrough, and are capped at 1024px/2MiB.
 - Commands follow the existing session/Command/GSC recording path. Cancellation, dataset or
-  edit-state changes terminate the connection; stale/duplicate calls cannot repeat mutations.
+  unrelated edit-state changes terminate the connection; stale/duplicate calls cannot repeat mutations.
   No automatic reconnect or replay, file access, volume edits or arbitrary GSC execution.
+- Manual Command events pause agent planning and resume the same goal from the user's latest
+  view. Explicit feedback can lead to proposed preferences, saved per device only after approval.
+  One application bridge isolates the assistant from BorgVR's core; see
+  [architecture and removal boundaries](AppSupport/Voice/ARCHITECTURE.md).
 - Native test: build `macOSApp`, then run `sh Scripts/test-voice-agent.sh <Debug-products> <agent-test-venv-python>`.
   This tests actual local TLS/WSS with a deterministic model, PNG delivery and GSC roundtrip;
   real microphone and deployed-model validation still need the target devices/server.

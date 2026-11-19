@@ -1,6 +1,83 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "Paused for your changes": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Paused for your changes" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Pausiert für deine Änderungen" } }
+      }
+    },
+    "Waiting for your reply": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Waiting for your reply" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Wartet auf deine Antwort" } }
+      }
+    },
+    "Yes": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Yes" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Ja" } }
+      }
+    },
+    "No": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "No" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Nein" } }
+      }
+    },
+    "Continue without help": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Continue without help" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Ohne Hilfe fortsetzen" } }
+      }
+    },
+    "Please continue without additional hints.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Please continue without additional hints." } },
+        "de": { "stringUnit": { "state": "translated", "value": "Bitte arbeite ohne weitere Hinweise weiter." } }
+      }
+    },
+    "Remember rule": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Remember rule" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Regel merken" } }
+      }
+    },
+    "Discard": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Discard" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Verwerfen" } }
+      }
+    },
+    "Reply": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Reply" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Antworten" } }
+      }
+    },
+    "Remembered rules": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Remembered rules" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Gemerkte Regeln" } }
+      }
+    },
+    "Remove rule": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": { "stringUnit": { "state": "translated", "value": "Remove rule" } },
+        "de": { "stringUnit": { "state": "translated", "value": "Regel entfernen" } }
+      }
+    },
     "Maximum work time (minutes)": {
       "extractionState": "manual",
       "localizations": {

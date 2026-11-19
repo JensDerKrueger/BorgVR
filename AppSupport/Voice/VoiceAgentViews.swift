@@ -55,7 +55,9 @@ struct VoiceAgentView: View {
         HStack {
           Label(agent.status, systemImage: agent.connectionState == .ready ? "checkmark.shield" : "network")
           Spacer()
-          if agent.busy || agent.connectionState == .connecting { ProgressView().controlSize(.small) }
+          if (agent.busy && agent.collaborationQuestion == nil && !agent.userIsInteracting) || agent.connectionState == .connecting {
+            ProgressView().controlSize(.small)
+          }
           Button { agent.newConversation() } label: { Image(systemName: "arrow.counterclockwise") }
             .help(voiceAgentText("New conversation"))
             .accessibilityLabel(voiceAgentText("New conversation"))
@@ -76,12 +78,30 @@ struct VoiceAgentView: View {
                 }
                 .id(message.id)
               }
+              ForEach(agent.ruleProposals) { proposal in
+                VStack(alignment: .leading, spacing: 8) {
+                  Text(proposal.text).font(.callout).fixedSize(horizontal: false, vertical: true)
+                  ViewThatFits(in: .horizontal) {
+                    HStack { ruleActions(proposal) }
+                    VStack(alignment: .leading) { ruleActions(proposal) }
+                  }
+                }
+                .padding(10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
+              }
             }
             .padding(.vertical, 8)
           }
           .frame(minHeight: 160)
           .onChange(of: agent.messages.count) { _, _ in
             if let last = agent.messages.last { proxy.scrollTo(last.id, anchor: .bottom) }
+          }
+        }
+        if agent.collaborationQuestion != nil {
+          ViewThatFits(in: .horizontal) {
+            HStack { collaborationActions }
+            VStack(alignment: .leading) { collaborationActions }
           }
         }
         if let error = agent.errorText {
@@ -100,7 +120,7 @@ struct VoiceAgentView: View {
           .help(voiceAgentText(speech.isRecording ? "Finish speaking" : "Speak"))
           .accessibilityLabel(voiceAgentText(speech.isRecording ? "Finish speaking" : "Speak"))
           .disabled(agent.interrupting || agent.connectionState == .connecting || !agent.hasDataset)
-          TextField(voiceAgentText("Message"), text: $text, axis: .vertical)
+          TextField(voiceAgentText(agent.collaborationQuestion == nil ? "Message" : "Reply"), text: $text, axis: .vertical)
             .lineLimit(1...4).textFieldStyle(.roundedBorder)
             .disabled(agent.interrupting || speech.isRecording)
           Button {
@@ -109,8 +129,8 @@ struct VoiceAgentView: View {
             Task { await agent.submit(message) }
           } label: { Image(systemName: "arrow.up").frame(width: 28, height: 28) }
           .buttonStyle(.borderedProminent)
-          .help(voiceAgentText(agent.busy ? "Send and interrupt current request" : "Send"))
-          .accessibilityLabel(voiceAgentText(agent.busy ? "Send and interrupt current request" : "Send"))
+          .help(voiceAgentText(agent.collaborationQuestion != nil ? "Reply" : agent.busy ? "Send and interrupt current request" : "Send"))
+          .accessibilityLabel(voiceAgentText(agent.collaborationQuestion != nil ? "Reply" : agent.busy ? "Send and interrupt current request" : "Send"))
           .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || text.count > 8192 || agent.interrupting ||
                     speech.isRecording || agent.connectionState == .connecting || !agent.hasDataset)
           Button { agent.cancel() } label: { Image(systemName: "xmark.circle").frame(width: 28, height: 28) }
@@ -139,6 +159,27 @@ struct VoiceAgentView: View {
       }
     }
     .onChange(of: settings.enabled) { _, enabled in if !enabled { dismiss() } }
+  }
+
+  @ViewBuilder private var collaborationActions: some View {
+    Button(voiceAgentText("Yes"), systemImage: "checkmark") {
+      Task { await agent.answerCollaboration(voiceAgentText("Yes")) }
+    }.buttonStyle(.borderedProminent)
+    Button(voiceAgentText("No"), systemImage: "xmark") {
+      Task { await agent.answerCollaboration(voiceAgentText("No")) }
+    }.buttonStyle(.bordered)
+    Button(voiceAgentText("Continue without help"), systemImage: "play.fill") {
+      Task { await agent.answerCollaboration(voiceAgentText("Please continue without additional hints.")) }
+    }.buttonStyle(.bordered)
+  }
+
+  @ViewBuilder private func ruleActions(_ proposal: VoiceAgentQuestion) -> some View {
+    Button(voiceAgentText("Remember rule"), systemImage: "brain.head.profile") {
+      Task { await agent.decideRule(proposal, remember: true) }
+    }.buttonStyle(.borderedProminent)
+    Button(voiceAgentText("Discard"), systemImage: "xmark") {
+      Task { await agent.decideRule(proposal, remember: false) }
+    }.buttonStyle(.bordered)
   }
 }
 
@@ -289,6 +330,19 @@ struct VoiceAgentSettingsView: View {
       }
       .disabled(!settings.speaks)
       Toggle(voiceAgentText("On-device speech recognition only"), isOn: $settings.onDeviceOnly)
+      if !settings.knowledgeRules.isEmpty {
+        Text(voiceAgentText("Remembered rules")).font(.headline)
+        ForEach(settings.knowledgeRules) { rule in
+          HStack(alignment: .top) {
+            Text(rule.text).fixedSize(horizontal: false, vertical: true)
+            Spacer()
+            Button { settings.forgetRule(id: rule.id) } label: { Image(systemName: "trash") }
+              .buttonStyle(.bordered)
+              .help(voiceAgentText("Remove rule"))
+              .accessibilityLabel(voiceAgentText("Remove rule"))
+          }
+        }
+      }
       Text(voiceAgentText("If on-device-only recognition is disabled, Apple may process microphone audio. Audio is never sent to the BorgVR agent server."))
         .font(.caption).foregroundStyle(.secondary)
       HStack {

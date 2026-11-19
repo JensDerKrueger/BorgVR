@@ -73,6 +73,31 @@ def test_old_images_are_removed_without_touching_the_newest_or_original():
     assert parts(messages, UserPromptPart)[0].content == images
 
 
+def test_tokenizer_prepares_sdk_settings_deltas_before_mapping(monkeypatch):
+    from openai import AsyncOpenAI
+    from pydantic_ai.messages import ModelSettingsDeltaPart
+    requests = []
+    original = httpx.AsyncClient
+    def handler(request):
+        import json
+        body = json.loads(request.content)
+        requests.append(body)
+        assert [message["role"] for message in body["messages"]] == ["system", "user"]
+        return httpx.Response(200, json={"count": 32, "max_model_len": 32768})
+    monkeypatch.setattr(httpx, "AsyncClient", lambda **kwargs: original(**kwargs, transport=httpx.MockTransport(handler)))
+    async def run():
+        async with AsyncOpenAI(api_key="synthetic", base_url="http://model.invalid/v1") as client:
+            model = VLLMChatModel("synthetic-model", provider=OpenAIProvider(openai_client=client),
+                                  token_url="http://model.invalid/tokenize", token="synthetic")
+            messages = [ModelRequest(parts=[SystemPromptPart("Policy"), UserPromptPart("Finish with a question."),
+                                           ModelSettingsDeltaPart(settings={"max_tokens": 512})])]
+            usage = await model.count_tokens(messages, {"max_tokens": 512}, ModelRequestParameters())
+            assert usage.input_tokens == 32
+            assert any(isinstance(part, ModelSettingsDeltaPart) for part in messages[0].parts)
+    asyncio.run(run())
+    assert len(requests) == 1
+
+
 class CountingModel(FunctionModel):
     async def count_tokens(self, messages, settings, parameters):
         return RequestUsage(input_tokens=len(ModelMessagesTypeAdapter.dump_json(keep_images(messages, 0))) // 3,

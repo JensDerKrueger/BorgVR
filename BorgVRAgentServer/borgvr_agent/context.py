@@ -38,7 +38,8 @@ class VLLMChatModel(OpenAIChatModel):
     async def count_tokens(self, messages, model_settings, model_request_parameters):
         settings, parameters = self.prepare_request(model_settings, model_request_parameters)
         # Use the pinned SDK adapter for exactly the same messages/tools as generation.
-        mapped = await self._map_messages(messages, parameters, model_settings=settings)
+        prepared = self.prepare_messages(messages, parameters)
+        mapped = await self._map_messages(prepared, parameters, model_settings=settings)
         tools, _ = self._get_tool_choice(settings or {}, parameters)
         body = {"model": self.model_name, "messages": mapped, "tools": tools,
                 "add_generation_prompt": True,

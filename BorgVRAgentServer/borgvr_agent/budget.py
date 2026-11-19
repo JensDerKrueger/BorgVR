@@ -38,6 +38,9 @@ class ControlBudget(AbstractCapability):
     async def prepare_tools(self, ctx, tool_defs):
         phase = self.phase(ctx)
         if phase == "answer":
+            collaboration = getattr(self.session, "collaboration", None)
+            if collaboration is not None and collaboration.asked_revision != collaboration.revision:
+                return [tool for tool in tool_defs if tool.name == "ask_collaboration_feedback"]
             return []
         if phase == "wrap_up":
             return [tool for tool in tool_defs if tool.name not in {"rotate_view", "report_progress"}]

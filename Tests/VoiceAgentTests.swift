@@ -4,6 +4,7 @@ import ImageIO
 import UniformTypeIdentifiers
 import Security
 import AVFoundation
+import Combine
 @testable import BorgVR
 
 private enum Failure: Error { case failed(String) }
@@ -70,6 +71,40 @@ struct VoiceAgentTests {
     let session = ScreenBorgVRSession.screen(appModel: app, renderingParameters: parameters, appSettings: appSettings)
     let service = BorgVRScreenCommandService(session: session)
     let router = BorgVRMCPToolRouter(commandService: service)
+    var commandEvents: [BorgVRCommandEvent] = []
+    let commandObservation = session.commandEvents.sink { commandEvents.append($0) }
+    defer { commandObservation.cancel() }
+    let bridge = BorgVRVoiceAgentBridge(service: service) {
+      .init(datasetID: entry.uniqueId, openingID: openingID, editStateID: nil)
+    }
+    var manualChanges: [VoiceAgentApplicationChange] = []
+    let changesObservation = bridge.changes.sink { manualChanges.append($0) }
+    defer { changesObservation.cancel() }
+    _ = try await bridge.executeTool(name: "rotate_view", arguments: ["axis": [0, 1, 0], "degrees": 5], validateContext: {})
+    try expect(!commandEvents.isEmpty && manualChanges.isEmpty, "Agent's own command was mistaken for a human change")
+    try service.rotate(axis: [0, 1, 0], degrees: 5)
+    try expect(manualChanges.count == 1 && manualChanges[0].domain == "transform", "Manual command missing without GSC recording")
+    session.publishRenderSnapshot()
+    session.publishRenderSnapshot()
+    try expect(manualChanges.count == 1, "Unchanged render snapshots duplicated a manual command")
+    parameters.pan.x += 0.01
+    session.publishRenderSnapshot()
+    try expect(manualChanges.count == 2, "Legacy manual input was not observed")
+    session.publishRenderSnapshot()
+    try expect(manualChanges.count == 2, "Legacy mutation was reported twice")
+    let lifecycleStart = commandEvents.count
+    do {
+      try await session.performAction(.discardVolumeEdits, source: .userInterface) { () async throws -> Void in
+        await Task.yield()
+        throw Failure.failed("Synthetic edit failure")
+      }
+      throw Failure.failed("Failed action was swallowed")
+    } catch Failure.failed(let message) {
+      try expect(message == "Synthetic edit failure", "Wrong async action failure")
+    }
+    let lifecycle = Array(commandEvents.dropFirst(lifecycleStart))
+    try expect(lifecycle.count == 2 && lifecycle[0].phase == .began && lifecycle[1].phase == .failed &&
+               lifecycle[0].id == lifecycle[1].id, "Manual async action did not publish a paired lifecycle")
     let before = session.currentSnapshot().transform
     do {
       _ = try await router.callTool(name: "rotate_view", arguments: ["axis": [0, 1, 0], "degrees": 30],
@@ -133,6 +168,14 @@ struct VoiceAgentTests {
     settings.maximumCalls = 256
     try expect(settings.speechRateMultiplier == 1, "Default speech rate changed")
     let initialIdentity = settings.identity
+    try settings.rememberRule("  Prefer a clear side view.  ")
+    try settings.rememberRule("Prefer a clear side view.")
+    try expect(settings.knowledgeRules.count == 1 && settings.identity == initialIdentity, "Rule was duplicated or disconnected the agent")
+    try expect(VoiceAgentSettings(defaults: defaults, tokenAccount: account).knowledgeRules == settings.knowledgeRules,
+               "Confirmed rules were not saved locally")
+    try rejects { try settings.rememberRule(String(repeating: "x", count: 501)) }
+    settings.forgetRule(id: settings.knowledgeRules[0].id)
+    try expect(VoiceAgentSettings(defaults: defaults, tokenAccount: account).knowledgeRules.isEmpty, "Removed rule was still persisted")
     settings.speechRateMultiplier = 1.6
     try expect(VoiceAgentSettings(defaults: defaults, tokenAccount: account).speechRateMultiplier == 1.6,
                "Speech rate was not persisted")
@@ -158,8 +201,10 @@ struct VoiceAgentTests {
     try expect(agent.datasetOpeningID == openingID, "Disconnecting the agent changed dataset ownership")
     try await agent.testServer()
     try expect(agent.errorText == nil && agent.model == "Qwen/Qwen3.6-35B-A3B", "Readiness failed: \(agent.errorText ?? "")")
+    let eventsBeforeRecording = commandEvents.count
     session.startCommandRecording()
     try await session.waitForRecordingPreparation()
+    try expect(commandEvents.count == eventsBeforeRecording, "GSC baseline priming was reported as manual activity")
     await agent.submit("roundtrip")
     try await wait { !agent.busy }
     try expect(agent.errorText == nil, "Native agent failed: \(agent.errorText ?? "")")
@@ -180,6 +225,23 @@ struct VoiceAgentTests {
     try await service.replayCommandRecording(Data(gsc.utf8))
     try expect(session.currentSnapshot().transform == expected, "Agent transform GSC roundtrip changed state")
     try expect(try service.transferFunction(channel: 0).samples == expectedTF.samples, "Agent TF GSC roundtrip changed state")
+    agent.newConversation()
+    await agent.submit("collaborate")
+    try await wait { agent.messages.contains { $0.text == "Waiting for manual edit." } }
+    try service.rotate(axis: [1, 0, 0], degrees: 15)
+    let userTransform = session.currentSnapshot().transform
+    try expect(agent.userIsInteracting, "Manual change did not pause the active agent")
+    try await wait { agent.collaborationQuestion != nil }
+    try expect(agent.busy && !agent.userIsInteracting && agent.errorText == nil, "User priority lost the current task")
+    await agent.submit("Yes, I wanted to show a better section.")
+    try await wait { !agent.busy }
+    try expect(agent.errorText == nil && agent.messages.last?.text == "Collaborative task completed without undoing your change.",
+               "Collaborative run failed: \(agent.errorText ?? "")")
+    try expect(session.currentSnapshot().transform == userTransform, "Agent undid the manual rotation")
+    try expect(settings.knowledgeRules.isEmpty && agent.ruleProposals.count == 1, "A rule was saved without user approval")
+    await agent.decideRule(agent.ruleProposals[0], remember: true)
+    try expect(settings.knowledgeRules.count == 1 && agent.ruleProposals.isEmpty, "Explicit approval did not save the rule")
+    try expect(VoiceAgentSettings(defaults: defaults, tokenAccount: account).knowledgeRules.count == 1, "Confirmed rule missing on reload")
     agent.newConversation()
     await agent.submit("long-run")
     try await wait { !agent.busy }
@@ -239,7 +301,7 @@ struct VoiceAgentTests {
     app.closeDataset(destination: .datasetSelection)
     agent.invalidateContext()
     try expect(agent.datasetOpeningID == nil, "Dataset closure did not notify an unconnected assistant window")
-    print("Voice agent tests passed: policy, TLS/WSS, PNG, GSC roundtrip, long runs, safe prompt replacement, queued cancellation and context ownership")
+    print("Voice agent tests passed: TLS/WSS, GSC roundtrip, generic Command events, user-priority collaboration, explicit local rules, long runs and safe cancellation")
   }
 
   private static func wait(_ condition: () -> Bool) async throws {

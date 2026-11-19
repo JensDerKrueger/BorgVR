@@ -5,7 +5,7 @@ import binascii
 import io
 import json
 import warnings
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 from jsonschema import Draft202012Validator
 from jsonschema.exceptions import SchemaError
@@ -53,6 +53,8 @@ class Hello(Message):
     context_id: str = Field(min_length=1, max_length=128)
     tools: list[ToolDefinition] = Field(max_length=32)
     execution_limits: ExecutionLimits | None = None
+    collaboration: bool = False
+    knowledge: list[Annotated[str, Field(min_length=1, max_length=500)]] = Field(default_factory=list, max_length=16)
 
 
 class UserMessage(Message):
@@ -70,6 +72,30 @@ class ToolResult(Message):
     result: Any = None
     error: str | None = Field(default=None, max_length=1024)
     image_png_base64: str | None = None
+    view_revision: int | None = Field(default=None, ge=0, le=2**53 - 1)
+
+
+class UserChange(Message):
+    type: Literal["user_change"]
+    dataset_id: str
+    context_id: str
+    revision: int = Field(ge=1, le=2**53 - 1)
+    active: bool
+    domains: list[Literal["transform", "clipping", "transfer_function", "lighting", "rendering", "annotations", "volume"]] = Field(max_length=7)
+    state: dict[str, Any] | None = None
+
+
+class CollaborationFeedback(Message):
+    type: Literal["collaboration_feedback"]
+    request_id: str
+    question_id: str = Field(min_length=1, max_length=128)
+    text: str = Field(min_length=1, max_length=2000)
+
+
+class RuleDecision(Message):
+    type: Literal["rule_decision"]
+    proposal_id: str = Field(min_length=1, max_length=128)
+    accepted: bool
 
 
 class Cancel(Message):

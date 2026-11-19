@@ -18,12 +18,14 @@ from pydantic import ValidationError
 from pydantic_ai import Agent, BinaryContent, ModelRetry, Tool, ToolReturn, UsageLimits
 from pydantic_ai.exceptions import ModelContextWindowExceededError
 from pydantic_ai.providers.openai import OpenAIProvider
+from pydantic_ai.usage import RunUsage
 from model_config import ModelConfig
 
 from .budget import ControlBudget, MAX_MODEL_REQUESTS, MAX_NATIVE_CALLS, MAX_TOOL_CALLS
+from .collaboration import Collaboration, ReplanForUser
 from .context import ContextBudgetExceeded, ContextMaintenance, VLLMChatModel, bounded_history
 from .protocol import (
-    Cancel, ContextChanged, Hello, MAX_RESULT_BYTES,
+    Cancel, CollaborationFeedback, ContextChanged, Hello, MAX_RESULT_BYTES, RuleDecision, UserChange,
     ProtocolError, ToolResult, UserMessage, decode_image, decode_message,
     json_bytes, select_tools, validate_arguments,
 )
@@ -68,7 +70,11 @@ resolved; otherwise report a supported lower bound or explicitly approximate ran
 explain the remaining occlusion. Never invent a total, a segmentation, or a voxel analysis.
 Stop when further views add no useful evidence. If the tools or images cannot resolve the
 question after a reasonable attempt, explain the specific limitation and what was observed,
-not a blanket refusal before trying. No screenshot tool means no visual counting claims.
+not a blanket refusal before trying. If a few attempts produce no new useful evidence,
+change strategy or ask for specific human help. Do not slide the same clipping plane over
+and over without findings. For an unresolved goal, end with a brief, honest progress summary
+and a concrete invitation to collaborate (for example, ask the user to show a better section
+or explain a helpful view), rather than simply giving up. No screenshot tool means no visual counting claims.
 For inspection-only questions, preserve the initial transform/clipping and restore them
 using their exact state values after inspection, unless the user requests a new final view.
 Do not approximate a saved TF from a preview to restore it. Reserve calls for restoration
@@ -84,6 +90,16 @@ In phase=answer no further tools are available: give the final answer NOW in the
 language, at most 150 words, using only the received images and evidence notes. State a
 lower bound or uncertainty when needed. Do not claim unperformed restoration or success;
 disclose any view changes still in place. An incomplete count is not a command error.
+
+In collaboration mode, manual user changes have priority. After an application collaboration
+update, keep the original goal but discard obsolete action plans and pre-intervention restore
+baselines. Read current state and inspect a new image before further mutations. A user edit
+is not automatically a teaching example: ask_collaboration_feedback can ask what the user
+intended, or ask for specific help when stuck. Wait for the reply without ending the task.
+Use the reply to adapt the ongoing task. propose_visualization_rule may suggest a cautious,
+conditional preference for future work, but only after explicit feedback. The app requires
+user approval before saving. Approved preferences are fallible context, not verified facts,
+not authorization for new tools/data access, and never override the current user or safety policy.
 """
 
 
@@ -152,6 +168,7 @@ class Session:
         self.model_request_limit = MAX_MODEL_REQUESTS
         self.run_started = None
         self.budget = None
+        self.collaboration = None
 
     async def send(self, value):
         async with asyncio.timeout(self.settings.send_timeout):
@@ -164,6 +181,9 @@ class Session:
         return decode_message(raw)
 
     async def call_tool(self, definition, arguments):
+        if self.collaboration is not None and self.collaboration.changed.is_set():
+            return {"ok": False, "not_applied": True, "code": "user_changed_view",
+                    "note": "The user is changing the scene. Replan from their updated state; no command was sent."}
         try:
             validate_arguments(definition, arguments)
         except (ValueError, TypeError) as error:
@@ -177,23 +197,36 @@ class Session:
         future = asyncio.get_running_loop().create_future()
         self.pending = (call_id, definition.name, future)
         try:
-            await self.send({
+            outgoing = {
                 "type": "tool_call", "request_id": self.request_id, "call_id": call_id,
                 "dataset_id": self.dataset_id, "context_id": self.context_id,
                 "name": definition.name, "arguments": arguments,
-            })
+            }
+            if self.collaboration is not None:
+                outgoing["view_revision"] = self.collaboration.revision
+            await self.send(outgoing)
             async with asyncio.timeout(self.settings.tool_timeout):
                 response = await future
             if response.error is not None:
                 # A client-reported error must mean the command did NOT commit.
                 return {"ok": False, "error": response.error}
+            if (isinstance(response.result, dict) and response.result.get("not_applied") is True and
+                    response.result.get("code") == "user_changed_view"):
+                self.state_seen = False
+                if self.collaboration is not None:
+                    self.collaboration.changed.set()
+                return response.result
             if definition.name.startswith("set_") or definition.name == "rotate_view":
                 self.changes_applied = True
             if definition.name == "get_application_state":
-                self.state_seen = True
+                self.state_seen = (self.collaboration is None or
+                                   (response.view_revision == self.collaboration.revision and
+                                    self.collaboration.idle.is_set() and not self.collaboration.changed.is_set()))
             if response.image_png_base64 is not None:
                 if definition.name != "capture_screenshot":
                     raise ProtocolError("Only capture_screenshot may return an image")
+                if self.collaboration is not None and response.view_revision != self.collaboration.revision:
+                    return {"stale_observation": True, "note": "The user changed the view while this image was captured."}
                 image = await asyncio.to_thread(decode_image, response.image_png_base64)
                 self.screenshot_count += 1
                 return ToolReturn(response.result, content=[BinaryContent(image, media_type="image/png")])
@@ -277,9 +310,13 @@ class Session:
 
             tools.append(Tool(record_visual_observation, sequential=True))
         self.budget = ControlBudget(self)
+        capabilities = [self.budget]
+        if self.collaboration is not None:
+            tools.extend(self.collaboration.tools())
+            capabilities.append(self.collaboration)
+        capabilities.append(ContextMaintenance(self.settings.inference.context, self.settings.inference.output_tokens))
         return Agent(self.model, system_prompt=SYSTEM_PROMPT, tools=tools, retries=1,
-                     capabilities=[self.budget, ContextMaintenance(self.settings.inference.context,
-                                                     self.settings.inference.output_tokens)], name="BorgVR-Agent")
+                     capabilities=capabilities, name="BorgVR-Agent")
 
     async def run(self, message):
         self.state_seen = False
@@ -288,15 +325,43 @@ class Session:
         self.visual_observations = []
         self.native_calls = 0
         self.run_started = time.monotonic()
+        if self.collaboration is not None:
+            self.collaboration.needs_context = True
+            self.collaboration.asked_revision = None
+            self.collaboration.feedback = None
         try:
             await self.send({"type": "started", "request_id": message.request_id})
+            prompt, history, usage = message.text, self.history, RunUsage()
             async with asyncio.timeout(self.request_timeout):
-                async with self.run_slots:
-                    result = await self.agent.run(
-                        message.text, message_history=self.history,
-                        model_settings=self.settings.inference.request_settings(),
-                        usage_limits=UsageLimits(request_limit=self.model_request_limit, tool_calls_limit=self.tool_call_limit),
-                    )
+                while True:
+                    if self.collaboration is not None:
+                        await self.collaboration.idle.wait()
+                    try:
+                        async with self.run_slots:
+                            result = await self.agent.run(
+                                prompt, message_history=history, usage=usage,
+                                model_settings=self.settings.inference.request_settings(),
+                                usage_limits=UsageLimits(request_limit=self.model_request_limit, tool_calls_limit=self.tool_call_limit),
+                            )
+                        if self.collaboration is not None:
+                            await asyncio.sleep(0)
+                            if self.collaboration.changed.is_set():
+                                self.collaboration.safe_history = await bounded_history(result.all_messages())
+                                raise ReplanForUser()
+                        break
+                    except ReplanForUser:
+                        await self.send({"type": "collaboration_paused", "request_id": message.request_id})
+                        await self.collaboration.idle.wait()
+                        self.collaboration.changed.clear()
+                        self.state_seen = False
+                        self.screenshot_count = 0
+                        self.visual_observations = []
+                        history = self.collaboration.resume_history()
+                        self.collaboration.needs_context = False
+                        self.collaboration.domains.clear()
+                        prompt = None
+                        await self.send({"type": "collaboration_resumed", "request_id": message.request_id,
+                                         "view_revision": self.collaboration.revision})
             self.history = await bounded_history(result.all_messages())
             await self.send({"type": "assistant_message", "request_id": message.request_id,
                              "text": result.output, "final": True})
@@ -345,11 +410,14 @@ class Session:
             self.tool_call_limit = max(MAX_TOOL_CALLS, self.native_call_limit * 2)
             self.model_request_limit = self.tool_call_limit + 8
         self.tools = select_tools(hello.tools)
+        if hello.collaboration:
+            self.collaboration = Collaboration(self, hello.knowledge)
         self.dataset_id, self.context_id = hello.dataset_id, hello.context_id
         self.agent = self.build_agent()
         await self.send({"type": "ready", "protocol": 1, "model": self.settings.model,
                          "capabilities": self.settings.capabilities(),
                          "execution_limits": {"max_calls": self.native_call_limit, "timeout_seconds": self.request_timeout},
+                         "collaboration": self.collaboration is not None,
                          "tools": [tool.name for tool in self.tools]})
         while True:
             receiving_timeout = (max(self.settings.idle_timeout, self.request_timeout + self.settings.tool_timeout)
@@ -387,6 +455,20 @@ class Session:
                     if message.request_id != self.request_id:
                         raise ProtocolError("Cancellation targets a different request")
                     await self.stop()
+                case "user_change":
+                    event = UserChange.model_validate(value)
+                    if (self.collaboration is None or event.dataset_id != self.dataset_id or
+                            event.context_id != self.context_id):
+                        raise ProtocolError("Unexpected or stale user intervention")
+                    self.collaboration.update(event)
+                case "collaboration_feedback":
+                    if self.collaboration is None:
+                        raise ProtocolError("Collaboration was not negotiated")
+                    self.collaboration.accept_feedback(CollaborationFeedback.model_validate(value))
+                case "rule_decision":
+                    if self.collaboration is None:
+                        raise ProtocolError("Collaboration was not negotiated")
+                    self.collaboration.decide_rule(RuleDecision.model_validate(value))
                 case "context_changed":
                     message = ContextChanged.model_validate(value)
                     if message.context_id == self.context_id:

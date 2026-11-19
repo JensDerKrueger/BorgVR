@@ -422,6 +422,29 @@ completion blocks automatic replacement. Cancel immediately stops the connection
 queued replacement; it does not undo committed changes. Network, individual-command and
 context limits remain independent of the longer task budget.
 
+### Collaborative editing and approved preferences
+
+You can manipulate the scene while the agent works. Manual Command events pause unexecuted
+planning; after an 800 ms quiet period and completion of manual operations, the current
+state is sent and the same task resumes. Locally checked view revisions reject stale
+agent commands. Already dispatched commands finish once; they are not replayed. The agent
+must treat the user's view as its new baseline, not restore an older view over it.
+
+The agent can ask what your intervention meant. Answer by text, voice, or the conversation
+buttons; this reply continues the same task. Ordinary new prompts still interrupt it.
+When investigation is inconclusive, it can ask for concrete help instead of claiming success.
+Native/time/context limits still apply, including while waiting for an answer.
+
+Reusable preferences are only proposals until you explicitly choose **Remember rule**.
+Up to 16 approved rules (500 characters each) stay on the current device, outside SharePlay
+and GSC, and are sent to future conversations. Remove them under **Settings > AI Assistant >
+Remembered rules**; start a new conversation to remove them from the active model context.
+Unconfirmed suggestions are not saved. This is contextual knowledge, not weight updates,
+LoRA training, guaranteed scientific knowledge, or permission to bypass tool safeguards.
+
+The assistant is isolated behind one application bridge and the documented network protocol.
+See [architecture and removal boundaries](../AppSupport/Voice/ARCHITECTURE.md).
+
 ## 6. Configuration, TLS and network security
 
 | File/setting | Purpose |

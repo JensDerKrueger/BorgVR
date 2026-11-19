@@ -49,7 +49,27 @@ async def model(messages, info):
     returned = [part for message in messages for part in message.parts if isinstance(part, ToolReturnPart)]
     user = next((part.content for message in messages for part in message.parts
                  if isinstance(part, UserPromptPart) and isinstance(part.content, str)), "")
-    if user == "long-run":
+    if user == "collaborate":
+        resumed = any(isinstance(part, UserPromptPart) and isinstance(part.content, list) and
+                      '"current_state":{' in str(part.content) for message in messages for part in message.parts)
+        names = [part.tool_name for part in returned]
+        if "propose_visualization_rule" in names:
+            return ModelResponse(parts=[TextPart("Collaborative task completed without undoing your change.")])
+        if "ask_collaboration_feedback" in names:
+            feedback = next(part.content for part in returned if part.tool_name == "ask_collaboration_feedback")
+            assert feedback["user_feedback"] == "Yes, I wanted to show a better section."
+            name, args = "propose_visualization_rule", {"rule": "When asked to inspect contents, consider a section perpendicular to the viewing direction."}
+        elif resumed:
+            name, args = "ask_collaboration_feedback", {"question": "Was your rotation intended to help?"}
+        elif "report_progress" in names:
+            await asyncio.sleep(30)
+            raise RuntimeError("Manual change did not cancel old planning")
+        elif "get_application_state" in names:
+            name, args = "report_progress", {"text": "Waiting for manual edit."}
+        else:
+            name, args = "get_application_state", {}
+        return ModelResponse(parts=[ToolCallPart(name, args, tool_call_id=f"collaboration-{len(returned)}")])
+    elif user == "long-run":
         if len(returned) >= 32:
             return ModelResponse(parts=[TextPart("Long native run passed.")])
         steps = [("get_application_state", {})] * 32

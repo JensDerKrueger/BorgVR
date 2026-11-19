@@ -75,6 +75,14 @@ definition also permits saving a file. There is no shell, code execution or web-
 If any visualization-changing tool is advertised, `get_application_state` must also be
 available; the server enforces a successful state read before each turn's first change.
 
+### Optional execution limits
+
+Hello may include `"execution_limits":{"max_calls":256,"timeout_seconds":1800}`.
+The server confirms accepted limits in `ready`, capped by its configuration (at most
+1024 native calls and 7200 seconds). Clients without this field retain 24 native calls
+and the configured legacy timeout (180 seconds by default). Native settings default to
+256 calls and 30 minutes. Internal tool/model budgets reserve capacity for a final answer.
+
 ## User Requests And Responses
 
 ```json
@@ -166,7 +174,66 @@ If it cancelled a pending tool, the uncertain-session rule still requires reconn
 Changed capabilities require a fresh connection/handshake. Stale/mismatched tool results
 are rejected, not delivered to the model. On dataset close, disconnect the agent entirely.
 
-## Bounds And Errors
+## Collaborative editing extension
+
+Hello may advertise `"collaboration":true` and `"knowledge":["An approved user preference"]`.
+`ready.collaboration:true` confirms support. Without negotiation no collaboration messages
+are sent. Knowledge contains at most 16 strings of 1 to 500 characters and is untrusted
+contextual preference data, not system instructions or permission to use additional tools.
+
+The app observes successful relevant Command events independently of GSC recording, plus
+begin/failure lifecycle events for asynchronous manual actions. It filters its own agent
+origin and coalesces changes into these domains: `transform`, `clipping`, `transfer_function`,
+`lighting`, `rendering`, `annotations`, `volume`. No raw Command/GSC, file path, credentials,
+voxel buffers or edit history are included. State uses the existing bounded application
+state response without `volumeEditing` details.
+
+```json
+{"type":"user_change","dataset_id":"DATASET-UUID","context_id":"RENDERER-OPENING-UUID","revision":1,"active":true,"domains":["transform"]}
+{"type":"user_change","dataset_id":"DATASET-UUID","context_id":"RENDERER-OPENING-UUID","revision":2,"active":false,"domains":["transform"],"state":{"transform":{"rotation":[0,0,0,1]}}}
+```
+
+Revisions increase for relevant events within the connection (1 through 2^53-1). A final
+snapshot requires `active:false` and state of at most 256 KiB. The native client waits for
+800 ms of quiet and all manual operations to end. Stale revisions cannot reopen a finished
+intervention. The server cancels only unexecuted model generation, not pending native tools.
+It emits `collaboration_paused`, waits for the final user snapshot, then
+`collaboration_resumed` with `request_id` and `view_revision`. The original goal, cumulative
+usage and absolute task deadline remain unchanged. Superseded state/images are invalidated;
+tool execution receipts remain. No commands are replayed. The latest user state replaces
+any earlier view-restoration baseline. A failed manual action is not proof of a useful edit:
+the final snapshot describes the actual resulting state and generalization requires feedback.
+
+Every negotiated `tool_call` and `tool_result` carries `view_revision` (initially 0).
+Before dispatch the client rejects outdated calls or calls during manual activity using
+`result:{"ok":false,"not_applied":true,"code":"user_changed_view"}` and the current revision.
+Such a response never counts as a committed mutation. Results of already dispatched tools
+finish normally; stale images are not supplied as current evidence. Dataset closure/reopening
+still disconnects. A user-initiated edit may update the edit-state ID within the same dataset
+opening; an unrelated edit-state/context switch still invalidates the session.
+
+The server can use an internal `ask_collaboration_feedback` tool to ask what an intervention
+meant, or request specific help when an investigation is inconclusive:
+
+```json
+{"type":"collaboration_question","session_id":"SERVER-ID","request_id":"TURN-ID","question_id":"QUESTION-ID","text":"Was that rotation intended to help?"}
+{"type":"collaboration_feedback","request_id":"TURN-ID","question_id":"QUESTION-ID","text":"Yes, inspect a section perpendicular to this view."}
+```
+
+Questions are at most 500 characters, answers 2000. A correlated reply continues the same
+task, unlike an ordinary new prompt. At most one question is asked per intervention per
+task. The overall deadline and explicit cancellation remain active while waiting.
+
+Only after explicit feedback may `propose_visualization_rule` emit `rule_proposal` with
+`request_id`, `proposal_id`, and `text` (1 to 500 characters, at most eight pending proposals).
+The client asks for separate explicit approval and sends
+`{"type":"rule_decision","proposal_id":"PROPOSAL-ID","accepted":true}` (or false).
+Only approved rules are persisted by the client, per device. The server keeps them only
+in this session; future Hello messages supply the device's approved rules. No weight updates,
+training, autonomous permanent memory or server-side rule files are involved. Deleted local
+rules take effect in new conversations; an existing context can still contain older copies.
+
+## Bounds and errors
 
 - Maximum 4 authenticated sessions; concurrent agent runs follow the configured model's
   `BORGVR_MAX_SEQS` (default 2, small-model profile 1).
@@ -189,7 +256,9 @@ are rejected, not delivered to the model. On dataset close, disconnect the agent
   retried once with a smaller history, without rerunning completed tools.
 - Initial hello: 10 s; application inactivity: 300 s; send: 10 s; tool completion: 45 s;
   one model HTTP call: 60 s without SDK retries; complete user request including queue: 180 s.
-- One user request: at most 16 model requests/24 tool calls; output tokens are configured
+- Legacy requests permit 24 native calls, up to 48 total internal/native tool calls and
+  48 model requests; negotiated native budgets increase internal capacity proportionally.
+  Output tokens are configured
   with `BORGVR_MAX_OUTPUT_TOKENS` (default 2048). Invalid arguments may be corrected once; dispatched actions have no
   transport-level automatic retries.
 
@@ -224,13 +293,15 @@ Render-only PNGs are reduced to at most 1024 pixels per axis and 2 MiB. No windo
 or passthrough capture is used. TF tool results include at most 256 uniformly spaced preview
 samples, `originalSampleCount`, and `samplesArePreview`; the advertised description explicitly
 marks this approximation. Actual TF resolution and recorded commands remain unchanged.
-Current native bounds also include 128 events per turn,
-512 unique call IDs per connection, 8 MiB call signatures and 16 MiB cached replies.
+Current native bounds also include `4 * accepted_native_call_budget + 128` events per turn,
+8192 unique call IDs per connection and 8 MiB cached replies. Signatures are hashes. Evicted
+replies leave tombstones and are rejected rather than executing a command again.
 
 Native cancellation conservatively disconnects the session and cancels the pending command;
 it never retries an uncertain mutation. Dataset opening IDs and edit-state IDs are checked
 before dispatch and again after async commands, including reopening the same dataset UUID.
 Changing connection settings also disconnects. Native idle sessions close after 240 seconds;
-connection/send/tool/turn deadlines are 15/10/40/185 seconds. There is no automatic reconnect
+connection/send/tool deadlines are 15/10/40 seconds; the turn deadline is the negotiated
+task timeout plus five seconds. There is no automatic reconnect
 or request replay. `Scripts/test-voice-agent.sh` exercises actual local TLS/WSS against the
 agent with a deterministic model, including render-image delivery and GSC roundtrip.

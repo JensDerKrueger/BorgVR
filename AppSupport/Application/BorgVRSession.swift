@@ -6,6 +6,7 @@ import SwiftUI
 
 @MainActor
 protocol BorgVRCommandExecuting: BorgVRActionExecuting {
+  var commandEvents: AnyPublisher<BorgVRCommandEvent, Never> { get }
   func perform(_ command: BorgVRCommand, source: BorgVRCommandSource) throws
   var isCommandRecording: Bool { get }
   func startCommandRecording()
@@ -308,10 +309,21 @@ enum BorgVRRecordedGSC {
 }
 
 struct BorgVRCommandEvent: Sendable {
-  let id = UUID()
+  enum Phase: Sendable, Equatable { case began, committed, failed }
+  let id: UUID
   let command: BorgVRCommand
   let source: BorgVRCommandSource
   let timestamp: Date
+  let phase: Phase
+
+  init(id: UUID = UUID(), command: BorgVRCommand, source: BorgVRCommandSource, timestamp: Date,
+       phase: Phase = .committed) {
+    self.id = id
+    self.command = command
+    self.source = source
+    self.timestamp = timestamp
+    self.phase = phase
+  }
 }
 
 enum BorgVRSessionError: Error {
@@ -377,6 +389,10 @@ final class BorgVRSession<VisualizationState: AnyObject, RuntimeState: AnyObject
   private var snapshotRefreshScheduled = false
   private var tracksObservationSnapshotChanges = false
   private var recordedEvents: [BorgVRCommandEvent] = []
+  private let commandEventSubject = PassthroughSubject<BorgVRCommandEvent, Never>()
+  var commandEvents: AnyPublisher<BorgVRCommandEvent, Never> { commandEventSubject.eraseToAnyPublisher() }
+  private var lastObservedFrame: BorgVRFrameSnapshot
+  private var suppressCommandEvents = false
   private var recordsCommands = false
   @Published private(set) var isCommandRecording = false
   @Published private(set) var commandRecordingError: String?
@@ -411,7 +427,9 @@ final class BorgVRSession<VisualizationState: AnyObject, RuntimeState: AnyObject
     self.snapshotProvider = snapshotProvider
     self.annotationSnapshotProvider = annotationSnapshotProvider
     self.transferFunctionSnapshotProvider = transferFunctionSnapshotProvider
-    self.renderSnapshotStore = BorgVRRenderSnapshotStore(snapshotProvider())
+    let initialFrame = snapshotProvider()
+    self.renderSnapshotStore = BorgVRRenderSnapshotStore(initialFrame)
+    self.lastObservedFrame = initialFrame
     self.cachedAnnotationSnapshot = annotationSnapshotProvider()
   }
 
@@ -464,13 +482,18 @@ final class BorgVRSession<VisualizationState: AnyObject, RuntimeState: AnyObject
     captureUncommittedChanges()
     let id = recordingID
     let isRecorded = recordsCommands && source != .sharePlay
-    if isRecorded { pendingRecordedActions += 1; emit(.action(action), source: source) }
+    if isRecorded { pendingRecordedActions += 1; emit(.action(action), source: source, committed: false) }
+    let activityID = UUID()
+    publishCommandEvent(.action(action), source: source, id: activityID, phase: .began)
     defer { if isRecorded, id == recordingID { pendingRecordedActions -= 1 } }
     do {
-      return try await BorgVRCommandExecutionContext.$executingAction.withValue(true) {
+      let result = try await BorgVRCommandExecutionContext.$executingAction.withValue(true) {
         try await BorgVRCommandExecutionContext.$source.withValue(source, operation: operation)
       }
+      publishCommandEvent(.action(action), source: source, id: activityID)
+      return result
     } catch {
+      publishCommandEvent(.action(action), source: source, id: activityID, phase: .failed)
       if isRecorded, id == recordingID { commandRecordingError = "A recorded action failed: \(error.localizedDescription)" }
       throw error
     }
@@ -513,18 +536,22 @@ final class BorgVRSession<VisualizationState: AnyObject, RuntimeState: AnyObject
     if BorgVRCommandExecutionContext.executingAction { _ = try await operation(); return }
     captureUncommittedChanges()
     let id = recordingID
-    let eventID = emit(.action(action), source: source)
+    let eventID = emit(.action(action), source: source, committed: false)
+    let activityID = UUID()
+    publishCommandEvent(.action(action), source: source, id: activityID, phase: .began)
     if eventID != nil { pendingRecordedActions += 1 }
     defer { if eventID != nil, id == recordingID { pendingRecordedActions -= 1 } }
     do {
       let result = try await BorgVRCommandExecutionContext.$executingAction.withValue(true) {
         try await BorgVRCommandExecutionContext.$source.withValue(source, operation: operation)
       }
+      publishCommandEvent(.action(result), source: source, id: activityID)
       if id == recordingID, let eventID,
         let index = recordedEvents.firstIndex(where: { $0.id == eventID }) {
         recordedEvents[index] = .init(command: .action(result), source: source, timestamp: recordedEvents[index].timestamp)
       }
     } catch {
+      publishCommandEvent(.action(action), source: source, id: activityID, phase: .failed)
       if eventID != nil, id == recordingID { commandRecordingError = error.localizedDescription }
       throw error
     }
@@ -728,8 +755,9 @@ final class BorgVRSession<VisualizationState: AnyObject, RuntimeState: AnyObject
   }
 
   func publishRenderSnapshot() {
-    renderSnapshotStore.publish(snapshotProvider())
-    if commandDepth == 0 { captureUncommittedChanges() }
+    let snapshot = snapshotProvider()
+    renderSnapshotStore.publish(snapshot)
+    if commandDepth == 0 { captureUncommittedChanges(observedFrame: snapshot) }
   }
 
   private func updateRecordingBaseline() {
@@ -741,7 +769,16 @@ final class BorgVRSession<VisualizationState: AnyObject, RuntimeState: AnyObject
 
   /// Safety net for legacy input and platform observation. Renderer snapshot refreshes
   /// must not consume a change before the recorder has derived its semantic commands.
-  private func captureUncommittedChanges(source: BorgVRCommandSource = .userInterface) {
+  private func captureUncommittedChanges(source: BorgVRCommandSource = .userInterface,
+                                         observedFrame: BorgVRFrameSnapshot? = nil) {
+    if !recordsCommands, commandDepth == 0 {
+      let after = observedFrame ?? snapshotProvider()
+      let changes = inferredCommands(from: lastObservedFrame.visualization, to: after.visualization, fallback: .visualization)
+        + inferredSettingsCommands(from: lastObservedFrame.settings, to: after.settings)
+      for command in changes { publishCommandEvent(command, source: source) }
+      lastObservedFrame = after
+      return
+    }
     guard recordsCommands, commandDepth == 0, let before = lastRecordedFrame else { return }
     let after = snapshotProvider()
     let annotations = annotationSnapshotProvider()
@@ -750,6 +787,7 @@ final class BorgVRSession<VisualizationState: AnyObject, RuntimeState: AnyObject
       + inferredAnnotationCommands(from: lastRecordedAnnotations, to: annotations, domain: .objects)
       + inferredAnnotationCommands(from: lastRecordedAnnotations, to: annotations, domain: .measurements)
     for command in changes { emit(command, source: source) }
+    lastObservedFrame = after
     lastRecordedFrame = after
     lastRecordedAnnotations = annotations
     cachedAnnotationSnapshot = annotations
@@ -804,12 +842,17 @@ final class BorgVRSession<VisualizationState: AnyObject, RuntimeState: AnyObject
       }
     }
     renderSnapshotStore.publish(snapshot)
-    captureUncommittedChanges()
+    captureUncommittedChanges(observedFrame: snapshot)
   }
 
   func startCommandRecording() {
     lock.withLock {
       guard !isCommandRecording, pendingRecordedActions == 0 else { return }
+      suppressCommandEvents = true
+      defer {
+        lastObservedFrame = renderSnapshotStore.load()
+        suppressCommandEvents = false
+      }
       recordedEvents.removeAll(keepingCapacity: true)
       recordingID = UUID()
       pendingRecordedActions = 0
@@ -910,8 +953,9 @@ final class BorgVRSession<VisualizationState: AnyObject, RuntimeState: AnyObject
   }
 
   @discardableResult
-  private func emit(_ command: BorgVRCommand, source: BorgVRCommandSource) -> UUID? {
+  private func emit(_ command: BorgVRCommand, source: BorgVRCommandSource, committed: Bool = true) -> UUID? {
     guard !BorgVRCommandExecutionContext.executingAction else { return nil }
+    if committed { publishCommandEvent(command, source: source) }
     let event = BorgVRCommandEvent(command: command, source: source, timestamp: Date())
     if recordsCommands, source != .sharePlay {
       if let lastIndex = recordedEvents.indices.last,
@@ -923,6 +967,14 @@ final class BorgVRSession<VisualizationState: AnyObject, RuntimeState: AnyObject
       return event.id
     }
     return nil
+  }
+
+  private func publishCommandEvent(_ command: BorgVRCommand, source: BorgVRCommandSource,
+                                   id: UUID = UUID(), phase: BorgVRCommandEvent.Phase = .committed) {
+    guard !suppressCommandEvents else { return }
+    if phase != .began { lastObservedFrame = snapshotProvider() }
+    let origin = BorgVRCommandExecutionContext.originOverride ?? source
+    commandEventSubject.send(.init(id: id, command: command, source: origin, timestamp: Date(), phase: phase))
   }
 
   private func inferredCommands(

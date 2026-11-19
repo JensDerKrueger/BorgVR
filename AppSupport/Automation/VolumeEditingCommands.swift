@@ -7,6 +7,7 @@ enum BorgVRCommandSource: Equatable, Sendable {
 }
 
 enum BorgVRCommandExecutionContext {
+  @TaskLocal static var originOverride: BorgVRCommandSource?
   @TaskLocal static var executingAction = false
   @TaskLocal static var source = BorgVRCommandSource.userInterface
 }

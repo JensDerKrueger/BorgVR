@@ -439,6 +439,31 @@ Der Abbrechen-Button beendet sofort auch einen vorgemerkten Folgeauftrag; bereit
 ausgeführte Änderungen werden nicht zurückgesetzt. Netzwerk-, Einzelbefehls- und
 Kontextgrenzen bleiben unabhängig vom längeren Arbeitsbudget aktiv.
 
+### Gemeinsame Bearbeitung und bestätigte Regeln
+
+Während der Agent arbeitet, können Sie die Szene selbst bedienen. Manuelle Command-Ereignisse
+pausieren die noch nicht ausgeführte Planung. Nach 800 ms Bedienpause und Abschluss manueller
+Aktionen erhält der Agent den aktuellen Zustand und setzt denselben Auftrag fort. Lokal
+geprüfte Ansichtsrevisionen verhindern veraltete Agentenbefehle. Bereits gestartete Befehle
+enden genau einmal; sie werden nicht wiederholt. Die neue Nutzeransicht ersetzt die alte
+Ausgangsansicht und darf nicht durch ein späteres Wiederherstellen überschrieben werden.
+
+Der Agent kann nachfragen, was Sie mit Ihrem Eingriff beabsichtigt haben. Antworten per Text,
+Sprache oder Gesprächsbuttons setzen denselben Auftrag fort; gewöhnliche neue Prompts
+unterbrechen ihn weiterhin. Bei unklaren Ergebnissen kann er um konkrete Hilfe bitten.
+Zeit-, Aufruf- und Kontextgrenzen gelten weiterhin, auch während einer Rückfrage.
+
+Wiederverwendbare Präferenzen bleiben Vorschläge, bis Sie **Regel merken** bestätigen.
+Höchstens 16 Regeln mit je 500 Zeichen werden auf diesem Gerät gespeichert und künftigen
+Gesprächen mitgegeben, außerhalb von SharePlay und GSC. Löschen ist unter **Einstellungen >
+KI-Assistent > Gemerkte Regeln** möglich; beginnen Sie danach ein neues Gespräch, damit die
+Regel auch aus dem aktiven Modellkontext verschwindet. Unbestätigte Vorschläge werden nicht
+gespeichert. Das ist Kontextwissen, kein Training der Gewichte oder LoRA, keine gesicherte
+wissenschaftliche Erkenntnis und keine Aufhebung der Werkzeug-Schutzmaßnahmen.
+
+Der Assistent ist über einen einzigen App-Adapter und das dokumentierte Netzwerkprotokoll
+angebunden. [Architektur und Ausbaugrenzen](../AppSupport/Voice/ARCHITECTURE.md) sind separat beschrieben.
+
 ## 6. Sicherheit und Zertifikate
 
 - `.env` enthält Image-/Modellrevision, GPU, Speicherbudget, Adresse, Port und Benutzer-IDs.
