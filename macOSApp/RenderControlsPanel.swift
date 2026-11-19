@@ -363,7 +363,9 @@ struct RenderControlsPanel: View {
       : .transferFunctionEditor
     let isPresented = docking.isVisible(panel)
     return Button {
-      docking.toggleEditor(for: renderingParameters.renderMode)
+      if docking.toggleEditor(for: renderingParameters.renderMode) {
+        openWindow(id: panel.windowID)
+      }
     } label: {
       windowButtonLabel(
         "Editor",
@@ -443,10 +445,8 @@ struct RenderControlsPanel: View {
   }
 
   private func toggleWindow(_ panel: DockablePanelID) {
-    if docking.isDetached(panel) {
+    if docking.togglePresentation(panel) {
       openWindow(id: panel.windowID)
-    } else {
-      docking.toggleVisibility(panel)
     }
   }
 

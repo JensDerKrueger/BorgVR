@@ -60,6 +60,31 @@ struct DockingControllerTests {
     precondition(panel.configuration.actions.isEmpty)
     precondition(docking.isDockedVisible(.renderControls))
 
+    for mode in [RenderMode.transferFunction1D, .transferFunction1DWithLighting, .isoValue] {
+      let editor: DockablePanelID = mode == .isoValue ? .isoEditor : .transferFunctionEditor
+      docking.close(editor)
+      precondition(!docking.toggleEditor(for: mode) && docking.isDockedVisible(editor),
+        "A docked editor must become visible without opening a native window")
+      precondition(!docking.toggleEditor(for: mode) && !docking.isVisible(editor),
+        "A second click must hide an inline editor")
+      docking.detach(editor)
+      precondition(docking.toggleEditor(for: mode) && docking.isVisible(editor),
+        "An already detached editor must be raised, not hidden")
+      docking.hide(editor)
+      precondition(docking.toggleEditor(for: mode) && docking.isDetached(editor) && docking.isVisible(editor),
+        "Reopening a hidden detached editor must restore its content and open its window")
+      docking.close(editor)
+      docking.detachedWindowDidDisappear(editor)
+    }
+    for panel in DockablePanelID.allCases {
+      docking.detach(panel)
+      docking.hide(panel)
+      precondition(docking.togglePresentation(panel) && docking.isVisible(panel),
+        "Every detached panel must restore its content before showing its window")
+      docking.close(panel)
+      docking.detachedWindowDidDisappear(panel)
+    }
+
     docking.detach(.measurementEditor)
     docking.detachedWindowDidDisappear(.measurementEditor)
     precondition(!docking.isVisible(.measurementEditor) && !docking.isDetached(.measurementEditor),

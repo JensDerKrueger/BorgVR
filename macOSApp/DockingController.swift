@@ -207,6 +207,16 @@ final class DockingController: ObservableObject {
     }
   }
 
+  /// Returns true when the detached native window must be opened or brought forward.
+  func togglePresentation(_ panel: DockablePanelID) -> Bool {
+    if isDetached(panel) {
+      show(panel)
+      return true
+    }
+    toggleVisibility(panel)
+    return false
+  }
+
   func request(_ command: MacCommand) {
     commandRequest = MacCommandRequest(command: command)
   }
@@ -360,12 +370,8 @@ final class DockingController: ObservableObject {
     }
   }
 
-  func toggleEditor(for renderMode: RenderMode) {
-    if renderMode == .isoValue {
-      toggleVisibility(.isoEditor)
-    } else {
-      toggleVisibility(.transferFunctionEditor)
-    }
+  func toggleEditor(for renderMode: RenderMode) -> Bool {
+    togglePresentation(renderMode == .isoValue ? .isoEditor : .transferFunctionEditor)
   }
 
   func hideIncompatibleEditor(for _: RenderMode) {

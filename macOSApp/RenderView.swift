@@ -655,10 +655,8 @@ struct RenderView: View {
        appModel.activeDatasetMetadata?.channelInterpretation != .independentChannels {
       return
     }
-    if docking.isDetached(panel) {
+    if docking.togglePresentation(panel) {
       openWindow(id: panel.windowID)
-    } else {
-      docking.toggleVisibility(panel)
     }
   }
 
