@@ -9,3 +9,11 @@ swiftc -module-cache-path "$BUILD_DIR/swift-module-cache" \
   "$ROOT/Tests/DockingControllerTests.swift" \
   -o "$BUILD_DIR/mac-panel-tests"
 "$BUILD_DIR/mac-panel-tests"
+swiftc -module-cache-path "$BUILD_DIR/swift-module-cache" \
+  "$ROOT/macOSApp/MacKeyboardShortcuts.swift" \
+  "$ROOT/macOSApp/DockingController.swift" \
+  "$ROOT/macOSApp/PanelWindow.swift" \
+  "$ROOT/macOSApp/NativePanelToolbar.swift" \
+  "$ROOT/Tests/NativePanelToolbarTests.swift" \
+  -o "$BUILD_DIR/native-toolbar-tests"
+"$BUILD_DIR/native-toolbar-tests"

@@ -51,8 +51,14 @@ struct NativePanelToolbar: NSViewRepresentable {
       actions.removeAll(keepingCapacity: true)
       identifiers.removeAll(keepingCapacity: true)
       func append(_ items: [PanelAction], prefix: String) {
+        var occurrences: [String: Int] = [:]
         for item in items {
-          let identifier = NSToolbarItem.Identifier("\(prefix).\(item.id)")
+          // Spacers and controls may share logical names, such as the Files menu.
+          let kind = item.icon == nil ? "spacer" : "control"
+          let base = "\(prefix).\(kind).\(item.id)"
+          let occurrence = occurrences[base, default: 0]
+          occurrences[base] = occurrence + 1
+          let identifier = NSToolbarItem.Identifier("\(base).\(occurrence)")
           actions[identifier] = item
           identifiers.append(identifier)
         }
@@ -80,7 +86,9 @@ struct NativePanelToolbar: NSViewRepresentable {
         window.title = self.title
         window.titleVisibility = .hidden
         if window.toolbar !== self.toolbar { window.toolbar = self.toolbar }
-        self.toolbar.itemIdentifiers = self.identifiers
+        if self.toolbar.items.map(\.itemIdentifier) != self.identifiers {
+          self.toolbar.itemIdentifiers = self.identifiers
+        }
         for item in self.toolbar.items { self.configure(item) }
       }
     }
